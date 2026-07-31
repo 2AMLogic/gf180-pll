@@ -4,47 +4,20 @@ K {}
 V {}
 S {}
 E {}
-T {inv_3v3 - unit CMOS inverter (3.3 V thick oxide)} 100 -60 0 0 0.3 0.3 {layer=8}
-T {* Unit static CMOS inverter, gf180mcu 3.3 V thick-oxide devices only\n* (DR-002 Decision 3).  Wp/Wn = 1.5u/0.5u at L = 0.3u -- a 3:1 ratio sized for\n* symmetric rise/fall, because every UP/DN path asymmetry in the PFD lands\n* directly in the charge pump's timing-mismatch budget.} 1900 -300 0 0 0.25 0.25 {layer=8}
-C {symbols/pfet_03v3.sym} 300 -300 0 0 {name=MP
-L=0.3u
-W=1.5u
-nf=1
-m=1
-ad="'int((nf+1)/2) * W/nf * 0.18u'"
-pd="'2*int((nf+1)/2) * (W/nf + 0.18u)'"
-as="'int((nf+2)/2) * W/nf * 0.18u'"
-ps="'2*int((nf+2)/2) * (W/nf + 0.18u)'"
-nrd="'0.18u / W'" nrs="'0.18u / W'"
-sa=0 sb=0 sd=0
-model=pfet_03v3
-spiceprefix=X
-}
-C {devices/lab_pin.sym} 320 -270 0 0 {name=l_MP_D lab=Y}
-C {devices/lab_pin.sym} 280 -300 0 0 {name=l_MP_G lab=A}
-C {devices/lab_pin.sym} 320 -330 0 0 {name=l_MP_S lab=VDD}
-C {devices/lab_pin.sym} 320 -300 0 0 {name=l_MP_B lab=VDD}
-T {MP} 260 -355 0 0 0.25 0.25 {layer=15}
-C {symbols/nfet_03v3.sym} 560 -300 0 0 {name=MN
-L=0.3u
-W=0.5u
-nf=1
-m=1
-ad="'int((nf+1)/2) * W/nf * 0.18u'"
-pd="'2*int((nf+1)/2) * (W/nf + 0.18u)'"
-as="'int((nf+2)/2) * W/nf * 0.18u'"
-ps="'2*int((nf+2)/2) * (W/nf + 0.18u)'"
-nrd="'0.18u / W'" nrs="'0.18u / W'"
-sa=0 sb=0 sd=0
-model=nfet_03v3
-spiceprefix=X
-}
-C {devices/lab_pin.sym} 580 -330 0 0 {name=l_MN_D lab=Y}
-C {devices/lab_pin.sym} 540 -300 0 0 {name=l_MN_G lab=A}
-C {devices/lab_pin.sym} 580 -270 0 0 {name=l_MN_S lab=VSS}
-C {devices/lab_pin.sym} 580 -300 0 0 {name=l_MN_B lab=VSS}
-T {MN} 520 -355 0 0 0.25 0.25 {layer=15}
-C {devices/ipin.sym} 100 -100 0 0 {name=P0 lab=A}
-C {devices/opin.sym} 100 -120 0 0 {name=P1 lab=Y}
-C {devices/iopin.sym} 100 -140 0 0 {name=P2 lab=VDD}
-C {devices/iopin.sym} 100 -160 0 0 {name=P3 lab=VSS}
+T {gf180-pll :: inv_3v3 -- 1x static CMOS inverter, 3.3 V thick-oxide devices
+Connectivity in this library is expressed with net labels (lab_pin) placed
+directly on device pins; see design/README.md for the convention.} -400 -400 0 0 0.4 0.4 {}
+C {ipin.sym} -400 0 0 0 {name=p1 lab=A}
+C {opin.sym} 400 0 0 0 {name=p2 lab=Y}
+C {iopin.sym} -400 -200 0 0 {name=p3 lab=VDD}
+C {iopin.sym} -400 200 0 0 {name=p4 lab=VSS}
+C {pfet_03v3.sym} 0 -100 0 0 {name=MP model=pfet_03v3 W=2.5u L=0.28u nf=1 m=1}
+C {lab_pin.sym} -20 -100 0 0 {name=lp1 lab=A}
+C {lab_pin.sym} 20 -70 0 0 {name=lp2 lab=Y}
+C {lab_pin.sym} 20 -130 0 0 {name=lp3 lab=VDD}
+C {lab_pin.sym} 20 -100 0 0 {name=lp4 lab=VDD}
+C {nfet_03v3.sym} 0 100 0 0 {name=MN model=nfet_03v3 W=1u L=0.28u nf=1 m=1}
+C {lab_pin.sym} -20 100 0 0 {name=ln1 lab=A}
+C {lab_pin.sym} 20 70 0 0 {name=ln2 lab=Y}
+C {lab_pin.sym} 20 130 0 0 {name=ln3 lab=VSS}
+C {lab_pin.sym} 20 100 0 0 {name=ln4 lab=VSS}

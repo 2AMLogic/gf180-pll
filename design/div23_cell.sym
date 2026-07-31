@@ -1,0 +1,27 @@
+v {xschem version=3.4.7 file_version=1.2}
+G {}
+K {type=subcircuit
+format="@name @pinlist @symname"
+template="name=x1"
+}
+V {}
+S {}
+E {}
+L 4 -60 -60 60 -60 {}
+L 4 60 -60 60 60 {}
+L 4 -60 60 60 60 {}
+L 4 -60 -60 -60 60 {}
+B 5 -62.5 -32.5 -57.5 -27.5 {name=CKIN dir=in}
+B 5 -62.5 -2.5 -57.5 2.5 {name=MODIN dir=in}
+B 5 -62.5 27.5 -57.5 32.5 {name=P dir=in}
+B 5 57.5 -32.5 62.5 -27.5 {name=CKOUT dir=out}
+B 5 57.5 -2.5 62.5 2.5 {name=MODOUT dir=out}
+B 5 -2.5 -62.5 2.5 -57.5 {name=VDD dir=inout}
+B 5 -2.5 57.5 2.5 62.5 {name=VSS dir=inout}
+T {@symname} -55 -8 0 0 0.25 0.25 {}
+T {@name} -55 -72 0 0 0.2 0.2 {}
+T {CKIN} -55 -36 0 0 0.14 0.14 {layer=7}
+T {MODIN} -55 -6 0 0 0.14 0.14 {layer=7}
+T {P} -55 24 0 0 0.14 0.14 {layer=7}
+T {CKOUT} 20 -36 0 0 0.14 0.14 {layer=7}
+T {MODOUT} 12 -6 0 0 0.14 0.14 {layer=7}

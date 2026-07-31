@@ -20,4 +20,4 @@ C {devices/lab_pin.sym} 390 -300 0 0 {name=l_xdut_UP lab=UP}
 C {devices/lab_pin.sym} 390 -60 0 0 {name=l_xdut_DN lab=DN}
 C {devices/lab_pin.sym} 300 -570 0 0 {name=l_xdut_VDD lab=VDD}
 C {devices/lab_pin.sym} 300 -30 0 0 {name=l_xdut_VSS lab=VSS}
-T {Netlist-export root only. Netlisting this schematic emits .subckt definitions for pfd_cp and every cell below it (pfd, cp, cp_leg_n/p, srlatch, edgedet, nand2_3v3, inv_3v3), which the stimulus decks under sim/ include. Not part of the design hierarchy - do not instantiate.} 100 -160 0 0 0.3 0.3 {layer=4}
+T {Netlist-export root only. Netlisting this schematic emits .subckt definitions for pfd_cp and every cell below it (pfd, cp, cp_leg_n/p, srlatch, edgedet, pfd_nand2_3v3, pfd_inv_3v3), which the stimulus decks under sim/ include. Not part of the design hierarchy - do not instantiate.} 100 -160 0 0 0.3 0.3 {layer=4}

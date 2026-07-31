@@ -1,25 +1,41 @@
 # `design/` — schematic capture
 
 xschem schematics and symbols for the PLL's blocks, plus the export step that
-turns them into the SPICE the `sim/` testbenches simulate.
+turns them into the SPICE the `sim/` testbenches simulate. Layout is `layout/`,
+measured silicon is `measurements/`, and every claim about any of these lives in
+`sim/` under the append-only record format in `sim/README.md`.
 
 ```
 design/
   xschemrc              project-local xschem config (symbol path, netlist dir)
-  netlist.sh            batch netlist exporter — one script, one --top per block
+  netlist.sh            batch netlist exporter — every block, one script
+  netlist/*.spice       committed exports (checked by `netlist.sh --check`)
 
+  # VCO (#8, DR-001 Decision 2 / DR-003)
   vco.sch  / .sym       top-level VCO: bias + 5-stage ring + buffer + decap
-  vco_bias.sch / .sym   constant-gm bias, V->I converter, band-select mirror
-  vco_stage.sch / .sym  one current-starved inverter delay cell
-  netlist/vco.spice     committed VCO export (checked by `netlist.sh --check`)
+  vco_bias.sch/.sym     constant-gm bias, V->I converter, band-select mirror
+  vco_stage.sch/.sym    one current-starved inverter delay cell
 
+  # Feedback divider + lock detector (#11, DR-001 Decision 3 / DR-002 Decision 4)
+  divider_chain.sch/.sym  six ÷2/3 cells + termination + output mux + retiming
+  div23_cell.sch/.sym     one Vaucher-style ÷2/3 cell
+  lock_detector.sch/.sym  phase-error window comparator
+  dff_tg_3v3.sch/.sym     transmission-gate master-slave D flip-flop
+
+  # PFD + charge pump (#9, DR-001 Decision 1)
   pfd_cp.sch / .sym     PFD + charge pump, the phase-detect front end
   pfd.sch / .sym        tri-state phase-frequency detector
   cp.sch / .sym         charge pump: 2-bit unit-element trim, cascode output
   cp_leg_n/_p.sch/.sym  one unit of sink / source current
-  srlatch, edgedet,     custom logic cells the PFD is built from
-    nand2_3v3, inv_3v3
+  srlatch, edgedet      custom logic cells the PFD is built from
   dut_export.sch        netlist-export root for pfd_cp; not part of the design
+
+  # Shared 3.3 V static-CMOS logic library (VCO / divider / lock detector)
+  inv_3v3, inv2x_3v3, nand2_3v3, nand3_3v3, nor2_3v3, xor2_3v3,
+  tgate_3v3, schmitt_3v3, delaywin_3v3
+
+  # Leaf cells owned by the PFD/CP block (DR-004 — see Leaf-cell ownership)
+  pfd_inv_3v3, pfd_nand2_3v3
 ```
 
 - **Device flavour**: gf180mcu 3.3 V thick-oxide only — `nfet_03v3` /
@@ -27,7 +43,7 @@ design/
   supply (DR-002 Decision 3). No 5 V or 1.8 V devices, and no standard cells:
   the two open standard-cell libraries for this node are 5 V-flavour, so every
   logic gate here is a custom cell.
-- **File organization**: one `.sch` + `.sym` pair per block, following the
+- **File organization**: one `.sch` + `.sym` pair per cell, following the
   sky130 prior-art convention DR-001 recommends, so each block can be
   simulated and re-verified on its own.
 - **PDK root**: set `GF180_PDK_ROOT` to point at a PDK root other than
@@ -36,37 +52,57 @@ design/
 
 ## Netlist export
 
-`netlist.sh` is the one exporter for everything in this directory. It takes an
-explicit `--top`, because the two blocks captured here deliberately ship their
-exports under **different conventions** and inferring which one was meant would
-be exactly the kind of silent mistake this flow cannot afford:
+`netlist.sh` is the one exporter for everything in this directory:
 
 ```bash
-./design/netlist.sh                        # rewrite design/netlist/vco.spice
-./design/netlist.sh --check                # fail if that committed export is stale
+./design/netlist.sh                        # rewrite design/netlist/*.spice
+./design/netlist.sh --check                # fail if any committed export is stale
 ./design/netlist.sh --top pfd_cp <outdir>  # write <outdir>/dut.spice (not committed)
+./design/netlist.sh --check-paths          # assert the symbol path is unshadowed
 ```
 
-| `--top` | Output | Committed? | `--check`? |
+The blocks captured here ship their exports under **two conventions**, and the
+convention is a property of the block, not of the script:
+
+| Top | Output | Committed? | `--check`? |
 |---|---|---|---|
-| `vco` (default) | `design/netlist/vco.spice` | yes | yes |
+| `vco`, `div23_cell`, `divider_chain`, `lock_detector`, `dff_tg_3v3` | `design/netlist/<top>.spice` | yes | yes |
 | `pfd_cp` | `<outdir>/dut.spice`, path echoed on stdout | no | n/a |
 
-**Why two conventions, rather than one of them being wrong.** The VCO is a
-single self-contained subcircuit whose export is small and stable, so
-committing it makes the netlist reviewable in a diff and gives `--check`
-something to check against; its post-processing is nothing but un-commenting
-the top-level `.subckt`/`.ends` pair xschem comments out for a top sheet and
-dropping the trailing `.end`, so the committed file stays a faithful rendering
-of `vco.sch`. The PFD/CP is a nine-cell hierarchy re-exported per campaign, and
+**Why two conventions, rather than one of them being wrong.** The committed
+tops are self-contained subcircuits whose exports are small and stable, so
+committing them makes the netlist reviewable in a diff, lets a testbench run
+without a working xschem install, and gives `--check` something to check
+against. The PFD/CP is a nine-cell hierarchy re-exported per campaign, and
 committing it would create a second source of truth beside the per-record
-snapshot the evidence actually cites. Adding a third block means adding a case
-to `netlist.sh`, not forking it.
+snapshot the evidence actually cites. Adding a block means adding it to the
+`BLOCKS` array (or adding a case), not forking the script.
 
 **Either way the export the evidence cites is frozen.** Every record under
 `sim/` copies the netlist it simulated to
 `sim/<slug>/netlist-snapshots/<record-id>.spice` (see `sim/README.md`), so the
 provenance of a result never depends on re-running the exporter.
+
+The only post-processing applied is un-commenting the top-level
+`.subckt`/`.ends` pair that xschem comments out for a top sheet, and dropping
+the trailing `.end`; nothing else in the xschem output is altered, so each file
+stays a faithful rendering of its schematic.
+
+**Absolute paths in the export (#28).** xschem stamps the absolute filesystem
+path of each expanded `.sch`/`.sym` into a `**` comment. Those comment lines,
+and only those, are rewritten to repo-relative form:
+
+- for the **committed** tops, on both sides of `--check`'s comparison, so the
+  check does not call every clone but the one that generated the files stale;
+- for the **`pfd_cp`** export, at *write* time as well, so its
+  `netlist-snapshots/*.spice` SHA-256 is reproducible on any machine and not
+  only in the checkout that minted it.
+
+The committed exports are not yet normalized at write time, because rewriting
+their bytes would invalidate the snapshot hashes the `vco-tuning-range`,
+`divider-ratio` and `lock-detector` records cite and would require re-running
+and re-minting all three campaigns under `sim/README.md`'s append-only rule.
+**#28** tracks that.
 
 Connectivity in these schematics is **label-driven**: each device terminal
 carries a `lab_pin` symbol placed exactly on the terminal coordinate, rather
@@ -74,9 +110,43 @@ than a drawn wire. xschem resolves nets from those labels (this is how the
 PDK's own test schematics are built). That makes a missing library path
 dangerous — xschem would instantiate the unresolved label symbols as pin-less
 placeholders, auto-name every net and report no error at all — so `netlist.sh`
-self-checks **both** exports for the expected `.subckt` set, for auto-generated
+self-checks **every** export for the expected `.subckt` set, for auto-generated
 `netN` names in a port list, and for unconnected pins, and fails loudly on any
-of them. `design/xschemrc` documents the symbol-path union the two blocks need.
+of them, before writing anything. `design/xschemrc` documents the symbol-path
+union the blocks need, and `--check-paths` re-asserts at run time that the
+union cannot shadow (no `.sym` sits directly in either parent directory).
+
+Never `.include` two committed exports in the same deck — each carries its own
+copy of the shared logic library, so including two would redefine them.
+
+## Leaf-cell ownership
+
+**A leaf cell belongs to exactly one owner, and its name says who.** This is
+**DR-004**, and it exists because `design/` is a flat namespace in which two
+independently-developed blocks each authored a cell called `inv_3v3`:
+
+| Cell | Owner | Sizing | Sized for |
+|---|---|---|---|
+| `inv_3v3`, `nand2_3v3`, … | the shared logic library (VCO, divider, lock detector) | Wp/Wn = 2.5/1.0 µm, L = 0.28 µm | a general-purpose unit gate at minimum length |
+| `pfd_inv_3v3`, `pfd_nand2_3v3` | the PFD/CP block | Wp/Wn = 1.5/0.5 µm, L = 0.3 µm | symmetric rise/fall in the PFD's 24-stage reset chain, with L one step above minimum for matching; full `ad/pd/as/ps/nrd/nrs` junction geometry, because the *absolute* delay of that chain is the load-bearing parameter behind the dead-zone result |
+
+The rule:
+
+- **A block that needs a leaf cell sized to its own argument owns a copy,
+  prefixed with the block name** (`pfd_inv_3v3`, not `inv_3v3`). It never
+  edits a cell another block instantiates.
+- **A block that is happy with the shared library instantiates it unmodified**
+  and does not fork it.
+- Neither is free to change silently: `netlist.sh` fails the run if any
+  `.subckt` name is defined by **both** the `pfd_cp` export and a committed
+  top, so a merge resolution (or a stray rename) that re-points one block at
+  the other's gates stops the export instead of quietly re-sizing a
+  characterized block.
+
+Sharing one canonical, parameterized library across every block is the better
+end state and is tracked as **#30**; converging the two sizings reaches back
+into evidence already merged for the divider and lock detector, so DR-004
+deliberately does not attempt it here.
 
 ---
 
@@ -213,8 +283,8 @@ current-steering charge pump with a 2-bit unit-element Icp trim.
 
 | Cell | Purpose |
 |---|---|
-| `inv_3v3` | unit inverter, Wp/Wn = 1.5u/0.5u at L = 0.3u |
-| `nand2_3v3` | unit 2-input NAND |
+| `pfd_inv_3v3` | unit inverter, Wp/Wn = 1.5u/0.5u at L = 0.3u — **block-owned**, see [Leaf-cell ownership](#leaf-cell-ownership) |
+| `pfd_nand2_3v3` | unit 2-input NAND, Wp/Wn = 1.5u/1u at L = 0.3u — block-owned |
 | `edgedet` | rising-edge pulse generator (AND of X and X delayed 5 stages) |
 | `srlatch` | NAND SR latch, active-low set/reset |
 | `pfd` | tri-state phase-frequency detector |
@@ -477,3 +547,140 @@ files: open, edit, and save them in xschem as normal. After any edit, re-run
 the affected campaign under `sim/` — the testbenches include the *exported*
 netlist, so a schematic change is picked up automatically and a new evidence
 record is minted for it (records are append-only; the old one stands).
+
+---
+
+# The feedback divider and lock detector
+
+Cells landed by #11 (feedback divider + lock detector, DR-001 Decision 3 and
+DR-002 Decision 4).
+
+## Leaf cells (3.3 V static CMOS)
+
+Every device is `nfet_03v3` / `pfet_03v3` — 3.3 V thick-oxide only, per
+DR-002 Decision 3. There is deliberately **no** 5 V or 1.8 V device anywhere
+in this block. The two open standard-cell libraries for gf180mcu are 5 V
+flavour, which is why these are hand-drawn rather than instantiated (DR-001
+Decision 3's "custom-cell count" argument).
+
+| Cell | Contents |
+|---|---|
+| `inv_3v3` | inverter, Wp/Wn = 2.5 µm / 1.0 µm, L = 0.28 µm — the unit gate |
+| `inv2x_3v3` | 2× inverter, Wp/Wn = 5.0 µm / 2.0 µm — clock/output drive |
+| `nand2_3v3`, `nand3_3v3`, `nor2_3v3` | ratioed to the unit inverter |
+| `xor2_3v3` | four-NAND XOR |
+| `tgate_3v3` | transmission gate, separate n- and p-gate pins |
+| `schmitt_3v3` | six-transistor Schmitt inverter (hysteresis for the lock flag) |
+| `delaywin_3v3` | four inverters loaded by MOS capacitors — the lock detector's comparator window |
+| `dff_tg_3v3` | positive-edge-triggered **transmission-gate master-slave** D flip-flop |
+
+This is the **shared** logic library: the VCO, divider and lock detector all
+instantiate these cells unmodified. The PFD/CP block does not — it owns
+`pfd_inv_3v3` / `pfd_nand2_3v3`, sized to a different argument, per DR-004 and
+[Leaf-cell ownership](#leaf-cell-ownership).
+
+`dff_tg_3v3` is the cell the whole divider is built from. Both latches use
+clocked-feedback (a feedback transmission gate on the opposite clock phase),
+so the flop is **fully static**: it holds state indefinitely with the clock
+stopped. That is the property DR-001 Decision 3 chose static CMOS for over
+TSPC / E-TSPC — dynamic logic has a *minimum* clock frequency, and this
+divider has to keep dividing at the 10 MHz bottom of the band and slower
+still during acquisition transients.
+
+## Blocks
+
+| Block | Role |
+|---|---|
+| `div23_cell` | one ÷2/3 cell (Vaucher-style), two `dff_tg_3v3` plus four gates |
+| `divider_chain` | six identical `div23_cell` + chain-length termination + one-hot output mux + VCO-clocked retiming flop |
+| `lock_detector` | phase-error window comparator producing the digital `lock` output |
+
+### `div23_cell`
+
+Two flops, both clocked on the rising edge of `CKIN`:
+
+```
+Q'      = /Q . /(MODIN . P . MODOUT)
+MODOUT' = MODIN . Q
+CKOUT   = Q
+```
+
+With `MODIN . P = 0` the cell divides by 2 (`Q` simply toggles). With
+`MODIN = P = 1` the state `(Q, MODOUT)` walks `(0,0) → (1,0) → (0,1) → (0,0)`,
+i.e. divide by 3, and `MODOUT` is high for exactly one `CKIN` period per
+output cycle — which is what the preceding, twice-as-fast cell needs in order
+to see it as one of *its* own output periods.
+
+### `divider_chain`
+
+```
+N = 2^k + Σ p_i · 2^i   (i < k),   SEL_(k-1) = 1
+```
+
+`SEL` is a one-hot chain-length code. It does two things at once: it
+terminates the modulus chain (`MODIN_i = MODOUT_(i+1) + SEL_i`, so the last
+active cell sees `MODIN = 1` permanently) and it selects that same cell's
+clock output through the one-hot output multiplexer. Six cells give
+continuous integer N over 4–64 with no holes; coverage extends free to 127,
+which is spare margin and **not** a spec claim (DR-001 Decision 3).
+
+N is a **static configuration**, set alongside the VCO band code; the loop
+re-locks after a change. Glitch-free on-the-fly modulus switching is
+explicitly out of v1 scope.
+
+The final flop is clocked by the **VCO**, not by the chain, so the feedback
+edge the PFD sees is one flop's clk→Q after a VCO edge **independent of N** —
+rather than the accumulated clk→Q of the `k` active cells, which varies with
+the programmed chain length. That constant feedback delay is DR-001's
+interface contract to #9. The price is a setup budget of one VCO period minus
+the chain's accumulated clk→Q, closed at the slow corner in
+`sim/divider-ratio/`.
+
+The chain runs on its own supply domain `vdd_div`, consistent with the
+VCO/reference domain split (DR-001 Decisions 2 and 3), so divider switching
+noise does not land on the VCO supply.
+
+`div23_cell` is instantiated six times unmodified. DR-001 Decision 3 asks for
+the *first* cell to be separately swappable so a future 400 MHz stretch push
+can replace one cell with a TSPC/E-TSPC version rather than redesigning the
+chain; keeping the six instances identical and distinct (`XD0`…`XD5`) is what
+makes that a one-symbol substitution.
+
+### `lock_detector`
+
+```
+ERR  = XOR(UP, DN)        the PFD's common reset overlap cancels
+ERRD = ERR delayed t_win
+WIDE = ERR . ERRD         pulses only if |phase error| > t_win
+VWIN                      weak always-on pull-up, WIDE-gated pull-down, MOS cap
+LOCK = /schmitt(VWIN)
+```
+
+Assert is slow (the pull-up must charge the node, i.e. the error has to stay
+inside the window for many reference cycles) and deassert is fast (one
+out-of-window pulse dumps the node). A lock flag that is slow to rise and
+quick to fall is the safe direction for a consumer gating logic on it.
+
+It is a **passive monitor**: no counter, no state machine, nothing driving a
+loop node. DR-001 Decision 2 keeps band select a static input with no
+calibration FSM and DR-002 Decision 4 preserves that unchanged.
+
+---
+
+# Conventions
+
+- One block per `.sch` + `.sym` pair, named for the block.
+- **A leaf cell is named for its owner** — a block that needs a gate sized to
+  its own argument owns a copy prefixed with the block name (`pfd_inv_3v3`),
+  rather than editing the shared library cell another block instantiates. See
+  [Leaf-cell ownership](#leaf-cell-ownership) and DR-004; `netlist.sh` enforces
+  it.
+- Ports: inputs `ipin`, outputs `opin`, supplies `iopin`. Supplies are
+  explicit pins on every cell — there are no global `VDD`/`VSS` nets, so a
+  block can be placed on `vdd_div` without editing its children.
+- Connectivity inside a schematic is by **net label** (`lab_pin`) rather than
+  drawn wire. That keeps a schematic diffable as text and keeps the netlist
+  the reviewable artifact; the trade-off is that the graphical rendering is
+  sparse.
+- Device geometry is written on the instance, not hidden in a model card, so
+  a sizing change is visible in the diff.

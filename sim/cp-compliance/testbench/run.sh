@@ -183,6 +183,29 @@ case "${1:-}" in
   --one-sw) shift; run_sw "$@"; exit 0 ;;
 esac
 
+# --------------------------------------------------------------------------
+# Supersession (sim/README.md :: Status / supersession language).
+#
+# A record's **Supersedes** field is the ONLY pointer between an old record and
+# the one that replaces it -- the superseded record's bytes never change.  So
+# the field has to be settable at mint time rather than edited in afterwards,
+# which would itself be a rewrite of a record.
+#
+#   SIM_SUPERSEDES=<record-id>        the record this run replaces
+#   SIM_SUPERSEDES_NOTE=<one line>    why, e.g. "netlist provenance only"
+#
+# Unset, the record says it is the first for its claim, exactly as before.
+# --------------------------------------------------------------------------
+supersedes_field() {
+  if [ -z "${SIM_SUPERSEDES:-}" ]; then
+    echo "- **Supersedes**: (none -- first record for this claim)"
+  elif [ -z "${SIM_SUPERSEDES_NOTE:-}" ]; then
+    echo "- **Supersedes**: ${SIM_SUPERSEDES}"
+  else
+    echo "- **Supersedes**: ${SIM_SUPERSEDES} -- ${SIM_SUPERSEDES_NOTE}"
+  fi
+}
+
 simenv_require_tools
 mkdir -p "${WORK}"
 
@@ -512,7 +535,7 @@ ${TRIM_TABLE}
   - Extracted metrics: \`sim/cp-compliance/corners/${RID}/cp_dc.csv\`,
     \`cp_switch.csv\`, \`cp_curves.csv\`
 - **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (issue #9)
-- **Supersedes**: (none -- first record for this claim)
+$(supersedes_field)
 EOF
 } >"${RECORD}"
 

@@ -82,22 +82,22 @@ C {devices/lab_pin.sym} 1060 -300 0 0 {name=l_MCP_G lab=ICP}
 C {devices/lab_pin.sym} 1100 -330 0 0 {name=l_MCP_S lab=VDD}
 C {devices/lab_pin.sym} 1100 -300 0 0 {name=l_MCP_B lab=VDD}
 T {MCP} 1040 -355 0 0 0.25 0.25 {layer=15}
-C {inv_3v3.sym} 1340 -300 0 0 {name=xi_b0}
+C {pfd_inv_3v3.sym} 1340 -300 0 0 {name=xi_b0}
 C {devices/lab_pin.sym} 1250 -300 0 0 {name=l_xi_b0_A lab=B0}
 C {devices/lab_pin.sym} 1430 -300 0 0 {name=l_xi_b0_Y lab=B0B}
 C {devices/lab_pin.sym} 1340 -390 0 0 {name=l_xi_b0_VDD lab=VDD}
 C {devices/lab_pin.sym} 1340 -210 0 0 {name=l_xi_b0_VSS lab=VSS}
-C {inv_3v3.sym} 1600 -300 0 0 {name=xi_b1}
+C {pfd_inv_3v3.sym} 1600 -300 0 0 {name=xi_b1}
 C {devices/lab_pin.sym} 1510 -300 0 0 {name=l_xi_b1_A lab=B1}
 C {devices/lab_pin.sym} 1690 -300 0 0 {name=l_xi_b1_Y lab=B1B}
 C {devices/lab_pin.sym} 1600 -390 0 0 {name=l_xi_b1_VDD lab=VDD}
 C {devices/lab_pin.sym} 1600 -210 0 0 {name=l_xi_b1_VSS lab=VSS}
-C {inv_3v3.sym} 1860 -300 0 0 {name=xi_up}
+C {pfd_inv_3v3.sym} 1860 -300 0 0 {name=xi_up}
 C {devices/lab_pin.sym} 1770 -300 0 0 {name=l_xi_up_A lab=UP}
 C {devices/lab_pin.sym} 1950 -300 0 0 {name=l_xi_up_Y lab=UPB}
 C {devices/lab_pin.sym} 1860 -390 0 0 {name=l_xi_up_VDD lab=VDD}
 C {devices/lab_pin.sym} 1860 -210 0 0 {name=l_xi_up_VSS lab=VSS}
-C {inv_3v3.sym} 2120 -300 0 0 {name=xi_dn}
+C {pfd_inv_3v3.sym} 2120 -300 0 0 {name=xi_dn}
 C {devices/lab_pin.sym} 2030 -300 0 0 {name=l_xi_dn_A lab=DN}
 C {devices/lab_pin.sym} 2210 -300 0 0 {name=l_xi_dn_Y lab=DNB}
 C {devices/lab_pin.sym} 2120 -390 0 0 {name=l_xi_dn_VDD lab=VDD}
