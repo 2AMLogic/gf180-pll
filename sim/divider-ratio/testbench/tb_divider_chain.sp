@@ -57,15 +57,15 @@ xchain vco pb0 pb1 pb2 pb3 pb4 pb5 sel0 sel1 sel2 sel3 sel4 sel5
 .tran {ktstep} {ktstop}
 
 * --- division ratio, two consecutive periods of the retimed feedback edge
-.meas tran tfb1 when v(fb)='vsup/2' rise=1
-.meas tran tfb2 when v(fb)='vsup/2' rise=2
-.meas tran tfb3 when v(fb)='vsup/2' rise=3
+.meas tran tfb1 when v(fb)='vsup/2' rise=1 td='ttd'
+.meas tran tfb2 when v(fb)='vsup/2' rise=2 td='ttd'
+.meas tran tfb3 when v(fb)='vsup/2' rise=3 td='ttd'
 .meas tran n1 param='(tfb2-tfb1)/tvco'
 .meas tran n2 param='(tfb3-tfb2)/tvco'
 
 * --- same ratio on the raw (un-retimed) chain output
-.meas tran tdo1 when v(divout)='vsup/2' rise=1
-.meas tran tdo2 when v(divout)='vsup/2' rise=2
+.meas tran tdo1 when v(divout)='vsup/2' rise=1 td='ttd'
+.meas tran tdo2 when v(divout)='vsup/2' rise=2 td='ttd'
 .meas tran ndo param='(tdo2-tdo1)/tvco'
 
 * --- retiming timing, both referred to the VCO rising edge (modulo one VCO
@@ -74,7 +74,7 @@ xchain vco pb0 pb1 pb2 pb3 pb4 pb5 sel0 sel1 sel2 sel3 sel4 sel5
 .meas tran t_rtcq param='(tfb2-tck0)-tvco*floor((tfb2-tck0)/tvco)'
 
 * --- feedback pulse width (sign corrected in the runner, see tb_div23_cell)
-.meas tran ffb2 when v(fb)='vsup/2' fall=2
+.meas tran ffb2 when v(fb)='vsup/2' fall=2 td='ttd'
 .meas tran fbpw param='ffb2-tfb2'
 
 * --- divider supply current on the dedicated vdd_div domain

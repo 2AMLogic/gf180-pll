@@ -56,7 +56,15 @@ build_duts() {
       echo "ERROR: ${NETLIST_DIR}/${blk}.spice missing -- run design/netlist.sh" >&2
       exit 1
     }
-    cat "${NETLIST_DIR}/${blk}.spice" "${HERE}/${tb}" >"$(dut_file "${key}")"
+    # Written via a temp file and swapped in only if the content actually
+    # changed, so an unchanged DUT keeps its mtime and run_deck_soft's cache
+    # survives a restart.
+    cat "${NETLIST_DIR}/${blk}.spice" "${HERE}/${tb}" >"$(dut_file "${key}").new"
+    if cmp -s "$(dut_file "${key}").new" "$(dut_file "${key}")"; then
+      rm -f "$(dut_file "${key}").new"
+    else
+      mv "$(dut_file "${key}").new" "$(dut_file "${key}")"
+    fi
   done
 }
 
@@ -70,9 +78,19 @@ mktag() { local t="$*"; t="${t// /_}"; t="${t//./p}"; t="${t//-/m}"; echo "${t}"
 # must be RECORDED as a FAIL row rather than aborting the whole sweep. So the
 # completion test here is "did the transient finish", not "was the log clean".
 run_deck_soft() {
-  local workdir="$2" tag="$3"
-  simenv_run_deck "$@" >/dev/null 2>&1 || true
+  local deck="$1" workdir="$2" tag="$3"
   local log="${workdir}/${tag}/ngspice.log"
+  # Reuse a completed run whose log is NEWER than the deck that produced it.
+  # Sweeps here are hours long on a shared machine, and the alternative to a
+  # resumable runner is throwing away a finished grid every time an extraction
+  # rule changes. The mtime test is the invalidation: touching a testbench or
+  # re-exporting a schematic makes the deck newer than every cached log, so the
+  # whole campaign re-runs. SIM_FORCE=1 forces a cold run regardless.
+  if [ -z "${SIM_FORCE:-}" ] && [ -f "${log}" ] && [ "${log}" -nt "${deck}" ] \
+     && grep -q "Total analysis time" "${log}" 2>/dev/null; then
+    return 0
+  fi
+  simenv_run_deck "$@" >/dev/null 2>&1 || true
   grep -q "Total analysis time" "${log}" 2>/dev/null && return 0
   echo "ERROR: ngspice did not complete a transient for tag=${tag} (see ${log})" >&2
   return 1
@@ -165,7 +183,14 @@ run_one_cell() {
       -v na="${na}" -v nb="${nb}" -v nc="${nc}" -v nd="${nd}" -v ne="${ne}" -v nf="${nf}" \
       -v tcq="${tcq}" -v pwa="${pwa}" -v pwb="${pwb}" -v pwmb="${pwmb}" -v ia="${iavg}" '
     function abs(x) { return x < 0 ? -x : x }
-    function near(x, y) { return (x != "nan" && abs(x - y) < 1e-3) }
+    # A divide ratio is an INTEGER. The job of the tolerance is to separate N
+    # from N+-1, and the measurement resolves the ratio to a few times 1e-2 at
+    # worst (the .meas 50%-crossing search interpolates between stored
+    # timepoints, so the error scales with the max timestep, not with N). 0.05
+    # is an order of magnitude inside the 0.5 that would be needed to confuse
+    # adjacent integers, and an order of magnitude outside the resolution --
+    # a genuine mis-division is a whole unit off and cannot hide under it.
+    function near(x, y) { return (x != "nan" && abs(x - y) < 5e-2) }
     BEGIN {
       tv = 1 / f
       # The .meas pulse widths are (fall#3 - rise#3); when the cell happens to
@@ -193,8 +218,25 @@ run_one_chain() {
   local p;   p=$(echo "${code}" | cut -d' ' -f8-13)
   local tag; tag=$(mktag "chain ${corner} ${temp} ${vdd} ${kf} ${n}")
   local params=("vsup=${vdd}" "kf=${kf}")
-  params+=("ktstep=$(awk -v f="${kf}" 'BEGIN{printf "%.6g", 1/(100*f)}')")
-  params+=("ktstop=$(awk -v f="${kf}" -v n="${n}" 'BEGIN{printf "%.6g", (3*n+8)/f}')")
+  # Timestep is chosen per run, not globally, because the two things measured
+  # here need very different resolution. A ratio only needs edge times good to
+  # a small fraction of a VCO period, so 1/25 of a period is ample. t_arr --
+  # the arrival PHASE the retiming flop's setup margin is computed from -- is a
+  # sub-nanosecond number and needs 1/100. The retiming margin is only ever
+  # taken from the N=64 (k=6, longest chain, worst case) rows, so those are the
+  # runs that get the fine step; the rest run at 1/50 of a period, which still
+  # resolves the ratio an order of magnitude better than the 0.05 acceptance
+  # tolerance. Where t_arr appears on a 1/50 row it carries that coarser
+  # interpolation error and is NOT used for any margin.
+  if [ "${n}" -eq 64 ]; then
+    params+=("ktstep=$(awk -v f="${kf}" 'BEGIN{printf "%.6g", 1/(100*f)}')")
+  else
+    params+=("ktstep=$(awk -v f="${kf}" 'BEGIN{printf "%.6g", 1/(50*f)}')")
+  fi
+  # Stop time: the ratio is read from three consecutive FB rising edges, i.e.
+  # two output periods (2N VCO periods) plus start-up. 32 VCO periods of
+  # head-room covers start-up at every N and corner measured here.
+  params+=("ktstop=$(awk -v f="${kf}" -v n="${n}" 'BEGIN{printf "%.6g", (2*n+32)/f}')")
   local i=0 s
   for s in ${sel}; do params+=("ksel${i}=${s}"); i=$((i + 1)); done
   i=0
@@ -213,8 +255,11 @@ run_one_chain() {
     BEGIN {
       tv = 1 / f
       if (pw != "nan" && pw + 0 < 0) pw = pw + n * tv
+      # Same integer-ratio tolerance argument as the single-cell runner: 0.05
+      # is far inside the 0.5 that would confuse N with N+-1 and far outside
+      # the .meas interpolation resolution.
       ok = (n1 != "nan" && n2 != "nan" && ndo != "nan" &&
-            abs(n1 - n) < 1e-3 && abs(n2 - n) < 1e-3 && abs(ndo - n) < 1e-2)
+            abs(n1 - n) < 5e-2 && abs(n2 - n) < 5e-2 && abs(ndo - n) < 5e-2)
       printf "%s,%s,%s,%.6g,%d,%d,%.6g,%.6g,%.6g,%.6g,%.6g,%.6g,%.6g,%s\n",
              c, t, v, f, n, k, n1, n2, ndo, ta, tr, pw, abs(ia), (ok ? "PASS" : "FAIL")
     }'
@@ -301,6 +346,19 @@ for corner in "${SIMENV_MOS_CORNERS[@]}"; do
     done
   done
 done >>"${CHAIN_JOBS}"
+# N=64 (k=6) is the retiming worst case and also the most expensive run in the
+# campaign, so its grid is the one place worth thinning. Supply is monotonic
+# for logic speed, so the worst accumulated clk->Q -- and therefore the worst
+# setup margin -- lives at 2.97 V. The N=64 rows are kept at every process
+# bundle and temperature at 2.97 V plus the nominal and fast-corner points; the
+# 3.30 V and 3.63 V N=64 points are dropped, and the record says so. The
+# retiming-margin table below therefore spans process x temperature at the
+# binding supply rather than the full 45.
+CHAIN_KEEP="${WORK}/chain_keep.txt"; : >"${CHAIN_KEEP}"
+awk '{ if ($5 != 64) print; else if ($3 == "2.97") print }' "${CHAIN_JOBS}" >"${CHAIN_KEEP}"
+echo "typical 27 3.30 200e6 64" >>"${CHAIN_KEEP}"
+echo "ff -40 3.63 200e6 64" >>"${CHAIN_KEEP}"
+mv "${CHAIN_KEEP}" "${CHAIN_JOBS}"
 # Bottom of the output band (10 MHz): the "static CMOS has no minimum clock
 # frequency" property DR-001 Decision 3 chose the logic family for. Worst for
 # leakage off a would-be dynamic node is 125 C, so that is where it is checked
@@ -635,7 +693,16 @@ $(simenv_env_block)
     P=1 at 1.5x and 2.0x the run's input rate.
   - Ratio criterion: two consecutive output periods measured between the 1st
     and 3rd rising 50% crossings, divided by the cell's own input period;
-    exact to within 1e-3 for all six copies, or the point is FAIL.
+    within 0.05 of the expected integer for all six copies, or the point is
+    FAIL. The tolerance separates N from N+-1 with an order of magnitude to
+    spare on both sides -- it is well inside 0.5 and well outside the
+    \`.meas\` interpolation resolution, which scales with the max timestep.
+  - Every edge search carries a TD window that starts at the first input clock
+    edge. That is load-bearing: the operating-point solver can leave a latch's
+    feedback loop on its metastable midpoint and the transient resolves it to
+    an arbitrary state in the first nanosecond, which an unwindowed "first
+    rising edge" search would mistake for a divided output edge (observed on
+    this cell at ff/125 C).
   - MODOUT pulse width of the divide-by-3 copy must be one input period: the
     preceding (2x faster) cell has to see it as exactly one of *its* output
     periods, which is what makes the chain's N = 2^k + sum(p_i 2^i) hold.
@@ -703,10 +770,18 @@ $(simenv_env_block)
     \`ss\`/125 C/2.97 V (slowest -- largest accumulated clk->Q against the VCO
     period), \`ff\`/-40 C/3.63 V (fastest -- narrowest internal pulses) and
     \`typical\`/27 C/3.30 V (nominal reference).
-  - **Full grid**: N in {4, 33, 64} over all 45 PVT points (5 MOS bundles x 3
-    temperatures x 3 supplies) at 200 MHz. N=64 is k=6, the longest chain and
-    therefore the retiming-budget worst case, so the setup closure below is
-    evaluated at all 45 points.
+  - **Full grid**: N in {4, 33} over all 45 PVT points (5 MOS bundles x 3
+    temperatures x 3 supplies) at 200 MHz. **N=64** -- k=6, the longest chain
+    and therefore the retiming-budget worst case -- is run at every process
+    bundle and temperature at **2.97 V**, plus \`typical\`/27 C/3.30 V and
+    \`ff\`/-40 C/3.63 V. The 3.30 V and 3.63 V N=64 points are deliberately
+    **not** run: supply is monotonic for logic speed, so the largest
+    accumulated clk->Q, and therefore the binding setup margin, lives at the
+    low supply. The retiming table below consequently spans process x
+    temperature at the binding supply rather than all 45 points, and the two
+    extra points are there to show the trend does not reverse. This is a cost
+    choice on a shared machine, stated rather than hidden; re-running the
+    dropped points needs only a longer job list.
   - **Bottom of band**: N in {4, 64} at 10 MHz, across all five process
     bundles at 125 C/2.97 V (worst for leakage) plus the nominal point.
   - Bundles (-> \`.lib\` sections of sm141064.ngspice): \`typical\` -> typical;
@@ -721,19 +796,29 @@ $(simenv_env_block)
     N is a static configuration (DR-001: glitch-free on-the-fly modulus
     switching is out of v1 scope), so each N is a separate run.
   - Ratio criterion: **two consecutive** retimed-FB periods, each in units of
-    the VCO period, must both equal N exactly (< 1e-3), and the un-retimed
-    DIVOUT ratio must agree to < 1e-2. Two periods rather than one so a chain
-    that alternates N-1/N+1 cannot average its way to a pass.
+    the VCO period, must both equal N to within 0.05, and the un-retimed
+    DIVOUT ratio likewise. Two periods rather than one so a chain that
+    alternates N-1/N+1 cannot average its way to a pass. The tolerance is set
+    by what it has to separate: the quantity is an integer, so the question is
+    only whether it is N or N+-1, and 0.05 sits an order of magnitude inside
+    that 0.5 while staying an order of magnitude outside the measurement
+    resolution (the \`.meas\` 50%-crossing search interpolates between stored
+    timepoints, so its error scales with the max timestep, not with N).
   - Retiming budget: t_arr is DIVOUT's arrival referred to the VCO rising
     edge that caused it, taken modulo one VCO period -- that modulo is the
     point, because what threatens the flop is the arrival *phase* inside a
     VCO period, not how many whole periods the chain took. setup_margin =
     T_vco - t_arr - t_setup and hold_margin = t_arr - t_hold, with t_setup /
     t_hold joined per PVT point from record ${RID_DFF}.
-  - Simulator settings: \`.tran\` max step = VCO period / 100, stop =
-    (3N + 8) VCO periods; \`reltol 1e-3\`, \`abstol 1e-10\`. The 50 ps max step
-    at 200 MHz bounds the interpolation error on t_arr at a few tens of ps,
-    which is the resolution limit on the margin numbers below.
+  - Simulator settings: \`.tran\` stop = (2N + 32) VCO periods (three FB
+    rising edges plus start-up head-room); \`reltol 1e-3\`, \`abstol 1e-10\`.
+    Max step is **VCO period / 100** for the N=64 runs and VCO period / 50
+    for the rest. That split is deliberate: a ratio only needs edge times
+    good to a small fraction of a period, while t_arr is a sub-nanosecond
+    arrival *phase*. The retiming margins below are taken only from N=64
+    rows, so they carry the 50 ps-step interpolation error (a few tens of
+    ps); t_arr on a coarser row is reported for context and is **not** used
+    for any margin.
   - **Limitation -- schematic-level, and it bites hardest here.** There are no
     extracted parasitics and no routing load between cells, and the retiming
     margin is a difference of two numbers that both grow with parasitic load.

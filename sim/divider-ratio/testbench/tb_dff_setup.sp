@@ -13,9 +13,16 @@
 * clock and sees its data transition ti seconds before the clock's 50%
 * crossing, ti stepping from 1.00 ns (relaxed) down to -0.15 ns (data moving
 * AFTER the clock edge). Bank A captures 0->1, bank B captures 1->0. The
-* FIRST clock edge preconditions every flop to the opposite state, so nothing
-* here depends on the DC operating point of a bistable latch; the SECOND edge
-* is the one measured. Setup time is the smallest ti whose clk->Q has not yet
+* FIRST clock edge (5 ns) preconditions every flop to the opposite state and
+* the SECOND (25.05 ns) is the one measured, so nothing here depends on the
+* DC operating point of a bistable latch. Every output measurement carries
+* TD = 20 ns for the same reason and it is load-bearing, not cosmetic: the
+* operating-point solver can leave a latch's feedback loop on its metastable
+* midpoint, and the transient then resolves it to an arbitrary state within
+* the first nanosecond. Observed on this cell at ff/125 C, where Q resolved
+* HIGH at t ~ 1 ns and an unwindowed "first rising edge" search locked onto
+* that resolution instead of the captured edge, reporting a negative clk->Q.
+* Setup time is the smallest ti whose clk->Q has not yet
 * degraded by more than 10% relative to the ti = 1.00 ns reference of the same
 * bank -- the standard degradation criterion. The ladder deliberately extends
 * past ti = 0: a transmission-gate master-slave flop closes its input gate a
@@ -127,26 +134,26 @@ xc9 dc9 ck qc9 nc9 vdd 0 dff_tg_3v3
 .options reltol=1e-3 abstol=1e-10 vntol=1e-5 chgtol=1e-13
 .tran 10p 35n
 
-.meas tran cqa0 trig v(ck) val='vsup/2' rise=2 targ v(qa0) val='vsup/2' rise=1
-.meas tran cqa1 trig v(ck) val='vsup/2' rise=2 targ v(qa1) val='vsup/2' rise=1
-.meas tran cqa2 trig v(ck) val='vsup/2' rise=2 targ v(qa2) val='vsup/2' rise=1
-.meas tran cqa3 trig v(ck) val='vsup/2' rise=2 targ v(qa3) val='vsup/2' rise=1
-.meas tran cqa4 trig v(ck) val='vsup/2' rise=2 targ v(qa4) val='vsup/2' rise=1
-.meas tran cqa5 trig v(ck) val='vsup/2' rise=2 targ v(qa5) val='vsup/2' rise=1
-.meas tran cqa6 trig v(ck) val='vsup/2' rise=2 targ v(qa6) val='vsup/2' rise=1
-.meas tran cqa7 trig v(ck) val='vsup/2' rise=2 targ v(qa7) val='vsup/2' rise=1
-.meas tran cqa8 trig v(ck) val='vsup/2' rise=2 targ v(qa8) val='vsup/2' rise=1
-.meas tran cqa9 trig v(ck) val='vsup/2' rise=2 targ v(qa9) val='vsup/2' rise=1
-.meas tran cqb0 trig v(ck) val='vsup/2' rise=2 targ v(qb0) val='vsup/2' fall=1
-.meas tran cqb1 trig v(ck) val='vsup/2' rise=2 targ v(qb1) val='vsup/2' fall=1
-.meas tran cqb2 trig v(ck) val='vsup/2' rise=2 targ v(qb2) val='vsup/2' fall=1
-.meas tran cqb3 trig v(ck) val='vsup/2' rise=2 targ v(qb3) val='vsup/2' fall=1
-.meas tran cqb4 trig v(ck) val='vsup/2' rise=2 targ v(qb4) val='vsup/2' fall=1
-.meas tran cqb5 trig v(ck) val='vsup/2' rise=2 targ v(qb5) val='vsup/2' fall=1
-.meas tran cqb6 trig v(ck) val='vsup/2' rise=2 targ v(qb6) val='vsup/2' fall=1
-.meas tran cqb7 trig v(ck) val='vsup/2' rise=2 targ v(qb7) val='vsup/2' fall=1
-.meas tran cqb8 trig v(ck) val='vsup/2' rise=2 targ v(qb8) val='vsup/2' fall=1
-.meas tran cqb9 trig v(ck) val='vsup/2' rise=2 targ v(qb9) val='vsup/2' fall=1
+.meas tran cqa0 trig v(ck) val='vsup/2' rise=2 targ v(qa0) val='vsup/2' rise=1 td=20n
+.meas tran cqa1 trig v(ck) val='vsup/2' rise=2 targ v(qa1) val='vsup/2' rise=1 td=20n
+.meas tran cqa2 trig v(ck) val='vsup/2' rise=2 targ v(qa2) val='vsup/2' rise=1 td=20n
+.meas tran cqa3 trig v(ck) val='vsup/2' rise=2 targ v(qa3) val='vsup/2' rise=1 td=20n
+.meas tran cqa4 trig v(ck) val='vsup/2' rise=2 targ v(qa4) val='vsup/2' rise=1 td=20n
+.meas tran cqa5 trig v(ck) val='vsup/2' rise=2 targ v(qa5) val='vsup/2' rise=1 td=20n
+.meas tran cqa6 trig v(ck) val='vsup/2' rise=2 targ v(qa6) val='vsup/2' rise=1 td=20n
+.meas tran cqa7 trig v(ck) val='vsup/2' rise=2 targ v(qa7) val='vsup/2' rise=1 td=20n
+.meas tran cqa8 trig v(ck) val='vsup/2' rise=2 targ v(qa8) val='vsup/2' rise=1 td=20n
+.meas tran cqa9 trig v(ck) val='vsup/2' rise=2 targ v(qa9) val='vsup/2' rise=1 td=20n
+.meas tran cqb0 trig v(ck) val='vsup/2' rise=2 targ v(qb0) val='vsup/2' fall=1 td=20n
+.meas tran cqb1 trig v(ck) val='vsup/2' rise=2 targ v(qb1) val='vsup/2' fall=1 td=20n
+.meas tran cqb2 trig v(ck) val='vsup/2' rise=2 targ v(qb2) val='vsup/2' fall=1 td=20n
+.meas tran cqb3 trig v(ck) val='vsup/2' rise=2 targ v(qb3) val='vsup/2' fall=1 td=20n
+.meas tran cqb4 trig v(ck) val='vsup/2' rise=2 targ v(qb4) val='vsup/2' fall=1 td=20n
+.meas tran cqb5 trig v(ck) val='vsup/2' rise=2 targ v(qb5) val='vsup/2' fall=1 td=20n
+.meas tran cqb6 trig v(ck) val='vsup/2' rise=2 targ v(qb6) val='vsup/2' fall=1 td=20n
+.meas tran cqb7 trig v(ck) val='vsup/2' rise=2 targ v(qb7) val='vsup/2' fall=1 td=20n
+.meas tran cqb8 trig v(ck) val='vsup/2' rise=2 targ v(qb8) val='vsup/2' fall=1 td=20n
+.meas tran cqb9 trig v(ck) val='vsup/2' rise=2 targ v(qb9) val='vsup/2' fall=1 td=20n
 
 * Hold: Q of each bank-C copy, averaged between the measured edge and the
 * next one. ~0 means the old value was held (hold satisfied); ~vsup means the

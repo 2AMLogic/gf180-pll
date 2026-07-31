@@ -66,23 +66,23 @@ xf ckf  hi hi ckof mof vdd 0 div23_cell
 
 * --- division ratios: two output periods each, measured against the cell's
 *     own input period (XE and XF run 1.5x and 2x faster than kf).
-.meas tran ta1 when v(ckoa)='vsup/2' rise=1
-.meas tran ta3 when v(ckoa)='vsup/2' rise=3
+.meas tran ta1 when v(ckoa)='vsup/2' rise=1 td='ttd'
+.meas tran ta3 when v(ckoa)='vsup/2' rise=3 td='ttd'
 .meas tran na param='(ta3-ta1)/(2*tvco)'
-.meas tran tb1 when v(ckob)='vsup/2' rise=1
-.meas tran tb3 when v(ckob)='vsup/2' rise=3
+.meas tran tb1 when v(ckob)='vsup/2' rise=1 td='ttd'
+.meas tran tb3 when v(ckob)='vsup/2' rise=3 td='ttd'
 .meas tran nb param='(tb3-tb1)/(2*tvco)'
-.meas tran tc1 when v(ckoc)='vsup/2' rise=1
-.meas tran tc3 when v(ckoc)='vsup/2' rise=3
+.meas tran tc1 when v(ckoc)='vsup/2' rise=1 td='ttd'
+.meas tran tc3 when v(ckoc)='vsup/2' rise=3 td='ttd'
 .meas tran nc param='(tc3-tc1)/(2*tvco)'
-.meas tran td1 when v(ckod)='vsup/2' rise=1
-.meas tran td3 when v(ckod)='vsup/2' rise=3
+.meas tran td1 when v(ckod)='vsup/2' rise=1 td='ttd'
+.meas tran td3 when v(ckod)='vsup/2' rise=3 td='ttd'
 .meas tran nd param='(td3-td1)/(2*tvco)'
-.meas tran te1 when v(ckoe)='vsup/2' rise=1
-.meas tran te3 when v(ckoe)='vsup/2' rise=3
+.meas tran te1 when v(ckoe)='vsup/2' rise=1 td='ttd'
+.meas tran te3 when v(ckoe)='vsup/2' rise=3 td='ttd'
 .meas tran ne param='(te3-te1)/(2*tvco/1.5)'
-.meas tran tf1 when v(ckof)='vsup/2' rise=1
-.meas tran tf3 when v(ckof)='vsup/2' rise=3
+.meas tran tf1 when v(ckof)='vsup/2' rise=1 td='ttd'
+.meas tran tf3 when v(ckof)='vsup/2' rise=3 td='ttd'
 .meas tran nf param='(tf3-tf1)/(2*tvco/2)'
 
 * --- clk->Q of the cell, extracted modulo the input period so it does not
@@ -92,16 +92,16 @@ xf ckf  hi hi ckof mof vdd 0 div23_cell
 * --- output high times. The sign is corrected in the runner by adding one
 *     output period when the DC operating point happens to start the cell high
 *     (rise #3 and fall #3 are then one period apart in the other order).
-.meas tran fa3 when v(ckoa)='vsup/2' fall=3
+.meas tran fa3 when v(ckoa)='vsup/2' fall=3 td='ttd'
 .meas tran pwa param='fa3-ta3'
-.meas tran fb3 when v(ckob)='vsup/2' fall=3
+.meas tran fb3 when v(ckob)='vsup/2' fall=3 td='ttd'
 .meas tran pwb param='fb3-tb3'
 
 * --- MODOUT pulse width of the divide-by-3 cell: must be exactly one CKIN
 *     period, because the previous (2x faster) cell has to see it as one of
 *     ITS output periods.
-.meas tran rmb2 when v(mob)='vsup/2' rise=2
-.meas tran fmb2 when v(mob)='vsup/2' fall=2
+.meas tran rmb2 when v(mob)='vsup/2' rise=2 td='ttd'
+.meas tran fmb2 when v(mob)='vsup/2' fall=2 td='ttd'
 .meas tran pwmb param='fmb2-rmb2'
 
 * --- supply current (both moduli running, 6 cells) for a first-order power
