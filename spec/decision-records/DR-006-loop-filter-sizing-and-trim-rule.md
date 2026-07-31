@@ -13,13 +13,17 @@
   coming back with the real component values, the real corner-swept
   stability table, and one correction to the hand calc's `C2 = C1/10`
   placeholder.
-- **Evidence**: `sim/loop-dynamics/records/20260731-195707-3e3814c.md` (this
+- **Evidence**: `sim/loop-dynamics/records/20260731-202550-82af5a9.md` (this
   issue's own corner-matrix sweep, cross-checked against an independent
-  whole-loop simulation to < 0.001 % agreement); consumes
+  whole-loop simulation to < 0.001 % agreement). That record supersedes
+  `20260731-195707-3e3814c`, which computed its control-line ripple from the
+  pre-#46 charge pump; the two agree exactly everywhere else. Consumes
   `sim/devchar-passives/records/20260731-041345-833292f.md` and
   `.../20260731-041346-833292f.md` (#4, capacitor/resistor device data),
   `sim/vco-tuning-range/records/20260731-081628-239e73b.md` (#8, Kvco table),
-  `sim/cp-compliance/records/20260731-122451-63e4b47.md` (#9, Icp/trim data).
+  `sim/cp-compliance/records/20260731-194124-afa338c.md` (#9, Icp/trim data —
+  the post-#46 charge pump, i.e. with the `cp_dumpbuf` dump-node buffer DR-005
+  settles, which is what is on `main`).
 
 ## Context
 
@@ -123,13 +127,36 @@ pole near `1/(2πRC1)`, regardless of how much Icp is applied) rather than an
 asserted one.
 
 **8. Control-line ripple is dominated by charge-pump charge asymmetry, not
-current mismatch**, and it is C2's tradeoff alone: worst-case peak Vctrl
-ripple 51.6 mV (median 20.8 mV), bounding the accumulated timing error at
-472.6 ps worst-case (median 79.6 ps). Ripple scales as `1/C2` while the
-pole-zero spread this record's phase margin depends on scales as `C1/C2` —
-the same knob cuts both ways, and the as-built 2.02 pF is the point where the
-phase-margin criterion is met at every f_ref without giving up more ripple
-margin than that requires (`sim/loop-dynamics`'s `ripple_tradeoff.csv`).
+current mismatch — and with the post-#46 charge pump that asymmetry no longer
+constrains C2.** The mechanism is unchanged: the per-event charge asymmetry
+`|q_up + q_dn|` lands on C2 once per reference cycle, whereas the UP/DN
+*current* mismatch during the ~1 ns anti-backlash window contributes under
+1 fC. What changed is its size. DR-005's `cp_dumpbuf` was adopted to null
+exactly this term, and `sim/cp-compliance` record `20260731-194124-afa338c`
+measures the result: `|q_up + q_dn|` = **3.68 fC worst case, 2.16 fC median**,
+against 104 fC / 41.9 fC for the pre-#46 charge pump — a ~28× improvement.
+Carried through this filter:
+
+| Quantity | Worst-corner dQ | Median dQ |
+|---|---|---|
+| Peak Vctrl ripple (`dQ/C2`) | 1.83 mV | 1.07 mV |
+| Peak instantaneous `df/f` (κ = 0.5/V) | 0.091 % | 0.054 % |
+| Bound on accumulated timing error (TIE) | 0.67 ps | 0.23 ps |
+
+Ripple still scales as `1/C2` while the pole-zero spread the phase margin
+depends on scales as `C1/C2`, so the same knob still cuts both ways — but at
+these charge levels the ripple side does not bind: even at 0.5 pF, a quarter
+of the as-built C2, worst-case ripple would be 7.4 mV. **C2 is therefore
+sized by phase margin, not by ripple**, and the as-built 2.02 pF sits on the
+flat part of that curve (`sim/loop-dynamics`'s `ripple_tradeoff.csv`:
+halving C2 buys +0.45° of worst-case model phase margin, doubling it costs
+22 of the 140 (f_ref, N, code) cells).
+
+This decision is stated against the charge pump that is on `main`. Should a
+future charge-pump revision give back the charge asymmetry `cp_dumpbuf`
+nulls, the ripple side of this trade becomes binding again and C2 has to be
+re-argued — that dependency is why the consumed cp-compliance record is named
+explicitly in **Evidence** above rather than left implicit.
 
 ## Alternatives considered
 
@@ -144,11 +171,15 @@ margin than that requires (`sim/loop-dynamics`'s `ripple_tradeoff.csv`).
   needs a smaller one to avoid over-driving `f_c` toward the third pole).
   Rejecting a fixed code in favor of the stated per-f_ref rule is therefore
   not a preference, it is what the measured data requires.
-- **Widening C2 further to relax the phase-margin criterion's dependence on
-  trim code** — not pursued in this record: it would increase ripple (§8)
-  for a margin problem that the existing 2-bit trim, correctly used, already
-  resolves at every f_ref in the ratified range. Revisit only if a future
-  spec change removes the trim mechanism this decision assumes.
+- **Shrinking C2 further (widening the C1/C2 spread) to relax the
+  phase-margin criterion's dependence on trim code** — not pursued in this
+  record, and the reason is *not* ripple: at the post-#46 charge pump's
+  charge levels halving C2 costs only ~1.8 mV more ripple (§8). It is that it
+  does not buy the thing it would be for — +0.45° of worst-case model phase
+  margin and 2 of 140 cells (`ripple_tradeoff.csv`) — for a margin problem
+  that the existing 2-bit trim, correctly used, already resolves at every
+  f_ref in the ratified range. Revisit only if a future spec change removes
+  the trim mechanism this decision assumes.
 - **Re-deriving R/C1 target values from scratch instead of DR-001's
   `ω_c ∝ Icp·Kvco·R/N` starting point** — not needed: the hand-calc order of
   magnitude for R and C1 holds up against the real device data (within a few
