@@ -88,7 +88,7 @@ expected_subckts() {
     divider_chain)  echo "divider_chain div23_cell nor2_3v3 inv_3v3 nand2_3v3 nand3_3v3 inv2x_3v3 dff_tg_3v3 tgate_3v3" ;;
     lock_detector)  echo "lock_detector xor2_3v3 delaywin_3v3 nand2_3v3 inv_3v3 schmitt_3v3" ;;
     dff_tg_3v3)     echo "dff_tg_3v3 inv_3v3 tgate_3v3" ;;
-    pfd_cp)         echo "pfd_cp pfd cp cp_leg_n cp_leg_p srlatch edgedet pfdcp_nand2_3v3 pfdcp_inv_3v3" ;;
+    pfd_cp)         echo "pfd_cp pfd cp cp_leg_n cp_leg_p cp_dumpbuf srlatch edgedet pfdcp_nand2_3v3 pfdcp_inv_3v3" ;;
     *)              echo "" ;;
   esac
 }

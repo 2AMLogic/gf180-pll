@@ -27,6 +27,7 @@ design/
   pfd.sch / .sym        tri-state phase-frequency detector
   cp.sch / .sym         charge pump: 2-bit unit-element trim, cascode output
   cp_leg_n/_p.sch/.sym  one unit of sink / source current
+  cp_dumpbuf.sch/.sym   dump-node buffer holding VDUMP at the control voltage
   srlatch, edgedet      custom logic cells the PFD is built from
   dut_export.sch        netlist-export root for pfd_cp; not part of the design
 
@@ -170,7 +171,7 @@ L = 0.28 µm and its ratios:
 | `pfdcp_nand2_3v3` | PFD/CP (#9) | Wp 1.5 µm, series NMOS 1 µm, L = 0.3 µm | pull-down strength tracking `pfdcp_inv_3v3`, keeping the reset path symmetric between the UP and DN branches |
 
 The VCO's `vco_stage` / `vco_bias` and the PFD/CP's `pfd`, `cp`, `cp_leg_n`,
-`cp_leg_p`, `srlatch`, `edgedet` are block *internals*, not leaf cells offered
+`cp_leg_p`, `cp_dumpbuf`, `srlatch`, `edgedet` are block *internals*, not leaf cells offered
 to anyone else; they are named for their function and are instantiated only by
 their own block's top.
 
@@ -367,6 +368,7 @@ current-steering charge pump with a 2-bit unit-element Icp trim.
 | `srlatch` | NAND SR latch, active-low set/reset |
 | `pfd` | tri-state phase-frequency detector |
 | `cp_leg_n` / `cp_leg_p` | one **unit** of charge-pump sink / source current |
+| `cp_dumpbuf` | dump-node tracking buffer: complementary pair of unity-gain 5T OTAs |
 | `cp` | charge pump: 2-bit unit-element Icp trim, wide-swing cascode output |
 | `pfd_cp` | PFD + charge pump — the DR-001 Decision 1 phase-detect front end |
 | `dut_export` | netlist-export root only; not part of the design hierarchy |
@@ -415,8 +417,10 @@ corner:
    The cost is bounded and small: the constant UP/DN overlap grows, and that
    overlap converts up/down *current* mismatch into static phase error at a
    rate of (overlap × mismatch fraction) — a few percent of a couple of
-   nanoseconds, i.e. tens of picoseconds, far below the tail-charge offset
-   that dominates the budget below.
+   nanoseconds, i.e. tens of picoseconds. That used to be two orders below the
+   tail-charge offset; now that #24 has nulled the tail term it is only about
+   one order below it, and it is the next term that would matter if the offset
+   ever had to shrink further.
 
 **Interface contract to #11 (feedback divider).** DR-001 Decision 3 specifies
 that FB is a VCO edge retimed by exactly one flop's clk→Q, independent of N,
@@ -470,12 +474,27 @@ unit-element Icp trim.
   minimum pulse may be. A 1u pair measurably lowered the detector gain.
   `MDUMN`/`MDUMP` are the standard half-width dummies gated by the
   complementary control.
-- **Shared, clamped dump node.** Idle legs steer to `VDUMP`, held near
-  mid-supply by two stacked NMOS diodes to VSS and two stacked PMOS diodes
-  from VDD (4u/12u — sized to hold the node *stiffly*, not merely to bound
-  it: a narrower 1u/3u clamp left VDUMP free to swing ~0.5 V during a pulse,
-  dragging the idle tail with it). See "Charge-error mechanism" below for why
-  this is not the obvious rail-dump design.
+- **Shared, Vctrl-tracking dump node.** Idle legs steer to `VDUMP`, which
+  `cp_dumpbuf` holds at the control-node voltage. Because the dump node and
+  the control node are then at the same potential, a steering switch closing
+  sees *no step* between the tail it was parked on and the node it is being
+  connected to, and the tail-charge term is nulled rather than balanced. This
+  replaces (does not supplement) the fixed diode clamp the block shipped in
+  #9 — the two cannot coexist. See "Charge-error mechanism" below for the
+  measured history, and **DR-005** for why a bias helper of this shape is
+  compatible with DR-001 Decision 1's no-opamp-in-the-loop-path constraint.
+- **The buffer is two amplifiers, not one, and that is a headroom result.** A
+  single differential pair cannot span the 0.9–2.4 V Vctrl window on a 2.97 V
+  worst-case rail: an NMOS-input pair runs out of tail headroom at the bottom
+  and a PMOS-input pair at the top. `cp_dumpbuf` therefore ties the outputs of
+  two unity-gain 5T OTAs, one of each polarity, together on `VDUMP`; where
+  they overlap they work in parallel, and outside its range each one's tail
+  collapses and its output device turns off rather than fighting. Tails mirror
+  four unit currents (≈8 µA) each off the existing `IBN`/`IBP` diodes — sized
+  to exceed the largest trim code's `Icp` so that a persistently one-sided PFD
+  state (which is what acquisition looks like) cannot collapse the node, not
+  merely for settling speed. Cost: ≈16 µA of static current (≈53 µW), and two
+  MOS gates (≈0.3 pF) on the control node — 0.2 % of the loop filter's C1.
 - **Bias generation is out of scope for this block.** `IBN`/`ICN`/`IBP`/`ICP`
   are the four reference nodes; the testbenches drive them from ideal current
   sources at 4× the unit-leg current, as `sim/devchar-cp` drives its mirrors,
@@ -491,12 +510,18 @@ is code 10 (three unit legs, ≈5.2 µA).
 
 The **effective phase-detector gain** — the charge actually delivered per unit
 of phase error, which is what #10's loop-filter design must use, not the DC
-Icp — is 2.19–5.67 µA across corners at the nominal code (`pfd-deadzone`
-record). It is below the DC Icp because the pump spends part of every pulse
-establishing its output current, and the gap widens at the slow/cold/low-supply
-corners.
+Icp — is **4.76–5.89 µA** across corners at the nominal code (`pfd-deadzone`
+record `20260731-192355-afa338c`). It is still below the DC Icp because the
+pump spends part of every pulse establishing its output current, but only
+slightly, and the spread across corners is now 1.24:1. Before #24's dump-node
+buffer the same measurement gave **2.19–5.67 µA**, a 2.6:1 spread with the
+floor set by the slow/cold/low-supply corners: holding the dump node at the
+control voltage removes the tail excursion the pump used to spend the start of
+every pulse recovering from, so the gain a loop-filter design can rely on at
+the worst corner **more than doubled**. #10 should size against the new floor,
+not the old one.
 
-### Charge-error mechanism (why the dump node is shared and clamped)
+### Charge-error mechanism (why the dump node is shared and buffered)
 
 At a few microamps and a sub-nanosecond minimum pulse, the *signal* charge per
 pulse is only a few femtocoulombs. Anything that exchanges tens of
@@ -505,19 +530,31 @@ dominates it. The dominant such term is the **tail node**: when a steering
 switch closes, the tail it was holding at its idle voltage is dragged to VOUT,
 and that charge comes out of the control node.
 
-Three dump-node designs were built and measured at the nominal corner, in this
-order:
+Four dump-node designs have been built and measured, in this order:
 
-| Idle tail parked at | Measured net charge at zero phase error |
-|---|---|
-| each polarity's own rail (the obvious design) | ≈ −10 fC |
-| shared unclamped dump node | ≈ −7 fC, and the node sat at 0.18 V |
-| shared **clamped** dump node (current design) | ≈ −6 fC |
+| Idle tail parked at | Measured net charge at zero phase error | Worst UP/DN skew over the Vctrl window |
+|---|---|---|
+| each polarity's own rail (the obvious design) | ≈ −10 fC | not characterized |
+| shared unclamped dump node | ≈ −7 fC, and the node sat at 0.18 V | not characterized |
+| shared **clamped** dump node (#9) | −40.7 … +14.7 fC over 45 corners | −19.4 … +15.8 ns |
+| shared **Vctrl-tracking** dump node (current design, #24) | **−3.50 … +0.30 fC** over 45 corners | **−0.60 … −0.05 ns** |
+
+(The first two rows are nominal-corner spot measurements taken while the
+topology was being chosen; the last two are the full 45-point campaigns, from
+`pfd-deadzone` records `20260731-121919-63e4b47` and `20260731-192355-afa338c`
+and `cp-compliance` records `20260731-122451-63e4b47` and
+`20260731-194124-afa338c` respectively.)
 
 The unclamped shared node fails for an instructive reason: with both legs idle
 it carries only the *difference* of two nominally equal currents, so it is
 degenerate and any mismatch walks it to whichever end saturates first. The
-clamp removes the degeneracy without adding a control loop.
+clamp removes the degeneracy without adding a control loop — but a *fixed*
+park voltage can only null the exchange at one control voltage, which is why
+the clamped row still carries a large Vctrl-dependent skew. The measured null
+sat at **1.487 V**, already close to the middle of the 0.9–2.4 V window, so
+re-centring the clamp was measured to be nearly exhausted as a mitigation
+(≈20 % off the worst case, and it makes the 0.9 V end worse). Making the node
+*track* the control voltage removes the term instead of re-balancing it.
 
 The same tail mechanism has a second, sharper consequence — it does not just
 offset the transfer, it can *flatten* it. If the tail has not finished moving
@@ -529,14 +566,22 @@ three changes that fixed it all attack the same time constant — a longer
 minimum pulse (24 stages), a faster tail (6u switches, stiff clamp), and a
 faster bias recovery (4× bias branch).
 
-**What remains, and the honest limit.** A unity-gain buffer holding the dump
-node exactly at VOUT would null this residue outright and is the textbook
-answer; it is not in this revision because DR-001 keeps opamps out of the loop
-path and because the buffer is a design and verification item of its own. The
-residue that survives is *measured, not assumed*, at every corner, and is the
-dominant term in the budget below. If #10's loop-filter and spur analysis
-finds the static offset too expensive, the buffered dump node is the first
-thing to add.
+**What remains, and the honest limit.** The buffered dump node (`cp_dumpbuf`,
+ratified as compatible with DR-001 Decision 1 by **DR-005**) is that fix, and
+it is now in the design. What survives is the buffer's own residual input
+offset — a few millivolts of `V_dump − Vctrl` rather than up to 0.75 V — and it
+is *measured, not assumed*, at every corner. Two honest limits remain:
+
+1. **The residual is one-signed.** Post-mitigation the skew is negative at
+   every one of the 135 (corner, Vctrl) points (−0.60 … −0.05 ns) rather than
+   straddling zero, which says it is a systematic buffer offset and not noise.
+   It is small enough not to matter at any reference frequency in the ratified
+   range, but it will not average out.
+2. **The buffer's own noise is not characterized here.** Its thermal and
+   flicker noise reaches the control node through the input pairs' `C_gs`.
+   #24's campaigns measure *charge*, not noise; **#14** owns that, and a
+   supply/noise record taken from here on must state that it measured the
+   buffered revision.
 
 ---
 
@@ -550,11 +595,18 @@ for the terms this block's own testbenches deliberately exclude.
 
 | # | Term | Systematic (measured, all 45 PVT corners) | **Budget (3σ, incl. random mismatch)** | Verified by |
 |---|---|---|---|---|
-| 1 | DC UP/DN current mismatch, `(Iup−Idn)/Iavg`, worst point in 0.9–2.4 V | −2.6 % … +4.7 % | **±12 %** | #15 |
-| 2 | Effective UP/DN switching-time skew, `w_up − w_dn`, over the whole Vctrl window | −19.4 ns … +15.8 ns | **±30 ns** | #15 |
-| 2a | — the same term at mid-window (Vctrl = 1.65 V) only | −8.4 ns … +3.0 ns | **±14 ns** | #15 |
-| 3 | Residual net charge per reference cycle at zero phase error (Vctrl = 1.65 V) | −40.7 fC … +14.7 fC | **±100 fC** | #15 |
-| 4 | Resulting static phase offset, `q_zero / Kd` (Vctrl = 1.65 V) | −3.9 ns … +9.8 ns | **±30 ns** over the full Vctrl window (= term 2) | #12 (closed loop) |
+| 1 | DC UP/DN current mismatch, `(Iup−Idn)/Iavg`, worst point in 0.9–2.4 V | −2.7 % … +4.7 % | **±12 %** | #15 |
+| 2 | Effective UP/DN switching-time skew, `w_up − w_dn`, over the whole Vctrl window | −0.60 ns … −0.05 ns | **±3 ns** | #15 |
+| 2a | — the same term at mid-window (Vctrl = 1.65 V) only | −0.47 ns … −0.05 ns | **±2 ns** | #15 |
+| 3 | Residual net charge per reference cycle at zero phase error (Vctrl = 1.65 V) | −3.50 fC … +0.30 fC | **±20 fC** | #15 |
+| 4 | Resulting static phase offset, `q_zero / Kd` (Vctrl = 1.65 V) | −0.06 ns … +0.67 ns | **±3 ns** over the full Vctrl window (= term 2) | #12 (closed loop) |
+
+**Provenance of the measured column**: term 1 and term 2 from `cp-compliance`
+record `20260731-194124-afa338c`; terms 3 and 4 from `pfd-deadzone` record
+`20260731-192355-afa338c`. Both were minted after #24 replaced the fixed
+dump-node clamp with `cp_dumpbuf`. The before-picture records
+(`20260731-122451-63e4b47`, `20260731-121919-63e4b47`) stand unmodified and
+are what the "was" figures below refer to.
 
 Notes on how to read this table:
 
@@ -572,43 +624,68 @@ Notes on how to read this table:
   a clean control edge; term 3 measures the net the loop actually sees with
   the real PFD driving; term 4 is term 3 divided by the detector gain, i.e.
   the phase at which the loop settles.
-- **Term 2's strong Vctrl dependence is the mechanism's signature**, and it is
-  the single most important number in this table for downstream work:
+- **Terms 2, 3 and 4 fell by 12–32× in #24**, because the exchange is
+  proportional to `V_dump − Vctrl` and the dump node now tracks `Vctrl`
+  instead of sitting at a fixed 1.487 V. Term 2's worst case went
+  **19.4 ns → 0.60 ns**, term 3's **40.7 fC → 3.50 fC**, term 4's
+  **9.8 ns → 0.67 ns**. Term 1 did not move at all (the DC characteristic does
+  not involve the dump node — the two campaigns' DC tables are numerically
+  identical), which is the cleanest confirmation available that the two error
+  mechanisms really are independent.
+- **The budgets in the right-hand column were re-derived, not just scaled
+  down.** They now sit at 4–6× the measured systematic worst case, where the
+  pre-#24 budgets sat at 1.5–2.5×. That widening is deliberate and is the
+  point: with the systematic term nulled, **random** device mismatch is no
+  longer a perturbation on top of a large systematic error — it is the
+  dominant contributor to terms 2–4, and it is not in the measured column
+  (`sw_stat_mismatch = 0`). The residual now traces mostly to `cp_dumpbuf`'s
+  own input offset, so #15's Monte Carlo must include the buffer's input pairs
+  and not only the mirror legs. If #15 finds the distribution does not fit
+  inside these numbers, the resolution is a decision record, not a quiet
+  widening here.
+- **Term 2's Vctrl dependence used to be the mechanism's signature, and it is
+  now gone** — which is the single most useful fact in this table for
+  downstream work:
 
-  | Vctrl | mean skew across 45 corners | worst corner |
-  |---|---|---|
-  | 0.9 V | +8.9 ns | +15.8 ns |
-  | 1.65 V | −1.9 ns | −8.4 ns |
-  | 2.4 V | −12.7 ns | −19.4 ns |
+  | Vctrl | mean skew across 45 corners | worst corner | *(was, #9)* mean | *(was)* worst |
+  |---|---|---|---|---|
+  | 0.9 V | −0.41 ns | −0.60 ns | +8.9 ns | +15.8 ns |
+  | 1.65 V | −0.21 ns | −0.47 ns | −1.9 ns | −8.4 ns |
+  | 2.4 V | −0.26 ns | −0.48 ns | −12.7 ns | −19.4 ns |
 
-  The skew is proportional to `V_dump − Vctrl` and crosses zero near the dump
-  node's own idle voltage. **This is a real limitation of the present design,
-  not a measurement artefact.** A ±30 ns static offset is a couple of percent
-  of a reference period at 1 MHz and most of a period at 25 MHz, so as drawn
-  this block is comfortable at the bottom of the ratified 1–25 MHz reference
-  range and is *not* comfortable at the top with Vctrl near a window edge.
-  The fix is to make the dump node track Vctrl (a unity-gain buffer nulls the
-  exchange outright) or, more cheaply, to re-centre the dump node so the error
-  is symmetric about the window instead of one-sided. Both are scoped in
-  **#24**, with this record set as the before-picture. Until then, #10's
-  loop-filter and spur analysis and #12's closed-loop work should treat the
-  static offset as Vctrl-dependent rather than a constant.
+  The skew is proportional to `V_dump − Vctrl`, so with the dump node tracking
+  the control node the term is nulled at every control voltage rather than at
+  one. The worst-case corner of the before-picture — **Vctrl = 2.4 V**, where
+  the skew reached −19.4 ns at `fs/125 °C/2.97 V` — now measures **−0.48 ns**
+  worst case across all 45 corners, and the residual no longer varies
+  systematically with Vctrl (0.41/0.21/0.26 ns of mean, i.e. flat to within
+  the corner spread). **#10's loop-filter and spur analysis and #12's
+  closed-loop work may now treat the static offset as a small constant rather
+  than a Vctrl-dependent term.** At the 25 MHz top of the ratified reference
+  range a 0.6 ns offset is 1.5 % of a reference period, against the ~50 % the
+  pre-#24 design carried there.
 - **Term 4 is a static offset, not a frequency error.** A charge-pump
   asymmetry does not shift the locked frequency; the loop settles at the phase
   where the net charge per cycle is zero. What it costs is control-node ripple
   — the equilibrium UP pulse is longer than the DN pulse by exactly this
   offset — which is a reference-spur mechanism, hence a budget rather than a
   shrug.
-- **The overlap-times-mismatch term is negligible here.** The classic
-  static-phase-error formula (reset overlap × current-mismatch fraction) gives
-  about 2 ns × 5 % ≈ 100 ps with the numbers above — two orders below the
-  tail-charge term. That is worth stating explicitly, because it is the term
-  most PFD/CP write-ups lead with, and at this current level it is not the one
-  that matters.
+- **The overlap-times-mismatch term is now the *next* term, not a negligible
+  one.** The classic static-phase-error formula (reset overlap ×
+  current-mismatch fraction) gives about 2 ns × 5 % ≈ 100 ps with the numbers
+  above. Against the pre-#24 tail-charge term that was two orders down and
+  safely ignorable; against the post-#24 residual (0.60 ns worst case) it is
+  only about 6× down. It is still not the binding term, but it is the one that
+  would have to be attacked next — by trimming `Icp` (term 1 is what the 2-bit
+  trim exists for) or by shortening the reset overlap — if the static offset
+  ever had to shrink another order of magnitude.
 - **Bias-generator contribution is excluded** from both the measured column
   and, deliberately, from the budget: it is a separate block. When it lands,
   its mirror mismatch adds to term 1 and the budget must be re-derived rather
-  than silently absorbed.
+  than silently absorbed. Note that `cp_dumpbuf`'s tails now mirror from the
+  same `IBN`/`IBP` references, so the bias block must supply ≈16 µA more than
+  it did before #24, and a bias failure now takes the dump node's definition
+  with it (there is no passive clamp behind it any more — see DR-005).
 - **The budget is not a spec line.** No ratified spec parameter exists for
   charge-pump mismatch (#1 is open). If #15's statistics or #10's spur
   analysis show these values do not buy the spur/jitter performance the

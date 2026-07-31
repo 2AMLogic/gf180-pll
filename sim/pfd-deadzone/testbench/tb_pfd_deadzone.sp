@@ -92,7 +92,20 @@ vctrl vctrl_src 0 dc 'vctrl'
 * two off devices, which is a floating node for the DC operating point.  A
 * 1 Tohm shunt to ground resolves it; at 3.3 V that is 3.3 pA against a
 * multi-microamp signal, i.e. below the abstol floor of the measurement.
-.option abstol=1e-14 reltol=1e-4 vntol=1e-7 rshunt=1e12
+* itl4: transient Newton-iteration limit, raised from ngspice's default of 10.
+* This is a solver-EFFORT knob, not a tolerance: every convergence tolerance
+* (abstol/reltol/vntol) is unchanged, so the converged solution is unchanged --
+* verified bit-for-bit at typical/27C/3.30V/Vctrl=1.65V, which converges either
+* way.  It is needed because the dump-node buffer (cp_dumpbuf, DR-005) puts two
+* MOS gates on the control node, and the ideal source holding that node has to
+* carry their displacement current: with everything else in DC steady state, that
+* branch current numerically jitters at a few times 1e-14 A against an abstol of
+* 1e-14 A, and ngspice's default 10 iterations are not enough to settle it, so it
+* halves the timestep to nothing at the sibling cp-compliance switching bench, which
+* drives the same charge pump from a clean edge; it is set here for the same
+* reason and with the same (nil) effect on the reported numbers.  Raising abstol instead does NOT fix it
+* and would have loosened a real tolerance; more iterations does, and does not.
+.option abstol=1e-14 reltol=1e-4 vntol=1e-7 rshunt=1e12 itl4=200
 .control
   set noaskquit
   let vmid = vsup_c / 2
