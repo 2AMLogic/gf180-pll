@@ -60,6 +60,15 @@ run_one() {
   mkdir -p "${rundir}"
   cp "${WORK}/vco.spice" "${rundir}/vco.spice"
 
+  # A ring that does not oscillate is a RESULT, not a runner failure: with only
+  # three stages the Barkhausen condition needs a small-signal gain of
+  # 1/cos(pi/3) = 2.0 per stage, against 1.24 for five and 1.11 for seven, and a
+  # current-starved cell loses gain as its head/tail devices are driven fully on.
+  # So a point is accepted once, for every stage count, EITHER the frequency
+  # measurement landed OR the ring node is provably static (its max and min over
+  # the measurement window agree to within 1 % of the supply). Only a run where
+  # neither holds is retried with a longer window and ultimately reported as a
+  # failure. A non-oscillating ring is emitted with fosc = 0.
   local libs attempt=0 stretch=1 ok=0
   libs=$(bundle_libs "${bundle}")
   while [ "${attempt}" -lt 3 ]; do
@@ -67,15 +76,28 @@ run_one() {
     read -r tsettle tstop tmax < <(python3 -c "
 flo=${flo}; fhi=${fhi}; s=${stretch}
 ts=4.0/flo*s; print('%.6g %.6g %.6g' % (ts, ts + 7.0/flo*s, 1.0/(80*fhi)))")
-    if simenv_run_deck "${DECK}" "${WORK}" "${tag}" "${libs}" "${temp}" \
-        "vsup=${vdd}" "vctrl=${vctrl}" "b0=${b0}" "b1=${b1}" "b2=${b2}" \
-        "tsettle=${tsettle}" "tstop=${tstop}" "tstep=${tmax}" "tmax=${tmax}" \
-        >/dev/null 2>&1
-    then
-      local ngood
-      ngood=$(grep -cE "^ *f[357] *=" "${rundir}/ngspice.log" || true)
-      [ "${ngood}" -eq 3 ] && { ok=1; break; }
-    fi
+    # simenv_run_deck's own error screen greps the ngspice log for /^ *error/,
+    # which a deliberately-expected failed `.meas` (a ring that did not start
+    # has no half-supply crossing to measure) also matches. Its verdict is
+    # therefore not usable here; the per-stage resolution check below is
+    # stricter anyway -- it requires every stage count to yield either a
+    # frequency or a provably static node, which a genuinely broken run cannot.
+    simenv_run_deck "${DECK}" "${WORK}" "${tag}" "${libs}" "${temp}" \
+      "vsup=${vdd}" "vctrl=${vctrl}" "b0=${b0}" "b1=${b1}" "b2=${b2}" \
+      "tsettle=${tsettle}" "tstop=${tstop}" "tstep=${tmax}" "tmax=${tmax}" \
+      >/dev/null 2>&1 || true
+
+    local resolved=1 hi lo
+    for n in 3 5 7; do
+      if grep -qE "^ *f${n} *= *[-0-9.]" "${rundir}/ngspice.log" 2>/dev/null; then continue; fi
+      hi=$(simenv_meas "${rundir}/ngspice.log" "s${n}hi" 2>/dev/null || echo nan)
+      lo=$(simenv_meas "${rundir}/ngspice.log" "s${n}lo" 2>/dev/null || echo nan)
+      if [ "${hi}" = "nan" ] || [ "${lo}" = "nan" ] || \
+         [ "$(python3 -c "print(1 if abs(${hi}-(${lo})) < 0.01*${vdd} else 0)")" != "1" ]; then
+        resolved=0
+      fi
+    done
+    [ "${resolved}" -eq 1 ] && { ok=1; break; }
     attempt=$((attempt + 1))
     stretch=$((stretch * 3))
   done
@@ -85,6 +107,7 @@ ts=4.0/flo*s; print('%.6g %.6g %.6g' % (ts, ts + 7.0/flo*s, 1.0/(80*fhi)))")
   for n in 3 5 7; do
     local fm cur hi lo
     fm=$(simenv_meas "${log}" "f${n}")
+    [ "${fm}" = "nan" ] && fm=0
     cur=$(simenv_meas "${log}" "i${n}")
     hi=$(simenv_meas "${log}" "s${n}hi")
     lo=$(simenv_meas "${log}" "s${n}lo")
@@ -160,8 +183,11 @@ CSV_OUT="${CORNERSDIR}/stage_count.csv"
 # fosc_hz: measured on a ring node over 4 whole cycles after tsettle (no output
 #   buffer: the buffer is common to all three counts and only adds a constant).
 # swing_hi_v/swing_lo_v: max/min of that ring node in the measurement window --
-#   a starved ring that has lost swing is not a usable oscillator, and the
-#   3-stage ring is the one at risk of it at the bottom of the band.
+#   a starved ring that has lost swing is not a usable oscillator.
+# fosc_hz = 0 means the ring DID NOT OSCILLATE at that point: the node was
+#   static across the whole measurement window (swing_hi == swing_lo) despite an
+#   identical start-up kick that dislodged the other counts. That is a measured
+#   outcome, not a missing measurement.
 EOF
   echo "${CSV_HEADER}"
   sort -t, -k1,1 -k4,4n -k5,5n -k6,6n "${ROWS}"

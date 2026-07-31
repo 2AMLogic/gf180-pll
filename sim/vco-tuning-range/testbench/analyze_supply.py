@@ -32,6 +32,14 @@ def linfit(xs, ys):
     return m, my - m * mx
 
 
+def ts(x):
+    """Format a time in the unit a reader can compare at a glance."""
+    ax = abs(x)
+    if ax >= 1e-9:
+        return "%.3g ns" % (x * 1e9)
+    return "%.3g ps" % (x * 1e12)
+
+
 def cname(b, t, v=None):
     return "%s/%gC" % (b, float(t)) + ("" if v is None else "/%.2fV" % float(v))
 
@@ -73,7 +81,7 @@ def main():
     a("  supply points spanning 2.97-3.63 V, at every (bundle, temperature,")
     a("  band) combination -- %d curves of 7 points each." % len(rows))
     a("")
-    a("  | Band | pushing, most negative | median | least negative | worst-case |df/f| for a +/-10%% rail |")
+    a("  | Band | pushing, most negative | median | least negative | worst-case frequency shift over a +/-10 % rail |")
     a("  |---|---|---|---|---|")
     for band in sorted({r["key"][2] for r in rows}, key=int):
         sel = [r for r in rows if r["key"][2] == band]
@@ -124,12 +132,16 @@ def main():
     a("")
 
     # ------------------------------------------------------- transient
-    main_grid = [r for r in jit if r["ripple_div"] == "16" and r["band"] == "5"
-                 and r["vctrl_v"] == "1.8"]
-    full = [r for r in main_grid if not (r["temp_c"] == "27" and r["vdd_v"] == "3.30"
-                                         and r["bundle"] not in ("typical", "ff", "ss", "fs", "sf",
-                                                                 "all-slow", "all-fast"))]
-    del full
+    seen = set()
+    main_grid = []
+    for r in jit:
+        if r["ripple_div"] != "16" or r["band"] != "5" or r["vctrl_v"] != "1.8":
+            continue
+        k = (r["bundle"], r["temp_c"], r["vdd_v"])
+        if k in seen:
+            continue  # the band sweep repeats band 5 at three bundles
+        seen.add(k)
+        main_grid.append(r)
 
     def f_(r, k):
         return float(r[k])
@@ -186,16 +198,16 @@ def main():
     qw = max(main_grid, key=lambda r: f_(r, "quiet_tie_pp_s"))
     for label, pick, pfx in (
         ("Rippled, worst (%s)" % cname(wrst["bundle"], wrst["temp_c"], wrst["vdd_v"]), wrst, "rip"),
-        ("Rippled, median", med, "rip"),
-        ("Rippled, best", best, "rip"),
+        ("Rippled, median (%s)" % cname(med["bundle"], med["temp_c"], med["vdd_v"]), med, "rip"),
+        ("Rippled, best (%s)" % cname(best["bundle"], best["temp_c"], best["vdd_v"]), best, "rip"),
         ("**Quiet reference, worst** (numerical floor)", qw, "quiet"),
     ):
         a(
-            "  | %s | %.3g ps | %.3g ps | %.3g ps | %.3g ps |"
+            "  | %s | %s | %s | %s | %s |"
             % (
                 label,
-                f_(pick, pfx + "_tj_pp_s") * 1e12, f_(pick, pfx + "_tj_rms_s") * 1e12,
-                f_(pick, pfx + "_tie_pp_s") * 1e12, f_(pick, pfx + "_tie_rms_s") * 1e12,
+                ts(f_(pick, pfx + "_tj_pp_s")), ts(f_(pick, pfx + "_tj_rms_s")),
+                ts(f_(pick, pfx + "_tie_pp_s")), ts(f_(pick, pfx + "_tie_rms_s")),
             )
         )
     a("")
@@ -243,10 +255,10 @@ def main():
             sel = [r for r in band_rows if r["band"] == band]
             fw = max(sel, key=lambda r: f_(r, "rip_tie_pp_s"))
             a(
-                "  | B%s | %.4g .. %.4g | %.3g | %.2f |"
+                "  | B%s | %.4g .. %.4g | %s | %.2f |"
                 % (band, min(f_(r, "rip_f_hz") for r in sel) / 1e6,
                    max(f_(r, "rip_f_hz") for r in sel) / 1e6,
-                   f_(fw, "rip_tie_pp_s") * 1e12,
+                   ts(f_(fw, "rip_tie_pp_s")),
                    100 * f_(fw, "rip_tj_rms_s") * f_(fw, "rip_f_hz"))
             )
         a("")
@@ -255,8 +267,7 @@ def main():
     fr_rows = [r for r in jit if r["band"] == "5" and r["temp_c"] == "27"
                and r["vdd_v"] == "3.30" and r["bundle"] in ("typical", "all-slow", "all-fast")]
     if fr_rows:
-        a("  ### 5. Ripple-frequency dependence, and whether the quasi-static")
-        a("  model may be used to project these numbers")
+        a("  ### 5. Ripple-frequency dependence, and whether these numbers project")
         a("")
         a("  | Ripple freq | TIE pp measured | TIE pp predicted from the step | measured/predicted |")
         a("  |---|---|---|---|")
@@ -265,9 +276,9 @@ def main():
             mm = sum(f_(r, "rip_tie_pp_s") for r in sel) / len(sel)
             pp = sum(f_(r, "rip_tie_pp_pred_s") for r in sel) / len(sel)
             a(
-                "  | f_osc/%s (%.3g MHz) | %.3g ps | %.3g ps | %.2f |"
+                "  | f_osc/%s (%.3g MHz) | %s | %s | %.2f |"
                 % (rdv, sum(f_(r, "frip_hz") for r in sel) / len(sel) / 1e6,
-                   mm * 1e12, pp * 1e12, mm / pp if pp else 0)
+                   ts(mm), ts(pp), mm / pp if pp else 0)
             )
         a("")
         allsel = [r for r in jit if f_(r, "rip_tie_pp_pred_s") > 0]
@@ -302,8 +313,8 @@ def main():
     a("    term rather than by bias-current sensitivity.")
     a("  - DR-001's top named risk now has a **number**, not a caveat: a 100 mV")
     a(
-        "    peak-to-peak rail ripple produces up to %.3g ps peak-to-peak TIE and"
-        % (f_(wrst, "rip_tie_pp_s") * 1e12)
+        "    peak-to-peak rail ripple produces up to %s peak-to-peak TIE and"
+        % ts(f_(wrst, "rip_tie_pp_s"))
     )
     a(
         "    %.2f %% RMS period jitter open-loop at the worst corner, %.0fx above"

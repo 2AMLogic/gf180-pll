@@ -219,27 +219,66 @@ for bundle in "${SPOT_BUNDLES[@]}"; do
   done
 done
 
+# The band sweep's band-5 entries coincide exactly with three points of the main
+# PVT grid. Simulating the same parameter set twice would be wasted runtime and
+# would double-count those corners in the record, so the transient job list is
+# deduplicated before anything runs.
+sort -u "${JJOBS}" -o "${JJOBS}"
+
 NP=$(wc -l <"${PJOBS}" | tr -d ' ')
 NJ=$(wc -l <"${JJOBS}" | tr -d ' ')
 echo "vco supply campaign: ${NP} pushing runs (x7 supply points) + ${NJ} transient runs, $(simenv_jobs) parallel jobs"
 
-PROWS="${WORK}/push_rows.csv"; : >"${PROWS}"
-# shellcheck disable=SC2016
-xargs -P "$(simenv_jobs)" -L 1 \
-  "${BASH:-/bin/bash}" -c 'exec "$0" --push-one "$@"' "${HERE}/run_supply.sh" \
-  <"${PJOBS}" >>"${PROWS}"
+PROWS="${WORK}/push_rows.csv"
+JROWS="${WORK}/jit_rows.csv"
+
+# Resumable for the same reason `run.sh` is: the runs are deterministic, so a
+# point re-run in a later pass produces byte-identical output. `--resume` keeps
+# the rows already collected and re-runs only the missing points; with nothing
+# missing it goes straight to minting the record, which is also how a corrected
+# extraction is re-applied to an unchanged simulation set.
+if [ "${1:-}" = "--resume" ] && [ -s "${PROWS}" ]; then
+  sort -u "${PROWS}" -o "${PROWS}"
+  awk -F, '{c[$1","$2","$3","$4]++} END {for (k in c) if (c[k] == 7) print k}' \
+    "${PROWS}" >"${WORK}/push_done.txt"
+  awk -F, 'NR==FNR{d[$0];next}{if (($1","$2","$3","$4) in d) print}' \
+    "${WORK}/push_done.txt" "${PROWS}" >"${PROWS}.keep" && mv "${PROWS}.keep" "${PROWS}"
+  awk 'NR==FNR{d[$0];next}{k=$1","$2","$3","$4; if (!(k in d)) print}' \
+    "${WORK}/push_done.txt" "${PJOBS}" >"${WORK}/push_pending.txt"
+  sort -u "${JROWS}" -o "${JROWS}" 2>/dev/null || : >"${JROWS}"
+  awk -F, '{print $1" "$2" "$3" "$4" "$5" "$6}' "${JROWS}" >"${WORK}/jit_done.txt"
+  awk 'NR==FNR{d[$0];next}{if (!($0 in d)) print}' \
+    "${WORK}/jit_done.txt" "${JJOBS}" >"${WORK}/jit_pending.txt"
+else
+  : >"${PROWS}"; : >"${JROWS}"
+  cp "${PJOBS}" "${WORK}/push_pending.txt"
+  cp "${JJOBS}" "${WORK}/jit_pending.txt"
+fi
+echo "vco supply campaign: $(wc -l <"${WORK}/push_pending.txt" | tr -d ' ') pushing + $(wc -l <"${WORK}/jit_pending.txt" | tr -d ' ') transient runs still to do"
+
+if [ -s "${WORK}/push_pending.txt" ]; then
+  # shellcheck disable=SC2016
+  xargs -P "$(simenv_jobs)" -L 1 \
+    "${BASH:-/bin/bash}" -c 'exec "$0" --push-one "$@"' "${HERE}/run_supply.sh" \
+    <"${WORK}/push_pending.txt" >>"${PROWS}"
+fi
+sort -u "${PROWS}" -o "${PROWS}"
 GOT=$(wc -l <"${PROWS}" | tr -d ' ')
 [ "${GOT}" -eq $((NP * 7)) ] || {
-  echo "ERROR: expected $((NP * 7)) pushing rows, collected ${GOT}" >&2; exit 1; }
+  echo "ERROR: expected $((NP * 7)) pushing rows, collected ${GOT} -- re-run with --resume" >&2
+  exit 1; }
 
-JROWS="${WORK}/jit_rows.csv"; : >"${JROWS}"
-# shellcheck disable=SC2016
-xargs -P "$(simenv_jobs)" -L 1 \
-  "${BASH:-/bin/bash}" -c 'exec "$0" --jit-one "$@"' "${HERE}/run_supply.sh" \
-  <"${JJOBS}" >>"${JROWS}"
+if [ -s "${WORK}/jit_pending.txt" ]; then
+  # shellcheck disable=SC2016
+  xargs -P "$(simenv_jobs)" -L 1 \
+    "${BASH:-/bin/bash}" -c 'exec "$0" --jit-one "$@"' "${HERE}/run_supply.sh" \
+    <"${WORK}/jit_pending.txt" >>"${JROWS}"
+fi
+sort -u "${JROWS}" -o "${JROWS}"
 GOT=$(wc -l <"${JROWS}" | tr -d ' ')
 [ "${GOT}" -eq "${NJ}" ] || {
-  echo "ERROR: expected ${NJ} jitter rows, collected ${GOT}" >&2; exit 1; }
+  echo "ERROR: expected ${NJ} jitter rows, collected ${GOT} -- re-run with --resume" >&2
+  exit 1; }
 
 # --------------------------------------------------------------------------
 # Freeze the evidence (sim/README.md convention).
