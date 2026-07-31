@@ -84,25 +84,36 @@ snapshot the evidence actually cites. Adding a block means adding it to the
 provenance of a result never depends on re-running the exporter.
 
 The only post-processing applied is un-commenting the top-level
-`.subckt`/`.ends` pair that xschem comments out for a top sheet, and dropping
-the trailing `.end`; nothing else in the xschem output is altered, so each file
-stays a faithful rendering of its schematic.
+`.subckt`/`.ends` pair that xschem comments out for a top sheet, dropping the
+trailing `.end` (and, for `pfd_cp`, stripping the export root's own body so the
+file is `.include`-able), and rewriting the path comments described next.
+Nothing else in the xschem output is altered — no device card, port list or
+`.subckt`/`.ends` block is touched — so each file stays a faithful rendering of
+its schematic.
 
 **Absolute paths in the export (#28).** xschem stamps the absolute filesystem
-path of each expanded `.sch`/`.sym` into a `**` comment. Those comment lines,
-and only those, are rewritten to repo-relative form:
+path of each expanded `.sch`/`.sym` into a `**` comment (`** sch_path:
+/abs/checkout/design/foo.sch`). Left alone, that path makes the export
+machine-specific: a re-export from a different checkout would differ on those
+lines alone even though nothing electrical changed, and a byte-exact snapshot
+hash would only be reproducible in the checkout that minted it. `netlist.sh`
+rewrites those comment lines, and only those, to repo-relative form **at write
+time under both conventions** — the committed tops in `export_block`, the
+per-record `pfd_cp` export in `netlist_pfd_cp`. So neither the committed bytes
+under `design/netlist/` nor a `netlist-snapshots/<record-id>.spice` frozen from
+a `pfd_cp` export ever embeds a machine-specific path, and both are
+reproducible from any checkout.
 
-- for the **committed** tops, on both sides of `--check`'s comparison, so the
-  check does not call every clone but the one that generated the files stale;
-- for the **`pfd_cp`** export, at *write* time as well, so its
-  `netlist-snapshots/*.spice` SHA-256 is reproducible on any machine and not
-  only in the checkout that minted it.
+`--check` runs the same rewrite again on both sides of its comparison. That
+pass is a no-op on anything this script wrote; it is kept as defense in depth
+against a committed file minted before write-time normalization existed.
 
-The committed exports are not yet normalized at write time, because rewriting
-their bytes would invalidate the snapshot hashes the `vco-tuning-range`,
-`divider-ratio` and `lock-detector` records cite and would require re-running
-and re-minting all three campaigns under `sim/README.md`'s append-only rule.
-**#28** tracks that.
+Turning on write-time normalization for the committed tops rewrote their bytes
+(comment lines only), which invalidates the netlist-snapshot SHA-256 that the
+`vco-tuning-range`, `divider-ratio` and `lock-detector` records cite.
+`sim/README.md`'s append-only rule therefore requires those campaigns to be
+re-run and re-minted under new record IDs rather than edited in place; that
+re-run is tracked in **#32**, and **#28** stays open until it lands.
 
 Connectivity in these schematics is **label-driven**: each device terminal
 carries a `lab_pin` symbol placed exactly on the terminal coordinate, rather
