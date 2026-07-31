@@ -28,6 +28,8 @@
 #   ./run.sh                 # full campaign -> mints a records/<id>.md
 #   ./run.sh --check         # nominal corner only, both benches, to stdout
 #   SIM_JOBS=8 ./run.sh      # cap parallelism
+#   SIM_SUPERSEDES=<id> SIM_SUPERSEDES_NOTE='<why>' SIM_METHOD_NOTE='<what>' \
+#     ./run.sh               # correcting re-run (see "Supersession" below)
 
 set -euo pipefail
 
@@ -45,11 +47,17 @@ WORK="${EXP}/work"
 DUT="${REPO}/design/netlist/loop_filter.spice"
 
 # Read-only design-input evidence this campaign consumes (#8, #9) -- never
-# written to, never modified.  Pinned to the current (non-superseded) record
-# for each claim.
+# written to, never modified.  Pinned to the record that measures the CURRENT
+# design for each claim.  For cp-compliance that is `20260731-194124-afa338c`,
+# which measures the post-#24 charge pump (fixed dump-node clamp replaced by
+# `cp_dumpbuf`, DR-005): the earlier `20260731-122451-63e4b47` is still valid
+# evidence for the design IT measured, but its per-event charge asymmetry
+# (~104 fC worst case) belongs to a charge pump that no longer exists on main
+# -- the current one measures ~3.7 fC, and the control-line ripple this
+# campaign derives from it is ~28x smaller as a result.
 KVCO_CSV="${REPO}/sim/vco-tuning-range/corners/20260731-081628-239e73b/kvco_by_point.csv"
-CPDC_CSV="${REPO}/sim/cp-compliance/corners/20260731-122451-63e4b47/cp_dc.csv"
-CPSW_CSV="${REPO}/sim/cp-compliance/corners/20260731-122451-63e4b47/cp_switch.csv"
+CPDC_CSV="${REPO}/sim/cp-compliance/corners/20260731-194124-afa338c/cp_dc.csv"
+CPSW_CSV="${REPO}/sim/cp-compliance/corners/20260731-194124-afa338c/cp_switch.csv"
 
 # Passive corner sections and their short forms used in bundle names
 # (r<res>-m<moscap>-x<mimcap>, e.g. rtyp-mtyp-xtyp / rss-mss-xss / rff-mff-xff
@@ -194,6 +202,21 @@ echo "loop-dynamics: collected ${NZROWS} filter-Z rows, ${NTROWS} loop-AC cross-
 
 # --------------------------------------------------------------------------
 # Supersession (sim/README.md :: Status / supersession language).
+#
+# A record is frozen at mint time and can never be edited afterwards, so
+# anything that has to be TRUE OF THIS RUN rather than of the campaign has to
+# be settable from outside (same convention as sim/cp-compliance/testbench):
+#
+#   SIM_SUPERSEDES=<record-id>        the record this run replaces
+#   SIM_SUPERSEDES_NOTE=<one line>    why
+#   SIM_METHOD_NOTE=<text>            one extra Methodology bullet, e.g. which
+#                                     design revision of a CONSUMED input this
+#                                     run reads and what it is comparable to
+#   SIM_AUTHOR=<who>                  attribution, when a later issue re-runs
+#                                     this campaign
+#
+# Unset, all four fall back to the wording this campaign was minted with, so
+# an unqualified re-run emits exactly what it emitted before.
 # --------------------------------------------------------------------------
 supersedes_field() {
   if [ -z "${SIM_SUPERSEDES:-}" ]; then
@@ -203,6 +226,14 @@ supersedes_field() {
   else
     echo "- **Supersedes**: ${SIM_SUPERSEDES} -- ${SIM_SUPERSEDES_NOTE}"
   fi
+}
+
+# Emits with a LEADING newline and none trailing, so it appends to the end of
+# the last Methodology bullet: command substitution strips trailing newlines,
+# so a trailing-newline form would run the next field onto the same line.
+method_note() {
+  [ -n "${SIM_METHOD_NOTE:-}" ] && printf '\n  - %s' "${SIM_METHOD_NOTE}"
+  return 0
 }
 
 # --------------------------------------------------------------------------
@@ -363,7 +394,7 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     where those enter.
   - Statistical switches: \`sw_stat_global = sw_stat_mismatch = 0\` (nominal
     per-corner skew, no Monte Carlo) -- inherited from the underlying #4/#8/#9
-    records this campaign consumes.
+    records this campaign consumes.$(method_note)
 - **Statistical convention**: N/A -- corner-matrix claim, not a distribution
   claim.
 - **Result**:
@@ -387,7 +418,7 @@ $(cat "${RESULT_MD}")
     \`kappa_by_target.csv\` (Kvco/f_out per f_ref/N under the three
     band-selection rules), \`ripple_tradeoff.csv\`, \`loop_ac_crosscheck.csv\`,
     \`filter_z.csv\` (decimated measured impedance curves)
-- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (issue #10)
+- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), ${SIM_AUTHOR:-agent-builder (issue #10)}
 $(supersedes_field)
 EOF
 } >"${RECORD}"

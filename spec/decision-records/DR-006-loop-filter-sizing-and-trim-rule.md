@@ -1,4 +1,4 @@
-# DR-005: Loop filter component values and the Icp-trim-vs-f_ref rule
+# DR-006: Loop filter component values and the Icp-trim-vs-f_ref rule
 
 - **Status**: proposed
 - **Date**: 2026-07-31

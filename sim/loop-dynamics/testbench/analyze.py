@@ -183,6 +183,14 @@ def cubic_roots(a3, a2, a1, a0):
     to within 7e-5 relative error; this closed form is otherwise ~300x faster
     per call, which is the difference between this record's corner-matrix
     sweep completing in about a minute and not completing in practice.
+
+    NOTE -- no range guard is enforced here, deliberately: this is a private
+    helper for settle_s(), whose coefficients come from the fitted 3-element
+    filter model, and it is validated ONLY inside that physical envelope
+    (R 61.6..93.4 kOhm, C1 99..133 pF, C2 1.81..2.22 pF, A 0.5..130).  Any
+    caller outside that envelope must re-validate against a general solver
+    before trusting the result; the conditioning argument above is what makes
+    the closed form safe here, not a property of the formula in general.
     """
     w0 = (a0 / a3) ** (1.0 / 3.0)
     b = a2 / (a3 * w0)

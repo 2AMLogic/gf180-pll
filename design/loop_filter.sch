@@ -4,7 +4,7 @@ K {}
 V {}
 S {}
 E {}
-T {loop_filter: passive fixed 2nd-order loop filter (DR-001 Decision 1, sized by #10 / DR-005)} -700 -560 0 0 0.4 0.4 {}
+T {loop_filter: passive fixed 2nd-order loop filter (DR-001 Decision 1, sized by #10 / DR-006)} -700 -560 0 0 0.4 0.4 {}
 T {VCTRL --+-- C2 -- VSS          zero  fz = 1/(2*pi*R*C1)     ~ 17 kHz typ} -700 -530 0 0 0.4 0.4 {}
 T {        +-- R -- NZ -- C1 -- VSS    3rd pole fp = (C1+C2)/(2*pi*R*C1*C2) ~ 1.0 MHz typ} -700 -500 0 0 0.4 0.4 {}
 T {No R/C trim banks: DR-001 Decision 1 rejects filter-side programmability.} -700 -470 0 0 0.4 0.4 {}

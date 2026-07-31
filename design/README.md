@@ -31,7 +31,7 @@ design/
   srlatch, edgedet      custom logic cells the PFD is built from
   dut_export.sch        netlist-export root for pfd_cp; not part of the design
 
-  # Loop filter (#10, DR-001 Decision 1 / DR-005)
+  # Loop filter (#10, DR-001 Decision 1 / DR-006)
   loop_filter.sch/.sym  passive fixed 2nd-order filter: series R + shunt C1 + C2
 
   # Shared 3.3 V static-CMOS logic library (VCO / divider / lock detector)
