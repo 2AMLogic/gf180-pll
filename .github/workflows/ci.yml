@@ -1,0 +1,93 @@
+name: CI
+
+# Wires this repo's existing self-checks into GitHub Actions.
+#
+# Two tiers, because the checks this repo already has do not share a
+# toolchain dependency:
+#
+#   checks       -- headless. No PDK, no xschem, no GUI. Runs on every
+#                   push/PR so a broken harness or a bad Python change is
+#                   caught immediately, in a bare runner with no extra
+#                   install step.
+#   pdk-checks   -- requires the gf180mcu PDK (via volare) and xschem on
+#                   PATH. These catch netlist drift against the committed
+#                   schematics, which only matters when design/ changes and
+#                   is not worth an install step on every PR. Gated to a
+#                   nightly schedule, manual dispatch, or an explicit
+#                   `ci:full` opt-in label on a PR.
+#
+# Self-checks intentionally NOT wired here:
+#   - sim/run-all.sh, sim/lib/simenv.sh, and the per-campaign
+#     sim/*/testbench/run.sh scripts are full PVT campaign runners invoked
+#     by run_corners.py / selftest.sh, not standalone CI smoke checks --
+#     see the "checks" and "pdk-checks" jobs below for what those exercise.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    # Nightly PDK-dependent run -- see the pdk-checks job below for why this
+    # is not on every push/PR.
+    - cron: "17 6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  checks:
+    name: checks (headless -- no PDK/xschem)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: sim/selftest.sh
+        # Default mode: harness unit tests always run (no PDK needed). The
+        # end-to-end PVT smoke stage self-skips with exit 0 when ngspice /
+        # the gf180mcu PDK are absent (which they are on this runner) --
+        # see sim/selftest.sh. Do NOT pass --require-pdk here.
+        run: bash sim/selftest.sh
+
+  pdk-checks:
+    name: pdk-checks (nightly / ci:full -- requires gf180mcu PDK + xschem)
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'ci:full'))
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install ngspice and xschem
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ngspice xschem
+
+      - name: Install the gf180mcu PDK via volare
+        run: |
+          pip install --user volare
+          # Pinned to the open_pdks hash this repo's evidence records cite
+          # (see sim/README.md). volare installs into ~/.volare/gf180mcuD,
+          # which sim/harness/pdk.py and design/xschemrc both search by
+          # default -- no extra env var needed.
+          "$HOME/.local/bin/volare" enable --pdk gf180mcu c6d73a35f524070e85faff4a6a9eef49553ebc2b
+
+      - name: design/netlist.sh --check-paths
+        run: ./design/netlist.sh --check-paths
+
+      - name: design/netlist.sh --check
+        run: ./design/netlist.sh --check
+
+      - name: sim/selftest.sh --require-pdk
+        # Fails loudly instead of skipping if the PDK turns out to be
+        # missing here too -- catches a broken nightly runner rather than
+        # reporting a false pass.
+        run: bash sim/selftest.sh --require-pdk
