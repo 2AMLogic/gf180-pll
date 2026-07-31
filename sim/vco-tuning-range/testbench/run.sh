@@ -150,19 +150,47 @@ for bundle in "${BUNDLES[@]}"; do
   done
 done
 NPOINTS=$(wc -l <"${JOBLIST}" | tr -d ' ')
-echo "vco-tuning-range: ${NPOINTS} (corner, band) runs x ${#VCTRLS[@]} control points, $(simenv_jobs) parallel jobs"
-
-ROWS="${WORK}/rows.csv"
-: >"${ROWS}"
-# shellcheck disable=SC2016
-xargs -P "$(simenv_jobs)" -L 1 \
-  "${BASH:-/bin/bash}" -c 'exec "$0" --one "$@"' "${HERE}/run.sh" \
-  <"${JOBLIST}" >>"${ROWS}"
-
 EXPECTED=$((NPOINTS * ${#VCTRLS[@]}))
+ROWS="${WORK}/rows.csv"
+PENDING="${WORK}/pending.txt"
+
+# A full campaign is hours of wall clock, so it is resumable. `--resume` keeps
+# the rows already collected and re-runs only the (bundle, temp, vdd, band)
+# points that are not complete. This is safe *because the runs are
+# deterministic*: same frozen netlist, same generated deck, same simulator and
+# corner sections, so a point re-run in a later pass produces byte-identical
+# output to the same point run in the first pass. Rows belonging to a partially
+# written point are discarded and that point is redone whole, so a run
+# interrupted mid-print cannot leave a spliced result behind.
+if [ "${1:-}" = "--resume" ] && [ -s "${ROWS}" ]; then
+  sort -u "${ROWS}" -o "${ROWS}"
+  awk -F, -v n="${#VCTRLS[@]}" '{c[$1","$2","$3","$4]++}
+    END {for (k in c) if (c[k] == n) print k}' "${ROWS}" >"${WORK}/complete.txt"
+  awk -F, 'NR==FNR{d[$0];next}{if (($1","$2","$3","$4) in d) print}' \
+    "${WORK}/complete.txt" "${ROWS}" >"${ROWS}.keep"
+  mv "${ROWS}.keep" "${ROWS}"
+  awk 'NR==FNR{d[$0];next}{k=$1","$2","$3","$4; if (!(k in d)) print}' \
+    "${WORK}/complete.txt" "${JOBLIST}" >"${PENDING}"
+  echo "vco-tuning-range: resuming -- $(wc -l <"${ROWS}" | tr -d ' ')/${EXPECTED} rows already collected"
+else
+  : >"${ROWS}"
+  cp "${JOBLIST}" "${PENDING}"
+fi
+
+NPEND=$(wc -l <"${PENDING}" | tr -d ' ')
+echo "vco-tuning-range: ${NPEND} of ${NPOINTS} (corner, band) runs to do x ${#VCTRLS[@]} control points, $(simenv_jobs) parallel jobs"
+
+if [ "${NPEND}" -gt 0 ]; then
+  # shellcheck disable=SC2016
+  xargs -P "$(simenv_jobs)" -L 1 \
+    "${BASH:-/bin/bash}" -c 'exec "$0" --one "$@"' "${HERE}/run.sh" \
+    <"${PENDING}" >>"${ROWS}"
+fi
+
+sort -u "${ROWS}" -o "${ROWS}"
 GOT=$(wc -l <"${ROWS}" | tr -d ' ')
 if [ "${GOT}" -ne "${EXPECTED}" ]; then
-  echo "ERROR: expected ${EXPECTED} rows, collected ${GOT}" >&2
+  echo "ERROR: expected ${EXPECTED} rows, collected ${GOT} -- re-run with --resume" >&2
   exit 1
 fi
 
@@ -312,6 +340,13 @@ $(simenv_env_block)
     the point is retried with a 3x longer window (up to three attempts), and
     the campaign aborts unless all ${EXPECTED} rows are collected. No row in
     the CSV is an extrapolation or a default.
+  - **Execution may span more than one pass.** The campaign is resumable
+    (\`run.sh --resume\`), which is sound here only because the runs are
+    deterministic: the same frozen netlist, generated deck, simulator build and
+    corner sections produce byte-identical output for a point whichever pass
+    runs it. Rows belonging to a partially written point are discarded and the
+    point is redone whole, so no result is ever spliced. The record ID's
+    timestamp is when the record was minted, i.e. after the last pass.
   - Statistical switches: \`sw_stat_global = sw_stat_mismatch = 0\` (nominal
     per-corner skew, no Monte Carlo mismatch). Device mismatch in the
     band-select mirror is **not** covered by this record.

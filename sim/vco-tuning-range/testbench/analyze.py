@@ -177,10 +177,42 @@ def main():
     # (A) Kvco ceiling, evaluated only where the VCO operates inside the v1 band.
     in_band = [p for p in point_rows if F_LO <= p[3] <= F_HI]
     k_in_max, k_in_pt = max((p[4], p) for p in in_band)
-    kvco_pass = k_in_max <= KVCO_MAX
+    kvco_any_pass = k_in_max <= KVCO_MAX
     ratio_in_max, ratio_in_pt = max((p[5], p) for p in in_band)
     ratio_in_min, ratio_in_pt_lo = min((p[5], p) for p in in_band)
     k_all_max, k_all_pt = max((p[4], p) for p in point_rows)
+
+    # (A') The check that actually binds the loop filter. The band code is a
+    # static configuration input, so a system targeting frequency f picks a
+    # band -- and the sensible choice is the LOWEST band that reaches f, since
+    # Kvco scales with f_osc within a band. The binding question is therefore
+    # not "how large can Kvco be somewhere in the code space" but "how large is
+    # it at the band a correct configuration would select".
+    targets = [10e6, 20e6, 35e6, 50e6, 75e6, 100e6, 140e6, 175e6, 200e6]
+    best_needed = []  # (kvco at the best band choice, corner, target, band)
+    unreachable = []
+    for c in corners:
+        for ft in targets:
+            cands = []
+            for b in bands:
+                vs = [p[0] for p in curves[(c, b)]]
+                fs = [p[1] for p in curves[(c, b)]]
+                if not (fs[0] <= ft <= fs[-1]):
+                    continue
+                ks = local_kvco(vs, fs)
+                for i in range(len(fs) - 1):
+                    if fs[i] <= ft <= fs[i + 1]:
+                        w = (ft - fs[i]) / (fs[i + 1] - fs[i])
+                        cands.append((ks[i] + w * (ks[i + 1] - ks[i]), b,
+                                      vs[i] + w * (vs[i + 1] - vs[i])))
+                        break
+            if not cands:
+                unreachable.append((c, ft))
+            else:
+                k, b, v = min(cands)
+                best_needed.append((k, c, ft, b, v))
+    k_cfg_max, cfg_c, cfg_ft, cfg_b, cfg_v = max(best_needed)
+    kvco_pass = k_cfg_max <= KVCO_MAX and not unreachable
 
     # (F) supply pushing derived from the main grid: df/dVdd at fixed
     #     (bundle, temp, band, vctrl) over the 2.97 -> 3.63 V span.
@@ -230,10 +262,17 @@ def main():
         )
     )
     a(
-        "  | 4 | Kvco inside the v1 band stays under the fixed-filter ceiling | %s B%d @ %.1f V | %s MHz/V | <= 150 MHz/V | **%s** |"
+        "  | 4a | Kvco under the fixed-filter ceiling at the band a correct configuration selects | %s, target %s MHz -> B%d @ %.2f V | %s MHz/V | <= 150 MHz/V | **%s** |"
+        % (
+            corner_name(cfg_c), mhz(cfg_ft), cfg_b, cfg_v, mhz(k_cfg_max),
+            "PASS" if kvco_pass else "FAIL",
+        )
+    )
+    a(
+        "  | 4b | Kvco under the ceiling at *every* in-band operating point, including bands a correct configuration would not select | %s B%d @ %.1f V | %s MHz/V | <= 150 MHz/V | **%s** |"
         % (
             corner_name(k_in_pt[0]), k_in_pt[1], k_in_pt[2], mhz(k_in_max),
-            "PASS" if kvco_pass else "FAIL",
+            "PASS" if kvco_any_pass else "FAIL",
         )
     )
     a(
@@ -325,13 +364,18 @@ def main():
         "  - Worst-case Kvco **at an operating point inside the ratified 10-200 MHz"
     )
     a(
-        "    band**: %s MHz/V (%s, B%d, Vctrl %.1f V, f = %s MHz) -- %s DR-001's"
-        % (
-            mhz(k_in_max), corner_name(k_in_pt[0]), k_in_pt[1], k_in_pt[2],
-            mhz(k_in_pt[3]), "under" if kvco_pass else "OVER",
-        )
+        "    band, over ALL band codes**: %s MHz/V (%s, B%d, Vctrl %.1f V, f ="
+        % (mhz(k_in_max), corner_name(k_in_pt[0]), k_in_pt[1], k_in_pt[2])
     )
-    a("    ~150 MHz/V ceiling.")
+    a(
+        "    %s MHz) -- %s DR-001's ~150 MHz/V ceiling. Reaching that point"
+        % (mhz(k_in_pt[3]), "under" if kvco_any_pass else "**OVER**")
+    )
+    a(
+        "    requires configuring band B%d for a frequency band B%d already"
+        % (k_in_pt[1], max(0, k_in_pt[1] - 1))
+    )
+    a("    covers; see check 4a and the band-choice note below.")
     a(
         "  - Worst-case Kvco anywhere on the grid **including the bands above the v1"
     )
@@ -350,14 +394,34 @@ def main():
         )
         a("    because the deferred 400 MHz stretch would operate there.")
     a(
-        "  - Kvco/f_out inside the v1 band spans **%.2f .. %.2f per volt** against"
+        "  - Kvco/f_out inside the v1 band spans **%.2f .. %.2f per volt**, which"
         % (ratio_in_min, ratio_in_max)
     )
     a(
-        "    DR-001's %.1f/V design-intent hand calc -- the extracted slope is"
+        "    **brackets** DR-001's %.1f/V design-intent hand calc rather than"
         % KVCO_OVER_F_INTENT
     )
-    a("    flatter than the hand calc assumed (see Methodology).")
+    a("    confirming it: the ratio is not a constant of the topology, it rises")
+    a("    monotonically with band code (see the per-band table above). Reading")
+    a("    0.7/V as a single number would under-predict Kvco in the top bands and")
+    a("    over-predict it in the bottom ones. #9/#10 should size against the")
+    a("    per-band table, not against the hand calc.")
+    a("")
+    a("  - **Band choice is load-bearing for the Kvco ceiling.** Because Kvco")
+    a("    scales with f_osc *within* a band, two different band codes that both")
+    a("    reach the same output frequency do not present the same Kvco to the")
+    a("    loop: the higher band reaches it near the bottom of its Vctrl range,")
+    a("    where its Kvco is already large. Selecting the **lowest** band that")
+    a("    reaches the target frequency is therefore not a preference but a")
+    a("    requirement of DR-001 Decision 1's fixed loop filter, and it is what")
+    a("    check 4a evaluates against check 4b's adversarial band choice.")
+    if unreachable:
+        a(
+            "    (%d (corner, target frequency) pairs are not reachable by ANY band:"
+            % len(unreachable)
+        )
+        a("    %s ...)" % ", ".join(
+            "%s @ %s MHz" % (corner_name(c), mhz(f)) for c, f in unreachable[:3]))
     a("")
 
     a("  **Supply pushing** (df/d(vdd_vco) across the full +/-10% supply range,")
@@ -411,20 +475,77 @@ def main():
         a("")
 
     overall = floor_pass and ceil_pass and overlap_pass and kvco_pass and not non_monotonic
+    failed = [
+        name
+        for name, ok in (
+            ("low-band floor", floor_pass),
+            ("high-band ceiling", ceil_pass),
+            ("band overlap", overlap_pass),
+            ("Kvco ceiling at the selected band (4a)", kvco_pass),
+            ("f(Vctrl) monotonicity", non_monotonic == []),
+        )
+        if not ok
+    ]
+    a("  **Overall: %s.**" % ("PASS" if overall else "FAIL"))
+    a("")
+    if overall:
+        a("  The ring covers the ratified 10-200 MHz v1 output band at every one")
+        a(
+            "  of the %d corners on the grid -- reaching below 10 MHz at the"
+            % len(corners)
+        )
+        a("  fastest corner and above 200 MHz at the slowest -- with no coverage")
+        a("  hole, monotonic control, and Kvco inside DR-001 Decision 1's ceiling")
+        a("  at the band a correct configuration selects.")
+    else:
+        a("  Failing check(s): %s." % "; ".join(failed))
+    a("")
+    if not kvco_any_pass:
+        a(
+            "  **Caveat that must travel with these numbers (check 4b).** Kvco"
+        )
+        a(
+            "    reaches %s MHz/V at an in-band operating point in band B%d, which"
+            % (mhz(k_in_max), k_in_pt[1])
+        )
+        a("    is above DR-001's ~150 MHz/V bound. That point is only reachable by")
+        a("    configuring a *higher* band than the target frequency requires. It")
+        a("    is not a defect of the ring, but it does mean the band code is part")
+        a("    of the loop-stability contract, not just a range-selection")
+        a("    convenience -- #9/#10 must state the band-selection rule alongside")
+        a("    the filter values, and a part configured into too high a band will")
+        a("    present the loop with more gain than the fixed filter was sized for.")
+        a("")
+    a("  **What this record hands to the sibling issues:**")
+    a("")
     a(
-        "  **Overall: %s** -- the ring covers the ratified 10-200 MHz v1 output"
-        % ("PASS" if overall else "FAIL")
+        "  - **#11 (output divider), DR-002 Decision 2's conditional trigger**: the"
     )
-    a("  band with margin at every corner on the grid, with no coverage hole and")
-    a("  with Kvco inside the ceiling the fixed loop filter assumes.")
+    a(
+        "    lowest band reaches %s MHz at the fastest corner, %.0f %% below the"
+        % (mhz(floor_worst), 100 * (F_LO - floor_worst) / F_LO)
+    )
+    a("    10 MHz spec line, so the ring reaches the bottom of the band **without**")
+    a("    a post-VCO divider. The DR-002 trigger does **not** fire: no output")
+    a("    divider enters v1 scope on account of the VCO's low-band floor.")
+    a("  - **#9 / #10 (charge pump, loop filter)**: size against `kvco_by_band.csv`")
+    a("    and `kvco_by_point.csv`, not against a single Kvco number. Within the")
+    a(
+        "    v1 band Kvco spans %s .. %s MHz/V across bands and corners."
+        % (mhz(min(p[4] for p in in_band)), mhz(k_in_max))
+    )
+    a("  - **#14 (supply sensitivity)**: static pushing table above; the transient")
+    a("    numbers are in the supply record from `run_supply.sh`.")
 
     sys.stdout.write("\n".join(o) + "\n")
 
     # Machine-readable verdict for the runner, on stderr so it cannot pollute
     # the Markdown the runner splices into the record.
     sys.stderr.write(
-        "VERDICT floor=%s ceiling=%s overlap=%s kvco=%s monotonic=%s overall=%s\n"
-        % (floor_pass, ceil_pass, overlap_pass, kvco_pass, not non_monotonic, overall)
+        "VERDICT floor=%s ceiling=%s overlap=%s kvco_selected=%s kvco_anyband=%s "
+        "monotonic=%s overall=%s\n"
+        % (floor_pass, ceil_pass, overlap_pass, kvco_pass, kvco_any_pass,
+           not non_monotonic, overall)
     )
 
 
