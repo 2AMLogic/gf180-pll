@@ -355,7 +355,11 @@ RES_RSH_TABLE=$(grep -v '^#' "${RESCORNERSDIR}/res_summary.csv" | tail -n +2 | a
   END { for (k in rmin) printf "%s %.6g %.6g\n", k, rmin[k], rmax[k] }' \
   | sort | awk '{printf "  | %s | %s | %s |\n", $1, $2, $3}')
 
-RES_TC_TABLE=$(grep -v '^#' "${RESCORNERSDIR}/res_tempco.csv" | tail -n +2 | awk -F, '{printf "  | %s (W=%sum, %s) | %.1f |\n", $1, $2, $3, $5}' | sort)
+# res_tempco.csv columns (1-indexed, after stripping '#' comments and the
+# header row), per RES_TEMPCO_HEADER above:
+#   1 device, 2 width_um, 3 corner_section, 4 r_m40c_ohm, 5 r_27c_ohm,
+#   6 r_125c_ohm, 7 tc_ppm_per_c
+RES_TC_TABLE=$(grep -v '^#' "${RESCORNERSDIR}/res_tempco.csv" | tail -n +2 | awk -F, '{printf "  | %s (W=%sum, %s) | %.1f |\n", $1, $2, $3, $7}' | sort)
 
 RECORD_CAP="${RECORDSDIR}/${RID_CAP}.md"
 {
@@ -480,10 +484,14 @@ ${RES_RSH_TABLE}
   |---|---|
 ${RES_TC_TABLE}
 
-  \`ppolyf_s\` (salicided) is included as a negative example: its rsh is
-  roughly 2 orders of magnitude below the unsalicided options, which is why
-  it is not a loop-filter candidate despite otherwise-similar tempco
-  behavior. See the full tables for \`r_vcoef_pct_per_v\` and \`r_head_ohm\`.
+  \`ppolyf_u\` is the near-zero-TC option (~-75 ppm/C, essentially section- and
+  width-independent); the high-sheet variants trade that away, running about
+  -870 ppm/C (\`_1k\`) to -1545 ppm/C (\`_2k\`/\`_3k\`). \`ppolyf_s\` (salicided) is
+  included as a negative example on both axes: its rsh is roughly 2 orders of
+  magnitude below the unsalicided options, and its tempco is large and
+  *positive* (+2.9e3 .. +3.2e3 ppm/C, metal-like) where every unsalicided
+  option is negative -- neither is loop-filter friendly. See the full tables
+  for \`r_vcoef_pct_per_v\` and \`r_head_ohm\`.
   Full tables: \`sim/devchar-passives/corners/${RID_RES}/res_summary.csv\`,
   \`res_tempco.csv\`.
 - **Links**:
