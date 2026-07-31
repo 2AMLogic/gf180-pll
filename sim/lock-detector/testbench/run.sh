@@ -18,6 +18,13 @@
 #   ./run.sh --check         # nominal corner only, to stdout
 #   SIM_JOBS=8 ./run.sh      # cap parallelism
 #
+#   SIM_SUPERSEDES=<record-id> SIM_SUPERSEDES_NOTE='<why>' ./run.sh
+#                            mint the record with a **Supersedes** field naming
+#                            the record this run replaces (sim/README.md ::
+#                            "Status / supersession language").  Set at mint
+#                            time on purpose -- editing the field into a
+#                            generated record afterwards is a record rewrite.
+#
 # The DUT netlist comes from design/netlist/lock_detector.spice, which
 # design/netlist.sh exports from design/lock_detector.sch. This runner freezes
 # whatever is committed there; it does not regenerate it.
@@ -435,7 +442,7 @@ ${WINTAB}
   - Raw logs: \`sim/lock-detector/corners/${RID}/\`
   - Extracted metrics: \`sim/lock-detector/corners/${RID}/lock_corners.csv\`
 - **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (issue #11)
-- **Supersedes**: (none -- first record for this claim)
+$(simenv_supersedes_field "${SIM_SUPERSEDES:-}")
 EOF
 
 echo "lock-detector: wrote ${RECORDSDIR}/${RID}.md"

@@ -25,6 +25,13 @@
 #   ./run_supply.sh              # full campaign -> mints a records/<id>.md
 #   ./run_supply.sh --check      # one pushing point + one jitter point, stdout
 #   SIM_JOBS=8 ./run_supply.sh   # cap parallelism
+#
+#   SIM_SUPERSEDES=<record-id> SIM_SUPERSEDES_NOTE='<why>' ./run_supply.sh
+#                            mint the record with a **Supersedes** field naming
+#                            the record this run replaces (sim/README.md ::
+#                            "Status / supersession language").  Set at mint
+#                            time on purpose -- editing the field into a
+#                            generated record afterwards is a record rewrite.
 
 set -euo pipefail
 
@@ -492,7 +499,7 @@ EOF
     numbers, extracted rather than committed as a rawfile per
     \`sim/README.md\`): \`corners/${RID}/periods_*.csv\`
 - **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (#8)
-- **Supersedes**: (none -- first record for this claim)
+$(simenv_supersedes_field "${SIM_SUPERSEDES:-}")
 EOF
 } >"${RECORD}"
 
