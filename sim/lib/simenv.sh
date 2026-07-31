@@ -178,22 +178,29 @@ EOF
 # The "Environment provenance" block of a record, in the field order
 # sim/README.md prescribes.
 #
-# simenv_env_block [schematic-capture-note]
-#   The optional argument replaces the default schematic-capture sentence, for
-#   campaigns whose DUT netlist IS an xschem export (sim/README.md requires the
-#   schematic-capture version whenever the netlist came from a schematic).
-#   Called with no argument the wording is unchanged, so the device-level
-#   devchar-* campaigns keep emitting exactly what they emitted before.
+# simenv_env_block [schematic-capture-note] [switches-note]
+#   The first optional argument replaces the default schematic-capture
+#   sentence, for campaigns whose DUT netlist IS an xschem export
+#   (sim/README.md requires the schematic-capture version whenever the
+#   netlist came from a schematic). The second replaces the default
+#   statistical-switches sentence, for campaigns (#15, mc-cp-mismatch) that
+#   deliberately override `sw_stat_mismatch` away from design.ngspice's
+#   default -- reporting "nominal skew, no Monte Carlo" for a run that turned
+#   mismatch ON would misstate the record's own environment. Called with no
+#   arguments the wording is unchanged, so every existing campaign keeps
+#   emitting exactly what it emitted before.
 simenv_env_block() {
   local capture="${1:-N/A — these
     testbenches are hand-written SPICE, not an xschem export; there is no
     schematic for a device-level DUT.}"
+  local switches="${2:-\`design.ngspice\` included first, leaving its default
+    statistical switches \`sw_stat_global = sw_stat_mismatch = 0\` (nominal
+    skew, no Monte Carlo)}"
   cat <<EOF
   - PDK: volare \`$(simenv_pdk_variant)\`, open_pdks \`$(simenv_pdk_hash)\`
   - Models: \`libs.tech/ngspice/sm141064.ngspice\` (MIM devices via
     \`sm141064_mim.ngspice\`, pulled in by the \`mimcap_*\` sections);
-    \`design.ngspice\` included first, leaving its default statistical switches
-    \`sw_stat_global = sw_stat_mismatch = 0\` (nominal skew, no Monte Carlo)
+    ${switches}
   - Simulator: $(simenv_ngspice_version). Schematic capture: ${capture}
   - Repo commit: \`$(simenv_git_sha)\` ($(simenv_git_state) tree)
   - Host: $(simenv_host)
@@ -258,9 +265,26 @@ simenv_run_deck() {
     done
     echo ".temp ${temp}"
     echo ".param sim_temp=${temp}"
-    local kv
+    local kv key val
     for kv in "$@"; do
-      echo ".param ${kv%%=*}=${kv#*=}"
+      key="${kv%%=*}"
+      val="${kv#*=}"
+      if [ "${key}" = "rndseed" ]; then
+        # Monte Carlo seeding (#15, mc-cp-mismatch): ngspice's per-instance
+        # mismatch draws (agauss() inside the gf180mcu nfet_03v3_dss /
+        # pfet_03v3_dss subcircuits, gated by sw_stat_mismatch) are evaluated
+        # once at netlist parse time, BEFORE any `.control` block runs -- so
+        # `set rndseed=N` inside `.control` is too late to affect them (it only
+        # reseeds behavioral-source noise for whatever analysis runs after it).
+        # `.option rndseed=N` at the top level is read at parse time and DOES
+        # make the mismatch draws reproducible: same seed -> same draws, a
+        # different seed -> an independent draw. This is the ONLY kv key this
+        # function treats specially; every other key becomes a `.param` line
+        # as before.
+        echo ".option rndseed=${val}"
+      else
+        echo ".param ${key}=${val}"
+      fi
     done
     echo ".include \"${deck}\""
     echo ".end"
