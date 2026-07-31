@@ -12,12 +12,12 @@
 # script:
 #
 #   COMMITTED (BLOCKS below: vco, div23_cell, divider_chain, lock_detector,
-#   dff_tg_3v3) -- each top is netlisted with its full hierarchy into one
-#   self-contained file under design/netlist/, which is committed.  `--check`
-#   regenerates into a temp dir and diffs instead of writing, so a stale
-#   committed netlist fails loudly.  These exports are small and stable, so
-#   committing them makes the netlist reviewable in a diff and gives `--check`
-#   something to check against.
+#   dff_tg_3v3, loop_filter) -- each top is netlisted with its full hierarchy
+#   into one self-contained file under design/netlist/, which is committed.
+#   `--check` regenerates into a temp dir and diffs instead of writing, so a
+#   stale committed netlist fails loudly.  These exports are small and
+#   stable, so committing them makes the netlist reviewable in a diff and
+#   gives `--check` something to check against.
 #
 #   PER-RECORD (pfd_cp) -- the whole hierarchy is exported to <outdir>/dut.spice
 #   as an includable fragment and is deliberately NOT committed: each evidence
@@ -77,7 +77,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Committed tops a testbench instantiates: the ring VCO (#8) and the feedback
 # divider / lock detector (#11).
-BLOCKS=(vco div23_cell divider_chain lock_detector dff_tg_3v3)
+BLOCKS=(vco div23_cell divider_chain lock_detector dff_tg_3v3 loop_filter)
 
 # Expected `.subckt` set per top -- the connectivity guard below fails the run
 # if any of these is missing from the corresponding export.
@@ -88,6 +88,7 @@ expected_subckts() {
     divider_chain)  echo "divider_chain div23_cell nor2_3v3 inv_3v3 nand2_3v3 nand3_3v3 inv2x_3v3 dff_tg_3v3 tgate_3v3" ;;
     lock_detector)  echo "lock_detector xor2_3v3 delaywin_3v3 nand2_3v3 inv_3v3 schmitt_3v3" ;;
     dff_tg_3v3)     echo "dff_tg_3v3 inv_3v3 tgate_3v3" ;;
+    loop_filter)    echo "loop_filter" ;;
     pfd_cp)         echo "pfd_cp pfd cp cp_leg_n cp_leg_p cp_dumpbuf srlatch edgedet pfdcp_nand2_3v3 pfdcp_inv_3v3" ;;
     *)              echo "" ;;
   esac
@@ -101,7 +102,8 @@ usage: netlist.sh [--top <block>] [--check]
 
   (no args)           regenerate every committed export under design/netlist/
   --top <block>       restrict to one top.  Committed tops: vco, div23_cell,
-                      divider_chain, lock_detector, dff_tg_3v3.
+                      divider_chain, lock_detector, dff_tg_3v3,
+                      loop_filter.
                       The per-record top is pfd_cp.
   --check             committed tops only: diff against the committed export,
                       do not write

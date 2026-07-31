@@ -31,6 +31,9 @@ design/
   srlatch, edgedet      custom logic cells the PFD is built from
   dut_export.sch        netlist-export root for pfd_cp; not part of the design
 
+  # Loop filter (#10, DR-001 Decision 1 / DR-005)
+  loop_filter.sch/.sym  passive fixed 2nd-order filter: series R + shunt C1 + C2
+
   # Shared 3.3 V static-CMOS logic library (VCO / divider / lock detector)
   inv_3v3, inv2x_3v3, nand2_3v3, nand3_3v3, nor2_3v3, xor2_3v3,
   tgate_3v3, schmitt_3v3, delaywin_3v3
@@ -819,6 +822,62 @@ quick to fall is the safe direction for a consumer gating logic on it.
 It is a **passive monitor**: no counter, no state machine, nothing driving a
 loop node. DR-001 Decision 2 keeps band select a static input with no
 calibration FSM and DR-002 Decision 4 preserves that unchanged.
+
+---
+
+# The loop filter (`loop_filter.sch`)
+
+Cell landed by #10: DR-001 Decision 1's **passive, fixed** second-order
+network between the charge pump (`cp.sch`) and the VCO's `VCTRL` input —
+series R, shunt C1, shunt C2. No R/C trim banks: DR-001 explicitly rejects a
+programmable filter (the band-switched VCO's `Kvco ∝ f_out` already
+self-compensates the loop gain, and switches on the loop's highest-impedance
+node are themselves a spur mechanism). The only loop-side programmability is
+the charge pump's own 2-bit Icp trim (`cp.sch`), which `sim/loop-dynamics`'s
+stability sweep covers as an axis of that campaign, not as a filter-side knob.
+
+```
+VCTRL --+-- C2 -- VSS          zero  fz  = 1/(2·π·R·C1)
+        +-- R -- NZ -- C1 -- VSS    3rd pole fp3 = (C1+C2)/(2·π·R·C1·C2)
+```
+
+## Component choice and sizing
+
+Each element is sized from `sim/devchar-passives`'s real, corner-swept device
+data (#4 → #10), not DR-001's hand-calc placeholders:
+
+- **R — 4× `ppolyf_u` in series**, W = 2 µm, L = 107 µm each. `ppolyf_u` is
+  the near-zero-tempco poly option (≈ −75 ppm/°C, section- and
+  width-independent) — the loop-filter-friendly choice next to the salicided
+  and high-sheet variants, which trade tempco for density or run positive.
+  Four devices in series (rather than one long one) only for layout
+  convenience; electrically it is one resistor.
+- **C1 — 4× `cap_nmos_03v3_b`**, 87 × 87 µm each (30 276 µm² total). This is
+  the **body-tied (accumulation-mode)** connection DR-001 asks for: the raw
+  `cap_nmos_03v3` is denser but has a severe voltage coefficient (`cv_ratio`
+  ≈ 45× over 0.3–3.3 V) — unusable as the dominant loop-filter cap, since its
+  effective value (and hence the loop's zero) would swing by the same factor
+  as `Vctrl` moves. The body-tied variant trades some density for `cv_ratio`
+  ≈ 1.10×, i.e. C1 stays within a few percent of its mid-window value across
+  the DR-003 Decision 5 usable Vctrl range (0.9–2.7 V) — see
+  `sim/loop-dynamics` for the measured C–V curve at the real operating
+  points, not just the nominal one. Gate on the filter node, bulk on `VSS`.
+- **C2 — 1× `cap_mim_2f0_m2m3_noshield`**, 31.4 × 31.4 µm. MIM is ideally
+  linear (`cv_ratio` = 1.0000) and sits directly on `VCTRL`, where a
+  voltage-dependent cap would modulate the ripple pole itself.
+
+C1 is the area-dominant element (§ acceptance criteria in #10): at the real
+device density from `sim/devchar-passives`, four 87×87 µm devices consume
+≈ 20 % of the 0.15 mm² block area budget — see `sim/loop-dynamics/records/`
+for the exact figure at every corner, not a single nominal number.
+
+## Regenerating and editing
+
+Same convention as every other block: edit `loop_filter.sch` in xschem, save,
+then `design/netlist.sh --top loop_filter` to refresh the committed
+`design/netlist/loop_filter.spice`, and re-run `sim/loop-dynamics/testbench/run.sh`
+to mint a fresh evidence record (records are append-only; the old one
+stands).
 
 ---
 
