@@ -220,7 +220,11 @@ Two properties of the check are worth knowing:
   #26/#27 case — `pfd_cp` regenerated from today's schematics against the
   committed tops' frozen copies — and `pfd_cp` is otherwise the one top a
   collision passes through silently, having no committed export for the
-  staleness diff to catch either.
+  staleness diff to catch either;
+- it runs, and blocks, under **both** invocations: `--check` fails (exit 1)
+  without writing anything, and plain write mode refuses to write or copy the
+  colliding exports into `design/netlist/` either, rather than reporting the
+  collision and writing the colliding set anyway (#34).
 
 ---
 

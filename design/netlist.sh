@@ -39,14 +39,18 @@
 # `pfdcp_nand2_3v3`, deliberately different cells from the shared library's
 # `inv_3v3` / `nand2_3v3`.
 #
-# `--check` runs a cross-block leaf-cell collision check (see
-# check_leaf_cell_collisions below): every export is self-contained and inlines
-# its own copy of every leaf cell it uses, captured whenever that top was last
-# regenerated.  Two tops can therefore carry genuinely different bodies under
-# the same `.subckt <name>` even though design/ only ever holds one `<name>.sch`
-# at a time on disk -- exactly the add/add-collision hazard this repo has hit
-# twice.  The check hashes every `.subckt ... .ends` block across all exports
-# and fails loudly if the same cell name hashes differently anywhere.
+# Every run -- `--check` and plain write mode alike -- performs a cross-block
+# leaf-cell collision check (see check_leaf_cell_collisions below): every
+# export is self-contained and inlines its own copy of every leaf cell it
+# uses, captured whenever that top was last regenerated.  Two tops can
+# therefore carry genuinely different bodies under the same `.subckt <name>`
+# even though design/ only ever holds one `<name>.sch` at a time on disk --
+# exactly the add/add-collision hazard this repo has hit twice.  The check
+# hashes every `.subckt ... .ends` block across all exports and fails loudly
+# if the same cell name hashes differently anywhere: `--check` exits non-zero
+# without writing (it never writes), and plain write mode refuses to write or
+# copy the colliding exports into design/netlist/ either -- see DR-004 item
+# 4(b).
 #
 # **[#26 delta]** the check spans the per-record `pfd_cp` top as well as the
 # committed ones.  The collision that motivated it was between `pfd_cp` and the
@@ -540,6 +544,17 @@ if [ "${CHECK}" -eq 1 ]; then
     echo "ERROR: design/netlist.sh --check failed -- see STALE / leaf-cell collision errors above" >&2
   fi
   exit "${rc}"
+fi
+
+# Write mode honors the same collisions_rc --check already exits on (DR-004
+# item 4(b)): a detected leaf-cell collision is refused, not merely reported,
+# so a plain `design/netlist.sh` run cannot silently commit a colliding set
+# any more than `--check` can silently pass one. Nothing under
+# design/netlist/ is touched when this fires.
+if [ "${collisions_rc}" -ne 0 ]; then
+  echo "ERROR: leaf-cell collision detected (see above) -- refusing to write" >&2
+  echo "       design/netlist/*.spice.  Fix the colliding cell and re-run." >&2
+  exit 1
 fi
 
 mkdir -p "${HERE}/netlist"

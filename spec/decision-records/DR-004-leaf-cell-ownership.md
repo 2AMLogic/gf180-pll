@@ -9,7 +9,10 @@
   because there was only one block in `design/` when they were written.
 - **Related**: #29 (the collision this resolves), #30 / PR #31 (the standing
   naming convention this record applies), #28 (path-independent exports,
-  landed for the `pfd_cp` top in the same change)
+  landed for the `pfd_cp` top in the same change), #34 (corrects item 4(a)'s
+  description of the collision check and closes item 4(b)'s write-path
+  enforcement gap; both were drafting/implementation gaps in this record, not
+  changes to the decision itself)
 
 ## Context
 
@@ -66,13 +69,28 @@ unresolved.
    library cell requires re-running and re-minting every campaign that cites it,
    under `sim/README.md`'s append-only rule.
 4. **Enforced mechanically, not by vigilance.** PR #31's cross-block collision
-   check is extended here to (a) compare the freshly regenerated exports rather
-   than the committed ones, so a collision is caught on the run that introduces
-   it, (b) refuse to *write* a colliding set, and (c) span the per-record
-   `pfd_cp` top. (c) is the load-bearing addition: the committed tops already
-   surface a re-sized leaf cell as a stale netlist, but `pfd_cp` has no
-   committed export to diff against, so it was the one top a collision could
-   pass through silently — which is exactly what happened.
+   check is extended here to (a) compare the **committed** exports (plus one
+   freshly regenerated export for the per-record `pfd_cp` top, which has
+   nothing committed to read), (b) refuse to *write* a colliding set, and (c)
+   span the per-record `pfd_cp` top. (c) is the load-bearing addition: the
+   committed tops already surface a re-sized leaf cell as a stale netlist, but
+   `pfd_cp` has no committed export to diff against, so it was the one top a
+   collision could pass through silently — which is exactly what happened.
+   `design/README.md` § "Leaf-cell ownership and naming" is the accurate
+   day-to-day statement of (a): comparing only freshly-regenerated exports
+   would never fire, because `design/` is a flat namespace and a full-set
+   regeneration in one run always regenerates one `<name>.sch` into one body,
+   so a set of exports produced together can never disagree with each other —
+   only a committed export, frozen at whenever its own top was last
+   regenerated, can disagree with a same-named cell in a different top's
+   committed (or, for `pfd_cp`, freshly regenerated) export. This record
+   originally stated (a) backwards, comparing regenerated exports rather than
+   committed ones; that was a drafting error in the record, not a description
+   of what shipped, and is corrected here (issue #34). (b) shipped for
+   `--check` (exit 1 on a detected collision) from the start of this record;
+   the write path did not honor it until issue #34, and now refuses to write
+   or copy the colliding exports into `design/netlist/` there too, matching
+   this item as originally intended.
 
 `design/README.md` § "Leaf-cell ownership and naming" is the day-to-day
 reference; this record is the decision it points at.
