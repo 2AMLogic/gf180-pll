@@ -10,7 +10,11 @@ __pycache__/
 
 # ngspice corner-sweep scratch (generated decks, per-run logs, raw data).
 # Committed evidence lives in sim/*/corners/<record-id>/ (see sim/README.md).
+# The trailing `*` matters: a campaign with more than one testbench keeps a
+# scratch tree per testbench (work-supply/, work-stages/, ...), and a bare
+# `work/` rule would silently let those be committed by `git add -A`.
 sim/*/work/
+sim/*/work-*/
 # >>> loom-managed (do not edit) >>>
 # Loom runtime state (don't commit these)
 .loom-in-use
