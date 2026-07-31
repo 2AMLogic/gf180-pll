@@ -212,7 +212,7 @@ CORNER_DESC="7 bundles{typical,ff,ss,fs,sf,all-slow,all-fast} x temp{-40,27,125}
 #   3-bit band select via three cascaded switched-ratio mirror stages
 #   (x1.65 / x1.65^2 / x1.65^4), fine control by a source-degenerated V->I
 #   converter offset by a 2*Vgs reference so I_sum ~ (Vctrl + Voff)/Rdeg.
-#   See spec/decision-records/DR-003 for the band-mapping decision.
+#   Topology and sizing rationale: design/README.md.
 # fosc_hz: measured at the buffered output CLK over 4 whole cycles after tsettle
 # isupply_a: average current out of that instance's own VDD_VCO ammeter over
 #   the measurement window (whole block: bias + ring + output buffer + decap)
@@ -223,8 +223,138 @@ EOF
   sort -t, -k1,1 -k2,2n -k3,3n -k4,4n -k5,5n "${ROWS}"
 } >"${CSV_OUT}"
 
+# --------------------------------------------------------------------------
+# Extract Kvco / coverage checks and mint the record. Every number in the
+# Result section is computed by analyze.py from the CSV just written, so the
+# record cannot drift from its own evidence.
+# --------------------------------------------------------------------------
+RESULT="${WORK}/result.md"
+python3 "${HERE}/analyze.py" "${CSV_OUT}" "${CORNERSDIR}" >"${RESULT}"
+
+RECORD="${RECORDSDIR}/${RID}.md"
+{
+  cat <<EOF
+# Record ${RID}
+
+- **Record ID**: ${RID}
+- **Claim**: #8 (design-input claim, and a pass/fail against two proposed spec
+  lines) -- does the 5-stage current-starved ring VCO of \`design/vco.sch\`
+  cover the ratified v1 output band of 10-200 MHz (DR-002 Decision 2) at every
+  PVT corner, with adjacent-band overlap and no coverage hole, and with
+  Kvco inside the ceiling DR-001 Decision 1's fixed loop filter assumes?
+  Two of the checks below are binding on sibling issues: the **low-band floor**
+  is DR-002 Decision 2's documented trigger for whether an output divider
+  enters v1 scope (#11), and the **Kvco table** is the input #9/#10 size the
+  charge pump and loop filter against.
+  Spec-line references are placeholders pending ratification (#1):
+  \`spec/pll.md#output-band\`, \`spec/pll.md#kvco\`.
+- **Netlist provenance**: schematic (\`design/vco.sch\` + \`design/vco_bias.sch\`
+  + \`design/vco_stage.sch\`, exported by \`design/netlist.sh\`) ->
+  \`sim/vco-tuning-range/netlist-snapshots/${RID}.spice\`, SHA-256 \`${SHA}\`
+- **Environment provenance**:
+$(simenv_env_block)
+- **Corner matrix run**: ${EXPECTED} points =
+  7 corner bundles x 3 temperatures x 3 supplies x 8 band codes x 7 control
+  voltages. The PVT grid is 63 points, a **superset** of the 45-point default
+  grid in \`sim/README.md\`.
+  - Bundles (-> \`.lib\` sections of \`sm141064.ngspice\`):
+    \`typical\` -> typical, res_typical, moscap_typical;
+    \`ff\` -> ff, res_typical, moscap_typical;
+    \`ss\` -> ss, res_typical, moscap_typical;
+    \`fs\` -> fs, res_typical, moscap_typical;
+    \`sf\` -> sf, res_typical, moscap_typical;
+    \`all-slow\` -> ss, res_ss, moscap_ss;
+    \`all-fast\` -> ff, res_ff, moscap_ff
+  - Temperature: -40 C, 27 C, 125 C
+  - Supply: 2.97 V, 3.30 V, 3.63 V (3.3 V +/-10%)
+  - Band code: all 8 codes of the 3-bit static band-select input (B2 B1 B0)
+  - Control voltage: 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7 V -- the usable Vctrl
+    window DR-001 predicts (~0.9-2.4 V), extended to 2.7 V to show where the
+    V->I converter's degeneration stops holding Kvco flat.
+  - **Passive axes ARE swept, and deliberately so.** \`sim/README.md\` warns
+    that a MOS-only sweep silently pins the passive sections at typical. This
+    DUT's frequency is set by a **poly resistor** (the V->I degeneration
+    resistor and the constant-gm reference resistor), so the resistor corner is
+    the single most Kvco-relevant process axis. The five MOS-only bundles are
+    kept for comparability with \`sim/devchar-delay\`, and the two composite
+    bundles (\`all-slow\`, \`all-fast\`) add \`res_ss/res_ff\` and
+    \`moscap_ss/moscap_ff\` so every reported worst case is a genuine
+    worst case. MIM sections are N/A -- the decoupling capacitor is
+    \`cap_nmos_03v3\` (a MOS cap), there is no MIM device in this DUT.
+- **Methodology / criteria / limitations**:
+  - **Measurement topology**: seven independent copies of the complete VCO
+    (constant-gm bias generator + band-select mirror chain + V->I converter +
+    5-stage starved ring + output buffer + on-chip decoupling) are instantiated
+    in one deck, one per control voltage, at a common PVT point and band code.
+    Each copy has its own supply ammeter, so f(Vctrl) and I(Vctrl) at all seven
+    control points come from a single transient. The copies share only the
+    ideal supply and ground nodes.
+  - **Measurement criterion**: frequency is measured at the **buffered output
+    \`CLK\`**, not at an internal ring node -- \`CLK\` is what the divider (#11)
+    and the closed-loop bench (#12) see, and measuring there also proves the
+    output buffer squares the starved ring's slow internal edges into a
+    rail-to-rail clock at the bottom of the band. The period is taken over four
+    whole cycles between the 1st and 5th rising half-supply crossing after
+    \`tsettle\`, and \`tsettle\` is >= 4 estimated periods, so the bias
+    generator's own start-up transient is excluded from every number.
+  - **Kvco extraction**: local dF/dVctrl by central difference on the 0.3 V
+    control grid (one-sided at the two ends), per (corner, band). Reported as
+    a per-point table, not a single per-band slope, because the loop-dynamics
+    design (#10) consumes the Kvco **spread**, not its average.
+  - Simulator settings: \`.tran <tstep> <tstop> 0 <tmax>\` with the window
+    scaled per (band, corner) from a frequency estimate -- \`tmax\` <= 1/(80
+    f_max), i.e. >= 80 timesteps per cycle of the fastest instance in the deck,
+    so half-supply crossings are interpolated to well under 1% of a period.
+    \`uic\` is deliberately NOT used: the bias generator is solved to its DC
+    operating point before t=0. \`.ic\` is applied to the ring nodes only, to
+    break the metastable all-nodes-at-mid DC solution.
+  - Every run is self-checking: all seven \`.meas\` frequencies must land or
+    the point is retried with a 3x longer window (up to three attempts), and
+    the campaign aborts unless all ${EXPECTED} rows are collected. No row in
+    the CSV is an extrapolation or a default.
+  - Statistical switches: \`sw_stat_global = sw_stat_mismatch = 0\` (nominal
+    per-corner skew, no Monte Carlo mismatch). Device mismatch in the
+    band-select mirror is **not** covered by this record.
+  - **Limitations**:
+    - **Schematic-level, no parasitics.** Ring frequency is set by the load
+      capacitance of each stage, so layout parasitics will move every number
+      here downward. The margins reported below are the budget that extraction
+      (#18) has to stay inside, not a final result.
+    - **Clean supply.** This record sweeps DC supply only; it produces a
+      supply-*pushing* number but no jitter number. DR-001 names supply noise
+      the top risk for this topology, and the supply-step / supply-ripple
+      jitter testbench that addresses it is a separate record from
+      \`testbench/run_supply.sh\`. A tuning-range record on its own does not
+      discharge that acceptance criterion.
+    - **Vctrl endpoints, not a servo.** Bands are characterized over a fixed
+      0.9-2.7 V control window; the closed loop will not use the full window at
+      every band. Band-edge numbers are therefore the *available* range.
+- **Statistical convention**: N/A -- corner-matrix claim, not a distribution
+  claim. Band-select mirror mismatch is a distribution claim and is out of
+  scope for this record.
+- **Result**:
+
+EOF
+  cat "${RESULT}"
+  cat <<EOF
+
+- **Links**:
+  - Testbench: \`sim/vco-tuning-range/testbench/tb_vco_tuning.sp\`
+  - Corner runner: \`sim/vco-tuning-range/testbench/run.sh\`
+  - Extraction: \`sim/vco-tuning-range/testbench/analyze.py\`
+  - Netlist snapshot: \`sim/vco-tuning-range/netlist-snapshots/${RID}.spice\`
+  - Raw logs: \`sim/vco-tuning-range/corners/${RID}/\` (one per PVT point,
+    each holding that point's eight band runs back to back)
+  - Extracted metrics: \`sim/vco-tuning-range/corners/${RID}/vco_tuning.csv\`
+    (raw sweep), \`kvco_by_point.csv\` (per-point Kvco),
+    \`kvco_by_band.csv\` (per-band summary)
+- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (#8)
+- **Supersedes**: (none -- first record for this claim)
+EOF
+} >"${RECORD}"
+
 echo "vco-tuning-range: wrote ${CSV_OUT}"
 echo "vco-tuning-range: wrote ${CORNERSDIR}/ (per-PVT-point logs)"
-echo "vco-tuning-range: record id ${RID}"
+echo "vco-tuning-range: wrote ${RECORD}"
 echo "vco-tuning-range: netlist sha256 ${SHA}"
 echo "${RID}" >"${WORK}/last_record_id"

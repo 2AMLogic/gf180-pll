@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+"""gf180-pll :: vco-tuning-range :: period/TIE extraction from tb_vco_supply_jitter.
+
+Reads the `jit.dat` written by the testbench's `.control` block (columns: time,
+v(clkq) quiet, v(clks) stepped supply, v(clkr) rippled supply), locates every
+rising half-supply crossing by linear interpolation between transient
+timepoints, and reduces the three crossing sequences to the jitter metrics the
+record reports.
+
+Why crossings and not `.meas`: jitter is a property of the period *sequence*,
+and `.meas` reports scalars. Extracting crossings here also lets the quiet
+channel act as an explicit numerical-noise floor for the other two.
+
+Metrics, per channel:
+  f_mean        (N-1) / (t_last - t_first)
+  tj_pp/tj_rms  peak-to-peak and RMS deviation of the individual periods
+  c2c_rms       RMS cycle-to-cycle period difference
+  tie_pp/rms    deviation of the crossing times from their least-squares line
+                (time interval error) -- the quantity a jitter budget consumes
+
+For the stepped channel the sequence is additionally split at `tstepon` into a
+pre-step and post-step frequency, giving the *transient* supply-pushing
+coefficient, which is not assumed equal to the dc one.
+
+Usage:
+  jitter_extract.py <jit.dat> <vsup> <tsettle> <tstepon> <astep> <arip> <frip>
+                    <periods-csv-out>
+Prints one CSV row (no header) on stdout; writes the full period/TIE sequences
+to <periods-csv-out> so a record can commit the sequence as evidence.
+"""
+
+import sys
+
+
+def read_columns(path):
+    """Return a list of columns. Tolerates wrdata's paired-scale layout."""
+    rows = []
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line[0] not in "-+.0123456789":
+                continue
+            parts = line.split()
+            try:
+                rows.append([float(x) for x in parts])
+            except ValueError:
+                continue
+    if not rows:
+        raise SystemExit("jitter_extract: no numeric rows in %s" % path)
+    ncol = len(rows[0])
+    cols = [[r[i] for r in rows] for i in range(ncol)]
+    if ncol == 4:  # `set wr_singlescale`: t, y1, y2, y3
+        return cols[0], cols[1:]
+    if ncol == 6:  # default wrdata: (t,y1),(t,y2),(t,y3)
+        return cols[0], [cols[1], cols[3], cols[5]]
+    raise SystemExit("jitter_extract: unexpected column count %d" % ncol)
+
+
+def crossings(t, y, th, tmin):
+    """Rising crossings of `th`, linearly interpolated, at times >= tmin."""
+    out = []
+    for i in range(len(y) - 1):
+        if y[i] < th <= y[i + 1] and t[i] >= tmin:
+            dy = y[i + 1] - y[i]
+            out.append(t[i] if dy == 0 else t[i] + (th - y[i]) * (t[i + 1] - t[i]) / dy)
+    return out
+
+
+def stats(xs):
+    n = len(xs)
+    if n == 0:
+        return 0.0, 0.0, 0.0
+    m = sum(xs) / n
+    var = sum((x - m) ** 2 for x in xs) / n
+    return m, var ** 0.5, (max(xs) - min(xs))
+
+
+def linefit_residual(ts):
+    """Residual of crossing times against their least-squares line (TIE)."""
+    n = len(ts)
+    ks = list(range(n))
+    mk = sum(ks) / n
+    mt = sum(ts) / n
+    sxx = sum((k - mk) ** 2 for k in ks)
+    sxy = sum((k - mk) * (t - mt) for k, t in zip(ks, ts))
+    slope = sxy / sxx
+    return [t - (mt + slope * (k - mk)) for k, t in zip(ks, ts)], slope
+
+
+def channel_metrics(ts):
+    if len(ts) < 8:
+        return None
+    per = [ts[i + 1] - ts[i] for i in range(len(ts) - 1)]
+    pm, prms, ppp = stats(per)
+    c2c = [per[i + 1] - per[i] for i in range(len(per) - 1)]
+    _, c2crms, _ = stats(c2c)
+    tie, slope = linefit_residual(ts)
+    _, tierms, tiepp = stats(tie)
+    return {
+        "n": len(ts),
+        "f": (len(ts) - 1) / (ts[-1] - ts[0]),
+        "period": pm,
+        "tj_rms": prms,
+        "tj_pp": ppp,
+        "c2c_rms": c2crms,
+        "tie_rms": tierms,
+        "tie_pp": tiepp,
+        "slope": slope,
+        "tie": tie,
+        "per": per,
+        "ts": ts,
+    }
+
+
+def main():
+    (dat, vsup, tsettle, tstepon, astep, arip, frip, pout) = sys.argv[1:9]
+    vsup, tsettle, tstepon = float(vsup), float(tsettle), float(tstepon)
+    astep, arip, frip = float(astep), float(arip), float(frip)
+
+    t, ys = read_columns(dat)
+    th = vsup / 2.0
+    ch = [crossings(t, y, th, tsettle) for y in ys]
+    mq, ms, mr = (channel_metrics(c) for c in ch)
+    if mq is None or ms is None or mr is None:
+        raise SystemExit("jitter_extract: too few crossings (deck window too short)")
+
+    # --- stepped channel: pre/post-step frequency.
+    # One period of guard either side keeps the crossing that straddles the
+    # step edge out of both estimates.
+    guard = ms["period"]
+    pre = [x for x in ms["ts"] if x < tstepon - guard]
+    post = [x for x in ms["ts"] if x > tstepon + guard]
+    if len(pre) < 4 or len(post) < 4:
+        raise SystemExit("jitter_extract: step lands outside the measured window")
+    f_pre = (len(pre) - 1) / (pre[-1] - pre[0])
+    f_post = (len(post) - 1) / (post[-1] - post[0])
+    df = f_post - f_pre
+    kvdd_tran = df / astep if astep else 0.0
+    # Timing error a 1 us open-loop interval accumulates at the post-step
+    # frequency offset -- the number a loop-bandwidth budget has to beat.
+    tie_1us = 1e-6 * df / f_pre
+
+    # --- rippled channel: measured vs. quasi-static prediction.
+    # Excess phase from f(t) = f0 + K*A*sin(2*pi*f_r*t) integrates to a
+    # peak-to-peak time error of K*A/(pi*f_r*f0); period modulation is
+    # 2*T0*K*A/f0 peak-to-peak.
+    if arip and frip:
+        tie_pp_pred = abs(kvdd_tran) * arip / (3.14159265358979 * frip * mq["f"])
+        tj_pp_pred = 2.0 * (1.0 / mq["f"]) * abs(kvdd_tran) * arip / mq["f"]
+    else:
+        tie_pp_pred = tj_pp_pred = 0.0
+
+    with open(pout, "w") as fh:
+        fh.write("# per-cycle period and TIE sequences, one row per measured cycle\n")
+        fh.write("# vsup=%g tsettle=%g tstepon=%g astep=%g arip=%g frip=%g\n"
+                 % (vsup, tsettle, tstepon, astep, arip, frip))
+        fh.write("cycle,quiet_t_s,quiet_period_s,quiet_tie_s,")
+        fh.write("step_t_s,step_period_s,step_tie_s,")
+        fh.write("ripple_t_s,ripple_period_s,ripple_tie_s\n")
+        n = min(len(mq["per"]), len(ms["per"]), len(mr["per"]))
+        for i in range(n):
+            fh.write(
+                "%d,%.10g,%.6g,%.6g,%.10g,%.6g,%.6g,%.10g,%.6g,%.6g\n"
+                % (i, mq["ts"][i], mq["per"][i], mq["tie"][i],
+                   ms["ts"][i], ms["per"][i], ms["tie"][i],
+                   mr["ts"][i], mr["per"][i], mr["tie"][i])
+            )
+
+    sys.stdout.write(
+        ",".join(
+            "%.6g" % v
+            for v in (
+                mq["f"], mq["tj_pp"], mq["tj_rms"], mq["c2c_rms"], mq["tie_pp"], mq["tie_rms"],
+                f_pre, f_post, df, kvdd_tran, tie_1us,
+                mr["f"], mr["tj_pp"], mr["tj_rms"], mr["c2c_rms"], mr["tie_pp"], mr["tie_rms"],
+                tie_pp_pred, tj_pp_pred, mq["n"], mr["n"],
+            )
+        )
+        + "\n"
+    )
+
+
+if __name__ == "__main__":
+    main()
