@@ -77,6 +77,16 @@ simenv_ngspice_version() {
   ngspice -v 2>&1 | awk '/ngspice-/ {gsub(/^\*+ /,""); sub(/ :.*/,""); print; exit}'
 }
 
+# Schematic-capture tool version, for campaigns whose DUT netlist is an xschem
+# export rather than a hand-written deck. Prints "unknown" if xschem is absent.
+simenv_xschem_version() {
+  if command -v xschem >/dev/null 2>&1; then
+    xschem -v 2>&1 | awk '/XSCHEM/ {print tolower($1) " " $2; exit}'
+  else
+    echo "unknown"
+  fi
+}
+
 simenv_repo_root() {
   git rev-parse --show-toplevel
 }
@@ -130,16 +140,24 @@ EOF
 
 # The "Environment provenance" block of a record, in the field order
 # sim/README.md prescribes.
+#
+# simenv_env_block [schematic-capture-note]
+#   The optional argument replaces the default schematic-capture sentence, for
+#   campaigns whose DUT netlist IS an xschem export (sim/README.md requires the
+#   schematic-capture version whenever the netlist came from a schematic).
+#   Called with no argument the wording is unchanged, so the device-level
+#   devchar-* campaigns keep emitting exactly what they emitted before.
 simenv_env_block() {
+  local capture="${1:-N/A — these
+    testbenches are hand-written SPICE, not an xschem export; there is no
+    schematic for a device-level DUT.}"
   cat <<EOF
   - PDK: volare \`$(simenv_pdk_variant)\`, open_pdks \`$(simenv_pdk_hash)\`
   - Models: \`libs.tech/ngspice/sm141064.ngspice\` (MIM devices via
     \`sm141064_mim.ngspice\`, pulled in by the \`mimcap_*\` sections);
     \`design.ngspice\` included first, leaving its default statistical switches
     \`sw_stat_global = sw_stat_mismatch = 0\` (nominal skew, no Monte Carlo)
-  - Simulator: $(simenv_ngspice_version). Schematic capture: N/A — these
-    testbenches are hand-written SPICE, not an xschem export; there is no
-    schematic for a device-level DUT.
+  - Simulator: $(simenv_ngspice_version). Schematic capture: ${capture}
   - Repo commit: \`$(simenv_git_sha)\` ($(simenv_git_state) tree)
   - Host: $(simenv_host)
 EOF

@@ -77,6 +77,8 @@ sim/
   | `divider-ratio` | ÷2/3 cell moduli and speed margin, chain ratio over the whole N = 4–64 range, retiming setup closure | #11 |
   | `lock-detector` | phase-error window comparator: assert/deassert and window edges | #11 |
   | `vco-tuning-range` | open-loop ring VCO range, Kvco | #8 |
+  | `pfd-deadzone` | PFD + charge-pump phase-to-charge transfer through zero phase error (dead-zone freedom), and the residual charge offset at zero | #9 |
+  | `cp-compliance` | charge-pump output compliance range, UP/DN current and switching-time mismatch, 2-bit Icp trim range | #9 |
   | `loop-dynamics` | loop bandwidth / phase margin vs. R–C and Kvco spread | #10 |
   | `lock-time` | closed-loop lock acquisition | #12 |
   | `output-range` | closed-loop output-band coverage | #12 |
@@ -115,6 +117,31 @@ sim/
   `ss-resss-mimss`, `all-slow`. Every bundle name used in a run **must** be
   expanded into its exact `.lib` section list in the record's corner-matrix
   field — the filename is a handle, the record is the definition.
+
+  **Campaigns that sweep beyond the PVT grid.** Some campaigns sweep an
+  independent variable *in addition to* process/temperature/supply — a phase
+  offset, a trim code, a control voltage — so one PVT point produces several
+  logs and `<corner-bundle>_<temp>c_<supply>v` is no longer unique. Such a
+  campaign appends the extra variable as a further `_`-separated field, and may
+  prepend a measurement-kind field when it runs more than one analysis over the
+  same grid:
+
+  ```
+  [<kind>_]<corner-bundle>_<temp>c_<supply>v[_<extra>][_<extra>…].log
+
+  ss_125c_3.30v_dphi200p.log      pfd-deadzone: phase offset (dphi) swept
+  dc_ff_-40c_2.97v_code00.log     cp-compliance: DC analysis, Icp trim code
+  sw_tt_27c_3.30v_vctrl1.65.log   cp-compliance: switching analysis, Vctrl
+  ```
+
+  An extra field is `<name><value>` with no separator between them, so the `_`
+  boundary stays unambiguous; the value is written exactly as the deck spells
+  it (SPICE suffixes included, `-` for negative). Every swept variable **must**
+  be named, with its points, in the record's corner-matrix field, on the same
+  terms as the PVT axes — the filename is still only a handle. The three fixed
+  fields keep their meaning and position, so a campaign that sweeps nothing
+  extra is unaffected: this documents a convention already in use, it does not
+  change the schema.
 
 - **`testbench/`** is not versioned per record — it holds the current
   testbench netlist(s)/xschem export(s) used to generate records. If the

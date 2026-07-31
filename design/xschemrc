@@ -1,36 +1,86 @@
 #### gf180-pll :: project-local xschem configuration for design/.
 ####
-#### Keeps the gf180mcu primitive symbols, xschem's own devices library and
-#### this directory on the symbol search path, and writes generated netlists
-#### beside the schematics (design/netlist/) rather than into
-#### ~/.xschem/simulations.
+#### Sourced by `design/netlist.sh` (batch netlisting) and picked up
+#### automatically when xschem is started from this directory.  ONE file serves
+#### every block captured here, and the blocks reference their symbols
+#### differently, so the search path below is the UNION of what each needs:
+####
+####   - the VCO cells (`vco.sch`, `vco_bias.sch`, `vco_stage.sch`) and the
+####     divider / lock-detector cells (`div23_cell.sch`, `divider_chain.sch`,
+####     `lock_detector.sch`, `dff_tg_3v3.sch`, plus the shared logic library
+####     `inv_3v3`, `nand2_3v3`, `nand3_3v3`, `nor2_3v3`, `xor2_3v3`,
+####     `tgate_3v3`, `inv2x_3v3`, `schmitt_3v3`, `delaywin_3v3`) instantiate
+####     BARE symbol names -- `ipin.sym`, `pfet_03v3.sym` -- so the two LEAF
+####     directories `xschem_library/devices` and `libs.tech/xschem/symbols`
+####     must be on the path;
+####   - the PFD/CP cells (`pfd*.sch`, `cp*.sch`, `edgedet.sch`, `srlatch.sch`
+####     and the block-owned leaf cells `pfdcp_inv_3v3.sch` /
+####     `pfdcp_nand2_3v3.sch`) instantiate QUALIFIED names -- `devices/ipin.sym`,
+####     `symbols/nfet_03v3.sym` -- so those directories' PARENTS
+####     (`xschem_library` and `libs.tech/xschem`) must be on the path as well.
+####
+#### The two pairs are complementary, not alternatives, and adding the parents
+#### cannot shadow anything: neither `${XSCHEM_SHAREDIR}/xschem_library` nor
+#### `${GF180_PDK_ROOT}/libs.tech/xschem` holds a `.sym` file of its own (they
+#### hold only `devices/`, and `symbols/` + `tests/` + `xschemrc`
+#### respectively), so a bare `ipin.sym` / `pfet_03v3.sym` still resolves in
+#### exactly the leaf directory it always resolved in.  That invariant is not
+#### left to inspection: `netlist.sh --check-paths` re-asserts it at run time,
+#### so it cannot rot silently as the PDK or the xschem install moves.
+####
+#### A missing devices/ path is the failure mode worth knowing about: xschem
+#### then silently instantiates unresolved label symbols as pin-less
+#### placeholders, every net comes out auto-named `net1`, `net2`, ... and the
+#### netlist is connectivity-wrong WITHOUT EVER REPORTING AN ERROR.  That is
+#### why `netlist.sh` self-checks EVERY export (expected `.subckt` set present,
+#### no auto-named net in a port list, no unconnected pin) instead of trusting
+#### xschem's exit status.
 ####
 #### Batch use (see netlist.sh):
 ####   xschem --no_x -n -s -q --rcfile design/xschemrc -o <outdir> <cell>.sch
-####
-#### GF180_PDK_ROOT may be set to point at a different volare install; it
-#### defaults to the same ~/.volare/gf180mcuD path sim/lib/simenv.sh pins.
-
-if { [info exists env(GF180_PDK_ROOT)] && $env(GF180_PDK_ROOT) ne {} } {
-  set GF180_ROOT $env(GF180_PDK_ROOT)
-} else {
-  set GF180_ROOT $env(HOME)/.volare/gf180mcuD
-}
-
-#### This file's own directory, so the paths below do not depend on the working
-#### directory xschem happens to be invoked from.
-set DESIGN_DIR [file dirname [file normalize [info script]]]
 
 set XSCHEM_LIBRARY_PATH {}
-#### xschem's own generic devices (ipin/opin/iopin/lab_pin)
+append XSCHEM_LIBRARY_PATH :${XSCHEM_SHAREDIR}/xschem_library
 append XSCHEM_LIBRARY_PATH :${XSCHEM_SHAREDIR}/xschem_library/devices
-#### gf180mcu primitive device symbols. The divider and lock detector use
-#### nfet_03v3 / pfet_03v3 only, per DR-002 Decision 3 (3.3 V thick-oxide
-#### flavour exclusively); the VCO adds ppolyf_u_3k and cap_nmos_03v3 from the
-#### same 3.3 V set.
-append XSCHEM_LIBRARY_PATH :${GF180_ROOT}/libs.tech/xschem/symbols
-#### this repository's own cells
-append XSCHEM_LIBRARY_PATH :${DESIGN_DIR}
 
-set netlist_dir [file join ${DESIGN_DIR} netlist]
+#### PDK root: override with GF180_PDK_ROOT, the same variable
+#### sim/lib/simenv.sh uses; it defaults to the same ~/.volare/gf180mcuD path
+#### simenv.sh pins.
+if { [info exists env(GF180_PDK_ROOT)] && $env(GF180_PDK_ROOT) ne {} } {
+  set GF180_PDK_ROOT $env(GF180_PDK_ROOT)
+} else {
+  set GF180_PDK_ROOT $env(HOME)/.volare/gf180mcuD
+}
+#### gf180mcu primitive device symbols.  Every block here uses nfet_03v3 /
+#### pfet_03v3 only, per DR-002 Decision 3 (3.3 V thick-oxide flavour
+#### exclusively); the VCO adds ppolyf_u_3k and cap_nmos_03v3 from the same
+#### 3.3 V set.
+append XSCHEM_LIBRARY_PATH :${GF180_PDK_ROOT}/libs.tech/xschem
+append XSCHEM_LIBRARY_PATH :${GF180_PDK_ROOT}/libs.tech/xschem/symbols
+set 180MCU_MODELS ${GF180_PDK_ROOT}/libs.tech/ngspice
+
+#### This repository's own cells.  Deliberately NOT [file normalize]d: xschem
+#### echoes the resolved `sym_path`/`sch_path` of every child cell into the
+#### netlist, so normalizing (which resolves symlinks -- /tmp -> /private/tmp on
+#### macOS) changes the raw exported bytes.  `netlist.sh` now rewrites those two
+#### comment kinds to repo-relative form on the way OUT, so the exported bytes
+#### no longer depend on this choice either way -- but leaving [file normalize]
+#### off also keeps the raw xschem output stable, which is what the committed
+#### `design/netlist/*.spice` files were minted from.  `netlist.sh` always
+#### passes an absolute --rcfile, so [info script] is already unambiguous.
+append XSCHEM_LIBRARY_PATH :[file dirname [info script]]
+append XSCHEM_LIBRARY_PATH :$env(PWD)
+
 set netlist_type spice
+
+#### Where a batch netlist lands.  `netlist.sh --top pfd_cp` exports per-record
+#### into a scratch directory and points XSCHEM_NETLIST_DIR at it; the
+#### committed tops pass an explicit output directory.  The default is
+#### design/netlist/ -- beside the schematics, where the committed exports
+#### live -- so an interactive xschem session lands where the batch flow does
+#### rather than in ~/.xschem/simulations.
+if { [info exists env(XSCHEM_NETLIST_DIR)] } {
+  set netlist_dir $env(XSCHEM_NETLIST_DIR)
+} else {
+  set netlist_dir [file join [file dirname [info script]] netlist]
+}
