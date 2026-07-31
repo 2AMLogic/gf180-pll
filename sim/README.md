@@ -558,3 +558,13 @@ migrating them onto `sim/harness` is tracked separately (see the issue that
 follows #2) rather than done as part of landing the harness itself, so that
 already-citable PVT evidence is not touched in the same change that
 introduces the tool that will eventually reproduce it.
+
+`sim/lock-time` and `sim/output-range` (#12) also build on `sim/lib/simenv.sh`
+rather than `sim/harness`, even though both landed after #2: `tb.json`
+(`sim/harness/testbench.py`) carries exactly one fixed `.param` set per
+experiment, with no per-run override, so a manifest cannot express the N x
+cold-start/re-lock axis these two closed-loop campaigns sweep *in addition
+to* the PVT grid within one evidence record. That is a real capability gap,
+not a preference — see either campaign's `testbench/run.sh` header for the
+citation. Closing it (a per-run `--param` override, or a multi-axis manifest
+shape) is tracked separately rather than worked around here.
