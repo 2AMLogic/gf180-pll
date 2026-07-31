@@ -1,0 +1,27 @@
+{
+  "name": "harness-selftest",
+  "description": "harness self-verification -- real devices, real corners, no design claim",
+  "claim": "harness self-verification -- proves sim/harness (#2) resolves the PDK, sweeps the repo's PVT corner grid, and writes a sim/README.md-conformant evidence record end to end. Not a design or spec claim for any block.",
+  "methodology": [
+    "idsat_n / idsat_p: diode-connected nfet_03v3 / pfet_03v3 (W=2um L=0.28um) drive current, read as the DC-settled average of a single .tran analysis (avg i(...) from=10n to=190n, well before the resistor step below) -- mirrors sim/devchar-delay's dc_idn/dc_idp convention.",
+    "res_tau: raw .measure trig/targ on the step response of a ppolyf_u resistor (W=1um L=10um) into a 1 pF load, from the input step's 10% crossing to the output's 63.2% crossing (one RC time constant) -- exercises the harness's raw_measures (.measure) pass-through mechanism against real ngspice output, not just a unit-tested string composition.",
+    "Simulator settings: single .tran 1n 1u analysis (1 ns print interval, adaptive internal timestep); no statistical switches touched (design.ngspice defaults: sw_stat_global = sw_stat_mismatch = 0, nominal skew only).",
+    "This experiment is deliberately architecture-agnostic infrastructure: it exists to prove the harness itself, not to characterize a PLL block. sim/devchar-delay / sim/devchar-cp / sim/devchar-passives remain the real device-characterization evidence for #8/#9/#10."
+  ],
+  "netlist": "tb_selftest.spice",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.10,
+  "temperatures_c": [-40, 27, 125],
+  "corners": ["mos", "res_ff", "res_ss"],
+  "analyses": ["tran 1n 1u"],
+  "raw_measures": {
+    "idsat_n": {"analysis": "tran", "expr": "avg i(vdn) from=10n to=190n"},
+    "idsat_p": {"analysis": "tran", "expr": "avg i(vdp) from=10n to=190n"},
+    "res_tau": {"analysis": "tran", "expr": "trig v(rin) val='0.1*vdd_val' rise=1 targ v(n_out) val='0.632*vdd_val' rise=1"}
+  },
+  "checks": {
+    "idsat_n": {"min_spread_pct": 5.0},
+    "idsat_p": {"min_spread_pct": 5.0},
+    "res_tau": {"min_spread_pct": 5.0}
+  }
+}

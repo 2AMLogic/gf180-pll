@@ -15,6 +15,10 @@ __pycache__/
 # `work/` rule would silently let those be committed by `git add -A`.
 sim/*/work/
 sim/*/work-*/
+
+# sim/harness PDK resolution (sim/harness/pdk.py): machine-local override,
+# never committed -- see sim/pdk.json for the committed defaults.
+sim/pdk.local.json
 # >>> loom-managed (do not edit) >>>
 # Loom runtime state (don't commit these)
 .loom-in-use

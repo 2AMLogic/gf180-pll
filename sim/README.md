@@ -544,3 +544,17 @@ run, the frozen netlist snapshot, the per-corner logs, and the Markdown
 summary record with every mandatory field populated. Machine-readable
 side-artifacts (JSON/CSV) are welcome **in addition**; they do not replace
 the Markdown record. Conformance is verified when #2 lands, not here.
+
+**#2 has landed** as `sim/harness/` (`pdk.py` / `corners.py` / `testbench.py`
+/ `runner.py` / `report.py` / `cli.py`), `sim/run_corners.py`, `sim/env.sh`
+and `sim/selftest.sh` — see `sim/harness/README.md` for how to run it and how
+to write a testbench manifest. `sim/harness-selftest/` is the harness's own
+acceptance testbench (real devices, real corners, no design claim); it is not
+one of the block campaigns in the table above. The interim `sim/lib/simenv.sh`
+shim and the `sim/devchar-*` / `sim/divider-ratio` / `sim/lock-detector` /
+`sim/cp-compliance` / `sim/pfd-deadzone` / `sim/vco-tuning-range` campaigns
+built on it remain the real, already-recorded evidence for their claims;
+migrating them onto `sim/harness` is tracked separately (see the issue that
+follows #2) rather than done as part of landing the harness itself, so that
+already-citable PVT evidence is not touched in the same change that
+introduces the tool that will eventually reproduce it.
