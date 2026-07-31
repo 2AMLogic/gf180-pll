@@ -62,6 +62,62 @@ of the shared leaf cells, so including two would redefine them.
 Set `GF180_PDK_ROOT` to point at a PDK root other than `~/.volare/gf180mcuD`;
 `design/xschemrc` and `sim/lib/simenv.sh` read the same variable.
 
+## Leaf-cell ownership and naming
+
+`design/` is a **single flat namespace** — every block PR lands its schematics
+into this one directory, with no directory-per-block split. That means two
+independently-developed blocks landing their own copy of the same
+static-CMOS leaf cell (`inv_3v3`, `nand2_3v3`, …) under the same filename is
+an **add/add collision**, not a merge that resolves cleanly: whichever side a
+human picks silently re-sizes the *other* block's already-characterized cell,
+and the export still succeeds — nothing reports a problem. This has already
+happened twice (issue #30).
+
+**Convention: every leaf cell is namespaced by its owning block**, using the
+pattern `<block-prefix>_<cellname>` — e.g. a PFD/CP-owned unit inverter would
+be `pfdcp_inv_3v3`, a divider-owned one `div_inv_3v3`. A **bare** cell name
+(no block prefix) is reserved for a cell that is a genuinely **shared,
+canonical** definition instantiated by more than one block; whether a given
+cell is "shared" or "per-block" is a decision recorded the same way any other
+spec choice is (a `spec/decision-records/` decision record), not something an
+implementer decides silently by reusing a bare filename. This is checkable by
+a human reviewer with no tooling at all: `ls design/*.sch design/*.sym` and
+confirm every filename other than the block-agnostic `xschemrc` / `netlist.sh`
+/ `README.md` either carries a `<block-prefix>_` prefix or is on this file's
+explicit shared-cell list (empty today).
+
+**Rationale.** Of the three options considered (namespace per block; one
+canonical shared library with a documented sizing rationale; a
+subdirectory per block), per-block namespacing is the cheapest rule that
+turns the failure mode from *silent* (same name, different meaning, picked by
+whoever resolves the merge) into *structural* (names cannot collide, because
+each block owns its own prefix) — reviewable by eye and requiring no schematic
+rework. A single canonical shared library is arguably the better long-run end
+state, but it requires converging the sizings two blocks have *already*
+characterized over their own PVT grids and re-running whichever campaigns
+move, which this issue does not force onto every future leaf cell just to get
+a naming rule in place; a subdirectory per block would work too, but ripples
+through `xschemrc`'s symbol search path and every existing schematic's
+bare-name symbol references for no benefit over a filename prefix. Per-block
+namespacing is also the outcome consistent with the lower-risk "separate"
+default documented for resolving the *current* `inv_3v3` / `nand2_3v3`
+instance of this exact problem.
+
+This convention governs leaf cells landed from issue #30 forward. It does
+**not** retroactively rename the current `inv_3v3` / `nand2_3v3` collision —
+that decision (and any resulting rename) is tracked separately so two issues
+do not independently decide policy for the same two cells.
+
+`design/netlist.sh --check` mechanically enforces the failure-mode half of
+this convention: every file under `design/netlist/` is a self-contained
+export that inlines its own copy of every leaf cell it uses, frozen at
+whatever the schematic looked like when that top was last regenerated. The
+check hashes every `.subckt <name> … .ends` block across all committed
+exports and fails loudly — naming the colliding tops and cell — if the same
+cell name ever hashes differently across two of them. Byte-identical content
+under the same name across multiple tops is expected and is **not** a
+failure; only genuine divergence is.
+
 ---
 
 # The VCO (`vco.sch`)
