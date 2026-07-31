@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gf180-pll :: run every device-characterization campaign
+# gf180-pll :: run every simulation campaign
 #
 #   ./run-all.sh            full corner grids, rewrites every results/*.csv
 #   ./run-all.sh --check    nominal corner of each campaign, printed to stdout,
@@ -21,7 +21,10 @@ echo "Simulator: $(simenv_ngspice_version)"
 echo
 
 MODE="${1:-}"
-for campaign in devchar-delay devchar-cp devchar-passives; do
+# Campaign order matters only in that a campaign must not depend on a later
+# one's output; today none do (divider-ratio joins its own two sub-campaigns
+# internally). Each campaign mints its own append-only record(s).
+for campaign in devchar-delay devchar-cp devchar-passives divider-ratio lock-detector; do
   echo "=== ${campaign} ==="
   if [ -n "${MODE}" ]; then
     "${HERE}/${campaign}/testbench/run.sh" "${MODE}"
