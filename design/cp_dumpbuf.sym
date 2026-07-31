@@ -1,0 +1,28 @@
+v {xschem version=3.4.7 file_version=1.2}
+G {}
+K {type=subcircuit
+format="@name @pinlist @symname"
+template="name=x1"
+}
+V {}
+S {}
+E {}
+L 4 -90 -150 90 -150 {}
+L 4 90 -150 90 150 {}
+L 4 90 150 -90 150 {}
+L 4 -90 150 -90 -150 {}
+B 5 -92.5 -102.5 -87.5 -97.5 {name=VREF dir=in}
+B 5 -92.5 -22.5 -87.5 -17.5 {name=VBN dir=in}
+B 5 -92.5 57.5 -87.5 62.5 {name=VBP dir=in}
+B 5 87.5 -2.5 92.5 2.5 {name=VDUMP dir=inout}
+B 5 -2.5 -152.5 2.5 -147.5 {name=VDD dir=inout}
+B 5 -2.5 147.5 2.5 152.5 {name=VSS dir=inout}
+T {VREF} -82 -106 0 0 0.25 0.25 {layer=7}
+T {VBN} -82 -26 0 0 0.25 0.25 {layer=7}
+T {VBP} -82 54 0 0 0.25 0.25 {layer=7}
+T {VDUMP} 82 -6 0 1 0.25 0.25 {layer=7}
+T {VDD} 4 -146 0 0 0.25 0.25 {layer=7}
+T {VSS} 4 158 0 0 0.25 0.25 {layer=7}
+T {@name} -90 -170 0 0 0.3 0.3 {}
+T {cp_dumpbuf} -85 -8 0 0 0.35 0.35 {layer=4}
+T {dump-node tracking buffer} -90 170 0 0 0.2 0.2 {layer=8}
