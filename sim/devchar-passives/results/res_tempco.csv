@@ -1,0 +1,33 @@
+# campaign: devchar-passives (resistor temperature coefficient)
+# generated_utc: 2026-07-31T03:36:45Z
+# pdk_variant: gf180mcuD
+# pdk_open_pdks_hash: c6d73a35f524070e85faff4a6a9eef49553ebc2b
+# pdk_root: /Users/rwalters/.volare/gf180mcuD
+# model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
+# switches: design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0 -> nominal skew, no Monte Carlo)
+# simulator: ngspice-46
+# netlist: sim/devchar-passives/tb_res.sp
+# corners: res_{typical,ff,ss} x temp{-40,27,125}C; V across device swept 0..1.0V
+# tc_ppm_per_c = (R(125C) - R(-40C)) / (R(27C) * 165 C), from the 50 um device
+device,width_um,corner_section,r_m40c_ohm,r_27c_ohm,r_125c_ohm,tc_ppm_per_c
+npolyf_u,1,res_ff,14611.3,13247,11718.8,-1323.3
+npolyf_u,1,res_ss,21582.5,19565.1,17307,-1324.4
+npolyf_u,1,res_typical,18096.9,16406.1,14512.9,-1324.0
+ppolyf_s,1,res_ff,49.4447,61.2684,78.8138,2905.2
+ppolyf_s,1,res_ss,611.286,776.537,1022.64,3210.5
+ppolyf_s,1,res_typical,302.273,383.139,503.534,3183.6
+ppolyf_u,1,res_ff,15021.3,14875.8,14831.8,-77.2
+ppolyf_u,1,res_ss,22462.4,22250.7,22193.2,-73.3
+ppolyf_u,1,res_typical,18741.8,18563.3,18512.5,-74.9
+ppolyf_u,2,res_ff,7314.1,7243.28,7221.82,-77.2
+ppolyf_u,2,res_ss,10937.3,10834.2,10806.2,-73.3
+ppolyf_u,2,res_typical,9125.7,9038.75,9014.02,-74.9
+ppolyf_u_1k,1,res_ff,44471.4,41316.4,38495.6,-876.6
+ppolyf_u_1k,1,res_ss,66558,61887.9,57687.6,-868.7
+ppolyf_u_1k,1,res_typical,55514.7,51602.2,48091.6,-871.8
+ppolyf_u_2k,1,res_ff,94639,83881.8,73248.5,-1545.5
+ppolyf_u_2k,1,res_ss,141914,125788,109848,-1545.0
+ppolyf_u_2k,1,res_typical,118276,104835,91548.1,-1545.2
+ppolyf_u_3k,1,res_ff,133050,117931,102985,-1545.1
+ppolyf_u_3k,1,res_ss,221690,196505,171609,-1544.6
+ppolyf_u_3k,1,res_typical,177370,157218,137297,-1544.8
