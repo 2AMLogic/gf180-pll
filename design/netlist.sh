@@ -16,6 +16,17 @@
 # Never `.include` two of these files in the same deck: each carries its own
 # copy of the shared leaf cells (inv_3v3, nand2_3v3, vco_stage, ...), so
 # including two would redefine them.
+#
+# `--check` also runs a cross-block leaf-cell collision check (see
+# check_leaf_cell_collisions below): every one of design/netlist/*.spice is a
+# self-contained export that inlines its own copy of every leaf cell it uses,
+# captured whenever that top was last regenerated. Two tops can therefore
+# commit genuinely different bodies under the same `.subckt <name>` even
+# though design/ only ever holds one `<name>.sch` at a time on disk -- that's
+# exactly the add/add-collision hazard this repo has hit twice (see
+# design/README.md "Leaf-cell ownership and naming"). The check hashes every
+# `.subckt ... .ends` block across all committed exports and fails loudly if
+# the same cell name hashes differently anywhere.
 
 set -euo pipefail
 
@@ -64,6 +75,64 @@ banner() {
 # (`set -e`) instead of silently producing two empty streams that compare equal.
 normalize() {
   sed -E 's#^(\*\* (sch|sym)_path: ).*/design/#\1design/#' "$1" >"$2"
+}
+
+sha256_of_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+# Extracts every `.subckt <name> ... .ends` block from a committed netlist
+# export and records a content hash for each, so the same leaf-cell name can
+# be compared across every top in BLOCKS that defines it. `celldir` gets one
+# file per cell name, appended with one `<top>\t<hash>` line per top that
+# defines that cell -- if a cell's hash set ever has more than one distinct
+# value, two tops disagree about what that cell is.
+record_subckt_hashes() {
+  local blk="$1" file="$2" celldir="$3" name hash
+  while IFS= read -r name; do
+    [ -n "${name}" ] || continue
+    hash="$(awk -v n="${name}" '
+              $0 ~ "^\\.subckt " n "( |$)" { capturing=1 }
+              capturing { print }
+              /^\.ends/ && capturing { exit }
+            ' "${file}" | sha256_of_stdin)"
+    printf '%s\t%s\n' "${blk}" "${hash}" >>"${celldir}/${name}"
+  done < <(grep '^\.subckt ' "${file}" | awk '{print $2}')
+}
+
+# Fails loudly if any leaf-cell name resolves to genuinely different content
+# across the committed exports of the tops in BLOCKS -- the mechanical guard
+# for the add/add-collision hazard described in the header comment above and
+# in design/README.md's "Leaf-cell ownership and naming" section. Byte-
+# identical content under the same name across tops is expected and not a
+# failure; only a real content divergence is.
+check_leaf_cell_collisions() {
+  local celldir cellfile cellname nuniq rc=0
+  celldir="$(mktemp -d)"
+
+  for blk in "${BLOCKS[@]}"; do
+    local committed="${HERE}/netlist/${blk}.spice"
+    [ -f "${committed}" ] || continue
+    record_subckt_hashes "${blk}" "${committed}" "${celldir}"
+  done
+
+  for cellfile in "${celldir}"/*; do
+    [ -e "${cellfile}" ] || continue
+    cellname="$(basename "${cellfile}")"
+    nuniq="$(awk -F'\t' '{print $2}' "${cellfile}" | sort -u | wc -l | tr -d ' ')"
+    if [ "${nuniq}" -gt 1 ]; then
+      echo "ERROR: leaf-cell '${cellname}' diverges across BLOCKS tops (add/add collision):" >&2
+      awk -F'\t' '{print "  " $1 " -> " $2}' "${cellfile}" | sort -u >&2
+      rc=1
+    fi
+  done
+
+  rm -rf "${celldir}"
+  return "${rc}"
 }
 
 export_block() {
@@ -120,10 +189,15 @@ if [ "${1:-}" = "--check" ]; then
       rc=1
     fi
   done
+
+  if ! check_leaf_cell_collisions; then
+    rc=1
+  fi
+
   if [ "${rc}" -eq 0 ]; then
-    echo "design/netlist.sh --check: all ${#BLOCKS[@]} netlists match the schematics"
+    echo "design/netlist.sh --check: all ${#BLOCKS[@]} netlists match the schematics, no leaf-cell collisions"
   else
-    echo "ERROR: committed netlists are stale -- re-run design/netlist.sh" >&2
+    echo "ERROR: design/netlist.sh --check failed -- see STALE / leaf-cell collision errors above" >&2
   fi
   exit "${rc}"
 fi
