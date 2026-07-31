@@ -1,18 +1,61 @@
-# Project-local xschem configuration for gf180-pll design/.
-#
-# Keeps the gf180mcu primitive symbols, xschem's own devices library and this
-# directory on the symbol search path, and writes generated netlists beside the
-# schematics (design/netlist/) rather than into ~/.xschem/simulations.
-#
-# Override the PDK root with GF180_PDK_ROOT, matching sim/lib/simenv.sh.
-
-set pdk_root $env(HOME)/.volare/gf180mcuD
-if { [info exists env(GF180_PDK_ROOT)] } { set pdk_root $env(GF180_PDK_ROOT) }
+#### gf180-pll :: project-local xschem configuration
+####
+#### Sourced by `design/netlist.sh` (batch netlisting) and picked up
+#### automatically when xschem is started from this directory.  ONE file serves
+#### every block captured here, and the two blocks reference their symbols
+#### differently, so the search path below is the UNION of what each needs:
+####
+####   - the VCO cells (`vco.sch`, `vco_bias.sch`, `vco_stage.sch`) instantiate
+####     BARE symbol names -- `ipin.sym`, `pfet_03v3.sym` -- so the two LEAF
+####     directories `xschem_library/devices` and `libs.tech/xschem/symbols`
+####     must be on the path;
+####   - the PFD/CP cells (`pfd*.sch`, `cp*.sch`, `inv_3v3.sch`, ...)
+####     instantiate QUALIFIED names -- `devices/ipin.sym`,
+####     `symbols/nfet_03v3.sym` -- so those directories' PARENTS
+####     (`xschem_library` and `libs.tech/xschem`) must be on the path as well.
+####
+#### The two pairs are complementary, not alternatives, and adding the parents
+#### cannot shadow anything: neither `${XSCHEM_SHAREDIR}/xschem_library` nor
+#### `${GF180_PDK_ROOT}/libs.tech/xschem` holds a `.sym` file of its own, so a
+#### bare `ipin.sym` / `pfet_03v3.sym` still resolves in exactly the leaf
+#### directory it always resolved in.
+####
+#### A missing devices/ path is the failure mode worth knowing about: xschem
+#### then silently instantiates unresolved label symbols as pin-less
+#### placeholders, every net comes out auto-named `net1`, `net2`, ... and the
+#### netlist is connectivity-wrong WITHOUT EVER REPORTING AN ERROR.  That is
+#### why `netlist.sh` self-checks both exports (expected `.subckt` set present,
+#### no auto-named net in a port list, no unconnected pin) instead of trusting
+#### xschem's exit status.
 
 set XSCHEM_LIBRARY_PATH {}
+append XSCHEM_LIBRARY_PATH :${XSCHEM_SHAREDIR}/xschem_library
 append XSCHEM_LIBRARY_PATH :${XSCHEM_SHAREDIR}/xschem_library/devices
-append XSCHEM_LIBRARY_PATH :${pdk_root}/libs.tech/xschem/symbols
-append XSCHEM_LIBRARY_PATH :[file dirname [info script]]
 
-set netlist_dir [file join [file dirname [info script]] netlist]
+#### PDK root: override with GF180_PDK_ROOT, same variable sim/lib/simenv.sh uses.
+if { [info exists env(GF180_PDK_ROOT)] } {
+  set GF180_PDK_ROOT $env(GF180_PDK_ROOT)
+} else {
+  set GF180_PDK_ROOT $env(HOME)/.volare/gf180mcuD
+}
+append XSCHEM_LIBRARY_PATH :${GF180_PDK_ROOT}/libs.tech/xschem
+append XSCHEM_LIBRARY_PATH :${GF180_PDK_ROOT}/libs.tech/xschem/symbols
+set 180MCU_MODELS ${GF180_PDK_ROOT}/libs.tech/ngspice
+
+#### this design's own cells
+append XSCHEM_LIBRARY_PATH :[file dirname [file normalize [info script]]]
+append XSCHEM_LIBRARY_PATH :$env(PWD)
+
 set netlist_type spice
+
+#### Where a batch netlist lands.  `netlist.sh --top pfd_cp` exports per-record
+#### into a scratch directory and points XSCHEM_NETLIST_DIR at it;
+#### `netlist.sh --top vco` passes `--netlist_path` explicitly.  The default is
+#### design/netlist/ -- beside the schematics, where the committed VCO export
+#### lives -- so an interactive xschem session lands where the batch flow does
+#### rather than in ~/.xschem/simulations.
+if { [info exists env(XSCHEM_NETLIST_DIR)] } {
+  set netlist_dir $env(XSCHEM_NETLIST_DIR)
+} else {
+  set netlist_dir [file join [file dirname [file normalize [info script]]] netlist]
+}

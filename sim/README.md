@@ -75,6 +75,8 @@ sim/
   | `devchar-cp` | mirror output resistance / compliance | #4 → #9 |
   | `devchar-passives` | MIM vs. MOS cap, poly-resistor options | #4 → #10 |
   | `vco-tuning-range` | open-loop ring VCO range, Kvco | #8 |
+  | `pfd-deadzone` | PFD + charge-pump phase-to-charge transfer through zero phase error (dead-zone freedom), and the residual charge offset at zero | #9 |
+  | `cp-compliance` | charge-pump output compliance range, UP/DN current and switching-time mismatch, 2-bit Icp trim range | #9 |
   | `loop-dynamics` | loop bandwidth / phase margin vs. R–C and Kvco spread | #10 |
   | `lock-time` | closed-loop lock acquisition | #12 |
   | `output-range` | closed-loop output-band coverage | #12 |
