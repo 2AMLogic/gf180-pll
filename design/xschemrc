@@ -1,0 +1,18 @@
+# Project-local xschem configuration for gf180-pll design/.
+#
+# Keeps the gf180mcu primitive symbols, xschem's own devices library and this
+# directory on the symbol search path, and writes generated netlists beside the
+# schematics (design/netlist/) rather than into ~/.xschem/simulations.
+#
+# Override the PDK root with GF180_PDK_ROOT, matching sim/lib/simenv.sh.
+
+set pdk_root $env(HOME)/.volare/gf180mcuD
+if { [info exists env(GF180_PDK_ROOT)] } { set pdk_root $env(GF180_PDK_ROOT) }
+
+set XSCHEM_LIBRARY_PATH {}
+append XSCHEM_LIBRARY_PATH :${XSCHEM_SHAREDIR}/xschem_library/devices
+append XSCHEM_LIBRARY_PATH :${pdk_root}/libs.tech/xschem/symbols
+append XSCHEM_LIBRARY_PATH :[file dirname [info script]]
+
+set netlist_dir [file join [file dirname [info script]] netlist]
+set netlist_type spice
