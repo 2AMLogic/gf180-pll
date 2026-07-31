@@ -194,6 +194,19 @@ esac
 #   SIM_SUPERSEDES=<record-id>        the record this run replaces
 #   SIM_SUPERSEDES_NOTE=<one line>    why, e.g. "netlist provenance only"
 #
+# Two further knobs exist for the same reason -- a record's text is fixed at
+# mint time and can never be edited afterwards, so anything that has to be
+# TRUE OF THIS RUN rather than of the campaign has to be settable from outside:
+#
+#   SIM_AUTHOR=<who>                  attribution, when a later issue re-runs
+#                                     this campaign against a changed design
+#   SIM_METHOD_NOTE=<text>            one extra Methodology bullet, e.g. which
+#                                     design revision this run measured and what
+#                                     it is comparable to
+#
+# Unset, both fall back to the wording this campaign was minted with, so an
+# unqualified re-run emits exactly what it emitted before.
+#
 # Unset, the record says it is the first for its claim, exactly as before.
 # --------------------------------------------------------------------------
 supersedes_field() {
@@ -204,6 +217,18 @@ supersedes_field() {
   else
     echo "- **Supersedes**: ${SIM_SUPERSEDES} -- ${SIM_SUPERSEDES_NOTE}"
   fi
+}
+
+author_field() {
+  echo "- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), ${SIM_AUTHOR:-agent-builder (issue #9)}"
+}
+
+# Emits with a LEADING newline and none trailing, so it is appended to the end
+# of the last Methodology bullet: command substitution strips trailing newlines,
+# so a trailing-newline form would run the next field onto the same line.
+method_note() {
+  [ -n "${SIM_METHOD_NOTE:-}" ] && printf '\n  - %s' "${SIM_METHOD_NOTE}"
+  return 0
 }
 
 simenv_require_tools
@@ -487,7 +512,7 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
   - **Limitation (nominal skew only)**: \`sw_stat_global = sw_stat_mismatch =
     0\`.  Everything here is systematic; RANDOM device mismatch is #15's
     campaign, and this record's numbers are what that distribution should be
-    centred on.
+    centred on.$(method_note)
 - **Statistical convention**: N/A -- corner-matrix claim, not a distribution
   claim.
 - **Result**:
@@ -529,12 +554,13 @@ ${TRIM_TABLE}
   - Testbenches: \`sim/cp-compliance/testbench/tb_cp_dc.sp\`,
     \`sim/cp-compliance/testbench/tb_cp_switch.sp\`,
     \`sim/cp-compliance/testbench/run.sh\`
-  - Design: \`design/cp.sch\`, \`design/cp_leg_n.sch\`, \`design/cp_leg_p.sch\`
+  - Design: \`design/cp.sch\`, \`design/cp_leg_n.sch\`, \`design/cp_leg_p.sch\`,
+    \`design/cp_dumpbuf.sch\`
   - Netlist snapshot: \`sim/cp-compliance/netlist-snapshots/${RID}.spice\`
   - Raw logs: \`sim/cp-compliance/corners/${RID}/\`
   - Extracted metrics: \`sim/cp-compliance/corners/${RID}/cp_dc.csv\`,
     \`cp_switch.csv\`, \`cp_curves.csv\`
-- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (issue #9)
+$(author_field)
 $(supersedes_field)
 EOF
 } >"${RECORD}"

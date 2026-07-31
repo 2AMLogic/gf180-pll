@@ -72,7 +72,19 @@ iicp_d icp_d 0 dc 'iunit'
 vod outd 0 dc 'vctrl'
 
 *------------------------------------------------------------------- analysis
-.option abstol=1e-14 reltol=1e-4 vntol=1e-7 rshunt=1e12
+* itl4: transient Newton-iteration limit, raised from ngspice's default of 10.
+* This is a solver-EFFORT knob, not a tolerance: every convergence tolerance
+* (abstol/reltol/vntol) is unchanged, so the converged solution is unchanged --
+* verified bit-for-bit at typical/27C/3.30V/Vctrl=1.65V, which converges either
+* way.  It is needed because the dump-node buffer (cp_dumpbuf, DR-005) puts two
+* MOS gates on the control node, and the ideal source holding that node has to
+* carry their displacement current: with everything else in DC steady state, that
+* branch current numerically jitters at a few times 1e-14 A against an abstol of
+* 1e-14 A, and ngspice's default 10 iterations are not enough to settle it, so it
+* halves the timestep to nothing at 2 of the 135 switching points (both at
+* Vctrl = 2.4 V on the 3.63 V supply).  Raising abstol instead does NOT fix it
+* and would have loosened a real tolerance; more iterations does, and does not.
+.option abstol=1e-14 reltol=1e-4 vntol=1e-7 rshunt=1e12 itl4=200
 .control
   set noaskquit
   let vmid = vsup_c / 2
