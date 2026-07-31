@@ -1,0 +1,10 @@
+# model-based sensitivity around the BUILT design: only the
+# c2_f = as-built row is simulated; the others substitute an
+# ideal C2 into the fitted 3-element model of the measured
+# filter, to show the ripple / phase-margin trade.
+c2_f,as_built,ripple_pp_v_worstdq,ripple_pp_v_meddq,tie_bound_s_worstdq,pm_min_deg_model,fref_cells_passing
+5e-13,0,0.20782,0.0837089,1.59097e-09,34.18,134
+1e-12,0,0.10391,0.0418545,8.95593e-10,33.95,134
+2.016e-12,1,0.0515464,0.0207627,4.72573e-10,33.50,132
+4e-12,0,0.0259775,0.0104636,2.4557e-10,31.61,110
+8e-12,0,0.0129887,0.00523181,1.24726e-10,22.69,86
