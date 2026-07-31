@@ -13,8 +13,8 @@
 # pulse-width check and still have a dead zone; this runner checks the small
 # signal gain near zero against the gain measured further out, per corner:
 #
-#   kd_near = [q(+50ps) - q(-50ps)] / 100ps      (the gain AT the lock point)
-#   kd_wide = [q(+1ns)  - q(-1ns) ] / 2ns        (the gain well away from it)
+#   kd_near = [q(+200ps) - q(-200ps)] / 400ps   (the gain AT the lock point)
+#   kd_wide = [q(+1ns)   - q(-1ns)  ] / 2ns      (the gain well away from it)
 #   ratio   = kd_near / kd_wide                  (1.0 = perfectly linear; a
 #                                                 dead zone drives it to 0)
 #
@@ -42,13 +42,22 @@ DECK="${HERE}/tb_pfd_deadzone.sp"
 WORK="${EXP}/work"
 NETLIST="${WORK}/dut.spice"
 
-# dphi sweep points (seconds, SPICE suffix form).  Deliberately spans more than
-# a decade around zero: +/-50 ps is inside the PFD's own reset-delay window
-# (the region a dead zone would live in), +/-1 ns is well outside it.  These
-# five points are exactly what the verdict below needs -- the near-zero pair,
-# the wide pair, and zero itself -- and each one costs a full transient at
-# every one of the 45 corners, so the list is kept to what is used.
-DPHI_POINTS=(-1n -50p 0 50p 1n)
+# dphi sweep points (seconds, SPICE suffix form).  +/-200 ps is well inside the
+# PFD's own reset-delay window (the minimum UP/DN pulse is 1.1-1.9 ns across
+# corners), which is the region a dead zone would live in; +/-1 ns is outside
+# it.  These five points are exactly what the verdict below needs -- the
+# near-zero pair, the wide pair, and zero itself -- and each one costs a full
+# transient at every one of the 45 corners, so the list is kept to what is used.
+#
+# Why the near pair is +/-200 ps and not tighter: the measured quantity is an
+# integrated charge of order 10 fC, and the trapezoidal integration noise on it
+# is a few tenths of a femtocoulomb.  At +/-50 ps the signal being differenced
+# is only about 0.1-0.5 fC -- comparable to that floor -- and the ratio below
+# becomes noise (an earlier run at +/-50 ps produced ratios scattered to
+# negative values at corners whose pulse-width data was perfectly clean).
+# +/-200 ps keeps the differenced signal several times the floor while staying
+# well inside the reset window.
+DPHI_POINTS=(-1n -200p 0 200p 1n)
 
 SUMMARY_HEADER="process,temp_c,vdd_v,dphi_s,qnet_c,width_up_s,width_dn_s"
 
@@ -200,7 +209,7 @@ STATS=$(grep -v '^#' "${OUT_SUMMARY}" | tail -n +2 | awk -F, '
     worst_ratio = 1e9; nfail = 0
     for (i = 1; i <= n; i++) {
       k = order[i]
-      kd_near = (q[k ",50p"] - q[k ",-50p"]) / 100e-12
+      kd_near = (q[k ",200p"] - q[k ",-200p"]) / 400e-12
       kd_wide = (q[k ",1n"]  - q[k ",-1n"])  / 2e-9
       ratio = (kd_wide != 0) ? kd_near / kd_wide : 0
       wmin = wu[k ",0"] < wd[k ",0"] ? wu[k ",0"] : wd[k ",0"]
@@ -228,7 +237,11 @@ STATS=$(grep -v '^#' "${OUT_SUMMARY}" | tail -n +2 | awk -F, '
 echo "${STATS}" | grep '^SUMMARY'
 echo "${STATS}" | grep '^FAILURES'
 
-get() { echo "${STATS}" | grep '^SUMMARY' | grep -o "$1=[^ ]*" | cut -d= -f2; }
+# Pull one key=value out of the SUMMARY line.  The leading-space anchor is
+# load-bearing: an unanchored `grep -o "n=..."` also matches the "n=" inside
+# `kd_min=` and `wmin_min=`, which silently turns a scalar into three lines of
+# record text.
+get() { echo "${STATS}" | grep '^SUMMARY' | grep -oE "(^| )$1=[^ ]*" | tr -d ' ' | cut -d= -f2; }
 NCHK=$(get n); WORST_RATIO=$(get worst_ratio); WORST_CORNER=$(get worst_corner)
 NFAIL=$(get nfail); KDMIN=$(get kd_min); KDMAX=$(get kd_max)
 WMIN=$(get wmin_min); WMAX=$(get wmin_max)
@@ -244,7 +257,7 @@ CORNER_TABLE=$(echo "${STATS}" | awk '$1 == "ROW" {printf "  | %s | %.3g | %.3g 
   simenv_provenance "pfd-deadzone (per-corner dead-zone verdict)" "${RID}" \
     "design/pfd_cp.sch (xschem export)" "${CORNER_DESC}"
   cat <<'EOF'
-# kd_near: charge-pump gain at the lock point, [q(+50ps)-q(-50ps)]/100ps (A)
+# kd_near: charge-pump gain at the lock point, [q(+200ps)-q(-200ps)]/400ps (A)
 # kd_wide: same, measured out at +/-1 ns (A)
 # ratio:   kd_near / kd_wide -- 1.0 is perfectly linear through zero, a dead
 #          zone drives it toward 0.  Acceptance: > 0.5 at every corner.
@@ -303,11 +316,15 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     around zero.  So the DUT is \`pfd_cp\` -- the PFD loaded by its real charge
     pump -- and the measured quantity is \`qnet\`, the net charge delivered to
     the control node per reference cycle.  Per corner:
-    \`kd_near = [q(+50ps) - q(-50ps)] / 100ps\` is the detector gain AT the
+    \`kd_near = [q(+200ps) - q(-200ps)] / 400ps\` is the detector gain AT the
     lock point and \`kd_wide = [q(+1ns) - q(-1ns)] / 2ns\` the gain well
     outside it; the verdict is \`ratio = kd_near / kd_wide > 0.5\` at every
     corner, together with a non-zero UP and DN pulse at dphi = 0.  A true dead
-    zone drives the ratio to 0.
+    zone drives the ratio to 0.  The near pair is +/-200 ps rather than
+    tighter because the differenced charge at +/-50 ps is comparable to the
+    trapezoidal integration noise floor of a few tenths of a femtocoulomb;
+    +/-200 ps is still well inside the 1.1-1.9 ns minimum UP/DN pulse, so it
+    probes the same region with a signal several times the floor.
   - Reference 25 MHz (40 ns period) -- the TOP of DR-002 Decision 1's ratified
     1-25 MHz v1 range, chosen deliberately: the PFD's reset-and-recover window
     is the largest fraction of the reference period there, so it is the

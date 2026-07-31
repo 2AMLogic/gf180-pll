@@ -36,9 +36,11 @@
 .include "dut.spice"
 
 * Charge-pump bias reference.  As in sim/devchar-cp, the four bias nodes are
-* driven from ideal current sources: reference generation is a separate block,
+* driven from ideal current sources at 4x the unit-leg
+* current (the bias diodes are 4x the unit geometry, so each leg still mirrors
+* one unit): reference generation is a separate block,
 * and driving it ideally here keeps the measured behaviour the PFD+CP's own.
-.param iunit=2u
+.param iunit=8u
 * Trim code: b1 b0 = 1 0 -> Icp = 3 units (the nominal setting, mid-range of
 * the 2-bit trim -- see design/README.md).
 .param b0_code=0

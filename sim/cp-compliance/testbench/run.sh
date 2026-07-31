@@ -372,8 +372,11 @@ SW_STATS=$(grep -v '^#' "${OUT_SW}" | tail -n +2 | awk -F, '
 echo "${DC_STATS}" | grep -E '^DCSUM|^SATFAILS|^TRIM'
 echo "${SW_STATS}"
 
-dcget() { echo "${DC_STATS}" | grep '^DCSUM' | grep -o "$1=[^ ]*" | cut -d= -f2; }
-swget() { echo "${SW_STATS}" | grep -o "$1=[^ ]*" | cut -d= -f2; }
+# The leading-space anchor is load-bearing: an unanchored `grep -o "n=..."`
+# also matches the "n=" inside keys like `ton_up_min=`, which would silently
+# turn a scalar into several lines of record text.
+dcget() { echo "${DC_STATS}" | grep '^DCSUM' | grep -oE "(^| )$1=[^ ]*" | tr -d ' ' | cut -d= -f2; }
+swget() { echo "${SW_STATS}" | grep -oE "(^| )$1=[^ ]*" | tr -d ' ' | cut -d= -f2; }
 MISM_ALL=$(dcget mism_absmax_all); MISM_ALL_AT=$(echo "${DC_STATS}" | grep '^DCSUM' | sed -n 's/.*mism_absmax_all_at=\([^ ]*\).*/\1/p')
 MISM_NOM=$(dcget mism_absmax_nom)
 FLAT_NOM=$(dcget flat_max_nom)
@@ -442,7 +445,11 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     w_dn\` is the effective UP/DN timing mismatch in seconds.
   - **Bias generation is out of scope and idealized**: the four bias nodes
     (bottom-mirror and wide-swing-cascode diode, per polarity) are driven from
-    ideal 2 uA current sources, exactly as in \`sim/devchar-cp\`.  The mismatch
+    ideal current sources, exactly as in \`sim/devchar-cp\` -- at 4x the
+    unit-leg current, because the bias diodes are 4x the unit geometry (the
+    mirror ratio into each leg is therefore 1x, while the bias nodes get 4x
+    the transconductance to drive the legs' aggregate gate capacitance).  The
+    mismatch
     reported here is therefore the OUTPUT STAGE's own; a real reference
     generator adds its own contribution, which \`design/README.md\` carries as
     a separate line of the budget.

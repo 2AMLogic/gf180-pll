@@ -35,7 +35,7 @@
 
 .include "dut.spice"
 
-.param iunit=2u
+.param iunit=8u
 
 .csparam vsup_c={vsup}
 

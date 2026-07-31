@@ -30,10 +30,12 @@
 
 * Unit bias reference.  Reference GENERATION is a separate block and out of
 * this issue's scope, so -- exactly as in sim/devchar-cp -- the four bias nodes
-* are driven from ideal current sources.  The mismatch this deck measures is
+* are driven from ideal current sources at 4x the unit-leg
+* current (the bias diodes are 4x the unit geometry, so each leg still mirrors
+* one unit).  The mismatch this deck measures is
 * therefore the OUTPUT STAGE's own; a real bias generator adds to it, and that
 * addition is carried explicitly in the budget in design/README.md.
-.param iunit=2u
+.param iunit=8u
 
 .csparam vsup_c={vsup}
 

@@ -233,15 +233,18 @@ consume.
 
 Tri-state PFD: each input's rising edge fires an `edgedet` that SETs its own
 `srlatch`; both latches share one RESET, generated as `AND(UP, DN)` through an
-explicit **6-inverter delay chain**.
+explicit **24-inverter delay chain**.
 
-That delay chain is the dead-zone-elimination element. It guarantees UP and DN
-both stay asserted for the reset-path delay even when REF and FB coincide
-exactly, so the charge pump's switches are fully on at zero phase error and
-the phase-to-charge transfer stays linear through zero.
+That delay chain is the dead-zone-elimination element, and **its length is set
+by the charge pump, not by the logic**. The requirement is not merely that UP
+and DN both toggle at zero phase error — they do that for any non-zero reset
+delay — but that the minimum UP/DN pulse be long enough for the pump's output
+current to actually *establish*. That is the whole reason this block's
+dead-zone criterion is stated in the charge domain (see `sim/pfd-deadzone`).
 
-Two ratios, not two absolute delays, keep this correct across PVT — both are
-ratios of the same gate delays, so they track process and temperature:
+Three constraints size it, and the first two are *ratios of the same gate
+delays*, so they track process and temperature rather than holding at one
+corner:
 
 1. **Edge-detector pulse > SR-latch loop delay.** A SET pulse released before
    QB has responded lets the latch fall back for one NAND delay and re-set,
@@ -249,8 +252,23 @@ ratios of the same gate delays, so they track process and temperature:
    zero phase error*. A 3-stage detector chain was measured doing exactly
    that on the UP branch (the branch loaded by the reset NAND's inner input);
    5 stages carries roughly 5× the latch loop delay and removes it.
-2. **Edge-detector pulse < reset delay** (5 stages against ~9 gate delays),
-   else set and reset would be asserted simultaneously.
+2. **Edge-detector pulse < reset delay**, else set and reset would be
+   asserted simultaneously. 5 stages against ~27 gate delays.
+3. **Reset delay > charge-pump turn-on time.** This is the binding one, and it
+   is *not* a pure gate-delay ratio: the pump's turn-on is set by how fast the
+   steering switch drags its tail node to the control-node voltage and how
+   fast the bias nodes recover from that disturbance. A 6-inverter chain
+   (~9 gate delays, 0.5–1.1 ns minimum pulse) was built and measured, and the
+   phase-to-charge transfer went flat at 9 of the 45 PVT corners — every one
+   of them slow/cold/low-supply — while the *logic* waveforms at those same
+   corners were perfect. 24 stages gives a 1.1–1.9 ns minimum pulse and, with
+   the charge-pump changes described below, restores the gain.
+
+   The cost is bounded and small: the constant UP/DN overlap grows, and that
+   overlap converts up/down *current* mismatch into static phase error at a
+   rate of (overlap × mismatch fraction) — a few percent of a couple of
+   nanoseconds, i.e. tens of picoseconds, far below the tail-charge offset
+   that dominates the budget below.
 
 **Interface contract to #11 (feedback divider).** DR-001 Decision 3 specifies
 that FB is a VCO edge retimed by exactly one flop's clk→Q, independent of N,
@@ -282,31 +300,53 @@ unit-element Icp trim.
 - **Sizing.** Unit mirror devices are `4u/1u` (N) and `12u/1u` (P) — a
   long-channel analog geometry for output resistance and matching, with the P
   device 3× wider so both polarities run at comparable overdrive at the same
-  unit current. Wide-swing cascode bias diodes are at W/4.
-- **Steering switches are sized for CHARGE, not on-resistance.** They pass a
-  few microamps, so IR drop is irrelevant (tens of millivolts at worst).
-  Equal N and P widths (3u/0.3u) — *not* mobility-ratioed widths — because
-  unequal widths put unequal channel and overlap charge on the two polarities
-  and inject a net residue onto the control node at every switching event.
+  unit current.
+- **Bias branch runs at 4× the unit current, with 4×-scaled diodes.** The
+  mirror ratio is unchanged (4·Iunit through a 4× device mirrors Iunit into a
+  1× leg) but every bias node gets 4× the transconductance. This is not
+  cosmetic. Each bias node drives the paralleled gates of four legs, and the
+  cascode-bias node drives four *wide* cascode gates; at 1× bias current its
+  1/gm against that capacitance gives a recovery time constant comparable to
+  the PFD pulse itself, so a bias node still recovering from the switching
+  kick modulates the delivered current for the whole pulse. Measured at the
+  worst corner (ss/−40 °C/2.97 V), scaling the bias 4× raised the
+  phase-to-charge gain by **3.8×** with no other change.
+- **Steering switches are sized for CHARGE and for RECOVERY, not for
+  on-resistance.** They pass a few microamps, so IR drop is irrelevant (tens
+  of millivolts at worst). Equal N and P widths (6u/0.3u) — *not*
+  mobility-ratioed widths — because unequal widths put unequal channel and
+  overlap charge on the two polarities and inject a net residue onto the
+  control node at every switching event; an earlier 3u(N)/9u(P) pair did
+  exactly that. They are not shrunk, either: the switch must re-establish its
+  tail node at turn-on, and that recovery is what bounds how short the PFD's
+  minimum pulse may be. A 1u pair measurably lowered the detector gain.
   `MDUMN`/`MDUMP` are the standard half-width dummies gated by the
-  complementary control. They are not shrunk further either: the switch must
-  also re-establish its tail node at turn-on, and a 1u pair measurably lowered
-  the detector gain by slowing that recovery.
+  complementary control.
 - **Shared, clamped dump node.** Idle legs steer to `VDUMP`, held near
   mid-supply by two stacked NMOS diodes to VSS and two stacked PMOS diodes
-  from VDD, sized narrow (1u/3u) so their turn-on thresholds leave a dead band
-  and no static crowbar current flows. See "Charge-error mechanism" below for
-  why this is not the obvious rail-dump design.
+  from VDD (4u/12u — sized to hold the node *stiffly*, not merely to bound
+  it: a narrower 1u/3u clamp left VDUMP free to swing ~0.5 V during a pulse,
+  dragging the idle tail with it). See "Charge-error mechanism" below for why
+  this is not the obvious rail-dump design.
 - **Bias generation is out of scope for this block.** `IBN`/`ICN`/`IBP`/`ICP`
-  are the four reference nodes; the testbenches drive them from ideal 2 µA
-  sources, as `sim/devchar-cp` does, so the measured mismatch is the output
-  stage's own. The integrated block must supply four matched references from
+  are the four reference nodes; the testbenches drive them from ideal current
+  sources at 4× the unit-leg current, as `sim/devchar-cp` drives its mirrors,
+  so the measured mismatch is the output stage's own. The integrated block
+  must supply four matched references from
   one constant-gm reference, and that contribution is additive to the budget
   below.
 
 `Icp` lands in the **single-digit µA** range at every trim code, as DR-001's
-sizing sanity check requires (the measured per-code range across corners is in
-the `cp-compliance` record).
+sizing sanity check requires: 1.68–1.80 / 3.36–3.60 / 5.04–5.41 / 6.71–7.21 µA
+for codes 00/01/10/11, min–max across all 45 PVT corners. The nominal setting
+is code 10 (three unit legs, ≈5.2 µA).
+
+The **effective phase-detector gain** — the charge actually delivered per unit
+of phase error, which is what #10's loop-filter design must use, not the DC
+Icp — is 2.19–5.67 µA across corners at the nominal code (`pfd-deadzone`
+record). It is below the DC Icp because the pump spends part of every pulse
+establishing its output current, and the gap widens at the slow/cold/low-supply
+corners.
 
 ### Charge-error mechanism (why the dump node is shared and clamped)
 
@@ -317,18 +357,29 @@ dominates it. The dominant such term is the **tail node**: when a steering
 switch closes, the tail it was holding at its idle voltage is dragged to VOUT,
 and that charge comes out of the control node.
 
-Three designs were built and measured, in this order:
+Three dump-node designs were built and measured at the nominal corner, in this
+order:
 
 | Idle tail parked at | Measured net charge at zero phase error |
 |---|---|
 | each polarity's own rail (the obvious design) | ≈ −10 fC |
 | shared unclamped dump node | ≈ −7 fC, and the node sat at 0.18 V |
-| shared **clamped** dump node (current design) | ≈ −6 to −9 fC with a near-ideal detector gain |
+| shared **clamped** dump node (current design) | ≈ −6 fC |
 
 The unclamped shared node fails for an instructive reason: with both legs idle
 it carries only the *difference* of two nominally equal currents, so it is
 degenerate and any mismatch walks it to whichever end saturates first. The
 clamp removes the degeneracy without adding a control loop.
+
+The same tail mechanism has a second, sharper consequence — it does not just
+offset the transfer, it can *flatten* it. If the tail has not finished moving
+by the time the pulse ends, the pump delivers only a fraction of Icp for the
+entire pulse, and lengthening the pulse by a phase error adds almost no
+charge: the detector gain collapses even though the UP/DN waveforms look
+perfect. That is what the 6-inverter reset chain hit at 9 of 45 corners. The
+three changes that fixed it all attack the same time constant — a longer
+minimum pulse (24 stages), a faster tail (6u switches, stiff clamp), and a
+faster bias recovery (4× bias branch).
 
 **What remains, and the honest limit.** A unity-gain buffer holding the dump
 node exactly at VOUT would null this residue outright and is the textbook
@@ -349,34 +400,63 @@ restatement of what one simulation happened to produce: the measured
 systematic values are corner-swept worst cases, and the budget adds allocation
 for the terms this block's own testbenches deliberately exclude.
 
-| # | Term | Systematic (measured, all 45 PVT corners) | **Budget (3σ, including mismatch)** | Verified by |
+| # | Term | Systematic (measured, all 45 PVT corners) | **Budget (3σ, incl. random mismatch)** | Verified by |
 |---|---|---|---|---|
-| 1 | DC UP/DN current mismatch, `(Iup−Idn)/Iavg`, anywhere in 0.9–2.4 V | see `cp-compliance` record | **±10 %** | #15 |
-| 2 | Effective UP/DN switching-time skew, `w_up − w_dn` | see `cp-compliance` record | **±3.5 ns** | #15 |
-| 3 | Residual net charge per reference cycle at zero phase error | see `pfd-deadzone` record | **±15 fC** | #15 |
-| 4 | Resulting static phase offset, `q_zero / Icp` | see `pfd-deadzone` record | **±3 ns** | #12 (closed loop) |
+| 1 | DC UP/DN current mismatch, `(Iup−Idn)/Iavg`, worst point in 0.9–2.4 V | −2.6 % … +4.7 % | **±12 %** | #15 |
+| 2 | Effective UP/DN switching-time skew, `w_up − w_dn`, over the whole Vctrl window | −19.4 ns … +15.8 ns | **±30 ns** | #15 |
+| 2a | — the same term at mid-window (Vctrl = 1.65 V) only | −8.4 ns … +3.0 ns | **±14 ns** | #15 |
+| 3 | Residual net charge per reference cycle at zero phase error (Vctrl = 1.65 V) | −40.7 fC … +14.7 fC | **±100 fC** | #15 |
+| 4 | Resulting static phase offset, `q_zero / Kd` (Vctrl = 1.65 V) | −3.9 ns … +9.8 ns | **±30 ns** over the full Vctrl window (= term 2) | #12 (closed loop) |
 
 Notes on how to read this table:
 
 - **Term 1 is dominated by finite output resistance**, and is measured at the
   *worst point inside the window*, not at mid-window: the two polarities' `ro`
   are not equal, so their curves diverge across the compliance range. The
-  budget is set at ±10 % — several times the measured systematic value —
-  because random `Vth`/`β` mismatch on the mirror devices is *not* in the
-  measured number (`sw_stat_mismatch = 0`) and is the term #15 adds.
-- **Terms 2 and 3 are the same physical effect** seen two ways: term 2 is
-  measured per polarity from a clean control edge, term 3 is the net the loop
-  sees per reference cycle with the real PFD driving. Term 3 is the one that
-  matters for the loop; term 2 is what tells you *which* polarity is
-  responsible.
+  budget is set at ±12 % — well above the measured systematic value — because
+  random `Vth`/`β` mismatch on the mirror devices is *not* in the measured
+  number (`sw_stat_mismatch = 0`) and is the term #15 adds.
+- **Terms 2, 3 and 4 are one physical effect** seen three ways, and it is
+  **not** current mismatch. It is the **tail-node charge exchange**: when a
+  steering switch closes, the tail it was holding at the dump-node voltage is
+  dragged to the control-node voltage, and that charge comes out of the
+  control node once per reference cycle. Term 2 measures it per polarity from
+  a clean control edge; term 3 measures the net the loop actually sees with
+  the real PFD driving; term 4 is term 3 divided by the detector gain, i.e.
+  the phase at which the loop settles.
+- **Term 2's strong Vctrl dependence is the mechanism's signature**, and it is
+  the single most important number in this table for downstream work:
+
+  | Vctrl | mean skew across 45 corners | worst corner |
+  |---|---|---|
+  | 0.9 V | +8.9 ns | +15.8 ns |
+  | 1.65 V | −1.9 ns | −8.4 ns |
+  | 2.4 V | −12.7 ns | −19.4 ns |
+
+  The skew is proportional to `V_dump − Vctrl` and crosses zero near the dump
+  node's own idle voltage. **This is a real limitation of the present design,
+  not a measurement artefact.** A ±30 ns static offset is a couple of percent
+  of a reference period at 1 MHz and most of a period at 25 MHz, so as drawn
+  this block is comfortable at the bottom of the ratified 1–25 MHz reference
+  range and is *not* comfortable at the top with Vctrl near a window edge.
+  The fix is to make the dump node track Vctrl (a unity-gain buffer nulls the
+  exchange outright) or, more cheaply, to re-centre the dump node so the error
+  is symmetric about the window instead of one-sided. Both are scoped in
+  **#24**, with this record set as the before-picture. Until then, #10's
+  loop-filter and spur analysis and #12's closed-loop work should treat the
+  static offset as Vctrl-dependent rather than a constant.
 - **Term 4 is a static offset, not a frequency error.** A charge-pump
-  asymmetry does not shift the locked frequency; the loop simply settles at
-  the phase where the net charge per cycle is zero. What it costs is control-
-  node ripple (the equilibrium UP pulse is longer than the DN pulse by exactly
-  this offset), which is a reference-spur mechanism — hence the budget rather
-  than a shrug. At the bottom of the ratified 1–25 MHz reference range this is
-  a fraction of a degree; at 25 MHz it is a significant fraction of a period,
-  which is why the `pfd-deadzone` campaign runs at 25 MHz, the demanding end.
+  asymmetry does not shift the locked frequency; the loop settles at the phase
+  where the net charge per cycle is zero. What it costs is control-node ripple
+  — the equilibrium UP pulse is longer than the DN pulse by exactly this
+  offset — which is a reference-spur mechanism, hence a budget rather than a
+  shrug.
+- **The overlap-times-mismatch term is negligible here.** The classic
+  static-phase-error formula (reset overlap × current-mismatch fraction) gives
+  about 2 ns × 5 % ≈ 100 ps with the numbers above — two orders below the
+  tail-charge term. That is worth stating explicitly, because it is the term
+  most PFD/CP write-ups lead with, and at this current level it is not the one
+  that matters.
 - **Bias-generator contribution is excluded** from both the measured column
   and, deliberately, from the budget: it is a separate block. When it lands,
   its mirror mismatch adds to term 1 and the budget must be re-derived rather
