@@ -35,12 +35,13 @@ sister-repo pattern rather than reinventing). Source:
 Markdown-record convention ratified in bandgap #22. That PR was **still open
 and unmerged** when this file was written, so the ratified Markdown
 convention above is what is copied here. If bandgap later supersedes its
-convention, this repo follows **via its own `spec/` decision record** (see
-issue #6) — never a silent fork. The two schemes are not actually in
-conflict for us: a harness (issue #2) may emit machine-readable
-`corners/<record-id>/` artifacts *in addition to* the Markdown summary
-record, but the Markdown record under `records/` is the citable evidence
-object and is mandatory.
+convention, this repo follows **via its own `spec/` decision record** — #6 has
+since landed `spec/decision-records/TEMPLATE.md`, so the mechanism now exists:
+copy it to `spec/decision-records/DR-NNN-<slug>.md`. Never a silent fork. The
+two schemes are not actually in conflict for us: a harness (issue #2) may emit
+machine-readable `corners/<record-id>/` artifacts *in addition to* the Markdown
+summary record, but the Markdown record under `records/` is the citable
+evidence object and is mandatory.
 
 Deltas from the bandgap convention are marked **[PLL delta]** below, each
 with its justification. Everything unmarked is bandgap's convention verbatim
@@ -74,6 +75,7 @@ sim/
   | `devchar-cp` | mirror output resistance / compliance | #4 → #9 |
   | `devchar-passives` | MIM vs. MOS cap, poly-resistor options | #4 → #10 |
   | `vco-tuning-range` | open-loop ring VCO range, Kvco | #8 |
+  | `loop-dynamics` | loop bandwidth / phase margin vs. R–C and Kvco spread | #10 |
   | `lock-time` | closed-loop lock acquisition | #12 |
   | `output-range` | closed-loop output-band coverage | #12 |
   | `period-jitter` | period jitter (deterministic + random) | #13 |
@@ -95,7 +97,13 @@ sim/
 
 - **`<corner-id>`** — `<corner-bundle>_<temp>c_<supply>v.log`, e.g.
   `ss_-40c_2.97v.log`, `tt_27c_3.30v.log`, `ff_125c_3.63v.log`. Supply is
-  always written to two decimals. **[PLL delta]** bandgap's field is a bare
+  always written to two decimals — **[PLL delta]**, a small tightening rather
+  than bandgap verbatim: bandgap's naming line shows a one-decimal
+  `tt_27c_3.3v.log` while its own worked example writes `3.30v`. Fixing the
+  width at two decimals removes that inconsistency and keeps corner filenames
+  sorting lexically in supply order.
+
+  **[PLL delta]** — the corner field itself: bandgap's is a bare
   MOS process corner; here it is a *bundle name*, because gf180mcu has no
   single global corner switch — each device family carries its own `.lib`
   section in `sm141064.ngspice` (MOS `tt/ff/ss/fs/sf`, plus the independent
@@ -232,20 +240,41 @@ apply is written as `N/A` **with a reason**, not omitted.
 
 ### Status / supersession language
 
-Records use the same status vocabulary as `spec/` decision records (issue #6;
-bandgap's `spec/decision-records/TEMPLATE.md` is the source of that house
-style), so the two conventions read as one:
+Records use the same status *vocabulary* as `spec/` decision records
+(`spec/decision-records/TEMPLATE.md`, landed in this repo via #6; that template
+is in turn adapted from bandgap's), so the two conventions read as one:
 
 - A record's standing is one of **`current`** or **`superseded by
   <record-id>`**. There is no `draft` or `retracted` state: a record is
   evidence of what a run produced, and a run that happened cannot become
-  un-happened.
-- The superseding record carries **Supersedes: `<record-id>`**; the
-  superseded record is **not edited** to add a back-reference — that would
-  be a rewrite. Standing is derived by reading forward, exactly as a
-  `superseded by DR-NNN` decision record is found by the record that
-  supersedes it.
-- Same rule as `spec/`: *do not delete or rewrite a record — supersede it.*
+  un-happened. Decision records add a third, **`proposed`**, which has no
+  analogue here: a record is minted by a run that already completed, so it is
+  never "not yet binding".
+- **`Status` is not a record field — do not emit one.** The schema above is the
+  complete field set, and it has no `Status`. Standing is *derived*, not
+  stored: a record is `current` until some later record names it in a
+  **Supersedes** field, at which point it is `superseded by` that record. The
+  vocabulary exists so humans and tools can *talk* about standing
+  consistently; nothing writes it into a file.
+- The superseding record carries **Supersedes: `<record-id>`**; the superseded
+  record is **not edited** to add a back-reference — that would be a rewrite.
+  Standing is therefore found by reading *forward* from the superseded record:
+  scan for the record that names it.
+- **[PLL delta] — one deliberate divergence from the decision-record
+  convention.** `spec/decision-records/TEMPLATE.md` supersedes a decision
+  record by editing the **old** record's `Status` to `superseded by DR-NNN`, a
+  forward pointer written in place. Evidence records do **not** do this: the
+  pointer lives only in the *new* record's **Supersedes** field, and the
+  superseded record's bytes never change after creation. The reason is that the
+  two artifacts have different jobs — a decision record is a governance
+  document whose current standing must be legible at a glance to anyone who
+  opens it, so a controlled in-place status edit earns its keep; an evidence
+  record is a frozen observation of what a simulator actually emitted, and
+  editing it at all (even to add a true, helpful pointer) forfeits the
+  guarantee that makes `sim/` citable. When the two rules seem to conflict,
+  immutability wins here and legibility wins in `spec/`.
+- Same rule as `spec/`, and the one both conventions share without
+  qualification: *do not delete or rewrite a record — supersede it.*
 
 ## Append-only rule
 
@@ -273,6 +302,24 @@ affects comparability must be called out in the next record.
 | Extracted metrics / measurement tables | **Always** — inside the record, or as a small CSV beside the logs | machine-readable comparison across records |
 | Full waveform rawfiles (`.raw`) | **No, not committed** | hundreds of MB per transient; regenerable from the frozen netlist + logged environment |
 | Plots | Only when the plot *is* the argument | a plot is a rendering, not evidence; commit it with the script that generated it |
+
+**How the tooling enforces this.** Root `.gitignore` ignores `*.raw` and `*.log`
+tree-wide, which would otherwise silently swallow the corner logs this table
+mandates committing — `git add sim/<slug>/corners/<id>/` would add nothing for
+them and the record's **Links → Raw logs** path would point at untracked files.
+A scoped negation un-ignores exactly the evidence path and nothing else:
+
+```gitignore
+*.raw
+*.log
+!sim/*/corners/**/*.log
+```
+
+So per-corner logs under `corners/<record-id>/` are trackable, while `.raw`
+files there and stray `.log` files anywhere else (e.g. `testbench/scratch.log`)
+stay ignored. Anyone adding a new committed-evidence artifact type that collides
+with an ignore rule must extend that negation in the same narrow way — never by
+`git add -f`, which leaves the next run's logs silently untracked again.
 
 **Waveform rule.** When a waveform is itself the evidence — a lock
 transient, a control-line ripple trace, a startup sequence — do **not**
@@ -353,8 +400,8 @@ sim/
   - Simulator: ngspice 46; schematic capture: xschem 3.4.7
   - Repo commit: `3f1c9ab` (clean tree)
   - Host: macOS 15 / arm64
-- **Corner matrix run**: 45 points = 5 MOS bundles × 3 temperatures × 3
-  supplies
+- **Corner matrix run**: 45 PVT points (5 MOS bundles × 3 temperatures × 3
+  supplies), each run at 3 divider settings → 135 runs
   - Bundles (→ `.lib` sections): `tt` → typical; `ff` → ff; `ss` → ss;
     `fs` → fs; `sf` → sf
   - Temperature: −40 °C, 27 °C, 125 °C
@@ -362,7 +409,8 @@ sim/
   - **Axes not swept**: passive sections held at `res_typical`,
     `mimcap_typical`, `moscap_typical` — MOS-only sweep. Justified in
     Methodology.
-  - N settings: ×4, ×16, ×64 at each point (worst-case step per setting)
+  - Divider settings: N = ×4, ×16, ×64, each exercised at every one of the 45
+    PVT points (worst-case step per setting)
 - **Methodology / criteria / limitations**:
   - Lock criterion: cold start from `vctrl = 0`; locked when |Δf/f_target|
     ≤ 0.1 % **and** static phase error ≤ 2 % of a reference period,

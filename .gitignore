@@ -1,5 +1,10 @@
 *.raw
 *.log
+# Per-corner ngspice logs under sim/ are committed evidence, not scratch output
+# — see the retention policy in sim/README.md. This negation is deliberately
+# narrow: only sim/<slug>/corners/<record-id>/*.log is un-ignored; *.raw and
+# stray *.log files anywhere else in the tree stay ignored.
+!sim/*/corners/**/*.log
 __pycache__/
 .DS_Store
 # >>> loom-managed (do not edit) >>>
