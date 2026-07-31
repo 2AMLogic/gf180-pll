@@ -11,6 +11,9 @@ design/
   netlist.sh            batch netlist exporter — every block, one script
   netlist/*.spice       committed exports (checked by `netlist.sh --check`)
 
+  # Closed-loop top level (#52, DR-001 Decisions 1-3)
+  pll_top.sch / .sym    the five blocks below, wired into the loop
+
   # VCO (#8, DR-001 Decision 2 / DR-003)
   vco.sch  / .sym       top-level VCO: bias + 5-stage ring + buffer + decap
   vco_bias.sch/.sym     constant-gm bias, V->I converter, band-select mirror
@@ -70,8 +73,28 @@ convention is a property of the block, not of the script:
 
 | Top | Output | Committed? | `--check`? |
 |---|---|---|---|
-| `vco`, `div23_cell`, `divider_chain`, `lock_detector`, `dff_tg_3v3` | `design/netlist/<top>.spice` | yes | yes |
+| `vco`, `div23_cell`, `divider_chain`, `lock_detector`, `dff_tg_3v3`, `loop_filter`, `pll_top` | `design/netlist/<top>.spice` | yes | yes |
 | `pfd_cp` | `<outdir>/dut.spice`, path echoed on stdout | no | n/a |
+
+`pll_top` is committed even though it, like `pfd_cp`, is a deep hierarchy —
+it inlines every cell in the block. That is the point: it is the DUT **every**
+closed-loop campaign instantiates (#12, #13, #14), so exactly one exported
+assembly has to exist for all of them to agree on, and `--check` staleness is
+what keeps that one file honest against the schematics. It also means the
+collision check below now has a *committed* copy of the PFD/CP hierarchy's
+leaf cells to compare the per-record `pfd_cp` export against, which is strictly
+more coverage than before.
+
+**Wrapped port lists (#52).** xschem breaks a long `.subckt` port list onto a
+`*+` continuation line — which is a **comment**. Promoting only the
+`**.subckt` header, as the exporter originally did, therefore left the tail of
+a long port list commented out, silently demoting those ports to
+subcircuit-local nodes: a deck that netlists, simulates, and is wrong.
+`pll_top` is the first top here with enough ports to hit it. `export_block`
+now promotes the continuation along with the header, and `check_export`
+asserts that no `*+` line survives in any export — the failure is invisible to
+every other check, since all the `.subckt`s are present, no `netN` appears, and
+no pin is reported missing.
 
 **Why two conventions, rather than one of them being wrong.** The committed
 tops are self-contained subcircuits whose exports are small and stable, so
@@ -878,6 +901,105 @@ then `design/netlist.sh --top loop_filter` to refresh the committed
 `design/netlist/loop_filter.spice`, and re-run `sim/loop-dynamics/testbench/run.sh`
 to mint a fresh evidence record (records are append-only; the old one
 stands).
+
+---
+
+# The closed-loop top level (`pll_top.sch`)
+
+The five blocks above, wired into DR-001's type-II charge-pump loop. Landed by
+**#52**, whose framing is worth keeping in view: this file exists so there is
+**one** top-level assembly in the repo. Before it, three separate issues each
+nominally needed a top level and each would have built its own — which is not a
+merge conflict but something worse, three subtly different loops each producing
+its own "evidence".
+
+```
+  REF ──▶ [pfd_cp] ──UP/DN──▶ [lock_detector] ──▶ LOCK
+            │ VOUT
+            ▼
+          VCTRL ════ [loop_filter]   (R + C1 + C2 to VSS)
+            │
+            ▼
+          [vco] ──CLK──┬──▶ CLK (block output)
+                       │
+                       ▼
+              [divider_chain] ──FB──▶ back to pfd_cp.FB
+                       │
+                       └──▶ DIVOUT (pre-retiming monitor tap)
+```
+
+## The four wiring facts that are load-bearing
+
+1. **`pfd_cp.VOUT`, `loop_filter.VCTRL` and `vco.VCTRL` are one net.** The loop
+   filter is a two-terminal shunt network — `loop_filter.sym` has exactly
+   `VCTRL` and `VSS` — because DR-001 Decision 1 puts it *passively across* the
+   charge pump's output node. There is no current-injection pin and nothing in
+   series with the loop.
+2. **`pfd_cp.FB` is driven by `divider_chain.FB`, not by `divider_chain.DIVOUT`.**
+   `FB` is the output of the retiming flop `XFRT` inside `divider_chain`,
+   clocked by the VCO, so the edge the PFD sees is one flop's clk→Q after a VCO
+   edge **independent of N** — DR-001 Decision 3's interface contract to #9.
+   `DIVOUT` is the raw chain/mux output, whose delay is the accumulated clk→Q of
+   the `k` *active* cells and therefore moves with the programmed N. Wiring
+   `DIVOUT` to the PFD would still lock, and a single-point smoke test would not
+   notice, but it would reintroduce exactly the N-dependent static phase offset
+   the retiming flop exists to remove. Both are brought out as monitor pins so a
+   testbench can see the retiming for itself.
+3. **The lock detector taps `UP`/`DN`, not the control node.** It is a passive
+   monitor (DR-002 Decision 4); nothing in it drives a loop node. Its `VWIN` pin
+   is an *output* — the integrating window node, brought out of the cell for
+   observation — not a threshold input, so it stays an internal net here.
+4. **Three supply domains stay separate all the way to the pins**: `VDD`
+   (reference / PFD / charge pump / lock detector), `VDD_VCO` + `GND_VCO` (the
+   VCO's own quiet domain, with its on-chip decap inside `vco.sch`) and
+   `VDD_DIV` (the divider) — DR-001 Decisions 2 and 3. `VSS` is the shared
+   ground for everything except the VCO.
+
+## Pins
+
+| Group | Pins | Notes |
+|---|---|---|
+| Reference | `REF` | reference clock in |
+| VCO band | `B2 B1 B0` | 3-bit static band select (`vco.sch`) |
+| Icp trim | `CPB1 CPB0` | 2-bit static charge-pump trim (`cp.sch`). Named `CPB*` rather than `B*` only so the top-level net names stay distinct from the VCO band bits |
+| Divider | `P5..P0`, `SEL5..SEL0` | `N = 2^k + Σ P_j·2^j (j<k)`, one-hot `SEL_(k-1) = 1` |
+| Bias | `IBN ICN IBP ICP` | charge-pump current references — **bias generation is out of scope for this block**, testbenches drive these ideally at 4× the unit-leg current |
+| Outputs | `CLK`, `LOCK` | the block output and the lock flag |
+| Monitors | `DIVOUT`, `FB`, `VCTRL` | observability only: the pre-retiming divider output, the retimed feedback edge, and the control node |
+| Supplies | `VDD`, `VDD_VCO`, `GND_VCO`, `VDD_DIV`, `VSS` | three domains, per DR-001 |
+
+Every configuration input is **static** — there is no calibration FSM in v1
+(DR-001 Decision 2), so an integrator has to know its band code and its N code,
+and a part programmed into the wrong band will not lock. That is a
+datasheet/integration burden the architecture accepted deliberately.
+
+## Simulating it
+
+`sim/lib/assemble_closed_loop.sh` is the **one** path from this schematic to a
+runnable deck, and every closed-loop campaign uses it rather than assembling a
+DUT of its own. It owns three things that would otherwise drift between
+campaigns: where the DUT comes from (`design/netlist/pll_top.spice`, the
+committed export), how the deck is put together (export + stimulus concatenated
+into one self-contained file, so a record's frozen snapshot reproduces the run
+on its own), and what the configuration bits mean — `cloop_divider_params 8`
+rather than twelve hand-set bits, since a mis-encoded one-hot `SEL` still locks,
+just at the wrong N.
+
+`sim/pll-top-smoke/` is this block's own acceptance gate: one nominal-corner
+cold-start run proving the assembled loop acquires and holds lock. It is
+deliberately **not** a PVT campaign — lock time and band coverage are #12,
+jitter is #13, supply pushing and power are #14, each against this same
+assembled DUT.
+
+## Regenerating and editing
+
+Same convention as every other block: edit `pll_top.sch` in xschem, save, then
+`design/netlist.sh --top pll_top` to refresh the committed
+`design/netlist/pll_top.spice`, and re-run
+`sim/pll-top-smoke/testbench/run.sh` to mint a fresh evidence record (records
+are append-only; the old one stands). A change here invalidates every
+closed-loop record, not just this block's — the other blocks' own records are
+unaffected, since they netlist their own tops.
 
 ---
 

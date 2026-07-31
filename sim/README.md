@@ -80,6 +80,7 @@ sim/
   | `pfd-deadzone` | PFD + charge-pump phase-to-charge transfer through zero phase error (dead-zone freedom), and the residual charge offset at zero | #9 |
   | `cp-compliance` | charge-pump output compliance range, UP/DN current and switching-time mismatch, 2-bit Icp trim range | #9 |
   | `loop-dynamics` | loop bandwidth / phase margin vs. R–C and Kvco spread | #10 |
+  | `pll-top-smoke` | does the assembled `design/pll_top.sch` acquire and hold lock at all — the acceptance gate for the top-level wiring, **one nominal corner by design** (see below) | #52 |
   | `lock-time` | closed-loop lock acquisition | #12 |
   | `output-range` | closed-loop output-band coverage | #12 |
   | `period-jitter` | period jitter (deterministic + random) | #13 |
@@ -177,6 +178,34 @@ process, a single nominal point for a Monte Carlo distribution claim — is
 allowed **only** with an in-record justification. "The sim was slow" is not a
 justification; "mismatch distribution is evaluated at nominal PVT, corner
 sensitivity covered separately by record X" is.
+
+**A worked example of an acceptable one-point justification** — `pll-top-smoke`
+(#52), the only single-corner campaign in the table above. The question it
+answers is a *connectivity and closed-loop-existence* question about a newly
+assembled top level ("is the loop wired such that it acquires and holds
+lock?"), not a performance question. A performance number needs the grid;
+"does the assembly close the loop" is answered, or not answered, at any single
+corner, and answering it at 45 costs 45× the wall clock for no additional
+information about the wiring. Every *performance* claim over the same DUT is
+explicitly deferred to `lock-time` / `output-range` (#12), `period-jitter`
+(#13) and `supply-sensitivity` (#14), each of which carries the full grid.
+The record says all of that in its own Corner-matrix field, and says in as many
+words that it must not be cited for a PVT claim — which is what makes it a
+justification rather than an excuse.
+
+## Closed-loop campaigns share one DUT
+
+Every campaign that simulates the whole PLL builds its deck through
+`sim/lib/assemble_closed_loop.sh`, which assembles
+`design/netlist/pll_top.spice` (the committed export of `design/pll_top.sch`)
+with the campaign's own stimulus fragment. No closed-loop campaign assembles a
+top level of its own. That is deliberate and it is #52's whole point: before
+`pll_top.sch` existed, three separate issues each nominally needed a top level,
+and three privately-assembled loops producing three sets of "evidence" is worse
+than a merge conflict, because nothing would have reported the divergence. The
+helper also owns the encoding of the block's 22 static configuration inputs, so
+a campaign asks for `N = 8` rather than setting twelve bits by hand — a
+mis-encoded one-hot `SEL` code still locks, just at the wrong N.
 
 ## Summary record format
 
