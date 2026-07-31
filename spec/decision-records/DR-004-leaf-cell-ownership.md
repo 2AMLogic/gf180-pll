@@ -7,9 +7,9 @@
   `design/`, not an electrical parameter. It does not supersede or refine
   DR-001/DR-002/DR-003; it settles a question those records never addressed
   because there was only one block in `design/` when they were written.
-- **Related**: #29 (the collision this resolves), #30 (the structural
-  follow-up), #28 (path-independent exports, landed for the `pfd_cp` top in the
-  same change)
+- **Related**: #29 (the collision this resolves), #30 / PR #31 (the standing
+  naming convention this record applies), #28 (path-independent exports,
+  landed for the `pfd_cp` top in the same change)
 
 ## Context
 
@@ -40,31 +40,42 @@ invalidate the 465-run evidence already merged for #11.
 
 ## Decision
 
-**A leaf cell in `design/` belongs to exactly one owner, and its name states
-the owner.**
+`design/README.md` § "Leaf-cell ownership and naming" (landed by PR #31 for
+#30) already states the standing rule: every leaf cell is namespaced
+`<block-prefix>_<cellname>`, and a **bare** name is reserved for a genuinely
+shared, canonical cell — with the shared-vs-per-block call recorded in a
+decision record rather than made silently by reusing a filename. **This is
+that decision record**, for the two cells the convention explicitly left
+unresolved.
 
-1. **Shared logic library** — `inv_3v3`, `inv2x_3v3`, `nand2_3v3`,
+1. **The shared-cell list** — `inv_3v3`, `inv2x_3v3`, `nand2_3v3`,
    `nand3_3v3`, `nor2_3v3`, `xor2_3v3`, `tgate_3v3`, `schmitt_3v3`,
-   `delaywin_3v3`, `dff_tg_3v3` are unowned, general-purpose cells at
-   Wp/Wn = 2.5/1.0 µm, L = 0.28 µm and its ratios. A block that is satisfied by
-   these instantiates them **unmodified** and never forks them.
+   `delaywin_3v3`, `dff_tg_3v3` **are** shared canonical cells and keep their
+   bare names, at Wp/Wn = 2.5/1.0 µm, L = 0.28 µm and its ratios, exactly as
+   the VCO, divider and lock detector landed them. A block satisfied by these
+   instantiates them **unmodified** and never forks them. This is the list
+   `design/README.md` refers to; it is not open-ended, and adding to it is
+   another decision record.
 2. **Block-owned cells** — a block that needs a leaf cell sized to its own
-   argument owns a copy named `<block>_<cell>`. The PFD/CP block owns
-   `pfd_inv_3v3` (Wp/Wn = 1.5/0.5 µm, L = 0.3 µm) and `pfd_nand2_3v3`
+   argument owns a copy named `<block-prefix>_<cellname>`. The PFD/CP block owns
+   `pfdcp_inv_3v3` (Wp/Wn = 1.5/0.5 µm, L = 0.3 µm) and `pfdcp_nand2_3v3`
    (Wp 1.5 µm, series NMOS 1 µm, L = 0.3 µm), whose sizing is a PFD
    reset-delay-and-symmetry argument, not a library default, and which carry
    full junction geometry because the chain's absolute delay is measured.
 3. **A block never edits a cell another block instantiates.** Changing a shared
    library cell requires re-running and re-minting every campaign that cites it,
    under `sim/README.md`'s append-only rule.
-4. **The convention is enforced mechanically, not by vigilance.**
-   `design/netlist.sh` fails the run if any `.subckt` name is defined by both
-   the per-record `pfd_cp` export and a committed top. For the committed tops
-   `--check` already catches a re-sized leaf cell as a stale netlist; the
-   per-record top had no such gate, and that was the silent hole.
+4. **Enforced mechanically, not by vigilance.** PR #31's cross-block collision
+   check is extended here to (a) compare the freshly regenerated exports rather
+   than the committed ones, so a collision is caught on the run that introduces
+   it, (b) refuse to *write* a colliding set, and (c) span the per-record
+   `pfd_cp` top. (c) is the load-bearing addition: the committed tops already
+   surface a re-sized leaf cell as a stale netlist, but `pfd_cp` has no
+   committed export to diff against, so it was the one top a collision could
+   pass through silently — which is exactly what happened.
 
-`design/README.md` states the convention (§ Leaf-cell ownership) and is the
-day-to-day reference; this record is the decision behind it.
+`design/README.md` § "Leaf-cell ownership and naming" is the day-to-day
+reference; this record is the decision it points at.
 
 ## Alternatives considered
 
@@ -77,23 +88,26 @@ day-to-day reference; this record is the decision behind it.
   sizing argument in `design/README.md` plus the mismatch budget would have to
   be **re-derived**, not merely re-run. That is a design revision, and a
   conflict resolution is the wrong vehicle for one.
-- **Converge both libraries on one parameterized cell** — the best end state,
-  and the direction #30 records. Rejected here because it reaches back into
-  evidence already merged for the divider and lock detector, so it cannot be
-  settled inside one block's PR without re-opening another block's results.
+- **Converge both libraries on one parameterized cell** — arguably the better
+  long-run end state, as #30 and `design/README.md`'s rationale both note.
+  Rejected here because it reaches back into evidence already merged for the
+  divider and lock detector, so it cannot be settled inside one block's PR
+  without re-opening another block's results.
 - **A subdirectory per block** (`design/pfd_cp/`, `design/divider/`,
   `design/lib/`) — turns the namespace collision into a path collision the
   merge surfaces loudly, which is a genuine improvement. Rejected *for now*
   only on cost: it moves every file in `design/`, rewrites every symbol
   reference and every committed export, and therefore re-mints every campaign's
-  snapshot. Left open under #30, which this record does not foreclose.
+  snapshot. #30's own rationale rejected it for the same reason (it ripples
+  through `xschemrc`'s search path and every bare-name symbol reference for no
+  benefit over a filename prefix); this record does not reopen it.
 - **Do nothing and resolve each collision by hand** — this is the second
   consecutive collision on the same PR from two different block PRs, and the
   failure mode is silent. Rejected.
 
 ## Consequences
 
-- The PFD/CP export changes bytes (`.subckt inv_3v3` → `.subckt pfd_inv_3v3`,
+- The PFD/CP export changes bytes (`.subckt inv_3v3` → `.subckt pfdcp_inv_3v3`,
   and instance lines to match) with **no electrical change whatsoever**: the
   regenerated export is byte-identical to the previous snapshot once the rename
   is undone and path comments are normalized. The `sim/pfd-deadzone/` and
@@ -107,8 +121,9 @@ day-to-day reference; this record is the decision behind it.
 - Two nominally similar inverters now exist in `design/`. That duplication is
   the accepted cost, and it is visible rather than latent — previously the
   duplication existed too, it was just hidden behind one filename.
-- Adding a fourth block means deciding, explicitly, whether it uses the shared
-  library or owns its cells. The exporter will not let the question be skipped.
+- Adding a fourth block means deciding, explicitly, whether it uses a
+  shared-list cell or owns its own. The exporter will not let the question be
+  skipped, and the shared-cell list above is now closed rather than implicit.
 - If a future revision does want one converged library, it is a new decision
   record superseding this one, plus the re-run of every campaign whose cells
   move — not a quiet rename.

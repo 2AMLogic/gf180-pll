@@ -4,7 +4,7 @@ K {}
 V {}
 S {}
 E {}
-T {pfd_inv_3v3 - PFD/CP unit CMOS inverter (3.3 V thick oxide)} 100 -60 0 0 0.3 0.3 {layer=8}
+T {pfdcp_inv_3v3 - PFD/CP unit CMOS inverter (3.3 V thick oxide)} 100 -60 0 0 0.3 0.3 {layer=8}
 T {* Unit static CMOS inverter OWNED BY THE PFD/CP BLOCK (DR-004), gf180mcu\n* 3.3 V thick-oxide devices only (DR-002 Decision 3).  Wp/Wn = 1.5u/0.5u at\n* L = 0.3u -- a 3:1 ratio sized for symmetric rise/fall, because every UP/DN\n* path asymmetry in the PFD lands directly in the charge pump's timing-\n* mismatch budget, and L is held one step above the 0.28u minimum to trade a\n* little speed for better matching in the 24-stage reset chain.\n*\n* NOT the same cell as the general-purpose logic-library inv_3v3 (2.5u/1u at\n* L=0.28u) used by the divider and lock detector.  The two are deliberately\n* separate: this one's sizing is a PFD reset-delay argument, not a library\n* default.  See design/README.md :: Leaf-cell ownership.} 1900 -300 0 0 0.25 0.25 {layer=8}
 C {symbols/pfet_03v3.sym} 300 -300 0 0 {name=MP
 L=0.3u

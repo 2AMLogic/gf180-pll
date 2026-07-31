@@ -4,8 +4,8 @@ K {}
 V {}
 S {}
 E {}
-T {pfd_nand2_3v3 - PFD/CP unit 2-input NAND (3.3 V thick oxide)} 100 -60 0 0 0.3 0.3 {layer=8}
-T {* Unit 2-input static CMOS NAND OWNED BY THE PFD/CP BLOCK (DR-004).  The\n* series NMOS stack is widened to 1u (vs. 0.5u in pfd_inv_3v3) so the pull-down\n* strength tracks the inverter's, keeping the PFD's reset path delay symmetric\n* between the UP and DN branches.\n*\n* NOT the same cell as the general-purpose logic-library nand2_3v3 (2.5u/2u at\n* L=0.28u).  See design/README.md :: Leaf-cell ownership.} 1900 -300 0 0 0.25 0.25 {layer=8}
+T {pfdcp_nand2_3v3 - PFD/CP unit 2-input NAND (3.3 V thick oxide)} 100 -60 0 0 0.3 0.3 {layer=8}
+T {* Unit 2-input static CMOS NAND OWNED BY THE PFD/CP BLOCK (DR-004).  The\n* series NMOS stack is widened to 1u (vs. 0.5u in pfdcp_inv_3v3) so the pull-down\n* strength tracks the inverter's, keeping the PFD's reset path delay symmetric\n* between the UP and DN branches.\n*\n* NOT the same cell as the general-purpose logic-library nand2_3v3 (2.5u/2u at\n* L=0.28u).  See design/README.md :: Leaf-cell ownership.} 1900 -300 0 0 0.25 0.25 {layer=8}
 C {symbols/pfet_03v3.sym} 300 -300 0 0 {name=MP1
 L=0.3u
 W=1.5u

@@ -22,5 +22,5 @@ T {Y} 82 -6 0 1 0.25 0.25 {layer=7}
 T {VDD} 4 -82 0 0 0.25 0.25 {layer=7}
 T {VSS} 4 98 0 0 0.25 0.25 {layer=7}
 T {@name} -90 -110 0 0 0.3 0.3 {}
-T {pfd_nand2_3v3} -88 -8 0 0 0.35 0.35 {layer=4}
+T {pfdcp_nand2_3v3} -88 -8 0 0 0.35 0.35 {layer=4}
 T {PFD/CP unit NAND2} -90 110 0 0 0.2 0.2 {layer=8}

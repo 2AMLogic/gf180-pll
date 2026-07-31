@@ -30,14 +30,29 @@
 # Both remain available; adding a block means adding it to BLOCKS (or adding a
 # case below), not forking this script.
 #
-# Never `.include` two committed exports in the same deck: each carries its own
-# copy of the shared logic library (inv_3v3, nand2_3v3, tgate_3v3, ...), so
-# including two would redefine them.  That hazard is also why leaf cells are
-# NAMESPACED BY OWNER -- see design/README.md :: Leaf-cell ownership, and
-# DR-004.  The PFD/CP block owns `pfd_inv_3v3` / `pfd_nand2_3v3`, which are
-# deliberately different cells from the general logic library's `inv_3v3` /
-# `nand2_3v3`; `check_leaf_collisions` below fails the run if any two tops ever
-# resolve the same `.subckt` name to different bodies again.
+# Never `.include` two exports in the same deck: each carries its own copy of
+# the shared leaf cells (inv_3v3, nand2_3v3, vco_stage, ...), so including two
+# would redefine them.  That hazard is also why leaf cells are NAMESPACED BY
+# OWNING BLOCK -- see design/README.md "Leaf-cell ownership and naming" (the
+# convention, from #30) and DR-004 (which cells are shared, and which the
+# PFD/CP block owns).  The PFD/CP block owns `pfdcp_inv_3v3` /
+# `pfdcp_nand2_3v3`, deliberately different cells from the shared library's
+# `inv_3v3` / `nand2_3v3`.
+#
+# `--check` runs a cross-block leaf-cell collision check (see
+# check_leaf_cell_collisions below): every export is self-contained and inlines
+# its own copy of every leaf cell it uses, captured whenever that top was last
+# regenerated.  Two tops can therefore carry genuinely different bodies under
+# the same `.subckt <name>` even though design/ only ever holds one `<name>.sch`
+# at a time on disk -- exactly the add/add-collision hazard this repo has hit
+# twice.  The check hashes every `.subckt ... .ends` block across all exports
+# and fails loudly if the same cell name hashes differently anywhere.
+#
+# **[#26 delta]** the check spans the per-record `pfd_cp` top as well as the
+# committed ones.  The collision that motivated it was between `pfd_cp` and the
+# committed divider/lock-detector tops, and `pfd_cp` has no committed export for
+# the staleness diff to catch -- restricting the check to BLOCKS would have
+# missed the one case it exists for.
 #
 # Why the pfd_cp export uses an export ROOT (`dut_export.sch`) rather than
 # netlisting `pfd_cp.sch` directly: xschem emits real `.subckt` blocks for
@@ -69,7 +84,7 @@ expected_subckts() {
     divider_chain)  echo "divider_chain div23_cell nor2_3v3 inv_3v3 nand2_3v3 nand3_3v3 inv2x_3v3 dff_tg_3v3 tgate_3v3" ;;
     lock_detector)  echo "lock_detector xor2_3v3 delaywin_3v3 nand2_3v3 inv_3v3 schmitt_3v3" ;;
     dff_tg_3v3)     echo "dff_tg_3v3 inv_3v3 tgate_3v3" ;;
-    pfd_cp)         echo "pfd_cp pfd cp cp_leg_n cp_leg_p srlatch edgedet pfd_nand2_3v3 pfd_inv_3v3" ;;
+    pfd_cp)         echo "pfd_cp pfd cp cp_leg_n cp_leg_p srlatch edgedet pfdcp_nand2_3v3 pfdcp_inv_3v3" ;;
     *)              echo "" ;;
   esac
 }
@@ -282,7 +297,7 @@ export_block() {
 # ------------------------------------------------------------- top: pfd_cp --
 # Per-record export.  Writes <outdir>/dut.spice containing a `.subckt`
 # definition for pfd_cp and every cell below it (pfd, cp, cp_leg_n, cp_leg_p,
-# srlatch, edgedet, pfd_nand2_3v3, pfd_inv_3v3).  The stimulus decks under sim/
+# srlatch, edgedet, pfdcp_nand2_3v3, pfdcp_inv_3v3).  The stimulus decks under sim/
 # `.include` that file and instantiate the block they are testing.
 netlist_pfd_cp() {
   [ "${CHECK}" -eq 0 ] || {
@@ -341,50 +356,73 @@ netlist_pfd_cp() {
   echo "${netlist}"
 }
 
-# ------------------------------------------------------ leaf-cell ownership --
-# DR-004's mechanical enforcement.
+# ------------------------------------------------- leaf-cell collision check --
+# The mechanical half of the "Leaf-cell ownership and naming" convention in
+# design/README.md (#30/#31), extended to cover the per-record `pfd_cp` top.
 #
-# The failure this exists to prevent is a MERGE picking one side of two
-# different cells that share a filename -- #26's `inv_3v3` (1.5u/0.5u, L=0.3u,
-# sized as a PFD reset-delay argument) versus #27's (2.5u/1u, L=0.28u, a
-# general logic-library default).  Whichever side loses, the other block's
-# schematics silently change and the export still succeeds.
-#
-# For the COMMITTED tops that case is already loud: `--check` diffs the
-# regenerated export against the committed one, so a re-sized leaf cell shows
-# up as a stale netlist.  The per-record `pfd_cp` top has no committed export to
-# diff against, and that is the silent hole.  So the invariant asserted here is
-# ownership, which is checkable from the exports alone:
-#
-#   no `.subckt` name may appear in BOTH the pfd_cp export and any committed
-#   export.
-#
-# The PFD/CP block owns `pfd_inv_3v3` / `pfd_nand2_3v3`; the committed tops
-# share the general logic library (`inv_3v3`, `nand2_3v3`, `tgate_3v3`, ...),
-# which they may legitimately have in common with each other.  If the PFD/CP
-# hierarchy is ever re-pointed at a library cell -- by a merge resolution, a
-# rename, or a stray edit -- a shared name appears and this fails the run.
-# Sharing a cell is not forbidden forever; it is forbidden SILENTLY, and
-# changing that means revising DR-004 and re-minting the affected records.
-check_leaf_ownership() {
-  local dir="$1" pfd_export="$2"
-  local shared
-  shared="$(comm -12 \
-    <(grep -iE '^\.subckt ' "${pfd_export}" | awk '{print tolower($2)}' | sort -u) \
-    <(cat "${dir}"/*.spice | grep -iE '^\.subckt ' | awk '{print tolower($2)}' | sort -u))"
-
-  if [ -n "${shared}" ]; then
-    echo "ERROR: leaf-cell ownership violation (DR-004).  These .subckt names are" >&2
-    echo "       defined by BOTH the per-record pfd_cp export and a committed top:" >&2
-    while IFS= read -r name; do echo "         ${name}" >&2; done <<<"${shared}"
-    echo "       The PFD/CP block owns namespaced copies (pfd_inv_3v3," >&2
-    echo "       pfd_nand2_3v3); the committed tops share the general logic" >&2
-    echo "       library.  A name in both means one block's gates were silently" >&2
-    echo "       redefined -- see design/README.md :: Leaf-cell ownership." >&2
-    exit 1
+# Every export is self-contained: it inlines its own copy of every leaf cell it
+# uses.  Two tops can therefore carry genuinely different bodies under the same
+# `.subckt <name>` even though design/ only ever holds one `<name>.sch` at a
+# time -- which is precisely how #26 and #27 each shipped a different
+# `inv_3v3`.  Byte-identical content under one name across several tops is
+# expected (the shared library) and is NOT a failure; only real divergence is.
+sha256_of_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
   fi
 }
 
+# Extracts every `.subckt <name> ... .ends` block from an export and records a
+# content hash for each, so the same leaf-cell name can be compared across every
+# top that defines it.  `celldir` gets one file per cell name, appended with one
+# `<top>\t<hash>` line per top that defines that cell -- if a cell's hash set
+# ever holds more than one distinct value, two tops disagree about what that
+# cell is.
+record_subckt_hashes() {
+  local blk="$1" file="$2" celldir="$3" name hash
+  while IFS= read -r name; do
+    [ -n "${name}" ] || continue
+    hash="$(awk -v n="${name}" '
+              $0 ~ "^\\.subckt " n "( |$)" { capturing=1 }
+              capturing { print }
+              /^\.ends/ && capturing { exit }
+            ' "${file}" | sha256_of_stdin)"
+    printf '%s\t%s\n' "${blk}" "${hash}" >>"${celldir}/${name}"
+  done < <(grep '^\.subckt ' "${file}" | awk '{print $2}')
+}
+
+# Fails loudly if any leaf-cell name resolves to genuinely different content
+# across the exports it appears in.  Takes `<top>=<export-path>` pairs so the
+# uncommitted pfd_cp export can take part alongside the committed ones.
+check_leaf_cell_collisions() {
+  local celldir cellfile cellname nuniq rc=0 pair blk file
+  celldir="$(mktemp -d)"
+
+  for pair in "$@"; do
+    blk="${pair%%=*}"
+    file="${pair#*=}"
+    [ -f "${file}" ] || continue
+    record_subckt_hashes "${blk}" "${file}" "${celldir}"
+  done
+
+  for cellfile in "${celldir}"/*; do
+    [ -e "${cellfile}" ] || continue
+    cellname="$(basename "${cellfile}")"
+    nuniq="$(awk -F'\t' '{print $2}' "${cellfile}" | sort -u | wc -l | tr -d ' ')"
+    if [ "${nuniq}" -gt 1 ]; then
+      echo "ERROR: leaf-cell '${cellname}' diverges across tops (add/add collision):" >&2
+      awk -F'\t' '{print "  " $1 " -> " $2}' "${cellfile}" | sort -u >&2
+      echo "       A leaf cell is owned by one block and named for it --" >&2
+      echo "       see design/README.md \"Leaf-cell ownership and naming\" and DR-004." >&2
+      rc=1
+    fi
+  done
+
+  rm -rf "${celldir}"
+  return "${rc}"
+}
 # ------------------------------------------------------------------ driver --
 if [ "${TOP}" = "pfd_cp" ]; then
   netlist_pfd_cp
@@ -422,11 +460,28 @@ for blk in "${SELECTED[@]}"; do
   export_block "${blk}" "${GENDIR}" "${WORK}"
 done
 
-# Cross-top ownership check (DR-004).  Only run on a full-set invocation (the
-# default, and what `--check` does in CI): a `--top <one-block>` run has nothing
-# to compare against.  pfd_cp is exported into a scratch directory purely to
-# take part in the comparison -- nothing is written for it, and the `--check`
-# loop below never looks at it because it is not in SELECTED.
+# Inputs to the cross-top collision check, as `<top>=<path>` pairs.
+#
+# The COMMITTED exports are compared, not the freshly regenerated ones.  That
+# is deliberate and is the only version of this check that can ever fire: each
+# committed export is frozen at whatever the schematics said when that top was
+# last regenerated, so two of them can disagree.  A set of exports all
+# regenerated in the same run cannot disagree in a flat namespace -- one
+# `<name>.sch` on disk yields one body -- so comparing regenerated files would
+# be a check that always passes.
+COLLISION_INPUTS=()
+for blk in "${BLOCKS[@]}"; do
+  COLLISION_INPUTS+=("${blk}=${HERE}/netlist/${blk}.spice")
+done
+
+# **[#26 delta]** the per-record pfd_cp top takes part too, from its FRESH
+# export -- it has no committed file to read.  This is the half that catches
+# the #26/#27 case: pfd_cp is regenerated from today's schematics while the
+# committed tops carry frozen copies, so a PFD/CP hierarchy that reaches into a
+# shared-list cell it has re-sized shows up here as a divergence.  Without it,
+# pfd_cp is the one top a collision passes through silently, because it has no
+# committed export for the staleness diff to catch either.  A
+# `--top <one-block>` run has nothing useful to compare, so it is skipped.
 if [ "${#SELECTED[@]}" -eq "${#BLOCKS[@]}" ]; then
   (
     cd "${HERE}" && XSCHEM_NETLIST_DIR="${WORK}" \
@@ -434,15 +489,18 @@ if [ "${#SELECTED[@]}" -eq "${#BLOCKS[@]}" ]; then
         "${HERE}/dut_export.sch" >"${WORK}/xschem-pfd_cp.log" 2>&1
   ) || true
   [ -f "${WORK}/dut_export.spice" ] || {
-    echo "ERROR: the pfd_cp export needed for the DR-004 ownership check was" >&2
+    echo "ERROR: the pfd_cp export needed for the leaf-cell collision check was" >&2
     echo "       not produced; see ${WORK}/xschem-pfd_cp.log" >&2
     exit 1
   }
-  check_leaf_ownership "${GENDIR}" "${WORK}/dut_export.spice"
+  COLLISION_INPUTS+=("pfd_cp=${WORK}/dut_export.spice")
 fi
 
+collisions_rc=0
+check_leaf_cell_collisions "${COLLISION_INPUTS[@]}" || collisions_rc=1
+
 if [ "${CHECK}" -eq 1 ]; then
-  rc=0
+  rc="${collisions_rc}"
   for blk in "${SELECTED[@]}"; do
     committed="${HERE}/netlist/${blk}.spice"
     if [ ! -f "${committed}" ]; then
@@ -459,10 +517,11 @@ if [ "${CHECK}" -eq 1 ]; then
       rc=1
     fi
   done
+
   if [ "${rc}" -eq 0 ]; then
-    echo "design/netlist.sh --check: all ${#SELECTED[@]} netlists match the schematics"
+    echo "design/netlist.sh --check: all ${#SELECTED[@]} netlists match the schematics, no leaf-cell collisions"
   else
-    echo "ERROR: committed netlists are stale -- re-run design/netlist.sh" >&2
+    echo "ERROR: design/netlist.sh --check failed -- see STALE / leaf-cell collision errors above" >&2
   fi
   exit "${rc}"
 fi

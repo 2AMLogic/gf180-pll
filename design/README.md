@@ -34,8 +34,8 @@ design/
   inv_3v3, inv2x_3v3, nand2_3v3, nand3_3v3, nor2_3v3, xor2_3v3,
   tgate_3v3, schmitt_3v3, delaywin_3v3
 
-  # Leaf cells owned by the PFD/CP block (DR-004 — see Leaf-cell ownership)
-  pfd_inv_3v3, pfd_nand2_3v3
+  # Leaf cells owned by the PFD/CP block (DR-004 — see Leaf-cell ownership and naming)
+  pfdcp_inv_3v3, pfdcp_nand2_3v3
 ```
 
 - **Device flavour**: gf180mcu 3.3 V thick-oxide only — `nfet_03v3` /
@@ -119,34 +119,97 @@ union cannot shadow (no `.sym` sits directly in either parent directory).
 Never `.include` two committed exports in the same deck — each carries its own
 copy of the shared logic library, so including two would redefine them.
 
-## Leaf-cell ownership
+## Leaf-cell ownership and naming
 
-**A leaf cell belongs to exactly one owner, and its name says who.** This is
-**DR-004**, and it exists because `design/` is a flat namespace in which two
-independently-developed blocks each authored a cell called `inv_3v3`:
+`design/` is a **single flat namespace** — every block PR lands its schematics
+into this one directory, with no directory-per-block split. That means two
+independently-developed blocks landing their own copy of the same
+static-CMOS leaf cell (`inv_3v3`, `nand2_3v3`, …) under the same filename is
+an **add/add collision**, not a merge that resolves cleanly: whichever side a
+human picks silently re-sizes the *other* block's already-characterized cell,
+and the export still succeeds — nothing reports a problem. This has already
+happened twice (issue #30).
+
+**Convention: every leaf cell is namespaced by its owning block**, using the
+pattern `<block-prefix>_<cellname>` — e.g. a PFD/CP-owned unit inverter would
+be `pfdcp_inv_3v3`, a divider-owned one `div_inv_3v3`. A **bare** cell name
+(no block prefix) is reserved for a cell that is a genuinely **shared,
+canonical** definition instantiated by more than one block; whether a given
+cell is "shared" or "per-block" is a decision recorded the same way any other
+spec choice is (a `spec/decision-records/` decision record), not something an
+implementer decides silently by reusing a bare filename. This is checkable by
+a human reviewer with no tooling at all: `ls design/*.sch design/*.sym` and
+confirm every filename other than the block-agnostic `xschemrc` / `netlist.sh`
+/ `README.md` either carries a `<block-prefix>_` prefix or is on the
+shared-cell list below.
+
+**The shared-cell list**, recorded by **DR-004** as this convention requires —
+these bare names are one canonical definition instantiated by more than one
+block (the VCO, the divider and the lock detector), at Wp/Wn = 2.5/1.0 µm,
+L = 0.28 µm and its ratios:
+
+> `inv_3v3`, `inv2x_3v3`, `nand2_3v3`, `nand3_3v3`, `nor2_3v3`, `xor2_3v3`,
+> `tgate_3v3`, `schmitt_3v3`, `delaywin_3v3`, `dff_tg_3v3`
+
+**Block-owned cells today:**
 
 | Cell | Owner | Sizing | Sized for |
 |---|---|---|---|
-| `inv_3v3`, `nand2_3v3`, … | the shared logic library (VCO, divider, lock detector) | Wp/Wn = 2.5/1.0 µm, L = 0.28 µm | a general-purpose unit gate at minimum length |
-| `pfd_inv_3v3`, `pfd_nand2_3v3` | the PFD/CP block | Wp/Wn = 1.5/0.5 µm, L = 0.3 µm | symmetric rise/fall in the PFD's 24-stage reset chain, with L one step above minimum for matching; full `ad/pd/as/ps/nrd/nrs` junction geometry, because the *absolute* delay of that chain is the load-bearing parameter behind the dead-zone result |
+| `pfdcp_inv_3v3` | PFD/CP (#9) | Wp/Wn = 1.5/0.5 µm, L = 0.3 µm | symmetric rise/fall in the PFD's 24-stage reset chain, with L one step above minimum for matching, and full `ad/pd/as/ps/nrd/nrs` junction geometry — the *absolute* delay of that chain is the load-bearing parameter behind the dead-zone result, so it is modelled rather than approximated |
+| `pfdcp_nand2_3v3` | PFD/CP (#9) | Wp 1.5 µm, series NMOS 1 µm, L = 0.3 µm | pull-down strength tracking `pfdcp_inv_3v3`, keeping the reset path symmetric between the UP and DN branches |
 
-The rule:
+The VCO's `vco_stage` / `vco_bias` and the PFD/CP's `pfd`, `cp`, `cp_leg_n`,
+`cp_leg_p`, `srlatch`, `edgedet` are block *internals*, not leaf cells offered
+to anyone else; they are named for their function and are instantiated only by
+their own block's top.
 
-- **A block that needs a leaf cell sized to its own argument owns a copy,
-  prefixed with the block name** (`pfd_inv_3v3`, not `inv_3v3`). It never
-  edits a cell another block instantiates.
-- **A block that is happy with the shared library instantiates it unmodified**
-  and does not fork it.
-- Neither is free to change silently: `netlist.sh` fails the run if any
-  `.subckt` name is defined by **both** the `pfd_cp` export and a committed
-  top, so a merge resolution (or a stray rename) that re-points one block at
-  the other's gates stops the export instead of quietly re-sizing a
-  characterized block.
+**Rationale.** Of the three options considered (namespace per block; one
+canonical shared library with a documented sizing rationale; a
+subdirectory per block), per-block namespacing is the cheapest rule that
+turns the failure mode from *silent* (same name, different meaning, picked by
+whoever resolves the merge) into *structural* (names cannot collide, because
+each block owns its own prefix) — reviewable by eye and requiring no schematic
+rework. A single canonical shared library is arguably the better long-run end
+state, but it requires converging the sizings two blocks have *already*
+characterized over their own PVT grids and re-running whichever campaigns
+move, which this issue does not force onto every future leaf cell just to get
+a naming rule in place; a subdirectory per block would work too, but ripples
+through `xschemrc`'s symbol search path and every existing schematic's
+bare-name symbol references for no benefit over a filename prefix. Per-block
+namespacing is also the outcome consistent with the lower-risk "separate"
+default documented for resolving the *current* `inv_3v3` / `nand2_3v3`
+instance of this exact problem.
 
-Sharing one canonical, parameterized library across every block is the better
-end state and is tracked as **#30**; converging the two sizings reaches back
-into evidence already merged for the divider and lock detector, so DR-004
-deliberately does not attempt it here.
+**The `inv_3v3` / `nand2_3v3` collision that prompted this convention is now
+resolved under it**, by **DR-004** (#29): the bare names stay with the shared
+library exactly as the divider and lock detector landed them, and the PFD/CP
+block's differently-sized copies were renamed to `pfdcp_inv_3v3` /
+`pfdcp_nand2_3v3`. Neither block's electrical content moved — see DR-004 for
+why adopting one sizing for both was rejected, and `sim/pfd-deadzone/` /
+`sim/cp-compliance/` for the re-minted records that pin the renamed export.
+
+`design/netlist.sh` mechanically enforces the failure-mode half of this
+convention: every export is self-contained and inlines its own copy of every
+leaf cell it uses, frozen at whatever the schematic looked like when that top
+was last regenerated. The check hashes every `.subckt <name> … .ends` block
+across all exports and fails loudly — naming the colliding tops and cell — if
+the same cell name ever hashes differently across two of them. Byte-identical
+content under the same name across multiple tops is expected and is **not** a
+failure; only genuine divergence is.
+
+Two properties of the check are worth knowing:
+
+- it reads the **committed** exports, not freshly regenerated ones. That is the
+  only version that can fire: `design/` is a flat namespace, so one
+  `<name>.sch` yields one body and a set of exports all regenerated in the same
+  run can never disagree. Committed exports *can*, because each is frozen at
+  whatever the schematics said when its top was last regenerated;
+- it spans the per-record **`pfd_cp`** top as well, from its fresh export,
+  since it has no committed file to read. This is the half that catches the
+  #26/#27 case — `pfd_cp` regenerated from today's schematics against the
+  committed tops' frozen copies — and `pfd_cp` is otherwise the one top a
+  collision passes through silently, having no committed export for the
+  staleness diff to catch either.
 
 ---
 
@@ -283,8 +346,8 @@ current-steering charge pump with a 2-bit unit-element Icp trim.
 
 | Cell | Purpose |
 |---|---|
-| `pfd_inv_3v3` | unit inverter, Wp/Wn = 1.5u/0.5u at L = 0.3u — **block-owned**, see [Leaf-cell ownership](#leaf-cell-ownership) |
-| `pfd_nand2_3v3` | unit 2-input NAND, Wp/Wn = 1.5u/1u at L = 0.3u — block-owned |
+| `pfdcp_inv_3v3` | unit inverter, Wp/Wn = 1.5u/0.5u at L = 0.3u — **block-owned**, see [Leaf-cell ownership and naming](#leaf-cell-ownership-and-naming) |
+| `pfdcp_nand2_3v3` | unit 2-input NAND, Wp/Wn = 1.5u/1u at L = 0.3u — block-owned |
 | `edgedet` | rising-edge pulse generator (AND of X and X delayed 5 stages) |
 | `srlatch` | NAND SR latch, active-low set/reset |
 | `pfd` | tri-state phase-frequency detector |
@@ -576,8 +639,8 @@ Decision 3's "custom-cell count" argument).
 
 This is the **shared** logic library: the VCO, divider and lock detector all
 instantiate these cells unmodified. The PFD/CP block does not — it owns
-`pfd_inv_3v3` / `pfd_nand2_3v3`, sized to a different argument, per DR-004 and
-[Leaf-cell ownership](#leaf-cell-ownership).
+`pfdcp_inv_3v3` / `pfdcp_nand2_3v3`, sized to a different argument, per DR-004 and
+[Leaf-cell ownership and naming](#leaf-cell-ownership-and-naming).
 
 `dff_tg_3v3` is the cell the whole divider is built from. Both latches use
 clocked-feedback (a feedback transmission gate on the opposite clock phase),
@@ -671,9 +734,9 @@ calibration FSM and DR-002 Decision 4 preserves that unchanged.
 
 - One block per `.sch` + `.sym` pair, named for the block.
 - **A leaf cell is named for its owner** — a block that needs a gate sized to
-  its own argument owns a copy prefixed with the block name (`pfd_inv_3v3`),
+  its own argument owns a copy prefixed with the block name (`pfdcp_inv_3v3`),
   rather than editing the shared library cell another block instantiates. See
-  [Leaf-cell ownership](#leaf-cell-ownership) and DR-004; `netlist.sh` enforces
+  [Leaf-cell ownership and naming](#leaf-cell-ownership-and-naming) and DR-004; `netlist.sh` enforces
   it.
 - Ports: inputs `ipin`, outputs `opin`, supplies `iopin`. Supplies are
   explicit pins on every cell — there are no global `VDD`/`VSS` nets, so a

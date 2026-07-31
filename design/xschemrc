@@ -14,8 +14,8 @@
 ####     directories `xschem_library/devices` and `libs.tech/xschem/symbols`
 ####     must be on the path;
 ####   - the PFD/CP cells (`pfd*.sch`, `cp*.sch`, `edgedet.sch`, `srlatch.sch`
-####     and the block-owned leaf cells `pfd_inv_3v3.sch` /
-####     `pfd_nand2_3v3.sch`) instantiate QUALIFIED names -- `devices/ipin.sym`,
+####     and the block-owned leaf cells `pfdcp_inv_3v3.sch` /
+####     `pfdcp_nand2_3v3.sch`) instantiate QUALIFIED names -- `devices/ipin.sym`,
 ####     `symbols/nfet_03v3.sym` -- so those directories' PARENTS
 ####     (`xschem_library` and `libs.tech/xschem`) must be on the path as well.
 ####
