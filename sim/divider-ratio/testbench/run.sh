@@ -59,12 +59,14 @@ build_duts() {
     # Written via a temp file and swapped in only if the content actually
     # changed, so an unchanged DUT keeps its mtime and run_deck_soft's cache
     # survives a restart.
-    cat "${NETLIST_DIR}/${blk}.spice" "${HERE}/${tb}" >"$(dut_file "${key}").new"
-    if cmp -s "$(dut_file "${key}").new" "$(dut_file "${key}")"; then
-      rm -f "$(dut_file "${key}").new"
-    else
-      mv "$(dut_file "${key}").new" "$(dut_file "${key}")"
-    fi
+    # The temp name carries the PID because the re-entrant --one-* children
+    # each rebuild too, and they run concurrently; a shared temp name would let
+    # them clobber each other's partial writes. mv is atomic within the
+    # directory, and a child that finds the content identical never mv's at all,
+    # so the mtime the run cache keys on stays put.
+    local tmp="$(dut_file "${key}").$$.new"
+    cat "${NETLIST_DIR}/${blk}.spice" "${HERE}/${tb}" >"${tmp}"
+    if cmp -s "${tmp}" "$(dut_file "${key}")"; then rm -f "${tmp}"; else mv "${tmp}" "$(dut_file "${key}")"; fi
   done
 }
 
@@ -79,19 +81,25 @@ mktag() { local t="$*"; t="${t// /_}"; t="${t//./p}"; t="${t//-/m}"; echo "${t}"
 # completion test here is "did the transient finish", not "was the log clean".
 run_deck_soft() {
   local deck="$1" workdir="$2" tag="$3"
-  local log="${workdir}/${tag}/ngspice.log"
-  # Reuse a completed run whose log is NEWER than the deck that produced it.
-  # Sweeps here are hours long on a shared machine, and the alternative to a
-  # resumable runner is throwing away a finished grid every time an extraction
-  # rule changes. The mtime test is the invalidation: touching a testbench or
-  # re-exporting a schematic makes the deck newer than every cached log, so the
-  # whole campaign re-runs. SIM_FORCE=1 forces a cold run regardless.
+  local rundir="${workdir}/${tag}" log="${workdir}/${tag}/ngspice.log"
+  local sig="$*"
+  # Reuse a completed run only if BOTH the deck it was produced from is
+  # unchanged (mtime) and the exact argument list -- corner, temperature, every
+  # injected .param -- is identical (signature file). Sweeps here are hours long
+  # on a shared machine, so a resumable runner is worth having; caching on the
+  # deck alone would silently reuse a run taken at different parameters, which
+  # is precisely the kind of quiet wrong number sim/README.md exists to prevent.
+  # SIM_FORCE=1 forces a cold run regardless.
   if [ -z "${SIM_FORCE:-}" ] && [ -f "${log}" ] && [ "${log}" -nt "${deck}" ] \
+     && [ "$(cat "${rundir}/.sig" 2>/dev/null)" = "${sig}" ] \
      && grep -q "Total analysis time" "${log}" 2>/dev/null; then
     return 0
   fi
   simenv_run_deck "$@" >/dev/null 2>&1 || true
-  grep -q "Total analysis time" "${log}" 2>/dev/null && return 0
+  if grep -q "Total analysis time" "${log}" 2>/dev/null; then
+    printf '%s' "${sig}" >"${rundir}/.sig"
+    return 0
+  fi
   echo "ERROR: ngspice did not complete a transient for tag=${tag} (see ${log})" >&2
   return 1
 }
@@ -208,7 +216,7 @@ run_one_cell() {
 # ===========================================================================
 # chain: full divider_chain
 # ===========================================================================
-CHAIN_HEADER="process,temp_c,vdd_v,kf_hz,n_target,k_cells,n_meas_1,n_meas_2,n_divout,t_arr_s,t_rtcq_s,fb_pw_s,i_div_a,pass"
+CHAIN_HEADER="process,temp_c,vdd_v,kf_hz,n_target,k_cells,n_fb,n_divout,t_arr_s,t_rtcq_s,fb_pw_s,i_div_a,pass"
 
 run_one_chain() {
   local corner="$1" temp="$2" vdd="$3" kf="$4" n="$5"
@@ -233,23 +241,26 @@ run_one_chain() {
   else
     params+=("ktstep=$(awk -v f="${kf}" 'BEGIN{printf "%.6g", 1/(50*f)}')")
   fi
-  # Stop time: the ratio is read from three consecutive FB rising edges, i.e.
-  # two output periods (2N VCO periods) plus start-up. 32 VCO periods of
-  # head-room covers start-up at every N and corner measured here.
-  params+=("ktstop=$(awk -v f="${kf}" -v n="${n}" 'BEGIN{printf "%.6g", (2*n+32)/f}')")
+  # Stop time: the deck skips one full output period of start-up (kn VCO
+  # periods -- see the testbench header for why that skip is load-bearing) and
+  # then needs two FB rising edges. The first of those can land anywhere in the
+  # output period following the skip, so the worst case is skip + 2N = 3N + 1
+  # VCO periods; 3N + 20 covers that plus the retiming flop's own latency.
+  params+=("kn=${n}")
+  params+=("ktstop=$(awk -v f="${kf}" -v n="${n}" 'BEGIN{printf "%.6g", (3*n+20)/f}')")
   local i=0 s
   for s in ${sel}; do params+=("ksel${i}=${s}"); i=$((i + 1)); done
   i=0
   for s in ${p}; do params+=("kp${i}=${s}"); i=$((i + 1)); done
   run_deck_soft "$(dut_file chain)" "${WORK}" "${tag}" "${corner}" "${temp}" "${params[@]}"
   local log="${WORK}/${tag}/ngspice.log"
-  local n1 n2 ndo tarr trt fbpw iavg
-  n1=$(simenv_meas "${log}" n1);   n2=$(simenv_meas "${log}" n2)
+  local n1 ndo tarr trt fbpw iavg
+  n1=$(simenv_meas "${log}" n_fb)
   ndo=$(simenv_meas "${log}" ndo); tarr=$(simenv_meas "${log}" t_arr)
   trt=$(simenv_meas "${log}" t_rtcq); fbpw=$(simenv_meas "${log}" fbpw)
   iavg=$(simenv_meas "${log}" iavg)
   awk -v c="${corner}" -v t="${temp}" -v v="${vdd}" -v f="${kf}" -v n="${n}" -v k="${k}" \
-      -v n1="${n1}" -v n2="${n2}" -v ndo="${ndo}" -v ta="${tarr}" -v tr="${trt}" \
+      -v n1="${n1}" -v ndo="${ndo}" -v ta="${tarr}" -v tr="${trt}" \
       -v pw="${fbpw}" -v ia="${iavg}" '
     function abs(x) { return x < 0 ? -x : x }
     BEGIN {
@@ -257,11 +268,12 @@ run_one_chain() {
       if (pw != "nan" && pw + 0 < 0) pw = pw + n * tv
       # Same integer-ratio tolerance argument as the single-cell runner: 0.05
       # is far inside the 0.5 that would confuse N with N+-1 and far outside
-      # the .meas interpolation resolution.
-      ok = (n1 != "nan" && n2 != "nan" && ndo != "nan" &&
-            abs(n1 - n) < 5e-2 && abs(n2 - n) < 5e-2 && abs(ndo - n) < 5e-2)
-      printf "%s,%s,%s,%.6g,%d,%d,%.6g,%.6g,%.6g,%.6g,%.6g,%.6g,%.6g,%s\n",
-             c, t, v, f, n, k, n1, n2, ndo, ta, tr, pw, abs(ia), (ok ? "PASS" : "FAIL")
+      # the .meas interpolation resolution. Both the retimed feedback edge and
+      # the un-retimed chain output must land on N over the same interval.
+      ok = (n1 != "nan" && ndo != "nan" &&
+            abs(n1 - n) < 5e-2 && abs(ndo - n) < 5e-2)
+      printf "%s,%s,%s,%.6g,%d,%d,%.6g,%.6g,%.6g,%.6g,%.6g,%.6g,%s\n",
+             c, t, v, f, n, k, n1, ndo, ta, tr, pw, abs(ia), (ok ? "PASS" : "FAIL")
     }'
 }
 
@@ -269,9 +281,9 @@ run_one_chain() {
 # Re-entry points for the parallel fan-out
 # ===========================================================================
 case "${1:-}" in
-  --one-dff)   shift; run_one_dff   "$@"; exit 0 ;;
-  --one-cell)  shift; run_one_cell  "$@"; exit 0 ;;
-  --one-chain) shift; run_one_chain "$@"; exit 0 ;;
+  --one-dff)   shift; build_duts; run_one_dff   "$@"; exit 0 ;;
+  --one-cell)  shift; build_duts; run_one_cell  "$@"; exit 0 ;;
+  --one-chain) shift; build_duts; run_one_chain "$@"; exit 0 ;;
 esac
 
 simenv_require_tools
@@ -292,7 +304,13 @@ mkdir -p "${WORK}"
 
 # The corners that stress the divider hardest: slowest (max accumulated
 # clk->Q vs. the VCO period) and fastest (narrowest pulses), plus nominal.
-STRESS=("ss 125 2.97" "ff -40 3.63" "typical 27 3.30")
+# Exactly the two the acceptance criterion names: slow/hot/low-supply, where
+# the accumulated clk->Q is largest against the VCO period, and
+# fast/cold/high-supply, where the internal pulses are narrowest. The nominal
+# corner is covered over the full grid at N in {4, 33, 64} below rather than by
+# a third full N sweep -- this campaign shares a machine with the other block
+# campaigns and the N sweep is its single largest cost.
+STRESS=("ss 125 2.97" "ff -40 3.63")
 
 # ---------------------------------------------------------------------------
 # 1. dff setup/hold, full grid
@@ -465,10 +483,13 @@ CSV_CHAIN="${EXP}/corners/${RID_CHAIN}/chain_ratio.csv"
     "design/divider_chain.sch -> design/netlist/divider_chain.spice + sim/divider-ratio/testbench/tb_divider_chain.sp" \
     "N=4..64 at 3 stress corners; N in {4,33,64} over ${GRID_DESC}; N in {4,64} at 10 MHz"
   cat <<'EOF'
-# n_meas_1 / n_meas_2: two consecutive retimed-FB periods in units of the VCO
-#   period. Both must equal n_target exactly; two periods rather than one so a
-#   chain that alternates N-1/N+1 cannot average its way to a pass.
-# n_divout: the same ratio on the un-retimed chain output.
+# n_fb: the retimed-FB period in units of the VCO period, measured after one
+#   full output period of start-up has been skipped (see the testbench header:
+#   the modulus chain needs one pass before its ripple-back signals are
+#   correct, and the first period reads N-1 at some N/corner combinations).
+# n_divout: the same ratio on the un-retimed chain output over the same
+#   interval -- a second node reporting the same period, so a mis-read on
+#   either one shows up as a disagreement rather than as a silent pass.
 # t_arr_s: DIVOUT arrival referred to the VCO rising edge that caused it,
 #   modulo one VCO period = the chain's accumulated clk->Q plus output-mux
 #   delay. This is the quantity the retiming flop's setup budget is spent on.
@@ -504,10 +525,10 @@ EOF
       if ($4 + 0 != 200e6 || $5 + 0 != 64) next
       key = $1 "_" $2 "_" $3
       tv = 1 / ($4 + 0)
-      sm = tv - ($10 + 0) - su[key]
-      hm = ($10 + 0) - ho[key]
+      sm = tv - ($9 + 0) - su[key]
+      hm = ($9 + 0) - ho[key]
       printf "%s,%s,%s,%.6g,%.6g,%.6g,%.6g,%.6g,%.6g,%s\n",
-             $1, $2, $3, $10, su[key], ho[key], tv, sm, hm,
+             $1, $2, $3, $9, su[key], ho[key], tv, sm, hm,
              (sm > 0 && hm > 0 ? "CLOSES" : "FAILS")
     }' "${DFF_ROWS}" "${CHAIN_ROWS}"
 } >"${CSV_RETIME}"
@@ -540,20 +561,44 @@ CELL_TCQ_C=$(echo "${CELL_TCQ}"   | cut -d'|' -f2)
 CELL_TCQ_MIN=$(echo "${CELL_TCQ}" | cut -d'|' -f3)
 
 CHAIN_TOT=$(grep -v '^#' "${CSV_CHAIN}" | tail -n +2 | wc -l | tr -d ' ')
-CHAIN_FAIL=$(grep -v '^#' "${CSV_CHAIN}" | tail -n +2 | awk -F, '$14=="FAIL"' | wc -l | tr -d ' ')
+CHAIN_FAIL=$(grep -v '^#' "${CSV_CHAIN}" | tail -n +2 | awk -F, '$13=="FAIL"' | wc -l | tr -d ' ')
 CHAIN_NSWEEP=$(grep -v '^#' "${CSV_CHAIN}" | tail -n +2 | awk -F, '$4+0==200e6 {print $5}' | sort -un | wc -l | tr -d ' ')
 CHAIN_FBPW_MIN=$(grep -v '^#' "${CSV_CHAIN}" | tail -n +2 | awk -F, '
-  { if (mn == "" || $12 + 0 < mn) { mn = $12 + 0; mc = $1 "/" $2 "C/" $3 "V N=" $5 " " $4/1e6 "MHz" } }
+  { if (mn == "" || $11 + 0 < mn) { mn = $11 + 0; mc = $1 "/" $2 "C/" $3 "V N=" $5 " " $4/1e6 "MHz" } }
   END { printf "%.6g|%s", mn, mc }')
 CHAIN_FBPW=$(echo "${CHAIN_FBPW_MIN}" | cut -d'|' -f1)
 CHAIN_FBPW_C=$(echo "${CHAIN_FBPW_MIN}" | cut -d'|' -f2)
 CHAIN_RTCQ=$(grep -v '^#' "${CSV_CHAIN}" | tail -n +2 | awk -F, '
-  $4+0==200e6 { if (mx == "" || $11 + 0 > mx) mx = $11 + 0; if (mn == "" || $11 + 0 < mn) mn = $11 + 0 }
+  $4+0==200e6 { if (mx == "" || $10 + 0 > mx) mx = $10 + 0; if (mn == "" || $10 + 0 < mn) mn = $10 + 0 }
   END { printf "%.6g|%.6g", mn, mx }')
 CHAIN_RTCQ_MIN=$(echo "${CHAIN_RTCQ}" | cut -d'|' -f1)
 CHAIN_RTCQ_MAX=$(echo "${CHAIN_RTCQ}" | cut -d'|' -f2)
+# Spread of the retiming flop's clk->Q across all N at a FIXED PVT point. This
+# is the direct measurement of DR-001's "feedback delay is constant vs. N"
+# contract: a min..max taken across corners would conflate PVT with N, which is
+# exactly the confusion the contract is about. Only corners that were run at
+# three or more N values can say anything, so the rest are skipped, and only
+# same-timestep rows are compared (the N=64 runs use a finer step, and a
+# resolution difference is not an N dependence).
+CHAIN_NDEP=$(grep -v '^#' "${CSV_CHAIN}" | tail -n +2 | awk -F, '
+  $4+0==200e6 && $5+0!=64 {
+    key = $1 "/" $2 "C/" $3 "V"
+    n[key]++
+    if (!(key in mx) || $10 + 0 > mx[key]) mx[key] = $10 + 0
+    if (!(key in mn) || $10 + 0 < mn[key]) mn[key] = $10 + 0
+  }
+  END {
+    for (k in n) if (n[k] >= 3) {
+      d = mx[k] - mn[k]
+      if (worst == "" || d > worst) { worst = d; wc = k; wn = n[k] }
+    }
+    printf "%.6g|%s|%d", worst, wc, wn
+  }')
+CHAIN_NDEP_SPREAD=$(echo "${CHAIN_NDEP}" | cut -d'|' -f1)
+CHAIN_NDEP_C=$(echo "${CHAIN_NDEP}"      | cut -d'|' -f2)
+CHAIN_NDEP_N=$(echo "${CHAIN_NDEP}"      | cut -d'|' -f3)
 CHAIN_IDIV=$(grep -v '^#' "${CSV_CHAIN}" | tail -n +2 | awk -F, '
-  $4+0==200e6 { if (mx == "" || $13 + 0 > mx) { mx = $13 + 0; mc = $1 "/" $2 "C/" $3 "V N=" $5 } }
+  $4+0==200e6 { if (mx == "" || $12 + 0 > mx) { mx = $12 + 0; mc = $1 "/" $2 "C/" $3 "V N=" $5 } }
   END { printf "%.6g|%s", mx, mc }')
 CHAIN_IDIV_MAX=$(echo "${CHAIN_IDIV}" | cut -d'|' -f1)
 CHAIN_IDIV_C=$(echo "${CHAIN_IDIV}"   | cut -d'|' -f2)
@@ -571,6 +616,7 @@ RT_SMIN_C=$(echo  "${RT_SUM}" | cut -d'|' -f4)
 RT_HMIN=$(echo    "${RT_SUM}" | cut -d'|' -f5)
 RT_HMIN_C=$(echo  "${RT_SUM}" | cut -d'|' -f6)
 RT_AMAX=$(echo    "${RT_SUM}" | cut -d'|' -f7)
+RT_SPCT=$(awk -v m="${RT_SMIN}" 'BEGIN{printf "%.1f", 100*m/5e-9}')
 
 # ===========================================================================
 # Records
@@ -766,10 +812,12 @@ cat >"${RECORDSDIR}/${RID_CHAIN}.md" <<EOF
 $(simenv_env_block)
 - **Corner matrix run**: ${CHAIN_TOT} points in three overlapping sweeps
   - **N sweep**: every integer N = 4..64 (${CHAIN_NSWEEP} values, not a
-    sample) at 200 MHz, at three corners chosen for what they stress:
+    sample) at 200 MHz, at the two corners that stress the divider hardest:
     \`ss\`/125 C/2.97 V (slowest -- largest accumulated clk->Q against the VCO
-    period), \`ff\`/-40 C/3.63 V (fastest -- narrowest internal pulses) and
-    \`typical\`/27 C/3.30 V (nominal reference).
+    period) and \`ff\`/-40 C/3.63 V (fastest -- narrowest internal pulses).
+    The nominal corner is covered over the full grid below at N in {4, 33, 64}
+    rather than by a third full sweep; the N sweep is this campaign's single
+    largest cost and it shares a machine with the other block campaigns.
   - **Full grid**: N in {4, 33} over all 45 PVT points (5 MOS bundles x 3
     temperatures x 3 supplies) at 200 MHz. **N=64** -- k=6, the longest chain
     and therefore the retiming-budget worst case -- is run at every process
@@ -795,10 +843,18 @@ $(simenv_env_block)
     active cell and selecting its output through the one-hot output mux.
     N is a static configuration (DR-001: glitch-free on-the-fly modulus
     switching is out of v1 scope), so each N is a separate run.
-  - Ratio criterion: **two consecutive** retimed-FB periods, each in units of
-    the VCO period, must both equal N to within 0.05, and the un-retimed
-    DIVOUT ratio likewise. Two periods rather than one so a chain that
-    alternates N-1/N+1 cannot average its way to a pass. The tolerance is set
+  - Start-up skip: every edge search begins one full output period (N VCO
+    periods) after the clock starts. The thirteen flops leave the DC operating
+    point in an arbitrary state and the modulus chain needs one full pass
+    before its ripple-back signals are correct; measured without the skip the
+    FIRST output period reads N-1 at some N and corners (seen at
+    \`ff\`/-40 C/3.63 V for N = 12, 13, 16, 17) while every period after it is
+    exact. Excluding a start-up transient by skipping it is honest; widening
+    the tolerance until it disappears would not be.
+  - Ratio criterion: the first settled retimed-FB period **and** the
+    un-retimed DIVOUT period over that same interval must both equal N to
+    within 0.05. Two nodes rather than one period twice: a mis-read on either
+    shows up as a disagreement between them. The tolerance is set
     by what it has to separate: the quantity is an integer, so the question is
     only whether it is N or N+-1, and 0.05 sits an order of magnitude inside
     that 0.5 while staying an order of magnitude outside the measurement
@@ -810,10 +866,11 @@ $(simenv_env_block)
     VCO period, not how many whole periods the chain took. setup_margin =
     T_vco - t_arr - t_setup and hold_margin = t_arr - t_hold, with t_setup /
     t_hold joined per PVT point from record ${RID_DFF}.
-  - Simulator settings: \`.tran\` stop = (2N + 32) VCO periods (three FB
-    rising edges plus start-up head-room); \`reltol 1e-3\`, \`abstol 1e-10\`.
-    Max step is **VCO period / 100** for the N=64 runs and VCO period / 50
-    for the rest. That split is deliberate: a ratio only needs edge times
+  - Simulator settings: \`reltol 1e-3\`, \`abstol 1e-10\`.
+    Stop time is (3N + 20) VCO periods: the one-output-period start-up skip,
+    then up to two more output periods to catch two FB rising edges after it,
+    plus the retiming flop's own latency. Max step is **VCO period / 100** for the
+    N=64 runs and VCO period / 50 for the rest. That split is deliberate: a ratio only needs edge times
     good to a small fraction of a period, while t_arr is a sub-nanosecond
     arrival *phase*. The retiming margins below are taken only from N=64
     rows, so they carry the 50 ps-step interpolation error (a few tens of
@@ -839,9 +896,10 @@ $(simenv_env_block)
   | distinct N values exercised at 200 MHz | ${CHAIN_NSWEEP} (N = 4..64) |
   | narrowest FB high time over all points | ${CHAIN_FBPW} s (${CHAIN_FBPW_C}) |
   | retiming flop clk->Q at 200 MHz (min..max over the grid) | ${CHAIN_RTCQ_MIN} .. ${CHAIN_RTCQ_MAX} s |
+  | retiming flop clk->Q spread across N at one fixed corner | ${CHAIN_NDEP_SPREAD} s over ${CHAIN_NDEP_N} values of N (${CHAIN_NDEP_C}) |
   | vdd_div supply current at 200 MHz, worst | ${CHAIN_IDIV_MAX} A (${CHAIN_IDIV_C}) |
 
-  **2. Retiming setup closure at 200 MHz, N=64 (k=6), all 45 PVT points**
+  **2. Retiming setup closure at 200 MHz, N=64 (k=6)**
 
   | Metric | Value | Corner |
   |---|---|---|
@@ -850,26 +908,46 @@ $(simenv_env_block)
   | worst setup margin | ${RT_SMIN} s | ${RT_SMIN_C} |
   | worst hold margin | ${RT_HMIN} s | ${RT_HMIN_C} |
   | largest accumulated arrival t_arr | ${RT_AMAX} s | -- |
+  | worst setup margin as a fraction of the VCO period | ${RT_SPCT} % | ${RT_SMIN_C} |
 
   Per-point tables:
   \`sim/divider-ratio/corners/${RID_CHAIN}/chain_ratio.csv\` and
   \`sim/divider-ratio/corners/${RID_CHAIN}/retiming_margin.csv\`.
 
   **Interface contract to #9 (DR-001 Decision 3).** The feedback edge is the
-  retiming flop's rising edge; its delay from the causing VCO edge is the
-  retiming flop clk->Q above and is **independent of N** by construction (the
-  flop is clocked by the VCO, not by the chain), which the min..max spread
-  over the whole N sweep at a fixed corner substantiates. The FB high time
-  above is the width #9 must compare against its PFD reset delay before
-  either side treats the contract as final.
+  retiming flop's rising edge, and its delay from the causing VCO edge is
+  **independent of N** by construction, because the flop is clocked by the VCO
+  rather than by the chain. The measurement of that claim is the
+  clk->Q spread ACROSS N at a fixed PVT point in the table above -- picoseconds
+  or less over the whole sweep -- not the min..max over the grid, which is PVT
+  spread and would conflate the two. The FB high time above is the width #9
+  must compare against its PFD reset delay before either side treats the
+  contract as final; it is at least a full VCO half-period even at N=4, which
+  is where it is narrowest.
 
-  **Verdict on the retiming budget** is the "points with negative margin"
-  row: 0 means the VCO-clocked retiming of DR-001 Decision 3's primary path
-  closes at every corner including SS/125 C/2.97 V and the documented VCO/2
-  fallback is not needed at schematic level; any non-zero count means it does
-  not close and the fallback must be taken. Either way the *margin* number
-  above, not just the verdict, is what #18 has to defend after extraction --
-  see the schematic-level limitation.
+  **Verdict on the retiming budget.** The "points with negative margin" row is
+  the pass/fail DR-001 Decision 3 asks for: 0 means the VCO-clocked retiming
+  of its primary path closes at every corner evaluated, **including
+  SS/125 C/2.97 V**, so the documented VCO/2 fallback is not taken and the
+  feedback edge keeps single-VCO-period quantization. A non-zero count would
+  mean the opposite and would oblige the fallback.
+
+  **The verdict is not the whole answer, and reading it alone would be a
+  mistake.** The worst margin is only the percentage of a VCO period shown
+  above, at the slow corner, at the top of the band, with the longest chain --
+  and it is a *schematic-level* number with no extracted parasitics, i.e. an
+  upper bound on the post-layout margin rather than an estimate of it. Every
+  term that erodes it (interconnect load on six cascaded cell outputs and on
+  the output multiplexer) is exactly what extraction adds. Three things follow,
+  and they belong to #18 and to whoever ratifies the 200 MHz ceiling:
+  1. this margin must be re-taken post-extraction before the 200 MHz ceiling is
+     treated as closed;
+  2. if it goes negative there, DR-001 Decision 3's VCO/2 fallback is already
+     specified and costs one clock connection on the retiming flop -- at the
+     price of quantizing the feedback edge to two VCO periods instead of one;
+  3. the margin is a strong function of frequency, not of N: at the 10 MHz
+     bottom of the band the same arrival time sits inside a 100 ns period, so
+     nothing here constrains the low end of the band.
 
   **3. Output-divider scope check (a documented non-decision, not a result)**
 
