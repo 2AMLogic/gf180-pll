@@ -1,0 +1,55 @@
+* Frozen netlist snapshot for record 20260731-151931-58c52d9
+* source     : sim/harness-selftest/testbench/tb_selftest.spice
+* sha256     : 71151f18410c0e5c77d17d12ee287bb84ac1019058ea876289d67eaa8b30146c
+* This is a verbatim copy taken at record time. Do not edit.
+* gf180-pll :: harness-selftest :: harness self-verification smoke test
+*
+* Not a design claim for any block -- proves sim/harness (#2) produces a
+* conformant sim/README.md evidence record end to end: real PDK resolution,
+* real corner grid, real ngspice devices, real raw .measure extraction.
+*
+* Devices: nfet_03v3 / pfet_03v3 (MOS corner axis, diode-connected drive
+* current) and ppolyf_u (resistor corner axis, RC step response). No
+* MIM/MOS-cap device -- kept to one passive family so the smoke test stays
+* small; devchar-passives (#4 -> #10) exercises the cap axes.
+*
+* All three measurements are raw .measure statements (see testbench/tb.json
+* 'raw_measures'), not post-analysis `let` reads: this deck runs a single
+* .tran analysis, and ngspice's own .measure engine (avg/from-to,
+* trig/targ) is what correctly reduces a transient waveform to a scalar --
+* a bare `let` expression on a transient vector prints the whole waveform,
+* not one number. This mirrors sim/devchar-delay's proven approach.
+*
+* Expects from the harness-generated header:
+*   .lib <MOS corner section> .lib <res corner section> (+ moscap_*/mimcap_*,
+*     unused by this deck but always included by the harness)
+*   .temp <temp_c>
+*   .param vdd_val=<supply volts>
+
+.param l_min=0.28u
+.param w1=2u
+.param rw=1u
+.param rl=10u
+* Contacted-diffusion extension for as/ad/ps/pd (0.44 um, single-contact-row
+* 3.3 V device in this PDK -- same convention as sim/devchar-delay).
+.param sab=0.44u
+
+* ---- NMOS drive current, diode-connected at Vgs=Vds=vdd_val --------------
+vdn dn 0 dc 'vdd_val'
+xmdn dn dn 0 0 nfet_03v3 w=w1 l=l_min nf=1
++ as='w1*sab' ad='w1*sab' ps='2*sab+w1' pd='2*sab+w1'
+
+* ---- PMOS drive current, diode-connected at Vsd=Vsg=vdd_val --------------
+vddd vddd 0 dc 'vdd_val'
+vgp gp 0 dc 0
+vdp dp 0 dc 0
+xmdp dp gp vddd vddd pfet_03v3 w=w1 l=l_min nf=1
++ as='w1*sab' ad='w1*sab' ps='2*sab+w1' pd='2*sab+w1'
+
+* ---- ppolyf_u resistor RC step response, res_* corner axis ---------------
+* Step at 200 ns (well after the MOS currents above have settled), rise/fall
+* 1 ps, held long enough for the RC step to fully settle inside the 1 us run.
+vstep rin 0 pulse(0 'vdd_val' 200n 1p 1p 800n 2u)
+vam rin n_r 0
+xres n_r n_out 0 ppolyf_u r_width=rw r_length=rl
+crc n_out 0 1p
