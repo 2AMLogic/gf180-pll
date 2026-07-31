@@ -223,7 +223,11 @@ check_export() {
 # checkout the file was generated in, so a byte-exact comparison -- or a
 # byte-exact snapshot hash -- is otherwise machine-specific (#28).  Those
 # comment lines, and only those, are rewritten to repo-relative form; every
-# other byte, including everything ngspice reads, is untouched.
+# other byte, including everything ngspice reads, is untouched.  Applied at
+# WRITE time by both export conventions (export_block and netlist_pfd_cp), and
+# again on both sides of the `--check` diff -- the second pass is a no-op on
+# output this script wrote, and is kept as defense in depth against a committed
+# file minted before write-time normalization existed.
 #
 # Writes to a file rather than a pipeline so that a sed failure aborts the run
 # (`set -e`) instead of silently producing two empty streams that compare equal.
@@ -254,17 +258,20 @@ banner() {
 }
 
 # -------------------------------------------------------- committed export --
-# NOTE ON #28: the committed exports below are written WITHOUT the `normalize`
-# step, so they still embed the absolute path of the checkout that generated
-# them; only the `--check` comparison is normalized.  That is deliberate and
-# scoped, not an oversight.  Normalizing them at write time changes their bytes
-# (comment lines only -- no electrical content), which invalidates the
-# netlist-snapshot SHA-256 that every sim/vco-tuning-range, sim/divider-ratio
-# and sim/lock-detector record cites, and sim/README.md's append-only rule then
-# requires re-running and re-minting all of those campaigns.  The pfd_cp export
-# IS normalized at write time, because this change re-mints its records anyway
-# and the marginal cost there is zero.  #28 tracks doing the same for the
-# committed tops, where the cost is three campaigns' re-runs.
+# PATH-INDEPENDENT BYTES (#28): the committed exports below are `normalize`d at
+# WRITE time, exactly like the per-record pfd_cp export -- both conventions now
+# produce identical bytes from any checkout path.  This closes the gap an
+# earlier revision of this script left open, where only the `--check`
+# comparison was normalized while the committed bytes still embedded the
+# absolute path of the checkout that generated them.
+#
+# Normalizing at write time changed the committed bytes (comment lines only --
+# no device card, port list or `.subckt`/`.ends` block moved), which
+# invalidates the netlist-snapshot SHA-256 that the sim/vco-tuning-range,
+# sim/divider-ratio and sim/lock-detector records cite.  sim/README.md's
+# append-only rule therefore requires those campaigns to be re-run and
+# re-minted under new record IDs; that re-run is tracked separately in #32 and
+# #28 stays open until it lands.  The existing records are NOT edited.
 export_block() {
   local blk="$1" outdir="$2" work="$3"
 
@@ -288,7 +295,16 @@ export_block() {
         -e 's/^\*\*\.ends/.ends/' \
         -e '/^\.end$/d' \
         "${work}/${blk}.spice"
-  } >"${outdir}/${blk}.spice"
+  } >"${work}/${blk}.raw.spice"
+
+  # Reuse normalize() (see above) at write time, not just at --check compare
+  # time, so the committed bytes never embed the exporting checkout's absolute
+  # path in the first place -- a re-export from any checkout now produces an
+  # identical file.  normalize() is idempotent on already-relative input (its
+  # pattern only matches a path segment preceding "/design/", which a relative
+  # "design/..." path lacks), so --check's own normalize() over this
+  # already-relative output is a harmless no-op.
+  normalize "${work}/${blk}.raw.spice" "${outdir}/${blk}.spice"
 
   # shellcheck disable=SC2046  # word splitting of the cell list is intended
   check_export "${outdir}/${blk}.spice" $(expected_subckts "${blk}")
@@ -340,8 +356,8 @@ netlist_pfd_cp() {
 
   # Path-independent bytes (#28): the snapshot SHA-256 an evidence record cites
   # must be reproducible on any machine, not only in the checkout that minted
-  # it.  This export is per-record and uncommitted, so normalizing it costs
-  # nothing beyond the re-mint this change already requires.
+  # it.  Same write-time `normalize` the committed tops get in export_block --
+  # both export conventions are path-independent at write time.
   normalize "${outdir}/dut.raw" "${netlist}"
   rm -f "${outdir}/dut.raw"
 

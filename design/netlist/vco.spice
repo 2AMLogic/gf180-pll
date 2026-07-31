@@ -1,6 +1,6 @@
 * gf180-pll :: VCO netlist exported from design/vco.sch by design/netlist.sh
 * Do not edit by hand -- edit the schematics and re-run design/netlist.sh.
-** sch_path: /Users/rwalters/GitHub/gf180-pll/.loom/worktrees/issue-8/design/vco.sch
+** sch_path: design/vco.sch
 .subckt vco VCTRL B0 B1 B2 CLK VDD_VCO GND_VCO
 *.ipin VCTRL
 *.ipin B0
@@ -32,8 +32,8 @@ XCDEC2 VDD_VCO GND_VCO cap_nmos_03v3 c_width=50u c_length=50u m=1
 .ends
 
 * expanding   symbol:  vco_bias.sym # of pins=8
-** sym_path: /Users/rwalters/GitHub/gf180-pll/.loom/worktrees/issue-8/design/vco_bias.sym
-** sch_path: /Users/rwalters/GitHub/gf180-pll/.loom/worktrees/issue-8/design/vco_bias.sch
+** sym_path: design/vco_bias.sym
+** sch_path: design/vco_bias.sch
 .subckt vco_bias VCTRL B0 B1 B2 VBP VBN VDD VSS
 *.ipin VCTRL
 *.ipin B0
@@ -122,8 +122,8 @@ XMDP VBP VBP VDD VDD pfet_03v3 L=0.5u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18
 
 
 * expanding   symbol:  vco_stage.sym # of pins=6
-** sym_path: /Users/rwalters/GitHub/gf180-pll/.loom/worktrees/issue-8/design/vco_stage.sym
-** sch_path: /Users/rwalters/GitHub/gf180-pll/.loom/worktrees/issue-8/design/vco_stage.sch
+** sym_path: design/vco_stage.sym
+** sch_path: design/vco_stage.sch
 .subckt vco_stage A Y VDD VSS VBP VBN
 *.ipin A
 *.opin Y
