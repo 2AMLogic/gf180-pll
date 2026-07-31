@@ -77,13 +77,45 @@ simenv_ngspice_version() {
   ngspice -v 2>&1 | awk '/ngspice-/ {gsub(/^\*+ /,""); sub(/ :.*/,""); print; exit}'
 }
 
-# Emit a provenance header. Every results file starts with one of these so a
-# recorded table is self-describing (repo evidence convention).
-# Args: <campaign> <netlist-path> <corner-list-description>
+simenv_repo_root() {
+  git rev-parse --show-toplevel
+}
+
+simenv_git_sha() {
+  git rev-parse --short=7 HEAD
+}
+
+# "clean" or "DIRTY" -- a dirty-tree record is not reproducible from the sha
+# alone, and sim/README.md requires the record to say so.
+simenv_git_state() {
+  if [ -n "$(git status --porcelain 2>/dev/null)" ]; then echo "DIRTY"; else echo "clean"; fi
+}
+
+simenv_host() {
+  echo "$(uname -s) $(uname -r) / $(uname -m)"
+}
+
+# Mint a record ID per sim/README.md: <YYYYMMDD>-<HHMMSS>-<short-sha>, UTC.
+simenv_record_id() {
+  echo "$(date -u +%Y%m%d-%H%M%S)-$(simenv_git_sha)"
+}
+
+simenv_sha256() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    sha256sum "$1" | awk '{print $1}'
+  fi
+}
+
+# Emit a provenance header. Every extracted-metrics CSV starts with one of
+# these so a table stays self-describing away from its record.
+# Args: <campaign> <record-id> <netlist-path> <corner-list-description>
 simenv_provenance() {
-  local campaign="$1" netlist="$2" corners="$3"
+  local campaign="$1" rid="$2" netlist="$3" corners="$4"
   cat <<EOF
 # campaign: ${campaign}
+# record_id: ${rid}
 # generated_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 # pdk_variant: $(simenv_pdk_variant)
 # pdk_open_pdks_hash: $(simenv_pdk_hash)
@@ -93,6 +125,23 @@ simenv_provenance() {
 # simulator: $(simenv_ngspice_version)
 # netlist: ${netlist}
 # corners: ${corners}
+EOF
+}
+
+# The "Environment provenance" block of a record, in the field order
+# sim/README.md prescribes.
+simenv_env_block() {
+  cat <<EOF
+  - PDK: volare \`$(simenv_pdk_variant)\`, open_pdks \`$(simenv_pdk_hash)\`
+  - Models: \`libs.tech/ngspice/sm141064.ngspice\` (MIM devices via
+    \`sm141064_mim.ngspice\`, pulled in by the \`mimcap_*\` sections);
+    \`design.ngspice\` included first, leaving its default statistical switches
+    \`sw_stat_global = sw_stat_mismatch = 0\` (nominal skew, no Monte Carlo)
+  - Simulator: $(simenv_ngspice_version). Schematic capture: N/A — these
+    testbenches are hand-written SPICE, not an xschem export; there is no
+    schematic for a device-level DUT.
+  - Repo commit: \`$(simenv_git_sha)\` ($(simenv_git_state) tree)
+  - Host: $(simenv_host)
 EOF
 }
 
@@ -177,6 +226,32 @@ simenv_run_deck() {
     return 1
   fi
   return 0
+}
+
+# Corner ID per sim/README.md: <corner-bundle>_<temp>c_<supply>v, supply always
+# written to two decimals so filenames sort lexically in supply order.
+# simenv_corner_id <bundle> <temp_c> <supply_v>
+simenv_corner_id() {
+  printf '%s_%sc_%.2fv\n' "$1" "$2" "$3"
+}
+
+# Archive one run as committed evidence: corners/<record-id>/<corner-id>.log,
+# containing the exact generated deck followed by the raw ngspice output. The
+# deck is prepended because the generated header (PDK path, .lib sections,
+# .temp, .param overrides) is the half of the input ngspice does not echo, and
+# without it the log is not sufficient to reproduce the run.
+# simenv_archive_log <workdir> <tag> <corners-dir> <corner-id>
+simenv_archive_log() {
+  local workdir="$1" tag="$2" cornersdir="$3" cid="$4"
+  local rundir="${workdir}/${tag}"
+  mkdir -p "${cornersdir}"
+  {
+    echo "==== generated deck (${cid}) ===="
+    cat "${rundir}/deck.sp"
+    echo
+    echo "==== ngspice output ===="
+    cat "${rundir}/ngspice.log"
+  } >"${cornersdir}/${cid}.log"
 }
 
 # Extract a `.meas` result from an ngspice batch log.

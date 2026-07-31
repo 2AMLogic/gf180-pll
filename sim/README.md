@@ -343,8 +343,10 @@ having no record at all, and the append-only rule means it could never be
 cleanly removed. The worked example below lives **in this README on
 purpose**, and must stay here.
 
-Until the first real testbench lands, `sim/` contains only this README (and
-`.gitkeep`).
+The first real testbenches landed via #4 (`devchar-delay`, `devchar-cp`,
+`devchar-passives` — see each experiment's `records/` for the current
+evidence). Every campaign added after them follows this same convention;
+`sim/` never gains a fabricated or example record outside this file.
 
 ## Worked example (ILLUSTRATIVE — not evidence)
 

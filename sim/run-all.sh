@@ -24,9 +24,9 @@ MODE="${1:-}"
 for campaign in devchar-delay devchar-cp devchar-passives; do
   echo "=== ${campaign} ==="
   if [ -n "${MODE}" ]; then
-    "${HERE}/${campaign}/run.sh" "${MODE}"
+    "${HERE}/${campaign}/testbench/run.sh" "${MODE}"
   else
-    "${HERE}/${campaign}/run.sh"
+    "${HERE}/${campaign}/testbench/run.sh"
   fi
   echo
 done

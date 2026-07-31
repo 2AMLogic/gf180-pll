@@ -9,7 +9,7 @@ __pycache__/
 .DS_Store
 
 # ngspice corner-sweep scratch (generated decks, per-run logs, raw data).
-# Committed evidence lives in sim/*/results/.
+# Committed evidence lives in sim/*/corners/<record-id>/ (see sim/README.md).
 sim/*/work/
 # >>> loom-managed (do not edit) >>>
 # Loom runtime state (don't commit these)
