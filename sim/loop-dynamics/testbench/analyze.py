@@ -509,6 +509,7 @@ def main():
     dq_max, icp_at_max, dq_at = charge[-1]
     kap_typ = 0.5
     rp_path = os.path.join(outdir, 'ripple_tradeoff.csv')
+    rp_rows = []
     with open(rp_path, 'w') as fh:
         fh.write('# model-based sensitivity around the BUILT design: only the\n'
                  '# c2_f = as-built row is simulated; the others substitute an\n'
@@ -536,9 +537,10 @@ def main():
                 ok = all(ideal_pm(a, r_typ, c1_typ, c2) >= PM_MIN
                          for a in loglin(d['amin'], d['amax'], A_GRID))
                 npass += 1 if ok else 0
-            fh.write('%.4g,%d,%.6g,%.6g,%.6g,%.2f,%d\n' %
-                     (c2, 1 if abs(c2 - c2_typ) < 1e-15 else 0,
-                      dq_max / c2, dq_med / c2, tie, pmmin, npass))
+            row = (c2, 1 if abs(c2 - c2_typ) < 1e-15 else 0,
+                   dq_max / c2, dq_med / c2, tie, pmmin, npass)
+            rp_rows.append(row)
+            fh.write('%.4g,%d,%.6g,%.6g,%.6g,%.2f,%d\n' % row)
 
     # ---- independent loop-AC cross-check --------------------------------
     xchecks = crosscheck(lac, curves)
@@ -569,7 +571,7 @@ def main():
                        typ=typ, cv=cv_rows, c1_ref=c1_ref, nonmono=nonmono,
                        worst_fit=worst_fit, fails=fails, outdir=outdir,
                        dq_med=dq_med, dq_max=dq_max, dq_at=dq_at,
-                       icp_at_max=icp_at_max))
+                       icp_at_max=icp_at_max, rp=rp_rows))
 
 
 def ideal_pm(a, r, c1, c2):
@@ -797,7 +799,32 @@ def emit_markdown(curves, inband, cells, ktab, icp, charge, xchecks, ex):
     w("\n  The trade is explicit and it is C2's alone: ripple scales as 1/C2, the\n"
       "  pole-zero spread that buys phase margin at the top of the f_ref range\n"
       "  scales as C1/C2.  `ripple_tradeoff.csv` sweeps C2 through the fitted\n"
-      "  model of the measured filter; the as-built %.3g pF is the knee.\n\n"
+      "  3-element model of the measured filter -- only the as-built row is\n"
+      "  simulated, the others substitute an ideal C2 into the fit, and both\n"
+      "  model columns are evaluated at the TYPICAL filter corner only, so the\n"
+      "  cell count is a trend indicator and NOT comparable with section 4's\n"
+      "  corner-swept verdict:\n\n")
+    rp = ex['rp']
+    ib = next(i for i, r in enumerate(rp) if r[1])
+    w("  | C2 | Vctrl ripple, worst dQ | worst PM (typ-corner model) | cells passing (of %d) |\n"
+      "  |---|---|---|---|\n" % len(cells))
+    for c2v, built, rw, _rm, _tie, pmm, npass in rp:
+        w("  | %.3g pF%s | %.4g mV | %.1f deg | %d |\n"
+          % (c2v * 1e12, " (as built)" if built else "", rw * 1e3, pmm, npass))
+    w("\n  Which side of that trade binds is set by the CHARGE PUMP, not by this\n"
+      "  filter, and against the charge pump as it is measured today it is the\n"
+      "  phase-margin side: worst-corner ripple at the as-built C2 is %.4g mV\n"
+      "  (%.3g %% instantaneous df/f)"
+      % (dq_max / c2_typ * 1e3, 50 * dq_max / c2_typ))
+    if ib > 0:
+        w(", and even at %.3g pF it is only %.4g mV,\n"
+          "  for %+.2f deg of worst-case model phase margin"
+          % (rp[ib - 1][0] * 1e12, rp[ib - 1][2] * 1e3, rp[ib - 1][5] - rp[ib][5]))
+    if ib + 1 < len(rp):
+        w("; going the other way to\n  %.3g pF costs %d of the %d cells"
+          % (rp[ib + 1][0] * 1e12, rp[ib][6] - rp[ib + 1][6], len(cells)))
+    w(".  The as-built %.3g pF sits on the\n"
+      "  flat part of the phase-margin curve, and it is not ripple-limited.\n\n"
       % (c2_typ * 1e12))
     stretch = [k for k, d in cells.items() if d['settle'] <= LOCK_STRETCH_S]
     w("  **Lock time.** For f_c well above the loop's zero the closed loop is\n"
