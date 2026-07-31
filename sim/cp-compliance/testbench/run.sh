@@ -187,7 +187,7 @@ simenv_require_tools
 mkdir -p "${WORK}"
 
 echo "cp-compliance: exporting design/ via xschem ..."
-"${REPO}/design/netlist.sh" "${WORK}" >/dev/null
+"${REPO}/design/netlist.sh" --top pfd_cp "${WORK}" >/dev/null
 [ -f "${NETLIST}" ] || { echo "ERROR: ${NETLIST} not produced" >&2; exit 1; }
 
 if [ "${1:-}" = "--check" ]; then

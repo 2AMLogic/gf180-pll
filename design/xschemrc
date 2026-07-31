@@ -42,8 +42,13 @@ append XSCHEM_LIBRARY_PATH :${GF180_PDK_ROOT}/libs.tech/xschem
 append XSCHEM_LIBRARY_PATH :${GF180_PDK_ROOT}/libs.tech/xschem/symbols
 set 180MCU_MODELS ${GF180_PDK_ROOT}/libs.tech/ngspice
 
-#### this design's own cells
-append XSCHEM_LIBRARY_PATH :[file dirname [file normalize [info script]]]
+#### This design's own cells.  Deliberately NOT [file normalize]d: xschem
+#### echoes the resolved `sym_path`/`sch_path` of every child cell into the
+#### netlist, so normalizing (which resolves symlinks -- /tmp -> /private/tmp on
+#### macOS) changes the exported bytes and would break the netlist-snapshot
+#### provenance of records already committed under sim/.  `netlist.sh` always
+#### passes an absolute --rcfile, so [info script] is already unambiguous.
+append XSCHEM_LIBRARY_PATH :[file dirname [info script]]
 append XSCHEM_LIBRARY_PATH :$env(PWD)
 
 set netlist_type spice
@@ -57,5 +62,5 @@ set netlist_type spice
 if { [info exists env(XSCHEM_NETLIST_DIR)] } {
   set netlist_dir $env(XSCHEM_NETLIST_DIR)
 } else {
-  set netlist_dir [file join [file dirname [file normalize [info script]]] netlist]
+  set netlist_dir [file join [file dirname [info script]] netlist]
 }
