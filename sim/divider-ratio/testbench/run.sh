@@ -24,6 +24,17 @@
 #   ./run.sh --check         # nominal corner of each sub-campaign, to stdout
 #   SIM_JOBS=8 ./run.sh      # cap parallelism
 #
+#   SIM_SUPERSEDES_DFF=<id> SIM_SUPERSEDES_CELL=<id> SIM_SUPERSEDES_CHAIN=<id> \
+#   SIM_SUPERSEDES_NOTE='<why>' ./run.sh
+#                            mint each of the three records with a
+#                            **Supersedes** field naming the record it
+#                            replaces (sim/README.md :: "Status / supersession
+#                            language").  One variable per record, because a
+#                            single invocation mints three distinct claims.
+#                            Set at mint time on purpose -- editing the field
+#                            into a generated record afterwards is a record
+#                            rewrite.
+#
 # The DUT netlists come from design/netlist/*.spice, which design/netlist.sh
 # exports from the xschem schematics in design/. Run `design/netlist.sh
 # --check` first if the schematics may have changed: this runner does not
@@ -696,7 +707,7 @@ $(simenv_env_block)
   - Raw logs: \`sim/divider-ratio/corners/${RID_DFF}/\`
   - Extracted metrics: \`sim/divider-ratio/corners/${RID_DFF}/dff_setup_hold.csv\`
 - **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (issue #11)
-- **Supersedes**: (none -- first record for this claim)
+$(simenv_supersedes_field "${SIM_SUPERSEDES_DFF:-}")
 EOF
 
 cat >"${RECORDSDIR}/${RID_CELL}.md" <<EOF
@@ -788,7 +799,7 @@ $(simenv_env_block)
   - Raw logs: \`sim/divider-ratio/corners/${RID_CELL}/\`
   - Extracted metrics: \`sim/divider-ratio/corners/${RID_CELL}/cell_corners.csv\`
 - **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (issue #11)
-- **Supersedes**: (none -- first record for this claim)
+$(simenv_supersedes_field "${SIM_SUPERSEDES_CELL:-}")
 EOF
 
 cat >"${RECORDSDIR}/${RID_CHAIN}.md" <<EOF
@@ -974,7 +985,7 @@ $(simenv_env_block)
   - Setup/hold numbers joined from record: \`sim/divider-ratio/records/${RID_DFF}.md\`
   - Single-cell evidence: \`sim/divider-ratio/records/${RID_CELL}.md\`
 - **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (issue #11)
-- **Supersedes**: (none -- first record for this claim)
+$(simenv_supersedes_field "${SIM_SUPERSEDES_CHAIN:-}")
 EOF
 
 echo "divider-ratio: wrote ${RECORDSDIR}/${RID_DFF}.md"

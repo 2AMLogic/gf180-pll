@@ -118,6 +118,43 @@ simenv_sha256() {
   fi
 }
 
+# The "Supersedes" field of a record, per sim/README.md :: "Status /
+# supersession language".
+#
+# That field is the ONLY pointer between a superseded record and the one that
+# replaces it -- the superseded record's bytes are never edited, so standing is
+# found by reading FORWARD from the old record to whichever new record names
+# it. It therefore has to be settable AT MINT TIME: editing the field into an
+# already-generated record afterwards is itself the rewrite the append-only
+# rule forbids, even when the record is still uncommitted, because nothing
+# distinguishes that edit from any other after-the-fact edit.
+#
+#   simenv_supersedes_field "${SIM_SUPERSEDES:-}"
+#
+# The reason is shared across every record a single invocation mints and comes
+# from SIM_SUPERSEDES_NOTE. A runner that mints SEVERAL records in one
+# invocation (divider-ratio mints three) passes a different variable per
+# record -- SIM_SUPERSEDES_DFF, SIM_SUPERSEDES_CELL, ... -- so each record
+# names the record it actually replaces rather than sharing one id.
+#
+# Called with an empty id the field reads exactly as the hardcoded line it
+# replaced, so an ordinary first run of any campaign is unchanged.
+#
+# (#26 introduced this as a `supersedes_field` local to the pfd-deadzone and
+# cp-compliance runners; it is hoisted here because #28's re-record pass needs
+# the same field in four more runners, and five copies of one three-branch
+# `if` is how the copies drift.)
+simenv_supersedes_field() {
+  local prior="${1:-}" note="${SIM_SUPERSEDES_NOTE:-}"
+  if [ -z "${prior}" ]; then
+    echo "- **Supersedes**: (none -- first record for this claim)"
+  elif [ -z "${note}" ]; then
+    echo "- **Supersedes**: ${prior}"
+  else
+    echo "- **Supersedes**: ${prior} -- ${note}"
+  fi
+}
+
 # Emit a provenance header. Every extracted-metrics CSV starts with one of
 # these so a table stays self-describing away from its record.
 # Args: <campaign> <record-id> <netlist-path> <corner-list-description>
