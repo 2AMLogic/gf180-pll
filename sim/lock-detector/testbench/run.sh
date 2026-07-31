@@ -76,8 +76,9 @@ build_dut() {
   }
   # Swapped in only if the content actually changed, so an unchanged DUT keeps
   # its mtime and run_deck_soft's cache survives a restart.
-  cat "${NETLIST}" "${HERE}/tb_lock_detector.sp" >"${DUT}.new"
-  if cmp -s "${DUT}.new" "${DUT}"; then rm -f "${DUT}.new"; else mv "${DUT}.new" "${DUT}"; fi
+  local tmp="${DUT}.$$.new"
+  cat "${NETLIST}" "${HERE}/tb_lock_detector.sp" >"${tmp}"
+  if cmp -s "${tmp}" "${DUT}"; then rm -f "${tmp}"; else mv "${tmp}" "${DUT}"; fi
 }
 
 mktag() { local t="$*"; t="${t// /_}"; t="${t//./p}"; t="${t//-/m}"; echo "${t}"; }
@@ -143,6 +144,9 @@ run_one() {
       return "CHATTER"
     }
     function num(x) { return (x == "nan") ? "nan" : sprintf("%.6g", x + 0) }
+    # The ladder is written with SPICE suffixes ("0.2n"); awk would silently
+    # read that as 0.2, so the suffix is converted rather than truncated.
+    function secs(x) { sub(/n$/, "", x); return x * 1e-9 }
     BEGIN {
       sw = lvl(la, v); il = lvl(lb, v); be = lvl(lc, v)
       fe = lvl(ld, v); pa = lvl(le, v); pb = lvl(lep, v)
@@ -159,8 +163,8 @@ run_one() {
             be == "LOW" && lc != "nan" &&
             fe == "LOW" &&
             tae != "nan" && tae + 0 < tp + 0 && pa == "LOW" && tde != "nan")
-      printf "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
-             c, t, v, te, num(twr), num(twf), num(taa), sw, num(tab), il,
+      printf "%s,%s,%s,%.6g,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+             c, t, v, secs(te), num(twr), num(twf), num(taa), sw, num(tab), il,
              be, fe, num(tae), num(tde), pb, pa, num(abs(ia)),
              (ok ? "PASS" : "FAIL")
     }'
@@ -283,15 +287,21 @@ S_BAD=$(echo "${SUM}" | cut -d'|' -f11)
 
 # Window edge: for each window-ladder corner, the largest phase error that
 # still left the swept copy asserted, and the smallest that did not.
+# Only the ladder corners can bracket a window edge -- a grid corner has a
+# single phase-error point and would contribute a meaningless "did not assert
+# from <that one point>" row. Corners are therefore included only if the run
+# actually stepped three or more distinct phase errors there.
 WINTAB=$(grep -v '^#' "${CSV}" | tail -n +2 | awk -F, '
   { key = $1 "/" $2 "C/" $3 "V"
     e = $4 + 0
+    if (!((key SUBSEP e) in pt)) { pt[key SUBSEP e] = 1; npts[key]++ }
     if ($8 == "HIGH") { if (!(key in hi) || e > hi[key]) hi[key] = e }
     else              { if (!(key in lo) || e < lo[key]) lo[key] = e }
     seen[key] = 1 }
-  END { for (k in seen) printf "  | %s | %s | %s |\n", k,
-          ((k in hi) ? sprintf("%.3g s", hi[k]) : "none asserted"),
-          ((k in lo) ? sprintf("%.3g s", lo[k]) : "all asserted") }' | sort)
+  END { for (k in seen) if (npts[k] >= 3)
+          printf "  | %s | %s | %s |\n", k,
+            ((k in hi) ? sprintf("%.3g ns", hi[k] * 1e9) : "none, down to the smallest step"),
+            ((k in lo) ? sprintf("%.3g ns", lo[k] * 1e9) : "none, up to the largest step") }' | sort)
 
 cat >"${RECORDSDIR}/${RID}.md" <<EOF
 # Record ${RID}
