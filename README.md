@@ -1,37 +1,82 @@
 # gf180-pll
 
-**PRIVATE — 2AM Logic proprietary IP. Canary block (wave 1).**
+An integer-N, ring-oscillator phase-locked loop for the
+[GlobalFoundries 180 nm MCU open PDK](https://github.com/google/gf180mcu-pdk)
+(`gf180mcuD`), designed entirely in the open-source analog flow: **xschem** for
+schematic capture, **ngspice** for simulation, and
+[klayout-tools](https://github.com/2AMLogic/klayout-tools) for layout work.
 
-Integer-N ring-oscillator PLL on gf180mcu (open PDK), designed by agents driving
-[klayout-tools](https://github.com/2AMLogic/klayout-tools) and the
-open-source analog flow. Dual purpose, per the canary model: catalog
-inventory (eventually silicon-measured) and tool forcing-function
-(friction issues go to the public klayout-tools tracker).
+This block is built by AI agents. Not "AI-assisted" — agents do the schematic
+capture, write the testbenches, run the PVT corner sweeps, argue the design
+decisions out in written decision records, and open the pull requests. The
+verification evidence in `sim/` is the point of the repository: every claim
+this project makes is meant to be backed by a testbench and a recorded corner
+sweep, in a format designed so you can check that yourself.
 
-Selection rationale: Biggest license category and the category leader (Silicon Creations) is absent from this node (matrix row 2).
+## Status: early. Schematic-level, pre-layout, pre-silicon.
 
-## Target specification (DRAFT — engineering to ratify, see issue #1)
+Being honest about where this actually is:
 
-| Parameter | Target | Stretch |
-|---|---|---|
-| Ref input | 1–25 MHz | 32 kHz mode |
-| Output | 10–200 MHz | 10–400 MHz |
-| Period jitter (RMS) | < 1% | < 0.5% |
-| Lock time | < 100 µs | < 20 µs |
-| Supply | 3.3 V ±10% | 1.8-V core variant |
-| Power @ 100 MHz | < 5 mW | < 2 mW |
-| Area | < 0.15 mm² | — |
-| Multiplier range | ×4–×64 integer-N | fractional-N later |
+- **Done** — architecture and scope captured as numbered decision records in
+  `spec/`; xschem schematics for the VCO, PFD, charge pump, feedback divider,
+  lock detector, and the shared 3.3 V logic cells they are built from; a
+  reproducible PVT corner harness; **16 evidence records** across 9
+  verification campaigns (device characterization, VCO tuning range, PFD
+  dead-zone freedom, charge-pump compliance and mismatch, divider moduli,
+  lock-detector window).
+- **Not done** — the loop filter and closed-loop bring-up. There is **no
+  closed-loop PLL simulation yet**: no lock-time, output-band, jitter, or
+  supply-sensitivity evidence. Those campaign slugs are reserved in
+  `sim/README.md` and are deliberately empty.
+- **Not started** — layout. `layout/` and `measurements/` are placeholders.
+  Nothing here has been through DRC/LVS, and nothing has been fabricated or
+  measured. Treat every number in this repository as simulation only.
 
-Maturity ladder: simulation-complete → layout DRC/LVS-clean → shuttle
-seat → measured silicon over temperature.
+The maturity ladder being climbed: simulation-complete → layout DRC/LVS-clean
+→ shuttle seat → measured silicon over temperature. This is the first rung.
 
-## Layout
+## Repository layout
 
 ```
-spec/          ratified spec + decision records
-design/        schematics / netlists (xschem)
-sim/           testbenches + PVT corner results (ngspice)
-layout/        GDS + DRC/LVS reports (klayout-tools driven)
-measurements/  silicon characterization (empty until tape-out)
+spec/          specification + numbered decision records (DR-NNN)
+design/        xschem schematics/symbols + the SPICE netlist exporter
+sim/           testbenches, the PVT corner harness, and append-only evidence records
+layout/        GDS + DRC/LVS reports (empty — not started)
+measurements/  silicon characterization (empty until there is silicon)
 ```
+
+Start with `spec/decision-records/` for *why the design is what it is*, and
+`sim/README.md` for *how results are recorded and how to reproduce them*.
+
+## How verification works here
+
+Two rules govern the repository, and most of its structure follows from them:
+
+1. **No claim without a testbench.** A statement about the design is only
+   admissible if there is a testbench that produces it, run across the PVT
+   corner matrix (temperature, supply, and process corners), with the raw
+   per-corner simulator logs committed alongside the summary.
+2. **`sim/` is append-only evidence.** A record, once written, is never edited
+   or deleted. Re-running — even to correct a mistake — mints a *new* record
+   that names the record it supersedes. So the repository keeps its own
+   mistakes, in order, with the corrections attached.
+
+Each record pins the PDK version, the ngspice version, the exact DUT netlist
+(by SHA-256), the repo commit, and whether the tree was dirty at run time. The
+runner is `sim/run_corners.py` (stdlib Python, no virtualenv); `sim/selftest.sh`
+is its acceptance test.
+
+## Why this is public
+
+This block is a canary. It exists partly to prove out an agent-driven analog
+design flow end to end, and partly as a forcing function on the open-source
+tooling: every time the layout tooling is awkward, missing a capability, or the
+wrong shape for the job, that friction is filed as an issue against
+[klayout-tools](https://github.com/2AMLogic/klayout-tools). Publishing the whole
+record — decision records, evidence, dead ends, and the agent-authored pull
+requests that produced them — is more useful than publishing a polished result,
+so that is what is here.
+
+## License
+
+[Apache-2.0](LICENSE). Copyright 2026 2AM Logic.
