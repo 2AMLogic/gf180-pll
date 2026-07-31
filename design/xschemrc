@@ -1,18 +1,36 @@
-# Project-local xschem configuration for gf180-pll design/.
-#
-# Keeps the gf180mcu primitive symbols, xschem's own devices library and this
-# directory on the symbol search path, and writes generated netlists beside the
-# schematics (design/netlist/) rather than into ~/.xschem/simulations.
-#
-# Override the PDK root with GF180_PDK_ROOT, matching sim/lib/simenv.sh.
+#### gf180-pll :: project-local xschem configuration for design/.
+####
+#### Keeps the gf180mcu primitive symbols, xschem's own devices library and
+#### this directory on the symbol search path, and writes generated netlists
+#### beside the schematics (design/netlist/) rather than into
+#### ~/.xschem/simulations.
+####
+#### Batch use (see netlist.sh):
+####   xschem --no_x -n -s -q --rcfile design/xschemrc -o <outdir> <cell>.sch
+####
+#### GF180_PDK_ROOT may be set to point at a different volare install; it
+#### defaults to the same ~/.volare/gf180mcuD path sim/lib/simenv.sh pins.
 
-set pdk_root $env(HOME)/.volare/gf180mcuD
-if { [info exists env(GF180_PDK_ROOT)] } { set pdk_root $env(GF180_PDK_ROOT) }
+if { [info exists env(GF180_PDK_ROOT)] && $env(GF180_PDK_ROOT) ne {} } {
+  set GF180_ROOT $env(GF180_PDK_ROOT)
+} else {
+  set GF180_ROOT $env(HOME)/.volare/gf180mcuD
+}
+
+#### This file's own directory, so the paths below do not depend on the working
+#### directory xschem happens to be invoked from.
+set DESIGN_DIR [file dirname [file normalize [info script]]]
 
 set XSCHEM_LIBRARY_PATH {}
+#### xschem's own generic devices (ipin/opin/iopin/lab_pin)
 append XSCHEM_LIBRARY_PATH :${XSCHEM_SHAREDIR}/xschem_library/devices
-append XSCHEM_LIBRARY_PATH :${pdk_root}/libs.tech/xschem/symbols
-append XSCHEM_LIBRARY_PATH :[file dirname [info script]]
+#### gf180mcu primitive device symbols. The divider and lock detector use
+#### nfet_03v3 / pfet_03v3 only, per DR-002 Decision 3 (3.3 V thick-oxide
+#### flavour exclusively); the VCO adds ppolyf_u_3k and cap_nmos_03v3 from the
+#### same 3.3 V set.
+append XSCHEM_LIBRARY_PATH :${GF180_ROOT}/libs.tech/xschem/symbols
+#### this repository's own cells
+append XSCHEM_LIBRARY_PATH :${DESIGN_DIR}
 
-set netlist_dir [file join [file dirname [info script]] netlist]
+set netlist_dir [file join ${DESIGN_DIR} netlist]
 set netlist_type spice

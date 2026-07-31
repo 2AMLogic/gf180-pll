@@ -74,6 +74,8 @@ sim/
   | `devchar-delay` | delay-cell drive/delay vs. PVT | #4 → #8 |
   | `devchar-cp` | mirror output resistance / compliance | #4 → #9 |
   | `devchar-passives` | MIM vs. MOS cap, poly-resistor options | #4 → #10 |
+  | `divider-ratio` | ÷2/3 cell moduli and speed margin, chain ratio over the whole N = 4–64 range, retiming setup closure | #11 |
+  | `lock-detector` | phase-error window comparator: assert/deassert and window edges | #11 |
   | `vco-tuning-range` | open-loop ring VCO range, Kvco | #8 |
   | `loop-dynamics` | loop bandwidth / phase margin vs. R–C and Kvco spread | #10 |
   | `lock-time` | closed-loop lock acquisition | #12 |

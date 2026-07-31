@@ -1,0 +1,66 @@
+# campaign: divider-ratio/dff
+# record_id: 20260731-104616-2610998
+# generated_utc: 2026-07-31T10:46:57Z
+# pdk_variant: gf180mcuD
+# pdk_open_pdks_hash: c6d73a35f524070e85faff4a6a9eef49553ebc2b
+# pdk_root: /Users/rwalters/.volare/gf180mcuD
+# model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
+# switches: design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0 -> nominal skew, no Monte Carlo)
+# simulator: ngspice-46
+# netlist: design/dff_tg_3v3.sch -> design/netlist/dff_tg_3v3.spice + sim/divider-ratio/testbench/tb_dff_setup.sp
+# corners: process{typical,ff,ss,fs,sf} x temp{-40,27,125}C x vdd{2.97,3.30,3.63}V = 45 points
+# tsetup_s: worst of the 0->1 and 1->0 banks, 10%-clk->Q-degradation criterion
+#   over the ladder ti = 1.00/0.20/0.10/0.05/0.02/0.00/-0.02/-0.05/-0.10/-0.15 ns.
+#   A value equal to the last ladder step means setup was never violated down
+#   to that step, i.e. the true setup time is at or below it.
+# thold_s: most negative ladder step of th = 0.50/0.20/0.10/0.00/-0.10/-0.20/
+#   -0.30/-0.40/-0.50/-0.70 ns at which data arriving AFTER the clock edge was
+#   still not captured. Negative = data may move before the edge and still be
+#   safely excluded.
+# tcq_r_s / tcq_f_s: relaxed-input clk->Q for the rising and falling output.
+process,temp_c,vdd_v,tsetup_s,thold_s,tcq_r_s,tcq_f_s
+ff,-40,2.97,2e-11,1e-10,1.88351e-10,1.62779e-10
+ff,-40,3.30,2e-11,1e-10,1.7512e-10,1.52276e-10
+ff,-40,3.63,2e-11,1e-10,1.65172e-10,1.44468e-10
+ff,27,2.97,5e-11,1e-10,2.13445e-10,1.84241e-10
+ff,27,3.30,2e-11,1e-10,1.98236e-10,1.71953e-10
+ff,27,3.63,2e-11,1e-10,1.86672e-10,1.62765e-10
+ff,125,2.97,5e-11,1e-10,2.48486e-10,2.14974e-10
+ff,125,3.30,5e-11,1e-10,2.30435e-10,2.00699e-10
+ff,125,3.63,2e-11,1e-10,2.16409e-10,1.89664e-10
+fs,-40,2.97,5e-11,1e-10,2.29115e-10,1.8871e-10
+fs,-40,3.30,5e-11,1e-10,2.09989e-10,1.73502e-10
+fs,-40,3.63,2e-11,1e-10,1.96011e-10,1.6249e-10
+fs,27,2.97,5e-11,1e-10,2.61119e-10,2.13439e-10
+fs,27,3.30,5e-11,1e-10,2.39189e-10,1.96347e-10
+fs,27,3.63,5e-11,1e-10,2.22806e-10,1.83748e-10
+fs,125,2.97,5e-11,1e-10,3.06084e-10,2.48624e-10
+fs,125,3.30,5e-11,1e-10,2.80324e-10,2.29047e-10
+fs,125,3.63,5e-11,1e-10,2.60649e-10,2.14265e-10
+sf,-40,2.97,2e-11,1e-10,2.25179e-10,2.0437e-10
+sf,-40,3.30,2e-11,1e-10,2.06745e-10,1.89117e-10
+sf,-40,3.63,2e-11,1e-10,1.93242e-10,1.77835e-10
+sf,27,2.97,2e-11,1e-10,2.55627e-10,2.3225e-10
+sf,27,3.30,2e-11,1e-10,2.34425e-10,2.14555e-10
+sf,27,3.63,2e-11,1e-10,2.18536e-10,2.01474e-10
+sf,125,2.97,5e-11,1e-10,2.97606e-10,2.72554e-10
+sf,125,3.30,2e-11,1e-10,2.72979e-10,2.51917e-10
+sf,125,3.63,2e-11,1e-10,2.54224e-10,2.36154e-10
+ss,-40,2.97,5e-11,1e-10,2.77937e-10,2.39841e-10
+ss,-40,3.30,5e-11,1e-10,2.51467e-10,2.18236e-10
+ss,-40,3.63,2e-11,1e-10,2.32246e-10,2.02761e-10
+ss,27,2.97,5e-11,1e-10,3.16882e-10,2.72608e-10
+ss,27,3.30,5e-11,1e-10,2.86705e-10,2.48108e-10
+ss,27,3.63,5e-11,1e-10,2.64443e-10,2.30108e-10
+ss,125,2.97,5e-11,1e-10,3.70952e-10,3.18953e-10
+ss,125,3.30,5e-11,1e-10,3.36093e-10,2.90823e-10
+ss,125,3.63,5e-11,1e-10,3.09915e-10,2.69853e-10
+typical,-40,2.97,5e-11,1e-10,2.26286e-10,1.95658e-10
+typical,-40,3.30,2e-11,1e-10,2.07622e-10,1.80471e-10
+typical,-40,3.63,2e-11,1e-10,1.93993e-10,1.69345e-10
+typical,27,2.97,5e-11,1e-10,2.57569e-10,2.21871e-10
+typical,27,3.30,5e-11,1e-10,2.36142e-10,2.04563e-10
+typical,27,3.63,2e-11,1e-10,2.20049e-10,1.91778e-10
+typical,125,2.97,5e-11,1e-10,3.012e-10,2.5954e-10
+typical,125,3.30,5e-11,1e-10,2.76065e-10,2.39474e-10
+typical,125,3.63,5e-11,1e-10,2.56789e-10,2.24213e-10
