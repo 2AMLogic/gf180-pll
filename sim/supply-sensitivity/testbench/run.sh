@@ -32,6 +32,15 @@
 #   SIM_FORCE=1 ./run.sh     # ignore cached runs in work/ and re-simulate
 #   SIM_JOBS=8 ./run.sh      # override the parallel job count
 #
+#   SIM_TSTOP / SIM_TA / SIM_TB
+#                            override the steady-state transient length and its
+#                            two late measurement instants, so a corner that is
+#                            still converging can be re-run longer instead of
+#                            being reported as a design result.
+#   SIM_EXTEND=off           disable the automatic settling escalation (below);
+#   SIM_EXTEND_TSTOP/_TA/_TB the length it escalates to;
+#   SIM_EXTEND_MAX=<n>       cap how many corners it escalates.
+#
 #   SIM_SUPERSEDES=<record-id> SIM_SUPERSEDES_NOTE='<why>' ./run.sh
 #                            mint with a **Supersedes** field (sim/README.md ::
 #                            "Status / supersession language").
@@ -113,11 +122,34 @@ KFREF2=6.25e6
 #         HALF-period for BOTH reference frequencies (12.5 MHz: tstart = 40 ns;
 #         6.25 MHz: tstart = 80 ns), so "the first REF rise after t" and "the
 #         first FB rise after t" are the same cycle's pair at either setting.
-KTSTOP=12.0u
+#
+# KTSTOP/KTA/KTB are OVERRIDABLE (`SIM_TSTOP`/`SIM_TA`/`SIM_TB`) because a
+# corner reported as still converging has to be re-runnable at a longer
+# transient instead of being reported as a design result.  KTSTOP_BASE is the
+# unoverridden default, kept separately for two reasons: a run at a
+# non-default length gets its OWN work directory (so the long run does not
+# destroy the default-length run it is being compared against), and every
+# emitted summary row carries the length it was actually run at, so the
+# record's `tstop` column is per-row truth rather than a script constant.
+KTSTOP_BASE=12.0u
+KTSTOP="${SIM_TSTOP:-${KTSTOP_BASE}}"
 KTSTEP=20n
 KTMAX=400p
-KTA=6.4u
-KTB=9.6u
+KTA="${SIM_TA:-6.4u}"
+KTB="${SIM_TB:-9.6u}"
+
+# The settling escalation (see "Settling escalation" in Main).  A corner whose
+# measured residual frequency error exceeds ACC_FERR at KTSTOP has NOT been
+# shown to be a design failure -- it has been shown to be unsettled -- so the
+# runner re-runs it automatically at KTSTOP_X and the record reports the pair.
+# 36.8u is 3.96 KTAU with the late window at 3.35/3.70 KTAU, against
+# 0.69/1.03 KTAU at the default length: an exponentially-settling loop drops
+# its residual by e^-2.7 (~x0.07) between the two, and one that does not is
+# not merely slow.  Both instants stay whole multiples of 160 ns, so they
+# remain on a reference half-period for both reference frequencies.
+KTSTOP_X="${SIM_EXTEND_TSTOP:-36.8u}"
+KTA_X="${SIM_EXTEND_TA:-31.2u}"
+KTB_X="${SIM_EXTEND_TB:-34.4u}"
 # The loop's own settling time constant, 1/(2*pi*R*C1) = 17.1 kHz => 9.3 us,
 # derived above.  Named here so report.sh states one number everywhere it
 # compares a rate or a window against "the loop", rather than restating it.
@@ -288,7 +320,11 @@ if [ "${1:-}" = "--one-lock" ]; then
   shift
   bundle="$1"; temp="$2"; vdd="$3"; band="$4"; vc0="$5"; fout="$6"; fref="$7"; sum="$8"
   kind="f$(awk -v f="${fout}" 'BEGIN{printf "%03d", f/1e6}')"
-  tag="${kind}_${bundle}_T${temp}_V${vdd}"; tag="${tag//./p}"; tag="${tag//-/m}"
+  tag="${kind}_${bundle}_T${temp}_V${vdd}"
+  # A non-default transient length gets its own work directory, so a settling
+  # re-run ADDS evidence rather than overwriting the run it is compared with.
+  [ "${KTSTOP}" = "${KTSTOP_BASE}" ] || tag="${tag}_X${KTSTOP}"
+  tag="${tag//./p}"; tag="${tag//-/m}"
   rundir="${WORK}/${tag}"; log="${rundir}/ngspice.log"
   libs="$(libs_for "${bundle}")"
 
@@ -317,12 +353,12 @@ if [ "${1:-}" = "--one-lock" ]; then
   fi
 
   m() { simenv_meas "${log}" "$1"; }
-  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
     "${bundle}" "${temp}" "${vdd}" "${fout}" "${band}" "${KTRIM}" "${fref}" "${KN}" "${vc0}" \
     "$(m fout)" "$(m ffb)" "$(m nmeas)" "$(m ferr)" "$(m phi_b)" \
     "$(m skew1)" "$(m skew2)" "$(m skew3)" "$(m wup1)" "$(m wdn1)" \
     "$(m vctrl_avg)" "$(m vctrl_min)" "$(m vctrl_max)" "$(m lock_lvl)" \
-    "$(m i_core)" "$(m i_vco)" "$(m i_div)" >"${sum}"
+    "$(m i_core)" "$(m i_vco)" "$(m i_div)" "${KTSTOP}" >"${sum}"
   exit 0
 fi
 
@@ -626,6 +662,43 @@ xargs -P "$(simenv_jobs)" -L 1 \
 # shellcheck disable=SC2016
 xargs -P "$(simenv_jobs)" -L 1 \
   "${BASH:-/bin/bash}" -c 'exec "$0" --one-lock "$@"' "${HERE}/run.sh" <"${JOBS050}"
+
+# --- settling escalation ----------------------------------------------------
+# A corner whose measured residual frequency error exceeds ACC_FERR at the
+# default transient length has not been shown to FAIL the lock criterion; it
+# has been shown to be still converging, and those are different claims.  The
+# distinction is a design question -- `sim/loop-dynamics` (#10) predicts phase
+# margin falling as Icp*Kvco/N rises, so the corners that ring longest are
+# expected to be the highest-Kvco operating points -- and it is settled by
+# running the SAME corner longer and comparing the two residuals, not by
+# reading the short run harder.  So the runner does it itself: escalation is
+# mechanism, not a note in the record asking someone to follow up.
+#
+#   SIM_EXTEND=off        skip the escalation entirely
+#   SIM_EXTEND_TSTOP/_TA/_TB   the longer transient (default 36.8u/31.2u/34.4u)
+#   SIM_EXTEND_MAX=<n>    cap the number of escalated corners (compute budget);
+#                         the worst residuals are escalated first, and
+#                         report.sh states the cap in the record when it bites.
+JOBS100X="${WORK}/jobs_100x.txt"; : >"${JOBS100X}"
+if [ "${SIM_EXTEND:-auto}" != "off" ]; then
+  cat "${WORK}"/s100_*.csv 2>/dev/null | awk -F, -v accf="${ACC_FERR}" -v w="${WORK}" \
+      -v fo="${KFOUT}" -v fr="${KFREF}" '
+    { fe = $13 + 0; if (fe < 0) fe = -fe;
+      if (fe > accf) printf "%.6g %s %s %s %s %s %s %s %s/s100x_%s_%s_%s.csv\n",
+        fe, $1, $2, $3, $5, $9, fo, fr, w, $1, $2, $3 }' \
+    | sort -rn | cut -d' ' -f2- \
+    | { if [ -n "${SIM_EXTEND_MAX:-}" ]; then head -n "${SIM_EXTEND_MAX}"; else cat; fi } \
+    >"${JOBS100X}"
+fi
+NX=$(wc -l <"${JOBS100X}" | tr -d ' ')
+if [ "${NX}" -gt 0 ]; then
+  echo "supply-sensitivity: ${NX} corner(s) still converging at ${KTSTOP} -- re-running at ${KTSTOP_X}"
+  # shellcheck disable=SC2016
+  SIM_TSTOP="${KTSTOP_X}" SIM_TA="${KTA_X}" SIM_TB="${KTB_X}" \
+    xargs -P "$(simenv_jobs)" -L 1 \
+      "${BASH:-/bin/bash}" -c 'exec "$0" --one-lock "$@"' "${HERE}/run.sh" <"${JOBS100X}"
+fi
+
 wait "${DYNPID}"
 
 got100=$(cat "${WORK}"/s100_*.csv 2>/dev/null | wc -l | tr -d ' ')
@@ -634,5 +707,7 @@ gotdyn=$(cat "${WORK}"/sdyn_*.csv 2>/dev/null | wc -l | tr -d ' ')
 [ "${got100}" -eq "${N100}" ] || { echo "ERROR: expected ${N100} rows @100 MHz, got ${got100}" >&2; exit 1; }
 [ "${got050}" -eq "${N050}" ] || { echo "ERROR: expected ${N050} rows @50 MHz, got ${got050}" >&2; exit 1; }
 [ "${gotdyn}" -eq "${NDYN}" ] || { echo "ERROR: expected ${NDYN} step/ramp rows, got ${gotdyn}" >&2; exit 1; }
+got100x=$(cat "${WORK}"/s100x_*.csv 2>/dev/null | wc -l | tr -d ' ')
+[ "${got100x}" -eq "${NX}" ] || { echo "ERROR: expected ${NX} settling re-run rows, got ${got100x}" >&2; exit 1; }
 
 exec "${HERE}/report.sh" "${WORK}" "${EXP}" "${HERE}"
