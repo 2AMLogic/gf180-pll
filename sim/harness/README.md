@@ -213,6 +213,16 @@ A manifest may declare both, but only if the `measure` entries are evaluated
 against the *last* analysis to run (see above) — when in doubt, use
 `raw_measures` for anything beyond a single-analysis `op` read.
 
+A netlist-level `.measure` card is serviced by ngspice's own post-`.control`
+re-run of every `analyses` line — a second full pass through the same
+analyses purely to report values the `.control` block's own run already
+produced (identical numbers, doubled wall clock). Whenever a manifest
+declares `raw_measures`, `compose_deck()` ends the control block with `quit`
+(after any `measure` entries' `let`/`print` lines, which still need the
+control block's own analyses to have run) so that redundant second pass never
+starts. This is a cost fix, not a correctness fix — no manifest needs to know
+about it or opt in.
+
 `checks` are evaluated after the sweep:
 
 | Key | Applies to | Meaning |
