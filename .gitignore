@@ -5,6 +5,10 @@
 # narrow: only sim/<slug>/corners/<record-id>/*.log is un-ignored; *.raw and
 # stray *.log files anywhere else in the tree stay ignored.
 !sim/*/corners/**/*.log
+# Same story for layout/'s DRC/LVS proof evidence (layout/README.md): the
+# captured deck stdout under layout/evidence/inv-tb-proof/ is the evidence,
+# not scratch output.
+!layout/evidence/inv-tb-proof/**/*.log
 __pycache__/
 .DS_Store
 
@@ -19,6 +23,11 @@ sim/*/work-*/
 # sim/harness PDK resolution (sim/harness/pdk.py): machine-local override,
 # never committed -- see sim/pdk.json for the committed defaults.
 sim/pdk.local.json
+
+# layout/'s DRC/LVS harness scratch (generated main.drc templates, re-run
+# work trees). Committed evidence lives in layout/evidence/inv-tb-proof/ --
+# see layout/README.md.
+layout/evidence/work/
 # >>> loom-managed (do not edit) >>>
 # Loom runtime state (don't commit these)
 .loom-in-use

@@ -1,0 +1,38 @@
+#!/bin/sh
+#
+# pmap(1) shim for hosts that do not have it (macOS, BSD).
+#
+# WHY THIS EXISTS
+# ---------------
+# The gf180mcu DRC and LVS rule decks install a Ruby logger formatter that
+# prefixes every log line with the process's memory usage, obtained as:
+#
+#     `pmap #{Process.pid} | tail -1`[10, 40].strip
+#
+# On a host without pmap(1) the backtick expansion yields an empty string,
+# `""[10, 40]` is nil, and the deck dies on the *first* log line with
+#
+#     undefined method `strip' for nil:NilClass
+#
+# i.e. the decks are unrunnable on macOS for a reason that has nothing to do
+# with layout. This shim restores the one property the formatter depends on:
+# a last line at least ~20 characters long whose columns 10..49 are the
+# memory figure. Resident set size from ps(1) is a faithful stand-in.
+#
+# It is deliberately NOT a general pmap implementation -- it prints only the
+# `total` line, which is all `| tail -1` ever looks at.
+#
+# layout/harness/env.py puts this directory on the front of PATH for the
+# duration of a deck run only; nothing else in the repo sees it.
+
+pid="${1:-$$}"
+
+# Strip a leading "-x" style flag if one was passed (pmap -x <pid>).
+case "$pid" in
+  -*) shift; pid="${1:-$$}" ;;
+esac
+
+rss=$(ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ')
+[ -z "$rss" ] && rss=0
+
+printf 'total %19sK\n' "$rss"
