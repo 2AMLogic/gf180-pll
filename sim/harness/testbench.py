@@ -39,6 +39,26 @@ belongs to which topology. Declaring the grouping lets the renderer emit one
 sub-table per topology instead. It changes nothing about how the deck is
 composed, run, parsed or checked -- omit it and every campaign behaves
 exactly as before.
+
+Four further optional keys exist for campaigns the single fixed ``params``
+map cannot express. Every one of them defaults to off, so a manifest that
+does not use them behaves exactly as it did before they existed:
+
+    dut        repo-root-relative netlist(s) composed ahead of the fragment,
+               so a committed ``design/netlist/<block>.spice`` export can be
+               the DUT without being pasted into the fragment (where it would
+               silently go stale).
+    sweeps     extra independent axes beyond the PVT grid, each point
+               carrying its own derived deck parameters.
+    grid       the union of blocks a run actually covers, when the extra-axis
+               cross-product is deliberately *not* run in full.
+    derived    the campaign's own reduction over the per-point table (see
+               ``sim/harness/derived.py``).
+
+and one per-measurement flag, ``optional``, for the case where a **failed**
+``.measure`` is the pass condition ("this must never assert"): an absent
+optional result is recorded as not-measured data instead of failing the point
+and discarding its successful measurements.
 """
 
 from __future__ import annotations
@@ -53,9 +73,18 @@ from .corners import (
     DEFAULT_NOMINAL_SUPPLY_V,
     DEFAULT_SUPPLY_TOLERANCE,
     DEFAULT_TEMPERATURES_C,
+    SUPPLY_ALIASES,
+    GridBlock,
+    SweepAxis,
+    SweepPoint,
 )
+from .derived import DerivedSpec
 
 MANIFEST_NAME = "tb.json"
+
+#: ``sim/`` -- ``dut`` paths are resolved relative to the repository root so a
+#: manifest names the committed export exactly as the repo spells it.
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: Name of the per-experiment subdirectory that holds the testbench, per
 #: the directory convention in ``sim/README.md``.
@@ -75,11 +104,28 @@ UNGROUPED_TOPOLOGY = "ungrouped"
 #: rejected rather than silently ignored.
 TOPOLOGY_GROUP_KEYS = ("measures", "description")
 
+#: Keys a ``sweeps`` axis may carry.
+SWEEP_AXIS_KEYS = ("points", "description")
+#: Keys one point on a ``sweeps`` axis may carry.
+SWEEP_POINT_KEYS = ("params", "description")
+#: Keys a ``grid`` block may carry.
+GRID_BLOCK_KEYS = ("description", "corners", "temperatures_c", "supplies", "axes")
+#: Keys the ``derived`` block may carry.
+DERIVED_KEYS = ("module", "measures", "tables", "joins")
+#: Characters a sweep-point id may use. ``_`` is excluded because it is the
+#: unambiguous field separator in ``sim/README.md``'s corner-id grammar, and a
+#: point id becomes one of those fields.
+SWEEP_ID_EXTRA_CHARS = "-.+"
+
 
 @dataclass
 class RawMeasure:
     analysis: str
     expr: str
+    #: A failed ``.measure`` for this name is data, not an error. See the
+    #: module docstring: for a lock detector's "must never assert" copies the
+    #: absent result *is* the pass condition.
+    optional: bool = False
 
 
 @dataclass
@@ -114,6 +160,11 @@ class Testbench:
     params: dict[str, str | float] = field(default_factory=dict)
     checks: dict[str, dict] = field(default_factory=dict)
     options: tuple[str, ...] = ()
+    dut: tuple[Path, ...] = ()
+    sweeps: tuple[SweepAxis, ...] = ()
+    grid_blocks: tuple[GridBlock, ...] = ()
+    optional_measures: frozenset[str] = frozenset()
+    derived: DerivedSpec | None = None
 
     @property
     def experiment(self) -> str:
@@ -129,9 +180,34 @@ class Testbench:
         return self.directory.parent
 
     @property
-    def measure_names(self) -> list[str]:
-        """Every measurement name, ``measure`` then ``raw_measures``, in order."""
+    def simulated_measure_names(self) -> list[str]:
+        """Names ngspice itself produces: ``measure`` then ``raw_measures``."""
         return list(self.measure) + list(self.raw_measures)
+
+    @property
+    def derived_measure_names(self) -> list[str]:
+        """Names the campaign's ``derive_point()`` contributes, in manifest order."""
+        return list(self.derived.measures) if self.derived else []
+
+    @property
+    def measure_names(self) -> list[str]:
+        """Every measurement name -- simulated first, then derived, in order."""
+        return self.simulated_measure_names + self.derived_measure_names
+
+    @property
+    def required_measure_names(self) -> list[str]:
+        """Simulated measurements whose absence really is a failed point.
+
+        Derived measures are never in this set: a reduction that finds nothing
+        to reduce (a ladder that never tripped) has legitimately produced no
+        value, and is recorded as not-measured for the same reason an
+        ``optional`` ``.measure`` is.
+        """
+        return [n for n in self.simulated_measure_names if n not in self.optional_measures]
+
+    def is_optional(self, name: str) -> bool:
+        """Is an absent value for ``name`` data rather than an error?"""
+        return name in self.optional_measures or name in self.derived_measure_names
 
     @property
     def measure_groups(self) -> tuple[TopologyGroup, ...]:
@@ -171,8 +247,40 @@ class Testbench:
     def manifest_sha256(self) -> str:
         return hashlib.sha256((self.directory / MANIFEST_NAME).read_bytes()).hexdigest()
 
+    @property
+    def netlist_sources(self) -> tuple[Path, ...]:
+        """Every file the DUT deck is made of: ``dut`` exports, then the fragment.
+
+        DUT first, because the exports define the subcircuits the fragment
+        instantiates -- the same order ``sim/lib/assemble_closed_loop.sh``
+        concatenates them in.
+        """
+        return self.dut + (self.netlist,)
+
+    def compose_netlist(self) -> str:
+        """The self-contained DUT + stimulus text, for the frozen snapshot.
+
+        The generated *deck* ``.include``s these files rather than inlining
+        them (so a failing corner can be re-run by hand against the live
+        sources); the *snapshot* inlines them, so the frozen artefact a record
+        cites is self-contained even after ``design/netlist.sh`` re-exports.
+        """
+        chunks: list[str] = []
+        for source in self.netlist_sources:
+            rel = _repo_relative(source)
+            chunks.append(
+                f"* ---- {rel} (sha256 {hashlib.sha256(source.read_bytes()).hexdigest()})\n"
+                + source.read_text().rstrip("\n")
+                + "\n"
+            )
+        return "\n".join(chunks)
+
+    @property
+    def composed_sha256(self) -> str:
+        return hashlib.sha256(self.compose_netlist().encode()).hexdigest()
+
     def provenance(self) -> dict:
-        return {
+        record = {
             "name": self.name,
             "description": self.description,
             "claim": self.claim,
@@ -184,6 +292,24 @@ class Testbench:
             "nominal_supply_v": self.nominal_supply_v,
             "supply_tolerance": self.supply_tolerance,
         }
+        if self.dut:
+            record["dut"] = [
+                {
+                    "path": _repo_relative(p),
+                    "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+                }
+                for p in self.dut
+            ]
+            record["composed_sha256"] = self.composed_sha256
+        return record
+
+
+def _repo_relative(path: Path) -> str:
+    """``path`` spelled the way the repo spells it, or absolutely if outside."""
+    try:
+        return str(path.resolve().relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
 
 
 def _require(manifest: dict, key: str, path: Path):
@@ -192,16 +318,367 @@ def _require(manifest: dict, key: str, path: Path):
     return manifest[key]
 
 
-def _load_raw_measures(manifest: dict, path: Path) -> dict[str, RawMeasure]:
+def _optional_flag(spec: dict, path: Path, where: str) -> bool:
+    value = spec.get("optional", False)
+    if not isinstance(value, bool):
+        raise ValueError(f"{path}: {where}.optional must be true or false, got {value!r}")
+    return value
+
+
+def _load_measures(manifest: dict, path: Path) -> tuple[dict[str, str], set[str]]:
+    """Parse ``measure``: either ``name: "<expr>"`` or ``name: {expr, optional}``.
+
+    The object form exists only so a ``let``-expression measurement can carry
+    the same ``optional`` flag a ``raw_measures`` entry can. The bare-string
+    form is unchanged and remains the normal spelling.
+    """
+    measures: dict[str, str] = {}
+    optional: set[str] = set()
+    for name, spec in manifest.get("measure", {}).items():
+        if isinstance(spec, str):
+            measures[name] = spec
+            continue
+        if not isinstance(spec, dict) or "expr" not in spec:
+            raise ValueError(
+                f"{path}: measure[{name!r}] must be a let-expression string, or an "
+                'object with an \'expr\' key (e.g. {"expr": "v(out)", "optional": true})'
+            )
+        unknown = sorted(set(spec) - {"expr", "optional"})
+        if unknown:
+            raise ValueError(
+                f"{path}: measure[{name!r}] has unknown key(s) {unknown}; "
+                "supported keys are ['expr', 'optional']"
+            )
+        measures[name] = spec["expr"]
+        if _optional_flag(spec, path, f"measure[{name!r}]"):
+            optional.add(name)
+    return measures, optional
+
+
+def _load_raw_measures(manifest: dict, path: Path) -> tuple[dict[str, RawMeasure], set[str]]:
     raw: dict[str, RawMeasure] = {}
+    optional: set[str] = set()
     for name, spec in manifest.get("raw_measures", {}).items():
         if not isinstance(spec, dict) or "expr" not in spec:
             raise ValueError(
                 f"{path}: raw_measures[{name!r}] must be an object with at least "
                 "an 'expr' key (e.g. {\"analysis\": \"tran\", \"expr\": \"trig ... targ ...\"})"
             )
-        raw[name] = RawMeasure(analysis=spec.get("analysis", "tran"), expr=spec["expr"])
-    return raw
+        unknown = sorted(set(spec) - {"analysis", "expr", "optional"})
+        if unknown:
+            raise ValueError(
+                f"{path}: raw_measures[{name!r}] has unknown key(s) {unknown}; "
+                "supported keys are ['analysis', 'expr', 'optional']"
+            )
+        is_optional = _optional_flag(spec, path, f"raw_measures[{name!r}]")
+        raw[name] = RawMeasure(
+            analysis=spec.get("analysis", "tran"), expr=spec["expr"], optional=is_optional
+        )
+        if is_optional:
+            optional.add(name)
+    return raw, optional
+
+
+def _load_dut(manifest: dict, path: Path) -> tuple[Path, ...]:
+    """Parse ``dut``: repo-root-relative netlist(s) composed ahead of the fragment.
+
+    This is the answer to "how does a committed ``design/netlist/<block>.spice``
+    export become the DUT without being pasted into the committed fragment".
+    The export stays where ``design/netlist.sh`` writes it; the manifest names
+    it; the harness composes and freezes the pair. Nothing under
+    ``testbench/`` becomes a generated artefact that can go stale.
+    """
+    raw = manifest.get("dut")
+    if raw is None:
+        return ()
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list) or not raw or not all(isinstance(p, str) for p in raw):
+        raise ValueError(
+            f"{path}: 'dut' must be a repo-root-relative netlist path or a list of them "
+            '(e.g. ["design/netlist/div23_cell.spice"])'
+        )
+    resolved: list[Path] = []
+    for entry in raw:
+        candidate = Path(entry)
+        if not candidate.is_absolute():
+            candidate = REPO_ROOT / entry
+        if not candidate.is_file():
+            raise FileNotFoundError(
+                f"{path}: dut netlist {entry!r} does not exist (looked at {candidate}). "
+                "Run design/netlist.sh to export it from the schematic."
+            )
+        resolved.append(candidate)
+    return tuple(resolved)
+
+
+def _sweep_id_ok(value: str) -> bool:
+    return bool(value) and all(
+        ch.isalnum() or ch in SWEEP_ID_EXTRA_CHARS for ch in value
+    )
+
+
+def _load_sweeps(manifest: dict, path: Path) -> tuple[SweepAxis, ...]:
+    """Parse the optional ``sweeps`` key -- extra axes beyond the PVT grid.
+
+    ::
+
+        "sweeps": {
+          "rate": {
+            "description": "input rate",
+            "points": {
+              "f200": {"params": {"kf": "200e6", "ktstep": "2e-11"}},
+              "f010": {"params": {"kf": "10e6",  "ktstep": "4e-10"}}
+            }
+          }
+        }
+
+    Each point's id is written out in full rather than derived from a value,
+    because the id becomes a field of the corner-id and ``sim/README.md`` fixes
+    that field's spelling (``<name><value>``, no separator, the value exactly
+    as the deck spells it). Deriving it would silently rename evidence.
+    """
+    raw = manifest.get("sweeps")
+    if raw is None:
+        return ()
+    if not isinstance(raw, dict) or not raw:
+        raise ValueError(
+            f"{path}: 'sweeps' must be a non-empty object mapping an axis name to "
+            "an object with a 'points' map"
+        )
+    axes: list[SweepAxis] = []
+    for name, spec in raw.items():
+        if not name or not isinstance(name, str):
+            raise ValueError(f"{path}: sweeps keys must be non-empty strings")
+        if not isinstance(spec, dict):
+            raise ValueError(f"{path}: sweeps[{name!r}] must be an object")
+        unknown = sorted(set(spec) - set(SWEEP_AXIS_KEYS))
+        if unknown:
+            raise ValueError(
+                f"{path}: sweeps[{name!r}] has unknown key(s) {unknown}; "
+                f"supported keys are {list(SWEEP_AXIS_KEYS)}"
+            )
+        points_spec = spec.get("points")
+        if not isinstance(points_spec, dict) or not points_spec:
+            raise ValueError(
+                f"{path}: sweeps[{name!r}] must have a non-empty 'points' object "
+                "mapping a point id to its parameters"
+            )
+        points: list[SweepPoint] = []
+        for point_id, point_spec in points_spec.items():
+            if not _sweep_id_ok(point_id):
+                raise ValueError(
+                    f"{path}: sweeps[{name!r}] point id {point_id!r} must be non-empty "
+                    f"and use only alphanumerics and {list(SWEEP_ID_EXTRA_CHARS)} -- it "
+                    "becomes a '_'-separated field of the corner-id (sim/README.md)"
+                )
+            if not isinstance(point_spec, dict):
+                raise ValueError(
+                    f"{path}: sweeps[{name!r}][{point_id!r}] must be an object with a "
+                    "'params' map"
+                )
+            unknown = sorted(set(point_spec) - set(SWEEP_POINT_KEYS))
+            if unknown:
+                raise ValueError(
+                    f"{path}: sweeps[{name!r}][{point_id!r}] has unknown key(s) "
+                    f"{unknown}; supported keys are {list(SWEEP_POINT_KEYS)}"
+                )
+            params = point_spec.get("params", {})
+            if not isinstance(params, dict):
+                raise ValueError(
+                    f"{path}: sweeps[{name!r}][{point_id!r}].params must be an object"
+                )
+            points.append(
+                SweepPoint(
+                    axis=name,
+                    id=point_id,
+                    params=tuple((k, str(v)) for k, v in params.items()),
+                    description=point_spec.get("description", ""),
+                )
+            )
+        axes.append(
+            SweepAxis(
+                name=name,
+                points=tuple(points),
+                description=spec.get("description", ""),
+            )
+        )
+    return tuple(axes)
+
+
+def _load_grid_blocks(
+    manifest: dict, path: Path, axes: tuple[SweepAxis, ...]
+) -> tuple[GridBlock, ...]:
+    """Parse the optional ``grid`` key -- the union of slices a run covers.
+
+    Every block must carry a ``description``. That is the structural half of
+    ``sim/README.md``'s "every swept variable must be named, with its points,
+    in the record's corner-matrix field": a thinned axis cannot be declared
+    without simultaneously writing down why, and the renderer copies those
+    descriptions into the record verbatim.
+    """
+    raw = manifest.get("grid")
+    if raw is None:
+        return ()
+    if not isinstance(raw, list) or not raw:
+        raise ValueError(
+            f"{path}: 'grid' must be a non-empty list of blocks, each with a "
+            "'description' saying why that slice is run"
+        )
+    if not axes:
+        raise ValueError(
+            f"{path}: 'grid' only means something alongside 'sweeps' -- without an "
+            "extra axis the PVT grid is already fully described by 'corners', "
+            "'temperatures_c' and 'supply_tolerance'"
+        )
+    known_axes = {a.name: a for a in axes}
+    blocks: list[GridBlock] = []
+    seen: set[str] = set()
+    for index, spec in enumerate(raw):
+        if not isinstance(spec, dict):
+            raise ValueError(f"{path}: grid[{index}] must be an object")
+        unknown = sorted(set(spec) - set(GRID_BLOCK_KEYS))
+        if unknown:
+            raise ValueError(
+                f"{path}: grid[{index}] has unknown key(s) {unknown}; supported keys "
+                f"are {list(GRID_BLOCK_KEYS)}"
+            )
+        description = spec.get("description", "")
+        if not isinstance(description, str) or not description.strip():
+            raise ValueError(
+                f"{path}: grid[{index}] must have a non-empty 'description' -- a "
+                "deliberately thinned grid is only evidence if the record says why"
+            )
+        if description in seen:
+            raise ValueError(
+                f"{path}: grid[{index}] repeats the description {description!r}; each "
+                "block's description identifies it in the record, so they must differ"
+            )
+        seen.add(description)
+        block_corners = tuple(spec.get("corners", ()) or ())
+        block_temps = tuple(float(t) for t in spec.get("temperatures_c", ()) or ())
+        supplies_raw = spec.get("supplies", ()) or ()
+        supplies: list[float | str] = []
+        for entry in supplies_raw:
+            if isinstance(entry, str):
+                if entry not in SUPPLY_ALIASES:
+                    raise ValueError(
+                        f"{path}: grid[{index}].supplies has unknown alias {entry!r}; "
+                        f"use a number or one of {list(SUPPLY_ALIASES)}"
+                    )
+                supplies.append(entry)
+            else:
+                supplies.append(float(entry))
+        axes_spec = spec.get("axes", {}) or {}
+        if not isinstance(axes_spec, dict):
+            raise ValueError(
+                f"{path}: grid[{index}].axes must be an object mapping an axis name "
+                "to the list of point ids this block runs"
+            )
+        block_axes: list[tuple[str, tuple[str, ...]]] = []
+        for axis_name, ids in axes_spec.items():
+            if axis_name not in known_axes:
+                raise ValueError(
+                    f"{path}: grid[{index}].axes names axis {axis_name!r}, which is not "
+                    f"declared in 'sweeps' ({', '.join(known_axes)})"
+                )
+            if not isinstance(ids, list) or not ids:
+                raise ValueError(
+                    f"{path}: grid[{index}].axes[{axis_name!r}] must be a non-empty "
+                    "list of point ids"
+                )
+            missing = [i for i in ids if i not in known_axes[axis_name].ids]
+            if missing:
+                raise ValueError(
+                    f"{path}: grid[{index}].axes[{axis_name!r}] names point(s) {missing} "
+                    f"that axis {axis_name!r} does not declare "
+                    f"({', '.join(known_axes[axis_name].ids)})"
+                )
+            block_axes.append((axis_name, tuple(ids)))
+        blocks.append(
+            GridBlock(
+                description=description,
+                corners=block_corners,
+                temperatures_c=block_temps,
+                supplies=tuple(supplies),
+                axes=tuple(block_axes),
+            )
+        )
+    return tuple(blocks)
+
+
+def _load_derived(
+    manifest: dict, path: Path, directory: Path, known: list[str]
+) -> DerivedSpec | None:
+    """Parse the optional ``derived`` key -- the campaign's own reduction."""
+    raw = manifest.get("derived")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"{path}: 'derived' must be an object with a 'module' key naming a python "
+            "file next to this manifest"
+        )
+    unknown = sorted(set(raw) - set(DERIVED_KEYS))
+    if unknown:
+        raise ValueError(
+            f"{path}: derived has unknown key(s) {unknown}; supported keys are "
+            f"{list(DERIVED_KEYS)}"
+        )
+    module = raw.get("module")
+    if not isinstance(module, str) or not module:
+        raise ValueError(f"{path}: derived.module must name a python file, e.g. 'derive.py'")
+    module_path = (directory / module).resolve()
+    try:
+        module_path.relative_to(directory.resolve())
+    except ValueError:
+        raise ValueError(
+            f"{path}: derived.module {module!r} must live inside this testbench "
+            "directory -- a reduction is part of the testbench, and the snapshot "
+            "has to be able to name it"
+        ) from None
+    if not module_path.is_file():
+        raise FileNotFoundError(f"{path}: derived.module {module_path} does not exist")
+
+    measures = tuple(raw.get("measures", ()) or ())
+    tables = tuple(raw.get("tables", ()) or ())
+    for name in measures:
+        if not name.replace("_", "").isalnum():
+            raise ValueError(
+                f"{path}: derived measure name {name!r} must be alphanumeric/underscore"
+            )
+        if name in known:
+            raise ValueError(
+                f"{path}: derived measure {name!r} collides with a simulated "
+                "measurement of the same name"
+            )
+    if len(set(measures)) != len(measures) or len(set(tables)) != len(tables):
+        raise ValueError(f"{path}: derived.measures / derived.tables must not repeat a name")
+    for name in tables:
+        if not name.replace("_", "").replace("-", "").isalnum():
+            raise ValueError(
+                f"{path}: derived table name {name!r} must be alphanumeric with "
+                "'_'/'-' (it becomes corners/<record-id>/<name>.csv)"
+            )
+    joins = raw.get("joins", {}) or {}
+    if not isinstance(joins, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in joins.items()
+    ):
+        raise ValueError(
+            f"{path}: derived.joins must map an alias to a sim/-relative CSV path"
+        )
+    if not measures and not tables:
+        raise ValueError(
+            f"{path}: derived must declare at least one of 'measures' or 'tables' -- "
+            "an undeclared reduction would produce a column or file the record "
+            "cannot describe"
+        )
+    return DerivedSpec(
+        module_path=module_path,
+        measures=measures,
+        tables=tables,
+        joins=dict(joins),
+    )
 
 
 def _load_topology_groups(
@@ -305,8 +782,9 @@ def load(directory: str | Path) -> Testbench:
     if not netlist.is_file():
         raise FileNotFoundError(f"{manifest_path}: netlist {netlist} does not exist")
 
-    measure = dict(manifest.get("measure", {}))
-    raw_measures = _load_raw_measures(manifest, manifest_path)
+    measure, optional_measure = _load_measures(manifest, manifest_path)
+    raw_measures, optional_raw = _load_raw_measures(manifest, manifest_path)
+    optional_measures = frozenset(optional_measure | optional_raw)
     if not measure and not raw_measures:
         raise ValueError(
             f"{manifest_path}: must define at least one measurement in 'measure' "
@@ -334,8 +812,17 @@ def load(directory: str | Path) -> Testbench:
                 f"analysis ({analyses!r})"
             )
 
+    dut = _load_dut(manifest, manifest_path)
+    sweeps = _load_sweeps(manifest, manifest_path)
+    grid_blocks = _load_grid_blocks(manifest, manifest_path, sweeps)
+    derived = _load_derived(
+        manifest, manifest_path, directory, list(measure) + list(raw_measures)
+    )
+
     topology_groups = _load_topology_groups(
-        manifest, manifest_path, list(measure) + list(raw_measures)
+        manifest,
+        manifest_path,
+        list(measure) + list(raw_measures) + list(derived.measures if derived else ()),
     )
 
     methodology = manifest.get("methodology", ())
@@ -364,34 +851,45 @@ def load(directory: str | Path) -> Testbench:
         params={k: v for k, v in manifest.get("params", {}).items()},
         checks=dict(manifest.get("checks", {})),
         options=tuple(manifest.get("options", ())),
+        dut=dut,
+        sweeps=sweeps,
+        grid_blocks=grid_blocks,
+        optional_measures=optional_measures,
+        derived=derived,
     )
     validate_netlist(tb)
     return tb
 
 
 def validate_netlist(tb: Testbench) -> None:
-    """Reject fragments that try to own what the harness owns.
+    """Reject fragments -- and DUT exports -- that own what the harness owns.
 
     Catching this here is much friendlier than debugging a duplicated
     ``.end``, a hardcoded ``.temp 27`` that silently pins every corner to
     room temperature, or a hardcoded ``.measure`` that can never see a
     different corner's waveform.
+
+    A ``dut`` export is held to the same rule: ``design/netlist.sh`` emits bare
+    ``.subckt``/``.ends`` blocks, and an export that had picked up a ``.lib``
+    or a ``.temp`` would pin every corner of every campaign that names it.
     """
-    problems: list[str] = []
-    for lineno, raw in enumerate(tb.netlist.read_text().splitlines(), start=1):
-        line = raw.strip().lower()
-        if not line.startswith("."):
-            continue
-        directive = line.split()[0]
-        if directive in FORBIDDEN_DIRECTIVES:
-            problems.append(f"  line {lineno}: {raw.strip()}")
-    if problems:
-        raise ValueError(
-            f"{tb.netlist}: netlist fragments must not contain "
-            f"{', '.join(FORBIDDEN_DIRECTIVES)} -- the harness supplies the models, "
-            "corner libs, temperature, measurements and the control block:\n"
-            + "\n".join(problems)
-        )
+    for source in tb.netlist_sources:
+        problems: list[str] = []
+        for lineno, raw in enumerate(source.read_text().splitlines(), start=1):
+            line = raw.strip().lower()
+            if not line.startswith("."):
+                continue
+            directive = line.split()[0]
+            if directive in FORBIDDEN_DIRECTIVES:
+                problems.append(f"  line {lineno}: {raw.strip()}")
+        if problems:
+            kind = "netlist fragments" if source == tb.netlist else "dut netlists"
+            raise ValueError(
+                f"{source}: {kind} must not contain "
+                f"{', '.join(FORBIDDEN_DIRECTIVES)} -- the harness supplies the models, "
+                "corner libs, temperature, measurements and the control block:\n"
+                + "\n".join(problems)
+            )
 
 
 def discover(root: str | Path) -> list[Path]:

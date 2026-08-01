@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import string
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -11,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .corners import PvtPoint
+from .derived import DerivedError, PointView, derive_point_measures
 from .pdk import Pdk
 from .testbench import Testbench
 
@@ -43,6 +45,35 @@ def ngspice_version() -> str:
     return out.strip().splitlines()[0] if out.strip() else "unknown"
 
 
+class _KeepUnknown(dict):
+    """``format_map`` helper: leave a placeholder alone if we cannot fill it."""
+
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
+def substitute_params(text: str, params: dict) -> str:
+    """Fill ``{name}`` placeholders in ``text`` from the point's parameters.
+
+    Needed for ``analyses``: ngspice's ``.control`` block is not a netlist
+    line, so a ``tran {ktstep} {ktstop}`` there is *not* resolved against
+    ``.param`` the way the same text is in a top-level ``.tran`` directive --
+    it reaches ngspice verbatim and fails with "TSTEP is invalid". Every
+    campaign whose timestep and stop time are functions of a swept rate
+    (``ktstep = 1/(250*kf)``, ``ktstop = 12/kf``) needs those numbers spliced
+    in per point, which is exactly what this does.
+
+    Unknown placeholders are left untouched rather than raising, so a manifest
+    that legitimately hands braces through to ngspice keeps working.
+    """
+    if "{" not in text:
+        return text
+    try:
+        return string.Formatter().vformat(text, (), _KeepUnknown(params))
+    except (IndexError, ValueError):  # pragma: no cover - malformed braces
+        return text
+
+
 def compose_deck(tb: Testbench, pdk: Pdk, point: PvtPoint) -> str:
     """Build the complete, self-contained ngspice deck for one PVT point."""
     lines: list[str] = [
@@ -57,6 +88,18 @@ def compose_deck(tb: Testbench, pdk: Pdk, point: PvtPoint) -> str:
     ]
     for key, value in tb.params.items():
         lines.append(f".param {key}={value}")
+    # Per-point parameters from the extra sweep axes come *after* the manifest's
+    # fixed params, so an axis can override a default rather than being forced
+    # to name a parameter no fixed entry uses.
+    axis_params = point.params
+    if axis_params:
+        lines.append("")
+        lines.append(
+            "* ---- sweep axes: "
+            + ", ".join(f"{axis}={pid}" for axis, pid in point.axes.items())
+        )
+        for key, value in axis_params.items():
+            lines.append(f".param {key}={value}")
 
     lines += [
         "",
@@ -72,6 +115,13 @@ def compose_deck(tb: Testbench, pdk: Pdk, point: PvtPoint) -> str:
     ]
     for option in tb.options:
         lines.append(f".options {option}")
+
+    if tb.dut:
+        lines += [
+            "",
+            "* ---- DUT (committed export, composed at run time) --------------------",
+        ]
+        lines += [f'.include "{path}"' for path in tb.dut]
 
     lines += [
         "",
@@ -91,7 +141,16 @@ def compose_deck(tb: Testbench, pdk: Pdk, point: PvtPoint) -> str:
         "set numdgt=10",
         "set noaskquit",
     ]
-    lines += [f"  {analysis}" for analysis in tb.analyses]
+    substitutions = {
+        "vdd_val": point.vdd,
+        "vdd_nom": tb.nominal_supply_v,
+        "temp_c": point.temp_c,
+        **{str(k): v for k, v in tb.params.items()},
+        **axis_params,
+    }
+    lines += [
+        f"  {substitute_params(analysis, substitutions)}" for analysis in tb.analyses
+    ]
     for name, expr in tb.measure.items():
         lines.append(f"  let m_{name} = {expr}")
     for name in tb.measure:
@@ -106,6 +165,11 @@ class PointResult:
     status: str                                   # "ok" | "failed" | "error"
     measurements: dict[str, float] = field(default_factory=dict)
     missing: list[str] = field(default_factory=list)
+    #: Declared *optional* (or derived) measurements that produced no value at
+    #: this point. This is data -- "the flag never asserted", "the ladder never
+    #: tripped" -- not an error, and it never costs the point its other
+    #: measurements.
+    not_measured: list[str] = field(default_factory=list)
     seconds: float = 0.0
     deck: str = ""
     log: str = ""
@@ -124,6 +188,8 @@ class PointResult:
         )
         if self.missing:
             record["missing_measurements"] = self.missing
+        if self.not_measured:
+            record["not_measured"] = self.not_measured
         if self.message:
             record["message"] = self.message
         return record
@@ -221,7 +287,11 @@ def run_point(
     log_path.write_text(output)
 
     measurements = parse_measurements(output, tb.raw_measures.keys())
-    missing = [name for name in tb.measure_names if name not in measurements]
+    # Only *required* measurements can fail a point. An absent optional
+    # measurement is the campaign's pass condition ("this must never assert"),
+    # and treating it as a failure used to discard every measurement the same
+    # point took successfully.
+    missing = [name for name in tb.required_measure_names if name not in measurements]
 
     if missing:
         errors = "; ".join(_ERROR_RE.findall(output)[:3])
@@ -233,19 +303,55 @@ def run_point(
             status="failed",
             measurements=measurements,
             missing=missing,
+            not_measured=[
+                name for name in tb.simulated_measure_names
+                if tb.is_optional(name) and name not in measurements
+            ],
             seconds=elapsed,
             deck=deck_path.name,
             log=log_path.name,
             message=first_error or errors or f"ngspice exit {returncode}, no measurements parsed",
         )
 
+    if tb.derived is not None and tb.derived.measures:
+        try:
+            measurements.update(
+                derive_point_measures(tb.derived, _point_view(tb, point, measurements))
+            )
+        except DerivedError as exc:
+            return PointResult(
+                point=point,
+                status="error",
+                measurements=measurements,
+                seconds=elapsed,
+                deck=deck_path.name,
+                log=log_path.name,
+                message=str(exc),
+            )
+
     return PointResult(
         point=point,
         status="ok",
         measurements=measurements,
+        not_measured=[n for n in tb.measure_names if n not in measurements],
         seconds=elapsed,
         deck=deck_path.name,
         log=log_path.name,
+    )
+
+
+def _point_view(tb: Testbench, point: PvtPoint, measurements: dict[str, float]) -> PointView:
+    """The read-only view handed to a campaign's ``derive_point()``."""
+    params = {str(k): str(v) for k, v in tb.params.items()}
+    params.update(point.params)
+    return PointView(
+        corner=point.corner.name,
+        corner_id=point.corner_id,
+        temp_c=point.temp_c,
+        vdd=point.vdd,
+        axes=point.axes,
+        params=params,
+        measurements=dict(measurements),
     )
 
 

@@ -24,6 +24,20 @@ schema these implement):
   which topology. Declaring the grouping splits the record's **Result**
   field into one sub-table per topology. Purely a rendering concern --
   omitting the key reproduces bandgap's flat table exactly.
+- ``testbench.py`` / ``corners.py`` / ``runner.py`` / ``report.py`` add the four
+  optional keys the ``sim/lib/simenv.sh`` campaigns need and bandgap's single
+  fixed ``params`` map cannot express: ``dut`` (compose a committed
+  ``design/netlist/`` export into the deck and the snapshot), ``sweeps`` +
+  ``grid`` (extra independent axes with per-point derived parameters, over a
+  deliberately non-rectangular union of justified slices), per-measurement
+  ``optional`` (an expected ``.measure`` failure is data, and never discards
+  the point's successful measurements), and ``derived`` (see ``derived.py`` --
+  the campaign's own reduction over the per-point table, including a
+  cross-record join). Every one defaults to off; a manifest that uses none of
+  them behaves exactly as it did before they existed.
+- ``derived.py`` is the extension point for that last one: campaign-specific
+  reduction logic lives in the campaign's own ``testbench/derive.py``, which
+  is where the equivalent awk lives today.
 - ``report.py`` renders this repo's ratified field set from ``sim/README.md``
   (Record ID, Claim, Netlist provenance, **Environment provenance**, Corner
   matrix run, **Methodology / criteria / limitations**, Statistical
