@@ -77,8 +77,10 @@ convention is a property of the block, not of the script:
 | `pfd_cp` | `<outdir>/dut.spice`, path echoed on stdout | no | n/a |
 
 `pll_top` is committed even though it, like `pfd_cp`, is a deep hierarchy —
-it inlines every cell in the block. That is the point: it is the DUT **every**
-closed-loop campaign instantiates (#12, #13, #14), so exactly one exported
+it inlines every cell in the block. That is the point: it is the DUT the
+`pll_top_dut.sh` campaigns instantiate (#52's smoke test and #14's
+supply-sensitivity today; #12's and #13's campaigns are still on the older
+block-concatenation path — see "Simulating it" below), so exactly one exported
 assembly has to exist for all of them to agree on, and `--check` staleness is
 what keeps that one file honest against the schematics. It also means the
 collision check below now has a *committed* copy of the PFD/CP hierarchy's
@@ -975,21 +977,32 @@ datasheet/integration burden the architecture accepted deliberately.
 
 ## Simulating it
 
-`sim/lib/assemble_closed_loop.sh` is the **one** path from this schematic to a
-runnable deck, and every closed-loop campaign uses it rather than assembling a
-DUT of its own. It owns three things that would otherwise drift between
-campaigns: where the DUT comes from (`design/netlist/pll_top.spice`, the
-committed export), how the deck is put together (export + stimulus concatenated
-into one self-contained file, so a record's frozen snapshot reproduces the run
-on its own), and what the configuration bits mean — `cloop_divider_params 8`
-rather than twelve hand-set bits, since a mis-encoded one-hot `SEL` still locks,
-just at the wrong N.
+`sim/lib/pll_top_dut.sh` is the path from **this schematic** to a runnable
+deck. It owns three things that would otherwise drift between campaigns: where
+the DUT comes from (`design/netlist/pll_top.spice`, the committed export), how
+the deck is put together (export + stimulus concatenated into one
+self-contained file, so a record's frozen snapshot reproduces the run on its
+own), and what the configuration bits mean — `cloop_divider_params 8` rather
+than twelve hand-set bits, since a mis-encoded one-hot `SEL` still locks, just
+at the wrong N. `sim/pll-top-smoke/` (#52) and `sim/supply-sensitivity/` (#14)
+use it.
+
+**It is not yet the only closed-loop assembly path in the repo.**
+`sim/lib/assemble_closed_loop.sh` (#12) predates this schematic and takes a
+different route: it concatenates the committed *block* exports with a fresh
+`pfd_cp` export and leaves the loop to be wired by each testbench's own
+top-level instance list — it never reads `pll_top.spice`. `sim/lock-time/` and
+`sim/output-range/` are built that way and have recorded evidence against that
+DUT, so the helper stays exactly as it is until those campaigns are re-run
+against `pll_top`. Migrating them is follow-up work; `sim/README.md` ("Closed-loop
+campaigns: two assembly paths") carries the current split, and every record's
+Netlist provenance field names the helper its numbers came from.
 
 `sim/pll-top-smoke/` is this block's own acceptance gate: one nominal-corner
 cold-start run proving the assembled loop acquires and holds lock. It is
 deliberately **not** a PVT campaign — lock time and band coverage are #12,
-jitter is #13, supply pushing and power are #14, each against this same
-assembled DUT.
+jitter is #13, supply pushing and power are #14. Of those, #14 runs against
+this assembled DUT today; #12's two campaigns do not yet.
 
 ## Regenerating and editing
 
@@ -997,9 +1010,13 @@ Same convention as every other block: edit `pll_top.sch` in xschem, save, then
 `design/netlist.sh --top pll_top` to refresh the committed
 `design/netlist/pll_top.spice`, and re-run
 `sim/pll-top-smoke/testbench/run.sh` to mint a fresh evidence record (records
-are append-only; the old one stands). A change here invalidates every
-closed-loop record, not just this block's — the other blocks' own records are
-unaffected, since they netlist their own tops.
+are append-only; the old one stands). A change here invalidates every record
+taken through `sim/lib/pll_top_dut.sh`, not just this block's. Records taken
+through `sim/lib/assemble_closed_loop.sh` (#12's `lock-time`, `output-range`)
+do not read this file at all, so a change here does not invalidate them — it
+makes them diverge from it, which is the reason those campaigns are queued to
+move onto this assembly. The other blocks' own records are unaffected either
+way, since they netlist their own tops.
 
 ---
 

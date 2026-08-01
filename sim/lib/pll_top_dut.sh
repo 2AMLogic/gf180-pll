@@ -12,17 +12,22 @@
 # as a follow-up.  Evidence records and testbench comments minted before the
 # rename refer to this file by its old path; the file is the same file.
 #
-# Every campaign that simulates the whole PLL -- #12 (lock-time,
-# output-range), #13 (period-jitter), #14 (supply-sensitivity), #49 -- builds
-# its deck through this file instead of assembling a top level of its own.
-# That is the entire point of #52: `design/pll_top.sch` is the single owner of
-# the top-level wiring, and this is the single owner of "how a testbench gets
-# hold of it".
+# WHO USES IT, as of today -- not as of the plan.  sim/pll-top-smoke (#52) and
+# sim/supply-sensitivity (#14) build their decks through this file.  #12's
+# sim/lock-time and sim/output-range do NOT: they are already merged with
+# recorded evidence taken against the concatenated-block-export DUT that
+# sim/lib/assemble_closed_loop.sh produces, and `sim/` records are append-only,
+# so that helper stays exactly as it is until those campaigns are re-run.
+# #13 (period-jitter) and #49 are unwritten and should start here.
+# The INTENT of #52 is that `design/pll_top.sch` becomes the single owner of
+# the top-level wiring and this file the single owner of "how a testbench gets
+# hold of it"; that is a destination, not a description of the tree, and
+# nothing in this repo may state it as an invariant until it is true.
 #
 # Usage from a campaign runner (after sourcing sim/lib/simenv.sh):
 #
 #   . "$(dirname "$0")/../../lib/simenv.sh"
-#   . "$(dirname "$0")/../../lib/assemble_closed_loop.sh"
+#   . "$(dirname "$0")/../../lib/pll_top_dut.sh"
 #
 #   cloop_require_netlist                      # committed export must exist
 #   cloop_assemble "${HERE}/tb_foo.sp" "${WORK}/dut_foo.sp"

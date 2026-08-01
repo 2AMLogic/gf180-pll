@@ -11,9 +11,13 @@
 #   #13  sim/period-jitter                 jitter
 #   #14  sim/supply-sensitivity            supply pushing, power
 #
-# Those campaigns build their DUT through the same
-# sim/lib/assemble_closed_loop.sh this runner uses, so there is one assembled
-# top level in the repo rather than one per campaign.
+# #14 builds its DUT through the same sim/lib/pll_top_dut.sh this runner uses,
+# so those two campaigns share one assembled top level.  #12's two campaigns do
+# NOT yet: they predate design/pll_top.sch and build a closed loop by
+# concatenating the individual block exports (sim/lib/assemble_closed_loop.sh,
+# a different helper with a similar name -- see sim/lib/pll_top_dut.sh's header
+# and sim/README.md, "Closed-loop campaigns: two assembly paths").  Converging
+# them onto this assembly is follow-up work, not a thing this file may claim.
 #
 # Usage:
 #   ./run.sh                 # run and mint a record
@@ -292,7 +296,7 @@ cat >"${RECORDSDIR}/${RID}.md" <<EOF
 - **Netlist provenance**: schematic (\`design/pll_top.sch\`, exported by
   \`design/netlist.sh\` to \`design/netlist/pll_top.spice\`) ->
   \`sim/pll-top-smoke/netlist-snapshots/${RID}.spice\` (exported subcircuit +
-  testbench, concatenated by \`sim/lib/assemble_closed_loop.sh\`), SHA-256
+  testbench, concatenated by \`sim/lib/pll_top_dut.sh\`), SHA-256
   \`${SHA}\`
 - **Environment provenance**:
 $(simenv_env_block "$(simenv_xschem_version) -- the DUT
@@ -324,8 +328,11 @@ $(simenv_env_block "$(simenv_xschem_version) -- the DUT
   - **DUT assembly**: \`design/netlist/pll_top.spice\` (the committed export of
     \`design/pll_top.sch\`) prepended to
     \`sim/pll-top-smoke/testbench/tb_pll_smoke.sp\` by
-    \`sim/lib/assemble_closed_loop.sh\`, which is the single assembly path
-    every closed-loop campaign in this repo uses. The DUT is not
+    \`sim/lib/pll_top_dut.sh\`, the single path from \`design/pll_top.sch\`
+    to a runnable deck (\`sim/supply-sensitivity\` (#14) uses the same helper;
+    #12's \`lock-time\` and \`output-range\` still assemble a closed loop from
+    the individual block exports instead, and converging them is follow-up
+    work -- see \`sim/README.md\`). The DUT is not
     hand-transcribed anywhere: a schematic edit this deck does not track is a
     netlist error, not a divergent second copy of the design.
   - **Cold start**: \`.ic v(vctrl) = 0\`, i.e. the VCO begins at its floor
@@ -424,7 +431,7 @@ $(simenv_env_block "$(simenv_xschem_version) -- the DUT
   claim. It does not; #14 does.
 - **Links**:
   - Testbench: \`sim/pll-top-smoke/testbench/tb_pll_smoke.sp\`
-  - Assembly: \`sim/lib/assemble_closed_loop.sh\`
+  - Assembly: \`sim/lib/pll_top_dut.sh\`
   - Schematic: \`design/pll_top.sch\`
   - Netlist snapshot: \`sim/pll-top-smoke/netlist-snapshots/${RID}.spice\`
   - Raw log: \`sim/pll-top-smoke/corners/${RID}/${CID}.log\`

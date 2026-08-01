@@ -193,19 +193,39 @@ The record says all of that in its own Corner-matrix field, and says in as many
 words that it must not be cited for a PVT claim — which is what makes it a
 justification rather than an excuse.
 
-## Closed-loop campaigns share one DUT
+## Closed-loop campaigns: two assembly paths, reconciliation pending
 
-Every campaign that simulates the whole PLL builds its deck through
-`sim/lib/assemble_closed_loop.sh`, which assembles
-`design/netlist/pll_top.spice` (the committed export of `design/pll_top.sch`)
-with the campaign's own stimulus fragment. No closed-loop campaign assembles a
-top level of its own. That is deliberate and it is #52's whole point: before
-`pll_top.sch` existed, three separate issues each nominally needed a top level,
-and three privately-assembled loops producing three sets of "evidence" is worse
-than a merge conflict, because nothing would have reported the divergence. The
-helper also owns the encoding of the block's 22 static configuration inputs, so
-a campaign asks for `N = 8` rather than setting twelve bits by hand — a
-mis-encoded one-hot `SEL` code still locks, just at the wrong N.
+A campaign that simulates the whole PLL does **not** hand-transcribe a loop
+into its testbench: it calls a shared helper in `sim/lib/`. There are currently
+**two** such helpers, and this is the honest state of the tree rather than a
+target state:
+
+| Helper | What it builds | Used by |
+|---|---|---|
+| `sim/lib/assemble_closed_loop.sh` (#12) | concatenates the committed block exports (`vco`, `divider_chain`, `lock_detector`, `loop_filter`) with a fresh `pfd_cp` export, de-duplicating the leaf cells two of them inline. It does **not** read `design/netlist/pll_top.spice`; the loop itself is wired by the testbench's own top-level instance list. | `lock-time`, `output-range` (#12) |
+| `sim/lib/pll_top_dut.sh` (#52) | prepends `design/netlist/pll_top.spice` — the committed export of `design/pll_top.sch` — to the campaign's stimulus fragment, and owns the encoding of the block's static configuration inputs, so a campaign asks for `N = 8` rather than setting twelve bits by hand (a mis-encoded one-hot `SEL` code still locks, just at the wrong N). | `pll-top-smoke` (#52), `supply-sensitivity` (#14) |
+
+The difference that matters is **where the loop is wired**. On the
+`pll_top_dut.sh` path it is wired once, in `design/pll_top.sch`, so every
+campaign simulates the same connectivity and a change to the loop shows up as a
+schematic diff. On the `assemble_closed_loop.sh` path each testbench wires its
+own instance list, so two campaigns can disagree about the loop without
+anything reporting the divergence — which is the failure mode `pll_top.sch`
+was created to end.
+
+The intended end state is therefore one path for every closed-loop campaign.
+**That is not the state today.** #12's `lock-time` and `output-range` have
+recorded evidence taken against the concatenated DUT, `sim/` records are
+append-only, and `assemble_closed_loop.sh` must keep working exactly as it does
+until those campaigns are re-run against `pll_top`. Until then: read a record's
+**Netlist provenance** field to know which DUT its numbers came from — every
+record names its helper — and do not read either helper's existence as a
+repo-wide invariant.
+
+*Naming note.* #52 originally called its helper `assemble_closed_loop.sh` as
+well; it was renamed to `pll_top_dut.sh` when both landed in the same tree.
+Frozen netlist snapshots and testbench comments minted before the rename still
+name the pre-rename path; the records that carry them disclose it.
 
 ## Summary record format
 

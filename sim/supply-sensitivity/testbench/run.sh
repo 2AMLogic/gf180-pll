@@ -39,6 +39,13 @@
 # Every run is resumable: a completed run is reused only on an exact match of
 # the deck mtime AND the full parameter list, never on the deck alone.
 
+# SC2034 ("appears unused") is disabled for this file: the KTAU / ACC_* / CITE_*
+# constants below are consumed by report.sh, which re-reads this file's
+# assignment block by hand (see its header) so that the criterion the record
+# STATES and the criterion the runner APPLIES cannot drift apart.  They are
+# deliberately not exported -- report.sh must read what this file declares, not
+# whatever happens to be in the environment.
+# shellcheck disable=SC2034
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -111,21 +118,31 @@ KTSTEP=20n
 KTMAX=400p
 KTA=6.4u
 KTB=9.6u
+# The loop's own settling time constant, 1/(2*pi*R*C1) = 17.1 kHz => 9.3 us,
+# derived above.  Named here so report.sh states one number everywhere it
+# compares a rate or a window against "the loop", rather than restating it.
+KTAU=9.3u
 
 # Supply step/ramp profile (criterion 3).  One transient carries both events.
-# KD_STEP  a 3.30 -> 3.63 V step with a 100 ns edge: 100 ns is ~1/40 of the
-#          loop's own response time at f_c ~ f_ref/22 = 570 kHz, so it is a
-#          step as far as the loop is concerned, while staying slow enough that
-#          the rail is not a delta function the integrator cannot resolve.
-# KD_RAMP  3.63 -> 2.97 V over 6.4 us, i.e. 103 mV/us.  Deliberately SLOWER
-#          than the loop's f_c (6.4 us is ~3600 cycles of the closed-loop
-#          crossover) so it tests TRACKING rather than transient rejection,
-#          while still being comparable with the loop's own 9.3 us settling
-#          time constant -- i.e. hard enough that a loop with no margin would
-#          visibly lag it.  The two events together bracket the loop's
-#          bandwidth from both sides, which a single rate could not.
-# The rate is stated here rather than left implicit because #14's acceptance
-# criterion requires the record to name it.
+# Both rates are stated against the loop's own settling time constant KTAU
+# (9.3 us, see above) because that is the only timescale the loop has, and
+# because #14's acceptance criterion requires the record to name the rates.
+# KD_STEP  a 3.30 -> 3.63 V step with a 100 ns edge.  100 ns is KTAU/93, and
+#          ~1/18 of the 1.76 us period of the nominal closed-loop crossover
+#          (f_c ~ f_ref/22 = 570 kHz), so it is a step as far as the loop is
+#          concerned, while staying slow enough that the rail is not a delta
+#          function the integrator cannot resolve.
+# KD_RAMP  3.63 -> 2.97 V over 6.4 us (16.0u..22.4u), i.e. 103 mV/us.  That is
+#          0.69 KTAU -- 64x slower than the step edge, but still FASTER than
+#          the loop's own settling, so it is NOT a quasi-static tracking test:
+#          it moves the rail on the same timescale the loop responds on, which
+#          is where a loop with no margin visibly lags.  The two events
+#          therefore probe rejection at two rates a factor of 64 apart, one far
+#          above the loop's response and one just above it; a true tracking
+#          test needs a ramp of several KTAU and is NOT part of this profile.
+#          (Do not "fix" this by editing the constants below without re-running:
+#          the frozen -dyn.spice snapshot and every recorded number are taken
+#          at the values coded here.)
 KD_LO=3.30
 KD_HI=3.63
 KD_END=2.97
@@ -596,9 +613,9 @@ NDYN=$(wc -l <"${JOBSDYN}" | tr -d ' ')
 echo "supply-sensitivity: ${N100} steady-state runs @ ${KFOUT} Hz, ${N050} @ ${KFOUT2} Hz (power split), ${NDYN} step/ramp runs; $(simenv_jobs) parallel jobs"
 [ -z "${NOBAND}" ] || echo "supply-sensitivity: NO single band spans +/-10 % at: ${NOBAND}"
 
-# The step/ramp runs go FIRST: each is a 40 us transient against the grid's
-# 12 us, so starting them last would leave one long job running alone at the
-# end with the machine idle behind it.
+# The step/ramp runs go FIRST: each is a ${KD_TSTOP} transient against the
+# grid's ${KTSTOP}, so starting them last would leave one long job running
+# alone at the end with the machine idle behind it.
 # shellcheck disable=SC2016
 xargs -P "$(simenv_jobs)" -L 1 \
   "${BASH:-/bin/bash}" -c 'exec "$0" --one-dyn "$@"' "${HERE}/run.sh" <"${JOBSDYN}" &

@@ -353,8 +353,48 @@ else
     stays-locked criterion on some plateau)."
 fi
 
+# **Waveform retained** is a mandatory sim/README.md field and is therefore
+# always emitted -- but it must describe what this run actually wrote.  The
+# step/ramp transient is the only waveform this campaign keeps, and it exists
+# only if a step/ramp run completed, so the claim is made against the files on
+# disk rather than against the runner's intent.  Same for the Links entry: a
+# record must not link evidence that was never produced.
+WAVEFILES=("${CORNERSDIR}"/supply_transient_*.csv)
+if [ "${#WAVEFILES[@]}" -eq 0 ]; then
+  WAVE_FIELD="**N/A -- no step/ramp run completed, so no waveform was
+    written.** The step/ramp transient is the only waveform this campaign
+    retains; the steady-state grid's own transients are not kept (their
+    measurements are, in \`supply_steady.csv\`), and no rawfile is written at
+    any point. When criterion 3 is run, the transient is retained -- decimated
+    to ${KD_DECIM} s per sample as
+    \`corners/<record-id>/supply_transient_<corner>.csv\` (control node, LOCK
+    flag, the rail itself and the feedback edge)."
+  WAVE_LINK=""
+else
+  WAVE_FIELD="the step/ramp transient IS the argument for criterion 3, so it
+    is kept -- decimated to ${KD_DECIM} s per sample as
+    \`corners/${RID}/supply_transient_<corner>.csv\` (control node, LOCK flag,
+    the rail itself and the feedback edge), never as a rawfile.
+    ${#WAVEFILES[@]} file(s) written."
+  WAVE_LINK="
+  - Retained waveforms: \`corners/${RID}/supply_transient_*.csv\`"
+fi
+
+# The step/ramp profile's derived figures.  Every one of them is computed from
+# the constants run.sh actually coded (and therefore from what was actually
+# simulated); none is typed in.  This block exists because an earlier revision
+# printed a hardcoded "40 us" ramp duration while passing the real endpoints
+# into awk and discarding them, which left the record's Methodology disagreeing
+# with the record's own Section 3 -- and with the deck -- by 6.25x.
 KD_RATE="$(awk -v a="${KD_HI}" -v b="${KD_END}" -v t0="${KD_TRAMP%u}" -v t1="${KD_TREND%u}" \
   'BEGIN{printf "%.4g", (a-b)*1000/(t1-t0)}')"
+# Ramp duration, us.
+KD_DUR="$(awk -v t0="${KD_TRAMP%u}" -v t1="${KD_TREND%u}" 'BEGIN{printf "%.4g", t1-t0}')"
+# The ramp and the step edge, each as a multiple of the loop's own KTAU.
+KD_RAMP_TAU="$(awk -v d="${KD_DUR}" -v t="${KTAU%u}" 'BEGIN{printf "%.2f", d/t}')"
+KD_STEP_TAU="$(awk -v e="${KD_TEDGE%n}" -v t="${KTAU%u}" 'BEGIN{printf "%.3g", t*1000/e}')"
+# How much slower the ramp is than the step edge.
+KD_RSRATIO="$(awk -v e="${KD_TEDGE%n}" -v d="${KD_DUR}" 'BEGIN{printf "%.3g", d*1000/e}')"
 DYN_CORNERS="$(awk -F, '!/^#/ && $1 != "bundle" {printf "`%s`/%s C, ", $1, $2}' "${DYNCSV}" | sed 's/, $//')"
 [ -n "${DYN_CORNERS}" ] || DYN_CORNERS="(none)"
 
@@ -729,15 +769,22 @@ SUBSET
     attributes current to the charge pump alone.**
   - **Supply step and ramp: the rates, stated.** One transient per corner
     carries both events, separated by enough settling that neither
-    contaminates the other. The **step** is ${KD_LO} -> ${KD_HI} V with a
-    ${KD_TEDGE} edge at t = ${KD_TSTEP} -- about 1/40 of the loop's own
-    response time, i.e. a step as far as the loop is concerned. The **ramp**
-    is ${KD_HI} -> ${KD_END} V over $(awk -v a="${KD_TRAMP}" -v b="${KD_TREND}" 'BEGIN{print "40 us"}'),
-    i.e. 16.5 mV/us, deliberately SLOWER than the loop so it tests tracking
-    rather than transient rejection. The two together bracket the loop
-    bandwidth from both sides, which one rate could not. Twelve REF->FB phase
-    probes are placed across the profile, each snapped onto a reference
-    half-period.
+    contaminates the other. Both rates are quoted against the loop's own
+    settling time constant \`KTAU\` = ${KTAU} (1/(2 pi R C1) = 17.1 kHz), which
+    is the only timescale the loop has. The **step** is ${KD_LO} -> ${KD_HI} V
+    with a ${KD_TEDGE} edge at t = ${KD_TSTEP} -- KTAU/${KD_STEP_TAU}, i.e. a
+    step as far as the loop is concerned. The **ramp** is ${KD_HI} ->
+    ${KD_END} V over ${KD_DUR} us (t = ${KD_TRAMP} to ${KD_TREND}), i.e.
+    ${KD_RATE} mV/us. That is **${KD_RAMP_TAU} KTAU**: ${KD_RSRATIO}x slower
+    than the step edge, but still FASTER than the loop's own settling, so the
+    ramp is **not** a quasi-static tracking test -- it moves the rail on the
+    same timescale the loop responds on, which is where a loop with no margin
+    visibly lags. The two events therefore probe rejection at two rates a
+    factor of ${KD_RSRATIO} apart, one far above the loop's response and one
+    just above it. **A true tracking test needs a ramp of several KTAU and is
+    not part of this profile**; adding one is follow-up work, not a
+    reinterpretation of these rates. Twelve REF->FB phase probes are placed
+    across the profile, each snapped onto a reference half-period.
   - **VCO supply pushing is CITED, not re-derived.** #8 measured it open loop:
     **${CITE_PUSH_WORST} %/V** worst-case static (median
     ${CITE_PUSH_MEDIAN} %/V) and **${CITE_STEP_WORST} MHz/V** transient for a
@@ -755,10 +802,7 @@ SUBSET
     this campaign MEASURES those widths, so the narrower pulse must be
     resolved by several timesteps and not merely integrated correctly. It is
     tighter than \`sim/pll-top-smoke\`'s 500 ps for exactly that reason.
-  - **Waveform retained**: the step/ramp transient IS the argument for
-    criterion 3, so it is kept -- decimated to ${KD_DECIM} s per sample as
-    \`corners/${RID}/supply_transient_<corner>.csv\` (control node, LOCK flag,
-    the rail itself and the feedback edge), never as a rawfile.
+  - **Waveform retained**: ${WAVE_FIELD}
   - **Limitations**:
     - **Schematic-level, no parasitics.** Every block's own record carries the
       same caveat; #18 owns the extracted re-run, and it is the record that
@@ -835,9 +879,15 @@ ${FDEV_TABLE}
     **${MNSLOPE} .. ${MXSLOPE} V/V** (mean ${AVSLOPE}), most sensitive at
     ${MXSLOPE_ID}, least at ${MNSLOPE_ID}.
   - Settled control voltage over the whole grid: **${MNVC} .. ${MXVC} V**
-    (lowest ${MNVC_ID}, highest ${MXVC_ID}). Points outside DR-001 Decision
+    (lowest ${MNVC_ID}, highest ${MXVC_ID}) -- these are the AVERAGE control
+    voltages, \`vctrl_avg_v\`. Points outside DR-001 Decision
     2's usable ${ACC_VCTRL_LO}-${ACC_VCTRL_HI} V window: **${N_VOUT}** --
-    ${VOUT}. **${V_VCTRL}**
+    ${VOUT}. **${V_VCTRL}** The window check deliberately uses a different
+    statistic from the range above it: it tests \`vctrl_min_v\`/\`vctrl_max_v\`,
+    i.e. the RIPPLE PEAKS, not the average, because headroom is lost at the
+    peak of the ripple and a corner whose average sits inside the window while
+    its peak leaves it has left it. So the count can exceed what the averages
+    alone would suggest; that is the check working, not an inconsistency.
   - **Overall criterion 1: ${V_FREQ}** -- ${N_SETTLED} of ${N_STEADY} corners
     met the full lock criterion inside the transient budget.
 
@@ -851,7 +901,7 @@ ${FDEV_TABLE}
   those corners the f_out, phase and power numbers in this record are samples
   of a loop that is still converging -- not settled values, and not to be
   quoted as such.** The run is ${KTSTOP} long against a loop time constant of
-  9.3 us (${KTB} is 1.03 tau), so a corner whose phase-acquisition transient
+  ${KTAU} (${KTB} is 1.03 tau), so a corner whose phase-acquisition transient
   was large has not finished; that is a limit of this record's transient
   budget, stated rather than hidden.
 
@@ -900,7 +950,8 @@ ${PHI_TABLE}
 
   Profile per run: hold at ${KD_LO} V; **step** to ${KD_HI} V with a
   ${KD_TEDGE} edge at t = ${KD_TSTEP}; settle; **ramp** down to ${KD_END} V
-  between t = ${KD_TRAMP} and t = ${KD_TREND} (${KD_RATE} mV/us); settle.
+  between t = ${KD_TRAMP} and t = ${KD_TREND} -- ${KD_DUR} us, ${KD_RATE}
+  mV/us, ${KD_RAMP_TAU} KTAU; settle.
 
   | Corner | phase, pre-step (ns) | peak phase excursion, step (ns) | peak phase excursion, ramp (ns) | residual f error, low plateau | ... end plateau | Vctrl low/high/end (V) | LOCK min (V) |
   |---|---|---|---|---|---|---|---|
@@ -974,12 +1025,13 @@ ${SPLIT_TABLE}
     (steady state), \`.../${RID}-dyn.spice\` (step/ramp)
   - Raw logs: \`sim/supply-sensitivity/corners/${RID}/\`
   - Extracted metrics: \`corners/${RID}/supply_steady.csv\`,
-    \`corners/${RID}/power_split.csv\`, \`corners/${RID}/supply_dynamic.csv\`
-  - Retained waveforms: \`corners/${RID}/supply_transient_*.csv\`
+    \`corners/${RID}/power_split.csv\`, \`corners/${RID}/supply_dynamic.csv\`${WAVE_LINK}
   - Cited: \`sim/vco-tuning-range/records/${CITE_VCO_RECORD}.md\` (#8, VCO
     supply pushing), \`sim/loop-dynamics/records/\` (#10, loop bandwidth and
-    the passive-corner sweep), \`sim/pll-top-smoke/records/\` (#52, the
-    closed-loop acceptance gate for this DUT)
+    the passive-corner sweep), \`sim/pll-top-smoke/\` (#52, the closed-loop
+    acceptance gate for this DUT -- testbench and runner only at the time of
+    writing; \`sim/pll-top-smoke/records/\` is not yet minted, so nothing in
+    this record rests on it)
 - **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), ${SIM_AUTHOR:-agent-builder (issue #14)}
 $(simenv_supersedes_field "${SIM_SUPERSEDES:-}")
 EOF
