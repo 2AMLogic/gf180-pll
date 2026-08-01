@@ -326,6 +326,15 @@ should be read as **not yet reconciled against this bound** — see
 distributions and which specific claims are affected. A record that predates the
 bound is not retracted by this section; it is qualified by it.
 
+`sim/supply-sensitivity`'s 9-corner record `20260801-024935-c4fe724` (#62) was
+taken at `KTMAX=400p` — above the bound — until #69. Unlike the pair above,
+that record's re-examination (`20260801-114140-f87afc5`, #69) reached a
+per-row verdict rather than a blanket "not yet reconciled": 5 of its 9 rows
+carry the artefact's signature and must not be cited as design results, and 4
+do not and stand. See that record for which rows are which and why the
+asymmetry (false negatives only, never false positives) lets four rows survive
+without a re-run.
+
 ## Summary record format
 
 Each run produces one `records/<record-id>.md` file with the following
