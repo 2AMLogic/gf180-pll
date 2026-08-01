@@ -22,6 +22,11 @@
 #                             # single targeted point (used by the anomaly-
 #                             #   investigation records; bypasses the grid)
 #   SIM_JOBS=1 ./run.sh      # cap parallelism (default: sequential -- see below)
+#   SIM_WINCAP=250n ./run.sh --one ...
+#                             # shorten the transient window for a CONTROLLED
+#                             #   sub-experiment only (appears in the work-dir
+#                             #   tag; see run_one). Same discipline as
+#                             #   SIM_TMAX: not a knob for making a grid finish.
 #
 # NOTE ON HOST CONTENTION: this campaign's real cost is dominated by
 # wall-clock contention, not raw CPU-seconds -- the SAME corner/window that
@@ -140,17 +145,47 @@ run_one() {
   # NOT interchangeable with one produced at SIMENV_CLOSED_LOOP_TMAX. Putting
   # it in the tag keeps the idempotent-reuse check below from silently handing
   # back a stale pre-#65 result under a new record's ID.
-  local tag="lt_${corner}_${temp}c_${vdd}v_n${n}_${cond}_tmax${SIMENV_CLOSED_LOOP_TMAX}"
+  # SIM_WINCAP shortens the transient window. Like SIM_TMAX it exists for ONE
+  # legitimate use -- a controlled sub-experiment where the point is to run the
+  # SAME corner twice in one environment with a single variable changed, and
+  # where the per-reference-cycle behaviour (not a settled Vctrl) is what is
+  # being compared. Cost scales with the window, so a bound-sensitivity pair
+  # that will not finish at 2 us on a contended host can still be run honestly
+  # at a shorter one. It is NOT a knob for making a grid finish: a grid row
+  # minted at a truncated window is not the same measurement as its neighbours.
+  # When set it is appended to the tag (so a short-window log can never be
+  # silently reused for a full-window record) and left out of the tag entirely
+  # when unset (so default tags are unchanged).
+  #
+  # The two conditions get DIFFERENT default caps -- not for a nicer-looking
+  # result, but because the `cold` window's real cost (measured: 906.2 ngspice
+  # CPU-seconds for 4 us -- see the record) left too little of the originating
+  # session's compute budget for `relock` at the same length; the shorter
+  # window is disclosed per-row, not silently assumed equal.
+  local wincap wintag=""
+  wincap=4e-6; [ "${cond}" = "relock" ] && wincap=2e-6
+  if [ -n "${SIM_WINCAP:-}" ]; then
+    # SECONDS, as a plain decimal or scientific-notation number -- NOT a SPICE
+    # engineering suffix. The cap is consumed by awk (below), and awk parses
+    # "250n" as the STRING "250n", which then compares against the computed
+    # window as a string and yields tstop=250 -- a 250 SECOND transient that
+    # looks superficially plausible in the deck. Rejected loudly rather than
+    # silently mis-scaled.
+    case "${SIM_WINCAP}" in
+      *[!0-9.eE+-]*|"")
+        echo "ERROR: SIM_WINCAP='${SIM_WINCAP}' must be seconds as a plain number (e.g. 2.5e-7), not a SPICE suffix" >&2
+        exit 1 ;;
+    esac
+    wincap="${SIM_WINCAP}"
+    wintag="_w${SIM_WINCAP}"
+  fi
+  local tag="lt_${corner}_${temp}c_${vdd}v_n${n}_${cond}_tmax${SIMENV_CLOSED_LOOP_TMAX}${wintag}"
   tag="${tag//./p}"
 
   # Transient window: generous multiple of the reference period, sized so a
   # loop that locks in the expected few-to-tens-of-us range has wide margin,
-  # while staying inside a tractable simulated-time budget (see Methodology).
-  # The two conditions get DIFFERENT caps -- not for a nicer-looking result,
-  # but because the `cold` window's real cost (measured: 906.2 ngspice
-  # CPU-seconds for 4 us -- see the record) left too little of this
-  # session's compute budget for `relock` at the same length; the shorter
-  # window is disclosed per-row, not silently assumed equal.
+  # while staying inside a tractable simulated-time budget (see Methodology)
+  # -- the cap itself is chosen above, next to the tag it feeds.
   #
   # `tstep` below is the PRINT step only. The ceiling on the INTERNAL timestep
   # is passed separately as .tran's 4th argument (SIMENV_CLOSED_LOOP_TMAX);
@@ -158,8 +193,7 @@ run_one() {
   # internal ceiling to `tstep` itself and the integration accuracy was tied to
   # f_out instead of to the PFD. Sizing the two independently is the fix --
   # see sim/lib/simenv.sh and sim/README.md.
-  local tstop tstep t_force wincap
-  wincap=4e-6; [ "${cond}" = "relock" ] && wincap=2e-6
+  local tstop tstep t_force
   tstop=$(awk -v fr="${fref}" -v cap="${wincap}" 'BEGIN{t=80/fr; if (t>cap) t=cap; printf "%.6g", t}')
   tstep=$(awk -v fo="${FOUT_TARGET}" 'BEGIN{printf "%.6g", 1/(50*fo)}')
   t_force=$(awk -v fr="${fref}" 'BEGIN{printf "%.6g", 0.02/fr}')
