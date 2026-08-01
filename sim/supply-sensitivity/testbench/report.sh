@@ -909,10 +909,16 @@ SUPERSEDE_PROSE=""
 if [ -n "${SIM_SUPERSEDES:-}" ]; then
   PRIOR_MD="${RECORDSDIR}/${SIM_SUPERSEDES}.md"
   PRIOR_CSV="${EXP}/corners/${SIM_SUPERSEDES}/supply_steady.csv"
-  PRIOR_COMMIT="$(sed -n 's/.*Repo commit: `\([^`]*\)`.*/\1/p' "${PRIOR_MD}" 2>/dev/null | head -1)"
-  PRIOR_STAMP="$(sed -n 's/^- \*\*Timestamp \/ author\*\*: \(.*\)$/\1/p' "${PRIOR_MD}" 2>/dev/null | head -1)"
-  PRIOR_N="$(awk -F, '!/^#/ && $1 != "bundle"' "${PRIOR_CSV}" 2>/dev/null | wc -l | tr -d ' ')"
-  PRIOR_TS="$(awk -F, '!/^#/ && $1 != "bundle" {print $23}' "${PRIOR_CSV}" 2>/dev/null | sort -u | tr '\n' ' ' | sed 's/ $//')"
+  # `|| true` on each: the superseded record is normally right there in
+  # records/, but a runner pointed at a record id that is not on this checkout
+  # must still mint an honest record saying so, not die inside `set -o pipefail`
+  # on sed's exit status.
+  PRIOR_COMMIT="$(sed -n 's/.*Repo commit: `\([^`]*\)`.*/\1/p' "${PRIOR_MD}" 2>/dev/null | head -1 || true)"
+  # The record's own field is "<timestamp>, <author>"; only the timestamp is
+  # wanted here, so the author is not restated as if it were part of a date.
+  PRIOR_STAMP="$(sed -n 's/^- \*\*Timestamp \/ author\*\*: \([^,]*\).*$/\1/p' "${PRIOR_MD}" 2>/dev/null | head -1 || true)"
+  PRIOR_N="$(awk -F, '!/^#/ && $1 != "bundle"' "${PRIOR_CSV}" 2>/dev/null | wc -l | tr -d ' ' || true)"
+  PRIOR_TS="$(awk -F, '!/^#/ && $1 != "bundle" {print $23}' "${PRIOR_CSV}" 2>/dev/null | sort -u | tr '\n' ' ' | sed 's/ $//' || true)"
   : "${PRIOR_COMMIT:=(not stated in that record)}"
   : "${PRIOR_STAMP:=(not stated in that record)}"
   : "${PRIOR_N:=0}"; [ "${PRIOR_N}" -gt 0 ] || PRIOR_N="an unrecorded number of"
@@ -1404,7 +1410,7 @@ ${FDEV_TABLE}
   inside that envelope, which is the cross-check: the closed loop is absorbing
   the pushing #8 characterised, through the control node, exactly as expected.
 
-  ### 1c. Settling re-run: budget artefact, or genuine margin?
+  ### 1c. The re-runs: budget artefact, integration artefact, or genuine margin?
 
 ${SETTLE_PROSE}
 
