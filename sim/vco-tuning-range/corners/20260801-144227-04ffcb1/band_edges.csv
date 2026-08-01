@@ -1,0 +1,8 @@
+# 1. can each stage count reach the band edges at the binding corner?
+# Top of band is binding at the **slow** corner (all-slow), bottom of band at
+# the **fast** corner (all-fast) -- the ring has to still be fast enough at one
+# extreme and still be slow enough at the other.
+stages,"max f at all-slow (B7, Vctrl 2.7 V)",vs 200 MHz,"min f at all-fast (B0, Vctrl 0.9 V)",vs 10 MHz
+3,550.7 MHz,PASS (+175 %),11.41 MHz,**FAIL** (+14 %)
+5,256.6 MHz,PASS (+28 %),6.632 MHz,PASS (-34 %)
+7,182.5 MHz,**FAIL** (-9 %),4.739 MHz,PASS (-53 %)

@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # gf180-pll :: vco-tuning-range :: odd-stage-count confirmation campaign
 #
+# SUPERSEDED FOR NEW RUNS by this campaign's sim/harness manifest
+# (testbench-stages/tb.json + tb_vco_stages.spice + derive_stages.py) -- run
+#   python3 sim/run_corners.py sim/vco-tuning-range/testbench-stages
+# instead. This script is kept because the records it already minted are
+# append-only evidence and it is the only thing that can regenerate the
+# extra CSV artifacts they cite; do not extend it.
+#
 # DR-001 Decision 2 fixes the delay cell and leaves the stage count open:
 # "odd stage count (5 nominal; #8 to confirm against the 200 MHz top of band and
 # the power budget)". `tb_vco_stages.sp` runs 3-, 5- and 7-stage rings built

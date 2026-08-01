@@ -68,6 +68,7 @@ from __future__ import annotations
 
 import csv
 import importlib.util
+import io
 import sys
 import threading
 from dataclasses import dataclass, field
@@ -475,6 +476,17 @@ def write_derived_tables(tables: list[DerivedTable], out_dir: Path) -> list[Path
 
     Append-only, like every other artefact under ``corners/<record-id>/``: an
     existing file is never rewritten.
+
+    Header and cells are written through :mod:`csv`, so a cell that contains a
+    comma (``ss/-40C, B5, Vctrl 2.1 V``) is quoted instead of silently
+    splitting into extra columns. A reduction's cells are *prose* -- worst
+    corner citations, check text -- so commas in them are normal, not exotic.
+    Quoting matters more here than in a throwaway report: these files are
+    append-only evidence, the record's Markdown cites them by name as the full
+    table behind a truncated one, and this repo's own tests read committed
+    evidence with :class:`csv.DictReader`. A row whose column count disagrees
+    with its header is a corrupt artefact that can only be repaired by
+    re-minting the whole record.
     """
     written: list[Path] = []
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -484,13 +496,15 @@ def write_derived_tables(tables: list[DerivedTable], out_dir: Path) -> list[Path
             raise DerivedError(
                 f"{path} already exists; derived tables are append-only evidence"
             )
-        lines: list[str] = []
+        buf = io.StringIO(newline="")
         if table.description:
-            lines.append(f"# {table.description}")
-        lines += [f"# {note}" for note in table.notes]
-        lines.append(",".join(table.columns))
+            buf.write(f"# {table.description}\n")
+        for note in table.notes:
+            buf.write(f"# {note}\n")
+        writer = csv.writer(buf, lineterminator="\n")
+        writer.writerow(list(table.columns))
         for row in table.rows:
-            lines.append(",".join("" if cell is None else str(cell) for cell in row))
-        path.write_text("\n".join(lines) + "\n")
+            writer.writerow(["" if cell is None else str(cell) for cell in row])
+        path.write_text(buf.getvalue())
         written.append(path)
     return written

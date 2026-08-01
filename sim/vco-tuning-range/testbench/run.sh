@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # gf180-pll :: vco-tuning-range :: open-loop f(Vctrl) / Kvco corner campaign
 #
+# SUPERSEDED FOR NEW RUNS by this campaign's sim/harness manifest
+# (testbench/tb.json + tb_vco_tuning.spice + derive.py beside it) -- run
+#   python3 sim/run_corners.py vco-tuning-range
+# instead. This script is kept because the records it already minted are
+# append-only evidence and it is the only thing that can regenerate the
+# extra CSV artifacts they cite; do not extend it.
+#
 # Sweeps tb_vco_tuning.sp over
 #   7 corner bundles x 3 temperatures x 3 supplies x 8 band codes = 504 runs,
 # each run producing f and I at 7 control voltages (3528 (band, Vctrl, PVT)
