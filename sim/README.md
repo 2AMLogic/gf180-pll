@@ -80,6 +80,7 @@ sim/
   | `pfd-deadzone` | PFD + charge-pump phase-to-charge transfer through zero phase error (dead-zone freedom), and the residual charge offset at zero | #9 |
   | `cp-compliance` | charge-pump output compliance range, UP/DN current and switching-time mismatch, 2-bit Icp trim range | #9 |
   | `loop-dynamics` | loop bandwidth / phase margin vs. R–C and Kvco spread | #10 |
+  | `pll-top-smoke` | does the assembled `design/pll_top.sch` acquire and hold lock at all — the acceptance gate for the top-level wiring, **one nominal corner by design** (see below) | #52 |
   | `lock-time` | closed-loop lock acquisition | #12 |
   | `output-range` | closed-loop output-band coverage | #12 |
   | `period-jitter` | period jitter (deterministic + random) | #13 |
@@ -177,6 +178,54 @@ process, a single nominal point for a Monte Carlo distribution claim — is
 allowed **only** with an in-record justification. "The sim was slow" is not a
 justification; "mismatch distribution is evaluated at nominal PVT, corner
 sensitivity covered separately by record X" is.
+
+**A worked example of an acceptable one-point justification** — `pll-top-smoke`
+(#52), the only single-corner campaign in the table above. The question it
+answers is a *connectivity and closed-loop-existence* question about a newly
+assembled top level ("is the loop wired such that it acquires and holds
+lock?"), not a performance question. A performance number needs the grid;
+"does the assembly close the loop" is answered, or not answered, at any single
+corner, and answering it at 45 costs 45× the wall clock for no additional
+information about the wiring. Every *performance* claim over the same DUT is
+explicitly deferred to `lock-time` / `output-range` (#12), `period-jitter`
+(#13) and `supply-sensitivity` (#14), each of which carries the full grid.
+The record says all of that in its own Corner-matrix field, and says in as many
+words that it must not be cited for a PVT claim — which is what makes it a
+justification rather than an excuse.
+
+## Closed-loop campaigns: two assembly paths, reconciliation pending
+
+A campaign that simulates the whole PLL does **not** hand-transcribe a loop
+into its testbench: it calls a shared helper in `sim/lib/`. There are currently
+**two** such helpers, and this is the honest state of the tree rather than a
+target state:
+
+| Helper | What it builds | Used by |
+|---|---|---|
+| `sim/lib/assemble_closed_loop.sh` (#12) | concatenates the committed block exports (`vco`, `divider_chain`, `lock_detector`, `loop_filter`) with a fresh `pfd_cp` export, de-duplicating the leaf cells two of them inline. It does **not** read `design/netlist/pll_top.spice`; the loop itself is wired by the testbench's own top-level instance list. | `lock-time`, `output-range` (#12) |
+| `sim/lib/pll_top_dut.sh` (#52) | prepends `design/netlist/pll_top.spice` — the committed export of `design/pll_top.sch` — to the campaign's stimulus fragment, and owns the encoding of the block's static configuration inputs, so a campaign asks for `N = 8` rather than setting twelve bits by hand (a mis-encoded one-hot `SEL` code still locks, just at the wrong N). | `pll-top-smoke` (#52), `supply-sensitivity` (#14) |
+
+The difference that matters is **where the loop is wired**. On the
+`pll_top_dut.sh` path it is wired once, in `design/pll_top.sch`, so every
+campaign simulates the same connectivity and a change to the loop shows up as a
+schematic diff. On the `assemble_closed_loop.sh` path each testbench wires its
+own instance list, so two campaigns can disagree about the loop without
+anything reporting the divergence — which is the failure mode `pll_top.sch`
+was created to end.
+
+The intended end state is therefore one path for every closed-loop campaign.
+**That is not the state today.** #12's `lock-time` and `output-range` have
+recorded evidence taken against the concatenated DUT, `sim/` records are
+append-only, and `assemble_closed_loop.sh` must keep working exactly as it does
+until those campaigns are re-run against `pll_top`. Until then: read a record's
+**Netlist provenance** field to know which DUT its numbers came from — every
+record names its helper — and do not read either helper's existence as a
+repo-wide invariant.
+
+*Naming note.* #52 originally called its helper `assemble_closed_loop.sh` as
+well; it was renamed to `pll_top_dut.sh` when both landed in the same tree.
+Frozen netlist snapshots and testbench comments minted before the rename still
+name the pre-rename path; the records that carry them disclose it.
 
 ## Summary record format
 

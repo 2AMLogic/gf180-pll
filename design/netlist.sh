@@ -12,7 +12,7 @@
 # script:
 #
 #   COMMITTED (BLOCKS below: vco, div23_cell, divider_chain, lock_detector,
-#   dff_tg_3v3, loop_filter) -- each top is netlisted with its full hierarchy
+#   dff_tg_3v3, loop_filter, pll_top) -- each top is netlisted with its full hierarchy
 #   into one self-contained file under design/netlist/, which is committed.
 #   `--check` regenerates into a temp dir and diffs instead of writing, so a
 #   stale committed netlist fails loudly.  These exports are small and
@@ -75,9 +75,19 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Committed tops a testbench instantiates: the ring VCO (#8) and the feedback
-# divider / lock detector (#11).
-BLOCKS=(vco div23_cell divider_chain lock_detector dff_tg_3v3 loop_filter)
+# Committed tops a testbench instantiates: the ring VCO (#8), the feedback
+# divider / lock detector (#11), the loop filter (#10) and the closed-loop
+# top-level assembly (#52).
+#
+# `pll_top` is committed rather than per-record even though it, like `pfd_cp`,
+# is a deep hierarchy: it is the DUT every closed-loop campaign (#12/#13/#14)
+# instantiates, so exactly one exported assembly has to exist for all of them
+# to agree on -- which is the whole point of #52 -- and `--check` staleness is
+# the mechanism that keeps that one file honest against the schematics.  It
+# INCLUDES pfd_cp's hierarchy, so the leaf-cell collision check below now has a
+# committed copy of those cells to compare the per-record pfd_cp export
+# against, which is strictly more coverage than before, not less.
+BLOCKS=(vco div23_cell divider_chain lock_detector dff_tg_3v3 loop_filter pll_top)
 
 # Expected `.subckt` set per top -- the connectivity guard below fails the run
 # if any of these is missing from the corresponding export.
@@ -90,6 +100,12 @@ expected_subckts() {
     dff_tg_3v3)     echo "dff_tg_3v3 inv_3v3 tgate_3v3" ;;
     loop_filter)    echo "loop_filter" ;;
     pfd_cp)         echo "pfd_cp pfd cp cp_leg_n cp_leg_p cp_dumpbuf srlatch edgedet pfdcp_nand2_3v3 pfdcp_inv_3v3" ;;
+    # The union of every block below pll_top: the five instantiated blocks plus
+    # every cell they pull in.  Listed in full rather than as "pll_top" alone
+    # because the guard's job is to catch a hierarchy that silently lost a
+    # branch -- a top-level export missing, say, `cp_dumpbuf` would still
+    # netlist, still simulate, and still lock.
+    pll_top)        echo "pll_top pfd_cp pfd cp cp_leg_n cp_leg_p cp_dumpbuf srlatch edgedet pfdcp_nand2_3v3 pfdcp_inv_3v3 loop_filter vco vco_bias vco_stage divider_chain div23_cell dff_tg_3v3 tgate_3v3 inv_3v3 inv2x_3v3 nand2_3v3 nand3_3v3 nor2_3v3 lock_detector xor2_3v3 delaywin_3v3 schmitt_3v3" ;;
     *)              echo "" ;;
   esac
 }
@@ -103,7 +119,7 @@ usage: netlist.sh [--top <block>] [--check]
   (no args)           regenerate every committed export under design/netlist/
   --top <block>       restrict to one top.  Committed tops: vco, div23_cell,
                       divider_chain, lock_detector, dff_tg_3v3,
-                      loop_filter.
+                      loop_filter, pll_top.
                       The per-record top is pfd_cp.
   --check             committed tops only: diff against the committed export,
                       do not write
@@ -202,6 +218,16 @@ fi
 # list may contain an auto-generated `netN` name, and no pin may be reported
 # unconnected -- and they are applied to EVERY export, so no top can go out
 # with silently-wrong connectivity.
+#
+# A fourth invariant guards a failure mode #52 walked into: xschem WRAPS a long
+# port list onto a `*+` continuation line, which is a COMMENT.  Promoting only
+# the `**.subckt` header (as this script used to) leaves the tail of the port
+# list commented out, so the subcircuit silently loses its last few ports and
+# every net named there becomes a subcircuit-LOCAL node instead -- a deck that
+# netlists, simulates, and is wrong.  export_block now promotes the
+# continuation too; this asserts it, because the failure is invisible in every
+# other check (all the `.subckt`s are present, no `netN` appears, no pin is
+# reported missing).
 check_export() {
   local netlist="$1"; shift
   local cell
@@ -211,6 +237,13 @@ check_export() {
       exit 1
     }
   done
+  if grep -qE '^\*\+' "${netlist}"; then
+    echo "ERROR: a commented '*+' continuation line survives in ${netlist}:" >&2
+    grep -nE '^\*\+' "${netlist}" >&2
+    echo "       That is a wrapped .subckt port list left commented out, i.e." >&2
+    echo "       ports silently demoted to internal nodes.  See export_block." >&2
+    exit 1
+  fi
   if grep -iE "^\.subckt " "${netlist}" | grep -qE '\bnet[0-9]+\b'; then
     echo "ERROR: auto-generated net names in a .subckt port list -- xschem could" >&2
     echo "       not resolve the label symbols (check XSCHEM_LIBRARY_PATH)." >&2
@@ -297,10 +330,22 @@ export_block() {
     banner "${blk}"
     # Promote the top cell's commented `**.subckt` header to a real one and
     # drop the trailing `.end`, so the file is `.include`-able by a testbench.
-    sed -e 's/^\*\*\.subckt/.subckt/' \
-        -e 's/^\*\*\.ends/.ends/' \
-        -e '/^\.end$/d' \
-        "${work}/${blk}.spice"
+    #
+    # xschem wraps a long port list onto `*+` continuation lines, which are
+    # comments.  Those have to be promoted to real `+` continuations along with
+    # the header, or the tail of the port list stays commented out and those
+    # ports silently become subcircuit-local nodes -- see check_export's fourth
+    # invariant, which asserts none survives.  Only continuation lines
+    # IMMEDIATELY following the promoted header are touched, so nothing else in
+    # the export can be mistaken for one.
+    awk '
+      /^\*\*\.subckt/ { sub(/^\*\*/, ""); print; cont = 1; next }
+      cont && /^\*\+/ { sub(/^\*/,  ""); print;            next }
+      { cont = 0 }
+      /^\*\*\.ends/   { sub(/^\*\*/, ""); print;           next }
+      /^\.end$/       { next }
+      { print }
+    ' "${work}/${blk}.spice"
   } >"${work}/${blk}.raw.spice"
 
   # Reuse normalize() (see above) at write time, not just at --check compare
