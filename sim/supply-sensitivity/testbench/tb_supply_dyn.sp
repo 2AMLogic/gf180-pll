@@ -116,7 +116,12 @@ xdut ref b0 b1 b2 cpb0 cpb1 p0 p1 p2 p3 p4 p5 sel0 sel1 sel2 sel3 sel4 sel5
 + pll_top
 
 *--------------------------------------------------------- initial state ---
+* Both filter nodes pre-charged -- see tb_supply_lock.sp for why setting
+* VCTRL alone is not a warm start: the loop's state lives on the filter's
+* series capacitor C1 (node NZ), and leaving it at 0 V turns every run into a
+* cold-start acquisition ramp.
 .ic v(vctrl)='vctrl0'
+.ic v(xdut.xlf.nz)='vctrl0'
 .ic v(xdut.xvco.y1)=0 v(xdut.xvco.y2)='v_lo' v(xdut.xvco.y3)=0
 + v(xdut.xvco.y4)='v_lo' v(xdut.xvco.y5)=0
 
@@ -155,13 +160,13 @@ xdut ref b0 b1 b2 cpb0 cpb1 p0 p1 p2 p3 p4 p5 sel0 sel1 sel2 sel3 sel4 sel5
 .meas tran ferr_end param='-(phi12-phi11)/(p12-p11)'
 
 *--------------------------------------------------------------- frequency ---
-* Output frequency on each settled plateau, over 200 whole CLK cycles.
-.meas tran tclk_lo  trig v(clk) val='v_lo/2' rise=1 td='p1'  targ v(clk) val='v_lo/2' rise=201 td='p1'
-.meas tran fout_lo  param='200/tclk_lo'
-.meas tran tclk_hi  trig v(clk) val='v_hi/2' rise=1 td='p7'  targ v(clk) val='v_hi/2' rise=201 td='p7'
-.meas tran fout_hi  param='200/tclk_hi'
-.meas tran tclk_end trig v(clk) val='v_end/2' rise=1 td='p11' targ v(clk) val='v_end/2' rise=201 td='p11'
-.meas tran fout_end param='200/tclk_end'
+* Output frequency on each settled plateau, over 100 whole CLK cycles.
+.meas tran tclk_lo  trig v(clk) val='v_lo/2' rise=1 td='p1'  targ v(clk) val='v_lo/2' rise=101 td='p1'
+.meas tran fout_lo  param='100/tclk_lo'
+.meas tran tclk_hi  trig v(clk) val='v_hi/2' rise=1 td='p7'  targ v(clk) val='v_hi/2' rise=101 td='p7'
+.meas tran fout_hi  param='100/tclk_hi'
+.meas tran tclk_end trig v(clk) val='v_end/2' rise=1 td='p11' targ v(clk) val='v_end/2' rise=101 td='p11'
+.meas tran fout_end param='100/tclk_end'
 
 * The output frequency during the two DISTURBANCES, over a short cycle count so
 * the window is inside the excursion rather than averaging across it.  20 CLK

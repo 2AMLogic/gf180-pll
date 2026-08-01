@@ -87,44 +87,71 @@ KFREF2=6.25e6
 #         output cycle, and ngspice's own local-truncation-error control takes
 #         the step well below this ceiling through every edge -- the ceiling
 #         only bounds the quiet stretches between them.
-# KTSTOP  54 us.  The loop's slowest pole is 1/(2*pi*R*C1) = 17.1 kHz
-#         (sim/loop-dynamics), i.e. tau = 9.3 us; the warm start below places
-#         the control node within ~0.05 V of its lock point, so ~3.4 tau of
-#         settling to reach the 1e-3 residual the lock criterion demands.
-#         KTA at 32 us is 3.4 tau, KTB at 44 us is 4.7 tau, and the run has
-#         10 us left after KTB for the frequency measurements (200 CLK cycles
-#         = 2 us at 100 MHz, 4 us at 50 MHz; 20 FB cycles = 1.6 us / 3.2 us).
-# KTA/KTB Both land on a reference HALF-period for BOTH reference frequencies
-#         (12.5 MHz: tstart = 40 ns, k = 399 and 549; 6.25 MHz: tstart = 80 ns,
-#         k = 199 and 274), so "the first REF rise after t" and "the first FB
-#         rise after t" are the same cycle's pair at either setting.
-KTSTOP=54u
+# KTSTOP  12 us.  Short because the warm start in tb_supply_lock.sp
+#         pre-charges BOTH loop-filter nodes -- the control node AND the
+#         series capacitor C1 that actually holds the loop's state -- so the
+#         run does not contain an acquisition ramp.  (Pre-charging only VCTRL
+#         costs 122 pF x V_lock / Icp = tens of microseconds of pure ramp at
+#         every corner; that is a real trap and the deck documents it.)  What
+#         is left is the residual settling of the loop's slowest pole,
+#         1/(2*pi*R*C1) = 17.1 kHz => tau = 9.3 us, from whatever error the
+#         predicted lock point carries.  KTA at 6.4 us and KTB at 9.6 us are
+#         0.69 tau and 1.03 tau, so this record is NOT entitled to assume the
+#         residual away: `ferr` measures it directly and the lock criterion is
+#         applied to the measured value at every corner.  The run has 2.4 us
+#         left after KTB for the frequency measurements (100 CLK cycles = 1 us
+#         at 100 MHz, 2 us at 50 MHz; 10 FB cycles = 0.8 us / 1.6 us).
+# KTA/KTB Both are whole multiples of 160 ns, which places them on a reference
+#         HALF-period for BOTH reference frequencies (12.5 MHz: tstart = 40 ns;
+#         6.25 MHz: tstart = 80 ns), so "the first REF rise after t" and "the
+#         first FB rise after t" are the same cycle's pair at either setting.
+KTSTOP=12.0u
 KTSTEP=20n
 KTMAX=400p
-KTA=32.0u
-KTB=44.0u
+KTA=6.4u
+KTB=9.6u
 
 # Supply step/ramp profile (criterion 3).  One transient carries both events.
 # KD_STEP  a 3.30 -> 3.63 V step with a 100 ns edge: 100 ns is ~1/40 of the
 #          loop's own response time at f_c ~ f_ref/22 = 570 kHz, so it is a
 #          step as far as the loop is concerned, while staying slow enough that
 #          the rail is not a delta function the integrator cannot resolve.
-# KD_RAMP  3.63 -> 2.97 V over 40 us, i.e. 16.5 mV/us.  Deliberately SLOWER
-#          than the loop (40 us is ~23 loop time constants) so it tests
-#          tracking rather than transient rejection: the two events together
-#          bracket the loop's bandwidth from both sides, which a single rate
-#          could not.
+# KD_RAMP  3.63 -> 2.97 V over 6.4 us, i.e. 103 mV/us.  Deliberately SLOWER
+#          than the loop's f_c (6.4 us is ~3600 cycles of the closed-loop
+#          crossover) so it tests TRACKING rather than transient rejection,
+#          while still being comparable with the loop's own 9.3 us settling
+#          time constant -- i.e. hard enough that a loop with no margin would
+#          visibly lag it.  The two events together bracket the loop's
+#          bandwidth from both sides, which a single rate could not.
 # The rate is stated here rather than left implicit because #14's acceptance
 # criterion requires the record to name it.
 KD_LO=3.30
 KD_HI=3.63
 KD_END=2.97
-KD_TSTEP=40u
+KD_TSTEP=5.6u
 KD_TEDGE=100n
-KD_TRAMP=80u
-KD_TREND=120u
-KD_TSTOP=160u
-KD_DECIM=40e-9
+KD_TRAMP=16.0u
+KD_TREND=22.4u
+KD_TSTOP=30.4u
+KD_DECIM=20e-9
+
+# In-loop control-voltage calibration (the `rforce` pre-pass).  Two forced
+# points per corner, KVPRE_D apart, straddling #8's standalone-VCO prediction;
+# the runner then solves the measured in-loop f(Vctrl) line for the control
+# voltage that gives the target output frequency.  A short transient suffices:
+# with VCTRL held by an ideal source there is no loop to settle, only the VCO's
+# own bias generator, and KVPRE_TB is 4 reference periods in.
+KVPRE_D=0.25
+KVPRE_TSTOP=1.44u
+KVPRE_TA=0.16u
+KVPRE_TB=0.32u
+KVPRE_RON=1m
+KVPRE_ROFF=1e15
+# Where the solved control voltage is allowed to land.  Outside this the
+# solution is not a control voltage, it is an extrapolation off the end of the
+# measured line, and the runner says so rather than simulating it.
+KVPRE_LO=0.40
+KVPRE_HI=2.95
 
 # Acceptance thresholds.  Stated here, before the run, not discovered from it.
 ACC_FERR=1e-3          # |residual fractional frequency error| in lock
@@ -159,6 +186,22 @@ VCO_TUNING="${ROOT}/sim/vco-tuning-range/corners/20260731-175947-0a12e6c/vco_tun
 PASSIVES="res_typical,moscap_typical,mimcap_typical"
 
 libs_for() { echo "$1,${PASSIVES}"; }
+
+# The corner axes.  Default is the full 45-point grid sim/README.md prescribes.
+# SIM_BUNDLES / SIM_TEMPS narrow it for a compute-limited run; whatever is
+# actually swept is what report.sh writes into the record's corner-matrix
+# field, derived from the collected rows rather than from these defaults, so a
+# reduced run can never describe itself as a full one.
+GRID_BUNDLES="${SIM_BUNDLES:-typical ff ss fs sf}"
+GRID_TEMPS="${SIM_TEMPS:--40 27 125}"
+# The corners the step/ramp deck runs at, and the corners the second frequency
+# point of the power split runs at.  Both are subsets by design (see the
+# record's Methodology), and both are overridable for the same reason.
+DYN_PICKS="${SIM_DYN_PICKS:-typical 27}"
+SPLIT_BUNDLES="${SIM_SPLIT_BUNDLES:-typical}"
+SPLIT_TEMPS="${SIM_SPLIT_TEMPS:-27}"
+
+in_list() { case " $2 " in *" $1 "*) return 0 ;; *) return 1 ;; esac }
 
 # ---------------------------------------------------------------------------
 # Operating-point derivation
@@ -232,6 +275,7 @@ if [ "${1:-}" = "--one-lock" ]; then
   libs="$(libs_for "${bundle}")"
 
   params=( "vsup=${vdd}" "fref=${fref}" "nratio=${KN}" "vctrl0=${vc0}"
+           "rforce=${KVPRE_ROFF}"
            "tstop=${KTSTOP}" "tstep=${KTSTEP}" "tmax=${KTMAX}"
            "ta=${KTA}" "tb=${KTB}" )
   # shellcheck disable=SC2207
@@ -265,6 +309,59 @@ if [ "${1:-}" = "--one-lock" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# One control-voltage calibration point.
+#   --one-vpre <bundle> <temp> <vdd> <band> <vctrl-predicted> <fout> <fref> <out>
+#
+# Runs the steady-state deck TWICE with VCTRL forced, at v0 and v0 + KVPRE_D,
+# and solves the two measured (Vctrl, f_out) points for the control voltage
+# that gives <fout>.  Writes "<v_solved> <f_at_v0> <f_at_v1>".
+# ---------------------------------------------------------------------------
+if [ "${1:-}" = "--one-vpre" ]; then
+  shift
+  bundle="$1"; temp="$2"; vdd="$3"; band="$4"; vc0="$5"; fout="$6"; fref="$7"; out="$8"
+  libs="$(libs_for "${bundle}")"
+  vpre_point() {
+    local vv="$1" idx="$2"
+    local tag="vpre${idx}_${bundle}_T${temp}_V${vdd}"; tag="${tag//./p}"; tag="${tag//-/m}"
+    local rundir="${WORK}/${tag}" log="${WORK}/${tag}/ngspice.log"
+    local params=( "vsup=${vdd}" "fref=${fref}" "nratio=${KN}" "vctrl0=${vv}"
+                   "rforce=${KVPRE_RON}"
+                   "tstop=${KVPRE_TSTOP}" "tstep=${KTSTEP}" "tmax=${KTMAX}"
+                   "ta=${KVPRE_TA}" "tb=${KVPRE_TB}" )
+    # shellcheck disable=SC2207
+    params+=( $(cloop_band_params "${band}") )
+    # shellcheck disable=SC2207
+    params+=( $(cloop_trim_params "${KTRIM}") )
+    # shellcheck disable=SC2207
+    params+=( $(cloop_divider_params "${KN}") )
+    local sig="${libs}|${temp}|${params[*]}"
+    if [ -z "${SIM_FORCE:-}" ] && [ -f "${log}" ] && [ "${log}" -nt "${DUT_LOCK}" ] \
+       && [ "$(cat "${rundir}/.sig" 2>/dev/null)" = "${sig}" ] \
+       && grep -q "Total analysis time" "${log}" 2>/dev/null; then
+      :
+    else
+      simenv_run_deck "${DUT_LOCK}" "${WORK}" "${tag}" "${libs}" "${temp}" "${params[@]}" \
+        >/dev/null 2>&1 || true
+      grep -q "Total analysis time" "${log}" 2>/dev/null || {
+        echo "ERROR: ngspice did not complete ${tag} (see ${log})" >&2; exit 1; }
+      printf '%s' "${sig}" >"${rundir}/.sig"
+    fi
+    simenv_meas "${log}" fout
+  }
+  vc1="$(awk -v a="${vc0}" -v d="${KVPRE_D}" 'BEGIN{printf "%.4f", a+d}')"
+  f0="$(vpre_point "${vc0}" 0)"
+  f1="$(vpre_point "${vc1}" 1)"
+  awk -v v0="${vc0}" -v v1="${vc1}" -v f0="${f0}" -v f1="${f1}" -v ft="${fout}" \
+      -v lo="${KVPRE_LO}" -v hi="${KVPRE_HI}" 'BEGIN{
+    if (f0 == "nan" || f1 == "nan" || f1 == f0) { printf "%s %s %s\n", "nan", f0, f1; exit }
+    v = v0 + (ft - f0) * (v1 - v0) / (f1 - f0);
+    if (v < lo) v = lo; if (v > hi) v = hi;
+    printf "%.4f %.6g %.6g\n", v, f0, f1;
+  }' >"${out}"
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
 # One supply step/ramp run.
 #   --one-dyn <bundle> <temp> <band> <vctrl0> <sumfile> <wavefile>
 # ---------------------------------------------------------------------------
@@ -282,7 +379,7 @@ if [ "${1:-}" = "--one-dyn" ]; then
     'BEGIN{ tr=1/f; ts=0.5*tr; k=int((t-ts)/tr - 0.5 + 0.5); if(k<0)k=0;
             printf "%.12g", ts + (k+0.5)*tr }'; }
   P=()
-  for t in 28e-6 38e-6 40.6e-6 42e-6 46e-6 54e-6 68e-6 78e-6 100e-6 118e-6 130e-6 155e-6; do
+  for t in 2.4e-6 4.0e-6 5.92e-6 6.72e-6 8.0e-6 11.2e-6 12.8e-6 14.4e-6 18.4e-6 21.6e-6 24.0e-6 28.8e-6; do
     P+=( "$(snap "${t}")" )
   done
 
@@ -386,17 +483,60 @@ if [ "${1:-}" = "--check" ]; then
   exit 0
 fi
 
-# --- job list: the full 45-point grid at 100 MHz -----------------------------
-JOBS100="${WORK}/jobs_100.txt"; : >"${JOBS100}"
+# --- pre-pass: the in-loop control voltage for every point we intend to run ---
+# #8's f(Vctrl) is a STANDALONE-VCO measurement and does not transfer to the
+# VCO as loaded inside pll_top (see the `rforce` note in tb_supply_lock.sp), so
+# every closed-loop point's warm start is calibrated first against this DUT.
+JOBSPRE="${WORK}/jobs_vpre.txt"; : >"${JOBSPRE}"
 NOBAND=""
+emit_pre() {  # <bundle> <temp> <band> <v297> <v330> <v363> <fout> <fref> <slug>
+  local b="$1" t="$2" bd="$3" fo="$7" fr="$8" sl="$9"
+  local i=0 vv
+  for vv in "$4" "$5" "$6"; do
+    i=$((i+1))
+    local vdd; vdd="$(awk -v i="${i}" 'BEGIN{split("2.97 3.30 3.63",a," "); print a[i]}')"
+    echo "${b} ${t} ${vdd} ${bd} ${vv} ${fo} ${fr} ${WORK}/vpre_${sl}_${b}_${t}_${vdd}.txt" >>"${JOBSPRE}"
+  done
+}
 while IFS=, read -r bundle temp band v297 v330 v363; do
+  in_list "${bundle}" "${GRID_BUNDLES}" || continue
+  in_list "${temp}"   "${GRID_TEMPS}"   || continue
   if [ "${band}" = "-1" ]; then
     NOBAND="${NOBAND}${bundle}/${temp}C "
     continue
   fi
-  echo "${bundle} ${temp} 2.97 ${band} ${v297} ${KFOUT} ${KFREF} ${WORK}/s100_${bundle}_${temp}_2.97.csv" >>"${JOBS100}"
-  echo "${bundle} ${temp} 3.30 ${band} ${v330} ${KFOUT} ${KFREF} ${WORK}/s100_${bundle}_${temp}_3.30.csv" >>"${JOBS100}"
-  echo "${bundle} ${temp} 3.63 ${band} ${v363} ${KFOUT} ${KFREF} ${WORK}/s100_${bundle}_${temp}_3.63.csv" >>"${JOBS100}"
+  emit_pre "${bundle}" "${temp}" "${band}" "${v297}" "${v330}" "${v363}" "${KFOUT}" "${KFREF}" 100
+done <"${OPTAB}"
+while IFS=, read -r bundle temp band v297 v330 v363; do
+  in_list "${bundle}" "${SPLIT_BUNDLES}" || continue
+  in_list "${temp}"   "${SPLIT_TEMPS}"   || continue
+  in_list "${bundle}" "${GRID_BUNDLES}"  || continue
+  in_list "${temp}"   "${GRID_TEMPS}"    || continue
+  [ "${band}" = "-1" ] && continue
+  emit_pre "${bundle}" "${temp}" "${band}" "${v297}" "${v330}" "${v363}" "${KFOUT2}" "${KFREF2}" 050
+done <"${OPTAB2}"
+
+NPRE=$(wc -l <"${JOBSPRE}" | tr -d ' ')
+echo "supply-sensitivity: ${NPRE} in-loop control-voltage calibration runs (2 forced points each)"
+# shellcheck disable=SC2016
+xargs -P "$(simenv_jobs)" -L 1 \
+  "${BASH:-/bin/bash}" -c 'exec "$0" --one-vpre "$@"' "${HERE}/run.sh" <"${JOBSPRE}"
+
+vpre_of() {  # <slug> <bundle> <temp> <vdd> -> calibrated control voltage
+  awk '{print $1}' "${WORK}/vpre_$1_$2_$3_$4.txt" 2>/dev/null
+}
+
+# --- job list: the steady-state grid at 100 MHz -----------------------------
+JOBS100="${WORK}/jobs_100.txt"; : >"${JOBS100}"
+while IFS=, read -r bundle temp band v297 v330 v363; do
+  in_list "${bundle}" "${GRID_BUNDLES}" || continue
+  in_list "${temp}"   "${GRID_TEMPS}"   || continue
+  [ "${band}" = "-1" ] && continue
+  for vdd in 2.97 3.30 3.63; do
+    vc="$(vpre_of 100 "${bundle}" "${temp}" "${vdd}")"
+    [ -n "${vc}" ] && [ "${vc}" != "nan" ] || { echo "ERROR: no calibrated Vctrl for ${bundle}/${temp}C/${vdd}V" >&2; exit 1; }
+    echo "${bundle} ${temp} ${vdd} ${band} ${vc} ${KFOUT} ${KFREF} ${WORK}/s100_${bundle}_${temp}_${vdd}.csv" >>"${JOBS100}"
+  done
 done <"${OPTAB}"
 
 # --- job list: the quiescent/dynamic power split -----------------------------
@@ -417,11 +557,16 @@ done <"${OPTAB}"
 # sweep is covered at full resolution.
 JOBS050="${WORK}/jobs_050.txt"; : >"${JOBS050}"
 while IFS=, read -r bundle temp band v297 v330 v363; do
-  [ "${bundle}" = "typical" ] || continue
+  in_list "${bundle}" "${SPLIT_BUNDLES}" || continue
+  in_list "${temp}"   "${SPLIT_TEMPS}"   || continue
+  in_list "${bundle}" "${GRID_BUNDLES}"  || continue
+  in_list "${temp}"   "${GRID_TEMPS}"    || continue
   [ "${band}" = "-1" ] && continue
-  echo "${bundle} ${temp} 2.97 ${band} ${v297} ${KFOUT2} ${KFREF2} ${WORK}/s050_${bundle}_${temp}_2.97.csv" >>"${JOBS050}"
-  echo "${bundle} ${temp} 3.30 ${band} ${v330} ${KFOUT2} ${KFREF2} ${WORK}/s050_${bundle}_${temp}_3.30.csv" >>"${JOBS050}"
-  echo "${bundle} ${temp} 3.63 ${band} ${v363} ${KFOUT2} ${KFREF2} ${WORK}/s050_${bundle}_${temp}_3.63.csv" >>"${JOBS050}"
+  for vdd in 2.97 3.30 3.63; do
+    vc="$(vpre_of 050 "${bundle}" "${temp}" "${vdd}")"
+    [ -n "${vc}" ] && [ "${vc}" != "nan" ] || continue
+    echo "${bundle} ${temp} ${vdd} ${band} ${vc} ${KFOUT2} ${KFREF2} ${WORK}/s050_${bundle}_${temp}_${vdd}.csv" >>"${JOBS050}"
+  done
 done <"${OPTAB2}"
 
 # --- job list: supply step/ramp ---------------------------------------------
@@ -432,14 +577,15 @@ done <"${OPTAB2}"
 # extremes of process and temperature answers it in a way 45 repetitions of the
 # same answer would not improve.
 JOBSDYN="${WORK}/jobs_dyn.txt"; : >"${JOBSDYN}"
-for pick in "typical 27" "ss -40" "ff 125"; do
-  set -- ${pick}
-  b="$1"; t="$2"
+set -- ${DYN_PICKS}
+while [ "$#" -ge 2 ]; do
+  b="$1"; t="$2"; shift 2
   row="$(awk -F, -v b="${b}" -v t="${t}" '$1==b && $2==t {print}' "${OPTAB}")"
   [ -n "${row}" ] || continue
   band="$(echo "${row}" | cut -d, -f3)"
-  v330="$(echo "${row}" | cut -d, -f5)"
   [ "${band}" = "-1" ] && continue
+  v330="$(vpre_of 100 "${b}" "${t}" 3.30)"
+  [ -n "${v330}" ] && [ "${v330}" != "nan" ] || continue
   echo "${b} ${t} ${band} ${v330} ${WORK}/sdyn_${b}_${t}.csv ${WORK}/wave_${b}_${t}.csv" >>"${JOBSDYN}"
 done
 
@@ -449,15 +595,20 @@ NDYN=$(wc -l <"${JOBSDYN}" | tr -d ' ')
 echo "supply-sensitivity: ${N100} steady-state runs @ ${KFOUT} Hz, ${N050} @ ${KFOUT2} Hz (power split), ${NDYN} step/ramp runs; $(simenv_jobs) parallel jobs"
 [ -z "${NOBAND}" ] || echo "supply-sensitivity: NO single band spans +/-10 % at: ${NOBAND}"
 
+# The step/ramp runs go FIRST: each is a 40 us transient against the grid's
+# 12 us, so starting them last would leave one long job running alone at the
+# end with the machine idle behind it.
+# shellcheck disable=SC2016
+xargs -P "$(simenv_jobs)" -L 1 \
+  "${BASH:-/bin/bash}" -c 'exec "$0" --one-dyn "$@"' "${HERE}/run.sh" <"${JOBSDYN}" &
+DYNPID=$!
 # shellcheck disable=SC2016
 xargs -P "$(simenv_jobs)" -L 1 \
   "${BASH:-/bin/bash}" -c 'exec "$0" --one-lock "$@"' "${HERE}/run.sh" <"${JOBS100}"
 # shellcheck disable=SC2016
 xargs -P "$(simenv_jobs)" -L 1 \
   "${BASH:-/bin/bash}" -c 'exec "$0" --one-lock "$@"' "${HERE}/run.sh" <"${JOBS050}"
-# shellcheck disable=SC2016
-xargs -P "$(simenv_jobs)" -L 1 \
-  "${BASH:-/bin/bash}" -c 'exec "$0" --one-dyn "$@"' "${HERE}/run.sh" <"${JOBSDYN}"
+wait "${DYNPID}"
 
 got100=$(cat "${WORK}"/s100_*.csv 2>/dev/null | wc -l | tr -d ' ')
 got050=$(cat "${WORK}"/s050_*.csv 2>/dev/null | wc -l | tr -d ' ')
