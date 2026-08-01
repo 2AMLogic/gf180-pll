@@ -511,13 +511,17 @@ def write_netlist_snapshot(tb: Testbench, experiment_dir: Path, record_id: str) 
     the committed fragment having to contain a copy of the export. For a
     ``dut_export`` top this call is what actually resolves it (see
     ``Testbench.resolved_dut``), if nothing already did.
+
+    A ``phases`` manifest takes the same composed path even with no DUT: the
+    record was minted from every phase's fragment, so freezing only the first
+    would leave half the record's evidence unfrozen.
     """
     out_dir = experiment_dir / SNAPSHOT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{record_id}.spice"
     if path.exists():
         raise RecordExists(f"{path} already exists; append-only evidence is never rewritten")
-    if tb.resolved_dut:
+    if tb.resolved_dut or tb.is_phased:
         header = "\n".join(
             [
                 f"* Frozen netlist snapshot for record {record_id}",
@@ -909,11 +913,34 @@ def render_record(record: dict, experiment: str) -> str:
     # carries more than one testbench (devchar-passives: a capacitor deck and
     # a resistor deck, two distinct claims) must not cite the wrong path.
     tb_dir = tb.get("directory") or TESTBENCH_DIR
+    phases = tb.get("phases") or []
     provenance = (
         f"schematic (`sim/{experiment}/{tb_dir}/{tb['netlist']}`), "
         f"netlist SHA-256 `{tb['netlist_sha256']}`"
     )
-    if tb.get("dut"):
+    if phases:
+        # Several decks, one record: the record has to name every deck it was
+        # minted from, with its own sha256, or a reader cannot tell which
+        # stimulus produced which half of the result.
+        decks = "; ".join(
+            f"`{p['name']}` — `sim/{experiment}/{tb_dir}/{p['netlist']}` "
+            f"(SHA-256 `{p['netlist_sha256']}`)"
+            for p in phases
+        )
+        provenance = f"{len(phases)} stimulus decks, one record: {decks}"
+        if tb.get("dut"):
+            provenance = (
+                "schematic export(s) "
+                + " + ".join(
+                    f"`{d['path']}` (SHA-256 `{d['sha256']}`)" for d in tb["dut"]
+                )
+                + f" composed with {provenance}"
+            )
+        provenance += (
+            f"; composed SHA-256 `{tb.get('composed_sha256')}` — this is what the "
+            "netlist snapshot holds"
+        )
+    elif tb.get("dut"):
         # The DUT is a committed export composed in at run time, not a copy
         # pasted into the fragment -- so the record names the export it froze,
         # with its own sha256, and the snapshot is the composed pair.
@@ -953,10 +980,12 @@ def render_record(record: dict, experiment: str) -> str:
            or "N/A (corner-matrix claim, not a distribution claim)")
     )
     lines += _result_lines(record)
+    fragments = [p["netlist"] for p in phases] or [tb["netlist"]]
     lines += [
         "- **Links**:",
-        f"  - Testbench: `sim/{experiment}/{tb_dir}/{tb['netlist']}`, "
-        f"`sim/{experiment}/{tb_dir}/tb.json`",
+        "  - Testbench: "
+        + ", ".join(f"`sim/{experiment}/{tb_dir}/{n}`" for n in fragments)
+        + f", `sim/{experiment}/{tb_dir}/tb.json`",
         f"  - Netlist snapshot: `sim/{experiment}/{SNAPSHOT_DIR}/{record_id}.spice`",
         f"  - Raw logs: `sim/{experiment}/{CORNERS_DIR}/{record_id}/`",
     ]

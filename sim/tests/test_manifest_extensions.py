@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for the manifest extensions issues #67, #78 and #81 add.
+"""Unit tests for the manifest extensions issues #67, #78, #81 and #85 add.
 
 No PDK and no ngspice (and, for #78's ``dut_export``, no xschem) required:
 ngspice's output and ``design/netlist.sh`` are both stubbed, so these run
@@ -28,6 +28,11 @@ need and the manifest could not previously express:
    captured per point and handed to the campaign's reduction as a parsed
    ``RawFile``. This is what makes a *sequence* claim (jitter/TIE, an I-V
    curve) expressible at all: ``.measure`` reports scalars.
+7. ``phases`` (#85) -- several decks minted into ONE record, run separately
+   and reduced together. A manifest names exactly one ``netlist``, which
+   cannot express a campaign whose claim is a *pair* of stimuli on a pair of
+   topologies (supply pushing + supply-induced jitter); splitting that into
+   two records would land evidence weaker than the record it supersedes.
 """
 
 from __future__ import annotations
@@ -1986,6 +1991,520 @@ class RawFileEndToEndTests(ManifestFixture):
         #    extracted period must land on 1 ns with a tiny numerical spread.
         self.assertAlmostEqual(result.measurements["t_period"], 1e-9, delta=2e-11)
         self.assertLess(result.measurements["tj_pp"], 5e-12)
+
+
+# ===========================================================================
+# 7. phases -- several decks, ONE record (#85)
+# ===========================================================================
+#
+# The shape `sim/vco-tuning-range/testbench/run_supply.sh` mints today and
+# `tb.json` could not express: a static supply-pushing deck and a transient
+# supply-jitter deck, run separately, reduced *together*, into one record --
+# because the jitter numbers are not interpretable without the pushing
+# numbers, and splitting them into two records would land migrated evidence
+# weaker than the record it supersedes.
+
+PUSH_FRAGMENT = "vpush out 0 dc {vdd_val}\n"
+JIT_FRAGMENT = "vjit out 0 dc {vdd_val}\n"
+
+#: Two decks, one record. Deliberately asymmetric, like the real campaign:
+#: the pushing deck reports a scalar with `.measure`, the jitter deck reports
+#: nothing at all with `.measure` and instead writes the waveform whose
+#: *sequence* is the claim.
+TWO_PHASES = {
+    "push": {
+        "description": "static pushing -- f_osc vs. vdd_vco",
+        "netlist": "tb_pushing.sp",
+        "analyses": ["tran 1n 10n"],
+        "raw_measures": {
+            "fosc": {"analysis": "tran", "expr": "when v(out)=1.65 rise=2"}
+        },
+    },
+    "jit": {
+        "description": "supply step + ripple against a quiet reference",
+        "netlist": "tb_jitter.sp",
+        "params": {"arip": "0.05"},
+        "analyses": ["tran 1n 10n", "set wr_singlescale", "wrdata jit.dat v(out)"],
+        "raw_files": {"jit.dat": {"columns": ["t", "clk"]}},
+    },
+}
+
+#: The reduction that only a *shared* record can express: it needs the pushing
+#: deck's scalar AND the jitter deck's waveform, at the same PVT point.
+BOTH_DECKS_MODULE = '''
+def derive_point(point):
+    raw = point.raw("jit.dat")
+    fosc = point.get("fosc")
+    if fosc is None or not raw.exists():
+        return {}
+    t = raw.column("t")
+    return {"tj_norm": (t[-1] - t[0]) * fosc}
+'''
+
+PUSH_LOG = "fosc = 2.50000e+08\n"
+
+
+def _stub_ngspice_by_phase(outputs: dict, files: dict | None = None, seen: list | None = None):
+    """Stub ngspice, dispatching on the phase prefix of the deck it was given.
+
+    ``sim/README.md``'s corner-id grammar puts the phase in the ``[<kind>_]``
+    prefix field, so ``push_typical_27c_3.30v.spice`` -> ``push``. That is
+    exactly how a human finds the right log too.
+    """
+
+    def _run(cmd, **kwargs):
+        deck = Path(cmd[-1]).name
+        phase = deck.split("_")[0]
+        if seen is not None:
+            seen.append(deck)
+        cwd = Path(kwargs["cwd"])
+        for name, content in (files or {}).get(phase, {}).items():
+            cwd.mkdir(parents=True, exist_ok=True)
+            (cwd / name).write_text(content)
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=0, stdout=outputs.get(phase, ""), stderr=""
+        )
+
+    return mock.patch.object(runner.subprocess, "run", side_effect=_run)
+
+
+class PhasedFixture(ManifestFixture):
+    """A manifest whose per-deck keys live in ``phases``, not at top level."""
+
+    def write_phased(self, manifest: dict, phases: dict | None = None) -> Path:
+        (self.tb_dir / "tb_pushing.sp").write_text(PUSH_FRAGMENT)
+        (self.tb_dir / "tb_jitter.sp").write_text(JIT_FRAGMENT)
+        base = {"name": self.slug, "phases": phases if phases is not None else TWO_PHASES}
+        base.update(manifest)
+        (self.tb_dir / "tb.json").write_text(json.dumps(base))
+        return self.tb_dir
+
+
+class PhasedManifestTests(PhasedFixture):
+    """The manifest half: declaring more than one deck for one record."""
+
+    def test_two_decks_load_in_manifest_order_each_owning_its_own_keys(self):
+        tb = testbench.load(self.write_phased({}))
+        self.assertTrue(tb.is_phased)
+        self.assertEqual([p.name for p in tb.phases], ["push", "jit"])
+        push, jit = tb.phases
+        self.assertEqual(push.netlist.name, "tb_pushing.sp")
+        self.assertEqual(jit.netlist.name, "tb_jitter.sp")
+        self.assertEqual(push.measure_names, ["fosc"])
+        self.assertEqual(jit.measure_names, [])
+        self.assertEqual(jit.params, {"arip": "0.05"})
+        self.assertEqual([s.name for s in jit.raw_files], ["jit.dat"])
+
+    def test_the_testbench_presents_one_flat_union_downstream(self):
+        """Everything after the runner sees one measurement set: one record."""
+        tb = testbench.load(self.write_phased({}))
+        self.assertEqual(tb.measure_names, ["fosc"])
+        self.assertEqual(tb.raw_file_names, ["jit.dat"])
+        self.assertEqual(tb.netlist_sources[-2:], (tb.phases[0].netlist, tb.phases[1].netlist))
+
+    def test_a_manifest_without_phases_is_completely_unaffected(self):
+        """Backward compatibility: one implicit, unnamed phase, same deck."""
+        tb = testbench.load(self.write({"analyses": ["tran 1n 10n"]}))
+        self.assertFalse(tb.is_phased)
+        self.assertEqual(tb.phases, ())
+        only = tb.run_phases
+        self.assertEqual(len(only), 1)
+        self.assertEqual(only[0].name, "")
+        self.assertEqual(only[0].netlist, tb.netlist)
+        self.assertEqual(only[0].measure, tb.measure)
+        # ... and no phase field infects the deck or its filenames.
+        point = corners.build_grid(corners.resolve_corners(["typical"]), (27,), [3.3])[0]
+        self.assertEqual(only[0].run_id(point.corner_id), point.corner_id)
+        self.assertNotIn("phase", runner.compose_deck(tb, fake_pdk(self.root / "gf180mcuD"), point))
+
+    def test_a_per_deck_key_may_not_also_be_declared_at_top_level(self):
+        for key, value in (
+            ("netlist", "x.spice"),
+            ("measure", {"vout": "v(out)"}),
+            ("raw_measures", {"t": {"analysis": "tran", "expr": "avg v(out)"}}),
+            ("raw_files", ["j.dat"]),
+        ):
+            with self.subTest(key=key), self.assertRaises(ValueError) as ctx:
+                testbench.load(self.write_phased({key: value}))
+            self.assertIn("which deck?", str(ctx.exception))
+
+    def test_shared_keys_stay_top_level_and_an_unknown_phase_key_is_rejected(self):
+        for key, value in (("checks", {"fosc": {"min": 1}}), ("corners", ["typical"])):
+            with self.subTest(key=key), self.assertRaises(ValueError) as ctx:
+                testbench.load(
+                    self.write_phased(
+                        {}, phases={"push": {**TWO_PHASES["push"], key: value}}
+                    )
+                )
+            self.assertIn("unknown key(s)", str(ctx.exception))
+            self.assertIn("property of the record", str(ctx.exception))
+
+    def test_a_phase_name_may_not_contain_the_corner_id_field_separator(self):
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(
+                self.write_phased({}, phases={"push_static": TWO_PHASES["push"]})
+            )
+        self.assertIn("prefix field", str(ctx.exception))
+
+    def test_the_reserved_ungrouped_name_is_rejected(self):
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(
+                self.write_phased({}, phases={"ungrouped": TWO_PHASES["push"]})
+            )
+        self.assertIn("reserved", str(ctx.exception))
+
+    def test_two_phases_may_not_measure_the_same_name(self):
+        clash = {
+            "push": TWO_PHASES["push"],
+            "jit": {**TWO_PHASES["jit"], "raw_measures": TWO_PHASES["push"]["raw_measures"]},
+        }
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(self.write_phased({}, phases=clash))
+        self.assertIn("same per-point row", str(ctx.exception))
+
+    def test_two_phases_may_not_write_the_same_raw_file(self):
+        clash = {
+            "push": {**TWO_PHASES["push"], "raw_files": ["jit.dat"]},
+            "jit": TWO_PHASES["jit"],
+        }
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(self.write_phased({}, phases=clash))
+        self.assertIn("already declared by phase", str(ctx.exception))
+
+    def test_a_phase_must_name_an_existing_netlist(self):
+        with self.assertRaises(ValueError):
+            testbench.load(
+                self.write_phased({}, phases={"push": {"measure": {"v": "v(out)"}}})
+            )
+        with self.assertRaises(FileNotFoundError):
+            testbench.load(
+                self.write_phased(
+                    {}, phases={"push": {**TWO_PHASES["push"], "netlist": "nope.sp"}}
+                )
+            )
+
+    def test_a_phase_that_produces_nothing_is_rejected(self):
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(
+                self.write_phased(
+                    {}, phases={"push": {"netlist": "tb_pushing.sp"}}
+                )
+            )
+        self.assertIn("produces nothing", str(ctx.exception))
+
+    def test_a_phases_raw_measure_is_checked_against_its_own_analyses(self):
+        """The per-deck rule, per deck: `analyses` is now a phase's property."""
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(
+                self.write_phased(
+                    {}, phases={"push": {**TWO_PHASES["push"], "analyses": ["op"]}}
+                )
+            )
+        self.assertIn("phases['push']", str(ctx.exception))
+        self.assertIn("does not include a 'tran' analysis", str(ctx.exception))
+
+    def test_an_empty_or_malformed_phases_key_is_rejected(self):
+        for bad in ({}, [], "push"):
+            with self.subTest(phases=bad), self.assertRaises(ValueError) as ctx:
+                testbench.load(self.write_phased({}, phases=bad))
+            self.assertIn("non-empty object", str(ctx.exception))
+
+    def test_every_phase_fragment_is_held_to_the_no_harness_directives_rule(self):
+        """A `.temp` in the *second* deck would pin half the record's corners."""
+        self.write_phased({})
+        (self.tb_dir / "tb_jitter.sp").write_text(JIT_FRAGMENT + ".temp 27\n")
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(self.tb_dir)
+        self.assertIn("netlist fragments must not contain", str(ctx.exception))
+
+
+class PhasedDeckTests(PhasedFixture):
+    """The composition half: one deck per phase, one shared environment."""
+
+    def setUp(self):
+        super().setUp()
+        self.pdk = fake_pdk(self.root / "gf180mcuD")
+        self.point = corners.build_grid(
+            corners.resolve_corners(["ss"]), (125,), [3.63]
+        )[0]
+
+    def test_each_phase_gets_its_own_fragment_measurements_and_analyses(self):
+        tb = testbench.load(self.write_phased({"params": {"kw": "4u"}}))
+        push = runner.compose_deck(tb, self.pdk, self.point, tb.phases[0])
+        jit = runner.compose_deck(tb, self.pdk, self.point, tb.phases[1])
+
+        self.assertIn("tb_pushing.sp", push)
+        self.assertNotIn("tb_jitter.sp", push)
+        self.assertIn(".measure tran fosc when v(out)=1.65 rise=2", push)
+        self.assertNotIn("wrdata", push)
+
+        self.assertIn("tb_jitter.sp", jit)
+        self.assertNotIn(".measure", jit)
+        self.assertIn("wrdata jit.dat v(out)", jit)
+        self.assertIn(".param arip=0.05", jit)
+        self.assertNotIn("arip", push)
+
+        # ... over one shared environment: same corner, temp, supply, params.
+        for deck in (push, jit):
+            self.assertIn(".param vdd_val=3.63", deck)
+            self.assertIn(".temp 125.0", deck)
+            self.assertIn(".param kw=4u", deck)
+            self.assertIn('.lib "', deck)
+
+    def test_a_phase_param_is_emitted_after_the_shared_one_it_overrides(self):
+        tb = testbench.load(
+            self.write_phased(
+                {"params": {"arip": "0.01"}},
+                phases={"push": TWO_PHASES["push"], "jit": TWO_PHASES["jit"]},
+            )
+        )
+        jit = runner.compose_deck(tb, self.pdk, self.point, tb.phases[1])
+        self.assertLess(jit.index(".param arip=0.01"), jit.index(".param arip=0.05"))
+
+    def test_the_deck_header_names_the_phase_and_the_run_id_carries_it(self):
+        tb = testbench.load(self.write_phased({}))
+        deck = runner.compose_deck(tb, self.pdk, self.point, tb.phases[1])
+        self.assertIn("* phase=jit (supply step + ripple", deck)
+        self.assertIn("jit_ss_125c_3.63v", deck)
+        self.assertEqual(
+            tb.phases[1].run_id(self.point.corner_id), "jit_ss_125c_3.63v"
+        )
+
+
+class PhasedRunTests(PhasedFixture):
+    """The runner half: N ngspice invocations, ONE PointResult."""
+
+    def setUp(self):
+        super().setUp()
+        self.pdk = fake_pdk(self.root / "gf180mcuD")
+        self.point = corners.build_grid(
+            corners.resolve_corners(["typical"]), (27,), [3.3]
+        )[0]
+        self.outputs = {"push": PUSH_LOG, "jit": ""}
+        self.files = {"jit": {"jit.dat": JIT_DAT}}
+
+    def _run(self, tb, log_dir=None, seen=None, outputs=None):
+        with _stub_ngspice_by_phase(outputs or self.outputs, self.files, seen):
+            return runner.run_point(
+                tb, self.pdk, self.point, self.root / "work", log_dir=log_dir
+            )
+
+    def test_two_decks_run_and_mint_one_result(self):
+        tb = testbench.load(self.write_phased({}))
+        seen = []
+        result = self._run(tb, seen=seen)
+        self.assertEqual(result.status, "ok", result.message)
+        self.assertEqual(
+            seen, ["push_typical_27c_3.30v.spice", "jit_typical_27c_3.30v.spice"]
+        )
+        # One row: the pushing scalar and the jitter deck's waveform together.
+        self.assertEqual(result.measurements["fosc"], 2.5e8)
+        self.assertTrue(result.raw_files["jit.dat"].exists())
+        self.assertEqual([p.name for p in result.phases], ["push", "jit"])
+        self.assertTrue(all(p.status == "ok" for p in result.phases))
+
+    def test_each_phase_writes_its_own_deck_log_and_scratch_directory(self):
+        tb = testbench.load(self.write_phased({}))
+        log_dir = self.root / "corners" / "rec-phased"
+        self._run(tb, log_dir=log_dir)
+        work = self.root / "work"
+        for name in ("push", "jit"):
+            self.assertTrue((work / f"{name}_typical_27c_3.30v.spice").is_file())
+            self.assertTrue((log_dir / f"{name}_typical_27c_3.30v.log").is_file())
+        # Only the deck that declares raw_files gets its own run directory ...
+        self.assertTrue((work / "jit_typical_27c_3.30v.d" / "jit.dat").is_file())
+        self.assertFalse((work / "push_typical_27c_3.30v.d").exists())
+
+    def test_the_reduction_runs_once_over_both_decks_output(self):
+        """The capability: a number neither deck could have produced alone."""
+        self.write_module(BOTH_DECKS_MODULE)
+        tb = testbench.load(
+            self.write_phased(
+                {"derived": {"module": "derive.py", "measures": ["tj_norm"]}}
+            )
+        )
+        result = self._run(tb)
+        self.assertEqual(result.status, "ok", result.message)
+        # jit.dat spans 0 .. 6 ns; fosc is 2.5e8 -> 6e-9 * 2.5e8 = 1.5
+        self.assertAlmostEqual(result.measurements["tj_norm"], 1.5)
+
+    def test_a_retained_raw_file_is_banked_under_its_phases_corner_id(self):
+        phases = {
+            "push": TWO_PHASES["push"],
+            "jit": {
+                **TWO_PHASES["jit"],
+                "raw_files": {"jit.dat": {"columns": ["t", "clk"], "retain": True}},
+            },
+        }
+        tb = testbench.load(self.write_phased({}, phases=phases))
+        log_dir = self.root / "corners" / "rec-retain"
+        result = self._run(tb, log_dir=log_dir)
+        self.assertEqual(
+            result.raw_files["jit.dat"].path,
+            log_dir / "jit_typical_27c_3.30v-jit.dat",
+        )
+
+    def test_a_failing_phase_stops_the_point_before_the_next_deck_runs(self):
+        """The record's claim is the pair, so half of it is not a result."""
+        tb = testbench.load(self.write_phased({}))
+        seen = []
+        result = self._run(tb, seen=seen, outputs={"push": "no measurements here\n"})
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.missing, ["fosc"])
+        self.assertEqual(seen, ["push_typical_27c_3.30v.spice"])
+        self.assertEqual([p.name for p in result.phases], ["push"])
+
+    def test_the_per_point_record_entry_lists_every_deck_it_ran(self):
+        tb = testbench.load(self.write_phased({}))
+        entry = self._run(tb).as_dict()
+        self.assertEqual([p["phase"] for p in entry["phases"]], ["push", "jit"])
+        self.assertEqual(entry["deck"], "push_typical_27c_3.30v.spice")
+
+    def test_a_single_deck_points_entry_says_nothing_about_phases(self):
+        """Backward compatibility, at the record's own level of detail."""
+        tb = testbench.load(
+            self.write(
+                {
+                    "measure": {},
+                    "analyses": ["tran 1n 10n"],
+                    "raw_measures": {
+                        "fosc": {"analysis": "tran", "expr": "when v(out)=1.65 rise=2"}
+                    },
+                }
+            )
+        )
+        with _stub_ngspice_by_phase({"typical": PUSH_LOG}):
+            result = runner.run_point(tb, self.pdk, self.point, self.root / "plain")
+        entry = result.as_dict()
+        self.assertNotIn("phases", entry)
+        self.assertEqual(entry["deck"], "typical_27c_3.30v.spice")
+        self.assertEqual(entry["log"], "typical_27c_3.30v.log")
+
+
+class PhasedRecordTests(PhasedFixture):
+    """The record half: one record, one sub-table per deck."""
+
+    def setUp(self):
+        super().setUp()
+        self.pdk = fake_pdk(self.root / "gf180mcuD")
+        self.write_module(BOTH_DECKS_MODULE)
+        self.tb = testbench.load(
+            self.write_phased(
+                {"derived": {"module": "derive.py", "measures": ["tj_norm"]}},
+                phases={
+                    "push": TWO_PHASES["push"],
+                    "jit": {
+                        **TWO_PHASES["jit"],
+                        "raw_measures": {
+                            "vripple": {"analysis": "tran", "expr": "pp v(out)"}
+                        },
+                    },
+                },
+            )
+        )
+        self.points = corners.build_grid(
+            corners.resolve_corners(["typical"]), (27,), [3.3]
+        )
+        self.results = [
+            runner.PointResult(
+                point=p,
+                status="ok",
+                measurements={"fosc": 2.5e8, "vripple": 0.05, "tj_norm": 1.5},
+            )
+            for p in self.points
+        ]
+        self.record = report.build_record(
+            tb=self.tb,
+            pdk=self.pdk,
+            points=self.points,
+            results=self.results,
+            ngspice="ngspice-46",
+            repo_root=SIM_DIR,
+            record_id="20260101-000000-abcdef0",
+            started_utc="2026-01-01T00:00:00+00:00",
+            wall_seconds=1.0,
+        )
+        self.text = report.render_record(self.record, self.slug)
+
+    def test_each_deck_renders_as_its_own_topology_sub_table(self):
+        """Two decks, two sub-tables -- with no topology_groups declared."""
+        self.assertEqual(
+            [g["name"] for g in self.record["topology_groups"]],
+            ["push", "jit", "ungrouped"],
+        )
+        self.assertIn("**push** — static pushing -- f_osc vs. vdd_vco", self.text)
+        self.assertIn("**jit** — supply step + ripple", self.text)
+        self.assertIn("| corner-id | fosc | pass/fail |", self.text)
+        self.assertIn("| corner-id | vripple | pass/fail |", self.text)
+        # The reduction belongs to neither deck alone, so it is rendered but
+        # unclaimed -- exactly what the trailing 'ungrouped' table is for.
+        self.assertIn("| corner-id | tj_norm | pass/fail |", self.text)
+
+    def test_declared_topology_groups_still_win(self):
+        tb = testbench.load(
+            self.write_phased(
+                {
+                    "derived": {"module": "derive.py", "measures": ["tj_norm"]},
+                    "topology_groups": {"supply": ["fosc", "tj_norm"]},
+                }
+            )
+        )
+        self.assertEqual([g.name for g in tb.measure_groups], ["supply"])
+
+    def test_the_record_names_every_deck_it_was_minted_from(self):
+        phases = self.record["testbench"]["phases"]
+        self.assertEqual([p["netlist"] for p in phases], ["tb_pushing.sp", "tb_jitter.sp"])
+        self.assertEqual(phases[0]["netlist_sha256"], self.tb.phases[0].netlist_sha256)
+        self.assertIn("2 stimulus decks, one record", self.text)
+        self.assertIn("`push` — `sim/an-experiment/testbench/tb_pushing.sp`", self.text)
+        self.assertIn("`jit` — `sim/an-experiment/testbench/tb_jitter.sp`", self.text)
+        self.assertIn(self.tb.composed_sha256, self.text)
+        # Both fragments are reachable from the Links field, not just the first.
+        self.assertIn(
+            "- Testbench: `sim/an-experiment/testbench/tb_pushing.sp`, "
+            "`sim/an-experiment/testbench/tb_jitter.sp`, ",
+            self.text,
+        )
+
+    def test_the_snapshot_freezes_every_deck_the_record_used(self):
+        snapshot = report.write_netlist_snapshot(
+            self.tb, self.root / self.slug, "20260101-000000-abcdef0"
+        )
+        text = snapshot.read_text()
+        self.assertIn(PUSH_FRAGMENT.strip(), text)
+        self.assertIn(JIT_FRAGMENT.strip(), text)
+        self.assertIn(self.tb.composed_sha256, text)
+
+    def test_every_ratified_field_survives_a_multi_deck_record(self):
+        for field in (
+            "Record ID", "Claim", "Netlist provenance", "Environment provenance",
+            "Corner matrix run", "Methodology / criteria / limitations",
+            "Statistical convention", "Result", "Links", "Timestamp / author",
+            "Supersedes",
+        ):
+            self.assertIn(f"**{field}**", self.text, field)
+
+    def test_a_single_deck_record_is_rendered_exactly_as_before(self):
+        """Backward compatibility, end to end: no phases, no phase language."""
+        tb = testbench.load(
+            self.write({"measure": {"vout": "v(out)"}})
+        )
+        results = [
+            runner.PointResult(point=p, status="ok", measurements={"vout": 1.0})
+            for p in self.points
+        ]
+        record = report.build_record(
+            tb=tb, pdk=self.pdk, points=self.points, results=results,
+            ngspice="ngspice-46", repo_root=SIM_DIR,
+            record_id="20260101-000000-abcdef0",
+            started_utc="2026-01-01T00:00:00+00:00", wall_seconds=1.0,
+        )
+        text = report.render_record(record, self.slug)
+        self.assertNotIn("phases", record["testbench"])
+        self.assertEqual(record["topology_groups"], [])
+        self.assertNotIn("stimulus decks", text)
+        self.assertIn("schematic (`sim/an-experiment/testbench/x.spice`)", text)
+        self.assertIn("| corner-id | vout | pass/fail |", text)
 
 
 if __name__ == "__main__":

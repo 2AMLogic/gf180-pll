@@ -47,6 +47,17 @@ schema these implement):
   hands the file to ``derive_point``/``derive_tables`` as a parsed
   ``derived.RawFile``, and optionally retains it under
   ``corners/<record-id>/`` as append-only evidence.
+- ``testbench.py`` / ``runner.py`` / ``report.py`` add the optional ``phases``
+  key, which bandgap has no analogue for either: a manifest names exactly one
+  ``netlist``, and several of this repo's claims are a *pair* of stimuli on a
+  pair of topologies -- supply pushing (static) plus supply-induced jitter
+  (transient), run separately and reduced together, where the jitter numbers
+  are not interpretable without the pushing numbers. Declaring ``phases``
+  gives each deck its own netlist/params/measurements while sharing one PVT
+  grid, one DUT, one set of checks, one reduction and ONE record; each deck's
+  files take its name as the ``[<kind>_]`` corner-id prefix ``sim/README.md``
+  already ratifies, and the record renders one topology sub-table per deck.
+  Distinct from ``dut``, which composes several files into one deck.
 - ``report.py`` renders this repo's ratified field set from ``sim/README.md``
   (Record ID, Claim, Netlist provenance, **Environment provenance**, Corner
   matrix run, **Methodology / criteria / limitations**, Statistical
