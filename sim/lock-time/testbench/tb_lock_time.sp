@@ -113,7 +113,17 @@ xlock  up dn lock vwin vdd vss lock_detector
 * disturbance (reference retune within the band, supply glitch, coarse-band
 * change) with a smaller one. See run.sh and this record's Methodology field.
 vsetv vsetnode 0 dc 'vctrl_ic'
-vsctrl sctrl 0 pulse('vsup' 0 't_force' 100p 100p '2*tstop' '4*tstop')
+* Release transition sized as a multiple of the internal-timestep ceiling
+* (#65), not a hardcoded constant -- see this campaign's investigation record
+* for why: at the OLD 100 ps tr/tf (equal to #65's own 100 ps ceiling), the
+* switch's Ron(10)/Roff(1G) discontinuity spans exactly one ceiling-sized
+* step, which ngspice cannot resolve (LTE drives the internal step below its
+* numerical floor -- "Timestep too small" -- 100% reproducible at vctrl_ic=
+* 0.9V, independent of corner or host load). Ten ceiling-steps across the
+* transition (10*tmax) gives the integrator enough resolution to follow it;
+* tying it to 'tmax' rather than a fixed constant keeps it proportionate if
+* SIM_TMAX is ever overridden for a controlled sub-experiment.
+vsctrl sctrl 0 pulse('vsup' 0 't_force' '10*tmax' '10*tmax' '2*tstop' '4*tstop')
 sforce vctrl vsetnode sctrl 0 SWFORCE
 .model SWFORCE SW(Ron=10 Roff=1G Vt='vsup/2' Vh=0)
 
