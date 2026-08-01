@@ -1,0 +1,275 @@
+{
+  "name": "vco-stage-count",
+  "description": "3 vs 5 vs 7 stage current-starved ring comparison (DR-001 Decision 2's open question)",
+  "claim": "#8 (design-input claim) -- DR-001 Decision 2 fixes the delay cell and leaves the stage count open (\"odd stage count (5 nominal; #8 to confirm against the 200 MHz top of band and the power budget)\"). Does the 5-stage ring remain the right choice against a 3- and a 7-stage ring built from the same cell and the same bias generator?",
+  "methodology": [
+    "**Measurement topology**: three rings in one deck at one PVT point, one band code and one control voltage, differing ONLY in stage count (3 / 5 / 7). Each is built from the same `vco_stage` cell and driven by its own `vco_bias` instance out of the committed `design/netlist/vco.spice` export, so the comparison isolates the stage count and nothing else. Each ring has its own supply ammeter. The three rings share only the ideal supply and ground nodes.",
+    "**Measurement criterion**: frequency is measured on a ring node (`c1`/`e1`/`g1`), not through the output buffer -- the buffer is common to all three counts and would only add a constant, and this deck is a relative comparison. The period is four whole cycles between the 1st and 5th rising half-supply crossing after `w_settle` (>= 4 estimated periods of the slowest ring in the deck).",
+    "**A ring that does not oscillate is a RESULT, not a runner failure.** An N-stage single-ended ring needs a per-stage small-signal gain of 1/cos(pi/N) -- 2.00 for N=3, 1.24 for N=5, 1.11 for N=7 -- and a current-starved inverter loses gain as its head/tail devices are driven fully on. `t<n>a`/`t<n>b`/`f<n>` are therefore declared **optional**: an absent frequency at a point whose ring node is provably static (`s<n>hi` and `s<n>lo` agree to within 1% of the supply) is recorded as data, and the derived `startup` table counts it.",
+    "**Start-up kick**: an identical 50 uA / 200 ps current pulse into the first node of each ring. `.ic` alone is not enough -- a noiseless transient solver can sit on a ring's metastable all-nodes-at-mid DC solution indefinitely, and the 3-stage ring was observed doing exactly that at the fast corner. The kick is identical for all three counts, so it cannot bias the comparison, and it is over ~two orders of magnitude before `w_settle`.",
+    "Simulator settings: `.tran <tmax> <tstop> 0 <tmax>` with the window sized in-deck from a calibrated frequency envelope (see the fragment header); `tmax <= 1/(80 f_max)` of the fastest (3-stage) ring. `uic` is NOT used: every bias generator is solved to its operating point before t=0. The control block ends with `quit` so ngspice's batch mode does not re-run the whole transient a second time to service the netlist `.measure` cards.",
+    "**REDUCED PVT grid, deliberately.** The three rings sit in the same deck at the same corner, so this is a *relative* comparison whose ranking is monotone in N; the absolute per-corner numbers for the chosen count come from the full-grid tuning record, not from here. The grid is the nominal point plus the extreme-slow and extreme-fast composite corners the 63-point tuning campaign identified, at the two band edges of the control window (the interior of a band adds nothing to a stage-count decision).",
+    "Statistical switches: `sw_stat_global = sw_stat_mismatch = 0` (nominal per-corner skew, no Monte Carlo mismatch).",
+    "**Limitation -- schematic-level, no parasitics.** Every frequency here will move downward under extraction (#18); the stage-count *ranking* is what this record claims, not the absolute numbers."
+  ],
+  "dut": [
+    "design/netlist/vco.spice"
+  ],
+  "netlist": "tb_vco_stages.spice",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "typical",
+    "all-slow",
+    "all-fast"
+  ],
+  "analyses": [
+    "tran $&cs_max $&cs_stop 0 $&cs_max",
+    "quit"
+  ],
+  "sweeps": {
+    "band": {
+      "description": "3-bit static band-select code (B2 B1 B0), all 8 codes",
+      "points": {
+        "band0": {
+          "description": "B2 B1 B0 = 000",
+          "params": {
+            "band": "0",
+            "b0": "0",
+            "b1": "0",
+            "b2": "0"
+          }
+        },
+        "band1": {
+          "description": "B2 B1 B0 = 001",
+          "params": {
+            "band": "1",
+            "b0": "1",
+            "b1": "0",
+            "b2": "0"
+          }
+        },
+        "band2": {
+          "description": "B2 B1 B0 = 010",
+          "params": {
+            "band": "2",
+            "b0": "0",
+            "b1": "1",
+            "b2": "0"
+          }
+        },
+        "band3": {
+          "description": "B2 B1 B0 = 011",
+          "params": {
+            "band": "3",
+            "b0": "1",
+            "b1": "1",
+            "b2": "0"
+          }
+        },
+        "band4": {
+          "description": "B2 B1 B0 = 100",
+          "params": {
+            "band": "4",
+            "b0": "0",
+            "b1": "0",
+            "b2": "1"
+          }
+        },
+        "band5": {
+          "description": "B2 B1 B0 = 101",
+          "params": {
+            "band": "5",
+            "b0": "1",
+            "b1": "0",
+            "b2": "1"
+          }
+        },
+        "band6": {
+          "description": "B2 B1 B0 = 110",
+          "params": {
+            "band": "6",
+            "b0": "0",
+            "b1": "1",
+            "b2": "1"
+          }
+        },
+        "band7": {
+          "description": "B2 B1 B0 = 111",
+          "params": {
+            "band": "7",
+            "b0": "1",
+            "b1": "1",
+            "b2": "1"
+          }
+        }
+      }
+    },
+    "vc": {
+      "description": "the two edges of the fine-tuning control window",
+      "points": {
+        "vc0.9": {
+          "description": "bottom of the fine-tuning window",
+          "params": {
+            "vctrl": "0.9"
+          }
+        },
+        "vc2.7": {
+          "description": "top of the fine-tuning window",
+          "params": {
+            "vctrl": "2.7"
+          }
+        }
+      }
+    }
+  },
+  "grid": [
+    {
+      "description": "nominal corner -- the reference point the power line is quoted at",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27
+      ],
+      "supplies": [
+        "nom"
+      ]
+    },
+    {
+      "description": "extreme-slow composite corner -- binding for the 200 MHz top of band",
+      "corners": [
+        "all-slow"
+      ],
+      "temperatures_c": [
+        -40
+      ],
+      "supplies": [
+        "high"
+      ]
+    },
+    {
+      "description": "extreme-fast composite corner -- binding for the 10 MHz bottom of band",
+      "corners": [
+        "all-fast"
+      ],
+      "temperatures_c": [
+        125
+      ],
+      "supplies": [
+        "low"
+      ]
+    }
+  ],
+  "raw_measures": {
+    "t3a": {
+      "analysis": "tran",
+      "expr": "when v(c1)='vdd_val/2' rise=1 td='w_settle'",
+      "optional": true
+    },
+    "t3b": {
+      "analysis": "tran",
+      "expr": "when v(c1)='vdd_val/2' rise=5 td='w_settle'",
+      "optional": true
+    },
+    "t5a": {
+      "analysis": "tran",
+      "expr": "when v(e1)='vdd_val/2' rise=1 td='w_settle'",
+      "optional": true
+    },
+    "t5b": {
+      "analysis": "tran",
+      "expr": "when v(e1)='vdd_val/2' rise=5 td='w_settle'",
+      "optional": true
+    },
+    "t7a": {
+      "analysis": "tran",
+      "expr": "when v(g1)='vdd_val/2' rise=1 td='w_settle'",
+      "optional": true
+    },
+    "t7b": {
+      "analysis": "tran",
+      "expr": "when v(g1)='vdd_val/2' rise=5 td='w_settle'",
+      "optional": true
+    },
+    "f3": {
+      "analysis": "tran",
+      "expr": "param='4/(t3b-t3a)'",
+      "optional": true
+    },
+    "f5": {
+      "analysis": "tran",
+      "expr": "param='4/(t5b-t5a)'",
+      "optional": true
+    },
+    "f7": {
+      "analysis": "tran",
+      "expr": "param='4/(t7b-t7a)'",
+      "optional": true
+    },
+    "i3": {
+      "analysis": "tran",
+      "expr": "avg i(vam3) from='w_settle' to='w_stop'"
+    },
+    "i5": {
+      "analysis": "tran",
+      "expr": "avg i(vam5) from='w_settle' to='w_stop'"
+    },
+    "i7": {
+      "analysis": "tran",
+      "expr": "avg i(vam7) from='w_settle' to='w_stop'"
+    },
+    "s3hi": {
+      "analysis": "tran",
+      "expr": "max v(c1) from='w_settle' to='w_stop'"
+    },
+    "s3lo": {
+      "analysis": "tran",
+      "expr": "min v(c1) from='w_settle' to='w_stop'"
+    },
+    "s5hi": {
+      "analysis": "tran",
+      "expr": "max v(e1) from='w_settle' to='w_stop'"
+    },
+    "s5lo": {
+      "analysis": "tran",
+      "expr": "min v(e1) from='w_settle' to='w_stop'"
+    },
+    "s7hi": {
+      "analysis": "tran",
+      "expr": "max v(g1) from='w_settle' to='w_stop'"
+    },
+    "s7lo": {
+      "analysis": "tran",
+      "expr": "min v(g1) from='w_settle' to='w_stop'"
+    }
+  },
+  "derived": {
+    "module": "derive_stages.py",
+    "measures": [
+      "e3",
+      "e5",
+      "e7",
+      "swing3",
+      "swing5",
+      "swing7"
+    ],
+    "tables": [
+      "startup",
+      "band_edges",
+      "energy_at_100mhz",
+      "worst_swing",
+      "stage_count_verdict"
+    ]
+  },
+  "checks": {
+    "f5": {
+      "min": 100000.0
+    }
+  }
+}
