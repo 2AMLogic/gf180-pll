@@ -1,0 +1,73 @@
+* gf180-pll :: cp-compliance :: UP/DN switching timing mismatch (transient)
+* -- sim/harness manifest fragment
+*
+* DUT: `cp` from the xschem hierarchy in design/, composed by tb.json's
+* `dut_export` (design/netlist.sh --top pfd_cp).  Companion to the sibling
+* testbench/tb_cp_dc.spice: that deck measures the DC current mismatch and
+* compliance, this one measures what a DC sweep cannot -- how much of each
+* polarity's current actually reaches the control node during a pulse of
+* finite width, and how far apart the two polarities are in time.
+*
+* Two instances are driven from the SAME control edge, one hardwired to
+* exercise only the UP (source) branch and one only the DN (sink) branch,
+* each into its own control node held at `vctrl` (a tb.json sweep axis) by
+* an ideal source.  Sharing the stimulus edge is the point: any measured
+* UP-vs-DN difference is then the charge pump's own asymmetry, with no
+* stimulus skew mixed in.
+*
+* The manifest's raw_measures report, per polarity: i_ss (steady-state
+* current late in the pulse) and q (charge delivered over the pulse,
+* including the tail-node charge-sharing transient at switch-on); wup/wdn =
+* q/i_ss are the effective pulse widths the loop actually sees, and wskew =
+* wup - wdn is the headline UP/DN TIMING mismatch -- the quantity that turns
+* charge-pump asymmetry into static phase error.
+*
+* LIMITATION: the pre-migration deck's four 50%-of-i_ss turn-on/turn-off
+* delay diagnostics (ton_up/ton_dn/toff_up/toff_dn) are not reproduced.
+* Reproducing them needs a `.measure ... targ i(...) val=<half of a
+* DIFFERENT, just-computed .measure's result>`, which ngspice rejects at
+* parse time ("Undefined parameter") -- exactly the class of forced
+* methodology gap devchar-cp's migration hit for a threshold defined
+* relative to another measurement (record 20260801-102353-79f398e). The
+* pre-migration deck's own comment already calls these four "diagnostics";
+* the headline switching number is wskew, which needs no edge search and is
+* fully reproduced above.
+
+.param iunit=8u
+
+*------------------------------------------------------------------ supplies
+vdd vdd 0 dc 'vdd_val'
+vss vss 0 dc 0
+vhi hi 0 dc 'vdd_val'
+vlo lo 0 dc 0
+* Fixed nominal trim code (b1 b0 = 1 0, 3 unit legs) -- the sibling DC bench
+* sweeps the trim code; this bench characterizes switching at the nominal
+* code only, as the pre-migration deck did.
+.param b0_code=0
+.param b1_code=1
+vb0 b0 0 dc 'vdd_val*b0_code'
+vb1 b1 0 dc 'vdd_val*b1_code'
+
+* Control edge, shared by both instances.  5 ns asserted -- several times the
+* PFD's own reset-delay pulse width, so the steady-state current is reached
+* well before the pulse ends and can be separated from the switching
+* transient.  200 ps edges, as in the sibling pfd-deadzone deck.
+vctl ctl 0 pulse(0 'vdd_val' 10n 200p 200p 5n 100n)
+
+*---------------------------------------------------------- UP-only instance
+xcpu ctl lo b0 b1 ibn_u icn_u ibp_u icp_u outu vdd vss cp
+iibn_u vdd ibn_u dc 'iunit'
+iicn_u vdd icn_u dc 'iunit'
+iibp_u ibp_u 0 dc 'iunit'
+iicp_u icp_u 0 dc 'iunit'
+* Control node held at vctrl (sweep axis); i(vou) > 0 when the pump SOURCES.
+vou outu 0 dc 'vctrl'
+
+*---------------------------------------------------------- DN-only instance
+xcpd lo ctl b0 b1 ibn_d icn_d ibp_d icp_d outd vdd vss cp
+iibn_d vdd ibn_d dc 'iunit'
+iicn_d vdd icn_d dc 'iunit'
+iibp_d ibp_d 0 dc 'iunit'
+iicp_d icp_d 0 dc 'iunit'
+* i(vod) < 0 when the pump SINKS.
+vod outd 0 dc 'vctrl'

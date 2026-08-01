@@ -1,0 +1,48 @@
+{
+  "name": "pfd-deadzone",
+  "description": "PFD + charge-pump phase-to-charge transfer through zero phase error (dead-zone freedom), and the residual charge offset at zero",
+  "claim": "#9 (design-input, not a spec line) -- does the tri-state PFD of DR-001 Decision 1, driving its own charge pump, deliver charge proportionally through ZERO phase error at every PVT corner (i.e. is it dead-zone free), and what is the residual charge offset at zero phase error that the loop must null as static phase error? DR-001 Decision 1's fixed passive filter assumes a linear phase detector at the lock point; a dead zone puts a piecewise-nonlinear region exactly there.",
+  "methodology": [
+    "Criterion (this is the load-bearing choice): dead-zone freedom is judged in the CHARGE domain, not the logic domain. A PFD whose UP/DN outputs technically toggle but whose pulses are too narrow to turn the charge-pump switches fully on still presents the loop with a flat region around zero. So the DUT is pfd_cp -- the PFD loaded by its real charge pump -- and the measured quantity is qnet, the net charge delivered to the control node per reference cycle. Per corner: kd_near = [q(+200ps) - q(-200ps)] / 400ps is the detector gain AT the lock point and kd_wide = [q(+1ns) - q(-1ns)] / 2ns the gain well outside it; the verdict is ratio = kd_near / kd_wide > 0.5 at every corner, together with a non-zero UP and DN pulse at dphi = 0. A true dead zone drives the ratio to 0. The near pair is +/-200 ps rather than tighter because the differenced charge at +/-50 ps is comparable to the trapezoidal integration noise floor of a few tenths of a femtocoulomb; +/-200 ps is still well inside the 1.1-1.9 ns minimum UP/DN pulse, so it probes the same region with a signal several times the floor. This cross-dphi reduction is derive_pfd_deadzone.py's derive_tables() -- see sim/harness/README.md 'sweeps and grid' / 'derived metrics': no single point's own measurements can express a ratio between two OTHER points.",
+    "dphi is this manifest's sweep axis (points -1n/-200p/0/200p/1n) rather than an in-deck loop: ngspice's alterparam does not resolve a vector-indexed RHS at parameter-substitution time, so the pre-migration deck already swept it externally (one ngspice invocation per (corner, dphi) point via run.sh); the harness's sweep axis is the same shape, run through the shared corner runner.",
+    "Reference 25 MHz (40 ns period) -- the TOP of DR-002 Decision 1's ratified 1-25 MHz v1 range, chosen deliberately: the PFD's reset-and-recover window is the largest fraction of the reference period there, so it is the demanding end for a dead-zone claim.",
+    "Transient: 3 reference cycles, 20 ps maximum timestep (well under the 100 ps PFD internal-timestep ceiling sim/README.md's 'Closed-loop internal-timestep bound' documents -- this open-loop bench derives its own ceiling from Tstep alone, `min(Tstep, (Tstop-Tstart)/50) = min(20p, 2.8n) = 20p`, already 5x tighter), reltol 1e-4 / abstol 1e-14; charge integrated over the last two cycles and halved (qnet = qnet2/2). The first cycle is discarded as startup. REF and FB edges have 200 ps rise/fall (a buffered clock edge, not an ideal step, which would flatter every delay in the set path).",
+    "Control node held at 1.65 V by an ideal source -- mid of DR-001 Decision 2's ~0.9-2.4 V Vctrl window. This isolates the pump's delivered charge from the loop filter's response to it (#10).",
+    "`rshunt = 1e12` is set: a disabled trim leg's cascode mid-node is driven only by two off devices and is floating for the DC solution. The shunt contributes 3.3 pA at 3.3 V, below the abstol floor of the measurement. `itl4 = 200` (transient Newton-iteration limit, raised from ngspice's default of 10): a solver-EFFORT knob, not a tolerance -- needed for the same cp_dumpbuf (DR-005) displacement-current reason documented in the sibling cp-compliance campaign's switching-bench manifest.",
+    "width_up/width_dn are marked `optional` (sim/harness/README.md 'Expected .measure failures: optional'): at this dphi range (+/-1 ns against a 40 ns period) both always assert in practice -- verified against the pre-migration record's own pfd_deadzone.csv, every one of whose 225 rows has both nonzero -- but the flag is defensive rather than load-bearing, matching the pre-migration deck's own defensive `if up_hi > vmid ... else width_up = 0` fallback for the same, in-practice-unreached, case.",
+    "**Also not swept**: the 2-bit Icp trim is held at code b1b0 = 10 (3 unit legs, the nominal setting). Trim range is characterized across corners by the cp-compliance campaign; the dead-zone property is a function of the PFD's reset delay and the switch turn-on, which the unit-element trim construction leaves unchanged (every code runs the same per-leg current).",
+    "LIMITATION (feedback-edge contract with #11 not closed here): FB is driven as an idealized buffered edge. DR-001 Decision 3 specifies that the real FB is a VCO edge retimed by one flop's clk->Q, shaped to be at least as wide as this PFD's reset delay. This record REPORTS that reset delay (wmin_zero, in the pfd_deadzone_verdict derived table) so #11 has a number to size its retiming pulse against; it does not verify the contract from the divider side.",
+    "LIMITATION (nominal skew only): sw_stat_global = sw_stat_mismatch = 0. Random device mismatch on the charge pump is #15's campaign (mc-cp-mismatch); this record's q_zero is the SYSTEMATIC residue, which is the number that campaign's distribution should be centred on.",
+    "Simulator/host delta against the pre-migration record this one supersedes: see this record's own Environment provenance for the exact simulator/host this run used, compared explicitly against the superseded record's ngspice-46/Darwin/arm64 in this Methodology's 'Agreement' note (added by the run that mints this record)."
+  ],
+  "netlist": "tb_pfd_deadzone.spice",
+  "dut_export": {"top": "pfd_cp"},
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [-40, 27, 125],
+  "corners": ["mos"],
+  "sweeps": {
+    "dphi": {
+      "description": "FB-relative-to-REF phase offset (dead-zone probe): the near pair (+/-200 ps), the wide pair (+/-1 ns), and zero itself",
+      "points": {
+        "-1n": {"params": {"dphi": "-1n"}},
+        "-200p": {"params": {"dphi": "-200p"}},
+        "0": {"params": {"dphi": "0"}},
+        "200p": {"params": {"dphi": "200p"}},
+        "1n": {"params": {"dphi": "1n"}}
+      }
+    }
+  },
+  "analyses": ["tran 20p 140n"],
+  "options": ["abstol=1e-14", "reltol=1e-4", "vntol=1e-7", "rshunt=1e12", "itl4=200"],
+  "raw_measures": {
+    "qnet2": {"analysis": "tran", "expr": "integ i(vam) from=60n to=140n"},
+    "qnet": {"analysis": "tran", "expr": "param='qnet2/2'"},
+    "width_up": {"analysis": "tran", "expr": "trig v(up) val='vdd_val/2' rise=3 targ v(up) val='vdd_val/2' fall=3", "optional": true},
+    "width_dn": {"analysis": "tran", "expr": "trig v(dn) val='vdd_val/2' rise=3 targ v(dn) val='vdd_val/2' fall=3", "optional": true}
+  },
+  "derived": {
+    "module": "derive_pfd_deadzone.py",
+    "tables": ["pfd_deadzone_verdict"]
+  }
+}

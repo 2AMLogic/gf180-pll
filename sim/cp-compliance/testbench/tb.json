@@ -1,0 +1,97 @@
+{
+  "name": "cp-compliance-dc",
+  "description": "charge-pump output compliance range, DC UP/DN current mismatch, and 2-bit Icp trim range",
+  "claim": "#9 (design-input, not a spec line) -- (a) does the charge pump hold BOTH current sources in saturation across the whole ~0.9-2.4 V Vctrl window of DR-001 Decision 2, at every PVT corner; (b) how large is the DC UP/DN current mismatch across that window; and (c) what range and step does the 2-bit Icp trim of DR-001 Decision 1 actually deliver. The mismatch numbers are the measured SYSTEMATIC part of the up/down mismatch budget stated in design/README.md, which #15's Monte Carlo campaign (mc-cp-mismatch) verifies statistically. The switching-timing half of the mismatch budget is the sibling testbench-switch/ manifest.",
+  "methodology": [
+    "Measurement topology: two charge-pump instances, one hardwired UP-active and one DN-active, share ONE swept output node `sw` through separate 0 V ammeters, so one DC sweep of `sw` from 0 to 3.63 V traces the complete output characteristic of both polarities at identical output voltages -- the same trick sim/devchar-cp/testbench/tb_cp_mirror.sp uses. Both instances always carry the SAME trim code (DR-001's 2-bit trim is a single shared code, not independent per polarity), swept here as tb.json's `code` sweep axis (code00/01/10/11 = b1 b0, unit legs = 1 + b0 + 2*b1; nominal is code10, 3 legs, per design/README.md).",
+    "DC sweep: 0 to 3.63 V in 20 mV steps, unconditionally -- ngspice's control-mode `dc` does not accept a `.param` reference for its sweep bounds, so (as in the pre-migration deck) the sweep runs to the top of the repo's supply grid at every corner, a superset of each corner's own 0..vdd_val range; the fixed-point `raw_measures` below interpolate within whichever corner's actual range, and `derive_cp_dc.py` windows the curve to 0.9-2.4 V before reducing it.",
+    "Compliance / saturation criterion: not inferred from the flatness of the I-V curve but read off the devices -- `satcasc_lo_v`/`satcasc_hi_v` are the smallest |vds|-|vdsat| among the two output CASCODE devices at Vctrl = 0.9 V / 2.4 V. Positive at both ends, at every corner and trim code, is the pass condition (enforced by `checks` below). The cascode is the right device to key the verdict on: it is the one whose operating point the output voltage actually moves. `satmir_lo_v`/`satmir_hi_v` are the same quantity for the two bottom/top MIRROR devices, reported for CONTEXT ONLY (no check) -- a wide-swing cascode bias deliberately parks them AT the saturation boundary (that is what buys the headroom) and their bias is set by the mirror, not by Vctrl, so a margin near zero there is the design working as intended.",
+    "`iup_lo/idn_lo/iup_mid/idn_mid/iup_hi/idn_hi` are `.measure dc find i(...) at=<V>` reads at 0.9/1.65/2.4 V -- ngspice interpolates linearly between the 20 mV grid samples, whereas the pre-migration awk extraction picked the nearest grid sample (round-to-nearest of (V-0)/0.02); 0.9 and 2.4 land exactly on the 20 mV grid so those two are bit-comparable, but 1.65 V (mid-window) is off-grid by 0.5 step and the two methods differ by a small interpolation delta on that one point family -- the same class of forced methodology change devchar-cp's ro/vcomp migration documented (record 20260801-102353-79f398e).",
+    "`mism_lo_pct`/`mism_mid_pct`/`mism_hi_pct` = 100*(iup-idn)/mean at each of the three fixed points. `mism_absmax_pct` (derived, from the full swept curve written to iv_cp.dat) is the worst-magnitude mismatch ANYWHERE inside the 0.9-2.4 V window, matching the pre-migration `mism_absmax_pct` column exactly (same window, same per-point formula, over the same 20 mV grid). `mism_absmax_nom_pct` restricts that same computation to the nominal trim code (code10) only, matching the pre-migration record's headline 'worst point inside the window at the nominal trim code' number; it is 'not measured' at every other code so the grid spread table reports min/max over the nominal-code rows alone (sim/harness/README.md 'Expected .measure failures: optional').",
+    "`iup_flat_pct`/`idn_flat_pct` (derived) = 100*(max-min)/mid-window value of each polarity's current across the 0.9-2.4 V window -- the compliance evidence in current terms, reported per (corner, code). `iup_flat_nom_pct`/`idn_flat_nom_pct` restrict the same quantity to the nominal code, matching the pre-migration headline 'largest peak-to-peak current variation ... at the nominal trim code'.",
+    "`cp_trim_range` (derived table) reproduces the pre-migration record's headline Icp trim-range table: mean of the two polarities at Vctrl = 1.65 V, min/max across the 45-corner PVT grid, one row per 2-bit trim code.",
+    "Bias generation is out of scope and idealized: the four bias nodes (bottom-mirror and wide-swing-cascode diode, per polarity) are driven from ideal current sources, exactly as in sim/devchar-cp -- at 4x the unit-leg current, because the bias diodes are 4x the unit geometry (the mirror ratio into each leg is therefore 1x, while the bias nodes get 4x the transconductance to drive the legs' aggregate gate capacitance). The mismatch reported here is therefore the OUTPUT STAGE's own; a real reference generator adds its own contribution, carried as a separate line of the budget in design/README.md.",
+    "`rshunt = 1e12` is set: a disabled trim leg's cascode mid-node is driven only by two off devices and is floating for the DC solution. It contributes 3.3 pA at 3.3 V, below the abstol floor of the measurement.",
+    "LIMITATION -- one pre-migration artifact is NOT reproduced here: `cp_curves.csv`, the decimated output I-V curve through both knees. The harness's derived-table mechanism reduces a raw waveform to scalars/small tables, not to a re-committed decimated curve; the full (unretained) curve remains readable from iv_cp.dat during the run but is not itself evidence. This is the same limitation, and the same reasoning, documented in devchar-cp's own migration (record 20260801-102353-79f398e) for the identical artifact family.",
+    "LIMITATION (nominal skew only): sw_stat_global = sw_stat_mismatch = 0. Everything here is systematic; RANDOM device mismatch is #15's campaign (mc-cp-mismatch), and this record's numbers are what that distribution should be centred on.",
+    "Simulator/host delta against the pre-migration record this one supersedes: see this record's own Environment provenance field for the exact simulator/host this run used, compared explicitly against the superseded record's ngspice-46/Darwin/arm64 in the Methodology 'Agreement' note below (added by the run that mints this record, since the harness's own environment is only known at run time)."
+  ],
+  "netlist": "tb_cp_dc.spice",
+  "dut_export": {"top": "pfd_cp"},
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [-40, 27, 125],
+  "corners": ["mos"],
+  "sweeps": {
+    "code": {
+      "description": "2-bit Icp trim code (b1 b0) -> unit legs = 1 + b0 + 2*b1; nominal = code10 (3 legs)",
+      "points": {
+        "code00": {"params": {"b1_code": "0", "b0_code": "0"}},
+        "code01": {"params": {"b1_code": "0", "b0_code": "1"}},
+        "code10": {"params": {"b1_code": "1", "b0_code": "0"}},
+        "code11": {"params": {"b1_code": "1", "b0_code": "1"}}
+      }
+    }
+  },
+  "analyses": [
+    "dc vsw 0 3.63 0.020",
+    "wrdata iv_cp.dat i(vam_up) i(vam_dn)"
+  ],
+  "options": ["abstol=1e-14", "reltol=1e-4", "vntol=1e-7", "rshunt=1e12"],
+  "raw_measures": {
+    "iup_lo": {"analysis": "dc", "expr": "find i(vam_up) at=0.9"},
+    "idn_lo": {"analysis": "dc", "expr": "find i(vam_dn) at=0.9"},
+    "iup_mid": {"analysis": "dc", "expr": "find i(vam_up) at=1.65"},
+    "idn_mid": {"analysis": "dc", "expr": "find i(vam_dn) at=1.65"},
+    "iup_hi": {"analysis": "dc", "expr": "find i(vam_up) at=2.4"},
+    "idn_hi": {"analysis": "dc", "expr": "find i(vam_dn) at=2.4"},
+    "satlo_ncasc_vds": {"analysis": "dc", "expr": "find @m.xcpd.xn_base.xmcasc.m0[vds] at=0.9"},
+    "satlo_ncasc_vdsat": {"analysis": "dc", "expr": "find @m.xcpd.xn_base.xmcasc.m0[vdsat] at=0.9"},
+    "satlo_pcasc_vds": {"analysis": "dc", "expr": "find @m.xcpu.xp_base.xmcasc.m0[vds] at=0.9"},
+    "satlo_pcasc_vdsat": {"analysis": "dc", "expr": "find @m.xcpu.xp_base.xmcasc.m0[vdsat] at=0.9"},
+    "satlo_nbot_vds": {"analysis": "dc", "expr": "find @m.xcpd.xn_base.xmbot.m0[vds] at=0.9"},
+    "satlo_nbot_vdsat": {"analysis": "dc", "expr": "find @m.xcpd.xn_base.xmbot.m0[vdsat] at=0.9"},
+    "satlo_ptop_vds": {"analysis": "dc", "expr": "find @m.xcpu.xp_base.xmtop.m0[vds] at=0.9"},
+    "satlo_ptop_vdsat": {"analysis": "dc", "expr": "find @m.xcpu.xp_base.xmtop.m0[vdsat] at=0.9"},
+    "sathi_ncasc_vds": {"analysis": "dc", "expr": "find @m.xcpd.xn_base.xmcasc.m0[vds] at=2.4"},
+    "sathi_ncasc_vdsat": {"analysis": "dc", "expr": "find @m.xcpd.xn_base.xmcasc.m0[vdsat] at=2.4"},
+    "sathi_pcasc_vds": {"analysis": "dc", "expr": "find @m.xcpu.xp_base.xmcasc.m0[vds] at=2.4"},
+    "sathi_pcasc_vdsat": {"analysis": "dc", "expr": "find @m.xcpu.xp_base.xmcasc.m0[vdsat] at=2.4"},
+    "sathi_nbot_vds": {"analysis": "dc", "expr": "find @m.xcpd.xn_base.xmbot.m0[vds] at=2.4"},
+    "sathi_nbot_vdsat": {"analysis": "dc", "expr": "find @m.xcpd.xn_base.xmbot.m0[vdsat] at=2.4"},
+    "sathi_ptop_vds": {"analysis": "dc", "expr": "find @m.xcpu.xp_base.xmtop.m0[vds] at=2.4"},
+    "sathi_ptop_vdsat": {"analysis": "dc", "expr": "find @m.xcpu.xp_base.xmtop.m0[vdsat] at=2.4"}
+  },
+  "raw_files": {
+    "iv_cp.dat": {
+      "description": "full UP/DN output I-V curve, 20 mV grid, 0..3.63 V -- reduced by derive_cp_dc.py, not itself committed evidence (see LIMITATION in methodology). wrdata repeats the sweep variable once per requested vector (vsw, i_up, vsw2, i_dn); vsw2 is the same values as vsw and unused.",
+      "columns": ["vsw", "i_up", "vsw2", "i_dn"],
+      "retain": false
+    }
+  },
+  "derived": {
+    "module": "derive_cp_dc.py",
+    "measures": [
+      "satcasc_lo_v",
+      "satcasc_hi_v",
+      "satmir_lo_v",
+      "satmir_hi_v",
+      "mism_lo_pct",
+      "mism_mid_pct",
+      "mism_hi_pct",
+      "mism_mid_nom_pct",
+      "icp_mid_mean",
+      "mism_absmax_pct",
+      "mism_absmax_nom_pct",
+      "iup_flat_pct",
+      "idn_flat_pct",
+      "iup_flat_nom_pct",
+      "idn_flat_nom_pct"
+    ],
+    "tables": ["cp_trim_range"]
+  },
+  "checks": {
+    "satcasc_lo_v": {"min": 0.0},
+    "satcasc_hi_v": {"min": 0.0}
+  }
+}

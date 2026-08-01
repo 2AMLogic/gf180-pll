@@ -1,0 +1,85 @@
+* gf180-pll :: pfd-deadzone :: phase-to-charge transfer through zero phase
+* error -- sim/harness manifest fragment
+*
+* DUT: `pfd_cp` from the xschem hierarchy in design/ -- the tri-state PFD
+* driving the real charge pump, composed by tb.json's `dut_export`
+* (design/netlist.sh --top pfd_cp).  Stimulus and measurement only here: a
+* schematic edit this deck does not track is a netlist error, not a silently
+* divergent second copy of the design.
+*
+* What this measures, and why the charge domain rather than the logic
+* domain: a PFD "dead zone" is only incidentally a digital-logic property.
+* What the loop actually sees is the CHARGE the pump delivers per reference
+* cycle as a function of phase error, and a PFD whose UP/DN pulses are
+* technically non-zero but too narrow to turn the charge-pump switches fully
+* on still has a dead zone -- a flat region of Q(dphi) around zero where the
+* loop has no gain.  So the DUT here is the PFD *with its real charge-pump
+* load*, the measured quantity (`qnet`, a raw_measures param= over the
+* integrated `qnet2`) is net charge per reference cycle into the control
+* node, and the acceptance criterion -- Q(dphi) stays proportional through
+* dphi = 0 rather than flattening -- is evaluated per-corner across the
+* `dphi` sweep axis by derive_pfd_deadzone.py's derive_tables(), since it
+* needs every dphi point of one corner together, which no single point's own
+* measurements can express.  width_up/width_dn (the UP/DN pulse widths) are
+* recorded alongside as the supporting logic-level evidence, and because the
+* minimum UP/DN width IS the PFD reset delay #11's retiming pulse must
+* exceed.
+*
+* dphi is a tb.json `sweeps` axis: ngspice's `alterparam` does not resolve a
+* vector-indexed RHS at parameter-substitution time, so an in-deck loop over
+* a dphi list was never available even pre-migration -- the pre-migration
+* run.sh swept it externally, one ngspice invocation per (corner, dphi)
+* point, exactly as the harness's sweep axis now does.
+
+* Charge-pump bias reference.  As in sim/devchar-cp, the four bias nodes are
+* driven from ideal current sources at 4x the unit-leg current (the bias
+* diodes are 4x the unit geometry, so each leg still mirrors one unit):
+* reference generation is a separate block, and driving it ideally here
+* keeps the measured behaviour the PFD+CP's own.
+.param iunit=8u
+* Trim code: b1 b0 = 1 0 -> Icp = 3 units (the nominal setting, mid-range of
+* the 2-bit trim -- see design/README.md).  Not swept here: cp-compliance
+* characterizes the trim axis; the unit-element trim construction leaves the
+* dead-zone property unchanged across codes (every code runs the same
+* per-leg current).
+.param b0_code=0
+.param b1_code=1
+
+* Control-node voltage this measurement is taken at: mid of the ~0.9-2.4 V
+* Vctrl window from DR-001 Decision 2.  Held by an ideal source so the
+* measured quantity is the pump's delivered charge, not the loop filter's
+* response to it (the filter is #10).
+.param vctrl=1.65
+
+*------------------------------------------------------------------ supplies
+vdd vdd 0 dc 'vdd_val'
+vss vss 0 dc 0
+
+* Reference period 40 ns (25 MHz) -- the TOP of DR-002 Decision 1's ratified
+* 1-25 MHz v1 reference range, deliberately: the reset-and-recover window is
+* the smallest fraction of the reference period there, so 25 MHz is the
+* demanding end for a dead-zone claim, and a result that holds here holds for
+* every slower reference in the range.  Edges get a 200 ps rise/fall rather
+* than an ideal step: a zero-rise-time stimulus would flatter every delay in
+* the PFD's set path and understate the reset delay this record reports.
+.param period=40n
+.param tstart=20n
+vref ref 0 pulse(0 'vdd_val' 'tstart' 200p 200p '0.5*period' period)
+vfb  fb  0 pulse(0 'vdd_val' 'tstart+dphi' 200p 200p '0.5*period' period)
+
+* Static trim code.
+vb0 b0 0 dc 'vdd_val*b0_code'
+vb1 b1 0 dc 'vdd_val*b1_code'
+
+* Ideal bias references (see note above).
+iibn vdd ibn dc 'iunit'
+iicn vdd icn dc 'iunit'
+iibp ibp 0 dc 'iunit'
+iicp icp 0 dc 'iunit'
+
+xdut ref fb b0 b1 ibn icn ibp icp vout up dn vdd vss pfd_cp
+
+* Control node held at vctrl through an ammeter, so i(vam) is exactly the
+* charge-pump output current (positive = pump sourcing into the control node).
+vam vout vctrl_src 0
+vctrl vctrl_src 0 dc 'vctrl'

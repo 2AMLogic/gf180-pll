@@ -1,0 +1,82 @@
+* gf180-pll :: cp-compliance :: charge-pump output compliance, UP/DN current
+* mismatch, and 2-bit Icp trim (DC) -- sim/harness manifest fragment
+*
+* DUT: `cp` from the xschem hierarchy in design/, composed by tb.json's
+* `dut_export` (design/netlist.sh --top pfd_cp) -- stimulus and measurement
+* only here, no hand-transcribed copy of the design.
+*
+* Measurement topology (the same trick sim/devchar-cp/testbench/tb_cp_mirror.sp
+* uses): TWO charge-pump instances share one swept output node `sw`, one
+* hardwired UP-active and the other hardwired DN-active, each reaching `sw`
+* through its own 0 V ammeter.  One DC sweep of `sw` from 0 to 3.63 V therefore
+* traces the complete output characteristic of BOTH polarities -- through the
+* saturation knee and into triode, not just the flat region -- and does so at
+* identical output voltages, which is what makes the point-by-point UP/DN
+* difference a real mismatch number rather than a comparison of two runs.
+*
+* Both instances carry the SAME trim code: DR-001's 2-bit trim is one shared
+* code, not an independent per-polarity trim, so the mismatch reported at a
+* code is a property of the design at that code.  The code itself is a
+* tb.json `sweeps` axis (b0_code/b1_code), not a fixed value here.
+*
+* The manifest's `raw_measures` read iup_lo/idn_lo/iup_mid/idn_mid/iup_hi/
+* idn_hi directly off this DC sweep at Vctrl = 0.9/1.65/2.4 V, and eight
+* device-internal saturation margins (`.save`d below) at the two window
+* edges.  `derive_cp_dc.py` reduces the full curve (written to iv_cp.dat by
+* the `analyses` wrdata line) for the two quantities a fixed-point `.measure`
+* cannot express: the worst mismatch ANYWHERE inside the window, and each
+* polarity's peak-to-peak current variation across it.
+*
+* vdd_val/temp_c come from the harness's PVT point; b0_code/b1_code from the
+* `code` sweep axis.
+
+.param iunit=8u
+
+*------------------------------------------------------------------ supplies
+vdd vdd 0 dc 'vdd_val'
+vss vss 0 dc 0
+* Swept output node, shared by both polarities.
+vsw sw 0 dc 0
+* Static logic levels for the hardwired steering inputs.
+vhi hi 0 dc 'vdd_val'
+vlo lo 0 dc 0
+* Static 2-bit trim code, shared by both instances (see tb.json 'sweeps').
+vb0 b0 0 dc 'vdd_val*b0_code'
+vb1 b1 0 dc 'vdd_val*b1_code'
+
+*---------------------------------------------------------- UP-only instance
+* up=1 (sourcing into sw), dn=0 (idle, steered to VSS).
+xcpu hi lo b0 b1 ibn_u icn_u ibp_u icp_u d_up vdd vss cp
+iibn_u vdd ibn_u dc 'iunit'
+iicn_u vdd icn_u dc 'iunit'
+iibp_u ibp_u 0 dc 'iunit'
+iicp_u icp_u 0 dc 'iunit'
+* Ammeter oriented so i(vam_up) is positive for current the pump SOURCES.
+vam_up d_up sw 0
+
+*---------------------------------------------------------- DN-only instance
+* up=0 (idle, steered to VSS), dn=1 (sinking from sw).
+xcpd lo hi b0 b1 ibn_d icn_d ibp_d icp_d d_dn vdd vss cp
+iibn_d vdd ibn_d dc 'iunit'
+iicn_d vdd icn_d dc 'iunit'
+iibp_d ibp_d 0 dc 'iunit'
+iicp_d icp_d 0 dc 'iunit'
+* Ammeter oriented so i(vam_dn) is positive for current the pump SINKS.
+vam_dn sw d_dn 0
+
+* Device-internal operating-point quantities the compliance verdict is keyed
+* on.  `.save` is required for a `.measure dc find @dev[param] at=<v>` to see
+* an internal parameter as a swept vector rather than only at the sweep's
+* final point.  Cascode devices are the verdict; the bottom-mirror/top-mirror
+* devices (nbot/ptop) are reported for context only -- see tb.json Methodology.
+* 'all' is load-bearing: ANY '.save' line switches ngspice from its default
+* "save every vector" behaviour to "save only what is listed" -- without it
+* here, i(vam_up)/i(vam_dn) (needed by raw_measures and by the iv_cp.dat
+* wrdata line) would silently vanish from the plot the moment the internal
+* device parameters below are requested (confirmed empirically against
+* ngspice-46 while writing this manifest).
+.save all
+.save @m.xcpd.xn_base.xmbot.m0[vds] @m.xcpd.xn_base.xmbot.m0[vdsat]
+.save @m.xcpd.xn_base.xmcasc.m0[vds] @m.xcpd.xn_base.xmcasc.m0[vdsat]
+.save @m.xcpu.xp_base.xmtop.m0[vds] @m.xcpu.xp_base.xmtop.m0[vdsat]
+.save @m.xcpu.xp_base.xmcasc.m0[vds] @m.xcpu.xp_base.xmcasc.m0[vdsat]

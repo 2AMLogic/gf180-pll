@@ -2,6 +2,18 @@
 # gf180-pll :: cp-compliance :: corner runner for the charge pump's output
 # compliance range, UP/DN mismatch, and 2-bit Icp trim.
 #
+# SUPERSEDED FOR NEW RUNS by this campaign's sim/harness manifests --
+#   python3 sim/run_corners.py cp-compliance                    # DC bench
+#   python3 sim/run_corners.py sim/cp-compliance/testbench-switch  # switching bench
+# instead (testbench/tb.json + tb_cp_dc.spice for the former,
+# testbench-switch/tb.json + tb_cp_switch.spice for the latter -- the harness
+# mints one record per manifest, so this script's single combined record is
+# now two sibling records). This script is kept because the records it
+# already minted are append-only evidence and it is the only thing that can
+# regenerate the extra CSV artifacts they cite (cp_curves.csv in particular,
+# which the harness migration does not reproduce -- see the DC manifest's
+# Methodology); do not extend it.
+#
 # Two testbenches, one record (they substantiate one claim -- "the charge pump
 # holds both current sources in saturation across the Vctrl window, and here is
 # how far apart the two polarities are"):

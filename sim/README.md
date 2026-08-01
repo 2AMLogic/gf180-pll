@@ -720,7 +720,7 @@ that introduces the tool that will eventually reproduce it.
 |---|---|---|
 | `devchar-delay`, `devchar-cp`, `devchar-passives` | `sim/harness` | migrated (#40); each new record **Supersedes** the pre-migration one |
 | `divider-ratio`, `lock-detector` | `sim/lib/simenv.sh` | #41 |
-| `cp-compliance`, `pfd-deadzone` | `sim/lib/simenv.sh` | #42 |
+| `pfd-deadzone`, `cp-compliance` (DC bench) | `sim/harness` | migrated (#42); each new record **Supersedes** the pre-migration one. `cp-compliance`'s switching-timing bench (`testbench-switch/`) has a harness manifest too, but its full-grid evidence record has not yet been minted — see that testbench's own note in `sim/cp-compliance/testbench-switch/tb.json` and #42's PR for status; `sim/cp-compliance/testbench/run.sh` (the pre-migration combined runner) remains the citable source for that half until it lands |
 | `vco-tuning-range` | `sim/lib/simenv.sh` | #43 |
 | `lock-time`, `output-range` | `sim/lib/simenv.sh` | blocked on a manifest capability gap — see below |
 | `loop-dynamics`, `mc-cp-mismatch`, `pll-top-smoke`, `supply-sensitivity` | `sim/lib/simenv.sh` | not yet scoped — these landed after #36 was written, so they are outside #40–#43 |

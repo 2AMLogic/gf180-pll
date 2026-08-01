@@ -1,0 +1,6 @@
+# Icp trim range: mean of the two polarities at Vctrl = 1.65 V (mid-window), min/max across the 45-corner PVT grid, per 2-bit trim code
+unit_legs,icp_min_a,icp_max_a
+1,1.67859e-06,1.8025e-06
+2,3.35713e-06,3.60472e-06
+3,5.0356e-06,5.40692e-06
+4,6.71402e-06,7.20908e-06

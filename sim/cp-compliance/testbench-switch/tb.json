@@ -1,0 +1,41 @@
+{
+  "name": "cp-compliance-switch",
+  "description": "charge-pump UP/DN switching timing mismatch (transient), companion to the DC compliance/mismatch/trim bench",
+  "claim": "#9 (design-input, not a spec line) -- the switching-timing half of the UP/DN mismatch budget stated in design/README.md: how much of each polarity's current actually reaches the control node during a finite-width pulse, and how far apart the two polarities are in time (wskew), at every PVT corner and at three points across the ~0.9-2.4 V Vctrl window. The DC current-mismatch and compliance/trim-range half of the same claim is the sibling testbench/ manifest.",
+  "methodology": [
+    "Two charge-pump instances are driven from the SAME control edge, one hardwired to exercise only the UP (source) branch and one only the DN (sink) branch, each into its own control node held at Vctrl (this manifest's `vctrl` sweep axis: 0.9/1.65/2.4 V, the low/mid/high points of DR-001 Decision 2's window) by an ideal source. Sharing the stimulus edge means any measured UP-vs-DN difference is the charge pump's own asymmetry, with no stimulus skew mixed in.",
+    "iup_ss/idn_ss: steady-state current, averaged over the last nanosecond of the 5 ns control pulse. qup/qdn: charge delivered over the whole switching event (integ from just before the control edge to just before the falling edge), including the tail-node charge-sharing transient at switch-on. wup = qup/iup_ss, wdn = qdn/idn_ss: the effective pulse width each polarity presents to the loop. wskew = wup - wdn: the headline effective UP/DN TIMING mismatch, in seconds -- the quantity that turns charge-pump asymmetry into static phase error (and hence reference spurs).",
+    "itl4 = 200 (transient Newton-iteration limit, raised from ngspice's default of 10): a solver-EFFORT knob, not a tolerance -- every convergence tolerance (abstol/reltol/vntol) is unchanged, so the converged solution is unchanged. Needed because the dump-node buffer (cp_dumpbuf, DR-005) puts two MOS gates on the control node, and the ideal source holding that node carries their displacement current: with everything else in DC steady state, that branch current numerically jitters at a few times 1e-14 A against an abstol of 1e-14 A, and ngspice's default 10 iterations are not enough to settle it at some (corner, Vctrl) points without the higher limit.",
+    "LIMITATION -- the pre-migration deck's four 50%-of-i_ss turn-on/turn-off delay diagnostics (ton_up/ton_dn/toff_up/toff_dn) are not reproduced: they need a `.measure ... targ i(...) val=<half of a DIFFERENT, just-computed .measure's result>`, which ngspice rejects at parse time with 'Undefined parameter' -- confirmed empirically against ngspice-46 while writing this manifest, the same class of forced gap devchar-cp's migration documented for a threshold defined relative to another measurement (record 20260801-102353-79f398e). The pre-migration deck's own comment already calls these four measurements 'diagnostics'; the headline switching number is wskew, which is derived from integrated charge and needs no edge search, and is fully reproduced above.",
+    "Bias generation is out of scope and idealized, exactly as in the sibling DC bench and in sim/devchar-cp: the four bias nodes are driven from ideal current sources at 4x the unit-leg current.",
+    "Fixed nominal trim code (b1 b0 = 1 0, 3 unit legs) -- the DC bench characterizes the trim code axis; this bench characterizes switching at the nominal code only, matching the pre-migration deck.",
+    "Simulator/host delta against the pre-migration record this one supersedes: see this record's own Environment provenance for the exact simulator/host this run used, compared explicitly against the superseded record's ngspice-46/Darwin/arm64 in this Methodology's 'Agreement' note (added by the run that mints this record)."
+  ],
+  "netlist": "tb_cp_switch.spice",
+  "dut_export": {"top": "pfd_cp"},
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [-40, 27, 125],
+  "corners": ["mos"],
+  "sweeps": {
+    "vctrl": {
+      "description": "control-node voltage this switching measurement is taken at -- low/mid/high of the ~0.9-2.4 V Vctrl window (DR-001 Decision 2)",
+      "points": {
+        "0.9": {"params": {"vctrl": "0.9"}},
+        "1.65": {"params": {"vctrl": "1.65"}},
+        "2.4": {"params": {"vctrl": "2.4"}}
+      }
+    }
+  },
+  "analyses": ["tran 5p 20n"],
+  "options": ["abstol=1e-14", "reltol=1e-4", "vntol=1e-7", "rshunt=1e12", "itl4=200"],
+  "raw_measures": {
+    "iup_ss": {"analysis": "tran", "expr": "avg i(vou) from=14n to=15n"},
+    "idn_ss": {"analysis": "tran", "expr": "avg i(vod) from=14n to=15n"},
+    "qup": {"analysis": "tran", "expr": "integ i(vou) from=9.5n to=15n"},
+    "qdn": {"analysis": "tran", "expr": "integ i(vod) from=9.5n to=15n"},
+    "wup": {"analysis": "tran", "expr": "param='qup/iup_ss'"},
+    "wdn": {"analysis": "tran", "expr": "param='qdn/idn_ss'"},
+    "wskew": {"analysis": "tran", "expr": "param='wup-wdn'"}
+  }
+}

@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # gf180-pll :: pfd-deadzone :: corner + phase-offset runner
 #
+# SUPERSEDED FOR NEW RUNS by this campaign's sim/harness manifest
+# (testbench/tb.json + tb_pfd_deadzone.spice, plus derive_pfd_deadzone.py for
+# the per-corner dead-zone verdict) -- run
+#   python3 sim/run_corners.py pfd-deadzone
+# instead. This script is kept because the records it already minted are
+# append-only evidence; do not extend it.
+#
 # Sweeps tb_pfd_deadzone.sp over the full repo PVT grid AND a phase-offset
 # (dphi) sweep through zero, to verify the dead-zone-elimination requirement
 # DR-001 Decision 1 puts on the PFD.
