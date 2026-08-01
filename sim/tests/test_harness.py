@@ -632,6 +632,46 @@ class RecordRenderingTests(unittest.TestCase):
         self.assertIn("sim/harness-selftest/netlist-snapshots/20260729-153000-1a7ef75.spice", text)
         self.assertIn("sim/harness-selftest/corners/20260729-153000-1a7ef75/", text)
 
+    def test_links_cite_a_second_testbench_dir_not_the_default_name(self):
+        """An experiment may carry more than one deck (devchar-passives does).
+
+        A record must cite the directory ITS OWN manifest came from, or the
+        capacitor record and the resistor record of the same experiment would
+        both claim to have come from ``testbench/``.
+        """
+        root = Path(self.tmp.name)
+        alt = root / "harness-selftest" / "testbench-alt"
+        alt.mkdir(parents=True)
+        (alt / "y.spice").write_text("v1 out 0 dc {vdd_val}\n")
+        (alt / "tb.json").write_text(
+            json.dumps({"name": "alt", "netlist": "y.spice", "measure": {"vout": "v(out)"}})
+        )
+        tb = testbench.load(alt)
+        record = report.build_record(
+            tb=tb,
+            pdk=self.pdk,
+            points=self.points,
+            results=self.results,
+            ngspice="ngspice-46",
+            repo_root=SIM_DIR,
+            record_id="20260729-153000-1a7ef75",
+            started_utc="2026-07-29T15:30:00+00:00",
+            wall_seconds=9.5,
+        )
+        text = report.render_record(record, "harness-selftest")
+        self.assertIn("sim/harness-selftest/testbench-alt/y.spice", text)
+        self.assertIn("sim/harness-selftest/testbench-alt/tb.json", text)
+        self.assertNotIn("sim/harness-selftest/testbench/y.spice", text)
+
+    def test_rendering_tolerates_a_record_written_before_the_directory_key(self):
+        """Records are append-only; the oldest ones carry no testbench dir."""
+        legacy = dict(self.record)
+        legacy["testbench"] = {
+            k: v for k, v in self.record["testbench"].items() if k != "directory"
+        }
+        text = report.render_record(legacy, "harness-selftest")
+        self.assertIn("sim/harness-selftest/testbench/x.spice", text)
+
     def test_result_table_uses_corner_ids_and_reports_overall_verdict(self):
         text = report.render_record(self.record, "harness-selftest")
         self.assertIn("`typical_-40c_2.97v`", text)
