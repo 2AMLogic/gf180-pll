@@ -14,6 +14,19 @@ in `corners/20260731-175947-0a12e6c/vco_tuning.csv` -- through the new
 identical. Any difference in a post-migration run is therefore an electrical
 difference, not an arithmetic one.
 
+It does that twice, over two entry points, because they fail differently:
+
+- `VcoTuningReductionParity` calls `reduce_grid()` on the flat rows read
+  straight out of the CSV. That pins the *arithmetic*.
+- `VcoTuningDerivedTableParity` rebuilds the harness's own `RunView` /
+  `PointView` from the same CSV and goes in the way a real run does --
+  `derive_point()` per point, then `derive_tables(run)`, which internally calls
+  `rows_from_run()` -> `reduce_grid()`. That pins the *record*: the seven
+  tables' columns, rows and notes, verbatim as the superseded record prints
+  them. A reduction that computes every number correctly and then puts them in
+  the wrong column, cites the wrong corner or drops a note is a corrupted
+  record, and only the second path sees it.
+
 Runs in the harness unit-test suite (`sim/selftest.sh` stage 1): no PDK, no
 ngspice, no network.
 """
@@ -22,6 +35,7 @@ from __future__ import annotations
 
 import csv
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
@@ -30,6 +44,9 @@ TESTBENCH = SIM_DIR / "vco-tuning-range" / "testbench"
 #: The chain-head record this migration supersedes, and its committed sweep CSV.
 SUPERSEDED_RECORD = "20260731-175947-0a12e6c"
 SWEEP_CSV = SIM_DIR / "vco-tuning-range" / "corners" / SUPERSEDED_RECORD / "vco_tuning.csv"
+
+sys.path.insert(0, str(SIM_DIR))
+from harness.derived import PointView, RunView  # noqa: E402
 
 
 def _load_derive():
@@ -55,6 +72,46 @@ def _read_sweep(path: Path):
             }
         )
     return rows
+
+
+def _run_view_from_csv(derive, path: Path) -> RunView:
+    """Rebuild the harness's per-point view from the pre-migration CSV.
+
+    The pre-migration runner wrote one row per (corner, band, Vctrl); the
+    harness's shape is one *point* per (corner, band) carrying that point's
+    seven control voltages as separate measurements -- `f1..f7` / `i1..i7`,
+    indexed by position in `derive.VCTRLS`, which is exactly what
+    `rows_from_run()` unpacks back into flat rows. Translating the former into
+    the latter is the shape change the migration makes, so going in through
+    here exercises `rows_from_run()` rather than bypassing it.
+    """
+    lines = [line for line in path.read_text().splitlines() if not line.startswith("#")]
+    index = {v: i for i, v in enumerate(derive.VCTRLS, start=1)}
+    grouped: dict[tuple, dict] = {}
+    for r in csv.DictReader(lines):
+        key = (r["bundle"], float(r["temp_c"]), float(r["vdd_v"]), int(r["band"]))
+        n = index[float(r["vctrl_v"])]
+        entry = grouped.setdefault(key, {})
+        entry["f%d" % n] = float(r["fosc_hz"])
+        entry["i%d" % n] = float(r["isupply_a"])
+
+    points = []
+    for (bundle, temp_c, vdd, band), meas in grouped.items():
+        view = PointView(
+            corner=bundle,
+            corner_id="%s_%gc_%.2fv_band%d" % (bundle, temp_c, vdd, band),
+            temp_c=temp_c,
+            vdd=vdd,
+            axes={"band": "band%d" % band},
+            params={"band": str(band)},
+            measurements=meas,
+        )
+        # derive_point() runs before derive_tables() in a real run; replay that
+        # order so the derived columns are present for the reduction.
+        meas.update(derive.derive_point(view))
+        points.append(view)
+    return RunView(experiment="vco-tuning-range",
+                   measure_names=(), points=tuple(points))
 
 
 class VcoTuningReductionParity(unittest.TestCase):
@@ -228,6 +285,210 @@ class VcoTuningReductionParity(unittest.TestCase):
         self.assertAlmostEqual(got["kvco_over_f_max"], want["ratio_max"], places=9)
         self.assertAlmostEqual(got["fine_ratio"], want["fhi"] / want["flo"], places=9)
         self.assertEqual(len([k for k in got if k.startswith("k") and k[1:].isdigit()]), 7)
+
+
+class VcoTuningDerivedTableParity(unittest.TestCase):
+    """The same grid, in through the harness hooks the record is minted from.
+
+    `VcoTuningReductionParity` above stops at `reduce_grid()`'s dict, so it
+    cannot see what the record actually prints. This class goes the whole way a
+    run does -- `derive_point()` per point, then `derive_tables(run)`, which
+    calls `rows_from_run()` itself -- and pins every one of the seven tables'
+    columns, rows and notes against record 20260731-175947-0a12e6c's own
+    Markdown. Numbers that are individually right but land in the wrong column,
+    cite the wrong corner, or lose a note are a corrupted record, and this is
+    what catches them.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.d = _load_derive()
+        cls.view = _run_view_from_csv(cls.d, SWEEP_CSV)
+        cls.table_list = cls.d.derive_tables(cls.view)
+        cls.tables = {t.name: t for t in cls.table_list}
+
+    def test_grid_shape(self):
+        """63 corners x 8 bands, each carrying its seven control voltages."""
+        self.assertEqual(len(self.view.points), 504)
+        for p in self.view.points:
+            for n in range(1, 8):
+                self.assertIsNotNone(p.get("f%d" % n), p.corner_id)
+                self.assertIsNotNone(p.get("i%d" % n), p.corner_id)
+        # derive_point() ran first, as it does in a real run.
+        self.assertIsNotNone(self.view.points[0].get("kvco_max"))
+
+    def test_rows_from_run_reproduces_the_flat_sweep(self):
+        """`rows_from_run()` must hand `reduce_grid()` back the CSV, row for row."""
+        def key(row):
+            return (row["corner"], row["band"], row["vctrl"])
+
+        self.assertEqual(sorted(self.d.rows_from_run(self.view), key=key),
+                         sorted(_read_sweep(SWEEP_CSV), key=key))
+
+    def test_table_set_and_order(self):
+        self.assertEqual(
+            [t.name for t in self.table_list],
+            ["acceptance_checks", "band_edge_margin", "band_plan", "band_overlap",
+             "kvco_summary", "supply_pushing", "block_current"],
+        )
+
+    def test_acceptance_checks_table(self):
+        t = self.tables["acceptance_checks"]
+        self.assertEqual(
+            t.columns, ("#", "check", "binding corner", "measured", "spec line", "verdict"))
+        self.assertEqual(
+            t.rows,
+            (("1",
+              "Lowest band (B0) reaches DOWN to 10 MHz at **every** corner",
+              "all-fast/125C/2.97V", "6.449 MHz floor", "<= 10 MHz", "**PASS**"),
+             ("2",
+              "Highest band (B7) reaches UP to 200 MHz at **every** corner",
+              "all-slow/-40C/3.63V", "247.8 MHz ceiling", ">= 200 MHz", "**PASS**"),
+             ("3",
+              "No band-overlap hole inside 10-200 MHz at any corner",
+              "ss/125C/3.63V", "worst adjacent overlap ratio 1.267", ">= 1.000",
+              "**PASS**"),
+             ("4a",
+              "Kvco under the fixed-filter ceiling at the band a correct "
+              "configuration selects",
+              "all-fast/27C/2.97V, target 200 MHz -> B6 @ 1.54 V", "115.8 MHz/V",
+              "<= 150 MHz/V", "**PASS**"),
+             ("4b",
+              "Kvco under the ceiling at *every* in-band operating point, including "
+              "bands a correct configuration would not select",
+              "all-fast/27C/3.30V B7 @ 0.9 V", "154.3 MHz/V", "<= 150 MHz/V",
+              "**FAIL**"),
+             ("5",
+              "f(Vctrl) monotonic on every (corner, band) curve",
+              "n/a", "0 non-monotonic curves", "0", "**PASS**")),
+        )
+
+    def test_acceptance_checks_notes(self):
+        notes = self.tables["acceptance_checks"].notes
+        self.assertEqual(notes[0], "**Overall: PASS.**")
+        self.assertIn("of the 63 corners on the grid -- reaching below 10 MHz at the", notes)
+        # The record's only FAIL travels with the numbers as a caveat (check 4b).
+        self.assertIn("**Caveat that must travel with these numbers (check 4b).** Kvco", notes)
+        self.assertIn("reaches 154.3 MHz/V at an in-band operating point in band B7, which",
+                      notes)
+        # ... and the two hand-offs #11 and #9/#10 read out of this record.
+        self.assertIn("    lowest band reaches 6.449 MHz at the fastest corner, 36 % below the",
+                      notes)
+        self.assertIn("    number. Within the v1 band Kvco spans 3.182 .. 154.3 MHz/V across "
+                      "bands and", notes)
+
+    def test_band_edge_margin_table(self):
+        t = self.tables["band_edge_margin"]
+        self.assertEqual(
+            t.columns, ("edge", "worst corner", "best corner", "spec", "worst-case margin"))
+        self.assertEqual(
+            t.rows,
+            (("B0 floor (must go low enough)",
+              "6.449 MHz @ all-fast/125C/2.97V", "2.956 MHz @ all-slow/-40C/3.63V",
+              "10 MHz", "36% below the spec line"),
+             ("B7 ceiling (must go high enough)",
+              "247.8 MHz @ all-slow/-40C/3.63V", "631.8 MHz @ all-fast/125C/2.97V",
+              "200 MHz", "24% above the spec line")),
+        )
+        self.assertIn("63-corner grid", t.description)
+
+    def test_band_plan_table(self):
+        t = self.tables["band_plan"]
+        self.assertEqual(
+            t.columns,
+            ("band", "floor: min .. max over corners (MHz)",
+             "ceiling: min .. max over corners (MHz)", "fine range (x)"),
+        )
+        self.assertEqual(
+            t.rows,
+            (("B0", "2.956 .. 6.449", "6.452 .. 14.45", "2.13 .. 2.38"),
+             ("B1", "4.724 .. 10.52", "10.39 .. 23.83", "2.15 .. 2.41"),
+             ("B2", "7.915 .. 17.54", "17.48 .. 40.34", "2.18 .. 2.44"),
+             ("B3", "12.72 .. 29.08", "28.55 .. 68.69", "2.21 .. 2.49"),
+             ("B4", "21.05 .. 51.6", "48.04 .. 125.2", "2.25 .. 2.55"),
+             ("B5", "34.41 .. 87.81", "80.51 .. 220.5", "2.31 .. 2.61"),
+             ("B6", "59.79 .. 155.9", "143.8 .. 389.3", "2.23 .. 2.68"),
+             ("B7", "100.6 .. 274.9", "247.8 .. 631.8", "2.00 .. 2.70")),
+        )
+
+    def test_band_overlap_table(self):
+        t = self.tables["band_overlap"]
+        self.assertEqual(
+            t.columns, ("band pair", "worst overlap ratio", "overlap", "worst corner"))
+        self.assertEqual(
+            t.rows,
+            (("B0 -> B1", "1.317", "32%", "ss/125C/3.63V"),
+             ("B1 -> B2", "1.297", "30%", "ss/125C/3.63V"),
+             ("B2 -> B3", "1.334", "33%", "ss/125C/3.63V"),
+             ("B3 -> B4", "1.267", "27%", "ss/125C/3.63V"),
+             ("B4 -> B5", "1.356", "36%", "ss/125C/3.63V"),
+             ("B5 -> B6", "1.336", "34%", "sf/-40C/3.63V"),
+             ("B6 -> B7", "1.321", "32%", "ss/125C/2.97V")),
+        )
+        self.assertEqual(
+            t.notes,
+            ("No corner leaves a hole in 10-200 MHz coverage: every adjacent band",
+             "pair overlaps at every one of the 63 corners."),
+        )
+
+    def test_kvco_summary_table(self):
+        t = self.tables["kvco_summary"]
+        self.assertEqual(
+            t.columns,
+            ("band", "Kvco min (MHz/V)", "Kvco max (MHz/V)", "max Kvco/f_out (per V)"))
+        self.assertEqual(
+            t.rows,
+            (("B0", "1.722", "4.702", "0.71"),
+             ("B1", "2.767", "7.91", "0.71"),
+             ("B2", "4.649", "13.33", "0.73"),
+             ("B3", "7.556", "23.95", "0.74"),
+             ("B4", "12.84", "45.32", "0.76"),
+             ("B5", "21.42", "81.52", "0.78"),
+             ("B6", "38.5", "135.3", "0.80"),
+             ("B7", "67.32", "205.9", "0.84")),
+        )
+
+    def test_kvco_summary_notes(self):
+        notes = self.tables["kvco_summary"].notes
+        self.assertIn("    band, over ALL band codes**: 154.3 MHz/V (all-fast/27C/3.30V, "
+                      "B7, Vctrl 0.9 V, f =", notes)
+        self.assertIn("    194.5 MHz) -- **OVER** DR-001's ~150 MHz/V ceiling. Reaching "
+                      "that point", notes)
+        self.assertIn("    band**: 205.9 MHz/V (all-fast/125C/2.97V, B7, Vctrl 1.5 V, "
+                      "f = 396.8 MHz).", notes)
+        # The worst point sits above the v1 envelope, so the deferred-stretch
+        # paragraph must be present and must say "exceeds".
+        self.assertIn("    ABOVE the v1 envelope and exceeds the 150 MHz/V bound; it is "
+                      "reported", notes)
+        self.assertIn("  - Kvco/f_out inside the v1 band spans **0.31 .. 0.84 per volt**, "
+                      "which", notes)
+        # No (corner, target) pair is unreachable, so no unreachable footnote.
+        self.assertNotIn("not reachable by ANY band", "\n".join(notes))
+
+    def test_supply_pushing_table(self):
+        t = self.tables["supply_pushing"]
+        self.assertEqual(t.columns, ("", "df/dVdd (MHz/V)", "normalized (%/V)", "point"))
+        self.assertEqual(
+            t.rows,
+            (("Worst", "-52.31", "55.3", "ss/-40C, B5, Vctrl 2.1 V (f = 94.65 MHz)"),
+             ("Best", "-0.76", "20.4", "ff/-40C, B0, Vctrl 0.9 V (f = 3.735 MHz)")),
+        )
+        self.assertIn("1176 combinations", t.description)
+        self.assertEqual(
+            t.notes[:2],
+            ("Median normalized pushing 39.1 %/V; a +/-10% (+/-0.33 V) supply excursion",
+             "therefore moves f_osc by up to 18% open-loop at the worst point."),
+        )
+
+    def test_block_current_table(self):
+        t = self.tables["block_current"]
+        self.assertEqual(
+            t.columns, ("operating point", "I min (uA)", "I median (uA)", "I max (uA)"))
+        self.assertEqual(
+            t.rows,
+            (("~10 MHz (n=179)", "39", "76", "146"),
+             ("~200 MHz (n=149)", "217", "328", "480")),
+        )
 
 
 if __name__ == "__main__":
