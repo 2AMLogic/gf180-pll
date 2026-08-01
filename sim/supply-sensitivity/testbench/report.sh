@@ -524,12 +524,13 @@ ${SETTLE_TABLE}
   transient-budget artefact; \`settles-phi\` = the residual frequency error
   settled but the STATIC phase error (or the block's own LOCK flag) is still
   over threshold, which is a static-offset result, not a settling one;
-  \`integration\` = still over threshold at the longer length under the default
-  ${KTMAX_BASE} timestep ceiling, but inside it at the SAME length under the
-  finer ${KTMAX_X} ceiling -- so the failure was the simulator's, not the
-  loop's, and it is **not** a design result (PR #64 measured exactly this
-  failure mode on this DUT: ngspice stepping over \`design/edgedet.sch\`'s
-  0.33-0.39 ns internal PFD set pulse);
+  \`integration\` = still over threshold at the longer length under the ceiling
+  the grid was run at, but inside it at the SAME length under the shared
+  closed-loop bound -- so the failure was the simulator's, not the loop's, and
+  it is **not** a design result (PR #64 measured exactly this failure mode on
+  this DUT: ngspice stepping over \`design/edgedet.sch\`'s 0.33-0.39 ns internal
+  PFD set pulse).  This can only arise on a run deliberately taken off the bound
+  with \`SIM_TMAX\`; at the bound the class is empty by construction;
   \`under-damped\` = in lock (divide ratio and absolute output frequency both
   correct) but the residual frequency error is STILL over threshold at
   ${KTB_X} = ${KTB_X_TAU} tau **and** at the finer ceiling, i.e. genuinely
@@ -545,8 +546,10 @@ ${SETTLE_TABLE}
 
   \`tmax (fine)\` / \`ferr (fine)\` are the timestep-ceiling cross-check: the
   same corner, the same ${KTSTOP_X} transient, the same warm start, re-run with
-  the internal timestep ceiling tightened to ${KTMAX_X}. \`--\` means the corner
-  came inside the criterion at the longer length and no cross-check was needed.
+  the internal timestep ceiling at the shared bound ${KTMAX_X}. \`--\` means no
+  cross-check was needed -- either the corner came inside the criterion at the
+  longer length, or the grid already ran at the bound and there is nothing to
+  cross-check against.
 
   - ${N_RERUN} corner(s) escalated from ${KTSTOP_BASE} to ${KTSTOP_X}
     (${KTSTOP_X_TAU} tau, late window at ${KTA_X_TAU}/${KTB_X_TAU} tau against
@@ -558,9 +561,9 @@ ${SETTLE_TABLE}
   - **\`integration\`: ${N_R_INTEG} corner(s)** -- ${INTEG_LIST}. Not design
     results either: they pass at the same transient length once the timestep
     ceiling resolves the PFD's internal set pulse. Their presence is also the
-    measurement that says the ${KTMAX_BASE} default is not sufficient
-    everywhere on this grid, which is a finding about this campaign's own
-    numerics and is stated as one.
+    measurement that says the ceiling this grid was run at is not sufficient
+    everywhere on it, which is a finding about this campaign's own numerics and
+    is stated as one.
   - **\`under-damped\`: ${N_R_UNDAMPED} corner(s)**; **\`not-locked\`:
     ${N_R_NOTLOCK} corner(s)** -- still outside the criterion at the longer
     length AND at the finer timestep ceiling.$(
@@ -1140,10 +1143,12 @@ SUBSET
     re-runs every such corner at ${KTSTOP_X} (${KTSTOP_X_TAU} tau, late window
     ${KTA_X}/${KTB_X} = ${KTA_X_TAU}/${KTB_X_TAU} tau); and any corner still
     over threshold there is re-run once more at the same length with the
-    timestep ceiling tightened to ${KTMAX_X}, because a third explanation --
-    the integration stepping over the PFD's internal set pulse, which PR #64
-    measured on this DUT -- has to be excluded before a residual can be called
-    a property of the loop. The record reports all the runs a corner got and
+    timestep ceiling put back on the shared bound ${KTMAX_X}, because a third
+    explanation -- the integration stepping over the PFD's internal set pulse,
+    which PR #64 measured on this DUT -- has to be excluded before a residual
+    can be called a property of the loop.  On a grid run AT the bound that
+    exclusion is already made and the stage does nothing; it exists for the
+    bound-sensitivity run that deliberately is not. The record reports all the runs a corner got and
     classifies it from the best-resolved one (section 1c). Both escalations are
     automatic -- \`SIM_EXTEND\`, \`SIM_EXTEND_TSTOP\`/\`_TA\`/\`_TB\`,
     \`SIM_EXTEND_MAX\`, \`SIM_FINE\`, \`SIM_FINE_TMAX\`, \`SIM_FINE_MAX\` in the
@@ -1238,27 +1243,36 @@ SUBSET
     per row) and \`.tran ${KTSTEP} ${KD_TSTOP} 0 ${KTMAX_BASE}\` for the
     step/ramp runs; \`reltol 1e-3\`, \`abstol 1e-13\`, \`vntol 1e-6\`,
     \`rshunt 1e12\`, \`itl4 200\`.
-  - **The timestep ceiling, and what it is NOT cleared by.** The
-    ${KTMAX_BASE} default was derived from the CHARGE PUMP rather than the VCO:
-    the PFD's minimum UP/DN OUTPUT pulse is 1.1-1.9 ns and this campaign
-    MEASURES those widths (criterion 2), so the narrower pulse must be resolved
-    by several timesteps and not merely integrated correctly. **PR #64 has since
-    shown, on this same DUT, that the output pulse is the wrong pulse to size a
-    ceiling from.** \`design/edgedet.sch\` fires each SR latch with
-    AND(X, NOT(X delayed by 5 inverters)) -- an INTERNAL set pulse of
-    0.33-0.39 ns, about 4x narrower. At a 500 ps ceiling #64 measured ngspice
-    stepping clean over that set pulse on 9 of 16 feedback edges, which reads
-    out as a loop that will not lock; it moved \`sim/pll-top-smoke\` to
-    ${KTMAX_X}. ${KTMAX_BASE} is tighter than the ceiling that failed there but
-    is **not** the ceiling that was shown to be sufficient, so this record
-    treats it as a justified default and not a cleared one, and every corner
-    that could have turned into a design-margin claim was re-run at ${KTMAX_X}
-    before that claim was allowed. Two independent reasons to believe the
-    default is adequate at the corners it was used at, both measured here
-    rather than argued: the UP/DN widths in section 2 are 1-3 ns with BOTH
-    branches pulsing every reference cycle (a stepped-over set pulse leaves the
-    corresponding branch dead), and section 1c reports what the finer ceiling
-    changed where it was run.
+  - **The timestep ceiling is the repo's shared closed-loop bound, not this
+    campaign's own number.** ${KTMAX_BASE} is \`SIMENV_CLOSED_LOOP_TMAX\`
+    (\`sim/lib/simenv.sh\`, documented in \`sim/README.md\`), and the runner
+    refuses to start if its own copy of the literal has drifted from it. The
+    bound is set by \`design/edgedet.sch\`'s INTERNAL set pulse (0.33-0.39 ns),
+    **not** by the 1.1-1.9 ns UP/DN OUTPUT pulse and not by f_out: an integrator
+    whose step is comparable to the set pulse steps clean over it on a large
+    fraction of feedback edges, and the loop then reads as jammed with UP
+    asserted while the feedback is already faster than the reference -- a false
+    "does not lock", not a noisy one. #52 / PR #64 measured that failure mode on
+    this DUT; #65 / PR #75 hoisted the bound so every closed-loop campaign
+    inherits one value.
+
+    **This campaign previously ran at 400 ps**, derived from the UP/DN output
+    pulse -- the wrong pulse. The 9-corner record this one supersedes
+    (\`20260801-024935-c4fe724\`) was taken at that ceiling and is qualified by
+    the bound; it is not edited and not retracted, and re-examining it directly
+    is #69's scope, not this record's. What this record can say is that its own
+    numbers were taken at the bound.
+
+    A run deliberately taken off the bound (\`SIM_TMAX\`, the bound-sensitivity
+    study \`sim/lib/simenv.sh\` sanctions) is not silently mixed in: it gets its
+    own work directory, its ceiling appears in the \`tmax\` column of every row
+    it produced, and section 1c re-runs any corner it left failing at the bound
+    before this campaign is allowed to call that corner a design-margin finding
+    -- because "under-damped" and "under-resolved" are different claims. A
+    corroborating in-band check that the integration is resolving the PFD at
+    every corner reported here, measured rather than argued: the UP/DN widths in
+    section 2 are 1-3 ns with BOTH branches pulsing every reference cycle, and a
+    stepped-over set pulse leaves the corresponding branch dead.
   - **Waveform retained**: ${WAVE_FIELD}
   - **Limitations**:
     - **Schematic-level, no parasitics.** Every block's own record carries the

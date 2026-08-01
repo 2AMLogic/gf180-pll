@@ -40,13 +40,19 @@
 #   SIM_EXTEND=off           disable the automatic settling escalation (below);
 #   SIM_EXTEND_TSTOP/_TA/_TB the length it escalates to;
 #   SIM_EXTEND_MAX=<n>       cap how many corners it escalates.
-#   SIM_TMAX                 override the timestep ceiling;
+#   SIM_TMAX                 run at a timestep ceiling other than the shared
+#                            closed-loop bound.  Its one sanctioned use
+#                            (sim/lib/simenv.sh) is a bound-sensitivity study;
+#                            such a run gets its own work directory and carries
+#                            its ceiling in every row it emits, so it cannot be
+#                            mistaken for a compliant one.
 #   SIM_FINE=off             disable the timestep-ceiling cross-check that
-#                            follows the escalation, which distinguishes a
-#                            genuinely under-damped corner from an
-#                            under-RESOLVED one;
-#   SIM_FINE_TMAX / SIM_FINE_MAX  the finer ceiling, and a cap on how many
-#                            corners are cross-checked at it.
+#                            follows the escalation.  The cross-check is a no-op
+#                            unless SIM_TMAX put the grid off the bound; when it
+#                            did, it is what distinguishes a genuinely
+#                            under-damped corner from an under-RESOLVED one.
+#   SIM_FINE_TMAX / SIM_FINE_MAX  the ceiling it re-runs at (default: the
+#                            bound), and a cap on how many corners it reaches.
 #
 #   SIM_SUPERSEDES=<record-id> SIM_SUPERSEDES_NOTE='<why>' ./run.sh
 #                            mint with a **Supersedes** field (sim/README.md ::
@@ -108,39 +114,23 @@ KFOUT2=50e6
 KFREF2=6.25e6
 
 # Transient controls, shared by every steady-state run.
-# KTMAX   400 ps ceiling on the internal timestep.  Set by the CHARGE PUMP as
-#         in sim/pll-top-smoke -- the PFD's minimum UP/DN pulse is 1.1-1.9 ns
-#         (24-inverter reset chain, design/README.md) and the charge in those
-#         pulses IS the loop gain -- and tightened from that campaign's original
-#         500 ps because this one MEASURES those pulse widths (criterion 2), so
-#         the narrower of the two pulses must be resolved by several timesteps
-#         and not merely integrated correctly.  At 100 MHz it is 25 points per
-#         output cycle, and ngspice's own local-truncation-error control takes
-#         the step well below this ceiling through every edge -- the ceiling
-#         only bounds the quiet stretches between them.
-#
-#         **That derivation is from the UP/DN OUTPUT pulse, and PR #64 has since
-#         shown on this same DUT that the output pulse is the wrong pulse to
-#         size a ceiling from.**  `design/edgedet.sch` fires each SR latch with
-#         AND(X, NOT(X delayed by 5 inverters)) -- an INTERNAL set pulse of
-#         0.33-0.39 ns, ~4x narrower than the UP/DN pulse it produces.  At a
-#         500 ps ceiling #64 measured a mean internal step of 0.38 ns and ngspice
-#         stepping clean over that set pulse on 9 of 16 feedback edges, which
-#         reads out as a loop jammed with UP asserted and Vctrl at the rail --
-#         a "does not lock" that is entirely an artefact of the integration.
-#         #64 moved `sim/pll-top-smoke` to a 100 ps ceiling for exactly this.
-#         400 ps is tighter than the ceiling that failed but is NOT the 100 ps
-#         that was shown to be sufficient, so on this campaign's evidence it is
-#         a JUSTIFIED DEFAULT AND NOT A CLEARED ONE.  Hence KTMAX_X and the
-#         timestep-ceiling cross-check below: any corner that still misses the
-#         lock criterion after the settling escalation is re-run at 100 ps
-#         before this campaign is allowed to call it a design-margin finding,
-#         because "under-damped" and "under-resolved" are different claims and
-#         the second one is free to check.
-#         Not applied to the whole grid: that is a ~2x cost on 45 corners to
-#         re-confirm a resolution the sane UP/DN widths (1-3 ns, both branches
-#         pulsing) already evidence at every settled corner.  It is applied
-#         exactly where the answer could change a design conclusion.
+# KTMAX   The ceiling on the ngspice INTERNAL timestep is NOT this campaign's to
+#         choose: it is a property of the PFD every closed-loop deck in this repo
+#         inherits, and it lives in one place -- `SIMENV_CLOSED_LOOP_TMAX` in
+#         `sim/lib/simenv.sh`, documented in `sim/README.md`.  The bound is set
+#         by `design/edgedet.sch`'s INTERNAL set pulse (0.33-0.39 ns), not by the
+#         1.1-1.9 ns UP/DN OUTPUT pulse this campaign used to derive it from and
+#         not by f_out; an integrator whose step is comparable to the set pulse
+#         steps clean over it on a large fraction of feedback edges and the loop
+#         reads as jammed with UP asserted -- a false "does not lock", not a
+#         noisy one (#52/PR #64 measured it, #65/PR #75 hoisted it).
+#         This campaign's previous 400 ps and its "set by the CHARGE PUMP"
+#         rationale were reasoning from the output pulse, i.e. from the wrong
+#         pulse, and are replaced here by the shared constant rather than by a
+#         second derivation of it.  **The 9-corner record this campaign already
+#         has on `main` (20260801-024935-c4fe724) was taken at 400 ps and is
+#         therefore qualified by that bound**; re-examining it is #69's scope,
+#         and nothing here edits it.
 # KTSTOP  12 us.  Short because the warm start in tb_supply_lock.sp
 #         pre-charges BOTH loop-filter nodes -- the control node AND the
 #         series capacitor C1 that actually holds the loop's state -- so the
@@ -171,17 +161,32 @@ KFREF2=6.25e6
 KTSTOP_BASE=12.0u
 KTSTOP="${SIM_TSTOP:-${KTSTOP_BASE}}"
 KTSTEP=20n
-# KTMAX is overridable (`SIM_TMAX`) for the same reason KTSTOP is: a corner that
-# misses the lock criterion has to be re-runnable under a different numerical
-# assumption instead of being reported as a design result under the only one
-# the script happened to hold.  KTMAX_BASE is the unoverridden default and a
-# non-default ceiling gets its OWN work directory, so the finer run adds a
-# measurement rather than destroying the one it is compared against.
-KTMAX_BASE=400p
-KTMAX="${SIM_TMAX:-${KTMAX_BASE}}"
-# The ceiling the cross-check re-runs at: PR #64's, which it showed sufficient
-# to resolve `design/edgedet.sch`'s 0.33-0.39 ns internal set pulse on this DUT.
-KTMAX_X="${SIM_FINE_TMAX:-100p}"
+# KTMAX_BASE is the shared closed-loop BOUND; KTMAX is what THIS invocation
+# actually runs at.  They differ only under `SIM_TMAX`, whose one sanctioned use
+# (`sim/lib/simenv.sh`) is a deliberate bound-sensitivity study -- and they have
+# to stay distinguishable, because a run at a non-bound ceiling gets its own
+# work directory and carries its ceiling in every summary row it emits, so that
+# such a run can never be quietly mistaken for a compliant one.
+#
+# The literal is restated here rather than derived, because `simenv.sh` folds
+# the SIM_TMAX override into `SIMENV_CLOSED_LOOP_TMAX` itself and there is then
+# no expression left that yields the unoverridden bound.  The guard below makes
+# the duplication safe: if the shared constant moves and this one does not, the
+# campaign refuses to run rather than minting a record against a stale bound.
+KTMAX_BASE=100p
+KTMAX="${SIMENV_CLOSED_LOOP_TMAX}"
+if [ -z "${SIM_TMAX:-}" ] && [ "${KTMAX}" != "${KTMAX_BASE}" ]; then
+  echo "ERROR: KTMAX_BASE (${KTMAX_BASE}) has drifted from sim/lib/simenv.sh's" >&2
+  echo "       SIMENV_CLOSED_LOOP_TMAX (${KTMAX}).  Update this runner to the" >&2
+  echo "       shared bound; do not mint a record against a stale one." >&2
+  exit 1
+fi
+# The ceiling the cross-check re-runs at is the BOUND itself: the cross-check
+# exists for the case where the grid was deliberately run coarser than the
+# bound, and its job is to say whether that choice, rather than the loop, is
+# what produced a lock-criterion failure.  When the grid already ran AT the
+# bound the two are equal and the stage is a no-op, which is the normal case.
+KTMAX_X="${SIM_FINE_TMAX:-${KTMAX_BASE}}"
 KTA="${SIM_TA:-6.4u}"
 KTB="${SIM_TB:-9.6u}"
 
@@ -806,24 +811,27 @@ fi
 
 # --- timestep-ceiling cross-check -------------------------------------------
 # The escalation above buys the right to say "this corner is not merely slow".
-# It does NOT buy the right to say "this corner is under-damped", because a
-# third explanation is still open and it is the one PR #64 caught on this exact
-# DUT: the integration stepping over `design/edgedet.sch`'s 0.33-0.39 ns
-# internal PFD set pulse, which reads out as a loop that will not converge.  A
-# design-margin finding routed to #10 or #8 on the strength of a numerical
-# artefact is the most expensive mistake this campaign can make -- it is a real
-# claim about the design, made from a simulator setting -- and the check that
-# rules it out is one more run per affected corner at PR #64's
-# proven-adequate 100 ps ceiling.  So: every corner still over ACC_FERR after
-# the escalation is re-run at KTSTOP_X *and* KTMAX_X, and report.sh classifies a
-# corner that comes inside the criterion there as `integration`, not as
-# `under-damped`.
+# It does NOT by itself buy the right to say "this corner is under-damped",
+# because a third explanation exists and PR #64 measured it on this exact DUT:
+# the integration stepping over `design/edgedet.sch`'s 0.33-0.39 ns internal PFD
+# set pulse, which reads out as a loop that will not converge.  A design-margin
+# finding routed to #10 or #8 on the strength of a numerical artefact is the
+# most expensive mistake this campaign can make -- a real claim about the design,
+# made from a simulator setting.
+#
+# With KTMAX at the shared bound (the normal case) that explanation is already
+# excluded and this stage does nothing.  It exists for the one case where it is
+# not: a deliberate bound-sensitivity run (`SIM_TMAX`, the only use
+# `sim/lib/simenv.sh` sanctions), where the grid ran coarser than the bound.
+# Then every corner still over ACC_FERR after the escalation is re-run at
+# KTSTOP_X *and* at the bound, and report.sh classifies a corner that comes
+# inside the criterion there as `integration`, not as `under-damped`.
 #
 #   SIM_FINE=off          skip the cross-check (a record that skips it says so)
-#   SIM_FINE_TMAX=<t>     the finer ceiling (default 100p)
+#   SIM_FINE_TMAX=<t>     the ceiling it re-runs at (default: the bound)
 #   SIM_FINE_MAX=<n>      cap how many corners are cross-checked
 JOBS100M="${WORK}/jobs_100m.txt"; : >"${JOBS100M}"
-if [ "${SIM_FINE:-auto}" != "off" ]; then
+if [ "${SIM_FINE:-auto}" != "off" ] && [ "${KTMAX_X}" != "${KTMAX}" ]; then
   cat "${WORK}"/s100x_*.csv 2>/dev/null | awk -F, -v accf="${ACC_FERR}" -v w="${WORK}" \
       -v fo="${KFOUT}" -v fr="${KFREF}" '
     { fe = $13 + 0; if (fe < 0) fe = -fe;
