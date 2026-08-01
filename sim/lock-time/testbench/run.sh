@@ -14,9 +14,10 @@
 # Methodology field for the citation.
 #
 # Usage:
-#   ./run.sh                 # full 45-point PVT grid x N=4 x {cold,relock},
-#                             #   90 runs -- see the Grid comment below for
-#                             #   why N=16/64 are a separate follow-up
+#   ./run.sh                 # full 45-point PVT grid x N in {4,16,64} x
+#                             #   {cold,relock}, 270 runs -- see the Grid
+#                             #   comment below for how N=16/64 (#65) scale
+#                             #   the transient window
 #   ./run.sh --check         # one short debug run, nominal corner, to stdout
 #   ./run.sh --one <corner> <temp_c> <vdd> <n> <cold|relock> <outcsv>
 #                             # single targeted point (used by the anomaly-
@@ -33,13 +34,18 @@
 # took 714.3 CPU-s (and much longer in wall-clock) on a heavily-loaded shared
 # host took only 62.1 CPU-s on an idle one (see
 # sim/lock-time/records/20260801-073931-eec269e.md's own throughput note).
-# Check `uptime` before committing to a full 90-run invocation.
+# Check `uptime` before committing to a full grid invocation -- this has cost
+# every session that has attempted the N=4-only 90-run grid so far a completed
+# run (see #65's own PR history: #68 and #83 both deferred it for exactly this
+# reason). The N=16/64 rows added here are proportionally longer per run (see
+# the Grid comment below), so the same host-contention discipline applies with
+# more force, not less.
 #
 # NOTE ON COST, POST-#65: those historical CPU-second figures were measured at
 # the OLD, bound-violating 250 ps internal-timestep ceiling. This campaign now
 # runs at the 100 ps ceiling every closed-loop bench inherits from the PFD
 # (sim/lib/simenv.sh :: SIMENV_CLOSED_LOOP_TMAX), which raises the internal
-# step count ~2.4x. Budget the 90-run grid accordingly, and do NOT reach for
+# step count ~2.4x. Budget the full grid accordingly, and do NOT reach for
 # SIM_TMAX to claw the time back -- a grid minted at a coarser ceiling is not
 # evidence about this loop. See sim/lock-time/records/20260801-101734-5eb00db.md.
 
@@ -100,9 +106,9 @@ n_to_code() {
 
 # --------------------------------------------------------------------------
 # Grid.  #65 (the follow-up #49 itself named) extends this campaign from the
-# original single-corner N=4 pilot to the FULL 45-point PVT grid at N=4 --
-# but ONLY after #65's own gate: a targeted vctrl/up/dn/fb waveform
-# investigation of `relock`'s anomalous vctrl_final (see
+# original single-corner N=4 pilot to the FULL 45-point PVT grid -- but ONLY
+# after #65's own gate: a targeted vctrl/up/dn/fb waveform investigation of
+# `relock`'s anomalous vctrl_final (see
 # sim/lock-time/records/20260801-073931-eec269e.md) had to land first and be
 # understood, and it now has. That record's finding matters here: `relock`
 # rows below are NOT expected to reach a stable in-window PASS in general --
@@ -110,16 +116,28 @@ n_to_code() {
 # dynamics anomaly, not a simple polarity bug) is not corner-specific in any
 # way this record establishes, so seeing it recur across many/most corners
 # below is the expected outcome of an already-diagnosed mechanism, not a new
-# per-corner anomaly needing its own investigation. N=16/64 remain deferred
-# (#65's own item 3, gated on this grid landing first) -- loop bandwidth
-# falls with N (per #10's loop-dynamics), so cold-start lock time at N=16/64
-# is expected far outside this record's transient window; extending N is a
-# separate, larger follow-up.
+# per-corner anomaly needing its own investigation.
+#
+# N=16/64 (#65's item 3): loop bandwidth falls with N (T(s) in
+# sim/loop-dynamics's own derivation carries an explicit 1/N term), so
+# cold-start/re-lock settling is expected to take longer in absolute time as N
+# grows. run_one's transient window was previously capped at a FIXED absolute
+# time (4 us cold / 2 us relock) that happened to equal exactly 80/40
+# reference periods at N=4 -- reusing that same fixed cap unchanged at N=16/64
+# would silently shrink the window to 20/10 reference periods at N=16 and
+# 5/2.5 at N=64, the wrong direction given loop bandwidth falls with N. The
+# cap below instead scales the SAME 80/40-reference-period budget
+# proportionally with N (wincap = base * n/4), so N=4's own window is
+# unchanged bit-for-bit (4e-6*4/4 = 4e-6) and N=16/64 get proportionally more
+# absolute time rather than less. This preserves the reference-period margin
+# the N=4 window was tuned for; it has not been validated against an actual
+# N=16/64 run in this session (see this PR's description for why) and should
+# be re-examined once a completed run is available.
 # --------------------------------------------------------------------------
 BUNDLES=("${SIMENV_MOS_CORNERS[@]}")
 TEMPS=("${SIMENV_TEMPS[@]}")
 VDDS=("${SIMENV_VDDS[@]}")
-N_VALUES=(4)
+N_VALUES=(4 16 64)
 CONDITIONS=(cold relock)   # vctrl_ic = 0.9 V / 2.7 V respectively
 
 # Single-point debug corner, used only by --check below.
@@ -172,8 +190,15 @@ run_one() {
   # CPU-seconds for 4 us -- see the record) left too little of the originating
   # session's compute budget for `relock` at the same length; the shorter
   # window is disclosed per-row, not silently assumed equal.
+  #
+  # #65 (N=16/64): both base caps below are scaled by n/4 -- see the Grid
+  # comment above for why a fixed absolute cap does not transfer across N.
+  # At n=4 this is exactly the original constant (4e-6*4/4 = 4e-6,
+  # 2e-6*4/4 = 2e-6), so N=4 rows are bit-for-bit unchanged from the
+  # already-recorded pilot/grid behaviour.
   local wincap wintag=""
-  wincap=4e-6; [ "${cond}" = "relock" ] && wincap=2e-6
+  wincap=$(awk -v n="${n}" 'BEGIN{printf "%.6g", 4e-6*n/4}')
+  [ "${cond}" = "relock" ] && wincap=$(awk -v n="${n}" 'BEGIN{printf "%.6g", 2e-6*n/4}')
   if [ -n "${SIM_WINCAP:-}" ]; then
     # SECONDS, as a plain decimal or scientific-notation number -- NOT a SPICE
     # engineering suffix. The cap is consumed by awk (below), and awk parses
@@ -331,7 +356,7 @@ for corner in "${BUNDLES[@]}"; do
   done
 done
 NJOBS=$(wc -l <"${JOBLIST}" | tr -d ' ')
-echo "lock-time: ${NJOBS} runs (full 45-point PVT grid x N=4 x {cold,relock} -- see run.sh header), ${JOBS} parallel"
+echo "lock-time: ${NJOBS} runs (full 45-point PVT grid x N in {4,16,64} x {cold,relock} -- see run.sh header), ${JOBS} parallel"
 
 export OUTCSV="${RESULT_CSV}"
 # shellcheck disable=SC2016
@@ -419,7 +444,7 @@ DNG_FAIL=$(awk -F, 'NR>1 && $12=="FAIL"{c++} END{print c+0}' "${RESULT_CSV}")
 DNG_SUSPECT=$(awk -F, 'NR>1 && $12=="SUSPECT"{c++} END{print c+0}' "${RESULT_CSV}")
 DNG_ERROR=$(awk -F, 'NR>1 && $12=="ERROR"{c++} END{print c+0}' "${RESULT_CSV}")
 DNG_SUMMARY="**PFD DN-branch integration guard** (#69; \`sim/README.md\`'s \"Closed-loop internal-timestep bound\"): **${DNG_PASS} PASS / ${DNG_FAIL} FAIL / ${DNG_SUSPECT} SUSPECT / ${DNG_ERROR} ERROR** across all rows, against a floor of ${ACC_DN_FRAC} of the rail. This grid runs AT the bound, so every row is expected to read PASS and the guard is a regression detector, not a diagnosis. A FAIL row reached lock while its DN branch never asserted; a SUSPECT row did not reach lock AND did not resolve its detector, so **this record does not attribute that row's FAIL to the design or to the transient window** -- the attribution is withheld rather than defaulted. Any non-PASS row means the ceiling was violated somewhere and the affected rows are not evidence about this loop."
-OVERALL_SUMMARY="Across the full 45-point PVT grid at N=4: \`cold\` reached a sustained in-window PASS on ${COLD_PASS}/${COLD_TOTAL} corners (${COLD_ERR} ERROR rows -- ngspice did not complete); \`relock\` reached PASS on ${RELOCK_PASS}/${RELOCK_TOTAL} corners (${RELOCK_ERR} ERROR rows). Of the ${RELOCK_TOTAL} \`relock\` rows, **${RELOCK_RAIL} report vctrl_final > 2.7 V** -- past the clamp value itself, the same rail-excursion signature 20260801-073931-eec269e's waveform investigation root-caused at the typical/27C/3.30V corner (a large-frequency-error PFD/CP acquisition-dynamics anomaly, not a per-corner bug -- see that record). This grid does NOT re-run that waveform investigation at every corner; a \`relock\` row with vctrl_final > 2.7 V here is reported as consistent with the already-diagnosed mechanism, not independently re-diagnosed. \`cold\` FAIL rows mean only that the transient window was too short for lock_detector to assert yet (see the original pilot record's own finding that vctrl moves correctly toward the target); they are not evidence of a broken loop -- **on rows whose DN-branch guard reads PASS.** ${DNG_SUMMARY}"
+OVERALL_SUMMARY="Across the full 45-point PVT grid at N in {4,16,64}: \`cold\` reached a sustained in-window PASS on ${COLD_PASS}/${COLD_TOTAL} corners (${COLD_ERR} ERROR rows -- ngspice did not complete); \`relock\` reached PASS on ${RELOCK_PASS}/${RELOCK_TOTAL} corners (${RELOCK_ERR} ERROR rows). Of the ${RELOCK_TOTAL} \`relock\` rows, **${RELOCK_RAIL} report vctrl_final > 2.7 V** -- past the clamp value itself, the same rail-excursion signature 20260801-073931-eec269e's waveform investigation root-caused at the typical/27C/3.30V corner (a large-frequency-error PFD/CP acquisition-dynamics anomaly, not a per-corner bug -- see that record). This grid does NOT re-run that waveform investigation at every corner; a \`relock\` row with vctrl_final > 2.7 V here is reported as consistent with the already-diagnosed mechanism, not independently re-diagnosed. \`cold\` FAIL rows mean only that the transient window was too short for lock_detector to assert yet (see the original pilot record's own finding that vctrl moves correctly toward the target); they are not evidence of a broken loop -- **on rows whose DN-branch guard reads PASS.** ${DNG_SUMMARY}"
 RECORD="${RECORDSDIR}/${RID}.md"
 {
   cat <<EOF
@@ -444,21 +469,18 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     design/pfd_cp.sch via design/netlist.sh; the DUT netlist is a schematic
     export, not a hand-written deck)")
 - **Corner matrix run**: the **FULL 45-point PVT grid** (5 MOS bundles x 3
-  temperatures x 3 supplies) at N=4, both cold-start and worst-case re-lock
-  -- ${NJOBS} runs total. Extends the original single-corner pilot
-  (\`sim/lock-time/records/20260731-221408-640560e.md\`), gated on
-  \`sim/lock-time/records/20260801-073931-eec269e.md\`'s \`relock\`
+  temperatures x 3 supplies) at N in {4, 16, 64}, both cold-start and
+  worst-case re-lock -- ${NJOBS} runs total. Extends the original
+  single-corner pilot (\`sim/lock-time/records/20260731-221408-640560e.md\`),
+  gated on \`sim/lock-time/records/20260801-073931-eec269e.md\`'s \`relock\`
   waveform investigation landing first, per #65's own explicit dependency
   ("do not extend the relock/lo-style grid to more corners/N/edges until
-  this is understood"). N=16/64 are deliberately NOT included here -- #65's
-  own item 3, a separate, larger follow-up (loop bandwidth falls with N per
-  #10's \`loop-dynamics\`, so N=16/64 cold-start lock time is expected well
-  outside this record's transient window; scaling the window AND the grid
-  together in one record was judged less useful than landing the grid at
-  the one N value this record's window is already sized for).
-  - Axes not swept: N (2 of 3 required settings, deferred to #65's own next
-    item) -- not a design judgement that it does not matter, a scoping
-    decision to land the PVT grid on its own first.
+  this is understood"). N=16/64 (#65's item 3) scale \`run_one\`'s transient
+  window proportionally with N rather than reusing the N=4 window's fixed
+  absolute cap unchanged -- see \`run.sh\`'s Grid comment and \`run_one\`'s
+  \`wincap\` for the derivation and why the N=4 rows are unaffected by it.
+  - Axes not swept: none of the campaign's own PVT/N grid; see Methodology
+    for the design point (band, Icp trim code) held fixed across the grid.
 - **Methodology / criteria / limitations**:
   - **Lock criterion**: the design's own real \`lock_detector\` (#11,
     \`design/netlist/lock_detector.spice\`) wired directly to the PFD's
@@ -473,8 +495,11 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     would walk the phase error monotonically out of the window every few
     cycles, which is exactly the deassert path. \`sim/lock-detector\`'s own
     45-point record puts \`t_win\` at 0.877-1.70 ns absolute (max at
-    ss/125C/2.97V); at this record's N=4 / 20 MHz reference (T_ref=50 ns)
-    that is a 1.75-3.4% phase-settling band. **Minimum hold window**: LOCK
+    ss/125C/2.97V); at N=4's 20 MHz reference (T_ref=50 ns) that is a
+    1.75-3.4% phase-settling band. \`t_win\` is a fixed absolute quantity, so
+    at N=16/64's longer T_ref (200 ns/800 ns) the same window is a
+    proportionally SMALLER (looser) percentage band -- 0.44-0.85% at N=16,
+    0.11-0.21% at N=64. **Minimum hold window**: LOCK
     time is read as the LAST rising edge of \`LOCK\` in the simulated window
     (\`rise=last\`), with the run sized so at least several hundred reference
     cycles remain after it (see \`t_lock_last_rise\`/\`lock_at_end\` in
@@ -509,15 +534,18 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     chgtol=1e-13\`; \`.tran\` print step \`1/(50*f_out)\` = 250 ps with an
     explicit **internal-timestep ceiling of ${SIMENV_CLOSED_LOOP_TMAX}**
     (\`.tran\`'s 4th argument, \`SIMENV_CLOSED_LOOP_TMAX\`); transient length up to
-    **4 us for \`cold\`, 2 us for \`relock\`** (or 80 reference periods,
-    whichever is shorter) -- narrowed from successively longer targets
-    (16 us, then 8 us) during development, and made asymmetric between the
-    two conditions once \`cold\`'s real measured cost (906.2 CPU-s, below)
-    showed the two conditions could not both run at 4 us inside this
-    session's remaining budget. This is disclosed, not hidden: the
-    achievable window had to be re-picked against the CPU-second budget
-    actually available in this session (see the throughput figure below)
-    rather than the window that would show the cleanest result.
+    **4 us for \`cold\`, 2 us for \`relock\` at N=4** (or 80/40 reference
+    periods, whichever is shorter), scaled proportionally with N for N=16/64
+    (16 us/8 us at N=16, 64 us/32 us at N=64 -- see \`run.sh\`'s Grid comment
+    for why the N=4 window's fixed absolute cap does not transfer to larger N
+    unscaled) -- narrowed from successively longer targets (16 us, then 8 us)
+    during development, and made asymmetric between the two conditions once
+    \`cold\`'s real measured cost (906.2 CPU-s, below) showed the two
+    conditions could not both run at 4 us inside this session's remaining
+    budget. This is disclosed, not hidden: the achievable window had to be
+    re-picked against the CPU-second budget actually available in this
+    session (see the throughput figure below) rather than the window that
+    would show the cleanest result.
   - **PFD DN-branch integration guard (#69)**: \`tb_lock_time.sp\` measures
     \`dn_lvl\`, the mean DN level over the last 10 % of the window -- the
     same quantity \`sim/pll-top-smoke\`'s check 7 gates on, against the same
@@ -590,7 +618,12 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     scope, not re-derived here); single design point (one band, one Icp
     code, one target frequency) rather than the full N=4-64 x band x Icp-trim
     cross-product loop-dynamics (#10) already covers in the frequency domain;
-    N=16/64 not covered (see Corner matrix run); \`relock\` rows showing the
+    the N=16/64 transient-window scaling (proportional to N, see Corner
+    matrix run) preserves the same reference-period margin the N=4 window was
+    tuned for but has not itself been validated against a completed N=16/64
+    run -- if N=16/64 rows below show a disproportionate ERROR/FAIL rate
+    relative to N=4 at the same corner, re-check the window before concluding
+    the loop itself is slower than expected; \`relock\` rows showing the
     rail-excursion signature are attributed to the already-diagnosed
     mechanism by a cheap per-row proxy (vctrl_final > 2.7 V), not by
     re-running the waveform investigation at every corner -- a row that
@@ -601,8 +634,7 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
 - **Result**:
 $(cat "${RESULT_MD}")
 
-  ${OVERALL_SUMMARY} **This does NOT extend to N=16/64, which remains #65's
-  own next item.** No overall PASS/FAIL against a lock-time spec threshold is
+  ${OVERALL_SUMMARY} No overall PASS/FAIL against a lock-time spec threshold is
   claimed (spec #1 has not ratified a lock-time value).
 - **Links**:
   - Testbench: \`sim/lock-time/testbench/tb_lock_time.sp\`,
