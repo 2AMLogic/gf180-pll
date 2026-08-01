@@ -40,10 +40,24 @@
 #   SIM_EXTEND=off           disable the automatic settling escalation (below);
 #   SIM_EXTEND_TSTOP/_TA/_TB the length it escalates to;
 #   SIM_EXTEND_MAX=<n>       cap how many corners it escalates.
+#   SIM_TMAX                 override the timestep ceiling;
+#   SIM_FINE=off             disable the timestep-ceiling cross-check that
+#                            follows the escalation, which distinguishes a
+#                            genuinely under-damped corner from an
+#                            under-RESOLVED one;
+#   SIM_FINE_TMAX / SIM_FINE_MAX  the finer ceiling, and a cap on how many
+#                            corners are cross-checked at it.
 #
 #   SIM_SUPERSEDES=<record-id> SIM_SUPERSEDES_NOTE='<why>' ./run.sh
 #                            mint with a **Supersedes** field (sim/README.md ::
 #                            "Status / supersession language").
+#   SIM_SUPERSEDES_PR='PR #62'
+#                            the pull request that landed the superseded
+#                            record, named in the new record's supersession
+#                            prose.  A record can read the superseded record's
+#                            commit and timestamp out of the file itself; the
+#                            PR that merged it is the one fact it cannot, so it
+#                            is passed in rather than guessed.
 #
 # Every run is resumable: a completed run is reused only on an exact match of
 # the deck mtime AND the full parameter list, never on the deck alone.
@@ -97,13 +111,36 @@ KFREF2=6.25e6
 # KTMAX   400 ps ceiling on the internal timestep.  Set by the CHARGE PUMP as
 #         in sim/pll-top-smoke -- the PFD's minimum UP/DN pulse is 1.1-1.9 ns
 #         (24-inverter reset chain, design/README.md) and the charge in those
-#         pulses IS the loop gain -- and tightened from that campaign's 500 ps
-#         because this one MEASURES those pulse widths (criterion 2), so the
-#         narrower of the two pulses must be resolved by several timesteps and
-#         not merely integrated correctly.  At 100 MHz it is 25 points per
+#         pulses IS the loop gain -- and tightened from that campaign's original
+#         500 ps because this one MEASURES those pulse widths (criterion 2), so
+#         the narrower of the two pulses must be resolved by several timesteps
+#         and not merely integrated correctly.  At 100 MHz it is 25 points per
 #         output cycle, and ngspice's own local-truncation-error control takes
 #         the step well below this ceiling through every edge -- the ceiling
 #         only bounds the quiet stretches between them.
+#
+#         **That derivation is from the UP/DN OUTPUT pulse, and PR #64 has since
+#         shown on this same DUT that the output pulse is the wrong pulse to
+#         size a ceiling from.**  `design/edgedet.sch` fires each SR latch with
+#         AND(X, NOT(X delayed by 5 inverters)) -- an INTERNAL set pulse of
+#         0.33-0.39 ns, ~4x narrower than the UP/DN pulse it produces.  At a
+#         500 ps ceiling #64 measured a mean internal step of 0.38 ns and ngspice
+#         stepping clean over that set pulse on 9 of 16 feedback edges, which
+#         reads out as a loop jammed with UP asserted and Vctrl at the rail --
+#         a "does not lock" that is entirely an artefact of the integration.
+#         #64 moved `sim/pll-top-smoke` to a 100 ps ceiling for exactly this.
+#         400 ps is tighter than the ceiling that failed but is NOT the 100 ps
+#         that was shown to be sufficient, so on this campaign's evidence it is
+#         a JUSTIFIED DEFAULT AND NOT A CLEARED ONE.  Hence KTMAX_X and the
+#         timestep-ceiling cross-check below: any corner that still misses the
+#         lock criterion after the settling escalation is re-run at 100 ps
+#         before this campaign is allowed to call it a design-margin finding,
+#         because "under-damped" and "under-resolved" are different claims and
+#         the second one is free to check.
+#         Not applied to the whole grid: that is a ~2x cost on 45 corners to
+#         re-confirm a resolution the sane UP/DN widths (1-3 ns, both branches
+#         pulsing) already evidence at every settled corner.  It is applied
+#         exactly where the answer could change a design conclusion.
 # KTSTOP  12 us.  Short because the warm start in tb_supply_lock.sp
 #         pre-charges BOTH loop-filter nodes -- the control node AND the
 #         series capacitor C1 that actually holds the loop's state -- so the
@@ -134,7 +171,17 @@ KFREF2=6.25e6
 KTSTOP_BASE=12.0u
 KTSTOP="${SIM_TSTOP:-${KTSTOP_BASE}}"
 KTSTEP=20n
-KTMAX=400p
+# KTMAX is overridable (`SIM_TMAX`) for the same reason KTSTOP is: a corner that
+# misses the lock criterion has to be re-runnable under a different numerical
+# assumption instead of being reported as a design result under the only one
+# the script happened to hold.  KTMAX_BASE is the unoverridden default and a
+# non-default ceiling gets its OWN work directory, so the finer run adds a
+# measurement rather than destroying the one it is compared against.
+KTMAX_BASE=400p
+KTMAX="${SIM_TMAX:-${KTMAX_BASE}}"
+# The ceiling the cross-check re-runs at: PR #64's, which it showed sufficient
+# to resolve `design/edgedet.sch`'s 0.33-0.39 ns internal set pulse on this DUT.
+KTMAX_X="${SIM_FINE_TMAX:-100p}"
 KTA="${SIM_TA:-6.4u}"
 KTB="${SIM_TB:-9.6u}"
 
@@ -356,9 +403,11 @@ if [ "${1:-}" = "--one-lock" ]; then
   bundle="$1"; temp="$2"; vdd="$3"; band="$4"; vc0="$5"; fout="$6"; fref="$7"; sum="$8"
   kind="f$(awk -v f="${fout}" 'BEGIN{printf "%03d", f/1e6}')"
   tag="${kind}_${bundle}_T${temp}_V${vdd}"
-  # A non-default transient length gets its own work directory, so a settling
-  # re-run ADDS evidence rather than overwriting the run it is compared with.
+  # A non-default transient length, or a non-default timestep ceiling, gets its
+  # own work directory -- so a settling re-run or a timestep-ceiling cross-check
+  # ADDS evidence rather than overwriting the run it is compared with.
   [ "${KTSTOP}" = "${KTSTOP_BASE}" ] || tag="${tag}_X${KTSTOP}"
+  [ "${KTMAX}" = "${KTMAX_BASE}" ]   || tag="${tag}_M${KTMAX}"
   tag="${tag//./p}"; tag="${tag//-/m}"
   rundir="${WORK}/${tag}"; log="${rundir}/ngspice.log"
   libs="$(libs_for "${bundle}")"
@@ -388,12 +437,15 @@ if [ "${1:-}" = "--one-lock" ]; then
   fi
 
   m() { simenv_meas "${log}" "$1"; }
-  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+  # 28 fields.  The last two are the transient length and the timestep ceiling
+  # this row was actually run at -- per-row truth, because after the escalation
+  # and the cross-check below they are no longer one constant for the grid.
+  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
     "${bundle}" "${temp}" "${vdd}" "${fout}" "${band}" "${KTRIM}" "${fref}" "${KN}" "${vc0}" \
     "$(m fout)" "$(m ffb)" "$(m nmeas)" "$(m ferr)" "$(m phi_b)" \
     "$(m skew1)" "$(m skew2)" "$(m skew3)" "$(m wup1)" "$(m wdn1)" \
     "$(m vctrl_avg)" "$(m vctrl_min)" "$(m vctrl_max)" "$(m lock_lvl)" \
-    "$(m i_core)" "$(m i_vco)" "$(m i_div)" "${KTSTOP}" >"${sum}"
+    "$(m i_core)" "$(m i_vco)" "$(m i_div)" "${KTSTOP}" "${KTMAX}" >"${sum}"
   exit 0
 fi
 
@@ -752,6 +804,44 @@ if [ "${NX}" -gt 0 ]; then
       "${BASH:-/bin/bash}" -c 'exec "$0" --one-lock "$@"' "${HERE}/run.sh" <"${JOBS100X}"
 fi
 
+# --- timestep-ceiling cross-check -------------------------------------------
+# The escalation above buys the right to say "this corner is not merely slow".
+# It does NOT buy the right to say "this corner is under-damped", because a
+# third explanation is still open and it is the one PR #64 caught on this exact
+# DUT: the integration stepping over `design/edgedet.sch`'s 0.33-0.39 ns
+# internal PFD set pulse, which reads out as a loop that will not converge.  A
+# design-margin finding routed to #10 or #8 on the strength of a numerical
+# artefact is the most expensive mistake this campaign can make -- it is a real
+# claim about the design, made from a simulator setting -- and the check that
+# rules it out is one more run per affected corner at PR #64's
+# proven-adequate 100 ps ceiling.  So: every corner still over ACC_FERR after
+# the escalation is re-run at KTSTOP_X *and* KTMAX_X, and report.sh classifies a
+# corner that comes inside the criterion there as `integration`, not as
+# `under-damped`.
+#
+#   SIM_FINE=off          skip the cross-check (a record that skips it says so)
+#   SIM_FINE_TMAX=<t>     the finer ceiling (default 100p)
+#   SIM_FINE_MAX=<n>      cap how many corners are cross-checked
+JOBS100M="${WORK}/jobs_100m.txt"; : >"${JOBS100M}"
+if [ "${SIM_FINE:-auto}" != "off" ]; then
+  cat "${WORK}"/s100x_*.csv 2>/dev/null | awk -F, -v accf="${ACC_FERR}" -v w="${WORK}" \
+      -v fo="${KFOUT}" -v fr="${KFREF}" '
+    { fe = $13 + 0; if (fe < 0) fe = -fe;
+      if (fe > accf) printf "%.6g %s %s %s %s %s %s %s %s/s100m_%s_%s_%s.csv\n",
+        fe, $1, $2, $3, $5, $9, fo, fr, w, $1, $2, $3 }' \
+    | sort -rn | cut -d' ' -f2- \
+    | { if [ -n "${SIM_FINE_MAX:-}" ]; then head -n "${SIM_FINE_MAX}"; else cat; fi } \
+    >"${JOBS100M}"
+fi
+NM=$(wc -l <"${JOBS100M}" | tr -d ' ')
+if [ "${NM}" -gt 0 ]; then
+  echo "supply-sensitivity: ${NM} corner(s) still over ${ACC_FERR} at ${KTSTOP_X} -- re-running at timestep ceiling ${KTMAX_X}"
+  # shellcheck disable=SC2016
+  SIM_TSTOP="${KTSTOP_X}" SIM_TA="${KTA_X}" SIM_TB="${KTB_X}" SIM_TMAX="${KTMAX_X}" \
+    xargs -P "$(simenv_jobs)" -L 1 \
+      "${BASH:-/bin/bash}" -c 'exec "$0" --one-lock "$@"' "${HERE}/run.sh" <"${JOBS100M}"
+fi
+
 wait "${DYNPID}"
 
 got100=$(cat "${WORK}"/s100_*.csv 2>/dev/null | wc -l | tr -d ' ')
@@ -762,5 +852,7 @@ gotdyn=$(cat "${WORK}"/sdyn_*.csv 2>/dev/null | wc -l | tr -d ' ')
 [ "${gotdyn}" -eq "${NDYN}" ] || { echo "ERROR: expected ${NDYN} step/ramp rows, got ${gotdyn}" >&2; exit 1; }
 got100x=$(cat "${WORK}"/s100x_*.csv 2>/dev/null | wc -l | tr -d ' ')
 [ "${got100x}" -eq "${NX}" ] || { echo "ERROR: expected ${NX} settling re-run rows, got ${got100x}" >&2; exit 1; }
+got100m=$(cat "${WORK}"/s100m_*.csv 2>/dev/null | wc -l | tr -d ' ')
+[ "${got100m}" -eq "${NM}" ] || { echo "ERROR: expected ${NM} timestep-ceiling rows, got ${got100m}" >&2; exit 1; }
 
 exec "${HERE}/report.sh" "${WORK}" "${EXP}" "${HERE}"

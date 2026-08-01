@@ -63,6 +63,13 @@ for f in "${WORK}"/s100x_*.csv; do
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" \
     "f100x_$(simenv_corner_id "${bundle}" "${temp}" "${vdd}")"
 done
+for f in "${WORK}"/s100m_*.csv; do
+  IFS=, read -r bundle temp vdd _ <<<"$(cat "${f}")"
+  ts="$(cut -d, -f27 <"${f}")"; tm="$(cut -d, -f28 <"${f}")"
+  tag="f100_${bundle}_T${temp}_V${vdd}_X${ts}_M${tm}"; tag="${tag//./p}"; tag="${tag//-/m}"
+  simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" \
+    "f100m_$(simenv_corner_id "${bundle}" "${temp}" "${vdd}")"
+done
 for f in "${WORK}"/sdyn_*.csv; do
   IFS=, read -r bundle temp _ <<<"$(cat "${f}")"
   tag="dyn_${bundle}_T${temp}"; tag="${tag//./p}"; tag="${tag//-/m}"
@@ -75,20 +82,32 @@ done
 # ---------------------------------------------------------------------------
 # Settling escalation: which run of a corner is the one the record reports.
 # ---------------------------------------------------------------------------
-# A corner may have been simulated twice -- once at the default transient
-# length, and once, if its residual frequency error was still over threshold
-# there, at the longer length run.sh escalates to.  The row that goes into the
-# record is the LONGEST run available for that corner, because it is the one
-# closest to a settled measurement.  The shorter run is NOT discarded: it is
-# the other half of the settling comparison written to settling_rerun.csv
-# below, which is what turns "did not meet the lock criterion" into either
-# "was still converging" or "is genuinely under-damped at that operating
-# point" -- two different claims, one of which is a design-margin finding.
+# A corner may have been simulated up to three times: once at the default
+# transient length; once, if its residual frequency error was still over
+# threshold there, at the longer length run.sh escalates to; and once more, if
+# it is STILL over threshold there, at the finer timestep ceiling of the
+# cross-check.  The row that goes into the record is the BEST-RESOLVED run
+# available for that corner -- longest transient first, then finest timestep
+# ceiling -- because that is the one closest to both a settled and a correctly
+# integrated measurement.  The earlier runs are NOT discarded: they are the
+# other half of the comparison written to settling_rerun.csv below, which is
+# what turns "did not meet the lock criterion" into one of three different
+# claims -- "was still converging", "was under-RESOLVED", or "is genuinely
+# under-damped at that operating point" -- only the last of which is a
+# design-margin finding.
+#
+# The rank field appended here (0 default, 1 escalated, 2 cross-checked) breaks
+# a tie the transient length alone cannot: the cross-check runs at the SAME
+# length as the escalation and differs only in the timestep ceiling.
 ROWS="${WORK}/.steady_rows.csv"
-cat "${WORK}"/s100_*.csv "${WORK}"/s100x_*.csv 2>/dev/null \
+{ for f in "${WORK}"/s100_*.csv;  do sed 's/$/,0/' "${f}"; done
+  for f in "${WORK}"/s100x_*.csv; do sed 's/$/,1/' "${f}"; done
+  for f in "${WORK}"/s100m_*.csv; do sed 's/$/,2/' "${f}"; done; } \
   | awk -F, -v dflt="${KTSTOP_BASE}" '
-    { k = $1 "|" $2 "|" $3; t = tnum($27 == "" ? dflt : $27);
-      if (!(k in bt) || t > bt[k]) { bt[k] = t; best[k] = $0 } }
+    { k = $1 "|" $2 "|" $3; t = tnum($27 == "" ? dflt : $27); r = $NF + 0;
+      line = $0; sub(/,[0-9]+$/, "", line);
+      if (!(k in bt) || t > bt[k] || (t == bt[k] && r > br[k])) {
+        bt[k] = t; br[k] = r; best[k] = line } }
     END { for (k in best) print best[k] }
     function tnum(s,   v) {
       v = s + 0;
@@ -115,10 +134,14 @@ STEADY="${CORNERSDIR}/supply_steady.csv"
   echo "# phi_b_s: static REF->FB phase error in the late window, seconds"
   echo "# skew_s: mean UP/DN pulse-WIDTH difference over 3 probes, seconds"
   echo "# p_tot_w: vdd * (|i_core| + |i_vco| + |i_div|)"
-  echo "bundle,temp_c,vdd_v,band,fout_hz,fdev_ppm,ferr,phi_b_s,skew_s,skew_spread_s,wup_s,wdn_s,nmeas,vctrl_avg_v,vctrl_min_v,vctrl_max_v,lock_lvl_v,i_core_a,i_vco_a,i_div_a,p_tot_w,verdict,tstop"
+  echo "# tstop/tmax: the transient length and internal-timestep ceiling THIS"
+  echo "#   row was run at -- per row, not per grid: see the settling escalation"
+  echo "#   and the timestep-ceiling cross-check in run.sh"
+  echo "bundle,temp_c,vdd_v,band,fout_hz,fdev_ppm,ferr,phi_b_s,skew_s,skew_spread_s,wup_s,wdn_s,nmeas,vctrl_avg_v,vctrl_min_v,vctrl_max_v,lock_lvl_v,i_core_a,i_vco_a,i_div_a,p_tot_w,verdict,tstop,tmax"
   sort -t, -k1,1 -k2,2n -k3,3n "${ROWS}" | awk -F, -v OFS=, \
     -v accf="${ACC_FERR}" -v accp="${ACC_PHI_FRAC}" -v accn="${ACC_NTOL}" \
-    -v accl="${ACC_LOCK_FRAC}" -v pwr="${ACC_PWR_MW}" -v dflt_ts="${KTSTOP_BASE}" '
+    -v accl="${ACC_LOCK_FRAC}" -v pwr="${ACC_PWR_MW}" -v dflt_ts="${KTSTOP_BASE}" \
+    -v dflt_tm="${KTMAX_BASE}" '
     { rows[NR] = $0; if ($3 + 0 == 3.30) fnom[$1 "|" $2] = $10 }
     END {
       for (i = 1; i <= NR; i++) {
@@ -129,6 +152,7 @@ STEADY="${CORNERSDIR}/supply_steady.csv"
         vca=f[20]+0; vcmin=f[21]+0; vcmax=f[22]+0; lock=f[23]+0;
         ic=f[24]+0; iv=f[25]+0; id=f[26]+0;
         ts=(f[27] == "" ? dflt_ts : f[27]);
+        tm=(f[28] == "" ? dflt_tm : f[28]);
         fn = fnom[bundle "|" temp];
         dev = (fn > 0) ? (fout - fn) / fn * 1e6 : 0;
         sk = (s1 + s2 + s3) / 3;
@@ -144,9 +168,9 @@ STEADY="${CORNERSDIR}/supply_steady.csv"
         else if (abs(fout - n * fref) / (n * fref) > accf) v = "FAIL:fout";
         else if (lock < accl * vdd) v = "FAIL:lock";
         else if (p * 1e3 > pwr) v = "FAIL:power";
-        printf "%s,%s,%.2f,%s,%.6g,%.4g,%.4g,%.6g,%.6g,%.6g,%.6g,%.6g,%.6g,%.4g,%.4g,%.4g,%.4g,%.6g,%.6g,%.6g,%.6g,%s,%s\n",
+        printf "%s,%s,%.2f,%s,%.6g,%.4g,%.4g,%.6g,%.6g,%.6g,%.6g,%.6g,%.6g,%.4g,%.4g,%.4g,%.4g,%.6g,%.6g,%.6g,%.6g,%s,%s,%s\n",
           bundle, temp, vdd, band, fout, dev, ferr, phib, sk, smax - smin, wup, wdn,
-          nmeas, vca, vcmin, vcmax, lock, ic, iv, id, p, v, ts;
+          nmeas, vca, vcmin, vcmax, lock, ic, iv, id, p, v, ts, tm;
       }
     }
     function abs(x) { return x < 0 ? -x : x }'
@@ -157,18 +181,23 @@ STEADY="${CORNERSDIR}/supply_steady.csv"
 # ---------------------------------------------------------------------------
 # The question this file answers is the one a bare FAIL row cannot: at a corner
 # that did not meet the lock criterion inside the default transient, was the
-# loop merely still converging, or is it genuinely under-damped there?  It is
-# answered by running the SAME corner at ~4 loop time constants and reading
-# three things off the longer run:
+# loop merely still converging, was it under-RESOLVED, or is it genuinely
+# under-damped there?  It is answered by running the SAME corner again -- at
+# ~4 loop time constants, and then, if it is still out, at the finer timestep
+# ceiling -- and reading four things off those runs:
 #
 #   - is the loop in lock AT ALL (divide ratio right, absolute output frequency
 #     right)?  If not, the corner is not an under-damping finding, it is a
 #     lock-range finding, and the two must not be conflated;
-#   - has the residual frequency error come inside threshold?  If yes, the
-#     short run's FAIL was a transient-budget artefact;
-#   - if the loop IS in lock and the residual is STILL over threshold at
-#     3.7 tau, the corner is genuinely under-damped -- a design-margin finding,
-#     not a measurement gap.
+#   - has the residual frequency error come inside threshold at the longer
+#     length?  If yes, the short run's FAIL was a transient-budget artefact;
+#   - if not, does it come inside threshold at the finer TIMESTEP CEILING, same
+#     length?  If yes, the failure was an artefact of the INTEGRATION, not of
+#     the loop -- PR #64's stepped-over PFD set pulse on this same DUT -- and
+#     this campaign is not entitled to call it a design result;
+#   - only if the loop IS in lock and the residual is STILL over threshold at
+#     3.7 tau AND at the finer ceiling is the corner genuinely under-damped --
+#     a design-margin finding, not a measurement gap.
 #
 # `decay_ratio` = |ferr(long)| / |ferr(short)|.  A single-pole settling at the
 # loop's own KTAU predicts exp(-(tb_long - tb_short)/KTAU); the ratio is
@@ -193,29 +222,55 @@ SETTLE="${CORNERSDIR}/settling_rerun.csv"
   echo "# decay_ratio: |ferr_long| / |ferr_short|; decay_expected is what a"
   echo "#   single-pole settling at KTAU = ${KTAU} would give between the two"
   echo "#   late windows."
-  echo "# classification: settles | settles-phi | under-damped | not-locked"
-  echo "bundle,temp_c,vdd_v,band,tstop_short,ferr_short,tstop_long,ferr_long,decay_ratio,decay_expected,nmeas_long,fout_long_hz,phi_long_s,vctrl_avg_long_v,lock_lvl_long_v,classification"
+  echo "# tmax_fine/ferr_fine: the timestep-ceiling cross-check -- the SAME"
+  echo "#   corner at the SAME tstop_long, re-run at a finer internal timestep"
+  echo "#   ceiling.  '--' where the corner settled at tstop_long and no"
+  echo "#   cross-check was needed."
+  echo "# ferr_best: the residual of the best-resolved run available for the"
+  echo "#   corner (longest transient, then finest ceiling) -- the number the"
+  echo "#   classification is made from."
+  echo "# classification: settles | settles-phi | integration | under-damped | not-locked"
+  echo "bundle,temp_c,vdd_v,band,tstop_short,ferr_short,tstop_long,ferr_long,decay_ratio,decay_expected,tmax_fine,ferr_fine,ferr_best,nmeas_best,fout_best_hz,phi_best_s,vctrl_avg_best_v,lock_lvl_best_v,classification"
   for f in "${WORK}"/s100x_*.csv; do
     IFS=, read -r b t v _ <<<"$(cat "${f}")"
     short="${WORK}/s100_${b}_${t}_${v}.csv"
     [ -f "${short}" ] || continue
-    paste -d, "${short}" "${f}"
+    fine="${WORK}/s100m_${b}_${t}_${v}.csv"
+    if [ -f "${fine}" ]; then paste -d, "${short}" "${f}" "${fine}"
+    else                      paste -d, "${short}" "${f}"; fi
   done | awk -F, -v accf="${ACC_FERR}" -v accn="${ACC_NTOL}" \
               -v accp="${ACC_PHI_FRAC}" -v accl="${ACC_LOCK_FRAC}" \
-              -v dexp="${SETTLE_DECAY_EXPECTED}" '
+              -v dexp="${SETTLE_DECAY_EXPECTED}" -v NW=28 '
     {
-      b=$1; t=$2; v=$3+0; band=$5; ts_s=$27; ts_l=$54;
-      fes=abs($13); fel=abs($40);
-      fr=$34+0; n=$35+0; fo=$37+0; nm=$39+0; ph=$41+0;
-      vca=$47+0; lk=$50+0; tref=1.0/fr;
+      # `paste` joined two or three summary rows of identical width NW: the
+      # default-length run, the escalated run, and -- only where the escalated
+      # run was still over threshold -- the timestep-ceiling cross-check.  Every
+      # offset below is (block - 1) * NW + field, never a hand-added constant.
+      L = NW; F = 2 * NW; nb = int(NF / NW);
+      b=$1; t=$2; v=$3+0; band=$5; ts_s=$(27); ts_l=$(L+27);
+      fes=abs($13); fel=abs($(L+13));
+      # The BEST-resolved run is the cross-check where it exists, else the
+      # escalated run.  The classification is made from that block, so a corner
+      # is never called under-damped on the strength of the coarser run when a
+      # finer one of the same length exists.
+      Bo = (nb >= 3 ? F : L);
+      tm_f = (nb >= 3 ? $(F+28) : "--");
+      fe_f = (nb >= 3 ? sprintf("%.4g", $(F+13)+0) : "--");
+      feb  = $(Bo+13)+0;
+      fr=$(Bo+7)+0; n=$(Bo+8)+0; fo=$(Bo+10)+0; nm=$(Bo+12)+0; ph=$(Bo+14)+0;
+      vca=$(Bo+20)+0; lk=$(Bo+23)+0; tref=1.0/fr;
       locked = (abs(nm - n) <= accn) && (abs(fo - n*fr)/(n*fr) <= accf);
       if (!locked)                       cls = "not-locked";
-      else if (fel > accf)               cls = "under-damped";
+      else if (abs(feb) > accf)          cls = "under-damped";
+      # Inside threshold at the best-resolved run, but NOT at the escalated run
+      # of the same length: the only thing that changed is the integration, so
+      # that is what the earlier failure was.
+      else if (nb >= 3 && fel > accf)    cls = "integration";
       else if (abs(ph) > accp*tref || lk < accl*v) cls = "settles-phi";
       else                               cls = "settles";
-      printf "%s,%s,%.2f,%s,%s,%.4g,%s,%.4g,%.4g,%.4g,%.6g,%.6g,%.6g,%.4g,%.4g,%s\n",
-        b, t, v, band, ts_s, $13+0, ts_l, $40+0,
-        (fes > 0 ? fel/fes : 0), dexp, nm, fo, ph, vca, lk, cls;
+      printf "%s,%s,%.2f,%s,%s,%.4g,%s,%.4g,%.4g,%.4g,%s,%s,%.4g,%.6g,%.6g,%.6g,%.4g,%.4g,%s\n",
+        b, t, v, band, ts_s, $13+0, ts_l, $(L+13)+0,
+        (fes > 0 ? fel/fes : 0), dexp, tm_f, fe_f, feb, nm, fo, ph, vca, lk, cls;
     }
     function abs(x) { return x < 0 ? -x : x }' | sort -t, -k1,1 -k2,2n -k3,3n
 } >"${SETTLE}"
@@ -341,18 +396,20 @@ eval "$(awk -F, '
   !/^#/ && $1 != "bundle" {
     n++;
     id = $1 "/" $2 "C/" sprintf("%.2f", $3) "V";
-    c = $16;
+    c = $19;
     if (c == "settles")      ns++;
     else if (c == "settles-phi") np++;
+    else if (c == "integration") { ni++; integ = (integ == "" ? id : integ " " id) }
     else if (c == "under-damped") { nu++; margin = (margin == "" ? id : margin " " id) }
     else                     { nl++; margin = (margin == "" ? id : margin " " id) }
     if (c == "under-damped" || c == "not-locked") {
-      if (worst == "" || abs($8) > abs(wf)) { wf = $8; worst = id; wband = $4; wdr = $9 }
+      if (worst == "" || abs($13) > abs(wf)) { wf = $13; worst = id; wband = $4; wdr = $9 }
     }
   }
   END {
-    printf "N_RERUN=%d\nN_R_SETTLES=%d\nN_R_PHI=%d\nN_R_UNDAMPED=%d\nN_R_NOTLOCK=%d\n",
-      n+0, ns+0, np+0, nu+0, nl+0;
+    printf "N_RERUN=%d\nN_R_SETTLES=%d\nN_R_PHI=%d\nN_R_UNDAMPED=%d\nN_R_NOTLOCK=%d\nN_R_INTEG=%d\n",
+      n+0, ns+0, np+0, nu+0, nl+0, ni+0;
+    printf "INTEG_LIST=%s\n", (integ == "" ? "(none)" : "\"" integ "\"");
     printf "MARGIN_LIST=%s\n", (margin == "" ? "(none)" : "\"" margin "\"");
     printf "MARGIN_WORST=%s\nMARGIN_WORST_FERR=%s\nMARGIN_WORST_BAND=%s\nMARGIN_WORST_DR=%s\n",
       (worst == "" ? "n/a" : "\"" worst "\""), (worst == "" ? "n/a" : sprintf("%.4g", wf)),
@@ -362,8 +419,8 @@ eval "$(awk -F, '
 
 SETTLE_TABLE="$(awk -F, '
   !/^#/ && $1 != "bundle" {
-    printf "  | %s | %s | %.2f | %s | %s | %.4g | %s | %.4g | %.3g | %s |\n",
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $16;
+    printf "  | %s | %s | %.2f | %s | %s | %.4g | %s | %.4g | %.3g | %s | %s | %s |\n",
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $11, $12, $19;
   }' "${SETTLE}")"
 
 # Power split totals at the nominal corner and worst corner of the reduced grid.
@@ -410,9 +467,10 @@ eval "$(awk -F, '
 : "${NOMQD_MW:=n/a}"; : "${NOMDD_MW:=n/a}"
 : "${N_RERUN:=0}"; : "${N_R_SETTLES:=0}"; : "${N_R_PHI:=0}"
 : "${N_R_UNDAMPED:=0}"; : "${N_R_NOTLOCK:=0}"; : "${MARGIN_LIST:=(none)}"
+: "${N_R_INTEG:=0}"; : "${INTEG_LIST:=(none)}"
 : "${MARGIN_WORST:=n/a}"; : "${MARGIN_WORST_FERR:=n/a}"
 : "${MARGIN_WORST_BAND:=n/a}"; : "${MARGIN_WORST_DR:=n/a}"
-[ -n "${SETTLE_TABLE}" ] || SETTLE_TABLE="  | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |"
+[ -n "${SETTLE_TABLE}" ] || SETTLE_TABLE="  | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |"
 N_MARGIN=$(( N_R_UNDAMPED + N_R_NOTLOCK ))
 # Corners still failing the residual-frequency check in the reported (longest
 # available) row, and how many of those the escalation never reached -- because
@@ -442,8 +500,8 @@ elif [ "${N_RERUN}" -eq 0 ]; then
   their rows must not be read as either. Stated as the open question it is."
   V_SETTLE="**NOT RESOLVED** -- ${N_FERRFAIL} corner(s) never escalated"
 else
-  SETTLE_PROSE="  | Bundle | Temp | Vdd | Band | tstop (short) | ferr (short) | tstop (long) | ferr (long) | decay ratio | resolution |
-  |---|---|---|---|---|---|---|---|---|---|
+  SETTLE_PROSE="  | Bundle | Temp | Vdd | Band | tstop (short) | ferr (short) | tstop (long) | ferr (long) | decay ratio | tmax (fine) | ferr (fine) | resolution |
+  |---|---|---|---|---|---|---|---|---|---|---|---|
 ${SETTLE_TABLE}
 
   Resolution key: \`settles\` = in lock and inside the residual-frequency
@@ -451,17 +509,29 @@ ${SETTLE_TABLE}
   transient-budget artefact; \`settles-phi\` = the residual frequency error
   settled but the STATIC phase error (or the block's own LOCK flag) is still
   over threshold, which is a static-offset result, not a settling one;
+  \`integration\` = still over threshold at the longer length under the default
+  ${KTMAX_BASE} timestep ceiling, but inside it at the SAME length under the
+  finer ${KTMAX_X} ceiling -- so the failure was the simulator's, not the
+  loop's, and it is **not** a design result (PR #64 measured exactly this
+  failure mode on this DUT: ngspice stepping over \`design/edgedet.sch\`'s
+  0.33-0.39 ns internal PFD set pulse);
   \`under-damped\` = in lock (divide ratio and absolute output frequency both
   correct) but the residual frequency error is STILL over threshold at
-  ${KTB_X} = ${KTB_X_TAU} tau, i.e. genuinely marginal damping at that
-  operating point; \`not-locked\` = the divide ratio or the absolute output
-  frequency is wrong at the longer length, so the loop is not in lock at that
-  corner at all and the finding is one of lock range, not of damping.
+  ${KTB_X} = ${KTB_X_TAU} tau **and** at the finer ceiling, i.e. genuinely
+  marginal damping at that operating point; \`not-locked\` = the divide ratio or
+  the absolute output frequency is wrong at the best-resolved run, so the loop
+  is not in lock at that corner at all and the finding is one of lock range,
+  not of damping.
 
   \`decay ratio\` is |ferr(long)| / |ferr(short)|. A loop settling as a single
   pole at KTAU = ${KTAU} would show ${SETTLE_DECAY_EXPECTED} between these two
   late windows; a corner whose ratio is near 1 has not decayed at all, which is
   the numerical form of \"not merely slow\".
+
+  \`tmax (fine)\` / \`ferr (fine)\` are the timestep-ceiling cross-check: the
+  same corner, the same ${KTSTOP_X} transient, the same warm start, re-run with
+  the internal timestep ceiling tightened to ${KTMAX_X}. \`--\` means the corner
+  came inside the criterion at the longer length and no cross-check was needed.
 
   - ${N_RERUN} corner(s) escalated from ${KTSTOP_BASE} to ${KTSTOP_X}
     (${KTSTOP_X_TAU} tau, late window at ${KTA_X_TAU}/${KTB_X_TAU} tau against
@@ -470,29 +540,37 @@ ${SETTLE_TABLE}
     i.e. budget artefacts of the short run, not design results.
   - \`settles-phi\`: ${N_R_PHI} corner(s) -- settled in frequency but outside
     the static-phase or LOCK-flag part of the criterion.
+  - **\`integration\`: ${N_R_INTEG} corner(s)** -- ${INTEG_LIST}. Not design
+    results either: they pass at the same transient length once the timestep
+    ceiling resolves the PFD's internal set pulse. Their presence is also the
+    measurement that says the ${KTMAX_BASE} default is not sufficient
+    everywhere on this grid, which is a finding about this campaign's own
+    numerics and is stated as one.
   - **\`under-damped\`: ${N_R_UNDAMPED} corner(s)**; **\`not-locked\`:
     ${N_R_NOTLOCK} corner(s)** -- still outside the criterion at the longer
-    length.$(
+    length AND at the finer timestep ceiling.$(
     if [ "${N_UNRESOLVED}" -gt 0 ]; then printf '
   - **%s further corner(s) still fail the residual-frequency check and were
     NOT escalated** (the `SIM_EXTEND_MAX` budget cap). Those rows are
     unresolved: this record does not classify them either way.' "${N_UNRESOLVED}"; fi)"
   if [ "${N_MARGIN}" -eq 0 ] && [ "${N_UNRESOLVED}" -eq 0 ]; then
-    V_SETTLE="resolved: ${N_RERUN} of ${N_RERUN} were transient-budget artefacts"
+    V_SETTLE="resolved: ${N_RERUN} of ${N_RERUN} were artefacts (${N_R_INTEG} of the integration, the rest of the transient budget)"
   elif [ "${N_MARGIN}" -eq 0 ]; then
-    V_SETTLE="${N_RERUN} escalated, all budget artefacts; **${N_UNRESOLVED} corner(s) unresolved**"
+    V_SETTLE="${N_RERUN} escalated, all artefacts (${N_R_INTEG} of the integration); **${N_UNRESOLVED} corner(s) unresolved**"
   else
-    V_SETTLE="**${N_MARGIN} genuine design-margin corner(s)** of ${N_RERUN} escalated"
+    V_SETTLE="**${N_MARGIN} genuine design-margin corner(s)** of ${N_RERUN} escalated (${N_R_INTEG} were integration artefacts)"
   fi
 fi
 
 if [ "${N_MARGIN}" -eq 0 ] && [ "${N_FERRFAIL}" -eq 0 ]; then
   MARGIN_NOTE="  **No corner on this grid is a design-margin finding.** Every corner that
   missed the lock criterion at the default transient length was re-run at
-  ${KTSTOP_X} and came inside it, so the short run's failures were
-  transient-budget artefacts and there is nothing here to route back to #10
-  (loop dynamics) or #8 (VCO). That is a conclusion this record is entitled to
-  only because the longer run was made: it is not an assumption."
+  ${KTSTOP_X}, and every corner still outside it there was re-run again at the
+  ${KTMAX_X} timestep ceiling; all of them came inside the criterion. So the
+  short run's failures were artefacts of the transient budget or of the
+  integration, and there is nothing here to route back to #10 (loop dynamics)
+  or #8 (VCO). That is a conclusion this record is entitled to only because
+  both re-runs were made: it is not an assumption."
 elif [ "${N_MARGIN}" -eq 0 ]; then
   MARGIN_NOTE="  **No corner is SHOWN to be a design-margin finding, and that is weaker than
   saying none is.** Every corner the escalation reached settled inside the
@@ -502,14 +580,18 @@ elif [ "${N_MARGIN}" -eq 0 ]; then
   this evidence, but nothing is cleared either."
 else
   MARGIN_NOTE="  **DESIGN-MARGIN FINDING -- flagged back, not absorbed.** ${N_MARGIN} corner(s)
-  do **not** meet the lock criterion even when run to ${KTSTOP_X}
-  (${KTSTOP_X_TAU} loop time constants), with the late window at
-  ${KTA_X_TAU}/${KTB_X_TAU} tau: ${MARGIN_LIST}. At those corners the failure
-  is **not** a limit of this record's transient budget and must not be read as
-  one -- the loop had four time constants and did not settle. Worst of them is
+  do **not** meet the lock criterion when run to ${KTSTOP_X}
+  (${KTSTOP_X_TAU} loop time constants, late window at
+  ${KTA_X_TAU}/${KTB_X_TAU} tau) **and do not meet it at the ${KTMAX_X}
+  timestep ceiling either**: ${MARGIN_LIST}. At those corners the failure is
+  **not** a limit of this record's transient budget and **not** an artefact of
+  its integration, and must not be read as either -- the loop had four time
+  constants and a ceiling PR #64 showed sufficient to resolve the PFD's
+  internal set pulse on this DUT, and still did not settle. Worst of them is
   ${MARGIN_WORST} (band ${MARGIN_WORST_BAND}, residual frequency error
-  ${MARGIN_WORST_FERR} at the long length, decay ratio ${MARGIN_WORST_DR}
-  against the ${SETTLE_DECAY_EXPECTED} a single-pole settling would give).
+  ${MARGIN_WORST_FERR} at the best-resolved run, decay ratio
+  ${MARGIN_WORST_DR} against the ${SETTLE_DECAY_EXPECTED} a single-pole
+  settling would give).
 
   This is consistent with, and is evidence for, \`sim/loop-dynamics\` (#10)'s
   phase-margin-vs-loop-gain result: phase margin falls as \`Icp*Kvco/N\` rises,
@@ -796,6 +878,51 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Supersession provenance.
+# ---------------------------------------------------------------------------
+# `sim/README.md`'s append-only rule says a re-run does not edit the record it
+# replaces: it mints a new one carrying a **Supersedes** field.  That field is
+# an ID, and an ID on its own leaves a reader holding two evidence records with
+# no stated link between them beyond a filename -- which run of which campaign
+# produced the baseline, at what commit, and what is different now.  So when
+# this campaign supersedes an earlier record it also says so in prose, and
+# every fact in that prose is READ OUT OF the superseded record and its own
+# extracted-metrics CSV rather than restated by hand.  SIM_SUPERSEDES_PR names
+# the pull request that landed the baseline (the one thing the record itself
+# cannot know, because it is written before it is merged).
+SUPERSEDE_PROSE=""
+if [ -n "${SIM_SUPERSEDES:-}" ]; then
+  PRIOR_MD="${RECORDSDIR}/${SIM_SUPERSEDES}.md"
+  PRIOR_CSV="${EXP}/corners/${SIM_SUPERSEDES}/supply_steady.csv"
+  PRIOR_COMMIT="$(sed -n 's/.*Repo commit: `\([^`]*\)`.*/\1/p' "${PRIOR_MD}" 2>/dev/null | head -1)"
+  PRIOR_STAMP="$(sed -n 's/^- \*\*Timestamp \/ author\*\*: \(.*\)$/\1/p' "${PRIOR_MD}" 2>/dev/null | head -1)"
+  PRIOR_N="$(awk -F, '!/^#/ && $1 != "bundle"' "${PRIOR_CSV}" 2>/dev/null | wc -l | tr -d ' ')"
+  PRIOR_TS="$(awk -F, '!/^#/ && $1 != "bundle" {print $23}' "${PRIOR_CSV}" 2>/dev/null | sort -u | tr '\n' ' ' | sed 's/ $//')"
+  : "${PRIOR_COMMIT:=(not stated in that record)}"
+  : "${PRIOR_STAMP:=(not stated in that record)}"
+  : "${PRIOR_N:=0}"; [ "${PRIOR_N}" -gt 0 ] || PRIOR_N="an unrecorded number of"
+  : "${PRIOR_TS:=(not stated)}"
+  SUPERSEDE_PROSE="
+- **Supersession provenance** (which record this replaces, and how it got
+  here): the baseline superseded below is
+  \`sim/supply-sensitivity/records/${SIM_SUPERSEDES}.md\` -- ${PRIOR_N} steady-state
+  points of this same claim, every one of them run at ${PRIOR_TS}, minted
+  ${PRIOR_STAMP} at repo commit \`${PRIOR_COMMIT}\`, landed on \`main\` by
+  **${SIM_SUPERSEDES_PR:-(pull request not stated)}**. That record is **not**
+  edited and is not withdrawn -- \`sim/README.md\` is append-only, so it stands
+  as the evidence it was, and this record states the delta rather than
+  overwriting it. The delta: ${N_STEADY} steady-state points here against
+  ${PRIOR_N} there; ${N_RERUN} settling re-run(s) at ${KTSTOP_X}, which that
+  record reported it had started and could not finish; ${N_SPLIT} corner(s) of
+  the quiescent/dynamic power split, which it reported as not measured; and
+  ${N_DYN} supply step/ramp run(s), which it reported as **NOT MEASURED** with
+  an empty table. Where a number appears in both records and differs, THIS
+  record's is the one to cite for the corners it covers, and the reason is
+  stated: a corner escalated to ${KTSTOP_X} is a longer, closer-to-settled
+  measurement of the same operating point, not a different one."
+fi
+
+# ---------------------------------------------------------------------------
 # Console summary
 # ---------------------------------------------------------------------------
 cat <<EOF
@@ -806,7 +933,7 @@ supply-sensitivity: ${N_STEADY} steady-state points, ${N_DYN} step/ramp runs
   Vctrl (settled)                         ${MNVC} .. ${MXVC} V,  ${N_VOUT} point(s) outside ${ACC_VCTRL_LO}-${ACC_VCTRL_HI} V   ${V_VCTRL}
   total power @ 100 MHz                   ${MNP_MW} .. ${MXP_MW} mW (worst ${MXP_ID})    ${V_PWR}
   step/ramp: worst plateau ferr           ${DYN_MXFE} @ ${DYN_MXFE_ID}     ${V_DYN}
-  settling re-runs @ ${KTSTOP_X}              ${N_RERUN}: ${N_R_SETTLES} settle, ${N_R_PHI} phi-only, ${N_R_UNDAMPED} under-damped, ${N_R_NOTLOCK} not locked
+  settling re-runs @ ${KTSTOP_X}              ${N_RERUN}: ${N_R_SETTLES} settle, ${N_R_PHI} phi-only, ${N_R_INTEG} integration, ${N_R_UNDAMPED} under-damped, ${N_R_NOTLOCK} not locked
   lock-criterion failures                 ${N_FAIL} of ${N_STEADY}: ${FAILLIST}
 EOF
 
@@ -828,7 +955,7 @@ cat >"${RECORDSDIR}/${RID}.md" <<EOF
   ${KFOUT} Hz, per block, against the draft < ${ACC_PWR_MW} mW target?
   The power target is the only pass/fail against a spec line and it is a
   placeholder pending ratification (#1): \`spec/pll.md#power\`. Everything else
-  here is a design-input claim in the second form \`sim/README.md\` admits.
+  here is a design-input claim in the second form \`sim/README.md\` admits.${SUPERSEDE_PROSE}
 - **Netlist provenance**: schematic (\`design/pll_top.sch\` (#52), exported by
   \`design/netlist.sh\` to \`design/netlist/pll_top.spice\`, assembled with the
   campaign stimulus by \`sim/lib/pll_top_dut.sh\`) ->
@@ -902,10 +1029,13 @@ SUBSET
       supply moves.
   - **Settling re-run (criterion 1c): ${N_RERUN} corner(s)** of the ${N_STEADY}
     above re-simulated at ${KTSTOP_X} instead of ${KTSTOP_BASE}, selected by
-    the runner from the measured residual frequency error rather than by hand.
-    Not a separate corner axis -- the same corners, run longer, so that a
-    lock-criterion miss can be attributed to the transient budget or to the
-    design. See Result section 1c.
+    the runner from the measured residual frequency error rather than by hand;
+    of those, **${N_R_INTEG} plus ${N_MARGIN} corner(s) were then re-simulated a
+    third time** at the same ${KTSTOP_X} with the internal timestep ceiling
+    tightened from ${KTMAX_BASE} to ${KTMAX_X}. Not separate corner axes -- the
+    same corners, run longer and then run finer, so that a lock-criterion miss
+    can be attributed to the transient budget, to the integration, or to the
+    design, which are three different claims. See Result section 1c.
   - **Quiescent/dynamic power split (criterion 4): ${N_SPLIT} corner(s)**$(
       if [ "${N_SPLIT}" -eq 0 ]; then printf ' -- **none run.**  No
     quiescent/dynamic number appears in this record; see the Result section.'
@@ -987,13 +1117,18 @@ SUBSET
     ${KTSTOP_BASE} has not been shown to be a design failure -- it has been
     shown to be unsettled, which is a different claim. The runner therefore
     re-runs every such corner at ${KTSTOP_X} (${KTSTOP_X_TAU} tau, late window
-    ${KTA_X}/${KTB_X} = ${KTA_X_TAU}/${KTB_X_TAU} tau) and the record reports
-    the pair, classifying each as a transient-budget artefact or as genuine
-    under-damping (section 1c). The escalation is automatic -- \`SIM_EXTEND\`,
-    \`SIM_EXTEND_TSTOP\`/\`_TA\`/\`_TB\`, \`SIM_EXTEND_MAX\` in the runner --
-    rather than a note asking a later reader to follow it up, because the
-    version of this campaign that left it as a note produced a record whose
-    headline verdict could not be interpreted.
+    ${KTA_X}/${KTB_X} = ${KTA_X_TAU}/${KTB_X_TAU} tau); and any corner still
+    over threshold there is re-run once more at the same length with the
+    timestep ceiling tightened to ${KTMAX_X}, because a third explanation --
+    the integration stepping over the PFD's internal set pulse, which PR #64
+    measured on this DUT -- has to be excluded before a residual can be called
+    a property of the loop. The record reports all the runs a corner got and
+    classifies it from the best-resolved one (section 1c). Both escalations are
+    automatic -- \`SIM_EXTEND\`, \`SIM_EXTEND_TSTOP\`/\`_TA\`/\`_TB\`,
+    \`SIM_EXTEND_MAX\`, \`SIM_FINE\`, \`SIM_FINE_TMAX\`, \`SIM_FINE_MAX\` in the
+    runner -- rather than a note asking a later reader to follow them up,
+    because the version of this campaign that left it as a note produced a
+    record whose headline verdict could not be interpreted.
   - **Lock criterion** (same form as \`sim/pll-top-smoke\`, so the verdicts are
     comparable): residual fractional frequency error <= ${ACC_FERR}, measured
     as the DRIFT of the REF->FB phase between t = ${KTA} and t = ${KTB} (in a
@@ -1073,17 +1208,36 @@ SUBSET
     a different quantity: inside the loop bandwidth the PLL corrects the VCO's
     excursion and outside it does not. The consistency check between the two
     is in the Result section.
-  - **Simulator settings**: \`.tran ${KTSTEP} ${KTSTOP_BASE} 0 ${KTMAX}\` for
-    the steady-state runs (\`.tran ${KTSTEP} ${KTSTOP_X} 0 ${KTMAX}\` for the
-    ${N_RERUN} escalated corner(s) -- the \`tstop\` column of
-    \`supply_steady.csv\` says which is which, per row) and
-    \`.tran ${KTSTEP} ${KD_TSTOP} 0 ${KTMAX}\` for the
+  - **Simulator settings**: \`.tran ${KTSTEP} ${KTSTOP_BASE} 0 ${KTMAX_BASE}\`
+    for the steady-state runs (\`.tran ${KTSTEP} ${KTSTOP_X} 0 ${KTMAX_BASE}\`
+    for the ${N_RERUN} escalated corner(s), and
+    \`.tran ${KTSTEP} ${KTSTOP_X} 0 ${KTMAX_X}\` for the ${N_R_INTEG} plus
+    ${N_MARGIN} corner(s) the timestep-ceiling cross-check reached -- the
+    \`tstop\` and \`tmax\` columns of \`supply_steady.csv\` say which is which,
+    per row) and \`.tran ${KTSTEP} ${KD_TSTOP} 0 ${KTMAX_BASE}\` for the
     step/ramp runs; \`reltol 1e-3\`, \`abstol 1e-13\`, \`vntol 1e-6\`,
-    \`rshunt 1e12\`, \`itl4 200\`. The ${KTMAX} timestep ceiling is set by the
-    CHARGE PUMP, not the VCO: the PFD's minimum UP/DN pulse is 1.1-1.9 ns and
-    this campaign MEASURES those widths, so the narrower pulse must be
-    resolved by several timesteps and not merely integrated correctly. It is
-    tighter than \`sim/pll-top-smoke\`'s 500 ps for exactly that reason.
+    \`rshunt 1e12\`, \`itl4 200\`.
+  - **The timestep ceiling, and what it is NOT cleared by.** The
+    ${KTMAX_BASE} default was derived from the CHARGE PUMP rather than the VCO:
+    the PFD's minimum UP/DN OUTPUT pulse is 1.1-1.9 ns and this campaign
+    MEASURES those widths (criterion 2), so the narrower pulse must be resolved
+    by several timesteps and not merely integrated correctly. **PR #64 has since
+    shown, on this same DUT, that the output pulse is the wrong pulse to size a
+    ceiling from.** \`design/edgedet.sch\` fires each SR latch with
+    AND(X, NOT(X delayed by 5 inverters)) -- an INTERNAL set pulse of
+    0.33-0.39 ns, about 4x narrower. At a 500 ps ceiling #64 measured ngspice
+    stepping clean over that set pulse on 9 of 16 feedback edges, which reads
+    out as a loop that will not lock; it moved \`sim/pll-top-smoke\` to
+    ${KTMAX_X}. ${KTMAX_BASE} is tighter than the ceiling that failed there but
+    is **not** the ceiling that was shown to be sufficient, so this record
+    treats it as a justified default and not a cleared one, and every corner
+    that could have turned into a design-margin claim was re-run at ${KTMAX_X}
+    before that claim was allowed. Two independent reasons to believe the
+    default is adequate at the corners it was used at, both measured here
+    rather than argued: the UP/DN widths in section 2 are 1-3 ns with BOTH
+    branches pulsing every reference cycle (a stepped-over set pulse leaves the
+    corresponding branch dead), and section 1c reports what the finer ceiling
+    changed where it was run.
   - **Waveform retained**: ${WAVE_FIELD}
   - **Limitations**:
     - **Schematic-level, no parasitics.** Every block's own record carries the
@@ -1297,7 +1451,7 @@ ${SPLIT_TABLE}
   |---|---|
   | 1. output frequency vs. supply, full grid | **${V_FREQ}** |
   | 1b. control voltage inside DR-001's usable window at every corner | **${V_VCTRL}** |
-  | 1c. settling re-run: budget artefact vs. genuine under-damping | ${V_SETTLE} |
+  | 1c. re-runs: budget artefact vs. integration artefact vs. genuine under-damping | ${V_SETTLE} |
   | 2. static phase offset vs. supply, full grid, post-#24 CP | reported (no ratified spec line; ${N_FAIL} corner(s) outside the ${ACC_PHI_FRAC}-of-a-period lock criterion) |
   | 3. stays locked through a supply step and a supply ramp | **${V_DYN}** |
   | 4. power at ${KFOUT} Hz vs. the draft < ${ACC_PWR_MW} mW target | **${V_PWR}** |
