@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
-# gf180-pll :: the ONE closed-loop DUT assembly path.
+# gf180-pll :: the pll_top closed-loop DUT assembly path.
+#
+# NAMING NOTE, and the reconciliation it is waiting on.  This file is #52's
+# `sim/lib/assemble_closed_loop.sh`, renamed.  That path is already taken on
+# `main` by a DIFFERENT helper (landed by #12/PR #56) which assembles a
+# closed-loop deck by concatenating the five block exports rather than by
+# instantiating `design/pll_top.sch`, and which #12's merged `sim/lock-time`
+# and `sim/output-range` runners call as an executable.  Overwriting it here
+# would break already-recorded evidence, so the two coexist under different
+# names until they are reconciled -- which is #52's whole point and is tracked
+# as a follow-up.  Evidence records and testbench comments minted before the
+# rename refer to this file by its old path; the file is the same file.
 #
 # Every campaign that simulates the whole PLL -- #12 (lock-time,
 # output-range), #13 (period-jitter), #14 (supply-sensitivity), #49 -- builds

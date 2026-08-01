@@ -21,7 +21,8 @@
 # requirement -- there is no separate 1.8 V or 5 V supply-flavour sweep to run.
 #
 # The DUT is design/pll_top.sch (#52), assembled by
-# sim/lib/assemble_closed_loop.sh.  This campaign does not build a top level of
+# sim/lib/pll_top_dut.sh (#52's helper, renamed -- see its header).  This
+# campaign does not build a top level of
 # its own; nothing here is a hand-transcribed copy of the design.
 #
 # Usage:
@@ -45,8 +46,8 @@ EXP="$(cd "${HERE}/.." && pwd)"
 ROOT="$(cd "${EXP}/../.." && pwd)"
 # shellcheck source=../../lib/simenv.sh
 . "${ROOT}/sim/lib/simenv.sh"
-# shellcheck source=../../lib/assemble_closed_loop.sh
-. "${ROOT}/sim/lib/assemble_closed_loop.sh"
+# shellcheck source=../../lib/pll_top_dut.sh
+. "${ROOT}/sim/lib/pll_top_dut.sh"
 
 WORK="${EXP}/work"
 DUT_LOCK="${WORK}/dut_lock.sp"

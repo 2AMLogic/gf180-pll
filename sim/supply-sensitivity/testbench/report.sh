@@ -81,10 +81,10 @@ STEADY="${CORNERSDIR}/supply_steady.csv"
   echo "# phi_b_s: static REF->FB phase error in the late window, seconds"
   echo "# skew_s: mean UP/DN pulse-WIDTH difference over 3 probes, seconds"
   echo "# p_tot_w: vdd * (|i_core| + |i_vco| + |i_div|)"
-  echo "bundle,temp_c,vdd_v,band,fout_hz,fdev_ppm,ferr,phi_b_s,skew_s,skew_spread_s,wup_s,wdn_s,nmeas,vctrl_avg_v,vctrl_min_v,vctrl_max_v,lock_lvl_v,i_core_a,i_vco_a,i_div_a,p_tot_w,verdict"
+  echo "bundle,temp_c,vdd_v,band,fout_hz,fdev_ppm,ferr,phi_b_s,skew_s,skew_spread_s,wup_s,wdn_s,nmeas,vctrl_avg_v,vctrl_min_v,vctrl_max_v,lock_lvl_v,i_core_a,i_vco_a,i_div_a,p_tot_w,verdict,tstop"
   cat "${WORK}"/s100_*.csv | sort -t, -k1,1 -k2,2n -k3,3n | awk -F, -v OFS=, \
     -v accf="${ACC_FERR}" -v accp="${ACC_PHI_FRAC}" -v accn="${ACC_NTOL}" \
-    -v accl="${ACC_LOCK_FRAC}" -v pwr="${ACC_PWR_MW}" '
+    -v accl="${ACC_LOCK_FRAC}" -v pwr="${ACC_PWR_MW}" -v dflt_ts="${KTSTOP}" '
     { rows[NR] = $0; if ($3 + 0 == 3.30) fnom[$1 "|" $2] = $10 }
     END {
       for (i = 1; i <= NR; i++) {
@@ -94,6 +94,7 @@ STEADY="${CORNERSDIR}/supply_steady.csv"
         s1=f[15]+0; s2=f[16]+0; s3=f[17]+0; wup=f[18]+0; wdn=f[19]+0;
         vca=f[20]+0; vcmin=f[21]+0; vcmax=f[22]+0; lock=f[23]+0;
         ic=f[24]+0; iv=f[25]+0; id=f[26]+0;
+        ts=(f[27] == "" ? dflt_ts : f[27]);
         fn = fnom[bundle "|" temp];
         dev = (fn > 0) ? (fout - fn) / fn * 1e6 : 0;
         sk = (s1 + s2 + s3) / 3;
@@ -109,9 +110,9 @@ STEADY="${CORNERSDIR}/supply_steady.csv"
         else if (abs(fout - n * fref) / (n * fref) > accf) v = "FAIL:fout";
         else if (lock < accl * vdd) v = "FAIL:lock";
         else if (p * 1e3 > pwr) v = "FAIL:power";
-        printf "%s,%s,%.2f,%s,%.6g,%.4g,%.4g,%.6g,%.6g,%.6g,%.6g,%.6g,%.6g,%.4g,%.4g,%.4g,%.4g,%.6g,%.6g,%.6g,%.6g,%s\n",
+        printf "%s,%s,%.2f,%s,%.6g,%.4g,%.4g,%.6g,%.6g,%.6g,%.6g,%.6g,%.6g,%.4g,%.4g,%.4g,%.4g,%.6g,%.6g,%.6g,%.6g,%s,%s\n",
           bundle, temp, vdd, band, fout, dev, ferr, phib, sk, smax - smin, wup, wdn,
-          nmeas, vca, vcmin, vcmax, lock, ic, iv, id, p, v;
+          nmeas, vca, vcmin, vcmax, lock, ic, iv, id, p, v, ts;
       }
     }
     function abs(x) { return x < 0 ? -x : x }'
@@ -323,8 +324,42 @@ else
   GRID_JUSTIFY="yes"
 fi
 
+if [ "${N_DYN}" -eq 0 ]; then
+  DYN_BULLETS="  - **Overall criterion 3: NOT MEASURED.** The step/ramp deck
+    (\`tb_supply_dyn.sp\`) is implemented, parameterised and exercised -- the
+    profile above is the one it runs and the runner builds its job set from
+    \`SIM_DYN_PICKS\` -- but **no step/ramp run completed inside this record's
+    compute budget**, so this record reports **no** number for the supply-step
+    or supply-ramp disturbance and **does not** claim the loop stays locked
+    through either. That criterion of #14 is undischarged and the follow-up
+    issue carries it. Reporting it as anything other than not-measured would be
+    the failure mode \`sim/README.md\` names: a number without a run behind it."
+else
+  DYN_BULLETS="  - Worst peak REF->FB phase excursion through the **step**:
+    **${DYN_PSTEP_NS} ns** at ${DYN_PSTEP_ID}.
+  - Worst peak excursion through the **ramp**: **${DYN_PRAMP_NS} ns** at
+    ${DYN_PRAMP_ID}.
+  - Worst output-frequency excursion measured inside the step disturbance
+    (20 CLK cycles from the end of the supply edge): **${DYN_DSTEP_HZ} Hz** at
+    ${DYN_DSTEP_ID}.
+  - Worst residual frequency error on any settled plateau:
+    **${DYN_MXFE}** at ${DYN_MXFE_ID} (criterion <= ${ACC_FERR}).
+  - Minimum LOCK-flag level anywhere in the profile: **${DYN_MNLOCK} V** at
+    ${DYN_MNLOCK_ID}.
+  - Control-node travel from the high rail to the low rail:
+    **${DYN_DVC} V** at ${DYN_DVC_ID}; peak excursion beyond the settled value
+    during the step: **${DYN_VEX} V** at ${DYN_VEX_ID}.
+  - **Overall criterion 3: ${V_DYN}** (${DYN_LOST} of ${N_DYN} runs failed the
+    stays-locked criterion on some plateau)."
+fi
+
+KD_RATE="$(awk -v a="${KD_HI}" -v b="${KD_END}" -v t0="${KD_TRAMP%u}" -v t1="${KD_TREND%u}" \
+  'BEGIN{printf "%.4g", (a-b)*1000/(t1-t0)}')"
 DYN_CORNERS="$(awk -F, '!/^#/ && $1 != "bundle" {printf "`%s`/%s C, ", $1, $2}' "${DYNCSV}" | sed 's/, $//')"
 [ -n "${DYN_CORNERS}" ] || DYN_CORNERS="(none)"
+
+N_SETTLED=$(( N_STEADY - N_FAIL ))
+N_UNSETTLED=${N_FAIL}
 
 # Overall verdicts.
 V_FREQ=$([ "${N_FAIL}" -eq 0 ] && echo PASS || echo FAIL)
@@ -337,9 +372,9 @@ V_VCTRL=$([ "${N_VOUT}" -eq 0 ] && echo PASS || echo "FAIL")
 FDEV_TABLE="$(awk -F, '
   !/^#/ && $1 != "bundle" {
     key = $1 "|" $2; band[key] = $4;
-    if ($3 + 0 < 3.0)  { d297[key] = $6; v297[key] = $14; f297[key] = $5 }
-    if ($3 + 0 == 3.30){ f330[key] = $5; v330[key] = $14 }
-    if ($3 + 0 > 3.6)  { d363[key] = $6; v363[key] = $14; f363[key] = $5 }
+    if ($3 + 0 < 3.0)  { d297[key] = $6; v297[key] = $14; f297[key] = $5; s297[key] = flag($22) }
+    if ($3 + 0 == 3.30){ f330[key] = $5; v330[key] = $14;                    s330[key] = flag($22) }
+    if ($3 + 0 > 3.6)  { d363[key] = $6; v363[key] = $14; f363[key] = $5; s363[key] = flag($22) }
     order[key] = 1;
   }
   END {
@@ -347,10 +382,21 @@ FDEV_TABLE="$(awk -F, '
     for (bi = 1; bi <= nb; bi++) for (ti = 1; ti <= nt; ti++) {
       k = BU[bi] "|" TE[ti];
       if (!(k in order)) continue;
-      printf "  | %s | %s | %s | %+.4g | %+.4g | %.3f / %.3f / %.3f | %.4g |\n",
-        BU[bi], TE[ti], band[k], d297[k], d363[k], v297[k], v330[k], v363[k],
+      printf "  | %s | %s | %s | %s/%s/%s | %+.4g | %+.4g | %.3f / %.3f / %.3f | %.4g |\n",
+        BU[bi], TE[ti], band[k], s297[k], s330[k], s363[k],
+        d297[k], d363[k], v297[k], v330[k], v363[k],
         (v363[k] - v297[k]) / 0.66;
     }
+  }
+  function flag(v) {
+    if (v == "PASS")       return "Y";
+    if (v == "FAIL:ferr")  return "f";
+    if (v == "FAIL:phi")   return "p";
+    if (v == "FAIL:N")     return "N";
+    if (v == "FAIL:fout")  return "o";
+    if (v == "FAIL:lock")  return "L";
+    if (v == "FAIL:power") return "P";
+    return "?";
   }' "${STEADY}")"
 
 # Per-(bundle,temp) static-phase table.
@@ -383,6 +429,8 @@ PWR_TABLE="$(awk -F, '
     C[key tag] = $3 * (($18 < 0) ? -$18 : $18) * 1e3;
     VV[key tag] = $3 * (($19 < 0) ? -$19 : $19) * 1e3;
     D[key tag] = $3 * (($20 < 0) ? -$20 : $20) * 1e3;
+    S[key tag] = ($22 == "PASS" ? "Y" : "n");
+    T[key tag] = $23;
     order[key] = 1;
   }
   END {
@@ -390,8 +438,8 @@ PWR_TABLE="$(awk -F, '
     for (bi = 1; bi <= nb; bi++) for (ti = 1; ti <= nt; ti++) {
       k = BU[bi] "|" TE[ti];
       if (!(k in order)) continue;
-      printf "  | %s | %s | %.3f / %.3f / %.3f | %.3f / %.3f / %.3f | %.3f / %.3f / %.3f | %.3f / %.3f / %.3f |\n",
-        BU[bi], TE[ti],
+      printf "  | %s | %s | %s/%s/%s | %.3f / %.3f / %.3f | %.3f / %.3f / %.3f | %.3f / %.3f / %.3f | %.3f / %.3f / %.3f |\n",
+        BU[bi], TE[ti], S[k "a"], S[k "b"], S[k "c"],
         C[k "a"], C[k "b"], C[k "c"], VV[k "a"], VV[k "b"], VV[k "c"],
         D[k "a"], D[k "b"], D[k "c"], P[k "a"], P[k "b"], P[k "c"];
     }
@@ -423,6 +471,19 @@ else
   NOMTOT_MW="$(awk -v a="${NOMQ_MW}" -v b="${NOMD_MW}" 'BEGIN{printf "%.4g", a+b}')"
 fi
 [ -n "${SPLIT_TABLE}" ] || SPLIT_TABLE="  | -- | -- | -- | -- | -- | -- |"
+if [ "${N_SPLIT}" -eq 0 ]; then
+  SPLIT_NOM=""
+else
+  SPLIT_NOM="
+
+  At the nominal corner (typical/27 C/3.30 V) the block draws
+  **${NOMTOT_MW} mW**, of which **${NOMQ_MW} mW** is frequency-independent and
+  **${NOMD_MW} mW** scales with frequency. Per domain, quiescent / dynamic:
+  core ${NOMQC_MW} / ${NOMDC_MW} mW, VCO ${NOMQV_MW} / ${NOMDV_MW} mW,
+  divider ${NOMQD_MW} / ${NOMDD_MW} mW. The worst corner of the reduced grid
+  is ${SPLIT_MAX_ID} at ${SPLIT_MAX_MW} mW (${SPLIT_MAXQ_MW} quiescent,
+  ${SPLIT_MAXD_MW} dynamic)."
+fi
 if [ "${N_SPLIT}" -eq 0 ]; then
   SPLIT_NOTE="**Not measured in this record.** The split needs a second locked
   operating point per corner and none completed inside this run's compute
@@ -469,7 +530,7 @@ cat >"${RECORDSDIR}/${RID}.md" <<EOF
   here is a design-input claim in the second form \`sim/README.md\` admits.
 - **Netlist provenance**: schematic (\`design/pll_top.sch\` (#52), exported by
   \`design/netlist.sh\` to \`design/netlist/pll_top.spice\`, assembled with the
-  campaign stimulus by \`sim/lib/assemble_closed_loop.sh\`) ->
+  campaign stimulus by \`sim/lib/pll_top_dut.sh\`) ->
   - steady-state deck: \`sim/supply-sensitivity/netlist-snapshots/${RID}.spice\`,
     SHA-256 \`${SHA_LOCK}\`
   - step/ramp deck: \`sim/supply-sensitivity/netlist-snapshots/${RID}-dyn.spice\`,
@@ -556,9 +617,15 @@ SUBSET
 - **Methodology / criteria / limitations**:
   - **DUT assembly**: \`design/netlist/pll_top.spice\` (the committed export of
     \`design/pll_top.sch\`) prepended to the campaign's stimulus fragment by
-    \`sim/lib/assemble_closed_loop.sh\`, which is the single closed-loop
-    assembly path in this repo. Nothing here is a hand-transcribed copy of the
-    design, and the frozen snapshots above are self-contained.
+    \`sim/lib/pll_top_dut.sh\`, the single path from \`design/pll_top.sch\` to
+    a runnable deck. Nothing here is a hand-transcribed copy of the design,
+    and the frozen snapshots above are self-contained. **Naming note:** that
+    helper is #52's \`sim/lib/assemble_closed_loop.sh\`, renamed because
+    \`main\` already has a differently-shaped helper at that path (#12 /
+    PR #56, which concatenates block exports rather than instantiating
+    \`pll_top\`). The two coexist until they are reconciled; the frozen
+    snapshots and the testbench comments inside them name the pre-rename path,
+    and it is the same file.
   - **Operating point, and where it comes from.** The VCO band code and the
     warm-start control voltage are DERIVED, per corner, from #8's committed
     f(Vctrl) evidence (\`${VCO_TUNING#"${ROOT}/"}\`) by
@@ -739,9 +806,26 @@ SUBSET
   absorbed, and the headroom left in the control window is what actually runs
   out at the supply extremes. Both are in the table.
 
-  | Bundle | Temp | Band | fdev @2.97 V (ppm) | fdev @3.63 V (ppm) | Vctrl @2.97/3.30/3.63 (V) | dVctrl/dVdd (V/V) |
-  |---|---|---|---|---|---|---|
+  | Bundle | Temp | Band | lock check @2.97/3.30/3.63 | fdev @2.97 V (ppm) | fdev @3.63 V (ppm) | Vctrl @2.97/3.30/3.63 (V) | dVctrl/dVdd (V/V) |
+  |---|---|---|---|---|---|---|---|
 ${FDEV_TABLE}
+
+  Lock-check key: \`Y\` = every check passed; \`f\` = residual frequency
+  error over threshold (still converging); \`p\` = static phase error over
+  threshold; \`N\` = divide ratio wrong; \`o\` = absolute output frequency
+  off target; \`L\` = the block's own LOCK flag did not assert; \`P\` = over
+  the power budget. \`L\` alone -- everything electrical settled but the
+  window comparator did not assert -- is a statement about the lock detector's
+  window, not about the loop; the per-corner \`verdict\` column of
+  \`corners/${RID}/supply_steady.csv\` names the failing check for every row.
+
+  Transient length per corner is in the \`tstop\` column of that same CSV. The
+  runner takes \`SIM_TSTOP\`/\`SIM_TA\`/\`SIM_TB\` precisely so a corner
+  reported as still converging can be re-run longer instead of being reported
+  as a design result; a 36.8 us re-run of the four converging corners was
+  started and did **not** complete inside this record's compute budget, so
+  every row here is at ${KTSTOP} and the longer re-run is part of what the
+  follow-up issue carries.
 
   - Worst frequency deviation from the nominal-supply value anywhere on the
     grid: **${WDEV_PPM} ppm** at ${WDEV_ID} (criterion: <= ${ACC_FDEV_PPM} ppm).
@@ -754,7 +838,32 @@ ${FDEV_TABLE}
     (lowest ${MNVC_ID}, highest ${MXVC_ID}). Points outside DR-001 Decision
     2's usable ${ACC_VCTRL_LO}-${ACC_VCTRL_HI} V window: **${N_VOUT}** --
     ${VOUT}. **${V_VCTRL}**
-  - **Overall criterion 1: ${V_FREQ}.**
+  - **Overall criterion 1: ${V_FREQ}** -- ${N_SETTLED} of ${N_STEADY} corners
+    met the full lock criterion inside the transient budget.
+
+  **THE SETTLING BUDGET, AND WHICH ROWS ARE ENTITLED TO BE READ AS
+  STEADY-STATE.** The lock-check column is the lock criterion applied at the
+  corner: \`Y\` means the residual frequency error, the static phase error,
+  the divide ratio, the absolute output frequency and the block's own LOCK
+  flag all met their stated thresholds in the late window; any other letter
+  names the check that did not. **${N_UNSETTLED} of ${N_STEADY} corners are
+  not \`Y\`, and at
+  those corners the f_out, phase and power numbers in this record are samples
+  of a loop that is still converging -- not settled values, and not to be
+  quoted as such.** The run is ${KTSTOP} long against a loop time constant of
+  9.3 us (${KTB} is 1.03 tau), so a corner whose phase-acquisition transient
+  was large has not finished; that is a limit of this record's transient
+  budget, stated rather than hidden.
+
+  It is not only a budget artefact, and the pattern says so: the unsettled
+  corners are the ones with the HIGHEST Kvco at their operating point -- band
+  6 at -40 C, where the control voltage sits near the bottom of the window,
+  and the high-supply 27 C points. \`sim/loop-dynamics\` (#10) shows phase
+  margin falling as the loop-gain constant \`Icp*Kvco/N\` rises, so a loop
+  that rings longer exactly where Kvco is largest is the behaviour that record
+  predicts. Separating "needs a longer run" from "is genuinely
+  under-damped here" needs the longer run, and is what the follow-up issue
+  carries along with the remaining process corners.
 
   **Consistency with #8's open-loop pushing.** The loop holds f_out fixed by
   moving Vctrl against the VCO's supply pushing, so the measured dVctrl/dVdd
@@ -791,29 +900,13 @@ ${PHI_TABLE}
 
   Profile per run: hold at ${KD_LO} V; **step** to ${KD_HI} V with a
   ${KD_TEDGE} edge at t = ${KD_TSTEP}; settle; **ramp** down to ${KD_END} V
-  between t = ${KD_TRAMP} and t = ${KD_TREND} (16.5 mV/us); settle.
+  between t = ${KD_TRAMP} and t = ${KD_TREND} (${KD_RATE} mV/us); settle.
 
   | Corner | phase, pre-step (ns) | peak phase excursion, step (ns) | peak phase excursion, ramp (ns) | residual f error, low plateau | ... end plateau | Vctrl low/high/end (V) | LOCK min (V) |
   |---|---|---|---|---|---|---|---|
 ${DYN_TABLE:-  | -- | -- | -- | -- | -- | -- | -- | -- |}
 
-  - Worst peak REF->FB phase excursion through the **step**:
-    **${DYN_PSTEP_NS} ns** at ${DYN_PSTEP_ID}.
-  - Worst peak excursion through the **ramp**: **${DYN_PRAMP_NS} ns** at
-    ${DYN_PRAMP_ID}.
-  - Worst output-frequency excursion measured inside the step disturbance
-    (20 CLK cycles from the end of the supply edge): **${DYN_DSTEP_HZ} Hz** at
-    ${DYN_DSTEP_ID}.
-  - Worst residual frequency error on any settled plateau:
-    **${DYN_MXFE}** at ${DYN_MXFE_ID} (criterion <= ${ACC_FERR}) -- i.e. the
-    loop is locked on every plateau it was asked about.
-  - Minimum LOCK-flag level anywhere in the profile: **${DYN_MNLOCK} V** at
-    ${DYN_MNLOCK_ID}.
-  - Control-node travel from the high rail to the low rail:
-    **${DYN_DVC} V** at ${DYN_DVC_ID}; peak excursion beyond the settled value
-    during the step: **${DYN_VEX} V** at ${DYN_VEX_ID}.
-  - **Overall criterion 3: ${V_DYN}** (${DYN_LOST} of ${N_DYN} runs failed the
-    stays-locked criterion on some plateau).
+${DYN_BULLETS}
 
   The step is where #8's open-loop transient pushing (${CITE_STEP_WORST} MHz/V
   for a 0.1 V step, i.e. about -0.16 % per 0.1 V at 100 MHz) enters: it walks
@@ -827,8 +920,8 @@ ${DYN_TABLE:-  | -- | -- | -- | -- | -- | -- | -- | -- |}
 
   Per-domain power with the loop locked at ${KFOUT} Hz, mW.
 
-  | Bundle | Temp | core (PFD+CP+LD) @2.97/3.30/3.63 | VCO | divider | **total** |
-  |---|---|---|---|---|---|
+  | Bundle | Temp | settled? | core (PFD+CP+LD) @2.97/3.30/3.63 | VCO | divider | **total** |
+  |---|---|---|---|---|---|---|
 ${PWR_TABLE}
 
   - Total power over the whole ${N_STEADY}-point grid: **${MNP_MW} .. ${MXP_MW} mW**
@@ -844,15 +937,7 @@ ${PWR_TABLE}
   |---|---|---|---|---|---|
 ${SPLIT_TABLE}
 
-  ${SPLIT_NOTE}
-
-  At the nominal corner (typical/27 C/3.30 V) the block draws
-  **${NOMTOT_MW} mW**, of which **${NOMQ_MW} mW** is frequency-independent and
-  **${NOMD_MW} mW** scales with frequency. Per domain, quiescent / dynamic:
-  core ${NOMQC_MW} / ${NOMDC_MW} mW, VCO ${NOMQV_MW} / ${NOMDV_MW} mW,
-  divider ${NOMQD_MW} / ${NOMDD_MW} mW. The worst corner of the reduced grid
-  is ${SPLIT_MAX_ID} at ${SPLIT_MAX_MW} mW (${SPLIT_MAXQ_MW} quiescent,
-  ${SPLIT_MAXD_MW} dynamic).
+  ${SPLIT_NOTE}${SPLIT_NOM}
 
   **Reconciliation.** The per-domain columns of the power table sum to the
   total column by construction -- the total IS vdd x (|i_core| + |i_vco| +
@@ -883,7 +968,7 @@ ${SPLIT_TABLE}
     \`sim/supply-sensitivity/testbench/tb_supply_dyn.sp\`
   - Runner: \`sim/supply-sensitivity/testbench/run.sh\`,
     \`sim/supply-sensitivity/testbench/report.sh\`
-  - Assembly: \`sim/lib/assemble_closed_loop.sh\`; schematic:
+  - Assembly: \`sim/lib/pll_top_dut.sh\`; schematic:
     \`design/pll_top.sch\`
   - Netlist snapshots: \`sim/supply-sensitivity/netlist-snapshots/${RID}.spice\`
     (steady state), \`.../${RID}-dyn.spice\` (step/ramp)
