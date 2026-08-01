@@ -259,15 +259,62 @@ Pass the ceiling as **`.tran`'s 4th argument**, from the single shared constant:
 ```
 
 `sim/lib/simenv.sh` defines `SIMENV_CLOSED_LOOP_TMAX`; campaign runners pass it
-through as a `.param`. **Omitting the 4th argument is the violation**: ngspice
-then defaults the internal ceiling to the *print* step, which campaigns
-routinely size from an output-waveform quantity such as `1/(50*f_out)` — tying
-integration accuracy to a number that has nothing to do with the PFD.
+through as a `.param`. **Omitting the 4th argument is the violation.** A deck
+with no `Tmax` does not run unbounded — it runs at a ceiling ngspice picks for
+it, `min(Tstep, (Tstop − Tstart)/50)`, which in practice is the *print* step,
+and campaigns routinely size the print step from an output-waveform quantity
+such as `1/(50*f_out)`. That ties integration accuracy to a number with nothing
+to do with the PFD.
+
+Verified against ngspice-46 on this host: an RC deck with `.tran 1n 1u`
+integrates in ~1 ns steps (`Tstep` binds), while the same deck with
+`.tran 100n 1u` integrates in ~14.5 ns steps — `(Tstop − Tstart)/50 = 20 ns`
+binds, not the 100 ns `Tstep`. So **check the derived ceiling, not the presence
+of a `Tmax` keyword**: "there is no `Tmax` in this deck" is not the same
+statement as "there is no bound to check", and the second is what matters.
 
 Because the ceiling changes the answer and not merely its precision, it is part
 of a run's identity: `lock-time` and `output-range` both carry it in their work
 directory tag so a pre-bound log is never silently reused for a post-bound
 record.
+
+### The standing guard: does the DN branch assert at all?
+
+The bound is a rule, and a rule that is only written down gets violated again.
+What makes a violation *self-detecting* is that the closed-loop campaigns
+measure `dn_lvl` — the mean PFD DN level over the late window — and score it
+against a floor of `3e-4` of the rail. In a loop that is tracking, both PFD
+branches pulse once per reference cycle for the reset-delay overlap, so a DN
+branch that never asserts **at all** is proof the integration failed, not the
+design. It is deliberately far below the overlap's own expected duty: it is not
+a measurement of the overlap, it is a liveness check on the detector.
+
+`sim/pll-top-smoke` (#52) carries it as its check 7, scored PASS/FAIL, which is
+sufficient there because that campaign expects lock on every row. `lock-time`
+and `output-range` (#12) have rows that can legitimately end the window still
+converging, so they score the same quantity **three-valued**:
+
+| `dn_lvl` vs floor | Row's own lock status | Verdict | Reading |
+|---|---|---|---|
+| above | any | `PASS` | detector resolved — the row's status means what it says |
+| below | PASS | `FAIL` | an apparent lock with an unresolved detector |
+| below | not PASS | `SUSPECT` | the FAIL cannot be attributed to the design *or* the window, because the detector was not resolved either — the attribution is **withheld** |
+| did not measure | any | `ERROR` | no verdict; never coerced to zero |
+
+`SUSPECT` is the load-bearing value. Suppressing the guard on non-PASS rows
+(reporting `N/A`) is the obvious-looking alternative and it is wrong: it
+discards the discriminating measurement on exactly the rows where "is this FAIL
+real?" is the open question.
+
+Measured against a real violation, before #75 brought `output-range` onto the
+bound: at that campaign's `lo` edge — 10 MHz output, so a `1/(50*f_out)` =
+2.0 ns implicit ceiling, ~6x the set pulse — `dn_lvl` read **6.6e-7 V against a
+9.9e-4 V floor** at typical/27 C/3.30 V. Three orders of magnitude under: the
+DN branch was not asserting at all, while nothing in that campaign's verdict
+table looked unusual. For contrast, `pll-top-smoke`'s committed locked run
+reads 5.25e-2 V on the same measurement. Now that both campaigns take the
+ceiling from `SIMENV_CLOSED_LOOP_TMAX`, every row is expected to read `PASS`
+and any other verdict means the bound has been violated again.
 
 ### Records taken before this bound was applied
 

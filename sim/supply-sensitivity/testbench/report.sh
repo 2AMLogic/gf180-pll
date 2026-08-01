@@ -177,6 +177,73 @@ STEADY="${CORNERSDIR}/supply_steady.csv"
 } >"${STEADY}"
 
 # ---------------------------------------------------------------------------
+# Optional generated diff against a prior record's extracted-metrics CSV.
+#
+#   SIM_COMPARE=<record-id> ./run.sh
+#
+# #69 has to re-examine this campaign's 9-corner record `20260801-024935-c4fe724`,
+# which was taken at a 400 ps internal-timestep ceiling -- above the PFD set
+# pulse, i.e. in violation of the bound `sim/README.md` now states -- against a
+# re-run at the bound.  "Diff the re-run against the record it may supersede" is
+# a comparison a reader has to be able to CHECK rather than take on trust, and
+# restating the prior record's numbers by hand in the new record's prose is
+# exactly the drift this file's no-hand-typed-numbers rule exists to prevent.
+# So the comparison is computed, from the prior record's own committed
+# corners/<id>/supply_steady.csv, over the corners the two runs have in common.
+#
+# The prior CSV is READ, never written: `sim/` is append-only, so the superseded
+# record stands unedited.  Absent SIM_COMPARE nothing changes and the record's
+# comparison section reads as not claimed.
+# shellcheck disable=SC2034
+CMP_TABLE=""
+# shellcheck disable=SC2034
+CMP_SUMMARY=""
+CMP_ID="${SIM_COMPARE:-}"
+if [ -n "${CMP_ID}" ]; then
+  CMP_CSV="${EXP}/corners/${CMP_ID}/supply_steady.csv"
+  [ -f "${CMP_CSV}" ] || {
+    echo "ERROR: SIM_COMPARE=${CMP_ID} but ${CMP_CSV} does not exist" >&2
+    exit 1; }
+  # Compared: the verdict, and the three measured quantities that carry it --
+  # settled output frequency, and the design's OWN lock-flag level.  The lock
+  # flag is included because it is what separates "the loop did not lock" from
+  # "the integration did not resolve the phase detector": an f_out ABOVE target
+  # with LOCK at ~0 V is feedback running FASTER than the reference while UP is
+  # still asserted, which is the artefact signature, not a design result.
+  # shellcheck disable=SC2034
+  CMP_TABLE="$(awk -F, '
+    FNR == 1 { file++ }
+    !/^#/ && $1 != "bundle" {
+      k = $1 "/" $2 "C/" sprintf("%.2f", $3 + 0) "V";
+      if (file == 1) { ov[k]=$22; of[k]=$5+0; ol[k]=$17+0; om[k]=$24; seen[k]=1 }
+      else if (k in seen) {
+        n++;
+        flip = (ov[k] != $22);
+        if (flip) nflip++;
+        printf "  | %s | %s | %s | **%s** | %.5g | %.5g | %.3g | %.3g | %s |\n",
+          k, (om[k] == "" ? "400p" : om[k]), ov[k], $22,
+          of[k]/1e6, ($5+0)/1e6, ol[k], $17+0, (flip ? "**yes**" : "no");
+      }
+    }
+    END { printf "@@ %d %d\n", n+0, nflip+0 > "/dev/stderr" }
+  ' "${CMP_CSV}" "${STEADY}" 2>"${WORK}/.cmpstat")"
+  read -r _ CMP_N CMP_NFLIP <"${WORK}/.cmpstat"
+  if [ "${CMP_N}" -eq 0 ]; then
+    # "0 of 0 verdicts changed" reads as reassurance and is not one.
+    echo "ERROR: SIM_COMPARE=${CMP_ID} shares NO corners with this run -- there" >&2
+    echo "       is nothing to diff, and an empty comparison must not be minted" >&2
+    echo "       as though it were a clean one." >&2
+    exit 1
+  elif [ "${CMP_NFLIP}" -gt 0 ]; then
+    # shellcheck disable=SC2034
+    CMP_SUMMARY="**${CMP_NFLIP} of the ${CMP_N} shared corner(s) change verdict.** The re-run is MATERIALLY different from \`${CMP_ID}\`, so this record supersedes it rather than merely repeating it."
+  else
+    # shellcheck disable=SC2034
+    CMP_SUMMARY="**No verdict changes across the ${CMP_N} shared corner(s).** The measured columns are the evidence for how far the underlying quantities moved; a reader who wants a tolerance judgement should make it from those, not from the verdict column alone."
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # Extracted metrics: the settling re-run, and its verdict per corner.
 # ---------------------------------------------------------------------------
 # The question this file answers is the one a bare FAIL row cannot: at a corner
@@ -1507,6 +1574,39 @@ ${SPLIT_TABLE}
   ratifies 3.3 V thick-oxide devices only for v1, so the 3.3 V +/- 10 % axis
   swept above (2.97 / 3.30 / 3.63 V) is the complete supply-axis requirement
   for v1 and this record discharges it in full.
+
+  ### 6. Comparison against the record this one supersedes
+$(if [ -z "${CMP_ID}" ]; then
+cat <<'NOCMP'
+
+  N/A -- this run was not asked to diff itself against a prior record
+  (`SIM_COMPARE` unset), so no comparison is claimed here.
+NOCMP
+else
+cat <<CMP
+
+  **Computed, not transcribed.** The rows below are a join of THIS run's
+  \`corners/${RID}/supply_steady.csv\` against the committed
+  \`corners/${CMP_ID}/supply_steady.csv\`, over the corners the two runs have
+  in common. The prior record's file is read and never written -- \`sim/\` is
+  append-only, so \`${CMP_ID}\` stands unedited and is superseded rather than
+  corrected in place.
+
+  \`lock level\` is the design's own LOCK flag in the late window, and it is
+  the column that separates **"the loop did not lock"** from **"the
+  integration did not resolve the phase detector"**. A row whose \`f_out\` is
+  ABOVE target while LOCK sits at ~0 V has feedback running FASTER than the
+  reference with UP still asserted -- the signature \`sim/README.md\`'s
+  "Closed-loop internal-timestep bound" documents for a ceiling above the PFD
+  set pulse, not a design result.
+
+  | Corner | prior tmax | verdict @${CMP_ID} | verdict now | f_out then (MHz) | f_out now (MHz) | lock then (V) | lock now (V) | flipped |
+  |---|---|---|---|---|---|---|---|---|
+${CMP_TABLE}
+
+  ${CMP_SUMMARY}
+CMP
+fi)
 
   ### Overall
 

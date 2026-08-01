@@ -39,6 +39,12 @@ KVCO_CSV="${REPO}/sim/vco-tuning-range/corners/20260731-175947-0a12e6c/kvco_by_p
 ICP_B1=1; ICP_B0=0
 IUNIT=8u
 
+# PFD DN-branch integration guard floor (#69) -- see
+# sim/lock-time/testbench/run.sh's identical constant and run_one for the full
+# rationale.  Same floor as sim/pll-top-smoke's check 7, so no two campaigns
+# can disagree about what "the DN branch asserted" means.
+ACC_DN_FRAC=3e-4
+
 n_to_code() {
   local n="$1" k=0 pow=1 m i
   while [ $((pow * 2)) -le "${n}" ]; do pow=$((pow * 2)); k=$((k + 1)); done
@@ -151,7 +157,7 @@ run_one() {
     local libs; libs=$(bundle_libs "${corner}")
     simenv_run_deck "${DECK}" "${WORK}" "${tag}" "${libs}" "${temp}" "${params[@]}" >/dev/null || true
     if [ ! -f "${log}" ] || ! grep -q "^vctrl_final" "${log}"; then
-      echo "${corner},${temp},${vdd},${edge},${fout},${n},${fref},ERROR,,,${k}" >>"${outcsv}"
+      echo "${corner},${temp},${vdd},${edge},${fout},${n},${fref},ERROR,,,${k},,ERROR" >>"${outcsv}"
       return 0
     fi
   fi
@@ -164,7 +170,21 @@ run_one() {
     local held; held=$(awk -v e="${endok}" 'BEGIN{print (e+0 >= 1.5) ? 1 : 0}')
     [ "${held}" -eq 1 ] && status="PASS"
   fi
-  echo "${corner},${temp},${vdd},${edge},${fout},${n},${fref},${status},${tlock},${vfin},${k}" >>"${outcsv}"
+  # PFD DN-branch integration guard (#69) -- three-valued (PASS / FAIL /
+  # SUSPECT / ERROR); see sim/lock-time/testbench/run.sh's run_one for why a
+  # bare PASS/FAIL does not transfer to a campaign whose rows may legitimately
+  # end the window still converging, and sim/README.md's "Closed-loop
+  # internal-timestep bound" for what it guards.  This campaign is where the
+  # guard was validated against a real violation: before #75 the `lo` edge ran
+  # at a 2.0 ns internal ceiling and its DN branch never asserted.
+  local dnl dnguard
+  dnl=$(simenv_meas "${log}" dn_lvl)
+  dnguard=$(awk -v d="${dnl}" -v acc="${ACC_DN_FRAC}" -v v="${vdd}" -v st="${status}" 'BEGIN{
+    if (d !~ /^-?[0-9.]+([eE][-+]?[0-9]+)?$/) { print "ERROR"; exit }
+    if (d + 0 >= acc * v) { print "PASS"; exit }
+    print (st == "PASS") ? "FAIL" : "SUSPECT";
+  }')
+  echo "${corner},${temp},${vdd},${edge},${fout},${n},${fref},${status},${tlock},${vfin},${k},${dnl},${dnguard}" >>"${outcsv}"
 }
 
 case "${1:-}" in
@@ -178,14 +198,14 @@ mkdir -p "${WORK}"
 if [ "${1:-}" = "--check" ]; then
   tmpdir=$(mktemp -d)
   trap 'rm -rf "${tmpdir}"' EXIT
-  echo "corner,temp_c,vdd_v,edge,fout_hz,n,fref_hz,status,t_lock_s,vctrl_final_v,k_cells" >"${tmpdir}/out.csv"
+  echo "corner,temp_c,vdd_v,edge,fout_hz,n,fref_hz,status,t_lock_s,vctrl_final_v,k_cells,dn_lvl_v,dn_guard" >"${tmpdir}/out.csv"
   run_one "${CORNER}" "${TEMP}" "${VDD}" lo 10e6 0 0 1 8 1.68 "${tmpdir}/out.csv"
   cat "${tmpdir}/out.csv"
   exit 0
 fi
 
 RESULT_CSV="${WORK}/output_range_raw.csv"
-echo "corner,temp_c,vdd_v,edge,fout_hz,n,fref_hz,status,t_lock_s,vctrl_final_v,k_cells" >"${RESULT_CSV}"
+echo "corner,temp_c,vdd_v,edge,fout_hz,n,fref_hz,status,t_lock_s,vctrl_final_v,k_cells,dn_lvl_v,dn_guard" >"${RESULT_CSV}"
 
 JOBLIST="${WORK}/jobs.txt"; : >"${JOBLIST}"
 for row in "${EDGES[@]}"; do
@@ -231,9 +251,9 @@ done <"${JOBLIST}"
 
 RESULT_MD="${WORK}/result.md"
 {
-  echo "| Edge | Target f_out | N | Status | vctrl_final | margin-to-0.9V | margin-to-2.7V |"
-  echo "|---|---|---|---|---|---|---|"
-  tail -n +2 "${RESULT_CSV}" | while IFS=, read -r corner temp vdd edge fout n fref status tlock vfin k; do
+  echo "| Edge | Target f_out | N | Status | vctrl_final | margin-to-0.9V | margin-to-2.7V | mean DN | DN guard |"
+  echo "|---|---|---|---|---|---|---|---|---|"
+  tail -n +2 "${RESULT_CSV}" | while IFS=, read -r corner temp vdd edge fout n fref status tlock vfin k dnl dnguard; do
     vfin_fmt="N/A"; mlo="N/A"; mhi="N/A"
     if [ -n "${vfin}" ] && [ "${vfin}" != "nan" ]; then
       vfin_fmt=$(awk -v v="${vfin}" 'BEGIN{printf "%.4g V", v}')
@@ -241,7 +261,9 @@ RESULT_MD="${WORK}/result.md"
       mhi=$(awk -v v="${vfin}" 'BEGIN{printf "%.3g V", 2.7-v}')
     fi
     fout_fmt=$(awk -v f="${fout}" 'BEGIN{printf "%.4g MHz", f/1e6}')
-    echo "| ${edge} | ${fout_fmt} | ${n} | ${status} | ${vfin_fmt} | ${mlo} | ${mhi} |"
+    dnl_fmt="N/A"
+    [ -n "${dnl}" ] && [ "${dnl}" != "nan" ] && dnl_fmt=$(awk -v d="${dnl}" 'BEGIN{printf "%.3g V", d}')
+    echo "| ${edge} | ${fout_fmt} | ${n} | ${status} | ${vfin_fmt} | ${mlo} | ${mhi} | ${dnl_fmt} | ${dnguard} |"
   done
 } >"${RESULT_MD}"
 
@@ -249,8 +271,14 @@ ALL_PASS=$(tail -n +2 "${RESULT_CSV}" | awk -F, '$8!="PASS"{f=1} END{print (f?"0
 if [ "${ALL_PASS}" = "1" ]; then
   OVERALL_SUMMARY="Both edges PASS (loop locks, real headroom to both rails) at this single corner."
 else
-  OVERALL_SUMMARY="At least one edge did NOT reach a sustained-lock PASS inside the simulated window at this single corner -- see the per-row Status above and the transient-window discussion in Methodology (a FAIL/inconclusive row here means the window was too short to observe sustained lock, not that the loop cannot reach that edge; the un-fabricated final Vctrl reading is reported either way)."
+  OVERALL_SUMMARY="At least one edge did NOT reach a sustained-lock PASS inside the simulated window at this single corner -- see the per-row Status above and the transient-window discussion in Methodology. The un-fabricated final Vctrl reading is reported either way. **What such a row means is decided per row by the DN-branch guard, not asserted in advance:** on a guard-PASS row a FAIL means the window was too short to observe sustained lock, not that the loop cannot reach that edge; on a guard-SUSPECT row this record declines to attribute the FAIL to the window, the design, or the integration."
 fi
+# PFD DN-branch guard tallies (#69).
+DNG_PASS=$(tail -n +2 "${RESULT_CSV}" | awk -F, '$13=="PASS"{c++} END{print c+0}')
+DNG_FAIL=$(tail -n +2 "${RESULT_CSV}" | awk -F, '$13=="FAIL"{c++} END{print c+0}')
+DNG_SUSPECT=$(tail -n +2 "${RESULT_CSV}" | awk -F, '$13=="SUSPECT"{c++} END{print c+0}')
+DNG_ERROR=$(tail -n +2 "${RESULT_CSV}" | awk -F, '$13=="ERROR"{c++} END{print c+0}')
+DNG_SUMMARY="**PFD DN-branch integration guard** (#69; \`sim/README.md\`'s \"Closed-loop internal-timestep bound\"): **${DNG_PASS} PASS / ${DNG_FAIL} FAIL / ${DNG_SUSPECT} SUSPECT / ${DNG_ERROR} ERROR** over the rows above, against a floor of ${ACC_DN_FRAC} of the rail. This campaign is where the guard was validated against a real violation: before #75 the \`lo\` edge derived its internal ceiling from its 10 MHz OUTPUT (\`1/(50*f_out)\` = 2.0 ns, ~6x the PFD's set pulse) and this measure read 6.6e-7 V -- three orders of magnitude under the floor, i.e. the DN branch never asserted, while nothing else in the verdict table looked wrong. The deck now takes the ceiling from \`SIMENV_CLOSED_LOOP_TMAX\` instead, so every row is expected to read PASS and a non-PASS row means the bound has been violated again."
 RECORD="${RECORDSDIR}/${RID}.md"
 {
   cat <<EOF
@@ -345,6 +373,22 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     This record's classification logic (\`sim/lib\`-adjacent \`run_one\`) does
     not gate completion on ngspice's own end-of-run banner for exactly this
     reason -- see \`sim/output-range/testbench/run.sh\`.
+  - **PFD DN-branch integration guard (#69)**: \`tb_output_range.sp\`
+    measures \`dn_lvl\`, the mean DN level over the last 10 % of the window
+    -- the same quantity \`sim/pll-top-smoke\`'s check 7 gates on, against
+    the same floor. It is not a lock criterion; it is the per-row check that
+    the internal-timestep ceiling was honoured, because a violation of that
+    ceiling produces a confident, clean-looking "does not lock" rather than
+    visible noise (\`sim/README.md\`'s "Closed-loop internal-timestep
+    bound"). Scored three-valued -- \`PASS\` (DN asserts, so the row's own
+    status means what it says), \`FAIL\` (reached lock with an unresolved
+    detector), \`SUSPECT\` (did not reach lock AND did not resolve the
+    detector, so the attribution is withheld) and \`ERROR\` (measurement
+    did not land) -- because unlike \`pll-top-smoke\` this campaign has rows
+    that can legitimately end the window still converging. Suppressing the
+    guard on those rows was rejected: it would report \`N/A\` for exactly
+    the row the guard exists to say something about. Full rationale in
+    \`sim/lock-time/testbench/run.sh\`'s \`run_one\`.
   - **Limitations**: schematic-level, no parasitics; nominal-skew only
     (\`sw_stat_global = sw_stat_mismatch = 0\`); single corner as stated
     above; margin is reported at ONE PVT point, not the worst-margin corner
@@ -359,6 +403,8 @@ $(cat "${RESULT_MD}")
   ${OVERALL_SUMMARY} **This does NOT bound the margin at the un-simulated
   corners**, which is exactly the coverage gap the follow-up issue tracks.
   No overall PASS/FAIL against the full mandated matrix is claimed.
+
+  ${DNG_SUMMARY}
 - **Links**:
   - Testbench: \`sim/output-range/testbench/tb_output_range.sp\`,
     \`sim/output-range/testbench/run.sh\`,

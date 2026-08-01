@@ -68,6 +68,16 @@ BAND_B2=1; BAND_B1=0; BAND_B0=1
 ICP_B1=1; ICP_B0=0
 IUNIT=8u
 
+# PFD DN-branch integration guard floor (#69), as a fraction of the rail --
+# the same floor sim/pll-top-smoke's check 7 uses, so the two campaigns cannot
+# disagree about what "the DN branch asserted" means.  In lock both branches
+# pulse once per reference cycle for the PFD's reset delay, so the expected
+# duty is ~1.5 ns * f_ref; this floor is more than an order of magnitude below
+# that.  It does not measure the overlap -- it asks only whether DN asserts AT
+# ALL, which is the question sim/README.md's "Closed-loop internal-timestep
+# bound" makes load-bearing.
+ACC_DN_FRAC=3e-4
+
 # n_to_code <N> -> "k sel0..sel5 p0..p5" (DR-001 Decision 3 chain-length /
 # modulus encoding: N = 2^k + sum(p_i . 2^i) for i<k, SEL_(k-1)=1) -- same
 # algorithm as sim/divider-ratio/testbench/run.sh.
@@ -204,7 +214,7 @@ run_one() {
     # alone would discard that real, already-computed result.
     simenv_run_deck "${DECK}" "${WORK}" "${tag}" "${libs}" "${temp}" "${params[@]}" >/dev/null || true
     if [ ! -f "${log}" ] || ! grep -q "^vctrl_final" "${log}"; then
-      echo "${corner},${temp},${vdd},${n},${cond},${fref},ERROR,,,${k}" >>"${outcsv}"
+      echo "${corner},${temp},${vdd},${n},${cond},${fref},ERROR,,,${k},,ERROR" >>"${outcsv}"
       return 0
     fi
   fi
@@ -218,7 +228,39 @@ run_one() {
     local held; held=$(awk -v e="${endok}" -v thr="1.5" 'BEGIN{print (e+0 >= thr) ? 1 : 0}')
     [ "${held}" -eq 1 ] && status="PASS"
   fi
-  echo "${corner},${temp},${vdd},${n},${cond},${fref},${status},${tlock},${vfin},${k}" >>"${outcsv}"
+  # PFD DN-branch integration guard (#69) -- the campaign-local form of
+  # sim/pll-top-smoke's check 7, and the per-row regression detector for
+  # sim/README.md's "Closed-loop internal-timestep bound".  #75 put this
+  # campaign ON the bound, so every row is expected to read PASS; a row that
+  # does not is the bound having been violated again, which is otherwise
+  # invisible because the failure it causes looks like a clean design result.
+  #
+  # pll-top-smoke expects lock on EVERY row, so a bare PASS/FAIL suffices
+  # there.  This campaign does not: a `cold` row can legitimately end the
+  # window still converging, and on such a row a quiet DN branch is not by
+  # itself proof of anything.  The tempting response -- suppress the guard on
+  # non-PASS rows -- is wrong: it discards the discriminating measurement on
+  # exactly the rows where "is this FAIL real?" is the open question.  So the
+  # verdict is THREE-valued against one floor:
+  #
+  #   PASS     DN asserts.  The detector was resolved, so this row's own lock
+  #            status means what it says -- locked or not.
+  #   FAIL     DN never asserts on a row that DID reach PASS.  An apparent
+  #            lock with an unresolved detector.
+  #   SUSPECT  DN never asserts on a row that did NOT reach PASS.  That row's
+  #            FAIL cannot be attributed to the design or to the window,
+  #            because the detector was not resolved either.  Not an error --
+  #            an attribution deliberately withheld.
+  #   ERROR    the measurement did not land.  Never coerced to zero, which
+  #            would read as a confident verdict on no evidence.
+  local dnl dnguard
+  dnl=$(simenv_meas "${log}" dn_lvl)
+  dnguard=$(awk -v d="${dnl}" -v acc="${ACC_DN_FRAC}" -v v="${vdd}" -v st="${status}" 'BEGIN{
+    if (d !~ /^-?[0-9.]+([eE][-+]?[0-9]+)?$/) { print "ERROR"; exit }
+    if (d + 0 >= acc * v) { print "PASS"; exit }
+    print (st == "PASS") ? "FAIL" : "SUSPECT";
+  }')
+  echo "${corner},${temp},${vdd},${n},${cond},${fref},${status},${tlock},${vfin},${k},${dnl},${dnguard}" >>"${outcsv}"
 }
 
 case "${1:-}" in
@@ -232,14 +274,14 @@ mkdir -p "${WORK}"
 if [ "${1:-}" = "--check" ]; then
   tmpdir=$(mktemp -d)
   trap 'rm -rf "${tmpdir}"' EXIT
-  echo "corner,temp_c,vdd_v,n,condition,fref_hz,status,t_lock_s,vctrl_final_v,k_cells" >"${tmpdir}/out.csv"
+  echo "corner,temp_c,vdd_v,n,condition,fref_hz,status,t_lock_s,vctrl_final_v,k_cells,dn_lvl_v,dn_guard" >"${tmpdir}/out.csv"
   run_one "${CORNER}" "${TEMP}" "${VDD}" 4 cold "${tmpdir}/out.csv"
   cat "${tmpdir}/out.csv"
   exit 0
 fi
 
 RESULT_CSV="${WORK}/lock_time_raw.csv"
-echo "corner,temp_c,vdd_v,n,condition,fref_hz,status,t_lock_s,vctrl_final_v,k_cells" >"${RESULT_CSV}"
+echo "corner,temp_c,vdd_v,n,condition,fref_hz,status,t_lock_s,vctrl_final_v,k_cells,dn_lvl_v,dn_guard" >"${RESULT_CSV}"
 
 JOBS="${SIM_JOBS:-1}"
 JOBLIST="${WORK}/jobs.txt"; : >"${JOBLIST}"
@@ -305,14 +347,20 @@ done <"${JOBLIST}"
 
 RESULT_MD="${WORK}/result.md"
 {
-  echo "| Corner | Temp | VDD | N | Condition | Status | t_lock | vctrl_final |"
-  echo "|---|---|---|---|---|---|---|---|"
-  tail -n +2 "${RESULT_CSV}" | while IFS=, read -r corner temp vdd n cond fref status tlock vfin k; do
+  echo "| Corner | Temp | VDD | N | Condition | Status | t_lock | vctrl_final | mean DN | DN guard |"
+  echo "|---|---|---|---|---|---|---|---|---|---|"
+  tail -n +2 "${RESULT_CSV}" | while IFS=, read -r corner temp vdd n cond fref status tlock vfin k dnl dnguard; do
     tlock_fmt="N/A (not asserted within window)"
     [ -n "${tlock}" ] && [ "${tlock}" != "nan" ] && tlock_fmt=$(awk -v t="${tlock}" 'BEGIN{printf "%.3g s", t}')
     vfin_fmt="N/A"
     [ -n "${vfin}" ] && [ "${vfin}" != "nan" ] && vfin_fmt=$(awk -v v="${vfin}" 'BEGIN{printf "%.4g V", v}')
-    echo "| ${corner} | ${temp}C | ${vdd}V | ${n} | ${cond} | ${status} | ${tlock_fmt} | ${vfin_fmt} |"
+    # The raw dn_lvl sits beside its verdict on purpose: the verdict says only
+    # whether the floor was cleared, while the magnitude says whether DN was
+    # marginal or (as in the pre-bound violation this guard exists to catch)
+    # three orders of magnitude away from asserting at all.
+    dnl_fmt="N/A"
+    [ -n "${dnl}" ] && [ "${dnl}" != "nan" ] && dnl_fmt=$(awk -v d="${dnl}" 'BEGIN{printf "%.3g V", d}')
+    echo "| ${corner} | ${temp}C | ${vdd}V | ${n} | ${cond} | ${status} | ${tlock_fmt} | ${vfin_fmt} | ${dnl_fmt} | ${dnguard} |"
   done
 } >"${RESULT_MD}"
 
@@ -328,7 +376,16 @@ RELOCK_TOTAL=$(awk -F, '$5=="relock"{c++} END{print c+0}' "${RESULT_CSV}")
 RELOCK_RAIL=$(awk -F, '$5=="relock" && $9!="" && $9!="nan" && $9+0>2.7{c++} END{print c+0}' "${RESULT_CSV}")
 RELOCK_ERR=$(awk -F, '$5=="relock" && $7=="ERROR"{c++} END{print c+0}' "${RESULT_CSV}")
 COLD_ERR=$(awk -F, '$5=="cold" && $7=="ERROR"{c++} END{print c+0}' "${RESULT_CSV}")
-OVERALL_SUMMARY="Across the full 45-point PVT grid at N=4: \`cold\` reached a sustained in-window PASS on ${COLD_PASS}/${COLD_TOTAL} corners (${COLD_ERR} ERROR rows -- ngspice did not complete); \`relock\` reached PASS on ${RELOCK_PASS}/${RELOCK_TOTAL} corners (${RELOCK_ERR} ERROR rows). Of the ${RELOCK_TOTAL} \`relock\` rows, **${RELOCK_RAIL} report vctrl_final > 2.7 V** -- past the clamp value itself, the same rail-excursion signature 20260801-073931-eec269e's waveform investigation root-caused at the typical/27C/3.30V corner (a large-frequency-error PFD/CP acquisition-dynamics anomaly, not a per-corner bug -- see that record). This grid does NOT re-run that waveform investigation at every corner; a \`relock\` row with vctrl_final > 2.7 V here is reported as consistent with the already-diagnosed mechanism, not independently re-diagnosed. \`cold\` FAIL rows mean only that the transient window was too short for lock_detector to assert yet (see the original pilot record's own finding that vctrl moves correctly toward the target); they are not evidence of a broken loop."
+# PFD DN-branch guard tallies (#69). Counted per verdict rather than folded
+# into the PASS rate above, because the two answer different questions: the
+# PASS rate is about the loop, the guard is about whether the integration was
+# entitled to report on the loop at all.
+DNG_PASS=$(awk -F, 'NR>1 && $12=="PASS"{c++} END{print c+0}' "${RESULT_CSV}")
+DNG_FAIL=$(awk -F, 'NR>1 && $12=="FAIL"{c++} END{print c+0}' "${RESULT_CSV}")
+DNG_SUSPECT=$(awk -F, 'NR>1 && $12=="SUSPECT"{c++} END{print c+0}' "${RESULT_CSV}")
+DNG_ERROR=$(awk -F, 'NR>1 && $12=="ERROR"{c++} END{print c+0}' "${RESULT_CSV}")
+DNG_SUMMARY="**PFD DN-branch integration guard** (#69; \`sim/README.md\`'s \"Closed-loop internal-timestep bound\"): **${DNG_PASS} PASS / ${DNG_FAIL} FAIL / ${DNG_SUSPECT} SUSPECT / ${DNG_ERROR} ERROR** across all rows, against a floor of ${ACC_DN_FRAC} of the rail. This grid runs AT the bound, so every row is expected to read PASS and the guard is a regression detector, not a diagnosis. A FAIL row reached lock while its DN branch never asserted; a SUSPECT row did not reach lock AND did not resolve its detector, so **this record does not attribute that row's FAIL to the design or to the transient window** -- the attribution is withheld rather than defaulted. Any non-PASS row means the ceiling was violated somewhere and the affected rows are not evidence about this loop."
+OVERALL_SUMMARY="Across the full 45-point PVT grid at N=4: \`cold\` reached a sustained in-window PASS on ${COLD_PASS}/${COLD_TOTAL} corners (${COLD_ERR} ERROR rows -- ngspice did not complete); \`relock\` reached PASS on ${RELOCK_PASS}/${RELOCK_TOTAL} corners (${RELOCK_ERR} ERROR rows). Of the ${RELOCK_TOTAL} \`relock\` rows, **${RELOCK_RAIL} report vctrl_final > 2.7 V** -- past the clamp value itself, the same rail-excursion signature 20260801-073931-eec269e's waveform investigation root-caused at the typical/27C/3.30V corner (a large-frequency-error PFD/CP acquisition-dynamics anomaly, not a per-corner bug -- see that record). This grid does NOT re-run that waveform investigation at every corner; a \`relock\` row with vctrl_final > 2.7 V here is reported as consistent with the already-diagnosed mechanism, not independently re-diagnosed. \`cold\` FAIL rows mean only that the transient window was too short for lock_detector to assert yet (see the original pilot record's own finding that vctrl moves correctly toward the target); they are not evidence of a broken loop -- **on rows whose DN-branch guard reads PASS.** ${DNG_SUMMARY}"
 RECORD="${RECORDSDIR}/${RID}.md"
 {
   cat <<EOF
@@ -427,6 +484,38 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     achievable window had to be re-picked against the CPU-second budget
     actually available in this session (see the throughput figure below)
     rather than the window that would show the cleanest result.
+  - **PFD DN-branch integration guard (#69)**: \`tb_lock_time.sp\` measures
+    \`dn_lvl\`, the mean DN level over the last 10 % of the window -- the
+    same quantity \`sim/pll-top-smoke\`'s check 7 gates on, against the same
+    floor (${ACC_DN_FRAC} of the rail). It is **not** a lock criterion. It
+    is the per-row standing check that the internal-timestep ceiling above
+    was actually honoured: when it is not, the PFD stops seeing feedback
+    edges and the loop reports a confident, clean-looking "does not lock"
+    that nothing else in this table flags (\`sim/README.md\`'s "Closed-loop
+    internal-timestep bound"). #75 put this campaign on the bound, so the
+    guard now earns its keep by catching a REGRESSION off it rather than
+    the violation that motivated it.
+
+    Because this campaign -- unlike \`pll-top-smoke\` -- has rows that can
+    legitimately end the window still converging, the verdict is
+    **three-valued** rather than a bare PASS/FAIL:
+    - \`PASS\` -- DN asserts; the detector was resolved, so this row's own
+      lock status means what it says.
+    - \`FAIL\` -- the row reached lock PASS but its DN branch never
+      asserted: an apparent lock with an unresolved detector.
+    - \`SUSPECT\` -- the row did not reach lock PASS **and** did not resolve
+      its detector. This record does not attribute such a row's FAIL to the
+      design or to the transient window; the attribution is withheld.
+      Suppressing the guard on non-PASS rows (reporting \`N/A\`) was
+      considered and rejected -- it discards the discriminating measurement
+      on precisely the rows where "is this FAIL real?" is the open question.
+    - \`ERROR\` -- the measurement did not land; never coerced to zero.
+
+    The per-row \`mean DN\` column carries the raw value beside the verdict,
+    because the verdict says only whether the floor was cleared while the
+    magnitude says whether DN was marginal or -- as measured on the
+    pre-bound \`sim/output-range\` \`lo\` edge, 6.6e-7 V against a 9.9e-4 V
+    floor -- not asserting at all.
   - **What the two conditions mean across the grid, stated plainly rather
     than dressed up**:
     - \`cold\` (0.9 V clamp, 4 us): the pilot record found Vctrl moving
@@ -435,6 +524,10 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
       short for \`lock_detector\` to assert yet at that corner -- not
       evidence of a broken loop. See the per-row \`vctrl_final\` column for
       whether the direction of travel looks purposeful at each corner.
+      **That reading is conditional on the row's DN guard reading PASS**: a
+      \`SUSPECT\` row did not resolve its phase detector either, so
+      "the window was too short" is one of two explanations it cannot
+      distinguish, and this record picks neither.
     - \`relock\` (2.7 V clamp, 2 us): \`sim/lock-time/records/20260801-073931-eec269e.md\`
       root-caused the pilot corner's \`vctrl_final\` = 3.138 V rail excursion
       as a genuine large-frequency-error PFD/CP acquisition-dynamics anomaly
