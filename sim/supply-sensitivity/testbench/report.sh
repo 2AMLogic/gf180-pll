@@ -350,6 +350,14 @@ eval "$(awk -F, -v accv_lo="${ACC_VCTRL_LO}" -v accv_hi="${ACC_VCTRL_HI}" -v pwr
     sk=$9+0; spread=$10+0; vca=$14+0; vcmin=$15+0; vcmax=$16+0; p=$21+0; v=$22;
     id = bundle "/" temp "C/" sprintf("%.2f", vdd) "V";
     if (v != "PASS") { nfail++; if (faillist == "") faillist = id "(" v ")"; else faillist = faillist " " id "(" v ")" }
+    # Per-class failure tallies.  "N of 45 failed" is not an actionable
+    # statement: a residual-frequency miss, a static-phase miss and a
+    # lock-DETECTOR miss are three different findings owned by three different
+    # design issues, and the record routes each rather than summing them.
+    if (v == "FAIL:ferr")  nfferr++;
+    if (v == "FAIL:phi")   { nfphi++;  phlist  = (phlist  == "" ? id : phlist  " " id) }
+    if (v == "FAIL:lock")  { nflock++; lklist  = (lklist  == "" ? id : lklist  " " id) }
+    if (v == "FAIL:N" || v == "FAIL:fout") { nfrange++; rglist = (rglist == "" ? id "(" v ")" : rglist " " id "(" v ")") }
     if (abs(dev) > abs(wdev)) { wdev = dev; wdevid = id }
     if (abs(ferr) > abs(wferr)) { wferr = ferr; wferrid = id }
     if (!seenphi || abs(phib) > abs(wphi)) { wphi = phib; wphiid = id; seenphi = 1 }
@@ -379,6 +387,11 @@ eval "$(awk -F, -v accv_lo="${ACC_VCTRL_LO}" -v accv_hi="${ACC_VCTRL_HI}" -v pwr
       sum += s; ns++; seens = 1;
     }
     printf "N_STEADY=%d\nN_FAIL=%d\nFAILLIST=%s\n", n, nfail+0, (faillist == "" ? "(none)" : "\"" faillist "\"");
+    printf "N_F_FERR=%d\nN_F_PHI=%d\nN_F_LOCK=%d\nN_F_RANGE=%d\n", nfferr+0, nfphi+0, nflock+0, nfrange+0;
+    printf "PHI_LIST=%s\nLOCK_LIST=%s\nRANGE_LIST=%s\n",
+      (phlist == "" ? "(none)" : "\"" phlist "\""),
+      (lklist == "" ? "(none)" : "\"" lklist "\""),
+      (rglist == "" ? "(none)" : "\"" rglist "\"");
     printf "WDEV_PPM=%.4g\nWDEV_ID=\"%s\"\n", wdev, wdevid;
     printf "WFERR=%.4g\nWFERR_ID=\"%s\"\n", wferr, wferrid;
     printf "WPHI_NS=%.4g\nWPHI_ID=\"%s\"\n", wphi*1e9, wphiid;
@@ -468,6 +481,8 @@ eval "$(awk -F, '
 : "${N_RERUN:=0}"; : "${N_R_SETTLES:=0}"; : "${N_R_PHI:=0}"
 : "${N_R_UNDAMPED:=0}"; : "${N_R_NOTLOCK:=0}"; : "${MARGIN_LIST:=(none)}"
 : "${N_R_INTEG:=0}"; : "${INTEG_LIST:=(none)}"
+: "${N_F_FERR:=0}"; : "${N_F_PHI:=0}"; : "${N_F_LOCK:=0}"; : "${N_F_RANGE:=0}"
+: "${PHI_LIST:=(none)}"; : "${LOCK_LIST:=(none)}"; : "${RANGE_LIST:=(none)}"
 : "${MARGIN_WORST:=n/a}"; : "${MARGIN_WORST_FERR:=n/a}"
 : "${MARGIN_WORST_BAND:=n/a}"; : "${MARGIN_WORST_DR:=n/a}"
 [ -n "${SETTLE_TABLE}" ] || SETTLE_TABLE="  | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |"
@@ -1327,7 +1342,35 @@ ${FDEV_TABLE}
     its peak leaves it has left it. So the count can exceed what the averages
     alone would suggest; that is the check working, not an inconsistency.
   - **Overall criterion 1: ${V_FREQ}** -- ${N_SETTLED} of ${N_STEADY} corners
-    met the full lock criterion inside the transient budget.
+    met the full lock criterion.
+
+  **WHICH CHECK FAILED, AND WHO OWNS IT.** "${N_FAIL} of ${N_STEADY} corners
+  failed" is not an actionable statement, because the lock criterion is five
+  checks against three different blocks and they route to three different
+  places. The breakdown, from the \`verdict\` column of \`supply_steady.csv\`:
+
+  - **residual frequency error over ${ACC_FERR}: ${N_F_FERR} corner(s).** These
+    are the settling question, and section 1c resolves each of them as a
+    transient-budget artefact, an integration artefact, or a genuine
+    design-margin finding. This is the only class that can reach #10 / #8.
+  - **static phase error over ${ACC_PHI_FRAC} of a reference period:
+    ${N_F_PHI} corner(s)** -- ${PHI_LIST}. Settled in frequency, but standing
+    off more phase than the criterion allows. That is the charge pump's
+    per-event charge asymmetry (\`pfd_cp\`, #9, post-#24), read against the
+    same criterion \`sim/pll-top-smoke\` applies; section 2 reports the number
+    itself and #15's \`mc-cp-mismatch\` adds the random component on top.
+  - **block's own LOCK flag below ${ACC_LOCK_FRAC} of the rail:
+    ${N_F_LOCK} corner(s)** -- ${LOCK_LIST}. At these corners everything
+    electrical settled and the window comparator did not assert, which is a
+    statement about **\`lock_detector\` (#11)'s window**, not about the loop.
+    It is flagged there rather than counted as a loop failure, and this record
+    does not propose a window change -- that is #11's call with its own
+    evidence.
+  - **divide ratio or absolute output frequency wrong: ${N_F_RANGE}
+    corner(s)** -- ${RANGE_LIST}. Not a damping finding: the loop is not in
+    lock at that corner at all, which is a lock-RANGE question about whether
+    the chosen band reaches ${KFOUT} Hz there, i.e. #8's f(Vctrl) table and
+    the band choice derived from it.
 
   **THE SETTLING BUDGET, AND WHICH ROWS ARE ENTITLED TO BE READ AS
   STEADY-STATE.** The lock-check column is the lock criterion applied at the
