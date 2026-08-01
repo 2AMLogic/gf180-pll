@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 from . import HARNESS_VERSION, corners as corners_mod, report, runner, testbench as tb_mod
+from . import derived as derived_mod
 from .pdk import PdkNotFound, find_pdk
 from .runner import NgspiceMissing
 
@@ -55,6 +56,10 @@ def build_parser() -> argparse.ArgumentParser:
             "  python3 sim/run_corners.py harness-selftest --corners typical --temps 27 \\\n"
             "      --subset-reason 'debugging convergence, not evidence'\n"
             "  python3 sim/run_corners.py harness-selftest --corner-set full -j 8\n"
+            "  python3 sim/run_corners.py divider-ratio --axis n=n64 --axis rate=f200 \\\n"
+            "      --subset-reason 'retiming worst case only'\n"
+            "  python3 sim/run_corners.py divider-ratio \\\n"
+            "      --join dff=divider-ratio/corners/<record-id>/dff_setup_hold.csv\n"
             "  python3 sim/run_corners.py --list\n"
             "  python3 sim/run_corners.py --check-env\n"
         ),
@@ -105,6 +110,23 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         metavar="FRAC",
         help="supply tolerance as a fraction, e.g. 0.10 (0 disables the V axis)",
+    )
+    parser.add_argument(
+        "--axis",
+        action="append",
+        default=[],
+        metavar="NAME=ID[,ID...]",
+        help="restrict an extra sweep axis declared in the manifest's 'sweeps' to "
+        "the named point ids (repeatable); a run thinned this way is a PVT/axis "
+        "subset and needs --subset-reason or --no-write like any other",
+    )
+    parser.add_argument(
+        "--join",
+        action="append",
+        default=[],
+        metavar="ALIAS=PATH",
+        help="supply or override a derived-metric join input: a CSV written by "
+        "another record, path relative to sim/ (repeatable)",
     )
     parser.add_argument("-j", "--jobs", type=int, default=0, help="parallel ngspice runs")
     parser.add_argument(
@@ -206,6 +228,68 @@ def cmd_print_env() -> int:
     return EXIT_OK
 
 
+def parse_key_value(entries: list[str], flag: str) -> dict[str, str]:
+    """``["a=b", "c=d"]`` -> ``{"a": "b", "c": "d"}``, for ``--axis`` / ``--join``."""
+    out: dict[str, str] = {}
+    for entry in entries or []:
+        if "=" not in entry:
+            raise ValueError(f"{flag} expects NAME=VALUE, got {entry!r}")
+        key, _, value = entry.partition("=")
+        key = key.strip()
+        if not key or not value.strip():
+            raise ValueError(f"{flag} expects NAME=VALUE, got {entry!r}")
+        out[key] = value.strip()
+    return out
+
+
+def parse_axis_filters(entries: list[str]) -> dict[str, list[str]]:
+    """``--axis n=n04,n64`` -> ``{"n": ["n04", "n64"]}``."""
+    return {
+        name: [i for i in value.split(",") if i]
+        for name, value in parse_key_value(entries, "--axis").items()
+    }
+
+
+def build_derived_tables(tb, results, join_args: list[str]) -> list:
+    """Run the campaign's ``derive_tables()``, if the manifest declares any.
+
+    Join inputs come from the manifest's ``derived.joins`` map, overridden per
+    invocation by ``--join alias=path``: a cross-record join names *another
+    record's* CSV, and a committed manifest cannot know which record id a given
+    run is being closed against.
+    """
+    spec = getattr(tb, "derived", None)
+    if spec is None or not spec.tables:
+        return []
+    wanted = dict(spec.joins)
+    wanted.update(parse_key_value(join_args, "--join"))
+    joins = {}
+    for alias, rel in wanted.items():
+        path = Path(rel)
+        if not path.is_absolute():
+            path = SIM_DIR / rel
+        joins[alias] = derived_mod.read_join_csv(alias, path)
+    view = derived_mod.RunView(
+        experiment=tb.experiment,
+        measure_names=tuple(tb.measure_names),
+        points=tuple(
+            derived_mod.PointView(
+                corner=r.point.corner.name,
+                corner_id=r.point.corner_id,
+                temp_c=r.point.temp_c,
+                vdd=r.point.vdd,
+                axes=r.point.axes,
+                params=r.point.params,
+                measurements=dict(r.measurements),
+            )
+            for r in results
+            if r.status == "ok"
+        ),
+        joins=joins,
+    )
+    return derived_mod.derive_run_tables(spec, view)
+
+
 def _fmt(value) -> str:
     if value is None:
         return "n/a"
@@ -233,12 +317,43 @@ def run(args: argparse.Namespace) -> int:
     nominal = args.supply if args.supply is not None else tb.nominal_supply_v
     tolerance = args.supply_tol if args.supply_tol is not None else tb.supply_tolerance
     supplies = corners_mod.supply_points(nominal, tolerance)
-    points = corners_mod.build_grid(corner_list, temperatures, supplies)
+    points = corners_mod.build_sweep_grid(
+        corner_list,
+        temperatures,
+        supplies,
+        axes=tb.sweeps,
+        blocks=tb.grid_blocks,
+        axis_filter=parse_axis_filters(args.axis),
+    )
+    if not points:
+        print(
+            "error: this run resolved to zero points -- the manifest's grid blocks "
+            "and the axes you asked for do not intersect.",
+            file=sys.stderr,
+        )
+        return EXIT_ENVIRONMENT
 
     # sim/README.md: an evidence record must cover the full mandated PVT
     # matrix unless it states why a subset was used. Refuse to record a thin
     # run without that justification rather than quietly banking weak evidence.
     conformance = report.matrix_conformance(tb, points)
+    # A deliberately thinned *extra* axis is justified by the manifest's own
+    # per-block descriptions and needs no CLI flag. An axis the CLI narrowed
+    # (--axis) or a block that came up empty is a different thing: the record
+    # would claim coverage this invocation does not have, so it is treated
+    # exactly like a PVT subset and needs a written reason.
+    axis_gaps = [
+        f"sweep axis {a['name']}: missing point(s) " + ", ".join(a["missing"])
+        for a in conformance.get("axes", [])
+        if a["missing"]
+    ] + [
+        f"grid block produced no points: {d}"
+        for d in conformance.get("empty_blocks", [])
+    ]
+    if axis_gaps:
+        conformance = dict(conformance)
+        conformance["full"] = False
+        conformance["missing"] = list(conformance["missing"]) + axis_gaps
     if not args.no_write and not conformance["full"] and not args.subset_reason:
         print(
             "error: this run is a subset of the PVT matrix CLAUDE.md/sim/README.md mandate:\n  - "
@@ -271,9 +386,15 @@ def run(args: argparse.Namespace) -> int:
         print(f"temps (C) : {', '.join(_fmt(t) for t in temperatures)}")
         print(f"supply (V): {', '.join(_fmt(v) for v in supplies)} "
               f"(nominal {_fmt(nominal)} +/-{tolerance * 100:g}%)")
+        for axis in conformance.get("axes", []):
+            print(f"axis {axis['name']:<6}: {', '.join(axis['ran'])}")
         print(f"points    : {len(points)}  (jobs={jobs})")
         print(f"record id : {record_id}")
         print()
+    for description in conformance.get("empty_blocks", []):
+        print(
+            f"warning: grid block produced no points: {description}", file=sys.stderr
+        )
 
     completed = 0
 
@@ -310,6 +431,15 @@ def run(args: argparse.Namespace) -> int:
         return EXIT_ENVIRONMENT
     wall = time.monotonic() - wall_start
 
+    # Derived metrics: the campaign's own reduction over the table above, which
+    # is what its record actually claims. Run before the record is built so a
+    # broken reduction fails the run rather than minting a record without it.
+    try:
+        derived_tables = build_derived_tables(tb, results, args.join)
+    except (derived_mod.DerivedError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_SIM_ERROR
+
     record = report.build_record(
         tb=tb,
         pdk=pdk,
@@ -325,6 +455,8 @@ def run(args: argparse.Namespace) -> int:
         statistical_convention=args.statistical_convention,
         subset_reason=args.subset_reason,
         git=git,
+        derived_tables=derived_tables,
+        conformance=conformance,
     )
 
     print()
@@ -333,7 +465,8 @@ def run(args: argparse.Namespace) -> int:
     print(header)
     for name, stats in record["summary"].items():
         if not stats.get("n"):
-            print(f"  {name:<16}{'no data':>16}")
+            label = "not measured" if stats.get("optional") else "no data"
+            print(f"  {name:<16}{label:>16}")
             continue
         print(
             f"  {name:<16}{_fmt(stats['min']):>16}{_fmt(stats['max']):>16}"
@@ -348,11 +481,14 @@ def run(args: argparse.Namespace) -> int:
 
     if not args.no_write:
         snapshot = report.write_netlist_snapshot(tb, experiment_dir, record_id)
+        written = derived_mod.write_derived_tables(derived_tables, log_dir)
         record_path = report.write_record(record, experiment_dir)
         print()
         print(f"record    : {record_path}")
         print(f"snapshot  : {snapshot}")
         print(f"raw logs  : {log_dir}")
+        for path in written:
+            print(f"derived   : {path}")
     else:
         print()
         print("evidence  : not recorded (--no-write)")
@@ -381,6 +517,12 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_ENVIRONMENT
     try:
         return run(args)
-    except (FileNotFoundError, ValueError, KeyError, report.RecordExists) as exc:
+    except (
+        FileNotFoundError,
+        ValueError,
+        KeyError,
+        report.RecordExists,
+        derived_mod.DerivedError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ENVIRONMENT
