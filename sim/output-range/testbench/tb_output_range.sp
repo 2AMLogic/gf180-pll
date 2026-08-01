@@ -90,7 +90,11 @@ sforce vctrl vsetnode sctrl 0 SWFORCE
 * The control-voltage margin measurement this campaign exists for.
 .measure tran vctrl_final find v(vctrl) at='tstop-1p'
 
+* Optional full-transient waveform capture -- see tb_lock_time.sp's header
+* comment above the identical `.control` block for the rationale (#49's
+* Vctrl-anomaly prerequisite; no extra analysis cost, left on unconditionally).
 .control
 run
+wrdata waveform.csv v(vctrl) v(up) v(dn) v(lock) v(vwin)
 .endc
 .end
