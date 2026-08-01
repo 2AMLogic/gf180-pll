@@ -135,7 +135,25 @@ sforce vctrl vsetnode sctrl 0 SWFORCE
 * record's Result table also reports incidentally (headroom to each rail).
 .measure tran vctrl_final find v(vctrl) at='tstop-1p'
 
+* Optional full-transient waveform capture (#49's Vctrl-anomaly prerequisite:
+* the two .measure samples above give only the END-of-window state, not
+* enough to distinguish a PFD/CP polarity effect, a SWFORCE-release
+* switching artifact, or a genuine rail-stability question -- invoke via
+* `run.sh --one <corner> <temp> <vdd> <n> <cond> <outcsv>` for a targeted
+* single-point run). The sibling `sim/output-range` campaign's `lo`-edge
+* anomaly-investigation record (same instrumentation, same prerequisite)
+* has been completed; the equivalent `relock` investigation for THIS
+* campaign has not yet been run to completion (attempted once; the run was
+* still mid-transient after several hundred wall-clock seconds on a
+* heavily-contended shared machine -- see #49's own throughput discussion
+* for the measured ~4-8 ns simulated / CPU-s baseline this DUT gets even
+* uncontended) and remains open follow-up scope. `wrdata` dumps the vectors ngspice
+* already holds in memory after `run` completes -- no extra analysis cost,
+* just file I/O -- so this is left ON unconditionally rather than gated
+* behind a flag; ordinary corner-sweep runs simply produce (and, per
+* run.sh, do not commit) one extra small CSV per run.
 .control
 run
+wrdata waveform.csv v(vctrl) v(up) v(dn) v(lock) v(vwin)
 .endc
 .end

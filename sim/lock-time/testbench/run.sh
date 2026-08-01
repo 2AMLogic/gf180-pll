@@ -232,6 +232,15 @@ while read -r corner temp vdd n cond; do
   tag="${tag//./p}"
   cid="${corner}_${temp}c_${vdd}v_n${n}_${cond}"
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" "${cid}"
+  # tb_lock_time.sp's `.control` block unconditionally `wrdata`s a small
+  # vctrl/up/dn/lock/vwin waveform CSV (#49's Vctrl-anomaly prerequisite --
+  # see that file's header comment) -- archive it alongside the log when
+  # present. Small extracted-metrics CSV, allowed by sim/README.md's
+  # retention table (distinct from the "no .raw" rule, which is about
+  # hundreds-of-MB full rawfiles, not this handful-of-KB measurement dump).
+  if [ -f "${WORK}/${tag}/waveform.csv" ]; then
+    cp "${WORK}/${tag}/waveform.csv" "${CORNERSDIR}/${cid}_waveform.csv"
+  fi
 done <"${JOBLIST}"
 
 RESULT_MD="${WORK}/result.md"
