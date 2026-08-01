@@ -74,7 +74,20 @@ xlock  up dn lock vwin vdd vss lock_detector
 * locked value (see header comment above and this record's Methodology) --
 * same mechanism as tb_lock_time.sp.
 vsetv vsetnode 0 dc 'vctrl_ic'
-vsctrl sctrl 0 pulse('vsup' 0 't_force' 100p 100p '2*tstop' '4*tstop')
+* Release transition sized as a multiple of the internal-timestep ceiling
+* (#65) -- same fix as tb_lock_time.sp's identical mechanism, applied here
+* preemptively for the same root cause: at the OLD 100 ps tr/tf (equal to
+* the 100 ps ceiling), the switch's Ron(10)/Roff(1G) discontinuity spans
+* exactly one ceiling-sized step, which sim/lock-time's cold-start row
+* (vctrl_ic=0.9V, at a rail) showed ngspice cannot resolve -- "Timestep too
+* small", 100% reproducible, independent of corner or host load. This bench
+* was NOT observed to reproduce the crash at its one checked point
+* (typical/27C/3.30V, `lo` edge, vctrl_ic ~1.68V mid-window rather than at a
+* rail) before this fix landed, but shares the identical model/mechanism, so
+* the fix is applied defensively rather than waiting for a corner where the
+* discontinuity happens to be sharp enough to fail. See this campaign's
+* sibling investigation record (sim/lock-time) for the full root-cause.
+vsctrl sctrl 0 pulse('vsup' 0 't_force' '10*tmax' '10*tmax' '2*tstop' '4*tstop')
 sforce vctrl vsetnode sctrl 0 SWFORCE
 .model SWFORCE SW(Ron=10 Roff=1G Vt='vsup/2' Vh=0)
 
