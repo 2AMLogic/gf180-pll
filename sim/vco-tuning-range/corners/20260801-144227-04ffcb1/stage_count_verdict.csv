@@ -1,0 +1,24 @@
+# 4. conclusion -- DR-001 Decision 2's open stage-count question
+# **5 stages is confirmed** as DR-001 Decision 2's nominal count, and
+# it is the *only* viable odd count of the three: each of the other two
+# is rejected by a measurement, not by a preference.
+# 
+#   - **3 stages -- rejected**: **it does not start at 1 of 48 grid points** (all-fast B7 @ 0.9 V) -- with a per-stage gain requirement of 2.00 it cannot sustain oscillation once the starving devices are driven fully on, and it then sits at mid-rail drawing static crowbar current; and its lowest band floors at 11.41 MHz at the fast corner, **14 % above the 10 MHz bottom of the band** -- it cannot reach the bottom of the ratified range without the output divider DR-002 Decision 2 keeps out of v1 scope; and its worst-case ring swing falls to 0.68 of the supply, so the output buffer would not see a reliable full-swing input at every corner.
+#     (Its 3.65 pJ per output cycle, 0.69x the 5-stage ring, is not the reason;
+#     the failures above are disqualifying on their own.)
+#   - **5 stages -- viable**: clears the 200 MHz v1 ceiling at the slow corner by 28 %, reaches 34 % below the 10 MHz floor at the fast corner, starts at every grid point, keeps full swing (1.01 of supply worst case), and costs 5.31 pJ per output cycle.
+#   - **7 stages -- rejected**: it tops out at 182.5 MHz at the slow corner, **9 % short of the 200 MHz v1 ceiling** DR-002 Decision 2 budgets margin to.
+#     (Its 7.62 pJ per output cycle, 1.43x the 5-stage ring, is not the reason;
+#     the failures above are disqualifying on their own.)
+# 
+# This **confirms** rather than revises DR-001 Decision 2, so it is not
+# grounds for a superseding decision record on the stage count. It does
+# narrow the decision: DR-001 left the count open as "odd (5 nominal)",
+# and this grid shows the neighbouring odd counts are not fallbacks --
+# there is no second choice to retreat to if layout parasitics erode the
+# 5-stage margins, which makes the extraction step (#18) the point where
+# this decision would actually be at risk.
+stages,starts everywhere,reaches 200 MHz slow,reaches 10 MHz fast,energy/cycle,worst swing,verdict
+3,**no**,yes,**no**,3.65 pJ,0.680,**rejected**
+5,yes,yes,yes,5.31 pJ,1.006,viable
+7,yes,**no**,yes,7.62 pJ,1.006,**rejected**
