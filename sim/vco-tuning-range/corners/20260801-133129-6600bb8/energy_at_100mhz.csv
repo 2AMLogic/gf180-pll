@@ -1,8 +1,0 @@
-# 2. cost at a matched frequency -- supply current of each complete ring (bias generator included) at the band/Vctrl point closest to 100 MHz at the nominal corner (typical), which is where the draft power line is quoted
-# Energy per cycle is the comparable number across counts (current alone
-# is not, because the three rings are not at the same frequency). Relative
-# to the 5-stage ring: 3 stages 0.69x, 5 stages 1.00x, 7 stages 1.43x.
-stages,closest point to 100 MHz,f,I_supply,energy per output cycle
-3,B5 @ 0.9 V,93.8 MHz,104 uA,3.65 pJ
-5,B6 @ 0.9 V,90.4 MHz,146 uA,5.31 pJ
-7,B5 @ 2.7 V,91.79 MHz,212 uA,7.62 pJ

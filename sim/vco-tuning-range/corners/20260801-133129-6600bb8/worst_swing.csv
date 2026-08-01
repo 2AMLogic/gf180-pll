@@ -1,8 +1,0 @@
-# 3. swing at the bottom of the band -- worst-case ring swing over the whole grid, as a fraction of that run's supply
-# A current-starved ring loses output swing before it loses oscillation;
-# a ring node that no longer reaches the rails cannot drive a
-# rail-to-rail buffer reliably at every corner.
-stages,worst swing (fraction of vdd),at
-3,0.680,all-fast, B6, Vctrl 2.7 V
-5,1.006,all-slow, B0, Vctrl 0.9 V
-7,1.006,all-slow, B0, Vctrl 0.9 V

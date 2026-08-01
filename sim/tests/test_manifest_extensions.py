@@ -32,6 +32,7 @@ need and the manifest could not previously express:
 
 from __future__ import annotations
 
+import csv
 import json
 import subprocess
 import sys
@@ -937,6 +938,38 @@ class CrossRecordJoinTests(ManifestFixture):
         self.assertIn("process,temp_c,vdd_v,t_arr_s,tsetup_s,setup_margin_s,verdict", text)
         with self.assertRaises(derived.DerivedError):
             derived.write_derived_tables(tables, out)
+
+    def test_cells_containing_commas_are_quoted_not_split_into_columns(self):
+        """A reduction's cells are prose -- worst-corner citations, check text.
+
+        Emitting them with a bare ``",".join(...)`` silently turns one cell
+        into several, so the committed evidence file has rows whose column
+        count disagrees with its header. Records are append-only, so such a
+        file cannot be repaired -- only the whole record re-minted.
+        """
+        table = derived.DerivedTable(
+            name="retiming_margin",
+            columns=("check", "worst corner", "verdict"),
+            rows=(
+                ("f(Vctrl) monotonic on every (corner, band) curve", "ss/-40C, B5, Vctrl 2.1 V", "PASS"),
+                ('quote "inside" a cell', "no comma here", "PASS"),
+            ),
+            description="commas in cells",
+        )
+        out = self.root / "corners" / "20260101-000000-abcdef0"
+        written = derived.write_derived_tables([table], out)
+        body = [
+            line
+            for line in written[0].read_text().splitlines()
+            if line.strip() and not line.startswith("#")
+        ]
+        parsed = list(csv.reader(body))
+        self.assertEqual({len(r) for r in parsed}, {3})
+        self.assertEqual(parsed[1][1], "ss/-40C, B5, Vctrl 2.1 V")
+        self.assertEqual(parsed[2][0], 'quote "inside" a cell')
+        # And the harness's own reader round-trips it.
+        rows = derived.read_join_csv("x", written[0]).rows
+        self.assertEqual(rows[0]["worst corner"], "ss/-40C, B5, Vctrl 2.1 V")
 
 
 # ===========================================================================

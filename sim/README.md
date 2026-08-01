@@ -721,7 +721,8 @@ that introduces the tool that will eventually reproduce it.
 | `devchar-delay`, `devchar-cp`, `devchar-passives` | `sim/harness` | migrated (#40); each new record **Supersedes** the pre-migration one |
 | `divider-ratio`, `lock-detector` | `sim/lib/simenv.sh` | #41 |
 | `cp-compliance`, `pfd-deadzone` | `sim/lib/simenv.sh` | #42 |
-| `vco-tuning-range` (tuning sweep, stage-count comparison) | `sim/harness` | migrated (#43); each new record **Supersedes** the pre-migration one |
+| `vco-tuning-range` (stage-count comparison) | `sim/harness` | migrated (#43); its new record **Supersedes** the pre-migration one |
+| `vco-tuning-range` (tuning sweep) | `sim/harness` | manifest migrated (#43); **migrated record still pending** — the 504-point evidence re-run is #84, so the citable record is still the pre-migration one |
 | `vco-tuning-range` (supply pushing / jitter) | `sim/lib/simenv.sh` | #43 -- blocked on a manifest capability gap, see below |
 | `lock-time`, `output-range` | `sim/lib/simenv.sh` | blocked on a manifest capability gap — see below |
 | `loop-dynamics`, `mc-cp-mismatch`, `pll-top-smoke`, `supply-sensitivity` | `sim/lib/simenv.sh` | not yet scoped — these landed after #36 was written, so they are outside #40–#43 |
@@ -758,15 +759,17 @@ slugs would have broken the supersession chains of the records they replace.
 That campaign's third deck pair — supply pushing (`tb_vco_pushing.sp`) and
 supply-step / supply-ripple jitter (`tb_vco_supply_jitter.sp`), minted as one
 record by `testbench/run_supply.sh` — has **not** moved, and is a real
-manifest capability gap rather than remaining work of the same kind:
+manifest capability gap rather than remaining work of the same kind: **one
+record is minted from two different decks**, and a manifest names exactly one
+`netlist`.
 
-- one record is minted from **two different decks** (a manifest names exactly
-  one `netlist`), and
-- every jitter number in it is extracted from a **raw waveform file** the deck
-  writes with `wrdata`, because `.meas` cannot report the per-cycle *period
-  sequence* that jitter is. `derived.py`'s `PointView` is handed a point's
-  parsed measurements, not the path to that point's run directory, so a
-  campaign reduction cannot reach the waveform.
+The other half of that campaign — every jitter number in it is extracted from
+a raw waveform the deck writes with `wrdata`, because `.meas` cannot report
+the per-cycle *period sequence* that jitter is — is **no longer** a gap: #81
+added the manifest's `raw_files` key and `PointView.raw_files` /
+`point.raw(name)` (#87), whose documented example in `sim/harness/README.md`
+is this campaign's `wrdata jit.dat` case. Only the two-decks-one-record
+problem remains.
 
 Splitting that record in two to fit the current manifest shape would land a
 migrated record *weaker* than the one it supersedes (a DC pushing number with
