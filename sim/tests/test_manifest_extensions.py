@@ -25,7 +25,10 @@ import json
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest import mock
 
@@ -747,6 +750,78 @@ class DerivedPointTests(ManifestFixture):
                 derived.PointView(corner="typical", corner_id="x", temp_c=27, vdd=3.3),
             )
         self.assertIn("derive_point", str(ctx.exception))
+
+
+class DerivedSpecConcurrencyTests(unittest.TestCase):
+    """#73: DerivedSpec.module() must not double-import under a thread race.
+
+    ``run_grid()`` (harness/runner.py) dispatches PVT points across a
+    ``ThreadPoolExecutor`` whenever ``-j``/``jobs > 1``, and every point in a
+    run shares the *same* ``DerivedSpec`` instance (the manifest is loaded
+    once). A check-then-set lazy import with no synchronization lets two
+    worker threads both observe ``_module is None`` and both import -- wasted
+    work at best, and silently wrong for a derive module with import-time
+    side effects. These tests drive ``module()`` from many threads at once
+    and assert the import ran exactly once.
+    """
+
+    N_THREADS = 8
+
+    def _spec(self):
+        return derived.DerivedSpec(module_path=Path("derive.py"), measures=("x",))
+
+    def test_concurrent_module_calls_import_exactly_once(self):
+        calls = []
+        calls_lock = threading.Lock()
+        # Every worker reaches spec.module() at (as close to) the same
+        # instant, so an unsynchronized check-then-set has its widest
+        # possible window to let more than one thread past the `is None`
+        # check.
+        start = threading.Barrier(self.N_THREADS)
+        sentinel = object()
+
+        def fake_load_module(path):
+            with calls_lock:
+                calls.append(path)
+            time.sleep(0.02)  # widen the window further once inside
+            return sentinel
+
+        spec = self._spec()
+
+        def worker(_):
+            start.wait(timeout=5)
+            return spec.module()
+
+        with mock.patch.object(derived, "load_module", side_effect=fake_load_module):
+            with ThreadPoolExecutor(max_workers=self.N_THREADS) as pool:
+                results = list(pool.map(worker, range(self.N_THREADS)))
+
+        self.assertEqual(len(calls), 1, "derive module was imported more than once")
+        self.assertTrue(all(r is sentinel for r in results))
+
+    def test_sequential_jobs1_behavior_is_unchanged(self):
+        """The default, sequential (``jobs=1``) path: no lock contention, one import."""
+        calls = []
+
+        def fake_load_module(path):
+            calls.append(path)
+            return object()
+
+        spec = self._spec()
+        with mock.patch.object(derived, "load_module", side_effect=fake_load_module):
+            first = spec.module()
+            second = spec.module()
+
+        self.assertIs(first, second)
+        self.assertEqual(len(calls), 1)
+
+    def test_a_load_error_still_propagates_through_the_synchronized_path(self):
+        spec = self._spec()
+        with mock.patch.object(
+            derived, "load_module", side_effect=derived.DerivedError("boom")
+        ):
+            with self.assertRaises(derived.DerivedError):
+                spec.module()
 
 
 class CrossRecordJoinTests(ManifestFixture):

@@ -54,6 +54,7 @@ from __future__ import annotations
 import csv
 import importlib.util
 import sys
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -159,11 +160,30 @@ class DerivedSpec:
     tables: tuple[str, ...] = ()
     joins: dict[str, str] = field(default_factory=dict)
     _module = None
+    #: Guards the check-then-set below. ``run_grid()`` dispatches PVT points
+    #: across a ``ThreadPoolExecutor`` (whenever ``jobs > 1``), and every point
+    #: shares the same ``DerivedSpec`` instance (the manifest is loaded once
+    #: and passed by reference), so multiple worker threads can call
+    #: ``module()`` on it concurrently. One lock per instance -- not a
+    #: module-level lock -- keeps the common (already-imported) path free of
+    #: cross-campaign contention.
+    _module_lock: threading.Lock = field(
+        default_factory=threading.Lock, repr=False, compare=False
+    )
 
     def module(self):
-        """Import (once) and return the campaign's derive module."""
+        """Import (once) and return the campaign's derive module.
+
+        Double-checked locking: the fast path (module already imported) never
+        pays for lock acquisition. Only the first caller(s) to observe
+        ``_module is None`` contend for the lock, and only one of them
+        actually imports -- whichever loses the race re-checks
+        ``_module is None`` inside the lock and finds it already set.
+        """
         if self._module is None:
-            self._module = load_module(self.module_path)
+            with self._module_lock:
+                if self._module is None:
+                    self._module = load_module(self.module_path)
         return self._module
 
     def point_hook(self):
