@@ -38,6 +38,15 @@ schema these implement):
 - ``derived.py`` is the extension point for that last one: campaign-specific
   reduction logic lives in the campaign's own ``testbench/derive.py``, which
   is where the equivalent awk lives today.
+- ``testbench.py`` / ``runner.py`` / ``derived.py`` add the optional
+  ``raw_files`` key, which bandgap has no analogue for: several of this repo's
+  claims are a *sequence* (a per-cycle period sequence -- jitter/TIE -- a
+  decimated I-V curve), and ``.measure`` reports only scalars. The deck writes
+  the sequence itself with ``wrdata``; declaring the filename gives each point
+  its own scratch directory (so concurrent points cannot clobber one another),
+  hands the file to ``derive_point``/``derive_tables`` as a parsed
+  ``derived.RawFile``, and optionally retains it under
+  ``corners/<record-id>/`` as append-only evidence.
 - ``report.py`` renders this repo's ratified field set from ``sim/README.md``
   (Record ID, Claim, Netlist provenance, **Environment provenance**, Corner
   matrix run, **Methodology / criteria / limitations**, Statistical

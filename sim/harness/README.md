@@ -161,11 +161,12 @@ distinct claim under test, kebab-case.
 }
 ```
 
-Six further keys are optional and default to off — `topology_groups` (record
+Seven further keys are optional and default to off — `topology_groups` (record
 layout), `dut` (compose a committed netlist export), `dut_export` (compose a
 *per-record*, non-committed netlist export), `sweeps` + `grid` (extra sweep
-axes, possibly non-rectangular) and `derived` (campaign-supplied reductions).
-Each has its own section below.
+axes, possibly non-rectangular), `raw_files` (a waveform the deck writes
+itself) and `derived` (campaign-supplied reductions). Each has its own section
+below.
 
 `claim` is the default for the record's **Claim** field, in either of the two
 forms `sim/README.md` accepts: a ratified spec line (`spec/pll.md#anchor`) or
@@ -516,6 +517,107 @@ Mark those measurements `optional` and an absent result becomes data:
 | `max_measured_points` | at most N points may produce this measurement — `0` is "this must never assert" |
 | `min_measured_points` | at least N points must produce it — "this must always assert" |
 
+### The deck's own waveform: `raw_files` (optional)
+
+Both measurement mechanisms above report **scalars**. A whole class of claim
+here is a *sequence*: the per-cycle period sequence that jitter/TIE actually
+is, a decimated I-V curve, a threshold crossing of a quantity nothing measured.
+`.measure ... when` cannot report any of those. The deck writes them itself,
+from the analyses block:
+
+```json
+{
+  "analyses": [
+    "tran {ktstep} {ktstop}",
+    "set wr_singlescale",
+    "wrdata jit.dat v(clkq) v(clks) v(clkr)"
+  ],
+  "raw_files": {
+    "jit.dat": {
+      "description": "quiet / stepped / rippled VCO outputs, one row per print step",
+      "columns": ["t", "clkq", "clks", "clkr"],
+      "retain": false
+    }
+  }
+}
+```
+
+`analyses` entries are arbitrary `.control` lines, so `wrdata` needs nothing
+new. `raw_files` is what tells the harness the file exists — without it the
+file is written into a directory shared by every point of the run and nothing
+can find it again.
+
+| Key | Meaning |
+|---|---|
+| *(the key itself)* | the filename **exactly as the `wrdata` line spells it** — a plain filename, no directory part |
+| `description` | one line, for the reader of the manifest |
+| `columns` | the column names the `wrdata` line writes, in order, so a reduction can say `raw.column("clkr")` instead of `raw.column(3)`. Optional; not validated against the file |
+| `retain` | `false` (default) — scratch; `true` — committed evidence. See below |
+
+A bare list is the shorthand for "no options": `"raw_files": ["jit.dat"]`.
+
+**Per-point isolation.** Every point's deck writes the *same* filename. When a
+manifest declares `raw_files`, the runner gives each point its own scratch
+directory `work/<record-id>/<corner-id>.d/` and runs ngspice from there, so two
+points cannot clobber each other under `-j`. The generated deck still lands at
+`work/<record-id>/<corner-id>.spice`, so the reproduce-by-hand invocation is
+unchanged. A manifest with no `raw_files` runs exactly where it always did.
+
+**Reaching it from a reduction.** Each declared file arrives on the
+`PointView` the `derived` hooks are handed (see the next section) as a
+`RawFile` — the raw-waveform counterpart of a `join`:
+
+```python
+def derive_point(point):
+    raw = point.raw("jit.dat")         # declared but unwritten is fine ...
+    if not raw.exists():
+        return {}                      # ... and reduces to "not measured"
+    t = raw.column("t")
+    clk = raw.column("clkr")
+    ...
+    return {"tie_pp": tie_pp}
+```
+
+| `RawFile` member | Meaning |
+|---|---|
+| `.path` | where the harness left it — hand it to your own reader if you'd rather parse it yourself |
+| `.exists()` | did this point's deck actually write it? |
+| `.rows()` | every numeric row, parsed from `wrdata`'s whitespace columns — **lazy** (a transient dump is megabytes) and cached |
+| `.column(key)` | one column, by declared name or 0-based position |
+| `.text()` | the file verbatim |
+
+`derive_tables(run)` reaches the same files through `run.points[i].raw(...)`:
+nothing deletes the run's work directory, so every point's file is still on
+disk once the whole grid has finished.
+
+**A file the deck never wrote is data, not a crash.** An early convergence
+failure never reaches the `wrdata` line. That point's `RawFile` reports
+`exists() is False` and `rows() == ()`, the reduction returns nothing, and its
+derived measures are recorded **not measured** — the same treatment a ladder
+that never tripped gets. The run prints how many points were affected, and the
+record's per-point entry carries `raw_files_missing`, so the absence is stated
+rather than silently starving the reduction.
+
+**Is the file evidence?** Only if you say so, per file:
+
+- **`retain: false` (default) — scratch.** The file stays in the git-ignored
+  `sim/*/work/` tree. Use this when the file is the *input* to the claim rather
+  than the claim: a full transient dump is megabytes per point, and the record
+  cites the reduction (a `derived` table), which *is* committed.
+- **`retain: true` — committed evidence.** The file is copied to
+  `corners/<record-id>/<corner-id>-<name>`, alongside that point's own
+  `<corner-id>.log`, under the same append-only rule as everything else there
+  (`sim/README.md`) — the copy happens the moment ngspice returns, before the
+  point's measurements are even judged, so a failing point still banks its
+  waveform. The reduction then reads that retained copy, so the number in the
+  record and the bytes in the evidence tree are the same bytes. Use this for
+  the small, decimated artefact a record actually cites.
+
+A retained file may not be named `*.raw` or `*.log`: this repo's `.gitignore`
+drops those tree-wide, so the copy would sit in `corners/<record-id>/` looking
+like evidence and never be committed. The loader rejects it rather than letting
+that happen.
+
 ### Derived metrics: `derived` (optional)
 
 The harness reports raw per-point measurements plus min/max/spread. Every real
@@ -580,6 +682,9 @@ def derive_tables(run):
 - `--join ALIAS=PATH` supplies or overrides a join input per invocation. That
   is what makes the cross-record case workable: a committed manifest cannot
   know which record-id a given run is being closed against.
+- `point.raw("<name>")` reaches a file **this point's own deck** wrote, for a
+  reduction over a waveform rather than over `.measure` scalars — see
+  `raw_files` above.
 - The module is imported lazily (never during `--list`) and namespaced by
   experiment, so two campaigns may both call their module `derive.py`.
 
@@ -594,6 +699,7 @@ writes, under `sim/<experiment-slug>/`:
 | `netlist-snapshots/<record-id>.spice` | verbatim frozen copy of the testbench fragment, with its sha256 |
 | `corners/<record-id>/<corner-id>.log` | raw ngspice output, one file per PVT point |
 | `corners/<record-id>/<name>.csv` | one per `derived.tables` entry — the reduction the record actually claims |
+| `corners/<record-id>/<corner-id>-<name>` | one per PVT point per `raw_files` entry marked `retain` — the deck's own written waveform, when the file itself is the evidence |
 
 Nothing is ever overwritten: the runner refuses to write over an existing
 record or snapshot, and mints a later record-id if one is somehow already
@@ -612,6 +718,9 @@ unjustified PVT subset).
 Generated decks land in `sim/<experiment-slug>/work/<record-id>/`
 (git-ignored, per the existing `sim/*/work/` convention), so a failing corner
 can be reproduced by hand with `ngspice -b sim/<slug>/work/<record-id>/<corner-id>.spice`.
+A manifest that declares `raw_files` additionally gets one
+`work/<record-id>/<corner-id>.d/` directory per point, holding whatever that
+point's deck wrote.
 
 ## harness-selftest
 

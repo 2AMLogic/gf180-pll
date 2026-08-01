@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .corners import PvtPoint
-from .derived import DerivedError, PointView, derive_point_measures
+from .derived import DerivedError, PointView, RawFile, derive_point_measures
 from .pdk import Pdk
 from .testbench import Testbench
 
@@ -180,6 +180,16 @@ class PointResult:
     #: tripped" -- not an error, and it never costs the point its other
     #: measurements.
     not_measured: list[str] = field(default_factory=list)
+    #: Files the manifest's ``raw_files`` declares, resolved for this point --
+    #: whether or not the deck actually wrote them (see ``RawFile.exists()``).
+    #: Carried on the result, not just handed to ``derive_point``, so
+    #: ``derive_tables`` can reach every point's raw output too.
+    raw_files: dict[str, RawFile] = field(default_factory=dict)
+    #: Declared raw files this point's deck never wrote. Data, not an error:
+    #: an early convergence failure legitimately produces no waveform, and the
+    #: reduction over it is then recorded as not-measured -- the same treatment
+    #: a derived measure that finds nothing to reduce already gets.
+    raw_files_missing: list[str] = field(default_factory=list)
     seconds: float = 0.0
     deck: str = ""
     log: str = ""
@@ -200,6 +210,15 @@ class PointResult:
             record["missing_measurements"] = self.missing
         if self.not_measured:
             record["not_measured"] = self.not_measured
+        written = {
+            name: raw.path.name
+            for name, raw in self.raw_files.items()
+            if raw.exists()
+        }
+        if written:
+            record["raw_files"] = written
+        if self.raw_files_missing:
+            record["raw_files_missing"] = self.raw_files_missing
         if self.message:
             record["message"] = self.message
         return record
@@ -260,6 +279,13 @@ def run_point(
     ``<corner-id>.log``; that is the ``sim/<slug>/corners/<record-id>/``
     directory from ``sim/README.md``. It defaults to ``workdir`` so a
     throwaway run does not touch the evidence tree.
+
+    When the manifest declares ``raw_files``, ngspice is run from a per-point
+    subdirectory ``<workdir>/<corner-id>.d/`` instead of from ``workdir``
+    itself, so that two points writing the same ``wrdata`` filename cannot
+    overwrite each other under ``-j``. The generated deck stays at
+    ``<workdir>/<corner-id>.spice`` (it is passed to ngspice by absolute path),
+    so the documented reproduce-by-hand invocation is unchanged.
     """
     workdir.mkdir(parents=True, exist_ok=True)
     log_dir = workdir if log_dir is None else log_dir
@@ -267,6 +293,10 @@ def run_point(
     deck_path = workdir / f"{point.corner_id}.spice"
     log_path = log_dir / f"{point.corner_id}.log"
     deck_path.write_text(compose_deck(tb, pdk, point))
+    rundir = workdir
+    if tb.raw_files:
+        rundir = workdir / f"{point.corner_id}.d"
+        rundir.mkdir(parents=True, exist_ok=True)
 
     started = time.monotonic()
     try:
@@ -275,7 +305,7 @@ def run_point(
             capture_output=True,
             text=True,
             timeout=timeout_s,
-            cwd=workdir,
+            cwd=rundir,
             check=False,
         )
         output = proc.stdout + "\n" + proc.stderr
@@ -285,9 +315,16 @@ def run_point(
     except subprocess.TimeoutExpired:
         elapsed = time.monotonic() - started
         log_path.write_text(f"TIMEOUT after {timeout_s}s\n")
+        # A killed deck never reached its `wrdata` line, so every declared raw
+        # file is reported absent rather than left unexplained.
+        timed_out_raw = capture_raw_files(tb, point, rundir, log_dir)
         return PointResult(
             point=point,
             status="error",
+            raw_files=timed_out_raw,
+            raw_files_missing=[
+                name for name, raw in timed_out_raw.items() if not raw.exists()
+            ],
             seconds=elapsed,
             deck=deck_path.name,
             log=log_path.name,
@@ -295,6 +332,12 @@ def run_point(
         )
     elapsed = time.monotonic() - started
     log_path.write_text(output)
+
+    # Capture what the deck wrote BEFORE anything else looks at this point: a
+    # retained raw file is evidence, and it has to be banked whether the point
+    # went on to pass, fail a required measurement, or break its reduction.
+    raw_files = capture_raw_files(tb, point, rundir, log_dir)
+    raw_missing = [name for name, raw in raw_files.items() if not raw.exists()]
 
     measurements = parse_measurements(output, tb.raw_measures.keys())
     # Only *required* measurements can fail a point. An absent optional
@@ -317,6 +360,8 @@ def run_point(
                 name for name in tb.simulated_measure_names
                 if tb.is_optional(name) and name not in measurements
             ],
+            raw_files=raw_files,
+            raw_files_missing=raw_missing,
             seconds=elapsed,
             deck=deck_path.name,
             log=log_path.name,
@@ -326,13 +371,17 @@ def run_point(
     if tb.derived is not None and tb.derived.measures:
         try:
             measurements.update(
-                derive_point_measures(tb.derived, _point_view(tb, point, measurements))
+                derive_point_measures(
+                    tb.derived, _point_view(tb, point, measurements, raw_files)
+                )
             )
         except DerivedError as exc:
             return PointResult(
                 point=point,
                 status="error",
                 measurements=measurements,
+                raw_files=raw_files,
+                raw_files_missing=raw_missing,
                 seconds=elapsed,
                 deck=deck_path.name,
                 log=log_path.name,
@@ -344,13 +393,54 @@ def run_point(
         status="ok",
         measurements=measurements,
         not_measured=[n for n in tb.measure_names if n not in measurements],
+        raw_files=raw_files,
+        raw_files_missing=raw_missing,
         seconds=elapsed,
         deck=deck_path.name,
         log=log_path.name,
     )
 
 
-def _point_view(tb: Testbench, point: PvtPoint, measurements: dict[str, float]) -> PointView:
+def capture_raw_files(
+    tb: Testbench, point: PvtPoint, rundir: Path, log_dir: Path
+) -> dict[str, RawFile]:
+    """Resolve the manifest's ``raw_files`` against what this point wrote.
+
+    Runs immediately after ngspice returns, so the reduction sees the file
+    while it is still on disk and a ``retain`` file is banked as evidence
+    before anything can go wrong downstream.
+
+    A ``retain`` file is copied out of the point's scratch directory into
+    ``log_dir`` (``corners/<record-id>/``) as ``<corner-id>-<name>``, alongside
+    the point's own ``<corner-id>.log``, and the returned :class:`RawFile`
+    points at that retained copy -- a reduction and a later reader then read
+    the same bytes. Everything else stays in the git-ignored scratch tree,
+    where it is still readable by ``derive_point`` and, because nothing deletes
+    the work directory, by ``derive_tables`` after every point has run.
+
+    A declared file the deck never wrote yields a :class:`RawFile` whose
+    ``exists()`` is ``False`` rather than an exception.
+    """
+    captured: dict[str, RawFile] = {}
+    for spec in tb.raw_files:
+        source = rundir / spec.name
+        path = source
+        if spec.retain and source.is_file():
+            path = log_dir / f"{point.corner_id}-{spec.name}"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, path)
+        captured[spec.name] = RawFile(
+            name=spec.name, path=path, columns=spec.columns
+        )
+    return captured
+
+
+def _point_view(
+    tb: Testbench,
+    point: PvtPoint,
+    measurements: dict[str, float],
+    raw_files: dict[str, RawFile] | None = None,
+) -> PointView:
     """The read-only view handed to a campaign's ``derive_point()``."""
     params = {str(k): str(v) for k, v in tb.params.items()}
     params.update(point.params)
@@ -362,6 +452,7 @@ def _point_view(tb: Testbench, point: PvtPoint, measurements: dict[str, float]) 
         axes=point.axes,
         params=params,
         measurements=dict(measurements),
+        raw_files=dict(raw_files or {}),
     )
 
 

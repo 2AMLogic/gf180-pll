@@ -47,6 +47,21 @@ this repo carries) and hands it to ``derive_tables`` as ``run.joins[alias]``.
 ``--join alias=path`` supplies or overrides one per invocation, which is what
 lets a chain run point at the dff record it is actually being closed against
 instead of hardcoding a record-id in a committed manifest.
+
+**Raw files** are the same idea pointed at a point's *own* output. A whole
+class of claim here is a *sequence*, not a scalar: a per-cycle period sequence
+(jitter / TIE), a decimated I-V curve. ``.measure`` cannot report one, so the
+deck writes it itself with ``wrdata`` and the campaign reduces it. The
+manifest's top-level ``raw_files`` key declares those filenames (see
+``testbench.RawFileSpec``); the harness runs each point in its own scratch
+directory, captures what the deck wrote there, and hands it over as a
+:class:`RawFile` -- path plus lazily-parsed numeric columns -- on
+``point.raw_files`` / ``point.raw(name)``, reachable from both hooks
+(``run.points[i].raw(...)`` in ``derive_tables``). A file the deck never wrote
+arrives as a :class:`RawFile` whose ``exists()`` is ``False`` and whose
+``rows()`` is empty, so the reduction returns nothing for that point and the
+measure is recorded as not-measured -- exactly what a reduction that finds
+nothing to reduce already does.
 """
 
 from __future__ import annotations
@@ -90,6 +105,121 @@ class DerivedTable:
 
 
 @dataclass(frozen=True)
+class RawFile:
+    """One file a point's own deck wrote, handed to a campaign's reduction.
+
+    This is the raw-waveform counterpart of :class:`JoinTable`: where a join is
+    a CSV *another record* already wrote, a raw file is what *this* point's
+    deck emitted during its own simulation (``wrdata jit.dat v(clkq) ...``).
+
+    The file is not parsed until something asks for :meth:`rows` -- a full
+    transient dump is megabytes, and a reduction that only wants
+    :attr:`path` (to hand to its own reader) must not pay for parsing it.
+    Once parsed, the result is cached for the life of the view.
+
+    A declared file the deck never wrote is **not** an error: it arrives here
+    with ``exists()`` false and ``rows()`` empty, so a reduction that finds
+    nothing to reduce returns nothing and its measure is recorded as
+    not-measured. That is the same treatment a ladder that never tripped gets.
+    """
+
+    #: The filename as the manifest (and the deck's ``wrdata`` line) spells it.
+    name: str
+    #: Where the harness left it: the point's scratch directory, or the
+    #: retained copy under ``corners/<record-id>/`` for a ``retain`` file.
+    path: Path
+    #: Manifest-declared column names, in the order the deck writes them.
+    #: Empty when the manifest did not name them -- index by position instead.
+    columns: tuple[str, ...] = ()
+    _cache: dict = field(
+        default_factory=dict, repr=False, compare=False, hash=False
+    )
+
+    def exists(self) -> bool:
+        """Did the deck actually write this file at this point?"""
+        return self.path.is_file()
+
+    def text(self) -> str:
+        """The file verbatim, or ``""`` when the deck never wrote it."""
+        return self.path.read_text() if self.exists() else ""
+
+    def rows(self) -> tuple[tuple[float, ...], ...]:
+        """Every numeric row, parsed from ``wrdata``'s whitespace columns.
+
+        ``wrdata`` writes one whitespace-separated row of floats per print
+        step and no header. Blank lines, and a leading comment or header line
+        (``#``/``*``, or a first line that is not numeric), are skipped. A
+        *later* non-numeric line, or a row whose width does not match the
+        first, is a hard error rather than a silently dropped sample: that
+        means the file is truncated or has ngspice's own error text spliced
+        into it, and silently reducing over the surviving rows would report a
+        number the waveform does not support.
+        """
+        if "rows" not in self._cache:
+            self._cache["rows"] = self._parse()
+        return self._cache["rows"]
+
+    def column(self, key) -> tuple[float, ...]:
+        """One column, by manifest-declared name or by 0-based position."""
+        rows = self.rows()
+        index = self._column_index(key)
+        if rows and index >= len(rows[0]):
+            raise DerivedError(
+                f"raw file {self.name!r} ({self.path}) has {len(rows[0])} column(s); "
+                f"no column at index {index}"
+                + (f" (declared columns: {list(self.columns)})" if self.columns else "")
+            )
+        return tuple(row[index] for row in rows)
+
+    def _column_index(self, key) -> int:
+        if isinstance(key, int):
+            return key
+        if key in self.columns:
+            return self.columns.index(key)
+        raise DerivedError(
+            f"raw file {self.name!r} has no column named {key!r}; declared columns "
+            f"are {list(self.columns)}"
+            + (
+                " -- name them in the manifest's raw_files[...].columns, or index "
+                "by position"
+                if not self.columns
+                else ""
+            )
+        )
+
+    def _parse(self) -> tuple[tuple[float, ...], ...]:
+        if not self.exists():
+            return ()
+        rows: list[tuple[float, ...]] = []
+        width: int | None = None
+        for lineno, line in enumerate(self.path.read_text().splitlines(), start=1):
+            fields = line.split()
+            if not fields:
+                continue
+            if fields[0].startswith(("#", "*")):
+                continue
+            try:
+                values = tuple(float(f) for f in fields)
+            except ValueError:
+                if not rows:
+                    continue  # a header line the deck (or a tool) prepended
+                raise DerivedError(
+                    f"raw file {self.name!r} ({self.path}) line {lineno} is not a "
+                    f"row of numbers: {line.strip()!r}"
+                ) from None
+            if width is None:
+                width = len(values)
+            elif len(values) != width:
+                raise DerivedError(
+                    f"raw file {self.name!r} ({self.path}) line {lineno} has "
+                    f"{len(values)} column(s), but the file started with {width} -- "
+                    "the file is truncated or interleaved"
+                )
+            rows.append(values)
+        return tuple(rows)
+
+
+@dataclass(frozen=True)
 class PointView:
     """Read-only view of one simulated point, handed to ``derive_point``."""
 
@@ -100,6 +230,10 @@ class PointView:
     axes: dict[str, str] = field(default_factory=dict)
     params: dict[str, str] = field(default_factory=dict)
     measurements: dict[str, float] = field(default_factory=dict)
+    #: Files this point's own deck wrote, keyed by the manifest's ``raw_files``
+    #: filename. Present for every declared file, whether or not the deck
+    #: actually wrote it -- see :class:`RawFile`.
+    raw_files: dict[str, RawFile] = field(default_factory=dict)
 
     def get(self, name: str, default=None):
         """``measurements[name]``, or ``default`` when the measure did not fire.
@@ -110,6 +244,22 @@ class PointView:
         into a silently wrong number.
         """
         return self.measurements.get(name, default)
+
+    def raw(self, name: str) -> RawFile:
+        """The declared raw file ``name``, for this point.
+
+        Undeclared is an error (like an undeclared join): the manifest has to
+        say which files the deck writes, or the harness cannot isolate them per
+        point or decide whether they are evidence. *Unwritten* is not an
+        error -- check :meth:`RawFile.exists`.
+        """
+        if name not in self.raw_files:
+            raise DerivedError(
+                f"derived metric needs raw file {name!r} at {self.corner_id}, which "
+                f"this testbench does not declare; add it to the manifest's top-level "
+                f"raw_files (declared: {sorted(self.raw_files)})"
+            )
+        return self.raw_files[name]
 
 
 @dataclass(frozen=True)
