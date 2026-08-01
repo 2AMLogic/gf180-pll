@@ -105,14 +105,28 @@ def allocate_record_id(
         when += _dt.timedelta(seconds=1)
 
 
-def summarize(results: list[PointResult], measure_names: list[str]) -> dict:
-    """Min / max / mean / spread of each measurement across the PVT grid."""
+def summarize(
+    results: list[PointResult],
+    measure_names: list[str],
+    optional_names: frozenset[str] | set[str] | tuple[str, ...] = (),
+) -> dict:
+    """Min / max / mean / spread of each measurement across the PVT grid.
+
+    ``optional_names`` are the measurements whose absence is data rather than
+    an error. They are summarised over whatever points *did* produce a value,
+    and carry ``optional: True`` plus ``n_absent`` so the record can say "this
+    never asserted, at all 45 points" instead of the ambiguous "no data".
+    """
     summary: dict[str, dict] = {}
     ok = [r for r in results if r.status == "ok"]
+    optional_names = set(optional_names)
     for name in measure_names:
         samples = [(r.measurements[name], r.point.corner_id) for r in ok if name in r.measurements]
+        absent = len(ok) - len(samples)
         if not samples:
             summary[name] = {"n": 0}
+            if name in optional_names:
+                summary[name].update({"optional": True, "n_absent": absent})
             continue
         values = [v for v, _ in samples]
         lo_value, lo_at = min(samples, key=lambda s: s[0])
@@ -128,6 +142,8 @@ def summarize(results: list[PointResult], measure_names: list[str]) -> dict:
             "mean": mean,
             "spread_pct": spread_pct,
         }
+        if name in optional_names:
+            summary[name].update({"optional": True, "n_absent": absent})
     return summary
 
 
@@ -166,6 +182,34 @@ def evaluate_checks(
                             "at": result.point.corner_id,
                         }
                     )
+        # Coverage checks for measurements whose *absence* is the claim. A lock
+        # detector's "must never assert" copy is exactly max_measured_points=0:
+        # the pass condition is that the .measure failed at every point, which
+        # no min/max limit on a value can express.
+        stats = summary.get(name) or {}
+        n_measured = stats.get("n", 0)
+        for kind, limit in (
+            ("max_measured_points", spec.get("max_measured_points")),
+            ("min_measured_points", spec.get("min_measured_points")),
+        ):
+            if limit is None:
+                continue
+            violated = (
+                n_measured > limit
+                if kind == "max_measured_points"
+                else n_measured < limit
+            )
+            if violated:
+                failures.append(
+                    {
+                        "measurement": name,
+                        "kind": kind,
+                        "limit": limit,
+                        "value": n_measured,
+                        "at": "grid",
+                    }
+                )
+
         # Grid-level spread checks. max_spread_pct is the usual "this must be
         # stable over PVT" assertion; min_spread_pct is its inverse and exists
         # to prove the harness is actually *moving* the corner -- a measurement
@@ -178,6 +222,12 @@ def evaluate_checks(
             if limit is None:
                 continue
             stats = summary.get(name) or {}
+            # An optional measurement that never fired has nothing to spread.
+            # Reporting that as a spread violation would turn the *expected*
+            # outcome ("this must never assert") into a check failure -- use
+            # max_measured_points/min_measured_points to assert on coverage.
+            if stats.get("optional") and not stats.get("n"):
+                continue
             # A single-point grid has zero spread by construction (there is
             # nothing to spread across), which is indistinguishable from "the
             # sweep is broken" by value alone. min_spread_pct exists to catch
@@ -267,7 +317,57 @@ def matrix_conformance(tb: Testbench, points: list[PvtPoint]) -> dict:
             + ", ".join(sorted(REQUIRED_MOS_CORNERS - process))
         )
 
-    return {"full": not missing, "missing": missing}
+    result = {"full": not missing, "missing": missing}
+    result.update(_axis_conformance(tb, points))
+    return result
+
+
+def _axis_conformance(tb: Testbench, points: list[PvtPoint]) -> dict:
+    """How the run covered any *extra* sweep axes, and whether it was thinned.
+
+    The mandated-matrix verdict above is deliberately unaffected: a campaign
+    that thins its extra axis (the divider chain drops most of its N = 64
+    supply points) can still cover the full mandated P/V/T matrix in the union
+    of its blocks, and does. What this adds is the record's other obligation
+    from ``sim/README.md`` -- every swept variable named, with its points --
+    plus an explicit flag when the extra-axis cross-product was **not** run in
+    full, so a thinned grid states itself rather than reading as a rectangle
+    with an unexplained hole.
+    """
+    if not tb.sweeps:
+        return {}
+    axes = []
+    full_product = 1
+    for axis in tb.sweeps:
+        ran = []
+        for point in points:
+            pid = point.axes.get(axis.name)
+            if pid is not None and pid not in ran:
+                ran.append(pid)
+        declared = list(axis.ids)
+        full_product *= len(ran) if ran else 1
+        axes.append(
+            {
+                "name": axis.name,
+                "description": axis.description,
+                "declared": declared,
+                "ran": ran,
+                "missing": [i for i in declared if i not in ran],
+            }
+        )
+    pvt_points = len({(p.corner.name, p.temp_c, p.vdd) for p in points})
+    rectangular = pvt_points * full_product
+    blocks = [
+        {"description": b.description, "points": sum(1 for p in points if p.block == b.description)}
+        for b in tb.grid_blocks
+    ]
+    return {
+        "axes": axes,
+        "thinned": len(points) < rectangular,
+        "rectangular_points": rectangular,
+        "blocks": blocks,
+        "empty_blocks": [b["description"] for b in blocks if not b["points"]],
+    }
 
 
 def build_record(
@@ -285,9 +385,12 @@ def build_record(
     statistical_convention: str = "",
     subset_reason: str = "",
     git: dict | None = None,
+    derived_tables: list | None = None,
+    conformance: dict | None = None,
 ) -> dict:
     measure_names = tb.measure_names
-    summary = summarize(results, measure_names)
+    optional_names = {n for n in measure_names if tb.is_optional(n)}
+    summary = summarize(results, measure_names, optional_names)
     failures = evaluate_checks(tb.checks, results, summary)
     n_ok = sum(1 for r in results if r.status == "ok")
 
@@ -322,7 +425,10 @@ def build_record(
         "supersedes": supersedes,
         "statistical_convention": statistical_convention,
         "subset_reason": subset_reason,
-        "matrix": matrix_conformance(tb, points),
+        # The CLI may have already computed this (and folded in gaps only it
+        # knows about, e.g. an axis narrowed by --axis); reuse it so the
+        # record and the pre-run subset gate cannot disagree.
+        "matrix": conformance if conformance is not None else matrix_conformance(tb, points),
         "testbench": tb.provenance(),
         "environment": environment(pdk, ngspice, repo_root, git),
         "grid": {
@@ -333,14 +439,13 @@ def build_record(
             "points": len(points),
             "points_ok": n_ok,
         },
-        "measure": {
-            name: (
-                tb.measure[name]
-                if name in tb.measure
-                else f"raw: .measure {tb.raw_measures[name].analysis} {tb.raw_measures[name].expr}"
-            )
-            for name in measure_names
-        },
+        "measure": {name: _measure_definition(tb, name) for name in measure_names},
+        "optional_measures": sorted(optional_names),
+        # Empty unless the manifest declares 'derived'. Each entry is one
+        # reduction over the per-point table above -- the quantity the campaign
+        # actually claims -- written alongside the raw logs as
+        # corners/<record-id>/<name>.csv.
+        "derived_tables": [t.as_dict() for t in (derived_tables or [])],
         # Empty for a single-topology testbench, which keeps the one flat
         # result table below. A multi-topology manifest gets one entry per
         # sub-circuit (plus a trailing 'ungrouped' entry for anything it did
@@ -361,6 +466,18 @@ def build_record(
         "summary": summary,
         "points": [r.as_dict() for r in results],
     }
+
+
+def _measure_definition(tb: Testbench, name: str) -> str:
+    """How the record describes where a measurement came from."""
+    suffix = " (optional: an absent result is data)" if name in tb.optional_measures else ""
+    if name in tb.measure:
+        return tb.measure[name] + suffix
+    if name in tb.raw_measures:
+        rm = tb.raw_measures[name]
+        return f"raw: .measure {rm.analysis} {rm.expr}{suffix}"
+    module = tb.derived.module_path.name if tb.derived else "?"
+    return f"derived: {module}::derive_point() (absent where the reduction found nothing)"
 
 
 def _fmt(value) -> str:
@@ -384,12 +501,33 @@ def write_netlist_snapshot(tb: Testbench, experiment_dir: Path, record_id: str) 
     ``sim/README.md``: ``netlist-snapshots/<record-id>.spice`` is "the frozen
     DUT netlist used for this record", so later edits to ``testbench/`` never
     change what an existing record refers to.
+
+    When the manifest names ``dut`` exports, the snapshot is the *composed*
+    DUT + stimulus, each chunk carrying its own source path and sha256 -- the
+    same self-contained artefact ``sim/lib/assemble_closed_loop.sh`` produces
+    by concatenation, but without the committed fragment having to contain a
+    copy of the export.
     """
     out_dir = experiment_dir / SNAPSHOT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{record_id}.spice"
     if path.exists():
         raise RecordExists(f"{path} already exists; append-only evidence is never rewritten")
+    if tb.dut:
+        header = "\n".join(
+            [
+                f"* Frozen netlist snapshot for record {record_id}",
+                "* sources    : "
+                + " + ".join(p.name for p in tb.netlist_sources)
+                + " (composed at record time, in this order)",
+                f"* sha256     : {tb.composed_sha256} (of this composed text)",
+                "* This is a verbatim composition taken at record time. Do not edit.",
+                "",
+                "",
+            ]
+        )
+        path.write_text(header + tb.compose_netlist())
+        return path
     header = "\n".join(
         [
             f"* Frozen netlist snapshot for record {record_id}",
@@ -405,6 +543,17 @@ def write_netlist_snapshot(tb: Testbench, experiment_dir: Path, record_id: str) 
 
 def _corner_matrix_lines(record: dict) -> list[str]:
     grid = record["grid"]
+    axes = record["matrix"].get("axes") or []
+    # "full-factorial" is only true of a run with no extra axes; with them the
+    # shape is described by the block list below instead, and claiming a
+    # factorial grid here would misdescribe a deliberately thinned campaign.
+    shape = (
+        "point grid (process x temperature x supply x "
+        + " x ".join(a["name"] for a in axes)
+        + ")"
+        if axes
+        else "point full-factorial grid (process x temperature x supply)"
+    )
     lines = [
         "- **Corner matrix run**:",
         "  - Process (bundle -> `.lib` sections): "
@@ -422,8 +571,7 @@ def _corner_matrix_lines(record: dict) -> list[str]:
     lines += [
         "  - Temperature: " + ", ".join(f"{t:g} °C" for t in grid["temperatures_c"]),
         "  - Supply: " + ", ".join(f"{v:.2f} V" for v in grid["supplies_v"]),
-        f"  - {grid['points']} point full-factorial grid "
-        f"(process x temperature x supply), {grid['points_ok']} completed",
+        f"  - {grid['points']} {shape}, {grid['points_ok']} completed",
     ]
     if record["matrix"]["full"]:
         lines.append(
@@ -434,6 +582,47 @@ def _corner_matrix_lines(record: dict) -> list[str]:
         lines.append("  - **Subset of the mandated PVT matrix.** Gaps: "
                      + "; ".join(record["matrix"]["missing"]) + ".")
         lines.append("  - Justification: " + (record["subset_reason"] or "(none given)"))
+    lines += _extra_axis_lines(record)
+    return lines
+
+
+def _extra_axis_lines(record: dict) -> list[str]:
+    """Name every extra swept variable and its points, per ``sim/README.md``.
+
+    "Every swept variable **must** be named, with its points, in the record's
+    corner-matrix field, on the same terms as the PVT axes." When the run is
+    not the full cross-product, the grid blocks that define what *was* run --
+    and their manifest-authored justifications -- are listed too.
+    """
+    matrix = record["matrix"]
+    axes = matrix.get("axes") or []
+    if not axes:
+        return []
+    lines = ["  - Extra swept variables (beyond process x temperature x supply):"]
+    for axis in axes:
+        detail = f" — {axis['description']}" if axis.get("description") else ""
+        lines.append(f"    - `{axis['name']}`{detail}: " + ", ".join(f"`{i}`" for i in axis["ran"]))
+        if axis.get("missing"):
+            lines.append(
+                "      - declared but not run in this record: "
+                + ", ".join(f"`{i}`" for i in axis["missing"])
+            )
+    blocks = matrix.get("blocks") or []
+    if matrix.get("thinned"):
+        lines.append(
+            f"    - **Deliberately non-rectangular**: {record['grid']['points']} points run of the "
+            f"{matrix.get('rectangular_points')} a full cross-product of the axes above "
+            "would be. The slices actually covered, and why:"
+        )
+    elif blocks:
+        lines.append("    - Slices covered:")
+    for block in blocks:
+        lines.append(f"      - {block['description']} — {block['points']} point(s)")
+    for description in matrix.get("empty_blocks") or []:
+        lines.append(
+            f"      - **{description} — 0 points**: this invocation narrowed an axis "
+            "the block depends on, so the block contributed nothing."
+        )
     return lines
 
 
@@ -475,8 +664,15 @@ def _corner_table_lines(
         "  | corner-id | " + " | ".join(measure_names) + " | pass/fail |",
         "  |---|" + "---|" * (len(measure_names) + 1),
     ]
+    not_measured_label = "not measured"
     for point in record["points"]:
-        cells = [_fmt(point["measurements"].get(name)) for name in measure_names]
+        absent = set(point.get("not_measured") or ())
+        cells = [
+            not_measured_label
+            if name not in point["measurements"] and name in absent
+            else _fmt(point["measurements"].get(name))
+            for name in measure_names
+        ]
         problems = failures_at.get(point["corner_id"], [])
         if point["status"] != "ok":
             verdict = f"ERROR — {point.get('message', point['status'])}"
@@ -531,13 +727,60 @@ def _spread_table_lines(record: dict, groups: list[dict]) -> list[str]:
         ) or "—"
         lead = f"| `{topology}` " if groups else ""
         if not stats.get("n"):
-            lines.append(f"  {lead}| `{name}` | no data | | | | {limits} |")
+            # "no data" for a required measurement means the run failed; for an
+            # optional one it is the *result* -- the flag never asserted -- and
+            # saying so is the whole point of the optional flag.
+            if stats.get("optional"):
+                absent = stats.get("n_absent")
+                where = f" at all {absent} completed point(s)" if absent else ""
+                lines.append(
+                    f"  {lead}| `{name}` | not measured{where} | | | | {limits} |"
+                )
+            else:
+                lines.append(f"  {lead}| `{name}` | no data | | | | {limits} |")
             continue
+        suffix = ""
+        if stats.get("optional") and stats.get("n_absent"):
+            suffix = f" (not measured at {stats['n_absent']} point(s))"
         lines.append(
             f"  {lead}| `{name}` | {_fmt(stats['min'])} (`{stats['min_at']}`) "
             f"| {_fmt(stats['max'])} (`{stats['max_at']}`) "
-            f"| {_fmt(stats['mean'])} | {_fmt(stats['spread_pct'])} | {limits} |"
+            f"| {_fmt(stats['mean'])}{suffix} | {_fmt(stats['spread_pct'])} | {limits} |"
         )
+    return lines
+
+
+def _derived_table_lines(record: dict) -> list[str]:
+    """Render each campaign-supplied derived table into the record.
+
+    These are the record's actual claim -- a setup/hold ladder reduced to two
+    numbers, a window-edge table, a cross-record setup-closure join -- so they
+    are rendered *before* the raw per-point table they were reduced from.
+    """
+    tables = record.get("derived_tables") or []
+    if not tables:
+        return []
+    lines: list[str] = []
+    for table in tables:
+        caption = f"  **{table['name']}** (derived)"
+        if table.get("description"):
+            caption += f" — {table['description']}"
+        lines.append(caption)
+        lines.append("")
+        for note in table.get("notes") or []:
+            lines.append(f"  {note}")
+        if table.get("notes"):
+            lines.append("")
+        columns = table["columns"]
+        lines.append("  | " + " | ".join(columns) + " |")
+        lines.append("  |" + "---|" * len(columns))
+        for row in table["rows"]:
+            lines.append(
+                "  | " + " | ".join("" if c is None else str(c) for c in row) + " |"
+            )
+        lines.append("")
+        lines.append(f"  Full table: `{table['name']}.csv`, alongside this record's raw logs.")
+        lines.append("")
     return lines
 
 
@@ -555,6 +798,7 @@ def _result_lines(record: dict) -> list[str]:
     failures_at = _failures_by_corner(failures)
 
     lines = ["- **Result**:", ""]
+    lines += _derived_table_lines(record)
     if groups:
         for group in groups:
             caption = f"  **{group['name']}**"
@@ -610,7 +854,21 @@ def render_record(record: dict, experiment: str) -> str:
     # carries more than one testbench (devchar-passives: a capacitor deck and
     # a resistor deck, two distinct claims) must not cite the wrong path.
     tb_dir = tb.get("directory") or TESTBENCH_DIR
-    provenance = f"schematic (`sim/{experiment}/{tb_dir}/{tb['netlist']}`)"
+    provenance = (
+        f"schematic (`sim/{experiment}/{tb_dir}/{tb['netlist']}`), "
+        f"netlist SHA-256 `{tb['netlist_sha256']}`"
+    )
+    if tb.get("dut"):
+        # The DUT is a committed export composed in at run time, not a copy
+        # pasted into the fragment -- so the record names the export it froze,
+        # with its own sha256, and the snapshot is the composed pair.
+        provenance = (
+            "schematic export(s) "
+            + " + ".join(f"`{d['path']}` (SHA-256 `{d['sha256']}`)" for d in tb["dut"])
+            + f" composed with stimulus `sim/{experiment}/{tb_dir}/{tb['netlist']}` "
+            f"(SHA-256 `{tb['netlist_sha256']}`); composed SHA-256 "
+            f"`{tb.get('composed_sha256')}` — this is what the netlist snapshot holds"
+        )
     if git["dirty"]:
         provenance += (
             f" — **taken against a dirty working tree** at commit `{git['commit']}`; "
@@ -622,7 +880,7 @@ def render_record(record: dict, experiment: str) -> str:
         "",
         f"- **Record ID**: {record_id}",
         f"- **Claim**: {record['claim'] or 'harness self-verification -- no spec or design-input claim'}",
-        f"- **Netlist provenance**: {provenance}, netlist SHA-256 `{tb['netlist_sha256']}`",
+        f"- **Netlist provenance**: {provenance}",
         "- **Environment provenance**:",
         f"  - PDK: volare `{pdk.get('variant')}`, open_pdks `{pdk.get('open_pdks_version')}` "
         f"({pdk.get('path')}, found via {pdk.get('discovered_via')})",
@@ -646,6 +904,13 @@ def render_record(record: dict, experiment: str) -> str:
         f"`sim/{experiment}/{tb_dir}/tb.json`",
         f"  - Netlist snapshot: `sim/{experiment}/{SNAPSHOT_DIR}/{record_id}.spice`",
         f"  - Raw logs: `sim/{experiment}/{CORNERS_DIR}/{record_id}/`",
+    ]
+    for table in record.get("derived_tables") or []:
+        lines.append(
+            f"  - Extracted metrics: "
+            f"`sim/{experiment}/{CORNERS_DIR}/{record_id}/{table['name']}.csv`"
+        )
+    lines += [
         f"- **Timestamp / author**: {record['started_utc']}, {env['user']}",
         f"- **Supersedes**: {record['supersedes'] or '(none)'}",
         "",

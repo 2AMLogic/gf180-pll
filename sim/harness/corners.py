@@ -29,7 +29,11 @@ exist for claims that do depend on them (e.g. the loop filter).
 from __future__ import annotations
 
 import itertools
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+
+#: Symbolic names a grid block may use instead of a numeric supply, so a
+#: thinning rule survives a ``--supply`` / ``--supply-tol`` override.
+SUPPLY_ALIASES = ("low", "nom", "high")
 
 # Default PVT axes. CLAUDE.md and sim/README.md mandate these on every
 # recorded result unless the record states why a subset was used.
@@ -160,6 +164,81 @@ def supply_points(
 
 
 @dataclass(frozen=True)
+class SweepPoint:
+    """One point on an *extra* sweep axis, beyond process/voltage/temperature.
+
+    ``id`` is the ``<name><value>`` field ``sim/README.md`` appends to a
+    corner-id (``f200``, ``n64``, ``e0400``), and ``params`` are the deck
+    parameters this point injects -- including any *derived* ones (a stop
+    time computed from the rate, a one-hot modulus encoding of N), which is
+    exactly what a single fixed ``params`` map cannot express.
+    """
+
+    axis: str
+    id: str
+    params: tuple[tuple[str, str], ...] = ()
+    description: str = ""
+
+    @property
+    def param_map(self) -> dict[str, str]:
+        return dict(self.params)
+
+
+@dataclass(frozen=True)
+class SweepAxis:
+    """A named extra axis and its declared points, in manifest order."""
+
+    name: str
+    points: tuple[SweepPoint, ...]
+    description: str = ""
+
+    @property
+    def ids(self) -> tuple[str, ...]:
+        return tuple(p.id for p in self.points)
+
+    def select(self, ids: list[str] | tuple[str, ...] | None) -> tuple[SweepPoint, ...]:
+        """The declared points named by ``ids`` (all of them when ``ids`` is empty)."""
+        if not ids:
+            return self.points
+        by_id = {p.id: p for p in self.points}
+        unknown = [i for i in ids if i not in by_id]
+        if unknown:
+            raise KeyError(
+                f"axis {self.name!r} has no point(s) {unknown}; "
+                f"declared points: {', '.join(self.ids)}"
+            )
+        # Declaration order, not the caller's -- the run order is a property of
+        # the manifest so two invocations naming the same points agree.
+        return tuple(p for p in self.points if p.id in set(ids))
+
+
+@dataclass(frozen=True)
+class GridBlock:
+    """One slice of the PVT x extra-axis space that a run actually covers.
+
+    The campaigns this exists for do **not** run the full cross-product: the
+    divider chain sweeps N = 4..64 at two stress corners only, three N over
+    the full 45-point grid, and drops most of the N = 64 supply points. A run's
+    point set is therefore the *union* of blocks like this one, each carrying
+    the ``description`` that justifies it in the record -- rather than a
+    rectangular product plus an unexplained hole.
+
+    An empty tuple on any axis means "everything the run resolved for that
+    axis", so a block that only thins one axis says only that.
+    """
+
+    description: str
+    corners: tuple[str, ...] = ()
+    temperatures_c: tuple[float, ...] = ()
+    supplies: tuple[float | str, ...] = ()
+    axes: tuple[tuple[str, tuple[str, ...]], ...] = ()
+
+    @property
+    def axis_map(self) -> dict[str, tuple[str, ...]]:
+        return dict(self.axes)
+
+
+@dataclass(frozen=True)
 class PvtPoint:
     """One point in the PVT grid -- exactly one ngspice invocation."""
 
@@ -167,26 +246,63 @@ class PvtPoint:
     temp_c: float
     vdd: float
     index: int = field(default=0, compare=False)
+    #: Selected point on each declared extra axis, in axis-declaration order.
+    axis_points: tuple[SweepPoint, ...] = ()
+    #: Description of the grid block this point was first produced by ("" for
+    #: a plain full-factorial run). Excluded from equality: two blocks that
+    #: overlap describe the *same* simulation, which is run once.
+    block: str = field(default="", compare=False)
 
     @property
     def corner_id(self) -> str:
-        """The ``<process>_<temp>c_<supply>v`` id from ``sim/README.md``.
+        """The ``<process>_<temp>c_<supply>v[_<extra>...]`` id from ``sim/README.md``.
 
         This is the ratified corner naming for evidence records: the raw log
         for this point is ``corners/<record-id>/<corner-id>.log`` (e.g.
         ``ss_-40c_2.97v.log``, ``typical_27c_3.30v.log``). Supply is always
         written to two decimals per the README's naming convention.
+
+        A campaign that sweeps an independent variable *in addition to* the
+        PVT grid appends one further ``_``-separated ``<name><value>`` field
+        per extra axis, in axis-declaration order --
+        ``ss_125c_2.97v_f200_n64`` -- which is the convention ``sim/README.md``
+        already ratifies under "Campaigns that sweep beyond the PVT grid".
         """
-        return f"{self.corner.name}_{self.temp_c:g}c_{self.vdd:.2f}v"
+        base = f"{self.corner.name}_{self.temp_c:g}c_{self.vdd:.2f}v"
+        return base + "".join(f"_{sp.id}" for sp in self.axis_points)
+
+    @property
+    def axes(self) -> dict[str, str]:
+        """``{axis-name: point-id}`` for this point's extra axes."""
+        return {sp.axis: sp.id for sp in self.axis_points}
+
+    @property
+    def params(self) -> dict[str, str]:
+        """Deck parameters contributed by this point's extra axes.
+
+        Later axes win on a key collision, which is what lets a fine-grained
+        axis (N) override a coarse one's default (the timestep chosen per
+        rate) rather than forcing every axis to name a disjoint parameter set.
+        """
+        out: dict[str, str] = {}
+        for sp in self.axis_points:
+            out.update(sp.param_map)
+        return out
 
     def as_dict(self) -> dict:
-        return {
+        record = {
             "corner": self.corner.name,
             "corner_sections": list(self.corner.sections),
             "temp_c": self.temp_c,
             "vdd": self.vdd,
             "corner_id": self.corner_id,
         }
+        if self.axis_points:
+            record["axes"] = self.axes
+            record["axis_params"] = self.params
+        if self.block:
+            record["grid_block"] = self.block
+        return record
 
 
 def build_grid(
@@ -202,3 +318,128 @@ def build_grid(
         )
     ]
     return points
+
+
+def resolve_block_supplies(
+    spec: tuple[float | str, ...], supplies: list[float]
+) -> list[float]:
+    """A grid block's supply restriction, resolved against the run's supplies.
+
+    Entries are either numeric (matched to a resolved supply within 1e-6, so a
+    manifest may spell the rail it means) or one of ``low`` / ``nom`` /
+    ``high``, which track the *ends* of whatever supply list the run resolved
+    and therefore survive a ``--supply`` / ``--supply-tol`` override. A numeric
+    entry that matches nothing contributes nothing rather than silently
+    widening the block.
+    """
+    if not spec:
+        return list(supplies)
+    ordered = sorted(supplies)
+    aliases = {
+        "low": ordered[0],
+        "nom": ordered[len(ordered) // 2],
+        "high": ordered[-1],
+    }
+    chosen: list[float] = []
+    for entry in spec:
+        if isinstance(entry, str):
+            if entry not in aliases:
+                raise KeyError(
+                    f"unknown supply alias {entry!r}; use a number or one of "
+                    + ", ".join(SUPPLY_ALIASES)
+                )
+            wanted = [aliases[entry]]
+        else:
+            wanted = [v for v in ordered if abs(v - float(entry)) < 1e-6]
+        for value in wanted:
+            if value not in chosen:
+                chosen.append(value)
+    return [v for v in supplies if v in chosen]
+
+
+def build_sweep_grid(
+    corners: list[Corner],
+    temperatures: list[float] | tuple[float, ...],
+    supplies: list[float],
+    axes: list[SweepAxis] | tuple[SweepAxis, ...] = (),
+    blocks: list[GridBlock] | tuple[GridBlock, ...] = (),
+    axis_filter: dict[str, list[str]] | None = None,
+) -> list[PvtPoint]:
+    """The point set of a run that sweeps extra axes, possibly non-rectangularly.
+
+    With no ``axes`` this is exactly :func:`build_grid`. With axes and no
+    ``blocks`` it is the full cross-product of the PVT grid and every declared
+    axis point. With ``blocks`` it is the **union** of those blocks, in block
+    order, de-duplicated by corner-id keeping the first occurrence -- so an
+    overlapping block re-states coverage without re-simulating it, and the
+    point that survives is attributed to the block that first asked for it.
+
+    ``axis_filter`` (``{axis: [point-id, ...]}``, from ``--axis``) narrows the
+    declared points of an axis before the blocks are applied, so a debugging
+    run can thin an axis without editing the manifest.
+    """
+    if not axes:
+        return build_grid(corners, temperatures, supplies)
+
+    axis_filter = axis_filter or {}
+    unknown_axes = sorted(set(axis_filter) - {a.name for a in axes})
+    if unknown_axes:
+        raise KeyError(
+            f"no sweep axis {unknown_axes}; declared axes: "
+            + ", ".join(a.name for a in axes)
+        )
+    available = {a.name: a.select(axis_filter.get(a.name)) for a in axes}
+
+    effective = blocks or (GridBlock(description=""),)
+    corner_by_name = {c.name: c for c in corners}
+    seen: dict[str, PvtPoint] = {}
+    for block in effective:
+        block_corners = (
+            [corner_by_name[n] for n in block.corners if n in corner_by_name]
+            if block.corners
+            else list(corners)
+        )
+        block_temps = (
+            [t for t in temperatures if any(abs(t - b) < 1e-6 for b in block.temperatures_c)]
+            if block.temperatures_c
+            else list(temperatures)
+        )
+        block_supplies = resolve_block_supplies(block.supplies, supplies)
+        wanted = block.axis_map
+        try:
+            block_axes = [
+                [p for p in available[a.name] if not wanted.get(a.name) or p.id in wanted[a.name]]
+                for a in axes
+            ]
+        except KeyError as exc:  # pragma: no cover - guarded by the loader
+            raise KeyError(f"grid block {block.description!r}: {exc}") from exc
+        for combo in itertools.product(
+            block_corners, block_temps, block_supplies, *block_axes
+        ):
+            corner, temp, vdd = combo[0], combo[1], combo[2]
+            point = PvtPoint(
+                corner=corner,
+                temp_c=float(temp),
+                vdd=float(vdd),
+                index=len(seen),
+                axis_points=tuple(combo[3:]),
+                block=block.description,
+            )
+            seen.setdefault(point.corner_id, point)
+    # Re-index so the surviving points number contiguously; de-duplication
+    # would otherwise leave gaps wherever two blocks overlapped.
+    return [replace(p, index=i) for i, p in enumerate(seen.values())]
+
+
+def empty_blocks(
+    blocks: list[GridBlock] | tuple[GridBlock, ...], points: list[PvtPoint]
+) -> list[str]:
+    """Declared grid blocks this run produced no point for.
+
+    A block can come up empty when the CLI narrows an axis the block depends
+    on (``--corners typical`` against a block scoped to ``ss``/``ff``). That is
+    legitimate for a debugging run but must never pass silently, because the
+    record would otherwise claim coverage the run does not have.
+    """
+    covered = {p.block for p in points}
+    return [b.description for b in blocks if b.description not in covered]

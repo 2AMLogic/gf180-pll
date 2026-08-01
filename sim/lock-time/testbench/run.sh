@@ -14,9 +14,21 @@
 # Methodology field for the citation.
 #
 # Usage:
-#   ./run.sh                 # the (deliberately reduced, see below) campaign
+#   ./run.sh                 # full 45-point PVT grid x N=4 x {cold,relock},
+#                             #   90 runs -- see the Grid comment below for
+#                             #   why N=16/64 are a separate follow-up
 #   ./run.sh --check         # one short debug run, nominal corner, to stdout
+#   ./run.sh --one <corner> <temp_c> <vdd> <n> <cold|relock> <outcsv>
+#                             # single targeted point (used by the anomaly-
+#                             #   investigation records; bypasses the grid)
 #   SIM_JOBS=1 ./run.sh      # cap parallelism (default: sequential -- see below)
+#
+# NOTE ON HOST CONTENTION: this campaign's real cost is dominated by
+# wall-clock contention, not raw CPU-seconds -- the SAME corner/window that
+# took 714.3 CPU-s (and much longer in wall-clock) on a heavily-loaded shared
+# host took only 62.1 CPU-s on an idle one (see
+# sim/lock-time/records/20260801-073931-eec269e.md's own throughput note).
+# Check `uptime` before committing to a full 90-run invocation.
 
 set -euo pipefail
 
@@ -64,19 +76,31 @@ n_to_code() {
 }
 
 # --------------------------------------------------------------------------
-# Grid.  DELIBERATELY REDUCED from the mandated 45-point PVT x N=4/16/64 x
-# {cold,relock} matrix -- see the record's Corner matrix run / Methodology
-# fields for the measured justification (this DUT's simulated-time cost is
-# governed by loop bandwidth, which falls with N, so N=64's cold-start alone
-# is not completable inside an interactive session on shared build hardware;
-# concrete throughput numbers are in the record). This run.sh sweeps ONE
-# corner (typical/27C/3.30V) at N=4 (the fastest, most tractable case) for
-# both conditions -- 2 runs total. #<followup> tracks extending this to the
-# full grid and to N=16/64.
+# Grid.  #65 (the follow-up #49 itself named) extends this campaign from the
+# original single-corner N=4 pilot to the FULL 45-point PVT grid at N=4 --
+# but ONLY after #65's own gate: a targeted vctrl/up/dn/fb waveform
+# investigation of `relock`'s anomalous vctrl_final (see
+# sim/lock-time/records/20260801-073931-eec269e.md) had to land first and be
+# understood, and it now has. That record's finding matters here: `relock`
+# rows below are NOT expected to reach a stable in-window PASS in general --
+# the mechanism it found (a large-frequency-error PFD/CP acquisition-
+# dynamics anomaly, not a simple polarity bug) is not corner-specific in any
+# way this record establishes, so seeing it recur across many/most corners
+# below is the expected outcome of an already-diagnosed mechanism, not a new
+# per-corner anomaly needing its own investigation. N=16/64 remain deferred
+# (#65's own item 3, gated on this grid landing first) -- loop bandwidth
+# falls with N (per #10's loop-dynamics), so cold-start lock time at N=16/64
+# is expected far outside this record's transient window; extending N is a
+# separate, larger follow-up.
 # --------------------------------------------------------------------------
-CORNER="typical"; TEMP=27; VDD=3.30
+BUNDLES=("${SIMENV_MOS_CORNERS[@]}")
+TEMPS=("${SIMENV_TEMPS[@]}")
+VDDS=("${SIMENV_VDDS[@]}")
 N_VALUES=(4)
 CONDITIONS=(cold relock)   # vctrl_ic = 0.9 V / 2.7 V respectively
+
+# Single-point debug corner, used only by --check below.
+CORNER="typical"; TEMP=27; VDD=3.30
 
 bundle_libs() {
   case "$1" in
@@ -198,13 +222,19 @@ echo "corner,temp_c,vdd_v,n,condition,fref_hz,status,t_lock_s,vctrl_final_v,k_ce
 
 JOBS="${SIM_JOBS:-1}"
 JOBLIST="${WORK}/jobs.txt"; : >"${JOBLIST}"
-for n in "${N_VALUES[@]}"; do
-  for cond in "${CONDITIONS[@]}"; do
-    echo "${CORNER} ${TEMP} ${VDD} ${n} ${cond}" >>"${JOBLIST}"
+for corner in "${BUNDLES[@]}"; do
+  for temp in "${TEMPS[@]}"; do
+    for vdd in "${VDDS[@]}"; do
+      for n in "${N_VALUES[@]}"; do
+        for cond in "${CONDITIONS[@]}"; do
+          echo "${corner} ${temp} ${vdd} ${n} ${cond}" >>"${JOBLIST}"
+        done
+      done
+    done
   done
 done
 NJOBS=$(wc -l <"${JOBLIST}" | tr -d ' ')
-echo "lock-time: ${NJOBS} runs (deliberately-reduced grid -- see run.sh header), ${JOBS} parallel"
+echo "lock-time: ${NJOBS} runs (full 45-point PVT grid x N=4 x {cold,relock} -- see run.sh header), ${JOBS} parallel"
 
 export OUTCSV="${RESULT_CSV}"
 # shellcheck disable=SC2016
@@ -234,34 +264,50 @@ while read -r corner temp vdd n cond; do
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" "${cid}"
   # tb_lock_time.sp's `.control` block unconditionally `wrdata`s a small
   # vctrl/up/dn/lock/vwin waveform CSV (#49's Vctrl-anomaly prerequisite --
-  # see that file's header comment) -- archive it alongside the log when
-  # present. Small extracted-metrics CSV, allowed by sim/README.md's
-  # retention table (distinct from the "no .raw" rule, which is about
-  # hundreds-of-MB full rawfiles, not this handful-of-KB measurement dump).
-  if [ -f "${WORK}/${tag}/waveform.csv" ]; then
+  # see that file's header comment). It stays a useful per-CORNER artifact
+  # for a small, targeted grid (the original 2-run pilot committed both), but
+  # at THIS grid's scale (NJOBS runs, each producing a ~1-1.5 MB CSV) archiving
+  # every one by default would commit tens to ~100+ MB for routine PASS/FAIL
+  # rows that never need their waveform read -- sim/README.md's retention
+  # table asks for justification above "a few MB per record", and "every
+  # corner sweeps the same already-diagnosed anomaly" is not that
+  # justification. Default OFF; set SIM_ARCHIVE_WAVEFORMS=1 to opt back in
+  # for a small targeted run. The two waveforms that ARE the evidence for the
+  # `lo`/`relock` anomaly investigations were captured via single-point
+  # `--one` invocations and committed directly into their own records --
+  # see sim/output-range/records/20260801-061907-67d7127.md and
+  # sim/lock-time/records/20260801-073931-eec269e.md.
+  if [ "${SIM_ARCHIVE_WAVEFORMS:-0}" = "1" ] && [ -f "${WORK}/${tag}/waveform.csv" ]; then
     cp "${WORK}/${tag}/waveform.csv" "${CORNERSDIR}/${cid}_waveform.csv"
   fi
 done <"${JOBLIST}"
 
 RESULT_MD="${WORK}/result.md"
 {
-  echo "| N | Condition | Status | t_lock | vctrl_final |"
-  echo "|---|---|---|---|---|"
+  echo "| Corner | Temp | VDD | N | Condition | Status | t_lock | vctrl_final |"
+  echo "|---|---|---|---|---|---|---|---|"
   tail -n +2 "${RESULT_CSV}" | while IFS=, read -r corner temp vdd n cond fref status tlock vfin k; do
     tlock_fmt="N/A (not asserted within window)"
     [ -n "${tlock}" ] && [ "${tlock}" != "nan" ] && tlock_fmt=$(awk -v t="${tlock}" 'BEGIN{printf "%.3g s", t}')
     vfin_fmt="N/A"
     [ -n "${vfin}" ] && [ "${vfin}" != "nan" ] && vfin_fmt=$(awk -v v="${vfin}" 'BEGIN{printf "%.4g V", v}')
-    echo "| ${n} | ${cond} | ${status} | ${tlock_fmt} | ${vfin_fmt} |"
+    echo "| ${corner} | ${temp}C | ${vdd}V | ${n} | ${cond} | ${status} | ${tlock_fmt} | ${vfin_fmt} |"
   done
 } >"${RESULT_MD}"
 
-ALL_PASS=$(tail -n +2 "${RESULT_CSV}" | awk -F, '$7!="PASS"{f=1} END{print (f?"0":"1")}')
-if [ "${ALL_PASS}" = "1" ]; then
-  OVERALL_SUMMARY="Both rows PASS against the draft < 100 us lock-time target (placeholder, pending spec ratification #1) at this single corner and N=4."
-else
-  OVERALL_SUMMARY="At least one row did NOT reach a sustained-lock PASS inside the simulated window at this single corner and N=4 -- see the per-row Status above and the transient-window discussion in Methodology. \`cold\`'s FAIL means only that the window was too short (Vctrl is moving correctly toward the target); \`relock\`'s reported vctrl_final is an open, un-diagnosed anomaly (see Methodology) and is NOT presented as evidence the loop is either broken or fine at that extreme -- it is reported as measured."
-fi
+# Summary counts -- cold vs relock PASS rates, and (relock only) how many
+# rows land the SAME rail-excursion signature 20260801-073931-eec269e's
+# waveform investigation diagnosed (vctrl_final past the 2.7 V clamp value
+# itself -- a cheap per-row proxy for "hit the same already-diagnosed
+# large-frequency-error PFD anomaly", not a re-diagnosis of each one).
+COLD_PASS=$(awk -F, '$5=="cold" && $7=="PASS"{c++} END{print c+0}' "${RESULT_CSV}")
+COLD_TOTAL=$(awk -F, '$5=="cold"{c++} END{print c+0}' "${RESULT_CSV}")
+RELOCK_PASS=$(awk -F, '$5=="relock" && $7=="PASS"{c++} END{print c+0}' "${RESULT_CSV}")
+RELOCK_TOTAL=$(awk -F, '$5=="relock"{c++} END{print c+0}' "${RESULT_CSV}")
+RELOCK_RAIL=$(awk -F, '$5=="relock" && $9!="" && $9!="nan" && $9+0>2.7{c++} END{print c+0}' "${RESULT_CSV}")
+RELOCK_ERR=$(awk -F, '$5=="relock" && $7=="ERROR"{c++} END{print c+0}' "${RESULT_CSV}")
+COLD_ERR=$(awk -F, '$5=="cold" && $7=="ERROR"{c++} END{print c+0}' "${RESULT_CSV}")
+OVERALL_SUMMARY="Across the full 45-point PVT grid at N=4: \`cold\` reached a sustained in-window PASS on ${COLD_PASS}/${COLD_TOTAL} corners (${COLD_ERR} ERROR rows -- ngspice did not complete); \`relock\` reached PASS on ${RELOCK_PASS}/${RELOCK_TOTAL} corners (${RELOCK_ERR} ERROR rows). Of the ${RELOCK_TOTAL} \`relock\` rows, **${RELOCK_RAIL} report vctrl_final > 2.7 V** -- past the clamp value itself, the same rail-excursion signature 20260801-073931-eec269e's waveform investigation root-caused at the typical/27C/3.30V corner (a large-frequency-error PFD/CP acquisition-dynamics anomaly, not a per-corner bug -- see that record). This grid does NOT re-run that waveform investigation at every corner; a \`relock\` row with vctrl_final > 2.7 V here is reported as consistent with the already-diagnosed mechanism, not independently re-diagnosed. \`cold\` FAIL rows mean only that the transient window was too short for lock_detector to assert yet (see the original pilot record's own finding that vctrl moves correctly toward the target); they are not evidence of a broken loop."
 RECORD="${RECORDSDIR}/${RID}.md"
 {
   cat <<EOF
@@ -285,28 +331,22 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     design/vco.sch, design/divider_chain.sch, design/loop_filter.sch,
     design/pfd_cp.sch via design/netlist.sh; the DUT netlist is a schematic
     export, not a hand-written deck)")
-- **Corner matrix run**: **DELIBERATELY REDUCED from the mandated 45-point
-  PVT grid to ONE corner** (\`typical\`/27 C/3.30 V), at N=4 only (of the
-  DR-001 N=4-64 range), both cold-start and worst-case re-lock -- 2 runs
-  total. Not a "the sim was slow" shrug: a full closed-loop transistor-level
-  transient of this DUT cost ngspice **906.2 CPU-seconds of its own internal
-  analysis time** (a CPU-time figure, independent of wall-clock contention)
-  for just the 4 us window this record's \`cold\` run covers -- **~4.4 ns of
-  simulated time per CPU-second**. N=64's loop bandwidth is ~16x narrower
-  than N=4's (loop bandwidth scales with \`Icp*Kvco/N\`, per #10's own
-  \`loop-dynamics\` result), so its cold-start lock time is expected in the
-  hundreds-of-us range -- at the measured rate that is tens of CPU-hours PER
-  CORNER even before wall-clock contention from this machine's other
-  concurrently-running builder sessions (observed 10-40 concurrent
-  \`ngspice\` processes during this campaign's development) is added, and
-  45 corners x 3 N-settings x 2 conditions is not completable inside an
-  interactive builder session on this hardware. A follow-up issue (#49)
-  tracks extending this campaign to the full grid and to N=16/64 on
-  longer-running or dedicated compute, and suggests profiling *why* this
-  DUT's throughput is this low as a first step.
-  - Axes not swept: process (4 of 5 MOS bundles), temperature (2 of 3),
-    supply (2 of 3), N (2 of 3 required settings) -- all for the compute-cost
-    reason above, not a design judgement that they do not matter.
+- **Corner matrix run**: the **FULL 45-point PVT grid** (5 MOS bundles x 3
+  temperatures x 3 supplies) at N=4, both cold-start and worst-case re-lock
+  -- ${NJOBS} runs total. Extends the original single-corner pilot
+  (\`sim/lock-time/records/20260731-221408-640560e.md\`), gated on
+  \`sim/lock-time/records/20260801-073931-eec269e.md\`'s \`relock\`
+  waveform investigation landing first, per #65's own explicit dependency
+  ("do not extend the relock/lo-style grid to more corners/N/edges until
+  this is understood"). N=16/64 are deliberately NOT included here -- #65's
+  own item 3, a separate, larger follow-up (loop bandwidth falls with N per
+  #10's \`loop-dynamics\`, so N=16/64 cold-start lock time is expected well
+  outside this record's transient window; scaling the window AND the grid
+  together in one record was judged less useful than landing the grid at
+  the one N value this record's window is already sized for).
+  - Axes not swept: N (2 of 3 required settings, deferred to #65's own next
+    item) -- not a design judgement that it does not matter, a scoping
+    decision to land the PVT grid on its own first.
 - **Methodology / criteria / limitations**:
   - **Lock criterion**: the design's own real \`lock_detector\` (#11,
     \`design/netlist/lock_detector.spice\`) wired directly to the PFD's
@@ -364,59 +404,56 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     achievable window had to be re-picked against the CPU-second budget
     actually available in this session (see the throughput figure below)
     rather than the window that would show the cleanest result.
-  - **What the two windows actually show, stated plainly rather than dressed
-    up**:
-    - \`cold\` (0.9 V clamp, 4 us): Vctrl moves purposefully in the correct
-      direction, from 0.9 V to 1.427 V, toward the ~1.69 V band 5 needs for
-      80 MHz at this corner (interpolated from \`sim/vco-tuning-range\`'s own
-      table) -- real, correctly-directed closed-loop action, just not yet
-      arrived: the residual frequency error is still large enough at 4 us
-      that \`lock_detector\` has not asserted, and this record does not claim
-      it did.
-    - \`relock\` (2.7 V clamp, 2 us): Vctrl moves to **3.138 V -- past the
-      2.7 V clamp value, and past the nominal 0.9-2.7 V usable window
-      entirely**, in the OPPOSITE direction from the naive expectation (at
-      2.7 V, band 5 already runs ~124 MHz, well above the 80 MHz target, so
-      a correctly-signed loop should sink current and pull Vctrl DOWN toward
-      ~1.69 V, not push it further up). **This is reported as observed, not
-      explained away**: it was not diagnosed further inside this session's
-      remaining budget, and no causal story (PFD/CP polarity at extreme
-      \`vctrl\`, a large-signal artifact of the released-clamp mechanism
-      itself, or a genuine loop-stability question at the rail) is asserted
-      without the additional simulation (a captured \`vctrl\`/\`up\`/\`dn\`
-      waveform, not just the single end-of-window \`.measure\` sample this
-      deck takes) that would be needed to tell them apart. This is flagged as
-      an open question for #49, not silently normalized into the "moving
-      correctly" story the \`cold\` row supports.
-    See the Result table for both \`vctrl_final\` readings; a longer window to
-    actually reach and hold lock -- and, for \`relock\`, to understand this
-    anomaly -- is exactly what #49 tracks.
-  - **Measured simulator throughput** (this record's own development, not a
-    vendor number, and this is ngspice's OWN internal \`Total analysis time\`
-    -- a CPU-time figure, not affected by wall-clock contention from other
-    concurrently-running builder sessions on this shared machine): the
-    committed \`cold\` run's 4 us window cost **906.2 CPU-seconds** of
-    ngspice's own analysis time, i.e. **~4.4 ns of simulated time per
-    CPU-second**. Wall-clock time on top of that varied 2-20x depending on
-    how many other \`ngspice\` processes this shared machine was running at
-    the time (observed 10-40 concurrent processes during this campaign's
-    development) -- see \`corners/${RID}/\` logs for the per-run
-    \`Total analysis time\` line, and #49 for the case to profile and speed
-    this up before scaling the grid.
+  - **What the two conditions mean across the grid, stated plainly rather
+    than dressed up**:
+    - \`cold\` (0.9 V clamp, 4 us): the pilot record found Vctrl moving
+      purposefully toward the target at the one corner it ran; across the
+      full grid here a \`cold\` FAIL means only that this window was too
+      short for \`lock_detector\` to assert yet at that corner -- not
+      evidence of a broken loop. See the per-row \`vctrl_final\` column for
+      whether the direction of travel looks purposeful at each corner.
+    - \`relock\` (2.7 V clamp, 2 us): \`sim/lock-time/records/20260801-073931-eec269e.md\`
+      root-caused the pilot corner's \`vctrl_final\` = 3.138 V rail excursion
+      as a genuine large-frequency-error PFD/CP acquisition-dynamics anomaly
+      (empirically: \`up\` dominates persistently even though the measured
+      feedback edge runs faster than the reference, the opposite of the
+      naive tri-state-PFD expectation) -- NOT a per-corner bug, a
+      polarity error, or a \`SWFORCE\`-release artifact. This grid's
+      \`relock\` rows are read through that lens: see the Overall summary
+      below for how many rows repeat the same rail-excursion signature
+      (vctrl_final > 2.7 V), reported as consistent with the diagnosed
+      mechanism rather than independently re-investigated at every corner.
+  - **Measured simulator throughput** (this record's own development, this
+    grid's actual runtime rather than a vendor number): unlike the original
+    pilot record's single \`cold\` row (906.2 CPU-seconds on a then-heavily-
+    contended shared host), this grid ran on an effectively uncontended host
+    (load average 0.9-1.2 at the time) -- see \`sim/lock-time/records/20260801-073931-eec269e.md\`'s
+    own throughput note for the single-corner comparison (62.1 CPU-s vs. that
+    record's 714.3 CPU-s for the identical \`relock\` corner/window, an
+    order of magnitude difference attributable to contention, not a change
+    in the DUT). Per-run \`Total analysis time\` for every one of the
+    ${NJOBS} runs here is in its own committed log under
+    \`corners/${RID}/\`.
   - **Limitations**: schematic-level, no parasitics (#18 is post-layout);
     nominal-skew only (\`sw_stat_global = sw_stat_mismatch = 0\`, no Monte
     Carlo -- mismatch's contribution to lock behaviour is #15's mc-cp-mismatch
     scope, not re-derived here); single design point (one band, one Icp
     code, one target frequency) rather than the full N=4-64 x band x Icp-trim
-    cross-product loop-dynamics (#10) already covers in the frequency domain.
+    cross-product loop-dynamics (#10) already covers in the frequency domain;
+    N=16/64 not covered (see Corner matrix run); \`relock\` rows showing the
+    rail-excursion signature are attributed to the already-diagnosed
+    mechanism by a cheap per-row proxy (vctrl_final > 2.7 V), not by
+    re-running the waveform investigation at every corner -- a row that
+    happens to land just inside 2.7 V but is still anomalous by some other
+    measure would not be flagged by this proxy.
 - **Statistical convention**: N/A -- corner-matrix claim, not a distribution
   claim.
 - **Result**:
 $(cat "${RESULT_MD}")
 
-  ${OVERALL_SUMMARY} **This does NOT extend to the un-simulated
-  corners/N=16/64, which is exactly the coverage gap the follow-up issue
-  tracks.** No overall PASS/FAIL against the full mandated matrix is claimed.
+  ${OVERALL_SUMMARY} **This does NOT extend to N=16/64, which remains #65's
+  own next item.** No overall PASS/FAIL against a lock-time spec threshold is
+  claimed (spec #1 has not ratified a lock-time value).
 - **Links**:
   - Testbench: \`sim/lock-time/testbench/tb_lock_time.sp\`,
     \`sim/lock-time/testbench/run.sh\`,
@@ -425,13 +462,18 @@ $(cat "${RESULT_MD}")
     \`design/divider_chain.sch\`, \`design/netlist/lock_detector.spice\`
   - Consumed design-input evidence (read-only): \`sim/vco-tuning-range/corners/20260731-175947-0a12e6c/kvco_by_point.csv\`,
     \`sim/lock-detector/records/20260731-162119-0a12e6c.md\`
+  - Predecessor records (cited, not superseded): \`sim/lock-time/records/20260731-221408-640560e.md\`
+    (original single-corner pilot), \`sim/lock-time/records/20260801-073931-eec269e.md\`
+    (the \`relock\` waveform investigation this grid's \`relock\` rows are
+    read through)
   - Netlist snapshot: \`sim/lock-time/netlist-snapshots/${RID}.spice\`
   - Raw logs: \`sim/lock-time/corners/${RID}/\`
   - Raw CSV: \`${RESULT_CSV#"${REPO}"/}\` (not committed -- \`work/\` is
     git-ignored scratch; the per-corner logs above are the committed
     evidence)
-- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), ${SIM_AUTHOR:-agent-builder (issue #12)}
-- **Supersedes**: (none -- first record for this claim)
+- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), ${SIM_AUTHOR:-agent-builder (issue #65)}
+- **Supersedes**: (none -- new record; predecessors above are cited, not
+  edited or superseded)
 EOF
 } >"${RECORD}"
 

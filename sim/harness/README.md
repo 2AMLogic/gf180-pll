@@ -19,6 +19,7 @@ sim/
   pdk.json                  committed PDK defaults (variant, extra search roots)
   pdk.local.json            machine-local PDK override (git-ignored, optional)
   harness/                  the runner itself (this directory)
+    derived.py              extension point for campaign-supplied reductions
   tests/                    harness unit tests (no PDK, no ngspice required)
 
   <experiment-slug>/        one per claim under test -- see sim/README.md
@@ -106,6 +107,7 @@ Override any axis from the command line:
 python3 sim/run_corners.py harness-selftest --corner-set full -j 8
 python3 sim/run_corners.py harness-selftest --corners typical res_ss --temps -40 125
 python3 sim/run_corners.py harness-selftest --supply 5.0 --supply-tol 0.10   # a different flavor
+python3 sim/run_corners.py my-campaign --axis n=n64 --axis rate=f200         # thin an extra axis
 ```
 
 **Subsets need a reason.** `sim/README.md` requires every record's *Corner
@@ -158,6 +160,11 @@ distinct claim under test, kebab-case.
   "checks": {"vref": {"min": 1.15, "max": 1.25, "max_spread_pct": 2.0}}
 }
 ```
+
+Five further keys are optional and default to off — `topology_groups` (record
+layout), `dut` (compose a committed netlist export), `sweeps` + `grid` (extra
+sweep axes, possibly non-rectangular) and `derived` (campaign-supplied
+reductions). Each has its own section below.
 
 `claim` is the default for the record's **Claim** field, in either of the two
 forms `sim/README.md` accepts: a ratified spec line (`spec/pll.md#anchor`) or
@@ -289,6 +296,247 @@ Omit the key — as every single-topology testbench, including
 `harness-selftest`, does — and the record renders exactly the flat table it
 always has.
 
+### Composing a committed DUT export: `dut` (optional)
+
+Most campaigns here simulate a block whose netlist `design/netlist.sh` exports
+from an xschem schematic to `design/netlist/<block>.spice`. The testbench
+fragment should *instantiate* that block, not contain a copy of it — a pasted
+copy makes the committed fragment a generated artefact that silently goes
+stale the next time the schematic changes.
+
+`dut` names the export(s), **repo-root-relative**, composed ahead of the
+fragment:
+
+```json
+{
+  "dut": ["design/netlist/div23_cell.spice"],
+  "netlist": "tb_div23_cell.sp"
+}
+```
+
+- The generated deck `.include`s each `dut` file **before** the fragment (the
+  exports define the subcircuits the fragment instantiates), so a failing
+  corner can still be re-run by hand against the live sources.
+- The **netlist snapshot** (`netlist-snapshots/<record-id>.spice`) inlines them
+  instead: one self-contained DUT + stimulus file, each chunk headed by its
+  own source path and sha256, plus a `composed_sha256` over the whole. That is
+  the same self-contained artefact `sim/lib/assemble_closed_loop.sh` produces
+  by concatenation — without the committed fragment ever holding a copy.
+- The record's **Netlist provenance** field names every source with its own
+  sha256, so a record says exactly which export it froze.
+- A `dut` export is held to the same rule as a fragment: no `.include`,
+  `.lib`, `.temp`, `.control`, `.endc`, `.end`, `.measure`/`.meas`. An export
+  that had picked up a `.lib` would pin every corner of every campaign that
+  names it.
+- A missing export is a load error naming `design/netlist.sh`, not a confusing
+  "unknown subckt" thousands of lines into an ngspice log.
+
+### Sweeping beyond the PVT grid: `sweeps` and `grid` (optional)
+
+Some campaigns sweep an independent variable *in addition to* process,
+voltage and temperature — an input rate, a divide ratio N, a phase-error
+ladder — and each point of that axis needs its own **derived** deck
+parameters (a timestep of `1/(250·kf)`, a stop time of `12/kf`, a one-hot
+encoding of N). One fixed `params` map cannot express that.
+
+`sweeps` declares the axes; each point spells its own id and parameters:
+
+```json
+{
+  "sweeps": {
+    "rate": {
+      "description": "input rate",
+      "points": {
+        "f200": {"params": {"kf": "200e6", "ktstep": "2e-11", "ktstop": "6e-08"}},
+        "f010": {"params": {"kf": "10e6",  "ktstep": "4e-10", "ktstop": "1.2e-06"}}
+      }
+    }
+  },
+  "analyses": ["tran {ktstep} {ktstop}"]
+}
+```
+
+- Each point becomes one further `_`-separated field on the corner-id, in
+  axis-declaration order: `ss_125c_2.97v_f200_n64`. That is the
+  `[<kind>_]<bundle>_<temp>c_<supply>v[_<extra>…]` grammar `sim/README.md`
+  ratifies under "Campaigns that sweep beyond the PVT grid" — the three fixed
+  fields keep their meaning and position, and a campaign that sweeps nothing
+  extra is completely unaffected.
+- **Point ids are written out, not derived from a value.** The convention is
+  `<name><value>` with no separator (`f200`, `n64`, `e0400`), the value spelled
+  exactly as the deck spells it; deriving it would silently rename evidence.
+  `_` is rejected in a point id, because it is the field separator.
+- A point's `params` are emitted **after** the manifest's fixed `params`, so an
+  axis can override a default rather than being forced to name a disjoint
+  parameter set (the N = 64 runs override the timestep chosen per rate).
+- **`analyses` entries are `{name}`-substituted** from `vdd_val`, `vdd_nom`,
+  `temp_c`, the manifest `params` and the point's params. This is load-bearing:
+  ngspice resolves `.param` braces in a top-level `.tran` card, but *not* in
+  the `.control` block the harness runs its analyses from, where the same text
+  fails with "TSTEP is invalid". An unknown placeholder is left untouched.
+- Every axis and its points are named in the record's **Corner matrix run**
+  field, on the same terms as the PVT axes.
+
+With `sweeps` alone the run is the full cross-product of the PVT grid and every
+declared point. Real campaigns are **not** rectangular — the divider chain
+sweeps N = 4…64 at two stress corners only, three N over the full 45-point
+grid, and drops most of the N = 64 supply points. `grid` expresses that as the
+**union of justified slices**:
+
+```json
+{
+  "grid": [
+    {
+      "description": "every N at the two stress corners",
+      "corners": ["ss", "ff"], "temperatures_c": [125], "supplies": ["low"],
+      "axes": {"rate": ["f200"], "n": ["n04", "n33", "n64"]}
+    },
+    {
+      "description": "three N over the full grid",
+      "axes": {"rate": ["f200"], "n": ["n04", "n33"]}
+    },
+    {
+      "description": "N=64 only at the binding (low) supply",
+      "supplies": ["low"], "axes": {"rate": ["f200"], "n": ["n64"]}
+    }
+  ]
+}
+```
+
+| Block key | Meaning |
+|---|---|
+| `description` | **required** — why this slice is run; copied verbatim into the record |
+| `corners` | corner-bundle names; omit for every corner the run resolved |
+| `temperatures_c` | numeric temperatures; omit for all |
+| `supplies` | numbers, and/or the aliases `low` / `nom` / `high`, which track the *ends* of whatever supply list the run resolved so a rule survives `--supply` / `--supply-tol` |
+| `axes` | `{axis: [point-id, …]}`; omit an axis for all of its points |
+
+- The point set is the union of the blocks, in block order, **de-duplicated by
+  corner-id** — an overlapping block re-states coverage without re-simulating
+  it, and the surviving point is attributed to the block that first asked.
+- **Every block must carry a `description`.** That is the structural half of
+  `sim/README.md`'s "every swept variable must be named, with its points, in
+  the record's corner-matrix field": a thinned axis cannot be declared without
+  simultaneously writing down why.
+- The mandated-PVT-matrix gate is unchanged and applies to the **union**: a
+  campaign that thins its extra axis can, and does, still cover the full
+  −40/27/125 °C × ±10 % × five-MOS-bundle matrix. When the extra-axis grid is
+  not a full cross-product the record says so explicitly, with the block list
+  and each block's justification, rather than reading as a rectangle with an
+  unexplained hole.
+- `--axis NAME=ID[,ID…]` narrows an axis for one invocation without editing
+  the manifest. Because that *removes* declared coverage, it is treated exactly
+  like a PVT subset: it needs `--subset-reason` or `--no-write`. A block the
+  CLI starved of points is reported the same way, never silently dropped.
+- A typo — an undeclared axis, an undeclared point id, a repeated block
+  description — is a load error, not a quietly smaller run.
+
+### Expected `.measure` failures: `optional` (optional)
+
+For some campaigns a **failed** `.measure` is the pass condition. A lock
+detector's deep-out-of-lock and frequency-error copies must *never* assert, so
+their `when` measurements are expected to fail at every passing corner; a
+setup/hold ladder deliberately drives copies past their timing limit so their
+capture measurement fails.
+
+Mark those measurements `optional` and an absent result becomes data:
+
+```json
+{
+  "raw_measures": {
+    "tb_asrt": {"analysis": "tran", "expr": "when v(lb)=1.65 rise=1"},
+    "tc_asrt": {"analysis": "tran", "expr": "when v(lc)=1.65 rise=1", "optional": true}
+  },
+  "measure": {"vout": {"expr": "v(out)", "optional": true}},
+  "checks": {"tc_asrt": {"max_measured_points": 0}}
+}
+```
+
+- Only a **required** measurement's absence fails a point. Without the flag, one
+  expected failure marked the whole point `failed` and the report then dropped
+  *every* measurement that point took successfully.
+- The absence is recorded per point (`not_measured`) and rendered as
+  `not measured` in the result table, and the spread table says "not measured
+  at all N completed point(s)" instead of the ambiguous "no data".
+- `measure` entries take the object form `{"expr": …, "optional": true}` to
+  carry the flag; the bare-string form is unchanged and remains the normal
+  spelling. A misspelled key is rejected rather than silently ignored.
+- Spread checks (`max_spread_pct` / `min_spread_pct`) do not apply to an
+  optional measurement that never fired — that is the *expected* outcome, not a
+  violation. Assert on it with the two coverage checks instead:
+
+| Key | Meaning |
+|---|---|
+| `max_measured_points` | at most N points may produce this measurement — `0` is "this must never assert" |
+| `min_measured_points` | at least N points must produce it — "this must always assert" |
+
+### Derived metrics: `derived` (optional)
+
+The harness reports raw per-point measurements plus min/max/spread. Every real
+campaign reports a *reduction* over those, and it is the reduction that is the
+claim: a setup/hold ladder scanned for the smallest passing step, a window-edge
+table over an extra axis, a `retiming_margin.csv` that joins a chain's arrival
+time against a **different record's** setup/hold numbers.
+
+Those reductions are campaign knowledge, not harness knowledge, so the harness
+provides the extension point rather than the logic. A manifest names a python
+module next to its `tb.json`:
+
+```json
+{
+  "derived": {
+    "module": "derive.py",
+    "measures": ["tsetup", "thold"],
+    "tables": ["retiming_margin"],
+    "joins": {"dff": "divider-ratio/corners/<record-id>/dff_setup_hold.csv"}
+  }
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `module` | python file **inside this testbench directory** (a reduction is part of the testbench) |
+| `measures` | per-point derived measurement names, produced by `derive_point()` |
+| `tables` | whole-run derived table names, produced by `derive_tables()` |
+| `joins` | `{alias: sim/-relative CSV}` — another record's table, for a cross-record join |
+
+The module may define either or both hooks, which are handed read-only views
+(`PointView` / `RunView` from `harness/derived.py`) rather than harness
+internals:
+
+```python
+from harness.derived import DerivedTable
+
+def derive_point(point):
+    # point.get(name) is None where a .meas did not fire -- which is what makes
+    # "this ladder step never captured, so it is violated" expressible at all.
+    reference = point.get("cq0")
+    ...
+    return {"tsetup": tsetup}          # names must be declared in 'measures'
+
+def derive_tables(run):
+    dff = run.join("dff").index_by("process", "temp_c", "vdd_v")
+    ...
+    return [DerivedTable(name="retiming_margin", columns=(...), rows=(...))]
+```
+
+- Derived **measures** behave exactly like measured ones downstream — summary,
+  `checks`, `topology_groups`, the record's result table — but are never
+  treated as required: a reduction that finds nothing to reduce is recorded as
+  not-measured, for the same reason an `optional` `.measure` is.
+- Derived **tables** are written to `corners/<record-id>/<name>.csv` (append-only,
+  like every other artefact there) and rendered into the record's **Result**
+  field ahead of the raw per-point table, with a link.
+- Returning an **undeclared** name, or failing to return a **declared** table,
+  is an error — a record that silently omits a declared derived quantity is
+  weaker than the record it replaces, and a name the record has no column for
+  would be dropped without saying so.
+- `--join ALIAS=PATH` supplies or overrides a join input per invocation. That
+  is what makes the cross-record case workable: a committed manifest cannot
+  know which record-id a given run is being closed against.
+- The module is imported lazily (never during `--list`) and namespaced by
+  experiment, so two campaigns may both call their module `derive.py`.
+
 ## What a run writes
 
 One run mints one `<record-id>` (`<YYYYMMDD>-<HHMMSS>-<short-git-sha>`) and
@@ -299,6 +547,7 @@ writes, under `sim/<experiment-slug>/`:
 | `records/<record-id>.md` | the append-only summary record — every field `sim/README.md` mandates: Record ID, Claim, Netlist provenance, Environment provenance, Corner matrix run, Methodology / criteria / limitations, Statistical convention, Result, Links, Timestamp / author, Supersedes |
 | `netlist-snapshots/<record-id>.spice` | verbatim frozen copy of the testbench fragment, with its sha256 |
 | `corners/<record-id>/<corner-id>.log` | raw ngspice output, one file per PVT point |
+| `corners/<record-id>/<name>.csv` | one per `derived.tables` entry — the reduction the record actually claims |
 
 Nothing is ever overwritten: the runner refuses to write over an existing
 record or snapshot, and mints a later record-id if one is somehow already
