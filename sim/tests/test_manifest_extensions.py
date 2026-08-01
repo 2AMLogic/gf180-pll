@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Unit tests for the manifest extensions issues #67 and #78 add.
+"""Unit tests for the manifest extensions issues #67, #78 and #81 add.
 
 No PDK and no ngspice (and, for #78's ``dut_export``, no xschem) required:
 ngspice's output and ``design/netlist.sh`` are both stubbed, so these run
-headless like the rest of ``sim/tests/``.
+headless like the rest of ``sim/tests/``. The one exception is the end-to-end
+``raw_files`` demonstration at the bottom, which drives a *real* ngspice over a
+stub model library (still no PDK) and skips itself when ngspice is absent.
 
     python3 -m unittest discover -s sim/tests -v
 
@@ -22,6 +24,10 @@ need and the manifest could not previously express:
    ``dut``, for a block (``pfd_cp``) ``design/netlist.sh`` deliberately does
    not commit. Resolved lazily -- never at ``load()``/``--list`` time -- and
    composed into the same snapshot/provenance/deck machinery ``dut`` uses.
+6. ``raw_files`` (#81) -- a file the point's OWN deck wrote (``wrdata``),
+   captured per point and handed to the campaign's reduction as a parsed
+   ``RawFile``. This is what makes a *sequence* claim (jitter/TIE, an I-V
+   curve) expressible at all: ``.measure`` reports scalars.
 """
 
 from __future__ import annotations
@@ -1368,6 +1374,568 @@ class CliArgumentTests(unittest.TestCase):
         )
         self.assertEqual(args.axis, ["n=n64"])
         self.assertEqual(args.join, ["dff=x.csv"])
+
+
+# ===========================================================================
+# 6. raw_files -- the point's own waveform, reduced by the campaign
+# ===========================================================================
+
+#: A reduction in the exact shape sim/vco-tuning-range's jitter_extract.py has:
+#: interpolated half-supply rising crossings -> a period *sequence* -> the
+#: peak-to-peak time interval error. `.measure` cannot report any of it.
+TIE_MODULE = '''
+"""Period / TIE extraction from a wrdata-written waveform."""
+
+from harness.derived import DerivedTable
+
+
+def _crossings(t, y, threshold):
+    out = []
+    for i in range(1, len(t)):
+        if y[i - 1] < threshold <= y[i]:
+            span = y[i] - y[i - 1]
+            frac = 0.0 if span == 0 else (threshold - y[i - 1]) / span
+            out.append(t[i - 1] + frac * (t[i] - t[i - 1]))
+    return out
+
+
+def _periods(point):
+    raw = point.raw("jit.dat")
+    if not raw.exists():
+        return []          # the deck never wrote it -- nothing to reduce
+    times = raw.column("t")
+    values = raw.column("clk")
+    edges = _crossings(times, values, point.vdd / 2.0)
+    return [b - a for a, b in zip(edges, edges[1:])]
+
+
+def derive_point(point):
+    periods = _periods(point)
+    if len(periods) < 2:
+        return {}
+    return {
+        "t_period": sum(periods) / len(periods),
+        "tj_pp": max(periods) - min(periods),
+    }
+
+
+def derive_tables(run):
+    rows = []
+    for point in run.points:
+        for index, period in enumerate(_periods(point)):
+            rows.append((point.corner_id, index, "%.12g" % period))
+    return [
+        DerivedTable(
+            name="period_sequence",
+            description="every extracted period, per point",
+            columns=("corner_id", "cycle", "period_s"),
+            rows=tuple(rows),
+        )
+    ]
+'''
+
+#: Four rows of `wrdata`-shaped output: a triangle crossing 1.65 V three times
+#: on the way up, giving two periods of 2 ns and 3 ns.
+JIT_DAT = "\n".join(
+    [
+        "0.000000000000e+00  0.000000000000e+00",
+        "1.000000000000e-09  3.300000000000e+00",
+        "2.000000000000e-09  0.000000000000e+00",
+        "3.000000000000e-09  3.300000000000e+00",
+        "4.000000000000e-09  0.000000000000e+00",
+        "5.000000000000e-09  0.000000000000e+00",
+        "6.000000000000e-09  3.300000000000e+00",
+    ]
+) + "\n"
+
+
+def _stub_ngspice_writing(files: dict, output: str = ""):
+    """Stub ngspice so it also *writes* into whatever cwd it was handed.
+
+    That cwd is the whole point of the mechanism under test: the harness gives
+    each point its own directory precisely so two concurrent points writing the
+    same ``wrdata`` filename cannot clobber one another.
+    """
+
+    def _run(cmd, **kwargs):
+        cwd = Path(kwargs["cwd"])
+        for name, content in files.items():
+            cwd.mkdir(parents=True, exist_ok=True)
+            (cwd / name).write_text(content(cwd) if callable(content) else content)
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=0, stdout=output, stderr=""
+        )
+
+    return mock.patch.object(runner.subprocess, "run", side_effect=_run)
+
+
+class RawFileManifestTests(ManifestFixture):
+    """The manifest half: declaring what the deck writes."""
+
+    def test_the_list_form_declares_a_filename_with_no_options(self):
+        tb = testbench.load(self.write({"raw_files": ["jit.dat"]}))
+        self.assertEqual(tb.raw_file_names, ["jit.dat"])
+        self.assertEqual(tb.raw_files[0].columns, ())
+        self.assertFalse(tb.raw_files[0].retain)
+
+    def test_the_object_form_carries_columns_description_and_retain(self):
+        tb = testbench.load(
+            self.write(
+                {
+                    "raw_files": {
+                        "jit.dat": {
+                            "description": "three buffered clocks",
+                            "columns": ["t", "clkq", "clks", "clkr"],
+                            "retain": True,
+                        }
+                    }
+                }
+            )
+        )
+        spec = tb.raw_files[0]
+        self.assertEqual(spec.columns, ("t", "clkq", "clks", "clkr"))
+        self.assertEqual(spec.description, "three buffered clocks")
+        self.assertTrue(spec.retain)
+
+    def test_no_raw_files_key_leaves_the_testbench_exactly_as_before(self):
+        tb = testbench.load(self.write({}))
+        self.assertEqual(tb.raw_files, ())
+        self.assertEqual(tb.raw_file_names, [])
+
+    def test_a_filename_with_a_directory_part_is_rejected(self):
+        for bad in ("../jit.dat", "sub/jit.dat", "/tmp/jit.dat"):
+            with self.assertRaises(ValueError) as ctx:
+                testbench.load(self.write({"raw_files": [bad]}))
+            self.assertIn("plain filename", str(ctx.exception))
+
+    def test_an_unknown_option_key_is_rejected_rather_than_ignored(self):
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(self.write({"raw_files": {"jit.dat": {"retian": True}}}))
+        self.assertIn("retian", str(ctx.exception))
+
+    def test_repeated_column_names_are_rejected(self):
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(
+                self.write({"raw_files": {"j.dat": {"columns": ["t", "t"]}}})
+            )
+        self.assertIn("repeats a name", str(ctx.exception))
+
+    def test_an_empty_declaration_is_rejected(self):
+        for bad in ([], {}):
+            with self.assertRaises(ValueError) as ctx:
+                testbench.load(self.write({"raw_files": bad}))
+            self.assertIn("omit the key", str(ctx.exception))
+
+    def test_retaining_a_gitignored_name_is_rejected(self):
+        """The evidence decision, enforced: no evidence-looking scratch file.
+
+        `.gitignore` drops *.raw / *.log tree-wide, so retaining under one of
+        those names would put a file in corners/<record-id>/ that looks like
+        committed evidence and never gets committed.
+        """
+        for bad in ("wave.raw", "trace.LOG"):
+            with self.assertRaises(ValueError) as ctx:
+                testbench.load(self.write({"raw_files": {bad: {"retain": True}}}))
+            self.assertIn(".gitignore", str(ctx.exception))
+        # ... and the same names are fine as pure scratch.
+        tb = testbench.load(self.write({"raw_files": ["wave.raw"]}))
+        self.assertEqual(tb.raw_file_names, ["wave.raw"])
+
+
+class RawFileCaptureTests(ManifestFixture):
+    """The runner half: isolation, capture, retention, absence."""
+
+    MANIFEST = {
+        "measure": {},
+        "analyses": ["tran 1n 10n", "set wr_singlescale", "wrdata jit.dat v(clk)"],
+        "raw_measures": {"vavg": {"analysis": "tran", "expr": "avg v(clk)"}},
+        "raw_files": {"jit.dat": {"columns": ["t", "clk"]}},
+    }
+    LOG = "vavg = 1.65000e+00\n"
+
+    def setUp(self):
+        super().setUp()
+        self.pdk = fake_pdk(self.root / "gf180mcuD")
+        self.point = corners.build_grid(
+            corners.resolve_corners(["typical"]), (27,), [3.3]
+        )[0]
+
+    def _tb(self, **overrides):
+        manifest = dict(self.MANIFEST)
+        manifest.update(overrides)
+        return testbench.load(self.write(manifest))
+
+    def _run(self, tb, files=None, workdir="work", log_dir=None):
+        with _stub_ngspice_writing(
+            {"jit.dat": JIT_DAT} if files is None else files, self.LOG
+        ):
+            return runner.run_point(
+                tb, self.pdk, self.point, self.root / workdir, log_dir=log_dir
+            )
+
+    def test_the_deck_runs_in_its_own_directory_when_raw_files_are_declared(self):
+        result = self._run(self._tb())
+        rundir = self.root / "work" / f"{self.point.corner_id}.d"
+        self.assertTrue((rundir / "jit.dat").is_file())
+        # The generated deck stays where sim/harness/README.md says it does, so
+        # the documented reproduce-by-hand invocation is unchanged.
+        self.assertEqual(result.deck, f"{self.point.corner_id}.spice")
+        self.assertTrue((self.root / "work" / result.deck).is_file())
+
+    def test_a_manifest_without_raw_files_still_runs_in_the_shared_workdir(self):
+        seen = {}
+
+        def _run(cmd, **kwargs):
+            seen["cwd"] = Path(kwargs["cwd"])
+            return subprocess.CompletedProcess(
+                args=cmd, returncode=0, stdout=self.LOG, stderr=""
+            )
+
+        tb = testbench.load(
+            self.write(
+                {
+                    "measure": {},
+                    "analyses": ["tran 1n 10n"],
+                    "raw_measures": {"vavg": {"analysis": "tran", "expr": "avg v(clk)"}},
+                }
+            )
+        )
+        with mock.patch.object(runner.subprocess, "run", side_effect=_run):
+            runner.run_point(tb, self.pdk, self.point, self.root / "plain")
+        self.assertEqual(seen["cwd"], self.root / "plain")
+
+    def test_the_written_file_reaches_the_result_parsed_and_addressable(self):
+        result = self._run(self._tb())
+        raw = result.raw_files["jit.dat"]
+        self.assertTrue(raw.exists())
+        self.assertEqual(len(raw.rows()), 7)
+        self.assertEqual(raw.column("t")[1], 1e-9)
+        self.assertEqual(raw.column("clk")[1], 3.3)
+        # by position as well, for a manifest that named no columns
+        self.assertEqual(raw.column(0), raw.column("t"))
+        self.assertEqual(result.raw_files_missing, [])
+
+    def test_the_reduction_reads_the_waveform_back_and_produces_a_sequence_metric(self):
+        """The whole point of #81: a value `.measure` cannot report."""
+        self.write_module(TIE_MODULE)
+        tb = self._tb(
+            derived={
+                "module": "derive.py",
+                "measures": ["t_period", "tj_pp"],
+                "tables": ["period_sequence"],
+            }
+        )
+        result = self._run(tb)
+        self.assertEqual(result.status, "ok")
+        # Crossings of 1.65 V at 0.5 ns, 2.5 ns, 5.5 ns -> periods 2 ns and 3 ns.
+        self.assertAlmostEqual(result.measurements["t_period"], 2.5e-9)
+        self.assertAlmostEqual(result.measurements["tj_pp"], 1.0e-9)
+
+    def test_a_raw_file_the_deck_never_wrote_is_data_not_a_crash(self):
+        """The acceptance case: an early convergence failure writes nothing."""
+        self.write_module(TIE_MODULE)
+        tb = self._tb(
+            derived={"module": "derive.py", "measures": ["t_period", "tj_pp"]}
+        )
+        result = self._run(tb, files={})
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.raw_files_missing, ["jit.dat"])
+        self.assertFalse(result.raw_files["jit.dat"].exists())
+        self.assertEqual(result.raw_files["jit.dat"].rows(), ())
+        # The measurement the deck DID take survives ...
+        self.assertEqual(result.measurements["vavg"], 1.65)
+        # ... and the reduction that found nothing to reduce is not-measured.
+        self.assertIn("t_period", result.not_measured)
+        self.assertIn("tj_pp", result.not_measured)
+        self.assertIn("raw_files_missing", result.as_dict())
+
+    def test_an_undeclared_raw_file_names_the_manifest_key(self):
+        self.write_module(
+            'def derive_point(point):\n'
+            '    return {"t_period": point.raw("other.dat").rows() and 1.0}\n'
+        )
+        tb = self._tb(derived={"module": "derive.py", "measures": ["t_period"]})
+        result = self._run(tb)
+        self.assertEqual(result.status, "error")
+        self.assertIn("raw_files", result.message)
+        self.assertIn("other.dat", result.message)
+
+    def test_retain_copies_the_file_into_the_evidence_directory(self):
+        tb = self._tb(raw_files={"jit.dat": {"columns": ["t", "clk"], "retain": True}})
+        log_dir = self.root / "corners" / "rec-1"
+        result = self._run(tb, log_dir=log_dir)
+        kept = log_dir / f"{self.point.corner_id}-jit.dat"
+        self.assertTrue(kept.is_file())
+        self.assertEqual(kept.read_text(), JIT_DAT)
+        # The reduction reads the retained copy, so a later reader of the
+        # evidence tree and the recorded number came from the same bytes.
+        self.assertEqual(result.raw_files["jit.dat"].path, kept)
+        self.assertEqual(result.as_dict()["raw_files"], {"jit.dat": kept.name})
+
+    def test_without_retain_nothing_lands_in_the_evidence_directory(self):
+        log_dir = self.root / "corners" / "rec-2"
+        result = self._run(self._tb(), log_dir=log_dir)
+        self.assertEqual(
+            sorted(p.name for p in log_dir.iterdir()), [f"{self.point.corner_id}.log"]
+        )
+        self.assertEqual(
+            result.raw_files["jit.dat"].path.parent,
+            self.root / "work" / f"{self.point.corner_id}.d",
+        )
+
+    def test_a_retained_file_is_banked_even_when_the_point_fails(self):
+        """Evidence is captured before the required-measurement verdict."""
+        tb = self._tb(raw_files={"jit.dat": {"retain": True}})
+        log_dir = self.root / "corners" / "rec-3"
+        with _stub_ngspice_writing({"jit.dat": JIT_DAT}, "nothing parseable here\n"):
+            result = runner.run_point(
+                tb, self.pdk, self.point, self.root / "workf", log_dir=log_dir
+            )
+        self.assertEqual(result.status, "failed")
+        self.assertTrue((log_dir / f"{self.point.corner_id}-jit.dat").is_file())
+
+    def test_concurrent_points_do_not_overwrite_each_others_output(self):
+        """The hazard the per-point directory exists to remove.
+
+        Every point's deck writes the same `wrdata` filename into its cwd; a
+        shared cwd under `-j` would leave every reduction reading whichever
+        point happened to finish last.
+        """
+        tb = self._tb()
+        points = corners.build_grid(
+            corners.resolve_corners(["mos"]), (-40, 27, 125), [3.0, 3.3]
+        )
+        self.assertGreater(len(points), 8)
+
+        def content(cwd: Path) -> str:
+            time.sleep(0.005)          # widen the window a shared cwd would lose
+            return f"0 {len(cwd.name)}.0\n1 {abs(hash(cwd.name)) % 97}.0\n"
+
+        with _stub_ngspice_writing({"jit.dat": content}, self.LOG):
+            results = runner.run_grid(
+                tb, self.pdk, points, self.root / "wgrid", jobs=6
+            )
+        self.assertEqual(len(results), len(points))
+        for result in results:
+            expected = f"{result.point.corner_id}.d"
+            self.assertEqual(result.raw_files["jit.dat"].path.parent.name, expected)
+            rows = result.raw_files["jit.dat"].rows()
+            self.assertEqual(rows[0][1], float(len(expected)))
+            self.assertEqual(rows[1][1], float(abs(hash(expected)) % 97))
+
+
+class RawFileParsingTests(unittest.TestCase):
+    """`RawFile` is deliberately strict about what it will reduce over."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def _raw(self, text: str, columns=("t", "y")) -> derived.RawFile:
+        path = self.root / "jit.dat"
+        path.write_text(text)
+        return derived.RawFile(name="jit.dat", path=path, columns=columns)
+
+    def test_blank_lines_and_comments_are_skipped(self):
+        raw = self._raw("# ngspice\n\n0 1\n\n* note\n1e-9 2\n")
+        self.assertEqual(raw.rows(), ((0.0, 1.0), (1e-9, 2.0)))
+
+    def test_a_leading_header_line_is_tolerated(self):
+        raw = self._raw("time v(clk)\n0 1\n1 2\n")
+        self.assertEqual(raw.rows(), ((0.0, 1.0), (1.0, 2.0)))
+
+    def test_garbage_after_real_data_is_an_error_not_a_dropped_sample(self):
+        raw = self._raw("0 1\n1 2\nError: timestep too small\n3 4\n")
+        with self.assertRaises(derived.DerivedError) as ctx:
+            raw.rows()
+        self.assertIn("line 3", str(ctx.exception))
+
+    def test_a_ragged_row_is_an_error(self):
+        raw = self._raw("0 1\n1 2 3\n")
+        with self.assertRaises(derived.DerivedError) as ctx:
+            raw.rows()
+        self.assertIn("truncated or interleaved", str(ctx.exception))
+
+    def test_an_unknown_column_name_lists_the_declared_ones(self):
+        raw = self._raw("0 1\n1 2\n")
+        with self.assertRaises(derived.DerivedError) as ctx:
+            raw.column("clkr")
+        self.assertIn("'t', 'y'", str(ctx.exception).replace('"', "'"))
+
+    def test_a_column_index_past_the_files_width_is_reported(self):
+        raw = self._raw("0 1\n1 2\n", columns=())
+        with self.assertRaises(derived.DerivedError) as ctx:
+            raw.column(5)
+        self.assertIn("2 column(s)", str(ctx.exception))
+
+    def test_a_file_that_was_never_written_reads_as_empty(self):
+        raw = derived.RawFile(name="jit.dat", path=self.root / "nope.dat")
+        self.assertFalse(raw.exists())
+        self.assertEqual(raw.rows(), ())
+        self.assertEqual(raw.text(), "")
+        self.assertEqual(raw.column(0), ())
+
+    def test_parsing_happens_once_and_only_on_demand(self):
+        path = self.root / "jit.dat"
+        path.write_text("0 1\n1 2\n")
+        raw = derived.RawFile(name="jit.dat", path=path)
+        first = raw.rows()
+        path.write_text("9 9\n")            # a re-read would see this
+        self.assertIs(raw.rows(), first)
+
+
+class RawFileRunViewTests(ManifestFixture):
+    """`derive_tables` reaches every point's raw file, like a join."""
+
+    def setUp(self):
+        super().setUp()
+        self.pdk = fake_pdk(self.root / "gf180mcuD")
+        self.write_module(TIE_MODULE)
+        self.tb = testbench.load(
+            self.write(
+                {
+                    "measure": {},
+                    "analyses": ["tran 1n 10n", "wrdata jit.dat v(clk)"],
+                    "raw_measures": {
+                        "vavg": {"analysis": "tran", "expr": "avg v(clk)"}
+                    },
+                    "raw_files": {"jit.dat": {"columns": ["t", "clk"]}},
+                    "derived": {
+                        "module": "derive.py",
+                        "measures": ["t_period", "tj_pp"],
+                        "tables": ["period_sequence"],
+                    },
+                }
+            )
+        )
+        self.points = corners.build_grid(
+            corners.resolve_corners(["typical"]), (-40, 27), [3.3]
+        )
+
+    def test_the_whole_run_reduction_sees_each_points_own_waveform(self):
+        with _stub_ngspice_writing({"jit.dat": JIT_DAT}, "vavg = 1.65e+00\n"):
+            results = runner.run_grid(
+                self.tb, self.pdk, self.points, self.root / "wrun"
+            )
+        tables = cli.build_derived_tables(self.tb, results, [])
+        self.assertEqual(len(tables), 1)
+        table = tables[0]
+        self.assertEqual(table.name, "period_sequence")
+        # two points x two extracted periods each
+        self.assertEqual(len(table.rows), 4)
+        self.assertEqual(
+            sorted({row[0] for row in table.rows}),
+            sorted(p.corner_id for p in self.points),
+        )
+        self.assertEqual([row[2] for row in table.rows], ["2e-09", "3e-09"] * 2)
+
+    def test_the_scratch_files_are_still_readable_after_every_point_has_run(self):
+        """`derive_tables` runs after the grid; nothing deletes the work dir."""
+        with _stub_ngspice_writing({"jit.dat": JIT_DAT}, "vavg = 1.65e+00\n"):
+            results = runner.run_grid(
+                self.tb, self.pdk, self.points, self.root / "wrun2"
+            )
+        for result in results:
+            self.assertTrue(result.raw_files["jit.dat"].path.is_file())
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: a real ngspice actually writing the file the harness captures.
+# ---------------------------------------------------------------------------
+
+#: Just enough of a model library for a passives-only deck to elaborate under
+#: the corner bundles corners.py names. No PDK needed -- this test exists to
+#: prove the composed deck, ngspice's `wrdata`, the harness's capture and the
+#: campaign's reduction line up for real, not to characterize a device.
+STUB_SECTIONS = ("typical", "res_typical", "moscap_typical", "mimcap_typical")
+
+#: A relaxation oscillator would need devices; a pulse source through an RC
+#: does not, and still produces exactly what the mechanism has to carry: a
+#: waveform whose *crossing sequence* is the quantity, written by the deck's
+#: own `wrdata` line and reduced outside `.measure`.
+E2E_FRAGMENT = """vsup vdd 0 dc 'vdd_val'
+vin in 0 pulse(0 'vdd_val' 0 20p 20p 480p 1n)
+r1 in out 1k
+c1 out 0 100f
+"""
+
+
+def _have_ngspice() -> bool:
+    try:
+        runner.ngspice_version()
+    except runner.NgspiceMissing:
+        return False
+    return True
+
+
+@unittest.skipUnless(_have_ngspice(), "ngspice is not on PATH")
+class RawFileEndToEndTests(ManifestFixture):
+    """The acceptance gate: a real deck writes a file, a reduction reads it."""
+
+    def setUp(self):
+        super().setUp()
+        pdk_root = self.root / "gf180mcuD"
+        self.pdk = fake_pdk(pdk_root)
+        models = pdk_root / "libs.tech" / "ngspice" / "sm141064.ngspice"
+        models.write_text(
+            "".join(f".lib {name}\n.endl {name}\n" for name in STUB_SECTIONS)
+        )
+        self.write_module(TIE_MODULE)
+        self.tb = testbench.load(
+            self.write(
+                {
+                    "measure": {},
+                    "analyses": [
+                        "tran 2p 10n",
+                        "set wr_singlescale",
+                        "wrdata jit.dat v(out)",
+                    ],
+                    "raw_measures": {
+                        "vavg": {"analysis": "tran", "expr": "avg v(out)"}
+                    },
+                    "raw_files": {
+                        "jit.dat": {
+                            "columns": ["t", "clk"],
+                            "description": "RC-filtered clock, one row per print step",
+                            "retain": True,
+                        }
+                    },
+                    "derived": {
+                        "module": "derive.py",
+                        "measures": ["t_period", "tj_pp"],
+                        "tables": ["period_sequence"],
+                    },
+                },
+                netlist=E2E_FRAGMENT,
+            )
+        )
+        self.point = corners.build_grid(
+            corners.resolve_corners(["typical"]), (27,), [3.3]
+        )[0]
+
+    def test_ngspice_writes_it_the_harness_captures_it_the_campaign_reduces_it(self):
+        log_dir = self.root / "corners" / "rec-e2e"
+        result = runner.run_point(
+            self.tb, self.pdk, self.point, self.root / "we2e", log_dir=log_dir
+        )
+        self.assertEqual(result.status, "ok", result.message)
+
+        # 1. ngspice really wrote the file, into this point's own directory ...
+        raw = result.raw_files["jit.dat"]
+        self.assertTrue(raw.exists())
+        self.assertGreater(len(raw.rows()), 100)
+        self.assertEqual(len(raw.rows()[0]), 2)     # `set wr_singlescale`
+
+        # 2. ... it was retained as evidence next to the point's own log ...
+        self.assertEqual(raw.path, log_dir / f"{self.point.corner_id}-jit.dat")
+        self.assertTrue((log_dir / f"{self.point.corner_id}.log").is_file())
+
+        # 3. ... and the campaign reduced the crossing sequence into a value
+        #    `.measure` cannot report. The source is a 1 ns pulse train, so the
+        #    extracted period must land on 1 ns with a tiny numerical spread.
+        self.assertAlmostEqual(result.measurements["t_period"], 1e-9, delta=2e-11)
+        self.assertLess(result.measurements["tj_pp"], 5e-12)
 
 
 if __name__ == "__main__":

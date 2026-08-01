@@ -40,7 +40,7 @@ sub-table per topology instead. It changes nothing about how the deck is
 composed, run, parsed or checked -- omit it and every campaign behaves
 exactly as before.
 
-Five further optional keys exist for campaigns the single fixed ``params``
+Six further optional keys exist for campaigns the single fixed ``params``
 map cannot express. Every one of them defaults to off, so a manifest that
 does not use them behaves exactly as it did before they existed:
 
@@ -63,6 +63,10 @@ does not use them behaves exactly as it did before they existed:
                carrying its own derived deck parameters.
     grid       the union of blocks a run actually covers, when the extra-axis
                cross-product is deliberately *not* run in full.
+    raw_files  files a point's own deck writes during simulation (``wrdata``),
+               declared so the harness can isolate them per point, hand them
+               to the campaign's reduction, and -- when the file itself is the
+               evidence -- retain them under ``corners/<record-id>/``.
     derived    the campaign's own reduction over the per-point table (see
                ``sim/harness/derived.py``).
 
@@ -127,6 +131,14 @@ SWEEP_POINT_KEYS = ("params", "description")
 GRID_BLOCK_KEYS = ("description", "corners", "temperatures_c", "supplies", "axes")
 #: Keys the ``derived`` block may carry.
 DERIVED_KEYS = ("module", "measures", "tables", "joins")
+#: Keys a ``raw_files`` entry may carry.
+RAW_FILE_KEYS = ("description", "columns", "retain")
+#: Filename suffixes this repo's ``.gitignore`` swallows tree-wide (scratch
+#: ngspice output). A ``retain``ed raw file may not use one: it would be copied
+#: into the evidence tree under ``corners/<record-id>/`` and then never be
+#: committed -- an evidence-looking path holding a still-scratch file, which is
+#: strictly worse than not retaining it at all.
+UNCOMMITTABLE_RAW_SUFFIXES = (".raw", ".log")
 #: Characters a sweep-point id may use. ``_`` is excluded because it is the
 #: unambiguous field separator in ``sim/README.md``'s corner-id grammar, and a
 #: point id becomes one of those fields.
@@ -141,6 +153,43 @@ class RawMeasure:
     #: module docstring: for a lock detector's "must never assert" copies the
     #: absent result *is* the pass condition.
     optional: bool = False
+
+
+@dataclass(frozen=True)
+class RawFileSpec:
+    """One file a point's own deck writes, declared in ``raw_files``.
+
+    ``.measure`` reports scalars. A whole class of this repo's claims is a
+    *sequence* instead -- a per-cycle period sequence (jitter/TIE), a decimated
+    I-V curve -- which the deck emits with ``wrdata <name> <vectors...>`` from
+    its ``.control`` block and a campaign reduces itself. Declaring the file
+    here is what lets the harness:
+
+    - run each point in its **own** scratch directory, so concurrent points
+      (``-j``) cannot overwrite one another's identically-named output;
+    - hand the file to ``derive_point()`` / ``derive_tables()`` as a
+      :class:`~harness.derived.RawFile` (path plus parsed columns) instead of
+      leaving the reduction to guess where the runner put it;
+    - retain it as committed evidence when -- and only when -- the manifest
+      says the file itself is the evidence (``retain``).
+
+    ``columns`` is optional and purely a readability aid: it names the columns
+    the deck's ``wrdata`` line writes, in order, so a reduction can say
+    ``raw.column("clkq")`` rather than ``raw.column(2)``. It is NOT validated
+    against the file (the harness cannot know what the deck wrote); a width
+    mismatch surfaces when the reduction asks for a column that is not there.
+    """
+
+    name: str
+    columns: tuple[str, ...] = ()
+    description: str = ""
+    #: ``False`` (the default) keeps the file in the run's git-ignored scratch
+    #: tree. ``True`` copies it into ``corners/<record-id>/<corner-id>-<name>``
+    #: -- append-only committed evidence, on the same terms as the sibling
+    #: ``<corner-id>.log``. Off by default because a full transient dump is
+    #: megabytes per point and is *input* to the claim, not the claim; turn it
+    #: on for the decimated/derived artefact a record actually cites.
+    retain: bool = False
 
 
 @dataclass
@@ -289,7 +338,13 @@ class Testbench:
     sweeps: tuple[SweepAxis, ...] = ()
     grid_blocks: tuple[GridBlock, ...] = ()
     optional_measures: frozenset[str] = frozenset()
+    raw_files: tuple[RawFileSpec, ...] = ()
     derived: DerivedSpec | None = None
+
+    @property
+    def raw_file_names(self) -> list[str]:
+        """Filenames the deck is declared to write, in manifest order."""
+        return [spec.name for spec in self.raw_files]
 
     @property
     def experiment(self) -> str:
@@ -793,6 +848,117 @@ def _load_grid_blocks(
     return tuple(blocks)
 
 
+def _load_raw_files(manifest: dict, path: Path) -> tuple[RawFileSpec, ...]:
+    """Parse the optional ``raw_files`` key -- what a point's own deck writes.
+
+    Two accepted spellings, matching ``topology_groups``' precedent -- a bare
+    list of filenames, or an object carrying per-file options::
+
+        "raw_files": ["jit.dat"]
+
+        "raw_files": {
+          "jit.dat": {
+            "description": "three buffered VCO outputs, one row per print step",
+            "columns": ["t", "clkq", "clks", "clkr"],
+            "retain": false
+          }
+        }
+
+    The key is the filename **exactly as the deck's ``wrdata`` line spells
+    it**, and it is that same string a reduction looks the file up by. It must
+    be a plain filename: a path separator, ``..`` or an absolute path is
+    rejected, because the harness's per-point isolation guarantee only holds
+    for files the deck writes into its own working directory.
+    """
+    raw = manifest.get("raw_files")
+    if raw is None:
+        return ()
+    if isinstance(raw, str):
+        raise ValueError(
+            f"{path}: 'raw_files' must be a list of filenames or an object mapping "
+            f'a filename to its options, not a bare string (use ["{raw}"])'
+        )
+    if isinstance(raw, list):
+        entries = {name: {} for name in raw}
+        if len(entries) != len(raw):
+            raise ValueError(f"{path}: 'raw_files' lists the same filename twice")
+    elif isinstance(raw, dict):
+        entries = raw
+    else:
+        raise ValueError(
+            f"{path}: 'raw_files' must be a list of filenames or an object mapping "
+            "a filename to its options"
+        )
+    if not entries:
+        raise ValueError(
+            f"{path}: 'raw_files' is empty -- omit the key entirely rather than "
+            "declaring a capture the deck does not do"
+        )
+
+    specs: list[RawFileSpec] = []
+    for name, spec in entries.items():
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"{path}: raw_files keys must be non-empty filenames")
+        if name != Path(name).name or name in (".", "..") or Path(name).is_absolute():
+            raise ValueError(
+                f"{path}: raw_files[{name!r}] must be a plain filename with no "
+                "directory part -- the harness runs each point in its own scratch "
+                "directory and captures what the deck wrote there"
+            )
+        if not isinstance(spec, dict):
+            raise ValueError(
+                f"{path}: raw_files[{name!r}] must be an object of options "
+                '(e.g. {"columns": ["t", "vout"], "retain": true})'
+            )
+        unknown = sorted(set(spec) - set(RAW_FILE_KEYS))
+        if unknown:
+            raise ValueError(
+                f"{path}: raw_files[{name!r}] has unknown key(s) {unknown}; "
+                f"supported keys are {list(RAW_FILE_KEYS)}"
+            )
+        columns = spec.get("columns", ()) or ()
+        if isinstance(columns, str) or not isinstance(columns, (list, tuple)):
+            raise ValueError(
+                f"{path}: raw_files[{name!r}].columns must be a list of column names, "
+                "in the order the deck's wrdata line writes them"
+            )
+        columns = tuple(columns)
+        if not all(isinstance(c, str) and c.strip() for c in columns):
+            raise ValueError(
+                f"{path}: raw_files[{name!r}].columns entries must be non-empty names"
+            )
+        if len(set(columns)) != len(columns):
+            raise ValueError(
+                f"{path}: raw_files[{name!r}].columns repeats a name; a reduction "
+                "looks a column up by name, so they must be distinct"
+            )
+        description = spec.get("description", "")
+        if not isinstance(description, str):
+            raise ValueError(
+                f"{path}: raw_files[{name!r}].description must be a string"
+            )
+        retain = spec.get("retain", False)
+        if not isinstance(retain, bool):
+            raise ValueError(
+                f"{path}: raw_files[{name!r}].retain must be true or false, got "
+                f"{retain!r}"
+            )
+        if retain and Path(name).suffix.lower() in UNCOMMITTABLE_RAW_SUFFIXES:
+            raise ValueError(
+                f"{path}: raw_files[{name!r}] cannot be retained under that name -- "
+                f"this repo's .gitignore drops {', '.join(UNCOMMITTABLE_RAW_SUFFIXES)} "
+                "tree-wide, so the copy would sit in corners/<record-id>/ looking "
+                "like evidence and never be committed. Write it as .dat/.csv, or "
+                "leave retain off."
+            )
+        specs.append(
+            RawFileSpec(
+                name=name, columns=columns, description=description, retain=retain
+            )
+        )
+    return tuple(specs)
+
+
 def _load_derived(
     manifest: dict, path: Path, directory: Path, known: list[str]
 ) -> DerivedSpec | None:
@@ -1036,6 +1202,7 @@ def load(directory: str | Path) -> Testbench:
     dut_export = _load_dut_export(manifest, manifest_path, directory)
     sweeps = _load_sweeps(manifest, manifest_path)
     grid_blocks = _load_grid_blocks(manifest, manifest_path, sweeps)
+    raw_files = _load_raw_files(manifest, manifest_path)
     derived = _load_derived(
         manifest, manifest_path, directory, list(measure) + list(raw_measures)
     )
@@ -1078,6 +1245,7 @@ def load(directory: str | Path) -> Testbench:
         sweeps=sweeps,
         grid_blocks=grid_blocks,
         optional_measures=optional_measures,
+        raw_files=raw_files,
         derived=derived,
     )
     validate_netlist(tb)

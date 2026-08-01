@@ -257,6 +257,12 @@ def build_derived_tables(tb, results, join_args: list[str]) -> list:
     invocation by ``--join alias=path``: a cross-record join names *another
     record's* CSV, and a committed manifest cannot know which record id a given
     run is being closed against.
+
+    Each point's own ``raw_files`` are carried through onto its ``PointView``
+    as well, so a whole-run reduction over per-point waveforms (a jitter table,
+    a family of I-V curves) can reach them the same way ``derive_point`` does.
+    Nothing deletes the run's work directory, so the scratch copies are still
+    on disk here, after every point has run.
     """
     spec = getattr(tb, "derived", None)
     if spec is None or not spec.tables:
@@ -281,6 +287,7 @@ def build_derived_tables(tb, results, join_args: list[str]) -> list:
                 axes=r.point.axes,
                 params=r.point.params,
                 measurements=dict(r.measurements),
+                raw_files=dict(r.raw_files),
             )
             for r in results
             if r.status == "ok"
@@ -479,6 +486,18 @@ def run(args: argparse.Namespace) -> int:
             f"got {_fmt(failure['value'])} at {failure['at']}"
         )
 
+    # A declared raw file the deck never wrote is data, not an error -- but it
+    # is data worth saying out loud, because it silently starves whatever
+    # reduction was supposed to read it.
+    for name in tb.raw_file_names:
+        absent = [r.point.corner_id for r in results if name in r.raw_files_missing]
+        if absent:
+            print(
+                f"  raw file {name!r} not written at {len(absent)}/{len(results)} "
+                f"point(s): {', '.join(absent[:3])}"
+                + (" ..." if len(absent) > 3 else "")
+            )
+
     if not args.no_write:
         snapshot = report.write_netlist_snapshot(tb, experiment_dir, record_id)
         written = derived_mod.write_derived_tables(derived_tables, log_dir)
@@ -487,6 +506,15 @@ def run(args: argparse.Namespace) -> int:
         print(f"record    : {record_path}")
         print(f"snapshot  : {snapshot}")
         print(f"raw logs  : {log_dir}")
+        for spec in tb.raw_files:
+            if not spec.retain:
+                continue
+            kept = sum(
+                1
+                for r in results
+                if spec.name in r.raw_files and r.raw_files[spec.name].exists()
+            )
+            print(f"raw files : {kept} x <corner-id>-{spec.name} in {log_dir}")
         for path in written:
             print(f"derived   : {path}")
     else:
