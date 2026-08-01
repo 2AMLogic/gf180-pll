@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 # gf180-pll :: pfd-deadzone :: corner + phase-offset runner
 #
+# SUPERSEDED FOR NEW RUNS by this campaign's sim/harness manifest
+# (testbench/tb.json + tb_pfd_deadzone.spice + derive.py beside it) -- run
+#   python3 sim/run_corners.py pfd-deadzone
+# instead.  The manifest runs the identical 45 x 5 grid, one ngspice
+# invocation per (corner, dphi) point, and its testbench/derive.py recomputes
+# this script's awk verdict (kd_near / kd_wide / ratio / wmin_zero / q_zero /
+# t_offset) from the same measurements.  This script is kept because the
+# records it already minted are append-only evidence and it is the testbench
+# every one of those records' Links field points at; do not extend it.
+#
 # Sweeps tb_pfd_deadzone.sp over the full repo PVT grid AND a phase-offset
 # (dphi) sweep through zero, to verify the dead-zone-elimination requirement
 # DR-001 Decision 1 puts on the PFD.

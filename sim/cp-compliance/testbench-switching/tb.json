@@ -1,0 +1,151 @@
+{
+  "name": "cp-compliance (switching)",
+  "description": "effective UP/DN switching-time mismatch of the charge pump, at three control-node voltages across the Vctrl window",
+  "claim": "#9 (design-input claim, not a spec line) -- how far apart are the charge pump's two polarities in TIME? A DC sweep cannot see switching asymmetry, but it is the effective UP/DN pulse-width skew (`w_eff = q / i_ss`) that turns charge-pump asymmetry into static phase error and hence reference spurs. This is the timing half of the same `#9` claim the DC bench (`sim/cp-compliance/testbench`) answers in the current domain; both write into the `sim/cp-compliance/` experiment directory.",
+  "methodology": [
+    "**Timing-mismatch measurement**: two charge-pump instances are pulsed from the SAME control edge, one hardwired UP-active and one DN-active, each into its own control node held at `vctrl` by an ideal source. Sharing the stimulus edge is the point: any measured UP-vs-DN difference is then the pump's own asymmetry, with no stimulus skew mixed in. Per polarity the deck reports `i_ss` (steady state late in the 5 ns pulse), `q` (charge over the whole switching event, INCLUDING the tail-node charge-sharing transient at switch-on) and `w_eff = q / i_ss`, the effective pulse width the loop actually sees. `wskew = w_up - w_dn` is the headline number.",
+    "**The measurements are taken in the control block, not as netlist `.measure` cards, and that is load-bearing.** The 50 % turn-on/turn-off delays trigger on a threshold of `i_ss/2` -- half a value that only exists once the transient has run. A netlist-level `.measure ... val='...'` expression is expanded by ngspice's `.param` machinery before the simulation starts and cannot reference a measurement result, so the pre-migration deck computed `iup_h`/`idn_h` with `let` after the `meas` that produced `iup_ss`. This manifest keeps exactly that sequence by putting it in `analyses` (which the harness passes through to `.control` verbatim) and exporting each result through the manifest's `measure` block. `td=` is likewise load-bearing, and is needed on the TARG clause as well as the TRIG clause: ngspice searches each clause independently from t=0 unless told otherwise, so without it the turn-OFF measurements latch onto a crossing belonging to the turn-ON event and report a negative delay.",
+    "**One ngspice invocation per (PVT corner, control voltage)** -- 45 x 3 = 135 points, the pre-migration grid unchanged. `vctrl` is a declared `sweeps` axis rather than a run.sh loop variable, taking the two ends and the middle of DR-001 Decision 2's ~0.9-2.4 V window.",
+    "The trim code is held at the nominal b1 b0 = 10 (3 unit legs). The trim RANGE is characterized by the DC bench; the switching asymmetry is a property of the shared steering switch and the tail node, which the unit-element trim construction leaves unchanged.",
+    "**Bias generation is out of scope and idealized**: the four bias nodes are driven from ideal current sources at 4x the unit-leg current, exactly as in the DC bench and in `sim/devchar-cp`. The skew reported here is therefore the OUTPUT STAGE's own.",
+    "Transient: 20 ns at a 5 ps maximum timestep, `reltol` 1e-4 / `abstol` 1e-14. `rshunt = 1e12` resolves the disabled trim legs' floating cascode mid-node (3.3 pA at 3.3 V, below the abstol floor). `itl4 = 200` raises the transient Newton-iteration limit -- a solver-EFFORT knob, not a tolerance: every convergence tolerance is unchanged, so the converged solution is unchanged (verified bit-for-bit at typical/27C/3.30V/Vctrl=1.65V, which converges either way). It is needed because the DR-005 dump-node buffer puts two MOS gates on the control node, and the ideal source holding that node has to carry their displacement current: with everything else in DC steady state that branch current numerically jitters at a few times the 1e-14 A abstol, and ngspice's default 10 iterations are not enough to settle it, so it halves the timestep to nothing at 2 of the 135 points (both at Vctrl = 2.4 V on the 3.63 V supply). Raising abstol instead does NOT fix it and would have loosened a real tolerance.",
+    "**Limitation (nominal skew only)**: `sw_stat_global = sw_stat_mismatch = 0`. Everything here is systematic; RANDOM device mismatch is #15's campaign (`mc-cp-mismatch`), and these numbers are what that distribution should be centred on.",
+    "**Axes not swept**: passive corner sections (`res_*`, `mimcap_*`, `moscap_*`) N/A -- the DUT is `nfet_03v3`/`pfet_03v3` only (DR-002 Decision 3); it contains no resistors or capacitors.",
+    "**Cross-record comparability (simulator / host delta)**: the pre-migration records this campaign supersedes (`20260731-091153-7d78a47`, `20260731-122451-63e4b47`, `20260731-194124-afa338c`) were taken with **ngspice-46 on Darwin 25.6.0 / arm64**; harness runs on this project's Linux host use **ngspice-42 on Linux x86_64**. The record's own Environment provenance field states the simulator and host of THIS run and is authoritative for it -- this bullet exists so the delta against the superseded record is never left implicit."
+  ],
+  "dut_export": {
+    "top": "pfd_cp"
+  },
+  "netlist": "tb_cp_switch.spice",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "mos"
+  ],
+  "options": [
+    "abstol=1e-14",
+    "reltol=1e-4",
+    "vntol=1e-7",
+    "rshunt=1e12",
+    "itl4=200"
+  ],
+  "params": {
+    "iunit": "8u",
+    "b0_code": "0",
+    "b1_code": "1"
+  },
+  "sweeps": {
+    "x": {
+      "description": "vctrl -- the control-node voltage the switching event is measured at: the two edges and the middle of DR-001 Decision 2's ~0.9-2.4 V Vctrl window",
+      "points": {
+        "x0.9": {
+          "description": "low edge of the Vctrl window",
+          "params": {
+            "vctrl": "0.9"
+          }
+        },
+        "x1.65": {
+          "description": "nominal, mid window",
+          "params": {
+            "vctrl": "1.65"
+          }
+        },
+        "x2.4": {
+          "description": "high edge of the Vctrl window",
+          "params": {
+            "vctrl": "2.4"
+          }
+        }
+      }
+    }
+  },
+  "analyses": [
+    "let vmid = vsup_c / 2",
+    "tran 5p 20n",
+    "meas tran iup_ss avg i(vou) from=14n to=15n",
+    "meas tran idn_ss avg i(vod) from=14n to=15n",
+    "let iup_h = iup_ss / 2",
+    "let idn_h = idn_ss / 2",
+    "meas tran qup integ i(vou) from=9.5n to=15n",
+    "meas tran qdn integ i(vod) from=9.5n to=15n",
+    "let wup = qup / iup_ss",
+    "let wdn = qdn / idn_ss",
+    "let wskew = wup - wdn",
+    "meas tran ton_up trig v(ctl) val=$&vmid rise=1 td=9n targ i(vou) val=$&iup_h rise=1 td=9n",
+    "meas tran ton_dn trig v(ctl) val=$&vmid rise=1 td=9n targ i(vod) val=$&idn_h fall=1 td=9n",
+    "meas tran toff_up trig v(ctl) val=$&vmid fall=1 td=15n targ i(vou) val=$&iup_h fall=1 td=15n",
+    "meas tran toff_dn trig v(ctl) val=$&vmid fall=1 td=15n targ i(vod) val=$&idn_h rise=1 td=15n"
+  ],
+  "measure": {
+    "iup_ss": "iup_ss",
+    "idn_ss": "idn_ss",
+    "qup": "qup",
+    "qdn": "qdn",
+    "wup": "wup",
+    "wdn": "wdn",
+    "wskew": "wskew",
+    "ton_up": "ton_up",
+    "ton_dn": "ton_dn",
+    "toff_up": "toff_up",
+    "toff_dn": "toff_dn"
+  },
+  "derived": {
+    "module": "derive.py",
+    "measures": [
+      "ton_skew"
+    ],
+    "tables": [
+      "cp_switch"
+    ]
+  },
+  "topology_groups": {
+    "effective pulse width (the headline)": {
+      "description": "q / i_ss per polarity -- the effective width the loop sees, including the tail-node charge-sharing transient -- and the UP-vs-DN difference that turns pump asymmetry into static phase error",
+      "measures": [
+        "wup",
+        "wdn",
+        "wskew"
+      ]
+    },
+    "steady state and delivered charge": {
+      "description": "the DC value each switch eventually delivers, and the charge integrated over the whole switching event",
+      "measures": [
+        "iup_ss",
+        "idn_ss",
+        "qup",
+        "qdn"
+      ]
+    },
+    "edge delays (diagnostics)": {
+      "description": "50 %-of-i_ss crossings referenced to the 50 % control edge; reported for context -- the headline skew above is derived from integrated charge and needs no edge search",
+      "measures": [
+        "ton_up",
+        "ton_dn",
+        "ton_skew",
+        "toff_up",
+        "toff_dn"
+      ]
+    }
+  },
+  "checks": {
+    "iup_ss": {
+      "min": 1e-06
+    },
+    "idn_ss": {
+      "max": -1e-06
+    },
+    "wup": {
+      "min": 1e-09,
+      "max": 1e-08
+    },
+    "wdn": {
+      "min": 1e-09,
+      "max": 1e-08
+    }
+  }
+}

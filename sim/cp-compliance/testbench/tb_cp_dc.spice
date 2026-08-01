@@ -1,0 +1,69 @@
+* gf180-pll :: cp-compliance :: charge-pump output compliance, UP/DN current
+* mismatch, and 2-bit Icp trim (DC)
+*
+* sim/harness fragment.  The DUT (`cp`, reached through the `pfd_cp` hierarchy)
+* is NOT in this file: the manifest's `dut_export` block has design/netlist.sh
+* export the xschem hierarchy once per record and the harness `.include`s it
+* ahead of this fragment.  Stimulus and measurement topology only -- no
+* hand-transcribed copy of the design in sim/.
+*
+* Measurement topology (the same trick sim/devchar-cp/testbench/tb_cp_mirror.sp
+* uses): TWO charge-pump instances share one swept output node `sw`, one
+* hardwired UP-active and the other hardwired DN-active, each reaching `sw`
+* through its own 0 V ammeter.  One DC sweep of `sw` from 0 to 3.63 V therefore
+* traces the complete output characteristic of BOTH polarities -- through the
+* saturation knee and into triode, not just the flat region -- and does so at
+* identical output voltages, which is what makes the point-by-point UP/DN
+* difference a real mismatch number rather than a comparison of two runs.
+*
+* Both instances carry the SAME trim code: DR-001's 2-bit trim is one shared
+* code, not an independent per-polarity trim, so the mismatch reported at a
+* code is a property of the design at that code.  The code is the manifest's
+* `code` sweep axis -- one ngspice invocation per (PVT corner, trim code),
+* exactly as the pre-migration `run.sh` ran it.
+*
+* Expects from the harness header:
+*   .lib <process corner bundle>, .temp <temp_c>
+*   .param vdd_val=<supply volts>  (also vdd_nom, temp_c)
+*   .param iunit                            (manifest `params`)
+*   .param b0_code=<0|1>  .param b1_code=<0|1>   (the `code` axis)
+
+* Unit bias reference.  Reference GENERATION is a separate block and out of
+* this issue's scope, so -- exactly as in sim/devchar-cp -- the four bias nodes
+* are driven from ideal current sources at 4x the unit-leg current (the bias
+* diodes are 4x the unit geometry, so each leg still mirrors one unit).  The
+* mismatch this deck measures is therefore the OUTPUT STAGE's own; a real bias
+* generator adds to it, and that addition is carried explicitly in the budget
+* in design/README.md.
+
+*------------------------------------------------------------------ supplies
+vdd vdd 0 dc 'vdd_val'
+vss vss 0 dc 0
+* Swept output node, shared by both polarities.
+vsw sw 0 dc 0
+* Static logic levels for the hardwired steering inputs.
+vhi hi 0 dc 'vdd_val'
+vlo lo 0 dc 0
+* Static 2-bit trim code, shared by both instances.
+vb0 b0 0 dc 'vdd_val*b0_code'
+vb1 b1 0 dc 'vdd_val*b1_code'
+
+*---------------------------------------------------------- UP-only instance
+* up=1 (sourcing into sw), dn=0 (idle, steered to VSS).
+xcpu hi lo b0 b1 ibn_u icn_u ibp_u icp_u d_up vdd vss cp
+iibn_u vdd ibn_u dc 'iunit'
+iicn_u vdd icn_u dc 'iunit'
+iibp_u ibp_u 0 dc 'iunit'
+iicp_u icp_u 0 dc 'iunit'
+* Ammeter oriented so i(vam_up) is positive for current the pump SOURCES.
+vam_up d_up sw 0
+
+*---------------------------------------------------------- DN-only instance
+* up=0 (idle, steered to VSS), dn=1 (sinking from sw).
+xcpd lo hi b0 b1 ibn_d icn_d ibp_d icp_d d_dn vdd vss cp
+iibn_d vdd ibn_d dc 'iunit'
+iicn_d vdd icn_d dc 'iunit'
+iibp_d ibp_d 0 dc 'iunit'
+iicp_d icp_d 0 dc 'iunit'
+* Ammeter oriented so i(vam_dn) is positive for current the pump SINKS.
+vam_dn sw d_dn 0
