@@ -339,6 +339,18 @@ def build_record(
             )
             for name in measure_names
         },
+        # Empty for a single-topology testbench, which keeps the one flat
+        # result table below. A multi-topology manifest gets one entry per
+        # sub-circuit (plus a trailing 'ungrouped' entry for anything it did
+        # not assign) and one sub-table per entry.
+        "topology_groups": [
+            {
+                "name": group.name,
+                "description": group.description,
+                "measures": list(group.measures),
+            }
+            for group in tb.measure_groups
+        ],
         "checks": {
             "spec": tb.checks,
             "passed": not failures,
@@ -426,18 +438,32 @@ def _methodology_lines(record: dict) -> list[str]:
     return lines
 
 
-def _result_lines(record: dict) -> list[str]:
-    measure_names = list(record["measure"])
-    failures_at: dict[str, list[str]] = {}
-    for failure in record["checks"]["failures"]:
-        failures_at.setdefault(failure["at"], []).append(
+def _failures_by_corner(failures: list[dict]) -> dict[str, list[str]]:
+    """``{corner-id (or "grid"): ["<measurement> <kind>=<limit> (got <value>)"]}``."""
+    out: dict[str, list[str]] = {}
+    for failure in failures:
+        out.setdefault(failure["at"], []).append(
             f"{failure['measurement']} {failure['kind']}={_fmt(failure['limit'])} "
             f"(got {_fmt(failure['value'])})"
         )
+    return out
 
-    lines = ["- **Result**:", ""]
-    lines.append("  | corner-id | " + " | ".join(measure_names) + " | pass/fail |")
-    lines.append("  |---|" + "---|" * (len(measure_names) + 1))
+
+def _corner_table_lines(
+    record: dict, measure_names: list[str], failures_at: dict[str, list[str]]
+) -> list[str]:
+    """One ``corner-id | <measure...> | pass/fail`` table.
+
+    ``failures_at`` is passed in rather than derived so a per-topology table
+    can be given only its own columns' failures -- an unrelated topology's
+    FAIL in this table's pass/fail column would be pure noise. A point that
+    failed to simulate at all is reported as ERROR in *every* table, because
+    the whole point is missing, not one topology's slice of it.
+    """
+    lines = [
+        "  | corner-id | " + " | ".join(measure_names) + " | pass/fail |",
+        "  |---|" + "---|" * (len(measure_names) + 1),
+    ]
     for point in record["points"]:
         cells = [_fmt(point["measurements"].get(name)) for name in measure_names]
         problems = failures_at.get(point["corner_id"], [])
@@ -448,7 +474,97 @@ def _result_lines(record: dict) -> list[str]:
         else:
             verdict = "PASS"
         lines.append(f"  | `{point['corner_id']}` | " + " | ".join(cells) + f" | {verdict} |")
+    return lines
 
+
+def _spread_rows(record: dict, groups: list[dict]):
+    """``(topology-or-None, name, stats)`` in the order the record renders.
+
+    Grouped records walk the groups in manifest order; anything the grouping
+    never mentioned is still emitted (with no topology) at the end, so no
+    measurement can fall out of the spread table.
+    """
+    summary = record["summary"]
+    if not groups:
+        for name, stats in summary.items():
+            yield None, name, stats
+        return
+    seen: set[str] = set()
+    for group in groups:
+        for name in group["measures"]:
+            if name in summary:
+                seen.add(name)
+                yield group["name"], name, summary[name]
+    for name, stats in summary.items():
+        if name not in seen:
+            yield None, name, stats
+
+
+def _spread_table_lines(record: dict, groups: list[dict]) -> list[str]:
+    if groups:
+        lines = [
+            "  | topology | measurement | min | max | mean | spread % | limits |",
+            "  |---|---|---|---|---|---|---|",
+        ]
+    else:
+        lines = [
+            "  | measurement | min | max | mean | spread % | limits |",
+            "  |---|---|---|---|---|---|",
+        ]
+    for topology, name, stats in _spread_rows(record, groups):
+        spec = record["checks"]["spec"].get(name, {})
+        limits = ", ".join(
+            f"{key}={_fmt(spec[key])}"
+            for key in ("min", "max", "max_spread_pct", "min_spread_pct")
+            if key in spec
+        ) or "—"
+        lead = f"| `{topology}` " if groups else ""
+        if not stats.get("n"):
+            lines.append(f"  {lead}| `{name}` | no data | | | | {limits} |")
+            continue
+        lines.append(
+            f"  {lead}| `{name}` | {_fmt(stats['min'])} (`{stats['min_at']}`) "
+            f"| {_fmt(stats['max'])} (`{stats['max_at']}`) "
+            f"| {_fmt(stats['mean'])} | {_fmt(stats['spread_pct'])} | {limits} |"
+        )
+    return lines
+
+
+def _result_lines(record: dict) -> list[str]:
+    """The record's **Result** field.
+
+    Single-topology (the default, and every record written before
+    ``topology_groups`` existed): one flat table over every measurement.
+    Multi-topology: one captioned sub-table per topology, in manifest order,
+    so a deck with several sub-circuits reads as several experiments instead
+    of one unreadably wide table.
+    """
+    groups = record.get("topology_groups") or []
+    failures = record["checks"]["failures"]
+    failures_at = _failures_by_corner(failures)
+
+    lines = ["- **Result**:", ""]
+    if groups:
+        for group in groups:
+            caption = f"  **{group['name']}**"
+            if group.get("description"):
+                caption += f" — {group['description']}"
+            own = set(group["measures"])
+            lines.append(caption)
+            lines.append("")
+            lines += _corner_table_lines(
+                record,
+                list(group["measures"]),
+                _failures_by_corner([f for f in failures if f["measurement"] in own]),
+            )
+            lines.append("")
+        lines.pop()  # the shared trailer below re-opens with its own blank line
+    else:
+        lines += _corner_table_lines(record, list(record["measure"]), failures_at)
+
+    # Grid-level failures are reported once for the whole record, not once per
+    # topology: they are properties of the sweep, and a check naming something
+    # that is not a declared measurement can only surface here.
     grid_failures = failures_at.get("grid", [])
     if grid_failures:
         lines.append("")
@@ -457,23 +573,7 @@ def _result_lines(record: dict) -> list[str]:
     lines.append("")
     lines.append("  Spread across the grid:")
     lines.append("")
-    lines.append("  | measurement | min | max | mean | spread % | limits |")
-    lines.append("  |---|---|---|---|---|---|")
-    for name, stats in record["summary"].items():
-        spec = record["checks"]["spec"].get(name, {})
-        limits = ", ".join(
-            f"{key}={_fmt(spec[key])}"
-            for key in ("min", "max", "max_spread_pct", "min_spread_pct")
-            if key in spec
-        ) or "—"
-        if not stats.get("n"):
-            lines.append(f"  | `{name}` | no data | | | | {limits} |")
-            continue
-        lines.append(
-            f"  | `{name}` | {_fmt(stats['min'])} (`{stats['min_at']}`) "
-            f"| {_fmt(stats['max'])} (`{stats['max_at']}`) "
-            f"| {_fmt(stats['mean'])} | {_fmt(stats['spread_pct'])} | {limits} |"
-        )
+    lines += _spread_table_lines(record, groups)
 
     verdict = {"pass": "PASS", "fail": "FAIL", "error": "ERROR"}[record["status"]]
     lines.append("")

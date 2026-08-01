@@ -17,6 +17,13 @@ schema these implement):
   when/rise, avg/from-to, ...), which is what most of this repo's real
   campaigns (delay, lock time, jitter) actually need and a bare ``let``
   expression cannot express.
+- ``testbench.py`` / ``report.py`` add the optional ``topology_groups``
+  manifest key: this repo's campaigns routinely put several sub-circuits in
+  one deck (the delay-cell deck alone carries five), and bandgap's single
+  flat result table cannot say which of two dozen measurements belongs to
+  which topology. Declaring the grouping splits the record's **Result**
+  field into one sub-table per topology. Purely a rendering concern --
+  omitting the key reproduces bandgap's flat table exactly.
 - ``report.py`` renders this repo's ratified field set from ``sim/README.md``
   (Record ID, Claim, Netlist provenance, **Environment provenance**, Corner
   matrix run, **Methodology / criteria / limitations**, Statistical
