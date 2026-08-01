@@ -216,6 +216,59 @@ against the *last* analysis to run (see above) — when in doubt, use
 silently failed to apply, a strongly PVT-sensitive measurement would come back
 flat, and this catches that instead of reporting a suspiciously perfect result.
 
+### Multi-topology decks: `topology_groups` (optional)
+
+Several of this repo's campaigns put more than one sub-circuit in a single
+deck — `sim/devchar-delay` alone carries unstarved rings, current-starved
+rings, an inverter chain and bare devices, with two dozen measurements between
+them. Rendered flat, that is one table two dozen columns wide with no hint of
+which measurement belongs to which topology.
+
+`topology_groups` fixes the *record*, and nothing else: it does not touch how
+the deck is composed, how the sweep runs, how output is parsed, or how `checks`
+are evaluated. Declare it and the record's **Result** field becomes one
+sub-table per topology instead of one flat table.
+
+```json
+{
+  "measure": {"r1_fosc": "...", "r1_tstage": "...", "ch_tpd": "...", "dc_idn": "..."},
+  "topology_groups": {
+    "ring1x": {
+      "description": "unstarved 5-stage self-loaded ring, 1x sizing",
+      "measures": ["r1_fosc", "r1_tstage"]
+    },
+    "chain": ["ch_tpd"]
+  }
+}
+```
+
+- The key is an **object**, and JSON preserves its order — the order you write
+  the topologies is the order their sub-tables appear in the record.
+- Each value is either a **bare list** of measurement names (shorthand, as
+  `chain` above) or an **object** with a `measures` list plus an optional
+  one-line `description`, rendered as the sub-table's caption. Those are the
+  only two keys accepted; anything else is rejected as a typo rather than
+  silently ignored.
+- Every name must be defined in `measure` or `raw_measures`. A name that is
+  not is a load error, because a typo would otherwise cost the record a whole
+  column without saying so.
+- **Partial grouping is fine.** Anything no group claims is collected into a
+  trailing `ungrouped` sub-table — measurements are never dropped for being
+  unassigned. (`ungrouped` is reserved; a manifest may not use it as a
+  topology name.) A measurement may appear in more than one group if it
+  genuinely belongs to more than one story; it is rendered in each.
+- The pass/fail column of a topology's sub-table reports only *that
+  topology's* check failures — a neighbouring sub-circuit's FAIL would be
+  noise there. A point that failed to simulate at all shows ERROR in every
+  sub-table, and grid-level check failures are still reported once for the
+  whole record. The overall verdict is unchanged.
+- The **Spread across the grid** table gains a leading `topology` column and
+  is ordered by group, so the per-measurement summary reads the same way.
+
+Omit the key — as every single-topology testbench, including
+`harness-selftest`, does — and the record renders exactly the flat table it
+always has.
+
 ## What a run writes
 
 One run mints one `<record-id>` (`<YYYYMMDD>-<HHMMSS>-<short-git-sha>`) and

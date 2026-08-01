@@ -193,6 +193,86 @@ class TestbenchTests(unittest.TestCase):
                 )
             )
 
+    def test_no_topology_groups_by_default(self):
+        """Single-topology manifests stay flat -- '()' is the renderer's signal."""
+        tb = testbench.load(self._write("v1 out 0 dc {vdd_val}\n"))
+        self.assertEqual(tb.topology_groups, ())
+        self.assertEqual(tb.measure_groups, ())
+
+    def _multi_topology(self, groups) -> Path:
+        return self._write(
+            "v1 out 0 dc {vdd_val}\n",
+            {
+                "measure": {"ring_f": "v(a)", "ring_i": "v(b)", "chain_tpd": "v(c)"},
+                "topology_groups": groups,
+            },
+        )
+
+    def test_topology_groups_load_in_manifest_order(self):
+        tb = testbench.load(
+            self._multi_topology(
+                {"ring": ["ring_f", "ring_i"], "chain": ["chain_tpd"]}
+            )
+        )
+        self.assertEqual([g.name for g in tb.topology_groups], ["ring", "chain"])
+        self.assertEqual(tb.topology_groups[0].measures, ("ring_f", "ring_i"))
+        self.assertEqual(tb.topology_groups[0].description, "")
+        # No leftovers -> measure_groups is exactly what the manifest declared.
+        self.assertEqual([g.name for g in tb.measure_groups], ["ring", "chain"])
+
+    def test_topology_group_object_form_carries_a_description(self):
+        tb = testbench.load(
+            self._multi_topology(
+                {
+                    "ring": {
+                        "description": "5-stage current-starved ring",
+                        "measures": ["ring_f", "ring_i"],
+                    },
+                    "chain": ["chain_tpd"],
+                }
+            )
+        )
+        self.assertEqual(tb.topology_groups[0].description, "5-stage current-starved ring")
+        self.assertEqual(tb.topology_groups[0].measures, ("ring_f", "ring_i"))
+        self.assertEqual(tb.topology_groups[1].description, "")
+
+    def test_partial_grouping_collects_the_rest_into_an_ungrouped_group(self):
+        """A group set covering only SOME names must not drop the others."""
+        tb = testbench.load(self._multi_topology({"ring": ["ring_f", "ring_i"]}))
+        groups = tb.measure_groups
+        self.assertEqual([g.name for g in groups], ["ring", testbench.UNGROUPED_TOPOLOGY])
+        self.assertEqual(groups[-1].measures, ("chain_tpd",))
+        # Every measurement is still accounted for exactly once.
+        self.assertEqual(
+            sorted(n for g in groups for n in g.measures), sorted(tb.measure_names)
+        )
+
+    def test_topology_groups_reject_an_unknown_measurement_name(self):
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(self._multi_topology({"ring": ["ring_f", "typo_here"]}))
+        self.assertIn("typo_here", str(ctx.exception))
+
+    def test_topology_groups_reject_a_misspelled_key(self):
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(self._multi_topology({"ring": {"measure": ["ring_f"]}}))
+        self.assertIn("measures", str(ctx.exception))
+
+    def test_topology_groups_reject_the_reserved_ungrouped_name(self):
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(
+                self._multi_topology({testbench.UNGROUPED_TOPOLOGY: ["ring_f"]})
+            )
+        self.assertIn("reserved", str(ctx.exception))
+
+    def test_topology_groups_reject_an_empty_group(self):
+        with self.assertRaises(ValueError):
+            testbench.load(self._multi_topology({"ring": []}))
+
+    def test_topology_groups_must_be_an_object(self):
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(self._multi_topology([["ring_f"]]))
+        self.assertIn("topology_groups", str(ctx.exception))
+
     def test_the_repo_selftest_testbench_is_valid(self):
         tb = testbench.load(SIM_DIR / "harness-selftest")
         self.assertEqual(tb.nominal_supply_v, 3.3)
@@ -538,6 +618,23 @@ class RecordRenderingTests(unittest.TestCase):
         text = report.render_record(dirty, "harness-selftest")
         self.assertIn("dirty working tree", text)
 
+    def test_a_single_topology_record_renders_one_flat_table(self):
+        """No topology_groups -> exactly the table this harness always wrote."""
+        self.assertEqual(self.record["topology_groups"], [])
+        text = report.render_record(self.record, "harness-selftest")
+        self.assertIn("| corner-id | vout | pass/fail |", text)
+        self.assertIn("| measurement | min | max | mean | spread % | limits |", text)
+        self.assertNotIn("| topology |", text)
+
+    def test_rendering_tolerates_a_record_written_before_topology_groups(self):
+        """Records are append-only; older ones have no topology_groups key."""
+        legacy = dict(self.record)
+        legacy.pop("topology_groups")
+        self.assertEqual(
+            report.render_record(legacy, "harness-selftest"),
+            report.render_record(self.record, "harness-selftest"),
+        )
+
     def test_netlist_snapshot_is_frozen_and_append_only(self):
         experiment = self.tb.experiment_dir
         path = report.write_netlist_snapshot(self.tb, experiment, "20260729-153000-1a7ef75")
@@ -546,6 +643,145 @@ class RecordRenderingTests(unittest.TestCase):
         self.assertIn(self.tb.netlist_sha256, path.read_text())
         with self.assertRaises(report.RecordExists):
             report.write_netlist_snapshot(self.tb, experiment, "20260729-153000-1a7ef75")
+
+
+class MultiTopologyRenderingTests(unittest.TestCase):
+    """A deck with several sub-circuits renders one sub-table per topology.
+
+    Mirrors the shape sim/devchar-delay needs: unstarved ring metrics, an
+    inverter-chain delay, and a bare-device drive current that the manifest
+    deliberately leaves ungrouped.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        tb_dir = root / "devchar-example" / "testbench"
+        tb_dir.mkdir(parents=True)
+        (tb_dir / "x.spice").write_text("v1 out 0 dc {vdd_val}\n")
+        (tb_dir / "tb.json").write_text(
+            json.dumps(
+                {
+                    "name": "devchar-example",
+                    "netlist": "x.spice",
+                    "measure": {
+                        "r1_fosc": "v(a)",
+                        "r1_tstage": "v(b)",
+                        "ch_tpd": "v(c)",
+                        "dc_idn": "v(d)",
+                    },
+                    "topology_groups": {
+                        "ring1x": {
+                            "description": "unstarved 5-stage ring, 1x sizing",
+                            "measures": ["r1_fosc", "r1_tstage"],
+                        },
+                        "chain": ["ch_tpd"],
+                    },
+                    "checks": {"ch_tpd": {"max": 1.0e-9}},
+                }
+            )
+        )
+        self.tb = testbench.load(tb_dir)
+        self.pdk = fake_pdk(root / "gf180mcuD")
+        self.points = corners.build_grid(
+            corners.resolve_corners(["mos"]), (-40, 27, 125), corners.supply_points(3.3, 0.10)
+        )
+        self.results = [
+            runner.PointResult(
+                point=p,
+                status="ok",
+                measurements={
+                    "r1_fosc": 1.0e9 + i * 1.0e6,
+                    "r1_tstage": 1.0e-11,
+                    "ch_tpd": 2.0e-9,  # violates the max check, in 'chain' only
+                    "dc_idn": 1.0e-3,
+                },
+            )
+            for i, p in enumerate(self.points)
+        ]
+        self.record = report.build_record(
+            tb=self.tb,
+            pdk=self.pdk,
+            points=self.points,
+            results=self.results,
+            ngspice="ngspice-46",
+            repo_root=SIM_DIR,
+            record_id="20260729-153000-1a7ef75",
+            started_utc="2026-07-29T15:30:00+00:00",
+            wall_seconds=9.5,
+        )
+        self.text = report.render_record(self.record, "devchar-example")
+
+    def _block(self, topology: str) -> str:
+        """The rendered lines belonging to one topology's sub-table."""
+        captions = [f"  **{g['name']}**" for g in self.record["topology_groups"]]
+        marker = f"  **{topology}**"
+        start = self.text.index(marker)
+        ends = [self.text.index(c) for c in captions if self.text.index(c) > start]
+        return self.text[start : min(ends)] if ends else self.text[start:]
+
+    def test_the_record_carries_the_grouping_with_an_ungrouped_fallback(self):
+        self.assertEqual(
+            [g["name"] for g in self.record["topology_groups"]],
+            ["ring1x", "chain", testbench.UNGROUPED_TOPOLOGY],
+        )
+
+    def test_one_sub_table_per_topology_instead_of_one_flat_table(self):
+        self.assertIn("| corner-id | r1_fosc | r1_tstage | pass/fail |", self.text)
+        self.assertIn("| corner-id | ch_tpd | pass/fail |", self.text)
+        self.assertIn("| corner-id | dc_idn | pass/fail |", self.text)
+        self.assertNotIn(
+            "| corner-id | r1_fosc | r1_tstage | ch_tpd | dc_idn | pass/fail |", self.text
+        )
+
+    def test_group_captions_carry_the_description_when_given(self):
+        self.assertIn("**ring1x** — unstarved 5-stage ring, 1x sizing", self.text)
+        self.assertIn("**chain**\n", self.text)  # no description declared
+
+    def test_an_ungrouped_measurement_still_gets_a_table(self):
+        self.assertIn(f"**{testbench.UNGROUPED_TOPOLOGY}**", self.text)
+        self.assertIn("dc_idn", self._block(testbench.UNGROUPED_TOPOLOGY))
+
+    def test_a_failure_appears_only_in_its_own_topology_table(self):
+        chain = self._block("chain")
+        ring = self._block("ring1x")
+        self.assertIn("FAIL — ch_tpd max=", chain)
+        self.assertNotIn("FAIL", ring)
+        self.assertIn("| PASS |", ring)
+        self.assertIn("**Overall: FAIL**", self.text)
+
+    def test_every_point_appears_in_every_sub_table(self):
+        for topology in ("ring1x", "chain", testbench.UNGROUPED_TOPOLOGY):
+            block = self._block(topology)
+            for point in self.points:
+                self.assertIn(f"`{point.corner_id}`", block, topology)
+
+    def test_the_spread_table_names_each_measurement_s_topology(self):
+        self.assertIn(
+            "| topology | measurement | min | max | mean | spread % | limits |", self.text
+        )
+        self.assertIn("| `ring1x` | `r1_fosc` |", self.text)
+        self.assertIn("| `chain` | `ch_tpd` |", self.text)
+        self.assertIn(f"| `{testbench.UNGROUPED_TOPOLOGY}` | `dc_idn` |", self.text)
+
+    def test_grid_level_failures_are_reported_once_for_the_whole_record(self):
+        summary = report.summarize(self.results, self.tb.measure_names)
+        failures = report.evaluate_checks(
+            {"r1_fosc": {"max_spread_pct": 0.1}}, self.results, summary
+        )
+        self.assertEqual([f["at"] for f in failures], ["grid"])
+        record = dict(self.record)
+        record["checks"] = dict(self.record["checks"])
+        record["checks"]["failures"] = failures
+        record["checks"]["spec"] = {"r1_fosc": {"max_spread_pct": 0.1}}
+        record["status"] = "fail"
+        text = report.render_record(record, "devchar-example")
+        self.assertEqual(text.count("Grid-level check failures:"), 1)
+
+    def test_every_ratified_field_survives_the_grouped_layout(self):
+        for field in RecordRenderingTests.RATIFIED_FIELDS:
+            self.assertIn(f"**{field}**", self.text, f"missing ratified field {field!r}")
 
 
 if __name__ == "__main__":

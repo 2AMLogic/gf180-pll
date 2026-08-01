@@ -30,6 +30,15 @@ Two measurement mechanisms, because a bare post-analysis ``let`` expression
                   and anything else ngspice's own .measure syntax supports.
                   This is what most of this repo's real campaigns (delay
                   chains, lock time, jitter) actually need.
+
+An optional third key, ``topology_groups``, exists purely for the *record*:
+a campaign whose deck carries several sub-circuits (a delay-cell deck with
+unstarved rings, starved rings, an inverter chain and bare devices) would
+otherwise render as one 27-column table with no hint of which measurement
+belongs to which topology. Declaring the grouping lets the renderer emit one
+sub-table per topology instead. It changes nothing about how the deck is
+composed, run, parsed or checked -- omit it and every campaign behaves
+exactly as before.
 """
 
 from __future__ import annotations
@@ -56,11 +65,34 @@ FORBIDDEN_DIRECTIVES = (
     ".control", ".endc", ".end", ".lib", ".temp", ".include", ".measure", ".meas",
 )
 
+#: Name of the synthetic group that collects measurements a manifest's
+#: ``topology_groups`` did not assign to any topology. Reserved: a manifest
+#: may not declare a group by this name.
+UNGROUPED_TOPOLOGY = "ungrouped"
+
+#: Keys a ``topology_groups`` entry may carry in its object form. Anything
+#: else is a typo (``measure`` for ``measures`` being the obvious one) and is
+#: rejected rather than silently ignored.
+TOPOLOGY_GROUP_KEYS = ("measures", "description")
+
 
 @dataclass
 class RawMeasure:
     analysis: str
     expr: str
+
+
+@dataclass
+class TopologyGroup:
+    """One sub-circuit / topology's slice of a testbench's measurements.
+
+    Only the *record* consumes this: the deck, the sweep and the checks are
+    all indifferent to grouping.
+    """
+
+    name: str
+    measures: tuple[str, ...]
+    description: str = ""
 
 
 @dataclass
@@ -78,6 +110,7 @@ class Testbench:
     analyses: tuple[str, ...] = ("op",)
     measure: dict[str, str] = field(default_factory=dict)
     raw_measures: dict[str, RawMeasure] = field(default_factory=dict)
+    topology_groups: tuple[TopologyGroup, ...] = ()
     params: dict[str, str | float] = field(default_factory=dict)
     checks: dict[str, dict] = field(default_factory=dict)
     options: tuple[str, ...] = ()
@@ -99,6 +132,36 @@ class Testbench:
     def measure_names(self) -> list[str]:
         """Every measurement name, ``measure`` then ``raw_measures``, in order."""
         return list(self.measure) + list(self.raw_measures)
+
+    @property
+    def measure_groups(self) -> tuple[TopologyGroup, ...]:
+        """The topology grouping the record should render, or ``()``.
+
+        Empty when the manifest declares no ``topology_groups`` -- that is the
+        signal to the renderer to keep the single flat table single-topology
+        testbenches have always produced.
+
+        When groups *are* declared, any measurement no group claimed is
+        collected into a trailing :data:`UNGROUPED_TOPOLOGY` group, so a
+        partially-grouped manifest still renders every measurement rather than
+        silently dropping the ones nobody assigned.
+        """
+        if not self.topology_groups:
+            return ()
+        claimed = {name for group in self.topology_groups for name in group.measures}
+        leftover = tuple(name for name in self.measure_names if name not in claimed)
+        groups = tuple(self.topology_groups)
+        if leftover:
+            groups += (
+                TopologyGroup(
+                    name=UNGROUPED_TOPOLOGY,
+                    measures=leftover,
+                    description=(
+                        "measurements this manifest's topology_groups did not assign"
+                    ),
+                ),
+            )
+        return groups
 
     @property
     def netlist_sha256(self) -> str:
@@ -139,6 +202,86 @@ def _load_raw_measures(manifest: dict, path: Path) -> dict[str, RawMeasure]:
             )
         raw[name] = RawMeasure(analysis=spec.get("analysis", "tran"), expr=spec["expr"])
     return raw
+
+
+def _load_topology_groups(
+    manifest: dict, path: Path, known: list[str]
+) -> tuple[TopologyGroup, ...]:
+    """Parse the optional ``topology_groups`` key.
+
+    Two accepted spellings per group -- a bare list of measurement names, or
+    an object carrying that list plus a one-line ``description`` rendered as
+    the sub-table's caption::
+
+        "topology_groups": {
+          "ring1x": ["r1_fosc", "r1_tstage"],
+          "ring4x": {"description": "4x sizing", "measures": ["r4_fosc"]}
+        }
+
+    JSON objects keep their insertion order, so the manifest's order is the
+    order the record's sub-tables appear in.
+    """
+    raw = manifest.get("topology_groups")
+    if raw is None:
+        return ()
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"{path}: 'topology_groups' must be an object mapping a topology name to "
+            "either a list of measurement names or an object with a 'measures' list"
+        )
+
+    known_set = set(known)
+    groups: list[TopologyGroup] = []
+    for name, spec in raw.items():
+        if not name or not isinstance(name, str):
+            raise ValueError(f"{path}: topology_groups keys must be non-empty strings")
+        if name == UNGROUPED_TOPOLOGY:
+            raise ValueError(
+                f"{path}: topology name {UNGROUPED_TOPOLOGY!r} is reserved for the "
+                "measurements no group claimed; pick another name"
+            )
+        description = ""
+        if isinstance(spec, list):
+            measures = spec
+        elif isinstance(spec, dict):
+            unknown_keys = sorted(set(spec) - set(TOPOLOGY_GROUP_KEYS))
+            if unknown_keys:
+                raise ValueError(
+                    f"{path}: topology_groups[{name!r}] has unknown key(s) "
+                    f"{unknown_keys}; supported keys are {list(TOPOLOGY_GROUP_KEYS)}"
+                )
+            if "measures" not in spec:
+                raise ValueError(
+                    f"{path}: topology_groups[{name!r}] must have a 'measures' list"
+                )
+            measures = spec["measures"]
+            description = spec.get("description", "")
+            if not isinstance(description, str):
+                raise ValueError(
+                    f"{path}: topology_groups[{name!r}].description must be a string"
+                )
+        else:
+            raise ValueError(
+                f"{path}: topology_groups[{name!r}] must be a list of measurement names "
+                "or an object with a 'measures' list"
+            )
+
+        if not isinstance(measures, list) or not measures:
+            raise ValueError(
+                f"{path}: topology_groups[{name!r}] must list at least one measurement name"
+            )
+        # An unknown name here would silently cost the record a column, so it
+        # is a hard error rather than something to skip over.
+        missing = [m for m in measures if m not in known_set]
+        if missing:
+            raise ValueError(
+                f"{path}: topology_groups[{name!r}] names measurement(s) {missing} that "
+                "are not defined in 'measure' or 'raw_measures'"
+            )
+        groups.append(
+            TopologyGroup(name=name, measures=tuple(measures), description=description)
+        )
+    return tuple(groups)
 
 
 def load(directory: str | Path) -> Testbench:
@@ -191,6 +334,10 @@ def load(directory: str | Path) -> Testbench:
                 f"analysis ({analyses!r})"
             )
 
+    topology_groups = _load_topology_groups(
+        manifest, manifest_path, list(measure) + list(raw_measures)
+    )
+
     methodology = manifest.get("methodology", ())
     if isinstance(methodology, str):
         methodology = (methodology,) if methodology else ()
@@ -213,6 +360,7 @@ def load(directory: str | Path) -> Testbench:
         analyses=analyses,
         measure=measure,
         raw_measures=raw_measures,
+        topology_groups=topology_groups,
         params={k: v for k, v in manifest.get("params", {}).items()},
         checks=dict(manifest.get("checks", {})),
         options=tuple(manifest.get("options", ())),
