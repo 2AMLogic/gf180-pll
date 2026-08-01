@@ -1,0 +1,6 @@
+# Icp delivered per trim code -- mean of the two polarities at Vctrl = 1.65 V, min/max across every corner
+units,icp_min_a,icp_max_a
+1,1.67862e-06,1.80253e-06
+2,3.35717e-06,3.60479e-06
+3,5.03566e-06,5.40703e-06
+4,6.71411e-06,7.20923e-06

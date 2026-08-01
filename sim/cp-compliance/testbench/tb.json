@@ -1,0 +1,228 @@
+{
+  "name": "cp-compliance",
+  "description": "charge-pump output compliance range, DC UP/DN current mismatch, and 2-bit Icp trim range (DC bench)",
+  "claim": "#9 (design-input claim, not a spec line) -- (a) does the charge pump hold BOTH current sources in saturation across the whole ~0.9-2.4 V Vctrl window of DR-001 Decision 2, at every PVT corner; (b) how large is the UP/DN mismatch in current across that window; and (c) what range and step does the 2-bit Icp trim of DR-001 Decision 1 actually deliver. The mismatch numbers are the measured SYSTEMATIC part of the up/down mismatch budget stated in `design/README.md`, which #15's Monte Carlo campaign (`mc-cp-mismatch`) verifies statistically. The TIMING half of the same claim -- the effective UP/DN switching-time skew a DC sweep cannot see -- is the companion manifest `sim/cp-compliance/testbench-switching`, which writes into this same experiment directory.",
+  "methodology": [
+    "**Compliance / saturation criterion**: not inferred from the flatness of the I-V curve but read off the devices -- at Vctrl = 0.9 V and Vctrl = 2.4 V the record reports the smallest `|vds| - |vdsat|` among the two output CASCODE devices. Positive at both ends, at every corner and trim code, is the pass condition, and it is a harness `check` on the derived `satcasc_lo_v` / `satcasc_hi_v` measurements rather than a sentence in the text. The cascode is the right device to key the verdict on: it is the one whose operating point the output voltage actually moves. The bottom mirror devices are reported separately for context -- a wide-swing cascode bias deliberately parks them AT the saturation boundary (that is what buys the headroom) and their bias is set by the mirror, not by Vctrl, so a margin near zero there is the design working as intended rather than a compliance failure. Current flatness across the window is reported alongside as the consequence.",
+    "**Mismatch measurement topology**: two charge-pump instances, one hardwired UP-active and one DN-active, share ONE swept output node through separate 0 V ammeters, so both polarities are measured at identical output voltages in a single DC sweep. Both instances always carry the same trim code, because DR-001's 2-bit trim is a single shared code.",
+    "**Bias generation is out of scope and idealized**: the four bias nodes (bottom-mirror and wide-swing-cascode diode, per polarity) are driven from ideal current sources, exactly as in `sim/devchar-cp` -- at 4x the unit-leg current, because the bias diodes are 4x the unit geometry (the mirror ratio into each leg is therefore 1x, while the bias nodes get 4x the transconductance to drive the legs' aggregate gate capacitance). The mismatch reported here is therefore the OUTPUT STAGE's own; a real reference generator adds its own contribution, which `design/README.md` carries as a separate line of the budget.",
+    "DC sweep: 0 to 3.63 V in 20 mV steps. ngspice's control-mode `dc` does not accept a parameter reference for its sweep bounds, so the sweep runs to the top of the supply grid at every corner -- a superset of each corner's own range; the extraction uses each corner's actual window and ignores the surplus points. The saturation margins are then read from two explicit operating points (`alter vsw` + `op` at 0.9 V and 2.4 V), which is what the pre-migration deck did and what keeps the numbers identical.",
+    "**How the reduction is wired to the harness**: the sweep and the two operating points are written out by the deck itself (`wrdata`) and declared as `raw_files`; `testbench/derive.py` performs, line for line, the same extraction the pre-migration `run.sh` did in awk -- window endpoints located on the 20 mV grid by nearest-index, peak-to-peak flatness over the window, point-by-point mismatch, and the minimum `|vds| - |vdsat|` over the cascode and over the bottom-mirror devices. Every extracted quantity is a per-point derived measurement, so `checks` gate the compliance verdict directly and the record's spread table covers them.",
+    "**One ngspice invocation per (PVT corner, trim code)** -- 45 x 4 = 180 points, the pre-migration grid unchanged. The trim code is a declared `sweeps` axis rather than a run.sh loop variable.",
+    "`rshunt = 1e12` is set: a disabled trim leg's cascode mid-node is driven only by two off devices and is floating for the DC solution. It contributes 3.3 pA at 3.3 V, below the abstol floor of the measurement.",
+    "**Limitation (nominal skew only)**: `sw_stat_global = sw_stat_mismatch = 0`. Everything here is systematic; RANDOM device mismatch is #15's campaign, and this record's numbers are what that distribution should be centred on.",
+    "**Axes not swept**: passive corner sections (`res_*`, `mimcap_*`, `moscap_*`) N/A -- the DUT is `nfet_03v3`/`pfet_03v3` only (DR-002 Decision 3); it contains no resistors or capacitors.",
+    "**Cross-record comparability (simulator / host delta)**: the pre-migration records this campaign supersedes (`20260731-091153-7d78a47`, `20260731-122451-63e4b47`, `20260731-194124-afa338c`) were taken with **ngspice-46 on Darwin 25.6.0 / arm64**; harness runs on this project's Linux host use **ngspice-42 on Linux x86_64**. The record's own Environment provenance field states the simulator and host of THIS run and is authoritative for it -- this bullet exists so the delta against the superseded record is never left implicit. Both ngspice builds were checked against the pre-migration record at typical/27 C/3.30 V and the DC bench reproduces it to every printed digit, so the DC numbers here are simulator-version-insensitive."
+  ],
+  "dut_export": {
+    "top": "pfd_cp"
+  },
+  "netlist": "tb_cp_dc.spice",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "mos"
+  ],
+  "options": [
+    "abstol=1e-14",
+    "reltol=1e-4",
+    "vntol=1e-7",
+    "rshunt=1e12"
+  ],
+  "params": {
+    "iunit": "8u"
+  },
+  "sweeps": {
+    "code": {
+      "description": "the 2-bit Icp trim code b1 b0 (Icp = Iunit * (1 + b0 + 2*b1)); all four codes, one invocation each",
+      "points": {
+        "code00": {
+          "description": "b1 b0 = 00 -> 1 unit leg",
+          "params": {
+            "b1_code": "0",
+            "b0_code": "0"
+          }
+        },
+        "code01": {
+          "description": "b1 b0 = 01 -> 2 unit legs",
+          "params": {
+            "b1_code": "0",
+            "b0_code": "1"
+          }
+        },
+        "code10": {
+          "description": "b1 b0 = 10 -> 3 unit legs (the nominal setting)",
+          "params": {
+            "b1_code": "1",
+            "b0_code": "0"
+          }
+        },
+        "code11": {
+          "description": "b1 b0 = 11 -> 4 unit legs",
+          "params": {
+            "b1_code": "1",
+            "b0_code": "1"
+          }
+        }
+      }
+    }
+  },
+  "analyses": [
+    "dc vsw 0 3.63 0.020",
+    "let i_up = i(vam_up)",
+    "let i_dn = i(vam_dn)",
+    "set wr_singlescale",
+    "wrdata iv_cp.dat i_up i_dn",
+    "alter vsw = 0.9",
+    "op",
+    "let nbot_vds = @m.xcpd.xn_base.xmbot.m0[vds]",
+    "let nbot_vdsat = @m.xcpd.xn_base.xmbot.m0[vdsat]",
+    "let ncasc_vds = @m.xcpd.xn_base.xmcasc.m0[vds]",
+    "let ncasc_vdsat = @m.xcpd.xn_base.xmcasc.m0[vdsat]",
+    "let ptop_vds = @m.xcpu.xp_base.xmtop.m0[vds]",
+    "let ptop_vdsat = @m.xcpu.xp_base.xmtop.m0[vdsat]",
+    "let pcasc_vds = @m.xcpu.xp_base.xmcasc.m0[vds]",
+    "let pcasc_vdsat = @m.xcpu.xp_base.xmcasc.m0[vdsat]",
+    "wrdata sat_lo.dat nbot_vds nbot_vdsat ncasc_vds ncasc_vdsat ptop_vds ptop_vdsat pcasc_vds pcasc_vdsat",
+    "alter vsw = 2.4",
+    "op",
+    "let nbot_vds = @m.xcpd.xn_base.xmbot.m0[vds]",
+    "let nbot_vdsat = @m.xcpd.xn_base.xmbot.m0[vdsat]",
+    "let ncasc_vds = @m.xcpd.xn_base.xmcasc.m0[vds]",
+    "let ncasc_vdsat = @m.xcpd.xn_base.xmcasc.m0[vdsat]",
+    "let ptop_vds = @m.xcpu.xp_base.xmtop.m0[vds]",
+    "let ptop_vdsat = @m.xcpu.xp_base.xmtop.m0[vdsat]",
+    "let pcasc_vds = @m.xcpu.xp_base.xmcasc.m0[vds]",
+    "let pcasc_vdsat = @m.xcpu.xp_base.xmcasc.m0[vdsat]",
+    "wrdata sat_hi.dat nbot_vds nbot_vdsat ncasc_vds ncasc_vdsat ptop_vds ptop_vdsat pcasc_vds pcasc_vdsat"
+  ],
+  "raw_files": {
+    "iv_cp.dat": {
+      "description": "the complete output characteristic of both polarities, one row per 20 mV DC sweep step",
+      "columns": [
+        "vsw",
+        "i_up",
+        "i_dn"
+      ],
+      "retain": false
+    },
+    "sat_lo.dat": {
+      "description": "|vds| and |vdsat| of the four devices the compliance verdict reads, at the LOW end of the Vctrl window (0.9 V)",
+      "columns": [
+        "scale",
+        "nbot_vds",
+        "nbot_vdsat",
+        "ncasc_vds",
+        "ncasc_vdsat",
+        "ptop_vds",
+        "ptop_vdsat",
+        "pcasc_vds",
+        "pcasc_vdsat"
+      ],
+      "retain": false
+    },
+    "sat_hi.dat": {
+      "description": "the same four devices at the HIGH end of the Vctrl window (2.4 V)",
+      "columns": [
+        "scale",
+        "nbot_vds",
+        "nbot_vdsat",
+        "ncasc_vds",
+        "ncasc_vdsat",
+        "ptop_vds",
+        "ptop_vdsat",
+        "pcasc_vds",
+        "pcasc_vdsat"
+      ],
+      "retain": false
+    }
+  },
+  "measure": {
+    "satchk_ncasc_hi_v": "abs(@m.xcpd.xn_base.xmcasc.m0[vds]) - abs(@m.xcpd.xn_base.xmcasc.m0[vdsat])",
+    "satchk_pcasc_hi_v": "abs(@m.xcpu.xp_base.xmcasc.m0[vds]) - abs(@m.xcpu.xp_base.xmcasc.m0[vdsat])"
+  },
+  "derived": {
+    "module": "derive.py",
+    "measures": [
+      "units",
+      "iup_lo_a",
+      "idn_lo_a",
+      "iup_mid_a",
+      "idn_mid_a",
+      "iup_hi_a",
+      "idn_hi_a",
+      "mism_lo_pct",
+      "mism_mid_pct",
+      "mism_hi_pct",
+      "mism_absmax_pct",
+      "iup_flat_pct",
+      "idn_flat_pct",
+      "satcasc_lo_v",
+      "satcasc_hi_v",
+      "satmir_lo_v",
+      "satmir_hi_v"
+    ],
+    "tables": [
+      "cp_dc",
+      "cp_curves",
+      "cp_trim_range"
+    ]
+  },
+  "topology_groups": {
+    "compliance (the verdict)": {
+      "description": "smallest |vds|-|vdsat| at each end of the 0.9-2.4 V Vctrl window: over the two output CASCODE devices (the verdict) and over the two bottom MIRROR devices (context -- the wide-swing bias parks those at the boundary by construction)",
+      "measures": [
+        "satcasc_lo_v",
+        "satcasc_hi_v",
+        "satmir_lo_v",
+        "satmir_hi_v",
+        "satchk_ncasc_hi_v",
+        "satchk_pcasc_hi_v"
+      ]
+    },
+    "Icp trim": {
+      "description": "unit legs at this code, and the delivered current at the low/mid/high points of the Vctrl window",
+      "measures": [
+        "units",
+        "iup_lo_a",
+        "iup_mid_a",
+        "iup_hi_a",
+        "idn_lo_a",
+        "idn_mid_a",
+        "idn_hi_a"
+      ]
+    },
+    "UP/DN mismatch (systematic)": {
+      "description": "100*(iup-idn)/mean at each window point, the worst magnitude anywhere inside the window, and each polarity's peak-to-peak variation across the window as a percentage of its mid-window value",
+      "measures": [
+        "mism_lo_pct",
+        "mism_mid_pct",
+        "mism_hi_pct",
+        "mism_absmax_pct",
+        "iup_flat_pct",
+        "idn_flat_pct"
+      ]
+    }
+  },
+  "checks": {
+    "satcasc_lo_v": {
+      "min": 0.0
+    },
+    "satcasc_hi_v": {
+      "min": 0.0
+    },
+    "iup_mid_a": {
+      "min": 1e-06,
+      "min_spread_pct": 5.0
+    },
+    "idn_mid_a": {
+      "min": 1e-06,
+      "min_spread_pct": 5.0
+    }
+  }
+}

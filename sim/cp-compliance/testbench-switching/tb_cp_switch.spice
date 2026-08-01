@@ -1,0 +1,73 @@
+* gf180-pll :: cp-compliance :: UP/DN switching timing mismatch (transient)
+*
+* sim/harness fragment.  The DUT (`cp`, reached through the `pfd_cp`
+* hierarchy) is NOT in this file: the manifest's `dut_export` block has
+* design/netlist.sh export the xschem hierarchy once per record and the
+* harness `.include`s it ahead of this fragment.
+*
+* Companion to `../testbench/tb_cp_dc.spice`: that deck measures the DC current
+* mismatch and compliance, this one measures what the DC sweep cannot -- how
+* much of each polarity's current actually reaches the control node during a
+* pulse of finite width, and how far apart the two polarities are in time.
+* Both write into the same `sim/cp-compliance/` experiment directory, because
+* they substantiate one claim.
+*
+* Two instances are driven from the SAME control edge, one hardwired to
+* exercise only the UP (source) branch and one only the DN (sink) branch, each
+* into its own control node held at `vctrl` by an ideal source.  Sharing the
+* stimulus edge is the point: any measured UP-vs-DN difference is then the
+* charge pump's own asymmetry, with no stimulus skew mixed in.
+*
+* Reported per polarity:
+*   i_ss      steady-state current, late in the pulse (the DC value the switch
+*             eventually delivers)
+*   ton/toff  50%-of-i_ss crossing, referenced to the 50% control edge
+*   q         total charge delivered to the control node over the pulse,
+*             INCLUDING the tail-node charge-sharing transient at switch-on
+*   w_eff     q / i_ss -- the effective pulse width the loop actually sees
+* The headline number is the difference of the two w_eff values: an effective
+* UP/DN TIMING mismatch in seconds, which is exactly the quantity that turns
+* charge-pump asymmetry into static phase error (and hence reference spurs).
+*
+* Expects from the harness header:
+*   .lib <process corner bundle>, .temp <temp_c>
+*   .param vdd_val=<supply volts>  (also vdd_nom, temp_c)
+*   .param iunit, b0_code, b1_code          (manifest `params`)
+*   .param vctrl=<control-node voltage>     (the `x` sweep axis)
+
+* `vmid` is needed as a control-block value (the 50 % control-edge threshold
+* the turn-on/turn-off searches trigger on), and `.control` cannot see a
+* `.param`.  `.csparam` is the bridge, exactly as in the pre-migration deck.
+.csparam vsup_c={vdd_val}
+
+*------------------------------------------------------------------ supplies
+vdd vdd 0 dc 'vdd_val'
+vss vss 0 dc 0
+vhi hi 0 dc 'vdd_val'
+vlo lo 0 dc 0
+vb0 b0 0 dc 'vdd_val*b0_code'
+vb1 b1 0 dc 'vdd_val*b1_code'
+
+* Control edge, shared by both instances.  5 ns asserted -- several times the
+* PFD's own reset-delay pulse width, so the steady-state current is reached
+* well before the pulse ends and can be separated from the switching
+* transient.  200 ps edges, as in tb_pfd_deadzone.spice.
+vctl ctl 0 pulse(0 'vdd_val' 10n 200p 200p 5n 100n)
+
+*---------------------------------------------------------- UP-only instance
+xcpu ctl lo b0 b1 ibn_u icn_u ibp_u icp_u outu vdd vss cp
+iibn_u vdd ibn_u dc 'iunit'
+iicn_u vdd icn_u dc 'iunit'
+iibp_u ibp_u 0 dc 'iunit'
+iicp_u icp_u 0 dc 'iunit'
+* Control node held at vctrl; i(vou) > 0 when the pump SOURCES into it.
+vou outu 0 dc 'vctrl'
+
+*---------------------------------------------------------- DN-only instance
+xcpd lo ctl b0 b1 ibn_d icn_d ibp_d icp_d outd vdd vss cp
+iibn_d vdd ibn_d dc 'iunit'
+iicn_d vdd icn_d dc 'iunit'
+iibp_d ibp_d 0 dc 'iunit'
+iicp_d icp_d 0 dc 'iunit'
+* i(vod) < 0 when the pump SINKS from it.
+vod outd 0 dc 'vctrl'

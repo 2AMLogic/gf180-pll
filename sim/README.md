@@ -116,6 +116,24 @@ sim/
   -native replacement for the two directories' shared `${EXP}/corners/` the
   pre-harness `run.sh` relied on.
 
+  **Two manifests, one experiment directory — the other resolution.**
+  Splitting into sibling slugs is right when the sub-testbenches are different
+  *DUTs*. When they are the same DUT measured two ways, the campaign stays one
+  directory and grows a second manifest directory beside `testbench/`:
+  `sim/run_corners.py` accepts a manifest **directory path** as well as a slug,
+  and `experiment_dir` is still `directory.parent`, so both write their
+  records/corners/snapshots into the same experiment directory and supersede
+  that campaign's chain in place. `vco-tuning-range` set the precedent with
+  `testbench-stages/` (#88); `cp-compliance` follows it with
+  `testbench-switching/` (#42) — one `cp`, measured once as a DC output
+  characteristic over the trim codes and once as a transient over the control
+  voltages. The split is forced by the harness's shape, not chosen: one
+  `tb.json` names one netlist fragment and one `analyses` list, and folding
+  both benches into one deck would drag the DC bench's instances through every
+  transient. Each such manifest mints its own record, so a campaign split this
+  way has more than one current record — each stating in its **Claim** which
+  half of the claim it answers and naming its companion.
+
 - **`<record-id>`** — unique and traceable:
   `<YYYYMMDD>-<HHMMSS>-<short-git-sha>` (e.g. `20260730-142500-3f1c9ab`),
   date and time in **UTC**, sha being this repo's `HEAD` when the run
