@@ -74,7 +74,10 @@ sim/
   | `devchar-delay` | delay-cell drive/delay vs. PVT | #4 → #8 |
   | `devchar-cp` | mirror output resistance / compliance | #4 → #9 |
   | `devchar-passives` | MIM vs. MOS cap, poly-resistor options | #4 → #10 |
-  | `divider-ratio` | ÷2/3 cell moduli and speed margin, chain ratio over the whole N = 4–64 range, retiming setup closure | #11 |
+  | `divider-ratio` *(pre-`sim/harness`, superseded — see below)* | ÷2/3 cell moduli and speed margin, chain ratio over the whole N = 4–64 range, retiming setup closure | #11 |
+  | `divider-ratio-dff` | `dff_tg_3v3` setup/hold/clk→Q — the retiming flop's timing budget input | #11 |
+  | `divider-ratio-cell` | ÷2/3 single-cell moduli, both output edges, both input duty cycles, speed margin, 10 MHz band floor | #11 |
+  | `divider-ratio-chain` | full-chain ratio over N = 4–64, retiming setup closure (joins `divider-ratio-dff`) | #11 |
   | `lock-detector` | phase-error window comparator: assert/deassert and window edges | #11 |
   | `vco-tuning-range` | open-loop ring VCO range, Kvco | #8 |
   | `pfd-deadzone` | PFD + charge-pump phase-to-charge transfer through zero phase error (dead-zone freedom), and the residual charge offset at zero | #9 |
@@ -89,6 +92,29 @@ sim/
 
   New campaigns add rows here as they are created; the list is descriptive,
   not a closed set.
+
+  **A one-directory experiment can outgrow one `sim/harness` manifest.**
+  `divider-ratio` originally held three sub-testbenches (`dff_tg_3v3`
+  setup/hold, the single `div23_cell`, and the assembled `divider_chain`)
+  sharing one `sim/lib/simenv.sh`-based `run.sh` and one experiment directory
+  — but `sim/harness` ties one `tb.json` manifest to exactly one
+  `testbench/`-plus-`records/`/`corners/`/`netlist-snapshots/` experiment
+  directory (`sim/harness/testbench.py`'s `experiment_dir` is
+  `directory.parent`), because each sub-testbench is a genuinely different
+  DUT with its own sweep needs (the chain alone sweeps N = 4–64 non
+  -rectangularly; the cell sweeps only an input rate; the flop sweeps
+  neither). #41 migrated the campaign onto the harness by splitting it into
+  three sibling slugs — `divider-ratio-dff`, `divider-ratio-cell`,
+  `divider-ratio-chain` — one per DUT, following the same one-directory-per
+  -distinct-DUT precedent `devchar-delay`/`devchar-cp`/`devchar-passives`
+  already set for this repo. The original `divider-ratio` directory's
+  `records/`/`corners/`/`netlist-snapshots/` are untouched (append-only); its
+  `testbench/` (mutable) keeps the pre-harness `run.sh` and fragments as-is,
+  for provenance. `divider-ratio-chain`'s retiming-margin table is a
+  `sim/harness` **derived** cross-record join (`derived.joins`) against
+  `divider-ratio-dff`'s own derived `dff_setup_hold` table — the harness
+  -native replacement for the two directories' shared `${EXP}/corners/` the
+  pre-harness `run.sh` relied on.
 
 - **`<record-id>`** — unique and traceable:
   `<YYYYMMDD>-<HHMMSS>-<short-git-sha>` (e.g. `20260730-142500-3f1c9ab`),

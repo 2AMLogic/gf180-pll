@@ -1,0 +1,299 @@
+{
+  "name": "lock-detector",
+  "description": "window-comparator lock detector: assert/deassert acceptance over the full PVT grid, and the comparator window's edges over a phase-error ladder at the PVT extremes",
+  "claim": "#11 -> DR-002 Decision 4 (design input, not a spec line) -- does the window-comparator lock detector assert once the phase error has stayed inside its window, refuse to assert on a large static phase error or on a frequency error, and deassert when the loop is deliberately perturbed out of lock -- at every PVT corner? And where are the EDGES of that window, measured rather than inferred? DR-002 Decision 4 puts a digital lock output in v1 scope as a passive monitor (no band-search or calibration FSM), and names #12's closed-loop testbench as the consumer of the signal.",
+  "methodology": [
+    "Stimulus models the tri-state PFD's UP/DN pair: with the reference edge leading the feedback edge by tau, UP is high for tau + t_reset and DN for t_reset (ktrst = 1 ns), both falling on the reset path, so the DUT's input XOR sees exactly tau and the common reset overlap cancels.",
+    "Five independent DUT copies share each transient: swept phase error (this manifest's 'terr' sweep axis); deep in lock (tau = 0); deep out of lock (static tau = Tref/4); frequency error (feedback train 25% slow, so the error pulse beats through every width from 0 to Tref); and a copy that starts in lock and is kicked to a sustained tau = kterrbig at t = ktpert.",
+    "Every integrating node is forced to 0 V at t=0 (.ic in the fragment), so each copy starts NOT locked and has to earn the assertion inside the run rather than inherit it from the DC operating point.",
+    "The XC (deep-out-of-lock) and XD (frequency-error) assert-time measurements are marked 'optional' with 'max_measured_points: 0' checks: they must NEVER fire, and per sim/harness's expected-.measure-failure handling an absent optional result is recorded as not-measured data rather than failing the point and discarding the point's other, successful measurements -- the exact failure mode this campaign's pre-harness runner (run_deck_soft) worked around by treating 'did the transient finish' rather than 'was the log clean' as the completion test.",
+    "The XB (deep-in-lock) assert and XE (perturbation) deassert measurements are marked 'optional' with 'min_measured_points' checks equal to the full point count: they must ALWAYS fire.",
+    "Per-point pass/fail verdict (testbench/derive.py 'lock_pass') replicates the pre-harness runner's acceptance formula verbatim: deep-in-lock asserted and stayed HIGH (lb_lvl), deep-out-of-lock and frequency-error stayed LOW (lc_lvl/ld_lvl), the swept copy asserted before the perturbation kick and the perturbed copy deasserted after it. 'Before the kick' is tested as assert-time < kick-time rather than as a level averaged over the run-up to the kick, because at the slowest corners the assert transition itself falls inside any such averaging window and would read as CHATTER -- an artefact of the window, not of the flag.",
+    "Window-edge table (testbench/derive.py 'derive_tables', table 'window_edges'): for each window-ladder corner, the largest phase error that still left the swept copy asserted and the smallest that did not -- only computed for corners the run actually stepped 3+ distinct phase errors at, matching the pre-harness reduction exactly.",
+    "Verdicts are taken from levels averaged over the last 10% of the run and classified HIGH (>90% of the rail) / LOW (<10%) / CHATTER (anything between) -- that distinction is the whole point of putting hysteresis (the Schmitt readout) in the DUT.",
+    "Simulator settings: tran 200p 3.40u, reltol 1e-3, abstol 1e-10, vntol 1e-5, chgtol 1e-13.",
+    "Limitation -- low end of the reference range. The assert time is set by a weak pull-up charging a MOS capacitor, i.e. an absolute time, not a count of reference cycles. Reliable deassert requires that hold-off to be much longer than one reference period; at the 25 MHz characterised here that is tens of reference cycles, but extrapolating the same hold-off to the 1 MHz bottom of the draft reference range leaves only of order one reference period, where the flag would be expected to chatter. That extrapolation is a hand argument, not a measured result -- this record makes no claim at 1 MHz.",
+    "Limitation -- absolute window. The comparator window t_win is an inverter-chain delay, so it is an absolute time and its ratio to the reference period changes across the reference range.",
+    "Limitation -- schematic-level. No extracted parasitics; the integrating node is high-impedance and its post-layout capacitance and leakage will move both the assert time and the window. #18 must re-take this.",
+    "Statistical switches: sw_stat_global = sw_stat_mismatch = 0.",
+    "This record supersedes 20260731-162119-0a12e6c (same claim, same 95-point corner matrix, run through the sim/lib/simenv.sh shim rather than sim/harness) as a tooling migration."
+  ],
+  "dut": [
+    "design/netlist/lock_detector.spice"
+  ],
+  "netlist": "tb_lock_detector_harness.sp",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "mos"
+  ],
+  "analyses": [
+    "tran 200p 3.40u"
+  ],
+  "options": [
+    "reltol=1e-3",
+    "abstol=1e-10",
+    "vntol=1e-5",
+    "chgtol=1e-13"
+  ],
+  "params": {
+    "kfref": "25e6",
+    "ktrst": "1n",
+    "kterrbig": "8n",
+    "ktpert": "2.40u",
+    "ktstep": "200p",
+    "ktstop": "3.40u"
+  },
+  "sweeps": {
+    "terr": {
+      "description": "swept phase error (XA)",
+      "points": {
+        "e0.2n": {
+          "params": {
+            "kterr": "0.2n"
+          }
+        },
+        "e0.5n": {
+          "params": {
+            "kterr": "0.5n"
+          }
+        },
+        "e0.8n": {
+          "params": {
+            "kterr": "0.8n"
+          }
+        },
+        "e1.0n": {
+          "params": {
+            "kterr": "1.0n"
+          }
+        },
+        "e1.2n": {
+          "params": {
+            "kterr": "1.2n"
+          }
+        },
+        "e1.5n": {
+          "params": {
+            "kterr": "1.5n"
+          }
+        },
+        "e2.0n": {
+          "params": {
+            "kterr": "2.0n"
+          }
+        },
+        "e3.0n": {
+          "params": {
+            "kterr": "3.0n"
+          }
+        },
+        "e5.0n": {
+          "params": {
+            "kterr": "5.0n"
+          }
+        },
+        "e10.0n": {
+          "params": {
+            "kterr": "10.0n"
+          }
+        },
+        "e4.0n": {
+          "params": {
+            "kterr": "4.0n"
+          }
+        }
+      }
+    }
+  },
+  "grid": [
+    {
+      "description": "full 45-point PVT grid at a fixed phase error (4 ns) comfortably outside the nominal ~1.2 ns window, so the grid point is an unambiguous out-of-window case at every corner",
+      "axes": {
+        "terr": [
+          "e4.0n"
+        ]
+      }
+    },
+    {
+      "description": "phase-error ladder at the nominal corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "terr": [
+          "e0.2n",
+          "e0.5n",
+          "e0.8n",
+          "e1.0n",
+          "e1.2n",
+          "e1.5n",
+          "e2.0n",
+          "e3.0n",
+          "e5.0n",
+          "e10.0n"
+        ]
+      }
+    },
+    {
+      "description": "phase-error ladder at the hot/low-supply extreme of the slow and fast MOS bundles",
+      "corners": [
+        "ss",
+        "ff"
+      ],
+      "temperatures_c": [
+        125
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "terr": [
+          "e0.2n",
+          "e0.5n",
+          "e0.8n",
+          "e1.0n",
+          "e1.2n",
+          "e1.5n",
+          "e2.0n",
+          "e3.0n",
+          "e5.0n",
+          "e10.0n"
+        ]
+      }
+    },
+    {
+      "description": "phase-error ladder at the cold/high-supply extreme of the slow and fast MOS bundles",
+      "corners": [
+        "ss",
+        "ff"
+      ],
+      "temperatures_c": [
+        -40
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "terr": [
+          "e0.2n",
+          "e0.5n",
+          "e0.8n",
+          "e1.0n",
+          "e1.2n",
+          "e1.5n",
+          "e2.0n",
+          "e3.0n",
+          "e5.0n",
+          "e10.0n"
+        ]
+      }
+    }
+  ],
+  "raw_measures": {
+    "twin_r": {
+      "analysis": "tran",
+      "expr": "trig v(wstep) val='vdd_val/2' rise=1 targ v(wout) val='vdd_val/2' rise=1"
+    },
+    "twin_f": {
+      "analysis": "tran",
+      "expr": "trig v(wstep) val='vdd_val/2' fall=1 targ v(wout) val='vdd_val/2' fall=1"
+    },
+    "ta_asrt": {
+      "analysis": "tran",
+      "expr": "when v(locka)='vdd_val/2' rise=1",
+      "optional": true
+    },
+    "tb_asrt": {
+      "analysis": "tran",
+      "expr": "when v(lockb)='vdd_val/2' rise=1",
+      "optional": true
+    },
+    "tc_asrt": {
+      "analysis": "tran",
+      "expr": "when v(lockc)='vdd_val/2' rise=1",
+      "optional": true
+    },
+    "td_asrt": {
+      "analysis": "tran",
+      "expr": "when v(lockd)='vdd_val/2' rise=1",
+      "optional": true
+    },
+    "te_asrt": {
+      "analysis": "tran",
+      "expr": "when v(locke)='vdd_val/2' rise=1",
+      "optional": true
+    },
+    "la_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(locka) from='0.9*ktstop' to='ktstop'"
+    },
+    "lb_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(lockb) from='0.9*ktstop' to='ktstop'"
+    },
+    "lc_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(lockc) from='0.9*ktstop' to='ktstop'"
+    },
+    "ld_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(lockd) from='0.9*ktstop' to='ktstop'"
+    },
+    "le_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(locke) from='0.9*ktstop' to='ktstop'"
+    },
+    "va_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(vwina) from='0.9*ktstop' to='ktstop'"
+    },
+    "te_deas": {
+      "analysis": "tran",
+      "expr": "when v(locke)='vdd_val/2' fall=1",
+      "optional": true
+    },
+    "le_pre": {
+      "analysis": "tran",
+      "expr": "avg v(locke) from='0.9*ktpert' to='ktpert'"
+    },
+    "iavg": {
+      "analysis": "tran",
+      "expr": "avg i(vdd) from='0.5*ktstop' to='ktstop'"
+    }
+  },
+  "checks": {
+    "tc_asrt": {
+      "max_measured_points": 0
+    },
+    "td_asrt": {
+      "max_measured_points": 0
+    },
+    "tb_asrt": {
+      "min_measured_points": 95
+    },
+    "te_deas": {
+      "min_measured_points": 95
+    }
+  },
+  "derived": {
+    "module": "derive.py",
+    "measures": [
+      "lock_pass"
+    ],
+    "tables": [
+      "window_edges"
+    ]
+  }
+}

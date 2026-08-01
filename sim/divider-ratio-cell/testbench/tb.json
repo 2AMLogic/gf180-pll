@@ -1,0 +1,209 @@
+{
+  "name": "divider-ratio-cell",
+  "description": "div23_cell single-cell divide-by-2/3 correctness, both output edges, both input duty cycles, speed margin, and the 10 MHz band-floor check",
+  "claim": "#11 -> DR-001 Decision 3 (design input, not a spec line) -- does one div23_cell divide by exactly 2 with its modulus bit low and by exactly 3 with it high, on both output edges and for both input duty cycles, at the top and the bottom of the v1 output band, at every PVT corner? Includes the first-stage speed-margin question DR-001 Decision 3 asks explicitly (\"the first divider stage must run at max VCO frequency at the worst corner\") and the \"static CMOS has no minimum clock frequency\" property the logic family was chosen for.",
+  "methodology": [
+    "Six independent copies of the identical cell share one transient, so a single run covers the whole single-cell acceptance set: P=0 and P=1 at 50% input duty, P=0 at 33% duty and P=1 at 67% duty (the both-edges check -- a swallowing cell emits a 33%-duty output, so every downstream cell is clocked by a duty-distorted waveform and division must still be exact, which is only true of a purely rising-edge-triggered cell), and P=1 at 1.5x and 2.0x the run's input rate.",
+    "Ratio criterion: two consecutive output periods measured between the 1st and 3rd rising 50% crossings, divided by the cell's own input period; a checks min/max of 0.05 around the expected integer separates N from N+-1 with an order of magnitude to spare on both sides -- well inside 0.5 and well outside the .measure interpolation resolution, which scales with the max timestep.",
+    "Every edge search carries a TD window that starts at the first input clock edge. That is load-bearing: the operating-point solver can leave a latch's feedback loop on its metastable midpoint and the transient resolves it to an arbitrary state in the first nanosecond, which an unwindowed 'first rising edge' search would mistake for a divided output edge (observed on this cell at ff/125 C).",
+    "MODOUT pulse width of the divide-by-3 copy must be one input period: the preceding (2x faster) cell has to see it as exactly one of ITS output periods, which is what makes the chain's N = 2^k + sum(p_i 2^i) hold.",
+    "Input rate is this manifest's 'rate' sweep axis (200 MHz, the v1 output ceiling per DR-002 Decision 2, and 10 MHz, the output floor); within each run two further copies are clocked at 1.5x/2x that rate, so the speed-margin points are covered at all 45 PVT points at both rates as well.",
+    "i_cell_a is the six copies' combined supply current divided by six, computed as a chained raw .measure param expression (i_cell_a = abs(iavg)/6) rather than in a post-processing step, so the record's own .measure output is the number reported.",
+    "pw_div2_s / pw_div3_s (testbench/derive.py) are the divide-by-2 / divide-by-3 output high times, sign-corrected by adding one output period when the DC operating point happens to start the cell high (rise #3 and fall #3 then land one period apart in the other order) -- the same correction the pre-harness runner applied in awk.",
+    "Simulator settings: tran max step = input period / 250, stop = 12 input periods; reltol 1e-3, abstol 1e-10, vntol 1e-5, chgtol 1e-13.",
+    "Limitation -- schematic-level. No extracted parasitics and no wire load between cells; the real inter-cell load is one cell input plus routing. Speed margin therefore reads optimistic and must be re-taken post-layout (#18).",
+    "Statistical switches: sw_stat_global = sw_stat_mismatch = 0.",
+    "This record supersedes 20260731-171816-0a12e6c (same claim, same 90-point grid, run through the sim/lib/simenv.sh shim rather than sim/harness) as a tooling migration."
+  ],
+  "dut": [
+    "design/netlist/div23_cell.spice"
+  ],
+  "netlist": "tb_div23_cell.sp",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "mos"
+  ],
+  "analyses": [
+    "tran {ktstep} {ktstop}"
+  ],
+  "options": [
+    "reltol=1e-3",
+    "abstol=1e-10",
+    "vntol=1e-5",
+    "chgtol=1e-13"
+  ],
+  "sweeps": {
+    "rate": {
+      "description": "input clock rate",
+      "points": {
+        "f200": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "2e-11",
+            "ktstop": "6e-08"
+          }
+        },
+        "f010": {
+          "params": {
+            "kf": "10e6",
+            "ktstep": "4e-10",
+            "ktstop": "1.2e-06"
+          }
+        }
+      }
+    }
+  },
+  "raw_measures": {
+    "ta1": {
+      "analysis": "tran",
+      "expr": "when v(ckoa)='vdd_val/2' rise=1 td='ttd'"
+    },
+    "ta3": {
+      "analysis": "tran",
+      "expr": "when v(ckoa)='vdd_val/2' rise=3 td='ttd'"
+    },
+    "na": {
+      "analysis": "tran",
+      "expr": "param='(ta3-ta1)/(2*tvco)'"
+    },
+    "tb1": {
+      "analysis": "tran",
+      "expr": "when v(ckob)='vdd_val/2' rise=1 td='ttd'"
+    },
+    "tb3": {
+      "analysis": "tran",
+      "expr": "when v(ckob)='vdd_val/2' rise=3 td='ttd'"
+    },
+    "nb": {
+      "analysis": "tran",
+      "expr": "param='(tb3-tb1)/(2*tvco)'"
+    },
+    "tc1": {
+      "analysis": "tran",
+      "expr": "when v(ckoc)='vdd_val/2' rise=1 td='ttd'"
+    },
+    "tc3": {
+      "analysis": "tran",
+      "expr": "when v(ckoc)='vdd_val/2' rise=3 td='ttd'"
+    },
+    "nc": {
+      "analysis": "tran",
+      "expr": "param='(tc3-tc1)/(2*tvco)'"
+    },
+    "td1": {
+      "analysis": "tran",
+      "expr": "when v(ckod)='vdd_val/2' rise=1 td='ttd'"
+    },
+    "td3": {
+      "analysis": "tran",
+      "expr": "when v(ckod)='vdd_val/2' rise=3 td='ttd'"
+    },
+    "nd": {
+      "analysis": "tran",
+      "expr": "param='(td3-td1)/(2*tvco)'"
+    },
+    "te1": {
+      "analysis": "tran",
+      "expr": "when v(ckoe)='vdd_val/2' rise=1 td='ttd'"
+    },
+    "te3": {
+      "analysis": "tran",
+      "expr": "when v(ckoe)='vdd_val/2' rise=3 td='ttd'"
+    },
+    "ne": {
+      "analysis": "tran",
+      "expr": "param='(te3-te1)/(2*tvco/1.5)'"
+    },
+    "tf1": {
+      "analysis": "tran",
+      "expr": "when v(ckof)='vdd_val/2' rise=1 td='ttd'"
+    },
+    "tf3": {
+      "analysis": "tran",
+      "expr": "when v(ckof)='vdd_val/2' rise=3 td='ttd'"
+    },
+    "nf": {
+      "analysis": "tran",
+      "expr": "param='(tf3-tf1)/(2*tvco/2)'"
+    },
+    "tcq": {
+      "analysis": "tran",
+      "expr": "param='(ta1-tck0)-tvco*floor((ta1-tck0)/tvco)'"
+    },
+    "fa3": {
+      "analysis": "tran",
+      "expr": "when v(ckoa)='vdd_val/2' fall=3 td='ttd'"
+    },
+    "pwa": {
+      "analysis": "tran",
+      "expr": "param='fa3-ta3'"
+    },
+    "fb3": {
+      "analysis": "tran",
+      "expr": "when v(ckob)='vdd_val/2' fall=3 td='ttd'"
+    },
+    "pwb": {
+      "analysis": "tran",
+      "expr": "param='fb3-tb3'"
+    },
+    "rmb2": {
+      "analysis": "tran",
+      "expr": "when v(mob)='vdd_val/2' rise=2 td='ttd'"
+    },
+    "fmb2": {
+      "analysis": "tran",
+      "expr": "when v(mob)='vdd_val/2' fall=2 td='ttd'"
+    },
+    "pw_modout_s": {
+      "analysis": "tran",
+      "expr": "param='fmb2-rmb2'"
+    },
+    "iavg": {
+      "analysis": "tran",
+      "expr": "avg i(vdd) from='ttd+2*tvco' to='ktstop'"
+    },
+    "i_cell_a": {
+      "analysis": "tran",
+      "expr": "param='abs(iavg)/6'"
+    }
+  },
+  "checks": {
+    "na": {
+      "min": 1.95,
+      "max": 2.05
+    },
+    "nc": {
+      "min": 1.95,
+      "max": 2.05
+    },
+    "nb": {
+      "min": 2.95,
+      "max": 3.05
+    },
+    "nd": {
+      "min": 2.95,
+      "max": 3.05
+    },
+    "ne": {
+      "min": 2.95,
+      "max": 3.05
+    },
+    "nf": {
+      "min": 2.95,
+      "max": 3.05
+    }
+  },
+  "derived": {
+    "module": "derive.py",
+    "measures": [
+      "pw_div2_s",
+      "pw_div3_s"
+    ]
+  }
+}
