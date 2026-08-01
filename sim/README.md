@@ -227,6 +227,58 @@ well; it was renamed to `pll_top_dut.sh` when both landed in the same tree.
 Frozen netlist snapshots and testbench comments minted before the rename still
 name the pre-rename path; the records that carry them disclose it.
 
+## Closed-loop internal-timestep bound
+
+**Every campaign whose DUT contains the PFD inherits a ceiling of 100 ps on the
+ngspice *internal* transient timestep.** This is a property of the PFD, not of
+any one testbench, and it is not a convergence-tuning preference — violating it
+produces a *false negative* (a confident, plausible-looking "the loop does not
+lock") rather than visible noise.
+
+`design/edgedet.sch` fires each of the PFD's two SR latches from
+`AND(X, NOT(X delayed by 5 inverters))`. That set pulse measures **0.33-0.39 ns**.
+The UP/DN pulse it eventually produces is 1.1-1.9 ns wide (the 24-inverter reset
+chain), and sizing the ceiling from *that* number — the obvious reading, since
+UP/DN carry the loop gain — is the trap. When the integrator's mean internal
+step approaches the set-pulse width, ngspice steps clean over the set pulse on a
+large fraction of feedback edges; each miss is a feedback edge the PFD never
+sees, so the loop reads as **jammed with UP asserted, ramping Vctrl to the rail
+while the feedback is ALREADY faster than the reference**. 100 ps puts 3-4
+internal steps inside the set pulse.
+
+First measured and documented by `sim/pll-top-smoke` (#52) — see
+`sim/pll-top-smoke/records/20260801-085349-0e5c22d.md`, which also shows a
+500 ps ceiling missing 9 of 16 feedback edges.
+
+### How to comply
+
+Pass the ceiling as **`.tran`'s 4th argument**, from the single shared constant:
+
+```
+.tran {tstep} {tstop} 0 {tmax}      # tmax <- SIMENV_CLOSED_LOOP_TMAX
+```
+
+`sim/lib/simenv.sh` defines `SIMENV_CLOSED_LOOP_TMAX`; campaign runners pass it
+through as a `.param`. **Omitting the 4th argument is the violation**: ngspice
+then defaults the internal ceiling to the *print* step, which campaigns
+routinely size from an output-waveform quantity such as `1/(50*f_out)` — tying
+integration accuracy to a number that has nothing to do with the PFD.
+
+Because the ceiling changes the answer and not merely its precision, it is part
+of a run's identity: `lock-time` and `output-range` both carry it in their work
+directory tag so a pre-bound log is never silently reused for a post-bound
+record.
+
+### Records taken before this bound was applied
+
+`sim/lock-time` and `sim/output-range` (#12) both omitted the 4th argument until
+#65. Their pre-#65 records remain committed and unedited, per the append-only
+rule, but their lock/no-lock verdicts and any `vctrl_final` rail excursion
+should be read as **not yet reconciled against this bound** — see
+`sim/lock-time/records/20260801-101734-5eb00db.md` for the measured internal-step
+distributions and which specific claims are affected. A record that predates the
+bound is not retracted by this section; it is qualified by it.
+
 ## Summary record format
 
 Each run produces one `records/<record-id>.md` file with the following

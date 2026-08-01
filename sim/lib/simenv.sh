@@ -57,6 +57,47 @@ SIMENV_TEMPS=(-40 27 125)
 SIMENV_VDDS=(2.97 3.30 3.63)
 
 # --------------------------------------------------------------------------
+# Closed-loop integration bound (a property of the PFD, not of any one bench)
+# --------------------------------------------------------------------------
+#
+# Ceiling on the ngspice INTERNAL transient timestep for any campaign whose DUT
+# contains the PFD (design/pfd_cp.sch). It is set by the PFD's INTERNAL SET
+# PULSE -- not by f_out, and not by the UP/DN output pulse either.
+# design/edgedet.sch fires each SR latch with AND(X, NOT(X delayed by 5
+# inverters)); that pulse measures 0.33-0.39 ns. The UP/DN pulse it eventually
+# produces is 1.1-1.9 ns wide (the 24-inverter reset chain) and sizing the
+# ceiling from THAT number is the trap: an integrator whose mean internal step
+# is comparable to the set pulse steps clean over it on a large fraction of
+# feedback edges, and every miss is an edge the PFD never sees -- the loop then
+# reads as jammed with UP asserted, ramping Vctrl to the rail while the
+# feedback is ALREADY faster than the reference. That is a "the loop does not
+# lock" result which is entirely an artefact of the integration.
+#
+# 100 ps puts 3-4 internal steps inside the set pulse. First established and
+# measured by sim/pll-top-smoke (see its run.sh KTMAX comment and
+# sim/pll-top-smoke/records/20260801-085349-0e5c22d.md); hoisted here because
+# EVERY closed-loop campaign inherits it, and two of them (sim/lock-time,
+# sim/output-range) were previously sizing the ceiling from f_out and
+# violating it. See sim/README.md's "Closed-loop internal-timestep bound".
+#
+# Campaigns pass this to their deck's `.tran <tstep> <tstop> 0 <tmax>` 4th
+# argument. Leaving that argument off is what causes the violation: ngspice
+# then defaults the internal ceiling to the PRINT step, silently tying the
+# integration accuracy to an unrelated output-waveform quantity.
+#
+# SIM_TMAX overrides it. This exists for ONE legitimate use -- a deliberate
+# bound-sensitivity study, where the point is to run the same corner at two
+# ceilings in one environment so the ceiling is the only variable (that is how
+# #65 established the bound actually changes this DUT's verdict, rather than
+# inferring it from two runs that also differed in simulator version and host).
+# It is NOT a knob for making a slow campaign finish: a record minted at a
+# ceiling coarser than the value above is not evidence about the loop, and the
+# campaign runners put the effective value in their work-directory tag so such
+# a run cannot be quietly mistaken for a compliant one.
+# shellcheck disable=SC2034
+SIMENV_CLOSED_LOOP_TMAX="${SIM_TMAX:-100p}"
+
+# --------------------------------------------------------------------------
 # Provenance
 # --------------------------------------------------------------------------
 

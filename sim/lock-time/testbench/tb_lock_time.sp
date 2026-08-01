@@ -35,7 +35,13 @@
 *   .param t_force=<s>               how long the vctrl_ic clamp holds after
 *                                    t=0 before releasing (run.sh: a small
 *                                    fraction of one reference period)
-*   .param tstop tstep               transient window, sized per N in run.sh
+*   .param tstop tstep               transient window / print step, sized per N
+*                                    in run.sh
+*   .param tmax=<s>                  ceiling on the ngspice INTERNAL timestep
+*                                    (.tran's 4th argument). Required, not
+*                                    optional: run.sh passes
+*                                    SIMENV_CLOSED_LOOP_TMAX. See the .tran
+*                                    card below.
 *   .param lockthresh=<V>            LOCK digital threshold (0.5*vsup)
 * and expects "dut.spice" (sim/lib/assemble_closed_loop.sh's output) to have
 * been copied into the run directory by testbench/run.sh.
@@ -112,7 +118,17 @@ sforce vctrl vsetnode sctrl 0 SWFORCE
 .model SWFORCE SW(Ron=10 Roff=1G Vt='vsup/2' Vh=0)
 
 .options reltol=1e-3 abstol=1e-9 vntol=1e-4 chgtol=1e-13
-.tran {tstep} {tstop}
+* The 4th .tran argument (tmax) is LOAD-BEARING, not decoration: it is the
+* ceiling on the ngspice INTERNAL timestep, set by the PFD's internal SR-latch
+* set pulse (0.33-0.39 ns) and NOT by f_out. Omitting it -- as this deck did
+* until #65 -- makes ngspice default the internal ceiling to the print step
+* {tstep}, which run.sh sizes as 1/(50*f_out): 250 ps at this campaign's fixed
+* 80 MHz target, coarse enough that the integrator runs pinned at the ceiling
+* (measured mean internal step 0.230 ns) with barely one step inside the set
+* pulse. See sim/lib/simenv.sh's SIMENV_CLOSED_LOOP_TMAX and sim/README.md's
+* "Closed-loop internal-timestep bound" for why that misreports a locked loop
+* as jammed-with-UP.
+.tran {tstep} {tstop} 0 {tmax}
 
 *------------------------------------------------------------- measurements
 * The lock criterion is the DESIGN'S OWN lock_detector (design/README.md:

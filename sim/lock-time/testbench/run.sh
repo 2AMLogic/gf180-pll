@@ -29,6 +29,14 @@
 # host took only 62.1 CPU-s on an idle one (see
 # sim/lock-time/records/20260801-073931-eec269e.md's own throughput note).
 # Check `uptime` before committing to a full 90-run invocation.
+#
+# NOTE ON COST, POST-#65: those historical CPU-second figures were measured at
+# the OLD, bound-violating 250 ps internal-timestep ceiling. This campaign now
+# runs at the 100 ps ceiling every closed-loop bench inherits from the PFD
+# (sim/lib/simenv.sh :: SIMENV_CLOSED_LOOP_TMAX), which raises the internal
+# step count ~2.4x. Budget the 90-run grid accordingly, and do NOT reach for
+# SIM_TMAX to claw the time back -- a grid minted at a coarser ceiling is not
+# evidence about this loop. See sim/lock-time/records/20260801-101734-5eb00db.md.
 
 set -euo pipefail
 
@@ -127,7 +135,12 @@ run_one() {
   local p;   p=$(echo "${code}" | cut -d' ' -f8-13)
   local fref; fref=$(awk -v f="${FOUT_TARGET}" -v n="${n}" 'BEGIN{printf "%.8g", f/n}')
   local vctrl_ic; [ "${cond}" = "cold" ] && vctrl_ic=0.9 || vctrl_ic=2.7
-  local tag="lt_${corner}_${temp}c_${vdd}v_n${n}_${cond}"
+  # The internal-timestep ceiling is part of the run's identity, not a tuning
+  # knob: a log produced at the old (f_out-derived, bound-violating) ceiling is
+  # NOT interchangeable with one produced at SIMENV_CLOSED_LOOP_TMAX. Putting
+  # it in the tag keeps the idempotent-reuse check below from silently handing
+  # back a stale pre-#65 result under a new record's ID.
+  local tag="lt_${corner}_${temp}c_${vdd}v_n${n}_${cond}_tmax${SIMENV_CLOSED_LOOP_TMAX}"
   tag="${tag//./p}"
 
   # Transient window: generous multiple of the reference period, sized so a
@@ -138,6 +151,13 @@ run_one() {
   # CPU-seconds for 4 us -- see the record) left too little of this
   # session's compute budget for `relock` at the same length; the shorter
   # window is disclosed per-row, not silently assumed equal.
+  #
+  # `tstep` below is the PRINT step only. The ceiling on the INTERNAL timestep
+  # is passed separately as .tran's 4th argument (SIMENV_CLOSED_LOOP_TMAX);
+  # before #65 this deck omitted that argument, so ngspice defaulted the
+  # internal ceiling to `tstep` itself and the integration accuracy was tied to
+  # f_out instead of to the PFD. Sizing the two independently is the fix --
+  # see sim/lib/simenv.sh and sim/README.md.
   local tstop tstep t_force wincap
   wincap=4e-6; [ "${cond}" = "relock" ] && wincap=2e-6
   tstop=$(awk -v fr="${fref}" -v cap="${wincap}" 'BEGIN{t=80/fr; if (t>cap) t=cap; printf "%.6g", t}')
@@ -149,7 +169,8 @@ run_one() {
     "bnd0v=${BAND_B0}*vsup" "bnd1v=${BAND_B1}*vsup" "bnd2v=${BAND_B2}*vsup"
     "icp0v=${ICP_B0}*vsup" "icp1v=${ICP_B1}*vsup" "iunit=${IUNIT}"
     "vctrl_ic=${vctrl_ic}" "t_force=${t_force}"
-    "tstep=${tstep}" "tstop=${tstop}" "lockthresh=0.5*vsup"
+    "tstep=${tstep}" "tstop=${tstop}" "tmax=${SIMENV_CLOSED_LOOP_TMAX}"
+    "lockthresh=0.5*vsup"
   )
   local i=0 s
   for s in ${sel}; do params+=("sel${i}v=${s}*vsup"); i=$((i + 1)); done
@@ -258,7 +279,7 @@ cp "${WORK}/dut.spice" "${SNAPDIR}/${RID}.spice"
 SHA=$(simenv_sha256 "${SNAPDIR}/${RID}.spice")
 
 while read -r corner temp vdd n cond; do
-  tag="lt_${corner}_${temp}c_${vdd}v_n${n}_${cond}"
+  tag="lt_${corner}_${temp}c_${vdd}v_n${n}_${cond}_tmax${SIMENV_CLOSED_LOOP_TMAX}"
   tag="${tag//./p}"
   cid="${corner}_${temp}c_${vdd}v_n${n}_${cond}"
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" "${cid}"
@@ -394,7 +415,9 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     ff/125C/2.97V, ~0.15-0.3 V off a rail). Icp trim code "10" (three unit
     legs, ~5.2 uA), the nominal setting.
   - **Simulator settings**: \`.options reltol=1e-3 abstol=1e-9 vntol=1e-4
-    chgtol=1e-13\`; max timestep \`1/(50*f_out)\`; transient length up to
+    chgtol=1e-13\`; \`.tran\` print step \`1/(50*f_out)\` = 250 ps with an
+    explicit **internal-timestep ceiling of ${SIMENV_CLOSED_LOOP_TMAX}**
+    (\`.tran\`'s 4th argument, \`SIMENV_CLOSED_LOOP_TMAX\`); transient length up to
     **4 us for \`cold\`, 2 us for \`relock\`** (or 80 reference periods,
     whichever is shorter) -- narrowed from successively longer targets
     (16 us, then 8 us) during development, and made asymmetric between the

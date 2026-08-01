@@ -79,7 +79,13 @@ sforce vctrl vsetnode sctrl 0 SWFORCE
 .model SWFORCE SW(Ron=10 Roff=1G Vt='vsup/2' Vh=0)
 
 .options reltol=1e-3 abstol=1e-9 vntol=1e-4 chgtol=1e-13
-.tran {tstep} {tstop}
+* The 4th .tran argument (tmax) is LOAD-BEARING -- see tb_lock_time.sp's
+* identical note and sim/lib/simenv.sh's SIMENV_CLOSED_LOOP_TMAX. This bench
+* was the worse of the two violators before #65: with the ceiling defaulting
+* to the print step {tstep} = 1/(50*f_out), the 10 MHz `lo` edge ran at a 2 ns
+* internal ceiling, and 91% of its measured internal steps were LONGER than
+* the PFD's entire 0.33-0.39 ns set pulse.
+.tran {tstep} {tstop} 0 {tmax}
 
 *------------------------------------------------------------- measurements
 * Same real lock_detector criterion as tb_lock_time.sp -- this bench also
