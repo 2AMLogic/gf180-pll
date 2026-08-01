@@ -65,6 +65,11 @@ def compose_deck(tb: Testbench, pdk: Pdk, point: PvtPoint) -> str:
     ]
     for section in point.corner.sections:
         lines.append(f'.lib "{pdk.model_lib}" {section}')
+    # Corner-independent sections the bundles do not carry (see
+    # testbench._load_extra_lib_sections): added at every PVT point, after the
+    # corner's own sections, so they cannot pin a corner-varying axis.
+    for section in tb.extra_lib_sections:
+        lines.append(f'.lib "{pdk.model_lib}" {section}')
 
     lines += [
         "",

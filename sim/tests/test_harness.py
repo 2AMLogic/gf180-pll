@@ -322,6 +322,56 @@ class DeckTests(unittest.TestCase):
         for section in self.point.corner.sections:
             self.assertIn(f'sm141064.ngspice" {section}', self.deck)
 
+    def test_deck_has_no_extra_lib_sections_by_default(self):
+        """Omitting the key must compose exactly the deck it always did."""
+        self.assertEqual(self.tb.extra_lib_sections, ())
+        self.assertEqual(
+            self.deck.count('sm141064.ngspice"'), len(self.point.corner.sections)
+        )
+
+    def test_deck_appends_extra_lib_sections_after_the_corner_bundle(self):
+        """A section no bundle carries (e.g. cap_mim) is added at every point."""
+        root = Path(self.tmp.name)
+        (root / "tb2").mkdir()
+        (root / "tb2" / "x.spice").write_text("v1 out 0 dc {vdd_val}\n")
+        (root / "tb2" / "tb.json").write_text(
+            json.dumps(
+                {
+                    "name": "x",
+                    "netlist": "x.spice",
+                    "measure": {"vout": "v(out)"},
+                    "extra_lib_sections": ["cap_mim", "cap_mim"],
+                }
+            )
+        )
+        tb = testbench.load(root / "tb2")
+        self.assertEqual(tb.extra_lib_sections, ("cap_mim",))  # de-duplicated
+        deck = runner.compose_deck(tb, self.pdk, self.point)
+        self.assertIn('sm141064.ngspice" cap_mim', deck)
+        last_bundle = self.point.corner.sections[-1]
+        self.assertLess(
+            deck.index(f'sm141064.ngspice" {last_bundle}'),
+            deck.index('sm141064.ngspice" cap_mim'),
+        )
+
+    def test_extra_lib_sections_must_be_a_list_of_names(self):
+        root = Path(self.tmp.name)
+        (root / "tb3").mkdir()
+        (root / "tb3" / "x.spice").write_text("v1 out 0 dc {vdd_val}\n")
+        (root / "tb3" / "tb.json").write_text(
+            json.dumps(
+                {
+                    "name": "x",
+                    "netlist": "x.spice",
+                    "measure": {"vout": "v(out)"},
+                    "extra_lib_sections": "cap_mim",
+                }
+            )
+        )
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(root / "tb3")
+        self.assertIn("extra_lib_sections", str(ctx.exception))
+
     def test_deck_carries_manifest_params_and_options(self):
         self.assertIn(".param cload=1p", self.deck)
         self.assertIn(".options reltol=1e-5", self.deck)

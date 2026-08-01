@@ -216,6 +216,26 @@ against the *last* analysis to run (see above) — when in doubt, use
 silently failed to apply, a strongly PVT-sensitive measurement would come back
 flat, and this catches that instead of reporting a suspiciously perfect result.
 
+### Model sections no corner carries: `extra_lib_sections` (optional)
+
+A corner is a *bundle* of model `.lib` sections, one per device family. A few
+gf180mcu sections belong to no family axis and are therefore in no bundle —
+`cap_mim`, the legacy-name MIM subcircuits of `sm141064.ngspice`, is the case
+this key exists for. Nothing pulls that section in, so a deck instantiating
+`cap_mim_1f0fF` cannot resolve the name under any corner, and a fragment may
+not carry its own `.lib`.
+
+```json
+{"extra_lib_sections": ["cap_mim"]}
+```
+
+Listed sections are added **unconditionally, at every PVT point, after** the
+corner's own sections, and are named in the record's *Corner matrix run*
+field. They are for **corner-independent** sections only: anything that varies
+by corner belongs in `harness/corners.py` as a bundle, where the sweep can see
+it — putting it here would silently pin that axis, which is exactly what the
+fragment `.lib` ban prevents.
+
 ### Multi-topology decks: `topology_groups` (optional)
 
 Several of this repo's campaigns put more than one sub-circuit in a single

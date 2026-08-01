@@ -1,0 +1,417 @@
+{
+  "name": "devchar-passives-res",
+  "description": "loop-filter series-resistor comparison -- 7 poly-resistor candidates, sheet resistance / head resistance / voltage coefficient",
+  "claim": "#4 -> #10 (design-input, not a spec line) -- poly-resistor option for the loop-filter series resistor: sheet-resistance spread across `res_ff`/`res_ss` and temperature coefficient for `ppolyf_u` vs. the high-sheet variants.",
+  "methodology": [
+    "Measurement topology: every device sits between a shared swept node and ground through its own 0 V ammeter, substrate grounded; a DC sweep of that node 0 -> 1.0 V in 25 mV steps gives R(V) = V/I, so the voltage coefficient is measured rather than assumed. Two drawn lengths per device (10 um and 50 um at W = 1 um; ppolyf_u additionally at W = 2 um) let rsh_eff = (R_50um - R_10um) / squares-between-lengths cancel the fixed contact head resistance; rhead is the remaining intercept (both terminals). rsh_eff differs from the model rsh parameter by the effective-width narrowing, which is why it is measured rather than quoted.",
+    "vcoef (%/V) is the fractional change in R of the 50 um device between 0.1 V and 1.0 V across it.",
+    "Corner axis: the res_* sections are an INDEPENDENT axis from the MOS tt/ff/ss/fs/sf sections used by devchar-delay / devchar-cp, and every device here depends only on that axis. `typical` is the harness bundle that carries res_typical; `res_ff` / `res_ss` skew the resistor family alone. The five MOS bundles are therefore not swept -- they would re-run the identical resistor-only circuit five times. Supply is likewise not an axis: the 0 -> 1.0 V device sweep IS this deck's voltage axis. Both omissions must be declared on the command line, e.g. `python3 sim/run_corners.py devchar-passives-res --subset-reason 'resistor-only DUT: res_* is the governing process axis; the device R-V sweep is the voltage axis, supply is not'`.",
+    "Temperature coefficient (tc_ppm_per_c = (R(125C) - R(-40C)) / (R(27C) * 165 C), from the body-dominated 50 um device) is NOT a per-point measurement -- it is a relation ACROSS the temperature axis. Read it off this record's per-corner r50 rows; the pre-migration runner precomputed it into res_tempco.csv, which record 20260731-041346-833292f still carries.",
+    "Solver: abstol=1e-15, reltol=1e-7 (the pre-migration deck's `.option` card, verbatim).",
+    "Statistical switches: sw_stat_global = sw_stat_mismatch = 0 (nominal skew, no Monte Carlo)."
+  ],
+  "netlist": "tb_res.spice",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.0,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "typical",
+    "res_ff",
+    "res_ss"
+  ],
+  "analyses": [
+    "dc vr 0 1.0 0.025"
+  ],
+  "options": [
+    "abstol=1e-15",
+    "reltol=1e-7"
+  ],
+  "raw_measures": {
+    "pu_i10_1v0": {
+      "analysis": "dc",
+      "expr": "find i(vam_pu_s) at=1.0"
+    },
+    "pu_i50_1v0": {
+      "analysis": "dc",
+      "expr": "find i(vam_pu_l) at=1.0"
+    },
+    "pu_i50_0v1": {
+      "analysis": "dc",
+      "expr": "find i(vam_pu_l) at=0.1"
+    },
+    "pu_r10": {
+      "analysis": "dc",
+      "expr": "param='1.0/pu_i10_1v0'"
+    },
+    "pu_r50": {
+      "analysis": "dc",
+      "expr": "param='1.0/pu_i50_1v0'"
+    },
+    "pu_r50_lo": {
+      "analysis": "dc",
+      "expr": "param='0.1/pu_i50_0v1'"
+    },
+    "pu_rsh": {
+      "analysis": "dc",
+      "expr": "param='(pu_r50-pu_r10)/40'"
+    },
+    "pu_rhead": {
+      "analysis": "dc",
+      "expr": "param='pu_r10-pu_rsh*10'"
+    },
+    "pu_vcoef": {
+      "analysis": "dc",
+      "expr": "param='100*(pu_r50-pu_r50_lo)/pu_r50_lo/0.9'"
+    },
+    "pu2_i10_1v0": {
+      "analysis": "dc",
+      "expr": "find i(vam_pu2_s) at=1.0"
+    },
+    "pu2_i50_1v0": {
+      "analysis": "dc",
+      "expr": "find i(vam_pu2_l) at=1.0"
+    },
+    "pu2_i50_0v1": {
+      "analysis": "dc",
+      "expr": "find i(vam_pu2_l) at=0.1"
+    },
+    "pu2_r10": {
+      "analysis": "dc",
+      "expr": "param='1.0/pu2_i10_1v0'"
+    },
+    "pu2_r50": {
+      "analysis": "dc",
+      "expr": "param='1.0/pu2_i50_1v0'"
+    },
+    "pu2_r50_lo": {
+      "analysis": "dc",
+      "expr": "param='0.1/pu2_i50_0v1'"
+    },
+    "pu2_rsh": {
+      "analysis": "dc",
+      "expr": "param='(pu2_r50-pu2_r10)/20'"
+    },
+    "pu2_rhead": {
+      "analysis": "dc",
+      "expr": "param='pu2_r10-pu2_rsh*5'"
+    },
+    "pu2_vcoef": {
+      "analysis": "dc",
+      "expr": "param='100*(pu2_r50-pu2_r50_lo)/pu2_r50_lo/0.9'"
+    },
+    "p1k_i10_1v0": {
+      "analysis": "dc",
+      "expr": "find i(vam_p1k_s) at=1.0"
+    },
+    "p1k_i50_1v0": {
+      "analysis": "dc",
+      "expr": "find i(vam_p1k_l) at=1.0"
+    },
+    "p1k_i50_0v1": {
+      "analysis": "dc",
+      "expr": "find i(vam_p1k_l) at=0.1"
+    },
+    "p1k_r10": {
+      "analysis": "dc",
+      "expr": "param='1.0/p1k_i10_1v0'"
+    },
+    "p1k_r50": {
+      "analysis": "dc",
+      "expr": "param='1.0/p1k_i50_1v0'"
+    },
+    "p1k_r50_lo": {
+      "analysis": "dc",
+      "expr": "param='0.1/p1k_i50_0v1'"
+    },
+    "p1k_rsh": {
+      "analysis": "dc",
+      "expr": "param='(p1k_r50-p1k_r10)/40'"
+    },
+    "p1k_rhead": {
+      "analysis": "dc",
+      "expr": "param='p1k_r10-p1k_rsh*10'"
+    },
+    "p1k_vcoef": {
+      "analysis": "dc",
+      "expr": "param='100*(p1k_r50-p1k_r50_lo)/p1k_r50_lo/0.9'"
+    },
+    "p2k_i10_1v0": {
+      "analysis": "dc",
+      "expr": "find i(vam_p2k_s) at=1.0"
+    },
+    "p2k_i50_1v0": {
+      "analysis": "dc",
+      "expr": "find i(vam_p2k_l) at=1.0"
+    },
+    "p2k_i50_0v1": {
+      "analysis": "dc",
+      "expr": "find i(vam_p2k_l) at=0.1"
+    },
+    "p2k_r10": {
+      "analysis": "dc",
+      "expr": "param='1.0/p2k_i10_1v0'"
+    },
+    "p2k_r50": {
+      "analysis": "dc",
+      "expr": "param='1.0/p2k_i50_1v0'"
+    },
+    "p2k_r50_lo": {
+      "analysis": "dc",
+      "expr": "param='0.1/p2k_i50_0v1'"
+    },
+    "p2k_rsh": {
+      "analysis": "dc",
+      "expr": "param='(p2k_r50-p2k_r10)/40'"
+    },
+    "p2k_rhead": {
+      "analysis": "dc",
+      "expr": "param='p2k_r10-p2k_rsh*10'"
+    },
+    "p2k_vcoef": {
+      "analysis": "dc",
+      "expr": "param='100*(p2k_r50-p2k_r50_lo)/p2k_r50_lo/0.9'"
+    },
+    "p3k_i10_1v0": {
+      "analysis": "dc",
+      "expr": "find i(vam_p3k_s) at=1.0"
+    },
+    "p3k_i50_1v0": {
+      "analysis": "dc",
+      "expr": "find i(vam_p3k_l) at=1.0"
+    },
+    "p3k_i50_0v1": {
+      "analysis": "dc",
+      "expr": "find i(vam_p3k_l) at=0.1"
+    },
+    "p3k_r10": {
+      "analysis": "dc",
+      "expr": "param='1.0/p3k_i10_1v0'"
+    },
+    "p3k_r50": {
+      "analysis": "dc",
+      "expr": "param='1.0/p3k_i50_1v0'"
+    },
+    "p3k_r50_lo": {
+      "analysis": "dc",
+      "expr": "param='0.1/p3k_i50_0v1'"
+    },
+    "p3k_rsh": {
+      "analysis": "dc",
+      "expr": "param='(p3k_r50-p3k_r10)/40'"
+    },
+    "p3k_rhead": {
+      "analysis": "dc",
+      "expr": "param='p3k_r10-p3k_rsh*10'"
+    },
+    "p3k_vcoef": {
+      "analysis": "dc",
+      "expr": "param='100*(p3k_r50-p3k_r50_lo)/p3k_r50_lo/0.9'"
+    },
+    "nu_i10_1v0": {
+      "analysis": "dc",
+      "expr": "find i(vam_nu_s) at=1.0"
+    },
+    "nu_i50_1v0": {
+      "analysis": "dc",
+      "expr": "find i(vam_nu_l) at=1.0"
+    },
+    "nu_i50_0v1": {
+      "analysis": "dc",
+      "expr": "find i(vam_nu_l) at=0.1"
+    },
+    "nu_r10": {
+      "analysis": "dc",
+      "expr": "param='1.0/nu_i10_1v0'"
+    },
+    "nu_r50": {
+      "analysis": "dc",
+      "expr": "param='1.0/nu_i50_1v0'"
+    },
+    "nu_r50_lo": {
+      "analysis": "dc",
+      "expr": "param='0.1/nu_i50_0v1'"
+    },
+    "nu_rsh": {
+      "analysis": "dc",
+      "expr": "param='(nu_r50-nu_r10)/40'"
+    },
+    "nu_rhead": {
+      "analysis": "dc",
+      "expr": "param='nu_r10-nu_rsh*10'"
+    },
+    "nu_vcoef": {
+      "analysis": "dc",
+      "expr": "param='100*(nu_r50-nu_r50_lo)/nu_r50_lo/0.9'"
+    },
+    "ps_i10_1v0": {
+      "analysis": "dc",
+      "expr": "find i(vam_ps_s) at=1.0"
+    },
+    "ps_i50_1v0": {
+      "analysis": "dc",
+      "expr": "find i(vam_ps_l) at=1.0"
+    },
+    "ps_i50_0v1": {
+      "analysis": "dc",
+      "expr": "find i(vam_ps_l) at=0.1"
+    },
+    "ps_r10": {
+      "analysis": "dc",
+      "expr": "param='1.0/ps_i10_1v0'"
+    },
+    "ps_r50": {
+      "analysis": "dc",
+      "expr": "param='1.0/ps_i50_1v0'"
+    },
+    "ps_r50_lo": {
+      "analysis": "dc",
+      "expr": "param='0.1/ps_i50_0v1'"
+    },
+    "ps_rsh": {
+      "analysis": "dc",
+      "expr": "param='(ps_r50-ps_r10)/40'"
+    },
+    "ps_rhead": {
+      "analysis": "dc",
+      "expr": "param='ps_r10-ps_rsh*10'"
+    },
+    "ps_vcoef": {
+      "analysis": "dc",
+      "expr": "param='100*(ps_r50-ps_r50_lo)/ps_r50_lo/0.9'"
+    }
+  },
+  "topology_groups": {
+    "pu_w1um": {
+      "description": "ppolyf_u, W=1 um, drawn at L=10 um and 50 um (R = V/I at 1.0 V; rsh_eff cancels the contact head resistance, rhead is the remaining intercept; vcoef is %/V between 0.1 V and 1.0 V)",
+      "measures": [
+        "pu_i10_1v0",
+        "pu_i50_1v0",
+        "pu_i50_0v1",
+        "pu_r10",
+        "pu_r50",
+        "pu_r50_lo",
+        "pu_rsh",
+        "pu_rhead",
+        "pu_vcoef"
+      ]
+    },
+    "pu2_w2um": {
+      "description": "ppolyf_u, W=2 um, drawn at L=10 um and 50 um (R = V/I at 1.0 V; rsh_eff cancels the contact head resistance, rhead is the remaining intercept; vcoef is %/V between 0.1 V and 1.0 V)",
+      "measures": [
+        "pu2_i10_1v0",
+        "pu2_i50_1v0",
+        "pu2_i50_0v1",
+        "pu2_r10",
+        "pu2_r50",
+        "pu2_r50_lo",
+        "pu2_rsh",
+        "pu2_rhead",
+        "pu2_vcoef"
+      ]
+    },
+    "p1k_w1um": {
+      "description": "ppolyf_u_1k, W=1 um, drawn at L=10 um and 50 um (R = V/I at 1.0 V; rsh_eff cancels the contact head resistance, rhead is the remaining intercept; vcoef is %/V between 0.1 V and 1.0 V)",
+      "measures": [
+        "p1k_i10_1v0",
+        "p1k_i50_1v0",
+        "p1k_i50_0v1",
+        "p1k_r10",
+        "p1k_r50",
+        "p1k_r50_lo",
+        "p1k_rsh",
+        "p1k_rhead",
+        "p1k_vcoef"
+      ]
+    },
+    "p2k_w1um": {
+      "description": "ppolyf_u_2k, W=1 um, drawn at L=10 um and 50 um (R = V/I at 1.0 V; rsh_eff cancels the contact head resistance, rhead is the remaining intercept; vcoef is %/V between 0.1 V and 1.0 V)",
+      "measures": [
+        "p2k_i10_1v0",
+        "p2k_i50_1v0",
+        "p2k_i50_0v1",
+        "p2k_r10",
+        "p2k_r50",
+        "p2k_r50_lo",
+        "p2k_rsh",
+        "p2k_rhead",
+        "p2k_vcoef"
+      ]
+    },
+    "p3k_w1um": {
+      "description": "ppolyf_u_3k, W=1 um, drawn at L=10 um and 50 um (R = V/I at 1.0 V; rsh_eff cancels the contact head resistance, rhead is the remaining intercept; vcoef is %/V between 0.1 V and 1.0 V)",
+      "measures": [
+        "p3k_i10_1v0",
+        "p3k_i50_1v0",
+        "p3k_i50_0v1",
+        "p3k_r10",
+        "p3k_r50",
+        "p3k_r50_lo",
+        "p3k_rsh",
+        "p3k_rhead",
+        "p3k_vcoef"
+      ]
+    },
+    "nu_w1um": {
+      "description": "npolyf_u, W=1 um, drawn at L=10 um and 50 um (R = V/I at 1.0 V; rsh_eff cancels the contact head resistance, rhead is the remaining intercept; vcoef is %/V between 0.1 V and 1.0 V)",
+      "measures": [
+        "nu_i10_1v0",
+        "nu_i50_1v0",
+        "nu_i50_0v1",
+        "nu_r10",
+        "nu_r50",
+        "nu_r50_lo",
+        "nu_rsh",
+        "nu_rhead",
+        "nu_vcoef"
+      ]
+    },
+    "ps_w1um": {
+      "description": "ppolyf_s, W=1 um, drawn at L=10 um and 50 um (R = V/I at 1.0 V; rsh_eff cancels the contact head resistance, rhead is the remaining intercept; vcoef is %/V between 0.1 V and 1.0 V)",
+      "measures": [
+        "ps_i10_1v0",
+        "ps_i50_1v0",
+        "ps_i50_0v1",
+        "ps_r10",
+        "ps_r50",
+        "ps_r50_lo",
+        "ps_rsh",
+        "ps_rhead",
+        "ps_vcoef"
+      ]
+    }
+  },
+  "checks": {
+    "pu_rsh": {
+      "min": 0.0,
+      "min_spread_pct": 1.0
+    },
+    "pu2_rsh": {
+      "min": 0.0,
+      "min_spread_pct": 1.0
+    },
+    "p1k_rsh": {
+      "min": 0.0,
+      "min_spread_pct": 1.0
+    },
+    "p2k_rsh": {
+      "min": 0.0,
+      "min_spread_pct": 1.0
+    },
+    "p3k_rsh": {
+      "min": 0.0,
+      "min_spread_pct": 1.0
+    },
+    "nu_rsh": {
+      "min": 0.0,
+      "min_spread_pct": 1.0
+    },
+    "ps_rsh": {
+      "min": 0.0,
+      "min_spread_pct": 1.0
+    }
+  }
+}

@@ -107,6 +107,7 @@ class Testbench:
     supply_tolerance: float = DEFAULT_SUPPLY_TOLERANCE
     temperatures_c: tuple[float, ...] = DEFAULT_TEMPERATURES_C
     corners: tuple[str, ...] = (DEFAULT_CORNER_SET,)
+    extra_lib_sections: tuple[str, ...] = ()
     analyses: tuple[str, ...] = ("op",)
     measure: dict[str, str] = field(default_factory=dict)
     raw_measures: dict[str, RawMeasure] = field(default_factory=dict)
@@ -202,6 +203,40 @@ def _load_raw_measures(manifest: dict, path: Path) -> dict[str, RawMeasure]:
             )
         raw[name] = RawMeasure(analysis=spec.get("analysis", "tran"), expr=spec["expr"])
     return raw
+
+
+def _load_extra_lib_sections(manifest: dict, path: Path) -> tuple[str, ...]:
+    """Parse the optional ``extra_lib_sections`` key.
+
+    A *corner* is a bundle of model ``.lib`` sections, one per device family
+    (see ``corners.py``). A handful of gf180mcu model sections belong to no
+    family axis at all and are therefore in no bundle -- ``cap_mim``, the
+    legacy-name MIM subcircuits of ``sm141064.ngspice``, is the case this
+    exists for: nothing pulls it in, so a deck that instantiates
+    ``cap_mim_1f0fF`` cannot resolve that name under any corner.
+
+    These sections are corner-INDEPENDENT by construction: they are added
+    unconditionally, at every PVT point, after the corner's own sections, so
+    they cannot silently pin a corner-varying axis the way a ``.lib`` inside
+    a netlist fragment would. Anything that *does* vary by corner belongs in
+    ``corners.py`` as a bundle, not here.
+    """
+    raw = manifest.get("extra_lib_sections")
+    if raw is None:
+        return ()
+    if isinstance(raw, str) or not isinstance(raw, (list, tuple)):
+        raise ValueError(
+            f"{path}: 'extra_lib_sections' must be a list of model .lib section names"
+        )
+    sections: list[str] = []
+    for section in raw:
+        if not isinstance(section, str) or not section.strip():
+            raise ValueError(
+                f"{path}: extra_lib_sections entries must be non-empty section names"
+            )
+        if section not in sections:
+            sections.append(section)
+    return tuple(sections)
 
 
 def _load_topology_groups(
@@ -357,6 +392,7 @@ def load(directory: str | Path) -> Testbench:
             float(t) for t in manifest.get("temperatures_c", DEFAULT_TEMPERATURES_C)
         ),
         corners=tuple(manifest.get("corners", (DEFAULT_CORNER_SET,))),
+        extra_lib_sections=_load_extra_lib_sections(manifest, manifest_path),
         analyses=analyses,
         measure=measure,
         raw_measures=raw_measures,
