@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # gf180-pll :: devchar-delay :: corner runner
 #
+# SUPERSEDED FOR NEW RUNS by this campaign's sim/harness manifest
+# (testbench/tb.json + the .spice fragment beside it) -- run
+#   python3 sim/run_corners.py <slug>
+# instead. This script is kept because the records it already minted are
+# append-only evidence and it is the only thing that can regenerate the
+# extra CSV artifacts they cite; do not extend it.
+#
 # Sweeps tb_delay_stage.sp over the full repo PVT grid:
 #   process {typical, ff, ss, fs, sf} x temp {-40, 27, 125} C x supply
 #   {2.97, 3.30, 3.63} V  = 45 points.

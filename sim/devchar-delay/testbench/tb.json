@@ -1,0 +1,102 @@
+{
+  "name": "devchar-delay",
+  "description": "3.3 V CMOS delay-stage characterization -- unstarved + current-starved rings, fan-out-1 chain, device drive",
+  "claim": "#4 -> #8 (design-input, not a spec line) -- per-PVT-corner delay-cell drive/delay and current-starved-ring frequency vs. starving current, sufficient to bound ring-VCO frequency spread worst-slow to worst-fast and to estimate Kvco.",
+  "methodology": [
+    "Measurement topology: five sub-circuits share one deck (see testbench/tb_delay_stage.spice header comment), rendered as one sub-table each via this manifest's topology_groups -- (1) R1/R4: unstarved 5-stage self-loaded CMOS ring at 1x and 4x sizing, stage delay td = T/(2N) from 8 periods after start-up (the frequency ceiling a current-starved ring approaches as fully-on); (2) CS-lo/md/hi: three 5-stage current-starved rings (the DR-001 Decision-2 delay cell: matched PMOS-head/NMOS-tail starving devices, L_st=0.5um), each starved at a fixed *ideal* mirrored current (10/50/250 uA) so the bias-generator's own PVT sensitivity is isolated from the cell's; frequency measured over 4 periods after start-up; (3) CH: open fan-out-1 inverter chain (ideal step in) giving tpHL/tpLH separately and 10-90% transition times; (4) DC: single 1x NMOS/PMOS at Vgs=Vds=Vdd for peak drive current.",
+    "Simulator settings: `tran 5p 150n uic` (5 ps max step; 150 ns covers >=6 periods of the slowest starved ring at the slowest corner). The .ic cards in the fragment set each ring's start-up state and the fan-out-1 chain's DC-correct state, so the edge indices in the ch_* measurements count only real switching events.",
+    "Limitation: the CS bias uses an *ideal* current source into a diode mirror, not the real band-select/V-to-I bias network #8 will design -- this isolates the delay cell's PVT sensitivity from the bias generator's, which is the correct scope for this record but means the real bias network's own PVT sensitivity is a separate, later characterization.",
+    "Limitation: no passive corner axis. The DUT contains no MIM/MOS caps and no poly resistors, so the five MOS bundles (which hold every passive family at *_typical) are the complete process axis for this claim.",
+    "Statistical switches: sw_stat_global = sw_stat_mismatch = 0 (nominal device skew from the corner section only, no Monte Carlo mismatch).",
+    "Agreement with the record this one supersedes (20260731-041318-833292f, same deck, same 45-point grid, run through the sim/lib/simenv.sh shim on ngspice-46/macOS rather than this harness on ngspice-42/Linux): over the 990 value comparisons that record's delay_corners.csv supports (45 corners x the 22 directly measured columns), 57 % are identical to the 6 significant figures that CSV carries, the median disagreement is 8.1e-5 % and the p90 is 1.3e-3 %. Only two columns exceed 0.005 % anywhere in the grid -- fo1_trise_s (worst 0.030 %) and fo1_tfall_s (worst 0.022 %), the 10-90 % transition times -- and that is timepoint interpolation, not physics: the worst case is 15 fs of disagreement on a 50 ps edge, a transition time being the difference of two separately interpolated threshold crossings on a 5 ps-max-step transient. Every ring frequency, stage delay, supply current and drive current agrees to <= 0.004 %. No conclusion of the superseded record is changed. (Note: this paragraph was measured from record 20260801-084448-01b0db8 and added to the manifest afterwards, so that record's own Methodology block predates it; the analysis is in PR #40's description.)",
+    "Derived quantities the pre-migration runner computed in awk (ring1x supply charge per stage transition q = |I_avg|*T/N and the equivalent switched capacitance C = q/Vdd) are NOT re-derived here: r1_period and r1_iavg are recorded per corner, and q/C follow from them by arithmetic. Recording the two measured quantities rather than two arithmetic restatements of them is the harness convention."
+  ],
+  "netlist": "tb_delay_stage.spice",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.10,
+  "temperatures_c": [-40, 27, 125],
+  "corners": ["mos"],
+  "analyses": ["tran 5p 150n uic"],
+  "raw_measures": {
+    "r1_t0": {"analysis": "tran", "expr": "when v(a1)='vsup/2' rise=2"},
+    "r1_t1": {"analysis": "tran", "expr": "when v(a1)='vsup/2' rise=10"},
+    "r1_period": {"analysis": "tran", "expr": "param='(r1_t1-r1_t0)/8'"},
+    "r1_fosc": {"analysis": "tran", "expr": "param='8/(r1_t1-r1_t0)'"},
+    "r1_tstage": {"analysis": "tran", "expr": "param='(r1_t1-r1_t0)/(8*2*5)'"},
+    "r1_iavg": {"analysis": "tran", "expr": "avg i(vdd) from=15n to=23n"},
+
+    "r4_t0": {"analysis": "tran", "expr": "when v(b1)='vsup/2' rise=2"},
+    "r4_t1": {"analysis": "tran", "expr": "when v(b1)='vsup/2' rise=10"},
+    "r4_period": {"analysis": "tran", "expr": "param='(r4_t1-r4_t0)/8'"},
+    "r4_fosc": {"analysis": "tran", "expr": "param='8/(r4_t1-r4_t0)'"},
+    "r4_tstage": {"analysis": "tran", "expr": "param='(r4_t1-r4_t0)/(8*2*5)'"},
+    "r4_iavg": {"analysis": "tran", "expr": "avg i(vdd4) from=15n to=23n"},
+
+    "ch_tphl": {"analysis": "tran", "expr": "trig v(c2) val='vsup/2' td=2n rise=1 targ v(c3) val='vsup/2' td=2n fall=1"},
+    "ch_tplh": {"analysis": "tran", "expr": "trig v(c2) val='vsup/2' td=12n fall=1 targ v(c3) val='vsup/2' td=12n rise=1"},
+    "ch_tpd": {"analysis": "tran", "expr": "param='(ch_tphl+ch_tplh)/2'"},
+    "ch_tf": {"analysis": "tran", "expr": "trig v(c3) val='0.9*vsup' td=2n fall=1 targ v(c3) val='0.1*vsup' td=2n fall=1"},
+    "ch_tr": {"analysis": "tran", "expr": "trig v(c3) val='0.1*vsup' td=12n rise=1 targ v(c3) val='0.9*vsup' td=12n rise=1"},
+
+    "dc_idn": {"analysis": "tran", "expr": "avg i(vdn) from=20n to=23n"},
+    "dc_idp": {"analysis": "tran", "expr": "avg i(vdp) from=20n to=23n"},
+
+    "cs_lo_t0": {"analysis": "tran", "expr": "when v(l1)='vsup/2' rise=2"},
+    "cs_lo_t1": {"analysis": "tran", "expr": "when v(l1)='vsup/2' rise=6"},
+    "cs_lo_fosc": {"analysis": "tran", "expr": "param='4/(cs_lo_t1-cs_lo_t0)'"},
+    "cs_lo_tstage": {"analysis": "tran", "expr": "param='(cs_lo_t1-cs_lo_t0)/(4*2*5)'"},
+    "cs_lo_iavg": {"analysis": "tran", "expr": "avg i(vddl) from=120n to=150n"},
+
+    "cs_md_t0": {"analysis": "tran", "expr": "when v(m1)='vsup/2' rise=2"},
+    "cs_md_t1": {"analysis": "tran", "expr": "when v(m1)='vsup/2' rise=6"},
+    "cs_md_fosc": {"analysis": "tran", "expr": "param='4/(cs_md_t1-cs_md_t0)'"},
+    "cs_md_tstage": {"analysis": "tran", "expr": "param='(cs_md_t1-cs_md_t0)/(4*2*5)'"},
+    "cs_md_iavg": {"analysis": "tran", "expr": "avg i(vddm) from=120n to=150n"},
+
+    "cs_hi_t0": {"analysis": "tran", "expr": "when v(h1)='vsup/2' rise=2"},
+    "cs_hi_t1": {"analysis": "tran", "expr": "when v(h1)='vsup/2' rise=6"},
+    "cs_hi_fosc": {"analysis": "tran", "expr": "param='4/(cs_hi_t1-cs_hi_t0)'"},
+    "cs_hi_tstage": {"analysis": "tran", "expr": "param='(cs_hi_t1-cs_hi_t0)/(4*2*5)'"},
+    "cs_hi_iavg": {"analysis": "tran", "expr": "avg i(vddh) from=120n to=150n"}
+  },
+  "topology_groups": {
+    "ring1x": {
+      "description": "unstarved 5-stage self-loaded ring, 1x sizing (Wn=1.0um Wp=2.5um L=0.28um) -- the frequency ceiling of the cell",
+      "measures": ["r1_fosc", "r1_period", "r1_tstage", "r1_iavg", "r1_t0", "r1_t1"]
+    },
+    "ring4x": {
+      "description": "identical unstarved 5-stage ring at 4x sizing (Wn=4.0um Wp=10.0um) -- separates self-loading from fixed parasitics",
+      "measures": ["r4_fosc", "r4_period", "r4_tstage", "r4_iavg", "r4_t0", "r4_t1"]
+    },
+    "cs_lo": {
+      "description": "5-stage current-starved ring (DR-001 Decision 2 cell) starved at an ideal 10 uA",
+      "measures": ["cs_lo_fosc", "cs_lo_tstage", "cs_lo_iavg", "cs_lo_t0", "cs_lo_t1"]
+    },
+    "cs_md": {
+      "description": "same current-starved ring starved at an ideal 50 uA",
+      "measures": ["cs_md_fosc", "cs_md_tstage", "cs_md_iavg", "cs_md_t0", "cs_md_t1"]
+    },
+    "cs_hi": {
+      "description": "same current-starved ring starved at an ideal 250 uA -- with cs_lo, the 25x-current Kvco proxy",
+      "measures": ["cs_hi_fosc", "cs_hi_tstage", "cs_hi_iavg", "cs_hi_t0", "cs_hi_t1"]
+    },
+    "fo1_chain": {
+      "description": "open 4-inverter chain (1x), stage 3 measured with an identical driver and a fan-out-1 load",
+      "measures": ["ch_tphl", "ch_tplh", "ch_tpd", "ch_tf", "ch_tr"]
+    },
+    "device_drive": {
+      "description": "single 1x NMOS (W=1.0um) and PMOS (W=2.5um) at Vgs=Vds=Vdd -- peak output-stage drive current",
+      "measures": ["dc_idn", "dc_idp"]
+    }
+  },
+  "checks": {
+    "r1_fosc": {"min_spread_pct": 5.0},
+    "r1_tstage": {"min_spread_pct": 5.0},
+    "r4_fosc": {"min_spread_pct": 5.0},
+    "ch_tpd": {"min_spread_pct": 5.0},
+    "dc_idn": {"min_spread_pct": 5.0},
+    "dc_idp": {"min_spread_pct": 5.0},
+    "cs_lo_fosc": {"min_spread_pct": 5.0},
+    "cs_hi_fosc": {"min_spread_pct": 5.0}
+  }
+}

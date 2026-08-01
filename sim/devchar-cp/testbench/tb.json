@@ -1,0 +1,761 @@
+{
+  "name": "devchar-cp",
+  "description": "charge-pump output-stack comparison -- six candidate mirror stacks, output resistance and compliance",
+  "claim": "#4 -> #9 (design-input, not a spec line) -- small-signal output resistance and compliance boundary of six candidate charge-pump mirror stacks (simple / self-biased cascode / wide-swing cascode, both polarities) across the full PVT grid, sufficient to pick the stack and confirm compliance covers the VCO control range.",
+  "methodology": [
+    "Measurement topology: each stack's output drain is tied through its own 0 V ammeter to a single swept node `sw`, shared by all six stacks; one DC sweep of `sw` from 0 to Vdd in 10 mV steps traces the complete output I-V of every stack in one analysis -- through the saturation knee and into triode, not just the flat region. A second `op` analysis records each polarity's reference-device operating point (vth / vdsat / gm / gds), because the compliance numbers are only interpretable next to the inversion level they were taken at.",
+    "ro(V) = |dVout/dIout| is the same +/-10 mV central difference on the 10 mV sweep grid the pre-migration extraction used, re-expressed as a pair of `.measure dc find ... at=` reads and a `param=` quotient; the P-polarity stacks carry an explicit leading minus because their output current falls as Vout rises. ro is reported at 0.3, 0.5 and 0.7 x Vdd, as before.",
+    "Compliance is reported as a *knee ladder* rather than as the pre-migration record's single crossing voltage: chd0v20 / chd0v40 / chd0v60 / chd0v80 are Iout normalised to the stack's own mid-rail current, read at 0.20 / 0.40 / 0.60 / 0.80 V of headroom from the rail the stack works against (ground for the N sinks, Vdd for the P sources). The pre-migration `vcomp_i1pct` / `vcomp_i5pct` are the inverse function of this ladder -- the headroom at which the ratio reaches 0.99 / 0.95 -- and are read off it by interpolation. The change of form is forced, not preferred: ngspice's `.measure ... when <var>=<value>` cannot take a value derived from another measurement (`when i(vam_ns)='0.99*imid_ns'` fails at netlist-parse time with 'Undefined parameter'), so a threshold defined relative to a measured mid-rail current is not expressible as a manifest measurement. The ladder carries strictly more information than the two scalars it replaces.",
+    "`abstol=1e-16 reltol=1e-7 vntol=1e-9 gmin=1e-15` (the pre-migration deck's `.option` card, verbatim): the output-resistance extraction differences currents of order 10 pA over a 10 mV step, which the default abstol=1e-12 would otherwise dominate. Do not trust any ro above ~10 MOhm without this.",
+    "Sizing: NMOS W=5um, PMOS W=15um, L=1um (deliberately long-channel analog geometry, not the digital minimum-length devices in devchar-delay); cascode bias diode at W/4; Iref=20uA, chosen so both polarities sit in moderate inversion (Vdsat ~ 0.2 V) at Iref -- the regime a charge pump actually uses.",
+    "Statistical switches: sw_stat_global = sw_stat_mismatch = 0 (nominal device skew, no Monte Carlo). CP mismatch is a separate campaign (#15, mc-cp-mismatch), not this record.",
+    "LIMITATION -- one pre-migration column family and one artifact are NOT reproduced here. `vcomp_ro50` / `headroom_ro50` (the output voltage at which ro falls to 50% of its mid-rail value) requires walking the swept curve for a threshold crossing of a *derived* quantity, and `cp_curves.csv` is the decimated curve itself; the harness records scalar per-point measurements, so neither is expressible in a manifest today. Both remain committed, for this same deck and grid, under the superseded record 20260731-041340-833292f.",
+    "Agreement with the record this one supersedes (20260731-041340-833292f, same deck, same 45-point grid, run through the sim/lib/simenv.sh shim on ngspice-46/macOS rather than this harness on ngspice-42/Linux): over all 270 stack-corner rows of that record's cp_summary.csv the directly measured currents agree closely -- iout_mid and gain to <= 0.013 %, isat to <= 0.11 % -- as do the reference-device vth/vdsat. `ro` is the one column with percent-level differences (median 0.04-0.21 % by decade, p90 <= 1.4 %, worst 9.8 % on a 4e7 ohm p_casc point), and that is arithmetic, not physics: ro is a 20 mV difference quotient whose denominator is a sub-nanoamp current step, so it amplifies any current disagreement by ~5 orders of magnitude. Converted back to the physical quantity, the WORST ro disagreement in the whole grid corresponds to a 4.8e-11 A difference in a 2e-5 A current -- 2.4 ppm, i.e. solver-level. The two extractions also differ slightly by construction: the pre-migration awk took a central difference between adjacent 10 mV sweep samples at the grid point NEAREST 0.3/0.5/0.7 x Vdd, while `find i(...) at='0.3*vdd_val-0.010'` interpolates at exactly +/-10 mV about the target, which is off-grid whenever 0.3 x Vdd is not a multiple of 10 mV. The superseded record's own warning stands for both: do not trust an ro above ~10 Mohm as more than an order of magnitude. No conclusion of that record is changed -- the stack ranking by ro decade is identical."
+  ],
+  "netlist": "tb_cp_mirror.spice",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "mos"
+  ],
+  "analyses": [
+    "dc vsw 0 $&vsup_c 0.010",
+    "op"
+  ],
+  "options": [
+    "abstol=1e-16",
+    "reltol=1e-7",
+    "vntol=1e-9",
+    "gmin=1e-15"
+  ],
+  "measure": {
+    "vth_n": "@m.xns_d.m0[vth]",
+    "vdsat_n": "@m.xns_d.m0[vdsat]",
+    "gm_n": "@m.xns_d.m0[gm]",
+    "gds_n": "@m.xns_d.m0[gds]",
+    "vth_p": "@m.xps_d.m0[vth]",
+    "vdsat_p": "@m.xps_d.m0[vdsat]",
+    "gm_p": "@m.xps_d.m0[gm]",
+    "gds_p": "@m.xps_d.m0[gds]"
+  },
+  "raw_measures": {
+    "isat_ns": {
+      "analysis": "dc",
+      "expr": "find i(vam_ns) at='vdd_val-0.010'"
+    },
+    "imid_ns": {
+      "analysis": "dc",
+      "expr": "find i(vam_ns) at='vdd_val/2'"
+    },
+    "gain_ns": {
+      "analysis": "dc",
+      "expr": "param='imid_ns/2e-05'"
+    },
+    "ilo30_ns": {
+      "analysis": "dc",
+      "expr": "find i(vam_ns) at='0.3*vdd_val-0.010'"
+    },
+    "ihi30_ns": {
+      "analysis": "dc",
+      "expr": "find i(vam_ns) at='0.3*vdd_val+0.010'"
+    },
+    "ro30_ns": {
+      "analysis": "dc",
+      "expr": "param='0.020/(ihi30_ns-ilo30_ns)'"
+    },
+    "ilo50_ns": {
+      "analysis": "dc",
+      "expr": "find i(vam_ns) at='0.5*vdd_val-0.010'"
+    },
+    "ihi50_ns": {
+      "analysis": "dc",
+      "expr": "find i(vam_ns) at='0.5*vdd_val+0.010'"
+    },
+    "ro50_ns": {
+      "analysis": "dc",
+      "expr": "param='0.020/(ihi50_ns-ilo50_ns)'"
+    },
+    "ilo70_ns": {
+      "analysis": "dc",
+      "expr": "find i(vam_ns) at='0.7*vdd_val-0.010'"
+    },
+    "ihi70_ns": {
+      "analysis": "dc",
+      "expr": "find i(vam_ns) at='0.7*vdd_val+0.010'"
+    },
+    "ro70_ns": {
+      "analysis": "dc",
+      "expr": "param='0.020/(ihi70_ns-ilo70_ns)'"
+    },
+    "ihd0v20_ns": {
+      "analysis": "dc",
+      "expr": "find i(vam_ns) at='0.20'"
+    },
+    "chd0v20_ns": {
+      "analysis": "dc",
+      "expr": "param='ihd0v20_ns/imid_ns'"
+    },
+    "ihd0v40_ns": {
+      "analysis": "dc",
+      "expr": "find i(vam_ns) at='0.40'"
+    },
+    "chd0v40_ns": {
+      "analysis": "dc",
+      "expr": "param='ihd0v40_ns/imid_ns'"
+    },
+    "ihd0v60_ns": {
+      "analysis": "dc",
+      "expr": "find i(vam_ns) at='0.60'"
+    },
+    "chd0v60_ns": {
+      "analysis": "dc",
+      "expr": "param='ihd0v60_ns/imid_ns'"
+    },
+    "ihd0v80_ns": {
+      "analysis": "dc",
+      "expr": "find i(vam_ns) at='0.80'"
+    },
+    "chd0v80_ns": {
+      "analysis": "dc",
+      "expr": "param='ihd0v80_ns/imid_ns'"
+    },
+    "isat_nc": {
+      "analysis": "dc",
+      "expr": "find i(vam_nc) at='vdd_val-0.010'"
+    },
+    "imid_nc": {
+      "analysis": "dc",
+      "expr": "find i(vam_nc) at='vdd_val/2'"
+    },
+    "gain_nc": {
+      "analysis": "dc",
+      "expr": "param='imid_nc/2e-05'"
+    },
+    "ilo30_nc": {
+      "analysis": "dc",
+      "expr": "find i(vam_nc) at='0.3*vdd_val-0.010'"
+    },
+    "ihi30_nc": {
+      "analysis": "dc",
+      "expr": "find i(vam_nc) at='0.3*vdd_val+0.010'"
+    },
+    "ro30_nc": {
+      "analysis": "dc",
+      "expr": "param='0.020/(ihi30_nc-ilo30_nc)'"
+    },
+    "ilo50_nc": {
+      "analysis": "dc",
+      "expr": "find i(vam_nc) at='0.5*vdd_val-0.010'"
+    },
+    "ihi50_nc": {
+      "analysis": "dc",
+      "expr": "find i(vam_nc) at='0.5*vdd_val+0.010'"
+    },
+    "ro50_nc": {
+      "analysis": "dc",
+      "expr": "param='0.020/(ihi50_nc-ilo50_nc)'"
+    },
+    "ilo70_nc": {
+      "analysis": "dc",
+      "expr": "find i(vam_nc) at='0.7*vdd_val-0.010'"
+    },
+    "ihi70_nc": {
+      "analysis": "dc",
+      "expr": "find i(vam_nc) at='0.7*vdd_val+0.010'"
+    },
+    "ro70_nc": {
+      "analysis": "dc",
+      "expr": "param='0.020/(ihi70_nc-ilo70_nc)'"
+    },
+    "ihd0v20_nc": {
+      "analysis": "dc",
+      "expr": "find i(vam_nc) at='0.20'"
+    },
+    "chd0v20_nc": {
+      "analysis": "dc",
+      "expr": "param='ihd0v20_nc/imid_nc'"
+    },
+    "ihd0v40_nc": {
+      "analysis": "dc",
+      "expr": "find i(vam_nc) at='0.40'"
+    },
+    "chd0v40_nc": {
+      "analysis": "dc",
+      "expr": "param='ihd0v40_nc/imid_nc'"
+    },
+    "ihd0v60_nc": {
+      "analysis": "dc",
+      "expr": "find i(vam_nc) at='0.60'"
+    },
+    "chd0v60_nc": {
+      "analysis": "dc",
+      "expr": "param='ihd0v60_nc/imid_nc'"
+    },
+    "ihd0v80_nc": {
+      "analysis": "dc",
+      "expr": "find i(vam_nc) at='0.80'"
+    },
+    "chd0v80_nc": {
+      "analysis": "dc",
+      "expr": "param='ihd0v80_nc/imid_nc'"
+    },
+    "isat_nw": {
+      "analysis": "dc",
+      "expr": "find i(vam_nw) at='vdd_val-0.010'"
+    },
+    "imid_nw": {
+      "analysis": "dc",
+      "expr": "find i(vam_nw) at='vdd_val/2'"
+    },
+    "gain_nw": {
+      "analysis": "dc",
+      "expr": "param='imid_nw/2e-05'"
+    },
+    "ilo30_nw": {
+      "analysis": "dc",
+      "expr": "find i(vam_nw) at='0.3*vdd_val-0.010'"
+    },
+    "ihi30_nw": {
+      "analysis": "dc",
+      "expr": "find i(vam_nw) at='0.3*vdd_val+0.010'"
+    },
+    "ro30_nw": {
+      "analysis": "dc",
+      "expr": "param='0.020/(ihi30_nw-ilo30_nw)'"
+    },
+    "ilo50_nw": {
+      "analysis": "dc",
+      "expr": "find i(vam_nw) at='0.5*vdd_val-0.010'"
+    },
+    "ihi50_nw": {
+      "analysis": "dc",
+      "expr": "find i(vam_nw) at='0.5*vdd_val+0.010'"
+    },
+    "ro50_nw": {
+      "analysis": "dc",
+      "expr": "param='0.020/(ihi50_nw-ilo50_nw)'"
+    },
+    "ilo70_nw": {
+      "analysis": "dc",
+      "expr": "find i(vam_nw) at='0.7*vdd_val-0.010'"
+    },
+    "ihi70_nw": {
+      "analysis": "dc",
+      "expr": "find i(vam_nw) at='0.7*vdd_val+0.010'"
+    },
+    "ro70_nw": {
+      "analysis": "dc",
+      "expr": "param='0.020/(ihi70_nw-ilo70_nw)'"
+    },
+    "ihd0v20_nw": {
+      "analysis": "dc",
+      "expr": "find i(vam_nw) at='0.20'"
+    },
+    "chd0v20_nw": {
+      "analysis": "dc",
+      "expr": "param='ihd0v20_nw/imid_nw'"
+    },
+    "ihd0v40_nw": {
+      "analysis": "dc",
+      "expr": "find i(vam_nw) at='0.40'"
+    },
+    "chd0v40_nw": {
+      "analysis": "dc",
+      "expr": "param='ihd0v40_nw/imid_nw'"
+    },
+    "ihd0v60_nw": {
+      "analysis": "dc",
+      "expr": "find i(vam_nw) at='0.60'"
+    },
+    "chd0v60_nw": {
+      "analysis": "dc",
+      "expr": "param='ihd0v60_nw/imid_nw'"
+    },
+    "ihd0v80_nw": {
+      "analysis": "dc",
+      "expr": "find i(vam_nw) at='0.80'"
+    },
+    "chd0v80_nw": {
+      "analysis": "dc",
+      "expr": "param='ihd0v80_nw/imid_nw'"
+    },
+    "isat_ps": {
+      "analysis": "dc",
+      "expr": "find i(vam_ps) at='0.010'"
+    },
+    "imid_ps": {
+      "analysis": "dc",
+      "expr": "find i(vam_ps) at='vdd_val/2'"
+    },
+    "gain_ps": {
+      "analysis": "dc",
+      "expr": "param='imid_ps/2e-05'"
+    },
+    "ilo30_ps": {
+      "analysis": "dc",
+      "expr": "find i(vam_ps) at='0.3*vdd_val-0.010'"
+    },
+    "ihi30_ps": {
+      "analysis": "dc",
+      "expr": "find i(vam_ps) at='0.3*vdd_val+0.010'"
+    },
+    "ro30_ps": {
+      "analysis": "dc",
+      "expr": "param='-0.020/(ihi30_ps-ilo30_ps)'"
+    },
+    "ilo50_ps": {
+      "analysis": "dc",
+      "expr": "find i(vam_ps) at='0.5*vdd_val-0.010'"
+    },
+    "ihi50_ps": {
+      "analysis": "dc",
+      "expr": "find i(vam_ps) at='0.5*vdd_val+0.010'"
+    },
+    "ro50_ps": {
+      "analysis": "dc",
+      "expr": "param='-0.020/(ihi50_ps-ilo50_ps)'"
+    },
+    "ilo70_ps": {
+      "analysis": "dc",
+      "expr": "find i(vam_ps) at='0.7*vdd_val-0.010'"
+    },
+    "ihi70_ps": {
+      "analysis": "dc",
+      "expr": "find i(vam_ps) at='0.7*vdd_val+0.010'"
+    },
+    "ro70_ps": {
+      "analysis": "dc",
+      "expr": "param='-0.020/(ihi70_ps-ilo70_ps)'"
+    },
+    "ihd0v20_ps": {
+      "analysis": "dc",
+      "expr": "find i(vam_ps) at='vdd_val-0.20'"
+    },
+    "chd0v20_ps": {
+      "analysis": "dc",
+      "expr": "param='ihd0v20_ps/imid_ps'"
+    },
+    "ihd0v40_ps": {
+      "analysis": "dc",
+      "expr": "find i(vam_ps) at='vdd_val-0.40'"
+    },
+    "chd0v40_ps": {
+      "analysis": "dc",
+      "expr": "param='ihd0v40_ps/imid_ps'"
+    },
+    "ihd0v60_ps": {
+      "analysis": "dc",
+      "expr": "find i(vam_ps) at='vdd_val-0.60'"
+    },
+    "chd0v60_ps": {
+      "analysis": "dc",
+      "expr": "param='ihd0v60_ps/imid_ps'"
+    },
+    "ihd0v80_ps": {
+      "analysis": "dc",
+      "expr": "find i(vam_ps) at='vdd_val-0.80'"
+    },
+    "chd0v80_ps": {
+      "analysis": "dc",
+      "expr": "param='ihd0v80_ps/imid_ps'"
+    },
+    "isat_pc": {
+      "analysis": "dc",
+      "expr": "find i(vam_pc) at='0.010'"
+    },
+    "imid_pc": {
+      "analysis": "dc",
+      "expr": "find i(vam_pc) at='vdd_val/2'"
+    },
+    "gain_pc": {
+      "analysis": "dc",
+      "expr": "param='imid_pc/2e-05'"
+    },
+    "ilo30_pc": {
+      "analysis": "dc",
+      "expr": "find i(vam_pc) at='0.3*vdd_val-0.010'"
+    },
+    "ihi30_pc": {
+      "analysis": "dc",
+      "expr": "find i(vam_pc) at='0.3*vdd_val+0.010'"
+    },
+    "ro30_pc": {
+      "analysis": "dc",
+      "expr": "param='-0.020/(ihi30_pc-ilo30_pc)'"
+    },
+    "ilo50_pc": {
+      "analysis": "dc",
+      "expr": "find i(vam_pc) at='0.5*vdd_val-0.010'"
+    },
+    "ihi50_pc": {
+      "analysis": "dc",
+      "expr": "find i(vam_pc) at='0.5*vdd_val+0.010'"
+    },
+    "ro50_pc": {
+      "analysis": "dc",
+      "expr": "param='-0.020/(ihi50_pc-ilo50_pc)'"
+    },
+    "ilo70_pc": {
+      "analysis": "dc",
+      "expr": "find i(vam_pc) at='0.7*vdd_val-0.010'"
+    },
+    "ihi70_pc": {
+      "analysis": "dc",
+      "expr": "find i(vam_pc) at='0.7*vdd_val+0.010'"
+    },
+    "ro70_pc": {
+      "analysis": "dc",
+      "expr": "param='-0.020/(ihi70_pc-ilo70_pc)'"
+    },
+    "ihd0v20_pc": {
+      "analysis": "dc",
+      "expr": "find i(vam_pc) at='vdd_val-0.20'"
+    },
+    "chd0v20_pc": {
+      "analysis": "dc",
+      "expr": "param='ihd0v20_pc/imid_pc'"
+    },
+    "ihd0v40_pc": {
+      "analysis": "dc",
+      "expr": "find i(vam_pc) at='vdd_val-0.40'"
+    },
+    "chd0v40_pc": {
+      "analysis": "dc",
+      "expr": "param='ihd0v40_pc/imid_pc'"
+    },
+    "ihd0v60_pc": {
+      "analysis": "dc",
+      "expr": "find i(vam_pc) at='vdd_val-0.60'"
+    },
+    "chd0v60_pc": {
+      "analysis": "dc",
+      "expr": "param='ihd0v60_pc/imid_pc'"
+    },
+    "ihd0v80_pc": {
+      "analysis": "dc",
+      "expr": "find i(vam_pc) at='vdd_val-0.80'"
+    },
+    "chd0v80_pc": {
+      "analysis": "dc",
+      "expr": "param='ihd0v80_pc/imid_pc'"
+    },
+    "isat_pw": {
+      "analysis": "dc",
+      "expr": "find i(vam_pw) at='0.010'"
+    },
+    "imid_pw": {
+      "analysis": "dc",
+      "expr": "find i(vam_pw) at='vdd_val/2'"
+    },
+    "gain_pw": {
+      "analysis": "dc",
+      "expr": "param='imid_pw/2e-05'"
+    },
+    "ilo30_pw": {
+      "analysis": "dc",
+      "expr": "find i(vam_pw) at='0.3*vdd_val-0.010'"
+    },
+    "ihi30_pw": {
+      "analysis": "dc",
+      "expr": "find i(vam_pw) at='0.3*vdd_val+0.010'"
+    },
+    "ro30_pw": {
+      "analysis": "dc",
+      "expr": "param='-0.020/(ihi30_pw-ilo30_pw)'"
+    },
+    "ilo50_pw": {
+      "analysis": "dc",
+      "expr": "find i(vam_pw) at='0.5*vdd_val-0.010'"
+    },
+    "ihi50_pw": {
+      "analysis": "dc",
+      "expr": "find i(vam_pw) at='0.5*vdd_val+0.010'"
+    },
+    "ro50_pw": {
+      "analysis": "dc",
+      "expr": "param='-0.020/(ihi50_pw-ilo50_pw)'"
+    },
+    "ilo70_pw": {
+      "analysis": "dc",
+      "expr": "find i(vam_pw) at='0.7*vdd_val-0.010'"
+    },
+    "ihi70_pw": {
+      "analysis": "dc",
+      "expr": "find i(vam_pw) at='0.7*vdd_val+0.010'"
+    },
+    "ro70_pw": {
+      "analysis": "dc",
+      "expr": "param='-0.020/(ihi70_pw-ilo70_pw)'"
+    },
+    "ihd0v20_pw": {
+      "analysis": "dc",
+      "expr": "find i(vam_pw) at='vdd_val-0.20'"
+    },
+    "chd0v20_pw": {
+      "analysis": "dc",
+      "expr": "param='ihd0v20_pw/imid_pw'"
+    },
+    "ihd0v40_pw": {
+      "analysis": "dc",
+      "expr": "find i(vam_pw) at='vdd_val-0.40'"
+    },
+    "chd0v40_pw": {
+      "analysis": "dc",
+      "expr": "param='ihd0v40_pw/imid_pw'"
+    },
+    "ihd0v60_pw": {
+      "analysis": "dc",
+      "expr": "find i(vam_pw) at='vdd_val-0.60'"
+    },
+    "chd0v60_pw": {
+      "analysis": "dc",
+      "expr": "param='ihd0v60_pw/imid_pw'"
+    },
+    "ihd0v80_pw": {
+      "analysis": "dc",
+      "expr": "find i(vam_pw) at='vdd_val-0.80'"
+    },
+    "chd0v80_pw": {
+      "analysis": "dc",
+      "expr": "param='ihd0v80_pw/imid_pw'"
+    }
+  },
+  "topology_groups": {
+    "n_simple": {
+      "description": "NMOS simple (2-transistor) mirror -- CP sink; isat = |Iout| deep in saturation, imid/gain at mid-rail (Iref = 20 uA), ro30/50/70 = |dVout/dIout| central difference over +/-10 mV at 0.3/0.5/0.7 x Vdd, and the compliance knee ladder chd0v20..chd0v80 = Iout/Iout(mid-rail) at 0.20/0.40/0.60/0.80 V of headroom from this stack's own rail (ground for the N sinks, Vdd for the P sources)",
+      "measures": [
+        "isat_ns",
+        "imid_ns",
+        "gain_ns",
+        "ilo30_ns",
+        "ihi30_ns",
+        "ro30_ns",
+        "ilo50_ns",
+        "ihi50_ns",
+        "ro50_ns",
+        "ilo70_ns",
+        "ihi70_ns",
+        "ro70_ns",
+        "ihd0v20_ns",
+        "chd0v20_ns",
+        "ihd0v40_ns",
+        "chd0v40_ns",
+        "ihd0v60_ns",
+        "chd0v60_ns",
+        "ihd0v80_ns",
+        "chd0v80_ns"
+      ]
+    },
+    "n_casc": {
+      "description": "NMOS self-biased cascode mirror -- CP sink; isat = |Iout| deep in saturation, imid/gain at mid-rail (Iref = 20 uA), ro30/50/70 = |dVout/dIout| central difference over +/-10 mV at 0.3/0.5/0.7 x Vdd, and the compliance knee ladder chd0v20..chd0v80 = Iout/Iout(mid-rail) at 0.20/0.40/0.60/0.80 V of headroom from this stack's own rail (ground for the N sinks, Vdd for the P sources)",
+      "measures": [
+        "isat_nc",
+        "imid_nc",
+        "gain_nc",
+        "ilo30_nc",
+        "ihi30_nc",
+        "ro30_nc",
+        "ilo50_nc",
+        "ihi50_nc",
+        "ro50_nc",
+        "ilo70_nc",
+        "ihi70_nc",
+        "ro70_nc",
+        "ihd0v20_nc",
+        "chd0v20_nc",
+        "ihd0v40_nc",
+        "chd0v40_nc",
+        "ihd0v60_nc",
+        "chd0v60_nc",
+        "ihd0v80_nc",
+        "chd0v80_nc"
+      ]
+    },
+    "n_ws": {
+      "description": "NMOS wide-swing (low-voltage) cascode mirror -- CP sink; isat = |Iout| deep in saturation, imid/gain at mid-rail (Iref = 20 uA), ro30/50/70 = |dVout/dIout| central difference over +/-10 mV at 0.3/0.5/0.7 x Vdd, and the compliance knee ladder chd0v20..chd0v80 = Iout/Iout(mid-rail) at 0.20/0.40/0.60/0.80 V of headroom from this stack's own rail (ground for the N sinks, Vdd for the P sources)",
+      "measures": [
+        "isat_nw",
+        "imid_nw",
+        "gain_nw",
+        "ilo30_nw",
+        "ihi30_nw",
+        "ro30_nw",
+        "ilo50_nw",
+        "ihi50_nw",
+        "ro50_nw",
+        "ilo70_nw",
+        "ihi70_nw",
+        "ro70_nw",
+        "ihd0v20_nw",
+        "chd0v20_nw",
+        "ihd0v40_nw",
+        "chd0v40_nw",
+        "ihd0v60_nw",
+        "chd0v60_nw",
+        "ihd0v80_nw",
+        "chd0v80_nw"
+      ]
+    },
+    "p_simple": {
+      "description": "PMOS simple mirror -- CP source; isat = |Iout| deep in saturation, imid/gain at mid-rail (Iref = 20 uA), ro30/50/70 = |dVout/dIout| central difference over +/-10 mV at 0.3/0.5/0.7 x Vdd, and the compliance knee ladder chd0v20..chd0v80 = Iout/Iout(mid-rail) at 0.20/0.40/0.60/0.80 V of headroom from this stack's own rail (ground for the N sinks, Vdd for the P sources)",
+      "measures": [
+        "isat_ps",
+        "imid_ps",
+        "gain_ps",
+        "ilo30_ps",
+        "ihi30_ps",
+        "ro30_ps",
+        "ilo50_ps",
+        "ihi50_ps",
+        "ro50_ps",
+        "ilo70_ps",
+        "ihi70_ps",
+        "ro70_ps",
+        "ihd0v20_ps",
+        "chd0v20_ps",
+        "ihd0v40_ps",
+        "chd0v40_ps",
+        "ihd0v60_ps",
+        "chd0v60_ps",
+        "ihd0v80_ps",
+        "chd0v80_ps"
+      ]
+    },
+    "p_casc": {
+      "description": "PMOS self-biased cascode mirror -- CP source; isat = |Iout| deep in saturation, imid/gain at mid-rail (Iref = 20 uA), ro30/50/70 = |dVout/dIout| central difference over +/-10 mV at 0.3/0.5/0.7 x Vdd, and the compliance knee ladder chd0v20..chd0v80 = Iout/Iout(mid-rail) at 0.20/0.40/0.60/0.80 V of headroom from this stack's own rail (ground for the N sinks, Vdd for the P sources)",
+      "measures": [
+        "isat_pc",
+        "imid_pc",
+        "gain_pc",
+        "ilo30_pc",
+        "ihi30_pc",
+        "ro30_pc",
+        "ilo50_pc",
+        "ihi50_pc",
+        "ro50_pc",
+        "ilo70_pc",
+        "ihi70_pc",
+        "ro70_pc",
+        "ihd0v20_pc",
+        "chd0v20_pc",
+        "ihd0v40_pc",
+        "chd0v40_pc",
+        "ihd0v60_pc",
+        "chd0v60_pc",
+        "ihd0v80_pc",
+        "chd0v80_pc"
+      ]
+    },
+    "p_ws": {
+      "description": "PMOS wide-swing cascode mirror -- CP source; isat = |Iout| deep in saturation, imid/gain at mid-rail (Iref = 20 uA), ro30/50/70 = |dVout/dIout| central difference over +/-10 mV at 0.3/0.5/0.7 x Vdd, and the compliance knee ladder chd0v20..chd0v80 = Iout/Iout(mid-rail) at 0.20/0.40/0.60/0.80 V of headroom from this stack's own rail (ground for the N sinks, Vdd for the P sources)",
+      "measures": [
+        "isat_pw",
+        "imid_pw",
+        "gain_pw",
+        "ilo30_pw",
+        "ihi30_pw",
+        "ro30_pw",
+        "ilo50_pw",
+        "ihi50_pw",
+        "ro50_pw",
+        "ilo70_pw",
+        "ihi70_pw",
+        "ro70_pw",
+        "ihd0v20_pw",
+        "chd0v20_pw",
+        "ihd0v40_pw",
+        "chd0v40_pw",
+        "ihd0v60_pw",
+        "chd0v60_pw",
+        "ihd0v80_pw",
+        "chd0v80_pw"
+      ]
+    },
+    "reference_devices": {
+      "description": "operating point of each polarity's reference (diode-connected) mirror device at Iref = 20 uA -- the inversion level the compliance numbers above were taken at",
+      "measures": [
+        "vth_n",
+        "vdsat_n",
+        "gm_n",
+        "gds_n",
+        "vth_p",
+        "vdsat_p",
+        "gm_p",
+        "gds_p"
+      ]
+    }
+  },
+  "checks": {
+    "gain_ns": {
+      "min": 0.5,
+      "max": 1.5
+    },
+    "ro50_ns": {
+      "min": 0.0
+    },
+    "chd0v80_ns": {
+      "min": 0.5,
+      "max": 1.5
+    },
+    "gain_nc": {
+      "min": 0.5,
+      "max": 1.5
+    },
+    "ro50_nc": {
+      "min": 0.0
+    },
+    "chd0v80_nc": {
+      "min": 0.5,
+      "max": 1.5
+    },
+    "gain_nw": {
+      "min": 0.5,
+      "max": 1.5
+    },
+    "ro50_nw": {
+      "min": 0.0
+    },
+    "chd0v80_nw": {
+      "min": 0.5,
+      "max": 1.5
+    },
+    "gain_ps": {
+      "min": 0.5,
+      "max": 1.5
+    },
+    "ro50_ps": {
+      "min": 0.0
+    },
+    "chd0v80_ps": {
+      "min": 0.5,
+      "max": 1.5
+    },
+    "gain_pc": {
+      "min": 0.5,
+      "max": 1.5
+    },
+    "ro50_pc": {
+      "min": 0.0
+    },
+    "chd0v80_pc": {
+      "min": 0.5,
+      "max": 1.5
+    },
+    "gain_pw": {
+      "min": 0.5,
+      "max": 1.5
+    },
+    "ro50_pw": {
+      "min": 0.0
+    },
+    "chd0v80_pw": {
+      "min": 0.5,
+      "max": 1.5
+    }
+  }
+}

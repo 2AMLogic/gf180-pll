@@ -652,13 +652,29 @@ and `sim/selftest.sh` — see `sim/harness/README.md` for how to run it and how
 to write a testbench manifest. `sim/harness-selftest/` is the harness's own
 acceptance testbench (real devices, real corners, no design claim); it is not
 one of the block campaigns in the table above. The interim `sim/lib/simenv.sh`
-shim and the `sim/devchar-*` / `sim/divider-ratio` / `sim/lock-detector` /
-`sim/cp-compliance` / `sim/pfd-deadzone` / `sim/vco-tuning-range` campaigns
-built on it remain the real, already-recorded evidence for their claims;
-migrating them onto `sim/harness` is tracked separately (see the issue that
-follows #2) rather than done as part of landing the harness itself, so that
-already-citable PVT evidence is not touched in the same change that
-introduces the tool that will eventually reproduce it.
+shim and the campaigns built on it remain the real, already-recorded evidence
+for their claims; migrating them onto `sim/harness` is tracked separately
+(#36, decomposed into #40–#44) rather than done as part of landing the harness
+itself, so that already-citable PVT evidence is not touched in the same change
+that introduces the tool that will eventually reproduce it.
+
+**Migration state** — which campaigns run on which runner today:
+
+| Campaign | Runner | Migration |
+|---|---|---|
+| `devchar-delay`, `devchar-cp`, `devchar-passives` | `sim/harness` | migrated (#40); each new record **Supersedes** the pre-migration one |
+| `divider-ratio`, `lock-detector` | `sim/lib/simenv.sh` | #41 |
+| `cp-compliance`, `pfd-deadzone` | `sim/lib/simenv.sh` | #42 |
+| `vco-tuning-range` | `sim/lib/simenv.sh` | #43 |
+| `lock-time`, `output-range` | `sim/lib/simenv.sh` | blocked on a manifest capability gap — see below |
+| `loop-dynamics`, `mc-cp-mismatch`, `pll-top-smoke`, `supply-sensitivity` | `sim/lib/simenv.sh` | not yet scoped — these landed after #36 was written, so they are outside #40–#43 |
+| `harness-selftest` | `sim/harness` | n/a — it *is* the harness's acceptance testbench |
+
+A migrated campaign keeps its pre-migration `run.sh` in place, marked
+superseded for new runs: the records that runner already minted are
+append-only evidence, and it is the only thing that can regenerate the extra
+CSV artifacts those records cite. `sim/lib/simenv.sh` is retired only when
+every campaign has moved (#44).
 
 `sim/lock-time` and `sim/output-range` (#12) also build on `sim/lib/simenv.sh`
 rather than `sim/harness`, even though both landed after #2: `tb.json`

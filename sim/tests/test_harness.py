@@ -322,6 +322,56 @@ class DeckTests(unittest.TestCase):
         for section in self.point.corner.sections:
             self.assertIn(f'sm141064.ngspice" {section}', self.deck)
 
+    def test_deck_has_no_extra_lib_sections_by_default(self):
+        """Omitting the key must compose exactly the deck it always did."""
+        self.assertEqual(self.tb.extra_lib_sections, ())
+        self.assertEqual(
+            self.deck.count('sm141064.ngspice"'), len(self.point.corner.sections)
+        )
+
+    def test_deck_appends_extra_lib_sections_after_the_corner_bundle(self):
+        """A section no bundle carries (e.g. cap_mim) is added at every point."""
+        root = Path(self.tmp.name)
+        (root / "tb2").mkdir()
+        (root / "tb2" / "x.spice").write_text("v1 out 0 dc {vdd_val}\n")
+        (root / "tb2" / "tb.json").write_text(
+            json.dumps(
+                {
+                    "name": "x",
+                    "netlist": "x.spice",
+                    "measure": {"vout": "v(out)"},
+                    "extra_lib_sections": ["cap_mim", "cap_mim"],
+                }
+            )
+        )
+        tb = testbench.load(root / "tb2")
+        self.assertEqual(tb.extra_lib_sections, ("cap_mim",))  # de-duplicated
+        deck = runner.compose_deck(tb, self.pdk, self.point)
+        self.assertIn('sm141064.ngspice" cap_mim', deck)
+        last_bundle = self.point.corner.sections[-1]
+        self.assertLess(
+            deck.index(f'sm141064.ngspice" {last_bundle}'),
+            deck.index('sm141064.ngspice" cap_mim'),
+        )
+
+    def test_extra_lib_sections_must_be_a_list_of_names(self):
+        root = Path(self.tmp.name)
+        (root / "tb3").mkdir()
+        (root / "tb3" / "x.spice").write_text("v1 out 0 dc {vdd_val}\n")
+        (root / "tb3" / "tb.json").write_text(
+            json.dumps(
+                {
+                    "name": "x",
+                    "netlist": "x.spice",
+                    "measure": {"vout": "v(out)"},
+                    "extra_lib_sections": "cap_mim",
+                }
+            )
+        )
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(root / "tb3")
+        self.assertIn("extra_lib_sections", str(ctx.exception))
+
     def test_deck_carries_manifest_params_and_options(self):
         self.assertIn(".param cload=1p", self.deck)
         self.assertIn(".options reltol=1e-5", self.deck)
@@ -581,6 +631,46 @@ class RecordRenderingTests(unittest.TestCase):
         self.assertIn("sim/harness-selftest/testbench/x.spice", text)
         self.assertIn("sim/harness-selftest/netlist-snapshots/20260729-153000-1a7ef75.spice", text)
         self.assertIn("sim/harness-selftest/corners/20260729-153000-1a7ef75/", text)
+
+    def test_links_cite_a_second_testbench_dir_not_the_default_name(self):
+        """An experiment may carry more than one deck (devchar-passives does).
+
+        A record must cite the directory ITS OWN manifest came from, or the
+        capacitor record and the resistor record of the same experiment would
+        both claim to have come from ``testbench/``.
+        """
+        root = Path(self.tmp.name)
+        alt = root / "harness-selftest" / "testbench-alt"
+        alt.mkdir(parents=True)
+        (alt / "y.spice").write_text("v1 out 0 dc {vdd_val}\n")
+        (alt / "tb.json").write_text(
+            json.dumps({"name": "alt", "netlist": "y.spice", "measure": {"vout": "v(out)"}})
+        )
+        tb = testbench.load(alt)
+        record = report.build_record(
+            tb=tb,
+            pdk=self.pdk,
+            points=self.points,
+            results=self.results,
+            ngspice="ngspice-46",
+            repo_root=SIM_DIR,
+            record_id="20260729-153000-1a7ef75",
+            started_utc="2026-07-29T15:30:00+00:00",
+            wall_seconds=9.5,
+        )
+        text = report.render_record(record, "harness-selftest")
+        self.assertIn("sim/harness-selftest/testbench-alt/y.spice", text)
+        self.assertIn("sim/harness-selftest/testbench-alt/tb.json", text)
+        self.assertNotIn("sim/harness-selftest/testbench/y.spice", text)
+
+    def test_rendering_tolerates_a_record_written_before_the_directory_key(self):
+        """Records are append-only; the oldest ones carry no testbench dir."""
+        legacy = dict(self.record)
+        legacy["testbench"] = {
+            k: v for k, v in self.record["testbench"].items() if k != "directory"
+        }
+        text = report.render_record(legacy, "harness-selftest")
+        self.assertIn("sim/harness-selftest/testbench/x.spice", text)
 
     def test_result_table_uses_corner_ids_and_reports_overall_verdict(self):
         text = report.render_record(self.record, "harness-selftest")

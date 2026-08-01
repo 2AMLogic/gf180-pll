@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # gf180-pll :: devchar-passives :: corner runner
 #
+# SUPERSEDED FOR NEW RUNS by this campaign's sim/harness manifest
+# (testbench/tb.json + the .spice fragment beside it) -- run
+#   python3 sim/run_corners.py <slug>
+# instead. This script is kept because the records it already minted are
+# append-only evidence and it is the only thing that can regenerate the
+# extra CSV artifacts they cite; do not extend it.
+#
 # Two campaigns in one directory, because they share a corner convention:
 #
 #   caps  tb_cap_cv.sp over mimcap_{typical,ff,ss} + moscap_{typical,ff,ss}
