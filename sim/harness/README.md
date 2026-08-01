@@ -161,10 +161,11 @@ distinct claim under test, kebab-case.
 }
 ```
 
-Five further keys are optional and default to off — `topology_groups` (record
-layout), `dut` (compose a committed netlist export), `sweeps` + `grid` (extra
-sweep axes, possibly non-rectangular) and `derived` (campaign-supplied
-reductions). Each has its own section below.
+Six further keys are optional and default to off — `topology_groups` (record
+layout), `dut` (compose a committed netlist export), `dut_export` (compose a
+*per-record*, non-committed netlist export), `sweeps` + `grid` (extra sweep
+axes, possibly non-rectangular) and `derived` (campaign-supplied reductions).
+Each has its own section below.
 
 `claim` is the default for the record's **Claim** field, in either of the two
 forms `sim/README.md` accepts: a ratified spec line (`spec/pll.md#anchor`) or
@@ -330,6 +331,51 @@ fragment:
   names it.
 - A missing export is a load error naming `design/netlist.sh`, not a confusing
   "unknown subckt" thousands of lines into an ngspice log.
+
+### Composing a per-record DUT export: `dut_export` (optional)
+
+`design/netlist.sh` keeps a *second* export convention for a hierarchy it
+deliberately does not commit — currently just `pfd_cp` (see that script's own
+header comment for why: the PFD/CP is re-exported per campaign, and
+committing it would be a second source of truth beside the per-record
+`netlist-snapshots/<record-id>.spice` freeze `sim/README.md` already
+mandates). `dut_export` is the per-record counterpart of `dut`, for exactly
+that convention:
+
+```json
+{
+  "dut_export": {"top": "pfd_cp"},
+  "netlist": "tb_pfd_cp.sp"
+}
+```
+
+- `top` is a `design/netlist.sh --top <block>` value from its PER-RECORD list
+  (today, only `pfd_cp`). A manifest may declare `dut` or `dut_export`, not
+  both.
+- Resolving it — actually running `design/netlist.sh --top <top> <outdir>` —
+  is **deferred to first use**, not done at `load()` time: the same guarantee
+  the `derived` module gets ("imported lazily, never during `--list`"), for
+  the same reason. Parsing or listing a manifest must never shell out to
+  xschem. The first thing that actually needs the composed DUT — generating a
+  deck, building provenance, or freezing the snapshot — triggers the one
+  export the run needs; every PVT point after that (including ones racing it
+  concurrently under `-j`) reuses the same cached, already-validated path.
+- The scratch export lands at `sim/<slug>/work/dut-export/<top>/dut.spice` —
+  the same already-gitignored `sim/*/work/` convention every
+  `sim/lib/simenv.sh` campaign's `run.sh` already uses for this export,
+  namespaced by `<top>` so a future manifest naming a second per-record top
+  cannot collide with this one.
+- From there on `dut_export` behaves exactly like `dut`: the generated deck
+  `.include`s the exported file before the fragment, the netlist snapshot
+  inlines it (self-contained, with its own sha256 and a `composed_sha256`
+  over the whole), the record's **Netlist provenance** field names it, and it
+  is held to the same no-`.include`/`.lib`/`.temp`/... rule a `dut` export
+  is — checked the moment it materializes, since (unlike `dut`) the file does
+  not exist yet at `load()` time for an earlier check to read.
+- A `design/netlist.sh` failure (no xschem, wrong `--top`, a leaf-cell
+  collision) surfaces as a load-time-shaped error the first time the export is
+  actually needed, including the script's own stdout/stderr — not a confusing
+  ngspice failure with no netlist to point at.
 
 ### Sweeping beyond the PVT grid: `sweeps` and `grid` (optional)
 

@@ -40,7 +40,7 @@ sub-table per topology instead. It changes nothing about how the deck is
 composed, run, parsed or checked -- omit it and every campaign behaves
 exactly as before.
 
-Four further optional keys exist for campaigns the single fixed ``params``
+Five further optional keys exist for campaigns the single fixed ``params``
 map cannot express. Every one of them defaults to off, so a manifest that
 does not use them behaves exactly as it did before they existed:
 
@@ -48,6 +48,17 @@ does not use them behaves exactly as it did before they existed:
                so a committed ``design/netlist/<block>.spice`` export can be
                the DUT without being pasted into the fragment (where it would
                silently go stale).
+    dut_export ``{"top": "<block>"}`` -- the *per-record* counterpart of
+               ``dut``, for a block ``design/netlist.sh`` deliberately does
+               NOT commit (currently just ``pfd_cp``; see that script's own
+               header comment for why). The harness runs
+               ``design/netlist.sh --top <block> <scratch-dir>`` itself and
+               composes the result exactly where a ``dut`` entry would go --
+               nothing under ``testbench/`` becomes a generated artefact, and
+               there is still only one committed-adjacent copy of the export:
+               the frozen ``netlist-snapshots/<record-id>.spice`` a record
+               actually cites. A manifest may declare ``dut`` or
+               ``dut_export``, not both.
     sweeps     extra independent axes beyond the PVT grid, each point
                carrying its own derived deck parameters.
     grid       the union of blocks a run actually covers, when the extra-axis
@@ -65,6 +76,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -104,6 +117,8 @@ UNGROUPED_TOPOLOGY = "ungrouped"
 #: rejected rather than silently ignored.
 TOPOLOGY_GROUP_KEYS = ("measures", "description")
 
+#: Keys a ``dut_export`` block may carry.
+DUT_EXPORT_KEYS = ("top",)
 #: Keys a ``sweeps`` axis may carry.
 SWEEP_AXIS_KEYS = ("points", "description")
 #: Keys one point on a ``sweeps`` axis may carry.
@@ -141,6 +156,114 @@ class TopologyGroup:
     description: str = ""
 
 
+def _check_forbidden_directives(source: Path, kind: str) -> None:
+    """Reject a fragment or DUT netlist that owns what the harness owns.
+
+    Shared by :func:`validate_netlist` (committed ``dut`` and the fragment,
+    checked at ``load()`` time) and :meth:`DutExportSpec.resolve` (a
+    ``dut_export``, checked the moment it materializes -- which is later than
+    ``load()``, since it does not exist yet at parse time). Same rule, same
+    message, in both places: a ``.lib``/``.temp`` that leaked into either kind
+    of DUT netlist would pin every corner of every campaign that names it.
+    """
+    problems: list[str] = []
+    for lineno, raw in enumerate(source.read_text().splitlines(), start=1):
+        line = raw.strip().lower()
+        if not line.startswith("."):
+            continue
+        directive = line.split()[0]
+        if directive in FORBIDDEN_DIRECTIVES:
+            problems.append(f"  line {lineno}: {raw.strip()}")
+    if problems:
+        raise ValueError(
+            f"{source}: {kind} must not contain "
+            f"{', '.join(FORBIDDEN_DIRECTIVES)} -- the harness supplies the models, "
+            "corner libs, temperature, measurements and the control block:\n"
+            + "\n".join(problems)
+        )
+
+
+@dataclass
+class DutExportSpec:
+    """A manifest's ``dut_export`` block -- a per-record (non-committed) DUT.
+
+    ``design/netlist.sh`` keeps two export conventions (see its own header
+    comment): a COMMITTED one (``dut`` composes those) and a PER-RECORD one,
+    currently just ``pfd_cp``, which is exported fresh on every invocation and
+    deliberately has no committed file under ``design/netlist/`` for a
+    manifest to name -- committing one would be a second source of truth
+    beside the per-record ``netlist-snapshots/<record-id>.spice`` freeze
+    ``sim/README.md`` already mandates.
+
+    So this spec does not *name* a path the way ``dut`` does -- it names a
+    ``--top`` value, and resolving it (:meth:`resolve`) actually runs
+    ``design/netlist.sh --top <top> <outdir>`` into a scratch directory under
+    ``sim/<slug>/work/`` (the existing, already-gitignored convention every
+    ``sim/lib/simenv.sh`` campaign's ``run.sh`` uses for the same export).
+
+    Resolution is deferred to first use, not done in ``load()``/``testbench.
+    load()`` itself: ``sim/harness/README.md`` already promises the ``derived``
+    module "is imported lazily (never during ``--list``)", for the same
+    reason -- parsing or listing a manifest must never shell out to xschem.
+    ``resolve()`` is the only call site that can trigger the export; every
+    consumer of the composed DUT goes through :attr:`Testbench.resolved_dut`,
+    which calls it.
+
+    ``resolve()`` is idempotent and thread-safe (double-checked locking, the
+    same pattern ``derived.DerivedSpec.module()`` uses -- see #76): every PVT
+    point ``run_grid()`` dispatches (across a ``ThreadPoolExecutor`` whenever
+    ``jobs > 1``) shares this one instance, so the first point to reach
+    ``compose_deck()`` pays for the one xschem invocation the run needs, and
+    every other point -- including ones racing it concurrently -- gets back
+    the same cached, already-validated path.
+    """
+
+    top: str
+    outdir: Path
+    _path: Path | None = field(default=None, init=False, repr=False, compare=False)
+    _lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False, compare=False
+    )
+
+    def resolve(self) -> Path:
+        if self._path is None:
+            with self._lock:
+                if self._path is None:
+                    self._path = self._export()
+        return self._path
+
+    def _export(self) -> Path:
+        netlist_sh = REPO_ROOT / "design" / "netlist.sh"
+        if not netlist_sh.is_file():
+            raise FileNotFoundError(
+                f"dut_export: {netlist_sh} does not exist -- cannot export top "
+                f"{self.top!r}"
+            )
+        self.outdir.mkdir(parents=True, exist_ok=True)
+        proc = subprocess.run(
+            [str(netlist_sh), "--top", self.top, str(self.outdir)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"dut_export: 'design/netlist.sh --top {self.top} {self.outdir}' "
+                f"failed (exit {proc.returncode}):\n{proc.stdout}{proc.stderr}"
+            )
+        exported = self.outdir / "dut.spice"
+        if not exported.is_file():
+            raise FileNotFoundError(
+                f"dut_export: design/netlist.sh --top {self.top} did not produce "
+                f"{exported}"
+            )
+        # Checked here, not at load() time: the file does not exist until this
+        # runs, so this is the earliest point the same rule a committed `dut`
+        # is held to (see _check_forbidden_directives) can be applied to it.
+        _check_forbidden_directives(exported, "dut netlists")
+        return exported
+
+
 @dataclass
 class Testbench:
     directory: Path
@@ -162,6 +285,7 @@ class Testbench:
     checks: dict[str, dict] = field(default_factory=dict)
     options: tuple[str, ...] = ()
     dut: tuple[Path, ...] = ()
+    dut_export: DutExportSpec | None = None
     sweeps: tuple[SweepAxis, ...] = ()
     grid_blocks: tuple[GridBlock, ...] = ()
     optional_measures: frozenset[str] = frozenset()
@@ -249,14 +373,31 @@ class Testbench:
         return hashlib.sha256((self.directory / MANIFEST_NAME).read_bytes()).hexdigest()
 
     @property
+    def resolved_dut(self) -> tuple[Path, ...]:
+        """``dut`` plus the resolved ``dut_export``, in that order.
+
+        This is the ONLY place ``dut_export`` is actually resolved (see
+        :meth:`DutExportSpec.resolve`) -- every consumer that needs the
+        composed DUT (the generated deck, the frozen snapshot, provenance)
+        goes through here rather than touching ``dut_export`` directly, so
+        there is exactly one call site that can trigger the export.
+        ``load()`` itself never calls this, which is what keeps parsing (and
+        ``--list``) from shelling out to xschem.
+        """
+        if self.dut_export is None:
+            return self.dut
+        return self.dut + (self.dut_export.resolve(),)
+
+    @property
     def netlist_sources(self) -> tuple[Path, ...]:
-        """Every file the DUT deck is made of: ``dut`` exports, then the fragment.
+        """Every file the DUT deck is made of: DUT sources, then the fragment.
 
         DUT first, because the exports define the subcircuits the fragment
         instantiates -- the same order ``sim/lib/assemble_closed_loop.sh``
-        concatenates them in.
+        concatenates them in. Resolves ``dut_export`` (via
+        :attr:`resolved_dut`) on first access.
         """
-        return self.dut + (self.netlist,)
+        return self.resolved_dut + (self.netlist,)
 
     def compose_netlist(self) -> str:
         """The self-contained DUT + stimulus text, for the frozen snapshot.
@@ -293,13 +434,14 @@ class Testbench:
             "nominal_supply_v": self.nominal_supply_v,
             "supply_tolerance": self.supply_tolerance,
         }
-        if self.dut:
+        dut_sources = self.resolved_dut
+        if dut_sources:
             record["dut"] = [
                 {
                     "path": _repo_relative(p),
                     "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
                 }
-                for p in self.dut
+                for p in dut_sources
             ]
             record["composed_sha256"] = self.composed_sha256
         return record
@@ -411,6 +553,49 @@ def _load_dut(manifest: dict, path: Path) -> tuple[Path, ...]:
             )
         resolved.append(candidate)
     return tuple(resolved)
+
+
+def _load_dut_export(
+    manifest: dict, path: Path, directory: Path
+) -> DutExportSpec | None:
+    """Parse ``dut_export``: a per-record (non-committed) DUT, by ``--top`` name.
+
+    This is the per-record counterpart of ``dut`` -- see the module docstring
+    and :class:`DutExportSpec`. Unlike ``dut``, nothing is resolved here:
+    ``design/netlist.sh`` is not run until :attr:`Testbench.resolved_dut` is
+    first accessed, well after ``load()`` returns.
+    """
+    raw = manifest.get("dut_export")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"{path}: 'dut_export' must be an object, e.g. {{\"top\": \"pfd_cp\"}}"
+        )
+    unknown = sorted(set(raw) - set(DUT_EXPORT_KEYS))
+    if unknown:
+        raise ValueError(
+            f"{path}: dut_export has unknown key(s) {unknown}; supported keys "
+            f"are {list(DUT_EXPORT_KEYS)}"
+        )
+    top = raw.get("top")
+    if not isinstance(top, str) or not top:
+        raise ValueError(
+            f"{path}: dut_export.top must name a design/netlist.sh --top value, "
+            'e.g. "pfd_cp"'
+        )
+    if manifest.get("dut") is not None:
+        raise ValueError(
+            f"{path}: a manifest may declare 'dut' (committed convention) or "
+            "'dut_export' (per-record convention), not both -- see "
+            "design/netlist.sh's two export conventions"
+        )
+    # sim/<slug>/work/dut-export/<top>/ -- scratch, already covered by the
+    # existing 'sim/*/work/' gitignore rule every sim/lib/simenv.sh campaign's
+    # WORK dir already relies on. Namespaced by <top> so a future manifest
+    # naming a second per-record top cannot collide with this one's export.
+    outdir = directory.parent / "work" / "dut-export" / top
+    return DutExportSpec(top=top, outdir=outdir)
 
 
 def _sweep_id_ok(value: str) -> bool:
@@ -848,6 +1033,7 @@ def load(directory: str | Path) -> Testbench:
             )
 
     dut = _load_dut(manifest, manifest_path)
+    dut_export = _load_dut_export(manifest, manifest_path, directory)
     sweeps = _load_sweeps(manifest, manifest_path)
     grid_blocks = _load_grid_blocks(manifest, manifest_path, sweeps)
     derived = _load_derived(
@@ -888,6 +1074,7 @@ def load(directory: str | Path) -> Testbench:
         checks=dict(manifest.get("checks", {})),
         options=tuple(manifest.get("options", ())),
         dut=dut,
+        dut_export=dut_export,
         sweeps=sweeps,
         grid_blocks=grid_blocks,
         optional_measures=optional_measures,
@@ -898,7 +1085,7 @@ def load(directory: str | Path) -> Testbench:
 
 
 def validate_netlist(tb: Testbench) -> None:
-    """Reject fragments -- and DUT exports -- that own what the harness owns.
+    """Reject fragments -- and committed DUT exports -- that own what the harness owns.
 
     Catching this here is much friendlier than debugging a duplicated
     ``.end``, a hardcoded ``.temp 27`` that silently pins every corner to
@@ -908,24 +1095,17 @@ def validate_netlist(tb: Testbench) -> None:
     A ``dut`` export is held to the same rule: ``design/netlist.sh`` emits bare
     ``.subckt``/``.ends`` blocks, and an export that had picked up a ``.lib``
     or a ``.temp`` would pin every corner of every campaign that names it.
+
+    Deliberately checks ``tb.dut`` (committed) and ``tb.netlist`` (the
+    fragment) only -- NOT ``tb.netlist_sources``/``tb.resolved_dut``, which
+    would resolve a ``dut_export`` right here, at ``load()`` time. A
+    ``dut_export`` is checked by the same rule, but lazily, inside
+    :meth:`DutExportSpec.resolve` -- the file does not exist yet for this
+    function to read.
     """
-    for source in tb.netlist_sources:
-        problems: list[str] = []
-        for lineno, raw in enumerate(source.read_text().splitlines(), start=1):
-            line = raw.strip().lower()
-            if not line.startswith("."):
-                continue
-            directive = line.split()[0]
-            if directive in FORBIDDEN_DIRECTIVES:
-                problems.append(f"  line {lineno}: {raw.strip()}")
-        if problems:
-            kind = "netlist fragments" if source == tb.netlist else "dut netlists"
-            raise ValueError(
-                f"{source}: {kind} must not contain "
-                f"{', '.join(FORBIDDEN_DIRECTIVES)} -- the harness supplies the models, "
-                "corner libs, temperature, measurements and the control block:\n"
-                + "\n".join(problems)
-            )
+    for source in tb.dut + (tb.netlist,):
+        kind = "netlist fragments" if source == tb.netlist else "dut netlists"
+        _check_forbidden_directives(source, kind)
 
 
 def discover(root: str | Path) -> list[Path]:

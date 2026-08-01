@@ -96,6 +96,15 @@ sforce vctrl vsetnode sctrl 0 SWFORCE
 * The control-voltage margin measurement this campaign exists for.
 .measure tran vctrl_final find v(vctrl) at='tstop-1p'
 
+* PFD DN-branch integration guard (#69) -- see tb_lock_time.sp's identical
+* measure for the full rationale.  This campaign is where the guard was
+* validated: at the pre-#75 ceiling the `lo` edge derived a 2.0 ns internal
+* timestep from its 10 MHz output (~6x the PFD's 0.33-0.39 ns set pulse) and
+* this measure read 6.6e-7 V against a 9.9e-4 V floor -- the DN branch was not
+* asserting at all, while the campaign's own verdict table showed nothing
+* unusual.  run.sh scores it three-valued (PASS / FAIL / SUSPECT / ERROR).
+.measure tran dn_lvl avg v(dn) from='0.9*tstop' to='tstop-1p'
+
 * Optional full-transient waveform capture -- see tb_lock_time.sp's header
 * comment above the identical `.control` block for the rationale (#49's
 * Vctrl-anomaly prerequisite; no extra analysis cost, left on unconditionally).

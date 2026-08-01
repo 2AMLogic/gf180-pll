@@ -392,7 +392,7 @@ current-steering charge pump with a 2-bit unit-element Icp trim.
 |---|---|
 | `pfdcp_inv_3v3` | unit inverter, Wp/Wn = 1.5u/0.5u at L = 0.3u — **block-owned**, see [Leaf-cell ownership and naming](#leaf-cell-ownership-and-naming) |
 | `pfdcp_nand2_3v3` | unit 2-input NAND, Wp/Wn = 1.5u/1u at L = 0.3u — block-owned |
-| `edgedet` | rising-edge pulse generator (AND of X and X delayed 5 stages) |
+| `edgedet` | rising-edge pulse generator (AND of X and X delayed 5 stages) — its **0.33–0.39 ns** output pulse is the narrowest signal anywhere in the loop, and therefore what bounds every closed-loop simulation's internal timestep; see [PFD (`pfd.sch`)](#pfd-pfdsch) below and `sim/README.md`'s "Closed-loop internal-timestep bound" |
 | `srlatch` | NAND SR latch, active-low set/reset |
 | `pfd` | tri-state phase-frequency detector |
 | `cp_leg_n` / `cp_leg_p` | one **unit** of charge-pump sink / source current |
@@ -412,6 +412,16 @@ consume.
 Tri-state PFD: each input's rising edge fires an `edgedet` that SETs its own
 `srlatch`; both latches share one RESET, generated as `AND(UP, DN)` through an
 explicit **24-inverter delay chain**.
+
+> **Simulating anything that contains this block?** `edgedet`'s internal SET
+> pulse — `AND(X, NOT(X delayed by 5 inverters))`, measured **0.33–0.39 ns**
+> — is narrower than the 1.1–1.9 ns UP/DN pulse the 24-inverter chain below
+> eventually produces, and it is the *internal* pulse that bounds a transient's
+> ngspice timestep. Sizing the ceiling from the UP/DN number instead is the
+> trap: the integrator then steps clean over the set pulse, the PFD stops
+> seeing feedback edges, and the loop reports a confident **false** "does not
+> lock". `sim/README.md`'s "Closed-loop internal-timestep bound" states the
+> rule (100 ps), how to comply, and which committed records predate it.
 
 That delay chain is the dead-zone-elimination element, and **its length is set
 by the charge pump, not by the logic**. The requirement is not merely that UP
@@ -1003,6 +1013,15 @@ cold-start run proving the assembled loop acquires and holds lock. It is
 deliberately **not** a PVT campaign — lock time and band coverage are #12,
 jitter is #13, supply pushing and power are #14. Of those, #14 runs against
 this assembled DUT today; #12's two campaigns do not yet.
+
+**Every closed-loop transient against this DUT inherits a 100 ps
+internal-timestep ceiling from the PFD** — not from the VCO, and not from the
+charge pump. It is a property of `edgedet`'s set pulse (see the note under
+[PFD (`pfd.sch`)](#pfd-pfdsch) above), so it does not move when a campaign
+changes its output frequency, its reference, or its divide ratio. The single
+shared constant is `SIMENV_CLOSED_LOOP_TMAX` in `sim/lib/simenv.sh`; the rule,
+the compliance recipe and the failure mode are in `sim/README.md`'s
+"Closed-loop internal-timestep bound".
 
 ## Regenerating and editing
 

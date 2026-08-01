@@ -151,6 +151,25 @@ sforce vctrl vsetnode sctrl 0 SWFORCE
 * record's Result table also reports incidentally (headroom to each rail).
 .measure tran vctrl_final find v(vctrl) at='tstop-1p'
 
+* PFD DN-branch integration guard (#69) -- mean DN level over the last 10% of
+* the window, the same quantity sim/pll-top-smoke's check 7 gates on.
+*
+* This is NOT a lock criterion.  It is the standing regression detector for
+* sim/README.md's "Closed-loop internal-timestep bound": when the ceiling is
+* too coarse the PFD stops seeing feedback edges, the loop reads as jammed
+* with UP asserted, and NOTHING in the verdict table looks wrong -- the
+* failure is a confident false negative.  In a loop that is tracking, both
+* branches pulse once per reference cycle for the reset-delay overlap, so a
+* DN branch that never asserts at all is proof the integration, not the
+* design, failed.
+*
+* #75 brought this deck onto the bound, so the expected verdict is now PASS
+* on every row and this measure earns its keep by catching a REGRESSION off
+* the bound rather than the violation that motivated it.  run.sh scores it
+* three-valued -- see its run_one for why a bare PASS/FAIL does not transfer
+* to a campaign whose rows may legitimately end the window still converging.
+.measure tran dn_lvl avg v(dn) from='0.9*tstop' to='tstop-1p'
+
 * Optional full-transient waveform capture (#49's Vctrl-anomaly prerequisite:
 * the two .measure samples above give only the END-of-window state, not
 * enough to distinguish a PFD/CP polarity effect, a SWFORCE-release
