@@ -51,6 +51,13 @@ jobs:
         # see sim/selftest.sh. Do NOT pass --require-pdk here.
         run: bash sim/selftest.sh
 
+      - name: layout/tests (harness unit tests, no PDK/KLayout needed)
+        # Mirrors the sim/tests step above: layout/harness/drc.py's two pure
+        # functions (parse_report_db, rules_from_log) have zero PDK/KLayout
+        # dependency. lvs.py and faults.py are not covered here -- their only
+        # non-trivial functions require KLayout/subprocess.
+        run: python3 -m unittest discover -s layout/tests -t layout/tests
+
   pdk-checks:
     name: pdk-checks (nightly / ci:full -- requires gf180mcu PDK + xschem)
     runs-on: ubuntu-latest
