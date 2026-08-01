@@ -243,11 +243,20 @@ POWER="${CORNERSDIR}/power_split.csv"
   done | awk -F, -v f1="${KFOUT}" -v f2="${KFOUT2}" '
     {
       b=$1; t=$2; v=$3+0;
-      # first row block is the 100 MHz run (fields 1..26), second the 50 MHz
-      # run (fields 27..52); domain currents are at offsets 24/25/26.
+      # `paste` joined two summary rows of identical width, so the width is
+      # NF/2 and is read off the data rather than restated as a constant.
+      NW = int(NF / 2);
+      # first row block is the 100 MHz run (fields 1..27), second the 50 MHz
+      # run (fields 28..54); domain currents are at offsets 24/25/26 inside
+      # each block, i.e. 24/25/26 and 51/52/53.  NW = the summary row width
+      # run.sh emits, derived rather than inlined so adding a column to that
+      # row (as `tstop` was) cannot silently shift the currents of the second
+      # block onto the wrong fields -- which reads vctrl_max and lock_lvl as if
+      # they were currents and quietly poisons the whole quiescent/dynamic
+      # split.
       split("core vco div", D, " ");
       for (d = 1; d <= 3; d++) {
-        i1 = abs($(23 + d)); i2 = abs($(49 + d));
+        i1 = abs($(23 + d)); i2 = abs($(NW + 23 + d));
         k  = (i1 - i2) / (f1 - f2);
         iq = i1 - k * f1;
         idyn = i1 - iq;
