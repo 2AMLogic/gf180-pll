@@ -165,6 +165,20 @@ def compose_deck(tb: Testbench, pdk: Pdk, point: PvtPoint) -> str:
         lines.append(f"  let m_{name} = {expr}")
     for name in tb.measure:
         lines.append(f"  print m_{name}")
+    if tb.raw_measures:
+        # Netlist-level `.measure` cards (emitted above) are serviced by
+        # ngspice's *own* post-`.control` re-run of every `.analyses` line --
+        # a second full transient/AC/etc pass that reproduces exactly the
+        # measurements already taken during the `.control` block's own run of
+        # those same analyses (see `analysis` on RawMeasure / the module
+        # docstring's `raw_measures` entry). `quit` here ends the ngspice
+        # session at the close of the `.control` block, before that
+        # redundant pass ever starts, so every campaign that declares
+        # `raw_measures` pays for its transient once instead of twice. Must
+        # come after the `let`/`print` lines above (those read the analyses'
+        # own results, and both are no-ops after `quit`); harmless when
+        # `tb.measure` is also set (the `let`/`print` lines already ran).
+        lines.append("  quit")
     lines += [".endc", ".end", ""]
     return "\n".join(lines)
 

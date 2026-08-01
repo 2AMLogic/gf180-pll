@@ -388,6 +388,43 @@ class DeckTests(unittest.TestCase):
         # evaluates them per-analysis regardless of what runs afterward.
         self.assertLess(self.deck.index(".measure tran tpd"), self.deck.index(".control"))
 
+    def test_deck_quits_after_raw_measures_to_skip_ngspice_s_redundant_rerun(self):
+        """See #86: with a netlist-level `.measure` card in the deck, ngspice
+        batch mode re-runs every `.analyses` line a second time after the
+        `.control` block finishes, purely to service that card -- doubling
+        wall clock for identical numbers. A `quit` at the end of the
+        `.control` block (after the `let`/`print` lines it must not precede)
+        ends the session before that second pass starts."""
+        control_at = self.deck.index(".control")
+        endc_at = self.deck.index(".endc")
+        quit_at = self.deck.index("\n  quit\n")
+        print_at = self.deck.rindex("print m_")
+        self.assertLess(control_at, quit_at)
+        self.assertLess(print_at, quit_at)
+        self.assertLess(quit_at, endc_at)
+
+    def test_deck_omits_quit_when_no_raw_measures_are_declared(self):
+        root = Path(self.tmp.name)
+        (root / "tb4").mkdir()
+        (root / "tb4" / "x.spice").write_text("v1 out 0 dc {vdd_val}\n")
+        (root / "tb4" / "tb.json").write_text(
+            json.dumps(
+                {
+                    "name": "x",
+                    "netlist": "x.spice",
+                    "measure": {"vout": "v(out)"},
+                    "analyses": ["op"],
+                }
+            )
+        )
+        tb = testbench.load(root / "tb4")
+        deck = runner.compose_deck(tb, self.pdk, self.point)
+        # No netlist `.measure` card means ngspice never re-runs the
+        # analyses, so there is nothing for `quit` to pre-empt. (The
+        # `set noaskquit` line legitimately contains the substring "quit" --
+        # check for the standalone control-block command, not the substring.)
+        self.assertNotIn("\n  quit\n", deck)
+
 
 class ParseTests(unittest.TestCase):
     def test_parses_let_expression_output(self):
