@@ -411,29 +411,49 @@ def derive_tables(run):
     )
 
     push = d["push"]
-    pw, pb = push[-1], push[0]
-    pushing = DerivedTable(
-        name="supply_pushing",
-        description="static supply pushing, df/d(vdd_vco) across the full +/-10%% supply "
-                    "range at fixed process/temperature/band/Vctrl -- %d combinations"
-                    % len(push),
-        columns=("", "df/dVdd (MHz/V)", "normalized (%/V)", "point"),
-        rows=(
-            ("Worst", mhz(pw[1]), "%.1f" % (100 * pw[0]),
-             "%s/%gC, B%d, Vctrl %.1f V (f = %s MHz)" % (pw[2], pw[3], pw[4], pw[5], mhz(pw[6]))),
-            ("Best", mhz(pb[1]), "%.1f" % (100 * pb[0]),
-             "%s/%gC, B%d, Vctrl %.1f V (f = %s MHz)" % (pb[2], pb[3], pb[4], pb[5], mhz(pb[6]))),
-        ),
-        notes=(
-            "Median normalized pushing %.1f %%/V; a +/-10%% (+/-0.33 V) supply excursion"
-            % (100 * push[len(push) // 2][0]),
-            "therefore moves f_osc by up to %.0f%% open-loop at the worst point."
-            % (100 * pw[0] * 0.33),
-            "Transient supply-step and supply-ripple jitter -- DR-001's top named",
-            "risk, which a DC pushing number does not cover -- are a separate record",
-            "from `testbench/run_supply.sh`.",
-        ),
-    )
+    if push:
+        pw, pb = push[-1], push[0]
+        pushing = DerivedTable(
+            name="supply_pushing",
+            description="static supply pushing, df/d(vdd_vco) across the full +/-10%% supply "
+                        "range at fixed process/temperature/band/Vctrl -- %d combinations"
+                        % len(push),
+            columns=("", "df/dVdd (MHz/V)", "normalized (%/V)", "point"),
+            rows=(
+                ("Worst", mhz(pw[1]), "%.1f" % (100 * pw[0]),
+                 "%s/%gC, B%d, Vctrl %.1f V (f = %s MHz)"
+                 % (pw[2], pw[3], pw[4], pw[5], mhz(pw[6]))),
+                ("Best", mhz(pb[1]), "%.1f" % (100 * pb[0]),
+                 "%s/%gC, B%d, Vctrl %.1f V (f = %s MHz)"
+                 % (pb[2], pb[3], pb[4], pb[5], mhz(pb[6]))),
+            ),
+            notes=(
+                "Median normalized pushing %.1f %%/V; a +/-10%% (+/-0.33 V) supply excursion"
+                % (100 * push[len(push) // 2][0]),
+                "therefore moves f_osc by up to %.0f%% open-loop at the worst point."
+                % (100 * pw[0] * 0.33),
+                "Transient supply-step and supply-ripple jitter -- DR-001's top named",
+                "risk, which a DC pushing number does not cover -- are a separate record",
+                "from `testbench/run_supply.sh`.",
+            ),
+        )
+    else:
+        pushing = DerivedTable(
+            name="supply_pushing",
+            description="static supply pushing, df/d(vdd_vco) across the full +/-10%% supply "
+                        "range at fixed process/temperature/band/Vctrl",
+            columns=("", "df/dVdd (MHz/V)", "normalized (%/V)", "point"),
+            rows=(),
+            notes=(
+                "**Not derivable**: this run's grid does not span the full "
+                "2.97-3.63 V supply range (needs all three of 2.97 V, 3.30 V and "
+                "3.63 V at a shared bundle/temp/band/Vctrl combination), so no "
+                "df/dVdd point could be formed.",
+                "This is expected for a supply-thinned run (e.g. `--supply-tol 0`, "
+                "a single-supply calibration or subset sweep) and is not a defect; "
+                "a full-grid `vco-tuning-range` campaign is required for this table.",
+            ),
+        )
 
     cur_rows = []
     for label, grp in (("~10 MHz", d["p10"]), ("~200 MHz", d["p200"])):

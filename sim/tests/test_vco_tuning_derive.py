@@ -491,5 +491,106 @@ class VcoTuningDerivedTableParity(unittest.TestCase):
         )
 
 
+def _run_view_from_rows(derive, rows) -> RunView:
+    """Rebuild the harness's per-point `RunView` from flat sweep rows.
+
+    Mirrors `test_vco_stages_derive.py`'s `_run_view_from_csv`: `rows_from_run`
+    (what a real `run_corners.py` invocation hands `reduce_grid`) expects one
+    `PointView` per (corner, band), each carrying its seven `f<n>`/`i<n>`
+    measurements -- the same shape `derive_tables` is called with in
+    production, so this exercises the actual crash site (`derive_tables`,
+    not just `reduce_grid`).
+    """
+    grouped: dict[tuple, list] = {}
+    for r in rows:
+        grouped.setdefault((r["corner"], r["band"]), []).append(r)
+
+    points = []
+    for (corner, band), rs in grouped.items():
+        bundle, temp_c, vdd = corner
+        meas = {}
+        for i, r in enumerate(sorted(rs, key=lambda r: r["vctrl"]), start=1):
+            meas["f%d" % i] = r["f"]
+            meas["i%d" % i] = r["i"]
+        view = PointView(
+            corner=bundle,
+            corner_id="%s_%gc_%.2fv_band%d" % (bundle, temp_c, vdd, band),
+            temp_c=temp_c,
+            vdd=vdd,
+            axes={"band": "band%d" % band},
+            params={"band": str(band)},
+            measurements=meas,
+        )
+        meas.update(derive.derive_point(view))
+        points.append(view)
+    return RunView(experiment="vco-tuning-range", measure_names=(), points=tuple(points))
+
+
+class VcoTuningSubsetGridDoesNotCrash(unittest.TestCase):
+    """Regression for #96: `derive_tables()` must not IndexError on a run
+
+    whose grid does not span all three supplies (e.g. `--supply-tol 0`, the
+    natural low-cost calibration run before committing to the full 504-point
+    campaign). Built from a supply-thinned (single supply, 3.30 V only) and
+    band-thinned (bands 0-2 only, out of the full 0-7) slice of the same
+    committed grid `VcoTuningReductionParity` replays, so this is still a pure
+    replay -- no simulator, no PDK, no network.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.d = _load_derive()
+        all_rows = _read_sweep(SWEEP_CSV)
+        # Supply-thinned: only the nominal 3.30 V supply (as --supply-tol 0
+        # produces) -- excludes 2.97 V and 3.63 V, so `push` in reduce_grid()
+        # can never gain an entry. Band-thinned: bands 0-2 only (consecutive,
+        # so the adjacent-band-overlap table's b -> b+1 lookups stay valid).
+        cls.rows = [
+            r for r in all_rows
+            if abs(r["corner"][2] - 3.30) < 1e-9 and r["band"] in (0, 1, 2)
+        ]
+        cls.run_view = _run_view_from_rows(cls.d, cls.rows)
+
+    def test_fixture_is_actually_thinned(self):
+        # Sanity check on the fixture itself: exactly one supply, three bands,
+        # and non-trivially smaller than the full 3528-row / 63-corner grid.
+        supplies = {r["corner"][2] for r in self.rows}
+        bands = {r["band"] for r in self.rows}
+        self.assertEqual(supplies, {3.30})
+        self.assertEqual(bands, {0, 1, 2})
+        self.assertLess(len(self.rows), 3528)
+        self.assertEqual(len(self.rows), 21 * 3 * 7)  # 21 corners x 3 bands x 7 vctrl
+
+    def test_reduce_grid_push_is_empty(self):
+        r = self.d.reduce_grid(self.d.rows_from_run(self.run_view))
+        self.assertEqual(r["push"], [])
+
+    def test_derive_tables_does_not_raise(self):
+        # This is the exact crash site from #96: derive_tables() unpacking
+        # push[-1]/push[0] on an empty list. Must not raise IndexError.
+        tables = self.d.derive_tables(self.run_view)
+        self.assertTrue(tables)
+
+    def test_supply_pushing_table_is_empty_with_an_explanation(self):
+        tables = {t.name: t for t in self.d.derive_tables(self.run_view)}
+        pushing = tables["supply_pushing"]
+        self.assertEqual(pushing.rows, ())
+        notes = "\n".join(pushing.notes)
+        self.assertIn("not derivable", notes.lower())
+        self.assertIn("2.97", notes)
+        self.assertIn("3.63", notes)
+
+    def test_other_tables_still_populated(self):
+        # The tables that do NOT share this crash (per the issue's curated
+        # analysis) should still produce sensible, non-empty output on the
+        # thinned grid -- this run is a legitimate subset, not a broken one.
+        tables = {t.name: t for t in self.d.derive_tables(self.run_view)}
+        self.assertEqual(len(tables["band_plan"].rows), 3)  # bands 0, 1, 2
+        self.assertEqual(len(tables["band_overlap"].rows), 2)  # 0->1, 1->2
+        self.assertEqual(len(tables["kvco_summary"].rows), 3)
+        self.assertEqual(len(tables["band_edge_margin"].rows), 2)
+        self.assertTrue(tables["acceptance_checks"].rows)
+
+
 if __name__ == "__main__":
     unittest.main()
