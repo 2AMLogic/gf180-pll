@@ -32,9 +32,38 @@
 #   SIM_FORCE=1 ./run.sh     # ignore cached runs in work/ and re-simulate
 #   SIM_JOBS=8 ./run.sh      # override the parallel job count
 #
+#   SIM_TSTOP / SIM_TA / SIM_TB
+#                            override the steady-state transient length and its
+#                            two late measurement instants, so a corner that is
+#                            still converging can be re-run longer instead of
+#                            being reported as a design result.
+#   SIM_EXTEND=off           disable the automatic settling escalation (below);
+#   SIM_EXTEND_TSTOP/_TA/_TB the length it escalates to;
+#   SIM_EXTEND_MAX=<n>       cap how many corners it escalates.
+#   SIM_TMAX                 run at a timestep ceiling other than the shared
+#                            closed-loop bound.  Its one sanctioned use
+#                            (sim/lib/simenv.sh) is a bound-sensitivity study;
+#                            such a run gets its own work directory and carries
+#                            its ceiling in every row it emits, so it cannot be
+#                            mistaken for a compliant one.
+#   SIM_FINE=off             disable the timestep-ceiling cross-check that
+#                            follows the escalation.  The cross-check is a no-op
+#                            unless SIM_TMAX put the grid off the bound; when it
+#                            did, it is what distinguishes a genuinely
+#                            under-damped corner from an under-RESOLVED one.
+#   SIM_FINE_TMAX / SIM_FINE_MAX  the ceiling it re-runs at (default: the
+#                            bound), and a cap on how many corners it reaches.
+#
 #   SIM_SUPERSEDES=<record-id> SIM_SUPERSEDES_NOTE='<why>' ./run.sh
 #                            mint with a **Supersedes** field (sim/README.md ::
 #                            "Status / supersession language").
+#   SIM_SUPERSEDES_PR='PR #62'
+#                            the pull request that landed the superseded
+#                            record, named in the new record's supersession
+#                            prose.  A record can read the superseded record's
+#                            commit and timestamp out of the file itself; the
+#                            PR that merged it is the one fact it cannot, so it
+#                            is passed in rather than guessed.
 #
 # Every run is resumable: a completed run is reused only on an exact match of
 # the deck mtime AND the full parameter list, never on the deck alone.
@@ -85,16 +114,23 @@ KFOUT2=50e6
 KFREF2=6.25e6
 
 # Transient controls, shared by every steady-state run.
-# KTMAX   400 ps ceiling on the internal timestep.  Set by the CHARGE PUMP as
-#         in sim/pll-top-smoke -- the PFD's minimum UP/DN pulse is 1.1-1.9 ns
-#         (24-inverter reset chain, design/README.md) and the charge in those
-#         pulses IS the loop gain -- and tightened from that campaign's 500 ps
-#         because this one MEASURES those pulse widths (criterion 2), so the
-#         narrower of the two pulses must be resolved by several timesteps and
-#         not merely integrated correctly.  At 100 MHz it is 25 points per
-#         output cycle, and ngspice's own local-truncation-error control takes
-#         the step well below this ceiling through every edge -- the ceiling
-#         only bounds the quiet stretches between them.
+# KTMAX   The ceiling on the ngspice INTERNAL timestep is NOT this campaign's to
+#         choose: it is a property of the PFD every closed-loop deck in this repo
+#         inherits, and it lives in one place -- `SIMENV_CLOSED_LOOP_TMAX` in
+#         `sim/lib/simenv.sh`, documented in `sim/README.md`.  The bound is set
+#         by `design/edgedet.sch`'s INTERNAL set pulse (0.33-0.39 ns), not by the
+#         1.1-1.9 ns UP/DN OUTPUT pulse this campaign used to derive it from and
+#         not by f_out; an integrator whose step is comparable to the set pulse
+#         steps clean over it on a large fraction of feedback edges and the loop
+#         reads as jammed with UP asserted -- a false "does not lock", not a
+#         noisy one (#52/PR #64 measured it, #65/PR #75 hoisted it).
+#         This campaign's previous 400 ps and its "set by the CHARGE PUMP"
+#         rationale were reasoning from the output pulse, i.e. from the wrong
+#         pulse, and are replaced here by the shared constant rather than by a
+#         second derivation of it.  **The 9-corner record this campaign already
+#         has on `main` (20260801-024935-c4fe724) was taken at 400 ps and is
+#         therefore qualified by that bound**; re-examining it is #69's scope,
+#         and nothing here edits it.
 # KTSTOP  12 us.  Short because the warm start in tb_supply_lock.sp
 #         pre-charges BOTH loop-filter nodes -- the control node AND the
 #         series capacitor C1 that actually holds the loop's state -- so the
@@ -113,11 +149,59 @@ KFREF2=6.25e6
 #         HALF-period for BOTH reference frequencies (12.5 MHz: tstart = 40 ns;
 #         6.25 MHz: tstart = 80 ns), so "the first REF rise after t" and "the
 #         first FB rise after t" are the same cycle's pair at either setting.
-KTSTOP=12.0u
+#
+# KTSTOP/KTA/KTB are OVERRIDABLE (`SIM_TSTOP`/`SIM_TA`/`SIM_TB`) because a
+# corner reported as still converging has to be re-runnable at a longer
+# transient instead of being reported as a design result.  KTSTOP_BASE is the
+# unoverridden default, kept separately for two reasons: a run at a
+# non-default length gets its OWN work directory (so the long run does not
+# destroy the default-length run it is being compared against), and every
+# emitted summary row carries the length it was actually run at, so the
+# record's `tstop` column is per-row truth rather than a script constant.
+KTSTOP_BASE=12.0u
+KTSTOP="${SIM_TSTOP:-${KTSTOP_BASE}}"
 KTSTEP=20n
-KTMAX=400p
-KTA=6.4u
-KTB=9.6u
+# KTMAX_BASE is the shared closed-loop BOUND; KTMAX is what THIS invocation
+# actually runs at.  They differ only under `SIM_TMAX`, whose one sanctioned use
+# (`sim/lib/simenv.sh`) is a deliberate bound-sensitivity study -- and they have
+# to stay distinguishable, because a run at a non-bound ceiling gets its own
+# work directory and carries its ceiling in every summary row it emits, so that
+# such a run can never be quietly mistaken for a compliant one.
+#
+# The literal is restated here rather than derived, because `simenv.sh` folds
+# the SIM_TMAX override into `SIMENV_CLOSED_LOOP_TMAX` itself and there is then
+# no expression left that yields the unoverridden bound.  The guard below makes
+# the duplication safe: if the shared constant moves and this one does not, the
+# campaign refuses to run rather than minting a record against a stale bound.
+KTMAX_BASE=100p
+KTMAX="${SIMENV_CLOSED_LOOP_TMAX}"
+if [ -z "${SIM_TMAX:-}" ] && [ "${KTMAX}" != "${KTMAX_BASE}" ]; then
+  echo "ERROR: KTMAX_BASE (${KTMAX_BASE}) has drifted from sim/lib/simenv.sh's" >&2
+  echo "       SIMENV_CLOSED_LOOP_TMAX (${KTMAX}).  Update this runner to the" >&2
+  echo "       shared bound; do not mint a record against a stale one." >&2
+  exit 1
+fi
+# The ceiling the cross-check re-runs at is the BOUND itself: the cross-check
+# exists for the case where the grid was deliberately run coarser than the
+# bound, and its job is to say whether that choice, rather than the loop, is
+# what produced a lock-criterion failure.  When the grid already ran AT the
+# bound the two are equal and the stage is a no-op, which is the normal case.
+KTMAX_X="${SIM_FINE_TMAX:-${KTMAX_BASE}}"
+KTA="${SIM_TA:-6.4u}"
+KTB="${SIM_TB:-9.6u}"
+
+# The settling escalation (see "Settling escalation" in Main).  A corner whose
+# measured residual frequency error exceeds ACC_FERR at KTSTOP has NOT been
+# shown to be a design failure -- it has been shown to be unsettled -- so the
+# runner re-runs it automatically at KTSTOP_X and the record reports the pair.
+# 36.8u is 3.96 KTAU with the late window at 3.35/3.70 KTAU, against
+# 0.69/1.03 KTAU at the default length: an exponentially-settling loop drops
+# its residual by e^-2.7 (~x0.07) between the two, and one that does not is
+# not merely slow.  Both instants stay whole multiples of 160 ns, so they
+# remain on a reference half-period for both reference frequencies.
+KTSTOP_X="${SIM_EXTEND_TSTOP:-36.8u}"
+KTA_X="${SIM_EXTEND_TA:-31.2u}"
+KTB_X="${SIM_EXTEND_TB:-34.4u}"
 # The loop's own settling time constant, 1/(2*pi*R*C1) = 17.1 kHz => 9.3 us,
 # derived above.  Named here so report.sh states one number everywhere it
 # compares a rate or a window against "the loop", rather than restating it.
@@ -159,12 +243,47 @@ KD_DECIM=20e-9
 # voltage that gives the target output frequency.  A short transient suffices:
 # with VCTRL held by an ideal source there is no loop to settle, only the VCO's
 # own bias generator, and KVPRE_TB is 4 reference periods in.
+#
+# The length of that transient is NOT a free constant.  tb_supply_lock.sp
+# measures f_out over a fixed COUNT of output cycles (100 of them, because
+# ngspice's `.meas ... rise=` index is not an expression context) starting at
+# `tb`, so the run time a calibration point needs scales as 1/f_out -- and the
+# deck says so in as many words, asking the runner for "at least 2.4 us of run
+# after tb".  KVPRE_TSTOP below states that length for KFOUT and KFOUT only.
+# Used unscaled at the HALF-frequency point of the power split it is not merely
+# tight, it is impossible: 100 cycles at KFOUT2 need 2.0 us and the window is
+# 1.12 us, so `fout` measures `failed`, the solve returns nan, and every split
+# corner is silently dropped -- which is exactly why the campaign that
+# introduced the split reported it as NOT MEASURED.  Hence vpre_tstop_for().
 KVPRE_D=0.25
 KVPRE_TSTOP=1.44u
 KVPRE_TA=0.16u
 KVPRE_TB=0.32u
 KVPRE_RON=1m
 KVPRE_ROFF=1e15
+# The retry window, as a multiple of the 100 output cycles the deck counts.
+# 2.4 is the headroom tb_supply_lock.sp asks for, against the 1.12 the nominal
+# window carries; a point whose f_out could not be measured in the nominal
+# window is re-run here rather than being reported as nan.  Same principle as
+# the settling escalation below: a measurement that did not fit its window is
+# re-measured in a bigger one, not recorded as a result.
+KVPRE_RETRY_K=2.4
+
+# vpre_tstop_for <f_out> -- the calibration transient for a target frequency.
+# At KFOUT it returns KVPRE_TSTOP verbatim (same string, so a run cached at the
+# documented length stays cached); elsewhere it scales the post-tb part of that
+# window by KFOUT/f_out, which holds the cycle-count margin CONSTANT rather
+# than holding the seconds constant.
+vpre_tstop_for() {
+  if [ "$1" = "${KFOUT}" ]; then printf '%s' "${KVPRE_TSTOP}"; return; fi
+  awk -v ts="${KVPRE_TSTOP%u}" -v tb="${KVPRE_TB%u}" -v f0="${KFOUT}" -v f="$1" \
+    'BEGIN{ printf "%.6gu", tb + (ts - tb) * f0 / f }'
+}
+# vpre_tstop_retry_for <f_out> -- the longer window a failed point is re-run at.
+vpre_tstop_retry_for() {
+  awk -v tb="${KVPRE_TB%u}" -v k="${KVPRE_RETRY_K}" -v f="$1" \
+    'BEGIN{ printf "%.6gu", tb + k * 100 / f * 1e6 }'
+}
 # Where the solved control voltage is allowed to land.  Outside this the
 # solution is not a control voltage, it is an extrapolation off the end of the
 # measured line, and the runner says so rather than simulating it.
@@ -288,7 +407,13 @@ if [ "${1:-}" = "--one-lock" ]; then
   shift
   bundle="$1"; temp="$2"; vdd="$3"; band="$4"; vc0="$5"; fout="$6"; fref="$7"; sum="$8"
   kind="f$(awk -v f="${fout}" 'BEGIN{printf "%03d", f/1e6}')"
-  tag="${kind}_${bundle}_T${temp}_V${vdd}"; tag="${tag//./p}"; tag="${tag//-/m}"
+  tag="${kind}_${bundle}_T${temp}_V${vdd}"
+  # A non-default transient length, or a non-default timestep ceiling, gets its
+  # own work directory -- so a settling re-run or a timestep-ceiling cross-check
+  # ADDS evidence rather than overwriting the run it is compared with.
+  [ "${KTSTOP}" = "${KTSTOP_BASE}" ] || tag="${tag}_X${KTSTOP}"
+  [ "${KTMAX}" = "${KTMAX_BASE}" ]   || tag="${tag}_M${KTMAX}"
+  tag="${tag//./p}"; tag="${tag//-/m}"
   rundir="${WORK}/${tag}"; log="${rundir}/ngspice.log"
   libs="$(libs_for "${bundle}")"
 
@@ -317,12 +442,15 @@ if [ "${1:-}" = "--one-lock" ]; then
   fi
 
   m() { simenv_meas "${log}" "$1"; }
-  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+  # 28 fields.  The last two are the transient length and the timestep ceiling
+  # this row was actually run at -- per-row truth, because after the escalation
+  # and the cross-check below they are no longer one constant for the grid.
+  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
     "${bundle}" "${temp}" "${vdd}" "${fout}" "${band}" "${KTRIM}" "${fref}" "${KN}" "${vc0}" \
     "$(m fout)" "$(m ffb)" "$(m nmeas)" "$(m ferr)" "$(m phi_b)" \
     "$(m skew1)" "$(m skew2)" "$(m skew3)" "$(m wup1)" "$(m wdn1)" \
     "$(m vctrl_avg)" "$(m vctrl_min)" "$(m vctrl_max)" "$(m lock_lvl)" \
-    "$(m i_core)" "$(m i_vco)" "$(m i_div)" >"${sum}"
+    "$(m i_core)" "$(m i_vco)" "$(m i_div)" "${KTSTOP}" "${KTMAX}" >"${sum}"
   exit 0
 fi
 
@@ -338,13 +466,25 @@ if [ "${1:-}" = "--one-vpre" ]; then
   shift
   bundle="$1"; temp="$2"; vdd="$3"; band="$4"; vc0="$5"; fout="$6"; fref="$7"; out="$8"
   libs="$(libs_for "${bundle}")"
+  # The frequency belongs IN the work-directory name, exactly as it does for
+  # --one-lock.  Without it the KFOUT and KFOUT2 calibrations of the same
+  # (bundle, temp, vdd) share one directory -- and since both job sets are in
+  # the same xargs pass, two ngspice processes write the same ngspice.log at
+  # the same time.  The .sig guard stops the WRONG cached run being reused, but
+  # nothing stops two concurrent runs interleaving into one log, which reads
+  # back as a failed measurement or, worse, as a plausible wrong number.
+  kind="f$(awk -v f="${fout}" 'BEGIN{printf "%03d", f/1e6}')"
   vpre_point() {
-    local vv="$1" idx="$2"
-    local tag="vpre${idx}_${bundle}_T${temp}_V${vdd}"; tag="${tag//./p}"; tag="${tag//-/m}"
+    local vv="$1" idx="$2" ts="$3"
+    local tag="vpre${idx}_${kind}_${bundle}_T${temp}_V${vdd}"
+    # A retry at the longer window gets its OWN work directory, so it adds a
+    # measurement rather than overwriting the one it is replacing.
+    [ "${ts}" = "$(vpre_tstop_for "${fout}")" ] || tag="${tag}_X${ts}"
+    tag="${tag//./p}"; tag="${tag//-/m}"
     local rundir="${WORK}/${tag}" log="${WORK}/${tag}/ngspice.log"
     local params=( "vsup=${vdd}" "fref=${fref}" "nratio=${KN}" "vctrl0=${vv}"
                    "rforce=${KVPRE_RON}"
-                   "tstop=${KVPRE_TSTOP}" "tstep=${KTSTEP}" "tmax=${KTMAX}"
+                   "tstop=${ts}" "tstep=${KTSTEP}" "tmax=${KTMAX}"
                    "ta=${KVPRE_TA}" "tb=${KVPRE_TB}" )
     # shellcheck disable=SC2207
     params+=( $(cloop_band_params "${band}") )
@@ -367,8 +507,14 @@ if [ "${1:-}" = "--one-vpre" ]; then
     simenv_meas "${log}" fout
   }
   vc1="$(awk -v a="${vc0}" -v d="${KVPRE_D}" 'BEGIN{printf "%.4f", a+d}')"
-  f0="$(vpre_point "${vc0}" 0)"
-  f1="$(vpre_point "${vc1}" 1)"
+  TS_N="$(vpre_tstop_for "${fout}")"
+  TS_X="$(vpre_tstop_retry_for "${fout}")"
+  f0="$(vpre_point "${vc0}" 0 "${TS_N}")"
+  f1="$(vpre_point "${vc1}" 1 "${TS_N}")"
+  # A `failed` f_out measurement means the forced point ran slower than the
+  # window assumed, not that the VCO is broken -- re-measure it longer.
+  [ "${f0}" = "nan" ] && f0="$(vpre_point "${vc0}" 0 "${TS_X}")"
+  [ "${f1}" = "nan" ] && f1="$(vpre_point "${vc1}" 1 "${TS_X}")"
   awk -v v0="${vc0}" -v v1="${vc1}" -v f0="${f0}" -v f1="${f1}" -v ft="${fout}" \
       -v lo="${KVPRE_LO}" -v hi="${KVPRE_HI}" 'BEGIN{
     if (f0 == "nan" || f1 == "nan" || f1 == f0) { printf "%s %s %s\n", "nan", f0, f1; exit }
@@ -626,6 +772,84 @@ xargs -P "$(simenv_jobs)" -L 1 \
 # shellcheck disable=SC2016
 xargs -P "$(simenv_jobs)" -L 1 \
   "${BASH:-/bin/bash}" -c 'exec "$0" --one-lock "$@"' "${HERE}/run.sh" <"${JOBS050}"
+
+# --- settling escalation ----------------------------------------------------
+# A corner whose measured residual frequency error exceeds ACC_FERR at the
+# default transient length has not been shown to FAIL the lock criterion; it
+# has been shown to be still converging, and those are different claims.  The
+# distinction is a design question -- `sim/loop-dynamics` (#10) predicts phase
+# margin falling as Icp*Kvco/N rises, so the corners that ring longest are
+# expected to be the highest-Kvco operating points -- and it is settled by
+# running the SAME corner longer and comparing the two residuals, not by
+# reading the short run harder.  So the runner does it itself: escalation is
+# mechanism, not a note in the record asking someone to follow up.
+#
+#   SIM_EXTEND=off        skip the escalation entirely
+#   SIM_EXTEND_TSTOP/_TA/_TB   the longer transient (default 36.8u/31.2u/34.4u)
+#   SIM_EXTEND_MAX=<n>    cap the number of escalated corners (compute budget);
+#                         the worst residuals are escalated first, and
+#                         report.sh states the cap in the record when it bites.
+JOBS100X="${WORK}/jobs_100x.txt"; : >"${JOBS100X}"
+if [ "${SIM_EXTEND:-auto}" != "off" ]; then
+  cat "${WORK}"/s100_*.csv 2>/dev/null | awk -F, -v accf="${ACC_FERR}" -v w="${WORK}" \
+      -v fo="${KFOUT}" -v fr="${KFREF}" '
+    { fe = $13 + 0; if (fe < 0) fe = -fe;
+      if (fe > accf) printf "%.6g %s %s %s %s %s %s %s %s/s100x_%s_%s_%s.csv\n",
+        fe, $1, $2, $3, $5, $9, fo, fr, w, $1, $2, $3 }' \
+    | sort -rn | cut -d' ' -f2- \
+    | { if [ -n "${SIM_EXTEND_MAX:-}" ]; then head -n "${SIM_EXTEND_MAX}"; else cat; fi } \
+    >"${JOBS100X}"
+fi
+NX=$(wc -l <"${JOBS100X}" | tr -d ' ')
+if [ "${NX}" -gt 0 ]; then
+  echo "supply-sensitivity: ${NX} corner(s) still converging at ${KTSTOP} -- re-running at ${KTSTOP_X}"
+  # shellcheck disable=SC2016
+  SIM_TSTOP="${KTSTOP_X}" SIM_TA="${KTA_X}" SIM_TB="${KTB_X}" \
+    xargs -P "$(simenv_jobs)" -L 1 \
+      "${BASH:-/bin/bash}" -c 'exec "$0" --one-lock "$@"' "${HERE}/run.sh" <"${JOBS100X}"
+fi
+
+# --- timestep-ceiling cross-check -------------------------------------------
+# The escalation above buys the right to say "this corner is not merely slow".
+# It does NOT by itself buy the right to say "this corner is under-damped",
+# because a third explanation exists and PR #64 measured it on this exact DUT:
+# the integration stepping over `design/edgedet.sch`'s 0.33-0.39 ns internal PFD
+# set pulse, which reads out as a loop that will not converge.  A design-margin
+# finding routed to #10 or #8 on the strength of a numerical artefact is the
+# most expensive mistake this campaign can make -- a real claim about the design,
+# made from a simulator setting.
+#
+# With KTMAX at the shared bound (the normal case) that explanation is already
+# excluded and this stage does nothing.  It exists for the one case where it is
+# not: a deliberate bound-sensitivity run (`SIM_TMAX`, the only use
+# `sim/lib/simenv.sh` sanctions), where the grid ran coarser than the bound.
+# Then every corner still over ACC_FERR after the escalation is re-run at
+# KTSTOP_X *and* at the bound, and report.sh classifies a corner that comes
+# inside the criterion there as `integration`, not as `under-damped`.
+#
+#   SIM_FINE=off          skip the cross-check (a record that skips it says so)
+#   SIM_FINE_TMAX=<t>     the ceiling it re-runs at (default: the bound)
+#   SIM_FINE_MAX=<n>      cap how many corners are cross-checked
+JOBS100M="${WORK}/jobs_100m.txt"; : >"${JOBS100M}"
+if [ "${SIM_FINE:-auto}" != "off" ] && [ "${KTMAX_X}" != "${KTMAX}" ]; then
+  cat "${WORK}"/s100x_*.csv 2>/dev/null | awk -F, -v accf="${ACC_FERR}" -v w="${WORK}" \
+      -v fo="${KFOUT}" -v fr="${KFREF}" '
+    { fe = $13 + 0; if (fe < 0) fe = -fe;
+      if (fe > accf) printf "%.6g %s %s %s %s %s %s %s %s/s100m_%s_%s_%s.csv\n",
+        fe, $1, $2, $3, $5, $9, fo, fr, w, $1, $2, $3 }' \
+    | sort -rn | cut -d' ' -f2- \
+    | { if [ -n "${SIM_FINE_MAX:-}" ]; then head -n "${SIM_FINE_MAX}"; else cat; fi } \
+    >"${JOBS100M}"
+fi
+NM=$(wc -l <"${JOBS100M}" | tr -d ' ')
+if [ "${NM}" -gt 0 ]; then
+  echo "supply-sensitivity: ${NM} corner(s) still over ${ACC_FERR} at ${KTSTOP_X} -- re-running at timestep ceiling ${KTMAX_X}"
+  # shellcheck disable=SC2016
+  SIM_TSTOP="${KTSTOP_X}" SIM_TA="${KTA_X}" SIM_TB="${KTB_X}" SIM_TMAX="${KTMAX_X}" \
+    xargs -P "$(simenv_jobs)" -L 1 \
+      "${BASH:-/bin/bash}" -c 'exec "$0" --one-lock "$@"' "${HERE}/run.sh" <"${JOBS100M}"
+fi
+
 wait "${DYNPID}"
 
 got100=$(cat "${WORK}"/s100_*.csv 2>/dev/null | wc -l | tr -d ' ')
@@ -634,5 +858,9 @@ gotdyn=$(cat "${WORK}"/sdyn_*.csv 2>/dev/null | wc -l | tr -d ' ')
 [ "${got100}" -eq "${N100}" ] || { echo "ERROR: expected ${N100} rows @100 MHz, got ${got100}" >&2; exit 1; }
 [ "${got050}" -eq "${N050}" ] || { echo "ERROR: expected ${N050} rows @50 MHz, got ${got050}" >&2; exit 1; }
 [ "${gotdyn}" -eq "${NDYN}" ] || { echo "ERROR: expected ${NDYN} step/ramp rows, got ${gotdyn}" >&2; exit 1; }
+got100x=$(cat "${WORK}"/s100x_*.csv 2>/dev/null | wc -l | tr -d ' ')
+[ "${got100x}" -eq "${NX}" ] || { echo "ERROR: expected ${NX} settling re-run rows, got ${got100x}" >&2; exit 1; }
+got100m=$(cat "${WORK}"/s100m_*.csv 2>/dev/null | wc -l | tr -d ' ')
+[ "${got100m}" -eq "${NM}" ] || { echo "ERROR: expected ${NM} timestep-ceiling rows, got ${got100m}" >&2; exit 1; }
 
 exec "${HERE}/report.sh" "${WORK}" "${EXP}" "${HERE}"
