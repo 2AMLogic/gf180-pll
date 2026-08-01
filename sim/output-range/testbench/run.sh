@@ -95,13 +95,24 @@ run_one() {
   local sel; sel=$(echo "${code}" | cut -d' ' -f2-7)
   local p;   p=$(echo "${code}" | cut -d' ' -f8-13)
   local fref; fref=$(awk -v f="${fout}" -v n="${n}" 'BEGIN{printf "%.8g", f/n}')
-  local tag="or_${corner}_${temp}c_${vdd}v_${edge}"
+  # The internal-timestep ceiling is part of the run's identity -- see
+  # sim/lock-time/testbench/run.sh's run_one for why it goes in the tag.
+  local tag="or_${corner}_${temp}c_${vdd}v_${edge}_tmax${SIMENV_CLOSED_LOOP_TMAX}"
   tag="${tag//./p}"
 
   local tstop tstep t_force
   # Seeded near the expected lock point, so acquiring the residual error is
   # fast -- see the campaign header and this record's Methodology field for
   # why (the same compute-cost constraint sim/lock-time documents).
+  #
+  # `tstep` is the PRINT step only. Before #65 this deck's .tran omitted the
+  # 4th (tmax) argument, so ngspice defaulted the INTERNAL timestep ceiling to
+  # this print step -- and because it is derived from f_out, the 10 MHz `lo`
+  # edge ran at a 2 ns internal ceiling, ~20x coarser than the PFD's set pulse
+  # can tolerate. The ceiling is now passed independently as
+  # SIMENV_CLOSED_LOOP_TMAX; note the resulting cost is strongly edge-dependent
+  # here (the `lo` edge's internal step count rises ~18x, `hi`'s is unchanged
+  # -- 200 MHz already computed to exactly 100 ps).
   tstop=$(awk -v fr="${fref}" 'BEGIN{t=20/fr; if (t>2e-6) t=2e-6; printf "%.6g", t}')
   tstep=$(awk -v fo="${fout}" 'BEGIN{printf "%.6g", 1/(50*fo)}')
   t_force=$(awk -v fr="${fref}" 'BEGIN{printf "%.6g", 0.02/fr}')
@@ -111,7 +122,8 @@ run_one() {
     "bnd0v=${b0}*vsup" "bnd1v=${b1}*vsup" "bnd2v=${b2}*vsup"
     "icp0v=${ICP_B0}*vsup" "icp1v=${ICP_B1}*vsup" "iunit=${IUNIT}"
     "vctrl_ic=${vctrl_ic}" "t_force=${t_force}"
-    "tstep=${tstep}" "tstop=${tstop}" "lockthresh=0.5*vsup"
+    "tstep=${tstep}" "tstop=${tstop}" "tmax=${SIMENV_CLOSED_LOOP_TMAX}"
+    "lockthresh=0.5*vsup"
   )
   local i=0 s
   for s in ${sel}; do params+=("sel${i}v=${s}*vsup"); i=$((i + 1)); done
@@ -202,7 +214,7 @@ cp "${WORK}/dut.spice" "${SNAPDIR}/${RID}.spice"
 SHA=$(simenv_sha256 "${SNAPDIR}/${RID}.spice")
 
 while read -r corner temp vdd edge fout b2 b1 b0 n vic; do
-  tag="or_${corner}_${temp}c_${vdd}v_${edge}"
+  tag="or_${corner}_${temp}c_${vdd}v_${edge}_tmax${SIMENV_CLOSED_LOOP_TMAX}"
   tag="${tag//./p}"
   cid="${corner}_${temp}c_${vdd}v_${edge}"
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" "${cid}"
@@ -300,8 +312,12 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     \`lock_detector\` (#11) wired to the PFD's UP/DN outputs; see that
     campaign's record for the full derivation (comparator window, implied
     frequency-settling band).
-  - **Simulator settings**: identical \`.options\` to \`sim/lock-time\`; max
-    timestep \`1/(50*f_out)\`; transient length capped at 2 us for BOTH
+  - **Simulator settings**: identical \`.options\` to \`sim/lock-time\`;
+    \`.tran\` print step \`1/(50*f_out)\` with an explicit
+    **internal-timestep ceiling of ${SIMENV_CLOSED_LOOP_TMAX}**
+    (\`.tran\`'s 4th argument, \`SIMENV_CLOSED_LOOP_TMAX\` -- see
+    \`sim/README.md\`'s "Closed-loop internal-timestep bound"); transient
+    length capped at 2 us for BOTH
     edges -- shortened during development once the measured throughput (see
     \`sim/lock-time\`'s record) showed a longer window would not complete
     inside this session. **The 2 us cap is a much smaller number of
