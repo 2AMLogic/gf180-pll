@@ -46,7 +46,8 @@ from .runner import PointResult
 from .testbench import Testbench
 
 #: Subdirectories of ``sim/<experiment-slug>/`` defined by ``sim/README.md``.
-TESTBENCH_DIR = "testbench"
+TESTBENCH_DIR = "testbench"          # the default; a record cites the
+                                     # directory its own manifest came from
 SNAPSHOT_DIR = "netlist-snapshots"
 CORNERS_DIR = "corners"
 RECORDS_DIR = "records"
@@ -432,6 +433,7 @@ def build_record(
         "environment": environment(pdk, ngspice, repo_root, git),
         "grid": {
             "corners": corners,
+            "extra_lib_sections": list(tb.extra_lib_sections),
             "temperatures_c": sorted({p.temp_c for p in points}),
             "supplies_v": sorted({p.vdd for p in points}),
             "points": len(points),
@@ -558,6 +560,15 @@ def _corner_matrix_lines(record: dict) -> list[str]:
         + "; ".join(
             f"`{c['name']}` -> {' '.join(c['sections'])}" for c in grid["corners"]
         ),
+    ]
+    # Corner-independent model sections no bundle carries (see
+    # testbench._load_extra_lib_sections). Older records predate the key.
+    if grid.get("extra_lib_sections"):
+        lines.append(
+            "  - Corner-independent `.lib` sections added at every point: "
+            + ", ".join(f"`{s}`" for s in grid["extra_lib_sections"])
+        )
+    lines += [
         "  - Temperature: " + ", ".join(f"{t:g} °C" for t in grid["temperatures_c"]),
         "  - Supply: " + ", ".join(f"{v:.2f} V" for v in grid["supplies_v"]),
         f"  - {grid['points']} {shape}, {grid['points_ok']} completed",
@@ -839,8 +850,12 @@ def render_record(record: dict, experiment: str) -> str:
     git = env["git"]
     pdk = env["pdk"]
 
+    # The manifest's own directory, not the default name: an experiment that
+    # carries more than one testbench (devchar-passives: a capacitor deck and
+    # a resistor deck, two distinct claims) must not cite the wrong path.
+    tb_dir = tb.get("directory") or TESTBENCH_DIR
     provenance = (
-        f"schematic (`sim/{experiment}/{TESTBENCH_DIR}/{tb['netlist']}`), "
+        f"schematic (`sim/{experiment}/{tb_dir}/{tb['netlist']}`), "
         f"netlist SHA-256 `{tb['netlist_sha256']}`"
     )
     if tb.get("dut"):
@@ -850,7 +865,7 @@ def render_record(record: dict, experiment: str) -> str:
         provenance = (
             "schematic export(s) "
             + " + ".join(f"`{d['path']}` (SHA-256 `{d['sha256']}`)" for d in tb["dut"])
-            + f" composed with stimulus `sim/{experiment}/{TESTBENCH_DIR}/{tb['netlist']}` "
+            + f" composed with stimulus `sim/{experiment}/{tb_dir}/{tb['netlist']}` "
             f"(SHA-256 `{tb['netlist_sha256']}`); composed SHA-256 "
             f"`{tb.get('composed_sha256')}` — this is what the netlist snapshot holds"
         )
@@ -885,8 +900,8 @@ def render_record(record: dict, experiment: str) -> str:
     lines += _result_lines(record)
     lines += [
         "- **Links**:",
-        f"  - Testbench: `sim/{experiment}/{TESTBENCH_DIR}/{tb['netlist']}`, "
-        f"`sim/{experiment}/{TESTBENCH_DIR}/tb.json`",
+        f"  - Testbench: `sim/{experiment}/{tb_dir}/{tb['netlist']}`, "
+        f"`sim/{experiment}/{tb_dir}/tb.json`",
         f"  - Netlist snapshot: `sim/{experiment}/{SNAPSHOT_DIR}/{record_id}.spice`",
         f"  - Raw logs: `sim/{experiment}/{CORNERS_DIR}/{record_id}/`",
     ]

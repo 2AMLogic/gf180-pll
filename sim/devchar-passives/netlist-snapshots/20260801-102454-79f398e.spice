@@ -1,0 +1,86 @@
+* Frozen netlist snapshot for record 20260801-102454-79f398e
+* source     : sim/devchar-passives/testbench/tb_cap_cv.spice
+* sha256     : b012f880ccf2a478594ad5cb61cea5b6213a9e157edcf1f269d4140846381bcf
+* This is a verbatim copy taken at record time. Do not edit.
+* gf180-pll :: devchar-passives :: loop-filter capacitor comparison
+*
+* sim/harness NETLIST FRAGMENT. Identical circuit to the pre-migration deck
+* `tb_cap_cv.sp`; the only edits are the ones the harness's fragment contract
+* requires (see sim/harness/README.md): the `.option` card moved to the
+* manifest's `options`, and the `.control` block's `tran` + `wrdata` moved to
+* the manifest's `analyses` + `raw_measures`. Device instances, geometry, the
+* ramp source and node names are byte-for-byte the pre-migration deck.
+*
+* Ten candidate loop-filter capacitor devices, all the same drawn area, all
+* driven from one shared ramp node through individual 0 V ammeters:
+*
+*   MIM, via the mimcap_* corner sections (sm141064_mim.ngspice / cap_mim_new):
+*     cap_mim_1f0_m2m3_noshield / _1f5_ / _2f0_
+*   MIM, legacy names in the .LIB cap_mim section of sm141064.ngspice:
+*     cap_mim_1f0fF / cap_mim_1f5fF / cap_mim_2f0fF
+*     -- included to confirm the two naming families are electrically identical;
+*        note that NO corner section pulls .LIB cap_mim in, so those names only
+*        resolve if the deck asks for that section explicitly (this one does).
+*   3.3 V MOS caps, via the moscap_* corner sections:
+*     cap_nmos_03v3, cap_pmos_03v3 and the well-tied _b variants
+*
+* Measurement topology:
+*   C-V   a linear voltage ramp 0 -> 3.63 V in 1 us. The ramp current of each
+*         branch is i = dq/dt = (dq/dv)(dv/dt), so C(V) = i / (dv/dt) is the
+*         true differential (small-signal) capacitance the simulator will use,
+*         independent of how the model expresses its charge. Both dv/dt and i
+*         are taken from the simulated waveform, so the extraction does not
+*         assume the source is exactly linear.
+*   leak  after the ramp the node is held at 3.63 V for a further 1 us; with
+*         dv/dt = 0 the remaining branch current is pure leakage.
+*
+* 3.63 V is the top of the 3.3 V +/- 10 % supply range, so one sweep covers the
+* control-voltage range at every supply corner. Supply is therefore not an
+* independent axis for this deck -- it is the sweep range.
+*
+* The harness supplies (see sim/harness/README.md):
+*   .lib <corner bundle sections>   `typical` / `all-fast` / `all-slow`, whose
+*       mimcap_* + moscap_* members step together exactly as the pre-migration
+*       runner stepped them
+*   .lib <extra_lib_sections>       `cap_mim`, the legacy-name MIM section that
+*       belongs to no corner bundle (manifest key `extra_lib_sections`)
+*   .temp <temp_c>
+*   .param vdd_val / vdd_nom / temp_c   (unused: the 0 -> 3.63 V ramp below is
+*       this deck's voltage axis, and it already spans the whole 3.3 V +/-10%
+*       control range, so supply is not an independent corner axis here)
+.param cw=30u
+.param cl=30u
+
+*------------------------------------------------------------------ ramp source
+* 0 V for 10 ns, linear to 3.63 V at 1.01 us, then held to 2 us.
+vramp r 0 pwl(0 0 10n 0 1.01u 3.63 2u 3.63)
+
+*------------------------------------------------- MIM via mimcap_* sections
+vam_m10 r n_m10 0
+xm10 n_m10 0 cap_mim_1f0_m2m3_noshield c_length=cl c_width=cw
+vam_m15 r n_m15 0
+xm15 n_m15 0 cap_mim_1f5_m2m3_noshield c_length=cl c_width=cw
+vam_m20 r n_m20 0
+xm20 n_m20 0 cap_mim_2f0_m2m3_noshield c_length=cl c_width=cw
+
+*------------------------------------------- MIM legacy names (.LIB cap_mim)
+vam_l10 r n_l10 0
+xl10 n_l10 0 cap_mim_1f0fF c_length=cl c_width=cw
+vam_l15 r n_l15 0
+xl15 n_l15 0 cap_mim_1f5fF c_length=cl c_width=cw
+vam_l20 r n_l20 0
+xl20 n_l20 0 cap_mim_2f0fF c_length=cl c_width=cw
+
+*----------------------------------------------------------------- MOS caps
+* cap_nmos_* want a positive terminal-1-to-terminal-2 voltage to reach their
+* high-capacitance state; cap_pmos_* want a negative one, so those instances
+* are wired with terminal 1 grounded and terminal 2 driven.
+vam_cn r n_cn 0
+xcn n_cn 0 cap_nmos_03v3 c_length=cl c_width=cw
+vam_cp r n_cp 0
+xcp 0 n_cp cap_pmos_03v3 c_length=cl c_width=cw
+vam_cnb r n_cnb 0
+xcnb n_cnb 0 cap_nmos_03v3_b c_length=cl c_width=cw
+vam_cpb r n_cpb 0
+xcpb 0 n_cpb cap_pmos_03v3_b c_length=cl c_width=cw
+
