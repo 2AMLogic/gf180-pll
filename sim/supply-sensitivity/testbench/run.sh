@@ -191,12 +191,47 @@ KD_DECIM=20e-9
 # voltage that gives the target output frequency.  A short transient suffices:
 # with VCTRL held by an ideal source there is no loop to settle, only the VCO's
 # own bias generator, and KVPRE_TB is 4 reference periods in.
+#
+# The length of that transient is NOT a free constant.  tb_supply_lock.sp
+# measures f_out over a fixed COUNT of output cycles (100 of them, because
+# ngspice's `.meas ... rise=` index is not an expression context) starting at
+# `tb`, so the run time a calibration point needs scales as 1/f_out -- and the
+# deck says so in as many words, asking the runner for "at least 2.4 us of run
+# after tb".  KVPRE_TSTOP below states that length for KFOUT and KFOUT only.
+# Used unscaled at the HALF-frequency point of the power split it is not merely
+# tight, it is impossible: 100 cycles at KFOUT2 need 2.0 us and the window is
+# 1.12 us, so `fout` measures `failed`, the solve returns nan, and every split
+# corner is silently dropped -- which is exactly why the campaign that
+# introduced the split reported it as NOT MEASURED.  Hence vpre_tstop_for().
 KVPRE_D=0.25
 KVPRE_TSTOP=1.44u
 KVPRE_TA=0.16u
 KVPRE_TB=0.32u
 KVPRE_RON=1m
 KVPRE_ROFF=1e15
+# The retry window, as a multiple of the 100 output cycles the deck counts.
+# 2.4 is the headroom tb_supply_lock.sp asks for, against the 1.12 the nominal
+# window carries; a point whose f_out could not be measured in the nominal
+# window is re-run here rather than being reported as nan.  Same principle as
+# the settling escalation below: a measurement that did not fit its window is
+# re-measured in a bigger one, not recorded as a result.
+KVPRE_RETRY_K=2.4
+
+# vpre_tstop_for <f_out> -- the calibration transient for a target frequency.
+# At KFOUT it returns KVPRE_TSTOP verbatim (same string, so a run cached at the
+# documented length stays cached); elsewhere it scales the post-tb part of that
+# window by KFOUT/f_out, which holds the cycle-count margin CONSTANT rather
+# than holding the seconds constant.
+vpre_tstop_for() {
+  if [ "$1" = "${KFOUT}" ]; then printf '%s' "${KVPRE_TSTOP}"; return; fi
+  awk -v ts="${KVPRE_TSTOP%u}" -v tb="${KVPRE_TB%u}" -v f0="${KFOUT}" -v f="$1" \
+    'BEGIN{ printf "%.6gu", tb + (ts - tb) * f0 / f }'
+}
+# vpre_tstop_retry_for <f_out> -- the longer window a failed point is re-run at.
+vpre_tstop_retry_for() {
+  awk -v tb="${KVPRE_TB%u}" -v k="${KVPRE_RETRY_K}" -v f="$1" \
+    'BEGIN{ printf "%.6gu", tb + k * 100 / f * 1e6 }'
+}
 # Where the solved control voltage is allowed to land.  Outside this the
 # solution is not a control voltage, it is an extrapolation off the end of the
 # measured line, and the runner says so rather than simulating it.
@@ -374,13 +409,25 @@ if [ "${1:-}" = "--one-vpre" ]; then
   shift
   bundle="$1"; temp="$2"; vdd="$3"; band="$4"; vc0="$5"; fout="$6"; fref="$7"; out="$8"
   libs="$(libs_for "${bundle}")"
+  # The frequency belongs IN the work-directory name, exactly as it does for
+  # --one-lock.  Without it the KFOUT and KFOUT2 calibrations of the same
+  # (bundle, temp, vdd) share one directory -- and since both job sets are in
+  # the same xargs pass, two ngspice processes write the same ngspice.log at
+  # the same time.  The .sig guard stops the WRONG cached run being reused, but
+  # nothing stops two concurrent runs interleaving into one log, which reads
+  # back as a failed measurement or, worse, as a plausible wrong number.
+  kind="f$(awk -v f="${fout}" 'BEGIN{printf "%03d", f/1e6}')"
   vpre_point() {
-    local vv="$1" idx="$2"
-    local tag="vpre${idx}_${bundle}_T${temp}_V${vdd}"; tag="${tag//./p}"; tag="${tag//-/m}"
+    local vv="$1" idx="$2" ts="$3"
+    local tag="vpre${idx}_${kind}_${bundle}_T${temp}_V${vdd}"
+    # A retry at the longer window gets its OWN work directory, so it adds a
+    # measurement rather than overwriting the one it is replacing.
+    [ "${ts}" = "$(vpre_tstop_for "${fout}")" ] || tag="${tag}_X${ts}"
+    tag="${tag//./p}"; tag="${tag//-/m}"
     local rundir="${WORK}/${tag}" log="${WORK}/${tag}/ngspice.log"
     local params=( "vsup=${vdd}" "fref=${fref}" "nratio=${KN}" "vctrl0=${vv}"
                    "rforce=${KVPRE_RON}"
-                   "tstop=${KVPRE_TSTOP}" "tstep=${KTSTEP}" "tmax=${KTMAX}"
+                   "tstop=${ts}" "tstep=${KTSTEP}" "tmax=${KTMAX}"
                    "ta=${KVPRE_TA}" "tb=${KVPRE_TB}" )
     # shellcheck disable=SC2207
     params+=( $(cloop_band_params "${band}") )
@@ -403,8 +450,14 @@ if [ "${1:-}" = "--one-vpre" ]; then
     simenv_meas "${log}" fout
   }
   vc1="$(awk -v a="${vc0}" -v d="${KVPRE_D}" 'BEGIN{printf "%.4f", a+d}')"
-  f0="$(vpre_point "${vc0}" 0)"
-  f1="$(vpre_point "${vc1}" 1)"
+  TS_N="$(vpre_tstop_for "${fout}")"
+  TS_X="$(vpre_tstop_retry_for "${fout}")"
+  f0="$(vpre_point "${vc0}" 0 "${TS_N}")"
+  f1="$(vpre_point "${vc1}" 1 "${TS_N}")"
+  # A `failed` f_out measurement means the forced point ran slower than the
+  # window assumed, not that the VCO is broken -- re-measure it longer.
+  [ "${f0}" = "nan" ] && f0="$(vpre_point "${vc0}" 0 "${TS_X}")"
+  [ "${f1}" = "nan" ] && f1="$(vpre_point "${vc1}" 1 "${TS_X}")"
   awk -v v0="${vc0}" -v v1="${vc1}" -v f0="${f0}" -v f1="${f1}" -v ft="${fout}" \
       -v lo="${KVPRE_LO}" -v hi="${KVPRE_HI}" 'BEGIN{
     if (f0 == "nan" || f1 == "nan" || f1 == f0) { printf "%s %s %s\n", "nan", f0, f1; exit }
