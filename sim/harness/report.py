@@ -502,18 +502,20 @@ def write_netlist_snapshot(tb: Testbench, experiment_dir: Path, record_id: str) 
     DUT netlist used for this record", so later edits to ``testbench/`` never
     change what an existing record refers to.
 
-    When the manifest names ``dut`` exports, the snapshot is the *composed*
-    DUT + stimulus, each chunk carrying its own source path and sha256 -- the
-    same self-contained artefact ``sim/lib/assemble_closed_loop.sh`` produces
-    by concatenation, but without the committed fragment having to contain a
-    copy of the export.
+    When the manifest names ``dut`` exports and/or a ``dut_export`` top, the
+    snapshot is the *composed* DUT + stimulus, each chunk carrying its own
+    source path and sha256 -- the same self-contained artefact
+    ``sim/lib/assemble_closed_loop.sh`` produces by concatenation, but without
+    the committed fragment having to contain a copy of the export. For a
+    ``dut_export`` top this call is what actually resolves it (see
+    ``Testbench.resolved_dut``), if nothing already did.
     """
     out_dir = experiment_dir / SNAPSHOT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{record_id}.spice"
     if path.exists():
         raise RecordExists(f"{path} already exists; append-only evidence is never rewritten")
-    if tb.dut:
+    if tb.resolved_dut:
         header = "\n".join(
             [
                 f"* Frozen netlist snapshot for record {record_id}",

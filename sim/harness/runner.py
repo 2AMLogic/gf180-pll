@@ -121,12 +121,17 @@ def compose_deck(tb: Testbench, pdk: Pdk, point: PvtPoint) -> str:
     for option in tb.options:
         lines.append(f".options {option}")
 
-    if tb.dut:
+    # tb.resolved_dut resolves a `dut_export` (design/netlist.sh --top <top>)
+    # on first access, here or in write_netlist_snapshot()/provenance() --
+    # whichever runs first for this Testbench instance. See
+    # Testbench.resolved_dut / DutExportSpec.resolve().
+    dut_sources = tb.resolved_dut
+    if dut_sources:
         lines += [
             "",
-            "* ---- DUT (committed export, composed at run time) --------------------",
+            "* ---- DUT (composed at run time) --------------------------------------",
         ]
-        lines += [f'.include "{path}"' for path in tb.dut]
+        lines += [f'.include "{path}"' for path in dut_sources]
 
     lines += [
         "",
