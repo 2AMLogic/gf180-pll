@@ -1,0 +1,192 @@
+{
+  "name": "divider-ratio-dff",
+  "description": "setup/hold/clk->Q of dff_tg_3v3, the transmission-gate master-slave flop the divider chain and its retiming flop are built from",
+  "claim": "#11 (design input, not a spec line) -- what are the setup time, hold time and clk->Q of dff_tg_3v3, the transmission-gate master-slave flop every divider cell and the retiming flop are built from (DR-001 Decision 3: \"static CMOS throughout (transmission-gate master-slave flops)\")? The setup number is the one DR-001 Decision 3 requires in order to state whether the retiming flop's budget closes at the slow corner; the closure itself is sim/divider-ratio-chain's retiming_margin.csv, joined against this record.",
+  "methodology": [
+    "Setup: 10 copies per bank share one clock; copy i sees its data 50% crossing ti before the clock's 50% crossing, ti = 1.00, 0.20, 0.10, 0.05, 0.02, 0.00, -0.02, -0.05, -0.10, -0.15 ns. Bank A captures 0->1, bank B captures 1->0. Setup time is the smallest ti whose clk->Q has not degraded by more than 10% against the same bank's ti = 1.00 ns reference -- the standard degradation criterion. Each ladder step's clk->Q is a raw_measures trig/targ .measure marked 'optional': a step past the flop's true setup time fails to capture within the td=20ns window, which ngspice reports as a failed .measure -- the harness records that as not-measured data (sim/harness README 'Expected .measure failures') rather than discarding the point, which is exactly what makes the ladder scan (testbench/derive.py, a sim/harness 'derived' measure) able to tell 'violated' from 'not simulated'.",
+    "Hold: 10 further copies (bank C) hold data low through the measured edge and transition 0->1 only th afterwards, th = 0.50 ... -0.70 ns. Hold is met at a step if Q stays below 10% of the rail until the next clock edge -- an avg measurement, which cannot fail, so bank C's raw_measures are required rather than optional.",
+    "The first clock edge preconditions every flop and the second (25.05 ns) is the one measured, so no result depends on the DC operating point of a bistable latch; every output measurement carries td=20ns for the same reason (see testbench/tb_dff_setup.sp header for the ff/125C failure mode this guards against).",
+    "Simulator settings: tran 10p 35n, reltol 1e-3, abstol 1e-10, vntol 1e-5, chgtol 1e-13 -- unchanged from the pre-harness deck.",
+    "Limitation -- ladder floor. Where the reported setup equals the last ladder step (-0.15 ns) the criterion was never tripped, so the true setup time is at or below that value and the number is a bound, not a measurement. That is the safe direction for the retiming margin computed downstream only because the bound is pessimistic: a smaller true setup can only increase the margin.",
+    "Limitation -- schematic-level. No extracted parasitics; clock and data both driven by ideal 100 ps -edge sources. Post-layout re-extraction is #18's scope and will supersede these numbers.",
+    "Statistical switches: sw_stat_global = sw_stat_mismatch = 0 (nominal device skew from the corner section only, no Monte Carlo mismatch).",
+    "This record supersedes 20260731-171815-0a12e6c (same claim, same 45-point grid, run through the sim/lib/simenv.sh shim rather than sim/harness) as a tooling migration -- see the Supersedes field for the numeric-agreement check against it."
+  ],
+  "dut": [
+    "design/netlist/dff_tg_3v3.spice"
+  ],
+  "netlist": "tb_dff_setup.sp",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "mos"
+  ],
+  "analyses": [
+    "tran 10p 35n"
+  ],
+  "options": [
+    "reltol=1e-3",
+    "abstol=1e-10",
+    "vntol=1e-5",
+    "chgtol=1e-13"
+  ],
+  "raw_measures": {
+    "cqa0": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qa0) val='vdd_val/2' rise=1 td=20n",
+      "optional": true
+    },
+    "cqa1": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qa1) val='vdd_val/2' rise=1 td=20n",
+      "optional": true
+    },
+    "cqa2": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qa2) val='vdd_val/2' rise=1 td=20n",
+      "optional": true
+    },
+    "cqa3": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qa3) val='vdd_val/2' rise=1 td=20n",
+      "optional": true
+    },
+    "cqa4": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qa4) val='vdd_val/2' rise=1 td=20n",
+      "optional": true
+    },
+    "cqa5": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qa5) val='vdd_val/2' rise=1 td=20n",
+      "optional": true
+    },
+    "cqa6": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qa6) val='vdd_val/2' rise=1 td=20n",
+      "optional": true
+    },
+    "cqa7": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qa7) val='vdd_val/2' rise=1 td=20n",
+      "optional": true
+    },
+    "cqa8": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qa8) val='vdd_val/2' rise=1 td=20n",
+      "optional": true
+    },
+    "cqa9": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qa9) val='vdd_val/2' rise=1 td=20n",
+      "optional": true
+    },
+    "cqb0": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qb0) val='vdd_val/2' fall=1 td=20n",
+      "optional": true
+    },
+    "cqb1": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qb1) val='vdd_val/2' fall=1 td=20n",
+      "optional": true
+    },
+    "cqb2": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qb2) val='vdd_val/2' fall=1 td=20n",
+      "optional": true
+    },
+    "cqb3": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qb3) val='vdd_val/2' fall=1 td=20n",
+      "optional": true
+    },
+    "cqb4": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qb4) val='vdd_val/2' fall=1 td=20n",
+      "optional": true
+    },
+    "cqb5": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qb5) val='vdd_val/2' fall=1 td=20n",
+      "optional": true
+    },
+    "cqb6": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qb6) val='vdd_val/2' fall=1 td=20n",
+      "optional": true
+    },
+    "cqb7": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qb7) val='vdd_val/2' fall=1 td=20n",
+      "optional": true
+    },
+    "cqb8": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qb8) val='vdd_val/2' fall=1 td=20n",
+      "optional": true
+    },
+    "cqb9": {
+      "analysis": "tran",
+      "expr": "trig v(ck) val='vdd_val/2' rise=2 targ v(qb9) val='vdd_val/2' fall=1 td=20n",
+      "optional": true
+    },
+    "hqc0": {
+      "analysis": "tran",
+      "expr": "avg v(qc0) from='tedge+2n' to='tedge+9n'"
+    },
+    "hqc1": {
+      "analysis": "tran",
+      "expr": "avg v(qc1) from='tedge+2n' to='tedge+9n'"
+    },
+    "hqc2": {
+      "analysis": "tran",
+      "expr": "avg v(qc2) from='tedge+2n' to='tedge+9n'"
+    },
+    "hqc3": {
+      "analysis": "tran",
+      "expr": "avg v(qc3) from='tedge+2n' to='tedge+9n'"
+    },
+    "hqc4": {
+      "analysis": "tran",
+      "expr": "avg v(qc4) from='tedge+2n' to='tedge+9n'"
+    },
+    "hqc5": {
+      "analysis": "tran",
+      "expr": "avg v(qc5) from='tedge+2n' to='tedge+9n'"
+    },
+    "hqc6": {
+      "analysis": "tran",
+      "expr": "avg v(qc6) from='tedge+2n' to='tedge+9n'"
+    },
+    "hqc7": {
+      "analysis": "tran",
+      "expr": "avg v(qc7) from='tedge+2n' to='tedge+9n'"
+    },
+    "hqc8": {
+      "analysis": "tran",
+      "expr": "avg v(qc8) from='tedge+2n' to='tedge+9n'"
+    },
+    "hqc9": {
+      "analysis": "tran",
+      "expr": "avg v(qc9) from='tedge+2n' to='tedge+9n'"
+    }
+  },
+  "derived": {
+    "module": "derive.py",
+    "measures": [
+      "tsetup_s",
+      "thold_s",
+      "tcq_r_s",
+      "tcq_f_s"
+    ],
+    "tables": [
+      "dff_setup_hold"
+    ]
+  }
+}

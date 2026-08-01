@@ -1,0 +1,1600 @@
+{
+  "name": "divider-ratio-chain",
+  "description": "full divider_chain: division ratio over N=4..64, and the VCO-clocked retiming flop's setup closure at N=64/200 MHz",
+  "claim": "#11 -> DR-001 Decision 3 (design input, not a spec line) -- two linked questions about the assembled feedback divider: 1. does the six-cell chain divide by every integer N from 4 to 64 exactly, with no holes, at the corners that stress it most; and 2. does the VCO-clocked retiming flop's setup budget -- \"one VCO period minus the chain's accumulated clk->Q\", DR-001 Decision 3 -- close at the slow corner (SS, 125 C, 2.97 V) at the 200 MHz v1 ceiling with the longest chain (k=6)? DR-001 requires an explicit answer here and names the fallback (retime on the first cell's output, VCO/2) if it does not.",
+  "methodology": [
+    "Programming: N = 2^k + sum(p_i . 2^i) for i < k, with the one-hot chain-length code SEL_(k-1) = 1 terminating the modulus chain at the last active cell and selecting its output through the one-hot output mux. N is a static configuration (DR-001: glitch-free on-the-fly modulus switching is out of v1 scope), so each N is a separate point on this manifest's 'point' sweep axis (one id per (input rate, N) combination actually run, e.g. f200n64, f010n04), with ksel0..5/kp0..5 precomputed per the N->code formula above.",
+    "Start-up skip: every edge search begins one full output period (N VCO periods) after the clock starts. The thirteen flops leave the DC operating point in an arbitrary state and the modulus chain needs one full pass before its ripple-back signals are correct; measured without the skip the FIRST output period reads N-1 at some N and corners (seen at ff/-40 C/3.63 V for N = 12, 13, 16, 17) while every period after it is exact. Excluding a start-up transient by skipping it is honest; widening the tolerance until it disappears would not be.",
+    "Ratio criterion (testbench/derive.py 'ratio_pass'): the first settled retimed-FB period AND the un-retimed DIVOUT period over that same interval must both equal the point's programmed N to within 0.05 -- two nodes rather than one period twice, so a mis-read on either shows up as a disagreement between them. The tolerance sits an order of magnitude inside the 0.5 that would confuse N with N+-1 and an order of magnitude outside the .measure interpolation resolution (which scales with the max timestep, not with N). A checks entry ({'min': 1} on ratio_pass) turns any violation into a named check failure rather than a silent CSV column.",
+    "Retiming budget (testbench/derive.py 'derive_tables', table 'retiming_margin'): t_arr is DIVOUT's arrival referred to the VCO rising edge that caused it, taken modulo one VCO period -- that modulo is the point, because what threatens the flop is the arrival phase inside a VCO period, not how many whole periods the chain took. setup_margin = T_vco - t_arr - t_setup and hold_margin = t_arr - t_hold, with t_setup / t_hold joined per PVT point from sim/divider-ratio-dff's derived table (only at the N=64/200 MHz points, DR-001's own worst-case selection).",
+    "fbpw_s (testbench/derive.py) is FB high time, sign-corrected by adding N output periods when the DC operating point happens to start the chain in the state that makes the raw fall-minus-rise measurement come out negative -- the same correction tb_div23_cell.sp's runner applies for its own pulse widths.",
+    "N=64 (k=6, the longest chain and therefore the retiming-budget worst case) is the most expensive point in the campaign, so its grid is deliberately thinned to the low (2.97 V) supply, plus the nominal and fast-corner points, in the manifest's 'grid' blocks -- each carrying its own justification, rendered into this record's Corner matrix run field per sim/harness/README.md 'Sweeping beyond the PVT grid'.",
+    "Simulator settings: reltol 1e-3, abstol 1e-10, vntol 1e-5, chgtol 1e-13. Stop time is (3N + 20) VCO periods: the one-output-period start-up skip, then up to two more output periods to catch two FB rising edges after it, plus the retiming flop's own latency. Max step is VCO period / 100 for the N=64 point (both input rates, tied to the 200 MHz value in absolute seconds -- see the note below) and VCO period / 50 for the rest.",
+    "Note -- N=64's timestep override is a fixed absolute number (5e-11 s = 1/(100 x 200 MHz)), not a function of the run's own kf, because this manifest's sweep-axis parameters are static per point and cannot depend on a second axis. At the 10 MHz bottom-of-band check this is finer than the pre-harness runner used there (which scaled the override by kf), which only improves resolution and is deliberately kept simple since that check is ratio-only, not the retiming-margin claim (which is only ever evaluated at 200 MHz).",
+    "Limitation -- schematic-level, and it bites hardest here. There are no extracted parasitics and no routing load between cells, and the retiming margin is a difference of two numbers that both grow with parasitic load. A margin quoted here is an upper bound on the post-layout margin, not an estimate of it. This is the single most important number for #18 to re-take.",
+    "Statistical switches: sw_stat_global = sw_stat_mismatch = 0.",
+    "Output-divider scope check (a documented non-decision, not a result of this record): DR-002 Decision 2 makes 'no post-VCO output-divider stage in v1' the default, triggered only by #8's extracted evidence that the ring's band overlap does not reach 10 MHz. That trigger is #8's scope, not this record's; nothing here constitutes evidence either way about the VCO's reachable low band.",
+    "This record supersedes 20260731-171817-0a12e6c (same claim, same 235-point corner matrix, run through the sim/lib/simenv.sh shim rather than sim/harness) as a tooling migration."
+  ],
+  "dut": [
+    "design/netlist/divider_chain.spice"
+  ],
+  "netlist": "tb_divider_chain.sp",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "mos"
+  ],
+  "analyses": [
+    "tran {ktstep} {ktstop}"
+  ],
+  "options": [
+    "reltol=1e-3",
+    "abstol=1e-10",
+    "vntol=1e-5",
+    "chgtol=1e-13"
+  ],
+  "sweeps": {
+    "point": {
+      "description": "input rate and programmed divide ratio N",
+      "points": {
+        "f200n04": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "1.6e-07",
+            "kn": "4",
+            "ksel0": "0",
+            "ksel1": "1",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n05": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "1.75e-07",
+            "kn": "5",
+            "ksel0": "0",
+            "ksel1": "1",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n06": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "1.9e-07",
+            "kn": "6",
+            "ksel0": "0",
+            "ksel1": "1",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n07": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "2.05e-07",
+            "kn": "7",
+            "ksel0": "0",
+            "ksel1": "1",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n08": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "2.2e-07",
+            "kn": "8",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "1",
+            "ksel3": "0",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n09": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "2.35e-07",
+            "kn": "9",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "1",
+            "ksel3": "0",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n10": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "2.5e-07",
+            "kn": "10",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "1",
+            "ksel3": "0",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n11": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "2.65e-07",
+            "kn": "11",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "1",
+            "ksel3": "0",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n12": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "2.8e-07",
+            "kn": "12",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "1",
+            "ksel3": "0",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n13": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "2.95e-07",
+            "kn": "13",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "1",
+            "ksel3": "0",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "0",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n14": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "3.1e-07",
+            "kn": "14",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "1",
+            "ksel3": "0",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "1",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n15": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "3.25e-07",
+            "kn": "15",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "1",
+            "ksel3": "0",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "1",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n16": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "3.4e-07",
+            "kn": "16",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n17": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "3.55e-07",
+            "kn": "17",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n18": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "3.7e-07",
+            "kn": "18",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n19": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "3.85e-07",
+            "kn": "19",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n20": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "4e-07",
+            "kn": "20",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n21": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "4.15e-07",
+            "kn": "21",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "0",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n22": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "4.3e-07",
+            "kn": "22",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "1",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n23": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "4.45e-07",
+            "kn": "23",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "1",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n24": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "4.6e-07",
+            "kn": "24",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n25": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "4.75e-07",
+            "kn": "25",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n26": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "4.9e-07",
+            "kn": "26",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n27": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "5.05e-07",
+            "kn": "27",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n28": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "5.2e-07",
+            "kn": "28",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "1",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n29": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "5.35e-07",
+            "kn": "29",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "0",
+            "kp2": "1",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n30": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "5.5e-07",
+            "kn": "30",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "1",
+            "kp2": "1",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n31": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "5.65e-07",
+            "kn": "31",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "1",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "1",
+            "kp2": "1",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n32": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "5.8e-07",
+            "kn": "32",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n33": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "5.95e-07",
+            "kn": "33",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n34": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "6.1e-07",
+            "kn": "34",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n35": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "6.25e-07",
+            "kn": "35",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n36": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "6.4e-07",
+            "kn": "36",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n37": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "6.55e-07",
+            "kn": "37",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "0",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n38": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "6.7e-07",
+            "kn": "38",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "1",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n39": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "6.85e-07",
+            "kn": "39",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "1",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n40": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "7e-07",
+            "kn": "40",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n41": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "7.15e-07",
+            "kn": "41",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n42": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "7.3e-07",
+            "kn": "42",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n43": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "7.45e-07",
+            "kn": "43",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n44": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "7.6e-07",
+            "kn": "44",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "1",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n45": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "7.75e-07",
+            "kn": "45",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "0",
+            "kp2": "1",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n46": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "7.9e-07",
+            "kn": "46",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "1",
+            "kp2": "1",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n47": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "8.05e-07",
+            "kn": "47",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "1",
+            "kp2": "1",
+            "kp3": "1",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f200n48": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "8.2e-07",
+            "kn": "48",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n49": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "8.35e-07",
+            "kn": "49",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n50": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "8.5e-07",
+            "kn": "50",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n51": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "8.65e-07",
+            "kn": "51",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n52": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "8.8e-07",
+            "kn": "52",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n53": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "8.95e-07",
+            "kn": "53",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "0",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n54": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "9.1e-07",
+            "kn": "54",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "1",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n55": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "9.25e-07",
+            "kn": "55",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "1",
+            "kp2": "1",
+            "kp3": "0",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n56": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "9.4e-07",
+            "kn": "56",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "1",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n57": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "9.55e-07",
+            "kn": "57",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "1",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n58": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "9.7e-07",
+            "kn": "58",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "1",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n59": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "9.85e-07",
+            "kn": "59",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "1",
+            "kp2": "0",
+            "kp3": "1",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n60": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "1e-06",
+            "kn": "60",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "1",
+            "kp3": "1",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n61": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "1.015e-06",
+            "kn": "61",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "0",
+            "kp2": "1",
+            "kp3": "1",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n62": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "1.03e-06",
+            "kn": "62",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "1",
+            "kp2": "1",
+            "kp3": "1",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n63": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "1e-10",
+            "ktstop": "1.045e-06",
+            "kn": "63",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "1",
+            "ksel5": "0",
+            "kp0": "1",
+            "kp1": "1",
+            "kp2": "1",
+            "kp3": "1",
+            "kp4": "1",
+            "kp5": "0"
+          }
+        },
+        "f200n64": {
+          "params": {
+            "kf": "200e6",
+            "ktstep": "5e-11",
+            "ktstop": "1.06e-06",
+            "kn": "64",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "0",
+            "ksel5": "1",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f010n04": {
+          "params": {
+            "kf": "10e6",
+            "ktstep": "2e-9",
+            "ktstop": "3.2e-06",
+            "kn": "4",
+            "ksel0": "0",
+            "ksel1": "1",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "0",
+            "ksel5": "0",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        },
+        "f010n64": {
+          "params": {
+            "kf": "10e6",
+            "ktstep": "5e-11",
+            "ktstop": "2.12e-05",
+            "kn": "64",
+            "ksel0": "0",
+            "ksel1": "0",
+            "ksel2": "0",
+            "ksel3": "0",
+            "ksel4": "0",
+            "ksel5": "1",
+            "kp0": "0",
+            "kp1": "0",
+            "kp2": "0",
+            "kp3": "0",
+            "kp4": "0",
+            "kp5": "0"
+          }
+        }
+      }
+    }
+  },
+  "grid": [
+    {
+      "description": "N sweep at the slow/hot/low-supply stress corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "point": [
+          "f200n04",
+          "f200n05",
+          "f200n06",
+          "f200n07",
+          "f200n08",
+          "f200n09",
+          "f200n10",
+          "f200n11",
+          "f200n12",
+          "f200n13",
+          "f200n14",
+          "f200n15",
+          "f200n16",
+          "f200n17",
+          "f200n18",
+          "f200n19",
+          "f200n20",
+          "f200n21",
+          "f200n22",
+          "f200n23",
+          "f200n24",
+          "f200n25",
+          "f200n26",
+          "f200n27",
+          "f200n28",
+          "f200n29",
+          "f200n30",
+          "f200n31",
+          "f200n32",
+          "f200n33",
+          "f200n34",
+          "f200n35",
+          "f200n36",
+          "f200n37",
+          "f200n38",
+          "f200n39",
+          "f200n40",
+          "f200n41",
+          "f200n42",
+          "f200n43",
+          "f200n44",
+          "f200n45",
+          "f200n46",
+          "f200n47",
+          "f200n48",
+          "f200n49",
+          "f200n50",
+          "f200n51",
+          "f200n52",
+          "f200n53",
+          "f200n54",
+          "f200n55",
+          "f200n56",
+          "f200n57",
+          "f200n58",
+          "f200n59",
+          "f200n60",
+          "f200n61",
+          "f200n62",
+          "f200n63",
+          "f200n64"
+        ]
+      }
+    },
+    {
+      "description": "N sweep at the fast/cold/high-supply stress corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        -40
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "point": [
+          "f200n04",
+          "f200n05",
+          "f200n06",
+          "f200n07",
+          "f200n08",
+          "f200n09",
+          "f200n10",
+          "f200n11",
+          "f200n12",
+          "f200n13",
+          "f200n14",
+          "f200n15",
+          "f200n16",
+          "f200n17",
+          "f200n18",
+          "f200n19",
+          "f200n20",
+          "f200n21",
+          "f200n22",
+          "f200n23",
+          "f200n24",
+          "f200n25",
+          "f200n26",
+          "f200n27",
+          "f200n28",
+          "f200n29",
+          "f200n30",
+          "f200n31",
+          "f200n32",
+          "f200n33",
+          "f200n34",
+          "f200n35",
+          "f200n36",
+          "f200n37",
+          "f200n38",
+          "f200n39",
+          "f200n40",
+          "f200n41",
+          "f200n42",
+          "f200n43",
+          "f200n44",
+          "f200n45",
+          "f200n46",
+          "f200n47",
+          "f200n48",
+          "f200n49",
+          "f200n50",
+          "f200n51",
+          "f200n52",
+          "f200n53",
+          "f200n54",
+          "f200n55",
+          "f200n56",
+          "f200n57",
+          "f200n58",
+          "f200n59",
+          "f200n60",
+          "f200n61",
+          "f200n62",
+          "f200n63",
+          "f200n64"
+        ]
+      }
+    },
+    {
+      "description": "full 45-point PVT grid at N in {4, 33}",
+      "axes": {
+        "point": [
+          "f200n04",
+          "f200n33"
+        ]
+      }
+    },
+    {
+      "description": "full 45-point PVT grid at N=64, thinned to the low (2.97 V) supply -- the retiming worst case, since supply is monotonic for logic speed",
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "point": [
+          "f200n64"
+        ]
+      }
+    },
+    {
+      "description": "N=64 at the nominal corner, to show the trend does not reverse away from the low supply",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "point": [
+          "f200n64"
+        ]
+      }
+    },
+    {
+      "description": "bottom-of-band 10 MHz check at N in {4, 64}, all five process bundles at 125 C (worst for leakage) / 2.97 V",
+      "temperatures_c": [
+        125
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "point": [
+          "f010n04",
+          "f010n64"
+        ]
+      }
+    },
+    {
+      "description": "bottom-of-band 10 MHz check at N in {4, 64}, nominal corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "point": [
+          "f010n04",
+          "f010n64"
+        ]
+      }
+    }
+  ],
+  "raw_measures": {
+    "tfb1": {
+      "analysis": "tran",
+      "expr": "when v(fb)='vdd_val/2' rise=1 td='tskip'"
+    },
+    "tfb2": {
+      "analysis": "tran",
+      "expr": "when v(fb)='vdd_val/2' rise=2 td='tskip'"
+    },
+    "n_fb": {
+      "analysis": "tran",
+      "expr": "param='(tfb2-tfb1)/tvco'"
+    },
+    "tdo1": {
+      "analysis": "tran",
+      "expr": "when v(divout)='vdd_val/2' rise=1 td='tskip'"
+    },
+    "tdo2": {
+      "analysis": "tran",
+      "expr": "when v(divout)='vdd_val/2' rise=2 td='tskip'"
+    },
+    "ndo": {
+      "analysis": "tran",
+      "expr": "param='(tdo2-tdo1)/tvco'"
+    },
+    "t_arr": {
+      "analysis": "tran",
+      "expr": "param='(tdo2-tck0)-tvco*floor((tdo2-tck0)/tvco)'"
+    },
+    "t_rtcq": {
+      "analysis": "tran",
+      "expr": "param='(tfb2-tck0)-tvco*floor((tfb2-tck0)/tvco)'"
+    },
+    "ffb2": {
+      "analysis": "tran",
+      "expr": "when v(fb)='vdd_val/2' fall=2 td='tskip'"
+    },
+    "fbpw": {
+      "analysis": "tran",
+      "expr": "param='ffb2-tfb2'"
+    },
+    "iavg": {
+      "analysis": "tran",
+      "expr": "avg i(vdiv) from='tskip' to='ktstop'"
+    }
+  },
+  "checks": {
+    "ratio_pass": {
+      "min": 1.0
+    }
+  },
+  "derived": {
+    "module": "derive.py",
+    "measures": [
+      "ratio_pass",
+      "fbpw_s",
+      "n_target"
+    ],
+    "tables": [
+      "retiming_margin"
+    ],
+    "joins": {
+      "dff": "divider-ratio-dff/corners/<record-id>/dff_setup_hold.csv"
+    }
+  }
+}
