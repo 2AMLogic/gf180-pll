@@ -21,10 +21,49 @@ echo "Simulator: $(simenv_ngspice_version)"
 echo
 
 MODE="${1:-}"
+
+# --------------------------------------------------------------------------
+# Campaigns migrated onto sim/harness (#40): run through the shared corner
+# runner, NOT through their superseded run.sh. `--check` maps to the harness's
+# own debugging form -- nominal corner, nothing recorded.
+#
+#   run_harness <testbench-path-or-slug> [extra run_corners.py args ...]
+# --------------------------------------------------------------------------
+run_harness() {
+  local target="$1"
+  shift
+  if [ -n "${MODE}" ]; then
+    python3 "${HERE}/run_corners.py" "${target}" \
+      --corners typical --temps 27 --supply-tol 0 --no-write "$@"
+  else
+    python3 "${HERE}/run_corners.py" "${target}" "$@"
+  fi
+}
+
+# The passive-axis decks are a deliberate subset of the mandated PVT matrix
+# (no MOS bundles, no supply axis -- see each record's Corner matrix field),
+# and sim/README.md requires the reason to travel with the record.
+CAP_SUBSET_REASON="Passive-axis campaign, not a MOS or supply campaign: the DUT is ten capacitors with no active devices, so the five MOS process bundles are N/A; the cap axes (mimcap_* and moscap_*) step together via the typical / all-fast / all-slow bundles, and each device depends only on its own axis, so every device still gets its full min/typ/max envelope. The voltage axis is this deck's own 0 -> 3.63 V C-V ramp, which already spans the whole 3.3 V +/-10% control range, so supply is the sweep variable rather than an independent corner axis."
+RES_SUBSET_REASON="Passive-axis campaign, not a MOS or supply campaign: the DUT is seven poly resistors with no active devices, so the five MOS process bundles are N/A and only the res_* axis is meaningful; the voltage axis is this deck's own 0 -> 1.0 V device sweep, which measures the voltage coefficient directly, so supply is not an independent corner axis."
+
+echo "=== devchar-delay ==="
+run_harness devchar-delay
+echo
+echo "=== devchar-cp ==="
+run_harness devchar-cp
+echo
+echo "=== devchar-passives (capacitors) ==="
+run_harness "${HERE}/devchar-passives/testbench" --subset-reason "${CAP_SUBSET_REASON}"
+echo
+echo "=== devchar-passives (resistors) ==="
+run_harness "${HERE}/devchar-passives/testbench-res" --subset-reason "${RES_SUBSET_REASON}"
+echo
+
 # Campaign order matters only in that a campaign must not depend on a later
 # one's output; today none do (divider-ratio joins its own two sub-campaigns
 # internally). Each campaign mints its own append-only record(s).
-for campaign in devchar-delay devchar-cp devchar-passives divider-ratio lock-detector; do
+# Still on the sim/lib/simenv.sh shim, migration tracked by #41.
+for campaign in divider-ratio lock-detector; do
   echo "=== ${campaign} ==="
   if [ -n "${MODE}" ]; then
     "${HERE}/${campaign}/testbench/run.sh" "${MODE}"
