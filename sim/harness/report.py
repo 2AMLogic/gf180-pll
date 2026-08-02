@@ -653,6 +653,63 @@ def _failures_by_corner(failures: list[dict]) -> dict[str, list[str]]:
     return out
 
 
+def _point_verdict(point: dict, failures_at: dict[str, list[str]]) -> str:
+    """PASS / ``FAIL — ...`` / ``ERROR — ...``, the verdict text for one point.
+
+    The verdict is exactly as wide as the ``failures_at`` map handed in, and
+    no wider: :func:`_result_lines` gives each per-topology sub-table only its
+    own group's failures (see :func:`_corner_table_lines`), while
+    :func:`point_verdicts` passes the unfiltered map. Factored out so that
+    both callers *format* a failure the same way, character for character --
+    the scope is the caller's decision, the wording is not.
+    """
+    problems = failures_at.get(point["corner_id"], [])
+    if point["status"] != "ok":
+        return f"ERROR — {point.get('message', point['status'])}"
+    if problems:
+        return "FAIL — " + "; ".join(problems)
+    return "PASS"
+
+
+def point_verdicts(tb: Testbench, results: list[PointResult]) -> dict[str, str]:
+    """``{corner-id: verdict}``, aggregated over **every** check in the manifest.
+
+    Runs the same ``summarize()`` + ``evaluate_checks()`` pipeline
+    :func:`build_record` uses and formats each verdict with the same
+    :func:`_point_verdict` helper the Markdown corner table uses, so a caller
+    outside the Markdown-record path (``raw_measures.write_raw_measures_csv``)
+    never invents its own notion of a failure or its own wording for one.
+
+    **The scope here deliberately differs from a multi-topology record's
+    per-group sub-tables.** When a manifest declares ``topology_groups``,
+    :func:`_result_lines` renders one sub-table per group and narrows each
+    sub-table's pass/fail column to that group's own checks -- an unrelated
+    topology's FAIL would be pure noise for a reader looking at one
+    sub-circuit. This function does no such narrowing: a point that fails any
+    check anywhere in the manifest reads FAIL. That is the right semantics for
+    its caller, whose CSV is one flat row per point with a single verdict cell
+    and no per-topology sections to scope to; it answers "is this point clean
+    at all?", the same question the record's *overall* status answers, rather
+    than the sub-table's "is this topology clean at this point?".
+
+    So for a manifest whose checks span more than one topology group (most of
+    this repo's grouped manifests), a point can legitimately read PASS in one
+    Markdown sub-table and FAIL here. Both are correct; they are different
+    questions. Grid-level failures (``at == "grid"``) belong to the sweep, not
+    to any point, and are excluded from every point's verdict in both
+    artifacts.
+    """
+    measure_names = tb.measure_names
+    optional_names = {n for n in measure_names if tb.is_optional(n)}
+    summary = summarize(results, measure_names, optional_names)
+    failures = evaluate_checks(tb.checks, results, summary)
+    failures_at = _failures_by_corner(failures)
+    return {
+        point["corner_id"]: _point_verdict(point, failures_at)
+        for point in (r.as_dict() for r in results)
+    }
+
+
 def _corner_table_lines(
     record: dict, measure_names: list[str], failures_at: dict[str, list[str]]
 ) -> list[str]:
@@ -677,13 +734,7 @@ def _corner_table_lines(
             else _fmt(point["measurements"].get(name))
             for name in measure_names
         ]
-        problems = failures_at.get(point["corner_id"], [])
-        if point["status"] != "ok":
-            verdict = f"ERROR — {point.get('message', point['status'])}"
-        elif problems:
-            verdict = "FAIL — " + "; ".join(problems)
-        else:
-            verdict = "PASS"
+        verdict = _point_verdict(point, failures_at)
         lines.append(f"  | `{point['corner_id']}` | " + " | ".join(cells) + f" | {verdict} |")
     return lines
 

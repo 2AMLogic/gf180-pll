@@ -20,6 +20,7 @@ sim/
   pdk.local.json            machine-local PDK override (git-ignored, optional)
   harness/                  the runner itself (this directory)
     derived.py              extension point for campaign-supplied reductions
+    raw_measures.py         writes corners/<record-id>/raw_measures.csv, unconditionally
   tests/                    harness unit tests (no PDK, no ngspice required)
 
   <experiment-slug>/        one per claim under test -- see sim/README.md
@@ -708,6 +709,7 @@ writes, under `sim/<experiment-slug>/`:
 | `records/<record-id>.md` | the append-only summary record — every field `sim/README.md` mandates: Record ID, Claim, Netlist provenance, Environment provenance, Corner matrix run, Methodology / criteria / limitations, Statistical convention, Result, Links, Timestamp / author, Supersedes |
 | `netlist-snapshots/<record-id>.spice` | verbatim frozen copy of the testbench fragment, with its sha256 |
 | `corners/<record-id>/<corner-id>.log` | raw ngspice output, one file per PVT point |
+| `corners/<record-id>/raw_measures.csv` | **always written**, one row per corner point — sweep-axis fields, `corner_id`, every measurement in `tb.measure_names`, and a PASS/FAIL/ERROR `verdict` for the point as a whole. Unlike derived tables, this does not depend on the manifest declaring anything — it is the machine-readable form of the Markdown corner table every record already renders. The verdict comes from the record's own check pipeline (`report.point_verdicts`), so the wording never drifts, but it considers **every** check in the manifest; a record that declares `topology_groups` narrows each per-topology sub-table's pass/fail column to that group's own checks, so for a manifest whose checks span groups the CSV verdict is the stricter of the two by design |
 | `corners/<record-id>/<name>.csv` | one per `derived.tables` entry — the reduction the record actually claims |
 | `corners/<record-id>/<corner-id>-<name>` | one per PVT point per `raw_files` entry marked `retain` — the deck's own written waveform, when the file itself is the evidence |
 
