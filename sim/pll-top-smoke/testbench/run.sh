@@ -78,14 +78,40 @@ CHECK=0
 # KTRIM   Icp trim code 2 (three unit legs, ~5.2 uA), the nominal setting
 #         design/README.md characterises the charge pump at.
 #
-# Why 72 MHz and not the bottom of the output band.  The lock point has to sit
-# where Icp*R of control-line ripple still leaves Vctrl inside the usable
-# window: the charge pump drives its full Icp into R = 77.11 kOhm for the
-# duration of each correction pulse, so the control node carries roughly
-# +/-0.39 V of ripple in lock, by construction and not as a defect.  A lock
-# point at 1.50 V rides that to 1.11 .. 1.89 V, comfortably inside 0.9-2.4 V.
-# A target chosen near either end of the window would put the RIPPLE outside
-# it and fail check 6 while the loop was in fact locked.
+# Why 72 MHz and not the bottom of the output band.  NOT because of in-lock
+# ripple.  That is what this file argued until #70, from Icp*R -- the charge
+# pump driving its full Icp into R = 77.11 kOhm, "roughly +/-0.39 V of ripple
+# in lock, by construction" -- and it is wrong by more than an order of
+# magnitude, in a direction that matters (it makes the filter look far worse
+# than it is).  Icp*R is the voltage the control node would REACH, not the one
+# it does reach: the charge lands on C2, and the node only climbs to Icp*R if
+# the pulse lasts long compared with R*C2 = 77.11 kOhm * 2.016 pF = 155 ns.
+# No pulse can -- the reference period itself is 111 ns.  For t_p << R*C2 the
+# step is Icp*t_p/C2, and in lock t_p is only the PFD's reset-delay overlap
+# (1.1-1.9 ns, design/README.md's 24-inverter reset chain) with UP and DN both
+# asserted, so what actually reaches the node is not Icp*t_p but the pump's
+# residual charge asymmetry |q_up + q_dn|.  DR-006 Decision 8 carries that
+# number through THIS filter from sim/cp-compliance record
+# 20260731-194124-afa338c: 3.68 fC worst corner / 2.16 fC median, i.e.
+# dQ/C2 = 1.83 mV / 1.07 mV of peak control-line ripple in lock.  Millivolts.
+#
+# The superseded record 20260801-085349-0e5c22d is the arithmetic check on
+# both halves of that.  It measured 29.5 mV peak-to-peak while still carrying
+# a 14.05 ns static phase error, and Icp*t_p/C2 at t_p = 14.05 ns is 36 mV --
+# so that 29.5 mV is a not-yet-locked loop pumping once per reference cycle,
+# roughly 16-27x the ripple the same filter carries once the phase error is
+# gone, and not a measurement of in-lock ripple at all.
+#
+# What does set the lock point is (a) the band rule above -- band 5 is the
+# lowest band reaching 72 MHz inside the 0.9-2.4 V window -- and (b) headroom
+# for the ACQUISITION excursion, which is where the control node actually
+# travels.  The same committed waveform visits 1.084 V within the first 60 ns
+# (the `.ic` relaxing into the real network) and 1.537 V at 6.4 us, before
+# settling at 1.496 V: 0.41 V below the eventual lock point and 0.04 V above
+# it, 453 mV peak-to-peak.  That is ~15x the late-window figure and ~250x the
+# in-lock ripple, and it -- not the ripple -- is what a lock point near either
+# end of the window would push outside it, failing check 6 on a loop that goes
+# on to lock perfectly well.
 KFREF=9e6
 KN=8
 KBAND=5
@@ -104,10 +130,35 @@ KTRIM=2
 #         starts sets the run length almost by itself.  **Cold-start lock TIME,
 #         over PVT, is #12's campaign** (`sim/lock-time`); this one answers
 #         only whether the assembled loop closes.
-# KTSTOP  20 us of transient.  0.30 V of slewing at 41 mV/us is 7.3 us, the
-#         loop's own settling adds about 5 time constants at
-#         f_c = 284 kHz (2.8 us), so lock lands near 10 us -- and the
-#         measurement instants below sit 4 and 7 us after that.
+# KTSTOP  56 us of transient.  This file carried 20 us until #70, from adding
+#         0.30 V of slewing at 41 mV/us (7.3 us) to "about 5 time constants at
+#         f_c = 284 kHz" (2.8 us).  The second term is the error, and it is a
+#         systematic one rather than a slip: f_c is the loop's CROSSOVER
+#         frequency, and this loop is deliberately overdamped, so what sets its
+#         settling is the dominant CLOSED-LOOP pole -- which sits near
+#         1/(2*pi*R*C1) = 17.09 kHz, a 9.31 us time constant, 3.3x slower than
+#         1/(2*pi*f_c).  That is not a new finding here: it is exactly why
+#         spec/pll.md's Lock time section states a STRUCTURAL settling floor of
+#         ~43 us "regardless of how much Icp is applied", and why DR-006
+#         Decision 7 dropped the <20 us stretch target from the ratified spec
+#         rather than carrying it.  A 20 us transient is less than HALF that
+#         ratified floor: it was asking this loop for something the spec
+#         already says it cannot do, and the superseded record
+#         20260801-085349-0e5c22d is what that looks like -- four FAILs that
+#         are four views of one fact, a loop still converging at tstop.
+#
+#         That record also MEASURES the time constant, and it agrees with the
+#         filter: the REF->FB phase error went 19.57 ns at 14 us -> 14.05 ns at
+#         17 us, i.e. an exponential with tau = 3 us / ln(19.57/14.05) =
+#         9.05 us against the 9.31 us R*C1 predicts.  Extrapolating that same
+#         decay is how the window below is placed.  56 us is tb + 3 us, which
+#         leaves the late-window measurements the run they need (160 whole VCO
+#         cycles = 2.2 us, 20 whole FB cycles = 2.2 us).
+#
+#         The cost is real and is the reason 20 us was attractive: wall clock
+#         scales with tstop at a fixed timestep ceiling, so this is ~2.8x the
+#         4386 s the 20 us run took.  That is the price of measuring past the
+#         filter's own settling floor instead of before it.
 # KTMAX   100 ps ceiling on the internal timestep.  Set by the PFD's INTERNAL
 #         SET PULSE -- not by the VCO, and not by the UP/DN output pulse either.
 #         `design/edgedet.sch` fires each SR latch with AND(X, NOT(X delayed by
@@ -127,7 +178,7 @@ KTRIM=2
 #         after decimation).  It does not limit `.meas` resolution: ngspice
 #         measures against the internal timesteps, not the print step.
 KVSTART=1.20
-KTSTOP=20u
+KTSTOP=56u
 KTSTEP=20n
 KTMAX=100p
 
@@ -136,15 +187,39 @@ KTMAX=100p
 # "the first REF rise after t" and "the first FB rise after t" are the same
 # cycle's pair and the phase measurement cannot alias by a whole reference
 # period.  At f_ref = 9 MHz that makes every multiple of 1/9 us a legal
-# instant: tstart = 55.556 ns, so 14 us is k = 125 and 17 us is k = 152, both
+# instant: tstart = 55.556 ns, so 50 us is k = 449 and 53 us is k = 476, both
 # exact.
-#   KTA  14 us  -- the loop must already be locked here (about 4 us, i.e. 7
-#                  loop time constants, after the estimate above)
-#   KTB  17 us  -- 3 us later, leaving 3 us of run for the frequency
-#                  measurements (160 VCO cycles = 2.2 us, 20 FB cycles =
-#                  2.2 us)
-KTA=14.0u
-KTB=17.0u
+#
+#   KTA  50 us  -- the loop must already be locked here.  Placed from two
+#                  numbers this repo already owns, not from where a verdict
+#                  flips.  (i) spec/pll.md's ~43 us STRUCTURAL settling floor
+#                  is the earliest instant at which any window may legitimately
+#                  sit, because the ratified spec states the loop cannot settle
+#                  faster than that.  (ii) The binding threshold among the
+#                  seven checks is not check 2's 0.02*T_ref = 2.22 ns but the
+#                  block's own LOCK FLAG: sim/lock-detector record
+#                  20260731-095213-0bffe91 measures its comparator window at
+#                  THIS corner as asserting up to 1.2 ns and not asserting from
+#                  1.5 ns, and spec/pll.md sets the ratified lock criterion to
+#                  1 ns for exactly that reason -- so the criterion and the
+#                  on-chip observable describe the same event.  Extrapolating
+#                  the superseded record's measured decay (14.05 ns at 17 us,
+#                  tau = 9.05 us) puts the phase error near 0.4 ns at 50 us:
+#                  ~3x inside the tightest of the seven criteria, and ~0.75 tau
+#                  past the ratified floor.
+#
+#                  It does not go to zero, and that is why 50 us is a placement
+#                  rather than "as late as affordable".  The charge pump's own
+#                  static offset is the asymptote (-0.06 .. +0.67 ns over 45
+#                  corners -- design/README.md, up/down mismatch budget term 4)
+#                  and that asymptote already sits inside the detector window,
+#                  so past this point waiting longer buys progressively less.
+#   KTB  53 us  -- 3 us later, unchanged from the superseded record: ferr is a
+#                  phase DRIFT across that interval, and 3 us of run is left
+#                  after it for the frequency measurements (160 VCO cycles =
+#                  2.2 us, 20 FB cycles = 2.2 us).
+KTA=50.0u
+KTB=53.0u
 
 # Decimation of the committed waveform CSV, seconds.
 KDECIM=20e-9
@@ -302,6 +377,160 @@ numeric "${FOUT}"  && FOUT_ERR_PPM=$(awk -v f="${FOUT}" -v t="${FTARGET}" \
 numeric "${I_REF}" && numeric "${I_VCO}" && numeric "${I_DIV}" && \
   P_TOT_MW=$(awk -v a="${I_REF}" -v b="${I_VCO}" -v c="${I_DIV}" -v v="${CORNER_VDD}" \
     'BEGIN{s=(a<0?-a:a)+(b<0?-b:b)+(c<0?-c:c); printf "%.4g", s*v*1e3}')
+
+# ---------------------------------------------------------------------------
+# The record's CONCLUSION, generated rather than left to the reader.
+# ---------------------------------------------------------------------------
+# `sim/README.md` asks a design-input record for the conclusion drawn, not just
+# the verdict, and a seven-row verdict table does not carry one.  "4 of 7
+# failed" admits at least four incompatible readings -- the loop is miswired,
+# the loop cannot lock, the integration never resolved the detector, or the
+# transient simply ended before the loop arrived -- and nothing in the count
+# separates them.  WHICH checks failed does separate them, because checks 3 and
+# 7 are deliberately not lock criteria: 3 is the assembly guard (did the loop
+# close through the configured N at all) and 7 is the integration guard (did
+# the timestep resolve the PFD).  So the reading is emitted here, from the
+# verdict pattern, instead of being reconstructed by whoever cites the record.
+#
+# This exists because the first record of this campaign,
+# `20260801-085349-0e5c22d`, read **FAIL** without saying which of those four
+# things it was -- and it was the fourth, a 20 us transient against a loop
+# whose own filter cannot settle in under ~43 us (see KTSTOP above).  Records
+# are immutable, so the fix has to live in the template: it appears on every
+# record minted from here on and never retro-fits the one that motivated it.
+#
+# Wrapped by awk rather than by `fmt` on purpose -- BSD and GNU `fmt` disagree
+# about where they break, and a record's line breaks should not depend on which
+# host minted it.
+wrap_para() {
+  awk -v w=74 '{
+    n = split($0, word, /[ \t]+/); line = "";
+    for (i = 1; i <= n; i++) {
+      if (word[i] == "") continue;
+      if (line == "") { line = word[i]; continue }
+      if (length(line) + 1 + length(word[i]) > w) { print "  " line; line = word[i] }
+      else { line = line " " word[i] }
+    }
+    if (line != "") print "  " line;
+  }'
+}
+
+record_conclusion() {
+  # Direction of travel between the two phase instants.  This is the single
+  # fact that separates "the window was early" from "the loop does not
+  # converge", and neither the verdict nor the phase value alone carries it.
+  local trend="at least one of the two phase instants did not land, so the direction of travel is unknown"
+  if numeric "${PHI_A}" && numeric "${PHI_B}"; then
+    trend=$(awk -v a="${PHI_A}" -v b="${PHI_B}" -v ta="${KTA}" -v tb="${KTB}" '
+      function abs(x) { return (x < 0 ? -x : x) }
+      BEGIN {
+        if (abs(b) < 0.95 * abs(a))
+          printf "the phase error was still SHRINKING across the measurement window (%.4g ns at %s, %.4g ns at %s) -- a converging loop caught before it arrived, not one that cannot converge", abs(a)*1e9, ta, abs(b)*1e9, tb;
+        else if (abs(b) > 1.05 * abs(a))
+          printf "the phase error GREW across the measurement window (%.4g ns at %s, %.4g ns at %s) -- divergence, not a window placed too early", abs(a)*1e9, ta, abs(b)*1e9, tb;
+        else
+          printf "the phase error was FLAT across the measurement window (%.4g ns at %s, %.4g ns at %s) -- the loop had settled to this offset rather than being caught mid-convergence", abs(a)*1e9, ta, abs(b)*1e9, tb;
+      }')
+  fi
+
+  local s
+  if [ "${VERDICT}" = "PASS" ]; then
+    s="**Conclusion.** All seven checks pass, so this record answers its claim"
+    s="${s} in the affirmative and closes the acceptance gate it was built for:"
+    s="${s} the five blocks of \`design/pll_top.sch\`, wired as they are"
+    s="${s} committed, form a loop that ACQUIRES lock from a real frequency"
+    s="${s} error -- released at ${KVSTART} V, well below the lock point, so the"
+    s="${s} PFD has to frequency-detect its way in rather than settle a small"
+    s="${s} phase -- and HOLDS it. Each leg of that is measured, not inferred:"
+    s="${s} the residual frequency error (${FERR}) and the static phase error"
+    s="${s} (${PHI_B_NS} ns) say the phase is neither drifting nor offset; the"
+    s="${s} independently measured divide ratio (${NMEAS}) says the loop closed"
+    s="${s} through the configured N and not at some other ratio; the block's"
+    s="${s} own LOCK flag (${LOCK_LVL} V late-window average) says the on-chip"
+    s="${s} observable agrees with the criterion rather than describing a"
+    s="${s} different event; and Vctrl (${VC_MIN} .. ${VC_MAX} V) says it did so"
+    s="${s} from inside the usable control window rather than off the end of it."
+    s="${s} Check 7, the integration guard, passes too (${DN_LVL} V mean on DN),"
+    s="${s} so none of the above is an artefact of a timestep that stepped over"
+    s="${s} the detector."
+  else
+    s="**Conclusion.** OVERALL FAIL: ${NLOCK} of the 7 checks failed."
+    if [ "${V_PFD}" = "FAIL" ]; then
+      # The integration guard invalidates every other row, so it is read first.
+      s="${s} Check 7 -- the INTEGRATION guard, not a lock criterion -- is among"
+      s="${s} the failures, and it has to be read first: the PFD's DN branch does"
+      s="${s} not assert in the late window at all (${DN_LVL} V mean). In a locked"
+      s="${s} loop both branches pulse once per reference cycle for the"
+      s="${s} reset-delay overlap, so a silent DN branch is the signature of a"
+      s="${s} transient stepping clean over the PFD's 0.33-0.39 ns internal set"
+      s="${s} pulse: the detector was never resolved by the integration. Until"
+      s="${s} that is fixed (the ${KTMAX} ceiling, see Simulator settings above)"
+      s="${s} NOT ONE of checks 1-6 may be read as a statement about the design."
+      s="${s} They are reading an artefact of the solver, and this record"
+      s="${s} substantiates nothing until it is re-run."
+    elif [ "${V_N}" = "FAIL" ]; then
+      s="${s} The divide ratio itself is wrong -- f_out/f_fb measured ${NMEAS}"
+      s="${s} against N = ${KN} -- so the feedback path is not dividing by the"
+      s="${s} ratio the configuration asked for. That is an assembly or"
+      s="${s} divider-encoding fault, and it is upstream of everything else here:"
+      s="${s} checks 1, 2, 4 and 5 are all measured against an N*f_ref target the"
+      s="${s} loop was never actually driving toward, so they are not independent"
+      s="${s} results and must not be read as loop-dynamics evidence."
+    else
+      s="${s} The two guards both PASS, so this is not a wiring result and not"
+      s="${s} an integration result: the divide ratio is ${NMEAS} against"
+      s="${s} N = ${KN}, so the loop closed through the configured divider, and"
+      s="${s} the PFD's DN branch asserts at ${DN_LVL} V mean, so the timestep"
+      s="${s} resolved the detector."
+      if [ "${V_VCTRL}" = "FAIL" ]; then
+        s="${s} The control node, however, left DR-001 Decision 2's usable"
+        s="${s} ${ACC_VCTRL_LO}-${ACC_VCTRL_HI} V window (${VC_MIN} .."
+        s="${s} ${VC_MAX} V), so whatever the phase and frequency rows say, this"
+        s="${s} is not a lock this record may claim -- it would be one held off"
+        s="${s} the end of the V->I converter's characterised range."
+      fi
+      if [ "${V_FERR}" = "FAIL" ] || [ "${V_PHI}" = "FAIL" ] \
+         || [ "${V_FOUT}" = "FAIL" ] || [ "${V_LOCK}" = "FAIL" ]; then
+        s="${s} What failed is the lock criterion itself, and ${trend}."
+        case "${trend}" in
+          *SHRINKING*)
+            s="${s} A phase error still closing at ${KTB} is a MEASUREMENT-WINDOW"
+            s="${s} result, not a design one. The two honest resolutions are a"
+            s="${s} longer transient with the window re-placed where the loop's"
+            s="${s} own dominant pole says lock lands, or -- if that lands beyond"
+            s="${s} \`spec/pll.md\`'s lock-time target -- a filter change carried"
+            s="${s} through a \`spec/\` decision record. Moving the window just far"
+            s="${s} enough to flip these verdicts is neither." ;;
+          *GREW*)
+            s="${s} A phase error that GROWS between the two instants is not a"
+            s="${s} window problem and no amount of extra transient will fix it:"
+            s="${s} the loop is not converging at this operating point, and that"
+            s="${s} has to be run down as a design or configuration result before"
+            s="${s} any measurement instant is touched." ;;
+          *FLAT*)
+            s="${s} A flat phase error means the loop HAS settled, and settled"
+            s="${s} outside the criterion: this is a static-accuracy result, not"
+            s="${s} a convergence one, and a longer transient will not move it." ;;
+        esac
+      fi
+    fi
+  fi
+
+  # The scope sentence is unconditional on purpose: the reading most likely to
+  # be over-cited is the PASS one.
+  if [ "${VERDICT}" = "PASS" ]; then
+    s="${s} That is the whole of what it establishes:"
+  else
+    s="${s} Either way this stays"
+  fi
+  s="${s} one corner, one N, one band -- the acceptance"
+  s="${s} gate for #52's top-level assembly and nothing more. It must not be"
+  s="${s} quoted for lock time, jitter, spurs, power or band coverage over PVT;"
+  s="${s} those are #12's, #13's and #14's campaigns, each over the full grid"
+  s="${s} against this same assembled DUT."
+
+  printf '%s\n' "${s}" | wrap_para
+}
 
 cat <<EOF
 pll-top-smoke @ ${CID}  (N=${KN}, band ${KBAND}, Icp code ${KTRIM}, f_ref=${KFREF} Hz)
@@ -465,6 +694,38 @@ $(simenv_env_block "$(simenv_xschem_version) -- the DUT
     Both phase instants are placed on a reference half-period, so "the first
     REF rise after t" and "the first FB rise after t" are the same cycle's
     pair and the measurement cannot alias by a whole reference period.
+  - **Where the measurement window sits, and why it sits there.** The window
+    is at ${KTA} / ${KTB} in a ${KTSTOP} transient, and it is placed from this
+    repo's own ratified numbers rather than from where the verdicts turn.
+    \`spec/pll.md\`'s Lock time section states a **structural settling floor
+    of ~43 us**, "regardless of how much Icp is applied", because the dominant
+    closed-loop pole sits near \`1/(2*pi*R*C1)\` = 17.09 kHz -- a 9.31 us time
+    constant, and a property of DR-001 Decision 1's fixed filter rather than
+    of the drive level. DR-006 Decision 7 is where that was measured, and it
+    is why the < 20 us stretch target was **removed** from the ratified spec
+    rather than carried. Any window earlier than ~43 us is therefore asking
+    this loop for something the spec already says it cannot do; the first
+    record of this campaign (\`20260801-085349-0e5c22d\`, superseded) measured
+    at 14/17 us in a 20 us transient and read FAIL for exactly that reason,
+    with its phase error visibly still closing (19.57 ns -> 14.05 ns) at
+    \`tstop\`.
+    The window is then placed against the **tightest** of the seven criteria,
+    which is not check 2's ${ACC_PHI_FRAC} of a reference period
+    (= 2.22 ns at ${KFREF} Hz) but the block's own LOCK flag:
+    \`sim/lock-detector\` record \`20260731-095213-0bffe91\` measures its
+    comparator window at this corner (\`typical\`/27 C/3.30 V) as asserting up
+    to 1.2 ns and not asserting from 1.5 ns, and \`spec/pll.md\`'s ratified
+    1 ns phase bound is set from that same measured window (0.877 ..
+    1.702 ns over the corners it swept) precisely so the criterion and the
+    on-chip observable describe one event rather than two.
+    Extrapolating the superseded record's own measured decay
+    (14.05 ns at 17 us, tau = 9.05 us, against the 9.31 us \`R*C1\` predicts)
+    puts the phase error near 0.4 ns at ${KTA} -- roughly 3x inside that
+    tightest criterion, and about 0.75 time constants past the ratified
+    floor. It is not placed later still because the phase error does not
+    decay to zero: the charge pump's own static offset (-0.06 .. +0.67 ns
+    over 45 corners, \`design/README.md\`'s up/down mismatch budget, term 4)
+    is the asymptote, and it already sits inside the detector's window.
   - **Simulator settings**: \`.tran ${KTSTEP} ${KTSTOP} 0 ${KTMAX}\`,
     \`reltol 1e-3\`, \`abstol 1e-13\`, \`vntol 1e-6\`, \`rshunt 1e12\`,
     \`itl4 200\`.
@@ -535,6 +796,8 @@ $(simenv_env_block "$(simenv_xschem_version) -- the DUT
   | total power at this corner | ${P_TOT_MW} mW |
 
   **Overall: ${VERDICT}** (${NLOCK} of 7 checks failed).
+
+$(record_conclusion)
 
   The Vctrl ripple and the supply/power figures are here because a loop that
   "locks" while drawing an implausible current, or while the control node
