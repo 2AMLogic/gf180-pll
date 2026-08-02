@@ -390,7 +390,11 @@ that makes it *one record* stays shared:
   decks says so.
 - A phase must produce *something*: at least one of `measure`, `raw_measures`
   or `raw_files`. A deck whose entire output is a waveform the reduction reads
-  declares only the last — that is the jitter deck above.
+  declares only the last — that is the jitter deck above. A manifest in which
+  **every** phase is of that shape is legal too: the record's numbers then all
+  come from `derived.measures` over the waveforms, which is still "at least one
+  measurement, from somewhere" — the same rule a single-deck manifest gets (see
+  `raw_files` below).
 - `params` and `options` may be declared at both levels: the top-level ones
   apply to every deck and a phase's are emitted after them, so a phase
   overrides rather than restates. `analyses` is the one shared default a phase
@@ -657,6 +661,16 @@ can find it again.
 | `retain` | `false` (default) — scratch; `true` — committed evidence. See below |
 
 A bare list is the shorthand for "no options": `"raw_files": ["jit.dat"]`.
+
+**A record whose every number is reduced from a waveform is a complete record.**
+A manifest must still produce at least one measurement, but `measure` /
+`raw_measures` are not the only source: declaring `raw_files` together with a
+`derived` block whose `measures` is non-empty satisfies the requirement on its
+own. A deck that only `wrdata`s and is reduced by `derive_point()` into the
+record's numbers is the shape this key exists for, and (with `phases`) two such
+decks reduced together is the jitter campaign. A manifest with neither an
+ngspice measurement nor a `raw_files` + `derived.measures` pair is still a load
+error — it would mint a record with no result.
 
 **Per-point isolation.** Every point's deck writes the *same* filename. When a
 manifest declares `raw_files`, the runner gives each point its own scratch

@@ -1581,6 +1581,27 @@ class RawFileManifestTests(ManifestFixture):
                 testbench.load(self.write({"raw_files": bad}))
             self.assertIn("omit the key", str(ctx.exception))
 
+    def test_a_deck_that_only_writes_a_waveform_is_a_complete_manifest(self):
+        """`raw_files` + `derived.measures` is a measurement source of its own."""
+        self.write_module("def derive_point(point):\n    return {'tie_pp': 0.0}\n")
+        tb = testbench.load(
+            self.write(
+                {
+                    "measure": {},
+                    "analyses": ["tran 1n 10n", "wrdata jit.dat v(out)"],
+                    "raw_files": ["jit.dat"],
+                    "derived": {"module": "derive.py", "measures": ["tie_pp"]},
+                }
+            )
+        )
+        self.assertEqual(tb.simulated_measure_names, [])
+        self.assertEqual(tb.derived_measure_names, ["tie_pp"])
+
+    def test_a_manifest_that_produces_no_number_at_all_is_rejected(self):
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(self.write({"measure": {}, "raw_files": ["jit.dat"]}))
+        self.assertIn("at least one measurement", str(ctx.exception))
+
     def test_retaining_a_gitignored_name_is_rejected(self):
         """The evidence decision, enforced: no evidence-looking scratch file.
 
@@ -2102,9 +2123,20 @@ class PhasedManifestTests(PhasedFixture):
         self.assertEqual(tb.raw_file_names, ["jit.dat"])
         self.assertEqual(tb.netlist_sources[-2:], (tb.phases[0].netlist, tb.phases[1].netlist))
 
+    #: A manifest exercising *both* keys `compose_deck` emits from the testbench
+    #: AND the phase. Anything that copies these onto the implicit phase emits
+    #: every line twice, so the backward-compatibility tests below must run
+    #: against a manifest that declares them -- one that declares neither
+    #: cannot observe the regression it claims to guard.
+    SHARED_PARAMS_AND_OPTIONS = {
+        "analyses": ["tran 1n 10n"],
+        "params": {"kf": "200e6", "ktstep": "2e-11"},
+        "options": ["method=gear", "reltol=1e-5", "abstol=1e-15"],
+    }
+
     def test_a_manifest_without_phases_is_completely_unaffected(self):
         """Backward compatibility: one implicit, unnamed phase, same deck."""
-        tb = testbench.load(self.write({"analyses": ["tran 1n 10n"]}))
+        tb = testbench.load(self.write(dict(self.SHARED_PARAMS_AND_OPTIONS)))
         self.assertFalse(tb.is_phased)
         self.assertEqual(tb.phases, ())
         only = tb.run_phases
@@ -2112,10 +2144,94 @@ class PhasedManifestTests(PhasedFixture):
         self.assertEqual(only[0].name, "")
         self.assertEqual(only[0].netlist, tb.netlist)
         self.assertEqual(only[0].measure, tb.measure)
+        # The implicit phase must NOT carry the shared keys compose_deck already
+        # emits from the testbench, or every one of them lands in the deck twice.
+        self.assertEqual(only[0].params, {})
+        self.assertEqual(only[0].options, ())
         # ... and no phase field infects the deck or its filenames.
         point = corners.build_grid(corners.resolve_corners(["typical"]), (27,), [3.3])[0]
         self.assertEqual(only[0].run_id(point.corner_id), point.corner_id)
         self.assertNotIn("phase", runner.compose_deck(tb, fake_pdk(self.root / "gf180mcuD"), point))
+
+    def test_the_unphased_deck_emits_each_shared_param_and_option_exactly_once(self):
+        """The load-bearing claim, asserted on line counts rather than substrings.
+
+        `assertNotIn("phase", ...)` cannot see a duplicated `.param`/`.options`
+        line, which is exactly how the implicit phase double-emitting the
+        top-level keys went unnoticed. Count them.
+        """
+        tb = testbench.load(self.write(dict(self.SHARED_PARAMS_AND_OPTIONS)))
+        point = corners.build_grid(corners.resolve_corners(["typical"]), (27,), [3.3])[0]
+        deck = runner.compose_deck(tb, fake_pdk(self.root / "gf180mcuD"), point)
+        lines = deck.splitlines()
+
+        params = [ln for ln in lines if ln.startswith(".param ")]
+        # The three PVT params the harness always supplies, then the manifest's
+        # own two -- each exactly once, in manifest order.
+        self.assertEqual(
+            params,
+            [
+                f".param vdd_nom={tb.nominal_supply_v!r}",
+                f".param vdd_val={point.vdd!r}",
+                f".param temp_c={point.temp_c!r}",
+                ".param kf=200e6",
+                ".param ktstep=2e-11",
+            ],
+        )
+        options = [ln for ln in lines if ln.startswith(".options ")]
+        self.assertEqual(
+            options,
+            [".options method=gear", ".options reltol=1e-5", ".options abstol=1e-15"],
+        )
+        # No stray per-phase header for a phase that has no name.
+        self.assertEqual([ln for ln in lines if ln.startswith("* ---- phase")], [])
+
+    def test_a_named_phase_still_adds_its_own_params_once_after_the_shared_ones(self):
+        """The other side of the same coin: a real phase's params are additive."""
+        tb = testbench.load(
+            self.write_phased({"params": {"kf": "200e6"}, "options": ["method=gear"]})
+        )
+        point = corners.build_grid(corners.resolve_corners(["typical"]), (27,), [3.3])[0]
+        jit = tb.phases[1]
+        lines = runner.compose_deck(
+            tb, fake_pdk(self.root / "gf180mcuD"), point, jit
+        ).splitlines()
+        self.assertEqual(
+            [ln for ln in lines if ln.startswith(".param ")][-2:],
+            [".param kf=200e6", ".param arip=0.05"],
+        )
+        self.assertEqual(
+            [ln for ln in lines if ln.startswith(".options ")], [".options method=gear"]
+        )
+        self.assertIn("* ---- phase jit parameters", lines)
+
+    def test_every_deck_may_be_waveform_only_when_derived_supplies_the_numbers(self):
+        """Two transient decks reduced together -- the shape `phases` exists for.
+
+        Neither deck runs a `.measure`; both `wrdata` and `derived` reduces them
+        into the record's only numbers. That has to load.
+        """
+        self.write_module(BOTH_DECKS_MODULE)
+        tb = testbench.load(
+            self.write_phased(
+                {"derived": {"module": "derive.py", "measures": ["tj_norm"]}},
+                phases={
+                    "jit": TWO_PHASES["jit"],
+                    "ref": {**TWO_PHASES["jit"], "raw_files": ["ref.dat"]},
+                },
+            )
+        )
+        self.assertEqual(tb.simulated_measure_names, [])
+        self.assertEqual(tb.raw_file_names, ["jit.dat", "ref.dat"])
+        self.assertEqual(tb.derived.measures, ("tj_norm",))
+
+    def test_a_record_with_no_numbers_at_all_is_still_a_load_error(self):
+        """The relaxation is not a hole: something must produce a measurement."""
+        with self.assertRaises(ValueError) as ctx:
+            testbench.load(
+                self.write_phased({}, phases={"jit": TWO_PHASES["jit"]})
+            )
+        self.assertIn("at least one measurement", str(ctx.exception))
 
     def test_a_per_deck_key_may_not_also_be_declared_at_top_level(self):
         for key, value in (
@@ -2379,6 +2495,23 @@ class PhasedRunTests(PhasedFixture):
         self.assertNotIn("phases", entry)
         self.assertEqual(entry["deck"], "typical_27c_3.30v.spice")
         self.assertEqual(entry["log"], "typical_27c_3.30v.log")
+
+    def test_a_deliberately_single_phase_manifest_still_lists_its_named_deck(self):
+        """Filenames and the point entry must not disagree about phases.
+
+        A `phases` manifest with exactly one phase writes
+        `push_<corner-id>.log` -- a named deck. The entry has to say so, or a
+        reader of the record cannot map the filename back to anything.
+        """
+        tb = testbench.load(self.write_phased({}, phases={"push": TWO_PHASES["push"]}))
+        entry = self._run(tb).as_dict()
+        self.assertEqual([p["phase"] for p in entry["phases"]], ["push"])
+        self.assertEqual(entry["deck"], "push_typical_27c_3.30v.spice")
+
+    def test_a_point_that_failed_on_its_first_deck_still_names_that_deck(self):
+        tb = testbench.load(self.write_phased({}))
+        entry = self._run(tb, outputs={"push": "no measurements here\n"}).as_dict()
+        self.assertEqual([p["phase"] for p in entry["phases"]], ["push"])
 
 
 class PhasedRecordTests(PhasedFixture):

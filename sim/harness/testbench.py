@@ -234,7 +234,13 @@ class Phase:
     Every :class:`Testbench` has at least one phase. A manifest with no
     ``phases`` key has exactly one, unnamed (``name == ""``), built from its
     top-level keys, and every filename, deck and record it produces is
-    byte-for-byte what it was before this key existed.
+    byte-for-byte what it was before this key existed. That is a claim, so it
+    has a testbench: see ``test_the_unphased_deck_emits_each_shared_param_and_
+    option_exactly_once`` in ``sim/tests/test_manifest_extensions.py``, which
+    counts the emitted ``.param``/``.options`` lines of a manifest declaring
+    both -- the two keys :func:`runner.compose_deck` emits from the testbench
+    *and* the phase, and therefore the only two the implicit phase must not
+    carry (see :attr:`Testbench.run_phases`).
 
     A *named* phase becomes the ``[<kind>_]`` prefix field of the corner-id --
     ``push_ss_125c_3.63v.log``, ``jit_ss_125c_3.63v.log`` -- which is not a new
@@ -442,6 +448,15 @@ class Testbench:
         phase built from its top-level keys, so the runner has a single code
         path and the single-deck case keeps producing the same deck, the same
         ``<corner-id>.spice``/``.log`` names and the same record it always has.
+
+        ``params`` and ``options`` are deliberately left **empty** on the
+        implicit phase. They are the two keys ``compose_deck`` emits from the
+        *testbench* as well as the phase (a phase's own values are additive --
+        they come after the shared ones so a phase can override rather than
+        restate them). Copying the top-level values in here too would emit each
+        ``.param``/``.options`` line twice, which would falsify the guarantee
+        this property exists to keep. Every other field is emitted from the
+        phase alone, so those are copied.
         """
         if self.phases:
             return self.phases
@@ -449,9 +464,9 @@ class Testbench:
             Phase(
                 name="",
                 netlist=self.netlist,
-                params=dict(self.params),
+                params={},
                 analyses=self.analyses,
-                options=self.options,
+                options=(),
                 measure=dict(self.measure),
                 raw_measures=dict(self.raw_measures),
                 raw_files=self.raw_files,
@@ -1554,12 +1569,6 @@ def load(directory: str | Path) -> Testbench:
         raw_files = _load_raw_files(manifest, manifest_path)
         _validate_measures(measure, raw_measures, analyses, manifest_path)
 
-    if not measure and not raw_measures:
-        raise ValueError(
-            f"{manifest_path}: must define at least one measurement in 'measure' "
-            "or 'raw_measures'"
-        )
-
     dut = _load_dut(manifest, manifest_path)
     dut_export = _load_dut_export(manifest, manifest_path, directory)
     sweeps = _load_sweeps(manifest, manifest_path)
@@ -1567,6 +1576,20 @@ def load(directory: str | Path) -> Testbench:
     derived = _load_derived(
         manifest, manifest_path, directory, list(measure) + list(raw_measures)
     )
+
+    # A record still has to produce numbers -- but ngspice's `.measure` is not
+    # the only way to get them. A deck that only `wrdata`s a waveform, reduced
+    # by `derived` into the record's measurements, is a complete claim: that is
+    # the whole shape `raw_files` + `derived` exists for, and a phased manifest
+    # whose every deck is of that shape (two transient decks reduced together)
+    # is exactly the campaign `phases` was added for. So the requirement is
+    # "at least one measurement, from somewhere", not "from ngspice".
+    if not measure and not raw_measures and not (raw_files and derived and derived.measures):
+        raise ValueError(
+            f"{manifest_path}: must define at least one measurement in 'measure' "
+            "or 'raw_measures' -- or declare 'raw_files' the deck writes together "
+            "with a 'derived' block whose 'measures' reduce them"
+        )
 
     topology_groups = _load_topology_groups(
         manifest,

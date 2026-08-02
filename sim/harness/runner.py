@@ -107,8 +107,11 @@ def compose_deck(
         lines.append(f".param {key}={value}")
     # A phase's own params come after the manifest's shared ones (so a phase
     # overrides rather than restates them) and before the axis params (so an
-    # axis can still override everything, as documented).
-    if phase.params:
+    # axis can still override everything, as documented). Gated on the phase
+    # having a *name*: the implicit single-deck phase carries no params of its
+    # own (see Testbench.run_phases), and an unnamed header would be noise even
+    # if it did.
+    if phase.name and phase.params:
         lines.append("")
         lines.append(f"* ---- phase {phase.name} parameters")
         for key, value in phase.params.items():
@@ -294,9 +297,14 @@ class PointResult:
                 "log": self.log,
             }
         )
-        # Only a genuinely multi-deck point says so: a single-deck record keeps
-        # exactly the shape it had before 'phases' existed.
-        if len(self.phases) > 1:
+        # Keyed on a phase having a *name*, not on there being more than one of
+        # them, so the point entry and the filenames on disk always agree: a
+        # named phase writes `<phase>_<corner-id>.log`, so it must be listed
+        # here even when the manifest declares exactly one phase, or when a
+        # multi-deck point failed on its first deck and only ran that one. The
+        # implicit phase of a manifest with no `phases` key is unnamed, so a
+        # single-deck record keeps exactly the shape it had before this key.
+        if any(run.name for run in self.phases):
             record["phases"] = [p.as_dict() for p in self.phases]
         if self.missing:
             record["missing_measurements"] = self.missing
