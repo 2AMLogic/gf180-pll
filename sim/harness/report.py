@@ -382,6 +382,7 @@ def build_record(
     wall_seconds: float,
     claim: str = "",
     supersedes: str = "",
+    supersedes_note: str = "",
     statistical_convention: str = "",
     subset_reason: str = "",
     git: dict | None = None,
@@ -423,6 +424,7 @@ def build_record(
         "claim": claim or tb.claim,
         "methodology": list(tb.methodology),
         "supersedes": supersedes,
+        "supersedes_note": supersedes_note,
         "statistical_convention": statistical_convention,
         "subset_reason": subset_reason,
         # The CLI may have already computed this (and folded in gaps only it
@@ -912,9 +914,15 @@ def render_record(record: dict, experiment: str) -> str:
             f"  - Extracted metrics: "
             f"`sim/{experiment}/{CORNERS_DIR}/{record_id}/{table['name']}.csv`"
         )
+    supersedes = record["supersedes"]
+    supersedes_note = record.get("supersedes_note") or ""
+    if supersedes and supersedes_note:
+        supersedes_line = f"{supersedes} -- {supersedes_note}"
+    else:
+        supersedes_line = supersedes or "(none)"
     lines += [
         f"- **Timestamp / author**: {record['started_utc']}, {env['user']}",
-        f"- **Supersedes**: {record['supersedes'] or '(none)'}",
+        f"- **Supersedes**: {supersedes_line}",
         "",
         "---",
         "",

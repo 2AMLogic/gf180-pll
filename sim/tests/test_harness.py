@@ -762,6 +762,79 @@ class RecordRenderingTests(unittest.TestCase):
             report.render_record(self.record, "harness-selftest"),
         )
 
+    def test_supersedes_with_no_note_renders_the_bare_record_id(self):
+        """Unchanged existing behaviour: no note -> just the id (or '(none)')."""
+        record = report.build_record(
+            tb=self.tb,
+            pdk=self.pdk,
+            points=self.points,
+            results=self.results,
+            ngspice="ngspice-46",
+            repo_root=SIM_DIR,
+            record_id="20260729-153000-1a7ef75",
+            started_utc="2026-07-29T15:30:00+00:00",
+            wall_seconds=9.5,
+            supersedes="20260731-194124-afa338c",
+        )
+        text = report.render_record(record, "harness-selftest")
+        supersedes_line = next(
+            ln for ln in text.splitlines() if "**Supersedes**" in ln
+        )
+        self.assertEqual(
+            supersedes_line, "- **Supersedes**: 20260731-194124-afa338c"
+        )
+
+    def test_supersedes_absent_still_renders_none(self):
+        text = report.render_record(self.record, "harness-selftest")
+        self.assertIn("- **Supersedes**: (none)", text)
+
+    def test_supersedes_note_renders_the_qualifier_after_the_record_id(self):
+        """sim/README.md's per-bench supersession precedent: `<id> -- <note>`."""
+        record = report.build_record(
+            tb=self.tb,
+            pdk=self.pdk,
+            points=self.points,
+            results=self.results,
+            ngspice="ngspice-46",
+            repo_root=SIM_DIR,
+            record_id="20260729-153000-1a7ef75",
+            started_utc="2026-07-29T15:30:00+00:00",
+            wall_seconds=9.5,
+            supersedes="20260731-194124-afa338c",
+            supersedes_note="switching-timing half only",
+        )
+        text = report.render_record(record, "harness-selftest")
+        self.assertIn(
+            "- **Supersedes**: 20260731-194124-afa338c -- switching-timing half only",
+            text,
+        )
+
+    def test_supersedes_note_without_supersedes_id_is_ignored(self):
+        """A note with no id to attach to falls back to the '(none)' rendering."""
+        record = report.build_record(
+            tb=self.tb,
+            pdk=self.pdk,
+            points=self.points,
+            results=self.results,
+            ngspice="ngspice-46",
+            repo_root=SIM_DIR,
+            record_id="20260729-153000-1a7ef75",
+            started_utc="2026-07-29T15:30:00+00:00",
+            wall_seconds=9.5,
+            supersedes_note="orphaned note",
+        )
+        text = report.render_record(record, "harness-selftest")
+        self.assertIn("- **Supersedes**: (none)", text)
+
+    def test_rendering_tolerates_a_record_written_before_supersedes_note(self):
+        """Records are append-only; older ones have no supersedes_note key."""
+        legacy = dict(self.record)
+        legacy.pop("supersedes_note", None)
+        self.assertEqual(
+            report.render_record(legacy, "harness-selftest"),
+            report.render_record(self.record, "harness-selftest"),
+        )
+
     def test_netlist_snapshot_is_frozen_and_append_only(self):
         experiment = self.tb.experiment_dir
         path = report.write_netlist_snapshot(self.tb, experiment, "20260729-153000-1a7ef75")
