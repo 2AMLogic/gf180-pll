@@ -61,6 +61,8 @@ sim/
       <record-id>/
         <corner-id>.log              # raw ngspice output per PVT point
                                       # e.g. ss_-40c_2.97v.log
+        raw_measures.csv             # always written: one row per corner point,
+                                      # every tb.measure_names value + verdict
     records/
       <record-id>.md                 # append-only summary record
 ```
@@ -552,7 +554,8 @@ affects comparability must be called out in the next record.
 | Summary record (`records/<id>.md`) | **Always, committed** | the citable evidence object |
 | Frozen netlist snapshot (`netlist-snapshots/<id>.spice`) | **Always, committed** | the record's claim is meaningless without the exact DUT |
 | Raw per-corner ngspice logs (`corners/<id>/*.log`) | **Always, committed** | the primary evidence the extracted metrics were read from; includes the warnings a summary hides |
-| Extracted metrics / measurement tables | **Always** — inside the record, or as a small CSV beside the logs | machine-readable comparison across records |
+| Per-point raw measurements (`corners/<id>/raw_measures.csv`) | **Always, committed** | `sim/harness` writes this unconditionally on every run, independent of whether the manifest declares any `derived.tables` — it is the machine-readable form of the record's own Markdown corner table (same columns, same PASS/FAIL/ERROR verdict), so a per-point comparison across records never requires parsing Markdown |
+| Extracted metrics / derived measurement tables | **Always** — inside the record, or as a small CSV beside the logs | machine-readable comparison across records for a campaign's own reduction over the raw table above |
 | Full waveform rawfiles (`.raw`) | **No, not committed** | hundreds of MB per transient; regenerable from the frozen netlist + logged environment |
 | Plots | Only when the plot *is* the argument | a plot is a rendering, not evidence; commit it with the script that generated it |
 

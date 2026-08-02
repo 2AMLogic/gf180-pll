@@ -11,6 +11,7 @@ from pathlib import Path
 
 from . import HARNESS_VERSION, corners as corners_mod, report, runner, testbench as tb_mod
 from . import derived as derived_mod
+from . import raw_measures as raw_measures_mod
 from .pdk import PdkNotFound, find_pdk
 from .runner import NgspiceMissing
 
@@ -511,6 +512,11 @@ def run(args: argparse.Namespace) -> int:
     if not args.no_write:
         snapshot = report.write_netlist_snapshot(tb, experiment_dir, record_id)
         written = derived_mod.write_derived_tables(derived_tables, log_dir)
+        # Always written, regardless of whether the manifest declares any
+        # derived.tables -- the per-point raw measurements are evidence in
+        # their own right, and a testbench with no derived table would
+        # otherwise leave nothing machine-readable behind (sim/harness#110).
+        raw_measures_path = raw_measures_mod.write_raw_measures_csv(tb, results, log_dir)
         record_path = report.write_record(record, experiment_dir)
         print()
         print(f"record    : {record_path}")
@@ -525,6 +531,7 @@ def run(args: argparse.Namespace) -> int:
                 if spec.name in r.raw_files and r.raw_files[spec.name].exists()
             )
             print(f"raw files : {kept} x <corner-id>-{spec.name} in {log_dir}")
+        print(f"raw table : {raw_measures_path}")
         for path in written:
             print(f"derived   : {path}")
     else:

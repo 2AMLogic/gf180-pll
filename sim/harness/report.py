@@ -653,6 +653,43 @@ def _failures_by_corner(failures: list[dict]) -> dict[str, list[str]]:
     return out
 
 
+def _point_verdict(point: dict, failures_at: dict[str, list[str]]) -> str:
+    """PASS / ``FAIL — ...`` / ``ERROR — ...``, the verdict text for one point.
+
+    Factored out of :func:`_corner_table_lines` so :func:`point_verdicts` --
+    used by ``raw_measures.write_raw_measures_csv`` -- computes the *identical*
+    verdict text the Markdown record's corner table renders. Two artifacts
+    citing the same evidence must never disagree about what counts as a
+    failure.
+    """
+    problems = failures_at.get(point["corner_id"], [])
+    if point["status"] != "ok":
+        return f"ERROR — {point.get('message', point['status'])}"
+    if problems:
+        return "FAIL — " + "; ".join(problems)
+    return "PASS"
+
+
+def point_verdicts(tb: Testbench, results: list[PointResult]) -> dict[str, str]:
+    """``{corner-id: verdict}`` for every point, computed the record's own way.
+
+    Runs the same ``summarize()`` + ``evaluate_checks()`` pipeline
+    :func:`build_record` uses, so a caller outside the Markdown-record path
+    (``raw_measures.write_raw_measures_csv``) gets a verdict that can never
+    drift from the one the record's own corner table renders for the same
+    ``results``.
+    """
+    measure_names = tb.measure_names
+    optional_names = {n for n in measure_names if tb.is_optional(n)}
+    summary = summarize(results, measure_names, optional_names)
+    failures = evaluate_checks(tb.checks, results, summary)
+    failures_at = _failures_by_corner(failures)
+    return {
+        point["corner_id"]: _point_verdict(point, failures_at)
+        for point in (r.as_dict() for r in results)
+    }
+
+
 def _corner_table_lines(
     record: dict, measure_names: list[str], failures_at: dict[str, list[str]]
 ) -> list[str]:
@@ -677,13 +714,7 @@ def _corner_table_lines(
             else _fmt(point["measurements"].get(name))
             for name in measure_names
         ]
-        problems = failures_at.get(point["corner_id"], [])
-        if point["status"] != "ok":
-            verdict = f"ERROR — {point.get('message', point['status'])}"
-        elif problems:
-            verdict = "FAIL — " + "; ".join(problems)
-        else:
-            verdict = "PASS"
+        verdict = _point_verdict(point, failures_at)
         lines.append(f"  | `{point['corner_id']}` | " + " | ".join(cells) + f" | {verdict} |")
     return lines
 
