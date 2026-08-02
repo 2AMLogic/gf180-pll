@@ -5,21 +5,35 @@ Drop-in replacement for `gh` that caches read-only command responses
 to reduce API calls. Mutations bypass the cache and invalidate
 related entries.
 
-Cache is file-backed in /tmp/gh-cache/ for cross-process sharing.
+Cache is file-backed under /tmp/gh-cache/ for cross-process sharing, and is
+partitioned per target repository: entries live in
+/tmp/gh-cache/<repo-slug>/ and the repo scope is also mixed into the cache
+key. Two different repositories issuing the byte-identical `gh` argv (e.g.
+the Loom queue listing `gh pr list --label=loom:review-requested --state=open
+--limit 500`, which is identical in every Loom-templated repo) therefore
+never share an entry. Two worktrees of the *same* repository still do share,
+because the scope is the resolved remote (owner/repo), not the cwd.
 
 Usage:
     gh-cached issue view 42 --json labels
     gh-cached pr list --label "loom:review-requested" --state open
     gh-cached --no-cache issue view 42 --json labels  # bypass cache
-    gh-cached --clear-cache                            # clear all cached entries
+    gh-cached --clear-cache                            # clear this repo's entries
+    gh-cached --clear-cache --all                      # clear every repo's entries
     gh-cached --cache-stats                            # show hit/miss statistics
+    gh-cached --cache-scope                            # print the resolved repo scope
 
 Environment:
-    GH_CACHE_DIR       Cache directory (default: /tmp/gh-cache)
+    GH_CACHE_DIR       Cache base directory (default: /tmp/gh-cache).
+                       Per-repo subdirectories are created underneath it.
     GH_CACHE_TTL       Default TTL in seconds (default: 30)
-    GH_CACHE_MAX_SIZE  Max cached entries (default: 256)
+    GH_CACHE_MAX_SIZE  Max cached entries (default: 256, per repo)
     GH_CACHE_DISABLE   Set to "1" to disable caching entirely
     GH_CACHE_DEBUG     Set to "1" for debug logging to stderr
+    GH_CACHE_SCOPE     Force the repo scope string (advanced/testing only —
+                       normally derived from GH_REPO or the git remote)
+    GH_REPO / GH_HOST  Honored when resolving the repo scope, matching how
+                       `gh` itself picks its target repository.
 """
 
 from __future__ import annotations
@@ -27,13 +41,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
 
 # ─── Configuration ──────────────────────────────────────────────────────────
 
-CACHE_DIR = os.environ.get("GH_CACHE_DIR", "/tmp/gh-cache")
+CACHE_BASE_DIR = os.environ.get("GH_CACHE_DIR", "/tmp/gh-cache")
 DEFAULT_TTL = int(os.environ.get("GH_CACHE_TTL", "30"))
 MAX_CACHE_SIZE = int(os.environ.get("GH_CACHE_MAX_SIZE", "256"))
 CACHE_DISABLED = os.environ.get("GH_CACHE_DISABLE", "") == "1"
@@ -64,6 +79,229 @@ PASSTHROUGH_COMMANDS = frozenset({
     "help", "--help", "-h", "--version",
 })
 
+# ─── Repo Scoping ───────────────────────────────────────────────────────────
+#
+# The cache is shared across processes via a well-known /tmp path, so every
+# checkout on the host reads and writes the same store. `gh` resolves its
+# target repository from GH_REPO or from the git remote of the cwd — so the
+# cache must
+# resolve the *same* identity, or two repos issuing identical argv collide and
+# one is served the other's response.
+#
+# Resolution is deliberately subprocess-free (plain file reads of git's own
+# config), so it costs microseconds rather than the ~hundreds of milliseconds a
+# `gh repo view` would add to every call — which would defeat the purpose of a
+# cache whose whole job is to be faster than invoking `gh`. It is also resolved
+# per process from the live cwd, so it cannot go stale across a `cd`.
+
+# Remote name preference, mirroring how `gh` picks a base repo when several
+# remotes exist (an explicit `gh-resolved = base` marker wins outright).
+_REMOTE_PREFERENCE = ("upstream", "github", "origin")
+
+_SLUG_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def _find_git_common_dir(start: str) -> str | None:
+    """Locate the git *common* dir for `start` (shared by all worktrees).
+
+    Returns None when `start` is not inside a git repository. Linked worktrees
+    have a `.git` *file* pointing at `<main>/.git/worktrees/<name>`, whose
+    `commondir` points back at the shared `<main>/.git` — so every worktree of
+    a repo resolves to the same directory, and therefore the same cache scope.
+    """
+    env_dir = os.environ.get("GIT_DIR")
+    if env_dir:
+        return _resolve_common_dir(os.path.abspath(env_dir))
+
+    d = os.path.abspath(start)
+    while True:
+        candidate = os.path.join(d, ".git")
+        if os.path.isdir(candidate):
+            return _resolve_common_dir(candidate)
+        if os.path.isfile(candidate):
+            try:
+                with open(candidate) as f:
+                    content = f.read().strip()
+            except OSError:
+                return None
+            if content.startswith("gitdir:"):
+                gitdir = content[len("gitdir:"):].strip()
+                if not os.path.isabs(gitdir):
+                    gitdir = os.path.join(d, gitdir)
+                return _resolve_common_dir(os.path.normpath(gitdir))
+            return None
+        parent = os.path.dirname(d)
+        if parent == d:
+            return None
+        d = parent
+
+
+def _resolve_common_dir(gitdir: str) -> str:
+    commondir_file = os.path.join(gitdir, "commondir")
+    try:
+        with open(commondir_file) as f:
+            rel = f.read().strip()
+    except OSError:
+        return gitdir
+    if not rel:
+        return gitdir
+    if not os.path.isabs(rel):
+        rel = os.path.join(gitdir, rel)
+    return os.path.normpath(rel)
+
+
+def _parse_git_remotes(common_dir: str) -> tuple[dict[str, str], str | None]:
+    """Return ({remote_name: url}, resolved_base_remote_or_None)."""
+    urls: dict[str, str] = {}
+    resolved: str | None = None
+    section: str | None = None
+    try:
+        with open(os.path.join(common_dir, "config")) as f:
+            lines = f.readlines()
+    except OSError:
+        return urls, resolved
+
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or line.startswith(";"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip()
+            continue
+        if section is None or "=" not in line:
+            continue
+        low = section.lower()
+        if not (low.startswith("remote ") or low == "remote"):
+            continue
+        parts = section.split(None, 1)
+        if len(parts) < 2:
+            continue
+        name = parts[1].strip().strip('"')
+        key, value = line.split("=", 1)
+        key = key.strip().lower()
+        value = value.strip()
+        if key == "url":
+            urls.setdefault(name, value)
+        elif key == "gh-resolved" and value == "base":
+            resolved = name
+    return urls, resolved
+
+
+def _normalize_repo_spec(spec: str, default_host: str) -> str | None:
+    """Normalize GH_REPO / a git remote URL to a stable `host/owner/repo`."""
+    spec = spec.strip()
+    if not spec:
+        return None
+
+    host = default_host
+    path = spec
+    bare = False  # no scheme and no user@host — i.e. "OWNER/REPO" style
+
+    # scp-style: git@github.com:owner/repo.git
+    if "://" not in spec and "@" in spec and ":" in spec.split("@", 1)[1]:
+        hostpart, path = spec.split("@", 1)[1].split(":", 1)
+        host = hostpart
+    elif "://" in spec:
+        rest = spec.split("://", 1)[1]
+        if "@" in rest.split("/", 1)[0]:
+            rest = rest.split("@", 1)[1]
+        hostpart, _, path = rest.partition("/")
+        host = hostpart
+    else:
+        bare = True
+        # A local filesystem remote is not an owner/repo identity — let the
+        # caller fall back to path-based scoping rather than inventing an
+        # owner/repo out of directory names (which can collide).
+        if spec.startswith(("/", ".", "~")):
+            return None
+
+    host = host.split(":")[0].lower()
+    path = path.strip("/")
+    if path.endswith(".git"):
+        path = path[: -len(".git")]
+
+    segments = [s for s in path.split("/") if s]
+    if len(segments) < 2:
+        return None
+    if bare:
+        # GH_REPO accepts OWNER/REPO or HOST/OWNER/REPO — nothing longer.
+        if len(segments) > 3:
+            return None
+        if len(segments) == 3:
+            host = segments[0].split(":")[0].lower()
+
+    owner, repo = segments[-2], segments[-1]
+    if not host:
+        return None
+
+    return f"{host.lower()}/{owner.lower()}/{repo.lower()}"
+
+
+def resolve_repo_scope() -> str:
+    """Resolve the repository this invocation targets, as a stable string.
+
+    Precedence mirrors `gh`'s own target resolution:
+      1. GH_CACHE_SCOPE  — explicit override (advanced / testing)
+      2. GH_REPO         — what `gh` itself honors first
+      3. the git remote of the cwd's repository (shared across worktrees)
+      4. the git common dir path — isolates checkouts with no usable remote
+      5. the cwd — last resort outside any git repository
+
+    Levels 4 and 5 are deliberately *coarser but never shared*: an
+    unidentifiable repo gets its own partition rather than falling into a
+    common one where it could collide with another unidentifiable repo.
+    """
+    forced = os.environ.get("GH_CACHE_SCOPE", "").strip()
+    if forced:
+        return f"scope:{forced}"
+
+    default_host = (os.environ.get("GH_HOST", "") or "github.com").strip().lower()
+
+    gh_repo = os.environ.get("GH_REPO", "").strip()
+    if gh_repo:
+        normalized = _normalize_repo_spec(gh_repo, default_host)
+        if normalized:
+            return f"repo:{normalized}"
+
+    try:
+        cwd = os.getcwd()
+    except OSError:
+        return "path:unknown"
+
+    common_dir = _find_git_common_dir(cwd)
+    if common_dir:
+        urls, resolved = _parse_git_remotes(common_dir)
+        candidates: list[str] = []
+        if resolved:
+            candidates.append(resolved)
+        candidates.extend(_REMOTE_PREFERENCE)
+        candidates.extend(sorted(urls))
+        for name in candidates:
+            if name in urls:
+                normalized = _normalize_repo_spec(urls[name], default_host)
+                if normalized:
+                    return f"repo:{normalized}"
+        return f"path:{os.path.realpath(common_dir)}"
+
+    return f"path:{os.path.realpath(cwd)}"
+
+
+def scope_slug(scope: str) -> str:
+    """Filesystem-safe, collision-free directory name for a repo scope.
+
+    Readable prefix (so `ls /tmp/gh-cache` is diagnosable) plus a hash of the
+    full scope, so two scopes that sanitize to the same prefix still get
+    distinct directories.
+    """
+    digest = hashlib.sha256(scope.encode()).hexdigest()[:12]
+    readable = _SLUG_UNSAFE.sub("_", scope).strip("_")[-60:].strip("_")
+    return f"{readable}-{digest}" if readable else digest
+
+
+REPO_SCOPE = resolve_repo_scope()
+CACHE_DIR = os.path.join(CACHE_BASE_DIR, scope_slug(REPO_SCOPE))
+
+
 # ─── Cache Implementation ───────────────────────────────────────────────────
 
 def debug(msg: str) -> None:
@@ -72,12 +310,26 @@ def debug(msg: str) -> None:
 
 
 def ensure_cache_dir() -> None:
-    os.makedirs(CACHE_DIR, mode=0o700, exist_ok=True)
+    # Create each level 0700-only: the base lives in a world-writable /tmp, so
+    # it must not be left group/other-accessible for other users to read one
+    # repo's cached API responses out of.
+    for path in (CACHE_BASE_DIR, CACHE_DIR):
+        os.makedirs(path, mode=0o700, exist_ok=True)
+        try:
+            os.chmod(path, 0o700)
+        except OSError:
+            pass
 
 
 def cache_key(args: list[str]) -> str:
-    """Generate a cache key from the gh command arguments."""
-    raw = " ".join(args)
+    """Generate a cache key from the repo scope plus the gh arguments.
+
+    The repo scope is part of the hashed input (not just the directory name)
+    so identical argv from two different repositories can never collide even
+    if the partition directories are bypassed. NUL-joining the arguments also
+    keeps `["a b", "c"]` distinct from `["a", "b c"]`.
+    """
+    raw = "\x00".join([REPO_SCOPE, *args])
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
@@ -239,7 +491,7 @@ def invalidate_all_for_type(resource_type: str) -> None:
 
 
 def clear_cache() -> None:
-    """Remove all cached entries."""
+    """Remove all cached entries for the current repo scope."""
     try:
         for name in os.listdir(CACHE_DIR):
             if name.startswith("_"):
@@ -248,6 +500,38 @@ def clear_cache() -> None:
             os.unlink(path)
     except OSError:
         pass
+
+
+def clear_all_caches() -> None:
+    """Remove cached entries for every repo scope under the cache base dir.
+
+    Also sweeps any un-partitioned entries sitting directly in the base dir:
+    those are pre-repo-scoping leftovers, which are never read any more but are
+    exactly the cross-repo-contaminated ones worth removing.
+    """
+    try:
+        partitions = os.listdir(CACHE_BASE_DIR)
+    except OSError:
+        return
+    for partition in partitions:
+        part_dir = os.path.join(CACHE_BASE_DIR, partition)
+        if not os.path.isdir(part_dir):
+            if partition.endswith(".json") and not partition.startswith("_"):
+                try:
+                    os.unlink(part_dir)
+                except OSError:
+                    pass
+            continue
+        try:
+            for name in os.listdir(part_dir):
+                if name.startswith("_"):
+                    continue
+                try:
+                    os.unlink(os.path.join(part_dir, name))
+                except OSError:
+                    pass
+        except OSError:
+            pass
 
 
 # ─── Command Analysis ────────────────────────────────────────────────────────
@@ -342,15 +626,25 @@ def main() -> int:
     args = sys.argv[1:]
 
     # Handle meta-commands
+    if "--cache-scope" in args:
+        print(REPO_SCOPE)
+        print(CACHE_DIR)
+        return 0
+
     if "--clear-cache" in args:
-        clear_cache()
-        print("Cache cleared.", file=sys.stderr)
+        if "--all" in args:
+            clear_all_caches()
+            print(f"Cache cleared for all repos under {CACHE_BASE_DIR}.", file=sys.stderr)
+        else:
+            clear_cache()
+            print(f"Cache cleared for {REPO_SCOPE}.", file=sys.stderr)
         return 0
 
     if "--cache-stats" in args:
         stats = read_stats()
         total = stats["hits"] + stats["misses"]
         rate = (stats["hits"] / total * 100) if total > 0 else 0
+        print(f"Scope: {REPO_SCOPE}", file=sys.stderr)
         print(f"Hits: {stats['hits']}", file=sys.stderr)
         print(f"Misses: {stats['misses']}", file=sys.stderr)
         print(f"Bypasses: {stats['bypasses']}", file=sys.stderr)
@@ -375,6 +669,7 @@ def main() -> int:
 
     parsed = parse_gh_args(args)
     debug(f"CMD: gh {' '.join(args)}")
+    debug(f"SCOPE: {REPO_SCOPE} dir={CACHE_DIR}")
     debug(f"PARSED: cacheable={parsed['cacheable']} type={parsed['resource_type']} "
           f"sub={parsed['subcommand']} id={parsed['resource_id']} ttl={parsed['ttl']}")
 
