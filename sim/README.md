@@ -466,7 +466,13 @@ apply is written as `N/A` **with a reason**, not omitted.
 
 - **Supersedes** (optional) — the prior `<record-id>` this record supersedes,
   for corrections or for a post-layout extracted re-run that reports a
-  schematic-vs-extracted delta against the schematic-level record.
+  schematic-vs-extracted delta against the schematic-level record. May carry
+  an optional free-text qualifier after the record-id, separated by ` -- `,
+  stating which part of the predecessor is superseded (e.g. `<record-id> --
+  switching-timing half only`) — see "Status / supersession language" below
+  for when this is needed, and
+  `sim/cp-compliance/records/20260731-122451-63e4b47.md`'s **Supersedes**
+  line for precedent.
 
 ### Status / supersession language
 
@@ -505,6 +511,23 @@ is in turn adapted from bandgap's), so the two conventions read as one:
   immutability wins here and legibility wins in `spec/`.
 - Same rule as `spec/`, and the one both conventions share without
   qualification: *do not delete or rewrite a record — supersede it.*
+- **Supersession is scoped per-bench, not per-experiment-directory.** An
+  experiment directory (e.g. `sim/cp-compliance/`) may host more than one
+  bench (e.g. a DC bench and a switching-timing bench) — that is explicitly
+  allowed. A record supersedes the *latest prior record that carries the
+  same bench's measurements*, not necessarily the latest record in the
+  directory by timestamp, and one predecessor record may legitimately have
+  **more than one** successor if it held evidence for more than one bench
+  and later runs replace those halves separately. When that happens, each
+  successor's **Supersedes** field should carry the free-text qualifier
+  described above naming which part of the predecessor it replaces, so a
+  reader landing on the superseded record can tell which successor to read
+  for which measurement without having to fall back on comparing `Claim`
+  fields. Worked example: `sim/cp-compliance/records/20260731-194124-afa338c.md`
+  held both the DC and switching-timing halves of the `cp-compliance` bench;
+  `sim/cp-compliance/records/20260801-190821-734f483.md` (DC half) and
+  `sim/cp-compliance/records/20260802-061841-c24ee3a.md` (switching-timing
+  half) both supersede it, each replacing a disjoint half.
 
 ## Append-only rule
 

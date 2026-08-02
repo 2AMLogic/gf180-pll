@@ -148,6 +148,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="prior record-id this record corrects or replaces",
     )
     parser.add_argument(
+        "--supersedes-note",
+        default="",
+        metavar="TEXT",
+        help="free-text qualifier for --supersedes stating which part of the "
+        "predecessor is superseded, e.g. 'switching-timing half only' -- "
+        "rendered as '**Supersedes**: <id> -- <note>' (see sim/README.md's "
+        "per-bench supersession scoping); ignored if --supersedes is not set",
+    )
+    parser.add_argument(
         "--statistical-convention",
         default="",
         metavar="TEXT",
@@ -459,6 +468,7 @@ def run(args: argparse.Namespace) -> int:
         wall_seconds=wall,
         claim=args.claim,
         supersedes=args.supersedes,
+        supersedes_note=args.supersedes_note,
         statistical_convention=args.statistical_convention,
         subset_reason=args.subset_reason,
         git=git,

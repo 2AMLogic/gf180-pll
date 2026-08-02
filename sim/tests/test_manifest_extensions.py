@@ -1408,6 +1408,23 @@ class CliArgumentTests(unittest.TestCase):
         self.assertEqual(args.axis, ["n=n64"])
         self.assertEqual(args.join, ["dff=x.csv"])
 
+    def test_the_parser_accepts_supersedes_note(self):
+        args = cli.build_parser().parse_args(
+            [
+                "cp-compliance",
+                "--supersedes",
+                "20260731-194124-afa338c",
+                "--supersedes-note",
+                "switching-timing half only",
+            ]
+        )
+        self.assertEqual(args.supersedes, "20260731-194124-afa338c")
+        self.assertEqual(args.supersedes_note, "switching-timing half only")
+
+    def test_supersedes_note_defaults_to_empty_when_absent(self):
+        args = cli.build_parser().parse_args(["cp-compliance"])
+        self.assertEqual(args.supersedes_note, "")
+
 
 # ===========================================================================
 # 6. raw_files -- the point's own waveform, reduced by the campaign
