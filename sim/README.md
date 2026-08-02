@@ -190,6 +190,28 @@ sim/
   extra is unaffected: this documents a convention already in use, it does not
   change the schema.
 
+  **Campaigns minted from more than one deck.** The `[<kind>_]` prefix above is
+  also what a record built from several *stimulus decks* uses. Some claims are
+  a **pair**: `vco-tuning-range`'s supply campaign runs a static
+  supply-pushing deck and a transient supply-jitter deck and reduces them
+  together, because the jitter numbers are not interpretable without the
+  pushing numbers. That is one record, not two — splitting it would land
+  evidence weaker than the record it supersedes, which the append-only rule
+  does not permit. Each deck's logs take its name as the prefix field:
+
+  ```
+  push_ss_125c_3.63v.log          vco-tuning-range: static supply pushing
+  jit_ss_125c_3.63v.log           vco-tuning-range: supply step + ripple
+  ```
+
+  A deck name obeys the same spelling rule as a corner bundle — lowercase
+  alphanumeric with `-`, **never `_`**. The record must name **every** deck it
+  was minted from, with that deck's own SHA-256, in its Netlist-provenance
+  field, and its netlist snapshot holds all of them composed; a reader must
+  never have to guess which stimulus produced which half of a result. The
+  harness expresses this as `tb.json`'s `phases` key (see
+  `sim/harness/README.md`).
+
 - **`testbench/`** is not versioned per record — it holds the current
   testbench netlist(s)/xschem export(s) used to generate records. If the
   testbench itself changes in a way that could affect comparability across
@@ -409,7 +431,10 @@ apply is written as `N/A` **with a reason**, not omitted.
 - **Netlist provenance** — `schematic` (`design/...`) or `extracted`
   (post-layout, `layout/...`), with the path, plus the SHA-256 of the frozen
   `netlist-snapshots/<record-id>.spice`. Required so post-layout re-runs are
-  distinguishable from the original schematic-level record (#18).
+  distinguishable from the original schematic-level record (#18). A record
+  minted from **more than one stimulus deck** (see "Campaigns minted from more
+  than one deck" above) names every deck, each with its own SHA-256, plus the
+  composed SHA-256 the snapshot holds.
 
 - **Environment provenance** — **[PLL delta]**, absorbed from #4: the
   environment must be reconstructable from the record alone.
@@ -803,6 +828,14 @@ superseded for new runs: the records that runner already minted are
 append-only evidence, and it is the only thing that can regenerate the extra
 CSV artifacts those records cite. `sim/lib/simenv.sh` is retired only when
 every campaign has moved (#44).
+
+`sim/vco-tuning-range`'s supply pushing/jitter campaign (#43) was blocked by a
+second, different manifest gap: it mints **one** record from **two** decks
+(`tb_vco_pushing.sp` and `tb_vco_supply_jitter.sp`), and a manifest named
+exactly one `netlist`. `tb.json`'s `phases` key closes that (see
+`sim/harness/README.md` — several decks, one record); the migration of the
+campaign itself is separate work, and until it lands the existing
+`run_supply.sh` record remains that claim's evidence.
 
 `sim/lock-time` and `sim/output-range` (#12) also build on `sim/lib/simenv.sh`
 rather than `sim/harness`, even though both landed after #2: `tb.json`

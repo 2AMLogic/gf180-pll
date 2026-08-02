@@ -405,6 +405,13 @@ def run(args: argparse.Namespace) -> int:
               f"(nominal {_fmt(nominal)} +/-{tolerance * 100:g}%)")
         for axis in conformance.get("axes", []):
             print(f"axis {axis['name']:<6}: {', '.join(axis['ran'])}")
+        if tb.is_phased:
+            # One record, several decks: say so up front, because it doubles
+            # (or triples) the ngspice invocations behind the point count below.
+            print(
+                f"phases    : {', '.join(p.name for p in tb.phases)}  "
+                f"({len(tb.phases)} decks per point, one record)"
+            )
         print(f"points    : {len(points)}  (jobs={jobs})")
         print(f"record id : {record_id}")
         print()

@@ -2,6 +2,13 @@
 """Unit tests for the PVT harness. No PDK and no ngspice required.
 
     python3 -m unittest discover -s sim/tests -v
+
+This file covers the harness's base manifest (one deck, one record) and the
+record it renders. The *optional* manifest extension keys -- ``sweeps`` /
+``grid``, ``optional``, ``derived``, ``dut`` / ``dut_export``, ``raw_files``
+and ``phases`` -- are covered next door in ``test_manifest_extensions.py``,
+which owns the fixture those keys need. Both files run under the same
+``discover`` above; the split is by manifest surface, not by scope.
 """
 
 from __future__ import annotations

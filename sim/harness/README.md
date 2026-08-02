@@ -162,12 +162,12 @@ distinct claim under test, kebab-case.
 }
 ```
 
-Seven further keys are optional and default to off — `topology_groups` (record
+Eight further keys are optional and default to off — `topology_groups` (record
 layout), `dut` (compose a committed netlist export), `dut_export` (compose a
 *per-record*, non-committed netlist export), `sweeps` + `grid` (extra sweep
 axes, possibly non-rectangular), `raw_files` (a waveform the deck writes
-itself) and `derived` (campaign-supplied reductions). Each has its own section
-below.
+itself), `derived` (campaign-supplied reductions) and `phases` (several decks
+minted into one record). Each has its own section below.
 
 `claim` is the default for the record's **Claim** field, in either of the two
 forms `sim/README.md` accepts: a ratified spec line (`spec/pll.md#anchor`) or
@@ -308,6 +308,101 @@ sub-table per topology instead of one flat table.
 Omit the key — as every single-topology testbench, including
 `harness-selftest`, does — and the record renders exactly the flat table it
 always has.
+
+### Several decks, one record: `phases` (optional)
+
+A manifest names exactly one `netlist`, and for almost every campaign here
+that is right. It is wrong for a campaign whose **claim is a pair**.
+`sim/vco-tuning-range`'s supply campaign is the case this key exists for: a
+*static* supply-pushing deck (f_osc vs. vdd, seven supply points) and a
+*transient* supply-jitter deck (a supply step and a supply ripple against a
+quiet reference copy), run separately and reduced **together**, because the
+jitter numbers are not interpretable without the pushing numbers — the record's
+claim is the pair. Splitting that into two records would land evidence weaker
+than the record it supersedes, which the append-only rule in `sim/README.md`
+does not permit.
+
+`phases` gives each deck its own `netlist` and measurements while everything
+that makes it *one record* stays shared:
+
+```json
+{
+  "params": {"vctrl": "1.8"},
+  "phases": {
+    "push": {
+      "description": "static pushing — f_osc vs. vdd_vco",
+      "netlist": "tb_vco_pushing.sp",
+      "analyses": ["tran {ktstep} {ktstop}"],
+      "raw_measures": {"fosc": {"analysis": "tran", "expr": "when v(clk)='vdd_val/2' rise=2"}}
+    },
+    "jit": {
+      "description": "supply step + ripple, against a quiet reference copy",
+      "netlist": "tb_vco_supply_jitter.sp",
+      "params": {"arip": "0.05", "astep": "0.1"},
+      "analyses": ["tran {ktstep} {ktstop}", "set wr_singlescale", "wrdata jit.dat v(clkq) v(clkr)"],
+      "raw_files": {"jit.dat": {"columns": ["t", "clkq", "clkr"]}}
+    }
+  },
+  "derived": {"module": "derive.py", "measures": ["kvdd", "tie_pp"]}
+}
+```
+
+| Owned by a phase | Shared by the record |
+|---|---|
+| `netlist`, `description`, `measure`, `raw_measures`, `raw_files`, `analyses`, `params`, `options` | the PVT grid (`corners`, `temperatures_c`, `supply_*`), `sweeps` + `grid`, `dut` / `dut_export`, `extra_lib_sections`, `checks`, `derived`, `topology_groups`, `claim`, `methodology` |
+
+- **Not the same thing as `dut`.** `dut` composes several files into **one**
+  deck. `phases` runs several **different decks** — different stimuli, on
+  different topologies — and reduces them into one record.
+- **The key is an object**, and JSON preserves its order: the order you write
+  the phases is the order they run and the order their sub-tables appear.
+- **Each phase runs its own ngspice invocation per PVT point**, so a 45-point
+  grid with two phases is 90 invocations. Its deck, log and scratch directory
+  carry the phase name as the `[<kind>_]` **prefix** field of the corner-id —
+  `push_ss_125c_3.63v.log`, `jit_ss_125c_3.63v.log`. That is not a new
+  convention: `sim/README.md` already ratifies that prefix for "a campaign that
+  runs more than one analysis over the same grid" (`dc_`/`sw_` in
+  `cp-compliance`). A phase name is therefore alphanumeric with `-`, **never
+  `_`**, which stays the field separator.
+- **Every phase's measurements land in the same per-point row**, so their names
+  must be distinct across phases (and so must their `raw_files` names). A
+  collision is a load error, not a silent overwrite.
+- **`derive_point()` runs once, after every phase**, over the merged
+  measurements and the merged `raw_files`. That is the capability: a number
+  neither deck could have produced alone (a jitter figure normalised by the
+  pushing slope measured on the other deck) is expressible. Its `point.params`
+  carries the *shared* `params` plus the sweep-axis params — not any one
+  phase's own, since a reduction that runs after every phase has no single
+  answer to "which phase's parameters?".
+- **Phases stop at the first one that fails or errors.** The record's claim is
+  the whole set, so continuing would only produce a point that looks
+  half-measured. The point is recorded `failed`/`error` with the phase's own
+  message, and everything the earlier phases banked — including a `retain`ed
+  waveform — is kept.
+- **The record renders one sub-table per phase**, for free: two decks in one
+  record *are* two topologies' worth of the same claim, which is what
+  `topology_groups` renders. Declare `topology_groups` explicitly to override
+  that — e.g. to place a derived measure with the deck it belongs to; anything
+  unclaimed still lands in the trailing `ungrouped` table.
+- **The netlist snapshot inlines every phase's fragment**, each with its own
+  sha256 plus a `composed_sha256` over the whole, and the record's **Netlist
+  provenance** and **Links** fields name every deck. A record minted from two
+  decks says so.
+- A phase must produce *something*: at least one of `measure`, `raw_measures`
+  or `raw_files`. A deck whose entire output is a waveform the reduction reads
+  declares only the last — that is the jitter deck above. A manifest in which
+  **every** phase is of that shape is legal too: the record's numbers then all
+  come from `derived.measures` over the waveforms, which is still "at least one
+  measurement, from somewhere" — the same rule a single-deck manifest gets (see
+  `raw_files` below).
+- `params` and `options` may be declared at both levels: the top-level ones
+  apply to every deck and a phase's are emitted after them, so a phase
+  overrides rather than restates. `analyses` is the one shared default a phase
+  replaces wholesale — two decks with two different stimuli rarely run the same
+  analysis line.
+- **Omit the key and nothing changes.** A manifest with no `phases` is one
+  implicit, unnamed phase: the same deck, the same `<corner-id>.spice` /
+  `<corner-id>.log` filenames, the same flat record it has always produced.
 
 ### Composing a committed DUT export: `dut` (optional)
 
@@ -567,6 +662,16 @@ can find it again.
 
 A bare list is the shorthand for "no options": `"raw_files": ["jit.dat"]`.
 
+**A record whose every number is reduced from a waveform is a complete record.**
+A manifest must still produce at least one measurement, but `measure` /
+`raw_measures` are not the only source: declaring `raw_files` together with a
+`derived` block whose `measures` is non-empty satisfies the requirement on its
+own. A deck that only `wrdata`s and is reduced by `derive_point()` into the
+record's numbers is the shape this key exists for, and (with `phases`) two such
+decks reduced together is the jitter campaign. A manifest with neither an
+ngspice measurement nor a `raw_files` + `derived.measures` pair is still a load
+error — it would mint a record with no result.
+
 **Per-point isolation.** Every point's deck writes the *same* filename. When a
 manifest declares `raw_files`, the runner gives each point its own scratch
 directory `work/<record-id>/<corner-id>.d/` and runs ngspice from there, so two
@@ -707,8 +812,8 @@ writes, under `sim/<experiment-slug>/`:
 | Path | Contents |
 |---|---|
 | `records/<record-id>.md` | the append-only summary record — every field `sim/README.md` mandates: Record ID, Claim, Netlist provenance, Environment provenance, Corner matrix run, Methodology / criteria / limitations, Statistical convention, Result, Links, Timestamp / author, Supersedes |
-| `netlist-snapshots/<record-id>.spice` | verbatim frozen copy of the testbench fragment, with its sha256 |
-| `corners/<record-id>/<corner-id>.log` | raw ngspice output, one file per PVT point |
+| `netlist-snapshots/<record-id>.spice` | verbatim frozen copy of the testbench fragment, with its sha256 — every phase's fragment, composed, for a `phases` manifest |
+| `corners/<record-id>/<corner-id>.log` | raw ngspice output, one file per PVT point (per *phase* per point, as `<phase>_<corner-id>.log`, for a `phases` manifest) |
 | `corners/<record-id>/raw_measures.csv` | **always written**, one row per corner point — sweep-axis fields, `corner_id`, every measurement in `tb.measure_names`, and a PASS/FAIL/ERROR `verdict` for the point as a whole. Unlike derived tables, this does not depend on the manifest declaring anything — it is the machine-readable form of the Markdown corner table every record already renders. The verdict comes from the record's own check pipeline (`report.point_verdicts`), so the wording never drifts, but it considers **every** check in the manifest; a record that declares `topology_groups` narrows each per-topology sub-table's pass/fail column to that group's own checks, so for a manifest whose checks span groups the CSV verdict is the stricter of the two by design |
 | `corners/<record-id>/<name>.csv` | one per `derived.tables` entry — the reduction the record actually claims |
 | `corners/<record-id>/<corner-id>-<name>` | one per PVT point per `raw_files` entry marked `retain` — the deck's own written waveform, when the file itself is the evidence |
@@ -732,7 +837,10 @@ Generated decks land in `sim/<experiment-slug>/work/<record-id>/`
 can be reproduced by hand with `ngspice -b sim/<slug>/work/<record-id>/<corner-id>.spice`.
 A manifest that declares `raw_files` additionally gets one
 `work/<record-id>/<corner-id>.d/` directory per point, holding whatever that
-point's deck wrote.
+point's deck wrote. A manifest that declares `phases` gets one deck (and, where
+that phase writes raw files, one scratch directory) per phase per point, named
+`<phase>_<corner-id>` — so the reproduce-by-hand invocation names the deck of
+the phase you are chasing.
 
 ## harness-selftest
 

@@ -40,10 +40,20 @@ sub-table per topology instead. It changes nothing about how the deck is
 composed, run, parsed or checked -- omit it and every campaign behaves
 exactly as before.
 
-Six further optional keys exist for campaigns the single fixed ``params``
+Seven further optional keys exist for campaigns the single fixed ``params``
 map cannot express. Every one of them defaults to off, so a manifest that
 does not use them behaves exactly as it did before they existed:
 
+    phases     several decks minted into ONE record. A manifest names exactly
+               one ``netlist``, which cannot express a campaign whose claim is
+               a *pair* of stimuli on a pair of topologies -- supply pushing
+               (static) plus supply-induced jitter (transient), where the
+               jitter numbers mean nothing without the pushing numbers.
+               Declaring ``phases`` gives each deck its own
+               ``netlist``/``params``/``measure``/``raw_measures``/``raw_files``
+               while sharing one PVT grid, one DUT, one set of ``checks``, one
+               ``derived`` reduction and one record. Distinct from ``dut``,
+               which composes several files into ONE deck.
     dut        repo-root-relative netlist(s) composed ahead of the fragment,
                so a committed ``design/netlist/<block>.spice`` export can be
                the DUT without being pasted into the fragment (where it would
@@ -121,6 +131,19 @@ UNGROUPED_TOPOLOGY = "ungrouped"
 #: rejected rather than silently ignored.
 TOPOLOGY_GROUP_KEYS = ("measures", "description")
 
+#: Keys one ``phases`` entry may carry. Everything else about a run -- the PVT
+#: grid, ``sweeps``/``grid``, ``dut``/``dut_export``, ``checks``, ``derived``,
+#: ``topology_groups`` -- is a property of the *record* and stays top-level,
+#: which is exactly what makes several decks one record rather than several.
+PHASE_KEYS = (
+    "netlist", "description", "params", "analyses", "options",
+    "measure", "raw_measures", "raw_files",
+)
+#: Top-level keys a phased manifest may NOT also declare: each names one deck's
+#: worth of something, and with several decks in play "which deck?" would be
+#: unanswerable. Rejected rather than silently shared.
+PHASE_OWNED_KEYS = ("netlist", "measure", "raw_measures", "raw_files")
+
 #: Keys a ``dut_export`` block may carry.
 DUT_EXPORT_KEYS = ("top",)
 #: Keys a ``sweeps`` axis may carry.
@@ -190,6 +213,71 @@ class RawFileSpec:
     #: megabytes per point and is *input* to the claim, not the claim; turn it
     #: on for the decimated/derived artefact a record actually cites.
     retain: bool = False
+
+
+@dataclass
+class Phase:
+    """One deck of a record minted from more than one deck.
+
+    A manifest names exactly one ``netlist``, and for almost every campaign
+    here that is right. It is wrong for a campaign whose *claim is a pair*:
+    ``sim/vco-tuning-range``'s supply campaign runs a static pushing deck and a
+    transient supply-jitter deck and reduces them together, because the jitter
+    numbers are not interpretable without the pushing numbers. Splitting that
+    into two records would land evidence weaker than the record it supersedes,
+    which the append-only rule in ``sim/README.md`` does not permit.
+
+    So a phase owns one deck's worth of manifest keys (:data:`PHASE_KEYS`) and
+    nothing else. The grid, the DUT, the checks, the reduction and the record
+    are shared -- that sharing IS the capability.
+
+    Every :class:`Testbench` has at least one phase. A manifest with no
+    ``phases`` key has exactly one, unnamed (``name == ""``), built from its
+    top-level keys, and every filename, deck and record it produces is
+    byte-for-byte what it was before this key existed. That is a claim, so it
+    has a testbench: see ``test_the_unphased_deck_emits_each_shared_param_and_
+    option_exactly_once`` in ``sim/tests/test_manifest_extensions.py``, which
+    counts the emitted ``.param``/``.options`` lines of a manifest declaring
+    both -- the two keys :func:`runner.compose_deck` emits from the testbench
+    *and* the phase, and therefore the only two the implicit phase must not
+    carry (see :attr:`Testbench.run_phases`).
+
+    A *named* phase becomes the ``[<kind>_]`` prefix field of the corner-id --
+    ``push_ss_125c_3.63v.log``, ``jit_ss_125c_3.63v.log`` -- which is not a new
+    convention: ``sim/README.md`` already ratifies that prefix for "a campaign
+    that runs more than one analysis over the same grid" (``dc_``/``sw_`` in
+    ``cp-compliance``). That is why the name may not contain ``_``.
+    """
+
+    #: ``""`` for the implicit single-deck phase every existing manifest has.
+    name: str
+    netlist: Path
+    description: str = ""
+    params: dict[str, str | float] = field(default_factory=dict)
+    analyses: tuple[str, ...] = ("op",)
+    options: tuple[str, ...] = ()
+    measure: dict[str, str] = field(default_factory=dict)
+    raw_measures: dict[str, RawMeasure] = field(default_factory=dict)
+    raw_files: tuple[RawFileSpec, ...] = ()
+    optional_measures: frozenset[str] = frozenset()
+
+    @property
+    def measure_names(self) -> list[str]:
+        """This deck's measurements: ``measure`` then ``raw_measures``."""
+        return list(self.measure) + list(self.raw_measures)
+
+    @property
+    def required_measure_names(self) -> list[str]:
+        """This deck's measurements whose absence really is a failed point."""
+        return [n for n in self.measure_names if n not in self.optional_measures]
+
+    def run_id(self, corner_id: str) -> str:
+        """This phase's ``[<kind>_]<corner-id>`` -- the deck/log/scratch stem."""
+        return f"{self.name}_{corner_id}" if self.name else corner_id
+
+    @property
+    def netlist_sha256(self) -> str:
+        return hashlib.sha256(self.netlist.read_bytes()).hexdigest()
 
 
 @dataclass
@@ -340,6 +428,51 @@ class Testbench:
     optional_measures: frozenset[str] = frozenset()
     raw_files: tuple[RawFileSpec, ...] = ()
     derived: DerivedSpec | None = None
+    #: Empty unless the manifest declares ``phases``. When it does, the
+    #: ``netlist``/``measure``/``raw_measures``/``raw_files`` fields above are
+    #: the *union* over these, in phase order -- everything downstream
+    #: (summary, checks, topology groups, the record) sees one flat set of
+    #: measurements, which is what makes it one record.
+    phases: tuple[Phase, ...] = ()
+
+    @property
+    def is_phased(self) -> bool:
+        """Does this record's point run more than one deck? (``phases``)"""
+        return bool(self.phases)
+
+    @property
+    def run_phases(self) -> tuple[Phase, ...]:
+        """Every deck a point runs, in manifest order. Never empty.
+
+        A manifest with no ``phases`` key resolves to exactly one *unnamed*
+        phase built from its top-level keys, so the runner has a single code
+        path and the single-deck case keeps producing the same deck, the same
+        ``<corner-id>.spice``/``.log`` names and the same record it always has.
+
+        ``params`` and ``options`` are deliberately left **empty** on the
+        implicit phase. They are the two keys ``compose_deck`` emits from the
+        *testbench* as well as the phase (a phase's own values are additive --
+        they come after the shared ones so a phase can override rather than
+        restate them). Copying the top-level values in here too would emit each
+        ``.param``/``.options`` line twice, which would falsify the guarantee
+        this property exists to keep. Every other field is emitted from the
+        phase alone, so those are copied.
+        """
+        if self.phases:
+            return self.phases
+        return (
+            Phase(
+                name="",
+                netlist=self.netlist,
+                params={},
+                analyses=self.analyses,
+                options=(),
+                measure=dict(self.measure),
+                raw_measures=dict(self.raw_measures),
+                raw_files=self.raw_files,
+                optional_measures=self.optional_measures,
+            ),
+        )
 
     @property
     def raw_file_names(self) -> list[str]:
@@ -401,12 +534,20 @@ class Testbench:
         collected into a trailing :data:`UNGROUPED_TOPOLOGY` group, so a
         partially-grouped manifest still renders every measurement rather than
         silently dropping the ones nobody assigned.
+
+        A **phased** manifest that declares no ``topology_groups`` gets one
+        group per phase for free: the whole reason two decks share a record is
+        that they are two topologies' worth of the same claim, which is exactly
+        what a topology sub-table renders. Declaring ``topology_groups``
+        explicitly overrides that -- a campaign whose derived measures belong
+        to one particular deck says so there.
         """
-        if not self.topology_groups:
+        declared = self.topology_groups or self._phase_groups()
+        if not declared:
             return ()
-        claimed = {name for group in self.topology_groups for name in group.measures}
+        claimed = {name for group in declared for name in group.measures}
         leftover = tuple(name for name in self.measure_names if name not in claimed)
-        groups = tuple(self.topology_groups)
+        groups = tuple(declared)
         if leftover:
             groups += (
                 TopologyGroup(
@@ -418,6 +559,25 @@ class Testbench:
                 ),
             )
         return groups
+
+    def _phase_groups(self) -> tuple[TopologyGroup, ...]:
+        """One topology group per declared phase -- the record's default layout.
+
+        A phase that measures nothing itself (a deck that only writes a
+        ``raw_files`` waveform for the reduction to read) contributes no
+        columns, so it is skipped rather than rendered as an empty sub-table;
+        the reduction's own derived measures land in the trailing
+        :data:`UNGROUPED_TOPOLOGY` table unless ``topology_groups`` places them.
+        """
+        return tuple(
+            TopologyGroup(
+                name=phase.name,
+                measures=tuple(phase.measure_names),
+                description=phase.description or f"deck {phase.netlist.name}",
+            )
+            for phase in self.phases
+            if phase.measure_names
+        )
 
     @property
     def netlist_sha256(self) -> str:
@@ -451,8 +611,12 @@ class Testbench:
         instantiates -- the same order ``sim/lib/assemble_closed_loop.sh``
         concatenates them in. Resolves ``dut_export`` (via
         :attr:`resolved_dut`) on first access.
+
+        A phased manifest contributes *every* phase's fragment, in phase
+        order: the record is minted from all of them, so the snapshot it
+        freezes has to hold all of them.
         """
-        return self.resolved_dut + (self.netlist,)
+        return self.resolved_dut + tuple(p.netlist for p in self.run_phases)
 
     def compose_netlist(self) -> str:
         """The self-contained DUT + stimulus text, for the frozen snapshot.
@@ -489,6 +653,20 @@ class Testbench:
             "nominal_supply_v": self.nominal_supply_v,
             "supply_tolerance": self.supply_tolerance,
         }
+        # Every deck this record was minted from, named with its own sha256.
+        # Absent for a single-deck manifest, so an existing record's shape is
+        # unchanged and a reader can tell the two cases apart.
+        if self.is_phased:
+            record["phases"] = [
+                {
+                    "name": p.name,
+                    "description": p.description,
+                    "netlist": p.netlist.name,
+                    "netlist_sha256": p.netlist_sha256,
+                    "measures": p.measure_names,
+                }
+                for p in self.phases
+            ]
         dut_sources = self.resolved_dut
         if dut_sources:
             record["dut"] = [
@@ -498,6 +676,10 @@ class Testbench:
                 }
                 for p in dut_sources
             ]
+        if dut_sources or self.is_phased:
+            # What the snapshot actually holds: with several decks (or a
+            # composed DUT) the frozen artefact is the composition, not any one
+            # file, so the record has to cite the composition's hash.
             record["composed_sha256"] = self.composed_sha256
         return record
 
@@ -575,6 +757,203 @@ def _load_raw_measures(manifest: dict, path: Path) -> tuple[dict[str, RawMeasure
         if is_optional:
             optional.add(name)
     return raw, optional
+
+
+def _validate_measures(
+    measure: dict[str, str],
+    raw_measures: dict[str, RawMeasure],
+    analyses: tuple[str, ...],
+    path: Path,
+    where: str = "",
+) -> None:
+    """Rules every deck's measurement set obeys, phased or not.
+
+    Shared by :func:`load` (the single-deck path) and :func:`_load_phases`, so
+    a phase's measurements are held to exactly the same rules as a single
+    deck's -- including the one that matters most here, that a ``raw_measures``
+    entry names an analysis *its own* deck actually runs.
+    """
+    for key in list(measure) + list(raw_measures):
+        if not key.replace("_", "").isalnum():
+            raise ValueError(
+                f"{path}: {where}measurement name {key!r} must be alphanumeric/underscore "
+                "(it becomes an ngspice vector/measure name)"
+            )
+    overlap = set(measure) & set(raw_measures)
+    if overlap:
+        raise ValueError(
+            f"{path}: {where}measurement name(s) {sorted(overlap)} defined in both "
+            "'measure' and 'raw_measures'"
+        )
+    for name, rm in raw_measures.items():
+        if not any(a.strip().split()[0] == rm.analysis for a in analyses if a.strip()):
+            raise ValueError(
+                f"{path}: {where}raw_measures[{name!r}] declares analysis "
+                f"{rm.analysis!r}, but 'analyses' does not include a {rm.analysis!r} "
+                f"analysis ({analyses!r})"
+            )
+
+
+def _phase_id_ok(value: str) -> bool:
+    """Is ``value`` usable as the ``[<kind>_]`` prefix field of a corner-id?
+
+    ``sim/README.md``'s grammar: lowercase alphanumeric with ``-``, never
+    ``_`` -- which stays the unambiguous field separator.
+    """
+    return bool(value) and all(ch.isalnum() or ch == "-" for ch in value)
+
+
+def _load_phases(manifest: dict, path: Path, directory: Path) -> tuple[Phase, ...]:
+    """Parse the optional ``phases`` key -- several decks, one record.
+
+    ::
+
+        "phases": {
+          "push": {
+            "description": "static supply pushing",
+            "netlist": "tb_vco_pushing.sp",
+            "params": {"vsup": "3.30"},
+            "analyses": ["tran {ktstep} {ktstop}"],
+            "measure": {"fosc": "..."}
+          },
+          "jit": {
+            "description": "supply step + ripple, against a quiet reference",
+            "netlist": "tb_vco_supply_jitter.sp",
+            "analyses": ["tran {ktstep} {ktstop}", "wrdata jit.dat v(clkq)"],
+            "raw_files": ["jit.dat"]
+          }
+        }
+
+    The key is an object and JSON preserves its order, so the manifest's order
+    is the order the decks run and the order their sub-tables appear in the
+    record -- the same convention ``topology_groups`` and ``sweeps`` follow.
+
+    Everything a phase does NOT name is shared: the PVT grid, ``sweeps`` /
+    ``grid``, ``dut`` / ``dut_export``, ``extra_lib_sections``, ``checks``,
+    ``derived`` and the record itself. ``params`` and ``options`` may be
+    declared at both levels -- the top-level ones apply to every deck, the
+    phase's are emitted after them, so a phase overrides rather than restates.
+    """
+    raw = manifest.get("phases")
+    if raw is None:
+        return ()
+    if not isinstance(raw, dict) or not raw:
+        raise ValueError(
+            f"{path}: 'phases' must be a non-empty object mapping a phase name to "
+            "an object with at least a 'netlist' key -- omit the key entirely for "
+            "the ordinary single-deck manifest"
+        )
+    conflicting = [key for key in PHASE_OWNED_KEYS if manifest.get(key) is not None]
+    if conflicting:
+        raise ValueError(
+            f"{path}: a manifest that declares 'phases' must not also declare "
+            f"top-level {conflicting} -- each names one deck's worth of something, "
+            "and with several decks in play there is no answer to 'which deck?'. "
+            f"Move {conflicting} into the phase(s) they belong to."
+        )
+
+    # The top-level 'params'/'options' stay on the Testbench and are emitted
+    # ahead of every phase's own (see runner.compose_deck), so a phase adds to
+    # or overrides them rather than restating them. 'analyses' is the one
+    # shared default a phase replaces wholesale: two decks with two different
+    # stimuli rarely run the same analysis line.
+    shared_analyses = tuple(manifest.get("analyses", ("op",)))
+
+    phases: list[Phase] = []
+    seen_measures: dict[str, str] = {}
+    seen_raw_files: dict[str, str] = {}
+    for name, spec in raw.items():
+        if not isinstance(name, str) or not _phase_id_ok(name):
+            raise ValueError(
+                f"{path}: phase name {name!r} must be non-empty and use only "
+                "alphanumerics and '-' -- it becomes the '[<kind>_]' prefix field "
+                "of every corner-id this phase writes (sim/README.md), where '_' "
+                "is the field separator"
+            )
+        if name == UNGROUPED_TOPOLOGY:
+            raise ValueError(
+                f"{path}: phase name {UNGROUPED_TOPOLOGY!r} is reserved for the "
+                "measurements no topology group claimed; pick another name"
+            )
+        if not isinstance(spec, dict):
+            raise ValueError(
+                f"{path}: phases[{name!r}] must be an object with at least a "
+                "'netlist' key"
+            )
+        unknown = sorted(set(spec) - set(PHASE_KEYS))
+        if unknown:
+            raise ValueError(
+                f"{path}: phases[{name!r}] has unknown key(s) {unknown}; supported "
+                f"keys are {list(PHASE_KEYS)}. Everything else (the grid, the DUT, "
+                "checks, derived, topology_groups) is a property of the record and "
+                "stays top-level -- that sharing is what makes these one record."
+            )
+        fragment = spec.get("netlist")
+        if not isinstance(fragment, str) or not fragment:
+            raise ValueError(
+                f"{path}: phases[{name!r}] must name its own 'netlist' fragment"
+            )
+        netlist = directory / fragment
+        if not netlist.is_file():
+            raise FileNotFoundError(
+                f"{path}: phases[{name!r}] netlist {netlist} does not exist"
+            )
+        analyses = tuple(spec.get("analyses", shared_analyses))
+        try:
+            measure, optional_measure = _load_measures(spec, path)
+            raw_measures, optional_raw = _load_raw_measures(spec, path)
+            raw_files = _load_raw_files(spec, path)
+        except ValueError as exc:
+            raise ValueError(f"phases[{name!r}]: {exc}") from None
+        _validate_measures(
+            measure, raw_measures, analyses, path, where=f"phases[{name!r}] "
+        )
+        if not measure and not raw_measures and not raw_files:
+            raise ValueError(
+                f"{path}: phases[{name!r}] produces nothing -- a phase must declare "
+                "at least one of 'measure', 'raw_measures' or 'raw_files' (a deck "
+                "whose whole output is a waveform the reduction reads declares only "
+                "the last)"
+            )
+        for measurement in list(measure) + list(raw_measures):
+            if measurement in seen_measures:
+                raise ValueError(
+                    f"{path}: phases[{name!r}] measurement {measurement!r} is already "
+                    f"measured by phase {seen_measures[measurement]!r} -- every phase's "
+                    "measurements land in the same per-point row of the same record, "
+                    "so their names have to be distinct"
+                )
+            seen_measures[measurement] = name
+        for spec_file in raw_files:
+            if spec_file.name in seen_raw_files:
+                raise ValueError(
+                    f"{path}: phases[{name!r}] raw file {spec_file.name!r} is already "
+                    f"declared by phase {seen_raw_files[spec_file.name]!r} -- a "
+                    "reduction looks a raw file up by name across the whole point, "
+                    "so their names have to be distinct"
+                )
+            seen_raw_files[spec_file.name] = name
+        params = dict(spec.get("params", {}))
+        if not isinstance(spec.get("params", {}), dict):
+            raise ValueError(f"{path}: phases[{name!r}].params must be an object")
+        description = spec.get("description", "")
+        if not isinstance(description, str):
+            raise ValueError(f"{path}: phases[{name!r}].description must be a string")
+        phases.append(
+            Phase(
+                name=name,
+                netlist=netlist,
+                description=description,
+                params=params,
+                analyses=analyses,
+                options=tuple(spec.get("options", ())),
+                measure=measure,
+                raw_measures=raw_measures,
+                raw_files=raw_files,
+                optional_measures=frozenset(optional_measure | optional_raw),
+            )
+        )
+    return tuple(phases)
 
 
 def _load_dut(manifest: dict, path: Path) -> tuple[Path, ...]:
@@ -1164,48 +1543,53 @@ def load(directory: str | Path) -> Testbench:
 
     manifest = json.loads(manifest_path.read_text())
 
-    netlist = directory / _require(manifest, "netlist", manifest_path)
-    if not netlist.is_file():
-        raise FileNotFoundError(f"{manifest_path}: netlist {netlist} does not exist")
-
-    measure, optional_measure = _load_measures(manifest, manifest_path)
-    raw_measures, optional_raw = _load_raw_measures(manifest, manifest_path)
-    optional_measures = frozenset(optional_measure | optional_raw)
-    if not measure and not raw_measures:
-        raise ValueError(
-            f"{manifest_path}: must define at least one measurement in 'measure' "
-            "or 'raw_measures'"
-        )
-    for key in list(measure) + list(raw_measures):
-        if not key.replace("_", "").isalnum():
-            raise ValueError(
-                f"{manifest_path}: measurement name {key!r} must be alphanumeric/underscore "
-                "(it becomes an ngspice vector/measure name)"
-            )
-    overlap = set(measure) & set(raw_measures)
-    if overlap:
-        raise ValueError(
-            f"{manifest_path}: measurement name(s) {sorted(overlap)} defined in both "
-            "'measure' and 'raw_measures'"
-        )
-
     analyses = tuple(manifest.get("analyses", ("op",)))
-    for name, rm in raw_measures.items():
-        if not any(a.strip().split()[0] == rm.analysis for a in analyses if a.strip()):
-            raise ValueError(
-                f"{manifest_path}: raw_measures[{name!r}] declares analysis "
-                f"{rm.analysis!r}, but 'analyses' does not include a {rm.analysis!r} "
-                f"analysis ({analyses!r})"
-            )
+    # Several decks, one record. Every field below is then the *union* over the
+    # phases, in phase order, so everything downstream -- the summary, the
+    # checks, the reduction, the record -- sees exactly one flat measurement
+    # set and cannot tell it came from more than one deck. That is the point.
+    phases = _load_phases(manifest, manifest_path, directory)
+    if phases:
+        netlist = phases[0].netlist
+        measure = {k: v for phase in phases for k, v in phase.measure.items()}
+        raw_measures = {
+            k: v for phase in phases for k, v in phase.raw_measures.items()
+        }
+        optional_measures = frozenset(
+            name for phase in phases for name in phase.optional_measures
+        )
+        raw_files = tuple(spec for phase in phases for spec in phase.raw_files)
+    else:
+        netlist = directory / _require(manifest, "netlist", manifest_path)
+        if not netlist.is_file():
+            raise FileNotFoundError(f"{manifest_path}: netlist {netlist} does not exist")
+        measure, optional_measure = _load_measures(manifest, manifest_path)
+        raw_measures, optional_raw = _load_raw_measures(manifest, manifest_path)
+        optional_measures = frozenset(optional_measure | optional_raw)
+        raw_files = _load_raw_files(manifest, manifest_path)
+        _validate_measures(measure, raw_measures, analyses, manifest_path)
 
     dut = _load_dut(manifest, manifest_path)
     dut_export = _load_dut_export(manifest, manifest_path, directory)
     sweeps = _load_sweeps(manifest, manifest_path)
     grid_blocks = _load_grid_blocks(manifest, manifest_path, sweeps)
-    raw_files = _load_raw_files(manifest, manifest_path)
     derived = _load_derived(
         manifest, manifest_path, directory, list(measure) + list(raw_measures)
     )
+
+    # A record still has to produce numbers -- but ngspice's `.measure` is not
+    # the only way to get them. A deck that only `wrdata`s a waveform, reduced
+    # by `derived` into the record's measurements, is a complete claim: that is
+    # the whole shape `raw_files` + `derived` exists for, and a phased manifest
+    # whose every deck is of that shape (two transient decks reduced together)
+    # is exactly the campaign `phases` was added for. So the requirement is
+    # "at least one measurement, from somewhere", not "from ngspice".
+    if not measure and not raw_measures and not (raw_files and derived and derived.measures):
+        raise ValueError(
+            f"{manifest_path}: must define at least one measurement in 'measure' "
+            "or 'raw_measures' -- or declare 'raw_files' the deck writes together "
+            "with a 'derived' block whose 'measures' reduce them"
+        )
 
     topology_groups = _load_topology_groups(
         manifest,
@@ -1247,6 +1631,7 @@ def load(directory: str | Path) -> Testbench:
         optional_measures=optional_measures,
         raw_files=raw_files,
         derived=derived,
+        phases=phases,
     )
     validate_netlist(tb)
     return tb
@@ -1264,15 +1649,19 @@ def validate_netlist(tb: Testbench) -> None:
     ``.subckt``/``.ends`` blocks, and an export that had picked up a ``.lib``
     or a ``.temp`` would pin every corner of every campaign that names it.
 
-    Deliberately checks ``tb.dut`` (committed) and ``tb.netlist`` (the
-    fragment) only -- NOT ``tb.netlist_sources``/``tb.resolved_dut``, which
-    would resolve a ``dut_export`` right here, at ``load()`` time. A
-    ``dut_export`` is checked by the same rule, but lazily, inside
-    :meth:`DutExportSpec.resolve` -- the file does not exist yet for this
-    function to read.
+    Every phase's fragment is checked, not just the first: a phased manifest
+    runs all of them, so a ``.temp`` in the second deck would pin every corner
+    of half the record.
+
+    Deliberately checks ``tb.dut`` (committed) and the phase fragments only --
+    NOT ``tb.netlist_sources``/``tb.resolved_dut``, which would resolve a
+    ``dut_export`` right here, at ``load()`` time. A ``dut_export`` is checked
+    by the same rule, but lazily, inside :meth:`DutExportSpec.resolve` -- the
+    file does not exist yet for this function to read.
     """
-    for source in tb.dut + (tb.netlist,):
-        kind = "netlist fragments" if source == tb.netlist else "dut netlists"
+    fragments = tuple(phase.netlist for phase in tb.run_phases)
+    for source in tb.dut + fragments:
+        kind = "netlist fragments" if source in fragments else "dut netlists"
         _check_forbidden_directives(source, kind)
 
 
