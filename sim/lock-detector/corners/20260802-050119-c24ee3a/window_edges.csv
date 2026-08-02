@@ -1,0 +1,7 @@
+# per window-ladder corner: the largest swept phase error (terr) that still left the swept copy (XA) asserted, and the smallest that did not -- asserted_up_to_s empty means not even the smallest step asserted, did_not_assert_from_s empty means every step up to the largest still asserted
+process,temp_c,vdd_v,asserted_up_to_s,did_not_assert_from_s
+ff,-40.0,3.63,8e-10,1e-09
+ff,125.0,2.97,1.2e-09,1.5e-09
+ss,-40.0,3.63,1e-09,1.2e-09
+ss,125.0,2.97,1.5e-09,2e-09
+typical,27.0,3.3,1.2e-09,1.5e-09
