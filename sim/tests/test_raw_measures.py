@@ -279,6 +279,125 @@ class OptionalAndExtraAxisTests(ManifestFixture):
         self.assertNotEqual(cell, "")
 
 
+class TopologyGroupScopingTests(ManifestFixture):
+    """A grouped manifest whose checks span groups -- the `cp-compliance` shape.
+
+    `report._result_lines` renders one sub-table per topology group and scopes
+    each sub-table's pass/fail column to that group's own checks, so an
+    unrelated sub-circuit's FAIL does not clutter the column a reader is
+    looking at. `raw_measures.csv` is one flat row per point with a single
+    verdict cell and no sub-tables to scope to, so its verdict covers every
+    check in the manifest -- the same question the record's overall status
+    answers.
+
+    That divergence is intentional and is what these tests pin down: for the
+    real `sim/cp-compliance` manifest (checks `iup_mid_a`/`idn_mid_a` in the
+    "Icp trim" group, `satcasc_lo_v`/`satcasc_hi_v` in "compliance"), a point
+    that trips only the Icp-trim check reads PASS in the compliance sub-table
+    and FAIL in the CSV. Both are correct.
+    """
+
+    slug = "cp-compliance-shaped"
+
+    def setUp(self):
+        super().setUp()
+        self.tb = testbench.load(
+            self.write(
+                {
+                    "measure": {
+                        "satcasc_lo_v": "v(a)",
+                        "satcasc_hi_v": "v(b)",
+                        "iup_mid_a": "i(vup)",
+                    },
+                    "topology_groups": {
+                        "compliance (the verdict)": {
+                            "measures": ["satcasc_lo_v", "satcasc_hi_v"]
+                        },
+                        "Icp trim": {"measures": ["iup_mid_a"]},
+                    },
+                    "checks": {
+                        "satcasc_lo_v": {"min": 0.0},
+                        "satcasc_hi_v": {"min": 0.0},
+                        "iup_mid_a": {"min": 1e-6},
+                    },
+                }
+            )
+        )
+        self.points = corners.build_grid(
+            corners.resolve_corners(["typical"]), (27.0,), (3.3,)
+        )
+        # Passes both "compliance" checks, trips the "Icp trim" one.
+        self.results = [
+            runner.PointResult(
+                point=self.points[0],
+                status="ok",
+                measurements={
+                    "satcasc_lo_v": 1.0,
+                    "satcasc_hi_v": 1.0,
+                    "iup_mid_a": 0.0,
+                },
+            )
+        ]
+        self.corner_id = self.points[0].corner_id
+        self.out_dir = self.root / "corners" / "20260101-000000-abcdef0"
+
+    def _record_text(self) -> str:
+        record = report.build_record(
+            tb=self.tb,
+            pdk=_stub_pdk(),
+            points=self.points,
+            results=self.results,
+            ngspice="ngspice-46",
+            repo_root=SIM_DIR,
+            record_id="20260101-000000-abcdef0",
+            started_utc="2026-01-01T00:00:00+00:00",
+            wall_seconds=1.0,
+        )
+        return report.render_record(record, self.slug)
+
+    def _csv_verdict(self) -> str:
+        path = raw_measures.write_raw_measures_csv(self.tb, self.results, self.out_dir)
+        with path.open(newline="") as fh:
+            rows = list(csv.reader(fh))
+        header, row = rows[0], rows[1]
+        return row[header.index("verdict")]
+
+    def test_csv_verdict_aggregates_across_every_topology_group(self):
+        verdict = self._csv_verdict()
+        self.assertTrue(verdict.startswith("FAIL"), verdict)
+        self.assertIn("iup_mid_a", verdict)
+
+    def test_markdown_sub_table_for_the_unaffected_group_still_reads_pass(self):
+        """The scoping `_corner_table_lines` documents, exercised end to end."""
+        rows = [
+            line
+            for line in self._record_text().splitlines()
+            if line.strip().startswith(f"| `{self.corner_id}`")
+        ]
+        self.assertEqual(len(rows), 2, "one corner row per topology sub-table")
+        compliance_row, icp_row = rows
+        self.assertTrue(compliance_row.rstrip().endswith("| PASS |"), compliance_row)
+        self.assertIn("FAIL", icp_row)
+        self.assertIn("iup_mid_a", icp_row)
+
+    def test_the_two_artifacts_diverge_by_design_but_share_failure_wording(self):
+        """Different scope, same words -- the contract `point_verdicts` keeps.
+
+        A FAIL the CSV reports must be renderable verbatim in the record (it
+        is the group's own check, so that group's sub-table carries the same
+        text); it is simply not reported in *every* sub-table the way the
+        record's flat single-topology table would report it.
+        """
+        text = self._record_text()
+        verdict = self._csv_verdict()
+        self.assertIn(verdict, text)
+        # ... and the compliance sub-table's own verdict is not the CSV's.
+        self.assertNotEqual(verdict, "PASS")
+        self.assertEqual(
+            report.point_verdicts(self.tb, self.results)[self.corner_id], verdict
+        )
+
+
 def _stub_pdk():
     from harness.pdk import Pdk
 

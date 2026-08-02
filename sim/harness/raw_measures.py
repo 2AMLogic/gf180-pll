@@ -12,10 +12,22 @@ emitted a per-point CSV.
 
 :func:`write_raw_measures_csv` closes that gap unconditionally: every run
 that writes a record also gets ``corners/<record-id>/raw_measures.csv``, one
-row per corner point, with the same sweep-axis + measurement + verdict
-content the Markdown corner table renders -- and the *identical* verdict
-text, via :func:`report.point_verdicts`, so the two artifacts can never
-drift apart.
+row per corner point, carrying the same sweep-axis + measurement values the
+Markdown corner table renders, plus one verdict cell.
+
+That verdict comes from :func:`report.point_verdicts`, which runs the
+record's own ``summarize()`` + ``evaluate_checks()`` pipeline and formats a
+failure with the record's own helper -- so the two artifacts never disagree
+about what a check failure *is* or how it reads. They are scoped
+differently, though, and deliberately so: this CSV is one flat table with a
+single verdict per point, so its verdict considers every check in the
+manifest ("is this point clean at all?"), matching the record's *overall*
+status. A record for a manifest declaring ``topology_groups`` instead splits
+into one sub-table per topology and narrows each sub-table's pass/fail
+column to that group's own checks, to keep an unrelated sub-circuit's
+failure out of a reader's way. For a manifest whose checks span groups, a
+point can therefore read PASS in one Markdown sub-table and FAIL in this
+CSV. See :func:`report.point_verdicts` for the full rationale.
 
 This is a sibling of :mod:`derived`, not an addition to it: a derived table
 is campaign-supplied *reduction* over the raw table below, opt-in per
@@ -68,8 +80,13 @@ def write_raw_measures_csv(
       Markdown corner table's row key.
     - one column per ``tb.measure_names`` -- every measurement the manifest
       declares, ``.measure`` cards and ``raw_measures``-sourced values alike.
-    - ``verdict`` -- PASS / ``FAIL — ...`` / ``ERROR — ...``, identical to
-      the Markdown record's corner table (:func:`report.point_verdicts`).
+    - ``verdict`` -- PASS / ``FAIL — ...`` / ``ERROR — ...`` for the point as
+      a whole (:func:`report.point_verdicts`): every check in the manifest,
+      not one topology group's slice of them. For a single-topology manifest
+      (the common case) that is the same verdict the record's corner table
+      renders; for a grouped manifest whose checks span groups it is
+      *stricter* than an individual sub-table's column, by design -- see the
+      module docstring.
 
     A point whose ``status`` is not ``"ok"`` (failed to simulate, or its
     derived reduction raised) still gets a row -- an ERROR verdict, not a
