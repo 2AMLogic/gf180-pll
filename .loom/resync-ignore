@@ -1,0 +1,12 @@
+# Pins per-repo customizations to Loom-installed surfaces so
+# `.loom/scripts/resync-installed.sh` never overwrites them.
+# One relative path per line (relative to the sync target root — e.g.
+# `roles/<file>` under `.loom/`, `commands/loom/<file>` under `.claude/`).
+# See `.loom/docs/troubleshooting.md` for the full resync-ignore convention.
+
+# gf180-pll issue #112: Curator dedup rule for "still blocked, no change"
+# re-check comments. Filed upstream at rjwalters/loom to fix `defaults/`
+# directly; pinned here until that upstream fix lands and this local
+# customization can be dropped.
+roles/curator.md
+commands/loom/curator.md

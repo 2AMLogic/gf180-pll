@@ -694,6 +694,49 @@ GitHub automatically checks boxes when issues close. When you see all boxes chec
 2. Remove `loom:blocked` label and add `loom:curated`: `gh issue edit <number> --remove-label "loom:blocked" --remove-label "loom:curating" --add-label "loom:curated"`
 3. Issue awaits `loom:issue` promotion (human, Champion, or a `/loom:sweep` orchestrator) before Workers can claim
 
+### Avoiding Duplicate "Still Blocked" Comments
+
+A `loom:blocked` issue gets re-picked-up by every subsequent Curator pass (manual, autonomous, or fallback sweep) until its blocker actually clears. Re-verifying the Dependencies checklist on every pass is correct and cheap — but **posting a new comment every time the answer is unchanged is not**. Left unchecked, this produces dozens of near-identical "still blocked on #N" comments on the same issue within hours, each costing a full Curator invocation for zero new information.
+
+**Before posting a Dependencies re-check comment, read the most recent prior Curator comment on the issue** (`gh issue view <number> --comments`, and find the last comment that reports a Dependencies re-check outcome):
+
+- **Same conclusion as that comment** (same blocking issue number(s), same blocker status) → **do not comment.** Silently leave the issue as-is (still `loom:blocked`, no label change, no comment) and move on. Re-running the checklist internally every pass is expected and cheap; only the redundant comment is the anti-pattern.
+- **Different conclusion** (a dependency closed, a new blocker surfaced, the blocking issue number changed, or the issue is now unblocked) → comment as usual with the updated status, and update labels per "Decision Logic" above. New information always gets a comment, no exception.
+- **Staleness-window exception**: if the most recent prior "still blocked, unchanged" comment is **older than 24 hours**, one fresh confirmation comment is allowed even though the conclusion is unchanged — this keeps a heartbeat on genuinely long-stalled issues without spamming hourly re-checks. After posting that heartbeat, the 24h clock restarts from its timestamp; do not chain heartbeats back-to-back.
+
+This rule governs the Dependencies re-check specifically. It does not change the "Re-curating Approved Issues" playbook above (that playbook only fires on `loom:issue` issues surfaced by Priority 1, which excludes `loom:blocked`).
+
+**Example — skipped no-op pass vs. a real re-check comment:**
+
+```markdown
+Before (the anti-pattern — one comment per pick-up, no dedup check):
+
+10:03 Curator: "Still blocked on #1 (spec ratification, loom:operator-only).
+      No other blockers. No change since last check."
+10:47 Curator: "Still blocked on #1 (spec ratification, loom:operator-only).
+      No other blockers. No change since last check."
+11:32 Curator: "Still blocked on #1 (spec ratification, loom:operator-only).
+      No other blockers. No change since last check."
+      … (dozens more across a weekend, zero new information each time)
+
+After (dedup rule applied):
+
+10:03 Curator: "Still blocked on #1 (spec ratification, loom:operator-only).
+      No other blockers. No change since last check."
+10:47 Curator re-verifies Dependencies → same conclusion (#1 still open, still
+      the sole blocker) → most recent comment is 44 minutes old, well under the
+      24h staleness window → SKIP: no comment posted, issue left as-is.
+11:32 Same re-verification, same conclusion → SKIP: no comment posted.
+[next day] 10:15 Curator re-verifies → same conclusion, but the 10:03 comment is
+      now >24h old → ALLOWED: one fresh heartbeat comment posted, "Still blocked
+      on #1 (spec ratification, loom:operator-only) as of 2026-08-04 — 24h+
+      since last confirmation, no change."
+[separately] 14:20 Curator re-verifies → #1 just closed; #84 (host-capacity
+      contention) is now the sole blocker → conclusion CHANGED → comment posted
+      immediately regardless of staleness window: "Dependency #1 closed; now
+      blocked on #84 (host-capacity contention)."
+```
+
 ## Issue Quality Checklist
 
 Before marking an issue as `loom:curated`, ensure it has:
