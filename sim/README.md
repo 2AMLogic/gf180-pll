@@ -814,12 +814,13 @@ that introduces the tool that will eventually reproduce it.
 | Campaign | Runner | Migration |
 |---|---|---|
 | `devchar-delay`, `devchar-cp`, `devchar-passives` | `sim/harness` | migrated (#40); each new record **Supersedes** the pre-migration one |
-| `divider-ratio`, `lock-detector` | `sim/lib/simenv.sh` | #41 |
-| `cp-compliance`, `pfd-deadzone` | `sim/lib/simenv.sh` | #42 |
+| `divider-ratio` → `divider-ratio-dff` / `-cell` / `-chain` | `sim/harness` | migrated (#41), by splitting the campaign into three sibling slugs — see "A one-directory experiment can outgrow one `sim/harness` manifest" above. The original `divider-ratio/` records stay untouched as append-only evidence |
+| `lock-detector` | `sim/harness` | migrated (#41); its new record **Supersedes** the pre-migration one |
+| `cp-compliance`, `pfd-deadzone` | `sim/harness` | migrated (#42, landed by #99); each new record **Supersedes** the pre-migration one |
 | `vco-tuning-range` (stage-count comparison) | `sim/harness` | migrated (#43); its new record **Supersedes** the pre-migration one |
-| `vco-tuning-range` (tuning sweep) | `sim/harness` | manifest migrated (#43); **migrated record still pending** — the 504-point evidence re-run is #84, so the citable record is still the pre-migration one |
-| `vco-tuning-range` (supply pushing / jitter) | `sim/lib/simenv.sh` | #43 -- blocked on a manifest capability gap, see below |
-| `lock-time`, `output-range` | `sim/lib/simenv.sh` | blocked on a manifest capability gap — see below |
+| `vco-tuning-range` (tuning sweep) | `sim/harness` | manifest migrated (#43); the 504-point evidence re-run landed under #84, so the citable record is a migrated one |
+| `vco-tuning-range` (supply pushing / jitter) | `sim/lib/simenv.sh` | #43 — the manifest gap that blocked it is closed (`phases`, #92); the campaign's own migration is what remains, see below |
+| `lock-time`, `output-range` | `sim/lib/simenv.sh` | the manifest gap that blocked them is closed (`sweeps`/`grid`); migrating the campaigns themselves is not yet scoped — see below |
 | `loop-dynamics`, `mc-cp-mismatch`, `pll-top-smoke`, `supply-sensitivity` | `sim/lib/simenv.sh` | not yet scoped — these landed after #36 was written, so they are outside #40–#43 |
 | `harness-selftest` | `sim/harness` | n/a — it *is* the harness's acceptance testbench |
 
@@ -838,14 +839,23 @@ campaign itself is separate work, and until it lands the existing
 `run_supply.sh` record remains that claim's evidence.
 
 `sim/lock-time` and `sim/output-range` (#12) also build on `sim/lib/simenv.sh`
-rather than `sim/harness`, even though both landed after #2: `tb.json`
-(`sim/harness/testbench.py`) carries exactly one fixed `.param` set per
-experiment, with no per-run override, so a manifest cannot express the N x
-cold-start/re-lock axis these two closed-loop campaigns sweep *in addition
-to* the PVT grid within one evidence record. That is a real capability gap,
-not a preference — see either campaign's `testbench/run.sh` header for the
-citation. Closing it (a per-run `--param` override, or a multi-axis manifest
-shape) is tracked separately rather than worked around here.
+rather than `sim/harness`, even though both landed after #2. The reason was a
+real capability gap, not a preference: `tb.json` (`sim/harness/testbench.py`)
+carried exactly one fixed `.param` set per experiment, with no per-run
+override, so a manifest could not express the N x cold-start/re-lock axis these
+two closed-loop campaigns sweep *in addition to* the PVT grid within one
+evidence record — see either campaign's `testbench/run.sh` header for the
+citation.
+
+**That gap is now closed.** `tb.json`'s `sweeps` key declares extra independent
+axes beyond the PVT grid, each point carrying its own derived deck parameters,
+and `grid` states the union of blocks a run covers when the cross-product is
+deliberately not run in full (`sim/harness/testbench.py`; see
+`sim/harness/README.md` → "Sweeping beyond the PVT grid"). Seven manifests
+already use it, including `sim/divider-ratio-chain/testbench/tb.json`, which
+sweeps N = 4-64 non-rectangularly through exactly that mechanism. What remains
+is migrating these two campaigns themselves, which is separate work and not yet
+scoped; until it lands, their `run.sh` records remain that claim's evidence.
 
 `sim/vco-tuning-range` is the first campaign to carry **more than one**
 `sim/harness` manifest, because it is one experiment directory answering one
@@ -861,19 +871,24 @@ slugs would have broken the supersession chains of the records they replace.
 
 That campaign's third deck pair — supply pushing (`tb_vco_pushing.sp`) and
 supply-step / supply-ripple jitter (`tb_vco_supply_jitter.sp`), minted as one
-record by `testbench/run_supply.sh` — has **not** moved, and is a real
-manifest capability gap rather than remaining work of the same kind: **one
-record is minted from two different decks**, and a manifest names exactly one
-`netlist`.
+record by `testbench/run_supply.sh` — has **not** moved. It used to be blocked
+by two genuine manifest gaps, and **both are now closed**:
 
-The other half of that campaign — every jitter number in it is extracted from
-a raw waveform the deck writes with `wrdata`, because `.meas` cannot report
-the per-cycle *period sequence* that jitter is — is **no longer** a gap: #81
-added the manifest's `raw_files` key and `PointView.raw_files` /
-`point.raw(name)` (#87), whose documented example in `sim/harness/README.md`
-is this campaign's `wrdata jit.dat` case. Only the two-decks-one-record
-problem remains.
+- **One record minted from two different decks**, against a manifest that named
+  exactly one `netlist`. `tb.json`'s `phases` key closes this (#92): each phase
+  gets its own `netlist`/`params`/`measure`/`raw_measures`/`raw_files` while
+  sharing one PVT grid, one DUT, one set of `checks`, one `derived` reduction
+  and one record.
+- **The jitter numbers come from a raw waveform**, not from `.meas` — the deck
+  writes it with `wrdata`, because `.meas` cannot report the per-cycle *period
+  sequence* that jitter is. #81 added the manifest's `raw_files` key and
+  `PointView.raw_files` / `point.raw(name)` (#87), whose documented example in
+  `sim/harness/README.md` is this campaign's `wrdata jit.dat` case.
 
-Splitting that record in two to fit the current manifest shape would land a
+What remains is the migration itself, which is ordinary remaining work rather
+than a blocker, tracked by #43.
+
+Splitting that record in two to fit a one-deck manifest would still land a
 migrated record *weaker* than the one it supersedes (a DC pushing number with
-the transient jitter dropped), which the append-only rule does not permit.
+the transient jitter dropped), which the append-only rule does not permit —
+which is why `phases` was the right shape for the fix and a split was not.
