@@ -1,0 +1,4 @@
+# margin on the two band-edge checks, over the whole 63-corner grid
+edge,worst corner,best corner,spec,worst-case margin
+B0 floor (must go low enough),6.449 MHz @ all-fast/125C/2.97V,2.958 MHz @ all-slow/-40C/3.63V,10 MHz,36% below the spec line
+B7 ceiling (must go high enough),247.7 MHz @ all-slow/-40C/3.63V,632 MHz @ all-fast/125C/2.97V,200 MHz,24% above the spec line

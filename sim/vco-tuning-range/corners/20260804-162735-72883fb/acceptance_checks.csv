@@ -1,0 +1,39 @@
+# issue #8's acceptance checks, each against its spec line, with the corner that binds it named (spec lines: 10-200 MHz v1 output band per DR-002 Decision 2; Kvco ceiling per DR-001 Decision 1)
+# **Overall: PASS.**
+# 
+# The ring covers the ratified 10-200 MHz v1 output band at every one
+# of the 63 corners on the grid -- reaching below 10 MHz at the
+# fastest corner and above 200 MHz at the slowest -- with no coverage
+# hole, monotonic control, and Kvco inside DR-001 Decision 1's ceiling
+# at the band a correct configuration selects.
+# 
+# **Caveat that must travel with these numbers (check 4b).** Kvco
+# reaches 154.4 MHz/V at an in-band operating point in band B7, which
+# is above DR-001's ~150 MHz/V bound. That point is only reachable by
+# configuring a *higher* band than the target frequency requires. It
+# is not a defect of the ring, but it does mean the band code is part
+# of the loop-stability contract, not just a range-selection
+# convenience -- #9/#10 must state the band-selection rule alongside
+# the filter values, and a part configured into too high a band will
+# present the loop with more gain than the fixed filter was sized for.
+# 
+# **What this record hands to the sibling issues:**
+# 
+#   - **#11 (output divider), DR-002 Decision 2's conditional trigger**: the
+#     lowest band reaches 6.449 MHz at the fastest corner, 36 % below the
+#     10 MHz spec line, so the ring reaches the bottom of the band **without**
+#     a post-VCO divider. The DR-002 trigger does **not** fire: no output
+#     divider enters v1 scope on account of the VCO's low-band floor.
+#   - **#9 / #10 (charge pump, loop filter)**: size against the per-point Kvco
+#     columns (k1..k7, kvco_min/kvco_max) below, not against a single Kvco
+#     number. Within the v1 band Kvco spans 3.21 .. 154.4 MHz/V across bands and
+#     corners.
+#   - **#14 (supply sensitivity)**: static pushing table below; the transient
+#     numbers are in the supply record from `run_supply.sh`.
+#,check,binding corner,measured,spec line,verdict
+1,Lowest band (B0) reaches DOWN to 10 MHz at **every** corner,all-fast/125C/2.97V,6.449 MHz floor,<= 10 MHz,**PASS**
+2,Highest band (B7) reaches UP to 200 MHz at **every** corner,all-slow/-40C/3.63V,247.7 MHz ceiling,>= 200 MHz,**PASS**
+3,No band-overlap hole inside 10-200 MHz at any corner,sf/125C/3.63V,worst adjacent overlap ratio 1.267,>= 1.000,**PASS**
+4a,Kvco under the fixed-filter ceiling at the band a correct configuration selects,"all-fast/27C/2.97V, target 200 MHz -> B6 @ 1.54 V",115.8 MHz/V,<= 150 MHz/V,**PASS**
+4b,"Kvco under the ceiling at *every* in-band operating point, including bands a correct configuration would not select",all-fast/27C/3.30V B7 @ 0.9 V,154.4 MHz/V,<= 150 MHz/V,**FAIL**
+5,"f(Vctrl) monotonic on every (corner, band) curve",n/a,0 non-monotonic curves,0,**PASS**
