@@ -20,7 +20,7 @@ Being honest about where this actually is:
 - **Done** — architecture and scope captured as numbered decision records in
   `spec/`; xschem schematics for the VCO, PFD, charge pump, feedback divider,
   lock detector, and the shared 3.3 V logic cells they are built from; a
-  reproducible PVT corner harness; **52 evidence records** across 18
+  reproducible PVT corner harness; **54 evidence records** across 18
   verification campaigns (device characterization, VCO tuning range, PFD
   dead-zone freedom, charge-pump compliance and mismatch, divider moduli,
   lock-detector window, loop dynamics, and a first pass at the closed-loop

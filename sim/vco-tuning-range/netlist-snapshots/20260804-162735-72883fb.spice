@@ -1,0 +1,269 @@
+* Frozen netlist snapshot for record 20260804-162735-72883fb
+* sources    : vco.spice + tb_vco_tuning.spice (composed at record time, in this order)
+* sha256     : 75f6fbf7b344c738b29c3189e338740dd23c7ab47f5a40bafa1e68674202ffd0 (of this composed text)
+* This is a verbatim composition taken at record time. Do not edit.
+
+* ---- design/netlist/vco.spice (sha256 3d8bf1b307d7b230808c86b318262822fdf525c2503724609bdf51d1b1cc2d31)
+* gf180-pll :: VCO netlist exported from design/vco.sch by design/netlist.sh
+* Do not edit by hand -- edit the schematics and re-run design/netlist.sh.
+** sch_path: design/vco.sch
+.subckt vco VCTRL B0 B1 B2 CLK VDD_VCO GND_VCO
+*.ipin VCTRL
+*.ipin B0
+*.ipin B1
+*.ipin B2
+*.opin CLK
+*.iopin VDD_VCO
+*.iopin GND_VCO
+XBIAS VCTRL B0 B1 B2 VBP VBN VDD_VCO GND_VCO vco_bias
+XS1 Y5 Y1 VDD_VCO GND_VCO VBP VBN vco_stage
+XS2 Y1 Y2 VDD_VCO GND_VCO VBP VBN vco_stage
+XS3 Y2 Y3 VDD_VCO GND_VCO VBP VBN vco_stage
+XS4 Y3 Y4 VDD_VCO GND_VCO VBP VBN vco_stage
+XS5 Y4 Y5 VDD_VCO GND_VCO VBP VBN vco_stage
+XMBP1 NB1 Y5 VDD_VCO VDD_VCO pfet_03v3 L=0.28u W=1.25u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMBN1 NB1 Y5 GND_VCO GND_VCO nfet_03v3 L=0.28u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMBP2 NB2 NB1 VDD_VCO VDD_VCO pfet_03v3 L=0.28u W=3.75u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMBN2 NB2 NB1 GND_VCO GND_VCO nfet_03v3 L=0.28u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMBP3 CLK NB2 VDD_VCO VDD_VCO pfet_03v3 L=0.28u W=11.25u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMBN3 CLK NB2 GND_VCO GND_VCO nfet_03v3 L=0.28u W=4.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XCDEC1 VDD_VCO GND_VCO cap_nmos_03v3 c_width=50u c_length=50u m=1
+XCDEC2 VDD_VCO GND_VCO cap_nmos_03v3 c_width=50u c_length=50u m=1
+.ends
+
+* expanding   symbol:  vco_bias.sym # of pins=8
+** sym_path: design/vco_bias.sym
+** sch_path: design/vco_bias.sch
+.subckt vco_bias VCTRL B0 B1 B2 VBP VBN VDD VSS
+*.ipin VCTRL
+*.ipin B0
+*.ipin B1
+*.ipin B2
+*.iopin VBP
+*.iopin VBN
+*.iopin VDD
+*.iopin VSS
+XMP1 NA VBPC VDD VDD pfet_03v3 L=1u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMP2 VBPC VBPC VDD VDD pfet_03v3 L=1u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN1 NA NA VSS VSS nfet_03v3 L=1u W=1.4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN2 VBPC NA NC VSS nfet_03v3 L=1u W=5.6u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XRCG NC VSS VSS ppolyf_u_3k r_width=1u r_length=5.6u m=1
+XMSU1 NSU VSS VDD VDD pfet_03v3 L=20u W=0.22u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMSU2 NSU NA VSS VSS nfet_03v3 L=1u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMSU3 VBPC NSU VSS VSS nfet_03v3 L=1u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMPR VFIX VBPC VDD VDD pfet_03v3 L=1u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMD1 VFIX VFIX NMD VSS nfet_03v3 L=1u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMD2 NMD NMD VSS VSS nfet_03v3 L=1u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMOFF VBP0 VFIX NOFF VSS nfet_03v3 L=1u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XROFF NOFF VSS VSS ppolyf_u_3k r_width=1u r_length=33u m=1
+XMVI VBP0 VCTRL NVI VSS nfet_03v3 L=1u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XRDEG NVI VSS VSS ppolyf_u_3k r_width=1u r_length=33u m=1
+XMSUM VBP0 VBP0 VDD VDD pfet_03v3 L=1u W=60u nf=4 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMIP0 B0B B0 VDD VDD pfet_03v3 L=0.28u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMIN0 B0B B0 VSS VSS nfet_03v3 L=0.28u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMIP1 B1B B1 VDD VDD pfet_03v3 L=0.28u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMIN1 B1B B1 VSS VSS nfet_03v3 L=0.28u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMIP2 B2B B2 VDD VDD pfet_03v3 L=0.28u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMIN2 B2B B2 VSS VSS nfet_03v3 L=0.28u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMA0 VBN1 VBP0 VDD VDD pfet_03v3 L=1u W=26.5u nf=2 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMA1 VBN1 GA VDD VDD pfet_03v3 L=1u W=17.225u nf=2 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMSWA0 GA B0B VBP0 VDD pfet_03v3 L=0.5u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMSWA1 GA B0 VDD VDD pfet_03v3 L=0.5u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMDA VBN1 VBN1 VSS VSS nfet_03v3 L=1u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMB0 VBP2 VBN1 VSS VSS nfet_03v3 L=1u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMB1 VBP2 GB VSS VSS nfet_03v3 L=1u W=8.6125u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMSWB0 GB B1 VBN1 VSS nfet_03v3 L=0.5u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMSWB1 GB B1B VSS VSS nfet_03v3 L=0.5u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMDB VBP2 VBP2 VDD VDD pfet_03v3 L=1u W=20u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMC0 VBN VBP2 VDD VDD pfet_03v3 L=1u W=12.3u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMC1 VBN GC VDD VDD pfet_03v3 L=1u W=78.87u nf=8 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMSWC0 GC B2B VBP2 VDD pfet_03v3 L=0.5u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMSWC1 GC B2 VDD VDD pfet_03v3 L=0.5u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMDN VBN VBN VSS VSS nfet_03v3 L=0.5u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMMN VBP VBN VSS VSS nfet_03v3 L=0.5u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMDP VBP VBP VDD VDD pfet_03v3 L=0.5u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+.ends
+
+
+* expanding   symbol:  vco_stage.sym # of pins=6
+** sym_path: design/vco_stage.sym
+** sch_path: design/vco_stage.sch
+.subckt vco_stage A Y VDD VSS VBP VBN
+*.ipin A
+*.opin Y
+*.iopin VDD
+*.iopin VSS
+*.iopin VBP
+*.iopin VBN
+XMPH NH VBP VDD VDD pfet_03v3 L=0.5u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMP Y A NH VDD pfet_03v3 L=0.28u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN Y A NT VSS nfet_03v3 L=0.28u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMNT NT VBN VSS VSS nfet_03v3 L=0.5u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+.ends
+
+* ---- sim/vco-tuning-range/testbench/tb_vco_tuning.spice (sha256 fab73ac36d339b9ae02c3f3172ecca46432179720a57fbd544e7e51a426b6892)
+* gf180-pll :: vco-tuning-range :: open-loop f(Vctrl) / Kvco characterization
+*
+* sim/harness netlist FRAGMENT (see sim/harness/README.md). The DUT is the
+* committed export design/netlist/vco.spice, composed ahead of this fragment by
+* the manifest's `dut` key -- this file instantiates the block, it never
+* contains a copy of it.
+*
+* Migrated from the sim/lib/simenv.sh-based tb_vco_tuning.sp + run.sh pair. The
+* measured circuit is unchanged: same seven-copy topology, same band-code
+* drive, same .ic start-up, same trig/targ measurement criterion.
+*
+* Measurement topology
+*   Seven independent copies of the whole VCO (bias generator + ring + output
+*   buffer + on-chip decoupling) are instantiated in one deck, one per control
+*   voltage, all at the same PVT point and the same band code. Each copy has its
+*   own supply ammeter, so f(Vctrl) and I(Vctrl) at seven control points come out
+*   of a single transient. The copies share only the ideal supply node and
+*   ground; they are otherwise disjoint, so there is no interaction between them.
+*
+*   Frequency is measured at the *buffered output* CLK, not at an internal ring
+*   node: CLK is what the divider (#11) and the closed-loop bench (#12) see, and
+*   measuring there also proves the output buffer resolves the ring's slow edges
+*   into a rail-to-rail clock at the bottom of the band.
+*
+*   Period is taken over four whole cycles between the first and fifth rising
+*   half-supply crossing after `w_settle`, so the bias generator's own start-up
+*   transient is excluded from the number.
+*
+* Devices are the PDK 3.3 V thick-oxide wrappers only (nfet_03v3 / pfet_03v3,
+* ppolyf_u_3k, cap_nmos_03v3), per DR-002 Decision 3.
+*
+* From the harness: vdd_val, vdd_nom, temp_c.
+* From the manifest's `band` sweep axis: band, b0, b1, b2.
+
+* --- control voltages: 0.9 .. 2.7 V in 0.3 V steps (the usable Vctrl window)
+.param vc1=0.9 vc2=1.2 vc3=1.5 vc4=1.8 vc5=2.1 vc6=2.4 vc7=2.7
+
+* ---------------------------------------------------------------------------
+* Transient window, sized in-deck.
+*
+* The window has to track f_osc, which moves by ~2 decades across the band
+* codes and by ~4x across PVT -- a single fixed .tran would either miss the
+* five rising edges the period measurement needs at the slow end or waste two
+* orders of magnitude of timesteps at the fast end. The pre-migration runner
+* computed the window in bash per (band, bundle, temp, vdd); the harness owns
+* the .tran card, so the estimate is expressed here as .param arithmetic over
+* the quantities the deck can see (band, temp_c, vdd_val) and handed to the
+* control block through .csparam.
+*
+* w_flo / w_fhi are a CALIBRATED ENVELOPE, not a result: least-squares fits (in
+* log f) of the *minimum-over-process* f at Vctrl = 0.9 V and the
+* *maximum-over-process* f at Vctrl = 2.7 V, against all 3528 measured points
+* of record 20260731-175947-0a12e6c. Fit residuals over that grid are within
+* -3.3%/+2.9% (low envelope) and -7.9%/+3.9% (high envelope); w_margin = 1.10
+* covers them ~2.5x over. The process axis is deliberately absorbed into the
+* envelope rather than modelled, because a deck cannot see which .lib sections
+* the harness selected.
+*
+* Nothing downstream trusts this estimate: it only sets tstart/tstop/tmax. If
+* it were wrong enough to cost a rising edge, the corresponding .measure would
+* not land and the harness reports that point as failed -- it can never turn
+* into a silently wrong frequency.
+.param w_t='(temp_c - 27) / 100'
+.param w_v='vdd_val - 3.3'
+.param w_llo='15.035565 + 0.485851*band + 0.005016*band*band + 0.058263*w_t - 0.003166*w_t*w_t - 0.291204*w_v - 0.031302*w_v*band + 0.009398*w_t*band'
+.param w_lhi='16.308724 + 0.490535*band + 0.006324*band*band + 0.082074*w_t - 0.011226*w_t*w_t - 0.302075*w_v - 0.019553*w_v*band + 0.011608*w_t*band'
+.param w_margin=1.10
+.param w_flo='exp(w_llo) / w_margin'
+.param w_fhi='exp(w_lhi) * w_margin'
+* >= 4 periods of the slowest copy before the first measured edge, then 7 more
+* periods of measurement window; <= 1/(80 f_max), i.e. >= 80 timesteps per
+* cycle of the fastest copy in the deck.
+.param w_settle='4 / w_flo'
+.param w_stop='w_settle + 7 / w_flo'
+.param w_max='1 / (80 * w_fhi)'
+.csparam cs_stop={w_stop}
+.csparam cs_max={w_max}
+
+vdd  vdd 0 dc 'vdd_val'
+vb0  nb0 0 dc 'b0*vdd_val'
+vb1  nb1 0 dc 'b1*vdd_val'
+vb2  nb2 0 dc 'b2*vdd_val'
+
+vv1 vc1 0 dc 'vc1'
+vv2 vc2 0 dc 'vc2'
+vv3 vc3 0 dc 'vc3'
+vv4 vc4 0 dc 'vc4'
+vv5 vc5 0 dc 'vc5'
+vv6 vc6 0 dc 'vc6'
+vv7 vc7 0 dc 'vc7'
+
+vs1 vdd nv1 dc 0
+vs2 vdd nv2 dc 0
+vs3 vdd nv3 dc 0
+vs4 vdd nv4 dc 0
+vs5 vdd nv5 dc 0
+vs6 vdd nv6 dc 0
+vs7 vdd nv7 dc 0
+
+x1 vc1 nb0 nb1 nb2 clk1 nv1 0 vco
+x2 vc2 nb0 nb1 nb2 clk2 nv2 0 vco
+x3 vc3 nb0 nb1 nb2 clk3 nv3 0 vco
+x4 vc4 nb0 nb1 nb2 clk4 nv4 0 vco
+x5 vc5 nb0 nb1 nb2 clk5 nv5 0 vco
+x6 vc6 nb0 nb1 nb2 clk6 nv6 0 vco
+x7 vc7 nb0 nb1 nb2 clk7 nv7 0 vco
+
+* Break the ring's DC symmetry so the operating point is not the metastable
+* all-nodes-at-mid solution; the constraint is released when the transient
+* starts. `uic` is deliberately NOT used: the bias generator must be solved to
+* its operating point before t=0 or the first microsecond of every run is a
+* bias start-up transient rather than the oscillation being measured.
+.ic v(x1.Y1)=0 v(x1.Y2)='vdd_val' v(x1.Y3)=0 v(x1.Y4)='vdd_val' v(x1.Y5)=0
+.ic v(x2.Y1)=0 v(x2.Y2)='vdd_val' v(x2.Y3)=0 v(x2.Y4)='vdd_val' v(x2.Y5)=0
+.ic v(x3.Y1)=0 v(x3.Y2)='vdd_val' v(x3.Y3)=0 v(x3.Y4)='vdd_val' v(x3.Y5)=0
+.ic v(x4.Y1)=0 v(x4.Y2)='vdd_val' v(x4.Y3)=0 v(x4.Y4)='vdd_val' v(x4.Y5)=0
+.ic v(x5.Y1)=0 v(x5.Y2)='vdd_val' v(x5.Y3)=0 v(x5.Y4)='vdd_val' v(x5.Y5)=0
+.ic v(x6.Y1)=0 v(x6.Y2)='vdd_val' v(x6.Y3)=0 v(x6.Y4)='vdd_val' v(x6.Y5)=0
+.ic v(x7.Y1)=0 v(x7.Y2)='vdd_val' v(x7.Y3)=0 v(x7.Y4)='vdd_val' v(x7.Y5)=0

@@ -1,0 +1,9 @@
+# static supply pushing, df/d(vdd_vco) across the full +/-10% supply range at fixed process/temperature/band/Vctrl -- 1176 combinations
+# Median normalized pushing 39.2 %/V; a +/-10% (+/-0.33 V) supply excursion
+# therefore moves f_osc by up to 18% open-loop at the worst point.
+# Transient supply-step and supply-ripple jitter -- DR-001's top named
+# risk, which a DC pushing number does not cover -- are a separate record
+# from `testbench/run_supply.sh`.
+,df/dVdd (MHz/V),normalized (%/V),point
+Worst,-52.22,55.2,"ss/-40C, B5, Vctrl 2.1 V (f = 94.63 MHz)"
+Best,-0.7641,20.5,"ff/-40C, B0, Vctrl 0.9 V (f = 3.735 MHz)"

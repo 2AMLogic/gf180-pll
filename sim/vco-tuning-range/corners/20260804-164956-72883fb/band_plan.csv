@@ -1,0 +1,10 @@
+# band plan, worst case over all 63 corners -- the union of the eight bands is what must cover 10-200 MHz; a single band never does
+band,floor: min .. max over corners (MHz),ceiling: min .. max over corners (MHz),fine range (x)
+B0,2.959 .. 6.451,6.461 .. 14.43,2.13 .. 2.38
+B1,4.722 .. 10.52,10.39 .. 23.87,2.15 .. 2.41
+B2,7.916 .. 17.55,17.51 .. 40.54,2.18 .. 2.44
+B3,12.71 .. 29.07,28.52 .. 68.77,2.22 .. 2.49
+B4,21.06 .. 51.59,48.09 .. 125,2.25 .. 2.54
+B5,34.4 .. 87.83,80.41 .. 220.4,2.31 .. 2.60
+B6,59.82 .. 155.9,143.7 .. 390.2,2.23 .. 2.68
+B7,100.6 .. 274.9,247.7 .. 632,2.00 .. 2.70

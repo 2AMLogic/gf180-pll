@@ -1,0 +1,4 @@
+# block current (whole VCO: bias generator + ring + output buffer) at operating points within +/-10% of each band edge
+operating point,I min (uA),I median (uA),I max (uA)
+~10 MHz (n=180),39,76,146
+~200 MHz (n=149),215,326,480

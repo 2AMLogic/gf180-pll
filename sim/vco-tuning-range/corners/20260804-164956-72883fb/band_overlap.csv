@@ -1,0 +1,11 @@
+# adjacent-band overlap, worst corner per pair. Overlap ratio = f_max(band b) / f_min(band b+1); > 1 means the bands overlap, and (ratio - 1) is the fractional overlap DR-001 budgets at ~20%
+# No corner leaves a hole in 10-200 MHz coverage: every adjacent band
+# pair overlaps at every one of the 63 corners.
+band pair,worst overlap ratio,overlap,worst corner
+B0 -> B1,1.319,32%,ss/125C/3.63V
+B1 -> B2,1.299,30%,ss/125C/3.63V
+B2 -> B3,1.333,33%,ss/125C/3.63V
+B3 -> B4,1.268,27%,ss/125C/3.63V
+B4 -> B5,1.356,36%,ss/125C/3.63V
+B5 -> B6,1.336,34%,sf/-40C/3.63V
+B6 -> B7,1.322,32%,ss/125C/2.97V

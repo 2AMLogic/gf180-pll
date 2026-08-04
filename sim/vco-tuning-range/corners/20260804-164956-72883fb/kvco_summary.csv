@@ -1,0 +1,36 @@
+# Kvco across the whole grid, per band. The per-(corner, band, Vctrl) detail is the k1..k7 columns of the per-point table below, and the per-(corner, band) reduction is its kvco_min / kvco_max / kvco_mean / kvco_over_f_max / fine_ratio columns
+#   - Worst-case Kvco **at an operating point inside the ratified 10-200 MHz
+#     band, over ALL band codes**: 154.4 MHz/V (all-fast/27C/3.30V, B7, Vctrl 0.9 V, f =
+#     194.5 MHz) -- **OVER** DR-001's ~150 MHz/V ceiling. Reaching that point
+#     requires configuring band B7 for a frequency band B6 already
+#     covers; see check 4a and the band-choice note below.
+#   - Worst-case Kvco anywhere on the grid **including the bands above the v1
+#     band**: 206 MHz/V (all-fast/125C/2.97V, B7, Vctrl 1.5 V, f = 396.8 MHz).
+#     DR-002 Decision 2 budgets v1 margin to 200 MHz, so that point sits
+#     ABOVE the v1 envelope and exceeds the 150 MHz/V bound; it is reported
+#     because the deferred 400 MHz stretch would operate there.
+#   - Kvco/f_out inside the v1 band spans **0.31 .. 0.84 per volt**, which
+#     **brackets** DR-001's 0.7/V design-intent hand calc rather than
+#     confirming it: the ratio is not a constant of the topology, it rises
+#     monotonically with band code (see the per-band table above). Reading
+#     0.7/V as a single number would under-predict Kvco in the top bands and
+#     over-predict it in the bottom ones. #9/#10 should size against the
+#     per-band table, not against the hand calc.
+# 
+#   - **Band choice is load-bearing for the Kvco ceiling.** Because Kvco
+#     scales with f_osc *within* a band, two different band codes that both
+#     reach the same output frequency do not present the same Kvco to the
+#     loop: the higher band reaches it near the bottom of its Vctrl range,
+#     where its Kvco is already large. Selecting the **lowest** band that
+#     reaches the target frequency is therefore not a preference but a
+#     requirement of DR-001 Decision 1's fixed loop filter, and it is what
+#     check 4a evaluates against check 4b's adversarial band choice.
+band,Kvco min (MHz/V),Kvco max (MHz/V),max Kvco/f_out (per V)
+B0,1.725,4.704,0.71
+B1,2.756,7.99,0.71
+B2,4.625,13.92,0.72
+B3,7.589,24.21,0.74
+B4,12.83,44.93,0.75
+B5,21.5,81.62,0.78
+B6,38.54,136,0.80
+B7,67.39,206,0.84
