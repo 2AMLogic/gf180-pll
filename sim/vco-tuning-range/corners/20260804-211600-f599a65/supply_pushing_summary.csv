@@ -1,0 +1,15 @@
+# static supply pushing, per band code (deck tb_vco_pushing.spice)
+# Local slope of f_osc against vdd_vco, least-squares over the seven supply points spanning 2.97-3.63 V, at every (bundle, temperature, band) combination -- 96 curves of 7 points each.
+# Worst (most supply-sensitive) point: **-54.5 %/V** (-44.91 MHz/V at 82.34 MHz) at ss/-40C, band 5, Vctrl 1.8 V.
+# Best: **-24.1 %/V** at ff/-40C, band 0.
+# Curvature: the largest departure of any measured f(vdd) curve from its own straight-line fit is 3.41 % of f_nom, so pushing is effectively linear across the whole +/-10 % rail and a single coefficient per corner is a fair summary.
+# **Where the sensitivity comes from, and why it is not a sizing error.** A current-starved ring runs at f ~ I_stage / (N * C_stage * V_swing), and V_swing *is* the supply. Even with a perfectly supply-independent starving current, f therefore carries a -1/vdd term = **-30.3 %/V** at 3.3 V. The measured median of -40.5 %/V is 1.34x that floor, i.e. the bias generator contributes only the remainder. Reducing supply pushing materially would require a regulated VCO rail or a swing-independent cell (a differential delay cell with replica-biased load), i.e. exactly the alternatives DR-001 Decision 2 considered and rejected on power and cell-count grounds -- not a resizing of this cell.
+band,curves,most_negative_pct_per_v,most_negative_at,median_pct_per_v,least_negative_pct_per_v,least_negative_at,worst_shift_over_pm10pct_rail_pct
+B0,21,-35.4,ss/-40C,-29.1,-24.1,ff/-40C,12
+B1,3,-36.7,all-slow/27C,-32.0,-29.2,all-fast/27C,12
+B2,3,-39.7,all-slow/27C,-34.7,-31.2,all-fast/27C,13
+B3,3,-44.6,all-slow/27C,-38.6,-35.0,all-fast/27C,15
+B4,21,-50.8,ss/-40C,-41.3,-33.6,ff/-40C,17
+B5,21,-54.5,ss/-40C,-46.0,-37.9,ff/-40C,18
+B6,3,-51.9,all-slow/27C,-48.8,-44.9,all-fast/27C,17
+B7,21,-50.1,sf/-40C,-44.6,-32.7,ss/125C,17

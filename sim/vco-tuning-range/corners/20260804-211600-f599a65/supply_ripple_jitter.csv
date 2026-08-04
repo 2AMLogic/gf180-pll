@@ -1,0 +1,9 @@
+# sinusoidal ripple of 0.05 V amplitude (100 mV peak-to-peak, 3.0 % of the nominal rail) at f_osc/16, over the 63-point mandated PVT grid
+# The smallest margin between a rippled result and its own run's quiet reference anywhere on the grid is **135x** in TIE RMS (at sf/125C/3.30V), so every supply-induced number above is a circuit result, not solver noise.
+# Worst case as a fraction of the period: **2.51 % RMS period jitter** and 7.14 % peak-to-peak, at all-slow/-40C/2.97V, f_osc = 78.52 MHz.
+# The draft spec line is < 1 % RMS period jitter, so **a 100 mV peak-to-peak ripple on an unregulated VCO rail is on its own sufficient to break that line** open-loop.
+case,corner,period_jitter_pp,period_jitter_rms,tie_pp,tie_rms
+"rippled, worst",all-slow/-40C/2.97V,910 ps,320 ps,3.37 ns,1.02 ns
+"rippled, median",ff/-40C/3.63V,540 ps,191 ps,1.69 ns,516 ps
+"rippled, best",all-fast/125C/3.63V,349 ps,123 ps,829 ps,259 ps
+"**quiet reference, worst** (numerical floor)",sf/125C/3.30V,2.68 ps,0.611 ps,9.5 ps,2.78 ps

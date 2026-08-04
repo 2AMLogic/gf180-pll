@@ -1,0 +1,10 @@
+# the same ripple at every band code -- jitter *as a fraction of the period* is the comparable quantity across a 40:1 frequency range
+band,points,f_osc_min_mhz,f_osc_max_mhz,worst_tie_pp,worst_period_jitter_rms_pct_of_period,worst_at
+B0,7,5.344,8.577,16.2 ns,1.18,all-slow/27C/3.30V
+B1,3,8.691,13.83,10.5 ns,1.31,all-slow/27C/3.30V
+B2,3,14.63,23.15,7.11 ns,1.42,all-slow/27C/3.30V
+B3,3,24.18,37.92,4.83 ns,1.59,all-slow/27C/3.30V
+B4,7,41.79,65.34,3.63 ns,1.94,all-slow/27C/3.30V
+B5,7,70.89,110,2.38 ns,2.12,all-slow/27C/3.30V
+B6,3,126.1,196.2,1.68 ns,2.46,all-slow/27C/3.30V
+B7,7,217.1,343.9,924 ps,2.33,all-slow/27C/3.30V

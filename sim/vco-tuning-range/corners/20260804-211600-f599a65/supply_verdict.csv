@@ -1,0 +1,8 @@
+# what this record establishes, and what it does not
+# **This does not by itself supersede DR-001 Decision 2.** The measured sensitivity is what a current-starved single-ended ring is expected to have, and DR-001 accepted it explicitly with eyes open. What the number does establish is a hard constraint for #10 and #14: the VCO rail needs either regulation or a decoupling/ripple budget, and the loop bandwidth cannot be set without knowing the supply-noise spectrum. If the system cannot deliver a quiet enough rail, *that* is the condition under which DR-001 Decision 2 should be revisited, and this record is the evidence that would drive it.
+quantity,value,where,reading
+"static supply pushing, worst corner",-54.5 %/V,"ss/-40C, band 5","characterized; 1.80x the -1/vdd swing term, so dominated by the ring's swing-vs-supply term rather than by bias-current sensitivity"
+"pushing linearity, worst curve",3.41 % of f_nom,all 96 curves,a single pushing coefficient per corner is a fair summary
+"supply-ripple TIE, worst corner",3.37 ns peak-to-peak,all-slow/-40C/2.97V,"DR-001's top named risk now has a number, not a caveat"
+"supply-ripple period jitter, worst corner",2.51 % RMS of the period,all-slow/-40C/2.97V,"BREAKS the draft < 1 % line, open loop, from a 100 mV peak-to-peak rail ripple alone"
+margin over the solver's numerical floor,135x in TIE RMS,smallest anywhere on the grid,"every supply-induced number above is a circuit result, not solver noise"
