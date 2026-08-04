@@ -851,11 +851,16 @@ citation.
 axes beyond the PVT grid, each point carrying its own derived deck parameters,
 and `grid` states the union of blocks a run covers when the cross-product is
 deliberately not run in full (`sim/harness/testbench.py`; see
-`sim/harness/README.md` → "Sweeping beyond the PVT grid"). Seven manifests
-already use it, including `sim/divider-ratio-chain/testbench/tb.json`, which
-sweeps N = 4-64 non-rectangularly through exactly that mechanism. What remains
-is migrating these two campaigns themselves, which is separate work and not yet
-scoped; until it lands, their `run.sh` records remain that claim's evidence.
+`sim/harness/README.md` → "Sweeping beyond the PVT grid"). Manifests across the
+tree already use it, and more will as campaigns migrate —
+`grep -rl '"sweeps"' sim/*/testbench*/tb.json` lists the current set at any
+commit, rather than a count here that goes stale. The proof case is
+`sim/divider-ratio-chain/testbench/tb.json`: 63 points sweeping N = 4-64 as an
+axis carried *alongside* the PVT grid within one evidence record, declared
+non-rectangularly as a `grid` of seven blocks (61/61/2/1/1/2/2 points). That is
+exactly the shape described above as inexpressible. What remains is migrating
+these two campaigns themselves, which is separate work and not yet scoped;
+until it lands, their `run.sh` records remain that claim's evidence.
 
 `sim/vco-tuning-range` is the first campaign to carry **more than one**
 `sim/harness` manifest, because it is one experiment directory answering one
