@@ -1,0 +1,8 @@
+# does the quasi-static model reproduce the measurement, i.e. may these numbers be projected to ripple frequencies that were not simulated?
+# Each row is averaged over the 3 bundle(s) that ran at every ripple frequency (all-fast, all-slow, typical), at 27 C and the nominal supply, so the ripple frequency is the only variable between rows.
+# Across all 144 rippled runs the measured/predicted ratio spans 1.22 .. 2.29 (median 1.46).
+# TIE scales as 1/f_ripple as the model predicts -- the *shape* is right -- but the magnitude is consistently off by that factor, so the step-derived coefficient is **not** a safe basis for projecting ripple jitter: a ring's response to a bidirectional ripple is larger than its response to a unidirectional step of the same peak-to-peak size, because f ~ 1/vdd is convex. Ripple jitter at a ripple frequency that matters must be **measured**, not extrapolated. The measured numbers stand on their own; only the extrapolation is withheld.
+ripple_frequency,points,f_ripple_mhz,tie_pp_measured,tie_pp_predicted_from_step,measured_over_predicted
+f_osc/4,3,23.5,673 ps,303 ps,2.22
+f_osc/16,3,5.86,1.76 ns,1.21 ns,1.45
+f_osc/32,3,2.93,2.99 ns,2.44 ns,1.23

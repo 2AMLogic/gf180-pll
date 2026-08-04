@@ -1,0 +1,6 @@
+# response to a 0.1 V supply step with a 1 ns edge, over the 63-point mandated PVT grid (band 5, Vctrl 1.8 V ~ 100 MHz class)
+# The last column is the number a loop-bandwidth budget has to beat: with the loop open, a supply step of this size walks the VCO's output edge by that much timing error for every microsecond the loop takes to correct it. It is *not* a jitter spec violation on its own -- inside the loop bandwidth the PLL cancels it -- but it is the reason #10 cannot choose an arbitrarily low loop bandwidth, and it is a direct input to #14's supply-sensitivity budget.
+case,corner,df_mhz,df_over_f_pct,transient_pushing_mhz_per_v,open_loop_timing_error_per_us_ns
+worst,all-slow/-40C/2.97V,-4.77,-6.08,-47.7,-60.8
+median,fs/125C/3.30V,-4.06,-4.16,-40.6,-41.6
+best,ff/-40C/3.63V,-1.68,-2.57,-16.8,-25.7

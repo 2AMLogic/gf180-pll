@@ -1,0 +1,156 @@
+* gf180-pll :: vco-tuning-range :: supply pushing, f_osc vs. vdd_vco
+*
+* sim/harness netlist FRAGMENT (see sim/harness/README.md), and the `push`
+* phase of the two-deck supply manifest next to this file. The DUT is the
+* committed export design/netlist/vco.spice, composed ahead of this fragment by
+* the manifest's `dut` key -- this file instantiates the block, it never
+* contains a copy of it.
+*
+* Migrated from the sim/lib/simenv.sh-based tb_vco_pushing.sp + run_supply.sh
+* pair (issue #43). The measured circuit and the measurement criterion are
+* unchanged: same seven-copy topology, same rail-referenced band-code drive,
+* same .ic start-up, same trig/targ period criterion, same seven supply points.
+*
+* Measurement topology
+*   Seven independent copies of the whole VCO, one per supply voltage, spanning
+*   the ratified 3.3 V +/-10 % rail in 0.11 V steps (2.97 .. 3.63 V, the
+*   manifest's vs1..vs7). Each copy has its OWN supply source, its OWN supply
+*   ammeter and its OWN band-code sources referenced to that copy's rail -- a
+*   shared logic-level band code would leave the band-select pass gates of the
+*   higher-rail copies partly on and corrupt the very quantity being measured.
+*
+*   Frequency is measured at the buffered output CLK of each copy, over four
+*   whole cycles after `w_settle`, against that copy's own half-supply
+*   threshold.
+*
+*   This deck characterizes STATIC pushing (dc supply -> dc frequency). It says
+*   nothing about the jitter a supply *transient* produces; that is the `jit`
+*   phase (tb_vco_supply_jitter.spice), and DR-001 names it the top risk for
+*   this topology. The two are one record because the jitter numbers are not
+*   interpretable without these.
+*
+*   The deck's own supply axis is internal, so `vdd_val` is deliberately unused
+*   here: this fragment measures f(vdd) over its own seven copies at whatever
+*   PVT point the harness places it. Where the shared grid runs this phase at
+*   more than one PVT supply (the band-5 blocks, which exist for the jitter
+*   deck), those runs are byte-identical circuits and must return identical
+*   numbers -- the migration check in derive_supply.py asserts exactly that.
+*
+* Devices are PDK 3.3 V thick-oxide wrappers only (DR-002 Decision 3).
+*
+* From the harness: vdd_val, vdd_nom, temp_c.
+* From the manifest's shared params: vctrl, vs1..vs7.
+* From the manifest's `band` sweep axis: band, b0, b1, b2.
+* From the manifest's `fcal` sweep axis: w_fres (see below).
+
+* ---------------------------------------------------------------------------
+* Transient window, sized in-deck.
+*
+* The window has to track f_osc, which moves by ~2 decades across the band
+* codes and by ~4x across PVT. The pre-migration runner computed it in bash
+* (testbench/common.sh :: f_est); the harness owns the .tran card, so the same
+* estimator is expressed here as .param arithmetic over the quantities the deck
+* can see, and handed to the control block through .csparam.
+*
+* This is the SAME estimator, term for term, that minted the record this
+* campaign supersedes. It is preserved rather than improved on purpose: the
+* jitter phase's ripple frequency is defined as f_osc/N, so the estimator is
+* part of the *stimulus*, and changing it would make the migrated record a
+* different experiment rather than the same one re-run. Here, where it only
+* sizes a window, its accuracy costs runtime and never correctness -- an
+* estimate wrong enough to lose a rising edge makes the .measure fail and the
+* harness reports that point as failed.
+*
+*   f_est = 4.5e6 * 1.65^band * (1 + (Vctrl-0.9)/1.33) * f_temp * f_res * f_vdd
+*
+*   1.65^band       exp(band*ln(1.65)); band is an integer 0..7 axis param
+*   Vctrl factor    1.6766917293233083 at the campaign's fixed Vctrl = 1.8 V
+*   f_temp          0.75 / 1.00 / 1.35 at -40 / 27 / 125 C. Written as the
+*                   quadratic through those three points, which reproduces
+*                   them EXACTLY (three points, three coefficients) and
+*                   interpolates sanely if the grid is ever run off them.
+*   f_res           the process axis, which a fragment cannot see -- supplied
+*                   as `w_fres` by the manifest's `fcal` sweep axis, whose grid
+*                   blocks pair it with the corner bundles it calibrates
+*                   (1.00 for the five MOS-only bundles, 0.80 all-slow,
+*                   1.25 all-fast). It is a calibration constant of the
+*                   estimator, NOT a model corner and NOT a result.
+*   f_vdd           1 + (3.30 - vdd)*0.36, evaluated per copy.
+.param w_fband='exp(band*0.50077528791248915)'
+.param w_ft='0.90030044582283386 + 0.0037187439426245397*temp_c - 9.6918007365767916e-07*temp_c*temp_c'
+.param w_fbase='4.5e6 * w_fband * 1.6766917293233083 * w_ft * w_fres'
+* f_vdd falls monotonically with vdd, so the slowest copy is the vs7 one and
+* the fastest is the vs1 one: the window is sized by the slowest and the
+* timestep by the fastest, exactly as the bash runner did.
+.param w_flo='w_fbase * (1 + (3.30 - vs7) * 0.36)'
+.param w_fhi='w_fbase * (1 + (3.30 - vs1) * 0.36)'
+* >= 4 periods of the slowest copy before the first measured edge, then 7 more
+* periods of measurement window; <= 1/(80 f_max), i.e. >= 80 timesteps per
+* cycle of the fastest copy in the deck.
+.param w_settle='4 / w_flo'
+.param w_stop='w_settle + 7 / w_flo'
+.param w_max='1 / (80 * w_fhi)'
+.csparam cs_stop={w_stop}
+.csparam cs_max={w_max}
+
+vc vctl 0 dc 'vctrl'
+
+* --- copy 1
+v1  n1  0 dc 'vs1'
+vam1 n1  m1 dc 0
+vq1a q1a 0 dc 'b0*vs1'
+vq1b q1b 0 dc 'b1*vs1'
+vq1c q1c 0 dc 'b2*vs1'
+x1 vctl q1a q1b q1c clk1 m1 0 vco
+* --- copy 2
+v2  n2  0 dc 'vs2'
+vam2 n2  m2 dc 0
+vq2a q2a 0 dc 'b0*vs2'
+vq2b q2b 0 dc 'b1*vs2'
+vq2c q2c 0 dc 'b2*vs2'
+x2 vctl q2a q2b q2c clk2 m2 0 vco
+* --- copy 3
+v3  n3  0 dc 'vs3'
+vam3 n3  m3 dc 0
+vq3a q3a 0 dc 'b0*vs3'
+vq3b q3b 0 dc 'b1*vs3'
+vq3c q3c 0 dc 'b2*vs3'
+x3 vctl q3a q3b q3c clk3 m3 0 vco
+* --- copy 4
+v4  n4  0 dc 'vs4'
+vam4 n4  m4 dc 0
+vq4a q4a 0 dc 'b0*vs4'
+vq4b q4b 0 dc 'b1*vs4'
+vq4c q4c 0 dc 'b2*vs4'
+x4 vctl q4a q4b q4c clk4 m4 0 vco
+* --- copy 5
+v5  n5  0 dc 'vs5'
+vam5 n5  m5 dc 0
+vq5a q5a 0 dc 'b0*vs5'
+vq5b q5b 0 dc 'b1*vs5'
+vq5c q5c 0 dc 'b2*vs5'
+x5 vctl q5a q5b q5c clk5 m5 0 vco
+* --- copy 6
+v6  n6  0 dc 'vs6'
+vam6 n6  m6 dc 0
+vq6a q6a 0 dc 'b0*vs6'
+vq6b q6b 0 dc 'b1*vs6'
+vq6c q6c 0 dc 'b2*vs6'
+x6 vctl q6a q6b q6c clk6 m6 0 vco
+* --- copy 7
+v7  n7  0 dc 'vs7'
+vam7 n7  m7 dc 0
+vq7a q7a 0 dc 'b0*vs7'
+vq7b q7b 0 dc 'b1*vs7'
+vq7c q7c 0 dc 'b2*vs7'
+x7 vctl q7a q7b q7c clk7 m7 0 vco
+
+* Break the ring's metastable all-nodes-at-mid DC solution. `uic` is NOT used:
+* every bias generator is solved to its operating point before t=0.
+.ic v(x1.Y1)=0 v(x1.Y2)='vs1' v(x1.Y3)=0 v(x1.Y4)='vs1' v(x1.Y5)=0
+.ic v(x2.Y1)=0 v(x2.Y2)='vs2' v(x2.Y3)=0 v(x2.Y4)='vs2' v(x2.Y5)=0
+.ic v(x3.Y1)=0 v(x3.Y2)='vs3' v(x3.Y3)=0 v(x3.Y4)='vs3' v(x3.Y5)=0
+.ic v(x4.Y1)=0 v(x4.Y2)='vs4' v(x4.Y3)=0 v(x4.Y4)='vs4' v(x4.Y5)=0
+.ic v(x5.Y1)=0 v(x5.Y2)='vs5' v(x5.Y3)=0 v(x5.Y4)='vs5' v(x5.Y5)=0
+.ic v(x6.Y1)=0 v(x6.Y2)='vs6' v(x6.Y3)=0 v(x6.Y4)='vs6' v(x6.Y5)=0
+.ic v(x7.Y1)=0 v(x7.Y2)='vs7' v(x7.Y3)=0 v(x7.Y4)='vs7' v(x7.Y5)=0

@@ -1,0 +1,731 @@
+{
+  "name": "vco-supply-pushing-jitter",
+  "description": "supply pushing (f_osc vs. vdd_vco) and supply-induced jitter (step + ripple) of the 5-stage current-starved ring VCO -- two decks, one record",
+  "claim": "#8 (design-input claim feeding two spec lines) -- how much does `vdd_vco` move the ring VCO's frequency, statically and in a transient, and what timing error does a realistic supply disturbance therefore inject? DR-001's Consequences section names this the accepted risk of the current-starved single-ended ring and states the requirement in terms this record answers: \"#8 must produce a supply-step/supply-noise jitter testbench, not just a clean-supply Kvco sweep. This is the number most likely to force a supersede.\" Feeds #14's supply-sensitivity budget and #13's jitter budget. Spec-line references are placeholders pending ratification (#1): `spec/pll.md#supply-sensitivity`, `spec/pll.md#period-jitter`.",
+  "methodology": [
+    "**Two decks, one record.** The claim is a pair: a *static* pushing deck (`tb_vco_pushing.spice`, seven VCO copies at seven supplies) and a *transient* deck (`tb_vco_supply_jitter.spice`, a quiet / stepped / rippled copy). The jitter numbers are not interpretable without the pushing numbers -- the quasi-static model that says whether they project to other ripple frequencies is written in terms of the pushing coefficient -- so they are one record, minted through the harness's `phases` key. Every PVT point of the shared grid runs both decks; each deck's log is `<phase>_<corner-id>.log`.",
+    "**Static pushing measurement criterion**: seven independent VCO copies, one per supply point (2.97 .. 3.63 V in 0.11 V steps), in a single transient. Each copy carries its own supply source, its own ammeter and its own band-code sources **referenced to that copy's rail** -- a shared logic-level band code would leave the band-select pass gates of the higher-rail copies partly on and corrupt the measurement. Frequency is taken at each copy's buffered `CLK` over four whole cycles after a settle window of >= 4 estimated periods. The per-corner pushing coefficient is a least-squares fit of f against vdd over those seven points, and `push_nl_pct` is the largest departure of the measured curve from its own straight line, as a percentage of the nominal-supply frequency -- so the record states how good the single-coefficient summary is rather than assuming it.",
+    "**Transient measurement criterion**: three VCO copies per run, identical except for their supply drive -- quiet (dc), stepped (0.1 V step, 1 ns edge, at the window midpoint) and rippled (0.05 V amplitude sine). Every reported number comes from **interpolated half-supply crossings of the buffered output**, extracted by `derive_supply.py` from the deck's own `jit.dat` waveform, not from `.measure`: jitter is a property of the period *sequence* and `.measure` reports scalars. The window always holds four whole ripple periods and at least 64 cycles, so a peak-to-peak TIE is a real peak-to-peak.",
+    "**The quiet copy is the noise floor, not a result.** Any period variation it shows is the transient solver's own local truncation error at these settings (`reltol = 1e-4`, max timestep 1/(200 f_osc)). The record reports the stepped and rippled numbers **against** that floor: `floor_margin_x` is the rippled TIE RMS divided by that point's own quiet TIE RMS, and it is a checked quantity, so a record in which any supply-induced number is not comfortably above the floor fails rather than quoting it.",
+    "**Quasi-static model, and why it is checked**: a ring VCO's supply response is flat well beyond any supply-noise frequency of interest, so f(t) = f0 + K_vdd*v_ripple(t) predicts TIE_pp = K*A/(pi*f_rip*f0) and period modulation 2*T0*K*A/f0. Both predictions are computed from the *measured transient* K_vdd and compared with the measured jitter at three ripple frequencies (f_osc/4, /16, /32). Agreement is what licenses projecting these numbers to ripple frequencies that were not simulated; disagreement means they cannot be projected, and the record says so instead.",
+    "**The window estimator, and why it is also the stimulus.** Both decks size their transient window in-deck from a calibrated frequency estimate (see the fragment headers). For the pushing deck that is a pure runtime knob -- an estimate wrong enough to lose a rising edge makes the `.measure` fail and the point is reported failed, never silently mis-measured. For the jitter deck it is more than that: the ripple frequency is *specified* as f_osc/N, so the estimate sets the stimulus. That is why the estimator's process term reaches the deck as the `fcal` sweep axis, whose grid blocks pair each factor with the corner bundles it calibrates: a ripple defined relative to f_osc cannot be corner-blind. `fcal` is a calibration constant of the estimator, not a model corner -- the `.lib` sections are the harness's, as always. The estimator is preserved term-for-term from the pre-migration bash runner (`testbench/common.sh :: f_est`) so that this record re-runs the *same* experiment as the record it supersedes rather than a similar one.",
+    "**Migration self-check.** This campaign replaces `testbench/run_supply.sh`, which minted record `20260731-184845-0a12e6c` through the `sim/lib/simenv.sh` shim. The `migration_delta` derived table joins that record's own committed CSVs and reports, per quantity, the median and worst relative deviation of the migrated numbers from it over the points the two grids share. A migration whose numbers moved is a finding, not a footnote, so it is computed into the record rather than asserted in a commit message.",
+    "**Limitations**:",
+    "  - **Open loop.** No PLL is closed around this VCO here, so nothing corrects the supply-induced frequency error. The reported TIE is therefore an upper bound for supply disturbances *inside* the (not yet designed) loop bandwidth and approximately correct for disturbances above it. The closed-loop number is #12/#13's, and it cannot be produced before #9/#10 fix the loop bandwidth.",
+    "  - **Deterministic disturbances only.** This record injects a step and a sinusoid. It is not a random-noise (phase-noise) simulation and reports no random jitter number; `sim/README.md`'s worked example and #13 both flag ngspice transient noise as a separate, harder question.",
+    "  - **Schematic level.** No supply-network parasitics: the rail is driven by an ideal source through the on-chip decap only. Real bond-wire and on-die rail impedance will make the *disturbance* larger for a given external event; this record characterizes the VCO's sensitivity to a rail disturbance, not the disturbance itself. Layout extraction (#18) will also move every absolute frequency here downward.",
+    "  - **One control voltage.** Both decks run at Vctrl = 1.8 V, the middle of the 0.9-2.7 V window. The Vctrl dependence of f_osc is the tuning-range record's claim, not this one's.",
+    "  - Statistical switches: `sw_stat_global = sw_stat_mismatch = 0` (nominal per-corner skew, no Monte Carlo mismatch)."
+  ],
+  "dut": [
+    "design/netlist/vco.spice"
+  ],
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "mos",
+    "all-slow",
+    "all-fast"
+  ],
+  "params": {
+    "vctrl": "1.8",
+    "astep": "0.1",
+    "arip": "0.05",
+    "tedge": "1n",
+    "vs1": "2.97",
+    "vs2": "3.08",
+    "vs3": "3.19",
+    "vs4": "3.30",
+    "vs5": "3.41",
+    "vs6": "3.52",
+    "vs7": "3.63"
+  },
+  "sweeps": {
+    "band": {
+      "description": "3-bit static band-select code (B2 B1 B0)",
+      "points": {
+        "band0": {
+          "description": "B2 B1 B0 = 000",
+          "params": {
+            "band": "0",
+            "b0": "0",
+            "b1": "0",
+            "b2": "0"
+          }
+        },
+        "band1": {
+          "description": "B2 B1 B0 = 001",
+          "params": {
+            "band": "1",
+            "b0": "1",
+            "b1": "0",
+            "b2": "0"
+          }
+        },
+        "band2": {
+          "description": "B2 B1 B0 = 010",
+          "params": {
+            "band": "2",
+            "b0": "0",
+            "b1": "1",
+            "b2": "0"
+          }
+        },
+        "band3": {
+          "description": "B2 B1 B0 = 011",
+          "params": {
+            "band": "3",
+            "b0": "1",
+            "b1": "1",
+            "b2": "0"
+          }
+        },
+        "band4": {
+          "description": "B2 B1 B0 = 100",
+          "params": {
+            "band": "4",
+            "b0": "0",
+            "b1": "0",
+            "b2": "1"
+          }
+        },
+        "band5": {
+          "description": "B2 B1 B0 = 101",
+          "params": {
+            "band": "5",
+            "b0": "1",
+            "b1": "0",
+            "b2": "1"
+          }
+        },
+        "band6": {
+          "description": "B2 B1 B0 = 110",
+          "params": {
+            "band": "6",
+            "b0": "0",
+            "b1": "1",
+            "b2": "1"
+          }
+        },
+        "band7": {
+          "description": "B2 B1 B0 = 111",
+          "params": {
+            "band": "7",
+            "b0": "1",
+            "b1": "1",
+            "b2": "1"
+          }
+        }
+      }
+    },
+    "rdiv": {
+      "description": "supply-ripple frequency as a divisor of the estimated f_osc; w_ncyc is the measurement window in VCO cycles, always >= 64 and >= 4 whole ripple periods",
+      "points": {
+        "r4": {
+          "description": "ripple at f_osc/4 -- 16 ripple periods in the 64-cycle window",
+          "params": {
+            "w_rdiv": "4",
+            "w_ncyc": "64"
+          }
+        },
+        "r16": {
+          "description": "ripple at f_osc/16 -- the campaign's reference ripple; 4 ripple periods in the 64-cycle window",
+          "params": {
+            "w_rdiv": "16",
+            "w_ncyc": "64"
+          }
+        },
+        "r32": {
+          "description": "ripple at f_osc/32 -- 4 ripple periods needs 128 cycles, so the window doubles",
+          "params": {
+            "w_rdiv": "32",
+            "w_ncyc": "128"
+          }
+        }
+      }
+    },
+    "fcal": {
+      "description": "process factor of the in-deck FREQUENCY ESTIMATE (window sizing, and the f_osc/N ripple frequency) -- a calibration constant of the estimator, paired with the corner bundles it calibrates by the grid blocks below. It selects no model section and enters no result.",
+      "points": {
+        "f080": {
+          "description": "estimator process factor 0.80 -- pairs with the all-slow bundle",
+          "params": {
+            "w_fres": "0.80"
+          }
+        },
+        "f100": {
+          "description": "estimator process factor 1.00 -- pairs with the five MOS-only bundles (typical/ff/ss/fs/sf)",
+          "params": {
+            "w_fres": "1.00"
+          }
+        },
+        "f125": {
+          "description": "estimator process factor 1.25 -- pairs with the all-fast bundle",
+          "params": {
+            "w_fres": "1.25"
+          }
+        }
+      }
+    }
+  },
+  "grid": [
+    {
+      "description": "static-pushing grid, the five MOS-only bundles: band codes B0/B4/B7 bracket the geometric band map at every temperature. The pushing deck sweeps its seven supply points internally, so this block runs at the nominal PVT supply only -- the supply axis of the pushing claim is inside the deck, not on the grid. The jitter deck runs here too (it runs at every point of the shared grid) and contributes the band dependence of supply-induced jitter at all seven bundles.",
+      "corners": [
+        "typical",
+        "ff",
+        "ss",
+        "fs",
+        "sf"
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "band": [
+          "band0",
+          "band4",
+          "band7"
+        ],
+        "rdiv": [
+          "r16"
+        ],
+        "fcal": [
+          "f100"
+        ]
+      }
+    },
+    {
+      "description": "static-pushing grid, all-slow: band codes B0/B4/B7 bracket the geometric band map at every temperature. The pushing deck sweeps its seven supply points internally, so this block runs at the nominal PVT supply only -- the supply axis of the pushing claim is inside the deck, not on the grid. The jitter deck runs here too (it runs at every point of the shared grid) and contributes the band dependence of supply-induced jitter at all seven bundles.",
+      "corners": [
+        "all-slow"
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "band": [
+          "band0",
+          "band4",
+          "band7"
+        ],
+        "rdiv": [
+          "r16"
+        ],
+        "fcal": [
+          "f080"
+        ]
+      }
+    },
+    {
+      "description": "static-pushing grid, all-fast: band codes B0/B4/B7 bracket the geometric band map at every temperature. The pushing deck sweeps its seven supply points internally, so this block runs at the nominal PVT supply only -- the supply axis of the pushing claim is inside the deck, not on the grid. The jitter deck runs here too (it runs at every point of the shared grid) and contributes the band dependence of supply-induced jitter at all seven bundles.",
+      "corners": [
+        "all-fast"
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "band": [
+          "band0",
+          "band4",
+          "band7"
+        ],
+        "rdiv": [
+          "r16"
+        ],
+        "fcal": [
+          "f125"
+        ]
+      }
+    },
+    {
+      "description": "transient grid, the five MOS-only bundles: the full mandated PVT matrix (3 temperatures x 3 supplies) at band 5, Vctrl 1.8 V -- the ~100 MHz class the draft jitter line is quoted at -- with ripple at f_osc/16. This is the block that carries the record's mandated corner coverage.",
+      "corners": [
+        "typical",
+        "ff",
+        "ss",
+        "fs",
+        "sf"
+      ],
+      "axes": {
+        "band": [
+          "band5"
+        ],
+        "rdiv": [
+          "r16"
+        ],
+        "fcal": [
+          "f100"
+        ]
+      }
+    },
+    {
+      "description": "transient grid, all-slow: the full mandated PVT matrix (3 temperatures x 3 supplies) at band 5, Vctrl 1.8 V -- the ~100 MHz class the draft jitter line is quoted at -- with ripple at f_osc/16. This is the block that carries the record's mandated corner coverage.",
+      "corners": [
+        "all-slow"
+      ],
+      "axes": {
+        "band": [
+          "band5"
+        ],
+        "rdiv": [
+          "r16"
+        ],
+        "fcal": [
+          "f080"
+        ]
+      }
+    },
+    {
+      "description": "transient grid, all-fast: the full mandated PVT matrix (3 temperatures x 3 supplies) at band 5, Vctrl 1.8 V -- the ~100 MHz class the draft jitter line is quoted at -- with ripple at f_osc/16. This is the block that carries the record's mandated corner coverage.",
+      "corners": [
+        "all-fast"
+      ],
+      "axes": {
+        "band": [
+          "band5"
+        ],
+        "rdiv": [
+          "r16"
+        ],
+        "fcal": [
+          "f125"
+        ]
+      }
+    },
+    {
+      "description": "band sweep, typical: all eight band codes at the nominal temperature and supply, so the band dependence of supply-induced jitter is measured over the whole 40:1 output range rather than inferred from band 5. Three bundles (typical / all-slow / all-fast) bracket the process spread; the full-PVT block above carries the rest.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "band": [
+          "band0",
+          "band1",
+          "band2",
+          "band3",
+          "band4",
+          "band5",
+          "band6",
+          "band7"
+        ],
+        "rdiv": [
+          "r16"
+        ],
+        "fcal": [
+          "f100"
+        ]
+      }
+    },
+    {
+      "description": "band sweep, all-slow: all eight band codes at the nominal temperature and supply, so the band dependence of supply-induced jitter is measured over the whole 40:1 output range rather than inferred from band 5. Three bundles (typical / all-slow / all-fast) bracket the process spread; the full-PVT block above carries the rest.",
+      "corners": [
+        "all-slow"
+      ],
+      "temperatures_c": [
+        27
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "band": [
+          "band0",
+          "band1",
+          "band2",
+          "band3",
+          "band4",
+          "band5",
+          "band6",
+          "band7"
+        ],
+        "rdiv": [
+          "r16"
+        ],
+        "fcal": [
+          "f080"
+        ]
+      }
+    },
+    {
+      "description": "band sweep, all-fast: all eight band codes at the nominal temperature and supply, so the band dependence of supply-induced jitter is measured over the whole 40:1 output range rather than inferred from band 5. Three bundles (typical / all-slow / all-fast) bracket the process spread; the full-PVT block above carries the rest.",
+      "corners": [
+        "all-fast"
+      ],
+      "temperatures_c": [
+        27
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "band": [
+          "band0",
+          "band1",
+          "band2",
+          "band3",
+          "band4",
+          "band5",
+          "band6",
+          "band7"
+        ],
+        "rdiv": [
+          "r16"
+        ],
+        "fcal": [
+          "f125"
+        ]
+      }
+    },
+    {
+      "description": "ripple-frequency check, typical: the same band-5 point at f_osc/4 and f_osc/32 as well as the f_osc/16 above, so the measured TIE can be tested against the quasi-static 1/f_ripple model instead of the model being assumed. Three bundles at the nominal temperature and supply.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "band": [
+          "band5"
+        ],
+        "rdiv": [
+          "r4",
+          "r32"
+        ],
+        "fcal": [
+          "f100"
+        ]
+      }
+    },
+    {
+      "description": "ripple-frequency check, all-slow: the same band-5 point at f_osc/4 and f_osc/32 as well as the f_osc/16 above, so the measured TIE can be tested against the quasi-static 1/f_ripple model instead of the model being assumed. Three bundles at the nominal temperature and supply.",
+      "corners": [
+        "all-slow"
+      ],
+      "temperatures_c": [
+        27
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "band": [
+          "band5"
+        ],
+        "rdiv": [
+          "r4",
+          "r32"
+        ],
+        "fcal": [
+          "f080"
+        ]
+      }
+    },
+    {
+      "description": "ripple-frequency check, all-fast: the same band-5 point at f_osc/4 and f_osc/32 as well as the f_osc/16 above, so the measured TIE can be tested against the quasi-static 1/f_ripple model instead of the model being assumed. Three bundles at the nominal temperature and supply.",
+      "corners": [
+        "all-fast"
+      ],
+      "temperatures_c": [
+        27
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "band": [
+          "band5"
+        ],
+        "rdiv": [
+          "r4",
+          "r32"
+        ],
+        "fcal": [
+          "f125"
+        ]
+      }
+    }
+  ],
+  "phases": {
+    "push": {
+      "description": "static pushing -- f_osc and I_supply vs. vdd_vco, seven copies in one transient",
+      "netlist": "tb_vco_pushing.spice",
+      "analyses": [
+        "tran $&cs_max $&cs_stop 0 $&cs_max"
+      ],
+      "raw_measures": {
+        "tp1": {
+          "analysis": "tran",
+          "expr": "trig v(clk1) val='vs1/2' rise=1 td='w_settle' targ v(clk1) val='vs1/2' rise=5 td='w_settle'"
+        },
+        "tp2": {
+          "analysis": "tran",
+          "expr": "trig v(clk2) val='vs2/2' rise=1 td='w_settle' targ v(clk2) val='vs2/2' rise=5 td='w_settle'"
+        },
+        "tp3": {
+          "analysis": "tran",
+          "expr": "trig v(clk3) val='vs3/2' rise=1 td='w_settle' targ v(clk3) val='vs3/2' rise=5 td='w_settle'"
+        },
+        "tp4": {
+          "analysis": "tran",
+          "expr": "trig v(clk4) val='vs4/2' rise=1 td='w_settle' targ v(clk4) val='vs4/2' rise=5 td='w_settle'"
+        },
+        "tp5": {
+          "analysis": "tran",
+          "expr": "trig v(clk5) val='vs5/2' rise=1 td='w_settle' targ v(clk5) val='vs5/2' rise=5 td='w_settle'"
+        },
+        "tp6": {
+          "analysis": "tran",
+          "expr": "trig v(clk6) val='vs6/2' rise=1 td='w_settle' targ v(clk6) val='vs6/2' rise=5 td='w_settle'"
+        },
+        "tp7": {
+          "analysis": "tran",
+          "expr": "trig v(clk7) val='vs7/2' rise=1 td='w_settle' targ v(clk7) val='vs7/2' rise=5 td='w_settle'"
+        },
+        "f1": {
+          "analysis": "tran",
+          "expr": "param='4/tp1'"
+        },
+        "f2": {
+          "analysis": "tran",
+          "expr": "param='4/tp2'"
+        },
+        "f3": {
+          "analysis": "tran",
+          "expr": "param='4/tp3'"
+        },
+        "f4": {
+          "analysis": "tran",
+          "expr": "param='4/tp4'"
+        },
+        "f5": {
+          "analysis": "tran",
+          "expr": "param='4/tp5'"
+        },
+        "f6": {
+          "analysis": "tran",
+          "expr": "param='4/tp6'"
+        },
+        "f7": {
+          "analysis": "tran",
+          "expr": "param='4/tp7'"
+        },
+        "i1": {
+          "analysis": "tran",
+          "expr": "avg i(vam1) from='w_settle' to='w_stop'"
+        },
+        "i2": {
+          "analysis": "tran",
+          "expr": "avg i(vam2) from='w_settle' to='w_stop'"
+        },
+        "i3": {
+          "analysis": "tran",
+          "expr": "avg i(vam3) from='w_settle' to='w_stop'"
+        },
+        "i4": {
+          "analysis": "tran",
+          "expr": "avg i(vam4) from='w_settle' to='w_stop'"
+        },
+        "i5": {
+          "analysis": "tran",
+          "expr": "avg i(vam5) from='w_settle' to='w_stop'"
+        },
+        "i6": {
+          "analysis": "tran",
+          "expr": "avg i(vam6) from='w_settle' to='w_stop'"
+        },
+        "i7": {
+          "analysis": "tran",
+          "expr": "avg i(vam7) from='w_settle' to='w_stop'"
+        }
+      }
+    },
+    "jit": {
+      "description": "supply step + supply ripple, against a quiet reference copy that measures the solver's own numerical floor",
+      "netlist": "tb_vco_supply_jitter.spice",
+      "options": [
+        "reltol=1e-4"
+      ],
+      "analyses": [
+        "tran $&cs_max $&cs_stop 0 $&cs_max",
+        "set wr_singlescale",
+        "wrdata jit.dat v(clkq) v(clks) v(clkr)"
+      ],
+      "raw_measures": {
+        "jsettle": {
+          "analysis": "tran",
+          "expr": "param='w_settle'"
+        },
+        "jstepon": {
+          "analysis": "tran",
+          "expr": "param='w_stepon'"
+        },
+        "jfrip": {
+          "analysis": "tran",
+          "expr": "param='w_frip'"
+        }
+      },
+      "raw_files": {
+        "jit.dat": {
+          "description": "quiet / stepped / rippled buffered VCO outputs, one row per print step -- the period sequence every jitter number is extracted from",
+          "columns": [
+            "t",
+            "clkq",
+            "clks",
+            "clkr"
+          ],
+          "retain": false
+        }
+      }
+    }
+  },
+  "derived": {
+    "module": "derive_supply.py",
+    "measures": [
+      "push_slope_hz_per_v",
+      "push_norm_pct_per_v",
+      "push_f_nom_hz",
+      "push_i_nom_a",
+      "push_nl_pct",
+      "quiet_f_hz",
+      "quiet_tj_pp_s",
+      "quiet_tj_rms_s",
+      "quiet_c2c_rms_s",
+      "quiet_tie_pp_s",
+      "quiet_tie_rms_s",
+      "step_f_pre_hz",
+      "step_f_post_hz",
+      "step_df_hz",
+      "step_kvdd_hz_per_v",
+      "step_tie_per_us_s",
+      "rip_f_hz",
+      "rip_tj_pp_s",
+      "rip_tj_rms_s",
+      "rip_c2c_rms_s",
+      "rip_tie_pp_s",
+      "rip_tie_rms_s",
+      "rip_tie_pp_pred_s",
+      "rip_tj_pp_pred_s",
+      "rip_tj_rms_pct",
+      "floor_margin_x",
+      "quiet_cycles",
+      "rip_cycles"
+    ],
+    "tables": [
+      "supply_pushing_summary",
+      "supply_step_response",
+      "supply_ripple_jitter",
+      "ripple_band_dependence",
+      "ripple_frequency_check",
+      "periods_nominal",
+      "periods_worst_ripple",
+      "migration_delta",
+      "supply_verdict"
+    ],
+    "joins": {
+      "legacy_push": "vco-tuning-range/corners/20260731-184845-0a12e6c/supply_pushing.csv",
+      "legacy_jit": "vco-tuning-range/corners/20260731-184845-0a12e6c/supply_jitter.csv"
+    }
+  },
+  "topology_groups": {
+    "push": {
+      "description": "static supply pushing (deck tb_vco_pushing.spice) -- tp<n>/f<n>/i<n> are the n-th supply copy, vs1=2.97 V .. vs7=3.63 V",
+      "measures": [
+        "tp1",
+        "tp2",
+        "tp3",
+        "tp4",
+        "tp5",
+        "tp6",
+        "tp7",
+        "f1",
+        "f2",
+        "f3",
+        "f4",
+        "f5",
+        "f6",
+        "f7",
+        "i1",
+        "i2",
+        "i3",
+        "i4",
+        "i5",
+        "i6",
+        "i7",
+        "push_slope_hz_per_v",
+        "push_norm_pct_per_v",
+        "push_f_nom_hz",
+        "push_i_nom_a",
+        "push_nl_pct"
+      ]
+    },
+    "jit": {
+      "description": "supply-step / supply-ripple jitter (deck tb_vco_supply_jitter.spice) -- jsettle/jstepon/jfrip are the deck's own window parameters, everything else is reduced from jit.dat",
+      "measures": [
+        "jsettle",
+        "jstepon",
+        "jfrip",
+        "quiet_f_hz",
+        "quiet_tj_pp_s",
+        "quiet_tj_rms_s",
+        "quiet_c2c_rms_s",
+        "quiet_tie_pp_s",
+        "quiet_tie_rms_s",
+        "step_f_pre_hz",
+        "step_f_post_hz",
+        "step_df_hz",
+        "step_kvdd_hz_per_v",
+        "step_tie_per_us_s",
+        "rip_f_hz",
+        "rip_tj_pp_s",
+        "rip_tj_rms_s",
+        "rip_c2c_rms_s",
+        "rip_tie_pp_s",
+        "rip_tie_rms_s",
+        "rip_tie_pp_pred_s",
+        "rip_tj_pp_pred_s",
+        "rip_tj_rms_pct",
+        "floor_margin_x",
+        "quiet_cycles",
+        "rip_cycles"
+      ]
+    }
+  },
+  "checks": {
+    "f4": {
+      "min": 100000.0,
+      "min_spread_pct": 50.0
+    },
+    "push_norm_pct_per_v": {
+      "max": 0.0
+    },
+    "push_nl_pct": {
+      "max": 5.0
+    },
+    "floor_margin_x": {
+      "min": 10.0
+    },
+    "quiet_cycles": {
+      "min": 32.0
+    },
+    "rip_cycles": {
+      "min": 32.0
+    }
+  }
+}

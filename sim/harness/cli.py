@@ -273,6 +273,15 @@ def build_derived_tables(tb, results, join_args: list[str]) -> list:
     a family of I-V curves) can reach them the same way ``derive_point`` does.
     Nothing deletes the run's work directory, so the scratch copies are still
     on disk here, after every point has run.
+
+    ``params`` is assembled exactly as :func:`runner._point_view` assembles it
+    for ``derive_point`` -- the manifest's top-level ``params`` first, then the
+    point's own values over the top. Both hooks must see the same mapping: a
+    reduction that reads a shared constant (a deck's internal supply sweep
+    ``vs1..vs7``, a ripple amplitude ``arip``) has no way to tell which hook it
+    is running in, and silently reading ``{}`` there does not fail loudly -- it
+    yields an empty curve or a zero-valued constant that then propagates into a
+    committed record as "no shared point" or "0 mV". Keep the two in step.
     """
     spec = getattr(tb, "derived", None)
     if spec is None or not spec.tables:
@@ -295,7 +304,10 @@ def build_derived_tables(tb, results, join_args: list[str]) -> list:
                 temp_c=r.point.temp_c,
                 vdd=r.point.vdd,
                 axes=r.point.axes,
-                params=r.point.params,
+                params={
+                    **{str(k): str(v) for k, v in tb.params.items()},
+                    **r.point.params,
+                },
                 measurements=dict(r.measurements),
                 raw_files=dict(r.raw_files),
             )

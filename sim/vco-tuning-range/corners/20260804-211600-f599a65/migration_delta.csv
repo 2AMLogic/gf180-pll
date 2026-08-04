@@ -1,0 +1,17 @@
+# numeric comparison against superseded record 20260731-184845-0a12e6c
+# Every quantity the superseded record `20260731-184845-0a12e6c` published, re-measured through `sim/harness` and compared point by point: 1872 shared measurements over 13 quantities. The deltas are relative, in percent.
+# The two runs are the same experiment, not merely a similar one: the decks, the seven-supply pushing axis, the 0.1 V step, the 0.05 V ripple, the window rule and the in-deck frequency estimator that sets the ripple frequency are all preserved term for term. What changed is the runner (bash + `sim/lib/simenv.sh` -> `sim/run_corners.py`), the deck composition (a `.control` block instead of a top-level `.tran`) and the extraction's host (`jitter_extract.py` -> this module, same arithmetic). A non-zero delta is therefore a finding about one of those, and is discussed in the record's Methodology field, not absorbed.
+quantity,points_compared,median_abs_delta_pct,max_abs_delta_pct,max_abs_delta_at
+fosc_hz,441,0.0394,0.763,sf/125C/B0/3.41V
+isupply_a,441,0.279,5.85,fs/-40C/B0/3.30V
+frip_hz,90,0,0.000542,all-slow/27C/3.30V/B5/R4
+quiet_f_hz,90,8.4e-05,0.000477,ss/125C/3.30V/B5/R16
+quiet_tie_rms_s,90,4.68,63.5,typical/27C/3.30V/B5/R4
+step_f_pre_hz,90,0.000145,0.000685,typical/27C/3.30V/B5/R4
+step_df_hz,90,0.00362,0.0171,typical/27C/3.30V/B5/R4
+step_kvdd_hz_per_v,90,0.00362,0.0171,typical/27C/3.30V/B5/R4
+rip_f_hz,90,9.2e-05,0.000477,ff/125C/2.97V/B5/R16
+rip_tj_pp_s,90,0.0319,0.154,all-slow/27C/3.30V/B5/R32
+rip_tj_rms_s,90,0.00453,0.0165,typical/27C/3.30V/B0/R16
+rip_tie_pp_s,90,0.0113,0.0698,typical/27C/3.30V/B0/R16
+rip_tie_rms_s,90,0.00412,0.023,typical/27C/3.30V/B0/R16
