@@ -33,8 +33,13 @@ Being honest about where this actually is:
   output-frequency accuracy, and the lock-detector flag all miss their
   criteria at the single nominal corner it covers. `period-jitter` is still
   reserved in `sim/README.md` with zero records.
-- **Not started** — layout. `layout/` and `measurements/` are placeholders.
-  Nothing here has been through DRC/LVS, and nothing has been fabricated or
+- **Not started** — PLL-block layout. `layout/` is not a placeholder: issue
+  #16 landed a repeatable `klt`-aware DRC/LVS flow against the gf180mcu
+  open-PDK decks, proven clean (and proven to catch a deliberately injected
+  DRC violation and LVS mismatch) on a trivial standard-cell inverter — see
+  `layout/evidence/inv-tb-proof/PROOF.md`. No PLL block has been drawn yet,
+  and `measurements/` stays empty until there is silicon. Nothing here has
+  been through DRC/LVS as a PLL block, and nothing has been fabricated or
   measured. Treat every number in this repository as simulation only.
 
 The maturity ladder being climbed: simulation-complete → layout DRC/LVS-clean
@@ -46,7 +51,7 @@ The maturity ladder being climbed: simulation-complete → layout DRC/LVS-clean
 spec/          specification + numbered decision records (DR-NNN)
 design/        xschem schematics/symbols + the SPICE netlist exporter
 sim/           testbenches, the PVT corner harness, and append-only evidence records
-layout/        GDS + DRC/LVS reports (empty — not started)
+layout/        DRC/LVS flow, proven on a test cell; PLL-block GDS/reports not yet drawn
 measurements/  silicon characterization (empty until there is silicon)
 ```
 
