@@ -769,6 +769,106 @@ class DerivedPointTests(ManifestFixture):
         self.assertIn("derive_point", str(ctx.exception))
 
 
+PARAMS_MODULE = '''
+"""Records what each derive hook was handed as ``params``."""
+
+from harness.derived import DerivedTable
+
+SEEN = {}
+
+
+def derive_point(point):
+    SEEN["derive_point"] = dict(point.params)
+    return {}
+
+
+def derive_tables(run):
+    SEEN["derive_tables"] = dict(run.points[0].params)
+    return [DerivedTable(name="t", columns=("a",), rows=(("1",),))]
+'''
+
+
+class DerivedParamsParityTests(ManifestFixture):
+    """Both derive hooks must see the manifest's top-level ``params``.
+
+    ``runner.point_view`` (``derive_point``) merged ``tb.params`` under the
+    point's own params, but ``cli.build_derived_tables`` (``derive_tables``)
+    passed ``point.params`` alone -- so a whole-run reduction reading a shared
+    manifest constant silently got nothing. That does not raise: it reads as an
+    empty deck-internal supply sweep (``vs1..vs7`` -> no curve to compare, a
+    migration self-check that reports "no shared point" for every quantity) or
+    as a zero-valued amplitude (``arip`` -> "0 mV peak-to-peak" in prose), and
+    both land in a committed record looking like findings rather than bugs.
+    Pin the two hooks to the same mapping.
+    """
+
+    slug = "vco-tuning-range"
+
+    def setUp(self):
+        super().setUp()
+        self.module = self.write_module(PARAMS_MODULE)
+        self.tb = testbench.load(
+            self.write(
+                {
+                    "measure": {},
+                    "analyses": ["tran 1n 10n"],
+                    "sweeps": RATE_AXIS,
+                    "params": {"arip": "0.05", "vs1": "2.97", "ktstep": "1e-9"},
+                    "raw_measures": {
+                        "t_arr": {"analysis": "tran", "expr": "trig v(a) targ v(b)"}
+                    },
+                    "derived": {"module": self.module, "tables": ["t"]},
+                }
+            )
+        )
+        self.point = corners.build_sweep_grid(
+            corners.resolve_corners(["typical"]), (27,), [3.3], axes=self.tb.sweeps
+        )[0]
+
+    def test_derive_tables_sees_the_manifests_top_level_params(self):
+        module = self.tb.derived.module()
+        module.SEEN.clear()
+        cli.build_derived_tables(
+            self.tb,
+            [runner.PointResult(point=self.point, status="ok",
+                                measurements={"t_arr": 1.0e-9})],
+            [],
+        )
+        seen = module.SEEN["derive_tables"]
+        self.assertEqual(seen.get("arip"), "0.05")
+        self.assertEqual(seen.get("vs1"), "2.97")
+
+    def test_both_hooks_are_handed_the_same_params_mapping(self):
+        module = self.tb.derived.module()
+        module.SEEN.clear()
+        derived.derive_point_measures(
+            self.tb.derived,
+            runner._point_view(self.tb, self.point, {"t_arr": 1.0e-9}),
+        )
+        cli.build_derived_tables(
+            self.tb,
+            [runner.PointResult(point=self.point, status="ok",
+                                measurements={"t_arr": 1.0e-9})],
+            [],
+        )
+        self.assertEqual(module.SEEN["derive_point"], module.SEEN["derive_tables"])
+
+    def test_a_points_own_value_still_wins_over_the_manifest_default(self):
+        module = self.tb.derived.module()
+        module.SEEN.clear()
+        cli.build_derived_tables(
+            self.tb,
+            [runner.PointResult(point=self.point, status="ok",
+                                measurements={"t_arr": 1.0e-9})],
+            [],
+        )
+        # RATE_AXIS's point carries its own ktstep; the axis must still win.
+        self.assertEqual(
+            module.SEEN["derive_tables"]["ktstep"],
+            self.point.params["ktstep"],
+        )
+
+
 class DerivedSpecConcurrencyTests(unittest.TestCase):
     """#73: DerivedSpec.module() must not double-import under a thread race.
 
