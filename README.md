@@ -20,14 +20,19 @@ Being honest about where this actually is:
 - **Done** — architecture and scope captured as numbered decision records in
   `spec/`; xschem schematics for the VCO, PFD, charge pump, feedback divider,
   lock detector, and the shared 3.3 V logic cells they are built from; a
-  reproducible PVT corner harness; **16 evidence records** across 9
+  reproducible PVT corner harness; **52 evidence records** across 18
   verification campaigns (device characterization, VCO tuning range, PFD
   dead-zone freedom, charge-pump compliance and mismatch, divider moduli,
-  lock-detector window).
-- **Not done** — the loop filter and closed-loop bring-up. There is **no
-  closed-loop PLL simulation yet**: no lock-time, output-band, jitter, or
-  supply-sensitivity evidence. Those campaign slugs are reserved in
-  `sim/README.md` and are deliberately empty.
+  lock-detector window, loop dynamics, and a first pass at the closed-loop
+  campaigns: lock-time, output-range, and supply-sensitivity).
+- **Not done** — closed-loop bring-up. `lock-time`, `output-range`, and
+  `supply-sensitivity` each have evidence now (6, 2, and 2 records
+  respectively), but the assembled loop does not yet close cleanly: the one
+  `pll-top-smoke` record on file (`20260801-085349-0e5c22d`) is an **overall
+  FAIL, 4 of 7 checks** — residual frequency error, static phase error,
+  output-frequency accuracy, and the lock-detector flag all miss their
+  criteria at the single nominal corner it covers. `period-jitter` is still
+  reserved in `sim/README.md` with zero records.
 - **Not started** — layout. `layout/` and `measurements/` are placeholders.
   Nothing here has been through DRC/LVS, and nothing has been fabricated or
   measured. Treat every number in this repository as simulation only.

@@ -58,6 +58,14 @@ jobs:
         # non-trivial functions require KLayout/subprocess.
         run: python3 -m unittest discover -s layout/tests -t layout/tests
 
+      - name: sim/lib/check-readme-status.sh (README evidence counts vs. sim/ tree)
+        # README.md's status section hand-states a record/campaign count
+        # (issue #117: it drifted silently to a stale "16 records / 9
+        # campaigns" while the tree grew to 52/18). Pure file-count vs.
+        # grep, no PDK dependency -- fails the build the next time it drifts
+        # instead of misleading a reader.
+        run: bash sim/lib/check-readme-status.sh
+
   pdk-checks:
     name: pdk-checks (nightly / ci:full -- requires gf180mcu PDK + xschem)
     runs-on: ubuntu-latest
