@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
-# gf180-pll :: run every simulation campaign
+# gf180-pll :: run the simulation campaigns wired into this script
 #
-#   ./run-all.sh            full corner grids, rewrites every results/*.csv
+#   ./run-all.sh            full corner grids; every campaign below mints a new
+#                           append-only record under sim/<slug>/records/
 #   ./run-all.sh --check    nominal corner of each campaign, printed to stdout,
-#                           nothing written -- the fast smoke test
+#                           nothing recorded -- the fast smoke test
 #   SIM_JOBS=4 ./run-all.sh cap parallelism
+#
+# This is NOT every campaign under sim/. The script predates sim/harness and
+# still covers only the campaigns listed below; the rest are run through
+# `python3 sim/run_corners.py <slug-or-manifest-path>` (see
+# sim/harness/README.md) or through their own testbench/run.sh. Retiring this
+# script alongside sim/lib/simenv.sh, once every campaign has moved onto
+# sim/harness, is #44.
 #
 # See README.md for the environment pin and the corner conventions.
 
@@ -60,9 +68,17 @@ run_harness "${HERE}/devchar-passives/testbench-res" --subset-reason "${RES_SUBS
 echo
 
 # Campaign order matters only in that a campaign must not depend on a later
-# one's output; today none do (divider-ratio joins its own two sub-campaigns
-# internally). Each campaign mints its own append-only record(s).
-# Still on the sim/lib/simenv.sh shim, migration tracked by #41.
+# one's output; today none do. Each campaign mints its own append-only
+# record(s).
+#
+# NOTE: these two invocations are the campaigns' PRE-migration runners. #41 has
+# since moved both onto sim/harness -- divider-ratio by splitting into the
+# sibling slugs divider-ratio-dff / -cell / -chain, lock-detector in place --
+# so the citable evidence for either claim is now a harness-minted record, and
+# these run.sh scripts are kept only because they are the only thing that can
+# regenerate the extra CSV artifacts their own older records cite (see
+# sim/README.md, "Migration state"). Repointing this loop at the harness is
+# part of #44.
 for campaign in divider-ratio lock-detector; do
   echo "=== ${campaign} ==="
   if [ -n "${MODE}" ]; then
@@ -73,4 +89,4 @@ for campaign in divider-ratio lock-detector; do
   echo
 done
 
-echo "All campaigns complete."
+echo "All campaigns wired into this script are complete."

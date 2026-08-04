@@ -141,8 +141,10 @@ Turning on write-time normalization for the committed tops rewrote their bytes
 (comment lines only), which invalidates the netlist-snapshot SHA-256 that the
 `vco-tuning-range`, `divider-ratio` and `lock-detector` records cite.
 `sim/README.md`'s append-only rule therefore requires those campaigns to be
-re-run and re-minted under new record IDs rather than edited in place; that
-re-run is tracked in **#32**, and **#28** stays open until it lands.
+re-run and re-minted under new record IDs rather than edited in place. That
+re-run landed under **#32** (both it and **#28** are closed): each affected
+campaign's post-normalization record carries a **Supersedes** line naming the
+pre-normalization one and reading `netlist provenance only`.
 
 Connectivity in these schematics is **label-driven**: each device terminal
 carries a `lab_pin` symbol placed exactly on the terminal coordinate, rather
