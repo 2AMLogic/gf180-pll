@@ -1,355 +1,329 @@
 #!/usr/bin/env bash
-# test-gh-cached.sh — Tests for the gh-cached TTL cache wrapper (issue #107).
+# test-gh-cached.sh — behavioral tests for the gh-cached short-TTL read cache
+# as it is used by the sweep / judge / champion skills (issue #4667).
 #
-# The cache is file-backed under a well-known /tmp path shared by every
-# checkout on the host, so its key MUST carry a repo-identifying component.
-# Without one, two repositories issuing byte-identical `gh` argv — e.g. the
-# Loom queue listing `gh pr list --label=loom:review-requested --state=open
-# --limit 500`, which is identical in every Loom-templated repo — collide on
-# the same key and one repo is served the other's response.
+# These cover the properties those skills' documented command sequences now
+# depend on (`defaults/docs/gh-cached.md`):
 #
-# Covers:
-#   a. Baseline: a repeated read in one repo is a cache HIT (one `gh` call).
-#   b. Cross-repo isolation: identical argv from two different repos never
-#      share an entry, and never serve each other's response.
-#   c. Same-repo/different-worktree: a linked worktree still SHARES the main
-#      checkout's entries (scope is the resolved remote, not the cwd).
-#   d. Scope derivation: ssh/https/bare/GH_REPO spellings of the same repo all
-#      normalize to one scope; a local-path remote falls back to path scope.
-#   e. Mutation invalidation stays inside the mutating repo's partition.
-#   f. --clear-cache is scope-local; --clear-cache --all is host-wide.
-#   g. Regression guard: the key is no longer the repo-agnostic
-#      sha256(" ".join(args))[:16] that produced the observed collision.
+#   1. Repeated hot discovery reads (`pr list` / `issue list` / `pr view`) are
+#      served from the cache within the TTL window.
+#   2. `--no-cache` bypasses the cache (the explicit-bypass escape hatch).
+#   3. Verdict/merge-gating shapes (`gh pr checks`) and the liveness probe
+#      (`gh repo view`) are NEVER cached — the deliberate carve-outs.
+#   4. A state change is observed once the TTL expires (no indefinite masking).
+#   5. A mutation issued through the wrapper invalidates cached reads of that
+#      resource — including the cached *listing* that contains it.
+#   6. `--clear-cache` drops every entry (the documented remedy after a write
+#      issued as literal `gh`, which is how the skills must issue writes so the
+#      destructive-command guard hooks still see them).
+#   7. Failed reads (non-zero exit) are never cached.
 #
-# Style matches test-fleet-send.sh — plain bash, hand-rolled assertions.
-# Bats is NOT used in this repository.
+# Hermetic: a stub `gh` on PATH plus a temp GH_CACHE_DIR. No network, no forge,
+# no real `gh`. Requires python3 (the wrapper's runtime); skips cleanly without.
 #
 # Usage:
-#   bash .loom/scripts/tests/test-gh-cached.sh
+#   ./defaults/scripts/tests/test-gh-cached.sh
 
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-GH_CACHED="$SCRIPTS_DIR/gh-cached"
-PY="${LOOM_PYTHON:-python3}"
+GH_CACHED="$(cd "$SCRIPT_DIR/.." && pwd)/gh-cached"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 NC='\033[0m'
 
 TESTS_RUN=0
 TESTS_PASSED=0
 TESTS_FAILED=0
 
-pass() {
-    TESTS_RUN=$((TESTS_RUN + 1))
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-    echo -e "  ${GREEN}PASS${NC}: $1"
-}
-fail() {
-    TESTS_RUN=$((TESTS_RUN + 1))
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-    echo -e "  ${RED}FAIL${NC}: $1"
-    [[ -n "${2:-}" ]] && echo "    $2"
-}
-
 assert_eq() {
-    if [[ "$1" == "$2" ]]; then pass "$3"; else fail "$3" "expected '$1', got '$2'"; fi
-}
-assert_ne() {
-    if [[ "$1" != "$2" ]]; then pass "$3"; else fail "$3" "expected values to differ, both were '$1'"; fi
-}
-assert_contains() {
-    if [[ "$2" == *"$1"* ]]; then pass "$3"; else fail "$3" "expected substring '$1' in '$2'"; fi
-}
-assert_not_contains() {
-    if [[ "$2" != *"$1"* ]]; then pass "$3"; else fail "$3" "unexpected substring '$1' in '$2'"; fi
-}
-
-if [[ ! -f "$GH_CACHED" ]]; then
-    echo -e "  ${RED}FAIL${NC}: gh-cached not found at $GH_CACHED"
-    exit 1
-fi
-if ! command -v "$PY" >/dev/null 2>&1; then
-    echo -e "  ${YELLOW}SKIP${NC}: python3 not available; gh-cached tests need it"
-    exit 0
-fi
-if ! command -v git >/dev/null 2>&1; then
-    echo -e "  ${YELLOW}SKIP${NC}: git not available; gh-cached tests need it"
-    exit 0
-fi
-
-TMPDIR_TEST="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_TEST"' EXIT
-
-CACHE_BASE="$TMPDIR_TEST/gh-cache"
-STUB_DIR="$TMPDIR_TEST/bin"
-CALLS="$TMPDIR_TEST/gh-calls.log"
-mkdir -p "$STUB_DIR"
-: >"$CALLS"
-
-# Stub `gh`: records each real invocation and echoes a caller-supplied payload,
-# so a cache HIT is observable (no new line in $CALLS) and a contaminated
-# response is observable (wrong payload on stdout).
-cat >"$STUB_DIR/gh" <<'STUB'
-#!/usr/bin/env bash
-echo "$*" >>"$GH_STUB_CALLS"
-printf '%s\n' "$GH_STUB_PAYLOAD"
-exit 0
-STUB
-chmod +x "$STUB_DIR/gh"
-
-# The exact primary-queue listing every Loom-templated repo issues verbatim —
-# this is the argv that collided in the field.
-QUEUE_ARGS=(pr list --label=loom:review-requested --state=open --limit 500)
-
-# run_in <dir> <payload> <args...> — invoke gh-cached from <dir> with the stub.
-run_in() {
-    local dir="$1" payload="$2"
-    shift 2
-    (
-        cd "$dir" || exit 1
-        PATH="$STUB_DIR:$PATH" \
-        GH_CACHE_DIR="$CACHE_BASE" \
-        GH_STUB_CALLS="$CALLS" \
-        GH_STUB_PAYLOAD="$payload" \
-        "$PY" "$GH_CACHED" "$@" 2>/dev/null
-    )
-}
-
-# scope_of <dir> [env assignments...] — print the resolved scope string.
-scope_of() {
-    local dir="$1"
-    shift
-    (
-        cd "$dir" || exit 1
-        env "$@" GH_CACHE_DIR="$CACHE_BASE" "$PY" "$GH_CACHED" --cache-scope 2>/dev/null | head -1
-    )
-}
-
-call_count() { wc -l <"$CALLS" | tr -d ' '; }
-entry_count() { find "$CACHE_BASE" -name '*.json' ! -name '_stats.json' 2>/dev/null | wc -l | tr -d ' '; }
-
-# make_repo <dir> <origin-url> [--commit]
-make_repo() {
-    local dir="$1" url="$2"
-    mkdir -p "$dir"
-    git -C "$dir" init -q
-    git -C "$dir" remote add origin "$url"
-    if [[ "${3:-}" == "--commit" ]]; then
-        echo seed >"$dir/seed.txt"
-        git -C "$dir" add seed.txt
-        git -C "$dir" -c user.email=t@example.com -c user.name=Test \
-            commit -qm seed
+    local expected="$1" actual="$2" msg="$3"
+    TESTS_RUN=$((TESTS_RUN + 1))
+    if [[ "$expected" == "$actual" ]]; then
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+        echo -e "  ${GREEN}PASS${NC}: $msg"
+    else
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        echo -e "  ${RED}FAIL${NC}: $msg"
+        echo "    Expected: '$expected'"
+        echo "    Actual:   '$actual'"
     fi
 }
 
-REPO_A="$TMPDIR_TEST/repo-a"
-REPO_B="$TMPDIR_TEST/repo-b"
-make_repo "$REPO_A" "https://github.com/2AMLogic/repo-alpha.git" --commit
-make_repo "$REPO_B" "https://github.com/2AMLogic/repo-beta.git"
-
-echo ""
-echo "=== gh-cached: repo-scoped caching ==="
-echo ""
-
-# ============================================================
-# (a) Baseline — caching still works within a single repo
-# ============================================================
-echo "-- (a) repeated identical read in one repo is a cache hit --"
-before="$(call_count)"
-out_a1="$(run_in "$REPO_A" "ALPHA-PAYLOAD" "${QUEUE_ARGS[@]}")"
-out_a2="$(run_in "$REPO_A" "ALPHA-PAYLOAD" "${QUEUE_ARGS[@]}")"
-after="$(call_count)"
-assert_eq "ALPHA-PAYLOAD" "$out_a1" "(a) first read returns the real response"
-assert_eq "ALPHA-PAYLOAD" "$out_a2" "(a) second read returns the same response"
-assert_eq "1" "$((after - before))" "(a) second read served from cache (one gh call)"
-
-# ============================================================
-# (b) Cross-repo isolation — THE bug in issue #107
-# ============================================================
-echo ""
-echo "-- (b) identical argv from a different repo is never served repo A's response --"
-before="$(call_count)"
-# Payload differs so a contaminated read is unmistakable: if the key were
-# repo-agnostic, repo B would receive ALPHA-PAYLOAD from repo A's live entry.
-out_b1="$(run_in "$REPO_B" "BETA-PAYLOAD" "${QUEUE_ARGS[@]}")"
-after="$(call_count)"
-assert_eq "BETA-PAYLOAD" "$out_b1" "(b) repo B gets its OWN response"
-assert_not_contains "ALPHA" "$out_b1" "(b) repo B is not served repo A's cached response"
-assert_eq "1" "$((after - before))" "(b) repo B's read was a MISS (repo A's entry did not match)"
-
-# Repo A's own entry must still be intact and unpolluted afterwards.
-before="$(call_count)"
-out_a3="$(run_in "$REPO_A" "ALPHA-PAYLOAD" "${QUEUE_ARGS[@]}")"
-after="$(call_count)"
-assert_eq "ALPHA-PAYLOAD" "$out_a3" "(b) repo A still gets its own cached response"
-assert_eq "0" "$((after - before))" "(b) repo A's entry survived repo B's read (still a hit)"
-
-scope_a="$(scope_of "$REPO_A")"
-scope_b="$(scope_of "$REPO_B")"
-assert_ne "$scope_a" "$scope_b" "(b) the two repos resolve to different scopes"
-assert_eq "repo:github.com/2amlogic/repo-alpha" "$scope_a" "(b) repo A scope is its resolved owner/repo"
-
-dirs="$(find "$CACHE_BASE" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
-assert_eq "2" "$dirs" "(b) each repo got its own cache partition directory"
-
-# ============================================================
-# (c) Same repo, different worktree — must still SHARE the cache
-# ============================================================
-echo ""
-echo "-- (c) a linked worktree of the same repo shares cache entries --"
-WT_A="$TMPDIR_TEST/wt-a"
-if git -C "$REPO_A" worktree add -q -b wt-branch "$WT_A" >/dev/null 2>&1; then
-    scope_wt="$(scope_of "$WT_A")"
-    assert_eq "$scope_a" "$scope_wt" "(c) worktree resolves to the SAME scope as its main checkout"
-
-    before="$(call_count)"
-    out_wt="$(run_in "$WT_A" "SHOULD-NOT-BE-USED" "${QUEUE_ARGS[@]}")"
-    after="$(call_count)"
-    assert_eq "ALPHA-PAYLOAD" "$out_wt" "(c) worktree is served the main checkout's cached response"
-    assert_eq "0" "$((after - before))" "(c) worktree read was a HIT (no extra gh call)"
-else
-    fail "(c) could not create a linked worktree fixture"
-fi
-
-# ============================================================
-# (d) Scope derivation across remote spellings
-# ============================================================
-echo ""
-echo "-- (d) scope derivation normalizes equivalent repo identities --"
-REPO_SSH="$TMPDIR_TEST/repo-ssh"
-make_repo "$REPO_SSH" "git@github.com:2AMLogic/Repo-Alpha.git"
-assert_eq "$scope_a" "$(scope_of "$REPO_SSH")" \
-    "(d) ssh remote normalizes to the same scope as the https remote"
-
-REPO_NOSUFFIX="$TMPDIR_TEST/repo-nosuffix"
-make_repo "$REPO_NOSUFFIX" "https://github.com/2AMLogic/repo-alpha"
-assert_eq "$scope_a" "$(scope_of "$REPO_NOSUFFIX")" \
-    "(d) missing .git suffix normalizes to the same scope"
-
-assert_eq "repo:github.com/2amlogic/repo-beta" \
-    "$(scope_of "$REPO_A" GH_REPO=2AMLogic/repo-beta)" \
-    "(d) GH_REPO overrides the git remote (matching gh's own precedence)"
-assert_eq "repo:example.com/o/r" \
-    "$(scope_of "$REPO_A" GH_REPO=example.com/o/r)" \
-    "(d) GH_REPO accepts HOST/OWNER/REPO"
-assert_eq "repo:gitea.example.com/2amlogic/repo-alpha" \
-    "$(scope_of "$REPO_A" GH_HOST=gitea.example.com GH_REPO=2AMLogic/repo-alpha)" \
-    "(d) GH_HOST distinguishes same-name repos on different forges"
-
-# A local filesystem remote is not an owner/repo identity — fall back to a
-# per-checkout path scope rather than inventing an owner/repo from directory
-# names (which two unrelated local repos could share).
-REPO_LOCAL1="$TMPDIR_TEST/local1/srv/mirrors/thing"
-REPO_LOCAL2="$TMPDIR_TEST/local2/srv/mirrors/thing"
-make_repo "$REPO_LOCAL1" "/srv/mirrors/thing.git"
-make_repo "$REPO_LOCAL2" "/srv/mirrors/thing.git"
-scope_l1="$(scope_of "$REPO_LOCAL1")"
-scope_l2="$(scope_of "$REPO_LOCAL2")"
-assert_contains "path:" "$scope_l1" "(d) local-path remote falls back to a path scope"
-assert_ne "$scope_l1" "$scope_l2" \
-    "(d) two unrelated local-path repos with identical remote strings stay isolated"
-
-REPO_NOREMOTE="$TMPDIR_TEST/repo-noremote"
-mkdir -p "$REPO_NOREMOTE"
-git -C "$REPO_NOREMOTE" init -q
-assert_contains "path:" "$(scope_of "$REPO_NOREMOTE")" \
-    "(d) a repo with no remote falls back to a path scope"
-
-# ============================================================
-# (e) Mutation invalidation stays inside the mutating repo
-# ============================================================
-echo ""
-echo "-- (e) a mutation in one repo does not invalidate another repo's entries --"
-run_in "$REPO_A" "ALPHA-ISSUE-42" issue view 42 --json labels >/dev/null
-run_in "$REPO_B" "BETA-ISSUE-42" issue view 42 --json labels >/dev/null
-run_in "$REPO_A" "edited" issue edit 42 --add-label bug >/dev/null
-
-before="$(call_count)"
-out_b_after="$(run_in "$REPO_B" "BETA-ISSUE-42-REFETCHED" issue view 42 --json labels)"
-after="$(call_count)"
-assert_eq "BETA-ISSUE-42" "$out_b_after" "(e) repo B's entry survived repo A's mutation"
-assert_eq "0" "$((after - before))" "(e) repo B still hits its cache after repo A's mutation"
-
-before="$(call_count)"
-out_a_after="$(run_in "$REPO_A" "ALPHA-ISSUE-42-REFETCHED" issue view 42 --json labels)"
-after="$(call_count)"
-assert_eq "ALPHA-ISSUE-42-REFETCHED" "$out_a_after" "(e) repo A's own entry WAS invalidated by its mutation"
-assert_eq "1" "$((after - before))" "(e) repo A re-fetched after its own mutation"
-
-# ============================================================
-# (f) --clear-cache scoping
-# ============================================================
-echo ""
-echo "-- (f) --clear-cache is scope-local; --clear-cache --all is host-wide --"
-run_in "$REPO_A" "unused" --clear-cache >/dev/null
-a_entries="$(find "$CACHE_BASE"/*repo-alpha* -name '*.json' ! -name '_stats.json' 2>/dev/null | wc -l | tr -d ' ')"
-b_entries="$(find "$CACHE_BASE"/*repo-beta* -name '*.json' ! -name '_stats.json' 2>/dev/null | wc -l | tr -d ' ')"
-assert_eq "0" "$a_entries" "(f) --clear-cache emptied the invoking repo's partition"
-[[ "$b_entries" -gt 0 ]] && pass "(f) --clear-cache left the other repo's entries alone" \
-    || fail "(f) --clear-cache left the other repo's entries alone" "repo B partition was emptied too"
-
-# A pre-repo-scoping leftover: an un-partitioned entry sitting directly in the
-# base dir. It is never read any more, but --all should still sweep it.
-echo '{}' >"$CACHE_BASE/102901682669d3f8.json"
-run_in "$REPO_A" "unused" --clear-cache --all >/dev/null
-assert_eq "0" "$(entry_count)" "(f) --clear-cache --all emptied every partition"
-[[ -f "$CACHE_BASE/102901682669d3f8.json" ]] \
-    && fail "(f) --clear-cache --all sweeps legacy un-partitioned entries" "legacy entry still present" \
-    || pass "(f) --clear-cache --all sweeps legacy un-partitioned entries"
-
-# ============================================================
-# (g) Regression guard — the key is no longer repo-agnostic
-# ============================================================
-echo ""
-echo "-- (g) cache key includes the repo scope --"
-# The field collision produced /tmp/gh-cache/102901682669d3f8.json, i.e.
-# sha256(" ".join(args))[:16] with no repo component. Assert (1) that legacy
-# derivation is not what the key function computes, and (2) that the same argv
-# under two scopes yields two different keys.
-legacy="$("$PY" - <<'PYEOF'
-import hashlib
-print(hashlib.sha256(
-    "pr list --label=loom:review-requested --state=open --limit 500".encode()
-).hexdigest()[:16])
-PYEOF
-)"
-assert_eq "102901682669d3f8" "$legacy" "(g) reproduced the legacy (repo-agnostic) key from the field report"
-
-keys="$(GH_CACHED_PATH="$GH_CACHED" "$PY" - <<'PYEOF'
-import importlib.util, os, sys
-
-args = ["pr", "list", "--label=loom:review-requested", "--state=open", "--limit", "500"]
-out = []
-for scope in ("github.com/owner/alpha", "github.com/owner/beta"):
-    os.environ["GH_CACHE_SCOPE"] = scope
-    spec = importlib.util.spec_from_loader(
-        "ghcached", importlib.machinery.SourceFileLoader(
-            "ghcached", os.environ["GH_CACHED_PATH"]))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    out.append(mod.cache_key(args))
-print(" ".join(out))
-PYEOF
-)"
-key1="${keys%% *}"
-key2="${keys##* }"
-assert_ne "$key1" "$key2" "(g) identical argv under two scopes produce different keys"
-assert_ne "$legacy" "$key1" "(g) key is no longer the legacy repo-agnostic digest"
-
-# ============================================================
-# Summary
-# ============================================================
-echo ""
-echo "========================================"
-echo "Test Results:"
-echo "  Total:  $TESTS_RUN"
-echo -e "  ${GREEN}Passed: $TESTS_PASSED${NC}"
-if [[ "$TESTS_FAILED" -gt 0 ]]; then
-    echo -e "  ${RED}Failed: $TESTS_FAILED${NC}"
+if [[ ! -x "$GH_CACHED" ]]; then
+    echo "FAIL: gh-cached not found or not executable at $GH_CACHED" >&2
     exit 1
 fi
-echo -e "  ${GREEN}All tests passed!${NC}"
+
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "SKIP: python3 not available — gh-cached cannot run on this host"
+    exit 0
+fi
+
+TMP_ROOT="$(mktemp -d)"
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+STUB_DIR="$TMP_ROOT/bin"
+STATE_DIR="$TMP_ROOT/state"
+mkdir -p "$STUB_DIR" "$STATE_DIR"
+
+CALL_LOG="$TMP_ROOT/calls.log"
+: > "$CALL_LOG"
+
+# --- Stub `gh` -------------------------------------------------------------
+# Logs every invocation (so we can count real forge calls) and answers from
+# $STATE_DIR files, which the tests mutate to simulate forge-side changes.
+cat > "$STUB_DIR/gh" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$GH_STUB_CALL_LOG"
+
+case "$1 ${2:-}" in
+  "--version "*|"--version")
+    echo "gh version 2.99.0 (stub)"; exit 0 ;;
+esac
+
+case "$1" in
+  repo)   cat "$GH_STUB_STATE/repo.txt"; exit 0 ;;
+esac
+
+case "$1 ${2:-}" in
+  "pr list")     cat "$GH_STUB_STATE/pr-list.json"; exit 0 ;;
+  "pr view")     cat "$GH_STUB_STATE/pr-view.json"; exit 0 ;;
+  "pr checks")   cat "$GH_STUB_STATE/pr-checks.txt"; exit 0 ;;
+  "issue list")  cat "$GH_STUB_STATE/issue-list.json"; exit 0 ;;
+  "pr edit"|"pr comment"|"issue edit")
+    exit 0 ;;
+  "api "*|"api")
+    # A failing read: used to prove non-zero responses are never cached.
+    echo "stub api error" >&2; exit 1 ;;
+esac
+
+echo "stub: unhandled args: $*" >&2
+exit 64
+STUB
+chmod +x "$STUB_DIR/gh"
+
+export GH_STUB_CALL_LOG="$CALL_LOG"
+export GH_STUB_STATE="$STATE_DIR"
+
+echo '{"name":"loom"}'                          > "$STATE_DIR/repo.txt"
+echo '[{"number":4242,"labels":["loom:review-requested"]}]' > "$STATE_DIR/pr-list.json"
+echo '{"labels":["loom:review-requested"]}'     > "$STATE_DIR/pr-view.json"
+echo 'build  pass  1m0s'                        > "$STATE_DIR/pr-checks.txt"
+echo '[{"number":99,"title":"an issue"}]'       > "$STATE_DIR/issue-list.json"
+
+CACHE_DIR="$TMP_ROOT/cache"
+
+# Run gh-cached with a hermetic environment. Args are passed through verbatim.
+# LOOM_ETAG_LIST_DISABLE=1 pins these to the TTL-cache layer under test — the
+# #5056 ETag/REST routing (which would otherwise front-run `issue/pr list` when
+# a loom-daemon is on PATH) has its own dedicated block at the end of this file.
+ghc() {
+    PATH="$STUB_DIR:$PATH" \
+    GH_CACHE_DIR="$CACHE_DIR" \
+    GH_CACHE_TTL="${TTL_OVERRIDE:-30}" \
+    LOOM_ETAG_LIST_DISABLE=1 \
+      "$GH_CACHED" "$@"
+}
+
+call_count() { wc -l < "$CALL_LOG" | tr -d ' '; }
+reset_calls() { : > "$CALL_LOG"; }
+reset_cache() { rm -rf "$CACHE_DIR"; reset_calls; }
+
+# --- 1. Hot discovery reads are cached -------------------------------------
+echo "Testing cache hits on hot discovery reads..."
+
+reset_cache
+out1=$(ghc pr list --label "loom:review-requested" --state open --limit 500)
+out2=$(ghc pr list --label "loom:review-requested" --state open --limit 500)
+assert_eq "1" "$(call_count)" "repeated 'pr list' issues ONE real gh call (2nd is a cache hit)"
+assert_eq "$out1" "$out2" "cached 'pr list' returns the identical payload"
+
+reset_cache
+ghc issue list --label "loom:issue" --state open --limit 100 >/dev/null
+ghc issue list --label "loom:issue" --state open --limit 100 >/dev/null
+assert_eq "1" "$(call_count)" "repeated 'issue list' issues ONE real gh call"
+
+reset_cache
+ghc pr view 4242 --json labels >/dev/null
+ghc pr view 4242 --json labels >/dev/null
+assert_eq "1" "$(call_count)" "repeated 'pr view --json labels' issues ONE real gh call"
+
+# Distinct arguments must be distinct cache keys (no cross-query bleed).
+reset_cache
+ghc pr list --label "loom:review-requested" --state open --limit 500 >/dev/null
+ghc pr list --label "loom:pr" --state open --limit 500 >/dev/null
+assert_eq "2" "$(call_count)" "a different --label is a different cache key"
+
+# --- 2. --no-cache bypasses ------------------------------------------------
+echo ""
+echo "Testing the explicit --no-cache bypass..."
+
+reset_cache
+ghc pr view 4242 --json labels >/dev/null
+ghc --no-cache pr view 4242 --json labels >/dev/null
+assert_eq "2" "$(call_count)" "--no-cache bypasses a warm cache entry"
+
+# --- 3. Deliberate carve-outs are never cached -----------------------------
+echo ""
+echo "Testing the uncached carve-outs (verdict/merge gating + liveness probe)..."
+
+reset_cache
+ghc pr checks 4242 >/dev/null 2>&1
+ghc pr checks 4242 >/dev/null 2>&1
+assert_eq "2" "$(call_count)" "'pr checks' (CI gate) is NEVER cached"
+
+reset_cache
+ghc repo view --json name >/dev/null 2>&1
+ghc repo view --json name >/dev/null 2>&1
+assert_eq "2" "$(call_count)" "'repo view' (liveness probe) is NEVER cached"
+
+# --- 4. A state change is observed once the TTL expires --------------------
+echo ""
+echo "Testing TTL expiry (a state change is not masked indefinitely)..."
+
+reset_cache
+TTL_OVERRIDE=1 ghc pr list --state open --limit 500 >/dev/null
+echo '[{"number":4242,"labels":["loom:pr"]}]' > "$STATE_DIR/pr-list.json"
+fresh_within_ttl=$(TTL_OVERRIDE=1 ghc pr list --state open --limit 500)
+assert_eq "1" "$(call_count)" "within the TTL window the changed state is still served from cache"
+case "$fresh_within_ttl" in
+  *loom:review-requested*) within_ok="stale" ;;
+  *) within_ok="fresh" ;;
+esac
+assert_eq "stale" "$within_ok" "…and that cached payload is the pre-change one (as designed)"
+
+sleep 2
+after_ttl=$(TTL_OVERRIDE=1 ghc pr list --state open --limit 500)
+assert_eq "2" "$(call_count)" "after the TTL expires the read hits the forge again"
+case "$after_ttl" in
+  *'"loom:pr"'*) after_ok="fresh" ;;
+  *) after_ok="stale" ;;
+esac
+assert_eq "fresh" "$after_ok" "…and the new state IS observed within one TTL window"
+
+# restore the baseline listing for the remaining tests
+echo '[{"number":4242,"labels":["loom:review-requested"]}]' > "$STATE_DIR/pr-list.json"
+
+# --- 5. Mutation-triggered invalidation ------------------------------------
+echo ""
+echo "Testing mutation-triggered invalidation (a skill's own write is never masked)..."
+
+reset_cache
+ghc pr view 4242 --json labels >/dev/null           # warm: 1 call
+echo '{"labels":["loom:pr"]}' > "$STATE_DIR/pr-view.json"
+ghc pr edit 4242 --add-label "loom:pr" >/dev/null    # mutation: 2 calls, invalidates
+after_edit=$(ghc pr view 4242 --json labels)         # re-read: 3 calls
+assert_eq "3" "$(call_count)" "a wrapped 'pr edit' invalidates the cached 'pr view' of that PR"
+case "$after_edit" in
+  *'"loom:pr"'*) mut_ok="fresh" ;;
+  *) mut_ok="stale" ;;
+esac
+assert_eq "fresh" "$mut_ok" "…so the re-read observes the skill's own write"
+
+# The cached LISTING containing that PR must be invalidated too (the stdout
+# fallback match) — otherwise a Judge that labels loom:pr could still see the
+# PR in its own loom:review-requested queue.
+reset_cache
+ghc pr list --label "loom:review-requested" --state open --limit 500 >/dev/null
+ghc pr edit 4242 --add-label "loom:pr" >/dev/null
+ghc pr list --label "loom:review-requested" --state open --limit 500 >/dev/null
+assert_eq "3" "$(call_count)" "a wrapped mutation also invalidates a cached listing containing that PR"
+
+reset_cache
+ghc pr view 4242 --json labels >/dev/null
+ghc pr comment 4242 --body "hello" >/dev/null
+ghc pr view 4242 --json labels >/dev/null
+assert_eq "3" "$(call_count)" "'pr comment' invalidates cached reads of that PR too"
+
+# --- 6. --clear-cache (the post-literal-`gh`-write remedy) -----------------
+echo ""
+echo "Testing --clear-cache (the documented remedy after a literal-gh write)..."
+
+reset_cache
+ghc pr list --label "loom:review-requested" --state open --limit 500 >/dev/null
+ghc --clear-cache >/dev/null 2>&1
+ghc pr list --label "loom:review-requested" --state open --limit 500 >/dev/null
+assert_eq "2" "$(call_count)" "--clear-cache drops the warm entry, forcing a fresh read"
+
+# --- 7. Failed reads are never cached --------------------------------------
+echo ""
+echo "Testing that failing reads are not memoized..."
+
+reset_cache
+ghc api "repos/o/r/commits/deadbeef/check-runs" >/dev/null 2>&1
+rc1=$?
+ghc api "repos/o/r/commits/deadbeef/check-runs" >/dev/null 2>&1
+assert_eq "2" "$(call_count)" "a non-zero read is retried, never served from cache"
+assert_eq "1" "$rc1" "the wrapper propagates the underlying gh exit code"
+
+# --- 8. The fallback contract ----------------------------------------------
+# Every skill resolves the wrapper with `"$GH_CACHED" --version` and falls back
+# to plain `gh` when it fails. Assert the probe the skills document works.
+echo ""
+echo "Testing the wrapper-resolution probe used by the skills..."
+
+reset_cache
+if ghc --version >/dev/null 2>&1; then probe_rc=0; else probe_rc=$?; fi
+assert_eq "0" "$probe_rc" "'gh-cached --version' succeeds (the skills' resolution probe)"
+
+# --- 9. ETag/REST routing (#5056) ------------------------------------------
+# `issue list` / `pr list` prefer loom-daemon's ETag-cached REST path when the
+# binary is present (free 304 on repeat, separate REST pool). Here a FAKE
+# loom-daemon on PATH proves: (a) a cacheable list shape is served by it, not
+# the stub gh; (b) a decline (non-zero exit) transparently falls through to the
+# normal gh path; (c) LOOM_ETAG_LIST_DISABLE=1 turns the whole layer off.
+echo ""
+echo "Testing the #5056 ETag/REST cached-listing routing..."
+
+FAKE_DAEMON_DIR="$TMP_ROOT/daemon"
+mkdir -p "$FAKE_DAEMON_DIR"
+# A fake loom-daemon: `forge <e> list --cached` with --json succeeds and emits a
+# sentinel; any shape without --json exits 3 (decline), mirroring the real one.
+cat > "$FAKE_DAEMON_DIR/loom-daemon" <<'FAKE'
+#!/usr/bin/env bash
+if [[ "$1" == "forge" && "$3" == "list" ]]; then
+    if printf '%s\n' "$@" | grep -q -- '--json'; then
+        echo '[{"number":777,"title":"from-etag-daemon"}]'
+        exit 0
+    fi
+    exit 3
+fi
+exit 3
+FAKE
+chmod +x "$FAKE_DAEMON_DIR/loom-daemon"
+
+# Runner with the fake daemon on PATH and the ETag layer ENABLED.
+ghc_etag() {
+    PATH="$STUB_DIR:$FAKE_DAEMON_DIR:$PATH" \
+    GH_CACHE_DIR="$CACHE_DIR" \
+    LOOM_DAEMON_BIN="$FAKE_DAEMON_DIR/loom-daemon" \
+      "$GH_CACHED" "$@"
+}
+
+reset_cache
+etag_out=$(ghc_etag issue list --label "loom:issue" --state open --json number,title)
+assert_eq '[{"number":777,"title":"from-etag-daemon"}]' "$etag_out" \
+    "a cacheable 'issue list --json' is served by the ETag daemon path, not stub gh"
+assert_eq "0" "$(call_count)" "…and the stub gh is never called for the ETag-served list"
+
+# A shape the daemon declines (no --json → daemon exits 3) falls through to gh.
+reset_cache
+ghc_etag pr list --label "loom:review-requested" --state open >/dev/null  # no --json → decline
+assert_eq "1" "$(call_count)" "a daemon-declined list shape falls through to a real gh call"
+
+# The kill switch disables the whole ETag layer even with the daemon present.
+reset_cache
+LOOM_ETAG_LIST_DISABLE=1 ghc_etag issue list --label "loom:issue" --state open --json number,title >/dev/null
+assert_eq "1" "$(call_count)" "LOOM_ETAG_LIST_DISABLE=1 bypasses the ETag path (falls to gh)"
+
+# --- Summary ---------------------------------------------------------------
+echo ""
+echo "────────────────────────────────"
+echo "Results: $TESTS_PASSED/$TESTS_RUN passed, $TESTS_FAILED failed"
+
+if [[ $TESTS_FAILED -gt 0 ]]; then
+    exit 1
+fi
+exit 0
