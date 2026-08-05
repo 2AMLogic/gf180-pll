@@ -20,19 +20,19 @@ Being honest about where this actually is:
 - **Done** — architecture and scope captured as numbered decision records in
   `spec/`; xschem schematics for the VCO, PFD, charge pump, feedback divider,
   lock detector, and the shared 3.3 V logic cells they are built from; a
-  reproducible PVT corner harness; **55 evidence records** across 18
+  reproducible PVT corner harness; **56 evidence records** across 18
   verification campaigns (device characterization, VCO tuning range, PFD
   dead-zone freedom, charge-pump compliance and mismatch, divider moduli,
   lock-detector window, loop dynamics, and a first pass at the closed-loop
   campaigns: lock-time, output-range, and supply-sensitivity).
 - **Not done** — closed-loop bring-up. `lock-time`, `output-range`, and
   `supply-sensitivity` each have evidence now (6, 2, and 2 records
-  respectively), but the assembled loop does not yet close cleanly: the one
-  `pll-top-smoke` record on file (`20260801-085349-0e5c22d`) is an **overall
-  FAIL, 4 of 7 checks** — residual frequency error, static phase error,
-  output-frequency accuracy, and the lock-detector flag all miss their
-  criteria at the single nominal corner it covers. `period-jitter` is still
-  reserved in `sim/README.md` with zero records.
+  respectively), and the latest `pll-top-smoke` record
+  (`20260802-160926-8456ff3`, superseding the earlier FAIL) is an **overall
+  PASS, 0 of 7 checks failed** — but that is still just the single nominal
+  corner (`typical` / 27 C / 3.30 V) it covers, not a PVT sweep; the loop's
+  behavior across the rest of the corner matrix remains unverified.
+  `period-jitter` is still reserved in `sim/README.md` with zero records.
 - **Not started** — PLL-block layout. `layout/` is not a placeholder: issue
   #16 landed a repeatable `klt`-aware DRC/LVS flow against the gf180mcu
   open-PDK decks, proven clean (and proven to catch a deliberately injected
