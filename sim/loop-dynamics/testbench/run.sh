@@ -218,16 +218,6 @@ echo "loop-dynamics: collected ${NZROWS} filter-Z rows, ${NTROWS} loop-AC cross-
 # Unset, all four fall back to the wording this campaign was minted with, so
 # an unqualified re-run emits exactly what it emitted before.
 # --------------------------------------------------------------------------
-supersedes_field() {
-  if [ -z "${SIM_SUPERSEDES:-}" ]; then
-    echo "- **Supersedes**: (none -- first record for this claim)"
-  elif [ -z "${SIM_SUPERSEDES_NOTE:-}" ]; then
-    echo "- **Supersedes**: ${SIM_SUPERSEDES}"
-  else
-    echo "- **Supersedes**: ${SIM_SUPERSEDES} -- ${SIM_SUPERSEDES_NOTE}"
-  fi
-}
-
 # Emits with a LEADING newline and none trailing, so it appends to the end of
 # the last Methodology bullet: command substitution strips trailing newlines,
 # so a trailing-newline form would run the next field onto the same line.
@@ -419,7 +409,7 @@ $(cat "${RESULT_MD}")
     band-selection rules), \`ripple_tradeoff.csv\`, \`loop_ac_crosscheck.csv\`,
     \`filter_z.csv\` (decimated measured impedance curves)
 - **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), ${SIM_AUTHOR:-agent-builder (issue #10)}
-$(supersedes_field)
+$(simenv_supersedes_field "${SIM_SUPERSEDES:-}")
 EOF
 } >"${RECORD}"
 
