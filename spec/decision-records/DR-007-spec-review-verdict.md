@@ -5,6 +5,30 @@
 - **Decided by**: Builder agent, issue #1, running `2AMLogic/klayout-tools`'s
   `spec-review` skill (`.claude/skills/spec-review/SKILL.md`) as the
   expert-EE reviewer named by the operator's 2026-08-09 comment on #1
+- **Provenance of that skill invocation** (read this before checking any
+  `.claude/skills/spec-review/...` path quoted in this record): the skill is
+  **not** installed in *this* repository, and this record never claimed it
+  was. It was read from a separate local checkout of `2AMLogic/klayout-tools`
+  at commit `da4b265c2d0ce14e461c9eb55f54ac734db92f27` (on the build host used
+  for this pass, `/home/ubuntu/GitHub/klayout-tools`), where
+  `.claude/skills/spec-review/SKILL.md` and its bundled class reference
+  `.claude/skills/spec-review/references/pll.md` both carry the 2026-07-31
+  date cited in the review header below. **Every bare
+  `.claude/skills/spec-review/...` path in this record is relative to that
+  klayout-tools checkout, not to `gf180-pll`** — `gf180-pll`'s own
+  `.claude/skills/` contains only `repo/`, and searching this repo's tree or
+  history for `spec-review` will correctly find nothing. "Running the skill"
+  means what it means in this harness: the skill is a package of LLM-directed
+  markdown instructions that a reviewing agent reads and follows, not an
+  executable — there is no `klt spec-review` subcommand, and `klt` is an
+  unrelated layout/DRC/LVS tool. This is exactly the first of the two paths
+  issue #1's own Implementation Guidance anticipated and authorized ("The
+  reviewer needs either a checkout of `klayout-tools` with the skill available
+  in that session, or the skill installed into `gf180-pll`"); it is *not* the
+  no-skill-available case, so #1's anti-fabrication disclosure ("this was NOT
+  run through the actual spec-review skill tool") does not apply and would be
+  inaccurate here. Nothing from the klayout-tools repository is reproduced
+  into this one — it is cited by reference only, per CLAUDE.md.
 - **Related**: #1 (spec ratification — this record is input to it, not the
   ratification itself), DR-001 (architecture), DR-002 (scope), DR-003 (VCO
   band map / Kvco), DR-005 (dump-node buffer), DR-006 (loop filter sizing /
