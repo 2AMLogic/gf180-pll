@@ -271,11 +271,3 @@ def find_tools(variant: str | None = None) -> PvTools:
                 "The gf180mcu install looks incomplete -- reinstall it with volare."
             )
     return tools
-
-
-def tools_available(variant: str | None = None) -> bool:
-    try:
-        find_tools(variant)
-    except (PdkNotFound, ToolNotFound):
-        return False
-    return True
