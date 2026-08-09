@@ -210,6 +210,16 @@ simenv_method_note() {
   return 0
 }
 
+# tag for a work subdirectory: filesystem-safe, unique per job.
+#
+# (Hoisted from byte-identical local copies in sim/divider-ratio and
+# sim/lock-detector's testbench/run.sh.)
+simenv_mktag() {
+  local t="$*"
+  t="${t// /_}"; t="${t//./p}"; t="${t//-/m}"
+  echo "${t}"
+}
+
 # N -> chain programming (DR-001 Decision 3 chain-length/modulus encoding):
 # N = 2^k + sum(p_i . 2^i) for i<k, SEL_(k-1)=1.
 # Prints "k sel0..sel5 p0..p5" as 13 space-separated 0/1 fields plus k.

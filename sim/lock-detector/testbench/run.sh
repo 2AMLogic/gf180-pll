@@ -88,8 +88,6 @@ build_dut() {
   if cmp -s "${tmp}" "${DUT}"; then rm -f "${tmp}"; else mv "${tmp}" "${DUT}"; fi
 }
 
-mktag() { local t="$*"; t="${t// /_}"; t="${t//./p}"; t="${t//-/m}"; echo "${t}"; }
-
 # A copy that never asserts produces a FAILED `.meas`, and that is the PASS
 # condition for the deep-out-of-lock and frequency-error copies. So the
 # completion test is "did the transient finish", not "was the log clean".
@@ -122,7 +120,7 @@ LOCK_HEADER="process,temp_c,vdd_v,terr_s,twin_r_s,twin_f_s,t_assert_swept_s,lock
 
 run_one() {
   local corner="$1" temp="$2" vdd="$3" terr="$4"
-  local tag; tag=$(mktag "lk ${corner} ${temp} ${vdd} ${terr}")
+  local tag; tag=$(simenv_mktag "lk ${corner} ${temp} ${vdd} ${terr}")
   run_deck_soft "${DUT}" "${WORK}" "${tag}" "${corner}" "${temp}" \
     "vsup=${vdd}" "kfref=${KFREF}" "ktrst=${KTRST}" "kterr=${terr}" \
     "kterrbig=${KTBIG}" "ktpert=${KTPERT}" "ktstep=${KTSTEP}" "ktstop=${KTSTOP}"
@@ -233,7 +231,7 @@ SHA=$(simenv_sha256 "${SNAPDIR}/${RID}.spice")
 
 while read -r corner temp vdd terr; do
   el=$(awk -v e="${terr}" 'BEGIN{gsub(/[a-z]/,"",e); printf "e%04d", e*100}')
-  simenv_archive_log "${WORK}" "$(mktag "lk ${corner} ${temp} ${vdd} ${terr}")" \
+  simenv_archive_log "${WORK}" "$(simenv_mktag "lk ${corner} ${temp} ${vdd} ${terr}")" \
     "${CORNERSDIR}" "$(simenv_corner_id "${el}-${corner}" "${temp}" "${vdd}")"
 done <"${ALL_JOBS}"
 
