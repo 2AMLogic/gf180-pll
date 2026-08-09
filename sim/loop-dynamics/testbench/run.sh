@@ -218,14 +218,6 @@ echo "loop-dynamics: collected ${NZROWS} filter-Z rows, ${NTROWS} loop-AC cross-
 # Unset, all four fall back to the wording this campaign was minted with, so
 # an unqualified re-run emits exactly what it emitted before.
 # --------------------------------------------------------------------------
-# Emits with a LEADING newline and none trailing, so it appends to the end of
-# the last Methodology bullet: command substitution strips trailing newlines,
-# so a trailing-newline form would run the next field onto the same line.
-method_note() {
-  [ -n "${SIM_METHOD_NOTE:-}" ] && printf '\n  - %s' "${SIM_METHOD_NOTE}"
-  return 0
-}
-
 # --------------------------------------------------------------------------
 # Mint the evidence record (sim/README.md convention).
 # --------------------------------------------------------------------------
@@ -384,7 +376,7 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     where those enter.
   - Statistical switches: \`sw_stat_global = sw_stat_mismatch = 0\` (nominal
     per-corner skew, no Monte Carlo) -- inherited from the underlying #4/#8/#9
-    records this campaign consumes.$(method_note)
+    records this campaign consumes.$(simenv_method_note)
 - **Statistical convention**: N/A -- corner-matrix claim, not a distribution
   claim.
 - **Result**:

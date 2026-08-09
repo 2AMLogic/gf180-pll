@@ -196,6 +196,60 @@ simenv_supersedes_field() {
   fi
 }
 
+# Emits with a LEADING newline and none trailing, so it is appended to the end
+# of the last Methodology bullet: command substitution strips trailing
+# newlines, so a trailing-newline form would run the next field onto the same
+# line.
+#
+# (#26/#28 introduced this as a `method_note` local to cp-compliance,
+# loop-dynamics, and pfd-deadzone; it is hoisted here for the same reason
+# #135 hoisted `supersedes_field` -- three byte-identical copies is drift
+# waiting to happen.)
+simenv_method_note() {
+  [ -n "${SIM_METHOD_NOTE:-}" ] && printf '\n  - %s' "${SIM_METHOD_NOTE}"
+  return 0
+}
+
+# N -> chain programming (DR-001 Decision 3 chain-length/modulus encoding):
+# N = 2^k + sum(p_i . 2^i) for i<k, SEL_(k-1)=1.
+# Prints "k sel0..sel5 p0..p5" as 13 space-separated 0/1 fields plus k.
+#
+# (Hoisted from byte-identical local copies in sim/divider-ratio,
+# sim/output-range, and sim/lock-time's testbench/run.sh -- lock-time's
+# own copy already noted "same algorithm as
+# sim/divider-ratio/testbench/run.sh" in a comment.)
+simenv_n_to_code() {
+  local n="$1" k=0 pow=1 m i
+  while [ $((pow * 2)) -le "${n}" ]; do pow=$((pow * 2)); k=$((k + 1)); done
+  m=$((n - pow))
+  local sel=() p=()
+  for i in 0 1 2 3 4 5; do
+    if [ "${i}" -eq $((k - 1)) ]; then sel+=(1); else sel+=(0); fi
+    if [ "${i}" -lt "${k}" ]; then p+=($(( (m >> i) & 1 ))); else p+=(0); fi
+  done
+  echo "${k} ${sel[*]} ${p[*]}"
+}
+
+# Map a MOS process-corner bundle name to the comma-separated list of
+# sm141064.ngspice `.lib` sections a campaign should include for it
+# (passives held at typical -- the five-bundle typical/ff/ss/fs/sf scheme).
+#
+# (Hoisted from byte-identical local copies in sim/output-range and
+# sim/lock-time's testbench/run.sh. sim/vco-tuning-range/testbench/common.sh
+# has its own DIFFERENT bundle_libs -- an all-slow/all-fast two-bundle
+# scheme -- deliberately not deduplicated here; see that file's header
+# comment.)
+simenv_bundle_libs() {
+  case "$1" in
+    typical) echo "typical,res_typical,moscap_typical,mimcap_typical" ;;
+    ff)      echo "ff,res_typical,moscap_typical,mimcap_typical" ;;
+    ss)      echo "ss,res_typical,moscap_typical,mimcap_typical" ;;
+    fs)      echo "fs,res_typical,moscap_typical,mimcap_typical" ;;
+    sf)      echo "sf,res_typical,moscap_typical,mimcap_typical" ;;
+    *) echo "ERROR: unknown bundle $1" >&2; exit 1 ;;
+  esac
+}
+
 # Emit a provenance header. Every extracted-metrics CSV starts with one of
 # these so a table stays self-describing away from its record.
 # Args: <campaign> <record-id> <netlist-path> <corner-list-description>
