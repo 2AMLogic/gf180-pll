@@ -115,22 +115,6 @@ run_deck_soft() {
   return 1
 }
 
-# ---------------------------------------------------------------------------
-# N -> chain programming.  N = 2^k + sum(p_i . 2^i), i < k;  SEL_(k-1) = 1.
-# Prints "k sel0..sel5 p0..p5" as 13 space-separated 0/1 fields plus k.
-# ---------------------------------------------------------------------------
-n_to_code() {
-  local n="$1" k=0 pow=1 m i
-  while [ $((pow * 2)) -le "${n}" ]; do pow=$((pow * 2)); k=$((k + 1)); done
-  m=$((n - pow))
-  local sel=() p=()
-  for i in 0 1 2 3 4 5; do
-    if [ "${i}" -eq $((k - 1)) ]; then sel+=(1); else sel+=(0); fi
-    if [ "${i}" -lt "${k}" ]; then p+=($(( (m >> i) & 1 ))); else p+=(0); fi
-  done
-  echo "${k} ${sel[*]} ${p[*]}"
-}
-
 # ===========================================================================
 # dff: setup / hold of dff_tg_3v3
 # ===========================================================================
@@ -231,7 +215,7 @@ CHAIN_HEADER="process,temp_c,vdd_v,kf_hz,n_target,k_cells,n_fb,n_divout,t_arr_s,
 
 run_one_chain() {
   local corner="$1" temp="$2" vdd="$3" kf="$4" n="$5"
-  local code; code=$(n_to_code "${n}")
+  local code; code=$(simenv_n_to_code "${n}")
   local k; k=$(echo "${code}" | cut -d' ' -f1)
   local sel; sel=$(echo "${code}" | cut -d' ' -f2-7)
   local p;   p=$(echo "${code}" | cut -d' ' -f8-13)

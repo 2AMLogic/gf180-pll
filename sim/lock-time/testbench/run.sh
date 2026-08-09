@@ -89,21 +89,6 @@ IUNIT=8u
 # bound" makes load-bearing.
 ACC_DN_FRAC=3e-4
 
-# n_to_code <N> -> "k sel0..sel5 p0..p5" (DR-001 Decision 3 chain-length /
-# modulus encoding: N = 2^k + sum(p_i . 2^i) for i<k, SEL_(k-1)=1) -- same
-# algorithm as sim/divider-ratio/testbench/run.sh.
-n_to_code() {
-  local n="$1" k=0 pow=1 m i
-  while [ $((pow * 2)) -le "${n}" ]; do pow=$((pow * 2)); k=$((k + 1)); done
-  m=$((n - pow))
-  local sel=() p=()
-  for i in 0 1 2 3 4 5; do
-    if [ "${i}" -eq $((k - 1)) ]; then sel+=(1); else sel+=(0); fi
-    if [ "${i}" -lt "${k}" ]; then p+=($(( (m >> i) & 1 ))); else p+=(0); fi
-  done
-  echo "${k} ${sel[*]} ${p[*]}"
-}
-
 # --------------------------------------------------------------------------
 # Grid.  #65 (the follow-up #49 itself named) extends this campaign from the
 # original single-corner N=4 pilot to the FULL 45-point PVT grid -- but ONLY
@@ -143,17 +128,6 @@ CONDITIONS=(cold relock)   # vctrl_ic = 0.9 V / 2.7 V respectively
 # Single-point debug corner, used only by --check below.
 CORNER="typical"; TEMP=27; VDD=3.30
 
-bundle_libs() {
-  case "$1" in
-    typical) echo "typical,res_typical,moscap_typical,mimcap_typical" ;;
-    ff)      echo "ff,res_typical,moscap_typical,mimcap_typical" ;;
-    ss)      echo "ss,res_typical,moscap_typical,mimcap_typical" ;;
-    fs)      echo "fs,res_typical,moscap_typical,mimcap_typical" ;;
-    sf)      echo "sf,res_typical,moscap_typical,mimcap_typical" ;;
-    *) echo "ERROR: unknown bundle $1" >&2; exit 1 ;;
-  esac
-}
-
 stage_netlist() {
   mkdir -p "$1"
   cp "${WORK}/dut.spice" "$1/dut.spice"
@@ -162,7 +136,7 @@ stage_netlist() {
 # run_one <corner> <temp> <vdd> <n> <condition> <outdir> -> writes result.csv row
 run_one() {
   local corner="$1" temp="$2" vdd="$3" n="$4" cond="$5" outcsv="$6"
-  local code; code=$(n_to_code "${n}")
+  local code; code=$(simenv_n_to_code "${n}")
   local k; k=$(echo "${code}" | cut -d' ' -f1)
   local sel; sel=$(echo "${code}" | cut -d' ' -f2-7)
   local p;   p=$(echo "${code}" | cut -d' ' -f8-13)
@@ -257,7 +231,7 @@ run_one() {
     : # reuse the existing log below
   else
     stage_netlist "${WORK}/${tag}"
-    local libs; libs=$(bundle_libs "${corner}")
+    local libs; libs=$(simenv_bundle_libs "${corner}")
     # simenv_run_deck treats ANY "Error:" line in the log as a hard failure,
     # which also matches ngspice's own ".measure ... failed!" line -- a
     # perfectly legitimate outcome here (LOCK simply had not asserted inside

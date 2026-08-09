@@ -228,14 +228,6 @@ author_field() {
   echo "- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), ${SIM_AUTHOR:-agent-builder (issue #9)}"
 }
 
-# Emits with a LEADING newline and none trailing, so it is appended to the end
-# of the last Methodology bullet: command substitution strips trailing newlines,
-# so a trailing-newline form would run the next field onto the same line.
-method_note() {
-  [ -n "${SIM_METHOD_NOTE:-}" ] && printf '\n  - %s' "${SIM_METHOD_NOTE}"
-  return 0
-}
-
 simenv_require_tools
 mkdir -p "${WORK}"
 
@@ -517,7 +509,7 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
   - **Limitation (nominal skew only)**: \`sw_stat_global = sw_stat_mismatch =
     0\`.  Everything here is systematic; RANDOM device mismatch is #15's
     campaign, and this record's numbers are what that distribution should be
-    centred on.$(method_note)
+    centred on.$(simenv_method_note)
 - **Statistical convention**: N/A -- corner-matrix claim, not a distribution
   claim.
 - **Result**:

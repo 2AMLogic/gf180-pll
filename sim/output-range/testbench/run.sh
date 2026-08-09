@@ -89,18 +89,6 @@ ACC_DN_FRAC=3e-4
 # --------------------------------------------------------------------------
 CSV_HEADER="corner,temp_c,vdd_v,edge,fout_hz,n,fref_hz,status,t_lock_s,vctrl_final_v,k_cells,seed_v,seed_pos,dn_lvl_v,dn_guard"
 
-n_to_code() {
-  local n="$1" k=0 pow=1 m i
-  while [ $((pow * 2)) -le "${n}" ]; do pow=$((pow * 2)); k=$((k + 1)); done
-  m=$((n - pow))
-  local sel=() p=()
-  for i in 0 1 2 3 4 5; do
-    if [ "${i}" -eq $((k - 1)) ]; then sel+=(1); else sel+=(0); fi
-    if [ "${i}" -lt "${k}" ]; then p+=($(( (m >> i) & 1 ))); else p+=(0); fi
-  done
-  echo "${k} ${sel[*]} ${p[*]}"
-}
-
 # --------------------------------------------------------------------------
 # Two edges of the draft 10-200 MHz v1 output band. Band code and N are read
 # off sim/vco-tuning-range's own measured kvco_by_point.csv. N is chosen as a
@@ -130,17 +118,6 @@ VDDS=("${SIMENV_VDDS[@]}")
 
 # Single-point debug corner, used only by --check below.
 CORNER="typical"; TEMP=27; VDD=3.30
-
-bundle_libs() {
-  case "$1" in
-    typical) echo "typical,res_typical,moscap_typical,mimcap_typical" ;;
-    ff)      echo "ff,res_typical,moscap_typical,mimcap_typical" ;;
-    ss)      echo "ss,res_typical,moscap_typical,mimcap_typical" ;;
-    fs)      echo "fs,res_typical,moscap_typical,mimcap_typical" ;;
-    sf)      echo "sf,res_typical,moscap_typical,mimcap_typical" ;;
-    *) echo "ERROR: unknown bundle $1" >&2; exit 1 ;;
-  esac
-}
 
 # --------------------------------------------------------------------------
 # seed_for_corner <bundle> <temp_c> <vdd> <band> <f_target> -> "<vctrl_v> <pos>"
@@ -211,7 +188,7 @@ run_one() {
   local corner="$1" temp="$2" vdd="$3" edge="$4" fout="$5" b2="$6" b1="$7" b0="$8" n="$9"
   shift 9
   local vctrl_ic="$1" outcsv="$2" seed_pos="${3:-in}"
-  local code; code=$(n_to_code "${n}")
+  local code; code=$(simenv_n_to_code "${n}")
   local k; k=$(echo "${code}" | cut -d' ' -f1)
   local sel; sel=$(echo "${code}" | cut -d' ' -f2-7)
   local p;   p=$(echo "${code}" | cut -d' ' -f8-13)
@@ -269,7 +246,7 @@ run_one() {
     : # reuse the existing log below
   else
     stage_netlist "${WORK}/${tag}"
-    local libs; libs=$(bundle_libs "${corner}")
+    local libs; libs=$(simenv_bundle_libs "${corner}")
     simenv_run_deck "${DECK}" "${WORK}" "${tag}" "${libs}" "${temp}" "${params[@]}" >/dev/null || true
     if [ ! -f "${log}" ] || ! grep -q "^vctrl_final" "${log}"; then
       echo "${corner},${temp},${vdd},${edge},${fout},${n},${fref},ERROR,,,${k},${vctrl_ic},${seed_pos},,ERROR" >>"${outcsv}"
