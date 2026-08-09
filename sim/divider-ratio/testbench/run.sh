@@ -81,9 +81,6 @@ build_duts() {
   done
 }
 
-# tag for a work subdirectory: filesystem-safe, unique per job
-mktag() { local t="$*"; t="${t// /_}"; t="${t//./p}"; t="${t//-/m}"; echo "${t}"; }
-
 # simenv_run_deck treats any "Error:" in the ngspice log as fatal, which is
 # right for a device sweep but wrong here: a FAILED `.meas` is the measurement.
 # The setup/hold ladder deliberately drives copies past their timing limit so
@@ -126,7 +123,7 @@ DFF_TH=(0.50e-9 0.20e-9 0.10e-9 0.00 -0.10e-9 -0.20e-9 -0.30e-9 -0.40e-9 -0.50e-
 
 run_one_dff() {
   local corner="$1" temp="$2" vdd="$3"
-  local tag; tag=$(mktag "dff ${corner} ${temp} ${vdd}")
+  local tag; tag=$(simenv_mktag "dff ${corner} ${temp} ${vdd}")
   run_deck_soft "$(dut_file dff)" "${WORK}" "${tag}" "${corner}" "${temp}" "vsup=${vdd}"
   local log="${WORK}/${tag}/ngspice.log" i
   local cqa=() cqb=() hqc=()
@@ -170,7 +167,7 @@ CELL_HEADER="process,temp_c,vdd_v,kf_hz,n_div2,n_div3,n_div2_33duty,n_div3_67dut
 
 run_one_cell() {
   local corner="$1" temp="$2" vdd="$3" kf="$4"
-  local tag; tag=$(mktag "cell ${corner} ${temp} ${vdd} ${kf}")
+  local tag; tag=$(simenv_mktag "cell ${corner} ${temp} ${vdd} ${kf}")
   run_deck_soft "$(dut_file cell)" "${WORK}" "${tag}" "${corner}" "${temp}" \
     "vsup=${vdd}" "kf=${kf}" "ktstep=$(awk -v f="${kf}" 'BEGIN{printf "%.6g", 1/(250*f)}')" \
     "ktstop=$(awk -v f="${kf}" 'BEGIN{printf "%.6g", 12/f}')"
@@ -219,7 +216,7 @@ run_one_chain() {
   local k; k=$(echo "${code}" | cut -d' ' -f1)
   local sel; sel=$(echo "${code}" | cut -d' ' -f2-7)
   local p;   p=$(echo "${code}" | cut -d' ' -f8-13)
-  local tag; tag=$(mktag "chain ${corner} ${temp} ${vdd} ${kf} ${n}")
+  local tag; tag=$(simenv_mktag "chain ${corner} ${temp} ${vdd} ${kf} ${n}")
   local params=("vsup=${vdd}" "kf=${kf}")
   # Timestep is chosen per run, not globally, because the two things measured
   # here need very different resolution. A ratio only needs edge times good to
@@ -409,20 +406,20 @@ SHA_CHAIN=$(simenv_sha256 "${SNAPDIR}/${RID_CHAIN}.spice")
 
 # --- archive the raw per-corner logs ---------------------------------------
 while read -r corner temp vdd; do
-  simenv_archive_log "${WORK}" "$(mktag "dff ${corner} ${temp} ${vdd}")" \
+  simenv_archive_log "${WORK}" "$(simenv_mktag "dff ${corner} ${temp} ${vdd}")" \
     "${EXP}/corners/${RID_DFF}" "$(simenv_corner_id "${corner}" "${temp}" "${vdd}")"
 done <"${DFF_JOBS}"
 
 while read -r corner temp vdd kf; do
   fl=$(awk -v f="${kf}" 'BEGIN{printf "f%03d", f/1e6}')
-  simenv_archive_log "${WORK}" "$(mktag "cell ${corner} ${temp} ${vdd} ${kf}")" \
+  simenv_archive_log "${WORK}" "$(simenv_mktag "cell ${corner} ${temp} ${vdd} ${kf}")" \
     "${EXP}/corners/${RID_CELL}" "$(simenv_corner_id "${fl}-${corner}" "${temp}" "${vdd}")"
 done <"${CELL_JOBS}"
 
 while read -r corner temp vdd kf n; do
   nl=$(printf "n%02d" "${n}")
   fl=$(awk -v f="${kf}" 'BEGIN{printf "f%03d", f/1e6}')
-  simenv_archive_log "${WORK}" "$(mktag "chain ${corner} ${temp} ${vdd} ${kf} ${n}")" \
+  simenv_archive_log "${WORK}" "$(simenv_mktag "chain ${corner} ${temp} ${vdd} ${kf} ${n}")" \
     "${EXP}/corners/${RID_CHAIN}" "$(simenv_corner_id "${nl}-${fl}-${corner}" "${temp}" "${vdd}")"
 done <"${CHAIN_JOBS}"
 
