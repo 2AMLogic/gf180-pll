@@ -140,16 +140,6 @@ fi
 #
 # Unset, the record says it is the first for its claim, exactly as before.
 # --------------------------------------------------------------------------
-supersedes_field() {
-  if [ -z "${SIM_SUPERSEDES:-}" ]; then
-    echo "- **Supersedes**: (none -- first record for this claim)"
-  elif [ -z "${SIM_SUPERSEDES_NOTE:-}" ]; then
-    echo "- **Supersedes**: ${SIM_SUPERSEDES}"
-  else
-    echo "- **Supersedes**: ${SIM_SUPERSEDES} -- ${SIM_SUPERSEDES_NOTE}"
-  fi
-}
-
 author_field() {
   echo "- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), ${SIM_AUTHOR:-agent-builder (issue #9)}"
 }
@@ -437,7 +427,7 @@ ${CORNER_TABLE}
   - Extracted metrics: \`sim/pfd-deadzone/corners/${RID}/pfd_deadzone.csv\`,
     \`sim/pfd-deadzone/corners/${RID}/pfd_deadzone_verdict.csv\`
 $(author_field)
-$(supersedes_field)
+$(simenv_supersedes_field "${SIM_SUPERSEDES:-}")
 EOF
 } >"${RECORD}"
 

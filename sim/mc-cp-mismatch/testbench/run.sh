@@ -176,20 +176,6 @@ run_dff() {
 }
 
 # --------------------------------------------------------------------------
-# Supersession (sim/README.md :: Status / supersession language) -- same
-# mechanism as cp-compliance/pfd-deadzone's run.sh.
-# --------------------------------------------------------------------------
-supersedes_field() {
-  if [ -z "${SIM_SUPERSEDES:-}" ]; then
-    echo "- **Supersedes**: (none -- first record for this claim)"
-  elif [ -z "${SIM_SUPERSEDES_NOTE:-}" ]; then
-    echo "- **Supersedes**: ${SIM_SUPERSEDES}"
-  else
-    echo "- **Supersedes**: ${SIM_SUPERSEDES} -- ${SIM_SUPERSEDES_NOTE}"
-  fi
-}
-
-# --------------------------------------------------------------------------
 # Entry points
 # --------------------------------------------------------------------------
 case "${1:-}" in
@@ -595,7 +581,7 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
   - Extracted metrics: \`sim/mc-cp-mismatch/corners/${RID}/mc_cp_dc.csv\`,
     \`mc_cp_switch.csv\`, \`mc_pfd_cp.csv\`, \`mc_dff_ctq.csv\`
 - **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (issue #15)
-$(supersedes_field)
+$(simenv_supersedes_field "${SIM_SUPERSEDES:-}")
 EOF
 
 echo "mc-cp-mismatch: wrote ${RECORD}"

@@ -224,16 +224,6 @@ esac
 #
 # Unset, the record says it is the first for its claim, exactly as before.
 # --------------------------------------------------------------------------
-supersedes_field() {
-  if [ -z "${SIM_SUPERSEDES:-}" ]; then
-    echo "- **Supersedes**: (none -- first record for this claim)"
-  elif [ -z "${SIM_SUPERSEDES_NOTE:-}" ]; then
-    echo "- **Supersedes**: ${SIM_SUPERSEDES}"
-  else
-    echo "- **Supersedes**: ${SIM_SUPERSEDES} -- ${SIM_SUPERSEDES_NOTE}"
-  fi
-}
-
 author_field() {
   echo "- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), ${SIM_AUTHOR:-agent-builder (issue #9)}"
 }
@@ -576,7 +566,7 @@ ${TRIM_TABLE}
   - Extracted metrics: \`sim/cp-compliance/corners/${RID}/cp_dc.csv\`,
     \`cp_switch.csv\`, \`cp_curves.csv\`
 $(author_field)
-$(supersedes_field)
+$(simenv_supersedes_field "${SIM_SUPERSEDES:-}")
 EOF
 } >"${RECORD}"
 
