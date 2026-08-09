@@ -128,10 +128,6 @@ simenv_xschem_version() {
   fi
 }
 
-simenv_repo_root() {
-  git rev-parse --show-toplevel
-}
-
 simenv_git_sha() {
   git rev-parse --short=7 HEAD
 }
