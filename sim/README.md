@@ -96,6 +96,7 @@ sim/
   | `period-jitter` | period jitter (deterministic + random) | #13 |
   | `supply-sensitivity` | supply pushing, quiescent/dynamic power | #14 |
   | `mc-cp-mismatch` | charge-pump mismatch distribution | #15 |
+  | `reference-spur` | closed-loop reference spur measured directly, as the ±f_ref sidebands of the locked output spectrum | #145 |
 
   New campaigns add rows here as they are created; the list is descriptive,
   not a closed set.
