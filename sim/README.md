@@ -1,5 +1,10 @@
 # sim/ — evidence record format
 
+**Looking for a headline number rather than the format spec?** See
+[`CHARACTERIZATION.md`](CHARACTERIZATION.md) — one aggregated table pulling
+each campaign's current result, record citation, and pass/fail-vs-spec
+status into a single document (#147).
+
 This directory holds simulation testbenches and their results. Results are
 **append-only evidence**: once a record is written, it is never edited or
 deleted. A re-run — even one that corrects a mistake — mints a new record
