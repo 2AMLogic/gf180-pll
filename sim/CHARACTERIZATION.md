@@ -4,14 +4,14 @@
 migration status; `spec/pll.md`'s summary table states each parameter's
 *target* and its overall status (measured / derived / budget / waived). Until
 now, nothing pulled every campaign's *headline result* into one place with a
-citation a reader can check without opening 18 directories. This report is
+citation a reader can check without opening 19 directories. This report is
 that aggregation: one row per `sim/*/records/` campaign directory, each
 citing its own current evidence record(s) by path and content hash.
 
 This report does not create new evidence, re-derive any number, or relax
 `spec/pll.md`. It transcribes what is already committed under `sim/` and
 cross-references it against `spec/pll.md`'s own "Summary table" (line 66) and
-"Verification owed" table (line 833) so the two documents cannot silently
+"Verification owed" table (line 879) so the two documents cannot silently
 disagree about what is and is not substantiated. Where they might read as
 disagreeing, that is called out explicitly below rather than resolved in
 either direction.
@@ -24,9 +24,9 @@ finding that no such aggregated artifact existed as of this repository's
 
 - **Coverage.** One entry below for every directory under `sim/` that
   contains a `records/` subdirectory, as of this report's own writing:
-  **18 campaign directories, 56 evidence records** total
+  **19 campaign directories, 57 evidence records** total
   (`find sim -maxdepth 1 -type d` / `find sim -path '*/records/*.md' -type f
-  | wc -l`), matching `README.md`'s own "56 evidence records across 18
+  | wc -l`), matching `README.md`'s own "57 evidence records across 19
   verification campaigns" line (README.md:23) at the same commit.
 - **"Latest record."** Record IDs are `<YYYYMMDD>-<HHMMSS>-<sha>`
   (`sim/README.md`'s naming convention), so a lexicographic sort of
@@ -75,6 +75,7 @@ finding that no such aggregated artifact existed as of this repository's
 | `lock-detector` | `sim/lock-detector/records/20260802-050119-c24ee3a.md` (`6dfe0a46b346`) | Window-comparator assert/deassert behavior at every PVT corner; assert window measured **0.877 … 1.702 ns**, max at `ss`/125 °C/2.97 V. **This is the number `spec/pll.md`'s summary table row 16 cites — the target (window ≥ 2.5 ns) is not met today.** | `spec/pll.md#lock-detector` (row 16); #11 → DR-002 Decision 4 | **measured**; target **not met** |
 | `loop-dynamics` | `sim/loop-dynamics/records/20260731-202550-82af5a9.md` (`004d3ad7c9ad`) | Loop-filter component extraction, area (C1 = 0.0303 mm², 20.2 % of the 0.15 mm² budget), the Icp trim-code rule (`spec/pll.md`'s normative "Icp trim-code rule"), and small-signal lock-time estimates (71 µs at f_ref = 1 MHz, structural floor 43 µs — **the number `spec/pll.md`'s summary table row 9 cites**). **Overall: PASS on the contracted operating space, FAIL off it** (i.e. only when the Icp trim-code rule is followed). | `spec/pll.md#loop-bandwidth`, `#phase-margin`, `#lock-time` (rows 8/8a/9), `#area`; #4/#8/#9 → #10 | **measured**, conditional PASS |
 | `mc-cp-mismatch` | `sim/mc-cp-mismatch/records/20260731-212614-640560e.md` (`b4a7026934b3`) | Monte Carlo (N=500, mismatch-only) charge-pump statistical dispersion at nominal PVT: all 4 `design/README.md` budget-table terms PASS (worst \|mean\|+3σ 8.48 % against ±12 %, 270 ps against ±3 ns, 2.99 fC against ±20 fC, 576 ps against ±3 ns). Feeds the reference-spur derivation (`spec/pll.md#reference-spur`, "Statistical residual net charge" step). | #15; feeds `spec/pll.md#reference-spur` (row 7, derived) | design-input / distribution claim, measured |
+| `reference-spur` | `sim/reference-spur/records/20260816-132150-5f405e7.md` (`f99061a2855f`) | First **direct** closed-loop spur measurement in this repository: the ±f_ref sidebands read out of the locked `pll_top` output spectrum at 5 spanning PVT corners (all five MOS bundles, all three temperatures, all three supplies), f_ref = 25 MHz / N = 6 / f_out = 150 MHz / band 6 / Icp code 0. Measured **−57.0 dBc worst** (`sf`/−40 °C/2.97 V) to −72.7 dBc best (`fs`/125 °C/3.63 V) — **PASS against the −55 dBc target at the measured 150 MHz at every corner**; scaled by +2.50 dB to the ratified band's binding 200 MHz the two cold corners read −54.5 and −54.9 dBc and **do not clear the target**, so the overall record verdict is FAIL on that scaled check. Residual settling drift (`drift_q_fc`, −1.60…+2.78 fC against the 2.16–3.68 fC charge-pump asymmetry) is of either sign and is the dominant per-corner uncertainty; the first-to-last-window spread reaches 11 dB. **Taken against a dirty working tree** — see its Netlist provenance field. | `spec/pll.md#reference-spur` (row 7); #145 (part of #127) | **measured** (5 of 45 corners, at 150 MHz); target **not met** once scaled to the 200 MHz binding point |
 | `pfd-deadzone` | `sim/pfd-deadzone/records/20260801-234626-5b333d0.md` (`b5372a13006f`) | Dead-zone-freedom criterion (ratio > 0.5 AND both UP/DN pulse at Δφ=0) — PASS at every evaluated corner. Residual net charge at zero phase error reported per corner (feeds reference-spur derivation). | #9; feeds `spec/pll.md#reference-spur` (row 7, derived) | design-input, measured |
 | `pll-top-smoke` | `sim/pll-top-smoke/records/20260802-160926-8456ff3.md` (`7dec4f0210c1`) | Assembled-top-level acceptance gate: **7 of 7 checks PASS** (residual frequency error, static phase error, divide ratio, output frequency vs. N·f_ref, LOCK level, Vctrl window, PFD DN-branch integration guard) at a **single nominal corner** (`typical`/27 °C/3.30 V) by design — this is a connectivity/closed-loop-existence check, not a PVT performance claim; see the record's own justification and `sim/README.md`'s "worked example of an acceptable one-point justification." | #52 (design-input; assembly acceptance gate, not a spec row) | design-input, measured (single corner, by design) |
 | `output-range` | `sim/output-range/records/20260801-061907-67d7127.md` (`380369d949c9`) — a single-corner (`typical`/27 °C/3.30 V) diagnostic follow-up to `sim/output-range/records/20260731-223426-640560e.md` (`2e43adde8fcd`), which is cited (not superseded) for the actual full-corner claim. | Neither the `lo` edge (10 MHz, N=8) nor the `hi` edge (200 MHz, N=32) reached a sustained-lock PASS inside the simulated window at the one corner tried; the follow-up record rules out three candidate artifact explanations for `lo`'s FAIL. **No PASS/FAIL against the full 45-point PVT matrix has been claimed by either record — the full grid is not yet run.** | #12; feeds closed-loop output-band coverage (design input, no independent spec row — `spec/pll.md`'s [Output band](#output-band) row 1 is substantiated by `vco-tuning-range`'s open-loop measurement, not by this campaign) | **gap** — full-grid closed-loop measurement not yet taken |
@@ -86,7 +87,7 @@ finding that no such aggregated artifact existed as of this repository's
 
 ## Verification-owed cross-check
 
-`spec/pll.md`'s own "Verification owed" table (line 833) lists what the
+`spec/pll.md`'s own "Verification owed" table (line 879) lists what the
 specification asserts that `sim/` does not yet substantiate. Every row of
 that table is disclosed above; this section restates the correspondence so a
 reader auditing gap-coverage does not have to cross-reference by hand:
@@ -95,7 +96,7 @@ reader auditing gap-coverage does not have to cross-reference by hand:
 |---|---|---|
 | Period jitter — closed-loop / random (noise-driven) jitter | `vco-tuning-range` (open-loop sensitivity substitute) | **yes** — no `sim/period-jitter/` directory exists yet; `sim/README.md`'s own campaign table reserves the slug (#13) with zero records, and `README.md`'s Status section says the same. Not counted among the 18/56 above because it has no `records/` directory to cite. |
 | Period jitter — band sweep at non-nominal temp/supply | `vco-tuning-range` | **yes** — the cited ripple-jitter number is one operating point, not a full grid |
-| Reference spur — actual closed-loop measurement (target is derived) | `cp-compliance`, `mc-cp-mismatch`, `pfd-deadzone` (the derivation's inputs) | **yes** — `spec/pll.md#reference-spur` states outright "this row is a target, not a measured result" |
+| Reference spur — remaining 40 PVT points, and a direct measurement at the binding 200 MHz | `reference-spur` (the measurement itself); `cp-compliance`, `mc-cp-mismatch`, `pfd-deadzone` (the derivation's inputs) | **partially** — the closed-loop measurement now exists at 5 spanning corners at 150 MHz (#145); the other 40 points and the 200 MHz binding frequency are not measured, and the two cold corners do not clear −55 dBc once scaled to 200 MHz |
 | Lock time — cold-start acquisition incl. cycle slipping | `lock-time` | **yes** — see the `lock-time` row above; only small-signal settling (via `loop-dynamics`) exists |
 | Reference input — thresholds/edge-rate sweep, numeric reference-jitter limit | (no campaign directory covers this — it is an interface *condition*, not a *result*) | **yes** — no `sim/` campaign measures this; `spec/pll.md#reference-input` states it as a budget |
 | Power — measured `vdd_ref` domain current, closed-loop total | `vco-tuning-range` (`vdd_vco`), `divider-ratio-chain`/`-cell` (`vdd_div`) | **yes** — `vdd_ref` is budget-only in `spec/pll.md#power`; no campaign here measures it, and no closed-loop total exists (`supply-sensitivity` is the closest, and is itself incomplete — see its row above) |
