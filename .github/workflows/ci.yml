@@ -66,6 +66,14 @@ jobs:
         # instead of misleading a reader.
         run: bash sim/lib/check-readme-status.sh
 
+      - name: sim/lib/check-characterization-coverage.sh (aggregated report vs. sim/ tree)
+        # #147's sim/CHARACTERIZATION.md is hand-maintained and pulls a
+        # headline result from every sim/*/records/ campaign directory.
+        # Fails the build if a new campaign directory lands without a
+        # matching entry in the report, instead of the aggregation silently
+        # going stale. Pure file-count vs. grep, no PDK dependency.
+        run: bash sim/lib/check-characterization-coverage.sh
+
   pdk-checks:
     name: pdk-checks (nightly / ci:full -- requires gf180mcu PDK + xschem)
     runs-on: ubuntu-latest
