@@ -71,7 +71,7 @@ are at risk. Nothing in this repository has been fabricated or measured.
 | 4 | [Integrated RMS jitter](#integrated-rms-jitter) | **not spec'd** — derived-only (DR-002 Decision 5) | n/a — deliberately unspecified; see the section for why this is visible rather than silent | **n/a** |
 | 5 | [Period jitter](#period-jitter) | ≤ 1.0 % of the output period, RMS, **conditional on ≤ 20 mV pp `vdd_vco` ripple** | `all-slow`/−40 °C/2.97 V, band 5 (2.51 % RMS at 100 mV pp ripple, open-loop) | **measured** (sensitivity); **derived** (the ripple condition) |
 | 6 | [Phase noise](#phase-noise) | **not spec'd** — derived-only (DR-002 Decision 5) | n/a — deliberately unspecified | **n/a** |
-| 7 | [Reference spur](#reference-spur) | ≤ −55 dBc | derived worst case −61 dBc at f_out = 200 MHz, worst-corner ΔQ (`fs`/125 °C/3.63 V, Vctrl = 0.9 V) + 3σ mismatch | **derived** |
+| 7 | [Reference spur](#reference-spur) | ≤ −55 dBc | measured worst −57.0 dBc at f_out = 150 MHz (`sf`/−40 °C/2.97 V), i.e. −54.5 dBc scaled to 200 MHz; derived worst case −61 dBc at 200 MHz | **measured** (5 spanning corners, 150 MHz); **budget** (the 200 MHz binding point and the other 40 corners — see [Verification owed](#verification-owed)) |
 | 8 | [Loop bandwidth](#loop-bandwidth) | f_c = 26 – 430 kHz over the ratified space, with `f_c < f_ref/10` as a hard ceiling | min 25.96 kHz at f_ref = 1 MHz / 4 legs; max 429.5 kHz at f_ref = 25 MHz / 1 leg; worst realized ratio `f_ref/13` | **measured** |
 | 8a | [Phase margin](#phase-margin) | ≥ 45° everywhere in the contracted space | 47.4° at f_ref = 1 MHz, 4 legs (the tightest cell of the trim rule) | **measured** |
 | 9 | [Lock time](#lock-time) | < 100 µs to the stated [lock criterion](#lock-time). **The < 20 µs stretch is dropped** | 71 µs at f_ref = 1 MHz under the trim rule; structural floor 43 µs | **measured** (small-signal settling); **budget** (cold-start, owed to #12) |
@@ -359,12 +359,54 @@ Corner binding: **n/a** — no target.
 **Target: ≤ −55 dBc**, at `f_ref` offset from the carrier, in lock, over the
 ratified operating space.
 
-Status: **derived**, not measured. There is no closed-loop spur measurement in
-`sim/`; #15 recorded that gap honestly rather than building an ad-hoc harness,
-and the conversion of the open-loop terms into a spur level is owed to #12.
+Status: **measured** at five spanning PVT corners, against the derivation
+below. `sim/reference-spur` (#145) runs the assembled `pll_top` to lock and
+reads the sidebands straight out of the locked output spectrum — the first
+closed-loop spur measurement in `sim/`. It does **not** retire the whole row:
+it is five of the 45 PVT points, at one (f_ref, N, band, trim) operating point,
+and at f_out = 150 MHz rather than the binding 200 MHz. What remains owed is
+named in [Verification owed](#verification-owed).
+
+Measured — `sim/reference-spur/records/20260816-132150-5f405e7.md`, f_ref =
+25 MHz, N = 6, f_out = 150 MHz, band 6, Icp trim code 0 (the trim the
+[Icp trim-code rule](#icp-trim-code-rule) requires at 25 MHz):
+
+| Corner | Measured spur at 150 MHz | Scaled to 200 MHz (`+20·log₁₀(200/150)` = +2.50 dB) |
+|---|---|---|
+| `sf` / −40 °C / 2.97 V | **−57.0 dBc** (worst) | **−54.5 dBc** |
+| `ff` / −40 °C / 3.63 V | −57.4 dBc | −54.9 dBc |
+| `typical` / 27 °C / 3.30 V | −58.4 dBc | −55.9 dBc |
+| `ss` / 125 °C / 2.97 V | −63.1 dBc | −60.6 dBc |
+| `fs` / 125 °C / 3.63 V | −72.7 dBc (best) | −70.2 dBc |
+
+**Against the −55 dBc target: PASS at 150 MHz at all five corners; the two
+cold corners do not clear it once scaled to the binding 200 MHz** (−54.5 and
+−54.9 dBc, i.e. 0.1–0.5 dB over). The scaling is arithmetic on the
+narrowband-FM relation `θ = 2π·f_out·TIE`, not a measurement — 200 MHz is not
+reachable in one static band code across the PVT grid (band 6's ceiling falls
+to 166 MHz at the slowest corner while band 7's floor rises to 225 MHz at the
+fastest), which is why the measurement is at 150 MHz. **The bound is not
+relaxed on the strength of that extrapolation**; a direct measurement at
+200 MHz, per corner, is what would settle it.
+
+How much to trust each number: the loop's slow pole is 9.3 µs and the run is
+8 µs, so a residual settling drift is still present and is reported per point
+as `drift_q_fc` (−1.60 … +2.78 fC, against the 2.16–3.68 fC charge-pump
+asymmetry the spur is made of). It is of **either sign** — it can add to or
+partly cancel the asymmetry — so an individual corner's number can be biased
+in either direction, and the first-window-to-last-window spread (up to 11 dB
+at `fs`) is the honest width of the per-corner uncertainty. The record's own
+Methodology field calls `spur_dbc` unconditionally conservative; its own
+`drift_q_fc` column disproves that, and the campaign manifest carries the
+correction (records are append-only, so it is stated here rather than edited
+into the record). What the five points do establish, and the derivation below
+does not, is that the measured spur sits in the same −57…−73 dBc neighbourhood
+the derivation predicts, by direct spectral measurement rather than by
+assumption.
 
 Derivation from the recorded dominant mechanism (charge-pump per-event charge
-asymmetry landing on C2 once per reference cycle):
+asymmetry landing on C2 once per reference cycle), kept as the cross-check the
+measurement above is read against:
 
 | Step | Value | Source |
 |---|---|---|
@@ -385,7 +427,11 @@ rail, and layout coupling that does not exist yet. The bound improves at lower
 output frequencies (−67 dBc at 100 MHz), so 200 MHz is the binding frequency as
 well as the binding corner.
 
-This row is a **target, not a measured result** — do not cite it as evidence.
+The derivation's own −61 dBc lands inside the measured −57…−73 dBc range above,
+which is a useful agreement and not a verification: the derivation is stated at
+200 MHz and at its own worst corner, the measurement is at 150 MHz at five
+corners, and the two are not the same quantity. **The −61 dBc row remains a
+derivation — cite `sim/reference-spur`'s record for a measured number.**
 
 ## Loop bandwidth
 
@@ -840,7 +886,7 @@ to reconstruct it from the status column.
 |---|---|---|
 | [Period jitter](#period-jitter) | closed-loop period jitter, and any **random** (noise-driven) jitter number at all | #13 (`period-jitter`) |
 | [Period jitter](#period-jitter) | the band sweep at corners other than nominal temp/supply | #13 |
-| [Reference spur](#reference-spur) | an actual closed-loop spur measurement; the −55 dBc target is derived, not measured | #12 → #15 |
+| [Reference spur](#reference-spur) | the remaining 40 PVT points, and a direct measurement at the binding f_out = 200 MHz rather than the 150 MHz one static band code holds across corners — the closed-loop measurement itself now exists (`sim/reference-spur/records/20260816-132150-5f405e7.md`, 5 spanning corners), and the two cold corners do not clear −55 dBc once scaled to 200 MHz | #145 (`reference-spur`) |
 | [Lock time](#lock-time) | cold-start acquisition including cycle slipping; everything recorded today is small-signal settling | #12 (`lock-time`) |
 | [Reference input](#reference-input) | input thresholds/edge-rate sweep; a numeric reference-jitter limit to replace the current exclusion | #12 |
 | [Power](#power) | a measured `vdd_ref` domain current, and a closed-loop total | #14 (`supply-sensitivity`) |
