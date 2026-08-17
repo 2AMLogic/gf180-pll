@@ -78,8 +78,8 @@ are at risk. Nothing in this repository has been fabricated or measured.
 | 10 | [Power](#power) | < 5 mW at 100 MHz, all domains, locked | `all-fast`/125 °C/3.63 V — derived total ≈ 1.98 mW | **derived** |
 | 11 | [Standby current](#standby-current) | **no power-down mode in v1** — the block is always-on whenever its rails are up | n/a — no standby state exists to bind a corner to | **waived, with rationale** |
 | 12 | [Supply sensitivity](#supply-sensitivity) | `vdd_vco` ripple ≤ 20 mV pp (100 kHz – 100 MHz); DC rail excursion over 2.97–3.63 V must consume ≤ 0.6 V of the Vctrl window | pushing worst −50.7 %/V at `ss`/−40 °C, band 4 (−52.3 %/V on the coarser tuning-range grid) | **measured** (pushing); **derived** (the two budgets) |
-| 13 | [Output duty cycle](#output-duty-cycle) | 45 – 55 % at `CLK`, over the whole band and all corners | n/a — **no duty-cycle measurement exists**; expected binding at the bottom of the band, where the ring's internal edges are slowest | **budget** |
-| 14 | [Output levels and drive](#output-levels-and-drive) | rail-to-rail CMOS on `vdd_vco`: V_OH ≥ 0.9·VDD_VCO, V_OL ≤ 0.1·VDD_VCO into ≤ 50 fF external load | n/a — **no loaded-output measurement exists**; every recorded frequency is at an essentially unloaded buffer | **budget** |
+| 13 | [Output duty cycle](#output-duty-cycle) | 45 – 55 % at `CLK`, over the whole band and all corners | measured 44.375 – 50.696 % (90 points); worst `fs`/27 °C/3.63 V at the `lo` edge (band 0, Vctrl 0.9 V) — the bottom-of-band binding condition the design basis predicted | **measured** (90 points, loaded); target **not met** at 7/90 points, all at the `lo` edge |
+| 14 | [Output levels and drive](#output-levels-and-drive) | rail-to-rail CMOS on `vdd_vco`: V_OH ≥ 0.9·VDD_VCO, V_OL ≤ 0.1·VDD_VCO into ≤ 50 fF external load | measured V_OH 1.006 – 1.044·VDD_VCO, V_OL −0.040 … −0.006·VDD_VCO into a 50 fF load, at every one of 90 points | **measured** (90 points); target **met** at every point |
 | 15 | [Area](#area) | ≤ 0.15 mm² total — **a budget, not a result** (no layout exists) | n/a — drawn area is not a PVT quantity; the *capacitance* it buys is (C1 = 107.1 … 133 pF over corners) | **budget**; loop-filter allocation is **measured** |
 | 16 | [Lock detector](#lock-detector) | digital `lock` output; assert window ≥ 2.5 ns of phase error, ≥ 2× the worst-case static phase offset; hysteresis ≥ 25 % of the assert window; no chatter | window measured 0.877 … 1.702 ns, max at `ss`/125 °C/2.97 V — **the target is not met today** | **measured** (behaviour); **budget** (the target, currently a gap) |
 | 17 | [Kvco](#kvco) | ≤ 150 MHz/V at every legal operating point under the [band-selection rule](#band-selection-rule) | 115.8 MHz/V at `all-fast`/27 °C/2.97 V, band 6, Vctrl 1.54 V (target 200 MHz) | **measured** |
@@ -653,8 +653,19 @@ why the loop bandwidth cannot be set arbitrarily low.
 
 **Target: 45 – 55 % at `CLK`, over the whole output band and all PVT corners.**
 
-Status: **budget — no duty-cycle measurement exists anywhere in `sim/`.** The
-target is set from design intent, and the verification is owed.
+Status: **measured — 90/90 points, target not met at 7.** Measured on a
+loaded `CLK` (50 fF, the same load [Output levels and drive](#output-levels-and-drive)
+uses) at the two extremes of the ratified band-code/Vctrl window (band 0 /
+Vctrl 0.9 V = `lo`, the slowest starved edges; band 7 / Vctrl 2.7 V = `hi`,
+the fastest), across all five MOS process bundles and the full temperature/
+supply grid (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90
+points). Measured duty cycle spans **44.375 – 50.696 %**. 7 of the 90 points
+fall below the 45 % floor — **all seven are at the `lo` edge**: `ff`/−40 °C/
+3.30 V (44.7873 %), `fs`/−40 °C/3.30 V (44.5683 %), `fs`/−40 °C/3.63 V
+(44.894 %), `fs`/27 °C/3.30 V (44.4337 %), `fs`/27 °C/3.63 V (44.375 %, the
+worst point), `fs`/125 °C/3.30 V (44.9554 %), `fs`/125 °C/3.63 V
+(44.7828 %). Every `hi`-edge point clears the floor with margin
+(47.26 – 50.696 %). No point exceeds the 55 % ceiling in either direction.
 
 Design basis for believing it is reachable: the delay cell's PMOS head and NMOS
 tail are *matched* — sized for equal charge and discharge current — so the
@@ -671,9 +682,19 @@ therefore a scope change, not a design tweak**, and this row is written at the
 loosest width a consumer of a clock is likely to accept so that the trade never
 gets made by accident.
 
-Expected binding condition once measured: the **bottom** of the band, where the
-starved ring's internal edges are slowest and the buffer's first stage is doing
-the most squaring — not the top.
+**Binding condition, confirmed by measurement**: the **bottom** of the band,
+where the starved ring's internal edges are slowest and the buffer's first
+stage is doing the most squaring — not the top, matching the design-basis
+prediction above. The shortfall is concentrated in one process bundle: 6 of
+the 7 failing points are `fs` (fast-NMOS/slow-PMOS) at the two higher supply
+rails (3.30 V and 3.63 V) across all three temperatures — every `fs`/`lo`
+point at the nominal-or-above rail fails, while the `fs`/2.97 V points at the
+same edge pass. The seventh failing point, `ff`/−40 °C/3.30 V, is the one
+excursion outside that pattern. The worst point is 0.625 percentage points
+below the 45 % floor — small in absolute terms, but systematic within the
+`fs` bundle rather than a single outlier. This gap is a design finding, not a
+missing measurement — see [Verification owed](#verification-owed) for what
+post-extraction work remains.
 
 ## Output levels and drive
 
@@ -681,13 +702,29 @@ the most squaring — not the top.
 V_OL ≤ 0.1·VDD_VCO — driving ≤ 50 fF of external load plus the on-die divider
 input, over the whole output band and all corners.**
 
-Status: **budget.** Every recorded frequency in `sim/vco-tuning-range` is
-measured at the buffered `CLK` node with essentially **no load** on it; there
-is no loaded-output measurement and no output-swing table in any record. The
-50 fF figure is a budget handed to layout and to the closed-loop bench, not a
-measured drive capability.
+Status: **measured — 90/90 points PASS.** `CLK` driving an ideal 50 fF
+capacitor to `GND_VCO` (the external-load half of the budget; see
+Limitations below for the on-die divider input, which this record does not
+add), swept at the same 90-point grid as
+[Output duty cycle](#output-duty-cycle)
+(`sim/output-driver/records/20260817-100354-0e9cfc9.md`). Measured V_OH spans
+**1.006 – 1.044·VDD_VCO** (min at `ff`/125 °C/3.63 V, max at `ss`/125 °C/
+2.97 V) and V_OL spans **−0.040 … −0.006·VDD_VCO** (most negative at
+`ss`/125 °C/2.97 V, least at `ff`/125 °C/3.63 V) — both comfortably inside
+the ≥ 0.9 / ≤ 0.1 budget at every corner, with V_OL's small negative values
+coming from post-edge ringing into the load cap rather than a floor
+violation. The loaded 10–90 % edge rate (the drive-strength proxy) ranges
+from ~84 ps (fastest `hi`-edge corners) to ~16 ns (slowest `lo`-edge
+corners) at the well-behaved points, tracking the ring's own edge-rate
+extremes as expected — with one data-quality caveat: 5 of the 180 `trise`/
+`tfall` readings (all at `hi`-edge, sub-nanosecond-period corners) came back
+negative, a threshold-ordering artifact of the same kind
+[Output duty cycle](#output-duty-cycle)'s methodology documents for
+`thigh` (ngspice's `trig`/`targ` measure clauses search independently and
+are not guaranteed ordered at these edge rates), not a physical negative
+transition time. Excluded from the range above; see Limitations.
 
-What *is* known:
+What *is* known beyond the measurement:
 
 - `CLK` is driven by a three-stage tapered inverter buffer (×3 per stage,
   1.25/0.5 → 3.75/1.5 → 11.25/4.5 µm) on `VDD_VCO`/`GND_VCO`, with ≈22 pF of
@@ -699,6 +736,17 @@ What *is* known:
 - Frequency is measured at `CLK` rather than at a ring node specifically so
   that the record proves the buffer squares the ring's slow internal edges into
   a rail-to-rail clock at the bottom of the band.
+
+**Limitations of the measurement** (full detail in the record's own
+Limitations field): the 50 fF load is external-only — the on-die divider's
+own input capacitance is not additionally modelled, so both this row's and
+[Output duty cycle](#output-duty-cycle)'s numbers are mildly optimistic
+relative to the assembled chip; the corner sweep is MOS-only (passives held
+typical); only the two band/Vctrl extremes are swept, not the full band plan;
+schematic-level, no layout parasitics; clean DC supply, no ripple; and
+Vctrl is open-loop (a fixed DC source), isolating this measurement from loop
+dynamics. Post-extraction re-run and the divider-input-capacitance addition
+are owed to #18 — see [Verification owed](#verification-owed).
 
 **Consequence of the domain choice, stated because it is easy to miss**: the
 output clock's levels ride on `vdd_vco`, the same rail the
@@ -890,8 +938,8 @@ to reconstruct it from the status column.
 | [Lock time](#lock-time) | cold-start acquisition including cycle slipping; everything recorded today is small-signal settling | #12 (`lock-time`) |
 | [Reference input](#reference-input) | input thresholds/edge-rate sweep; a numeric reference-jitter limit to replace the current exclusion | #12 |
 | [Power](#power) | a measured `vdd_ref` domain current, and a closed-loop total | #14 (`supply-sensitivity`) |
-| [Output duty cycle](#output-duty-cycle) | any duty-cycle measurement at all | #12 (`output-range`) |
-| [Output levels and drive](#output-levels-and-drive) | a loaded-output swing/edge-rate measurement at the specified load | #12 / #18 |
+| [Output duty cycle](#output-duty-cycle) | the design does not meet its own 45 % floor at 7/90 measured points (`fs` bundle, `lo` edge, nominal-or-above supply); post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the measurement itself now exists (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |
+| [Output levels and drive](#output-levels-and-drive) | post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the loaded-output swing/edge-rate measurement itself now exists and PASSES at every point (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |
 | [Lock detector](#lock-detector) | T1/T2 window widening (the design does not meet its own target today); T4/T5 characterization below 25 MHz | #11 rework, verified by #12 |
 | [Area](#area) | everything except the loop filter; the block has no floorplan | #17 (floorplan), #18 (extraction) |
 | [Kvco](#kvco), [Output band](#output-band) | Monte Carlo band-select mirror mismatch; **post-extraction re-run of every VCO number** | #15, #18 |
