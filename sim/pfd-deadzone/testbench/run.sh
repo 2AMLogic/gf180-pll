@@ -140,10 +140,6 @@ fi
 #
 # Unset, the record says it is the first for its claim, exactly as before.
 # --------------------------------------------------------------------------
-author_field() {
-  echo "- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), ${SIM_AUTHOR:-agent-builder (issue #9)}"
-}
-
 simenv_require_tools
 mkdir -p "${WORK}"
 
@@ -418,7 +414,7 @@ ${CORNER_TABLE}
   - Raw logs: \`sim/pfd-deadzone/corners/${RID}/\`
   - Extracted metrics: \`sim/pfd-deadzone/corners/${RID}/pfd_deadzone.csv\`,
     \`sim/pfd-deadzone/corners/${RID}/pfd_deadzone_verdict.csv\`
-$(author_field)
+$(simenv_author_field)
 $(simenv_supersedes_field "${SIM_SUPERSEDES:-}")
 EOF
 } >"${RECORD}"
