@@ -206,6 +206,15 @@ simenv_method_note() {
   return 0
 }
 
+# (Hoisted from byte-identical local copies in sim/cp-compliance and
+# sim/pfd-deadzone's testbench/run.sh -- the same file pair
+# `simenv_supersedes_field`/`simenv_method_note` were hoisted from, for the
+# same reason: two copies of one evidence-record field emitter is how the
+# copies drift.)
+simenv_author_field() {
+  echo "- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), ${SIM_AUTHOR:-agent-builder (issue #9)}"
+}
+
 # tag for a work subdirectory: filesystem-safe, unique per job.
 #
 # (Hoisted from byte-identical local copies in sim/divider-ratio and

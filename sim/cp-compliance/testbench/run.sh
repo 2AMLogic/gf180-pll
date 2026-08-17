@@ -224,10 +224,6 @@ esac
 #
 # Unset, the record says it is the first for its claim, exactly as before.
 # --------------------------------------------------------------------------
-author_field() {
-  echo "- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), ${SIM_AUTHOR:-agent-builder (issue #9)}"
-}
-
 simenv_require_tools
 mkdir -p "${WORK}"
 
@@ -557,7 +553,7 @@ ${TRIM_TABLE}
   - Raw logs: \`sim/cp-compliance/corners/${RID}/\`
   - Extracted metrics: \`sim/cp-compliance/corners/${RID}/cp_dc.csv\`,
     \`cp_switch.csv\`, \`cp_curves.csv\`
-$(author_field)
+$(simenv_author_field)
 $(simenv_supersedes_field "${SIM_SUPERSEDES:-}")
 EOF
 } >"${RECORD}"
