@@ -340,6 +340,19 @@ def run(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ENVIRONMENT
 
+    # #153: ngspice-47 mis-expands the PDK's nonlinear-capacitance moscap
+    # family into a malformed internal element ("unknown parameter (e9)"),
+    # which otherwise surfaces only as an opaque per-point ngspice failure
+    # deep inside the sweep. Warn up front with an actionable message rather
+    # than let every point fail silently unexplained; the run still proceeds
+    # (this is a heuristic content match, not a hard version gate) so a host
+    # where ngspice-47 has since been fixed is not blocked.
+    moscap_warning = runner.nonlinear_moscap_ngspice47_warning(
+        ngspice, tuple(tb.dut) + tuple(phase.netlist for phase in tb.run_phases)
+    )
+    if moscap_warning:
+        print(moscap_warning, file=sys.stderr)
+
     corner_names = args.corners or ([args.corner_set] if args.corner_set else list(tb.corners))
     corner_list = corners_mod.resolve_corners(corner_names)
     temperatures = args.temps if args.temps is not None else list(tb.temperatures_c)

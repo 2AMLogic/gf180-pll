@@ -465,6 +465,91 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(runner.parse_measurements(text, raw_names=["ttest"]), {})
 
 
+class NonlinearMoscapGuardTests(unittest.TestCase):
+    """#153: ngspice-47 mis-expands this PDK's nonlinear-capacitance moscap
+    family (a ``c=<expr>`` behavioral coefficient) into a malformed internal
+    element ("unknown parameter (e9)") when it is instantiated from inside a
+    nested ``.subckt`` -- verified against a real ngspice-46/-47 pair on
+    ``design/netlist/vco.spice`` (nests -- fails on ngspice-47) versus
+    ``sim/devchar-passives``' own device-characterization deck (flat,
+    top-level instantiation -- does not fail). These tests fix that parsing
+    / triggering logic with small fixtures so it does not require ngspice or
+    the PDK to run.
+    """
+
+    NESTED = (
+        ".subckt vco vctrl clk vdd vss\n"
+        "xcdec1 vdd vss cap_nmos_03v3 c_width=50u c_length=50u m=1\n"
+        ".ends\n"
+    )
+    FLAT = "xcn n_cn 0 cap_nmos_03v3 c_length=cl c_width=cw\n"
+
+    def test_ngspice_major_version_parses_the_leading_number(self):
+        self.assertEqual(
+            runner.ngspice_major_version("ngspice-47 : Circuit level simulation program"), 47
+        )
+        self.assertEqual(runner.ngspice_major_version("ngspice-46"), 46)
+
+    def test_ngspice_major_version_none_when_unparseable(self):
+        self.assertIsNone(runner.ngspice_major_version("unknown"))
+
+    def test_nested_instantiation_matches(self):
+        self.assertEqual(runner._nested_nonlinear_moscap_match(self.NESTED), "cap_nmos_03v3")
+
+    def test_flat_top_level_instantiation_does_not_match(self):
+        """sim/devchar-passives' own deck instantiates this family directly,
+        with no enclosing .subckt -- verified NOT to trip the ngspice-47
+        regression, so the guard must not warn about it."""
+        self.assertIsNone(runner._nested_nonlinear_moscap_match(self.FLAT))
+
+    def test_b_variant_and_case_insensitivity_match(self):
+        text = ".SUBCKT loop_filter vctrl vss\nXCF1 nz vss CAP_NMOS_03V3_B c_width=87u c_length=87u m=1\n.ENDS\n"
+        self.assertEqual(runner._nested_nonlinear_moscap_match(text), "CAP_NMOS_03V3_B")
+
+    def test_dut_uses_nonlinear_moscap_skips_unreadable_sources(self):
+        self.assertIsNone(runner.dut_uses_nonlinear_moscap([Path("/no/such/file.spice")]))
+
+    def test_dut_uses_nonlinear_moscap_scans_every_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flat = root / "flat.spice"
+            nested = root / "nested.spice"
+            flat.write_text(self.FLAT)
+            nested.write_text(self.NESTED)
+            self.assertEqual(
+                runner.dut_uses_nonlinear_moscap([flat, nested]), "cap_nmos_03v3"
+            )
+
+    def test_warning_fires_only_on_ngspice_47_with_a_nested_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            nested = Path(tmp) / "vco.spice"
+            nested.write_text(self.NESTED)
+            sources = [nested]
+            self.assertIsNotNone(
+                runner.nonlinear_moscap_ngspice47_warning("ngspice-47", sources)
+            )
+            self.assertIn("#153", runner.nonlinear_moscap_ngspice47_warning("ngspice-47", sources))
+            self.assertIsNone(
+                runner.nonlinear_moscap_ngspice47_warning("ngspice-46", sources)
+            )
+
+    def test_warning_absent_for_a_flat_dut_even_on_ngspice_47(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            flat = Path(tmp) / "cap_cv.spice"
+            flat.write_text(self.FLAT)
+            self.assertIsNone(
+                runner.nonlinear_moscap_ngspice47_warning("ngspice-47", [flat])
+            )
+
+    def test_warning_absent_when_ngspice_version_is_unparseable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            nested = Path(tmp) / "vco.spice"
+            nested.write_text(self.NESTED)
+            self.assertIsNone(
+                runner.nonlinear_moscap_ngspice47_warning("some dev build", [nested])
+            )
+
+
 class _StubPoint:
     def __init__(self, corner_id):
         self.corner_id = corner_id
