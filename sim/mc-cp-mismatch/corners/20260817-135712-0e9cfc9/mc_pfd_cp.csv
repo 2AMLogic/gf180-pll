@@ -1,0 +1,18 @@
+# campaign: mc-cp-mismatch (pfd_cp)
+# record_id: 20260817-135712-0e9cfc9
+# generated_utc: 2026-08-17T13:57:12Z
+# pdk_variant: gf180mcuD
+# pdk_open_pdks_hash: c6d73a35f524070e85faff4a6a9eef49553ebc2b
+# pdk_root: /home/ubuntu/.volare/gf180mcuD
+# model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
+# switches: design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0 -> nominal skew, no Monte Carlo)
+# simulator: ngspice-46
+# netlist: design/pfd_cp.sch (xschem export)
+# corners: 3 corners, dphi={-1n,0,+1n}, N=2 mismatch samples/corner
+corner,seed,qnet0_c,qplus_c,qminus_c,kd_wide_a,t_offset_s
+ff_-40c_3.63v,1,-3.61029e-15,4.25453e-17,-9.97099e-15,5.00677e-06,-7.21082e-10
+ff_-40c_3.63v,2,-2.86018e-15,5.57663e-16,-8.93088e-15,4.74427e-06,-6.0287e-10
+ss_125c_2.97v,1,-9.22984e-16,3.80881e-15,-6.92969e-15,5.36925e-06,-1.71902e-10
+ss_125c_2.97v,2,-2.01194e-17,4.65932e-15,-5.80539e-15,5.23236e-06,-3.84519e-12
+typical_27c_3.30v,1,-1.90962e-15,2.92005e-15,-7.55016e-15,5.2351e-06,-3.64772e-10
+typical_27c_3.30v,2,-1.0849e-15,3.66978e-15,-6.46163e-15,5.0657e-06,-2.14166e-10
