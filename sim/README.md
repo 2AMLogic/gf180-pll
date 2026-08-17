@@ -97,6 +97,7 @@ sim/
   | `supply-sensitivity` | supply pushing, quiescent/dynamic power | #14 |
   | `mc-cp-mismatch` | charge-pump mismatch distribution | #15 |
   | `reference-spur` | closed-loop reference spur measured directly, as the ±f_ref sidebands of the locked output spectrum | #145 |
+  | `output-driver` | loaded buffered-output duty cycle, levels and drive-strength (edge rate) at the two extremes of the ratified band/Vctrl window | #144 |
 
   New campaigns add rows here as they are created; the list is descriptive,
   not a closed set.
