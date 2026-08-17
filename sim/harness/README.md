@@ -66,6 +66,70 @@ producing a misleading result. `sim/run_corners.py --print-env` emits the
 resolved paths as shell exports; `source sim/env.sh` applies them so that an
 interactive ngspice or xschem session uses the identical PDK.
 
+### ngspice-46 required for nested nonlinear moscap decks (#153)
+
+`sm141064.ngspice` implements this PDK's decoupling/loop-filter moscap family
+(`cap_nmos_03v3`, `cap_pmos_03v3`, `cap_nmos_06v0`, `cap_pmos_06v0`, and each
+of those with a `_b` body-tie variant) as a *nonlinear* capacitance -- a `c=`
+behavioral coefficient expression, not a fixed value. **ngspice-47** (the
+current Homebrew/apt bottle as of this writing) mis-expands that construct
+into a malformed internal element/node whenever it is instantiated from
+*inside* another named `.subckt` -- the hierarchical instance path the error
+names (`x1.xcdec1.gc_moscap`, two levels deep: the DUT copy, then the cap
+nested inside `.subckt vco`) is the signature -- and every PVT point fails
+with:
+
+```
+Error on line NNNN or its substitute:
+  g.x1.xcdec1.gc_moscap x1.xcdec1.c_moscap_int1 0 0 nv1   1.000000000000000e+00    e9
+  unknown parameter (e9)
+```
+
+**ngspice-46 composes and runs the identical deck correctly.** This is an
+ngspice-47 codegen regression in the PDK's own subcircuit, not a defect in
+this repo's decks, and not something a `.options` line or netlist change can
+work around — see #153 for the verified reproduction (a clean ngspice-46 run
+reproducing the historical `vco-tuning-range` record's frequency/Kvco range,
+byte-for-byte identical deck).
+
+Two campaigns currently compose a DUT that nests this family and are affected:
+`sim/vco-tuning-range` (`design/netlist/vco.spice`, `cap_nmos_03v3` inside
+`.subckt vco`) and `sim/reference-spur` (`design/netlist/pll_top.spice`,
+both `cap_nmos_03v3` inside `.subckt vco` and `cap_nmos_03v3_b` inside
+`.subckt loop_filter`). A *flat*, top-level instantiation of the same family
+-- as `sim/devchar-passives`' own device-characterization deck uses, with no
+enclosing `.subckt` -- has been verified NOT to trigger this on ngspice-47;
+that campaign runs on either version. The harness itself checks this
+automatically: `run_corners.py` prints an actionable warning to stderr (and
+still attempts the run) whenever it detects a resolved DUT/fragment nesting
+this family under a version whose leading `ngspice-<N>` is `47`
+(`harness/runner.py`'s `nonlinear_moscap_ngspice47_warning`) — so a host
+missing ngspice-46 gets the explanation up front instead of only the opaque
+per-point parser error.
+
+To obtain ngspice-46 (not the current stock `brew install ngspice`, which
+tracks the latest release) on macOS, build the upstream release tarball
+directly rather than relying on any local, unpublished tap:
+
+```bash
+curl -LO https://downloads.sourceforge.net/project/ngspice/ng-spice-rework/old-releases/46/ngspice-46.tar.gz
+echo "a0d1699af1940b06649276dcd6ff5a566c8c0cad01b2f7b5e99dedbb4d64c19b  ngspice-46.tar.gz" | shasum -a 256 -c -
+tar xzf ngspice-46.tar.gz && cd ngspice-46
+./configure --enable-xspice --disable-openmp --enable-pss --with-readline=yes
+make -j"$(sysctl -n hw.ncpu 2>/dev/null || nproc)"
+sudo make install     # or --prefix=$HOME/.local and adjust PATH
+```
+
+(`--enable-cider` from Homebrew's own `ngspice@46` formula is omitted here as
+non-essential to this fix; the sha256 above is the upstream release tarball's
+own checksum, independent of any Homebrew formula.) Point `PATH` at the
+resulting `ngspice` binary before invoking `run_corners.py` for either
+affected campaign, e.g.:
+
+```bash
+PATH="/path/to/ngspice-46/bin:$PATH" python3 sim/run_corners.py sim/vco-tuning-range/testbench ...
+```
+
 ## The PVT grid
 
 CLAUDE.md requires PVT corners on every recorded result. The defaults are
