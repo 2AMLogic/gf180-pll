@@ -185,6 +185,14 @@ run_one() {
   local k; k=$(k_from_divparams "${divparams}")
   local fref; fref=$(awk -v f="${FOUT_TARGET}" -v n="${n}" 'BEGIN{printf "%.8g", f/n}')
   local vctrl_ic; [ "${cond}" = "cold" ] && vctrl_ic=0.9 || vctrl_ic=2.7
+  # NOT the sim/output-range::vctrl_ic seed-collision hazard (#170): unlike
+  # that campaign, this bench's `--one` entry point does not take vctrl_ic as
+  # an argument at all -- it is always this deterministic function of `cond`
+  # (0.9 V cold / 2.7 V relock), which is already fully captured by the
+  # `${cond}` component the tag below already carries. Two `--one`
+  # invocations of the same (corner, temp, vdd, n, cond) are therefore
+  # guaranteed to compute the identical vctrl_ic and cannot collide under
+  # different stimuli, so no tag change is needed here.
   # The internal-timestep ceiling is part of the run's identity, not a tuning
   # knob: a log produced at the old (f_out-derived, bound-violating) ceiling is
   # NOT interchangeable with one produced at SIMENV_CLOSED_LOOP_TMAX. Putting

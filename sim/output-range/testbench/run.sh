@@ -25,7 +25,18 @@
 #   ./run.sh --one <corner> <temp_c> <vdd> <edge> <fout> <b2> <b1> <b0> <n> \
 #                 <vctrl_ic> <outcsv> [seed_pos]
 #                             # single targeted point (used by the lo-edge
-#                             #   anomaly-investigation record; bypasses the grid)
+#                             #   anomaly-investigation record; bypasses the grid).
+#                             #   A <vctrl_ic> that differs from what
+#                             #   seed_for_corner would compute for this exact
+#                             #   point is appended to the work-dir tag (#170),
+#                             #   so re-running the same point at a DIFFERENT
+#                             #   seed (a seed-control run) cannot collide with
+#                             #   -- and silently reuse the log of -- another
+#                             #   invocation's run. A grid row's own seed IS
+#                             #   seed_for_corner's output, so this is a no-op
+#                             #   for the full grid: tags, and therefore an
+#                             #   existing work/ tree's reusability, are
+#                             #   unchanged.
 #   SIM_JOBS=4 ./run.sh      # parallelism (default: sequential -- see below)
 #   SIM_WINCAP=2.5e-7 ./run.sh --one ...
 #                             # shorten the transient window for a CONTROLLED
@@ -245,6 +256,33 @@ run_one() {
   # come from the shared encoder rather than from this script.
   local band=$(( b2 * 4 + b1 * 2 + b0 ))
   local fref; fref=$(awk -v f="${fout}" -v n="${n}" 'BEGIN{printf "%.8g", f/n}')
+  # `vctrl_ic` seed disambiguation (#170): a full-grid invocation always
+  # passes run_one the SAME seed seed_for_corner would compute for this exact
+  # (corner, temp, vdd, band, fout) row, but the `--one` entry point takes
+  # vctrl_ic as an explicit argument precisely so a single point can be
+  # re-run with a DIFFERENT seed (e.g. a seed-control run at the same
+  # PVT/edge). Without this check two such `--one` invocations land in the
+  # SAME work-dir tag, and the `-nt "${DECK}"` reuse guard below then hands
+  # the second invocation the first invocation's log under the second
+  # invocation's (unrelated) seed -- silently, with no warning.
+  #
+  # Recomputing the canonical seed here and comparing is a no-op for every
+  # full-grid row (the recomputed value is byte-identical to what was
+  # passed in, since both come from the same seed_for_corner call), so grid
+  # tags are UNCHANGED and a resumed grid's work/ tree stays fully reusable
+  # -- this is the "include the seed only when it differs" alternative from
+  # #170's Scope, chosen specifically to avoid invalidating an in-progress
+  # 90-run grid. Only a `--one` invocation given a seed that does NOT match
+  # the canonical one (including one seed_for_corner cannot itself resolve,
+  # e.g. an off-grid corner) gets a distinct tag.
+  local seedtag=""
+  local canon_seed canon_vic
+  canon_seed=$(seed_for_corner "${corner}" "${temp}" "${vdd}" "${band}" "${fout}")
+  canon_vic="${canon_seed%% *}"
+  if [ "${canon_vic}" = "ERROR" ] || \
+     [ "$(awk -v a="${vctrl_ic}" -v b="${canon_vic}" 'BEGIN{print (a+0==b+0)?1:0}')" != "1" ]; then
+    seedtag="_ic${vctrl_ic}"
+  fi
   # The internal-timestep ceiling is part of the run's identity -- see
   # sim/lock-time/testbench/run.sh's run_one for why it goes in the tag.
   #
@@ -270,7 +308,7 @@ run_one() {
     esac
     wintag="_w${SIM_WINCAP}"
   fi
-  local tag="or_${corner}_${temp}c_${vdd}v_${edge}_tmax${SIMENV_CLOSED_LOOP_TMAX}${wintag}"
+  local tag="or_${corner}_${temp}c_${vdd}v_${edge}_tmax${SIMENV_CLOSED_LOOP_TMAX}${wintag}${seedtag}"
   tag="${tag//./p}"
 
   local tstop tstep t_force
