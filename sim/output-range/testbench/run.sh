@@ -66,9 +66,11 @@
 # committed export of design/pll_top.sch. Every record already in
 # sim/output-range/records/ was taken against the older DUT and names it in
 # its own Netlist provenance field; those records are append-only and are
-# neither edited nor reinterpreted by this change. NO record in this campaign
-# has yet been taken against `pll_top` -- the full-grid re-run that supersedes
-# them is #159's remaining scope.
+# neither edited nor reinterpreted by this change. The first record taken
+# against `pll_top` is 20260819-160843-4e32f91 (#164) -- the full 90-run grid,
+# which supersedes the single-corner pilot 20260731-223426-640560e. The
+# equivalent re-take for sim/lock-time (#163) is still open, and #159's own
+# remaining scope (deleting sim/lib/assemble_closed_loop.sh) waits on it.
 
 set -euo pipefail
 
@@ -519,7 +521,7 @@ DNG_PASS=$(tail -n +2 "${RESULT_CSV}" | awk -F, '$15=="PASS"{c++} END{print c+0}
 DNG_FAIL=$(tail -n +2 "${RESULT_CSV}" | awk -F, '$15=="FAIL"{c++} END{print c+0}')
 DNG_SUSPECT=$(tail -n +2 "${RESULT_CSV}" | awk -F, '$15=="SUSPECT"{c++} END{print c+0}')
 DNG_ERROR=$(tail -n +2 "${RESULT_CSV}" | awk -F, '$15=="ERROR"{c++} END{print c+0}')
-DNG_SUMMARY="**PFD DN-branch integration guard** (#69; \`sim/README.md\`'s \"Closed-loop internal-timestep bound\"): **${DNG_PASS} PASS / ${DNG_FAIL} FAIL / ${DNG_SUSPECT} SUSPECT / ${DNG_ERROR} ERROR** over the rows above, against a floor of ${ACC_DN_FRAC} of the rail. This campaign is where the guard was validated against a real violation: before #75 the \`lo\` edge derived its internal ceiling from its 10 MHz OUTPUT (\`1/(50*f_out)\` = 2.0 ns, ~6x the PFD's set pulse) and this measure read 6.6e-7 V -- three orders of magnitude under the floor, i.e. the DN branch never asserted, while nothing else in the verdict table looked wrong. The deck now takes the ceiling from \`SIMENV_CLOSED_LOOP_TMAX\` instead, so every row is expected to read PASS and a non-PASS row means the bound has been violated again. An \`OUT-OF-WINDOW\` row takes the SUSPECT branch by construction (it never reached lock because it was never scored for it) -- see \`run_one\`."
+DNG_SUMMARY="**PFD DN-branch integration guard** (#69; \`sim/README.md\`'s \"Closed-loop internal-timestep bound\"): **${DNG_PASS} PASS / ${DNG_FAIL} FAIL / ${DNG_SUSPECT} SUSPECT / ${DNG_ERROR} ERROR** over the rows above, against a floor of ${ACC_DN_FRAC} of the rail. This campaign is where the guard was validated against a real violation: before #75 the \`lo\` edge derived its internal ceiling from its 10 MHz OUTPUT (\`1/(50*f_out)\` = 2.0 ns, ~6x the PFD's set pulse) and this measure read 6.6e-7 V -- three orders of magnitude under the floor, i.e. the DN branch never asserted, while nothing else in the verdict table looked wrong. The deck now takes the ceiling from \`SIMENV_CLOSED_LOOP_TMAX\` instead, so a **FAIL** verdict -- a row that reached lock while its DN branch stayed unresolved -- is the one that would mean the bound has been violated again. **SUSPECT is not that verdict and must not be read as one**: a row that did not reach lock inside its window never resolves the detector either, so the guard withholds attribution rather than indicting the ceiling. An \`OUT-OF-WINDOW\` row takes the same SUSPECT branch by construction (it never reached lock because it was never scored for it) -- see \`run_one\`."
 RECORD="${RECORDSDIR}/${RID}.md"
 {
   cat <<EOF
@@ -552,7 +554,10 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
   temperatures x 3 supplies) at both ratified output-band edges -- ${NJOBS}
   runs total. Extends the original deliberately-reduced single-corner pilot
   (\`sim/output-range/records/20260731-223426-640560e.md\`, 2 runs at
-  typical/27C/3.30V), which is cited and not superseded.
+  typical/27C/3.30V) -- see **Supersedes** below for that record's standing
+  after this one (this generated text does not assert either way, since the
+  actual standing is decided by which \`SIM_SUPERSEDES\` id, if any, minted
+  this specific record).
   - Axes not swept: passive process corners (held at
     \`res_typical\`/\`moscap_typical\`/\`mimcap_typical\`, the campaign's
     existing convention -- \`sim/lock-time\` does the same); VCO band code and
@@ -656,7 +661,7 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     design point per edge; the 2 us window is short for \`lo\` (above), so a
     \`lo\` FAIL row bounds nothing about whether that corner eventually
     locks; margin is reported per corner but the worst-margin corner is only
-    as trustworthy as the window that produced it.
+    as trustworthy as the window that produced it.$(simenv_method_note)
 - **Statistical convention**: N/A -- corner-matrix claim, not a distribution
   claim.
 - **Result**:
@@ -674,10 +679,13 @@ $(cat "${RESULT_MD}")
     \`design/divider_chain.sch\`, \`design/lock_detector.sch\`)
   - Consumed design-input evidence (read-only, cited not re-derived):
     \`${KVCO_CSV#"${REPO}"/}\`
-  - Predecessor records (cited, not superseded):
+  - Predecessor records (see **Supersedes** below for standing):
     \`sim/output-range/records/20260731-223426-640560e.md\` (single-corner
     pilot), \`sim/output-range/records/20260801-061907-67d7127.md\`
-    (\`lo\`-edge waveform investigation),
+    (\`lo\`-edge waveform investigation -- its claim is the waveform
+    diagnosis, not a corner-measurement standing this grid replaces, so it
+    remains cited, not superseded, regardless of this record's own
+    Supersedes field),
     \`sim/lock-time/records/20260801-101734-5eb00db.md\` (the
     internal-timestep-bound reconciliation this grid is the first
     \`output-range\` campaign to satisfy)
