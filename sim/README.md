@@ -268,47 +268,42 @@ The record says all of that in its own Corner-matrix field, and says in as many
 words that it must not be cited for a PVT claim — which is what makes it a
 justification rather than an excuse.
 
-## Closed-loop campaigns: two assembly paths, migration scoped and deferred
+## Closed-loop campaigns: one assembly path, one retained generator
 
 A campaign that simulates the whole PLL does **not** hand-transcribe a loop
-into its testbench: it calls a shared helper in `sim/lib/`. There are currently
-**two** such helpers, and this is the honest state of the tree rather than a
-target state:
+into its testbench: it calls a shared helper in `sim/lib/`. Since #159 there is
+**one such helper on every live campaign**, and one older generator retained
+for a narrower reason:
 
 | Helper | What it builds | Used by |
 |---|---|---|
-| `sim/lib/assemble_closed_loop.sh` (#12) | concatenates the committed block exports (`vco`, `divider_chain`, `lock_detector`, `loop_filter`) with a fresh `pfd_cp` export, de-duplicating the leaf cells two of them inline. It does **not** read `design/netlist/pll_top.spice`; the loop itself is wired by the testbench's own top-level instance list. | `lock-time`, `output-range` (#12) |
-| `sim/lib/pll_top_dut.sh` (#52) | prepends `design/netlist/pll_top.spice` — the committed export of `design/pll_top.sch` — to the campaign's stimulus fragment, and owns the encoding of the block's static configuration inputs, so a campaign asks for `N = 8` rather than setting twelve bits by hand (a mis-encoded one-hot `SEL` code still locks, just at the wrong N). | `pll-top-smoke` (#52), `supply-sensitivity` (#14) |
+| `sim/lib/pll_top_dut.sh` (#52) | prepends `design/netlist/pll_top.spice` — the committed export of `design/pll_top.sch` — to the campaign's stimulus fragment, and owns the encoding of the block's static configuration inputs, so a campaign asks for `N = 8` rather than setting twelve bits by hand (a mis-encoded one-hot `SEL` code still locks, just at the wrong N). | `pll-top-smoke` (#52), `supply-sensitivity` (#14), `lock-time`, `output-range` (#12, since #159) |
+| `sim/lib/assemble_closed_loop.sh` (#12) | concatenates the committed block exports (`vco`, `divider_chain`, `lock_detector`, `loop_filter`) with a fresh `pfd_cp` export, de-duplicating the leaf cells two of them inline. It does **not** read `design/netlist/pll_top.spice`; the loop was wired by each testbench's own top-level instance list. | **No live campaign.** Retained only as the documented generator of the `lock-time` / `output-range` evidence already committed under `records/` and `netlist-snapshots/`. |
 
 The difference that matters is **where the loop is wired**. On the
 `pll_top_dut.sh` path it is wired once, in `design/pll_top.sch`, so every
 campaign simulates the same connectivity and a change to the loop shows up as a
-schematic diff. On the `assemble_closed_loop.sh` path each testbench wires its
-own instance list, so two campaigns can disagree about the loop without
-anything reporting the divergence — which is the failure mode `pll_top.sch`
-was created to end.
+schematic diff. On the `assemble_closed_loop.sh` path each testbench wired its
+own instance list, so two campaigns could disagree about the loop without
+anything reporting the divergence — the failure mode `pll_top.sch` was created
+to end.
 
-The intended end state is therefore one path for every closed-loop campaign.
-**That is not the state today, and #131 (which evaluated closing this gap)
-made an explicit decision to keep it that way for now rather than attempt a
-rushed migration.** Reconciling the two paths means re-running `sim/lock-time`
-and `sim/output-range` (#12) across their full PVT grids against `pll_top`
-and minting superseding records — not a mechanical deletion. `sim/lock-time`
-alone is a documented 270-run grid (45-point PVT × N ∈ {4,16,64} ×
-{cold,relock}; see its `run.sh` header), and per-point cost has been measured
-between ~62 and ~900 CPU-seconds depending on host contention (see
-`sim/lock-time/records/20260801-073931-eec269e.md`). As of #131, the full
-grid has not yet even been completed once against the *current*
-`assemble_closed_loop.sh` DUT (#65, tracking that, was still open) —
-re-running it a second time against a different DUT is real, multi-session
-simulation work that #131 declined to attempt as a same-pass addendum rather
-than produce partial or rushed evidence. That migration is tracked as its own
-scoped follow-up: **#159**. Until #159 lands, `assemble_closed_loop.sh` stays
-exactly as it is, `sim/` records are append-only, and both paths coexist by
-this explicit decision rather than by neglect. Read a record's **Netlist
-provenance** field to know which DUT its numbers came from — every record
-names its helper — and do not read either helper's existence as a repo-wide
-invariant.
+**Why the retired generator is still in the tree.** `sim/` records are
+append-only, and every `lock-time` / `output-range` record committed before
+#159 names `assemble_closed_loop.sh` in its own **Netlist provenance** field as
+what produced its frozen snapshot. Deleting the generator while it is still the
+cited provenance of the *only* evidence those two campaigns have would leave
+records pointing at a file that never existed in the tree they are read from.
+It is deleted once both campaigns hold superseding full-grid evidence taken
+against `pll_top` — the remaining scope of **#159**, which is real
+multi-session simulation work: `lock-time` alone is a documented 270-run grid
+(45-point PVT × N ∈ {4,16,64} × {cold,relock}) and `output-range` a 90-run one,
+at a measured tens-to-hundreds of CPU-seconds per point.
+
+Until then: **runners and testbenches are on `pll_top`; the committed evidence
+for these two campaigns is not.** Read a record's **Netlist provenance** field
+to know which DUT its numbers came from — every record names its helper — and
+do not read either helper's existence as a repo-wide invariant.
 
 *Naming note.* #52 originally called its helper `assemble_closed_loop.sh` as
 well; it was renamed to `pll_top_dut.sh` when both landed in the same tree.

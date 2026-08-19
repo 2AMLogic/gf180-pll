@@ -1,60 +1,70 @@
 * gf180-pll :: output-range :: closed-loop output-band coverage testbench (#12)
 *
-* DUT: the SAME full closed loop as sim/lock-time (VCO #8, PFD/CP #9, loop
-* filter #10, feedback divider #11), assembled by
-* sim/lib/assemble_closed_loop.sh into "dut.spice" and included below.  This
-* bench answers a different question than lock-time: not "how long does the
-* loop take to lock", but "does the loop reach the ratified output-band EDGE
-* frequencies at all, and with how much control-voltage headroom to the
-* usable 0.9-2.7 V window" -- complementing (not re-deriving) #8's open-loop
-* vco-tuning-range characterization, which is what this bench's initial
-* condition and target selection are taken from (see run.sh).
+* DUT: `pll_top` -- the SAME whole-PLL DUT as sim/lock-time, sim/pll-top-smoke
+* and sim/supply-sensitivity: design/pll_top.sch, netlisted by
+* design/netlist.sh into design/netlist/pll_top.spice and prepended to this
+* fragment by sim/lib/pll_top_dut.sh (#52).  This bench answers a different
+* question than lock-time: not "how long does the loop take to lock", but
+* "does the loop reach the ratified output-band EDGE frequencies at all, and
+* with how much control-voltage headroom to the usable 0.9-2.7 V window" --
+* complementing (not re-deriving) #8's open-loop vco-tuning-range
+* characterization, which is what this bench's initial condition and target
+* selection are taken from (see run.sh).
 *
-* Same net names and topology as tb_lock_time.sp; see that file's header for
-* the full description.
+* MIGRATED FROM sim/lib/assemble_closed_loop.sh (#159), in lockstep with
+* sim/lock-time and for the same reason: the loop's top-level wiring now
+* comes from design/pll_top.sch instead of from this testbench's own instance
+* list, so no two campaigns can disagree about the connectivity without the
+* schematic diff showing it.  Every record already in
+* sim/output-range/records/ was taken against the older assembly and names it
+* in its own Netlist provenance field; those records are append-only evidence
+* and are not restated or reinterpreted here.  See
+* sim/lock-time/testbench/tb_lock_time.sp's header for the itemised list of
+* what changed -- this deck took exactly the same changes.
+*
+* Same net names, stimulus and topology as tb_lock_time.sp; see that file's
+* header for the full description.
 *
 * Expects from the generated header (sim/lib/simenv.sh): the same param set
-* as tb_lock_time.sp (vsup, fref, bnd*v, icp*v, iunit, sel*v/p*v, vctrl_ic,
-* t_force, tstep, tstop, lockthresh). vctrl_ic here is NOT cold-start-vs-
-* re-lock -- it is run.sh's best open-loop estimate of the locked Vctrl (from
-* sim/vco-tuning-range's own measured f(Vctrl) table), used ONLY to keep the
-* required simulated transient short enough to be tractable (see this
-* record's Methodology field): the loop still closes and settles on its own,
-* this just avoids re-proving cold-start slewing, which is lock-time's (#12)
-* job, not this bench's.
-*
-* Expects "dut.spice" (sim/lib/assemble_closed_loop.sh's output) to have been
-* copied into the run directory by testbench/run.sh.
-
-.include "dut.spice"
+* as tb_lock_time.sp (vsup, fref, b*_code, cpb*_code, sel*_code, p*_code,
+* iunit, vctrl_ic, t_force, tstep, tstop, tmax, lockthresh). vctrl_ic here is
+* NOT cold-start-vs-re-lock -- it is run.sh's best open-loop estimate of the
+* locked Vctrl (from sim/vco-tuning-range's own measured f(Vctrl) table),
+* used ONLY to keep the required simulated transient short enough to be
+* tractable (see this record's Methodology field): the loop still closes and
+* settles on its own, this just avoids re-proving cold-start slewing, which
+* is lock-time's (#12) job, not this bench's.
 
 *------------------------------------------------------------------ supplies
-vdd    vdd    0 dc 'vsup'
-vss    vss    0 dc 0
-vddvco vddvco 0 dc 'vsup'
-vddiv  vddiv  0 dc 'vsup'
+vvdd    vdd     0 dc 'vsup'
+vvddvco vdd_vco 0 dc 'vsup'
+vvdddiv vdd_div 0 dc 'vsup'
+vgndvco gnd_vco 0 dc 0
+vvss    vss     0 dc 0
 
 *----------------------------------------------------------- reference clock
 vref ref 0 pulse(0 'vsup' 20n 200p 200p '0.5/fref-200p' '1/fref')
 
 *----------------------------------------------------- static configuration
-vbnd0 bnd0 0 dc 'bnd0v'
-vbnd1 bnd1 0 dc 'bnd1v'
-vbnd2 bnd2 0 dc 'bnd2v'
-vicp0 icp0 0 dc 'icp0v'
-vicp1 icp1 0 dc 'icp1v'
-vsel0 sel0 0 dc 'sel0v'
-vsel1 sel1 0 dc 'sel1v'
-vsel2 sel2 0 dc 'sel2v'
-vsel3 sel3 0 dc 'sel3v'
-vsel4 sel4 0 dc 'sel4v'
-vsel5 sel5 0 dc 'sel5v'
-vp0   pb0  0 dc 'p0v'
-vp1   pb1  0 dc 'p1v'
-vp2   pb2  0 dc 'p2v'
-vp3   pb3  0 dc 'p3v'
-vp4   pb4  0 dc 'p4v'
-vp5   pb5  0 dc 'p5v'
+* Encoded by sim/lib/pll_top_dut.sh (cloop_band_params / cloop_trim_params /
+* cloop_divider_params), not by this deck -- see tb_lock_time.sp's header.
+vb0   b0   0 dc 'vsup*b0_code'
+vb1   b1   0 dc 'vsup*b1_code'
+vb2   b2   0 dc 'vsup*b2_code'
+vcpb0 cpb0 0 dc 'vsup*cpb0_code'
+vcpb1 cpb1 0 dc 'vsup*cpb1_code'
+vp0   p0   0 dc 'vsup*p0_code'
+vp1   p1   0 dc 'vsup*p1_code'
+vp2   p2   0 dc 'vsup*p2_code'
+vp3   p3   0 dc 'vsup*p3_code'
+vp4   p4   0 dc 'vsup*p4_code'
+vp5   p5   0 dc 'vsup*p5_code'
+vs0   sel0 0 dc 'vsup*sel0_code'
+vs1   sel1 0 dc 'vsup*sel1_code'
+vs2   sel2 0 dc 'vsup*sel2_code'
+vs3   sel3 0 dc 'vsup*sel3_code'
+vs4   sel4 0 dc 'vsup*sel4_code'
+vs5   sel5 0 dc 'vsup*sel5_code'
 
 iibn vdd ibn dc 'iunit'
 iicn vdd icn dc 'iunit'
@@ -62,13 +72,13 @@ iibp ibp 0 dc 'iunit'
 iicp icp 0 dc 'iunit'
 
 *--------------------------------------------------------------------- DUT
-xpfdcp ref fb icp0 icp1 ibn icn ibp icp vctrl up dn vdd vss pfd_cp
-xlf    vctrl vss loop_filter
-xvco   vctrl bnd0 bnd1 bnd2 clk vddvco vss vco
-xdiv   clk pb0 pb1 pb2 pb3 pb4 pb5 sel0 sel1 sel2 sel3 sel4 sel5 divout fb vddiv vss divider_chain
-xlock  up dn lock vwin vdd vss lock_detector
+* Generated by sim/lib/pll_top_dut.sh's `cloop_instance`.
+xdut ref b0 b1 b2 cpb0 cpb1 p0 p1 p2 p3 p4 p5 sel0 sel1 sel2 sel3 sel4 sel5
++ ibn icn ibp icp clk divout fb lock vctrl vdd vdd_vco gnd_vco vdd_div vss
++ pll_top
 
-.ic v(xvco.Y1)=0 v(xvco.Y2)='vsup' v(xvco.Y3)=0 v(xvco.Y4)='vsup' v(xvco.Y5)=0
+.ic v(xdut.xvco.y1)=0 v(xdut.xvco.y2)='vsup' v(xdut.xvco.y3)=0
++ v(xdut.xvco.y4)='vsup' v(xdut.xvco.y5)=0
 
 * Released clamp seeding VCTRL near run.sh's open-loop estimate of the
 * locked value (see header comment above and this record's Methodology) --
@@ -91,14 +101,33 @@ vsctrl sctrl 0 pulse('vsup' 0 't_force' '10*tmax' '10*tmax' '2*tstop' '4*tstop')
 sforce vctrl vsetnode sctrl 0 SWFORCE
 .model SWFORCE SW(Ron=10 Roff=1G Vt='vsup/2' Vh=0)
 
-.options reltol=1e-3 abstol=1e-9 vntol=1e-4 chgtol=1e-13
-* The 4th .tran argument (tmax) is LOAD-BEARING -- see tb_lock_time.sp's
+* rshunt / itl4 are REQUIRED on this DUT and are solver knobs only -- every
+* convergence TOLERANCE is this campaign's own, unchanged from before #159,
+* so the converged solution is the one this campaign has always reported.
+* See tb_lock_time.sp's identical `.options` note for the bisection that
+* established rshunt is not optional here (without it the migrated deck
+* aborts inside the SWFORCE release ramp on the loop filter's nonlinear
+* moscap branch) and for the floating-cascode-node reason sim/pfd-deadzone,
+* sim/pll-top-smoke and sim/supply-sensitivity all carry the same 1 Tohm
+* shunt.
+.options rshunt=1e12 itl4=200 reltol=1e-3 abstol=1e-9 vntol=1e-4 chgtol=1e-13
+
+* The transient is issued ONCE, from the `.control` block at the bottom,
+* rather than from a top-level `.tran` card that ngspice batch mode would
+* then re-run a second time -- see tb_lock_time.sp's identical note, and
+* sim/pll-top-smoke/testbench/tb_pll_smoke.sp, which documented the
+* mechanism this campaign's own records had reported as ngspice
+* "re-entering its own analysis path" after printing complete measurements.
+*
+* The 4th transient argument (tmax) is LOAD-BEARING -- see tb_lock_time.sp's
 * identical note and sim/lib/simenv.sh's SIMENV_CLOSED_LOOP_TMAX. This bench
 * was the worse of the two violators before #65: with the ceiling defaulting
 * to the print step {tstep} = 1/(50*f_out), the 10 MHz `lo` edge ran at a 2 ns
 * internal ceiling, and 91% of its measured internal steps were LONGER than
 * the PFD's entire 0.33-0.39 ns set pulse.
-.tran {tstep} {tstop} 0 {tmax}
+.csparam c_tstep={tstep}
+.csparam c_tstop={tstop}
+.csparam c_tmax={tmax}
 
 *------------------------------------------------------------- measurements
 * Same real lock_detector criterion as tb_lock_time.sp -- this bench also
@@ -116,13 +145,18 @@ sforce vctrl vsetnode sctrl 0 SWFORCE
 * this measure read 6.6e-7 V against a 9.9e-4 V floor -- the DN branch was not
 * asserting at all, while the campaign's own verdict table showed nothing
 * unusual.  run.sh scores it three-valued (PASS / FAIL / SUSPECT / ERROR).
-.measure tran dn_lvl avg v(dn) from='0.9*tstop' to='tstop-1p'
+* DN is internal to pll_top since #159, hence the hierarchical reference.
+.measure tran dn_lvl avg v(xdut.dn) from='0.9*tstop' to='tstop-1p'
 
-* Optional full-transient waveform capture -- see tb_lock_time.sp's header
-* comment above the identical `.control` block for the rationale (#49's
-* Vctrl-anomaly prerequisite; no extra analysis cost, left on unconditionally).
+* Full-transient waveform capture -- see tb_lock_time.sp's header comment
+* above the identical `.control` block for the rationale (#49's Vctrl-anomaly
+* prerequisite; no extra analysis cost, left on unconditionally).
 .control
-run
-wrdata waveform.csv v(vctrl) v(up) v(dn) v(lock) v(vwin)
+  set noaskquit
+  * Only the vectors the `.meas` cards and the waveform artifact read -- see
+  * tb_lock_time.sp's identical list for why an unrestricted save is not
+  * viable on a ~390-node DUT at this timestep ceiling.
+  save v(vctrl) v(lock) v(xdut.up) v(xdut.dn) v(xdut.vwin)
+  tran $&c_tstep $&c_tstop 0 $&c_tmax
+  wrdata waveform.csv v(vctrl) v(xdut.up) v(xdut.dn) v(lock) v(xdut.vwin)
 .endc
-.end
