@@ -400,9 +400,32 @@ simenv_run_deck() {
     echo ".end"
   } >"${gen}"
 
+  # SIMENV_RUN_TIMEOUT_S (#168): an optional wall-clock cap on the ngspice
+  # invocation itself, for the one documented legitimate use -- a per-point
+  # diagnostic/bounded-infeasibility run where a closed-loop point does not
+  # converge in any tractable time (sim/output-range/testbench/run.sh's
+  # SIM_TIMEOUT is the campaign-facing knob that sets this). Unset by
+  # default, so every existing caller's behavior -- an unbounded ngspice run
+  # -- is unchanged. `timeout` is GNU coreutils; ngspice is its DIRECT child
+  # here (this subshell has no intervening bash layer to swallow the signal),
+  # so SIGTERM reaches the simulator itself rather than orphaning it.
+  local timeout_cmd=()
+  if [ -n "${SIMENV_RUN_TIMEOUT_S:-}" ]; then
+    command -v timeout >/dev/null 2>&1 || {
+      echo "ERROR: SIMENV_RUN_TIMEOUT_S is set but no 'timeout' command is on PATH (GNU coreutils -- 'brew install coreutils' on macOS)" >&2
+      exit 1
+    }
+    timeout_cmd=(timeout --signal=TERM --kill-after=10 "${SIMENV_RUN_TIMEOUT_S}")
+  fi
+
   # ngspice must run with rundir as cwd so `wrdata` relative paths stay local.
-  (cd "${rundir}" && ngspice -b -o ngspice.log "${gen}" >stdout.log 2>&1) || {
-    echo "ERROR: ngspice failed for tag=${tag} (see ${rundir}/ngspice.log)" >&2
+  (cd "${rundir}" && "${timeout_cmd[@]}" ngspice -b -o ngspice.log "${gen}" >stdout.log 2>&1) || {
+    local rc=$?
+    if [ -n "${SIMENV_RUN_TIMEOUT_S:-}" ] && [ "${rc}" -eq 124 ]; then
+      echo "ERROR: ngspice for tag=${tag} did NOT finish within SIMENV_RUN_TIMEOUT_S=${SIMENV_RUN_TIMEOUT_S}s -- capped, not a simulator verdict (see ${rundir}/ngspice.log)" >&2
+    else
+      echo "ERROR: ngspice failed for tag=${tag} (see ${rundir}/ngspice.log)" >&2
+    fi
     return 1
   }
 

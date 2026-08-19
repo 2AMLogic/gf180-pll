@@ -32,6 +32,21 @@
 #                             #   sub-experiment only (appears in the work-dir
 #                             #   tag; see run_one). Same discipline as
 #                             #   SIM_TMAX: not a knob for making a grid finish.
+#   SIM_TIMEOUT=1800 ./run.sh --one ...
+#                             # cap the ngspice invocation itself at N wall-
+#                             #   clock seconds (#168), for a point that does
+#                             #   not converge in any tractable time. Appears
+#                             #   in the work-dir tag (see run_one) so a
+#                             #   capped log can never be silently read as a
+#                             #   simulator-reached verdict, and the CSV row it
+#                             #   produces is ERROR either way (a cap timeout
+#                             #   is not distinguishable from any other
+#                             #   ngspice failure in the CSV -- the work-dir
+#                             #   log and the record's own prose are what
+#                             #   carry that distinction). Same discipline as
+#                             #   SIM_WINCAP: a diagnostic/bounded-infeasible-
+#                             #   ity knob, never a substitute for the grid
+#                             #   actually finishing.
 #
 # NOTE ON HOST CONTENTION: exactly as for sim/lock-time, this campaign's real
 # cost is dominated by wall-clock contention rather than raw CPU-seconds (the
@@ -270,7 +285,20 @@ run_one() {
     esac
     wintag="_w${SIM_WINCAP}"
   fi
-  local tag="or_${corner}_${temp}c_${vdd}v_${edge}_tmax${SIMENV_CLOSED_LOOP_TMAX}${wintag}"
+  # SIM_TIMEOUT (#168): wall-clock cap on the ngspice invocation itself --
+  # see the run.sh header comment and simenv.sh's SIMENV_RUN_TIMEOUT_S for
+  # the full rationale. Same tagging discipline as SIM_WINCAP: appears in the
+  # tag when set, absent (default tags unchanged) when not.
+  local captag=""
+  if [ -n "${SIM_TIMEOUT:-}" ]; then
+    case "${SIM_TIMEOUT}" in
+      *[!0-9]*|"")
+        echo "ERROR: SIM_TIMEOUT='${SIM_TIMEOUT}' must be a whole number of seconds" >&2
+        exit 1 ;;
+    esac
+    captag="_cap${SIM_TIMEOUT}s"
+  fi
+  local tag="or_${corner}_${temp}c_${vdd}v_${edge}_tmax${SIMENV_CLOSED_LOOP_TMAX}${wintag}${captag}"
   tag="${tag//./p}"
 
   local tstop tstep t_force
@@ -330,7 +358,7 @@ run_one() {
     : # reuse the existing log below
   else
     local libs; libs=$(simenv_bundle_libs "${corner}")
-    simenv_run_deck "${DECK}" "${WORK}" "${tag}" "${libs}" "${temp}" "${params[@]}" >/dev/null || true
+    SIMENV_RUN_TIMEOUT_S="${SIM_TIMEOUT:-}" simenv_run_deck "${DECK}" "${WORK}" "${tag}" "${libs}" "${temp}" "${params[@]}" >/dev/null || true
     if [ ! -f "${log}" ] || ! grep -q "^vctrl_final" "${log}"; then
       echo "${corner},${temp},${vdd},${edge},${fout},${n},${fref},ERROR,,,${k},${vctrl_ic},${seed_pos},,ERROR" >>"${outcsv}"
       return 0
