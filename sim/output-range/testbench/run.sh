@@ -43,6 +43,27 @@
 #                             #   sub-experiment only (appears in the work-dir
 #                             #   tag; see run_one). Same discipline as
 #                             #   SIM_TMAX: not a knob for making a grid finish.
+#   SIM_RUNCAP=2400 ./run.sh [--one ...]
+#                             # wall-clock budget in SECONDS for each point's
+#                             #   ngspice invocation (#168). Unlike SIM_WINCAP
+#                             #   this does NOT shorten the requested transient
+#                             #   (tstop is unchanged, so a row that finishes
+#                             #   under the cap is the SAME measurement as an
+#                             #   uncapped one) -- it only bounds how long
+#                             #   run.sh will wait for ngspice before killing
+#                             #   it and its whole process group. Off by
+#                             #   default (unset -> unbounded, the behaviour
+#                             #   every existing record was taken under).
+#                             #   Appears in the work-dir tag like SIM_WINCAP,
+#                             #   and a cap that fires is reported with its own
+#                             #   status `CAPPED` -- never `ERROR` -- so a
+#                             #   budget termination can never be read as the
+#                             #   simulator's own verdict (the distinction
+#                             #   #168 exists to make; see run_with_cap).
+#                             #   Exists for exactly one point in this
+#                             #   campaign's grid that does not converge in
+#                             #   tractable time -- see #168 -- not a knob for
+#                             #   silently truncating any other row.
 #
 # NOTE ON HOST CONTENTION: exactly as for sim/lock-time, this campaign's real
 # cost is dominated by wall-clock contention rather than raw CPU-seconds (the
@@ -234,6 +255,167 @@ k_from_divparams() {
                END { if (!found) print 0 }'
 }
 
+# row_tag <corner> <temp> <vdd> <edge> [<vctrl_ic> <band> <fout>]
+#
+# The work-directory tag for one row, i.e. that row's RUN IDENTITY. Defined
+# once and used by BOTH run_one (which writes the run dir) and the
+# record-minting loop (which archives it), so the two can never disagree about
+# where a row's log lives -- before #168 the mint loop rebuilt the tag inline
+# without the SIM_WINCAP suffix, so a short-window grid archived nothing.
+#
+# The three trailing arguments are the SEED IDENTITY of the row, and are
+# optional only as a group: pass all three or none. They carry #172's `vctrl_ic`
+# disambiguation (#170), which lives INSIDE this function for the same
+# single-definition reason the rest of the tag does -- computing the seed suffix
+# in run_one and appending it to this function's return value would both skip
+# the `.`->`p` substitution below (yielding `_ic1.4540001` where #172 produced
+# `_ic1p4540001`) and leave the mint loop building a tag without it, which is
+# exactly the run-dir/archive divergence #168 hoisted this function to prevent.
+#
+# The internal-timestep ceiling is part of the run's identity -- see
+# sim/lock-time/testbench/run.sh's run_one for why it goes in the tag.
+#
+# SIM_WINCAP (#159) shortens the transient window, and exists for the single
+# legitimate use sim/lock-time documents for its own copy: a CONTROLLED
+# sub-experiment where the same corner is run twice in one environment with a
+# single variable changed, or a wiring/regression check of the deck itself at
+# the compliant ceiling. It is NOT a knob for making a grid finish -- a row
+# minted at a truncated window is not the same measurement as its neighbours.
+#
+# SIM_RUNCAP (#168) is orthogonal to it and the distinction is load-bearing:
+# SIM_WINCAP changes WHAT IS MEASURED (a shorter tstop, so the row is not
+# comparable to its neighbours even when it completes); SIM_RUNCAP does not
+# touch tstop at all, so a row that finishes under the cap IS comparable --
+# the cap only bounds how long run.sh waits before giving up. See run_with_cap.
+#
+# Both are appended to the tag when set and omitted entirely when unset, so
+# default tags are byte-identical to the pre-#168 ones and no capped or
+# short-window log can ever be silently reused for a full-window record.
+#
+# CALLERS MUST WRITE `tag=$(row_tag ...) || exit 1`. This function validates
+# the two environment knobs and its own seed arguments, and it runs inside a
+# command substitution, so its `exit 1` ends only that subshell -- without the
+# caller's `|| exit 1` a rejected SIM_WINCAP/SIM_RUNCAP would print its error
+# and then carry on with an empty tag.
+row_tag() {
+  local corner="$1" temp="$2" vdd="$3" edge="$4"
+  local vctrl_ic="${5:-}" band="${6:-}" fout="${7:-}"
+  local wintag="" runcaptag="" seedtag=""
+  # `vctrl_ic` seed disambiguation (#170, landed as #172): a full-grid
+  # invocation always passes run_one the SAME seed seed_for_corner would
+  # compute for this exact (corner, temp, vdd, band, fout) row, but the `--one`
+  # entry point takes vctrl_ic as an explicit argument precisely so a single
+  # point can be re-run with a DIFFERENT seed (e.g. a seed-control run at the
+  # same PVT/edge). Without this check two such `--one` invocations land in the
+  # SAME work-dir tag, and run_one's `-nt "${DECK}"` reuse guard then hands the
+  # second invocation the first invocation's log under the second invocation's
+  # (unrelated) seed -- silently, with no warning.
+  #
+  # Recomputing the canonical seed here and comparing is a no-op for every
+  # full-grid row (the recomputed value is byte-identical to what was passed
+  # in, since both come from the same seed_for_corner call), so grid tags are
+  # UNCHANGED and a resumed grid's work/ tree stays fully reusable -- this is
+  # the "include the seed only when it differs" alternative from #170's Scope,
+  # chosen specifically to avoid invalidating an in-progress 90-run grid. Only
+  # a `--one` invocation given a seed that does NOT match the canonical one
+  # (including one seed_for_corner cannot itself resolve, e.g. an off-grid
+  # corner) gets a distinct tag.
+  #
+  # All three or none: seed_for_corner needs the band and target frequency as
+  # well as the PVT point, so accepting vctrl_ic alone could only ever silently
+  # DROP the suffix -- which is the failure mode this whole function exists to
+  # rule out. Rejected loudly instead.
+  if [ -n "${vctrl_ic}" ] || [ -n "${band}" ] || [ -n "${fout}" ]; then
+    if [ -z "${vctrl_ic}" ] || [ -z "${band}" ] || [ -z "${fout}" ]; then
+      echo "ERROR: row_tag's seed arguments are all-or-nothing: got vctrl_ic='${vctrl_ic}' band='${band}' fout='${fout}'" >&2
+      exit 1
+    fi
+    local canon_seed canon_vic
+    canon_seed=$(seed_for_corner "${corner}" "${temp}" "${vdd}" "${band}" "${fout}")
+    canon_vic="${canon_seed%% *}"
+    if [ "${canon_vic}" = "ERROR" ] || \
+       [ "$(awk -v a="${vctrl_ic}" -v b="${canon_vic}" 'BEGIN{print (a+0==b+0)?1:0}')" != "1" ]; then
+      seedtag="_ic${vctrl_ic}"
+    fi
+  fi
+  if [ -n "${SIM_WINCAP:-}" ]; then
+    # SECONDS, as a plain decimal or scientific-notation number -- NOT a SPICE
+    # engineering suffix; awk parses "250n" as a string and would silently
+    # yield a 250 SECOND transient. Rejected loudly instead.
+    case "${SIM_WINCAP}" in
+      *[!0-9.eE+-]*|"")
+        echo "ERROR: SIM_WINCAP='${SIM_WINCAP}' must be seconds as a plain number (e.g. 2.5e-7), not a SPICE suffix" >&2
+        exit 1 ;;
+    esac
+    wintag="_w${SIM_WINCAP}"
+  fi
+  if [ -n "${SIM_RUNCAP:-}" ]; then
+    # Whole seconds only: run_with_cap counts them with shell integer
+    # arithmetic, and "0" would mean "kill before ngspice starts", which is
+    # never what anyone means.
+    case "${SIM_RUNCAP}" in
+      *[!0-9]*|""|0)
+        echo "ERROR: SIM_RUNCAP='${SIM_RUNCAP}' must be a wall-clock budget in whole seconds > 0 (e.g. 2400)" >&2
+        exit 1 ;;
+    esac
+    runcaptag="_cap${SIM_RUNCAP}"
+  fi
+  local tag="or_${corner}_${temp}c_${vdd}v_${edge}_tmax${SIMENV_CLOSED_LOOP_TMAX}${wintag}${runcaptag}${seedtag}"
+  # AFTER the seed suffix is appended, not before: `_ic1.4540001` has to become
+  # `_ic1p4540001` like every other dot in the tag (#172's own behaviour).
+  echo "${tag//./p}"
+}
+
+# run_with_cap <seconds> <command...>
+#
+# Runs <command...> (here, always simenv_run_deck) with a wall-clock ceiling
+# (#168, SIM_RUNCAP): if it is still running after <seconds>, kills the WHOLE
+# process group -- not just the immediate child -- so a still-spinning
+# ngspice descendant cannot outlive the cap. `set -m` is scoped to this
+# function only (restored immediately after backgrounding), so the
+# backgrounded job gets its own process group via ordinary job-control
+# semantics without changing signal handling anywhere else in this script.
+#
+# Deliberately not built on GNU/BSD `timeout`: macOS ships no `timeout(1)` in
+# the base system, and this campaign's own records were all taken on a Darwin
+# host, so depending on coreutils here would make the cap silently unavailable
+# on exactly the machine the capped row was measured on.
+#
+# The budget is enforced against a DEADLINE taken from the clock, not by
+# counting `sleep 1` iterations. Measured, not theoretical: the counting form
+# overshot a 2400 s budget by 397 s (16.5%) on the contended host this
+# campaign's own runner header warns about, because each iteration costs
+# `sleep 1` PLUS the loop's own syscalls and the scheduler's latency, and that
+# error is proportional to how loaded the machine is. A budget whose real
+# value depends on host load is not a reproducible experimental parameter, and
+# reproducibility is the entire reason this mechanism exists rather than a
+# manual kill.
+#
+# Returns 124 (matching GNU timeout's own convention, so a caller can tell a
+# capped run from any other nonzero exit) if the cap fired, otherwise the
+# wrapped command's own exit status.
+run_with_cap() {
+  local cap="$1"; shift
+  local pid rc=0 deadline
+  deadline=$(( $(date +%s) + cap ))
+  set -m
+  "$@" &
+  pid=$!
+  set +m
+  while kill -0 "${pid}" 2>/dev/null; do
+    if [ "$(date +%s)" -ge "${deadline}" ]; then
+      kill -TERM -- "-${pid}" 2>/dev/null || kill -TERM "${pid}" 2>/dev/null
+      sleep 2
+      kill -KILL -- "-${pid}" 2>/dev/null || kill -KILL "${pid}" 2>/dev/null
+      wait "${pid}" 2>/dev/null || true
+      return 124
+    fi
+    sleep 1
+  done
+  wait "${pid}" 2>/dev/null || rc=$?
+  return "${rc}"
+}
+
 # run_one <corner> <temp> <vdd> <edge> <fout> <b2> <b1> <b0> <n> <vctrl_ic> \
 #         <outcsv> [seed_pos]
 #
@@ -256,60 +438,9 @@ run_one() {
   # come from the shared encoder rather than from this script.
   local band=$(( b2 * 4 + b1 * 2 + b0 ))
   local fref; fref=$(awk -v f="${fout}" -v n="${n}" 'BEGIN{printf "%.8g", f/n}')
-  # `vctrl_ic` seed disambiguation (#170): a full-grid invocation always
-  # passes run_one the SAME seed seed_for_corner would compute for this exact
-  # (corner, temp, vdd, band, fout) row, but the `--one` entry point takes
-  # vctrl_ic as an explicit argument precisely so a single point can be
-  # re-run with a DIFFERENT seed (e.g. a seed-control run at the same
-  # PVT/edge). Without this check two such `--one` invocations land in the
-  # SAME work-dir tag, and the `-nt "${DECK}"` reuse guard below then hands
-  # the second invocation the first invocation's log under the second
-  # invocation's (unrelated) seed -- silently, with no warning.
-  #
-  # Recomputing the canonical seed here and comparing is a no-op for every
-  # full-grid row (the recomputed value is byte-identical to what was
-  # passed in, since both come from the same seed_for_corner call), so grid
-  # tags are UNCHANGED and a resumed grid's work/ tree stays fully reusable
-  # -- this is the "include the seed only when it differs" alternative from
-  # #170's Scope, chosen specifically to avoid invalidating an in-progress
-  # 90-run grid. Only a `--one` invocation given a seed that does NOT match
-  # the canonical one (including one seed_for_corner cannot itself resolve,
-  # e.g. an off-grid corner) gets a distinct tag.
-  local seedtag=""
-  local canon_seed canon_vic
-  canon_seed=$(seed_for_corner "${corner}" "${temp}" "${vdd}" "${band}" "${fout}")
-  canon_vic="${canon_seed%% *}"
-  if [ "${canon_vic}" = "ERROR" ] || \
-     [ "$(awk -v a="${vctrl_ic}" -v b="${canon_vic}" 'BEGIN{print (a+0==b+0)?1:0}')" != "1" ]; then
-    seedtag="_ic${vctrl_ic}"
-  fi
-  # The internal-timestep ceiling is part of the run's identity -- see
-  # sim/lock-time/testbench/run.sh's run_one for why it goes in the tag.
-  #
-  # SIM_WINCAP (#159) shortens the transient window, and exists here for the
-  # same single legitimate use sim/lock-time documents for its own copy: a
-  # CONTROLLED sub-experiment where the same corner is run twice in one
-  # environment with a single variable changed, or a wiring/regression check
-  # of the deck itself at the compliant ceiling. It is NOT a knob for making
-  # a grid finish -- a row minted at a truncated window is not the same
-  # measurement as its neighbours. When set it is appended to the tag, so a
-  # short-window log can never be silently reused for a full-window record,
-  # and left out of the tag entirely when unset, so default tags are
-  # unchanged.
-  local wintag=""
-  if [ -n "${SIM_WINCAP:-}" ]; then
-    # SECONDS, as a plain decimal or scientific-notation number -- NOT a SPICE
-    # engineering suffix; awk parses "250n" as a string and would silently
-    # yield a 250 SECOND transient. Rejected loudly instead.
-    case "${SIM_WINCAP}" in
-      *[!0-9.eE+-]*|"")
-        echo "ERROR: SIM_WINCAP='${SIM_WINCAP}' must be seconds as a plain number (e.g. 2.5e-7), not a SPICE suffix" >&2
-        exit 1 ;;
-    esac
-    wintag="_w${SIM_WINCAP}"
-  fi
-  local tag="or_${corner}_${temp}c_${vdd}v_${edge}_tmax${SIMENV_CLOSED_LOOP_TMAX}${wintag}${seedtag}"
-  tag="${tag//./p}"
+  local tag
+  tag=$(row_tag "${corner}" "${temp}" "${vdd}" "${edge}" \
+                "${vctrl_ic}" "${band}" "${fout}") || exit 1
 
   local tstop tstep t_force
   # Seeded near the expected lock point, so acquiring the residual error is
@@ -368,9 +499,42 @@ run_one() {
     : # reuse the existing log below
   else
     local libs; libs=$(simenv_bundle_libs "${corner}")
-    simenv_run_deck "${DECK}" "${WORK}" "${tag}" "${libs}" "${temp}" "${params[@]}" >/dev/null || true
+    local capfired=0
+    if [ -n "${SIM_RUNCAP:-}" ]; then
+      local rc=0
+      run_with_cap "${SIM_RUNCAP}" simenv_run_deck "${DECK}" "${WORK}" "${tag}" "${libs}" "${temp}" "${params[@]}" >/dev/null || rc=$?
+      # 124 is run_with_cap's own "the budget fired" code (GNU timeout's
+      # convention). Any other nonzero is simenv_run_deck's normal
+      # failure path and is classified below exactly as it was before #168.
+      if [ "${rc}" -eq 124 ]; then
+        capfired=1
+        # A capped kill leaves whatever ngspice had already logged -- for the
+        # point #168 exists for, just the DC/"Initial Transient Solution"
+        # print, because a stalled transient produces no periodic progress
+        # output of its own. Append an explicit marker so the ARCHIVED log
+        # (sim/lib/simenv.sh's simenv_archive_log copies this file verbatim)
+        # states in its own text that the cap fired -- distinguishing this
+        # from BOTH an ngspice-reported convergence abort (the sf/lo ERROR
+        # rows, which name a node and a timestep) and the ad-hoc SIGTERM the
+        # #164 record had to disclose for this row.
+        if [ -f "${log}" ]; then
+          printf '\n==== SIM_RUNCAP=%ss: run.sh killed ngspice and its process group after the wall-clock budget elapsed with no vctrl_final reading. Reproducible per-point budget (see run_with_cap in sim/output-range/testbench/run.sh, #168) -- NOT an ngspice-reported error, and NOT an ad-hoc manual kill. This row is reported CAPPED, not ERROR. ====\n' \
+            "${SIM_RUNCAP}" >>"${log}"
+        fi
+      fi
+    else
+      simenv_run_deck "${DECK}" "${WORK}" "${tag}" "${libs}" "${temp}" "${params[@]}" >/dev/null || true
+    fi
     if [ ! -f "${log}" ] || ! grep -q "^vctrl_final" "${log}"; then
-      echo "${corner},${temp},${vdd},${edge},${fout},${n},${fref},ERROR,,,${k},${vctrl_ic},${seed_pos},,ERROR" >>"${outcsv}"
+      # CAPPED is deliberately its own status rather than another flavour of
+      # ERROR (#168). ERROR on this campaign means "the simulator reached a
+      # verdict and it was a failure" -- the sf/27C `lo` rows abort in ~8
+      # CPU-s naming a node. A budget termination is not a simulator verdict
+      # at all, and the whole point of the cap is that a reader can tell the
+      # two apart from the CSV alone rather than from the prose of a record.
+      local nostatus="ERROR"
+      if [ "${capfired}" -eq 1 ]; then nostatus="CAPPED"; fi
+      echo "${corner},${temp},${vdd},${edge},${fout},${n},${fref},${nostatus},,,${k},${vctrl_ic},${seed_pos},,ERROR" >>"${outcsv}"
       return 0
     fi
   fi
@@ -501,8 +665,16 @@ cp "${DECK}" "${SNAPDIR}/${RID}.spice"
 SHA=$(simenv_sha256 "${SNAPDIR}/${RID}.spice")
 
 while read -r corner temp vdd edge fout b2 b1 b0 n vic pos; do
-  tag="or_${corner}_${temp}c_${vdd}v_${edge}_tmax${SIMENV_CLOSED_LOOP_TMAX}"
-  tag="${tag//./p}"
+  # Same row_tag() run_one wrote the run dir under (#168) -- rebuilding the
+  # tag inline here used to drop the SIM_WINCAP suffix, so a sub-experiment
+  # grid archived nothing at all while still minting a record. The seed
+  # arguments are passed for the same reason: this loop's `vic` IS the value
+  # xargs handed run_one for this row, so run_one and this loop cannot disagree
+  # about the seed suffix either. (By construction `vic` came from
+  # seed_for_corner, so the suffix is empty for every grid row and grid tags
+  # are unchanged -- see row_tag.)
+  tag=$(row_tag "${corner}" "${temp}" "${vdd}" "${edge}" \
+                "${vic}" "$(( b2 * 4 + b1 * 2 + b0 ))" "${fout}") || exit 1
   cid="${corner}_${temp}c_${vdd}v_${edge}"
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" "${cid}"
   # tb_output_range.sp's `.control` block unconditionally `wrdata`s a small
@@ -549,9 +721,22 @@ LO_PASS=$(edge_count lo PASS);  LO_TOTAL=$(edge_total lo)
 HI_PASS=$(edge_count hi PASS);  HI_TOTAL=$(edge_total hi)
 LO_OOW=$(edge_count lo OUT-OF-WINDOW); HI_OOW=$(edge_count hi OUT-OF-WINDOW)
 LO_ERR=$(edge_count lo ERROR);  HI_ERR=$(edge_count hi ERROR)
+# CAPPED rows (#168) are tallied separately from ERROR, for the same reason
+# run_one gives them their own status: a wall-clock budget termination is not
+# a simulator verdict, and folding it into the ERROR count would put it back
+# in the one bucket #168 exists to get it out of. A CAPPED row is only ever
+# possible when SIM_RUNCAP is set, so an uncapped grid reports 0/0 here.
+LO_CAP=$(edge_count lo CAPPED); HI_CAP=$(edge_count hi CAPPED)
+CAP_LIST="(none)"
+CAP_NOTE=""
+if [ -n "${SIM_RUNCAP:-}" ]; then
+  CAP_LIST=$(awk -F, '$8=="CAPPED"{printf "%s/%sC/%sV (%s)\n", $1, $2, $3, $4}' "${RESULT_CSV}" | paste -sd'; ' -)
+  [ -z "${CAP_LIST}" ] && CAP_LIST="(none)"
+  CAP_NOTE=" **This grid was run under a per-point wall-clock budget of \`SIM_RUNCAP=${SIM_RUNCAP}\` seconds** (see \`run_with_cap\` in \`sim/output-range/testbench/run.sh\`, #168), which is recorded in every row's work-directory tag. \`SIM_RUNCAP\` does NOT shorten the transient -- \`tstop\` is untouched -- so every row that completed under it is the same measurement an uncapped run would have produced. A row the budget terminated is reported \`CAPPED\`, never \`PASS\`/\`FAIL\`/\`ERROR\`: **${LO_CAP} \`lo\` + ${HI_CAP} \`hi\` row(s) hit the budget** -- ${CAP_LIST} -- and for those rows this record asserts nothing about whether the loop locks there, only that the simulator did not reach a verdict within ${SIM_RUNCAP} s of wall clock. Their archived \`corners/\` logs carry an explicit \`SIM_RUNCAP\` marker line saying so."
+fi
 OOW_LIST=$(awk -F, '$13!="in" && NR>1 {printf "%s/%sC/%sV (%s, %s)\n", $1, $2, $3, $4, $13}' "${RESULT_CSV}" | paste -sd'; ' -)
 [ -z "${OOW_LIST}" ] && OOW_LIST="(none)"
-OVERALL_SUMMARY="Across the full 45-point PVT grid at both band edges (${NJOBS} runs): the \`lo\` (10 MHz) edge reached a sustained in-window PASS on ${LO_PASS}/${LO_TOTAL} corners (${LO_OOW} OUT-OF-WINDOW, ${LO_ERR} ERROR); the \`hi\` (200 MHz) edge on ${HI_PASS}/${HI_TOTAL} corners (${HI_OOW} OUT-OF-WINDOW, ${HI_ERR} ERROR). OUT-OF-WINDOW rows: ${OOW_LIST}. The un-fabricated final Vctrl reading is reported for every row either way. **What a FAIL row means is decided per row by the DN-branch guard (#69), not asserted in advance:** on a guard-PASS row a FAIL means the transient window (see Methodology) was too short to observe sustained lock at that corner, NOT that the loop cannot reach that edge there; on a guard-SUSPECT row this record declines to attribute the FAIL to the window, the design, or the integration."
+OVERALL_SUMMARY="Across the full 45-point PVT grid at both band edges (${NJOBS} runs): the \`lo\` (10 MHz) edge reached a sustained in-window PASS on ${LO_PASS}/${LO_TOTAL} corners (${LO_OOW} OUT-OF-WINDOW, ${LO_ERR} ERROR, ${LO_CAP} CAPPED); the \`hi\` (200 MHz) edge on ${HI_PASS}/${HI_TOTAL} corners (${HI_OOW} OUT-OF-WINDOW, ${HI_ERR} ERROR, ${HI_CAP} CAPPED). OUT-OF-WINDOW rows: ${OOW_LIST}.${CAP_NOTE} The un-fabricated final Vctrl reading is reported for every row either way. **What a FAIL row means is decided per row by the DN-branch guard (#69), not asserted in advance:** on a guard-PASS row a FAIL means the transient window (see Methodology) was too short to observe sustained lock at that corner, NOT that the loop cannot reach that edge there; on a guard-SUSPECT row this record declines to attribute the FAIL to the window, the design, or the integration."
 
 # PFD DN-branch guard tallies (#69). Columns are addressed positionally --
 # see CSV_HEADER at the top of this script for the field map ($15 = dn_guard).
