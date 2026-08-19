@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 # gf180-pll :: lock-detector :: corner runner (issue #11, DR-002 Decision 4)
 #
+# SUPERSEDED FOR NEW RUNS by this campaign's sim/harness manifest
+# (testbench/tb.json + tb_lock_detector.sp / tb_lock_detector_harness.sp
+# beside it) -- run
+#   python3 sim/run_corners.py lock-detector
+# instead. Record 20260802-050119-c24ee3a supersedes this script's own
+# 20260731-162119-0a12e6c for the identical reason: re-run through
+# sim/harness's shared corner runner instead of the sim/lib/simenv.sh shim.
+# This script is kept because the record it minted is append-only evidence
+# and it is the only thing that can regenerate the extra CSV artifacts it
+# cites; do not extend it.
+#
 # Characterises design/lock_detector.sch -- the phase-error window comparator
 # that produces the digital LOCK status output DR-002 Decision 4 puts in v1
 # scope. One record is minted covering two sweeps of the same DUT:
