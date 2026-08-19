@@ -151,7 +151,7 @@ params=(
   "tstep=${tstep}" "tstop=${tstop}" "tmax=${SIMENV_CLOSED_LOOP_TMAX}"
   "lockthresh=0.5*vsup" "nstop=${nstop}"
 )
-# shellcheck disable=SC2206
+# shellcheck disable=SC2207
 params+=( $(cloop_divider_params "${n}") )
 # shellcheck disable=SC2207
 params+=( $(cloop_band_params "${band}") )
