@@ -268,7 +268,7 @@ The record says all of that in its own Corner-matrix field, and says in as many
 words that it must not be cited for a PVT claim — which is what makes it a
 justification rather than an excuse.
 
-## Closed-loop campaigns: two assembly paths, reconciliation pending
+## Closed-loop campaigns: two assembly paths, migration scoped and deferred
 
 A campaign that simulates the whole PLL does **not** hand-transcribe a loop
 into its testbench: it calls a shared helper in `sim/lib/`. There are currently
@@ -289,13 +289,26 @@ anything reporting the divergence — which is the failure mode `pll_top.sch`
 was created to end.
 
 The intended end state is therefore one path for every closed-loop campaign.
-**That is not the state today.** #12's `lock-time` and `output-range` have
-recorded evidence taken against the concatenated DUT, `sim/` records are
-append-only, and `assemble_closed_loop.sh` must keep working exactly as it does
-until those campaigns are re-run against `pll_top`. Until then: read a record's
-**Netlist provenance** field to know which DUT its numbers came from — every
-record names its helper — and do not read either helper's existence as a
-repo-wide invariant.
+**That is not the state today, and #131 (which evaluated closing this gap)
+made an explicit decision to keep it that way for now rather than attempt a
+rushed migration.** Reconciling the two paths means re-running `sim/lock-time`
+and `sim/output-range` (#12) across their full PVT grids against `pll_top`
+and minting superseding records — not a mechanical deletion. `sim/lock-time`
+alone is a documented 270-run grid (45-point PVT × N ∈ {4,16,64} ×
+{cold,relock}; see its `run.sh` header), and per-point cost has been measured
+between ~62 and ~900 CPU-seconds depending on host contention (see
+`sim/lock-time/records/20260801-073931-eec269e.md`). As of #131, the full
+grid has not yet even been completed once against the *current*
+`assemble_closed_loop.sh` DUT (#65, tracking that, was still open) —
+re-running it a second time against a different DUT is real, multi-session
+simulation work that #131 declined to attempt as a same-pass addendum rather
+than produce partial or rushed evidence. That migration is tracked as its own
+scoped follow-up: **#159**. Until #159 lands, `assemble_closed_loop.sh` stays
+exactly as it is, `sim/` records are append-only, and both paths coexist by
+this explicit decision rather than by neglect. Read a record's **Netlist
+provenance** field to know which DUT its numbers came from — every record
+names its helper — and do not read either helper's existence as a repo-wide
+invariant.
 
 *Naming note.* #52 originally called its helper `assemble_closed_loop.sh` as
 well; it was renamed to `pll_top_dut.sh` when both landed in the same tree.
