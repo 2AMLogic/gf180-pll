@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 # gf180-pll :: divider-ratio :: corner runner (issue #11, DR-001 Decision 3)
 #
+# SUPERSEDED FOR NEW RUNS by three sim/harness manifests -- run
+#   python3 sim/run_corners.py divider-ratio-dff     # dff setup/hold
+#   python3 sim/run_corners.py divider-ratio-cell    # div23 cell
+#   python3 sim/run_corners.py divider-ratio-chain   # six-cell chain
+# instead. Each manifest reruns the identical grid for its sub-campaign, and
+# its record supersedes the one this script minted here: divider-ratio-dff's
+# 20260801-125114-3f883e3 supersedes this directory's 20260731-171815-0a12e6c,
+# divider-ratio-cell's 20260801-140529-3f883e3 supersedes
+# 20260731-171816-0a12e6c, and divider-ratio-chain's 20260802-100727-082c879
+# supersedes 20260731-171817-0a12e6c. This script is kept because the records
+# it minted are append-only evidence and it is the only thing that can
+# regenerate the extra CSV artifacts they cite; do not extend it.
+#
 # Three sub-campaigns share this directory because they substantiate three
 # linked claims about the same block. Each mints its OWN record ID, because
 # sim/README.md ties one record to one frozen netlist snapshot and the three
