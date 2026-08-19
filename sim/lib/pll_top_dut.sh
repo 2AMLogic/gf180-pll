@@ -12,13 +12,16 @@
 # as a follow-up.  Evidence records and testbench comments minted before the
 # rename refer to this file by its old path; the file is the same file.
 #
-# WHO USES IT, as of today -- not as of the plan.  sim/pll-top-smoke (#52) and
-# sim/supply-sensitivity (#14) build their decks through this file.  #12's
-# sim/lock-time and sim/output-range do NOT: they are already merged with
-# recorded evidence taken against the concatenated-block-export DUT that
-# sim/lib/assemble_closed_loop.sh produces, and `sim/` records are append-only,
-# so that helper stays exactly as it is until those campaigns are re-run.
-# #13 (period-jitter) and #49 are unwritten and should start here.
+# WHO USES IT, as of today -- not as of the plan.  All four closed-loop
+# campaigns build their decks through this file: sim/pll-top-smoke (#52),
+# sim/supply-sensitivity (#14), and -- since #159 -- #12's sim/lock-time and
+# sim/output-range.  What #159 has not yet done is re-take #12's committed
+# EVIDENCE against this DUT: every record in those two campaigns predates the
+# migration, was taken against the concatenated-block-export DUT that
+# sim/lib/assemble_closed_loop.sh produces, and names it in its own Netlist
+# provenance field.  `sim/` records are append-only, so that helper stays in
+# the tree -- with no live caller -- until superseding full-grid evidence
+# exists.  #13 (period-jitter) and #49 are unwritten and should start here.
 # The INTENT of #52 is that `design/pll_top.sch` becomes the single owner of
 # the top-level wiring and this file the single owner of "how a testbench gets
 # hold of it"; that is a destination, not a description of the tree, and
@@ -129,7 +132,10 @@ cloop_assemble() {
   mkdir -p "$(dirname "${out}")"
   local tmp="${out}.$$.new"
   {
-    echo "* ASSEMBLED by sim/lib/assemble_closed_loop.sh -- do not edit."
+    # This file's own path, current as of #159.  Snapshots frozen before then
+    # carry the pre-rename name (see the NAMING NOTE above); they are
+    # append-only evidence and are not rewritten to match.
+    echo "* ASSEMBLED by sim/lib/pll_top_dut.sh -- do not edit."
     echo "* DUT: design/netlist/pll_top.spice (export of design/pll_top.sch, #52)"
     echo "* Stimulus: ${frag#"${CLOOP_ROOT}/"}"
     cat "${CLOOP_NETLIST}"

@@ -13,12 +13,15 @@
 #   #14  sim/supply-sensitivity            supply pushing, power
 #
 # #14 builds its DUT through the same sim/lib/pll_top_dut.sh this runner uses,
-# so those two campaigns share one assembled top level.  #12's two campaigns do
-# NOT yet: they predate design/pll_top.sch and build a closed loop by
-# concatenating the individual block exports (sim/lib/assemble_closed_loop.sh,
-# a different helper with a similar name -- see sim/lib/pll_top_dut.sh's header
-# and sim/README.md, "Closed-loop campaigns: two assembly paths").  Converging
-# them onto this assembly is follow-up work, not a thing this file may claim.
+# and since #159 so do #12's two campaigns -- all four closed-loop campaigns
+# now share one assembled top level.  What #159 has NOT yet done is re-take
+# #12's committed evidence against it: every record currently in
+# sim/lock-time/records/ and sim/output-range/records/ was taken against the
+# older concatenated-block-export assembly (sim/lib/assemble_closed_loop.sh,
+# a different helper with a similar name -- see sim/lib/pll_top_dut.sh's
+# header and sim/README.md, "Closed-loop campaigns: one assembly path").  Read
+# a record's own Netlist provenance field rather than assuming the tree's
+# current helper produced it.
 #
 # Usage:
 #   ./run.sh                 # run and mint a record

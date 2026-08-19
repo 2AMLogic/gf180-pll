@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # gf180-pll :: output-range :: closed-loop output-band coverage campaign (#12)
 #
-# DUT: the full closed loop, assembled by sim/lib/assemble_closed_loop.sh
-# (shared with sim/lock-time -- see that campaign's run.sh header for why
-# sim/lib/simenv.sh is used here rather than sim/harness's tb.json).
+# DUT: `pll_top` -- the whole PLL from design/pll_top.sch, prepended to
+# tb_output_range.sp by sim/lib/pll_top_dut.sh (#52); the same DUT
+# sim/lock-time, sim/pll-top-smoke and sim/supply-sensitivity build. See
+# sim/lock-time's run.sh header for why sim/lib/simenv.sh is used here rather
+# than sim/harness's tb.json.
 #
 # What this measures: for each of the two ratified output-band EDGE
 # frequencies (10 MHz and 200 MHz -- draft 10-200 MHz target band, pending
@@ -25,6 +27,11 @@
 #                             # single targeted point (used by the lo-edge
 #                             #   anomaly-investigation record; bypasses the grid)
 #   SIM_JOBS=4 ./run.sh      # parallelism (default: sequential -- see below)
+#   SIM_WINCAP=2.5e-7 ./run.sh --one ...
+#                             # shorten the transient window for a CONTROLLED
+#                             #   sub-experiment only (appears in the work-dir
+#                             #   tag; see run_one). Same discipline as
+#                             #   SIM_TMAX: not a knob for making a grid finish.
 #
 # NOTE ON HOST CONTENTION: exactly as for sim/lock-time, this campaign's real
 # cost is dominated by wall-clock contention rather than raw CPU-seconds (the
@@ -43,6 +50,25 @@
 # unchanged, because 1/(50*200 MHz) happened to equal 100 ps exactly. Budget
 # the grid accordingly, and do NOT reach for SIM_TMAX to claw the time back --
 # a grid minted at a coarser ceiling is not evidence about this loop.
+#
+# NOTE ON COST, POST-#159: this campaign's deck previously carried BOTH a
+# top-level `.tran` card and a `.control ... run` block, which makes ngspice
+# batch mode execute the transient TWICE -- the mechanism behind the
+# "ngspice re-entered its own analysis path a second time" observation this
+# campaign's own records report. #159's deck issues it once, from the control
+# block, so historical per-run CPU-second figures are roughly twice what the
+# same row costs now.
+#
+# DUT MIGRATION (#159): until #159 this campaign built its DUT with
+# sim/lib/assemble_closed_loop.sh, which concatenates the five committed block
+# exports and leaves the loop's top-level wiring to the testbench's own
+# instance list. It now builds it with sim/lib/pll_top_dut.sh, from the
+# committed export of design/pll_top.sch. Every record already in
+# sim/output-range/records/ was taken against the older DUT and names it in
+# its own Netlist provenance field; those records are append-only and are
+# neither edited nor reinterpreted by this change. NO record in this campaign
+# has yet been taken against `pll_top` -- the full-grid re-run that supersedes
+# them is #159's remaining scope.
 
 set -euo pipefail
 
@@ -51,16 +77,26 @@ EXP="$(cd "${HERE}/.." && pwd)"
 REPO="$(cd "${EXP}/../.." && pwd)"
 # shellcheck source=../../lib/simenv.sh
 . "${HERE}/../../lib/simenv.sh"
+# shellcheck source=../../lib/pll_top_dut.sh
+. "${HERE}/../../lib/pll_top_dut.sh"
 
-DECK="${HERE}/tb_output_range.sp"
-ASSEMBLE="${REPO}/sim/lib/assemble_closed_loop.sh"
+FRAGMENT="${HERE}/tb_output_range.sp"
 WORK="${EXP}/work"
+# The deck actually handed to ngspice: the committed pll_top export with this
+# campaign's stimulus fragment appended, so the frozen netlist snapshot a
+# record cites is self-contained.
+DECK="${WORK}/dut_output_range.sp"
 
 # Read-only design-input evidence this campaign cites (#8) -- never written
 # to, never re-derived here.
 KVCO_CSV="${REPO}/sim/vco-tuning-range/corners/20260731-175947-0a12e6c/kvco_by_point.csv"
 
-ICP_B1=1; ICP_B0=0
+# Icp trim named by CODE (#159): the bits come from sim/lib/pll_top_dut.sh's
+# cloop_trim_params, which owns the encoding for every campaign on this DUT.
+# Code 2 = (CPB1 CPB0) 1 0 -- the same nominal setting this campaign has
+# always run. The VCO band is per-edge (see EDGES below) and goes through
+# cloop_band_params the same way.
+ICP_CODE=2
 IUNIT=8u
 
 # PFD DN-branch integration guard floor (#69) -- see
@@ -174,9 +210,15 @@ seed_for_corner() {
   ' "${KVCO_CSV}"
 }
 
-stage_netlist() {
-  mkdir -p "$1"
-  cp "${WORK}/dut.spice" "$1/dut.spice"
+# The divider chain length k, read back OUT of the encoding rather than
+# computed a second time beside it (#159) -- see sim/lock-time's identical
+# helper. cloop_divider_params is the single owner of the SEL/P encoding; k is
+# "which one-hot SEL bit did it set", +1, so the reported k_cells column cannot
+# disagree with the bits the DUT was actually given.
+k_from_divparams() {
+  printf '%s\n' "$1" | tr ' ' '\n' \
+    | awk -F= '/^sel[0-9]_code=1$/ { print substr($1, 4, 1) + 1; found = 1 }
+               END { if (!found) print 0 }'
 }
 
 # run_one <corner> <temp> <vdd> <edge> <fout> <b2> <b1> <b0> <n> <vctrl_ic> \
@@ -188,14 +230,45 @@ run_one() {
   local corner="$1" temp="$2" vdd="$3" edge="$4" fout="$5" b2="$6" b1="$7" b0="$8" n="$9"
   shift 9
   local vctrl_ic="$1" outcsv="$2" seed_pos="${3:-in}"
-  local code; code=$(simenv_n_to_code "${n}")
-  local k; k=$(echo "${code}" | cut -d' ' -f1)
-  local sel; sel=$(echo "${code}" | cut -d' ' -f2-7)
-  local p;   p=$(echo "${code}" | cut -d' ' -f8-13)
+  # Idempotent and cheap (only rewrites the file when the bytes change), so a
+  # bare `--one` invocation -- the single-point form the anomaly
+  # investigations use -- assembles its own deck rather than depending on a
+  # prior full-grid invocation having left one behind.
+  cloop_assemble "${FRAGMENT}" "${DECK}"
+  local divparams; divparams=$(cloop_divider_params "${n}")
+  local k; k=$(k_from_divparams "${divparams}")
+  # The `--one` interface still takes the three band bits individually (that
+  # is the form the existing anomaly-investigation records document); the
+  # 0..7 code they spell is reassembled here so the actual .param bits still
+  # come from the shared encoder rather than from this script.
+  local band=$(( b2 * 4 + b1 * 2 + b0 ))
   local fref; fref=$(awk -v f="${fout}" -v n="${n}" 'BEGIN{printf "%.8g", f/n}')
   # The internal-timestep ceiling is part of the run's identity -- see
   # sim/lock-time/testbench/run.sh's run_one for why it goes in the tag.
-  local tag="or_${corner}_${temp}c_${vdd}v_${edge}_tmax${SIMENV_CLOSED_LOOP_TMAX}"
+  #
+  # SIM_WINCAP (#159) shortens the transient window, and exists here for the
+  # same single legitimate use sim/lock-time documents for its own copy: a
+  # CONTROLLED sub-experiment where the same corner is run twice in one
+  # environment with a single variable changed, or a wiring/regression check
+  # of the deck itself at the compliant ceiling. It is NOT a knob for making
+  # a grid finish -- a row minted at a truncated window is not the same
+  # measurement as its neighbours. When set it is appended to the tag, so a
+  # short-window log can never be silently reused for a full-window record,
+  # and left out of the tag entirely when unset, so default tags are
+  # unchanged.
+  local wintag=""
+  if [ -n "${SIM_WINCAP:-}" ]; then
+    # SECONDS, as a plain decimal or scientific-notation number -- NOT a SPICE
+    # engineering suffix; awk parses "250n" as a string and would silently
+    # yield a 250 SECOND transient. Rejected loudly instead.
+    case "${SIM_WINCAP}" in
+      *[!0-9.eE+-]*|"")
+        echo "ERROR: SIM_WINCAP='${SIM_WINCAP}' must be seconds as a plain number (e.g. 2.5e-7), not a SPICE suffix" >&2
+        exit 1 ;;
+    esac
+    wintag="_w${SIM_WINCAP}"
+  fi
+  local tag="or_${corner}_${temp}c_${vdd}v_${edge}_tmax${SIMENV_CLOSED_LOOP_TMAX}${wintag}"
   tag="${tag//./p}"
 
   local tstop tstep t_force
@@ -203,30 +276,32 @@ run_one() {
   # fast -- see the campaign header and this record's Methodology field for
   # why (the same compute-cost constraint sim/lock-time documents).
   #
-  # `tstep` is the PRINT step only. Before #65 this deck's .tran omitted the
-  # 4th (tmax) argument, so ngspice defaulted the INTERNAL timestep ceiling to
+  # `tstep` is the PRINT step only. Before #65 this deck's transient omitted
+  # the 4th (tmax) argument, so ngspice defaulted the INTERNAL timestep ceiling to
   # this print step -- and because it is derived from f_out, the 10 MHz `lo`
   # edge ran at a 2 ns internal ceiling, ~20x coarser than the PFD's set pulse
   # can tolerate. The ceiling is now passed independently as
   # SIMENV_CLOSED_LOOP_TMAX; note the resulting cost is strongly edge-dependent
   # here (the `lo` edge's internal step count rises ~18x, `hi`'s is unchanged
   # -- 200 MHz already computed to exactly 100 ps).
-  tstop=$(awk -v fr="${fref}" 'BEGIN{t=20/fr; if (t>2e-6) t=2e-6; printf "%.6g", t}')
+  tstop=$(awk -v fr="${fref}" -v cap="${SIM_WINCAP:-2e-6}" 'BEGIN{t=20/fr; if (t>cap) t=cap; printf "%.6g", t}')
   tstep=$(awk -v fo="${fout}" 'BEGIN{printf "%.6g", 1/(50*fo)}')
   t_force=$(awk -v fr="${fref}" 'BEGIN{printf "%.6g", 0.02/fr}')
 
   local params=(
-    "vsup=${vdd}" "fref=${fref}"
-    "bnd0v=${b0}*vsup" "bnd1v=${b1}*vsup" "bnd2v=${b2}*vsup"
-    "icp0v=${ICP_B0}*vsup" "icp1v=${ICP_B1}*vsup" "iunit=${IUNIT}"
+    "vsup=${vdd}" "fref=${fref}" "iunit=${IUNIT}"
     "vctrl_ic=${vctrl_ic}" "t_force=${t_force}"
     "tstep=${tstep}" "tstop=${tstop}" "tmax=${SIMENV_CLOSED_LOOP_TMAX}"
     "lockthresh=0.5*vsup"
   )
-  local i=0 s
-  for s in ${sel}; do params+=("sel${i}v=${s}*vsup"); i=$((i + 1)); done
-  i=0
-  for s in ${p}; do params+=("p${i}v=${s}*vsup"); i=$((i + 1)); done
+  # Word splitting of each helper's `name=value ...` line is exactly what is
+  # wanted here: one array element per .param.
+  # shellcheck disable=SC2206
+  params+=( ${divparams} )
+  # shellcheck disable=SC2207
+  params+=( $(cloop_band_params "${band}") )
+  # shellcheck disable=SC2207
+  params+=( $(cloop_trim_params "${ICP_CODE}") )
 
   local log="${WORK}/${tag}/ngspice.log"
   # Idempotent re-run, and correct fatal-vs-benign classification -- see
@@ -242,10 +317,16 @@ run_one() {
   # fully root-caused -- see this record's Methodology); gating completion
   # on the final banner alone would discard that real, already-computed
   # result.
-  if [ -f "${log}" ] && grep -q "^vctrl_final" "${log}"; then
+  #
+  # The `-nt "${DECK}"` guard is new with #159: the deck is now a GENERATED
+  # artifact and the work-dir tag does not encode its contents, so without it
+  # a log produced by a previous version of the stimulus fragment could be
+  # silently reused under a new record's ID. cloop_assemble leaves an
+  # unchanged deck's mtime alone, so a resumed grid still reuses everything it
+  # legitimately can.
+  if [ -f "${log}" ] && [ "${log}" -nt "${DECK}" ] && grep -q "^vctrl_final" "${log}"; then
     : # reuse the existing log below
   else
-    stage_netlist "${WORK}/${tag}"
     local libs; libs=$(simenv_bundle_libs "${corner}")
     simenv_run_deck "${DECK}" "${WORK}" "${tag}" "${libs}" "${temp}" "${params[@]}" >/dev/null || true
     if [ ! -f "${log}" ] || ! grep -q "^vctrl_final" "${log}"; then
@@ -332,7 +413,8 @@ if [ "${MODE}" = "--plan" ]; then
 fi
 
 simenv_require_tools
-"${ASSEMBLE}" "${REPO}" "${WORK}/dut.spice"
+cloop_require_netlist
+cloop_assemble "${FRAGMENT}" "${DECK}"
 
 if [ "${MODE}" = "--check" ]; then
   tmpdir=$(mktemp -d)
@@ -375,7 +457,7 @@ CORNERSDIR="${EXP}/corners/${RID}"
 RECORDSDIR="${EXP}/records"
 mkdir -p "${SNAPDIR}" "${CORNERSDIR}" "${RECORDSDIR}"
 
-cp "${WORK}/dut.spice" "${SNAPDIR}/${RID}.spice"
+cp "${DECK}" "${SNAPDIR}/${RID}.spice"
 SHA=$(simenv_sha256 "${SNAPDIR}/${RID}.spice")
 
 while read -r corner temp vdd edge fout b2 b1 b0 n vic pos; do
@@ -450,13 +532,21 @@ RECORD="${RECORDSDIR}/${RID}.md"
   10-200 MHz v1 output band with real control-voltage headroom to the
   0.9-2.7 V usable window, complementing (not re-deriving) #8's open-loop
   \`vco-tuning-range\` characterization?
-- **Netlist provenance**: schematic (assembled by
-  \`sim/lib/assemble_closed_loop.sh\`, identical DUT to \`sim/lock-time\`) ->
-  \`sim/output-range/netlist-snapshots/${RID}.spice\`, SHA-256 \`${SHA}\`
+- **Netlist provenance**: schematic (\`design/pll_top.sch\`, exported by
+  \`design/netlist.sh\` to \`design/netlist/pll_top.spice\`; the identical
+  DUT \`sim/lock-time\` builds) ->
+  \`sim/output-range/netlist-snapshots/${RID}.spice\` (exported subcircuit +
+  testbench fragment, concatenated by \`sim/lib/pll_top_dut.sh\`), SHA-256
+  \`${SHA}\`.
+  **DUT changed at #159**: every \`sim/output-range\` record dated before
+  that migration was taken against a different assembly of the same five
+  blocks (\`sim/lib/assemble_closed_loop.sh\`, whose testbench wired the loop
+  itself) and says so in its own provenance field. Those records stand as
+  written; this one is not comparable to them netlist-for-netlist, only
+  claim-for-claim.
 - **Environment provenance**:
 $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
-    design/vco.sch, design/divider_chain.sch, design/loop_filter.sch,
-    design/pfd_cp.sch via design/netlist.sh; the DUT netlist is a schematic
+    design/pll_top.sch via design/netlist.sh; the DUT netlist is a schematic
     export, not a hand-written deck)")
 - **Corner matrix run**: the **FULL 45-point PVT grid** (5 MOS bundles x 3
   temperatures x 3 supplies) at both ratified output-band edges -- ${NJOBS}
@@ -516,10 +606,12 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     \`lock_detector\` (#11) wired to the PFD's UP/DN outputs; see that
     campaign's record for the full derivation (comparator window, implied
     frequency-settling band).
-  - **Simulator settings**: identical \`.options\` to \`sim/lock-time\`;
-    \`.tran\` print step \`1/(50*f_out)\` with an explicit
+  - **Simulator settings**: identical \`.options\` to \`sim/lock-time\`
+    (including the \`rshunt\`/\`itl4\` solver knobs #159 added for this DUT
+    -- tolerances unchanged, see that campaign's deck for the bisection);
+    transient print step \`1/(50*f_out)\` with an explicit
     **internal-timestep ceiling of ${SIMENV_CLOSED_LOOP_TMAX}**
-    (\`.tran\`'s 4th argument, \`SIMENV_CLOSED_LOOP_TMAX\` -- see
+    (the transient's 4th argument, \`SIMENV_CLOSED_LOOP_TMAX\` -- see
     \`sim/README.md\`'s "Closed-loop internal-timestep bound"). This is the
     first \`output-range\` grid taken at a compliant ceiling; every earlier
     record for this claim ran with the 4th argument absent, which put the
@@ -576,9 +668,10 @@ $(cat "${RESULT_MD}")
 - **Links**:
   - Testbench: \`sim/output-range/testbench/tb_output_range.sp\`,
     \`sim/output-range/testbench/run.sh\`,
-    \`sim/lib/assemble_closed_loop.sh\`
-  - Design: \`design/vco.sch\`, \`design/pfd_cp.sch\`, \`design/loop_filter.sch\`,
-    \`design/divider_chain.sch\`, \`design/netlist/lock_detector.spice\`
+    \`sim/lib/pll_top_dut.sh\`
+  - Design: \`design/pll_top.sch\` (which instantiates \`design/vco.sch\`,
+    \`design/pfd_cp.sch\`, \`design/loop_filter.sch\`,
+    \`design/divider_chain.sch\`, \`design/lock_detector.sch\`)
   - Consumed design-input evidence (read-only, cited not re-derived):
     \`${KVCO_CSV#"${REPO}"/}\`
   - Predecessor records (cited, not superseded):
