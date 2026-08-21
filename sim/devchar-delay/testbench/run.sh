@@ -42,8 +42,7 @@ CSV_HEADER="process,temp_c,vdd_v,ring1x_fosc_hz,ring1x_tstage_s,ring1x_isupply_a
 run_one() {
   local corner="$1" temp="$2" vdd="$3"
   local tag="${corner}_T${temp}_V${vdd}"
-  tag="${tag//./p}"
-  tag="${tag//-/m}"
+  tag=$(simenv_mktag "${tag}")
 
   simenv_run_deck "${DECK}" "${WORK}" "${tag}" "${corner}" "${temp}" "vsup=${vdd}" >/dev/null
   local log="${WORK}/${tag}/ngspice.log"
@@ -162,8 +161,7 @@ SHA=$(simenv_sha256 "${SNAPDIR}/${RID}.spice")
 # evidence, corner-id-named per sim/README.md.
 while read -r corner temp vdd; do
   tag="${corner}_T${temp}_V${vdd}"
-  tag="${tag//./p}"
-  tag="${tag//-/m}"
+  tag=$(simenv_mktag "${tag}")
   cid=$(simenv_corner_id "${corner}" "${temp}" "${vdd}")
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" "${cid}"
 done <"${JOBLIST}"

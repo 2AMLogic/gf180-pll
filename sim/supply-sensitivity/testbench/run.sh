@@ -413,7 +413,7 @@ if [ "${1:-}" = "--one-lock" ]; then
   # ADDS evidence rather than overwriting the run it is compared with.
   [ "${KTSTOP}" = "${KTSTOP_BASE}" ] || tag="${tag}_X${KTSTOP}"
   [ "${KTMAX}" = "${KTMAX_BASE}" ]   || tag="${tag}_M${KTMAX}"
-  tag="${tag//./p}"; tag="${tag//-/m}"
+  tag=$(simenv_mktag "${tag}")
   rundir="${WORK}/${tag}"; log="${rundir}/ngspice.log"
   libs="$(libs_for "${bundle}")"
 
@@ -480,7 +480,7 @@ if [ "${1:-}" = "--one-vpre" ]; then
     # A retry at the longer window gets its OWN work directory, so it adds a
     # measurement rather than overwriting the one it is replacing.
     [ "${ts}" = "$(vpre_tstop_for "${fout}")" ] || tag="${tag}_X${ts}"
-    tag="${tag//./p}"; tag="${tag//-/m}"
+    tag=$(simenv_mktag "${tag}")
     local rundir="${WORK}/${tag}" log="${WORK}/${tag}/ngspice.log"
     local params=( "vsup=${vdd}" "fref=${fref}" "nratio=${KN}" "vctrl0=${vv}"
                    "rforce=${KVPRE_RON}"
@@ -532,7 +532,7 @@ fi
 if [ "${1:-}" = "--one-dyn" ]; then
   shift
   bundle="$1"; temp="$2"; band="$3"; vc0="$4"; sum="$5"; wave="$6"
-  tag="dyn_${bundle}_T${temp}"; tag="${tag//./p}"; tag="${tag//-/m}"
+  tag="dyn_${bundle}_T${temp}"; tag=$(simenv_mktag "${tag}")
   rundir="${WORK}/${tag}"; log="${rundir}/ngspice.log"
   libs="$(libs_for "${bundle}")"
 

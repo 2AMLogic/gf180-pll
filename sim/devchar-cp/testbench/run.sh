@@ -61,8 +61,7 @@ CURVE_DECIMATE=5
 run_one() {
   local corner="$1" temp="$2" vdd="$3" sfile="$4" cfile="$5"
   local tag="${corner}_T${temp}_V${vdd}"
-  tag="${tag//./p}"
-  tag="${tag//-/m}"
+  tag=$(simenv_mktag "${tag}")
 
   simenv_run_deck "${DECK}" "${WORK}" "${tag}" "${corner}" "${temp}" "vsup=${vdd}" >/dev/null
   local rundir="${WORK}/${tag}"
@@ -173,7 +172,7 @@ for corner in "${SIMENV_MOS_CORNERS[@]}"; do
   for temp in "${SIMENV_TEMPS[@]}"; do
     for vdd in "${SIMENV_VDDS[@]}"; do
       tag="${corner}_T${temp}_V${vdd}"
-      tag="${tag//./p}"; tag="${tag//-/m}"
+      tag=$(simenv_mktag "${tag}")
       echo "${corner} ${temp} ${vdd} ${WORK}/${tag}.sum ${WORK}/${tag}.cur" >>"${JOBLIST}"
     done
   done
@@ -210,7 +209,7 @@ SHA=$(simenv_sha256 "${SNAPDIR}/${RID}.spice")
 
 while read -r corner temp vdd _rest; do
   tag="${corner}_T${temp}_V${vdd}"
-  tag="${tag//./p}"; tag="${tag//-/m}"
+  tag=$(simenv_mktag "${tag}")
   cid=$(simenv_corner_id "${corner}" "${temp}" "${vdd}")
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" "${cid}"
 done <"${JOBLIST}"

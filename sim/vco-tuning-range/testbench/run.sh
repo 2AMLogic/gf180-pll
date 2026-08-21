@@ -82,7 +82,7 @@ run_one() {
   local bundle="$1" temp="$2" vdd="$3" band="$4"
   local b0=$((band & 1)) b1=$(((band >> 1) & 1)) b2=$(((band >> 2) & 1))
   local tag="${bundle}_T${temp}_V${vdd}_B${band}"
-  tag="${tag//./p}"; tag="${tag//-/m}"
+  tag=$(simenv_mktag "${tag}")
 
   local flo fhi
   flo=$(f_est "${band}" 0.9 "${bundle}" "${temp}" "${vdd}")
@@ -230,7 +230,7 @@ for bundle in "${BUNDLES[@]}"; do
       : >"${CORNERSDIR}/${cid}.log"
       for band in "${BANDS[@]}"; do
         tag="${bundle}_T${temp}_V${vdd}_B${band}"
-        tag="${tag//./p}"; tag="${tag//-/m}"
+        tag=$(simenv_mktag "${tag}")
         {
           echo "======== band ${band} :: generated deck (${cid}) ========"
           cat "${WORK}/${tag}/deck.sp"
