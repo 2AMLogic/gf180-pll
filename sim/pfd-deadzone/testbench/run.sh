@@ -273,11 +273,8 @@ STATS=$(grep -v '^#' "${OUT_SUMMARY}" | tail -n +2 | awk -F, '
 echo "${STATS}" | grep '^SUMMARY'
 echo "${STATS}" | grep '^FAILURES'
 
-# Pull one key=value out of the SUMMARY line.  The leading-space anchor is
-# load-bearing: an unanchored `grep -o "n=..."` also matches the "n=" inside
-# `kd_min=` and `wmin_min=`, which silently turns a scalar into three lines of
-# record text.
-get() { echo "${STATS}" | grep '^SUMMARY' | grep -oE "(^| )$1=[^ ]*" | tr -d ' ' | cut -d= -f2; }
+# Pull one key=value out of the SUMMARY line.
+get() { simenv_kv "$(echo "${STATS}" | grep '^SUMMARY')" "$1"; }
 NCHK=$(get n); WORST_RATIO=$(get worst_ratio); WORST_CORNER=$(get worst_corner)
 NFAIL=$(get nfail); KDMIN=$(get kd_min); KDMAX=$(get kd_max)
 WMIN=$(get wmin_min); WMAX=$(get wmin_max)
