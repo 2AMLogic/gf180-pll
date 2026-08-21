@@ -817,12 +817,20 @@ the Markdown record. Conformance is verified when #2 lands, not here.
 and `sim/selftest.sh` — see `sim/harness/README.md` for how to run it and how
 to write a testbench manifest. `sim/harness-selftest/` is the harness's own
 acceptance testbench (real devices, real corners, no design claim); it is not
-one of the block campaigns in the table above. The interim `sim/lib/simenv.sh`
-shim and the campaigns built on it remain the real, already-recorded evidence
-for their claims; migrating them onto `sim/harness` is tracked separately
-(#36, decomposed into #40–#44) rather than done as part of landing the harness
-itself, so that already-citable PVT evidence is not touched in the same change
-that introduces the tool that will eventually reproduce it.
+one of the block campaigns in the table above.
+
+**`sim/harness` is the convention for every new campaign — `sim/lib/simenv.sh`
+is legacy.** The interim shim and the campaigns still built on it remain the
+real, already-recorded evidence for their claims, but no new campaign should
+be written against it. Migrating existing shim campaigns onto `sim/harness`
+was tracked by #36 (decomposed into #40–#44): #40–#43 each migrated a named
+set of campaigns and are closed. #44 — the issue that would delete
+`sim/lib/simenv.sh`/`sim/run-all.sh` once nothing depended on them — closed
+by *documenting* the remaining dependents as a formal exception list (below)
+rather than by migrating them, because several were never in #40–#43's scope
+and one is a deliberate, harness-capability-limited design choice. The shim
+files stay in the tree until every row in the table below reads
+`sim/harness`.
 
 **Migration state** — which campaigns run on which runner today:
 
@@ -834,81 +842,129 @@ that introduces the tool that will eventually reproduce it.
 | `cp-compliance`, `pfd-deadzone` | `sim/harness` | migrated (#42, landed by #99); each new record **Supersedes** the pre-migration one |
 | `vco-tuning-range` (stage-count comparison) | `sim/harness` | migrated (#43); its new record **Supersedes** the pre-migration one |
 | `vco-tuning-range` (tuning sweep) | `sim/harness` | manifest migrated (#43); the 504-point evidence re-run landed under #84, so the citable record is a migrated one |
-| `vco-tuning-range` (supply pushing / jitter) | `sim/lib/simenv.sh` | #43 — the manifest gap that blocked it is closed (`phases`, #92); the campaign's own migration is what remains, see below |
-| `lock-time`, `output-range` | `sim/lib/simenv.sh` | the manifest gap that blocked them is closed (`sweeps`/`grid`); migrating the campaigns themselves is not yet scoped — see below |
-| `loop-dynamics`, `mc-cp-mismatch`, `pll-top-smoke`, `supply-sensitivity` | `sim/lib/simenv.sh` | not yet scoped — these landed after #36 was written, so they are outside #40–#43 |
+| `vco-tuning-range` (supply pushing / jitter) | `sim/harness` | migrated (#43, landed by #124); its new record **Supersedes** the pre-migration one — see below |
+| `vco-tuning-range` (band-select mirror Monte Carlo mismatch, #146) | `sim/lib/simenv.sh` | **deliberate exception, not scheduled to migrate** — see below |
+| `lock-time`, `output-range` | `sim/lib/simenv.sh` | **#44 exception** — the manifest gap that blocked them is closed (`sweeps`/`grid`); migrating the campaigns themselves is not yet scoped by any issue — see below |
+| `loop-dynamics`, `pll-top-smoke`, `supply-sensitivity` | `sim/lib/simenv.sh` | **#44 exception** — not yet scoped; these campaigns landed after #36 was written, so they were never in #40–#43's scope and #44 does not migrate them either |
+| `mc-cp-mismatch` | `sim/lib/simenv.sh` | **#44 exception** — not yet scoped, and additionally the campaign that established the raw-`simenv.sh`-deck Monte Carlo pattern the mismatch exception above reuses (no per-run seed axis in `sim/harness`; see `sim/vco-tuning-range/testbench/run_mismatch.sh`'s header) |
 | `harness-selftest` | `sim/harness` | n/a — it *is* the harness's acceptance testbench |
 
 A migrated campaign keeps its pre-migration `run.sh` in place, marked
 superseded for new runs: the records that runner already minted are
 append-only evidence, and it is the only thing that can regenerate the extra
-CSV artifacts those records cite. `sim/lib/simenv.sh` is retired only when
-every campaign has moved (#44).
+CSV artifacts those records cite.
 
-`sim/vco-tuning-range`'s supply pushing/jitter campaign (#43) was blocked by a
-second, different manifest gap: it mints **one** record from **two** decks
-(`tb_vco_pushing.sp` and `tb_vco_supply_jitter.sp`), and a manifest named
-exactly one `netlist`. `tb.json`'s `phases` key closes that (see
-`sim/harness/README.md` — several decks, one record); the migration of the
-campaign itself is separate work, and until it lands the existing
-`run_supply.sh` record remains that claim's evidence.
+### `sim/lib/simenv.sh` / `sim/run-all.sh` retention — the #44 exception list
 
-`sim/lock-time` and `sim/output-range` (#12) also build on `sim/lib/simenv.sh`
-rather than `sim/harness`, even though both landed after #2. The reason was a
-real capability gap, not a preference: `tb.json` (`sim/harness/testbench.py`)
-carried exactly one fixed `.param` set per experiment, with no per-run
-override, so a manifest could not express the N x cold-start/re-lock axis these
-two closed-loop campaigns sweep *in addition to* the PVT grid within one
-evidence record — see either campaign's `testbench/run.sh` header for the
-citation.
+`sim/lib/simenv.sh` and `sim/run-all.sh` are **not deleted**. #44 audited
+every `sim/**/*.sh` that still sources the shim
+(`grep -rl 'simenv\.sh\|run-all\.sh' sim/ --include='*.sh'`, excluding the
+shim files themselves and comment-only references) and sorted the result into
+three categories, none of which #44 migrates itself:
 
-**That gap is now closed.** `tb.json`'s `sweeps` key declares extra independent
-axes beyond the PVT grid, each point carrying its own derived deck parameters,
-and `grid` states the union of blocks a run covers when the cross-product is
-deliberately not run in full (`sim/harness/testbench.py`; see
-`sim/harness/README.md` → "Sweeping beyond the PVT grid"). Manifests across the
-tree already use it, and more will as campaigns migrate —
+1. **Pre-migration `run.sh` retained for provenance only** — every campaign
+   the "Migration state" table above marks `sim/harness`: `devchar-delay`,
+   `devchar-cp`, `devchar-passives`, `divider-ratio`, `lock-detector`,
+   `cp-compliance`, `pfd-deadzone`, and all three `vco-tuning-range` decks
+   (main tuning sweep, stage-count comparison, supply pushing/jitter). Each
+   file carries a `SUPERSEDED FOR NEW RUNS` banner pointing at its
+   replacement manifest; none is a live consumer of the shim going forward,
+   they only regenerate the CSV artifacts their own already-committed
+   records cite.
+2. **Live campaigns with no `sim/harness` manifest and no migration issue
+   filed** — `lock-time`, `output-range`, `loop-dynamics`, `pll-top-smoke`,
+   `supply-sensitivity`, `mc-cp-mismatch`. These are the shim's real,
+   ongoing consumers. `lock-time`/`output-range` cleared their manifest gap
+   (`sweeps`/`grid`, see below) but nobody has scoped migrating the
+   campaigns themselves; `loop-dynamics`/`pll-top-smoke`/`supply-sensitivity`/
+   `mc-cp-mismatch` landed after #36 was written and were never in #40–#43's
+   scope either. Each ancillary script under these same campaign directories
+   that also sources the shim — `output-range/testbench/stall_trace.sh`
+   (a diagnostic helper) and `supply-sensitivity/testbench/reexamine.sh` /
+   `report.sh` (re-examination and reporting helpers) — is covered by its
+   parent campaign's exception, not a separate one. Migrating any of these
+   campaigns is legitimate future work — each should get its own issue, sized
+   the way #40–#43 were — but it is not this issue: #44's Acceptance Criteria
+   are explicit that "no `sim/` evidence record is re-run or re-recorded by
+   this issue," and running six already-substantial closed-loop/Monte-Carlo
+   campaigns through a harness migration is well beyond "routine."
+3. **One deliberate, harness-capability-limited exception** —
+   `sim/vco-tuning-range/testbench/run_mismatch.sh` (the band-select mirror
+   Monte Carlo campaign, #146) reuses `mc-cp-mismatch`'s raw-`simenv.sh`-deck
+   pattern on purpose, not provisionally. Its own header documents two
+   `sim/harness` gaps that block a manifest-based version today: a
+   `tb.json` `params` override of a `design.ngspice`-defaulted global is
+   silently nullified by deck ordering (`compose_deck()` emits `.include` for
+   the design *after* the manifest's own `.param` lines), and the harness's
+   PVT-grid runner has no per-run Monte Carlo seed axis (`.option
+   rndseed=N` must be read at netlist parse time). `mc-cp-mismatch` — item 2
+   above — carries the same seed-axis gap; `run_mismatch.sh` names it as the
+   established precedent it is following. Fixing either gap generally is
+   its own harness change, not a side effect of documenting an exception
+   list.
+
+So `sim/lib/simenv.sh` stays until every row in the "Migration state" table
+reads `sim/harness`, which requires new, separately-scoped migration work for
+category 2 and a `sim/harness` capability change for category 3 — neither of
+which #44 does. This satisfies #44's Acceptance Criteria via the "keep the
+shim, document the exception" branch rather than the "delete it" branch.
+
+`sim/vco-tuning-range`'s supply pushing/jitter campaign (#43) **has migrated**
+(PR #124): it minted **one** record from **two** decks (`tb_vco_pushing.sp`
+and `tb_vco_supply_jitter.sp`) once `tb.json`'s `phases` key (#92) let one
+manifest declare more than one `netlist`/`params`/`measure` block sharing one
+PVT grid, one DUT, one `checks` list, one `derived` reduction and one record
+— see `sim/harness/README.md` for `phases`. The migrated manifest lives at
+`sim/vco-tuning-range/testbench-supply/tb.json`; its record
+(`20260804-211600-f599a65`) **Supersedes** the pre-migration
+`run_supply.sh` record and includes a `migration_delta` table joining the two
+runs' shared measurements to show the migration reproduced the same
+experiment (frequency-domain quantities to 0.04% median / 0.76% worst; two
+explained deviations documented in the record itself). `run_supply.sh` now
+carries the `SUPERSEDED FOR NEW RUNS` banner alongside its migrated siblings.
+Splitting that record in two to fit a one-deck manifest would have landed a
+migrated record *weaker* than the one it supersedes (a DC pushing number with
+the transient jitter dropped), which the append-only rule does not permit —
+which is why `phases` was the right shape for the fix and a split was not.
+
+`sim/lock-time` and `sim/output-range` (#12) still build on
+`sim/lib/simenv.sh` rather than `sim/harness`, even though both landed after
+#2. The reason was a real capability gap, not a preference: `tb.json`
+(`sim/harness/testbench.py`) carried exactly one fixed `.param` set per
+experiment, with no per-run override, so a manifest could not express the N x
+cold-start/re-lock axis these two closed-loop campaigns sweep *in addition
+to* the PVT grid within one evidence record — see either campaign's
+`testbench/run.sh` header for the citation.
+
+**That gap is now closed.** `tb.json`'s `sweeps` key declares extra
+independent axes beyond the PVT grid, each point carrying its own derived
+deck parameters, and `grid` states the union of blocks a run covers when the
+cross-product is deliberately not run in full (`sim/harness/testbench.py`;
+see `sim/harness/README.md` → "Sweeping beyond the PVT grid"). Manifests
+across the tree already use it, and more will as campaigns migrate —
 `grep -rl '"sweeps"' sim/*/testbench*/tb.json` lists the current set at any
 commit, rather than a count here that goes stale. The proof case is
 `sim/divider-ratio-chain/testbench/tb.json`: 63 points sweeping N = 4-64 as an
 axis carried *alongside* the PVT grid within one evidence record, declared
 non-rectangularly as a `grid` of seven blocks (61/61/2/1/1/2/2 points). That is
 exactly the shape described above as inexpressible. What remains is migrating
-these two campaigns themselves, which is separate work and not yet scoped;
-until it lands, their `run.sh` records remain that claim's evidence.
+`lock-time`/`output-range` themselves, which — per the exception list above —
+is separate work and not yet scoped by any issue; until it lands, their
+`run.sh` records remain that claim's evidence.
 
-`sim/vco-tuning-range` is the first campaign to carry **more than one**
-`sim/harness` manifest, because it is one experiment directory answering one
-claim (#8) through three separate decks. The main tuning sweep keeps the
-conventional `testbench/tb.json`, so `python3 sim/run_corners.py
-vco-tuning-range` runs it; the stage-count comparison lives beside it in
-`testbench-stages/tb.json` and is run by path (`python3 sim/run_corners.py
-sim/vco-tuning-range/testbench-stages`). Both resolve to the same
-`sim/vco-tuning-range/` experiment directory, so their records, snapshots and
-corner logs land in the same append-only tree and can supersede each other's
-predecessors — which is the point: splitting them into sibling experiment
-slugs would have broken the supersession chains of the records they replace.
-
-That campaign's third deck pair — supply pushing (`tb_vco_pushing.sp`) and
-supply-step / supply-ripple jitter (`tb_vco_supply_jitter.sp`), minted as one
-record by `testbench/run_supply.sh` — has **not** moved. It used to be blocked
-by two genuine manifest gaps, and **both are now closed**:
-
-- **One record minted from two different decks**, against a manifest that named
-  exactly one `netlist`. `tb.json`'s `phases` key closes this (#92): each phase
-  gets its own `netlist`/`params`/`measure`/`raw_measures`/`raw_files` while
-  sharing one PVT grid, one DUT, one set of `checks`, one `derived` reduction
-  and one record.
-- **The jitter numbers come from a raw waveform**, not from `.meas` — the deck
-  writes it with `wrdata`, because `.meas` cannot report the per-cycle *period
-  sequence* that jitter is. #81 added the manifest's `raw_files` key and
-  `PointView.raw_files` / `point.raw(name)` (#87), whose documented example in
-  `sim/harness/README.md` is this campaign's `wrdata jit.dat` case.
-
-What remains is the migration itself, which is ordinary remaining work rather
-than a blocker, tracked by #43.
-
-Splitting that record in two to fit a one-deck manifest would still land a
-migrated record *weaker* than the one it supersedes (a DC pushing number with
-the transient jitter dropped), which the append-only rule does not permit —
-which is why `phases` was the right shape for the fix and a split was not.
+`sim/vco-tuning-range` carries **more than one** `sim/harness` manifest,
+because it is one experiment directory answering one claim (#8) through three
+separate decks. The main tuning sweep keeps the conventional
+`testbench/tb.json`, so `python3 sim/run_corners.py vco-tuning-range` runs
+it; the stage-count comparison lives beside it in `testbench-stages/tb.json`
+(`python3 sim/run_corners.py sim/vco-tuning-range/testbench-stages`), and the
+supply pushing/jitter campaign lives in `testbench-supply/tb.json` (`python3
+sim/run_corners.py sim/vco-tuning-range/testbench-supply`). All three resolve
+to the same `sim/vco-tuning-range/` experiment directory, so their records,
+snapshots and corner logs land in the same append-only tree and can supersede
+each other's predecessors — which is the point: splitting them into sibling
+experiment slugs would have broken the supersession chains of the records
+they replace. The fourth deck under the same directory,
+`testbench/run_mismatch.sh` (the Monte Carlo mismatch campaign, category 3
+above), has no manifest and is not expected to gain one until the two harness
+gaps it documents are fixed.
