@@ -207,37 +207,11 @@ stage_netlist() {
   cp "${NETLIST}" "$1/dut.spice"
 }
 
-# Retry wrapper around simenv_run_deck (#146). This shared build host was
-# observed, during #146's own build, to externally SIGKILL individual
-# `ngspice -b` invocations sporadically -- confirmed NOT the OOM killer
-# (checked `dmesg`/`/var/log/kern.log`: no OOM entries; `free -h` had >10 GiB
-# available at the time) and NOT this cgroup's own memory or CPU quota
-# (`memory.max` unlimited, `memory.events` `oom 0`/`oom_kill 0`; `cpu.max`
-# throttles but does not kill) -- root cause not identified from inside this
-# sandbox, but reproducibly transient: the SAME invocation that got killed
-# once succeeded outright on a bare retry with no other change. A multi-hour,
-# ~150-invocation campaign hitting even a low per-invocation kill probability
-# is likely to lose at least one sample to this outright without a retry, and
-# `set -euo pipefail` means ONE lost sample would abort the entire corner
-# grid, not just that sample -- so every simenv_run_deck call in this file
-# goes through this wrapper rather than being called directly. 3 attempts,
-# short fixed backoff; a sample that still fails after 3 tries is a real
-# error (bad deck, missing model, etc.), not host flakiness, and is still
-# reported and still aborts the run via `return 1`, unchanged from before.
-simenv_run_deck_retried() {
-  local attempt rc
-  for attempt in 1 2 3; do
-    if simenv_run_deck "$@"; then
-      return 0
-    fi
-    rc=$?
-    if [ "${attempt}" -lt 3 ]; then
-      echo "WARN: simenv_run_deck failed (attempt ${attempt}/3, rc=${rc}) for: $* -- retrying" >&2
-      sleep 2
-    fi
-  done
-  return "${rc}"
-}
+# simenv_run_deck_retried (3-attempt retry wrapper around simenv_run_deck,
+# #146 host-flakiness mitigation) is hoisted to sim/lib/simenv.sh -- #184.
+# Every simenv_run_deck call in this file goes through it rather than being
+# called directly; see that function's comment there for the full
+# investigation.
 
 # ===========================================================================
 # dc: tb_mc_cp_dc.sp -- term 1 (DC UP/DN current mismatch)

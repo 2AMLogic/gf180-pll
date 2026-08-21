@@ -455,6 +455,43 @@ simenv_run_deck() {
   return 0
 }
 
+# Retry wrapper around simenv_run_deck (#146). The shared build host used for
+# sim/mc-cp-mismatch and sim/vco-tuning-range was observed, during
+# mc-cp-mismatch's #146 build, to externally SIGKILL individual `ngspice -b`
+# invocations sporadically -- confirmed NOT the OOM killer (checked
+# `dmesg`/`/var/log/kern.log`: no OOM entries; `free -h` had >10 GiB available
+# at the time) and NOT this cgroup's own memory or CPU quota (`memory.max`
+# unlimited, `memory.events` `oom 0`/`oom_kill 0`; `cpu.max` throttles but does
+# not kill) -- root cause not identified from inside this sandbox, but
+# reproducibly transient: the SAME invocation that got killed once succeeded
+# outright on a bare retry with no other change. A multi-hour, many-invocation
+# campaign hitting even a low per-invocation kill probability is likely to
+# lose at least one sample to this outright without a retry, and
+# `set -euo pipefail` means ONE lost sample would abort the entire corner
+# grid, not just that sample -- so every simenv_run_deck call in a campaign
+# exposed to this host flakiness should go through this wrapper rather than
+# calling simenv_run_deck directly. 3 attempts, short fixed backoff; a sample
+# that still fails after 3 tries is a real error (bad deck, missing model,
+# etc.), not host flakiness, and is still reported and still aborts the run
+# via `return 1`, unchanged from before.
+#
+# (Hoisted from byte-identical local copies in sim/mc-cp-mismatch and
+# sim/vco-tuning-range's testbench/run.sh -- #184.)
+simenv_run_deck_retried() {
+  local attempt rc
+  for attempt in 1 2 3; do
+    if simenv_run_deck "$@"; then
+      return 0
+    fi
+    rc=$?
+    if [ "${attempt}" -lt 3 ]; then
+      echo "WARN: simenv_run_deck failed (attempt ${attempt}/3, rc=${rc}) for: $* -- retrying" >&2
+      sleep 2
+    fi
+  done
+  return "${rc}"
+}
+
 # Corner ID per sim/README.md: <corner-bundle>_<temp>c_<supply>v, supply always
 # written to two decimals so filenames sort lexically in supply order.
 # simenv_corner_id <bundle> <temp_c> <supply_v>
