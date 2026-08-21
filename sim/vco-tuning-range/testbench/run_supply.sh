@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # gf180-pll :: vco-tuning-range :: supply-pushing + supply-induced-jitter campaign
 #
+# SUPERSEDED FOR NEW RUNS by this campaign's sim/harness manifest
+# (testbench-supply/tb.json + derive_supply.py) -- run
+#   python3 sim/run_corners.py sim/vco-tuning-range/testbench-supply
+# instead (#124). This script is kept because the records it already minted
+# are append-only evidence and it is the only thing that can regenerate the
+# extra CSV artifacts they cite; do not extend it.
+#
 # Two testbenches, one record, because they answer two halves of the same
 # question and the second is meaningless without the first:
 #
