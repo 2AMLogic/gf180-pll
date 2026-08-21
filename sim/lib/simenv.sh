@@ -303,6 +303,21 @@ simenv_stats_from_values() {
   }'
 }
 
+# simenv_kv <space-separated key=value blob> <key> -> value
+#
+# Pull one key=value out of a summary-line blob. The leading-space anchor is
+# load-bearing: an unanchored `grep -o "$1=..."` also matches the "$1=" inside
+# a longer key like `mism_absmax_all_at=` or `wmin_min=`, which would
+# silently turn a scalar into several lines of record text.
+#
+# (Hoisted from byte-identical local copies -- modulo the caller-specific
+# line-prefix filter (`^DCSUM`/`^SUMMARY`) applied before the call -- in
+# sim/cp-compliance (dcget/swget) and sim/pfd-deadzone's (get) testbench/
+# run.sh -- #189.)
+simenv_kv() {
+  echo "$1" | grep -oE "(^| )$2=[^ ]*" | tr -d ' ' | cut -d= -f2
+}
+
 # Emit a provenance header. Every extracted-metrics CSV starts with one of
 # these so a table stays self-describing away from its record.
 # Args: <campaign> <record-id> <netlist-path> <corner-list-description>

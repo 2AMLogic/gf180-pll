@@ -413,11 +413,8 @@ SW_STATS=$(grep -v '^#' "${OUT_SW}" | tail -n +2 | awk -F, '
 echo "${DC_STATS}" | grep -E '^DCSUM|^SATFAILS|^TRIM'
 echo "${SW_STATS}"
 
-# The leading-space anchor is load-bearing: an unanchored `grep -o "n=..."`
-# also matches the "n=" inside keys like `ton_up_min=`, which would silently
-# turn a scalar into several lines of record text.
-dcget() { echo "${DC_STATS}" | grep '^DCSUM' | grep -oE "(^| )$1=[^ ]*" | tr -d ' ' | cut -d= -f2; }
-swget() { echo "${SW_STATS}" | grep -oE "(^| )$1=[^ ]*" | tr -d ' ' | cut -d= -f2; }
+dcget() { simenv_kv "$(echo "${DC_STATS}" | grep '^DCSUM')" "$1"; }
+swget() { simenv_kv "${SW_STATS}" "$1"; }
 MISM_ALL=$(dcget mism_absmax_all); MISM_ALL_AT=$(echo "${DC_STATS}" | grep '^DCSUM' | sed -n 's/.*mism_absmax_all_at=\([^ ]*\).*/\1/p')
 MISM_NOM=$(dcget mism_absmax_nom)
 FLAT_NOM=$(dcget flat_max_nom)
