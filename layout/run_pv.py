@@ -40,11 +40,17 @@ EXIT_ENVIRONMENT = 2
 EXIT_HARNESS_UNTRUSTWORTHY = 3
 
 
-def cmd_check_env(_args: argparse.Namespace) -> int:
+def _find_tools(args: argparse.Namespace) -> env.PvTools | None:
     try:
-        tools = env.find_tools(_args.variant)
+        return env.find_tools(args.variant)
     except (env.PdkNotFound, env.ToolNotFound) as exc:
         print(f"error: {exc}", file=sys.stderr)
+        return None
+
+
+def cmd_check_env(_args: argparse.Namespace) -> int:
+    tools = _find_tools(_args)
+    if tools is None:
         return EXIT_ENVIRONMENT
     print(f"PDK        : OK   {tools.pdk.path} (variant {tools.variant_letter}, "
           f"open_pdks {tools.pdk.version})")
@@ -57,10 +63,8 @@ def cmd_check_env(_args: argparse.Namespace) -> int:
 
 
 def cmd_build(args: argparse.Namespace) -> int:
-    try:
-        tools = env.find_tools(args.variant)
-    except (env.PdkNotFound, env.ToolNotFound) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    tools = _find_tools(args)
+    if tools is None:
         return EXIT_ENVIRONMENT
     outdir = Path(args.outdir)
     tc = cell.build(outdir, tools.stdcell_gds)
@@ -71,10 +75,8 @@ def cmd_build(args: argparse.Namespace) -> int:
 
 
 def cmd_drc(args: argparse.Namespace) -> int:
-    try:
-        tools = env.find_tools(args.variant)
-    except (env.PdkNotFound, env.ToolNotFound) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    tools = _find_tools(args)
+    if tools is None:
         return EXIT_ENVIRONMENT
     result = drc_mod.run(
         args.layout,
@@ -92,10 +94,8 @@ def cmd_drc(args: argparse.Namespace) -> int:
 
 
 def cmd_lvs(args: argparse.Namespace) -> int:
-    try:
-        tools = env.find_tools(args.variant)
-    except (env.PdkNotFound, env.ToolNotFound) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    tools = _find_tools(args)
+    if tools is None:
         return EXIT_ENVIRONMENT
     result = lvs_mod.run(
         args.layout,
@@ -122,10 +122,8 @@ def cmd_bare_cell(args: argparse.Namespace) -> int:
     carries tie/fill cells, it does not exercise the harness's dirty-result
     detection (``prove``'s negative controls already do that).
     """
-    try:
-        tools = env.find_tools(args.variant)
-    except (env.PdkNotFound, env.ToolNotFound) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    tools = _find_tools(args)
+    if tools is None:
         return EXIT_ENVIRONMENT
     outdir = Path(args.outdir)
     gds = cell.build_bare_cell(outdir, tools.stdcell_gds)
@@ -161,10 +159,8 @@ def cmd_prove(args: argparse.Namespace) -> int:
     back clean is treated as a harness fault (exit 3), not a pass -- see
     layout/harness/faults.py's module docstring.
     """
-    try:
-        tools = env.find_tools(args.variant)
-    except (env.PdkNotFound, env.ToolNotFound) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    tools = _find_tools(args)
+    if tools is None:
         return EXIT_ENVIRONMENT
 
     work = Path(args.work_dir)
