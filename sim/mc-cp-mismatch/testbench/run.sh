@@ -202,11 +202,6 @@ SW_HEADER="corner,seed,vctrl_v,wskew_s"
 PFD_HEADER="corner,seed,qnet0_c,qplus_c,qminus_c,kd_wide_a,t_offset_s"
 DFF_HEADER="corner,seed,tcq_r_s,tcq_f_s"
 
-stage_netlist() {
-  mkdir -p "$1"
-  cp "${NETLIST}" "$1/dut.spice"
-}
-
 # simenv_run_deck_retried (3-attempt retry wrapper around simenv_run_deck,
 # #146 host-flakiness mitigation) is hoisted to sim/lib/simenv.sh -- #184.
 # Every simenv_run_deck call in this file goes through it rather than being
@@ -220,7 +215,7 @@ run_dc() {
   local seed="$1" sfile="$2"
   local ctag="${CORNER}_${TEMP}c_${VDD}v"
   local tag="dc_${ctag}_seed$(printf '%03d' "${seed}")"
-  stage_netlist "${WORK}/${tag}"
+  simenv_stage_netlist "${WORK}/${tag}" "${NETLIST}"
   simenv_run_deck_retried "${DECK_DC}" "${WORK}" "${tag}" "${CORNER}" "${TEMP}" \
     "vsup=${VDD}" "sw_stat_mismatch=1" "rndseed=${seed}" >/dev/null
   local log="${WORK}/${tag}/ngspice.log"
@@ -243,7 +238,7 @@ run_sw() {
   local seed="$1" sfile="$2"
   local ctag="${CORNER}_${TEMP}c_${VDD}v"
   local tag="sw_${ctag}_seed$(printf '%03d' "${seed}")"
-  stage_netlist "${WORK}/${tag}"
+  simenv_stage_netlist "${WORK}/${tag}" "${NETLIST}"
   simenv_run_deck_retried "${DECK_SW}" "${WORK}" "${tag}" "${CORNER}" "${TEMP}" \
     "vsup=${VDD}" "vctrl=${VCTRL_MID}" "sw_stat_mismatch=1" "rndseed=${seed}" >/dev/null
   local log="${WORK}/${tag}/ngspice.log" line wskew
@@ -264,7 +259,7 @@ run_pfd() {
   for dphi in -1n 0 1n; do
     local dsuf="d${dphi}"; dsuf="${dsuf//./p}"; dsuf="${dsuf//-/m}"
     local dtag="pfd_${ctag}_seed${sseed}_${dsuf}"
-    stage_netlist "${WORK}/${dtag}"
+    simenv_stage_netlist "${WORK}/${dtag}" "${NETLIST}"
     simenv_run_deck_retried "${DECK_PFD}" "${WORK}" "${dtag}" "${CORNER}" "${TEMP}" \
       "vsup=${VDD}" "dphi=${dphi}" "sw_stat_mismatch=1" "rndseed=${seed}" >/dev/null
     local log="${WORK}/${dtag}/ngspice.log" line q
