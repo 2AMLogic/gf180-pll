@@ -495,47 +495,36 @@ OUT_DFF="${CORNERSDIR}/mc_dff_ctq.csv"
 # Statistics: mean, sample stddev (N-1), +/-3sigma, from the just-written
 # CSVs so the record text cannot drift from the data. Data rows are neither
 # the leading `simenv_provenance` `#` comment block nor the CSV header row --
-# strip both before handing the column to awk.
+# strip both before handing the column to awk. (simenv_datarows /
+# simenv_stats_from_values live in sim/lib/simenv.sh -- #183.)
 # --------------------------------------------------------------------------
-datarows() { grep -v '^#' "$1" | tail -n +2; }
-
-stats_from_values() {
-  # stats_from_values <newline-separated values> -> "mean sd n"
-  awk '{x[n++]=$1; s+=$1} END{
-    if (n==0) { print "nan nan 0"; exit }
-    m=s/n
-    for (i=0;i<n;i++) ss+=(x[i]-m)*(x[i]-m)
-    sd = (n>1) ? sqrt(ss/(n-1)) : 0
-    printf "%.6g %.6g %d\n", m, sd, n
-  }'
-}
 
 # Pooled stats across ALL corners for a given file/field.
 stats() {
   # stats <file> <field> -> "mean sd n"
-  datarows "$1" | awk -F, -v f="$2" '{print $f}' | stats_from_values
+  simenv_datarows "$1" | awk -F, -v f="$2" '{print $f}' | simenv_stats_from_values
 }
 
 # Per-corner stats for a given file/field/corner tag.
 stats_corner() {
   # stats_corner <file> <field> <corner_tag> -> "mean sd n"
-  datarows "$1" | awk -F, -v f="$2" -v c="$3" '$1==c {print $f}' | stats_from_values
+  simenv_datarows "$1" | awk -F, -v f="$2" -v c="$3" '$1==c {print $f}' | simenv_stats_from_values
 }
 
 # Term 1: worst-|mismatch| per (corner,seed) sample across the 3 Vctrl points.
 dc_worst_all() {
-  datarows "${OUT_DC}" | awk -F, '
+  simenv_datarows "${OUT_DC}" | awk -F, '
     { a = ($6<0 ? -$6 : $6); s = $1 SUBSEP $2; if (!(s in seen) || a > worst[s]) { worst[s] = a; seen[s] = 1 } }
     END { for (s in worst) print worst[s] }'
 }
 dc_worst_corner() {
   local corner="$1"
-  datarows "${OUT_DC}" | awk -F, -v c="${corner}" '
+  simenv_datarows "${OUT_DC}" | awk -F, -v c="${corner}" '
     $1==c { a = ($6<0 ? -$6 : $6); s = $2; if (!(s in seen) || a > worst[s]) { worst[s] = a; seen[s] = 1 } }
     END { for (s in worst) print worst[s] }'
 }
 
-DC_STATS=$(dc_worst_all | stats_from_values)
+DC_STATS=$(dc_worst_all | simenv_stats_from_values)
 DC_MEAN=$(echo "${DC_STATS}" | awk '{print $1}'); DC_SD=$(echo "${DC_STATS}" | awk '{print $2}')
 
 SW_STATS=$(stats "${OUT_SW}" 4)
@@ -577,7 +566,7 @@ for point in "${CORNER_POINTS[@]}"; do
   read -r pc pt pv <<<"${point}"
   ctag="${pc}_${pt}c_${pv}v"
 
-  c_dc=$(dc_worst_corner "${ctag}" | stats_from_values)
+  c_dc=$(dc_worst_corner "${ctag}" | simenv_stats_from_values)
   c_dc_m=$(echo "${c_dc}" | awk '{print $1}'); c_dc_s=$(echo "${c_dc}" | awk '{print $2}'); c_dc_n=$(echo "${c_dc}" | awk '{print $3}')
   c_dc_3s=$(sig3 "${c_dc_m}" "${c_dc_s}")
 

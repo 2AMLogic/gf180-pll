@@ -280,6 +280,29 @@ simenv_bundle_libs() {
   esac
 }
 
+# Data rows of a record CSV: neither the leading `simenv_provenance` `#`
+# comment block nor the CSV header row.
+#
+# (Hoisted from byte-identical local copies in sim/mc-cp-mismatch and
+# sim/vco-tuning-range's testbench/run.sh -- #183.)
+simenv_datarows() {
+  grep -v '^#' "$1" | tail -n +2
+}
+
+# simenv_stats_from_values <newline-separated values> -> "mean sd n"
+#
+# (Hoisted from byte-identical local copies in sim/mc-cp-mismatch and
+# sim/vco-tuning-range's testbench/run.sh -- #183.)
+simenv_stats_from_values() {
+  awk '{x[n++]=$1; s+=$1} END{
+    if (n==0) { print "nan nan 0"; exit }
+    m=s/n
+    for (i=0;i<n;i++) ss+=(x[i]-m)*(x[i]-m)
+    sd = (n>1) ? sqrt(ss/(n-1)) : 0
+    printf "%.6g %.6g %d\n", m, sd, n
+  }'
+}
+
 # Emit a provenance header. Every extracted-metrics CSV starts with one of
 # these so a table stays self-describing away from its record.
 # Args: <campaign> <record-id> <netlist-path> <corner-list-description>
