@@ -270,19 +270,9 @@ OUT="${CORNERSDIR}/mismatch.csv"
   echo "${HEADER}"; cat "${WORK}/all.csv"
 } >"${OUT}"
 
-datarows() { grep -v '^#' "$1" | tail -n +2; }
-stats_from_values() {
-  awk '{x[n++]=$1; s+=$1} END{
-    if (n==0) { print "nan nan 0"; exit }
-    m=s/n
-    for (i=0;i<n;i++) ss+=(x[i]-m)*(x[i]-m)
-    sd = (n>1) ? sqrt(ss/(n-1)) : 0
-    printf "%.6g %.6g %d\n", m, sd, n
-  }'
-}
 stats_band() {
   local band="$1" field="$2"
-  datarows "${OUT}" | awk -F, -v b="${band}" -v f="${field}" '$1==b {print $f}' | stats_from_values
+  simenv_datarows "${OUT}" | awk -F, -v b="${band}" -v f="${field}" '$1==b {print $f}' | simenv_stats_from_values
 }
 
 B0_F=$(stats_band 0 3); B0_F_M=$(echo "${B0_F}" | awk '{print $1}'); B0_F_SD=$(echo "${B0_F}" | awk '{print $2}'); B0_F_N=$(echo "${B0_F}" | awk '{print $3}')
