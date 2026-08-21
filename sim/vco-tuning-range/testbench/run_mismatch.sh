@@ -150,29 +150,9 @@ stage_netlist() {
   cp "${DUT_SRC}" "$1/vco.spice"
 }
 
-# Retry wrapper around simenv_run_deck -- same host-flakiness finding
-# sim/mc-cp-mismatch/testbench/run.sh's #146 build made (see that file's
-# comment on `simenv_run_deck_retried` for the full investigation: the shared
-# build host was observed sporadically SIGKILLing individual `ngspice -b`
-# invocations, confirmed NOT the OOM killer and NOT a cgroup memory/CPU quota,
-# root cause not identified from inside this sandbox but reproducibly
-# transient -- a bare retry of the same invocation with no other change
-# succeeded). `set -euo pipefail` means one lost sample would otherwise abort
-# the whole campaign.
-simenv_run_deck_retried() {
-  local attempt rc
-  for attempt in 1 2 3; do
-    if simenv_run_deck "$@"; then
-      return 0
-    fi
-    rc=$?
-    if [ "${attempt}" -lt 3 ]; then
-      echo "WARN: simenv_run_deck failed (attempt ${attempt}/3, rc=${rc}) for: $* -- retrying" >&2
-      sleep 2
-    fi
-  done
-  return "${rc}"
-}
+# simenv_run_deck_retried (3-attempt retry wrapper around simenv_run_deck,
+# #146 host-flakiness mitigation) is hoisted to sim/lib/simenv.sh -- #184.
+# See that function's comment there for the full investigation.
 
 # One (band, seed) sample -> one CSV row on stdout.
 run_one() {
