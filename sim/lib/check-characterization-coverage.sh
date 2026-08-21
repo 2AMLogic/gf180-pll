@@ -21,6 +21,9 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 REPORT="${REPO_ROOT}/sim/CHARACTERIZATION.md"
 
+# shellcheck source=sim/lib/record-campaigns.sh
+. "$(dirname "${BASH_SOURCE[0]}")/record-campaigns.sh"
+
 if [ ! -f "${REPORT}" ]; then
   echo "FAIL: ${REPORT} does not exist" >&2
   exit 1
@@ -29,10 +32,7 @@ fi
 # One campaign per sim/<name>/records/ directory that actually holds at
 # least one record -- same enumeration rule sim/lib/check-readme-status.sh
 # uses for its counts.
-mapfile -t campaigns < <(
-  find "${REPO_ROOT}/sim" -path '*/records/*.md' -type f \
-    | sed -E 's#.*/sim/([^/]+)/records/.*#\1#' | sort -u
-)
+mapfile -t campaigns < <(sim_record_campaigns "${REPO_ROOT}")
 
 if [ "${#campaigns[@]}" -eq 0 ]; then
   echo "FAIL: found no sim/*/records/*.md files -- enumeration is broken" >&2
