@@ -244,17 +244,6 @@ seed_for_corner() {
   ' "${KVCO_CSV}"
 }
 
-# The divider chain length k, read back OUT of the encoding rather than
-# computed a second time beside it (#159) -- see sim/lock-time's identical
-# helper. cloop_divider_params is the single owner of the SEL/P encoding; k is
-# "which one-hot SEL bit did it set", +1, so the reported k_cells column cannot
-# disagree with the bits the DUT was actually given.
-k_from_divparams() {
-  printf '%s\n' "$1" | tr ' ' '\n' \
-    | awk -F= '/^sel[0-9]_code=1$/ { print substr($1, 4, 1) + 1; found = 1 }
-               END { if (!found) print 0 }'
-}
-
 # row_tag <corner> <temp> <vdd> <edge> [<vctrl_ic> <band> <fout>]
 #
 # The work-directory tag for one row, i.e. that row's RUN IDENTITY. Defined
@@ -431,7 +420,7 @@ run_one() {
   # prior full-grid invocation having left one behind.
   cloop_assemble "${FRAGMENT}" "${DECK}"
   local divparams; divparams=$(cloop_divider_params "${n}")
-  local k; k=$(k_from_divparams "${divparams}")
+  local k; k=$(simenv_k_from_divparams "${divparams}")
   # The `--one` interface still takes the three band bits individually (that
   # is the form the existing anomaly-investigation records document); the
   # 0..7 code they spell is reassembled here so the actual .param bits still

@@ -162,17 +162,6 @@ CONDITIONS=(cold relock)   # vctrl_ic = 0.9 V / 2.7 V respectively
 # Single-point debug corner, used only by --check below.
 CORNER="typical"; TEMP=27; VDD=3.30
 
-# The divider chain length k, read back OUT of the encoding rather than
-# computed a second time beside it (#159). cloop_divider_params is the single
-# owner of the SEL/P encoding; k is just "which one-hot SEL bit did it set",
-# +1. Deriving it this way means the reported k_cells column cannot disagree
-# with the bits the DUT was actually given.
-k_from_divparams() {
-  printf '%s\n' "$1" | tr ' ' '\n' \
-    | awk -F= '/^sel[0-9]_code=1$/ { print substr($1, 4, 1) + 1; found = 1 }
-               END { if (!found) print 0 }'
-}
-
 # run_one <corner> <temp> <vdd> <n> <condition> <outdir> -> writes result.csv row
 run_one() {
   local corner="$1" temp="$2" vdd="$3" n="$4" cond="$5" outcsv="$6"
@@ -182,7 +171,7 @@ run_one() {
   # prior full-grid invocation having left one behind.
   cloop_assemble "${FRAGMENT}" "${DECK}"
   local divparams; divparams=$(cloop_divider_params "${n}")
-  local k; k=$(k_from_divparams "${divparams}")
+  local k; k=$(simenv_k_from_divparams "${divparams}")
   local fref; fref=$(awk -v f="${FOUT_TARGET}" -v n="${n}" 'BEGIN{printf "%.8g", f/n}')
   local vctrl_ic; [ "${cond}" = "cold" ] && vctrl_ic=0.9 || vctrl_ic=2.7
   # NOT the sim/output-range::vctrl_ic seed-collision hazard (#170): unlike

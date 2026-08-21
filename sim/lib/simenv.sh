@@ -245,6 +245,21 @@ simenv_n_to_code() {
   echo "${k} ${sel[*]} ${p[*]}"
 }
 
+# The divider chain length k, read back OUT of the encoding rather than
+# computed a second time beside it (#159). cloop_divider_params (see
+# sim/lib/pll_top_dut.sh) is the single owner of the SEL/P encoding; k is just
+# "which one-hot SEL bit did it set", +1. Deriving it this way means a
+# campaign's reported k_cells column cannot disagree with the bits the DUT
+# was actually given.
+#
+# (Hoisted from byte-identical local copies in sim/lock-time and
+# sim/output-range's testbench/run.sh -- #181.)
+simenv_k_from_divparams() {
+  printf '%s\n' "$1" | tr ' ' '\n' \
+    | awk -F= '/^sel[0-9]_code=1$/ { print substr($1, 4, 1) + 1; found = 1 }
+               END { if (!found) print 0 }'
+}
+
 # Map a MOS process-corner bundle name to the comma-separated list of
 # sm141064.ngspice `.lib` sections a campaign should include for it
 # (passives held at typical -- the five-bundle typical/ff/ss/fs/sf scheme).
