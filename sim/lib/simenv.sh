@@ -478,11 +478,13 @@ simenv_run_deck() {
 # (Hoisted from byte-identical local copies in sim/mc-cp-mismatch and
 # sim/vco-tuning-range's testbench/run.sh -- #184.)
 simenv_run_deck_retried() {
-  local attempt rc
+  local attempt rc=0
   for attempt in 1 2 3; do
-    if simenv_run_deck "$@"; then
-      return 0
-    fi
+    # Capture the real exit status via a separate assignment rather than
+    # reading $? after the `if` completes: per POSIX, when an `if cmd; then
+    # ...; fi` condition is false and the then-branch never runs, $? reflects
+    # the `if` compound's own status (0), not cmd's. See #187.
+    simenv_run_deck "$@" && return 0
     rc=$?
     if [ "${attempt}" -lt 3 ]; then
       echo "WARN: simenv_run_deck failed (attempt ${attempt}/3, rc=${rc}) for: $* -- retrying" >&2
