@@ -17,11 +17,13 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 README="${REPO_ROOT}/README.md"
 
+# shellcheck source=sim/lib/record-campaigns.sh
+. "$(dirname "${BASH_SOURCE[0]}")/record-campaigns.sh"
+
 # Actual counts from the tree: one directory per campaign, one file per
 # evidence record, under sim/<campaign>/records/*.md.
 records_actual=$(find "${REPO_ROOT}/sim" -path '*/records/*.md' -type f | wc -l | tr -d ' ')
-campaigns_actual=$(find "${REPO_ROOT}/sim" -path '*/records/*.md' -type f \
-  | sed -E 's#.*/sim/([^/]+)/records/.*#\1#' | sort -u | wc -l | tr -d ' ')
+campaigns_actual=$(sim_record_campaigns "${REPO_ROOT}" | wc -l | tr -d ' ')
 
 # Claimed counts, scraped from README.md's status section, e.g.:
 #   "**52 evidence records** across 18\nverification campaigns"
