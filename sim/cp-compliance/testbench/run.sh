@@ -73,16 +73,6 @@ CURVES_HEADER="process,temp_c,vdd_v,b1,b0,vout_v,iup_a,idn_a"
 CURVE_DECIMATE=5
 
 # --------------------------------------------------------------------------
-# Place the xschem export next to the generated deck: the decks `.include`
-# "dut.spice" relative to their run directory, and `.include` takes no
-# parameter substitution.
-# --------------------------------------------------------------------------
-stage_netlist() {
-  mkdir -p "$1"
-  cp "${NETLIST}" "$1/dut.spice"
-}
-
-# --------------------------------------------------------------------------
 # One DC point: run_dc <corner> <temp> <vdd> <b1> <b0> <summary-out> <curves-out>
 # --------------------------------------------------------------------------
 run_dc() {
@@ -90,7 +80,7 @@ run_dc() {
   local tag="dc_${corner}_T${temp}_V${vdd}_C${b1}${b0}"
   tag="${tag//./p}"; tag="${tag//-/m}"
 
-  stage_netlist "${WORK}/${tag}"
+  simenv_stage_netlist "${WORK}/${tag}" "${NETLIST}"
   simenv_run_deck "${DECK_DC}" "${WORK}" "${tag}" "${corner}" "${temp}" \
     "vsup=${vdd}" "b0_code=${b0}" "b1_code=${b1}" >/dev/null
   local rundir="${WORK}/${tag}"
@@ -175,7 +165,7 @@ run_sw() {
   local tag="sw_${corner}_T${temp}_V${vdd}_X${vctrl}"
   tag="${tag//./p}"; tag="${tag//-/m}"
 
-  stage_netlist "${WORK}/${tag}"
+  simenv_stage_netlist "${WORK}/${tag}" "${NETLIST}"
   simenv_run_deck "${DECK_SW}" "${WORK}" "${tag}" "${corner}" "${temp}" \
     "vsup=${vdd}" "vctrl=${vctrl}" "b0_code=${NOM_B0}" "b1_code=${NOM_B1}" >/dev/null
   local rundir="${WORK}/${tag}"

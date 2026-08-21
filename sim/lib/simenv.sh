@@ -318,6 +318,19 @@ simenv_kv() {
   echo "$1" | grep -oE "(^| )$2=[^ ]*" | tr -d ' ' | cut -d= -f2
 }
 
+# simenv_stage_netlist <dest-dir> <source-netlist-path>
+#
+# Create <dest-dir> and copy the campaign's DUT netlist into it as
+# <dest-dir>/dut.spice.
+#
+# (Hoisted from byte-identical local copies -- modulo which variable held the
+# source netlist path (`NETLIST` vs `DUT`) -- in sim/mc-cp-mismatch,
+# sim/loop-dynamics and sim/cp-compliance's testbench/run.sh -- #191.)
+simenv_stage_netlist() {
+  mkdir -p "$1"
+  cp "$2" "$1/dut.spice"
+}
+
 # Emit a provenance header. Every extracted-metrics CSV starts with one of
 # these so a table stays self-describing away from its record.
 # Args: <campaign> <record-id> <netlist-path> <corner-list-description>

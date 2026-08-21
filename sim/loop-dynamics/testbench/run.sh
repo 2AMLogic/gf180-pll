@@ -72,11 +72,6 @@ VCTRLS=(0.3 0.9 1.35 1.8 2.25 2.7)
 FZ_HEADER="bundle,res_sec,moscap_sec,mimcap_sec,temp_c,vctrl_v,freq_hz,zmag_ohm,zph_deg"
 LAC_HEADER="tag,bundle,temp_c,vctrl_v,icp_a,kvco_hz_per_v,n_div,freq_hz,tmag,tph_deg"
 
-stage_netlist() {
-  mkdir -p "$1"
-  cp "${DUT}" "$1/dut.spice"
-}
-
 # --------------------------------------------------------------------------
 # One filter-impedance point: run_z <res_sec> <moscap_sec> <mimcap_sec> <temp> <outcsv>
 # --------------------------------------------------------------------------
@@ -86,7 +81,7 @@ run_z() {
   local tag="z_${bundle}_T${temp}"
   tag="${tag//./p}"; tag="${tag//-/m}"
 
-  stage_netlist "${WORK}/${tag}"
+  simenv_stage_netlist "${WORK}/${tag}" "${DUT}"
   simenv_run_deck "${DECK_Z}" "${WORK}" "${tag}" \
     "res_${rsec},moscap_${msec},mimcap_${xsec}" "${temp}" >/dev/null
   local rundir="${WORK}/${tag}"
@@ -115,7 +110,7 @@ run_t() {
   local rtag="xc_${tag}"
   rtag="${rtag//./p}"; rtag="${rtag//-/m}"
 
-  stage_netlist "${WORK}/${rtag}"
+  simenv_stage_netlist "${WORK}/${rtag}" "${DUT}"
   simenv_run_deck "${DECK_T}" "${WORK}" "${rtag}" "${libs}" "${temp}" \
     "icp=${icp}" "kvco=${kvco}" "ndiv=${ndiv}" "vctrl=${vctrl}" >/dev/null
   local rundir="${WORK}/${rtag}"
