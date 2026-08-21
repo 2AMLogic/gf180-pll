@@ -78,7 +78,7 @@ CURVE_DECIMATE=5
 run_dc() {
   local corner="$1" temp="$2" vdd="$3" b1="$4" b0="$5" sfile="$6" cfile="$7"
   local tag="dc_${corner}_T${temp}_V${vdd}_C${b1}${b0}"
-  tag="${tag//./p}"; tag="${tag//-/m}"
+  tag=$(simenv_mktag "${tag}")
 
   simenv_stage_netlist "${WORK}/${tag}" "${NETLIST}"
   simenv_run_deck "${DECK_DC}" "${WORK}" "${tag}" "${corner}" "${temp}" \
@@ -163,7 +163,7 @@ run_dc() {
 run_sw() {
   local corner="$1" temp="$2" vdd="$3" vctrl="$4" sfile="$5"
   local tag="sw_${corner}_T${temp}_V${vdd}_X${vctrl}"
-  tag="${tag//./p}"; tag="${tag//-/m}"
+  tag=$(simenv_mktag "${tag}")
 
   simenv_stage_netlist "${WORK}/${tag}" "${NETLIST}"
   simenv_run_deck "${DECK_SW}" "${WORK}" "${tag}" "${corner}" "${temp}" \
@@ -238,11 +238,11 @@ for corner in "${SIMENV_MOS_CORNERS[@]}"; do
     for vdd in "${SIMENV_VDDS[@]}"; do
       for code in "${TRIM_CODES[@]}"; do
         set -- ${code}
-        tag="dc_${corner}_T${temp}_V${vdd}_C$1$2"; tag="${tag//./p}"; tag="${tag//-/m}"
+        tag="dc_${corner}_T${temp}_V${vdd}_C$1$2"; tag=$(simenv_mktag "${tag}")
         echo "${corner} ${temp} ${vdd} $1 $2 ${WORK}/${tag}.sum ${WORK}/${tag}.cur" >>"${DCJOBS}"
       done
       for vctrl in "${VLO}" "${VMID}" "${VHI}"; do
-        tag="sw_${corner}_T${temp}_V${vdd}_X${vctrl}"; tag="${tag//./p}"; tag="${tag//-/m}"
+        tag="sw_${corner}_T${temp}_V${vdd}_X${vctrl}"; tag=$(simenv_mktag "${tag}")
         echo "${corner} ${temp} ${vdd} ${vctrl} ${WORK}/${tag}.sum" >>"${SWJOBS}"
       done
     done
@@ -282,12 +282,12 @@ cp "${NETLIST}" "${SNAPDIR}/${RID}.spice"
 SHA=$(simenv_sha256 "${SNAPDIR}/${RID}.spice")
 
 while read -r corner temp vdd b1 b0 _rest; do
-  tag="dc_${corner}_T${temp}_V${vdd}_C${b1}${b0}"; tag="${tag//./p}"; tag="${tag//-/m}"
+  tag="dc_${corner}_T${temp}_V${vdd}_C${b1}${b0}"; tag=$(simenv_mktag "${tag}")
   cid="dc_$(simenv_corner_id "${corner}" "${temp}" "${vdd}")_code${b1}${b0}"
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" "${cid}"
 done <"${DCJOBS}"
 while read -r corner temp vdd vctrl _rest; do
-  tag="sw_${corner}_T${temp}_V${vdd}_X${vctrl}"; tag="${tag//./p}"; tag="${tag//-/m}"
+  tag="sw_${corner}_T${temp}_V${vdd}_X${vctrl}"; tag=$(simenv_mktag "${tag}")
   cid="sw_$(simenv_corner_id "${corner}" "${temp}" "${vdd}")_vctrl${vctrl}"
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" "${cid}"
 done <"${SWJOBS}"

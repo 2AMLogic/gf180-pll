@@ -79,7 +79,7 @@ run_z() {
   local rsec="$1" msec="$2" xsec="$3" temp="$4" outcsv="$5"
   local bundle="r$(short "${rsec}")-m$(short "${msec}")-x$(short "${xsec}")"
   local tag="z_${bundle}_T${temp}"
-  tag="${tag//./p}"; tag="${tag//-/m}"
+  tag=$(simenv_mktag "${tag}")
 
   simenv_stage_netlist "${WORK}/${tag}" "${DUT}"
   simenv_run_deck "${DECK_Z}" "${WORK}" "${tag}" \
@@ -155,7 +155,7 @@ for rsec in "${SECTIONS[@]}"; do
     for xsec in "${SECTIONS[@]}"; do
       for temp in "${SIMENV_TEMPS[@]}"; do
         bundle="r$(short "${rsec}")-m$(short "${msec}")-x$(short "${xsec}")"
-        tag="z_${bundle}_T${temp}"; tag="${tag//./p}"; tag="${tag//-/m}"
+        tag="z_${bundle}_T${temp}"; tag=$(simenv_mktag "${tag}")
         echo "${rsec} ${msec} ${xsec} ${temp} ${WORK}/${tag}.csv" >>"${ZJOBS}"
       done
     done
@@ -228,7 +228,7 @@ SHA=$(simenv_sha256 "${SNAPDIR}/${RID}.spice")
 echo "loop-dynamics: archiving ${NZ} filter + ${NT} cross-check corner logs ..."
 while read -r rsec msec xsec temp _rest; do
   bundle="r$(short "${rsec}")-m$(short "${msec}")-x$(short "${xsec}")"
-  tag="z_${bundle}_T${temp}"; tag="${tag//./p}"; tag="${tag//-/m}"
+  tag="z_${bundle}_T${temp}"; tag=$(simenv_mktag "${tag}")
   cid="z_${bundle}_${temp}c"
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" "${cid}"
 done <"${ZJOBS}"

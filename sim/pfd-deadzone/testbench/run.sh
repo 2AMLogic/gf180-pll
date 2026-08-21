@@ -78,8 +78,7 @@ SUMMARY_HEADER="process,temp_c,vdd_v,dphi_s,qnet_c,width_up_s,width_dn_s"
 run_one() {
   local corner="$1" temp="$2" vdd="$3" dphi="$4" sfile="$5"
   local tag="${corner}_T${temp}_V${vdd}_D${dphi}"
-  tag="${tag//./p}"
-  tag="${tag//-/m}"
+  tag=$(simenv_mktag "${tag}")
 
   # The deck `.include`s "dut.spice" relative to its run directory: `.include`
   # takes no parameter substitution, so the xschem export is PLACED next to the
@@ -167,7 +166,7 @@ for corner in "${SIMENV_MOS_CORNERS[@]}"; do
     for vdd in "${SIMENV_VDDS[@]}"; do
       for dphi in "${DPHI_POINTS[@]}"; do
         tag="${corner}_T${temp}_V${vdd}_D${dphi}"
-        tag="${tag//./p}"; tag="${tag//-/m}"
+        tag=$(simenv_mktag "${tag}")
         echo "${corner} ${temp} ${vdd} ${dphi} ${WORK}/${tag}.sum" >>"${JOBLIST}"
       done
     done
@@ -206,7 +205,7 @@ SHA=$(simenv_sha256 "${SNAPDIR}/${RID}.spice")
 
 while read -r corner temp vdd dphi _rest; do
   tag="${corner}_T${temp}_V${vdd}_D${dphi}"
-  tag="${tag//./p}"; tag="${tag//-/m}"
+  tag=$(simenv_mktag "${tag}")
   cid="$(simenv_corner_id "${corner}" "${temp}" "${vdd}")_dphi${dphi}"
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" "${cid}"
 done <"${JOBLIST}"
