@@ -522,6 +522,46 @@ simenv_run_deck_retried() {
   return "${rc}"
 }
 
+# Cache-aware wrapper around simenv_run_deck (#192). Distinct from
+# simenv_run_deck_retried above: that one retries a transient host-level
+# ngspice SIGKILL; this one skips a re-run entirely when a prior run's deck
+# and full argument signature are unchanged on disk. Sweeps here are hours
+# long on a shared machine, so a resumable runner is worth having.
+#
+# simenv_run_deck_soft <deck> <workdir> <tag> [args...]
+#
+# Reuse a completed run only if BOTH the deck it was produced from is
+# unchanged (mtime) and the exact argument list -- corner, temperature, every
+# injected .param -- is identical (signature file). Caching on the deck alone
+# would silently reuse a run taken at different parameters, which is
+# precisely the kind of quiet wrong number sim/README.md exists to prevent.
+# SIM_FORCE=1 forces a cold run regardless.
+#
+# Success is "did the transient finish" (a `Total analysis time` line in the
+# ngspice log), not "was the log clean" -- callers use this instead of
+# simenv_run_deck/simenv_run_deck_retried specifically where a FAILED `.meas`
+# is itself the expected, recorded result of a corner rather than an error.
+#
+# (Hoisted from byte-identical local copies in sim/divider-ratio and
+# sim/lock-detector's testbench/run.sh -- #192.)
+simenv_run_deck_soft() {
+  local deck="$1" workdir="$2" tag="$3"
+  local rundir="${workdir}/${tag}" log="${workdir}/${tag}/ngspice.log"
+  local sig="$*"
+  if [ -z "${SIM_FORCE:-}" ] && [ -f "${log}" ] && [ "${log}" -nt "${deck}" ] \
+     && [ "$(cat "${rundir}/.sig" 2>/dev/null)" = "${sig}" ] \
+     && grep -q "Total analysis time" "${log}" 2>/dev/null; then
+    return 0
+  fi
+  simenv_run_deck "$@" >/dev/null 2>&1 || true
+  if grep -q "Total analysis time" "${log}" 2>/dev/null; then
+    printf '%s' "${sig}" >"${rundir}/.sig"
+    return 0
+  fi
+  echo "ERROR: ngspice did not complete a transient for tag=${tag} (see ${log})" >&2
+  return 1
+}
+
 # Corner ID per sim/README.md: <corner-bundle>_<temp>c_<supply>v, supply always
 # written to two decimals so filenames sort lexically in supply order.
 # simenv_corner_id <bundle> <temp_c> <supply_v>

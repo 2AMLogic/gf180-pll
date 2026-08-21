@@ -100,29 +100,11 @@ build_duts() {
 # that their capture measurement fails, and a divider corner that mis-divides
 # must be RECORDED as a FAIL row rather than aborting the whole sweep. So the
 # completion test here is "did the transient finish", not "was the log clean".
+# Caching behavior (mtime + argument-signature reuse, SIM_FORCE=1 override)
+# lives in sim/lib/simenv.sh's simenv_run_deck_soft (#192); this is a thin
+# testbench-local name for readability at the call sites below.
 run_deck_soft() {
-  local deck="$1" workdir="$2" tag="$3"
-  local rundir="${workdir}/${tag}" log="${workdir}/${tag}/ngspice.log"
-  local sig="$*"
-  # Reuse a completed run only if BOTH the deck it was produced from is
-  # unchanged (mtime) and the exact argument list -- corner, temperature, every
-  # injected .param -- is identical (signature file). Sweeps here are hours long
-  # on a shared machine, so a resumable runner is worth having; caching on the
-  # deck alone would silently reuse a run taken at different parameters, which
-  # is precisely the kind of quiet wrong number sim/README.md exists to prevent.
-  # SIM_FORCE=1 forces a cold run regardless.
-  if [ -z "${SIM_FORCE:-}" ] && [ -f "${log}" ] && [ "${log}" -nt "${deck}" ] \
-     && [ "$(cat "${rundir}/.sig" 2>/dev/null)" = "${sig}" ] \
-     && grep -q "Total analysis time" "${log}" 2>/dev/null; then
-    return 0
-  fi
-  simenv_run_deck "$@" >/dev/null 2>&1 || true
-  if grep -q "Total analysis time" "${log}" 2>/dev/null; then
-    printf '%s' "${sig}" >"${rundir}/.sig"
-    return 0
-  fi
-  echo "ERROR: ngspice did not complete a transient for tag=${tag} (see ${log})" >&2
-  return 1
+  simenv_run_deck_soft "$@"
 }
 
 # ===========================================================================
