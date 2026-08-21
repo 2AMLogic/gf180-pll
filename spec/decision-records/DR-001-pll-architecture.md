@@ -521,7 +521,7 @@ derived, not spec'd, until the flow demonstrably produces it.
 
 Links only. Nothing from this repository — spec values, results, design
 detail — appears in, or has been contributed to, any of these public trackers
-(CLAUDE.md, Tier 2 confidentiality). These are citations, one-directional.
+(CLAUDE.md). These are citations, one-directional.
 
 - **`ejfogleman/sky130_ejf_ip__pll_dev`** —
   https://github.com/ejfogleman/sky130_ejf_ip__pll_dev — the closest and most

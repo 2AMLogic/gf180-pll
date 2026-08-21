@@ -454,7 +454,8 @@ No row fails the corner-binding check outright.
 
 **Confidentiality sub-question** (per #1's acceptance criteria — addressed,
 not silently dropped, and deliberately **not resolved here** as a business
-call): `spec/pll.md`'s own Confidentiality section rests on this repo's
+call; *resolved by the operator 2026-08-21: the numeric values are public-safe,
+and the stale Tier-2 prose in `spec/pll.md`/DR-001 was removed — #116*): `spec/pll.md`'s own Confidentiality section rests on this repo's
 CLAUDE.md carrying a "Tier 2" restriction. As of this review, **the current
 committed `CLAUDE.md` carries no Tier 2 or confidentiality language at
 all** (`git grep -i 'tier 2\|confidential' CLAUDE.md` returns nothing) —
