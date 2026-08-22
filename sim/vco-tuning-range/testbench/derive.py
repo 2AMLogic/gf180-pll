@@ -27,19 +27,14 @@ by the migration.
 
 from __future__ import annotations
 
-import importlib.util
 import sys
 from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from harness.derived import DerivedTable  # noqa: E402
+from harness.derived import DerivedTable, load_module  # noqa: E402
 
-_spec = importlib.util.spec_from_file_location(
-    "_vco_tuning_range_numeric", Path(__file__).resolve().parent / "_numeric.py"
-)
-_numeric = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_numeric)
+_numeric = load_module(Path(__file__).resolve().parent / "_numeric.py")
 mhz = _numeric.mhz
 corner_name = _numeric.corner_name
 

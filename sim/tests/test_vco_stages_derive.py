@@ -18,7 +18,6 @@ ngspice, no network.
 from __future__ import annotations
 
 import csv
-import importlib.util
 import sys
 import unittest
 from pathlib import Path
@@ -29,16 +28,11 @@ SUPERSEDED_RECORD = "20260731-180254-0a12e6c"
 STAGE_CSV = SIM_DIR / "vco-tuning-range" / "corners" / SUPERSEDED_RECORD / "stage_count.csv"
 
 sys.path.insert(0, str(SIM_DIR))
-from harness.derived import PointView, RunView  # noqa: E402
+from harness.derived import PointView, RunView, load_module  # noqa: E402
 
 
 def _load_derive():
-    spec = importlib.util.spec_from_file_location(
-        "_vco_stages_derive_under_test", TESTBENCH / "derive_stages.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_module(TESTBENCH / "derive_stages.py")
 
 
 def _run_view_from_csv(derive, path: Path) -> RunView:
