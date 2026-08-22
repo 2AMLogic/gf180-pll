@@ -47,18 +47,6 @@ class LvsResult:
             return f"LVS mismatch: {self.topcell} ({self.variant}) layout != schematic"
         return f"LVS error: {self.message}"
 
-    def as_dict(self) -> dict:
-        return {
-            "check": "lvs",
-            "status": self.status,
-            "topcell": self.topcell,
-            "layout": str(self.layout),
-            "netlist": str(self.netlist),
-            "variant": self.variant,
-            "extracted_netlist": str(self.extracted_netlist) if self.extracted_netlist else None,
-            "message": self.message,
-        }
-
 
 def run(
     layout: Path,
