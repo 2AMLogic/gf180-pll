@@ -96,13 +96,12 @@ def run(
     ]
 
     try:
-        completed = subprocess.run(
+        completed, log = env_mod.run_pv_command(
             command,
-            capture_output=True,
-            text=True,
+            cwd=tools.lvs_dir,
             timeout=timeout,
-            cwd=str(tools.lvs_dir),
             env=tools.subprocess_env(),
+            log_path=run_dir / "lvs.stdout.log",
         )
     except subprocess.TimeoutExpired as exc:  # pragma: no cover - operational
         return LvsResult(
@@ -114,9 +113,6 @@ def run(
             command=command,
             message=f"LVS run timed out after {timeout}s: {exc}",
         )
-
-    log = (completed.stdout or "") + (completed.stderr or "")
-    (run_dir / "lvs.stdout.log").write_text(log)
 
     extracted = sorted(run_dir.glob("*.cir"))
     lvs_dbs = sorted(run_dir.glob("*.lvsdb"))

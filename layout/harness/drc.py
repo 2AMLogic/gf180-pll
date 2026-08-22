@@ -131,13 +131,12 @@ def run(
         command.append("--no_offgrid")
 
     try:
-        completed = subprocess.run(
+        completed, log = env_mod.run_pv_command(
             command,
-            capture_output=True,
-            text=True,
+            cwd=tools.drc_dir,
             timeout=timeout,
-            cwd=str(tools.drc_dir),
             env=tools.subprocess_env(),
+            log_path=run_dir / "drc.stdout.log",
         )
     except subprocess.TimeoutExpired as exc:  # pragma: no cover - operational
         return DrcResult(
@@ -148,9 +147,6 @@ def run(
             command=command,
             message=f"DRC run timed out after {timeout}s: {exc}",
         )
-
-    log = (completed.stdout or "") + (completed.stderr or "")
-    (run_dir / "drc.stdout.log").write_text(log)
 
     report_dbs = sorted(run_dir.glob("*.lyrdb"))
     report_db = report_dbs[0] if report_dbs else None

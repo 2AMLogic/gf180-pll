@@ -260,6 +260,38 @@ class PvTools:
         return record
 
 
+def run_pv_command(
+    command: list,
+    *,
+    cwd: Path,
+    timeout: int,
+    env: dict,
+    log_path: Path,
+) -> tuple[subprocess.CompletedProcess, str]:
+    """Run a PV-deck subprocess, capture combined stdout+stderr, and persist the log.
+
+    Shared by ``drc.run()`` and ``lvs.run()`` -- the command list, cwd, timeout,
+    environment, and log destination are the only things that differ between
+    the two decks; everything else about invoking and logging a PV subprocess
+    is identical.
+
+    Raises ``subprocess.TimeoutExpired`` on timeout; the caller builds its own
+    per-deck error ``Result`` from that, since the message text and dataclass
+    differ between DRC and LVS.
+    """
+    completed = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        cwd=str(cwd),
+        env=env,
+    )
+    log = (completed.stdout or "") + (completed.stderr or "")
+    log_path.write_text(log)
+    return completed, log
+
+
 def find_tools(variant: str | None = None) -> PvTools:
     """Locate the whole toolchain, or raise ``PdkNotFound`` / ``ToolNotFound``."""
     pdk = find_pdk(variant)
