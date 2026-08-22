@@ -319,16 +319,6 @@ def build_derived_tables(tb, results, join_args: list[str]) -> list:
     return derived_mod.derive_run_tables(spec, view)
 
 
-def _fmt(value) -> str:
-    if value is None:
-        return "n/a"
-    if isinstance(value, float):
-        if value != 0 and (abs(value) < 1e-3 or abs(value) >= 1e5):
-            return f"{value:.6e}"
-        return f"{value:.6g}"
-    return str(value)
-
-
 def run(args: argparse.Namespace) -> int:
     tb_path = _resolve_tb_path(args.testbench)
     tb = tb_mod.load(tb_path)
@@ -425,9 +415,9 @@ def run(args: argparse.Namespace) -> int:
         print(f"pdk       : {pdk.variant} @ {pdk.version}  ({pdk.path})")
         print(f"ngspice   : {ngspice}")
         print(f"corners   : {', '.join(c.name for c in corner_list)}")
-        print(f"temps (C) : {', '.join(_fmt(t) for t in temperatures)}")
-        print(f"supply (V): {', '.join(_fmt(v) for v in supplies)} "
-              f"(nominal {_fmt(nominal)} +/-{tolerance * 100:g}%)")
+        print(f"temps (C) : {', '.join(report._fmt(t) for t in temperatures)}")
+        print(f"supply (V): {', '.join(report._fmt(v) for v in supplies)} "
+              f"(nominal {report._fmt(nominal)} +/-{tolerance * 100:g}%)")
         for axis in conformance.get("axes", []):
             print(f"axis {axis['name']:<6}: {', '.join(axis['ran'])}")
         if tb.is_phased:
@@ -456,7 +446,7 @@ def run(args: argparse.Namespace) -> int:
         detail = ""
         if result.status == "ok":
             detail = "  ".join(
-                f"{name}={_fmt(result.measurements[name])}" for name in tb.measure_names
+                f"{name}={report._fmt(result.measurements[name])}" for name in tb.measure_names
                 if name in result.measurements
             )
         else:
@@ -519,14 +509,14 @@ def run(args: argparse.Namespace) -> int:
             print(f"  {name:<16}{label:>16}")
             continue
         print(
-            f"  {name:<16}{_fmt(stats['min']):>16}{_fmt(stats['max']):>16}"
-            f"{_fmt(stats['mean']):>16}{_fmt(stats['spread_pct']):>12}"
+            f"  {name:<16}{report._fmt(stats['min']):>16}{report._fmt(stats['max']):>16}"
+            f"{report._fmt(stats['mean']):>16}{report._fmt(stats['spread_pct']):>12}"
         )
 
     for failure in record["checks"]["failures"]:
         print(
-            f"  CHECK FAIL {failure['measurement']} {failure['kind']}={_fmt(failure['limit'])} "
-            f"got {_fmt(failure['value'])} at {failure['at']}"
+            f"  CHECK FAIL {failure['measurement']} {failure['kind']}={report._fmt(failure['limit'])} "
+            f"got {report._fmt(failure['value'])} at {failure['at']}"
         )
 
     # A declared raw file the deck never wrote is data, not an error -- but it
