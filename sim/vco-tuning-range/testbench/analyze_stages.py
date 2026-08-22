@@ -191,7 +191,6 @@ def main():
 
     a("  ### 4. Conclusion")
     a("")
-    hi5 = verdicts["5"][2] if "5" in verdicts else 0
     a("  | Stages | starts everywhere | reaches 200 MHz slow | reaches 10 MHz fast | energy/cycle | worst swing | verdict |")
     a("  |---|---|---|---|---|---|---|")
     for n in ns:
