@@ -34,7 +34,6 @@ ngspice, no network.
 from __future__ import annotations
 
 import csv
-import importlib.util
 import sys
 import unittest
 from pathlib import Path
@@ -46,16 +45,11 @@ SUPERSEDED_RECORD = "20260731-175947-0a12e6c"
 SWEEP_CSV = SIM_DIR / "vco-tuning-range" / "corners" / SUPERSEDED_RECORD / "vco_tuning.csv"
 
 sys.path.insert(0, str(SIM_DIR))
-from harness.derived import PointView, RunView  # noqa: E402
+from harness.derived import PointView, RunView, load_module  # noqa: E402
 
 
 def _load_derive():
-    spec = importlib.util.spec_from_file_location(
-        "_vco_tuning_derive_under_test", TESTBENCH / "derive.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_module(TESTBENCH / "derive.py")
 
 
 def _read_sweep(path: Path):

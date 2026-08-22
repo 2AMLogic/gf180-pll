@@ -38,7 +38,6 @@ Runs in the harness unit-test suite: no PDK, no ngspice, no network.
 from __future__ import annotations
 
 import csv
-import importlib.util
 import math
 import sys
 import unittest
@@ -54,7 +53,7 @@ PUSH_CSV = CORNERS / "supply_pushing.csv"
 JIT_CSV = CORNERS / "supply_jitter.csv"
 
 sys.path.insert(0, str(SIM_DIR))
-from harness.derived import PointView, RawFile, RunView, read_join_csv  # noqa: E402
+from harness.derived import PointView, RawFile, RunView, load_module, read_join_csv  # noqa: E402
 
 #: The seven supply points the pushing deck sweeps internally, as the manifest
 #: spells them.
@@ -74,12 +73,7 @@ JIT_MEASURES = (
 
 
 def _load_derive():
-    spec = importlib.util.spec_from_file_location(
-        "_vco_supply_derive_under_test", TESTBENCH / "derive_supply.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_module(TESTBENCH / "derive_supply.py")
 
 
 def _read(path):

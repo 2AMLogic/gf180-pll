@@ -31,7 +31,6 @@ What each test pins:
 
 from __future__ import annotations
 
-import importlib.util
 import math
 import random
 import sys
@@ -42,15 +41,11 @@ SIM_DIR = Path(__file__).resolve().parents[1]
 TESTBENCH = SIM_DIR / "reference-spur" / "testbench"
 
 sys.path.insert(0, str(SIM_DIR))
+from harness.derived import load_module  # noqa: E402
 
 
 def _load_derive():
-    spec = importlib.util.spec_from_file_location(
-        "_reference_spur_derive_under_test", TESTBENCH / "derive.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_module(TESTBENCH / "derive.py")
 
 
 D = _load_derive()
