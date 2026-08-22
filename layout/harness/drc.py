@@ -58,19 +58,6 @@ class DrcResult:
             )
         return f"DRC error: {self.message}"
 
-    def as_dict(self) -> dict:
-        return {
-            "check": "drc",
-            "status": self.status,
-            "topcell": self.topcell,
-            "layout": str(self.layout),
-            "variant": self.variant,
-            "violation_count": self.violation_count,
-            "rule_counts": dict(sorted(self.rule_counts.items())),
-            "report_db": str(self.report_db) if self.report_db else None,
-            "message": self.message,
-        }
-
 
 def parse_report_db(path: Path) -> tuple[int, dict]:
     """Count violations per rule id in a KLayout ``.lyrdb`` report database."""
