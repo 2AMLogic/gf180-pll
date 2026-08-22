@@ -344,6 +344,18 @@ class DerivedSpec:
         return getattr(self.module(), TABLES_HOOK, None)
 
 
+def fmt_scalar(value, spec: str = "%.6g") -> str:
+    """Format one scalar for a derived table cell, ``""`` when not measured.
+
+    Shared by campaign ``derive.py`` modules that build ``DerivedTable`` rows
+    from ``PointView``/``RunView`` values -- ``None`` (not measured) and a
+    real value are different facts (see :meth:`PointView.get`), so this keeps
+    that distinction all the way into the rendered cell instead of coercing a
+    missing measurement into ``"0"`` or an empty numeric format error.
+    """
+    return "" if value is None else spec % value
+
+
 def load_module(path: Path):
     """Import a campaign's ``derive.py`` by path, without touching sys.path.
 

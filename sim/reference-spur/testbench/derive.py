@@ -51,7 +51,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from harness.derived import DerivedTable  # noqa: E402
+from harness.derived import DerivedTable, fmt_scalar  # noqa: E402
 
 #: Uniform resampling density, samples per reference period. The carrier sits
 #: at 6 * f_ref here, so this is ~85 samples per output period -- far above
@@ -381,10 +381,6 @@ def derive_point(point):
 
 
 # ------------------------------------------------------------------ per run
-def _fmt(value, spec="%.4g"):
-    return "" if value is None else spec % value
-
-
 def derive_tables(run):
     rows = []
     worst_point = None
@@ -401,24 +397,24 @@ def derive_tables(run):
             (
                 pt.corner_id,
                 pt.corner,
-                _fmt(pt.temp_c, "%g"),
-                _fmt(pt.vdd, "%.2f"),
+                fmt_scalar(pt.temp_c, "%g"),
+                fmt_scalar(pt.vdd, "%.2f"),
                 pt.params.get("vstart", ""),
-                _fmt(pt.get("fout"), "%.6g"),
-                _fmt(pt.get("carrier_v"), "%.4f"),
-                _fmt(pt.get("spur_lsb_dbc"), "%.2f"),
-                _fmt(pt.get("spur_usb_dbc"), "%.2f"),
-                _fmt(spur, "%.2f"),
-                _fmt(pt.get("spur_dbc_200m"), "%.2f"),
-                _fmt(pt.get("spur_dbc_fit"), "%.2f"),
-                _fmt(pt.get("spur_fit_r2"), "%.3f"),
-                _fmt(pt.get("spur_tie_dbc"), "%.2f"),
-                _fmt(pt.get("spur_dbc_first"), "%.2f"),
-                _fmt(pt.get("tie_pk_ps"), "%.3f"),
-                _fmt(pt.get("vctrl_ripple_mv"), "%.3f"),
-                _fmt(pt.get("drift_q_fc"), "%.3f"),
-                _fmt(pt.get("dt_int_mean"), "%.3e"),
-                _fmt(pt.get("ferr"), "%.2e"),
+                fmt_scalar(pt.get("fout"), "%.6g"),
+                fmt_scalar(pt.get("carrier_v"), "%.4f"),
+                fmt_scalar(pt.get("spur_lsb_dbc"), "%.2f"),
+                fmt_scalar(pt.get("spur_usb_dbc"), "%.2f"),
+                fmt_scalar(spur, "%.2f"),
+                fmt_scalar(pt.get("spur_dbc_200m"), "%.2f"),
+                fmt_scalar(pt.get("spur_dbc_fit"), "%.2f"),
+                fmt_scalar(pt.get("spur_fit_r2"), "%.3f"),
+                fmt_scalar(pt.get("spur_tie_dbc"), "%.2f"),
+                fmt_scalar(pt.get("spur_dbc_first"), "%.2f"),
+                fmt_scalar(pt.get("tie_pk_ps"), "%.3f"),
+                fmt_scalar(pt.get("vctrl_ripple_mv"), "%.3f"),
+                fmt_scalar(pt.get("drift_q_fc"), "%.3f"),
+                fmt_scalar(pt.get("dt_int_mean"), "%.3e"),
+                fmt_scalar(pt.get("ferr"), "%.2e"),
                 verdict,
             )
         )
@@ -491,7 +487,7 @@ def derive_tables(run):
                         elif k and k % nratio == 0:
                             role = "harmonic of f_out"
                         spec_rows.append(
-                            (k, "%.6g" % (k * fref), "%.6e" % a, _fmt(dbc, "%.2f"), role)
+                            (k, "%.6g" % (k * fref), "%.6e" % a, fmt_scalar(dbc, "%.2f"), role)
                         )
     where = worst_point.corner_id if worst_point is not None else "no point produced one"
     tables.append(
