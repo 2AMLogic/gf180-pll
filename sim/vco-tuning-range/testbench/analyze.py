@@ -27,17 +27,23 @@ Usage:  analyze.py <vco_tuning.csv> <outdir>
 """
 
 import csv
+import importlib.util
 import sys
 from collections import defaultdict
+from pathlib import Path
 
 F_LO = 10e6
 F_HI = 200e6
 KVCO_MAX = 150e6  # Hz/V
 KVCO_OVER_F_INTENT = 0.7  # DR-001 design-intent Kvco ~ 0.7 * f_out per volt
 
-
-def mhz(x):
-    return "%.4g" % (x / 1e6)
+_spec = importlib.util.spec_from_file_location(
+    "_vco_tuning_range_numeric", Path(__file__).resolve().parent / "_numeric.py"
+)
+_numeric = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_numeric)
+mhz = _numeric.mhz
+corner_name = _numeric.corner_name
 
 
 def read_rows(path):
@@ -60,10 +66,6 @@ def read_rows(path):
             }
         )
     return out
-
-
-def corner_name(c):
-    return "%s/%gC/%.2fV" % (c[0], c[1], c[2])
 
 
 def local_kvco(vs, fs):

@@ -9,8 +9,17 @@ Usage:  analyze_supply.py <supply_pushing.csv> <supply_jitter.csv>
 """
 
 import csv
+import importlib.util
 import sys
 from collections import defaultdict
+from pathlib import Path
+
+_spec = importlib.util.spec_from_file_location(
+    "_vco_tuning_range_numeric", Path(__file__).resolve().parent / "_numeric.py"
+)
+_numeric = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_numeric)
+linfit = _numeric.linfit
 
 
 def rd(path):
@@ -21,15 +30,6 @@ def stats(xs):
     xs = sorted(xs)
     n = len(xs)
     return xs[0], xs[n // 2], xs[-1]
-
-
-def linfit(xs, ys):
-    n = len(xs)
-    mx, my = sum(xs) / n, sum(ys) / n
-    sxx = sum((x - mx) ** 2 for x in xs)
-    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
-    m = sxy / sxx
-    return m, my - m * mx
 
 
 def ts(x):
