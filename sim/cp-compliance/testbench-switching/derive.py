@@ -8,7 +8,7 @@ reported but no single `.meas` produced, plus the `cp_switch.csv` table that
 record cited.
 """
 
-from harness.derived import DerivedTable
+from harness.derived import DerivedTable, fmt_scalar
 
 
 def derive_point(point):
@@ -20,10 +20,6 @@ def derive_point(point):
     return {"ton_skew": ton_up - ton_dn}
 
 
-def _fmt(value, spec="%.6g"):
-    return "" if value is None else spec % value
-
-
 def derive_tables(run):
     rows = []
     for point in run.points:
@@ -33,17 +29,17 @@ def derive_tables(run):
                 f"{point.temp_c:g}",
                 f"{point.vdd:.2f}",
                 point.params.get("vctrl", ""),
-                _fmt(point.get("iup_ss")),
-                _fmt(point.get("idn_ss")),
-                _fmt(point.get("qup")),
-                _fmt(point.get("qdn")),
-                _fmt(point.get("wup")),
-                _fmt(point.get("wdn")),
-                _fmt(point.get("wskew")),
-                _fmt(point.get("ton_up")),
-                _fmt(point.get("ton_dn")),
-                _fmt(point.get("toff_up")),
-                _fmt(point.get("toff_dn")),
+                fmt_scalar(point.get("iup_ss")),
+                fmt_scalar(point.get("idn_ss")),
+                fmt_scalar(point.get("qup")),
+                fmt_scalar(point.get("qdn")),
+                fmt_scalar(point.get("wup")),
+                fmt_scalar(point.get("wdn")),
+                fmt_scalar(point.get("wskew")),
+                fmt_scalar(point.get("ton_up")),
+                fmt_scalar(point.get("ton_dn")),
+                fmt_scalar(point.get("toff_up")),
+                fmt_scalar(point.get("toff_dn")),
             )
         )
 

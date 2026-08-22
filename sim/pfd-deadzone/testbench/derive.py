@@ -25,7 +25,7 @@ column rather than folding the dead-zone question into the record's overall
 pass/fail.
 """
 
-from harness.derived import DerivedTable
+from harness.derived import DerivedTable, fmt_scalar
 
 #: The dphi axis, as the manifest declares it: (sweep point id, the label the
 #: pre-migration CSV used, the offset in seconds).
@@ -84,10 +84,6 @@ def _corner_key(point):
     return f"{point.corner}/{point.temp_c:g}C/{point.vdd:.2f}V"
 
 
-def _fmt(value, spec="%.6g"):
-    return "" if value is None else spec % value
-
-
 def derive_tables(run):
     """The two CSVs the pre-migration record cited, rebuilt from the same data."""
     label_of = {pid: label for pid, label, _ in DPHI_POINTS}
@@ -110,9 +106,9 @@ def derive_tables(run):
                     f"{point.temp_c:g}",
                     f"{point.vdd:.2f}",
                     label_of.get(point_id, point_id),
-                    _fmt(point.get("qnet")),
-                    _fmt(point.get("width_up")),
-                    _fmt(point.get("width_dn")),
+                    fmt_scalar(point.get("qnet")),
+                    fmt_scalar(point.get("width_up")),
+                    fmt_scalar(point.get("width_dn")),
                 )
             )
 
@@ -144,12 +140,12 @@ def derive_tables(run):
         verdict_rows.append(
             (
                 key,
-                _fmt(kd_near),
-                _fmt(kd_wide),
-                _fmt(ratio, "%.4f"),
-                _fmt(w_min),
-                _fmt(q_zero),
-                _fmt(t_offset),
+                fmt_scalar(kd_near),
+                fmt_scalar(kd_wide),
+                fmt_scalar(ratio, "%.4f"),
+                fmt_scalar(w_min),
+                fmt_scalar(q_zero),
+                fmt_scalar(t_offset),
                 "pass" if passed else "FAIL",
             )
         )

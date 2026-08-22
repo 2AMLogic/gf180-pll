@@ -19,7 +19,7 @@ what lets the manifest's `checks` gate the compliance verdict directly:
 code, which is exactly the pre-migration acceptance criterion.
 """
 
-from harness.derived import DerivedTable
+from harness.derived import DerivedTable, fmt_scalar
 
 #: trim-code sweep point id -> (b1, b0)
 CODE_BITS = {
@@ -160,10 +160,6 @@ def derive_point(point):
     return {k: data[k] for k in MEASURES if data.get(k) is not None}
 
 
-def _fmt(value, spec="%.6g"):
-    return "" if value is None else spec % value
-
-
 def derive_tables(run):
     dc_rows = []
     curve_rows = []
@@ -181,19 +177,19 @@ def derive_tables(run):
         dc_rows.append(
             (
                 process, temp, vdd, b1, b0, int(data["units"]),
-                _fmt(data["iup_lo_a"]), _fmt(data["idn_lo_a"]),
-                _fmt(data["iup_mid_a"]), _fmt(data["idn_mid_a"]),
-                _fmt(data["iup_hi_a"]), _fmt(data["idn_hi_a"]),
-                _fmt(data["mism_lo_pct"], "%.4f"),
-                _fmt(data["mism_mid_pct"], "%.4f"),
-                _fmt(data["mism_hi_pct"], "%.4f"),
-                _fmt(data["mism_absmax_pct"], "%.4f"),
-                _fmt(data["iup_flat_pct"], "%.4f"),
-                _fmt(data["idn_flat_pct"], "%.4f"),
-                _fmt(data["satcasc_lo_v"], "%.4f"), data["satcasc_lo_dev"],
-                _fmt(data["satcasc_hi_v"], "%.4f"), data["satcasc_hi_dev"],
-                _fmt(data["satmir_lo_v"], "%.4f"),
-                _fmt(data["satmir_hi_v"], "%.4f"),
+                fmt_scalar(data["iup_lo_a"]), fmt_scalar(data["idn_lo_a"]),
+                fmt_scalar(data["iup_mid_a"]), fmt_scalar(data["idn_mid_a"]),
+                fmt_scalar(data["iup_hi_a"]), fmt_scalar(data["idn_hi_a"]),
+                fmt_scalar(data["mism_lo_pct"], "%.4f"),
+                fmt_scalar(data["mism_mid_pct"], "%.4f"),
+                fmt_scalar(data["mism_hi_pct"], "%.4f"),
+                fmt_scalar(data["mism_absmax_pct"], "%.4f"),
+                fmt_scalar(data["iup_flat_pct"], "%.4f"),
+                fmt_scalar(data["idn_flat_pct"], "%.4f"),
+                fmt_scalar(data["satcasc_lo_v"], "%.4f"), data["satcasc_lo_dev"],
+                fmt_scalar(data["satcasc_hi_v"], "%.4f"), data["satcasc_hi_dev"],
+                fmt_scalar(data["satmir_lo_v"], "%.4f"),
+                fmt_scalar(data["satmir_hi_v"], "%.4f"),
                 "pass"
                 if (
                     data["satcasc_lo_v"] is not None
@@ -210,7 +206,7 @@ def derive_tables(run):
             curve_rows.append(
                 (
                     process, temp, vdd, b1, b0,
-                    "%.4f" % v[k], _fmt(i_up[k]), _fmt(i_dn[k]),
+                    "%.4f" % v[k], fmt_scalar(i_up[k]), fmt_scalar(i_dn[k]),
                 )
             )
 
@@ -281,7 +277,7 @@ def derive_tables(run):
             ),
             columns=("units", "icp_min_a", "icp_max_a"),
             rows=tuple(
-                (units, _fmt(lo), _fmt(hi)) for units, (lo, hi) in sorted(trim.items())
+                (units, fmt_scalar(lo), fmt_scalar(hi)) for units, (lo, hi) in sorted(trim.items())
             ),
         ),
     ]
