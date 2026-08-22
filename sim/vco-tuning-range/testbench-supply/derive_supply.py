@@ -31,6 +31,7 @@ closed form) through them without a simulator.
 
 from __future__ import annotations
 
+import importlib.util
 import math
 import sys
 from collections import defaultdict
@@ -38,6 +39,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness.derived import DerivedError, DerivedTable  # noqa: E402
+
+_spec = importlib.util.spec_from_file_location(
+    "_vco_tuning_range_numeric",
+    Path(__file__).resolve().parents[1] / "testbench" / "_numeric.py",
+)
+_numeric = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_numeric)
+crossings = _numeric.crossings
+stats = _numeric.stats
+linefit_residual = _numeric.linefit_residual
+linfit = _numeric.linfit
+mhz = _numeric.mhz
 
 #: The record this campaign supersedes -- the `derived.joins` inputs are its
 #: committed CSVs, and `migration_delta` is the comparison against them.
@@ -63,10 +76,6 @@ MIN_CROSSINGS = 8
 # --------------------------------------------------------------- formatting
 def g(x, digits=6):
     return "%.*g" % (digits, x) if x is not None else ""
-
-
-def mhz(x):
-    return "%.4g" % (x / 1e6)
 
 
 def ts(x):
@@ -115,38 +124,6 @@ def read_columns(path):
     raise DerivedError(
         "raw file %s has %d columns; expected 4 (wr_singlescale) or 6" % (path, ncol)
     )
-
-
-def crossings(t, y, th, tmin):
-    """Rising crossings of `th`, linearly interpolated, at times >= tmin."""
-    out = []
-    for i in range(len(y) - 1):
-        if y[i] < th <= y[i + 1] and t[i] >= tmin:
-            dy = y[i + 1] - y[i]
-            out.append(t[i] if dy == 0 else t[i] + (th - y[i]) * (t[i + 1] - t[i]) / dy)
-    return out
-
-
-def stats(xs):
-    """(mean, RMS deviation from the mean, peak-to-peak)."""
-    n = len(xs)
-    if n == 0:
-        return 0.0, 0.0, 0.0
-    m = sum(xs) / n
-    var = sum((x - m) ** 2 for x in xs) / n
-    return m, var**0.5, (max(xs) - min(xs))
-
-
-def linefit_residual(ts):
-    """Residual of crossing times against their least-squares line (TIE)."""
-    n = len(ts)
-    ks = list(range(n))
-    mk = sum(ks) / n
-    mt = sum(ts) / n
-    sxx = sum((k - mk) ** 2 for k in ks)
-    sxy = sum((k - mk) * (t - mt) for k, t in zip(ks, ts))
-    slope = sxy / sxx
-    return [t - (mt + slope * (k - mk)) for k, t in zip(ks, ts)], slope
 
 
 def channel_metrics(ts):
@@ -254,15 +231,6 @@ def extract_jitter(t, yq, ys, yr, vsup, tsettle, tstepon, astep, arip, frip,
 
 
 # ------------------------------------------------------- pushing reduction
-def linfit(xs, ys):
-    n = len(xs)
-    mx, my = sum(xs) / n, sum(ys) / n
-    sxx = sum((x - mx) ** 2 for x in xs)
-    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
-    m = sxy / sxx
-    return m, my - m * mx
-
-
 def reduce_pushing(vs, fs, currents, vnom=3.30):
     """Least-squares f(vdd) slope of one corner's seven-supply curve.
 

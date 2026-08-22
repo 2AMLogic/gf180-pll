@@ -27,12 +27,21 @@ by the migration.
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness.derived import DerivedTable  # noqa: E402
+
+_spec = importlib.util.spec_from_file_location(
+    "_vco_tuning_range_numeric", Path(__file__).resolve().parent / "_numeric.py"
+)
+_numeric = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_numeric)
+mhz = _numeric.mhz
+corner_name = _numeric.corner_name
 
 #: The control-voltage grid the deck instantiates, one VCO copy per entry.
 VCTRLS = (0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7)
@@ -45,14 +54,6 @@ KVCO_OVER_F_INTENT = 0.7  # DR-001 design-intent Kvco ~ 0.7 * f_out per volt
 #: Frequencies a configuration might be asked to hit, used by check 4a to ask
 #: "what Kvco does the *lowest band that reaches this target* present?".
 TARGETS = (10e6, 20e6, 35e6, 50e6, 75e6, 100e6, 140e6, 175e6, 200e6)
-
-
-def mhz(x):
-    return "%.4g" % (x / 1e6)
-
-
-def corner_name(c):
-    return "%s/%gC/%.2fV" % (c[0], c[1], c[2])
 
 
 def local_kvco(vs, fs):

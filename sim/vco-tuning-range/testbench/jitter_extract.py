@@ -29,7 +29,18 @@ Prints one CSV row (no header) on stdout; writes the full period/TIE sequences
 to <periods-csv-out> so a record can commit the sequence as evidence.
 """
 
+import importlib.util
 import sys
+from pathlib import Path
+
+_spec = importlib.util.spec_from_file_location(
+    "_vco_tuning_range_numeric", Path(__file__).resolve().parent / "_numeric.py"
+)
+_numeric = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_numeric)
+crossings = _numeric.crossings
+stats = _numeric.stats
+linefit_residual = _numeric.linefit_residual
 
 
 def read_columns(path):
@@ -54,37 +65,6 @@ def read_columns(path):
     if ncol == 6:  # default wrdata: (t,y1),(t,y2),(t,y3)
         return cols[0], [cols[1], cols[3], cols[5]]
     raise SystemExit("jitter_extract: unexpected column count %d" % ncol)
-
-
-def crossings(t, y, th, tmin):
-    """Rising crossings of `th`, linearly interpolated, at times >= tmin."""
-    out = []
-    for i in range(len(y) - 1):
-        if y[i] < th <= y[i + 1] and t[i] >= tmin:
-            dy = y[i + 1] - y[i]
-            out.append(t[i] if dy == 0 else t[i] + (th - y[i]) * (t[i + 1] - t[i]) / dy)
-    return out
-
-
-def stats(xs):
-    n = len(xs)
-    if n == 0:
-        return 0.0, 0.0, 0.0
-    m = sum(xs) / n
-    var = sum((x - m) ** 2 for x in xs) / n
-    return m, var ** 0.5, (max(xs) - min(xs))
-
-
-def linefit_residual(ts):
-    """Residual of crossing times against their least-squares line (TIE)."""
-    n = len(ts)
-    ks = list(range(n))
-    mk = sum(ks) / n
-    mt = sum(ts) / n
-    sxx = sum((k - mk) ** 2 for k in ks)
-    sxy = sum((k - mk) * (t - mt) for k, t in zip(ks, ts))
-    slope = sxy / sxx
-    return [t - (mt + slope * (k - mk)) for k, t in zip(ks, ts)], slope
 
 
 def channel_metrics(ts):
