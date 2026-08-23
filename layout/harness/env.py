@@ -247,18 +247,6 @@ class PvTools:
         env["PATH"] = os.pathsep.join(prefix + [env.get("PATH", "")])
         return env
 
-    def provenance(self) -> dict:
-        record = dict(self.pdk.provenance())
-        record.update(
-            {
-                "klayout_binary": str(self.klayout),
-                "klayout_version": self.klayout_version(),
-                "pv_python": str(self.python),
-                "variant_letter": self.variant_letter,
-            }
-        )
-        return record
-
 
 def run_pv_command(
     command: list,
