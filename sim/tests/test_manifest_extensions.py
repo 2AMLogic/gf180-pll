@@ -52,17 +52,8 @@ from unittest import mock
 SIM_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SIM_DIR))
 
-from _fixtures import ManifestFixture  # noqa: E402
+from _fixtures import ManifestFixture, fake_pdk  # noqa: E402
 from harness import cli, corners, derived, report, runner, testbench  # noqa: E402
-from harness.pdk import Pdk  # noqa: E402
-
-
-def fake_pdk(root: Path) -> Pdk:
-    (root / "libs.tech" / "ngspice").mkdir(parents=True, exist_ok=True)
-    (root / "libs.tech" / "ngspice" / "sm141064.ngspice").write_text("* fake\n")
-    (root / "libs.tech" / "ngspice" / "design.ngspice").write_text("* fake\n")
-    (root / "SOURCES").write_text("open_pdks deadbeef\n")
-    return Pdk(path=root, variant=root.name, source="test")
 
 
 # ===========================================================================
