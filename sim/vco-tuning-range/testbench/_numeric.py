@@ -66,6 +66,32 @@ def mhz(x):
     return "%.4g" % (x / 1e6)
 
 
+def channel_metrics(ts, min_crossings=8):
+    """One channel's period / TIE statistics, or None if too few crossings."""
+    if len(ts) < min_crossings:
+        return None
+    per = [ts[i + 1] - ts[i] for i in range(len(ts) - 1)]
+    pm, prms, ppp = stats(per)
+    c2c = [per[i + 1] - per[i] for i in range(len(per) - 1)]
+    _, c2crms, _ = stats(c2c)
+    tie, slope = linefit_residual(ts)
+    _, tierms, tiepp = stats(tie)
+    return {
+        "n": len(ts),
+        "f": (len(ts) - 1) / (ts[-1] - ts[0]),
+        "period": pm,
+        "tj_rms": prms,
+        "tj_pp": ppp,
+        "c2c_rms": c2crms,
+        "tie_rms": tierms,
+        "tie_pp": tiepp,
+        "slope": slope,
+        "tie": tie,
+        "per": per,
+        "ts": ts,
+    }
+
+
 def corner_name(c):
     """A (bundle, temp_c, vdd_v) triple, formatted the way every record cites it."""
     return "%s/%gC/%.2fV" % (c[0], c[1], c[2])
