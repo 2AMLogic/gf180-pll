@@ -41,6 +41,10 @@ _spec.loader.exec_module(_numeric)
 crossings = _numeric.crossings
 stats = _numeric.stats
 linefit_residual = _numeric.linefit_residual
+channel_metrics = _numeric.channel_metrics
+
+#: Minimum crossings a channel needs before its statistics mean anything.
+MIN_CROSSINGS = 8
 
 
 def read_columns(path):
@@ -67,31 +71,6 @@ def read_columns(path):
     raise SystemExit("jitter_extract: unexpected column count %d" % ncol)
 
 
-def channel_metrics(ts):
-    if len(ts) < 8:
-        return None
-    per = [ts[i + 1] - ts[i] for i in range(len(ts) - 1)]
-    pm, prms, ppp = stats(per)
-    c2c = [per[i + 1] - per[i] for i in range(len(per) - 1)]
-    _, c2crms, _ = stats(c2c)
-    tie, slope = linefit_residual(ts)
-    _, tierms, tiepp = stats(tie)
-    return {
-        "n": len(ts),
-        "f": (len(ts) - 1) / (ts[-1] - ts[0]),
-        "period": pm,
-        "tj_rms": prms,
-        "tj_pp": ppp,
-        "c2c_rms": c2crms,
-        "tie_rms": tierms,
-        "tie_pp": tiepp,
-        "slope": slope,
-        "tie": tie,
-        "per": per,
-        "ts": ts,
-    }
-
-
 def main():
     (dat, vsup, tsettle, tstepon, astep, arip, frip, pout) = sys.argv[1:9]
     vsup, tsettle, tstepon = float(vsup), float(tsettle), float(tstepon)
@@ -100,7 +79,7 @@ def main():
     t, ys = read_columns(dat)
     th = vsup / 2.0
     ch = [crossings(t, y, th, tsettle) for y in ys]
-    mq, ms, mr = (channel_metrics(c) for c in ch)
+    mq, ms, mr = (channel_metrics(c, MIN_CROSSINGS) for c in ch)
     if mq is None or ms is None or mr is None:
         raise SystemExit("jitter_extract: too few crossings (deck window too short)")
 

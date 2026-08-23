@@ -47,6 +47,7 @@ stats = _numeric.stats
 linefit_residual = _numeric.linefit_residual
 linfit = _numeric.linfit
 mhz = _numeric.mhz
+channel_metrics = _numeric.channel_metrics
 
 #: The record this campaign supersedes -- the `derived.joins` inputs are its
 #: committed CSVs, and `migration_delta` is the comparison against them.
@@ -122,32 +123,6 @@ def read_columns(path):
     )
 
 
-def channel_metrics(ts):
-    """One channel's period / TIE statistics, or None if too few crossings."""
-    if len(ts) < MIN_CROSSINGS:
-        return None
-    per = [ts[i + 1] - ts[i] for i in range(len(ts) - 1)]
-    pm, prms, ppp = stats(per)
-    c2c = [per[i + 1] - per[i] for i in range(len(per) - 1)]
-    _, c2crms, _ = stats(c2c)
-    tie, slope = linefit_residual(ts)
-    _, tierms, tiepp = stats(tie)
-    return {
-        "n": len(ts),
-        "f": (len(ts) - 1) / (ts[-1] - ts[0]),
-        "period": pm,
-        "tj_rms": prms,
-        "tj_pp": ppp,
-        "c2c_rms": c2crms,
-        "tie_rms": tierms,
-        "tie_pp": tiepp,
-        "slope": slope,
-        "tie": tie,
-        "per": per,
-        "ts": ts,
-    }
-
-
 def extract_jitter(t, yq, ys, yr, vsup, tsettle, tstepon, astep, arip, frip,
                    with_sequences=False):
     """Every jitter number the record reports, from one point's `jit.dat`.
@@ -162,7 +137,9 @@ def extract_jitter(t, yq, ys, yr, vsup, tsettle, tstepon, astep, arip, frip,
     data, recorded as *not measured*, not an error.
     """
     th = vsup / 2.0
-    mq, ms, mr = (channel_metrics(crossings(t, y, th, tsettle)) for y in (yq, ys, yr))
+    mq, ms, mr = (
+        channel_metrics(crossings(t, y, th, tsettle), MIN_CROSSINGS) for y in (yq, ys, yr)
+    )
     if mq is None or mr is None:
         return None
 
