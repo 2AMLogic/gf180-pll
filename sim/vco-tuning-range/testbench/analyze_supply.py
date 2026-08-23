@@ -8,7 +8,6 @@ number is computed here from the CSVs, never hand-typed.
 Usage:  analyze_supply.py <supply_pushing.csv> <supply_jitter.csv>
 """
 
-import csv
 import importlib.util
 import sys
 from collections import defaultdict
@@ -21,25 +20,19 @@ _numeric = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_numeric)
 linfit = _numeric.linfit
 ts = _numeric.ts
+read_csv_rows = _numeric.read_csv_rows
+cname = _numeric.corner_temp_name
 
 
-def rd(path):
-    return list(csv.DictReader(l for l in open(path) if not l.startswith("#")))
-
-
-def stats(xs):
+def min_med_max(xs):
     xs = sorted(xs)
     n = len(xs)
     return xs[0], xs[n // 2], xs[-1]
 
 
-def cname(b, t, v=None):
-    return "%s/%gC" % (b, float(t)) + ("" if v is None else "/%.2fV" % float(v))
-
-
 def main():
-    push = rd(sys.argv[1])
-    jit = rd(sys.argv[2])
+    push = read_csv_rows(sys.argv[1])
+    jit = read_csv_rows(sys.argv[2])
     o = []
     a = o.append
 
@@ -78,7 +71,7 @@ def main():
     a("  |---|---|---|---|---|")
     for band in sorted({r["key"][2] for r in rows}, key=int):
         sel = [r for r in rows if r["key"][2] == band]
-        lo, md, hi = stats([r["norm"] for r in sel])
+        lo, md, hi = min_med_max([r["norm"] for r in sel])
         worst = max(abs(r["norm"]) for r in sel)
         a(
             "  | B%s | %.1f %%/V | %.1f %%/V | %.1f %%/V | %.0f %% |"
@@ -115,8 +108,8 @@ def main():
     a("  and V_swing *is* the supply. Even with a perfectly supply-independent")
     a("  starving current, f therefore carries a -1/vdd term = **-30.3 %/V** at")
     a("  3.3 V. The measured median of %.1f %%/V is %.2fx that floor, i.e. the"
-      % (100 * stats([r["norm"] for r in rows])[1],
-         abs(stats([r["norm"] for r in rows])[1]) / 0.303))
+      % (100 * min_med_max([r["norm"] for r in rows])[1],
+         abs(min_med_max([r["norm"] for r in rows])[1]) / 0.303))
     a("  bias generator contributes only the remainder. Reducing supply pushing")
     a("  materially would require a regulated VCO rail or a swing-independent")
     a("  cell (a differential delay cell with replica-biased load), i.e. exactly")
@@ -276,7 +269,7 @@ def main():
         a("")
         allsel = [r for r in jit if f_(r, "rip_tie_pp_pred_s") > 0]
         rr = [f_(r, "rip_tie_pp_s") / f_(r, "rip_tie_pp_pred_s") for r in allsel]
-        lo, md, hi = stats(rr)
+        lo, md, hi = min_med_max(rr)
         a(
             "  Across all %d rippled runs the measured/predicted ratio spans"
             % len(rr)
