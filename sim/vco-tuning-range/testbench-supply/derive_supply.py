@@ -49,6 +49,7 @@ linfit = _numeric.linfit
 mhz = _numeric.mhz
 ts = _numeric.ts
 channel_metrics = _numeric.channel_metrics
+corner_temp_name = _numeric.corner_temp_name
 
 #: The record this campaign supersedes -- the `derived.joins` inputs are its
 #: committed CSVs, and `migration_delta` is the comparison against them.
@@ -74,11 +75,6 @@ MIN_CROSSINGS = 8
 # --------------------------------------------------------------- formatting
 def g(x, digits=6):
     return "%.*g" % (digits, x) if x is not None else ""
-
-
-def corner_name(corner, temp_c, vdd=None):
-    out = "%s/%gC" % (corner, float(temp_c))
-    return out if vdd is None else out + "/%.2fV" % float(vdd)
 
 
 # ------------------------------------------------------ crossing extraction
@@ -302,7 +298,7 @@ class _Point:
 
     @property
     def label(self):
-        return corner_name(self.corner, self.temp_c, self.vdd)
+        return corner_temp_name(self.corner, self.temp_c, self.vdd)
 
     def supply_curve(self):
         """{supply_v: (f, |i|)} from the push phase's seven copies."""
@@ -385,10 +381,10 @@ def _pushing_summary(points):
                 "B%d" % band,
                 len(sel),
                 "%.1f" % min(norms),
-                corner_name(lo[0][0], lo[0][1]),
+                corner_temp_name(lo[0][0], lo[0][1]),
                 "%.1f" % _median(norms),
                 "%.1f" % max(norms),
-                corner_name(hi[0][0], hi[0][1]),
+                corner_temp_name(hi[0][0], hi[0][1]),
                 "%.0f" % (worst * 0.33),
             )
         )
@@ -405,10 +401,10 @@ def _pushing_summary(points):
         "Worst (most supply-sensitive) point: **%.1f %%/V** (%s MHz/V at %s MHz) "
         "at %s, band %d, Vctrl %g V."
         % (wr[1].get("push_norm_pct_per_v"), mhz(wr[1].get("push_slope_hz_per_v")),
-           mhz(wr[1].get("push_f_nom_hz")), corner_name(wr[0][0], wr[0][1]),
+           mhz(wr[1].get("push_f_nom_hz")), corner_temp_name(wr[0][0], wr[0][1]),
            wr[0][2], wr[1].vctrl),
         "Best: **%.1f %%/V** at %s, band %d."
-        % (br[1].get("push_norm_pct_per_v"), corner_name(br[0][0], br[0][1]), br[0][2]),
+        % (br[1].get("push_norm_pct_per_v"), corner_temp_name(br[0][0], br[0][1]), br[0][2]),
         "Curvature: the largest departure of any measured f(vdd) curve from its "
         "own straight-line fit is %.2f %% of f_nom, so pushing is effectively "
         "linear across the whole +/-10 %% rail and a single coefficient per "
@@ -915,7 +911,7 @@ def _verdict(points, grid):
         rows.append(
             ("static supply pushing, worst corner",
              "%.1f %%/V" % min(norms),
-             "%s, band %d" % (corner_name(worst[0][0], worst[0][1]), worst[0][2]),
+             "%s, band %d" % (corner_temp_name(worst[0][0], worst[0][1]), worst[0][2]),
              "characterized; %.2fx the -1/vdd swing term, so dominated by the "
              "ring's swing-vs-supply term rather than by bias-current sensitivity"
              % abs(min(norms) / SWING_TERM_PCT_PER_V)),

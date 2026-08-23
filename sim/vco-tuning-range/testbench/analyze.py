@@ -26,7 +26,6 @@ stretch):
 Usage:  analyze.py <vco_tuning.csv> <outdir>
 """
 
-import csv
 import importlib.util
 import sys
 from collections import defaultdict
@@ -45,28 +44,20 @@ _spec.loader.exec_module(_numeric)
 mhz = _numeric.mhz
 corner_name = _numeric.corner_name
 local_kvco = _numeric.local_kvco
+read_csv_rows = _numeric.read_csv_rows
 
 
 def read_rows(path):
-    rows = []
-    with open(path) as fh:
-        for line in fh:
-            if line.startswith("#"):
-                continue
-            rows.append(line)
-    rdr = csv.DictReader(rows)
-    out = []
-    for r in rdr:
-        out.append(
-            {
-                "corner": (r["bundle"], float(r["temp_c"]), float(r["vdd_v"])),
-                "band": int(r["band"]),
-                "vctrl": float(r["vctrl_v"]),
-                "f": float(r["fosc_hz"]),
-                "i": float(r["isupply_a"]),
-            }
-        )
-    return out
+    return [
+        {
+            "corner": (r["bundle"], float(r["temp_c"]), float(r["vdd_v"])),
+            "band": int(r["band"]),
+            "vctrl": float(r["vctrl_v"]),
+            "f": float(r["fosc_hz"]),
+            "i": float(r["isupply_a"]),
+        }
+        for r in read_csv_rows(path)
+    ]
 
 
 def main():

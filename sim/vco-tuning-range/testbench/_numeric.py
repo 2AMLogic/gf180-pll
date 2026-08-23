@@ -18,6 +18,8 @@ collide.
 
 from __future__ import annotations
 
+import csv
+
 
 def crossings(t, y, th, tmin):
     """Rising crossings of `th`, linearly interpolated, at times >= tmin."""
@@ -100,6 +102,19 @@ def channel_metrics(ts, min_crossings=8):
 def corner_name(c):
     """A (bundle, temp_c, vdd_v) triple, formatted the way every record cites it."""
     return "%s/%gC/%.2fV" % (c[0], c[1], c[2])
+
+
+def corner_temp_name(bundle, temp_c, vdd=None):
+    """A (bundle, temp_c[, vdd]) grouping key, formatted the way every supply
+    record cites it -- vdd is optional because some groupings are per-temp
+    only."""
+    out = "%s/%gC" % (bundle, float(temp_c))
+    return out if vdd is None else out + "/%.2fV" % float(vdd)
+
+
+def read_csv_rows(path):
+    """Rows of a `run.sh`-written CSV, skipping its leading `#`-comment lines."""
+    return list(csv.DictReader(l for l in open(path) if not l.startswith("#")))
 
 
 def local_kvco(vs, fs):
