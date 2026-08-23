@@ -50,6 +50,7 @@ mhz = _numeric.mhz
 ts = _numeric.ts
 channel_metrics = _numeric.channel_metrics
 corner_temp_name = _numeric.corner_temp_name
+_read_columns = _numeric.read_columns
 
 #: The record this campaign supersedes -- the `derived.joins` inputs are its
 #: committed CSVs, and `migration_delta` is the comparison against them.
@@ -79,12 +80,9 @@ def g(x, digits=6):
 
 # ------------------------------------------------------ crossing extraction
 def read_columns(path):
-    """``(t, [y1, y2, y3])`` from one point's `jit.dat`, tolerating both layouts.
-
-    `wrdata` writes ``t y1 t y2 t y3`` by default and ``t y1 y2 y3`` under
-    ``set wr_singlescale``; the deck sets the latter, and this accepts either
-    for the same reason the pre-migration `jitter_extract.py` did -- a deck
-    edited to drop that line would otherwise silently mis-column.
+    """``(t, [y1, y2, y3])`` from one point's `jit.dat`; see `_numeric.read_columns`
+    for the shared parse (both `wrdata` layouts, the empty-file and
+    unexpected-column-count edge cases).
 
     This reads the file itself, through the ``RawFile.path`` the harness
     documents for exactly this, rather than through ``RawFile.rows()``: that
@@ -92,27 +90,12 @@ def read_columns(path):
     18 000-row transient dumps is ~1.3 GB of cached float tuples nothing needs
     once the point has been reduced.
     """
-    rows = []
-    with open(path) as fh:
-        for line in fh:
-            line = line.strip()
-            if not line or line[0] not in "-+.0123456789":
-                continue
-            try:
-                rows.append([float(x) for x in line.split()])
-            except ValueError:
-                continue
-    if not rows:
-        return (), ()
-    ncol = len(rows[0])
-    cols = [[r[i] for r in rows if len(r) == ncol] for i in range(ncol)]
-    if ncol == 4:  # `set wr_singlescale`: t, y1, y2, y3
-        return cols[0], cols[1:]
-    if ncol == 6:  # default wrdata: (t,y1),(t,y2),(t,y3)
-        return cols[0], [cols[1], cols[3], cols[5]]
-    raise DerivedError(
-        "raw file %s has %d columns; expected 4 (wr_singlescale) or 6" % (path, ncol)
-    )
+    try:
+        return _read_columns(path)
+    except ValueError as exc:
+        raise DerivedError(
+            "raw file %s: %s; expected 4 (wr_singlescale) or 6 columns" % (path, exc)
+        )
 
 
 def extract_jitter(t, yq, ys, yr, vsup, tsettle, tstepon, astep, arip, frip,

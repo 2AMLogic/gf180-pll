@@ -117,6 +117,40 @@ def read_csv_rows(path):
     return list(csv.DictReader(l for l in open(path) if not l.startswith("#")))
 
 
+def read_columns(path):
+    """``(t, [y1, y2, y3])`` from one point's `jit.dat`, tolerating both layouts.
+
+    `wrdata` writes ``t y1 t y2 t y3`` by default and ``t y1 y2 y3`` under
+    ``set wr_singlescale``; this accepts either, since a deck edited to drop
+    that line would otherwise silently mis-column.
+
+    Skips non-numeric lines, then (defensively) any row whose length
+    disagrees with the first numeric row's. Returns ``((), ())`` if the file
+    has no numeric rows at all, and raises ``ValueError`` if the surviving
+    column count is neither 4 nor 6 -- callers translate both edge cases into
+    their own exit/error style.
+    """
+    rows = []
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line[0] not in "-+.0123456789":
+                continue
+            try:
+                rows.append([float(x) for x in line.split()])
+            except ValueError:
+                continue
+    if not rows:
+        return (), ()
+    ncol = len(rows[0])
+    cols = [[r[i] for r in rows if len(r) == ncol] for i in range(ncol)]
+    if ncol == 4:  # `set wr_singlescale`: t, y1, y2, y3
+        return cols[0], cols[1:]
+    if ncol == 6:  # default wrdata: (t,y1),(t,y2),(t,y3)
+        return cols[0], [cols[1], cols[3], cols[5]]
+    raise ValueError("unexpected column count %d" % ncol)
+
+
 def local_kvco(vs, fs):
     """Central-difference dF/dV at each sweep point (one-sided at the ends)."""
     k = []

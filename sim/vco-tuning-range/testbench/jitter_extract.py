@@ -42,33 +42,10 @@ crossings = _numeric.crossings
 stats = _numeric.stats
 linefit_residual = _numeric.linefit_residual
 channel_metrics = _numeric.channel_metrics
+read_columns = _numeric.read_columns
 
 #: Minimum crossings a channel needs before its statistics mean anything.
 MIN_CROSSINGS = 8
-
-
-def read_columns(path):
-    """Return a list of columns. Tolerates wrdata's paired-scale layout."""
-    rows = []
-    with open(path) as fh:
-        for line in fh:
-            line = line.strip()
-            if not line or line[0] not in "-+.0123456789":
-                continue
-            parts = line.split()
-            try:
-                rows.append([float(x) for x in parts])
-            except ValueError:
-                continue
-    if not rows:
-        raise SystemExit("jitter_extract: no numeric rows in %s" % path)
-    ncol = len(rows[0])
-    cols = [[r[i] for r in rows] for i in range(ncol)]
-    if ncol == 4:  # `set wr_singlescale`: t, y1, y2, y3
-        return cols[0], cols[1:]
-    if ncol == 6:  # default wrdata: (t,y1),(t,y2),(t,y3)
-        return cols[0], [cols[1], cols[3], cols[5]]
-    raise SystemExit("jitter_extract: unexpected column count %d" % ncol)
 
 
 def main():
@@ -76,7 +53,12 @@ def main():
     vsup, tsettle, tstepon = float(vsup), float(tsettle), float(tstepon)
     astep, arip, frip = float(astep), float(arip), float(frip)
 
-    t, ys = read_columns(dat)
+    try:
+        t, ys = read_columns(dat)
+    except ValueError as exc:
+        raise SystemExit("jitter_extract: %s in %s" % (exc, dat))
+    if not t:
+        raise SystemExit("jitter_extract: no numeric rows in %s" % dat)
     th = vsup / 2.0
     ch = [crossings(t, y, th, tsettle) for y in ys]
     mq, ms, mr = (channel_metrics(c, MIN_CROSSINGS) for c in ch)
