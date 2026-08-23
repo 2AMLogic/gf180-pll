@@ -11,36 +11,15 @@ No PDK and no ngspice required: every fixture builds ``PointResult``/
 from __future__ import annotations
 
 import csv
-import json
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
 SIM_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SIM_DIR))
 
+from _fixtures import ManifestFixture  # noqa: E402
 from harness import corners, raw_measures, report, runner, testbench  # noqa: E402
-
-
-class ManifestFixture(unittest.TestCase):
-    """Lays out ``sim/<slug>/testbench/`` the way ``sim/README.md`` specifies."""
-
-    slug = "an-experiment"
-
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name)
-        self.tb_dir = self.root / self.slug / "testbench"
-        self.tb_dir.mkdir(parents=True)
-
-    def write(self, manifest: dict, netlist: str = "v1 out 0 dc {vdd_val}\n") -> Path:
-        (self.tb_dir / "x.spice").write_text(netlist)
-        base = {"name": self.slug, "netlist": "x.spice", "measure": {"vout": "v(out)"}}
-        base.update(manifest)
-        (self.tb_dir / "tb.json").write_text(json.dumps(base))
-        return self.tb_dir
 
 
 class BasicWriterTests(ManifestFixture):
