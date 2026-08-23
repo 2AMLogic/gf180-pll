@@ -47,6 +47,7 @@ stats = _numeric.stats
 linefit_residual = _numeric.linefit_residual
 linfit = _numeric.linfit
 mhz = _numeric.mhz
+ts = _numeric.ts
 channel_metrics = _numeric.channel_metrics
 
 #: The record this campaign supersedes -- the `derived.joins` inputs are its
@@ -73,11 +74,6 @@ MIN_CROSSINGS = 8
 # --------------------------------------------------------------- formatting
 def g(x, digits=6):
     return "%.*g" % (digits, x) if x is not None else ""
-
-
-def ts(x):
-    """A time in the unit a reader can compare at a glance (as the record does)."""
-    return "%.3g ns" % (x * 1e9) if abs(x) >= 1e-9 else "%.3g ps" % (x * 1e12)
 
 
 def corner_name(corner, temp_c, vdd=None):

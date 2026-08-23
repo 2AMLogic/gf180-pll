@@ -66,6 +66,11 @@ def mhz(x):
     return "%.4g" % (x / 1e6)
 
 
+def ts(x):
+    """A time in the unit a reader can compare at a glance (as the record does)."""
+    return "%.3g ns" % (x * 1e9) if abs(x) >= 1e-9 else "%.3g ps" % (x * 1e12)
+
+
 def channel_metrics(ts, min_crossings=8):
     """One channel's period / TIE statistics, or None if too few crossings."""
     if len(ts) < min_crossings:
