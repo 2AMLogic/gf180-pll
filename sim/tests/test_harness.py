@@ -8,7 +8,8 @@ record it renders. The *optional* manifest extension keys -- ``sweeps`` /
 ``grid``, ``optional``, ``derived``, ``dut`` / ``dut_export``, ``raw_files``
 and ``phases`` -- are covered next door in ``test_manifest_extensions.py``,
 which owns the fixture those keys need. Both files run under the same
-``discover`` above; the split is by manifest surface, not by scope.
+``discover`` above; the split is by manifest surface, not by scope. Both also
+share the ``fake_pdk`` fixture from ``_fixtures.py``.
 """
 
 from __future__ import annotations
@@ -23,16 +24,8 @@ from pathlib import Path
 SIM_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SIM_DIR))
 
+from _fixtures import fake_pdk  # noqa: E402
 from harness import corners, report, runner, testbench  # noqa: E402
-from harness.pdk import Pdk  # noqa: E402
-
-
-def fake_pdk(root: Path) -> Pdk:
-    (root / "libs.tech" / "ngspice").mkdir(parents=True, exist_ok=True)
-    (root / "libs.tech" / "ngspice" / "sm141064.ngspice").write_text("* fake\n")
-    (root / "libs.tech" / "ngspice" / "design.ngspice").write_text("* fake\n")
-    (root / "SOURCES").write_text("open_pdks deadbeef\n")
-    return Pdk(path=root, variant=root.name, source="test")
 
 
 class CornerTests(unittest.TestCase):
