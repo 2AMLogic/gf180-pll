@@ -20,6 +20,7 @@ _spec = importlib.util.spec_from_file_location(
 _numeric = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_numeric)
 linfit = _numeric.linfit
+ts = _numeric.ts
 
 
 def rd(path):
@@ -30,14 +31,6 @@ def stats(xs):
     xs = sorted(xs)
     n = len(xs)
     return xs[0], xs[n // 2], xs[-1]
-
-
-def ts(x):
-    """Format a time in the unit a reader can compare at a glance."""
-    ax = abs(x)
-    if ax >= 1e-9:
-        return "%.3g ns" % (x * 1e9)
-    return "%.3g ps" % (x * 1e12)
 
 
 def cname(b, t, v=None):
