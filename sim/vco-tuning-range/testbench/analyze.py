@@ -26,21 +26,19 @@ stretch):
 Usage:  analyze.py <vco_tuning.csv> <outdir>
 """
 
-import importlib.util
 import sys
 from collections import defaultdict
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from harness.derived import load_module  # noqa: E402
 
 F_LO = 10e6
 F_HI = 200e6
 KVCO_MAX = 150e6  # Hz/V
 KVCO_OVER_F_INTENT = 0.7  # DR-001 design-intent Kvco ~ 0.7 * f_out per volt
 
-_spec = importlib.util.spec_from_file_location(
-    "_vco_tuning_range_numeric", Path(__file__).resolve().parent / "_numeric.py"
-)
-_numeric = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_numeric)
+_numeric = load_module(Path(__file__).resolve().parent / "_numeric.py")
 mhz = _numeric.mhz
 corner_name = _numeric.corner_name
 local_kvco = _numeric.local_kvco

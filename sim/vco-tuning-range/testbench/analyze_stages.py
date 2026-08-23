@@ -18,17 +18,15 @@ stages -- judged on four things the record can measure:
 Usage:  analyze_stages.py <stage_count.csv>
 """
 
-import importlib.util
 import math
 import sys
 from collections import defaultdict
 from pathlib import Path
 
-_spec = importlib.util.spec_from_file_location(
-    "_vco_tuning_range_numeric", Path(__file__).resolve().parent / "_numeric.py"
-)
-_numeric = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_numeric)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from harness.derived import load_module  # noqa: E402
+
+_numeric = load_module(Path(__file__).resolve().parent / "_numeric.py")
 read_csv_rows = _numeric.read_csv_rows
 
 F_LO = 10e6

@@ -8,16 +8,14 @@ number is computed here from the CSVs, never hand-typed.
 Usage:  analyze_supply.py <supply_pushing.csv> <supply_jitter.csv>
 """
 
-import importlib.util
 import sys
 from collections import defaultdict
 from pathlib import Path
 
-_spec = importlib.util.spec_from_file_location(
-    "_vco_tuning_range_numeric", Path(__file__).resolve().parent / "_numeric.py"
-)
-_numeric = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_numeric)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from harness.derived import load_module  # noqa: E402
+
+_numeric = load_module(Path(__file__).resolve().parent / "_numeric.py")
 linfit = _numeric.linfit
 ts = _numeric.ts
 read_csv_rows = _numeric.read_csv_rows
