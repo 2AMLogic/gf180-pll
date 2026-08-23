@@ -56,7 +56,9 @@ def main():
     try:
         t, ys = read_columns(dat)
     except ValueError as exc:
-        raise SystemExit("jitter_extract: %s in %s" % (exc, dat))
+        # Deliberately no path suffix: the pre-dedup wording of the
+        # bad-column-count exit carried none, and this stays byte-identical.
+        raise SystemExit("jitter_extract: %s" % exc)
     if not t:
         raise SystemExit("jitter_extract: no numeric rows in %s" % dat)
     th = vsup / 2.0
