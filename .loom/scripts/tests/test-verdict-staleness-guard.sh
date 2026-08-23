@@ -84,7 +84,7 @@ STUB_DIR="$(mktemp -d)"
 trap 'rm -rf "$STUB_DIR" 2>/dev/null || true' EXIT
 
 # --- Stub gh on PATH ---------------------------------------------------
-#   gh pr view <N> --json headRefOid,labels,state,merged
+#   gh pr view <N> --json headRefOid,labels,state,mergedAt
 #                                           -> cat $STUB_DIR/pr-<N>.json
 #                                              (fails if pr-view-fail-<N> exists)
 #   gh api repos/{owner}/{repo}/issues/<N>/comments --paginate
@@ -113,7 +113,7 @@ case "$1" in
           echo "gh: A new release of gh is available: 2.0.0 -> 2.1.0" >&2
         fi
         canned="$STUB_DIR_FROM_ENV/pr-$pr_num.json"
-        if [[ -f "$canned" ]]; then cat "$canned"; else echo '{"headRefOid":"0000000000000000000000000000000000000000","state":"OPEN","merged":false,"labels":[]}'; fi
+        if [[ -f "$canned" ]]; then cat "$canned"; else echo '{"headRefOid":"0000000000000000000000000000000000000000","state":"OPEN","mergedAt":null,"labels":[]}'; fi
         exit 0
         ;;
       comment)
@@ -184,9 +184,16 @@ labels_json() {
 
 pr_json_state() {
     # pr_json_state <pr-number> <head-sha> <state> <merged:true|false> [label ...]
+    #
+    # `gh pr view --json` has no `merged` field on gh >= 2.98.0 — only
+    # `mergedAt`, a timestamp string when merged and `null` otherwise (#234).
+    # The `merged` arg here stays a simple true/false for callers' convenience;
+    # it's translated to the real `mergedAt` shape before being written out.
     local num="$1" sha="$2" state="$3" merged="$4"; shift 4
-    printf '{"headRefOid":"%s","state":"%s","merged":%s,"labels":[%s]}' \
-        "$sha" "$state" "$merged" "$(labels_json "$@")" > "$STUB_DIR/pr-$num.json"
+    local merged_at='null'
+    [[ "$merged" == "true" ]] && merged_at='"2026-08-23T00:00:00Z"'
+    printf '{"headRefOid":"%s","state":"%s","mergedAt":%s,"labels":[%s]}' \
+        "$sha" "$state" "$merged_at" "$(labels_json "$@")" > "$STUB_DIR/pr-$num.json"
 }
 
 pr_json() {
