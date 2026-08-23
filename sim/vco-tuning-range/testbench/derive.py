@@ -37,6 +37,7 @@ from harness.derived import DerivedTable, load_module  # noqa: E402
 _numeric = load_module(Path(__file__).resolve().parent / "_numeric.py")
 mhz = _numeric.mhz
 corner_name = _numeric.corner_name
+local_kvco = _numeric.local_kvco
 
 #: The control-voltage grid the deck instantiates, one VCO copy per entry.
 VCTRLS = (0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7)
@@ -49,19 +50,6 @@ KVCO_OVER_F_INTENT = 0.7  # DR-001 design-intent Kvco ~ 0.7 * f_out per volt
 #: Frequencies a configuration might be asked to hit, used by check 4a to ask
 #: "what Kvco does the *lowest band that reaches this target* present?".
 TARGETS = (10e6, 20e6, 35e6, 50e6, 75e6, 100e6, 140e6, 175e6, 200e6)
-
-
-def local_kvco(vs, fs):
-    """Central-difference dF/dV at each sweep point (one-sided at the ends)."""
-    k = []
-    for i in range(len(vs)):
-        if i == 0:
-            k.append((fs[1] - fs[0]) / (vs[1] - vs[0]))
-        elif i == len(vs) - 1:
-            k.append((fs[-1] - fs[-2]) / (vs[-1] - vs[-2]))
-        else:
-            k.append((fs[i + 1] - fs[i - 1]) / (vs[i + 1] - vs[i - 1]))
-    return k
 
 
 # ---------------------------------------------------------------- per point

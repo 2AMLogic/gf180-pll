@@ -95,3 +95,16 @@ def channel_metrics(ts, min_crossings=8):
 def corner_name(c):
     """A (bundle, temp_c, vdd_v) triple, formatted the way every record cites it."""
     return "%s/%gC/%.2fV" % (c[0], c[1], c[2])
+
+
+def local_kvco(vs, fs):
+    """Central-difference dF/dV at each sweep point (one-sided at the ends)."""
+    k = []
+    for i in range(len(vs)):
+        if i == 0:
+            k.append((fs[1] - fs[0]) / (vs[1] - vs[0]))
+        elif i == len(vs) - 1:
+            k.append((fs[-1] - fs[-2]) / (vs[-1] - vs[-2]))
+        else:
+            k.append((fs[i + 1] - fs[i - 1]) / (vs[i + 1] - vs[i - 1]))
+    return k
