@@ -43,16 +43,6 @@ Two rules in this file are **normative conditions**, not advice: the
 [Icp trim-code rule](#icp-trim-code-rule). A part configured against either one
 is operating outside this specification, and no row below applies to it.
 
-### Confidentiality
-
-This repository, its specification and its results are Tier 2 (CLAUDE.md). The
-#38 pre-publication audit stripped these values out of the public `README.md`;
-whether they are public-safe is an **operator ruling that has not been made**,
-and this file does not make it. Nothing here may be copied into `README.md`, a
-public issue, or any external artifact until that ruling exists. Writing the
-real derived values *here*, inside the private repo, is the normal internal
-spec work this file is for.
-
 ### Everything here is schematic-level
 
 No layout parasitics, no extracted netlists, no silicon. Every measured number
@@ -945,17 +935,3 @@ to reconstruct it from the status column.
 | [Kvco](#kvco), [Output band](#output-band) | Monte Carlo band-select mirror mismatch; **post-extraction re-run of every VCO number** | #15, #18 |
 | [Multiplication ratio](#multiplication-ratio) | post-extraction retiming setup margin at N = 64, 200 MHz — the thinnest margin in the block at 6.1 % of a VCO period | #18 |
 
-## Open question routed to the operator, not answered here
-
-The #38 pre-publication audit treated the literal spec numbers as sensitive and
-stripped them from the public `README.md`. Two facts sit in tension with that:
-DR-001's Context section restates several of the stripped lines verbatim and is
-committed, and the original table's commit is still reachable in `origin/main`
-history. Either the numbers are public-safe — in which case this file is a
-restatement and the audit's remedy was over-broad — or DR-001 and the history
-need remediation too.
-
-**This file does not decide that.** It is written for internal use inside a
-Tier 2 repository, which is unambiguously in-scope regardless of how the ruling
-goes. #1 is where the ruling belongs, and whichever way it goes, the effect on
-this file is on *where its contents may be copied*, not on what belongs in it.
