@@ -674,6 +674,30 @@ simenv_jobs() {
 # `simenv_recommend_omp_threads`'s return-nothing-on-uncertain behavior below
 # -- an inconclusive probe leaves `OMP_NUM_THREADS` untouched rather than
 # guessing.
+#
+# #244 found that `OMP_NUM_THREADS` alone is NOT a reliable pin on this same
+# ngspice-46 build: for `sim/supply-sensitivity`'s closed-loop lock deck
+# (a much larger BSIM3/4 device count than #146's charge-pump-only deck),
+# `OMP_NUM_THREADS=1` -- confirmed present in the running process's own
+# `/proc/<pid>/environ` -- left `/proc/<pid>/status`'s `Threads:` line at 8
+# for the whole run (matching #242's own idle-host record). Live probing
+# (`/proc/<pid>/status`, sampled every 0.2s across the process's life, on
+# `ngspice -b` invoked directly against the generated deck) found the
+# OpenMP-standard `OMP_THREAD_LIMIT` environment variable DOES cap this
+# deck's thread count to 1, where `OMP_NUM_THREADS` alone does not. This is
+# consistent with the OpenMP spec's own distinction between the two
+# variables: `OMP_NUM_THREADS` only seeds the `nthreads-var` internal control
+# variable, which a program's OWN in-process `omp_set_num_threads()` call can
+# reassign afterward for a specific parallel region (plausibly what this
+# ngspice build's larger-circuit code path does, independent of environment);
+# `OMP_THREAD_LIMIT` seeds `thread-limit-var`, a hard ceiling on live thread
+# count for the whole process that no in-program call can exceed. Both decks
+# (`sim/mc-cp-mismatch`'s #146 precedent and `sim/supply-sensitivity`'s
+# closed-loop deck) were re-probed with `OMP_THREAD_LIMIT` added and neither
+# regressed -- `simenv_apply_omp_pin` below now exports both, independently
+# defaulted, so a deck class where `OMP_NUM_THREADS` alone was already
+# sufficient (#146) is unaffected and a deck class where it was not (#244) is
+# now actually pinned.
 
 # simenv_ngspice_openmp_linked -- exit 0 if the `ngspice` binary on PATH
 # appears to link an OpenMP (or raw pthread-based) runtime, exit 1 if it does
@@ -710,29 +734,43 @@ simenv_recommend_omp_threads() {
 
 # simenv_apply_omp_pin -- the opt-in call a campaign's run.sh makes (typically
 # right after simenv_require_tools) to avoid squaring `simenv_jobs()` process
-# count against ngspice's own internal thread count (#241).
+# count against ngspice's own internal thread count (#241), and -- per #244's
+# finding above -- to actually make that pin stick on deck classes where
+# `OMP_NUM_THREADS` alone is silently ineffective.
 #
-#   - An explicit, caller-set OMP_NUM_THREADS (env or a prior line in the same
-#     script) is ALWAYS respected and left untouched -- this function only
-#     ever fills in a default, never overrides an explicit choice, exactly
-#     preserving the `${OMP_NUM_THREADS:-1}` semantics #146's two campaigns
-#     already used.
-#   - Otherwise, exports OMP_NUM_THREADS to simenv_recommend_omp_threads()'s
-#     recommendation, but ONLY if that recommendation is non-empty. On a
-#     host/build where detection does not fire (not internally threaded, or
-#     the probe itself is inconclusive), this function exports nothing --
-#     `OMP_NUM_THREADS` is left exactly as the ambient environment set it
-#     (typically unset), so ngspice's own default threading behavior is
-#     unchanged. This is the "does not silently change behavior when
-#     internal threading is absent" guarantee #241 asks for.
+#   - Exports BOTH `OMP_NUM_THREADS` and `OMP_THREAD_LIMIT` to
+#     simenv_recommend_omp_threads()'s recommendation (the two variables get
+#     the SAME value -- there is currently no evidence any deck in this repo
+#     needs them to differ). Each is defaulted INDEPENDENTLY: an explicit,
+#     caller-set value for either one (env or a prior line in the same
+#     script) is ALWAYS respected and left untouched, exactly preserving the
+#     `${OMP_NUM_THREADS:-1}` semantics #146's two campaigns already used for
+#     that variable specifically. A caller that explicitly sets ONLY
+#     `OMP_NUM_THREADS` (e.g. an old copy of #146's pattern) still gets
+#     `OMP_THREAD_LIMIT` filled in -- #244 found the ceiling is what makes
+#     the pin effective on the deck class `OMP_NUM_THREADS` alone does not
+#     cover, so silently skipping it just because the OTHER variable was
+#     already set would reintroduce #244's exact failure mode for that
+#     caller.
+#   - If neither is already set, both are set to
+#     simenv_recommend_omp_threads()'s recommendation, but ONLY if that
+#     recommendation is non-empty. On a host/build where detection does not
+#     fire (not internally threaded, or the probe itself is inconclusive),
+#     this function exports nothing -- both variables are left exactly as the
+#     ambient environment set them (typically unset), so ngspice's own
+#     default threading behavior is unchanged. This is the "does not
+#     silently change behavior when internal threading is absent" guarantee
+#     #241 asks for.
 simenv_apply_omp_pin() {
-  if [ -n "${OMP_NUM_THREADS:-}" ]; then
-    return 0
+  local rec=""
+  if [ -z "${OMP_NUM_THREADS:-}" ] || [ -z "${OMP_THREAD_LIMIT:-}" ]; then
+    rec="$(simenv_recommend_omp_threads)"
   fi
-  local rec
-  rec="$(simenv_recommend_omp_threads)"
-  if [ -n "${rec}" ]; then
+  if [ -z "${OMP_NUM_THREADS:-}" ] && [ -n "${rec}" ]; then
     export OMP_NUM_THREADS="${rec}"
+  fi
+  if [ -z "${OMP_THREAD_LIMIT:-}" ] && [ -n "${rec}" ]; then
+    export OMP_THREAD_LIMIT="${rec}"
   fi
   return 0
 }
