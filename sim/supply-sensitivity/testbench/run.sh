@@ -614,6 +614,14 @@ fi
 # Main
 # ---------------------------------------------------------------------------
 simenv_require_tools
+# Opt in to sim/lib/simenv.sh's ngspice-internal-threading pin (#241): this
+# campaign is the one that originally surfaced the self-oversubscription
+# failure mode in #58 (SIM_JOBS=6 external processes x an OpenMP-linked
+# ngspice's own internal threads squared the host's thread count, measured
+# ~55x wall-clock regression) but had not adopted #146's per-campaign fix.
+# A no-op on a host/build where ngspice is not internally threaded, and never
+# overrides an OMP_NUM_THREADS the caller already set.
+simenv_apply_omp_pin
 [ -f "${VCO_TUNING}" ] || {
   echo "ERROR: ${VCO_TUNING} missing -- this campaign derives its operating" >&2
   echo "       point from #8's committed f(Vctrl) evidence, not from a fresh sweep." >&2

@@ -613,6 +613,19 @@ simenv_meas() {
 
 # Number of parallel ngspice jobs. Device-level decks are tiny; the model-file
 # parse dominates, so oversubscribing slightly is fine.
+#
+# NOTE (#241): this answers "how many cores does this host have," which is
+# the right question for a campaign's EXTERNAL `xargs -P` process-level
+# parallelism only if each `ngspice` PROCESS itself uses exactly one core.
+# At least one `ngspice` build in this fleet links its own OpenMP runtime and
+# spawns up to `nproc` internal threads per process regardless of this
+# function's answer -- a campaign that fans out `simenv_jobs()` external
+# processes of such a build squares its true thread count instead of adding
+# it (`SIM_JOBS` processes x up to `nproc` internal threads each, on `nproc`
+# cores). This function's return value is deliberately left unchanged by
+# that finding -- see `simenv_recommend_omp_threads`/`simenv_apply_omp_pin`
+# below for the (opt-in, per-campaign) fix, and why the fix is NOT to make
+# this function threading-aware itself.
 simenv_jobs() {
   if [ -n "${SIM_JOBS:-}" ]; then
     echo "${SIM_JOBS}"
@@ -623,4 +636,103 @@ simenv_jobs() {
   else
     echo 4
   fi
+}
+
+# --------------------------------------------------------------------------
+# ngspice internal-threading detection (#241)
+# --------------------------------------------------------------------------
+#
+# #146 (sim/mc-cp-mismatch, sim/vco-tuning-range/run_mismatch.sh) found and
+# fixed this exact self-oversubscription on the shared build host: `ngspice`
+# there links an OpenMP runtime and spawns several OS threads PER PROCESS for
+# BSIM model evaluation, independent of and on top of `simenv_jobs()`'s own
+# external process-level fan-out. Both campaigns fixed it locally with
+# `export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"` in their own `run.sh`,
+# deliberately NOT in this file -- their own comments say why: doing it here
+# would silently change every OTHER campaign's behavior too, including on a
+# host/`ngspice` build where BSIM evaluation is NOT internally threaded, where
+# forcing `OMP_NUM_THREADS=1` would serialize model evaluation for zero
+# benefit (and, on a genuinely multi-core-per-process workload, could hurt).
+#
+# #241 centralizes the DETECTION (so it is not re-derived or copy-pasted per
+# campaign, which is how sim/supply-sensitivity went unfixed despite being
+# the campaign that originally surfaced the failure mode in #58) while
+# keeping the OPT-IN, per-campaign DEFAULT #146 chose: `simenv_jobs()` above
+# is completely unchanged, and nothing in this file exports `OMP_NUM_THREADS`
+# on its own -- a campaign must call `simenv_apply_omp_pin` (typically right
+# after `simenv_require_tools`) to opt in.
+#
+# Detection strategy: an OpenMP-linked `ngspice` binary is a STATIC property
+# of the installed build, so it can be answered by inspecting the binary's
+# shared-library dependencies (`ldd`) rather than by spawning a throwaway
+# ngspice job and inspecting its thread count -- cheaper, and does not cost a
+# real simulation just to answer a yes/no question. This is a heuristic, not
+# a guarantee: a build could spawn internal threads via a mechanism other
+# than a detectable OpenMP/pthread runtime, or (on a platform without `ldd`,
+# e.g. macOS) the check cannot run at all. Both failure directions are safe
+# by construction -- see `simenv_ngspice_openmp_linked`'s and
+# `simenv_recommend_omp_threads`'s return-nothing-on-uncertain behavior below
+# -- an inconclusive probe leaves `OMP_NUM_THREADS` untouched rather than
+# guessing.
+
+# simenv_ngspice_openmp_linked -- exit 0 if the `ngspice` binary on PATH
+# appears to link an OpenMP (or raw pthread-based) runtime, exit 1 if it does
+# not, `ngspice` is not on PATH, or the check cannot be performed (no `ldd`,
+# e.g. macOS -- a future `otool -L` branch is out of scope for #241, which
+# found this on a Linux host).
+#
+# SIMENV_NGSPICE_LDD_OUTPUT overrides the live `ldd` invocation with a literal
+# string for testing (see sim/lib/test-simenv-jobs.sh) -- this is what makes
+# the detection logic unit-testable without an actual OpenMP-linked ngspice
+# binary present on the test host.
+simenv_ngspice_openmp_linked() {
+  local ldd_output
+  if [ -n "${SIMENV_NGSPICE_LDD_OUTPUT+x}" ]; then
+    ldd_output="${SIMENV_NGSPICE_LDD_OUTPUT}"
+  else
+    local ngspice_path
+    ngspice_path="$(command -v ngspice 2>/dev/null)" || return 1
+    command -v ldd >/dev/null 2>&1 || return 1
+    ldd_output="$(ldd "${ngspice_path}" 2>/dev/null)" || return 1
+  fi
+  printf '%s\n' "${ldd_output}" | grep -qE 'libgomp|libiomp|libomp\.'
+}
+
+# simenv_recommend_omp_threads -> prints "1" if simenv_ngspice_openmp_linked
+# detects an internally-threaded ngspice build, prints nothing (empty stdout,
+# exit 0) otherwise -- "nothing" means "no recommendation," not "recommend
+# unlimited," so a caller must treat empty output as leave-alone, never as a
+# literal thread count.
+simenv_recommend_omp_threads() {
+  simenv_ngspice_openmp_linked && echo 1
+  return 0
+}
+
+# simenv_apply_omp_pin -- the opt-in call a campaign's run.sh makes (typically
+# right after simenv_require_tools) to avoid squaring `simenv_jobs()` process
+# count against ngspice's own internal thread count (#241).
+#
+#   - An explicit, caller-set OMP_NUM_THREADS (env or a prior line in the same
+#     script) is ALWAYS respected and left untouched -- this function only
+#     ever fills in a default, never overrides an explicit choice, exactly
+#     preserving the `${OMP_NUM_THREADS:-1}` semantics #146's two campaigns
+#     already used.
+#   - Otherwise, exports OMP_NUM_THREADS to simenv_recommend_omp_threads()'s
+#     recommendation, but ONLY if that recommendation is non-empty. On a
+#     host/build where detection does not fire (not internally threaded, or
+#     the probe itself is inconclusive), this function exports nothing --
+#     `OMP_NUM_THREADS` is left exactly as the ambient environment set it
+#     (typically unset), so ngspice's own default threading behavior is
+#     unchanged. This is the "does not silently change behavior when
+#     internal threading is absent" guarantee #241 asks for.
+simenv_apply_omp_pin() {
+  if [ -n "${OMP_NUM_THREADS:-}" ]; then
+    return 0
+  fi
+  local rec
+  rec="$(simenv_recommend_omp_threads)"
+  if [ -n "${rec}" ]; then
+    export OMP_NUM_THREADS="${rec}"
+  fi
+  return 0
 }
