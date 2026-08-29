@@ -102,14 +102,18 @@ set -euo pipefail
 # host's 8 physical cores several times over from self-contention alone.
 # Pinning one thread per ngspice process and letting `simenv_jobs` provide
 # parallelism at the process level (measured ~44x wall-clock improvement on
-# the sibling campaign) is the correct division for this host.
-export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
-
+# the sibling campaign) is the correct division for this host. #241
+# centralized the DETECTION half of this fix into
+# sim/lib/simenv.sh::simenv_apply_omp_pin -- called below, right after
+# sourcing that file -- while keeping this campaign's own OPT-IN call (not a
+# changed default inside simenv.sh itself). An explicit OMP_NUM_THREADS in
+# the environment still always wins.
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXP="$(cd "${HERE}/.." && pwd)"
 REPO="$(cd "${EXP}/../.." && pwd)"
 # shellcheck source=../../lib/simenv.sh
 . "${HERE}/../../lib/simenv.sh"
+simenv_apply_omp_pin
 
 DECK="${HERE}/tb_vco_mismatch.sp"
 DUT_SRC="${REPO}/design/netlist/vco.spice"

@@ -144,16 +144,19 @@ set -euo pipefail
 # was self-inflicted thread oversubscription, not genuine compute. Pinning to
 # one thread per ngspice PROCESS and letting `simenv_jobs` provide the
 # parallelism at the process level (the level `xargs -P` below already
-# fans out at) is the correct division of the host's 8 cores; exporting this
-# here (not in sim/lib/simenv.sh) keeps the fix scoped to this campaign's own
-# runner rather than silently changing every other campaign's behavior.
-export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
-
+# fans out at) is the correct division of the host's 8 cores. #241
+# centralized the DETECTION half of this fix into
+# sim/lib/simenv.sh::simenv_apply_omp_pin -- called below, right after
+# sourcing that file -- while keeping this campaign's own OPT-IN call (not a
+# changed default inside simenv.sh itself), for the same "don't silently
+# change every other campaign's behavior" reason the original fix stated.
+# An explicit OMP_NUM_THREADS in the environment still always wins.
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXP="$(cd "${HERE}/.." && pwd)"
 REPO="$(cd "${EXP}/../.." && pwd)"
 # shellcheck source=../../lib/simenv.sh
 . "${HERE}/../../lib/simenv.sh"
+simenv_apply_omp_pin
 
 DECK_DC="${HERE}/tb_mc_cp_dc.sp"
 DECK_SW="${HERE}/tb_mc_cp_switch.sp"

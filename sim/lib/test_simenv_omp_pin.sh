@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+# Regression test for the ngspice-internal-threading detection helpers in
+# simenv.sh -- simenv_ngspice_openmp_linked, simenv_recommend_omp_threads,
+# simenv_apply_omp_pin (issue #241).
+#
+# This is host/binary-dependent behavior in production use (it inspects the
+# REAL `ngspice` binary's shared-library dependencies), which is exactly why
+# #241's own Test Plan calls the end-to-end effect "not practically unit
+# testable." What IS unit-testable in isolation, with no real ngspice binary
+# required, is the detection LOGIC itself: SIMENV_NGSPICE_LDD_OUTPUT lets a
+# test supply the "ldd" output directly, so these cases run identically on
+# any host regardless of what ngspice build (if any) is actually installed.
+#
+# There is no existing bash-level unit-test harness for sim/lib/simenv.sh
+# (see sim/lib/test_simenv_run_deck_retried.sh's header, the established
+# precedent this file follows) -- run directly:
+#
+#   sim/lib/test_simenv_omp_pin.sh
+#
+# shellcheck disable=SC2016 # run_case's single-quoted bodies intentionally
+# defer $-expansion to the `bash -c` subshell they're spliced into.
+
+set -uo pipefail
+
+SIM_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SIMENV_SH="${SIM_LIB_DIR}/simenv.sh"
+
+fail_count=0
+
+# assert_eq <expected> <actual> <case_name>
+assert_eq() {
+  local expected="$1" actual="$2" name="$3"
+  if [ "${expected}" != "${actual}" ]; then
+    echo "FAIL: ${name}: expected '${expected}', got '${actual}'"
+    fail_count=$((fail_count + 1))
+  else
+    echo "PASS: ${name}: '${actual}'"
+  fi
+}
+
+# assert_rc <expected_rc> <actual_rc> <case_name>
+assert_rc() {
+  local expected="$1" actual="$2" name="$3"
+  if [ "${expected}" -ne "${actual}" ]; then
+    echo "FAIL: ${name}: expected rc=${expected}, got rc=${actual}"
+    fail_count=$((fail_count + 1))
+  else
+    echo "PASS: ${name}: rc=${actual}"
+  fi
+}
+
+# run_case <script_body> -- runs script_body in `bash -c` with `set +e` so a
+# stubbed non-zero return doesn't kill the subshell before we can inspect it.
+# Sets globals CASE_RC and CASE_STDOUT.
+run_case() {
+  local body="$1"
+  local out_file
+  out_file="$(mktemp)"
+  bash -c "source \"${SIMENV_SH}\"; set +e; ${body}" >"${out_file}" 2>/dev/null
+  CASE_RC=$?
+  CASE_STDOUT="$(cat "${out_file}")"
+  rm -f "${out_file}"
+}
+
+echo "== simenv_ngspice_openmp_linked =="
+
+run_case '
+  SIMENV_NGSPICE_LDD_OUTPUT="linux-vdso.so.1 (0x00007fff)
+libgomp.so.1 => /usr/lib/x86_64-linux-gnu/libgomp.so.1 (0x00007f1)
+libc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f2)"
+  simenv_ngspice_openmp_linked
+  exit "$?"
+'
+assert_rc 0 "${CASE_RC}" "libgomp-linked ldd output detected as OpenMP-linked"
+
+run_case '
+  SIMENV_NGSPICE_LDD_OUTPUT="linux-vdso.so.1 (0x00007fff)
+libiomp5.so => /usr/lib/libiomp5.so (0x00007f1)"
+  simenv_ngspice_openmp_linked
+  exit "$?"
+'
+assert_rc 0 "${CASE_RC}" "libiomp5-linked ldd output detected as OpenMP-linked"
+
+run_case '
+  SIMENV_NGSPICE_LDD_OUTPUT="linux-vdso.so.1 (0x00007fff)
+libc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f2)
+libreadline.so.8 => /usr/lib/x86_64-linux-gnu/libreadline.so.8 (0x00007f3)"
+  simenv_ngspice_openmp_linked
+  exit "$?"
+'
+assert_rc 1 "${CASE_RC}" "no OpenMP runtime in ldd output -> not detected"
+
+run_case '
+  SIMENV_NGSPICE_LDD_OUTPUT=""
+  simenv_ngspice_openmp_linked
+  exit "$?"
+'
+assert_rc 1 "${CASE_RC}" "empty ldd output -> not detected (inconclusive is safe)"
+
+echo
+echo "== simenv_recommend_omp_threads =="
+
+run_case '
+  SIMENV_NGSPICE_LDD_OUTPUT="libgomp.so.1 => /usr/lib/libgomp.so.1"
+  simenv_recommend_omp_threads
+'
+assert_rc 0 "${CASE_RC}" "recommend: OpenMP-linked case exits 0"
+assert_eq "1" "${CASE_STDOUT}" "recommend: OpenMP-linked build recommends 1 thread"
+
+run_case '
+  SIMENV_NGSPICE_LDD_OUTPUT="libc.so.6 => /usr/lib/libc.so.6"
+  simenv_recommend_omp_threads
+'
+assert_rc 0 "${CASE_RC}" "recommend: non-OpenMP case still exits 0 (not an error)"
+assert_eq "" "${CASE_STDOUT}" "recommend: non-OpenMP build makes no recommendation"
+
+echo
+echo "== simenv_apply_omp_pin =="
+
+run_case '
+  SIMENV_NGSPICE_LDD_OUTPUT="libgomp.so.1 => /usr/lib/libgomp.so.1"
+  simenv_apply_omp_pin
+  printf "%s" "${OMP_NUM_THREADS:-<unset>}"
+'
+assert_eq "1" "${CASE_STDOUT}" "apply: OpenMP-linked build exports OMP_NUM_THREADS=1"
+
+run_case '
+  SIMENV_NGSPICE_LDD_OUTPUT="libc.so.6 => /usr/lib/libc.so.6"
+  simenv_apply_omp_pin
+  printf "%s" "${OMP_NUM_THREADS:-<unset>}"
+'
+assert_eq "<unset>" "${CASE_STDOUT}" "apply: non-OpenMP build leaves OMP_NUM_THREADS unset (no regression)"
+
+run_case '
+  SIMENV_NGSPICE_LDD_OUTPUT="libgomp.so.1 => /usr/lib/libgomp.so.1"
+  OMP_NUM_THREADS=4
+  simenv_apply_omp_pin
+  printf "%s" "${OMP_NUM_THREADS}"
+'
+assert_eq "4" "${CASE_STDOUT}" "apply: an explicit caller-set OMP_NUM_THREADS is always respected, never overridden"
+
+echo
+if [ "${fail_count}" -eq 0 ]; then
+  echo "All simenv ngspice-thread-pin regression tests passed."
+  exit 0
+else
+  echo "${fail_count} simenv ngspice-thread-pin regression test(s) failed."
+  exit 1
+fi
