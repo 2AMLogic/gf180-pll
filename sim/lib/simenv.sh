@@ -682,7 +682,7 @@ simenv_jobs() {
 # found this on a Linux host).
 #
 # SIMENV_NGSPICE_LDD_OUTPUT overrides the live `ldd` invocation with a literal
-# string for testing (see sim/lib/test-simenv-jobs.sh) -- this is what makes
+# string for testing (see sim/lib/test_simenv_omp_pin.sh) -- this is what makes
 # the detection logic unit-testable without an actual OpenMP-linked ngspice
 # binary present on the test host.
 simenv_ngspice_openmp_linked() {
