@@ -620,7 +620,13 @@ simenv_require_tools
 # ngspice's own internal threads squared the host's thread count, measured
 # ~55x wall-clock regression) but had not adopted #146's per-campaign fix.
 # A no-op on a host/build where ngspice is not internally threaded, and never
-# overrides an OMP_NUM_THREADS the caller already set.
+# overrides an OMP_NUM_THREADS/OMP_THREAD_LIMIT the caller already set.
+#
+# #242/#244: on this campaign's closed-loop lock deck, `OMP_NUM_THREADS`
+# alone was found NOT to reduce ngspice's live thread count (unlike #146's
+# charge-pump-only deck) -- `simenv_apply_omp_pin` now also exports
+# `OMP_THREAD_LIMIT`, the variable #244 found actually caps this deck's
+# thread count; see sim/supply-sensitivity/records/20260829-114117-aca2990.md.
 simenv_apply_omp_pin
 [ -f "${VCO_TUNING}" ] || {
   echo "ERROR: ${VCO_TUNING} missing -- this campaign derives its operating" >&2

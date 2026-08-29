@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Regression test for the ngspice-internal-threading detection helpers in
 # simenv.sh -- simenv_ngspice_openmp_linked, simenv_recommend_omp_threads,
-# simenv_apply_omp_pin (issue #241).
+# simenv_apply_omp_pin (issue #241; extended by #244 to also cover
+# OMP_THREAD_LIMIT, the variable that turned out to be the effective pin for
+# sim/supply-sensitivity's closed-loop deck where OMP_NUM_THREADS alone was
+# not).
 #
 # This is host/binary-dependent behavior in production use (it inspects the
 # REAL `ngspice` binary's shared-library dependencies), which is exactly why
@@ -125,11 +128,18 @@ run_case '
 assert_eq "1" "${CASE_STDOUT}" "apply: OpenMP-linked build exports OMP_NUM_THREADS=1"
 
 run_case '
+  SIMENV_NGSPICE_LDD_OUTPUT="libgomp.so.1 => /usr/lib/libgomp.so.1"
+  simenv_apply_omp_pin
+  printf "%s" "${OMP_THREAD_LIMIT:-<unset>}"
+'
+assert_eq "1" "${CASE_STDOUT}" "apply: OpenMP-linked build also exports OMP_THREAD_LIMIT=1 (#244 -- the variable that actually caps sim/supply-sensitivity's closed-loop deck)"
+
+run_case '
   SIMENV_NGSPICE_LDD_OUTPUT="libc.so.6 => /usr/lib/libc.so.6"
   simenv_apply_omp_pin
-  printf "%s" "${OMP_NUM_THREADS:-<unset>}"
+  printf "%s,%s" "${OMP_NUM_THREADS:-<unset>}" "${OMP_THREAD_LIMIT:-<unset>}"
 '
-assert_eq "<unset>" "${CASE_STDOUT}" "apply: non-OpenMP build leaves OMP_NUM_THREADS unset (no regression)"
+assert_eq "<unset>,<unset>" "${CASE_STDOUT}" "apply: non-OpenMP build leaves both OMP_NUM_THREADS and OMP_THREAD_LIMIT unset (no regression)"
 
 run_case '
   SIMENV_NGSPICE_LDD_OUTPUT="libgomp.so.1 => /usr/lib/libgomp.so.1"
@@ -138,6 +148,22 @@ run_case '
   printf "%s" "${OMP_NUM_THREADS}"
 '
 assert_eq "4" "${CASE_STDOUT}" "apply: an explicit caller-set OMP_NUM_THREADS is always respected, never overridden"
+
+run_case '
+  SIMENV_NGSPICE_LDD_OUTPUT="libgomp.so.1 => /usr/lib/libgomp.so.1"
+  OMP_NUM_THREADS=4
+  simenv_apply_omp_pin
+  printf "%s" "${OMP_THREAD_LIMIT:-<unset>}"
+'
+assert_eq "1" "${CASE_STDOUT}" "apply: an explicit caller-set OMP_NUM_THREADS does NOT suppress the OMP_THREAD_LIMIT default (#244 -- the two variables are defaulted independently)"
+
+run_case '
+  SIMENV_NGSPICE_LDD_OUTPUT="libgomp.so.1 => /usr/lib/libgomp.so.1"
+  OMP_THREAD_LIMIT=4
+  simenv_apply_omp_pin
+  printf "%s,%s" "${OMP_NUM_THREADS:-<unset>}" "${OMP_THREAD_LIMIT}"
+'
+assert_eq "1,4" "${CASE_STDOUT}" "apply: an explicit caller-set OMP_THREAD_LIMIT is always respected, never overridden, and does not suppress the OMP_NUM_THREADS default"
 
 echo
 if [ "${fail_count}" -eq 0 ]; then
