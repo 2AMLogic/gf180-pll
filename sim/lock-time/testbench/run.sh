@@ -83,6 +83,39 @@ REPO="$(cd "${EXP}/../.." && pwd)"
 # shellcheck source=../../lib/pll_top_dut.sh
 . "${HERE}/../../lib/pll_top_dut.sh"
 
+# ngspice internal-threading pin (#241/#244/#246), applied HERE -- above the
+# `--one` dispatch below -- rather than next to simenv_require_tools, because
+# the grid path runs every one of its points as a FRESH `run.sh --one`
+# invocation via xargs, and that entry point returns before
+# simenv_require_tools is ever reached. A pin placed after it would cover
+# `--check` and the record-minting parent only, i.e. exactly not the 270
+# processes that do the work.
+#
+# Why this campaign opts in (measured this session, typical/27C/3.30V, N=4,
+# `cold`, SIM_WINCAP=2.5e-7, same contended host, back-to-back):
+#
+#   unpinned (ngspice-46 spawns up to nproc OpenMP threads)  177.7 s wall, 357.1 CPU-s
+#   OMP_THREAD_LIMIT=1                                        17.5 s wall,  11.5 CPU-s
+#
+# -- a 10x wall-clock and 31x CPU-second difference for a BIT-IDENTICAL result
+# row (same status, same vctrl_final 1.05995e+00, same dn_lvl 1.33230e-05).
+# The threads are not doing useful work on this deck; they are spinning at
+# OpenMP barriers, and the cost grows with host contention, which is the exact
+# mechanism #58/#65 and this campaign's own records repeatedly diagnosed as
+# "the host was loaded" and budgeted around instead of fixing. Without this
+# line the full 270-run grid measured ~61 h of wall-clock on this host; with
+# it the same grid is a couple of hours, which is the difference between this
+# campaign having a full-grid record and not.
+#
+# simenv_apply_omp_pin is a no-op on a host/build whose ngspice is not
+# internally threaded, and never overrides an OMP_NUM_THREADS/OMP_THREAD_LIMIT
+# the caller already set -- so `OMP_THREAD_LIMIT=8 ./run.sh` still reproduces
+# the unpinned regime deliberately. See sim/lib/simenv.sh and
+# sim/supply-sensitivity/records/20260829-114117-aca2990.md for why
+# OMP_THREAD_LIMIT (not OMP_NUM_THREADS) is the variable that actually binds
+# on a closed-loop deck of this size.
+simenv_apply_omp_pin
+
 FRAGMENT="${HERE}/tb_lock_time.sp"
 WORK="${EXP}/work"
 # The deck actually handed to ngspice: the committed pll_top export with the
@@ -385,11 +418,22 @@ done
 NJOBS=$(wc -l <"${JOBLIST}" | tr -d ' ')
 echo "lock-time: ${NJOBS} runs (full 45-point PVT grid x N in {4,16,64} x {cold,relock} -- see run.sh header), ${JOBS} parallel"
 
+# Host contention is the single biggest determinant of this campaign's
+# wall-clock (see the header), and every record it mints is read as evidence
+# about throughput as well as about the loop -- so the load average is
+# SAMPLED here rather than asserted in the record template. The template used
+# to hard-code "an effectively uncontended host (load average 0.9-1.2 at the
+# time)", inherited from a session that never actually completed the grid;
+# that sentence would have been emitted verbatim, and false, by every
+# subsequent run on a loaded host. Measure it instead.
+LOAD_START="$(uptime | sed 's/.*load average: //')"
+NCPU="$(nproc 2>/dev/null || echo unknown)"
 export OUTCSV="${RESULT_CSV}"
 # shellcheck disable=SC2016
 xargs -P "${JOBS}" -L 1 \
   "${BASH:-/bin/bash}" -c 'exec "$0" --one "$@" "${OUTCSV}"' "${HERE}/run.sh" \
   <"${JOBLIST}"
+LOAD_END="$(uptime | sed 's/.*load average: //')"
 
 echo "lock-time: wrote ${RESULT_CSV}"
 cat "${RESULT_CSV}"
@@ -641,16 +685,27 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
       (vctrl_final > 2.7 V), reported as consistent with the diagnosed
       mechanism rather than independently re-investigated at every corner.
   - **Measured simulator throughput** (this record's own development, this
-    grid's actual runtime rather than a vendor number): unlike the original
-    pilot record's single \`cold\` row (906.2 CPU-seconds on a then-heavily-
-    contended shared host), this grid ran on an effectively uncontended host
-    (load average 0.9-1.2 at the time) -- see \`sim/lock-time/records/20260801-073931-eec269e.md\`'s
-    own throughput note for the single-corner comparison (62.1 CPU-s vs. that
-    record's 714.3 CPU-s for the identical \`relock\` corner/window, an
-    order of magnitude difference attributable to contention, not a change
-    in the DUT). Per-run \`Total analysis time\` for every one of the
-    ${NJOBS} runs here is in its own committed log under
-    \`corners/${RID}/\`.
+    grid's actual runtime rather than a vendor number): **host load average
+    was ${LOAD_START} when this grid started and ${LOAD_END} when it
+    finished**, on a ${NCPU}-CPU shared host
+    running \`${JOBS}\` of this campaign's runs in parallel; this figure is
+    sampled by \`run.sh\` at run time, not asserted. Read every per-row
+    \`Total analysis time\` below in that light -- the same corner and window
+    has been measured at 62.1 CPU-s on an idle host and 714.3 CPU-s on a
+    loaded one (\`sim/lock-time/records/20260801-073931-eec269e.md\`'s own
+    throughput note), an order of magnitude attributable to contention rather
+    than to any change in the DUT, so these numbers bound this host's
+    throughput on this day and are not a portable cost model for the deck.
+    **ngspice internal-threading pin (#241/#244/#246)**: this campaign now
+    calls \`simenv_apply_omp_pin\`, so each run is one single-threaded
+    \`ngspice\` process (\`OMP_NUM_THREADS=${OMP_NUM_THREADS:-unset}\`,
+    \`OMP_THREAD_LIMIT=${OMP_THREAD_LIMIT:-unset}\`) and the campaign's
+    parallelism is external (\`SIM_JOBS\`) rather than a fan-out of
+    \`SIM_JOBS\` processes each spawning up to \`nproc\` OpenMP threads. Rows
+    in the pre-#159 records above were taken WITHOUT that pin and their
+    per-run figures are not comparable to these. Per-run \`Total analysis
+    time\` for every one of the ${NJOBS} runs here is in its own committed
+    log under \`corners/${RID}/\`.
   - **Limitations**: schematic-level, no parasitics (#18 is post-layout);
     nominal-skew only (\`sw_stat_global = sw_stat_mismatch = 0\`, no Monte
     Carlo -- mismatch's contribution to lock behaviour is #15's mc-cp-mismatch
