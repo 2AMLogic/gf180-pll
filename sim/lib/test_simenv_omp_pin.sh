@@ -20,6 +20,10 @@
 #
 #   sim/lib/test_simenv_omp_pin.sh
 #
+# Shared run_case/assert_rc/fail_count/test_summary scaffolding lives in
+# test_helpers.sh (issue #249); only assert_eq (used solely by this file) is
+# defined locally.
+#
 # shellcheck disable=SC2016 # run_case's single-quoted bodies intentionally
 # defer $-expansion to the `bash -c` subshell they're spliced into.
 
@@ -28,7 +32,8 @@ set -uo pipefail
 SIM_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SIMENV_SH="${SIM_LIB_DIR}/simenv.sh"
 
-fail_count=0
+# shellcheck source=sim/lib/test_helpers.sh
+. "${SIM_LIB_DIR}/test_helpers.sh"
 
 # assert_eq <expected> <actual> <case_name>
 assert_eq() {
@@ -39,30 +44,6 @@ assert_eq() {
   else
     echo "PASS: ${name}: '${actual}'"
   fi
-}
-
-# assert_rc <expected_rc> <actual_rc> <case_name>
-assert_rc() {
-  local expected="$1" actual="$2" name="$3"
-  if [ "${expected}" -ne "${actual}" ]; then
-    echo "FAIL: ${name}: expected rc=${expected}, got rc=${actual}"
-    fail_count=$((fail_count + 1))
-  else
-    echo "PASS: ${name}: rc=${actual}"
-  fi
-}
-
-# run_case <script_body> -- runs script_body in `bash -c` with `set +e` so a
-# stubbed non-zero return doesn't kill the subshell before we can inspect it.
-# Sets globals CASE_RC and CASE_STDOUT.
-run_case() {
-  local body="$1"
-  local out_file
-  out_file="$(mktemp)"
-  bash -c "source \"${SIMENV_SH}\"; set +e; ${body}" >"${out_file}" 2>/dev/null
-  CASE_RC=$?
-  CASE_STDOUT="$(cat "${out_file}")"
-  rm -f "${out_file}"
 }
 
 echo "== simenv_ngspice_openmp_linked =="
@@ -165,11 +146,5 @@ run_case '
 '
 assert_eq "1,4" "${CASE_STDOUT}" "apply: an explicit caller-set OMP_THREAD_LIMIT is always respected, never overridden, and does not suppress the OMP_NUM_THREADS default"
 
-echo
-if [ "${fail_count}" -eq 0 ]; then
-  echo "All simenv ngspice-thread-pin regression tests passed."
-  exit 0
-else
-  echo "${fail_count} simenv ngspice-thread-pin regression test(s) failed."
-  exit 1
-fi
+test_summary "simenv ngspice-thread-pin"
+exit "$?"

@@ -11,6 +11,10 @@
 # simenv_run_deck() to control the pass/fail sequence, then asserts on the
 # wrapper's return code and stderr WARN lines.
 #
+# Shared run_case/assert_rc/fail_count/test_summary scaffolding lives in
+# test_helpers.sh (issue #249); only assert_contains/assert_not_contains
+# (used solely by this file) are defined locally.
+#
 # shellcheck disable=SC2016 # run_case's single-quoted bodies intentionally
 # defer $-expansion to the `bash -c` subshell they're spliced into.
 
@@ -19,18 +23,8 @@ set -uo pipefail
 SIM_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SIMENV_SH="${SIM_LIB_DIR}/simenv.sh"
 
-fail_count=0
-
-# assert_rc <expected_rc> <actual_rc> <case_name>
-assert_rc() {
-  local expected="$1" actual="$2" name="$3"
-  if [ "${expected}" -ne "${actual}" ]; then
-    echo "FAIL: ${name}: expected rc=${expected}, got rc=${actual}"
-    fail_count=$((fail_count + 1))
-  else
-    echo "PASS: ${name}: rc=${actual}"
-  fi
-}
+# shellcheck source=sim/lib/test_helpers.sh
+. "${SIM_LIB_DIR}/test_helpers.sh"
 
 # assert_contains <needle> <haystack> <case_name>
 assert_contains() {
@@ -62,19 +56,6 @@ assert_not_contains() {
       echo "PASS: ${name}: '${needle}' absent as expected"
       ;;
   esac
-}
-
-# run_case <script_body> -- runs script_body in `bash -c` with `set +e` so
-# the wrapper's non-zero return doesn't kill the subshell before we can
-# inspect it; sets globals CASE_RC and CASE_STDERR.
-run_case() {
-  local body="$1"
-  local err_file
-  err_file="$(mktemp)"
-  bash -c "source \"${SIMENV_SH}\"; set +e; ${body}" >/dev/null 2>"${err_file}"
-  CASE_RC=$?
-  CASE_STDERR="$(cat "${err_file}")"
-  rm -f "${err_file}"
 }
 
 echo "== case 1: all 3 attempts fail -> wrapper returns real non-zero rc =="
@@ -111,11 +92,5 @@ run_case '
 assert_rc 0 "${CASE_RC}" "fails-then-succeeds returns 0"
 assert_contains "rc=3" "${CASE_STDERR}" "fails-then-succeeds WARN reports attempt-1's real rc"
 
-echo
-if [ "${fail_count}" -eq 0 ]; then
-  echo "All simenv_run_deck_retried regression tests passed."
-  exit 0
-else
-  echo "${fail_count} simenv_run_deck_retried regression test(s) failed."
-  exit 1
-fi
+test_summary "simenv_run_deck_retried"
+exit "$?"
