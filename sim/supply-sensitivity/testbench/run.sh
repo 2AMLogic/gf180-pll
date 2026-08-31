@@ -54,6 +54,32 @@
 #   SIM_FINE_TMAX / SIM_FINE_MAX  the ceiling it re-runs at (default: the
 #                            bound), and a cap on how many corners it reaches.
 #
+#   The step/ramp deck has TWO independent settling escalations, one per
+#   plateau, because a corner can still be converging after the STEP, after
+#   the RAMP, or both, and those are different claims:
+#
+#   SIM_DYN_TRAMP/_TREND/_TSTOP/_TA_HI/_TB_HI
+#                            override the step/ramp profile and its
+#                            HIGH-plateau (post-STEP) measurement window.
+#   SIM_DYN_EXTEND=off       disable the automatic HIGH-plateau escalation
+#                            (#253); SIM_DYN_EXTEND_TA/_TB/_TRAMP/_TREND/_TSTOP
+#                            are the longer profile it escalates to and
+#                            SIM_DYN_EXTEND_MAX=<n> caps how many corners it
+#                            reaches.
+#   SIM_DYN_P11 / SIM_DYN_P12
+#                            override the two END-plateau (post-RAMP)
+#                            measurement instants, the criterion-3 analogue of
+#                            SIM_TA/SIM_TB above (#255).  Unset = derived from
+#                            the profile, exactly as this deck has always done.
+#   SIM_DYN_END_EXTEND=off   disable the automatic END-plateau settling
+#                            escalation (#255); SIM_DYN_END_MAX=<n> caps how
+#                            many step/ramp corners it escalates.
+#   SIM_DYN_END_TA/_TB/_TSTOP  the two probe instants and the post-ramp hold
+#                            it escalates to, stated as OFFSETS FROM t_rend so
+#                            they compose with the HIGH-plateau escalation
+#                            (defaults: KTA_X/KTB_X/KTSTOP_X -- see
+#                            "END-plateau settling escalation" below).
+#
 #   SIM_SUPERSEDES=<record-id> SIM_SUPERSEDES_NOTE='<why>' ./run.sh
 #                            mint with a **Supersedes** field (sim/README.md ::
 #                            "Status / supersession language").
@@ -77,8 +103,9 @@
 # shellcheck disable=SC2034
 set -euo pipefail
 # The settling-escalation and timestep-cross-check glob patterns below
-# (s100x_*.csv, s100m_*.csv) legitimately match zero files whenever every
-# corner already met the lock criterion at the default transient length --
+# (s100x_*.csv, s100m_*.csv, sdynx_*.csv, sdynend_*.csv) legitimately match
+# zero files whenever every corner already met the lock criterion at the
+# default transient length --
 # the common, good-path outcome, not an error.  Without nullglob, an
 # unmatched glob expands to its own literal pattern, `cat` fails to open a
 # file with that literal name, and -- because that `cat` sits at the head of
@@ -286,6 +313,46 @@ KD_TB_HI_X="${SIM_DYN_EXTEND_TB:-40.1u}"
 KD_TRAMP_X="${SIM_DYN_EXTEND_TRAMP:-41.1u}"
 KD_TREND_X="${SIM_DYN_EXTEND_TREND:-47.5u}"
 KD_TSTOP_X="${SIM_DYN_EXTEND_TSTOP:-55.5u}"
+
+# The END-plateau (post-RAMP) measurement instants p11/p12.  Unset means
+# "derive them from the profile", which is what this deck has always done
+# (t_rend + 1.6 us and tstop - 1.6 us, i.e. the literal 24.0e-6 / 28.8e-6 of
+# the default profile); SIM_DYN_P11/_P12 state them directly, in seconds, so
+# the END-plateau escalation below can push the post-ramp hold out without a
+# second, hand-duplicated probe list.
+KD_P11="${SIM_DYN_P11:-}"
+KD_P12="${SIM_DYN_P12:-}"
+
+# The criterion-3 END-plateau settling escalation (#255).  #253's escalation
+# immediately above resolves this ambiguity for the HIGH plateau (the hold
+# after the STEP); this is the SAME ambiguity for the END plateau (the hold
+# after the RAMP, measured by p11/p12 and reported as ferr_end): a corner
+# whose |ferr_end| misses ACC_FERR at the default 8.0 us post-ramp hold has
+# not been shown to FAIL the stays-locked criterion, only to still be
+# converging after the ramp.  #58's originating record
+# (sim/supply-sensitivity/records/20260831-133708-35c5a33.md, section 3)
+# reported that FAIL at all 3 sampled corners without ruling this out.
+#
+# Rather than deriving a second settling window independently, the extended
+# END-plateau probes and hold reuse the SAME KTA_X/KTB_X/KTSTOP_X window
+# criterion 1 already defines above, as OFFSETS FROM t_rend rather than from
+# t = 0: t_rend is where the loop's post-RAMP convergence starts, the same
+# role t = 0 plays for the steady-state deck's warm start.  They are offsets,
+# not absolute instants, precisely so this escalation composes with #253's --
+# a corner that needed BOTH is re-run on the high-plateau-escalated profile
+# (whose t_rend is KD_TREND_X, not KD_TREND_BASE) and still gets the same
+# post-ramp settling budget, measured from ITS OWN t_rend.  On the default
+# profile they reduce to the instants #255's originating record used:
+#   p11   = 22.4u + 31.2u = 53.6u  (3.35 KTAU after t_rend)
+#   p12   = 22.4u + 34.4u = 56.8u  (3.70 KTAU after t_rend)
+#   tstop = 22.4u + 36.8u = 59.2u  (3.96 KTAU after t_rend)
+# Both probes stay whole multiples of 160 ns, so they remain on a reference
+# half-period for both reference frequencies, same as every other instant in
+# this deck -- and snap() re-snaps them regardless, exactly as it does the
+# default 12 probes.
+KD_DEND_TA="${SIM_DYN_END_TA:-${KTA_X}}"
+KD_DEND_TB="${SIM_DYN_END_TB:-${KTB_X}}"
+KD_DEND_TSTOP="${SIM_DYN_END_TSTOP:-${KTSTOP_X}}"
 
 # In-loop control-voltage calibration (the `rforce` pre-pass).  Two forced
 # points per corner, KVPRE_D apart, straddling #8's standalone-VCO prediction;
@@ -588,6 +655,11 @@ if [ "${1:-}" = "--one-dyn" ]; then
   # overwriting the default-hold run it is compared against, exactly as the
   # criterion-1 escalation's "_X${KTSTOP}" tag does for --one-lock.
   [ "${KD_TRAMP}" = "${KD_TRAMP_BASE}" ] || tag="${tag}_X${KD_TRAMP}"
+  # ... and a non-default END-plateau hold (the criterion-3 END escalation,
+  # #255) gets its own directory again, on the SAME rule and for the same
+  # reason.  The two suffixes compose: a corner escalated on both plateaus
+  # lands in "..._X<t_ramp>_E<p12>", distinct from either single escalation.
+  [ -z "${KD_P12}" ] || tag="${tag}_E${KD_P12}"
   tag=$(simenv_mktag "${tag}")
   rundir="${WORK}/${tag}"; log="${rundir}/ngspice.log"
   libs="$(libs_for "${bundle}")"
@@ -619,16 +691,20 @@ if [ "${1:-}" = "--one-dyn" ]; then
   # escalated run can push it far later without disturbing the others; p9..p12
   # (ramp and end plateau) relative to t_ramp/t_rend/tstop, so pushing the
   # high-plateau hold out for an escalated run carries the ramp and the end
-  # plateau out with it rather than compressing them.  Reduces to the exact
-  # literal probe times this deck has always used (2.4e-6 .. 28.8e-6) at the
-  # unoverridden defaults.
+  # plateau out with it rather than compressing them; p11/p12 additionally
+  # overridable outright (KD_P11/KD_P12) so the END-plateau escalation can
+  # push the post-ramp window past a tstop the derived form would peg it to
+  # (#255).  Reduces to the exact literal probe times this deck has always
+  # used (2.4e-6 .. 28.8e-6) at the unoverridden defaults.
+  p11_s="$(sec "${KD_P11:-$(addoff "${t_rend_s}" 1.6e-6)}")"
+  p12_s="$(sec "${KD_P12:-$(addoff "${t_stop_s}" -1.6e-6)}")"
   P=()
   for t in 2.4e-6 4.0e-6 \
            "$(addoff "${t_step_s}" 0.32e-6)" "$(addoff "${t_step_s}" 1.12e-6)" \
            "$(addoff "${t_step_s}" 2.4e-6)"  "$(addoff "${t_step_s}" 5.6e-6)" \
            "${ta_hi_s}" "${tb_hi_s}" \
            "$(addoff "${t_ramp_s}" 2.4e-6)" "$(addoff "${t_rend_s}" -0.8e-6)" \
-           "$(addoff "${t_rend_s}" 1.6e-6)" "$(addoff "${t_stop_s}" -1.6e-6)"; do
+           "${p11_s}" "${p12_s}"; do
     P+=( "$(snap "${t}")" )
   done
 
@@ -665,6 +741,14 @@ if [ "${1:-}" = "--one-dyn" ]; then
   # verdict was measured at (mirroring --one-lock's trailing tstop/tmax
   # fields for the criterion-1 escalation, #253).
   esc_rank=0; [ "${KD_TRAMP}" = "${KD_TRAMP_BASE}" ] || esc_rank=1
+  # The same pair again for the END plateau (#255): rank, and the instant the
+  # ferr_end/lock_end/vc_end window for THIS row actually ended at (p12, in
+  # seconds).  Two independent ranks rather than one, because a corner can be
+  # escalated on either plateau, on both, or on neither, and collapsing that
+  # into a single number would lose which measurement the row is good for.
+  # APPENDED, never inserted: every awk block downstream reads the fixed
+  # fields $5..$48 by position.
+  esc_rank_end=0; [ -z "${KD_P12}" ] || esc_rank_end=1
   {
     printf '%s,%s,%s,%s' "${bundle}" "${temp}" "${band}" "${vc0}"
     for k in phi01 phi02 phi03 phi04 phi05 phi06 phi07 phi08 phi09 phi10 phi11 phi12 \
@@ -675,7 +759,11 @@ if [ "${1:-}" = "--one-dyn" ]; then
              i_core_end i_vco_end i_div_end; do
       printf ',%s' "$(m "${k}")"
     done
-    printf ',%s,%s\n' "${esc_rank}" "${KD_TB_HI}"
+    # Both instants are emitted in SECONDS -- the snapped probe times p8 and
+    # p12 the deck was actually run with, not the "14.4u"-style literal the
+    # constant is written as.  report.sh scales these by 1e6 to print
+    # microseconds, and a suffixed literal would silently read as 14.4 there.
+    printf ',%s,%s,%s,%s\n' "${esc_rank}" "${P[7]}" "${esc_rank_end}" "${P[11]}"
   } >"${sum}"
 
   # sim/README.md's waveform rule: the disturbance transient IS the argument
@@ -991,6 +1079,77 @@ if [ "${NDX}" -gt 0 ]; then
       "${BASH:-/bin/bash}" -c 'exec "$0" --one-dyn "$@"' "${HERE}/run.sh" <"${JOBSDYNX}"
 fi
 
+# --- criterion-3 END-plateau settling escalation (#255) ---------------------
+# The same mechanism again, one plateau later: a corner whose |ferr_end| (the
+# residual frequency error on the END plateau, after the RAMP) exceeds
+# ACC_FERR at the default 8.0 us post-ramp hold has not been shown to fail the
+# stays-locked criterion, only to still be converging after the ramp.  So it
+# is re-run with p11/p12 and tstop pushed out by KD_DEND_TA/_TB/_TSTOP from
+# ITS OWN t_rend.
+#
+# This runs AFTER the high-plateau escalation, not beside it, and reads the
+# BEST-so-far row per corner (the #253-escalated run where one exists, else
+# the default-hold run).  That is what makes the two escalations COMPOSE
+# rather than compete: a corner that missed both plateaus is re-run on the
+# high-plateau-escalated profile with the post-ramp hold extended on top, so
+# exactly one row per corner is the best-resolved one on both plateaus at
+# once and report.sh's "longest hold wins" rule stays a total order.  The two
+# job lists below are that split -- same escalation, two different base
+# profiles, so each batch has to carry its own instants.
+#
+#   SIM_DYN_END_EXTEND=off             skip this escalation entirely
+#   SIM_DYN_END_TA/_TB/_TSTOP          the post-ramp offsets it escalates to
+#   SIM_DYN_END_MAX=<n>                cap the number of escalated corners;
+#                                      worst |ferr_end| first
+JOBSDEND="${WORK}/jobs_dend.txt";   : >"${JOBSDEND}"
+JOBSDENDX="${WORK}/jobs_dendx.txt"; : >"${JOBSDENDX}"
+if [ "${SIM_DYN_END_EXTEND:-auto}" != "off" ]; then
+  JOBSDENDALL="${WORK}/jobs_dend_all.txt"
+  { cat "${WORK}"/sdyn_*.csv 2>/dev/null; cat "${WORK}"/sdynx_*.csv 2>/dev/null; } \
+    | awk -F, '
+        { k = $1 "|" $2; r = $49 + 0;
+          if (!(k in br) || r > br[k]) { br[k] = r; best[k] = $0 } }
+        END { for (k in best) print best[k] }' \
+    | awk -F, -v accf="${ACC_FERR}" -v w="${WORK}" '
+        { fe = $19 + 0; if (fe < 0) fe = -fe;
+          if (fe > accf) printf "%d %.6g %s %s %s %s %s/sdynend_%s_%s.csv %s/waveend_%s_%s.csv\n",
+            $49 + 0, fe, $1, $2, $3, $4, w, $1, $2, w, $1, $2 }' \
+    | sort -k2,2gr \
+    | { if [ -n "${SIM_DYN_END_MAX:-}" ]; then head -n "${SIM_DYN_END_MAX}"; else cat; fi } \
+    >"${JOBSDENDALL}"
+  awk '$1 == 0' "${JOBSDENDALL}" | cut -d' ' -f3- >"${JOBSDEND}"
+  awk '$1 == 1' "${JOBSDENDALL}" | cut -d' ' -f3- >"${JOBSDENDX}"
+fi
+# t_rend + offset, in seconds, from two "<n><u|n|p>"-suffixed literals -- the
+# top-level twin of --one-dyn's own sec()/addoff() pair.
+dend_at() { awk -v a="$1" -v b="$2" '
+  function s(x) { if (x ~ /[uU]$/) return x * 1e-6;
+                  if (x ~ /[nN]$/) return x * 1e-9;
+                  if (x ~ /[pP]$/) return x * 1e-12;
+                  return x + 0 }
+  BEGIN { printf "%.12g", s(a) + s(b) }'; }
+NDE=$(( $(wc -l <"${JOBSDEND}" | tr -d ' ') + $(wc -l <"${JOBSDENDX}" | tr -d ' ') ))
+if [ -s "${JOBSDEND}" ]; then
+  echo "supply-sensitivity: $(wc -l <"${JOBSDEND}" | tr -d ' ') corner(s) still converging on the END plateau at ${KD_TSTOP_BASE} -- re-running at $(dend_at "${KD_TREND_BASE}" "${KD_DEND_TSTOP}") s"
+  # shellcheck disable=SC2016
+  SIM_DYN_P11="$(dend_at "${KD_TREND_BASE}" "${KD_DEND_TA}")" \
+    SIM_DYN_P12="$(dend_at "${KD_TREND_BASE}" "${KD_DEND_TB}")" \
+    SIM_DYN_TSTOP="$(dend_at "${KD_TREND_BASE}" "${KD_DEND_TSTOP}")" \
+    xargs -P "$(simenv_jobs)" -L 1 \
+      "${BASH:-/bin/bash}" -c 'exec "$0" --one-dyn "$@"' "${HERE}/run.sh" <"${JOBSDEND}"
+fi
+if [ -s "${JOBSDENDX}" ]; then
+  echo "supply-sensitivity: $(wc -l <"${JOBSDENDX}" | tr -d ' ') high-plateau-escalated corner(s) still converging on the END plateau -- re-running at $(dend_at "${KD_TREND_X}" "${KD_DEND_TSTOP}") s"
+  # shellcheck disable=SC2016
+  SIM_DYN_TA_HI="${KD_TA_HI_X}" SIM_DYN_TB_HI="${KD_TB_HI_X}" \
+    SIM_DYN_TRAMP="${KD_TRAMP_X}" SIM_DYN_TREND="${KD_TREND_X}" \
+    SIM_DYN_P11="$(dend_at "${KD_TREND_X}" "${KD_DEND_TA}")" \
+    SIM_DYN_P12="$(dend_at "${KD_TREND_X}" "${KD_DEND_TB}")" \
+    SIM_DYN_TSTOP="$(dend_at "${KD_TREND_X}" "${KD_DEND_TSTOP}")" \
+    xargs -P "$(simenv_jobs)" -L 1 \
+      "${BASH:-/bin/bash}" -c 'exec "$0" --one-dyn "$@"' "${HERE}/run.sh" <"${JOBSDENDX}"
+fi
+
 got100=$(cat "${WORK}"/s100_*.csv 2>/dev/null | wc -l | tr -d ' ')
 got050=$(cat "${WORK}"/s050_*.csv 2>/dev/null | wc -l | tr -d ' ')
 gotdyn=$(cat "${WORK}"/sdyn_*.csv 2>/dev/null | wc -l | tr -d ' ')
@@ -1003,5 +1162,7 @@ got100m=$(cat "${WORK}"/s100m_*.csv 2>/dev/null | wc -l | tr -d ' ')
 [ "${got100m}" -eq "${NM}" ] || { echo "ERROR: expected ${NM} timestep-ceiling rows, got ${got100m}" >&2; exit 1; }
 gotdynx=$(cat "${WORK}"/sdynx_*.csv 2>/dev/null | wc -l | tr -d ' ')
 [ "${gotdynx}" -eq "${NDX}" ] || { echo "ERROR: expected ${NDX} high-plateau settling re-run rows, got ${gotdynx}" >&2; exit 1; }
+gotdynend=$(cat "${WORK}"/sdynend_*.csv 2>/dev/null | wc -l | tr -d ' ')
+[ "${gotdynend}" -eq "${NDE}" ] || { echo "ERROR: expected ${NDE} END-plateau settling re-run rows, got ${gotdynend}" >&2; exit 1; }
 
 exec "${HERE}/report.sh" "${WORK}" "${EXP}" "${HERE}"

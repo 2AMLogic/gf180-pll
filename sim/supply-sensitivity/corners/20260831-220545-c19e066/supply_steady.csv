@@ -1,0 +1,26 @@
+# campaign: supply-sensitivity
+# record_id: 20260831-220545-c19e066
+# generated_utc: 2026-08-31T22:05:45Z
+# pdk_variant: gf180mcuD
+# pdk_open_pdks_hash: c6d73a35f524070e85faff4a6a9eef49553ebc2b
+# pdk_root: /home/ubuntu/.volare/gf180mcuD
+# model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
+# switches: design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0 -> nominal skew, no Monte Carlo)
+# simulator: ngspice-46
+# netlist: design/pll_top.sch -> sim/supply-sensitivity/netlist-snapshots/20260831-220545-c19e066.spice
+# corners: process{typical,ff,ss,fs,sf} x temp{-40,27,125}C x vdd{2.97,3.30,3.63}V = 45 points at f_out=100e6 Hz, plus 9 points at f_out=50e6 Hz (typical bundle) for the quiescent/dynamic power split
+# dut: design/pll_top.sch (#52) -- pfd_cp (#9, post-#24 cp_dumpbuf) +
+#   loop_filter (#10) + vco (#8) + divider_chain + lock_detector (#11)
+# band/vctrl0: derived from #8's committed f(Vctrl) table,
+#   sim/vco-tuning-range/corners/20260731-175947-0a12e6c/vco_tuning.csv
+# fdev_ppm: (f_out - f_out at 3.30 V, same bundle/temp) / f_out(3.30 V), ppm
+# phi_b_s: static REF->FB phase error in the late window, seconds
+# skew_s: mean UP/DN pulse-WIDTH difference over 3 probes, seconds
+# p_tot_w: vdd * (|i_core| + |i_vco| + |i_div|)
+# tstop/tmax: the transient length and internal-timestep ceiling THIS
+#   row was run at -- per row, not per grid: see the settling escalation
+#   and the timestep-ceiling cross-check in run.sh
+bundle,temp_c,vdd_v,band,fout_hz,fdev_ppm,ferr,phi_b_s,skew_s,skew_spread_s,wup_s,wdn_s,nmeas,vctrl_avg_v,vctrl_min_v,vctrl_max_v,lock_lvl_v,i_core_a,i_vco_a,i_div_a,p_tot_w,verdict,tstop,tmax
+typical,27,2.97,5,1.00005e+08,-9.999,8.548e-05,3.87179e-10,3.64561e-10,1.6569e-11,2.31589e-09,1.94249e-09,8.00006,1.8,1.798,1.802,2.97,-7.52586e-05,-0.000183064,-0.00010811,0.0010883,PASS,12.0u,100p
+typical,27,3.30,5,1.00006e+08,0,8.221e-05,6.27819e-10,6.00863e-10,2.6885e-11,2.38845e-09,1.77444e-09,7.99999,2.162,2.16,2.166,3.3,-8.37946e-05,-0.000217736,-0.000123736,0.00140338,PASS,12.0u,100p
+typical,27,3.63,5,9.9982e+07,-240,-0.0002123,-9.07162e-10,-9.2587e-10,3.848e-11,1.68746e-09,2.628e-09,7.99955,2.498,2.495,2.502,3.63,-0.000112134,-0.000254387,-0.000139246,0.00183593,PASS,12.0u,100p
