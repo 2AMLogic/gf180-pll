@@ -27,6 +27,28 @@ ROOT="$(cd "${EXP}/../.." && pwd)"
 # the criterion actually applied drift apart.
 eval "$(sed -n '/^KFOUT=/,/^ACC_FDEV_PPM=/p;/^CITE_/p;/^VCO_TUNING=/p;/^PASSIVES=/p' "${HERE}/run.sh")"
 
+# The END-plateau escalation's instants are declared by run.sh as OFFSETS from
+# t_rend (KD_DEND_TA/_TB/_TSTOP), not as absolute times, because they compose
+# with #253's high-plateau escalation -- which moves t_rend.  Re-derive the two
+# absolute sets here exactly as run.sh's own dend_at() does, so the record
+# states the instants the runner actually used rather than a restatement of
+# them.  KD_DEND_* = escalated from the default profile; KD_DENDX_* =
+# escalated on top of a high-plateau-escalated profile.
+dend_at() { awk -v a="$1" -v b="$2" '
+  function s(x) { if (x ~ /[uU]$/) return x * 1e-6;
+                  if (x ~ /[nN]$/) return x * 1e-9;
+                  if (x ~ /[pP]$/) return x * 1e-12;
+                  return x + 0 }
+  BEGIN { printf "%.12g", s(a) + s(b) }'; }
+KD_DEND_P11="$(dend_at "${KD_TREND_BASE}" "${KD_DEND_TA}")"
+KD_DEND_P12="$(dend_at "${KD_TREND_BASE}" "${KD_DEND_TB}")"
+KD_DEND_TSTOP_ABS="$(dend_at "${KD_TREND_BASE}" "${KD_DEND_TSTOP}")"
+KD_DENDX_P12="$(dend_at "${KD_TREND_X}" "${KD_DEND_TB}")"
+KD_DENDX_TSTOP_ABS="$(dend_at "${KD_TREND_X}" "${KD_DEND_TSTOP}")"
+# The default END-plateau window's own end instant (t_rend + 1.6 us derived
+# form), for the "short" side of the comparison table's prose.
+KD_DEND_P12_BASE="$(dend_at "${KD_TSTOP_BASE}" "-1.6u")"
+
 RID="$(simenv_record_id)"
 SNAPDIR="${EXP}/netlist-snapshots"; mkdir -p "${SNAPDIR}"
 CORNERSDIR="${EXP}/corners/${RID}"; mkdir -p "${CORNERSDIR}"
@@ -88,6 +110,25 @@ for f in "${WORK}"/sdynx_*.csv; do
     "dynx_$(simenv_corner_id "${bundle}" "${temp}" 3.30)"
   cp "${WORK}/wavex_${bundle}_${temp}.csv" \
      "${CORNERSDIR}/supply_transient_$(simenv_corner_id "${bundle}" "${temp}" 3.30)_esc.csv"
+done
+# The criterion-3 END-plateau settling escalation's own runs (#255) -- same
+# corner again, post-ramp hold extended, own work directory again (the
+# "_E<p12>" tag, composed on top of the "_X<KD_TRAMP_X>" tag when this corner
+# had ALSO been high-plateau escalated -- field 49 of its own row says which,
+# so the archive names the directory the runner actually wrote rather than
+# guessing at it).
+for f in "${WORK}"/sdynend_*.csv; do
+  IFS=, read -r bundle temp _ <<<"$(cat "${f}")"
+  if [ "$(cut -d, -f49 <"${f}")" = "1" ]; then
+    tag="dyn_${bundle}_T${temp}_X${KD_TRAMP_X}_E${KD_DENDX_P12}"
+  else
+    tag="dyn_${bundle}_T${temp}_E${KD_DEND_P12}"
+  fi
+  tag="${tag//./p}"; tag="${tag//-/m}"
+  simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" \
+    "dynend_$(simenv_corner_id "${bundle}" "${temp}" 3.30)"
+  cp "${WORK}/waveend_${bundle}_${temp}.csv" \
+     "${CORNERSDIR}/supply_transient_$(simenv_corner_id "${bundle}" "${temp}" 3.30)_end.csv"
 done
 
 # ---------------------------------------------------------------------------
@@ -404,18 +445,33 @@ POWER="${CORNERSDIR}/power_split.csv"
 # Extracted metrics: the step/ramp runs.
 # ---------------------------------------------------------------------------
 # supply_dynamic.csv reports the BEST-RESOLVED run of each corner -- the
-# criterion-3 escalation's longer-hold re-run where one exists, else the
+# criterion-3 escalations' longer-hold re-runs where one exists, else the
 # default-hold run -- exactly the same "longest available hold wins" rule
-# ROWS applies to the criterion-1 steady-state grid above (#253).  The
-# trailing esc_rank/t_hi_end_s columns say, per row, which hold that was: 0 =
-# the default ${KD_TB_HI} window, 1 = escalated to ${KD_TB_HI_X}.  The
-# earlier (default-hold) rows are not discarded -- they are the short side of
-# the comparison in dyn_settling_rerun.csv below.
+# ROWS applies to the criterion-1 steady-state grid above (#253, #255).  The
+# trailing esc_rank/t_hi_end_s and esc_rank_end/t_end_s column PAIRS say, per
+# row, which hold each plateau's verdict was measured at: esc_rank 0 = the
+# default ${KD_TB_HI} high-plateau window, 1 = escalated to ${KD_TB_HI_X};
+# esc_rank_end 0 = the default ${KD_TSTOP_BASE} post-ramp hold, 1 = escalated
+# past it.  The earlier (default-hold) rows are not discarded -- they are the
+# short side of the comparisons in dyn_settling_rerun.csv and
+# dyn_end_settling_rerun.csv below.
+#
+# The two ranks are SUMMED to order the rows, and that is a total order rather
+# than an arbitrary tie-break because run.sh's END escalation is dispatched
+# from the best row the high-plateau escalation left behind, not from the
+# default row (see its "END-plateau settling escalation" block).  So a corner
+# that needed both is re-run ONCE, on the high-plateau-escalated profile with
+# the post-ramp hold extended on top, and scores 2 -- strictly above either
+# single escalation, and better resolved on BOTH plateaus at once.  A corner
+# that needed only one has a single rank-1 row, and no rank-1 row can collide
+# with another, because needing both is exactly what produces the rank-2 row
+# instead.
 DYNROWS="${WORK}/.dyn_rows.csv"
-{ for f in "${WORK}"/sdyn_*.csv;  do cat "${f}"; done
-  for f in "${WORK}"/sdynx_*.csv; do cat "${f}"; done; } \
+{ for f in "${WORK}"/sdyn_*.csv;    do cat "${f}"; done
+  for f in "${WORK}"/sdynx_*.csv;   do cat "${f}"; done
+  for f in "${WORK}"/sdynend_*.csv; do cat "${f}"; done; } \
   | awk -F, '
-    { k = $1 "|" $2; r = $(NF-1) + 0;
+    { k = $1 "|" $2; r = $49 + $51;
       if (!(k in br) || r > br[k]) { br[k] = r; best[k] = $0 } }
     END { for (k in best) print best[k] }' >"${DYNROWS}"
 
@@ -423,7 +479,7 @@ DYNCSV="${CORNERSDIR}/supply_dynamic.csv"
 {
   simenv_provenance "supply-sensitivity (step/ramp)" "${RID}" \
     "design/pll_top.sch -> sim/supply-sensitivity/netlist-snapshots/${RID}-dyn.spice" \
-    "typical/27C, ss/-40C, ff/125C -- one transient each, carrying a ${KD_LO}->${KD_HI} V step and a ${KD_HI}->${KD_END} V ramp, reported at the best-resolved (longest) high-plateau hold available per corner (see esc_rank)"
+    "typical/27C, ss/-40C, ff/125C -- one transient each, carrying a ${KD_LO}->${KD_HI} V step and a ${KD_HI}->${KD_END} V ramp, reported at the best-resolved (longest) high-plateau AND end-plateau hold available per corner (see esc_rank / esc_rank_end)"
   echo "# phi_NN: static REF->FB phase error at probe NN (see the record's"
   echo "#   methodology for the probe instants); phi01/02 pre-step,"
   echo "#   phi03..06 through the step, phi07/08 settled high,"
@@ -435,7 +491,11 @@ DYNCSV="${CORNERSDIR}/supply_dynamic.csv"
   echo "#   that escalated and how each resolved."
   echo "# t_hi_end_s: the instant (seconds) the ferr_hi/lock_hi/vc_hi window"
   echo "#   for THIS row actually ended at -- per row, not per campaign."
-  echo "bundle,temp_c,band,vctrl0_v,phi01,phi02,phi03,phi04,phi05,phi06,phi07,phi08,phi09,phi10,phi11,phi12,ferr_lo,ferr_hi,ferr_end,fout_lo,fout_hi,fout_end,fout_step,fout_ramp,vc_lo,vc_hi,vc_end,vc_smax,vc_smin,vc_rmax,vc_rmin,vc_all_max,vc_all_min,lock_lo,lock_stp,lock_hi,lock_rmp,lock_end,lock_min,i_core_lo,i_vco_lo,i_div_lo,i_core_hi,i_vco_hi,i_div_hi,i_core_end,i_vco_end,i_div_end,esc_rank,t_hi_end_s"
+  echo "# esc_rank_end: 0 = default ${KD_TSTOP_BASE} post-ramp hold, 1 ="
+  echo "#   escalated past it (#255) -- see dyn_end_settling_rerun.csv."
+  echo "# t_end_s: the instant (seconds) the ferr_end/lock_end/vc_end window"
+  echo "#   for THIS row actually ended at (probe p12) -- per row."
+  echo "bundle,temp_c,band,vctrl0_v,phi01,phi02,phi03,phi04,phi05,phi06,phi07,phi08,phi09,phi10,phi11,phi12,ferr_lo,ferr_hi,ferr_end,fout_lo,fout_hi,fout_end,fout_step,fout_ramp,vc_lo,vc_hi,vc_end,vc_smax,vc_smin,vc_rmax,vc_rmin,vc_all_max,vc_all_min,lock_lo,lock_stp,lock_hi,lock_rmp,lock_end,lock_min,i_core_lo,i_vco_lo,i_div_lo,i_core_hi,i_vco_hi,i_div_hi,i_core_end,i_vco_end,i_div_end,esc_rank,t_hi_end_s,esc_rank_end,t_end_s"
   sort -t, -k1,1 "${DYNROWS}"
 } >"${DYNCSV}"
 
@@ -470,7 +530,12 @@ DYNSETTLE="${CORNERSDIR}/dyn_settling_rerun.csv"
     short="${WORK}/sdyn_${b}_${t}.csv"
     [ -f "${short}" ] || continue
     paste -d, "${short}" "${f}"
-  done | awk -F, -v accf="${ACC_FERR}" -v accl="${ACC_LOCK_FRAC}" -v khi="${KD_HI}" -v NW=50 '
+  done | awk -F, -v accf="${ACC_FERR}" -v accl="${ACC_LOCK_FRAC}" -v khi="${KD_HI}" '
+    # NW = the summary row width run.sh emits, derived from the pasted pair
+    # rather than inlined, for the same reason the power split derives it: a
+    # column added to that row (as #255 added esc_rank_end/t_end_s) must not
+    # silently shift the escalated block onto the wrong fields.
+    NR == 1 { NW = int(NF / 2) }
     {
       b=$1; t=$2; band=$3; vc0=$4;
       ts_s=$50; fe_s=abs($18);
@@ -503,6 +568,110 @@ eval "$(awk -F, '
       n+0, nr+0, ng+0, nl+0;
     printf "DYN_MARGIN_LIST=%s\n", (margin == "" ? "(none)" : "\"" margin "\"");
   }' "${DYNSETTLE}")"
+
+# ---------------------------------------------------------------------------
+# Extracted metrics: the criterion-3 END-plateau settling re-run (#255).
+# ---------------------------------------------------------------------------
+# The same disambiguation one plateau later: a corner whose |ferr_end|
+# exceeded ${ACC_FERR} at its default post-ramp hold and was re-run with that
+# hold extended either comes inside the criterion there (the short run's FAIL
+# was a settling-budget artefact -- `settles`) or does not (`under-damped` --
+# a genuine design-margin finding, routed to #10, not absorbed here).
+#
+# Deliberately a TWO-way classification, unlike the criterion-1 re-run's
+# three-way one: #255 scopes the END-plateau escalation to the hold length
+# only, and does not re-derive criterion 1's timestep-ceiling cross-check
+# tier.  A corner whose LOCK flag is down on the end plateau is already
+# reported as such by ferr_end/lock_end in supply_dynamic.csv and by
+# criterion 3's own verdict; it is not re-classified here.
+#
+# The "short" side is the row the escalation was actually dispatched FROM --
+# the high-plateau-escalated run where the corner had one, else the
+# default-hold run -- so the pair differs in the post-ramp hold and in
+# nothing else, which is the only way the decay ratio below means anything.
+DYN_END_SETTLE="${CORNERSDIR}/dyn_end_settling_rerun.csv"
+{
+  simenv_provenance "supply-sensitivity (criterion-3 END-plateau settling re-run)" "${RID}" \
+    "design/pll_top.sch -> sim/supply-sensitivity/netlist-snapshots/${RID}-dyn.spice" \
+    "every step/ramp corner whose |ferr_end| exceeded ${ACC_FERR} at its default post-ramp hold, re-run with p11/p12 pushed to t_rend + ${KD_DEND_TA}/${KD_DEND_TB} and tstop to t_rend + ${KD_DEND_TSTOP}"
+  echo "# t_end_short/t_end_long: the END-plateau window's end instant (probe"
+  echo "#   p12, seconds), before and after the escalation -- same corner,"
+  echo "#   same profile, same calibrated warm start; only the post-ramp hold"
+  echo "#   differs.  On the default profile that is ${KD_DEND_P12_BASE} ->"
+  echo "#   ${KD_DEND_P12} s; on a corner that #253 had already escalated it is"
+  echo "#   measured from that longer profile's own t_rend instead."
+  echo "# decay_ratio: |ferr_end(long)| / |ferr_end(short)|; decay_expected is"
+  echo "#   what a single-pole settling at KTAU = ${KTAU} would give between"
+  echo "#   those two instants.  A ratio near 1 has not decayed at all; a ratio"
+  echo "#   well ABOVE decay_expected settled far more slowly than a single"
+  echo "#   pole predicts, which is worth reading even when the row passes."
+  echo "# classification: settles | under-damped"
+  echo "bundle,temp_c,band,t_end_short,ferr_end_short,t_end_long,ferr_end_long,decay_ratio,decay_expected,classification"
+  for f in "${WORK}"/sdynend_*.csv; do
+    IFS=, read -r b t _ <<<"$(cat "${f}")"
+    short="${WORK}/sdynx_${b}_${t}.csv"
+    [ -f "${short}" ] || short="${WORK}/sdyn_${b}_${t}.csv"
+    [ -f "${short}" ] || continue
+    paste -d, "${short}" "${f}"
+  done | awk -F, -v accf="${ACC_FERR}" -v tau="${KTAU%u}" '
+    NR == 1 { NW = int(NF / 2) }
+    {
+      b=$1; t=$2; band=$3;
+      ts_s=$52 + 0;          fe_s=abs($19);
+      ts_l=$(NW + 52) + 0;   fe_l=abs($(NW + 19));
+      # tau is the "9.3u" literal with its suffix stripped, i.e. MICROseconds;
+      # ts_* are seconds.  Both terms are put in seconds explicitly rather
+      # than left to cancel by luck.
+      dexp = exp(-(ts_l - ts_s) / (tau * 1e-6));
+      cls = (fe_l > accf) ? "under-damped" : "settles";
+      printf "%s,%s,%s,%.6g,%.4g,%.6g,%.4g,%.4g,%.4g,%s\n",
+        b, t, band, ts_s, fe_s, ts_l, fe_l, (fe_s > 0 ? fe_l / fe_s : 0), dexp, cls;
+    }
+    function abs(x) { return x < 0 ? -x : x }' | sort -t, -k1,1 -k2,2n
+} >"${DYN_END_SETTLE}"
+
+# END-plateau escalation summary, computed from dyn_end_settling_rerun.csv the
+# same way the two summaries above are computed from their own re-run CSVs.
+# SLOW_LIST collects the rows that PASSED but decayed markedly slower than a
+# single pole would (decay_ratio >= DYN_SLOW_FACTOR x decay_expected): a
+# `settles` verdict on such a row is correct but thin, and the record says so
+# rather than letting a reader take `settles` for "comfortably settles".
+DYN_SLOW_FACTOR=2
+eval "$(awk -F, -v accf="${ACC_FERR}" -v slowf="${DYN_SLOW_FACTOR}" '
+  !/^#/ && $1 != "bundle" {
+    n++;
+    id = $1 "/" $2 "C";
+    if ($10 == "settles") {
+      ns++;
+      if ($8 + 0 >= slowf * ($9 + 0)) {
+        slow = (slow == "" ? id : slow " " id);
+        nslow++;
+      }
+      m = ($7 + 0) / accf;
+      if (wm == "" || m > wm) { wm = m; wmid = id; wmfe = $7; wmdr = $8; wmde = $9 }
+    } else {
+      nu++; margin = (margin == "" ? id : margin " " id);
+      if (worst == "" || $7 + 0 > wf + 0) { wf = $7; worst = id; wband = $3; wdr = $8 }
+    }
+  }
+  END {
+    printf "N_DEND=%d\nN_DEND_SETTLES=%d\nN_DEND_UNDAMPED=%d\nN_DEND_SLOW=%d\n",
+      n+0, ns+0, nu+0, nslow+0;
+    printf "DEND_MARGIN_LIST=%s\n", (margin == "" ? "(none)" : "\"" margin "\"");
+    printf "DEND_SLOW_LIST=%s\n",   (slow   == "" ? "(none)" : "\"" slow   "\"");
+    printf "DEND_WORST=%s\nDEND_WORST_FERR=%s\nDEND_WORST_BAND=%s\nDEND_WORST_DR=%s\n",
+      (worst == "" ? "n/a" : "\"" worst "\""), (worst == "" ? "n/a" : sprintf("%.4g", wf)),
+      (worst == "" ? "n/a" : wband), (worst == "" ? "n/a" : sprintf("%.4g", wdr));
+    printf "DEND_TIGHT=%s\nDEND_TIGHT_FERR=%s\nDEND_TIGHT_MARGIN=%s\nDEND_TIGHT_DR=%s\nDEND_TIGHT_DEXP=%s\n",
+      (wmid == "" ? "n/a" : "\"" wmid "\""), (wmid == "" ? "n/a" : sprintf("%.4g", wmfe)),
+      (wmid == "" ? "n/a" : sprintf("%.1f%%", 100 * (1 - wm))),
+      (wmid == "" ? "n/a" : sprintf("%.4g", wmdr)), (wmid == "" ? "n/a" : sprintf("%.4g", wmde));
+  }' "${DYN_END_SETTLE}")"
+: "${N_DEND:=0}"; : "${N_DEND_SETTLES:=0}"; : "${N_DEND_UNDAMPED:=0}"; : "${N_DEND_SLOW:=0}"
+: "${DEND_MARGIN_LIST:=(none)}"; : "${DEND_SLOW_LIST:=(none)}"
+: "${DEND_WORST:=n/a}"; : "${DEND_WORST_FERR:=n/a}"; : "${DEND_WORST_BAND:=n/a}"; : "${DEND_WORST_DR:=n/a}"
+: "${DEND_TIGHT:=n/a}"; : "${DEND_TIGHT_FERR:=n/a}"; : "${DEND_TIGHT_MARGIN:=n/a}"
+: "${DEND_TIGHT_DR:=n/a}"; : "${DEND_TIGHT_DEXP:=n/a}"
 
 # ---------------------------------------------------------------------------
 # Headline scalars for the record.
@@ -870,6 +1039,29 @@ else
   V_DYN_SETTLE="**${N_DYN_GENUINE} genuine design-margin corner(s)** of ${N_DYN_ESC} escalated (routed to sim/loop-dynamics, #10)"
 fi
 
+# Criterion-3 END-plateau escalation verdict (#255) -- the same three outcomes
+# for the post-RAMP hold.  N_DENDFAIL/N_DENDUNRESOLVED mirror
+# N_FERRFAIL/N_UNRESOLVED for criterion 1: corners still failing ferr_end in
+# the best-resolved row, and how many of those the escalation never reached
+# (disabled, or the SIM_DYN_END_MAX budget cap), which is a DIFFERENT claim
+# from "escalated and still failed" and must not be folded into it.
+N_DENDFAIL=$(awk -F, -v accf="${ACC_FERR}" '!/^#/ && $1 != "bundle" { fe = $19 + 0; if (fe < 0) fe = -fe; if (fe > accf) print }' "${DYNCSV}" | wc -l | tr -d ' ')
+N_DENDUNRESOLVED=$(( N_DENDFAIL - N_DEND_UNDAMPED ))
+[ "${N_DENDUNRESOLVED}" -ge 0 ] || N_DENDUNRESOLVED=0
+if [ "${N_DYN:-0}" -eq 0 ]; then
+  V_DEND="N/A -- criterion 3 not measured"
+elif [ "${N_DEND}" -eq 0 ] && [ "${N_DENDFAIL}" -eq 0 ]; then
+  V_DEND="N/A -- no corner needed one"
+elif [ "${N_DEND}" -eq 0 ]; then
+  V_DEND="**NOT RESOLVED** -- ${N_DENDFAIL} corner(s) never escalated"
+elif [ "${N_DEND_UNDAMPED}" -eq 0 ] && [ "${N_DENDUNRESOLVED}" -eq 0 ]; then
+  V_DEND="resolved: ${N_DEND} of ${N_DEND} were settling-budget artefacts"
+elif [ "${N_DEND_UNDAMPED}" -eq 0 ]; then
+  V_DEND="${N_DEND} escalated, all artefacts; **${N_DENDUNRESOLVED} corner(s) unresolved**"
+else
+  V_DEND="**${N_DEND_UNDAMPED} genuine design-margin corner(s)** of ${N_DEND} escalated (routed to sim/loop-dynamics, #10)"
+fi
+
 if [ "${N_DYN}" -eq 0 ]; then
   DYN_BULLETS="  - **Overall criterion 3: NOT MEASURED.** The step/ramp deck
     (\`tb_supply_dyn.sp\`) is implemented, parameterised and exercised -- the
@@ -901,6 +1093,10 @@ else
     re-run with the hold pushed to ${KD_TB_HI_X} -- **${V_DYN_SETTLE}**. See
     \`dyn_settling_rerun.csv\` and the Methodology section below for the
     per-corner classification.
+  - **END-plateau settling escalation (#255): ${N_DEND} of ${N_DYN}
+    corner(s)** missed \`ferr_end\` at their default post-ramp hold and were
+    re-run with that hold extended by ${KD_DEND_TSTOP} past \`t_rend\` --
+    **${V_DEND}**. See \`dyn_end_settling_rerun.csv\` and section 3c below.
   - **Overall criterion 3: ${V_DYN}** (${DYN_LOST} of ${N_DYN} runs failed the
     stays-locked criterion on some plateau, at the best-resolved hold)."
 fi
@@ -1027,15 +1223,17 @@ PWR_TABLE="$(awk -F, '
     }
   }' "${STEADY}")"
 
-# Step/ramp table.  The trailing "hold" column names the high-plateau window
-# THIS row was actually measured at ($50, t_hi_end_s) and flags an escalated
-# row (esc_rank = $49) with an asterisk, so a reader cannot mistake an
-# escalated-and-still-failing corner for an unescalated one (#253).
+# Step/ramp table.  The two trailing "hold" columns name the high-plateau and
+# END-plateau windows THIS row was actually measured at ($50 t_hi_end_s, $52
+# t_end_s) and flag an escalated row (esc_rank = $49, esc_rank_end = $51) with
+# an asterisk, so a reader cannot mistake an escalated-and-still-failing
+# corner for an unescalated one (#253, #255).
 DYN_TABLE="$(awk -F, '
   !/^#/ && $1 != "bundle" {
-    printf "  | %s / %s C | %.4g | %.4g | %.4g | %.4g | %.4g | %.3f / %.3f / %.3f | %.4g | %s%.4g us |\n",
+    printf "  | %s / %s C | %.4g | %.4g | %.4g | %.4g | %.4g | %.3f / %.3f / %.3f | %.4g | %s%.4g us | %s%.4g us |\n",
       $1, $2, $5*1e9, maxa($7,$8,$9,$10)*1e9, maxa($13,$14,$13,$14)*1e9,
-      $17, $19, $25, $26, $27, $39, ($49+0 == 1 ? "*" : ""), $50*1e6;
+      $17, $19, $25, $26, $27, $39,
+      ($49+0 == 1 ? "*" : ""), $50*1e6, ($51+0 == 1 ? "*" : ""), $52*1e6;
   }
   function maxa(a, b, c, d,   m) {
     m = ab(a); if (ab(b) > m) m = ab(b); if (ab(c) > m) m = ab(c); if (ab(d) > m) m = ab(d);
@@ -1053,6 +1251,17 @@ DYN_SETTLE_TABLE="$(awk -F, '
     printf "  | %s / %s C | %.4g us | %.4g | %.4g us | %.4g | %.4g | %s |\n",
       $1, $2, $4*1e6, $5, $6*1e6, $7, $8, $10;
   }' "${DYNSETTLE}")"
+
+# END-plateau settling re-run table -- one row per corner that escalated.
+# Consumed only inside the nested heredoc in section 3c below, so the linter's
+# usage tracking cannot see the reference (same shape as DYN_SETTLE_TABLE
+# immediately above).
+# shellcheck disable=SC2034
+DYN_END_TABLE="$(awk -F, '
+  !/^#/ && $1 != "bundle" {
+    printf "  | %s / %s C | %s | %.4g us | %.4g | %.4g us | %.4g | %.3g | %.3g | %s |\n",
+      $1, $2, $3, $4*1e6, $5, $6*1e6, $7, $8, $9, $10;
+  }' "${DYN_END_SETTLE}")"
 
 # Power-split table at 3.30 V.
 SPLIT_TABLE="$(awk -F, '
@@ -1181,6 +1390,8 @@ supply-sensitivity: ${N_STEADY} steady-state points, ${N_DYN} step/ramp runs
   total power @ 100 MHz                   ${MNP_MW} .. ${MXP_MW} mW (worst ${MXP_ID})    ${V_PWR}
   step/ramp: worst plateau ferr           ${DYN_MXFE} @ ${DYN_MXFE_ID}     ${V_DYN}
   settling re-runs @ ${KTSTOP_X}              ${N_RERUN}: ${N_R_SETTLES} settle, ${N_R_PHI} phi-only, ${N_R_INTEG} integration, ${N_R_UNDAMPED} under-damped, ${N_R_NOTLOCK} not locked
+  step/ramp high-plateau re-runs @ ${KD_TB_HI_X}  ${N_DYN_ESC:-0}: ${N_DYN_RESOLVED:-0} resolved, ${N_DYN_GENUINE:-0} genuine, ${N_DYN_NOTLOCK:-0} not locked
+  step/ramp END-plateau re-runs           ${N_DEND}: ${N_DEND_SETTLES} settle, ${N_DEND_UNDAMPED} under-damped
   lock-criterion failures                 ${N_FAIL} of ${N_STEADY}: ${FAILLIST}
 EOF
 
@@ -1681,13 +1892,13 @@ ${PHI_TABLE}
   between t = ${KD_TRAMP} and t = ${KD_TREND} -- ${KD_DUR} us, ${KD_RATE}
   mV/us, ${KD_RAMP_TAU} KTAU; settle.
 
-  | Corner | phase, pre-step (ns) | peak phase excursion, step (ns) | peak phase excursion, ramp (ns) | residual f error, low plateau | ... end plateau | Vctrl low/high/end (V) | LOCK min (V) | hold |
-  |---|---|---|---|---|---|---|---|---|
-${DYN_TABLE:-  | -- | -- | -- | -- | -- | -- | -- | -- | -- |}
+  | Corner | phase, pre-step (ns) | peak phase excursion, step (ns) | peak phase excursion, ramp (ns) | residual f error, low plateau | ... end plateau | Vctrl low/high/end (V) | LOCK min (V) | hold, high | hold, end |
+  |---|---|---|---|---|---|---|---|---|---|
+${DYN_TABLE:-  | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |}
 
-  \`hold\` is the high-plateau window's end instant this row was actually
-  measured at; \`*\` marks a row escalated past the default ${KD_TB_HI}
-  (#253) -- see 3b below.
+  \`hold, high\` and \`hold, end\` are the two plateau windows' end instants
+  this row was actually measured at; \`*\` marks that plateau escalated past
+  its default (${KD_TB_HI} high, ${KD_TSTOP_BASE} end) -- see 3b and 3c below.
 
 ${DYN_BULLETS}
 
@@ -1738,6 +1949,106 @@ ${DYN_SETTLE_TABLE}
   **Result: ${V_DYN_SETTLE}.** ${N_DYN_GENUINE:-0} genuine, ${N_DYN_NOTLOCK:-0}
   not-locked corner(s) at the escalated hold: ${DYN_MARGIN_LIST:-(none)}.
 ESC
+fi)
+
+  ### 3c. END-plateau settling escalation (criterion 3)
+
+  3b asks the settling-budget question of the HIGH plateau, the hold after the
+  STEP; this asks the identical question of the END plateau, the hold after
+  the RAMP, measured over \`p11\`..\`p12\` and reported above as \`ferr_end\`
+  (#255).  A corner whose \`ferr_end\` misses ${ACC_FERR} inside the default
+  ${KD_TSTOP_BASE} post-ramp hold has not been shown to fail the stays-locked
+  criterion -- only to still be converging after the ramp -- so the runner
+  re-runs it with \`p11\`/\`p12\`/\`tstop\` pushed to \`t_rend\` +
+  ${KD_DEND_TA}/${KD_DEND_TB}/${KD_DEND_TSTOP} before this record calls it
+  either way.  Those are the SAME \`KTA_X\`/\`KTB_X\`/\`KTSTOP_X\` offsets
+  criterion 1's escalation uses, measured from \`t_rend\` (where post-ramp
+  convergence starts) rather than from t = 0, so an escalated END plateau gets
+  exactly the settling budget criterion 1 already grants a still-converging
+  corner -- not a shorter one, and not a second budget invented here.
+
+  They are OFFSETS rather than absolute instants so that this escalation
+  COMPOSES with 3b's: a corner that missed both plateaus is re-run once, on
+  the high-plateau-escalated profile, with the post-ramp hold extended from
+  **that** profile's own \`t_rend\` -- so exactly one row per corner is the
+  best-resolved one on both plateaus at once, and \`supply_dynamic.csv\`'s
+  "longest hold wins" rule stays a total order rather than a coin toss between
+  two half-resolved rows.  On the unescalated profile the instants reduce to
+  \`p11\` = ${KD_DEND_P11} s, \`p12\` = ${KD_DEND_P12} s and \`tstop\` =
+  ${KD_DEND_TSTOP_ABS} s; on a 3b-escalated profile the same offsets land
+  \`p12\` at ${KD_DENDX_P12} s and \`tstop\` at ${KD_DENDX_TSTOP_ABS} s.
+
+$(if [ "${N_DYN:-0}" -eq 0 ]; then
+cat <<NOEND
+
+  N/A -- no step/ramp run completed (criterion 3 is NOT MEASURED in this
+  record), so the END-plateau escalation had nothing to run against.
+NOEND
+elif [ "${N_DEND:-0}" -eq 0 ] && [ "${N_DENDFAIL:-0}" -eq 0 ]; then
+cat <<NOEND
+
+  N/A -- every step/ramp corner met the END-plateau residual-frequency
+  threshold (${ACC_FERR}) inside the default ${KD_TSTOP_BASE} post-ramp hold,
+  so nothing escalated and the question #255 raised does not arise here.
+NOEND
+elif [ "${N_DEND:-0}" -eq 0 ]; then
+cat <<NOEND
+
+  **NOT RESOLVED -- the escalation did not run.** ${N_DENDFAIL} corner(s)
+  missed \`ferr_end <= ${ACC_FERR}\` and none was re-run longer
+  (\`SIM_DYN_END_EXTEND=off\`, or the \`SIM_DYN_END_MAX\` budget cap).  **This
+  record therefore does not say whether those corners are settling-budget
+  artefacts or genuinely under-damped**, and their rows must not be read as
+  either.
+NOEND
+else
+cat <<ENDESC
+
+  | Corner | band | hold, short | ferr_end, short | hold, long | ferr_end, long | decay ratio | single-pole expectation | classification |
+  |---|---|---|---|---|---|---|---|---|
+${DYN_END_TABLE}
+
+  \`classification\`: \`settles\` = |ferr_end| came inside ${ACC_FERR} once
+  given the longer hold, i.e. the short run's FAIL was a settling-budget
+  artefact, the same fate criterion 1's apparent failures had on this grid
+  (section 1c); \`under-damped\` = still outside ${ACC_FERR} at the longer
+  hold -- genuinely marginal post-ramp damping at that operating point, not a
+  measurement gap, and routed to \`sim/loop-dynamics\` (#10) rather than
+  absorbed here.
+
+  \`decay ratio\` is |ferr_end(long)| / |ferr_end(short)|; the
+  \`single-pole expectation\` column beside it is what a loop settling as one
+  pole at KTAU = ${KTAU} would give between those two instants.  A ratio near
+  1 has not decayed at all.  **A ratio well ABOVE the expectation is worth
+  reading even on a \`settles\` row**: it means the corner did converge inside
+  the criterion, but far more slowly than a single pole predicts, which is a
+  damping observation the bare verdict does not carry.$(
+  if [ "${N_DEND_SLOW:-0}" -gt 0 ]; then printf '
+  %s of the passing corner(s) decayed at least %sx slower than the single-pole
+  expectation: %s.  Thinnest passing margin is %s, at ferr_end %s -- %s under
+  the %s threshold, with a decay ratio of %s against an expected %s.  Both are
+  stated because `settles` at that kind of margin is a pass, not a comfortable
+  one, and `sim/loop-dynamics` (#10) already flags the high-`Kvco` corner as
+  marginal on its own evidence.' "${N_DEND_SLOW}" "${DYN_SLOW_FACTOR}" \
+    "${DEND_SLOW_LIST}" "${DEND_TIGHT}" "${DEND_TIGHT_FERR}" "${DEND_TIGHT_MARGIN}" \
+    "${ACC_FERR}" "${DEND_TIGHT_DR}" "${DEND_TIGHT_DEXP}"; fi)
+
+  **Result: ${V_DEND}.** ${N_DEND_SETTLES:-0} settled once given the longer
+  hold, ${N_DEND_UNDAMPED:-0} did not: ${DEND_MARGIN_LIST:-(none)}.$(
+  if [ "${N_DEND_UNDAMPED:-0}" -gt 0 ]; then printf '
+  **DESIGN-MARGIN FINDING -- flagged back, not absorbed.** Worst of the
+  under-damped corners is %s (band %s, ferr_end %s at the extended hold, decay
+  ratio %s). At those corners the post-ramp residual is NOT a limit of the
+  transient budget in this record, so it is raised against #10 (loop-dynamics
+  / loop-filter margin) rather than recorded here as one more FAIL row. This
+  campaign does not propose a fix; that decision belongs to #10, with its own
+  evidence.' "${DEND_WORST}" "${DEND_WORST_BAND}" "${DEND_WORST_FERR}" \
+    "${DEND_WORST_DR}"; fi)$(
+  if [ "${N_DENDUNRESOLVED:-0}" -gt 0 ]; then printf '
+  A further %s corner(s) still fail `ferr_end` and were NOT escalated (the
+  `SIM_DYN_END_MAX` budget cap); those rows are unresolved, which is a
+  different claim from either verdict above.' "${N_DENDUNRESOLVED}"; fi)
+ENDESC
 fi)
 
   ### 4. Power -- quiescent and dynamic, per block (criterion 4)
@@ -1819,6 +2130,7 @@ fi)
   | 2. static phase offset vs. supply, full grid, post-#24 CP | reported (no ratified spec line; ${N_FAIL} corner(s) outside the ${ACC_PHI_FRAC}-of-a-period lock criterion) |
   | 3. stays locked through a supply step and a supply ramp | **${V_DYN}** |
   | 3b. high-plateau re-runs: settling-budget artefact vs. genuine design-margin | ${V_DYN_SETTLE} |
+  | 3c. END-plateau re-runs: settling-budget artefact vs. genuine design-margin | ${V_DEND} |
   | 4. power at ${KFOUT} Hz vs. the draft < ${ACC_PWR_MW} mW target | **${V_PWR}** |
   | 5. DR-002 Decision 3 supply-flavour scope | confirmed, no further sweep |
 
@@ -1835,7 +2147,8 @@ fi)
   - Extracted metrics: \`corners/${RID}/supply_steady.csv\`,
     \`corners/${RID}/power_split.csv\`, \`corners/${RID}/supply_dynamic.csv\`,
     \`corners/${RID}/settling_rerun.csv\`,
-    \`corners/${RID}/dyn_settling_rerun.csv\` (#253)${WAVE_LINK}
+    \`corners/${RID}/dyn_settling_rerun.csv\` (#253),
+    \`corners/${RID}/dyn_end_settling_rerun.csv\` (#255)${WAVE_LINK}
   - Cited: \`sim/vco-tuning-range/records/${CITE_VCO_RECORD}.md\` (#8, VCO
     supply pushing), \`sim/loop-dynamics/records/\` (#10, loop bandwidth and
     the passive-corner sweep), \`sim/pll-top-smoke/\` (#52, the closed-loop
@@ -1852,5 +2165,6 @@ echo "supply-sensitivity: wrote ${POWER}"
 echo "supply-sensitivity: wrote ${DYNCSV}"
 echo "supply-sensitivity: wrote ${SETTLE}"
 echo "supply-sensitivity: wrote ${DYNSETTLE}"
+echo "supply-sensitivity: wrote ${DYN_END_SETTLE}"
 [ "${V_FREQ}" = "PASS" ] || exit 1
 exit 0

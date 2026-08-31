@@ -51,6 +51,21 @@
 *                                   runner onto a reference HALF-period so the
 *                                   REF and FB edges a probe pairs are the same
 *                                   cycle's and cannot alias by a whole period
+*
+* END-PLATEAU SETTLING ESCALATION (#255).  p11/p12 -- the END-plateau probes
+* that bound `ferr_end` -- and `tstop` are NOT hardcoded by the runner: a
+* corner whose `ferr_end` misses the lock criterion at the default 8.0 us
+* post-ramp hold (`t_rend`..`tstop`) is re-run by `run.sh` with p11/p12 and
+* `tstop` pushed out to a longer hold, the same ambiguity-resolving mechanism
+* `run.sh`'s criterion-1 settling escalation (`KTSTOP_X`/`KTA_X`/`KTB_X`)
+* already applies to the steady-state deck -- see `run.sh`'s "END-plateau
+* settling escalation" comment for the derivation.  It composes with #253's
+* HIGH-plateau escalation (which moves `t_ramp`/`t_rend` instead): a corner
+* that missed both plateaus is re-run once, on the high-plateau-escalated
+* profile, with the post-ramp hold extended from that profile's own `t_rend`.
+* This deck itself is unchanged by either escalation: p11/p12/`t_ramp`/
+* `t_rend`/`tstop` are already generic `.param`s, so a longer hold is just a
+* different value passed in, not a different deck.
 
 .param iunit=8u
 .param tref='1/fref'
