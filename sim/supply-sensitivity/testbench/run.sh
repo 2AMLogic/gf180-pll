@@ -76,6 +76,18 @@
 # whatever happens to be in the environment.
 # shellcheck disable=SC2034
 set -euo pipefail
+# The settling-escalation and timestep-cross-check glob patterns below
+# (s100x_*.csv, s100m_*.csv) legitimately match zero files whenever every
+# corner already met the lock criterion at the default transient length --
+# the common, good-path outcome, not an error.  Without nullglob, an
+# unmatched glob expands to its own literal pattern, `cat` fails to open a
+# file with that literal name, and -- because that `cat` sits at the head of
+# a `| wc -l | tr -d ' '` pipeline under `pipefail` -- the pipeline's exit
+# status is `cat`'s failure, which `set -e` treats as this whole script
+# failing, silently (no message; report.sh, which mints the record, is never
+# reached).  This is the same rationale report.sh already states for its own
+# identical `shopt -s nullglob` (see its header).
+shopt -s nullglob
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXP="$(cd "${HERE}/.." && pwd)"

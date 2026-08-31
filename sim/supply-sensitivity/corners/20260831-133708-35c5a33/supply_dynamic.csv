@@ -1,0 +1,21 @@
+# campaign: supply-sensitivity (step/ramp)
+# record_id: 20260831-133708-35c5a33
+# generated_utc: 2026-08-31T13:37:08Z
+# pdk_variant: gf180mcuD
+# pdk_open_pdks_hash: c6d73a35f524070e85faff4a6a9eef49553ebc2b
+# pdk_root: /home/ubuntu/.volare/gf180mcuD
+# model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
+# switches: design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0 -> nominal skew, no Monte Carlo)
+# simulator: ngspice-46
+# netlist: design/pll_top.sch -> sim/supply-sensitivity/netlist-snapshots/20260831-133708-35c5a33-dyn.spice
+# corners: typical/27C, ss/-40C, ff/125C -- one transient each, carrying a 3.30->3.63 V step and a 3.63->2.97 V ramp
+# phi_NN: static REF->FB phase error at probe NN (see the record's
+#   methodology for the probe instants); phi01/02 pre-step,
+#   phi03..06 through the step, phi07/08 settled high,
+#   phi09/10 during the ramp, phi11/12 settled at the low rail.
+# ferr_*: residual fractional frequency error on each settled plateau
+# lock_*: LOCK-flag average over each phase of the profile, volts
+bundle,temp_c,band,vctrl0_v,phi01,phi02,phi03,phi04,phi05,phi06,phi07,phi08,phi09,phi10,phi11,phi12,ferr_lo,ferr_hi,ferr_end,fout_lo,fout_hi,fout_end,fout_step,fout_ramp,vc_lo,vc_hi,vc_end,vc_smax,vc_smin,vc_rmax,vc_rmin,vc_all_max,vc_all_min,lock_lo,lock_stp,lock_hi,lock_rmp,lock_end,lock_min,i_core_lo,i_vco_lo,i_div_lo,i_core_hi,i_vco_hi,i_div_hi,i_core_end,i_vco_end,i_div_end
+ff,125,5,2.0230,2.41781e-09,1.97921e-09,3.24070e-08,-2.58261e-08,-3.23356e-08,3.31617e-08,2.77930e-08,2.32998e-08,-1.88343e-08,1.69935e-08,1.68860e-08,-3.73911e-08,2.74123e-04,2.80825e-03,1.13077e-02,1.00030e+08,1.00289e+08,9.93276e+07,9.01053e+07,1.01633e+08,2.02358e+00,2.30214e+00,1.72216e+00,2.33308e+00,2.02290e+00,2.31873e+00,1.74823e+00,2.33308e+00,1.69817e+00,5.15267e-07,8.20637e-07,5.56390e-07,3.89075e-08,4.85689e-07,-1.64006e-04,-9.15500e-05,-2.61000e-04,-1.33970e-04,-9.73501e-05,-2.99014e-04,-1.51116e-04,-8.49515e-05,-2.23963e-04,-1.17112e-04
+ss,-40,5,2.2266,1.38236e-09,1.11058e-09,4.47534e-08,8.46572e-09,-4.08760e-09,-2.50462e-08,-3.39007e-08,3.83170e-08,-2.72583e-08,5.29470e-09,1.11020e-08,-1.13179e-08,1.69862e-04,-4.51361e-02,4.67081e-03,1.00017e+08,1.00493e+08,1.19470e+08,8.64708e+07,1.02766e+08,2.22708e+00,2.65485e+00,2.14376e+00,2.67809e+00,2.22702e+00,2.67365e+00,2.10626e+00,2.67867e+00,1.97736e+00,3.82265e-01,7.72980e-02,5.32087e-09,-3.64594e-07,4.46833e-09,-1.62024e-01,-1.20459e-04,-1.86804e-04,-1.18076e-04,-8.74576e-05,-2.23567e-04,-1.33672e-04,-7.14560e-05,-1.74474e-04,-1.21439e-04
+typical,27,5,2.1618,1.48582e-09,1.20036e-09,3.74173e-08,-1.43415e-08,-2.07874e-08,-3.84538e-08,3.45038e-08,2.88901e-08,-2.31698e-08,-1.84681e-08,-2.86626e-08,1.33036e-08,1.78413e-04,3.50857e-03,-8.74295e-03,1.00018e+08,1.00373e+08,1.14032e+08,8.85120e+07,1.02153e+08,2.16208e+00,2.50750e+00,2.00618e+00,2.53551e+00,2.16177e+00,2.52584e+00,1.94524e+00,2.53551e+00,1.76694e+00,5.42325e-09,7.70917e-02,6.20069e-09,-4.07788e-07,5.04363e-09,-1.32454e-01,-9.34468e-05,-2.17969e-04,-1.23917e-04,-9.35068e-05,-2.54459e-04,-1.40129e-04,-8.20177e-05,-1.98117e-04,-1.19994e-04
