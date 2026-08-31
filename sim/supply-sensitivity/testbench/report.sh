@@ -78,6 +78,17 @@ for f in "${WORK}"/sdyn_*.csv; do
   cp "${WORK}/wave_${bundle}_${temp}.csv" \
      "${CORNERSDIR}/supply_transient_$(simenv_corner_id "${bundle}" "${temp}" 3.30).csv"
 done
+# The criterion-3 high-plateau settling escalation's own runs (#253) -- same
+# corner, longer hold, own work directory (the "_X<KD_TRAMP_X>" tag
+# --one-dyn's escalated invocation uses) so archiving them is additive.
+for f in "${WORK}"/sdynx_*.csv; do
+  IFS=, read -r bundle temp _ <<<"$(cat "${f}")"
+  tag="dyn_${bundle}_T${temp}_X${KD_TRAMP_X}"; tag="${tag//./p}"; tag="${tag//-/m}"
+  simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" \
+    "dynx_$(simenv_corner_id "${bundle}" "${temp}" 3.30)"
+  cp "${WORK}/wavex_${bundle}_${temp}.csv" \
+     "${CORNERSDIR}/supply_transient_$(simenv_corner_id "${bundle}" "${temp}" 3.30)_esc.csv"
+done
 
 # ---------------------------------------------------------------------------
 # Settling escalation: which run of a corner is the one the record reports.
@@ -392,20 +403,106 @@ POWER="${CORNERSDIR}/power_split.csv"
 # ---------------------------------------------------------------------------
 # Extracted metrics: the step/ramp runs.
 # ---------------------------------------------------------------------------
+# supply_dynamic.csv reports the BEST-RESOLVED run of each corner -- the
+# criterion-3 escalation's longer-hold re-run where one exists, else the
+# default-hold run -- exactly the same "longest available hold wins" rule
+# ROWS applies to the criterion-1 steady-state grid above (#253).  The
+# trailing esc_rank/t_hi_end_s columns say, per row, which hold that was: 0 =
+# the default ${KD_TB_HI} window, 1 = escalated to ${KD_TB_HI_X}.  The
+# earlier (default-hold) rows are not discarded -- they are the short side of
+# the comparison in dyn_settling_rerun.csv below.
+DYNROWS="${WORK}/.dyn_rows.csv"
+{ for f in "${WORK}"/sdyn_*.csv;  do cat "${f}"; done
+  for f in "${WORK}"/sdynx_*.csv; do cat "${f}"; done; } \
+  | awk -F, '
+    { k = $1 "|" $2; r = $(NF-1) + 0;
+      if (!(k in br) || r > br[k]) { br[k] = r; best[k] = $0 } }
+    END { for (k in best) print best[k] }' >"${DYNROWS}"
+
 DYNCSV="${CORNERSDIR}/supply_dynamic.csv"
 {
   simenv_provenance "supply-sensitivity (step/ramp)" "${RID}" \
     "design/pll_top.sch -> sim/supply-sensitivity/netlist-snapshots/${RID}-dyn.spice" \
-    "typical/27C, ss/-40C, ff/125C -- one transient each, carrying a ${KD_LO}->${KD_HI} V step and a ${KD_HI}->${KD_END} V ramp"
+    "typical/27C, ss/-40C, ff/125C -- one transient each, carrying a ${KD_LO}->${KD_HI} V step and a ${KD_HI}->${KD_END} V ramp, reported at the best-resolved (longest) high-plateau hold available per corner (see esc_rank)"
   echo "# phi_NN: static REF->FB phase error at probe NN (see the record's"
   echo "#   methodology for the probe instants); phi01/02 pre-step,"
   echo "#   phi03..06 through the step, phi07/08 settled high,"
   echo "#   phi09/10 during the ramp, phi11/12 settled at the low rail."
   echo "# ferr_*: residual fractional frequency error on each settled plateau"
   echo "# lock_*: LOCK-flag average over each phase of the profile, volts"
-  echo "bundle,temp_c,band,vctrl0_v,phi01,phi02,phi03,phi04,phi05,phi06,phi07,phi08,phi09,phi10,phi11,phi12,ferr_lo,ferr_hi,ferr_end,fout_lo,fout_hi,fout_end,fout_step,fout_ramp,vc_lo,vc_hi,vc_end,vc_smax,vc_smin,vc_rmax,vc_rmin,vc_all_max,vc_all_min,lock_lo,lock_stp,lock_hi,lock_rmp,lock_end,lock_min,i_core_lo,i_vco_lo,i_div_lo,i_core_hi,i_vco_hi,i_div_hi,i_core_end,i_vco_end,i_div_end"
-  cat "${WORK}"/sdyn_*.csv | sort -t, -k1,1
+  echo "# esc_rank: 0 = default ${KD_TB_HI} high-plateau hold, 1 = escalated to"
+  echo "#   ${KD_TB_HI_X} (#253) -- see dyn_settling_rerun.csv for the corners"
+  echo "#   that escalated and how each resolved."
+  echo "# t_hi_end_s: the instant (seconds) the ferr_hi/lock_hi/vc_hi window"
+  echo "#   for THIS row actually ended at -- per row, not per campaign."
+  echo "bundle,temp_c,band,vctrl0_v,phi01,phi02,phi03,phi04,phi05,phi06,phi07,phi08,phi09,phi10,phi11,phi12,ferr_lo,ferr_hi,ferr_end,fout_lo,fout_hi,fout_end,fout_step,fout_ramp,vc_lo,vc_hi,vc_end,vc_smax,vc_smin,vc_rmax,vc_rmin,vc_all_max,vc_all_min,lock_lo,lock_stp,lock_hi,lock_rmp,lock_end,lock_min,i_core_lo,i_vco_lo,i_div_lo,i_core_hi,i_vco_hi,i_div_hi,i_core_end,i_vco_end,i_div_end,esc_rank,t_hi_end_s"
+  sort -t, -k1,1 "${DYNROWS}"
 } >"${DYNCSV}"
+
+# ---------------------------------------------------------------------------
+# Extracted metrics: the criterion-3 high-plateau settling re-run.
+# ---------------------------------------------------------------------------
+# Answers, for every corner escalated above, the same question the
+# criterion-1 settling re-run answers for the steady-state grid: did the
+# longer hold bring ferr_hi inside ${ACC_FERR} (a settling-budget artefact at
+# the default hold), or is the corner still over threshold with the loop
+# otherwise in lock (a genuine design-margin finding, routed to
+# sim/loop-dynamics -- #10)?  A corner whose LOCK flag never recovers on
+# EITHER hold is a lock-range finding, not a damping one, and is classified
+# separately so the two are not conflated.
+DYNSETTLE="${CORNERSDIR}/dyn_settling_rerun.csv"
+{
+  simenv_provenance "supply-sensitivity (criterion-3 settling re-run)" "${RID}" \
+    "design/pll_top.sch -> sim/supply-sensitivity/netlist-snapshots/${RID}-dyn.spice" \
+    "every step/ramp corner whose ferr_hi exceeded ${ACC_FERR} at the default ${KD_TB_HI} high-plateau hold, re-run with the hold pushed to ${KD_TB_HI_X}"
+  echo "# t_hi_end_short/long: the high-plateau window's end instant, default"
+  echo "#   and escalated -- only the hold length differs, same corner, same"
+  echo "#   calibrated warm start, same band."
+  echo "# classification: resolved (ferr_hi came inside ${ACC_FERR} at the"
+  echo "#   longer hold -- a settling-budget artefact, matching the fate of"
+  echo "#   every one of criterion 1's apparent failures on this same grid) |"
+  echo "#   genuine (still outside ${ACC_FERR} with the loop otherwise in"
+  echo "#   lock -- a design-margin finding for sim/loop-dynamics, #10) |"
+  echo "#   not-locked (LOCK flag never recovers on the escalated hold either)"
+  echo "bundle,temp_c,band,t_hi_end_short,ferr_hi_short,t_hi_end_long,ferr_hi_long,lock_hi_long,vctrl0_v,classification"
+  for f in "${WORK}"/sdynx_*.csv; do
+    IFS=, read -r b t _ <<<"$(cat "${f}")"
+    short="${WORK}/sdyn_${b}_${t}.csv"
+    [ -f "${short}" ] || continue
+    paste -d, "${short}" "${f}"
+  done | awk -F, -v accf="${ACC_FERR}" -v accl="${ACC_LOCK_FRAC}" -v khi="${KD_HI}" -v NW=50 '
+    {
+      b=$1; t=$2; band=$3; vc0=$4;
+      ts_s=$50; fe_s=abs($18);
+      ts_l=$(NW+50); fe_l=abs($(NW+18)); lk_l=$(NW+36)+0;
+      # The rail during the high plateau is KD_HI at every corner (the
+      # profile, not the row, sets it) -- ACC_LOCK_FRAC is stated as a
+      # fraction of the rail, so compare against KD_HI, not vctrl0.
+      if (lk_l < accl * khi)        cls = "not-locked";
+      else if (fe_l <= accf)        cls = "resolved";
+      else                          cls = "genuine";
+      printf "%s,%s,%s,%s,%.4g,%s,%.4g,%.4g,%s,%s\n",
+        b, t, band, ts_s, fe_s, ts_l, fe_l, lk_l, vc0, cls;
+    }
+    function abs(x) { return x < 0 ? -x : x }' | sort -t, -k1,1 -k2,2n
+} >"${DYNSETTLE}"
+
+# Escalation summary, computed from dyn_settling_rerun.csv the same way the
+# criterion-1 escalation summary above is computed from settling_rerun.csv.
+eval "$(awk -F, '
+  !/^#/ && $1 != "bundle" {
+    n++;
+    id = $1 "/" $2 "C";
+    c = $10;
+    if (c == "resolved")        nr++;
+    else if (c == "genuine")    { ng++; margin = (margin == "" ? id : margin " " id) }
+    else                        { nl++; margin = (margin == "" ? id : margin " " id) }
+  }
+  END {
+    printf "N_DYN_ESC=%d\nN_DYN_RESOLVED=%d\nN_DYN_GENUINE=%d\nN_DYN_NOTLOCK=%d\n",
+      n+0, nr+0, ng+0, nl+0;
+    printf "DYN_MARGIN_LIST=%s\n", (margin == "" ? "(none)" : "\"" margin "\"");
+  }' "${DYNSETTLE}")"
 
 # ---------------------------------------------------------------------------
 # Headline scalars for the record.
@@ -761,6 +858,18 @@ if [ "${N_DYN:-0}" -eq 0 ]; then V_DYN="NOT MEASURED"; else
   V_DYN=$([ "${DYN_LOST}" -eq 0 ] && echo PASS || echo FAIL); fi
 V_VCTRL=$([ "${N_VOUT}" -eq 0 ] && echo PASS || echo "FAIL")
 
+# Criterion-3 escalation verdict (#253) -- mirrors V_SETTLE's three-way
+# outcome for criterion 1: nothing needed escalating, everything that
+# escalated turned out to be a settling-budget artefact, or at least one
+# corner is a genuine design-margin finding.
+if [ "${N_DYN_ESC:-0}" -eq 0 ]; then
+  V_DYN_SETTLE="N/A -- no criterion-3 corner needed one"
+elif [ "${N_DYN_GENUINE:-0}" -eq 0 ] && [ "${N_DYN_NOTLOCK:-0}" -eq 0 ]; then
+  V_DYN_SETTLE="resolved: ${N_DYN_ESC} of ${N_DYN_ESC} were settling-budget artefacts"
+else
+  V_DYN_SETTLE="**${N_DYN_GENUINE} genuine design-margin corner(s)** of ${N_DYN_ESC} escalated (routed to sim/loop-dynamics, #10)"
+fi
+
 if [ "${N_DYN}" -eq 0 ]; then
   DYN_BULLETS="  - **Overall criterion 3: NOT MEASURED.** The step/ramp deck
     (\`tb_supply_dyn.sp\`) is implemented, parameterised and exercised -- the
@@ -779,15 +888,21 @@ else
   - Worst output-frequency excursion measured inside the step disturbance
     (20 CLK cycles from the end of the supply edge): **${DYN_DSTEP_HZ} Hz** at
     ${DYN_DSTEP_ID}.
-  - Worst residual frequency error on any settled plateau:
+  - Worst residual frequency error on any settled plateau, AT THE
+    BEST-RESOLVED HOLD PER CORNER (esc_rank in \`supply_dynamic.csv\`):
     **${DYN_MXFE}** at ${DYN_MXFE_ID} (criterion <= ${ACC_FERR}).
   - Minimum LOCK-flag level anywhere in the profile: **${DYN_MNLOCK} V** at
     ${DYN_MNLOCK_ID}.
   - Control-node travel from the high rail to the low rail:
     **${DYN_DVC} V** at ${DYN_DVC_ID}; peak excursion beyond the settled value
     during the step: **${DYN_VEX} V** at ${DYN_VEX_ID}.
+  - **High-plateau settling escalation (#253): ${N_DYN_ESC} of ${N_DYN}
+    corner(s)** missed \`ferr_hi\` at the default ${KD_TB_HI} hold and were
+    re-run with the hold pushed to ${KD_TB_HI_X} -- **${V_DYN_SETTLE}**. See
+    \`dyn_settling_rerun.csv\` and the Methodology section below for the
+    per-corner classification.
   - **Overall criterion 3: ${V_DYN}** (${DYN_LOST} of ${N_DYN} runs failed the
-    stays-locked criterion on some plateau)."
+    stays-locked criterion on some plateau, at the best-resolved hold)."
 fi
 
 # **Waveform retained** is a mandatory sim/README.md field and is therefore
@@ -912,18 +1027,32 @@ PWR_TABLE="$(awk -F, '
     }
   }' "${STEADY}")"
 
-# Step/ramp table.
+# Step/ramp table.  The trailing "hold" column names the high-plateau window
+# THIS row was actually measured at ($50, t_hi_end_s) and flags an escalated
+# row (esc_rank = $49) with an asterisk, so a reader cannot mistake an
+# escalated-and-still-failing corner for an unescalated one (#253).
 DYN_TABLE="$(awk -F, '
   !/^#/ && $1 != "bundle" {
-    printf "  | %s / %s C | %.4g | %.4g | %.4g | %.4g | %.4g | %.3f / %.3f / %.3f | %.4g |\n",
+    printf "  | %s / %s C | %.4g | %.4g | %.4g | %.4g | %.4g | %.3f / %.3f / %.3f | %.4g | %s%.4g us |\n",
       $1, $2, $5*1e9, maxa($7,$8,$9,$10)*1e9, maxa($13,$14,$13,$14)*1e9,
-      $17, $19, $25, $26, $27, $39;
+      $17, $19, $25, $26, $27, $39, ($49+0 == 1 ? "*" : ""), $50*1e6;
   }
   function maxa(a, b, c, d,   m) {
     m = ab(a); if (ab(b) > m) m = ab(b); if (ab(c) > m) m = ab(c); if (ab(d) > m) m = ab(d);
     return m;
   }
   function ab(x) { return x < 0 ? -x : x }' "${DYNCSV}")"
+
+# High-plateau settling re-run table -- one row per corner that escalated.
+# Consumed only inside the nested `$(if ... cat <<ESC ... ESC)` block in
+# section 3b below, which is why shellcheck's usage tracking cannot see the
+# reference (same shape as CMP_TABLE's own nested-heredoc use above).
+# shellcheck disable=SC2034
+DYN_SETTLE_TABLE="$(awk -F, '
+  !/^#/ && $1 != "bundle" {
+    printf "  | %s / %s C | %.4g us | %.4g | %.4g us | %.4g | %.4g | %s |\n",
+      $1, $2, $4*1e6, $5, $6*1e6, $7, $8, $10;
+  }' "${DYNSETTLE}")"
 
 # Power-split table at 3.30 V.
 SPLIT_TABLE="$(awk -F, '
@@ -991,26 +1120,53 @@ if [ -n "${SIM_SUPERSEDES:-}" ]; then
   PRIOR_TS="$(awk -F, '!/^#/ && $1 != "bundle" {print $23}' "${PRIOR_CSV}" 2>/dev/null | sort -u | tr '\n' ' ' | sed 's/ $//' || true)"
   : "${PRIOR_COMMIT:=(not stated in that record)}"
   : "${PRIOR_STAMP:=(not stated in that record)}"
-  : "${PRIOR_N:=0}"; [ "${PRIOR_N}" -gt 0 ] || PRIOR_N="an unrecorded number of"
+  : "${PRIOR_N:=0}"
   : "${PRIOR_TS:=(not stated)}"
+  # Read what the PRIOR record actually measured off ITS OWN extracted-metrics
+  # CSVs (#253) -- never assumed. An earlier revision of this paragraph
+  # hardcoded "that record reported [the settling re-run/power split/step-
+  # ramp] as not measured", which was true of the FIRST supersession this
+  # campaign ever did (the 9-corner record #62 -> the full-grid record #58)
+  # but is false of any LATER one where the superseded record already
+  # measured those things (e.g. #58 -> #253, which supersedes a record that
+  # measured and FAILED criterion 3, not one that never measured it).
+  PRIOR_RERUN_CSV="${EXP}/corners/${SIM_SUPERSEDES}/settling_rerun.csv"
+  PRIOR_N_RERUN="$(awk -F, '!/^#/ && $1 != "bundle"' "${PRIOR_RERUN_CSV}" 2>/dev/null | wc -l | tr -d ' ' || true)"
+  : "${PRIOR_N_RERUN:=0}"
+  PRIOR_SPLIT_CSV="${EXP}/corners/${SIM_SUPERSEDES}/power_split.csv"
+  PRIOR_N_SPLIT_ROWS="$(awk -F, '!/^#/ && $1 != "bundle"' "${PRIOR_SPLIT_CSV}" 2>/dev/null | wc -l | tr -d ' ' || true)"
+  : "${PRIOR_N_SPLIT_ROWS:=0}"; PRIOR_N_SPLIT=$(( PRIOR_N_SPLIT_ROWS / 3 ))
+  PRIOR_DYN_CSV="${EXP}/corners/${SIM_SUPERSEDES}/supply_dynamic.csv"
+  PRIOR_N_DYN="$(awk -F, '!/^#/ && $1 != "bundle"' "${PRIOR_DYN_CSV}" 2>/dev/null | wc -l | tr -d ' ' || true)"
+  : "${PRIOR_N_DYN:=0}"
+  PRIOR_DYNSETTLE_CSV="${EXP}/corners/${SIM_SUPERSEDES}/dyn_settling_rerun.csv"
+  PRIOR_N_DYN_ESC="$(awk -F, '!/^#/ && $1 != "bundle"' "${PRIOR_DYNSETTLE_CSV}" 2>/dev/null | wc -l | tr -d ' ' || true)"
+  : "${PRIOR_N_DYN_ESC:=0}"
   SUPERSEDE_PROSE="
 - **Supersession provenance** (which record this replaces, and how it got
   here): the baseline superseded below is
-  \`sim/supply-sensitivity/records/${SIM_SUPERSEDES}.md\` -- ${PRIOR_N} steady-state
+  \`sim/supply-sensitivity/records/${SIM_SUPERSEDES}.md\` -- $([ "${PRIOR_N}" -gt 0 ] && echo "${PRIOR_N}" || echo "an unrecorded number of") steady-state
   points of this same claim, every one of them run at ${PRIOR_TS}, minted
   ${PRIOR_STAMP} at repo commit \`${PRIOR_COMMIT}\`, landed on \`main\` by
   **${SIM_SUPERSEDES_PR:-(pull request not stated)}**. That record is **not**
   edited and is not withdrawn -- \`sim/README.md\` is append-only, so it stands
   as the evidence it was, and this record states the delta rather than
-  overwriting it. The delta: ${N_STEADY} steady-state points here against
-  ${PRIOR_N} there; ${N_RERUN} settling re-run(s) at ${KTSTOP_X}, which that
-  record reported it had started and could not finish; ${N_SPLIT} corner(s) of
-  the quiescent/dynamic power split, which it reported as not measured; and
-  ${N_DYN} supply step/ramp run(s), which it reported as **NOT MEASURED** with
-  an empty table. Where a number appears in both records and differs, THIS
-  record's is the one to cite for the corners it covers, and the reason is
-  stated: a corner escalated to ${KTSTOP_X} is a longer, closer-to-settled
-  measurement of the same operating point, not a different one."
+  overwriting it. The delta, read off that record's own extracted-metrics
+  CSVs rather than assumed: ${N_STEADY} steady-state points here against
+  ${PRIOR_N} there; ${N_RERUN} criterion-1 settling re-run(s) at ${KTSTOP_X}
+  here against ${PRIOR_N_RERUN} there; ${N_SPLIT} corner(s) of the
+  quiescent/dynamic power split here against ${PRIOR_N_SPLIT} there;
+  ${N_DYN} supply step/ramp run(s) here against ${PRIOR_N_DYN} there; and,
+  specifically for #253's own fix, ${N_DYN_ESC:-0} of those step/ramp
+  corner(s) escalated to the longer ${KD_TB_HI_X} high-plateau hold here,
+  against ${PRIOR_N_DYN_ESC} there (that record's step/ramp deck had no
+  high-plateau escalation mechanism, so every one of its criterion-3 FAILs
+  was measured once, at the shorter ${KD_TB_HI} hold, and reported as a bare
+  FAIL rather than as resolved-or-genuine). Where a number appears in both
+  records and differs, THIS record's is the one to cite for the corners it
+  covers, and the reason is stated: a corner escalated to a longer hold (at
+  either criterion) is a closer-to-settled measurement of the same operating
+  point, not a different one."
 fi
 
 # ---------------------------------------------------------------------------
@@ -1525,9 +1681,13 @@ ${PHI_TABLE}
   between t = ${KD_TRAMP} and t = ${KD_TREND} -- ${KD_DUR} us, ${KD_RATE}
   mV/us, ${KD_RAMP_TAU} KTAU; settle.
 
-  | Corner | phase, pre-step (ns) | peak phase excursion, step (ns) | peak phase excursion, ramp (ns) | residual f error, low plateau | ... end plateau | Vctrl low/high/end (V) | LOCK min (V) |
-  |---|---|---|---|---|---|---|---|
-${DYN_TABLE:-  | -- | -- | -- | -- | -- | -- | -- | -- |}
+  | Corner | phase, pre-step (ns) | peak phase excursion, step (ns) | peak phase excursion, ramp (ns) | residual f error, low plateau | ... end plateau | Vctrl low/high/end (V) | LOCK min (V) | hold |
+  |---|---|---|---|---|---|---|---|---|
+${DYN_TABLE:-  | -- | -- | -- | -- | -- | -- | -- | -- | -- |}
+
+  \`hold\` is the high-plateau window's end instant this row was actually
+  measured at; \`*\` marks a row escalated past the default ${KD_TB_HI}
+  (#253) -- see 3b below.
 
 ${DYN_BULLETS}
 
@@ -1538,6 +1698,47 @@ ${DYN_BULLETS}
   of that error while the loop corrects it, which is the number a system-level
   jitter budget consumes -- **not** #8's open-loop figure, and not a
   re-derivation of it.
+
+  ### 3b. High-plateau settling escalation (criterion 3)
+
+  The same question criterion 1's own settling re-run answers for the
+  steady-state grid, asked of the step/ramp deck's high plateau (#253): a
+  corner whose \`ferr_hi\` misses ${ACC_FERR} at the default
+  ${KD_TB_HI} window (only ${KD_TA_HI}..${KD_TB_HI} after the step edge ends
+  -- LESS settling time than criterion 1's own default late window) has not
+  been shown to fail the stays-locked criterion, only to still be settling.
+  Every corner that misses it is re-run automatically with the high-plateau
+  hold pushed to ${KD_TB_HI_X} (the ramp, and everything after it, pushed out
+  by the same amount so its own rate and duration do not change) before being
+  called a design result.
+
+$(if [ "${N_DYN_ESC:-0}" -eq 0 ]; then
+cat <<NOESC
+
+  N/A -- every step/ramp corner in this record met the stays-locked criterion
+  at the default ${KD_TB_HI} hold, so nothing escalated.
+NOESC
+else
+cat <<ESC
+
+  | Corner | hold, short | ferr_hi, short | hold, long | ferr_hi, long | LOCK, long (V) | classification |
+  |---|---|---|---|---|---|---|
+${DYN_SETTLE_TABLE}
+
+  \`classification\`: \`resolved\` = ferr_hi came inside ${ACC_FERR} at the
+  longer hold -- a settling-budget artefact, the same fate every one of
+  criterion 1's apparent failures had on this grid (section 1c); \`genuine\` =
+  still outside ${ACC_FERR} with the loop otherwise in lock -- a design-margin
+  finding, evidence that a large supply step, not just steady-state phase
+  margin, is where this operating point's loop-bandwidth margin binds, routed
+  to \`sim/loop-dynamics\` (#10); \`not-locked\` = the LOCK flag itself never
+  recovers on the escalated hold, a lock-range finding rather than a damping
+  one.
+
+  **Result: ${V_DYN_SETTLE}.** ${N_DYN_GENUINE:-0} genuine, ${N_DYN_NOTLOCK:-0}
+  not-locked corner(s) at the escalated hold: ${DYN_MARGIN_LIST:-(none)}.
+ESC
+fi)
 
   ### 4. Power -- quiescent and dynamic, per block (criterion 4)
 
@@ -1617,6 +1818,7 @@ fi)
   | 1c. re-runs: budget artefact vs. integration artefact vs. genuine under-damping | ${V_SETTLE} |
   | 2. static phase offset vs. supply, full grid, post-#24 CP | reported (no ratified spec line; ${N_FAIL} corner(s) outside the ${ACC_PHI_FRAC}-of-a-period lock criterion) |
   | 3. stays locked through a supply step and a supply ramp | **${V_DYN}** |
+  | 3b. high-plateau re-runs: settling-budget artefact vs. genuine design-margin | ${V_DYN_SETTLE} |
   | 4. power at ${KFOUT} Hz vs. the draft < ${ACC_PWR_MW} mW target | **${V_PWR}** |
   | 5. DR-002 Decision 3 supply-flavour scope | confirmed, no further sweep |
 
@@ -1632,7 +1834,8 @@ fi)
   - Raw logs: \`sim/supply-sensitivity/corners/${RID}/\`
   - Extracted metrics: \`corners/${RID}/supply_steady.csv\`,
     \`corners/${RID}/power_split.csv\`, \`corners/${RID}/supply_dynamic.csv\`,
-    \`corners/${RID}/settling_rerun.csv\`${WAVE_LINK}
+    \`corners/${RID}/settling_rerun.csv\`,
+    \`corners/${RID}/dyn_settling_rerun.csv\` (#253)${WAVE_LINK}
   - Cited: \`sim/vco-tuning-range/records/${CITE_VCO_RECORD}.md\` (#8, VCO
     supply pushing), \`sim/loop-dynamics/records/\` (#10, loop bandwidth and
     the passive-corner sweep), \`sim/pll-top-smoke/\` (#52, the closed-loop
@@ -1648,5 +1851,6 @@ echo "supply-sensitivity: wrote ${STEADY}"
 echo "supply-sensitivity: wrote ${POWER}"
 echo "supply-sensitivity: wrote ${DYNCSV}"
 echo "supply-sensitivity: wrote ${SETTLE}"
+echo "supply-sensitivity: wrote ${DYNSETTLE}"
 [ "${V_FREQ}" = "PASS" ] || exit 1
 exit 0
