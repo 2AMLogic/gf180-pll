@@ -244,10 +244,48 @@ KD_HI=3.63
 KD_END=2.97
 KD_TSTEP=5.6u
 KD_TEDGE=100n
-KD_TRAMP=16.0u
-KD_TREND=22.4u
-KD_TSTOP=30.4u
+# KD_TRAMP/_TREND/_TSTOP and the high-plateau measurement window KD_TA_HI/
+# _TB_HI are OVERRIDABLE (SIM_DYN_TRAMP/_TREND/_TSTOP/_TA_HI/_TB_HI) for
+# exactly the reason KTSTOP/KTA/KTB are (#253): a corner whose high-plateau
+# residual frequency error misses ACC_FERR at the DEFAULT hold has not been
+# shown to fail the stays-locked criterion, only to still be settling, and it
+# has to be re-runnable at a longer hold instead of being reported as a
+# design result. KD_*_BASE are the unoverridden defaults -- kept separately
+# so a non-default run gets its own work directory (see the "_X" tag in
+# --one-dyn below) and never overwrites the run it is being compared against.
+# Do not "fix" a FAIL by editing the _BASE values without re-running: the
+# frozen -dyn.spice snapshot and every recorded default-hold number are taken
+# at these values.
+KD_TRAMP_BASE=16.0u
+KD_TRAMP="${SIM_DYN_TRAMP:-${KD_TRAMP_BASE}}"
+KD_TREND_BASE=22.4u
+KD_TREND="${SIM_DYN_TREND:-${KD_TREND_BASE}}"
+KD_TSTOP_BASE=30.4u
+KD_TSTOP="${SIM_DYN_TSTOP:-${KD_TSTOP_BASE}}"
+# The high-plateau ferr_hi/lock_hi/vc_hi measurement window (probes p7/p8),
+# stated directly rather than as a fixed offset from KD_TSTEP, because the
+# escalated run moves this window far later than a "+7.2u/+8.8u from the
+# step" offset would reach.
+KD_TA_HI_BASE=12.8u
+KD_TA_HI="${SIM_DYN_TA_HI:-${KD_TA_HI_BASE}}"
+KD_TB_HI_BASE=14.4u
+KD_TB_HI="${SIM_DYN_TB_HI:-${KD_TB_HI_BASE}}"
 KD_DECIM=20e-9
+
+# The criterion-3 high-plateau settling escalation (#253).  Mirrors the
+# criterion-1 escalation (KTSTOP_X/KTA_X/KTB_X above) at the same settling
+# budget: KD_TB_HI_X sits KTB_X (34.4u = 3.70 KTAU) after the step edge ends
+# (KD_TSTEP+KD_TEDGE = 5.7u), i.e. 5.7u + 34.4u = 40.1u, so a corner that
+# fails the default 8.7 us-after-the-edge window (KD_TB_HI - 5.7u) gets the
+# SAME settling budget criterion 1's own escalation already gives a
+# still-converging corner, not a shorter one. KD_TRAMP_X/_TREND_X/_TSTOP_X
+# push the ramp (and everything after it) out by the same amount, preserving
+# the ramp's own rate and duration and the end-plateau hold length.
+KD_TA_HI_X="${SIM_DYN_EXTEND_TA:-36.9u}"
+KD_TB_HI_X="${SIM_DYN_EXTEND_TB:-40.1u}"
+KD_TRAMP_X="${SIM_DYN_EXTEND_TRAMP:-41.1u}"
+KD_TREND_X="${SIM_DYN_EXTEND_TREND:-47.5u}"
+KD_TSTOP_X="${SIM_DYN_EXTEND_TSTOP:-55.5u}"
 
 # In-loop control-voltage calibration (the `rforce` pre-pass).  Two forced
 # points per corner, KVPRE_D apart, straddling #8's standalone-VCO prediction;
@@ -544,7 +582,13 @@ fi
 if [ "${1:-}" = "--one-dyn" ]; then
   shift
   bundle="$1"; temp="$2"; band="$3"; vc0="$4"; sum="$5"; wave="$6"
-  tag="dyn_${bundle}_T${temp}"; tag=$(simenv_mktag "${tag}")
+  tag="dyn_${bundle}_T${temp}"
+  # A non-default hold (the criterion-3 escalation, #253) gets its own work
+  # directory -- so the longer-hold re-run ADDS evidence rather than
+  # overwriting the default-hold run it is compared against, exactly as the
+  # criterion-1 escalation's "_X${KTSTOP}" tag does for --one-lock.
+  [ "${KD_TRAMP}" = "${KD_TRAMP_BASE}" ] || tag="${tag}_X${KD_TRAMP}"
+  tag=$(simenv_mktag "${tag}")
   rundir="${WORK}/${tag}"; log="${rundir}/ngspice.log"
   libs="$(libs_for "${bundle}")"
 
@@ -554,8 +598,37 @@ if [ "${1:-}" = "--one-dyn" ]; then
   snap() { awk -v t="$1" -v f="${KFREF}" \
     'BEGIN{ tr=1/f; ts=0.5*tr; k=int((t-ts)/tr - 0.5 + 0.5); if(k<0)k=0;
             printf "%.12g", ts + (k+0.5)*tr }'; }
+  # Seconds, from a "<n><u|n|p>" literal -- the same suffix alphabet run.sh's
+  # own KD_*/KTA_* constants use.  A bare number passes through unchanged.
+  sec() { case "$1" in
+    *u) awk -v x="${1%u}" 'BEGIN{printf "%.12g", x*1e-6}' ;;
+    *n) awk -v x="${1%n}" 'BEGIN{printf "%.12g", x*1e-9}' ;;
+    *p) awk -v x="${1%p}" 'BEGIN{printf "%.12g", x*1e-12}' ;;
+    *)  printf '%s' "$1" ;;
+  esac; }
+  addoff() { awk -v a="$1" -v d="$2" 'BEGIN{printf "%.12g", a+d}'; }
+  t_step_s="$(sec "${KD_TSTEP}")"
+  t_ramp_s="$(sec "${KD_TRAMP}")"
+  t_rend_s="$(sec "${KD_TREND}")"
+  t_stop_s="$(sec "${KD_TSTOP}")"
+  ta_hi_s="$(sec "${KD_TA_HI}")"
+  tb_hi_s="$(sec "${KD_TB_HI}")"
+  # p1..p12, each an OFFSET from the phase of the profile it belongs to --
+  # p1/p2 (pre-step) and p3..p6 (through the step) fixed relative to t_step;
+  # p7/p8 the high-plateau window, stated directly as KD_TA_HI/KD_TB_HI so the
+  # escalated run can push it far later without disturbing the others; p9..p12
+  # (ramp and end plateau) relative to t_ramp/t_rend/tstop, so pushing the
+  # high-plateau hold out for an escalated run carries the ramp and the end
+  # plateau out with it rather than compressing them.  Reduces to the exact
+  # literal probe times this deck has always used (2.4e-6 .. 28.8e-6) at the
+  # unoverridden defaults.
   P=()
-  for t in 2.4e-6 4.0e-6 5.92e-6 6.72e-6 8.0e-6 11.2e-6 12.8e-6 14.4e-6 18.4e-6 21.6e-6 24.0e-6 28.8e-6; do
+  for t in 2.4e-6 4.0e-6 \
+           "$(addoff "${t_step_s}" 0.32e-6)" "$(addoff "${t_step_s}" 1.12e-6)" \
+           "$(addoff "${t_step_s}" 2.4e-6)"  "$(addoff "${t_step_s}" 5.6e-6)" \
+           "${ta_hi_s}" "${tb_hi_s}" \
+           "$(addoff "${t_ramp_s}" 2.4e-6)" "$(addoff "${t_rend_s}" -0.8e-6)" \
+           "$(addoff "${t_rend_s}" 1.6e-6)" "$(addoff "${t_stop_s}" -1.6e-6)"; do
     P+=( "$(snap "${t}")" )
   done
 
@@ -586,6 +659,12 @@ if [ "${1:-}" = "--one-dyn" ]; then
   fi
 
   m() { simenv_meas "${log}" "$1"; }
+  # Escalation rank (0 default hold, 1 escalated to the longer high-plateau
+  # hold) and the high-plateau window's END instant KD_TB_HI -- the pair
+  # report.sh needs to state, per corner, which hold length criterion 3's
+  # verdict was measured at (mirroring --one-lock's trailing tstop/tmax
+  # fields for the criterion-1 escalation, #253).
+  esc_rank=0; [ "${KD_TRAMP}" = "${KD_TRAMP_BASE}" ] || esc_rank=1
   {
     printf '%s,%s,%s,%s' "${bundle}" "${temp}" "${band}" "${vc0}"
     for k in phi01 phi02 phi03 phi04 phi05 phi06 phi07 phi08 phi09 phi10 phi11 phi12 \
@@ -596,7 +675,7 @@ if [ "${1:-}" = "--one-dyn" ]; then
              i_core_end i_vco_end i_div_end; do
       printf ',%s' "$(m "${k}")"
     done
-    printf '\n'
+    printf ',%s,%s\n' "${esc_rank}" "${KD_TB_HI}"
   } >"${sum}"
 
   # sim/README.md's waveform rule: the disturbance transient IS the argument
@@ -878,6 +957,40 @@ fi
 
 wait "${DYNPID}"
 
+# --- criterion-3 high-plateau settling escalation (#253) --------------------
+# A step/ramp corner whose measured ferr_hi (the residual frequency error on
+# the HIGH plateau, after the step) exceeds ACC_FERR at the default
+# ${KD_TB_HI} window has not been shown to fail the stays-locked criterion --
+# it has been shown to still be settling after the step, and at LESS settling
+# time than criterion 1's own default window gets (see the KD_TA_HI_X/
+# KD_TB_HI_X derivation above).  So it is re-run with the high-plateau hold
+# pushed out to KD_TB_HI_X before the ramp resumes, mirroring the criterion-1
+# escalation immediately above: mechanism, not a note asking someone to
+# re-run it by hand.
+#
+#   SIM_DYN_EXTEND=off                 skip this escalation entirely
+#   SIM_DYN_EXTEND_TA/_TB/_TRAMP/_TREND/_TSTOP   the longer profile
+#   SIM_DYN_EXTEND_MAX=<n>              cap the number of escalated corners
+JOBSDYNX="${WORK}/jobs_dynx.txt"; : >"${JOBSDYNX}"
+if [ "${SIM_DYN_EXTEND:-auto}" != "off" ]; then
+  cat "${WORK}"/sdyn_*.csv 2>/dev/null | awk -F, -v accf="${ACC_FERR}" -v w="${WORK}" '
+    { fe = $18 + 0; if (fe < 0) fe = -fe;
+      if (fe > accf) printf "%.6g %s %s %s %s %s/sdynx_%s_%s.csv %s/wavex_%s_%s.csv\n",
+        fe, $1, $2, $3, $4, w, $1, $2, w, $1, $2 }' \
+    | sort -rn | cut -d' ' -f2- \
+    | { if [ -n "${SIM_DYN_EXTEND_MAX:-}" ]; then head -n "${SIM_DYN_EXTEND_MAX}"; else cat; fi } \
+    >"${JOBSDYNX}"
+fi
+NDX=$(wc -l <"${JOBSDYNX}" | tr -d ' ')
+if [ "${NDX}" -gt 0 ]; then
+  echo "supply-sensitivity: ${NDX} corner(s) missed the high-plateau lock criterion at ${KD_TB_HI} -- re-running with the hold pushed to ${KD_TB_HI_X}"
+  # shellcheck disable=SC2016
+  SIM_DYN_TA_HI="${KD_TA_HI_X}" SIM_DYN_TB_HI="${KD_TB_HI_X}" \
+    SIM_DYN_TRAMP="${KD_TRAMP_X}" SIM_DYN_TREND="${KD_TREND_X}" SIM_DYN_TSTOP="${KD_TSTOP_X}" \
+    xargs -P "$(simenv_jobs)" -L 1 \
+      "${BASH:-/bin/bash}" -c 'exec "$0" --one-dyn "$@"' "${HERE}/run.sh" <"${JOBSDYNX}"
+fi
+
 got100=$(cat "${WORK}"/s100_*.csv 2>/dev/null | wc -l | tr -d ' ')
 got050=$(cat "${WORK}"/s050_*.csv 2>/dev/null | wc -l | tr -d ' ')
 gotdyn=$(cat "${WORK}"/sdyn_*.csv 2>/dev/null | wc -l | tr -d ' ')
@@ -888,5 +1001,7 @@ got100x=$(cat "${WORK}"/s100x_*.csv 2>/dev/null | wc -l | tr -d ' ')
 [ "${got100x}" -eq "${NX}" ] || { echo "ERROR: expected ${NX} settling re-run rows, got ${got100x}" >&2; exit 1; }
 got100m=$(cat "${WORK}"/s100m_*.csv 2>/dev/null | wc -l | tr -d ' ')
 [ "${got100m}" -eq "${NM}" ] || { echo "ERROR: expected ${NM} timestep-ceiling rows, got ${got100m}" >&2; exit 1; }
+gotdynx=$(cat "${WORK}"/sdynx_*.csv 2>/dev/null | wc -l | tr -d ' ')
+[ "${gotdynx}" -eq "${NDX}" ] || { echo "ERROR: expected ${NDX} high-plateau settling re-run rows, got ${gotdynx}" >&2; exit 1; }
 
 exec "${HERE}/report.sh" "${WORK}" "${EXP}" "${HERE}"
