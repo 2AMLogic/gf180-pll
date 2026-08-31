@@ -268,47 +268,49 @@ The record says all of that in its own Corner-matrix field, and says in as many
 words that it must not be cited for a PVT claim — which is what makes it a
 justification rather than an excuse.
 
-## Closed-loop campaigns: one assembly path, one retained generator
+## Closed-loop campaigns: one assembly path
 
 A campaign that simulates the whole PLL does **not** hand-transcribe a loop
-into its testbench: it calls a shared helper in `sim/lib/`. Since #159 there is
-**one such helper on every live campaign**, and one older generator retained
-for a narrower reason:
+into its testbench: it calls a shared helper in `sim/lib/`. There is now
+**exactly one such helper**, used by every closed-loop campaign:
 
 | Helper | What it builds | Used by |
 |---|---|---|
 | `sim/lib/pll_top_dut.sh` (#52) | prepends `design/netlist/pll_top.spice` — the committed export of `design/pll_top.sch` — to the campaign's stimulus fragment, and owns the encoding of the block's static configuration inputs, so a campaign asks for `N = 8` rather than setting twelve bits by hand (a mis-encoded one-hot `SEL` code still locks, just at the wrong N). | `pll-top-smoke` (#52), `supply-sensitivity` (#14), `lock-time`, `output-range` (#12, since #159) |
-| `sim/lib/assemble_closed_loop.sh` (#12) | concatenates the committed block exports (`vco`, `divider_chain`, `lock_detector`, `loop_filter`) with a fresh `pfd_cp` export, de-duplicating the leaf cells two of them inline. It does **not** read `design/netlist/pll_top.spice`; the loop was wired by each testbench's own top-level instance list. | **No live campaign.** Retained only as the documented generator of the `lock-time` / `output-range` evidence already committed under `records/` and `netlist-snapshots/`. |
 
-The difference that matters is **where the loop is wired**. On the
-`pll_top_dut.sh` path it is wired once, in `design/pll_top.sch`, so every
-campaign simulates the same connectivity and a change to the loop shows up as a
-schematic diff. On the `assemble_closed_loop.sh` path each testbench wired its
-own instance list, so two campaigns could disagree about the loop without
-anything reporting the divergence — the failure mode `pll_top.sch` was created
-to end.
+Because the loop is wired exactly once, in `design/pll_top.sch`, every
+campaign simulates the same connectivity and a change to the loop shows up as
+a schematic diff — every campaign has to reckon with it, none can silently
+diverge from the others.
 
-**Why the retired generator is still in the tree.** `sim/` records are
-append-only, and every `lock-time` / `output-range` record committed before
-#159 names `assemble_closed_loop.sh` in its own **Netlist provenance** field as
-what produced its frozen snapshot. Deleting the generator while it is still the
-cited provenance of the *only* evidence those two campaigns have would leave
-records pointing at a file that never existed in the tree they are read from.
-It is deleted once both campaigns hold superseding full-grid evidence taken
-against `pll_top` — the remaining scope of **#159**, which is real
-multi-session simulation work: `lock-time` alone is a documented 270-run grid
-(45-point PVT × N ∈ {4,16,64} × {cold,relock}) and `output-range` a 90-run one,
-at a measured tens-to-hundreds of CPU-seconds per point.
+**There used to be a second helper**, `sim/lib/assemble_closed_loop.sh` (#12):
+it concatenated the committed block exports (`vco`, `divider_chain`,
+`lock_detector`, `loop_filter`) with a fresh `pfd_cp` export, de-duplicating
+the leaf cells two of them inline, rather than reading
+`design/netlist/pll_top.spice` — each testbench on that path wired the loop's
+top-level connectivity itself, so two campaigns could disagree about the loop
+without anything reporting the divergence. `lock-time` and `output-range`
+built their DUT this way until #159, which re-took both campaigns' full PVT
+grids against `pll_top_dut.sh`'s DUT
+(`sim/lock-time/records/20260831-052456-effc505.md`,
+`sim/output-range/records/20260819-160843-4e32f91.md`) and then deleted
+`assemble_closed_loop.sh` — it produced no evidence any current record needs
+in order to be read.
 
-Until then: **runners and testbenches are on `pll_top`; the committed evidence
-for these two campaigns is not.** Read a record's **Netlist provenance** field
-to know which DUT its numbers came from — every record names its helper — and
-do not read either helper's existence as a repo-wide invariant.
+**`sim/` records are append-only**, so every `lock-time` / `output-range`
+record committed before #159's migration still names
+`assemble_closed_loop.sh` in its own **Netlist provenance** field as what
+produced its frozen snapshot, and those records are neither edited nor
+reinterpreted by the helper's removal — they simply describe a DUT assembly
+that is no longer live. Read a record's own **Netlist provenance** field to
+know which DUT its numbers came from; do not assume the tree's current helper
+produced an older record.
 
 *Naming note.* #52 originally called its helper `assemble_closed_loop.sh` as
-well; it was renamed to `pll_top_dut.sh` when both landed in the same tree.
-Frozen netlist snapshots and testbench comments minted before the rename still
-name the pre-rename path; the records that carry them disclose it.
+well; it was renamed to `pll_top_dut.sh` when both landed in the same tree, to
+avoid colliding with the differently-shaped #12 helper described above. Frozen
+netlist snapshots and testbench comments minted before that rename still name
+the pre-rename path; the records that carry them disclose it.
 
 ## Closed-loop internal-timestep bound
 

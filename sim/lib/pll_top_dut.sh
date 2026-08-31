@@ -1,31 +1,33 @@
 #!/usr/bin/env bash
 # gf180-pll :: the pll_top closed-loop DUT assembly path.
 #
-# NAMING NOTE, and the reconciliation it is waiting on.  This file is #52's
-# `sim/lib/assemble_closed_loop.sh`, renamed.  That path is already taken on
-# `main` by a DIFFERENT helper (landed by #12/PR #56) which assembles a
+# NAMING NOTE, and the reconciliation it went through.  This file is #52's
+# `sim/lib/assemble_closed_loop.sh`, renamed.  That path was already taken on
+# `main` by a DIFFERENT helper (landed by #12/PR #56) which assembled a
 # closed-loop deck by concatenating the five block exports rather than by
-# instantiating `design/pll_top.sch`, and which #12's merged `sim/lock-time`
-# and `sim/output-range` runners call as an executable.  Overwriting it here
-# would break already-recorded evidence, so the two coexist under different
-# names until they are reconciled -- which is #52's whole point and is tracked
-# as a follow-up.  Evidence records and testbench comments minted before the
-# rename refer to this file by its old path; the file is the same file.
+# instantiating `design/pll_top.sch`, and which #12's `sim/lock-time` and
+# `sim/output-range` runners called as an executable.  Overwriting it here
+# would have broken already-recorded evidence, so the two coexisted under
+# different names until #159 reconciled them.  Evidence records and testbench
+# comments minted before this file's rename still refer to it by its old
+# path; the file is the same file.
 #
-# WHO USES IT, as of today -- not as of the plan.  All four closed-loop
-# campaigns build their decks through this file: sim/pll-top-smoke (#52),
-# sim/supply-sensitivity (#14), and -- since #159 -- #12's sim/lock-time and
-# sim/output-range.  What #159 has not yet done is re-take #12's committed
-# EVIDENCE against this DUT: every record in those two campaigns predates the
-# migration, was taken against the concatenated-block-export DUT that
-# sim/lib/assemble_closed_loop.sh produces, and names it in its own Netlist
-# provenance field.  `sim/` records are append-only, so that helper stays in
-# the tree -- with no live caller -- until superseding full-grid evidence
-# exists.  #13 (period-jitter) and #49 are unwritten and should start here.
-# The INTENT of #52 is that `design/pll_top.sch` becomes the single owner of
-# the top-level wiring and this file the single owner of "how a testbench gets
-# hold of it"; that is a destination, not a description of the tree, and
-# nothing in this repo may state it as an invariant until it is true.
+# WHO USES IT.  All four closed-loop campaigns build their decks through this
+# file: sim/pll-top-smoke (#52), sim/supply-sensitivity (#14), and --
+# since #159 -- #12's sim/lock-time and sim/output-range.  #159 also re-took
+# #12's committed EVIDENCE against this DUT (a full-grid mint per campaign:
+# sim/lock-time/records/20260831-052456-effc505.md,
+# sim/output-range/records/20260819-160843-4e32f91.md) and then deleted
+# `sim/lib/assemble_closed_loop.sh`, which had no live caller left and was
+# retained only as long as it was the cited provenance of not-yet-superseded
+# evidence.  Records dated before that migration still name it in their own
+# Netlist provenance field -- those records are append-only and are not
+# restated here.  #13 (period-jitter) and #49 are unwritten and should start
+# here.
+#
+# `design/pll_top.sch` is now the single owner of the top-level wiring, and
+# this file the single owner of "how a testbench gets hold of it," for every
+# closed-loop campaign in the tree.
 #
 # Usage from a campaign runner (after sourcing sim/lib/simenv.sh):
 #

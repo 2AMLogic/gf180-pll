@@ -608,8 +608,9 @@ class Testbench:
         """Every file the DUT deck is made of: DUT sources, then the fragment.
 
         DUT first, because the exports define the subcircuits the fragment
-        instantiates -- the same order ``sim/lib/assemble_closed_loop.sh``
-        concatenates them in. Resolves ``dut_export`` (via
+        instantiates -- the same order the retired ``sim/lib/assemble_closed_loop.sh``
+        (deleted at #159; see ``sim/README.md``, "Closed-loop campaigns")
+        concatenated them in. Resolves ``dut_export`` (via
         :attr:`resolved_dut`) on first access.
 
         A phased manifest contributes *every* phase's fragment, in phase
