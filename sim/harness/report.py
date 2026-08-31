@@ -506,9 +506,11 @@ def write_netlist_snapshot(tb: Testbench, experiment_dir: Path, record_id: str) 
 
     When the manifest names ``dut`` exports and/or a ``dut_export`` top, the
     snapshot is the *composed* DUT + stimulus, each chunk carrying its own
-    source path and sha256 -- the same self-contained artefact
-    ``sim/lib/assemble_closed_loop.sh`` produces by concatenation, but without
-    the committed fragment having to contain a copy of the export. For a
+    source path and sha256 -- the same kind of self-contained artefact the
+    retired ``sim/lib/assemble_closed_loop.sh`` (deleted at #159; see
+    ``sim/README.md``, "Closed-loop campaigns") used to produce by
+    concatenation, but without the committed fragment having to contain a
+    copy of the export. For a
     ``dut_export`` top this call is what actually resolves it (see
     ``Testbench.resolved_dut``), if nothing already did.
 

@@ -91,18 +91,20 @@
 # block, so historical per-run CPU-second figures are roughly twice what the
 # same row costs now.
 #
-# DUT MIGRATION (#159): until #159 this campaign built its DUT with
-# sim/lib/assemble_closed_loop.sh, which concatenates the five committed block
-# exports and leaves the loop's top-level wiring to the testbench's own
+# DUT MIGRATION (#159): before #159 this campaign built its DUT with
+# sim/lib/assemble_closed_loop.sh, which concatenated the five committed block
+# exports and left the loop's top-level wiring to the testbench's own
 # instance list. It now builds it with sim/lib/pll_top_dut.sh, from the
-# committed export of design/pll_top.sch. Every record already in
-# sim/output-range/records/ was taken against the older DUT and names it in
-# its own Netlist provenance field; those records are append-only and are
-# neither edited nor reinterpreted by this change. The first record taken
+# committed export of design/pll_top.sch. Every record dated before the
+# migration in sim/output-range/records/ was taken against the older DUT and
+# names it in its own Netlist provenance field; those records are append-only
+# and are neither edited nor reinterpreted by this change. The record taken
 # against `pll_top` is 20260819-160843-4e32f91 (#164) -- the full 90-run grid,
 # which supersedes the single-corner pilot 20260731-223426-640560e. The
-# equivalent re-take for sim/lock-time (#163) is still open, and #159's own
-# remaining scope (deleting sim/lib/assemble_closed_loop.sh) waits on it.
+# equivalent re-take for sim/lock-time (#163) has since landed too
+# (20260831-052456-effc505), so #159's own remaining scope -- deleting
+# sim/lib/assemble_closed_loop.sh -- is complete; that file no longer exists
+# in the tree.
 
 set -euo pipefail
 

@@ -492,8 +492,9 @@ fragment:
 - The **netlist snapshot** (`netlist-snapshots/<record-id>.spice`) inlines them
   instead: one self-contained DUT + stimulus file, each chunk headed by its
   own source path and sha256, plus a `composed_sha256` over the whole. That is
-  the same self-contained artefact `sim/lib/assemble_closed_loop.sh` produces
-  by concatenation — without the committed fragment ever holding a copy.
+  the same kind of self-contained artefact the retired `sim/lib/assemble_closed_loop.sh`
+  (deleted at #159; see `sim/README.md`, "Closed-loop campaigns") used to
+  produce by concatenation — without the committed fragment ever holding a copy.
 - The record's **Netlist provenance** field names every source with its own
   sha256, so a record says exactly which export it froze.
 - A `dut` export is held to the same rule as a fragment: no `.include`,

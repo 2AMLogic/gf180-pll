@@ -1,9 +1,12 @@
 * gf180-pll :: supply-sensitivity :: supply STEP and RAMP on a locked loop
 *
-* DUT: `pll_top`, assembled by sim/lib/assemble_closed_loop.sh (#52) from the
+* DUT: `pll_top`, assembled by sim/lib/pll_top_dut.sh (#52) from the
 * committed export of design/pll_top.sch -- the same DUT tb_supply_lock.sp
 * measures, so the disturbance numbers here and the steady-state numbers there
-* describe one block and not two.
+* describe one block and not two.  (`pll_top_dut.sh` was originally named
+* `assemble_closed_loop.sh` too, before being renamed to avoid colliding with
+* the differently-shaped #12 helper of the same pre-rename name -- see
+* sim/README.md, "Closed-loop campaigns".)
 *
 * WHAT THIS DECK MEASURES (#14 criterion 3).  tb_supply_lock.sp answers "where
 * does the loop sit at each supply"; a stepped rail has no single steady state,

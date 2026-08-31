@@ -59,19 +59,22 @@
 # therefore paying for two transients per row; do not read them as a floor for
 # a run of the current deck.
 #
-# DUT MIGRATION (#159): until #159 this campaign built its DUT with
-# sim/lib/assemble_closed_loop.sh, which concatenates the five committed block
-# exports and leaves the loop's top-level wiring to the testbench's own
+# DUT MIGRATION (#159): before #159 this campaign built its DUT with
+# sim/lib/assemble_closed_loop.sh, which concatenated the five committed block
+# exports and left the loop's top-level wiring to the testbench's own
 # instance list. It now builds it with sim/lib/pll_top_dut.sh, i.e. from the
 # committed export of design/pll_top.sch, so this campaign and
 # sim/pll-top-smoke / sim/supply-sensitivity all simulate the SAME
 # connectivity and a change to the loop is a schematic diff rather than a
 # silent divergence between two hand-written instance lists. Every record
-# already in sim/lock-time/records/ was taken against the older DUT and names
-# it in its own Netlist provenance field; those records are append-only and
-# are neither edited nor reinterpreted by this change. NO record in this
-# campaign has yet been taken against `pll_top` -- the full-grid re-run that
-# supersedes them is #159's remaining scope.
+# dated before the migration in sim/lock-time/records/ was taken against the
+# older DUT and names it in its own Netlist provenance field; those records
+# are append-only and are neither edited nor reinterpreted by this change.
+# The full 270-run grid against `pll_top` is
+# sim/lock-time/records/20260831-052456-effc505.md, which supersedes them for
+# the closed-loop-lock-acquisition claim -- #159's own remaining scope
+# (deleting sim/lib/assemble_closed_loop.sh once both campaigns held
+# superseding evidence) is complete; that file no longer exists in the tree.
 
 set -euo pipefail
 

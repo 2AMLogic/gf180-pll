@@ -14,14 +14,14 @@
 #
 # #14 builds its DUT through the same sim/lib/pll_top_dut.sh this runner uses,
 # and since #159 so do #12's two campaigns -- all four closed-loop campaigns
-# now share one assembled top level.  What #159 has NOT yet done is re-take
-# #12's committed evidence against it: every record currently in
-# sim/lock-time/records/ and sim/output-range/records/ was taken against the
-# older concatenated-block-export assembly (sim/lib/assemble_closed_loop.sh,
-# a different helper with a similar name -- see sim/lib/pll_top_dut.sh's
-# header and sim/README.md, "Closed-loop campaigns: one assembly path").  Read
-# a record's own Netlist provenance field rather than assuming the tree's
-# current helper produced it.
+# now share one assembled top level, and #159 has since re-taken #12's full
+# grids against it (sim/lock-time/records/20260831-052456-effc505.md,
+# sim/output-range/records/20260819-160843-4e32f91.md) and deleted the older
+# concatenated-block-export generator (sim/lib/assemble_closed_loop.sh) that
+# produced their predecessors.  Records dated before that migration still
+# name the retired generator in their own Netlist provenance field -- see
+# sim/README.md, "Closed-loop campaigns" -- so read a record's own provenance
+# rather than assuming the tree's current helper produced it.
 #
 # Usage:
 #   ./run.sh                 # run and mint a record
