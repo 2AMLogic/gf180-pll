@@ -1,0 +1,30 @@
+# campaign: supply-sensitivity (step/ramp)
+# record_id: 20260901-155456-46b92f8
+# generated_utc: 2026-09-01T15:55:00Z
+# pdk_variant: gf180mcuD
+# pdk_open_pdks_hash: c6d73a35f524070e85faff4a6a9eef49553ebc2b
+# pdk_root: /Users/rwalters/.volare/gf180mcuD
+# model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
+# switches: design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0 -> nominal skew, no Monte Carlo)
+# simulator: ngspice-46
+# netlist: design/pll_top.sch -> sim/supply-sensitivity/netlist-snapshots/20260901-155456-46b92f8-dyn.spice
+# corners: typical/27C, ss/-40C, ff/125C -- one transient each, carrying a 3.30->3.63 V step and a 3.63->2.97 V ramp, reported at the best-resolved (longest) high-plateau AND end-plateau hold available per corner (see esc_rank / esc_rank_end)
+# phi_NN: static REF->FB phase error at probe NN (see the record's
+#   methodology for the probe instants); phi01/02 pre-step,
+#   phi03..06 through the step, phi07/08 settled high,
+#   phi09/10 during the ramp, phi11/12 settled at the low rail.
+# ferr_*: residual fractional frequency error on each settled plateau
+# lock_*: LOCK-flag average over each phase of the profile, volts
+# esc_rank: 0 = default 14.4u high-plateau hold, 1 = escalated to
+#   40.1u (#253) -- see dyn_settling_rerun.csv for the corners
+#   that escalated and how each resolved.
+# t_hi_end_s: the instant (seconds) the ferr_hi/lock_hi/vc_hi window
+#   for THIS row actually ended at -- per row, not per campaign.
+# esc_rank_end: 0 = default 30.4u post-ramp hold, 1 =
+#   escalated past it (#255) -- see dyn_end_settling_rerun.csv.
+# t_end_s: the instant (seconds) the ferr_end/lock_end/vc_end window
+#   for THIS row actually ended at (probe p12) -- per row.
+bundle,temp_c,band,vctrl0_v,phi01,phi02,phi03,phi04,phi05,phi06,phi07,phi08,phi09,phi10,phi11,phi12,ferr_lo,ferr_hi,ferr_end,fout_lo,fout_hi,fout_end,fout_step,fout_ramp,vc_lo,vc_hi,vc_end,vc_smax,vc_smin,vc_rmax,vc_rmin,vc_all_max,vc_all_min,lock_lo,lock_stp,lock_hi,lock_rmp,lock_end,lock_min,i_core_lo,i_vco_lo,i_div_lo,i_core_hi,i_vco_hi,i_div_hi,i_core_end,i_vco_end,i_div_end,esc_rank,t_hi_end_s,esc_rank_end,t_end_s
+ff,125,5,2.0230,2.41573e-09,1.96728e-09,3.24016e-08,-2.58263e-08,-3.23399e-08,3.31506e-08,2.18459e-09,1.55889e-09,-3.19759e-08,7.98297e-09,-3.21549e-09,-2.20692e-09,2.80286e-04,1.95533e-04,-3.15178e-04,1.00030e+08,1.00021e+08,9.99691e+07,9.01034e+07,1.01456e+08,2.02360e+00,2.29569e+00,1.73194e+00,2.33306e+00,2.02293e+00,2.29937e+00,1.77351e+00,2.33306e+00,1.69822e+00,5.15267e-07,8.20635e-07,5.56397e-07,3.89557e-08,4.85595e-07,-1.67656e-04,-9.15379e-05,-2.60976e-04,-1.34007e-04,-9.67370e-05,-2.98559e-04,-1.50961e-04,-8.67935e-05,-2.24832e-04,-1.17681e-04,1,4.008e-05,1,8.192e-05
+ss,-40,5,2.2266,1.37369e-09,1.11118e-09,4.47544e-08,8.46236e-09,-4.06439e-09,-2.50457e-08,3.21056e-09,2.29808e-09,2.74896e-08,7.81689e-09,-1.85685e-08,-1.31141e-08,1.64073e-04,2.85148e-04,-1.70451e-03,1.00016e+08,1.00028e+08,9.98215e+07,8.64817e+07,1.02394e+08,2.22706e+00,2.64282e+00,1.79250e+00,2.67807e+00,2.22703e+00,2.64534e+00,2.22469e+00,2.67863e+00,1.76288e+00,4.90493e-01,7.73116e-02,5.25696e-09,-3.64560e-07,4.46142e-09,-1.47898e-01,-1.21007e-04,-1.86887e-04,-1.18108e-04,-8.52193e-05,-2.22442e-04,-1.33388e-04,-8.03904e-05,-1.52488e-04,-1.03543e-04,1,4.008e-05,1,8.192e-05
+typical,27,5,2.1618,1.48732e-09,1.19407e-09,3.74352e-08,-1.43453e-08,-2.07972e-08,-3.84522e-08,2.66778e-09,1.88606e-09,3.84002e-08,2.75096e-08,-6.93795e-09,-4.96619e-09,1.83281e-04,2.44287e-04,-6.16174e-04,1.00019e+08,1.00027e+08,9.99362e+07,8.85087e+07,1.01866e+08,2.16209e+00,2.49882e+00,1.79818e+00,2.53543e+00,2.16178e+00,2.50235e+00,2.03457e+00,2.53543e+00,1.76561e+00,5.42204e-09,7.70979e-02,6.18928e-09,-4.07590e-07,5.07713e-09,-1.48792e-01,-9.47782e-05,-2.18066e-04,-1.23708e-04,-9.24536e-05,-2.54508e-04,-1.39223e-04,-8.32063e-05,-1.82878e-04,-1.08245e-04,1,4.008e-05,1,8.192e-05
