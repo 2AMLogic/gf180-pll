@@ -821,6 +821,28 @@ to write a testbench manifest. `sim/harness-selftest/` is the harness's own
 acceptance testbench (real devices, real corners, no design claim); it is not
 one of the block campaigns in the table above.
 
+### ngspice binary pin (#259)
+
+Every `sim/lib/simenv.sh`-based campaign's `simenv_require_tools` now insists
+on a **pinned** `ngspice` binary — `$HOME/.local/bin/ngspice` by default,
+overridable with `SIM_NGSPICE_BIN` — rather than silently accepting whatever
+`ngspice` resolves to on `PATH`. This is not merely version pedantry: issue
+#259 found a host where that pinned `ngspice-46` was absent, PATH fell
+through to Homebrew's `ngspice-47`, and that build then hit a reproducible
+parse failure on this PDK's nested nonlinear loop-filter/VCO moscaps
+(`sm141064.ngspice`'s `cap_*mos_03v3`/`06v0` family — see
+`sim/harness/README.md`'s "ngspice-46 required for nested nonlinear moscap
+decks", #153) — and, worse, **hung instead of exiting** on that error,
+stalling an `xargs`-driven `run.sh` job pool indefinitely since the affected
+corner's slot never freed. A host missing the pin now gets a loud, actionable
+error up front (naming the fix, the `SIM_NGSPICE_BIN` relocation override,
+and the `SIM_ALLOW_UNPINNED_NGSPICE=1` opt-out) instead of quietly burning
+hours against a defective, uncited simulator build. `sim/harness`'s own
+`run_corners.py --check-env` / `runner.py` codepath is unaffected — it
+already carries its own PATH-resolved-version warning
+(`nonlinear_moscap_ngspice47_warning`) for the same underlying #153 defect,
+scoped to the DUTs that actually nest the moscap family.
+
 **`sim/harness` is the convention for every new campaign — `sim/lib/simenv.sh`
 is legacy.** The interim shim and the campaigns still built on it remain the
 real, already-recorded evidence for their claims, but no new campaign should

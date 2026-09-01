@@ -398,11 +398,106 @@ EOF
 }
 
 # --------------------------------------------------------------------------
+# ngspice binary pin (#259)
+# --------------------------------------------------------------------------
+#
+# Every citable `sim/` evidence record cites `ngspice-46`, and #241/#242
+# tuned this shim's OpenMP-internal-thread-pin detection
+# (simenv_apply_omp_pin above) against that specific build. The convention
+# every host that has minted a record so far actually follows (see the
+# `/home/ubuntu/.local/bin/ngspice`-cited records under
+# sim/supply-sensitivity/records/) is to install that pinned build at
+# `~/.local/bin/ngspice` -- NOT to rely on it winning whatever order the
+# rest of PATH happens to be in.
+#
+# #259: on a host where that pinned binary is simply absent (never
+# installed, or removed by an unrelated package upgrade), PATH falls
+# through silently to whatever "ngspice" resolves to next -- e.g.
+# Homebrew's current bottle, which self-reports `ngspice-47`. That fallback
+# is not merely "an untested version": #153/sim/harness/README.md's
+# "ngspice-46 required for nested nonlinear moscap decks" already
+# documents that ngspice-47 mis-expands this PDK's nonlinear
+# cap_*mos_03v3/06v0 loop-filter/VCO moscap family into a malformed
+# element ("unknown parameter (e9)") whenever it is instantiated inside a
+# named `.subckt` -- and #259 additionally found that build does not even
+# exit on that error, it hangs indefinitely (~13-14% CPU), which stalls an
+# entire `xargs`-driven run.sh job pool since the affected corner's slot
+# never frees. A campaign that silently ran on the wrong binary because the
+# pin happened to be missing is exactly the kind of quiet wrong number
+# CLAUDE.md's "Verification is the product" line exists to prevent -- so
+# the check below fails loudly by default instead.
+#
+# SIM_NGSPICE_BIN overrides the pinned path itself, for a host that
+# deliberately keeps its pinned ngspice-46 build somewhere other than
+# `~/.local/bin/ngspice` (e.g. a from-source `--prefix` install, per
+# sim/harness/README.md's build recipe).
+SIMENV_NGSPICE_PIN="${SIM_NGSPICE_BIN:-$HOME/.local/bin/ngspice}"
+
+# simenv_require_ngspice_pin -- called by simenv_require_tools. Exits 0 (and,
+# as a side effect, prepends the pinned binary's directory onto PATH so it is
+# what every subsequent `ngspice` invocation in this process actually runs,
+# regardless of what else sits earlier on the caller's PATH) when
+# SIMENV_NGSPICE_PIN exists and is executable. Otherwise prints a detailed,
+# actionable ERROR to stderr and returns 1 -- unless SIM_ALLOW_UNPINNED_NGSPICE
+# is set, in which case it prints a WARNING instead and returns 0, deliberately
+# falling through to plain PATH resolution (this is an explicit opt-in escape
+# hatch, not a default -- a host that sets it is asserting it has already
+# checked whatever "ngspice" resolves to on PATH is not #259's defective
+# ngspice-47 fallback).
+simenv_require_ngspice_pin() {
+  if [ -x "${SIMENV_NGSPICE_PIN}" ]; then
+    local pin_dir
+    pin_dir="$(cd "$(dirname "${SIMENV_NGSPICE_PIN}")" && pwd)"
+    # Unconditionally prepend, even if pin_dir already appears somewhere
+    # else in PATH -- a later duplicate entry is harmless, but merely being
+    # PRESENT in PATH is not enough to guarantee the pinned binary is the
+    # one that resolves: another directory earlier in PATH (e.g. Homebrew's
+    # own bin dir) could still contain an `ngspice` of its own and win.
+    # Being FIRST is what actually stops #259's silent fallback.
+    case ":${PATH}:" in
+      ":${pin_dir}:"*) ;; # already first; avoid a redundant duplicate entry
+      *) PATH="${pin_dir}:${PATH}" ;;
+    esac
+    export PATH
+    return 0
+  fi
+
+  if [ -n "${SIM_ALLOW_UNPINNED_NGSPICE:-}" ]; then
+    echo "WARN: pinned ngspice not found at ${SIMENV_NGSPICE_PIN}; SIM_ALLOW_UNPINNED_NGSPICE=1 is set, so falling through to whatever 'ngspice' resolves to on PATH ($(command -v ngspice 2>/dev/null || echo '<not found>'), $(simenv_ngspice_version 2>/dev/null || echo 'unknown')). This is UNVERIFIED against #259's ngspice-47 parse/hang defect -- see sim/harness/README.md's 'ngspice-46 required for nested nonlinear moscap decks'." >&2
+    return 0
+  fi
+
+  cat >&2 <<EOF
+ERROR: pinned ngspice not found at ${SIMENV_NGSPICE_PIN} (issue #259).
+
+Every citable sim/ evidence record cites ngspice-46 at this path, and
+#241/#242 tuned this shim's OpenMP-thread-pin detection against that build.
+Silently falling through to whatever "ngspice" resolves to on PATH is not
+safe here: Homebrew's current ngspice-47 bottle has a reproducible parse
+failure ("unknown parameter (e9)") on this PDK's nested nonlinear loop-
+filter/VCO moscaps (see sim/harness/README.md's "ngspice-46 required for
+nested nonlinear moscap decks", #153) and, worse, does not exit on that
+error -- it hangs indefinitely, which stalls an entire xargs-driven run.sh
+job pool since the affected corner's job slot never frees (#259).
+
+  Fix:      install ngspice-46 at ${SIMENV_NGSPICE_PIN}
+            (sim/harness/README.md's "ngspice-46 required..." section has
+            the from-source build recipe).
+  Relocate: export SIM_NGSPICE_BIN=/path/to/ngspice-46/bin/ngspice
+  Override: export SIM_ALLOW_UNPINNED_NGSPICE=1
+            (not recommended -- asserts you have already checked whatever
+            "ngspice" resolves to on PATH is not #259's defective fallback)
+EOF
+  return 1
+}
+
+# --------------------------------------------------------------------------
 # Preflight
 # --------------------------------------------------------------------------
 
 simenv_require_tools() {
   local missing=0
+  simenv_require_ngspice_pin || missing=1
   command -v ngspice >/dev/null 2>&1 || {
     echo "ERROR: ngspice not found on PATH (brew install ngspice)" >&2
     missing=1
