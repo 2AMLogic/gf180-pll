@@ -1,0 +1,27 @@
+# campaign: supply-sensitivity (power split)
+# record_id: 20260901-155456-46b92f8
+# generated_utc: 2026-09-01T15:55:00Z
+# pdk_variant: gf180mcuD
+# pdk_open_pdks_hash: c6d73a35f524070e85faff4a6a9eef49553ebc2b
+# pdk_root: /Users/rwalters/.volare/gf180mcuD
+# model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
+# switches: design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0 -> nominal skew, no Monte Carlo)
+# simulator: ngspice-46
+# netlist: design/pll_top.sch -> sim/supply-sensitivity/netlist-snapshots/20260901-155456-46b92f8.spice
+# corners: typical bundle x temp{-40,27,125}C x vdd{2.97,3.30,3.63}V, each locked at 100e6 Hz and at 50e6 Hz
+# I(f) = I_q + k*f fitted per domain through the two locked operating
+#   points; I_q is the frequency-INDEPENDENT (quiescent) part and
+#   k*f_out the frequency-PROPORTIONAL (dynamic) part at 100e6 Hz.
+# domains: core = pfd_cp + lock_detector (loop_filter is passive);
+#   vco = bias + band mirrors + V->I + ring + output buffer;
+#   div = divider_chain (div-2/3 cells, retiming flop, input inverters)
+bundle,temp_c,vdd_v,domain,i_at_100mhz_a,i_at_50mhz_a,i_quiescent_a,i_dynamic_a,p_quiescent_w,p_dynamic_w
+typical,27,2.97,core,7.53044e-05,6.85677e-05,6.1831e-05,1.34734e-05,0.000183638,4.0016e-05
+typical,27,2.97,div,0.000108131,5.42579e-05,3.848e-07,0.000107746,1.14286e-06,0.000320006
+typical,27,2.97,vco,0.00018307,0.000113506,4.3942e-05,0.000139128,0.000130508,0.00041321
+typical,27,3.30,core,0.000103623,9.09605e-05,7.8298e-05,2.5325e-05,0.000258383,8.35725e-05
+typical,27,3.30,div,0.000123636,6.17021e-05,-2.318e-07,0.000123868,-7.6494e-07,0.000408764
+typical,27,3.30,vco,0.000217929,0.00013423,5.0531e-05,0.000167398,0.000166752,0.000552413
+typical,27,3.63,core,0.000112019,7.39401e-05,3.58612e-05,7.61578e-05,0.000130176,0.000276453
+typical,27,3.63,div,0.00013932,6.97249e-05,1.298e-07,0.00013919,4.71174e-07,0.00050526
+typical,27,3.63,vco,0.000254344,0.000155707,5.707e-05,0.000197274,0.000207164,0.000716105
