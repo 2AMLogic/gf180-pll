@@ -1,0 +1,6 @@
+# deterministic period/TIE jitter of the locked output, measured directly from the period sequence over the manifest's measurement window. RANDOM/NOISE-DRIVEN JITTER IS NOT MEASURED -- see this record's Methodology field.
+# tj_rms_pct is the deterministic (control-ripple-driven) period jitter as a percentage of the measured output period -- the form spec/pll.md#period-jitter states its draft <=1.0% RMS target in. The verdict column is read against that draft, unratified target (issue #1).
+# tie_rms_s/tie_pp_s de-trend the crossing sequence by its own least-squares line before computing RMS/pp, which removes any residual release-transient settling drift from being counted as jitter -- the same reason sim/reference-spur's TIE path de-trends by a fit rather than a nominal period.
+# This table reports the DETERMINISTIC component only. No random/noise-driven jitter number appears anywhere in this record -- see the Methodology field for why.
+corner_id,process,temp_c,vdd_v,fout_hz,n_cycles,tj_rms_s,tj_rms_pct,tj_pp_s,c2c_rms_s,tie_rms_s,tie_pp_s,ferr,dn_lvl,dt_int_mean_s,verdict_vs_1pct_rms_draft
+typical_27c_3.30v,typical,27,3.30,1.50001e+08,314,1.5558e-11,0.2334,6.7689e-11,2.7513e-11,1.4529e-11,6.7895e-11,1.62e-06,0.1750,7.368e-11,PASS

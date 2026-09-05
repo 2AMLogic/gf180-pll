@@ -20,13 +20,13 @@ Being honest about where this actually is:
 - **Done** — architecture and scope captured as numbered decision records in
   `spec/`; xschem schematics for the VCO, PFD, charge pump, feedback divider,
   lock detector, and the shared 3.3 V logic cells they are built from; a
-  reproducible PVT corner harness; **69 evidence records** across 20
+  reproducible PVT corner harness; **70 evidence records** across 21
   verification campaigns (device characterization, VCO tuning range, PFD
   dead-zone freedom, charge-pump compliance and mismatch, divider moduli,
   lock-detector window, loop dynamics, the closed-loop reference spur measured
   from the output spectrum, the loaded output driver's duty cycle and
   levels/drive, and a first pass at the other closed-loop campaigns:
-  lock-time, output-range, and supply-sensitivity).
+  lock-time, output-range, supply-sensitivity, and period-jitter).
 - **Not done** — closed-loop bring-up. `pll-top-smoke`'s latest record
   (`20260802-160926-8456ff3`, superseding the earlier FAIL) is an **overall
   PASS, 0 of 7 checks failed** at the single nominal corner (`typical` / 27 C /
@@ -43,9 +43,14 @@ Being honest about where this actually is:
   of its other four criteria at real corners, with one genuine design-margin
   finding routed to `loop-dynamics` (#10) and the rest to `lock-detector`
   (#11) or the post-#24 charge pump (#9) — see each campaign's own latest
-  record under `sim/*/records/` for the full accounting. **`period-jitter`
-  still has zero records** — it is reserved in `sim/README.md` (#13) but
-  blocked on #1's spec ratification, per #13's own tracked dependency.
+  record under `sim/*/records/` for the full accounting. `period-jitter`
+  now has its **first record** (`20260905-192724-a2ba48f`): deterministic
+  (control-ripple-driven) period jitter at one nominal corner measures
+  **0.2334 % RMS**, comfortably inside the 1.0 % draft target — but this
+  covers only 1 of the mandated 45 PVT corners, and the campaign's own
+  Acceptance Criteria (#13, `loom:blocked` on #1's spec ratification) also
+  require a **random/noise-driven** jitter component this record explicitly
+  does not measure (a disclosed methodology gap, not an oversight).
 - **Not started** — PLL-block layout. `layout/` is not a placeholder: issue
   #16 landed a repeatable `klt`-aware DRC/LVS flow against the gf180mcu
   open-PDK decks, proven clean (and proven to catch a deliberately injected
@@ -108,7 +113,9 @@ Challenge #5 (GF180MCU / Wafer.Space), re-derived from this repository's own
 `sim/` evidence. It states plainly where the block does and does not meet the
 brief today — including that the design is 3.3 V-only and does not yet
 exercise the Challenge's 5.0 V analog rail, and that `period-jitter`'s
-closed-loop PVT verification is still outstanding (#13, blocked on #1).
+closed-loop PVT verification is still outstanding: its first record covers
+one corner and the deterministic component only, with the random/noise-driven
+component and the remaining 44 corners still open (#13, blocked on #1).
 
 ## License
 

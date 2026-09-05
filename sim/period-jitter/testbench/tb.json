@@ -1,0 +1,199 @@
+{
+  "name": "period-jitter",
+  "description": "closed-loop deterministic period jitter: the period-to-period spacing of the locked output, driven by the naturally-occurring per-reference-cycle control-voltage ripple (#13)",
+  "claim": "spec/pll.md#period-jitter -- period jitter (RMS), percent of output period, in lock. DETERMINISTIC component only (control-line ripple); random/noise-driven jitter is not measured by this record -- see Methodology.",
+  "methodology": [
+    "FIRST RECORD FOR THIS CAMPAIGN. sim/README.md's campaign table has reserved the `period-jitter` slug for #13 since this repo's harness stood up, with zero records until this one. This record establishes the deterministic half of the claim at one PVT point; it does not close #13, whose Acceptance Criteria also require the full default PVT grid for the deterministic component and DR-002 Decision 5's random/noise-driven component (see the ONE-CORNER SCOPE and RANDOM JITTER notes below).",
+    "WHAT IS MEASURED, AND WHY IT IS A TIME-DOMAIN READ OF THE SAME MECHANISM sim/reference-spur MEASURES IN FREQUENCY. Once locked, the PFD fires both branches once per reference cycle for the reset-delay overlap, the charge pump's per-event charge asymmetry lands on the loop filter's C2, and the resulting Vctrl ripple phase-modulates the ring (design basis; sim/reference-spur's own methodology states it in full). sim/reference-spur (#145) reads that ripple out of the output SPECTRUM as a sideband; this record reads the identical physical ripple out of the output's TIME-DOMAIN edge sequence instead, which is the form spec/pll.md#period-jitter states its target in (percent of period, RMS) rather than dBc.",
+    "OPERATING POINT: IDENTICAL TO sim/reference-spur (#145), reused deliberately rather than re-derived. f_ref = 25 MHz, N = 6, f_out = 150 MHz, VCO band code 6, Icp trim code 0 (one unit leg, the Icp trim-code rule's required setting there). This is inside the ratified 1-25 MHz reference / 10-200 MHz output / N=4-64 space, is the highest output frequency one static band code holds across the whole PVT grid (sim/vco-tuning-range record 20260804-162735-72883fb), and its per-corner lock-point voltage is already committed evidence (sim/reference-spur/testbench/tb.json's `sweeps.vs`) this record cites rather than re-derives. Every static configuration bit in tb_period_jitter.sp is copied verbatim from sim/reference-spur/testbench/tb_ref_spur.sp, itself checked against sim/lib/pll_top_dut.sh's `cloop_divider_params`/`cloop_band_params`/`cloop_trim_params` by that directory's own check_config.sh.",
+    "ONE-CORNER SCOPE, STATED PLAINLY. This record runs the typical/27C/3.30V nominal point ONLY, not the mandated 45-point grid sim/README.md's default convention calls for. This is a genuine, disclosed scope reduction -- following the precedent sim/pll-top-smoke set for a first closed-loop record of a brand-new claim ('one nominal corner by design') -- made for the same reason sim/reference-spur's full-grid re-run 'remains owed': a closed-loop transient at this campaign's 100 ps internal-timestep ceiling costs real wall-clock minutes-to-tens-of-minutes per point (sim/reference-spur's own methodology quotes 'thousands of CPU-seconds per point' for its longer 8 us run), and this is the FIRST measurement this claim has ever had, not a re-run. The full-PVT-grid rollout for the deterministic component remains owed and is tracked at #13, which this record does not close.",
+    "WHY A TRANSIENT AND NOT loop-dynamics' SMALL-SIGNAL ANALYSIS. The ripple is a nonlinear, periodic-steady-state effect (once-per-reference-cycle charge-pump event), exactly as sim/reference-spur's own methodology states; sim/loop-dynamics' linearized AC sweep cannot produce it and says so in its own Limitations field.",
+    "STEADY STATE, NOT LOCK TIME. The control node is released at `vstart` -- sim/reference-spur's own committed per-corner lock-point estimate -- for the same reason sim/reference-spur uses it: this campaign measures a STEADY-STATE property (the locked period sequence), not acquisition time (sim/lock-time, #12, owns that claim), and starting near the lock point reaches steady state for the least simulated time. The residual settling drift this leaves is not assumed away -- `ferr` is measured over a 1 us baseline (`ta`/`tb`) immediately before the measurement window and is reported as a lock-quality gate, exactly as sim/pll-top-smoke's and sim/reference-spur's lock criteria are.",
+    "MEASUREMENT CRITERION: the reported RMS/pp period jitter and TIE come from every rising mid-supply crossing of `v(clk)` in the measurement window (`wa` to `wb`, 300 output cycles = 2.0 us at 150 MHz), linearly interpolated between the two straddling ngspice timepoints (sim/vco-tuning-range's `_numeric.py:crossings`, the same primitive sim/vco-tuning-range's jitter extraction and sim/reference-spur's TIE cross-check both use). Period jitter is the RMS/pp deviation of the per-cycle period sequence from its own mean; TIE is the RMS/pp deviation of the crossing times from their own least-squares line (removes any residual settling drift from being counted as jitter, the same reason sim/reference-spur's TIE path de-trends by a fit rather than a nominal period). `sim/tests/test_period_jitter_derive.py` replays a synthetic waveform of known jitter through this exact reduction path, off any simulator, before this record's own number is trusted.",
+    "RANDOM / NOISE-DRIVEN JITTER IS NOT MEASURED BY THIS RECORD -- A METHODOLOGY GAP, STATED HONESTLY. DR-002 Decision 5 (spec/decision-records/DR-002-draft-spec-scope-ratification.md) ratifies (status: proposed) a VCO-dominated transient-noise testbench plus a jitter-transfer argument through the closed loop as the intended method for the random component, and explicitly rejects an ngspice AC `.noise` analysis as unsupported for a free-running oscillator's phase noise on this flow. Before writing this deck, `.option TRANNOISE=1` was tried on ngspice-46 (this repo's pinned build) against a trivial R-driven-by-a-DC-source circuit: the resulting transient carried NO noise -- a bit-for-bit flat waveform across the whole run -- so this pinned build does not inject automatic device noise into a `.tran` analysis (or the syntax this build recognizes for it is not `.option TRANNOISE=1`; either way, nothing in this repo's flow demonstrates it working). ngspice DOES support an explicit `trnoise()` PWL source function (confirmed working, injecting a synthesized white/1-f voltage waveform) -- but turning that into a credible DEVICE-noise-EQUIVALENT number requires first calibrating the injected amplitude against a validated noise-PSD measurement of the VCO's dominant noise contributors (thermal + flicker in the current-starved ring's bias and switching devices), which is real, separately-scoped methodology development this record does not attempt. Per sim/README.md's own worked example for this exact scenario ('A recorded methodology gap instead of a number (#13)'), this record states the gap here rather than publishing an uncalibrated, not-credible random-jitter figure. No random/noise-driven period-jitter number is reported anywhere in this record.",
+    "SIMULATOR SETTINGS. `.tran 2n 5.7u 3.5u 100p` -- the fourth argument is the 100 ps ceiling on ngspice's INTERNAL timestep every campaign whose DUT contains the PFD inherits (sim/README.md, 'Closed-loop internal-timestep bound'), verified per point via `dt_int_mean`. `.option rshunt=1e12 itl4=200 reltol=1e-3 abstol=1e-13 vntol=1e-6` matches sim/reference-spur's/sim/pll-top-smoke's exactly, so this deck's converged solution is comparable with the other closed-loop campaigns'.",
+    "LIMITATIONS. (1) One PVT point only (typical/27C/3.30V) -- see ONE-CORNER SCOPE above; the full 45-point grid is owed. (2) Random/noise-driven jitter is not measured -- see above; this record answers only the deterministic half of #13's claim. (3) Schematic-level: no layout parasitics, no supply or substrate coupling into the VCO rail beyond what design/pll_top.sch itself models. (4) The reference is ideal: no reference jitter, no duty-cycle error -- a jitter contribution from reference-clock imperfection is out of scope here by construction, matching sim/reference-spur's own stated limitation. (5) Device mismatch is OFF (no Monte Carlo); a statistical (not corner-driven) jitter contribution is not covered here. (6) One (f_ref, N, band, trim) operating point of the ratified space -- see OPERATING POINT above."
+  ],
+  "dut": [
+    "design/netlist/pll_top.spice"
+  ],
+  "netlist": "tb_period_jitter.sp",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.0,
+  "temperatures_c": [
+    27
+  ],
+  "corners": [
+    "typical"
+  ],
+  "params": {
+    "fref": "25e6",
+    "nratio": "6",
+    "b0_code": "0",
+    "b1_code": "1",
+    "b2_code": "1",
+    "cpb0_code": "0",
+    "cpb1_code": "0",
+    "sel0_code": "0",
+    "sel1_code": "1",
+    "sel2_code": "0",
+    "sel3_code": "0",
+    "sel4_code": "0",
+    "sel5_code": "0",
+    "p0_code": "0",
+    "p1_code": "1",
+    "p2_code": "0",
+    "p3_code": "0",
+    "p4_code": "0",
+    "p5_code": "0",
+    "vstart": "1.795",
+    "ktstep": "2e-9",
+    "ktstop": "5.7e-6",
+    "ktstart": "3.5e-6",
+    "ktmax": "100e-12",
+    "ta": "2.60e-6",
+    "tb": "3.60e-6",
+    "wa": "3.60e-6",
+    "wb": "5.60e-6"
+  },
+  "options": [
+    "rshunt=1e12",
+    "itl4=200",
+    "reltol=1e-3",
+    "abstol=1e-13",
+    "vntol=1e-6"
+  ],
+  "analyses": [
+    "save v(ref) v(fb) v(clk) v(lock) v(xdut.up) v(xdut.dn)",
+    "tran {ktstep} {ktstop} {ktstart} {ktmax}",
+    "set wr_singlescale",
+    "wrdata clk.dat v(clk)"
+  ],
+  "raw_files": {
+    "clk.dat": {
+      "description": "the locked output over the measurement region only, at ngspice's own internal timesteps -- the waveform derive.py extracts the period/TIE sequence from",
+      "columns": [
+        "t",
+        "clk"
+      ],
+      "retain": false
+    }
+  },
+  "raw_measures": {
+    "phi_a": {
+      "analysis": "tran",
+      "expr": "trig v(ref) val='vdd_val/2' rise=1 td='ta' targ v(fb) val='vdd_val/2' rise=1 td='ta'"
+    },
+    "phi_b": {
+      "analysis": "tran",
+      "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tb' targ v(fb) val='vdd_val/2' rise=1 td='tb'"
+    },
+    "ferr": {
+      "analysis": "tran",
+      "expr": "param='-(phi_b-phi_a)/(tb-ta)'"
+    },
+    "tclk20": {
+      "analysis": "tran",
+      "expr": "trig v(clk) val='vdd_val/2' rise=1 td='ta' targ v(clk) val='vdd_val/2' rise=21 td='ta'"
+    },
+    "fout": {
+      "analysis": "tran",
+      "expr": "param='20/tclk20'"
+    },
+    "tfb5": {
+      "analysis": "tran",
+      "expr": "trig v(fb) val='vdd_val/2' rise=1 td='ta' targ v(fb) val='vdd_val/2' rise=6 td='ta'"
+    },
+    "ffb": {
+      "analysis": "tran",
+      "expr": "param='5/tfb5'"
+    },
+    "nmeas": {
+      "analysis": "tran",
+      "expr": "param='fout/ffb'"
+    },
+    "lock_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(lock) from='ta' to='tb'"
+    },
+    "up_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(xdut.up) from='ta' to='tb'"
+    },
+    "dn_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(xdut.dn) from='ta' to='tb'"
+    }
+  },
+  "derived": {
+    "module": "derive.py",
+    "measures": [
+      "tj_rms_s",
+      "tj_pp_s",
+      "tj_rms_pct",
+      "c2c_rms_s",
+      "tie_rms_s",
+      "tie_pp_s",
+      "n_cycles",
+      "dt_int_mean"
+    ],
+    "tables": [
+      "period_jitter_by_corner"
+    ]
+  },
+  "topology_groups": {
+    "jitter": {
+      "description": "the measurement this record exists for -- the deterministic period/TIE jitter of the locked output",
+      "measures": [
+        "tj_rms_s",
+        "tj_pp_s",
+        "tj_rms_pct",
+        "c2c_rms_s",
+        "tie_rms_s",
+        "tie_pp_s",
+        "n_cycles"
+      ]
+    },
+    "lock": {
+      "description": "is the loop actually locked -- a period sequence from an unlocked loop is not jitter",
+      "measures": [
+        "ferr",
+        "fout",
+        "ffb",
+        "nmeas",
+        "lock_lvl"
+      ]
+    },
+    "integration": {
+      "description": "the standing guards: the PFD's DN branch must assert at all, and the internal timestep ceiling must actually be in force",
+      "measures": [
+        "dn_lvl",
+        "up_lvl",
+        "dt_int_mean"
+      ]
+    }
+  },
+  "checks": {
+    "tj_rms_pct": {
+      "max": 1.0
+    },
+    "ferr": {
+      "min": -0.001,
+      "max": 0.001
+    },
+    "nmeas": {
+      "min": 5.99,
+      "max": 6.01
+    },
+    "fout": {
+      "min": 148500000.0,
+      "max": 151500000.0
+    },
+    "dn_lvl": {
+      "min": 0.00089
+    },
+    "dt_int_mean": {
+      "max": 1e-10
+    }
+  }
+}
