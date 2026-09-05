@@ -27,14 +27,25 @@ Being honest about where this actually is:
   from the output spectrum, the loaded output driver's duty cycle and
   levels/drive, and a first pass at the other closed-loop campaigns:
   lock-time, output-range, and supply-sensitivity).
-- **Not done** — closed-loop bring-up. `lock-time`, `output-range`, and
-  `supply-sensitivity` each have evidence now (8, 4, and 7 records
-  respectively), and the latest `pll-top-smoke` record
+- **Not done** — closed-loop bring-up. `pll-top-smoke`'s latest record
   (`20260802-160926-8456ff3`, superseding the earlier FAIL) is an **overall
-  PASS, 0 of 7 checks failed** — but that is still just the single nominal
-  corner (`typical` / 27 C / 3.30 V) it covers, not a PVT sweep; the loop's
-  behavior across the rest of the corner matrix remains unverified.
-  `period-jitter` is still reserved in `sim/README.md` with zero records.
+  PASS, 0 of 7 checks failed** at the single nominal corner (`typical` / 27 C /
+  3.30 V) it is deliberately scoped to. Three of the four closed-loop
+  campaigns have since taken the full PVT grid against the same assembled
+  `pll_top` DUT, and the honest news is mixed: `lock-time`'s 270-run grid
+  (45 corners × N ∈ {4, 16, 64} × {cold, relock}) reaches a sustained
+  in-window `LOCK` PASS on 21/135 cold-start rows and 1/135 relock rows — the
+  rest are read as the test window being too short, not as a broken loop, but
+  that reading is not yet a closed PASS bound; `output-range`'s full 45-point
+  grid reaches **0/45** sustained in-window PASS at either drawn-band edge;
+  `supply-sensitivity`'s full 45-point grid (plus all three step/ramp corners)
+  PASSes on power (0.99–1.98 mW, under the 5 mW draft target) but FAILs three
+  of its other four criteria at real corners, with one genuine design-margin
+  finding routed to `loop-dynamics` (#10) and the rest to `lock-detector`
+  (#11) or the post-#24 charge pump (#9) — see each campaign's own latest
+  record under `sim/*/records/` for the full accounting. **`period-jitter`
+  still has zero records** — it is reserved in `sim/README.md` (#13) but
+  blocked on #1's spec ratification, per #13's own tracked dependency.
 - **Not started** — PLL-block layout. `layout/` is not a placeholder: issue
   #16 landed a repeatable `klt`-aware DRC/LVS flow against the gf180mcu
   open-PDK decks, proven clean (and proven to catch a deliberately injected
@@ -88,6 +99,16 @@ wrong shape for the job, that friction is filed as an issue against
 record — decision records, evidence, dead ends, and the agent-authored pull
 requests that produced them — is more useful than publishing a polished result,
 so that is what is here.
+
+## Chipalooza
+
+[`docs/chipalooza/challenge-5-proposal.md`](docs/chipalooza/challenge-5-proposal.md)
+is this block's proposal document for Open Circuit Design's Chipalooza
+Challenge #5 (GF180MCU / Wafer.Space), re-derived from this repository's own
+`sim/` evidence. It states plainly where the block does and does not meet the
+brief today — including that the design is 3.3 V-only and does not yet
+exercise the Challenge's 5.0 V analog rail, and that `period-jitter`'s
+closed-loop PVT verification is still outstanding (#13, blocked on #1).
 
 ## License
 
