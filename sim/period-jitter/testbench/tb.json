@@ -1,30 +1,32 @@
 {
   "name": "period-jitter",
-  "description": "closed-loop deterministic period jitter: the period-to-period spacing of the locked output, driven by the naturally-occurring per-reference-cycle control-voltage ripple (#13)",
+  "description": "closed-loop deterministic period jitter: the period-to-period spacing of the locked output, driven by the naturally-occurring per-reference-cycle control-voltage ripple (#13). This manifest declares the full 45-point PVT matrix, one grid block per point, each released at its own predicted lock voltage",
   "claim": "spec/pll.md#period-jitter -- period jitter (RMS), percent of output period, in lock. DETERMINISTIC component only (control-line ripple); random/noise-driven jitter is not measured by this record -- see Methodology.",
   "methodology": [
-    "FIRST RECORD FOR THIS CAMPAIGN. sim/README.md's campaign table has reserved the `period-jitter` slug for #13 since this repo's harness stood up, with zero records until this one. This record establishes the deterministic half of the claim at one PVT point; it does not close #13, whose Acceptance Criteria also require the full default PVT grid for the deterministic component and DR-002 Decision 5's random/noise-driven component (see the ONE-CORNER SCOPE and RANDOM JITTER notes below).",
+    "WHERE THIS CAMPAIGN STANDS. Record 20260905-192724-a2ba48f established this claim's deterministic half at ONE nominal point (typical/27C/3.30V) and stated plainly that the mandated 45-point PVT matrix remained owed. This manifest now DECLARES that full matrix: 45 grid blocks, one per PVT point, each carrying its own control-node release voltage derived from committed VCO evidence by vstart_from_vco_record.py in this directory. What was owed is therefore no longer design work -- every remaining point is `python3 sim/run_corners.py period-jitter` with no --axis narrowing, i.e. compute. A run that narrows the declared grid says which points it ran and why, in this record's own Corner matrix field, on the same terms as any other PVT subset.",
     "WHAT IS MEASURED, AND WHY IT IS A TIME-DOMAIN READ OF THE SAME MECHANISM sim/reference-spur MEASURES IN FREQUENCY. Once locked, the PFD fires both branches once per reference cycle for the reset-delay overlap, the charge pump's per-event charge asymmetry lands on the loop filter's C2, and the resulting Vctrl ripple phase-modulates the ring (design basis; sim/reference-spur's own methodology states it in full). sim/reference-spur (#145) reads that ripple out of the output SPECTRUM as a sideband; this record reads the identical physical ripple out of the output's TIME-DOMAIN edge sequence instead, which is the form spec/pll.md#period-jitter states its target in (percent of period, RMS) rather than dBc.",
-    "OPERATING POINT: IDENTICAL TO sim/reference-spur (#145), reused deliberately rather than re-derived. f_ref = 25 MHz, N = 6, f_out = 150 MHz, VCO band code 6, Icp trim code 0 (one unit leg, the Icp trim-code rule's required setting there). This is inside the ratified 1-25 MHz reference / 10-200 MHz output / N=4-64 space, is the highest output frequency one static band code holds across the whole PVT grid (sim/vco-tuning-range record 20260804-162735-72883fb), and its per-corner lock-point voltage is already committed evidence (sim/reference-spur/testbench/tb.json's `sweeps.vs`) this record cites rather than re-derives. Every static configuration bit in tb_period_jitter.sp is copied verbatim from sim/reference-spur/testbench/tb_ref_spur.sp, itself checked against sim/lib/pll_top_dut.sh's `cloop_divider_params`/`cloop_band_params`/`cloop_trim_params` by that directory's own check_config.sh.",
-    "ONE-CORNER SCOPE, STATED PLAINLY. This record runs the typical/27C/3.30V nominal point ONLY, not the mandated 45-point grid sim/README.md's default convention calls for. This is a genuine, disclosed scope reduction -- following the precedent sim/pll-top-smoke set for a first closed-loop record of a brand-new claim ('one nominal corner by design') -- made for the same reason sim/reference-spur's full-grid re-run 'remains owed': a closed-loop transient at this campaign's 100 ps internal-timestep ceiling costs real wall-clock minutes-to-tens-of-minutes per point (sim/reference-spur's own methodology quotes 'thousands of CPU-seconds per point' for its longer 8 us run), and this is the FIRST measurement this claim has ever had, not a re-run. The full-PVT-grid rollout for the deterministic component remains owed and is tracked at #13, which this record does not close.",
+    "OPERATING POINT: IDENTICAL TO sim/reference-spur (#145), reused deliberately rather than re-derived. f_ref = 25 MHz, N = 6, f_out = 150 MHz, VCO band code 6, Icp trim code 0 (one unit leg, the Icp trim-code rule's required setting there). This is inside the ratified 1-25 MHz reference / 10-200 MHz output / N=4-64 space and is the highest output frequency one static band code holds across the whole PVT grid (sim/vco-tuning-range record 20260804-162735-72883fb) -- which is precisely why it, and not a different operating point, is the one that can be carried to all 45 corners at a single static band code. The per-PVT-point control-node release voltage is interpolated from that same committed VCO record by vstart_from_vco_record.py in this directory, one value per corner of the mandated matrix; that script re-checks the manifest against the record (--check) and regenerates the manifest fragment from it (--emit), and it loads its interpolation arithmetic from sim/reference-spur/testbench/vstart_from_vco_record.py rather than re-implementing it, so the two campaigns can never disagree about what the committed record says a corner's lock point is. Every static configuration bit in tb_period_jitter.sp is copied verbatim from sim/reference-spur/testbench/tb_ref_spur.sp, itself checked against sim/lib/pll_top_dut.sh's `cloop_divider_params`/`cloop_band_params`/`cloop_trim_params` by that directory's own check_config.sh.",
+    "WHAT A POINT OF THIS DECK COSTS, AND WHY THAT IS RECORDED HERE. A closed-loop transient at this campaign's 100 ps internal-timestep ceiling is expensive: sim/reference-spur's own methodology quotes 'thousands of CPU-seconds per point' for its longer 8 us run, and this deck is the same order. That cost, not any design uncertainty, is the only thing standing between this manifest and the full 45 points -- so a run that does not cover all 45 states the arithmetic in its Corner matrix field rather than leaving 'the grid remains owed' as an unquantified promise. Two things keep the per-point cost as low as it is. FIRST, the run length is not increased to accommodate the grid: the deck stays at `.tran 2n 5.7u 3.5u 100p` at every corner, because each corner is released at its OWN predicted lock point rather than at a common voltage -- across this grid that point spans 1.09-2.43 V, and at the loop's Icp/C1 = 14 mV/us slew a common release would spend tens of microseconds slewing before any measurement window could open. SECOND, the points are independent, so they are run in parallel across cores (`-j`); nothing about the numerical solution depends on that scheduling, since the per-point deck, options and tolerances are identical to the predecessor record's. Whether the release estimate was good enough at any given point is not assumed: it is gated per point by this manifest's ferr / fout / nmeas lock checks, and a point that fails them is reported as a failing point, never as a jitter number.",
     "WHY A TRANSIENT AND NOT loop-dynamics' SMALL-SIGNAL ANALYSIS. The ripple is a nonlinear, periodic-steady-state effect (once-per-reference-cycle charge-pump event), exactly as sim/reference-spur's own methodology states; sim/loop-dynamics' linearized AC sweep cannot produce it and says so in its own Limitations field.",
-    "STEADY STATE, NOT LOCK TIME. The control node is released at `vstart` -- sim/reference-spur's own committed per-corner lock-point estimate -- for the same reason sim/reference-spur uses it: this campaign measures a STEADY-STATE property (the locked period sequence), not acquisition time (sim/lock-time, #12, owns that claim), and starting near the lock point reaches steady state for the least simulated time. The residual settling drift this leaves is not assumed away -- `ferr` is measured over a 1 us baseline (`ta`/`tb`) immediately before the measurement window and is reported as a lock-quality gate, exactly as sim/pll-top-smoke's and sim/reference-spur's lock criteria are.",
+    "STEADY STATE, NOT LOCK TIME. The control node is released at `vstart` -- this corner's own predicted lock point, 1.09-2.43 V across this grid -- for the same reason sim/reference-spur does it: this campaign measures a STEADY-STATE property (the locked period sequence), not acquisition time (sim/lock-time, #12, owns that claim), and starting near the lock point reaches steady state for the least simulated time. The residual settling drift this leaves is not assumed away -- `ferr` is measured over a 1 us baseline (`ta`/`tb`) immediately before the measurement window and is reported as a lock-quality gate, exactly as sim/pll-top-smoke's and sim/reference-spur's lock criteria are, and `tie_*` de-trends the crossing sequence by its own least-squares line so a residual drift cannot be counted as jitter.",
     "MEASUREMENT CRITERION: the reported RMS/pp period jitter and TIE come from every rising mid-supply crossing of `v(clk)` in the measurement window (`wa` to `wb`, 300 output cycles = 2.0 us at 150 MHz), linearly interpolated between the two straddling ngspice timepoints (sim/vco-tuning-range's `_numeric.py:crossings`, the same primitive sim/vco-tuning-range's jitter extraction and sim/reference-spur's TIE cross-check both use). Period jitter is the RMS/pp deviation of the per-cycle period sequence from its own mean; TIE is the RMS/pp deviation of the crossing times from their own least-squares line (removes any residual settling drift from being counted as jitter, the same reason sim/reference-spur's TIE path de-trends by a fit rather than a nominal period). `sim/tests/test_period_jitter_derive.py` replays a synthetic waveform of known jitter through this exact reduction path, off any simulator, before this record's own number is trusted.",
     "RANDOM / NOISE-DRIVEN JITTER IS NOT MEASURED BY THIS RECORD -- A METHODOLOGY GAP, STATED HONESTLY. DR-002 Decision 5 (spec/decision-records/DR-002-draft-spec-scope-ratification.md) ratifies (status: proposed) a VCO-dominated transient-noise testbench plus a jitter-transfer argument through the closed loop as the intended method for the random component, and explicitly rejects an ngspice AC `.noise` analysis as unsupported for a free-running oscillator's phase noise on this flow. Before writing this deck, `.option TRANNOISE=1` was tried on ngspice-46 (this repo's pinned build) against a trivial R-driven-by-a-DC-source circuit: the resulting transient carried NO noise -- a bit-for-bit flat waveform across the whole run -- so this pinned build does not inject automatic device noise into a `.tran` analysis (or the syntax this build recognizes for it is not `.option TRANNOISE=1`; either way, nothing in this repo's flow demonstrates it working). ngspice DOES support an explicit `trnoise()` PWL source function (confirmed working, injecting a synthesized white/1-f voltage waveform) -- but turning that into a credible DEVICE-noise-EQUIVALENT number requires first calibrating the injected amplitude against a validated noise-PSD measurement of the VCO's dominant noise contributors (thermal + flicker in the current-starved ring's bias and switching devices), which is real, separately-scoped methodology development this record does not attempt. Per sim/README.md's own worked example for this exact scenario ('A recorded methodology gap instead of a number (#13)'), this record states the gap here rather than publishing an uncalibrated, not-credible random-jitter figure. No random/noise-driven period-jitter number is reported anywhere in this record.",
     "SIMULATOR SETTINGS. `.tran 2n 5.7u 3.5u 100p` -- the fourth argument is the 100 ps ceiling on ngspice's INTERNAL timestep every campaign whose DUT contains the PFD inherits (sim/README.md, 'Closed-loop internal-timestep bound'), verified per point via `dt_int_mean`. `.option rshunt=1e12 itl4=200 reltol=1e-3 abstol=1e-13 vntol=1e-6` matches sim/reference-spur's/sim/pll-top-smoke's exactly, so this deck's converged solution is comparable with the other closed-loop campaigns'.",
-    "LIMITATIONS. (1) One PVT point only (typical/27C/3.30V) -- see ONE-CORNER SCOPE above; the full 45-point grid is owed. (2) Random/noise-driven jitter is not measured -- see above; this record answers only the deterministic half of #13's claim. (3) Schematic-level: no layout parasitics, no supply or substrate coupling into the VCO rail beyond what design/pll_top.sch itself models. (4) The reference is ideal: no reference jitter, no duty-cycle error -- a jitter contribution from reference-clock imperfection is out of scope here by construction, matching sim/reference-spur's own stated limitation. (5) Device mismatch is OFF (no Monte Carlo); a statistical (not corner-driven) jitter contribution is not covered here. (6) One (f_ref, N, band, trim) operating point of the ratified space -- see OPERATING POINT above."
+    "LIMITATIONS. (1) Random/noise-driven jitter is not measured -- see above; this record answers only the deterministic half of #13's claim. (2) Schematic-level: no layout parasitics, no supply or substrate coupling into the VCO rail beyond what design/pll_top.sch itself models. (3) The reference is ideal: no reference jitter, no duty-cycle error -- a jitter contribution from reference-clock imperfection is out of scope here by construction, matching sim/reference-spur's own stated limitation. (4) Device mismatch is OFF (no Monte Carlo); a statistical (not corner-driven) jitter contribution is not covered here. (5) One (f_ref, N, band, trim) operating point of the ratified space -- see OPERATING POINT above. (6) The release voltage is an ESTIMATE interpolated from a committed OPEN-LOOP f(Vctrl) table, not a per-corner closed-loop solve; where it missed far enough to leave the loop unlocked the point fails this manifest's ferr/fout/nmeas checks and is reported as a failing point rather than as jitter. (7) Whatever subset of the declared 45-point grid a given record ran is stated in that record's Corner matrix field -- read it before citing this campaign's coverage."
   ],
   "dut": [
     "design/netlist/pll_top.spice"
   ],
   "netlist": "tb_period_jitter.sp",
   "nominal_supply_v": 3.3,
-  "supply_tolerance": 0.0,
+  "supply_tolerance": 0.1,
   "temperatures_c": [
-    27
+    -40,
+    27,
+    125
   ],
   "corners": [
-    "typical"
+    "mos"
   ],
   "params": {
     "fref": "25e6",
@@ -46,7 +48,6 @@
     "p3_code": "0",
     "p4_code": "0",
     "p5_code": "0",
-    "vstart": "1.795",
     "ktstep": "2e-9",
     "ktstop": "5.7e-6",
     "ktstart": "3.5e-6",
@@ -195,5 +196,1004 @@
     "dt_int_mean": {
       "max": 1e-10
     }
-  }
+  },
+  "sweeps": {
+    "vs": {
+      "description": "control-node release voltage, one per PVT point: the control voltage at which sim/vco-tuning-range's committed f(Vctrl) table (record 20260804-162735-72883fb, band 6) puts that corner's ring at 150.0000 MHz. vstart_from_vco_record.py in this directory recomputes all 45 from that record and diffs them against this manifest. It sets only where the loop STARTS -- every reported number is measured microseconds later, after the loop has closed on its own lock point, and a point whose release estimate missed badly enough to leave the loop unlocked fails this manifest's ferr/fout/nmeas lock checks rather than being reported as jitter.",
+      "points": {
+        "vs1p644": {
+          "params": {
+            "vstart": "1.644"
+          }
+        },
+        "vs1p999": {
+          "params": {
+            "vstart": "1.999"
+          }
+        },
+        "vs2p330": {
+          "params": {
+            "vstart": "2.330"
+          }
+        },
+        "vs1p478": {
+          "params": {
+            "vstart": "1.478"
+          }
+        },
+        "vs1p795": {
+          "params": {
+            "vstart": "1.795"
+          }
+        },
+        "vs2p094": {
+          "params": {
+            "vstart": "2.094"
+          }
+        },
+        "vs1p270": {
+          "params": {
+            "vstart": "1.270"
+          }
+        },
+        "vs1p549": {
+          "params": {
+            "vstart": "1.549"
+          }
+        },
+        "vs1p813": {
+          "params": {
+            "vstart": "1.813"
+          }
+        },
+        "vs1p812": {
+          "params": {
+            "vstart": "1.812"
+          }
+        },
+        "vs2p136": {
+          "params": {
+            "vstart": "2.136"
+          }
+        },
+        "vs2p430": {
+          "params": {
+            "vstart": "2.430"
+          }
+        },
+        "vs1p638": {
+          "params": {
+            "vstart": "1.638"
+          }
+        },
+        "vs1p931": {
+          "params": {
+            "vstart": "1.931"
+          }
+        },
+        "vs2p200": {
+          "params": {
+            "vstart": "2.200"
+          }
+        },
+        "vs1p431": {
+          "params": {
+            "vstart": "1.431"
+          }
+        },
+        "vs1p689": {
+          "params": {
+            "vstart": "1.689"
+          }
+        },
+        "vs1p929": {
+          "params": {
+            "vstart": "1.929"
+          }
+        },
+        "vs1p482": {
+          "params": {
+            "vstart": "1.482"
+          }
+        },
+        "vs1p834": {
+          "params": {
+            "vstart": "1.834"
+          }
+        },
+        "vs2p192": {
+          "params": {
+            "vstart": "2.192"
+          }
+        },
+        "vs1p310": {
+          "params": {
+            "vstart": "1.310"
+          }
+        },
+        "vs1p633": {
+          "params": {
+            "vstart": "1.633"
+          }
+        },
+        "vs1p953": {
+          "params": {
+            "vstart": "1.953"
+          }
+        },
+        "vs1p093": {
+          "params": {
+            "vstart": "1.093"
+          }
+        },
+        "vs1p383": {
+          "params": {
+            "vstart": "1.383"
+          }
+        },
+        "vs1p664": {
+          "params": {
+            "vstart": "1.664"
+          }
+        },
+        "vs1p620": {
+          "params": {
+            "vstart": "1.620"
+          }
+        },
+        "vs1p956": {
+          "params": {
+            "vstart": "1.956"
+          }
+        },
+        "vs2p279": {
+          "params": {
+            "vstart": "2.279"
+          }
+        },
+        "vs1p460": {
+          "params": {
+            "vstart": "1.460"
+          }
+        },
+        "vs1p764": {
+          "params": {
+            "vstart": "1.764"
+          }
+        },
+        "vs2p055": {
+          "params": {
+            "vstart": "2.055"
+          }
+        },
+        "vs1p265": {
+          "params": {
+            "vstart": "1.265"
+          }
+        },
+        "vs1p534": {
+          "params": {
+            "vstart": "1.534"
+          }
+        },
+        "vs1p791": {
+          "params": {
+            "vstart": "1.791"
+          }
+        },
+        "vs1p677": {
+          "params": {
+            "vstart": "1.677"
+          }
+        },
+        "vs2p043": {
+          "params": {
+            "vstart": "2.043"
+          }
+        },
+        "vs2p379": {
+          "params": {
+            "vstart": "2.379"
+          }
+        },
+        "vs1p500": {
+          "params": {
+            "vstart": "1.500"
+          }
+        },
+        "vs1p825": {
+          "params": {
+            "vstart": "1.825"
+          }
+        },
+        "vs2p128": {
+          "params": {
+            "vstart": "2.128"
+          }
+        },
+        "vs1p274": {
+          "params": {
+            "vstart": "1.274"
+          }
+        },
+        "vs1p559": {
+          "params": {
+            "vstart": "1.559"
+          }
+        },
+        "vs1p827": {
+          "params": {
+            "vstart": "1.827"
+          }
+        }
+      }
+    }
+  },
+  "grid": [
+    {
+      "description": "typical / -40 C / 2.97 V -- nominal MOS; released at 1.644 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p644"
+        ]
+      }
+    },
+    {
+      "description": "typical / -40 C / 3.30 V -- nominal MOS; released at 1.999 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p999"
+        ]
+      }
+    },
+    {
+      "description": "typical / -40 C / 3.63 V -- nominal MOS; released at 2.330 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs2p330"
+        ]
+      }
+    },
+    {
+      "description": "typical / 27 C / 2.97 V -- nominal MOS; released at 1.478 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p478"
+        ]
+      }
+    },
+    {
+      "description": "typical / 27 C / 3.30 V -- nominal MOS; released at 1.795 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p795"
+        ]
+      }
+    },
+    {
+      "description": "typical / 27 C / 3.63 V -- nominal MOS; released at 2.094 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs2p094"
+        ]
+      }
+    },
+    {
+      "description": "typical / 125 C / 2.97 V -- nominal MOS; released at 1.270 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p270"
+        ]
+      }
+    },
+    {
+      "description": "typical / 125 C / 3.30 V -- nominal MOS; released at 1.549 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p549"
+        ]
+      }
+    },
+    {
+      "description": "typical / 125 C / 3.63 V -- nominal MOS; released at 1.813 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p813"
+        ]
+      }
+    },
+    {
+      "description": "ff / -40 C / 2.97 V -- fastest MOS (highest lock point on this grid); released at 1.812 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p812"
+        ]
+      }
+    },
+    {
+      "description": "ff / -40 C / 3.30 V -- fastest MOS (highest lock point on this grid); released at 2.136 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs2p136"
+        ]
+      }
+    },
+    {
+      "description": "ff / -40 C / 3.63 V -- fastest MOS (highest lock point on this grid); released at 2.430 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs2p430"
+        ]
+      }
+    },
+    {
+      "description": "ff / 27 C / 2.97 V -- fastest MOS (highest lock point on this grid); released at 1.638 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p638"
+        ]
+      }
+    },
+    {
+      "description": "ff / 27 C / 3.30 V -- fastest MOS (highest lock point on this grid); released at 1.931 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p931"
+        ]
+      }
+    },
+    {
+      "description": "ff / 27 C / 3.63 V -- fastest MOS (highest lock point on this grid); released at 2.200 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs2p200"
+        ]
+      }
+    },
+    {
+      "description": "ff / 125 C / 2.97 V -- fastest MOS (highest lock point on this grid); released at 1.431 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p431"
+        ]
+      }
+    },
+    {
+      "description": "ff / 125 C / 3.30 V -- fastest MOS (highest lock point on this grid); released at 1.689 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p689"
+        ]
+      }
+    },
+    {
+      "description": "ff / 125 C / 3.63 V -- fastest MOS (highest lock point on this grid); released at 1.929 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p929"
+        ]
+      }
+    },
+    {
+      "description": "ss / -40 C / 2.97 V -- slowest MOS (lowest lock point on this grid); released at 1.482 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p482"
+        ]
+      }
+    },
+    {
+      "description": "ss / -40 C / 3.30 V -- slowest MOS (lowest lock point on this grid); released at 1.834 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p834"
+        ]
+      }
+    },
+    {
+      "description": "ss / -40 C / 3.63 V -- slowest MOS (lowest lock point on this grid); released at 2.192 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs2p192"
+        ]
+      }
+    },
+    {
+      "description": "ss / 27 C / 2.97 V -- slowest MOS (lowest lock point on this grid); released at 1.310 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p310"
+        ]
+      }
+    },
+    {
+      "description": "ss / 27 C / 3.30 V -- slowest MOS (lowest lock point on this grid); released at 1.633 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p633"
+        ]
+      }
+    },
+    {
+      "description": "ss / 27 C / 3.63 V -- slowest MOS (lowest lock point on this grid); released at 1.953 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p953"
+        ]
+      }
+    },
+    {
+      "description": "ss / 125 C / 2.97 V -- slowest MOS (lowest lock point on this grid); released at 1.093 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p093"
+        ]
+      }
+    },
+    {
+      "description": "ss / 125 C / 3.30 V -- slowest MOS (lowest lock point on this grid); released at 1.383 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p383"
+        ]
+      }
+    },
+    {
+      "description": "ss / 125 C / 3.63 V -- slowest MOS (lowest lock point on this grid); released at 1.664 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p664"
+        ]
+      }
+    },
+    {
+      "description": "fs / -40 C / 2.97 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way; released at 1.620 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p620"
+        ]
+      }
+    },
+    {
+      "description": "fs / -40 C / 3.30 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way; released at 1.956 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p956"
+        ]
+      }
+    },
+    {
+      "description": "fs / -40 C / 3.63 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way; released at 2.279 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs2p279"
+        ]
+      }
+    },
+    {
+      "description": "fs / 27 C / 2.97 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way; released at 1.460 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p460"
+        ]
+      }
+    },
+    {
+      "description": "fs / 27 C / 3.30 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way; released at 1.764 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p764"
+        ]
+      }
+    },
+    {
+      "description": "fs / 27 C / 3.63 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way; released at 2.055 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs2p055"
+        ]
+      }
+    },
+    {
+      "description": "fs / 125 C / 2.97 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way; released at 1.265 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p265"
+        ]
+      }
+    },
+    {
+      "description": "fs / 125 C / 3.30 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way; released at 1.534 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p534"
+        ]
+      }
+    },
+    {
+      "description": "fs / 125 C / 3.63 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way; released at 1.791 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p791"
+        ]
+      }
+    },
+    {
+      "description": "sf / -40 C / 2.97 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way; released at 1.677 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p677"
+        ]
+      }
+    },
+    {
+      "description": "sf / -40 C / 3.30 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way; released at 2.043 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs2p043"
+        ]
+      }
+    },
+    {
+      "description": "sf / -40 C / 3.63 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way; released at 2.379 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs2p379"
+        ]
+      }
+    },
+    {
+      "description": "sf / 27 C / 2.97 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way; released at 1.500 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p500"
+        ]
+      }
+    },
+    {
+      "description": "sf / 27 C / 3.30 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way; released at 1.825 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p825"
+        ]
+      }
+    },
+    {
+      "description": "sf / 27 C / 3.63 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way; released at 2.128 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs2p128"
+        ]
+      }
+    },
+    {
+      "description": "sf / 125 C / 2.97 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way; released at 1.274 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p274"
+        ]
+      }
+    },
+    {
+      "description": "sf / 125 C / 3.30 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way; released at 1.559 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p559"
+        ]
+      }
+    },
+    {
+      "description": "sf / 125 C / 3.63 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way; released at 1.827 V, this corner's own 150 MHz control voltage from VCO record 20260804-162735-72883fb (band 6). One block per PVT point because the release voltage is per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p827"
+        ]
+      }
+    }
+  ]
 }
