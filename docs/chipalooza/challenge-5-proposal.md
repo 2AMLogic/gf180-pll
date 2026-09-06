@@ -197,9 +197,11 @@ none require the Challenge's shared analog mux beyond `VCTRL`.
    a scope/TIA against the 1.0 % RMS draft target
    (`spec/pll.md#period-jitter`) — this bench measurement would be the first
    *closed-loop, full-PVT* period-jitter data point this design has, since
-   `sim/period-jitter`'s own evidence today covers only 5 of the mandated 45
-   PVT points (all at 27 °C/3.30 V) and its deterministic component only
-   (§5, §7).
+   `sim/period-jitter`'s own evidence today covers 13 of the mandated 45 PVT
+   points and its deterministic component only, all at band 6 / 150 MHz
+   (§5, §7). Measuring at the 200 MHz top of the band is therefore of
+   particular interest on silicon: no simulation in this repository bounds
+   closed-loop jitter there.
 7. **Lock detector window and chatter.** Perturb the loop (a small `REF`
    frequency step) and observe `LOCK`'s deassert/reassert behavior against
    `spec/pll.md#lock-detector`'s targets, particularly near the bottom of
@@ -238,8 +240,8 @@ the 3.3 V digital rail only, since no 5.0 V device exists in this design
 | Multiplication ratio | N = 4–64, every integer | 61 distinct N exercised at 200 MHz, 0 ratio errors of 235 chain points; worst retiming setup margin 6.1 % of a VCO period (`ss`/125 °C/2.97 V) | **MET** | `sim/divider-ratio/records/20260731-171817-0a12e6c.md` (chain), sibling flop/cell records same date |
 | Integrated RMS jitter | not spec'd (DR-002 Decision 5) | n/a by design — never presented as a spec'd figure | **N/A, by design** | `spec/pll.md#integrated-rms-jitter` |
 | Period jitter (open-loop sensitivity) | ≤ 1.0 % RMS, conditional on ≤ 20 mV pp `vdd_vco` ripple | Worst 2.51 % RMS at 100 mV pp ripple (`all-slow`/−40 °C/2.97 V, band 5); implies 0.50 % RMS at the 20 mV pp budget, leaving headroom for an unmeasured random component | **derived, conditional PASS** at the stated ripple budget | `sim/vco-tuning-range/records/20260731-184845-0a12e6c.md` |
-| Period jitter, **closed-loop, deterministic (control-ripple)** | Same 1.0 % RMS line | 5 of the mandated 45 PVT points now measured, all at 27 °C/3.30 V: the nominal (`typical`) corner plus all four process-corner extremes (`ff`, `ss`, `fs`, `sf`), same operating point as `reference-spur` (f_ref = 25 MHz, N = 6, f_out = 150 MHz, band 6, Icp code 0). Range **0.1333–0.2334 % RMS** across the 5 corners (worst: `typical`); lock and PFD DN-branch integration guards PASS at every measured point | **MET at every measured corner (5/5)** — temperature (−40 °C, 125 °C) and supply (2.97 V, 3.63 V) axes remain entirely unswept; the full 45-point grid remains owed | `sim/period-jitter/records/20260905-192724-a2ba48f.md` (first, `typical` only); `sim/period-jitter/records/20260906-015602-f9bef9d.md` (adds `ff`/`ss`/`fs`/`sf`) |
-| Period jitter, **closed-loop, random/noise-driven** | Same 1.0 % RMS line | **Zero records.** The deterministic-component record above explicitly does not measure this — a disclosed methodology gap (DR-002 Decision 5; ngspice `TRANNOISE` produces no injected noise on this repo's pinned build). Tracked at issue #13, which is itself **blocked on issue #1** (spec ratification) per #13's own tracked Dependencies | **UNMET — explicitly, not omitted.** This is the one row this proposal cannot report a number for at any maturity | issue #13 (open, `loom:blocked`) |
+| Period jitter, **closed-loop, deterministic (control-ripple)** | Same 1.0 % RMS line | 13 of the mandated 45 PVT points now measured, at one operating point throughout (f_ref = 25 MHz, N = 6, f_out = 150 MHz, band 6, Icp code 0 — the same as `reference-spur`): the process axis at 27 °C/3.30 V (`typical`, `ff`, `ss`, `fs`, `sf`), **plus the complete temperature × supply plane at nominal process** (−40/27/125 °C × 2.97/3.30/3.63 V). Range **0.1111–0.2691 % RMS** across all 13 — worst `typical`/−40 °C/3.63 V, best `typical`/125 °C/2.97 V. Temperature and supply move the number about 2.4×, more than process did, monotonically (colder and higher-supply is worse). Lock and PFD DN-branch integration guards PASS at every measured point | **MET at every measured corner (13/13), with a ~4× margin at the worst of them** — but 32 of 45 points are still unmeasured (the four skewed/extreme MOS bundles crossed with off-nominal temperature or supply), and **no record of this campaign varies the output band**: every point is at band 6 / 150 MHz, so nothing here bounds jitter at the 200 MHz top of the ratified band | `sim/period-jitter/records/20260905-192724-a2ba48f.md` (first, `typical` only); `sim/period-jitter/records/20260906-015602-f9bef9d.md` (adds `ff`/`ss`/`fs`/`sf`); `sim/period-jitter/records/20260906-024225-12bccda.md` (adds the temperature × supply plane) |
+| Period jitter, **closed-loop, random/noise-driven** | Same 1.0 % RMS line | **Zero records.** None of the three deterministic-component records above measures this — a disclosed methodology gap (DR-002 Decision 5; ngspice `TRANNOISE` produces no injected noise on this repo's pinned build, and turning its `trnoise()` PWL source into a credible device-noise-equivalent figure needs a noise-PSD calibration this repository has not done). Tracked at issue #13 | **UNMET — explicitly, not omitted.** This is the one row this proposal cannot report a number for at any maturity | issue #13 (open) |
 | Phase noise | not spec'd (DR-002 Decision 5) | n/a by design | **N/A, by design** | `spec/pll.md#phase-noise` |
 | Reference spur | ≤ −55 dBc | −57.0…−72.7 dBc measured at 150 MHz (5 spanning corners); scaled to the binding 200 MHz, the two coldest corners land at −54.5/−54.9 dBc (0.1–0.5 dB over the line) | **PASS at 150 MHz (5/5 corners); UNMET at the scaled 200 MHz binding point for 2/5 corners** — 5 of 45 PVT points measured, not the full grid | `sim/reference-spur/records/20260816-132150-5f405e7.md` |
 | Loop bandwidth | 26–430 kHz over the ratified space, `f_c < f_ref/10` | 25.96–429.5 kHz measured; worst realized `f_c/f_ref` = `f_ref/13`, inside the ceiling at every point of the cross-product | **MET** | `sim/loop-dynamics/records/20260731-202550-82af5a9.md` |
@@ -296,12 +298,15 @@ claim DRC/LVS closure that has not happened.
    the 3.3 V digital rail — before it meaningfully exercises the Challenge's
    5.0 V rail. Nothing here should be read as implying that work has started.
 2. **Closed-loop `period-jitter`'s random/noise-driven component has zero
-   records, and its deterministic component covers only 5 of the mandated
-   45 PVT points (all at 27 °C/3.30 V — the full temperature and supply
-   axes are unswept)** (§5). Tracked at issue #13, itself blocked on issue
-   #1 (spec ratification) per #13's own Dependencies section — not
-   something this proposal, or the issue that produced it, can resolve
-   directly.
+   records, and its deterministic component covers 13 of the mandated 45
+   PVT points** (§5). The temperature and supply axes are no longer unswept
+   — the full 3 × 3 temperature × supply plane at nominal process is
+   measured, and every point of it passes with roughly 4× margin — but the
+   32 points crossing those axes with the skewed/extreme MOS bundles are
+   not, and neither is any output band other than band 6 / 150 MHz.
+   Tracked at issue #13. What is owed on the 32 remaining PVT points is
+   compute rather than design: the campaign's manifest already declares all
+   45 points, one per corner with its own predicted release voltage.
 3. **Closed-loop `lock-time` and `output-range` full-PVT grids exist but do
    not establish a closed PASS bound** (§5) — `lock-time` reaches a
    sustained PASS on a minority of tested corners within its own window,
