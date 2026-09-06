@@ -62,6 +62,7 @@ _refspur = load_module(SIM / "reference-spur" / "testbench" / "vstart_from_vco_r
 VCO_RECORD = _refspur.VCO_RECORD
 interp_vctrl = _refspur.interp_vctrl
 load_curves = _refspur.load_curves
+supplies_of = _refspur.supplies_of
 
 #: The MOS-bundle corner set `tb.json` names (`sim/harness/corners.py`'s
 #: `CORNER_SETS["mos"]`), in the order the runner expands it.
@@ -89,16 +90,6 @@ def point_id(vstart: float) -> str:
     is what `sim/reference-spur`'s five ids already use (`vs1p795`, ...).
     """
     return "vs" + ("%.3f" % vstart).replace(".", "p")
-
-
-def supplies_of(manifest) -> dict:
-    nom = float(manifest["nominal_supply_v"])
-    tol = float(manifest["supply_tolerance"])
-    return {
-        "low": round(nom * (1 - tol), 2),
-        "nom": round(nom, 2),
-        "high": round(nom * (1 + tol), 2),
-    }
 
 
 def full_grid(manifest):

@@ -75,13 +75,19 @@ def load_curves(band):
     return curves
 
 
+def supplies_of(manifest) -> dict:
+    nom = float(manifest["nominal_supply_v"])
+    tol = float(manifest["supply_tolerance"])
+    return {
+        "low": round(nom * (1 - tol), 2),
+        "nom": round(nom, 2),
+        "high": round(nom * (1 + tol), 2),
+    }
+
+
 def manifest_points(manifest):
     """(corner, temp, vdd, vs-point-id) for every point tb.json's grid runs."""
-    supplies = {
-        "low": round(manifest["nominal_supply_v"] * (1 - manifest["supply_tolerance"]), 2),
-        "nom": round(manifest["nominal_supply_v"], 2),
-        "high": round(manifest["nominal_supply_v"] * (1 + manifest["supply_tolerance"]), 2),
-    }
+    supplies = supplies_of(manifest)
     out = []
     for block in manifest["grid"]:
         for corner in block["corners"]:
