@@ -41,29 +41,11 @@ TRIM=0
 
 fail=0
 
-check_field() {
-  local field="$1" want="$2" got
-  got="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["params"][sys.argv[2]])' "${TB}" "${field}")"
-  if [ "${got}" != "${want}" ]; then
-    printf '  FAIL %-12s tb.json=%s  pll_top_dut.sh=%s\n' "${field}" "${got}" "${want}"
-    fail=1
-  else
-    printf '  ok   %-12s %s\n' "${field}" "${got}"
-  fi
-}
-
-check_codes() {
-  local kv
-  for kv in $1; do
-    check_field "${kv%%=*}" "${kv#*=}"
-  done
-}
-
 echo "period-jitter-band-top config check -- N=${N}, Icp trim code=${TRIM}, band per point"
 echo "divider (cloop_divider_params ${N}):"
-check_codes "$(cloop_divider_params "${N}")"
+cloop_check_codes "${TB}" "$(cloop_divider_params "${N}")"
 echo "Icp trim (cloop_trim_params ${TRIM}):"
-check_codes "$(cloop_trim_params "${TRIM}")"
+cloop_check_codes "${TB}" "$(cloop_trim_params "${TRIM}")"
 
 # No fixed band bits may sit in `params`: they would be emitted BEFORE the
 # axis point's own and so would not change the deck, but the manifest would
@@ -108,21 +90,7 @@ PY
 # verbatim, folded onto continuation lines: same ports, same ORDER, since the
 # instance line is positional and a swapped pair simulates happily.
 echo "DUT instance line (cloop_instance xdut):"
-want_inst="$(cloop_instance xdut | tr -s ' ')"
-got_inst="$(awk '
-    /^xdut /   { line = $0; f = 1; next }
-    f && /^\+/ { sub(/^\+ */, " "); line = line $0; next }
-    f          { exit }
-    END        { print line }
-  ' "${HERE}/tb_period_jitter_band_top.sp" | tr -s ' ' | sed -e 's/ *$//')"
-if [ "${got_inst}" != "${want_inst}" ]; then
-  echo "  FAIL instance line does not match cloop_instance's output"
-  echo "    deck:   ${got_inst}"
-  echo "    helper: ${want_inst}"
-  fail=1
-else
-  echo "  ok   32-port instance line matches"
-fi
+cloop_check_instance_line "${HERE}/tb_period_jitter_band_top.sp" xdut
 
 if [ "${fail}" -eq 0 ]; then
   echo "PASS -- tb.json's configuration bits are sim/lib/pll_top_dut.sh's own encoding"
