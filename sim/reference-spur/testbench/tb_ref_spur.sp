@@ -154,8 +154,18 @@ xdut ref b0 b1 b2 cpb0 cpb1 p0 p1 p2 p3 p4 p5 sel0 sel1 sel2 sel3 sel4 sel5
 *
 * ta and tb are placed by tb.json on a reference HALF-period (tstart +
 * (k+0.5)*tref), so "the first REF rise after t" and "the first FB rise after
-* t" are the same cycle's pair and the measurement cannot alias by a whole
-* reference period.  Both are inside the stored window (see ktstart).
+* t" are normally the same cycle's pair.  Both are inside the stored window
+* (see ktstart).
+*
+* That placement is NOT on its own alias-proof, and this comment used to say
+* it was (#273).  A trig/targ delay is wrapped into one reference period by
+* construction, so when the static phase error straddles zero a sample can
+* still latch the NEXT FB edge and read ~tref instead of ~0 -- which is what
+* sim/period-jitter record 20260906-063728-f3c9c23 hit, on a deck with the
+* same half-period placement.  tb.json's `dphi` therefore unwraps the
+* difference into (-tref/2, +tref/2] before `ferr` differentiates it, and
+* `ferr_fb` (= ffb/fref - 1, a period count, no wrap at all) closes the
+* aliasing blind spot that unwrapping leaves at multiples of tref/(tb-ta).
 *
 * The `.measure` cards themselves live in tb.json's `raw_measures` -- the
 * harness owns them (a fragment may not carry `.meas`), which is why this

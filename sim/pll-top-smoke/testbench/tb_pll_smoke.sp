@@ -154,12 +154,38 @@ xdut ref b0 b1 b2 cpb0 cpb1 p0 p1 p2 p3 p4 p5 sel0 sel1 sel2 sel3 sel4 sel5
 *
 * ta and tb are chosen by the runner to land on the HALF-period of the
 * reference (tstart + (k + 0.5)*tref), so the "first REF rise after ta" and
-* the "first FB rise after ta" are unambiguously the same cycle's pair and the
-* measurement cannot alias by a whole reference period.
+* the "first FB rise after ta" are normally the same cycle's pair.
+*
+* That placement alone is NOT enough, and this comment used to claim it was
+* (#273).  A trig/targ delay is wrapped into ONE reference period by
+* construction: when the static phase error straddles zero -- FB's edge
+* sitting marginally AHEAD of REF's -- the pair can latch the NEXT FB edge and
+* report ~tref instead of ~0.  Two samples landing on opposite sides of that
+* wrap then difference to a whole reference period of apparent drift, i.e. a
+* locked loop scored as a large frequency error.  sim/period-jitter record
+* 20260906-063728-f3c9c23 hit exactly that at two ff/27C points whose fout,
+* ffb and nmeas all said the loop WAS locked.
+*
+* So dphi is unwrapped into (-tref/2, +tref/2] before it is differentiated.
+* This is a wrap fix, not a loosened tolerance: any genuine drift inside
+* +-tref/(2*(tb-ta)) is reported unchanged, and ACC_FERR in run.sh is
+* untouched.  Unwrapping aliases only at exact multiples of tref/(tb-ta)
+* (1.3e-2 here) -- far outside gate 4's independent |fout/(N*fref) - 1| <=
+* ACC_FERR = 1e-3 window, which is measured from a period count and does not
+* wrap at all, so an aliased ferr cannot carry a point to PASS on its own.
 .meas tran phi_a trig v(ref) val='vsup/2' rise=1 td='ta' targ v(fb) val='vsup/2' rise=1 td='ta'
 .meas tran phi_b trig v(ref) val='vsup/2' rise=1 td='tb' targ v(fb) val='vsup/2' rise=1 td='tb'
-.meas tran dphi   param='phi_b-phi_a'
-.meas tran ferr   param='-(phi_b-phi_a)/(tb-ta)'
+.meas tran dphi   param='(phi_b-phi_a) - tref*floor((phi_b-phi_a)/tref + 0.5)'
+.meas tran ferr   param='-dphi/(tb-ta)'
+* The same wrap reaches criterion (b): a phi_b that latched the next FB edge
+* reads ~tref, which the static-phase gate would score as a whole reference
+* period of offset for a loop sitting 0.2 ns from centre.  So each sample is
+* unwrapped into (-tref/2, +tref/2] on its own, and run.sh gates and reports
+* THESE -- the physical static phase error -- rather than the raw pair.  The
+* raw phi_a/phi_b stay measured and stay in the .log, so the unwrap is
+* auditable rather than invisible.
+.meas tran phi_a_uw param='phi_a - tref*floor(phi_a/tref + 0.5)'
+.meas tran phi_b_uw param='phi_b - tref*floor(phi_b/tref + 0.5)'
 
 * Output frequency, over 160 whole VCO cycles inside the late window -- a
 * fixed cycle COUNT rather than a fixed time, so the same deck measures the
