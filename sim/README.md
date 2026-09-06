@@ -93,7 +93,8 @@ sim/
   | `pll-top-smoke` | does the assembled `design/pll_top.sch` acquire and hold lock at all — the acceptance gate for the top-level wiring, **one nominal corner by design** (see below) | #52 |
   | `lock-time` | closed-loop lock acquisition | #12 |
   | `output-range` | closed-loop output-band coverage | #12 |
-  | `period-jitter` | period jitter (deterministic + random) | #13 |
+  | `period-jitter` | period jitter (deterministic + random), at 150 MHz / band 6 / N = 6 | #13 |
+  | `period-jitter-band-top` | the same deterministic period jitter at the **200 MHz top of the ratified band** — N = 8, and the VCO band code per corner because `spec/pll.md`'s band-selection rule splits this grid across bands 6 and 7 | #13 |
   | `supply-sensitivity` | supply pushing, quiescent/dynamic power | #14 |
   | `mc-cp-mismatch` | charge-pump mismatch distribution | #15 |
   | `reference-spur` | closed-loop reference spur measured directly, as the ±f_ref sidebands of the locked output spectrum | #145 |
