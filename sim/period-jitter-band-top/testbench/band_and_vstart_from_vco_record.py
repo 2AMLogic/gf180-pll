@@ -88,6 +88,7 @@ VCO_RECORD = _refspur.VCO_RECORD
 VCTRLS = _refspur.VCTRLS
 interp_vctrl = _refspur.interp_vctrl
 load_curves = _refspur.load_curves
+supplies_of = _refspur.supplies_of
 
 #: The MOS-bundle corner set `tb.json` names (`sim/harness/corners.py`'s
 #: `CORNER_SETS["mos"]`), in the order the runner expands it.
@@ -144,16 +145,6 @@ def select_band(curves_by_band, key, target):
         if vstart is not None:
             return band, vstart, kvco_at(curve, vstart)
     return None, None, None
-
-
-def supplies_of(manifest):
-    nom = float(manifest["nominal_supply_v"])
-    tol = float(manifest["supply_tolerance"])
-    return {
-        "low": round(nom * (1 - tol), 2),
-        "nom": round(nom, 2),
-        "high": round(nom * (1 + tol), 2),
-    }
 
 
 def full_grid(manifest):
