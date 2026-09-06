@@ -238,3 +238,71 @@ cloop_trim_params() {
     echo "ERROR: cloop_trim_params: Icp code ${c} outside the 2-bit range 0..3" >&2; exit 2; }
   printf 'cpb0_code=%d cpb1_code=%d\n' $((c & 1)) $(((c >> 1) & 1))
 }
+
+# ---------------------------------------------------- tb.json verification --
+#
+# Shared by every closed-loop campaign's check_config.sh: asserting that a
+# tb.json manifest's static configuration params, and a testbench fragment's
+# DUT instance line, are exactly what this file's own encoding produces.
+# Originally duplicated byte-for-byte between sim/reference-spur and
+# sim/period-jitter-band-top (#276); consolidated here so both campaigns
+# check against one copy of this logic rather than two.
+#
+# Every function below sets the caller's `fail` variable to 1 on mismatch and
+# leaves it alone on a match -- callers declare `fail=0` before the first call
+# and `exit "${fail}"` after the last, same as before extraction.
+
+# cloop_check_field <tb.json> <field> <want>
+#
+# Asserts tb.json's params[<field>] equals <want> (a value already produced by
+# one of the cloop_*_params functions above), printing a PASS/FAIL line either
+# way.
+cloop_check_field() {
+  local tb="$1" field="$2" want="$3" got
+  got="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["params"][sys.argv[2]])' "${tb}" "${field}")"
+  if [ "${got}" != "${want}" ]; then
+    printf '  FAIL %-12s tb.json=%s  pll_top_dut.sh=%s\n' "${field}" "${got}" "${want}"
+    # shellcheck disable=SC2034 # read by the sourcing check_config.sh, not this file
+    fail=1
+  else
+    printf '  ok   %-12s %s\n' "${field}" "${got}"
+  fi
+}
+
+# cloop_check_codes <tb.json> "<field=value field=value ...>"
+#
+# Runs cloop_check_field over each `field=value` pair in a cloop_*_params
+# line, e.g. cloop_check_codes "${TB}" "$(cloop_divider_params "${N}")".
+cloop_check_codes() {
+  local tb="$1" kv
+  for kv in $2; do
+    cloop_check_field "${tb}" "${kv%%=*}" "${kv#*=}"
+  done
+}
+
+# cloop_check_instance_line <fragment.sp> [<instance-name>]
+#
+# Asserts the DUT instance line in a testbench fragment (folded onto its `+`
+# continuation lines) is byte-for-byte cloop_instance's output: same 32 ports,
+# same ORDER, since the instance line is positional and a swapped pair
+# simulates happily without erroring.
+cloop_check_instance_line() {
+  local frag="$1" inst="${2:-xdut}"
+  local want_inst got_inst
+  want_inst="$(cloop_instance "${inst}" | tr -s ' ')"
+  got_inst="$(awk -v inst="${inst}" '
+      $0 ~ "^" inst " " { line = $0; f = 1; next }
+      f && /^\+/         { sub(/^\+ */, " "); line = line $0; next }
+      f                  { exit }
+      END                { print line }
+    ' "${frag}" | tr -s ' ' | sed -e 's/ *$//')"
+  if [ "${got_inst}" != "${want_inst}" ]; then
+    echo "  FAIL instance line does not match cloop_instance's output"
+    echo "    deck:   ${got_inst}"
+    echo "    helper: ${want_inst}"
+    # shellcheck disable=SC2034 # read by the sourcing check_config.sh, not this file
+    fail=1
+  else
+    echo "  ok   32-port instance line matches"
+  fi
+}
