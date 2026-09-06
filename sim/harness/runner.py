@@ -613,6 +613,25 @@ def run_point(
     )
 
 
+def _write_log(log_path: Path, text: str) -> str | None:
+    """Write raw ngspice output (or a timeout banner) to ``log_path``.
+
+    Returns ``None`` on success, or a short message describing the failure if
+    the write raised ``OSError`` -- e.g. the untracked ``corners/<record-id>/``
+    directory getting removed mid-run by a concurrent worktree-hygiene pass or
+    a ``git clean`` (#271). The point has already produced whatever
+    measurements it produced (they were parsed from ``text``, already in
+    memory) by the time this is called, so losing the log write must degrade
+    that one point rather than raising out of :func:`run_grid` and discarding
+    every other point the grid already completed.
+    """
+    try:
+        log_path.write_text(text)
+    except OSError as exc:
+        return f"log not written: {exc}"
+    return None
+
+
 def _run_phase(
     tb: Testbench,
     phase: Phase,
@@ -662,10 +681,13 @@ def _run_phase(
         raise NgspiceMissing(str(exc)) from exc
     except subprocess.TimeoutExpired:
         elapsed = time.monotonic() - started
-        log_path.write_text(f"TIMEOUT after {timeout_s}s\n")
+        log_write_error = _write_log(log_path, f"TIMEOUT after {timeout_s}s\n")
         # A killed deck never reached its `wrdata` line, so every declared raw
         # file is reported absent rather than left unexplained.
         timed_out_raw = capture_raw_files(tb, point, rundir, log_dir, phase)
+        message = f"ngspice timed out after {timeout_s}s"
+        if log_write_error:
+            message = f"{message}; {log_write_error}"
         return _PhaseOutcome(
             run=PhaseRun(
                 name=phase.name,
@@ -673,13 +695,13 @@ def _run_phase(
                 deck=deck_path.name,
                 log=log_path.name,
                 seconds=elapsed,
-                message=f"ngspice timed out after {timeout_s}s",
+                message=message,
             ),
             raw_files=timed_out_raw,
             raw_missing=[n for n, raw in timed_out_raw.items() if not raw.exists()],
         )
     elapsed = time.monotonic() - started
-    log_path.write_text(output)
+    log_write_error = _write_log(log_path, output)
 
     # Capture what the deck wrote BEFORE anything else looks at this point: a
     # retained raw file is evidence, and it has to be banked whether the point
@@ -693,12 +715,21 @@ def _run_phase(
     # and treating it as a failure used to discard every measurement the same
     # point took successfully.
     missing = [n for n in phase.required_measure_names if n not in measurements]
+    not_measured = [
+        name for name in phase.measure_names
+        if tb.is_optional(name) and name not in measurements
+    ]
 
     if missing:
         errors = "; ".join(_ERROR_RE.findall(output)[:3])
         first_error = next(
             (line.strip() for line in output.splitlines() if _ERROR_RE.match(line)), ""
         )
+        message = (
+            first_error or errors or f"ngspice exit {returncode}, no measurements parsed"
+        )
+        if log_write_error:
+            message = f"{message}; {log_write_error}"
         return _PhaseOutcome(
             run=PhaseRun(
                 name=phase.name,
@@ -706,16 +737,32 @@ def _run_phase(
                 deck=deck_path.name,
                 log=log_path.name,
                 seconds=elapsed,
-                message=first_error
-                or errors
-                or f"ngspice exit {returncode}, no measurements parsed",
+                message=message,
             ),
             measurements=measurements,
             missing=missing,
-            not_measured=[
-                name for name in phase.measure_names
-                if tb.is_optional(name) and name not in measurements
-            ],
+            not_measured=not_measured,
+            raw_files=raw_files,
+            raw_missing=raw_missing,
+        )
+
+    if log_write_error:
+        # The point otherwise measured cleanly, but its evidence log -- the
+        # file this record's `log` field names -- does not exist on disk.
+        # Reporting "ok" here would misrepresent what actually got recorded,
+        # so this degrades the point to "error" instead of discarding it (or
+        # the rest of the grid) outright (#271).
+        return _PhaseOutcome(
+            run=PhaseRun(
+                name=phase.name,
+                status="error",
+                deck=deck_path.name,
+                log=log_path.name,
+                seconds=elapsed,
+                message=log_write_error,
+            ),
+            measurements=measurements,
+            not_measured=not_measured,
             raw_files=raw_files,
             raw_missing=raw_missing,
         )
@@ -731,10 +778,7 @@ def _run_phase(
         measurements=measurements,
         # Carried even on success so that a *later* phase's failure still
         # reports what this one legitimately did not measure.
-        not_measured=[
-            name for name in phase.measure_names
-            if tb.is_optional(name) and name not in measurements
-        ],
+        not_measured=not_measured,
         raw_files=raw_files,
         raw_missing=raw_missing,
     )
