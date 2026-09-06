@@ -11,6 +11,7 @@
     "WHAT IS MEASURED. Identical to sim/period-jitter: once locked, the PFD fires both branches once per reference cycle for the reset-delay overlap, the charge pump's per-event charge asymmetry lands on the loop filter's C2, and the resulting Vctrl ripple phase-modulates the ring. sim/reference-spur reads that ripple out of the output SPECTRUM as a sideband; this deck reads the identical physical ripple out of the output's TIME-DOMAIN edge sequence, which is the form spec/pll.md#period-jitter states its target in (percent of period, RMS) rather than dBc.",
     "MEASUREMENT CRITERION: the reported RMS/pp period jitter and TIE come from every rising mid-supply crossing of v(clk) in the measurement window (`wa` to `wb`, 2.0 us = 400 output cycles at 200 MHz), linearly interpolated between the two straddling ngspice timepoints (sim/vco-tuning-range's `_numeric.py:crossings`). Period jitter is the RMS/pp deviation of the per-cycle period sequence from its own mean; TIE is the RMS/pp deviation of the crossing times from their own least-squares line, which keeps residual settling drift out of the jitter number. sim/tests/test_period_jitter_derive.py replays a synthetic waveform of known jitter through this exact reduction path, off any simulator -- and covers this campaign because derive.py here IS that file, loaded rather than copied.",
     "STEADY STATE, NOT LOCK TIME. Each point is released at its own predicted lock point in its own selected band, for the same reason sim/period-jitter does it: the loop's slow closed-loop pole is 1/(R*C1) = 9.3 us, so a common release voltage would spend tens of microseconds slewing at Icp/C1 = 14 mV/us before any measurement window could open. The residual settling drift this leaves is not assumed away -- `ferr` is measured over a 1 us baseline (`ta`/`tb`) immediately before the measurement window and gates the point, and `tie_*` de-trends the crossing sequence by its own least-squares line.",
+    "THE LOCK GATE IS WRAP-SAFE, AND IS CORROBORATED BY A WRAP-FREE SECOND MEASURE (#273). Identical to sim/period-jitter, whose manifest carries the full derivation. `phi_a`/`phi_b` are `trig`/`targ` edge-pair delays and are therefore each wrapped into one reference period, so their difference is unwrapped into (-T_ref/2, +T_ref/2] before it is divided by the baseline -- `dphi = (phi_b-phi_a) - (1/fref)*floor((phi_b-phi_a)*fref + 0.5)`, `ferr = -dphi/(tb-ta)` -- and the residual aliasing blind spot at multiples of T_ref/(tb-ta) = 0.04 is closed by `ferr_fb = ffb/fref - 1`, a period-count frequency error with no wrap at all, checked at +-2e-3. The `ferr` gate itself is unchanged at +-1e-3: this is a wrap fix, not a loosened tolerance. Note that this campaign divides by 8, not 6, so its `ferr`/`ferr_fb` are still referred to the 25 MHz reference, not to the 200 MHz output.",
     "RANDOM / NOISE-DRIVEN JITTER IS NOT MEASURED BY THIS RECORD -- the same disclosed methodology gap sim/period-jitter states in full. DR-002 Decision 5 ratifies (status: proposed) a VCO-dominated transient-noise testbench plus a jitter-transfer argument as the intended method; this repo's pinned ngspice-46 injects no automatic device noise into a .tran, and turning ngspice's explicit trnoise() PWL source into a credible device-noise-equivalent figure needs a noise-PSD calibration this repository has not done. No random/noise-driven period-jitter number appears anywhere in this record.",
     "SIMULATOR SETTINGS. `.tran 2n 5.7u 3.5u 100p` -- the fourth argument is the 100 ps ceiling on ngspice's INTERNAL timestep every campaign whose DUT contains the PFD inherits (sim/README.md, 'Closed-loop internal-timestep bound'), verified per point via `dt_int_mean`. At 200 MHz that ceiling is also exactly 1/(50*f_out), so it bounds the output edge sequence at 50 points per period as well as bounding the PFD. `.option rshunt=1e12 itl4=200 reltol=1e-3 abstol=1e-13 vntol=1e-6` matches sim/period-jitter's and sim/reference-spur's exactly, so this deck's converged solution is comparable with theirs.",
     "LIMITATIONS. (1) Random/noise-driven jitter is not measured -- see above. (2) Schematic-level: no layout parasitics, no supply or substrate coupling into the VCO rail beyond what design/pll_top.sch itself models. (3) The reference is ideal: no reference jitter, no duty-cycle error. (4) Device mismatch is OFF (no Monte Carlo). (5) One (f_ref, N, trim) operating point at one output frequency -- the top of the band; sim/period-jitter holds the 150 MHz middle, and no record of either campaign covers the 10 MHz floor. (6) The release voltage is an ESTIMATE interpolated from a committed OPEN-LOOP f(Vctrl) table, not a per-corner closed-loop solve; where it missed far enough to leave the loop unlocked the point fails this manifest's ferr/fout/nmeas checks and is reported as a failing point rather than as jitter. (7) Whatever subset of the declared 45-point grid a given record ran is stated in that record's Corner matrix field -- read it before citing this campaign's coverage."
@@ -87,9 +88,13 @@
       "analysis": "tran",
       "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tb' targ v(fb) val='vdd_val/2' rise=1 td='tb'"
     },
+    "dphi": {
+      "analysis": "tran",
+      "expr": "param='(phi_b-phi_a) - (1/fref)*floor((phi_b-phi_a)*fref + 0.5)'"
+    },
     "ferr": {
       "analysis": "tran",
-      "expr": "param='-(phi_b-phi_a)/(tb-ta)'"
+      "expr": "param='-dphi/(tb-ta)'"
     },
     "tclk20": {
       "analysis": "tran",
@@ -110,6 +115,10 @@
     "nmeas": {
       "analysis": "tran",
       "expr": "param='fout/ffb'"
+    },
+    "ferr_fb": {
+      "analysis": "tran",
+      "expr": "param='ffb/fref - 1'"
     },
     "lock_lvl": {
       "analysis": "tran",
@@ -156,7 +165,9 @@
     "lock": {
       "description": "is the loop actually locked -- a period sequence from an unlocked loop is not jitter",
       "measures": [
+        "dphi",
         "ferr",
+        "ferr_fb",
         "fout",
         "ffb",
         "nmeas",
@@ -179,6 +190,10 @@
     "ferr": {
       "min": -0.001,
       "max": 0.001
+    },
+    "ferr_fb": {
+      "min": -0.002,
+      "max": 0.002
     },
     "nmeas": {
       "min": 7.99,

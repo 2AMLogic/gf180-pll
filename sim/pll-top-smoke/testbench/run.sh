@@ -187,9 +187,11 @@ KTMAX=100p
 
 # The two instants the lock criterion is evaluated at.  Both are placed on a
 # reference HALF-period (tstart + (k + 0.5)/f_ref, with tstart = 0.5/f_ref), so
-# "the first REF rise after t" and "the first FB rise after t" are the same
-# cycle's pair and the phase measurement cannot alias by a whole reference
-# period.  At f_ref = 9 MHz that makes every multiple of 1/9 us a legal
+# "the first REF rise after t" and "the first FB rise after t" are normally the
+# same cycle's pair.  That placement is not on its own alias-proof (#273) --
+# the deck unwraps the phase samples and their difference for that; see the
+# lock-criterion block in tb_pll_smoke.sp.  At f_ref = 9 MHz it makes every
+# multiple of 1/9 us a legal
 # instant: tstart = 55.556 ns, so 50 us is k = 449 and 53 us is k = 476, both
 # exact.
 #
@@ -310,7 +312,15 @@ fi
 # ---------------------------------------------------------------------------
 m() { simenv_meas "${LOG}" "$1"; }
 
-PHI_A=$(m phi_a);       PHI_B=$(m phi_b)
+# PHI_A/PHI_B are the deck's WRAP-UNWRAPPED phase samples (phi_a_uw/phi_b_uw),
+# not the raw trig/targ pair -- see the lock-criterion comment in
+# tb_pll_smoke.sp (#273).  A raw sample is wrapped into one reference period by
+# construction, so a loop whose static phase error straddles zero can report
+# ~tref where the physical answer is ~0; gating or printing that would score a
+# locked loop as a whole reference period off.  The raw pair is still measured
+# and still in the .log for audit; nothing here is smoothed away, only unwrapped.
+PHI_A=$(m phi_a_uw);    PHI_B=$(m phi_b_uw)
+PHI_A_RAW=$(m phi_a);   PHI_B_RAW=$(m phi_b)
 DPHI=$(m dphi);         FERR=$(m ferr)
 FOUT=$(m fout);         FFB=$(m ffb);        NMEAS=$(m nmeas)
 VC_AVG=$(m vctrl_avg);  VC_MIN=$(m vctrl_min); VC_MAX=$(m vctrl_max)
@@ -695,8 +705,18 @@ $(simenv_env_block "$(simenv_xschem_version) -- the DUT
        separately so that "the loop did not lock" and "the integration did not
        resolve the detector" cannot be confused for one another.
     Both phase instants are placed on a reference half-period, so "the first
-    REF rise after t" and "the first FB rise after t" are the same cycle's
-    pair and the measurement cannot alias by a whole reference period.
+    REF rise after t" and "the first FB rise after t" are normally the same
+    cycle's pair. That placement is not on its own alias-proof: a
+    \`trig\`/\`targ\` delay is wrapped into one reference period by
+    construction, so when the static phase error straddles zero a sample can
+    latch the *next* FB edge and read one whole reference period instead of
+    ~0 (#273). Checks 1 and 2 are therefore evaluated on phase samples
+    unwrapped into (-1/(2 f_ref), +1/(2 f_ref)], and on a difference unwrapped
+    the same way -- a wrap fix, not a widened tolerance: \`ACC_FERR\` and
+    \`ACC_PHI_FRAC\` are unchanged, any genuine drift below
+    f_ref/(2 (t_b - t_a)) is reported unchanged, and check 4 (output frequency
+    vs N*f_ref, read from a period count, no wrap) independently covers the
+    aliasing residue. The raw pre-unwrap pair is reported below.
   - **Where the measurement window sits, and why it sits there.** The window
     is at ${KTA} / ${KTB} in a ${KTSTOP} transient, and it is placed from this
     repo's own ratified numbers rather than from where the verdicts turn.
@@ -793,7 +813,8 @@ $(simenv_env_block "$(simenv_xschem_version) -- the DUT
   | Vctrl peak-to-peak ripple, late window | ${VC_RIPPLE} V |
   | LOCK flag first asserts at | ${T_LOCK} s |
   | PFD UP / DN mean level, late window | ${UP_LVL} V / ${DN_LVL} V |
-  | phase error at ${KTA} / at ${KTB} | ${PHI_A} s / ${PHI_B} s |
+  | phase error at ${KTA} / at ${KTB} (unwrapped) | ${PHI_A} s / ${PHI_B} s |
+  | same pair as raw \`trig\`/\`targ\` delays, before unwrapping | ${PHI_A_RAW} s / ${PHI_B_RAW} s |
   | feedback frequency f_fb | ${FFB} Hz |
   | supply current, ref / vco / div domain | ${I_REF} / ${I_VCO} / ${I_DIV} A |
   | total power at this corner | ${P_TOT_MW} mW |

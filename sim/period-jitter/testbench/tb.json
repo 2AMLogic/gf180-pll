@@ -9,6 +9,7 @@
     "WHAT A POINT OF THIS DECK COSTS, AND WHY THAT IS RECORDED HERE. A closed-loop transient at this campaign's 100 ps internal-timestep ceiling is expensive: sim/reference-spur's own methodology quotes 'thousands of CPU-seconds per point' for its longer 8 us run, and this deck is the same order. That cost, not any design uncertainty, is the only thing standing between this manifest and the full 45 points -- so a run that does not cover all 45 states the arithmetic in its Corner matrix field rather than leaving 'the grid remains owed' as an unquantified promise. Two things keep the per-point cost as low as it is. FIRST, the run length is not increased to accommodate the grid: the deck stays at `.tran 2n 5.7u 3.5u 100p` at every corner, because each corner is released at its OWN predicted lock point rather than at a common voltage -- across this grid that point spans 1.09-2.43 V, and at the loop's Icp/C1 = 14 mV/us slew a common release would spend tens of microseconds slewing before any measurement window could open. SECOND, the points are independent, so they are run in parallel across cores (`-j`); nothing about the numerical solution depends on that scheduling, since the per-point deck, options and tolerances are identical to the predecessor record's. Whether the release estimate was good enough at any given point is not assumed: it is gated per point by this manifest's ferr / fout / nmeas lock checks, and a point that fails them is reported as a failing point, never as a jitter number.",
     "WHY A TRANSIENT AND NOT loop-dynamics' SMALL-SIGNAL ANALYSIS. The ripple is a nonlinear, periodic-steady-state effect (once-per-reference-cycle charge-pump event), exactly as sim/reference-spur's own methodology states; sim/loop-dynamics' linearized AC sweep cannot produce it and says so in its own Limitations field.",
     "STEADY STATE, NOT LOCK TIME. The control node is released at `vstart` -- this corner's own predicted lock point, 1.09-2.43 V across this grid -- for the same reason sim/reference-spur does it: this campaign measures a STEADY-STATE property (the locked period sequence), not acquisition time (sim/lock-time, #12, owns that claim), and starting near the lock point reaches steady state for the least simulated time. The residual settling drift this leaves is not assumed away -- `ferr` is measured over a 1 us baseline (`ta`/`tb`) immediately before the measurement window and is reported as a lock-quality gate, exactly as sim/pll-top-smoke's and sim/reference-spur's lock criteria are, and `tie_*` de-trends the crossing sequence by its own least-squares line so a residual drift cannot be counted as jitter.",
+    "THE LOCK GATE IS WRAP-SAFE, AND IS CORROBORATED BY A WRAP-FREE SECOND MEASURE (#273). `phi_a`/`phi_b` are ngspice `trig`/`targ` edge-pair delays, so each is wrapped into ONE reference period by construction: when the static phase error straddles zero -- FB's edge sitting marginally AHEAD of REF's -- the pair can latch the NEXT FB edge and report ~T_ref instead of ~0. Placing `ta`/`tb` on a reference HALF-period does not prevent this, and was previously believed to: at ff/27C/2.97V the sample at `ta` latched the next edge (phi_a = 39.8121 ns) while the sample at `tb` did not (phi_b = -0.186 ns), on a deck whose `ta`/`tb` are both half-period aligned. Differencing two samples on opposite sides of the wrap then reads one whole reference period of apparent drift per baseline -- 40 ns per 1 us, i.e. ferr = 0.04 -- for a loop that is in fact locked. That is what record 20260906-063728-f3c9c23 hit at ff/27C/2.97V and ff/27C/3.63V, points at which fout, ffb and nmeas all independently said the loop WAS locked, to within 160 ppm. So the difference is unwrapped into (-T_ref/2, +T_ref/2] before it is divided by the baseline: `dphi = (phi_b-phi_a) - (1/fref)*floor((phi_b-phi_a)*fref + 0.5)`, and `ferr = -dphi/(tb-ta)`. Unwrapping is not loosening -- the gate stays at +-1e-3, and any genuine drift inside +-T_ref/(2*(tb-ta)) = +-0.02 is reported unchanged. What unwrapping does leave is an aliasing blind spot at exact multiples of T_ref/(tb-ta) = 0.04, so the gate does not stand alone: `ferr_fb = ffb/fref - 1` measures the same frequency error from a PERIOD COUNT rather than a phase difference, has no wrap at all, and is checked at +-2e-3 (the largest |ferr_fb| any committed record of this campaign has produced is 3.1e-4). A residual frequency error large enough to alias `ferr` cannot pass `ferr_fb`; a drift too small for `ferr_fb`'s 5-cycle baseline to resolve is exactly what `ferr`'s 1 us phase baseline is for. Both are in the `lock` topology group and both must pass.",
     "MEASUREMENT CRITERION: the reported RMS/pp period jitter and TIE come from every rising mid-supply crossing of `v(clk)` in the measurement window (`wa` to `wb`, 300 output cycles = 2.0 us at 150 MHz), linearly interpolated between the two straddling ngspice timepoints (sim/vco-tuning-range's `_numeric.py:crossings`, the same primitive sim/vco-tuning-range's jitter extraction and sim/reference-spur's TIE cross-check both use). Period jitter is the RMS/pp deviation of the per-cycle period sequence from its own mean; TIE is the RMS/pp deviation of the crossing times from their own least-squares line (removes any residual settling drift from being counted as jitter, the same reason sim/reference-spur's TIE path de-trends by a fit rather than a nominal period). `sim/tests/test_period_jitter_derive.py` replays a synthetic waveform of known jitter through this exact reduction path, off any simulator, before this record's own number is trusted.",
     "RANDOM / NOISE-DRIVEN JITTER IS NOT MEASURED BY THIS RECORD -- A METHODOLOGY GAP, STATED HONESTLY. DR-002 Decision 5 (spec/decision-records/DR-002-draft-spec-scope-ratification.md) ratifies (status: proposed) a VCO-dominated transient-noise testbench plus a jitter-transfer argument through the closed loop as the intended method for the random component, and explicitly rejects an ngspice AC `.noise` analysis as unsupported for a free-running oscillator's phase noise on this flow. Before writing this deck, `.option TRANNOISE=1` was tried on ngspice-46 (this repo's pinned build) against a trivial R-driven-by-a-DC-source circuit: the resulting transient carried NO noise -- a bit-for-bit flat waveform across the whole run -- so this pinned build does not inject automatic device noise into a `.tran` analysis (or the syntax this build recognizes for it is not `.option TRANNOISE=1`; either way, nothing in this repo's flow demonstrates it working). ngspice DOES support an explicit `trnoise()` PWL source function (confirmed working, injecting a synthesized white/1-f voltage waveform) -- but turning that into a credible DEVICE-noise-EQUIVALENT number requires first calibrating the injected amplitude against a validated noise-PSD measurement of the VCO's dominant noise contributors (thermal + flicker in the current-starved ring's bias and switching devices), which is real, separately-scoped methodology development this record does not attempt. Per sim/README.md's own worked example for this exact scenario ('A recorded methodology gap instead of a number (#13)'), this record states the gap here rather than publishing an uncalibrated, not-credible random-jitter figure. No random/noise-driven period-jitter number is reported anywhere in this record.",
     "SIMULATOR SETTINGS. `.tran 2n 5.7u 3.5u 100p` -- the fourth argument is the 100 ps ceiling on ngspice's INTERNAL timestep every campaign whose DUT contains the PFD inherits (sim/README.md, 'Closed-loop internal-timestep bound'), verified per point via `dt_int_mean`. `.option rshunt=1e12 itl4=200 reltol=1e-3 abstol=1e-13 vntol=1e-6` matches sim/reference-spur's/sim/pll-top-smoke's exactly, so this deck's converged solution is comparable with the other closed-loop campaigns'.",
@@ -89,9 +90,13 @@
       "analysis": "tran",
       "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tb' targ v(fb) val='vdd_val/2' rise=1 td='tb'"
     },
+    "dphi": {
+      "analysis": "tran",
+      "expr": "param='(phi_b-phi_a) - (1/fref)*floor((phi_b-phi_a)*fref + 0.5)'"
+    },
     "ferr": {
       "analysis": "tran",
-      "expr": "param='-(phi_b-phi_a)/(tb-ta)'"
+      "expr": "param='-dphi/(tb-ta)'"
     },
     "tclk20": {
       "analysis": "tran",
@@ -112,6 +117,10 @@
     "nmeas": {
       "analysis": "tran",
       "expr": "param='fout/ffb'"
+    },
+    "ferr_fb": {
+      "analysis": "tran",
+      "expr": "param='ffb/fref - 1'"
     },
     "lock_lvl": {
       "analysis": "tran",
@@ -158,7 +167,9 @@
     "lock": {
       "description": "is the loop actually locked -- a period sequence from an unlocked loop is not jitter",
       "measures": [
+        "dphi",
         "ferr",
+        "ferr_fb",
         "fout",
         "ffb",
         "nmeas",
@@ -181,6 +192,10 @@
     "ferr": {
       "min": -0.001,
       "max": 0.001
+    },
+    "ferr_fb": {
+      "min": -0.002,
+      "max": 0.002
     },
     "nmeas": {
       "min": 5.99,
