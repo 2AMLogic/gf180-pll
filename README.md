@@ -120,7 +120,10 @@ closed-loop PVT verification is still incomplete: its three records cover 13
 of the mandated 45 corners — the process axis at 27 °C/3.30 V, plus the
 complete temperature x supply plane at nominal process — and the
 deterministic component only, with the random/noise-driven component and the
-remaining 32 corners still open (#13).
+remaining 32 corners still open (#13). Every one of those records is also at
+one output frequency, 150 MHz; `sim/period-jitter-band-top` declares the same
+measurement at the 200 MHz top of the ratified band and carries no measured
+record yet, so the proposal marks that row **unmet** rather than omitting it.
 
 ## License
 
