@@ -20,7 +20,7 @@ Being honest about where this actually is:
 - **Done** — architecture and scope captured as numbered decision records in
   `spec/`; xschem schematics for the VCO, PFD, charge pump, feedback divider,
   lock detector, and the shared 3.3 V logic cells they are built from; a
-  reproducible PVT corner harness; **71 evidence records** across 21
+  reproducible PVT corner harness; **72 evidence records** across 21
   verification campaigns (device characterization, VCO tuning range, PFD
   dead-zone freedom, charge-pump compliance and mismatch, divider moduli,
   lock-detector window, loop dynamics, the closed-loop reference spur measured
@@ -116,10 +116,11 @@ Challenge #5 (GF180MCU / Wafer.Space), re-derived from this repository's own
 `sim/` evidence. It states plainly where the block does and does not meet the
 brief today — including that the design is 3.3 V-only and does not yet
 exercise the Challenge's 5.0 V analog rail, and that `period-jitter`'s
-closed-loop PVT verification is still outstanding: its two records cover 5 of
-the mandated 45 corners (all at 27 °C/3.30 V) and the deterministic component
-only, with the random/noise-driven component and the remaining 40
-temperature/supply corners still open (#13, blocked on #1).
+closed-loop PVT verification is still incomplete: its three records cover 13
+of the mandated 45 corners — the process axis at 27 °C/3.30 V, plus the
+complete temperature x supply plane at nominal process — and the
+deterministic component only, with the random/noise-driven component and the
+remaining 32 corners still open (#13).
 
 ## License
 

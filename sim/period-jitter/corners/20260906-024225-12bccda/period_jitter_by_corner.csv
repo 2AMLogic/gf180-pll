@@ -1,0 +1,13 @@
+# deterministic period/TIE jitter of the locked output, measured directly from the period sequence over the manifest's measurement window. RANDOM/NOISE-DRIVEN JITTER IS NOT MEASURED -- see this record's Methodology field.
+# tj_rms_pct is the deterministic (control-ripple-driven) period jitter as a percentage of the measured output period -- the form spec/pll.md#period-jitter states its draft <=1.0% RMS target in. The verdict column is read against that draft, unratified target (issue #1).
+# tie_rms_s/tie_pp_s de-trend the crossing sequence by its own least-squares line before computing RMS/pp, which removes any residual release-transient settling drift from being counted as jitter -- the same reason sim/reference-spur's TIE path de-trends by a fit rather than a nominal period.
+# This table reports the DETERMINISTIC component only. No random/noise-driven jitter number appears anywhere in this record -- see the Methodology field for why.
+corner_id,process,temp_c,vdd_v,fout_hz,n_cycles,tj_rms_s,tj_rms_pct,tj_pp_s,c2c_rms_s,tie_rms_s,tie_pp_s,ferr,dn_lvl,dt_int_mean_s,verdict_vs_1pct_rms_draft
+typical_-40c_2.97v_vs1p644,typical,-40,2.97,1.50005e+08,314,1.6780e-11,0.2517,7.6440e-11,2.9713e-11,4.0112e-11,1.7268e-10,7.51e-06,0.1481,7.353e-11,PASS
+typical_-40c_3.30v_vs1p999,typical,-40,3.30,1.49988e+08,314,1.5954e-11,0.2393,8.0703e-11,2.8138e-11,1.4469e-11,7.2330e-11,-1.59e-06,0.1524,7.095e-11,PASS
+typical_-40c_3.63v_vs2p330,typical,-40,3.63,1.49985e+08,314,1.7938e-11,0.2691,7.3594e-11,3.1531e-11,3.9621e-11,1.6885e-10,-1.49e-05,0.1535,6.876e-11,PASS
+typical_27c_2.97v_vs1p478,typical,27,2.97,1.50009e+08,314,1.1660e-11,0.1749,5.7485e-11,1.9361e-11,2.9503e-11,1.2758e-10,-5.18e-07,0.1719,7.718e-11,PASS
+typical_27c_3.63v_vs2p094,typical,27,3.63,1.50043e+08,314,1.6839e-11,0.2526,7.0700e-11,2.8816e-11,1.6636e-11,7.4979e-11,1.11e-05,0.1776,7.131e-11,PASS
+typical_125c_2.97v_vs1p270,typical,125,2.97,1.50017e+08,314,7.4080e-12,0.1111,3.5352e-11,1.2815e-11,6.5833e-12,3.4245e-11,2.72e-05,0.2058,8.086e-11,PASS
+typical_125c_3.30v_vs1p549,typical,125,3.30,1.50032e+08,314,1.0967e-11,0.1645,4.6369e-11,1.8807e-11,9.6746e-12,4.3193e-11,2.92e-05,0.2079,7.721e-11,PASS
+typical_125c_3.63v_vs1p813,typical,125,3.63,1.50037e+08,314,1.2401e-11,0.1860,5.4542e-11,2.1393e-11,1.0196e-11,4.8876e-11,2.98e-05,0.2117,7.455e-11,PASS
