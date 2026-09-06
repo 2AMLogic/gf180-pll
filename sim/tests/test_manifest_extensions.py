@@ -1581,6 +1581,14 @@ def _stub_ngspice_writing(files: dict, output: str = ""):
     """
 
     def _run(cmd, **kwargs):
+        # `runner.subprocess` is the shared module object, so patching its
+        # `run` intercepts every subprocess the harness makes -- not only the
+        # ngspice invocation this stub is about. `sim/harness/omp.py` probes
+        # `ldd` (no `cwd`, no deck) to decide the internal-thread budget; let
+        # that through as a benign, non-OpenMP answer instead of tripping on
+        # the missing `cwd` this stub's ngspice contract guarantees.
+        if not cmd or Path(str(cmd[0])).name != runner.NGSPICE:
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
         cwd = Path(kwargs["cwd"])
         for name, content in files.items():
             cwd.mkdir(parents=True, exist_ok=True)

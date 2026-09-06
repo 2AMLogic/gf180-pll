@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import string
 import subprocess
 import time
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .corners import PvtPoint
 from .derived import DerivedError, PointView, RawFile, derive_point_measures
+from .omp import omp_env_overrides
 from .pdk import Pdk
 from .testbench import Phase, Testbench
 
@@ -473,6 +476,7 @@ def run_point(
     workdir: Path,
     timeout_s: int = DEFAULT_TIMEOUT_S,
     log_dir: Path | None = None,
+    omp_env: Mapping[str, str] | None = None,
 ) -> PointResult:
     """Simulate one PVT point. Never raises for simulation failure.
 
@@ -513,7 +517,9 @@ def run_point(
     failed: PhaseRun | None = None
 
     for phase in tb.run_phases:
-        outcome = _run_phase(tb, phase, pdk, point, workdir, timeout_s, log_dir)
+        outcome = _run_phase(
+            tb, phase, pdk, point, workdir, timeout_s, log_dir, omp_env=omp_env
+        )
         runs.append(outcome.run)
         elapsed += outcome.run.seconds
         measurements.update(outcome.measurements)
@@ -576,6 +582,7 @@ def _run_phase(
     workdir: Path,
     timeout_s: int,
     log_dir: Path,
+    omp_env: Mapping[str, str] | None = None,
 ) -> _PhaseOutcome:
     """One deck, one PVT point: compose, run, parse, capture.
 
@@ -593,6 +600,12 @@ def _run_phase(
         rundir = workdir / f"{run_id}.d"
         rundir.mkdir(parents=True, exist_ok=True)
 
+    # An empty/absent `omp_env` must leave the child's environment BIT-FOR-BIT
+    # ambient -- passing `env=dict(os.environ)` instead of `env=None` is not
+    # equivalent for every libc/OS combination, and this path is the one every
+    # committed evidence record was taken through.
+    child_env = {**os.environ, **omp_env} if omp_env else None
+
     started = time.monotonic()
     try:
         proc = subprocess.run(
@@ -602,6 +615,7 @@ def _run_phase(
             timeout=timeout_s,
             cwd=rundir,
             check=False,
+            env=child_env,
         )
         output = proc.stdout + "\n" + proc.stderr
         returncode = proc.returncode
@@ -760,12 +774,22 @@ def run_grid(
     on_result=None,
     log_dir: Path | None = None,
 ) -> list[PointResult]:
-    """Run every PVT point; results come back in grid order regardless of jobs."""
+    """Run every PVT point; results come back in grid order regardless of jobs.
+
+    Under ``jobs > 1`` each ngspice worker is given an explicit OpenMP thread
+    budget (``sim/harness/omp.py``) so that the grid's process-level fan-out
+    does not multiply against ngspice's own internal thread count -- the
+    self-oversubscription #241/#244 fixed for the shell campaign path but not
+    for this one. A serial run is left exactly as it was.
+    """
     results: list[PointResult | None] = [None] * len(points)
+    omp_env = omp_env_overrides(jobs)
 
     def _one(index_point):
         index, point = index_point
-        result = run_point(tb, pdk, point, workdir, timeout_s=timeout_s, log_dir=log_dir)
+        result = run_point(
+            tb, pdk, point, workdir, timeout_s=timeout_s, log_dir=log_dir, omp_env=omp_env
+        )
         results[index] = result
         if on_result is not None:
             on_result(result)

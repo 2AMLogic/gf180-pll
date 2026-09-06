@@ -192,6 +192,53 @@ python3 sim/run_corners.py harness-selftest --corners typical --temps 27 \
     --subset-reason "nominal-only mismatch sweep; distribution claim, see Statistical convention"
 ```
 
+### `-j` and ngspice's own threads: the budget, not just the fan-out
+
+`-j N` is **process**-level fan-out. On many Linux builds `ngspice` *also*
+links an OpenMP runtime and spawns several threads **per process** for BSIM
+model evaluation, so a naive `-j N` on an `M`-core host asks for `N x threads`
+of `M` — the self-oversubscription this repository diagnosed in #146, #58 and
+#241, and finally pinned in #244. That fix reached only the shell campaign
+path (`sim/lib/simenv.sh`'s opt-in `simenv_apply_omp_pin`); the harness — i.e.
+everything `sim/run_corners.py` drives — had no equivalent, and its default
+job count is `min(8, ncpu)`. On the 8-core build host that is 8 processes x 8
+threads = **64 threads for 8 cores**, which is how a full-grid closed-loop
+campaign could have every point time out at once while each point run alone
+completed fine.
+
+`harness/omp.py` closes that. Under `-j N > 1`, and only when the installed
+`ngspice` is detected (via `ldd`) to link an OpenMP runtime, each worker gets
+
+```
+OMP_NUM_THREADS = OMP_THREAD_LIMIT = max(1, ncpu // jobs)
+```
+
+so total thread demand lands at or under the core count. Both variables are
+exported because #244 found `OMP_NUM_THREADS` alone does not stick on this
+repository's larger closed-loop decks — `OMP_THREAD_LIMIT` is the hard
+per-process ceiling that does.
+
+Three deliberate non-behaviors:
+
+- **`-j1` changes nothing.** A serial run cannot self-oversubscribe, so the
+  harness does not serialize a lone ngspice's model evaluation for no gain.
+- **A non-OpenMP build changes nothing**, and neither does a probe that cannot
+  answer (no `ngspice`/`ldd` on PATH — e.g. macOS). "Cannot tell" is treated
+  as "leave it alone", never as a guess.
+- **An explicitly-set `OMP_NUM_THREADS` / `OMP_THREAD_LIMIT` is always
+  respected**, each defaulted independently, so you can still override the
+  budget from the environment:
+
+  ```bash
+  OMP_NUM_THREADS=4 OMP_THREAD_LIMIT=4 python3 sim/run_corners.py my-campaign -j 2
+  ```
+
+The applied budget is printed at run start and recorded in every new record's
+**Environment provenance** (`- Execution: ...`), because on an internally
+threaded build the per-point wall clock is not reproducible from `jobs` alone.
+Records minted before this field existed do not grow the line — `sim/` is
+append-only, so an old record is never rewritten to match a newer format.
+
 ## Writing a testbench
 
 Create `sim/<experiment-slug>/testbench/` with a manifest and a netlist

@@ -11,6 +11,7 @@ from pathlib import Path
 
 from . import HARNESS_VERSION, corners as corners_mod, report, runner, testbench as tb_mod
 from . import derived as derived_mod
+from . import omp
 from . import raw_measures as raw_measures_mod
 from .pdk import PdkNotFound, find_pdk
 from .runner import NgspiceMissing
@@ -400,6 +401,10 @@ def run(args: argparse.Namespace) -> int:
     records_dir = experiment_dir / report.RECORDS_DIR
 
     jobs = args.jobs or min(8, (os.cpu_count() or 2))
+    # Resolved once, here, so the value the record discloses is provably the
+    # same one run_grid hands to every ngspice worker (omp_env_overrides is
+    # pure given `jobs` and the ambient environment).
+    omp_pin = omp.omp_env_overrides(jobs)
     started = _dt.datetime.now(_dt.timezone.utc)
     # Sample git state *before* the run: the harness writes its own per-corner
     # logs into the tracked evidence tree, so sampling afterwards would mark
@@ -428,6 +433,12 @@ def run(args: argparse.Namespace) -> int:
                 f"({len(tb.phases)} decks per point, one record)"
             )
         print(f"points    : {len(points)}  (jobs={jobs})")
+        if omp_pin:
+            print(
+                "omp pin   : "
+                + ", ".join(f"{k}={v}" for k, v in sorted(omp_pin.items()))
+                + "  (ngspice links an OpenMP runtime; capping per-worker threads)"
+            )
         print(f"record id : {record_id}")
         print()
     for description in conformance.get("empty_blocks", []):
@@ -497,6 +508,7 @@ def run(args: argparse.Namespace) -> int:
         git=git,
         derived_tables=derived_tables,
         conformance=conformance,
+        execution={"jobs": jobs, "omp": omp_pin},
     )
 
     print()

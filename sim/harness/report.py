@@ -256,12 +256,25 @@ def evaluate_checks(
     return failures
 
 
-def environment(pdk: Pdk, ngspice: str, repo_root: Path, git: dict | None = None) -> dict:
+def environment(
+    pdk: Pdk,
+    ngspice: str,
+    repo_root: Path,
+    git: dict | None = None,
+    execution: dict | None = None,
+) -> dict:
     """Reproducibility provenance for the record.
 
     ``git`` should be sampled *before* the run starts. The harness writes its
     own per-corner logs into the tracked evidence tree, so sampling afterwards
     would report every record as taken against a dirty tree.
+
+    ``execution`` carries how the run was *scheduled* rather than what it was
+    run against: the process-level fan-out (``jobs``) and the OpenMP thread
+    budget each ngspice worker was given (``sim/harness/omp.py``). Both belong
+    in provenance because ngspice is internally threaded on some builds, so
+    the two together -- not either alone -- determine the true thread demand a
+    reader would have to reproduce to get comparable per-point wall clock.
     """
     try:
         user = getpass.getuser()
@@ -276,6 +289,7 @@ def environment(pdk: Pdk, ngspice: str, repo_root: Path, git: dict | None = None
         "user": user,
         "pdk": pdk.provenance(),
         "git": git if git is not None else git_provenance(repo_root),
+        "execution": dict(execution or {}),
     }
 
 
@@ -388,6 +402,7 @@ def build_record(
     git: dict | None = None,
     derived_tables: list | None = None,
     conformance: dict | None = None,
+    execution: dict | None = None,
 ) -> dict:
     measure_names = tb.measure_names
     optional_names = {n for n in measure_names if tb.is_optional(n)}
@@ -432,7 +447,7 @@ def build_record(
         # record and the pre-run subset gate cannot disagree.
         "matrix": conformance if conformance is not None else matrix_conformance(tb, points),
         "testbench": tb.provenance(),
-        "environment": environment(pdk, ngspice, repo_root, git),
+        "environment": environment(pdk, ngspice, repo_root, git, execution=execution),
         "grid": {
             "corners": corners,
             "extra_lib_sections": list(tb.extra_lib_sections),
@@ -549,6 +564,35 @@ def write_netlist_snapshot(tb: Testbench, experiment_dir: Path, record_id: str) 
     )
     path.write_text(header + tb.netlist.read_text())
     return path
+
+
+def _execution_lines(execution: dict) -> list[str]:
+    """The scheduling half of Environment provenance, or nothing.
+
+    Emitted only when the caller supplied it, so every record minted before
+    this field existed stays byte-comparable with one minted after -- the
+    append-only convention means old records are never rewritten to match a
+    newer format, and a reader diffing two records should see a *new* line,
+    not a reshuffled one.
+    """
+    if not execution:
+        return []
+    jobs = execution.get("jobs")
+    omp = execution.get("omp") or {}
+    if omp:
+        pin = ", ".join(f"`{k}={v}`" for k, v in sorted(omp.items()))
+        threads = (
+            f"ngspice internal-thread budget: {pin} (sim/harness/omp.py -- this "
+            f"build links an OpenMP runtime, so each worker's own threads are "
+            f"capped to keep total demand at or under the core count)"
+        )
+    else:
+        threads = (
+            "ngspice internal-thread budget: none applied (serial run, or no "
+            "OpenMP runtime detected in the `ngspice` binary) -- the ambient "
+            "environment's threading behavior was used unchanged"
+        )
+    return [f"  - Execution: {jobs} parallel ngspice job(s); {threads}"]
 
 
 def _corner_matrix_lines(record: dict) -> list[str]:
@@ -974,6 +1018,7 @@ def render_record(record: dict, experiment: str) -> str:
         f"  - Repo commit: `{git['commit']}` ({'DIRTY' if git['dirty'] else 'clean'} tree)",
         f"  - Host: {env['platform']} ({env['host']})",
     ]
+    lines += _execution_lines(env.get("execution") or {})
     lines += _corner_matrix_lines(record)
     lines += _methodology_lines(record)
     lines.append(
