@@ -403,14 +403,21 @@ def build_record(
     derived_tables: list | None = None,
     conformance: dict | None = None,
     execution: dict | None = None,
+    abort_reason: str = "",
 ) -> dict:
     measure_names = tb.measure_names
     optional_names = {n for n in measure_names if tb.is_optional(n)}
     summary = summarize(results, measure_names, optional_names)
     failures = evaluate_checks(tb.checks, results, summary)
     n_ok = sum(1 for r in results if r.status == "ok")
+    # A run that raised out of run_grid() (#271) hands back fewer results than
+    # points -- `results` only covers what completed before the fault. That
+    # must never be mistaken for a clean run just because every point that DID
+    # complete happened to be "ok": a naive `n_ok == len(results)` check alone
+    # cannot see the points that never ran at all.
+    partial = len(results) < len(points)
 
-    if n_ok != len(results):
+    if partial or n_ok != len(results):
         status = "error"
     elif failures:
         status = "fail"
@@ -434,6 +441,11 @@ def build_record(
         "record_id": record_id,
         "experiment": tb.experiment,
         "status": status,
+        # #271: a record minted from an aborted grid must say so explicitly,
+        # not merely be inferable from a status/points_ok mismatch a reader
+        # would have to notice on their own.
+        "partial": partial,
+        "abort_reason": abort_reason,
         "started_utc": started_utc,
         "wall_seconds": round(wall_seconds, 2),
         "claim": claim or tb.claim,
@@ -455,6 +467,9 @@ def build_record(
             "supplies_v": sorted({p.vdd for p in points}),
             "points": len(points),
             "points_ok": n_ok,
+            # Only diverges from `points` on a partial run (#271); equal to it
+            # on every ordinary complete grid, old records included.
+            "points_run": len(results),
         },
         "measure": {name: _measure_definition(tb, name) for name in measure_names},
         "optional_measures": sorted(optional_names),
@@ -627,6 +642,20 @@ def _corner_matrix_lines(record: dict) -> list[str]:
         "  - Supply: " + ", ".join(f"{v:.2f} V" for v in grid["supplies_v"]),
         f"  - {grid['points']} {shape}, {grid['points_ok']} completed",
     ]
+    if record.get("partial"):
+        # #271: an unexpected exception cut this grid short. Say so loudly and
+        # near the top of the record, rather than leaving a reader to notice
+        # `points_run` disagrees with `points` on their own -- this is the
+        # whole point of not discarding a partial run's completed evidence.
+        points_run = grid.get("points_run", grid["points_ok"])
+        lines.append(
+            f"  - **PARTIAL RUN — aborted after {points_run}/{grid['points']} "
+            "point(s) were attempted**"
+            + (f": {record['abort_reason']}" if record.get("abort_reason") else "")
+            + ". This record does NOT cover the full intended grid -- points "
+            "beyond the ones listed below were never attempted and are not "
+            "evidence of anything, passing or otherwise."
+        )
     if record["matrix"]["full"]:
         lines.append(
             "  - Full PVT matrix per CLAUDE.md / sim/README.md "

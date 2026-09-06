@@ -504,10 +504,15 @@ def run(args: argparse.Namespace) -> int:
         )
 
     completed = 0
+    # Every point that finished before a possible mid-grid exception (#271) --
+    # kept independently of `runner.run_grid`'s own return value so that if it
+    # raises, whatever already ran is not lost along with it.
+    completed_results: list[runner.PointResult] = []
 
     def progress(result):
         nonlocal completed
         completed += 1
+        completed_results.append(result)
         if args.quiet:
             return
         flag = {"ok": "ok  ", "failed": "FAIL", "error": "ERR "}[result.status]
@@ -522,6 +527,7 @@ def run(args: argparse.Namespace) -> int:
         print(f"[{completed:>3}/{len(points)}] {flag} {result.point.corner_id:<26} {detail}")
 
     wall_start = time.monotonic()
+    abort_reason = ""
     try:
         results = runner.run_grid(
             tb,
@@ -534,8 +540,27 @@ def run(args: argparse.Namespace) -> int:
             log_dir=log_dir,
         )
     except NgspiceMissing as exc:
+        # Kept fail-fast and separate from the broad net below: no ngspice on
+        # PATH means no point could have meaningfully run, so there is nothing
+        # partial to salvage.
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ENVIRONMENT
+    except Exception as exc:  # noqa: BLE001 - last-resort net, see #271
+        # An unexpected fault (e.g. an OSError escaping some code path this
+        # harness does not otherwise guard against -- the untracked
+        # corners/<record-id>/ directory getting removed mid-run) must not
+        # discard every point that already completed. Mint an explicitly
+        # partial record from them instead of losing hours of ngspice wall
+        # time to one late-run exception.
+        abort_reason = f"{type(exc).__name__}: {exc}"
+        results = completed_results
+        print(
+            f"error: {abort_reason}\n"
+            f"  {len(results)}/{len(points)} point(s) completed before this "
+            "exception -- minting a partial record from them instead of "
+            "discarding.",
+            file=sys.stderr,
+        )
     wall = time.monotonic() - wall_start
 
     # Derived metrics: the campaign's own reduction over the table above, which
@@ -566,6 +591,7 @@ def run(args: argparse.Namespace) -> int:
         derived_tables=derived_tables,
         conformance=conformance,
         execution={"jobs": jobs, "omp": omp_pin},
+        abort_reason=abort_reason,
     )
 
     print()

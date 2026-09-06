@@ -19,6 +19,8 @@ import datetime
 import io
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -28,7 +30,7 @@ from unittest import mock
 SIM_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SIM_DIR))
 
-from _fixtures import fake_pdk  # noqa: E402
+from _fixtures import ManifestFixture, fake_pdk  # noqa: E402
 from harness import cli, corners, report, runner, testbench  # noqa: E402
 
 
@@ -462,6 +464,137 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(runner.parse_measurements(text, raw_names=["ttest"]), {})
 
 
+class WriteLogTests(unittest.TestCase):
+    """``runner._write_log`` -- the #271 primitive that turns an ``OSError``
+    on a per-point log write into a message instead of letting it propagate.
+    """
+
+    def test_returns_none_and_writes_the_file_on_success(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "ok.log"
+            self.assertIsNone(runner._write_log(target, "hello\n"))
+            self.assertEqual(target.read_text(), "hello\n")
+
+    def test_returns_a_message_instead_of_raising_on_oserror(self):
+        # A real OSError, not a mock: the parent directory does not exist, so
+        # `Path.write_text` raises FileNotFoundError (an OSError subclass) --
+        # exactly the shape of fault #271 reports (the untracked
+        # corners/<record-id>/ directory disappearing mid-run).
+        bogus = Path("/no/such/directory-271/should-not-exist.log")
+        message = runner._write_log(bogus, "hello\n")
+        self.assertIsNotNone(message)
+        self.assertIn("log not written", message)
+        self.assertFalse(bogus.exists())
+
+
+class LogWriteFailureTests(ManifestFixture):
+    """#271: one point's failed log write must degrade that point, not
+    discard it (or its already-completed siblings) out of the grid.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.tb = testbench.load(self.write({"measure": {"vout": "v(out)"}}))
+        self.pdk = fake_pdk(self.root / "gf180mcuD")
+        self.points = corners.build_grid(
+            corners.resolve_corners(["typical"]), (27, 125), [3.3]
+        )
+        self.point = self.points[0]
+
+    @staticmethod
+    def _stub_ngspice(output: str):
+        return mock.patch.object(
+            runner.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=output, stderr=""
+            ),
+        )
+
+    @staticmethod
+    def _stub_ngspice_removing(output: str, victim: Path, calls_to_hit: int = 1):
+        """Ngspice succeeds, but something deletes ``victim`` (simulating a
+        concurrent worktree-hygiene pass / ``git clean``) while it "runs" --
+        so the log write that follows lands against a missing directory. Only
+        deletes on the first ``calls_to_hit`` invocations, so a multi-point
+        grid's later points see a normal, healthy directory again (each point
+        re-``mkdir``s its own ``log_dir`` at the top of ``run_point``).
+        """
+        state = {"n": 0}
+
+        def _run(cmd, **kwargs):
+            state["n"] += 1
+            if state["n"] <= calls_to_hit:
+                shutil.rmtree(victim, ignore_errors=True)
+            return subprocess.CompletedProcess(
+                args=cmd, returncode=0, stdout=output, stderr=""
+            )
+
+        return mock.patch.object(runner.subprocess, "run", side_effect=_run)
+
+    def test_a_removed_log_dir_degrades_the_point_to_error(self):
+        log_dir = self.root / "corners" / "rec-1"
+        with self._stub_ngspice_removing("m_vout = 1.65000e+00\n", log_dir):
+            result = runner.run_point(
+                self.tb, self.pdk, self.point, self.root / "work", log_dir=log_dir
+            )
+        # Already parsed from the in-memory ngspice output -- must survive
+        # even though the log evidence never made it to disk.
+        self.assertEqual(result.measurements, {"vout": 1.65})
+        self.assertEqual(result.status, "error")
+        self.assertIn("log not written", result.message)
+
+    def test_run_grid_continues_past_one_points_failed_log_write(self):
+        """The actual defect reported in #271: one point's OSError used to
+        propagate out of run_grid() and discard every completed sibling."""
+        self.assertEqual(len(self.points), 2)
+        log_dir = self.root / "corners" / "rec-2"
+        with self._stub_ngspice_removing(
+            "m_vout = 1.65000e+00\n", log_dir, calls_to_hit=1
+        ):
+            results = runner.run_grid(
+                self.tb, self.pdk, self.points, self.root / "wgrid", log_dir=log_dir
+            )
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0].status, "error")
+        self.assertIn("log not written", results[0].message)
+        # The second point's own run_point() call re-creates log_dir before
+        # its own subprocess call, which this time does not delete it.
+        self.assertEqual(results[1].status, "ok")
+        self.assertEqual(results[1].measurements, {"vout": 1.65})
+
+    def test_a_timed_out_points_log_write_failure_is_also_degraded(self):
+        log_dir = self.root / "corners" / "rec-3"
+
+        def _run(cmd, **kwargs):
+            shutil.rmtree(log_dir, ignore_errors=True)
+            raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout", 1))
+
+        with mock.patch.object(runner.subprocess, "run", side_effect=_run):
+            result = runner.run_point(
+                self.tb,
+                self.pdk,
+                self.point,
+                self.root / "workt",
+                log_dir=log_dir,
+                timeout_s=1,
+            )
+        self.assertEqual(result.status, "error")
+        self.assertIn("timed out", result.message)
+        self.assertIn("log not written", result.message)
+
+    def test_a_healthy_log_write_still_reports_ok(self):
+        """Control: nothing above changes the happy path."""
+        log_dir = self.root / "corners" / "rec-4"
+        with self._stub_ngspice("m_vout = 1.65000e+00\n"):
+            result = runner.run_point(
+                self.tb, self.pdk, self.point, self.root / "workok", log_dir=log_dir
+            )
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.message, "")
+        self.assertTrue((log_dir / f"{self.point.corner_id}.log").is_file())
+
+
 class NonlinearMoscapGuardTests(unittest.TestCase):
     """#153: ngspice-47 mis-expands this PDK's nonlinear-capacitance moscap
     family (a ``c=<expr>`` behavioral coefficient) into a malformed internal
@@ -628,6 +761,73 @@ class CheckEnvTests(unittest.TestCase):
         self.assertIn("pin", out)
         self.assertIn("/no/such/pin/ngspice", out)
         self.assertIn("#259", out)
+
+
+class CliPartialGridRecoveryTests(ManifestFixture):
+    """#271: an unexpected exception escaping ``runner.run_grid`` inside
+    ``cli.run()`` must still mint a record from whatever points completed,
+    rather than losing them via ``main()``'s top-level handler (which only
+    ever caught the intentionally-narrow set of expected exceptions, never
+    this one).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.write({"measure": {"vout": "v(out)"}})
+        self.pdk = fake_pdk(self.root / "gf180mcuD")
+
+    def _args(self):
+        return cli.build_parser().parse_args(
+            [
+                self.slug,
+                "--corners", "typical",
+                "--temps", "27", "125",
+                "--supply-tol", "0",
+                "--subset-reason", "unit test: exercising the partial-grid recovery path",
+                "--quiet",
+            ]
+        )
+
+    def _run_cli(self, fake_run_grid):
+        buf_out, buf_err = io.StringIO(), io.StringIO()
+        with mock.patch.object(cli, "find_pdk", return_value=self.pdk), \
+             mock.patch.object(runner, "ngspice_version", return_value="ngspice-46"), \
+             mock.patch.object(runner, "run_grid", side_effect=fake_run_grid), \
+             mock.patch.object(cli, "SIM_DIR", self.root), \
+             contextlib.redirect_stdout(buf_out), contextlib.redirect_stderr(buf_err):
+            status = cli.run(self._args())
+        return status, buf_out.getvalue(), buf_err.getvalue()
+
+    def test_an_exception_out_of_run_grid_still_mints_a_partial_record(self):
+        def fake_run_grid(tb, pdk, points, workdir, jobs=1, timeout_s=300, on_result=None, log_dir=None):
+            self.assertEqual(len(points), 2)
+            first = runner.PointResult(point=points[0], status="ok", measurements={"vout": 1.65})
+            if on_result:
+                on_result(first)
+            raise OSError(2, "No such file or directory", "simulated mid-run fault")
+
+        status, _, err = self._run_cli(fake_run_grid)
+
+        self.assertEqual(status, cli.EXIT_SIM_ERROR)
+        self.assertIn("simulated mid-run fault", err)
+        record_files = list((self.root / self.slug / "records").glob("*.md"))
+        self.assertEqual(len(record_files), 1, "the completed point must still be minted")
+        text = record_files[0].read_text()
+        self.assertIn("PARTIAL RUN", text)
+        self.assertIn("1/2", text)
+        self.assertIn("**Overall: ERROR**", text)
+
+    def test_ngspice_missing_is_unaffected_and_still_fails_fast(self):
+        """The broadened net must not swallow NgspiceMissing -- no environment
+        means no point could have meaningfully run, so there is nothing
+        partial to salvage."""
+
+        def fake_run_grid(*args, **kwargs):
+            raise runner.NgspiceMissing("ngspice not found on PATH")
+
+        status, _, _ = self._run_cli(fake_run_grid)
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertFalse((self.root / self.slug / "records").exists())
 
 
 class _StubPoint:
@@ -1015,6 +1215,98 @@ class RecordRenderingTests(unittest.TestCase):
         self.assertIn(self.tb.netlist_sha256, path.read_text())
         with self.assertRaises(report.RecordExists):
             report.write_netlist_snapshot(self.tb, experiment, "20260729-153000-1a7ef75")
+
+
+class PartialRunRecordTests(unittest.TestCase):
+    """#271: a run that raised out of run_grid() must mint an explicitly
+    partial record instead of one that reads as a clean, complete pass just
+    because every point that DID complete happened to be "ok".
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        tb_dir = root / "harness-selftest" / "testbench"
+        tb_dir.mkdir(parents=True)
+        (tb_dir / "x.spice").write_text("v1 out 0 dc {vdd_val}\n")
+        (tb_dir / "tb.json").write_text(
+            json.dumps(
+                {"name": "harness-selftest", "netlist": "x.spice", "measure": {"vout": "v(out)"}}
+            )
+        )
+        self.tb = testbench.load(tb_dir)
+        self.pdk = fake_pdk(root / "gf180mcuD")
+        self.points = corners.build_grid(
+            corners.resolve_corners(["mos"]), (-40, 27, 125), corners.supply_points(3.3, 0.10)
+        )
+        self.assertGreater(len(self.points), 5)
+        # Every completed point looks perfectly clean -- the failure mode this
+        # guards against: a naive `n_ok == len(results)` check alone would
+        # call this a PASS despite most of the grid never having run.
+        self.completed = [
+            runner.PointResult(point=p, status="ok", measurements={"vout": 1.0})
+            for p in self.points[:3]
+        ]
+
+    def _build(self, **overrides):
+        kwargs = dict(
+            tb=self.tb,
+            pdk=self.pdk,
+            points=self.points,
+            results=self.completed,
+            ngspice="ngspice-46",
+            repo_root=SIM_DIR,
+            record_id="20260906-000000-abc1234",
+            started_utc="2026-09-06T00:00:00+00:00",
+            wall_seconds=42.0,
+        )
+        kwargs.update(overrides)
+        return report.build_record(**kwargs)
+
+    def test_fewer_results_than_points_is_detected_as_partial(self):
+        record = self._build()
+        self.assertTrue(record["partial"])
+        self.assertEqual(record["status"], "error")
+
+    def test_a_complete_grid_is_not_marked_partial(self):
+        full_results = [
+            runner.PointResult(point=p, status="ok", measurements={"vout": 1.0})
+            for p in self.points
+        ]
+        record = self._build(results=full_results)
+        self.assertFalse(record["partial"])
+        self.assertEqual(record["status"], "pass")
+
+    def test_points_run_reflects_only_what_completed(self):
+        record = self._build()
+        self.assertEqual(record["grid"]["points_run"], 3)
+        self.assertEqual(record["grid"]["points"], len(self.points))
+        self.assertEqual(record["grid"]["points_ok"], 3)
+
+    def test_the_abort_reason_is_carried_and_rendered(self):
+        record = self._build(
+            abort_reason="OSError: [Errno 2] No such file or directory: 'x.log'"
+        )
+        text = report.render_record(record, "harness-selftest")
+        self.assertIn("PARTIAL RUN", text)
+        self.assertIn("OSError", text)
+        self.assertIn(f"{len(self.completed)}/{len(self.points)}", text)
+
+    def test_partial_does_not_read_as_a_clean_pass_in_the_overall_verdict(self):
+        record = self._build()
+        text = report.render_record(record, "harness-selftest")
+        self.assertIn("**Overall: ERROR**", text)
+        self.assertNotIn("**Overall: PASS**", text)
+
+    def test_a_complete_grid_renders_no_partial_note(self):
+        full_results = [
+            runner.PointResult(point=p, status="ok", measurements={"vout": 1.0})
+            for p in self.points
+        ]
+        record = self._build(results=full_results)
+        text = report.render_record(record, "harness-selftest")
+        self.assertNotIn("PARTIAL RUN", text)
 
 
 class MultiTopologyRenderingTests(unittest.TestCase):
