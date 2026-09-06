@@ -14,18 +14,22 @@ share the ``fake_pdk`` fixture from ``_fixtures.py``.
 
 from __future__ import annotations
 
+import contextlib
 import datetime
+import io
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SIM_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SIM_DIR))
 
 from _fixtures import fake_pdk  # noqa: E402
-from harness import corners, report, runner, testbench  # noqa: E402
+from harness import cli, corners, report, runner, testbench  # noqa: E402
 
 
 class CornerTests(unittest.TestCase):
@@ -541,6 +545,89 @@ class NonlinearMoscapGuardTests(unittest.TestCase):
             self.assertIsNone(
                 runner.nonlinear_moscap_ngspice47_warning("some dev build", [nested])
             )
+
+    def test_version_only_advisory_fires_on_ngspice_47_with_no_dut_needed(self):
+        advisory = runner.ngspice47_advisory("ngspice-47 : Circuit level simulation program")
+        self.assertIsNotNone(advisory)
+        self.assertIn("#153", advisory)
+        self.assertIn("ngspice-46", advisory)
+
+    def test_version_only_advisory_absent_on_ngspice_46(self):
+        self.assertIsNone(runner.ngspice47_advisory("ngspice-46"))
+
+    def test_version_only_advisory_absent_when_unparseable(self):
+        self.assertIsNone(runner.ngspice47_advisory("some dev build"))
+
+
+class CheckEnvTests(unittest.TestCase):
+    """#268: ``--check-env`` must not print an unqualified ``OK`` when the
+    resolved ``ngspice`` is version 47 -- #153 already established that
+    version mis-expands this PDK's nonlinear-capacitance moscap family into a
+    malformed element, so every point of an affected closed-loop campaign
+    fails. Pins both the version-only path (no experiment argument, no
+    ngspice/PDK required) and the DUT-aware path (an experiment argument
+    reuses ``nonlinear_moscap_ngspice47_warning`` for a precise verdict).
+    """
+
+    def _check_env(self, version, experiment=None, ngspice_exe="/usr/bin/ngspice"):
+        buf = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp:
+            # A real (if fake) PDK, so the assertions below isolate the
+            # ngspice-47 advisory's own exit status rather than a PdkNotFound
+            # this test has nothing to do with (#268 only touches the
+            # ngspice half of --check-env).
+            pdk = fake_pdk(Path(tmp))
+            with mock.patch.object(runner, "ngspice_version", return_value=version), \
+                mock.patch.object(runner, "ngspice_executable", return_value=ngspice_exe), \
+                mock.patch.object(cli, "find_pdk", return_value=pdk), \
+                mock.patch.dict(os.environ, {"SIM_NGSPICE_BIN": "/no/such/pin/ngspice"}), \
+                contextlib.redirect_stdout(buf):
+                status = cli.cmd_check_env(experiment)
+        return status, buf.getvalue()
+
+    def test_ngspice_47_is_a_warning_not_an_unqualified_ok(self):
+        status, out = self._check_env("ngspice-47 : Circuit level simulation program")
+        self.assertIn("ngspice : WARN", out)
+        self.assertNotIn("ngspice : OK", out)
+        self.assertIn("#153", out)
+        self.assertIn("ngspice-46", out)
+
+    def test_ngspice_47_check_env_still_exits_ok_advisory_only(self):
+        status, _ = self._check_env("ngspice-47")
+        self.assertEqual(status, cli.EXIT_OK)
+
+    def test_ngspice_46_is_plain_ok_with_no_warning(self):
+        status, out = self._check_env("ngspice-46 : Circuit level simulation program")
+        self.assertEqual(status, cli.EXIT_OK)
+        self.assertIn("ngspice : OK", out)
+        self.assertNotIn("WARN", out)
+        self.assertNotIn("#153", out)
+
+    def test_unparseable_version_does_not_warn_or_raise(self):
+        status, out = self._check_env("some dev build")
+        self.assertEqual(status, cli.EXIT_OK)
+        self.assertIn("ngspice : OK", out)
+        self.assertNotIn("WARN", out)
+
+    def test_experiment_argument_gives_a_precise_per_campaign_verdict(self):
+        """``vco-tuning-range`` composes ``design/netlist/vco.spice``, which
+        nests ``cap_nmos_03v3`` inside ``.subckt vco`` -- a real, committed
+        instance of the #153 nesting pattern -- so the DUT-aware path must
+        name that subcircuit rather than only the generic advisory."""
+        status, out = self._check_env("ngspice-47", experiment="vco-tuning-range")
+        self.assertEqual(status, cli.EXIT_OK)
+        self.assertIn("ngspice : WARN", out)
+        self.assertIn("#153", out)
+        self.assertIn("cap_nmos_03v3", out)
+
+    def test_pin_awareness_reports_the_259_discipline(self):
+        """#268 suggested-fix item 3: report whether SIM_NGSPICE_BIN /
+        ~/.local/bin/ngspice resolved, so a silent PATH fall-through to an
+        unpinned build is visible."""
+        _, out = self._check_env("ngspice-46", ngspice_exe="/opt/homebrew/bin/ngspice")
+        self.assertIn("pin", out)
+        self.assertIn("/no/such/pin/ngspice", out)
+        self.assertIn("#259", out)
 
 
 class _StubPoint:

@@ -64,19 +64,25 @@ def build_parser() -> argparse.ArgumentParser:
             "      --join dff=divider-ratio/corners/<record-id>/dff_setup_hold.csv\n"
             "  python3 sim/run_corners.py --list\n"
             "  python3 sim/run_corners.py --check-env\n"
+            "  python3 sim/run_corners.py --check-env vco-tuning-range\n"
         ),
     )
     parser.add_argument(
         "testbench",
         nargs="?",
         metavar="EXPERIMENT",
-        help="experiment slug under sim/ (i.e. sim/<slug>/testbench/tb.json)",
+        help="experiment slug under sim/ (i.e. sim/<slug>/testbench/tb.json); "
+        "with --check-env, an optional experiment to check for a precise "
+        "per-campaign ngspice-47 verdict instead of the generic one (#268)",
     )
     parser.add_argument("--list", action="store_true", help="list testbenches and corners")
     parser.add_argument(
         "--check-env",
         action="store_true",
-        help="report ngspice / PDK availability and exit",
+        help="report ngspice / PDK availability and exit; warns (not a hard "
+        "block) if the resolved ngspice is version 47, known-bad for "
+        "closed-loop campaigns nesting the PDK's nonlinear moscap family "
+        "(#153) -- pass EXPERIMENT for a DUT-aware verdict",
     )
     parser.add_argument(
         "--print-env",
@@ -199,11 +205,62 @@ def cmd_list() -> int:
     return EXIT_OK
 
 
-def cmd_check_env() -> int:
+def _ngspice_pin_report() -> str:
+    """One line on ``sim/lib/simenv.sh``'s pinned-binary discipline (#259):
+    whether the pin ($SIM_NGSPICE_BIN, default ``~/.local/bin/ngspice``)
+    exists, and whether it -- not some other PATH entry -- is what actually
+    resolved. ``simenv.sh`` is bash, not importable from here, so this
+    replicates its ``SIM_NGSPICE_BIN`` override precedence rather than
+    sourcing it (#268)."""
+    pin_override = os.environ.get("SIM_NGSPICE_BIN")
+    pin_path = Path(pin_override) if pin_override else Path.home() / ".local" / "bin" / "ngspice"
+    resolved = runner.ngspice_executable()
+    pin_exists = pin_path.is_file()
+    if resolved is None:
+        return f"  pin     : {pin_path} ({'present' if pin_exists else 'absent'}); ngspice not found on PATH"
+    if pin_exists and Path(resolved).resolve() == pin_path.resolve():
+        return f"  pin     : {pin_path} (resolved -- matches sim/lib/simenv.sh's #259 pin)"
+    if pin_exists:
+        return (
+            f"  pin     : {pin_path} exists but PATH resolved {resolved} instead -- "
+            "a plain --check-env run does not apply simenv.sh's PATH prepend; "
+            "see sim/lib/simenv.sh's #259 pinned-binary discipline"
+        )
+    return (
+        f"  pin     : {pin_path} not found (set SIM_NGSPICE_BIN to override) -- "
+        f"resolved {resolved} from PATH instead; see sim/lib/simenv.sh's #259 "
+        "pinned-binary discipline"
+    )
+
+
+def cmd_check_env(experiment: str | None = None) -> int:
     status = EXIT_OK
     try:
         version = runner.ngspice_version()
-        print(f"ngspice : OK   {version}")
+        # #153/#268: ngspice-47 is known-bad for this repo's closed-loop
+        # campaigns that nest the PDK's nonlinear-capacitance moscap family
+        # inside a .subckt -- report that up front rather than an
+        # unqualified OK, without hard-blocking (a host with only
+        # ngspice-47 can still attempt a run). If an experiment was given,
+        # prefer the DUT-aware warning for a precise per-campaign verdict;
+        # otherwise fall back to the version-only advisory.
+        warning = None
+        if experiment:
+            try:
+                tb_path = _resolve_tb_path(experiment)
+                tb = tb_mod.load(tb_path)
+                sources = tuple(tb.dut) + tuple(phase.netlist for phase in tb.run_phases)
+                warning = runner.nonlinear_moscap_ngspice47_warning(version, sources)
+            except FileNotFoundError as exc:
+                print(f"  (could not resolve {experiment!r} for a DUT-aware check: {exc})")
+        if warning is None:
+            warning = runner.ngspice47_advisory(version)
+        if warning:
+            print(f"ngspice : WARN  {version}")
+            print(f"  {warning}")
+        else:
+            print(f"ngspice : OK   {version}")
+        print(_ngspice_pin_report())
     except NgspiceMissing as exc:
         print(f"ngspice : MISSING\n{exc}")
         status = EXIT_ENVIRONMENT
@@ -588,7 +645,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.list:
         return cmd_list()
     if args.check_env:
-        return cmd_check_env()
+        return cmd_check_env(args.testbench)
     if args.print_env:
         return cmd_print_env()
     if not args.testbench:

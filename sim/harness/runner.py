@@ -68,6 +68,15 @@ def ngspice_version() -> str:
     return out.strip().splitlines()[0] if out.strip() else "unknown"
 
 
+def ngspice_executable() -> str | None:
+    """Absolute path of whatever ``ngspice`` resolves to on ``PATH`` right
+    now, or ``None`` if nothing does. Exposed separately from
+    :func:`ngspice_version` so a caller (``--check-env``'s pin-awareness
+    report) can compare it against ``sim/lib/simenv.sh``'s pinned-binary
+    discipline (#259) without re-running ``ngspice --version``."""
+    return shutil.which(NGSPICE)
+
+
 def ngspice_major_version(version: str) -> int | None:
     """Parse the leading ``ngspice-<N>`` major version, or ``None`` if it
     cannot be found (e.g. a HEAD/dev build with no such token)."""
@@ -119,6 +128,36 @@ def dut_uses_nonlinear_moscap(sources) -> str | None:
         if match:
             return match
     return None
+
+
+def ngspice47_advisory(version: str) -> str | None:
+    """A version-only advisory if ``version`` is ngspice-47, else ``None`` --
+    unlike :func:`nonlinear_moscap_ngspice47_warning`, this needs no DUT or
+    fragment netlists to say something useful (#268). ``--check-env`` has no
+    experiment argument by default, so the leading ``ngspice-<N>`` token
+    alone is all it has to go on; when a DUT *is* known (an experiment was
+    resolved), prefer the DUT-aware warning below for a precise per-campaign
+    verdict instead of this generic one.
+
+    Advisory only, like the DUT-aware warning: a host with only ngspice-47
+    can still attempt a run and see the real error.
+    """
+    if ngspice_major_version(version) != 47:
+        return None
+    return (
+        f"{version} is known-bad for this repo's closed-loop PVT campaigns "
+        "that instantiate the PDK's nonlinear-capacitance moscap family "
+        "(cap_nmos_03v3, cap_pmos_03v3, cap_nmos_06v0, cap_pmos_06v0, and "
+        "each '_b' body-tie variant) from inside a nested '.subckt' -- "
+        "currently sim/vco-tuning-range and sim/reference-spur. ngspice-47 "
+        "mis-expands that construct into a malformed internal element, and "
+        "every point of an affected campaign fails with \"unknown parameter "
+        "(eN)\" (a scientific-notation exponent split off mid-token, #153). "
+        "A flat, top-level instantiation (e.g. sim/devchar-passives) is "
+        "unaffected and runs on either version. Known-good: ngspice-46 -- "
+        "see sim/harness/README.md's \"ngspice-46 required for nested "
+        "nonlinear moscap decks\" note for a portable build recipe."
+    )
 
 
 def nonlinear_moscap_ngspice47_warning(version: str, sources) -> str | None:

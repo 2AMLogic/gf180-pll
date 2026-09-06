@@ -105,7 +105,12 @@ still attempts the run) whenever it detects a resolved DUT/fragment nesting
 this family under a version whose leading `ngspice-<N>` is `47`
 (`harness/runner.py`'s `nonlinear_moscap_ngspice47_warning`) — so a host
 missing ngspice-46 gets the explanation up front instead of only the opaque
-per-point parser error.
+per-point parser error. `run_corners.py --check-env` carries the same warning
+(#268): it reports a resolved ngspice-47 as a `WARN`, not an unqualified
+`OK`, naming this issue and the build recipe below -- pass an experiment
+(`--check-env vco-tuning-range`) for the same DUT-aware, per-campaign verdict
+the run path prints. Either way this stays advisory, never a hard block, so
+a host with only ngspice-47 can still attempt a run.
 
 To obtain ngspice-46 (not the current stock `brew install ngspice`, which
 tracks the latest release) on macOS, build the upstream release tarball
