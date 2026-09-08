@@ -6,6 +6,10 @@ this project's maturity ladder (simulation-complete -> layout DRC/LVS-clean
 -> shuttle seat). It is **tool/flow bring-up**, proven on a trivial cell (a
 tapped standard-cell inverter), not any PLL-block layout — see
 `layout/evidence/inv-tb-proof/` for the recorded proof and "Scope" below.
+`layout/floorplan/` (issue #17) is the first consumer of that flow beyond the
+bring-up proof: a block-placement floorplan record and GDS skeleton, not yet
+any block's real transistor-level layout — see
+`layout/floorplan/PLL-FLOORPLAN.md`.
 
 ```
 layout/
@@ -19,8 +23,12 @@ layout/
     faults.py                 negative-control fault injection (DRC + LVS)
   tools/
     pmap                      macOS pmap(1) shim the foundry decks' logger needs (see below)
+  floorplan/                 PLL block-placement floorplan (issue #17)
+    PLL-FLOORPLAN.md           isolation, supply routing, cap placement, matching, area budget
+    skeleton.py                assembles the GDS block-placement skeleton the record describes
   evidence/
     inv-tb-proof/            committed proof artifacts (gds, netlist, logs, reports)
+    floorplan-skeleton/      block-placement skeleton GDS + DRC report (issue #17)
     work/                    scratch re-run tree (git-ignored)
 ```
 
