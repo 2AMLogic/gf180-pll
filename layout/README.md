@@ -35,10 +35,16 @@ layout/
       primitives.py              full-custom nfet_03v3/pfet_03v3 geometry generator
       stage.py                   one vco_stage.sch instance (MPH-MP-MN-MNT)
       ring.py                    assembles the 5-stage ring + guard ring + decap; CLI entry point
+    lock_detector/            real transistor-level lock_detector block layout (issue #296)
+      devices.py                 Fet parameter tables, transcribed from design/netlist/lock_detector.spice
+      primitives.py               hand-drawn nfet_03v3/pfet_03v3 geometry primitives + net routing
+      cells.py                    gate-level macros (inv/nand2/schmitt/xor2/delaywin) built from primitives.py
+      build.py                    assembles the full block (or any leaf macro standalone) into a GDS
   evidence/
     inv-tb-proof/            committed proof artifacts (gds, netlist, logs, reports)
     floorplan-skeleton/      block-placement skeleton GDS + DRC report (issue #17)
     vco-layout/              VCO ring block real GDS + DRC report (issue #293)
+    lock-detector-layout/    lock_detector block GDS + DRC-clean report (issue #296)
     work/                    scratch re-run tree (git-ignored)
 ```
 
@@ -298,3 +304,15 @@ details, spec values, or this repo's content.
   `run_drc.py`/`run_lvs.py` and the standalone KLayout application), not a
   `klayout-tools` capability gap — out of scope for that tracker, documented
   here instead.
+- **`mos_array`/`diff_pair` have no dog-bone-terminal option for a unit
+  device narrower than `UNIT_MIN_W_UM`'s contact-fit floor.** Hit while
+  drawing `lock_detector`'s real transistor-level layout (issue #296): one
+  schematic device is narrower than that floor by design (a high-resistance
+  bias element, not a matched-array unit). `klayout-tools`#322 already
+  documented the floor's rationale but scoped a fix to the error message
+  only, explicitly deferring "a real use case for narrower-than-contact-fit
+  unit devices" as a follow-up trigger — this is that follow-up. Filed as
+  [2AMLogic/klayout-tools#1574](https://github.com/2AMLogic/klayout-tools/issues/1574).
+  Worked around with a hand-drawn dog-bone S/D terminal (widened contact
+  pad, unwidened shoulder against the gate edge, true schematic width under
+  the gate) in `layout/pll_top/lock_detector/primitives.py`'s `mosfet()`.
