@@ -35,10 +35,13 @@ layout/
       primitives.py              full-custom nfet_03v3/pfet_03v3 geometry generator
       stage.py                   one vco_stage.sch instance (MPH-MP-MN-MNT)
       ring.py                    assembles the 5-stage ring + guard ring + decap; CLI entry point
+      buffer.py                  the 3-stage tapered output buffer; CLI entry point
+      mirror.py                  the common-centroid 3-cascade band-select mirror; CLI entry point
   evidence/
     inv-tb-proof/            committed proof artifacts (gds, netlist, logs, reports)
     floorplan-skeleton/      block-placement skeleton GDS + DRC report (issue #17)
-    vco-layout/              VCO ring block real GDS + DRC report (issue #293)
+    vco-layout/              VCO sub-block real GDS + DRC reports (issue #293)
+                             PROOF.md = ring; PROOF-mirror-buffer.md = mirror + buffer
     work/                    scratch re-run tree (git-ignored)
 ```
 
