@@ -1,13 +1,6 @@
 #!/usr/bin/env bash
-# gf180-pll :: vco-tuning-range :: helpers shared by the supply and stage-count
-# runners.
-#
-# `run.sh` (the open-loop f(Vctrl) campaign) carries its own copies of these two
-# functions inline. They are duplicated here rather than refactored out of it
-# because `run.sh` is the script that minted the tuning-range record: editing it
-# would make the committed runner differ from the one that produced the
-# evidence, for no behavioural gain. If a third consumer appears, fold all three
-# together in one change and re-run the affected campaigns.
+# gf180-pll :: vco-tuning-range :: helpers shared by the supply, stage-count,
+# and open-loop f(Vctrl) runners (run_supply.sh, run_stages.sh, run.sh).
 #
 # shellcheck shell=bash
 
