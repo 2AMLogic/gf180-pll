@@ -11,8 +11,16 @@ bring-up proof: a block-placement floorplan record and GDS skeleton, not yet
 any block's real transistor-level layout — see
 `layout/floorplan/PLL-FLOORPLAN.md`. `layout/pll_top/` (issue #292/#293) is
 the first block with **real** transistor-level layout: the VCO's 5-stage
-ring, its own guard ring, and its carried-forward decap — see
-`layout/pll_top/vco/ring.py`.
+ring with its own guard ring and carried-forward decap
+(`layout/pll_top/vco/ring.py`), its common-centroid 3-cascade band-select
+mirror (`mirror.py`) and its 3-stage tapered output buffer (`buffer.py`).
+`layout/pll_top/pfd_cp/` (issue #294/#299) is
+a second, independent full-custom leaf-cell family: a reusable
+device-list-driven generator (`devgen.py`) proved out on one representative
+PFD/CP leaf cell (`pfdcp_inv_3v3`) — see `layout/evidence/pfdcp-inv-proof/PROOF.md`
+for the DRC/LVS-clean proof and why it draws geometry directly against
+`klayout.db` rather than through `klt gen`/`klt gen-compose` (a genuine,
+filed capability gap, not a preference).
 
 ```
 layout/
@@ -37,11 +45,21 @@ layout/
       ring.py                    assembles the 5-stage ring + guard ring + decap; CLI entry point
       buffer.py                  the 3-stage tapered output buffer; CLI entry point
       mirror.py                  the common-centroid 3-cascade band-select mirror; CLI entry point
+    lock_detector/            real transistor-level lock_detector block layout (issue #296)
+      devices.py                 Fet parameter tables, transcribed from design/netlist/lock_detector.spice
+      primitives.py               hand-drawn nfet_03v3/pfet_03v3 geometry primitives + net routing
+      cells.py                    gate-level macros (inv/nand2/schmitt/xor2/delaywin) built from primitives.py
+      build.py                    assembles the full block (or any leaf macro standalone) into a GDS
+    pfd_cp/                   the PFD/CP block family (issue #294/#299)
+      devgen.py                  reusable device-list -> DRC-clean leaf-cell generator
+      pfdcp_inv.py                pfdcp_inv_3v3.sch's device table + CLI entry point
   evidence/
     inv-tb-proof/            committed proof artifacts (gds, netlist, logs, reports)
     floorplan-skeleton/      block-placement skeleton GDS + DRC report (issue #17)
     vco-layout/              VCO sub-block real GDS + DRC reports (issue #293)
                              PROOF.md = ring; PROOF-mirror-buffer.md = mirror + buffer
+    lock-detector-layout/    lock_detector block GDS + DRC-clean report (issue #296)
+    pfdcp-inv-proof/         PFD/CP devgen methodology proof: GDS + DRC/LVS reports (issue #299)
     work/                    scratch re-run tree (git-ignored)
 ```
 
@@ -301,3 +319,15 @@ details, spec values, or this repo's content.
   `run_drc.py`/`run_lvs.py` and the standalone KLayout application), not a
   `klayout-tools` capability gap — out of scope for that tracker, documented
   here instead.
+- **`mos_array`/`diff_pair` have no dog-bone-terminal option for a unit
+  device narrower than `UNIT_MIN_W_UM`'s contact-fit floor.** Hit while
+  drawing `lock_detector`'s real transistor-level layout (issue #296): one
+  schematic device is narrower than that floor by design (a high-resistance
+  bias element, not a matched-array unit). `klayout-tools`#322 already
+  documented the floor's rationale but scoped a fix to the error message
+  only, explicitly deferring "a real use case for narrower-than-contact-fit
+  unit devices" as a follow-up trigger — this is that follow-up. Filed as
+  [2AMLogic/klayout-tools#1574](https://github.com/2AMLogic/klayout-tools/issues/1574).
+  Worked around with a hand-drawn dog-bone S/D terminal (widened contact
+  pad, unwidened shoulder against the gate edge, true schematic width under
+  the gate) in `layout/pll_top/lock_detector/primitives.py`'s `mosfet()`.

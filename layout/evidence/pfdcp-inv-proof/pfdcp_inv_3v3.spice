@@ -1,0 +1,14 @@
+* Reference schematic for pfdcp_inv_3v3 (issue #299).
+*
+* Hand-written independently of the layout -- see
+* layout/harness/cell.py's docstring for why. Device sizes/nodes match
+* design/pfdcp_inv_3v3.sch exactly.
+*
+* Run LVS with --lvs_sub=VSS (layout/run_pv.py's own default): the NMOS
+* body ties to the deck's synthesized global substrate net, which this
+* flag names VSS -- see layout/README.md's "substrate-net gotcha".
+
+.subckt pfdcp_inv_3v3 A Y VDD VSS
+M_MP Y A VDD VDD pfet_03v3 W=1.5u L=0.3u
+M_MN Y A VSS VSS nfet_03v3 W=0.5u L=0.3u
+.ends
