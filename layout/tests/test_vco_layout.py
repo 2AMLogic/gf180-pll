@@ -27,6 +27,7 @@ sys.path.insert(0, str(LAYOUT_DIR))
 sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
 
 from floorplan import skeleton  # noqa: E402
+from vco import bias_resistors  # noqa: E402
 from vco import buffer as buf  # noqa: E402
 from vco import devices as dev  # noqa: E402
 from vco import mirror  # noqa: E402
@@ -467,6 +468,84 @@ class VcoSubBlockFloorplanTests(unittest.TestCase):
         used = skeleton.total_extent_um2()
         self.assertLess(used, 150_000.0)
         self.assertGreater(used / 150_000.0, 0.9, "budget headroom changed -- re-read skeleton.py")
+
+
+class BiasResistorDeviceTests(unittest.TestCase):
+    """devices.BIAS_RESISTORS matches design/netlist/vco.spice's XRCG/XROFF/XRDEG."""
+
+    def test_three_resistors_match_the_frozen_netlist(self):
+        by_name = {r.name: r for r in dev.BIAS_RESISTORS}
+        self.assertEqual(set(by_name), {"RCG", "ROFF", "RDEG"})
+        self.assertEqual((by_name["RCG"].w_um, by_name["RCG"].l_um), (1.0, 5.6))
+        self.assertEqual((by_name["ROFF"].w_um, by_name["ROFF"].l_um), (1.0, 33.0))
+        self.assertEqual((by_name["RDEG"].w_um, by_name["RDEG"].l_um), (1.0, 33.0))
+
+    def test_every_resistor_meets_pres1s_minimum_width(self):
+        for r in dev.BIAS_RESISTORS:
+            self.assertGreaterEqual(r.w_um, prim.POLY_RES_MIN_WIDTH_UM)
+
+    def test_signal_nodes_match_the_schematic(self):
+        by_name = {r.name: r for r in dev.BIAS_RESISTORS}
+        self.assertEqual(by_name["RCG"].top_net, "NC")
+        self.assertEqual(by_name["ROFF"].top_net, "NOFF")
+        self.assertEqual(by_name["RDEG"].top_net, "NVI")
+        for r in dev.BIAS_RESISTORS:
+            self.assertEqual(r.bottom_net, "GND_VCO")
+
+
+class BiasResistorsBlockTests(unittest.TestCase):
+    """bias_resistors.py -- the standalone poly-resistor block."""
+
+    def test_columns_are_ordered_and_non_overlapping(self):
+        xs = bias_resistors.column_x0_um()
+        self.assertEqual(len(xs), len(dev.BIAS_RESISTORS))
+        for x0, x1, r in zip(xs, xs[1:], dev.BIAS_RESISTORS):
+            self.assertGreaterEqual(x1 - x0, r.w_um + bias_resistors.RESISTOR_GAP_UM)
+
+    def test_footprint_has_positive_extent(self):
+        x0, y0, x1, y1 = bias_resistors.footprint_um()
+        self.assertGreater(x1 - x0, 0.0)
+        self.assertGreater(y1 - y0, 0.0)
+
+    def test_footprint_contains_the_longest_resistor(self):
+        _, outer_y0, _, outer_y1 = bias_resistors.footprint_um()
+        poly_y0, poly_y1 = bias_resistors.poly_y_extent_um()
+        self.assertLess(outer_y0, poly_y0)
+        self.assertGreater(outer_y1, poly_y1)
+        self.assertAlmostEqual(poly_y1, max(r.l_um for r in dev.BIAS_RESISTORS) + prim.POLY_RES_EXT_UM)
+
+    def test_tap_pitch_bound_with_real_margin(self):
+        # This block's guard-ring bands are left/right (full block height),
+        # not top/bottom -- see bias_resistors.py's own module docstring for
+        # why that is the correct shape for a narrow, tall block.
+        d = bias_resistors.max_tap_distance_um()
+        self.assertGreater(d, 0.0)
+        self.assertLess(d, dev.DRC_TAP_PITCH_MAX_UM / 2.0)
+
+
+class PolyResistorPrimitiveTests(unittest.TestCase):
+    """primitives.poly_resistor()'s pure-Python constants (PRES.* citations)."""
+
+    def test_sab_extension_matches_pres6(self):
+        self.assertAlmostEqual(prim.POLY_RES_SAB_EXT_UM, 0.28)
+
+    def test_contact_to_sab_clearance_matches_pres7(self):
+        self.assertAlmostEqual(prim.POLY_RES_CONTACT_TO_SAB_UM, 0.22)
+
+    def test_implant_enclosure_meets_pres5(self):
+        self.assertGreaterEqual(prim.POLY_RES_IMPLANT_ENC_UM, 0.3)
+
+    def test_poly_extension_leaves_room_for_a_contact_clear_of_sab(self):
+        # The contact-land region (POLY_RES_EXT_UM tall) has to fit both
+        # CONTACT_ROW_MARGIN_UM (poly enclosure) and
+        # POLY_RES_CONTACT_TO_SAB_UM (PRES.7 clearance) with a real contact
+        # in between -- this is the arithmetic poly_resistor() relies on.
+        usable = (
+            prim.POLY_RES_EXT_UM
+            - prim.CONTACT_ROW_MARGIN_UM
+            - prim.POLY_RES_CONTACT_TO_SAB_UM
+        )
+        self.assertGreaterEqual(usable, prim.CONTACT_SIZE_UM)
 
 
 if __name__ == "__main__":

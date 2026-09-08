@@ -65,6 +65,12 @@ LAYER = {
     # this module (via1.drc, metal2.drc).
     "via1": (35, 0),
     "metal2": (36, 0),
+    # Poly-resistor-only layers, used by poly_resistor() below. Confirmed
+    # against layers_def.drc's own get_polygons() calls, same as every other
+    # entry in this table -- sab = get_polygons(49, 0), res_mk =
+    # get_polygons(110, 5).
+    "sab": (49, 0),  # salicide block -- PRES.6/PRES.7/PRES.9a
+    "res_mk": (110, 5),  # resistor body marker -- PRES.9a/PRES.9b
     # DIEAREA -- no rule in this PDK's DRC deck references it (confirmed the
     # same way layout/floorplan/skeleton.py's own docstring documents: grep
     # against every rule_decks/*.drc file). Used only for the carried-forward
@@ -108,6 +114,62 @@ METAL1_WIRE_WIDTH_UM = 0.28  # > M1.1's 0.23 min; also narrow enough that the
 # spacing apart -- see stage.py) stay M1.2a-legal (>= 0.23 um) from each
 # other once both are drawn full-width across the whole row (see ring.py's
 # DRC-iteration notes -- 0.32 was 0.01 um short).
+
+# --- ppolyf_u_3k poly-resistor generator margins (poly_resistor(), below) ---
+#
+# Rather than re-derive these from pres.drc's PRES.* rules in isolation (the
+# rules themselves are decomposed across width/spacing/enclosure/marker-layer
+# checks that interact -- e.g. PRES.7's contact-to-sab clearance only makes
+# sense once the contact-land geometry is already fixed), every constant here
+# is read directly off the gf180mcuD PDK's own device generator --
+# ``$PDK_ROOT/libs.tech/klayout/tech/pymacros/cells/draw_res.py``'s
+# ``polyf_res_inst()`` (the shared body every ``draw_*polyf*_res()`` wraps)
+# called with ``res_type="ppolyf_u"`` via ``draw_ppolyf_res()``'s non-"_s"
+# branch -- the PDK's own shipped recipe for this exact device class, not a
+# re-derivation of it. Two exceptions, both *tightened* relative to that
+# recipe rather than copied verbatim: ``POLY_RES_CONTACT_TO_SAB_UM`` is this
+# module's own explicit PRES.7 margin (the pcell's ``con_enc=0`` for "_u"
+# devices places its contact land flush with the sab boundary, which is
+# fine for *that* generator's own geometry but is not a value this module
+# re-derives blind -- see poly_resistor()'s docstring for why an explicit
+# clearance is drawn instead), and no local ``sub_rect`` substrate tap is
+# reproduced here at all -- see poly_resistor()'s docstring for why a
+# block-level guard ring plus an explicit parallel tap strip (drawn by the
+# caller, not this function) is used instead of the pcell's own per-instance
+# comp tap.
+POLY_RES_MIN_WIDTH_UM = 0.8  # PRES.1
+POLY_RES_EXT_UM = 0.66  # pl_res_ext ("_u"-type, i.e. not "_s") -- poly2's
+# contact-land extension beyond the res_mk body, at each end along the
+# resistor's own length (current-flow) axis.
+POLY_RES_SAB_EXT_UM = 0.28  # sab_res_ext -- sab's overlap beyond res_mk in
+# the *width* direction (perpendicular to current flow) on each side; this is
+# PRES.6's own 0.28 um number, i.e. the pcell already sits exactly on the
+# rule's minimum here (no headroom to add without deviating from the PDK's
+# own shipped recipe).
+POLY_RES_SAB_MIN_AREA_UM2 = 2.01  # sab_area -- the pcell's own SAB
+# minimum-area floor, so a short/narrow resistor's sab shape does not itself
+# become geometrically degenerate. Every resistor this module actually draws
+# (RCG/ROFF/RDEG, W=1 um, L>=5.6 um) is far above this floor.
+POLY_RES_IMPLANT_ENC_UM = 0.3  # np_enc_poly2 -- pplus enclosure of poly2
+# (PRES.5's own 0.3 um number), applied around the *whole* poly2 body +
+# contact-land extension rather than just the res_mk-marked core, which is
+# already more margin than PRES.5 requires (PRES.5 only requires pplus to
+# enclose the poly-and-pplus-and-sab-and-res_mk overlap region, i.e. the
+# res_mk-marked body itself, by 0.3 um -- enclosing the larger poly2+
+# extension footprint by the same 0.3 um is strictly generous, matching
+# this module's own convention of adding margin rather than sitting on the
+# rule's exact boundary).
+POLY_RES_CONTACT_TO_SAB_UM = 0.22  # PRES.7's own number, applied here as an
+# explicit clearance this module's own contact placement respects (see the
+# constant-block docstring above for why this is drawn rather than copied
+# from the pcell's own con_enc=0 placement).
+POLY_RES_TAP_SPACING_UM = 0.86  # comp_spacing = 0.46 + sub_sp(0.4), the
+# pcell's own non-deepnwell "_u"-type spacing from the poly2 body's outer
+# edge to a nearby substrate tap's comp -- itself already above PRES.3's
+# 0.6 um poly-resistor-to-COMP minimum. Used by the caller
+# (bias_resistors.py) to place its own parallel GND_VCO tap strip; not
+# consumed by poly_resistor() itself, which draws no local tap (see the
+# constant-block docstring above).
 
 
 def _r(v: float) -> float:
@@ -476,3 +538,137 @@ def guard_ring(
     tap_strip(canvas, kind, x0, y0, x1, y0 + width, net)  # bottom
     tap_strip(canvas, kind, x0, y0 + width, x0 + width, y1 - width, net)  # left
     tap_strip(canvas, kind, x1 - width, y0 + width, x1, y1 - width, net)  # right
+
+
+@dataclass
+class PolyResistorPorts:
+    """Metal1 landing pads for a drawn ``poly_resistor()`` instance."""
+
+    name: str
+    x0: float  # poly2/res_mk left edge (== the resistor's own width column)
+    x1: float
+    y0: float  # poly2 bottom edge (== bottom terminal's contact-land extent)
+    y1: float  # poly2 top edge
+    bottom_pad: tuple[float, float, float, float]
+    top_pad: tuple[float, float, float, float]
+
+
+def poly_resistor(
+    canvas: Canvas,
+    res: dev.PolyResistor,
+    x0: float,
+    y_bottom: float,
+) -> PolyResistorPorts:
+    """Draw one ``ppolyf_u_3k`` poly resistor instance (vertical current flow).
+
+    Same orientation convention as ``mosfet()``: ``x0`` is the resistor's
+    width-column left edge, ``y_bottom`` is the *res_mk*-marked body's bottom
+    edge, and current flows vertically along ``res.l_um`` -- ``res.w_um`` is
+    the horizontal extent (PRES.1's own "width", not the resistor's length).
+
+    WHY THIS FUNCTION DRAWS NO LOCAL SUBSTRATE TAP
+    ------------------------------------------------
+    The PDK's own ``polyf_res_inst()`` pcell (see the constant block above
+    this function) draws one ``sub_rect`` comp/pplus tap per resistor
+    instance, positioned past one end of the poly. That is the right choice
+    for a pcell meant to drop into an arbitrary layout with no guaranteed
+    nearby substrate tie. Every resistor this repo draws instead lives inside
+    a block that already carries its own dedicated ``GND_VCO`` guard ring
+    (``ring.py``/``mirror.py``/``buffer.py``'s own convention) -- and two of
+    the three resistors this module exists for (``ROFF``/``RDEG``, both
+    ``L=33 um``) are themselves longer than PLL-FLOORPLAN.md section 1's own
+    15 um tap-pitch bound, so a *single* end-of-resistor tap (this function's
+    own footprint, or the pcell's) would leave the far end of a 33 um-long
+    resistor un-tapped by anything closer than the block's own outer ring.
+    The caller (``bias_resistors.py``) instead draws one parallel
+    ``GND_VCO`` tap strip running the *entire* column height alongside every
+    resistor in the row, which keeps every point along even the longest
+    resistor within ``POLY_RES_TAP_SPACING_UM`` of a tap -- a stronger,
+    simpler guarantee than one tap per resistor end would give, and the
+    reason ``POLY_RES_TAP_SPACING_UM`` is defined above but not consumed
+    here.
+
+    WHY THE CONTACT LAND IS PULLED BACK FROM THE SAB BOUNDARY
+    -------------------------------------------------------------
+    PRES.7 forbids a contact on the resistor's poly2 from being closer than
+    ``POLY_RES_CONTACT_TO_SAB_UM`` (0.22 um) to the salicide-block (``sab``)
+    shape -- and this module's own ``sab`` rectangle's length-axis extent is
+    drawn to exactly coincide with ``res_mk``'s (PRES.9a: "RES_MK length
+    shall coincide with resistor length, defined by SAB length"), i.e. ``sab``
+    starts exactly where the resistor body (and thus the contact-land
+    extension) begins. So the contact land in each ``POLY_RES_EXT_UM``
+    extension is inset from the ``res_mk``/``sab`` boundary by
+    ``POLY_RES_CONTACT_TO_SAB_UM`` explicitly, rather than placed flush
+    against it -- deliberately, not incidentally: this module's own
+    convention throughout (see the module docstring) is margin on top of a
+    rule's stated minimum, not sitting exactly on the boundary.
+    """
+    w = res.w_um
+    l = res.l_um
+    x1 = x0 + w
+
+    # --- res_mk: the marked resistor body, PRES.1/PRES.9a/PRES.9b ---
+    canvas.rect("res_mk", x0, y_bottom, x1, y_bottom + l)
+
+    # --- poly2: body + a POLY_RES_EXT_UM contact-land extension at each end ---
+    poly_y0 = y_bottom - POLY_RES_EXT_UM
+    poly_y1 = y_bottom + l + POLY_RES_EXT_UM
+    canvas.rect("poly2", x0, poly_y0, x1, poly_y1)
+
+    # --- sab: same length-axis extent as res_mk (PRES.9a), widened by
+    # POLY_RES_SAB_EXT_UM on each side in the width direction (PRES.6),
+    # subject to the pcell's own min-area floor for a short/narrow resistor
+    # (not triggered by RCG/ROFF/RDEG's own W=1/L>=5.6 um, but kept so this
+    # function stays correct for a future resistor with a shorter L). ---
+    sab_w = w + 2 * POLY_RES_SAB_EXT_UM
+    if l * sab_w < POLY_RES_SAB_MIN_AREA_UM2:
+        sab_w = dev.snap_um(POLY_RES_SAB_MIN_AREA_UM2 / l)
+    sab_x0 = x0 - (sab_w - w) / 2.0
+    canvas.rect("sab", sab_x0, y_bottom, sab_x0 + sab_w, y_bottom + l)
+
+    # --- pplus implant enclosing the whole poly2 body + extension, margin on
+    # top of PRES.5's 0.3 um (see the constant's own docstring) ---
+    canvas.rect(
+        "pplus",
+        x0 - POLY_RES_IMPLANT_ENC_UM,
+        poly_y0 - POLY_RES_IMPLANT_ENC_UM,
+        x1 + POLY_RES_IMPLANT_ENC_UM,
+        poly_y1 + POLY_RES_IMPLANT_ENC_UM,
+    )
+
+    # --- two poly2 -> Metal1 contact pads, one per end's extension region,
+    # pulled back POLY_RES_CONTACT_TO_SAB_UM from the res_mk/sab boundary
+    # (PRES.7 -- see this function's own docstring) and
+    # CONTACT_ROW_MARGIN_UM from the poly2 outer edge (CO.3's poly enclosure,
+    # same margin mosfet()'s own gate contact uses). ---
+    def _end_pad(y_outer: float, y_inner: float) -> tuple[float, float, float, float]:
+        xs = _contact_positions(x0, x1)
+        ys = _contact_positions(min(y_outer, y_inner), max(y_outer, y_inner))
+        for cx in xs:
+            for cy in ys:
+                canvas.rect("contact", cx, cy, cx + CONTACT_SIZE_UM, cy + CONTACT_SIZE_UM)
+        pad_x0 = min(xs) - METAL1_PAD_MARGIN_UM
+        pad_x1 = max(xs) + CONTACT_SIZE_UM + METAL1_PAD_MARGIN_UM
+        pad_y0 = min(ys) - METAL1_PAD_MARGIN_UM
+        pad_y1 = max(ys) + CONTACT_SIZE_UM + METAL1_PAD_MARGIN_UM
+        canvas.rect("metal1", pad_x0, pad_y0, pad_x1, pad_y1)
+        return (pad_x0, pad_y0, pad_x1, pad_y1)
+
+    bottom_pad = _end_pad(
+        poly_y0 + CONTACT_ROW_MARGIN_UM,
+        y_bottom - POLY_RES_CONTACT_TO_SAB_UM,
+    )
+    top_pad = _end_pad(
+        y_bottom + l + POLY_RES_CONTACT_TO_SAB_UM,
+        poly_y1 - CONTACT_ROW_MARGIN_UM,
+    )
+
+    return PolyResistorPorts(
+        name=res.name,
+        x0=x0,
+        x1=x1,
+        y0=poly_y0,
+        y1=poly_y1,
+        bottom_pad=bottom_pad,
+        top_pad=top_pad,
+    )
