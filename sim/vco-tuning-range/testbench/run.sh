@@ -40,6 +40,8 @@ EXP="$(cd "${HERE}/.." && pwd)"
 REPO="$(cd "${EXP}/../.." && pwd)"
 # shellcheck source=../../lib/simenv.sh
 . "${HERE}/../../lib/simenv.sh"
+# shellcheck source=common.sh
+. "${HERE}/common.sh"
 
 DECK="${HERE}/tb_vco_tuning.sp"
 DUT="${REPO}/design/netlist/vco.spice"
@@ -51,29 +53,8 @@ VCTRLS=(0.9 1.2 1.5 1.8 2.1 2.4 2.7)
 
 CSV_HEADER="bundle,temp_c,vdd_v,band,vctrl_v,fosc_hz,isupply_a"
 
-# Map a bundle name to the .lib sections it stands for.
-bundle_libs() {
-  case "$1" in
-    all-slow) echo "ss,res_ss,moscap_ss" ;;
-    all-fast) echo "ff,res_ff,moscap_ff" ;;
-    *)        echo "$1,res_typical,moscap_typical" ;;
-  esac
-}
-
-# Frequency estimate used only to size the transient window (never to produce a
-# result). Calibrated against the nominal corner; the corner factors bound the
-# measured spread with margin, and a failed .meas triggers a retry with a longer
-# window, so an inaccurate estimate costs runtime, never correctness.
-f_est() { # <band> <vctrl> <bundle> <temp> <vdd>
-  python3 - "$@" <<'PY'
-import sys
-band, vctrl, bundle, temp, vdd = int(sys.argv[1]), float(sys.argv[2]), sys.argv[3], float(sys.argv[4]), float(sys.argv[5])
-ftemp = {-40.0: 0.75, 27.0: 1.0, 125.0: 1.35}[temp]
-fres  = {"all-fast": 1.25, "all-slow": 0.80}.get(bundle, 1.0)
-fvdd  = 1.0 + (3.30 - vdd) * 0.36
-print("%.6g" % (4.5e6 * (1.65 ** band) * (1 + (vctrl - 0.9) / 1.33) * ftemp * fres * fvdd))
-PY
-}
+# bundle_libs() and f_est() come from common.sh (sourced above), shared with
+# run_supply.sh/run_stages.sh.
 
 # --------------------------------------------------------------------------
 # One (bundle, temp, vdd, band) point -> seven CSV rows on stdout.
