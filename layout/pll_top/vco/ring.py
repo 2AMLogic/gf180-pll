@@ -14,8 +14,17 @@ Real, DRC-clean transistor-level layout for:
 * the carried-forward 22 pF decap footprint (2x 50x50 um, ``vco.sch``),
   positioned adjacent to the ``VDD_VCO`` pin/ring-tap junction.
 
-WHAT THIS PASS DEFERS
-----------------------
+WHAT THIS MODULE DEFERS (and where it has since landed)
+--------------------------------------------------------
+Since this module was written, ``buffer.py`` has drawn the 3-stage output
+buffer and ``mirror.py`` the common-centroid band-select mirror, each as its
+own standalone DRC-clean block landing against the ``VBP``/``VBN`` and
+``Y5_CLK_IN`` pins this one exposes. Still un-drawn: the bias generator's
+V-to-I core (it needs a ``ppolyf_u_3k`` poly-resistor generator -- see
+``mirror.py``'s docstring) and the wiring that will merge every VCO
+sub-block under one shared guard ring. The paragraph below is this module's
+own original scope statement, kept as written:
+
 The bias generator (``vco_bias.sch``), the 3-cascade band-select mirror, and
 the 3-stage output buffer are **not** drawn here. Issue #293's own dispatch
 explicitly allows scoping down to "a coherent, real, DRC-clean sub-portion"
