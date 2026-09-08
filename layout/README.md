@@ -12,7 +12,13 @@ any block's real transistor-level layout — see
 `layout/floorplan/PLL-FLOORPLAN.md`. `layout/pll_top/` (issue #292/#293) is
 the first block with **real** transistor-level layout: the VCO's 5-stage
 ring, its own guard ring, and its carried-forward decap — see
-`layout/pll_top/vco/ring.py`.
+`layout/pll_top/vco/ring.py`. `layout/pll_top/pfd_cp/` (issue #294/#299) is
+a second, independent full-custom leaf-cell family: a reusable
+device-list-driven generator (`devgen.py`) proved out on one representative
+PFD/CP leaf cell (`pfdcp_inv_3v3`) — see `layout/evidence/pfdcp-inv-proof/PROOF.md`
+for the DRC/LVS-clean proof and why it draws geometry directly against
+`klayout.db` rather than through `klt gen`/`klt gen-compose` (a genuine,
+filed capability gap, not a preference).
 
 ```
 layout/
@@ -40,11 +46,15 @@ layout/
       primitives.py               hand-drawn nfet_03v3/pfet_03v3 geometry primitives + net routing
       cells.py                    gate-level macros (inv/nand2/schmitt/xor2/delaywin) built from primitives.py
       build.py                    assembles the full block (or any leaf macro standalone) into a GDS
+    pfd_cp/                   the PFD/CP block family (issue #294/#299)
+      devgen.py                  reusable device-list -> DRC-clean leaf-cell generator
+      pfdcp_inv.py                pfdcp_inv_3v3.sch's device table + CLI entry point
   evidence/
     inv-tb-proof/            committed proof artifacts (gds, netlist, logs, reports)
     floorplan-skeleton/      block-placement skeleton GDS + DRC report (issue #17)
     vco-layout/              VCO ring block real GDS + DRC report (issue #293)
     lock-detector-layout/    lock_detector block GDS + DRC-clean report (issue #296)
+    pfdcp-inv-proof/         PFD/CP devgen methodology proof: GDS + DRC/LVS reports (issue #299)
     work/                    scratch re-run tree (git-ignored)
 ```
 
