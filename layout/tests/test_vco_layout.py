@@ -9,6 +9,13 @@ draw geometry (same convention as ``layout/floorplan/skeleton.py`` /
 footprint/tap-distance helpers) is importable and checkable without a PV
 environment.
 
+The one exception is ``DogBoneMosfetTests``, which exercises the geometry
+``primitives.mosfet()`` actually *draws* and therefore does need
+``klayout.db``. It is gated behind ``@unittest.skipUnless(_HAVE_KLAYOUT, ...)``
+-- the same convention ``test_pfdcp_devgen.py`` uses -- so it skips (never
+errors) in the headless CI job, and this file as a whole keeps its "runs
+without KLayout" contract.
+
     python3 -m unittest discover -s layout/tests -t layout/tests -v
 
 For the actual DRC-clean claim (which *does* need KLayout + the PDK), see
@@ -25,6 +32,13 @@ from pathlib import Path
 LAYOUT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LAYOUT_DIR))
 sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
+
+try:
+    import klayout.db  # noqa: F401
+
+    _HAVE_KLAYOUT = True
+except ImportError:
+    _HAVE_KLAYOUT = False
 
 from floorplan import skeleton  # noqa: E402
 from vco import bias_resistors  # noqa: E402
@@ -694,8 +708,14 @@ class VtoiCoreTapPitchTests(unittest.TestCase):
         self.assertLess(vtoi_core.max_nmos_tap_distance_um(), dev.DRC_TAP_PITCH_MAX_UM / 2.0)
 
 
+@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class DogBoneMosfetTests(unittest.TestCase):
-    """primitives.mosfet()'s min_sd_width_um dog-bone widening."""
+    """primitives.mosfet()'s min_sd_width_um dog-bone widening.
+
+    Needs klayout.db: prim.Canvas() draws real geometry, so unlike the rest
+    of this file these cases cannot run in the headless (no-PDK/no-KLayout)
+    CI job -- same skip guard as test_pfdcp_devgen.py's device-generator
+    tests."""
 
     def test_no_widening_when_min_sd_width_is_none_or_below_w(self):
         # Backward compatibility: every existing caller (min_sd_width_um not
