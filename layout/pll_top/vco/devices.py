@@ -23,13 +23,15 @@ time as ``#293``'s own acceptance-criteria checklist is worked through.
   were the named reason the V-to-I core stayed undrawn -- see
   ``primitives.poly_resistor()``'s own module-level constant block for the
   PDK-generator citation).
-* Still absent, deliberately: the V-to-I core's *transistors*
-  (``MP1``/``MP2``/``MN1``/``MN2``/``MSU1``-``MSU3``/``MPR``/``MD1``/
-  ``MD2``/``MOFF``/``MVI``/``MSUM``) and the inter-sub-block wiring that
-  merges ring + bias generator + mirror + buffer under one shared guard
-  ring -- see ``bias_resistors.py``'s module docstring for why proving the
-  new poly-resistor primitive stayed a standalone slice rather than being
-  folded into a full V-to-I core assembly in the same increment.
+* This increment adds ``VTOI_NMOS_ROW``/``VTOI_PMOS_ROW`` (``vco_bias.sch``'s
+  V-to-I core transistors: ``MP1``/``MP2``/``MN1``/``MN2``/``MSU1``-``MSU3``/
+  ``MPR``/``MD1``/``MD2``/``MOFF``/``MVI``/``MSUM``) -- see
+  ``vtoi_core.py``'s module docstring for the layout.
+* Still absent, deliberately: the inter-sub-block wiring that merges ring +
+  bias generator (resistors + V-to-I core) + mirror + buffer under one
+  shared guard ring, and the combined block's own standalone DRC run --
+  see ``vtoi_core.py``'s module docstring for why that stayed out of scope
+  here.
 """
 
 from __future__ import annotations
@@ -390,3 +392,75 @@ BIAS_R_ROFF = PolyResistor("ROFF", w_um=1.0, l_um=33.0, top_net="NOFF", bottom_n
 BIAS_R_RDEG = PolyResistor("RDEG", w_um=1.0, l_um=33.0, top_net="NVI", bottom_net="GND_VCO")
 
 BIAS_RESISTORS = (BIAS_R_RCG, BIAS_R_ROFF, BIAS_R_RDEG)
+
+
+# ---------------------------------------------------------------------------
+# vco_bias.sch's V-to-I core transistors (XMP1/XMP2/XMN1/XMN2/XMSU1-3/XMPR/
+# XMD1/XMD2/XMOFF/XMVI/XMSUM), read directly off design/netlist/vco.spice.
+# Every device is nf=1 except MSUM (nf=4). vco.sch binds the subckt's own
+# VDD/VSS pins to VDD_VCO/GND_VCO -- same block-boundary-name convention
+# every other table in this module already uses.
+#
+# Topology (see vtoi_core.py's module docstring for the full circuit read):
+# a constant-gm (beta-multiplier) reference (MP1/MN1 diode branch, MP2/MN2
+# degenerated branch via RCG through node NC), a startup detect+kick loop
+# (MSU1/MSU2 detect NA, MSU3 kicks VBPC), a stacked 2*Vgs reference
+# (MPR/MD1/MD2 -> VFIX), and the offset/degenerated V-to-I branches (MOFF+
+# ROFF via NOFF, MVI+RDEG via NVI, gate driven by VCTRL) summed into VBP0 by
+# the diode-connected MSUM -- VBP0 is this core's own output pin, feeding
+# mirror.py's cascade A (devices.CASCADE_A.always_on.gate_net == "VBP0").
+#
+# ``top_net``/``bottom_net`` below follow this module's own row-drawing
+# convention (see ``vtoi_core.py``): for an nfet, ``bottom_net`` is the
+# terminal drawn at the row's bottom (``GND_VCO`` when a device's own source
+# is literally ground, so the generator ties it directly into the substrate
+# ring instead of routing it as a mesh net); for a pfet, ``top_net`` is the
+# terminal drawn at the row's top (``VDD_VCO`` when the source is literally
+# the supply, tied directly into the n-well tap band). Every other terminal
+# -- including a diode-connected device's own gate, which is simply the same
+# net as one of its two S/D terminals -- is routed as an ordinary mesh net.
+#
+# MSU1 is the one exception ``vtoi_core.py`` documents on its own: its gate
+# is tied directly to ``GND_VCO`` (a permanently-on weak pull-up), which is
+# drawn as a direct wire to the guard ring rather than through the mesh --
+# see that module's own docstring for why.
+# ---------------------------------------------------------------------------
+
+# constant-gm (beta-multiplier) reference
+VTOI_MN1 = Fet("MN1", "nfet", w_um=1.4, l_um=1.0, gate_net="NA", top_net="NA", bottom_net="GND_VCO")
+VTOI_MN2 = Fet("MN2", "nfet", w_um=5.6, l_um=1.0, gate_net="NA", top_net="VBPC", bottom_net="NC")
+VTOI_MP1 = Fet("MP1", "pfet", w_um=10.0, l_um=1.0, gate_net="VBPC", top_net="VDD_VCO", bottom_net="NA")
+VTOI_MP2 = Fet("MP2", "pfet", w_um=10.0, l_um=1.0, gate_net="VBPC", top_net="VDD_VCO", bottom_net="VBPC")
+
+# startup detect ("NA" low -> NSU pulled high by MSU1 -> MSU3 kicks VBPC low)
+VTOI_MSU2 = Fet("MSU2", "nfet", w_um=2.0, l_um=1.0, gate_net="NA", top_net="NSU", bottom_net="GND_VCO")
+VTOI_MSU3 = Fet("MSU3", "nfet", w_um=1.0, l_um=1.0, gate_net="NSU", top_net="VBPC", bottom_net="GND_VCO")
+# MSU1's gate ties directly to GND_VCO (always-on weak pull-up) -- see the
+# section docstring above and vtoi_core.py's own note on this device.
+VTOI_MSU1 = Fet("MSU1", "pfet", w_um=0.22, l_um=20.0, gate_net="GND_VCO", top_net="VDD_VCO", bottom_net="NSU")
+
+# 2*Vgs stacked reference (MPR over MD1 over MD2 -> VFIX)
+VTOI_MPR = Fet("MPR", "pfet", w_um=2.5, l_um=1.0, gate_net="VBPC", top_net="VDD_VCO", bottom_net="VFIX")
+VTOI_MD1 = Fet("MD1", "nfet", w_um=2.0, l_um=1.0, gate_net="VFIX", top_net="VFIX", bottom_net="NMD")
+VTOI_MD2 = Fet("MD2", "nfet", w_um=2.0, l_um=1.0, gate_net="NMD", top_net="NMD", bottom_net="GND_VCO")
+
+# offset branch + source-degenerated V-to-I + summing node
+VTOI_MOFF = Fet("MOFF", "nfet", w_um=10.0, l_um=1.0, gate_net="VFIX", top_net="VBP0", bottom_net="NOFF")
+VTOI_MVI = Fet("MVI", "nfet", w_um=10.0, l_um=1.0, gate_net="VCTRL", top_net="VBP0", bottom_net="NVI")
+VTOI_MSUM = Fet("MSUM", "pfet", w_um=60.0, l_um=1.0, gate_net="VBP0", top_net="VDD_VCO", bottom_net="VBP0", nf=4)
+
+# Row placement (left to right) -- vtoi_core.py places these as two flat
+# mesh-routed rows, same convention as mirror.py's PMOS_ROW/NMOS_ROW.
+VTOI_NMOS_ROW = (VTOI_MN1, VTOI_MN2, VTOI_MSU2, VTOI_MSU3, VTOI_MD1, VTOI_MD2, VTOI_MOFF, VTOI_MVI)
+# MSU1 is placed LAST (rightmost) -- vtoi_core.py's own gate-tie-to-ring
+# routing for it relies on the row having no device further right.
+VTOI_PMOS_ROW = (VTOI_MP1, VTOI_MP2, VTOI_MPR, VTOI_MSUM, VTOI_MSU1)
+
+VTOI_ALL_FETS = VTOI_NMOS_ROW + VTOI_PMOS_ROW
+
+VTOI_IN_NET = "VCTRL"  # external control-voltage input pin
+VTOI_OUT_NET = "VBP0"  # summing-node output pin (-> mirror.py's cascade A)
+# Nodes exposed as pins for the future increment that wires this block to
+# bias_resistors.py's own RCG/ROFF/RDEG (whose top_net fields use these
+# exact same names -- see BIAS_RESISTORS above).
+VTOI_RESISTOR_NETS = ("NC", "NOFF", "NVI")

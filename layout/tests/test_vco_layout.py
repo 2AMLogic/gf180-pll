@@ -9,6 +9,13 @@ draw geometry (same convention as ``layout/floorplan/skeleton.py`` /
 footprint/tap-distance helpers) is importable and checkable without a PV
 environment.
 
+The one exception is ``DogBoneMosfetTests``, which exercises the geometry
+``primitives.mosfet()`` actually *draws* and therefore does need
+``klayout.db``. It is gated behind ``@unittest.skipUnless(_HAVE_KLAYOUT, ...)``
+-- the same convention ``test_pfdcp_devgen.py`` uses -- so it skips (never
+errors) in the headless CI job, and this file as a whole keeps its "runs
+without KLayout" contract.
+
     python3 -m unittest discover -s layout/tests -t layout/tests -v
 
 For the actual DRC-clean claim (which *does* need KLayout + the PDK), see
@@ -26,6 +33,13 @@ LAYOUT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LAYOUT_DIR))
 sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
 
+try:
+    import klayout.db  # noqa: F401
+
+    _HAVE_KLAYOUT = True
+except ImportError:
+    _HAVE_KLAYOUT = False
+
 from floorplan import skeleton  # noqa: E402
 from vco import bias_resistors  # noqa: E402
 from vco import buffer as buf  # noqa: E402
@@ -33,6 +47,7 @@ from vco import devices as dev  # noqa: E402
 from vco import mirror  # noqa: E402
 from vco import primitives as prim  # noqa: E402
 from vco import ring  # noqa: E402
+from vco import vtoi_core  # noqa: E402
 
 
 def _contains(outer, inner) -> bool:
@@ -428,26 +443,28 @@ class GridSnapTests(unittest.TestCase):
 
 
 class VcoSubBlockFloorplanTests(unittest.TestCase):
-    """skeleton.py's VCO_RING/VCO_MIRROR/VCO_BUFFER vs. the real generators."""
+    """skeleton.py's VCO_RING/VCO_MIRROR/VCO_BUFFER/VCO_VTOI_CORE vs. the
+    real generators."""
 
     def test_sub_block_footprints_match_their_generators(self):
         for block, footprint in (
             (skeleton.VCO_RING, ring.footprint_um()),
             (skeleton.VCO_MIRROR, mirror.footprint_um()),
             (skeleton.VCO_BUFFER, buf.footprint_um()),
+            (skeleton.VCO_VTOI_CORE, vtoi_core.footprint_um()),
         ):
             x0, y0, x1, y1 = footprint
             self.assertAlmostEqual(block.w, x1 - x0)
             self.assertAlmostEqual(block.h, y1 - y0)
 
-    def test_all_three_sub_blocks_sit_inside_vco_core(self):
-        for block in (skeleton.VCO_RING, skeleton.VCO_MIRROR, skeleton.VCO_BUFFER):
+    def test_all_four_sub_blocks_sit_inside_vco_core(self):
+        for block in (skeleton.VCO_RING, skeleton.VCO_MIRROR, skeleton.VCO_BUFFER, skeleton.VCO_VTOI_CORE):
             self.assertTrue(
                 _contains(skeleton.VCO_CORE, block), f"{block.name} escapes VCO_CORE"
             )
 
-    def test_the_three_real_sub_blocks_do_not_overlap_each_other(self):
-        blocks = (skeleton.VCO_MIRROR, skeleton.VCO_RING, skeleton.VCO_BUFFER)
+    def test_the_four_real_sub_blocks_do_not_overlap_each_other(self):
+        blocks = (skeleton.VCO_MIRROR, skeleton.VCO_RING, skeleton.VCO_BUFFER, skeleton.VCO_VTOI_CORE)
         for i, a in enumerate(blocks):
             for b in blocks[i + 1 :]:
                 overlap = (
@@ -455,16 +472,20 @@ class VcoSubBlockFloorplanTests(unittest.TestCase):
                 )
                 self.assertFalse(overlap, f"{a.name} overlaps {b.name}")
 
-    def test_vco_core_still_fits_the_rom_height(self):
-        # The ROM box's 100 um height survives all three real sub-blocks
-        # stacked; its 140 um width did not (see skeleton.py's docstring).
-        self.assertEqual(skeleton.VCO_CORE.h, 100.0)
+    def test_vco_core_height_now_exceeds_the_rom_estimate(self):
+        # Adding the V-to-I core as a fourth real sub-block is the first
+        # increment where VCO_CORE.h itself has to grow past the 100 um ROM
+        # value -- disclosed explicitly, not silently absorbed (see
+        # skeleton.py's own docstring for the exact before/after numbers).
+        self.assertGreater(skeleton.VCO_CORE.h, 100.0)
         self.assertGreater(skeleton.VCO_CORE.w, 140.0)
 
     def test_area_budget_headroom_is_reported_not_silently_exceeded(self):
-        # PLL-FLOORPLAN.md section 5's draft target is 0.15 mm^2. The real
-        # single-row sub-block widths eat most of it; this test pins the
-        # number so a later increment cannot cross the line unnoticed.
+        # PLL-FLOORPLAN.md section 5's draft target is 0.15 mm^2, measured
+        # against the whole-skeleton bounding box -- which is dominated by
+        # LOOP_FILTER's own 195 um height, not VCO_CORE's, so VCO_CORE.h
+        # growing past 100 um (previous test) does not move this number
+        # (see skeleton.py's own docstring for the arithmetic).
         used = skeleton.total_extent_um2()
         self.assertLess(used, 150_000.0)
         self.assertGreater(used / 150_000.0, 0.9, "budget headroom changed -- re-read skeleton.py")
@@ -546,6 +567,179 @@ class PolyResistorPrimitiveTests(unittest.TestCase):
             - prim.POLY_RES_CONTACT_TO_SAB_UM
         )
         self.assertGreaterEqual(usable, prim.CONTACT_SIZE_UM)
+
+
+class VtoiCoreDeviceTests(unittest.TestCase):
+    """devices.VTOI_* matches design/vco_bias.sch's V-to-I core transistors."""
+
+    def test_thirteen_devices_match_the_frozen_netlist(self):
+        self.assertEqual(len(dev.VTOI_ALL_FETS), 13)
+        by_name = {f.name: f for f in dev.VTOI_ALL_FETS}
+        self.assertEqual(
+            set(by_name),
+            {
+                "MP1", "MP2", "MN1", "MN2", "MSU1", "MSU2", "MSU3",
+                "MPR", "MD1", "MD2", "MOFF", "MVI", "MSUM",
+            },
+        )
+
+    def test_sizes_match_the_frozen_netlist(self):
+        by_name = {f.name: f for f in dev.VTOI_ALL_FETS}
+        expected = {
+            "MP1": ("pfet", 10.0, 1.0),
+            "MP2": ("pfet", 10.0, 1.0),
+            "MN1": ("nfet", 1.4, 1.0),
+            "MN2": ("nfet", 5.6, 1.0),
+            "MSU1": ("pfet", 0.22, 20.0),
+            "MSU2": ("nfet", 2.0, 1.0),
+            "MSU3": ("nfet", 1.0, 1.0),
+            "MPR": ("pfet", 2.5, 1.0),
+            "MD1": ("nfet", 2.0, 1.0),
+            "MD2": ("nfet", 2.0, 1.0),
+            "MOFF": ("nfet", 10.0, 1.0),
+            "MVI": ("nfet", 10.0, 1.0),
+            "MSUM": ("pfet", 60.0, 1.0),
+        }
+        for name, (kind, w, l) in expected.items():
+            f = by_name[name]
+            self.assertEqual(f.kind, kind, name)
+            self.assertAlmostEqual(f.w_um, w, msg=name)
+            self.assertAlmostEqual(f.l_um, l, msg=name)
+
+    def test_msum_is_the_only_multi_finger_device(self):
+        folded = [f.name for f in dev.VTOI_ALL_FETS if f.fingers != 1]
+        self.assertEqual(folded, ["MSUM"])
+        self.assertEqual(dev.VTOI_MSUM.fingers, 4)
+
+    def test_diode_connections_match_the_schematic(self):
+        # MN1, MP2, MD1, MD2, MSUM are all diode-connected (gate == one of
+        # their own S/D terminals).
+        for name in ("MN1", "MP2", "MD1", "MD2", "MSUM"):
+            f = {f.name: f for f in dev.VTOI_ALL_FETS}[name]
+            self.assertIn(f.gate_net, (f.top_net, f.bottom_net), name)
+
+    def test_msu1_gate_ties_to_gnd_and_is_last_in_its_row(self):
+        self.assertEqual(dev.VTOI_MSU1.gate_net, "GND_VCO")
+        self.assertEqual(dev.VTOI_PMOS_ROW[-1].name, "MSU1")
+
+    def test_vbp0_is_the_output_and_feeds_the_mirrors_cascade_a(self):
+        self.assertEqual(dev.VTOI_OUT_NET, "VBP0")
+        self.assertEqual(dev.CASCADE_A.always_on.gate_net, "VBP0")
+
+    def test_resistor_nets_match_bias_resistors_top_nets(self):
+        # NC/NOFF/NVI are shared boundary-pin names with bias_resistors.py's
+        # own RCG/ROFF/RDEG top_net fields -- the future wiring increment
+        # relies on this exact name match.
+        by_top_net = {r.top_net for r in dev.BIAS_RESISTORS}
+        self.assertEqual(set(dev.VTOI_RESISTOR_NETS), by_top_net)
+
+
+class VtoiCorePlanTests(unittest.TestCase):
+    """vtoi_core.py's pure-Python placement/routing plan."""
+
+    def test_every_inter_device_net_has_a_track(self):
+        p = vtoi_core.plan()
+        self.assertEqual(set(p.net_rows) - set(vtoi_core.NET_ORDER), set())
+
+    def test_two_row_nets_get_a_link_column(self):
+        p = vtoi_core.plan()
+        two_row_nets = {n for n, rows in p.net_rows.items() if rows == {"nfet", "pfet"}}
+        self.assertEqual(two_row_nets, {"VBPC", "NA", "NSU", "VFIX", "VBP0"})
+        self.assertEqual(set(p.link_x), two_row_nets)
+
+    def test_single_row_nets_get_no_link_column(self):
+        p = vtoi_core.plan()
+        single_row_nets = {n for n, rows in p.net_rows.items() if len(rows) == 1}
+        self.assertEqual(single_row_nets & set(p.link_x), set())
+
+    def test_msu1_gate_is_excluded_from_the_mesh(self):
+        # GND_VCO is never a mesh-routed net in this block (see
+        # vtoi_core.py's module docstring on MSU1) -- it must not show up in
+        # net_rows even though MSU1.gate_net == "GND_VCO".
+        p = vtoi_core.plan()
+        self.assertNotIn("GND_VCO", p.net_rows)
+        self.assertNotIn("VDD_VCO", p.net_rows)
+
+    def test_footprint_has_positive_extent(self):
+        x0, y0, x1, y1 = vtoi_core.footprint_um()
+        self.assertGreater(x1 - x0, 0.0)
+        self.assertGreater(y1 - y0, 0.0)
+
+    def test_msum_footprint_accounts_for_all_four_fingers(self):
+        w = vtoi_core.item_width_um(dev.VTOI_MSUM)
+        finger_w = dev.VTOI_MSUM.finger_w_um
+        expected = 4 * finger_w + 3 * vtoi_core.FINGER_GAP_UM
+        self.assertAlmostEqual(w, expected)
+
+    def test_msu1_footprint_is_dog_bone_widened(self):
+        # MSU1's own w=0.22 um is narrower than primitives.MIN_SD_CONTACT_
+        # WIDTH_UM (0.42 um) -- item_width_um() must report the widened
+        # footprint, not the raw schematic W, or the row-placement math
+        # would understate this device's real drawn extent.
+        w = vtoi_core.item_width_um(dev.VTOI_MSU1)
+        self.assertAlmostEqual(w, prim.MIN_SD_CONTACT_WIDTH_UM)
+        self.assertGreater(prim.MIN_SD_CONTACT_WIDTH_UM, dev.VTOI_MSU1.w_um)
+
+
+class VtoiCoreTapPitchTests(unittest.TestCase):
+    """Test plan edge case: guard-ring tap pitch <= 15 um everywhere,
+    including across MSU1's own L=20 um channel (the block's tallest
+    device, per vtoi_core.py's own note on why this block needs a top AND
+    a bottom n-well tap band)."""
+
+    def test_pmos_devices_are_within_the_drc_tap_pitch_bound(self):
+        d = vtoi_core.max_pmos_tap_distance_um()
+        self.assertGreater(d, 0.0)
+        self.assertLessEqual(d, dev.DRC_TAP_PITCH_MAX_UM)
+
+    def test_nmos_devices_are_within_the_drc_tap_pitch_bound(self):
+        d = vtoi_core.max_nmos_tap_distance_um()
+        self.assertGreater(d, 0.0)
+        self.assertLessEqual(d, dev.DRC_TAP_PITCH_MAX_UM)
+
+    def test_pmos_tap_pitch_has_real_margin_not_just_barely_under(self):
+        # MSU1's own L=20 um channel dominates this block's PMOS row height,
+        # so the margin here is real but smaller than the other VCO
+        # sub-blocks' own < 7.5 um convention -- 12.1 um is still well clear
+        # of the 15 um bound, not a rounding-error pass.
+        self.assertLess(vtoi_core.max_pmos_tap_distance_um(), 13.0)
+
+    def test_nmos_tap_pitch_has_real_margin_not_just_barely_under(self):
+        self.assertLess(vtoi_core.max_nmos_tap_distance_um(), dev.DRC_TAP_PITCH_MAX_UM / 2.0)
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+class DogBoneMosfetTests(unittest.TestCase):
+    """primitives.mosfet()'s min_sd_width_um dog-bone widening.
+
+    Needs klayout.db: prim.Canvas() draws real geometry, so unlike the rest
+    of this file these cases cannot run in the headless (no-PDK/no-KLayout)
+    CI job -- same skip guard as test_pfdcp_devgen.py's device-generator
+    tests."""
+
+    def test_no_widening_when_min_sd_width_is_none_or_below_w(self):
+        # Backward compatibility: every existing caller (min_sd_width_um not
+        # passed) must draw exactly the same single-rectangle comp as before.
+        for min_sd in (None, 1.0):
+            canvas = prim.Canvas(f"dogbone_test_{min_sd}")
+            fet = dev.Fet("T", "nfet", w_um=2.0, l_um=0.28, gate_net="G", top_net="D", bottom_net="S")
+            ports = prim.mosfet(canvas, fet, 0.0, 0.0, min_sd_width_um=min_sd)
+            self.assertAlmostEqual(ports.x1 - ports.x0, 2.0)
+
+    def test_widening_reports_the_widened_footprint(self):
+        canvas = prim.Canvas("dogbone_test_widen")
+        fet = dev.VTOI_MSU1
+        ports = prim.mosfet(
+            canvas, fet, 0.0, 0.0, sd_overhang=1.5, min_sd_width_um=prim.MIN_SD_CONTACT_WIDTH_UM
+        )
+        # Overall footprint is the widened S/D extent, not the raw (narrower) W.
+        self.assertAlmostEqual(ports.x1 - ports.x0, prim.MIN_SD_CONTACT_WIDTH_UM)
+        self.assertGreater(prim.MIN_SD_CONTACT_WIDTH_UM, fet.w_um)
+        # The channel is centered within the widened footprint, so the gate
+        # contact tab's own centre sits close to the footprint's own centre
+        # (offset only by the tab's fixed geometry, not by W).
+        footprint_centre = (ports.x0 + ports.x1) / 2.0
+        self.assertLess(abs(ports.gate_tab_x_center - footprint_centre), 1.0)
 
 
 if __name__ == "__main__":

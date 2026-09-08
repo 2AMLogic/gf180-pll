@@ -109,6 +109,23 @@ VIA1_METAL_ENCLOSE_UM = 0.09  # V1.3a/V1.4a need only >= 0; 0.09 also keeps the
 METAL2_WIRE_WIDTH_UM = 0.44  # >= M2.1's 0.28 min AND >= the 0.34 um V1.4b
 # threshold, so every metal2 track is wide enough to land a via1 anywhere
 # along it without a separately-grown pad.
+MIN_SD_CONTACT_WIDTH_UM = CONTACT_SIZE_UM + 2 * CONTACT_ROW_MARGIN_UM  # 0.42;
+# the narrowest S/D comp island ``mosfet()`` can drop a contact into using
+# CONTACT_ROW_MARGIN_UM's own margin on both sides -- a device narrower than
+# this (``vtoi_core.py``'s ``MSU1``, ``w=0.22 um``) needs ``mosfet()``'s
+# ``min_sd_width_um`` dog-bone widening (see that parameter's own docstring)
+# or its S/D contact falls outside CO.4's 0.07 um comp-overlap-of-contact
+# minimum -- a real violation this generator hit, not a hypothetical one.
+DOG_BONE_SETBACK_UM = 0.5  # keeps the dog-bone's wide-to-narrow comp step
+# well clear of the gate poly's own y1/y2 boundary (comfortably above
+# PL.5a_LV/PL.5b_LV's 0.1 um field-poly-to-comp minimum). Without this
+# setback the comp step lands exactly where the gate bar's own endcap
+# flanks (poly beyond the *channel*'s narrow width, which is legitimately
+# "field poly" there) sit directly adjacent to the *wide* S/D comp just
+# below/above -- a real PL.5a_LV/PL.5b_LV violation this generator hit, not
+# a hypothetical one (the gate bar's endcap extends POLY_ENDCAP_UM=0.65 um
+# past the channel on each side, which is wider than most dog-boned
+# devices' own S/D widening, so the endcap flank oversails the step).
 METAL1_WIRE_WIDTH_UM = 0.28  # > M1.1's 0.23 min; also narrow enough that the
 # VDD_VCO/GND_VCO and VBP/VBN rail pair (each stage's own S/D-to-gate
 # spacing apart -- see stage.py) stay M1.2a-legal (>= 0.23 um) from each
@@ -287,13 +304,15 @@ def mosfet(
     *,
     w_um: float | None = None,
     sd_overhang: float | None = None,
+    min_sd_width_um: float | None = None,
 ) -> MosfetPorts:
     """Draw one vertical-current-flow ``nfet_03v3``/``pfet_03v3`` instance.
 
-    ``x0`` is the transistor's comp left edge (column-left-aligned, so every
-    stage fet's gate contact tab lands at the same x regardless of ``w`` --
-    see the module docstring). ``y_bottom`` is the bottom terminal comp's
-    bottom edge. Returns the Metal1 pad geometry the caller wires up.
+    ``x0`` is the transistor's own **overall footprint's** left edge
+    (column-left-aligned, so every stage fet's gate contact tab lands at the
+    same x regardless of ``w`` -- see the module docstring). ``y_bottom`` is
+    the bottom terminal comp's bottom edge. Returns the Metal1 pad geometry
+    the caller wires up.
 
     ``w_um`` overrides ``fet.w_um`` -- used to draw **one finger** of a
     multi-finger device (``fet.finger_w_um``); the caller is responsible for
@@ -305,30 +324,66 @@ def mosfet(
     corridor beside the gate contact tab -- ``mirror.py`` needs exactly that
     to get two gate buses across a common-centroid array without shorting
     them to the array's own source/drain buses.
+
+    ``min_sd_width_um`` draws a **dog-bone**: the channel (gate) region stays
+    exactly ``w`` wide (so W is unchanged), but the two S/D comp islands
+    widen -- symmetrically about the same centerline -- to
+    ``max(w, min_sd_width_um)``. A device narrower than
+    ``MIN_SD_CONTACT_WIDTH_UM`` cannot otherwise drop a legal S/D contact at
+    all: ``vtoi_core.py``'s ``MSU1`` (``w=0.22 um``, a deliberately narrow
+    always-on weak pull-up) is the first device this repo has drawn that
+    needs it -- with no widening, ``_contact_positions()``'s own "span
+    narrower than one contact" fallback centers a full-size contact in a
+    comp island too narrow to enclose it, a real ``CO.4`` (comp overlap of
+    contact, 0.07 um min) violation this generator hit, not a hypothetical
+    one. When ``min_sd_width_um`` is ``None`` or ``<= w``, this reduces to
+    exactly the single-rectangle comp this function has always drawn (the
+    dog-bone's S/D width equals its channel width, i.e. no dog-bone at all)
+    -- fully backward compatible with every existing caller.
     """
     w = fet.w_um if w_um is None else w_um
     l = fet.l_um
     sd = SD_OVERHANG_UM if sd_overhang is None else sd_overhang
+    sd_w = w if min_sd_width_um is None else max(w, min_sd_width_um)
     comp_layer = "comp"
     implant_layer = "pplus" if fet.kind == "pfet" else "nplus"
 
-    x1 = x0 + w
+    # Channel (gate) region is centered within the (possibly wider) overall
+    # footprint, so W stays exactly ``w`` regardless of ``sd_w``.
+    x_center = x0 + sd_w / 2.0
+    ch_x0 = x_center - w / 2.0
+    ch_x1 = x_center + w / 2.0
+    sd_x0 = x0
+    sd_x1 = x0 + sd_w
+    x1 = sd_x1  # overall footprint right edge
 
     y1 = y_bottom + sd  # bottom terminal comp top edge / gate bottom edge
     y2 = y1 + l  # gate top edge / top terminal comp bottom edge
     y3 = y2 + sd  # top terminal comp top edge
 
-    # --- comp: ONE continuous active rectangle from the bottom terminal to
-    # the top terminal -- the channel region (y1..y2, under the gate) has to
-    # be real comp too, or the gate poly there is not "tgate" (poly-over-comp)
+    # --- comp: ONE continuous active island from the bottom terminal to the
+    # top terminal -- the channel region (y1..y2, under the gate) has to be
+    # real comp too, or the gate poly there is not "tgate" (poly-over-comp)
     # at all, just isolated field poly next to the S/D islands (which is
     # exactly the PL.5a/PL.5b violation this generator hit on its first DRC
-    # pass -- see the module docstring's DRC-iteration note). ---
-    canvas.rect(comp_layer, x0, y_bottom, x1, y3)
+    # pass -- see the module docstring's DRC-iteration note). When
+    # ``sd_w > w`` this is drawn as three stacked rectangles (the dog-bone:
+    # wide S/D, narrow channel, wide S/D) instead of one -- a concave step
+    # in comp width has no DRC rule against it in this deck (every DF rule is
+    # a width/spacing/enclosure check, not a corner-shape constraint). ---
+    if sd_w > w:
+        narrow_y0 = y1 - DOG_BONE_SETBACK_UM
+        narrow_y1 = y2 + DOG_BONE_SETBACK_UM
+        canvas.rect(comp_layer, sd_x0, y_bottom, sd_x1, narrow_y0)
+        canvas.rect(comp_layer, ch_x0, narrow_y0, ch_x1, narrow_y1)
+        canvas.rect(comp_layer, sd_x0, narrow_y1, sd_x1, y3)
+    else:
+        canvas.rect(comp_layer, sd_x0, y_bottom, sd_x1, y3)
 
-    # --- poly2 gate bar + contact tab ---
-    gate_x0 = x0 - POLY_ENDCAP_UM
-    gate_x1 = x1 + POLY_ENDCAP_UM
+    # --- poly2 gate bar + contact tab -- always sized off the *channel*
+    # width, never the (possibly wider) S/D dog-bone. ---
+    gate_x0 = ch_x0 - POLY_ENDCAP_UM
+    gate_x1 = ch_x1 + POLY_ENDCAP_UM
     canvas.rect("poly2", gate_x0, y1, gate_x1, y2)
 
     gate_y_center = (y1 + y2) / 2.0
@@ -360,7 +415,7 @@ def mosfet(
     # edge, so CO.7's 0.15 um contact-to-gate-poly space is satisfied by
     # SD_OVERHANG_UM (0.5) - CONTACT_ROW_MARGIN_UM (0.1) - CONTACT_SIZE_UM (0.22). ---
     def _terminal_pad(y_outer_edge: float, *, outer_is_max: bool) -> tuple[float, float, float, float]:
-        xs = _contact_positions(x0, x1)
+        xs = _contact_positions(sd_x0, sd_x1)
         if outer_is_max:
             cy1 = y_outer_edge - CONTACT_ROW_MARGIN_UM
             cy0 = cy1 - CONTACT_SIZE_UM
@@ -384,9 +439,9 @@ def mosfet(
     # see devices.py's DRC_IMPLANT_* constants) ---
     canvas.rect(
         implant_layer,
-        x0 - IMPLANT_MARGIN_UM,
+        sd_x0 - IMPLANT_MARGIN_UM,
         y_bottom - IMPLANT_MARGIN_UM,
-        x1 + IMPLANT_MARGIN_UM,
+        sd_x1 + IMPLANT_MARGIN_UM,
         y3 + IMPLANT_MARGIN_UM,
     )
 
