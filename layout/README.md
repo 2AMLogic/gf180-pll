@@ -45,6 +45,8 @@ layout/
       ring.py                    assembles the 5-stage ring + guard ring + decap; CLI entry point
       buffer.py                  the 3-stage tapered output buffer; CLI entry point
       mirror.py                  the common-centroid 3-cascade band-select mirror; CLI entry point
+      bias_resistors.py          the bias generator's RCG/ROFF/RDEG ppolyf_u_3k poly resistors
+      vtoi_core.py               the bias generator's 13-transistor V-to-I core; CLI entry point
     lock_detector/            real transistor-level lock_detector block layout (issue #296)
       devices.py                 Fet parameter tables, transcribed from design/netlist/lock_detector.spice
       primitives.py               hand-drawn nfet_03v3/pfet_03v3 geometry primitives + net routing
@@ -57,7 +59,8 @@ layout/
     inv-tb-proof/            committed proof artifacts (gds, netlist, logs, reports)
     floorplan-skeleton/      block-placement skeleton GDS + DRC report (issue #17)
     vco-layout/              VCO sub-block real GDS + DRC reports (issue #293)
-                             PROOF.md = ring; PROOF-mirror-buffer.md = mirror + buffer
+                             PROOF.md = ring; PROOF-mirror-buffer.md = mirror + buffer;
+                             PROOF-bias-resistors.md = RCG/ROFF/RDEG; PROOF-vtoi-core.md = V-to-I core
     lock-detector-layout/    lock_detector block GDS + DRC-clean report (issue #296)
     pfdcp-inv-proof/         PFD/CP devgen methodology proof: GDS + DRC/LVS reports (issue #299)
     work/                    scratch re-run tree (git-ignored)

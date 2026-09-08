@@ -32,8 +32,8 @@ estimate from that record's area-budget table, midpoint of the stated range.
 VCO sub-block real geometry (issue #293)
 -----------------------------------------
 ``layout/pll_top/vco/`` now draws real, DRC-clean transistor-level layout for
-three of the VCO's four sub-blocks, each with its own dedicated guard ring
-and each provable standalone:
+all four of the VCO's sub-blocks, each with its own dedicated guard ring and
+each provable standalone:
 
 ===================  ==============================  ====================
 Block                Generator                       Real footprint (um)
@@ -41,33 +41,48 @@ Block                Generator                       Real footprint (um)
 ``VCO_RING``         ``vco/ring.py``                 177.4 x 18.7
 ``VCO_MIRROR``       ``vco/mirror.py``               269.9 x 37.1
 ``VCO_BUFFER``       ``vco/buffer.py``               31.7 x 13.3
+``VCO_VTOI_CORE``    ``vco/vtoi_core.py``            121.2 x 50.7
 ===================  ==============================  ====================
+
+(``vco/bias_resistors.py``'s ``RCG``/``ROFF``/``RDEG`` trio, 13.0 x 40.3 um,
+is drawn as a fifth standalone block but not yet folded into this skeleton --
+see that module's own docstring for why: it is one piece of the bias
+generator, not a complete sub-block, until it is wired to ``VCO_VTOI_CORE``'s
+own ``NC``/``NOFF``/``NVI`` pins.)
 
 Each footprint comes from that module's plain-Python ``footprint_um()``, so
 this file still imports no KLayout. They **augment** ``VCO_CORE`` rather than
-replacing it: the bias generator's V-to-I core (which needs a poly-resistor
-generator, see ``vco/mirror.py``'s docstring) is still un-drawn, and the
-inter-sub-block wiring that will merge these three under one shared guard
-ring is a later increment.
+replacing it: the inter-sub-block wiring that will merge all of these (plus
+``bias_resistors.py``) under one shared guard ring, and the combined block's
+own standalone DRC run, are issue #293's own remaining scope.
 
 **Real footprints deviate from the 140x100 um ROM estimate, disclosed
-explicitly rather than silently absorbed.** Every one of the three is much
-*wider* and much *shorter* than the square ROM guess, for the same reason:
-these are single-row full-custom layouts, each transistor its own diffusion
-island wired by Metal1 (see ``vco/primitives.py``'s module docstring), so a
-block that the ROM budget imagined as a compact square comes out as a long
-thin band. ``VCO_CORE.w`` is widened here to the widest of them plus
-clearance -- 140 -> ~280 um, driven by the band-select mirror -- while
-``VCO_CORE.h`` stays at the ROM value, which still comfortably contains all
-three stacked (~89 of 100 um used).
+explicitly rather than silently absorbed.** Every one of the four is much
+*wider* than the square ROM guess, for the same reason: these are
+single-row full-custom layouts, each transistor its own diffusion island
+wired by Metal1 (see ``vco/primitives.py``'s module docstring), so a block
+that the ROM budget imagined as a compact square comes out as a long thin
+band. ``VCO_CORE.w`` is widened here to the widest of them plus clearance --
+140 -> ~280 um, still driven by the band-select mirror -- while
+``VCO_CORE.h`` grows past the ROM's 100 um value for the first time: four
+real sub-blocks stacked with margin no longer fit in it (the V-to-I core's
+own 50.7 um height, driven by ``MSU1``'s deliberately long L=20 um channel,
+is the largest single addition -- see ``vtoi_core.py``'s own module
+docstring).
 
-**Consequence worth stating plainly**: at 280 um wide, the VCO block pushes
-``total_extent_um2()`` to roughly 97% of PLL-FLOORPLAN.md section 5's
-0.15 mm^2 draft target. That is a real result, not slack -- folding these
-single-row blocks into multiple rows is the identified next area
-optimization, and the remaining un-drawn V-to-I core has to fit in what is
-left. This record deliberately reports the number rather than quietly
-re-baselining the target.
+**Consequence worth stating plainly**: ``VCO_CORE``'s *own* rectangle grows
+from 27,986 um^2 (279.86 x 100 um, three sub-blocks) to 40,514 um^2
+(279.86 x 144.78 um, four), a ~45% increase driven almost entirely by the
+V-to-I core's height. ``total_extent_um2()`` itself does **not** move
+(145,247.7 um^2 either way) -- the whole-skeleton bounding box this
+function reports is dominated by ``LOOP_FILTER``'s own 195 um height, not
+``VCO_CORE``'s, so this growth has not yet crossed PLL-FLOORPLAN.md
+section 5's 0.15 mm^2 draft target at the *skeleton* level. It is real
+headroom being consumed at the *block* level, though: folding these
+single-row blocks into multiple rows (the previously identified next area
+optimization) becomes relevant sooner, since ``VCO_CORE``'s own height has
+room only up to ``LOOP_FILTER.h`` (195 um) before it, rather than
+``LOOP_FILTER``, becomes the skeleton's own height driver.
 """
 
 from __future__ import annotations
@@ -85,6 +100,7 @@ if str(_PLL_TOP_DIR) not in sys.path:
 from vco import buffer as vco_buffer  # noqa: E402
 from vco import mirror as vco_mirror  # noqa: E402
 from vco import ring as vco_ring  # noqa: E402
+from vco import vtoi_core as vco_vtoi_core  # noqa: E402
 
 TOP_CELL = "pll_floorplan_skeleton"
 BOUNDARY_LAYER = (0, 0)  # DIEAREA -- no DRC rule references this layer.
@@ -129,6 +145,7 @@ def _extent(footprint) -> tuple[float, float]:
 VCO_RING_W, VCO_RING_H = _extent(vco_ring.footprint_um())
 VCO_MIRROR_W, VCO_MIRROR_H = _extent(vco_mirror.footprint_um())
 VCO_BUFFER_W, VCO_BUFFER_H = _extent(vco_buffer.footprint_um())
+VCO_VTOI_CORE_W, VCO_VTOI_CORE_H = _extent(vco_vtoi_core.footprint_um())
 
 VCO_SUB_MARGIN = 5.0  # clearance from the VCO block edge, and between sub-blocks
 
@@ -136,17 +153,32 @@ VCO_CORE = Block(
     "vco",
     x=LOOP_FILTER.x + LOOP_FILTER.w + DOMAIN_SPACING,
     y=0.0,
-    w=max(140.0, max(VCO_RING_W, VCO_MIRROR_W, VCO_BUFFER_W) + 2 * VCO_SUB_MARGIN),
-    h=100.0,
+    w=max(140.0, max(VCO_RING_W, VCO_MIRROR_W, VCO_BUFFER_W, VCO_VTOI_CORE_W) + 2 * VCO_SUB_MARGIN),
+    # Four real sub-blocks stacked with margin no longer fit the ROM's
+    # 100 um height -- see this module's own docstring for the disclosed
+    # deviation (VCO_VTOI_CORE_H's own 50.7 um, driven by MSU1's L=20 um
+    # channel, is the largest single addition).
+    h=max(
+        100.0,
+        VCO_MIRROR_H + VCO_RING_H + VCO_BUFFER_H + VCO_VTOI_CORE_H + 5 * VCO_SUB_MARGIN,
+    ),
 )
-# Stacked bottom to top in signal order: the bias/band-select mirror feeds the
-# ring's VBP/VBN, and the ring's own Y5 feeds the output buffer. Each is a
-# separately guard-ringed, standalone-DRC-clean block today; merging them
-# under one ring is a later increment of #293.
+# Stacked bottom to top in signal order: the V-to-I core feeds the
+# band-select mirror's VBP0 input, the mirror feeds the ring's VBP/VBN, and
+# the ring's own Y5 feeds the output buffer. Each is a separately
+# guard-ringed, standalone-DRC-clean block today; merging them under one
+# ring is a later increment of #293.
+VCO_VTOI_CORE = Block(
+    "vco.vtoi_core",
+    x=VCO_CORE.x + VCO_SUB_MARGIN,
+    y=VCO_CORE.y + VCO_SUB_MARGIN,
+    w=VCO_VTOI_CORE_W,
+    h=VCO_VTOI_CORE_H,
+)
 VCO_MIRROR = Block(
     "vco.bandsel_mirror",
     x=VCO_CORE.x + VCO_SUB_MARGIN,
-    y=VCO_CORE.y + VCO_SUB_MARGIN,
+    y=VCO_VTOI_CORE.y + VCO_VTOI_CORE.h + VCO_SUB_MARGIN,
     w=VCO_MIRROR_W,
     h=VCO_MIRROR_H,
 )
@@ -258,6 +290,7 @@ SUB_BLOCKS = (
     VCO_MIRROR,
     VCO_RING,
     VCO_BUFFER,
+    VCO_VTOI_CORE,
 )
 
 
