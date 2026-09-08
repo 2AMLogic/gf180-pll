@@ -21,6 +21,16 @@ PFD/CP leaf cell (`pfdcp_inv_3v3`) — see `layout/evidence/pfdcp-inv-proof/PROO
 for the DRC/LVS-clean proof and why it draws geometry directly against
 `klayout.db` rather than through `klt gen`/`klt gen-compose` (a genuine,
 filed capability gap, not a preference).
+`layout/pll_top/divider_chain/` (issue #295/#306) is a third, independent
+full-custom leaf-cell family: a sibling `devgen.py`, reused/generalized from
+`pfd_cp/devgen.py`, proved out on two representative leaf cells —
+`inv_3v3` (a static CMOS inverter) and `tgate_3v3` (a complementary
+transmission gate, the pass-device topology neither sibling family covers)
+— see `layout/evidence/divider-inv-proof/PROOF.md` and
+`layout/evidence/divider-tgate-proof/PROOF.md`. The transmission gate
+needed two real generalizations beyond `pfd_cp/devgen.py`'s original API
+(`Device.body_net`, `build_stack_cell()`'s `bypass_nets`) — both docstrings
+document the concrete DRC/LVS failures that motivated each one.
 
 ```
 layout/
@@ -53,6 +63,11 @@ layout/
     pfd_cp/                   the PFD/CP block family (issue #294/#299)
       devgen.py                  reusable device-list -> DRC-clean leaf-cell generator
       pfdcp_inv.py                pfdcp_inv_3v3.sch's device table + CLI entry point
+    divider_chain/            the divider_chain block family (issue #295/#306)
+      devgen.py                  reusable device-list -> DRC-clean leaf-cell generator
+                                  (reused/generalized from pfd_cp/devgen.py)
+      inv_3v3.py                  inv_3v3.sch's device table + CLI entry point
+      tgate_3v3.py                tgate_3v3.sch's device table + CLI entry point
   evidence/
     inv-tb-proof/            committed proof artifacts (gds, netlist, logs, reports)
     floorplan-skeleton/      block-placement skeleton GDS + DRC report (issue #17)
@@ -60,6 +75,8 @@ layout/
                              PROOF.md = ring; PROOF-mirror-buffer.md = mirror + buffer
     lock-detector-layout/    lock_detector block GDS + DRC-clean report (issue #296)
     pfdcp-inv-proof/         PFD/CP devgen methodology proof: GDS + DRC/LVS reports (issue #299)
+    divider-inv-proof/       divider_chain inv_3v3 devgen proof: GDS + DRC/LVS reports (issue #306)
+    divider-tgate-proof/     divider_chain tgate_3v3 devgen proof: GDS + DRC/LVS reports (issue #306)
     work/                    scratch re-run tree (git-ignored)
 ```
 

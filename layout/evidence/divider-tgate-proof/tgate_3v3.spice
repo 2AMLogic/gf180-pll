@@ -1,0 +1,14 @@
+* Reference schematic for tgate_3v3 (issue #306).
+*
+* Hand-written independently of the layout -- see
+* layout/harness/cell.py's docstring for why. Device sizes/nodes match
+* design/tgate_3v3.sch exactly.
+*
+* Run LVS with --lvs_sub=VSS (layout/run_pv.py's own default): the NMOS
+* body ties to the deck's synthesized global substrate net, which this
+* flag names VSS -- see layout/README.md's "substrate-net gotcha".
+
+.subckt tgate_3v3 A Y GN GP VDD VSS
+M_MP Y GP A VDD pfet_03v3 W=2.5u L=0.28u
+M_MN Y GN A VSS nfet_03v3 W=1u L=0.28u
+.ends
