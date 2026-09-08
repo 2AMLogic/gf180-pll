@@ -293,29 +293,32 @@ exists; treat every non-loop-filter row as bounded, not exact.
 | VCO (ring + bias + band mirror + buffer + decap) | Decap real (5,000 µm², `vco.sch`); active-device W×L sum from `design/README.md`'s stated sizes; ROM matching/routing multiplier | ≈900–1,600 µm² devices + 5,000 µm² decap | ×3–5 on devices (common-centroid mirror legs, guard-ring tap coverage per §1) | **≈0.011–0.017 mm²** |
 | PFD + charge pump (incl. `cp_dumpbuf`) | ROM from device count/sizes in `design/README.md` (~100 devices, mostly minimum-size logic + ~12 wider CP/OTA devices) | ≈3,000–3,600 µm² | ×3–5 (CP common-centroid arrays, dump-buffer isolated n-well per §4, PFD mirror symmetry) | **≈0.010–0.020 mm²** |
 | Divider chain + lock detector | ROM, std-cell-row-style estimate (~94 unit-gate-equivalents at `layout/harness/cell.py`'s proven 9-track pitch class, scaled ×1.5–2 for the hand-drawn 3.3 V cells vs. the denser 5 V0 std-cell family) | ≈1,900–2,600 µm² | ×2 (digital routing/channel overhead) | **≈0.0038–0.0052 mm²** |
-| **Subtotal (blocks, midpoint of ranges)** | | | | **≈0.066 mm²** |
-| **+ top-level overhead** (VCO guard ring, four-domain supply trunk routing, block-to-block spacing) | ROM | | ×1.25 | **≈0.083 mm²** |
-| **Total estimate, midpoint** | | | | **≈0.083 mm²** |
-| **Total estimate, conservative (high end of every range)** | | | | **≈0.098 mm²** |
+| **Subtotal (blocks, midpoint of ranges)** | | | | **≈0.0704 mm²** |
+| **+ top-level overhead** (VCO guard ring, four-domain supply trunk routing, block-to-block spacing) | ROM | | ×1.25 | **≈0.088 mm²** |
+| **Total estimate, midpoint** | | | | **≈0.088 mm²** |
+| **Total estimate, conservative (high end of every range)** | | | | **≈0.099 mm²** |
 
 *Overhead multiplier = (guard ring + well/substrate spacing + local
 interconnect) / active-device area, applied per block before the top-level
-pass.
+pass. Subtotal = 0.0369 (loop filter) + 0.014 (VCO midpoint) + 0.015 (PFD+CP
+midpoint) + 0.0045 (divider+lock midpoint) mm²; conservative = 0.0369 + 0.017
++ 0.020 + 0.0052 mm², both ×1.25 for top-level overhead.
 
 **Against the draft < 0.15 mm² (150,000 µm²) target: PASS at both the
-midpoint (≈0.083 mm², ≈45 % margin) and the conservative high-end estimate
-(≈0.098 mm², ≈35 % margin).** The loop filter alone (the only fully-pinned
+midpoint (≈0.088 mm², ≈41 % margin) and the conservative high-end estimate
+(≈0.099 mm², ≈34 % margin).** The loop filter alone (the only fully-pinned
 number) is ≈20 % of budget on its own, matching DR-006's own statement almost
 exactly (DR-006: "≈0.030 mm² total, ~20 % of budget" for C1 alone; this
 record's 0.0369 mm² for the whole R+C1+C2 cluster is ≈24.6 % of budget). The
-margin above the loop filter (≈0.11–0.13 mm² for everything else) is
-comfortable against the ROM estimates for the remaining four blocks, but
+headroom above the loop filter (0.15 − 0.0369 ≈ 0.113 mm² available for
+everything else) comfortably covers the conservative ROM estimate's own
+remaining-block total (≈0.062 mm², §5's three ROM rows plus overhead), but
 **this is not a signoff number** — it does not include extraction parasitics,
 real transistor-level layout for the VCO/PFD-CP/divider blocks, or pad-ring
 area, and the biggest single lever on it (the VCO/CP matching-overhead
 multipliers) is a ROM guess, not a measurement. **Fail-loud condition for a
 future pass**: if real per-block layout pushes the conservative estimate's
-≈35 % margin below zero, that is a budget overrun this record's own
+≈34 % margin below zero, that is a budget overrun this record's own
 methodology predicts is plausible (the ROM ranges above already span a
 factor of ~1.4–1.5×), not a surprise — the next floorplan revision should
 state the overrun explicitly rather than silently rounding the total down.
