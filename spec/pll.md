@@ -85,7 +85,7 @@ are at risk. Nothing in this repository has been fabricated or measured.
 | 2 | [Reference input](#reference-input) | 1 – 25 MHz, CMOS square wave, rising-edge triggered, duty 30–70 % | n/a — interface contract; the electrical limits are conditions on the driving system, not PVT-varying outputs | **budget** (levels/edge rate); range is **measured** as an operating condition of rows 8/9 |
 | 3 | [Multiplication ratio](#multiplication-ratio) | N = 4 – 64, every integer, static configuration | retiming setup `ss`/125 °C/2.97 V at N = 64, 200 MHz (6.1 % of a VCO period) | **measured** |
 | 4 | [Integrated RMS jitter](#integrated-rms-jitter) | **not spec'd** — derived-only (DR-002 Decision 5) | n/a — deliberately unspecified; see the section for why this is visible rather than silent | **n/a** |
-| 5 | [Period jitter](#period-jitter) | ≤ 1.0 % of the output period, RMS, **conditional on ≤ 20 mV pp `vdd_vco` ripple** | `all-slow`/−40 °C/2.97 V, band 5 (2.51 % RMS at 100 mV pp ripple, open-loop) | **measured** (sensitivity); **derived** (the ripple condition) |
+| 5 | [Period jitter](#period-jitter) | ≤ 1.0 % of the output period, RMS, **conditional on ≤ 20 mV pp `vdd_vco` ripple** | `all-slow`/−40 °C/2.97 V, band 5 (2.51 % RMS at 100 mV pp ripple, open-loop); closed-loop deterministic jitter measured at all 45 mandated PVT corners, 0.0508–0.2691 % RMS, PASS at every corner (`sim/period-jitter/`, #13) | **measured** (sensitivity); **derived** (the ripple condition) |
 | 6 | [Phase noise](#phase-noise) | **not spec'd** — derived-only (DR-002 Decision 5) | n/a — deliberately unspecified | **n/a** |
 | 7 | [Reference spur](#reference-spur) | ≤ −55 dBc | measured worst −57.0 dBc at f_out = 150 MHz (`sf`/−40 °C/2.97 V), i.e. −54.5 dBc scaled to 200 MHz; derived worst case −61 dBc at 200 MHz | **measured** (5 spanning corners, 150 MHz); **budget** (the 200 MHz binding point and the other 40 corners — see [Verification owed](#verification-owed)) |
 | 8 | [Loop bandwidth](#loop-bandwidth) | f_c = 26 – 430 kHz over the ratified space, with `f_c < f_ref/10` as a hard ceiling | min 25.96 kHz at f_ref = 1 MHz / 4 legs; max 429.5 kHz at f_ref = 25 MHz / 1 leg; worst realized ratio `f_ref/13` | **measured** |
@@ -357,10 +357,20 @@ runs the measured/predicted ratio spans 1.22 … 2.29 (median 1.45), because
 ### Limits of the present evidence
 
 Open-loop, deterministic disturbances only, schematic-level, ideal supply
-network. **No closed-loop and no random-jitter number exists** — that is #13's
-campaign, and DR-002 Decision 5 is explicitly `proposed` until it runs. The
-band sweep (1.18 % at B0 rising to 2.46 % at B6, as a fraction of the period)
-was taken at nominal temperature and supply only.
+network, for the ripple-sensitivity figure above. **The closed-loop
+deterministic component is now measured** — `sim/period-jitter/` holds six
+merged records (`20260905-192724-a2ba48f` through `20260906-095050-3a8a6ef`,
+#13) covering all 45 mandated PVT corners, the full temperature × supply
+plane at every MOS bundle: 0.0508–0.2691 % RMS, PASS against the draft
+target at every corner (see `sim/CHARACTERIZATION.md`'s `period-jitter`
+row). **No random (noise-driven) jitter number exists** — every record's
+Methodology field discloses that DR-002 Decision 5's specified
+transient-noise method (`.option TRANNOISE=1`) injects no noise on this
+repo's pinned ngspice-46 build, so DR-002 Decision 5 remains `proposed` on
+that count — its ratification status is unchanged by this campaign. The
+band sweep (1.18 % at B0 rising to 2.46 % at B6, as a fraction of the
+period) is a separate, open-loop measurement that varies band rather than
+temperature/supply, and was taken at nominal temperature and supply only.
 
 Evidence: `sim/vco-tuning-range/records/20260804-211600-f599a65.md`, the
 `sim/harness`-migrated successor to `20260731-184845-0a12e6c.md` (DR-007
@@ -966,8 +976,7 @@ to reconstruct it from the status column.
 
 | Row | What is owed | Whose campaign |
 |---|---|---|
-| [Period jitter](#period-jitter) | closed-loop period jitter, and any **random** (noise-driven) jitter number at all | #13 (`period-jitter`) |
-| [Period jitter](#period-jitter) | the band sweep at corners other than nominal temp/supply | #13 |
+| [Period jitter](#period-jitter) | any **random** (noise-driven) jitter number at all — the closed-loop **deterministic** component (and the temperature/supply sweep it was taken over) now exists at all 45 mandated PVT corners, the full temperature × supply plane (`sim/period-jitter/`, 0.0508–0.2691 % RMS, PASS against the draft target at every corner); the random component remains unmeasured (TRANNOISE unsupported on this repo's pinned ngspice-46 build) | #13 (`period-jitter`) |
 | [Reference spur](#reference-spur) | the remaining 40 PVT points, and a direct measurement at the binding f_out = 200 MHz rather than the 150 MHz one static band code holds across corners — the closed-loop measurement itself now exists (`sim/reference-spur/records/20260816-132150-5f405e7.md`, 5 spanning corners), and the two cold corners do not clear −55 dBc once scaled to 200 MHz | #145 (`reference-spur`) |
 | [Lock time](#lock-time) | cold-start acquisition including cycle slipping — the closed-loop measurement itself now exists (`sim/lock-time/records/20260831-052456-effc505.md`, full 270-run PVT × N grid against the design's own `lock_detector` criterion): 22 PASS / 233 FAIL / 15 ERROR of 270; most `cold` FAILs read as a transient window too short for the detector to assert rather than a broken loop, and the majority of `relock` FAILs are not yet attributed to a cause (see `sim/CHARACTERIZATION.md`'s `lock-time` row and #284) | #163 (`lock-time`) |
 | [Reference input](#reference-input) | input thresholds/edge-rate sweep; a numeric reference-jitter limit to replace the current exclusion | #12 |
