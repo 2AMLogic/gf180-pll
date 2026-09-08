@@ -26,8 +26,9 @@
 #
 #   sim/lib/test_simenv_ngspice_pin.sh
 #
-# Shared run_case/assert_rc/fail_count/test_summary scaffolding lives in
-# test_helpers.sh (issue #249).
+# Shared run_case/assert_rc/assert_contains/fail_count/test_summary
+# scaffolding lives in test_helpers.sh (issue #249; assert_contains
+# consolidated there in #287).
 #
 # shellcheck disable=SC2016 # run_case's single-quoted bodies intentionally
 # defer $-expansion to the `bash -c` subshell they're spliced into.
@@ -39,20 +40,6 @@ SIMENV_SH="${SIM_LIB_DIR}/simenv.sh"
 
 # shellcheck source=sim/lib/test_helpers.sh
 . "${SIM_LIB_DIR}/test_helpers.sh"
-
-# assert_contains <haystack> <needle> <case_name>
-assert_contains() {
-  local haystack="$1" needle="$2" name="$3"
-  case "${haystack}" in
-    *"${needle}"*)
-      echo "PASS: ${name}"
-      ;;
-    *)
-      echo "FAIL: ${name}: expected to find '${needle}'"
-      fail_count=$((fail_count + 1))
-      ;;
-  esac
-}
 
 # --------------------------------------------------------------------------
 # Fixture: two fake, self-identifying "ngspice" stubs in a scratch $TMPDIR --
@@ -98,7 +85,7 @@ run_case "
   echo resolved=\"\$(command -v ngspice)\"
 "
 assert_rc 0 "${CASE_RC}" "pin present: returns 0"
-assert_contains "${CASE_STDOUT}" "resolved=${PIN_NGSPICE}" "pin present, another ngspice earlier in PATH: pinned binary still wins PATH resolution (#259 -- presence isn't enough, it must be FIRST)"
+assert_contains "resolved=${PIN_NGSPICE}" "${CASE_STDOUT}" "pin present, another ngspice earlier in PATH: pinned binary still wins PATH resolution (#259 -- presence isn't enough, it must be FIRST)"
 
 run_case "
   export PATH=\"${FIXTURE_DIR}/other_dir:\${PATH}\"
@@ -106,7 +93,7 @@ run_case "
   simenv_require_ngspice_pin >/dev/null 2>&1
   ngspice -v
 "
-assert_contains "${CASE_STDOUT}" "ngspice-46" "pin present: subsequent bare 'ngspice' invocations (as simenv_run_deck makes) actually run the pinned build"
+assert_contains "ngspice-46" "${CASE_STDOUT}" "pin present: subsequent bare 'ngspice' invocations (as simenv_run_deck makes) actually run the pinned build"
 
 echo
 echo "== simenv_require_ngspice_pin: pin absent =="
@@ -117,9 +104,9 @@ run_case "
   simenv_require_ngspice_pin
 "
 assert_rc 1 "${CASE_RC}" "pin absent: returns non-zero (simenv_require_tools' caller then exits 1, rather than falling through silently)"
-assert_contains "${CASE_STDERR}" "ERROR: pinned ngspice not found" "pin absent: loud ERROR on stderr, not a silent fallback"
-assert_contains "${CASE_STDERR}" "#259" "pin absent: error names issue #259"
-assert_contains "${CASE_STDERR}" "SIM_ALLOW_UNPINNED_NGSPICE" "pin absent: error documents the explicit opt-out"
+assert_contains "ERROR: pinned ngspice not found" "${CASE_STDERR}" "pin absent: loud ERROR on stderr, not a silent fallback"
+assert_contains "#259" "${CASE_STDERR}" "pin absent: error names issue #259"
+assert_contains "SIM_ALLOW_UNPINNED_NGSPICE" "${CASE_STDERR}" "pin absent: error documents the explicit opt-out"
 
 echo
 echo "== simenv_require_ngspice_pin: pin absent, SIM_ALLOW_UNPINNED_NGSPICE=1 =="
@@ -133,8 +120,8 @@ run_case "
   echo resolved=\"\$(command -v ngspice)\"
 "
 assert_rc 0 "${CASE_RC}" "pin absent + opt-out set: returns 0 (deliberate fallback, not an error)"
-assert_contains "${CASE_STDERR}" "WARN: pinned ngspice not found" "pin absent + opt-out set: still a loud WARNING, not silent"
-assert_contains "${CASE_STDOUT}" "resolved=${OTHER_NGSPICE}" "pin absent + opt-out set: falls through to whatever 'ngspice' resolves to on PATH, as before #259's fix"
+assert_contains "WARN: pinned ngspice not found" "${CASE_STDERR}" "pin absent + opt-out set: still a loud WARNING, not silent"
+assert_contains "resolved=${OTHER_NGSPICE}" "${CASE_STDOUT}" "pin absent + opt-out set: falls through to whatever 'ngspice' resolves to on PATH, as before #259's fix"
 
 test_summary "simenv ngspice pin (#259)"
 exit "$?"

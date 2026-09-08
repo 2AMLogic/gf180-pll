@@ -4,6 +4,8 @@
 # Provides:
 #   fail_count       -- shared failure counter, initialized to 0 here
 #   assert_rc         <expected_rc> <actual_rc> <case_name>
+#   assert_contains   <needle> <haystack> <case_name>
+#   assert_not_contains <needle> <haystack> <case_name>
 #   run_case          <script_body> -- runs script_body in `bash -c` against
 #                      SIMENV_SH with `set +e` so a stubbed non-zero return
 #                      doesn't kill the subshell before we can inspect it.
@@ -32,6 +34,44 @@ assert_rc() {
   else
     echo "PASS: ${name}: rc=${actual}"
   fi
+}
+
+# assert_contains <needle> <haystack> <case_name>
+#
+# Canonical, shared version (issue #287) -- previously
+# test_simenv_ngspice_pin.sh and test_simenv_run_deck_retried.sh each
+# defined their own local assert_contains() with swapped argument order
+# (<haystack> <needle> vs <needle> <haystack>). This is the
+# test_simenv_run_deck_retried.sh order plus its richer FAIL diagnostics.
+assert_contains() {
+  local needle="$1" haystack="$2" name="$3"
+  case "${haystack}" in
+    *"${needle}"*)
+      echo "PASS: ${name}: found '${needle}'"
+      ;;
+    *)
+      echo "FAIL: ${name}: expected to find '${needle}' in:"
+      # shellcheck disable=SC2001 # multi-line indent, not a plain substitution
+      echo "${haystack}" | sed 's/^/    /'
+      fail_count=$((fail_count + 1))
+      ;;
+  esac
+}
+
+# assert_not_contains <needle> <haystack> <case_name>
+assert_not_contains() {
+  local needle="$1" haystack="$2" name="$3"
+  case "${haystack}" in
+    *"${needle}"*)
+      echo "FAIL: ${name}: did not expect to find '${needle}' in:"
+      # shellcheck disable=SC2001 # multi-line indent, not a plain substitution
+      echo "${haystack}" | sed 's/^/    /'
+      fail_count=$((fail_count + 1))
+      ;;
+    *)
+      echo "PASS: ${name}: '${needle}' absent as expected"
+      ;;
+  esac
 }
 
 # run_case <script_body> -- runs script_body in `bash -c` with `set +e` so a
