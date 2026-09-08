@@ -90,7 +90,7 @@ are at risk. Nothing in this repository has been fabricated or measured.
 | 7 | [Reference spur](#reference-spur) | ≤ −55 dBc | measured worst −57.0 dBc at f_out = 150 MHz (`sf`/−40 °C/2.97 V), i.e. −54.5 dBc scaled to 200 MHz; derived worst case −61 dBc at 200 MHz | **measured** (5 spanning corners, 150 MHz); **budget** (the 200 MHz binding point and the other 40 corners — see [Verification owed](#verification-owed)) |
 | 8 | [Loop bandwidth](#loop-bandwidth) | f_c = 26 – 430 kHz over the ratified space, with `f_c < f_ref/10` as a hard ceiling | min 25.96 kHz at f_ref = 1 MHz / 4 legs; max 429.5 kHz at f_ref = 25 MHz / 1 leg; worst realized ratio `f_ref/13` | **measured** |
 | 8a | [Phase margin](#phase-margin) | ≥ 45° everywhere in the contracted space | 47.4° at f_ref = 1 MHz, 4 legs (the tightest cell of the trim rule) | **measured** |
-| 9 | [Lock time](#lock-time) | < 100 µs to the stated [lock criterion](#lock-time). **The < 20 µs stretch is dropped** | 71 µs at f_ref = 1 MHz under the trim rule; structural floor 43 µs | **measured** (small-signal settling); **budget** (cold-start, owed to #12) |
+| 9 | [Lock time](#lock-time) | < 100 µs to the stated [lock criterion](#lock-time). **The < 20 µs stretch is dropped** | 71 µs at f_ref = 1 MHz under the trim rule; structural floor 43 µs | **measured** (small-signal settling); **budget** (cold-start, owed to #163) |
 | 10 | [Power](#power) | < 5 mW at 100 MHz, all domains, locked | `all-fast`/125 °C/3.63 V — derived total ≈ 1.98 mW | **derived** |
 | 11 | [Standby current](#standby-current) | **no power-down mode in v1** — the block is always-on whenever its rails are up | n/a — no standby state exists to bind a corner to | **waived, with rationale** |
 | 12 | [Supply sensitivity](#supply-sensitivity) | `vdd_vco` ripple ≤ 20 mV pp (100 kHz – 100 MHz); DC rail excursion over 2.97–3.63 V must consume ≤ 0.6 V of the Vctrl window | pushing worst −50.7 %/V at `ss`/−40 °C, band 4 (−52.3 %/V on the coarser tuning-range grid) | **measured** (pushing); **derived** (the two budgets) |
@@ -560,8 +560,8 @@ observable are describing the same event rather than two different ones. The
 
 **Limitation, and it is a large one.** These are *small-signal settling*
 estimates from a fitted 3-element model. Cold-start acquisition involves cycle
-slipping and the VCO's large-signal nonlinearity, and is #12's number, not this
-one. The < 100 µs target above is therefore **measured for settling and a
+slipping and the VCO's large-signal nonlinearity, and is #163's number, not
+this one. The < 100 µs target above is therefore **measured for settling and a
 budget for cold start**; see [Verification owed](#verification-owed).
 
 ## Power
@@ -969,7 +969,7 @@ to reconstruct it from the status column.
 | [Period jitter](#period-jitter) | closed-loop period jitter, and any **random** (noise-driven) jitter number at all | #13 (`period-jitter`) |
 | [Period jitter](#period-jitter) | the band sweep at corners other than nominal temp/supply | #13 |
 | [Reference spur](#reference-spur) | the remaining 40 PVT points, and a direct measurement at the binding f_out = 200 MHz rather than the 150 MHz one static band code holds across corners — the closed-loop measurement itself now exists (`sim/reference-spur/records/20260816-132150-5f405e7.md`, 5 spanning corners), and the two cold corners do not clear −55 dBc once scaled to 200 MHz | #145 (`reference-spur`) |
-| [Lock time](#lock-time) | cold-start acquisition including cycle slipping; everything recorded today is small-signal settling | #12 (`lock-time`) |
+| [Lock time](#lock-time) | cold-start acquisition including cycle slipping — the closed-loop measurement itself now exists (`sim/lock-time/records/20260831-052456-effc505.md`, full 270-run PVT × N grid against the design's own `lock_detector` criterion): 22 PASS / 233 FAIL / 15 ERROR of 270; most `cold` FAILs read as a transient window too short for the detector to assert rather than a broken loop, and the majority of `relock` FAILs are not yet attributed to a cause (see `sim/CHARACTERIZATION.md`'s `lock-time` row and #284) | #163 (`lock-time`) |
 | [Reference input](#reference-input) | input thresholds/edge-rate sweep; a numeric reference-jitter limit to replace the current exclusion | #12 |
 | [Power](#power) | a measured `vdd_ref` domain current, and a closed-loop total | #14 (`supply-sensitivity`) |
 | [Output duty cycle](#output-duty-cycle) | the design does not meet its own 45 % floor at 7/90 measured points (`fs` bundle, `lo` edge, nominal-or-above supply); post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the measurement itself now exists (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |
