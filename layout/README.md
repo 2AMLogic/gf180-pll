@@ -9,7 +9,10 @@ tapped standard-cell inverter), not any PLL-block layout — see
 `layout/floorplan/` (issue #17) is the first consumer of that flow beyond the
 bring-up proof: a block-placement floorplan record and GDS skeleton, not yet
 any block's real transistor-level layout — see
-`layout/floorplan/PLL-FLOORPLAN.md`.
+`layout/floorplan/PLL-FLOORPLAN.md`. `layout/pll_top/` (issue #292/#293) is
+the first block with **real** transistor-level layout: the VCO's 5-stage
+ring, its own guard ring, and its carried-forward decap — see
+`layout/pll_top/vco/ring.py`.
 
 ```
 layout/
@@ -26,9 +29,16 @@ layout/
   floorplan/                 PLL block-placement floorplan (issue #17)
     PLL-FLOORPLAN.md           isolation, supply routing, cap placement, matching, area budget
     skeleton.py                assembles the GDS block-placement skeleton the record describes
+  pll_top/                  real per-block transistor-level layout (issue #292)
+    vco/                      the VCO block (issue #293)
+      devices.py                schematic-sourced device table (W/L/nodes), no KLayout needed
+      primitives.py              full-custom nfet_03v3/pfet_03v3 geometry generator
+      stage.py                   one vco_stage.sch instance (MPH-MP-MN-MNT)
+      ring.py                    assembles the 5-stage ring + guard ring + decap; CLI entry point
   evidence/
     inv-tb-proof/            committed proof artifacts (gds, netlist, logs, reports)
     floorplan-skeleton/      block-placement skeleton GDS + DRC report (issue #17)
+    vco-layout/              VCO ring block real GDS + DRC report (issue #293)
     work/                    scratch re-run tree (git-ignored)
 ```
 
