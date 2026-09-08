@@ -1,0 +1,6 @@
+* Extracted by KLayout with GF180MCU LVS runset on : 08/09/2026 23:36
+
+.SUBCKT tgate_3v3 GN GP VDD VSS
+M$1 \$4 GP \$3 VDD pfet_03v3 L=0.28U W=2.5U AS=1.25P AD=1.25P PS=6U PD=6U
+M$2 \$3 GN \$4 VSS nfet_03v3 L=0.28U W=1U AS=0.5P AD=0.5P PS=3U PD=3U
+.ENDS tgate_3v3
