@@ -15,14 +15,21 @@ time as ``#293``'s own acceptance-criteria checklist is worked through.
 
 * PR #305 added ``STAGE_FETS`` (the 5-stage current-starved ring) plus the
   carried-forward 22 pF decap constants.
-* This increment adds ``BUFFER_STAGES`` (``vco.sch``'s 3-stage tapered
-  output buffer) and ``MIRROR_*`` (``vco_bias.sch``'s 3-cascade band-select
-  mirror, its band-code inverters, and its switch muxes).
-* Still absent, deliberately: the bias generator's V-to-I core
-  (``MP1``/``MP2``/``MN1``/``MN2``/``MSU*``/``MPR``/``MD*``/``MOFF``/
-  ``MVI``/``MSUM``), because three of its elements are ``ppolyf_u_3k`` poly
-  resistors (``RCG``/``ROFF``/``RDEG``) and ``primitives.py`` has no
-  poly-resistor generator yet -- see ``mirror.py``'s module docstring.
+* PR #313 added ``BUFFER_STAGES`` (``vco.sch``'s 3-stage tapered output
+  buffer) and ``MIRROR_*`` (``vco_bias.sch``'s 3-cascade band-select mirror,
+  its band-code inverters, and its switch muxes).
+* This increment adds ``PolyResistor``/``BIAS_RESISTORS`` (``vco_bias.sch``'s
+  ``RCG``/``ROFF``/``RDEG``, the three ``ppolyf_u_3k`` poly resistors that
+  were the named reason the V-to-I core stayed undrawn -- see
+  ``primitives.poly_resistor()``'s own module-level constant block for the
+  PDK-generator citation).
+* Still absent, deliberately: the V-to-I core's *transistors*
+  (``MP1``/``MP2``/``MN1``/``MN2``/``MSU1``-``MSU3``/``MPR``/``MD1``/
+  ``MD2``/``MOFF``/``MVI``/``MSUM``) and the inter-sub-block wiring that
+  merges ring + bias generator + mirror + buffer under one shared guard
+  ring -- see ``bias_resistors.py``'s module docstring for why proving the
+  new poly-resistor primitive stayed a standalone slice rather than being
+  folded into a full V-to-I core assembly in the same increment.
 """
 
 from __future__ import annotations
@@ -346,3 +353,40 @@ MIRROR_INVERTERS = tuple(
 
 MIRROR_IN_NETS = ("VBP0", "B0", "B1", "B2")
 MIRROR_OUT_NETS = ("VBP", "VBN")
+
+
+# ---------------------------------------------------------------------------
+# vco_bias.sch's V-to-I core: the three ppolyf_u_3k poly resistors
+# (XRCG/XROFF/XRDEG), read directly off design/netlist/vco.spice's own
+# `r_width=`/`r_length=` parameters. All three tie their "P" terminal and
+# bulk to VSS (=GND_VCO at the vco.sch block boundary, same binding every
+# other bias-generator device in this file already uses); "M" is the
+# resistor's own signal-carrying node.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PolyResistor:
+    """One ``ppolyf_u_3k`` poly resistor instance, sized in microns.
+
+    ``w_um`` is PRES.1's own "width" (perpendicular to current flow, >= the
+    rule's 0.8 um minimum); ``l_um`` is the resistor's length (the
+    current-flow axis) -- see ``primitives.poly_resistor()``'s own docstring
+    for the drawn geometry these two numbers drive.
+    """
+
+    name: str
+    w_um: float
+    l_um: float
+    top_net: str  # the resistor's own signal node ("M" terminal)
+    bottom_net: str  # VSS/GND_VCO ("P" terminal, tied with the bulk)
+
+
+# XRCG NC VSS VSS ppolyf_u_3k r_width=1u r_length=5.6u
+BIAS_R_RCG = PolyResistor("RCG", w_um=1.0, l_um=5.6, top_net="NC", bottom_net="GND_VCO")
+# XROFF NOFF VSS VSS ppolyf_u_3k r_width=1u r_length=33u
+BIAS_R_ROFF = PolyResistor("ROFF", w_um=1.0, l_um=33.0, top_net="NOFF", bottom_net="GND_VCO")
+# XRDEG NVI VSS VSS ppolyf_u_3k r_width=1u r_length=33u
+BIAS_R_RDEG = PolyResistor("RDEG", w_um=1.0, l_um=33.0, top_net="NVI", bottom_net="GND_VCO")
+
+BIAS_RESISTORS = (BIAS_R_RCG, BIAS_R_ROFF, BIAS_R_RDEG)
