@@ -1,8 +1,34 @@
 # PLL target specification — v1
 
-- **Status**: **proposed** — pending engineering ratification (#1). This file
-  is the artifact #1 ratifies *against*; it does not ratify itself, and no row
-  below is binding until #1 says so.
+- **Status**: **ratified, with amendments** (#1, 2026-09-08), per
+  `spec/decision-records/DR-007-spec-review-verdict.md`'s
+  `ratify-with-amendments` verdict, applied through this repo's
+  spec/DR-ratification-via-PR policy (`2AMLogic/2am#357`, precedented on
+  this repo by #148/PR #158): a Builder drafts the ratification as a PR on
+  the evidence, and the operator's approval of that PR is the ratifying
+  act. **Two rows are carved out of this ratification and remain
+  unratified**, per DR-007 Amendment A1: [Lock time](#lock-time) (row 9)
+  and [Lock detector](#lock-detector) (row 16) — both rows' own stated
+  targets are *contradicted*, not merely unmeasured, by the evidence each
+  row's own text already discloses, which is why DR-007 elevated exactly
+  these two from footnote to a blocking condition on full ratification.
+  Every other row is ratified as stated, including its own
+  measured/derived/budget status column. DR-007's remaining amendments
+  (A2, A3, A5) are evidence-maturity and traceability follow-ups, not
+  additional blocking conditions, and are not applied as edits in this
+  revision — see DR-007 and the ratifying PR's description for what each
+  amendment's disposition was and why. Amendment A4 (stale `sim/`
+  citations) is partially applied in this revision: the `cp-compliance`,
+  `lock-detector`, and `divider-ratio` citations below now point at their
+  current `sim/harness`-migrated records; the `vco-tuning-range`
+  `20260731-175947-0a12e6c` citation (output band / Kvco / band-selection
+  rule) is deliberately **not** updated even though a migrated successor
+  exists, because that successor's own printed numbers differ from this
+  file's stated values in the last 1–2 significant digits at several rows
+  (e.g. floor 6.449→6.451 MHz, ceiling 247.8→247.7 MHz, Kvco
+  115.8→115.7 MHz/V) and reconciling every number those rows carry is out
+  of this revision's scope — flagged here rather than silently applied;
+  see the ratifying PR's description for detail.
 - **Date**: 2026-07-31
 - **Written by**: Builder agent, issue #55
 - **Consumes**: DR-001 (architecture), DR-002 (scope ratification), DR-003
@@ -131,8 +157,9 @@ Source: DR-006 Decision 5, from `sim/loop-dynamics/records/20260731-202550-82af5
 
 Unit-leg currents are 1.68–1.80 / 3.36–3.60 / 5.04–5.41 / 6.71–7.21 µA for
 codes 00/01/10/11 across all 45 PVT corners
-(`sim/cp-compliance/records/20260731-194124-afa338c.md`); the nominal code is
-10 (three legs, ≈5.2 µA).
+(`sim/cp-compliance/records/20260801-190821-734f483.md`, the `sim/harness`-
+migrated successor to `20260731-194124-afa338c.md`, reproducing the same
+range — DR-007 Amendment A4); the nominal code is 10 (three legs, ≈5.2 µA).
 
 Reference frequencies between the decades above take the code of the **nearest
 tabulated f_ref at or below** them; 105 of the 140 measured (f_ref, N, code)
@@ -236,8 +263,13 @@ Conditions:
   post-layout margin, and it is the single most important number for #18 to
   re-take before the 200 MHz ceiling is treated as closed.
 
-Evidence: `sim/divider-ratio/records/20260731-171817-0a12e6c.md` (chain),
-`…-171816-…` (single cell), `…-171815-…` (flop setup/hold).
+Evidence: `sim/divider-ratio-chain/records/20260802-100727-082c879.md`
+(chain), `sim/divider-ratio-cell/records/20260801-140529-3f883e3.md`
+(single cell), `sim/divider-ratio-dff/records/20260801-125114-3f883e3.md`
+(flop setup/hold) — the `sim/harness`-migrated successors to the
+pre-migration `sim/divider-ratio/records/20260731-171817-0a12e6c.md` /
+`…-171816-…` / `…-171815-…`, each reproducing its predecessor's measured
+values (DR-007 Amendment A4).
 
 ## Integrated RMS jitter
 
@@ -330,7 +362,16 @@ campaign, and DR-002 Decision 5 is explicitly `proposed` until it runs. The
 band sweep (1.18 % at B0 rising to 2.46 % at B6, as a fraction of the period)
 was taken at nominal temperature and supply only.
 
-Evidence: `sim/vco-tuning-range/records/20260731-184845-0a12e6c.md`.
+Evidence: `sim/vco-tuning-range/records/20260804-211600-f599a65.md`, the
+`sim/harness`-migrated successor to `20260731-184845-0a12e6c.md` (DR-007
+Amendment A4). The worst- and median-corner figures quoted above (910 ps /
+320 ps / 3.37 ns / 1.02 ns; 540 ps / 191 ps / 1.69 ns / 516 ps) and the
+worst-case 2.51 % RMS reproduce exactly; the migrated record's own "quiet
+reference" solver-noise-floor row (an incidental figure, not a design
+result) reads a few percent different from the value this file's own
+[Period jitter](#period-jitter) table above still quotes — noted, not
+silently reconciled, since it is not the number either row's own
+pass/fail turns on.
 
 ## Phase noise
 
@@ -400,7 +441,7 @@ measurement above is read against:
 
 | Step | Value | Source |
 |---|---|---|
-| Systematic per-event charge asymmetry \|q_up + q_dn\|, worst corner | 3.68 fC (`fs`/125 °C/3.63 V, Vctrl 0.9 V) | `sim/cp-compliance/…-194124-afa338c` via DR-006 §8 |
+| Systematic per-event charge asymmetry \|q_up + q_dn\|, worst corner | 3.68 fC (`fs`/125 °C/3.63 V, Vctrl 0.9 V) | `sim/cp-compliance/records/20260802-061841-c24ee3a.md` (the `sim/harness`-migrated switching-timing successor to `…-194124-afa338c`, reproducing the same `q_up`/`q_dn` pair at this corner — DR-007 Amendment A4) via DR-006 §8 |
 | Statistical residual net charge, \|mean\| + 3σ | 2.99 fC | `sim/mc-cp-mismatch/…-212614-640560e` term 3 |
 | Worst-case sum | 6.67 fC | linear add (conservative) |
 | C2, worst-case minimum over corners | 1.814 pF | DR-006 Decision 1 |
@@ -631,8 +672,9 @@ DR-001 Decision 2 considered and rejected.
 
 **The condition that reopens DR-001 Decision 2 is now explicit and measurable**:
 if the system cannot deliver a rail inside Budget 1, the delay-cell choice must
-be revisited, and `sim/vco-tuning-range/records/20260731-184845-0a12e6c.md` is
-the evidence that would drive it.
+be revisited, and `sim/vco-tuning-range/records/20260804-211600-f599a65.md`
+(the `sim/harness`-migrated successor to `20260731-184845-0a12e6c.md`,
+DR-007 Amendment A4) is the evidence that would drive it.
 
 Supply-step response, for a loop-bandwidth budget: a 0.1 V step walks the
 open-loop output edge by −25.7 ns/µs (best) to **−60.8 ns/µs** (worst,
@@ -785,8 +827,10 @@ design does **not** meet them today):
 | T4 | Deassert latency ≤ **1 reference period** at every f_ref in 1–25 MHz | a consumer gating logic on `lock` needs the deassert to be prompt at the *bottom* of the reference range, which is where the present design is weakest |
 | T5 | No chatter at any corner, at any f_ref in 1–25 MHz | measured today at 25 MHz only |
 
-**Measured behaviour** (`sim/lock-detector/records/20260731-162119-0a12e6c.md`,
-95 points):
+**Measured behaviour** (`sim/lock-detector/records/20260802-050119-c24ee3a.md`,
+95 points — the `sim/harness`-migrated successor to
+`20260731-162119-0a12e6c.md`, reproducing the same window/assert/deassert
+figures below, DR-007 Amendment A4):
 
 | Metric | Value | Corner |
 |---|---|---|
@@ -898,7 +942,7 @@ Every anchor `sim/` cites against `spec/pll.md#…`, and where:
 |---|---|---|
 | `#output-band` | [Output band](#output-band) | `sim/vco-tuning-range/records/20260731-175947-0a12e6c.md`, `…-081628-239e73b.md`, `sim/vco-tuning-range/testbench/run.sh` |
 | `#kvco` | [Kvco](#kvco) | same three |
-| `#supply-sensitivity` | [Supply sensitivity](#supply-sensitivity) | `sim/vco-tuning-range/records/20260731-184845-0a12e6c.md`, `…-100401-07f4b7b.md`, `sim/vco-tuning-range/testbench/run_supply.sh` |
+| `#supply-sensitivity` | [Supply sensitivity](#supply-sensitivity) | `sim/vco-tuning-range/records/20260804-211600-f599a65.md` (migrated successor to `20260731-184845-0a12e6c.md`, DR-007 Amendment A4), `…-100401-07f4b7b.md`, `sim/vco-tuning-range/testbench/run_supply.sh` |
 | `#period-jitter` | [Period jitter](#period-jitter) | same three, plus `sim/README.md`'s worked example |
 | `#lock-time` | [Lock time](#lock-time) | `sim/README.md` worked example, `sim/harness/README.md`, `sim/harness/cli.py` |
 
