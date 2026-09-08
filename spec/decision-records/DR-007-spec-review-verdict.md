@@ -1,6 +1,15 @@
 # DR-007: spec-review verdict on `spec/pll.md` v1 (ratify-with-amendments)
 
-- **Status**: proposed
+- **Status**: ratified (2026-09-08). This record's own verdict
+  (`ratify-with-amendments`) is applied to `spec/pll.md` by the PR that
+  ratifies #1, per this repo's spec/DR-ratification-via-PR policy
+  (`2AMLogic/2am#357`, precedented by #148/PR #158): the operator's
+  approval of that PR is the ratifying act for both `spec/pll.md` and this
+  record. Two of `spec/pll.md`'s rows (Lock time, Lock detector) are
+  explicitly carved out of ratification by this record's own Amendment A1
+  and remain unratified pending further work — see `spec/pll.md`'s Status
+  line. This record's status flip does not by itself imply those two rows
+  are resolved.
 - **Date**: 2026-08-09
 - **Decided by**: Builder agent, issue #1, running `2AMLogic/klayout-tools`'s
   `spec-review` skill (`.claude/skills/spec-review/SKILL.md`) as the
@@ -511,13 +520,38 @@ is the operator's call; this review is an opinion.
 - **#1 remains open.** This record does not flip `spec/pll.md`'s Status
   line; that remains an operator action on #1 (directly, or once
   `klayout-tools#654` lands a binding-with-veto path for `spec-review`
-  itself).
+  itself). **Superseded by the Post-ratification note below** — #1 was
+  subsequently closed via a Builder-drafted ratification PR, per
+  `2AMLogic/2am#357`'s standing policy, rather than by `klayout-tools#654`
+  landing first.
 - **A1–A4 are actionable follow-ups**, not spec edits made by this record:
   A1 is design/testbench work already tracked (#11 rework, #12's cold-start
   bench); A2 and A3 are additional derivation/estimation work on existing
   rows, not new campaigns; A4 is a small, mechanical citation update to
   `spec/pll.md` (separate from this record, since this issue's scope does
   not include editing `spec/pll.md`).
+- **Post-ratification note (2026-09-08).** The bullets above described this
+  record's own scope at the time it was written (2026-08-09), when #1's
+  interim contract limited the deliverable to the verdict plus this
+  record, not the Status-line flip. That flip has since happened, via a
+  Builder-drafted PR against #1 (per `2AMLogic/2am#357`'s standing policy)
+  that the operator approved. A4 was applied to `spec/pll.md` in that same
+  PR for `cp-compliance`, `lock-detector`, and `divider-ratio`'s
+  migrated-successor citations; the `vco-tuning-range`
+  `20260731-175947-0a12e6c` citation was deliberately left unchanged
+  because its migrated successors' own printed numbers drift from this
+  file's stated values in the last 1–2 significant digits at several rows
+  — see that PR's description. A2 (reference-spur two-mechanism bound) and
+  A3 (area's non-loop-filter hand estimate) remain unapplied — no new
+  derivation exists for either. A1 remains open on its own terms: #11 and
+  #12 have since closed as issues, and #12's chain has since produced a
+  full 270-run cold-start `sim/lock-time` grid
+  (`sim/lock-time/records/20260831-052456-effc505.md`, #163) — but that
+  grid's own result (22 PASS / 233 FAIL / 15 ERROR of 270, largely
+  attributable to the still-unwidened lock-detector window rather than to
+  loop convergence) does not close A1's gap, it sharpens it. `spec/pll.md`'s
+  Status line carves the Lock time and Lock detector rows out of
+  ratification on that basis.
 - **The confidentiality observation is handed to #1/#116** rather than
   acted on here — #116 can now cite this record instead of rediscovering
   the CLAUDE.md fact independently.
