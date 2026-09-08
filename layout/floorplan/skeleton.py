@@ -28,12 +28,47 @@ Positions and sizes below are float micron coordinates from
 87x87 um, DR-006) and the VCO decap (2x 50x50 um, ``vco.sch``) are real,
 as-drawn device footprints. Everything else is the ROM block-footprint
 estimate from that record's area-budget table, midpoint of the stated range.
+
+VCO ring real geometry (issue #293)
+------------------------------------
+``layout/pll_top/vco/ring.py`` now draws real, DRC-clean transistor-level
+layout for the VCO's 5-stage current-starved ring, its own dedicated guard
+ring, and the carried-forward decap -- see that module's docstring for the
+full scope (the bias generator, band-select mirror, and output buffer are
+deferred to follow-up issues). ``VCO_RING`` below is that real footprint
+(``ring.footprint_um()``, plain-Python, no KLayout import needed), placed at
+``VCO_CORE``'s own origin -- **augmenting**, not replacing, ``VCO_CORE``:
+the ring alone does not need the full block, and the bias
+generator/mirror/buffer this pass defers still have to land somewhere
+inside (or beside) it.
+
+**Real footprint deviates from the 140x100 um ROM estimate, disclosed
+explicitly rather than silently absorbed**: the ring's real layout is
+~177 x 19 um -- much *wider* (5 stages placed in one row, full-custom, each
+its own diffusion island wired by Metal1 -- see ``primitives.py``'s module
+docstring for why) and much *shorter* (the ring alone is a thin horizontal
+band; the ROM box's 100 um height assumed room for every VCO sub-block
+stacked together, not the ring in isolation) than the original square
+guess. ``VCO_CORE.w`` is widened here to stay a real (not stale) bound on
+the ring's own width; its height is left at the ROM value since the
+bias generator/mirror/buffer (not yet real geometry) are what the
+remaining vertical room is reserved for. Whether the eventual full VCO
+block folds the ring into more than one row to recover width is a
+follow-up layout decision, not a placeholder-vs-real correctness question
+this record has to resolve.
 """
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+_PLL_TOP_DIR = Path(__file__).resolve().parents[1] / "pll_top"
+if str(_PLL_TOP_DIR) not in sys.path:
+    sys.path.insert(0, str(_PLL_TOP_DIR))
+
+from vco import ring as vco_ring  # noqa: E402 -- plain-Python footprint_um(), no KLayout needed
 
 TOP_CELL = "pll_floorplan_skeleton"
 BOUNDARY_LAYER = (0, 0)  # DIEAREA -- no DRC rule references this layer.
@@ -66,12 +101,27 @@ LOOP_FILTER = Block(
     w=235.0,
     h=195.0,
 )
+# Real ring footprint (issue #293) -- see this module's docstring for why
+# VCO_CORE.w is widened to it rather than left at the stale 140 um ROM
+# guess. footprint_um() returns (x0, y0, x1, y1) relative to the ring's own
+# origin; VCO_RING places that at VCO_CORE's own (x, y).
+_ring_x0, _ring_y0, _ring_x1, _ring_y1 = vco_ring.footprint_um()
+VCO_RING_W = _ring_x1 - _ring_x0
+VCO_RING_H = _ring_y1 - _ring_y0
+
 VCO_CORE = Block(
     "vco",
     x=LOOP_FILTER.x + LOOP_FILTER.w + DOMAIN_SPACING,
     y=0.0,
-    w=140.0,
+    w=max(140.0, VCO_RING_W + 2 * 5.0),  # +5 um clearance margin each side
     h=100.0,
+)
+VCO_RING = Block(
+    "vco.ring",
+    x=VCO_CORE.x,
+    y=VCO_CORE.y,
+    w=VCO_RING_W,
+    h=VCO_RING_H,
 )
 DIVIDER_LOCK = Block(
     "divider_lock",
@@ -131,7 +181,18 @@ VCO_DECAP_1 = Block(
     h=DECAP_DEVICE_UM,
 )
 
-SUB_BLOCKS = (C1_ARRAY, C2_CAP, VCO_DECAP_0, VCO_DECAP_1)
+# VCO_RING is drawn in addition to (not instead of) VCO_DECAP_0/1 above:
+# VCO_DECAP_0/1 are this skeleton's own long-standing decap markers (#17),
+# left untouched so the tests that already pin their exact geometry keep
+# passing; VCO_RING (#293) is the newer, more detailed real-ring footprint,
+# which happens to spatially overlap them within this reference-only
+# boundary-layer drawing -- harmless, since layer (0, 0) carries no DRC rule
+# and this file has never claimed sub-blocks are mutually disjoint (only
+# that C1_ARRAY/C2_CAP sit inside LOOP_FILTER and VCO_DECAP_0/1 don't
+# overlap *each other* -- see layout/tests/test_floorplan_skeleton.py). The
+# real, non-overlapping, DRC-checked version of both lives in
+# layout/pll_top/vco/ring.py's own GDS, not here.
+SUB_BLOCKS = (C1_ARRAY, C2_CAP, VCO_DECAP_0, VCO_DECAP_1, VCO_RING)
 
 
 def build(outdir: Path) -> Path:

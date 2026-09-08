@@ -11,6 +11,8 @@
 !layout/evidence/inv-tb-proof/**/*.log
 # Same story again for the floorplan skeleton's DRC evidence (issue #17).
 !layout/evidence/floorplan-skeleton/**/*.log
+# Same story again for the VCO ring block's real-layout DRC evidence (issue #293).
+!layout/evidence/vco-layout/**/*.log
 __pycache__/
 .DS_Store
 
