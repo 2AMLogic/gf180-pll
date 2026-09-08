@@ -13,6 +13,8 @@
 !layout/evidence/floorplan-skeleton/**/*.log
 # Same story again for the VCO ring block's real-layout DRC evidence (issue #293).
 !layout/evidence/vco-layout/**/*.log
+# Same story again for the lock_detector block layout's DRC evidence (issue #296).
+!layout/evidence/lock-detector-layout/**/*.log
 __pycache__/
 .DS_Store
 

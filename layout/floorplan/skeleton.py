@@ -131,6 +131,21 @@ DIVIDER_LOCK = Block(
     h=50.0,
 )
 
+# lock_detector (issue #296) now has a real, DRC-clean standalone
+# transistor-level layout -- see layout/pll_top/lock_detector/build.py and
+# layout/evidence/lock-detector-layout/PROOF.md. Its as-drawn standalone
+# footprint (119.3 x 62.6 um, ~7,468 um^2) is *larger on its own* than
+# DIVIDER_LOCK's 90x50 um placement-plan estimate above -- which
+# divider_chain (#295, real layout not yet landed) also shares. Not
+# reconciled into DIVIDER_LOCK's own rectangle here: per both issues'
+# Acceptance Criteria, whichever of #295/#296 lands second is responsible
+# for reconciling the region's real combined footprint against the other's
+# actual layout. #296 landed first, so this reconciliation is still open --
+# do not assume DIVIDER_LOCK's dimensions above reflect either block's real
+# geometry yet.
+LOCK_DETECTOR_STANDALONE_W_UM = 119.3
+LOCK_DETECTOR_STANDALONE_H_UM = 62.6
+
 BLOCKS = (PFD_CP, LOOP_FILTER, VCO_CORE, DIVIDER_LOCK)
 
 # VCO guard ring: a 15 um ring (PLL-FLOORPLAN.md section 1's tap-pitch bound)

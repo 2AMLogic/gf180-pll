@@ -90,6 +90,14 @@ class BlockPlacementTests(unittest.TestCase):
         # PLL-FLOORPLAN.md section 5: draft target < 0.15 mm^2 = 150_000 um^2.
         self.assertLess(skeleton.total_extent_um2(), 150_000.0)
 
+    def test_lock_detector_standalone_footprint_is_recorded_and_positive(self):
+        # issue #296: the real, DRC-clean standalone lock_detector layout's
+        # as-drawn footprint, recorded for the DIVIDER_LOCK reconciliation
+        # this issue and #295 both defer -- see the comment next to
+        # DIVIDER_LOCK and layout/evidence/lock-detector-layout/PROOF.md.
+        self.assertGreater(skeleton.LOCK_DETECTOR_STANDALONE_W_UM, 0)
+        self.assertGreater(skeleton.LOCK_DETECTOR_STANDALONE_H_UM, 0)
+
     def test_vco_guard_ring_margin_matches_the_drc_tap_pitch_bound(self):
         # layout/README.md / PLL-FLOORPLAN.md section 1: DF.13_MV/DF.14_MV
         # cap NCOMP-in-nwell / PCOMP-outside-nwell to a well/substrate tap at
