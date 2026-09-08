@@ -29,6 +29,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+LAYOUT_GRID_UM = 0.005
+"""Manufacturing grid every drawn vertex must land on.
+
+``$PDK_ROOT/libs.tech/klayout/drc/rule_decks/geom.drc``'s OFFGRID section
+runs ``<layer>.ongrid(0.005)`` on every drawn layer when ``run_drc.py`` is
+invoked without ``--no_offgrid`` -- which is how this repo runs it (see
+``layout/run_pv.py drc --offgrid``). A generator that computes a midpoint or
+divides a width by a finger count will land off this grid routinely, so
+``primitives.Canvas`` snaps every coordinate to it and ``snap_um()`` below
+lets the pure-Python placement math agree with what is actually drawn.
+"""
+
+
+def snap_um(v: float) -> float:
+    """Round ``v`` to the nearest manufacturing-grid point."""
+    return round(round(v / LAYOUT_GRID_UM) * LAYOUT_GRID_UM, 6)
+
 
 @dataclass(frozen=True)
 class Fet:
@@ -50,8 +67,25 @@ class Fet:
 
     @property
     def finger_w_um(self) -> float:
-        """Per-finger drawn width. ``fingers * finger_w_um == w_um`` exactly."""
-        return self.w_um / self.fingers
+        """Per-finger drawn width, snapped to the manufacturing grid.
+
+        Three of ``vco_bias.sch``'s band-mirror legs have a schematic ``W``
+        that is not an exact multiple of ``LAYOUT_GRID_UM`` once divided by
+        the finger count (``17.225/2``, ``8.6125/2``, ``78.87/8``), so the
+        drawn per-finger width is the nearest grid point and the drawn leg
+        width differs from the schematic by at most half a grid step per
+        finger. ``w_deviation_frac`` quantifies that; the tests bound it.
+        """
+        return snap_um(self.w_um / self.fingers)
+
+    @property
+    def drawn_w_um(self) -> float:
+        """Total width actually drawn: ``fingers * finger_w_um``."""
+        return round(self.fingers * self.finger_w_um, 6)
+
+    @property
+    def w_deviation_frac(self) -> float:
+        return abs(self.drawn_w_um - self.w_um) / self.w_um
 
 
 # vco_stage.sch, .subckt vco_stage A Y VDD VSS VBP VBN -- one current-starved

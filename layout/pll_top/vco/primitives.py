@@ -134,12 +134,24 @@ class Canvas:
         self.layout = db.Layout()
         self.layout.dbu = self.dbu
         self._dbu_per_um = int(round(1.0 / self.dbu))
+        self._grid_dbu = int(round(dev.LAYOUT_GRID_UM / self.dbu))
         self.top = self.layout.create_cell(self.top_name)
         self._layer_index = {name: self.layout.layer(*gds) for name, gds in LAYER.items()}
         self.pins: dict[str, list[tuple[float, float, float, float]]] = {}
 
     def _u(self, v: float) -> int:
-        return int(round(v * self._dbu_per_um))
+        """Micron -> database units, snapped to the manufacturing grid.
+
+        Snapping happens here rather than at each call site because *derived*
+        coordinates -- a pad midpoint, a bus centreline, a device width
+        divided by its finger count -- go off-grid routinely, and the PDK's
+        own ``geom.drc`` OFFGRID section (``ongrid(0.005)`` per layer) fails
+        every one of them. Snapping is a monotone function of the coordinate,
+        so shapes that shared an exact edge before still share it after, and
+        geometry that was already on-grid (the ring block, ``ring.py``) is
+        unchanged.
+        """
+        return int(round(v * self._dbu_per_um / self._grid_dbu)) * self._grid_dbu
 
     def rect(self, layer: str, x0: float, y0: float, x1: float, y1: float) -> None:
         if x1 < x0:
@@ -167,18 +179,24 @@ class Canvas:
 
 
 def _contact_positions(lo: float, hi: float) -> list[float]:
-    """Left-edge x (or y) positions for a row of contacts spanning [lo, hi]."""
+    """Left-edge x (or y) positions for a row of contacts spanning [lo, hi].
+
+    Snapped to the manufacturing grid at the *origin*, not left to
+    ``Canvas._u`` -- ``CO.1`` makes 0.22 um the contact's min **and** max
+    size, so an off-grid origin whose far edge rounds the other way is a
+    0.215/0.225 um contact and a hard violation, not a cosmetic nudge.
+    """
     usable_lo = lo + CONTACT_ROW_MARGIN_UM
     usable_hi = hi - CONTACT_ROW_MARGIN_UM
     span = usable_hi - usable_lo
     if span < CONTACT_SIZE_UM:
         center = (lo + hi) / 2.0
-        return [center - CONTACT_SIZE_UM / 2.0]
+        return [dev.snap_um(center - CONTACT_SIZE_UM / 2.0)]
     n = int((span - CONTACT_SIZE_UM) // CONTACT_PITCH_UM) + 1
     n = max(n, 1)
     total = CONTACT_SIZE_UM + (n - 1) * CONTACT_PITCH_UM
-    start = usable_lo + (span - total) / 2.0
-    return [start + i * CONTACT_PITCH_UM for i in range(n)]
+    start = dev.snap_um(usable_lo + (span - total) / 2.0)
+    return [dev.snap_um(start + i * CONTACT_PITCH_UM) for i in range(n)]
 
 
 @dataclass
@@ -258,8 +276,9 @@ def mosfet(
     tab_y1 = gate_y_center + GATE_TAB_H_UM / 2.0
     canvas.rect("poly2", tab_x0, tab_y0, tab_x1, tab_y1)
 
-    gate_contact_x0 = tab_x0 + (GATE_TAB_W_UM - CONTACT_SIZE_UM) / 2.0
-    gate_contact_y0 = tab_y0 + (GATE_TAB_H_UM - CONTACT_SIZE_UM) / 2.0
+    # Snapped for the same CO.1 min/max reason as _contact_positions().
+    gate_contact_x0 = dev.snap_um(tab_x0 + (GATE_TAB_W_UM - CONTACT_SIZE_UM) / 2.0)
+    gate_contact_y0 = dev.snap_um(tab_y0 + (GATE_TAB_H_UM - CONTACT_SIZE_UM) / 2.0)
     canvas.rect(
         "contact",
         gate_contact_x0,
@@ -374,7 +393,10 @@ def via1_stack(canvas: Canvas, x: float, y: float) -> tuple:
     and stays at or above the 0.34 um width threshold below which the deck's
     V1.3c/V1.4b end-of-line-overlap rules would apply. Returns the pad box.
     """
-    half_v = VIA1_SIZE_UM / 2.0
+    # V1.1 makes 0.26 um the via's min *and* max size, so the corner is
+    # snapped explicitly -- same reasoning as _contact_positions()/CO.1.
+    x, y = dev.snap_um(x), dev.snap_um(y)
+    half_v = VIA1_SIZE_UM / 2.0  # 0.13 um -- itself a grid multiple
     canvas.rect("via1", x - half_v, y - half_v, x + half_v, y + half_v)
     half_p = half_v + VIA1_METAL_ENCLOSE_UM
     pad = (x - half_p, y - half_p, x + half_p, y + half_p)
