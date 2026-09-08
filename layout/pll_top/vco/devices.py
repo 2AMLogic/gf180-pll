@@ -10,18 +10,41 @@ check the layout's own claims about what it built against these numbers
 without needing a KLayout-capable Python (same convention as
 ``floorplan/skeleton.py`` / ``layout/tests/test_floorplan_skeleton.py``).
 
-Scope note (issue #293): this module only carries the devices this pass's
-layout actually draws -- the 5-stage current-starved ring
-(``vco_stage.sch`` x5) plus its own guard ring and the carried-forward
-22 pF decap. The bias generator (``vco_bias.sch``), the 3-cascade
-band-select mirror, and the 3-stage output buffer are explicitly deferred
-to follow-up issues (see ``ring.py``'s module docstring) -- their device
-tables are not duplicated here.
+Scope note (issue #293, cumulative): the tables here grow one increment at a
+time as ``#293``'s own acceptance-criteria checklist is worked through.
+
+* PR #305 added ``STAGE_FETS`` (the 5-stage current-starved ring) plus the
+  carried-forward 22 pF decap constants.
+* This increment adds ``BUFFER_STAGES`` (``vco.sch``'s 3-stage tapered
+  output buffer) and ``MIRROR_*`` (``vco_bias.sch``'s 3-cascade band-select
+  mirror, its band-code inverters, and its switch muxes).
+* Still absent, deliberately: the bias generator's V-to-I core
+  (``MP1``/``MP2``/``MN1``/``MN2``/``MSU*``/``MPR``/``MD*``/``MOFF``/
+  ``MVI``/``MSUM``), because three of its elements are ``ppolyf_u_3k`` poly
+  resistors (``RCG``/``ROFF``/``RDEG``) and ``primitives.py`` has no
+  poly-resistor generator yet -- see ``mirror.py``'s module docstring.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+LAYOUT_GRID_UM = 0.005
+"""Manufacturing grid every drawn vertex must land on.
+
+``$PDK_ROOT/libs.tech/klayout/drc/rule_decks/geom.drc``'s OFFGRID section
+runs ``<layer>.ongrid(0.005)`` on every drawn layer when ``run_drc.py`` is
+invoked without ``--no_offgrid`` -- which is how this repo runs it (see
+``layout/run_pv.py drc --offgrid``). A generator that computes a midpoint or
+divides a width by a finger count will land off this grid routinely, so
+``primitives.Canvas`` snaps every coordinate to it and ``snap_um()`` below
+lets the pure-Python placement math agree with what is actually drawn.
+"""
+
+
+def snap_um(v: float) -> float:
+    """Round ``v`` to the nearest manufacturing-grid point."""
+    return round(round(v / LAYOUT_GRID_UM) * LAYOUT_GRID_UM, 6)
 
 
 @dataclass(frozen=True)
@@ -35,6 +58,34 @@ class Fet:
     gate_net: str
     top_net: str  # the "upper" S/D terminal in the stage's vertical stack
     bottom_net: str  # the "lower" S/D terminal
+    nf: int = 1  # the frozen netlist's own ``nf=`` parameter
+    layout_nf: int | None = None  # fingers actually drawn; ``None`` => ``nf``
+
+    @property
+    def fingers(self) -> int:
+        return self.nf if self.layout_nf is None else self.layout_nf
+
+    @property
+    def finger_w_um(self) -> float:
+        """Per-finger drawn width, snapped to the manufacturing grid.
+
+        Three of ``vco_bias.sch``'s band-mirror legs have a schematic ``W``
+        that is not an exact multiple of ``LAYOUT_GRID_UM`` once divided by
+        the finger count (``17.225/2``, ``8.6125/2``, ``78.87/8``), so the
+        drawn per-finger width is the nearest grid point and the drawn leg
+        width differs from the schematic by at most half a grid step per
+        finger. ``w_deviation_frac`` quantifies that; the tests bound it.
+        """
+        return snap_um(self.w_um / self.fingers)
+
+    @property
+    def drawn_w_um(self) -> float:
+        """Total width actually drawn: ``fingers * finger_w_um``."""
+        return round(self.fingers * self.finger_w_um, 6)
+
+    @property
+    def w_deviation_frac(self) -> float:
+        return abs(self.drawn_w_um - self.w_um) / self.w_um
 
 
 # vco_stage.sch, .subckt vco_stage A Y VDD VSS VBP VBN -- one current-starved
@@ -87,3 +138,211 @@ DRC_TAP_PITCH_MAX_UM = 15.0  # DF.13_MV/DF.14_MV -- PLL-FLOORPLAN.md's own bound
 DRC_METAL1_MIN_WIDTH_UM = 0.23  # M1.1
 DRC_METAL1_MIN_SPACE_UM = 0.23  # M1.2a
 DRC_METAL1_MIN_AREA_UM2 = 0.1444  # M1.3
+DRC_METAL2_MIN_WIDTH_UM = 0.28  # M2.1
+DRC_METAL2_MIN_SPACE_UM = 0.28  # M2.2a
+DRC_METAL2_MIN_AREA_UM2 = 0.1444  # M2.3
+DRC_VIA1_SIZE_UM = 0.26  # V1.1 (min *and* max -- via1 is exactly 0.26 um square)
+DRC_VIA1_MIN_SPACE_UM = 0.26  # V1.2a
+DRC_VIA1_EOL_METAL_WIDTH_UM = 0.34  # V1.3c / V1.4b apply only to metal < 0.34 um wide
+
+
+# ---------------------------------------------------------------------------
+# vco.sch top level: the 3-stage tapered output buffer (Y5 -> NB1 -> NB2 ->
+# CLK). Read off design/netlist/vco.spice's XMBP1/XMBN1 .. XMBP3/XMBN3 lines;
+# every device is nf=1, L=0.28 um. PLL-FLOORPLAN.md section 1 requires the
+# largest/fastest stage to sit closest to the CLK pin and farthest from the
+# ring's starved internal nodes, which is why BUFFER_STAGES is ordered
+# smallest-first and buffer.py places it left-to-right in that order with CLK
+# on the right edge.
+#
+# vco.sch's own supply nets for these devices are VDD_VCO/GND_VCO directly
+# (they are top-level `vco` devices, not inside a subcircuit), so the net
+# names here are the block-boundary names verbatim.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class InverterStage:
+    """One CMOS inverter: a pfet over an nfet sharing gate and drain nets."""
+
+    index: int
+    pfet: Fet
+    nfet: Fet
+
+    @property
+    def in_net(self) -> str:
+        return self.pfet.gate_net
+
+    @property
+    def out_net(self) -> str:
+        return self.pfet.bottom_net
+
+    @property
+    def max_w_um(self) -> float:
+        return max(self.pfet.w_um, self.nfet.w_um)
+
+
+BUFFER_STAGES = (
+    InverterStage(
+        index=1,
+        pfet=Fet("MBP1", "pfet", 1.25, 0.28, "Y5", "VDD_VCO", "NB1"),
+        nfet=Fet("MBN1", "nfet", 0.5, 0.28, "Y5", "NB1", "GND_VCO"),
+    ),
+    InverterStage(
+        index=2,
+        pfet=Fet("MBP2", "pfet", 3.75, 0.28, "NB1", "VDD_VCO", "NB2"),
+        nfet=Fet("MBN2", "nfet", 1.5, 0.28, "NB1", "NB2", "GND_VCO"),
+    ),
+    InverterStage(
+        index=3,
+        pfet=Fet("MBP3", "pfet", 11.25, 0.28, "NB2", "VDD_VCO", "CLK"),
+        nfet=Fet("MBN3", "nfet", 4.5, 0.28, "NB2", "CLK", "GND_VCO"),
+    ),
+)
+
+BUFFER_IN_NET = "Y5"  # the ring's own pre-buffer output pin (ring.py: "Y5_CLK_IN")
+BUFFER_OUT_NET = "CLK"
+
+
+# ---------------------------------------------------------------------------
+# vco_bias.sch: the 3-cascade band-select mirror.
+#
+# Read off design/netlist/vco.spice's `.subckt vco_bias` device lines. The
+# subcircuit's own supply pins are VDD/VSS; vco.sch binds them to
+# VDD_VCO/GND_VCO (`XBIAS VCTRL B0 B1 B2 VBP VBN VDD_VCO GND_VCO vco_bias`),
+# so the block-boundary names are used directly here -- same convention as
+# BUFFER_STAGES above and as ring.py's own pin names.
+#
+# Signal chain, as instantiated: VBP0 (the V-to-I core's summing node, an
+# input pin of *this* sub-block until that core is drawn) -> cascade A ->
+# VBN1 -> cascade B -> VBP2 -> cascade C -> VBN -> the VBN/VBP output pair
+# the ring's own VBP/VBN pins consume.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CascadePair:
+    """One band-select cascade: an always-on leg + its band-switched leg.
+
+    PLL-FLOORPLAN.md section 1: "The three cascades ... are each a
+    common-centroid pair (always-on leg interdigitated with its switched
+    leg), not three separate blobs". ``pattern`` is the left-to-right drawn
+    finger order ("A" = a finger of ``always_on``, "S" = a finger of
+    ``switched``) and MUST be a palindrome -- that is what makes both legs'
+    finger centroids coincide with the array's own centre regardless of the
+    two legs' different finger widths (see ``mirror.py``).
+    """
+
+    name: str
+    always_on: Fet
+    switched: Fet
+    pattern: tuple[str, ...]
+
+    @property
+    def kind(self) -> str:
+        return self.always_on.kind
+
+    def finger_widths(self) -> tuple[float, ...]:
+        a, s = self.always_on.finger_w_um, self.switched.finger_w_um
+        return tuple(a if tag == "A" else s for tag in self.pattern)
+
+
+# Cascade A: pfet 26.5 / 17.225 um (PLL-FLOORPLAN.md section 1). Both legs are
+# nf=2 in the frozen netlist, so ABBA interdigitation uses the schematic's own
+# finger count with no layout-side folding.
+CASCADE_A = CascadePair(
+    name="A",
+    always_on=Fet("MA0", "pfet", 26.5, 1.0, "VBP0", "VDD_VCO", "VBN1", nf=2),
+    switched=Fet("MA1", "pfet", 17.225, 1.0, "GA", "VDD_VCO", "VBN1", nf=2),
+    pattern=("A", "S", "S", "A"),
+)
+
+# Cascade B: nfet 5 / 8.6125 um. Both legs are nf=1 in the frozen netlist, and
+# two single-finger devices cannot be interdigitated at all -- a one-finger
+# leg's centroid is its own centre, which can never coincide with a different
+# one-finger leg's centre. This is the only cascade where the drawn finger
+# count deviates from the netlist's `nf`: each leg is folded 1 -> 2 fingers of
+# exactly half the schematic W (2.5 um and 4.30625 um), so total W, L and
+# device count are preserved exactly and ABBA becomes possible. Recorded here
+# rather than silently in the generator because it is a real (if small)
+# layout-vs-netlist parameter deviation for the future LVS increment.
+CASCADE_B = CascadePair(
+    name="B",
+    always_on=Fet("MB0", "nfet", 5.0, 1.0, "VBN1", "VBP2", "GND_VCO", nf=1, layout_nf=2),
+    switched=Fet("MB1", "nfet", 8.6125, 1.0, "GB", "VBP2", "GND_VCO", nf=1, layout_nf=2),
+    pattern=("A", "S", "S", "A"),
+)
+
+# Cascade C: pfet 12.3 / 78.87 um -- the 6.4:1 ratio DR-003 calls out as the
+# whole point of cascading. MC1 is nf=8 and MC0 is nf=1 in the netlist, which
+# already admits a palindromic pattern with no folding: the single MC0 finger
+# sits at the array's centre (its centroid *is* the centre) with MC1's eight
+# fingers split 4/4 symmetrically around it.
+CASCADE_C = CascadePair(
+    name="C",
+    always_on=Fet("MC0", "pfet", 12.3, 1.0, "VBP2", "VDD_VCO", "VBN", nf=1),
+    switched=Fet("MC1", "pfet", 78.87, 1.0, "GC", "VDD_VCO", "VBN", nf=8),
+    pattern=("S", "S", "S", "S", "A", "S", "S", "S", "S"),
+)
+
+MIRROR_CASCADES = (CASCADE_A, CASCADE_B, CASCADE_C)
+
+
+@dataclass(frozen=True)
+class SwitchMux:
+    """A cascade's 2-transistor band mux driving its switched leg's gate.
+
+    ``on`` conducts when the band bit selects the leg (gate = the *inverted*
+    band bit for a pfet mux, the true bit for an nfet mux) and pulls the
+    switched leg's gate to the cascade's own bias node; ``off`` parks it at
+    the rail that turns the leg fully off.
+    """
+
+    cascade: str
+    out_net: str  # the switched leg's gate net (GA / GB / GC)
+    on: Fet
+    off: Fet
+
+
+MIRROR_MUXES = (
+    SwitchMux(
+        cascade="A",
+        out_net="GA",
+        on=Fet("MSWA0", "pfet", 2.0, 0.5, "B0B", "VBP0", "GA"),
+        off=Fet("MSWA1", "pfet", 2.0, 0.5, "B0", "VDD_VCO", "GA"),
+    ),
+    SwitchMux(
+        cascade="B",
+        out_net="GB",
+        on=Fet("MSWB0", "nfet", 2.0, 0.5, "B1", "GB", "VBN1"),
+        off=Fet("MSWB1", "nfet", 2.0, 0.5, "B1B", "GB", "GND_VCO"),
+    ),
+    SwitchMux(
+        cascade="C",
+        out_net="GC",
+        on=Fet("MSWC0", "pfet", 2.0, 0.5, "B2B", "VBP2", "GC"),
+        off=Fet("MSWC1", "pfet", 2.0, 0.5, "B2", "VDD_VCO", "GC"),
+    ),
+)
+
+# Diode-connected loads / the VBN->VBP output mirror (XMDA/XMDB/XMDN/XMMN/XMDP).
+MIRROR_LOADS = (
+    Fet("MDA", "nfet", 10.0, 1.0, "VBN1", "VBN1", "GND_VCO"),
+    Fet("MDB", "pfet", 20.0, 1.0, "VBP2", "VDD_VCO", "VBP2"),
+    Fet("MDN", "nfet", 4.0, 0.5, "VBN", "VBN", "GND_VCO"),
+    Fet("MMN", "nfet", 4.0, 0.5, "VBN", "VBP", "GND_VCO"),
+    Fet("MDP", "pfet", 10.0, 0.5, "VBP", "VDD_VCO", "VBP"),
+)
+
+# Band-code inverters (XMIP0/XMIN0 .. XMIP2/XMIN2) -- B<n> -> B<n>B.
+MIRROR_INVERTERS = tuple(
+    InverterStage(
+        index=i,
+        pfet=Fet(f"MIP{i}", "pfet", 2.0, 0.28, f"B{i}", "VDD_VCO", f"B{i}B"),
+        nfet=Fet(f"MIN{i}", "nfet", 1.0, 0.28, f"B{i}", f"B{i}B", "GND_VCO"),
+    )
+    for i in range(3)
+)
+
+MIRROR_IN_NETS = ("VBP0", "B0", "B1", "B2")
+MIRROR_OUT_NETS = ("VBP", "VBN")

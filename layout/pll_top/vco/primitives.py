@@ -55,6 +55,16 @@ LAYER = {
     "pplus": (31, 0),
     "nwell": (21, 0),
     "metal1": (34, 0),
+    # Second routing layer, used only by mirror.py: an interdigitated
+    # common-centroid array has three nets (source bus, drain bus, two gate
+    # buses) that all have to cross the array, which is provably not planar
+    # in a single metal. via1/metal2's own rules are as simple as metal1's --
+    # V1.1 (via exactly 0.26 um square), V1.2a (0.26 um space), V1.3a/V1.4a
+    # (metal overlap of via >= 0), M2.1/M2.2a (0.28 um width/space), M2.3
+    # (0.1444 um^2 area) -- read from the same deck as everything else in
+    # this module (via1.drc, metal2.drc).
+    "via1": (35, 0),
+    "metal2": (36, 0),
     # DIEAREA -- no rule in this PDK's DRC deck references it (confirmed the
     # same way layout/floorplan/skeleton.py's own docstring documents: grep
     # against every rule_decks/*.drc file). Used only for the carried-forward
@@ -85,6 +95,14 @@ CONTACT_ROW_MARGIN_UM = 0.1  # inset from the terminal's outer comp edge
 IMPLANT_MARGIN_UM = 0.3  # NP.5a/PP.5a=0.23, NP.5b/PP.5b=0.16 min
 NWELL_MARGIN_UM = 0.5  # DF.4c_LV=0.43 min (PMOS comp -> nwell edge)
 METAL1_PAD_MARGIN_UM = 0.12  # metal1 pad grown around a contact/contact-row
+VIA1_SIZE_UM = dev.DRC_VIA1_SIZE_UM  # V1.1: min *and* max -- exactly 0.26 um
+VIA1_METAL_ENCLOSE_UM = 0.09  # V1.3a/V1.4a need only >= 0; 0.09 also keeps the
+# landing pad 0.26 + 2*0.09 = 0.44 um wide, i.e. >= V1.3c/V1.4b's 0.34 um
+# threshold, so the deck's end-of-line-overlap special cases (which apply only
+# to metal lines narrower than 0.34 um) never engage at all.
+METAL2_WIRE_WIDTH_UM = 0.44  # >= M2.1's 0.28 min AND >= the 0.34 um V1.4b
+# threshold, so every metal2 track is wide enough to land a via1 anywhere
+# along it without a separately-grown pad.
 METAL1_WIRE_WIDTH_UM = 0.28  # > M1.1's 0.23 min; also narrow enough that the
 # VDD_VCO/GND_VCO and VBP/VBN rail pair (each stage's own S/D-to-gate
 # spacing apart -- see stage.py) stay M1.2a-legal (>= 0.23 um) from each
@@ -116,12 +134,24 @@ class Canvas:
         self.layout = db.Layout()
         self.layout.dbu = self.dbu
         self._dbu_per_um = int(round(1.0 / self.dbu))
+        self._grid_dbu = int(round(dev.LAYOUT_GRID_UM / self.dbu))
         self.top = self.layout.create_cell(self.top_name)
         self._layer_index = {name: self.layout.layer(*gds) for name, gds in LAYER.items()}
         self.pins: dict[str, list[tuple[float, float, float, float]]] = {}
 
     def _u(self, v: float) -> int:
-        return int(round(v * self._dbu_per_um))
+        """Micron -> database units, snapped to the manufacturing grid.
+
+        Snapping happens here rather than at each call site because *derived*
+        coordinates -- a pad midpoint, a bus centreline, a device width
+        divided by its finger count -- go off-grid routinely, and the PDK's
+        own ``geom.drc`` OFFGRID section (``ongrid(0.005)`` per layer) fails
+        every one of them. Snapping is a monotone function of the coordinate,
+        so shapes that shared an exact edge before still share it after, and
+        geometry that was already on-grid (the ring block, ``ring.py``) is
+        unchanged.
+        """
+        return int(round(v * self._dbu_per_um / self._grid_dbu)) * self._grid_dbu
 
     def rect(self, layer: str, x0: float, y0: float, x1: float, y1: float) -> None:
         if x1 < x0:
@@ -136,10 +166,10 @@ class Canvas:
             self._db.Text(text, self._db.Trans(self._db.Vector(self._u(x), self._u(y))))
         )
 
-    def pin(self, net: str, x0: float, y0: float, x1: float, y1: float) -> None:
-        """Record a Metal1 landing pad as a named net pin (for tests + docs)."""
+    def pin(self, net: str, x0: float, y0: float, x1: float, y1: float, layer: str = "metal1") -> None:
+        """Record a Metal1 (or Metal2) landing pad as a named net pin."""
         self.pins.setdefault(net, []).append((_r(x0), _r(y0), _r(x1), _r(y1)))
-        self.label("metal1", net, (x0 + x1) / 2.0, (y0 + y1) / 2.0)
+        self.label(layer, net, (x0 + x1) / 2.0, (y0 + y1) / 2.0)
 
     def write_gds(self, path) -> None:
         options = self._db.SaveLayoutOptions()
@@ -149,18 +179,24 @@ class Canvas:
 
 
 def _contact_positions(lo: float, hi: float) -> list[float]:
-    """Left-edge x (or y) positions for a row of contacts spanning [lo, hi]."""
+    """Left-edge x (or y) positions for a row of contacts spanning [lo, hi].
+
+    Snapped to the manufacturing grid at the *origin*, not left to
+    ``Canvas._u`` -- ``CO.1`` makes 0.22 um the contact's min **and** max
+    size, so an off-grid origin whose far edge rounds the other way is a
+    0.215/0.225 um contact and a hard violation, not a cosmetic nudge.
+    """
     usable_lo = lo + CONTACT_ROW_MARGIN_UM
     usable_hi = hi - CONTACT_ROW_MARGIN_UM
     span = usable_hi - usable_lo
     if span < CONTACT_SIZE_UM:
         center = (lo + hi) / 2.0
-        return [center - CONTACT_SIZE_UM / 2.0]
+        return [dev.snap_um(center - CONTACT_SIZE_UM / 2.0)]
     n = int((span - CONTACT_SIZE_UM) // CONTACT_PITCH_UM) + 1
     n = max(n, 1)
     total = CONTACT_SIZE_UM + (n - 1) * CONTACT_PITCH_UM
-    start = usable_lo + (span - total) / 2.0
-    return [start + i * CONTACT_PITCH_UM for i in range(n)]
+    start = dev.snap_um(usable_lo + (span - total) / 2.0)
+    return [dev.snap_um(start + i * CONTACT_PITCH_UM) for i in range(n)]
 
 
 @dataclass
@@ -178,25 +214,47 @@ class MosfetPorts:
     gate_pad: tuple[float, float, float, float]
     gate_y_center: float
     gate_tab_x1: float  # right edge of the gate contact tab (== gate bar's left endcap start)
+    gate_tab_x_center: float = 0.0  # x of the gate contact tab's own centreline
 
 
-def mosfet(canvas: Canvas, fet: dev.Fet, x0: float, y_bottom: float) -> MosfetPorts:
+def mosfet(
+    canvas: Canvas,
+    fet: dev.Fet,
+    x0: float,
+    y_bottom: float,
+    *,
+    w_um: float | None = None,
+    sd_overhang: float | None = None,
+) -> MosfetPorts:
     """Draw one vertical-current-flow ``nfet_03v3``/``pfet_03v3`` instance.
 
     ``x0`` is the transistor's comp left edge (column-left-aligned, so every
     stage fet's gate contact tab lands at the same x regardless of ``w`` --
     see the module docstring). ``y_bottom`` is the bottom terminal comp's
     bottom edge. Returns the Metal1 pad geometry the caller wires up.
+
+    ``w_um`` overrides ``fet.w_um`` -- used to draw **one finger** of a
+    multi-finger device (``fet.finger_w_um``); the caller is responsible for
+    drawing ``fet.fingers`` of them and tying their pads together.
+
+    ``sd_overhang`` overrides the module's default source/drain comp overhang.
+    Widening it does not change the device (W and L are untouched) but moves
+    the S/D contact rows further from the gate, which opens a Metal1 routing
+    corridor beside the gate contact tab -- ``mirror.py`` needs exactly that
+    to get two gate buses across a common-centroid array without shorting
+    them to the array's own source/drain buses.
     """
-    w, l = fet.w_um, fet.l_um
+    w = fet.w_um if w_um is None else w_um
+    l = fet.l_um
+    sd = SD_OVERHANG_UM if sd_overhang is None else sd_overhang
     comp_layer = "comp"
     implant_layer = "pplus" if fet.kind == "pfet" else "nplus"
 
     x1 = x0 + w
 
-    y1 = y_bottom + SD_OVERHANG_UM  # bottom terminal comp top edge / gate bottom edge
+    y1 = y_bottom + sd  # bottom terminal comp top edge / gate bottom edge
     y2 = y1 + l  # gate top edge / top terminal comp bottom edge
-    y3 = y2 + SD_OVERHANG_UM  # top terminal comp top edge
+    y3 = y2 + sd  # top terminal comp top edge
 
     # --- comp: ONE continuous active rectangle from the bottom terminal to
     # the top terminal -- the channel region (y1..y2, under the gate) has to
@@ -218,8 +276,9 @@ def mosfet(canvas: Canvas, fet: dev.Fet, x0: float, y_bottom: float) -> MosfetPo
     tab_y1 = gate_y_center + GATE_TAB_H_UM / 2.0
     canvas.rect("poly2", tab_x0, tab_y0, tab_x1, tab_y1)
 
-    gate_contact_x0 = tab_x0 + (GATE_TAB_W_UM - CONTACT_SIZE_UM) / 2.0
-    gate_contact_y0 = tab_y0 + (GATE_TAB_H_UM - CONTACT_SIZE_UM) / 2.0
+    # Snapped for the same CO.1 min/max reason as _contact_positions().
+    gate_contact_x0 = dev.snap_um(tab_x0 + (GATE_TAB_W_UM - CONTACT_SIZE_UM) / 2.0)
+    gate_contact_y0 = dev.snap_um(tab_y0 + (GATE_TAB_H_UM - CONTACT_SIZE_UM) / 2.0)
     canvas.rect(
         "contact",
         gate_contact_x0,
@@ -281,6 +340,7 @@ def mosfet(canvas: Canvas, fet: dev.Fet, x0: float, y_bottom: float) -> MosfetPo
         gate_pad=gate_pad,
         gate_y_center=gate_y_center,
         gate_tab_x1=tab_x1,
+        gate_tab_x_center=(tab_x0 + tab_x1) / 2.0,
     )
 
 
@@ -316,6 +376,33 @@ def route_pads(canvas: Canvas, pad_a: tuple, pad_b: tuple, via_y: float) -> None
     # see ring.py's DRC-iteration notes).
     half = METAL1_WIRE_WIDTH_UM / 2.0
     h_wire(canvas, min(ax, bx) - half, max(ax, bx) + half, via_y)
+
+
+def m2_wire(canvas: Canvas, x0: float, x1: float, y: float, width: float = METAL2_WIRE_WIDTH_UM) -> tuple:
+    """A horizontal Metal2 track centred on ``y``."""
+    y0, y1 = y - width / 2.0, y + width / 2.0
+    canvas.rect("metal2", min(x0, x1), y0, max(x0, x1), y1)
+    return (min(x0, x1), y0, max(x0, x1), y1)
+
+
+def via1_stack(canvas: Canvas, x: float, y: float) -> tuple:
+    """One via1 at ``(x, y)`` with its own Metal1 and Metal2 landing pads.
+
+    Both pads are ``VIA1_SIZE_UM + 2*VIA1_METAL_ENCLOSE_UM`` = 0.44 um square,
+    which satisfies V1.3a/V1.4a (metal overlap of via1 >= 0) with real margin
+    and stays at or above the 0.34 um width threshold below which the deck's
+    V1.3c/V1.4b end-of-line-overlap rules would apply. Returns the pad box.
+    """
+    # V1.1 makes 0.26 um the via's min *and* max size, so the corner is
+    # snapped explicitly -- same reasoning as _contact_positions()/CO.1.
+    x, y = dev.snap_um(x), dev.snap_um(y)
+    half_v = VIA1_SIZE_UM / 2.0  # 0.13 um -- itself a grid multiple
+    canvas.rect("via1", x - half_v, y - half_v, x + half_v, y + half_v)
+    half_p = half_v + VIA1_METAL_ENCLOSE_UM
+    pad = (x - half_p, y - half_p, x + half_p, y + half_p)
+    canvas.rect("metal1", *pad)
+    canvas.rect("metal2", *pad)
+    return pad
 
 
 def bbox_union(boxes: Iterable[tuple[float, float, float, float]]) -> tuple[float, float, float, float]:
