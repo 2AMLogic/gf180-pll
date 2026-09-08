@@ -9,6 +9,8 @@
 # captured deck stdout under layout/evidence/inv-tb-proof/ is the evidence,
 # not scratch output.
 !layout/evidence/inv-tb-proof/**/*.log
+# Same story again for the floorplan skeleton's DRC evidence (issue #17).
+!layout/evidence/floorplan-skeleton/**/*.log
 __pycache__/
 .DS_Store
 
