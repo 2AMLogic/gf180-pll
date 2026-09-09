@@ -6,10 +6,14 @@ single polygon that is perfectly legal by every width/space/enclosure rule.
 It cannot see an *open* either: a net drawn as two pieces that never
 actually touch is likewise geometrically legal. Only LVS (which needs a
 foundry deck and a reference netlist) or an explicit connectivity check over
-the design's own net-tagged shapes catches either one -- this module is that
-check, ported from ``pfd_cp/rowgen.py``'s ``shorted_pairs()``/
-``disconnected_nets()`` (issue #300), which independently proved the same
-approach for a different full-custom block in this repo.
+the design's own net-tagged shapes catches either one -- this module's
+``shorted_pairs()``/``disconnected_nets()`` are that check, re-exported from
+``layout/pll_top/_canvas.py`` (issue #364), which also backs
+``pfd_cp/rowgen.py``'s identically-named functions: the two implementations
+started as an intentional port (issue #300 for ``rowgen.py``, #322 for this
+module) proving the same approach independently for two different
+full-custom blocks, then stayed byte-for-byte identical ever since, so #364
+consolidated them into one shared body.
 
 ``RecordingCanvas`` is the other half: a duck-typed stand-in for
 ``primitives.Canvas`` (implements ``rect()``/``label()``/``pin()``/``net()``/
@@ -27,20 +31,34 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Iterable, Iterator
+from typing import Iterator
 
+try:
+    from .. import _canvas
+except ImportError:  # this package's own dir (not its "pll_top" parent) is the
+    # sys.path root under layout/tests's flat-import convention (see
+    # floorplan/skeleton.py and every layout/tests/test_*.py's own
+    # sys.path.insert(..., ".../pll_top") -- "vco"/"lock_detector"/"pfd_cp"
+    # are then each their own top-level package, one level short of "..").
+    import _canvas
 from . import primitives as P
 
 #: (net, layer, x0, y0, x1, y1) -- one Metal1/Metal2/Metal3 shape.
-Conductor = tuple[str, str, float, float, float, float]
+Conductor = _canvas.Conductor
 #: (net, "via1" | "via2", x, y) -- where a net changes layer.
-Via = tuple[str, str, float, float]
+Via = _canvas.Via
 
 #: Which two metal layers each via kind joins.
-VIA_LAYERS = {"via1": ("metal1", "metal2"), "via2": ("metal2", "metal3")}
+VIA_LAYERS = _canvas.VIA_LAYERS
+
+#: Shared connectivity-check implementation (issue #364) -- see
+#: ``layout/pll_top/_canvas.py``'s module docstring for the consolidation
+#: rationale; re-exported here so ``checks.shorted_pairs(...)`` and
+#: ``checks.disconnected_nets(...)`` keep working unchanged.
+shorted_pairs = _canvas.shorted_pairs
+disconnected_nets = _canvas.disconnected_nets
 
 _CONDUCTOR_LAYERS = frozenset({"metal1", "metal2", "metal3"})
-_TOUCH_EPS = 1e-6
 
 
 def _r(v: float) -> float:
@@ -92,86 +110,3 @@ class RecordingCanvas:
 
     def via(self, net: str, kind: str, x: float, y: float) -> None:
         self.vias.append((net, kind, _r(x), _r(y)))
-
-
-def _boxes_touch(a: Conductor, b: Conductor) -> bool:
-    return (
-        a[4] >= b[2] - _TOUCH_EPS
-        and b[4] >= a[2] - _TOUCH_EPS
-        and a[5] >= b[3] - _TOUCH_EPS
-        and b[5] >= a[3] - _TOUCH_EPS
-    )
-
-
-def shorted_pairs(conductors: Iterable[Conductor]) -> list[tuple[str, str, str]]:
-    """Every ``(net_a, net_b, layer)`` where two different nets overlap.
-
-    A DRC deck cannot see this: two overlapping same-layer shapes from
-    different nets merge into one legal polygon. See issue #322, where this
-    exact defect (114 cross-net Metal3 overlaps, 75 of them VDD/VSS) sat
-    undetected through a DRC-clean, merged ``lock_detector`` layout.
-    """
-    items = sorted(conductors, key=lambda c: c[2])
-    hits: list[tuple[str, str, str]] = []
-    for i, a in enumerate(items):
-        for b in items[i + 1 :]:
-            if b[2] >= a[4]:
-                break
-            if a[0] == b[0] or a[1] != b[1]:
-                continue
-            if a[4] > b[2] and b[4] > a[2] and a[5] > b[3] and b[5] > a[3]:
-                hits.append((a[0], b[0], a[1]))
-    return sorted(set(hits))
-
-
-def _contains(box: Conductor, x: float, y: float) -> bool:
-    return box[2] - _TOUCH_EPS <= x <= box[4] + _TOUCH_EPS and box[3] - _TOUCH_EPS <= y <= box[5] + _TOUCH_EPS
-
-
-def disconnected_nets(conductors: Iterable[Conductor], vias: Iterable[Via]) -> list[tuple[str, int]]:
-    """Every ``(net, piece_count)`` whose shapes do not form one island.
-
-    Two shapes on the same layer are connected when their boxes touch or
-    overlap; a via connects a shape on its lower layer to one on its upper
-    layer when both contain the via's centre.
-    """
-    items = list(conductors)
-    parent = list(range(len(items)))
-
-    def find(a: int) -> int:
-        while parent[a] != a:
-            parent[a] = parent[parent[a]]
-            a = parent[a]
-        return a
-
-    def union(a: int, b: int) -> None:
-        ra, rb = find(a), find(b)
-        if ra != rb:
-            parent[ra] = rb
-
-    by_net: dict[str, list[int]] = {}
-    for i, c in enumerate(items):
-        by_net.setdefault(c[0], []).append(i)
-
-    for idxs in by_net.values():
-        ordered = sorted(idxs, key=lambda i: items[i][2])
-        for n, i in enumerate(ordered):
-            for j in ordered[n + 1 :]:
-                if items[j][2] > items[i][4] + _TOUCH_EPS:
-                    break
-                if items[i][1] == items[j][1] and _boxes_touch(items[i], items[j]):
-                    union(i, j)
-
-    for net, kind, x, y in vias:
-        lower, upper = VIA_LAYERS[kind]
-        below = [i for i in by_net.get(net, []) if items[i][1] == lower and _contains(items[i], x, y)]
-        above = [i for i in by_net.get(net, []) if items[i][1] == upper and _contains(items[i], x, y)]
-        if not below or not above:
-            raise ValueError(f"via {kind} for net {net!r} at ({x}, {y}) lands on no {lower}/{upper} shape")
-        for i in below:
-            for j in above:
-                union(i, j)
-
-    return sorted(
-        (net, len({find(i) for i in idxs})) for net, idxs in by_net.items() if len({find(i) for i in idxs}) != 1
-    )

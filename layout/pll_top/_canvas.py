@@ -80,6 +80,19 @@ and deliberately stay local, each documented at its own definition:
 ``divider_chain/devgen.py`` is therefore ``_riser()``'s only caller today;
 ``_via_square()``, ``_contact_positions()`` and ``bbox_union()`` are still
 shared by all of them, including the two modules above.
+
+``Conductor``, ``Via``, ``VIA_LAYERS``, ``_TOUCH_EPS``, ``_boxes_touch()``,
+``_contains()``, ``shorted_pairs()`` and ``disconnected_nets()`` (issue #364)
+join the same convention: ``lock_detector/checks.py`` (issue #322) and
+``pfd_cp/rowgen.py`` (issue #300) each independently authored a pure-Python
+short/open connectivity check over the same ``(net, layer, x0, y0, x1, y1)``
+conductor tuples, and the two bodies stayed byte-for-byte identical (down to
+``_TOUCH_EPS``'s value and the ``VIA_LAYERS`` dict literal) ever since --
+this module gives that logic, too, one shared home. Both submodules re-export
+these names under their own original ``checks.shorted_pairs(...)`` /
+``rowgen.shorted_pairs(...)`` call signatures, so no call site (including
+``layout/tests/test_lock_detector_layout.py`` and
+``layout/tests/test_pfd_layout.py``) changed.
 """
 
 from __future__ import annotations
@@ -332,3 +345,118 @@ def v_wire(canvas: Canvas, x: float, y0: float, y1: float, width: float) -> tupl
     x0, x1 = x - width / 2.0, x + width / 2.0
     canvas.rect("metal1", x0, y0, x1, y1)
     return (x0, min(y0, y1), x1, max(y0, y1))
+
+
+# ---------------------------------------------------------------------------
+# Connectivity checks (pure) -- what a DRC deck structurally cannot do
+# ---------------------------------------------------------------------------
+#
+# A DRC deck checks widths, spaces, enclosures and densities. It does not
+# check *connectivity*, and the two failure modes below are both invisible to
+# it:
+#
+#   * a short -- two different nets' shapes overlapping on one layer merge
+#     into a single polygon that is perfectly legal by every geometric rule;
+#   * an open -- a net drawn as two pieces that never touch is likewise
+#     legal.
+#
+# Both are caught by LVS, but LVS needs an extracted netlist and a reference
+# netlist. These two functions run on the plain-Python shape model instead,
+# so every build of a ``layout/pll_top/*`` block is checked for shorts and
+# opens in the unit test suite with no PDK, no KLayout and no run_pv
+# invocation. See #322 for the defect this caught (114 cross-net Metal3
+# overlaps, 75 of them VDD/VSS, sitting undetected through a DRC-clean,
+# merged ``lock_detector`` layout).
+
+#: (net, layer, x0, y0, x1, y1) -- one Metal1/Metal2/Metal3 shape.
+Conductor = tuple[str, str, float, float, float, float]
+#: (net, "via1" | "via2", x, y) -- where a net changes layer.
+Via = tuple[str, str, float, float]
+
+#: Which two metal layers each via kind joins.
+VIA_LAYERS = {"via1": ("metal1", "metal2"), "via2": ("metal2", "metal3")}
+
+_TOUCH_EPS = 1e-6
+
+
+def _boxes_touch(a: Conductor, b: Conductor) -> bool:
+    return (
+        a[4] >= b[2] - _TOUCH_EPS
+        and b[4] >= a[2] - _TOUCH_EPS
+        and a[5] >= b[3] - _TOUCH_EPS
+        and b[5] >= a[3] - _TOUCH_EPS
+    )
+
+
+def shorted_pairs(conductors: Iterable[Conductor]) -> list[tuple[str, str, str]]:
+    """Every ``(net_a, net_b, layer)`` where two different nets overlap.
+
+    A DRC deck cannot see this: two overlapping same-layer shapes from
+    different nets merge into one legal polygon. See issue #322, where this
+    exact defect (114 cross-net Metal3 overlaps, 75 of them VDD/VSS) sat
+    undetected through a DRC-clean, merged ``lock_detector`` layout.
+    """
+    items = sorted(conductors, key=lambda c: c[2])
+    hits: list[tuple[str, str, str]] = []
+    for i, a in enumerate(items):
+        for b in items[i + 1 :]:
+            if b[2] >= a[4]:
+                break
+            if a[0] == b[0] or a[1] != b[1]:
+                continue
+            if a[4] > b[2] and b[4] > a[2] and a[5] > b[3] and b[5] > a[3]:
+                hits.append((a[0], b[0], a[1]))
+    return sorted(set(hits))
+
+
+def _contains(box: Conductor, x: float, y: float) -> bool:
+    return box[2] - _TOUCH_EPS <= x <= box[4] + _TOUCH_EPS and box[3] - _TOUCH_EPS <= y <= box[5] + _TOUCH_EPS
+
+
+def disconnected_nets(conductors: Iterable[Conductor], vias: Iterable[Via]) -> list[tuple[str, int]]:
+    """Every ``(net, piece_count)`` whose shapes do not form one island.
+
+    Two shapes on the same layer are connected when their boxes touch or
+    overlap; a via connects a shape on its lower layer to one on its upper
+    layer when both contain the via's centre.
+    """
+    items = list(conductors)
+    parent = list(range(len(items)))
+
+    def find(a: int) -> int:
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    by_net: dict[str, list[int]] = {}
+    for i, c in enumerate(items):
+        by_net.setdefault(c[0], []).append(i)
+
+    for idxs in by_net.values():
+        ordered = sorted(idxs, key=lambda i: items[i][2])
+        for n, i in enumerate(ordered):
+            for j in ordered[n + 1 :]:
+                if items[j][2] > items[i][4] + _TOUCH_EPS:
+                    break
+                if items[i][1] == items[j][1] and _boxes_touch(items[i], items[j]):
+                    union(i, j)
+
+    for net, kind, x, y in vias:
+        lower, upper = VIA_LAYERS[kind]
+        below = [i for i in by_net.get(net, []) if items[i][1] == lower and _contains(items[i], x, y)]
+        above = [i for i in by_net.get(net, []) if items[i][1] == upper and _contains(items[i], x, y)]
+        if not below or not above:
+            raise ValueError(f"via {kind} for net {net!r} at ({x}, {y}) lands on no {lower}/{upper} shape")
+        for i in below:
+            for j in above:
+                union(i, j)
+
+    return sorted(
+        (net, len({find(i) for i in idxs})) for net, idxs in by_net.items() if len({find(i) for i in idxs}) != 1
+    )
