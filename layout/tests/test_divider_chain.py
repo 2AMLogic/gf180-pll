@@ -147,9 +147,14 @@ class GeometryTests(unittest.TestCase):
         self.assertGreater(x1 - x0, 0)
         self.assertGreater(y1 - y0, 0)
         # The number layout/floorplan/skeleton.py records for DIVIDER_LOCK and
-        # layout/evidence/divider-chain-layout/PROOF.md states.
+        # layout/evidence/divider-chain-layout/PROOF-track-packing.md states
+        # (issue #341: devgen.pack_tracks() reused this block's own top-level
+        # Metal2 tracks across non-colliding nets instead of #310's original
+        # one-track-per-net devgen.NetTracks scheme, cutting the block's
+        # height -- the width is unchanged, still one row of 6 div23_cell
+        # instances + 46 glue columns).
         self.assertAlmostEqual(x1 - x0, 2634.28, places=2)
-        self.assertAlmostEqual(y1 - y0, 93.82, places=2)
+        self.assertAlmostEqual(y1 - y0, 57.07, places=2)
 
     def test_every_boundary_net_has_a_pin(self):
         self.assertEqual(set(self.layout.pins), set(divider_chain.BOUNDARY_NETS))
