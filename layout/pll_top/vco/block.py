@@ -90,6 +90,21 @@ below draw it concentric with the ``GND_VCO`` ring, tied to the real
 pre-existing ``SHARED_MARGIN_UM`` gap rather than growing the block further.
 See ``layout/evidence/vco-layout/PROOF-mirror-fold.md``.
 
+The ``nwell`` layer under that tap ring is drawn as a **hollow annulus**
+(``prim.rect_frame()``, width ``NWELL_FRAME_WIDTH_UM``), never as a filled
+rectangle. The ring's box is derived from ``content`` -- the union bbox of
+all five sub-blocks -- so a filled ``rect()`` spanning that box puts every
+NMOS device in the block *inside the n-well*, and neither of this module's
+two verification gates can see it: the foundry DRC deck's rules are
+edge/spacing based, and ``connectivity_report()`` extracts metal only. It
+would surface first at block-level LVS, which has not been run here yet.
+That is not a hypothetical: it is exactly what the first version of this
+ring did (caught in review of PR #333, 100 % of the block's NMOS
+gate-crossing active area under n-well). ``AssembledVcoBlockNwellRing*Tests``
+in ``layout/tests/test_vco_layout.py`` now assert the annulus and the
+zero-overlap property directly against the drawn geometry, so the same
+mistake fails the test suite rather than needing manual KLayout inspection.
+
 One real design conflict this surfaced: the block's own pre-existing
 ``GND_VCO`` straps (block ring -> each sub-block's own ring) run radially
 through the exact annulus the new n-well ring now occupies, and a Metal1
@@ -199,13 +214,21 @@ STRAP_WIDTH_UM = 1.2  # Metal1 tie, block ring <-> a sub-block's own ring
 # (mirror.py) recovered ~80 um of block width, which funds this ring.
 # ``kind="n"``, so ``guard_ring()`` draws n-well tap bands (ncomp + nplus)
 # tied VDD_VCO; the caller (``build()``) also draws the ``nwell`` shape those
-# tap bands sit inside, same convention every per-sub-block generator already
-# uses.
+# tap bands sit inside. Unlike the per-sub-block generators -- whose n-well
+# covers only their own PMOS band -- this one's box spans the whole block, so
+# it is drawn as an annulus (``prim.rect_frame()``), never a filled rect. See
+# build() step 8 and the module docstring.
 NWELL_TAP_ENCLOSURE_MARGIN_UM = 0.3  # DF.4d_LV needs the nwell shape to
-# enclose its own tap comp by >= 0.12 um on every side; this ring's own
-# drawn ``nwell`` rect is grown by this much past its own tap band's outer
-# edge (see build()), not flush with it.
+# enclose its own tap comp by >= 0.12 um on every side; the drawn ``nwell``
+# annulus extends this far past its own tap band on the outer edge *and*
+# past the band's inner edge into the hole (see build()), not flush with
+# either.
 NWELL_RING_WIDTH_UM = 0.9  # >= NW.1a_LV's 0.86 um min, with margin
+NWELL_FRAME_WIDTH_UM = NWELL_RING_WIDTH_UM + 2 * NWELL_TAP_ENCLOSURE_MARGIN_UM
+# ...and the width of the *drawn nwell annulus* around that tap band -- the
+# band plus its DF.4d_LV enclosure on the inner and the outer side. 1.5 um,
+# still >= NW.1a_LV's 0.86 um minimum width in its own right, which is the
+# rule a hollow frame (unlike a filled slab) actually has to satisfy.
 NWELL_RING_INNER_GAP_UM = 1.3  # content's own comp -> this ring's own nwell
 # edge: >= DF.16_LV's 0.43 um with margin, *and* wide enough that a via1
 # landing pad (0.44 um) fits inside it with M1.2a's 0.23 um clearance on both
@@ -255,7 +278,24 @@ class Placement:
     res_col_nvi_x: float
     content: tuple  # (x0, y0, x1, y1) of everything the guard ring encloses
     nwell_ring: tuple  # (x0, y0, x1, y1) of the block-level n-well tap ring
+    nwell_shape: tuple  # (x0, y0, x1, y1) -- *outer* box of the drawn nwell annulus
     outer: tuple  # (x0, y0, x1, y1) of the block-level GND_VCO guard ring itself
+
+    @property
+    def nwell_hole(self) -> tuple:
+        """(x0, y0, x1, y1) of the drawn n-well annulus's own **hole**.
+
+        ``build()`` draws the block-level n-well as a hollow frame, so this
+        box is the region the well deliberately does *not* cover -- it has to
+        contain every sub-block (``content``) with DF.16_LV clearance, or the
+        block's own NMOS devices end up inside the well. Exposed as pure
+        Python so ``layout/tests/`` can assert that invariant without
+        KLayout, alongside the geometric check that reads it back out of the
+        drawn GDS.
+        """
+        w = NWELL_FRAME_WIDTH_UM
+        x0, y0, x1, y1 = self.nwell_shape
+        return (x0 + w, y0 + w, x1 - w, y1 - w)
 
     def boxes(self) -> dict:
         """Each sub-block's own guard-ring box, translated into block coords."""
@@ -335,6 +375,17 @@ def placement() -> Placement:
     # block width beyond what the mirror fold already recovered.
     nm = NWELL_RING_INNER_GAP_UM + NWELL_RING_WIDTH_UM
     nwell_ring = (content[0] - nm, content[1] - nm, content[2] + nm, content[3] + nm)
+    # The drawn nwell annulus: the tap ring's own box grown by DF.4d_LV's
+    # enclosure margin on every side. build() draws this as a *frame* of
+    # NWELL_FRAME_WIDTH_UM, so its hole (Placement.nwell_hole) still clears
+    # ``content`` -- see build() step 8.
+    ne = NWELL_TAP_ENCLOSURE_MARGIN_UM
+    nwell_shape = (
+        nwell_ring[0] - ne,
+        nwell_ring[1] - ne,
+        nwell_ring[2] + ne,
+        nwell_ring[3] + ne,
+    )
 
     return Placement(
         dx_res=dx_res,
@@ -357,6 +408,7 @@ def placement() -> Placement:
         res_col_nvi_x=res_col_nvi_x,
         content=content,
         nwell_ring=nwell_ring,
+        nwell_shape=nwell_shape,
         outer=outer,
     )
 
@@ -674,19 +726,26 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
     # 1's "real two-sided ring" acceptance criterion that PR #325 (#293's own
     # final increment) left open -- see NWELL_RING_*_UM's own comment for why
     # this fits inside the pre-existing SHARED_MARGIN_UM gap rather than
-    # growing the block. A plain filled nwell rect, same convention every
-    # per-sub-block generator already uses for its own tap band: nothing
-    # else is ever placed in this annulus, so there is no reason to draw it
-    # hollow -- grown NWELL_TAP_ENCLOSURE_MARGIN_UM past the ring's own tap
-    # comp on every side (DF.4d_LV's own 0.12 um n-well-encloses-tap minimum,
-    # with margin), not flush with it. ---
-    nwell_shape = (
-        p.nwell_ring[0] - NWELL_TAP_ENCLOSURE_MARGIN_UM,
-        p.nwell_ring[1] - NWELL_TAP_ENCLOSURE_MARGIN_UM,
-        p.nwell_ring[2] + NWELL_TAP_ENCLOSURE_MARGIN_UM,
-        p.nwell_ring[3] + NWELL_TAP_ENCLOSURE_MARGIN_UM,
-    )
-    canvas.rect("nwell", *nwell_shape)
+    # growing the block.
+    #
+    # The nwell shape underneath the tap bands is a **hollow frame**
+    # (``prim.rect_frame()``), not a filled rect. This is not cosmetic: the
+    # ring's own outer box is derived from ``content``, i.e. the union bbox
+    # of all five sub-blocks, so a filled ``rect()`` from that box's corners
+    # would put every NMOS device in the block inside n-well. Neither gate
+    # this block relies on would catch that -- the foundry deck's rules are
+    # edge/spacing based (an nplus active island deep inside an oversized
+    # n-well is geometrically indistinguishable from a legitimate n-well
+    # tap) and ``connectivity_report()`` extracts metal only. See
+    # ``rect_frame()``'s own docstring, and the
+    # ``AssembledVcoBlockNwellRingGeometryTests`` regression tests that now
+    # assert the drawn annulus directly.
+    #
+    # The frame is NWELL_TAP_ENCLOSURE_MARGIN_UM wider than the tap band on
+    # *both* sides (DF.4d_LV's 0.12 um n-well-encloses-tap minimum, with
+    # margin), so the tap ncomp is enclosed all the way round rather than
+    # sitting flush with either well edge. ---
+    prim.rect_frame(canvas, "nwell", *p.nwell_shape, NWELL_FRAME_WIDTH_UM)
     prim.guard_ring(canvas, "n", *p.nwell_ring, NWELL_RING_WIDTH_UM, VDD_NET)
     prim.h_wire(canvas, p.vdd_trunk_x, p.nwell_ring[2], vdd_pin_y, width=STRAP_WIDTH_UM)
 

@@ -1,4 +1,4 @@
-wrote /tmp/blkev/vco_block.gds
+wrote /tmp/vcowork2/vco_block.gds
 footprint: 214.820 x 162.880 um  (34989.9 um^2)
   bias_resistors     123.560    -3.450   136.560    36.870
   vtoi_core           -4.120    -3.720   117.060    47.000
