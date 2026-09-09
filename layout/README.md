@@ -14,13 +14,17 @@ the first block with **real** transistor-level layout: the VCO's 5-stage
 ring with its own guard ring and carried-forward decap
 (`layout/pll_top/vco/ring.py`), its common-centroid 3-cascade band-select
 mirror (`mirror.py`) and its 3-stage tapered output buffer (`buffer.py`).
-`layout/pll_top/pfd_cp/` (issue #294/#299) is
+`layout/pll_top/pfd_cp/` (issue #294/#299/#300) is
 a second, independent full-custom leaf-cell family: a reusable
 device-list-driven generator (`devgen.py`) proved out on one representative
 PFD/CP leaf cell (`pfdcp_inv_3v3`) — see `layout/evidence/pfdcp-inv-proof/PROOF.md`
 for the DRC/LVS-clean proof and why it draws geometry directly against
 `klayout.db` rather than through `klt gen`/`klt gen-compose` (a genuine,
-filed capability gap, not a preference).
+filed capability gap, not a preference). Built on that methodology,
+`rowgen.py`/`pfd_cells.py`/`pfd.py` (issue #300) assemble the full
+tri-state PFD block — 47 leaf instances, 108 transistors, its two UP/DN
+chains laid out as literal mirror images about a shared axis per
+`PLL-FLOORPLAN.md` section 4 — see `layout/evidence/pfd-layout/PROOF.md`.
 `layout/pll_top/divider_chain/` (issue #295/#306) is a third, independent
 full-custom leaf-cell family: a sibling `devgen.py`, reused/generalized from
 `pfd_cp/devgen.py`, proved out on two representative leaf cells —
@@ -62,9 +66,12 @@ layout/
       primitives.py               hand-drawn nfet_03v3/pfet_03v3 geometry primitives + net routing
       cells.py                    gate-level macros (inv/nand2/schmitt/xor2/delaywin) built from primitives.py
       build.py                    assembles the full block (or any leaf macro standalone) into a GDS
-    pfd_cp/                   the PFD/CP block family (issue #294/#299)
+    pfd_cp/                   the PFD/CP block family (issue #294/#299/#300)
       devgen.py                  reusable device-list -> DRC-clean leaf-cell generator
       pfdcp_inv.py                pfdcp_inv_3v3.sch's device table + CLI entry point
+      rowgen.py                   row-style geometry/routing primitives for multi-gate blocks (issue #300)
+      pfd_cells.py                 pfdcp_inv_3v3/pfdcp_nand2_3v3 as row-style cells (issue #300)
+      pfd.py                       assembles the full mirror-symmetric PFD block; CLI entry point (issue #300)
     divider_chain/            the divider_chain block family (issue #295/#306)
       devgen.py                  reusable device-list -> DRC-clean leaf-cell generator
                                   (reused/generalized from pfd_cp/devgen.py)
@@ -78,6 +85,7 @@ layout/
                              PROOF-bias-resistors.md = RCG/ROFF/RDEG; PROOF-vtoi-core.md = V-to-I core
     lock-detector-layout/    lock_detector block GDS + DRC-clean report (issue #296)
     pfdcp-inv-proof/         PFD/CP devgen methodology proof: GDS + DRC/LVS reports (issue #299)
+    pfd-layout/              PFD block GDS + DRC-clean report, mirror-symmetric UP/DN chains (issue #300)
     divider-inv-proof/       divider_chain inv_3v3 devgen proof: GDS + DRC/LVS reports (issue #306)
     divider-tgate-proof/     divider_chain tgate_3v3 devgen proof: GDS + DRC/LVS reports (issue #306)
     work/                    scratch re-run tree (git-ignored)

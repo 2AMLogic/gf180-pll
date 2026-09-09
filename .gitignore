@@ -17,6 +17,8 @@
 !layout/evidence/lock-detector-layout/**/*.log
 # Same story again for the PFD/CP devgen methodology proof's DRC+LVS evidence (issue #299).
 !layout/evidence/pfdcp-inv-proof/**/*.log
+# Same story again for the PFD block layout's DRC evidence (issue #300).
+!layout/evidence/pfd-layout/**/*.log
 __pycache__/
 .DS_Store
 
