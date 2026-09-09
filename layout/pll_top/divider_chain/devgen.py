@@ -937,6 +937,118 @@ class NetTracks:
             self._next_y += self._pitch
         return self._assigned[net]
 
+
+# --- track *reuse* for a large, mostly-local net population (issue #341) ---
+#
+# :class:`NetTracks` is the right tool for a composite with a handful of
+# nets, most of which reach across the composite's *entire* width anyway
+# (``dff_tg_3v3``'s clock nets, ``div23_cell``'s internal nets): giving every
+# net its own track costs nothing extra there, because most tracks would end
+# up nearly full-width regardless.
+#
+# ``divider_chain.py``'s own top-level assembly is a different regime: 71
+# nets, many of which are genuinely *local* -- a one-hot-mux net whose two
+# pads are both inside the glue-logic region, or a chain net whose only two
+# far-apart uses still leave most of the block's width untouched by it.
+# Handing every one of those its own :data:`METAL2_TRACK_PITCH_UM`-tall track
+# regardless is exactly the "one global track per net, even though most nets
+# are local" cost issue #341 measured: ~71 tracks x 0.75 um = ~53 um, more
+# than half the block's total height, for a track band that (per net) is
+# mostly empty in x.
+#
+# :func:`pack_tracks` is the fix: the same *track assignment* step a real
+# channel router performs (not a channel router itself -- this package's
+# per-net Metal1-pad-to-Metal2-bus wiring via :func:`route_net` is
+# unchanged), reusing one track_y for every net whose drawn Metal2 bus
+# extent -- x_lo .. x_hi across all its own pads, exactly the rectangle
+# :func:`route_net` draws -- does not come within
+# :data:`METAL2_TRACK_PITCH_UM` - :data:`METAL2_WIRE_WIDTH_UM` of another
+# net's already on that track. This is the textbook "left-edge algorithm"
+# for interval-graph track assignment: sorting by each interval's own left
+# edge and greedily reusing the first track whose last-placed interval ends
+# early enough is known to use the *minimum* number of tracks for an
+# interval graph (the maximum number of nets whose extents mutually
+# overlap at any single x) -- so this is not a heuristic that might miss a
+# packing opportunity a smarter one would find, it is provably optimal for
+# this 1-D placement problem.
+#
+# Two full-width nets (this block's own ``VDD_DIV``/``VSS`` supply trunks,
+# whose pads span every column) can never share a track with anything, so
+# they alone still cost two full tracks -- :func:`pack_tracks` cannot do
+# better than :class:`NetTracks` there. The win is entirely on the nets
+# whose extent leaves the rest of the block's width free for something
+# else's bus.
+def _net_x_extent(pad_centers: Sequence[tuple[float, float]]) -> tuple[float, float]:
+    """The physical x-range one net's drawn Metal2 geometry occupies at its
+    own track_y -- not just :func:`route_net`'s own bus rectangle
+    (``x_lo - METAL2_WIRE_WIDTH_UM/2 .. x_hi + METAL2_WIRE_WIDTH_UM/2``), but
+    the wider of that and each end riser's own Via2/Metal2 landing square
+    (:func:`_canvas._riser`'s ``half_m3_top = VIA2_SIZE_UM/2 + VIA_ENCLOSURE_UM``,
+    which is wider than half the bus wire's own width) -- so a net's true
+    left/rightmost drawn shape at ``track_y`` is never underestimated at the
+    two extreme pads, where the landing square is what actually reaches
+    furthest, not the bus wire.
+    """
+    xs = [x for x, _ in pad_centers]
+    half = max(METAL2_WIRE_WIDTH_UM / 2.0, VIA2_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM)
+    return (min(xs) - half, max(xs) + half)
+
+
+def pack_tracks(
+    nets: dict[str, Sequence[tuple[float, float]]],
+    base_y: float,
+    *,
+    pitch: float = METAL2_TRACK_PITCH_UM,
+    clearance: float = METAL2_TRACK_PITCH_UM - METAL2_WIRE_WIDTH_UM,
+) -> dict[str, float]:
+    """Assign every net in ``nets`` a track_y, reusing a track across any
+    nets whose drawn extents (:func:`_net_x_extent`) do not come within
+    ``clearance`` of each other -- see this section's own module-level
+    comment for the algorithm and why it is optimal, not merely "good
+    enough".
+
+    ``clearance`` defaults to the same margin :class:`NetTracks` already
+    uses *between* two tracks in y (``METAL2_TRACK_PITCH_UM -
+    METAL2_WIRE_WIDTH_UM`` = 0.41 um, comfortably over M2.2a's 0.28 um
+    minimum Metal2 spacing) -- reused here as the required x-direction gap
+    between two different nets' bus rectangles sharing one track, rather
+    than re-derived, since it is the same rule (minimum same-layer Metal2
+    spacing) applying along the other axis.
+
+    Requires every net to have at least one pad (same precondition
+    :func:`route_net` already enforces); raises ``ValueError`` otherwise, one
+    net at a time, naming it -- the same discipline
+    :func:`build_stack_cell`/:func:`build_row_cell` already use for a caller
+    error rather than a confusing downstream KeyError.
+    """
+    extents: dict[str, tuple[float, float]] = {}
+    for net, pads in nets.items():
+        pads = list(pads)
+        if not pads:
+            raise ValueError(f"pack_tracks(): net {net!r} has no pads to route")
+        extents[net] = _net_x_extent(pads)
+
+    # Left-edge algorithm: process nets in increasing left-edge order (ties
+    # broken by name, for determinism), placing each on the first track
+    # whose most-recent occupant ends early enough to clear this net's own
+    # left edge by `clearance`; open a new track only when none does.
+    order = sorted(extents, key=lambda n: (extents[n][0], n))
+    track_right: list[float] = []
+    track_of: dict[str, int] = {}
+    for net in order:
+        lo, hi = extents[net]
+        for i, right in enumerate(track_right):
+            if lo >= right + clearance:
+                track_right[i] = hi
+                track_of[net] = i
+                break
+        else:
+            track_right.append(hi)
+            track_of[net] = len(track_right) - 1
+
+    return {net: base_y + i * pitch for net, i in track_of.items()}
+
+
 # ===========================================================================
 # ROW CELLS -- static-CMOS gates with real fan-in (issue #307, Part 2 of #295)
 # ===========================================================================

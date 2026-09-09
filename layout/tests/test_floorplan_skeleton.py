@@ -100,9 +100,13 @@ class BlockPlacementTests(unittest.TestCase):
         Through #324 this asserted ``total_extent_um2() < 150_000`` and
         passed. It cannot any more: #310 replaced ``DIVIDER_LOCK``'s 90x50 um
         placeholder with the two real blocks it contains, and the divider
-        chain alone measures 2634.28 x 93.82 um (see the fail-loud block at
+        chain alone measured 2634.28 x 93.82 um (see the fail-loud block at
         ``DIVIDER_LOCK`` in skeleton.py, and PLL-FLOORPLAN.md section 5's
-        revision note).
+        revision note). Issue #341 then reduced the divider chain's *height*
+        (not its width) to 57.07 um by packing its own top-level routing
+        tracks instead of giving every net a never-reused one -- the overrun
+        is smaller now (~1.09e6 um^2, was ~1.19e6 um^2) but still real; the
+        ratchet ceiling below was tightened to match rather than left loose.
 
         The assertion is *inverted rather than deleted*, plus a ratchet: the
         overrun must still be real (so this test starts failing again the
@@ -120,8 +124,9 @@ class BlockPlacementTests(unittest.TestCase):
             "skeleton.py's DIVIDER_LOCK fail-loud note and PLL-FLOORPLAN.md "
             "section 5 to match",
         )
-        # Ratchet: skeleton.py states ~1.19e6 um^2. Allow no growth past 1.25e6.
-        self.assertLess(extent, 1_250_000.0, "floorplan extent grew beyond the recorded overrun")
+        # Ratchet: skeleton.py states ~1.09e6 um^2 (issue #341). Allow no
+        # growth past 1.15e6.
+        self.assertLess(extent, 1_150_000.0, "floorplan extent grew beyond the recorded overrun")
 
     def test_lock_detector_standalone_footprint_is_recorded_and_positive(self):
         # issue #296: the real, DRC-clean standalone lock_detector layout's
