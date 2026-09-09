@@ -37,6 +37,9 @@
 # Same story again for the assembled divider_chain block layout's DRC+LVS
 # evidence (issue #310).
 !layout/evidence/divider-chain-layout/**/*.log
+# Same story again for the cp_array common-centroid N/P array + bias branch
+# layout's DRC evidence (issue #320).
+!layout/evidence/cp-array-proof/**/*.log
 __pycache__/
 .DS_Store
 
