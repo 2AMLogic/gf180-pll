@@ -225,6 +225,30 @@ jobs, and conflating them is the single easiest way to get stuck:
   thing that can execute the foundry's Ruby DRC/LVS-DSL rule decks. There is
   no way to run a `.drc`/`.lvs` script through the pip wheel.
 
+### KLayout version pin — a newer install can produce a false LVS mismatch
+
+The committed DRC/LVS evidence under `layout/evidence/*/` was captured
+against `KLayout 0.28.16` — recorded as `KNOWN_GOOD_KLAYOUT_VERSION` in
+`layout/harness/env.py`. A **newer** KLayout application binary resolved off
+`PATH` (0.30.9 has been reproduced directly) has been observed to report a
+false `LVS mismatch` on a `divider_chain` layout that is otherwise LVS-clean
+and unchanged from a previously LVS-clean, evidenced state — while running
+DRC on the *same* binary against the *same* GDS came back clean, 0
+violations. Whatever changed between these point releases appears specific
+to the LVS deck's net extraction/comparison, not general geometry handling
+(unverified hypothesis — bisecting the exact point release is out of scope
+of this note; see issue #360).
+
+`env.py`'s `find_klayout()` resolves the application binary with no version
+pin or check, so this drift is silent by default. `check-env`, `drc`, and
+`lvs` all call `PvTools.klayout_version_warning()` and print a `WARNING`
+line when the resolved KLayout differs from the pin — non-fatal, and only
+printed inline by `drc`/`lvs` when the result itself came back
+violations/mismatch (a clean/matching run stays silent). **If you see an
+unexpected `LVS mismatch` locally**, run `python3 layout/run_pv.py
+check-env` first and check whether the reported KLayout version matches the
+pin before concluding the layout itself regressed.
+
 ### The `pmap` shim (macOS/BSD)
 
 The foundry DRC/LVS decks configure a Ruby logger whose message formatter

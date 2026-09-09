@@ -59,6 +59,9 @@ def cmd_check_env(_args: argparse.Namespace) -> int:
     print(f"DRC runner : {tools.drc_runner}")
     print(f"LVS runner : {tools.lvs_runner}")
     print(f"stdcell gds: {tools.stdcell_gds}")
+    warning = tools.klayout_version_warning()
+    if warning:
+        print(warning)
     return EXIT_OK
 
 
@@ -88,6 +91,10 @@ def cmd_drc(args: argparse.Namespace) -> int:
         timeout=args.timeout,
     )
     print(result.summary())
+    if result.status == "violations":
+        warning = tools.klayout_version_warning()
+        if warning:
+            print(warning)
     if result.status == "error":
         return EXIT_ENVIRONMENT
     return EXIT_OK if result.ok else EXIT_UNEXPECTED_RESULT
@@ -108,6 +115,10 @@ def cmd_lvs(args: argparse.Namespace) -> int:
         timeout=args.timeout,
     )
     print(result.summary())
+    if result.status == "mismatch":
+        warning = tools.klayout_version_warning()
+        if warning:
+            print(warning)
     if result.status == "error":
         return EXIT_ENVIRONMENT
     return EXIT_OK if result.ok else EXIT_UNEXPECTED_RESULT

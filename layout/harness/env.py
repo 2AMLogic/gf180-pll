@@ -113,6 +113,48 @@ class ToolNotFound(RuntimeError):
     """Raised when a required physical-verification tool cannot be located."""
 
 
+# The KLayout application version this repo's committed DRC/LVS evidence
+# (``layout/evidence/*/``) was captured against. Update this by hand only
+# when evidence is deliberately regenerated against a newer KLayout -- see
+# ``klayout_version_mismatch_warning()`` below and layout/README.md's "The
+# two KLayouts" section for why this matters: a KLayout newer than this pin
+# (reproduced: 0.30.9) has been observed to report a false LVS mismatch on
+# an LVS-clean, unchanged layout, while DRC on the same binary was
+# unaffected (issue #360).
+KNOWN_GOOD_KLAYOUT_VERSION = "KLayout 0.28.16"
+
+
+def klayout_version_mismatch_warning(version: str) -> str | None:
+    """Advisory-only comparison of a resolved KLayout version against the pin.
+
+    Returns ``None`` (silent) when ``version`` matches
+    ``KNOWN_GOOD_KLAYOUT_VERSION`` or when it could not be determined (the
+    ``"unknown (...)"`` string produced by ``PvTools.klayout_version()``'s
+    exception path) -- an undetermined version is not evidence of a
+    mismatch, so it must not print a warning either. Otherwise returns a
+    human-readable warning string; never raises.
+
+    This is a pure string comparison, not semver parsing: the format
+    (``"KLayout X.Y.Z"``) has been consistent across the platforms this
+    repo has observed so far. Deliberately decoupled from any pass/fail
+    verdict -- callers decide whether/when to surface it (see
+    ``run_pv.py``'s ``cmd_check_env`` / ``cmd_drc`` / ``cmd_lvs``).
+    """
+    if not version or version.startswith("unknown"):
+        return None
+    if KNOWN_GOOD_KLAYOUT_VERSION in version:
+        return None
+    return (
+        f"WARNING: resolved KLayout is '{version}', but this repo's committed "
+        f"DRC/LVS evidence was captured against '{KNOWN_GOOD_KLAYOUT_VERSION}'. "
+        "KLayout releases newer than 0.28.16 (reproduced: 0.30.9) have been "
+        "observed to report a false LVS mismatch on an LVS-clean, unchanged "
+        "layout -- DRC on the same binary was unaffected. See "
+        "layout/README.md's \"The two KLayouts\" section before concluding "
+        "a regression from an LVS mismatch alone."
+    )
+
+
 def _expand(path: str) -> Path:
     return Path(os.path.expandvars(os.path.expanduser(path)))
 
@@ -230,6 +272,10 @@ class PvTools:
         except (subprocess.SubprocessError, OSError) as exc:  # pragma: no cover
             return f"unknown ({exc})"
         return (out.stdout or out.stderr).strip().splitlines()[0] if (out.stdout or out.stderr) else "unknown"
+
+    def klayout_version_warning(self) -> str | None:
+        """Advisory-only: see ``klayout_version_mismatch_warning()``."""
+        return klayout_version_mismatch_warning(self.klayout_version())
 
     def subprocess_env(self) -> dict:
         """Environment for the PDK runners.
