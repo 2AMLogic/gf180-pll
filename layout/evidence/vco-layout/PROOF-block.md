@@ -170,7 +170,7 @@ left-hand channel (the side the supply trunk is not on).
 | Issue #293 AC | Where |
 |---|---|
 | Real DRC-clean layout for ring + bias generator + 3-cascade band mirror + 3-stage buffer | this block; per-sub-block proofs in the four companion PROOFs |
-| Dedicated VCO guard ring, tap pitch ≤ 15 µm everywhere inside the block | block-level `GND_VCO` p-ring drawn by `block.build()`; per-sub-block rings retained inside it, so the worst-case device-to-tap distance anywhere in the block is 12.1 µm (the V-to-I core's PMOS band, set by `MSU1`'s L = 20 µm channel) — `test_tap_pitch_bound_holds_for_every_sub_block` |
+| Dedicated VCO guard ring, tap pitch ≤ 15 µm everywhere inside the block | **partial** — block-level `GND_VCO` p-ring drawn by `block.build()`, per-sub-block rings retained inside it, worst-case device-to-tap distance anywhere in the block 12.1 µm (`test_tap_pitch_bound_holds_for_every_sub_block`). The `VDD_VCO`-tied n-well tap rings are **per sub-block**, not a block-level second ring — see "The one acceptance criterion this increment does not fully close" below |
 | Band-mirror cascades common-centroid | `mirror.py` + `check_common_centroid()`, PR #313 |
 | Buffer's largest stage closest to `CLK`, farthest from the ring's starved nodes | `buffer.py` orders stages smallest-first with `CLK` on its right edge; `block.py` places the buffer with its *input* over the ring's stage-5 pad, so the large stage is the far one |
 | 22 pF decap carried forward unchanged, adjacent to the `VDD_VCO` pin/ring-tap junction | `block.decap_boxes_um()` — the same 2 × 50 × 50 µm layer-(0,0) markers, placed against the block's own `VDD_VCO` trunk pin; `ring.build(draw_decap=False)` suppresses the ring's own copy so there is exactly one marker pair |
@@ -212,6 +212,32 @@ cut the block from 327.2 × 148.2 µm to 294.8 × 148.2 µm (−11 %) — but
 is not this issue's scope.** At ~50 % area utilisation inside the guard ring,
 that lever is worth roughly another 2× and should be a separate issue.
 
+## The one acceptance criterion this increment does not fully close
+
+`PLL-FLOORPLAN.md` §1 asks for the VCO's guard ring to be "tied to `GND_VCO`
+on the substrate side and to a local `VDD_VCO`-tied n-well tap ring on the
+p-well side … a real two-sided ring, not a substrate-only one."
+
+What is drawn: the **block-level** ring is `GND_VCO` substrate only. Every
+n-well inside the block is `VDD_VCO`-tied by its own sub-block's tap band
+(12.1 µm worst case), which satisfies the well-tie and tap-pitch halves of
+that sentence and is arguably what "a *local* … n-well tap ring" means — but
+it is not a second, concentric n-well ring at the block boundary, which is
+the other reading. This PROOF does not pick the reading that flatters it.
+
+Why it is not simply added here: an n-well band at the block boundary needs
+its own width (≥ `NW.1a_LV`'s 0.86 µm), its `DF.4d_LV` tap inset, and
+`DF.16_LV` clearance to comp on both sides — about 4.4 µm per side, so
++8.8 µm of block width. There is no width budget for that today: as the area
+section above records, `skeleton.total_extent_um2()` already sits ~1.2 %
+under the 0.15 mm² draft target, and +8.8 µm of VCO width would take that to
+~0.1 %. Block *height* is free (the skeleton's height is set by the loop
+filter, not the VCO), so the fix and the area optimisation are naturally the
+same increment: folding the single-row sub-blocks into multiple rows both
+recovers the width and pays for the ring.
+
+That is why this PR is `Part of #293` rather than closing it.
+
 ## klayout-tools friction: none new
 
 Per this repo's friction protocol, tool gaps hit while drawing real geometry
@@ -234,5 +260,6 @@ repo's* generators, not of klayout-tools, and was added here as
 * **Extraction / post-layout simulation.** Nothing here says what the drawn
   parasitics do to DR-003's tuning range or jitter — that is a separate
   deliverable and the numbers in `sim/` remain pre-layout.
+* **The block-level n-well guard ring** — see the section above.
 * **Top-level assembly.** Wiring this block into `pll_top` alongside the
   PFD/CP, divider chain and lock detector is issue #297.

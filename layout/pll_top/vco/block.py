@@ -74,6 +74,24 @@ layer that is allowed to. ``GND_VCO`` needs no trunk at all: it is the
 substrate, and the block-level ring is tied to each sub-block's own ring by a
 Metal1 strap in the left-hand channel.
 
+WHAT THIS BLOCK'S GUARD RING IS *NOT*
+---------------------------------------
+PLL-FLOORPLAN.md section 1 asks for the VCO's ring to be "a real two-sided
+ring, not a substrate-only one" -- ``GND_VCO`` on the substrate side and a
+``VDD_VCO``-tied n-well tap ring on the well side. The block-level ring here
+is ``GND_VCO`` substrate only. Every n-well *inside* the block is
+``VDD_VCO``-tied by its own sub-block's tap band (12.1 um worst case, well
+inside section 1's own 15 um bound), which covers the well-tie and tap-pitch
+halves of that requirement -- but there is no second, concentric n-well band
+at the block boundary. That band would cost about 4.4 um per side
+(``NW.1a_LV`` width + ``DF.4d_LV`` tap inset + ``DF.16_LV`` clearance to comp
+on both sides), i.e. +8.8 um of block *width*, and as the area section below
+records there is no width budget for it today. Block *height* is free (the
+floorplan skeleton's height is set by the loop filter, not the VCO), so the
+missing ring and the row-folding area optimisation are naturally the same
+follow-up increment: folding pays for the ring. See
+``layout/evidence/vco-layout/PROOF-block.md``.
+
 DEVIATION FROM THE ROM FLOORPLAN, STATED PLAINLY
 --------------------------------------------------
 ``footprint_um()`` reports the assembled block at 294.78 x 148.18 um
