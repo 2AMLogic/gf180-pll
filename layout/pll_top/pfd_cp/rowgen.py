@@ -75,7 +75,17 @@ headroom; the citations are per-constant.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Iterable, Sequence
+
+try:
+    from .. import _canvas
+except ImportError:  # this package's own dir (not its "pll_top" parent) is the
+    # sys.path root under layout/tests's flat-import convention (see
+    # floorplan/skeleton.py and every layout/tests/test_*.py's own
+    # sys.path.insert(..., ".../pll_top") -- "vco"/"lock_detector"/"pfd_cp"
+    # are then each their own top-level package, one level short of "..").
+    import _canvas
 
 # --- GDS layers, gf180mcuD (confirmed against
 # libs.tech/klayout/drc/rule_decks/layers_def.drc's get_polygons() calls --
@@ -298,17 +308,15 @@ def sd_pad_reach(w_um: float) -> float:
     return _r(w_um / 2.0 + METAL1_PAD_MARGIN_UM)
 
 
-def _contact_positions(lo: float, hi: float) -> list[float]:
-    usable_lo = lo + CONTACT_ROW_MARGIN_UM
-    usable_hi = hi - CONTACT_ROW_MARGIN_UM
-    span = usable_hi - usable_lo
-    if span < CONTACT_SIZE_UM:
-        center = (lo + hi) / 2.0
-        return [center - CONTACT_SIZE_UM / 2.0]
-    n = max(int((span - CONTACT_SIZE_UM) // CONTACT_PITCH_UM) + 1, 1)
-    total = CONTACT_SIZE_UM + (n - 1) * CONTACT_PITCH_UM
-    start = usable_lo + (span - total) / 2.0
-    return [start + i * CONTACT_PITCH_UM for i in range(n)]
+# Left-edge x (or y) positions for a row of contacts spanning [lo, hi] --
+# shared with every other ``layout/pll_top/*`` submodule (issue #332,
+# ``_canvas._contact_positions()``).
+_contact_positions = partial(
+    _canvas._contact_positions,
+    size_um=CONTACT_SIZE_UM,
+    pitch_um=CONTACT_PITCH_UM,
+    margin_um=CONTACT_ROW_MARGIN_UM,
+)
 
 
 def mosfet(view, fet: Fet, x0: float, y_center: float, *, tab_up: bool) -> MosfetPorts:

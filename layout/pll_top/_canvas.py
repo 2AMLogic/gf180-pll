@@ -39,13 +39,28 @@ flat top cell is what every block-level generator in this package will need.
 It costs nothing to inherit -- the offset is ``(0, 0)`` for any caller that
 never opens the context manager, so every existing standalone build is
 byte-identical.
+
+``bbox_union()``, ``_contact_positions()``, ``_via_square()``, and
+``_riser()`` (issue #332, a follow-up to #317/#328's ``Canvas``/``_r()``
+consolidation) are free functions rather than ``Canvas`` methods, matching
+each submodule's original convention: each was independently re-authored
+per ``layout/pll_top/*`` submodule with identical (or, for
+``_contact_positions()``, near-identical) bodies. ``_contact_positions()``
+and ``_riser()`` take their caller's own CO.1/via/wire-size constants as
+explicit keyword arguments rather than hardcoding a shared value here, so
+each submodule keeps deriving them from its own
+``CONTACT_SIZE_UM``/``CONTACT_PITCH_UM``/``CONTACT_ROW_MARGIN_UM`` /
+``VIA1_SIZE_UM``/``VIA2_SIZE_UM``/``VIA_ENCLOSURE_UM``/``METAL3_WIRE_WIDTH_UM``
+constants, unchanged. ``pfd_cp/cp_dumpbuf.py``'s own ``_riser()`` is
+structurally different (a separate ``_rect_extra()`` helper and a different
+via-landing sequence) and stays put -- see that function's own docstring.
 """
 
 from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import ClassVar, Iterator
+from typing import Callable, ClassVar, Iterable, Iterator
 
 
 def _r(v: float) -> float:
@@ -180,3 +195,102 @@ class Canvas:
         options.select_cell(self.top.cell_index())
         options.format = "GDS2"
         self.layout.write(str(path), options)
+
+
+def bbox_union(boxes: Iterable[tuple[float, float, float, float]]) -> tuple[float, float, float, float]:
+    """The smallest axis-aligned box enclosing every box in ``boxes``."""
+    boxes = list(boxes)
+    return (
+        min(b[0] for b in boxes),
+        min(b[1] for b in boxes),
+        max(b[2] for b in boxes),
+        max(b[3] for b in boxes),
+    )
+
+
+def _contact_positions(
+    lo: float,
+    hi: float,
+    *,
+    size_um: float,
+    pitch_um: float,
+    margin_um: float,
+    snap: Callable[[float], float] | None = None,
+) -> list[float]:
+    """Left-edge x (or y) positions for a row of contacts spanning ``[lo, hi]``.
+
+    ``size_um``/``pitch_um``/``margin_um`` are the caller's own CO.1-derived
+    contact size, pitch, and row-inset margin, passed explicitly rather than
+    hardcoded here -- each submodule keeps deriving them from its own
+    ``CONTACT_SIZE_UM``/``CONTACT_PITCH_UM``/``CONTACT_ROW_MARGIN_UM``
+    constants, unchanged.
+
+    ``snap``, when given, rounds each returned coordinate (and the
+    intermediate ``start`` position) through a manufacturing-grid snap
+    function before returning. ``vco/primitives.py`` is the one caller that
+    needs this: ``CO.1`` makes 0.22 um the contact's min **and** max size,
+    so an off-grid origin whose far edge rounds the other way is a
+    0.215/0.225 um contact and a hard violation, not a cosmetic nudge. Every
+    other caller passes nothing and keeps the original, unsnapped behavior.
+    """
+    snap = snap or (lambda v: v)
+    usable_lo = lo + margin_um
+    usable_hi = hi - margin_um
+    span = usable_hi - usable_lo
+    if span < size_um:
+        center = (lo + hi) / 2.0
+        return [snap(center - size_um / 2.0)]
+    n = int((span - size_um) // pitch_um) + 1
+    n = max(n, 1)
+    total = size_um + (n - 1) * pitch_um
+    start = snap(usable_lo + (span - total) / 2.0)
+    return [snap(start + i * pitch_um) for i in range(n)]
+
+
+def _via_square(canvas: Canvas, layer: str, x: float, y: float, size: float, enclosure: float) -> float:
+    """Draw one square via centered at ``(x, y)`` and return the half-size of
+    its enclosing metal landing pad (``size / 2 + enclosure``)."""
+    half_v = size / 2.0
+    canvas.rect(layer, x - half_v, y - half_v, x + half_v, y + half_v)
+    return half_v + enclosure
+
+
+def _riser(
+    canvas: Canvas,
+    x: float,
+    y_pad: float,
+    track_y: float,
+    *,
+    via1_size_um: float,
+    via2_size_um: float,
+    via_enclosure_um: float,
+    metal3_width_um: float,
+) -> None:
+    """Metal1 pad -> Via1 -> Metal2 landing -> Via2 -> Metal3 riser -> Via2 -> Metal2 bus landing.
+
+    The long vertical run (from ``y_pad`` to ``track_y``) is drawn entirely
+    on Metal3 -- a layer this package's leaf-cell geometry never otherwise
+    uses -- so it can freely cross any other net's Metal2 bus without a via
+    (no via, no connection, no short: metal on two different layers
+    overlapping with no via between them is not a DRC violation in this
+    deck).
+
+    ``via1_size_um``/``via2_size_um``/``via_enclosure_um``/``metal3_width_um``
+    are the caller's own via/wire-size constants, passed explicitly so each
+    submodule keeps deriving them from its own ``VIA1_SIZE_UM`` /
+    ``VIA2_SIZE_UM`` / ``VIA_ENCLOSURE_UM`` / ``METAL3_WIRE_WIDTH_UM``
+    constants, unchanged.
+    """
+    half_m2 = _via_square(canvas, "via1", x, y_pad, via1_size_um, via_enclosure_um)
+    canvas.rect("metal2", x - half_m2, y_pad - half_m2, x + half_m2, y_pad + half_m2)
+    canvas.rect("metal1", x - half_m2, y_pad - half_m2, x + half_m2, y_pad + half_m2)
+
+    half_m3 = _via_square(canvas, "via2", x, y_pad, via2_size_um, via_enclosure_um)
+    canvas.rect("metal3", x - half_m3, y_pad - half_m3, x + half_m3, y_pad + half_m3)
+
+    half_w = metal3_width_um / 2.0
+    canvas.rect("metal3", x - half_w, min(y_pad, track_y), x + half_w, max(y_pad, track_y))
+
+    half_m3_top = _via_square(canvas, "via2", x, track_y, via2_size_um, via_enclosure_um)
+    canvas.rect("metal3", x - half_m3_top, track_y - half_m3_top, x + half_m3_top, track_y + half_m3_top)
+    canvas.rect("metal2", x - half_m3_top, track_y - half_m3_top, x + half_m3_top, track_y + half_m3_top)

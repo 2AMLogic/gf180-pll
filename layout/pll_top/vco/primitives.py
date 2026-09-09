@@ -41,6 +41,7 @@ trade was made explicit rather than silent.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import partial
 from typing import ClassVar, Iterable
 
 try:
@@ -229,25 +230,21 @@ class Canvas(_canvas.Canvas):
     GRID_UM: ClassVar[float] = dev.LAYOUT_GRID_UM
 
 
-def _contact_positions(lo: float, hi: float) -> list[float]:
-    """Left-edge x (or y) positions for a row of contacts spanning [lo, hi].
-
-    Snapped to the manufacturing grid at the *origin*, not left to
-    ``Canvas._u`` -- ``CO.1`` makes 0.22 um the contact's min **and** max
-    size, so an off-grid origin whose far edge rounds the other way is a
-    0.215/0.225 um contact and a hard violation, not a cosmetic nudge.
-    """
-    usable_lo = lo + CONTACT_ROW_MARGIN_UM
-    usable_hi = hi - CONTACT_ROW_MARGIN_UM
-    span = usable_hi - usable_lo
-    if span < CONTACT_SIZE_UM:
-        center = (lo + hi) / 2.0
-        return [dev.snap_um(center - CONTACT_SIZE_UM / 2.0)]
-    n = int((span - CONTACT_SIZE_UM) // CONTACT_PITCH_UM) + 1
-    n = max(n, 1)
-    total = CONTACT_SIZE_UM + (n - 1) * CONTACT_PITCH_UM
-    start = dev.snap_um(usable_lo + (span - total) / 2.0)
-    return [dev.snap_um(start + i * CONTACT_PITCH_UM) for i in range(n)]
+# Left-edge x (or y) positions for a row of contacts spanning [lo, hi] --
+# shared with every other ``layout/pll_top/*`` submodule (issue #332,
+# ``_canvas._contact_positions()``). Snapped to the manufacturing grid at
+# the *origin* via ``dev.snap_um``, not left to ``Canvas._u`` -- ``CO.1``
+# makes 0.22 um the contact's min **and** max size, so an off-grid origin
+# whose far edge rounds the other way is a 0.215/0.225 um contact and a
+# hard violation, not a cosmetic nudge. This module is the one caller that
+# needs that snap; every other submodule's own binding leaves it unsnapped.
+_contact_positions = partial(
+    _canvas._contact_positions,
+    size_um=CONTACT_SIZE_UM,
+    pitch_um=CONTACT_PITCH_UM,
+    margin_um=CONTACT_ROW_MARGIN_UM,
+    snap=dev.snap_um,
+)
 
 
 @dataclass
@@ -520,14 +517,9 @@ def via1_stack(canvas: Canvas, x: float, y: float) -> tuple:
     return pad
 
 
-def bbox_union(boxes: Iterable[tuple[float, float, float, float]]) -> tuple[float, float, float, float]:
-    boxes = list(boxes)
-    return (
-        min(b[0] for b in boxes),
-        min(b[1] for b in boxes),
-        max(b[2] for b in boxes),
-        max(b[3] for b in boxes),
-    )
+# Smallest axis-aligned box enclosing every box given -- shared with every
+# other ``layout/pll_top/*`` submodule (issue #332, ``_canvas.bbox_union()``).
+bbox_union = _canvas.bbox_union
 
 
 def tap_strip(canvas: Canvas, kind: str, x0: float, y0: float, x1: float, y1: float, net: str) -> None:
