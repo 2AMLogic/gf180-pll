@@ -1108,6 +1108,7 @@ def route_all_nets(
     nets: dict[str, list[tuple[float, float, float, float]]],
     tracks: "NetTracks",
     width: float = METAL2_WIRE_WIDTH_UM,
+    late_nets: frozenset[str] = frozenset(),
 ) -> None:
     """Tie every net's pads to its own Metal2 bus at ``tracks.get(net)``.
 
@@ -1135,6 +1136,30 @@ def route_all_nets(
     small, provably jog-safe move rather than a long one -- confirmed by
     hand-tracing ``inv``'s own four nets through this exact algorithm during
     this fix.
+
+    ``late_nets`` (issue #347), if given, still places every one of those
+    nets' groups in natural-x order *among themselves*, but only after every
+    *other* net's groups already have a placement -- rather than fully
+    interleaved by natural x across every net at once, the default above.
+    Left empty (the default) for every net on every build that does not
+    need it -- interleaved placement is already proven conflict-free for
+    every net in ``inv``/``nand2``/``schmitt``/``delaywin`` (issue #322).
+    ``xor2`` (and ``build_lock_detector()``, which embeds it) is dense
+    enough that ``RiserLanes.resolve_conflicts()`` cannot converge on a
+    fully interleaved placement (issue #347): a supply net's pads recur at
+    nearly *every* column (``VDD``/``VSS`` land on almost every PMOS/NMOS
+    row instance), so interleaved by natural x, each one of ``xor2``'s ~10
+    signal nets keeps landing its own lane search in between two supply
+    risers that haven't settled yet, and the reverse holds too -- resolving
+    one net's conflict routinely reveals another elsewhere in the graph, the
+    exact non-convergence this issue reports. Placing every *signal* net
+    first removes that interference entirely: signal nets settle into a
+    conflict-free layout on their own (confirmed directly: excluding
+    ``VDD``/``VSS`` from ``RiserLanes`` altogether leaves zero residual
+    conflicts in ``xor2``'s own graph), and the supply nets placed
+    afterwards then only ever have to dodge already-fixed signal-net
+    geometry -- a much easier one-sided search that does converge (also
+    confirmed directly, on both ``xor2`` and the full ``lock_detector``).
     """
     per_net_track_y: dict[str, float] = {net: tracks.get(net) for net in nets}
     #: (x, net, y_pad, track_y, half_w, half_h) for every riser to place.
@@ -1143,7 +1168,7 @@ def route_all_nets(
         track_y = per_net_track_y[net]
         for gx, gy, half_w, half_h in _riser_groups(pads):
             all_groups.append((gx, net, gy, track_y, half_w, half_h))
-    all_groups.sort(key=lambda g: g[0])
+    all_groups.sort(key=lambda g: (g[1] in late_nets, g[0]))
 
     lanes = RiserLanes((net, gx, gy, track_y, half_w, half_h) for gx, net, gy, track_y, half_w, half_h in all_groups)
 

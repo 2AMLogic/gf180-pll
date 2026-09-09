@@ -32,7 +32,17 @@ ROW_W_P_MAX = 2.5
 ROW_W_N_MAX = 2.0
 
 
-def _finish(canvas: Canvas, nets, pwells, block_box, tap_xs=None, *, ntap_net: str = "VDD", ptap_net: str = "VSS"):
+def _finish(
+    canvas: Canvas,
+    nets,
+    pwells,
+    block_box,
+    tap_xs=None,
+    *,
+    ntap_net: str = "VDD",
+    ptap_net: str = "VSS",
+    defer_supply_routing: bool = False,
+):
     """Common tail: ntap/ptap pair(s), one nwell, route every net once.
 
     ``tap_xs``, if given, is the set of X positions *known clear* of every
@@ -49,6 +59,16 @@ def _finish(canvas: Canvas, nets, pwells, block_box, tap_xs=None, *, ntap_net: s
 
     Placed in a dedicated Y band clear of every row's own comp/poly
     footprint (see ``ROW_Y_P``/``ROW_Y_N`` above).
+
+    ``defer_supply_routing`` (issue #347) places ``ntap_net``'s/
+    ``ptap_net``'s own risers only after every other net already has one
+    (see ``route_all_nets()``'s own ``late_nets`` docstring). Left off by
+    default: ``inv``/``nand2``/``schmitt``/``delaywin`` all build clean
+    without it (issue #322) and it only costs the natural-x interleaving
+    that keeps a riser's own required move small, so there is nothing to
+    gain there. ``xor2`` (and ``build_lock_detector()``, which embeds it)
+    turns it on -- dense enough that ``RiserLanes`` cannot converge
+    otherwise (issue #347).
     """
     x_left, _y_bottom, x_right_edge, _y_top = block_box
     y_p_tap = ROW_Y_P + ROW_W_P_MAX / 2.0 + 1.5
@@ -67,7 +87,8 @@ def _finish(canvas: Canvas, nets, pwells, block_box, tap_xs=None, *, ntap_net: s
     nwell_over(canvas, [*pwells, *ntap_boxes])
 
     tracks = NetTracks(base_y=block_box[3] + 6.0)
-    route_all_nets(canvas, nets, tracks)
+    late_nets = frozenset((ntap_net, ptap_net)) if defer_supply_routing else frozenset()
+    route_all_nets(canvas, nets, tracks, late_nets=late_nets)
 
 
 def build_inv_standalone(top_name: str = "lock_detector_inv", *, canvas_cls: type = Canvas) -> Canvas:
@@ -102,7 +123,7 @@ def build_xor2_standalone(top_name: str = "lock_detector_xor2", *, canvas_cls: t
     nets: dict[str, list[tuple[float, float, float, float]]] = {}
     pwells: list[tuple[float, float, float, float]] = []
     box, tap_xs = cells.draw_xor2(canvas, nets, pwells, 0.0, 2.5, -2.5, "A", "B", "Y", "VDD", "VSS", prefix="X")
-    _finish(canvas, nets, pwells, box, tap_xs=tap_xs)
+    _finish(canvas, nets, pwells, box, tap_xs=tap_xs, defer_supply_routing=True)
     return canvas
 
 
@@ -232,7 +253,7 @@ def build_lock_detector(top_name: str = "lock_detector", *, canvas_cls: type = C
         max(y_cap + 4.0 + 1.0, b_err[3]),
     )
     tap_xs = sorted({*err_taps, *dly_taps, *gap_taps})
-    _finish(canvas, nets, pwells, block_box, tap_xs=tap_xs)
+    _finish(canvas, nets, pwells, block_box, tap_xs=tap_xs, defer_supply_routing=True)
     return canvas
 
 
