@@ -122,7 +122,26 @@ silently corrected):
    against the *preceding* point's own natural X (not the running assigned
    one), which finds a true tie correctly regardless of any earlier nudging.
 
-## Standalone DRC-clean
+## Post-landing fix: EN/ENB riser column short (issue #359)
+
+DRC-clean at landing time was real but incomplete: `declutter_riser_x()`'s
+own net-agnostic exact-tie collapse (above) silently merged two
+*different*-net risers onto one Metal3 column whenever their pads shared an
+exact natural X -- invisible to DRC (two Metal3 runs at one X are one legal
+polygon), caught only once `layout/pll_top/pfd_cp/netcheck.py` landed with
+#321 and was run against this module's own standalone GDS: `xn_t0`'s own
+`EN`/`ENB` gate-tab pads (`B0`/`B0B`) shared a column, and so did
+`xn_base`'s (`VDD`/`VSS`) with `xn_t1b`'s (`B1`/`B1B`) -- the tripod places
+`t1b` directly above `base`. Filed and root-caused as #359, fixed here: the
+tie rule is now net-aware (a same-X tie only collapses when the two points
+are also the same net), every leg's own gate-tab pins reach their riser
+column through an explicit, checked Metal1 escape rather than their
+un-escaped natural X (`cp_array.py`'s own module docstring, "EN/ENB SHARE
+ONE GATE-TAB COLUMN"), and `check_riser_columns()` now asserts -- on every
+build, not just in a docstring -- that the decluttered plan never puts two
+nets on one column. See `netcheck` results below.
+
+## Standalone DRC-clean, and connectivity
 
 ```bash
 python3 -m pfd_cp.cp_array --outdir <workdir>       # (from layout/pll_top/)
@@ -133,6 +152,7 @@ python3 layout/run_pv.py drc <workdir>/cp_array.gds --top cp_array --run-dir <ru
 |---|---|---|---|
 | `cp_array` DRC, table `main` (default, no `--offgrid`) | clean | `DRC clean: cp_array (D), 0 violations` | **PASS** |
 | `cp_array` DRC, table `main`, `--offgrid` (signoff-grade) | clean | `DRC clean: cp_array (D), 0 violations` | **PASS** |
+| `netcheck.check_gds()` (Metal1-3 connectivity, `python3 -m pfd_cp.cp_array`'s own default run) | no shorts, no splits | `connectivity clean: 18 nets, no shorts, no splits` | **PASS** |
 
 Real device/routing rules this run actually exercised (every table in the
 `main` deck ran; every family below was hit and fixed at least once during
@@ -190,7 +210,7 @@ landing points) the way `divider_chain.py` builds on `div23_cell.py`'s own
 
 | | |
 |---|---|
-| Generated | 2026-09-09T04:59 UTC |
+| Generated | 2026-09-09T11:46 UTC (regenerated for issue #359) |
 | Invoked as | `python3 -m pfd_cp.cp_array --outdir <workdir>` (from `layout/pll_top/`), then `python3 layout/run_pv.py drc`, `LAYOUT_PV_PYTHON` pointed at a local venv (`klayout` + `docopt`) per `layout/README.md`'s Prerequisites |
 | PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
 | KLayout (application, deck runner) | `KLayout 0.28.16` |

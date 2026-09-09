@@ -150,6 +150,59 @@ VDD/VSS, not a trim net" acceptance criterion. ``xn_base``'s own ``ENB``
 (``VSS``) and ``xp_base``'s own ``EN`` (``VDD``), by contrast, join the
 *real* multi-pad rail mesh already present on their own side (every leg's
 own rail pin + the bias branch's own source pads).
+
+EN/ENB SHARE ONE GATE-TAB COLUMN: EXPLICIT ESCAPES, NOT A BLIND COLLAPSE
+--------------------------------------------------------------------------
+``cp_leg``'s own ``build_stack_cell``-style column places every device in
+one leg left-aligned at the same ``x0`` (see ``devgen.py``'s own module
+docstring), so ``MEN``'s and ``MDIS``'s gate-tab pads -- this array's own
+``EN``/``ENB`` pins -- always land at the *literal same local X*, one above
+the other, in *every* leg instance. A first version of this module's own
+:func:`declutter_riser_x` treated that as license to collapse any exact
+natural-X tie onto one shared riser column, reasoning that two risers at
+the same natural X could only ever be the same net here. That reasoning was
+wrong twice over (issue #359): every leg's own ``EN``/``ENB`` map to two
+*different* nets (``xn_t0``: ``B0``/``B0B``; ``xn_base``: ``VDD``/``VSS``),
+and the tripod places ``t1b`` directly *above* ``base`` (:func:`leg_offsets`,
+same ``dx``), so ``xn_base``'s and ``xn_t1b``'s own ``EN``/``ENB`` pins
+*also* collide at one shared X -- both invisible to DRC (two Metal3 runs at
+one X merge into one legal polygon; see ``netcheck.py``'s own docstring).
+
+The fix is what this module's own suggested-fix text (issue #359) and
+``cp_output_stage.py``'s own hand-placed-column scheme both point at: an
+**explicitly allocated riser column per net, reached by a checked Metal1
+escape**, rather than trusting a blind X-tie to mean "same net." :func:`_leg_pads`
+draws that escape for every leg's own ``mdis_gate_net`` pin (``ENB`` on the
+N side, ``EN`` on the P side -- ``cp_leg.LegSpec.mdis_gate_net``, always the
+*lower* of the two gate-tab pads), moving it a short distance *left*
+(:data:`MDIS_LEFT_ESCAPE_UM`) -- not into the gap between this leg's own
+bias pad (``VBN``/``VBP``) and cascode pad (``VCASCN``/``VCASCP``), which
+*looks* empty at the gate-tab pins' own Y but is not: ``cp_leg.py``'s own
+hand-routed ``BG`` tap wire and rail strap+tap both cross that gap a few
+tenths of a um above and below it (a real, reproduced ``M1.2a`` failure
+during this fix's own development, against internal ``cp_leg`` geometry no
+net-map or pin table names). Left of the gate-tab pads themselves, by
+contrast, is the one place ``cp_leg_n``'s/``cp_leg_p``'s own canvas draws
+*nothing at all* (verified directly against every Metal1 shape either leaf
+cell draws). Because every leg is a literal translated copy of the same
+proven cell (see "GDS-LEVEL PLACEMENT" above), that same relative escape is
+safe for ``base``, ``t0``, *and* ``t1a`` -- their three different ``dx``
+values keep the three escaped columns apart automatically. ``t1b`` is the
+one exception: since it shares ``base``'s own ``dx``, the same escape would
+just recreate the collision one column over (whichever pin owns it,
+``base`` already claimed it). Both of ``t1b``'s own gate-tab pins escape
+*further* left instead, just past ``t0``'s own already-escaped column
+(:func:`_t1b_escape_targets`), into the one part of this side's own 1-D
+riser-column space no other leg's own real geometry can ever reach at
+``t1b``'s own Y (``t0``'s and ``t1a``'s Y bands sit entirely below
+``base``'s, and neither reaches ``t1b``'s, ~7.6 um higher -- see
+:func:`leg_offsets`'s own docstring). :func:`declutter_riser_x`
+now falls back to its own generic (already net-agnostic) pitch-based nudge
+for any two *escaped* columns that still land within :data:`RISER_MIN_PITCH_UM`
+of each other by coincidence -- so this fix does not depend on the hand-picked
+escape offsets being exactly disjoint, only close enough to start from, and
+:func:`check_riser_columns` re-proves the whole result on every build (see
+that function's own docstring).
 """
 
 from __future__ import annotations
@@ -159,7 +212,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
-from . import cp_leg_n, cp_leg_p, devgen
+from . import cp_leg_n, cp_leg_p, devgen, netcheck
 
 try:
     from .. import _canvas
@@ -188,6 +241,12 @@ VIA_ENCLOSURE_UM = 0.09  # V1.3a/V2.3b min is ~0 um; headroom for the enclosing 
 METAL2_WIRE_WIDTH_UM = 0.34  # > M2.1's 0.28 min
 METAL3_WIRE_WIDTH_UM = 0.34  # > M3.1's 0.28 min
 METAL2_TRACK_PITCH_UM = 0.75  # (pitch - width) = 0.41 > M2.2a's 0.28 min, between two tracks
+
+LANDING_HALF_UM = VIA1_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM
+"""Half-width of a Metal1/Metal2 via landing pad -- ``V1.3a``/``V2.3b``
+enclosure, identical derivation to :func:`_riser`'s own inline ``half_v1``
+(kept as a named constant here too, since :func:`_escape` needs the same
+value to size the landing pad its own Metal1 jog ends in)."""
 
 # --- Array/placement margins (um). ---
 LEG_GAP_UM = 3.0
@@ -435,50 +494,234 @@ def declutter_riser_x(
     two nets happen to collide, rather than special-casing the one pair
     this module's own development run happened to hit.
 
-    Exact ties (a point whose own *natural* X exactly equals the
-    immediately preceding point's own *natural* X, in sorted order) are
-    assigned that preceding point's own *final* X, whatever it ended up
-    being -- rather than left at their own unperturbed natural X. Two risers
-    at the literal same natural X only ever occur here when two pads of the
-    *same* net share an identical local-X translation (this module's own
-    tripod places ``t1b`` directly above ``base``, so every one of
-    ``t1b``'s own pins lands at exactly ``base``'s own X for that pin), and
+    Exact ties are net-aware (issue #359 -- an earlier version of this
+    function was not, and silently collapsed two *different* nets' risers
+    onto one Metal3 column any time their pads' natural X happened to
+    coincide, which DRC cannot see: see ``netcheck.py``'s own docstring, and
+    ``cp_array.py``'s own module docstring, "EN/ENB SHARE ONE GATE-TAB
+    COLUMN", for the real case this hit). A point whose own *natural* X
+    exactly equals the immediately preceding point's own *natural* X, in
+    sorted order, is only assigned that preceding point's own *final* X
+    when the two also share the same net -- two risers at the literal same
+    natural X are safe to collapse onto one column *only* then, since
     :func:`_riser` always runs each riser from its own pad up to that net's
     own shared track, so two same-X same-net risers always fully overlap in
-    Y along the way -- already DRC-safe by construction. Snapping the tied
-    point to its sibling's own *final* X (not its own unperturbed natural X)
-    is required, not merely tidy: a naive "leave ties alone" rule -- comparing
-    each point only against the running *assigned* ``x`` -- breaks the moment
-    an earlier point in the sweep gets nudged past a later point that shares
-    its *own* natural X (a real, reproduced failure during this module's own
-    development: two ``ICN`` pads at an identical natural X, sorted stably
-    adjacent, where the first got nudged rightward by an intervening
-    different-net point and the second -- still comparing its own
-    unperturbed natural X against the now-larger running ``x`` -- computed a
-    *negative* delta and was left behind, only 0.3 um from its own nudged
-    sibling). Comparing each point's own *natural* X against the
-    *preceding* point's own natural X (not the running assigned one) finds
-    the tie correctly regardless of any nudging that happened earlier in the
-    sweep.
+    Y along the way. A same-X *different*-net tie instead falls through to
+    the ordinary too-close nudge below (as if the two points were merely
+    ``0`` um apart rather than exactly tied) -- callers whose own pad
+    geometry can produce such a tie must not feed this function the raw
+    pad centre directly (a plain ``min_pitch`` nudge is not always safe on
+    its own -- see :func:`_leg_pads`'s own docstring for why this module
+    pre-escapes those specific pins instead of relying on this fallback
+    alone).
+
+    Snapping a genuine tie to its sibling's own *final* X (not its own
+    unperturbed natural X) is required, not merely tidy: a naive "leave ties
+    alone" rule -- comparing each point only against the running *assigned*
+    ``x`` -- breaks the moment an earlier point in the sweep gets nudged past
+    a later point that shares its *own* natural X (a real, reproduced
+    failure during this module's own development: two ``ICN`` pads at an
+    identical natural X, sorted stably adjacent, where the first got nudged
+    rightward by an intervening different-net point and the second -- still
+    comparing its own unperturbed natural X against the now-larger running
+    ``x`` -- computed a *negative* delta and was left behind, only 0.3 um
+    from its own nudged sibling). Comparing each point's own *natural* X
+    against the *preceding* point's own natural X (not the running assigned
+    one) finds the tie correctly regardless of any nudging that happened
+    earlier in the sweep.
     """
     order = sorted(range(len(points)), key=lambda i: points[i][1])
     result = list(points)
+    prev_net: str | None = None
     prev_natural_x: float | None = None
     prev_assigned_x: float | None = None
     for i in order:
         net, natural_x, y = points[i]
         if prev_assigned_x is None:
             assigned_x = natural_x
-        elif natural_x == prev_natural_x:
+        elif natural_x == prev_natural_x and net == prev_net:
             assigned_x = prev_assigned_x
         elif natural_x - prev_assigned_x < min_pitch:
             assigned_x = prev_assigned_x + min_pitch
         else:
             assigned_x = natural_x
         result[i] = (net, assigned_x, y)
+        prev_net = net
         prev_natural_x = natural_x
         prev_assigned_x = assigned_x
     return result
+
+
+def _verify_riser_plan(planned: Sequence[tuple[str, float, float]], min_pitch: float) -> None:
+    """Raise unless ``planned`` (an already-decluttered ``(net, x, y)`` riser
+    plan) puts exactly one net on every Metal3 riser column, with every two
+    distinct columns at least ``min_pitch`` apart. Split out from
+    :func:`check_riser_columns` so a test can prove this half raises on a
+    synthetic two-nets-one-column plan without needing an input that also
+    survives :func:`declutter_riser_x`'s own (now correct) net-aware
+    decluttering to reach it -- see issue #359's own test plan.
+    """
+    by_x: dict[float, set[str]] = {}
+    for net, x, _y in planned:
+        by_x.setdefault(round(x, 6), set()).add(net)
+    for x, nets in sorted(by_x.items()):
+        if len(nets) > 1:
+            raise ValueError(f"cp_array: riser column x={x} carries more than one net: {sorted(nets)}")
+    xs = sorted(by_x)
+    for a, b in zip(xs, xs[1:]):
+        if b - a < min_pitch - 1e-9:
+            raise ValueError(
+                f"cp_array: riser columns x={a} ({sorted(by_x[a])}) and x={b} "
+                f"({sorted(by_x[b])}) are {b - a:.3f} um apart; needs >= {min_pitch}"
+            )
+
+
+def check_riser_columns(
+    points: Sequence[tuple[str, float, float]], min_pitch: float = RISER_MIN_PITCH_UM
+) -> list[tuple[str, float, float]]:
+    """Run :func:`declutter_riser_x` over ``points`` and raise (via
+    :func:`_verify_riser_plan`) unless the result puts exactly one net on
+    every Metal3 riser column, with every two distinct columns at least
+    ``min_pitch`` apart.
+
+    This is the build-time proof issue #359's own acceptance criteria ask
+    for: a two-nets-on-one-column allocation (the exact defect that issue
+    found) is asserted against, not left as a comment, on *every* call to
+    :func:`_route_side` -- see that function's own use of this. Returns the
+    decluttered plan so a caller that already needs it (:func:`_route_side`)
+    does not have to run :func:`declutter_riser_x` twice.
+    """
+    planned = declutter_riser_x(list(points), min_pitch)
+    _verify_riser_plan(planned, min_pitch)
+    return planned
+
+
+MDIS_LEFT_ESCAPE_UM = 2.0 * RISER_MIN_PITCH_UM
+"""How far left of its own natural X ``base``'s/``t0``'s/``t1a``'s own
+``mdis_gate_net`` pin escapes (see module docstring, "EN/ENB SHARE ONE
+GATE-TAB COLUMN"). Left, not into the gap between that leg's own bias pad
+(``VBN``/``VBP``) and cascode pad (``VCASCN``/``VCASCP``): that gap *looks*
+empty at the gate-tab pins' own Y but is not -- ``cp_leg.py``'s own
+hand-routed ``BG`` tap wire and rail strap+tap both cross it a few tenths of
+a um below and above that Y (a real, reproduced ``M1.2a`` failure during
+this fix's own development). Left of the gate-tab pads themselves, by
+contrast, is the one place ``cp_leg_n``'s/``cp_leg_p``'s own canvas draws
+*nothing at all* -- verified directly against every Metal1 shape either
+leaf cell draws (none has an ``x0`` less than the gate-tab pads' own, which
+are themselves each leg's own leftmost geometry). Two full
+:data:`RISER_MIN_PITCH_UM`, not one: ``base``'s own escaped column also has
+to stay clear of the N/P bias branch's own substrate/n-well tap strip (a
+single wide pad whose own natural riser X -- its own geometric centre --
+can land close enough to ``base``'s own gate-tab pins to need the extra
+margin; a real, reproduced failure during this fix's own development,
+otherwise indistinguishable from the ``M1.2a`` case above).
+"""
+
+T1B_CLEAR_PITCH_UM = 2.0 * RISER_MIN_PITCH_UM
+"""How far apart :func:`_t1b_escape_targets`'s own two returned columns are
+from each other and from whatever real riser column they land closest to
+(see that function's own docstring) -- headroom past
+:data:`RISER_MIN_PITCH_UM`, not a tightly-derived minimum.
+"""
+
+
+def _t1b_escape_targets(
+    t0_dx: float,
+    pins: dict[str, tuple[float, float, float, float]],
+    spec,
+) -> tuple[float, float]:
+    """The two explicit riser-column X targets ``t1b``'s own
+    ``men_gate_net``/``mdis_gate_net`` pins escape to (see module
+    docstring, "EN/ENB SHARE ONE GATE-TAB COLUMN").
+
+    ``t1b`` shares ``base``'s own ``dx`` (:func:`leg_offsets`, same
+    tripod), so it cannot reuse :data:`MDIS_LEFT_ESCAPE_UM` the way
+    ``base``/``t0``/``t1a`` do -- that would just recreate the collision one
+    column over, whichever leg's escaped pin got there first. This instead
+    lands ``t1b``'s own two pins just past ``t0``'s own already-escaped
+    ``mdis_gate_net`` column (``t0_dx`` is that leg's own ``dx``, i.e.
+    ``offsets_n["t0"][0]``/``offsets_p["t0"][0]``) -- the *nearest* other
+    leg's own riser column ``t1b``'s own Y band can ever actually reach (see
+    module docstring: ``t0``'s and ``t1a``'s own geometry sits entirely
+    below ``base``'s, well short of ``t1b``'s own Y, so nothing about their
+    real pad positions constrains this beyond the shared 1-D riser-column
+    space every net on this side competes for -- see
+    ``declutter_riser_x()``'s own docstring). Landing past ``t0``'s own
+    escaped column, not merely past its *natural* gate-tab X, is what keeps
+    a modest, fixed :data:`T1B_CLEAR_PITCH_UM` margin sufficient regardless
+    of ``t0``'s own leg dimensions.
+    """
+    t0_mdis_natural_x = t0_dx + pad_center(pins[spec.mdis_gate_net])[0]
+    t0_mdis_escaped_x = t0_mdis_natural_x - MDIS_LEFT_ESCAPE_UM
+    men_x = t0_mdis_escaped_x - T1B_CLEAR_PITCH_UM
+    mdis_x = men_x - T1B_CLEAR_PITCH_UM
+    return men_x, mdis_x
+
+
+def _escape(
+    canvas: devgen.Canvas,
+    pad: tuple[float, float, float, float],
+    x_target: float,
+    width: float = devgen.METAL1_WIRE_WIDTH_UM,
+    landing_half: float = LANDING_HALF_UM,
+) -> tuple[float, float, float, float]:
+    """Run a short horizontal Metal1 wire from ``pad``'s own centre out to
+    ``x_target``, ending in a via-sized landing pad, and return that landing
+    pad's own box -- the box to hand :func:`_route_side` in place of ``pad``.
+
+    Same technique as :func:`_stub` -- a single horizontal segment at the
+    pad's own Y, so it can never cross a shape that pad does not already
+    abut -- but *deliberately placed* rather than a repair for a
+    decluttering nudge (see :func:`_leg_pads`, the one caller): this is how
+    a gate-tab pin whose natural riser X is already claimed by another net
+    (see module docstring, "EN/ENB SHARE ONE GATE-TAB COLUMN") gets a
+    column of its own. The landing pad is drawn explicitly, wide enough to
+    enclose Via1 (``V1.3a``), because the wire itself is narrower than that
+    enclosure requires -- the identical reason :func:`_riser` draws its own
+    (same citation, same ``landing_half``).
+    """
+    cx, cy = pad_center(pad)
+    half = width / 2.0
+    x_lo, x_hi = sorted((cx, x_target))
+    canvas.rect("metal1", x_lo, cy - half, x_hi, cy + half)
+    box = (x_target - landing_half, cy - landing_half, x_target + landing_half, cy + landing_half)
+    canvas.rect("metal1", *box)
+    return box
+
+
+def _leg_pads(
+    canvas: devgen.Canvas,
+    pins: dict[str, tuple[float, float, float, float]],
+    spec,
+    leg_name: str,
+    dx: float,
+    dy: float,
+    t1b_targets: tuple[float, float] | None = None,
+) -> dict[str, tuple[float, float, float, float]]:
+    """One leg instance's own local pin -> pad map, translated by
+    ``(dx, dy)`` like every other pin, *except* its own ``mdis_gate_net``/
+    ``men_gate_net`` pins (``spec`` is ``cp_leg_n.SPEC``/``cp_leg_p.SPEC`` --
+    a ``cp_leg.LegSpec``), whose riser columns are explicitly escaped off
+    ``cp_leg``'s own shared gate-tab X -- see module docstring, "EN/ENB
+    SHARE ONE GATE-TAB COLUMN", for why that pair can never safely share a
+    riser column here (every leg maps them to two different nets) and why
+    ``t1b`` needs a bigger escape than ``base``/``t0``/``t1a`` (required,
+    not optional, for ``leg_name == "t1b"``; the caller -- :func:`build`,
+    the only caller -- computes it from the real array geometry, since a
+    per-leg constant cannot know where ``t0``'s own escaped column ends up).
+    """
+    pads = {name: _translate_box(box, dx, dy) for name, box in pins.items()}
+    mdis_pad = pads[spec.mdis_gate_net]
+    if leg_name == "t1b":
+        assert t1b_targets is not None, "t1b needs its own explicit escape targets"
+        men_pad = pads[spec.men_gate_net]
+        men_x, mdis_x = t1b_targets
+        pads[spec.men_gate_net] = _escape(canvas, men_pad, men_x)
+        pads[spec.mdis_gate_net] = _escape(canvas, mdis_pad, mdis_x)
+    else:
+        target_x = pad_center(mdis_pad)[0] - MDIS_LEFT_ESCAPE_UM
+        pads[spec.mdis_gate_net] = _escape(canvas, mdis_pad, target_x)
+    return pads
 
 
 def _stub(canvas: devgen.Canvas, a: tuple[float, float], b: tuple[float, float], width: float = devgen.METAL1_WIRE_WIDTH_UM) -> None:
@@ -510,7 +753,10 @@ def _route_side(
     pin -- see module docstring's "MESH ROUTING" section. Declutters every
     net's own riser X *together* (:func:`declutter_riser_x`, not per net in
     isolation) so nets that happen to land close in X by coincidence (not
-    just the same net's own multiple pads) never violate M3.2a.
+    just the same net's own multiple pads) never violate M3.2a, and
+    verifies the result with :func:`check_riser_columns` before drawing
+    anything (issue #359) -- a two-nets-on-one-column allocation raises here
+    rather than silently drawing a short.
 
     Returns ``(tracks, bus_spans)``, where ``bus_spans`` maps each routed net
     to its own ``(track_y, x_lo, x_hi)`` Metal2 bus extent -- the *only*
@@ -537,7 +783,7 @@ def _route_side(
             flat_nets.append(net)
             flat_boxes.append(box)
     flat_points = [(flat_nets[i], *pad_center(flat_boxes[i])) for i in range(len(flat_boxes))]
-    planned = declutter_riser_x(flat_points, min_pitch)
+    planned = check_riser_columns(flat_points, min_pitch)
 
     bus_x: dict[str, list[float]] = {}
     seen_riser: set[tuple[str, float, float]] = set()
@@ -694,9 +940,32 @@ class CpArrayLayout:
     #: landing a second via stack on a Metal1 pad that already carries one.
     n_bus: dict[str, tuple[float, float, float]] = field(default_factory=dict)
     p_bus: dict[str, tuple[float, float, float]] = field(default_factory=dict)
+    #: net -> every one of its own Metal1 landing pads on that side (leg
+    #: pins *and* the bias branch's own pads) -- unlike :attr:`pins` (one
+    #: representative pad per net, promoted by ``canvas.pin()``), this is
+    #: every pad :func:`_route_side` was actually handed, so a caller can
+    #: probe all of them with :func:`netcheck.check_gds` and catch an open
+    #: as well as a short (issue #359). Keyed per side (not merged) because
+    #: a net name like ``B0`` names two genuinely different, deliberately
+    #: unlinked nets here -- one per polarity (see module docstring).
+    n_net_pads: dict[str, list[tuple[float, float, float, float]]] = field(default_factory=dict)
+    p_net_pads: dict[str, list[tuple[float, float, float, float]]] = field(default_factory=dict)
 
     def write_gds(self, path) -> None:
         self.canvas.write_gds(path)
+
+    def probe_pads(self) -> dict[str, list[tuple[float, float, float, float]]]:
+        """``"N:"``/``"P:"``-prefixed net -> every Metal1 pad this module
+        believes is on that net, on that side -- what :func:`netcheck.check_gds`
+        needs to prove both sides are short-free *and* fully connected,
+        without conflating the N and P polarities' own same-named-but-
+        unlinked trim/rail nets into one probed key (see :attr:`n_net_pads`'s
+        own docstring)."""
+        pads: dict[str, list[tuple[float, float, float, float]]] = {}
+        for prefix, net_pads in (("N:", self.n_net_pads), ("P:", self.p_net_pads)):
+            for net, boxes in net_pads.items():
+                pads[f"{prefix}{net}"] = list(boxes)
+        return pads
 
 
 def build(outdir: Path | None = None) -> CpArrayLayout:
@@ -717,11 +986,26 @@ def build(outdir: Path | None = None) -> CpArrayLayout:
     n_bias_row_w = BIAS_DEVICES_N[0].w_um + BIAS_DEVICE_GAP_UM + BIAS_DEVICES_N[1].w_um
     n_side_x1 = max(n_array_bbox[2], n_array_bbox[0] + n_bias_row_w)
 
-    # --- P array placement (local), then shifted clear of the N side ---
+    # --- P array placement (local), then shifted clear of the N side.
+    # shift_x must also clear P's own eventual EN/ENB gate-tab riser
+    # escapes (issue #359): t0's own single escape (MDIS_LEFT_ESCAPE_UM)
+    # and t1b's own two (_t1b_escape_targets()) can reach further left than
+    # any leg's own footprint alone, so that known local reach is folded
+    # into the bbox shift_x is computed from here, rather than a hand-tuned
+    # N_P_GAP_UM that could silently go stale (and let the P side's own
+    # escaped columns cross back into the N side's own space) if any of
+    # those offsets ever change. ---
     offsets_p_local = leg_offsets(p_w, p_h, LEG_GAP_UM)
     check_common_centroid(offsets_p_local["base"], [offsets_p_local[k] for k in LEG_NAMES[1:]])
     p_local_boxes = {name: _translate_box(lp.footprint, *off) for name, off in offsets_p_local.items()}
-    p_local_bbox = _canvas.bbox_union(p_local_boxes.values())
+    p_t0_mdis_escape_x = (
+        offsets_p_local["t0"][0] + pad_center(lp.pins[cp_leg_p.SPEC.mdis_gate_net])[0] - MDIS_LEFT_ESCAPE_UM
+    )
+    p_t1b_men_x, p_t1b_mdis_x = _t1b_escape_targets(offsets_p_local["t0"][0], lp.pins, cp_leg_p.SPEC)
+    p_escape_reach_x0 = min(p_t0_mdis_escape_x, p_t1b_men_x, p_t1b_mdis_x) - LANDING_HALF_UM
+    p_local_bbox = _canvas.bbox_union(
+        list(p_local_boxes.values()) + [(p_escape_reach_x0, 0.0, p_escape_reach_x0, 0.0)]
+    )
 
     shift_x = (n_side_x1 + N_P_GAP_UM) - p_local_bbox[0]
     offsets_p = {name: (dx + shift_x, dy) for name, (dx, dy) in offsets_p_local.items()}
@@ -801,16 +1085,20 @@ def build(outdir: Path | None = None) -> CpArrayLayout:
             raise ValueError("cp_array: P bias branch overlaps a leg -- must be adjacent, not inside")
 
     # --- gather every net's own pad list (leg pins, per this module's own
-    # N_NET_MAP/P_NET_MAP, plus the bias branch's own pads) ---
+    # N_NET_MAP/P_NET_MAP, plus the bias branch's own pads). Every leg's own
+    # pins are escaped via _leg_pads() (not a raw translate) -- see module
+    # docstring, "EN/ENB SHARE ONE GATE-TAB COLUMN", and issue #359. ---
     n_nets: dict[str, list[tuple[float, float, float, float]]] = {}
 
     def _add_n(net: str, pad: tuple[float, float, float, float]) -> None:
         n_nets.setdefault(net, []).append(pad)
 
+    t1b_targets_n = _t1b_escape_targets(offsets_n["t0"][0], ln.pins, cp_leg_n.SPEC)
     for name, (dx, dy) in offsets_n.items():
         net_map = N_NET_MAP[name]
-        for local_net, pad in ln.pins.items():
-            _add_n(net_map[local_net], _translate_box(pad, dx, dy))
+        leg_pads = _leg_pads(canvas, ln.pins, cp_leg_n.SPEC, name, dx, dy, t1b_targets_n)
+        for local_net, pad in leg_pads.items():
+            _add_n(net_map[local_net], pad)
 
     _add_n("IBN", mbn.gate_pad)
     _add_n("VSS", mbn.bottom_pad)
@@ -823,16 +1111,31 @@ def build(outdir: Path | None = None) -> CpArrayLayout:
     def _add_p(net: str, pad: tuple[float, float, float, float]) -> None:
         p_nets.setdefault(net, []).append(pad)
 
+    t1b_targets_p = _t1b_escape_targets(offsets_p["t0"][0], lp.pins, cp_leg_p.SPEC)
     for name, (dx, dy) in offsets_p.items():
         net_map = P_NET_MAP[name]
-        for local_net, pad in lp.pins.items():
-            _add_p(net_map[local_net], _translate_box(pad, dx, dy))
+        leg_pads = _leg_pads(canvas, lp.pins, cp_leg_p.SPEC, name, dx, dy, t1b_targets_p)
+        for local_net, pad in leg_pads.items():
+            _add_p(net_map[local_net], pad)
 
     _add_p("IBP", mbp.gate_pad)
     _add_p("VDD", mbp.bottom_pad)
     _add_p("ICP", mcp.gate_pad)
     _add_p("VDD", mcp.bottom_pad)
     _add_p("VDD", p_tap_pad)
+
+    # --- widen each side's own reported bbox to include every escaped pad
+    # (issue #359): _leg_pads() can move a gate-tab riser's own natural X
+    # well outside the leg-box-only bbox computed above (t0's/t1a's own
+    # escape reaches past their own leg footprint; t1b's own two reach past
+    # t0's), and a stale, too-narrow bbox would silently under-report this
+    # block's own real extent to a parent (cp_output_stage.py's own
+    # CONN_COLUMN_MARGIN_UM clearance, in particular, is measured from
+    # exactly this attribute). Only ever grows the box (every escape stays
+    # inside each leg's own existing Y range), so this cannot change
+    # anything the N/P non-overlap check above already verified. ---
+    n_side_bbox = _canvas.bbox_union([n_side_bbox] + [pad for pads in n_nets.values() for pad in pads])
+    p_side_bbox = _canvas.bbox_union([p_side_bbox] + [pad for pads in p_nets.values() for pad in pads])
 
     # --- mesh-route every net, each in its own side's own channel above
     # that side's own topmost drawn edge, decluttered so no two risers on
@@ -868,6 +1171,8 @@ def build(outdir: Path | None = None) -> CpArrayLayout:
         p_bias_ports={"MBP": mbp, "MCP": mcp},
         n_bus=n_bus,
         p_bus=p_bus,
+        n_net_pads=n_nets,
+        p_net_pads=p_nets,
     )
     if outdir is not None:
         outdir = Path(outdir)
@@ -882,6 +1187,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     default_outdir = Path(__file__).resolve().parents[2] / "evidence" / "cp-array-proof" / "work"
     parser.add_argument("--outdir", default=str(default_outdir))
+    parser.add_argument(
+        "--no-netcheck",
+        action="store_true",
+        help="skip the Metal1-3 connectivity check (see netcheck.py)",
+    )
     args = parser.parse_args()
     outdir = Path(args.outdir)
     layout = build(outdir)
@@ -893,7 +1203,13 @@ def main() -> int:
     print(f"N side bbox: {layout.n_side_bbox}")
     print(f"P side bbox: {layout.p_side_bbox}")
     print(f"pins: {sorted(layout.pins)}")
-    return 0
+    if args.no_netcheck:
+        return 0
+    report = netcheck.check_gds(
+        outdir / f"{TOP_CELL}.gds", TOP_CELL, netcheck.pad_probe_points(layout.probe_pads())
+    )
+    print(report.summary())
+    return 0 if report.ok else 1
 
 
 if __name__ == "__main__":

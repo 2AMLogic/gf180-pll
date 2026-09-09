@@ -249,20 +249,12 @@ class LinkColumnTests(unittest.TestCase):
 
 
 class InheritedShortsConstantTests(unittest.TestCase):
-    """INHERITED_ARRAY_SHORTS is a recorded defect, not a design intent."""
+    """INHERITED_ARRAY_SHORTS: cp_array's own former B0/B0B and
+    B1/B1B/VDD/VSS shorts are fixed (issue #359); this constant is asserted
+    empty so a regression here fails loudly rather than silently."""
 
-    def test_the_known_defect_is_stated_as_net_groups(self):
-        self.assertEqual(
-            {frozenset({"B0", "B0B"}), frozenset({"B1", "B1B", "VDD", "VSS"})},
-            set(cos.INHERITED_ARRAY_SHORTS),
-        )
-
-    def test_no_glue_only_net_is_in_the_known_defect(self):
-        # The shorts come entirely from cp_array; nothing this increment
-        # wires may appear in them.
-        glue_only = {"UP", "UPB", "DN", "DNB", "VOUT", "VDUMP"}
-        for group in cos.INHERITED_ARRAY_SHORTS:
-            self.assertEqual(group & glue_only, set(), f"{sorted(group)} touches this block's own wiring")
+    def test_the_inherited_defect_is_fixed(self):
+        self.assertEqual(cos.INHERITED_ARRAY_SHORTS, ())
 
 
 class NetcheckReportTests(unittest.TestCase):
@@ -411,18 +403,23 @@ class ConnectivityTests(unittest.TestCase):
         # one component is what proves that link actually connected.
         self.assertEqual(self.report.splits, ())
 
-    def test_shorts_are_exactly_the_defect_inherited_from_cp_array(self):
-        # NOT an approval of the shorts: see INHERITED_ARRAY_SHORTS' own
-        # docstring and issue #359. Pinned exactly so the defect can neither
-        # grow silently nor be forgotten -- when Part 3b's routing is fixed
-        # (#359) this fails, and the correct response is to set
-        # INHERITED_ARRAY_SHORTS to ().
-        self.assertEqual(set(self.report.shorts), set(cos.INHERITED_ARRAY_SHORTS))
+    def test_no_shorts_at_all(self):
+        # cp_array's own former B0/B0B and B1/B1B/VDD/VSS shorts (recorded,
+        # while they existed, as INHERITED_ARRAY_SHORTS) are fixed by issue
+        # #359 -- this block's connectivity is now fully clean, not merely
+        # "clean except for a known defect".
+        self.assertEqual(self.report.shorts, ())
+        self.assertEqual(self.report.shorts, cos.INHERITED_ARRAY_SHORTS)
 
     def test_this_increments_own_wiring_is_short_free(self):
         shorted = {net for group in self.report.shorts for net in group}
         for net in ("UP", "UPB", "DN", "DNB", "VOUT", "VDUMP", "DNT", "UPT", "IBN", "ICN", "IBP", "ICP"):
             self.assertNotIn(net, shorted, f"{net} is shorted -- this block's own wiring is wrong")
+
+    def test_the_trim_and_rail_nets_are_no_longer_shorted(self):
+        # The exact nets INHERITED_ARRAY_SHORTS used to name.
+        for net in ("B0", "B0B", "B1", "B1B", "VDD", "VSS"):
+            self.assertNotIn(net, {n for group in self.report.shorts for n in group}, net)
 
     def test_vdump_is_a_distinct_net_of_its_own(self):
         self.assertEqual(len(self.report.components["VDUMP"]), 1)

@@ -42,60 +42,82 @@ Boundary pins are exactly the twelve `design/cp.sch` declares as `ipin`/
 | Devices | 8 composite legs + 4 bias devices (from `cp_array`) + 4 inverters (8 devices) + 6 switches |
 | Top cell | `cp_output_stage`, flat |
 
-## ⚠ Inherited connectivity defect — this block is DRC-clean but NOT yet electrically correct
+## ✅ Inherited connectivity defect — fixed (issue #359)
 
-**Read this before treating the DRC result below as a correctness claim.**
+**This block once shipped alongside a real, pre-existing short in the
+`cp_array` sub-block it assembles. That defect is now fixed; this section
+records what it was and how it was closed, for provenance.**
 
-Running the connectivity check described further down against **Part 3b's
-own standalone `cp_array` GDS** — no change from this issue involved —
-reports six cross-net shorts:
+At landing time, running the connectivity check described further down
+against **Part 3b's own standalone `cp_array` GDS** — no change from this
+increment involved — reported six cross-net shorts:
 
 ```
 connectivity FAILED: shorts=B0+B0B; B1+B1B+VDD+VSS
 ```
 
-(full log: `connectivity/cp_array.netcheck.log`). They are inherited
-verbatim by this block. A DRC deck cannot see them: two Metal3 runs sharing
-one X merge into a single polygon that is legal by every width/space rule
-in the deck — the same class of defect issue #322 found in
+inherited verbatim by this block. A DRC deck could not see them: two Metal3
+runs sharing one X merge into a single polygon that is legal by every
+width/space rule in the deck — the same class of defect issue #322 found in
 `lock_detector`, where 114 real shorts survived a clean DRC run.
 
-**Root cause.** `cp_array.declutter_riser_x()` collapses two riser
-candidates that share an *exact* natural X onto one column, justified by an
-invariant its own docstring states — "two risers at the literal same natural
+**Root cause.** `cp_array.declutter_riser_x()` collapsed two riser
+candidates that shared an *exact* natural X onto one column, justified by an
+invariant its own docstring stated — "two risers at the literal same natural
 X only ever occur here when two pads of the *same* net share an identical
-local-X translation". That invariant is false twice over:
+local-X translation". That invariant was false twice over:
 
 1. `cp_leg_n`/`cp_leg_p` place their `EN` and `ENB` gate-tab pads at the
    *same* local X (both hang off the same left-aligned poly end-cap, one
    above the other — confirmed directly: both pads' centres are at
-   x = −0.800 µm). So `xn_t0`'s `B0` and `B0B` land on one column.
+   x = −0.800 µm). So `xn_t0`'s `B0` and `B0B` landed on one column.
 2. The tripod places `t1b` directly above `base`, so `xn_base`'s `EN`/`ENB`
-   (tied `VDD`/`VSS`) land on `xn_t1b`'s `EN`/`ENB` (`B1`/`B1B`) — which is
-   how `VDD` ends up shorted to `VSS`.
+   (tied `VDD`/`VSS`) landed on `xn_t1b`'s `EN`/`ENB` (`B1`/`B1B`) — which is
+   how `VDD` ended up shorted to `VSS`.
 
-**Why the obvious one-line fix is not one.** Making the tie rule net-aware
-does not fix it: the nudge it then applies pushes a gate-tab riser 1 µm to
-the right, whose Via1 landing pad lands on the leg's own `VBN` pad (0.07 µm
-of Metal1 clearance, i.e. an `M1.2a` violation *and* a different short). The
-real fix is an explicitly-allocated riser column per net with a checked
-Metal1 escape — the scheme `cp_output_stage.py` already uses for its own
-glue block — applied to the array's pads. That changes Part 3b's
-proven-DRC-clean geometry and its recorded evidence, so it is **tracked as
-its own issue against #320 — see #359** rather than folded into this
-increment, per the Builder scope rule ("do not fix pre-existing issues in
-other files — file a separate issue"). #359 carries the full reproduction,
-root cause, and acceptance criteria.
+**Why the obvious one-line fix was not one.** Making the tie rule net-aware
+alone did not fix it: the nudge it then applies pushes a gate-tab riser 1 µm
+to the right, whose Via1 landing pad lands on the leg's own `VBN` pad
+(0.07 µm of Metal1 clearance, i.e. an `M1.2a` violation *and* a different
+short). It changed Part 3b's proven-DRC-clean geometry and its recorded
+evidence, so it was tracked as its own issue against #320 — **#359** — per
+the Builder scope rule ("do not fix pre-existing issues in other files —
+file a separate issue"), rather than folded into this increment.
 
-The defect is pinned exactly as `cp_output_stage.INHERITED_ARRAY_SHORTS` and
-asserted by `layout/tests/test_cp_output_stage.py`, so it can neither grow
-silently nor be forgotten: when the fix lands, that test fails and the
-constant becomes `()`.
+**The fix, as landed (issue #359).** An explicitly-allocated riser column
+per net, reached by a checked Metal1 escape — the same scheme this module
+already used for its own glue block (see "Riser columns are hand-placed and
+proven, not decluttered" below), now ported to the array's own pads:
+`cp_array.declutter_riser_x()`'s exact-tie collapse is net-aware (a same-X
+tie only collapses when the two points are also the same net), every leg's
+own gate-tab pins reach their riser column through an explicit escape
+rather than their raw natural X, and `cp_array.check_riser_columns()` now
+asserts — on every build, not just in a docstring — that the decluttered
+plan never puts two nets on one column. Full account:
+`cp_array.py`'s own module docstring, "EN/ENB SHARE ONE GATE-TAB COLUMN",
+and `evidence/cp-array-proof/PROOF.md`'s own "Post-landing fix" section.
 
-**What is *not* affected**: every net this increment wires
+Re-running the same standalone `cp_array` check now reports clean (full
+log: `connectivity/cp_array.netcheck.log`):
+
+```
+connectivity clean: 18 nets, no shorts, no splits
+```
+
+The defect was pinned exactly as `cp_output_stage.INHERITED_ARRAY_SHORTS`
+and asserted by `layout/tests/test_cp_output_stage.py`, so it could neither
+grow silently nor be forgotten — that constant is now `()`, and the test
+that once asserted the six shorts now asserts there are none, exactly as
+its own docstring always said it would (`layout/tests/test_cp_array.py`
+additionally gained a `check_riser_columns` regression test, in scope of
+this issue's own acceptance criteria, so the class of defect cannot
+silently reappear).
+
+**What was never affected**: every net this increment itself wires
 (`UP`/`UPB`/`DN`/`DNB`/`VOUT`/`VDUMP`/`DNT`/`UPT`/`IBN`/`ICN`/`IBP`/`ICP`)
-comes back on its own distinct extracted net, and no probed net is *open* —
-which is also the positive proof that the array↔glue link columns work.
+already came back on its own distinct extracted net, and no probed net was
+*open* — the positive proof that the array↔glue link columns worked even
+while the array's own internal routing did not.
 
 ## Connectivity is checked, not assumed
 
@@ -122,7 +144,7 @@ python3 -m pfd_cp.cp_output_stage --outdir <workdir>   # (from layout/pll_top/)
 | No net is open (`splits`) | none | none | **PASS** |
 | This increment's own wiring short-free | yes | yes | **PASS** |
 | `VDUMP` isolated from every other net | yes | yes | **PASS** |
-| Shorts present | *(none, ideally)* | `B0+B0B`, `B1+B1B+VDD+VSS` | **INHERITED DEFECT — see above** |
+| Shorts present | none | none | **PASS** (fixed, issue #359 — see above) |
 
 Full log: `connectivity/cp_output_stage.netcheck.log`.
 
@@ -157,8 +179,9 @@ is excluded by #321's own scope — so an LVS run against that schematic's
 netlist would legitimately mismatch on the dump buffer's thirteen devices.
 The complete-circuit LVS belongs to Part 5 (#303), where `xbuf` lands and
 the block finally corresponds 1:1 to `cp.sch`. Until then the connectivity
-check above is the electrical claim this evidence directory makes, and the
-inherited-shorts finding above bounds it.
+check above — now clean end to end, including the array's own routing
+(issue #359, see above) — is the electrical claim this evidence directory
+makes.
 
 ## How this block reaches `cp_array`'s nets
 
@@ -210,7 +233,7 @@ what `SWITCH_DEVICE_GAP_UM` exists to buy.
 ## Automated test coverage
 
 `layout/tests/test_cp_output_stage.py` (54 tests; the whole
-`layout/tests` suite is 465 tests, all passing,
+`layout/tests` suite is 501 tests, all passing,
 `python3 -m unittest discover -s layout/tests -t layout/tests`):
 
 * **Pure-Python, no `klayout.db` needed** — `SWITCH_DEVICES_N`/
@@ -239,9 +262,10 @@ what `SWITCH_DEVICE_GAP_UM` exists to buy.
   the trim/rail nets are linked on both polarities and the tail nets on
   their own polarity only.
 * **`klayout.db`-gated connectivity** — the extracted Metal1-3 graph has no
-  unresolved probe, no open net, no short involving this increment's own
-  wiring, a genuinely isolated `VDUMP`, and a short set exactly equal to
-  `INHERITED_ARRAY_SHORTS`.
+  unresolved probe, no open net, no short anywhere (this increment's own
+  wiring, and — since issue #359 — `cp_array`'s own inherited routing too),
+  a genuinely isolated `VDUMP`, and an empty short set, matching
+  `INHERITED_ARRAY_SHORTS` now being `()`.
 
 `layout/tests/test_cp_array.py` additionally gains coverage of Part 3b's new
 `n_bus`/`p_bus` export (one span per routed net, above its own side's block,
@@ -251,10 +275,10 @@ one track per net).
 
 | | |
 |---|---|
-| Generated | 2026-09-09T06:48 UTC |
+| Generated | 2026-09-09T11:48 UTC (regenerated for issue #359) |
 | Invoked as | `python3 -m pfd_cp.cp_output_stage --outdir <workdir>` (from `layout/pll_top/`), then `python3 layout/run_pv.py drc`, `LAYOUT_PV_PYTHON` pointed at a local venv (`klayout` + `docopt`) per `layout/README.md`'s Prerequisites |
 | PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
-| KLayout (application, deck runner) | `KLayout 0.30.9` |
+| KLayout (application, deck runner) | `KLayout 0.28.16` |
 | DRC deck | `<pdk>/libs.tech/klayout/drc/run_drc.py`, table `main`, `--variant=D` |
 
 ## Artifacts
