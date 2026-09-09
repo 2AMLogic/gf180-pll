@@ -28,18 +28,18 @@ instantiation into this block is Part 5 (#303) -- see this issue's own "Out
 of scope" section. Everything else ``design/cp.sch`` draws *is* here, so the
 block's twelve boundary nets are exactly :data:`BOUNDARY_PINS`.
 
-WHAT THIS BLOCK IS NOT YET: ELECTRICALLY COMPLETE
----------------------------------------------------
-This block is DRC-clean, and the wiring *this* increment adds is verified
-short-free and fully connected by :mod:`netcheck` (see below). It is **not**
-yet electrically correct end to end, and deliberately says so rather than
-implying otherwise: the ``cp_array`` sub-block it assembles carries a
-pre-existing cross-net short defect in its own routing, recorded exactly as
-:data:`INHERITED_ARRAY_SHORTS` and reproducible against Part 3b's own
-standalone GDS. Read that constant's docstring for the root cause, why the
-one-line fix is not a fix, and where the real fix belongs.
-
-No LVS claim is made, for the same reason ``cp_array``'s own proof states:
+WHAT THIS BLOCK IS NOT YET: A COMPLETE-CIRCUIT LVS CLAIM
+------------------------------------------------------------
+This block is DRC-clean, and its own wiring -- both what this increment
+adds and the ``cp_array`` sub-block it assembles -- is verified short-free
+and fully connected by :mod:`netcheck` (see below). Earlier revisions of
+this module (issue #321's own first landing) shipped alongside a
+pre-existing cross-net short defect inherited from ``cp_array``'s own
+routing, recorded as :data:`INHERITED_ARRAY_SHORTS`; that defect is fixed
+(issue #359, ``cp_array.py``'s own module docstring, "EN/ENB SHARE ONE
+GATE-TAB COLUMN") and the constant is now the empty tuple its own docstring
+always said it would become. This block still makes **no LVS claim**, for
+the same reason ``cp_array``'s own proof states:
 this block is a strict *subset* of ``cp.sch`` (``xbuf`` excluded), so an LVS
 run against that schematic's own netlist would legitimately mismatch on the
 dump buffer's devices. The complete-circuit LVS belongs to Part 5 (#303),
@@ -236,43 +236,25 @@ BOUNDARY_PINS: tuple[str, ...] = (
 #: promoted pin set) so a wiring slip cannot silently publish one.
 INTERNAL_NETS: tuple[str, ...] = ("B0B", "B1B", "UPB", "DNB", "DNT", "UPT")
 
-INHERITED_ARRAY_SHORTS: tuple[frozenset[str], ...] = (
-    frozenset({"B0", "B0B"}),
-    frozenset({"B1", "B1B", "VDD", "VSS"}),
-)
-"""Cross-net shorts this block **inherits** from ``cp_array`` (issue #320,
-merged via PR #351) -- a pre-existing defect in that block's own routing,
-not one introduced here, and reproducible against ``cp_array``'s own
-standalone GDS with :func:`netcheck.check_gds` (see
-``layout/evidence/cp-layout/PROOF.md``, "Inherited connectivity defect", and
-issue #359, filed against Part 3b from this increment).
-
-Root cause, for whoever fixes it: ``cp_array.declutter_riser_x()`` collapses
-two riser candidates that share an *exact* natural X onto one column. Its
-own docstring justifies that with an invariant -- "two risers at the literal
-same natural X only ever occur here when two pads of the *same* net share an
-identical local-X translation" -- which is false twice over.
-``cp_leg_n``/``cp_leg_p`` put their ``EN`` and ``ENB`` gate-tab pads at the
-*same* local X (both hang off the same left-aligned poly end-cap, one above
-the other), so ``xn_t0``'s ``B0``/``B0B`` land on one column; and the tripod
-places ``t1b`` directly above ``base``, so ``xn_base``'s ``EN``/``ENB``
-(``VDD``/``VSS``) land on ``xn_t1b``'s ``EN``/``ENB`` (``B1``/``B1B``). Both
-merges are invisible to DRC -- two Metal3 runs at one X simply become one
-legal polygon.
-
-Making the tie rule net-aware is *not* a sufficient fix on its own: the
-nudge it would then apply pushes a gate-tab riser 1 um to the right, into
-the leg's own ``VBN``/``VCASCN`` pad cluster, which trades these shorts for
-different ones. The real fix is an explicitly-allocated riser column per
-net with a checked Metal1 escape -- the scheme this module already uses for
-its own glue block (see the module docstring) -- applied to the array's own
-pads. That is a change to Part 3b's proven-DRC-clean geometry and its
-recorded evidence, so it is tracked as its own issue (**#359**) rather than
-folded in here.
+INHERITED_ARRAY_SHORTS: tuple[frozenset[str], ...] = ()
+"""Cross-net shorts this block once **inherited** from ``cp_array`` (issue
+#320, merged via PR #351) -- ``B0``/``B0B`` and ``B1``/``B1B``/``VDD``/
+``VSS``, reproducible against ``cp_array``'s own standalone GDS with
+:func:`netcheck.check_gds`. Fixed by issue #359: ``cp_array.declutter_riser_x()``
+used to collapse any two riser candidates sharing an *exact* natural X onto
+one shared column, reasoning that this could only happen for two pads of
+the *same* net -- false twice over (``cp_leg_n``'s/``cp_leg_p``'s own
+``EN``/``ENB`` gate-tab pads always share one local X, and every leg maps
+them to two *different* nets; and the tripod places ``t1b`` directly above
+``base``, so their own ``EN``/``ENB`` pins collide too). See
+``cp_array.py``'s own module docstring, "EN/ENB SHARE ONE GATE-TAB COLUMN",
+for the fix: an explicitly-allocated riser column per net, reached by a
+checked Metal1 escape -- the same scheme this module already used for its
+own glue block, now ported to the array's own pads too.
 
 This tuple is asserted **exactly** by ``layout/tests/test_cp_output_stage.py``
-so the defect can neither grow silently nor be quietly forgotten: when the
-fix lands, that test fails and this constant becomes ``()``.
+(now asserting it is empty) so a regression here can neither grow silently
+nor be quietly forgotten.
 """
 
 
@@ -823,12 +805,6 @@ def main() -> int:
         outdir / f"{TOP_CELL}.gds", TOP_CELL, netcheck.pad_probe_points(layout.probe_pads())
     )
     print(report.summary())
-    if tuple(report.shorts) == INHERITED_ARRAY_SHORTS and not report.splits and not report.unresolved:
-        print(
-            "note: those shorts are exactly cp_output_stage.INHERITED_ARRAY_SHORTS -- "
-            "cp_array's own pre-existing defect, see that constant's docstring"
-        )
-        return 0
     return 0 if report.ok else 1
 
 

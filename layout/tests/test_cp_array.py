@@ -13,12 +13,16 @@ For the actual DRC-clean claim (which additionally needs the PDK's own
 signoff deck), see ``layout/evidence/cp-array-proof/PROOF.md`` -- this file
 checks the geometry/placement math ``cp_array`` *claims* to build (common-
 centroid placement, N/P non-overlap, bias-branch device table, net mapping),
-not a substitute for running the deck.
+not a substitute for running the deck. Where ``klayout.db`` is importable,
+``ConnectivityTests`` additionally extracts the finished GDS's own Metal1-3
+connectivity with ``netcheck.py`` -- the only check that can see a short or
+an open (a DRC deck cannot; issue #359).
 """
 
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -33,7 +37,7 @@ try:
 except ImportError:
     _HAVE_KLAYOUT = False
 
-from pfd_cp import cp_array  # noqa: E402
+from pfd_cp import cp_array, netcheck  # noqa: E402
 
 
 class LegOffsetsTests(unittest.TestCase):
@@ -164,6 +168,64 @@ class DeclutterRiserXTests(unittest.TestCase):
         for (net_a, xa, _ya), (net_b, xb, _yb) in zip(by_x, by_x[1:]):
             gap = xb - xa
             self.assertTrue(gap == 0.0 or gap >= 1.0, f"{net_a}@{xa} vs {net_b}@{xb}: gap {gap}")
+
+    def test_exact_tie_different_nets_are_pushed_apart_not_collapsed(self):
+        # Regression test for issue #359: an earlier version of this
+        # function treated *any* exact natural-X tie as safe to collapse
+        # onto one shared riser column, reasoning that two risers at the
+        # same natural X could only ever be the same net. That is false --
+        # cp_leg's own EN/ENB gate-tab pads share one local X on every leg,
+        # and every leg maps them to two different nets -- so an exact tie
+        # between different nets must now be pushed apart, exactly like a
+        # near-miss, not silently merged into one Metal3 column (a real
+        # short that DRC cannot see).
+        pts = [("VDD", -0.8, 2.55), ("VSS", -0.8, 0.65)]
+        out = cp_array.declutter_riser_x(pts, 1.0)
+        xs = {net: x for net, x, _y in out}
+        self.assertNotEqual(xs["VDD"], xs["VSS"])
+        self.assertGreaterEqual(abs(xs["VDD"] - xs["VSS"]), 1.0)
+
+    def test_exact_tie_same_net_still_collapses(self):
+        # The one case the original invariant does hold for: two pads of
+        # the *same* net sharing an identical natural X (e.g. two legs
+        # translated onto the same dx) are still safe -- and correct -- to
+        # collapse onto one shared riser column.
+        pts = [("IBN", 0.5, 2.99), ("IBN", 0.5, 10.59)]
+        out = cp_array.declutter_riser_x(pts, 1.0)
+        xs = [x for _net, x, _y in out]
+        self.assertEqual(xs[0], xs[1])
+
+
+class CheckRiserColumnsTests(unittest.TestCase):
+    """check_riser_columns() -- the build-time proof (issue #359) that a
+    two-nets-on-one-column allocation cannot be reintroduced silently."""
+
+    def test_well_separated_distinct_nets_pass(self):
+        points = [("A", 0.0, 0.0), ("B", 1.5, 3.0), ("C", 3.0, -2.0)]
+        cp_array.check_riser_columns(points)  # must not raise
+
+    def test_same_net_sharing_a_column_passes(self):
+        points = [("VSS", 0.0, 0.2), ("VSS", 0.0, 1.1), ("B0B", 1.5, 0.6)]
+        cp_array.check_riser_columns(points)  # must not raise
+
+    def test_returns_the_decluttered_plan(self):
+        points = [("A", 0.0, 0.0), ("B", 0.3, 1.0)]
+        planned = cp_array.check_riser_columns(points)
+        self.assertEqual(planned, cp_array.declutter_riser_x(points))
+
+    def test_verify_raises_on_a_synthetic_two_nets_one_column_plan(self):
+        # Synthetic two-nets-one-column input, as issue #359's own test plan
+        # asks for -- the exact defect this whole mechanism exists to catch,
+        # fed directly to the verification half (declutter_riser_x() itself
+        # can no longer produce this from any real input -- see
+        # DeclutterRiserXTests -- so this proves the *check* still fires if
+        # that invariant were ever broken again).
+        with self.assertRaises(ValueError):
+            cp_array._verify_riser_plan([("A", 0.0, 0.0), ("B", 0.0, 1.0)], 1.0)
+
+    def test_verify_raises_on_too_close_distinct_columns(self):
+        with self.assertRaises(ValueError):
+            cp_array._verify_riser_plan([("A", 0.0, 0.0), ("B", 0.4, 0.0)], 1.0)
 
 
 class BiasDeviceTableTests(unittest.TestCase):
@@ -355,6 +417,166 @@ class BuildTests(unittest.TestCase):
         for bus in (self.layout.n_bus, self.layout.p_bus):
             track_ys = [ty for ty, _lo, _hi in bus.values()]
             self.assertEqual(len(set(track_ys)), len(track_ys), "two nets share a Metal2 track")
+
+    def test_net_pads_cover_every_leg_and_bias_pad(self):
+        # n_net_pads/p_net_pads (issue #359) are what probe_pads() -- and
+        # therefore ConnectivityTests below -- are built from; every net
+        # that got a Metal2 bus must have at least one recorded pad.
+        for bus, net_pads in (
+            (self.layout.n_bus, self.layout.n_net_pads),
+            (self.layout.p_bus, self.layout.p_net_pads),
+        ):
+            for net in bus:
+                self.assertGreater(len(net_pads.get(net, [])), 0, net)
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+class ConnectivityTests(unittest.TestCase):
+    """The finished GDS's own extracted Metal1-3 connectivity -- the only
+    check that can see a short or an open (``layout/run_pv.py drc`` cannot;
+    see ``netcheck.py``'s own docstring, and issue #359)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.layout = cp_array.build()
+        cls._tmp = tempfile.TemporaryDirectory()
+        gds = Path(cls._tmp.name) / f"{cp_array.TOP_CELL}.gds"
+        cls.layout.write_gds(gds)
+        # probe_pads() -- unlike layout.pins -- hands every pad of every net
+        # on each side, "N:"/"P:"-prefixed so the two polarities' own
+        # deliberately-unlinked same-named nets (B0/B0B/B1/B1B/VDD/VSS; see
+        # module docstring) are never conflated into one probed key.
+        cls.report = netcheck.check_gds(
+            gds, cp_array.TOP_CELL, netcheck.pad_probe_points(cls.layout.probe_pads())
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_connectivity_is_fully_clean(self):
+        # The regression test for issue #359 itself: cp_array's own
+        # standalone GDS used to extract with shorts=B0+B0B;
+        # B1+B1B+VDD+VSS. Probing every pad on each side (not just one
+        # representative per net) additionally proves no net is open.
+        self.assertTrue(self.report.ok, self.report.summary())
+
+    def test_no_probe_point_is_unresolved(self):
+        self.assertEqual(self.report.unresolved, (), "stale probe coordinates")
+
+    def test_no_net_is_split(self):
+        self.assertEqual(self.report.splits, ())
+
+    def test_no_shorts(self):
+        self.assertEqual(self.report.shorts, ())
+
+    def test_n_and_p_trim_nets_are_genuinely_unlinked_at_this_level(self):
+        # Not a regression to guard against -- the module docstring's own
+        # stated design (Part 3c/#321 links them) -- but worth pinning: the
+        # fix for issue #359 must not accidentally tie the two polarities
+        # together at this level either.
+        for net in ("B0", "B0B", "B1", "B1B"):
+            n_ids = self.report.components[f"N:{net}"]
+            p_ids = self.report.components[f"P:{net}"]
+            self.assertEqual(n_ids & p_ids, set())
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+class LegPadsTests(unittest.TestCase):
+    """_leg_pads() -- the per-leg EN/ENB gate-tab riser escape (issue #359)."""
+
+    @classmethod
+    def setUpClass(cls):
+        from pfd_cp import cp_leg_n
+
+        cls.ln = cp_leg_n.build()
+
+    def test_non_t1b_legs_only_move_the_mdis_pin(self):
+        import pfd_cp.devgen as devgen
+        from pfd_cp import cp_leg_n
+
+        canvas = devgen.Canvas("scratch")
+        for name in ("base", "t0", "t1a"):
+            pads = cp_array._leg_pads(canvas, self.ln.pins, cp_leg_n.SPEC, name, 5.0, 7.0)
+            men_net = cp_leg_n.SPEC.men_gate_net
+            mdis_net = cp_leg_n.SPEC.mdis_gate_net
+            # men_gate_net is a plain translate -- unchanged natural X.
+            self.assertEqual(
+                cp_array.pad_center(pads[men_net])[0],
+                cp_array.pad_center(cp_array._translate_box(self.ln.pins[men_net], 5.0, 7.0))[0],
+            )
+            # mdis_gate_net moved left of its own translated natural X.
+            natural_x = cp_array.pad_center(cp_array._translate_box(self.ln.pins[mdis_net], 5.0, 7.0))[0]
+            self.assertLess(cp_array.pad_center(pads[mdis_net])[0], natural_x)
+
+    def test_t1b_moves_both_gate_tab_pins_left_and_keeps_them_apart(self):
+        import pfd_cp.devgen as devgen
+        from pfd_cp import cp_leg_n
+
+        canvas = devgen.Canvas("scratch")
+        t0_dx = -20.0  # an arbitrary t0 dx well clear of t1b's own natural X
+        targets = cp_array._t1b_escape_targets(t0_dx, self.ln.pins, cp_leg_n.SPEC)
+        pads = cp_array._leg_pads(canvas, self.ln.pins, cp_leg_n.SPEC, "t1b", 0.0, 7.6, targets)
+        men_x = cp_array.pad_center(pads[cp_leg_n.SPEC.men_gate_net])[0]
+        mdis_x = cp_array.pad_center(pads[cp_leg_n.SPEC.mdis_gate_net])[0]
+        natural_x = cp_array.pad_center(
+            cp_array._translate_box(self.ln.pins[cp_leg_n.SPEC.men_gate_net], 0.0, 7.6)
+        )[0]
+        self.assertLess(men_x, natural_x)
+        self.assertLess(mdis_x, natural_x)
+        self.assertGreaterEqual(abs(men_x - mdis_x), cp_array.RISER_MIN_PITCH_UM - 1e-9)
+
+    def test_t1b_without_targets_raises(self):
+        import pfd_cp.devgen as devgen
+        from pfd_cp import cp_leg_n
+
+        canvas = devgen.Canvas("scratch")
+        with self.assertRaises(AssertionError):
+            cp_array._leg_pads(canvas, self.ln.pins, cp_leg_n.SPEC, "t1b", 0.0, 7.6)
+
+    def test_every_other_pin_is_a_plain_translate(self):
+        import pfd_cp.devgen as devgen
+        from pfd_cp import cp_leg_n
+
+        canvas = devgen.Canvas("scratch")
+        pads = cp_array._leg_pads(canvas, self.ln.pins, cp_leg_n.SPEC, "base", 3.0, -2.0)
+        moved = {cp_leg_n.SPEC.mdis_gate_net}
+        for net, pad in self.ln.pins.items():
+            if net in moved:
+                continue
+            self.assertEqual(pads[net], cp_array._translate_box(pad, 3.0, -2.0), net)
+
+
+class T1bEscapeTargetsTests(unittest.TestCase):
+    """_t1b_escape_targets() -- t1b's own two explicit riser columns, both
+    past t0's own already-escaped mdis_gate_net column (issue #359)."""
+
+    def setUp(self):
+        from pfd_cp import cp_leg_n
+
+        self.pins = cp_leg_n.build().pins if _HAVE_KLAYOUT else None
+        self.spec = cp_leg_n.SPEC
+
+    @unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+    def test_both_targets_clear_t0s_own_escaped_column(self):
+        t0_dx = -11.77
+        men_x, mdis_x = cp_array._t1b_escape_targets(t0_dx, self.pins, self.spec)
+        t0_mdis_natural_x = t0_dx + cp_array.pad_center(self.pins[self.spec.mdis_gate_net])[0]
+        t0_mdis_escaped_x = t0_mdis_natural_x - cp_array.MDIS_LEFT_ESCAPE_UM
+        self.assertLessEqual(men_x, t0_mdis_escaped_x - cp_array.T1B_CLEAR_PITCH_UM + 1e-9)
+        self.assertLess(mdis_x, men_x)
+
+    @unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+    def test_the_two_targets_are_pitch_separated(self):
+        men_x, mdis_x = cp_array._t1b_escape_targets(-11.77, self.pins, self.spec)
+        self.assertAlmostEqual(men_x - mdis_x, cp_array.T1B_CLEAR_PITCH_UM)
+
+    @unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+    def test_result_shifts_with_t0s_own_dx(self):
+        men_a, mdis_a = cp_array._t1b_escape_targets(-11.77, self.pins, self.spec)
+        men_b, mdis_b = cp_array._t1b_escape_targets(-20.0, self.pins, self.spec)
+        self.assertAlmostEqual(men_b - men_a, -20.0 - (-11.77))
+        self.assertAlmostEqual(mdis_b - mdis_a, -20.0 - (-11.77))
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 <report-database>
  <description>DRC Run Report at</description>
  <original-file/>
- <generator>drc: script='/tmp/cp_array_evidence_drc2/main.drc'</generator>
+ <generator>drc: script='/tmp/cp359-drc/main.drc'</generator>
  <top-cell>cp_array</top-cell>
  <tags>
  </tags>
