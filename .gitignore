@@ -23,6 +23,14 @@
 !layout/evidence/cp-dumpbuf-layout/**/*.log
 # Same story again for the dff_tg_3v3 composite layout's DRC+LVS evidence (issue #308).
 !layout/evidence/divider-dff-proof/**/*.log
+# Same story again for the divider_chain devgen proofs' DRC+LVS evidence
+# (issues #306, #307). #306's two directories predate this rule -- their logs
+# are already tracked, so they stayed committed without one; this pattern
+# makes the intent explicit for the whole family rather than relying on a
+# future `git add -f`.
+!layout/evidence/divider-inv-proof/**/*.log
+!layout/evidence/divider-tgate-proof/**/*.log
+!layout/evidence/divider-rowcells-proof/**/*.log
 __pycache__/
 .DS_Store
 
