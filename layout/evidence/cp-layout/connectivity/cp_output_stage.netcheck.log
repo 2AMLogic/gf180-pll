@@ -1,0 +1,9 @@
+wrote /tmp/cpout-321-final/cp_output_stage.gds
+footprint: 117.810 x 66.725 um  (7860.87 um^2)
+glue bbox: (-11.659999999999998, 30.080000000000002, 76.68, 40.980000000000004)
+switch row: {'MSWDN': (-10.54, -4.539999999999999), 'MDMPDN': (0.46000000000000085, 6.460000000000001), 'MDUMN': (11.46, 14.46), 'MSWUP': (18.46, 24.46), 'MDMPUP': (29.46, 35.46), 'MDUMP': (40.46, 43.46)}
+inverter origins: {'xi_b0': (47.46, 32.28), 'xi_b1': (55.46, 32.28), 'xi_up': (63.46, 32.28), 'xi_dn': (71.46000000000001, 32.28)}
+link columns: {'N:VDD': -14.54, 'N:VSS': -15.54, 'N:DNT': -16.54, 'N:B0': -17.54, 'N:B0B': -18.54, 'N:B1': -19.54, 'N:B1B': -20.54, 'P:VSS': 89.27000000000001, 'P:VDD': 90.27000000000001, 'P:UPT': 91.27000000000001, 'P:B0B': 92.27000000000001, 'P:B0': 93.27000000000001, 'P:B1B': 94.27000000000001, 'P:B1': 95.27000000000001}
+boundary pins: ['B0', 'B1', 'DN', 'IBN', 'IBP', 'ICN', 'ICP', 'UP', 'VDD', 'VDUMP', 'VOUT', 'VSS']
+connectivity FAILED: shorts=B0+B0B; B1+B1B+VDD+VSS
+note: those shorts are exactly cp_output_stage.INHERITED_ARRAY_SHORTS -- cp_array's own pre-existing defect, see that constant's docstring

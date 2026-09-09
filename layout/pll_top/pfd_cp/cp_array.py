@@ -502,7 +502,8 @@ def _route_side(
     side_bbox: tuple[float, float, float, float],
     channel_margin_um: float = CHANNEL_MARGIN_UM,
     min_pitch: float = RISER_MIN_PITCH_UM,
-) -> NetTracks:
+    promote_pins: bool = True,
+) -> tuple[NetTracks, dict[str, tuple[float, float, float]]]:
     """Mesh-route every net in ``nets`` (dict of net -> its own Metal1 pad
     boxes) to its own dedicated Metal2 track in one channel above
     ``side_bbox``'s own topmost drawn edge, then promote each as a top-level
@@ -510,6 +511,22 @@ def _route_side(
     net's own riser X *together* (:func:`declutter_riser_x`, not per net in
     isolation) so nets that happen to land close in X by coincidence (not
     just the same net's own multiple pads) never violate M3.2a.
+
+    Returns ``(tracks, bus_spans)``, where ``bus_spans`` maps each routed net
+    to its own ``(track_y, x_lo, x_hi)`` Metal2 bus extent -- the *only*
+    coordinates a parent block needs in order to reach this side's nets
+    without re-rising off a Metal1 pad that already carries a via stack (see
+    ``cp_output_stage.py``'s own "REACHING THIS BLOCK'S NETS" section, issue
+    #321). ``x_lo == x_hi`` means the net had a single riser and no bus
+    rectangle was drawn -- only that riser's own Metal2 landing square exists
+    at ``track_y``, which a parent extending the bus merges with.
+
+    ``promote_pins=False`` suppresses the ``canvas.pin()`` call per net,
+    for a caller that routes an *internal* mesh (every net of the CP output
+    stage's glue block except the boundary ones) and promotes its own
+    boundary pins explicitly. Geometry drawn is identical either way --
+    ``canvas.pin()`` only labels and records (see ``_canvas.py``'s own
+    docstring).
     """
     tracks = NetTracks(base_y=side_bbox[3] + channel_margin_um)
 
@@ -534,15 +551,18 @@ def _route_side(
             seen_riser.add(key)
         bus_x.setdefault(net, []).append(rx)
 
+    bus_spans: dict[str, tuple[float, float, float]] = {}
     for net, xs in bus_x.items():
         track_y = tracks.get(net)
         x_lo, x_hi = min(xs), max(xs)
         if x_hi > x_lo:
             half = METAL2_WIRE_WIDTH_UM / 2.0
             _rect_extra(canvas, "metal2", x_lo - half, track_y - half, x_hi + half, track_y + half)
-        canvas.pin(net, *nets[net][0])
+        bus_spans[net] = (track_y, x_lo, x_hi)
+        if promote_pins:
+            canvas.pin(net, *nets[net][0])
 
-    return tracks
+    return tracks, bus_spans
 
 
 class NetTracks:
@@ -667,6 +687,13 @@ class CpArrayLayout:
     p_side_bbox: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
     n_bias_ports: dict[str, devgen.MosfetPorts] = field(default_factory=dict)
     p_bias_ports: dict[str, devgen.MosfetPorts] = field(default_factory=dict)
+    #: net -> ``(track_y, x_lo, x_hi)`` for each side's own Metal2 bus (see
+    #: :func:`_route_side`). This is the handle a parent block reaches this
+    #: block's nets through -- ``cp_output_stage.py`` (issue #321) extends a
+    #: bus sideways into clear space and rises from *there*, rather than
+    #: landing a second via stack on a Metal1 pad that already carries one.
+    n_bus: dict[str, tuple[float, float, float]] = field(default_factory=dict)
+    p_bus: dict[str, tuple[float, float, float]] = field(default_factory=dict)
 
     def write_gds(self, path) -> None:
         self.canvas.write_gds(path)
@@ -814,8 +841,8 @@ def build(outdir: Path | None = None) -> CpArrayLayout:
     # docstring) -- and promote each as a top-level pin (canvas.pin() draws
     # no shape of its own, see _canvas.py's docstring, so this composes
     # cleanly with the pad(s) routing already placed). ---
-    n_tracks = _route_side(canvas, n_nets, n_side_bbox)
-    p_tracks = _route_side(canvas, p_nets, p_side_bbox)
+    n_tracks, n_bus = _route_side(canvas, n_nets, n_side_bbox)
+    p_tracks, p_bus = _route_side(canvas, p_nets, p_side_bbox)
 
     n_leg_centers = {name: box_center(box) for name, box in n_leg_boxes.items()}
     p_leg_centers = {name: box_center(box) for name, box in p_leg_boxes.items()}
@@ -839,6 +866,8 @@ def build(outdir: Path | None = None) -> CpArrayLayout:
         p_side_bbox=p_side_bbox,
         n_bias_ports={"MBN": mbn, "MCN": mcn},
         p_bias_ports={"MBP": mbp, "MCP": mcp},
+        n_bus=n_bus,
+        p_bus=p_bus,
     )
     if outdir is not None:
         outdir = Path(outdir)
