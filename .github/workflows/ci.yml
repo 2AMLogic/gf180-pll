@@ -44,6 +44,18 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Install the klayout pip wheel (klayout.db -- not the standalone app binary)
+        # This is the `klayout` PyPI package providing `klayout.db`, distinct
+        # from the standalone KLayout application binary used for DRC/LVS
+        # decks (see layout/README.md -- "The two KLayouts"). It needs no
+        # PDK, no xschem, and no extra system libs on ubuntu-latest, so it's
+        # cheap to install on every PR. Installing it here is what flips the
+        # layout/tests/*.py tests below from `@unittest.skipUnless(_HAVE_KLAYOUT,
+        # ...)`-skipped to actually run/pass in this job (issue #349) --
+        # without it every such test (including the VCO n-well geometric
+        # verification gate added in #339/#345) silently never executes.
+        run: pip install klayout
+
       - name: sim/selftest.sh
         # Default mode: harness unit tests always run (no PDK needed). The
         # end-to-end PVT smoke stage self-skips with exit 0 when ngspice /
@@ -51,11 +63,16 @@ jobs:
         # see sim/selftest.sh. Do NOT pass --require-pdk here.
         run: bash sim/selftest.sh
 
-      - name: layout/tests (harness unit tests, no PDK/KLayout needed)
-        # Mirrors the sim/tests step above: layout/harness/drc.py's two pure
-        # functions (parse_report_db, rules_from_log) have zero PDK/KLayout
-        # dependency. lvs.py and faults.py are not covered here -- their only
-        # non-trivial functions require KLayout/subprocess.
+      - name: layout/tests (harness unit tests + klayout.db-gated tests)
+        # layout/harness/drc.py's two pure functions (parse_report_db,
+        # rules_from_log) have zero PDK/KLayout dependency and always ran
+        # here. With the klayout pip wheel installed above, the
+        # `@unittest.skipUnless(_HAVE_KLAYOUT, ...)`-gated tests across
+        # layout/tests/ (e.g. test_vco_layout.py, test_divider_chain.py,
+        # test_cp_leg_devgen.py) now run too. lvs.py and faults.py's
+        # subprocess-driving functions (the standalone KLayout app binary,
+        # DRC/LVS decks) are still not covered here -- those require the
+        # full PDK toolchain and belong in pdk-checks, not this headless job.
         run: python3 -m unittest discover -s layout/tests -t layout/tests
 
       - name: sim/lib/check-readme-status.sh (README evidence counts vs. sim/ tree)
