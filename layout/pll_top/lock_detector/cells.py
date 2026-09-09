@@ -3,10 +3,13 @@
 Every function below draws directly into a shared ``primitives.Canvas`` (no
 GDS-level sub-cell hierarchy -- see the module docstring in ``build.py`` for
 why a flat macro-composition model was chosen over ``CellInstArray``
-placement) and returns the Metal1 pad centers it created, keyed by the
+placement) and returns the Metal1 pad *boxes* it created, keyed by the
 *global* net name the caller passed in for each port. Callers accumulate
-these into one shared ``nets: dict[str, list[(x, y)]]`` and route each net
-exactly once (see ``build.py``).
+these into one shared ``nets: dict[str, list[bbox]]`` and route each net
+exactly once (see ``build.py``). Boxes, not just centers (issue #322):
+``route_all_nets()``'s ``RiserLanes`` needs each pad's real footprint, not
+just its center point, to keep a moved riser's own Metal1 jog from crossing
+some *other* net's own, possibly much wider than a via, S/D pad.
 
 Every PMOS comp bbox drawn anywhere in this package is appended to a shared
 ``pwells: list[bbox]`` instead of each function drawing its own nwell --
@@ -23,15 +26,14 @@ from .primitives import (
     Canvas,
     bbox_union,
     mosfet,
-    pad_center,
 )
 
-Nets = dict[str, list[tuple[float, float]]]
+Nets = dict[str, list[tuple[float, float, float, float]]]
 PWells = list[tuple[float, float, float, float]]
 
 
 def _add(nets: Nets, net: str, pad: tuple[float, float, float, float]) -> None:
-    nets.setdefault(net, []).append(pad_center(pad))
+    nets.setdefault(net, []).append(pad)
 
 
 def draw_inv(
@@ -154,9 +156,16 @@ def draw_schmitt(
     _add(nets, a, p1.gate_pad)
     _add(nets, a, p2.gate_pad)
 
-    # MP3: D=VSS(left), S=P1(right), G=Y.
-    _add(nets, vss, p3.left_pad)
-    _add(nets, p1_net, p3.right_pad)
+    # MP3: S(left)=P1, D(right)=VSS, G=Y (issue #322: this used to register
+    # left_pad/right_pad the other way around -- mosfet()'s own convention
+    # is source=left/drain=right, dev.schmitt_fets()'s MP3 has s=p1/d=vss,
+    # so the pad mosfet() actually draws and tags "P1" at x0's own left
+    # terminal was being registered into nets['VSS'] for routing instead,
+    # and vice versa for the right terminal -- an unconditional short
+    # between P1 and VSS wherever that riser and that pad's real net tag
+    # ended up close enough to touch, independent of any routing choice).
+    _add(nets, p1_net, p3.left_pad)
+    _add(nets, vss, p3.right_pad)
     _add(nets, y, p3.gate_pad)
 
     # MN1: S(left)=VSS, D(right)=N1.  MN2: S(left)=N1, D(right)=Y.
@@ -167,9 +176,10 @@ def draw_schmitt(
     _add(nets, a, n1.gate_pad)
     _add(nets, a, n2.gate_pad)
 
-    # MN3: D=VDD(left), S=N1(right), G=Y.
-    _add(nets, vdd, n3.left_pad)
-    _add(nets, n1_net, n3.right_pad)
+    # MN3: S(left)=N1, D(right)=VDD, G=Y (issue #322: same left/right swap
+    # as MP3 above, shorting N1 to VDD).
+    _add(nets, n1_net, n3.left_pad)
+    _add(nets, vdd, n3.right_pad)
     _add(nets, y, n3.gate_pad)
 
     pwells.extend([p1.comp_bbox, p2.comp_bbox, p3.comp_bbox])

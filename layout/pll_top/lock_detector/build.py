@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from . import cells, devices as dev
-from .primitives import Canvas, NetTracks, nwell_over, pad_center, route_net, tap_strip
+from .primitives import Canvas, NetTracks, nwell_over, route_all_nets, tap_strip
 
 
 #: DF.13_LV/DF.14_LV cap the distance from any PMOS-in-nwell/NMOS-outside-
@@ -61,62 +61,61 @@ def _finish(canvas: Canvas, nets, pwells, block_box, tap_xs=None, *, ntap_net: s
         ntap_box, ntap_pad = tap_strip(canvas, "n", x, y_p_tap, ntap_net)
         ptap_box, ptap_pad = tap_strip(canvas, "p", x, y_n_tap, ptap_net)
         ntap_boxes.append(ntap_box)
-        nets.setdefault(ntap_net, []).append(pad_center(ntap_pad))
-        nets.setdefault(ptap_net, []).append(pad_center(ptap_pad))
+        nets.setdefault(ntap_net, []).append(ntap_pad)
+        nets.setdefault(ptap_net, []).append(ptap_pad)
 
     nwell_over(canvas, [*pwells, *ntap_boxes])
 
     tracks = NetTracks(base_y=block_box[3] + 6.0)
-    for net, pads in nets.items():
-        route_net(canvas, net, pads, tracks.get(net))
+    route_all_nets(canvas, nets, tracks)
 
 
-def build_inv_standalone(top_name: str = "lock_detector_inv") -> Canvas:
-    canvas = Canvas(top_name)
-    nets: dict[str, list[tuple[float, float]]] = {}
+def build_inv_standalone(top_name: str = "lock_detector_inv", *, canvas_cls: type = Canvas) -> Canvas:
+    canvas = canvas_cls(top_name)
+    nets: dict[str, list[tuple[float, float, float, float]]] = {}
     pwells: list[tuple[float, float, float, float]] = []
     box = cells.draw_inv(canvas, nets, pwells, 0.0, 2.5, -2.5, "A", "Y", "VDD", "VSS")
     _finish(canvas, nets, pwells, box)
     return canvas
 
 
-def build_nand2_standalone(top_name: str = "lock_detector_nand2") -> Canvas:
-    canvas = Canvas(top_name)
-    nets: dict[str, list[tuple[float, float]]] = {}
+def build_nand2_standalone(top_name: str = "lock_detector_nand2", *, canvas_cls: type = Canvas) -> Canvas:
+    canvas = canvas_cls(top_name)
+    nets: dict[str, list[tuple[float, float, float, float]]] = {}
     pwells: list[tuple[float, float, float, float]] = []
     box = cells.draw_nand2(canvas, nets, pwells, 0.0, 2.5, -2.5, "A", "B", "Y", "VDD", "VSS")
     _finish(canvas, nets, pwells, box)
     return canvas
 
 
-def build_schmitt_standalone(top_name: str = "lock_detector_schmitt") -> Canvas:
-    canvas = Canvas(top_name)
-    nets: dict[str, list[tuple[float, float]]] = {}
+def build_schmitt_standalone(top_name: str = "lock_detector_schmitt", *, canvas_cls: type = Canvas) -> Canvas:
+    canvas = canvas_cls(top_name)
+    nets: dict[str, list[tuple[float, float, float, float]]] = {}
     pwells: list[tuple[float, float, float, float]] = []
     box = cells.draw_schmitt(canvas, nets, pwells, 0.0, 2.5, -2.5, "A", "Y", "VDD", "VSS")
     _finish(canvas, nets, pwells, box)
     return canvas
 
 
-def build_xor2_standalone(top_name: str = "lock_detector_xor2") -> Canvas:
-    canvas = Canvas(top_name)
-    nets: dict[str, list[tuple[float, float]]] = {}
+def build_xor2_standalone(top_name: str = "lock_detector_xor2", *, canvas_cls: type = Canvas) -> Canvas:
+    canvas = canvas_cls(top_name)
+    nets: dict[str, list[tuple[float, float, float, float]]] = {}
     pwells: list[tuple[float, float, float, float]] = []
     box, tap_xs = cells.draw_xor2(canvas, nets, pwells, 0.0, 2.5, -2.5, "A", "B", "Y", "VDD", "VSS", prefix="X")
     _finish(canvas, nets, pwells, box, tap_xs=tap_xs)
     return canvas
 
 
-def build_delaywin_standalone(top_name: str = "lock_detector_delaywin") -> Canvas:
-    canvas = Canvas(top_name)
-    nets: dict[str, list[tuple[float, float]]] = {}
+def build_delaywin_standalone(top_name: str = "lock_detector_delaywin", *, canvas_cls: type = Canvas) -> Canvas:
+    canvas = canvas_cls(top_name)
+    nets: dict[str, list[tuple[float, float, float, float]]] = {}
     pwells: list[tuple[float, float, float, float]] = []
     box, tap_xs = cells.draw_delaywin(canvas, nets, pwells, 0.0, 2.5, -2.5, 14.0, "A", "Y", "VDD", "VSS", prefix="D")
     _finish(canvas, nets, pwells, box, tap_xs=tap_xs)
     return canvas
 
 
-def build_lock_detector(top_name: str = "lock_detector") -> Canvas:
+def build_lock_detector(top_name: str = "lock_detector", *, canvas_cls: type = Canvas) -> Canvas:
     """The full ``lock_detector`` block: XERR/XDLY/XNW/XIW/MDNW/MUPW/MCW/XSCH/XILK.
 
     Wired exactly per ``design/netlist/lock_detector.spice``'s top-level
@@ -126,9 +125,14 @@ def build_lock_detector(top_name: str = "lock_detector") -> Canvas:
     divider chain's own supply trunk even though the two blocks share the
     ``DIVIDER_LOCK`` floorplan region for physical adjacency only (see
     ``layout/floorplan/skeleton.py`` and this issue's Acceptance Criteria).
+
+    ``canvas_cls`` defaults to the real (KLayout-backed) ``Canvas``; pass
+    ``checks.RecordingCanvas`` to build the identical geometry as a
+    net-tagged shape list instead, with no ``klayout.db`` import at all --
+    see ``checks.py`` (issue #322).
     """
-    canvas = Canvas(top_name)
-    nets: dict[str, list[tuple[float, float]]] = {}
+    canvas = canvas_cls(top_name)
+    nets: dict[str, list[tuple[float, float, float, float]]] = {}
     pwells: list[tuple[float, float, float, float]] = []
 
     y_p, y_n, y_cap = 2.5, -2.5, 14.0
@@ -188,7 +192,7 @@ def build_lock_detector(top_name: str = "lock_detector") -> Canvas:
     # it.
     mupw_mid_x = (b_mupw[0] + b_mupw[2]) / 2.0 - 4.0
     mupw_ntap_box, mupw_ntap_pad = tap_strip(canvas, "n", mupw_mid_x, ROW_Y_P + ROW_W_P_MAX / 2.0 + 1.5, vdd)
-    nets.setdefault(vdd, []).append(pad_center(mupw_ntap_pad))
+    nets.setdefault(vdd, []).append(mupw_ntap_pad)
 
     # No gap tap on MUPW's far side either, for the same reason as its near
     # side above -- its own drain (VWIN) S/D pad sits ~1 um from the comp
@@ -213,7 +217,7 @@ def build_lock_detector(top_name: str = "lock_detector") -> Canvas:
     mcw = dev.mcw_fet("VWIN", vss)
     b_mcw = cells.draw_discrete_fet(canvas, nets, pwells, x, y_mcw, mcw, tab_up=True)
     mcw_ptap_box, mcw_ptap_pad = tap_strip(canvas, "p", x, y_mcw + mcw.w_um / 2.0 + 1.5, vss)
-    nets.setdefault(vss, []).append(pad_center(mcw_ptap_pad))
+    nets.setdefault(vss, []).append(mcw_ptap_pad)
     x = _gap(max(b_mcw[2], mcw_ptap_box[2]), 3.0)
 
     b_sch = cells.draw_schmitt(canvas, nets, pwells, x, y_p, y_n, "VWIN", "LOCKB", vdd, vss, prefix="XSCH_")
