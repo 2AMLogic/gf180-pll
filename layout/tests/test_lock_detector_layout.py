@@ -161,28 +161,20 @@ class RiserLanesTests(unittest.TestCase):
 class BuiltLayoutConnectivityTests(unittest.TestCase):
     """Checks on the full block's drawn geometry itself.
 
-    ``build_lock_detector()`` currently fails outright (raises, rather than
-    building anything -- see ``RiserLanes.resolve_conflicts()``'s own
-    docstring) because it embeds ``xor2`` (as ``XERR``): a dense-enough
-    riser conflict graph that this fix's own repair pass cannot converge on
-    within a reasonable try/round budget, tracked as a follow-up (see
-    ``StandaloneCellConnectivityTests.test_xor2``'s own skip reason for the
-    same root cause in isolation). This is a *build failure*, not a
-    ``StandaloneCellConnectivityTests``-style silent short: `RiserLanes`
-    raises rather than emitting unresolved Metal1 geometry, so the whole
-    class is skipped rather than asserted against a canvas that was never
-    actually built.
+    ``build_lock_detector()`` embeds ``xor2`` (as ``XERR``) -- a dense-enough
+    riser conflict graph that ``RiserLanes.resolve_conflicts()``'s pairwise
+    repair pass could not converge on (issue #347); ``route_all_nets()``'s
+    ``late_nets`` (used here via ``build.py``'s ``defer_supply_routing``)
+    fixes that by placing ``VDD``/``VSS`` -- present on almost every column,
+    the graph's own biggest source of interference -- only after every
+    signal net already has a settled position (see that parameter's own
+    docstring for why that converges where full natural-x interleaving does
+    not).
     """
 
     @classmethod
     def setUpClass(cls):
-        try:
-            cls.canvas = build.build_lock_detector(canvas_cls=checks.RecordingCanvas)
-        except ValueError as exc:
-            raise unittest.SkipTest(
-                f"build_lock_detector() does not converge yet (embeds xor2/XERR -- "
-                f"see StandaloneCellConnectivityTests.test_xor2's own skip reason): {exc}"
-            ) from exc
+        cls.canvas = build.build_lock_detector(canvas_cls=checks.RecordingCanvas)
 
     def test_no_two_nets_are_shorted(self):
         hits = checks.shorted_pairs(self.canvas.conductors)
@@ -234,17 +226,12 @@ class StandaloneCellConnectivityTests(unittest.TestCase):
     def test_xor2(self):
         # xor2's own dense, 4-NAND2 composition produces a Metal1 riser
         # conflict graph (~40 risers, several mutually interfering) that
-        # RiserLanes.resolve_conflicts() cannot converge on within its own
-        # try/round budget (see that method's own docstring for the
-        # cycle-breaking history it already tried) -- filed as a follow-up
-        # rather than fixed here: issue #322 is the riser-collision
-        # mechanism itself (fixed and verified on inv/nand2/schmitt/
-        # delaywin above), not a general channel router, and xor2's own
-        # conflict-graph density is a distinct, harder problem.
-        try:
-            self._assert_clean(build.build_xor2_standalone(canvas_cls=checks.RecordingCanvas))
-        except ValueError as exc:
-            self.skipTest(f"RiserLanes does not converge yet for xor2's own conflict graph: {exc}")
+        # RiserLanes.resolve_conflicts()'s pairwise repair could not
+        # converge on within its own try/round budget (issue #347) --
+        # build_xor2_standalone() now opts into route_all_nets()'s
+        # late_nets (via build.py's defer_supply_routing), which placing
+        # VDD/VSS last resolves (see that parameter's own docstring).
+        self._assert_clean(build.build_xor2_standalone(canvas_cls=checks.RecordingCanvas))
 
     def test_delaywin(self):
         self._assert_clean(build.build_delaywin_standalone(canvas_cls=checks.RecordingCanvas))
