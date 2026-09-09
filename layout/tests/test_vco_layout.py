@@ -360,46 +360,61 @@ class CommonCentroidTests(unittest.TestCase):
 
 
 class MirrorPlanTests(unittest.TestCase):
-    """mirror.plan() -- the pure-Python placement the generator draws from."""
+    """mirror.plan() -- the pure-Python placement the generator draws from.
+
+    Issue #324 folded this generator from one PMOS-row-over-NMOS-row pair
+    into two, stacked (``MirrorPlan.tier1``/``.tier2``, see mirror.py's own
+    module docstring for why the netlist cuts cleanly there). Every
+    per-tier invariant the single-row generator used to check still holds,
+    just once per tier -- plus the two genuinely new cross-tier properties
+    (the mid GND tap, the VBP2 riser) get their own tests below.
+    """
 
     def setUp(self):
-        self.plan = mirror.plan()
+        self.mp = mirror.plan()
+        self.tiers = (self.mp.tier1, self.mp.tier2)
 
     def test_every_inter_device_net_has_a_track(self):
-        for net, rows in self.plan.net_rows.items():
-            self.assertIn(net, mirror.NET_ORDER)
-            for row in rows:
-                self.assertIsInstance(self.plan.track_y(net, row), float)
+        for t in self.tiers:
+            for net, rows in t.net_rows.items():
+                self.assertIn(net, t.net_order)
+                for row in rows:
+                    self.assertIsInstance(t.track_y(net, row), float)
 
     def test_nmos_and_pmos_track_groups_are_disjoint(self):
         # The invariant that makes a Metal1 escape column from one row
         # incapable of touching one from the other row, whatever their x --
-        # see mirror.py's NET_ORDER comment.
-        lo = [self.plan.track_lo[n] for n, r in self.plan.net_rows.items() if "nfet" in r]
-        hi = [self.plan.track_hi[n] for n, r in self.plan.net_rows.items() if "pfet" in r]
-        self.assertLess(max(lo), min(hi))
-        self.assertGreaterEqual(min(hi) - max(lo), mirror.TRACK_PITCH_UM)
+        # see mirror.py's NET_ORDER comment. Checked within each tier: the
+        # two tiers' own track groups are far apart in y by construction
+        # (see test_tiers_do_not_overlap_in_y below) and are not compared to
+        # each other here.
+        for t in self.tiers:
+            lo = [t.track_lo[n] for n, r in t.net_rows.items() if "nfet" in r]
+            hi = [t.track_hi[n] for n, r in t.net_rows.items() if "pfet" in r]
+            self.assertLess(max(lo), min(hi))
+            self.assertGreaterEqual(min(hi) - max(lo), mirror.TRACK_PITCH_UM)
 
     def test_two_row_nets_get_a_link_column_and_one_row_nets_do_not(self):
-        for net, rows in self.plan.net_rows.items():
-            if rows == {"nfet", "pfet"}:
-                self.assertIn(net, self.plan.link_x, f"{net} spans both rows but has no link")
-            else:
-                self.assertNotIn(net, self.plan.link_x)
+        for t in self.tiers:
+            for net, rows in t.net_rows.items():
+                if rows == {"nfet", "pfet"}:
+                    self.assertIn(net, t.link_x, f"{net} spans both rows but has no link")
+                else:
+                    self.assertNotIn(net, t.link_x)
 
     def test_link_columns_sit_clear_of_both_transistor_rows(self):
-        rows_right = max(
-            it.x0 + it.width for it in (self.plan.pmos + self.plan.nmos)
-        )
-        for net, x in self.plan.link_x.items():
-            self.assertGreater(x, rows_right, f"{net}'s link column lands inside a device row")
+        for t in self.tiers:
+            rows_right = max(it.x0 + it.width for it in (t.pmos + t.nmos))
+            for net, x in t.link_x.items():
+                self.assertGreater(x, rows_right, f"{net}'s link column lands inside a device row")
 
     def test_metal2_tracks_meet_the_m2_spacing_rule(self):
-        ys = sorted(set(list(self.plan.track_lo.values()) + list(self.plan.track_hi.values())))
-        for a, b in zip(ys, ys[1:]):
-            self.assertGreaterEqual(
-                b - a - prim.METAL2_WIRE_WIDTH_UM, dev.DRC_METAL2_MIN_SPACE_UM
-            )
+        for t in self.tiers:
+            ys = sorted(set(list(t.track_lo.values()) + list(t.track_hi.values())))
+            for a, b in zip(ys, ys[1:]):
+                self.assertGreaterEqual(
+                    b - a - prim.METAL2_WIRE_WIDTH_UM, dev.DRC_METAL2_MIN_SPACE_UM
+                )
 
     def test_reserve_rejects_two_nets_closer_than_m1_spacing(self):
         # Negative control for the guard that caught the real short in this
@@ -425,6 +440,41 @@ class MirrorPlanTests(unittest.TestCase):
         x0, y0, x1, y1 = mirror.footprint_um()
         self.assertGreater(x1 - x0, 0.0)
         self.assertGreater(y1 - y0, 0.0)
+
+    def test_tiers_do_not_overlap_in_y(self):
+        # tier 2's own NMOS row bottom (y0) has to clear tier 1's own n-well
+        # top plus the mid GND tap's own footprint -- if it didn't, the two
+        # tiers' devices would physically collide.
+        t1, t2 = self.mp.tier1, self.mp.tier2
+        self.assertGreater(t1.nwell[3], t1.nwell[1])
+        self.assertGreater(self.mp.mid_gnd_tap[1], t1.nwell[3])
+        self.assertGreater(t2.y0, self.mp.mid_gnd_tap[3])
+
+    def test_mid_gnd_tap_spans_tier2_nmos_row(self):
+        # DF.13_MV/DF.14_MV: every device in tier 2's NMOS row has to be
+        # within 15 um of *some* substrate tap -- the mid tap is that tap,
+        # so it has to actually span that row's own width.
+        t2 = self.mp.tier2
+        row_x0 = min(it.x0 for it in t2.nmos)
+        row_x1 = max(it.x0 + it.width for it in t2.nmos)
+        self.assertLessEqual(self.mp.mid_gnd_tap[0], row_x0)
+        self.assertGreaterEqual(self.mp.mid_gnd_tap[2], row_x1)
+
+    def test_vbp2_is_nfet_only_in_tier1_and_pfet_only_in_tier2(self):
+        # The one net this fold crosses tiers on -- see mirror.py's module
+        # docstring for why the netlist cuts cleanly here. Neither tier's
+        # own local net_rows should ever need *both* rows for it (that
+        # would mean the fold picked the wrong cut).
+        self.assertEqual(self.mp.tier1.net_rows["VBP2"], {"nfet"})
+        self.assertEqual(self.mp.tier2.net_rows["VBP2"], {"pfet"})
+
+    def test_link_vbp2_and_link_vdd_columns_are_on_opposite_sides(self):
+        # The VBP2 riser's own vertical run spans the same y range on the
+        # right that the VDD_VCO tap-band riser needs on the left -- see
+        # build()'s own comment for why they cannot share a side.
+        t1, t2 = self.mp.tier1, self.mp.tier2
+        self.assertGreater(self.mp.link_vbp2_x, max(t1.right_metal_x, t2.right_metal_x))
+        self.assertLess(self.mp.link_vdd_x, min(t1.left_metal_x, t2.left_metal_x))
 
 
 class GridSnapTests(unittest.TestCase):
@@ -491,10 +541,15 @@ class VcoSubBlockFloorplanTests(unittest.TestCase):
         # against the whole-skeleton bounding box -- which is dominated by
         # LOOP_FILTER's own 195 um height, not VCO_CORE's, so VCO_CORE.h
         # growing past 100 um (previous test) does not move this number
-        # (see skeleton.py's own docstring for the arithmetic).
+        # (see skeleton.py's own docstring for the arithmetic). Issue #324's
+        # own mirror fold recovered width faster than the new block-level
+        # n-well ring spent it, so this ratio *improved* (was ~0.99, now
+        # ~0.88) -- pinned with both bounds so a future edit that erodes the
+        # recovered margin again is caught here, not just in review.
         used = skeleton.total_extent_um2()
         self.assertLess(used, 150_000.0)
-        self.assertGreater(used / 150_000.0, 0.9, "budget headroom changed -- re-read skeleton.py")
+        self.assertGreater(used / 150_000.0, 0.8, "budget headroom changed -- re-read skeleton.py")
+        self.assertLess(used / 150_000.0, 0.95, "budget headroom changed -- re-read skeleton.py")
 
 
 class BiasResistorDeviceTests(unittest.TestCase):
@@ -800,6 +855,27 @@ class AssembledVcoBlockPlacementTests(unittest.TestCase):
     def test_footprint_is_the_block_guard_ring_box(self):
         self.assertEqual(vco_block.footprint_um(), self.p.outer)
 
+    def test_nwell_ring_is_concentric_with_and_inside_the_gnd_ring(self):
+        # Issue #324's own closing increment: PLL-FLOORPLAN.md section 1's
+        # "real two-sided ring" -- a second, VDD_VCO-tied n-well band,
+        # concentric with the existing GND_VCO substrate ring.
+        x0, y0, x1, y1 = self.p.outer
+        nx0, ny0, nx1, ny1 = self.p.nwell_ring
+        self.assertTrue(x0 < nx0 < nx1 < x1)
+        self.assertTrue(y0 < ny0 < ny1 < y1)
+        # concentric: the gap on every side is symmetric (both boxes share a
+        # centre), not offset to one corner.
+        self.assertAlmostEqual(nx0 - x0, x1 - nx1)
+        self.assertAlmostEqual(ny0 - y0, y1 - ny1)
+
+    def test_nwell_ring_encloses_all_content_with_real_margin(self):
+        x0, y0, x1, y1 = self.p.content
+        nx0, ny0, nx1, ny1 = self.p.nwell_ring
+        self.assertGreater(x0 - nx0, dev.DRC_NWELL_TO_NCOMP_OUT_UM)
+        self.assertGreater(nx1 - x1, dev.DRC_NWELL_TO_NCOMP_OUT_UM)
+        self.assertGreater(y0 - ny0, dev.DRC_NWELL_TO_NCOMP_OUT_UM)
+        self.assertGreater(ny1 - y1, dev.DRC_NWELL_TO_NCOMP_OUT_UM)
+
     def test_tap_pitch_bound_holds_for_every_sub_block(self):
         # PLL-FLOORPLAN.md section 1 / DF.13_MV / DF.14_MV: <= 15 um to a tap
         # *everywhere inside the block*, not just at its perimeter. Each
@@ -923,13 +999,15 @@ class AssembledVcoBlockFloorplanTests(unittest.TestCase):
         self.assertGreater(area, 17_000.0)
 
     def test_skeleton_bounding_box_headroom_against_the_draft_budget(self):
-        # Still under PLL-FLOORPLAN.md section 5's 150,000 um^2 draft target,
-        # but the real VCO layout has eaten most of the headroom -- assert
-        # both facts, so the next block to land real geometry finds out here
-        # rather than in review.
+        # Still under PLL-FLOORPLAN.md section 5's 150,000 um^2 draft target.
+        # Issue #324's mirror fold (issue #293's own follow-up) recovered
+        # more block width than the new block-level n-well ring it funds
+        # spent, so the whole skeleton's own headroom against this target
+        # *improved* here (previously ~148,000 um^2, ~1 % headroom) rather
+        # than eroding further -- both bounds pin that fact.
         extent = skeleton.total_extent_um2()
         self.assertLess(extent, 150_000.0)
-        self.assertGreater(extent, 140_000.0)
+        self.assertGreater(extent, 120_000.0)
 
 
 @unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")

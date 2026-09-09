@@ -14,6 +14,16 @@ words: **the inter-sub-block wiring that merges ring + bias generator
 guard ring, and the combined block's own standalone DRC run.** This increment
 is that work.
 
+**Update (issue #324, closing #293):** the one acceptance criterion this
+increment left open below — a block-level `VDD_VCO`-tied n-well tap ring,
+concentric with the `GND_VCO` ring — is now drawn, funded by folding the
+band-select mirror into two tiers. See
+[`PROOF-mirror-fold.md`](PROOF-mirror-fold.md) for that increment's own
+before/after footprint, DRC/connectivity results, and negative controls. The
+footprint numbers and DRC run recorded below are this increment's own
+historical record (PR #325) and are superseded by that file, not edited
+here.
+
 | Block | Generator | Top cell | GDS |
 |---|---|---|---|
 | Whole VCO (`vco.sch` + `vco_bias.sch`) | `layout/pll_top/vco/block.py` | `vco_block` | `vco_block.gds` |
@@ -213,6 +223,9 @@ is not this issue's scope.** At ~50 % area utilisation inside the guard ring,
 that lever is worth roughly another 2× and should be a separate issue.
 
 ## The one acceptance criterion this increment does not fully close
+
+**Closed by issue #324, see [`PROOF-mirror-fold.md`](PROOF-mirror-fold.md).**
+The section below is left exactly as PR #325 recorded it, for history.
 
 `PLL-FLOORPLAN.md` §1 asks for the VCO's guard ring to be "tied to `GND_VCO`
 on the substrate side and to a local `VDD_VCO`-tied n-well tap ring on the

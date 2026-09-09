@@ -1,10 +1,10 @@
 wrote /tmp/blkev/vco_block.gds
-footprint: 294.780 x 148.180 um  (43680.5 um^2)
+footprint: 214.820 x 162.880 um  (34989.9 um^2)
   bias_resistors     123.560    -3.450   136.560    36.870
   vtoi_core           -4.120    -3.720   117.060    47.000
-  mirror              -4.120    55.000   265.740    92.120
-  ring                -4.700    98.120    70.700   116.780
-  buffer              52.300   122.780    83.950   136.060
+  mirror              -6.340    55.000   183.140   105.820
+  ring                -4.700   111.820    70.700   130.480
+  buffer              52.300   136.480    83.950   149.760
 
   ok   NC               RCG signal pad <-> V-to-I core's NC track: 2 probe(s) -> one net
   ok   NOFF             ROFF signal pad <-> V-to-I core's NOFF track: 2 probe(s) -> one net

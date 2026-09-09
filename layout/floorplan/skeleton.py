@@ -42,30 +42,27 @@ extent, translated out of the block's own coordinates. All of it comes from
 plain-Python ``footprint_um()``/``placement()`` calls, so this file still
 imports no KLayout.
 
-**The real block is 294.8 x 148.2 um = 43,680 um^2, against PLL-FLOORPLAN.md
-section 5's ROM row of 0.011-0.017 mm^2 for the whole VCO -- a 2.6-4.0x
-overrun.** That record's own section 5 names this case in advance ("if real
-per-block layout pushes the conservative estimate's ~34 % margin below zero
-... the next floorplan revision should state the overrun explicitly rather
-than silently rounding the total down"), so it is stated here rather than
-absorbed:
+**The real block is 214.8 x 162.9 um = 34,990 um^2, against PLL-FLOORPLAN.md
+section 5's ROM row of 0.011-0.017 mm^2 for the whole VCO -- still an
+overrun, though smaller than the 294.8 x 148.2 um (43,680 um^2) figure PR
+#325 first recorded.** Issue #324's own follow-up (folding
+``vco/mirror.py``'s band-select mirror from one row into two tiers, which
+also funded the block-level ``VDD_VCO`` n-well guard-ring band
+PLL-FLOORPLAN.md section 1 asks for) recovered more width than that ring
+cost, so the budget margin *improved* rather than eroding further:
 
-* Re-running section 5's own arithmetic with the measured VCO number in
-  place of its ROM row gives a block subtotal of ~0.111 mm^2 conservative
-  (0.0369 loop filter + 0.0437 VCO + 0.020 PFD/CP + 0.0052 divider+lock),
-  ~0.139 mm^2 after that section's x1.25 top-level overhead -- still inside
-  the 0.15 mm^2 budget, but with the margin down from ~34 % to ~7 %.
 * ``total_extent_um2()`` (this skeleton's whole bounding box, a deliberately
   looser number than the budget table -- see that function's own docstring)
-  lands at ~148,000 um^2, i.e. ~1 % under the 150,000 um^2 target where it
-  previously had ~3 %.
+  lands at ~132,600 um^2, i.e. ~12 % under the 150,000 um^2 target, up from
+  ~1 % under it before issue #324's own increment.
+* See ``layout/evidence/vco-layout/PROOF-mirror-fold.md`` for the full
+  before/after arithmetic and DRC/connectivity evidence.
 
-The cause is structural and already recorded per sub-block: every device is
-drawn as its own diffusion island wired by metal (see
-``vco/primitives.py``'s module docstring), and each sub-block is a single
-row, so the band-select mirror alone is 266 um wide and sets the whole
-block's width. Folding those rows is the identified next area optimisation
-and is not issue #293's scope.
+The remaining overrun is structural and already recorded per sub-block:
+every device is drawn as its own diffusion island wired by metal (see
+``vco/primitives.py``'s module docstring). Every VCO sub-block other than
+the band-select mirror is still a single row; folding those too remains the
+next area optimisation if a future budget pass needs it.
 """
 
 from __future__ import annotations

@@ -74,45 +74,56 @@ layer that is allowed to. ``GND_VCO`` needs no trunk at all: it is the
 substrate, and the block-level ring is tied to each sub-block's own ring by a
 Metal1 strap in the left-hand channel.
 
-WHAT THIS BLOCK'S GUARD RING IS *NOT*
----------------------------------------
+THE GUARD RING IS NOW A REAL TWO-SIDED RING (issue #324)
+-----------------------------------------------------------
 PLL-FLOORPLAN.md section 1 asks for the VCO's ring to be "a real two-sided
 ring, not a substrate-only one" -- ``GND_VCO`` on the substrate side and a
-``VDD_VCO``-tied n-well tap ring on the well side. The block-level ring here
-is ``GND_VCO`` substrate only. Every n-well *inside* the block is
-``VDD_VCO``-tied by its own sub-block's tap band (12.1 um worst case, well
-inside section 1's own 15 um bound), which covers the well-tie and tap-pitch
-halves of that requirement -- but there is no second, concentric n-well band
-at the block boundary. That band would cost about 4.4 um per side
-(``NW.1a_LV`` width + ``DF.4d_LV`` tap inset + ``DF.16_LV`` clearance to comp
-on both sides), i.e. +8.8 um of block *width*, and as the area section below
-records there is no width budget for it today. Block *height* is free (the
-floorplan skeleton's height is set by the loop filter, not the VCO), so the
-missing ring and the row-folding area optimisation are naturally the same
-follow-up increment: folding pays for the ring. See
-``layout/evidence/vco-layout/PROOF-block.md``.
+``VDD_VCO``-tied n-well tap ring on the well side. PR #325 (this module's own
+first increment) left the block-level ring ``GND_VCO`` substrate only,
+recording the missing n-well band's cost (~4.4 um/side, +8.8 um of block
+width) and noting there was no width budget for it at the time. Issue #324
+funds it: folding ``mirror.py`` from one row into two tiers recovered ~80 um
+of block width, which is far more than the ring costs, so
+``NWELL_RING_WIDTH_UM``/``NWELL_RING_INNER_GAP_UM``/``NWELL_RING_OUTER_GAP_UM``
+below draw it concentric with the ``GND_VCO`` ring, tied to the real
+``VDD_VCO`` supply trunk (not left floating), and it fits inside the
+pre-existing ``SHARED_MARGIN_UM`` gap rather than growing the block further.
+See ``layout/evidence/vco-layout/PROOF-mirror-fold.md``.
+
+One real design conflict this surfaced: the block's own pre-existing
+``GND_VCO`` straps (block ring -> each sub-block's own ring) run radially
+through the exact annulus the new n-well ring now occupies, and a Metal1
+strap crossing a Metal1 ring merges into it -- a real short
+(``block.connectivity_report()`` caught it; DRC did not, since same-layer
+shapes touching is not a width/spacing violation). Each strap now hops onto
+Metal2 for exactly the width of that crossing
+(``strap_across_nwell_ring()``), the same "Metal2 has no spacing
+relationship to Metal1" principle this module's own inter-sub-block routing
+already uses (see "ROUTING DISCIPLINE" above).
 
 DEVIATION FROM THE ROM FLOORPLAN, STATED PLAINLY
 --------------------------------------------------
-``footprint_um()`` reports the assembled block at 294.78 x 148.18 um
-(43,680 um^2 = 0.0437 mm^2) against PLL-FLOORPLAN.md section 5's
-0.011-0.017 mm^2 ROM row for the whole VCO -- a **2.6-4.0x overrun**. That
+``footprint_um()`` reports the assembled block at 214.82 x 162.88 um
+(34,990 um^2 = 0.0350 mm^2) against PLL-FLOORPLAN.md section 5's
+0.011-0.017 mm^2 ROM row for the whole VCO -- still an overrun, though a
+smaller one than PR #325's own 294.78 x 148.18 um (43,680 um^2) figure. That
 record's section 5 names this case in advance and prescribes the response
 ("the next floorplan revision should state the overrun explicitly rather
 than silently rounding the total down"), so it is stated here, in
 ``layout/floorplan/skeleton.py``'s docstring, and in
-``layout/evidence/vco-layout/PROOF-block.md`` with the re-run budget
+``layout/evidence/vco-layout/PROOF-mirror-fold.md`` with the re-run budget
 arithmetic.
 
 The cause is the one already recorded per sub-block: every device is drawn
 as its own diffusion island wired by metal (``primitives.py``'s module
-docstring), and each sub-block is a single row, so the band-select mirror
-alone is 266 um wide and sets the whole block's width. This module takes the
-easy half of that back -- packing the resistor trio into the V-to-I core
-row's own leftover width rather than beside it, and trimming the
-boundary-pin channels, is worth ~11 % -- but at ~50 % area utilisation
-inside the guard ring the real lever is folding the single-row sub-blocks
-into multiple rows, which is not this issue's scope.
+docstring). PR #325 packed the resistor trio into the V-to-I core row's own
+leftover width and trimmed the boundary-pin channels (294.8 -> 279.9 um
+mirror-driven width before this increment's own further reduction); issue
+#324 then folded the band-select mirror itself from one row into two tiers
+(``mirror.py``), the real lever PR #325's own PROOF named -- worth ~80 um of
+block width on its own. Every other sub-block is still a single row, so
+folding those too remains the next area optimisation if a future budget
+pass needs it, but is not this issue's scope.
 """
 
 from __future__ import annotations
@@ -175,9 +186,39 @@ LEFT_PIN_CHANNEL_UM = 3.0  # leftmost sub-block edge -> the input-pin column
 PIN_STUB_UM = 0.6  # drawn length of a boundary pin's own landing pad
 
 # --- block-level guard ring -------------------------------------------------
-SHARED_MARGIN_UM = 3.0  # content bbox -> guard ring inner edge
 SHARED_RING_WIDTH_UM = 1.2
 STRAP_WIDTH_UM = 1.2  # Metal1 tie, block ring <-> a sub-block's own ring
+
+# Issue #324's own closing increment: PLL-FLOORPLAN.md section 1 asks for
+# this block's own guard ring to be "a real two-sided ring ... tied to
+# GND_VCO on the substrate side and to a local VDD_VCO-tied n-well tap ring
+# on the p-well side", which PR #325 (issue #293's own final increment) left
+# open -- every n-well *inside* this block is VDD_VCO-tied by its own
+# sub-block's tap band, but there was no second, concentric n-well band at
+# the block boundary. Folding the band-select mirror into two tiers
+# (mirror.py) recovered ~80 um of block width, which funds this ring.
+# ``kind="n"``, so ``guard_ring()`` draws n-well tap bands (ncomp + nplus)
+# tied VDD_VCO; the caller (``build()``) also draws the ``nwell`` shape those
+# tap bands sit inside, same convention every per-sub-block generator already
+# uses.
+NWELL_TAP_ENCLOSURE_MARGIN_UM = 0.3  # DF.4d_LV needs the nwell shape to
+# enclose its own tap comp by >= 0.12 um on every side; this ring's own
+# drawn ``nwell`` rect is grown by this much past its own tap band's outer
+# edge (see build()), not flush with it.
+NWELL_RING_WIDTH_UM = 0.9  # >= NW.1a_LV's 0.86 um min, with margin
+NWELL_RING_INNER_GAP_UM = 1.3  # content's own comp -> this ring's own nwell
+# edge: >= DF.16_LV's 0.43 um with margin, *and* wide enough that a via1
+# landing pad (0.44 um) fits inside it with M1.2a's 0.23 um clearance on both
+# sides -- the block's own GND_VCO straps have to jump onto Metal2 to cross
+# this ring without shorting to it (see build()'s strap_across_nwell_ring()),
+# and that jump's own via1 lands in this gap.
+NWELL_RING_OUTER_GAP_UM = 1.3  # this ring's own outer edge -> the GND_VCO
+# ring's own comp -- same >= DF.4c_LV-with-margin-and-via-room sizing as the
+# inner gap, for the same strap jump's *other* via1.
+SHARED_MARGIN_UM = NWELL_RING_INNER_GAP_UM + NWELL_RING_WIDTH_UM + NWELL_RING_OUTER_GAP_UM
+# content bbox -> the GND_VCO ring's own inner edge -- sized to exactly fit
+# the n-well ring plus both of its own via-jump clearances above, not an
+# independent guess the way it was before this ring existed.
 
 M2_HALF_UM = prim.METAL2_WIRE_WIDTH_UM / 2.0
 
@@ -213,7 +254,8 @@ class Placement:
     res_col_noff_x: float
     res_col_nvi_x: float
     content: tuple  # (x0, y0, x1, y1) of everything the guard ring encloses
-    outer: tuple  # (x0, y0, x1, y1) of the block-level guard ring itself
+    nwell_ring: tuple  # (x0, y0, x1, y1) of the block-level n-well tap ring
+    outer: tuple  # (x0, y0, x1, y1) of the block-level GND_VCO guard ring itself
 
     def boxes(self) -> dict:
         """Each sub-block's own guard-ring box, translated into block coords."""
@@ -287,6 +329,13 @@ def placement() -> Placement:
     m = SHARED_MARGIN_UM + SHARED_RING_WIDTH_UM
     outer = (content[0] - m, content[1] - m, content[2] + m, content[3] + m)
 
+    # n-well ring: concentric with ``outer``, inside the same SHARED_MARGIN_UM
+    # gap that already separated ``content`` from the GND_VCO ring's own inner
+    # edge -- see NWELL_RING_*_UM's own comment for why this costs no extra
+    # block width beyond what the mirror fold already recovered.
+    nm = NWELL_RING_INNER_GAP_UM + NWELL_RING_WIDTH_UM
+    nwell_ring = (content[0] - nm, content[1] - nm, content[2] + nm, content[3] + nm)
+
     return Placement(
         dx_res=dx_res,
         dy_res=dy_res,
@@ -307,6 +356,7 @@ def placement() -> Placement:
         res_col_noff_x=res_col_noff_x,
         res_col_nvi_x=res_col_nvi_x,
         content=content,
+        nwell_ring=nwell_ring,
         outer=outer,
     )
 
@@ -619,7 +669,28 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
         vdd_pin_y + 0.5,
     )
 
-    # --- 8. block-level GND_VCO guard ring + Metal1 straps to each
+    # --- 8. the block-level n-well tap ring (issue #324): concentric with
+    # the GND_VCO ring below, VDD_VCO-tied, closing PLL-FLOORPLAN.md section
+    # 1's "real two-sided ring" acceptance criterion that PR #325 (#293's own
+    # final increment) left open -- see NWELL_RING_*_UM's own comment for why
+    # this fits inside the pre-existing SHARED_MARGIN_UM gap rather than
+    # growing the block. A plain filled nwell rect, same convention every
+    # per-sub-block generator already uses for its own tap band: nothing
+    # else is ever placed in this annulus, so there is no reason to draw it
+    # hollow -- grown NWELL_TAP_ENCLOSURE_MARGIN_UM past the ring's own tap
+    # comp on every side (DF.4d_LV's own 0.12 um n-well-encloses-tap minimum,
+    # with margin), not flush with it. ---
+    nwell_shape = (
+        p.nwell_ring[0] - NWELL_TAP_ENCLOSURE_MARGIN_UM,
+        p.nwell_ring[1] - NWELL_TAP_ENCLOSURE_MARGIN_UM,
+        p.nwell_ring[2] + NWELL_TAP_ENCLOSURE_MARGIN_UM,
+        p.nwell_ring[3] + NWELL_TAP_ENCLOSURE_MARGIN_UM,
+    )
+    canvas.rect("nwell", *nwell_shape)
+    prim.guard_ring(canvas, "n", *p.nwell_ring, NWELL_RING_WIDTH_UM, VDD_NET)
+    prim.h_wire(canvas, p.vdd_trunk_x, p.nwell_ring[2], vdd_pin_y, width=STRAP_WIDTH_UM)
+
+    # --- 9. block-level GND_VCO guard ring + Metal1 straps to each
     # sub-block's own ring. The bias row is strapped as a chain (block ring ->
     # resistors -> V-to-I core) because the resistor block sits between the
     # two; every other row is strapped straight to the block ring's left
@@ -628,12 +699,37 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
     strap_x0 = p.outer[0] + SHARED_RING_WIDTH_UM
 
     def strap(x0: float, x1: float, y: float) -> None:
+        """A plain Metal1 tie between two points already inside ``content`` --
+        does not cross the n-well ring, so no jump is needed."""
         prim.h_wire(canvas, x0, x1, y, width=STRAP_WIDTH_UM)
+
+    # The four straps below run from the block's own outer GND_VCO ring
+    # (outside the n-well ring) in to a sub-block's own ring (inside it), so
+    # each one physically crosses the n-well ring's own left band -- issue
+    # #324's own new structure, not something these straps could route around.
+    # Metal1 cannot cross Metal1 without merging (an M1.2a-legal gap is still
+    # a short once two same-layer shapes touch), so each strap hops onto
+    # Metal2 -- which has no spacing relationship to Metal1/comp/nwell in
+    # this deck -- for exactly the width of that crossing, landing back on
+    # Metal1 on the far side. Both jump points sit at the midpoint of their
+    # own gap, symmetric clearance from the ring on both sides.
+    ring_jump_out_x = dev.snap_um((strap_x0 + p.nwell_ring[0]) / 2.0)
+    ring_jump_in_x = dev.snap_um(
+        p.nwell_ring[0] + NWELL_RING_WIDTH_UM + NWELL_RING_INNER_GAP_UM / 2.0
+    )
+
+    def strap_across_nwell_ring(x0: float, x1: float, y: float) -> None:
+        prim.h_wire(canvas, x0, ring_jump_out_x, y, width=STRAP_WIDTH_UM)
+        prim.via1_stack(canvas, ring_jump_out_x, y)
+        prim.m2_wire(canvas, ring_jump_out_x, ring_jump_in_x, y, width=STRAP_WIDTH_UM)
+        prim.via1_stack(canvas, ring_jump_in_x, y)
+        prim.h_wire(canvas, ring_jump_in_x, x1, y, width=STRAP_WIDTH_UM)
 
     res_box = boxes["bias_resistors"]
     vtoi_box = boxes["vtoi_core"]
     # The resistor block sits inboard of the V-to-I core, so it is strapped to
-    # the core's own right band rather than to the block ring directly.
+    # the core's own right band rather than to the block ring directly -- both
+    # ends are already inside content, so this one stays plain Metal1.
     strap(
         vtoi_box[2] - vtoi_core.RING_WIDTH_UM,
         res_box[0] + bias_resistors.RING_WIDTH_UM,
@@ -646,9 +742,9 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
         ("buffer", out_buffer.RING_WIDTH_UM),
     ):
         box = boxes[key]
-        strap(strap_x0, box[0] + ring_w, dev.snap_um((box[1] + box[3]) / 2.0))
+        strap_across_nwell_ring(strap_x0, box[0] + ring_w, dev.snap_um((box[1] + box[3]) / 2.0))
 
-    # --- 9. carried-forward 22 pF decap, against this block's VDD_VCO pin --
+    # --- 10. carried-forward 22 pF decap, against this block's VDD_VCO pin --
     for i, box in enumerate(decap_boxes_um()):
         canvas.rect("boundary", *box)
         canvas.label("boundary", f"vco.decap{i}", box[0] + 1.0, box[1] + 1.0)

@@ -183,6 +183,13 @@ routing channel, so a bottom tap band there would short every drain to
 
 ## Footprints vs. the ROM estimate (issue #293 AC — deviation disclosed)
 
+**Update (issue #324):** `vco_bandsel_mirror`'s footprint below is this
+increment's own historical record (PR #313, single-row layout) and is
+superseded by [`PROOF-mirror-fold.md`](PROOF-mirror-fold.md), which folded
+it into two tiers (189.48 × 50.82 µm) to fund the block-level n-well guard
+ring. `vco_out_buffer` and `vco_ring` are unaffected and still match the
+numbers below.
+
 | Block | Real footprint | Area |
 |---|---|---|
 | `vco_ring` (increment 1) | 177.40 × 18.66 µm | 3 310 µm² |
