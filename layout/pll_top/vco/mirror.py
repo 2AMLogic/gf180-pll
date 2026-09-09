@@ -168,6 +168,25 @@ ARRAY_GAP_UM = 4.5  # ... when the next item is a common-centroid array (its
 CC_FINGER_GAP_UM = 3.0  # between two fingers of one common-centroid array;
 # wide enough that the array's own drain/source escape columns fit in an
 # inter-finger gap without crowding the next finger's gate contact tab.
+CC_ROW_GAP_UM = 0.4
+"""Comp-to-comp gap between two stacked rows of a 2-D common-centroid array
+(issue #336's fold of cascade C -- see ``draw_cc_array()``).
+
+The binding rule is ``DF.3a_LV``'s 0.28 um comp-to-comp minimum: the two rows
+are the same fet kind, so their pplus/nplus implants may legally touch or
+overlap (no ``PP.2``/``NP.2`` cross-polarity spacing applies between same-type
+implants), and the two rows' facing Metal1 pads are two *different* nets
+(one row's ``top_net``, the next row's ``bottom_net``) needing ``M1.2a``'s
+0.23 um clear once each pad's own margin overshoot past its comp edge
+(``METAL1_PAD_MARGIN_UM`` net of ``CONTACT_ROW_MARGIN_UM``, 0.02 um) is
+subtracted -- 0.27 um. 0.4 um clears both with real margin (43% over the
+tighter, DF.3a_LV, bound) while staying deliberately tight: unlike this
+module's other gaps, every um here is spent twice (once per row boundary a
+2-D array needs), directly against issue #336's own area-saving goal, and
+this module's ``M1.2a``-adjacent margins have never sat exactly on the DRC
+boundary but have also never needed to spend far past it -- see
+``SD_OVERHANG_UM``'s own comment for that convention.
+"""
 ARRAY_LEFT_ESCAPE_UM = 2.2  # always-on gate bus escape, left of the array
 ARRAY_RIGHT_ESCAPE_UM = 1.1  # switched gate bus escape, right of the array
 JOG_ESCAPE_UM = 1.1  # escape column for a terminal that faces the wrong rail
@@ -322,33 +341,106 @@ def device_height_um(l_um: float) -> float:
 # ---------------------------------------------------------------------------
 
 
-def finger_x0_um(cascade: dev.CascadePair, x0: float = 0.0) -> tuple[float, ...]:
-    """Left comp edge of each drawn finger, left to right, from ``x0``."""
+def col_widths_um(cascade: dev.CascadePair) -> tuple[float, ...]:
+    """Per-column width: the widest finger *any row* of the grid places there.
+
+    Not the array's global widest finger -- a column pays uniform-pitch slack
+    only against the fingers that actually land in it. Cascade C's outer
+    columns hold only ``MC1`` fingers (9.85 um) in every row, so only its
+    centre column (which also holds ``MC0``'s single 12.3 um finger) pays the
+    slack; see ``mirror.py``'s module docstring. For a single-row cascade (A,
+    B) every column has exactly one occupant, so this is exactly that
+    finger's own width -- no behaviour change from the pre-#336 flat layout.
+    """
+    grid = cascade.finger_widths()
+    cols = len(grid[0])
+    return tuple(max(row[c] for row in grid) for c in range(cols))
+
+
+def col_box_x0_um(cascade: dev.CascadePair, x0: float = 0.0) -> tuple[float, ...]:
+    """Left edge of each column's own *box* (``col_widths_um()`` wide), from ``x0``.
+
+    Not any particular row's own (possibly slack-centred) finger edge -- see
+    ``finger_x0_um()``, which centres a narrower occupant inside this same
+    box. Column boxes are identical for every row by construction, which is
+    what ``draw_cc_array()``'s S/D risers rely on: the inter-column *gap*
+    ``col_box_x0_um()[c] + col_widths_um()[c]`` to ``col_box_x0_um()[c+1]``
+    is empty of any finger in every row, regardless of which row's occupant
+    is narrower than its column.
+    """
+    colw = col_widths_um(cascade)
     xs = []
     x = x0
-    for w in cascade.finger_widths():
+    for w in colw:
         xs.append(x)
         x += w + CC_FINGER_GAP_UM
     return tuple(xs)
 
 
-def array_width_um(cascade: dev.CascadePair) -> float:
+def finger_x0_um(cascade: dev.CascadePair, x0: float = 0.0) -> tuple[tuple[float, ...], ...]:
+    """Left comp edge of each drawn finger, as an (row, col) grid from ``x0``.
+
+    Every finger is centred in its own column's box, which is why a finger's
+    own centre coincides with its column's centre regardless of which leg (and
+    so which width) occupies it -- the arithmetic fact
+    ``check_common_centroid()`` relies on for the x centroid.
+    """
+    colw = col_widths_um(cascade)
+    col_x0 = col_box_x0_um(cascade, x0)
     widths = cascade.finger_widths()
-    return sum(widths) + (len(widths) - 1) * CC_FINGER_GAP_UM
+    return tuple(
+        tuple(col_x0[c] + (colw[c] - widths[r][c]) / 2.0 for c in range(len(colw)))
+        for r in range(len(cascade.pattern))
+    )
 
 
-def leg_centroid_um(cascade: dev.CascadePair, leg: str, x0: float = 0.0) -> float:
-    """Centroid (mean finger centre, area-weighted) of one leg's fingers.
+def array_width_um(cascade: dev.CascadePair) -> float:
+    colw = col_widths_um(cascade)
+    return sum(colw) + (len(colw) - 1) * CC_FINGER_GAP_UM
+
+
+def array_height_um(cascade: dev.CascadePair) -> float:
+    """Total drawn height of the array, rows plus their inter-row gaps.
+
+    Every row is the same device -- ``check_common_centroid()`` requires
+    ``always_on.l_um == switched.l_um`` precisely so one ``device_height_um()``
+    covers every row -- so a single-row cascade's height is exactly
+    ``device_height_um(l_um)``, unchanged from the pre-#336 layout.
+    """
+    rows = len(cascade.pattern)
+    row_h = device_height_um(cascade.always_on.l_um)
+    return rows * row_h + (rows - 1) * CC_ROW_GAP_UM
+
+
+def row_y0_um(cascade: dev.CascadePair, y0: float = 0.0) -> tuple[float, ...]:
+    """Bottom-edge y of each row, row 0 = bottom-most, from ``y0``."""
+    row_h = device_height_um(cascade.always_on.l_um)
+    return tuple(y0 + r * (row_h + CC_ROW_GAP_UM) for r in range(len(cascade.pattern)))
+
+
+def leg_centroid_um(
+    cascade: dev.CascadePair, leg: str, x0: float = 0.0, y0: float = 0.0
+) -> tuple[float, float]:
+    """(x, y) centroid (area-weighted finger centre) of one leg's fingers.
 
     Area-weighted and plain-mean coincide here because every finger of a
     given leg has the same width -- the weighting is written out anyway so
     the function stays correct if a leg ever gets unequal fingers.
     """
     xs = finger_x0_um(cascade, x0)
+    ys = row_y0_um(cascade, y0)
     widths = cascade.finger_widths()
-    sel = [(x, w) for x, w, tag in zip(xs, widths, cascade.pattern) if tag == leg]
-    total_w = sum(w for _, w in sel)
-    return sum((x + w / 2.0) * w for x, w in sel) / total_w
+    row_h = device_height_um(cascade.always_on.l_um)
+    sx = sy = total_w = 0.0
+    for r, row in enumerate(cascade.pattern):
+        for c, tag in enumerate(row):
+            if tag != leg:
+                continue
+            w = widths[r][c]
+            sx += (xs[r][c] + w / 2.0) * w
+            sy += (ys[r] + row_h / 2.0) * w
+            total_w += w
+    return (sx / total_w, sy / total_w)
 
 
 def check_common_centroid(cascade: dev.CascadePair, tol_um: float = 1e-9) -> None:
@@ -356,30 +448,72 @@ def check_common_centroid(cascade: dev.CascadePair, tol_um: float = 1e-9) -> Non
 
     This is the acceptance criterion "band-select mirror cascades laid out
     common-centroid (always-on leg interdigitated with switched leg per
-    cascade), not row-placed" reduced to something a build can fail on.
+    cascade), not row-placed" reduced to something a build can fail on --
+    generalised (issue #336) to a 2-D R x C grid, both x *and* y. A 1-row
+    grid (cascades A, B) is the special case this generalises from, and every
+    check below reduces to exactly what it checked before #336 when
+    ``len(cascade.pattern) == 1``.
     """
-    if tuple(cascade.pattern) != tuple(reversed(cascade.pattern)):
-        raise ValueError(f"cascade {cascade.name}: pattern {cascade.pattern} is not a palindrome")
-    if cascade.pattern.count("A") != cascade.always_on.fingers:
+    grid = cascade.pattern
+    if not grid or any(len(row) == 0 for row in grid):
+        raise ValueError(f"cascade {cascade.name}: empty pattern grid")
+    cols = len(grid[0])
+    if any(len(row) != cols for row in grid):
+        raise ValueError(f"cascade {cascade.name}: pattern rows have different column counts")
+    if cascade.always_on.l_um != cascade.switched.l_um:
+        raise ValueError(f"cascade {cascade.name}: legs have different L; row height is undefined")
+
+    # The grid must be symmetric under 180-degree rotation about its own
+    # centre: pattern[r][c] == pattern[R-1-r][C-1-c] for every cell. For a
+    # 1-row grid this is exactly the old flat-palindrome check
+    # (pattern[0][c] == pattern[0][C-1-c]); a 1-column-pair grid like cascade
+    # A's proposed 2x2 fold ("A S" over "S A") satisfies this rotation
+    # symmetry despite *neither individual row* being a palindrome, which is
+    # why rotation symmetry -- not "every row and the row order are each
+    # separately a palindrome" -- is the right general condition here.
+    #
+    # It is also what makes both legs' centroids coincide with the array
+    # centre in x *and* y: a column's occupant multiset (over every row) is
+    # provably identical to its mirror column's occupant multiset under this
+    # symmetry (substitute the relation with r' = R-1-r), so column c and
+    # column C-1-c always get the same width (see col_widths_um()) and every
+    # leg's per-column and per-row weight distribution is symmetric about the
+    # centre regardless of how the legs are actually arranged inside that
+    # symmetry.
+    rows_n = len(grid)
+    for r in range(rows_n):
+        for c in range(cols):
+            if grid[r][c] != grid[rows_n - 1 - r][cols - 1 - c]:
+                raise ValueError(
+                    f"cascade {cascade.name}: pattern {grid} is not symmetric under "
+                    f"180-degree rotation -- cell ({r},{c})={grid[r][c]!r} != "
+                    f"cell ({rows_n - 1 - r},{cols - 1 - c})={grid[rows_n - 1 - r][cols - 1 - c]!r}"
+                )
+
+    flat = [tag for row in grid for tag in row]
+    if flat.count("A") != cascade.always_on.fingers:
         raise ValueError(f"cascade {cascade.name}: pattern has the wrong always-on finger count")
-    if cascade.pattern.count("S") != cascade.switched.fingers:
+    if flat.count("S") != cascade.switched.fingers:
         raise ValueError(f"cascade {cascade.name}: pattern has the wrong switched finger count")
-    centre = array_width_um(cascade) / 2.0
+
+    centre_x = array_width_um(cascade) / 2.0
+    centre_y = array_height_um(cascade) / 2.0
     for leg in ("A", "S"):
-        c = leg_centroid_um(cascade, leg)
-        if abs(c - centre) > tol_um:
+        cx, cy = leg_centroid_um(cascade, leg)
+        if abs(cx - centre_x) > tol_um or abs(cy - centre_y) > tol_um:
             raise ValueError(
-                f"cascade {cascade.name}: leg {leg} centroid {c:.6f} um != array centre {centre:.6f} um"
+                f"cascade {cascade.name}: leg {leg} centroid ({cx:.6f}, {cy:.6f}) um != "
+                f"array centre ({centre_x:.6f}, {centre_y:.6f}) um"
             )
+
     # Interdigitation, not two blobs: a "row-placed" pair is exactly two
-    # maximal runs (all of one leg, then all of the other). Any genuinely
-    # interleaved pattern -- ABBA, SSSSASSSS -- has three or more.
-    runs = 1 + sum(1 for a, b in zip(cascade.pattern, cascade.pattern[1:]) if a != b)
+    # maximal runs (all of one leg, then all of the other) in the row-major
+    # flattening. Any genuinely interleaved pattern -- ABBA, SSSSASSSS, or
+    # cascade C's SSS/SAS/SSS grid flattened to SSSSASSSS -- has three or
+    # more.
+    runs = 1 + sum(1 for a, b in zip(flat, flat[1:]) if a != b)
     if runs < 3:
-        raise ValueError(
-            f"cascade {cascade.name}: pattern {cascade.pattern} is row-placed "
-            f"({runs} runs), not interdigitated"
-        )
+        raise ValueError(f"cascade {cascade.name}: pattern {grid} is row-placed ({runs} runs), not interdigitated")
 
 
 def gate_bus_y_um(l_um: float, y_bottom: float) -> tuple[float, float]:
@@ -487,19 +621,29 @@ class Plan:
     def nmos(self) -> list[Item]:
         return [it for b in self.banks for it in b.nmos]
 
-    # -- Metal1 escape-column bookkeeping (see the module docstring) --
-    def reserve(self, net: str, x0: float, y0: float, x1: float, y1: float) -> None:
-        s = dev.DRC_METAL1_MIN_SPACE_UM
-        for other_net, ox0, oy0, ox1, oy1 in self._columns:
-            if other_net == net:
+    # -- escape-column bookkeeping (see the module docstring) --
+    def reserve(
+        self, net: str, x0: float, y0: float, x1: float, y1: float, *, layer: str = "metal1"
+    ) -> None:
+        """Prove ``net``'s column clears every other net's column on ``layer``.
+
+        Metal1 by default (every device escape and gate/S-D bus tie); the
+        2-D common-centroid array's inter-row S/D risers (issue #336) reserve
+        on ``"metal2"`` instead, at ``M2.2a``'s wider minimum -- the two
+        layers are never compared against each other, matching the physical
+        reality that Metal1 and Metal2 shapes do not interact absent a via1.
+        """
+        s = dev.DRC_METAL1_MIN_SPACE_UM if layer == "metal1" else dev.DRC_METAL2_MIN_SPACE_UM
+        for other_layer, other_net, ox0, oy0, ox1, oy1 in self._columns:
+            if other_layer != layer or other_net == net:
                 continue
             if x0 - s < ox1 and ox0 < x1 + s and y0 - s < oy1 and oy0 < y1 + s:
                 raise ValueError(
-                    f"Metal1 escape columns for {net!r} and {other_net!r} are closer than "
-                    f"M1.2a's {s} um: ({x0:.3f},{y0:.3f})-({x1:.3f},{y1:.3f}) vs "
+                    f"{layer} escape columns for {net!r} and {other_net!r} are closer than "
+                    f"{s} um: ({x0:.3f},{y0:.3f})-({x1:.3f},{y1:.3f}) vs "
                     f"({ox0:.3f},{oy0:.3f})-({ox1:.3f},{oy1:.3f})"
                 )
-        self._columns.append((net, x0, y0, x1, y1))
+        self._columns.append((layer, net, x0, y0, x1, y1))
 
 
 def _row_items(names: tuple[str, ...]) -> list[Item]:
@@ -559,11 +703,15 @@ def _net_rows(pmos: list[Item], nmos: list[Item]) -> dict[str, set]:
     return rows
 
 
+def item_height_um(item: Item) -> float:
+    """How tall a plan ``Item`` draws: one row for a plain fet, R rows (plus
+    their inter-row gaps) for a common-centroid array -- see
+    ``array_height_um()``."""
+    return device_height_um(item.fet.l_um) if item.kind == "fet" else array_height_um(item.cascade)
+
+
 def _row_height_um(items: list[Item]) -> float:
-    return max(
-        device_height_um(it.fet.l_um if it.kind == "fet" else it.cascade.always_on.l_um)
-        for it in items
-    )
+    return max(item_height_um(it) for it in items)
 
 
 def plan() -> Plan:
@@ -768,10 +916,16 @@ class _Builder:
         prim.v_wire(self.canvas, x, y0, y1, width=ESCAPE_WIRE_W_UM)
 
     # -- devices -------------------------------------------------------------
-    def _y_bottom(self, row: str, l_um: float, bank: BankPlan) -> float:
-        """Devices are bottom-aligned in an NMOS row, top-aligned in a PMOS one."""
+    def _y_bottom(self, row: str, height_um: float, bank: BankPlan) -> float:
+        """An item's own bottom edge for a footprint ``height_um`` tall.
+
+        Bottom-aligned in an NMOS row, top-aligned in a PMOS one -- ``row``
+        picks which; ``height_um`` is ``item_height_um(item)`` (one row for a
+        plain fet, the whole R-row footprint for a common-centroid array), not
+        a gate length, so this works unchanged for both.
+        """
         if row == "pfet":
-            return bank.pmos_top - device_height_um(l_um)
+            return bank.pmos_top - height_um
         return bank.nmos_bottom
 
     def draw_fet(self, item: Item, row: str, bank: BankPlan) -> None:
@@ -780,7 +934,7 @@ class _Builder:
             self.canvas,
             fet,
             item.x0,
-            self._y_bottom(row, fet.l_um, bank),
+            self._y_bottom(row, device_height_um(fet.l_um), bank),
             sd_overhang=SD_OVERHANG_UM,
         )
         x_pad_c = (ports.bottom_pad[0] + ports.bottom_pad[2]) / 2.0
@@ -805,67 +959,174 @@ class _Builder:
             self.escape(fet.gate_net, ports.gate_tab_x_center, ports.gate_pad[3], row, bank)
 
     def draw_cc_array(self, item: Item, row: str, bank: BankPlan) -> None:
-        """One cascade, interdigitated per ``devices.CascadePair.pattern``."""
+        """One cascade, interdigitated per ``devices.CascadePair.pattern``.
+
+        Handles both a 1-row array (cascades A, B -- byte-for-byte what this
+        method drew before issue #336, see the R == 1 branches below) and an
+        R-row grid (cascade C's 3x3 fold). A grid needs each row's own S/D
+        buses and gate buses tied to the *other* rows' -- see the module
+        docstring's "TWO-DIMENSIONAL ARRAYS" section for why that is a Metal2
+        hop for the S/D buses but plain Metal1 for the gate buses.
+        """
         cascade = item.cascade
         legs = {"A": cascade.always_on, "S": cascade.switched}
         l_um = cascade.always_on.l_um
-        y_bottom = self._y_bottom(row, l_um, bank)
-        y_lo, y_hi = gate_bus_y_um(l_um, y_bottom)
-        bus_y = {"A": y_lo, "S": y_hi}
+        grid = cascade.pattern
+        rows = len(grid)
+        row_h = device_height_um(l_um)
+        y_item_bottom = self._y_bottom(row, item_height_um(item), bank)
+        row_y0 = [dev.snap_um(y_item_bottom + r * (row_h + CC_ROW_GAP_UM)) for r in range(rows)]
 
-        finger_ports = []
-        for x0, w, tag in zip(item.finger_x0, cascade.finger_widths(), cascade.pattern):
-            finger_ports.append(
-                (
-                    tag,
-                    prim.mosfet(
-                        self.canvas, legs[tag], x0, y_bottom, w_um=w, sd_overhang=SD_OVERHANG_UM
-                    ),
-                )
+        # --- draw every row's fingers ---
+        rows_ports: list[list[tuple[str, prim.MosfetPorts]]] = []
+        for r, tags in enumerate(grid):
+            xs = item.finger_x0[r]
+            widths = cascade.finger_widths()[r]
+            rows_ports.append(
+                [
+                    (
+                        tag,
+                        prim.mosfet(
+                            self.canvas, legs[tag], x0, row_y0[r], w_um=w, sd_overhang=SD_OVERHANG_UM
+                        ),
+                    )
+                    for x0, w, tag in zip(xs, widths, tags)
+                ]
             )
 
-        # --- shared source and drain buses: one Metal1 rectangle each, drawn
-        # at exactly the pads' own y so the merged polygon has no notch (the
-        # same rule ring.py's rails follow). ---
-        pads_lo = [p.bottom_pad for _, p in finger_ports]
-        pads_hi = [p.top_pad for _, p in finger_ports]
-        bus_x0 = min(p[0] for p in pads_lo)
-        bus_x1 = max(p[2] for p in pads_lo)
-        self.canvas.rect("metal1", bus_x0, pads_lo[0][1], bus_x1, pads_lo[0][3])
-        self.canvas.rect("metal1", bus_x0, pads_hi[0][1], bus_x1, pads_hi[0][3])
+        # --- per-row shared source and drain buses: one Metal1 rectangle
+        # each, drawn at exactly the pads' own y so the merged polygon has no
+        # notch (the same rule ring.py's rails follow). For R == 1 this is
+        # exactly the pre-#336 single bus pair. ---
+        row_bus_lo: list[tuple[float, float, float, float]] = []
+        row_bus_hi: list[tuple[float, float, float, float]] = []
+        for ports in rows_ports:
+            pads_lo = [p.bottom_pad for _, p in ports]
+            pads_hi = [p.top_pad for _, p in ports]
+            bus_x0 = min(p[0] for p in pads_lo)
+            bus_x1 = max(p[2] for p in pads_lo)
+            b_lo = (bus_x0, pads_lo[0][1], bus_x1, pads_lo[0][3])
+            b_hi = (bus_x0, pads_hi[0][1], bus_x1, pads_hi[0][3])
+            self.canvas.rect("metal1", *b_lo)
+            self.canvas.rect("metal1", *b_hi)
+            row_bus_lo.append(b_lo)
+            row_bus_hi.append(b_hi)
 
-        # --- two gate buses in the corridor, one per leg ---
+        # --- two gate buses per row, one per leg that row actually has a
+        # finger of (cascade C's centre leg, "A", exists in only one row) ---
         left_x = item.x0 - ARRAY_LEFT_ESCAPE_UM
         right_x = item.x0 + item.width + ARRAY_RIGHT_ESCAPE_UM
         bus_end = {"A": left_x, "S": right_x}
-        for leg in ("A", "S"):
-            tabs = [p.gate_tab_x_center for tag, p in finger_ports if tag == leg]
-            y = bus_y[leg]
-            prim.h_wire(
-                self.canvas,
-                min(tabs + [bus_end[leg]]) - prim.METAL1_WIRE_WIDTH_UM / 2.0,
-                max(tabs + [bus_end[leg]]) + prim.METAL1_WIRE_WIDTH_UM / 2.0,
-                y,
-            )
-            for tag, p in finger_ports:
-                if tag != leg:
+        row_gate_y: list[dict[str, float]] = [dict() for _ in range(rows)]
+        for r, ports in enumerate(rows_ports):
+            y_lo, y_hi = gate_bus_y_um(l_um, row_y0[r])
+            by = {"A": y_lo, "S": y_hi}
+            for leg in ("A", "S"):
+                tabs = [p.gate_tab_x_center for tag, p in ports if tag == leg]
+                if not tabs:
                     continue
-                if y < p.gate_pad[1]:
-                    prim.v_wire(self.canvas, p.gate_tab_x_center, y, p.gate_pad[1])
-                else:
-                    prim.v_wire(self.canvas, p.gate_tab_x_center, p.gate_pad[3], y)
-            self.escape(legs[leg].gate_net, bus_end[leg], y, row, bank)
+                y = by[leg]
+                row_gate_y[r][leg] = y
+                prim.h_wire(
+                    self.canvas,
+                    min(tabs + [bus_end[leg]]) - prim.METAL1_WIRE_WIDTH_UM / 2.0,
+                    max(tabs + [bus_end[leg]]) + prim.METAL1_WIRE_WIDTH_UM / 2.0,
+                    y,
+                )
+                for tag, p in ports:
+                    if tag != leg:
+                        continue
+                    if y < p.gate_pad[1]:
+                        prim.v_wire(self.canvas, p.gate_tab_x_center, y, p.gate_pad[1])
+                    else:
+                        prim.v_wire(self.canvas, p.gate_tab_x_center, p.gate_pad[3], y)
 
-        # --- source / drain escapes, placed in inter-finger gaps so they
-        # never crowd a finger's own gate contact tab ---
-        drain_x = finger_ports[0][1].x1 + CC_FINGER_GAP_UM / 3.0
-        source_x = finger_ports[1][1].x1 + CC_FINGER_GAP_UM / 3.0
-        if row == "pfet":
-            self.escape(cascade.always_on.bottom_net, drain_x, pads_lo[0][1], row, bank)
-            self.rail_stub(VDD_NET, source_x, pads_hi[0][3], bank.tap_band[1])
+        # --- tie each leg's per-row gate buses together and escape the tied
+        # node once. Every row's own gate bus already terminates exactly at
+        # ``bus_end[leg]`` -- outside the array's finger footprint, in a lane
+        # nothing else ever draws into -- so a single Metal1 vertical there,
+        # spanning every row that owns this leg, T-joins into one continuous
+        # net with no via1 needed. A leg confined to one row (cascade C's "A")
+        # makes this a no-op and reduces to the pre-#336 single escape. ---
+        for leg in ("A", "S"):
+            rows_with_leg = [r for r in range(rows) if leg in row_gate_y[r]]
+            if not rows_with_leg:
+                continue
+            x = bus_end[leg]
+            ys = [row_gate_y[r][leg] for r in rows_with_leg]
+            if len(ys) > 1:
+                y0, y1 = min(ys), max(ys)
+                half = ESCAPE_WIRE_W_UM / 2.0
+                self.plan.reserve(legs[leg].gate_net, x - half, y0, x + half, y1)
+                prim.v_wire(self.canvas, x, y0, y1, width=ESCAPE_WIRE_W_UM)
+            self.escape(legs[leg].gate_net, x, ys[0], row, bank)
+
+        # --- source / drain: two points inside the array's own inter-column
+        # gaps, chosen so a row's own bus never has to widen to reach them
+        # (see col_box_x0_um()). A >=3-column array (cascade C) has at least
+        # two distinct gaps and uses one each -- the same two points (1/3
+        # into the gap after column 0, and after column 1) the pre-#336
+        # single-row array used for its own escape points. A 2-column array
+        # (cascade A's 2x2 fold) has only one gap, so both points share it,
+        # at 1/3 and 2/3 in. Each row's own bus pad is tied into the other
+        # rows' via a Metal2 hop -- the gate buses' own escape lane cannot
+        # carry it too, because the S/D buses (unlike the gate buses) do not
+        # confine themselves to a lane outside the finger footprint; see the
+        # module docstring. ---
+        cols = len(grid[0])
+        if cols < 2:
+            raise ValueError(f"cascade {cascade.name}: need at least 2 columns for S/D risers")
+        colw = col_widths_um(cascade)
+        col_x0 = col_box_x0_um(cascade, item.x0)
+        gap = CC_FINGER_GAP_UM
+        if cols >= 3:
+            gap0_x = dev.snap_um(col_x0[0] + colw[0] + gap / 3.0)
+            gap1_x = dev.snap_um(col_x0[1] + colw[1] + gap / 3.0)
         else:
-            self.escape(cascade.always_on.top_net, drain_x, pads_hi[0][3], row, bank)
-            self.rail_stub(GND_NET, source_x, pads_lo[0][1], bank.gnd_stub_y(self.plan.outer))
+            gap0_x = dev.snap_um(col_x0[0] + colw[0] + gap / 3.0)
+            gap1_x = dev.snap_um(col_x0[0] + colw[0] + 2.0 * gap / 3.0)
+
+        def _tie_rows(net: str, pads: list[tuple[float, float, float, float]], gap_x: float) -> None:
+            """Metal2 hop tying every row's own ``net`` pad into one node.
+
+            A no-op for a 1-row array: ``pads`` has one entry, and the
+            caller's own escape()/rail_stub() call (below) connects it exactly
+            as the pre-#336 single-row array did.
+            """
+            for p in pads:
+                if not p[0] <= gap_x <= p[2]:
+                    raise ValueError(
+                        f"cascade {cascade.name}: riser x {gap_x} falls outside a row's own "
+                        f"{net!r} bus {p} -- an outer column has uniform-pitch slack this "
+                        f"generator does not yet widen the bus to cover"
+                    )
+            if len(pads) < 2:
+                return
+            ys = [(p[1] + p[3]) / 2.0 for p in pads]
+            for y in ys:
+                prim.via1_stack(self.canvas, gap_x, y)
+            y0, y1 = min(ys), max(ys)
+            half = prim.METAL2_WIRE_WIDTH_UM / 2.0
+            self.plan.reserve(net, gap_x - half, y0, gap_x + half, y1, layer="metal2")
+            prim.m2_route(self.canvas, [(gap_x, y0), (gap_x, y1)])
+
+        if row == "pfet":
+            escape_net, escape_pads, escape_gap = cascade.always_on.bottom_net, row_bus_lo, gap0_x
+            rail_pads, rail_gap = row_bus_hi, gap1_x
+            escape_edge_y = escape_pads[0][1]  # bottom-most row's own bottom edge
+            rail_edge_y = rail_pads[-1][3]  # top-most row's own top edge
+        else:
+            escape_net, escape_pads, escape_gap = cascade.always_on.top_net, row_bus_hi, gap0_x
+            rail_pads, rail_gap = row_bus_lo, gap1_x
+            escape_edge_y = escape_pads[-1][3]  # top-most row's own top edge
+            rail_edge_y = rail_pads[0][1]  # bottom-most row's own bottom edge
+        rail_net = VDD_NET if row == "pfet" else GND_NET
+        rail_dest_y = bank.tap_band[1] if row == "pfet" else bank.gnd_stub_y(self.plan.outer)
+
+        _tie_rows(escape_net, escape_pads, escape_gap)
+        _tie_rows(rail_net, rail_pads, rail_gap)
+        self.escape(escape_net, escape_gap, escape_edge_y, row, bank)
+        self.rail_stub(rail_net, rail_gap, rail_edge_y, rail_dest_y)
 
     # -- assembly ------------------------------------------------------------
     def build(self) -> MirrorResult:
@@ -954,6 +1215,143 @@ def build(outdir: Path | None = None, canvas: prim.Canvas | None = None) -> Mirr
     return result
 
 
+def _bus_pad_centre_y_um(row_y0: float, row_h: float, edge: str) -> float:
+    """Centre y of a drawn row's own S/D pad -- see ``primitives.mosfet()``'s
+    ``_terminal_pad()``. ``edge`` is ``"bottom"`` or ``"top"``."""
+    half_contact = prim.CONTACT_SIZE_UM / 2.0
+    if edge == "bottom":
+        return row_y0 + prim.CONTACT_ROW_MARGIN_UM + half_contact
+    return row_y0 + row_h - prim.CONTACT_ROW_MARGIN_UM - half_contact
+
+
+def _cc_riser_probes(item: Item, bank: BankPlan, row: str) -> list[tuple[str, str, float, float]]:
+    """(net, layer, x, y) Metal1 probe pairs for one multi-row array's own
+    internal ties -- the risers ``draw_cc_array()`` draws to make an R-row
+    array's per-row S/D and gate buses one electrical node each, which DRC
+    cannot see (a Metal2 hop that stops short of its via1 is DRC-clean and
+    completely broken). Empty for an R == 1 array: its single row needs no
+    internal tie, and its one escape/rail_stub column is already exactly
+    what the pre-#336 single-row array drew, which DRC + ``Plan.reserve()``
+    already cover.
+    """
+    cascade = item.cascade
+    grid = cascade.pattern
+    rows = len(grid)
+    if rows < 2:
+        return []
+    row_h = device_height_um(cascade.always_on.l_um)
+    y_item_bottom = bank.pmos_top - item_height_um(item) if row == "pfet" else bank.nmos_bottom
+    row_y0 = [dev.snap_um(y_item_bottom + r * (row_h + CC_ROW_GAP_UM)) for r in range(rows)]
+
+    cols = len(grid[0])
+    colw = col_widths_um(cascade)
+    col_x0 = col_box_x0_um(cascade, item.x0)
+    gap = CC_FINGER_GAP_UM
+    if cols >= 3:
+        gap0_x = dev.snap_um(col_x0[0] + colw[0] + gap / 3.0)
+        gap1_x = dev.snap_um(col_x0[1] + colw[1] + gap / 3.0)
+    else:
+        gap0_x = dev.snap_um(col_x0[0] + colw[0] + gap / 3.0)
+        gap1_x = dev.snap_um(col_x0[0] + colw[0] + 2.0 * gap / 3.0)
+
+    if row == "pfet":
+        escape_net, escape_gap, escape_edge = cascade.always_on.bottom_net, gap0_x, "bottom"
+        rail_net, rail_gap, rail_edge = VDD_NET, gap1_x, "top"
+    else:
+        escape_net, escape_gap, escape_edge = cascade.always_on.top_net, gap0_x, "top"
+        rail_net, rail_gap, rail_edge = GND_NET, gap1_x, "bottom"
+
+    # Every row, not just the two ends: a via lost on an *interior* row would
+    # still leave the end-to-end riser intact (the metal2 spine between the
+    # two end rows never touched that via), isolating only that row's own
+    # bus -- a real, DRC-invisible fault a first-and-last-row-only probe set
+    # would silently miss.
+    probes = []
+    for net, gap_x, edge in ((escape_net, escape_gap, escape_edge), (rail_net, rail_gap, rail_edge)):
+        for r in range(rows):
+            y = _bus_pad_centre_y_um(row_y0[r], row_h, edge)
+            probes.append((net, "metal1", gap_x, y))
+
+    left_x = item.x0 - ARRAY_LEFT_ESCAPE_UM
+    right_x = item.x0 + item.width + ARRAY_RIGHT_ESCAPE_UM
+    bus_end = {"A": left_x, "S": right_x}
+    for leg in ("A", "S"):
+        rows_with_leg = [r for r in range(rows) if any(tag == leg for tag in grid[r])]
+        if len(rows_with_leg) < 2:
+            continue
+        net = cascade.always_on.gate_net if leg == "A" else cascade.switched.gate_net
+        for r in rows_with_leg:
+            y_lo, y_hi = gate_bus_y_um(cascade.always_on.l_um, row_y0[r])
+            y = y_lo if leg == "A" else y_hi
+            probes.append((net, "metal1", bus_end[leg], y))
+    return probes
+
+
+def connectivity_report(result: MirrorResult) -> list[tuple[str, bool, str]]:
+    """Extract metal connectivity and check every 2-D array's own internal
+    row-to-row tie actually joins into one net.
+
+    Every other net this block routes is a single Metal1 escape column DRC
+    and ``Plan.reserve()`` already prove correct by construction (one column,
+    one via1, checked for spacing at build time); the property neither of
+    those checks can see is whether a *new* piece of geometry -- the Metal2
+    riser an R-row common-centroid array (issue #336) needs to tie its own
+    rows together -- actually reaches every via1 it claims to. Same
+    machinery ``block.connectivity_report()`` uses (KLayout's own
+    ``LayoutToNetlist``, restricted to metal1/via1/metal2), scoped here to
+    just the nets this block's own 2-D arrays introduce a new tie for.
+    """
+    import klayout.db as db  # noqa: PLC0415
+
+    layout = result.canvas.layout
+    cell = result.canvas.top
+    l2n = db.LayoutToNetlist(db.RecursiveShapeIterator(layout, cell, []))
+    layers = {}
+    for name in ("metal1", "via1", "metal2"):
+        layers[name] = l2n.make_polygon_layer(layout.layer(*prim.LAYER[name]), name)
+    l2n.connect(layers["metal1"])
+    l2n.connect(layers["via1"])
+    l2n.connect(layers["metal2"])
+    l2n.connect(layers["metal1"], layers["via1"])
+    l2n.connect(layers["via1"], layers["metal2"])
+    l2n.extract_netlist()
+
+    # Keyed by (net, item.name) rather than net alone: VDD_VCO/GND_VCO are
+    # each other bank's own *separate* rail island pre-assembly (only
+    # block.py's own supply trunk joins the banks' tap bands into one net --
+    # see mirror.py's module docstring), so aggregating by net name alone
+    # would compare two cascades' unrelated rail islands against each other
+    # and report a false failure.
+    probes_by_key: dict[tuple[str, str], list[tuple[str, float, float]]] = {}
+    for bank in result.plan.banks:
+        for items, row in ((bank.pmos, "pfet"), (bank.nmos, "nfet")):
+            for item in items:
+                if item.kind != "cc":
+                    continue
+                for net, layer, x, y in _cc_riser_probes(item, bank, row):
+                    probes_by_key.setdefault((net, item.name), []).append((layer, x, y))
+
+    out: list[tuple[str, bool, str]] = []
+    for (net, item_name), probes in probes_by_key.items():
+        label = f"{net} ({item_name})"
+        found = [l2n.probe_net(layers[layer], db.DPoint(x, y)) for layer, x, y in probes]
+        missing = [p for p, n in zip(probes, found) if n is None]
+        if missing:
+            out.append((label, False, f"2-D array internal tie: no metal found at {missing}"))
+            continue
+        ids = {n.cluster_id for n in found}
+        ok = len(ids) == 1
+        out.append(
+            (
+                label,
+                ok,
+                f"2-D array internal tie: {len(probes)} probe(s) -> "
+                + ("one net" if ok else f"{len(ids)} separate nets {sorted(ids)}"),
+            )
+        )
+    return out
+
+
 def main() -> int:
     import argparse
 
@@ -977,10 +1375,13 @@ def main() -> int:
         )
     print(f"link columns: {len(result.plan.link_x)} ({', '.join(sorted(result.plan.link_x))})")
     for c in dev.MIRROR_CASCADES:
-        centre = array_width_um(c) / 2.0
+        cw, ch = array_width_um(c), array_height_um(c)
+        ax, ay = leg_centroid_um(c, "A")
+        sx, sy = leg_centroid_um(c, "S")
         print(
-            f"cascade {c.name}: width {array_width_um(c):.3f} um, centre {centre:.3f}, "
-            f"A centroid {leg_centroid_um(c, 'A'):.3f}, S centroid {leg_centroid_um(c, 'S'):.3f}"
+            f"cascade {c.name}: {len(c.pattern)} row(s), {cw:.3f} x {ch:.3f} um, "
+            f"centre ({cw / 2.0:.3f}, {ch / 2.0:.3f}), "
+            f"A centroid ({ax:.3f}, {ay:.3f}), S centroid ({sx:.3f}, {sy:.3f})"
         )
     return 0
 

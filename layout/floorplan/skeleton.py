@@ -43,9 +43,9 @@ drawn extent, translated out of the block's own coordinates. All of it comes
 from plain-Python ``footprint_um()``/``placement()`` calls, so this file
 still imports no KLayout.
 
-**The real block is 183.2 x 170.3 um = 31,192 um^2, against
+**The real block is 172.5 x 183.5 um = 31,654 um^2, against
 PLL-FLOORPLAN.md section 5's ROM row of 0.011-0.017 mm^2 for the whole VCO
--- a 1.8-2.8x overrun.** That record's own section 5 names this case in
+-- a 1.9-2.9x overrun.** That record's own section 5 names this case in
 advance ("if real per-block layout pushes the conservative estimate's ~34 %
 margin below zero ... the next floorplan revision should state the overrun
 explicitly rather than silently rounding the total down"), so it is stated
@@ -53,13 +53,37 @@ here rather than absorbed:
 
 * Re-running section 5's own arithmetic with the measured VCO number in
   place of its ROM row gives a conservative block subtotal of
-  0.0369 (loop filter) + 0.0312 (VCO) + 0.020 (PFD/CP) + 0.0052
-  (divider+lock) = **0.0933 mm^2**, i.e. **0.1167 mm^2** after that
+  0.0369 (loop filter) + 0.031654 (VCO) + 0.020 (PFD/CP) + 0.0052
+  (divider+lock) = **0.093754 mm^2**, i.e. **0.117 mm^2** after that
   section's x1.25 top-level overhead -- inside the 0.15 mm^2 budget with
   ~22 % margin (section 5's own ROM-only conservative estimate had ~34 %).
 * ``total_extent_um2()`` (this skeleton's whole bounding box, a deliberately
   looser number than the budget table -- see that function's own docstring)
-  lands at ~126,400 um^2, i.e. ~16 % under the 150,000 um^2 target.
+  lands at ~124,300 um^2, i.e. ~17 % under the 150,000 um^2 target.
+
+Both numbers improved sharply at issue #324 (see below) and then moved only
+marginally at issue #336, which is stated explicitly rather than folded
+silently into the #324 numbers: #336 gave the band-select mirror sub-block a
+**2-D** common-centroid fold (cascade A 1x4 -> 2x2, cascade C 1x9 -> 3x3;
+``vco/mirror.py``'s ``draw_cc_array()``), narrowing it from 152.6 to 115.9 um
+-- the width lever #324's own row fold could not reach, because cascade C
+alone (115.18 um) was already alone in its bank's PMOS row, so no further
+*row* split could shrink it. That narrower-but-taller mirror shrinks
+``VCO_CORE``'s width (183.2 -> 172.5 um, -5.8 %) but grows its height by the
+same 13.2 um the mirror's own footprint grew (170.3 -> 183.5 um, +7.8 %) --
+comfortably inside ``LOOP_FILTER``'s 195 um height budget, but *not* a free
+trade at the block level the way #324's own height-for-width trade was: the
+mirror's new height has nothing else in its own row of sub-blocks to absorb
+it into, so ``VCO_CORE``'s own area moves from 31,192 to 31,654 um^2 (+1.5 %)
+and the budget-table margin from ~22 % to ~22 % -- unchanged within rounding.
+**Recorded as what it is: #336 is a real, DRC-clean width reduction and it
+retires the "cascade C sets the mirror's width, and a row split can't go
+below it" architectural dead-end #324 disclosed, but it is not, on its own,
+an area win for the assembled block** -- see
+``evidence/vco-layout/PROOF-2d-fold.md`` for the full accounting, including
+why the mirror is very likely no longer the block's own width bottleneck
+(the V-to-I core + bias-resistors row, 140.7 um combined, now exceeds the
+mirror's 115.9 um).
 
 Both numbers **improved** at issue #324, which is the same increment that
 added the block's second (n-well) guard-ring band. Before it, the assembled
@@ -79,9 +103,13 @@ alone was 266 um wide and set the whole block's width. #324 folded that
 mirror into two stacked banks (see ``vco/mirror.py``'s ``BANKS``), trading
 +16 um of block height -- which is free, the skeleton's height is set by
 ``LOOP_FILTER``'s 195 um, not by the VCO -- for -118 um of block width, and
-spent 6.2 um of that back on the n-well ring. The remaining overrun is the
-same diffusion-island convention; the other four sub-blocks are still single
-rows and are the next lever.
+spent 6.2 um of that back on the n-well ring. The remaining overrun (after
+#324) was the same diffusion-island convention plus the mirror's own
+still-flat cascades; #336 (above) closed the cascade-C-specific piece of
+that. The other three sub-blocks (ring, buffer, resistors) are still single
+rows, narrower than the mirror even after #336, and folding any one of them
+alone would not reduce the block's own width -- the V-to-I core is now the
+practical floor.
 
 Divider/lock real geometry, and a 2.9x budget overrun (issues #296, #310)
 --------------------------------------------------------------------------
