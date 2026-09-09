@@ -481,10 +481,6 @@ def declutter_riser_x(
     return result
 
 
-def pad_center(pad: tuple[float, float, float, float]) -> tuple[float, float]:
-    return ((pad[0] + pad[2]) / 2.0, (pad[1] + pad[3]) / 2.0)
-
-
 def _stub(canvas: devgen.Canvas, a: tuple[float, float], b: tuple[float, float], width: float = devgen.METAL1_WIRE_WIDTH_UM) -> None:
     """A short Metal1 jog from an original pad centre ``a`` to its own
     (possibly X-nudged) assigned riser point ``b``. :func:`declutter_riser_x`
