@@ -589,7 +589,7 @@ class VcoSubBlockFloorplanTests(unittest.TestCase):
 
     def test_area_budget_headroom_is_reported_not_silently_exceeded(self):
         # PLL-FLOORPLAN.md section 5's draft target is 0.15 mm^2, measured
-        # against the whole-skeleton bounding box -- which is dominated by
+        # against the skeleton bounding box -- which was dominated by
         # LOOP_FILTER's own 195 um height, not VCO_CORE's, so VCO_CORE.h
         # growing past 100 um (previous test) does not move this number
         # (see skeleton.py's own docstring for the arithmetic).
@@ -599,7 +599,20 @@ class VcoSubBlockFloorplanTests(unittest.TestCase):
         # go re-read skeleton.py" tripwire, not a floor anything wants to sit
         # against. Both bounds are asserted so a *regression* (the fold being
         # undone) trips it too.
-        used = skeleton.total_extent_um2()
+        #
+        # SCOPE (issue #310): measured over BLOCKS *excluding* DIVIDER_LOCK.
+        # This tripwire's own comment predicted "the next block to land real
+        # geometry ... find out here rather than in review", and that is
+        # exactly what happened -- the real divider chain (2634.28 x 93.82 um)
+        # took the unscoped whole-skeleton extent to ~1.19e6 um^2, ~9x this
+        # bound. That overrun is a real finding, stated at skeleton.py's
+        # DIVIDER_LOCK definition and asserted by
+        # test_floorplan_skeleton.py's own
+        # test_total_extent_overrun_is_recorded_and_does_not_grow. It is not
+        # re-asserted here, because a VCO-fold regression would then be
+        # invisible underneath it; scoping this to the pre-#310 blocks keeps
+        # *this* test measuring what it was written to measure.
+        used = skeleton.total_extent_um2(skeleton.BLOCKS_EXCLUDING_DIVIDER_LOCK)
         self.assertLess(used, 150_000.0)
         self.assertGreater(used / 150_000.0, 0.8, "budget headroom changed -- re-read skeleton.py")
         self.assertLess(used / 150_000.0, 0.9, "budget headroom changed -- re-read skeleton.py")
@@ -1075,14 +1088,19 @@ class AssembledVcoBlockFloorplanTests(unittest.TestCase):
         self.assertGreater(area, 17_000.0)
 
     def test_skeleton_bounding_box_headroom_against_the_draft_budget(self):
-        # Still under PLL-FLOORPLAN.md section 5's 150,000 um^2 draft target.
         # Issue #324's row fold bought back most of the headroom the real VCO
         # layout had eaten: ~148,200 um^2 (1.2 % under) before the fold,
         # ~126,400 um^2 (16 % under) after, *including* the +6.2 um per axis
         # the new block-level n-well guard ring costs. Both bounds are
-        # asserted so the next block to land real geometry -- and a regression
-        # that unfolds the mirror -- both find out here rather than in review.
-        extent = skeleton.total_extent_um2()
+        # asserted so a regression that unfolds the mirror trips here.
+        #
+        # SCOPE (issue #310): measured over BLOCKS *excluding* DIVIDER_LOCK --
+        # see the identical note on
+        # VcoSubBlockFloorplanTests.test_area_budget_headroom_is_reported_not_silently_exceeded.
+        # The whole-skeleton number no longer fits the draft budget once the
+        # real divider chain is in it; that is asserted, with its magnitude
+        # ratcheted, in test_floorplan_skeleton.py.
+        extent = skeleton.total_extent_um2(skeleton.BLOCKS_EXCLUDING_DIVIDER_LOCK)
         self.assertLess(extent, 135_000.0)
         self.assertGreater(extent, 115_000.0)
 
