@@ -39,6 +39,7 @@ no prior art in this repository to check against.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 from typing import ClassVar, Iterable
 
 try:
@@ -133,19 +134,15 @@ class Canvas(_canvas.Canvas):
     LAYER: ClassVar[dict[str, tuple[int, int]]] = LAYER
 
 
-def _contact_positions(lo: float, hi: float) -> list[float]:
-    """Left-edge (or bottom-edge) positions for a row of contacts spanning [lo, hi]."""
-    usable_lo = lo + CONTACT_ROW_MARGIN_UM
-    usable_hi = hi - CONTACT_ROW_MARGIN_UM
-    span = usable_hi - usable_lo
-    if span < CONTACT_SIZE_UM:
-        center = (lo + hi) / 2.0
-        return [center - CONTACT_SIZE_UM / 2.0]
-    n = int((span - CONTACT_SIZE_UM) // CONTACT_PITCH_UM) + 1
-    n = max(n, 1)
-    total = CONTACT_SIZE_UM + (n - 1) * CONTACT_PITCH_UM
-    start = usable_lo + (span - total) / 2.0
-    return [start + i * CONTACT_PITCH_UM for i in range(n)]
+# Left-edge (or bottom-edge) positions for a row of contacts spanning
+# [lo, hi] -- shared with every other ``layout/pll_top/*`` submodule (issue
+# #332, ``_canvas._contact_positions()``).
+_contact_positions = partial(
+    _canvas._contact_positions,
+    size_um=CONTACT_SIZE_UM,
+    pitch_um=CONTACT_PITCH_UM,
+    margin_um=CONTACT_ROW_MARGIN_UM,
+)
 
 
 @dataclass
@@ -360,14 +357,9 @@ def pad_center(pad: tuple[float, float, float, float]) -> tuple[float, float]:
     return ((pad[0] + pad[2]) / 2.0, (pad[1] + pad[3]) / 2.0)
 
 
-def bbox_union(boxes: Iterable[tuple[float, float, float, float]]) -> tuple[float, float, float, float]:
-    boxes = list(boxes)
-    return (
-        min(b[0] for b in boxes),
-        min(b[1] for b in boxes),
-        max(b[2] for b in boxes),
-        max(b[3] for b in boxes),
-    )
+# Smallest axis-aligned box enclosing every box given -- shared with every
+# other ``layout/pll_top/*`` submodule (issue #332, ``_canvas.bbox_union()``).
+bbox_union = _canvas.bbox_union
 
 
 def tap_strip(canvas: Canvas, kind: str, x0: float, y_center: float, net: str, length: float = TAP_STRIP_LEN_UM):
@@ -408,35 +400,18 @@ def tap_strip(canvas: Canvas, kind: str, x0: float, y_center: float, net: str, l
     return (x0, y0, x1, y1), pad
 
 
-def _via_square(canvas: Canvas, layer: str, x: float, y: float, size: float, enclosure: float) -> None:
-    half_v = size / 2.0
-    canvas.rect(layer, x - half_v, y - half_v, x + half_v, y + half_v)
-    half_pad = half_v + enclosure
-    return half_pad
-
-
-def _riser(canvas: Canvas, x: float, y_pad: float, track_y: float) -> None:
-    """Metal1 pad -> Via1 -> Metal2 landing -> Via2 -> Metal3 riser -> Via2 -> Metal2 bus landing.
-
-    The long vertical run (from ``y_pad`` to ``track_y``) is drawn entirely
-    on Metal3 -- a layer this package never uses for anything else -- so it
-    can freely cross any other net's Metal2 bus without a via (no via, no
-    connection, no short: metal on two different layers overlapping with no
-    via between them is not a DRC violation in this deck).
-    """
-    half_m2 = _via_square(canvas, "via1", x, y_pad, VIA1_SIZE_UM, VIA_ENCLOSURE_UM)
-    canvas.rect("metal2", x - half_m2, y_pad - half_m2, x + half_m2, y_pad + half_m2)
-    canvas.rect("metal1", x - half_m2, y_pad - half_m2, x + half_m2, y_pad + half_m2)
-
-    half_m3 = _via_square(canvas, "via2", x, y_pad, VIA2_SIZE_UM, VIA_ENCLOSURE_UM)
-    canvas.rect("metal3", x - half_m3, y_pad - half_m3, x + half_m3, y_pad + half_m3)
-
-    half_w = METAL3_WIRE_WIDTH_UM / 2.0
-    canvas.rect("metal3", x - half_w, min(y_pad, track_y), x + half_w, max(y_pad, track_y))
-
-    half_m3_top = _via_square(canvas, "via2", x, track_y, VIA2_SIZE_UM, VIA_ENCLOSURE_UM)
-    canvas.rect("metal3", x - half_m3_top, track_y - half_m3_top, x + half_m3_top, track_y + half_m3_top)
-    canvas.rect("metal2", x - half_m3_top, track_y - half_m3_top, x + half_m3_top, track_y + half_m3_top)
+# Draw one square via + a Metal1/2/3 riser landing it on a shared bus --
+# shared with ``divider_chain/devgen.py`` (issue #332,
+# ``_canvas._via_square()``/``_canvas._riser()``). ``pfd_cp/cp_dumpbuf.py``'s
+# own ``_riser()`` is structurally different and is not part of this
+# consolidation -- see that function's own docstring.
+_riser = partial(
+    _canvas._riser,
+    via1_size_um=VIA1_SIZE_UM,
+    via2_size_um=VIA2_SIZE_UM,
+    via_enclosure_um=VIA_ENCLOSURE_UM,
+    metal3_width_um=METAL3_WIRE_WIDTH_UM,
+)
 
 
 def route_net(

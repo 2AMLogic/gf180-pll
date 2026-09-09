@@ -87,6 +87,15 @@ from typing import Iterable, Sequence
 
 from . import devgen
 
+try:
+    from .. import _canvas
+except ImportError:  # this package's own dir (not its "pll_top" parent) is the
+    # sys.path root under layout/tests's flat-import convention (see
+    # floorplan/skeleton.py and every layout/tests/test_*.py's own
+    # sys.path.insert(..., ".../pll_top") -- "vco"/"lock_detector"/"pfd_cp"
+    # are then each their own top-level package, one level short of "..").
+    import _canvas
+
 TOP_CELL = "cp_dumpbuf"
 
 # --- extra GDS layers this module needs beyond devgen.Canvas's own
@@ -261,14 +270,9 @@ def pad_center(pad: tuple[float, float, float, float]) -> tuple[float, float]:
     return ((pad[0] + pad[2]) / 2.0, (pad[1] + pad[3]) / 2.0)
 
 
-def bbox_union(boxes: Iterable[tuple[float, float, float, float]]) -> tuple[float, float, float, float]:
-    boxes = list(boxes)
-    return (
-        min(b[0] for b in boxes),
-        min(b[1] for b in boxes),
-        max(b[2] for b in boxes),
-        max(b[3] for b in boxes),
-    )
+# Smallest axis-aligned box enclosing every box given -- shared with every
+# other ``layout/pll_top/*`` submodule (issue #332, ``_canvas.bbox_union()``).
+bbox_union = _canvas.bbox_union
 
 
 def well_separation_um(box_a: tuple[float, float, float, float], box_b: tuple[float, float, float, float]) -> float:
