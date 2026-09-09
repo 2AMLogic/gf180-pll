@@ -872,11 +872,12 @@ def offset_pad_x(
     return (target_x, y_c)
 
 
-# Draw one square via + a Metal1/2/3 riser landing it on a shared bus --
-# shared with ``lock_detector/primitives.py`` (issue #332,
-# ``_canvas._via_square()``/``_canvas._riser()``). ``pfd_cp/cp_dumpbuf.py``'s
-# own ``_riser()`` is structurally different and is not part of this
-# consolidation -- see that function's own docstring.
+# Draw one square via + a Metal1/2/3 riser landing it on a shared bus
+# (issue #332, ``_canvas._via_square()``/``_canvas._riser()``). This module
+# is now ``_canvas._riser()``'s only caller: ``lock_detector/primitives.py``
+# shared it until issue #322, and ``pfd_cp/cp_dumpbuf.py`` never did -- both
+# of those risers are structurally different and stay local; see each one's
+# own docstring for why. ``_via_square()`` is still shared by all three.
 _riser = partial(
     _canvas._riser,
     via1_size_um=VIA1_SIZE_UM,
