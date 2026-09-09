@@ -1,0 +1,17 @@
+* Reference schematic for cp_leg_p (issue #319).
+*
+* Hand-written independently of the layout -- see
+* layout/harness/cell.py's docstring for why. Device sizes/nodes match
+* design/cp_leg_p.sch exactly.
+*
+* The PMOS body's n-well tie is not a global connection in this deck
+* (unlike the NMOS substrate tie) -- devgen.py always draws and wires
+* a small n-well tap for it (see cp_leg.py's docstring's "RAIL STRAP
+* + TAP" section), so no --lvs-sub override is needed for this leg.
+
+.subckt cp_leg_p VBP VCASCP EN ENB TAIL VDD
+M_MEN BG ENB VBP VDD pfet_03v3 W=1u L=0.3u
+M_MDIS BG EN VDD VDD pfet_03v3 W=1u L=0.3u
+M_MTOP MID BG VDD VDD pfet_03v3 W=12u L=1u
+M_MCASC TAIL VCASCP MID VDD pfet_03v3 W=12u L=1u
+.ends

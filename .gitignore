@@ -31,6 +31,9 @@
 !layout/evidence/divider-inv-proof/**/*.log
 !layout/evidence/divider-tgate-proof/**/*.log
 !layout/evidence/divider-rowcells-proof/**/*.log
+# Same story again for the cp_leg_n/cp_leg_p composite layout's DRC+LVS
+# evidence (issue #319).
+!layout/evidence/cp-leg-proof/**/*.log
 __pycache__/
 .DS_Store
 

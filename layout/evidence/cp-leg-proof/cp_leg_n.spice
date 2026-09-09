@@ -1,0 +1,16 @@
+* Reference schematic for cp_leg_n (issue #319).
+*
+* Hand-written independently of the layout -- see
+* layout/harness/cell.py's docstring for why. Device sizes/nodes match
+* design/cp_leg_n.sch exactly.
+*
+* Run LVS with --lvs_sub=VSS (layout/run_pv.py's own default): the NMOS
+* body ties to the deck's synthesized global substrate net, which this
+* flag names VSS -- see layout/README.md's "substrate-net gotcha".
+
+.subckt cp_leg_n VBN VCASCN EN ENB TAIL VSS
+M_MEN BG EN VBN VSS nfet_03v3 W=1u L=0.3u
+M_MDIS BG ENB VSS VSS nfet_03v3 W=1u L=0.3u
+M_MBOT MID BG VSS VSS nfet_03v3 W=4u L=1u
+M_MCASC TAIL VCASCN MID VSS nfet_03v3 W=4u L=1u
+.ends
