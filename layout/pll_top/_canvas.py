@@ -53,6 +53,15 @@ each submodule keeps deriving them from its own
 ``VIA1_SIZE_UM``/``VIA2_SIZE_UM``/``VIA_ENCLOSURE_UM``/``METAL3_WIRE_WIDTH_UM``
 constants, unchanged.
 
+``v_wire()`` (issue #353, a later follow-up in the same wave) joins them the
+same way, with its Metal1 wire width taken as an explicit ``width`` argument
+rather than defaulted here: ``METAL1_WIRE_WIDTH_UM`` is 0.28 um in
+``pfd_cp/devgen.py``, ``divider_chain/devgen.py``, and ``vco/primitives.py``,
+but 0.32 um in ``lock_detector/primitives.py``, so each submodule binds its
+own default via ``functools.partial`` at its own call site (already imported
+everywhere for ``_contact_positions()``/``_riser()`` above) rather than this
+module guessing one value that fits all four.
+
 Two of this package's risers are *structurally* different from ``_riser()``
 and deliberately stay local, each documented at its own definition:
 
@@ -311,3 +320,15 @@ def _riser(
     half_m3_top = _via_square(canvas, "via2", x, track_y, via2_size_um, via_enclosure_um)
     canvas.rect("metal3", x - half_m3_top, track_y - half_m3_top, x + half_m3_top, track_y + half_m3_top)
     canvas.rect("metal2", x - half_m3_top, track_y - half_m3_top, x + half_m3_top, track_y + half_m3_top)
+
+
+def v_wire(canvas: Canvas, x: float, y0: float, y1: float, width: float) -> tuple:
+    """A vertical Metal1 wire segment centered on ``x``, spanning ``[y0, y1]``.
+
+    ``width`` is the caller's own Metal1 minimum-wire-width constant, passed
+    explicitly (no default here -- see the module docstring's ``v_wire()``
+    note on why 0.28 um/0.32 um can't both be this function's default).
+    """
+    x0, x1 = x - width / 2.0, x + width / 2.0
+    canvas.rect("metal1", x0, y0, x1, y1)
+    return (x0, min(y0, y1), x1, max(y0, y1))

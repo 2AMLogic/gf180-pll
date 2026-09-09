@@ -450,10 +450,9 @@ def mosfet(canvas: Canvas, device: Device, x0: float, y_bottom: float) -> Mosfet
     )
 
 
-def v_wire(canvas: Canvas, x: float, y0: float, y1: float, width: float = METAL1_WIRE_WIDTH_UM) -> tuple:
-    x0, x1 = x - width / 2.0, x + width / 2.0
-    canvas.rect("metal1", x0, y0, x1, y1)
-    return (x0, min(y0, y1), x1, max(y0, y1))
+# Vertical Metal1 wire segment -- shared with every other
+# ``layout/pll_top/*`` submodule (issue #353, ``_canvas.v_wire()``).
+v_wire = partial(_canvas.v_wire, width=METAL1_WIRE_WIDTH_UM)
 
 
 def _pad_overlap_x(pad_a: tuple, pad_b: tuple) -> float | None:
