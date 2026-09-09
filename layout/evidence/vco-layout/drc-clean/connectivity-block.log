@@ -1,10 +1,9 @@
-wrote /tmp/blkev/vco_block.gds
-footprint: 294.780 x 148.180 um  (43680.5 um^2)
+footprint: 183.180 x 170.280 um  (31191.9 um^2)
   bias_resistors     123.560    -3.450   136.560    36.870
   vtoi_core           -4.120    -3.720   117.060    47.000
-  mirror              -4.120    55.000   265.740    92.120
-  ring                -4.700    98.120    70.700   116.780
-  buffer              52.300   122.780    83.950   136.060
+  mirror              -5.420    55.000   147.220   108.020
+  ring                -4.700   114.020    70.700   132.680
+  buffer              52.300   138.680    83.950   151.960
 
   ok   NC               RCG signal pad <-> V-to-I core's NC track: 2 probe(s) -> one net
   ok   NOFF             ROFF signal pad <-> V-to-I core's NOFF track: 2 probe(s) -> one net
@@ -13,8 +12,8 @@ footprint: 294.780 x 148.180 um  (43680.5 um^2)
   ok   VBP              band mirror VBP output <-> ring VBP rail: 2 probe(s) -> one net
   ok   VBN              band mirror VBN output <-> ring VBN rail: 2 probe(s) -> one net
   ok   Y5               ring stage-5 output <-> output buffer input gate: 2 probe(s) -> one net
-  ok   VDD_VCO          supply trunk <-> all four n-well tap bands: 5 probe(s) -> one net
-  ok   GND_VCO          block guard ring <-> every sub-block guard ring: 6 probe(s) -> one net
+  ok   VDD_VCO          supply trunk <-> four n-well tap bands + the block n-well ring: 6 probe(s) -> one net
+  ok   GND_VCO          block guard ring <-> every sub-block guard ring + bank tap strips: 7 probe(s) -> one net
   ok   CLK              output buffer's last stage <-> the block's CLK pin: 2 probe(s) -> one net
   ok   VCTRL            block VCTRL pin <-> V-to-I core's VCTRL track: 2 probe(s) -> one net
   ok   B0               block B0 pin <-> band mirror's B0 track: 2 probe(s) -> one net
@@ -26,3 +25,10 @@ footprint: 294.780 x 148.180 um  (43680.5 um^2)
   ok   VBP0 != VBP      distinct nets
 
 connectivity: PASS
+
+negative controls -- each suppresses exactly one via1 and re-runs the
+identical check; the layout stays DRC-clean and the check must FAIL:
+  [neg-control] suppressed via1 at (56.2, 141.84) -- Y5 -> the output buffer's input gate
+  FAIL Y5               ring stage-5 output <-> output buffer input gate: 2 probe(s) -> 2 separate nets [21, 23]
+  [neg-control] suppressed via1 at (162.44, 43.7) -- VDD_VCO -> the block-level n-well tap ring
+  FAIL VDD_VCO          supply trunk <-> four n-well tap bands + the block n-well ring: 6 probe(s) -> 2 separate nets [1, 9]

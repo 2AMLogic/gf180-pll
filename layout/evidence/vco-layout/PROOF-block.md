@@ -1,5 +1,28 @@
 # Assembled VCO block — five sub-blocks, one guard ring, DRC-clean (issue #293, increment 5)
 
+> **Superseded in part by [`PROOF-fold.md`](PROOF-fold.md) (issue #324).**
+> Everything below was true of the block as it stood at PR #325, and the
+> reasoning — why the layout is flat, the routing discipline, why `VDD_VCO` is
+> the one net that is not Metal2 — is unchanged and still describes the
+> generator. Three specific things in it are now stale, and are deliberately
+> left in place rather than rewritten, because this file is the record of that
+> increment:
+>
+> * **The measured footprint.** This record's 294.78 × 148.18 µm (43,680 µm²)
+>   was the pre-fold block. The `vco_block.gds` / `drc-clean/*` artifacts in
+>   this directory have since been regenerated and are now the **post-fold**
+>   geometry: 183.18 × 170.28 µm (31,192 µm²), still 0 DRC violations, still
+>   `connectivity: PASS`. Read `PROOF-fold.md` for the run those artifacts
+>   come from.
+> * **"The one acceptance criterion this increment does not fully close."**
+>   The block-level `VDD_VCO` n-well guard ring named there is now drawn;
+>   `PLL-FLOORPLAN.md` §1's two-sided-ring criterion is closed.
+> * **The area arithmetic below.** Its conservative subtotal is quoted as
+>   ≈0.111 mm² (≈0.139 mm² after ×1.25, ≈7 % margin), but its own four terms
+>   — 0.0369 + 0.0437 + 0.020 + 0.0052 — sum to **0.1058**, giving
+>   0.1323 mm² and ≈**12 %**. `PROOF-fold.md` carries the corrected table and
+>   the post-fold row (≈0.0933 mm², ≈0.1167 mm², ≈22 %).
+
 Companion to [`PROOF.md`](PROOF.md) (increment 1: the 5-stage ring, PR #305),
 [`PROOF-mirror-buffer.md`](PROOF-mirror-buffer.md) (increment 2: the
 band-select mirror + output buffer, PR #313),
@@ -224,6 +247,10 @@ n-well inside the block is `VDD_VCO`-tied by its own sub-block's tap band
 that sentence and is arguably what "a *local* … n-well tap ring" means — but
 it is not a second, concentric n-well ring at the block boundary, which is
 the other reading. This PROOF does not pick the reading that flatters it.
+
+**Closed at issue #324 — see [`PROOF-fold.md`](PROOF-fold.md).** The paragraph
+below is why it was deferred *from this increment*, kept as the record of that
+decision; the deferral itself no longer stands.
 
 Why it is not simply added here: an n-well band at the block boundary needs
 its own width (≥ `NW.1a_LV`'s 0.86 µm), its `DF.4d_LV` tap inset, and

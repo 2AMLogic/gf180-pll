@@ -16,9 +16,12 @@ sub-blocks — the 5-stage ring (`ring.py`), the common-centroid 3-cascade
 band-select mirror (`mirror.py`), the 3-stage tapered output buffer
 (`buffer.py`), the `RCG`/`ROFF`/`RDEG` poly resistors (`bias_resistors.py`)
 and the 13-transistor V-to-I core (`vtoi_core.py`) — into one DRC-clean
-layout under one block-level `GND_VCO` guard ring, with the routed nets
+layout under a two-sided block-level guard ring (`GND_VCO` substrate ring,
+`VDD_VCO` n-well tap ring concentric outside it), with the routed nets
 proved electrically connected as well as rule-clean (see
-`layout/evidence/vco-layout/PROOF-block.md`).
+`layout/evidence/vco-layout/PROOF-block.md` for the assembly and
+`PROOF-fold.md` for the band mirror's two-bank row fold and that second ring
+band).
 `layout/pll_top/pfd_cp/` (issue #294/#299/#300) is
 a second, independent full-custom leaf-cell family: a reusable
 device-list-driven generator (`devgen.py`) proved out on one representative
@@ -119,7 +122,8 @@ layout/
     vco-layout/              VCO real GDS + DRC reports (issue #293)
                              PROOF.md = ring; PROOF-mirror-buffer.md = mirror + buffer;
                              PROOF-bias-resistors.md = RCG/ROFF/RDEG; PROOF-vtoi-core.md = V-to-I core;
-                             PROOF-block.md = the assembled block (all five, wired, one guard ring)
+                             PROOF-block.md = the assembled block (all five, wired, one guard ring);
+                             PROOF-fold.md = band-mirror row fold + block-level n-well guard ring (issue #324)
     lock-detector-layout/    lock_detector block GDS + DRC-clean report (issue #296)
     pfdcp-inv-proof/         PFD/CP devgen methodology proof: GDS + DRC/LVS reports (issue #299)
     pfd-layout/              PFD block GDS + DRC-clean report, mirror-symmetric UP/DN chains (issue #300)

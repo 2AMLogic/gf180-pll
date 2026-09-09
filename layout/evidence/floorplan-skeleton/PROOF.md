@@ -46,23 +46,31 @@ boundary regions and text labels?), not a stronger DRC claim.
 | `pll_floorplan_skeleton` DRC, table `main` | clean (no rule keys off layer 0/0) | `Klayout DRC run is clean. GDS has no DRC violations.` | **PASS** |
 
 Skeleton bounding-box extent (block rectangles only, excluding the VCO guard
-ring's outward margin): **148,157 µm² (0.148157 mm²)** — a sanity cross-check
+ring's outward margin): **126,395 µm² (0.126395 mm²)** — a sanity cross-check
 against `PLL-FLOORPLAN.md`'s area-budget table, not the same number as that
 table's ROM footprint estimates (this bbox includes the inter-domain spacing
 channels the budget's top-level overhead multiplier accounts for
 separately, and does not include the VCO guard ring's own outward extent).
-Still under the < 0.15 mm² draft target, but only just.
+Under the < 0.15 mm² draft target with ≈16 % headroom.
 
-**Regenerated for issue #293's assembled VCO block** (was 117,975 µm² when
-this record was first written, with `VCO_CORE` a 140 × 100 µm ROM
-placeholder). `VCO_CORE` is now the real, wired, DRC-clean VCO block's own
-guard-ring box — 294.78 × 148.18 µm, 43,680 µm² — which is a 2.6–4.0×
-overrun against `PLL-FLOORPLAN.md` §5's 0.011–0.017 mm² ROM row for the
-whole VCO, and takes this bounding box from ≈21 % headroom against the draft
-target to ≈1.2 %. §5's own "fail-loud condition" asks for exactly this to be
-stated rather than rounded away; the full accounting is in
-[`../vco-layout/PROOF-block.md`](../vco-layout/PROOF-block.md) and
-`layout/floorplan/skeleton.py`'s own module docstring.
+**Regenerated twice since this record was first written**, both times because
+`VCO_CORE` stopped being an estimate and became measured geometry:
+
+| Revision | `VCO_CORE` | Skeleton extent | Headroom vs 0.15 mm² |
+|---|---|---|---|
+| original (issue #17) | 140 × 100 µm ROM placeholder | 117,975 µm² | ≈21 % |
+| issue #293 (PR #325) | 294.78 × 148.18 µm, real assembled block | 148,157 µm² | ≈1.2 % |
+| **issue #324 (this file)** | **183.18 × 170.28 µm**, that block with its band mirror's rows folded into two banks and a block-level `VDD_VCO` n-well guard ring added | **126,395 µm²** | ≈**16 %** |
+
+`VCO_CORE` is the real, wired, DRC-clean VCO block's own **outer** guard-ring
+box (the `VDD_VCO` n-well ring, with the `GND_VCO` substrate ring concentric
+inside it). At 31,192 µm² it is still a 1.8–2.8× overrun against
+`PLL-FLOORPLAN.md` §5's 0.011–0.017 mm² ROM row for the whole VCO, down from
+2.6–4.0× before the fold. §5's own "fail-loud condition" asks for exactly
+this to be stated rather than rounded away; the full accounting is in
+[`../vco-layout/PROOF-fold.md`](../vco-layout/PROOF-fold.md) (and, for the
+pre-fold block, [`../vco-layout/PROOF-block.md`](../vco-layout/PROOF-block.md))
+and `layout/floorplan/skeleton.py`'s own module docstring.
 
 ## Artifacts
 
