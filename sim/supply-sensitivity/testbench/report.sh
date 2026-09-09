@@ -30,24 +30,19 @@ eval "$(sed -n '/^KFOUT=/,/^ACC_FDEV_PPM=/p;/^CITE_/p;/^VCO_TUNING=/p;/^PASSIVES
 # The END-plateau escalation's instants are declared by run.sh as OFFSETS from
 # t_rend (KD_DEND_TA/_TB/_TSTOP), not as absolute times, because they compose
 # with #253's high-plateau escalation -- which moves t_rend.  Re-derive the two
-# absolute sets here exactly as run.sh's own dend_at() does, so the record
-# states the instants the runner actually used rather than a restatement of
-# them.  KD_DEND_* = escalated from the default profile; KD_DENDX_* =
-# escalated on top of a high-plateau-escalated profile.
-dend_at() { awk -v a="$1" -v b="$2" '
-  function s(x) { if (x ~ /[uU]$/) return x * 1e-6;
-                  if (x ~ /[nN]$/) return x * 1e-9;
-                  if (x ~ /[pP]$/) return x * 1e-12;
-                  return x + 0 }
-  BEGIN { printf "%.12g", s(a) + s(b) }'; }
-KD_DEND_P11="$(dend_at "${KD_TREND_BASE}" "${KD_DEND_TA}")"
-KD_DEND_P12="$(dend_at "${KD_TREND_BASE}" "${KD_DEND_TB}")"
-KD_DEND_TSTOP_ABS="$(dend_at "${KD_TREND_BASE}" "${KD_DEND_TSTOP}")"
-KD_DENDX_P12="$(dend_at "${KD_TREND_X}" "${KD_DEND_TB}")"
-KD_DENDX_TSTOP_ABS="$(dend_at "${KD_TREND_X}" "${KD_DEND_TSTOP}")"
+# absolute sets here exactly as run.sh's own simenv_dend_at() call does (the
+# shared helper lives in sim/lib/simenv.sh, sourced above -- #329), so the
+# record states the instants the runner actually used rather than a
+# restatement of them.  KD_DEND_* = escalated from the default profile;
+# KD_DENDX_* = escalated on top of a high-plateau-escalated profile.
+KD_DEND_P11="$(simenv_dend_at "${KD_TREND_BASE}" "${KD_DEND_TA}")"
+KD_DEND_P12="$(simenv_dend_at "${KD_TREND_BASE}" "${KD_DEND_TB}")"
+KD_DEND_TSTOP_ABS="$(simenv_dend_at "${KD_TREND_BASE}" "${KD_DEND_TSTOP}")"
+KD_DENDX_P12="$(simenv_dend_at "${KD_TREND_X}" "${KD_DEND_TB}")"
+KD_DENDX_TSTOP_ABS="$(simenv_dend_at "${KD_TREND_X}" "${KD_DEND_TSTOP}")"
 # The default END-plateau window's own end instant (t_rend + 1.6 us derived
 # form), for the "short" side of the comparison table's prose.
-KD_DEND_P12_BASE="$(dend_at "${KD_TSTOP_BASE}" "-1.6u")"
+KD_DEND_P12_BASE="$(simenv_dend_at "${KD_TSTOP_BASE}" "-1.6u")"
 
 RID="$(simenv_record_id)"
 SNAPDIR="${EXP}/netlist-snapshots"; mkdir -p "${SNAPDIR}"
