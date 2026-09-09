@@ -334,6 +334,28 @@ class BuildTests(unittest.TestCase):
         for net in ("IBN", "ICN", "DNT", "IBP", "ICP", "UPT"):
             self.assertEqual(len(self.layout.pins[net]), 1, f"{net}: {self.layout.pins[net]}")
 
+    def test_each_side_reports_a_metal2_bus_span_per_routed_net(self):
+        # n_bus/p_bus are the handle a parent block reaches this block's nets
+        # through -- see cp_output_stage.py's "REACHING THIS BLOCK'S NETS".
+        expected_n = {"IBN", "ICN", "DNT", "B0", "B0B", "B1", "B1B", "VSS", "VDD"}
+        expected_p = {"IBP", "ICP", "UPT", "B0", "B0B", "B1", "B1B", "VDD", "VSS"}
+        self.assertEqual(set(self.layout.n_bus), expected_n)
+        self.assertEqual(set(self.layout.p_bus), expected_p)
+
+    def test_bus_spans_are_well_formed_and_sit_in_their_own_side_channel(self):
+        for bus, side_bbox in (
+            (self.layout.n_bus, self.layout.n_side_bbox),
+            (self.layout.p_bus, self.layout.p_side_bbox),
+        ):
+            for net, (track_y, x_lo, x_hi) in bus.items():
+                self.assertLessEqual(x_lo, x_hi, net)
+                self.assertGreaterEqual(track_y, side_bbox[3], f"{net} track is not above the block")
+
+    def test_each_side_assigns_every_net_its_own_track(self):
+        for bus in (self.layout.n_bus, self.layout.p_bus):
+            track_ys = [ty for ty, _lo, _hi in bus.values()]
+            self.assertEqual(len(set(track_ys)), len(track_ys), "two nets share a Metal2 track")
+
 
 if __name__ == "__main__":
     unittest.main()

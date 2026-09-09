@@ -335,7 +335,7 @@ measurements land far outside the ROM ranges:
 |---|---|---|---|---|
 | Loop filter | 0.0369 mm² (already real) | 0.0369 mm² | 1.0× | DR-006, §3 |
 | VCO | 0.011–0.017 mm² | **0.0312 mm²** (183.2 × 170.3 µm) | 1.8–2.8× | `layout/evidence/vco-layout/PROOF-block.md` (#293, folded at #324) |
-| PFD + charge pump | 0.010–0.020 mm² | *still ROM — no assembled block yet* | — | — |
+| PFD + charge pump | 0.010–0.020 mm² | *still ROM — no assembled `pfd_cp` block yet; its **CP output stage** is now real at **0.0079 mm²** (117.81 × 66.73 µm), on its own already ≈40–79 % of the whole row's ROM range* | — | `layout/evidence/cp-layout/PROOF.md` (#321) |
 | Lock detector | *(shared row below)* | **0.0075 mm²** (119.3 × 62.6 µm) | — | `layout/evidence/lock-detector-layout/PROOF.md` (#296) |
 | Divider chain | *(shared row below)* | **0.2471 mm²** (2634.28 × 93.82 µm) | — | `layout/evidence/divider-chain-layout/PROOF.md` (#310) |
 | **Divider chain + lock detector** | **0.0038–0.0052 mm²** | **0.2546 mm²** | **≈49–67×** | both of the above |
@@ -543,6 +543,18 @@ latter two — see §5.1 and §5.3.
 `pfd_cp` is still a §5 ROM estimate. The devices themselves are DRC-clean
 (and, for the divider chain, LVS-clean) in each block's own evidence
 directory, not by virtue of this skeleton's run.
+
+**`pfd_cp`'s rectangle stays ROM for now, deliberately (issue #321).** Its
+charge-pump output stage is now a real, DRC-clean block —
+`layout/pll_top/pfd_cp/cp_output_stage.py`, 117.81 × 66.73 µm, evidence in
+`layout/evidence/cp-layout/` — but `pfd_cp` as this skeleton draws it is the
+*whole* PFD + charge pump + `cp_dumpbuf` block, and the assembly that puts
+`pfd.py`, `cp_output_stage.py` and `cp_dumpbuf.py` into one placed block is
+Part 5 (**#303**). Replacing this rectangle with a measured extent before
+that assembly exists would mean measuring a block that does not, so
+`skeleton.py`'s `pfd_cp` extent is **deferred to #303** rather than updated
+here; §5.1's own table row carries the CP output stage's real number in the
+meantime.
 
 Evidence: `layout/evidence/floorplan-skeleton/` (see `PROOF.md` there for the
 DRC run's provenance and verdict).
