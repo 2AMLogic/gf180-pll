@@ -42,6 +42,7 @@ except ImportError:
 
 from floorplan import skeleton  # noqa: E402
 from vco import bias_resistors  # noqa: E402
+from vco import block as vco_block  # noqa: E402
 from vco import buffer as buf  # noqa: E402
 from vco import devices as dev  # noqa: E402
 from vco import mirror  # noqa: E402
@@ -143,7 +144,12 @@ class FloorplanIntegrationTests(unittest.TestCase):
     "replace/augment the VCO_CORE placeholder" acceptance criterion)."""
 
     def test_vco_ring_matches_the_real_generator_footprint(self):
-        x0, y0, x1, y1 = ring.footprint_um()
+        # ``with_decap=False``: inside the assembled block the 22 pF decap is
+        # placed once, by block.py, against the *block's* own VDD_VCO
+        # pin/ring-tap junction -- so the ring rectangle here is the ring's
+        # own devices-and-guard-ring extent, not its standalone
+        # decap-inflated one (block.py's docstring, ring.build(draw_decap=)).
+        x0, y0, x1, y1 = ring.footprint_um(with_decap=False)
         self.assertAlmostEqual(skeleton.VCO_RING.w, x1 - x0)
         self.assertAlmostEqual(skeleton.VCO_RING.h, y1 - y0)
 
@@ -448,7 +454,7 @@ class VcoSubBlockFloorplanTests(unittest.TestCase):
 
     def test_sub_block_footprints_match_their_generators(self):
         for block, footprint in (
-            (skeleton.VCO_RING, ring.footprint_um()),
+            (skeleton.VCO_RING, ring.footprint_um(with_decap=False)),
             (skeleton.VCO_MIRROR, mirror.footprint_um()),
             (skeleton.VCO_BUFFER, buf.footprint_um()),
             (skeleton.VCO_VTOI_CORE, vtoi_core.footprint_um()),
@@ -740,6 +746,261 @@ class DogBoneMosfetTests(unittest.TestCase):
         # (offset only by the tab's fixed geometry, not by W).
         footprint_centre = (ports.x0 + ports.x1) / 2.0
         self.assertLess(abs(ports.gate_tab_x_center - footprint_centre), 1.0)
+
+
+class AssembledVcoBlockPlacementTests(unittest.TestCase):
+    """``vco/block.py``'s placement -- pure Python, no KLayout.
+
+    Issue #293's final acceptance criteria: all five sub-blocks wired
+    together under one dedicated ``GND_VCO`` guard ring, tap pitch <= 15 um
+    everywhere inside the block, and the ``VCO_CORE`` placeholder replaced by
+    real geometry.
+    """
+
+    def setUp(self):
+        self.p = vco_block.placement()
+        self.boxes = self.p.boxes()
+
+    def test_all_five_sub_blocks_are_present(self):
+        self.assertEqual(
+            set(self.boxes),
+            {"bias_resistors", "vtoi_core", "mirror", "ring", "buffer"},
+        )
+
+    def test_sub_blocks_do_not_overlap_each_other(self):
+        items = sorted(self.boxes.items())
+        for i, (name_a, a) in enumerate(items):
+            for name_b, b in items[i + 1 :]:
+                overlap = a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+                self.assertFalse(overlap, f"{name_a} overlaps {name_b}: {a} vs {b}")
+
+    def test_sub_block_guard_rings_clear_each_other_by_more_than_comp_spacing(self):
+        # Two adjacent sub-blocks' own guard-ring comp must not merely miss
+        # each other -- they have to clear DF.3a_LV. Checked with real margin
+        # (1 um, ~3.5x the rule) because these are separate p-tap islands.
+        items = sorted(self.boxes.items())
+        for i, (name_a, a) in enumerate(items):
+            for name_b, b in items[i + 1 :]:
+                gap_x = max(b[0] - a[2], a[0] - b[2])
+                gap_y = max(b[1] - a[3], a[1] - b[3])
+                self.assertGreater(
+                    max(gap_x, gap_y),
+                    1.0,
+                    f"{name_a} and {name_b} are closer than 1 um: {a} vs {b}",
+                )
+
+    def test_every_sub_block_sits_inside_the_block_guard_ring(self):
+        x0, y0, x1, y1 = self.p.outer
+        for name, b in self.boxes.items():
+            self.assertTrue(
+                x0 < b[0] and y0 < b[1] and b[2] < x1 and b[3] < y1,
+                f"{name} escapes the block guard ring: {b} vs {self.p.outer}",
+            )
+
+    def test_footprint_is_the_block_guard_ring_box(self):
+        self.assertEqual(vco_block.footprint_um(), self.p.outer)
+
+    def test_tap_pitch_bound_holds_for_every_sub_block(self):
+        # PLL-FLOORPLAN.md section 1 / DF.13_MV / DF.14_MV: <= 15 um to a tap
+        # *everywhere inside the block*, not just at its perimeter. Each
+        # sub-block keeps its own guard ring inside the assembled block, so
+        # the bound is each generator's own worst case. Asserted with a
+        # stated 2 um of headroom rather than just "<=": the worst case in
+        # the whole block is the V-to-I core's PMOS band (12.1 um, set by
+        # MSU1's deliberately long L=20 um channel -- see vtoi_core.py), so a
+        # blanket "half the rule" bound would be a false claim about a block
+        # that genuinely runs closer than that.
+        worst = (
+            ring.max_pmos_tap_distance_um(),
+            ring.max_nmos_tap_distance_um(),
+            mirror.max_pmos_tap_distance_um(),
+            mirror.max_nmos_tap_distance_um(),
+            buf.max_pmos_tap_distance_um(),
+            buf.max_nmos_tap_distance_um(),
+            vtoi_core.max_pmos_tap_distance_um(),
+            vtoi_core.max_nmos_tap_distance_um(),
+            bias_resistors.max_tap_distance_um(),
+        )
+        for d in worst:
+            self.assertLess(d, dev.DRC_TAP_PITCH_MAX_UM - 2.0)
+
+    def test_left_channel_column_order_prevents_crossings(self):
+        # The VBP0 riser spans the whole bias-row-to-mirror-row height, so it
+        # has to sit OUTSIDE the input-pin column -- every input route runs
+        # rightward from its pin and would otherwise cross it.
+        blocks_x0 = min(b[0] for b in self.boxes.values())
+        self.assertLess(self.p.col_vbp0_x, self.p.left_pin_x)
+        self.assertLess(self.p.left_pin_x, blocks_x0)
+
+    def test_right_channel_column_order_prevents_crossings(self):
+        # VBP's horizontal run is above VBN's, so VBP takes the inner column;
+        # the supply trunk is innermost of all (signals cross it on Metal2).
+        blocks_x1 = max(b[2] for b in self.boxes.values())
+        self.assertLess(blocks_x1, self.p.vdd_trunk_x)
+        self.assertLess(self.p.vdd_trunk_x, self.p.col_vbp_x)
+        self.assertLess(self.p.col_vbp_x, self.p.col_vbn_x)
+        self.assertLess(self.p.col_vbn_x, self.p.clk_pin_x)
+
+    def test_resistor_riser_column_order_prevents_crossings(self):
+        # NVI is the inner column even though its own track is the outer one
+        # -- see block.RES_COL_*_OFFSET_UM.
+        self.assertLess(self.boxes["vtoi_core"][2], self.p.res_col_nvi_x)
+        self.assertLess(self.p.res_col_nvi_x, self.p.res_col_noff_x)
+        self.assertLess(self.p.res_col_noff_x, self.boxes["bias_resistors"][0])
+
+    def test_supply_trunk_clears_the_widest_sub_block_guard_ring(self):
+        # The Metal1 VDD trunk runs beside the band mirror's own Metal1-covered
+        # GND guard ring band -- that gap is a real M1.2a check, not a
+        # cosmetic one.
+        blocks_x1 = max(b[2] for b in self.boxes.values())
+        gap = (self.p.vdd_trunk_x - vco_block.VDD_TRUNK_WIDTH_UM / 2.0) - (
+            blocks_x1 + prim.METAL1_PAD_MARGIN_UM
+        )
+        self.assertGreater(gap, dev.DRC_METAL1_MIN_SPACE_UM)
+
+    def test_rcg_pad_lands_exactly_on_the_v_to_i_core_nc_track(self):
+        # placement() picks the resistor block's y offset for this; if the
+        # two ever drift the NC route becomes a dogleg nobody designed.
+        pad_y = bias_resistors.top_pad_center_um(dev.BIAS_R_RCG)[1] + self.p.dy_res
+        self.assertAlmostEqual(pad_y, vtoi_core.plan().track_lo["NC"])
+
+    def test_decap_is_the_committed_pair_of_50um_devices(self):
+        boxes = vco_block.decap_boxes_um()
+        self.assertEqual(len(boxes), dev.DECAP_COUNT)
+        for b in boxes:
+            self.assertAlmostEqual(b[2] - b[0], dev.DECAP_SIZE_UM)
+            self.assertAlmostEqual(b[3] - b[1], dev.DECAP_SIZE_UM)
+        a, c = boxes
+        self.assertLess(a[2], c[0])  # side by side, not overlapping
+
+    def test_decap_sits_next_to_the_block_vdd_pin_and_inside_the_guard_ring(self):
+        # AC: "placed adjacent to the VDD_VCO pin/ring-tap junction". The
+        # block's VDD_VCO pin is on the Metal1 supply trunk, so adjacency is
+        # measured against that trunk's own x.
+        boxes = vco_block.decap_boxes_um()
+        self.assertLess(self.p.vdd_trunk_x - boxes[1][2], 10.0)
+        x0, y0, x1, y1 = self.p.outer
+        for b in boxes:
+            self.assertTrue(x0 < b[0] and y0 < b[1] and b[2] < x1 and b[3] < y1)
+
+    def test_ring_decap_is_suppressed_inside_the_block(self):
+        # One marker pair for one physical pair of caps: the ring's own copy
+        # is off inside the block, so its rectangle here is the narrower
+        # devices-and-guard-ring extent.
+        with_decap = ring.footprint_um(with_decap=True)
+        without = ring.footprint_um(with_decap=False)
+        self.assertLess(without[2], with_decap[2])
+        self.assertAlmostEqual(self.boxes["ring"][2] - self.boxes["ring"][0], without[2] - without[0])
+
+
+class AssembledVcoBlockFloorplanTests(unittest.TestCase):
+    """``skeleton.py``'s ``VCO_CORE`` is now the assembled block itself."""
+
+    def test_vco_core_is_the_assembled_block_footprint(self):
+        x0, y0, x1, y1 = vco_block.footprint_um()
+        self.assertAlmostEqual(skeleton.VCO_CORE.w, x1 - x0)
+        self.assertAlmostEqual(skeleton.VCO_CORE.h, y1 - y0)
+
+    def test_every_vco_sub_block_rectangle_sits_inside_vco_core(self):
+        for block in (
+            skeleton.VCO_RING,
+            skeleton.VCO_MIRROR,
+            skeleton.VCO_BUFFER,
+            skeleton.VCO_VTOI_CORE,
+            skeleton.VCO_BIAS_RESISTORS,
+            skeleton.VCO_DECAP_0,
+            skeleton.VCO_DECAP_1,
+        ):
+            self.assertTrue(_contains(skeleton.VCO_CORE, block), f"{block.name} escapes VCO_CORE")
+
+    def test_real_vco_area_overruns_the_rom_row_and_is_disclosed(self):
+        # PLL-FLOORPLAN.md section 5's VCO row is 0.011-0.017 mm^2 ROM. The
+        # real block is several times that; the record's own "fail-loud"
+        # clause requires the overrun to be stated, which skeleton.py's
+        # docstring does. This test pins the fact of the overrun so a future
+        # edit cannot quietly re-describe it as within budget.
+        area = skeleton.VCO_CORE.w * skeleton.VCO_CORE.h
+        self.assertGreater(area, 17_000.0)
+
+    def test_skeleton_bounding_box_headroom_against_the_draft_budget(self):
+        # Still under PLL-FLOORPLAN.md section 5's 150,000 um^2 draft target,
+        # but the real VCO layout has eaten most of the headroom -- assert
+        # both facts, so the next block to land real geometry finds out here
+        # rather than in review.
+        extent = skeleton.total_extent_um2()
+        self.assertLess(extent, 150_000.0)
+        self.assertGreater(extent, 140_000.0)
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class AssembledVcoBlockConnectivityTests(unittest.TestCase):
+    """The routed nets are electrically joined, not merely DRC-legal.
+
+    A Metal2 wire that stops short of its via1 is perfectly clean under the
+    DRC deck and completely broken; ``block.connectivity_report()`` extracts
+    metal1/via1/metal2 connectivity and probes both ends of every route.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.report = vco_block.connectivity_report(vco_block.build())
+
+    def test_every_routed_net_is_one_connected_net(self):
+        for name, ok, detail in self.report:
+            self.assertTrue(ok, f"{name}: {detail}")
+
+    def test_the_report_covers_every_inter_sub_block_net(self):
+        names = {name for name, _, _ in self.report}
+        for net in ("NC", "NOFF", "NVI", "VBP0", "VBP", "VBN", "Y5", "VDD_VCO", "GND_VCO"):
+            self.assertIn(net, names)
+
+    def test_nets_that_must_stay_separate_did_not_merge(self):
+        checks = {name for name, _, _ in self.report if "!=" in name}
+        self.assertIn("VDD_VCO != GND_VCO", checks)
+        self.assertIn("VBP != VBN", checks)
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class PolyResistorPadArithmeticTests(unittest.TestCase):
+    """``bias_resistors.top_pad_center_um()`` mirrors what is actually drawn."""
+
+    def test_pure_python_pad_centre_matches_the_drawn_pad(self):
+        for res in dev.BIAS_RESISTORS:
+            canvas = prim.Canvas(f"pad_centre_{res.name}")
+            ports = prim.poly_resistor(canvas, res, 0.0, 0.0)
+            drawn = (
+                (ports.top_pad[0] + ports.top_pad[2]) / 2.0,
+                (ports.top_pad[1] + ports.top_pad[3]) / 2.0,
+            )
+            self.assertAlmostEqual(bias_resistors.top_pad_center_um(res)[0], drawn[0])
+            self.assertAlmostEqual(bias_resistors.top_pad_center_um(res)[1], drawn[1])
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class CanvasOffsetTests(unittest.TestCase):
+    """``Canvas.at()`` -- the one mechanism that makes the assembly possible."""
+
+    def test_offset_translates_shapes_and_leaves_the_default_untouched(self):
+        import klayout.db as db
+
+        canvas = prim.Canvas("offset_test")
+        canvas.rect("metal1", 0.0, 0.0, 1.0, 1.0)
+        with canvas.at(10.0, 20.0):
+            canvas.rect("metal1", 0.0, 0.0, 1.0, 1.0)
+        canvas.rect("metal1", 2.0, 0.0, 3.0, 1.0)
+        region = db.Region(canvas.top.shapes(canvas.layout.layer(*prim.LAYER["metal1"])))
+        boxes = sorted((s.bbox().left, s.bbox().bottom) for s in region.each())
+        self.assertEqual(boxes, [(0, 0), (2000, 0), (10000, 20000)])
+
+    def test_pins_are_recorded_in_absolute_coordinates_and_scoped(self):
+        canvas = prim.Canvas("offset_pin_test")
+        with canvas.at(5.0, 7.0) as scope:
+            canvas.pin("N", 0.0, 0.0, 1.0, 1.0)
+        self.assertEqual(scope["N"], [(5.0, 7.0, 6.0, 8.0)])
+        self.assertEqual(canvas.pins["N"], [(5.0, 7.0, 6.0, 8.0)])
+        # ... and the offset does not leak out of the context manager.
+        canvas.pin("M", 0.0, 0.0, 1.0, 1.0)
+        self.assertEqual(canvas.pins["M"], [(0.0, 0.0, 1.0, 1.0)])
 
 
 if __name__ == "__main__":

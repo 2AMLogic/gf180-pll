@@ -19,9 +19,9 @@ devices that motivated it is this increment's own coherent, independently
 DRC-provable slice, per this issue's own established "a real, DRC-clean
 sub-portion beats a placeholder for the full scope" convention (see
 ``ring.py``'s and ``mirror.py``'s module docstrings for the same call made
-twice already). The V-to-I core's transistors, and the wiring that merges
-this block with the ring, mirror and output buffer under one shared guard
-ring, remain issue #293's own remaining scope.
+twice already). The V-to-I core's transistors landed next
+(``vtoi_core.py``), and ``block.py`` has since wired this block to it -- and
+to the ring, mirror and output buffer -- under one block-level guard ring.
 
 WHY NO PER-RESISTOR SUBSTRATE TAP
 -----------------------------------
@@ -100,6 +100,36 @@ def footprint_um() -> tuple:
     return (outer_x0, outer_y0, outer_x1, outer_y1)
 
 
+def top_pad_center_um(res: dev.PolyResistor) -> tuple[float, float]:
+    """Pure-Python (x, y) centre of ``res``'s own signal-terminal Metal1 pad.
+
+    ``block.py`` needs this *before* any KLayout drawing happens: it chooses
+    the whole resistor block's placement offset so that ``RCG``'s pad lands
+    exactly on the V-to-I core's own ``NC`` Metal2 track, which turns a
+    three-segment dogleg into a straight wire plus one via1. Mirrors
+    ``primitives.poly_resistor()``'s own ``_end_pad()`` arithmetic; the tests
+    check the two against each other, so a drift in either is a test failure
+    rather than a silently-misplaced via.
+
+    ``x`` is trivially the resistor's own column centre (its contact row is
+    centred in the width). ``y`` reproduces ``_contact_positions()``'s
+    single-contact fallback: the contact land between the ``PRES.7``
+    clearance and the poly2 end is always narrower than one contact for a
+    ``ppolyf_u_3k`` of this class, so the row degenerates to one centred
+    contact -- asserted rather than assumed.
+    """
+    y_outer = res.l_um + prim.POLY_RES_CONTACT_TO_SAB_UM
+    y_inner = res.l_um + prim.POLY_RES_EXT_UM - prim.CONTACT_ROW_MARGIN_UM
+    span = (y_inner - prim.CONTACT_ROW_MARGIN_UM) - (y_outer + prim.CONTACT_ROW_MARGIN_UM)
+    if span >= prim.CONTACT_SIZE_UM:
+        raise NotImplementedError(
+            "poly-resistor contact land is wide enough for a multi-contact row; "
+            "this pure-Python mirror only covers the single-contact fallback"
+        )
+    y0 = dev.snap_um((y_outer + y_inner) / 2.0 - prim.CONTACT_SIZE_UM / 2.0)
+    return (res.w_um / 2.0, y0 + prim.CONTACT_SIZE_UM / 2.0)
+
+
 def max_tap_distance_um() -> float:
     """Worst-case in-plane distance from any resistor to the nearest guard-ring band.
 
@@ -130,8 +160,9 @@ class BiasResistorsResult:
     footprint: tuple = (0.0, 0.0, 0.0, 0.0)
 
 
-def build(outdir: Path | None = None) -> BiasResistorsResult:
-    canvas = prim.Canvas(TOP_CELL)
+def build(outdir: Path | None = None, canvas: prim.Canvas | None = None) -> BiasResistorsResult:
+    """``canvas`` draws into a caller-supplied canvas -- see ``ring.build()``."""
+    canvas = prim.Canvas(TOP_CELL) if canvas is None else canvas
     xs = column_x0_um()
 
     ports: list[ResistorPorts] = []

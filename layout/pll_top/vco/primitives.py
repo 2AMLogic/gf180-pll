@@ -40,8 +40,9 @@ trade was made explicit rather than silent.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Iterable
+from typing import Iterable, Iterator
 
 from . import devices as dev
 
@@ -217,6 +218,41 @@ class Canvas:
         self.top = self.layout.create_cell(self.top_name)
         self._layer_index = {name: self.layout.layer(*gds) for name, gds in LAYER.items()}
         self.pins: dict[str, list[tuple[float, float, float, float]]] = {}
+        self._dx = 0.0
+        self._dy = 0.0
+        self._pin_scope: dict | None = None
+
+    @contextmanager
+    def at(self, dx: float, dy: float) -> Iterator[dict]:
+        """Draw everything inside this block translated by ``(dx, dy)``.
+
+        The one mechanism ``block.py`` needs to place five separately-written
+        sub-block generators into one flat top cell without any of them
+        learning about placement: each generator keeps computing in its own
+        local coordinates (and stays byte-identically correct when built
+        standalone, where the offset is ``(0, 0)``), while the assembler
+        chooses where those coordinates land.
+
+        Flat, not hierarchical, deliberately: the assembler's own top-level
+        routing has to *merge* with sub-block shapes (a via1 landing on a
+        sub-block's own Metal1 pin, a Metal2 track extended past a sub-block's
+        boundary), and two shapes that merge into one polygon for DRC must be
+        in the same cell -- a cell instance's shapes cannot be grown by the
+        parent. Hierarchy would buy compactness and cost exactly the property
+        this block's DRC run has to prove.
+
+        Yields a per-scope pin dict, so the assembler can tell *which*
+        sub-block a ``GND_VCO`` pin came from (``Canvas.pins`` is a single
+        flat registry, and every sub-block declares that same net).
+        Coordinates recorded in both dicts are absolute (post-offset).
+        """
+        prev = (self._dx, self._dy, self._pin_scope)
+        scope: dict[str, list[tuple[float, float, float, float]]] = {}
+        self._dx, self._dy, self._pin_scope = dx, dy, scope
+        try:
+            yield scope
+        finally:
+            self._dx, self._dy, self._pin_scope = prev
 
     def _u(self, v: float) -> int:
         """Micron -> database units, snapped to the manufacturing grid.
@@ -237,17 +273,34 @@ class Canvas:
             x0, x1 = x1, x0
         if y1 < y0:
             y0, y1 = y1, y0
-        box = self._db.Box(self._u(x0), self._u(y0), self._u(x1), self._u(y1))
+        box = self._db.Box(
+            self._u(x0 + self._dx),
+            self._u(y0 + self._dy),
+            self._u(x1 + self._dx),
+            self._u(y1 + self._dy),
+        )
         self.top.shapes(self._layer_index[layer]).insert(box)
 
     def label(self, layer: str, text: str, x: float, y: float) -> None:
         self.top.shapes(self._layer_index[layer]).insert(
-            self._db.Text(text, self._db.Trans(self._db.Vector(self._u(x), self._u(y))))
+            self._db.Text(
+                text,
+                self._db.Trans(self._db.Vector(self._u(x + self._dx), self._u(y + self._dy))),
+            )
         )
 
     def pin(self, net: str, x0: float, y0: float, x1: float, y1: float, layer: str = "metal1") -> None:
-        """Record a Metal1 (or Metal2) landing pad as a named net pin."""
-        self.pins.setdefault(net, []).append((_r(x0), _r(y0), _r(x1), _r(y1)))
+        """Record a Metal1 (or Metal2) landing pad as a named net pin.
+
+        The recorded box is **absolute** -- ``at()``'s translation applied --
+        so an assembler reading ``pins`` back gets coordinates it can route
+        to directly. Standalone builds have a zero offset, so this is
+        unchanged for every existing caller.
+        """
+        box = (_r(x0 + self._dx), _r(y0 + self._dy), _r(x1 + self._dx), _r(y1 + self._dy))
+        self.pins.setdefault(net, []).append(box)
+        if self._pin_scope is not None:
+            self._pin_scope.setdefault(net, []).append(box)
         self.label(layer, net, (x0 + x1) / 2.0, (y0 + y1) / 2.0)
 
     def write_gds(self, path) -> None:
@@ -500,6 +553,32 @@ def m2_wire(canvas: Canvas, x0: float, x1: float, y: float, width: float = METAL
     y0, y1 = y - width / 2.0, y + width / 2.0
     canvas.rect("metal2", min(x0, x1), y0, max(x0, x1), y1)
     return (min(x0, x1), y0, max(x0, x1), y1)
+
+
+def m2_route(canvas: Canvas, points: Iterable[tuple[float, float]], width: float = METAL2_WIRE_WIDTH_UM) -> None:
+    """A Manhattan Metal2 polyline through ``points`` (block-level routing).
+
+    Every segment is drawn ``width/2`` long past *both* of its endpoints, so a
+    corner between two segments is a full-width rectangle union rather than a
+    butt joint -- the same construction (and for the same M1.1/M1.2a-class
+    reason) ``route_pads()`` uses on Metal1, see its own comment. The
+    half-width overhang at the polyline's two free ends is deliberate too: a
+    route that lands on a via1 wants the pad fully covered, and a route that
+    merges into an existing track wants a real overlap with it.
+
+    Raises on a non-Manhattan segment rather than drawing a diagonal: every
+    caller here is placing routes into hand-checked spacing channels, and a
+    silently-drawn diagonal would be a shape none of that reasoning covers.
+    """
+    pts = list(points)
+    half = width / 2.0
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        if abs(y1 - y0) < 1e-9:
+            canvas.rect("metal2", min(x0, x1) - half, y0 - half, max(x0, x1) + half, y0 + half)
+        elif abs(x1 - x0) < 1e-9:
+            canvas.rect("metal2", x0 - half, min(y0, y1) - half, x0 + half, max(y0, y1) + half)
+        else:
+            raise ValueError(f"non-Manhattan Metal2 segment ({x0},{y0}) -> ({x1},{y1})")
 
 
 def via1_stack(canvas: Canvas, x: float, y: float) -> tuple:

@@ -27,11 +27,15 @@ time as ``#293``'s own acceptance-criteria checklist is worked through.
   V-to-I core transistors: ``MP1``/``MP2``/``MN1``/``MN2``/``MSU1``-``MSU3``/
   ``MPR``/``MD1``/``MD2``/``MOFF``/``MVI``/``MSUM``) -- see
   ``vtoi_core.py``'s module docstring for the layout.
-* Still absent, deliberately: the inter-sub-block wiring that merges ring +
-  bias generator (resistors + V-to-I core) + mirror + buffer under one
-  shared guard ring, and the combined block's own standalone DRC run --
-  see ``vtoi_core.py``'s module docstring for why that stayed out of scope
-  here.
+* The final increment added no device table at all: ``block.py`` wires the
+  five sub-blocks these tables describe into one guard-ringed, DRC-clean
+  layout, which is routing and placement rather than new devices. Every net
+  it joins is already named in the tables above -- ``BIAS_RESISTORS``'s own
+  ``top_net`` fields against ``VTOI_RESISTOR_NETS``, ``VTOI_OUT_NET``
+  against ``CASCADE_A.always_on.gate_net``, ``MIRROR_OUT_NETS`` against the
+  ring stages' ``VBP``/``VBN`` gate nets, and ``BUFFER_IN_NET`` against the
+  ring's own stage-5 output -- which is what made that increment mechanical
+  rather than a re-derivation.
 """
 
 from __future__ import annotations

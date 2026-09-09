@@ -122,8 +122,9 @@ def stage_center_x_um() -> tuple[float, ...]:
     return tuple(x + st.max_w_um / 2.0 for x, st in zip(xs, dev.BUFFER_STAGES))
 
 
-def build(outdir: Path | None = None) -> BufferResult:
-    canvas = prim.Canvas(TOP_CELL)
+def build(outdir: Path | None = None, canvas: prim.Canvas | None = None) -> BufferResult:
+    """``canvas`` draws into a caller-supplied canvas -- see ``ring.build()``."""
+    canvas = prim.Canvas(TOP_CELL) if canvas is None else canvas
     xs = column_x0_um()
     pmos_y0, _ = pmos_y_range()
 

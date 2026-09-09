@@ -42,8 +42,10 @@ exact same net names** ``bias_resistors.py`` already uses for its own
 one shared guard ring, and running one combined DRC pass) is a
 well-defined, mechanical follow-up rather than a re-derivation. That
 follow-up, plus the identical merge with ``ring.py``/``mirror.py``/
-``buffer.py``, is issue #293's own remaining scope after this increment --
-see ``bias_resistors.py``'s module docstring for the same call made for the
+``buffer.py``, has since landed as ``block.py`` -- and it *was* mechanical:
+it adds no device geometry at all, only the routes between the pins these
+five generators already agreed on, plus one block-level guard ring.
+See ``bias_resistors.py``'s module docstring for the same call made for the
 resistor trio.
 
 WHY THIS BLOCK USES THE SAME METAL2-MESH ROUTING AS ``mirror.py``
@@ -385,9 +387,9 @@ class VtoiCoreResult:
 
 
 class _Builder:
-    def __init__(self) -> None:
+    def __init__(self, canvas: prim.Canvas | None = None) -> None:
         self.plan = plan()
-        self.canvas = prim.Canvas(TOP_CELL)
+        self.canvas = prim.Canvas(TOP_CELL) if canvas is None else canvas
         self.net_x: dict[tuple[str, str], list[float]] = {}
 
     # -- escapes (identical construction to mirror.py's own -- see that
@@ -559,8 +561,9 @@ class _Builder:
         return VtoiCoreResult(canvas=self.canvas, plan=p, footprint=p.outer, net_x=self.net_x)
 
 
-def build(outdir: Path | None = None) -> VtoiCoreResult:
-    result = _Builder().build()
+def build(outdir: Path | None = None, canvas: prim.Canvas | None = None) -> VtoiCoreResult:
+    """``canvas`` draws into a caller-supplied canvas -- see ``ring.build()``."""
+    result = _Builder(canvas).build()
     if outdir is not None:
         outdir = Path(outdir)
         outdir.mkdir(parents=True, exist_ok=True)

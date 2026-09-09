@@ -46,12 +46,23 @@ boundary regions and text labels?), not a stronger DRC claim.
 | `pll_floorplan_skeleton` DRC, table `main` | clean (no rule keys off layer 0/0) | `Klayout DRC run is clean. GDS has no DRC violations.` | **PASS** |
 
 Skeleton bounding-box extent (block rectangles only, excluding the VCO guard
-ring's outward margin): 117,975 µm² (0.117975 mm²) — a sanity cross-check
+ring's outward margin): **148,157 µm² (0.148157 mm²)** — a sanity cross-check
 against `PLL-FLOORPLAN.md`'s area-budget table, not the same number as that
 table's ROM footprint estimates (this bbox includes the inter-domain spacing
 channels the budget's top-level overhead multiplier accounts for
 separately, and does not include the VCO guard ring's own outward extent).
-Both numbers are under the < 0.15 mm² draft target.
+Still under the < 0.15 mm² draft target, but only just.
+
+**Regenerated for issue #293's assembled VCO block** (was 117,975 µm² when
+this record was first written, with `VCO_CORE` a 140 × 100 µm ROM
+placeholder). `VCO_CORE` is now the real, wired, DRC-clean VCO block's own
+guard-ring box — 294.78 × 148.18 µm, 43,680 µm² — which is a 2.6–4.0×
+overrun against `PLL-FLOORPLAN.md` §5's 0.011–0.017 mm² ROM row for the
+whole VCO, and takes this bounding box from ≈21 % headroom against the draft
+target to ≈1.2 %. §5's own "fail-loud condition" asks for exactly this to be
+stated rather than rounded away; the full accounting is in
+[`../vco-layout/PROOF-block.md`](../vco-layout/PROOF-block.md) and
+`layout/floorplan/skeleton.py`'s own module docstring.
 
 ## Artifacts
 
