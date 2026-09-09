@@ -68,20 +68,29 @@ physical location of every boundary connection it needs to make, without
 caring at all how ``div23_cell`` wired its own interior.
 
 Those translated points are fed into the *same* per-net Metal2/3
-riser-to-bus fabric (:func:`devgen.route_net`/:class:`devgen.NetTracks`)
-this package's every other composite already uses, mixed in with this
-module's own freshly-drawn glue-logic pads -- one shared ``nets`` dict, one
-shared :class:`devgen.NetTracks` pass, exactly like ``div23_cell.py``'s own
-``build()``. The only new constraint this introduces is that the *shared*
-routing base_y must sit above every div23_cell instance's own already-
-flattened internal top-of-footprint (each instance's own internal Metal2/3
-bus fabric is already baked into its footprint's own top edge) -- so a new,
-higher-level riser continuing straight up from one of those instances' own
-boundary pads never has to cross that instance's own internal geometry
-sideways, only extend further up the same net's own already-reserved x
-column (extending a net's own riser upward, at the same x, is the "two
-risers for the same net... not a problem" case ``devgen.py``'s own "Composite
-macro routing fabric" section documents).
+riser-to-bus fabric (:func:`devgen.route_net`) this package's every other
+composite already uses, mixed in with this module's own freshly-drawn
+glue-logic pads -- one shared ``nets`` dict, one shared track-assignment
+pass, exactly like ``div23_cell.py``'s own ``build()``. The only new
+constraint this introduces is that the *shared* routing base_y must sit
+above every div23_cell instance's own already-flattened internal
+top-of-footprint (each instance's own internal Metal2/3 bus fabric is
+already baked into its footprint's own top edge) -- so a new, higher-level
+riser continuing straight up from one of those instances' own boundary pads
+never has to cross that instance's own internal geometry sideways, only
+extend further up the same net's own already-reserved x column (extending a
+net's own riser upward, at the same x, is the "two risers for the same
+net... not a problem" case ``devgen.py``'s own "Composite macro routing
+fabric" section documents).
+
+This module's own track-assignment pass is :func:`devgen.pack_tracks`, not
+:class:`devgen.NetTracks` (issue #341) -- every other composite in this
+package still uses the latter, unchanged; see :func:`devgen.pack_tracks`'s
+own docstring/module-level comment for why this block's own top-level pass
+specifically benefits from reusing a track across non-colliding nets rather
+than handing out a fresh one per net, and
+``layout/evidence/divider-chain-layout/PROOF-track-packing.md`` for the
+measured result.
 
 GLUE LOGIC: THE SAME FLAT-COMPOSITE FABRIC AS ``div23_cell.py``
 ------------------------------------------------------------------
@@ -110,9 +119,12 @@ periodic taps are tied to ``VDD_DIV`` directly, not ``VDD``), lands on one
 Metal1/2/3 fabric carrying only that name. Since this block's own generated
 GDS contains no other supply net, ``VDD_DIV`` is -- by construction, not by
 convention -- never physically merged with any ``VDD``/``VDD_VCO`` segment;
-its own Metal2 bus (built by the shared :class:`devgen.NetTracks` pass, one
+its own Metal2 bus (built by the shared track-assignment pass, one
 continuous run spanning every tap/pin on the net) *is* this block's own
-supply trunk.
+supply trunk. ``VDD_DIV`` (like ``VSS``) reaches every column in the block,
+so :func:`devgen.pack_tracks` still gives it its own dedicated track --
+reuse only helps nets whose own extent leaves room for another net's bus,
+which a block-wide supply trunk never does.
 
 REFERENCE NETLIST: A FLATTENED RE-EXPRESSION OF THE EXISTING GENERATED ONE
 ------------------------------------------------------------------------------
@@ -195,7 +207,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import devgen, dff_tg_3v3, div23_cell, inv2x_3v3, inv_3v3, nand2_3v3, nand3_3v3, nor2_3v3
-from .devgen import Canvas, NetTracks, offset_pad_x, pad_center, route_net, well_tap
+from .devgen import Canvas, offset_pad_x, pack_tracks, pad_center, route_net, well_tap
 
 TOP_CELL = "divider_chain"
 
@@ -586,15 +598,20 @@ def build(outdir: Path | None = None) -> DividerChainLayout:
 
     glue_nwell_box = devgen.nwell_over(canvas, pfet_boxes)
 
-    # --- unify: one shared NetTracks pass, based above every div23_cell
-    # instance's own already-flattened top edge and the glue logic's own
-    # nwell top -- see module docstring's "ROUTING THE SIX INSTANCES' BOUNDARY
-    # PINS" section for why this is safe. ---
+    # --- unify: one shared, *packed* track assignment, based above every
+    # div23_cell instance's own already-flattened top edge and the glue
+    # logic's own nwell top -- see module docstring's "ROUTING THE SIX
+    # INSTANCES' BOUNDARY PINS" section for why a shared base_y is safe, and
+    # devgen.py's "track reuse" section (issue #341) for why this reuses one
+    # track_y across every net whose drawn extent does not collide, instead
+    # of devgen.NetTracks's one-track-per-net scheme every other module in
+    # this package still uses (unchanged there -- this is this block's own
+    # top-level pass only). ---
     max_div23_top = max(dy + div23.footprint[3] for _dx, dy in offsets)
     base_y = max(max_div23_top, glue_nwell_box[3]) + 3.0
-    tracks = NetTracks(base_y=base_y)
+    track_y = pack_tracks(nets, base_y=base_y)
     for net, pads in nets.items():
-        route_net(canvas, net, pads, tracks.get(net))
+        route_net(canvas, net, pads, track_y[net])
 
     # Label every net this module itself routes -- not just this block's own
     # 17 official BOUNDARY_NETS -- with its own reference-netlist name. See

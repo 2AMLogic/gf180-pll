@@ -51,9 +51,26 @@ explicit keyword arguments rather than hardcoding a shared value here, so
 each submodule keeps deriving them from its own
 ``CONTACT_SIZE_UM``/``CONTACT_PITCH_UM``/``CONTACT_ROW_MARGIN_UM`` /
 ``VIA1_SIZE_UM``/``VIA2_SIZE_UM``/``VIA_ENCLOSURE_UM``/``METAL3_WIRE_WIDTH_UM``
-constants, unchanged. ``pfd_cp/cp_dumpbuf.py``'s own ``_riser()`` is
-structurally different (a separate ``_rect_extra()`` helper and a different
-via-landing sequence) and stays put -- see that function's own docstring.
+constants, unchanged.
+
+Two of this package's risers are *structurally* different from ``_riser()``
+and deliberately stay local, each documented at its own definition:
+
+* ``pfd_cp/cp_dumpbuf.py``'s -- a separate ``_rect_extra()`` helper and a
+  different via-landing sequence.
+* ``lock_detector/primitives.py``'s -- since issue #322 it moves each
+  riser's lane change onto **Metal1** before Via1 (``lane_dx``/``jog_y``,
+  driven by that module's ``RiserLanes`` placer and its
+  ``Canvas.net()``/``Canvas.via()`` net tagging). That is safe only under
+  a module-local invariant -- lock_detector draws no Metal1 shape wider
+  than one device pad -- which is **false** for ``divider_chain/devgen.py``
+  (``v_wire()``/``h_wire()``/bypass lanes), so the capability must not be
+  offered from here: cross-net metal that merges with no via is invisible
+  to the DRC deck, which is exactly how issue #322's 114 shorts survived.
+
+``divider_chain/devgen.py`` is therefore ``_riser()``'s only caller today;
+``_via_square()``, ``_contact_positions()`` and ``bbox_union()`` are still
+shared by all of them, including the two modules above.
 """
 
 from __future__ import annotations

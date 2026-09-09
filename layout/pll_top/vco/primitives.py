@@ -559,6 +559,52 @@ def tap_strip(canvas: Canvas, kind: str, x0: float, y0: float, x1: float, y1: fl
     canvas.pin(net, x0, y0, x1, y1)
 
 
+def rect_frame(
+    canvas: Canvas,
+    layer: str,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    width: float,
+) -> None:
+    """A **hollow** rectangular frame on ``layer``: ``[x0,y0,x1,y1]`` minus its
+    own ``width``-inset interior.
+
+    Drawn as four corner-overlapping bands -- exactly the construction
+    ``guard_ring()`` uses for its ``tap_strip()`` bands -- rather than as a
+    filled ``rect()``. The distinction is load-bearing for ``nwell``: a filled
+    rectangle whose bbox spans a whole block puts every device inside that
+    block *in the well*, which the foundry DRC deck does not catch (its
+    rules are edge/spacing-based, and an NMOS active island sitting well
+    inside an oversized n-well looks exactly like a legitimate n-well tap to
+    them) and metal-only connectivity extraction cannot see at all. It only
+    surfaces at LVS, as an unrecognisable device (issue #339). This helper
+    exists so the hollow shape is a single named primitive with its own
+    regression tests rather than an easily-mistyped four-``rect()`` idiom at
+    each call site.
+
+    The four bands union into one polygon-with-a-hole after merge, so the
+    frame is DRC-continuous (no butt joints at the corners) -- the same
+    property ``guard_ring()``'s own docstring claims for its bands.
+
+    Raises if ``width`` is not small enough to leave a real hole: a "frame"
+    whose bands meet in the middle is a filled rectangle, i.e. silently the
+    very bug this function exists to prevent.
+    """
+    if width <= 0.0:
+        raise ValueError(f"rect_frame() width must be positive, got {width}")
+    if 2 * width >= min(x1 - x0, y1 - y0):
+        raise ValueError(
+            f"rect_frame() width {width} leaves no hole in box "
+            f"({x0},{y0})-({x1},{y1}) -- that is a filled rect, not a frame"
+        )
+    canvas.rect(layer, x0, y1 - width, x1, y1)  # top
+    canvas.rect(layer, x0, y0, x1, y0 + width)  # bottom
+    canvas.rect(layer, x0, y0 + width, x0 + width, y1 - width)  # left
+    canvas.rect(layer, x1 - width, y0 + width, x1, y1 - width)  # right
+
+
 def guard_ring(
     canvas: Canvas,
     kind: str,

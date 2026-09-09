@@ -726,20 +726,13 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
     # --- 8b. block-level VDD_VCO n-well tap ring, concentric outside the
     # GND_VCO substrate ring (issue #324). ``guard_ring(kind="n")`` draws only
     # the ncomp/nplus/contact/Metal1 bands, so the n-well those bands sit in is
-    # this caller's own four rectangles -- drawn as a closed frame (top and
-    # bottom spanning the full width, left and right filling between) so the
-    # union is one annulus, not four islands that happen to touch. ---
+    # this caller's own responsibility -- drawn with ``rect_frame()`` (issue
+    # #339) rather than a single filled ``rect()`` so the well is a real
+    # annulus (a filled slab put every device in the block inside the well in
+    # PR #333, undetected by DRC or connectivity extraction; see
+    # ``rect_frame()``'s own docstring). ---
     nwr, nwt = p.nwell_ring, p.nwell_tap
-    inner = (
-        nwr[0] + NWELL_RING_WIDTH_UM,
-        nwr[1] + NWELL_RING_WIDTH_UM,
-        nwr[2] - NWELL_RING_WIDTH_UM,
-        nwr[3] - NWELL_RING_WIDTH_UM,
-    )
-    canvas.rect("nwell", nwr[0], inner[3], nwr[2], nwr[3])  # top
-    canvas.rect("nwell", nwr[0], nwr[1], nwr[2], inner[1])  # bottom
-    canvas.rect("nwell", nwr[0], inner[1], inner[0], inner[3])  # left
-    canvas.rect("nwell", inner[2], inner[1], nwr[2], inner[3])  # right
+    prim.rect_frame(canvas, "nwell", *nwr, NWELL_RING_WIDTH_UM)
     prim.guard_ring(canvas, "n", *nwt, NWELL_RING_TAP_WIDTH_UM, VDD_NET)
 
     # --- 9. carried-forward 22 pF decap, against this block's VDD_VCO pin --

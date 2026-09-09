@@ -60,6 +60,20 @@ def _contains(outer, inner) -> bool:
     )
 
 
+def _box(x0: float, y0: float, x1: float, y1: float):
+    """A ``klayout.db.Box`` from float microns, on the same 1 nm/dbu grid and
+    with the same ``primitives.Canvas._u()`` grid snap the generators draw on
+    -- so a box built here compares exactly against a drawn shape's bbox."""
+    import klayout.db as db
+
+    grid_dbu = int(round(dev.LAYOUT_GRID_UM * 1000))  # Canvas' own dbu = 1 nm
+
+    def u(v: float) -> int:
+        return int(round(v * 1000 / grid_dbu)) * grid_dbu
+
+    return db.Box(u(x0), u(y0), u(x1), u(y1))
+
+
 class DeviceTableTests(unittest.TestCase):
     """devices.STAGE_FETS matches design/netlist/vco.spice's XMPH/XMP/XMN/XMNT."""
 
@@ -1176,6 +1190,161 @@ class AssembledVcoBlockPlacementTests(unittest.TestCase):
         without = ring.footprint_um(with_decap=False)
         self.assertLess(without[2], with_decap[2])
         self.assertAlmostEqual(self.boxes["ring"][2] - self.boxes["ring"][0], without[2] - without[0])
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class RectFramePrimitiveTests(unittest.TestCase):
+    """``primitives.rect_frame()`` draws a hole, and refuses not to (issue #339).
+
+    Regression cover for the underlying failure class this issue names: PR
+    #333's block-level n-well ring was a single filled ``canvas.rect()``
+    spanning the ring's outer box, which put every device in the block inside
+    n-well. Neither the foundry DRC deck (edge/spacing rules only) nor
+    ``connectivity_report()`` (metal-only extraction) can see that -- it only
+    surfaces at LVS. ``rect_frame()`` exists so the hollow shape is a single
+    named primitive with its own tests, rather than an easily-mistyped
+    four-``rect()`` idiom at each call site.
+    """
+
+    def _frame_region(self, canvas, layer="nwell"):
+        import klayout.db as db
+
+        idx = canvas.layout.layer(*prim.LAYER[layer])
+        return db.Region(canvas.top.shapes(idx)).merged()
+
+    def test_the_four_bands_merge_into_one_polygon_with_one_hole(self):
+        canvas = prim.Canvas("frame_test")
+        prim.rect_frame(canvas, "nwell", 0.0, 0.0, 20.0, 10.0, 1.5)
+        region = self._frame_region(canvas)
+        self.assertEqual(region.count(), 1)
+        poly = next(region.each())
+        self.assertEqual(poly.holes(), 1)
+        self.assertEqual(poly.bbox(), _box(0.0, 0.0, 20.0, 10.0))
+
+    def test_the_hole_is_the_width_inset_box_and_carries_no_geometry(self):
+        import klayout.db as db
+
+        canvas = prim.Canvas("frame_hole_test")
+        prim.rect_frame(canvas, "nwell", 0.0, 0.0, 20.0, 10.0, 1.5)
+        region = self._frame_region(canvas)
+        hole = db.Region(_box(1.5, 1.5, 18.5, 8.5))
+        self.assertTrue((region & hole).is_empty())
+        # ...and the frame really covers everything outside that hole.
+        self.assertTrue((db.Region(_box(0.0, 0.0, 20.0, 10.0)) - hole - region).is_empty())
+
+    def test_a_width_that_would_fill_the_box_is_refused(self):
+        canvas = prim.Canvas("frame_reject_test")
+        with self.assertRaises(ValueError):
+            prim.rect_frame(canvas, "nwell", 0.0, 0.0, 20.0, 10.0, 5.0)
+        with self.assertRaises(ValueError):
+            prim.rect_frame(canvas, "nwell", 0.0, 0.0, 20.0, 10.0, 0.0)
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class AssembledVcoBlockNwellRingGeometryTests(unittest.TestCase):
+    """The block-level n-well ring the assembler actually *draws* (issue #339).
+
+    ``AssembledVcoBlockPlacementTests`` above checks the ring's arithmetic
+    (``NWELL_RING_*`` against the rules they cite); those assertions are
+    blind to *how* the geometry got drawn, which is exactly where PR #333's
+    defect lived -- the numbers were fine, a single ``canvas.rect()`` call
+    was not. These assertions run against ``build()``'s own canvas instead,
+    so this class runs in the same unit-test pass as the rest of the suite
+    rather than needing a manual KLayout session or an external
+    ``klt ring-check`` invocation to catch a recurrence.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import klayout.db as db
+
+        cls.db = db
+        cls.result = vco_block.build()
+        canvas = cls.result.canvas
+
+        def region(name):
+            idx = canvas.layout.layer(*prim.LAYER[name])
+            return db.Region(canvas.top.shapes(idx)).merged()
+
+        cls.nwell = region("nwell")
+        cls.pplus = region("pplus")
+        # comp under poly, with nplus implant == a real NMOS gate-crossing
+        # active area. Every actual NMOS device in the block, and nothing
+        # else (an n-tap band has no poly over it).
+        cls.nmos_gate = region("poly2") & region("comp") & region("nplus")
+        p = cls.result.placement
+        cls.placement = p
+        # The block-level ring is the one merged n-well polygon whose bbox is
+        # the whole ring box (``p.nwell_ring``); every other n-well polygon
+        # in the layout is a sub-block's own PMOS well, entirely inside this
+        # ring's hole.
+        ring_polys = [q for q in cls.nwell.each() if q.bbox() == _box(*p.nwell_ring)]
+        cls.ring_polys = ring_polys
+        cls.block_frame = db.Region(ring_polys) if ring_polys else db.Region()
+        w = vco_block.NWELL_RING_WIDTH_UM
+        x0, y0, x1, y1 = p.nwell_ring
+        cls.nwell_hole = (x0 + w, y0 + w, x1 - w, y1 - w)
+
+    def test_the_block_level_nwell_is_an_annulus_not_a_slab(self):
+        # The one assertion that would have failed on PR #333 as first
+        # written: `klt ring-check --layers '[[21,0]]'` reported
+        # "solid, hole-less region, not an annulus" there.
+        self.assertEqual(
+            len(self.ring_polys), 1, "no single polygon spans the block-level n-well ring"
+        )
+        self.assertGreaterEqual(
+            self.ring_polys[0].holes(), 1, "the block-level n-well ring has no hole"
+        )
+
+    def test_the_annulus_hole_contains_every_sub_block(self):
+        hole = self.db.Region(_box(*self.nwell_hole))
+        self.assertTrue(
+            (self.block_frame & hole).is_empty(),
+            "the block-level n-well reaches into its own hole",
+        )
+        for name, b in self.placement.boxes().items():
+            self.assertTrue(
+                (self.db.Region(_box(*b)) - hole).is_empty(),
+                f"{name} is not fully inside the n-well ring's hole",
+            )
+
+    def test_no_nmos_active_area_anywhere_in_the_block_sits_under_nwell(self):
+        # Whole-layer, not just the block ring: an NMOS device inside an
+        # n-well is not a DRC error the deck can see (its rules are
+        # edge/spacing based) and connectivity_report() extracts metal only,
+        # so this check is the block's only pre-LVS gate on it.
+        self.assertGreater(self.nmos_gate.area(), 0, "no NMOS gate area found -- check broken")
+        self.assertTrue(
+            (self.nmos_gate & self.nwell).is_empty(),
+            "NMOS gate-crossing active area is inside n-well",
+        )
+
+    def test_the_block_ring_does_not_engulf_the_substrate_ring_pplus(self):
+        # The GND_VCO substrate ring and every sub-block's own p-taps must
+        # stay out of the block-level well.
+        self.assertTrue(
+            (self.block_frame & self.pplus).is_empty(),
+            "substrate-tie pplus falls under the block-level n-well ring",
+        )
+
+    def test_the_block_ring_carries_its_own_vdd_tied_ntap(self):
+        # The ring is only a real well tie if the n-tap comp it exists for is
+        # inside the drawn well -- i.e. the frame must not be *so* hollow
+        # that it undercuts its own tap band (the opposite failure mode).
+        canvas = self.result.canvas
+        ntap = (
+            self.db.Region(canvas.top.shapes(canvas.layout.layer(*prim.LAYER["comp"])))
+            & self.db.Region(canvas.top.shapes(canvas.layout.layer(*prim.LAYER["nplus"])))
+        ).merged()
+        ring_band = self.db.Region(_box(*self.placement.nwell_ring)) - self.db.Region(
+            _box(*self.nwell_hole)
+        )
+        band_ntap = ntap & ring_band
+        self.assertGreater(band_ntap.area(), 0, "the block-level ring has no n-tap comp at all")
+        self.assertTrue(
+            (band_ntap - self.nwell).is_empty(),
+            "part of the block ring's n-tap comp is outside the drawn n-well",
+        )
 
 
 class AssembledVcoBlockFloorplanTests(unittest.TestCase):

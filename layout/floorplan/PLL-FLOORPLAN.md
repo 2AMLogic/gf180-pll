@@ -376,11 +376,65 @@ worth stating before anyone reaches for the obvious fix:
 **The `DIVIDER_LOCK` reconciliation is closed.** #296 and #310 each deferred
 sizing the shared divider/lock region to whichever landed second; #310 landed
 second and did it. `skeleton.py`'s `DIVIDER_LOCK` is now sized to contain
-both real footprints (2650.28 × 212.42 µm), with the two blocks stacked and
-separated by a full `DOMAIN_SPACING` — they are on different supply domains
-(`VDD_DIV` vs. `VDD`, §2), so sharing the region buys signal adjacency, never
-a shared supply segment. The 90 × 50 µm placement-plan estimate both blocks
-were nominally sized against is superseded and should not be cited again.
+both real footprints (2650.28 × 212.42 µm at #310, before §5.2's reduction
+below), with the two blocks stacked and separated by a full `DOMAIN_SPACING`
+— they are on different supply domains (`VDD_DIV` vs. `VDD`, §2), so sharing
+the region buys signal adjacency, never a shared supply segment. The 90 × 50
+µm placement-plan estimate both blocks were nominally sized against is
+superseded and should not be cited again.
+
+### 5.2 Revision: issue #341 packs the divider chain's routing tracks
+
+**Status: the overrun is smaller — ≈2.0× rather than ≈2.9× — but still real.**
+§5.1 named the divider chain's shared per-net Metal2 track band (≈71 nets ×
+0.75 µm pitch ≈ 53 µm of the block's 93.82 µm total height) as the single
+largest area term, and named two candidate fixes without attempting either:
+"localized per-row tracks, or a channel-router rather than
+one-global-track-per-net". This revision is the first of those.
+
+`devgen.py`'s `NetTracks` handed out one Metal2 track_y per net, monotonically
+increasing, never reused — correct for the sibling composites in this same
+package (`div23_cell`, `dff_tg_3v3`), whose nets mostly reach the full width
+of their own composite regardless, but wasteful for `divider_chain.py`'s own
+top-level assembly: 71 nets, many of them genuinely local, each still cost a
+full, mostly-empty track. The new `devgen.pack_tracks()` reuses one track_y
+across every net whose drawn Metal2 bus extent does not come within
+`METAL2_TRACK_PITCH_UM − METAL2_WIRE_WIDTH_UM` (0.41 µm, the same margin
+`NetTracks` already used between tracks in y) of another net's already on
+that track — the standard "left-edge algorithm" channel-router track
+assignment step, which is provably optimal for this 1-D interval-packing
+problem. 71 nets packed onto 22 tracks (16.5 µm), against 71 (53.25 µm)
+before.
+
+| Block | §5.1 real, as-drawn | §5.2 real, as-drawn | Δ | Evidence |
+|---|---|---|---|---|
+| Divider chain | 0.2471 mm² (2634.28 × 93.82 µm) | **0.1503 mm² (2634.28 × 57.07 µm)** | −39 % area, height only | `layout/evidence/divider-chain-layout/PROOF-track-packing.md` (#341) |
+| Divider chain + lock detector | 0.2546 mm² | **0.1578 mm²** | −38 % | both of #296's and #341's records |
+
+Re-running §5.1's own arithmetic with the new divider-chain number: 0.0369
+(loop filter) + 0.0312 (VCO) + 0.020 (PFD/CP, still ROM) + 0.1578 (divider +
+lock) = **0.2459 mm²**, i.e. **0.3074 mm²** after ×1.25 top-level overhead —
+against the < 0.15 mm² draft target, a **≈2.0× overrun**, down from §5.1's
+≈2.9×. `skeleton.py`'s `total_extent_um2()` bounding box moves the same way:
+~1.19 × 10⁶ µm² → **~1.09 × 10⁶ µm²**.
+
+**The width is unchanged, and §5.1's fold caveat is unchanged in spirit —
+narrowed, not resolved.** The divider chain is still one row of six
+`div23_cell` instances plus 46 glue-logic columns, and on its own it is still
+just over the entire 0.15 mm² die target. What §5.1 got right and this
+revision does not undo is that a row fold only pays off once the routing
+fabric stops charging one full-width band per row — which is exactly what
+this revision fixed. A fold is a follow-up (issue #344), not attempted here:
+re-deriving the six instances' placement grid and the glue logic's own
+layout for a multi-row assembly is a materially larger piece of work than
+this revision's own routing-fabric change, and #295's "six identical
+instances" acceptance criterion has to be re-proved for however many rows
+result.
+
+**Still not a DRC/LVS regression.** The divider chain is signoff-clean on the
+PDK's own decks at the new footprint, additionally re-proved LVS-clean
+against `design/netlist/divider_chain.spice` unchanged (`layout/evidence/
+divider-chain-layout/PROOF-track-packing.md`).
 
 ## 6. GDS skeleton
 

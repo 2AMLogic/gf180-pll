@@ -152,7 +152,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import partial
-from typing import Sequence
+from typing import ClassVar, Sequence
 
 try:
     from .. import _canvas
@@ -270,66 +270,27 @@ TAP_GAP_UM = 1.0  # clearance from the tap's own comp to the nearest device comp
 # the adjacent device's implant (NP.3/PP.3-class spacing, 0.16-0.43 um min)
 
 
-def _r(v: float) -> float:
-    return round(v, 6)
+_r = _canvas._r
 
 
 @dataclass
-class Canvas:
+class Canvas(_canvas.Canvas):
     """A thin ``klayout.db`` layout/cell wrapper, float-micron coordinates in.
 
     ``klayout.db`` is imported lazily (inside ``__post_init__``), so any
     caller that only touches this module's pure-Python dataclasses
     (:class:`Device`) stays importable with no PV environment -- same
     convention as ``pfd_cp/devgen.py``/``vco/primitives.py``/
-    ``layout/harness/cell.py``.
+    ``layout/harness/cell.py``. This is the shared
+    ``layout/pll_top/_canvas.Canvas`` (see issue #317, applied to this module
+    by issue #327) with this module's own ``LAYER`` table and ``pin()``
+    labelling on ``"metal1_label"`` (34/10) -- the *purpose* layer gf180mcu's
+    own official LVS deck actually reads net names from (see module
+    docstring), *not* the drawing layer a purely-visual label would use.
     """
 
-    top_name: str
-    dbu: float = 0.001
-
-    def __post_init__(self) -> None:
-        import klayout.db as db  # noqa: PLC0415
-
-        self._db = db
-        self.layout = db.Layout()
-        self.layout.dbu = self.dbu
-        self._dbu_per_um = int(round(1.0 / self.dbu))
-        self.top = self.layout.create_cell(self.top_name)
-        self._layer_index = {name: self.layout.layer(*gds) for name, gds in LAYER.items()}
-        self.pins: dict[str, list[tuple[float, float, float, float]]] = {}
-
-    def _u(self, v: float) -> int:
-        return int(round(v * self._dbu_per_um))
-
-    def rect(self, layer: str, x0: float, y0: float, x1: float, y1: float) -> None:
-        if x1 < x0:
-            x0, x1 = x1, x0
-        if y1 < y0:
-            y0, y1 = y1, y0
-        box = self._db.Box(self._u(x0), self._u(y0), self._u(x1), self._u(y1))
-        self.top.shapes(self._layer_index[layer]).insert(box)
-
-    def label(self, layer: str, text: str, x: float, y: float) -> None:
-        self.top.shapes(self._layer_index[layer]).insert(
-            self._db.Text(text, self._db.Trans(self._db.Vector(self._u(x), self._u(y))))
-        )
-
-    def pin(self, net: str, x0: float, y0: float, x1: float, y1: float) -> None:
-        """Record + label a Metal1 pad as a top-level net pin.
-
-        Labels on ``"metal1_label"`` (34/10), the purpose gf180mcu's own
-        official LVS deck actually reads (see module docstring) -- *not*
-        the drawing layer a purely-visual label would use.
-        """
-        self.pins.setdefault(net, []).append((_r(x0), _r(y0), _r(x1), _r(y1)))
-        self.label("metal1_label", net, (x0 + x1) / 2.0, (y0 + y1) / 2.0)
-
-    def write_gds(self, path) -> None:
-        options = self._db.SaveLayoutOptions()
-        options.select_cell(self.top.cell_index())
-        options.format = "GDS2"
-        self.layout.write(str(path), options)
+    LAYER: ClassVar[dict[str, tuple[int, int]]] = LAYER
+    PIN_LAYER: ClassVar[str] = "metal1_label"
 
 
 @dataclass(frozen=True)
@@ -911,11 +872,12 @@ def offset_pad_x(
     return (target_x, y_c)
 
 
-# Draw one square via + a Metal1/2/3 riser landing it on a shared bus --
-# shared with ``lock_detector/primitives.py`` (issue #332,
-# ``_canvas._via_square()``/``_canvas._riser()``). ``pfd_cp/cp_dumpbuf.py``'s
-# own ``_riser()`` is structurally different and is not part of this
-# consolidation -- see that function's own docstring.
+# Draw one square via + a Metal1/2/3 riser landing it on a shared bus
+# (issue #332, ``_canvas._via_square()``/``_canvas._riser()``). This module
+# is now ``_canvas._riser()``'s only caller: ``lock_detector/primitives.py``
+# shared it until issue #322, and ``pfd_cp/cp_dumpbuf.py`` never did -- both
+# of those risers are structurally different and stay local; see each one's
+# own docstring for why. ``_via_square()`` is still shared by all three.
 _riser = partial(
     _canvas._riser,
     via1_size_um=VIA1_SIZE_UM,
@@ -975,6 +937,118 @@ class NetTracks:
             self._assigned[net] = self._next_y
             self._next_y += self._pitch
         return self._assigned[net]
+
+
+# --- track *reuse* for a large, mostly-local net population (issue #341) ---
+#
+# :class:`NetTracks` is the right tool for a composite with a handful of
+# nets, most of which reach across the composite's *entire* width anyway
+# (``dff_tg_3v3``'s clock nets, ``div23_cell``'s internal nets): giving every
+# net its own track costs nothing extra there, because most tracks would end
+# up nearly full-width regardless.
+#
+# ``divider_chain.py``'s own top-level assembly is a different regime: 71
+# nets, many of which are genuinely *local* -- a one-hot-mux net whose two
+# pads are both inside the glue-logic region, or a chain net whose only two
+# far-apart uses still leave most of the block's width untouched by it.
+# Handing every one of those its own :data:`METAL2_TRACK_PITCH_UM`-tall track
+# regardless is exactly the "one global track per net, even though most nets
+# are local" cost issue #341 measured: ~71 tracks x 0.75 um = ~53 um, more
+# than half the block's total height, for a track band that (per net) is
+# mostly empty in x.
+#
+# :func:`pack_tracks` is the fix: the same *track assignment* step a real
+# channel router performs (not a channel router itself -- this package's
+# per-net Metal1-pad-to-Metal2-bus wiring via :func:`route_net` is
+# unchanged), reusing one track_y for every net whose drawn Metal2 bus
+# extent -- x_lo .. x_hi across all its own pads, exactly the rectangle
+# :func:`route_net` draws -- does not come within
+# :data:`METAL2_TRACK_PITCH_UM` - :data:`METAL2_WIRE_WIDTH_UM` of another
+# net's already on that track. This is the textbook "left-edge algorithm"
+# for interval-graph track assignment: sorting by each interval's own left
+# edge and greedily reusing the first track whose last-placed interval ends
+# early enough is known to use the *minimum* number of tracks for an
+# interval graph (the maximum number of nets whose extents mutually
+# overlap at any single x) -- so this is not a heuristic that might miss a
+# packing opportunity a smarter one would find, it is provably optimal for
+# this 1-D placement problem.
+#
+# Two full-width nets (this block's own ``VDD_DIV``/``VSS`` supply trunks,
+# whose pads span every column) can never share a track with anything, so
+# they alone still cost two full tracks -- :func:`pack_tracks` cannot do
+# better than :class:`NetTracks` there. The win is entirely on the nets
+# whose extent leaves the rest of the block's width free for something
+# else's bus.
+def _net_x_extent(pad_centers: Sequence[tuple[float, float]]) -> tuple[float, float]:
+    """The physical x-range one net's drawn Metal2 geometry occupies at its
+    own track_y -- not just :func:`route_net`'s own bus rectangle
+    (``x_lo - METAL2_WIRE_WIDTH_UM/2 .. x_hi + METAL2_WIRE_WIDTH_UM/2``), but
+    the wider of that and each end riser's own Via2/Metal2 landing square
+    (:func:`_canvas._riser`'s ``half_m3_top = VIA2_SIZE_UM/2 + VIA_ENCLOSURE_UM``,
+    which is wider than half the bus wire's own width) -- so a net's true
+    left/rightmost drawn shape at ``track_y`` is never underestimated at the
+    two extreme pads, where the landing square is what actually reaches
+    furthest, not the bus wire.
+    """
+    xs = [x for x, _ in pad_centers]
+    half = max(METAL2_WIRE_WIDTH_UM / 2.0, VIA2_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM)
+    return (min(xs) - half, max(xs) + half)
+
+
+def pack_tracks(
+    nets: dict[str, Sequence[tuple[float, float]]],
+    base_y: float,
+    *,
+    pitch: float = METAL2_TRACK_PITCH_UM,
+    clearance: float = METAL2_TRACK_PITCH_UM - METAL2_WIRE_WIDTH_UM,
+) -> dict[str, float]:
+    """Assign every net in ``nets`` a track_y, reusing a track across any
+    nets whose drawn extents (:func:`_net_x_extent`) do not come within
+    ``clearance`` of each other -- see this section's own module-level
+    comment for the algorithm and why it is optimal, not merely "good
+    enough".
+
+    ``clearance`` defaults to the same margin :class:`NetTracks` already
+    uses *between* two tracks in y (``METAL2_TRACK_PITCH_UM -
+    METAL2_WIRE_WIDTH_UM`` = 0.41 um, comfortably over M2.2a's 0.28 um
+    minimum Metal2 spacing) -- reused here as the required x-direction gap
+    between two different nets' bus rectangles sharing one track, rather
+    than re-derived, since it is the same rule (minimum same-layer Metal2
+    spacing) applying along the other axis.
+
+    Requires every net to have at least one pad (same precondition
+    :func:`route_net` already enforces); raises ``ValueError`` otherwise, one
+    net at a time, naming it -- the same discipline
+    :func:`build_stack_cell`/:func:`build_row_cell` already use for a caller
+    error rather than a confusing downstream KeyError.
+    """
+    extents: dict[str, tuple[float, float]] = {}
+    for net, pads in nets.items():
+        pads = list(pads)
+        if not pads:
+            raise ValueError(f"pack_tracks(): net {net!r} has no pads to route")
+        extents[net] = _net_x_extent(pads)
+
+    # Left-edge algorithm: process nets in increasing left-edge order (ties
+    # broken by name, for determinism), placing each on the first track
+    # whose most-recent occupant ends early enough to clear this net's own
+    # left edge by `clearance`; open a new track only when none does.
+    order = sorted(extents, key=lambda n: (extents[n][0], n))
+    track_right: list[float] = []
+    track_of: dict[str, int] = {}
+    for net in order:
+        lo, hi = extents[net]
+        for i, right in enumerate(track_right):
+            if lo >= right + clearance:
+                track_right[i] = hi
+                track_of[net] = i
+                break
+        else:
+            track_right.append(hi)
+            track_of[net] = len(track_right) - 1
+
+    return {net: base_y + i * pitch for net, i in track_of.items()}
+
 
 # ===========================================================================
 # ROW CELLS -- static-CMOS gates with real fan-in (issue #307, Part 2 of #295)
