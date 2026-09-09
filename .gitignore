@@ -19,6 +19,8 @@
 !layout/evidence/pfdcp-inv-proof/**/*.log
 # Same story again for the PFD block layout's DRC evidence (issue #300).
 !layout/evidence/pfd-layout/**/*.log
+# Same story again for the cp_dumpbuf block layout's DRC evidence (issue #302).
+!layout/evidence/cp-dumpbuf-layout/**/*.log
 __pycache__/
 .DS_Store
 
