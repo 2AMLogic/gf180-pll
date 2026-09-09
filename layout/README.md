@@ -39,8 +39,17 @@ transmission gate, the pass-device topology neither sibling family covers)
 `layout/evidence/divider-tgate-proof/PROOF.md`. The transmission gate
 needed two real generalizations beyond `pfd_cp/devgen.py`'s original API
 (`Device.body_net`, `build_stack_cell()`'s `bypass_nets`) — both docstrings
-document the concrete DRC/LVS failures that motivated each one. Built on
-that methodology, `dff_tg_3v3.py` (issue #308) assembles the first
+document the concrete DRC/LVS failures that motivated each one. Issue #307
+adds that family's four remaining combinational leaf cells —
+`nand2_3v3`, `nand3_3v3`, `nor2_3v3`, `inv2x_3v3` — via a second leaf-cell
+generator in the same module, `build_row_cell()`: a column/row placement
+model plus Metal1-strap/Metal2-track routing, because a static gate with
+real fan-in puts 3+ terminals on one net, which `build_stack_cell()` refuses
+by design. All four share one fixed row-cell frame (identical height and
+rail y-bands, so they abut) — see
+`layout/evidence/divider-rowcells-proof/PROOF.md`, including why
+single-layer routing provably cannot draw a NAND2 here. Built on the same
+methodology, `dff_tg_3v3.py` (issue #308) assembles the first
 `divider_chain` **composite**: a 20-transistor transmission-gate
 master-slave flop, 6x `inv_3v3` + 4x `tgate_3v3` placed side by side in one
 flat macro (not GDS-level `CellInstArray`, the same style
@@ -89,13 +98,19 @@ layout/
       rowgen.py                   row-style geometry/routing primitives for multi-gate blocks (issue #300)
       pfd_cells.py                 pfdcp_inv_3v3/pfdcp_nand2_3v3 as row-style cells (issue #300)
       pfd.py                       assembles the full mirror-symmetric PFD block; CLI entry point (issue #300)
-    divider_chain/            the divider_chain block family (issue #295/#306/#308)
+    divider_chain/            the divider_chain block family (issue #295/#306/#307/#308)
       devgen.py                  reusable device-list -> DRC-clean leaf-cell generator +
                                   composite Metal2/3 routing fabric (issue #308's
                                   draw_column()/route_net()/NetTracks/offset_pad_x())
-                                  (reused/generalized from pfd_cp/devgen.py)
+                                  (reused/generalized from pfd_cp/devgen.py);
+                                  build_stack_cell() = single column (#306),
+                                  build_row_cell() = fixed-frame row cell with fan-in (#307)
       inv_3v3.py                  inv_3v3.sch's device table + CLI entry point
       tgate_3v3.py                tgate_3v3.sch's device table + CLI entry point
+      nand2_3v3.py                nand2_3v3.sch's device table + CLI entry point (issue #307)
+      nand3_3v3.py                nand3_3v3.sch's device table + CLI entry point (issue #307)
+      nor2_3v3.py                 nor2_3v3.sch's device table + CLI entry point (issue #307)
+      inv2x_3v3.py                inv2x_3v3.sch's device table + CLI entry point (issue #307)
       dff_tg_3v3.py                dff_tg_3v3.sch's composite (6x inv_3v3 + 4x tgate_3v3,
                                     20 transistors) + CLI entry point (issue #308)
   evidence/
@@ -110,6 +125,8 @@ layout/
     pfd-layout/              PFD block GDS + DRC-clean report, mirror-symmetric UP/DN chains (issue #300)
     divider-inv-proof/       divider_chain inv_3v3 devgen proof: GDS + DRC/LVS reports (issue #306)
     divider-tgate-proof/     divider_chain tgate_3v3 devgen proof: GDS + DRC/LVS reports (issue #306)
+    divider-rowcells-proof/  divider_chain nand2/nand3/nor2/inv2x row cells: per-cell GDS +
+                             DRC/LVS reports, one shared PROOF.md (issue #307)
     divider-dff-proof/       divider_chain dff_tg_3v3 composite proof: GDS + DRC/LVS reports (issue #308)
     work/                    scratch re-run tree (git-ignored)
 ```

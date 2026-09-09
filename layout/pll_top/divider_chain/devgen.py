@@ -173,12 +173,15 @@ LAYER = {
     # invisible to that connectivity step, so a net "labelled" there is
     # still extracted as an anonymous node under LVS.
     "metal1_label": (34, 10),
-    # Metal2/Via1/Via2/Metal3 -- used only by the composite-macro routing
-    # fabric (:func:`route_net`/:class:`NetTracks`, added for issue #308's
-    # ``dff_tg_3v3``), not by any single leaf cell's own ``build_stack_cell()``
-    # geometry. See that function's docstring for why a multi-instance
-    # composite needs a dedicated cross-layer bus instead of Metal1-only
-    # wiring.
+    # Metal2/Via1/Via2/Metal3. Via1/Metal2 are used by
+    # :func:`build_row_cell`'s own strap/track routing (issue #307) and by
+    # the composite-macro routing fabric (:func:`route_net`/
+    # :class:`NetTracks`, issue #308's ``dff_tg_3v3``); Via2/Metal3 only by
+    # the latter. No single-column ``build_stack_cell()`` leaf cell (issue
+    # #306) draws on any of them, so those cells' generated GDS is unchanged
+    # by either addition. Same (layer, datatype) values as
+    # ``pfd_cp/rowgen.py``/``lock_detector/primitives.py``, both already
+    # DRC-clean on this deck.
     "via1": (35, 0),
     "metal2": (36, 0),
     "via2": (38, 0),
@@ -987,3 +990,591 @@ class NetTracks:
             self._assigned[net] = self._next_y
             self._next_y += self._pitch
         return self._assigned[net]
+
+# ===========================================================================
+# ROW CELLS -- static-CMOS gates with real fan-in (issue #307, Part 2 of #295)
+# ===========================================================================
+#
+# WHY build_stack_cell() IS NOT ENOUGH
+# ------------------------------------
+# :func:`build_stack_cell` draws exactly one vertical column and only
+# resolves 1- and 2-terminal nets (it raises ``ValueError`` on anything
+# else, by design). That covers ``inv_3v3``/``tgate_3v3`` -- issue #306's
+# two proof cells, two devices each, no fan-in. It cannot draw this issue's
+# NAND/NOR cells at all: ``design/nand3_3v3.sch``'s output ``Y`` has *four*
+# device terminals (the series NMOS stack's top drain plus each of three
+# parallel PMOS drains), and ``VDD`` has three.
+#
+# ``pfd_cp/rowgen.py`` (issue #300) hit the same wall for the PFD/CP block
+# and solved it with a horizontal-current-flow row generator wired into a
+# whole-block assembly. That module's cells are not standalone -- their
+# rails, taps and routing band belong to the block, not the cell -- so it is
+# not directly reusable for this issue's requirement (four *standalone*
+# DRC/LVS-clean leaf cells). :func:`build_row_cell` below is the
+# ``divider_chain`` package's own answer: it keeps ``devgen``'s
+# vertical-current-flow :func:`mosfet` geometry byte-for-byte (so the leaf
+# devices are the exact shapes #306 already proved clean) and adds a
+# column/row placement model plus a two-layer routing model around it.
+#
+# PLACEMENT MODEL: COLUMNS, NOT A SINGLE STACK
+# --------------------------------------------
+# A cell is an ordered list of :class:`Column`\s, left to right. Each column
+# holds at most one ``pulldown`` branch (nfet-only, bottom-to-top series
+# devices) and at most one ``pullup`` branch (pfet-only, bottom-to-top). All
+# pulldown branches share one baseline (:data:`ROW_PD_Y0`) and all pullup
+# branches share another (:data:`ROW_PU_Y0`) -- these are *fixed module
+# constants*, not derived per cell, which is what makes every cell this
+# function draws share one row-cell frame (see "ROW-CELL FRAME" below).
+#
+# Mapping a schematic onto columns is mechanical: one column per parallel
+# branch of whichever network has fan-in, with the *other* network's single
+# series branch living in the first column. ``nand2_3v3`` is two columns
+# (series NMOS pair + ``MPA`` | ``MPB``); ``nor2_3v3`` is two columns
+# (``MNA`` + series PMOS pair | ``MNB``); ``inv2x_3v3`` is one column.
+#
+# ROUTING MODEL: METAL1 STRAPS + METAL2 TRACKS (no same-layer crossings)
+# ----------------------------------------------------------------------
+# This is the part that had to change from a first, Metal1-only attempt,
+# and the reason is worth recording because it is a property of the
+# topology, not of any particular cell:
+#
+#   With one routing layer there is no crossing-free assignment for
+#   ``nand2_3v3``. Its output ``Y`` must reach *under* both pullup
+#   branches, and its two input nets must each reach *across* the cell from
+#   an NMOS gate to a PMOS gate. Whichever horizontal ordering the input
+#   spines take in the inter-row channel, one pullup branch's own Y drop or
+#   gate riser is left having to cross the other input's spine. Worked
+#   through exhaustively for nand2's four possible orderings before
+#   switching layers.
+#
+# So: **Metal1 carries only vertical straps, Metal2 only horizontal
+# tracks**, joined by one via1 where a strap meets its own track. A strap
+# crossing an unrelated track is two different layers with no via between
+# them -- not a short and not a spacing violation. That is the same
+# three-layer discipline ``pfd_cp/rowgen.py``'s docstring states, with
+# Metal3 dropped (a leaf cell never has to cross a whole row pair).
+#
+#   * **Gate straps** run in per-device *lanes* reserved in each column's
+#     own left margin, reached by a short horizontal jog at the gate pad's
+#     own y-centre. Lanes are ranked by distance from the inter-row channel
+#     -- the device *farthest* from the channel gets the *outermost* lane --
+#     so an outer device's jog (drawn at its own gate y, beyond every inner
+#     device's gate y) never crosses an inner device's strap (which only
+#     ever spans from its own gate y *towards* the channel). Pulldown lanes
+#     are the inner set and pullup lanes the outer set of the same margin;
+#     they cannot collide because a pulldown strap lives entirely below the
+#     channel and a pullup strap entirely above it.
+#   * **Channel straps** are the S/D terminals facing the inter-row channel
+#     (a pulldown branch's topmost drain, a pullup branch's bottommost
+#     drain). Nothing is drawn between such a pad and the channel, so the
+#     strap is a straight vertical run at the pad's own x-centre.
+#   * **Rail straps** are the S/D terminals facing *away* from the channel
+#     (a pulldown branch's bottom source, a pullup branch's top source).
+#     They run straight out to the cell's own supply rail.
+#   * Any *other* S/D terminal -- an interior device's pad that is not part
+#     of a same-branch series connection -- raises ``NotImplementedError``
+#     rather than being drawn wrong. None of this issue's four cells
+#     produce one.
+#
+# Same-branch series nets (``NMID``, ``NM1``/``NM2``, ``PMID``) never reach
+# any of that: they are resolved first and locally, with the same
+# straight-line :func:`_connect_pads` :func:`build_stack_cell` already uses.
+#
+# ROW-CELL FRAME (the abutment contract)
+# --------------------------------------
+# Every cell :func:`build_row_cell` draws has the *same* height and the
+# *same* rail y-bands, independent of how many columns it has or how tall
+# its tallest branch is: the pulldown baseline, the pullup baseline, the tap
+# rows and both rails are fixed module constants sized for the tallest cell
+# in this family (``nand3_3v3``'s three-high NMOS stack, ``nor2_3v3``'s
+# two-high PMOS stack). That is what lets Parts 3/4 (#308's ``dff_tg_3v3``,
+# #309's ``div23_cell``) place these cells side by side in a row and have
+# their ``VDD``/``VSS`` rails line up and touch.
+#
+# This is a *stricter* frame than issue #306's two cells have: those are
+# drawn by :func:`build_stack_cell`, whose height follows its own device
+# list, and are deliberately left untouched here so their landed evidence
+# (``layout/evidence/divider-inv-proof/``,
+# ``layout/evidence/divider-tgate-proof/``) still describes the GDS this
+# module produces. Re-emitting ``inv_3v3``/``tgate_3v3`` into this frame is
+# Part 3's problem, not this issue's -- see
+# ``layout/evidence/divider-rowcells-proof/PROOF.md``'s "Known gap" section.
+
+# --- Row-cell frame: fixed y coordinates shared by every cell
+# build_row_cell() draws (see "ROW-CELL FRAME" above). Sized for the tallest
+# member of this family; a cell with a shorter branch simply leaves more
+# room in the inter-row channel, it does not move any of these. ---
+ROW_PD_Y0 = 0.0  # pulldown (nfet) row comp baseline -- same origin build_stack_cell() uses
+ROW_PU_Y0 = 10.0  # pullup (pfet) row comp baseline. The tallest pulldown branch in
+# this family is nand3_3v3's three-high stack: 3*(2*SD_OVERHANG_UM + L) +
+# 2*COMP_GAP_UM = 5.04 um, so the nfet-comp-to-nwell-edge clearance is
+# 10.0 - 5.04 - NWELL_MARGIN_UM = 4.46 um -- more than build_stack_cell()'s
+# own proven NWELL_TO_NMOS_GAP_UM (4.0), itself >> DF.16_LV's 0.43 min.
+ROW_NTAP_Y0 = 14.4  # n-well tap comp bottom. The tallest pullup branch is nor2_3v3's
+# two-high stack, topping out at ROW_PU_Y0 + 2*1.28 + COMP_GAP_UM = 13.16;
+# 14.4 leaves >= TAP_GAP_UM (1.0) of tap-comp-to-device-comp clearance.
+ROW_PTAP_Y1 = ROW_PD_Y0 - TAP_GAP_UM  # p-substrate tap comp top edge (-1.0)
+ROW_PTAP_Y0 = ROW_PTAP_Y1 - TAP_SIZE_UM
+
+# Both supply rails are drawn exactly over their own tap row's Metal1 pad,
+# so rail and tap merge into one shape with no extra connector: the rail's
+# height is the tap pad's height and its centreline is the tap pad's own
+# centre.
+ROW_RAIL_H_UM = TAP_SIZE_UM + 2 * METAL1_PAD_MARGIN_UM
+ROW_VSS_RAIL_CY = ROW_PTAP_Y0 + TAP_SIZE_UM / 2.0
+ROW_VDD_RAIL_CY = ROW_NTAP_Y0 + TAP_SIZE_UM / 2.0
+
+# Fixed cell extent in y: the p-tap's own implant edge at the bottom, the
+# n-well's own edge at the top. Identical for every cell this function
+# draws -- layout/tests/test_divider_rowcells.py asserts it.
+ROW_CELL_Y0 = ROW_PTAP_Y0 - IMPLANT_MARGIN_UM
+ROW_CELL_Y1 = ROW_NTAP_Y0 + TAP_SIZE_UM + NWELL_MARGIN_UM
+ROW_CELL_H_UM = ROW_CELL_Y1 - ROW_CELL_Y0
+
+# --- Two-layer routing geometry. Reuses this module's own
+# :data:`VIA1_SIZE_UM` / :data:`VIA_ENCLOSURE_UM` (0.26 / 0.09 -- V1.1's
+# exact via1 size and V1.3a's enclosure, shared with issue #308's composite
+# fabric above). The remaining values are restated from pfd_cp/rowgen.py,
+# which proved them DRC-clean on this deck for a 108-transistor block; see
+# that module's own per-constant citations. ---
+ROW_STRAP_W_UM = VIA1_SIZE_UM + 2 * VIA_ENCLOSURE_UM  # 0.44
+# 0.44, not this module's own METAL1_WIRE_WIDTH_UM (0.28): a via1 landing
+# needs 0.44 of enclosing metal, and a 0.44 landing on a 0.28 strap leaves a
+# concave notch that M1.2a reports as an intra-net space violation (the
+# concrete failure rowgen.py's METAL1_WIRE_WIDTH_UM comment records). Making
+# the whole strap 0.44 means a via never widens the wire it sits on. 0.44 is
+# also >= 0.34, so the "narrow metal line" end-of-line via-overlap clauses
+# (V1.3c/V1.4b) never apply.
+ROW_TRACK_W_UM = ROW_STRAP_W_UM  # Metal2 track width; > M2.1's 0.28 min
+ROW_LANE_PITCH_UM = 0.8  # (pitch - width) = 0.36 > M1.2a's 0.23 min
+ROW_TRACK_PITCH_UM = 0.8  # (pitch - width) = 0.36 > M2.2a's 0.28 min
+ROW_LANE_CLEARANCE_UM = 0.3  # innermost lane's outer edge to the gate pad's
+# own left edge, before the half-pitch offset -- > M1.2a's 0.23 min
+ROW_BAND_MARGIN_UM = 0.3  # pulldown row's top drawn comp edge to the first
+# Metal2 track's centreline
+
+# A gate pad's own left edge relative to its device's comp x0, derived from
+# mosfet()'s own tab/pad construction (``gate_x0 = x0 - POLY_ENDCAP_UM``;
+# ``tab_x1 = gate_x0 + GATE_TAB_OVERLAP_UM``; ``tab_x0 = tab_x1 -
+# GATE_TAB_W_UM``; the Metal1 pad extends METAL1_PAD_MARGIN_UM further out)
+# so lanes can be reserved to its left without re-deriving that geometry.
+GATE_PAD_LEFT_UM = POLY_ENDCAP_UM + (GATE_TAB_W_UM - GATE_TAB_OVERLAP_UM) + METAL1_PAD_MARGIN_UM
+
+
+@dataclass(frozen=True)
+class Column:
+    """One left-to-right slot of a :func:`build_row_cell` cell.
+
+    ``pulldown`` is an all-``"nfet"`` branch and ``pullup`` an all-``"pfet"``
+    branch, each ordered bottom-to-top and each a *series* sub-stack when it
+    has more than one device (adjacent devices whose facing terminal nets
+    match are wired directly, exactly as in :func:`build_stack_cell`). Either
+    may be empty -- a column with only a pulldown branch (``nor2_3v3``'s
+    second column) or only a pullup branch (``nand2_3v3``'s second column) is
+    normal -- but not both.
+
+    Both branches of a column are left-aligned at the same comp ``x0``, and
+    the lanes reserved in that column's left margin are shared by both
+    branches' gates (see the module's "ROUTING MODEL" note).
+    """
+
+    pulldown: tuple[Device, ...] = ()
+    pullup: tuple[Device, ...] = ()
+
+
+@dataclass
+class _PlacedColumn:
+    column: Column
+    x0: float
+    pulldown: list[MosfetPorts]
+    pullup: list[MosfetPorts]
+    lanes: dict[tuple[str, int], float]
+    right: float
+
+
+def _branch_ports(placed: _PlacedColumn, network: str) -> list[MosfetPorts]:
+    return placed.pulldown if network == "pulldown" else placed.pullup
+
+
+def _branch_devices(placed: _PlacedColumn, network: str) -> tuple[Device, ...]:
+    return placed.column.pulldown if network == "pulldown" else placed.column.pullup
+
+
+def _h_strap(canvas: Canvas, x_a: float, x_b: float, y_center: float) -> None:
+    half = ROW_STRAP_W_UM / 2.0
+    canvas.rect("metal1", min(x_a, x_b), y_center - half, max(x_a, x_b), y_center + half)
+
+
+def _v_strap(canvas: Canvas, x_center: float, y_a: float, y_b: float) -> None:
+    half = ROW_STRAP_W_UM / 2.0
+    canvas.rect("metal1", x_center - half, min(y_a, y_b), x_center + half, max(y_a, y_b))
+
+
+def _via1(canvas: Canvas, x: float, y: float) -> None:
+    """One via1 plus the Metal1/Metal2 enclosure it needs.
+
+    Both enclosing shapes are exactly :data:`ROW_STRAP_W_UM` square, i.e.
+    exactly the width of the strap and the track that meet here -- so the
+    landing never widens either wire and no notch is created (see
+    :data:`ROW_STRAP_W_UM`'s own comment).
+    """
+    half_v = VIA1_SIZE_UM / 2.0
+    half_p = ROW_STRAP_W_UM / 2.0
+    canvas.rect("via1", x - half_v, y - half_v, x + half_v, y + half_v)
+    canvas.rect("metal1", x - half_p, y - half_p, x + half_p, y + half_p)
+    canvas.rect("metal2", x - half_p, y - half_p, x + half_p, y + half_p)
+
+
+def _pad_cx(pad: tuple[float, float, float, float]) -> float:
+    return (pad[0] + pad[2]) / 2.0
+
+
+def _terminal_role(network: str, dev_idx: int, branch_len: int, kind: str) -> str:
+    """Classify one non-gate device terminal, per the module's "ROUTING MODEL".
+
+    ``kind`` is ``"top"`` or ``"bottom"``. Raises ``NotImplementedError`` for
+    an interior pad that is not part of a same-branch series connection --
+    the caller has already consumed every series pair before this is reached,
+    so anything left over here genuinely has nowhere to go.
+    """
+    if network == "pulldown":
+        if kind == "top" and dev_idx == branch_len - 1:
+            return "channel"
+        if kind == "bottom" and dev_idx == 0:
+            return "rail"
+    else:
+        if kind == "bottom" and dev_idx == 0:
+            return "channel"
+        if kind == "top" and dev_idx == branch_len - 1:
+            return "rail"
+    raise NotImplementedError(
+        f"{network} device {dev_idx} of {branch_len}: its {kind} terminal is an interior "
+        "pad with no same-branch series partner -- build_row_cell() cannot route it "
+        "(see this module's ROUTING MODEL note)"
+    )
+
+
+def build_row_cell(
+    top_name: str,
+    columns: Sequence[Column],
+    *,
+    x0: float = 0.0,
+    add_taps: bool = True,
+) -> LeafCell:
+    """Draw a static-CMOS gate with fan-in as a fixed-frame row cell.
+
+    See this module's "ROW CELLS" section for the placement model
+    (:class:`Column`), the Metal1-strap/Metal2-track routing model, and the
+    fixed row-cell frame every cell drawn here shares.
+
+    Net resolution, in order:
+
+    1. Same-branch series pairs (adjacent devices in one branch whose facing
+       terminal nets match) are wired directly with :func:`_connect_pads` and
+       removed from consideration.
+    2. Every remaining terminal is classified: gates are ``"gate"``, S/D pads
+       are ``"channel"`` or ``"rail"`` per :func:`_terminal_role`.
+    3. Nets whose remaining terminals are *all* ``"rail"`` become the cell's
+       supply nets -- exactly one such net per row is required (the pulldown
+       row's is ``VSS``-like, the pullup row's ``VDD``-like), each drawn as a
+       full-cell-width Metal1 rail carrying that row's own well/substrate tap.
+    4. Every other multi-terminal net gets its own Metal2 track in the
+       inter-row channel, with one Metal1 strap + via1 per terminal.
+    5. A net with exactly one remaining terminal is promoted to a labelled
+       Metal1 pin on that pad, unchanged from :func:`build_stack_cell`.
+
+    Every net -- supply, track-routed, or single-terminal -- is additionally
+    labelled as a top-level pin. That is a deliberate superset of
+    :func:`build_stack_cell`'s behaviour (which labels only 1-terminal nets):
+    gf180mcu's LVS deck matches by topology rather than by port name, so the
+    extra labels change no verdict, but they let #308/#309's composite
+    assembly find each cell's ``A``/``B``/``C``/``Y``/``VDD``/``VSS`` pin
+    locations from :attr:`LeafCell.pins` instead of re-deriving them.
+    """
+    if not columns:
+        raise ValueError("build_row_cell() needs at least one column")
+    for i, col in enumerate(columns):
+        if not col.pulldown and not col.pullup:
+            raise ValueError(f"column {i} has neither a pulldown nor a pullup branch")
+        if any(d.kind != "nfet" for d in col.pulldown):
+            raise ValueError(f"column {i}: every pulldown device must be an nfet")
+        if any(d.kind != "pfet" for d in col.pullup):
+            raise ValueError(f"column {i}: every pullup device must be a pfet")
+
+    canvas = Canvas(top_name)
+
+    # --- placement ---------------------------------------------------------
+    placed: list[_PlacedColumn] = []
+    cursor = x0
+    for col in columns:
+        n_pd, n_pu = len(col.pulldown), len(col.pullup)
+        lane_reserve = GATE_PAD_LEFT_UM + ROW_LANE_CLEARANCE_UM + (n_pd + n_pu) * ROW_LANE_PITCH_UM
+        bx0 = cursor + lane_reserve
+
+        def _draw_branch(devices: Sequence[Device], y_base: float) -> list[MosfetPorts]:
+            out: list[MosfetPorts] = []
+            y = y_base
+            for i, d in enumerate(devices):
+                if i > 0:
+                    y += COMP_GAP_UM
+                p = mosfet(canvas, d, bx0, y)
+                out.append(p)
+                y = p.y3
+            return out
+
+        pd_ports = _draw_branch(col.pulldown, ROW_PD_Y0)
+        pu_ports = _draw_branch(col.pullup, ROW_PU_Y0)
+
+        # Lane x, innermost first. Pulldown lanes occupy indices
+        # [0, n_pd), pullup lanes [n_pd, n_pd + n_pu) -- see the module's
+        # "ROUTING MODEL" note for why the two sets can share one margin, and
+        # why within each set the device *farthest* from the channel takes
+        # the *outermost* lane.
+        lanes: dict[tuple[str, int], float] = {}
+        for i in range(n_pd):
+            lanes[("pulldown", i)] = bx0 - GATE_PAD_LEFT_UM - ROW_LANE_CLEARANCE_UM - (
+                (n_pd - 1 - i) + 0.5
+            ) * ROW_LANE_PITCH_UM
+        for j in range(n_pu):
+            lanes[("pullup", j)] = bx0 - GATE_PAD_LEFT_UM - ROW_LANE_CLEARANCE_UM - (
+                n_pd + j + 0.5
+            ) * ROW_LANE_PITCH_UM
+
+        right = max(
+            max(p.x1, p.top_pad[2], p.bottom_pad[2]) for p in (pd_ports + pu_ports)
+        )
+        placed.append(
+            _PlacedColumn(column=col, x0=bx0, pulldown=pd_ports, pullup=pu_ports, lanes=lanes, right=right)
+        )
+        cursor = right + COMP_GAP_UM
+
+    pd_top = max((p.y3 for c in placed for p in c.pulldown), default=ROW_PD_Y0)
+    pu_top = max((p.y3 for c in placed for p in c.pullup), default=ROW_PU_Y0)
+    if pd_top + NWELL_TO_NMOS_GAP_UM > ROW_PU_Y0:
+        raise ValueError(
+            f"pulldown row tops out at {pd_top} um; ROW_PU_Y0={ROW_PU_Y0} leaves less than "
+            f"NWELL_TO_NMOS_GAP_UM ({NWELL_TO_NMOS_GAP_UM}) of clearance"
+        )
+    if pu_top + TAP_GAP_UM > ROW_NTAP_Y0:
+        raise ValueError(
+            f"pullup row tops out at {pu_top} um; ROW_NTAP_Y0={ROW_NTAP_Y0} leaves less than "
+            f"TAP_GAP_UM ({TAP_GAP_UM}) of clearance"
+        )
+
+    # --- pass 1: same-branch series connections ----------------------------
+    consumed: set[tuple[int, str, int, str]] = set()
+    for ci, c in enumerate(placed):
+        for network in ("pulldown", "pullup"):
+            devices = _branch_devices(c, network)
+            ports = _branch_ports(c, network)
+            for i in range(len(devices) - 1):
+                if devices[i].top_net != devices[i + 1].bottom_net:
+                    continue
+                _connect_pads(canvas, ports[i].top_pad, ports[i + 1].bottom_pad)
+                consumed.add((ci, network, i, "top"))
+                consumed.add((ci, network, i + 1, "bottom"))
+
+    # --- pass 2: collect + classify every remaining terminal ---------------
+    @dataclass
+    class _Term:
+        net: str
+        role: str  # "gate" | "channel" | "rail"
+        network: str
+        column: _PlacedColumn
+        dev_idx: int
+        pad: tuple[float, float, float, float]
+        lane_x: float | None
+        strap_x: float | None = None
+
+    terms: dict[str, list[_Term]] = {}
+
+    def _add(t: _Term) -> None:
+        terms.setdefault(t.net, []).append(t)
+
+    for ci, c in enumerate(placed):
+        for network in ("pulldown", "pullup"):
+            devices = _branch_devices(c, network)
+            ports = _branch_ports(c, network)
+            for i, (d, p) in enumerate(zip(devices, ports)):
+                _add(
+                    _Term(
+                        net=d.gate_net, role="gate", network=network, column=c, dev_idx=i,
+                        pad=p.gate_pad, lane_x=c.lanes[(network, i)],
+                    )
+                )
+                for kind, pad, net in (("top", p.top_pad, d.top_net), ("bottom", p.bottom_pad, d.bottom_net)):
+                    if (ci, network, i, kind) in consumed:
+                        continue
+                    role = _terminal_role(network, i, len(devices), kind)
+                    _add(
+                        _Term(
+                            net=net, role=role, network=network, column=c, dev_idx=i,
+                            pad=pad, lane_x=None,
+                        )
+                    )
+
+    # --- pass 3: split nets into rail / track / single-pad -----------------
+    rail_nets: dict[str, list[_Term]] = {}
+    track_nets: dict[str, list[_Term]] = {}
+    single_nets: dict[str, _Term] = {}
+    for net, tlist in terms.items():
+        roles = {t.role for t in tlist}
+        if roles == {"rail"}:
+            networks = {t.network for t in tlist}
+            if len(networks) != 1:
+                raise NotImplementedError(
+                    f"net {net!r} is rail-facing in both rows -- build_row_cell() draws one "
+                    "supply rail per row, so a net cannot be both"
+                )
+            rail_nets[net] = tlist
+        elif "rail" in roles:
+            raise NotImplementedError(
+                f"net {net!r} mixes a rail-facing terminal with {sorted(roles - {'rail'})} "
+                "terminals -- build_row_cell() routes a supply net on its rail only"
+            )
+        elif len(tlist) == 1:
+            single_nets[net] = tlist[0]
+        else:
+            track_nets[net] = tlist
+
+    pd_rails = [n for n, ts in rail_nets.items() if ts[0].network == "pulldown"]
+    pu_rails = [n for n, ts in rail_nets.items() if ts[0].network == "pullup"]
+    if len(pd_rails) != 1 or len(pu_rails) != 1:
+        raise ValueError(
+            "build_row_cell() needs exactly one rail-facing net per row "
+            f"(got pulldown={sorted(pd_rails)}, pullup={sorted(pu_rails)})"
+        )
+    vss_net, vdd_net = pd_rails[0], pu_rails[0]
+
+    pins: dict[str, tuple[float, float, float, float]] = {}
+
+    # --- pass 4: Metal2 tracks in the inter-row channel --------------------
+    # Track order is by net name, purely for determinism: with straps on
+    # Metal1 and tracks on Metal2 a crossing is not a short, so no ordering
+    # heuristic is needed (that requirement is exactly what the single-layer
+    # attempt could not satisfy -- see the module's "ROUTING MODEL" note).
+    track_y0 = pd_top + ROW_BAND_MARGIN_UM
+    track_top = track_y0 + max(len(track_nets) - 1, 0) * ROW_TRACK_PITCH_UM + ROW_TRACK_W_UM / 2.0
+    if track_top > ROW_PU_Y0 - ROW_BAND_MARGIN_UM:
+        raise ValueError(
+            f"{len(track_nets)} nets need routing tracks but the channel "
+            f"({pd_top} .. {ROW_PU_Y0} um) only fits "
+            f"{int((ROW_PU_Y0 - ROW_BAND_MARGIN_UM - track_y0) // ROW_TRACK_PITCH_UM) + 1}"
+        )
+
+    # A gate terminal's strap x is its own reserved lane. A channel
+    # terminal's would naturally be its pad's x-centre, but two channel pads
+    # in the *same* column (a pulldown branch's drain and the pullup branch
+    # stacked above it, both on the output net) have centres only a fraction
+    # of a micron apart whenever the two devices' widths differ -- close
+    # enough for their two via1 squares to merge into one oversized shape,
+    # which V1.1 (via1 is exactly 0.26 um square, min *and* max) reports.
+    # Reproduced on nand2_3v3's first build as 2 V1.1 items, at Y's own
+    # W=2u NMOS drain / W=2.5u PMOS drain pair. So channel straps are
+    # spread onto a ROW_LANE_PITCH_UM grid, sliding along the pad they land
+    # on -- every S/D pad in this family is at least 0.96 um wide, so there
+    # is always room.
+    used_xs: list[float] = []
+
+    def _pick_strap_x(pad: tuple[float, float, float, float]) -> float:
+        half_s = ROW_STRAP_W_UM / 2.0
+        lo, hi = pad[0] + half_s, pad[2] - half_s
+        cand = _pad_cx(pad)
+        options = [cand]
+        for k in range(1, 9):
+            options += [cand + k * ROW_LANE_PITCH_UM, cand - k * ROW_LANE_PITCH_UM]
+        for opt in options:
+            if opt < lo - 1e-9 or opt > hi + 1e-9:
+                continue
+            if all(abs(opt - u) >= ROW_LANE_PITCH_UM - 1e-9 for u in used_xs):
+                return _r(opt)
+        raise ValueError(
+            f"no free strap lane on pad {pad} -- widen the device or raise ROW_LANE_PITCH_UM"
+        )
+
+    for t in (t for net in sorted(track_nets) for t in track_nets[net]):
+        if t.role == "gate":
+            assert t.lane_x is not None
+            t.strap_x = _r(t.lane_x)
+        else:
+            t.strap_x = _pick_strap_x(t.pad)
+        used_xs.append(t.strap_x)
+
+    for k, net in enumerate(sorted(track_nets)):
+        track_y = _r(track_y0 + k * ROW_TRACK_PITCH_UM)
+        xs: list[float] = []
+        for t in track_nets[net]:
+            assert t.strap_x is not None
+            if t.role == "gate":
+                # Jog from the lane across to (and fully over) the gate pad,
+                # at the pad's own y-centre; then a vertical strap from that
+                # y down/up to the track.
+                cy = (t.pad[1] + t.pad[3]) / 2.0
+                _h_strap(canvas, t.strap_x - ROW_STRAP_W_UM / 2.0, t.pad[2], cy)
+                _v_strap(canvas, t.strap_x, cy, track_y)
+            else:  # "channel"
+                _v_strap(canvas, t.strap_x, min(t.pad[1], track_y), max(t.pad[3], track_y))
+            _via1(canvas, t.strap_x, track_y)
+            xs.append(t.strap_x)
+        half = ROW_TRACK_W_UM / 2.0
+        canvas.rect("metal2", min(xs) - half, track_y - half, max(xs) + half, track_y + half)
+        label_pad = track_nets[net][0].pad
+        canvas.pin(net, *label_pad)
+        pins[net] = label_pad
+
+    for net, t in single_nets.items():
+        canvas.pin(net, *t.pad)
+        pins[net] = t.pad
+
+    # --- n-well ------------------------------------------------------------
+    pfet_ports = [p for c in placed for p in c.pullup]
+    nwell_box = None
+    ntap_x0 = None
+    if pfet_ports:
+        ntap_x0 = min(p.x0 for p in pfet_ports)
+        nwell_box = (
+            min(p.x0 for p in pfet_ports) - NWELL_MARGIN_UM,
+            ROW_PU_Y0 - NWELL_MARGIN_UM,
+            max(p.x1 for p in pfet_ports) + NWELL_MARGIN_UM,
+            ROW_CELL_Y1,
+        )
+        canvas.rect("nwell", *nwell_box)
+
+    # --- footprint + rails -------------------------------------------------
+    # The rails span the whole cell so two abutted cells' rails touch. Take
+    # the cell's right edge from what has actually been drawn so far (every
+    # implant/poly/n-well overhang included) rather than re-deriving each
+    # overhang by hand.
+    drawn = canvas.top.bbox()
+    footprint_x1 = _r(drawn.right * canvas.dbu)
+    footprint = (x0, ROW_CELL_Y0, footprint_x1, ROW_CELL_Y1)
+
+    half_rail = ROW_RAIL_H_UM / 2.0
+    for net, rail_cy in ((vss_net, ROW_VSS_RAIL_CY), (vdd_net, ROW_VDD_RAIL_CY)):
+        canvas.rect("metal1", x0, rail_cy - half_rail, footprint_x1, rail_cy + half_rail)
+        for t in rail_nets[net]:
+            cx = _pad_cx(t.pad)
+            _v_strap(canvas, cx, min(t.pad[1], rail_cy), max(t.pad[3], rail_cy))
+
+    if add_taps:
+        # One tap per body type: every device of a given kind shares one
+        # continuous well/substrate region regardless of column count, so one
+        # tap per row suffices -- build_stack_cell()'s own convention. Each
+        # tap sits directly under/over the first column's own devices, and
+        # its Metal1 pad is exactly the rail's own band, so tap and rail
+        # merge with no extra connector.
+        well_tap(canvas, "p", placed[0].x0, ROW_PTAP_Y0, vss_net)
+        if ntap_x0 is not None:
+            well_tap(canvas, "n", ntap_x0, ROW_NTAP_Y0, vdd_net)
+
+    for net, rail_cy in ((vss_net, ROW_VSS_RAIL_CY), (vdd_net, ROW_VDD_RAIL_CY)):
+        pad = (x0, rail_cy - half_rail, footprint_x1, rail_cy + half_rail)
+        pins[net] = pad
+        if not add_taps:
+            # well_tap() already labels the rail's net on its own pad; only
+            # label it here when no tap was drawn, so the net never picks up
+            # two labels (harmless under this deck, but noisy in the report).
+            canvas.pin(net, *pad)
+
+    ports = [p for c in placed for p in (c.pulldown + c.pullup)]
+    return LeafCell(canvas=canvas, ports=ports, pins=pins, nwell_box=nwell_box, footprint=footprint)

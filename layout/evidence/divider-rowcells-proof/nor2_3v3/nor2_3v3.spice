@@ -1,0 +1,16 @@
+* Reference schematic for nor2_3v3 (issue #307).
+*
+* Hand-written independently of the layout -- see
+* layout/harness/cell.py's docstring for why. Device sizes/nodes match
+* design/nor2_3v3.sch exactly.
+*
+* Run LVS with --lvs_sub=VSS (layout/run_pv.py's own default): the NMOS
+* body ties to the deck's synthesized global substrate net, which this
+* flag names VSS -- see layout/README.md's "substrate-net gotcha".
+
+.subckt nor2_3v3 A B Y VDD VSS
+M_MPA PMID A VDD VDD pfet_03v3 W=5u L=0.28u
+M_MPB Y B PMID VDD pfet_03v3 W=5u L=0.28u
+M_MNA Y A VSS VSS nfet_03v3 W=1u L=0.28u
+M_MNB Y B VSS VSS nfet_03v3 W=1u L=0.28u
+.ends
