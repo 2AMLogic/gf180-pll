@@ -75,8 +75,11 @@ draws its own dedicated guard ring (outer substrate ``p`` ring tied
 ``GND_VCO``; an n-well tap band tied ``VDD_VCO``) so it is provable on its
 own. ``VBP0``/``B0``/``B1``/``B2`` are input pins and ``VBP``/``VBN`` output
 pins at the block boundary — ``VBP``/``VBN`` are exactly the nets
-``ring.py``'s block already exposes as Metal1 pins, so the later integration
-increment abuts them rather than re-deriving them.
+``ring.py``'s block already exposes as Metal1 pins, which is what let
+``block.py``'s integration increment route to them rather than re-derive
+them. ``block.py`` reaches every one of these pins by *extending that pin's
+own Metal2 track* in its own direction, so nothing it adds changes this
+block's internal spacing relationships -- see that module's docstring.
 """
 
 from __future__ import annotations
@@ -517,9 +520,9 @@ class MirrorResult:
 
 
 class _Builder:
-    def __init__(self) -> None:
+    def __init__(self, canvas: prim.Canvas | None = None) -> None:
         self.plan = plan()
-        self.canvas = prim.Canvas(TOP_CELL)
+        self.canvas = prim.Canvas(TOP_CELL) if canvas is None else canvas
         self.net_x: dict[tuple[str, str], list[float]] = {}
 
     # -- escapes -------------------------------------------------------------
@@ -709,8 +712,9 @@ class _Builder:
         return MirrorResult(canvas=self.canvas, plan=p, footprint=p.outer, net_x=self.net_x)
 
 
-def build(outdir: Path | None = None) -> MirrorResult:
-    result = _Builder().build()
+def build(outdir: Path | None = None, canvas: prim.Canvas | None = None) -> MirrorResult:
+    """``canvas`` draws into a caller-supplied canvas -- see ``ring.build()``."""
+    result = _Builder(canvas).build()
     if outdir is not None:
         outdir = Path(outdir)
         outdir.mkdir(parents=True, exist_ok=True)

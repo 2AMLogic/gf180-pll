@@ -2,8 +2,8 @@
 <report-database>
  <description>DRC Run Report at</description>
  <original-file/>
- <generator>drc: script='/tmp/final/skel/drc2/main.drc'</generator>
- <top-cell>pll_floorplan_skeleton</top-cell>
+ <generator>drc: script='/tmp/blkev/drc/main.drc'</generator>
+ <top-cell>vco_block</top-cell>
  <tags>
  </tags>
  <categories>
@@ -4044,7 +4044,7 @@
  </categories>
  <cells>
   <cell>
-   <name>pll_floorplan_skeleton</name>
+   <name>vco_block</name>
    <variant/>
    <references>
    </references>

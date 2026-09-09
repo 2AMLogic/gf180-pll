@@ -14,15 +14,13 @@ Real, DRC-clean transistor-level layout for:
 * the carried-forward 22 pF decap footprint (2x 50x50 um, ``vco.sch``),
   positioned adjacent to the ``VDD_VCO`` pin/ring-tap junction.
 
-WHAT THIS MODULE DEFERS (and where it has since landed)
---------------------------------------------------------
-Since this module was written, ``buffer.py`` has drawn the 3-stage output
-buffer and ``mirror.py`` the common-centroid band-select mirror, each as its
-own standalone DRC-clean block landing against the ``VBP``/``VBN`` and
-``Y5_CLK_IN`` pins this one exposes. Still un-drawn: the bias generator's
-V-to-I core (it needs a ``ppolyf_u_3k`` poly-resistor generator -- see
-``mirror.py``'s docstring) and the wiring that will merge every VCO
-sub-block under one shared guard ring. The paragraph below is this module's
+WHAT THIS MODULE DEFERRED (and where all of it has since landed)
+-----------------------------------------------------------------
+Everything this module originally deferred now exists: ``buffer.py`` (output
+buffer), ``mirror.py`` (band-select mirror), ``bias_resistors.py`` +
+``vtoi_core.py`` (the bias generator), and ``block.py``, which wires all
+five under one block-level guard ring and lands the ``VBP``/``VBN`` and
+``Y5_CLK_IN`` pins this module exposes. The paragraph below is this module's
 own original scope statement, kept as written:
 
 The bias generator (``vco_bias.sch``), the 3-cascade band-select mirror, and
@@ -144,8 +142,23 @@ class VcoRingResult:
     nwell_box: tuple = (0.0, 0.0, 0.0, 0.0)
 
 
-def build(outdir: Path | None = None) -> VcoRingResult:
-    canvas = prim.Canvas(TOP_CELL)
+def build(
+    outdir: Path | None = None,
+    canvas: prim.Canvas | None = None,
+    *,
+    draw_decap: bool = True,
+) -> VcoRingResult:
+    """Draw the ring block.
+
+    ``canvas`` draws into a caller-supplied canvas (``block.py`` assembling
+    every VCO sub-block into one flat top cell) instead of a private one.
+    ``draw_decap=False`` suppresses this block's own carried-forward 22 pF
+    decap markers -- the assembled block places that pair against *its* own
+    ``VDD_VCO`` pin/ring-tap junction rather than the ring's, which is what
+    issue #293's acceptance criterion actually asks for; drawing both would
+    be two marker pairs for one physical pair of caps.
+    """
+    canvas = prim.Canvas(TOP_CELL) if canvas is None else canvas
 
     # --- 1. place the 5 stages ---
     stage_ports = []
@@ -248,14 +261,20 @@ def build(outdir: Path | None = None) -> VcoRingResult:
     # inside the outer guard ring). ---
     decap0_x0 = outer_x1 - OUTER_MARGIN_RIGHT_UM + DECAP_GAP_UM
     decap0_y0 = outer_y0 + DECAP_GAP_UM
-    canvas.rect("boundary", decap0_x0, decap0_y0, decap0_x0 + DECAP_SIZE_UM, decap0_y0 + DECAP_SIZE_UM)
-    canvas.label("boundary", "vco.decap0", decap0_x0 + 1.0, decap0_y0 + 1.0)
     decap1_x0 = decap0_x0 + DECAP_SIZE_UM + DECAP_GAP_UM
-    canvas.rect("boundary", decap1_x0, decap0_y0, decap1_x0 + DECAP_SIZE_UM, decap0_y0 + DECAP_SIZE_UM)
-    canvas.label("boundary", "vco.decap1", decap1_x0 + 1.0, decap0_y0 + 1.0)
+    if draw_decap:
+        canvas.rect("boundary", decap0_x0, decap0_y0, decap0_x0 + DECAP_SIZE_UM, decap0_y0 + DECAP_SIZE_UM)
+        canvas.label("boundary", "vco.decap0", decap0_x0 + 1.0, decap0_y0 + 1.0)
+        canvas.rect("boundary", decap1_x0, decap0_y0, decap1_x0 + DECAP_SIZE_UM, decap0_y0 + DECAP_SIZE_UM)
+        canvas.label("boundary", "vco.decap1", decap1_x0 + 1.0, decap0_y0 + 1.0)
     outer_x1_with_decap = decap1_x0 + DECAP_SIZE_UM + OUTER_MARGIN_RIGHT_UM
 
-    footprint = (outer_x0, outer_y0, max(outer_x1, outer_x1_with_decap), outer_y1)
+    footprint = (
+        outer_x0,
+        outer_y0,
+        max(outer_x1, outer_x1_with_decap) if draw_decap else outer_x1,
+        outer_y1,
+    )
 
     if outdir is not None:
         outdir = Path(outdir)
@@ -265,7 +284,7 @@ def build(outdir: Path | None = None) -> VcoRingResult:
     return VcoRingResult(canvas=canvas, stage_ports=stage_ports, footprint=footprint, nwell_box=nwell_box)
 
 
-def footprint_um() -> tuple:
+def footprint_um(with_decap: bool = True) -> tuple:
     """Pure-Python (no KLayout) footprint estimate, for tests.
 
     Recomputes the same bounding geometry ``build()`` derives from the
@@ -307,7 +326,7 @@ def footprint_um() -> tuple:
     decap0_x0 = outer_x1_devices - OUTER_MARGIN_RIGHT_UM + DECAP_GAP_UM
     decap1_x0 = decap0_x0 + DECAP_SIZE_UM + DECAP_GAP_UM
     outer_x1_with_decap = decap1_x0 + DECAP_SIZE_UM + OUTER_MARGIN_RIGHT_UM
-    outer_x1 = max(outer_x1_devices, outer_x1_with_decap)
+    outer_x1 = max(outer_x1_devices, outer_x1_with_decap) if with_decap else outer_x1_devices
 
     return (outer_x0, outer_y0, outer_x1, outer_y1)
 

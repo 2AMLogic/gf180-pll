@@ -10,10 +10,15 @@ tapped standard-cell inverter), not any PLL-block layout — see
 bring-up proof: a block-placement floorplan record and GDS skeleton, not yet
 any block's real transistor-level layout — see
 `layout/floorplan/PLL-FLOORPLAN.md`. `layout/pll_top/` (issue #292/#293) is
-the first block with **real** transistor-level layout: the VCO's 5-stage
-ring with its own guard ring and carried-forward decap
-(`layout/pll_top/vco/ring.py`), its common-centroid 3-cascade band-select
-mirror (`mirror.py`) and its 3-stage tapered output buffer (`buffer.py`).
+the first block with **real** transistor-level layout, and the VCO is now
+assembled end to end: `layout/pll_top/vco/block.py` wires all five VCO
+sub-blocks — the 5-stage ring (`ring.py`), the common-centroid 3-cascade
+band-select mirror (`mirror.py`), the 3-stage tapered output buffer
+(`buffer.py`), the `RCG`/`ROFF`/`RDEG` poly resistors (`bias_resistors.py`)
+and the 13-transistor V-to-I core (`vtoi_core.py`) — into one DRC-clean
+layout under one block-level `GND_VCO` guard ring, with the routed nets
+proved electrically connected as well as rule-clean (see
+`layout/evidence/vco-layout/PROOF-block.md`).
 `layout/pll_top/pfd_cp/` (issue #294/#299/#300) is
 a second, independent full-custom leaf-cell family: a reusable
 device-list-driven generator (`devgen.py`) proved out on one representative
@@ -61,6 +66,8 @@ layout/
       mirror.py                  the common-centroid 3-cascade band-select mirror; CLI entry point
       bias_resistors.py          the bias generator's RCG/ROFF/RDEG ppolyf_u_3k poly resistors
       vtoi_core.py               the bias generator's 13-transistor V-to-I core; CLI entry point
+      block.py                   assembles all five sub-blocks into one wired, guard-ringed,
+                                 DRC-clean VCO block; CLI entry point (--check-connectivity)
     lock_detector/            real transistor-level lock_detector block layout (issue #296)
       devices.py                 Fet parameter tables, transcribed from design/netlist/lock_detector.spice
       primitives.py               hand-drawn nfet_03v3/pfet_03v3 geometry primitives + net routing
@@ -80,9 +87,10 @@ layout/
   evidence/
     inv-tb-proof/            committed proof artifacts (gds, netlist, logs, reports)
     floorplan-skeleton/      block-placement skeleton GDS + DRC report (issue #17)
-    vco-layout/              VCO sub-block real GDS + DRC reports (issue #293)
+    vco-layout/              VCO real GDS + DRC reports (issue #293)
                              PROOF.md = ring; PROOF-mirror-buffer.md = mirror + buffer;
-                             PROOF-bias-resistors.md = RCG/ROFF/RDEG; PROOF-vtoi-core.md = V-to-I core
+                             PROOF-bias-resistors.md = RCG/ROFF/RDEG; PROOF-vtoi-core.md = V-to-I core;
+                             PROOF-block.md = the assembled block (all five, wired, one guard ring)
     lock-detector-layout/    lock_detector block GDS + DRC-clean report (issue #296)
     pfdcp-inv-proof/         PFD/CP devgen methodology proof: GDS + DRC/LVS reports (issue #299)
     pfd-layout/              PFD block GDS + DRC-clean report, mirror-symmetric UP/DN chains (issue #300)
