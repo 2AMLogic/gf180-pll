@@ -488,20 +488,6 @@ def via2_landing(view, x: float, y: float) -> None:
     view.rect("metal3", x - half_p, y - half_p, x + half_p, y + half_p)
 
 
-def m3_link(view, x: float, y_a: float, y_b: float) -> None:
-    """A vertical Metal3 run between two Metal2 tracks at the same x.
-
-    Used only for row-pair-to-row-pair crossings: Metal3 carries nothing else
-    in this block, so such a link can cross any number of Metal1 rails and
-    Metal2 buses without a via (different layers -- no connection, no short,
-    no same-layer spacing check).
-    """
-    half = METAL3_WIRE_WIDTH_UM / 2.0
-    view.rect("metal3", x - half, min(y_a, y_b), x + half, max(y_a, y_b))
-    via2_landing(view, x, y_a)
-    via2_landing(view, x, y_b)
-
-
 # ---------------------------------------------------------------------------
 # Track packing (pure)
 # ---------------------------------------------------------------------------
