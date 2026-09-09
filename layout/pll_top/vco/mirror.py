@@ -49,6 +49,43 @@ device count are preserved exactly; only ``nf`` differs. See
 a real layout-vs-schematic parameter difference the future LVS increment has
 to reconcile.
 
+WHY THE DEVICES ARE FOLDED INTO TWO BANKS, NOT ONE ROW
+-------------------------------------------------------
+Every device here is its own diffusion island wired by metal
+(``primitives.py``'s convention), so a single PMOS row holding all eleven
+pfets is 248 um wide -- wide enough that it, alone, set the *assembled*
+VCO block's width (294.78 um) and its 2.6-4.0x overrun against
+``PLL-FLOORPLAN.md`` section 5's ROM area row. Issue #324 folds it.
+
+The fold is a **bank**, not a coordinate shift: a bank is one complete
+NMOS-row / Metal2-channel / PMOS-row stack, exactly the structure this
+module has always drawn, and ``BANKS`` below stacks two of them
+vertically. Each bank carries its own n-well + ``VDD_VCO`` tap band above
+its PMOS row; each bank above the first also carries its own ``GND_VCO``
+substrate tap strip below its NMOS row (``sub_tap``), butted into the
+block's own guard ring on the left so the strip is one continuous pcomp
+shape with it rather than a separate island relying on substrate
+conduction.
+
+The split is by *cascade section*, chosen so that only two nets cross a
+bank boundary at all:
+
+===========  =====================================  ====================
+Bank         PMOS row                               NMOS row
+===========  =====================================  ====================
+lower        band-code inverters, cascade A, its     ``MIN0``/``MDA``/
+             mux, ``MDB``, cascade C's mux           cascade B/its mux/
+                                                     ``MIN1``/``MIN2``
+upper        cascade C, ``MDP``                      ``MDN``/``MMN``
+===========  =====================================  ====================
+
+``VBP2`` and ``GC`` are the only two nets escaped from both banks; every
+other net is local to one. That matters because the mesh (see the next
+section) is per bank -- each bank's channel carries only the tracks its
+own two rows need -- and a net that spans banks costs one extra Metal1
+link column in the right-hand strip, which is where the two tracks of a
+both-rows net were already being joined before this fold.
+
 ROUTING: WHY THIS BLOCK USES METAL2 AND ``ring.py`` DID NOT
 -----------------------------------------------------------
 An interdigitated array has to get four nets across the same span: the
@@ -69,6 +106,22 @@ Every Metal1 escape column is registered with ``_Plan.reserve()``, which
 fails the build if two different nets' columns come within ``M1.2a``'s
 0.23 µm — a spacing bug in a generated 200 µm-wide block is much cheaper to
 catch as a Python exception than as one of several thousand DRC markers.
+That check is *block-wide*, not per bank, so it also covers the one new class
+of neighbour the fold introduces: a link column that now spans several banks'
+worth of y.
+
+WHY THE TWO BANKS' TRACK GROUPS CANNOT INTERACT
+------------------------------------------------
+The lo/hi split above is what keeps an NMOS escape column and a PMOS escape
+column from ever overlapping in y *within* one bank. Across banks the same
+guarantee comes for free from the geometry: bank ``k``'s NMOS row sits
+physically **above** bank ``k-1``'s PMOS row (with that bank's n-well, its tap
+band and the next bank's own substrate tap strip in between), so bank ``k``'s
+upward escapes start above where bank ``k-1``'s downward escapes end.
+``layout/tests/test_vco_layout.py`` asserts the ``max(lo) < min(hi)``
+invariant bank by bank rather than globally -- globally it is false by
+construction once the rows are folded, and asserting it globally would be
+asserting the single-row layout.
 
 Standalone-DRC scope: like ``ring.py``'s and ``buffer.py``'s blocks, this one
 draws its own dedicated guard ring (outer substrate ``p`` ring tied
@@ -128,6 +181,39 @@ LINK_MARGIN_UM = 3.0  # from the rows' right edge to the first link column
 TAP_GAP_UM = 0.6
 TAP_BAND_WIDTH_UM = 0.6
 RING_WIDTH_UM = 1.2
+
+# --- inter-bank geometry (um), see the module docstring's fold section ------
+SUB_TAP_WIDTH_UM = 0.6
+"""``GND_VCO`` substrate tap strip drawn under every bank above the first.
+
+Bank 0's NMOS sources tie into the block's own outer guard ring, whose
+bottom band is directly below them; a higher bank has no such band within
+reach, so it gets its own strip. The strip is butted into the ring's left
+band (see ``plan()``), i.e. it is drawn as one continuous pcomp shape with
+the ring rather than as an island tied only through the substrate -- which
+also means the metal-connectivity extraction sees one ``GND_VCO`` net, not
+two.
+"""
+
+BANK_NWELL_TO_TAP_UM = 1.5
+"""Bank ``k-1``'s n-well top edge -> bank ``k``'s substrate tap comp.
+
+``DF.16_LV``'s own minimum is 0.43 um; 1.5 um also keeps the tap's own
+pplus (``primitives.IMPLANT_MARGIN_UM`` = 0.3 um beyond its comp) 1.2 um
+clear of the n-well, matching the clearance this block's outer p-ring
+already keeps from the same n-well in the single-row layout that DRC-proved
+clean.
+"""
+
+BANK_TAP_TO_NMOS_UM = 1.0
+"""Substrate tap comp -> the NMOS row's own comp, inside one bank.
+
+``DF.3a_LV``'s comp-to-comp minimum is 0.28 um. 1.0 um is used instead so
+the two islands' *implants* also clear each other by 0.4 um (each extends
+``IMPLANT_MARGIN_UM`` = 0.3 um past its comp), i.e. ``PP.2``/``NP.2``'s own
+0.4 um same-layer spacing is met with no reliance on nplus and pplus being
+different layers.
+"""
 OUTER_MARGIN_LEFT_UM = 3.0
 OUTER_MARGIN_RIGHT_UM = 3.0
 OUTER_MARGIN_BELOW_UM = 2.5
@@ -171,9 +257,42 @@ NET_ORDER = (
     "VBP",
 )
 
-# Row contents, left to right. Names index devices.py's own tables.
-PMOS_ROW = ("MIP0", "A", "MSWA0", "MSWA1", "MIP1", "MDB", "MIP2", "MSWC0", "MSWC1", "C", "MDP")
-NMOS_ROW = ("MIN0", "MDA", "B", "MSWB0", "MSWB1", "MIN1", "MDN", "MMN", "MIN2")
+
+@dataclass(frozen=True)
+class Bank:
+    """One NMOS-row / Metal2-channel / PMOS-row stack, left to right.
+
+    Names index ``devices.py``'s own tables (``CASCADES`` for the three
+    common-centroid arrays, ``DEVICES`` for everything else).
+    """
+
+    name: str
+    pmos: tuple[str, ...]
+    nmos: tuple[str, ...]
+
+
+# The fold (issue #324). Split by cascade section, which is what keeps the
+# cross-bank net count at two (``VBP2`` and ``GC``) -- see the module
+# docstring. Cascade C is 115.18 um wide on its own and is the reason the
+# upper bank holds only it and the output mirror's ``MDP``: it, not the
+# device count, is what sets each bank's width.
+BANKS = (
+    Bank(
+        name="lower",
+        pmos=("MIP0", "A", "MSWA0", "MSWA1", "MIP1", "MDB", "MIP2", "MSWC0", "MSWC1"),
+        nmos=("MIN0", "MDA", "B", "MSWB0", "MSWB1", "MIN1", "MIN2"),
+    ),
+    Bank(
+        name="upper",
+        pmos=("C", "MDP"),
+        nmos=("MDN", "MMN"),
+    ),
+)
+
+# Every device, in bank-then-row order -- the flat view the pre-fold layout
+# drew as one row each, kept so a reader can check no device was dropped.
+PMOS_ROW = tuple(name for b in BANKS for name in b.pmos)
+NMOS_ROW = tuple(name for b in BANKS for name in b.nmos)
 
 
 def _device_index() -> dict[str, dev.Fet]:
@@ -307,26 +426,68 @@ class Item:
 
 
 @dataclass
-class Plan:
+class BankPlan:
+    """One bank's own geometry: two device rows and the channel between them."""
+
+    index: int = 0
+    name: str = ""
     pmos: list[Item] = field(default_factory=list)
     nmos: list[Item] = field(default_factory=list)
     net_rows: dict[str, set] = field(default_factory=dict)
     track_lo: dict[str, float] = field(default_factory=dict)
     track_hi: dict[str, float] = field(default_factory=dict)
-    link_x: dict[str, float] = field(default_factory=dict)
     channel: tuple[float, float] = (0.0, 0.0)
-    pmos_top: float = 0.0
+    nmos_bottom: float = 0.0
+    nmos_top: float = 0.0
     pmos_bottom: float = 0.0
+    pmos_top: float = 0.0
     nwell: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
     tap_band: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
-    outer: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
-    _columns: list = field(default_factory=list)
+    sub_tap: tuple[float, float, float, float] | None = None
+    """``GND_VCO`` substrate tap strip below this bank's NMOS row.
 
-    # -- Metal1 escape-column bookkeeping (see the module docstring) --
+    ``None`` for bank 0 only: the block's own outer guard ring's bottom band
+    already sits directly below that bank's NMOS row and serves the same
+    purpose.
+    """
+
     def track_y(self, net: str, row: str) -> float:
         """The Metal2 track ``row``'s Metal1 escape columns may land ``net`` on."""
         return self.track_lo[net] if row == "nfet" else self.track_hi[net]
 
+    def items(self) -> list[Item]:
+        return self.pmos + self.nmos
+
+    def row_x1(self) -> float:
+        return max(it.x0 + it.width for it in self.items())
+
+    def gnd_stub_y(self, outer: tuple) -> float:
+        """Where an NMOS source stub in this bank lands on ``GND_VCO`` metal."""
+        if self.sub_tap is None:
+            return outer[1] + RING_WIDTH_UM + prim.METAL1_PAD_MARGIN_UM
+        return self.sub_tap[3] + prim.METAL1_PAD_MARGIN_UM
+
+
+@dataclass
+class Plan:
+    banks: list[BankPlan] = field(default_factory=list)
+    net_rows: dict[str, set] = field(default_factory=dict)
+    net_groups: dict[str, set] = field(default_factory=dict)
+    link_x: dict[str, float] = field(default_factory=dict)
+    outer: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    _columns: list = field(default_factory=list)
+
+    # Flat views, so a caller that only wants "every drawn device" does not
+    # have to know the fold exists.
+    @property
+    def pmos(self) -> list[Item]:
+        return [it for b in self.banks for it in b.pmos]
+
+    @property
+    def nmos(self) -> list[Item]:
+        return [it for b in self.banks for it in b.nmos]
+
+    # -- Metal1 escape-column bookkeeping (see the module docstring) --
     def reserve(self, net: str, x0: float, y0: float, x1: float, y1: float) -> None:
         s = dev.DRC_METAL1_MIN_SPACE_UM
         for other_net, ox0, oy0, ox1, oy1 in self._columns:
@@ -398,86 +559,125 @@ def _net_rows(pmos: list[Item], nmos: list[Item]) -> dict[str, set]:
     return rows
 
 
+def _row_height_um(items: list[Item]) -> float:
+    return max(
+        device_height_um(it.fet.l_um if it.kind == "fet" else it.cascade.always_on.l_um)
+        for it in items
+    )
+
+
 def plan() -> Plan:
     for cascade in dev.MIRROR_CASCADES:
         check_common_centroid(cascade)
 
     p = Plan()
-    p.pmos = _row_items(PMOS_ROW)
-    p.nmos = _row_items(NMOS_ROW)
-    p.net_rows = _net_rows(p.pmos, p.nmos)
-
-    missing = set(p.net_rows) - set(NET_ORDER)
-    if missing:
-        raise ValueError(f"nets with no track assignment: {sorted(missing)}")
-
-    nmos_h = max(
-        device_height_um(it.fet.l_um if it.kind == "fet" else it.cascade.always_on.l_um)
-        for it in p.nmos
-    )
-    pmos_h = max(
-        device_height_um(it.fet.l_um if it.kind == "fet" else it.cascade.always_on.l_um)
-        for it in p.pmos
-    )
-
-    # --- lower track group (NMOS-row escapes), then upper group (PMOS-row) ---
-    lo_nets = [n for n in NET_ORDER if "nfet" in p.net_rows.get(n, ())]
-    hi_nets = [n for n in NET_ORDER if "pfet" in p.net_rows.get(n, ())]
-    ch_y0 = nmos_h + CHANNEL_MARGIN_UM
-    for i, net in enumerate(lo_nets):
-        p.track_lo[net] = ch_y0 + TRACK_PITCH_UM / 2.0 + i * TRACK_PITCH_UM
-    base_hi = ch_y0 + len(lo_nets) * TRACK_PITCH_UM
-    for j, net in enumerate(hi_nets):
-        p.track_hi[net] = base_hi + TRACK_PITCH_UM / 2.0 + j * TRACK_PITCH_UM
-    ch_y1 = base_hi + len(hi_nets) * TRACK_PITCH_UM
-    p.channel = (ch_y0, ch_y1)
-    # A net escaped from only one row still needs a value for the other, so
-    # escape() can be row-agnostic; with no column ever reaching it, aliasing
-    # is harmless.
-    for net in NET_ORDER:
-        if net not in p.track_lo:
-            p.track_lo[net] = p.track_hi[net]
-        elif net not in p.track_hi:
-            p.track_hi[net] = p.track_lo[net]
-
-    p.pmos_bottom = ch_y1 + CHANNEL_MARGIN_UM
-    p.pmos_top = p.pmos_bottom + pmos_h
-
-    pmos_x0 = p.pmos[0].x0
-    pmos_x1 = p.pmos[-1].x0 + p.pmos[-1].width
-    p.tap_band = (
-        pmos_x0,
-        p.pmos_top + TAP_GAP_UM,
-        pmos_x1,
-        p.pmos_top + TAP_GAP_UM + TAP_BAND_WIDTH_UM,
-    )
     m = prim.NWELL_MARGIN_UM
-    p.nwell = (pmos_x0 - m, p.pmos_bottom - m, pmos_x1 + m, p.tap_band[3] + m)
 
-    # --- lo/hi link columns, right of both rows ---
+    y_floor = 0.0  # bank 0's NMOS row bottom; every later bank stacks above
+    for index, bank in enumerate(BANKS):
+        bp = BankPlan(index=index, name=bank.name)
+        bp.pmos = _row_items(bank.pmos)
+        bp.nmos = _row_items(bank.nmos)
+        bp.net_rows = _net_rows(bp.pmos, bp.nmos)
+
+        missing = set(bp.net_rows) - set(NET_ORDER)
+        if missing:
+            raise ValueError(f"nets with no track assignment: {sorted(missing)}")
+
+        if index == 0:
+            bp.nmos_bottom = 0.0
+        else:
+            prev = p.banks[-1]
+            tap_y0 = dev.snap_um(prev.nwell[3] + BANK_NWELL_TO_TAP_UM)
+            # x0 is patched below, once the outer ring's own box is known --
+            # the strip is butted into that ring's left band on purpose.
+            bp.sub_tap = (0.0, tap_y0, bp.row_x1(), tap_y0 + SUB_TAP_WIDTH_UM)
+            bp.nmos_bottom = dev.snap_um(bp.sub_tap[3] + BANK_TAP_TO_NMOS_UM)
+        bp.nmos_top = bp.nmos_bottom + _row_height_um(bp.nmos)
+
+        # --- lower track group (NMOS-row escapes), then upper (PMOS-row) ---
+        lo_nets = [n for n in NET_ORDER if "nfet" in bp.net_rows.get(n, ())]
+        hi_nets = [n for n in NET_ORDER if "pfet" in bp.net_rows.get(n, ())]
+        ch_y0 = bp.nmos_top + CHANNEL_MARGIN_UM
+        for i, net in enumerate(lo_nets):
+            bp.track_lo[net] = ch_y0 + TRACK_PITCH_UM / 2.0 + i * TRACK_PITCH_UM
+        base_hi = ch_y0 + len(lo_nets) * TRACK_PITCH_UM
+        for j, net in enumerate(hi_nets):
+            bp.track_hi[net] = base_hi + TRACK_PITCH_UM / 2.0 + j * TRACK_PITCH_UM
+        ch_y1 = base_hi + len(hi_nets) * TRACK_PITCH_UM
+        bp.channel = (ch_y0, ch_y1)
+        # A net escaped from only one row of this bank still needs a value for
+        # the other, so escape() can be row-agnostic; with no column ever
+        # reaching it, aliasing is harmless.
+        for net in bp.net_rows:
+            if net not in bp.track_lo:
+                bp.track_lo[net] = bp.track_hi[net]
+            elif net not in bp.track_hi:
+                bp.track_hi[net] = bp.track_lo[net]
+
+        bp.pmos_bottom = ch_y1 + CHANNEL_MARGIN_UM
+        bp.pmos_top = bp.pmos_bottom + _row_height_um(bp.pmos)
+
+        pmos_x0 = bp.pmos[0].x0
+        pmos_x1 = bp.pmos[-1].x0 + bp.pmos[-1].width
+        bp.tap_band = (
+            pmos_x0,
+            bp.pmos_top + TAP_GAP_UM,
+            pmos_x1,
+            bp.pmos_top + TAP_GAP_UM + TAP_BAND_WIDTH_UM,
+        )
+        bp.nwell = (pmos_x0 - m, bp.pmos_bottom - m, pmos_x1 + m, bp.tap_band[3] + m)
+
+        p.banks.append(bp)
+        y_floor = bp.nwell[3]
+
+    # --- block-wide net bookkeeping -----------------------------------------
+    for bp in p.banks:
+        for net, rows in bp.net_rows.items():
+            p.net_rows.setdefault(net, set()).update(rows)
+            for row in rows:
+                p.net_groups.setdefault(net, set()).add((bp.index, row))
+
+    # --- link columns, right of every bank's rows ---------------------------
+    # A net escaped from more than one (bank, row) group needs exactly one
+    # Metal1 column joining all of its tracks. Pre-fold that meant "a net in
+    # both rows"; folded, it also means "a net in more than one bank".
     rows_right = (
-        max(pmos_x1, p.nmos[-1].x0 + p.nmos[-1].width)
+        max(bp.row_x1() for bp in p.banks)
         + ARRAY_RIGHT_ESCAPE_UM
         + max(JOG_ESCAPE_UM, ARRAY_RIGHT_ESCAPE_UM)
         + ESCAPE_WIRE_W_UM / 2.0
     )
-    link_nets = [n for n in NET_ORDER if p.net_rows.get(n, set()) == {"nfet", "pfet"}]
+    link_nets = [n for n in NET_ORDER if len(p.net_groups.get(n, ())) > 1]
     for k, net in enumerate(link_nets):
         p.link_x[net] = rows_right + LINK_MARGIN_UM + k * LINK_PITCH_UM
 
-    # Leftmost Metal1 in either row: a gate contact tab's own pad, or (for a
-    # row that starts with an array) that array's always-on gate escape.
+    # Leftmost Metal1 anywhere: a gate contact tab's own pad, or (for a row
+    # that starts with an array) that array's always-on gate escape column.
     tab_dx = prim.POLY_ENDCAP_UM - prim.GATE_TAB_OVERLAP_UM + prim.GATE_TAB_W_UM + prim.METAL1_PAD_MARGIN_UM
     left_metal = -tab_dx
+    for bp in p.banks:
+        for items in (bp.pmos, bp.nmos):
+            if items and items[0].kind == "cc":
+                left_metal = min(
+                    left_metal, items[0].x0 - ARRAY_LEFT_ESCAPE_UM - ESCAPE_WIRE_W_UM / 2.0
+                )
     right_metal = max([rows_right] + [x + ESCAPE_WIRE_W_UM / 2.0 for x in p.link_x.values()])
     gnd_pad_y0 = prim.CONTACT_ROW_MARGIN_UM - prim.METAL1_PAD_MARGIN_UM
 
     p.outer = (
-        min(p.nwell[0], left_metal) - OUTER_MARGIN_LEFT_UM,
+        min(min(bp.nwell[0] for bp in p.banks), left_metal) - OUTER_MARGIN_LEFT_UM,
         gnd_pad_y0 - OUTER_MARGIN_BELOW_UM - RING_WIDTH_UM,
-        max(p.nwell[2], right_metal) + OUTER_MARGIN_RIGHT_UM,
-        p.nwell[3] + OUTER_MARGIN_ABOVE_UM,
+        max(max(bp.nwell[2] for bp in p.banks), right_metal) + OUTER_MARGIN_RIGHT_UM,
+        y_floor + OUTER_MARGIN_ABOVE_UM,
     )
+
+    # Butt every substrate tap strip into the outer ring's left band, so the
+    # two are one continuous pcomp shape (and one extracted GND_VCO net)
+    # rather than an island relying on substrate conduction alone.
+    for bp in p.banks:
+        if bp.sub_tap is not None:
+            bp.sub_tap = (p.outer[0] + RING_WIDTH_UM, bp.sub_tap[1], bp.sub_tap[2], bp.sub_tap[3])
     return p
 
 
@@ -488,22 +688,27 @@ def footprint_um() -> tuple:
 def max_pmos_tap_distance_um() -> float:
     """Worst-case pfet-to-nearest-n-well-tap distance (DF.13_MV/DF.14_MV).
 
-    The tap band runs the full length of the PMOS row along its top edge, so
-    the worst case is a device's own bottom (drain) edge.
+    Each bank carries its own tap band along the full length of its PMOS
+    row's top edge, so the worst case is a device's own bottom (drain) edge,
+    taken over every bank.
     """
     p = plan()
-    return (p.pmos_top - p.pmos_bottom) + TAP_GAP_UM
+    return max((bp.pmos_top - bp.pmos_bottom) + TAP_GAP_UM for bp in p.banks)
 
 
 def max_nmos_tap_distance_um() -> float:
-    """Worst-case nfet-to-nearest-substrate-tap (outer p-ring bottom band)."""
+    """Worst-case nfet-to-nearest-substrate-tap, over every bank.
+
+    Bank 0 ties to the outer p-ring's bottom band; every bank above it ties
+    to its own ``sub_tap`` strip, which sits directly below its NMOS row --
+    so folding the rows does not lengthen this distance, it shortens it.
+    """
     p = plan()
-    nmos_h = max(
-        device_height_um(it.fet.l_um if it.kind == "fet" else it.cascade.always_on.l_um)
-        for it in p.nmos
-    )
-    ring_top = p.outer[1] + RING_WIDTH_UM
-    return nmos_h - ring_top
+    worst = 0.0
+    for bp in p.banks:
+        near = p.outer[1] + RING_WIDTH_UM if bp.sub_tap is None else bp.sub_tap[3]
+        worst = max(worst, bp.nmos_top - near)
+    return worst
 
 
 # ---------------------------------------------------------------------------
@@ -523,20 +728,25 @@ class _Builder:
     def __init__(self, canvas: prim.Canvas | None = None) -> None:
         self.plan = plan()
         self.canvas = prim.Canvas(TOP_CELL) if canvas is None else canvas
-        self.net_x: dict[tuple[str, str], list[float]] = {}
+        self.net_x: dict[tuple[str, int, str], list[float]] = {}
 
     # -- escapes -------------------------------------------------------------
-    def escape(self, net: str, x: float, y_pad_edge: float, row: str) -> None:
-        """Metal1 column from a device pad edge to ``net``'s Metal2 track."""
-        y_track = self.plan.track_y(net, row)
+    def escape(self, net: str, x: float, y_pad_edge: float, row: str, bank: BankPlan) -> None:
+        """Metal1 column from a device pad edge to ``net``'s Metal2 track.
+
+        ``bank`` selects *which* channel's track: every bank runs its own
+        lo/hi track pair per net, and a column only ever reaches the channel
+        of the bank whose device row it starts in.
+        """
+        y_track = bank.track_y(net, row)
         y0, y1 = min(y_pad_edge, y_track), max(y_pad_edge, y_track)
         half = ESCAPE_WIRE_W_UM / 2.0
         self.plan.reserve(net, x - half, y0, x + half, y1)
         prim.v_wire(self.canvas, x, y0, y1, width=ESCAPE_WIRE_W_UM)
         prim.via1_stack(self.canvas, x, y_track)
-        self.net_x.setdefault((net, row), []).append(x)
+        self.net_x.setdefault((net, bank.index, row), []).append(x)
 
-    def jog_escape(self, net: str, pad: tuple, x_jog: float, row: str) -> None:
+    def jog_escape(self, net: str, pad: tuple, x_jog: float, row: str, bank: BankPlan) -> None:
         """As ``escape()``, for a terminal whose pad faces the wrong way.
 
         Runs Metal1 sideways out of the pad first, at the pad's own height
@@ -548,7 +758,7 @@ class _Builder:
         half = ESCAPE_WIRE_W_UM / 2.0
         prim.h_wire(self.canvas, pad[0], x_jog + half, y_c, width=width)
         self.plan.reserve(net, min(pad[2], x_jog - half), pad[1], x_jog + half, pad[3])
-        self.escape(net, x_jog, y_c, row)
+        self.escape(net, x_jog, y_c, row, bank)
 
     def rail_stub(self, net: str, x: float, y_from: float, y_to: float) -> None:
         """Plain Metal1 stub from a source pad to the block's own rail band."""
@@ -558,18 +768,19 @@ class _Builder:
         prim.v_wire(self.canvas, x, y0, y1, width=ESCAPE_WIRE_W_UM)
 
     # -- devices -------------------------------------------------------------
-    def _y_bottom(self, row: str, l_um: float) -> float:
+    def _y_bottom(self, row: str, l_um: float, bank: BankPlan) -> float:
+        """Devices are bottom-aligned in an NMOS row, top-aligned in a PMOS one."""
         if row == "pfet":
-            return self.plan.pmos_top - device_height_um(l_um)
-        return 0.0
+            return bank.pmos_top - device_height_um(l_um)
+        return bank.nmos_bottom
 
-    def draw_fet(self, item: Item, row: str) -> None:
+    def draw_fet(self, item: Item, row: str, bank: BankPlan) -> None:
         fet = item.fet
         ports = prim.mosfet(
             self.canvas,
             fet,
             item.x0,
-            self._y_bottom(row, fet.l_um),
+            self._y_bottom(row, fet.l_um, bank),
             sd_overhang=SD_OVERHANG_UM,
         )
         x_pad_c = (ports.bottom_pad[0] + ports.bottom_pad[2]) / 2.0
@@ -578,26 +789,27 @@ class _Builder:
         if row == "pfet":
             # source (top): to the n-well tap band if it is VDD, else jog out
             if fet.top_net == VDD_NET:
-                self.rail_stub(VDD_NET, x_pad_c, ports.top_pad[3], self.plan.tap_band[1])
+                self.rail_stub(VDD_NET, x_pad_c, ports.top_pad[3], bank.tap_band[1])
             else:
-                self.jog_escape(fet.top_net, ports.top_pad, x_jog, row)
-            self.escape(fet.bottom_net, x_pad_c, ports.bottom_pad[1], row)
-            self.escape(fet.gate_net, ports.gate_tab_x_center, ports.gate_pad[1], row)
+                self.jog_escape(fet.top_net, ports.top_pad, x_jog, row, bank)
+            self.escape(fet.bottom_net, x_pad_c, ports.bottom_pad[1], row, bank)
+            self.escape(fet.gate_net, ports.gate_tab_x_center, ports.gate_pad[1], row, bank)
         else:
             if fet.bottom_net == GND_NET:
-                ring_top = self.plan.outer[1] + RING_WIDTH_UM + prim.METAL1_PAD_MARGIN_UM
-                self.rail_stub(GND_NET, x_pad_c, ports.bottom_pad[1], ring_top)
+                self.rail_stub(
+                    GND_NET, x_pad_c, ports.bottom_pad[1], bank.gnd_stub_y(self.plan.outer)
+                )
             else:
-                self.jog_escape(fet.bottom_net, ports.bottom_pad, x_jog, row)
-            self.escape(fet.top_net, x_pad_c, ports.top_pad[3], row)
-            self.escape(fet.gate_net, ports.gate_tab_x_center, ports.gate_pad[3], row)
+                self.jog_escape(fet.bottom_net, ports.bottom_pad, x_jog, row, bank)
+            self.escape(fet.top_net, x_pad_c, ports.top_pad[3], row, bank)
+            self.escape(fet.gate_net, ports.gate_tab_x_center, ports.gate_pad[3], row, bank)
 
-    def draw_cc_array(self, item: Item, row: str) -> None:
+    def draw_cc_array(self, item: Item, row: str, bank: BankPlan) -> None:
         """One cascade, interdigitated per ``devices.CascadePair.pattern``."""
         cascade = item.cascade
         legs = {"A": cascade.always_on, "S": cascade.switched}
         l_um = cascade.always_on.l_um
-        y_bottom = self._y_bottom(row, l_um)
+        y_bottom = self._y_bottom(row, l_um, bank)
         y_lo, y_hi = gate_bus_y_um(l_um, y_bottom)
         bus_y = {"A": y_lo, "S": y_hi}
 
@@ -642,71 +854,91 @@ class _Builder:
                     prim.v_wire(self.canvas, p.gate_tab_x_center, y, p.gate_pad[1])
                 else:
                     prim.v_wire(self.canvas, p.gate_tab_x_center, p.gate_pad[3], y)
-            self.escape(legs[leg].gate_net, bus_end[leg], y, row)
+            self.escape(legs[leg].gate_net, bus_end[leg], y, row, bank)
 
         # --- source / drain escapes, placed in inter-finger gaps so they
         # never crowd a finger's own gate contact tab ---
         drain_x = finger_ports[0][1].x1 + CC_FINGER_GAP_UM / 3.0
         source_x = finger_ports[1][1].x1 + CC_FINGER_GAP_UM / 3.0
         if row == "pfet":
-            self.escape(cascade.always_on.bottom_net, drain_x, pads_lo[0][1], row)
-            self.rail_stub(VDD_NET, source_x, pads_hi[0][3], self.plan.tap_band[1])
+            self.escape(cascade.always_on.bottom_net, drain_x, pads_lo[0][1], row, bank)
+            self.rail_stub(VDD_NET, source_x, pads_hi[0][3], bank.tap_band[1])
         else:
-            self.escape(cascade.always_on.top_net, drain_x, pads_hi[0][3], row)
-            ring_top = self.plan.outer[1] + RING_WIDTH_UM + prim.METAL1_PAD_MARGIN_UM
-            self.rail_stub(GND_NET, source_x, pads_lo[0][1], ring_top)
+            self.escape(cascade.always_on.top_net, drain_x, pads_hi[0][3], row, bank)
+            self.rail_stub(GND_NET, source_x, pads_lo[0][1], bank.gnd_stub_y(self.plan.outer))
 
     # -- assembly ------------------------------------------------------------
     def build(self) -> MirrorResult:
         p = self.plan
-        for item in p.pmos:
-            (self.draw_cc_array if item.kind == "cc" else self.draw_fet)(item, "pfet")
-        for item in p.nmos:
-            (self.draw_cc_array if item.kind == "cc" else self.draw_fet)(item, "nfet")
+        for bank in p.banks:
+            for item in bank.pmos:
+                (self.draw_cc_array if item.kind == "cc" else self.draw_fet)(item, "pfet", bank)
+            for item in bank.nmos:
+                (self.draw_cc_array if item.kind == "cc" else self.draw_fet)(item, "nfet", bank)
 
-        # --- Metal2 tracks, one per (net, row) group, each stretched to the
-        # net's own link column so the two groups end up on the same net ---
+        # --- Metal2 tracks, one per (net, bank, row) group, each stretched to
+        # the net's own link column so all its groups end up on one net ---
         pad = ESCAPE_WIRE_W_UM / 2.0
         track_x1: dict[str, float] = {}
         for net in NET_ORDER:
-            for row in ("nfet", "pfet"):
-                xs = self.net_x.get((net, row))
-                if not xs:
-                    continue
-                x_link = p.link_x.get(net)
-                x1 = max(xs + ([x_link] if x_link is not None else []))
-                prim.m2_wire(self.canvas, min(xs) - pad, x1 + pad, p.track_y(net, row))
-                track_x1[net] = max(track_x1.get(net, x1), x1)
+            for bank in p.banks:
+                for row in ("nfet", "pfet"):
+                    xs = self.net_x.get((net, bank.index, row))
+                    if not xs:
+                        continue
+                    x_link = p.link_x.get(net)
+                    x1 = max(xs + ([x_link] if x_link is not None else []))
+                    prim.m2_wire(self.canvas, min(xs) - pad, x1 + pad, bank.track_y(net, row))
+                    track_x1[net] = max(track_x1.get(net, x1), x1)
 
-        # --- lo <-> hi link columns (see NET_ORDER's comment) ---
+        # --- link columns: one Metal1 run joining every track a net owns,
+        # in the strip right of every bank's rows (see NET_ORDER's comment).
+        # Pre-fold this joined a net's lo and hi track; folded, the same
+        # column also joins the banks, which is why it is drawn from the
+        # net's lowest track to its highest with a via1 on each. ---
         for net, x in p.link_x.items():
-            y0, y1 = p.track_lo[net], p.track_hi[net]
-            self.plan.reserve(net, x - pad, y0, x + pad, y1)
-            prim.v_wire(self.canvas, x, y0, y1, width=ESCAPE_WIRE_W_UM)
-            prim.via1_stack(self.canvas, x, y0)
-            prim.via1_stack(self.canvas, x, y1)
+            ys = sorted(
+                {
+                    bank.track_y(net, row)
+                    for bank in p.banks
+                    for row in ("nfet", "pfet")
+                    if (net, bank.index, row) in self.net_x
+                }
+            )
+            self.plan.reserve(net, x - pad, ys[0], x + pad, ys[-1])
+            prim.v_wire(self.canvas, x, ys[0], ys[-1], width=ESCAPE_WIRE_W_UM)
+            for y in ys:
+                prim.via1_stack(self.canvas, x, y)
 
         # --- block boundary pins ---
-        def _leftmost(net: str) -> tuple[float, float]:
-            for row in ("nfet", "pfet"):
-                xs = self.net_x.get((net, row))
-                if xs:
-                    return (min(xs), p.track_y(net, row))
+        def _group(net: str, banks: list, rows: tuple) -> tuple[float, float, float]:
+            """(min x, max x, track y) of the first drawn group of ``net``."""
+            for bank in banks:
+                for row in rows:
+                    xs = self.net_x.get((net, bank.index, row))
+                    if xs:
+                        return (min(xs), max(xs), bank.track_y(net, row))
             raise KeyError(net)
 
         for net in dev.MIRROR_IN_NETS:
-            x, y = _leftmost(net)
+            x, _, y = _group(net, p.banks, ("nfet", "pfet"))
             self.canvas.pin(net, x - pad - 0.6, y - pad, x - pad, y + pad, layer="metal2")
             prim.m2_wire(self.canvas, x - pad - 0.6, x, y)
         for net in dev.MIRROR_OUT_NETS:
-            y = p.track_hi[net]
+            # Output pins leave on the right, so they take the *last* bank's
+            # PMOS-side track -- the topmost, rightmost one this net owns.
+            _, _, y = _group(net, list(reversed(p.banks)), ("pfet", "nfet"))
             x = track_x1[net] + pad
             self.canvas.pin(net, x, y - pad, x + 0.6, y + pad, layer="metal2")
             prim.m2_wire(self.canvas, x - pad, x + 0.6, y)
 
-        # --- n-well, its VDD_VCO tap band, and the outer GND_VCO guard ring ---
-        self.canvas.rect("nwell", *p.nwell)
-        prim.tap_strip(self.canvas, "n", *p.tap_band, VDD_NET)
+        # --- per-bank n-well + VDD_VCO tap band, per-bank GND_VCO substrate
+        # tap strip, and the one outer GND_VCO guard ring around all of it ---
+        for bank in p.banks:
+            self.canvas.rect("nwell", *bank.nwell)
+            prim.tap_strip(self.canvas, "n", *bank.tap_band, VDD_NET)
+            if bank.sub_tap is not None:
+                prim.tap_strip(self.canvas, "p", *bank.sub_tap, GND_NET)
         prim.guard_ring(self.canvas, "p", *p.outer, RING_WIDTH_UM, GND_NET)
 
         return MirrorResult(canvas=self.canvas, plan=p, footprint=p.outer, net_x=self.net_x)
@@ -735,6 +967,15 @@ def main() -> int:
     x0, y0, x1, y1 = result.footprint
     print(f"wrote {args.outdir}/{TOP_CELL}.gds")
     print(f"footprint: {x1 - x0:.3f} x {y1 - y0:.3f} um  ({(x1 - x0) * (y1 - y0):.1f} um^2)")
+    for bank in result.plan.banks:
+        print(
+            f"bank {bank.index} ({bank.name}): pmos row {bank.pmos[-1].x0 + bank.pmos[-1].width:.3f} um wide, "
+            f"nmos row {bank.nmos[-1].x0 + bank.nmos[-1].width:.3f} um, "
+            f"channel {bank.channel[1] - bank.channel[0]:.3f} um "
+            f"({len(bank.track_lo)} lo / {len(bank.track_hi)} hi tracks), "
+            f"y {bank.nmos_bottom:.3f}..{bank.nwell[3]:.3f}"
+        )
+    print(f"link columns: {len(result.plan.link_x)} ({', '.join(sorted(result.plan.link_x))})")
     for c in dev.MIRROR_CASCADES:
         centre = array_width_um(c) / 2.0
         print(

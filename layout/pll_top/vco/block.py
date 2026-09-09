@@ -74,45 +74,68 @@ layer that is allowed to. ``GND_VCO`` needs no trunk at all: it is the
 substrate, and the block-level ring is tied to each sub-block's own ring by a
 Metal1 strap in the left-hand channel.
 
-WHAT THIS BLOCK'S GUARD RING IS *NOT*
----------------------------------------
+THE BLOCK'S GUARD RING IS TWO-SIDED (issue #324)
+--------------------------------------------------
 PLL-FLOORPLAN.md section 1 asks for the VCO's ring to be "a real two-sided
 ring, not a substrate-only one" -- ``GND_VCO`` on the substrate side and a
-``VDD_VCO``-tied n-well tap ring on the well side. The block-level ring here
-is ``GND_VCO`` substrate only. Every n-well *inside* the block is
-``VDD_VCO``-tied by its own sub-block's tap band (12.1 um worst case, well
-inside section 1's own 15 um bound), which covers the well-tie and tap-pitch
-halves of that requirement -- but there is no second, concentric n-well band
-at the block boundary. That band would cost about 4.4 um per side
-(``NW.1a_LV`` width + ``DF.4d_LV`` tap inset + ``DF.16_LV`` clearance to comp
-on both sides), i.e. +8.8 um of block *width*, and as the area section below
-records there is no width budget for it today. Block *height* is free (the
-floorplan skeleton's height is set by the loop filter, not the VCO), so the
-missing ring and the row-folding area optimisation are naturally the same
-follow-up increment: folding pays for the ring. See
-``layout/evidence/vco-layout/PROOF-block.md``.
+``VDD_VCO``-tied n-well tap ring on the well side. Both bands are now drawn,
+concentric: the ``GND_VCO`` p+ substrate ring immediately around the block's
+content (step 8 below), and a ``VDD_VCO`` n-well tap ring outside it
+(step 8b) -- ``NWELL_RING_*`` for the geometry and the rules each number
+comes from. ``placement().outer`` is the substrate ring, ``nwell_ring`` the
+n-well band's outer edge, and ``footprint_um()`` is the latter, i.e. the
+block's real outermost geometry.
+
+The n-well band goes *outside* on purpose. In a p-substrate flow with no
+deep n-well, the p+ ring is what the devices' own sources already tie into,
+so it belongs closest to them; the reverse-biased well/substrate junction
+belongs outside it, collecting what gets past. Putting it inside would also
+mean threading a well band between the substrate ring and five sub-block
+rings already strapped to that ring in Metal1.
+
+Every n-well *inside* the block remains ``VDD_VCO``-tied by its own
+sub-block's tap band (12.1 um worst case, well inside section 1's own 15 um
+bound), which is the well-tie and tap-pitch half of the same requirement.
+The ring band is reached the same way every sub-block's tap band is -- one
+Metal2 hop from the Metal1 supply trunk, hopping over the substrate ring on
+the layer that is allowed to. One hop is enough for the whole ring because
+``primitives.guard_ring()`` draws all four bands as one continuous Metal1
+shape; ``connectivity_report()`` probes the band *opposite* the feed, so
+"the ring is continuous" is proved rather than assumed.
 
 DEVIATION FROM THE ROM FLOORPLAN, STATED PLAINLY
 --------------------------------------------------
-``footprint_um()`` reports the assembled block at 294.78 x 148.18 um
-(43,680 um^2 = 0.0437 mm^2) against PLL-FLOORPLAN.md section 5's
-0.011-0.017 mm^2 ROM row for the whole VCO -- a **2.6-4.0x overrun**. That
-record's section 5 names this case in advance and prescribes the response
-("the next floorplan revision should state the overrun explicitly rather
-than silently rounding the total down"), so it is stated here, in
+``footprint_um()`` reports the assembled block at 183.18 x 170.28 um
+(31,192 um^2 = 0.0312 mm^2) against PLL-FLOORPLAN.md section 5's
+0.011-0.017 mm^2 ROM row for the whole VCO -- still a **1.8-2.8x overrun**.
+That record's section 5 names this case in advance and prescribes the
+response ("the next floorplan revision should state the overrun explicitly
+rather than silently rounding the total down"), so it is stated here, in
 ``layout/floorplan/skeleton.py``'s docstring, and in
-``layout/evidence/vco-layout/PROOF-block.md`` with the re-run budget
-arithmetic.
+``layout/evidence/vco-layout/PROOF-fold.md`` with the re-run budget
+arithmetic (``PROOF-block.md`` carries the pre-fold version of the same
+accounting, plus a correction note on one arithmetic slip in it).
 
 The cause is the one already recorded per sub-block: every device is drawn
 as its own diffusion island wired by metal (``primitives.py``'s module
-docstring), and each sub-block is a single row, so the band-select mirror
-alone is 266 um wide and sets the whole block's width. This module takes the
-easy half of that back -- packing the resistor trio into the V-to-I core
-row's own leftover width rather than beside it, and trimming the
-boundary-pin channels, is worth ~11 % -- but at ~50 % area utilisation
-inside the guard ring the real lever is folding the single-row sub-blocks
-into multiple rows, which is not this issue's scope.
+docstring). Issue #293's own increment took the easy part back -- packing
+the resistor trio into the V-to-I core row's own leftover width rather than
+beside it, and trimming the boundary-pin channels, worth ~11 % -- and left
+the real lever, folding the single-row sub-blocks into multiple rows,
+explicitly to a follow-up. Issue #324 pulled that lever on the widest one:
+``mirror.py``'s band-select mirror is now two stacked banks rather than one
+NMOS/PMOS row pair (269.9 x 37.1 um -> 152.6 x 53.0 um), which took the
+assembled block from 294.78 x 148.18 um to 176.98 x 164.08 um before the
+n-well ring's own +6.2 um per axis. Height is the currency width was bought
+with, and it is affordable: the floorplan skeleton's height is set by the
+loop filter's 195 um, not by this block.
+
+**The other four sub-blocks are still single rows and are the next lever.**
+The ring, the buffer and the V-to-I core are all narrower than the folded
+mirror, so folding any one of them alone buys nothing at block level until
+the mirror's own two banks are folded again (cascade C is 115.18 um wide on
+its own and would need a 2-D common-centroid array, not another row split,
+to go below that) -- issue #336.
 """
 
 from __future__ import annotations
@@ -179,6 +202,30 @@ SHARED_MARGIN_UM = 3.0  # content bbox -> guard ring inner edge
 SHARED_RING_WIDTH_UM = 1.2
 STRAP_WIDTH_UM = 1.2  # Metal1 tie, block ring <-> a sub-block's own ring
 
+# --- block-level n-well tap ring (issue #324) -------------------------------
+# The second, concentric half of PLL-FLOORPLAN.md section 1's "real two-sided
+# ring": a VDD_VCO-tied n-well band outside the GND_VCO substrate ring. Outside
+# rather than inside on purpose -- in a p-substrate flow with no deep n-well,
+# the p+ ring belongs closest to the noisy devices (it is the low-impedance
+# substrate tie those devices' own sources already run to) and the n-well band
+# belongs outside it, where the reverse-biased well/substrate junction collects
+# what gets past the p+ ring. Putting it inside would also mean threading it
+# between the block ring and five sub-block rings that are already strapped to
+# that ring in Metal1.
+NWELL_RING_GAP_UM = 1.5
+"""GND_VCO ring's outer edge -> the n-well's inner edge.
+
+``DF.16_LV``'s own minimum (n-well to comp outside it) is 0.43 um. 1.5 um is
+used so the p-ring's *pplus* (0.3 um past its comp) also clears the n-well by
+1.2 um -- the same clearance ``mirror.py``'s single-row layout already kept
+between its own p-ring and n-well and DRC-proved clean.
+"""
+
+NWELL_RING_TAP_INSET_UM = 0.5  # n-well edge -> its own ncomp (DF.4d_LV = 0.12 min)
+NWELL_RING_TAP_WIDTH_UM = 0.6  # ncomp band thickness (NP.1's min is 0.4)
+NWELL_RING_WIDTH_UM = 2 * NWELL_RING_TAP_INSET_UM + NWELL_RING_TAP_WIDTH_UM
+"""Drawn n-well band width, 1.6 um -- comfortably above ``NW.1a_LV``'s 0.86."""
+
 M2_HALF_UM = prim.METAL2_WIRE_WIDTH_UM / 2.0
 
 
@@ -213,7 +260,11 @@ class Placement:
     res_col_noff_x: float
     res_col_nvi_x: float
     content: tuple  # (x0, y0, x1, y1) of everything the guard ring encloses
-    outer: tuple  # (x0, y0, x1, y1) of the block-level guard ring itself
+    outer: tuple  # (x0, y0, x1, y1) of the block-level GND_VCO substrate ring
+    nwell_tap: tuple  # (x0, y0, x1, y1), outer edge of the VDD_VCO ncomp ring
+    nwell_ring: tuple  # (x0, y0, x1, y1), outer edge of that ring's own n-well
+    boundary: tuple  # the block's own footprint -- == nwell_ring, the
+    # outermost geometry this block draws
 
     def boxes(self) -> dict:
         """Each sub-block's own guard-ring box, translated into block coords."""
@@ -287,6 +338,12 @@ def placement() -> Placement:
     m = SHARED_MARGIN_UM + SHARED_RING_WIDTH_UM
     outer = (content[0] - m, content[1] - m, content[2] + m, content[3] + m)
 
+    def _grow(box: tuple, d: float) -> tuple:
+        return (box[0] - d, box[1] - d, box[2] + d, box[3] + d)
+
+    nwell_ring = _grow(outer, NWELL_RING_GAP_UM + NWELL_RING_WIDTH_UM)
+    nwell_tap = _grow(outer, NWELL_RING_GAP_UM + NWELL_RING_WIDTH_UM - NWELL_RING_TAP_INSET_UM)
+
     return Placement(
         dx_res=dx_res,
         dy_res=dy_res,
@@ -308,12 +365,22 @@ def placement() -> Placement:
         res_col_nvi_x=res_col_nvi_x,
         content=content,
         outer=outer,
+        nwell_tap=nwell_tap,
+        nwell_ring=nwell_ring,
+        boundary=nwell_ring,
     )
 
 
 def footprint_um() -> tuple:
-    """Pure-Python (no KLayout) footprint: the block-level guard ring's box."""
-    return placement().outer
+    """Pure-Python (no KLayout) footprint: the block's outermost guard band.
+
+    That is the ``VDD_VCO`` n-well ring's own outer edge (issue #324), not the
+    ``GND_VCO`` substrate ring's -- the substrate ring is now the *inner* of
+    two concentric bands. ``placement().outer`` is still the substrate ring, so
+    every check that is really about "inside the block's guard ring" (sub-block
+    containment, the decap placement) keeps using it.
+    """
+    return placement().boundary
 
 
 def decap_boxes_um() -> tuple:
@@ -578,6 +645,14 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
     for pins in (mirror_pins, ring_pins, buffer_pins):
         vdd_feed(pins)
 
+    # ... and the same hop again for the block-level n-well tap ring (step 8b),
+    # which is outside the GND_VCO ring and so is likewise only reachable on
+    # Metal2. One feed point is enough for the whole ring: ``guard_ring()``
+    # draws all four bands as one continuous Metal1 shape.
+    nw_ring_x = dev.snap_um(p.nwell_tap[2] - NWELL_RING_TAP_WIDTH_UM / 2.0)
+    r.route(VDD_NET, [(p.vdd_trunk_x, vdd_pin_y), (nw_ring_x, vdd_pin_y)])
+    r.via(VDD_NET, nw_ring_x, vdd_pin_y)
+
     # --- 7. block boundary pins -------------------------------------------
     # Inputs stay on their own sub-block's track y and simply run out to the
     # left-hand pin column -- no risers, so nothing in the left channel can
@@ -648,6 +723,25 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
         box = boxes[key]
         strap(strap_x0, box[0] + ring_w, dev.snap_um((box[1] + box[3]) / 2.0))
 
+    # --- 8b. block-level VDD_VCO n-well tap ring, concentric outside the
+    # GND_VCO substrate ring (issue #324). ``guard_ring(kind="n")`` draws only
+    # the ncomp/nplus/contact/Metal1 bands, so the n-well those bands sit in is
+    # this caller's own four rectangles -- drawn as a closed frame (top and
+    # bottom spanning the full width, left and right filling between) so the
+    # union is one annulus, not four islands that happen to touch. ---
+    nwr, nwt = p.nwell_ring, p.nwell_tap
+    inner = (
+        nwr[0] + NWELL_RING_WIDTH_UM,
+        nwr[1] + NWELL_RING_WIDTH_UM,
+        nwr[2] - NWELL_RING_WIDTH_UM,
+        nwr[3] - NWELL_RING_WIDTH_UM,
+    )
+    canvas.rect("nwell", nwr[0], inner[3], nwr[2], nwr[3])  # top
+    canvas.rect("nwell", nwr[0], nwr[1], nwr[2], inner[1])  # bottom
+    canvas.rect("nwell", nwr[0], inner[1], inner[0], inner[3])  # left
+    canvas.rect("nwell", inner[2], inner[1], nwr[2], inner[3])  # right
+    prim.guard_ring(canvas, "n", *nwt, NWELL_RING_TAP_WIDTH_UM, VDD_NET)
+
     # --- 9. carried-forward 22 pF decap, against this block's VDD_VCO pin --
     for i, box in enumerate(decap_boxes_um()):
         canvas.rect("boundary", *box)
@@ -661,12 +755,13 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
     return VcoBlockResult(
         canvas=canvas,
         placement=p,
-        footprint=p.outer,
+        footprint=p.boundary,
         sub_pins=sub_pins,
         nets={
             "VBP_land_x": vbp_land_x,
             "VBN_land_x": vbn_land_x,
             "vdd_pin_y": vdd_pin_y,
+            "nwell_ring_feed_x": nw_ring_x,
             "lane_vbp_y": lane_vbp_y,
             "lane_vbn_y": lane_vbn_y,
             "lane_y5_y": lane_y5_y,
@@ -698,8 +793,8 @@ CONNECTED_PROBES = (
     ("VBP", "band mirror VBP output <-> ring VBP rail"),
     ("VBN", "band mirror VBN output <-> ring VBN rail"),
     ("Y5", "ring stage-5 output <-> output buffer input gate"),
-    ("VDD_VCO", "supply trunk <-> all four n-well tap bands"),
-    ("GND_VCO", "block guard ring <-> every sub-block guard ring"),
+    ("VDD_VCO", "supply trunk <-> four n-well tap bands + the block n-well ring"),
+    ("GND_VCO", "block guard ring <-> every sub-block guard ring + bank tap strips"),
     ("CLK", "output buffer's last stage <-> the block's CLK pin"),
     ("VCTRL", "block VCTRL pin <-> V-to-I core's VCTRL track"),
     ("B0", "block B0 pin <-> band mirror's B0 track"),
@@ -743,7 +838,29 @@ def _probe_points(result: VcoBlockResult) -> dict:
     for key in ("vtoi_core", "mirror", "ring", "buffer"):
         band = max(sp[key][VDD_NET], key=lambda b: b[3])
         add("VDD_VCO", "metal1", *c(band))
+    # The block-level n-well tap ring, probed on the band *opposite* its single
+    # Metal2 feed -- so the probe proves the ring is continuous all the way
+    # round, not just that the feed's own via landed.
+    add(
+        "VDD_VCO",
+        "metal1",
+        p.nwell_tap[0] + NWELL_RING_TAP_WIDTH_UM / 2.0,
+        (p.nwell_tap[1] + p.nwell_tap[3]) / 2.0,
+    )
     add("GND_VCO", "metal1", (p.outer[0] + p.outer[2]) / 2.0, p.outer[1] + SHARED_RING_WIDTH_UM / 2.0)
+    # Every substrate tap strip the band mirror's row fold added under its
+    # upper bank(s) -- butted into that sub-block's own ring, so this proves
+    # the butt joint really merged rather than merely abutting on paper.
+    mirror_plan = mirror.plan()
+    for bank in mirror_plan.banks:
+        if bank.sub_tap is None:
+            continue
+        add(
+            "GND_VCO",
+            "metal1",
+            (bank.sub_tap[0] + bank.sub_tap[2]) / 2.0 + p.dx_mirror,
+            (bank.sub_tap[1] + bank.sub_tap[3]) / 2.0 + p.dy_mirror,
+        )
     for key, ring_w in (
         ("bias_resistors", bias_resistors.RING_WIDTH_UM),
         ("vtoi_core", vtoi_core.RING_WIDTH_UM),

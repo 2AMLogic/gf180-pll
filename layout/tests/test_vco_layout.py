@@ -366,28 +366,42 @@ class MirrorPlanTests(unittest.TestCase):
         self.plan = mirror.plan()
 
     def test_every_inter_device_net_has_a_track(self):
-        for net, rows in self.plan.net_rows.items():
-            self.assertIn(net, mirror.NET_ORDER)
-            for row in rows:
-                self.assertIsInstance(self.plan.track_y(net, row), float)
+        for bank in self.plan.banks:
+            for net, rows in bank.net_rows.items():
+                self.assertIn(net, mirror.NET_ORDER)
+                for row in rows:
+                    self.assertIsInstance(bank.track_y(net, row), float)
 
-    def test_nmos_and_pmos_track_groups_are_disjoint(self):
+    def test_nmos_and_pmos_track_groups_are_disjoint_within_every_bank(self):
         # The invariant that makes a Metal1 escape column from one row
         # incapable of touching one from the other row, whatever their x --
-        # see mirror.py's NET_ORDER comment.
-        lo = [self.plan.track_lo[n] for n, r in self.plan.net_rows.items() if "nfet" in r]
-        hi = [self.plan.track_hi[n] for n, r in self.plan.net_rows.items() if "pfet" in r]
-        self.assertLess(max(lo), min(hi))
-        self.assertGreaterEqual(min(hi) - max(lo), mirror.TRACK_PITCH_UM)
+        # see mirror.py's NET_ORDER comment. Asserted per bank: after the
+        # issue-#324 fold it is deliberately false *globally* (bank 1's lo
+        # tracks sit above bank 0's hi tracks), and the cross-bank case is
+        # covered by test_banks_do_not_overlap_in_y below instead.
+        for bank in self.plan.banks:
+            lo = [bank.track_lo[n] for n, r in bank.net_rows.items() if "nfet" in r]
+            hi = [bank.track_hi[n] for n, r in bank.net_rows.items() if "pfet" in r]
+            self.assertLess(max(lo), min(hi), bank.name)
+            # round(): a bank whose own y origin is not 0 accumulates float
+            # error in its track y's; the geometry itself is snapped on the
+            # way out by Canvas._u (devices.LAYOUT_GRID_UM = 0.005 um), which
+            # is three orders of magnitude coarser than this rounding.
+            self.assertGreaterEqual(
+                round(min(hi) - max(lo), 6), mirror.TRACK_PITCH_UM, bank.name
+            )
 
-    def test_two_row_nets_get_a_link_column_and_one_row_nets_do_not(self):
-        for net, rows in self.plan.net_rows.items():
-            if rows == {"nfet", "pfet"}:
-                self.assertIn(net, self.plan.link_x, f"{net} spans both rows but has no link")
+    def test_multi_group_nets_get_a_link_column_and_single_group_nets_do_not(self):
+        # Pre-fold "more than one group" meant "escaped from both rows"; with
+        # banks it also means "escaped from more than one bank".
+        for net in mirror.NET_ORDER:
+            groups = self.plan.net_groups.get(net, set())
+            if len(groups) > 1:
+                self.assertIn(net, self.plan.link_x, f"{net} spans {groups} but has no link")
             else:
                 self.assertNotIn(net, self.plan.link_x)
 
-    def test_link_columns_sit_clear_of_both_transistor_rows(self):
+    def test_link_columns_sit_clear_of_every_banks_transistor_rows(self):
         rows_right = max(
             it.x0 + it.width for it in (self.plan.pmos + self.plan.nmos)
         )
@@ -395,11 +409,12 @@ class MirrorPlanTests(unittest.TestCase):
             self.assertGreater(x, rows_right, f"{net}'s link column lands inside a device row")
 
     def test_metal2_tracks_meet_the_m2_spacing_rule(self):
-        ys = sorted(set(list(self.plan.track_lo.values()) + list(self.plan.track_hi.values())))
-        for a, b in zip(ys, ys[1:]):
-            self.assertGreaterEqual(
-                b - a - prim.METAL2_WIRE_WIDTH_UM, dev.DRC_METAL2_MIN_SPACE_UM
-            )
+        for bank in self.plan.banks:
+            ys = sorted(set(list(bank.track_lo.values()) + list(bank.track_hi.values())))
+            for a, b in zip(ys, ys[1:]):
+                self.assertGreaterEqual(
+                    b - a - prim.METAL2_WIRE_WIDTH_UM, dev.DRC_METAL2_MIN_SPACE_UM, bank.name
+                )
 
     def test_reserve_rejects_two_nets_closer_than_m1_spacing(self):
         # Negative control for the guard that caught the real short in this
@@ -425,6 +440,92 @@ class MirrorPlanTests(unittest.TestCase):
         x0, y0, x1, y1 = mirror.footprint_um()
         self.assertGreater(x1 - x0, 0.0)
         self.assertGreater(y1 - y0, 0.0)
+
+
+class MirrorRowFoldTests(unittest.TestCase):
+    """The issue-#324 fold: two banks instead of one row pair.
+
+    The point of the fold is width, so these tests assert the fold is real
+    (every device still drawn, exactly once, in a bank that is genuinely
+    narrower than the flat row would be) and that the new inter-bank geometry
+    -- the substrate tap strip each bank above the first needs -- clears the
+    bank below it by the rules it has to clear.
+    """
+
+    def setUp(self):
+        self.plan = mirror.plan()
+
+    def test_the_fold_draws_every_device_exactly_once(self):
+        drawn = [it.name for it in self.plan.pmos] + [it.name for it in self.plan.nmos]
+        self.assertEqual(len(drawn), len(set(drawn)), "a device is drawn twice")
+        expected = set(mirror.DEVICES) | set(mirror.CASCADES)
+        # The cascades' own legs are drawn as the array item, not as fets.
+        legs = {c.always_on.name for c in dev.MIRROR_CASCADES} | {
+            c.switched.name for c in dev.MIRROR_CASCADES
+        }
+        self.assertEqual(set(drawn), expected - legs)
+
+    def test_more_than_one_bank_and_each_row_is_left_aligned(self):
+        self.assertGreater(len(self.plan.banks), 1, "the rows are not folded at all")
+        for bank in self.plan.banks:
+            self.assertEqual(bank.pmos[0].x0, 0.0)
+            self.assertEqual(bank.nmos[0].x0, 0.0)
+
+    def test_the_widest_bank_is_much_narrower_than_one_flat_row_would_be(self):
+        # What the fold buys, stated as a number a regression would trip.
+        flat_pmos = sum(it.width for it in self.plan.pmos) + mirror.DEVICE_GAP_UM * (
+            len(self.plan.pmos) - 1
+        )
+        widest = max(bank.row_x1() for bank in self.plan.banks)
+        self.assertLess(widest, 0.6 * flat_pmos)
+
+    def test_banks_do_not_overlap_in_y(self):
+        # The reason a bank's own lo/hi track invariant is enough: bank k's
+        # NMOS row starts above everything bank k-1 draws.
+        for lower, upper in zip(self.plan.banks, self.plan.banks[1:]):
+            self.assertGreater(upper.nmos_bottom, lower.nwell[3])
+            self.assertGreater(min(upper.track_lo.values()), max(lower.track_hi.values()))
+
+    def test_every_bank_above_the_first_carries_its_own_substrate_tap_strip(self):
+        self.assertIsNone(self.plan.banks[0].sub_tap, "bank 0 uses the outer ring's own band")
+        for bank in self.plan.banks[1:]:
+            self.assertIsNotNone(bank.sub_tap, f"{bank.name} has no GND_VCO tap of its own")
+
+    def test_substrate_tap_strips_clear_the_bank_below_and_the_row_above(self):
+        for lower, upper in zip(self.plan.banks, self.plan.banks[1:]):
+            tap = upper.sub_tap
+            # DF.16_LV: n-well to comp outside it.
+            self.assertGreaterEqual(tap[1] - lower.nwell[3], dev.DRC_NWELL_TO_NCOMP_OUT_UM)
+            # DF.3a_LV: comp to comp -- and enough that the two islands'
+            # implants clear each other too (PP.2/NP.2's own 0.4 um).
+            self.assertGreaterEqual(upper.nmos_bottom - tap[3], dev.DRC_COMP_MIN_SPACE_UM)
+            self.assertGreaterEqual(
+                round(
+                    (upper.nmos_bottom - prim.IMPLANT_MARGIN_UM)
+                    - (tap[3] + prim.IMPLANT_MARGIN_UM),
+                    6,
+                ),
+                dev.DRC_NPLUS_MIN_WIDTH_UM,
+            )
+
+    def test_substrate_tap_strips_butt_into_the_blocks_own_guard_ring(self):
+        # Drawn as one continuous pcomp shape with the ring's left band, so
+        # the extraction sees one GND_VCO net rather than an island tied only
+        # through the substrate -- block.connectivity_report() probes this.
+        for bank in self.plan.banks[1:]:
+            self.assertAlmostEqual(
+                bank.sub_tap[0], self.plan.outer[0] + mirror.RING_WIDTH_UM
+            )
+
+    def test_only_two_nets_cross_a_bank_boundary(self):
+        # Not a rule, a design property the split was chosen for: it is what
+        # keeps the link strip the same size it was before the fold.
+        crossing = {
+            net
+            for net, groups in self.plan.net_groups.items()
+            if len({bank for bank, _ in groups}) > 1
+        }
+        self.assertEqual(crossing, {"VBP2", "GC"})
 
 
 class GridSnapTests(unittest.TestCase):
@@ -492,9 +593,16 @@ class VcoSubBlockFloorplanTests(unittest.TestCase):
         # LOOP_FILTER's own 195 um height, not VCO_CORE's, so VCO_CORE.h
         # growing past 100 um (previous test) does not move this number
         # (see skeleton.py's own docstring for the arithmetic).
+        #
+        # The lower bound moved from 0.9 to 0.8 of the target when issue
+        # #324's row fold cut VCO_CORE's width: it is a "this number changed,
+        # go re-read skeleton.py" tripwire, not a floor anything wants to sit
+        # against. Both bounds are asserted so a *regression* (the fold being
+        # undone) trips it too.
         used = skeleton.total_extent_um2()
         self.assertLess(used, 150_000.0)
-        self.assertGreater(used / 150_000.0, 0.9, "budget headroom changed -- re-read skeleton.py")
+        self.assertGreater(used / 150_000.0, 0.8, "budget headroom changed -- re-read skeleton.py")
+        self.assertLess(used / 150_000.0, 0.9, "budget headroom changed -- re-read skeleton.py")
 
 
 class BiasResistorDeviceTests(unittest.TestCase):
@@ -797,8 +905,52 @@ class AssembledVcoBlockPlacementTests(unittest.TestCase):
                 f"{name} escapes the block guard ring: {b} vs {self.p.outer}",
             )
 
-    def test_footprint_is_the_block_guard_ring_box(self):
-        self.assertEqual(vco_block.footprint_um(), self.p.outer)
+    def test_footprint_is_the_outer_nwell_guard_ring_box(self):
+        # Issue #324: the block's outermost geometry is no longer the GND_VCO
+        # substrate ring but the VDD_VCO n-well ring concentric outside it.
+        self.assertEqual(vco_block.footprint_um(), self.p.boundary)
+        self.assertEqual(self.p.boundary, self.p.nwell_ring)
+
+    def test_the_guard_ring_is_two_sided_and_concentric(self):
+        # PLL-FLOORPLAN.md section 1: "a real two-sided ring, not a
+        # substrate-only one" -- GND_VCO on the substrate side, a VDD_VCO
+        # n-well tap ring outside it, each fully enclosing the last.
+        sub, tap, nw = self.p.outer, self.p.nwell_tap, self.p.nwell_ring
+        for inner, outer_box in ((sub, tap), (tap, nw)):
+            self.assertLess(outer_box[0], inner[0])
+            self.assertLess(outer_box[1], inner[1])
+            self.assertGreater(outer_box[2], inner[2])
+            self.assertGreater(outer_box[3], inner[3])
+
+    def test_nwell_ring_meets_the_nwell_and_tap_rules_it_cites(self):
+        # NW.1a_LV (n-well width), DF.4d_LV (n-well overlap of its own ncomp),
+        # DF.16_LV (n-well to the substrate ring's comp outside it).
+        self.assertGreaterEqual(vco_block.NWELL_RING_WIDTH_UM, dev.DRC_NWELL_MIN_WIDTH_UM)
+        self.assertGreaterEqual(
+            vco_block.NWELL_RING_TAP_INSET_UM, dev.DRC_NWELL_NCOMP_ENCLOSE_UM
+        )
+        self.assertGreaterEqual(vco_block.NWELL_RING_GAP_UM, dev.DRC_NWELL_TO_NCOMP_OUT_UM)
+        # The drawn geometry has to agree with those constants, not just the
+        # constants with the rules.
+        self.assertAlmostEqual(
+            self.p.nwell_ring[0] + vco_block.NWELL_RING_WIDTH_UM + vco_block.NWELL_RING_GAP_UM,
+            self.p.outer[0],
+        )
+        self.assertAlmostEqual(
+            self.p.nwell_tap[0] - self.p.nwell_ring[0], vco_block.NWELL_RING_TAP_INSET_UM
+        )
+
+    def test_nwell_ring_clears_every_sub_block_nwell_by_nw2b(self):
+        # NW.2b_LV: 1.4 um between two n-well shapes. Measured against each
+        # sub-block's own guard-ring box, which encloses its n-well.
+        for name, b in self.boxes.items():
+            gap = min(
+                b[0] - self.p.nwell_ring[0],
+                b[1] - self.p.nwell_ring[1],
+                self.p.nwell_ring[2] - b[2],
+                self.p.nwell_ring[3] - b[3],
+            )
+            self.assertGreater(gap, 1.4, f"{name} sits within NW.2b_LV of the block n-well ring")
 
     def test_tap_pitch_bound_holds_for_every_sub_block(self):
         # PLL-FLOORPLAN.md section 1 / DF.13_MV / DF.14_MV: <= 15 um to a tap
@@ -923,13 +1075,30 @@ class AssembledVcoBlockFloorplanTests(unittest.TestCase):
         self.assertGreater(area, 17_000.0)
 
     def test_skeleton_bounding_box_headroom_against_the_draft_budget(self):
-        # Still under PLL-FLOORPLAN.md section 5's 150,000 um^2 draft target,
-        # but the real VCO layout has eaten most of the headroom -- assert
-        # both facts, so the next block to land real geometry finds out here
-        # rather than in review.
+        # Still under PLL-FLOORPLAN.md section 5's 150,000 um^2 draft target.
+        # Issue #324's row fold bought back most of the headroom the real VCO
+        # layout had eaten: ~148,200 um^2 (1.2 % under) before the fold,
+        # ~126,400 um^2 (16 % under) after, *including* the +6.2 um per axis
+        # the new block-level n-well guard ring costs. Both bounds are
+        # asserted so the next block to land real geometry -- and a regression
+        # that unfolds the mirror -- both find out here rather than in review.
         extent = skeleton.total_extent_um2()
-        self.assertLess(extent, 150_000.0)
-        self.assertGreater(extent, 140_000.0)
+        self.assertLess(extent, 135_000.0)
+        self.assertGreater(extent, 115_000.0)
+
+    def test_the_row_fold_actually_reduced_the_block_footprint(self):
+        # The pre-fold assembled block (PR #325, recorded in
+        # layout/evidence/vco-layout/PROOF-block.md) was 294.78 x 148.18 um =
+        # 43,680 um^2, with a substrate-only block ring. This asserts the
+        # direction and rough size of the change, so "folded" cannot silently
+        # become "unfolded plus a wider ring".
+        w, h = skeleton.VCO_CORE.w, skeleton.VCO_CORE.h
+        self.assertLess(w, 200.0)
+        self.assertLess(w * h, 35_000.0)
+        # Height was the currency the width was bought with, and the budget
+        # can afford it only while it stays under LOOP_FILTER's own 195 um.
+        self.assertGreater(h, 148.18)
+        self.assertLess(h, skeleton.LOOP_FILTER.h)
 
 
 @unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")

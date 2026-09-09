@@ -29,43 +29,59 @@ Positions and sizes below are float micron coordinates from
 as-drawn device footprints. Everything else is the ROM block-footprint
 estimate from that record's area-budget table, midpoint of the stated range.
 
-VCO real geometry (issue #293)
--------------------------------
+VCO real geometry (issues #293, #324)
+--------------------------------------
 ``VCO_CORE`` is no longer a placeholder rectangle. ``layout/pll_top/vco/
 block.py`` assembles all five VCO sub-blocks -- the 5-stage ring, the
 common-centroid band-select mirror, the 3-stage output buffer, the
 ``RCG``/``ROFF``/``RDEG`` poly resistors and the V-to-I core -- into one
-wired, DRC-clean layout under one block-level ``GND_VCO`` guard ring, and
-``VCO_CORE`` below is *that block's own guard-ring box*, not an estimate.
-Every sub-block rectangle in ``SUB_BLOCKS`` is likewise its real drawn
-extent, translated out of the block's own coordinates. All of it comes from
-plain-Python ``footprint_um()``/``placement()`` calls, so this file still
-imports no KLayout.
+wired, DRC-clean layout under a two-sided block-level guard ring
+(``GND_VCO`` substrate ring, ``VDD_VCO`` n-well tap ring concentric outside
+it), and ``VCO_CORE`` below is *that block's own outer guard-ring box*, not
+an estimate. Every sub-block rectangle in ``SUB_BLOCKS`` is likewise its real
+drawn extent, translated out of the block's own coordinates. All of it comes
+from plain-Python ``footprint_um()``/``placement()`` calls, so this file
+still imports no KLayout.
 
-**The real block is 294.8 x 148.2 um = 43,680 um^2, against PLL-FLOORPLAN.md
-section 5's ROM row of 0.011-0.017 mm^2 for the whole VCO -- a 2.6-4.0x
-overrun.** That record's own section 5 names this case in advance ("if real
-per-block layout pushes the conservative estimate's ~34 % margin below zero
-... the next floorplan revision should state the overrun explicitly rather
-than silently rounding the total down"), so it is stated here rather than
-absorbed:
+**The real block is 183.2 x 170.3 um = 31,192 um^2, against
+PLL-FLOORPLAN.md section 5's ROM row of 0.011-0.017 mm^2 for the whole VCO
+-- a 1.8-2.8x overrun.** That record's own section 5 names this case in
+advance ("if real per-block layout pushes the conservative estimate's ~34 %
+margin below zero ... the next floorplan revision should state the overrun
+explicitly rather than silently rounding the total down"), so it is stated
+here rather than absorbed:
 
 * Re-running section 5's own arithmetic with the measured VCO number in
-  place of its ROM row gives a block subtotal of ~0.111 mm^2 conservative
-  (0.0369 loop filter + 0.0437 VCO + 0.020 PFD/CP + 0.0052 divider+lock),
-  ~0.139 mm^2 after that section's x1.25 top-level overhead -- still inside
-  the 0.15 mm^2 budget, but with the margin down from ~34 % to ~7 %.
+  place of its ROM row gives a conservative block subtotal of
+  0.0369 (loop filter) + 0.0312 (VCO) + 0.020 (PFD/CP) + 0.0052
+  (divider+lock) = **0.0933 mm^2**, i.e. **0.1167 mm^2** after that
+  section's x1.25 top-level overhead -- inside the 0.15 mm^2 budget with
+  ~22 % margin (section 5's own ROM-only conservative estimate had ~34 %).
 * ``total_extent_um2()`` (this skeleton's whole bounding box, a deliberately
   looser number than the budget table -- see that function's own docstring)
-  lands at ~148,000 um^2, i.e. ~1 % under the 150,000 um^2 target where it
-  previously had ~3 %.
+  lands at ~126,400 um^2, i.e. ~16 % under the 150,000 um^2 target.
 
-The cause is structural and already recorded per sub-block: every device is
-drawn as its own diffusion island wired by metal (see
-``vco/primitives.py``'s module docstring), and each sub-block is a single
-row, so the band-select mirror alone is 266 um wide and sets the whole
-block's width. Folding those rows is the identified next area optimisation
-and is not issue #293's scope.
+Both numbers **improved** at issue #324, which is the same increment that
+added the block's second (n-well) guard-ring band. Before it, the assembled
+block was 294.8 x 148.2 um = 43,680 um^2 with a substrate-only block ring: a
+2.6-4.0x ROM overrun, a ~148,200 um^2 whole-skeleton extent (~1.2 % under
+target), and the same budget-table arithmetic giving 0.0369 + 0.0437 + 0.020
++ 0.0052 = 0.1058 mm^2, 0.1323 mm^2 after x1.25, ~12 % margin. (The earlier
+revision of this docstring, and ``evidence/vco-layout/PROOF-block.md``,
+quoted that subtotal as ~0.111 mm^2 / ~0.139 mm^2 / ~7 % -- the four terms
+sum to 0.1058, not 0.111. The ~12 % figure above is the corrected
+before-number; the conclusion it supported, that the margin had dropped
+sharply and folding was the fix, is unchanged.) The cause of the overrun was
+structural and recorded per sub-block: every device is drawn as its own
+diffusion island wired by metal (see ``vco/primitives.py``'s module
+docstring) and every sub-block was a *single row*, so the band-select mirror
+alone was 266 um wide and set the whole block's width. #324 folded that
+mirror into two stacked banks (see ``vco/mirror.py``'s ``BANKS``), trading
++16 um of block height -- which is free, the skeleton's height is set by
+``LOOP_FILTER``'s 195 um, not by the VCO -- for -118 um of block width, and
+spent 6.2 um of that back on the n-well ring. The remaining overrun is the
+same diffusion-island convention; the other four sub-blocks are still single
+rows and are the next lever.
 """
 
 from __future__ import annotations
@@ -114,10 +130,11 @@ LOOP_FILTER = Block(
     w=235.0,
     h=195.0,
 )
-# Real VCO geometry (issue #293). ``block.footprint_um()`` is the assembled
-# block's own guard-ring box, in that block's own coordinates; everything the
-# block draws is placed relative to the same origin, so one translation maps
-# all of it into this skeleton's frame.
+# Real VCO geometry (issues #293, #324). ``block.footprint_um()`` is the
+# assembled block's own *outer* guard-ring box -- the VDD_VCO n-well ring, with
+# the GND_VCO substrate ring concentric inside it -- in that block's own
+# coordinates; everything the block draws is placed relative to the same
+# origin, so one translation maps all of it into this skeleton's frame.
 VCO_BLOCK_BOX = vco_block.footprint_um()
 VCO_BLOCK_W = VCO_BLOCK_BOX[2] - VCO_BLOCK_BOX[0]
 VCO_BLOCK_H = VCO_BLOCK_BOX[3] - VCO_BLOCK_BOX[1]
@@ -170,9 +187,12 @@ LOCK_DETECTOR_STANDALONE_H_UM = 62.6
 BLOCKS = (PFD_CP, LOOP_FILTER, VCO_CORE, DIVIDER_LOCK)
 
 # VCO isolation keep-out. VCO_CORE's own boundary is now the *real* drawn
-# GND_VCO guard ring (vco/block.py), so this rectangle no longer stands in for
-# that ring -- it is the PLL-FLOORPLAN.md section 1 keep-out around it, still
-# sized at the same 15 um DF.13_MV/DF.14_MV tap-pitch bound.
+# two-sided guard ring (vco/block.py: GND_VCO substrate ring inside, VDD_VCO
+# n-well tap ring outside), so this rectangle no longer stands in for that
+# ring -- it is the PLL-FLOORPLAN.md section 1 keep-out around it, still sized
+# at the same 15 um DF.13_MV/DF.14_MV tap-pitch bound. 15 um is also
+# comfortably above NW.2b_LV's 1.4 um n-well-to-n-well spacing, which the
+# outer ring now makes a real constraint on whatever abuts this block.
 VCO_GUARD_MARGIN = 15.0
 
 # Loop-filter sub-geometry, real as-drawn DR-006 device footprints, placed
