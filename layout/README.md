@@ -39,7 +39,17 @@ transmission gate, the pass-device topology neither sibling family covers)
 `layout/evidence/divider-tgate-proof/PROOF.md`. The transmission gate
 needed two real generalizations beyond `pfd_cp/devgen.py`'s original API
 (`Device.body_net`, `build_stack_cell()`'s `bypass_nets`) — both docstrings
-document the concrete DRC/LVS failures that motivated each one.
+document the concrete DRC/LVS failures that motivated each one. Built on
+that methodology, `dff_tg_3v3.py` (issue #308) assembles the first
+`divider_chain` **composite**: a 20-transistor transmission-gate
+master-slave flop, 6x `inv_3v3` + 4x `tgate_3v3` placed side by side in one
+flat macro (not GDS-level `CellInstArray`, the same style
+`layout/pll_top/lock_detector/build.py` established) and wired with a new
+Metal2/3 composite-routing fabric (`devgen.py`'s `route_net()`/`NetTracks`,
+generalized from `lock_detector/primitives.py`'s own) — see
+`layout/evidence/divider-dff-proof/PROOF.md` for the DRC/LVS-clean proof and
+two concrete same-x riser-collision bugs its own bring-up found and fixed
+(`devgen.py`'s `offset_pad_x()`).
 
 ```
 layout/
@@ -79,11 +89,15 @@ layout/
       rowgen.py                   row-style geometry/routing primitives for multi-gate blocks (issue #300)
       pfd_cells.py                 pfdcp_inv_3v3/pfdcp_nand2_3v3 as row-style cells (issue #300)
       pfd.py                       assembles the full mirror-symmetric PFD block; CLI entry point (issue #300)
-    divider_chain/            the divider_chain block family (issue #295/#306)
-      devgen.py                  reusable device-list -> DRC-clean leaf-cell generator
+    divider_chain/            the divider_chain block family (issue #295/#306/#308)
+      devgen.py                  reusable device-list -> DRC-clean leaf-cell generator +
+                                  composite Metal2/3 routing fabric (issue #308's
+                                  draw_column()/route_net()/NetTracks/offset_pad_x())
                                   (reused/generalized from pfd_cp/devgen.py)
       inv_3v3.py                  inv_3v3.sch's device table + CLI entry point
       tgate_3v3.py                tgate_3v3.sch's device table + CLI entry point
+      dff_tg_3v3.py                dff_tg_3v3.sch's composite (6x inv_3v3 + 4x tgate_3v3,
+                                    20 transistors) + CLI entry point (issue #308)
   evidence/
     inv-tb-proof/            committed proof artifacts (gds, netlist, logs, reports)
     floorplan-skeleton/      block-placement skeleton GDS + DRC report (issue #17)
@@ -96,6 +110,7 @@ layout/
     pfd-layout/              PFD block GDS + DRC-clean report, mirror-symmetric UP/DN chains (issue #300)
     divider-inv-proof/       divider_chain inv_3v3 devgen proof: GDS + DRC/LVS reports (issue #306)
     divider-tgate-proof/     divider_chain tgate_3v3 devgen proof: GDS + DRC/LVS reports (issue #306)
+    divider-dff-proof/       divider_chain dff_tg_3v3 composite proof: GDS + DRC/LVS reports (issue #308)
     work/                    scratch re-run tree (git-ignored)
 ```
 
