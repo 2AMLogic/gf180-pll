@@ -239,35 +239,64 @@ class CascadePair:
 
     PLL-FLOORPLAN.md section 1: "The three cascades ... are each a
     common-centroid pair (always-on leg interdigitated with its switched
-    leg), not three separate blobs". ``pattern`` is the left-to-right drawn
-    finger order ("A" = a finger of ``always_on``, "S" = a finger of
-    ``switched``) and MUST be a palindrome -- that is what makes both legs'
-    finger centroids coincide with the array's own centre regardless of the
-    two legs' different finger widths (see ``mirror.py``).
+    leg), not three separate blobs". ``pattern`` is a **grid** of rows,
+    bottom-to-top, each row itself left-to-right ("A" = a finger of
+    ``always_on``, "S" = a finger of ``switched``). A single-row cascade
+    (``A``, ``B``) is drawn as a 1-row grid, e.g. ``(("A","S","S","A"),)`` --
+    identical to the flat pattern this field held before issue #336 -- and a
+    multi-row cascade (``C``) folds its fingers into an R x C array (see
+    ``mirror.py``'s ``draw_cc_array()``).
+
+    Every row MUST be a palindrome, and the tuple of rows must itself be a
+    palindrome top-to-bottom -- together those two conditions are what make
+    both legs' finger centroids coincide with the array's own centre in
+    *both* x and y regardless of the legs' different finger widths (see
+    ``mirror.py.check_common_centroid()``, which proves it arithmetically
+    rather than leaving it to inspection).
     """
 
     name: str
     always_on: Fet
     switched: Fet
-    pattern: tuple[str, ...]
+    pattern: tuple[tuple[str, ...], ...]
 
     @property
     def kind(self) -> str:
         return self.always_on.kind
 
-    def finger_widths(self) -> tuple[float, ...]:
+    def finger_widths(self) -> tuple[tuple[float, ...], ...]:
         a, s = self.always_on.finger_w_um, self.switched.finger_w_um
-        return tuple(a if tag == "A" else s for tag in self.pattern)
+        return tuple(tuple(a if tag == "A" else s for tag in row) for row in self.pattern)
 
 
 # Cascade A: pfet 26.5 / 17.225 um (PLL-FLOORPLAN.md section 1). Both legs are
-# nf=2 in the frozen netlist, so ABBA interdigitation uses the schematic's own
-# finger count with no layout-side folding.
+# nf=2 in the frozen netlist, so a 2x2 grid uses the schematic's own finger
+# count with no layout-side folding.
+#
+# Issue #336: folded from the one-row "A S S A" layout PR #313 drew (52.72 um
+# wide) into a 2x2 grid --
+#
+#   A S
+#   S A
+#
+# -- the cheaper mechanism-proving fold the issue names before cascade C's,
+# since it is the *other* cascade in the mirror's lower bank wide enough to
+# matter once C's own fold stopped setting the block's width (see
+# mirror.py's module docstring). Neither row is itself a palindrome (reading
+# "A S" backwards is "S A", not "A S"), but the grid is symmetric under
+# 180-degree rotation about its own centre, which is the condition
+# mirror.py.check_common_centroid() actually needs -- see that function's own
+# comment for why rotation symmetry generalises correctly where "every row
+# and the row order are each a palindrome" would wrongly reject this exact
+# layout.
 CASCADE_A = CascadePair(
     name="A",
     always_on=Fet("MA0", "pfet", 26.5, 1.0, "VBP0", "VDD_VCO", "VBN1", nf=2),
     switched=Fet("MA1", "pfet", 17.225, 1.0, "GA", "VDD_VCO", "VBN1", nf=2),
-    pattern=("A", "S", "S", "A"),
+    pattern=(
+        ("A", "S"),
+        ("S", "A"),
+    ),
 )
 
 # Cascade B: nfet 5 / 8.6125 um. Both legs are nf=1 in the frozen netlist, and
@@ -283,19 +312,37 @@ CASCADE_B = CascadePair(
     name="B",
     always_on=Fet("MB0", "nfet", 5.0, 1.0, "VBN1", "VBP2", "GND_VCO", nf=1, layout_nf=2),
     switched=Fet("MB1", "nfet", 8.6125, 1.0, "GB", "VBP2", "GND_VCO", nf=1, layout_nf=2),
-    pattern=("A", "S", "S", "A"),
+    pattern=(("A", "S", "S", "A"),),
 )
 
 # Cascade C: pfet 12.3 / 78.87 um -- the 6.4:1 ratio DR-003 calls out as the
-# whole point of cascading. MC1 is nf=8 and MC0 is nf=1 in the netlist, which
-# already admits a palindromic pattern with no folding: the single MC0 finger
-# sits at the array's centre (its centroid *is* the centre) with MC1's eight
-# fingers split 4/4 symmetrically around it.
+# whole point of cascading. MC1 is nf=8 and MC0 is nf=1 in the netlist.
+#
+# Issue #336: folded into a 3x3 grid rather than the one-row "S S S S A S S S
+# S" layout PR #313/#324 drew -- that single row was 115.18 um wide on its
+# own and, after #324's bank fold, was the widest thing in the whole VCO
+# block. Folded, MC0's one finger sits at the centre position (its centroid
+# *is* the array's centre) with MC1's eight fingers split 2-per-row around it
+# on the other 8 grid cells:
+#
+#   S S S
+#   S A S
+#   S S S
+#
+# Both conditions mirror.py.check_common_centroid() needs generalise cleanly:
+# every row ("S S S", "S A S", "S S S") is itself a palindrome, and the tuple
+# of three rows is a palindrome top-to-bottom (row 0 == row 2). See
+# mirror.py's module docstring for why folding a 1x9 row into a 3x3 grid is
+# the width lever and what routing it costs.
 CASCADE_C = CascadePair(
     name="C",
     always_on=Fet("MC0", "pfet", 12.3, 1.0, "VBP2", "VDD_VCO", "VBN", nf=1),
     switched=Fet("MC1", "pfet", 78.87, 1.0, "GC", "VDD_VCO", "VBN", nf=8),
-    pattern=("S", "S", "S", "S", "A", "S", "S", "S", "S"),
+    pattern=(
+        ("S", "S", "S"),
+        ("S", "A", "S"),
+        ("S", "S", "S"),
+    ),
 )
 
 MIRROR_CASCADES = (CASCADE_A, CASCADE_B, CASCADE_C)

@@ -317,7 +317,10 @@ class BandSelectMirrorDeviceTests(unittest.TestCase):
 
 class CommonCentroidTests(unittest.TestCase):
     """The acceptance criterion this whole block exists for: each cascade is
-    an interdigitated array whose two legs share a centroid."""
+    an interdigitated array whose two legs share a centroid -- generalised
+    (issue #336) to a 2-D R x C grid, both x *and* y. Cascade A (2x2) and
+    cascade B (1x4) are the R == 1 and "no individual row is a palindrome"
+    special cases; cascade C (3x3) is the fully general one."""
 
     def test_every_cascade_passes_the_generator_own_check(self):
         for c in dev.MIRROR_CASCADES:
@@ -325,52 +328,85 @@ class CommonCentroidTests(unittest.TestCase):
 
     def test_leg_centroids_coincide_with_the_array_centre(self):
         for c in dev.MIRROR_CASCADES:
-            centre = mirror.array_width_um(c) / 2.0
+            centre = (mirror.array_width_um(c) / 2.0, mirror.array_height_um(c) / 2.0)
             for leg in ("A", "S"):
-                self.assertAlmostEqual(mirror.leg_centroid_um(c, leg), centre, places=9)
+                cx, cy = mirror.leg_centroid_um(c, leg)
+                self.assertAlmostEqual(cx, centre[0], places=9)
+                self.assertAlmostEqual(cy, centre[1], places=9)
 
-    def test_patterns_are_palindromes_with_the_netlist_finger_counts(self):
+    def test_patterns_are_symmetric_under_180_degree_rotation(self):
         for c in dev.MIRROR_CASCADES:
-            self.assertEqual(tuple(c.pattern), tuple(reversed(c.pattern)))
-            self.assertEqual(c.pattern.count("A"), c.always_on.fingers)
-            self.assertEqual(c.pattern.count("S"), c.switched.fingers)
+            grid = c.pattern
+            rows, cols = len(grid), len(grid[0])
+            for r in range(rows):
+                self.assertEqual(len(grid[r]), cols, f"cascade {c.name}: ragged row {r}")
+                for col in range(cols):
+                    self.assertEqual(
+                        grid[r][col],
+                        grid[rows - 1 - r][cols - 1 - col],
+                        f"cascade {c.name}: cell ({r},{col}) breaks 180-degree symmetry",
+                    )
+            flat = [tag for row in grid for tag in row]
+            self.assertEqual(flat.count("A"), c.always_on.fingers)
+            self.assertEqual(flat.count("S"), c.switched.fingers)
 
     def test_a_row_placed_pattern_is_rejected(self):
         # Negative control: the check has to actually reject the layout
         # PLL-FLOORPLAN.md section 1 rules out ("not three separate blobs"),
-        # not merely pass on the patterns we happen to ship.
-        c = {x.name: x for x in dev.MIRROR_CASCADES}["A"]
+        # not merely pass on the patterns we happen to ship. Two rows, one
+        # leg per row -- the 2-D analogue of the flat "A A S S" this test
+        # used before #336's grid generalisation.
+        c = {x.name: x for x in dev.MIRROR_CASCADES}["C"]
         row_placed = dev.CascadePair(
-            name="A_rowplaced",
+            name="C_rowplaced",
             always_on=c.always_on,
             switched=c.switched,
-            pattern=("A", "A", "S", "S"),
+            pattern=(("A", "A"), ("S", "S")),
         )
         with self.assertRaises(ValueError):
             mirror.check_common_centroid(row_placed)
 
     def test_an_asymmetric_pattern_is_rejected(self):
+        # The always-on finger nudged one cell off the grid's own centre --
+        # still a single finger surrounded by the switched leg, but no longer
+        # 180-degree-symmetric, so the centroid-coincidence proof this check
+        # exists for would be false.
         c = {x.name: x for x in dev.MIRROR_CASCADES}["C"]
         skewed = dev.CascadePair(
             name="C_skewed",
             always_on=c.always_on,
             switched=c.switched,
-            pattern=("A", "S", "S", "S", "S", "S", "S", "S", "S"),
+            pattern=(
+                ("S", "S", "S"),
+                ("A", "S", "S"),
+                ("S", "S", "S"),
+            ),
         )
         with self.assertRaises(ValueError):
             mirror.check_common_centroid(skewed)
 
     def test_finger_positions_are_symmetric_about_the_array_centre(self):
-        # Stronger than the centroid equality above: with a uniform finger
-        # gap, a palindromic pattern must make the whole position sequence
-        # mirror-symmetric, which is what actually cancels a linear gradient.
+        # Stronger than the centroid equality above: 180-degree rotation
+        # symmetry with a uniform per-column/per-row pitch must make every
+        # finger's own (row, col) position mirror its rotational partner's,
+        # which is what actually cancels a linear gradient in either axis.
         for c in dev.MIRROR_CASCADES:
             xs = mirror.finger_x0_um(c)
+            ys = mirror.row_y0_um(c)
             widths = c.finger_widths()
-            total = mirror.array_width_um(c)
-            centers = [x + w / 2.0 for x, w in zip(xs, widths)]
-            for a, b in zip(centers, reversed(centers)):
-                self.assertAlmostEqual(a + b, total, places=9)
+            row_h = mirror.device_height_um(c.always_on.l_um)
+            total_w = mirror.array_width_um(c)
+            total_h = mirror.array_height_um(c)
+            rows, cols = len(c.pattern), len(c.pattern[0])
+            for r in range(rows):
+                for col in range(cols):
+                    r2, c2 = rows - 1 - r, cols - 1 - col
+                    cx = xs[r][col] + widths[r][col] / 2.0
+                    cy = ys[r] + row_h / 2.0
+                    cx2 = xs[r2][c2] + widths[r2][c2] / 2.0
+                    cy2 = ys[r2] + row_h / 2.0
+                    self.assertAlmostEqual(cx + cx2, total_w, places=9)
+                    self.assertAlmostEqual(cy + cy2, total_h, places=9)
 
 
 class MirrorPlanTests(unittest.TestCase):
@@ -446,9 +482,18 @@ class MirrorPlanTests(unittest.TestCase):
             self.assertGreaterEqual(hi - lo - prim.METAL1_WIRE_WIDTH_UM, dev.DRC_METAL1_MIN_SPACE_UM)
 
     def test_tap_pitch_bound_with_real_margin(self):
-        for d in (mirror.max_pmos_tap_distance_um(), mirror.max_nmos_tap_distance_um()):
-            self.assertGreater(d, 0.0)
-            self.assertLess(d, dev.DRC_TAP_PITCH_MAX_UM / 2.0)
+        # Issue #336's 2-D fold of cascades A and C makes the PMOS bound the
+        # mirror's own new worst case: a 3-row array's own farthest (bottom)
+        # row is 12.8 um of comp + CC_ROW_GAP_UM-separated rows away from the
+        # bank's single top-of-bank VDD_VCO tap band, +TAP_GAP_UM = 13.4 um --
+        # a real number this test states rather than a blanket "half the
+        # rule" bound that a folded array can no longer meet (same pattern
+        # AssembledVcoBlockPlacementTests.test_tap_pitch_bound_holds_for_every_sub_block
+        # already uses for the V-to-I core's own worst case, 12.1 um).
+        self.assertGreater(mirror.max_pmos_tap_distance_um(), 0.0)
+        self.assertLess(mirror.max_pmos_tap_distance_um(), dev.DRC_TAP_PITCH_MAX_UM - 1.5)
+        self.assertGreater(mirror.max_nmos_tap_distance_um(), 0.0)
+        self.assertLess(mirror.max_nmos_tap_distance_um(), dev.DRC_TAP_PITCH_MAX_UM / 2.0)
 
     def test_footprint_has_positive_extent(self):
         x0, y0, x1, y1 = mirror.footprint_um()
@@ -486,12 +531,21 @@ class MirrorRowFoldTests(unittest.TestCase):
             self.assertEqual(bank.nmos[0].x0, 0.0)
 
     def test_the_widest_bank_is_much_narrower_than_one_flat_row_would_be(self):
-        # What the fold buys, stated as a number a regression would trip.
+        # What the #324 bank fold buys on its own, stated as a number a
+        # regression would trip -- independent of issue #336's later 2-D fold
+        # of cascades A and C, which is why ``flat_pmos`` uses each item's own
+        # (possibly already-folded) width rather than re-deriving a
+        # pre-#336 number: #336 narrows both sides of this ratio (a folded
+        # cascade is narrower whether it sits alone in a flat row or in a
+        # bank), so ~0.63 is the post-#336 ratio the #324 bank fold alone is
+        # responsible for, down from ~0.47 pre-#336 -- still comfortably
+        # under one flat row, just less dramatically since #336 already did
+        # much of the work #324's bank fold used to be the only lever for.
         flat_pmos = sum(it.width for it in self.plan.pmos) + mirror.DEVICE_GAP_UM * (
             len(self.plan.pmos) - 1
         )
         widest = max(bank.row_x1() for bank in self.plan.banks)
-        self.assertLess(widest, 0.6 * flat_pmos)
+        self.assertLess(widest, 0.65 * flat_pmos)
 
     def test_banks_do_not_overlap_in_y(self):
         # The reason a bank's own lo/hi track invariant is enough: bank k's
@@ -540,6 +594,58 @@ class MirrorRowFoldTests(unittest.TestCase):
             if len({bank for bank, _ in groups}) > 1
         }
         self.assertEqual(crossing, {"VBP2", "GC"})
+
+    def test_cascades_a_and_c_are_2d_arrays_and_b_is_not(self):
+        # Issue #336: cascade A folds 1x4 -> 2x2, cascade C folds 1x9 -> 3x3;
+        # cascade B is untouched (its own single-row layout was never the
+        # width bottleneck -- see mirror.py's module docstring).
+        shapes = {c.name: (len(c.pattern), len(c.pattern[0])) for c in dev.MIRROR_CASCADES}
+        self.assertEqual(shapes["A"], (2, 2))
+        self.assertEqual(shapes["B"], (1, 4))
+        self.assertEqual(shapes["C"], (3, 3))
+
+    def test_the_2d_fold_narrows_cascade_c_below_its_own_flat_width(self):
+        # The number issue #336 exists to move: cascade C alone was 115.18 um
+        # wide (PROOF-fold.md), which is why "another row split" (#324's own
+        # lever) could not go below it. Folded 3x3, it is well under half.
+        self.assertLess(mirror.array_width_um(dev.CASCADE_C), 50.0)
+        self.assertGreater(mirror.array_width_um(dev.CASCADE_C), 30.0)
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class MirrorConnectivityTests(unittest.TestCase):
+    """A 2-D common-centroid array's own internal row-to-row tie (issue
+    #336) is a genuinely new electrical-topology claim DRC cannot see: a
+    Metal2 riser that stops short of one row's own via1 is DRC-clean and
+    completely broken. ``mirror.connectivity_report()`` probes every row of
+    every multi-row array's own S/D and gate ties, not just the two end rows
+    a weaker probe set could pass with a broken interior row (see that
+    function's own docstring)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.result = mirror.build()
+        cls.report = mirror.connectivity_report(cls.result)
+
+    def test_every_2d_array_internal_tie_is_one_connected_net(self):
+        for name, ok, detail in self.report:
+            self.assertTrue(ok, f"{name}: {detail}")
+
+    def test_both_2d_cascades_are_covered(self):
+        names = {name for name, _, _ in self.report}
+        for cascade_name in ("A", "C"):
+            self.assertTrue(
+                any(f"({cascade_name})" in n for n in names),
+                f"cascade {cascade_name}: no internal-tie probe recorded",
+            )
+
+    def test_cascade_c_middle_row_is_probed_not_just_the_two_ends(self):
+        # The property a first/last-row-only probe set would silently miss
+        # (see connectivity_report()'s own docstring): cascade C is 3 rows,
+        # so its escape/rail nets should carry 3 probes each, not 2.
+        by_name = {name: detail for name, _, detail in self.report}
+        for net in ("VBN (C)", "VDD_VCO (C)"):
+            self.assertIn("3 probe(s)", by_name[net], by_name[net])
 
 
 class GridSnapTests(unittest.TestCase):
@@ -983,24 +1089,38 @@ class AssembledVcoBlockPlacementTests(unittest.TestCase):
         # PLL-FLOORPLAN.md section 1 / DF.13_MV / DF.14_MV: <= 15 um to a tap
         # *everywhere inside the block*, not just at its perimeter. Each
         # sub-block keeps its own guard ring inside the assembled block, so
-        # the bound is each generator's own worst case. Asserted with a
-        # stated 2 um of headroom rather than just "<=": the worst case in
-        # the whole block is the V-to-I core's PMOS band (12.1 um, set by
-        # MSU1's deliberately long L=20 um channel -- see vtoi_core.py), so a
-        # blanket "half the rule" bound would be a false claim about a block
-        # that genuinely runs closer than that.
-        worst = (
+        # the bound is each generator's own worst case. Asserted against each
+        # known worst case explicitly (not a blanket "same margin for every
+        # sub-block" bound, which would be a false claim about a block that
+        # genuinely runs this close for two different, named reasons):
+        #
+        # * the V-to-I core's PMOS band, 12.1 um, set by MSU1's deliberately
+        #   long L=20 um channel (see vtoi_core.py);
+        # * the mirror's own PMOS band, 13.4 um after issue #336's 2-D fold
+        # of cascades A and C -- a 3-row array's bottom row is that much
+        # comp-and-row-gap away from the bank's single top-of-bank tap band
+        # (see mirror.py's own test_tap_pitch_bound_with_real_margin).
+        #
+        # Both are real DRC-clean margins against the 15 um rule (0.9 um and
+        # 1.6 um respectively) -- run_pv.py drc confirms 0 violations on the
+        # assembled block -- just tighter than the blanket "-2 um" bound this
+        # test used before either of them was the block's known worst case.
+        pmos_worst = (
             ring.max_pmos_tap_distance_um(),
-            ring.max_nmos_tap_distance_um(),
             mirror.max_pmos_tap_distance_um(),
-            mirror.max_nmos_tap_distance_um(),
             buf.max_pmos_tap_distance_um(),
-            buf.max_nmos_tap_distance_um(),
             vtoi_core.max_pmos_tap_distance_um(),
-            vtoi_core.max_nmos_tap_distance_um(),
             bias_resistors.max_tap_distance_um(),
         )
-        for d in worst:
+        nmos_worst = (
+            ring.max_nmos_tap_distance_um(),
+            mirror.max_nmos_tap_distance_um(),
+            buf.max_nmos_tap_distance_um(),
+            vtoi_core.max_nmos_tap_distance_um(),
+        )
+        for d in pmos_worst:
+            self.assertLess(d, dev.DRC_TAP_PITCH_MAX_UM - 1.4)
+        for d in nmos_worst:
             self.assertLess(d, dev.DRC_TAP_PITCH_MAX_UM - 2.0)
 
     def test_left_channel_column_order_prevents_crossings(self):

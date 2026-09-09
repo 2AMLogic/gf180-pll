@@ -2,7 +2,7 @@
 <report-database>
  <description>DRC Run Report at</description>
  <original-file/>
- <generator>drc: script='/tmp/vco324/run-vco_bandsel_mirror/main.drc'</generator>
+ <generator>drc: script='/tmp/vco336_drc/mirror/main.drc'</generator>
  <top-cell>vco_bandsel_mirror</top-cell>
  <tags>
  </tags>

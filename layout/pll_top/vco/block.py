@@ -105,16 +105,16 @@ shape; ``connectivity_report()`` probes the band *opposite* the feed, so
 
 DEVIATION FROM THE ROM FLOORPLAN, STATED PLAINLY
 --------------------------------------------------
-``footprint_um()`` reports the assembled block at 183.18 x 170.28 um
-(31,192 um^2 = 0.0312 mm^2) against PLL-FLOORPLAN.md section 5's
-0.011-0.017 mm^2 ROM row for the whole VCO -- still a **1.8-2.8x overrun**.
+``footprint_um()`` reports the assembled block at 172.52 x 183.48 um
+(31,654 um^2 = 0.0317 mm^2) against PLL-FLOORPLAN.md section 5's
+0.011-0.017 mm^2 ROM row for the whole VCO -- still a **1.9-2.9x overrun**.
 That record's section 5 names this case in advance and prescribes the
 response ("the next floorplan revision should state the overrun explicitly
 rather than silently rounding the total down"), so it is stated here, in
 ``layout/floorplan/skeleton.py``'s docstring, and in
-``layout/evidence/vco-layout/PROOF-fold.md`` with the re-run budget
-arithmetic (``PROOF-block.md`` carries the pre-fold version of the same
-accounting, plus a correction note on one arithmetic slip in it).
+``layout/evidence/vco-layout/PROOF-fold.md`` / ``PROOF-2d-fold.md`` with the
+re-run budget arithmetic (``PROOF-block.md`` carries the pre-fold version of
+the same accounting, plus a correction note on one arithmetic slip in it).
 
 The cause is the one already recorded per sub-block: every device is drawn
 as its own diffusion island wired by metal (``primitives.py``'s module
@@ -130,12 +130,25 @@ n-well ring's own +6.2 um per axis. Height is the currency width was bought
 with, and it is affordable: the floorplan skeleton's height is set by the
 loop filter's 195 um, not by this block.
 
-**The other four sub-blocks are still single rows and are the next lever.**
-The ring, the buffer and the V-to-I core are all narrower than the folded
-mirror, so folding any one of them alone buys nothing at block level until
-the mirror's own two banks are folded again (cascade C is 115.18 um wide on
-its own and would need a 2-D common-centroid array, not another row split,
-to go below that) -- issue #336.
+Issue #336 then folded cascades A and C of the mirror's own arrays from flat
+rows into 2-D common-centroid grids (A: 1x4 -> 2x2; C: 1x9 -> 3x3), which is
+the lever #324 could not reach -- cascade C alone (115.18 um) was already
+alone in its bank's PMOS row, so no further *row* split could shrink it.
+That narrows the mirror from 152.6 to 115.9 um wide, but grows it from 53.0
+to 66.2 um tall, and the mirror's new height has no other sub-block in its
+own row to absorb it into -- so the assembled block's own width drops
+(183.18 -> 172.52 um) while its height grows by essentially the same amount
+the mirror did (170.28 -> 183.48 um), leaving the block's own area roughly
+unchanged (31,192 -> 31,654 um^2, +1.5 %). **Recorded as what it is: #336 is
+a real, DRC-clean width reduction that retires cascade C as the mirror's own
+width bottleneck, but it is not, on its own, an area win for the assembled
+block** -- see ``PROOF-2d-fold.md``.
+
+**The V-to-I core is now the practical width floor.** The ring, the buffer
+and the resistor trio are all narrower than the mirror even after #336; the
+V-to-I core (121.18 um) plus the bias-resistor row it sits beside (combined
+140.7 um) now exceeds the mirror's own 115.9 um, so the mirror is very
+likely no longer the block's own width bottleneck.
 """
 
 from __future__ import annotations
