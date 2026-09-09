@@ -103,3 +103,24 @@ that issue's scope. Filed as
 Worked around here with a hand-drawn dog-bone S/D terminal (widened contact
 pad, unwidened shoulder against the gate edge, true schematic width under
 the gate) in `layout/pll_top/lock_detector/primitives.py`'s `mosfet()`.
+
+## Addendum (2026-09-09, issue #310): the `DIVIDER_LOCK` reconciliation is now closed
+
+The "Results" section above records that reconciling `DIVIDER_LOCK`'s real
+combined footprint was "left to whichever of #295/#296 lands second" and that,
+#296 having landed first, "that reconciliation is still open". **It is no
+longer open.** #310 (the final part of #295) landed the `divider_chain` block
+and performed it. This addendum is appended rather than editing the statement
+above, per this repo's append-only evidence convention.
+
+- `divider_chain`'s own measured footprint is **2634.28 x 93.82 um**
+  (0.2471 mm^2), against this block's 119.3 x 62.6 um — see
+  `layout/evidence/divider-chain-layout/PROOF.md`.
+- `layout/floorplan/skeleton.py`'s `DIVIDER_LOCK` is now sized to contain both
+  real blocks (2650.28 x 212.42 um), stacked with a full 40 um
+  `DOMAIN_SPACING` between them because they sit on different supply domains
+  (`VDD` here, `VDD_DIV` there — consistent with the "Supply domain" note
+  above). The 90x50 um placement-plan estimate is superseded.
+- The combined region is a large overrun against `PLL-FLOORPLAN.md` section
+  5's ROM budget; that is stated in full in that record's new section 5.1 and
+  is dominated by `divider_chain`, not by this block.

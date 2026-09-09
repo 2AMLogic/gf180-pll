@@ -323,6 +323,65 @@ methodology predicts is plausible (the ROM ranges above already span a
 factor of ~1.4–1.5×), not a surprise — the next floorplan revision should
 state the overrun explicitly rather than silently rounding the total down.
 
+### 5.1 Revision: the fail-loud condition has fired (issues #293/#324, #296, #310)
+
+**Status: the budget above is now FAILING, by ≈2.9×, and this section states
+it rather than re-deriving the estimate to fit.** This is §5's own fail-loud
+clause being exercised, not a new methodology. Three of the four block rows
+above have since been replaced by real, DRC-clean per-block layout, and the
+measurements land far outside the ROM ranges:
+
+| Block | §5 ROM row | Real, as-drawn | Ratio | Evidence |
+|---|---|---|---|---|
+| Loop filter | 0.0369 mm² (already real) | 0.0369 mm² | 1.0× | DR-006, §3 |
+| VCO | 0.011–0.017 mm² | **0.0312 mm²** (183.2 × 170.3 µm) | 1.8–2.8× | `layout/evidence/vco-layout/PROOF-block.md` (#293, folded at #324) |
+| PFD + charge pump | 0.010–0.020 mm² | *still ROM — no assembled block yet* | — | — |
+| Lock detector | *(shared row below)* | **0.0075 mm²** (119.3 × 62.6 µm) | — | `layout/evidence/lock-detector-layout/PROOF.md` (#296) |
+| Divider chain | *(shared row below)* | **0.2471 mm²** (2634.28 × 93.82 µm) | — | `layout/evidence/divider-chain-layout/PROOF.md` (#310) |
+| **Divider chain + lock detector** | **0.0038–0.0052 mm²** | **0.2546 mm²** | **≈49–67×** | both of the above |
+
+Re-running this section's own arithmetic with every measured number in place
+of its ROM row: 0.0369 (loop filter) + 0.0312 (VCO) + 0.020 (PFD/CP, still
+ROM, high end) + 0.2546 (divider + lock) = **0.3427 mm²**, i.e. **0.4283 mm²**
+after this section's ×1.25 top-level overhead — against the < 0.15 mm² draft
+target, a **≈2.9× overrun** where the last revision recorded ≈22 % margin.
+`skeleton.py`'s `total_extent_um2()` bounding box moves the same way and
+worse (~126,400 µm² → ~1.19 × 10⁶ µm²), because the divider chain is drawn
+2634 µm wide — roughly 4× the rest of the skeleton put together — so its
+bounding box swallows the floorplan and most of that extent is empty space.
+
+**Where the area actually goes, measured not guessed.** The divider chain is
+one row: six `div23_cell` instances at 332.14 µm each, plus 46 glue-logic
+columns, placed side by side, so the block's width is the sum of every
+sub-cell's width. On top of that, ≈57 % of the block's *height* is the shared
+per-net Metal2 track band (≈71 top-level nets × 0.75 µm pitch ≈ 53 µm of the
+93.82 µm total), and that band spans the block's full width. Two consequences
+worth stating before anyone reaches for the obvious fix:
+
+- **The #324-style row fold does not recover this.** Folding the VCO's
+  band-select mirror into two banks worked because the mirror's height was
+  free (the skeleton's height was set by `LOOP_FILTER`). Here each new row
+  wants its own track band, so a naive fold trades width for height at
+  roughly constant area. Reducing this block needs the routing fabric itself
+  to change (localized per-row tracks, or a channel-router rather than
+  one-global-track-per-net), and/or the diffusion-island-per-device
+  convention `vco/primitives.py` documents. That is a materially larger piece
+  of work than #324 and is tracked separately.
+- **This is not a DRC/LVS regression.** Every block above is signoff-clean on
+  the PDK's own decks at the footprint quoted (the divider chain additionally
+  LVS-clean against `design/netlist/divider_chain.spice`). What has failed is
+  the *area budget*, which is exactly the outcome the fail-loud clause was
+  written to surface rather than absorb.
+
+**The `DIVIDER_LOCK` reconciliation is closed.** #296 and #310 each deferred
+sizing the shared divider/lock region to whichever landed second; #310 landed
+second and did it. `skeleton.py`'s `DIVIDER_LOCK` is now sized to contain
+both real footprints (2650.28 × 212.42 µm), with the two blocks stacked and
+separated by a full `DOMAIN_SPACING` — they are on different supply domains
+(`VDD_DIV` vs. `VDD`, §2), so sharing the region buys signal adjacency, never
+a shared supply segment. The 90 × 50 µm placement-plan estimate both blocks
+were nominally sized against is superseded and should not be cited again.
+
 ## 6. GDS skeleton
 
 `layout/floorplan/skeleton.py` assembles a **block-placement skeleton**
@@ -338,10 +397,18 @@ in this deck; it is used only as a boundary/reference marker, never as a
 device or routing layer), so the skeleton is **necessarily** DRC-clean under
 #16's flow — that is the honest characterization of what this DRC run
 proves: this deck's silence about layer (0,0), not that the physical devices
-inside these footprints are DRC-clean (they do not exist as real geometry
-yet — see the scope note at the top of this record). The value of running it
-through `run_pv.py drc` regardless is exercising #16's flow against a
-multi-block layout instead of only the single trivial `inv_tb` cell.
+inside these footprints are DRC-clean. The value of running it through
+`run_pv.py drc` regardless is exercising #16's flow against a multi-block
+layout instead of only the single trivial `inv_tb` cell.
+
+**Which rectangles are now real** (this list supersedes the "they do not
+exist as real geometry yet" characterization this section carried through
+#17): `vco` (#293/#324), `divider_lock.divider_chain` (#310) and
+`divider_lock.lock_detector` (#296) are the blocks' own measured as-drawn
+extents, and `DIVIDER_LOCK` is sized to contain the latter two — see §5.1.
+`pfd_cp` is still a §5 ROM estimate. The devices themselves are DRC-clean
+(and, for the divider chain, LVS-clean) in each block's own evidence
+directory, not by virtue of this skeleton's run.
 
 Evidence: `layout/evidence/floorplan-skeleton/` (see `PROOF.md` there for the
 DRC run's provenance and verdict).

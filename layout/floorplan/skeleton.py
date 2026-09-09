@@ -82,6 +82,25 @@ mirror into two stacked banks (see ``vco/mirror.py``'s ``BANKS``), trading
 spent 6.2 um of that back on the n-well ring. The remaining overrun is the
 same diffusion-island convention; the other four sub-blocks are still single
 rows and are the next lever.
+
+Divider/lock real geometry, and a 2.9x budget overrun (issues #296, #310)
+--------------------------------------------------------------------------
+``DIVIDER_LOCK`` is likewise no longer a placeholder: both of its occupants
+now have real, DRC-clean layout (``lock_detector``, #296; ``divider_chain``,
+#310, additionally LVS-clean), and the region below is sized to contain the
+two blocks' measured footprints rather than the 90x50 um placement-plan
+estimate both were nominally sized against. **That reconciliation is the
+headline result of this revision, and it is a failure against the area
+budget, recorded rather than absorbed**: the two real blocks are 0.2546 mm^2
+against PLL-FLOORPLAN.md section 5's 0.0038-0.0052 mm^2 ROM row for the same
+pair, and the divider chain alone (0.2471 mm^2, drawn 2634.28 x 93.82 um) is
+1.7x the entire 0.15 mm^2 die target. The full arithmetic, the two
+structural causes, and why the ``#324``-style row fold does *not* recover it
+here are stated at the ``DIVIDER_LOCK`` definition below. This skeleton is
+now a floorplan record of a design that does not fit its budget -- which is
+precisely what section 5's own "fail-loud condition for a future pass" asked
+for, and is tracked for reduction separately from #310's DRC/LVS-clean
+geometry claim.
 """
 
 from __future__ import annotations
@@ -161,30 +180,6 @@ VCO_BIAS_RESISTORS = _from_vco_block("vco.bias_resistors", _VCO_SUB_BOXES["bias_
 VCO_MIRROR = _from_vco_block("vco.bandsel_mirror", _VCO_SUB_BOXES["mirror"])
 VCO_RING = _from_vco_block("vco.ring", _VCO_SUB_BOXES["ring"])
 VCO_BUFFER = _from_vco_block("vco.out_buffer", _VCO_SUB_BOXES["buffer"])
-DIVIDER_LOCK = Block(
-    "divider_lock",
-    x=0.0,
-    y=PFD_CP.h + DOMAIN_SPACING,
-    w=90.0,
-    h=50.0,
-)
-
-# lock_detector (issue #296) now has a real, DRC-clean standalone
-# transistor-level layout -- see layout/pll_top/lock_detector/build.py and
-# layout/evidence/lock-detector-layout/PROOF.md. Its as-drawn standalone
-# footprint (119.3 x 62.6 um, ~7,468 um^2) is *larger on its own* than
-# DIVIDER_LOCK's 90x50 um placement-plan estimate above -- which
-# divider_chain (#295, real layout not yet landed) also shares. Not
-# reconciled into DIVIDER_LOCK's own rectangle here: per both issues'
-# Acceptance Criteria, whichever of #295/#296 lands second is responsible
-# for reconciling the region's real combined footprint against the other's
-# actual layout. #296 landed first, so this reconciliation is still open --
-# do not assume DIVIDER_LOCK's dimensions above reflect either block's real
-# geometry yet.
-LOCK_DETECTOR_STANDALONE_W_UM = 119.3
-LOCK_DETECTOR_STANDALONE_H_UM = 62.6
-
-BLOCKS = (PFD_CP, LOOP_FILTER, VCO_CORE, DIVIDER_LOCK)
 
 # VCO isolation keep-out. VCO_CORE's own boundary is now the *real* drawn
 # two-sided guard ring (vco/block.py: GND_VCO substrate ring inside, VDD_VCO
@@ -193,7 +188,113 @@ BLOCKS = (PFD_CP, LOOP_FILTER, VCO_CORE, DIVIDER_LOCK)
 # at the same 15 um DF.13_MV/DF.14_MV tap-pitch bound. 15 um is also
 # comfortably above NW.2b_LV's 1.4 um n-well-to-n-well spacing, which the
 # outer ring now makes a real constraint on whatever abuts this block.
+# (Defined here rather than below BLOCKS, as it was through #324, because
+# DIVIDER_LOCK's placement now clears this keep-out -- see below.)
 VCO_GUARD_MARGIN = 15.0
+
+# --- DIVIDER_LOCK: both blocks now real, and the region reconciled (#310) ---
+#
+# Both occupants of this shared region now have real, DRC-clean
+# transistor-level layout, so DIVIDER_LOCK below is no longer the 90x50 um
+# placement-plan estimate it was through #17: it is sized to contain the two
+# blocks' actual as-drawn footprints. Recorded as plain floats rather than
+# computed from the generators, because this module must stay importable
+# without KLayout (see the module docstring and
+# layout/tests/test_floorplan_skeleton.py); the numbers come from each
+# block's own committed evidence record, and
+# test_divider_chain_recorded_footprint_matches_the_generator rebuilds the
+# divider chain and asserts the match whenever klayout.db *is* importable, so
+# the two views cannot drift silently.
+#
+# lock_detector (issue #296, layout/evidence/lock-detector-layout/PROOF.md):
+LOCK_DETECTOR_STANDALONE_W_UM = 119.3
+LOCK_DETECTOR_STANDALONE_H_UM = 62.6
+# divider_chain (issue #310, layout/evidence/divider-chain-layout/PROOF.md):
+DIVIDER_CHAIN_STANDALONE_W_UM = 2634.28
+DIVIDER_CHAIN_STANDALONE_H_UM = 93.82
+
+# The two blocks are on *different supply domains* -- divider_chain on
+# VDD_DIV, lock_detector on VDD (PLL-FLOORPLAN.md section 2's four-domain
+# split; confirmed in both blocks' generators: divider_chain.py draws no
+# VDD/VDD_VCO net at all, lock_detector/build.py draws no VDD_DIV) -- so they
+# are stacked inside this region with a full DOMAIN_SPACING gap between them,
+# not abutted. Sharing the region buys physical adjacency for the DIVOUT/FB
+# and UP/DN signal runs, never a shared supply segment.
+DIVIDER_LOCK_MARGIN = 8.0  # um clearance from the region edge (LOOP_FILTER's convention)
+
+DIVIDER_CHAIN = Block(
+    "divider_lock.divider_chain",
+    x=DIVIDER_LOCK_MARGIN,
+    # Above every other block's top edge (LOOP_FILTER's 195 um is the tallest;
+    # the VCO's guard ring reaches 185.3 um), by one DOMAIN_SPACING.
+    y=max(
+        PFD_CP.y + PFD_CP.h,
+        LOOP_FILTER.y + LOOP_FILTER.h,
+        VCO_CORE.y + VCO_CORE.h + VCO_GUARD_MARGIN,
+    )
+    + DOMAIN_SPACING
+    + DIVIDER_LOCK_MARGIN,
+    w=DIVIDER_CHAIN_STANDALONE_W_UM,
+    h=DIVIDER_CHAIN_STANDALONE_H_UM,
+)
+LOCK_DETECTOR = Block(
+    "divider_lock.lock_detector",
+    x=DIVIDER_LOCK_MARGIN,
+    y=DIVIDER_CHAIN.y + DIVIDER_CHAIN.h + DOMAIN_SPACING,
+    w=LOCK_DETECTOR_STANDALONE_W_UM,
+    h=LOCK_DETECTOR_STANDALONE_H_UM,
+)
+DIVIDER_LOCK = Block(
+    "divider_lock",
+    x=0.0,
+    y=DIVIDER_CHAIN.y - DIVIDER_LOCK_MARGIN,
+    w=max(DIVIDER_CHAIN.w, LOCK_DETECTOR.w) + 2 * DIVIDER_LOCK_MARGIN,
+    h=(LOCK_DETECTOR.y + LOCK_DETECTOR.h) - DIVIDER_CHAIN.y + 2 * DIVIDER_LOCK_MARGIN,
+)
+
+# FAIL-LOUD: this region is a 2.9x whole-chip area overrun, stated not absorbed.
+# -----------------------------------------------------------------------------
+# PLL-FLOORPLAN.md section 5 budgeted "divider chain + lock detector" at
+# 0.0038-0.0052 mm^2 (a ROM std-cell-row estimate made when no physical view
+# existed for either block). The two real blocks measure 0.2471 mm^2 +
+# 0.0075 mm^2 = 0.2546 mm^2 -- a ~49-67x overrun on that row, and 1.7x the
+# entire 0.15 mm^2 die target on the divider chain alone. Section 5's own
+# "fail-loud condition for a future pass" instructs stating an overrun
+# explicitly rather than silently rounding the total down, so:
+#
+#   * Re-running section 5's arithmetic with every measured number in place of
+#     its ROM row gives 0.0369 (loop filter) + 0.0312 (VCO) + 0.020 (PFD/CP,
+#     still ROM) + 0.2546 (divider+lock) = 0.3427 mm^2, i.e. 0.4283 mm^2 after
+#     that section's x1.25 top-level overhead -- 2.9x the 0.15 mm^2 budget,
+#     against the +22 % margin the VCO-only revision of this docstring
+#     recorded.
+#   * total_extent_um2() (this skeleton's whole bounding box) goes from
+#     ~126,400 um^2 to ~1.19e6 um^2, dominated by empty space: the divider
+#     chain is 2634.28 um wide, ~4x the rest of the skeleton put together, so
+#     its bounding box swallows the floorplan.
+#
+# The cause is structural and measurable, not a sizing slip:
+#
+#   * The block is one row. Six div23_cell instances (332.14 um each) plus 46
+#     glue columns are placed side by side, so the block's width is the sum of
+#     every sub-cell's width -- the same "every sub-block is a single row"
+#     lever the VCO docstring above already names, here at 6x the length.
+#   * ~57 % of the block's *height* is the shared per-net Metal2 track band
+#     (~71 top-level nets x 0.75 um pitch = ~53 um of the 93.82 um total),
+#     and that band spans the block's full 2634 um width. Folding the row
+#     alone therefore does not recover the area the way #324's mirror fold
+#     did for the VCO -- each new row wants its own band -- so this is a
+#     genuinely different (and larger) piece of work than #324, tracked
+#     separately rather than attempted in #310.
+#
+# Nothing here is a DRC/LVS claim change: the divider chain is signoff-clean on
+# the PDK's own decks at this footprint (layout/evidence/divider-chain-layout/
+# PROOF.md). It is the *area budget* that is now failing, loudly and on the
+# record, which is what section 5 asked a pass like this one to do.
+DIVIDER_LOCK_AREA_UM2 = DIVIDER_LOCK.w * DIVIDER_LOCK.h
+AREA_BUDGET_UM2 = 150_000.0
+
+BLOCKS = (PFD_CP, LOOP_FILTER, VCO_CORE, DIVIDER_LOCK)
 
 # Loop-filter sub-geometry, real as-drawn DR-006 device footprints, placed
 # inside the LOOP_FILTER block per PLL-FLOORPLAN.md section 3: the C1 2x2
@@ -243,6 +344,8 @@ SUB_BLOCKS = (
     VCO_BUFFER,
     VCO_VTOI_CORE,
     VCO_BIAS_RESISTORS,
+    DIVIDER_CHAIN,
+    LOCK_DETECTOR,
 )
 
 
@@ -299,11 +402,26 @@ def build(outdir: Path) -> Path:
     return gds_path
 
 
-def total_extent_um2() -> float:
+def total_extent_um2(blocks: tuple[Block, ...] = BLOCKS) -> float:
     """Bounding-box area of the whole skeleton, for a sanity cross-check
     against PLL-FLOORPLAN.md's area-budget table (not the same number --
     this includes inter-domain spacing the budget's overhead multiplier
-    accounts for separately, so it is expected to run larger)."""
-    xs = [b.x for b in BLOCKS] + [b.x + b.w for b in BLOCKS]
-    ys = [b.y for b in BLOCKS] + [b.y + b.h for b in BLOCKS]
+    accounts for separately, so it is expected to run larger).
+
+    ``blocks`` defaults to every top-level block. It is a parameter so a
+    caller can scope the measurement to a subset -- specifically, so the VCO's
+    own fold-regression tripwires in ``layout/tests/test_vco_layout.py`` can
+    keep measuring the pre-#310 extent (``BLOCKS`` minus ``DIVIDER_LOCK``)
+    after the real divider chain came to dominate the full number by ~9x. The
+    unscoped default is still the honest whole-skeleton figure, and is what
+    ``test_floorplan_skeleton.py`` asserts the recorded overrun against.
+    """
+    xs = [b.x for b in blocks] + [b.x + b.w for b in blocks]
+    ys = [b.y for b in blocks] + [b.y + b.h for b in blocks]
     return (max(xs) - min(xs)) * (max(ys) - min(ys))
+
+
+#: ``BLOCKS`` minus the divider/lock region -- the scope the VCO's own
+#: area tripwires measure, so they keep tracking the VCO row fold rather than
+#: the divider chain's much larger footprint. See ``total_extent_um2()``.
+BLOCKS_EXCLUDING_DIVIDER_LOCK = tuple(b for b in BLOCKS if b is not DIVIDER_LOCK)
