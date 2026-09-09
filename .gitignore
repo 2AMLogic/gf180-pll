@@ -21,6 +21,8 @@
 !layout/evidence/pfd-layout/**/*.log
 # Same story again for the cp_dumpbuf block layout's DRC evidence (issue #302).
 !layout/evidence/cp-dumpbuf-layout/**/*.log
+# Same story again for the dff_tg_3v3 composite layout's DRC+LVS evidence (issue #308).
+!layout/evidence/divider-dff-proof/**/*.log
 __pycache__/
 .DS_Store
 

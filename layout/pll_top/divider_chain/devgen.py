@@ -173,6 +173,16 @@ LAYER = {
     # invisible to that connectivity step, so a net "labelled" there is
     # still extracted as an anonymous node under LVS.
     "metal1_label": (34, 10),
+    # Metal2/Via1/Via2/Metal3 -- used only by the composite-macro routing
+    # fabric (:func:`route_net`/:class:`NetTracks`, added for issue #308's
+    # ``dff_tg_3v3``), not by any single leaf cell's own ``build_stack_cell()``
+    # geometry. See that function's docstring for why a multi-instance
+    # composite needs a dedicated cross-layer bus instead of Metal1-only
+    # wiring.
+    "via1": (35, 0),
+    "metal2": (36, 0),
+    "via2": (38, 0),
+    "metal3": (42, 0),
 }
 
 # --- Derived generator margins (deck minimum + explicit headroom) -- values
@@ -196,6 +206,21 @@ IMPLANT_MARGIN_UM = 0.3  # NP.5a/PP.5a=0.23, NP.5b/PP.5b=0.16 min
 NWELL_MARGIN_UM = 0.5  # DF.4c_LV=0.43 min (PMOS comp -> nwell edge)
 METAL1_PAD_MARGIN_UM = 0.12
 METAL1_WIRE_WIDTH_UM = 0.28  # > M1.1's 0.23 min
+
+# --- Metal2/Via1/Via2/Metal3 composite-routing margins (issue #308's
+# ``dff_tg_3v3`` -- multiple leaf-cell instances placed side by side in one
+# shared ``Canvas``, wired by :func:`route_net`, not by any single leaf
+# cell's own Metal1-only ``build_stack_cell()`` wiring). Values/derivation
+# identical to ``lock_detector/primitives.py``'s own proven-DRC-clean
+# routing fabric (see that module's docstring for the full per-rule
+# citation); repeated, not imported, per this package's "each full-custom
+# leaf-cell family owns its own generator" convention. ---
+VIA1_SIZE_UM = 0.26  # V1.1 min/max
+VIA2_SIZE_UM = 0.26  # V2.1 min/max
+VIA_ENCLOSURE_UM = 0.09  # V1.3a/V2.3b min is ~0 um; headroom for the enclosing metal pad
+METAL2_WIRE_WIDTH_UM = 0.34  # > M2.1's 0.28 min
+METAL3_WIRE_WIDTH_UM = 0.34  # > M3.1's 0.28 min
+METAL2_TRACK_PITCH_UM = 0.75  # (pitch - width) = 0.41 > M2.2a's 0.28 min, between two tracks
 
 # --- Bypass-lane wiring (see module docstring's "TRANSMISSION-GATE
 # TOPOLOGY" section, and build_stack_cell()'s own docstring, for why this
@@ -519,13 +544,20 @@ def _bypass_wire(
     canvas.rect("metal1", min(lane_x - half, pad_b[2]), y_b - half, max(lane_x + half, pad_b[2]), y_b + half)
 
 
-def _well_tap(canvas: Canvas, kind: str, x0: float, y0: float, net: str) -> tuple[float, float, float, float]:
+def well_tap(canvas: Canvas, kind: str, x0: float, y0: float, net: str) -> tuple[float, float, float, float]:
     """A small square substrate/n-well tie: comp + implant + contact + Metal1 pad.
 
     ``kind='n'``: n-well tie (comp + ``nplus``), tied to the PMOS body net.
     ``kind='p'``: substrate tie (comp + ``pplus``), tied to the NMOS body net.
     Returns the drawn Metal1 pad, for the caller to wire to the rest of that
     net.
+
+    Public (not module-private) because a composite macro built from several
+    :func:`draw_column` instances in one shared ``Canvas`` (issue #308's
+    ``dff_tg_3v3``) draws its own periodic taps directly with this same
+    function, rather than the one-tap-per-column placement
+    :func:`build_stack_cell` does below -- see ``dff_tg_3v3.py``'s module
+    docstring for why a composite needs periodic, not per-device, taps.
     """
     x1 = x0 + TAP_SIZE_UM
     y1 = y0 + TAP_SIZE_UM
@@ -566,6 +598,31 @@ class LeafCell:
         self.canvas.write_gds(path)
 
 
+def draw_column(canvas: Canvas, devices: Sequence[Device], x0: float, y0: float = 0.0) -> list[MosfetPorts]:
+    """Draw ``devices`` as one left-aligned vertical column, bare -- no net
+    wiring, no pin promotion, no well/substrate tap. This is exactly the
+    drawing step :func:`build_stack_cell` performs internally (same stacking
+    order/gaps), extracted so a composite macro assembling *several* such
+    columns into one shared ``Canvas`` (e.g. ``dff_tg_3v3.py``, issue #308)
+    can draw each instance's devices without also triggering
+    :func:`build_stack_cell`'s own per-column net-count-based auto-wiring --
+    which only ever sees that one column's own 1-2 device terminals and so
+    cannot resolve a net that also has terminals in a *different* column of
+    the same composite (see that module's docstring for why the composite
+    resolves nets itself, via :func:`route_net`, instead).
+    """
+    ports: list[MosfetPorts] = []
+    y_cursor = y0
+    for i, d in enumerate(devices):
+        if i > 0:
+            gap = NWELL_TO_NMOS_GAP_UM if d.kind != devices[i - 1].kind else COMP_GAP_UM
+            y_cursor += gap
+        p = mosfet(canvas, d, x0, y_cursor)
+        ports.append(p)
+        y_cursor = p.y3
+    return ports
+
+
 def build_stack_cell(
     top_name: str,
     devices: Sequence[Device],
@@ -603,15 +660,7 @@ def build_stack_cell(
         raise ValueError("build_stack_cell() needs at least one device")
 
     canvas = Canvas(top_name)
-    ports: list[MosfetPorts] = []
-    y_cursor = 0.0
-    for i, d in enumerate(devices):
-        if i > 0:
-            gap = NWELL_TO_NMOS_GAP_UM if d.kind != devices[i - 1].kind else COMP_GAP_UM
-            y_cursor += gap
-        p = mosfet(canvas, d, x0, y_cursor)
-        ports.append(p)
-        y_cursor = p.y3
+    ports = draw_column(canvas, devices, x0)
 
     # --- net resolution: gate/top/bottom terminals only (well/substrate
     # ties are handled separately, below, and wired onto whichever pad
@@ -690,7 +739,7 @@ def build_stack_cell(
             net = d_top.body_net if d_top.body_net is not None else d_top.top_net
             tap_x0 = pfet_ports_top.x0
             tap_y0 = pfet_ports_top.y3 + TAP_GAP_UM
-            tap_pad = _well_tap(canvas, "n", tap_x0, tap_y0, net)
+            tap_pad = well_tap(canvas, "n", tap_x0, tap_y0, net)
             if net == d_top.top_net:
                 # Same net as the device's own S/D pad (the common case: an
                 # inverter's PMOS source *is* VDD) -- merge them with a
@@ -701,7 +750,7 @@ def build_stack_cell(
             # transmission gate's pass device, whose top_net is a signal
             # net) -- do NOT wire the tap's pad to the device's own S/D pad;
             # that would short the body-tie net onto the diffusion net.
-            # _well_tap() already independently labels `net` on the tap's
+            # well_tap() already independently labels `net` on the tap's
             # own pad, and the tap's comp sits inside the same continuous
             # n-well as the device (see nwell_box, above), so the body ties
             # correctly through the well itself with no Metal1 needed.
@@ -713,7 +762,7 @@ def build_stack_cell(
             tap_x0 = nfet_ports_bottom.x0
             tap_y1 = nfet_ports_bottom.y0 - TAP_GAP_UM
             tap_y0 = tap_y1 - TAP_SIZE_UM
-            tap_pad = _well_tap(canvas, "p", tap_x0, tap_y0, net)
+            tap_pad = well_tap(canvas, "p", tap_x0, tap_y0, net)
             if net == d_bot.bottom_net:
                 _connect_pads(canvas, nfet_ports_bottom.bottom_pad, tap_pad)
             footprint_y0 = min(footprint_y0, tap_y0 - COMP_GAP_UM)
@@ -721,3 +770,220 @@ def build_stack_cell(
     footprint = (footprint_x0, footprint_y0, footprint_x1, footprint_y1)
 
     return LeafCell(canvas=canvas, ports=ports, pins=pins, nwell_box=nwell_box, footprint=footprint)
+
+
+# ---------------------------------------------------------------------------
+# Composite-macro routing fabric (issue #308's ``dff_tg_3v3``)
+# ---------------------------------------------------------------------------
+#
+# ``build_stack_cell()``'s Metal1-only wiring (above) resolves nets by
+# counting *that one column's own* device terminals -- correct for a
+# standalone leaf cell (``inv_3v3``/``tgate_3v3``), but not for a composite
+# built from several such columns placed side by side in one shared
+# ``Canvas``: most of a composite's nets fan out across columns (e.g.
+# ``dff_tg_3v3``'s clock/clock-bar nets each reach four transmission-gate
+# instances), which is outside what a same-layer, same-column straight-line
+# connector can safely wire without risking a same-layer short against an
+# unrelated intervening net or device (exactly the class of failure
+# ``build_stack_cell()``'s own "TRANSMISSION-GATE TOPOLOGY" docstring section
+# documents for a *single* column's two nets -- multiplied across many
+# columns and nets here).
+#
+# The fix is the same one ``lock_detector/primitives.py`` already proved out
+# for its own (horizontal-flow) composite macros: every net rides a
+# dedicated Metal3 "riser" from each of its Metal1 pads up/down to one
+# Metal2 "bus" at a track_y unique to that net (:class:`NetTracks`), so two
+# unrelated nets can never risk a same-layer collision regardless of
+# placement, and a net's own Metal3 risers may freely cross any other net's
+# Metal2 bus (different layers, no via between them -- not a short, not a
+# spacing violation). Repeated here (not imported) per this package's "each
+# full-custom leaf-cell family owns its own generator" convention --
+# identical values/derivation to ``lock_detector/primitives.py``'s own
+# proven-DRC-clean routing fabric; see that module's docstring for the full
+# per-rule citation.
+#
+# Unlike ``lock_detector``'s own ``route_net()``, this one does **not**
+# snap same-net pads that are merely close in *x* onto a single shared
+# riser: ``lock_detector``'s horizontal-flow cells only ever place two
+# same-net pads that close together when they are *also* adjacent in y (a
+# device's own pad right next to a periodic tap's), so collapsing them onto
+# one averaged riser point stays on both pads' physical footprint. This
+# package's vertical-flow columns instead routinely put a shared net's two
+# pads at the *same x but far apart in y* -- an ``inv_3v3`` instance's own
+# ``A`` gate net ties both devices' gate pads, which sit at the same x (both
+# devices are left-aligned at the column's own ``x0``) several microns apart
+# in y (the NMOS-PMOS well gap). Averaging those into one riser point would
+# place the via where *neither* pad's own Metal1 actually is -- a broken
+# connection, not a via-size DRC violation, so nothing would flag it short
+# of an actual LVS run. This module instead draws one riser per pad,
+# unconditionally: two risers for the same net at the same x is not a
+# problem (their Metal3/Metal2 paths simply overlap, which is legal --
+# same net, same layer), and it is correct regardless of how far apart in y
+# a net's pads happen to be.
+
+
+def pad_center(pad: tuple[float, float, float, float]) -> tuple[float, float]:
+    return ((pad[0] + pad[2]) / 2.0, (pad[1] + pad[3]) / 2.0)
+
+
+def bbox_union(boxes: Sequence[tuple[float, float, float, float]]) -> tuple[float, float, float, float]:
+    boxes = list(boxes)
+    return (
+        min(b[0] for b in boxes),
+        min(b[1] for b in boxes),
+        max(b[2] for b in boxes),
+        max(b[3] for b in boxes),
+    )
+
+
+def nwell_over(canvas: Canvas, boxes: Sequence[tuple[float, float, float, float]]) -> tuple[float, float, float, float]:
+    """Draw one nwell rectangle enclosing every PMOS comp box (+ any ntap
+    box) given, with :data:`NWELL_MARGIN_UM` margin -- the one-shared-nwell
+    convention a composite macro uses instead of :func:`build_stack_cell`'s
+    per-column nwell (see ``dff_tg_3v3.py``'s module docstring).
+    """
+    x0, y0, x1, y1 = bbox_union(boxes)
+    well = (x0 - NWELL_MARGIN_UM, y0 - NWELL_MARGIN_UM, x1 + NWELL_MARGIN_UM, y1 + NWELL_MARGIN_UM)
+    canvas.rect("nwell", *well)
+    return well
+
+
+def offset_pad_x(
+    canvas: Canvas,
+    pad: tuple[float, float, float, float],
+    target_dx: float,
+    via_half_um: float = VIA1_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM,
+) -> tuple[float, float]:
+    """Return a routing point ``target_dx`` away (signed) from ``pad``'s own
+    natural center in x, extending ``pad`` with extra Metal1 (same net --
+    guaranteed overlap, since the extension shares the pad's own full
+    y-range) only if the natural pad is not already wide enough to keep a
+    via centred there fully enclosed.
+
+    Exists because :func:`mosfet` places a device's *top* and *bottom*
+    terminal pads (and, when a column's two devices' gates are on
+    independent nets, their two *gate* pads) at the exact same x -- current
+    flows through one vertical comp island, so a device's own drain/source
+    terminals are necessarily the same comp's top and bottom, same x by
+    construction. That is invisible to a *standalone* leaf cell (only ever
+    one net per pad, wired same-column with a plain Metal1 run -- see
+    :func:`build_stack_cell`), but a real, concretely-observed bug for a
+    composite macro's :func:`route_net`-based fabric: two *different* nets'
+    risers landing at the same x draw overlapping same-layer Metal3, which
+    is not a DRC violation (no via, no spacing check trips) but silently
+    shorts them -- exactly what a first, unoffset attempt at
+    ``dff_tg_3v3.py`` hit (LVS extracted one node merging ``D``/``Q``/
+    ``QB``/``VDD``/``VSS`` and several devices' widths summed together, from
+    every device's own top/bottom pad pair colliding, and every
+    ``tgate_3v3`` instance's independent ``GN``/``GP`` gate pads colliding
+    too).
+
+    A second attempt, offsetting by a large, fixed Metal1 extension
+    regardless of whether the pad already had room, over-corrected into a
+    *different* concretely-observed failure: the wide extension (drawn to
+    reach well clear of the pad's own column-mate) reached far enough into
+    the inter-column gap to nearly touch -- overlapping by a fraction of a
+    micron, not clearing it -- the periodic n-well tap's own Metal1 pad
+    placed at that gap's midpoint, leaving an M1.1-violating sliver where
+    the two nearly-but-not-quite-aligned rectangles met. Extending only the
+    minimum needed to enclose the *target* via position (usually nothing at
+    all for a pad already wider than ``target_dx``, e.g. every ``pfet``'s
+    own top/bottom pad -- only the narrower ``nfet``'s needs a small
+    extension) keeps every reach well short of the gap's own midpoint,
+    fixing both failures at once. ``dff_tg_3v3.py``'s ``build()`` calls this
+    for every top pad (positive ``target_dx``) and every pfet gate pad
+    (negative), leaving bottom pads and nfet gate pads at their natural
+    center -- see that module's own docstring for the exact deltas and the
+    clearance check against neighbouring columns/taps.
+    """
+    x0, y0, x1, y1 = pad
+    y_c = (y0 + y1) / 2.0
+    target_x = (x0 + x1) / 2.0 + target_dx
+    need_x0 = min(x0, target_x - via_half_um)
+    need_x1 = max(x1, target_x + via_half_um)
+    if need_x0 < x0 or need_x1 > x1:
+        canvas.rect("metal1", need_x0, y0, need_x1, y1)
+    return (target_x, y_c)
+
+
+def _via_square(canvas: Canvas, layer: str, x: float, y: float, size: float, enclosure: float) -> float:
+    half_v = size / 2.0
+    canvas.rect(layer, x - half_v, y - half_v, x + half_v, y + half_v)
+    return half_v + enclosure
+
+
+def _riser(canvas: Canvas, x: float, y_pad: float, track_y: float) -> None:
+    """Metal1 pad -> Via1 -> Metal2 landing -> Via2 -> Metal3 riser -> Via2 -> Metal2 bus landing.
+
+    The long vertical run (from ``y_pad`` to ``track_y``) is drawn entirely
+    on Metal3 -- a layer this package's leaf-cell geometry never otherwise
+    uses -- so it can freely cross any other net's Metal2 bus without a via
+    (no via, no connection, no short: metal on two different layers
+    overlapping with no via between them is not a DRC violation in this
+    deck).
+    """
+    half_m2 = _via_square(canvas, "via1", x, y_pad, VIA1_SIZE_UM, VIA_ENCLOSURE_UM)
+    canvas.rect("metal2", x - half_m2, y_pad - half_m2, x + half_m2, y_pad + half_m2)
+    canvas.rect("metal1", x - half_m2, y_pad - half_m2, x + half_m2, y_pad + half_m2)
+
+    half_m3 = _via_square(canvas, "via2", x, y_pad, VIA2_SIZE_UM, VIA_ENCLOSURE_UM)
+    canvas.rect("metal3", x - half_m3, y_pad - half_m3, x + half_m3, y_pad + half_m3)
+
+    half_w = METAL3_WIRE_WIDTH_UM / 2.0
+    canvas.rect("metal3", x - half_w, min(y_pad, track_y), x + half_w, max(y_pad, track_y))
+
+    half_m3_top = _via_square(canvas, "via2", x, track_y, VIA2_SIZE_UM, VIA_ENCLOSURE_UM)
+    canvas.rect("metal3", x - half_m3_top, track_y - half_m3_top, x + half_m3_top, track_y + half_m3_top)
+    canvas.rect("metal2", x - half_m3_top, track_y - half_m3_top, x + half_m3_top, track_y + half_m3_top)
+
+
+def route_net(
+    canvas: Canvas,
+    net: str,
+    pad_centers: Sequence[tuple[float, float]],
+    track_y: float,
+    width: float = METAL2_WIRE_WIDTH_UM,
+) -> None:
+    """Tie every ``pad_centers`` Metal1 landing point to one shared Metal2 bus at ``track_y``.
+
+    One riser per pad, unconditionally -- see this section's module-level
+    docstring for why no "snap close pads together" merge is applied here
+    (unlike ``lock_detector/primitives.py``'s own ``route_net()``).
+    ``track_y`` must be unique per net -- see :class:`NetTracks`.
+    """
+    pad_centers = list(pad_centers)
+    if not pad_centers:
+        raise ValueError(f"route_net(): net {net!r} has no pads to route")
+    for x, y in pad_centers:
+        _riser(canvas, x, y, track_y)
+    xs = [x for x, _ in pad_centers]
+    x_lo, x_hi = min(xs), max(xs)
+    half = width / 2.0
+    if x_hi > x_lo:
+        canvas.rect("metal2", x_lo - half, track_y - half, x_hi + half, track_y + half)
+    else:
+        # A single-pad net still needs a via/landing (drawn above by the
+        # loop's one riser) but no bus run -- nothing to span.
+        pass
+
+
+class NetTracks:
+    """Hands out a fresh, never-reused Metal2 track_y per net name.
+
+    Because every track is unique (monotonically increasing by
+    :data:`METAL2_TRACK_PITCH_UM`), two nets' buses can never be closer than
+    the pitch on the Y axis -- eliminating same-layer Metal2 collisions
+    between different nets by construction, independent of each net's own
+    bus's x extent (see :func:`route_net`/:func:`_riser`'s docstrings).
+    """
+
+    def __init__(self, base_y: float, pitch: float = METAL2_TRACK_PITCH_UM) -> None:
+        self._next_y = base_y
+        self._pitch = pitch
+        self._assigned: dict[str, float] = {}
+
+    def get(self, net: str) -> float:
+        if net not in self._assigned:
+            self._assigned[net] = self._next_y
+            self._next_y += self._pitch
+        return self._assigned[net]

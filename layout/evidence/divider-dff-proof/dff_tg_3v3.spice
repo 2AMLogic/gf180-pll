@@ -1,0 +1,36 @@
+* Reference schematic for dff_tg_3v3 (issue #308).
+*
+* Hand-written independently of the layout, fully flattened to 20 M
+* device lines (not X-instance calls into inv_3v3/tgate_3v3) -- see
+* this module's own docstring ("REFERENCE NETLIST") for why, and
+* layout/harness/cell.py's docstring for the general discipline.
+* Connectivity/sizes derived by hand-expanding
+* design/netlist/dff_tg_3v3.spice's own X-instance list against its
+* own inlined inv_3v3/tgate_3v3 subckt bodies.
+*
+* Run LVS with --lvs_sub=VSS (layout/run_pv.py's own default): the NMOS
+* body ties to the deck's synthesized global substrate net, which this
+* flag names VSS -- see layout/README.md's "substrate-net gotcha".
+
+.subckt dff_tg_3v3 D CK Q QB VDD VSS
+M_ICKB_P CKB CK VDD VDD pfet_03v3 W=2.5u L=0.28u
+M_ICKB_N CKB CK VSS VSS nfet_03v3 W=1u L=0.28u
+M_ICKBB_P CKBB CKB VDD VDD pfet_03v3 W=2.5u L=0.28u
+M_ICKBB_N CKBB CKB VSS VSS nfet_03v3 W=1u L=0.28u
+M_TGMI_P NM CKBB D VDD pfet_03v3 W=2.5u L=0.28u
+M_TGMI_N D CKB NM VSS nfet_03v3 W=1u L=0.28u
+M_IA_P NMA NM VDD VDD pfet_03v3 W=2.5u L=0.28u
+M_IA_N NMA NM VSS VSS nfet_03v3 W=1u L=0.28u
+M_IB_P NMB NMA VDD VDD pfet_03v3 W=2.5u L=0.28u
+M_IB_N NMB NMA VSS VSS nfet_03v3 W=1u L=0.28u
+M_TGMF_P NM CKB NMB VDD pfet_03v3 W=2.5u L=0.28u
+M_TGMF_N NMB CKBB NM VSS nfet_03v3 W=1u L=0.28u
+M_TGSI_P NS CKB NMA VDD pfet_03v3 W=2.5u L=0.28u
+M_TGSI_N NMA CKBB NS VSS nfet_03v3 W=1u L=0.28u
+M_IC_P Q NS VDD VDD pfet_03v3 W=2.5u L=0.28u
+M_IC_N Q NS VSS VSS nfet_03v3 W=1u L=0.28u
+M_ID_P QB Q VDD VDD pfet_03v3 W=2.5u L=0.28u
+M_ID_N QB Q VSS VSS nfet_03v3 W=1u L=0.28u
+M_TGSF_P NS CKBB QB VDD pfet_03v3 W=2.5u L=0.28u
+M_TGSF_N QB CKB NS VSS nfet_03v3 W=1u L=0.28u
+.ends
