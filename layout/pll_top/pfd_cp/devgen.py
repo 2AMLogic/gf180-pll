@@ -113,7 +113,16 @@ otherwise get one for free.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Sequence
+from typing import ClassVar, Sequence
+
+try:
+    from .. import _canvas
+except ImportError:  # this package's own dir (not its "pll_top" parent) is the
+    # sys.path root under layout/tests's flat-import convention (see
+    # floorplan/skeleton.py and every layout/tests/test_*.py's own
+    # sys.path.insert(..., ".../pll_top") -- "vco"/"lock_detector"/"pfd_cp"
+    # are then each their own top-level package, one level short of "..").
+    import _canvas
 
 # --- GDS layers, gf180mcuD (confirmed against
 # libs.tech/klayout/drc/rule_decks/layers_def.drc's get_polygons() calls --
@@ -167,65 +176,26 @@ TAP_GAP_UM = 1.0  # clearance from the tap's own comp to the nearest device comp
 # the adjacent device's implant (NP.3/PP.3-class spacing, 0.16-0.43 um min)
 
 
-def _r(v: float) -> float:
-    return round(v, 6)
+_r = _canvas._r
 
 
 @dataclass
-class Canvas:
+class Canvas(_canvas.Canvas):
     """A thin ``klayout.db`` layout/cell wrapper, float-micron coordinates in.
 
     ``klayout.db`` is imported lazily (inside ``__post_init__``), so any
     caller that only touches this module's pure-Python dataclasses
     (:class:`Device`) stays importable with no PV environment -- same
-    convention as ``vco/primitives.py``/``layout/harness/cell.py``.
+    convention as ``vco/primitives.py``/``layout/harness/cell.py``. This is
+    the shared ``layout/pll_top/_canvas.Canvas`` (see issue #317) with this
+    module's own ``LAYER`` table and ``pin()`` labelling on
+    ``"metal1_label"`` (34/10) -- the *purpose* layer gf180mcu's own official
+    LVS deck actually reads net names from (see module docstring), *not* the
+    drawing layer a purely-visual label would use.
     """
 
-    top_name: str
-    dbu: float = 0.001
-
-    def __post_init__(self) -> None:
-        import klayout.db as db  # noqa: PLC0415
-
-        self._db = db
-        self.layout = db.Layout()
-        self.layout.dbu = self.dbu
-        self._dbu_per_um = int(round(1.0 / self.dbu))
-        self.top = self.layout.create_cell(self.top_name)
-        self._layer_index = {name: self.layout.layer(*gds) for name, gds in LAYER.items()}
-        self.pins: dict[str, list[tuple[float, float, float, float]]] = {}
-
-    def _u(self, v: float) -> int:
-        return int(round(v * self._dbu_per_um))
-
-    def rect(self, layer: str, x0: float, y0: float, x1: float, y1: float) -> None:
-        if x1 < x0:
-            x0, x1 = x1, x0
-        if y1 < y0:
-            y0, y1 = y1, y0
-        box = self._db.Box(self._u(x0), self._u(y0), self._u(x1), self._u(y1))
-        self.top.shapes(self._layer_index[layer]).insert(box)
-
-    def label(self, layer: str, text: str, x: float, y: float) -> None:
-        self.top.shapes(self._layer_index[layer]).insert(
-            self._db.Text(text, self._db.Trans(self._db.Vector(self._u(x), self._u(y))))
-        )
-
-    def pin(self, net: str, x0: float, y0: float, x1: float, y1: float) -> None:
-        """Record + label a Metal1 pad as a top-level net pin.
-
-        Labels on ``"metal1_label"`` (34/10), the purpose gf180mcu's own
-        official LVS deck actually reads (see module docstring) -- *not*
-        the drawing layer a purely-visual label would use.
-        """
-        self.pins.setdefault(net, []).append((_r(x0), _r(y0), _r(x1), _r(y1)))
-        self.label("metal1_label", net, (x0 + x1) / 2.0, (y0 + y1) / 2.0)
-
-    def write_gds(self, path) -> None:
-        options = self._db.SaveLayoutOptions()
-        options.select_cell(self.top.cell_index())
-        options.format = "GDS2"
-        self.layout.write(str(path), options)
+    LAYER: ClassVar[dict[str, tuple[int, int]]] = LAYER
+    PIN_LAYER: ClassVar[str] = "metal1_label"
 
 
 @dataclass(frozen=True)

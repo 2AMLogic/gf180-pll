@@ -40,10 +40,17 @@ trade was made explicit rather than silent.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Iterable, Iterator
+from typing import ClassVar, Iterable
 
+try:
+    from .. import _canvas
+except ImportError:  # this package's own dir (not its "pll_top" parent) is the
+    # sys.path root under layout/tests's flat-import convention (see
+    # floorplan/skeleton.py and every layout/tests/test_*.py's own
+    # sys.path.insert(..., ".../pll_top") -- "vco"/"lock_detector"/"pfd_cp"
+    # are then each their own top-level package, one level short of "..").
+    import _canvas
 from . import devices as dev
 
 # --- GDS layers, gf180mcuD (confirmed against
@@ -190,124 +197,36 @@ POLY_RES_TAP_SPACING_UM = 0.86  # comp_spacing = 0.46 + sub_sp(0.4), the
 # constant-block docstring above).
 
 
-def _r(v: float) -> float:
-    return round(v, 6)
+_r = _canvas._r
 
 
 @dataclass
-class Canvas:
+class Canvas(_canvas.Canvas):
     """A thin ``klayout.db`` layout/cell wrapper, float-micron coordinates in.
 
     Mirrors ``layout/floorplan/skeleton.py``/``layout/harness/cell.py``'s own
     convention: ``klayout.db`` is imported lazily (inside ``__post_init__``),
     so anything in this package that only touches ``devices.py``'s constants
-    stays importable with no PV environment.
+    stays importable with no PV environment. This is the shared
+    ``layout/pll_top/_canvas.Canvas`` (see issue #317) with this module's own
+    ``LAYER`` table and manufacturing-grid snap step: ``_u()`` snaps every
+    coordinate to ``devices.LAYOUT_GRID_UM`` because *derived* coordinates --
+    a pad midpoint, a bus centreline, a device width divided by its finger
+    count -- go off-grid routinely, and the PDK's own ``geom.drc`` OFFGRID
+    section (``ongrid(0.005)`` per layer) fails every one of them. Snapping
+    is a monotone function of the coordinate, so shapes that shared an exact
+    edge before still share it after, and geometry that was already on-grid
+    (the ring block, ``ring.py``) is unchanged.
+
+    ``at()`` -- the block-assembly translation ``block.py`` places its five
+    sub-block generators with -- lives on that shared base too: it is generic
+    placement plumbing, not a VCO-specific rule, and it is a no-op
+    (``(0, 0)`` offset) for every caller that never opens the context
+    manager.
     """
 
-    top_name: str
-    dbu: float = 0.001  # 1 nm/dbu, matches the PDK's stdcell GDS convention
-
-    def __post_init__(self) -> None:
-        import klayout.db as db  # noqa: PLC0415
-
-        self._db = db
-        self.layout = db.Layout()
-        self.layout.dbu = self.dbu
-        self._dbu_per_um = int(round(1.0 / self.dbu))
-        self._grid_dbu = int(round(dev.LAYOUT_GRID_UM / self.dbu))
-        self.top = self.layout.create_cell(self.top_name)
-        self._layer_index = {name: self.layout.layer(*gds) for name, gds in LAYER.items()}
-        self.pins: dict[str, list[tuple[float, float, float, float]]] = {}
-        self._dx = 0.0
-        self._dy = 0.0
-        self._pin_scope: dict | None = None
-
-    @contextmanager
-    def at(self, dx: float, dy: float) -> Iterator[dict]:
-        """Draw everything inside this block translated by ``(dx, dy)``.
-
-        The one mechanism ``block.py`` needs to place five separately-written
-        sub-block generators into one flat top cell without any of them
-        learning about placement: each generator keeps computing in its own
-        local coordinates (and stays byte-identically correct when built
-        standalone, where the offset is ``(0, 0)``), while the assembler
-        chooses where those coordinates land.
-
-        Flat, not hierarchical, deliberately: the assembler's own top-level
-        routing has to *merge* with sub-block shapes (a via1 landing on a
-        sub-block's own Metal1 pin, a Metal2 track extended past a sub-block's
-        boundary), and two shapes that merge into one polygon for DRC must be
-        in the same cell -- a cell instance's shapes cannot be grown by the
-        parent. Hierarchy would buy compactness and cost exactly the property
-        this block's DRC run has to prove.
-
-        Yields a per-scope pin dict, so the assembler can tell *which*
-        sub-block a ``GND_VCO`` pin came from (``Canvas.pins`` is a single
-        flat registry, and every sub-block declares that same net).
-        Coordinates recorded in both dicts are absolute (post-offset).
-        """
-        prev = (self._dx, self._dy, self._pin_scope)
-        scope: dict[str, list[tuple[float, float, float, float]]] = {}
-        self._dx, self._dy, self._pin_scope = dx, dy, scope
-        try:
-            yield scope
-        finally:
-            self._dx, self._dy, self._pin_scope = prev
-
-    def _u(self, v: float) -> int:
-        """Micron -> database units, snapped to the manufacturing grid.
-
-        Snapping happens here rather than at each call site because *derived*
-        coordinates -- a pad midpoint, a bus centreline, a device width
-        divided by its finger count -- go off-grid routinely, and the PDK's
-        own ``geom.drc`` OFFGRID section (``ongrid(0.005)`` per layer) fails
-        every one of them. Snapping is a monotone function of the coordinate,
-        so shapes that shared an exact edge before still share it after, and
-        geometry that was already on-grid (the ring block, ``ring.py``) is
-        unchanged.
-        """
-        return int(round(v * self._dbu_per_um / self._grid_dbu)) * self._grid_dbu
-
-    def rect(self, layer: str, x0: float, y0: float, x1: float, y1: float) -> None:
-        if x1 < x0:
-            x0, x1 = x1, x0
-        if y1 < y0:
-            y0, y1 = y1, y0
-        box = self._db.Box(
-            self._u(x0 + self._dx),
-            self._u(y0 + self._dy),
-            self._u(x1 + self._dx),
-            self._u(y1 + self._dy),
-        )
-        self.top.shapes(self._layer_index[layer]).insert(box)
-
-    def label(self, layer: str, text: str, x: float, y: float) -> None:
-        self.top.shapes(self._layer_index[layer]).insert(
-            self._db.Text(
-                text,
-                self._db.Trans(self._db.Vector(self._u(x + self._dx), self._u(y + self._dy))),
-            )
-        )
-
-    def pin(self, net: str, x0: float, y0: float, x1: float, y1: float, layer: str = "metal1") -> None:
-        """Record a Metal1 (or Metal2) landing pad as a named net pin.
-
-        The recorded box is **absolute** -- ``at()``'s translation applied --
-        so an assembler reading ``pins`` back gets coordinates it can route
-        to directly. Standalone builds have a zero offset, so this is
-        unchanged for every existing caller.
-        """
-        box = (_r(x0 + self._dx), _r(y0 + self._dy), _r(x1 + self._dx), _r(y1 + self._dy))
-        self.pins.setdefault(net, []).append(box)
-        if self._pin_scope is not None:
-            self._pin_scope.setdefault(net, []).append(box)
-        self.label(layer, net, (x0 + x1) / 2.0, (y0 + y1) / 2.0)
-
-    def write_gds(self, path) -> None:
-        options = self._db.SaveLayoutOptions()
-        options.select_cell(self.top.cell_index())
-        options.format = "GDS2"
-        self.layout.write(str(path), options)
+    LAYER: ClassVar[dict[str, tuple[int, int]]] = LAYER
+    GRID_UM: ClassVar[float] = dev.LAYOUT_GRID_UM
 
 
 def _contact_positions(lo: float, hi: float) -> list[float]:
