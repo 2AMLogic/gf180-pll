@@ -27,17 +27,21 @@ finger centroids equal the array's own centre) rather than leaving it to
 visual inspection — a matching mistake here passes DRC clean and only
 surfaces much later at extraction.
 
-The patterns come from ``devices.py`` and are palindromes, which is what
-makes the centroids coincide even though the two legs have different finger
-widths:
+The patterns come from ``devices.py``. Each is a **grid** of rows
+(bottom-to-top), each row itself left-to-right; a 1-row grid is a flat
+array, exactly what every cascade drew before issue #336. Every grid is
+symmetric under 180-degree rotation about its own centre, which is what
+makes both legs' centroids coincide with the array centre in *x and y* even
+though the two legs have different finger widths — see
+``check_common_centroid()`` for the arithmetic:
 
-===========  =========================================  =====================
-Cascade      Pattern (left → right, A = always-on)      Netlist ``nf``
-===========  =========================================  =====================
-A (pfet)     ``A S S A``                                2 / 2, drawn as-is
-B (nfet)     ``A S S A``                                1 / 1, **folded to 2**
-C (pfet)     ``S S S S A S S S S``                      1 / 8, drawn as-is
-===========  =========================================  =====================
+===========  =============================  =====================
+Cascade      Pattern (bottom → top row)      Netlist ``nf``
+===========  =============================  =====================
+A (pfet)     ``A S`` / ``S A`` (2x2)         2 / 2, folded (#336)
+B (nfet)     ``A S S A`` (1x4)               1 / 1, **folded to 2**
+C (pfet)     ``S S S`` / ``S A S`` / ``S S S`` (3x3)  1 / 8, folded (#336)
+===========  =============================  =====================
 
 Cascade B is the one place the drawn finger count deviates from the frozen
 netlist's ``nf``: two single-finger devices cannot be interdigitated at all
@@ -109,6 +113,60 @@ catch as a Python exception than as one of several thousand DRC markers.
 That check is *block-wide*, not per bank, so it also covers the one new class
 of neighbour the fold introduces: a link column that now spans several banks'
 worth of y.
+
+TWO-DIMENSIONAL ARRAYS: FOLDING A CASCADE'S OWN ROW, NOT JUST THE BANK
+------------------------------------------------------------------------
+Issue #336 folds cascades A and C a second time, *inside* their own item:
+each becomes an R x C grid of fingers (A: 2x2; C: 3x3) rather than one row,
+which is the width lever a bank fold cannot reach once a cascade is already
+alone in its own bank row (cascade C, 115.18 µm, was — see ``PROOF-fold.md``
+and issue #336). ``col_widths_um()``/``col_box_x0_um()`` give every row the
+same column layout (each column as wide as the widest finger *any* row
+places there), so a finger's own centre always coincides with its column's
+centre regardless of which leg occupies it — the fact
+``check_common_centroid()`` needs for the x centroid, generalising the
+single-row case's uniform finger pitch.
+
+A single row's four nets (shared source bus, shared drain bus, two gate
+buses) already use both the top/bottom S/D pad tracks and the corridor
+between them (see ROUTING, above). An R-row grid has to answer the same
+"how do N nets cross the same span without touching" question *again*, in
+the other axis, to tie each row's own S/D and gate buses into one node per
+net — and the module docstring's own channel is not available for it: that
+Metal2 channel is per bank and sits *outside* the array (between the PMOS
+and NMOS rows), where a multi-row PMOS (or NMOS) array's own internal rows
+never reach.
+
+``draw_cc_array()`` answers it with a *second*, purely local Metal2 hop,
+confined to the array's own footprint and never touching the bank's own
+channel tracks:
+
+* **Gate buses** stay Metal1. Every row's own gate bus (per leg) already
+  terminates at the same x — ``ARRAY_LEFT_ESCAPE_UM``/``ARRAY_RIGHT_ESCAPE_UM``
+  past the array, outside every row's finger footprint, a lane nothing else
+  ever draws into — so one Metal1 vertical spanning every row that owns that
+  leg T-joins them into one node with no via at all, and the array's one
+  escape point moves from that vertical instead of from a single row's bus.
+* **S/D buses** cannot reuse that lane: unlike the gate buses, a row's S/D
+  bus spans the row's own full width, so two rows' S/D pads only line up
+  *inside* the array, in an inter-column gap (``col_box_x0_um()`` guarantees
+  those gaps are finger-free in every row by construction). Tying them there
+  needs a via1 up to Metal2, a short Metal2 vertical spanning the rows that
+  need joining, and a via1 back down at each row — a self-contained hop that
+  never leaves the array's own x-span, so it cannot collide with the bank's
+  own channel tracks, which live in a completely different y band (between
+  the rows, not inside one array's own footprint).
+
+Every riser is registered with ``Plan.reserve(..., layer="metal2")`` — the
+same spacing proof the module's Metal1 escape columns get, generalised to a
+second layer that is never compared against the first (Metal1 and Metal2
+shapes have no DRC spacing relationship absent a via1 joining them). DRC
+alone cannot see whether a riser's via1 actually lands on its row's own pad
+rather than stopping short of it — a Metal2 wire 0.01 µm short of its via1
+is DRC-clean and completely disconnected — so ``connectivity_report()``
+(below ``build()``) probes every row's own tie, not just the array's two end
+rows, which is the property a weaker end-only probe set would silently miss
+if an *interior* row's via broke.
 
 WHY THE TWO BANKS' TRACK GROUPS CANNOT INTERACT
 ------------------------------------------------
