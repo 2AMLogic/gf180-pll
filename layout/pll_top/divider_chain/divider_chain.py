@@ -38,16 +38,16 @@ across all six, not something that can silently drift if one of six
 independent redraws is edited without the others. So this module builds
 ``div23_cell`` exactly **once** (:func:`div23_cell.build`), writes it to one
 scratch GDS, and places six ``klayout.db.CellInstArray`` references to that
-one cell, translated into a single row -- the same technique
+one cell, translated onto :data:`ROW_PLAN`'s own placement grid (one row
+through issue #341, two since #344) -- the same technique
 ``layout/harness/cell.py``'s own ``build()`` already uses (the only other
 ``CellInstArray`` use in this repo, there placing PDK standard cells instead
-of a locally-built composite). Immediately after placing all six, the top
+of a locally-built composite). Once every row is placed and routed the top
 cell is flattened (``top.flatten(-1, True)``) -- same reason
 ``harness/cell.py`` gives: "the DRC/LVS deck then compares a flat layout
 against the flat reference netlist, with no subcircuit-correspondence
-question in the way." The remaining glue logic below is drawn directly into
-the same (now-flat) top cell, exactly like every other composite in this
-package.
+question in the way." The glue logic is drawn directly into that same top
+cell, exactly like every other composite in this package.
 
 Flattening after placement does not undermine "byte-identical": the six
 placements are geometrically identical copies of the one drawn cell (each
@@ -70,10 +70,10 @@ caring at all how ``div23_cell`` wired its own interior.
 Those translated points are fed into the *same* per-net Metal2/3
 riser-to-bus fabric (:func:`devgen.route_net`) this package's every other
 composite already uses, mixed in with this module's own freshly-drawn
-glue-logic pads -- one shared ``nets`` dict, one shared track-assignment
-pass, exactly like ``div23_cell.py``'s own ``build()``. The only new
-constraint this introduces is that the *shared* routing base_y must sit
-above every div23_cell instance's own already-flattened internal
+glue-logic pads -- one ``nets`` dict per row, one track-assignment pass per
+row, otherwise exactly like ``div23_cell.py``'s own ``build()``. The only
+new constraint this introduces is that a row's routing base_y must sit above
+every div23_cell instance *in that row*'s own already-flattened internal
 top-of-footprint (each instance's own internal Metal2/3 bus fabric is
 already baked into its footprint's own top edge) -- so a new, higher-level
 riser continuing straight up from one of those instances' own boundary pads
@@ -92,6 +92,71 @@ than handing out a fresh one per net, and
 ``layout/evidence/divider-chain-layout/PROOF-track-packing.md`` for the
 measured result.
 
+FOLDING THE ROW: TWO ROWS, ONE PACKED BAND EACH (issue #344)
+---------------------------------------------------------------
+Through issue #341 this block was a **single row**: six ``div23_cell``
+instances plus 46 glue-logic columns placed left to right, so its width
+(2634.28 um) was the sum of every sub-cell's width and the block on its own
+(0.1503 mm^2) was just over the entire 0.15 mm^2 whole-chip area target.
+:data:`ROW_PLAN` now folds that into **two rows**, each with its own
+independent :func:`devgen.pack_tracks` band above it.
+
+Why the fold pays off now and did not before #341: with
+:class:`devgen.NetTracks`'s one-never-reused-track-per-net scheme, every new
+row wants its own band whose height scales with the block's *total* net
+count, so folding trades width for height at roughly constant area. With
+packing, a row's band height scales with how many of that row's own nets
+*mutually collide in x* -- which folding reduces twice over, because each
+row holds fewer nets and each net's own extent is bounded by the (now much
+narrower) row.
+
+Two placement choices do most of the work, and both are placement-only (no
+electrical change whatsoever -- :func:`reference_netlist` is generated from
+the same net tables and is byte-for-byte what it was):
+
+* **Glue interleaved with the instances it wires, not parked at one end.**
+  ``_glue_group("S<i>")`` holds exactly the gates whose nets terminate on
+  ``XD<i>``/``XD<i+1>`` (:func:`_stage_columns`), and :data:`ROW_PLAN` places
+  each next to those instances. Through #341 all 46 glue columns sat to the
+  right of all six instances, so *every* chain net ran the block's full
+  width to reach them -- the measured net-extent profile ramped from 0 at the
+  block's left edge to its maximum of 22 mutually-overlapping nets at the
+  first glue column, and that peak *is* the track count (it is the interval
+  graph's own clique number, which is what :func:`devgen.pack_tracks`
+  provably achieves).
+* **The one-hot AND second stage split in two.** ``XMA`` consumes
+  ``T0``/``T1``/``T2`` and ``XMB`` consumes ``T3``/``T4``/``T5``, so placing
+  each in the row holding the three stages that produce its own terms keeps
+  all six ``T`` nets inside one row (:func:`_nand3_columns`). Keeping them in
+  one shared group instead leaves three of the six crossing a row boundary,
+  and a cross-row net costs a track in *every* row it appears in.
+
+CROSS-ROW NETS: A LEFT-HAND METAL3 SPINE
+-------------------------------------------
+Because each row's band is packed independently, a net with pads in both
+rows gets a bus in each and needs the two tied together.
+:func:`spine_columns` reserves one vertical Metal3 column per such net,
+outside every row's own content, and :func:`devgen.route_spine` draws the
+tie; :func:`devgen.route_net`'s own ``bus_to_x`` extends each row's bus out
+to meet it. The run crosses only other rows' Metal2 buses and device
+geometry -- different layers with no via between them, the same property
+:func:`devgen.route_net`'s own long Metal3 risers already rely on.
+
+The spine is at *negative* x (left of every row, which all start at x = 0)
+for a mechanical reason worth recording: a right-hand spine's x would depend
+on the widest row's drawn width, which is not known until the glue columns
+are drawn, which cannot happen until each row's own y placement is known,
+which needs that row's own track count, which needs the spine. Anchoring at
+x = 0 makes the spine's own geometry a function of the *net tables alone*
+and cuts that circularity instead of resolving it with a throwaway
+measurement pass.
+
+A cross-row net is therefore never free: it reaches from its own pads out to
+the spine, so every cross-row net in a row mutually overlaps every other one
+there and each takes a whole track of that row's band. That is exactly why
+:data:`ROW_PLAN` is built to minimise their number rather than to balance
+the two rows' widths perfectly.
+
 GLUE LOGIC: THE SAME FLAT-COMPOSITE FABRIC AS ``div23_cell.py``
 ------------------------------------------------------------------
 The termination/one-hot-mux glue (92 transistors across 46 columns: 5x
@@ -103,10 +168,17 @@ already proved DRC-clean for this same leaf-cell family -- reused via this
 module's own :data:`GATE_REF_DX_UM`/:data:`CHANNEL_REF_DX_UM`/etc. (imported
 from that module rather than re-derived, since the underlying device
 geometry -- gf180mcu's own ``nfet_03v3``/``pfet_03v3`` construction -- is
-identical). Placed to the right of the six ``div23_cell`` instances, each
-column tied into its own supply net (``VDD_DIV``, not ``VDD``) at its own
-periodic tap pair, exactly as the block's own top-level supply domain
-requires (see "VDD_DIV supply domain" below).
+identical). Each column is tied into its own supply net (``VDD_DIV``, not
+``VDD``) at its own periodic tap pair, exactly as the block's own top-level
+supply domain requires (see "VDD_DIV supply domain" below).
+
+*Where* those columns sit changed at issue #344: through #341 all 46 sat to
+the right of all six ``div23_cell`` instances; they are now grouped
+(:data:`GLUE_GROUPS`) and interleaved beside the instances each group wires
+(see "FOLDING THE ROW" below for why -- it is the single largest term in
+that fold's own result). Only ``div23_cell``'s own frame constants are
+shared with those groups; each glue column's own row-cell frame is lifted to
+its row's baseline by :func:`_draw_glue_column`.
 
 VDD_DIV SUPPLY DOMAIN
 -----------------------
@@ -203,11 +275,20 @@ own, not a new one this module reopens.
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import devgen, dff_tg_3v3, div23_cell, inv2x_3v3, inv_3v3, nand2_3v3, nand3_3v3, nor2_3v3
-from .devgen import Canvas, offset_pad_x, pack_tracks, pad_center, route_net, well_tap
+from .devgen import (
+    Canvas,
+    offset_pad_x,
+    pack_tracks,
+    pad_center,
+    route_net,
+    route_spine,
+    well_tap,
+)
 
 TOP_CELL = "divider_chain"
 
@@ -246,15 +327,65 @@ _DIV23_NET_MAP: tuple[dict[str, str], ...] = (
 )
 
 #: Horizontal clearance between two adjacent ``div23_cell`` instances' own
-#: drawn extents -- generous headroom past NW.2b's ~1.4 um min nwell-to-nwell
-#: spacing (see ``vco/block.py``'s own citation of the same rule), since each
-#: instance's own nwell already reaches close to its footprint's own edge.
-DIV23_GAP_X_UM = 20.0
+#: drawn extents.
+#:
+#: Headroom past NW.2b's ~1.4 um min nwell-to-nwell spacing (see
+#: ``vco/block.py``'s own citation of the same rule). #310 set this to 20 um
+#: on the reasoning that "each instance's own nwell already reaches close to
+#: its footprint's own edge"; issue #344 re-derived it against the drawn cell
+#: instead, because with the block folded (:data:`ROW_PLAN`) each row pays
+#: this gap several times over and the block's own width is the axis the fold
+#: is trying to reduce:
+#:
+#: * ``div23_cell``'s nwell spans x = -0.5 .. 329.3 inside a footprint of
+#:   -2.62 .. 329.52, i.e. it is inset 2.12 um from the instance box's own
+#:   left edge and 0.22 um from its right -- so two abutted instances G um
+#:   apart have G + 2.34 um between their nwells. At G = 6 that is 8.34 um,
+#:   ~6x NW.2b's minimum.
+#: * The tightest rule at this boundary is therefore not the well spacing at
+#:   all but plain same-layer metal spacing: Metal1/2/3 *do* reach the
+#:   instance box's own edge, so two instances G apart have G um of
+#:   metal-to-metal clearance, against M1.2a/M2.2a/M3.2a's 0.23-0.28 um.
+#: * DF.16_LV (nwell to nmos comp, 0.43 um min) is likewise slack: the
+#:   neighbour's own leftmost nfet comp is a further 2.62 um in.
+#:
+#: 6 um keeps at least an order of magnitude of headroom on every one of
+#: those, and is signed off the only way that counts -- the assembled block
+#: at this value is DRC-clean on the PDK's own deck (see
+#: ``layout/evidence/divider-chain-layout/PROOF-fold.md``).
+DIV23_GAP_X_UM = 6.0
 
-#: Horizontal clearance between the sixth ``div23_cell`` instance's own
-#: drawn extent and the first glue-logic column -- same rationale/value as
-#: :data:`DIV23_GAP_X_UM`.
-GLUE_GAP_X_UM = 20.0
+#: Horizontal clearance between a ``div23_cell`` instance's own drawn extent
+#: and an adjacent glue-logic column -- same rationale/value as
+#: :data:`DIV23_GAP_X_UM`, with the glue side even slacker (a glue run's own
+#: nwell is drawn by :func:`devgen.nwell_over` around its pfet comps only,
+#: which start well inside the run's own first column).
+GLUE_GAP_X_UM = 6.0
+
+#: Vertical clearance from one row's own Metal2 track band (its topmost
+#: drawn bus edge) to the next row up's own bottom-most drawn shape -- see
+#: the module docstring's "FOLDING THE ROW" section. Nothing overlaps across
+#: this gap: a row's band is Metal2/Metal3 only and the next row's own bottom
+#: is device geometry (comp/implant) plus its own Metal1/2/3 fabric, so the
+#: only rule in play is same-layer Metal2/Metal3 spacing (M2.2a/M3.2a,
+#: 0.28 um min). 3.0 um is the same margin this module already leaves between
+#: a row's own content top and its band's first track.
+ROW_GAP_Y_UM = 3.0
+
+#: Vertical clearance from a row's own tallest drawn shape to the first track
+#: of that row's own Metal2 band.
+BAND_BASE_GAP_UM = 3.0
+
+#: Left-hand spine (see the module docstring's "CROSS-ROW NETS" section):
+#: clearance from every row's own left edge (x = 0) to the *rightmost* spine
+#: column, and the x pitch between two adjacent spine columns. Each spine
+#: column is a Metal3 run 0.34 um wide with 0.44 um Via2 landing squares, so a
+#: 1.0 um pitch leaves 0.56 um between two neighbours' widest drawn shapes --
+#: comfortably over M3.2a's 0.28 um minimum Metal3 spacing, and the same
+#: order of headroom :data:`devgen.METAL2_TRACK_PITCH_UM` leaves between two
+#: Metal2 tracks.
+SPINE_GAP_X_UM = 3.0
+SPINE_PITCH_UM = 1.0
 
 #: Reused unchanged from ``div23_cell.py`` -- the same leaf-cell family, same
 #: proven-DRC-clean net-offset/tap geometry (see that module's own
@@ -307,46 +438,191 @@ _NAND2_SPECS: tuple[tuple[str, str, str, str], ...] = (
 )
 
 
-def _glue_placements() -> list[_Placement]:
-    """The 46 columns (92 transistors) of termination/one-hot-mux glue logic,
-    in ``design/netlist/divider_chain.spice``'s own X-instance order -- see
-    module docstring's "GLUE LOGIC" section.
+def _stage_columns(i: int) -> list[_Placement]:
+    """The glue columns belonging to divider stage ``i`` -- ``XNR_i``/``XIV_i``
+    (the modulus-in feedback pair, 3 columns) plus ``XM_i`` (that stage's own
+    one-hot AND first stage, 2 columns).
+
+    Grouped *by stage* rather than by gate type (which is how
+    ``design/netlist/divider_chain.spice``'s own X-instance list, and this
+    module's own :func:`reference_netlist`, order them) purely for
+    **placement**: every net in stage ``i``'s group has its other end on
+    ``XD_i`` or ``XD_{i+1}``, so keeping the group physically next to those
+    instances is what keeps this block's own top-level nets short -- and a
+    net's own drawn extent is exactly what decides how many Metal2 tracks
+    :func:`devgen.pack_tracks` has to open (issue #341). Placement order has
+    no electrical meaning at all: the reference netlist is generated from the
+    same ``_NOR_SPECS``/``_INV_SPECS``/``_NAND2_SPECS`` tables independently
+    of it.
+
+    Stage 5 is the odd one out: ``XD5``'s own ``MODIN`` is driven directly by
+    the block port ``SEL5`` (see :data:`_DIV23_NET_MAP`), so there is no
+    ``XNR5``/``XIV5`` pair -- only ``XM5``.
     """
     result: list[_Placement] = []
-
-    for (nname, a, b, y), (_iname, ia, iy) in zip(_NOR_SPECS, _INV_SPECS):
+    if i < len(_NOR_SPECS):
+        nname, a, b, y = _NOR_SPECS[i]
+        _iname, ia, iy = _INV_SPECS[i]
         result += _leaf_columns(
             nor2_3v3.COLUMNS, {"A": a, "B": b, "Y": y, "VDD": "VDD_DIV", "VSS": "VSS", "PMID": f"{nname}_PMID"}
         )
         result.append((_split_branches(inv_3v3.INV_DEVICES), {"A": ia, "Y": iy, "VDD": "VDD_DIV", "VSS": "VSS"}))
 
-    for name, a, b, y in _NAND2_SPECS:
-        result += _leaf_columns(
-            nand2_3v3.COLUMNS, {"A": a, "B": b, "Y": y, "VDD": "VDD_DIV", "VSS": "VSS", "NMID": f"{name}_NMID"}
-        )
-
-    # XMA/XMB -- one-hot AND-gate second stage (3-input).
+    name, a, b, y = _NAND2_SPECS[i]
     result += _leaf_columns(
-        nand3_3v3.COLUMNS,
-        {"A": "T0", "B": "T1", "C": "T2", "Y": "MA", "VDD": "VDD_DIV", "VSS": "VSS", "NM1": "XMA_NM1", "NM2": "XMA_NM2"},
+        nand2_3v3.COLUMNS, {"A": a, "B": b, "Y": y, "VDD": "VDD_DIV", "VSS": "VSS", "NMID": f"{name}_NMID"}
     )
-    result += _leaf_columns(
+    return result
+
+
+def _nand3_columns(name: str, a: str, b: str, c: str, y: str) -> list[_Placement]:
+    """One ``nand3_3v3`` one-hot AND second stage (``XMA`` or ``XMB``) -- 3
+    columns.
+
+    Its own group rather than half of a single "output stage" group because
+    ``XMA`` and ``XMB`` between them consume all six ``T0``..``T5`` one-hot
+    terms: placing each next to the three stages that produce its own three
+    terms keeps all six of those nets inside one row, where a single shared
+    ``MUX`` group would leave three of them crossing a row boundary (and a
+    cross-row net costs a Metal2 track in *every* row it appears in, plus its
+    own spine column -- see :func:`spine_columns`).
+    """
+    return _leaf_columns(
         nand3_3v3.COLUMNS,
-        {"A": "T3", "B": "T4", "C": "T5", "Y": "MB", "VDD": "VDD_DIV", "VSS": "VSS", "NM1": "XMB_NM1", "NM2": "XMB_NM2"},
+        {"A": a, "B": b, "C": c, "Y": y, "VDD": "VDD_DIV", "VSS": "VSS", "NM1": f"{name}_NM1", "NM2": f"{name}_NM2"},
     )
 
-    # XMNO/XIDO -- one-hot mux output stage.
+
+def _out_columns() -> list[_Placement]:
+    """``XMNO``/``XIDO`` -- the one-hot mux output stage, 3 columns."""
+    result: list[_Placement] = []
     result += _leaf_columns(
         nor2_3v3.COLUMNS, {"A": "MA", "B": "MB", "Y": "DIVOUTB", "VDD": "VDD_DIV", "VSS": "VSS", "PMID": "XMNO_PMID"}
     )
     result += _leaf_columns(inv2x_3v3.COLUMNS, {"A": "DIVOUTB", "Y": "DIVOUT", "VDD": "VDD_DIV", "VSS": "VSS"})
+    return result
 
-    # XFRT -- divider-retiming flop (Part 3's dff_tg_3v3, issue #308).
-    result += _dff_columns(
+
+def _frt_columns() -> list[_Placement]:
+    """``XFRT`` -- the divider-retiming flop (Part 3's ``dff_tg_3v3``, issue
+    #308), 10 columns.
+    """
+    return _dff_columns(
         "XFRT", {"D": "DIVOUT", "CK": "VCO", "Q": "FB", "QB": "FBB", "VDD": "VDD_DIV", "VSS": "VSS"}
     )
 
+
+#: Every glue-logic group by name -- the placement unit :data:`ROW_PLAN`
+#: refers to. ``S0``..``S5`` are the per-stage groups (:func:`_stage_columns`),
+#: ``MA``/``MB`` the two one-hot AND second stages, ``OUT`` the mux output
+#: stage, ``FRT`` the retiming flop. 5x5 + 2 + 3 + 3 + 3 + 10 = 46 columns, 92
+#: transistors -- the same set (never a different one) this block's glue logic
+#: has always been.
+GLUE_GROUPS: tuple[str, ...] = ("S0", "S1", "S2", "S3", "S4", "S5", "MA", "MB", "OUT", "FRT")
+
+
+def _glue_group(name: str) -> list[_Placement]:
+    if name == "MA":
+        return _nand3_columns("XMA", "T0", "T1", "T2", "MA")
+    if name == "MB":
+        return _nand3_columns("XMB", "T3", "T4", "T5", "MB")
+    if name == "OUT":
+        return _out_columns()
+    if name == "FRT":
+        return _frt_columns()
+    return _stage_columns(int(name[1:]))
+
+
+def _glue_placements() -> list[_Placement]:
+    """All 46 columns (92 transistors) of termination/one-hot-mux glue logic
+    -- see module docstring's "GLUE LOGIC" section.
+
+    Kept as one flat list (in :data:`GLUE_GROUPS` order) for the device-count
+    checks that do not care where a column is placed; :func:`build` itself
+    walks :data:`ROW_PLAN` group by group instead.
+    """
+    result: list[_Placement] = []
+    for name in GLUE_GROUPS:
+        result += _glue_group(name)
     return result
+
+
+#: How this block's content is folded into rows (issue #344) -- see the module
+#: docstring's "FOLDING THE ROW" section for the derivation.
+#:
+#: One entry per row, bottom row first; each row is an ordered left-to-right
+#: sequence of placement items, where ``("div23", i)`` is the i-th
+#: ``div23_cell`` instance (``XD<i>``, per :data:`_DIV23_NET_MAP`) and
+#: ``("glue", name)`` is one :data:`GLUE_GROUPS` entry. Every instance must
+#: appear exactly once and every glue group exactly once -- checked by
+#: ``layout/tests/test_divider_chain.py``, since a typo here would silently
+#: drop devices the DRC deck alone would never notice.
+ROW_PLAN: tuple[tuple[tuple[str, object], ...], ...] = (
+    (
+        ("glue", "OUT"),
+        ("div23", 0), ("glue", "S0"),
+        ("div23", 1), ("glue", "S1"),
+        ("div23", 2), ("glue", "S2"),
+        ("glue", "MA"),
+    ),
+    (
+        ("glue", "FRT"),
+        ("div23", 3), ("glue", "S3"),
+        ("div23", 4), ("glue", "S4"),
+        ("div23", 5), ("glue", "S5"),
+        ("glue", "MB"),
+    ),
+)
+
+
+def _row_nets() -> tuple[set[str], ...]:
+    """The set of net names each :data:`ROW_PLAN` row touches -- derived from
+    the same tables :func:`build` and :func:`reference_netlist` both use, with
+    no geometry involved, so the cross-row net set (and therefore the spine's
+    own width) is known before anything is drawn.
+    """
+    rows: list[set[str]] = []
+    for plan in ROW_PLAN:
+        here: set[str] = set()
+        for kind, key in plan:
+            if kind == "div23":
+                net_map = _DIV23_NET_MAP[int(key)]
+                here.update(net_map.values())
+                here.update(("VDD_DIV", "VSS"))
+            else:
+                for col, port_map in _glue_group(str(key)):
+                    for d in col.pulldown + col.pullup:
+                        here.update(port_map[n] for n in (d.gate_net, d.top_net, d.bottom_net))
+                    # every column carries its own VDD_DIV/VSS tap pair
+                    here.update(("VDD_DIV", "VSS"))
+        rows.append(here)
+    return tuple(rows)
+
+
+def spine_columns() -> dict[str, float]:
+    """The x of every cross-row net's own vertical Metal3 spine column.
+
+    A net whose pads live in more than one :data:`ROW_PLAN` row gets a
+    separate packed Metal2 bus per row (:func:`devgen.pack_tracks` runs
+    independently per row), and those buses have to be tied together --
+    :func:`devgen.route_spine` draws that tie as one vertical Metal3 run at
+    the x this function reserves for the net.
+
+    The spine sits at **negative x**, left of every row's own content (which
+    always starts at x = 0), one column per cross-row net at
+    :data:`SPINE_PITCH_UM` pitch, nearest column :data:`SPINE_GAP_X_UM` from
+    the rows' own left edge. Left rather than right on purpose: a left-hand
+    spine's x positions depend only on *how many* nets cross a row boundary
+    -- pure table data, available before any geometry exists -- whereas a
+    right-hand spine's would depend on the widest row's own drawn width,
+    which is not known until the glue columns have been drawn, which cannot
+    happen until each row's own y placement is known, which needs each row's
+    own track count, which needs the spine. Anchoring at x = 0 cuts that
+    circularity instead of resolving it with a throwaway measurement pass.
+    """
+    rows = _row_nets()
+    crossing = sorted({net for net in set().union(*rows) if sum(net in r for r in rows) > 1})
+    return {net: -(SPINE_GAP_X_UM + i * SPINE_PITCH_UM) for i, net in enumerate(crossing)}
 
 
 def _rename_token(token: str, prefix: str, port_map: dict[str, str]) -> str:
@@ -496,9 +772,80 @@ class DividerChainLayout:
     canvas: Canvas
     footprint: tuple[float, float, float, float]
     pins: dict[str, tuple[float, float]] = field(default_factory=dict)
+    #: The as-placed lower-left corner of every ``div23_cell`` instance's own
+    #: drawn bounding box, in ``XD0``..``XD5`` order -- what
+    #: ``layout/tests/test_divider_chain.py`` clips its six comparison windows
+    #: out of. Recorded rather than re-derived from a placement pitch, because
+    #: after issue #344's fold the six instances no longer sit on one uniform
+    #: step (see :data:`ROW_PLAN`).
+    div23_boxes: tuple[tuple[float, float, float, float], ...] = ()
+    #: Per-row (bottom row first) drawn extent of the assembled block, purely
+    #: as a record for the evidence/tests -- ``(y_bottom, y_band_top, x_right)``.
+    rows: tuple[tuple[float, float, float], ...] = ()
 
     def write_gds(self, path) -> None:
         self.canvas.write_gds(path)
+
+
+def _draw_glue_column(
+    canvas: Canvas,
+    col: devgen.Column,
+    port_map: dict[str, str],
+    x_cursor: float,
+    row_y: float,
+    add: Callable[[str, tuple[float, float]], None],
+    pfet_boxes: list[tuple[float, float, float, float]],
+) -> float:
+    """Draw one glue-logic column at ``x_cursor``, with its own row-cell frame
+    lifted by ``row_y``, and return the next column's own ``x_cursor``.
+
+    Byte-for-byte the per-column body :func:`build` ran inline before issue
+    #344's fold -- the *only* change is that every fixed row-cell frame
+    y-coordinate (:data:`devgen.ROW_PD_Y0`/:data:`devgen.ROW_PU_Y0` and the
+    two tap rows) is offset by this column's own row baseline, so the same
+    proven-DRC-clean column geometry can be drawn in any of the block's rows
+    rather than only in the single row at y = 0.
+    """
+    devices = col.pulldown + col.pullup
+    pd_ports = _draw_branch(canvas, col.pulldown, x_cursor, devgen.ROW_PD_Y0 + row_y)
+    pu_ports = _draw_branch(canvas, col.pullup, x_cursor, devgen.ROW_PU_Y0 + row_y)
+    ports = pd_ports + pu_ports
+
+    for p in ports:
+        if p.kind == "pfet":
+            pfet_boxes.append((p.x0, p.y0, p.x1, p.y3))
+
+    roles: dict[str, list[tuple[str, tuple[float, float, float, float]]]] = {"gate": [], "channel": []}
+    for d, p in zip(devices, ports):
+        roles["gate"].append((port_map[d.gate_net], p.gate_pad))
+        roles["channel"].append((port_map[d.top_net], p.top_pad))
+        roles["channel"].append((port_map[d.bottom_net], p.bottom_pad))
+    role_reference = {"gate": x_cursor + GATE_REF_DX_UM, "channel": x_cursor + CHANNEL_REF_DX_UM}
+    channel_max_reach = x_cursor
+    for role, items in roles.items():
+        if not items:
+            continue
+        reference_x = role_reference[role]
+        nets_here = sorted({n for n, _ in items})
+        n = len(nets_here)
+        role_offsets = {net: (idx - (n - 1) / 2.0) * NET_OFFSET_STEP_UM for idx, net in enumerate(nets_here)}
+        if role == "channel":
+            channel_max_reach = reference_x + max(role_offsets.values())
+        for net, pad in items:
+            target_dx = reference_x + role_offsets[net] - pad_center(pad)[0]
+            point = pad_center(pad) if target_dx == 0.0 else offset_pad_x(canvas, pad, target_dx)
+            add(net, point)
+
+    col_right = max([p.x1 for p in ports] + [channel_max_reach], default=x_cursor)
+    half_tap = devgen.TAP_SIZE_UM / 2.0
+    gx = col_right + TAP_LEFT_MARGIN_UM
+    ntap_pad = well_tap(canvas, "n", gx - half_tap, NTAP_Y0_UM + row_y, "VDD_DIV")
+    add("VDD_DIV", pad_center(ntap_pad))
+    pfet_boxes.append((gx - half_tap, NTAP_Y0_UM + row_y, gx + half_tap, NTAP_Y0_UM + row_y + devgen.TAP_SIZE_UM))
+    ptap_pad = well_tap(canvas, "p", gx - half_tap, PTAP_Y0_UM + row_y, "VSS")
+    add("VSS", offset_pad_x(canvas, ptap_pad, TAP_OFFSET_UM))
+
+    return col_right + COLUMN_CLEAR_GAP_UM
 
 
 def build(outdir: Path | None = None) -> DividerChainLayout:
@@ -508,6 +855,7 @@ def build(outdir: Path | None = None) -> DividerChainLayout:
     # module docstring's "SIX IDENTICAL div23_cell INSTANCES" section. ---
     div23 = div23_cell.build()
     div23_w = div23.footprint[2] - div23.footprint[0]
+    div23_h = div23.footprint[3] - div23.footprint[1]
     base_dx = -div23.footprint[0]
     base_dy = -div23.footprint[1]
 
@@ -518,100 +866,102 @@ def build(outdir: Path | None = None) -> DividerChainLayout:
         div23.write_gds(div23_gds)
         canvas.layout.read(str(div23_gds))
     div23_index = canvas.layout.cell_by_name("div23_cell")
-
     dbu_per_um = int(round(1.0 / canvas.dbu))
-    offsets: list[tuple[float, float]] = []
-    for i in range(6):
-        dx = base_dx + i * (div23_w + DIV23_GAP_X_UM)
-        dy = base_dy
-        offsets.append((dx, dy))
-        trans = db.Trans(db.Vector(int(round(dx * dbu_per_um)), int(round(dy * dbu_per_um))))
-        canvas.top.insert(db.CellInstArray(div23_index, trans))
 
-    # Flatten immediately -- see module docstring for why (harness/cell.py's
-    # own precedent: a flat top cell needs no subcircuit correspondence with
-    # the (hierarchical) reference netlist during LVS).
-    canvas.top.flatten(-1, True)
+    # Every net that crosses a ROW_PLAN row boundary gets its own reserved
+    # vertical Metal3 column at negative x -- known up front, from the net
+    # tables alone (see spine_columns()).
+    spine_x = spine_columns()
 
     nets: dict[str, list[tuple[float, float]]] = {}
+    div23_boxes: list[tuple[float, float, float, float] | None] = [None] * 6
+    rows: list[tuple[float, float, float]] = []
+    row_tracks: list[dict[str, float]] = []
 
-    def _add(net: str, point: tuple[float, float]) -> None:
-        nets.setdefault(net, []).append(point)
+    row_y = 0.0
+    for plan in ROW_PLAN:
+        row_nets: dict[str, list[tuple[float, float]]] = {}
 
-    for i, (dx, dy) in enumerate(offsets):
-        net_map = _DIV23_NET_MAP[i]
-        for local, (px, py) in div23.pins.items():
-            if local == "VDD":
-                global_net = "VDD_DIV"
-            elif local == "VSS":
-                global_net = "VSS"
+        def _add(net: str, point: tuple[float, float], _row_nets=row_nets) -> None:
+            _row_nets.setdefault(net, []).append(point)
+
+        x_cursor = 0.0
+        content_top = row_y
+        pfet_boxes: list[tuple[float, float, float, float]] = []
+        previous: str | None = None
+
+        for kind, key in plan:
+            # Two adjacent glue columns keep their own COLUMN_CLEAR_GAP_UM
+            # (already applied by _draw_glue_column); any boundary involving a
+            # div23_cell instance gets that instance's own clearance instead.
+            if previous is not None and "div23" in (kind, previous):
+                x_cursor += DIV23_GAP_X_UM if previous == kind else GLUE_GAP_X_UM
+
+            if kind == "div23":
+                # One nwell per *contiguous run* of glue columns, not one per
+                # row: a run is broken by any div23_cell instance next to it,
+                # and a single nwell spanning across an instance would swallow
+                # that instance's own nfet row.
+                if pfet_boxes:
+                    content_top = max(content_top, devgen.nwell_over(canvas, pfet_boxes)[3])
+                    pfet_boxes = []
+                i = int(key)
+                dx = x_cursor + base_dx
+                dy = row_y + base_dy
+                div23_boxes[i] = (x_cursor, row_y, x_cursor + div23_w, row_y + div23_h)
+                trans = db.Trans(db.Vector(int(round(dx * dbu_per_um)), int(round(dy * dbu_per_um))))
+                canvas.top.insert(db.CellInstArray(div23_index, trans))
+                net_map = _DIV23_NET_MAP[i]
+                for local, (px, py) in div23.pins.items():
+                    if local == "VDD":
+                        global_net = "VDD_DIV"
+                    elif local == "VSS":
+                        global_net = "VSS"
+                    else:
+                        global_net = net_map[local]
+                    _add(global_net, (px + dx, py + dy))
+                x_cursor += div23_w
+                content_top = max(content_top, row_y + div23_h)
             else:
-                global_net = net_map[local]
-            _add(global_net, (px + dx, py + dy))
+                # --- glue logic: same flat-composite fabric as div23_cell.py's
+                # own build() -- see module docstring's "GLUE LOGIC" section. ---
+                for col, port_map in _glue_group(str(key)):
+                    x_cursor = _draw_glue_column(canvas, col, port_map, x_cursor, row_y, _add, pfet_boxes)
+            previous = kind
 
-    # --- glue logic: same flat-composite fabric as div23_cell.py's own
-    # build() -- see module docstring's "GLUE LOGIC" section. ---
-    pfet_boxes: list[tuple[float, float, float, float]] = []
-    x_cursor = offsets[-1][0] + div23_w + GLUE_GAP_X_UM
+        if pfet_boxes:
+            content_top = max(content_top, devgen.nwell_over(canvas, pfet_boxes)[3])
 
-    for col, port_map in _glue_placements():
-        devices = col.pulldown + col.pullup
-        pd_ports = _draw_branch(canvas, col.pulldown, x_cursor, devgen.ROW_PD_Y0)
-        pu_ports = _draw_branch(canvas, col.pullup, x_cursor, devgen.ROW_PU_Y0)
-        ports = pd_ports + pu_ports
+        # --- this row's own packed track assignment -- see devgen.py's "track
+        # reuse" section (issue #341) for why one track_y is reused across
+        # every net whose drawn extent does not collide, and the module
+        # docstring's "FOLDING THE ROW" section (issue #344) for why each row
+        # gets its own independent pass rather than one band for the block. ---
+        extent_pads = {
+            net: (pads + [(spine_x[net], row_y)] if net in spine_x else pads)
+            for net, pads in row_nets.items()
+        }
+        track_y = pack_tracks(extent_pads, base_y=content_top + BAND_BASE_GAP_UM)
+        for net, pads in row_nets.items():
+            route_net(canvas, net, pads, track_y[net], bus_to_x=spine_x.get(net))
 
-        for p in ports:
-            if p.kind == "pfet":
-                pfet_boxes.append((p.x0, p.y0, p.x1, p.y3))
+        band_top = max(track_y.values()) + devgen.METAL2_WIRE_WIDTH_UM / 2.0
+        rows.append((row_y, band_top, x_cursor))
+        row_tracks.append(track_y)
+        for net, pads in row_nets.items():
+            nets.setdefault(net, []).extend(pads)
+        row_y = band_top + ROW_GAP_Y_UM
 
-        roles: dict[str, list[tuple[str, tuple[float, float, float, float]]]] = {"gate": [], "channel": []}
-        for d, p in zip(devices, ports):
-            roles["gate"].append((port_map[d.gate_net], p.gate_pad))
-            roles["channel"].append((port_map[d.top_net], p.top_pad))
-            roles["channel"].append((port_map[d.bottom_net], p.bottom_pad))
-        role_reference = {"gate": x_cursor + GATE_REF_DX_UM, "channel": x_cursor + CHANNEL_REF_DX_UM}
-        channel_max_reach = x_cursor
-        for role, items in roles.items():
-            if not items:
-                continue
-            reference_x = role_reference[role]
-            nets_here = sorted({n for n, _ in items})
-            n = len(nets_here)
-            role_offsets = {net: (idx - (n - 1) / 2.0) * NET_OFFSET_STEP_UM for idx, net in enumerate(nets_here)}
-            if role == "channel":
-                channel_max_reach = reference_x + max(role_offsets.values())
-            for net, pad in items:
-                target_dx = reference_x + role_offsets[net] - pad_center(pad)[0]
-                point = pad_center(pad) if target_dx == 0.0 else offset_pad_x(canvas, pad, target_dx)
-                _add(net, point)
+    # --- tie each cross-row net's per-row buses together, one vertical Metal3
+    # run per net in the left-hand spine -- see spine_columns(). ---
+    for net, sx in spine_x.items():
+        ys = [tracks[net] for tracks in row_tracks if net in tracks]
+        route_spine(canvas, sx, ys)
 
-        col_right = max([p.x1 for p in ports] + [channel_max_reach], default=x_cursor)
-        half_tap = devgen.TAP_SIZE_UM / 2.0
-        gx = col_right + TAP_LEFT_MARGIN_UM
-        ntap_pad = well_tap(canvas, "n", gx - half_tap, NTAP_Y0_UM, "VDD_DIV")
-        _add("VDD_DIV", pad_center(ntap_pad))
-        pfet_boxes.append((gx - half_tap, NTAP_Y0_UM, gx + half_tap, NTAP_Y0_UM + devgen.TAP_SIZE_UM))
-        ptap_pad = well_tap(canvas, "p", gx - half_tap, PTAP_Y0_UM, "VSS")
-        _add("VSS", offset_pad_x(canvas, ptap_pad, TAP_OFFSET_UM))
-
-        x_cursor = col_right + COLUMN_CLEAR_GAP_UM
-
-    glue_nwell_box = devgen.nwell_over(canvas, pfet_boxes)
-
-    # --- unify: one shared, *packed* track assignment, based above every
-    # div23_cell instance's own already-flattened top edge and the glue
-    # logic's own nwell top -- see module docstring's "ROUTING THE SIX
-    # INSTANCES' BOUNDARY PINS" section for why a shared base_y is safe, and
-    # devgen.py's "track reuse" section (issue #341) for why this reuses one
-    # track_y across every net whose drawn extent does not collide, instead
-    # of devgen.NetTracks's one-track-per-net scheme every other module in
-    # this package still uses (unchanged there -- this is this block's own
-    # top-level pass only). ---
-    max_div23_top = max(dy + div23.footprint[3] for _dx, dy in offsets)
-    base_y = max(max_div23_top, glue_nwell_box[3]) + 3.0
-    track_y = pack_tracks(nets, base_y=base_y)
-    for net, pads in nets.items():
-        route_net(canvas, net, pads, track_y[net])
+    # Flatten -- see module docstring for why (harness/cell.py's own
+    # precedent: a flat top cell needs no subcircuit correspondence with the
+    # (hierarchical) reference netlist during LVS).
+    canvas.top.flatten(-1, True)
 
     # Label every net this module itself routes -- not just this block's own
     # 17 official BOUNDARY_NETS -- with its own reference-netlist name. See
@@ -642,7 +992,13 @@ def build(outdir: Path | None = None) -> DividerChainLayout:
         round(drawn.top * dbu, 6),
     )
 
-    layout = DividerChainLayout(canvas=canvas, footprint=footprint, pins=pins)
+    layout = DividerChainLayout(
+        canvas=canvas,
+        footprint=footprint,
+        pins=pins,
+        div23_boxes=tuple(box for box in div23_boxes if box is not None),
+        rows=tuple(rows),
+    )
     if outdir is not None:
         outdir = Path(outdir)
         outdir.mkdir(parents=True, exist_ok=True)
@@ -666,6 +1022,9 @@ def main() -> int:
     print(f"wrote {netlist_path}")
     print("instances : 6 div23_cell + 20 glue-logic gates + 1 dff_tg_3v3 (XFRT)")
     print("devices   : 452 (360 across the six div23_cell instances + 92 glue logic)")
+    print(f"rows      : {len(ROW_PLAN)}")
+    for r, (y0_row, band_top, x_right) in enumerate(layout.rows):
+        print(f"  row {r}: y {y0_row:8.3f} .. {band_top:8.3f}  width {x_right:9.3f} um")
     print(f"footprint : {x1 - x0:.3f} x {y1 - y0:.3f} um  ({(x1 - x0) * (y1 - y0):.1f} um^2)")
     print(f"pins      : {sorted(layout.pins)}")
     for net in BOUNDARY_NETS:

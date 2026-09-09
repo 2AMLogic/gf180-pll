@@ -111,8 +111,8 @@ rows, narrower than the mirror even after #336, and folding any one of them
 alone would not reduce the block's own width -- the V-to-I core is now the
 practical floor.
 
-Divider/lock real geometry, and a budget overrun -- 2.9x, now 2.0x (issues
-#296, #310, #341)
+Divider/lock real geometry, and a budget overrun -- 2.9x, then 2.0x, now
+1.9x (issues #296, #310, #341, #344)
 --------------------------------------------------------------------------
 ``DIVIDER_LOCK`` is likewise no longer a placeholder: both of its occupants
 now have real, DRC-clean layout (``lock_detector``, #296; ``divider_chain``,
@@ -128,17 +128,25 @@ pair, and the divider chain alone (0.2471 mm^2, drawn 2634.28 x 93.82 um) was
 Issue #341 then reduced the divider chain's height (not its width) by
 reusing this block's own top-level Metal2 routing tracks across nets that do
 not collide, instead of handing every net its own never-reused track --
-93.82 um down to **57.07 um**, a 39 % footprint cut with no DRC/LVS change.
-The two real blocks now measure 0.1578 mm^2, and the divider chain alone
-(0.1503 mm^2, drawn 2634.28 x 57.07 um) is still just over the entire
-0.15 mm^2 die target on its own. The full arithmetic, the (now one, not two)
-remaining structural cause, and the reasoning for why folding the row is a
-separate follow-up rather than attempted in the same pass are stated at the
-``DIVIDER_LOCK`` definition below. This skeleton is still a floorplan record
-of a design that does not fit its budget -- which is precisely what section
-5's own "fail-loud condition for a future pass" asked for, and is tracked for
-further reduction separately from #310's/#341's own DRC/LVS-clean geometry
-claims.
+93.82 um down to 57.07 um, a 39 % footprint cut with no DRC/LVS change. That
+left the block at 0.1503 mm^2, still just over the entire 0.15 mm^2 die
+target on its own, with one structural cause outstanding: it was still a
+single row, so its width was the sum of every sub-cell's width.
+
+Issue #344 closed that one too, by folding the row in two -- three
+``div23_cell`` instances per row, each row carrying its own #341-packed
+routing band, with the glue logic interleaved next to the instances it wires
+rather than parked at one end. The block is now **1317.66 x 100.29 um =
+0.1321 mm^2**, a further 12 % cut, and for the first time it fits inside the
+whole-chip 0.15 mm^2 target *on its own* -- which is a necessary, not a
+sufficient, condition for the chip to fit. The two real blocks now measure
+0.1396 mm^2 together. The full arithmetic and what is still structurally
+oversized (device density, the one lever neither #341 nor #344 touched) are
+stated at the ``DIVIDER_LOCK`` definition below. This skeleton is still a
+floorplan record of a design that does not fit its budget -- which is
+precisely what section 5's own "fail-loud condition for a future pass" asked
+for, and is tracked for further reduction separately from #310's/#341's/
+#344's own DRC/LVS-clean geometry claims.
 """
 
 from __future__ import annotations
@@ -249,10 +257,11 @@ LOCK_DETECTOR_STANDALONE_W_UM = 119.3
 LOCK_DETECTOR_STANDALONE_H_UM = 62.6
 # divider_chain (issue #310, layout/evidence/divider-chain-layout/PROOF.md;
 # height reduced by issue #341's routing-track packing, layout/evidence/
-# divider-chain-layout/PROOF-track-packing.md -- width unchanged, still one
-# row of 6 div23_cell instances + 46 glue columns):
-DIVIDER_CHAIN_STANDALONE_W_UM = 2634.28
-DIVIDER_CHAIN_STANDALONE_H_UM = 57.07
+# divider-chain-layout/PROOF-track-packing.md; then folded from one row into
+# two by issue #344, layout/evidence/divider-chain-layout/PROOF-fold.md --
+# 2634.28 x 57.07 um before the fold, 1317.66 x 100.29 um after):
+DIVIDER_CHAIN_STANDALONE_W_UM = 1317.66
+DIVIDER_CHAIN_STANDALONE_H_UM = 100.29
 
 # The two blocks are on *different supply domains* -- divider_chain on
 # VDD_DIV, lock_detector on VDD (PLL-FLOORPLAN.md section 2's four-domain
@@ -293,37 +302,29 @@ DIVIDER_LOCK = Block(
     h=(LOCK_DETECTOR.y + LOCK_DETECTOR.h) - DIVIDER_CHAIN.y + 2 * DIVIDER_LOCK_MARGIN,
 )
 
-# FAIL-LOUD: this region is a 2.0x whole-chip area overrun, stated not absorbed.
+# FAIL-LOUD: this region is a 1.9x whole-chip area overrun, stated not absorbed.
 # -----------------------------------------------------------------------------
 # PLL-FLOORPLAN.md section 5 budgeted "divider chain + lock detector" at
 # 0.0038-0.0052 mm^2 (a ROM std-cell-row estimate made when no physical view
-# existed for either block). The two real blocks measure 0.1503 mm^2 +
-# 0.0075 mm^2 = 0.1578 mm^2 -- a ~30-42x overrun on that row, and (still) more
-# than the entire 0.15 mm^2 die target on the divider chain alone. Section 5's
-# own "fail-loud condition for a future pass" instructs stating an overrun
+# existed for either block). The two real blocks measure 0.1321 mm^2 +
+# 0.0075 mm^2 = 0.1396 mm^2 -- a ~27-37x overrun on that row. Section 5's own
+# "fail-loud condition for a future pass" instructs stating an overrun
 # explicitly rather than silently rounding the total down, so:
 #
 #   * Re-running section 5's arithmetic with every measured number in place of
 #     its ROM row gives 0.0369 (loop filter) + 0.0312 (VCO) + 0.020 (PFD/CP,
-#     still ROM) + 0.1578 (divider+lock) = 0.2459 mm^2, i.e. 0.3074 mm^2 after
-#     that section's x1.25 top-level overhead -- 2.0x the 0.15 mm^2 budget,
-#     against the 2.9x this docstring recorded through issue #310 (and the
-#     +22 % margin the VCO-only revision recorded before that).
+#     still ROM) + 0.1396 (divider+lock) = 0.2277 mm^2, i.e. 0.2846 mm^2 after
+#     that section's x1.25 top-level overhead -- 1.9x the 0.15 mm^2 budget,
+#     against the 2.0x recorded through issue #341 and the 2.9x through #310
+#     (and the +22 % margin the VCO-only revision recorded before those).
 #   * total_extent_um2() (this skeleton's whole bounding box) is now
-#     ~1.09e6 um^2 (was ~1.19e6 um^2), still dominated by empty space: the
-#     divider chain is 2634.28 um wide, ~4x the rest of the skeleton put
-#     together, so its bounding box still swallows the floorplan even after
-#     issue #341's height reduction below.
+#     ~0.61e6 um^2 (was ~1.09e6 um^2 through #341, ~1.19e6 through #310).
+#     The divider chain no longer swallows the floorplan on its own: at
+#     1317.66 um it is ~2x the rest of the skeleton rather than ~4x.
 #
-# The cause was structural and measurable, not a sizing slip, and issue #341
-# closed one of the two structural causes #310 originally recorded here:
+# The cause was structural and measurable, not a sizing slip. #310 recorded two
+# structural causes here; #341 closed one and #344 the other:
 #
-#   * The block is (still) one row. Six div23_cell instances (332.14 um each)
-#     plus 46 glue columns are placed side by side, so the block's width is
-#     the sum of every sub-cell's width -- the same "every sub-block is a
-#     single row" lever the VCO docstring above already names, here at 6x the
-#     length. **Unchanged by #341** -- still the next lever, and now a more
-#     promising one (see below).
 #   * ~57 % of the block's *height* **was** the shared per-net Metal2 track
 #     band (~71 top-level nets x 0.75 um pitch = ~53 um of the 93.82 um
 #     total), spanning the block's full 2634 um width. Issue #341 fixed this:
@@ -334,23 +335,37 @@ DIVIDER_LOCK = Block(
 #     assignment step uses) instead of handing out one never-reused track per
 #     net regardless of how local it is. That cut the routing band from 71
 #     tracks to 22 (53.25 um to 16.5 um), taking the block's total height from
-#     93.82 um to **57.07 um** -- a 39 % footprint reduction with the width
+#     93.82 um to 57.07 um -- a 39 % footprint reduction with the width
 #     unchanged. See layout/evidence/divider-chain-layout/
 #     PROOF-track-packing.md for the full before/after and DRC/LVS re-proof.
-#   * Folding the row (like #324's VCO mirror) was explicitly *not* attempted
-#     here before #341, because with one track per net it would have traded
-#     width for height at roughly constant area (each new row wanting its own
-#     full-width band). With #341's packing, a row's own track count now
-#     scales with how many *locally-colliding* nets it introduces rather than
-#     its total net count, which is the precondition a future fold would need
-#     to actually pay off -- filed as a follow-up (#344) rather than attempted
-#     in this same pass.
+#   * The block **was** one row: six div23_cell instances (332.14 um each)
+#     plus 46 glue columns placed side by side, so its width was the sum of
+#     every sub-cell's width -- the same "every sub-block is a single row"
+#     lever the VCO docstring above already names, here at 6x the length.
+#     Issue #344 folded it into two rows of three instances, each row with its
+#     own packed band, and moved the glue logic in beside the instances it
+#     wires instead of leaving it all at one end (which had made every chain
+#     net run the block's full width). 2634.28 x 57.07 um became
+#     **1317.66 x 100.29 um** -- 0.1503 mm^2 down to 0.1321 mm^2, a further
+#     12 %. The fold pays off only *because* #341 landed first: with one
+#     never-reused track per net, a second row would have wanted its own
+#     full-width band and the fold would have traded width for height at
+#     roughly constant area. See layout/evidence/divider-chain-layout/
+#     PROOF-fold.md.
+#
+# What is left is not structural placement any more but **device density**:
+# the diffusion-island-per-device convention this block's full-custom
+# generators use costs it ~292 um^2/transistor against lock_detector's ~187
+# for the same PDK/flavour. That lever is shared with the VCO's own residual
+# overrun and is deliberately not folded into either of the two passes above.
 #
 # Nothing here is a DRC/LVS claim change: the divider chain is signoff-clean on
 # the PDK's own decks at this footprint (layout/evidence/divider-chain-layout/
-# PROOF-track-packing.md). It is the *area budget* that is still failing,
-# loudly and on the record, which is what section 5 asked a pass like this one
-# to do.
+# PROOF-fold.md). It is the *area budget* that is still failing, loudly and on
+# the record, which is what section 5 asked a pass like this one to do -- and
+# it is now failing by less: the divider chain on its own finally fits inside
+# the 0.15 mm^2 whole-chip target, which is necessary but not sufficient for
+# the chip to.
 DIVIDER_LOCK_AREA_UM2 = DIVIDER_LOCK.w * DIVIDER_LOCK.h
 AREA_BUDGET_UM2 = 150_000.0
 
