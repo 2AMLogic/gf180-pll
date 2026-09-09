@@ -1121,31 +1121,27 @@ if [ "${SIM_DYN_END_EXTEND:-auto}" != "off" ]; then
   awk '$1 == 1' "${JOBSDENDALL}" | cut -d' ' -f3- >"${JOBSDENDX}"
 fi
 # t_rend + offset, in seconds, from two "<n><u|n|p>"-suffixed literals -- the
-# top-level twin of --one-dyn's own sec()/addoff() pair.
-dend_at() { awk -v a="$1" -v b="$2" '
-  function s(x) { if (x ~ /[uU]$/) return x * 1e-6;
-                  if (x ~ /[nN]$/) return x * 1e-9;
-                  if (x ~ /[pP]$/) return x * 1e-12;
-                  return x + 0 }
-  BEGIN { printf "%.12g", s(a) + s(b) }'; }
+# top-level twin of --one-dyn's own sec()/addoff() pair. simenv_dend_at()
+# (sim/lib/simenv.sh) is the shared implementation; report.sh re-derives the
+# same instants with the same helper (#329).
 NDE=$(( $(wc -l <"${JOBSDEND}" | tr -d ' ') + $(wc -l <"${JOBSDENDX}" | tr -d ' ') ))
 if [ -s "${JOBSDEND}" ]; then
-  echo "supply-sensitivity: $(wc -l <"${JOBSDEND}" | tr -d ' ') corner(s) still converging on the END plateau at ${KD_TSTOP_BASE} -- re-running at $(dend_at "${KD_TREND_BASE}" "${KD_DEND_TSTOP}") s"
+  echo "supply-sensitivity: $(wc -l <"${JOBSDEND}" | tr -d ' ') corner(s) still converging on the END plateau at ${KD_TSTOP_BASE} -- re-running at $(simenv_dend_at "${KD_TREND_BASE}" "${KD_DEND_TSTOP}") s"
   # shellcheck disable=SC2016
-  SIM_DYN_P11="$(dend_at "${KD_TREND_BASE}" "${KD_DEND_TA}")" \
-    SIM_DYN_P12="$(dend_at "${KD_TREND_BASE}" "${KD_DEND_TB}")" \
-    SIM_DYN_TSTOP="$(dend_at "${KD_TREND_BASE}" "${KD_DEND_TSTOP}")" \
+  SIM_DYN_P11="$(simenv_dend_at "${KD_TREND_BASE}" "${KD_DEND_TA}")" \
+    SIM_DYN_P12="$(simenv_dend_at "${KD_TREND_BASE}" "${KD_DEND_TB}")" \
+    SIM_DYN_TSTOP="$(simenv_dend_at "${KD_TREND_BASE}" "${KD_DEND_TSTOP}")" \
     xargs -P "$(simenv_jobs)" -L 1 \
       "${BASH:-/bin/bash}" -c 'exec "$0" --one-dyn "$@"' "${HERE}/run.sh" <"${JOBSDEND}"
 fi
 if [ -s "${JOBSDENDX}" ]; then
-  echo "supply-sensitivity: $(wc -l <"${JOBSDENDX}" | tr -d ' ') high-plateau-escalated corner(s) still converging on the END plateau -- re-running at $(dend_at "${KD_TREND_X}" "${KD_DEND_TSTOP}") s"
+  echo "supply-sensitivity: $(wc -l <"${JOBSDENDX}" | tr -d ' ') high-plateau-escalated corner(s) still converging on the END plateau -- re-running at $(simenv_dend_at "${KD_TREND_X}" "${KD_DEND_TSTOP}") s"
   # shellcheck disable=SC2016
   SIM_DYN_TA_HI="${KD_TA_HI_X}" SIM_DYN_TB_HI="${KD_TB_HI_X}" \
     SIM_DYN_TRAMP="${KD_TRAMP_X}" SIM_DYN_TREND="${KD_TREND_X}" \
-    SIM_DYN_P11="$(dend_at "${KD_TREND_X}" "${KD_DEND_TA}")" \
-    SIM_DYN_P12="$(dend_at "${KD_TREND_X}" "${KD_DEND_TB}")" \
-    SIM_DYN_TSTOP="$(dend_at "${KD_TREND_X}" "${KD_DEND_TSTOP}")" \
+    SIM_DYN_P11="$(simenv_dend_at "${KD_TREND_X}" "${KD_DEND_TA}")" \
+    SIM_DYN_P12="$(simenv_dend_at "${KD_TREND_X}" "${KD_DEND_TB}")" \
+    SIM_DYN_TSTOP="$(simenv_dend_at "${KD_TREND_X}" "${KD_DEND_TSTOP}")" \
     xargs -P "$(simenv_jobs)" -L 1 \
       "${BASH:-/bin/bash}" -c 'exec "$0" --one-dyn "$@"' "${HERE}/run.sh" <"${JOBSDENDX}"
 fi

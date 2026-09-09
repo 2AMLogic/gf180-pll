@@ -239,6 +239,22 @@ simenv_mktag() {
   echo "${t}"
 }
 
+# simenv_dend_at <a> <b> -> a + b, in seconds, from two SPICE time-suffixed
+# ("<n><u|n|p>") or bare-numeric literals.
+#
+# (Hoisted from byte-identical local copies -- both named `dend_at()` -- in
+# sim/supply-sensitivity's run.sh and report.sh; report.sh's own comment
+# above its copy called out the duplication explicitly ("Re-derive ... here
+# exactly as run.sh's own dend_at() does"). #329.)
+simenv_dend_at() {
+  awk -v a="$1" -v b="$2" '
+    function s(x) { if (x ~ /[uU]$/) return x * 1e-6;
+                    if (x ~ /[nN]$/) return x * 1e-9;
+                    if (x ~ /[pP]$/) return x * 1e-12;
+                    return x + 0 }
+    BEGIN { printf "%.12g", s(a) + s(b) }'
+}
+
 # N -> chain programming (DR-001 Decision 3 chain-length/modulus encoding):
 # N = 2^k + sum(p_i . 2^i) for i<k, SEL_(k-1)=1.
 # Prints "k sel0..sel5 p0..p5" as 13 space-separated 0/1 fields plus k.
