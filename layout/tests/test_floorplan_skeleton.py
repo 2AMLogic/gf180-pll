@@ -104,9 +104,11 @@ class BlockPlacementTests(unittest.TestCase):
         ``DIVIDER_LOCK`` in skeleton.py, and PLL-FLOORPLAN.md section 5's
         revision note). Issue #341 then reduced the divider chain's *height*
         (not its width) to 57.07 um by packing its own top-level routing
-        tracks instead of giving every net a never-reused one -- the overrun
-        is smaller now (~1.09e6 um^2, was ~1.19e6 um^2) but still real; the
-        ratchet ceiling below was tightened to match rather than left loose.
+        tracks instead of giving every net a never-reused one, and #344 folded
+        its single row in two, taking it to 1317.66 x 100.29 um. The overrun
+        is smaller at each step (~1.19e6 -> ~1.09e6 -> ~0.61e6 um^2) but still
+        real; the ratchet ceiling below is tightened to match each time rather
+        than left loose.
 
         The assertion is *inverted rather than deleted*, plus a ratchet: the
         overrun must still be real (so this test starts failing again the
@@ -124,9 +126,23 @@ class BlockPlacementTests(unittest.TestCase):
             "skeleton.py's DIVIDER_LOCK fail-loud note and PLL-FLOORPLAN.md "
             "section 5 to match",
         )
-        # Ratchet: skeleton.py states ~1.09e6 um^2 (issue #341). Allow no
-        # growth past 1.15e6.
-        self.assertLess(extent, 1_150_000.0, "floorplan extent grew beyond the recorded overrun")
+        # Ratchet: skeleton.py states ~0.61e6 um^2 (issue #344). Allow no
+        # growth past 0.65e6.
+        self.assertLess(extent, 650_000.0, "floorplan extent grew beyond the recorded overrun")
+
+    def test_divider_chain_alone_now_fits_the_whole_chip_area_target(self):
+        """#344's headline: the divider chain stopped being the single block
+        that busts the whole-chip budget on its own.
+
+        It measured 0.2471 mm^2 at #310 and 0.1503 mm^2 after #341 -- both
+        over the entire 0.15 mm^2 die target for one block. Folding the row
+        (#344) brought it to 0.1321 mm^2. This is a necessary condition for
+        the chip to fit, never a sufficient one: the re-summed total above is
+        still 1.9x the budget.
+        """
+        area = skeleton.DIVIDER_CHAIN_STANDALONE_W_UM * skeleton.DIVIDER_CHAIN_STANDALONE_H_UM
+        self.assertLess(area, skeleton.AREA_BUDGET_UM2)
+        self.assertLess(area, 2634.28 * 57.07, "the recorded footprint did not shrink against #341")
 
     def test_lock_detector_standalone_footprint_is_recorded_and_positive(self):
         # issue #296: the real, DRC-clean standalone lock_detector layout's

@@ -892,13 +892,24 @@ def route_net(
     pad_centers: Sequence[tuple[float, float]],
     track_y: float,
     width: float = METAL2_WIRE_WIDTH_UM,
+    *,
+    bus_to_x: float | None = None,
 ) -> None:
     """Tie every ``pad_centers`` Metal1 landing point to one shared Metal2 bus at ``track_y``.
 
     One riser per pad, unconditionally -- see this section's module-level
     docstring for why no "snap close pads together" merge is applied here
     (unlike ``lock_detector/primitives.py``'s own ``route_net()``).
-    ``track_y`` must be unique per net -- see :class:`NetTracks`.
+    ``track_y`` must be unique per net *among nets whose x extents overlap*
+    -- see :class:`NetTracks` (a fresh track per net) and :func:`pack_tracks`
+    (one track shared by several non-colliding nets).
+
+    ``bus_to_x`` extends the drawn Metal2 bus out to that x without drawing a
+    riser there: the landing this net's own cross-row Metal3 :func:`route_spine`
+    link comes down onto, for a caller assembling several stacked rows
+    (``divider_chain.py``, issue #344). ``None`` (the default, and every
+    single-row caller in this package) draws exactly the bus the pads
+    themselves span, byte-for-byte as before.
     """
     pad_centers = list(pad_centers)
     if not pad_centers:
@@ -906,6 +917,8 @@ def route_net(
     for x, y in pad_centers:
         _riser(canvas, x, y, track_y)
     xs = [x for x, _ in pad_centers]
+    if bus_to_x is not None:
+        xs.append(bus_to_x)
     x_lo, x_hi = min(xs), max(xs)
     half = width / 2.0
     if x_hi > x_lo:
@@ -914,6 +927,45 @@ def route_net(
         # A single-pad net still needs a via/landing (drawn above by the
         # loop's one riser) but no bus run -- nothing to span.
         pass
+
+
+def route_spine(
+    canvas: Canvas,
+    x: float,
+    track_ys: Sequence[float],
+    width: float = METAL3_WIRE_WIDTH_UM,
+) -> None:
+    """One net's vertical Metal3 link joining that net's per-row Metal2 buses.
+
+    The cross-row counterpart of :func:`route_net` (issue #344). A folded
+    block draws one *independent* packed track band per row
+    (:func:`pack_tracks`, issue #341), so a net with pads in more than one row
+    gets a separate bus per row and needs those buses tied together. This
+    draws that tie: one continuous Metal3 run at ``x``, spanning
+    ``min(track_ys) .. max(track_ys)``, with a Via2 + Metal3/Metal2 landing
+    square at *every* ``track_ys`` entry (not only the two ends -- a net
+    present in three or more rows lands on each).
+
+    ``x`` must be a column reserved for this net alone and clear of every
+    row's own drawn content, since the run crosses every intervening row's
+    full height. ``divider_chain.py`` reserves those columns in a dedicated
+    left-hand spine region at negative x, outside every row's own extent, so
+    the only same-layer neighbours are the other spine columns (kept apart by
+    that module's own ``SPINE_PITCH_UM``). Everything the run passes *over*
+    is Metal2 (each row's own buses) or Metal1/device geometry -- different
+    layers with no via between them, the same no-crossing-cost property
+    :func:`_riser`'s own long Metal3 run already relies on.
+    """
+    ys = sorted(set(track_ys))
+    if not ys:
+        raise ValueError(f"route_spine(): no track_y values at x={x}")
+    half_w = width / 2.0
+    if ys[-1] > ys[0]:
+        canvas.rect("metal3", x - half_w, ys[0], x + half_w, ys[-1])
+    for y in ys:
+        half = _canvas._via_square(canvas, "via2", x, y, VIA2_SIZE_UM, VIA_ENCLOSURE_UM)
+        canvas.rect("metal3", x - half, y - half, x + half, y + half)
+        canvas.rect("metal2", x - half, y - half, x + half, y + half)
 
 
 class NetTracks:

@@ -367,6 +367,10 @@ worth stating before anyone reaches for the obvious fix:
   one-global-track-per-net), and/or the diffusion-island-per-device
   convention `vco/primitives.py` documents. That is a materially larger piece
   of work than #324 and is tracked separately.
+  *(Both halves of that prediction held: §5.2 changed the routing fabric
+  first and §5.3 then folded the row — in that order, and the fold only paid
+  off because the fabric change went first. Device density is still
+  untouched.)*
 - **This is not a DRC/LVS regression.** Every block above is signoff-clean on
   the PDK's own decks at the footprint quoted (the divider chain additionally
   LVS-clean against `design/netlist/divider_chain.spice`). What has failed is
@@ -429,12 +433,87 @@ re-deriving the six instances' placement grid and the glue logic's own
 layout for a multi-row assembly is a materially larger piece of work than
 this revision's own routing-fabric change, and #295's "six identical
 instances" acceptance criterion has to be re-proved for however many rows
-result.
+result. *(That fold landed at §5.3 below; the "six identical instances"
+criterion re-proved clean at two rows.)*
 
 **Still not a DRC/LVS regression.** The divider chain is signoff-clean on the
 PDK's own decks at the new footprint, additionally re-proved LVS-clean
 against `design/netlist/divider_chain.spice` unchanged (`layout/evidence/
 divider-chain-layout/PROOF-track-packing.md`).
+
+### 5.3 Revision: issue #344 folds the divider chain's row in two
+
+**Status: the overrun is smaller again — ≈1.9× rather than ≈2.0× — and the
+divider chain on its own now fits inside the whole-chip target for the first
+time.** §5.2 left exactly one structural cause standing: the block was still
+one row, so its width was the sum of every sub-cell's width. This revision is
+the fold §5.1 predicted would only work *after* the routing fabric changed.
+
+`divider_chain.py`'s new `ROW_PLAN` places three `div23_cell` instances per
+row in two stacked rows, each row carrying its own independent
+`devgen.pack_tracks()` band. Two placement choices carry the result, and
+neither changes a single device or connection — `reference_netlist()` is
+byte-for-byte what it was:
+
+- **The glue logic moved in beside the instances it wires.** Through §5.2 all
+  46 glue-logic columns sat to the right of all six instances, so every chain
+  net ran the block's full width to reach them; the measured net-extent
+  profile ramped monotonically to ≈20 mutually-overlapping nets at the glue
+  boundary, and that peak *is* the track count. The glue is now grouped per
+  divider stage and placed next to that stage's own instances.
+- **The one-hot AND second stage split in two.** `XMA` consumes `T0`–`T2` and
+  `XMB` consumes `T3`–`T5`, so each sits in the row holding the three stages
+  that produce its own terms, keeping all six `T` nets row-local.
+
+A net with pads in both rows still needs its two buses tied together: those
+seven nets (`VSS`, `VDD_DIV`, `VCO`, `MO3`, `MB`, `DIVOUT`, `CK3`) each get a
+reserved vertical Metal3 column in a left-hand spine at negative x. The two
+rows use 12 and 10 tracks — 22 in total, the same number §5.2's single band
+used, but now spanning half the width each.
+
+| Block | §5.2 real, as-drawn | §5.3 real, as-drawn | Δ | Evidence |
+|---|---|---|---|---|
+| Divider chain | 0.1503 mm² (2634.28 × 57.07 µm) | **0.1321 mm² (1317.66 × 100.29 µm)** | −12 % | `layout/evidence/divider-chain-layout/PROOF-fold.md` (#344) |
+| Divider chain + lock detector | 0.1578 mm² | **0.1396 mm²** | −12 % | both of #296's and #344's records |
+
+Re-running §5.1's arithmetic once more: 0.0369 (loop filter) + 0.0312 (VCO) +
+0.020 (PFD/CP, still ROM) + 0.1396 (divider + lock) = **0.2277 mm²**, i.e.
+**0.2846 mm²** after ×1.25 top-level overhead — a **≈1.9× overrun** against
+the < 0.15 mm² draft target, down from §5.2's ≈2.0× and §5.1's ≈2.9×.
+`skeleton.py`'s `total_extent_um2()` moves much further, because the divider
+chain stops dominating the bounding box: ~1.09 × 10⁶ µm² → **~0.61 × 10⁶
+µm²**, −44 %.
+
+**The fold reduced area, it did not merely move it.** That was the specific
+failure mode §5.1 warned of, so it is worth separating the two levers this
+revision pulled:
+
+| | Width × height | Area |
+|---|---|---|
+| §5.2 baseline, one row | 2634.28 × 57.07 µm | 150,338 µm² |
+| Folded, placement gaps unchanged at 20 µm | 1401.66 × 100.29 µm | 140,572 µm² (−6.5 %) |
+| Folded, instance/glue gap re-derived to 6 µm | 1317.66 × 100.29 µm | **132,148 µm² (−12.1 %)** |
+
+The 20 µm instance-to-instance gap #310 chose was re-derived against the
+drawn cell rather than assumed: `div23_cell`'s n-well is inset 2.12 µm from
+its instance box's left edge and 0.22 µm from its right, so two instances
+6 µm apart have 8.34 µm between their wells — ≈6× NW.2b's 1.4 µm minimum,
+and the binding rule at that boundary is plain same-layer metal spacing
+(0.23–0.28 µm) rather than well spacing at all. A folded block pays this gap
+several times per row, which is why it was worth re-deriving here and not
+before.
+
+**What is left is device density, not placement.** At 0.1321 mm² for 452
+transistors the block spends ≈292 µm²/transistor, against `lock_detector`'s
+≈187 for the same PDK and flavour — the diffusion-island-per-device
+convention `vco/primitives.py` documents. That lever is shared with the VCO's
+own residual overrun and is deliberately untouched by both §5.2 and §5.3.
+
+**Still not a DRC/LVS regression.** The divider chain is signoff-clean on the
+PDK's own decks at the folded footprint, and re-proved LVS-clean against
+`design/netlist/divider_chain.spice` — whose flattened re-expression is
+byte-for-byte unchanged by this revision (`layout/evidence/
+divider-chain-layout/PROOF-fold.md`).
 
 ## 6. GDS skeleton
 
@@ -457,9 +536,10 @@ layout instead of only the single trivial `inv_tb` cell.
 
 **Which rectangles are now real** (this list supersedes the "they do not
 exist as real geometry yet" characterization this section carried through
-#17): `vco` (#293/#324), `divider_lock.divider_chain` (#310) and
-`divider_lock.lock_detector` (#296) are the blocks' own measured as-drawn
-extents, and `DIVIDER_LOCK` is sized to contain the latter two — see §5.1.
+#17): `vco` (#293/#324), `divider_lock.divider_chain` (#310, reduced at #341
+and folded at #344) and `divider_lock.lock_detector` (#296) are the blocks'
+own measured as-drawn extents, and `DIVIDER_LOCK` is sized to contain the
+latter two — see §5.1 and §5.3.
 `pfd_cp` is still a §5 ROM estimate. The devices themselves are DRC-clean
 (and, for the divider chain, LVS-clean) in each block's own evidence
 directory, not by virtue of this skeleton's run.

@@ -2,7 +2,7 @@
 <report-database>
  <description>DRC Run Report at</description>
  <original-file/>
- <generator>drc: script='/tmp/dc_pv2/drc/main.drc'</generator>
+ <generator>drc: script='/tmp/dcdrc/main.drc'</generator>
  <top-cell>divider_chain</top-cell>
  <tags>
  </tags>
