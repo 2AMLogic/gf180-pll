@@ -123,7 +123,10 @@ layout/
                              PROOF.md = ring; PROOF-mirror-buffer.md = mirror + buffer;
                              PROOF-bias-resistors.md = RCG/ROFF/RDEG; PROOF-vtoi-core.md = V-to-I core;
                              PROOF-block.md = the assembled block (all five, wired, one guard ring);
-                             PROOF-fold.md = band-mirror row fold + block-level n-well guard ring (issue #324)
+                             PROOF-fold.md = band-mirror row fold + block-level n-well guard ring (issue #324);
+                             PROOF-lvs.md = first block-level LVS attempt: reference netlist +
+                             net-labelling fix landed, a real pre-existing connectivity defect found
+                             and not yet fixed (issue #367)
     lock-detector-layout/    lock_detector block GDS + DRC-clean report (issue #296)
     pfdcp-inv-proof/         PFD/CP devgen methodology proof: GDS + DRC/LVS reports (issue #299)
     pfd-layout/              PFD block GDS + DRC-clean report, mirror-symmetric UP/DN chains (issue #300)

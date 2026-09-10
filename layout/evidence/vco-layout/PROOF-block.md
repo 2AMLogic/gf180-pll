@@ -279,11 +279,20 @@ repo's* generators, not of klayout-tools, and was added here as
 
 ## What is still not proved
 
-* **LVS.** No block-level SPICE netlist is generated yet, and no device
-  recognition is run. The connectivity check above covers the interconnect
-  only. `mirror.py` also records one deliberate layout-vs-netlist deviation
-  (cascade B's legs folded 1 → 2 fingers, total W/L and device count
-  preserved) that a future LVS increment has to reconcile.
+* **LVS.** See `PROOF-lvs.md` (issue #367): a reference netlist
+  (`block.reference_netlist()`) now exists and a real LVS run has been
+  attempted, but it is **not yet LVS-clean**. That first real run found a
+  genuine, reproducible connectivity defect in this block's own assembled
+  geometry (a merge spanning the ring's chain nets, the buffer's internal
+  and output nodes, the mirror's output pair, and both supply rails) that
+  predates #367 and is invisible to the metal-only connectivity check above
+  — DRC and `connectivity_report()` both stay clean throughout. `PROOF-lvs.md`
+  records the full diagnostic trail (including two ruled-out suspects) and a
+  follow-up issue (#368) tracks the fix. Cascade B's legs (folded 1 → 2 fingers,
+  total W/L and device count preserved) needed no special reconciliation:
+  `reference_netlist()` states every finger-folded device's drawn width, and
+  the deck's own default `netlist.simplify()` folds the separately-drawn
+  fingers back into one device before comparison.
 * **Extraction / post-layout simulation.** Nothing here says what the drawn
   parasitics do to DR-003's tuning range or jitter — that is a separate
   deliverable and the numbers in `sim/` remain pre-layout.
