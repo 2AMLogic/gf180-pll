@@ -1479,5 +1479,141 @@ class CanvasOffsetTests(unittest.TestCase):
         self.assertEqual(canvas.pins["M"], [(0.0, 0.0, 1.0, 1.0)])
 
 
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class ReferenceNetlistDeviceTests(unittest.TestCase):
+    """``block.reference_netlist()`` matches ``devices.py``'s own tables
+    (issue #367) -- per-class device count and summed drawn width, the same
+    "checked by the run, not asserted" discipline ``devices.Fet.
+    w_deviation_frac`` already documents.
+
+    Gated on ``klayout.db`` per the issue's own instruction, even though the
+    reference text itself needs no PV environment -- CI's headless job (#349)
+    runs this class alongside the rest of the assembled-block suite.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = vco_block.reference_netlist()
+        cls.lines = [ln for ln in cls.text.splitlines() if ln.startswith(("M_", "R_"))]
+
+    @staticmethod
+    def _param(line: str, key: str) -> float:
+        for tok in line.split():
+            if tok.startswith(f"{key}="):
+                return float(tok[len(key) + 1 :].rstrip("u"))
+        raise AssertionError(f"{key}= not found in {line!r}")
+
+    def _expected_fets(self):
+        fets = []
+        for f in dev.STAGE_FETS:
+            fets.extend([f] * dev.STAGE_COUNT)
+        for st in dev.BUFFER_STAGES:
+            fets.extend([st.pfet, st.nfet])
+        for cascade in dev.MIRROR_CASCADES:
+            fets.extend([cascade.always_on, cascade.switched])
+        for mux in dev.MIRROR_MUXES:
+            fets.extend([mux.on, mux.off])
+        fets.extend(dev.MIRROR_LOADS)
+        for inv in dev.MIRROR_INVERTERS:
+            fets.extend([inv.pfet, inv.nfet])
+        fets.extend(dev.VTOI_ALL_FETS)
+        return fets
+
+    def test_per_class_device_count_and_summed_drawn_width_match(self):
+        expected = self._expected_fets()
+        for kind, model in (("pfet", " pfet_03v3 "), ("nfet", " nfet_03v3 ")):
+            want = [f for f in expected if f.kind == kind]
+            got = [ln for ln in self.lines if model in ln]
+            self.assertEqual(
+                len(got), len(want), f"{kind}: device count mismatch ({len(got)} vs {len(want)})"
+            )
+            self.assertAlmostEqual(
+                sum(self._param(ln, "W") for ln in got),
+                sum(f.drawn_w_um for f in want),
+                places=6,
+                msg=f"{kind}: summed drawn W mismatch",
+            )
+
+    def test_resistor_count_and_sizes_match_devices_py(self):
+        r_lines = [ln for ln in self.lines if ln.startswith("R_")]
+        self.assertEqual(len(r_lines), len(dev.BIAS_RESISTORS))
+        for r in dev.BIAS_RESISTORS:
+            matches = [ln for ln in r_lines if ln.startswith(f"R_{r.name} ")]
+            self.assertEqual(len(matches), 1, r.name)
+            self.assertAlmostEqual(self._param(matches[0], "W"), r.w_um)
+            self.assertAlmostEqual(self._param(matches[0], "L"), r.l_um)
+
+    def test_resistors_use_the_decks_own_extracted_class_not_the_schematics(self):
+        r_lines = [ln for ln in self.lines if ln.startswith("R_")]
+        self.assertTrue(r_lines)
+        for ln in r_lines:
+            self.assertIn(vco_block.RESISTOR_LVS_MODEL, ln)
+            self.assertNotIn("ppolyf_u_3k", ln)
+
+    def test_decap_devices_are_not_emitted(self):
+        self.assertNotIn(vco_block.DECAP_LVS_MODEL, self.text)
+
+    def test_top_level_ports_match_the_frozen_netlist(self):
+        header = next(ln for ln in self.text.splitlines() if ln.startswith(".subckt"))
+        self.assertEqual(
+            header.split(),
+            [".subckt", "vco_block", "VCTRL", "B0", "B1", "B2", "CLK", "VDD_VCO", "GND_VCO"],
+        )
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class ReferenceNetlistLabelCoverageTests(unittest.TestCase):
+    """Every net ``block.py``'s router (or a sub-block generator it calls)
+    routes is labelled with the exact name ``reference_netlist()`` gives it,
+    on the *label/pin purpose* layer gf180mcu's own LVS deck actually reads
+    net names from -- not just this package's own drawing-layer convention
+    (issue #367).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.result = vco_block.build()
+        cls.expected_nets = (
+            "NC",
+            "NOFF",
+            "NVI",
+            "VBP0",
+            "VBP",
+            "VBN",
+            "Y1",
+            "Y2",
+            "Y3",
+            "Y4",
+            "Y5",
+            "VDD_VCO",
+            "GND_VCO",
+            "CLK",
+            "VCTRL",
+            "B0",
+            "B1",
+            "B2",
+        )
+
+    def test_every_net_reference_netlist_names_is_a_recorded_pin(self):
+        for net in self.expected_nets:
+            self.assertIn(net, self.result.canvas.pins, net)
+
+    def test_every_net_carries_a_real_label_on_the_decks_own_purpose_layer(self):
+        canvas = self.result.canvas
+        for layer_name in ("metal1_label", "metal2_label"):
+            self.assertIn(layer_name, prim.LAYER)
+        labelled = set()
+        for layer_name in ("metal1_label", "metal2_label"):
+            li = canvas.layout.layer(*prim.LAYER[layer_name])
+            for shape in canvas.top.shapes(li).each():
+                if shape.is_text():
+                    labelled.add(shape.text_string)
+        for net in self.expected_nets:
+            self.assertIn(net, labelled, net)
+
+    def test_pin_layer_defaults_to_the_label_purpose_not_the_drawing_layer(self):
+        self.assertEqual(prim.Canvas.PIN_LAYER, "metal1_label")
+
+
 if __name__ == "__main__":
     unittest.main()

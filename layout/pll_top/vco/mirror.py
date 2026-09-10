@@ -1241,14 +1241,14 @@ class _Builder:
 
         for net in dev.MIRROR_IN_NETS:
             x, _, y = _group(net, p.banks, ("nfet", "pfet"))
-            self.canvas.pin(net, x - pad - 0.6, y - pad, x - pad, y + pad, layer="metal2")
+            self.canvas.pin(net, x - pad - 0.6, y - pad, x - pad, y + pad, layer="metal2_label")
             prim.m2_wire(self.canvas, x - pad - 0.6, x, y)
         for net in dev.MIRROR_OUT_NETS:
             # Output pins leave on the right, so they take the *last* bank's
             # PMOS-side track -- the topmost, rightmost one this net owns.
             _, _, y = _group(net, list(reversed(p.banks)), ("pfet", "nfet"))
             x = track_x1[net] + pad
-            self.canvas.pin(net, x, y - pad, x + 0.6, y + pad, layer="metal2")
+            self.canvas.pin(net, x, y - pad, x + 0.6, y + pad, layer="metal2_label")
             prim.m2_wire(self.canvas, x - pad, x + 0.6, y)
 
         # --- per-bank n-well + VDD_VCO tap band, per-bank GND_VCO substrate

@@ -243,6 +243,211 @@ M2_HALF_UM = prim.METAL2_WIRE_WIDTH_UM / 2.0
 
 
 # ---------------------------------------------------------------------------
+# Reference LVS netlist (issue #367)
+# ---------------------------------------------------------------------------
+#
+# A flat, flattened re-expression of design/netlist/vco.spice's own three
+# subckts (vco / vco_bias / vco_stage), following divider_chain.py's own
+# "REFERENCE NETLIST" discipline: every device's W/L and connection traces
+# directly to devices.py's tables (which are themselves read off that
+# generated file's own .subckt bodies -- see devices.py's module docstring),
+# not re-derived independently. This is *not* that generated file's own
+# literal hierarchical text: the five ring stages, three mirror cascades,
+# three-stage buffer, three bias resistors and twelve-transistor V-to-I core
+# are all inlined into one flat .subckt with every sub-block-internal net
+# (only the ring's own per-stage NH/NT nodes -- every other net devices.py
+# names is already a block-boundary or inter-sub-block name reused verbatim
+# across every table in that module) uniquely prefixed per instance -- the
+# same reason a first attempt at divider_chain's own reference using the
+# generated hierarchical file directly failed LVS outright (gf180mcu's LVS
+# deck matches sub-circuits by name; a flattened GDS has none to match once
+# named instances become geometry).
+
+RESISTOR_LVS_MODEL = "ppolyf_u_1k"
+"""The poly-resistor device class gf180mcu's own signoff LVS deck actually
+extracts -- not ``ppolyf_u_3k``, which is the class
+``design/netlist/vco.spice`` names on ``XRCG``/``XROFF``/``XRDEG``
+(``devices.BIAS_RESISTORS``).
+
+Verified directly against the PDK's own deck, not assumed:
+``<pdk>/libs.tech/klayout/lvs/run_lvs.py``'s own ``generate_klayout_switches()``
+hardcodes ``switches["poly_res"] = "1k"`` for *every* ``--variant`` value
+(A/B/C/D it supports) with no ``--poly_res`` (or any other) CLI override, and
+``rule_decks/res_extraction.lvs``'s own ``case POLY_RES`` block only reaches
+its ``'3k'`` branch (extracting ``ppolyf_u_3k`` at a 3000 ohm/sq sheet
+resistance) when the Ruby-level ``$poly_res`` variable is literally ``'3k'``
+-- which nothing in this repo's flow (``layout/run_pv.py``,
+``layout/harness/lvs.py``, neither of which passes a ``poly_res`` switch
+through to the deck) can ever request, because the PDK's own wrapper script
+never exposes that choice to its caller. This is a real, reproducible
+**foundry-deck** limitation (``open_pdks``' ``run_lvs.py``, not
+``klt``/klayout-tools -- see ``layout/README.md``'s "Why this isn't
+`klt drc`" section), so this reference netlist states the three resistors at
+the device class the deck can actually produce, and ``PROOF-lvs.md`` records
+the naming difference from ``design/netlist/vco.spice`` explicitly rather
+than silently renaming the schematic's own class or dropping the devices.
+"""
+
+DECAP_LVS_MODEL = "cap_nmos_03v3"
+"""The device class ``design/netlist/vco.spice``'s ``XCDEC1``/``XCDEC2``
+name -- deliberately **not** emitted by :func:`reference_netlist` at all.
+
+``ring.py``'s own module docstring (carried into this module's
+``decap_boxes_um()``) already states the carried-forward 22 pF decap pair is
+drawn as two boundary-layer marker rectangles (GDS layer (0, 0); no DRC rule
+in this deck references it -- see ``primitives.LAYER``'s docstring), not real
+``cap_nmos_03v3`` device geometry (comp/poly2/``mos_cap_mk``): "AC's own
+wording is 'carried forward **unchanged**', not 're-drawn as a real MOS-cap
+device' -- turning it into real device geometry is follow-up-issue scope".
+With no matching layout geometry for the deck to extract, including
+``XCDEC1``/``XCDEC2`` in this reference would not "confirm ``cap_nmos_03v3``
+recognition" -- it would just fail LVS with two permanently-unmatched
+schematic-side devices for a device family this increment never draws.
+Disclosed here and in ``PROOF-lvs.md`` rather than silently omitted with no
+comment.
+"""
+
+
+def _fet_line(instance: str, f: dev.Fet, net_map: dict[str, str] | None = None) -> str:
+    """One ``M_<instance>`` MOSFET4 line: ``D=top_net G=gate_net S=bottom_net``.
+
+    ``net_map`` renames any of ``f``'s three nets found as a key (the ring's
+    own per-stage translation -- see :func:`reference_netlist`); every other
+    net passes through verbatim, which is correct for every non-ring device
+    table in ``devices.py`` since those already use global, block-boundary or
+    inter-sub-block net names directly (no per-instance-local nodes to
+    rename).
+
+    ``W`` is ``f.drawn_w_um`` -- the *drawn* width (fingers times the
+    grid-snapped per-finger width: ``devices.Fet.finger_w_um``), not the
+    schematic's own literal ``w_um`` -- so this reference always states what
+    the layout actually manufactures, the same "layout is what gets
+    verified" reasoning ``devices.Fet.w_deviation_frac`` (tested already on
+    ``main``) exists for. For most devices the two are identical; three
+    (``MA1``, ``MB1``, ``MC1``) differ by up to ~0.03 % because 17.225/2,
+    8.6125/2 and 78.87/8 are not exact multiples of the 5 nm manufacturing
+    grid (``devices.LAYOUT_GRID_UM``) -- an existing, already-tested property
+    of the DRC-clean geometry on ``main``, not something this issue
+    introduces. ``PROOF-lvs.md`` states the three deviations plainly rather
+    than rounding them away. ``devices.CASCADE_B``'s own ``nf`` 1 -> 2
+    finger fold needs no special case here at all: both its legs' ``fingers``
+    (``layout_nf``) and thus ``drawn_w_um`` already account for it, and
+    gf180mcu's own ``netlist.simplify`` (the LVS deck's default, un-flagged
+    behaviour -- see ``PROOF-lvs.md``) combines the two separately-drawn,
+    identically-connected fingers ``mirror.py`` draws for each leg back into
+    one device with the summed ``W`` before comparison, so one reference line
+    per logical device -- not one per drawn finger -- is what actually
+    matches the deck's own extracted netlist.
+    """
+
+    def n(net: str) -> str:
+        return net_map[net] if net_map and net in net_map else net
+
+    model = f"{f.kind}_03v3"
+    bulk = VDD_NET if f.kind == "pfet" else GND_NET
+    return (
+        f"M_{instance} {n(f.top_net)} {n(f.gate_net)} {n(f.bottom_net)} {bulk} "
+        f"{model} W={f.drawn_w_um}u L={f.l_um}u"
+    )
+
+
+def _resistor_line(r: dev.PolyResistor) -> str:
+    """One ``R_<name>`` 3-terminal (A/B/bulk) poly-resistor line.
+
+    Node order and the ``W=``/``L=`` parameter names match what gf180mcu's
+    own ``SubcircuitModelsReader`` (``rule_decks/custom_classes.lvs``) reads
+    for a resistor element -- *not* ``design/netlist/vco.spice``'s own
+    ``r_width=``/``r_length=`` spelling, which that reader does not
+    recognise (it looks up ``params['W']``/``params['L']`` specifically, so
+    a reference line using the schematic's own parameter names would extract
+    as a 0x0 resistor). Model is :data:`RESISTOR_LVS_MODEL`, not the
+    schematic's own ``ppolyf_u_3k`` -- see that constant's docstring.
+    """
+    return f"R_{r.name} {r.top_net} {r.bottom_net} {r.bottom_net} {RESISTOR_LVS_MODEL} W={r.w_um}u L={r.l_um}u"
+
+
+def reference_netlist() -> str:
+    """Flattened LVS reference for :data:`TOP_CELL` (``vco_block``).
+
+    See the module-level "Reference LVS netlist" section above for the
+    flattening/labelling discipline, and :data:`RESISTOR_LVS_MODEL` /
+    :data:`DECAP_LVS_MODEL` for the two disclosed, deliberate departures from
+    ``design/netlist/vco.spice``'s own device classes.
+    """
+    lines: list[str] = [
+        f"* Reference LVS netlist for {TOP_CELL} (issue #367).",
+        "*",
+        "* Flattened re-expression of design/netlist/vco.spice's vco/vco_bias/",
+        "* vco_stage subckts -- every device W/L traces to devices.py's own",
+        "* tables (themselves read off that generated file). See block.py's",
+        "* module-level docstring section and layout/evidence/vco-layout/",
+        "* lvs-clean/PROOF-lvs.md for the two disclosed device-class",
+        "* deviations (poly resistors, and the excluded MOS decap pair).",
+        "*",
+        "* Run LVS with --lvs-sub=GND_VCO (this block's own substrate net --",
+        "* NOT layout/run_pv.py's own VSS default; see layout/README.md's",
+        '* "substrate-net gotcha").',
+        "",
+        f".subckt {TOP_CELL} VCTRL B0 B1 B2 CLK VDD_VCO GND_VCO",
+    ]
+
+    # --- ring: 5x vco_stage.sch, chained Y_i -> A_(i+1), wraparound Y5 -> A1.
+    # NH/NT are the only per-instance-local nets in the whole reference. ---
+    for i in range(dev.STAGE_COUNT):
+        stage_num = i + 1
+        a_net = "Y5" if i == 0 else f"Y{i}"
+        y_net = f"Y{stage_num}"
+        net_map = {
+            "A": a_net,
+            "Y": y_net,
+            "VDD": VDD_NET,
+            "VSS": GND_NET,
+            "VBP": "VBP",
+            "VBN": "VBN",
+            "NH": f"S{stage_num}_NH",
+            "NT": f"S{stage_num}_NT",
+        }
+        for f in dev.STAGE_FETS:
+            lines.append(_fet_line(f"S{stage_num}_{f.name}", f, net_map))
+
+    # --- 3-stage output buffer (Y5 -> NB1 -> NB2 -> CLK); already global net
+    # names, per devices.py's own module-level comment on BUFFER_STAGES. ---
+    for st in dev.BUFFER_STAGES:
+        lines.append(_fet_line(st.pfet.name, st.pfet))
+        lines.append(_fet_line(st.nfet.name, st.nfet))
+
+    # --- 3-cascade band-select mirror: cascades, switch muxes, output-mirror
+    # loads, band-code inverters -- all already global net names. ---
+    for cascade in dev.MIRROR_CASCADES:
+        lines.append(_fet_line(cascade.always_on.name, cascade.always_on))
+        lines.append(_fet_line(cascade.switched.name, cascade.switched))
+    for mux in dev.MIRROR_MUXES:
+        lines.append(_fet_line(mux.on.name, mux.on))
+        lines.append(_fet_line(mux.off.name, mux.off))
+    for f in dev.MIRROR_LOADS:
+        lines.append(_fet_line(f.name, f))
+    for inv in dev.MIRROR_INVERTERS:
+        lines.append(_fet_line(inv.pfet.name, inv.pfet))
+        lines.append(_fet_line(inv.nfet.name, inv.nfet))
+
+    # --- RCG/ROFF/RDEG poly resistors -- see RESISTOR_LVS_MODEL. ---
+    for r in dev.BIAS_RESISTORS:
+        lines.append(_resistor_line(r))
+
+    # --- V-to-I core (constant-gm reference, startup kick, 2*Vgs stack,
+    # offset/degenerated V-to-I branches, summing device) -- already global
+    # net names. ---
+    for f in dev.VTOI_ALL_FETS:
+        lines.append(_fet_line(f.name, f))
+
+    # NOTE: design/netlist/vco.spice's XCDEC1/XCDEC2 (cap_nmos_03v3, 22 pF
+    # total) are deliberately NOT emitted -- see DECAP_LVS_MODEL's docstring.
+
+    lines.append(".ends")
+    return "\n".join(lines) + "\n"
+
+
+# ---------------------------------------------------------------------------
 # Placement -- pure Python (no KLayout import), same convention as every other
 # module in this package: footprint_um() and layout/tests/ derive the block's
 # extents from the same arithmetic build() draws from.
@@ -684,7 +889,7 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
             y_in - M2_HALF_UM,
             p.left_pin_x + PIN_STUB_UM,
             y_in + M2_HALF_UM,
-            layer="metal2",
+            layer="metal2_label",
         )
 
     clk_pad = buffer_pins[dev.BUFFER_OUT_NET][0]
@@ -697,7 +902,7 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
         clk_y - M2_HALF_UM,
         p.clk_pin_x,
         clk_y + M2_HALF_UM,
-        layer="metal2",
+        layer="metal2_label",
     )
     canvas.pin(
         VDD_NET,

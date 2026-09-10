@@ -1,0 +1,80 @@
+* Reference LVS netlist for vco_block (issue #367).
+*
+* Flattened re-expression of design/netlist/vco.spice's vco/vco_bias/
+* vco_stage subckts -- every device W/L traces to devices.py's own
+* tables (themselves read off that generated file). See block.py's
+* module-level docstring section and layout/evidence/vco-layout/
+* lvs-clean/PROOF-lvs.md for the two disclosed device-class
+* deviations (poly resistors, and the excluded MOS decap pair).
+*
+* Run LVS with --lvs-sub=GND_VCO (this block's own substrate net --
+* NOT layout/run_pv.py's own VSS default; see layout/README.md's
+* "substrate-net gotcha").
+
+.subckt vco_block VCTRL B0 B1 B2 CLK VDD_VCO GND_VCO
+M_S1_MPH VDD_VCO VBP S1_NH VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_S1_MP S1_NH Y5 Y1 VDD_VCO pfet_03v3 W=5.0u L=0.28u
+M_S1_MN Y1 Y5 S1_NT GND_VCO nfet_03v3 W=2.0u L=0.28u
+M_S1_MNT S1_NT VBN GND_VCO GND_VCO nfet_03v3 W=4.0u L=0.5u
+M_S2_MPH VDD_VCO VBP S2_NH VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_S2_MP S2_NH Y1 Y2 VDD_VCO pfet_03v3 W=5.0u L=0.28u
+M_S2_MN Y2 Y1 S2_NT GND_VCO nfet_03v3 W=2.0u L=0.28u
+M_S2_MNT S2_NT VBN GND_VCO GND_VCO nfet_03v3 W=4.0u L=0.5u
+M_S3_MPH VDD_VCO VBP S3_NH VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_S3_MP S3_NH Y2 Y3 VDD_VCO pfet_03v3 W=5.0u L=0.28u
+M_S3_MN Y3 Y2 S3_NT GND_VCO nfet_03v3 W=2.0u L=0.28u
+M_S3_MNT S3_NT VBN GND_VCO GND_VCO nfet_03v3 W=4.0u L=0.5u
+M_S4_MPH VDD_VCO VBP S4_NH VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_S4_MP S4_NH Y3 Y4 VDD_VCO pfet_03v3 W=5.0u L=0.28u
+M_S4_MN Y4 Y3 S4_NT GND_VCO nfet_03v3 W=2.0u L=0.28u
+M_S4_MNT S4_NT VBN GND_VCO GND_VCO nfet_03v3 W=4.0u L=0.5u
+M_S5_MPH VDD_VCO VBP S5_NH VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_S5_MP S5_NH Y4 Y5 VDD_VCO pfet_03v3 W=5.0u L=0.28u
+M_S5_MN Y5 Y4 S5_NT GND_VCO nfet_03v3 W=2.0u L=0.28u
+M_S5_MNT S5_NT VBN GND_VCO GND_VCO nfet_03v3 W=4.0u L=0.5u
+M_MBP1 VDD_VCO Y5 NB1 VDD_VCO pfet_03v3 W=1.25u L=0.28u
+M_MBN1 NB1 Y5 GND_VCO GND_VCO nfet_03v3 W=0.5u L=0.28u
+M_MBP2 VDD_VCO NB1 NB2 VDD_VCO pfet_03v3 W=3.75u L=0.28u
+M_MBN2 NB2 NB1 GND_VCO GND_VCO nfet_03v3 W=1.5u L=0.28u
+M_MBP3 VDD_VCO NB2 CLK VDD_VCO pfet_03v3 W=11.25u L=0.28u
+M_MBN3 CLK NB2 GND_VCO GND_VCO nfet_03v3 W=4.5u L=0.28u
+M_MA0 VDD_VCO VBP0 VBN1 VDD_VCO pfet_03v3 W=26.5u L=1.0u
+M_MA1 VDD_VCO GA VBN1 VDD_VCO pfet_03v3 W=17.22u L=1.0u
+M_MB0 VBP2 VBN1 GND_VCO GND_VCO nfet_03v3 W=5.0u L=1.0u
+M_MB1 VBP2 GB GND_VCO GND_VCO nfet_03v3 W=8.61u L=1.0u
+M_MC0 VDD_VCO VBP2 VBN VDD_VCO pfet_03v3 W=12.3u L=1.0u
+M_MC1 VDD_VCO GC VBN VDD_VCO pfet_03v3 W=78.88u L=1.0u
+M_MSWA0 VBP0 B0B GA VDD_VCO pfet_03v3 W=2.0u L=0.5u
+M_MSWA1 VDD_VCO B0 GA VDD_VCO pfet_03v3 W=2.0u L=0.5u
+M_MSWB0 GB B1 VBN1 GND_VCO nfet_03v3 W=2.0u L=0.5u
+M_MSWB1 GB B1B GND_VCO GND_VCO nfet_03v3 W=2.0u L=0.5u
+M_MSWC0 VBP2 B2B GC VDD_VCO pfet_03v3 W=2.0u L=0.5u
+M_MSWC1 VDD_VCO B2 GC VDD_VCO pfet_03v3 W=2.0u L=0.5u
+M_MDA VBN1 VBN1 GND_VCO GND_VCO nfet_03v3 W=10.0u L=1.0u
+M_MDB VDD_VCO VBP2 VBP2 VDD_VCO pfet_03v3 W=20.0u L=1.0u
+M_MDN VBN VBN GND_VCO GND_VCO nfet_03v3 W=4.0u L=0.5u
+M_MMN VBP VBN GND_VCO GND_VCO nfet_03v3 W=4.0u L=0.5u
+M_MDP VDD_VCO VBP VBP VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_MIP0 VDD_VCO B0 B0B VDD_VCO pfet_03v3 W=2.0u L=0.28u
+M_MIN0 B0B B0 GND_VCO GND_VCO nfet_03v3 W=1.0u L=0.28u
+M_MIP1 VDD_VCO B1 B1B VDD_VCO pfet_03v3 W=2.0u L=0.28u
+M_MIN1 B1B B1 GND_VCO GND_VCO nfet_03v3 W=1.0u L=0.28u
+M_MIP2 VDD_VCO B2 B2B VDD_VCO pfet_03v3 W=2.0u L=0.28u
+M_MIN2 B2B B2 GND_VCO GND_VCO nfet_03v3 W=1.0u L=0.28u
+R_RCG NC GND_VCO GND_VCO ppolyf_u_1k W=1.0u L=5.6u
+R_ROFF NOFF GND_VCO GND_VCO ppolyf_u_1k W=1.0u L=33.0u
+R_RDEG NVI GND_VCO GND_VCO ppolyf_u_1k W=1.0u L=33.0u
+M_MN1 NA NA GND_VCO GND_VCO nfet_03v3 W=1.4u L=1.0u
+M_MN2 VBPC NA NC GND_VCO nfet_03v3 W=5.6u L=1.0u
+M_MSU2 NSU NA GND_VCO GND_VCO nfet_03v3 W=2.0u L=1.0u
+M_MSU3 VBPC NSU GND_VCO GND_VCO nfet_03v3 W=1.0u L=1.0u
+M_MD1 VFIX VFIX NMD GND_VCO nfet_03v3 W=2.0u L=1.0u
+M_MD2 NMD NMD GND_VCO GND_VCO nfet_03v3 W=2.0u L=1.0u
+M_MOFF VBP0 VFIX NOFF GND_VCO nfet_03v3 W=10.0u L=1.0u
+M_MVI VBP0 VCTRL NVI GND_VCO nfet_03v3 W=10.0u L=1.0u
+M_MP1 VDD_VCO VBPC NA VDD_VCO pfet_03v3 W=10.0u L=1.0u
+M_MP2 VDD_VCO VBPC VBPC VDD_VCO pfet_03v3 W=10.0u L=1.0u
+M_MPR VDD_VCO VBPC VFIX VDD_VCO pfet_03v3 W=2.5u L=1.0u
+M_MSUM VDD_VCO VBP0 VBP0 VDD_VCO pfet_03v3 W=60.0u L=1.0u
+M_MSU1 VDD_VCO GND_VCO NSU VDD_VCO pfet_03v3 W=0.22u L=20.0u
+.ends
