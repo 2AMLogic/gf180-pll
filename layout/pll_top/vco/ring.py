@@ -182,6 +182,19 @@ def build(
             # stage's own comp/poly, then up into stage 1's A gate pad.
             wrap_y = -WRAP_ROUTE_Y_OFFSET_UM
             prim.route_pads(canvas, src.y_pad, dst.a_gate_pad_bottom, wrap_y)
+        # Issue #367: label every ring-internal chain net with the exact name
+        # design/netlist/vco.spice's own `.subckt vco` uses (Y1..Y5, per its
+        # XS1..XS5 instance lines) -- not just this module's own
+        # ``stage.py``-assigned "S<i>.Y" per-instance label. Five structurally
+        # identical stages are exactly the kind of repeated macro
+        # ``divider_chain.py``'s own PROOF documents defeating the LVS
+        # comparer's topology-only matching when left unlabelled; naming each
+        # chain net by its real schematic identity (rather than relying on
+        # the per-instance "S<i>.Y" label alone, which has no counterpart in
+        # ``block.reference_netlist()``) gives the comparer's name-based hint
+        # matching the same anchor ``block.py``'s own top-level nets already
+        # get. This is additive -- ``"S<i>.Y"`` stays, unchanged, alongside it.
+        canvas.pin(f"Y{i + 1}", *src.y_pad)
 
     # --- 3. shared n-well over every stage's MP/MPH devices, sized with real
     # clearance (TAP_GAP_UM) for the inner n-well tap ring (step 7) to sit

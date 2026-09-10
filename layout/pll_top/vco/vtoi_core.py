@@ -540,12 +540,12 @@ class _Builder:
         single_row_pins = (dev.VTOI_IN_NET,) + dev.VTOI_RESISTOR_NETS
         for net in single_row_pins:
             x, y = _leftmost(net)
-            self.canvas.pin(net, x - pad - 0.6, y - pad, x - pad, y + pad, layer="metal2")
+            self.canvas.pin(net, x - pad - 0.6, y - pad, x - pad, y + pad, layer="metal2_label")
             prim.m2_wire(self.canvas, x - pad - 0.6, x, y)
 
         y = p.track_hi[dev.VTOI_OUT_NET]
         x = track_x1[dev.VTOI_OUT_NET] + pad
-        self.canvas.pin(dev.VTOI_OUT_NET, x, y - pad, x + 0.6, y + pad, layer="metal2")
+        self.canvas.pin(dev.VTOI_OUT_NET, x, y - pad, x + 0.6, y + pad, layer="metal2_label")
         prim.m2_wire(self.canvas, x - pad, x + 0.6, y)
 
         # --- n-well, its VDD_VCO tap bands (top AND bottom -- see plan()'s

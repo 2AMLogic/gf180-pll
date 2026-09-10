@@ -74,6 +74,24 @@ LAYER = {
     # this module (via1.drc, metal2.drc).
     "via1": (35, 0),
     "metal2": (36, 0),
+    # The *pin/label* purpose of Metal1/Metal2 -- NOT the drawing datatype
+    # above. gf180mcu's own official LVS deck reads top-level/inter-block net
+    # names from here (``libs.tech/klayout/lvs/rule_decks/layers_definitions
+    # .lvs``: ``metal1_label = labels(34, 10)`` / ``metal2_label =
+    # labels(36, 10)``, then ``general_connections.lvs``:
+    # ``connect(metal1_con, metal1_label)`` / ``connect(metal2_con,
+    # metal2_label)``) -- same citation ``divider_chain/devgen.py`` and
+    # ``pfd_cp/devgen.py`` already use for their own ``PIN_LAYER``. A text
+    # dropped on the drawing datatype instead (this module's own convention
+    # until issue #367) is invisible to that connectivity step: every net
+    # this package ever labelled was extracted as an anonymous node under a
+    # real LVS run, undetected until #367's first-ever VCO LVS attempt
+    # because ``block.connectivity_report()``'s own metal extraction reads
+    # labels from the *drawing* layer directly (it is not gf180mcu's LVS
+    # deck), so the DRC-clean/connectivity-clean claims already on ``main``
+    # were never affected by this.
+    "metal1_label": (34, 10),
+    "metal2_label": (36, 10),
     # Poly-resistor-only layers, used by poly_resistor() below. Confirmed
     # against layers_def.drc's own get_polygons() calls, same as every other
     # entry in this table -- sab = get_polygons(49, 0), res_mk =
@@ -228,6 +246,7 @@ class Canvas(_canvas.Canvas):
 
     LAYER: ClassVar[dict[str, tuple[int, int]]] = LAYER
     GRID_UM: ClassVar[float] = dev.LAYOUT_GRID_UM
+    PIN_LAYER: ClassVar[str] = "metal1_label"
 
 
 # Left-edge x (or y) positions for a row of contacts spanning [lo, hi] --
