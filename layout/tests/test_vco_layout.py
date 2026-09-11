@@ -1296,6 +1296,77 @@ class VtoiCoreTapPitchTests(unittest.TestCase):
         self.assertLess(vtoi_core.max_nmos_tap_distance_um(), dev.DRC_TAP_PITCH_MAX_UM / 2.0)
 
 
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class VtoiCoreNetSeparationTests(unittest.TestCase):
+    """``vtoi_core.py``'s PMOS row never shorts an internal net to
+    ``VDD_VCO`` (issue #376) -- same reproduction discipline as
+    ``RingMetal1NetSeparationTests``/``OutputBufferMetal1NetSeparationTests``,
+    extended to a full Metal1/via1/Metal2 connectivity extraction (not just a
+    Metal1-label merge check) because four of this row's own five affected
+    nets (``NA``, ``VBPC``, ``VFIX``, ``NSU``) carry no boundary pin/label at
+    all -- only ``VBP0`` does, which is why ``vco_block``'s own assembled LVS
+    could only ever see this as a ``VBP0``/``VDD_VCO`` short.
+
+    On ``main`` before ``vtoi_core._Builder._pmos_row_escape()`` existed,
+    every one of the five bottom/gate escapes below extracted onto the same
+    cluster as ``VDD_VCO``'s own n-well tap band -- reproduced directly
+    against ``klayout.db.LayoutToNetlist`` in
+    ``layout/evidence/vco-layout/PROOF-376-vbp0-fix.md``.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import klayout.db as db
+
+        cls.db = db
+        cls.result = vtoi_core.build()
+        cls.plan = cls.result.plan
+        canvas = cls.result.canvas
+        layout = canvas.layout
+        l2n = db.LayoutToNetlist(db.RecursiveShapeIterator(layout, canvas.top, []))
+        cls.layers = {}
+        for name in ("metal1", "via1", "metal2"):
+            cls.layers[name] = l2n.make_polygon_layer(layout.layer(*prim.LAYER[name]), name)
+        l2n.connect(cls.layers["metal1"])
+        l2n.connect(cls.layers["via1"])
+        l2n.connect(cls.layers["metal2"])
+        l2n.connect(cls.layers["metal1"], cls.layers["via1"])
+        l2n.connect(cls.layers["via1"], cls.layers["metal2"])
+        l2n.extract_netlist()
+        cls.l2n = l2n
+
+    def _cluster(self, x: float, y: float):
+        n = self.l2n.probe_net(self.layers["metal1"], self.db.DPoint(x, y))
+        self.assertIsNotNone(n, f"no metal1 net found at ({x}, {y})")
+        return n.cluster_id
+
+    def _vdd_cluster(self):
+        tb = self.plan.tap_band_bottom
+        return self._cluster(50.0, (tb[1] + tb[3]) / 2.0)
+
+    def _bottom_pad_cluster(self, name: str):
+        it = next(i for i in self.plan.pmos if i.name == name)
+        x = it.x0 + it.width / 2.0
+        y_bottom = self.plan.pmos_top - vtoi_core.device_height_um(it.fet.l_um)
+        return self._cluster(x, y_bottom + 0.02)
+
+    def test_every_pmos_row_bottom_pad_is_distinct_from_vdd_vco(self):
+        vdd = self._vdd_cluster()
+        for name in ("MP1", "MP2", "MPR", "MSUM", "MSU1"):
+            with self.subTest(device=name):
+                self.assertNotEqual(
+                    self._bottom_pad_cluster(name),
+                    vdd,
+                    f"{name}'s own bottom (source) pad is shorted to VDD_VCO's "
+                    "n-well tap band",
+                )
+
+    def test_vbp0_extracts_as_its_own_net_not_merged_with_vdd_vco(self):
+        # MSUM's own bottom pad *is* VBP0 (devices.VTOI_MSUM.bottom_net).
+        vbp0_cluster = self._bottom_pad_cluster("MSUM")
+        self.assertNotEqual(vbp0_cluster, self._vdd_cluster())
+
+
 @unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class DogBoneMosfetTests(unittest.TestCase):
     """primitives.mosfet()'s min_sd_width_um dog-bone widening.

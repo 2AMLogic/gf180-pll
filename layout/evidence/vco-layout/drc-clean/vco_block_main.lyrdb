@@ -2,7 +2,7 @@
 <report-database>
  <description>DRC Run Report at</description>
  <original-file/>
- <generator>drc: script='/private/tmp/block371_finalpv/main.drc'</generator>
+ <generator>drc: script='/private/tmp/vco_block_drc_376/main.drc'</generator>
  <top-cell>vco_block</top-cell>
  <tags>
  </tags>
