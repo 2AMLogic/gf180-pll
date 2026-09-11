@@ -21,10 +21,48 @@ abutting the ring. ``max_stage_distance_to_clk_pin_um()`` /
 the tuple's own order.
 
 Standalone-DRC scope: this block draws its own dedicated guard ring (outer
-substrate ``p`` ring tied ``GND_VCO``, inner n-well tap bands tied
+substrate ``p`` ring tied ``GND_VCO``, inner n-well tap ring tied
 ``VDD_VCO``) so it is provable on its own, exactly as ``ring.py``'s block is.
 Merging the VCO's sub-blocks under one shared guard ring is integration work
 for a later increment of issue #293.
+
+SUPPLY DISTRIBUTION (issue #372, root-caused in
+``layout/evidence/vco-layout/PROOF-368-rootcause.md``)
+-------------------------------------------------------------------------
+Two rules this module now holds itself to, both of them things the first
+version of this generator got wrong in a way no DRC run could report (two
+Metal1 shapes that *touch* merge into one polygon before any spacing rule
+runs, so a short is never a violation):
+
+1. **A supply rail is drawn in the clear channel outside its own device
+   row's pads, never across them.** ``primitives.mosfet()``'s gate-contact
+   pad and its adjacent terminal pad overlap in *y* by ``0.26 - l/2`` um
+   (0.12 um for these 0.28 um-long inverter fets) -- harmless per device,
+   because the gate tab sits at a different *x* than the terminal pad, but
+   fatal the moment a rail is stretched across the whole row at the
+   terminal pad's own y: it then reaches every *other* stage's gate tab
+   too. Each rail here is a full-row-width band in the empty channel
+   *beyond* its row's pads (below the NMOS ``GND_VCO`` pads, above the PMOS
+   ``VDD_VCO`` pads), and ``build()`` asserts at draw time that every gate
+   pad clears it by at least ``devices.DRC_METAL1_MIN_SPACE_UM``.
+
+2. **Every supply rail is deliberately strapped to the ring that biases the
+   same net.** Each rail band runs from its own row's pads all the way into
+   the corresponding ring's Metal1 (the outer p guard ring for ``GND_VCO``,
+   the inner n-well tap ring for ``VDD_VCO``), overlapping it by a real
+   ``primitives.METAL1_PAD_MARGIN_UM`` of area rather than meeting it at a
+   coincident edge -- the same deliberate device-to-ring tie ``mirror.py``
+   draws per fet with its own ``rail_stub()``. Before this, the rails, the
+   tap bands and the guard ring were three separately-labelled Metal1
+   islands that were never connected by any drawn metal; they only ever
+   *looked* connected because of the accidental short in (1).
+
+The NMOS-to-PMOS channel is crossed on **Metal2**, not Metal1, for the same
+class of reason: the inner n-well tap ring's bottom band lies directly
+across that channel, so a Metal1 drain/gate bridge would short every stage's
+own internal node to ``VDD_VCO``. ``_channel_hop()`` lands a ``via1_stack()``
+inside each of the two Metal1 pads it joins and jumps the band on Metal2,
+which has no spacing relationship with Metal1 at all.
 """
 
 from __future__ import annotations
@@ -55,6 +93,49 @@ TAP_RING_WIDTH_UM = 0.6
 CLK_STUB_UM = 1.5  # Metal1 run from the last stage's output pad to the CLK pin
 
 
+def _box_gap_um(a: tuple, b: tuple) -> float:
+    """Euclidean gap between two axis-aligned boxes (0.0 if they touch/overlap).
+
+    Euclidean rather than projected, because that is the metric the gf180mcu
+    DRC deck's own ``metal1.space()`` check uses by default -- so a number
+    from this helper is directly comparable against
+    ``devices.DRC_METAL1_MIN_SPACE_UM`` (M1.2a).
+    """
+    dx = max(a[0] - b[2], b[0] - a[2], 0.0)
+    dy = max(a[1] - b[3], b[1] - a[3], 0.0)
+    return (dx * dx + dy * dy) ** 0.5
+
+
+def _channel_hop(canvas: prim.Canvas, pad_lo: tuple, pad_hi: tuple, y_jog: float) -> None:
+    """Bridge two Metal1 pads across the NMOS/PMOS channel on Metal2.
+
+    The inner n-well tap ring's bottom band (``VDD_VCO``) spans the whole
+    row *inside* this channel, so the plain Metal1 riser this used to be
+    shorted every stage's own drain and gate node to ``VDD_VCO`` -- see the
+    module docstring and ``PROOF-368-rootcause.md``. Metal2 has no spacing
+    relationship with Metal1, so the band is simply jumped over.
+
+    Each ``via1_stack()`` is centred on its own pad, whose 0.46 x 0.46 um
+    minimum footprint (one contact plus ``METAL1_PAD_MARGIN_UM`` on each
+    side) strictly contains the 0.44 um square via landing pad -- so this
+    adds **no** new Metal1 geometry at all, only via1/Metal2. The two pads
+    are rarely at the same x (an inverter's pfet is wider than its nfet, and
+    both are left-aligned), hence the Metal2 jog at ``y_jog`` rather than one
+    straight column.
+    """
+    x_lo, y_lo = (pad_lo[0] + pad_lo[2]) / 2.0, (pad_lo[1] + pad_lo[3]) / 2.0
+    x_hi, y_hi = (pad_hi[0] + pad_hi[2]) / 2.0, (pad_hi[1] + pad_hi[3]) / 2.0
+    prim.via1_stack(canvas, x_lo, y_lo)
+    prim.via1_stack(canvas, x_hi, y_hi)
+    if abs(x_hi - x_lo) < 1e-9:
+        prim.m2_route(canvas, [(x_lo, y_lo), (x_lo, y_hi)])
+    else:
+        prim.m2_route(
+            canvas,
+            [(x_lo, y_lo), (x_lo, y_jog), (x_hi, y_jog), (x_hi, y_hi)],
+        )
+
+
 @dataclass
 class BufferStagePorts:
     index: int
@@ -78,6 +159,13 @@ class BufferResult:
     footprint: tuple = (0.0, 0.0, 0.0, 0.0)
     nwell_box: tuple = (0.0, 0.0, 0.0, 0.0)
     clk_pin: tuple = (0.0, 0.0, 0.0, 0.0)
+    # The two full-row-width supply bands actually drawn, and the worst-case
+    # Euclidean Metal1 gap between either of them and any stage's own gate
+    # pad -- the number issue #372's short was a *negative* value of. Carried
+    # on the result (rather than re-derived in a test) so the assertion runs
+    # against what ``build()`` drew, not against a second copy of its math.
+    rail_bands: dict = field(default_factory=dict)
+    rail_gate_clearance_um: float = 0.0
 
 
 def column_x0_um() -> tuple[float, ...]:
@@ -128,6 +216,13 @@ def build(outdir: Path | None = None, canvas: prim.Canvas | None = None) -> Buff
     xs = column_x0_um()
     pmos_y0, _ = pmos_y_range()
 
+    # Metal2 jog height for the drain/gate bridges: mid-channel, between the
+    # NMOS band's top pads and the PMOS band's bottom pads. Nothing else in
+    # this block is on Metal2, so one shared y is enough -- the jogs are
+    # column-local and the stage pitch keeps them far apart in x.
+    nfet_h = 2 * prim.SD_OVERHANG_UM + dev.BUFFER_STAGES[0].nfet.l_um
+    channel_jog_y = dev.snap_um((nfet_h + pmos_y0) / 2.0)
+
     stage_ports: list[BufferStagePorts] = []
     for x0, st in zip(xs, dev.BUFFER_STAGES):
         # --- NMOS: source (GND_VCO) at the bottom, drain (this stage's
@@ -137,16 +232,25 @@ def build(outdir: Path | None = None, canvas: prim.Canvas | None = None) -> Buff
         # (VDD_VCO) at the top. ---
         p_ports = prim.mosfet(canvas, st.pfet, x0, pmos_y0)
 
-        # --- output net: nfet drain <-> pfet drain, one vertical Metal1 run
-        # across the NMOS/PMOS channel (stage.py's own "Y" bridge). ---
-        out_x = (n_ports.top_pad[0] + n_ports.top_pad[2]) / 2.0
-        prim.v_wire(canvas, out_x, n_ports.top_pad[3], p_ports.bottom_pad[1])
-        canvas.pin(f"BUF{st.index}.{st.out_net}", *n_ports.top_pad)
+        # --- output net: nfet drain <-> pfet drain, hopped across the
+        # channel on Metal2 (see _channel_hop() -- the inner n-well tap
+        # ring's bottom band lies right across this channel on Metal1). ---
+        _channel_hop(canvas, n_ports.top_pad, p_ports.bottom_pad, channel_jog_y)
+        # Labelled with the schematic's own net name (``NB1``/``NB2``), not a
+        # ``BUF<i>.``-prefixed alias: unlike ring.py's per-stage ``S<i>.Y``,
+        # these are top-level ``vco.sch`` nets, so the prefix invented a name
+        # that no reference netlist has (see devices.py's own note on
+        # BUFFER_STAGES). The last stage's output is ``CLK`` itself and is
+        # already labelled at the end of its own output stub below -- a second
+        # label for it here would put two different strings on one net, which
+        # is the one thing an LVS deck reads labels *for*.
+        if st.out_net != dev.BUFFER_OUT_NET:
+            canvas.pin(st.out_net, *n_ports.top_pad)
 
-        # --- input net: both gates, one vertical Metal1 run at the shared
-        # gate-contact-tab x (both devices are left-aligned at x0). ---
-        gate_x = (n_ports.gate_pad[0] + n_ports.gate_pad[2]) / 2.0
-        prim.v_wire(canvas, gate_x, n_ports.gate_pad[3], p_ports.gate_pad[1])
+        # --- input net: both gates, hopped the same way at the shared
+        # gate-contact-tab x (both devices are left-aligned at x0, so this
+        # one needs no jog). ---
+        _channel_hop(canvas, n_ports.gate_pad, p_ports.gate_pad, channel_jog_y)
 
         stage_ports.append(
             BufferStagePorts(
@@ -192,18 +296,8 @@ def build(outdir: Path | None = None, canvas: prim.Canvas | None = None) -> Buff
     )
     canvas.rect("nwell", *nwell_box)
 
-    # --- VDD_VCO / GND_VCO rails: one Metal1 rectangle per net, drawn at
-    # exactly a representative stage's own pad y0/y1 so the rail is a
-    # superset of (not merely adjacent to) each stage's pad with no notch
-    # shallower than M1.2a's 0.23 um -- see ring.py's iteration note. ---
     row_x0 = min(p.x0 for p in stage_ports)
     row_x1 = max(p.x1 for p in stage_ports)
-    for net, pad_getter in (("VDD_VCO", lambda p: p.vdd_pad), ("GND_VCO", lambda p: p.gnd_pad)):
-        for p in stage_ports:
-            pad = pad_getter(p)
-            canvas.rect("metal1", row_x0, pad[1], row_x1, pad[3])
-        ref = pad_getter(stage_ports[0])
-        canvas.pin(net, row_x0, ref[1], row_x0 + 1.0, ref[3])
 
     # --- Y5 input pin (left edge, ring-facing) and CLK output pin (right
     # edge, buffer-facing) -- PLL-FLOORPLAN.md section 1's placement rule. ---
@@ -231,6 +325,80 @@ def build(outdir: Path | None = None, canvas: prim.Canvas | None = None) -> Buff
     prim.tap_strip(canvas, "n", tap_outer[0], tap_outer[3] - TAP_RING_WIDTH_UM, tap_outer[2], tap_outer[3], "VDD_VCO")
     prim.tap_strip(canvas, "n", tap_outer[0], tap_outer[1], tap_outer[2], tap_outer[1] + TAP_RING_WIDTH_UM, "VDD_VCO")
 
+    # ...and a plain Metal1 strap down the right-hand edge of the well tying
+    # those two bands together (issue #372). Without it the *bottom* band is
+    # a Metal1 island of its own: it sits inside the NMOS/PMOS routing
+    # channel, so nothing else on Metal1 may legally touch it, and the only
+    # reason it ever looked connected was the short this issue removes.
+    #
+    # Metal1, not a third ``tap_strip()``: a real comp band here would land
+    # on the last stage's own gate poly, whose endcap runs POLY_ENDCAP_UM
+    # past the widest pfet's comp (to x = pmos_x1 + 0.65, i.e. *into*
+    # tap_outer's right column). Drawn as comp that is a parasitic channel
+    # -- DF.2a_LV (x2), CO.7 and NP.12, four violations the deck reported on
+    # the first attempt at this. Metal1 crossing field poly has no such
+    # rule, and this
+    # band's job is purely electrical: the well taps themselves are already
+    # drawn top and bottom. The left-hand edge is not available for the same
+    # strap at all -- stage 1's gate-contact tabs and their Metal1 pads
+    # occupy exactly that column, i.e. the Y5 input node.
+    canvas.rect(
+        "metal1",
+        tap_outer[2] - TAP_RING_WIDTH_UM,
+        tap_outer[1] + TAP_RING_WIDTH_UM,
+        tap_outer[2],
+        tap_outer[3] - TAP_RING_WIDTH_UM,
+    )
+
+    # --- VDD_VCO / GND_VCO rails + their deliberate straps to this block's
+    # own rings (issue #372; root cause in PROOF-368-rootcause.md).
+    #
+    # Each rail is ONE full-row-width Metal1 band living in the empty channel
+    # *outside* its own device row's supply pads, running from those pads all
+    # the way into the ring that biases the same net:
+    #
+    #   GND_VCO: [gnd_pad y0] down to the outer p ring's own comp edge, which
+    #            is METAL1_PAD_MARGIN_UM *inside* that ring's Metal1 pad.
+    #   VDD_VCO: [vdd_pad y1] up to the n-well tap ring's top band comp edge,
+    #            likewise inside its Metal1 pad.
+    #
+    # Overlapping the ring pad by real area (not meeting it at a coincident
+    # edge) is deliberate: a butt joint is one grid-snap away from being no
+    # joint at all. This band therefore does two jobs at once -- it is the
+    # inter-stage rail AND the device-to-ring strap mirror.py draws per fet
+    # with rail_stub(). Drawing it in the clear channel instead of across the
+    # pads' own y is what keeps it off every other stage's gate pad; the
+    # assertion below is the regression gate on that, since a Metal1 short is
+    # structurally invisible to DRC (two touching shapes merge into one
+    # polygon before any spacing rule runs). ---
+    rail_bands = {
+        "GND_VCO": (
+            row_x0,
+            outer_y0 + RING_WIDTH_UM,
+            row_x1,
+            min(p.gnd_pad[1] for p in stage_ports),
+        ),
+        "VDD_VCO": (
+            row_x0,
+            max(p.vdd_pad[3] for p in stage_ports),
+            row_x1,
+            tap_outer[3] - TAP_RING_WIDTH_UM,
+        ),
+    }
+    gate_pads = [p.gate_pad_bottom for p in stage_ports] + [p.gate_pad_top for p in stage_ports]
+    rail_gate_clearance_um = min(
+        _box_gap_um(band, pad) for band in rail_bands.values() for pad in gate_pads
+    )
+    if rail_gate_clearance_um < dev.DRC_METAL1_MIN_SPACE_UM:
+        raise ValueError(
+            f"supply rail to gate-pad Metal1 clearance {rail_gate_clearance_um:.3f} um "
+            f"< M1.2a's {dev.DRC_METAL1_MIN_SPACE_UM} um -- this is the issue #368/#372 "
+            "short re-introduced (and DRC cannot report it: the two shapes merge)"
+        )
+    for net, band in rail_bands.items():
+        canvas.rect("metal1", *band)
+        canvas.pin(net, band[0], band[1], band[0] + 1.0, band[3])
+
     footprint = (outer_x0, outer_y0, outer_x1, outer_y1)
 
     if outdir is not None:
@@ -244,6 +412,8 @@ def build(outdir: Path | None = None, canvas: prim.Canvas | None = None) -> Buff
         footprint=footprint,
         nwell_box=nwell_box,
         clk_pin=clk_pin,
+        rail_bands=rail_bands,
+        rail_gate_clearance_um=rail_gate_clearance_um,
     )
 
 
@@ -277,6 +447,57 @@ def footprint_um() -> tuple:
     outer_y0 = gnd_pad_y0 - OUTER_MARGIN_BELOW_UM
     outer_y1 = nwell_box[3] + OUTER_MARGIN_ABOVE_NWELL_UM
     return (outer_x0, outer_y0, outer_x1, outer_y1)
+
+
+def reference_netlist() -> str:
+    """Standalone LVS reference for :data:`TOP_CELL` (``vco_out_buffer``).
+
+    ``block.py``'s own :func:`~block.reference_netlist` is the *assembled*
+    block's reference; this one exists so this generator is provable on its
+    own, for the same reason it draws its own guard ring: a block-level LVS
+    mismatch cannot tell you *which* sub-block's geometry is wrong, and
+    issue #368's short took a full root-cause investigation precisely
+    because no sub-block had an LVS testbench of its own.
+
+    Device lines use the same node order, model names and ``W=``/``L=``
+    spelling ``block.py``'s reference does (gf180mcu's own
+    ``SubcircuitModelsReader`` reads those parameter names specifically),
+    and ``drawn_w_um`` rather than the schematic ``w_um`` -- identical for
+    every buffer fet (none is folded), but stated the same way so the two
+    references cannot drift apart in convention.
+
+    Run it (from the repo root, with the PDK/KLayout environment
+    ``layout/run_pv.py check-env`` reports)::
+
+        python3 -m layout.pll_top.vco.buffer --outdir <workdir>
+        python3 -c "from layout.pll_top.vco import buffer; \\
+          open('<workdir>/vco_out_buffer.spice','w').write(buffer.reference_netlist())"
+        python3 layout/run_pv.py lvs <workdir>/vco_out_buffer.gds \\
+          <workdir>/vco_out_buffer.spice --top vco_out_buffer \\
+          --lvs-sub GND_VCO --run-dir <rundir>
+    """
+    lines = [
+        f"* Standalone LVS reference for {TOP_CELL} (issue #372).",
+        "*",
+        "* vco.sch's XMBP1..XMBN3 output-buffer taper, expressed against this",
+        "* block's own boundary nets. Every W/L traces to devices.py's",
+        "* BUFFER_STAGES (itself read off design/netlist/vco.spice).",
+        "*",
+        "* Run LVS with --lvs-sub=GND_VCO (this block's own substrate net --",
+        "* NOT layout/run_pv.py's own VSS default; see layout/README.md's",
+        '* "substrate-net gotcha").',
+        "",
+        f".subckt {TOP_CELL} {dev.BUFFER_IN_NET} {dev.BUFFER_OUT_NET} VDD_VCO GND_VCO",
+    ]
+    for st in dev.BUFFER_STAGES:
+        for f in (st.pfet, st.nfet):
+            bulk = "VDD_VCO" if f.kind == "pfet" else "GND_VCO"
+            lines.append(
+                f"M_{f.name} {f.top_net} {f.gate_net} {f.bottom_net} {bulk} "
+                f"{f.kind}_03v3 W={f.drawn_w_um}u L={f.l_um}u"
+            )
+    lines += [".ends", ""]
+    return "\n".join(lines)
 
 
 def main() -> int:
