@@ -94,6 +94,36 @@ that needs the bespoke wire rather than an ordinary rail_stub -- every
 other rail-tied terminal in this block is a source/drain pad, which
 ``rail_stub()`` already handles.
 
+EVERY PMOS-ROW BOTTOM/GATE ESCAPE HOPS OVER ``tap_band_bottom`` (issue #376)
+------------------------------------------------------------------------
+The PMOS row is *top*-aligned (``_y_bottom()``'s own pfet convention: every
+item's own top edge is ``plan.pmos_top``, so a shorter device's own body
+sits higher, not lower) specifically so ``MSU1``'s own ``l=20 um`` channel
+-- the tallest thing in the row -- can reach all the way down to
+``plan.pmos_bottom`` without every *other* device's own pads needing to
+move. But every PMOS-row device's own **bottom** (source) pad still has to
+reach the inter-row channel below, and ``plan.tap_band_bottom`` (the
+``VDD_VCO`` n-well tap band ``build()`` draws along the row's own bottom
+edge, spanning the *entire* row width) sits directly in that path for
+every one of them, not just ``MSU1``. A plain ``escape()`` column -- a
+single Metal1 wire straight down to the channel, what every other
+mesh-routed net in this block uses -- runs directly through that band's own
+drawn Metal1, merging the escaping net into ``VDD_VCO``. Root-caused by
+direct ``klayout.db`` connectivity probing (not assumed): all five of this
+row's own bottom nets (``NA``, ``VBPC``, ``VFIX``, ``VBP0``, ``NSU``) showed
+this identical merge before ``_pmos_row_escape()`` existed --
+``VBP0`` is the only one of the five with a boundary pin, which is why it
+was the only one issue #376 could see from ``vco_block``'s own assembled
+LVS. ``_pmos_row_escape()`` (used for every PMOS-row bottom *and* gate pad
+instead of the general ``escape()``) hops onto Metal2 for exactly the
+crossing -- Metal2 has no spacing relationship with Metal1 at all, the same
+fact ``block.py``'s own top-level routing and ``ring.py``'s #371 fix both
+already lean on -- then returns to Metal1 for the rest of the descent. See
+``layout/evidence/vco-layout/PROOF-376-vbp0-fix.md`` -- including that
+record's own disclosure that this fix, by resolving the ``VBP0``/``VDD_VCO``
+short, exposes a distinct, separately-scoped ``NC``/``NOFF``/``NVI`` circuit-pin
+artifact in the assembled ``vco_block`` LVS, filed as issue #378.
+
 Standalone-DRC scope: like every other VCO sub-block, this one draws its
 own dedicated guard ring (outer substrate ``p`` ring tied ``GND_VCO``, an
 n-well tap band tied ``VDD_VCO``) so it is provable on its own.
@@ -416,6 +446,68 @@ class _Builder(EscapeBuilderMixin):
         x1 = max(p[2] for p in pads)
         return (x0, pads[0][1], x1, pads[0][3])
 
+    def _pmos_row_escape(self, net: str, x: float, pad_edge_y: float) -> None:
+        """Like ``escape()``, for a PMOS-row pad (bottom *or* gate) -- but
+        hops onto Metal2 across ``plan.tap_band_bottom`` (issue #376).
+
+        Every PMOS-row device here is *top*-aligned to ``plan.pmos_top``
+        (``_y_bottom()``'s own pfet convention), so a device's own bottom
+        and gate pads always sit *above* ``tap_band_bottom`` -- the
+        ``VDD_VCO`` n-well tap band ``build()`` draws along the row's own
+        bottom edge, spanning the row's full width (``plan.tap_band_bottom
+        [0]`` to ``[2]`` == every PMOS item's own x-range). A plain
+        ``escape()`` column descending from either pad straight down to the
+        inter-row channel -- what every other mesh-routed net in this block
+        uses -- would run its own Metal1 directly through the tap band's own
+        drawn Metal1 (``primitives.tap_strip()``: comp + contact + a Metal1
+        pad), merging whatever net escapes there into ``VDD_VCO``.
+        Root-caused by direct ``klayout.db`` connectivity probing, not
+        assumed: every one of this row's own bottom *and* gate escapes
+        (``NA``, ``VBPC`` -- reached from three different devices' own gate
+        and/or bottom pads -- ``VFIX``, ``VBP0``, ``NSU``) showed this
+        identical merge before this method existed -- ``VBP0`` is the only
+        one of them with a boundary pin, which is why it was the only one
+        issue #376 could see from ``vco_block``'s own assembled LVS. See
+        ``layout/evidence/vco-layout/PROOF-376-vbp0-fix.md``.
+
+        Metal2 has no spacing relationship with Metal1 (the same fact
+        ``block.py``'s own top-level routing and ``ring.py``'s #371 fix both
+        already lean on), so this runs Metal1 from the pad down to just
+        above the tap band's own drawn edge, hops onto Metal2 for exactly
+        the crossing, then returns to Metal1 (via the ordinary ``escape()``)
+        for the rest of the descent to the net's own channel track --
+        unconditionally, for *every* PMOS-row escape regardless of whether
+        its own x happens to fall inside the tap band's drawn extent, the
+        same "no obstruction inventory needed" shape ``ring.py``'s own
+        wraparound-riser fix used for an analogous same-layer crossing.
+        """
+        tb = self.plan.tap_band_bottom
+        # tap_strip() itself grows the tap band's own drawn Metal1 pad
+        # METAL1_PAD_MARGIN_UM past the comp box ``tap_band_bottom`` gives,
+        # and via1_stack()'s own landing pad (half-width VIA1_SIZE_UM/2 +
+        # VIA1_METAL_ENCLOSE_UM) is what actually has to clear that edge by
+        # DRC_METAL1_MIN_SPACE_UM (M1.2a) -- not the hop point itself.
+        via_half_pad = prim.VIA1_SIZE_UM / 2.0 + prim.VIA1_METAL_ENCLOSE_UM
+        clear = prim.METAL1_PAD_MARGIN_UM + dev.DRC_METAL1_MIN_SPACE_UM + via_half_pad
+        hop_hi = tb[3] + clear  # just above the tap band's own drawn Metal1
+        hop_lo = tb[1] - clear  # just below it
+        if not pad_edge_y > hop_hi:
+            raise ValueError(
+                f"{net!r}'s own pad ({pad_edge_y}) does not clear the tap band's "
+                f"own hop zone (>{hop_hi}) -- _pmos_row_escape()'s own "
+                "top-aligned-row assumption no longer holds"
+            )
+        half = self.escape_wire_w_um / 2.0
+        prim.v_wire(self.canvas, x, pad_edge_y, hop_hi, width=self.escape_wire_w_um)
+        prim.via1_stack(self.canvas, x, hop_hi)
+        self.canvas.rect("metal2", x - half, hop_lo, x + half, hop_hi)
+        prim.via1_stack(self.canvas, x, hop_lo)
+        self.plan.reserve(net, x - half, hop_hi, x + half, pad_edge_y)
+        # The rest of the descent (hop_lo -> the net's own channel track) is
+        # an ordinary Metal1 escape() -- same reserve()/net_x bookkeeping
+        # every other mesh-routed net gets.
+        self.escape(net, x, hop_lo, "pfet", self.plan)
+
     def draw_fet(self, item: Item, row: str) -> None:
         fet = item.fet
         y_bottom = self._y_bottom(row, device_height_um(fet.l_um), self.plan)
@@ -460,14 +552,14 @@ class _Builder(EscapeBuilderMixin):
                 self.rail_stub(VDD_NET, x_pad_c, top_pad[3], self.plan.tap_band[1])
             else:
                 self.jog_escape(fet.top_net, top_pad, x_jog, row, self.plan)
-            self.escape(fet.bottom_net, x_pad_c, bottom_pad[1], row, self.plan)
+            self._pmos_row_escape(fet.bottom_net, x_pad_c, bottom_pad[1])
             if fet.gate_net == GND_NET:
                 # MSU1: tie its gate directly to the guard ring's right band
                 # (module docstring) -- drawn once, after every item is
                 # placed, in build() (needs self.plan.outer[2]).
                 self._msu1_gate_pad = gate_pad
             else:
-                self.escape(fet.gate_net, gate_tab_x_center, gate_pad[1], row, self.plan)
+                self._pmos_row_escape(fet.gate_net, gate_tab_x_center, gate_pad[1])
         else:
             if fet.bottom_net == GND_NET:
                 ring_top = self.plan.outer[1] + RING_WIDTH_UM + prim.METAL1_PAD_MARGIN_UM
