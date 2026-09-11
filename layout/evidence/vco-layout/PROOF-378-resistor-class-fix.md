@@ -1,5 +1,25 @@
 # `vco_block` assembled LVS — clean at last: the resistor reference-netlist device class was wrong
 
+> **Correction and follow-on (issue #381):** two statements below are
+> withdrawn, though the constant change this record made was correct for the
+> geometry as it then stood.
+> (1) "the PDK's own `ppolyf_u_3k` pcell instance, calling the identical
+> `polyf_res_inst()` body" — it does not: the high-sheet family has its own
+> pcell class, `ppolyf_u_high_Rs_resistor` (`cells/res.py:1202`), calling
+> `draw_ppolyf_u_high_Rs_res()` (`cells/draw_res.py:851`), which **does** draw
+> `layer["resistor"]` = `(62, 0)`. `sm141064.ngspice` lists `ppolyf_u_3k`
+> (line 79, "3k high-Rs") and `ppolyf_u` (line 72) as two different devices.
+> (2) The framing of the naming difference as a "foundry-deck device-class-naming
+> difference" understates it: the drawn device really was the 350 ohm/sq one,
+> i.e. an 8.3x resistance error against the schematic, which this record's own
+> fix made LVS-clean rather than visible.
+> `PROOF-381-high-rs-resistor.md` corrects the geometry (the generator now
+> draws the marker and the rest of the PDK's high-Rs recipe), measures the
+> bias-current consequence across PVT, and records the decision in
+> `spec/decision-records/DR-009-vco-bias-resistor-device-class.md`.
+> `sim/`-style append-only discipline applies here too — this pointer is added,
+> the body below is otherwise unedited.
+
 Fix record for [issue #378](https://github.com/2AMLogic/gf180-pll/issues/378),
 which [`PROOF-376-vbp0-fix.md`](PROOF-376-vbp0-fix.md) filed once fixing
 issue #376's `VBP0`/`VDD_VCO` short exposed it. Same discipline as every
