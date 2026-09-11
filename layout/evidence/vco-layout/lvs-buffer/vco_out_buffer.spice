@@ -1,0 +1,18 @@
+* Standalone LVS reference for vco_out_buffer (issue #372).
+*
+* vco.sch's XMBP1..XMBN3 output-buffer taper, expressed against this
+* block's own boundary nets. Every W/L traces to devices.py's
+* BUFFER_STAGES (itself read off design/netlist/vco.spice).
+*
+* Run LVS with --lvs-sub=GND_VCO (this block's own substrate net --
+* NOT layout/run_pv.py's own VSS default; see layout/README.md's
+* "substrate-net gotcha").
+
+.subckt vco_out_buffer Y5 CLK VDD_VCO GND_VCO
+M_MBP1 VDD_VCO Y5 NB1 VDD_VCO pfet_03v3 W=1.25u L=0.28u
+M_MBN1 NB1 Y5 GND_VCO GND_VCO nfet_03v3 W=0.5u L=0.28u
+M_MBP2 VDD_VCO NB1 NB2 VDD_VCO pfet_03v3 W=3.75u L=0.28u
+M_MBN2 NB2 NB1 GND_VCO GND_VCO nfet_03v3 W=1.5u L=0.28u
+M_MBP3 VDD_VCO NB2 CLK VDD_VCO pfet_03v3 W=11.25u L=0.28u
+M_MBN3 CLK NB2 GND_VCO GND_VCO nfet_03v3 W=4.5u L=0.28u
+.ends

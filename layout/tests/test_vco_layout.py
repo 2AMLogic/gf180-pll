@@ -235,6 +235,165 @@ class OutputBufferTests(unittest.TestCase):
         for d in (buf.max_pmos_tap_distance_um(), buf.max_nmos_tap_distance_um()):
             self.assertLess(d, dev.DRC_TAP_PITCH_MAX_UM / 2.0)
 
+    def test_reference_netlist_covers_every_stage_against_the_frozen_sizes(self):
+        # buffer.py's own standalone LVS testbench (issue #372). Checked
+        # against BUFFER_STAGES rather than a golden string so it cannot
+        # drift from the device table the layout is drawn from.
+        text = buf.reference_netlist()
+        self.assertIn(f".subckt {buf.TOP_CELL} {dev.BUFFER_IN_NET} {dev.BUFFER_OUT_NET} VDD_VCO GND_VCO", text)
+        self.assertIn(".ends", text)
+        for st in dev.BUFFER_STAGES:
+            for f, bulk in ((st.pfet, "VDD_VCO"), (st.nfet, "GND_VCO")):
+                self.assertIn(
+                    f"M_{f.name} {f.top_net} {f.gate_net} {f.bottom_net} {bulk} "
+                    f"{f.kind}_03v3 W={f.drawn_w_um}u L={f.l_um}u",
+                    text,
+                )
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class OutputBufferMetal1NetSeparationTests(unittest.TestCase):
+    """No Metal1 polygon in buffer.py carries two nets (issues #368/#372).
+
+    This is the reproduction script from
+    ``layout/evidence/vco-layout/PROOF-368-rootcause.md`` run as a unit
+    test: merge every Metal1 shape, drop each Metal1 *label* (datatype 10 --
+    the purpose gf180mcu's own LVS deck reads net names from) onto the
+    polygon under it, and assert no polygon ends up carrying more than one
+    name. On ``main`` before this fix, one polygon carried all seven of
+    ``BUF1.NB1``/``BUF2.NB2``/``BUF3.CLK``/``CLK``/``GND_VCO``/``VDD_VCO``/
+    ``Y5``.
+
+    Why it is a test and not just a proof document: this failure mode is
+    structurally invisible to DRC -- two Metal1 shapes that touch merge into
+    one polygon *before* any spacing rule runs, so a short is never a
+    violation -- and invisible to ``block.connectivity_report()``, whose
+    probe list only asks whether same-net conductors reach each other, never
+    whether different-net ones stay apart.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import klayout.db as db
+
+        cls.db = db
+        cls.result = buf.build()
+        canvas = cls.result.canvas
+        cls.layout = canvas.layout
+        m1 = db.Region(canvas.top.shapes(canvas.layout.layer(*prim.LAYER["metal1"]))).merged()
+        cls.polys = list(m1.each_merged())
+        cls.labels = [
+            (s.text.string, s.text.x, s.text.y)
+            for s in canvas.top.shapes(canvas.layout.layer(*prim.LAYER["metal1_label"])).each()
+            if s.is_text()
+        ]
+        # label -> indices of the merged polygons it lands on
+        cls.nets_on_poly = {}
+        cls.unplaced = []
+        for name, x, y in cls.labels:
+            pt = db.Point(x, y)
+            hit = None
+            for i, p in enumerate(cls.polys):
+                if p.bbox().contains(pt) and not (
+                    db.Region(p) & db.Region(db.Box(pt.x - 1, pt.y - 1, pt.x + 1, pt.y + 1))
+                ).is_empty():
+                    hit = i
+                    break
+            if hit is None:
+                cls.unplaced.append(name)
+            else:
+                cls.nets_on_poly.setdefault(hit, set()).add(name)
+
+    def test_every_pin_label_actually_lands_on_metal1(self):
+        self.assertEqual(self.unplaced, [])
+        self.assertTrue(self.labels)
+
+    def test_no_merged_metal1_polygon_carries_two_net_names(self):
+        shorted = {
+            str(self.polys[i].bbox()): sorted(names)
+            for i, names in self.nets_on_poly.items()
+            if len(names) > 1
+        }
+        self.assertEqual(shorted, {})
+
+    def test_each_net_is_exactly_one_merged_polygon(self):
+        # The other half of the #368 root cause: the rails, the n-well tap
+        # bands and the guard ring were *four separately-labelled Metal1
+        # islands never joined by any drawn metal*. A net spread across more
+        # than one merged polygon is that bug -- which the short above used
+        # to hide, and which removing the short alone would have exposed as
+        # genuinely floating device terminals.
+        per_net = {}
+        for i, names in self.nets_on_poly.items():
+            for name in names:
+                per_net.setdefault(name, set()).add(i)
+        self.assertEqual({n: len(v) for n, v in per_net.items()}, {n: 1 for n in per_net})
+        self.assertEqual(
+            set(per_net),
+            {"VDD_VCO", "GND_VCO", dev.BUFFER_IN_NET, dev.BUFFER_OUT_NET, "NB1", "NB2"},
+        )
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class OutputBufferSupplyRailTests(unittest.TestCase):
+    """The supply rails clear every gate pad, and reach their own rings.
+
+    The gate-pad overlap is structural, not incidental: ``mosfet()``'s gate
+    pad and its adjacent terminal pad overlap in y by ``0.26 - l/2`` um
+    (0.12 um at these 0.28 um-long inverter fets), so *any* rail drawn at a
+    terminal pad's own y and stretched across the row necessarily lands on
+    the other stages' gate tabs. These assertions run against the boxes
+    ``build()`` actually drew.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.result = buf.build()
+        cls.taps = (
+            min(p.pmos_y0 for p in cls.result.stage_ports) - buf.TAP_GAP_UM - buf.TAP_RING_WIDTH_UM,
+            max(p.pmos_y1 for p in cls.result.stage_ports) + buf.TAP_GAP_UM + buf.TAP_RING_WIDTH_UM,
+        )
+
+    def test_rails_clear_every_gate_pad_by_m1_2a(self):
+        self.assertGreaterEqual(self.result.rail_gate_clearance_um, dev.DRC_METAL1_MIN_SPACE_UM)
+
+    def test_the_clearance_guard_actually_refuses_a_short(self):
+        # Negative control for the assertion above, in the same spirit as
+        # layout/harness/faults.py's DRC negative controls: a check that has
+        # never been seen to fail is not yet evidence of anything. Raising
+        # the required spacing past what the layout can give must make
+        # build() refuse to draw, not silently emit a shorted layout.
+        from unittest import mock
+
+        with mock.patch.object(dev, "DRC_METAL1_MIN_SPACE_UM", 5.0):
+            with self.assertRaises(ValueError):
+                buf.build()
+
+    def test_each_rail_overlaps_the_ring_that_biases_the_same_net(self):
+        # GND_VCO's rail runs into the outer p ring's own Metal1 pad, VDD_VCO's
+        # into the n-well tap band's -- by real area (METAL1_PAD_MARGIN_UM of
+        # it), not a coincident edge one grid snap away from being no joint.
+        margin = prim.METAL1_PAD_MARGIN_UM
+        ring_pad_top = self.result.footprint[1] + buf.RING_WIDTH_UM + margin
+        gnd = self.result.rail_bands["GND_VCO"]
+        self.assertAlmostEqual(ring_pad_top - gnd[1], margin)
+
+        tap_band_pad_bottom = self.taps[1] - buf.TAP_RING_WIDTH_UM - margin
+        vdd = self.result.rail_bands["VDD_VCO"]
+        self.assertAlmostEqual(vdd[3] - tap_band_pad_bottom, margin)
+
+    def test_rails_span_every_stage_and_meet_their_own_pads(self):
+        for net, pad_attr, rail_edge, pad_edge in (
+            ("GND_VCO", "gnd_pad", 3, 1),  # rail's top edge == the pad's bottom
+            ("VDD_VCO", "vdd_pad", 1, 3),  # rail's bottom edge == the pad's top
+        ):
+            band = self.result.rail_bands[net]
+            for p in self.result.stage_ports:
+                pad = getattr(p, pad_attr)
+                self.assertLessEqual(band[0], pad[0] + 1e-9)
+                self.assertGreaterEqual(band[2], pad[2] - 1e-9)
+                self.assertAlmostEqual(band[rail_edge], pad[pad_edge])
+
 
 class BandSelectMirrorDeviceTests(unittest.TestCase):
     """devices.MIRROR_* matches design/netlist/vco.spice's .subckt vco_bias."""

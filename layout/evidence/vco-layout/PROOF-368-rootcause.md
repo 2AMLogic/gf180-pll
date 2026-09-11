@@ -1,5 +1,26 @@
 # `vco_block` LVS short (issue #368) — root cause found, fix not yet implemented
 
+> **Status update (2026-09-11): half of the fix has landed.**
+> [`PROOF-372-buffer-fix.md`](PROOF-372-buffer-fix.md) implements everything
+> below for **`buffer.py`** (issue #372) — `vco_out_buffer` is now DRC-clean
+> *and* matches a standalone LVS reference netlist of its own, and the
+> reproduction script in this file reports zero multi-net Metal1 polygons
+> against it. **`ring.py` is still unfixed** (issue #371), so `vco_block` LVS
+> still mismatches and everything this record says about `ring.py` still
+> stands verbatim. Two details of this record were refined by doing the work:
+>
+> * `buffer.py` had a **third** short of the same family that items 1 and 2
+>   below masked — the inner n-well tap ring's *bottom* band lies across the
+>   NMOS/PMOS routing channel, so each stage's plain-Metal1 drain and gate
+>   bridges shorted its own nodes to `VDD_VCO` too. `ring.py` should be
+>   checked for the same thing rather than assumed to have only the three
+>   listed here.
+> * "Recommended fix shape" item 1 says to *clip* the wide rail's y-extent.
+>   For `buffer.py` that is not sufficient on its own: the clearance a clip
+>   would leave (0.11 µm) is narrower than M1.1's own minimum *width*, so the
+>   rail was moved wholesale into the clear channel outside the row's pads
+>   instead. Same conclusion, one step further.
+
 This is **not** a fix record. It documents a complete, mechanistically-verified
 root cause for the connectivity short `PROOF-lvs.md` (issue #367) discovered,
 reached by direct KLayout `klayout.db` introspection of the extracted
