@@ -113,6 +113,7 @@ def cmd_lvs(args: argparse.Namespace) -> int:
         run_mode=args.run_mode,
         substrate=args.lvs_sub,
         timeout=args.timeout,
+        poly_res=None if args.poly_res == "pdk" else args.poly_res,
     )
     print(result.summary())
     if result.status == "mismatch":
@@ -286,6 +287,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--run-dir", required=True, dest="run_dir")
     p.add_argument("--run-mode", default="deep")
     p.add_argument("--lvs-sub", default="VSS", dest="lvs_sub")
+    p.add_argument(
+        "--poly-res",
+        default=lvs_mod.POLY_RES,
+        dest="poly_res",
+        choices=("1k", "2k", "3k", "pdk"),
+        help=(
+            "gf180mcu high-sheet poly-resistor process option the deck names "
+            f"marked poly resistors against (default: {lvs_mod.POLY_RES}, this "
+            "repo's ratified option -- see DR-009). 'pdk' runs the PDK's own "
+            "run_lvs.py unmodified, i.e. its hardcoded 1k."
+        ),
+    )
     p.add_argument("--timeout", type=int, default=3600)
     p.set_defaults(func=cmd_lvs)
 

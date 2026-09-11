@@ -1,0 +1,171 @@
+{
+  "name": "vco-bias-current",
+  "description": "constant-gm reference current of the VCO bias generator, as specified (ppolyf_u_3k) vs. as the pre-#381 layout drew it (unmarked ppolyf_u)",
+  "claim": "#381 (design-input claim, cross-checked against a ratified spec line) -- `design/netlist/vco.spice` declares RCG/ROFF/RDEG as `ppolyf_u_3k` (3000 ohm/sq) while `layout/pll_top/vco/primitives.poly_resistor()` drew the unmarked `ppolyf_u` class (350 ohm/sq) at the same W/L. What does that sheet-resistance error do to the beta-multiplier reference current and to the per-stage ring starving current, and how does each arm stand against spec/pll.md#power's ratified 318 uA `vdd_vco` domain current?",
+  "methodology": [
+    "Measurement topology: two bias generators are instantiated side by side at every PVT point, from the same ideal rails and the same static band code -- `design/netlist/vco.spice`'s own `.subckt vco_bias` (as specified, `ppolyf_u_3k`) and `vco_bias_as_drawn_350.spice`'s `.subckt vco_bias_as_drawn_350`, which is that same subckt with exactly one token changed per resistor (`ppolyf_u_3k` -> `ppolyf_u`) by `make_counterfactual.py`. Three copies of each, at Vctrl = 0.9 / 1.8 / 2.7 V (the bottom, middle and top of the usable control window), each through its own supply ammeter. The copies share only the supply node and ground.",
+    "The ring is NOT in this deck. What the ring sees is measured on replicas of `vco_stage.sch`'s own two bias-driven devices -- the tail `MNT` (nfet_03v3 W=4 um L=0.5 um, gate on VBN) and the head `MPH` (pfet_03v3 W=10 um L=0.5 um, gate on VBP) -- with their drains held at mid-rail, carrying the identical ad/as/pd/ps/nrd/nrs geometry expressions the schematic gives them. `i_tail` is therefore the per-stage starving current the 5-stage ring is biased to, i.e. the quantity f_osc is proportional to, read at a DC operating point instead of from an oscillating transient. It is a bias-network measurement and is not a substitute for `sim/vco-tuning-range`'s own measured f(Vctrl).",
+    "Four witness resistors (`ppolyf_u_3k` and `ppolyf_u`, each at the drawn W=1 um and both drawn lengths L=5.6 um / 33 um, 1.0 V across each) measure the resistance the corner actually delivers, so every current in this record is reported alongside the resistance behind it rather than a quoted model parameter. `rsh_ratio` is the measured 3k/unmarked resistance ratio at the RCG geometry -- the 8.6x figure issue #381 states, measured rather than assumed.",
+    "`ivco_*_100m_ua` sums the bias generator's own supply current and 5x the replica tail current. The replica tail is held at mid-rail, i.e. in saturation, so 5x it is the ring's PEAK starving budget, not its cycle-average supply current (a switching stage's tail spends much of each cycle with its drain well below mid-rail). It is an upper bound on the ring term, used here only to compare the two arms against each other and against the ratified domain figure's order of magnitude; `sim/vco-tuning-range` remains the source of the measured per-copy VCO supply current.",
+    "Analysis is a DC operating point (`.op`), so the numbers are the bias network's own settled state. The constant-gm core has two DC solutions (the zero-current state and the operating one) and carries `vco_bias.sch`'s own start-up branch (MSU1/MSU2/MSU3) to make the zero state non-sustaining; `itail_a_mid_ua`'s `min` check below fails loudly if any point nevertheless lands in the zero state, rather than that point being recorded as a very low bias current.",
+    "No absolute pass/fail is placed on the AS-SPECIFIED arm, deliberately. spec/pll.md#power's 318 uA `vdd_vco` figure is the worst of 159 grid points at a fixed OUTPUT FREQUENCY (90 <= f_osc <= 110 MHz), reached at a corner-dependent band code and Vctrl; this deck holds the operating POINT fixed (band 5, Vctrl 1.8 V -- spec/pll.md's own named 100 MHz reference point) and lets f_osc move with the corner, so at `res_ff`/125 C the same point is a far faster oscillator than 100 MHz and legitimately draws more. A `max` check on the as-specified arm would therefore be testing the corner's frequency, not the bias network. What IS point-independent -- and is checked -- is that the counterfactual arm exceeds the entire ratified domain figure at EVERY point of the grid, by 6.3x at its own best corner. The nominal-corner comparison against 318 uA is reported in the record and in layout/evidence/vco-layout/PROOF-381-high-rs-resistor.md rather than asserted as a check.",
+    "The band-select code is a sweep axis with two points (band 0 = 000 and band 7 = 111). The band code does not touch the constant-gm reference at all -- it switches the band mirror legs downstream of VBP0 -- so it is swept at its two extremes rather than all eight, which is the axis that changes VBP/VBN and therefore the replica currents.",
+    "Corner axis: the full 13-bundle set, because the claim rides directly on the resistor family (`res_ff`/`res_ss` move the high-sheet resistance by roughly -35%/+40%) and on MOS (the beta multiplier's own reference current is a MOS-and-resistor quantity, not a resistor-only one). Temperature -40/27/125 C and supply 3.30 V +/-10% are the mandated axes, unmodified.",
+    "Statistical switches: sw_stat_global = sw_stat_mismatch = 0 (nominal skew, no Monte Carlo). This is a corner-matrix claim; RCG's own mismatch contribution to the reference current is not in scope here.",
+    "Limitation: the counterfactual arm is a *diagnostic*, not a design alternative. It exists so the bias-current consequence of the drawn device class can be measured instead of asserted, and it must not be cited as a proposed sizing."
+  ],
+  "dut": [
+    "design/netlist/vco.spice",
+    "sim/vco-bias-current/testbench/vco_bias_as_drawn_350.spice"
+  ],
+  "netlist": "tb_vco_bias.spice",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "full"
+  ],
+  "analyses": [
+    "op"
+  ],
+  "options": [
+    "reltol=1e-6"
+  ],
+  "sweeps": {
+    "band": {
+      "description": "static band-select code (B2 B1 B0) at its two extremes",
+      "points": {
+        "band0": {
+          "description": "B2 B1 B0 = 000 (lowest band)",
+          "params": {
+            "b0": "0",
+            "b1": "0",
+            "b2": "0"
+          }
+        },
+        "band7": {
+          "description": "B2 B1 B0 = 111 (highest band)",
+          "params": {
+            "b0": "1",
+            "b1": "1",
+            "b2": "1"
+          }
+        }
+      }
+    }
+  },
+  "measure": {
+    "r3k_cg": "1.0/(-i(vw3k_cg))",
+    "r3k_off": "1.0/(-i(vw3k_off))",
+    "ru_cg": "1.0/(-i(vwu_cg))",
+    "ru_off": "1.0/(-i(vwu_off))",
+    "rsh_ratio": "(1.0/(-i(vw3k_cg)))/(1.0/(-i(vwu_cg)))",
+    "ibias_a_lo_ua": "i(vam_a_lo)*1e6",
+    "ibias_a_mid_ua": "i(vam_a_mid)*1e6",
+    "ibias_a_hi_ua": "i(vam_a_hi)*1e6",
+    "ibias_b_lo_ua": "i(vam_b_lo)*1e6",
+    "ibias_b_mid_ua": "i(vam_b_mid)*1e6",
+    "ibias_b_hi_ua": "i(vam_b_hi)*1e6",
+    "ibias_ratio_mid": "i(vam_b_mid)/i(vam_a_mid)",
+    "ibias_a_100m_ua": "i(vam_a_b5)*1e6",
+    "ibias_b_100m_ua": "i(vam_b_b5)*1e6",
+    "ibias_ratio_100m": "i(vam_b_b5)/i(vam_a_b5)",
+    "itail_a_lo_ua": "-i(vnt_a_lo)*1e6",
+    "itail_a_mid_ua": "-i(vnt_a_mid)*1e6",
+    "itail_a_hi_ua": "-i(vnt_a_hi)*1e6",
+    "itail_b_lo_ua": "-i(vnt_b_lo)*1e6",
+    "itail_b_mid_ua": "-i(vnt_b_mid)*1e6",
+    "itail_b_hi_ua": "-i(vnt_b_hi)*1e6",
+    "itail_ratio_mid": "i(vnt_b_mid)/i(vnt_a_mid)",
+    "ihead_a_mid_ua": "i(vph_a_mid)*1e6",
+    "ihead_b_mid_ua": "i(vph_b_mid)*1e6",
+    "vbn_a_mid": "v(a_mid_vbn)",
+    "vbn_b_mid": "v(b_mid_vbn)",
+    "vbp_a_mid": "v(a_mid_vbp)",
+    "vbp_b_mid": "v(b_mid_vbp)",
+    "iring_a_mid_ua": "-i(vnt_a_mid)*5e6",
+    "iring_b_mid_ua": "-i(vnt_b_mid)*5e6",
+    "itail_a_100m_ua": "-i(vnt_a_b5)*1e6",
+    "itail_b_100m_ua": "-i(vnt_b_b5)*1e6",
+    "iring_a_100m_ua": "-i(vnt_a_b5)*5e6",
+    "iring_b_100m_ua": "-i(vnt_b_b5)*5e6",
+    "ivco_a_100m_ua": "i(vam_a_b5)*1e6 - i(vnt_a_b5)*5e6",
+    "ivco_b_100m_ua": "i(vam_b_b5)*1e6 - i(vnt_b_b5)*5e6"
+  },
+  "topology_groups": {
+    "witness_resistors": {
+      "description": "measured resistance of the two poly-resistor classes at the drawn RCG (W=1 um, L=5.6 um) and ROFF/RDEG (W=1 um, L=33 um) geometries, 1.0 V across each; rsh_ratio is the measured as-specified/as-drawn ratio at the RCG geometry",
+      "measures": [
+        "r3k_cg",
+        "r3k_off",
+        "ru_cg",
+        "ru_off",
+        "rsh_ratio"
+      ]
+    },
+    "bias_supply_current": {
+      "description": "current the bias generator itself draws from vdd_vco, at Vctrl = 0.9 / 1.8 / 2.7 V -- arm A as specified (ppolyf_u_3k), arm B as the pre-#381 layout drew it (ppolyf_u); ibias_ratio_mid is B/A at mid-window",
+      "measures": [
+        "ibias_a_lo_ua",
+        "ibias_a_mid_ua",
+        "ibias_a_hi_ua",
+        "ibias_b_lo_ua",
+        "ibias_b_mid_ua",
+        "ibias_b_hi_ua",
+        "ibias_ratio_mid"
+      ]
+    },
+    "ring_stage_bias": {
+      "description": "per-stage ring starving current read off replicas of vco_stage.sch's own MNT tail / MPH head devices, and the bias voltages driving them; iring_*_mid_ua is 5x the tail current, i.e. the whole 5-stage ring's starving budget at mid-window",
+      "measures": [
+        "itail_a_lo_ua",
+        "itail_a_mid_ua",
+        "itail_a_hi_ua",
+        "itail_b_lo_ua",
+        "itail_b_mid_ua",
+        "itail_b_hi_ua",
+        "itail_ratio_mid",
+        "ihead_a_mid_ua",
+        "ihead_b_mid_ua",
+        "vbn_a_mid",
+        "vbn_b_mid",
+        "vbp_a_mid",
+        "vbp_b_mid",
+        "iring_a_mid_ua",
+        "iring_b_mid_ua"
+      ]
+    },
+    "reference_point_100mhz": {
+      "description": "spec/pll.md#power's own 100 MHz reference operating point (band 5, Vctrl 1.8 V), present at every grid point rather than only on the band-sweep slice that selects it. ivco_*_100m_ua is the bias generator's own current plus the 5-stage ring's starving budget (5x the replica tail current) -- the two terms of the ratified 318 uA `vdd_vco` domain figure this campaign can measure without an oscillating ring; the output buffer's own dynamic current is not in it.",
+      "measures": [
+        "ibias_a_100m_ua",
+        "ibias_b_100m_ua",
+        "ibias_ratio_100m",
+        "itail_a_100m_ua",
+        "itail_b_100m_ua",
+        "iring_a_100m_ua",
+        "iring_b_100m_ua",
+        "ivco_a_100m_ua",
+        "ivco_b_100m_ua"
+      ]
+    }
+  },
+  "checks": {
+    "itail_a_mid_ua": {
+      "min": 1.0
+    },
+    "rsh_ratio": {
+      "min": 5.0
+    },
+    "ibias_ratio_100m": {
+      "min": 5.0
+    },
+    "ivco_b_100m_ua": {
+      "min": 318.0
+    }
+  }
+}

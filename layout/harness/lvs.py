@@ -8,6 +8,19 @@ the normalised verdict and a trustworthy exit code.
 naive ``run_lvs.py ... && echo ok`` therefore reports success on a failing
 LVS. This was observed directly during bring-up; both verdicts here are
 decided from the deck's log markers, never from the process exit status.
+
+**The poly-resistor process option.** gf180mcu's high-sheet poly resistors
+(``ppolyf_u_1k``/``_2k``/``_3k``) are one drawn device -- identical masks --
+separated only by a fab implant *option*, which the LVS deck models with its
+``$poly_res`` switch. The PDK's own ``run_lvs.py`` hardcodes that switch to
+``1k`` with no CLI override, so every run of it names a marked poly resistor
+``ppolyf_u_1k`` whatever the design intends. :data:`POLY_RES` is this repo's
+own ratified option (``3k``, see
+``spec/decision-records/DR-009-vco-bias-resistor-device-class.md``) and is
+applied through ``_pdk_lvs_poly_res.py``, a shim that re-uses the PDK
+runner's own argument parsing and switch derivation and replaces exactly
+that one key. Pass ``poly_res=None`` to get the PDK runner's own unmodified
+behaviour.
 """
 
 from __future__ import annotations
@@ -20,6 +33,21 @@ from . import env as env_mod
 
 MATCH_MARKER = "Congratulations! Netlists match"
 MISMATCH_MARKER = "Netlists don't match"
+
+POLY_RES = "3k"
+"""This repo's ratified gf180mcu high-sheet-poly process option.
+
+``design/netlist/vco.spice`` specifies ``ppolyf_u_3k`` for the VCO's three
+bias resistors and every recorded ``sim/`` result was produced against that
+device, so ``3k`` is the option the extracted netlist has to be named
+against for a layout-vs-schematic comparison to mean anything. The drawn
+geometry is the same for all three options (see
+``layout/pll_top/vco/primitives.poly_resistor()``); the loop filter's own
+resistor is the *unmarked* ``ppolyf_u`` class, which this switch does not
+affect at all.
+"""
+
+_POLY_RES_SHIM = Path(__file__).resolve().parent / "_pdk_lvs_poly_res.py"
 
 
 @dataclass
@@ -57,6 +85,7 @@ def run(
     run_mode: str = "deep",
     substrate: str = "VSS",
     timeout: int = 3600,
+    poly_res: str | None = POLY_RES,
 ) -> LvsResult:
     """Run the foundry LVS deck. Never raises on a *mismatch*.
 
@@ -64,6 +93,10 @@ def run(
     extractor names the global p-substrate ``gf180mcu_gnd`` and exposes it as
     an extra top-level pin, so a schematic that (correctly) ties the n-channel
     bulk to VSS will not match. See layout/README.md.
+
+    ``poly_res`` selects the deck's high-sheet poly-resistor process option
+    (see :data:`POLY_RES`); ``None`` runs the PDK's own ``run_lvs.py``
+    directly, with its hardcoded ``1k``.
     """
     tools = tools or env_mod.find_tools()
     layout = Path(layout).resolve()
@@ -71,9 +104,14 @@ def run(
     run_dir = Path(run_dir).resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    runner: list[str] = (
+        [str(tools.lvs_runner)]
+        if poly_res is None
+        else [str(_POLY_RES_SHIM), str(tools.lvs_runner), poly_res]
+    )
     command = [
         str(tools.python),
-        str(tools.lvs_runner),
+        *runner,
         f"--layout={layout}",
         f"--netlist={netlist}",
         f"--variant={tools.variant_letter}",

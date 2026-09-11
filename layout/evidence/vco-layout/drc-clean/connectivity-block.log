@@ -1,6 +1,6 @@
-wrote /Users/rwalters/GitHub/gf180-pll/.loom/worktrees/issue-376/layout/evidence/vco-layout/work/vco_block.gds
+wrote /home/ubuntu/loom-workspaces/gf180-pll/.loom/worktrees/issue-381/layout/evidence/vco-layout/work/vco_block.gds
 footprint: 172.520 x 184.480 um  (31826.5 um^2)
-  bias_resistors     123.560    -3.450   136.560    36.870
+  bias_resistors     123.560    -3.500   136.560    36.820
   vtoi_core           -4.120    -3.720   117.060    47.000
   mirror              -5.420    55.000   110.440   121.220
   ring                -4.700   127.220    70.700   146.880

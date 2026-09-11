@@ -1,0 +1,143 @@
+* gf180-pll :: vco-bias-current :: constant-gm reference current of the VCO bias
+* generator, as specified (ppolyf_u_3k) vs. as the pre-#381 layout drew it
+*
+* sim/harness netlist FRAGMENT (see sim/harness/README.md). Two DUTs are
+* composed ahead of this file by the manifest's `dut` key and are never copied
+* into it:
+*   - design/netlist/vco.spice                          -> .subckt vco_bias
+*   - .../vco_bias_as_drawn_350.spice (generated)       -> .subckt vco_bias_as_drawn_350
+*
+* WHAT THIS DECK MEASURES AND WHY
+* -------------------------------
+* `design/netlist/vco.spice` declares RCG/ROFF/RDEG as `ppolyf_u_3k`
+* (3000 ohm/sq). Until issue #381 the layout generator drew them as the
+* unmarked `ppolyf_u` class (350 ohm/sq) at the same W/L -- an 8.6x
+* sheet-resistance error sitting directly on RCG, which sets the
+* beta-multiplier (constant-gm) reference current. This deck measures the
+* consequence rather than asserting it: both bias generators are instantiated
+* side by side at the same PVT point, from the same rails, and their currents
+* are compared.
+*
+* Three quantities per arm, at each of three control voltages:
+*
+*   i_bias   total current drawn from vdd_vco by the bias generator itself.
+*   i_tail   drain current of a REPLICA of vco_stage.sch's own tail device
+*            (MNT: nfet_03v3 W=4 um L=0.5 um, gate on VBN), its drain held at
+*            mid-rail. This is the per-stage starving current the 5-stage ring
+*            is biased to, i.e. the quantity f_osc is proportional to -- read
+*            off a replica rather than the ring itself so the measurement is a
+*            fast DC operating point with no oscillator in the deck.
+*   i_head   the same for the stage's head device (MPH: pfet_03v3 W=10 um
+*            L=0.5 um, gate on VBP, source on vdd_vco).
+*
+* The replicas carry the identical geometry parameters vco_stage.sch gives
+* those two devices (ad/as/pd/ps/nrd/nrs expressions included verbatim), so
+* they are the schematic's devices held at a DC bias, not a re-sizing.
+*
+* Four witness resistors (both classes, both drawn lengths, 1.0 V across each)
+* measure the sheet resistance the corner actually delivers, so the record
+* states the resistance behind every current it reports instead of quoting a
+* model parameter. i(v...) of those sources is negative by SPICE convention;
+* the manifest's measure expressions negate it.
+*
+* The ring, the output buffer and the 22 pF decap pair are deliberately NOT in
+* this deck: the claim under test is the bias generator's own operating point,
+* and leaving `cap_nmos_03v3` out also keeps the deck runnable on either
+* ngspice-46 or -47 (see sim/harness/README.md's nonlinear-moscap note).
+*
+* From the harness: vdd_val, vdd_nom, temp_c.
+* From the manifest's `band` sweep axis: b0, b1, b2.
+
+* --- control voltages: bottom, middle and top of the usable Vctrl window
+* (0.9 .. 2.7 V, DR-001 Decision 3 / spec/pll.md's tuning-range section).
+.param vc_lo=0.9 vc_mid=1.8 vc_hi=2.7
+
+* --- rails and static band-select code -------------------------------------
+vdd vdd 0 dc {vdd_val}
+vb0 b0 0 dc {b0 * vdd_val}
+vb1 b1 0 dc {b1 * vdd_val}
+vb2 b2 0 dc {b2 * vdd_val}
+
+vctl_lo  vc_lo  0 dc {vc_lo}
+vctl_mid vc_mid 0 dc {vc_mid}
+vctl_hi  vc_hi  0 dc {vc_hi}
+
+* --- arm A: as specified (ppolyf_u_3k, 3000 ohm/sq) -------------------------
+vam_a_lo  vdd a_lo_vdd  dc 0
+xa_lo  vc_lo  b0 b1 b2 a_lo_vbp  a_lo_vbn  a_lo_vdd  0 vco_bias
+vam_a_mid vdd a_mid_vdd dc 0
+xa_mid vc_mid b0 b1 b2 a_mid_vbp a_mid_vbn a_mid_vdd 0 vco_bias
+vam_a_hi  vdd a_hi_vdd  dc 0
+xa_hi  vc_hi  b0 b1 b2 a_hi_vbp  a_hi_vbn  a_hi_vdd  0 vco_bias
+
+* --- arm B: as the pre-#381 layout drew it (ppolyf_u, 350 ohm/sq) -----------
+vam_b_lo  vdd b_lo_vdd  dc 0
+xb_lo  vc_lo  b0 b1 b2 b_lo_vbp  b_lo_vbn  b_lo_vdd  0 vco_bias_as_drawn_350
+vam_b_mid vdd b_mid_vdd dc 0
+xb_mid vc_mid b0 b1 b2 b_mid_vbp b_mid_vbn b_mid_vdd 0 vco_bias_as_drawn_350
+vam_b_hi  vdd b_hi_vdd  dc 0
+xb_hi  vc_hi  b0 b1 b2 b_hi_vbp  b_hi_vbn  b_hi_vdd  0 vco_bias_as_drawn_350
+
+* --- the 100 MHz reference point, hardwired (NOT on the band sweep axis) ----
+* spec/pll.md's power section names "100 MHz (band 5, Vctrl 1.8 V)" as the
+* reference operating point its ratified 318 uA `vdd_vco` domain current is
+* measured at, so the one absolute, spec-anchored check in this campaign needs
+* that point present at EVERY grid point rather than only on the band-sweep
+* slice that happens to select it. B2 B1 B0 = 101.
+vb5_0 b5_0 0 dc {vdd_val}
+vb5_1 b5_1 0 dc 0
+vb5_2 b5_2 0 dc {vdd_val}
+
+vam_a_b5 vdd a_b5_vdd dc 0
+xa_b5 vc_mid b5_0 b5_1 b5_2 a_b5_vbp a_b5_vbn a_b5_vdd 0 vco_bias
+vam_b_b5 vdd b_b5_vdd dc 0
+xb_b5 vc_mid b5_0 b5_1 b5_2 b_b5_vbp b_b5_vbn b_b5_vdd 0 vco_bias_as_drawn_350
+
+* --- ring-stage replica probes ----------------------------------------------
+* One MNT (tail) + one MPH (head) per arm per control voltage, drain/source
+* held at mid-rail through a 0 V-offset source that doubles as the ammeter.
+.param vmid='vdd_val/2'
+
+vnt_a_lo  a_lo_nt  0 dc {vmid}
+xnt_a_lo  a_lo_nt  a_lo_vbn  0 0 nfet_03v3 L=0.5u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+vnt_a_mid a_mid_nt 0 dc {vmid}
+xnt_a_mid a_mid_nt a_mid_vbn 0 0 nfet_03v3 L=0.5u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+vnt_a_hi  a_hi_nt  0 dc {vmid}
+xnt_a_hi  a_hi_nt  a_hi_vbn  0 0 nfet_03v3 L=0.5u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+
+vnt_b_lo  b_lo_nt  0 dc {vmid}
+xnt_b_lo  b_lo_nt  b_lo_vbn  0 0 nfet_03v3 L=0.5u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+vnt_b_mid b_mid_nt 0 dc {vmid}
+xnt_b_mid b_mid_nt b_mid_vbn 0 0 nfet_03v3 L=0.5u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+vnt_b_hi  b_hi_nt  0 dc {vmid}
+xnt_b_hi  b_hi_nt  b_hi_vbn  0 0 nfet_03v3 L=0.5u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+
+vnt_a_b5  a_b5_nt  0 dc {vmid}
+xnt_a_b5  a_b5_nt  a_b5_vbn  0 0 nfet_03v3 L=0.5u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+vnt_b_b5  b_b5_nt  0 dc {vmid}
+xnt_b_b5  b_b5_nt  b_b5_vbn  0 0 nfet_03v3 L=0.5u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+
+vph_a_mid a_mid_nh 0 dc {vmid}
+xph_a_mid a_mid_nh a_mid_vbp vdd vdd pfet_03v3 L=0.5u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+vph_b_mid b_mid_nh 0 dc {vmid}
+xph_b_mid b_mid_nh b_mid_vbp vdd vdd pfet_03v3 L=0.5u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+
+* --- witness resistors: both classes, both drawn lengths, 1.0 V across ------
+vw3k_cg  w3k_cg  0 dc 1.0
+xw3k_cg  w3k_cg  0 0 ppolyf_u_3k r_width=1u r_length=5.6u m=1
+vw3k_off w3k_off 0 dc 1.0
+xw3k_off w3k_off 0 0 ppolyf_u_3k r_width=1u r_length=33u m=1
+vwu_cg   wu_cg   0 dc 1.0
+xwu_cg   wu_cg   0 0 ppolyf_u r_width=1u r_length=5.6u m=1
+vwu_off  wu_off  0 dc 1.0
+xwu_off  wu_off  0 0 ppolyf_u r_width=1u r_length=33u m=1

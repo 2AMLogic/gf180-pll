@@ -263,54 +263,58 @@ M2_HALF_UM = prim.METAL2_WIRE_WIDTH_UM / 2.0
 # deck matches sub-circuits by name; a flattened GDS has none to match once
 # named instances become geometry).
 
-RESISTOR_LVS_MODEL = "ppolyf_u"
-"""The poly-resistor device class gf180mcu's own signoff LVS deck actually
-extracts for ``primitives.poly_resistor()``'s own drawn geometry -- not
-``ppolyf_u_3k``, which is the class ``design/netlist/vco.spice`` names on
-``XRCG``/``XROFF``/``XRDEG`` (``devices.BIAS_RESISTORS``), and (issue #378,
-correcting this constant's own earlier value) not ``ppolyf_u_1k`` either.
+RESISTOR_LVS_MODEL = "ppolyf_u_3k"
+"""The poly-resistor device class this reference netlist names -- the same
+class ``design/netlist/vco.spice`` names on ``XRCG``/``XROFF``/``XRDEG``
+(``devices.BIAS_RESISTORS``), and, since issue #381, the class gf180mcu's own
+signoff LVS deck actually extracts from ``primitives.poly_resistor()``'s own
+drawn geometry.
 
-Verified directly against the PDK's own deck, not assumed --
-``rule_decks/res_derivations.lvs``'s own two poly-resistor layer derivations:
+Two deck facts, both read directly out of ``gf180mcuD`` rather than assumed,
+are what make that agreement possible -- and are what the two earlier values
+of this constant each got half-right:
 
-* ``ppolyf_u_layer = pplus.and(poly2).and(sab).and(res_mk)`` ``.not_interacting(resistor)...``
-* ``ppolyf_u_h = poly2.and(sab).and(res_mk).and(resistor)...``
+1. ``rule_decks/res_derivations.lvs`` splits every ``poly2``+``sab``+``res_mk``
+   shape into two mutually exclusive buckets on a *third* marker layer, GDS
+   ``(62, 0)`` (``get_polygons(62, 0)``, which the deck calls ``resistor``):
 
-(``resistor`` here is a *third* derived layer, GDS ``(62, 0)``, whose own
-definition is a plain ``get_polygons(62, 0)`` in ``layers_definitions.lvs`` --
-nothing to do with ``primitives.LAYER['metal1']``'s drawing-datatype ``62``
-coincidence, an unrelated GDS layer number reused by the tech file for a
-different purpose.) These two derivations partition every ``poly2``+``sab``+
-``res_mk`` shape into exactly two, mutually exclusive buckets based on whether
-it *also* overlaps that ``(62, 0)`` marker: ``ppolyf_u_h`` (which
-``res_extraction.lvs``'s ``case POLY_RES`` block then further extracts as
-``ppolyf_u_1k``/``_2k``/``_3k`` depending on the deck's own
-``$poly_res`` switch) if it does, plain ``ppolyf_u`` (a single, fixed
-350 ohm/sq class, extracted unconditionally, no switch involved at all) if it
-does not. ``primitives.poly_resistor()`` draws exactly the layers
-``polyf_res_inst()`` -- the PDK's own pcell body for this exact device,
-``$PDK_ROOT/libs.tech/klayout/tech/pymacros/cells/draw_res.py``, confirmed by
-reading it directly -- draws for a ``"polyf_u"`` ``res_type`` (``res_mk``,
-``poly2``, ``sab``, contacts, implant), and none of those is layer
-``(62, 0)``: that marker is drawn only by ``draw_ppolyf_u_high_Rs_res()``, a
-wholly different pcell function this repo's generator does not call and was
-never documented as modelling. So this repo's drawn resistors -- and the PDK's own
-``ppolyf_u_3k`` pcell instance, calling the identical ``polyf_res_inst()``
-body -- always land in the ``ppolyf_u_layer`` bucket and extract as plain
-``ppolyf_u``, regardless of the deck's ``$poly_res`` switch value. (This
-constant's earlier ``"ppolyf_u_1k"`` value assumed the switch alone decided
-the extracted class -- true only for shapes that already carry the ``(62,
-0)`` marker, which this module's own geometry never does; direct
-``klayout.db.LayoutVsSchematic`` cross-reference of an assembled ``vco_block``
-LVS run, not this docstring's own reasoning, is what actually caught the
-error -- see ``layout/evidence/vco-layout/PROOF-378-resistor-class-fix.md``.)
-This remains a real, reproducible **foundry-deck** device-class-naming
-difference from ``design/netlist/vco.spice``'s own ``ppolyf_u_3k`` (not a
-``klt``/klayout-tools gap -- see ``layout/README.md``'s "Why this isn't
-`klt drc`" section), so this reference netlist states the three resistors at
-the device class the deck actually produces, and ``PROOF-lvs.md`` records the
-naming difference from ``design/netlist/vco.spice`` explicitly rather than
-silently renaming the schematic's own class or dropping the devices.
+   * ``ppolyf_u_layer = pplus.and(poly2).and(sab).and(res_mk).not_interacting(resistor)...``
+     -- extracted unconditionally as plain ``ppolyf_u``, a fixed 350 ohm/sq
+     class, no switch involved.
+   * ``ppolyf_u_h = poly2.and(sab).and(res_mk).and(resistor)...`` -- the
+     high-sheet family, further named ``ppolyf_u_1k``/``_2k``/``_3k`` by
+     ``res_extraction.lvs``'s own ``case POLY_RES`` block.
+
+   Issue #378 corrected this constant from ``"ppolyf_u_1k"`` to ``"ppolyf_u"``
+   because the generator genuinely drew no ``(62, 0)`` marker at the time. It
+   drew none because it modelled ``polyf_res_inst()``, the PDK pcell body for
+   the *unmarked* class -- so ``"ppolyf_u"`` named the extracted device
+   correctly while the drawn device was, at 350 ohm/sq, an 8.6x-wrong
+   resistance against the schematic (issue #381). The generator now draws the
+   marker and the rest of ``draw_ppolyf_u_high_Rs_res()``'s recipe, so the
+   drawn device is the schematic's device. (That #378 fix also recorded, in
+   passing, that the PDK's ``ppolyf_u_3k`` pcell "calls the identical
+   ``polyf_res_inst()`` body" -- it does not: the high-Rs family has its own
+   pcell class, ``ppolyf_u_high_Rs_resistor``, calling
+   ``draw_ppolyf_u_high_Rs_res()``, which draws ``layer["resistor"]``. That
+   sentence is withdrawn here; the constant change it accompanied was correct
+   for the geometry as it then stood.)
+
+2. Which of ``_1k``/``_2k``/``_3k`` the deck names is the ``$poly_res``
+   switch, i.e. a **fab process option**, not a geometry difference -- all
+   three extract from the identical ``ppolyf_u_h`` layer. The PDK's own
+   ``run_lvs.py`` hardcodes that switch to ``1k`` for all four ``--variant``
+   letters with no CLI override, which is why ``layout/harness/lvs.py`` passes
+   this repo's ratified option (``3k``) through its own
+   ``_pdk_lvs_poly_res.py`` shim. An LVS run made with the PDK runner's own
+   default instead will report ``ppolyf_u_1k`` for this same unchanged
+   geometry; that is a run-configuration difference, not a layout defect.
+
+See ``spec/decision-records/DR-009-vco-bias-resistor-device-class.md`` for why
+the layout was corrected to the schematic rather than the schematic (or the
+drawn W/L) to the layout, and
+``layout/evidence/vco-layout/PROOF-381-high-rs-resistor.md`` for the DRC/LVS
+runs and the bias-current impact.
 """
 
 DECAP_LVS_MODEL = "cap_nmos_03v3"
@@ -385,8 +389,9 @@ def _resistor_line(r: dev.PolyResistor) -> str:
     ``r_width=``/``r_length=`` spelling, which that reader does not
     recognise (it looks up ``params['W']``/``params['L']`` specifically, so
     a reference line using the schematic's own parameter names would extract
-    as a 0x0 resistor). Model is :data:`RESISTOR_LVS_MODEL`, not the
-    schematic's own ``ppolyf_u_3k`` -- see that constant's docstring.
+    as a 0x0 resistor). Model is :data:`RESISTOR_LVS_MODEL`, which since
+    issue #381 *is* the schematic's own ``ppolyf_u_3k`` -- see that
+    constant's docstring.
     """
     return f"R_{r.name} {r.top_net} {r.bottom_net} {r.bottom_net} {RESISTOR_LVS_MODEL} W={r.w_um}u L={r.l_um}u"
 
