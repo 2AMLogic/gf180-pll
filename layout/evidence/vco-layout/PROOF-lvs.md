@@ -1,5 +1,21 @@
 # `vco_block` LVS — reference netlist landed, first real run finds a genuine short (issue #367)
 
+> **Correction (issue #378):** the "Two disclosed device-class deviations"
+> section below reasons from this run's resistors' own *resistance values*
+> (1960/11550/11550 ohms) to conclude they "match `ppolyf_u_1k`" — that
+> arithmetic was wrong: 1960 ohms / (L/W = 5.6) = 350 ohm/sq, not the 1000
+> ohm/sq the `"1k"` name implies, and 350 ohm/sq is exactly
+> `res_extraction.lvs`'s own **unconditional, switch-independent**
+> `ppolyf_u` class (`resistor_with_bulk('ppolyf_u', 350, BResistor)`), not
+> the switch-gated `ppolyf_u_1k`/`_2k`/`_3k` family at all. This record
+> already (correctly) observed the extracted class's own *name* is literally
+> `ppolyf_u` — it just mis-explained *why*. `PROOF-378-resistor-class-fix.md`
+> has the corrected root cause (a second, `(62, 0)`-marker-gated layer split
+> `res_derivations.lvs` uses that this repo's own resistor generator never
+> satisfies) and the fix to `block.RESISTOR_LVS_MODEL`. `sim/`-style
+> append-only discipline applies here too — this pointer is added, the body
+> below is otherwise unedited.
+
 This is **not** an LVS-clean record. It documents the first-ever attempt at
 block-level LVS for the VCO (`vco_block.gds` vs a new, independently-derived
 `vco_block.spice` reference), what that attempt got right (the reference

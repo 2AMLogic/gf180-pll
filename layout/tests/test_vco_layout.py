@@ -1157,6 +1157,43 @@ class PolyResistorPrimitiveTests(unittest.TestCase):
         self.assertGreaterEqual(usable, prim.CONTACT_SIZE_UM)
 
 
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class PolyResistorMarkerLayerTests(unittest.TestCase):
+    """Direct geometric confirmation of ``block.RESISTOR_LVS_MODEL``'s own
+    docstring claim (issue #378): ``primitives.poly_resistor()`` never draws
+    GDS layer ``(62, 0)``.
+
+    gf180mcu's own ``rule_decks/res_derivations.lvs`` uses that layer (an
+    unrelated derived layer the deck calls ``resistor``, defined as a plain
+    ``get_polygons(62, 0)`` in ``layers_definitions.lvs`` -- nothing to do
+    with any layer this repo's own ``primitives.LAYER`` table names, a bare
+    GDS-layer-number coincidence) to split every ``poly2``+``sab``+``res_mk``
+    shape into exactly two buckets: ``ppolyf_u_h`` (overlaps ``(62, 0)`` --
+    then further split into ``ppolyf_u_1k``/``_2k``/``_3k`` by the deck's own
+    ``$poly_res`` switch) or plain ``ppolyf_u`` (does not overlap it,
+    unconditional, no switch). This test draws one resistor with
+    ``primitives.poly_resistor()`` directly and confirms no shape lands on
+    ``(62, 0)`` anywhere in the produced layout -- the geometric fact that
+    makes ``block.RESISTOR_LVS_MODEL = "ppolyf_u"`` (not ``"ppolyf_u_1k"``)
+    correct, independent of any PV/LVS-deck run.
+    """
+
+    def test_no_shapes_on_the_switch_controlled_marker_layer(self):
+        import klayout.db as db
+
+        canvas = prim.Canvas("poly_resistor_marker_probe")
+        prim.poly_resistor(canvas, dev.BIAS_R_RCG, 0.0, 0.0)
+        marker_layer_index = canvas.layout.layer(62, 0)
+        region = db.Region(canvas.top.begin_shapes_rec(marker_layer_index))
+        self.assertTrue(
+            region.is_empty(),
+            "poly_resistor() drew a shape on GDS layer (62, 0) -- the "
+            "res_derivations.lvs 'resistor' marker that would move this "
+            "device into the switch-controlled ppolyf_u_h/_1k/_2k/_3k "
+            "bucket instead of the plain, unconditional ppolyf_u one",
+        )
+
+
 class VtoiCoreDeviceTests(unittest.TestCase):
     """devices.VTOI_* matches design/vco_bias.sch's V-to-I core transistors."""
 
@@ -1961,6 +1998,29 @@ class ReferenceNetlistDeviceTests(unittest.TestCase):
         for ln in r_lines:
             self.assertIn(vco_block.RESISTOR_LVS_MODEL, ln)
             self.assertNotIn("ppolyf_u_3k", ln)
+
+    def test_resistor_model_is_the_marker_free_class_not_the_1k_bucket(self):
+        """Regression guard for issue #378.
+
+        ``RESISTOR_LVS_MODEL`` briefly named ``"ppolyf_u_1k"`` (the class the
+        deck's own ``$poly_res`` switch selects for shapes carrying GDS layer
+        ``(62, 0)``, gf180mcu's own ``res_derivations.lvs`` -- see
+        ``PolyResistorMarkerLayerTests`` below for the direct geometric
+        check) -- but ``primitives.poly_resistor()`` never draws that marker
+        layer, so the deck's own extraction always lands every drawn
+        resistor in the plain, switch-independent ``ppolyf_u`` bucket
+        instead. A reference netlist naming ``"ppolyf_u_1k"`` device-class
+        mismatched the actual extracted device (confirmed directly via
+        ``klayout.db.LayoutVsSchematic`` cross-reference of the assembled
+        ``vco_block`` LVS run -- see
+        ``layout/evidence/vco-layout/PROOF-378-resistor-class-fix.md``),
+        which is what escalated three internal nets (``NC``/``NOFF``/
+        ``NVI``) plus ``GND_VCO`` into a spurious net-level ``Mismatch``
+        despite every device individually pairing correctly. Pinned to the
+        exact string (not just "not ppolyf_u_3k") so a future revert of
+        either constant is caught here rather than only in a full PV run.
+        """
+        self.assertEqual(vco_block.RESISTOR_LVS_MODEL, "ppolyf_u")
 
     def test_decap_devices_are_not_emitted(self):
         self.assertNotIn(vco_block.DECAP_LVS_MODEL, self.text)
