@@ -130,7 +130,11 @@ layout/
                              PROOF-368-rootcause.md = that defect root-caused to two per-generator
                              Metal1 design gaps (issue #368);
                              PROOF-372-buffer-fix.md = buffer.py's half of that fix, with the
-                             block's first LVS-matching sub-block (lvs-buffer/, issue #372)
+                             block's first LVS-matching sub-block (lvs-buffer/, issue #372);
+                             PROOF-371-ring-fix.md = ring.py's own half (lvs-ring/, issue #371) --
+                             both sub-blocks now match their own standalone LVS; the assembled
+                             vco_block still mismatches on a separate, pre-existing short
+                             (VBP0/VDD_VCO) this record found and scoped out to issue #376
     lock-detector-layout/    lock_detector block GDS + DRC-clean report (issue #296)
     pfdcp-inv-proof/         PFD/CP devgen methodology proof: GDS + DRC/LVS reports (issue #299)
     pfd-layout/              PFD block GDS + DRC-clean report, mirror-symmetric UP/DN chains (issue #300)

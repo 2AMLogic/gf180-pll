@@ -1,0 +1,33 @@
+* Standalone LVS reference for vco_ring (issue #371).
+*
+* The 5-stage current-starved ring (vco.sch's XS1..XS5), chained
+* Y_i -> A_(i+1) with the Y5 -> A1 wraparound, expressed against
+* this block's own boundary nets. Every W/L traces to devices.py's
+* STAGE_FETS (itself read off design/netlist/vco.spice).
+*
+* Run LVS with --lvs-sub=GND_VCO (this block's own substrate net --
+* NOT layout/run_pv.py's own VSS default; see layout/README.md's
+* "substrate-net gotcha").
+
+.subckt vco_ring VBP VBN VDD_VCO GND_VCO Y1 Y2 Y3 Y4 Y5
+M_S1_MPH VDD_VCO VBP S1_NH VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_S1_MP S1_NH Y5 Y1 VDD_VCO pfet_03v3 W=5.0u L=0.28u
+M_S1_MN Y1 Y5 S1_NT GND_VCO nfet_03v3 W=2.0u L=0.28u
+M_S1_MNT S1_NT VBN GND_VCO GND_VCO nfet_03v3 W=4.0u L=0.5u
+M_S2_MPH VDD_VCO VBP S2_NH VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_S2_MP S2_NH Y1 Y2 VDD_VCO pfet_03v3 W=5.0u L=0.28u
+M_S2_MN Y2 Y1 S2_NT GND_VCO nfet_03v3 W=2.0u L=0.28u
+M_S2_MNT S2_NT VBN GND_VCO GND_VCO nfet_03v3 W=4.0u L=0.5u
+M_S3_MPH VDD_VCO VBP S3_NH VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_S3_MP S3_NH Y2 Y3 VDD_VCO pfet_03v3 W=5.0u L=0.28u
+M_S3_MN Y3 Y2 S3_NT GND_VCO nfet_03v3 W=2.0u L=0.28u
+M_S3_MNT S3_NT VBN GND_VCO GND_VCO nfet_03v3 W=4.0u L=0.5u
+M_S4_MPH VDD_VCO VBP S4_NH VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_S4_MP S4_NH Y3 Y4 VDD_VCO pfet_03v3 W=5.0u L=0.28u
+M_S4_MN Y4 Y3 S4_NT GND_VCO nfet_03v3 W=2.0u L=0.28u
+M_S4_MNT S4_NT VBN GND_VCO GND_VCO nfet_03v3 W=4.0u L=0.5u
+M_S5_MPH VDD_VCO VBP S5_NH VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_S5_MP S5_NH Y4 Y5 VDD_VCO pfet_03v3 W=5.0u L=0.28u
+M_S5_MN Y5 Y4 S5_NT GND_VCO nfet_03v3 W=2.0u L=0.28u
+M_S5_MNT S5_NT VBN GND_VCO GND_VCO nfet_03v3 W=4.0u L=0.5u
+.ends

@@ -1,25 +1,40 @@
-# `vco_block` LVS short (issue #368) — root cause found, fix not yet implemented
+# `vco_block` LVS short (issue #368) — root cause found, both sub-block fixes landed
 
-> **Status update (2026-09-11): half of the fix has landed.**
-> [`PROOF-372-buffer-fix.md`](PROOF-372-buffer-fix.md) implements everything
-> below for **`buffer.py`** (issue #372) — `vco_out_buffer` is now DRC-clean
-> *and* matches a standalone LVS reference netlist of its own, and the
-> reproduction script in this file reports zero multi-net Metal1 polygons
-> against it. **`ring.py` is still unfixed** (issue #371), so `vco_block` LVS
-> still mismatches and everything this record says about `ring.py` still
-> stands verbatim. Two details of this record were refined by doing the work:
+> **Status update (2026-09-11): both per-generator fixes have landed.**
+> [`PROOF-372-buffer-fix.md`](PROOF-372-buffer-fix.md) (`buffer.py`, issue
+> #372) and [`PROOF-371-ring-fix.md`](PROOF-371-ring-fix.md) (`ring.py`,
+> issue #371) both implement everything below for their own generator —
+> `vco_out_buffer` and `vco_ring` are each DRC-clean *and* match a standalone
+> LVS reference netlist of their own, and the reproduction script in this
+> file reports zero multi-net Metal1 polygons against either. **The
+> assembled `vco_block` LVS still mismatches** — but no longer on anything
+> either fix owns: `PROOF-371-ring-fix.md` traces the one remaining shorted
+> net (`VBP0`/`VDD_VCO`) to a separate, pre-existing defect entirely inside
+> `vtoi_core.py`/`mirror.py`/`block.py`'s own routing, unrelated to either
+> generator this record root-caused, now tracked as
+> [issue #376](https://github.com/2AMLogic/gf180-pll/issues/376). Several
+> details of this record were refined by doing the work:
 >
-> * `buffer.py` had a **third** short of the same family that items 1 and 2
->   below masked — the inner n-well tap ring's *bottom* band lies across the
->   NMOS/PMOS routing channel, so each stage's plain-Metal1 drain and gate
->   bridges shorted its own nodes to `VDD_VCO` too. `ring.py` should be
->   checked for the same thing rather than assumed to have only the three
->   listed here.
+> * Both `buffer.py` and `ring.py` had a **third** short of the same family
+>   that items 1 and 2 below masked — the inner n-well tap ring's *bottom*
+>   band lies across the NMOS/PMOS routing channel, so each stage's
+>   plain-Metal1 drain and gate bridges shorted its own nodes to `VDD_VCO`
+>   too.
 > * "Recommended fix shape" item 1 says to *clip* the wide rail's y-extent.
->   For `buffer.py` that is not sufficient on its own: the clearance a clip
->   would leave (0.11 µm) is narrower than M1.1's own minimum *width*, so the
->   rail was moved wholesale into the clear channel outside the row's pads
->   instead. Same conclusion, one step further.
+>   For both generators that is not sufficient on its own: the clearance a
+>   clip would leave is narrower than M1.1's own minimum *width* (0.11 µm
+>   for `buffer.py`), so `VDD_VCO`/`GND_VCO`'s rails were moved wholesale
+>   into the clear channel outside the row's pads instead. `ring.py`'s own
+>   `VBP`/`VBN` bias rails go a step further still: there is no clear
+>   channel *at all* for them (each bias-gate pad sits *between* two
+>   different terminal pads of its own device, both directions squeezed),
+>   so they moved off Metal1 entirely onto a dedicated Metal2 trunk per net
+>   — see `PROOF-371-ring-fix.md`'s own item 4.
+> * `ring.py`'s own inner n-well tap ring had the identical top/bottom-band
+>   disconnection `buffer.py`'s fix found and fixed with a Metal1 strap down
+>   one edge of the well — the same fix, found by running the reproduction
+>   script against `ring.py`'s own items 1-4 fix rather than assumed from
+>   `buffer.py`'s precedent.
 
 This is **not** a fix record. It documents a complete, mechanistically-verified
 root cause for the connectivity short `PROOF-lvs.md` (issue #367) discovered,

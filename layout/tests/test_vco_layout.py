@@ -187,6 +187,188 @@ class FloorplanIntegrationTests(unittest.TestCase):
             self.assertAlmostEqual(decap.h, 50.0)
 
 
+class RingReferenceNetlistTests(unittest.TestCase):
+    """ring.reference_netlist() -- ring.py's own standalone LVS testbench
+    (issue #371), the same role buffer.reference_netlist() plays for
+    buffer.py (issue #372)."""
+
+    def test_subckt_ports_and_device_count(self):
+        text = ring.reference_netlist()
+        y_ports = " ".join(f"Y{i + 1}" for i in range(dev.STAGE_COUNT))
+        self.assertIn(f".subckt {ring.TOP_CELL} VBP VBN VDD_VCO GND_VCO {y_ports}", text)
+        self.assertIn(".ends", text)
+        # 4 fets/stage * STAGE_COUNT stages, one M_ line each.
+        self.assertEqual(text.count("\nM_"), 4 * dev.STAGE_COUNT)
+
+    def test_every_stage_uses_the_frozen_stage_fets_sizes(self):
+        text = ring.reference_netlist()
+        for i in range(dev.STAGE_COUNT):
+            for f in dev.STAGE_FETS:
+                self.assertIn(f"W={f.drawn_w_um}u L={f.l_um}u", text)
+                self.assertIn(f"M_S{i + 1}_{f.name} ", text)
+
+    def test_wraparound_chain_topology(self):
+        # Y5 -> A1 (stage 1's own gate net is Y5, not "Y0"); every other
+        # stage's A is the previous stage's own Y.
+        text = ring.reference_netlist()
+        lines = [ln for ln in text.splitlines() if ln.startswith("M_S1_MN ")]
+        self.assertEqual(len(lines), 1)
+        self.assertIn(" Y5 ", lines[0])  # MN's own gate net (A) for stage 1
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class RingMetal1NetSeparationTests(unittest.TestCase):
+    """No Metal1 polygon in ring.py carries two nets (issues #368/#371).
+
+    The reproduction script from
+    ``layout/evidence/vco-layout/PROOF-368-rootcause.md`` run as a unit
+    test, same construction as ``OutputBufferMetal1NetSeparationTests``.
+    On ``main`` before this fix, ring.py's own standalone GDS had two
+    merged polygons: one carrying ``GND_VCO``/``VBN``/every chain net at
+    once, another carrying ``VBP``/``VDD_VCO``.
+
+    ``VBP``/``VBN`` are deliberately absent from this check -- issue #371
+    moved them off Metal1 entirely (onto a shared Metal2 trunk, labelled
+    with ``metal2_label`` -- see ring.py's own "SUPPLY/BIAS RAIL GEOMETRY"
+    module docstring section on why a full-row Metal1 rail cannot work for
+    either), so they carry no Metal1 label to check here at all.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import klayout.db as db
+
+        cls.db = db
+        cls.result = ring.build(draw_decap=False)
+        canvas = cls.result.canvas
+        cls.layout = canvas.layout
+        m1 = db.Region(canvas.top.shapes(canvas.layout.layer(*prim.LAYER["metal1"]))).merged()
+        cls.polys = list(m1.each_merged())
+        cls.labels = [
+            (s.text.string, s.text.x, s.text.y)
+            for s in canvas.top.shapes(canvas.layout.layer(*prim.LAYER["metal1_label"])).each()
+            if s.is_text()
+        ]
+        cls.nets_on_poly = {}
+        cls.unplaced = []
+        for name, x, y in cls.labels:
+            pt = db.Point(x, y)
+            hit = None
+            for i, p in enumerate(cls.polys):
+                if p.bbox().contains(pt) and not (
+                    db.Region(p) & db.Region(db.Box(pt.x - 1, pt.y - 1, pt.x + 1, pt.y + 1))
+                ).is_empty():
+                    hit = i
+                    break
+            if hit is None:
+                cls.unplaced.append(name)
+            else:
+                cls.nets_on_poly.setdefault(hit, set()).add(name)
+
+    def test_every_pin_label_actually_lands_on_metal1(self):
+        self.assertEqual(self.unplaced, [])
+        self.assertTrue(self.labels)
+
+    def test_no_merged_metal1_polygon_carries_two_different_nets(self):
+        # "Different nets" -- S<i>.Y / Y<i> (and, for stage 5, Y5_CLK_IN)
+        # are deliberate aliases of the *same* physical net (issue #367),
+        # not a short; strip the "S<i>." instance prefix and the
+        # "_CLK_IN" suffix before comparing.
+        def canon(name: str) -> str:
+            # "S<i>.Y" -> "Y<i>" (its own per-instance alias of the chain
+            # net -- issue #367); "Y5_CLK_IN" -> "Y5" (the pre-buffer output
+            # pin, same physical pad as stage 5's own Y).
+            if name.startswith("S") and name.endswith(".Y"):
+                return "Y" + name[1:-2]
+            return "Y5" if name == "Y5_CLK_IN" else name
+
+        shorted = {
+            str(self.polys[i].bbox()): sorted(names)
+            for i, names in self.nets_on_poly.items()
+            if len({canon(n) for n in names}) > 1
+        }
+        self.assertEqual(shorted, {})
+
+    def test_vdd_vco_and_gnd_vco_are_each_exactly_one_merged_polygon(self):
+        per_net = {}
+        for i, names in self.nets_on_poly.items():
+            for name in names:
+                per_net.setdefault(name, set()).add(i)
+        for net in ("VDD_VCO", "GND_VCO"):
+            self.assertEqual(len(per_net[net]), 1, f"{net}: {per_net[net]}")
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class RingBiasTrunkTests(unittest.TestCase):
+    """VBP/VBN's own Metal2 trunks (issue #371, item 4): every stage's
+    natural bias-gate pad reaches the trunk, the trunk carries no other
+    net's Metal2 (no ``via1_stack()`` sneaking a foreign net onto it), and
+    a fresh reproduction against a *combined* ``vco_block`` (issue #368's
+    own connectivity_report()) no longer reports ``VBP``/``VBN`` shorted to
+    anything -- covered by ``AssembledVcoBlockConnectivityTests`` already;
+    this class checks ring.py's own standalone Metal2 in isolation.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import klayout.db as db
+
+        cls.db = db
+        cls.result = ring.build(draw_decap=False)
+        canvas = cls.result.canvas
+        m2 = db.Region(canvas.top.shapes(canvas.layout.layer(*prim.LAYER["metal2"]))).merged()
+        cls.polys = list(m2.each_merged())
+        cls.labels = [
+            (s.text.string, s.text.x, s.text.y)
+            for s in canvas.top.shapes(canvas.layout.layer(*prim.LAYER["metal2_label"])).each()
+            if s.is_text()
+        ]
+
+    def _poly_index_for(self, name: str) -> int:
+        for label_name, x, y in self.labels:
+            if label_name != name:
+                continue
+            pt = self.db.Point(x, y)
+            for i, p in enumerate(self.polys):
+                if p.bbox().contains(pt) and not (
+                    self.db.Region(p) & self.db.Region(self.db.Box(pt.x - 1, pt.y - 1, pt.x + 1, pt.y + 1))
+                ).is_empty():
+                    return i
+        raise AssertionError(f"no Metal2 polygon found for {name!r} pin label")
+
+    def test_vbp_and_vbn_each_have_a_metal2_pin(self):
+        names = {n for n, _, _ in self.labels}
+        self.assertEqual(names, {"VBP", "VBN"})
+
+    def test_vbp_and_vbn_are_on_different_metal2_polygons(self):
+        self.assertNotEqual(self._poly_index_for("VBP"), self._poly_index_for("VBN"))
+
+    def test_vbn_trunk_stays_below_wrap_y(self):
+        # Both wraparound risers stop *at* wrap_y (issue #371, item 3) --
+        # VBN's own trunk (item 4) has to stay below that unconditionally.
+        # The merged VBN polygon also includes each stage's own vertical
+        # riser up to its natural pad (well above wrap_y), so this checks
+        # the trunk's own *bottom* edge -- the polygon's lowest point,
+        # necessarily on the horizontal trunk itself -- rather than the
+        # whole shape's bbox top.
+        i = self._poly_index_for("VBN")
+        self.assertAlmostEqual(self.polys[i].bbox().bottom / 1000.0, ring.VBN_TRUNK_Y_UM - prim.METAL2_WIRE_WIDTH_UM / 2.0)
+        self.assertLess(ring.VBN_TRUNK_Y_UM, -ring.WRAP_ROUTE_Y_OFFSET_UM)
+
+    def test_vbp_trunk_stays_above_the_tap_ring(self):
+        # Mirrors the VBN check above: VBP's merged polygon also reaches
+        # down to every stage's own natural pad, so this checks the
+        # trunk's own *top* edge (its highest point) against the tap
+        # ring's own top band.
+        pmos_x0, pmos_x1 = ring.pmos_x_range()
+        pmos_y0, pmos_y1 = ring.pmos_y_range()
+        tap_ring_top = pmos_y1 + ring.TAP_GAP_UM + ring.TAP_RING_WIDTH_UM
+        vbp_trunk_y = tap_ring_top + ring.VBP_TRUNK_CLEARANCE_UM
+        i = self._poly_index_for("VBP")
+        self.assertAlmostEqual(self.polys[i].bbox().top / 1000.0, vbp_trunk_y + prim.METAL2_WIRE_WIDTH_UM / 2.0)
+        self.assertGreater(vbp_trunk_y, tap_ring_top)
+
+
 class OutputBufferTests(unittest.TestCase):
     """devices.BUFFER_STAGES / buffer.py -- vco.sch's XMBP1..XMBN3 taper."""
 
