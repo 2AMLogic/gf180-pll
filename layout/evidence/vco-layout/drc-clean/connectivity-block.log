@@ -1,9 +1,10 @@
-footprint: 172.520 x 183.480 um  (31654.0 um^2)
+wrote /Users/rwalters/GitHub/gf180-pll/.loom/worktrees/issue-371/layout/evidence/vco-layout/work/vco_block.gds
+footprint: 172.520 x 184.480 um  (31826.5 um^2)
   bias_resistors     123.560    -3.450   136.560    36.870
   vtoi_core           -4.120    -3.720   117.060    47.000
   mirror              -5.420    55.000   110.440   121.220
-  ring                -4.700   127.220    70.700   145.880
-  buffer              52.300   151.880    83.950   165.160
+  ring                -4.700   127.220    70.700   146.880
+  buffer              52.300   152.880    83.950   166.160
 
   ok   NC               RCG signal pad <-> V-to-I core's NC track: 2 probe(s) -> one net
   ok   NOFF             ROFF signal pad <-> V-to-I core's NOFF track: 2 probe(s) -> one net

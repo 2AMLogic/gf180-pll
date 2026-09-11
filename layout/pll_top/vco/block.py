@@ -783,17 +783,27 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
         ],
     )
 
-    # --- 4. VBP / VBN: the mirror's outputs -> the ring's own bias rails.
-    # Both land on the ring's full-width Metal1 rails rather than on its
-    # left-edge pin pads, which is what lets the two routes use *different*
-    # x columns inside the ring and so never cross: VBP takes the rail's left
-    # end, VBN a point two thirds along it. ---
+    # --- 4. VBP / VBN: the mirror's outputs -> the ring's own bias nets.
+    # VBN still lands near the ring's own bottom edge (issue #371 moved its
+    # own internal Metal2 trunk there, clear of the block's own guard ring
+    # and of the ring's own device geometry -- see ring.py's module
+    # docstring), a short straight run up from the mirror-ring gap, same
+    # shape this always had. VBP's own trunk moved to the *opposite* end
+    # (above the ring's own inner tap ring, issue #371 again -- nothing
+    # else on Metal2 in ring.py ever reaches that high), so a straight run
+    # up from the gap at the same x would run the entire height of the
+    # ring block and cross VBN's own trunk near the bottom on the way --
+    # this bypasses that by taking the clear routing channel *outside* the
+    # ring's own left edge instead, the same "channel outside the block's
+    # own width" escape this function's own VBP0 riser (step 3, above)
+    # already uses for an analogous crossing. ---
     ring_ports = ring_res.stage_ports
     rail_x0 = min(q.a_gate_pad_bottom[0] for q in ring_ports) + p.dx_ring
     vbp_rail_y = _center(ring_pins["VBP"][0])[1]
     vbn_rail_y = _center(ring_pins["VBN"][0])[1]
     vbp_land_x = dev.snap_um(rail_x0 + 0.5)
     vbn_land_x = dev.snap_um(p.dx_ring + (dev.STAGE_COUNT - 1) * ring.STAGE_PITCH_UM + 4.0)
+    vbp_bypass_x = dev.snap_um(boxes["ring"][0] - 1.0)
 
     channel_y0 = boxes["mirror"][3]
     lane_vbp_y = dev.snap_um(channel_y0 + ROW_GAP_MIRROR_TO_RING_UM * 0.32)
@@ -806,7 +816,8 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
             (vbp_out_x, vbp_out_y),
             (p.col_vbp_x, vbp_out_y),
             (p.col_vbp_x, lane_vbp_y),
-            (vbp_land_x, lane_vbp_y),
+            (vbp_bypass_x, lane_vbp_y),
+            (vbp_bypass_x, vbp_rail_y),
             (vbp_land_x, vbp_rail_y),
         ],
     )
