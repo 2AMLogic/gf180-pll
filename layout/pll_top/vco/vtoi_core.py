@@ -106,6 +106,7 @@ from pathlib import Path
 
 from . import devices as dev
 from . import primitives as prim
+from ._escape_builder import EscapeBuilderMixin
 
 TOP_CELL = "vco_vtoi_core"
 
@@ -214,6 +215,13 @@ class Plan:
     tap_band_bottom: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
     outer: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
     _columns: list = field(default_factory=list)
+
+    # -- mirror.py's BankPlan-shaped stand-in (see _escape_builder.py's
+    # module docstring): this block has exactly one implicit bank, so
+    # ``index``/``nmos_bottom`` are fixed rather than per-bank. ``pmos_top``
+    # and ``track_y()`` already existed above for this module's own use. --
+    index: int = 0
+    nmos_bottom: float = 0.0
 
     def track_y(self, net: str, row: str) -> float:
         return self.track_lo[net] if row == "nfet" else self.track_hi[net]
@@ -386,43 +394,22 @@ class VtoiCoreResult:
     net_x: dict = field(default_factory=dict)
 
 
-class _Builder:
+class _Builder(EscapeBuilderMixin):
     def __init__(self, canvas: prim.Canvas | None = None) -> None:
         self.plan = plan()
         self.canvas = prim.Canvas(TOP_CELL) if canvas is None else canvas
-        self.net_x: dict[tuple[str, str], list[float]] = {}
+        self.net_x: dict[tuple[str, int, str], list[float]] = {}
+        self.escape_wire_w_um = ESCAPE_WIRE_W_UM
 
-    # -- escapes (identical construction to mirror.py's own -- see that
-    # module's docstring for the two-track-group rationale) --------------
-    def escape(self, net: str, x: float, y_pad_edge: float, row: str) -> None:
-        y_track = self.plan.track_y(net, row)
-        y0, y1 = min(y_pad_edge, y_track), max(y_pad_edge, y_track)
-        half = ESCAPE_WIRE_W_UM / 2.0
-        self.plan.reserve(net, x - half, y0, x + half, y1)
-        prim.v_wire(self.canvas, x, y0, y1, width=ESCAPE_WIRE_W_UM)
-        prim.via1_stack(self.canvas, x, y_track)
-        self.net_x.setdefault((net, row), []).append(x)
-
-    def jog_escape(self, net: str, pad: tuple, x_jog: float, row: str) -> None:
-        y_c = (pad[1] + pad[3]) / 2.0
-        width = pad[3] - pad[1]
-        half = ESCAPE_WIRE_W_UM / 2.0
-        prim.h_wire(self.canvas, pad[0], x_jog + half, y_c, width=width)
-        self.plan.reserve(net, min(pad[2], x_jog - half), pad[1], x_jog + half, pad[3])
-        self.escape(net, x_jog, y_c, row)
-
-    def rail_stub(self, net: str, x: float, y_from: float, y_to: float) -> None:
-        y0, y1 = min(y_from, y_to), max(y_from, y_to)
-        half = ESCAPE_WIRE_W_UM / 2.0
-        self.plan.reserve(net, x - half, y0, x + half, y1)
-        prim.v_wire(self.canvas, x, y0, y1, width=ESCAPE_WIRE_W_UM)
+    # -- escape()/jog_escape()/rail_stub()/_y_bottom() are inherited from
+    # EscapeBuilderMixin -- identical construction to mirror.py's own (see
+    # that module's docstring for the two-track-group rationale), factored
+    # out in _escape_builder.py. This block passes ``self.plan`` itself as
+    # the ``bank`` argument those methods take: it has exactly one implicit
+    # bank, and ``Plan`` above carries the same index/pmos_top/nmos_bottom/
+    # track_y() a one-bank stand-in would need. -----------------------------
 
     # -- devices -------------------------------------------------------------
-    def _y_bottom(self, row: str, l_um: float) -> float:
-        if row == "pfet":
-            return self.plan.pmos_top - device_height_um(l_um)
-        return 0.0
-
     @staticmethod
     def _bus(pads: list[tuple]) -> tuple:
         x0 = min(p[0] for p in pads)
@@ -431,7 +418,7 @@ class _Builder:
 
     def draw_fet(self, item: Item, row: str) -> None:
         fet = item.fet
-        y_bottom = self._y_bottom(row, fet.l_um)
+        y_bottom = self._y_bottom(row, device_height_um(fet.l_um), self.plan)
         n = fet.fingers
         fw = fet.finger_w_um
 
@@ -472,23 +459,23 @@ class _Builder:
             if fet.top_net == VDD_NET:
                 self.rail_stub(VDD_NET, x_pad_c, top_pad[3], self.plan.tap_band[1])
             else:
-                self.jog_escape(fet.top_net, top_pad, x_jog, row)
-            self.escape(fet.bottom_net, x_pad_c, bottom_pad[1], row)
+                self.jog_escape(fet.top_net, top_pad, x_jog, row, self.plan)
+            self.escape(fet.bottom_net, x_pad_c, bottom_pad[1], row, self.plan)
             if fet.gate_net == GND_NET:
                 # MSU1: tie its gate directly to the guard ring's right band
                 # (module docstring) -- drawn once, after every item is
                 # placed, in build() (needs self.plan.outer[2]).
                 self._msu1_gate_pad = gate_pad
             else:
-                self.escape(fet.gate_net, gate_tab_x_center, gate_pad[1], row)
+                self.escape(fet.gate_net, gate_tab_x_center, gate_pad[1], row, self.plan)
         else:
             if fet.bottom_net == GND_NET:
                 ring_top = self.plan.outer[1] + RING_WIDTH_UM + prim.METAL1_PAD_MARGIN_UM
                 self.rail_stub(GND_NET, x_pad_c, bottom_pad[1], ring_top)
             else:
-                self.jog_escape(fet.bottom_net, bottom_pad, x_jog, row)
-            self.escape(fet.top_net, x_pad_c, top_pad[3], row)
-            self.escape(fet.gate_net, gate_tab_x_center, gate_pad[3], row)
+                self.jog_escape(fet.bottom_net, bottom_pad, x_jog, row, self.plan)
+            self.escape(fet.top_net, x_pad_c, top_pad[3], row, self.plan)
+            self.escape(fet.gate_net, gate_tab_x_center, gate_pad[3], row, self.plan)
 
     # -- assembly ------------------------------------------------------------
     def build(self) -> VtoiCoreResult:
@@ -503,7 +490,7 @@ class _Builder:
         track_x1: dict[str, float] = {}
         for net in NET_ORDER:
             for row in ("nfet", "pfet"):
-                xs = self.net_x.get((net, row))
+                xs = self.net_x.get((net, p.index, row))
                 if not xs:
                     continue
                 x_link = p.link_x.get(net)
@@ -532,7 +519,7 @@ class _Builder:
         # --- block boundary pins ---
         def _leftmost(net: str) -> tuple[float, float]:
             for row in ("nfet", "pfet"):
-                xs = self.net_x.get((net, row))
+                xs = self.net_x.get((net, p.index, row))
                 if xs:
                     return (min(xs), p.track_y(net, row))
             raise KeyError(net)

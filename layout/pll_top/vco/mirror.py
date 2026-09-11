@@ -200,6 +200,7 @@ from pathlib import Path
 
 from . import devices as dev
 from . import primitives as prim
+from ._escape_builder import EscapeBuilderMixin
 
 TOP_CELL = "vco_bandsel_mirror"
 
@@ -930,62 +931,19 @@ class MirrorResult:
     net_x: dict = field(default_factory=dict)
 
 
-class _Builder:
+class _Builder(EscapeBuilderMixin):
     def __init__(self, canvas: prim.Canvas | None = None) -> None:
         self.plan = plan()
         self.canvas = prim.Canvas(TOP_CELL) if canvas is None else canvas
         self.net_x: dict[tuple[str, int, str], list[float]] = {}
+        self.escape_wire_w_um = ESCAPE_WIRE_W_UM
 
-    # -- escapes -------------------------------------------------------------
-    def escape(self, net: str, x: float, y_pad_edge: float, row: str, bank: BankPlan) -> None:
-        """Metal1 column from a device pad edge to ``net``'s Metal2 track.
-
-        ``bank`` selects *which* channel's track: every bank runs its own
-        lo/hi track pair per net, and a column only ever reaches the channel
-        of the bank whose device row it starts in.
-        """
-        y_track = bank.track_y(net, row)
-        y0, y1 = min(y_pad_edge, y_track), max(y_pad_edge, y_track)
-        half = ESCAPE_WIRE_W_UM / 2.0
-        self.plan.reserve(net, x - half, y0, x + half, y1)
-        prim.v_wire(self.canvas, x, y0, y1, width=ESCAPE_WIRE_W_UM)
-        prim.via1_stack(self.canvas, x, y_track)
-        self.net_x.setdefault((net, bank.index, row), []).append(x)
-
-    def jog_escape(self, net: str, pad: tuple, x_jog: float, row: str, bank: BankPlan) -> None:
-        """As ``escape()``, for a terminal whose pad faces the wrong way.
-
-        Runs Metal1 sideways out of the pad first, at the pad's own height
-        (so the joint is a full-width overlap, not a notch), then drops the
-        column from there.
-        """
-        y_c = (pad[1] + pad[3]) / 2.0
-        width = pad[3] - pad[1]
-        half = ESCAPE_WIRE_W_UM / 2.0
-        prim.h_wire(self.canvas, pad[0], x_jog + half, y_c, width=width)
-        self.plan.reserve(net, min(pad[2], x_jog - half), pad[1], x_jog + half, pad[3])
-        self.escape(net, x_jog, y_c, row, bank)
-
-    def rail_stub(self, net: str, x: float, y_from: float, y_to: float) -> None:
-        """Plain Metal1 stub from a source pad to the block's own rail band."""
-        y0, y1 = min(y_from, y_to), max(y_from, y_to)
-        half = ESCAPE_WIRE_W_UM / 2.0
-        self.plan.reserve(net, x - half, y0, x + half, y1)
-        prim.v_wire(self.canvas, x, y0, y1, width=ESCAPE_WIRE_W_UM)
+    # -- escape()/jog_escape()/rail_stub()/_y_bottom() are inherited from
+    # EscapeBuilderMixin (factored out to _escape_builder.py; identical to
+    # what this class used to define directly) -- each call below passes the
+    # ``BankPlan`` selecting which bank's own channel/rows a column reaches.
 
     # -- devices -------------------------------------------------------------
-    def _y_bottom(self, row: str, height_um: float, bank: BankPlan) -> float:
-        """An item's own bottom edge for a footprint ``height_um`` tall.
-
-        Bottom-aligned in an NMOS row, top-aligned in a PMOS one -- ``row``
-        picks which; ``height_um`` is ``item_height_um(item)`` (one row for a
-        plain fet, the whole R-row footprint for a common-centroid array), not
-        a gate length, so this works unchanged for both.
-        """
-        if row == "pfet":
-            return bank.pmos_top - height_um
-        return bank.nmos_bottom
-
     def draw_fet(self, item: Item, row: str, bank: BankPlan) -> None:
         fet = item.fet
         ports = prim.mosfet(
