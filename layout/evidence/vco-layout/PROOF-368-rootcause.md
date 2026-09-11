@@ -5,9 +5,13 @@
 > #372) and [`PROOF-371-ring-fix.md`](PROOF-371-ring-fix.md) (`ring.py`,
 > issue #371) both implement everything below for their own generator —
 > `vco_out_buffer` and `vco_ring` are each DRC-clean *and* match a standalone
-> LVS reference netlist of their own, and the reproduction script in this
-> file reports zero multi-net Metal1 polygons against either. **The
-> assembled `vco_block` LVS still mismatches** — but no longer on anything
+> LVS reference netlist of their own. The reproduction script in this file
+> reports zero multi-net Metal1 polygons against `vco_out_buffer`; against
+> `vco_ring` it reports 5, all of them `ring.py`'s own pre-existing (issue
+> #367) intentional `S{i}.Y`/`Y{i}` dual-labelling of the same physical
+> pad, not shorts — see `PROOF-371-ring-fix.md`'s own Results section for
+> the reproduced output and explanation. **The assembled `vco_block` LVS
+> still mismatches** — but no longer on anything
 > either fix owns: `PROOF-371-ring-fix.md` traces the one remaining shorted
 > net (`VBP0`/`VDD_VCO`) to a separate, pre-existing defect entirely inside
 > `vtoi_core.py`/`mirror.py`/`block.py`'s own routing, unrelated to either

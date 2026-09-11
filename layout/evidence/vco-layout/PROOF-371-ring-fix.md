@@ -117,13 +117,42 @@ the same "channel outside the block's own width" escape `block.py`'s own
 
 | Check | Command | Expected | Got | Verdict |
 |---|---|---|---|---|
-| Reproduction script, post-fix | `PROOF-368-rootcause.md`'s script vs. `vco_ring.gds` | no polygon with >1 net label | `multi-label polys: 0` | **PASS** |
+| Reproduction script, post-fix | `PROOF-368-rootcause.md`'s script vs. `vco_ring.gds` | no polygon with an unintentional net-name collision | `multi-label polys: 5` (see note below — all 5 are the intentional `S{i}.Y`/`Y{i}` dual-labelling below, not shorts) | **PASS** |
 | `vco_ring` DRC, table `main` | `run_pv.py drc … --top vco_ring` | clean | `Klayout DRC run is clean. GDS has no DRC violations.` | **PASS** |
 | `vco_ring` **LVS** | `run_pv.py lvs … --top vco_ring --lvs-sub GND_VCO` | match | `Congratulations! Netlists match.` | **PASS** |
 | `vco_block` DRC, table `main` | `run_pv.py drc … --top vco_block` | clean | `Klayout DRC run is clean. GDS has no DRC violations.` | **PASS** |
 | `vco_block` `connectivity_report()` | `python3 -m layout.pll_top.vco.block --check-connectivity` | PASS | `connectivity: PASS` (18/18, incl. `VBP != VBN`) | **PASS** |
 | `vco_block` LVS | `run_pv.py lvs … --top vco_block --lvs-sub GND_VCO` | match | `ERROR : Netlists don't match` | **mismatch — pre-existing, separate short, see below** |
 | `layout/tests` | `python3 -m unittest discover -s layout/tests -t layout/tests` | pass | `Ran 527 tests … OK` | **PASS** |
+
+**On the reproduction-script count.** An earlier draft of this table reported
+`multi-label polys: 0` for the post-fix run; that number does not reproduce.
+Re-running `PROOF-368-rootcause.md`'s script verbatim against `vco_ring.gds`
+gives:
+
+```
+poly bbox (20,2420;13520,5690) um: ['S1.Y', 'Y1']
+poly bbox (14020,2420;27520,5690) um: ['S2.Y', 'Y2']
+poly bbox (28020,2420;41520,5690) um: ['S3.Y', 'Y3']
+poly bbox (42020,2420;55520,5690) um: ['S4.Y', 'Y4']
+poly bbox (56020,2940;57980,3400) um: ['S5.Y', 'Y5', 'Y5_CLK_IN']
+multi-label polys: 5
+```
+
+None of these five are shorts: `stage.py:125` pins each stage's `Y` pad as
+`S{i}.Y` (the stage's own per-instance output name), and `ring.py:456`
+deliberately pins the *same physical pad* a second time as `Y{i}` (the chain
+net's schematic-matching name, added for issue #367's own LVS name-hinting —
+see `ring.py`'s comment there) — `Y5_CLK_IN` is a third deliberate label on
+that same stage-5 pad. The reproduction script counts *distinct label
+strings sharing one polygon*, with no notion of an intentional same-node
+alias, so it was always going to report this design's own dual-naming
+convention as "multi-label" — a convention that predates this PR (issue
+#367) and is unrelated to the short this PR fixes. The DRC-clean and
+LVS-match results above are the checks that actually confirm the short is
+gone; this script only ever demonstrated that the *previous* short (`item 3`
+below) dragged the chain nets, both supplies, and `VBN` into one shared
+polygon, which no longer happens.
 
 Artifacts committed beside this file: `vco_ring.gds`, `vco_block.gds`,
 `drc-clean/drc.stdout.log` + `vco_ring_main.lyrdb`,
