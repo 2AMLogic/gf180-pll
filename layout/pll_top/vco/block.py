@@ -771,7 +771,7 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
     # every one of that block's horizontal Metal2 tracks -- so it takes the
     # channel outside the mirror's left edge. ---
     vbp0_y = _center(vtoi_pins["VBP0"][0])[1]
-    vbp0_track_x0 = min(vtoi_res.net_x[("VBP0", "pfet")]) - M2_HALF_UM + p.dx_vtoi
+    vbp0_track_x0 = min(vtoi_res.net_x[("VBP0", 0, "pfet")]) - M2_HALF_UM + p.dx_vtoi
     vbp0_in_x, vbp0_in_y = track_in(mirror_pins, "VBP0")
     r.route(
         "VBP0",
