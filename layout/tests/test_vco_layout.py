@@ -1133,65 +1133,232 @@ class BiasResistorsBlockTests(unittest.TestCase):
 
 
 class PolyResistorPrimitiveTests(unittest.TestCase):
-    """primitives.poly_resistor()'s pure-Python constants (PRES.* citations)."""
+    """primitives.poly_resistor()'s pure-Python constants (HRES.* citations).
 
-    def test_sab_extension_matches_pres6(self):
+    These cited the unmarked class's PRES.* rules until issue #381; the
+    generator now draws the ``(62, 0)``-marked high-Rs device, which
+    ``pres.drc``'s own ``not_interacting(resistor)`` derivation excludes from
+    PRES.* entirely and ``hres.drc`` picks up instead.
+    """
+
+    def test_sab_width_extension_matches_hres9(self):
         self.assertAlmostEqual(prim.POLY_RES_SAB_EXT_UM, 0.28)
 
-    def test_contact_to_sab_clearance_matches_pres7(self):
+    def test_contact_to_sab_clearance_matches_hres8(self):
         self.assertAlmostEqual(prim.POLY_RES_CONTACT_TO_SAB_UM, 0.22)
 
-    def test_implant_enclosure_meets_pres5(self):
-        self.assertGreaterEqual(prim.POLY_RES_IMPLANT_ENC_UM, 0.3)
+    def test_min_width_matches_hres2(self):
+        # HRES.2 is 1.0 um -- 0.2 um TIGHTER than the unmarked class's
+        # PRES.1, and exactly the width every bias resistor is drawn at.
+        self.assertAlmostEqual(prim.POLY_RES_MIN_WIDTH_UM, 1.0)
+        for r in dev.BIAS_RESISTORS:
+            self.assertGreaterEqual(r.w_um, prim.POLY_RES_MIN_WIDTH_UM)
+
+    def test_marker_enclosure_clears_hres4(self):
+        self.assertGreaterEqual(prim.POLY_RES_MARKER_ENC_UM, 0.4)
+
+    def test_implant_overlaps_sab_by_exactly_hres10(self):
+        # HRES.10's pplus-over-sab overlap is a min AND max 0.1 um, and the
+        # end implants stop flush with res_mk, so the sab end overhang IS
+        # that overlap.
+        self.assertAlmostEqual(prim.POLY_RES_SAB_END_EXT_UM, 0.1)
+
+    def test_contact_row_clears_the_implant_edge_by_hres7(self):
+        # HRES.7 wants >= 0.2 um of pplus around a contact on the resistor
+        # poly. On the width axis the margin is the contact row's own inset
+        # plus the implant's overhang; on the length axis it is the HRES.8
+        # clearance, which is larger still.
+        self.assertGreaterEqual(
+            prim.CONTACT_ROW_MARGIN_UM + prim.POLY_RES_IMPLANT_ENC_UM,
+            prim.POLY_RES_CONTACT_TO_IMPLANT_UM,
+        )
+        self.assertGreaterEqual(
+            prim.POLY_RES_CONTACT_TO_SAB_UM, prim.POLY_RES_CONTACT_TO_IMPLANT_UM
+        )
 
     def test_poly_extension_leaves_room_for_a_contact_clear_of_sab(self):
-        # The contact-land region (POLY_RES_EXT_UM tall) has to fit both
-        # CONTACT_ROW_MARGIN_UM (poly enclosure) and
-        # POLY_RES_CONTACT_TO_SAB_UM (PRES.7 clearance) with a real contact
+        # The contact-land region (POLY_RES_EXT_UM tall) has to fit
+        # CONTACT_ROW_MARGIN_UM (poly enclosure), the sab end overhang and
+        # POLY_RES_CONTACT_TO_SAB_UM (HRES.8 clearance) with a real contact
         # in between -- this is the arithmetic poly_resistor() relies on.
         usable = (
             prim.POLY_RES_EXT_UM
             - prim.CONTACT_ROW_MARGIN_UM
+            - prim.POLY_RES_SAB_END_EXT_UM
             - prim.POLY_RES_CONTACT_TO_SAB_UM
         )
         self.assertGreaterEqual(usable, prim.CONTACT_SIZE_UM)
 
 
 @unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
-class PolyResistorMarkerLayerTests(unittest.TestCase):
-    """Direct geometric confirmation of ``block.RESISTOR_LVS_MODEL``'s own
-    docstring claim (issue #378): ``primitives.poly_resistor()`` never draws
-    GDS layer ``(62, 0)``.
+class PolyResistorLvsClassTests(unittest.TestCase):
+    """The drawn device class, the LVS reference class and the schematic's
+    class are one thing, checked three ways (issue #381).
 
-    gf180mcu's own ``rule_decks/res_derivations.lvs`` uses that layer (an
-    unrelated derived layer the deck calls ``resistor``, defined as a plain
-    ``get_polygons(62, 0)`` in ``layers_definitions.lvs`` -- nothing to do
-    with any layer this repo's own ``primitives.LAYER`` table names, a bare
-    GDS-layer-number coincidence) to split every ``poly2``+``sab``+``res_mk``
-    shape into exactly two buckets: ``ppolyf_u_h`` (overlaps ``(62, 0)`` --
-    then further split into ``ppolyf_u_1k``/``_2k``/``_3k`` by the deck's own
-    ``$poly_res`` switch) or plain ``ppolyf_u`` (does not overlap it,
-    unconditional, no switch). This test draws one resistor with
-    ``primitives.poly_resistor()`` directly and confirms no shape lands on
-    ``(62, 0)`` anywhere in the produced layout -- the geometric fact that
-    makes ``block.RESISTOR_LVS_MODEL = "ppolyf_u"`` (not ``"ppolyf_u_1k"``)
-    correct, independent of any PV/LVS-deck run.
+    gf180mcu's decks tell the 3000 ohm/sq ``ppolyf_u_3k`` apart from the
+    350 ohm/sq unmarked ``ppolyf_u`` by exactly one shape: GDS ``(62, 0)``,
+    the layer both decks call ``resistor``
+    (``lvs/rule_decks/layers_definitions.lvs``,
+    ``drc/rule_decks/layers_def.drc``). LVS derives
+    ``ppolyf_u_h = poly2.and(sab).and(res_mk).and(resistor)`` (extracted as
+    ``ppolyf_u_1k``/``_2k``/``_3k`` per the deck's ``$poly_res`` switch)
+    versus ``ppolyf_u_layer = ....not_interacting(resistor)`` (extracted
+    unconditionally as plain ``ppolyf_u``); DRC likewise routes marked
+    geometry to ``hres.drc``'s HRES.* rules and unmarked geometry to
+    ``pres.drc``'s PRES.* rules.
+
+    That single marker is therefore the pivot for an 8.6x resistance error
+    that no amount of correct W/L can compensate, and it was silently absent
+    for the whole period between the generator being written and issue #381
+    (issue #378 correctly renamed the *reference netlist* to the class the
+    deck then extracted, which made LVS match while the drawn device stayed
+    the wrong one). These tests pin all three faces of the agreement so a
+    future drift in any one of them fails here rather than in silicon:
+
+    1. the marker is drawn, and encloses the resistor's whole poly2
+       footprint by at least HRES.4's 0.4 um;
+    2. ``block.RESISTOR_LVS_MODEL`` names a high-sheet class, not the
+       unmarked one;
+    3. that class is exactly what ``design/netlist/vco.spice`` declares on
+       ``XRCG``/``XROFF``/``XRDEG`` -- read out of the committed export, not
+       restated here.
     """
 
-    def test_no_shapes_on_the_switch_controlled_marker_layer(self):
+    SCHEMATIC = LAYOUT_DIR.parent / "design" / "netlist" / "vco.spice"
+
+    def _regions(self, res):
         import klayout.db as db
 
-        canvas = prim.Canvas("poly_resistor_marker_probe")
-        prim.poly_resistor(canvas, dev.BIAS_R_RCG, 0.0, 0.0)
-        marker_layer_index = canvas.layout.layer(62, 0)
-        region = db.Region(canvas.top.begin_shapes_rec(marker_layer_index))
-        self.assertTrue(
-            region.is_empty(),
-            "poly_resistor() drew a shape on GDS layer (62, 0) -- the "
-            "res_derivations.lvs 'resistor' marker that would move this "
-            "device into the switch-controlled ppolyf_u_h/_1k/_2k/_3k "
-            "bucket instead of the plain, unconditional ppolyf_u one",
+        canvas = prim.Canvas(f"poly_resistor_probe_{res.name}")
+        prim.poly_resistor(canvas, res, 0.0, 0.0)
+        out = {}
+        for name in ("resistor", "poly2", "res_mk", "sab", "pplus"):
+            idx = canvas.layout.layer(*prim.LAYER[name])
+            out[name] = db.Region(canvas.top.begin_shapes_rec(idx)).merged()
+        return out
+
+    def test_the_high_rs_marker_is_drawn_on_every_bias_resistor(self):
+        for res in dev.BIAS_RESISTORS:
+            with self.subTest(res.name):
+                self.assertFalse(
+                    self._regions(res)["resistor"].is_empty(),
+                    f"{res.name}: no shape on GDS (62, 0) -- the deck would "
+                    "extract this as the unmarked 350 ohm/sq ppolyf_u class, "
+                    "not the ppolyf_u_3k the schematic declares",
+                )
+
+    def test_the_marker_encloses_the_whole_resistor_poly_by_hres4(self):
+        # HRES.4: minimum RESISTOR overlap of Poly2 resistor is 0.4 um, and
+        # no part of the resistor poly may fall outside the marker at all.
+        for res in dev.BIAS_RESISTORS:
+            with self.subTest(res.name):
+                r = self._regions(res)
+                marker = r["resistor"].bbox()
+                poly = r["poly2"].bbox()
+                self.assertTrue(r["poly2"].not_inside(r["resistor"]).is_empty())
+                dbu = 1000.0  # Canvas writes 1 nm database units
+                for got in (
+                    poly.left - marker.left,
+                    marker.right - poly.right,
+                    poly.bottom - marker.bottom,
+                    marker.top - poly.top,
+                ):
+                    self.assertGreaterEqual(got / dbu, 0.4)
+                self.assertAlmostEqual(
+                    (poly.left - marker.left) / dbu, prim.POLY_RES_MARKER_ENC_UM
+                )
+
+    def test_the_implant_leaves_the_body_clear_and_overlaps_sab_by_hres10(self):
+        # HRES.12a defines the resistor's length as poly2 inside sab and
+        # OUTSIDE pplus, and HRES.10 makes the pplus-over-sab overlap a
+        # min-and-max 0.1 um. Both hang off the same geometry: two end
+        # implants that stop flush with res_mk.
+        for res in dev.BIAS_RESISTORS:
+            with self.subTest(res.name):
+                r = self._regions(res)
+                body = r["poly2"] & r["sab"] - r["pplus"]
+                self.assertEqual(
+                    body.bbox().height() / 1000.0,
+                    res.l_um,
+                    "the un-implanted poly under sab is the resistor's length",
+                )
+                overlap = (r["pplus"] & r["sab"]).merged()
+                self.assertEqual(overlap.count(), 2, "one implant strip per end")
+                for poly in overlap.each():
+                    self.assertAlmostEqual(
+                        poly.bbox().height() / 1000.0, prim.POLY_RES_SAB_END_EXT_UM
+                    )
+
+    def test_contacts_clear_sab_by_hres8_and_sit_inside_the_implant_by_hres7(self):
+        import klayout.db as db
+
+        for res in dev.BIAS_RESISTORS:
+            with self.subTest(res.name):
+                canvas = prim.Canvas(f"poly_resistor_contacts_{res.name}")
+                prim.poly_resistor(canvas, res, 0.0, 0.0)
+                idx = canvas.layout.layer(*prim.LAYER["contact"])
+                contacts = db.Region(canvas.top.begin_shapes_rec(idx)).merged()
+                r = self._regions(res)
+                self.assertFalse(contacts.is_empty())
+                self.assertTrue(
+                    contacts.interacting(r["sab"]).is_empty(),
+                    "HRES.8: a contact may not touch the salicide block",
+                )
+                self.assertTrue(
+                    contacts.not_inside(r["pplus"]).is_empty(),
+                    "HRES.7: every resistor contact sits inside the end implant",
+                )
+                self.assertGreaterEqual(
+                    (prim.POLY_RES_EXT_UM
+                     - prim.CONTACT_ROW_MARGIN_UM
+                     - prim.POLY_RES_SAB_END_EXT_UM
+                     - prim.POLY_RES_CONTACT_TO_SAB_UM),
+                    prim.CONTACT_SIZE_UM,
+                    "the contact land has to fit a whole contact between the "
+                    "poly end and the HRES.8 clearance from sab",
+                )
+
+    def test_the_reference_class_is_a_high_sheet_class(self):
+        self.assertIn(
+            vco_block.RESISTOR_LVS_MODEL,
+            ("ppolyf_u_1k", "ppolyf_u_2k", "ppolyf_u_3k"),
+            "the drawn geometry carries the (62, 0) marker, so the deck "
+            "extracts one of the switch-selected high-sheet classes -- never "
+            "the unmarked ppolyf_u",
         )
+
+    def test_the_reference_class_is_exactly_what_the_schematic_declares(self):
+        """The drift guard the whole class exists for.
+
+        Reads ``design/netlist/vco.spice``'s own model token off
+        ``XRCG``/``XROFF``/``XRDEG`` rather than restating it, so a re-export
+        of the schematic that changed the resistor class -- or a future edit
+        to ``RESISTOR_LVS_MODEL`` alone -- fails here instead of producing a
+        layout that LVS-matches a netlist the design does not have.
+        """
+        declared = set()
+        for line in self.SCHEMATIC.read_text().splitlines():
+            fields = line.split()
+            if fields and fields[0].upper() in ("XRCG", "XROFF", "XRDEG"):
+                declared.add(fields[4])
+        self.assertEqual(
+            declared,
+            {vco_block.RESISTOR_LVS_MODEL},
+            "design/netlist/vco.spice's bias-resistor device class and "
+            "block.RESISTOR_LVS_MODEL have drifted apart",
+        )
+
+    def test_the_poly_res_switch_the_lvs_harness_passes_matches_that_class(self):
+        """The deck names the extracted device from ``$poly_res``; the PDK's
+        own ``run_lvs.py`` hardcodes ``1k``, so ``layout/harness/lvs.py``
+        passes this repo's option explicitly. If the two ever disagree, an
+        LVS run reports a device-class mismatch on three otherwise-correct
+        resistors -- the exact failure issue #378 spent a whole cycle on.
+        """
+        sys.path.insert(0, str(LAYOUT_DIR))
+        from harness import lvs as lvs_mod
+
+        self.assertEqual(vco_block.RESISTOR_LVS_MODEL, f"ppolyf_u_{lvs_mod.POLY_RES}")
 
 
 class VtoiCoreDeviceTests(unittest.TestCase):
@@ -1992,35 +2159,41 @@ class ReferenceNetlistDeviceTests(unittest.TestCase):
             self.assertAlmostEqual(self._param(matches[0], "W"), r.w_um)
             self.assertAlmostEqual(self._param(matches[0], "L"), r.l_um)
 
-    def test_resistors_use_the_decks_own_extracted_class_not_the_schematics(self):
+    def test_resistors_use_the_class_the_schematic_declares(self):
+        """Since issue #381 the deck's extracted class and the schematic's
+        declared class are the same string, so this reference netlist states
+        it once and both comparisons hold.
+
+        Before #381 they could not be: the generator drew the unmarked
+        350 ohm/sq body, so the reference had to say ``ppolyf_u`` while
+        ``design/netlist/vco.spice`` said ``ppolyf_u_3k`` -- an LVS match on
+        a device the design does not have.
+        """
         r_lines = [ln for ln in self.lines if ln.startswith("R_")]
         self.assertTrue(r_lines)
         for ln in r_lines:
             self.assertIn(vco_block.RESISTOR_LVS_MODEL, ln)
-            self.assertNotIn("ppolyf_u_3k", ln)
+            self.assertIn("ppolyf_u_3k", ln)
 
-    def test_resistor_model_is_the_marker_free_class_not_the_1k_bucket(self):
-        """Regression guard for issue #378.
+    def test_resistor_model_is_the_schematics_high_sheet_class(self):
+        """Regression guard for issues #378 and #381, in that order.
 
-        ``RESISTOR_LVS_MODEL`` briefly named ``"ppolyf_u_1k"`` (the class the
-        deck's own ``$poly_res`` switch selects for shapes carrying GDS layer
-        ``(62, 0)``, gf180mcu's own ``res_derivations.lvs`` -- see
-        ``PolyResistorMarkerLayerTests`` below for the direct geometric
-        check) -- but ``primitives.poly_resistor()`` never draws that marker
-        layer, so the deck's own extraction always lands every drawn
-        resistor in the plain, switch-independent ``ppolyf_u`` bucket
-        instead. A reference netlist naming ``"ppolyf_u_1k"`` device-class
-        mismatched the actual extracted device (confirmed directly via
-        ``klayout.db.LayoutVsSchematic`` cross-reference of the assembled
-        ``vco_block`` LVS run -- see
-        ``layout/evidence/vco-layout/PROOF-378-resistor-class-fix.md``),
-        which is what escalated three internal nets (``NC``/``NOFF``/
-        ``NVI``) plus ``GND_VCO`` into a spurious net-level ``Mismatch``
-        despite every device individually pairing correctly. Pinned to the
-        exact string (not just "not ppolyf_u_3k") so a future revert of
-        either constant is caught here rather than only in a full PV run.
+        This constant has held three values. ``"ppolyf_u_1k"`` was wrong
+        because the drawn geometry carried no ``(62, 0)`` marker and so was
+        never in the switch-selected bucket at all. ``"ppolyf_u"`` (issue
+        #378) was right about *what the deck extracted* and, exactly because
+        it was right, made a real 8.6x resistance error LVS-clean: the drawn
+        device was the 350 ohm/sq class while ``design/netlist/vco.spice``
+        -- and every recorded ``sim/`` result -- assumed 3000 ohm/sq. Issue
+        #381 fixed the geometry instead of the name, so the correct value is
+        now the schematic's own class.
+
+        Pinned to the exact string, and cross-checked against the committed
+        schematic export and against the LVS harness's own ``$poly_res``
+        switch by ``PolyResistorLvsClassTests`` above -- a revert of any one
+        of the three fails here or there rather than only in a full PV run.
         """
-        self.assertEqual(vco_block.RESISTOR_LVS_MODEL, "ppolyf_u")
+        self.assertEqual(vco_block.RESISTOR_LVS_MODEL, "ppolyf_u_3k")
 
     def test_decap_devices_are_not_emitted(self):
         self.assertNotIn(vco_block.DECAP_LVS_MODEL, self.text)

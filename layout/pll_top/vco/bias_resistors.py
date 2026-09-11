@@ -1,4 +1,4 @@
-"""``vco_bias.sch``'s three ``ppolyf_u_3k`` poly resistors (``RCG``/``ROFF``/``RDEG``).
+"""``vco_bias.sch``'s three ``ppolyf_u_3k`` high-Rs poly resistors (``RCG``/``ROFF``/``RDEG``).
 
 WHY THIS IS ITS OWN BLOCK, NOT PART OF A FULL V-TO-I CORE ASSEMBLY
 --------------------------------------------------------------------
@@ -52,8 +52,13 @@ TOP_CELL = "vco_bias_resistors"
 
 GND_NET = "GND_VCO"
 
-RESISTOR_GAP_UM = 2.0  # comfortably above both PRES.2 (0.4 um, resistor-to-
-# resistor isolation) and PRES.4 (0.6 um, resistor poly to unrelated poly2)
+RESISTOR_GAP_UM = 2.0  # comfortably above every high-Rs spacing rule the row
+# has to clear, measured between *marker* edges rather than poly edges since
+# issue #381 (each resistor's (62, 0) marker overhangs its poly2 by
+# primitives.POLY_RES_MARKER_ENC_UM = 0.5 um, so the marker-to-marker gap is
+# 2.0 - 2*0.5 = 1.0 um): HRES.1 (0.4 um, marker-to-marker), HRES.3 (0.4 um,
+# resistor poly to resistor poly) and HRES.5 (0.3 um, marker to unrelated
+# poly2 -- of which this block has none).
 RING_WIDTH_UM = 1.2
 OUTER_MARGIN_LEFT_UM = 3.0
 OUTER_MARGIN_RIGHT_UM = 3.0
@@ -113,12 +118,14 @@ def top_pad_center_um(res: dev.PolyResistor) -> tuple[float, float]:
 
     ``x`` is trivially the resistor's own column centre (its contact row is
     centred in the width). ``y`` reproduces ``_contact_positions()``'s
-    single-contact fallback: the contact land between the ``PRES.7``
-    clearance and the poly2 end is always narrower than one contact for a
+    single-contact fallback: the contact land between the ``HRES.8``
+    clearance (measured from the ``sab`` edge, which overhangs the resistor
+    body by ``POLY_RES_SAB_END_EXT_UM`` -- see ``primitives.poly_resistor()``)
+    and the poly2 end is always narrower than one contact for a
     ``ppolyf_u_3k`` of this class, so the row degenerates to one centred
     contact -- asserted rather than assumed.
     """
-    y_outer = res.l_um + prim.POLY_RES_CONTACT_TO_SAB_UM
+    y_outer = res.l_um + prim.POLY_RES_SAB_END_EXT_UM + prim.POLY_RES_CONTACT_TO_SAB_UM
     y_inner = res.l_um + prim.POLY_RES_EXT_UM - prim.CONTACT_ROW_MARGIN_UM
     span = (y_inner - prim.CONTACT_ROW_MARGIN_UM) - (y_outer + prim.CONTACT_ROW_MARGIN_UM)
     if span >= prim.CONTACT_SIZE_UM:
