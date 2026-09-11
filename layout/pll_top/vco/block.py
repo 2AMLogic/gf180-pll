@@ -263,29 +263,56 @@ M2_HALF_UM = prim.METAL2_WIRE_WIDTH_UM / 2.0
 # deck matches sub-circuits by name; a flattened GDS has none to match once
 # named instances become geometry).
 
-RESISTOR_LVS_MODEL = "ppolyf_u_1k"
+RESISTOR_LVS_MODEL = "ppolyf_u"
 """The poly-resistor device class gf180mcu's own signoff LVS deck actually
-extracts -- not ``ppolyf_u_3k``, which is the class
-``design/netlist/vco.spice`` names on ``XRCG``/``XROFF``/``XRDEG``
-(``devices.BIAS_RESISTORS``).
+extracts **from the geometry ``primitives.poly_resistor()`` draws** -- not
+``ppolyf_u_3k``, which is the class ``design/netlist/vco.spice`` names on
+``XRCG``/``XROFF``/``XRDEG`` (``devices.BIAS_RESISTORS``), and not
+``ppolyf_u_1k``, which this constant wrongly named until issue #378.
 
-Verified directly against the PDK's own deck, not assumed:
-``<pdk>/libs.tech/klayout/lvs/run_lvs.py``'s own ``generate_klayout_switches()``
-hardcodes ``switches["poly_res"] = "1k"`` for *every* ``--variant`` value
-(A/B/C/D it supports) with no ``--poly_res`` (or any other) CLI override, and
-``rule_decks/res_extraction.lvs``'s own ``case POLY_RES`` block only reaches
-its ``'3k'`` branch (extracting ``ppolyf_u_3k`` at a 3000 ohm/sq sheet
-resistance) when the Ruby-level ``$poly_res`` variable is literally ``'3k'``
--- which nothing in this repo's flow (``layout/run_pv.py``,
-``layout/harness/lvs.py``, neither of which passes a ``poly_res`` switch
-through to the deck) can ever request, because the PDK's own wrapper script
-never exposes that choice to its caller. This is a real, reproducible
-**foundry-deck** limitation (``open_pdks``' ``run_lvs.py``, not
-``klt``/klayout-tools -- see ``layout/README.md``'s "Why this isn't
-`klt drc`" section), so this reference netlist states the three resistors at
-the device class the deck can actually produce, and ``PROOF-lvs.md`` records
-the naming difference from ``design/netlist/vco.spice`` explicitly rather
-than silently renaming the schematic's own class or dropping the devices.
+Read off the deck's own extracted netlist, not inferred (issue #378, see
+``layout/evidence/vco-layout/PROOF-378-resistor-class-fix.md``). The run's
+own ``vco_block.cir`` states the three resistors as::
+
+    R$77 GND_VCO NC   GND_VCO  1960 ppolyf_u L=5.6U W=1U
+    R$78 GND_VCO NOFF GND_VCO 11550 ppolyf_u L=33U  W=1U
+    R$79 GND_VCO NVI  GND_VCO 11550 ppolyf_u L=33U  W=1U
+
+-- device class ``ppolyf_u``, at 350 ohm/sq (1960 / 5.6 == 11550 / 33 ==
+350), the *unmarked* p+ poly resistor.
+
+**Why not the high-sheet class.** ``rule_decks/res_derivations.lvs`` derives
+every high-sheet variant (``PPOLYF_U_1K``/``_2K``/``_3K``, whichever
+``$poly_res`` selects) as ``poly2.and(sab).and(res_mk).and(resistor)`` --
+``resistor`` being GDS layer ``(62, 0)``. ``primitives.poly_resistor()``
+draws ``res_mk``/``poly2``/``sab``/``pplus``/contacts and no ``(62, 0)`` at
+all, so the layout falls into that same file's *unmarked* branch,
+``ppolyf_u_layer = pplus.and(poly2).and(sab).and(res_mk)
+.not_interacting(resistor)...`` -- extracted by ``res_extraction.lvs``'s own
+un-gated ``extract_devices(resistor_with_bulk('ppolyf_u', 350, BResistor))``.
+The deck's ``poly_res`` switch (hardcoded ``"1k"`` by the PDK's own
+``run_lvs.py``, with no CLI override) only chooses *which* high-sheet class
+the marked branch produces; with no ``(62, 0)`` drawn, it never applies to
+this layout. The deck's log line ``Extracting PPOLYF_U_1K device`` -- which
+issue #367's own reading of this took as evidence for ``ppolyf_u_1k`` -- is
+printed for **every** class the deck attempts (``Extracting PPOLYF_U
+device`` appears six lines above it in the same log) and says nothing about
+which class any geometry actually produced.
+
+Naming a class the deck does not extract is not a cosmetic mislabel: it
+cost the assembled ``vco_block`` LVS run its match. The comparer paired the
+three resistors only ``MatchWithWarning`` across the two class names, which
+left every net adjacent to them (``NC``/``NOFF``/``NVI`` and, through their
+shared bottom terminal, ``GND_VCO``) topologically unconfirmed -- the exact
+four ``Mismatch`` nets issue #378 was filed for.
+
+**Still a disclosed deviation, and a larger one than before**: the layout
+draws a 350 ohm/sq unmarked resistor where ``design/netlist/vco.spice``
+specifies ``ppolyf_u_3k`` (3000 ohm/sq) -- ~8.6x the sheet resistance, a
+design-level discrepancy in the bias network, tracked separately as issue
+#381 rather than papered over here. ``PROOF-lvs.md`` and
+``PROOF-378-resistor-class-fix.md`` record it explicitly rather than
+silently renaming the schematic's own class or dropping the devices.
 """
 
 DECAP_LVS_MODEL = "cap_nmos_03v3"

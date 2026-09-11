@@ -1,4 +1,4 @@
-* Extracted by KLayout with GF180MCU LVS runset on : 11/09/2026 05:49
+* Extracted by KLayout with GF180MCU LVS runset on : 11/09/2026 09:21
 
 .SUBCKT vco_block B0 B1 B2 CLK GND_VCO NB1 NB2 NC NOFF NVI S1.Y|Y1 S2.Y|Y2
 + S3.Y|Y3 S4.Y|Y4 S5.Y|Y5|Y5_CLK_IN VBN VBP VBP0 VCTRL VDD_VCO

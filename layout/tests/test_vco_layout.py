@@ -1973,6 +1973,68 @@ class ReferenceNetlistDeviceTests(unittest.TestCase):
         )
 
 
+# gf180mcu's own LVS deck derives every *high-sheet* poly-resistor class
+# (PPOLYF_U_1K/_2K/_3K -- rule_decks/res_derivations.lvs) as
+# ``poly2.and(sab).and(res_mk).and(resistor)``, where ``resistor`` is
+# ``get_polygons(62, 0)`` (rule_decks/layers_definitions.lvs). Drawing no
+# (62, 0) puts the geometry in that same file's *unmarked* branch,
+# ``ppolyf_u_layer = ... .not_interacting(resistor) ...``, extracted by the
+# un-gated ``extract_devices(resistor_with_bulk('ppolyf_u', 350, BResistor))``.
+HIGH_SHEET_RES_MARKER_GDS = (62, 0)
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class PolyResistorLvsClassTests(unittest.TestCase):
+    """``block.RESISTOR_LVS_MODEL`` must name the class the deck extracts from
+    the geometry ``primitives.poly_resistor()`` actually draws (issue #378).
+
+    This pair drifted once already and cost the assembled ``vco_block`` LVS
+    run its match: the reference named ``ppolyf_u_1k`` (inferred from the
+    PDK ``run_lvs.py``'s hardcoded ``poly_res`` switch) while the layout --
+    which draws no (62, 0) high-sheet marker -- extracted as plain
+    ``ppolyf_u``. The comparer paired the three resistors only
+    ``MatchWithWarning`` across those two class names, which left every net
+    adjacent to them (``NC``/``NOFF``/``NVI``, and ``GND_VCO`` through their
+    shared bottom terminal) topologically unconfirmed.
+
+    The two facts are asserted *together*, against the built geometry rather
+    than against each other's restatement, so adding the high-sheet marker
+    later fails here until ``RESISTOR_LVS_MODEL`` is updated in lockstep --
+    rather than silently re-opening issue #378's mismatch.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import klayout.db as db
+
+        cls.db = db
+        cls.canvas = bias_resistors.build().canvas
+
+    def _region(self, gds: tuple) -> "object":
+        idx = self.canvas.layout.layer(*gds)
+        return self.db.Region(self.canvas.top.shapes(idx)).merged()
+
+    def test_drawn_resistors_carry_no_high_sheet_marker(self):
+        self.assertTrue(
+            self._region(HIGH_SHEET_RES_MARKER_GDS).is_empty(),
+            "bias_resistors.py now draws the deck's high-sheet resistor marker "
+            f"{HIGH_SHEET_RES_MARKER_GDS}; the extracted device class is no longer "
+            "'ppolyf_u' and block.RESISTOR_LVS_MODEL must be updated to match "
+            "(see issue #378 / PROOF-378-resistor-class-fix.md)",
+        )
+
+    def test_the_unmarked_ppolyf_u_derivation_layers_are_all_drawn(self):
+        # ppolyf_u_layer = pplus.and(poly2).and(sab).and(res_mk)... -- all four
+        # must be present, or the deck extracts no resistor device at all.
+        for name in ("pplus", "poly2", "sab", "res_mk"):
+            self.assertFalse(
+                self._region(prim.LAYER[name]).is_empty(), f"{name} not drawn"
+            )
+
+    def test_reference_model_is_the_unmarked_class(self):
+        self.assertEqual(vco_block.RESISTOR_LVS_MODEL, "ppolyf_u")
+
+
 @unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
 class ReferenceNetlistLabelCoverageTests(unittest.TestCase):
     """Every net ``block.py``'s router (or a sub-block generator it calls)

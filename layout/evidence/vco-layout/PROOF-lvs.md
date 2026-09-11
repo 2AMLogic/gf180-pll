@@ -1,5 +1,30 @@
 # `vco_block` LVS — reference netlist landed, first real run finds a genuine short (issue #367)
 
+> **Correction + superseded verdict (issue #378, 2026-09-11).** Two claims
+> below are now known to be wrong, and are left in place rather than rewritten
+> because they are what led to the defect #378 fixed:
+>
+> 1. **The poly resistors extract as `ppolyf_u` (350 ohm/sq), not
+>    `ppolyf_u_1k`.** The deck's `Extracting PPOLYF_U_1K device` log line,
+>    cited below as empirical confirmation, is printed for *every* class the
+>    deck attempts (`Extracting PPOLYF_U device` appears six lines above it in
+>    the same log) and confirms nothing about what any geometry produced. The
+>    extracted resistances stated below — 1960/11550/11550 ohms — are
+>    350 x L/W, not "1000 ohm/sq x L/W": 1960 / 5.6 is 350. `poly_resistor()`
+>    draws no (62, 0) `resistor` marker, which is what every high-sheet class
+>    requires. `RESISTOR_LVS_MODEL` has been corrected to `ppolyf_u`, and the
+>    real, larger deviation from the schematic's `ppolyf_u_3k` is tracked as
+>    issue #381.
+> 2. **`lvs-attempt/` is now `lvs-clean/`** — the directory was renamed when
+>    the assembled run finally matched. Every reference to `lvs-attempt/`
+>    below (and in `PROOF-371`/`PROOF-372`/`PROOF-376`) means that same
+>    directory under its former name.
+>
+> The connectivity defect this document *found* was real and is fully
+> resolved: #368 → #371 / #372 / #376, then #378. See
+> `PROOF-378-resistor-class-fix.md` for the current verdict
+> (`Congratulations! Netlists match.`, 65/65 devices, 43/43 nets).
+
 This is **not** an LVS-clean record. It documents the first-ever attempt at
 block-level LVS for the VCO (`vco_block.gds` vs a new, independently-derived
 `vco_block.spice` reference), what that attempt got right (the reference
