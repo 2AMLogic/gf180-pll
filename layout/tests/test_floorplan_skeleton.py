@@ -144,6 +144,28 @@ class BlockPlacementTests(unittest.TestCase):
         self.assertLess(area, skeleton.AREA_BUDGET_UM2)
         self.assertLess(area, 2634.28 * 57.07, "the recorded footprint did not shrink against #341")
 
+    def test_pfd_cp_standalone_footprint_is_recorded_and_positive(self):
+        # issue #386: pfd (#300) assembled with the complete cp block (#385)
+        # into the real, DRC-clean standalone pfd_cp layout -- see
+        # layout/evidence/pfd-cp-layout/PROOF.md.
+        self.assertGreater(skeleton.PFD_CP_STANDALONE_W_UM, 0)
+        self.assertGreater(skeleton.PFD_CP_STANDALONE_H_UM, 0)
+
+    def test_pfd_cp_block_matches_the_recorded_standalone_footprint(self):
+        self.assertAlmostEqual(skeleton.PFD_CP.w, skeleton.PFD_CP_STANDALONE_W_UM)
+        self.assertAlmostEqual(skeleton.PFD_CP.h, skeleton.PFD_CP_STANDALONE_H_UM)
+
+    def test_pfd_cp_footprint_overrun_is_recorded_and_does_not_grow(self):
+        # FAIL-LOUD (skeleton.py's own PFD_CP note): 0.0351 mm^2 against
+        # PLL-FLOORPLAN.md section 5's 0.010-0.020 mm^2 ROM estimate. A
+        # ratchet, same convention as test_total_extent_overrun_is_recorded_
+        # and_does_not_grow above -- must still be a real overrun (so a
+        # future reduction pass has to update this record rather than
+        # quietly pass) and must not exceed the magnitude skeleton.py states.
+        area_mm2 = (skeleton.PFD_CP_STANDALONE_W_UM * skeleton.PFD_CP_STANDALONE_H_UM) / 1.0e6
+        self.assertGreater(area_mm2, 0.020, "pfd_cp now fits the ROM high estimate -- update skeleton.py's FAIL-LOUD note and PLL-FLOORPLAN.md section 5 to match")
+        self.assertLess(area_mm2, 0.040, "pfd_cp footprint grew beyond the recorded overrun")
+
     def test_lock_detector_standalone_footprint_is_recorded_and_positive(self):
         # issue #296: the real, DRC-clean standalone lock_detector layout's
         # as-drawn footprint -- see layout/evidence/lock-detector-layout/PROOF.md.
@@ -218,6 +240,17 @@ class RecordedFootprintDriftTests(unittest.TestCase):
         x0, y0, x1, y1 = divider_chain.build().footprint
         self.assertAlmostEqual(x1 - x0, skeleton.DIVIDER_CHAIN_STANDALONE_W_UM, places=2)
         self.assertAlmostEqual(y1 - y0, skeleton.DIVIDER_CHAIN_STANDALONE_H_UM, places=2)
+
+    def test_pfd_cp_recorded_footprint_matches_the_generator(self):
+        # issue #386: pfd_cp.block.build() also needs klayout.db (it flattens
+        # pfd + cp at the GDS level -- see block.py's own module docstring),
+        # so PFD_CP_STANDALONE_{W,H}_UM are likewise recorded as plain
+        # floats rather than computed at skeleton.py import time.
+        from pfd_cp import block as pfd_cp_block  # noqa: PLC0415
+
+        x0, y0, x1, y1 = pfd_cp_block.build().footprint
+        self.assertAlmostEqual(x1 - x0, skeleton.PFD_CP_STANDALONE_W_UM, places=2)
+        self.assertAlmostEqual(y1 - y0, skeleton.PFD_CP_STANDALONE_H_UM, places=2)
 
 
 if __name__ == "__main__":

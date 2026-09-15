@@ -1055,28 +1055,34 @@ class VcoSubBlockFloorplanTests(unittest.TestCase):
         # growing past 100 um (previous test) does not move this number
         # (see skeleton.py's own docstring for the arithmetic).
         #
-        # The lower bound moved from 0.9 to 0.8 of the target when issue
-        # #324's row fold cut VCO_CORE's width: it is a "this number changed,
-        # go re-read skeleton.py" tripwire, not a floor anything wants to sit
-        # against. Both bounds are asserted so a *regression* (the fold being
-        # undone) trips it too.
-        #
-        # SCOPE (issue #310): measured over BLOCKS *excluding* DIVIDER_LOCK.
+        # SCOPE (issue #310, re-scoped again at #386): measured over
+        # VCO_FOLD_TRIPWIRE_BLOCKS (BLOCKS minus DIVIDER_LOCK *and* PFD_CP).
         # This tripwire's own comment predicted "the next block to land real
-        # geometry ... find out here rather than in review", and that is
-        # exactly what happened -- the real divider chain (2634.28 x 93.82 um)
-        # took the unscoped whole-skeleton extent to ~1.19e6 um^2, ~9x this
-        # bound. That overrun is a real finding, stated at skeleton.py's
-        # DIVIDER_LOCK definition and asserted by
-        # test_floorplan_skeleton.py's own
-        # test_total_extent_overrun_is_recorded_and_does_not_grow. It is not
-        # re-asserted here, because a VCO-fold regression would then be
-        # invisible underneath it; scoping this to the pre-#310 blocks keeps
-        # *this* test measuring what it was written to measure.
-        used = skeleton.total_extent_um2(skeleton.BLOCKS_EXCLUDING_DIVIDER_LOCK)
-        self.assertLess(used, 150_000.0)
-        self.assertGreater(used / 150_000.0, 0.8, "budget headroom changed -- re-read skeleton.py")
-        self.assertLess(used / 150_000.0, 0.9, "budget headroom changed -- re-read skeleton.py")
+        # geometry ... find out here rather than in review", and that
+        # happened twice: first the real divider chain (2634.28 x 93.82 um,
+        # #310), then pfd_cp's own real assembly (434.31 x 80.73 um vs. its
+        # 150 x 100 um placeholder, #386) -- both widen the combined bounding
+        # box for reasons that have nothing to do with the VCO's own fold.
+        # Both overruns are real findings, stated at skeleton.py's
+        # DIVIDER_LOCK/PFD_CP definitions and asserted by
+        # test_floorplan_skeleton.py's own ratchets. Neither is re-asserted
+        # here, because a VCO-fold regression would then be invisible
+        # underneath it; VCO_FOLD_TRIPWIRE_BLOCKS keeps *this* test measuring
+        # only LOOP_FILTER (fixed) + VCO_CORE (what it was written to
+        # measure) -- see that constant's own docstring for why this scope
+        # is immune to PFD_CP's own width by construction, not just by
+        # exclusion.
+        #
+        # The ratio bounds below are recalibrated for this narrower scope
+        # (previously 0.8-0.9 against the unscoped-by-PFD_CP reading before
+        # #386); like the old bounds, they are a "this number changed, go
+        # re-read skeleton.py" tripwire, not a floor anything wants to sit
+        # against -- both are asserted so a regression (e.g. the #324 fold
+        # being undone) trips it too.
+        used = skeleton.total_extent_um2(skeleton.VCO_FOLD_TRIPWIRE_BLOCKS)
+        self.assertLess(used, 100_000.0)
+        self.assertGreater(used / 150_000.0, 0.55, "budget headroom changed -- re-read skeleton.py")
+        self.assertLess(used / 150_000.0, 0.65, "budget headroom changed -- re-read skeleton.py")
 
 
 class BiasResistorDeviceTests(unittest.TestCase):
@@ -1994,20 +2000,26 @@ class AssembledVcoBlockFloorplanTests(unittest.TestCase):
 
     def test_skeleton_bounding_box_headroom_against_the_draft_budget(self):
         # Issue #324's row fold bought back most of the headroom the real VCO
-        # layout had eaten: ~148,200 um^2 (1.2 % under) before the fold,
-        # ~126,400 um^2 (16 % under) after, *including* the +6.2 um per axis
-        # the new block-level n-well guard ring costs. Both bounds are
-        # asserted so a regression that unfolds the mirror trips here.
+        # layout had eaten. Both bounds are asserted so a regression that
+        # unfolds the mirror trips here.
         #
-        # SCOPE (issue #310): measured over BLOCKS *excluding* DIVIDER_LOCK --
+        # SCOPE (issue #310, re-scoped again at #386): measured over
+        # VCO_FOLD_TRIPWIRE_BLOCKS (BLOCKS minus DIVIDER_LOCK *and* PFD_CP) --
         # see the identical note on
-        # VcoSubBlockFloorplanTests.test_area_budget_headroom_is_reported_not_silently_exceeded.
-        # The whole-skeleton number no longer fits the draft budget once the
-        # real divider chain is in it; that is asserted, with its magnitude
-        # ratcheted, in test_floorplan_skeleton.py.
-        extent = skeleton.total_extent_um2(skeleton.BLOCKS_EXCLUDING_DIVIDER_LOCK)
-        self.assertLess(extent, 135_000.0)
-        self.assertGreater(extent, 115_000.0)
+        # VcoSubBlockFloorplanTests.test_area_budget_headroom_is_reported_not_silently_exceeded,
+        # and VCO_FOLD_TRIPWIRE_BLOCKS's own docstring in skeleton.py for why
+        # this scope is immune to PFD_CP's own real-geometry width by
+        # construction. The bounds below (87,266.4 um^2 as of #386) are
+        # narrower than the pre-#386 115,000-135,000 um^2 band because
+        # LOOP_FILTER + VCO_CORE alone, with PFD_CP's own contribution
+        # excluded, is a smaller box than the three-block reading the old
+        # bounds were calibrated against. The whole-skeleton number no longer
+        # fits the draft budget once the real divider chain and pfd_cp are
+        # both in it; that is asserted, with its magnitude ratcheted, in
+        # test_floorplan_skeleton.py.
+        extent = skeleton.total_extent_um2(skeleton.VCO_FOLD_TRIPWIRE_BLOCKS)
+        self.assertLess(extent, 95_000.0)
+        self.assertGreater(extent, 80_000.0)
 
     def test_the_row_fold_actually_reduced_the_block_footprint(self):
         # The pre-fold assembled block (PR #325, recorded in

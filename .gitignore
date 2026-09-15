@@ -46,6 +46,9 @@
 # Same story again for the assembled complete cp block's DRC evidence and its
 # extracted-connectivity logs (issue #385).
 !layout/evidence/cp-block-layout/**/*.log
+# Same story again for the assembled pfd_cp top-level block's DRC evidence and
+# its extracted-connectivity logs (issue #386).
+!layout/evidence/pfd-cp-layout/**/*.log
 __pycache__/
 .DS_Store
 
