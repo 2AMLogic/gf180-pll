@@ -205,7 +205,27 @@ Unchanged from `PROOF-fold.md` / `PROOF-block.md`: no block-level LVS, no
 post-layout parasitic extraction, `sim/` remains pre-layout. This increment
 narrows the gap LVS would eventually close (an n-well/device-placement
 defect that today can only be caught by LVS or a manual KLayout session now
-also fails CI), it does not replace the need for LVS.
+also fails locally whenever `klayout.db` is importable), it does not replace
+the need for LVS.
+
+**Correction (added during review, issue #339's own PR):** "now also fails
+CI" was overstated when first written here. Verified against
+`.github/workflows/ci.yml`: neither the `checks` (headless) job nor the
+`pdk-checks` (nightly / `ci:full`) job installs the `klayout` pip wheel —
+only `volare` (the PDK) is installed. `_HAVE_KLAYOUT` is therefore `False` in
+both, so this increment's 8 new tests are *skipped*, not run, by CI today —
+confirmed by diffing `python3 -m unittest discover`'s own count on `main` vs.
+this branch: 341 tests/74 skipped -> 349 tests/82 skipped, i.e. all 8 new
+tests land in the skipped bucket, not the passed one. This is the same
+pre-existing gap the file's other `@unittest.skipUnless(_HAVE_KLAYOUT, ...)`
+tests already had (74 of them, before this increment) — not a regression
+introduced here, but not closed by it either. The gate is real and
+demonstrated (see the fault-injection section above), and it *does* protect
+a developer who runs `layout/tests/` locally with `klayout` installed before
+pushing — it just does not yet protect a push that skips that local step.
+Tracked in a follow-up issue to add `pip install klayout` to the `checks`
+job, which would turn this and the other 74 pre-existing skips into a real
+per-PR CI gate.
 
 This increment's own scope is deliberately narrow: `rect_frame()` is added to
 `layout/pll_top/vco/primitives.py` only, and the geometric regression tests
