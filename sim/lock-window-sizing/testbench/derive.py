@@ -13,7 +13,7 @@ Two hooks:
     deliberately not produced and is recorded ``not measured``.
 
 ``derive_tables``
-    ``window_sizing`` -- one row per sizing point, reducing the 45 PVT points
+    ``window_sizing`` -- one row per sizing point, reducing the 117 PVT points
     at that sizing to what the decision actually turns on: the MINIMUM window
     over the grid (the corner that decides whether a part meeting the ratified
     Lock criterion can fail to assert) and the MAXIMUM (the corner that
@@ -150,7 +150,7 @@ def derive_tables(run):
             name="window_sizing",
             description=(
                 "per delaywin_3v3 MOS-cap sizing: the comparator window t_win "
-                "(twin_r) reduced over the 45-point PVT grid to its extremes, "
+                "(twin_r) reduced over the 117-point PVT grid to its extremes, "
                 f"against the two-sided band [{WIN_LO_NS:g}, {WIN_HI_NS:g}] ns "
                 "-- lower edge = spec/pll.md's ratified Lock criterion, upper "
                 "edge = 2x it"

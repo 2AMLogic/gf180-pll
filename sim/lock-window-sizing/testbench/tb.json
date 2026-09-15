@@ -1,6 +1,6 @@
 {
   "name": "lock-window-sizing",
-  "description": "delaywin_3v3 window-sizing ladder: where t_win lands over the full 45-point PVT grid as the four MOS-cap loads are scaled, and whether any one sizing holds t_win inside a two-sided band at every corner at once",
+  "description": "delaywin_3v3 window-sizing ladder: where t_win lands over the full 13-bundle, 117-point PVT grid as the four MOS-cap loads are scaled, and whether any one sizing holds t_win inside a two-sided band at every corner at once",
   "claim": "#387 -> spec/pll.md#lock-detector (row 16, carved out of ratification by DR-007 Amendment A1) -- the spec's Lock detector section names two candidate fixes for its T1/T2 gap, 'widen the delay window, or scale the integrating capacitor'. Only the first moves the phase threshold at all (WIDE = ERR . ERRD fires when the error pulse outlasts the ERR->ERRD delay, so the threshold IS that delay; the integrating cap sets the assert/deassert time constants). Question: over the full PVT grid, is there a delaywin_3v3 MOS-cap sizing that holds the comparator window t_win simultaneously at or above the ratified Lock criterion (1 ns static phase error at the PFD inputs, so a part that MEETS the criterion always asserts) and at or below 2x that criterion (so the flag cannot assert on a part more than 2x outside it)? And how much margin does the answer have? The same grid also evaluates row 16's literal T1 (window >= 2.5 ns at every corner) on the same data, so the decision record can state the cost of T1 -- how far outside the ratified Lock criterion the flag would then assert -- as a measured number rather than an argument.",
   "methodology": [
     "DUT is design/delaywin_3v3.sch's four-stage inverter chain, each stage loaded by one nfet_03v3 wired as a MOS capacitor (drain = source = bulk = VSS, gate on the delayed node), exported inside design/netlist/lock_detector.spice.",
@@ -10,7 +10,7 @@
     "Band under test, stated here so the verdict is not read as an arbitrary threshold: the LOWER edge is spec/pll.md's ratified Lock criterion itself (static phase error at the PFD inputs <= 1 ns) -- a window narrower than that at any corner can refuse to assert on a part that meets the criterion. The UPPER edge is 2x that criterion -- a window wider than that lets the flag assert on a part more than 2x outside the criterion, which is the unsafe direction for a consumer gating logic on lock. Both edges must hold at EVERY PVT corner simultaneously, which is why the reduction reports min and max over the whole grid per sizing rather than a nominal value.",
     "This deck deliberately does NOT instantiate lock_detector. A full-detector deck would re-measure what sim/lock-detector/records/20260802-050119-c24ee3a.md already measured over the same grid, and would confound the sizing axis with the integrating node's own assert/deassert dynamics -- which are what the integrating capacitor sets and this campaign is not about.",
     "Limitation -- schematic-level. No extracted parasitics. The delay chain's nodes are lightly loaded, so wire capacitance adds delay (widening the window) and interconnect RC will not scale with kwc, so both the absolute window and its PVT spread move post-extraction. #18 must re-take this before any sizing chosen here is treated as final.",
-    "Limitation -- passives held typical. The corner set is the five MOS bundles; the MOS-cap axis (moscap_ff / moscap_ss) is NOT swept, so the load capacitance sits at its typical value at every point. That is deliberate for comparability with 20260802-050119-c24ee3a, which swept the same MOS-only bundle set, but it means the reported PVT spread is a LOWER bound on the real spread and the band margin reported here is optimistic. Sweeping the moscap axis is named as verification owed by the decision record this campaign backs.",
+    "Passive corner axes ARE swept, and the result is a deliberate null. sim/README.md warns that a MOS-only sweep silently leaves res_*/moscap_*/mimcap_* at typical, which is fatal for a claim that rides on a passive skew. This campaign therefore runs the FULL 13-bundle corner set (117 points per sizing), not the 45-point MOS-only grid sim/lock-detector's own record used -- and the window's extremes do not move: min and max land on ff/-40C/3.63V and ss/125C/2.97V, the same two MOS bundles, with the same values, at every sizing. That is the expected answer and it is now measured rather than argued: design/delaywin_3v3.sch's load is an nfet_03v3 wired as a MOS capacitor, NOT a device from the PDK's moscap family, so it takes its model from the MOS .lib section and has no independent passive corner axis to leave at typical (the schematic's own header states this was the reason for choosing that device). res_* and mimcap_* touch nothing in this DUT at all.",
     "Limitation -- no mismatch. sw_stat_global = sw_stat_mismatch = 0. Four nominally identical loads in series average their own mismatch, but the chain-to-chain variation between the detector's window and the rest of the block is not characterised here.",
     "Simulator settings: tran 5p 40n, the defaults otherwise."
   ],
@@ -19,7 +19,7 @@
   "nominal_supply_v": 3.3,
   "supply_tolerance": 0.1,
   "temperatures_c": [-40, 27, 125],
-  "corners": ["mos"],
+  "corners": ["full"],
   "params": {
     "ktstep": "5p",
     "ktstop": "40n"
@@ -85,8 +85,8 @@
     "repl_err_pct": {
       "min": -1.0,
       "max": 1.0,
-      "min_measured_points": 45,
-      "max_measured_points": 45
+      "min_measured_points": 117,
+      "max_measured_points": 117
     }
   }
 }
