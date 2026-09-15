@@ -33,8 +33,19 @@
 - **Written by**: Builder agent, issue #55
 - **Consumes**: DR-001 (architecture), DR-002 (scope ratification), DR-003
   (VCO band map / Kvco contract), DR-005 (dump-node buffer), DR-006 (loop
-  filter values and the Icp trim rule), and the `sim/` evidence records each of
+  filter values and the Icp trim rule), DR-010 (lock-detector window targets),
+  DR-011 (post-supply-step settling), and the `sim/` evidence records each of
   those cites.
+- **Revisions to the carved-out rows** (#387, 2026-09-15). Row 16's targets
+  **T1/T2 are replaced by T1′/T2′** per DR-010 — the original pair could not
+  be satisfied simultaneously, as its own [section](#lock-detector) now shows
+  with measured numbers — and the [Lock time](#lock-time) section gains a
+  second limitation, on re-lock after a mid-operation supply excursion, per
+  DR-011. **Neither row leaves DR-007 Amendment A1's carve-out on this
+  revision**: row 16's decided fix is not yet implemented or re-characterized
+  (#393) and its T4/T5 gap below 25 MHz is untouched; row 9's cold-start
+  question is unchanged. These revisions sharpen what is owed; they do not
+  close it.
 - **Supersedes**: nothing. The DRAFT target table that used to live in
   `README.md` was removed by the pre-publication audit (#38, PR #47) and is not
   restored there; this file is where the target spec lives from now on.
@@ -97,7 +108,7 @@ are at risk. Nothing in this repository has been fabricated or measured.
 | 13 | [Output duty cycle](#output-duty-cycle) | 45 – 55 % at `CLK`, over the whole band and all corners | measured 44.375 – 50.696 % (90 points); worst `fs`/27 °C/3.63 V at the `lo` edge (band 0, Vctrl 0.9 V) — the bottom-of-band binding condition the design basis predicted | **measured** (90 points, loaded); target **not met** at 7/90 points, all at the `lo` edge |
 | 14 | [Output levels and drive](#output-levels-and-drive) | rail-to-rail CMOS on `vdd_vco`: V_OH ≥ 0.9·VDD_VCO, V_OL ≤ 0.1·VDD_VCO into ≤ 50 fF external load | measured V_OH 1.006 – 1.044·VDD_VCO, V_OL −0.040 … −0.006·VDD_VCO into a 50 fF load, at every one of 90 points | **measured** (90 points); target **met** at every point |
 | 15 | [Area](#area) | ≤ 0.15 mm² total — **a budget, not a result** (no layout exists) | n/a — drawn area is not a PVT quantity; the *capacitance* it buys is (C1 = 107.1 … 133 pF over corners) | **budget**; loop-filter allocation is **measured** |
-| 16 | [Lock detector](#lock-detector) | digital `lock` output; assert window ≥ 2.5 ns of phase error, ≥ 2× the worst-case static phase offset; hysteresis ≥ 25 % of the assert window; no chatter | window measured 0.877 … 1.702 ns, max at `ss`/125 °C/2.97 V — **the target is not met today** | **measured** (behaviour); **budget** (the target, currently a gap) |
+| 16 | [Lock detector](#lock-detector) | digital `lock` output; assert window within **1 … 2 ns** of phase error — i.e. ≥ the ratified Lock criterion and ≤ 2× it — at every PVT point (T1′/T2′, DR-010); hysteresis ≥ 25 % of the assert window; no chatter | as drawn (W = 8 µm) the window is 0.877 … 1.702 ns — **12 % below T1′ at `ff`/−40 °C/3.63 V, so the target is not met today**. The decided fix (W = 9.5 µm) measures 1.017 … 1.956 ns over 117 corners, in-band with +1.7 %/+2.2 % of margin, but is **not yet implemented or re-characterized** | **measured** (behaviour, and the sizing ladder); **budget** (the target, still a gap until the fix lands) |
 | 17 | [Kvco](#kvco) | ≤ 150 MHz/V at every legal operating point under the [band-selection rule](#band-selection-rule) | 115.8 MHz/V at `all-fast`/27 °C/2.97 V, band 6, Vctrl 1.54 V (target 200 MHz) | **measured** |
 | 18 | [Supply range](#supply-range) | 3.3 V ± 10 % (2.97 – 3.63 V), `nfet_03v3`/`pfet_03v3` only; three domains | n/a — the supply axis is the *independent* variable of every other row's corner binding | **measured** as a swept axis on every campaign |
 
@@ -574,6 +585,27 @@ slipping and the VCO's large-signal nonlinearity, and is #163's number, not
 this one. The < 100 µs target above is therefore **measured for settling and a
 budget for cold start**; see [Verification owed](#verification-owed).
 
+**A second limitation, and it is a different one: this specification states no
+bound on re-lock after a mid-operation supply excursion** (DR-011). Every
+number above is cold-start — from enable-release at `Vctrl = 0`. A supply step
+*during* operation is a different disturbance, and the only evidence about it
+is a lower bound: after a 3.30 → 3.63 V step (+10 % of nominal, 100 ns edge),
+`lock` had **not** re-asserted **34.4 µs (3.70 τ)** later at 2 of the 3
+sampled corners, with the static phase still decaying monotonically at that
+instant (`sim/supply-sensitivity/records/20260901-155456-46b92f8.md`, the
+escalated 40.08 µs high-plateau hold; classified as a settling tail rather
+than a structural miss by `.../20260915-105055-2d6ab99.md` and
+`.../20260915-124108-49f539f.md`). Arithmetic on that data brackets the
+recovery at 37.2 … 42.6 µs after the step edge — at or below this loop's own
+≈43 µs cold-start settling floor, so **nothing in evidence indicts the loop
+filter** (DR-011 Decision 1) — but that bracket is a two-sample extrapolation
+and `46b92f8` §3c's `under-damped` result at one of the same corners is
+inconsistent with the model it rests on
+(`.../20260915-202323-62391c6.md`). **A consumer gating logic on `lock` must
+therefore treat post-excursion re-lock as unbounded above 34.4 µs** until
+#395 measures it. Only 3 of 45 corners, one excursion size, and one
+(f_ref, N, trim-code) cell have been run on that deck at all.
+
 ## Power
 
 **Target: < 5 mW at 100 MHz output, in lock, all supply domains summed.**
@@ -826,13 +858,14 @@ entire block budget** (DR-002 Decision 1).
 implemented as a phase-error window comparator — a passive monitor, explicitly
 **not** bundled with any band-search or self-calibration FSM.
 
-**Targets** (the "[no recorded target]" item, resolved — and note that the
-design does **not** meet them today):
+**Targets** (the "[no recorded target]" item, resolved; T1/T2 replaced by
+T1′/T2′ per DR-010 — see the gap discussion below for why the original pair
+could not be satisfied):
 
 | # | Target | Rationale |
 |---|---|---|
-| T1 | Assert window ≥ **2.5 ns** of phase error at the PFD inputs | it must be wider than the worst-case static phase offset the loop actually stands off in lock, or the flag will refuse to assert on a correctly locked part |
-| T2 | Assert window ≥ **2× the worst-case static phase offset** over the ratified (f_ref, trim-code) space | the same requirement expressed as a ratio, so it tracks a future charge-pump or trim change instead of freezing at one number |
+| T1′ | Assert window ≥ **1 ns** — the ratified [Lock criterion](#lock-time) itself — at every point of the mandated PVT grid | a part that *meets* the criterion must always be able to assert `lock`; a window narrower than the criterion at any corner is a false negative on a genuinely locked part |
+| T2′ | Assert window ≤ **2 × the ratified Lock criterion** (2 ns), at every point of the same grid | the flag must not assert far outside the criterion it observes. 2× is the stated reach, and this is the direction whose failure is unsafe for a consumer gating logic on `lock` |
 | T3 | Hysteresis ≥ **25 % of the assert window** | so the flag cannot chatter at the window edge |
 | T4 | Deassert latency ≤ **1 reference period** at every f_ref in 1–25 MHz | a consumer gating logic on `lock` needs the deassert to be prompt at the *bottom* of the reference range, which is where the present design is weakest |
 | T5 | No chatter at any corner, at any f_ref in 1–25 MHz | measured today at 25 MHz only |
@@ -853,17 +886,47 @@ figures below, DR-007 Amendment A4):
 
 **Two gaps, recorded rather than papered over:**
 
-1. **T1/T2 are not met.** The window is 0.877–1.702 ns, and the static phase
-   offset the loop stands off in lock is of comparable size: 0.671 ns
-   systematic worst-corner (`pfd-deadzone`, `ff`/125 °C/3.63 V) plus 0.576 ns
-   statistical (`mc-cp-mismatch` term 4, |mean| + 3σ) plus 0.239 ns of
-   divider-retiming flop clk→Q mismatch — up to ≈1.49 ns summed. That is at or
-   past the assert edge at several corners. It is worse at the top of the
-   reference range: the charge-derived component scales as `ΔQ/Icp`, and the
-   [trim rule](#icp-trim-code-rule) mandates the *smallest* Icp (1 leg,
-   ≈1.7 µA) at f_ref ≥ 16 MHz. **A correctly locked part may fail to assert
-   `lock`.** The fix is geometric (widen the delay window, or scale the
-   integrating capacitor), not architectural.
+1. **T1′ is not met by the cell as drawn, and the fix is decided but not yet
+   implemented** (DR-010). The window is 0.877–1.702 ns, so at the narrowest
+   corner (`ff`/−40 °C/3.63 V) it is 12 % *below* the ratified 1 ns Lock
+   criterion: **a part that meets the criterion can fail to assert `lock`.**
+   The fix is geometric — `delaywin_3v3`'s four MOS-capacitor loads go from
+   W = 8 µm to **W = 9.5 µm**, measured at 1.017 … 1.956 ns over all 117
+   corners, `in-band` by T1′/T2′ with +1.7 % / +2.2 % of margin
+   (`sim/lock-window-sizing/records/20260915-202802-79c0cee.md`, 1170 points).
+   It is **not** a change to the integrating capacitor: `WIDE = ERR · ERRD`
+   fires when the error pulse outlasts the `ERR → ERRD` delay, so the phase
+   threshold *is* that delay, and `MCW`/`VWIN` set the assert/deassert time
+   constants (T4's subject) instead. The margin is thin and three erosions
+   are unquantified — extraction (#18), mismatch, and the driving XOR's own
+   edge rate; see DR-010 §Consequences.
+
+   **The original T1/T2 could not be satisfied at all**, which is why DR-010
+   replaced them. T1 (≥ 2.5 ns) is a *minimum*; "do not assert far outside the
+   criterion" is a *maximum*; and the delay chain's PVT spread is a fixed
+   ≈1.92× that geometry cannot narrow (measured: 1.928× at W = 8 µm,
+   1.906× at W = 26 µm). The smallest sizing meeting T1 at every corner is
+   W = 26 µm, and there the window reaches **4.924 ns** — the flag would
+   assert on a part 4.9× outside the very criterion it exists to observe.
+   T1/T2's premise was that the window must cover "the worst-case static
+   phase offset the loop actually stands off in lock" — 0.671 ns systematic
+   worst-corner (`pfd-deadzone`, `ff`/125 °C/3.63 V) plus 0.576 ns statistical
+   (`mc-cp-mismatch` term 4, |mean| + 3σ) plus 0.239 ns of divider-retiming
+   flop clk→Q mismatch, up to ≈1.49 ns summed, and worse at the top of the
+   reference range because the charge-derived component scales as `ΔQ/Icp`
+   while the [trim rule](#icp-trim-code-rule) mandates the *smallest* Icp
+   (1 leg, ≈1.7 µA) at f_ref ≥ 16 MHz. But ≈1.49 ns is **itself already
+   outside** the ratified ≤ 1 ns Lock criterion: a part standing off that much
+   phase is not locked, and a flag refusing to assert there is correct.
+
+   **A separate, larger finding this does not fix**: at `ff`/125 °C/3.63 V the
+   *loop* stands off **1.796 ns** of static phase in its own undisturbed
+   steady state (`sim/supply-sensitivity`, `supply_steady.csv` row
+   `ff,125,3.63`; found by #384/#389 from the supply-step campaign). That
+   corner does not meet the ratified Lock criterion at all, and no window
+   change can make it do so without making the flag lie. It is owed to **#394**
+   as a static-phase-offset question — see
+   [Verification owed](#verification-owed).
 2. **T4/T5 are unverified below 25 MHz.** The detector was characterized at
    f_ref = 25 MHz only. Its assert hold-off is an *absolute* time set by a weak
    pull-up charging a MOS cap, so at the 1 MHz bottom of the reference range
@@ -875,7 +938,14 @@ Both gaps are listed in [Verification owed](#verification-owed).
 
 **Corner binding**: `ss` / 125 °C / 2.97 V for the window width, the assert
 time and the deassert latency; `ff` / −40 °C / 3.63 V for the *narrowest*
-window, which is the corner that binds T1.
+window. T1′ binds at `ff` / −40 °C / 3.63 V and T2′ at `ss` / 125 °C /
+2.97 V — the two edges of the band bind at opposite corners, which is why a
+sizing must be checked against the whole grid at once rather than at a
+nominal point. Neither edge moves when the eight passive corner bundles are
+added to the five MOS ones: `delaywin_3v3`'s load is an `nfet_03v3` wired as
+a MOS capacitor, not a device from the PDK's `moscap` family, so the window
+rides entirely on the MOS axis (measured over all 13 bundles, 117 points per
+sizing, in `20260915-202802-79c0cee`).
 
 Note that the window is an **absolute** number of nanoseconds (it is an
 inverter-chain delay), so the *phase* band it implies is a fixed time, not a
@@ -984,7 +1054,9 @@ to reconstruct it from the status column.
 | [Power](#power) | a measured `vdd_ref` domain current, and a closed-loop total | #14 (`supply-sensitivity`) |
 | [Output duty cycle](#output-duty-cycle) | the design does not meet its own 45 % floor at 7/90 measured points (`fs` bundle, `lo` edge, nominal-or-above supply); post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the measurement itself now exists (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |
 | [Output levels and drive](#output-levels-and-drive) | post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the loaded-output swing/edge-rate measurement itself now exists and PASSES at every point (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |
-| [Lock detector](#lock-detector) | T1/T2 window widening (the design does not meet its own target today); T4/T5 characterization below 25 MHz | #11 rework, verified by #12 |
+| [Lock detector](#lock-detector) | T1′ window widening — **decided** (DR-010: W = 9.5 µm, measured in-band over 117 corners) but **not yet implemented or re-characterized**, so the design still does not meet T1′ today; T4/T5 characterization below 25 MHz, still untouched | #393 (implement DR-010 + re-take `sim/lock-detector`); T4/T5 unowned |
+| [Lock criterion](#lock-time) | `ff`/125 °C/3.63 V stands off **1.796 ns** of static phase in its own undisturbed steady state, against the ratified ≤ 1 ns bound — the loop, not the detector, misses the criterion at that corner. Also unreconciled: the itemized static-phase-offset budget (≈1.49 ns summed) already exceeds the criterion it is supposed to fit inside | #394 |
+| [Lock time](#lock-time) | any bound at all on **re-lock after a mid-operation supply excursion** — distinct from row 9's cold-start acquisition. Measured today only as a lower bound: `lock` had not re-asserted 34.4 µs (3.70 τ) after a +10 % step at 2 of 3 sampled corners (DR-011) | #395 |
 | [Area](#area) | everything except the loop filter; the block has no floorplan | #17 (floorplan), #18 (extraction) |
 | [Kvco](#kvco), [Output band](#output-band) | Monte Carlo band-select mirror mismatch; **post-extraction re-run of every VCO number** | #15, #18 |
 | [Multiplication ratio](#multiplication-ratio) | post-extraction retiming setup margin at N = 64, 200 MHz — the thinnest margin in the block at 6.1 % of a VCO period | #18 |
