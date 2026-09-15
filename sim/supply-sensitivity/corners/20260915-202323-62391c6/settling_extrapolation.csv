@@ -1,0 +1,20 @@
+# campaign: supply-sensitivity (#387, finding 2)
+# source record (read-only, never modified): 20260901-155456-46b92f8
+# ranking/derivation predecessor: 20260915-124108-49f539f (which supersedes 20260915-105055-2d6ab99 on its ranking only)
+# generated_utc: 2026-09-15T20:23:23Z
+# NO SIMULATION WAS RUN. Every column is arithmetic on committed data.
+# dominant closed-loop pole f_p = 17.09e3 Hz (spec/pll.md 'Lock time': 1/(2 pi R C1) = 17.09 kHz); tau_s = 1/(2 pi f_p)
+# t7_s/t8_s: the REF-edge instants phi07/phi08 were actually measured at (the .meas TRIG times), so dt_s is read, not assumed
+# ld_assert_ns / phase_to_shed_ns: as in lock_disambiguation.csv -- the detector's assert edge, and phi08 minus it
+# steady_lock_ok: does THIS corner's own undisturbed steady state at the SAME 3.63 V rail assert LOCK? Where this is 'no' the corner is structural (spec row 16), and every extrapolation column below is meaningless for it and is emitted as 'n/a'
+# ratio_to_assert_meas: (phi08-a)/(phi07-a), model-free shrink factor of the distance to the assert edge over one p7..p8 window
+# k_singlepole: exp(-dt/tau) -- what one pole at the loop's own tau gives over the same interval. ratio_to_assert_meas BELOW this means the distance was closing faster than one pole over the window observed
+# implied_asymptote_ns: the settled phase SOLVED for from the two samples and tau -- a two-parameter fit to two points; fragile by construction
+# t_extra_linear_us: OPTIMISTIC bracket end -- phase_to_shed at the measured mean rate, straight-line
+# t_extra_singlepole_us: the same distance closed by one pole at tau from the implied asymptote
+# t_relock_*_us: the corresponding instant measured from the END of the supply step edge (t_step + t_edge), i.e. directly comparable to the 34.4 us the escalated hold actually ran
+# NEITHER extrapolation is a measurement. 46b92f8 section 3c measured this same ss/-40C corner's END-plateau frequency residual decaying ~16x slower than single-pole ('under-damped'); if the phase tail does the same, both columns understate the answer. See this script's header.
+bundle,temp_c,t7_s,t8_s,dt_s,phi07_ns,phi08_ns,rate_ns_per_us,ld_assert_ns,phase_to_shed_ns,steady_lock_ok,tau_s,k_singlepole,ratio_to_assert_meas,implied_asymptote_ns,t_extra_linear_us,t_extra_singlepole_us,t_edge_end_s,t_relock_linear_us,t_relock_singlepole_us
+typical,27,3.69201e-05,4.01201e-05,3.2e-06,2.668,1.886,0.2443,1.2,0.6861,yes,9.31275e-06,0.709202,0.4674,-0.02041,2.808,4.154,5.7e-06,37.23,38.57
+ff,125,3.69201e-05,4.01201e-05,3.2e-06,2.185,1.559,0.1955,1.2,0.3589,no,9.31275e-06,0.709202,n/a,n/a,n/a,n/a,5.7e-06,n/a,n/a
+ss,-40,3.69201e-05,4.01201e-05,3.2e-06,3.211,2.298,0.2851,1,1.298,yes,9.31275e-06,0.709202,0.5872,0.07271,4.552,8.153,5.7e-06,38.97,42.57

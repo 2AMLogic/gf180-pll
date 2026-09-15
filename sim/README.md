@@ -86,6 +86,7 @@ sim/
   | `divider-ratio-cell` | ÷2/3 single-cell moduli, both output edges, both input duty cycles, speed margin, 10 MHz band floor | #11 |
   | `divider-ratio-chain` | full-chain ratio over N = 4–64, retiming setup closure (joins `divider-ratio-dff`) | #11 |
   | `lock-detector` | phase-error window comparator: assert/deassert and window edges | #11 |
+  | `lock-window-sizing` | `delaywin_3v3` window-sizing ladder — where the comparator window `t_win` lands over the full 13-bundle PVT grid as the four MOS-cap loads are scaled, and which sizing (if any) holds it inside a two-sided band at every corner at once | #387 → DR-010 |
   | `vco-tuning-range` | open-loop ring VCO range, Kvco | #8 |
   | `pfd-deadzone` | PFD + charge-pump phase-to-charge transfer through zero phase error (dead-zone freedom), and the residual charge offset at zero | #9 |
   | `cp-compliance` | charge-pump output compliance range, UP/DN current and switching-time mismatch, 2-bit Icp trim range | #9 |

@@ -20,13 +20,14 @@ Being honest about where this actually is:
 - **Done** — architecture and scope captured as numbered decision records in
   `spec/`; xschem schematics for the VCO, PFD, charge pump, feedback divider,
   lock detector, and the shared 3.3 V logic cells they are built from; a
-  reproducible PVT corner harness; **79 evidence records** across 22
+  reproducible PVT corner harness; **81 evidence records** across 23
   verification campaigns (device characterization, VCO tuning range, PFD
   dead-zone freedom, charge-pump compliance and mismatch, divider moduli,
-  lock-detector window, loop dynamics, the closed-loop reference spur measured
-  from the output spectrum, the loaded output driver's duty cycle and
-  levels/drive, and a first pass at the other closed-loop campaigns:
-  lock-time, output-range, supply-sensitivity, and period-jitter).
+  lock-detector window and its sizing ladder, loop dynamics, the closed-loop
+  reference spur measured from the output spectrum, the loaded output
+  driver's duty cycle and levels/drive, and a first pass at the other
+  closed-loop campaigns: lock-time, output-range, supply-sensitivity, and
+  period-jitter).
 - **Not done** — closed-loop bring-up. `pll-top-smoke`'s latest record
   (`20260802-160926-8456ff3`, superseding the earlier FAIL) is an **overall
   PASS, 0 of 7 checks failed** at the single nominal corner (`typical` / 27 C /

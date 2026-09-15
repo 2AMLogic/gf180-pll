@@ -1,0 +1,17 @@
+# per delaywin_3v3 MOS-cap sizing: the comparator window t_win (twin_r) reduced over the 117-point PVT grid to its extremes, against the two-sided band [1, 2] ns -- lower edge = spec/pll.md's ratified Lock criterion, upper edge = 2x it
+# verdict 'in-band' means BOTH edges hold at every one of the grid's points simultaneously, not that the nominal value sits between them.
+# margin_to_lo_pct is (twin_min - lo)/lo; margin_to_hi_pct is (hi - twin_max)/hi. A negative value means that edge is already crossed.
+# ratio_max_over_min is the window's own PVT spread. It is a property of the delay chain, not of its sizing, and the band is satisfiable at all only while it stays at or under 2.
+# meets_t1_2p5ns is spec/pll.md row 16's target T1 (twin_min >= 2.5 ns) evaluated on the same data. It is reported, not used as the verdict: T1 is a minimum and the band's upper edge is a maximum, so at this chain's PVT spread the two cannot both hold.
+# twin_max_over_lock_criterion is twin_max / the ratified Lock criterion (1 ns) -- how far outside the criterion a part can be and still have the flag assert, at the worst corner. It is the cost column for T1: the sizing that meets T1 is the sizing that lets the flag assert furthest outside the criterion it is supposed to observe.
+sizing,kwc,n_points,twin_min_ns,twin_min_corner,twin_max_ns,twin_max_corner,ratio_max_over_min,margin_to_lo_pct,margin_to_hi_pct,verdict,meets_t1_2p5ns,twin_max_over_lock_criterion
+w08,8u,117,0.8746,ff_-40c_3.63v,1.686,ss_125c_2.97v,1.928,-12.54,15.68,below-lo,no,1.686
+w09,9u,117,0.9696,ff_-40c_3.63v,1.866,ss_125c_2.97v,1.925,-3.04,6.679,below-lo,no,1.866
+w095,9.5u,117,1.017,ff_-40c_3.63v,1.956,ss_125c_2.97v,1.923,1.712,2.179,in-band,no,1.956
+w10,10u,117,1.065,ff_-40c_3.63v,2.046,ss_125c_2.97v,1.922,6.464,-2.321,above-hi,no,2.046
+w11,11u,117,1.16,ff_-40c_3.63v,2.226,ss_125c_2.97v,1.92,15.96,-11.32,above-hi,no,2.226
+w12,12u,117,1.255,ff_-40c_3.63v,2.406,ss_125c_2.97v,1.918,25.45,-20.31,above-hi,no,2.406
+w16,16u,117,1.634,ff_-40c_3.63v,3.126,ss_125c_2.97v,1.913,63.43,-56.29,above-hi,no,3.126
+w24,24u,117,2.394,ff_-40c_3.63v,4.564,ss_125c_2.97v,1.907,139.4,-128.2,above-hi,no,4.564
+w25,25u,117,2.489,ff_-40c_3.63v,4.744,ss_125c_2.97v,1.906,148.9,-137.2,above-hi,no,4.744
+w26,26u,117,2.584,ff_-40c_3.63v,4.924,ss_125c_2.97v,1.906,158.4,-146.2,above-hi,yes,4.924
