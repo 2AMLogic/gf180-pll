@@ -184,10 +184,32 @@ class Block:
 # PLL-FLOORPLAN.md section 2) rather than adjacent to the VCO.
 DOMAIN_SPACING = 40.0  # um between domain guard rings/trunks (section 2)
 
-PFD_CP = Block("pfd_cp", x=0.0, y=0.0, w=150.0, h=100.0)
-# Width/height sized to actually contain its two real sub-block geometries
-# below (C1 array + C2, each with margin) -- see the containment check in
-# layout/tests/test_floorplan_skeleton.py.
+# Real pfd_cp geometry (issue #386): pfd (#300, mirror-symmetric PFD layout)
+# assembled with the complete cp block (#385, cp_output_stage + cp_dumpbuf)
+# into one flat, standalone-DRC-clean block matching design/pfd_cp.sch's
+# top-level netlist -- layout/pll_top/pfd_cp/block.py,
+# layout/evidence/pfd-cp-layout/PROOF.md. Recorded as plain floats rather
+# than calling pfd_cp.block.build() (which needs klayout.db to place/flatten
+# the two sub-blocks at the GDS level, unlike vco/block.py's own plain-Python
+# footprint_um()) -- same convention as DIVIDER_CHAIN_STANDALONE_W_UM/H_UM
+# below; layout/tests/test_floorplan_skeleton.py's own
+# RecordedFootprintDriftTests rebuilds the block and asserts the match
+# whenever klayout.db *is* importable, so the two views cannot drift
+# silently.
+#
+# FAIL-LOUD: 434.31 x 80.73 um (35,059.67 um^2 = 0.0351 mm^2) against
+# PLL-FLOORPLAN.md section 5's 0.010-0.020 mm^2 ROM estimate -- a 1.76-3.5x
+# overrun (and 2.34x the 150x100 um / 0.015 mm^2 placeholder this replaces),
+# stated here rather than silently absorbed, following the same
+# "FAIL-LOUD condition for a future pass" convention the VCO/divider-chain
+# docstrings above already use. See PLL-FLOORPLAN.md section 5's own
+# revision note for the re-run whole-chip arithmetic.
+PFD_CP_STANDALONE_W_UM = 434.31
+PFD_CP_STANDALONE_H_UM = 80.73
+PFD_CP = Block("pfd_cp", x=0.0, y=0.0, w=PFD_CP_STANDALONE_W_UM, h=PFD_CP_STANDALONE_H_UM)
+# LOOP_FILTER's width/height are sized to actually contain its two real
+# sub-block geometries below (C1 array + C2, each with margin) -- see the
+# containment check in layout/tests/test_floorplan_skeleton.py.
 LOOP_FILTER = Block(
     "loop_filter",
     x=PFD_CP.x + PFD_CP.w + DOMAIN_SPACING,
@@ -500,3 +522,20 @@ def total_extent_um2(blocks: tuple[Block, ...] = BLOCKS) -> float:
 #: area tripwires measure, so they keep tracking the VCO row fold rather than
 #: the divider chain's much larger footprint. See ``total_extent_um2()``.
 BLOCKS_EXCLUDING_DIVIDER_LOCK = tuple(b for b in BLOCKS if b is not DIVIDER_LOCK)
+
+#: ``BLOCKS_EXCLUDING_DIVIDER_LOCK`` further scoped to exclude ``PFD_CP`` --
+#: the VCO fold-regression tripwires need a measurement immune to *any*
+#: other block's own real-geometry growth, not just ``DIVIDER_LOCK``'s.
+#: Issue #386's ``pfd_cp`` assembly grew ``PFD_CP.w`` from its 150 um
+#: placement-plan placeholder to its own real 434.31 um footprint, which --
+#: laid out left of ``LOOP_FILTER``/``VCO_CORE`` in one row -- shifted the
+#: combined bounding box exactly the way ``DIVIDER_LOCK``'s own growth did
+#: at #310. This scope is immune to that shift by construction:
+#: ``LOOP_FILTER.x`` is defined as ``PFD_CP.x + PFD_CP.w + DOMAIN_SPACING``,
+#: so ``LOOP_FILTER``/``VCO_CORE``'s own combined width
+#: (``VCO_CORE.x + VCO_CORE.w - LOOP_FILTER.x``) cancels ``PFD_CP.w`` out
+#: entirely and depends only on ``LOOP_FILTER``'s own fixed 235 um width,
+#: ``DOMAIN_SPACING`` and ``VCO_CORE.w``. ``PFD_CP``'s own overrun is
+#: tracked separately by ``test_floorplan_skeleton.py``, same as
+#: ``DIVIDER_LOCK``'s.
+VCO_FOLD_TRIPWIRE_BLOCKS = tuple(b for b in BLOCKS_EXCLUDING_DIVIDER_LOCK if b is not PFD_CP)

@@ -515,6 +515,53 @@ PDK's own decks at the folded footprint, and re-proved LVS-clean against
 byte-for-byte unchanged by this revision (`layout/evidence/
 divider-chain-layout/PROOF-fold.md`).
 
+### 5.4 Revision: `pfd_cp` is now real (issues #385, #386)
+
+**Status: the PFD/CP row is no longer a ROM estimate.** `pfd` (#300,
+mirror-symmetric PFD layout) is assembled with the complete `cp` block
+(#385, `cp_output_stage` + `cp_dumpbuf`) into one flat, standalone-DRC-clean
+`pfd_cp` block matching `design/pfd_cp.sch`'s top-level netlist — the final
+integration piece #303/#294 asked for (`layout/pll_top/pfd_cp/block.py`,
+`layout/evidence/pfd-cp-layout/PROOF.md`).
+
+| Block | §5's ROM row | §5.4 real, as-drawn | Δ | Evidence |
+|---|---|---|---|---|
+| PFD + charge pump | 0.010–0.020 mm² | **0.0351 mm² (434.31 × 80.73 µm)** | 1.76–3.5× over the ROM range | `layout/evidence/pfd-cp-layout/PROOF.md` (#386) |
+
+Re-running §5.1's arithmetic once more, replacing the PFD/CP row's ROM
+high-end estimate with the real number: 0.0369 (loop filter) + 0.0312 (VCO)
++ 0.0351 (PFD/CP, real) + 0.1396 (divider + lock) = **0.2428 mm²**, i.e.
+**0.3035 mm²** after §5's own ×1.25 top-level overhead — a **≈2.0× overrun**
+against the < 0.15 mm² draft target, up slightly from §5.3's ≈1.9× (the
+PFD/CP row grew from its own ROM high end, 0.020 mm², to the real 0.0351
+mm² — a genuine increase, not a rounding artifact).
+`skeleton.py`'s `total_extent_um2()` is effectively unchanged (~0.611 × 10⁶
+µm², same order as §5.3's ~0.61 × 10⁶): the divider chain, not `PFD_CP`,
+sets the skeleton's overall width (`DIVIDER_LOCK.w` = 1333.66 µm, against
+`PFD_CP`'s own 434.31 µm), so widening `PFD_CP` shifted `LOOP_FILTER`/
+`VCO_CORE` to the right without moving the skeleton's own bounding box.
+
+**The cause, same structural pattern as the VCO/divider-chain overruns
+above:** every device in `pfd`/`cp_array`/`cp_output_stage`/`cp_dumpbuf` is
+its own diffusion island wired by metal (`devgen.py`'s own module
+docstring), and `pfd_cp` composes two already-wide sub-blocks
+side-by-side rather than folding either — `cp` alone is 347.41 × 74.73 µm
+(`layout/evidence/cp-block-layout/PROOF.md`), and placing `pfd` (80.9 ×
+22.48 µm) beside it adds width, not height, since the bridging routing
+(four Metal3 risers + a Metal2 trunk row above both blocks) needs no
+dedicated channel of its own. No fold pass has been attempted on `pfd_cp`
+the way #324/#341/#344 folded the VCO/divider chain; that lever is
+deliberately untouched here, tracked as a follow-up the same way §5.3's own
+"what is left is device density" note tracks the divider chain's own
+residual overrun.
+
+**Not a DRC regression.** `pfd_cp` is signoff-clean on the PDK's own `main`
+deck, both the default and `--offgrid` (signoff-grade) runs, against the
+real assembled geometry — `layout/evidence/pfd-cp-layout/PROOF.md`. No LVS
+claim is made for the same reason `cp`'s own record states: a reference
+netlist for the block is not part of this issue's own scope (see
+`PROOF.md`'s "No LVS claim, and why").
+
 ## 6. GDS skeleton
 
 `layout/floorplan/skeleton.py` assembles a **block-placement skeleton**
@@ -537,24 +584,21 @@ layout instead of only the single trivial `inv_tb` cell.
 **Which rectangles are now real** (this list supersedes the "they do not
 exist as real geometry yet" characterization this section carried through
 #17): `vco` (#293/#324), `divider_lock.divider_chain` (#310, reduced at #341
-and folded at #344) and `divider_lock.lock_detector` (#296) are the blocks'
-own measured as-drawn extents, and `DIVIDER_LOCK` is sized to contain the
-latter two — see §5.1 and §5.3.
-`pfd_cp` is still a §5 ROM estimate. The devices themselves are DRC-clean
-(and, for the divider chain, LVS-clean) in each block's own evidence
-directory, not by virtue of this skeleton's run.
+and folded at #344), `divider_lock.lock_detector` (#296), and now `pfd_cp`
+(#385/#386) are the blocks' own measured as-drawn extents, and
+`DIVIDER_LOCK` is sized to contain the divider-chain/lock-detector pair —
+see §5.1, §5.3 and §5.4. The devices themselves are DRC-clean (and, for the
+divider chain, LVS-clean) in each block's own evidence directory, not by
+virtue of this skeleton's run.
 
-**`pfd_cp`'s rectangle stays ROM for now, deliberately (issue #321).** Its
-charge-pump output stage is now a real, DRC-clean block —
-`layout/pll_top/pfd_cp/cp_output_stage.py`, 117.81 × 66.73 µm, evidence in
-`layout/evidence/cp-layout/` — but `pfd_cp` as this skeleton draws it is the
-*whole* PFD + charge pump + `cp_dumpbuf` block, and the assembly that puts
-`pfd.py`, `cp_output_stage.py` and `cp_dumpbuf.py` into one placed block is
-Part 5 (**#303**). Replacing this rectangle with a measured extent before
-that assembly exists would mean measuring a block that does not, so
-`skeleton.py`'s `pfd_cp` extent is **deferred to #303** rather than updated
-here; §5.1's own table row carries the CP output stage's real number in the
-meantime.
+**`pfd_cp`'s rectangle is real as of issue #386.** `pfd.py`, the complete
+`cp` block (`cp_output_stage.py` + `cp_dumpbuf.py`, assembled at #385) and
+their own bridging routing (`UP`/`DN`/`VDD`/`VSS`) are now one flat,
+standalone-DRC-clean `pfd_cp` GDS matching `design/pfd_cp.sch`'s full
+netlist — `layout/pll_top/pfd_cp/block.py`,
+`layout/evidence/pfd-cp-layout/PROOF.md`. `skeleton.py`'s `PFD_CP` block is
+now sized to that measured 434.31 × 80.73 µm extent (§5.4) rather than the
+150 × 100 µm placement-plan estimate it carried through #385.
 
 Evidence: `layout/evidence/floorplan-skeleton/` (see `PROOF.md` there for the
 DRC run's provenance and verdict).
