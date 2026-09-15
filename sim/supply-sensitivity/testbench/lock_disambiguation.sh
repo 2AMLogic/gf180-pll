@@ -41,6 +41,39 @@
 #     all once the phase has actually settled?
 #   - `sim/lock-detector`'s own measured assert/deassert window
 #     (`window_edges.csv`), the independent characterisation of mechanism 2.
+#
+# SCHEMA CHANGE (#389), called out here per `sim/README.md` ("a testbench
+# change that affects comparability must be called out in the next record"):
+# two columns were appended after `steady_lock_ok` --
+#
+#   ld_assert_ns      the assert edge of this corner's detector window
+#                     (`asserted_up_to_s` in window_edges.csv), i.e. the
+#                     largest static phase error that still let the detector
+#                     assert. Already implicit in `ld_window_ns`'s low end;
+#                     emitted numerically so the subtraction below is
+#                     auditable without opening window_edges.csv.
+#   phase_to_shed_ns  phi08_ns - ld_assert_ns -- how much phase a corner still
+#                     has to shed, at the escalated hold's own end, before
+#                     LOCK could assert. This is the quantity that ranks the
+#                     corners by "distance from settled". It is NOT the
+#                     settled value's distance below the window edge, which is
+#                     a different (and, for ranking, meaningless) number:
+#                     record `20260915-105055-2d6ab99` ranked the corners on
+#                     that wrong quantity and stated the comparison inverted
+#                     (#389, corrected by the record that supersedes it). The
+#                     column exists so the ranking is machine-derived rather
+#                     than hand-typed, per this campaign's own standard.
+#
+#                     Caveat: `phase_to_shed_ns` is a settling-distance metric
+#                     only at a corner whose OWN undisturbed steady state
+#                     asserts LOCK (`steady_lock_ok=yes`). Where it does not
+#                     (`ff`/125 C here), the corner is structurally outside
+#                     its detector window even fully settled, so no amount of
+#                     shedding reaches assertion and the number ranks nothing.
+#
+# A CSV emitted before this change has 11 columns and no header comment for
+# either; one emitted after has 13. Nothing under `corners/` is rewritten --
+# the pre-change CSV stays exactly as committed (`sim/README.md`, append-only).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -76,7 +109,10 @@ TABLE="${OUT}/lock_disambiguation.csv"
   echo "# window_lo/window_hi_v: min/max |LOCK| over that window, from the retained _esc.csv trace"
   echo "# ld_window_ns: sim/lock-detector's own measured assert/deassert phase-error window at this process/temp (window_edges.csv)"
   echo "# steady_phase_ns / steady_lock_ok: this SAME corner's undisturbed steady-state static phase and LOCK verdict at the SAME 3.63 V rail (supply_steady.csv) -- the control condition"
-  echo "bundle,temp_c,phi07_ns,phi08_ns,ferr_hi,lock_hi_v,lock_plateau_max_v,lock_plateau_mean_v,ld_window_ns,steady_phase_ns,steady_lock_ok"
+  echo "# steady_phase_ns is a SIGNED REF->FB skew; the detector window bounds its MAGNITUDE, so compare |steady_phase_ns| against ld_window_ns"
+  echo "# ld_assert_ns: assert edge of this corner's detector window (asserted_up_to_s) -- the largest static phase error that still asserted"
+  echo "# phase_to_shed_ns: phi08_ns - ld_assert_ns -- phase still to shed at the escalated hold's end before LOCK could assert; ranks the corners by distance from settled. Meaningful only where steady_lock_ok=yes (see this script's header)"
+  echo "bundle,temp_c,phi07_ns,phi08_ns,ferr_hi,lock_hi_v,lock_plateau_max_v,lock_plateau_mean_v,ld_window_ns,steady_phase_ns,steady_lock_ok,ld_assert_ns,phase_to_shed_ns"
   for row in "typical 27" "ff 125" "ss -40"; do
     # shellcheck disable=SC2086  # intentional word-splitting of "bundle temp"
     set -- ${row}; bundle="$1"; temp="$2"
@@ -104,17 +140,26 @@ TABLE="${OUT}/lock_disambiguation.csv"
         printf "%.3g-%.3g", $4*1e9, $5*1e9
       }' "${LD_WINDOW}")"
 
+    # Assert edge on its own, and the phase still to shed against it. Derived
+    # here rather than in the record's prose: a hand-typed comparative is
+    # exactly what drifted from the data in `20260915-105055-2d6ab99` (#389).
+    ldassert="$(awk -F, -v b="${bundle}" -v t="${temp}" '
+      !/^#/ && $1 != "process" && $1==b && $2==t+0 { printf "%.17g", $4*1e9 }' "${LD_WINDOW}")"
+    [ -n "${ldassert}" ] || { echo "ERROR: no window_edges.csv row for ${bundle}/${temp}C" >&2; exit 1; }
+
     read -r sphase slock <<<"$(awk -F, -v b="${bundle}" -v t="${temp}" '
       !/^#/ && $1 != "bundle" && $1==b && $2==t+0 && ($3+0)==3.63 {
         lockok = ($17+0 >= 0.9*3.63) ? "yes" : "no";
         printf "%.6g %s", $8*1e9, lockok
       }' "${steady}")"
 
-    printf "%s,%s,%.4g,%.4g,%.6g,%.6g,%.6g,%.6g,%s,%.4g,%s\n" \
+    printf "%s,%s,%.4g,%.4g,%.6g,%.6g,%.6g,%.6g,%s,%.4g,%s,%.4g,%.4g\n" \
       "${bundle}" "${temp}" \
       "$(awk -v v="${phi07}" 'BEGIN{print v*1e9}')" \
       "$(awk -v v="${phi08}" 'BEGIN{print v*1e9}')" \
-      "${ferr_hi}" "${lock_hi}" "${lmax}" "${lmean}" "${ldwin}" "${sphase}" "${slock}"
+      "${ferr_hi}" "${lock_hi}" "${lmax}" "${lmean}" "${ldwin}" "${sphase}" "${slock}" \
+      "${ldassert}" \
+      "$(awk -v p="${phi08}" -v a="${ldassert}" 'BEGIN{print p*1e9 - a}')"
   done
 } >"${TABLE}"
 
