@@ -77,6 +77,69 @@ generator" convention), using ``devgen.py``'s own DRC-proven Metal1/device
 geometry underneath it. Via/Metal2/Metal3 sizes are the identical
 gf180mcuD signoff-deck minimums (+ headroom) ``lock_detector/primitives.py``
 already cites and proved DRC-clean (``V1.1``/``V2.1``/``M2.1``/``M3.1``).
+
+RISER COLUMNS MUST BE DECLUTTERED ACROSS NETS, NOT JUST WITHIN ONE (issue #391)
+--------------------------------------------------------------------------------
+The routing scheme above is necessary but was not, until this fix, sufficient:
+a first version of this module gave each net's own pads a Metal3 riser at that
+pad's own *natural* X (its Metal1 landing point's own centre) with no check
+that two *different* nets' risers ever landed on the same, or a too-close,
+Metal3 column. ``netcheck.py`` (issue #321) proved this is exactly the failure
+its own docstring describes DRC as blind to: two Metal3 verticals at one X
+(or closer than ``M3.2a``'s minimum space) merge into one legal polygon, and
+because every net's own riser here runs from its own pad -- low, near one of
+the two device rows -- up to a shared routing channel well above the whole
+cell, their Y extents overwhelmingly overlap, so *any* X collision is a real
+short, not a near-miss DRC happens to tolerate. ``cp_array.py``'s own
+``EN``/``ENB`` gate-tab columns (issue #359) hit the identical class of bug
+for a different reason; this module hits it far more pervasively, because
+``devgen.mosfet()`` draws a device's own top (drain) and bottom (source) pads
+spanning the *identical* X range (the full comp width) -- so any device whose
+``top_net`` and ``bottom_net`` differ (nearly every device in this schematic)
+produces a same-X, different-net collision *by construction*, not by
+coincidence, on every single device. This module's own 6 external pins
+(``design/cp_dumpbuf.sch``'s own ``ipin``/``iopin``s), previously all placed
+at one shared ``PIN_X_UM`` column, are a second, equally systematic instance.
+
+The fix has two parts, in the same spirit as issue #359's precedent but
+adapted to this module's own dense, single-row-per-polarity layout (not
+``cp_array.py``'s few, widely-spaced leg instances):
+
+1. **Slide within the pad, don't jog outside it, wherever there is room.**
+   :data:`PAD_SUB_OFFSET_UM` moves every device's own top-pad riser toward
+   one edge of that pad and its own bottom-pad riser toward the other (see
+   that constant's own docstring for the clearance arithmetic) -- the two
+   riser landing points stay on the *same already-DRC-clean Metal1 pad* the
+   device generator already drew, so this needs no new Metal1 shape and
+   cannot introduce a new spacing violation the pad itself does not already
+   clear. This alone resolves every top/bottom-of-one-device collision (the
+   overwhelming majority found by issue #391), and, as a side effect, also
+   clears a couple of coincidental collisions between a device's own centre
+   and an unrelated wide tap strip's own centre (e.g. the substrate tap
+   spanning the whole N row happening to centre on ``MN1``'s own X).
+2. **Give every remaining riser point a globally decluttered column.**
+   :func:`declutter_riser_x` (ported from ``cp_array.py``, issue #359 --
+   net-aware: two points sharing a natural X collapse onto one column only
+   when they are the *same* net) and :func:`check_riser_columns` (the
+   build-time proof that raises rather than silently drawing a short) now
+   run once, across *every* net's own merged riser points together, not per
+   net in isolation -- exactly ``cp_array.py``'s own precedent, and for the
+   same reason (nets that land close in X by coincidence, not just the same
+   net's own multiple pads, must never violate ``M3.2a``). A point whose
+   decluttered X differs from its own natural X gets a short :func:`_stub`
+   Metal1 jog first (also ported from ``cp_array.py``) -- safe here for the
+   same reason it is safe there: the jog is drawn on Metal1, which has no
+   DRC relationship to any *other* net's own Metal3 riser column (different
+   layer, connected only through an explicit via stack), so the only real
+   constraint is not overlapping *another* Metal1 shape too closely
+   (``M1.2a``), which this module's own DRC pass proves directly rather than
+   assuming. The external pins are pre-spread across distinct natural X
+   columns before entering this pipeline (see :func:`build`'s own pin
+   placement loop) rather than relying on the generic nudge alone: 6 pins
+   sharing one exact natural X, decluttered by a rightward-only sweep, would
+   otherwise cascade into the device row's own X range and force much
+   larger, riskier jogs than pre-spacing them in the genuinely empty space
+   this module's own canvas already leaves to their exterior.
 """
 
 from __future__ import annotations
@@ -85,7 +148,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Sequence
 
-from . import devgen
+from . import devgen, netcheck
 
 try:
     from .. import _canvas
@@ -117,6 +180,50 @@ VIA_ENCLOSURE_UM = 0.09  # V1.3a/V2.3b min is ~0 um; headroom for the enclosing 
 METAL2_WIRE_WIDTH_UM = 0.34  # > M2.1's 0.28 min
 METAL3_WIRE_WIDTH_UM = 0.34  # > M3.1's 0.28 min
 METAL2_TRACK_PITCH_UM = 0.75  # (pitch - width) = 0.41 > M2.2a's 0.28 min, between two tracks
+
+LANDING_HALF_UM = VIA1_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM
+"""Half-width of a Metal1/Metal2 via landing pad -- ``V1.3a``/``V2.3b``
+enclosure, identical derivation to :func:`_riser`'s own inline ``half_v1``
+(kept as a named constant too, since :func:`_stub`'s own caller needs the
+same value to size the landing pad a decluttering jog ends in -- same
+citation as ``cp_array.py``'s own ``LANDING_HALF_UM``, issue #359/#391)."""
+
+RISER_MIN_PITCH_UM = 1.0
+"""Minimum centre-to-centre X separation this module ever allows between two
+*different* Metal3 riser positions, enforced by :func:`declutter_riser_x` --
+identical value/citation to ``cp_array.py``'s own (issue #359): comfortably
+above the real DRC-minimum pitch (``METAL3_WIRE_WIDTH_UM`` (0.34) + ``M3.2a``'s
+0.28 um minimum space = 0.62 um). See the module docstring's own "RISER
+COLUMNS MUST BE DECLUTTERED ACROSS NETS" section (issue #391) for why this
+module needs the same global, cross-net decluttering ``cp_array.py`` does.
+"""
+
+PAD_SUB_OFFSET_UM = 3.0
+"""How far a device's own top-pad riser lands from that pad's exact
+geometric X centre (bottom-pad risers land the mirror-image ``-`` distance)
+-- see the module docstring's own "RISER COLUMNS MUST BE DECLUTTERED ACROSS
+NETS" section. ``devgen.mosfet()`` draws a device's own top (drain) and
+bottom (source) Metal1 pads spanning the *identical* X range (the full comp
+width), so their two centres always coincide exactly; offsetting each
+*within* that already-drawn, already-DRC-clean pad -- never outside it --
+needs no new Metal1 shape and cannot fail a rule the pad itself does not
+already clear. 3.0 um leaves at least 4.9 um of clearance to either edge of
+this module's own narrowest device (16 um wide: ``MTN``/``MN1``/``MN2``/
+``MP3``/``MP4``), far more than ``V1.3a``'s own via1-enclosure needs
+(:data:`LANDING_HALF_UM`, 0.22 um) -- and far more than :data:`RISER_MIN_PITCH_UM`
+(1.0 um), so a device's own top/bottom pair is never the reason
+:func:`declutter_riser_x` has to nudge anything.
+"""
+
+PIN_COL_PITCH_UM = 1.5
+"""How far apart this module's own 6 external pins (see :data:`EXTERNAL_NETS`)
+are pre-spread in X before routing -- see the module docstring's own "RISER
+COLUMNS MUST BE DECLUTTERED ACROSS NETS" section for why pre-spacing, not
+:func:`declutter_riser_x`'s own generic rightward nudge alone, is the right
+fix for this specific collision (6 different nets sharing one exact natural
+X would otherwise cascade into the device row's own X range). Matches
+:data:`PIN_PITCH_UM` purely for a tidy 45-degree fan-out; nothing requires
+the two to be equal."""
 
 # --- Row/device placement margins (um). ---
 DEVICE_GAP_UM = 2.0  # same-kind devices, same row -- clears each device's own
@@ -183,9 +290,24 @@ def _rect_extra(canvas: devgen.Canvas, layer: str, x0: float, y0: float, x1: flo
 def _riser(canvas: devgen.Canvas, x: float, y_pad: float, track_y: float) -> None:
     """Metal1 pad -> Via1 -> Metal2 landing -> Via2 -> Metal3 riser -> Via2 ->
     Metal2 bus landing. See this module's own docstring ("ROUTING") for why;
-    identical structure to ``lock_detector/primitives.py``'s own ``_riser()``.
+    identical structure to ``lock_detector/primitives.py``'s own ``_riser()``,
+    plus one addition that module did not need and ``cp_array.py``'s own
+    ``_riser()`` does (issue #391, same citation as that module's own): an
+    explicit Metal1 landing square under Via1, sized to fully enclose it
+    (``V1.3a``). This module no longer always rises directly off an
+    already-real, already-sizable device pad at its own exact centre --
+    :func:`declutter_riser_x` can now move a riser's own X a short distance
+    off that centre, possibly onto a plain :func:`_stub` jog only
+    ``METAL1_WIRE_WIDTH_UM`` (0.28 um) wide -- narrower than Via1's own
+    required enclosure (0.44 um) -- so this can no longer rely on the
+    incoming Metal1 already being wide enough. Drawing this landing square
+    even when the point is still safely inside the pad's own real geometry
+    (the common case, after :data:`PAD_SUB_OFFSET_UM`'s own within-pad
+    slide) is harmless -- an extra same-net Metal1 shape never violates a
+    width/space/enclosure rule against itself.
     """
     half_v1 = VIA1_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM
+    canvas.rect("metal1", x - half_v1, y_pad - half_v1, x + half_v1, y_pad + half_v1)
     _rect_extra(canvas, "via1", x - VIA1_SIZE_UM / 2.0, y_pad - VIA1_SIZE_UM / 2.0, x + VIA1_SIZE_UM / 2.0, y_pad + VIA1_SIZE_UM / 2.0)
     _rect_extra(canvas, "metal2", x - half_v1, y_pad - half_v1, x + half_v1, y_pad + half_v1)
 
@@ -201,34 +323,144 @@ def _riser(canvas: devgen.Canvas, x: float, y_pad: float, track_y: float) -> Non
     _rect_extra(canvas, "metal2", x - half_v2, track_y - half_v2, x + half_v2, track_y + half_v2)
 
 
-def _route_net(
-    canvas: devgen.Canvas,
-    net: str,
-    pad_centers: Iterable[tuple[float, float]],
-    track_y: float,
-    width: float = METAL2_WIRE_WIDTH_UM,
-) -> None:
-    """Tie every ``pad_centers`` Metal1 landing point to one shared Metal2 bus
-    at ``track_y`` via its own Metal3 riser -- see this module's docstring.
-    Two of this same net's own pads within one riser-width of each other in
-    X are snapped onto a single riser position first (grid = one riser
-    pitch), same reasoning as ``lock_detector.primitives.route_net()``'s own
-    docstring: two overlapping-but-not-identical via squares would merge
-    into an illegal shape.
+def pad_center(pad: tuple[float, float, float, float]) -> tuple[float, float]:
+    return ((pad[0] + pad[2]) / 2.0, (pad[1] + pad[3]) / 2.0)
+
+
+def _stub(canvas: devgen.Canvas, a: tuple[float, float], b: tuple[float, float], width: float = devgen.METAL1_WIRE_WIDTH_UM) -> None:
+    """A short Metal1 jog from a riser point's own natural centre ``a`` to
+    its own (possibly X-nudged) assigned column ``b`` -- ported verbatim
+    from ``cp_array.py``'s own ``_stub()`` (issue #359/#391).
+    :func:`declutter_riser_x` only ever changes X, never Y, so this is
+    always a single horizontal segment at the point's own Y -- short
+    (bounded by a handful of :data:`RISER_MIN_PITCH_UM`), and safe against
+    every *other* net's own Metal3 riser column regardless of how close the
+    jog passes to one: Metal1 and Metal3 have no DRC relationship to each
+    other except through an explicit via stack (see the module docstring's
+    own "RISER COLUMNS MUST BE DECLUTTERED ACROSS NETS" section), so the
+    only real constraint is not landing too close to *another* Metal1 shape
+    (``M1.2a``) -- proved directly by this module's own DRC pass, not
+    assumed.
+    """
+    half = width / 2.0
+    x0, x1 = sorted((a[0], b[0]))
+    canvas.rect("metal1", x0, a[1] - half, x1, a[1] + half)
+
+
+def declutter_riser_x(
+    points: Sequence[tuple[str, float, float]], min_pitch: float = RISER_MIN_PITCH_UM
+) -> list[tuple[str, float, float]]:
+    """Given ``(net, x, y)`` riser candidates -- one per merged riser point
+    this module needs to rise from -- return the same points with ``x``
+    nudged rightward (never ``y``) so that no two points end up less than
+    ``min_pitch`` apart in X, sweeping left to right by natural X.
+
+    Ported verbatim from ``cp_array.py``'s own ``declutter_riser_x()``
+    (issue #359), which this module's own build now needs for the identical
+    reason (see the module docstring's own "RISER COLUMNS MUST BE
+    DECLUTTERED ACROSS NETS" section, issue #391): exact ties are net-aware
+    (two points at the literal same natural X collapse onto one column only
+    when they share a net -- :func:`_riser` always runs each riser from its
+    own pad up to that net's own shared track, so two same-X same-net risers
+    always fully overlap in Y along the way, which is safe by construction),
+    and a tied point is snapped to its sibling's own *final* (possibly
+    already-nudged) X, not its own unperturbed natural X, so an earlier
+    nudge earlier in the sweep can never strand a later same-X point behind
+    it. See ``cp_array.py``'s own docstring for the two real, reproduced
+    failures this exact algorithm already fixed there.
+    """
+    order = sorted(range(len(points)), key=lambda i: points[i][1])
+    result = list(points)
+    prev_net: str | None = None
+    prev_natural_x: float | None = None
+    prev_assigned_x: float | None = None
+    for i in order:
+        net, natural_x, y = points[i]
+        if prev_assigned_x is None:
+            assigned_x = natural_x
+        elif natural_x == prev_natural_x and net == prev_net:
+            assigned_x = prev_assigned_x
+        elif natural_x - prev_assigned_x < min_pitch:
+            assigned_x = prev_assigned_x + min_pitch
+        else:
+            assigned_x = natural_x
+        result[i] = (net, assigned_x, y)
+        prev_net = net
+        prev_natural_x = natural_x
+        prev_assigned_x = assigned_x
+    return result
+
+
+def _verify_riser_plan(planned: Sequence[tuple[str, float, float]], min_pitch: float) -> None:
+    """Raise unless ``planned`` (an already-decluttered ``(net, x, y)`` riser
+    plan) puts exactly one net on every Metal3 riser column, with every two
+    distinct columns at least ``min_pitch`` apart. Ported from
+    ``cp_array.py``'s own ``_verify_riser_plan()`` (issue #359/#391) --
+    split out from :func:`check_riser_columns` for the identical reason: a
+    test can prove this half raises on a synthetic two-nets-one-column plan
+    without needing an input that also survives :func:`declutter_riser_x`'s
+    own (already correct) net-aware decluttering to reach it.
+    """
+    by_x: dict[float, set[str]] = {}
+    for net, x, _y in planned:
+        by_x.setdefault(round(x, 6), set()).add(net)
+    for x, nets in sorted(by_x.items()):
+        if len(nets) > 1:
+            raise ValueError(f"cp_dumpbuf: riser column x={x} carries more than one net: {sorted(nets)}")
+    xs = sorted(by_x)
+    for a, b in zip(xs, xs[1:]):
+        if b - a < min_pitch - 1e-9:
+            raise ValueError(
+                f"cp_dumpbuf: riser columns x={a} ({sorted(by_x[a])}) and x={b} "
+                f"({sorted(by_x[b])}) are {b - a:.3f} um apart; needs >= {min_pitch}"
+            )
+
+
+def check_riser_columns(
+    points: Sequence[tuple[str, float, float]], min_pitch: float = RISER_MIN_PITCH_UM
+) -> list[tuple[str, float, float]]:
+    """Run :func:`declutter_riser_x` over ``points`` and raise (via
+    :func:`_verify_riser_plan`) unless the result puts exactly one net on
+    every Metal3 riser column, with every two distinct columns at least
+    ``min_pitch`` apart.
+
+    This is the build-time proof issue #391 (following #359's own precedent
+    in ``cp_array.py``) asks for: a two-nets-on-one-column allocation (the
+    exact defect issue #391 found -- this module's entire standalone GDS
+    collapsing onto one electrical net) is asserted against, not left as a
+    comment, on *every* call to :func:`_route_nets`, i.e. on every
+    :func:`build`. Returns the decluttered plan so a caller that already
+    needs it does not have to run :func:`declutter_riser_x` twice.
+    """
+    planned = declutter_riser_x(list(points), min_pitch)
+    _verify_riser_plan(planned, min_pitch)
+    return planned
+
+
+def _merge_riser_points(pad_centers: Iterable[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Bucket one net's own riser candidate points that land within one
+    riser pitch of each other in X (and the same coarse row band in Y) onto
+    a single averaged point -- unchanged from this module's own original
+    ``_route_net()`` (see git history), just split out so :func:`build` can
+    gather every net's own merged points *before* handing them all, together,
+    to :func:`check_riser_columns` (issue #391 -- see the module docstring's
+    own "RISER COLUMNS MUST BE DECLUTTERED ACROSS NETS" section for why this
+    now has to happen globally, not per net).
+
+    Bucket by (x, a coarse y-band) -- x alone is not enough here: unlike
+    lock_detector's single-row cells, this module's pads span *two* rows
+    (Y_N and Y_P, ~20 um apart) plus a pin column, so two *different* rows'
+    pads can share a nearby X purely by coincidence. Averaging their (x, y)
+    into one fake riser point would land the via stack in the empty
+    channel between rows, on top of no Metal1 pad at all -- a real,
+    reproduced failure (V1.3a: "metal1 overlap of via1 >= 0") caught by
+    this module's own DRC pass before this fix. The row pitch (~20 um)
+    comfortably exceeds one grid cell, so bucketing y at a coarse 10 um
+    grid separates rows while still merging genuinely-adjacent same-row
+    pads (e.g. a device's own gate pad and a facing neighbour's S/D pad).
     """
     pad_centers = list(pad_centers)
     grid = METAL2_TRACK_PITCH_UM
-    # Bucket by (x, a coarse y-band) -- x alone is not enough here: unlike
-    # lock_detector's single-row cells, this module's pads span *two* rows
-    # (Y_N and Y_P, ~20 um apart) plus a pin column, so two *different* rows'
-    # pads can share a nearby X purely by coincidence. Averaging their (x, y)
-    # into one fake riser point would land the via stack in the empty
-    # channel between rows, on top of no Metal1 pad at all -- a real,
-    # reproduced failure (V1.3a: "metal1 overlap of via1 >= 0") caught by
-    # this module's own DRC pass before this fix. The row pitch (~20 um)
-    # comfortably exceeds one grid cell, so bucketing y at a coarse 10 um
-    # grid separates rows while still merging genuinely-adjacent same-row
-    # pads (e.g. a device's own gate pad and a facing neighbour's S/D pad).
     y_grid = 10.0
     merged: dict[tuple[int, int], list[tuple[float, float]]] = {}
     for x, y in pad_centers:
@@ -238,14 +470,57 @@ def _route_net(
         gx = sum(p[0] for p in group) / len(group)
         gy = sum(p[1] for p in group) / len(group)
         riser_points.append((gx, gy))
+    return riser_points
 
-    for x, y in riser_points:
-        _riser(canvas, x, y, track_y)
 
-    xs = [x for x, _ in pad_centers]
-    x_lo, x_hi = min(xs), max(xs)
-    if x_hi > x_lo:
-        _rect_extra(canvas, "metal2", x_lo - width / 2.0, track_y - width / 2.0, x_hi + width / 2.0, track_y + width / 2.0)
+def _route_nets(
+    canvas: devgen.Canvas,
+    nets: dict[str, list[tuple[float, float]]],
+    tracks: "NetTracks",
+    min_pitch: float = RISER_MIN_PITCH_UM,
+    width: float = METAL2_WIRE_WIDTH_UM,
+) -> None:
+    """Mesh-route every net in ``nets`` (dict of net -> its own riser
+    candidate centres, already offset per :data:`PAD_SUB_OFFSET_UM` where
+    applicable) to its own dedicated Metal2 track via :func:`_riser` -- see
+    the module docstring's own "ROUTING" and "RISER COLUMNS MUST BE
+    DECLUTTERED ACROSS NETS" sections (issue #391).
+
+    Every net's own points are first merged with :func:`_merge_riser_points`
+    (unchanged from before this fix), then *every* net's own merged points
+    are decluttered and verified *together* with :func:`check_riser_columns`
+    (issue #359's own precedent in ``cp_array.py``) -- a two-nets-on-one-
+    column allocation raises here rather than silently drawing a short. A
+    point whose decluttered X differs from its own natural X gets a
+    :func:`_stub` Metal1 jog first. The Metal2 bus per net spans that net's
+    own *decluttered* riser X extent (not its raw, pre-declutter pad
+    centres) -- the only coordinates that are guaranteed to still have a
+    riser landing on them.
+    """
+    flat_natural: list[tuple[str, float, float]] = []
+    for net, centers in nets.items():
+        for x, y in _merge_riser_points(centers):
+            flat_natural.append((net, x, y))
+    planned = check_riser_columns(flat_natural, min_pitch)
+
+    bus_x: dict[str, list[float]] = {}
+    seen_riser: set[tuple[str, float, float]] = set()
+    for i, (net, rx, ry) in enumerate(planned):
+        _, ox, oy = flat_natural[i]
+        if (round(ox, 6), round(oy, 6)) != (round(rx, 6), round(ry, 6)):
+            _stub(canvas, (ox, oy), (rx, ry))
+        key = (net, round(rx, 6), round(ry, 6))
+        if key not in seen_riser:
+            _riser(canvas, rx, ry, tracks.get(net))
+            seen_riser.add(key)
+        bus_x.setdefault(net, []).append(rx)
+
+    for net, xs in bus_x.items():
+        track_y = tracks.get(net)
+        x_lo, x_hi = min(xs), max(xs)
+        if x_hi > x_lo:
+            half = width / 2.0
+            _rect_extra(canvas, "metal2", x_lo - half, track_y - half, x_hi + half, track_y + half)
 
 
 class NetTracks:
@@ -264,10 +539,6 @@ class NetTracks:
             self._assigned[net] = self._next_y
             self._next_y += self._pitch
         return self._assigned[net]
-
-
-def pad_center(pad: tuple[float, float, float, float]) -> tuple[float, float]:
-    return ((pad[0] + pad[2]) / 2.0, (pad[1] + pad[3]) / 2.0)
 
 
 # Smallest axis-aligned box enclosing every box given -- shared with every
@@ -456,30 +727,59 @@ class DumpBufCell:
     isolated_well_box: tuple[float, float, float, float]
     other_well_boxes: list[tuple[float, float, float, float]]
     mp12_x_centers: list[float] = field(default_factory=list)
+    #: net -> every Metal1 pad this module believes belongs to that net --
+    #: unlike :attr:`pins` (external schematic pins only), this includes
+    #: every internal net too (``NSRC``, ``NDA``, ``PSRC``, ``PDA``, ...),
+    #: so a caller can probe all of them with :func:`netcheck.check_gds` and
+    #: catch an open as well as a short (issue #391). Same convention as
+    #: ``cp_array.py``'s own ``n_net_pads``/``p_net_pads``/``probe_pads()``.
+    net_pads: dict[str, list[tuple[float, float, float, float]]] = field(default_factory=dict)
 
     def write_gds(self, path) -> None:
         self.canvas.write_gds(path)
+
+    def probe_pads(self) -> dict[str, list[tuple[float, float, float, float]]]:
+        """Every net's own recorded pad list -- what
+        :func:`netcheck.check_gds` needs to prove this cell's own Metal1-3
+        connectivity is short- and open-free. See :attr:`net_pads`."""
+        return {net: list(boxes) for net, boxes in self.net_pads.items()}
 
 
 def build(outdir: Path | None = None) -> DumpBufCell:
     canvas = devgen.Canvas(TOP_CELL)
 
-    nets: dict[str, list[tuple[float, float]]] = {}
+    # --- every pad this module draws, net -> [(pad box, riser-x offset)],
+    # in the order add() is called. The offset (see PAD_SUB_OFFSET_UM's own
+    # docstring) only moves where *within* that already-drawn pad the riser
+    # lands -- add()'s own caller chooses it per port kind, not this dict. ---
+    raw: dict[str, list[tuple[tuple[float, float, float, float], float]]] = {}
 
-    def add(net: str, pad: tuple[float, float, float, float]) -> None:
-        nets.setdefault(net, []).append(pad_center(pad))
+    def add(net: str, pad: tuple[float, float, float, float], offset: float = 0.0) -> None:
+        raw.setdefault(net, []).append((pad, offset))
 
     n_ports = _place_row(canvas, N_DEVICES, ROW_Y_N)
     p_ports = _place_row(canvas, P_DEVICES, ROW_Y_P)
 
+    # Every device's own top (drain) and bottom (source) Metal1 pad spans
+    # the *identical* X range (devgen.mosfet() draws both the full comp
+    # width), so their two natural riser centres always coincide exactly --
+    # a systematic, not coincidental, collision whenever top_net != bottom_net
+    # (nearly every device here). +/-PAD_SUB_OFFSET_UM lands each riser at a
+    # different point *within* its own already-real pad instead (see that
+    # constant's own docstring, and the module docstring's own "RISER
+    # COLUMNS MUST BE DECLUTTERED ACROSS NETS" section, issue #391). Gate
+    # pads are too narrow to offset the same way (see PAD_SUB_OFFSET_UM's
+    # own docstring) and keep their own natural centre; any residual
+    # collision among them (or with a wide tap strip's own centre) is
+    # resolved generically by check_riser_columns() below.
     for (dev, _gap), port in zip(N_DEVICES, n_ports):
         add(dev.gate_net, port.gate_pad)
-        add(dev.top_net, port.top_pad)
-        add(dev.bottom_net, port.bottom_pad)
+        add(dev.top_net, port.top_pad, offset=PAD_SUB_OFFSET_UM)
+        add(dev.bottom_net, port.bottom_pad, offset=-PAD_SUB_OFFSET_UM)
     for (dev, _gap), port in zip(P_DEVICES, p_ports):
         add(dev.gate_net, port.gate_pad)
-        add(dev.top_net, port.top_pad)
-        add(dev.bottom_net, port.bottom_pad)
+        add(dev.top_net, port.top_pad, offset=PAD_SUB_OFFSET_UM)
+        add(dev.bottom_net, port.bottom_pad, offset=-PAD_SUB_OFFSET_UM)
 
     by_name_n = {dev.name: port for (dev, _g), port in zip(N_DEVICES, n_ports)}
     by_name_p = {dev.name: port for (dev, _g), port in zip(P_DEVICES, p_ports)}
@@ -555,11 +855,18 @@ def build(outdir: Path | None = None) -> DumpBufCell:
     # --- external pins: one Metal1 pad per schematic ipin/iopin, promoted
     # with devgen.Canvas.pin() (labels on the 34/10 purpose the official LVS
     # deck reads -- see devgen.py's own LAYER table comment), joining the
-    # same net's routed bus like any other pad. ---
+    # same net's routed bus like any other pad. Pre-spread across 6 distinct
+    # natural X columns (not one shared PIN_X_UM for all 6) -- see
+    # PIN_COL_PITCH_UM's own docstring and the module docstring's own "RISER
+    # COLUMNS MUST BE DECLUTTERED ACROSS NETS" section (issue #391): these
+    # pads are pure external I/O with no internal constraint on their exact
+    # X, and the empty exterior space to PIN_X_UM's own left has plenty of
+    # room for all 6 without ever reaching into the device row's own X range. ---
     pins: dict[str, tuple[float, float, float, float]] = {}
     for i, net in enumerate(EXTERNAL_NETS):
         y = ROW_Y_N + i * PIN_PITCH_UM
-        pad = (PIN_X_UM - 0.3, y - 0.3, PIN_X_UM + 0.3, y + 0.3)
+        x = PIN_X_UM - i * PIN_COL_PITCH_UM
+        pad = (x - 0.3, y - 0.3, x + 0.3, y + 0.3)
         canvas.rect("metal1", *pad)
         canvas.pin(net, *pad)
         add(net, pad)
@@ -567,14 +874,22 @@ def build(outdir: Path | None = None) -> DumpBufCell:
 
     # --- route every net: one Metal2 bus + per-pad Metal3 risers, at a
     # track_y unique to that net, in a channel above the whole cell (see
-    # this module's docstring, "ROUTING"). ---
+    # this module's docstring, "ROUTING" and "RISER COLUMNS MUST BE
+    # DECLUTTERED ACROSS NETS"). Every net's own points are decluttered
+    # *together*, not net by net, so a same-X collision between two
+    # different nets -- this module's own dominant defect (issue #391) --
+    # can never draw a short. ---
+    net_pads = {net: [pad for pad, _off in items] for net, items in raw.items()}
+    nets_points = {
+        net: [(pad_center(pad)[0] + off, pad_center(pad)[1]) for pad, off in items] for net, items in raw.items()
+    }
     channel_base_y = ROW_Y_P + ROW_HEIGHT_UM + 6.0
     tracks = NetTracks(base_y=channel_base_y)
-    for net, centers in nets.items():
-        _route_net(canvas, net, centers, tracks.get(net))
+    _route_nets(canvas, nets_points, tracks)
 
     all_ports = n_ports + p_ports
-    footprint_x0 = min(PIN_X_UM - 0.3, min(p.x0 for p in all_ports))
+    pin_x_min = PIN_X_UM - (len(EXTERNAL_NETS) - 1) * PIN_COL_PITCH_UM
+    footprint_x0 = min(pin_x_min - 0.3, min(p.x0 for p in all_ports))
     footprint_x1 = max(p.x1 for p in all_ports) + TAP_GAP_UM + TAP_SIZE_UM + devgen.NWELL_MARGIN_UM
     footprint_y0 = ROW_Y_N - devgen.NWELL_MARGIN_UM
     footprint_y1 = tracks._next_y  # noqa: SLF001 -- top of the last routed track
@@ -586,6 +901,7 @@ def build(outdir: Path | None = None) -> DumpBufCell:
         isolated_well_box=isolated_well,
         other_well_boxes=other_well_boxes,
         mp12_x_centers=mp12_x_centers,
+        net_pads=net_pads,
     )
 
 
@@ -595,6 +911,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     default_outdir = Path(__file__).resolve().parents[2] / "evidence" / "cp-dumpbuf-layout" / "work"
     parser.add_argument("--outdir", default=str(default_outdir))
+    parser.add_argument(
+        "--no-netcheck",
+        action="store_true",
+        help="skip the Metal1-3 connectivity check (see netcheck.py)",
+    )
     args = parser.parse_args()
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -609,7 +930,11 @@ def main() -> int:
         gap = well_separation_um(cell.isolated_well_box, other)
         print(f"  clearance from other well {other}: {gap:.3f} um")
     print(f"MP1/MP2 finger x-centers: {cell.mp12_x_centers}")
-    return 0
+    if args.no_netcheck:
+        return 0
+    report = netcheck.check_gds(gds_path, TOP_CELL, netcheck.pad_probe_points(cell.probe_pads()))
+    print(report.summary())
+    return 0 if report.ok else 1
 
 
 if __name__ == "__main__":

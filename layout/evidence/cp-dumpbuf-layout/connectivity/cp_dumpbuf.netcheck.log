@@ -1,0 +1,7 @@
+wrote /tmp/cp_dumpbuf_final/cp_dumpbuf.gds
+footprint: 211.100 x 36.000 um (7599.60 um^2)
+isolated well box: (57.5, 19.5, 160.5, 24.3)
+  clearance from other well (55.5, -0.5, 106.5, 4.3): 15.200 um
+  clearance from other well (-0.5, 19.5, 50.5, 24.3): 7.000 um
+MP1/MP2 finger x-centers: [70.0, 96.0, 122.0, 148.0]
+connectivity clean: 10 nets, no shorts, no splits

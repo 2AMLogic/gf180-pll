@@ -85,19 +85,110 @@ exists; `layout/tests/test_cp_dumpbuf_layout.py` exercises it today against
 a synthetic stand-in well box in the interim, per this issue's own
 Dependencies note.
 
+## Post-landing fix: whole-cell short, riser columns not decluttered across nets (issue #391)
+
+DRC-clean at landing time was real but incomplete: this module's own
+`_route_net()`/`NetTracks` riser scheme gave every net its own Metal2
+`track_y`, but never checked that two *different* nets' Metal3 riser
+**columns** (X position) stayed clear of each other -- invisible to DRC (two
+Metal3 runs at one X, or closer than `M3.2a`'s minimum space, merge into one
+legal polygon), caught only once `netcheck.py` (issue #321) was run against
+this module's own standalone GDS: **every** external pin
+(`VBN`/`VBP`/`VDD`/`VDUMP`/`VREF`/`VSS`, all sharing one `PIN_X_UM` column)
+and every internal net this module routes came back on one single extracted
+component -- the whole cell shorted to itself. `cp_array.py`'s own
+`EN`/`ENB` riser-column fix (issue #359) is the closest precedent (the same
+class of defect, in a sibling module), but the *cause* here is more
+pervasive than that one coincidental case: `devgen.mosfet()` draws a
+device's own top (drain) and bottom (source) Metal1 pads spanning the
+*identical* X range (the full comp width), so any device whose `top_net`
+and `bottom_net` differ -- nearly every device in this schematic -- produces
+a same-X, different-net riser collision **by construction**, on every
+device, not by coincidence.
+
+Filed and root-caused as #391, fixed here with two changes (see
+`cp_dumpbuf.py`'s own module docstring, "RISER COLUMNS MUST BE DECLUTTERED
+ACROSS NETS", for the full detail):
+
+1. **Slide within the pad, don't jog outside it, wherever there is room.**
+   `PAD_SUB_OFFSET_UM` (3.0 um) moves every device's own top-pad riser
+   toward one edge of that already-drawn, already-DRC-clean pad and its own
+   bottom-pad riser toward the other -- needs no new Metal1 shape, and
+   resolves the systemic top/bottom-of-one-device collision (the
+   overwhelming majority found) without any risk of a new spacing
+   violation.
+2. **Give every remaining riser point a globally decluttered column.**
+   `declutter_riser_x()`/`check_riser_columns()` (ported from `cp_array.py`,
+   issue #359 -- net-aware: two points sharing a natural X collapse onto one
+   column only when they are the *same* net) now run once, across *every*
+   net's own merged riser points together, not per net in isolation, with a
+   short `_stub()` Metal1 jog for any point whose decluttered X differs from
+   its own natural X. `check_riser_columns()` runs on every `build()`, so a
+   two-nets-one-column allocation can never reappear silently. The 6
+   external pins are pre-spread across distinct natural X columns
+   (`PIN_COL_PITCH_UM`) before entering this pipeline, rather than relying
+   on the generic nudge alone -- see that constant's own docstring for why.
+
+## Standalone DRC-clean, and connectivity
+
+```bash
+python3 -m pfd_cp.cp_dumpbuf --outdir <workdir>       # (from layout/pll_top/)
+python3 layout/run_pv.py drc <workdir>/cp_dumpbuf.gds --top cp_dumpbuf --run-dir <rundir>
+```
+
 ## Results
 
 | Check | Cell | Expected | Got | Verdict |
 |---|---|---|---|---|
-| 1 | `cp_dumpbuf` (full block) | clean | `Klayout DRC run is clean. GDS has no DRC violations.` | **PASS** |
+| 1 | `cp_dumpbuf` (full block) DRC, table `main` | clean | `DRC clean: cp_dumpbuf (D), 0 violations` | **PASS** |
 | 2 | `MP1`/`MP2` common-centroid | leg centroids == array centre | `check_common_centroid()` raises nothing (see `cp_dumpbuf.build()`) | **PASS** |
 | 3 | Isolated well vs. `MTPa`/`MTPb`'s well | >= 1.4 um | 7.0 um | **PASS** |
 | 4 | Isolated well vs. `MN3`/`MN4`'s well | >= 1.4 um | 15.2 um | **PASS** |
+| 5 | `netcheck.check_gds()` (Metal1-3 connectivity, `python3 -m pfd_cp.cp_dumpbuf`'s own default run) | no shorts, no splits | `connectivity clean: 10 nets, no shorts, no splits` | **PASS** |
 
-Regenerate with:
+Check 5 (issue #391's own acceptance criterion) probes every net this
+module's own `build()` records a pad for -- the 6 external pins
+(`VREF`/`VBN`/`VBP`/`VDUMP`/`VDD`/`VSS`) *and* every internal net
+(`NSRC`/`NDA`/`PSRC`/`PDA`) -- not just the promoted schematic pins; see
+`layout/tests/test_cp_dumpbuf_layout.py`'s own `ConnectivityTests` for the
+automated version of this same check.
 
-```
-python3 -m pfd_cp.cp_dumpbuf --outdir /tmp/cp_dumpbuf_work   # from layout/pll_top, PYTHONPATH set
-python3 layout/run_pv.py drc /tmp/cp_dumpbuf_work/cp_dumpbuf.gds \
-    --top cp_dumpbuf --run-dir /tmp/cp_dumpbuf_drc
-```
+## Automated test coverage
+
+`layout/tests/test_cp_dumpbuf_layout.py` (39 tests, `python3 -m unittest
+layout.tests.test_cp_dumpbuf_layout -v`): device-table fidelity against
+`design/cp_dumpbuf.sch`, `check_common_centroid()`/`check_well_separation()`
+arithmetic (pure Python, no `klayout.db` needed), `declutter_riser_x()`/
+`check_riser_columns()` (well-separated points unchanged, close/exact-tie
+different-nets pushed apart -- including a direct regression test for issue
+#391's own 6-pin collision, exact-tie same-net still collapses, a denser
+adversarial case checked pairwise-safe, and the build-time proof raising on
+a synthetic two-nets-one-column plan), and (`klayout.db`-gated, skipped
+without a PV environment) `build()`'s own footprint/pin/well-separation/
+common-centroid results plus `ConnectivityTests` -- the finished GDS's own
+extracted Metal1-3 connectivity, proving every external pin and every
+probed internal net is exactly one component, with `VDUMP` in particular
+checked as a distinct net of its own (issue #391's own reported `x=94.0`
+`MN4` top/bottom collision would have merged it with `VDD`).
+
+## Provenance (regenerated for issue #391)
+
+| | |
+|---|---|
+| Regenerated | 2026-09-15T13:54 UTC |
+| Invoked as | `python3 -m pfd_cp.cp_dumpbuf --outdir <workdir>` (from `layout/pll_top/`), then `python3 layout/run_pv.py drc`, `LAYOUT_PV_PYTHON` pointed at a local venv (`klayout` + `docopt`) per `layout/README.md`'s Prerequisites |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout (application, deck runner) | `KLayout 0.28.16` |
+| DRC deck | `<pdk>/libs.tech/klayout/drc/run_drc.py`, table `main`, `--variant=D` |
+
+## Artifacts
+
+| Path | What it is |
+|---|---|
+| `cp_dumpbuf.gds` | the real transistor-level block (10 N/P-OTA devices, wired, tapped, 6 external pins) |
+| `drc-clean/cp_dumpbuf_main.lyrdb` | KLayout DRC report database (empty violations) |
+| `drc-clean/drc.stdout.log` | captured `run_drc.py` stdout+stderr (full `main`-table rule list) |
+| `connectivity/cp_dumpbuf.netcheck.log` | captured `python3 -m pfd_cp.cp_dumpbuf`'s own stdout, including the `netcheck.check_gds()` summary line |
+
+Regenerate via `python3 -m pfd_cp.cp_dumpbuf` (from `layout/pll_top/`) +
+`layout/run_pv.py drc`; do not hand-edit any file under this directory.
