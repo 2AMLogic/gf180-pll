@@ -100,6 +100,27 @@ sim/
   | `reference-spur` | closed-loop reference spur measured directly, as the ±f_ref sidebands of the locked output spectrum | #145 |
   | `output-driver` | loaded buffered-output duty cycle, levels and drive-strength (edge rate) at the two extremes of the ratified band/Vctrl window | #144 |
 
+  **`supply-sensitivity`'s HIGH-plateau `not-locked` verdict, disambiguated
+  (#384).** The criterion-3 high-plateau escalation (#253) classified all 3
+  sampled step/ramp corners `not-locked` at the escalated 40.08 us hold in
+  `20260901-155456-46b92f8` -- `ferr_hi` (a frequency-drift proxy) converges
+  but `lock_hi` does not, at every corner. `20260915-105055-2d6ab99` rules out
+  a measurement-window artefact (the retained full-hold LOCK trace stays near
+  zero for the entire plateau, not only the averaging window `lock_hi` uses)
+  and finds the remaining mechanism differs BY CORNER: `ff`/125 C/3.63 V does
+  not assert `lock` even in its own undisturbed steady state at the same
+  rail (static phase 1.796 ns, already past `sim/lock-detector`'s measured
+  window and `spec/pll.md`'s ratified 1 ns Lock criterion) -- a structural
+  mismatch, and new evidence for `spec/pll.md`'s already-documented Lock
+  detector T1/T2 gap (row 16, unratified per DR-007 Amendment A1), not a new
+  question. `ss`/-40 C and `typical`/27 C DO assert `lock` fine at the same
+  undisturbed rail, so their post-step failure is a phase-settling tail
+  slower than `ferr_hi`'s drift-rate proxy shows -- new evidence for
+  `sim/loop-dynamics` (#10), generalizing the same record's section 3c
+  `under-damped` END-plateau finding (previously `ss`/-40 C only) to the HIGH
+  plateau and to `typical`/27 C. Both findings are carried forward as design
+  issue #387; #384 itself is disambiguation-only.
+
   New campaigns add rows here as they are created; the list is descriptive,
   not a closed set.
 
