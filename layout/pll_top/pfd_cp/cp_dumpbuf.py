@@ -118,9 +118,10 @@ adapted to this module's own dense, single-row-per-polarity layout (not
    and an unrelated wide tap strip's own centre (e.g. the substrate tap
    spanning the whole N row happening to centre on ``MN1``'s own X).
 2. **Give every remaining riser point a globally decluttered column.**
-   :func:`declutter_riser_x` (ported from ``cp_array.py``, issue #359 --
-   net-aware: two points sharing a natural X collapse onto one column only
-   when they are the *same* net) and :func:`check_riser_columns` (the
+   :func:`declutter_riser_x` (re-exported from ``cp_array.py``, issue #359,
+   consolidated in issue #413 -- net-aware: two points sharing a natural X
+   collapse onto one column only when they are the *same* net) and
+   :func:`check_riser_columns` (the
    build-time proof that raises rather than silently drawing a short) now
    run once, across *every* net's own merged riser points together, not per
    net in isolation -- exactly ``cp_array.py``'s own precedent, and for the
