@@ -23,6 +23,17 @@
   `sim/lock-time/records/20260831-052456-effc505.md` (#163, whose 233 of 270
   FAILs DR-007's post-ratification note already attributes largely to this
   unwidened window).
+- **Followed by**: **DR-013** (#401), which records what happened when
+  Decision 2's sizing was implemented (#393) and measured *in situ* rather than
+  on the isolated delay chain this record's evidence drives: T1′ is met, T2′ is
+  not shown to hold, and the choice §Consequences pre-named — "either a wider
+  stated reach for T2′ … or a lower-spread delay reference" — is taken in
+  favour of the latter, with the reach left at 2×. **Nothing in this record's
+  Decisions is changed there**, and its targets are not edited in place;
+  Decision 3's "scaling [`MCW`] moves no phase threshold at all" is *refined*
+  (the network sets a small residual δ on the observable threshold, 1.4–7 %,
+  and nothing else), not reversed, and Decision 2's W = 9.5 µm sizing stands as
+  drawn. Read DR-013 before sizing any further work off this record's margins.
 
 ## Context
 
