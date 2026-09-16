@@ -189,14 +189,15 @@ enclosure, identical derivation to :func:`_riser`'s own inline ``half_v1``
 same value to size the landing pad a decluttering jog ends in -- same
 citation as ``cp_array.py``'s own ``LANDING_HALF_UM``, issue #359/#391)."""
 
-RISER_MIN_PITCH_UM = 1.0
+RISER_MIN_PITCH_UM = cp_array.RISER_MIN_PITCH_UM
 """Minimum centre-to-centre X separation this module ever allows between two
 *different* Metal3 riser positions, enforced by :func:`declutter_riser_x` --
-identical value/citation to ``cp_array.py``'s own (issue #359): comfortably
-above the real DRC-minimum pitch (``METAL3_WIRE_WIDTH_UM`` (0.34) + ``M3.2a``'s
-0.28 um minimum space = 0.62 um). See the module docstring's own "RISER
-COLUMNS MUST BE DECLUTTERED ACROSS NETS" section (issue #391) for why this
-module needs the same global, cross-net decluttering ``cp_array.py`` does.
+aliased from ``cp_array.py``'s own (issue #359, #415) so the two constants can
+never silently diverge: comfortably above the real DRC-minimum pitch
+(``METAL3_WIRE_WIDTH_UM`` (0.34) + ``M3.2a``'s 0.28 um minimum space = 0.62 um).
+See the module docstring's own "RISER COLUMNS MUST BE DECLUTTERED ACROSS
+NETS" section (issue #391) for why this module needs the same global,
+cross-net decluttering ``cp_array.py`` does.
 """
 
 PAD_SUB_OFFSET_UM = 3.0

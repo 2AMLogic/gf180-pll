@@ -220,11 +220,11 @@ class CheckRiserColumnsTests(unittest.TestCase):
         # can no longer produce this from any real input -- see
         # DeclutterRiserXTests -- so this proves the *check* still fires if
         # that invariant were ever broken again).
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, r"^cp_array: "):
             cp_array._verify_riser_plan([("A", 0.0, 0.0), ("B", 0.0, 1.0)], 1.0)
 
     def test_verify_raises_on_too_close_distinct_columns(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, r"^cp_array: "):
             cp_array._verify_riser_plan([("A", 0.0, 0.0), ("B", 0.4, 0.0)], 1.0)
 
 
