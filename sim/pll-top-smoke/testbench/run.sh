@@ -241,7 +241,20 @@ CORNER_VDD=3.30
 
 # Acceptance thresholds.  Stated here, not discovered from the result.
 ACC_FERR=1e-3          # |residual fractional frequency error|
-ACC_PHI_FRAC=0.02      # |static phase error| as a fraction of a reference period
+# |static phase error| at the PFD inputs, an ABSOLUTE bound in seconds.
+#
+# THIS IS `spec/pll.md`'S RATIFIED LOCK CRITERION, CITED (DR-012 Decision 5,
+# #394/#400).  It used to be `ACC_PHI_FRAC=0.02` -- 2 % of a reference period
+# -- which is 2.22 ns at this deck's 9 MHz KFREF, i.e. 2.2x looser than the
+# criterion the spec ratifies.  A testbench whose acceptance threshold is
+# looser than the ratified spec cannot substantiate a claim about that spec,
+# so the fraction is replaced by the bound itself.
+#
+# It is absolute rather than fractional because the ratified criterion is: the
+# spec bounds the static phase error in seconds at the PFD inputs, with no
+# reference to f_ref.  A scale-free 2 % was the right shape for a criterion
+# that had no ratified value yet; it is the wrong shape for one that does.
+ACC_PHI_S=1e-9
 ACC_NTOL=0.01          # |measured f_out/f_fb - N|
 ACC_LOCK_FRAC=0.90     # LOCK level in the late window, as a fraction of the rail
 ACC_VCTRL_LO=0.9       # DR-001 Decision 2's usable control window
@@ -338,19 +351,21 @@ $(awk -v ferr="${FERR}" -v phib="${PHI_B}" -v nmeas="${NMEAS}" -v fout="${FOUT}"
       -v lock="${LOCK_LVL}" -v vcmin="${VC_MIN}" -v vcmax="${VC_MAX}" \
       -v dnl="${DN_LVL}" -v accd="${ACC_DN_FRAC}" \
       -v fref="${KFREF}" -v n="${KN}" -v vdd="${CORNER_VDD}" \
-      -v accf="${ACC_FERR}" -v accp="${ACC_PHI_FRAC}" -v accn="${ACC_NTOL}" \
+      -v accf="${ACC_FERR}" -v accp="${ACC_PHI_S}" -v accn="${ACC_NTOL}" \
       -v accl="${ACC_LOCK_FRAC}" -v vlo="${ACC_VCTRL_LO}" -v vhi="${ACC_VCTRL_HI}" '
 function num(x)  { return (x ~ /^-?[0-9]+\.?[0-9]*([eE][-+]?[0-9]+)?$/) }
 function abs(x)  { return (x < 0 ? -x : x) }
 BEGIN {
-  tref = 1.0 / fref; ftarget = n * fref;
+  ftarget = n * fref;
   # A measurement that did not land comes back as the literal "nan", and awk
   # would silently coerce that to 0 -- which would turn "the .meas failed" into
   # a PASS on any check whose criterion is an upper bound.  Every input is
   # therefore tested for being a number FIRST; a non-number is a FAIL, never a
   # zero.
   a = !num(ferr)  ? "FAIL" : (abs(ferr) <= accf                      ? "PASS" : "FAIL");
-  b = !num(phib)  ? "FAIL" : (abs(phib) <= accp * tref               ? "PASS" : "FAIL");
+  # accp is ACC_PHI_S, an ABSOLUTE bound in seconds (spec/pll.md ratified
+  # Lock criterion, DR-012 Decision 5) -- not scaled by the reference period.
+  b = !num(phib)  ? "FAIL" : (abs(phib) <= accp                      ? "PASS" : "FAIL");
   d = !num(nmeas) ? "FAIL" : (abs(nmeas - n) <= accn                 ? "PASS" : "FAIL");
   e = !num(fout)  ? "FAIL" : (abs(fout - ftarget) / ftarget <= accf  ? "PASS" : "FAIL");
   f = !num(lock)  ? "FAIL" : (lock >= accl * vdd                     ? "PASS" : "FAIL");
@@ -380,6 +395,11 @@ NUMRE='^-?[0-9]+\.?[0-9]*([eE][-+]?[0-9]+)?$'
 numeric() { printf '%s' "$1" | grep -qE "${NUMRE}"; }
 
 FTARGET=$(awk -v f="${KFREF}" -v n="${KN}" 'BEGIN{printf "%.6g", f*n}')
+ACC_PHI_S_NS=$(awk -v p="${ACC_PHI_S}" 'BEGIN{printf "%.4g", p*1e9}')
+# The same ratified bound, restated as a fraction of THIS deck's reference
+# period -- an informational scale note only, it does not set the verdict
+# (check 2 gates on ACC_PHI_S above, an absolute bound; see DR-012 Decision 5).
+ACC_PHI_FRAC_INFO=$(awk -v p="${ACC_PHI_S}" -v f="${KFREF}" 'BEGIN{printf "%.4g", p*f}')
 VC_RIPPLE=nan; PHI_B_NS=nan; DPHI_NS=nan; FOUT_ERR_PPM=nan; P_TOT_MW=nan
 numeric "${VC_MAX}" && numeric "${VC_MIN}" && \
   VC_RIPPLE=$(awk -v a="${VC_MAX}" -v b="${VC_MIN}" 'BEGIN{printf "%.4g", a-b}')
@@ -687,7 +707,11 @@ $(simenv_env_block "$(simenv_xschem_version) -- the DUT
        later measures it directly, to picosecond resolution and with no
        dependence on how many cycles the simulator put in between.
     2. **Phase** -- the static REF->FB phase error at t = ${KTB} must be
-       <= ${ACC_PHI_FRAC} of a reference period.
+       <= ${ACC_PHI_S_NS} ns, \`spec/pll.md\`'s ratified absolute Lock
+       criterion at the PFD inputs (DR-012 Decision 5), not a fraction of a
+       reference period (informationally, that bound is ${ACC_PHI_FRAC_INFO}
+       of a reference period at this deck's ${KFREF} Hz KFREF -- reported
+       below, not gated).
     3. **Ratio** -- f_out / f_fb, measured independently over 160 whole VCO
        cycles and 20 whole feedback cycles, must equal N to within
        ${ACC_NTOL}, so a divider dividing by the wrong N shows up as a ratio
@@ -713,7 +737,7 @@ $(simenv_env_block "$(simenv_xschem_version) -- the DUT
     ~0 (#273). Checks 1 and 2 are therefore evaluated on phase samples
     unwrapped into (-1/(2 f_ref), +1/(2 f_ref)], and on a difference unwrapped
     the same way -- a wrap fix, not a widened tolerance: \`ACC_FERR\` and
-    \`ACC_PHI_FRAC\` are unchanged, any genuine drift below
+    \`ACC_PHI_S\` are unchanged, any genuine drift below
     f_ref/(2 (t_b - t_a)) is reported unchanged, and check 4 (output frequency
     vs N*f_ref, read from a period count, no wrap) independently covers the
     aliasing residue. The raw pre-unwrap pair is reported below.
@@ -733,17 +757,20 @@ $(simenv_env_block "$(simenv_xschem_version) -- the DUT
     with its phase error visibly still closing (19.57 ns -> 14.05 ns) at
     \`tstop\`.
     The window is then placed against the **tightest** of the seven criteria,
-    which is not check 2's ${ACC_PHI_FRAC} of a reference period
-    (= 2.22 ns at ${KFREF} Hz) but the block's own LOCK flag:
-    \`sim/lock-detector\` record \`20260731-095213-0bffe91\` measures its
-    comparator window at this corner (\`typical\`/27 C/3.30 V) as asserting up
-    to 1.2 ns and not asserting from 1.5 ns, and \`spec/pll.md\`'s ratified
-    1 ns phase bound is set from that same measured window (0.877 ..
-    1.702 ns over the corners it swept) precisely so the criterion and the
-    on-chip observable describe one event rather than two.
+    which as of DR-012 Decision 5 (#400) is check 2's own ${ACC_PHI_S_NS} ns
+    absolute Lock criterion -- \`spec/pll.md\`'s ratified bound, gated
+    directly rather than through a looser per-reference-period proxy -- and
+    which by construction describes nearly the same physical event as the
+    block's own LOCK flag: \`sim/lock-detector\` record
+    \`20260731-095213-0bffe91\` measures its comparator window at this corner
+    (\`typical\`/27 C/3.30 V) as asserting up to 1.2 ns and not asserting from
+    1.5 ns, and \`spec/pll.md\`'s ratified ${ACC_PHI_S_NS} ns phase bound is
+    set from that same measured window (0.877 .. 1.702 ns over the corners it
+    swept) precisely so the criterion and the on-chip observable describe one
+    event rather than two.
     Extrapolating the superseded record's own measured decay
     (14.05 ns at 17 us, tau = 9.05 us, against the 9.31 us \`R*C1\` predicts)
-    puts the phase error near 0.4 ns at ${KTA} -- roughly 3x inside that
+    puts the phase error near 0.4 ns at ${KTA} -- roughly 2.5x inside that
     tightest criterion, and about 0.75 time constants past the ratified
     floor. It is not placed later still because the phase error does not
     decay to zero: the charge pump's own static offset (-0.06 .. +0.67 ns
@@ -797,7 +824,7 @@ $(simenv_env_block "$(simenv_xschem_version) -- the DUT
   | # | Check | Criterion | Measured | Verdict |
   |---|---|---|---|---|
   | 1 | residual frequency error (phase drift ${KTA} -> ${KTB}) | <= ${ACC_FERR} | ${FERR} | **${V_FERR}** |
-  | 2 | static phase error, REF -> FB, at ${KTB} | <= ${ACC_PHI_FRAC} of a reference period | ${PHI_B_NS} ns | **${V_PHI}** |
+  | 2 | static phase error, REF -> FB, at ${KTB} | <= ${ACC_PHI_S_NS} ns (\`spec/pll.md\` Lock criterion) | ${PHI_B_NS} ns | **${V_PHI}** |
   | 3 | divide ratio f_out / f_fb | ${KN} +/- ${ACC_NTOL} | ${NMEAS} | **${V_N}** |
   | 4 | output frequency vs N*f_ref = ${FTARGET} Hz | within ${ACC_FERR} | ${FOUT} Hz (${FOUT_ERR_PPM} ppm) | **${V_FOUT}** |
   | 5 | block LOCK flag, late-window average | >= ${ACC_LOCK_FRAC} of the rail | ${LOCK_LVL} V | **${V_LOCK}** |

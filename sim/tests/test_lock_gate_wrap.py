@@ -402,7 +402,8 @@ class PllTopSmokeSharesTheFix(unittest.TestCase):
             with self.subTest(card=card):
                 value = evaluate(self._meas(card), env)
                 self.assertAlmostEqual(value, -0.2e-9, places=15)
-                # run.sh's ACC_PHI_FRAC gate, which the raw sample would fail.
+                # Well inside run.sh's ACC_PHI_S gate (1 ns, an absolute
+                # bound); the raw (wrapped) sample would fail it instead.
                 self.assertLess(abs(value), 0.02 * t_ref)
                 self.assertGreater(abs(t_ref - 0.2e-9), 0.02 * t_ref)
 
@@ -412,7 +413,7 @@ class PllTopSmokeSharesTheFix(unittest.TestCase):
         self.assertIn("PHI_A=$(m phi_a_uw)", text)
         self.assertIn("PHI_B=$(m phi_b_uw)", text)
         self.assertIn("ACC_FERR=1e-3", text)  # tolerance unchanged
-        self.assertIn("ACC_PHI_FRAC=0.02", text)
+        self.assertIn("ACC_PHI_S=1e-9", text)  # spec/pll.md's ratified Lock criterion
 
     def test_genuine_drift_still_fails_the_smoke_gate(self):
         for ferr_true in (2e-3, -5e-3):
