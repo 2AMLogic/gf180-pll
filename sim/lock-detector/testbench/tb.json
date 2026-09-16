@@ -107,6 +107,96 @@
           "params": {
             "kterr": "4.0n"
           }
+        },
+        "e1.02n": {
+          "params": {
+            "kterr": "1.02n"
+          }
+        },
+        "e1.04n": {
+          "params": {
+            "kterr": "1.04n"
+          }
+        },
+        "e1.06n": {
+          "params": {
+            "kterr": "1.06n"
+          }
+        },
+        "e1.08n": {
+          "params": {
+            "kterr": "1.08n"
+          }
+        },
+        "e1.1n": {
+          "params": {
+            "kterr": "1.1n"
+          }
+        },
+        "e1.12n": {
+          "params": {
+            "kterr": "1.12n"
+          }
+        },
+        "e1.14n": {
+          "params": {
+            "kterr": "1.14n"
+          }
+        },
+        "e1.16n": {
+          "params": {
+            "kterr": "1.16n"
+          }
+        },
+        "e1.18n": {
+          "params": {
+            "kterr": "1.18n"
+          }
+        },
+        "e2.1n": {
+          "params": {
+            "kterr": "2.1n"
+          }
+        },
+        "e2.2n": {
+          "params": {
+            "kterr": "2.2n"
+          }
+        },
+        "e2.3n": {
+          "params": {
+            "kterr": "2.3n"
+          }
+        },
+        "e2.4n": {
+          "params": {
+            "kterr": "2.4n"
+          }
+        },
+        "e2.5n": {
+          "params": {
+            "kterr": "2.5n"
+          }
+        },
+        "e2.6n": {
+          "params": {
+            "kterr": "2.6n"
+          }
+        },
+        "e2.7n": {
+          "params": {
+            "kterr": "2.7n"
+          }
+        },
+        "e2.8n": {
+          "params": {
+            "kterr": "2.8n"
+          }
+        },
+        "e2.9n": {
+          "params": {
+            "kterr": "2.9n"
+          }
         }
       }
     }
@@ -199,6 +289,56 @@
           "e10.0n"
         ]
       }
+    },
+    {
+      "description": "T1' margin refinement at ff/-40C/3.63V (DR-010 re-characterization, issue #393): the coarse 1.0/1.2 ns ladder step brackets the T1' lower edge (>= 1 ns) but cannot resolve a single-digit-percent margin against it, so this corner gets a 0.02 ns step from 1.02 to 1.18 ns -- the same corner spec/pll.md's Lock detector section cites as where T1' binds.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        -40
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "terr": [
+          "e1.02n",
+          "e1.04n",
+          "e1.06n",
+          "e1.08n",
+          "e1.1n",
+          "e1.12n",
+          "e1.14n",
+          "e1.16n",
+          "e1.18n"
+        ]
+      }
+    },
+    {
+      "description": "T2' margin refinement at ss/125C/2.97V (DR-010 re-characterization, issue #393): the coarse 2.0/3.0 ns ladder step only brackets the T2' upper edge (<= 2 ns) to within 1 ns, which cannot distinguish a small overrun from none at all, so this corner gets a 0.1 ns step from 2.1 to 2.9 ns -- the same corner spec/pll.md's Lock detector section cites as where T2' binds.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "terr": [
+          "e2.1n",
+          "e2.2n",
+          "e2.3n",
+          "e2.4n",
+          "e2.5n",
+          "e2.6n",
+          "e2.7n",
+          "e2.8n",
+          "e2.9n"
+        ]
+      }
     }
   ],
   "raw_measures": {
@@ -281,10 +421,10 @@
       "max_measured_points": 0
     },
     "tb_asrt": {
-      "min_measured_points": 167
+      "min_measured_points": 185
     },
     "te_deas": {
-      "min_measured_points": 167
+      "min_measured_points": 185
     }
   },
   "derived": {
