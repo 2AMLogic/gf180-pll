@@ -1,0 +1,358 @@
+* Frozen netlist snapshot for record 20260916-051356-8cedbba
+* sources    : dut.spice + tb_pfd_operating_point.spice (composed at record time, in this order)
+* sha256     : cfba15771c1f61a7936856c5b951ed5efba1782207432e660e8bba0fb287985c (of this composed text)
+* This is a verbatim composition taken at record time. Do not edit.
+
+* ---- sim/pfd-deadzone/work/dut-export/pfd_cp/dut.spice (sha256 97856cc146493ffc31f96be947c1fc4fe55a302205f1e5749a6a1ffdb6a3cef4)
+** sch_path: design/dut_export.sch
+
+* expanding   symbol:  pfd_cp.sym # of pins=13
+** sym_path: design/pfd_cp.sym
+** sch_path: design/pfd_cp.sch
+.subckt pfd_cp REF FB B0 B1 IBN ICN IBP ICP VOUT UP DN VDD VSS
+*.ipin REF
+*.ipin FB
+*.ipin B0
+*.ipin B1
+*.iopin IBN
+*.iopin ICN
+*.iopin IBP
+*.iopin ICP
+*.iopin VOUT
+*.opin UP
+*.opin DN
+*.iopin VDD
+*.iopin VSS
+xpfd REF FB UP DN VDD VSS pfd
+xcp UP DN B0 B1 IBN ICN IBP ICP VOUT VDD VSS cp
+.ends
+
+
+* expanding   symbol:  pfd.sym # of pins=6
+** sym_path: design/pfd.sym
+** sch_path: design/pfd.sch
+.subckt pfd REF FB UP DN VDD VSS
+*.ipin REF
+*.ipin FB
+*.opin UP
+*.opin DN
+*.iopin VDD
+*.iopin VSS
+xed_ref REF PR VDD VSS edgedet
+xed_fb FB PF VDD VSS edgedet
+xinv_sr PR SBR VDD VSS pfdcp_inv_3v3
+xinv_sf PF SBF VDD VSS pfdcp_inv_3v3
+xlat_ref SBR RB UP UPB VDD VSS srlatch
+xlat_fb SBF RB DN DNB VDD VSS srlatch
+xnand_rst UP DN NRST VDD VSS pfdcp_nand2_3v3
+xinv_r0 NRST RST_RAW VDD VSS pfdcp_inv_3v3
+xd1 RST_RAW RD1 VDD VSS pfdcp_inv_3v3
+xd2 RD1 RD2 VDD VSS pfdcp_inv_3v3
+xd3 RD2 RD3 VDD VSS pfdcp_inv_3v3
+xd4 RD3 RD4 VDD VSS pfdcp_inv_3v3
+xd5 RD4 RD5 VDD VSS pfdcp_inv_3v3
+xd6 RD5 RD6 VDD VSS pfdcp_inv_3v3
+xd7 RD6 RD7 VDD VSS pfdcp_inv_3v3
+xd8 RD7 RD8 VDD VSS pfdcp_inv_3v3
+xd9 RD8 RD9 VDD VSS pfdcp_inv_3v3
+xd10 RD9 RD10 VDD VSS pfdcp_inv_3v3
+xd11 RD10 RD11 VDD VSS pfdcp_inv_3v3
+xd12 RD11 RD12 VDD VSS pfdcp_inv_3v3
+xd13 RD12 RD13 VDD VSS pfdcp_inv_3v3
+xd14 RD13 RD14 VDD VSS pfdcp_inv_3v3
+xd15 RD14 RD15 VDD VSS pfdcp_inv_3v3
+xd16 RD15 RD16 VDD VSS pfdcp_inv_3v3
+xd17 RD16 RD17 VDD VSS pfdcp_inv_3v3
+xd18 RD17 RD18 VDD VSS pfdcp_inv_3v3
+xd19 RD18 RD19 VDD VSS pfdcp_inv_3v3
+xd20 RD19 RD20 VDD VSS pfdcp_inv_3v3
+xd21 RD20 RD21 VDD VSS pfdcp_inv_3v3
+xd22 RD21 RD22 VDD VSS pfdcp_inv_3v3
+xd23 RD22 RD23 VDD VSS pfdcp_inv_3v3
+xd24 RD23 RST_DLY VDD VSS pfdcp_inv_3v3
+xinv_rb RST_DLY RB VDD VSS pfdcp_inv_3v3
+.ends
+
+
+* expanding   symbol:  cp.sym # of pins=11
+** sym_path: design/cp.sym
+** sch_path: design/cp.sch
+.subckt cp UP DN B0 B1 IBN ICN IBP ICP VOUT VDD VSS
+*.ipin UP
+*.ipin DN
+*.ipin B0
+*.ipin B1
+*.iopin IBN
+*.iopin ICN
+*.iopin IBP
+*.iopin ICP
+*.iopin VOUT
+*.iopin VDD
+*.iopin VSS
+XMBN IBN IBN VSS VSS nfet_03v3 L=1u W=16u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMCN ICN ICN VSS VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMBP IBP IBP VDD VDD pfet_03v3 L=1u W=48u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMCP ICP ICP VDD VDD pfet_03v3 L=1u W=12u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+xi_b0 B0 B0B VDD VSS pfdcp_inv_3v3
+xi_b1 B1 B1B VDD VSS pfdcp_inv_3v3
+xi_up UP UPB VDD VSS pfdcp_inv_3v3
+xi_dn DN DNB VDD VSS pfdcp_inv_3v3
+xn_base IBN ICN VDD VSS DNT VSS cp_leg_n
+xn_t0 IBN ICN B0 B0B DNT VSS cp_leg_n
+xn_t1a IBN ICN B1 B1B DNT VSS cp_leg_n
+xn_t1b IBN ICN B1 B1B DNT VSS cp_leg_n
+xp_base IBP ICP VDD VSS UPT VDD cp_leg_p
+xp_t0 IBP ICP B0 B0B UPT VDD cp_leg_p
+xp_t1a IBP ICP B1 B1B UPT VDD cp_leg_p
+xp_t1b IBP ICP B1 B1B UPT VDD cp_leg_p
+XMSWDN VOUT DN DNT VSS nfet_03v3 L=0.3u W=6u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMDMPDN VDUMP DNB DNT VSS nfet_03v3 L=0.3u W=6u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMSWUP VOUT UPB UPT VDD pfet_03v3 L=0.3u W=6u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMDMPUP VDUMP UP UPT VDD pfet_03v3 L=0.3u W=6u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMDUMN VOUT DNB VOUT VSS nfet_03v3 L=0.3u W=3u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMDUMP VOUT UP VOUT VDD pfet_03v3 L=0.3u W=3u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+xbuf VOUT IBN IBP VDUMP VDD VSS cp_dumpbuf
+.ends
+
+
+* expanding   symbol:  edgedet.sym # of pins=4
+** sym_path: design/edgedet.sym
+** sch_path: design/edgedet.sch
+.subckt edgedet X PULSE VDD VSS
+*.ipin X
+*.opin PULSE
+*.iopin VDD
+*.iopin VSS
+xi1 X D1 VDD VSS pfdcp_inv_3v3
+xi2 D1 D2 VDD VSS pfdcp_inv_3v3
+xi3 D2 D3 VDD VSS pfdcp_inv_3v3
+xi4 D3 D4 VDD VSS pfdcp_inv_3v3
+xi5 D4 D5 VDD VSS pfdcp_inv_3v3
+xnd X D5 NN VDD VSS pfdcp_nand2_3v3
+xi6 NN PULSE VDD VSS pfdcp_inv_3v3
+.ends
+
+
+* expanding   symbol:  pfdcp_inv_3v3.sym # of pins=4
+** sym_path: design/pfdcp_inv_3v3.sym
+** sch_path: design/pfdcp_inv_3v3.sch
+.subckt pfdcp_inv_3v3 A Y VDD VSS
+*.ipin A
+*.opin Y
+*.iopin VDD
+*.iopin VSS
+XMP Y A VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN Y A VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+.ends
+
+
+* expanding   symbol:  srlatch.sym # of pins=6
+** sym_path: design/srlatch.sym
+** sch_path: design/srlatch.sch
+.subckt srlatch SB RB Q QB VDD VSS
+*.ipin SB
+*.ipin RB
+*.opin Q
+*.opin QB
+*.iopin VDD
+*.iopin VSS
+xn1 SB QB Q VDD VSS pfdcp_nand2_3v3
+xn2 RB Q QB VDD VSS pfdcp_nand2_3v3
+.ends
+
+
+* expanding   symbol:  pfdcp_nand2_3v3.sym # of pins=5
+** sym_path: design/pfdcp_nand2_3v3.sym
+** sch_path: design/pfdcp_nand2_3v3.sch
+.subckt pfdcp_nand2_3v3 A B Y VDD VSS
+*.ipin A
+*.ipin B
+*.opin Y
+*.iopin VDD
+*.iopin VSS
+XMP1 Y A VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMP2 Y B VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN1 Y A NI VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN2 NI B VSS VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+.ends
+
+
+* expanding   symbol:  cp_leg_n.sym # of pins=6
+** sym_path: design/cp_leg_n.sym
+** sch_path: design/cp_leg_n.sch
+.subckt cp_leg_n VBN VCASCN EN ENB TAIL VSS
+*.ipin VBN
+*.ipin VCASCN
+*.ipin EN
+*.ipin ENB
+*.iopin TAIL
+*.iopin VSS
+XMEN BG EN VBN VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMDIS BG ENB VSS VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMBOT MID BG VSS VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMCASC TAIL VCASCN MID VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+.ends
+
+
+* expanding   symbol:  cp_leg_p.sym # of pins=6
+** sym_path: design/cp_leg_p.sym
+** sch_path: design/cp_leg_p.sch
+.subckt cp_leg_p VBP VCASCP EN ENB TAIL VDD
+*.ipin VBP
+*.ipin VCASCP
+*.ipin EN
+*.ipin ENB
+*.iopin TAIL
+*.iopin VDD
+XMEN BG ENB VBP VDD pfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMDIS BG EN VDD VDD pfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMTOP MID BG VDD VDD pfet_03v3 L=1u W=12u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMCASC TAIL VCASCP MID VDD pfet_03v3 L=1u W=12u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+.ends
+
+
+* expanding   symbol:  cp_dumpbuf.sym # of pins=6
+** sym_path: design/cp_dumpbuf.sym
+** sch_path: design/cp_dumpbuf.sch
+.subckt cp_dumpbuf VREF VBN VBP VDUMP VDD VSS
+*.ipin VREF
+*.ipin VBN
+*.ipin VBP
+*.iopin VDUMP
+*.iopin VDD
+*.iopin VSS
+XMTN NSRC VBN VSS VSS nfet_03v3 L=1u W=16u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN1 NDA VREF NSRC VSS nfet_03v3 L=1u W=16u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN2 VDUMP VDUMP NSRC VSS nfet_03v3 L=1u W=16u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN3 NDA NDA VDD VDD pfet_03v3 L=1u W=24u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN4 VDUMP NDA VDD VDD pfet_03v3 L=1u W=24u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMTP PSRC VBP VDD VDD pfet_03v3 L=1u W=48u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMP1 PDA VREF PSRC PSRC pfet_03v3 L=1u W=48u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMP2 VDUMP VDUMP PSRC PSRC pfet_03v3 L=1u W=48u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMP3 PDA PDA VSS VSS nfet_03v3 L=1u W=16u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMP4 VDUMP PDA VSS VSS nfet_03v3 L=1u W=16u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+.ends
+
+* ---- sim/pfd-deadzone/testbench-operating-point/tb_pfd_operating_point.spice (sha256 80d11fd5b38802a6ad7bbd8aff01af034fdadcf22ab66c21f94223dc7823ac8a)
+* gf180-pll :: pfd-deadzone :: residual charge offset AT THE CLOSED LOOP'S OWN
+* operating point (#394)
+*
+* sim/harness fragment.  Same DUT as `testbench/tb_pfd_deadzone.spice`
+* (`pfd_cp`, the tri-state PFD driving its real charge pump) measured the same
+* way -- net charge per reference cycle versus phase offset -- at a DIFFERENT
+* OPERATING POINT.  Per sim/README.md ("Two manifests, one experiment
+* directory"), same DUT measured two ways stays in one experiment directory and
+* grows a second manifest beside `testbench/`, as `vco-tuning-range`
+* (`testbench-stages`, #88) and `cp-compliance` (`testbench-switching`, #42)
+* already do.
+*
+* WHY A SECOND OPERATING POINT EXISTS AT ALL.  `spec/pll.md`'s static
+* phase-offset budget cites this campaign's `t_offset` -- 0.671 ns at
+* `ff`/125 C/3.63 V -- as the SYSTEMATIC term.  That number is measured at
+* f_ref = 25 MHz with the control node held at 1.65 V.  The closed-loop
+* campaign that reported 1.796 ns of static REF->FB phase at the same PVT
+* corner (`sim/supply-sensitivity`, `20260901-155456-46b92f8`) runs at
+* f_ref = 12.5 MHz with the loop's control node settling near 2.29 V.  #394
+* asks whether that 2.7x gap is the operating point.  Answering it requires
+* the same measurement at the loop's own f_ref and across the whole ratified
+* control window, which is exactly what this manifest is.
+*
+* WHAT CHANGES RELATIVE TO THE PARENT MANIFEST, and nothing else does:
+*
+*   1. `period` is 80 ns (12.5 MHz) -- `sim/supply-sensitivity`'s own
+*      reference, = 100 MHz / N=8.  The parent's 40 ns (25 MHz) is the TOP of
+*      DR-002 Decision 1's ratified range and is the demanding end for a
+*      DEAD-ZONE claim; it is not the reference the closed-loop campaign runs
+*      at, and this manifest makes no dead-zone claim.
+*   2. `vctrl` is a declared sweep axis over DR-001 Decision 2's ratified
+*      ~0.9-2.4 V control window instead of one point at its middle.
+*   3. The charge-integration window is expressed RELATIVE to `period` rather
+*      than as the parent's literal `from=60n to=140n`, so the same two
+*      whole reference cycles (the 2nd and the 3rd) are integrated whatever
+*      `period` is.  Verified to reproduce the parent's number bit-for-bit at
+*      the parent's own settings.
+*
+* Everything else -- the DUT, the ideal bias references, the 200 ps stimulus
+* edges, the trim code (b1 b0 = 10, 3 unit legs), `rshunt`/`itl4`/the
+* tolerances -- is the parent manifest's, unchanged, so the two records are
+* comparable term by term.
+*
+* Expects from the harness header:
+*   .lib <process corner bundle>, .temp <temp_c>
+*   .param vdd_val=<supply volts>  (also vdd_nom, temp_c)
+*   .param iunit, b0_code, b1_code, period, tstart   (manifest `params`)
+*   .param vctrl=<control-node voltage, V>           (the `vc` axis)
+*   .param dphi=<FB-relative-to-REF phase offset, s> (the `d` axis)
+
+*------------------------------------------------------------------ supplies
+vdd vdd 0 dc 'vdd_val'
+vss vss 0 dc 0
+
+* Reference edges.  200 ps rise/fall rather than an ideal step: a
+* zero-rise-time stimulus would flatter every delay in the PFD's set path and
+* understate the reset delay.  `tstart` is half a reference period, so the
+* first edge does not coincide with t = 0.
+vref ref 0 pulse(0 'vdd_val' 'tstart' 200p 200p '0.5*period' period)
+vfb  fb  0 pulse(0 'vdd_val' 'tstart+dphi' 200p 200p '0.5*period' period)
+
+* Static trim code: b1 b0 = 1 0 -> Icp = 3 units (the nominal setting, and the
+* setting `sim/supply-sensitivity` runs its closed loop at -- its KTRIM=2).
+vb0 b0 0 dc 'vdd_val*b0_code'
+vb1 b1 0 dc 'vdd_val*b1_code'
+
+* Charge-pump bias reference.  As in sim/devchar-cp and the parent manifest,
+* the four bias nodes are driven from ideal current sources at 4x the unit-leg
+* current (the bias diodes are 4x the unit geometry, so each leg still mirrors
+* one unit): reference generation is a separate block, and driving it ideally
+* here keeps the measured behaviour the PFD+CP's own.  `sim/supply-sensitivity`
+* drives them identically, so this is not a point of difference between the two
+* campaigns either.
+iibn vdd ibn dc 'iunit'
+iicn vdd icn dc 'iunit'
+iibp ibp 0 dc 'iunit'
+iicp icp 0 dc 'iunit'
+
+xdut ref fb b0 b1 ibn icn ibp icp vout up dn vdd vss pfd_cp
+
+* Control node held at `vctrl` through an ammeter, so i(vam) is exactly the
+* charge-pump output current (positive = pump sourcing into the control node).
+* Holding it with an ideal source is what makes this an OPEN-LOOP measurement
+* of the pump's delivered charge, isolated from the loop filter's response to
+* it (#10) -- the same isolation the parent manifest applies, at a control
+* voltage the loop actually visits rather than only at the window's middle.
+vam vout vctrl_src 0
+vctrl vctrl_src 0 dc 'vctrl'

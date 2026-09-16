@@ -1,0 +1,88 @@
+* gf180-pll :: pfd-deadzone :: residual charge offset AT THE CLOSED LOOP'S OWN
+* operating point (#394)
+*
+* sim/harness fragment.  Same DUT as `testbench/tb_pfd_deadzone.spice`
+* (`pfd_cp`, the tri-state PFD driving its real charge pump) measured the same
+* way -- net charge per reference cycle versus phase offset -- at a DIFFERENT
+* OPERATING POINT.  Per sim/README.md ("Two manifests, one experiment
+* directory"), same DUT measured two ways stays in one experiment directory and
+* grows a second manifest beside `testbench/`, as `vco-tuning-range`
+* (`testbench-stages`, #88) and `cp-compliance` (`testbench-switching`, #42)
+* already do.
+*
+* WHY A SECOND OPERATING POINT EXISTS AT ALL.  `spec/pll.md`'s static
+* phase-offset budget cites this campaign's `t_offset` -- 0.671 ns at
+* `ff`/125 C/3.63 V -- as the SYSTEMATIC term.  That number is measured at
+* f_ref = 25 MHz with the control node held at 1.65 V.  The closed-loop
+* campaign that reported 1.796 ns of static REF->FB phase at the same PVT
+* corner (`sim/supply-sensitivity`, `20260901-155456-46b92f8`) runs at
+* f_ref = 12.5 MHz with the loop's control node settling near 2.29 V.  #394
+* asks whether that 2.7x gap is the operating point.  Answering it requires
+* the same measurement at the loop's own f_ref and across the whole ratified
+* control window, which is exactly what this manifest is.
+*
+* WHAT CHANGES RELATIVE TO THE PARENT MANIFEST, and nothing else does:
+*
+*   1. `period` is 80 ns (12.5 MHz) -- `sim/supply-sensitivity`'s own
+*      reference, = 100 MHz / N=8.  The parent's 40 ns (25 MHz) is the TOP of
+*      DR-002 Decision 1's ratified range and is the demanding end for a
+*      DEAD-ZONE claim; it is not the reference the closed-loop campaign runs
+*      at, and this manifest makes no dead-zone claim.
+*   2. `vctrl` is a declared sweep axis over DR-001 Decision 2's ratified
+*      ~0.9-2.4 V control window instead of one point at its middle.
+*   3. The charge-integration window is expressed RELATIVE to `period` rather
+*      than as the parent's literal `from=60n to=140n`, so the same two
+*      whole reference cycles (the 2nd and the 3rd) are integrated whatever
+*      `period` is.  Verified to reproduce the parent's number bit-for-bit at
+*      the parent's own settings.
+*
+* Everything else -- the DUT, the ideal bias references, the 200 ps stimulus
+* edges, the trim code (b1 b0 = 10, 3 unit legs), `rshunt`/`itl4`/the
+* tolerances -- is the parent manifest's, unchanged, so the two records are
+* comparable term by term.
+*
+* Expects from the harness header:
+*   .lib <process corner bundle>, .temp <temp_c>
+*   .param vdd_val=<supply volts>  (also vdd_nom, temp_c)
+*   .param iunit, b0_code, b1_code, period, tstart   (manifest `params`)
+*   .param vctrl=<control-node voltage, V>           (the `vc` axis)
+*   .param dphi=<FB-relative-to-REF phase offset, s> (the `d` axis)
+
+*------------------------------------------------------------------ supplies
+vdd vdd 0 dc 'vdd_val'
+vss vss 0 dc 0
+
+* Reference edges.  200 ps rise/fall rather than an ideal step: a
+* zero-rise-time stimulus would flatter every delay in the PFD's set path and
+* understate the reset delay.  `tstart` is half a reference period, so the
+* first edge does not coincide with t = 0.
+vref ref 0 pulse(0 'vdd_val' 'tstart' 200p 200p '0.5*period' period)
+vfb  fb  0 pulse(0 'vdd_val' 'tstart+dphi' 200p 200p '0.5*period' period)
+
+* Static trim code: b1 b0 = 1 0 -> Icp = 3 units (the nominal setting, and the
+* setting `sim/supply-sensitivity` runs its closed loop at -- its KTRIM=2).
+vb0 b0 0 dc 'vdd_val*b0_code'
+vb1 b1 0 dc 'vdd_val*b1_code'
+
+* Charge-pump bias reference.  As in sim/devchar-cp and the parent manifest,
+* the four bias nodes are driven from ideal current sources at 4x the unit-leg
+* current (the bias diodes are 4x the unit geometry, so each leg still mirrors
+* one unit): reference generation is a separate block, and driving it ideally
+* here keeps the measured behaviour the PFD+CP's own.  `sim/supply-sensitivity`
+* drives them identically, so this is not a point of difference between the two
+* campaigns either.
+iibn vdd ibn dc 'iunit'
+iicn vdd icn dc 'iunit'
+iibp ibp 0 dc 'iunit'
+iicp icp 0 dc 'iunit'
+
+xdut ref fb b0 b1 ibn icn ibp icp vout up dn vdd vss pfd_cp
+
+* Control node held at `vctrl` through an ammeter, so i(vam) is exactly the
+* charge-pump output current (positive = pump sourcing into the control node).
+* Holding it with an ideal source is what makes this an OPEN-LOOP measurement
+* of the pump's delivered charge, isolated from the loop filter's response to
+* it (#10) -- the same isolation the parent manifest applies, at a control
+* voltage the loop actually visits rather than only at the window's middle.
+vam vout vctrl_src 0
+vctrl vctrl_src 0 dc 'vctrl'

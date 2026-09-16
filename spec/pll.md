@@ -586,10 +586,16 @@ their anchor. A testbench judging this quantity therefore cites the 1 ns
 itself; a per-period proxy is not an acceptable substitute, and one campaign
 was found applying a 1.6× looser one (DR-012 Decision 5).
 
-**This criterion is not met at every mandated corner today.** The loop settles
-at 1.227 ns of static phase at `ff`/27 °C/3.63 V and 1.049 ns at
-`typical`/−40 °C/3.63 V — nominal skew, systematic only, at f_ref = 12.5 MHz /
-N = 8 / Icp b1b0 = 10. The criterion is **not** relaxed to accommodate them
+**This criterion is not met at every mandated corner today, and the axis it is
+lost on is the control voltage.** Closed-loop, the loop settles at 1.227 ns of
+static phase at `ff`/27 °C/3.63 V and 1.049 ns at `typical`/−40 °C/3.63 V —
+nominal skew, systematic only, at f_ref = 12.5 MHz / N = 8 / Icp b1b0 = 10.
+Open-loop, the charge pump's residual per-cycle charge nulls at a static offset
+that grows steeply toward the bottom of DR-001 Decision 2's ratified 0.9–2.4 V
+control window: at Vctrl = 0.90 V it exceeds this entire criterion by itself at
+**36 of the 45** mandated corners (worst 1.873 ns), while at 1.65 V and 2.40 V
+it exceeds it at none. The criterion is therefore reachable over most of the
+control window and not at its bottom. It is **not** relaxed to accommodate that
 (DR-012 Decision 1); the gap is recorded against the design in
 [Verification owed](#verification-owed).
 
@@ -954,15 +960,22 @@ implemented and re-characterized by #393; supersedes
    outside** the ratified ≤ 1 ns Lock criterion: a part standing off that much
    phase is not locked, and a flag refusing to assert there is correct.
 
-   **The systematic term carries an operating point and may not be quoted
-   without it** (DR-012 Decision 4). 0.671 ns is `pfd-deadzone`'s worst corner
+   **The systematic term is not a worst case and may not be quoted as one**
+   (DR-012 Decision 4). 0.671 ns is `pfd-deadzone`'s worst corner
    (`ff`/125 °C/3.63 V) **at f_ref = 25 MHz with the control node pinned at
-   1.65 V** — one cell of a surface the term varies strongly over. Measured
-   across DR-001 Decision 2's ratified 0.9–2.4 V control window at the closed
-   loop's own f_ref = 12.5 MHz, PFD_OP_SPEC_SENTENCE
-   (`sim/pfd-deadzone/records/PFD_OP_RECORD_ID.md`). The budget above is
-   therefore a floor on its own systematic term, not a worst case over the
-   operating surface.
+   1.65 V** — one point on a surface the term varies over by more than 100× at
+   a fixed corner. Re-measured across DR-001 Decision 2's ratified 0.9–2.4 V
+   control window at the closed loop's own f_ref = 12.5 MHz (405 points,
+   `sim/pfd-deadzone/records/20260916-051356-8cedbba.md`), it rises to
+   **1.873 ns** at the window's bottom — 2.8× the cited figure — and at
+   Vctrl = 0.90 V it exceeds the entire ratified 1 ns criterion **by itself at
+   36 of the 45 corners**, leaving nothing for the other two terms. At 1.65 V
+   and 2.40 V no corner does. The **reference frequency is nearly irrelevant**
+   by comparison: at the cited corner and 1.65 V, halving f_ref moves the term
+   only from 0.671 ns to 0.628 ns (−6.4 %). So the ≈1.49 ns sum above is the
+   budget **at mid-window**; at the bottom of the control window the same three
+   terms sum to ≈2.69 ns. The axis this criterion is lost on is the **control
+   voltage**, not the PVT corner — and the budget never named it.
 
    **A separate, larger finding this does not fix**, restated on better
    evidence by **DR-012** (#394). The loop **does** miss the ratified ≤ 1 ns
@@ -1112,7 +1125,7 @@ to reconstruct it from the status column.
 | [Output duty cycle](#output-duty-cycle) | the design does not meet its own 45 % floor at 7/90 measured points (`fs` bundle, `lo` edge, nominal-or-above supply); post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the measurement itself now exists (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |
 | [Output levels and drive](#output-levels-and-drive) | post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the loaded-output swing/edge-rate measurement itself now exists and PASSES at every point (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |
 | [Lock detector](#lock-detector) | T1′ window widening — **implemented and re-characterized** (DR-010: W = 9.5 µm, #393): T1′ is met (+4–6 % margin at `ff`/−40 °C/3.63 V). **T2′ is now the open item**: exceeded by 0–5 % at `ss`/125 °C/2.97 V under this in-situ re-characterization, a finding DR-010's idealized sizing campaign did not show — needs a wider T2′ reach or a lower-spread delay reference, not another re-size; T4/T5 characterization below 25 MHz, still untouched | #401 (T2′ decision); T4/T5 unowned |
-| [Lock criterion](#lock-time) | **a design gap, now measured** (DR-012): the loop misses the ratified ≤ 1 ns static-phase bound at 2 of the 45 mandated corners in its own undisturbed steady state — **1.227 ns** at `ff`/27 °C/3.63 V and 1.049 ns at `typical`/−40 °C/3.63 V, nominal-skew and systematic-only, before `mc-cp-mismatch`'s 0.576 ns statistical term is added. What is *owed* is the rest of the picture, not the existence of the gap: (a) the settled static phase at the **15** further corners that exceed the bound with the phase still decaying — their committed values are upper bounds on a tail, needing `run.sh`'s 36.8 µs settling escalation (≈10 h of ngspice per corner); (b) any measurement at all at an (f_ref, N, trim-code) cell other than 12.5 MHz / N = 8 / b1b0 = 10, the only cell characterized; (c) the design resolution, which DR-012 Decision 7 deliberately does not pick. The earlier entry here — "`ff`/125 °C/3.63 V stands off 1.796 ns" — was a sample on a decaying tail and is withdrawn by DR-012 Decision 2; that corner is neither cleared nor confirmed | #394 (found); #399 (owed measurement) |
+| [Lock criterion](#lock-time) | **a design gap, now measured** (DR-012): the loop misses the ratified ≤ 1 ns static-phase bound at 2 of the 45 mandated corners in its own undisturbed steady state — **1.227 ns** at `ff`/27 °C/3.63 V and 1.049 ns at `typical`/−40 °C/3.63 V, nominal-skew and systematic-only, before `mc-cp-mismatch`'s 0.576 ns statistical term is added. What is *owed* is the rest of the picture, not the existence of the gap: (a) the settled static phase at the **15** further corners that exceed the bound with the phase still decaying — their committed values are upper bounds on a tail, needing `run.sh`'s 36.8 µs settling escalation (≈10 h of ngspice per corner); (b) any **closed-loop** measurement at an (f_ref, N, trim-code) cell other than 12.5 MHz / N = 8 / b1b0 = 10, the only cell characterized — the open-loop systematic term is now swept over the whole ratified control window at all 45 corners (`sim/pfd-deadzone/records/20260916-051356-8cedbba.md`) and exceeds the criterion by itself at 36 of 45 at Vctrl = 0.90 V, so a closed-loop cell that parks low on that window is expected to miss and has never been run; (c) the design resolution, which DR-012 Decision 7 deliberately does not pick, though it does establish that the cause is the pump's residual charge at low Vctrl. The earlier entry here — "`ff`/125 °C/3.63 V stands off 1.796 ns" — was a sample on a decaying tail and is withdrawn by DR-012 Decision 2; that corner is neither cleared nor confirmed | #394 (found); #399 (owed measurement) |
 | [Lock time](#lock-time) | any bound at all on **re-lock after a mid-operation supply excursion** — distinct from row 9's cold-start acquisition. Measured today only as a lower bound: `lock` had not re-asserted 34.4 µs (3.70 τ) after a +10 % step at 2 of 3 sampled corners (DR-011) | #395 |
 | [Area](#area) | everything except the loop filter; the block has no floorplan | #17 (floorplan), #18 (extraction) |
 | [Kvco](#kvco), [Output band](#output-band) | Monte Carlo band-select mirror mismatch; **post-extraction re-run of every VCO number** | #15, #18 |

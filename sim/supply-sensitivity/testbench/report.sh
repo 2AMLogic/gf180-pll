@@ -337,7 +337,14 @@ SETTLE="${CORNERSDIR}/settling_rerun.csv"
 {
   simenv_provenance "supply-sensitivity (settling re-run)" "${RID}" \
     "design/pll_top.sch -> sim/supply-sensitivity/netlist-snapshots/${RID}.spice" \
-    "every corner whose residual frequency error exceeded ${ACC_FERR} at ${KTSTOP_BASE}, re-run at ${KTSTOP_X}"
+    "every corner not settled in FREQUENCY (|ferr| > ${ACC_FERR}) or in PHASE (|ferr| * (tb - ta) > ${ACC_PHI_SETTLE_S} s) at ${KTSTOP_BASE}, re-run at ${KTSTOP_X}"
+  echo "# TWO escalation gates, not one (#394).  The frequency gate alone is"
+  echo "#   blind to the criterion the phase column is judged against: a small"
+  echo "#   residual frequency error integrated over a long late window is a"
+  echo "#   large phase shift, so a corner can sit well inside ACC_FERR while"
+  echo "#   its 'static' phase is still visibly moving.  A row reaching the"
+  echo "#   record without tripping either gate has been shown to hold its"
+  echo "#   phase, not merely to have been sampled once."
   echo "# tstop_short/tstop_long: the two transient lengths, same corner, same"
   echo "#   calibrated warm start, same band -- only the run length differs."
   echo "# decay_ratio: |ferr_long| / |ferr_short|; decay_expected is what a"

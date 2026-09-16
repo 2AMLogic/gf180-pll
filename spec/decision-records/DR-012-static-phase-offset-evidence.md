@@ -56,21 +56,51 @@ own two instants. Nobody had inverted it. Reading it:
   an overall `PASS` while standing off more static phase than `spec/pll.md`
   allows. That is why none of the above was visible from the verdict column.
 
-**`sim/pfd-deadzone/records/PFD_OP_RECORD_ID.md`** measured the other half.
-`spec/pll.md`'s 0.671 ns systematic term is an *open-loop* charge-null offset
-taken at **f_ref = 25 MHz with the control node pinned at 1.65 V**, while the
-closed loop at the corners above runs at **f_ref = 12.5 MHz** with its control
-node standing wherever the loop puts it (1.396 V at `ff`/27 °C/3.63 V, 2.291 V
-at `ff`/125 °C/3.63 V). That record re-measures the identical quantity on the
-identical DUT at the loop's own reference frequency and across DR-001
-Decision 2's whole ratified 0.9–2.4 V control window. The result:
-**PFD_OP_HEADLINE**
+**`sim/pfd-deadzone/records/20260916-051356-8cedbba.md`** measured the other
+half, and it is the larger of the two findings. `spec/pll.md`'s 0.671 ns
+systematic term is an *open-loop* charge-null offset taken at **f_ref = 25 MHz
+with the control node pinned at 1.65 V**, while the closed loop runs at
+**f_ref = 12.5 MHz** with its control node standing wherever the loop puts it
+(1.396 V at `ff`/27 °C/3.63 V, 2.291 V at `ff`/125 °C/3.63 V, 0.978–0.991 V at
+the three `−40 °C`/2.97 V corners). A second manifest re-measures the identical
+quantity on the identical DUT — same stimulus, same reduction, same Icp code,
+same solver options — at the loop's own reference frequency and across DR-001
+Decision 2's whole ratified 0.9–2.4 V control window. 405 points, 45 corners ×
+3 control voltages × 3 phase offsets, all measured:
+
+| Vctrl | `t_offset` over the 45 corners | worst corner | corners over the ratified 1 ns |
+|---|---|---|---|
+| **0.90 V** (window bottom) | 0.778 … **1.873 ns** | `ff`/125 °C/3.63 V | **36 of 45** |
+| 1.65 V (the cited point) | 0.009 … 0.657 ns | `ff`/27 °C/3.63 V | 0 of 45 |
+| 2.40 V (window top) | 0.023 … 0.647 ns | `ff`/27 °C/2.97 V | 0 of 45 |
+
+**The variable that matters is the control voltage, and the budget never
+mentioned it.** Across the ratified control window the systematic term varies
+by more than **100×** at a fixed corner (`ff`/27 °C/3.63 V: 0.175 ns at 2.40 V,
+0.657 ns at 1.65 V, 1.823 ns at 0.90 V), and at the window's bottom it exceeds
+the entire ratified criterion by itself at 36 of the 45 corners. By contrast
+the **reference frequency is nearly irrelevant**: at the cited corner and the
+cited 1.65 V, halving f_ref from 25 MHz to 12.5 MHz moves the term only from
+0.671 ns to 0.628 ns (−6.4 %).
+
+**The two campaigns cross-validate where they overlap.** At the three corners
+where the closed loop settles near the bottom of the control window, the
+open-loop systematic value at 0.90 V and the closed-loop settled phase agree to
+within 0.09 ns — measured in different decks, different topologies (ideal
+source vs. real filter), and different nodes:
+
+| Corner | closed-loop Vctrl | open-loop `t_offset` @ 0.90 V | closed-loop settled phase |
+|---|---|---|---|
+| `fs`/−40 °C/2.97 V | 0.978 V | 0.897 ns | 0.838 ns |
+| `typical`/−40 °C/2.97 V | 0.984 V | 0.923 ns | 0.953 ns |
+
+That agreement is what licenses reading the two records together at all.
 
 So the 2.7× "discrepancy" of #394's title was never a discrepancy between two
-measurements of one quantity: it compared a tail sample to a settled number, at
-a different reference frequency, at a different control voltage, in a different
-loop topology. Three of those four differences are now measured; the fourth
-(settled vs. tail) is what the first record removes.
+measurements of one quantity. It compared a tail sample to a settled number, at
+a different reference frequency, and — decisively — at a different control
+voltage. All three differences are now measured, and the control voltage
+accounts for most of the gap.
 
 ## Decision
 
@@ -103,13 +133,36 @@ criterion") with a measurement, and it upgrades the [Lock criterion] entry in
 [Verification owed](../pll.md) from "unreconciled" to a named, quantified
 design gap.
 
-**4. The 0.671 ns systematic term may not be cited without its operating
-point.** `spec/pll.md`'s budget presents it as *the* worst-corner systematic
-static offset; it is the worst corner **at f_ref = 25 MHz with Vctrl pinned at
-1.65 V**, which is one cell of a surface the term varies strongly over.
-Wherever the budget cites it, it must carry the operating point it was measured
-at, and it must cite PFD_OP_CITE alongside. A number this specification calls a
-worst case is only a worst case at the operating point it was measured at.
+**4. The 0.671 ns systematic term is not a worst case and may not be cited as
+one.** `spec/pll.md`'s budget presents it as *the* worst-corner systematic
+static offset. It is the worst **corner** at one **operating point** —
+f_ref = 25 MHz, Vctrl pinned at 1.65 V — and the term varies by more than 100×
+across the ratified control window at a fixed corner. The worst case over
+DR-001 Decision 2's ratified 0.9–2.4 V window is **1.873 ns**
+(`ff`/125 °C/3.63 V at Vctrl = 0.90 V), **2.8× the cited figure**. Wherever the
+budget cites 0.671 ns it must carry the operating point it was taken at and
+cite `sim/pfd-deadzone/records/20260916-051356-8cedbba.md` alongside; a number
+this specification calls a worst case is only a worst case over the axes it was
+swept on, and Vctrl was not one of them.
+
+**4a. The static-phase-offset budget is restated against the control window.**
+Summed at the bottom of the ratified control window the three terms are
+1.873 ns systematic + 0.576 ns statistical + 0.239 ns divider retiming =
+**≈2.69 ns**, against a ratified 1 ns. The previously stated ≈1.49 ns is the
+same sum at Vctrl = 1.65 V. Both are stated, with their operating points,
+because the spread between them *is* the finding.
+
+**4b. The answer to "is ≤ 1 ns reachable at `ff`/125 °C/3.63 V, and over which
+cells" is: not at the bottom of the control window, at that corner or at 35
+others — and the limit is the charge pump's residual, not the corner.** At
+Vctrl = 0.90 V the systematic term alone exceeds the whole criterion at **36 of
+45** corners, leaving nothing for the statistical or retiming terms. At 1.65 V
+and 2.40 V it exceeds it at none, so the criterion is reachable over most of
+the window. **Where a given (f_out, band code, N, trim code) cell lands on that
+window is set by the [band-selection rule](../pll.md)**, which this record does
+not re-derive; what it establishes is that the control voltage — not the PVT
+corner — is the axis the criterion is lost on. This supersedes nothing: it is
+the first measurement of that axis.
 
 **5. A testbench's acceptance threshold on a ratified quantity is the ratified
 value, not a proxy for it.** `sim/supply-sensitivity` judged a ratified
@@ -137,13 +190,17 @@ corners, which is expensive — the unescalated 12.0 µs run at
 escalated length there is of order 10 h. It is filed as **#399** and listed in
 [Verification owed](../pll.md).
 
-**7. Implementation of a design fix is not decided here.** This record
-establishes *that* the loop misses the criterion at `ff`/27 °C/3.63 V and *why
-the prior evidence did not show it*. Whether the fix is charge-pump
-(the residual up/down asymmetry the offset nulls), trim-rule, divider-retiming,
-or a loop-filter change is a design question that needs the owed measurements
-of Decision 6 to be scoped against, and is not something this record has the
-evidence to settle.
+**7. Implementation of a design fix is not decided here, but the axis it must
+act on is.** This record establishes *that* the loop misses the criterion at
+`ff`/27 °C/3.63 V, *why the prior evidence did not show it*, and *what the
+offset is actually a function of*: the charge pump's residual per-cycle charge
+`q_zero` at the control voltage the loop happens to stand at, which grows
+steeply toward the bottom of the ratified window (−8.6 fC at 0.90 V against
+−3.3 fC at 1.65 V at `ff`/125 °C/3.63 V). Whether the fix is in the pump's
+output-stage compliance, the Icp trim rule, the divider retiming, or the
+band-selection rule that decides where on the control window a cell sits, is a
+design question this record deliberately does not settle — but a fix that does
+not reduce `q_zero` at low Vctrl is not addressing the measured cause.
 
 ## Alternatives considered
 
