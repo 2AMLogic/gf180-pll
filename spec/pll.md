@@ -37,21 +37,24 @@
   DR-011 (post-supply-step settling), and the `sim/` evidence records each of
   those cites.
 - **Revisions to the carved-out rows** (#387, 2026-09-15; row 16 updated
-  again by #393, 2026-09-16). Row 16's targets **T1/T2 are replaced by
-  T1′/T2′** per DR-010 — the original pair could not be satisfied
-  simultaneously, as its own [section](#lock-detector) now shows with
-  measured numbers — and the [Lock time](#lock-time) section gains a second
-  limitation, on re-lock after a mid-operation supply excursion, per DR-011.
-  DR-010's decided fix (W = 9.5 µm) is now implemented and re-characterized
-  (#393): T1′ is met, but the re-characterization surfaces a new finding
-  DR-010's own idealized sizing campaign did not show — **T2′ is exceeded**
-  at the same corner it names as binding, by 0–5 %, under the realistic
-  full-loop stimulus this in-situ campaign drives with rather than the
-  isolated delay chain's ideal voltage step (#401). **DR-013** (#401) then
+  again by #393, 2026-09-16, and again by #407, 2026-09-16). Row 16's targets
+  **T1/T2 are replaced by T1′/T2′** per DR-010 — the original pair could not
+  be satisfied simultaneously, as its own [section](#lock-detector) now shows
+  with measured numbers — and the [Lock time](#lock-time) section gains a
+  second limitation, on re-lock after a mid-operation supply excursion, per
+  DR-011. DR-010's decided fix (W = 9.5 µm) is now implemented and
+  re-characterized (#393): T1′ is met, but the re-characterization surfaces a
+  new finding DR-010's own idealized sizing campaign did not show — **T2′ is
+  exceeded** at the same corner it names as binding, by 0–5 %, under the
+  realistic full-loop stimulus this in-situ campaign drives with rather than
+  the isolated delay chain's ideal voltage step (#401). **DR-013** (#401) then
   decides that gap: T1′ and T2′ keep their numbers and T2′'s reach is **not**
   widened; what changes is that both are measured at the flag rather than at
   the delay chain, and that the window's PVT spread — not its centre — is what
-  the fix has to move (#407).
+  the fix has to move (#407). **#407** then sizes the miss precisely
+  (**[2.02, 2.04) ns**, 1.0–2.0 % over budget) and **DR-014** picks the fix
+  mechanism — a fixed test-set trim code, not a bias-referenced delay — with
+  implementation and re-characterization scoped onward to **#411**.
   **Neither carved-out row leaves DR-007 Amendment A1's
   carve-out on this revision**: row 16 still
   does not meet its own targets (T2′ now, not T1′) and its T4/T5 gap below
@@ -119,7 +122,7 @@ are at risk. Nothing in this repository has been fabricated or measured.
 | 13 | [Output duty cycle](#output-duty-cycle) | 45 – 55 % at `CLK`, over the whole band and all corners | measured 44.375 – 50.696 % (90 points); worst `fs`/27 °C/3.63 V at the `lo` edge (band 0, Vctrl 0.9 V) — the bottom-of-band binding condition the design basis predicted | **measured** (90 points, loaded); target **not met** at 7/90 points, all at the `lo` edge |
 | 14 | [Output levels and drive](#output-levels-and-drive) | rail-to-rail CMOS on `vdd_vco`: V_OH ≥ 0.9·VDD_VCO, V_OL ≤ 0.1·VDD_VCO into ≤ 50 fF external load | measured V_OH 1.006 – 1.044·VDD_VCO, V_OL −0.040 … −0.006·VDD_VCO into a 50 fF load, at every one of 90 points | **measured** (90 points); target **met** at every point |
 | 15 | [Area](#area) | ≤ 0.15 mm² total — **a budget, not a result** (no layout exists) | n/a — drawn area is not a PVT quantity; the *capacitance* it buys is (C1 = 107.1 … 133 pF over corners) | **budget**; loop-filter allocation is **measured** |
-| 16 | [Lock detector](#lock-detector) | digital `lock` output; assert window within **1 … 2 ns** of phase error — i.e. ≥ the ratified Lock criterion and ≤ 2× it — at every PVT point (T1′/T2′, DR-010), **measured at the flag** (the largest phase error for which `lock` asserts and stays asserted through the assembled detector loop) rather than at the bare delay chain (DR-013 Decision 1); hysteresis ≥ 25 % of the assert window; no chatter | **implemented** (W = 9.5 µm, #393). T1′ is now met: window 1.04 … 1.06 ns at `ff`/−40 °C/3.63 V, +4–6 % margin. **T2′ is not met**: at `ss`/125 °C/2.97 V, the same corner DR-010's own sizing campaign measured at 1.956 ns (in-band, +2.2 % margin) under an idealized delay-chain-only stimulus, this full-loop in-situ re-characterization instead bounds the window's close to **[2.0, 2.1) ns — 0–5 % past the 2 ns budget, with the size of the miss unresolved** (no measured point lies between). Per DR-010 §Consequences this is not fixed by resizing again, and **DR-013** (#401) decides it: T2′'s 2× reach stands, the **spread** comes down instead — any replacement delay must hold the observable window to ≤ 1.65× over the grid, against 1.89–2.02× today (#407) | **measured** (both sizings, 185-point re-characterization); target **not met** (T2′) |
+| 16 | [Lock detector](#lock-detector) | digital `lock` output; assert window within **1 … 2 ns** of phase error — i.e. ≥ the ratified Lock criterion and ≤ 2× it — at every PVT point (T1′/T2′, DR-010), **measured at the flag** (the largest phase error for which `lock` asserts and stays asserted through the assembled detector loop) rather than at the bare delay chain (DR-013 Decision 1); hysteresis ≥ 25 % of the assert window; no chatter | **implemented** (W = 9.5 µm, #393). T1′ is now met: window 1.04 … 1.06 ns at `ff`/−40 °C/3.63 V, +4–6 % margin. **T2′ is not met**: at `ss`/125 °C/2.97 V, the same corner DR-010's own sizing campaign measured at 1.956 ns (in-band, +2.2 % margin) under an idealized delay-chain-only stimulus, this full-loop in-situ re-characterization instead bounds the window to **[2.02, 2.04) ns — 1.0–2.0 % past the 2 ns budget**, sized precisely by the owed 0.02 ns refinement (#407 scope item 1). Per DR-010 §Consequences this is not fixed by resizing again, and **DR-013** (#401) decides it: T2′'s 2× reach stands, the **spread** comes down instead — any replacement delay must hold the observable window to ≤ 1.65× over the grid, against 1.91–1.96× today. **DR-014** (#407 scope item 2) picks the mechanism — a fixed test-set trim code, not a bias-referenced delay; implementation and re-characterization scoped to **#411** | **measured** (both sizings, 189-point re-characterization); target **not met** (T2′); fix mechanism **decided**, not yet **implemented** |
 | 17 | [Kvco](#kvco) | ≤ 150 MHz/V at every legal operating point under the [band-selection rule](#band-selection-rule) | 115.8 MHz/V at `all-fast`/27 °C/2.97 V, band 6, Vctrl 1.54 V (target 200 MHz) | **measured** |
 | 18 | [Supply range](#supply-range) | 3.3 V ± 10 % (2.97 – 3.63 V), `nfet_03v3`/`pfet_03v3` only; three domains | n/a — the supply axis is the *independent* variable of every other row's corner binding | **measured** as a swept axis on every campaign |
 
@@ -915,10 +918,13 @@ the flag keeps asserting for a further **δ** — measured at **+1.4 … +3.3 %*
 the corner where T2′ binds. An isolated-delay-chain campaign cannot see δ, so
 no T1′/T2′ verdict may rest on one alone.
 
-**Measured behaviour** (`sim/lock-detector/records/20260916-052313-b1633b5.md`,
-185 points — `delaywin_3v3` at **W = 9.5 µm** per DR-010's decided fix,
-implemented and re-characterized by #393; supersedes
-`20260802-050119-c24ee3a.md`'s W = 8 µm figures):
+**Measured behaviour** (`sim/lock-detector/records/20260916-122705-98c935b.md`,
+189 points, clean tree — `delaywin_3v3` at **W = 9.5 µm** per DR-010's decided
+fix, implemented and re-characterized by #393; supersedes
+`20260916-052313-b1633b5.md`'s 185-point figures with the 0.02 ns T2′
+refinement issue #407 scope item 1 / DR-013 Decision 3 owed — every other
+measured quantity is unchanged, since the added points are four more
+phase-error steps at an already-covered corner, not a new PVT point):
 
 | Metric | Value | Corner |
 |---|---|---|
@@ -927,8 +933,8 @@ implemented and re-characterized by #393; supersedes
 | Comparator window `t_win` (the delay, *not* the target's observable) | 1.006 … 1.968 ns | max at `ss`/125 °C/2.97 V |
 | Assert time from cold start, deep in lock | 0.680 … 1.913 µs | max at `ss`/125 °C/2.97 V |
 | Worst deassert latency after a perturbation | 5.72 ns | `ss`/125 °C/2.97 V |
-| **Window edges — the T1′/T2′ observable** (asserted up to / did not assert from) | 1.04 ns / 1.06 ns at `ff`/−40 °C/3.63 V; 2.0 ns / 2.1 ns at `ss`/125 °C/2.97 V | — |
-| PVT spread of the observable (T2′ edge ÷ T1′ edge) | **1.89 … 2.02 ×**, against a band only 2 × wide | bounds, not a point — the edges are resolved to 0.02 ns and 0.1 ns respectively |
+| **Window edges — the T1′/T2′ observable** (asserted up to / did not assert from) | 1.04 ns / 1.06 ns at `ff`/−40 °C/3.63 V; 2.02 ns / 2.04 ns at `ss`/125 °C/2.97 V | — |
+| PVT spread of the observable (T2′ edge ÷ T1′ edge) | **1.91 … 1.96 ×**, against a band only 2 × wide | bounds, not a point — both edges are now resolved to 0.02 ns |
 
 **Gaps, recorded rather than papered over:**
 
@@ -940,23 +946,21 @@ implemented and re-characterized by #393; supersedes
    with an ideal voltage-step stimulus. This record instead drives the same
    cell through the full lock-detector loop (XOR → delay chain → `WIDE`/`VWIN`
    charge network → Schmitt trigger) from the realistic PFD-modeled UP/DN edge
-   rate DR-010's own "Known risk" section had already flagged as unquantified,
-   and at a 0.1 ns ladder resolution rather than the 1 ns gap the predecessor
-   record left unresolved at this corner: the flag instead still asserts at
-   2.0 ns and no longer asserts at 2.1 ns — **0–5 % past the 2 ns T2′ budget,
-   and the size of the miss is unresolved**, since no measured point lies
-   between those two and the only reading under which T2′ holds is the exact
-   boundary. The status word is **not met**, because a target that cannot be
-   shown to hold is not met; a 0.02 ns refinement of that corner's ladder
-   between 2.00 and 2.10 ns is owed (DR-013 Decision 3).
+   rate DR-010's own "Known risk" section had already flagged as unquantified.
+   The 0.02 ns refinement DR-013 Decision 3 owed (issue #407 scope item 1,
+   `sim/lock-detector/records/20260916-122705-98c935b.md`) has since sized the
+   miss precisely: the flag asserts up to 2.02 ns and no longer asserts from
+   2.04 ns — a measured **1.0–2.0 % past the 2 ns T2′ budget**, replacing the
+   prior unresolved 0–5 % bound. The status word is **not met**, because a
+   target that cannot be shown to hold is not met.
 
    **The two campaigns disagree because they do not measure the same
    quantity.** The delay itself reproduces in situ to within 0.9 % (1.026 ns
    against 1.017 ns at the T1′ corner, 1.965 against 1.956 at the T2′ corner);
-   the rest of the gap — **+0.044 … +0.144 ns** at the T2′ corner, more than
-   the +2.2 % DR-010 booked — is δ, the residual WIDE pulse the charge network
-   cannot act on, which the targets' observable includes and an isolated chain
-   cannot show.
+   the rest of the gap — now sized to **+0.064 … +0.084 ns** at the T2′
+   corner (2.02–2.04 ns against 1.956 ns), more than the +2.2 % DR-010
+   booked — is δ, the residual WIDE pulse the charge network cannot act on,
+   which the targets' observable includes and an isolated chain cannot show.
 
    Per DR-010 §Consequences this is not a re-size question: the delay chain's
    PVT spread is a fixed ≈1.92× that geometry cannot narrow (measured 1.928× at
@@ -971,11 +975,16 @@ implemented and re-characterized by #393; supersedes
    into without licensing the flag to assert on the parts DR-012 identifies as
    the design's real gap. What moves instead is the **spread**: any replacement
    delay must hold the observable window to **≤ 1.65×** over the mandated grid
-   (a 2× band with 10 % of margin on each edge), against 1.89–2.02× today.
+   (a 2× band with 10 % of margin on each edge), against 1.91–1.96× today.
    Measured within-bundle voltage/temperature spread is 1.453× (`ff`) …
-   1.513× (`ss`), so the target is reachable; which mechanism reaches it — a
-   bias-referenced delay or a fixed trim code set at test — is **#407**'s to
-   pick, and `delaywin_3v3` stays at W = 9.5 µm as drawn until it does.
+   1.513× (`ss`), so the target is reachable. **DR-014 picks the mechanism**:
+   a fixed, test-set trim code — the same idiom as the existing
+   [Icp trim-code rule](#icp-trim-code-rule), not a self-calibration FSM
+   (DR-002 Decision 4's scope boundary stays intact) — over a bias-referenced
+   delay, on the evidence above (≈ 1.55× projected, inside the 1.65× target
+   with margin) against the bias route's own unmeasured achievable spread.
+   Implementing the trim and re-characterizing T1′–T5 under it is scoped to
+   **#411**, and `delaywin_3v3` stays at W = 9.5 µm as drawn until it lands.
 
 2. **T1′ is now met.** The window closes between 1.04 and 1.06 ns at the
    narrowest corner (`ff`/−40 °C/3.63 V), +4–6 % above the ratified 1 ns Lock
@@ -1165,12 +1174,12 @@ to reconstruct it from the status column.
 | [Period jitter](#period-jitter) | any **random** (noise-driven) jitter number at all — the closed-loop **deterministic** component (and the temperature/supply sweep it was taken over) now exists at all 45 mandated PVT corners, the full temperature × supply plane (`sim/period-jitter/`, 0.0508–0.2691 % RMS, PASS against the draft target at every corner); the random component remains unmeasured (TRANNOISE unsupported on this repo's pinned ngspice-46 build) | #13 (`period-jitter`) |
 | [Period jitter](#period-jitter) | the **output-band** axis of that sweep — the temperature × supply axis is retired by the row above, but every measured closed-loop point is at band 6 / f_out = 150 MHz, so no jitter number exists at the binding f_out = 200 MHz top of [Output band](#output-band), and the open-loop band sweep (B0 → B6) remains nominal temperature and supply only. The 200 MHz sweep is now a declared campaign of its own, `sim/period-jitter-band-top` — its 45-point grid, manifest, deck and per-corner operating-point derivation are committed and self-checking, and **every measured point of it is still owed** (`sim/CHARACTERIZATION.md`'s "Period jitter — band sweep at non-nominal temp/supply" row). That derivation already shows the normative [band-selection rule](#band-selection-rule) does not hold one band code across the 200 MHz grid (band 6 at 34 of the 45 points, band 7 at the other 11), so the loop gain the one fixed filter sees varies 1.6× across it against 1.05× across the 150 MHz grid | #13 (`period-jitter-band-top`) |
 | [Reference spur](#reference-spur) | the remaining 40 PVT points, and a direct measurement at the binding f_out = 200 MHz rather than the 150 MHz one static band code holds across corners — the closed-loop measurement itself now exists (`sim/reference-spur/records/20260816-132150-5f405e7.md`, 5 spanning corners), and the two cold corners do not clear −55 dBc once scaled to 200 MHz | #145 (`reference-spur`) |
-| [Lock time](#lock-time) | cold-start acquisition including cycle slipping — the closed-loop measurement itself now exists (`sim/lock-time/records/20260831-052456-effc505.md`, full 270-run PVT × N grid against the design's own `lock_detector` criterion): 22 PASS / 233 FAIL / 15 ERROR of 270; most `cold` FAILs read as a transient window too short for the detector to assert rather than a broken loop, and the majority of `relock` FAILs are not yet attributed to a cause (see `sim/CHARACTERIZATION.md`'s `lock-time` row and #284). **The re-take of that grid is held** (DR-013 Decision 7): its verdicts are taken against the design's own `lock_detector`, so a grid re-run before the window changes would be read against a window #407 is going to move | #163 (`lock-time`); held behind #407 |
+| [Lock time](#lock-time) | cold-start acquisition including cycle slipping — the closed-loop measurement itself now exists (`sim/lock-time/records/20260831-052456-effc505.md`, full 270-run PVT × N grid against the design's own `lock_detector` criterion): 22 PASS / 233 FAIL / 15 ERROR of 270; most `cold` FAILs read as a transient window too short for the detector to assert rather than a broken loop, and the majority of `relock` FAILs are not yet attributed to a cause (see `sim/CHARACTERIZATION.md`'s `lock-time` row and #284). **The re-take of that grid is held** (DR-013 Decision 7): its verdicts are taken against the design's own `lock_detector`, so a grid re-run before the window changes would be read against a window #411 is going to move | #163 (`lock-time`); held behind #411 |
 | [Reference input](#reference-input) | input thresholds/edge-rate sweep; a numeric reference-jitter limit to replace the current exclusion | #12 |
 | [Power](#power) | a measured `vdd_ref` domain current, and a closed-loop total | #14 (`supply-sensitivity`) |
 | [Output duty cycle](#output-duty-cycle) | the design does not meet its own 45 % floor at 7/90 measured points (`fs` bundle, `lo` edge, nominal-or-above supply); post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the measurement itself now exists (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |
 | [Output levels and drive](#output-levels-and-drive) | post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the loaded-output swing/edge-rate measurement itself now exists and PASSES at every point (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |
-| [Lock detector](#lock-detector) | T1′ window widening — **implemented and re-characterized** (DR-010: W = 9.5 µm, #393): T1′ is met (+4–6 % margin at `ff`/−40 °C/3.63 V). **T2′ is the open item, and it is now decided rather than open-ended** (DR-013): exceeded by 0–5 % at `ss`/125 °C/2.97 V under the in-situ re-characterization, a finding DR-010's idealized sizing campaign could not show. The reach stays at 2×; the fix is a delay whose observable window spreads ≤ 1.65× over the grid instead of today's 1.89–2.02×, which is a topology change, not a re-size. Three things are owed against it: (a) a **0.02 ns ladder refinement** at `ss`/125 °C/2.97 V between 2.00 and 2.10 ns, to size a miss the present 0.1 ns gap leaves unresolved; (b) the lower-spread delay itself, its sizing and a full T1′–T5 re-take; (c) a **`sim/supply-sensitivity` re-run at the new window** — every committed row there is at W = 8 µm, so the finding that the window has crossed `typical`/−40 °C/3.63 V's settled 1.049 ns offset is inferred across two campaigns, not measured in one loop. T4/T5 characterization below 25 MHz, still untouched | DR-013 (decision, #401); **#407** (a)–(c); T4/T5 unowned |
+| [Lock detector](#lock-detector) | T1′ window widening — **implemented and re-characterized** (DR-010: W = 9.5 µm, #393): T1′ is met (+4–6 % margin at `ff`/−40 °C/3.63 V). **T2′ is the open item, and it is now decided rather than open-ended** (DR-013): exceeded by 1.0–2.0 % at `ss`/125 °C/2.97 V under the in-situ re-characterization (sized precisely by the 0.02 ns refinement below), a finding DR-010's idealized sizing campaign could not show. The reach stays at 2×; the fix is a delay whose observable window spreads ≤ 1.65× over the grid instead of today's 1.91–1.96×, which is a topology change, not a re-size, and **the mechanism is now picked** (DR-014): a fixed test-set trim code, not a bias-referenced delay. Owed against it: (a) ~~a **0.02 ns ladder refinement** at `ss`/125 °C/2.97 V between 2.00 and 2.10 ns~~ — **done**, `sim/lock-detector/records/20260916-122705-98c935b.md` bounds the edge to [2.02, 2.04) ns; (b) the trim's own circuit implementation, its sizing and a full T1′–T5 re-take, scoped to **#411**; (c) a **`sim/supply-sensitivity` re-run at the new window** — every committed row there is at W = 8 µm, so the finding that the window has crossed `typical`/−40 °C/3.63 V's settled 1.049 ns offset is inferred across two campaigns, not measured in one loop; also scoped to #411. T4/T5 characterization below 25 MHz, still untouched | DR-013 (decision, #401); DR-014 (mechanism, #407); **#411** (b)–(c); T4/T5 unowned |
 | [Lock criterion](#lock-time) | **a design gap, now measured** (DR-012): the loop misses the ratified ≤ 1 ns static-phase bound at 2 of the 45 mandated corners in its own undisturbed steady state — **1.227 ns** at `ff`/27 °C/3.63 V and 1.049 ns at `typical`/−40 °C/3.63 V, nominal-skew and systematic-only, before `mc-cp-mismatch`'s 0.576 ns statistical term is added. What is *owed* is the rest of the picture, not the existence of the gap: (a) the settled static phase at the **15** further corners that exceed the bound with the phase still decaying — their committed values are upper bounds on a tail, needing `run.sh`'s 36.8 µs settling escalation (≈10 h of ngspice per corner); (b) any **closed-loop** measurement at an (f_ref, N, trim-code) cell other than 12.5 MHz / N = 8 / b1b0 = 10, the only cell characterized — the open-loop systematic term is now swept over the whole ratified control window at all 45 corners (`sim/pfd-deadzone/records/20260916-051356-8cedbba.md`) and exceeds the criterion by itself at 36 of 45 at Vctrl = 0.90 V, so a closed-loop cell that parks low on that window is expected to miss and has never been run; (c) the design resolution, which DR-012 Decision 7 deliberately does not pick, though it does establish that the cause is the pump's residual charge at low Vctrl. The earlier entry here — "`ff`/125 °C/3.63 V stands off 1.796 ns" — was a sample on a decaying tail and is withdrawn by DR-012 Decision 2; that corner is neither cleared nor confirmed | #394 (found); #399 (owed measurement) |
 | [Lock time](#lock-time) | any bound at all on **re-lock after a mid-operation supply excursion** — distinct from row 9's cold-start acquisition. Measured today only as a lower bound: `lock` had not re-asserted 34.4 µs (3.70 τ) after a +10 % step at 2 of 3 sampled corners (DR-011) | #395 |
 | [Area](#area) | everything except the loop filter; the block has no floorplan | #17 (floorplan), #18 (extraction) |
