@@ -148,7 +148,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Sequence
 
-from . import devgen, netcheck
+from . import cp_array, devgen, netcheck
 
 try:
     from .. import _canvas
@@ -347,73 +347,42 @@ def _stub(canvas: devgen.Canvas, a: tuple[float, float], b: tuple[float, float],
     canvas.rect("metal1", x0, a[1] - half, x1, a[1] + half)
 
 
-def declutter_riser_x(
-    points: Sequence[tuple[str, float, float]], min_pitch: float = RISER_MIN_PITCH_UM
-) -> list[tuple[str, float, float]]:
-    """Given ``(net, x, y)`` riser candidates -- one per merged riser point
-    this module needs to rise from -- return the same points with ``x``
-    nudged rightward (never ``y``) so that no two points end up less than
-    ``min_pitch`` apart in X, sweeping left to right by natural X.
+declutter_riser_x = cp_array.declutter_riser_x
+"""Given ``(net, x, y)`` riser candidates -- one per merged riser point this
+module needs to rise from -- return the same points with ``x`` nudged
+rightward (never ``y``) so that no two points end up less than ``min_pitch``
+apart in X, sweeping left to right by natural X.
 
-    Ported verbatim from ``cp_array.py``'s own ``declutter_riser_x()``
-    (issue #359), which this module's own build now needs for the identical
-    reason (see the module docstring's own "RISER COLUMNS MUST BE
-    DECLUTTERED ACROSS NETS" section, issue #391): exact ties are net-aware
-    (two points at the literal same natural X collapse onto one column only
-    when they share a net -- :func:`_riser` always runs each riser from its
-    own pad up to that net's own shared track, so two same-X same-net risers
-    always fully overlap in Y along the way, which is safe by construction),
-    and a tied point is snapped to its sibling's own *final* (possibly
-    already-nudged) X, not its own unperturbed natural X, so an earlier
-    nudge earlier in the sweep can never strand a later same-X point behind
-    it. See ``cp_array.py``'s own docstring for the two real, reproduced
-    failures this exact algorithm already fixed there.
-    """
-    order = sorted(range(len(points)), key=lambda i: points[i][1])
-    result = list(points)
-    prev_net: str | None = None
-    prev_natural_x: float | None = None
-    prev_assigned_x: float | None = None
-    for i in order:
-        net, natural_x, y = points[i]
-        if prev_assigned_x is None:
-            assigned_x = natural_x
-        elif natural_x == prev_natural_x and net == prev_net:
-            assigned_x = prev_assigned_x
-        elif natural_x - prev_assigned_x < min_pitch:
-            assigned_x = prev_assigned_x + min_pitch
-        else:
-            assigned_x = natural_x
-        result[i] = (net, assigned_x, y)
-        prev_net = net
-        prev_natural_x = natural_x
-        prev_assigned_x = assigned_x
-    return result
+Re-exported from ``cp_array.py``'s own ``declutter_riser_x()`` (issue #359,
+consolidated here in issue #413) rather than duplicated: this module's own
+build needs it for the identical reason (see the module docstring's own
+"RISER COLUMNS MUST BE DECLUTTERED ACROSS NETS" section, issue #391) --
+exact ties are net-aware (two points at the literal same natural X collapse
+onto one column only when they share a net -- :func:`_riser` always runs
+each riser from its own pad up to that net's own shared track, so two
+same-X same-net risers always fully overlap in Y along the way, which is
+safe by construction), and a tied point is snapped to its sibling's own
+*final* (possibly already-nudged) X, not its own unperturbed natural X, so
+an earlier nudge earlier in the sweep can never strand a later same-X point
+behind it. See ``cp_array.py``'s own docstring for the two real, reproduced
+failures this exact algorithm already fixed there.
+"""
 
 
 def _verify_riser_plan(planned: Sequence[tuple[str, float, float]], min_pitch: float) -> None:
     """Raise unless ``planned`` (an already-decluttered ``(net, x, y)`` riser
     plan) puts exactly one net on every Metal3 riser column, with every two
-    distinct columns at least ``min_pitch`` apart. Ported from
-    ``cp_array.py``'s own ``_verify_riser_plan()`` (issue #359/#391) --
-    split out from :func:`check_riser_columns` for the identical reason: a
-    test can prove this half raises on a synthetic two-nets-one-column plan
-    without needing an input that also survives :func:`declutter_riser_x`'s
-    own (already correct) net-aware decluttering to reach it.
+    distinct columns at least ``min_pitch`` apart. Thin wrapper around
+    ``cp_array.py``'s own ``_verify_riser_plan()`` (issue #359/#391,
+    consolidated here in issue #413), passing this module's own name so the
+    raised ``ValueError`` messages still say ``cp_dumpbuf`` rather than
+    ``cp_array`` -- split out from :func:`check_riser_columns` for the
+    identical reason ``cp_array.py``'s own version is: a test can prove this
+    half raises on a synthetic two-nets-one-column plan without needing an
+    input that also survives :func:`declutter_riser_x`'s own (already
+    correct) net-aware decluttering to reach it.
     """
-    by_x: dict[float, set[str]] = {}
-    for net, x, _y in planned:
-        by_x.setdefault(round(x, 6), set()).add(net)
-    for x, nets in sorted(by_x.items()):
-        if len(nets) > 1:
-            raise ValueError(f"cp_dumpbuf: riser column x={x} carries more than one net: {sorted(nets)}")
-    xs = sorted(by_x)
-    for a, b in zip(xs, xs[1:]):
-        if b - a < min_pitch - 1e-9:
-            raise ValueError(
-                f"cp_dumpbuf: riser columns x={a} ({sorted(by_x[a])}) and x={b} "
-                f"({sorted(by_x[b])}) are {b - a:.3f} um apart; needs >= {min_pitch}"
-            )
+    cp_array._verify_riser_plan(planned, min_pitch, module="cp_dumpbuf")
 
 
 def check_riser_columns(
