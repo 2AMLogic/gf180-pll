@@ -16,7 +16,8 @@
     "Limitation -- absolute window. The comparator window t_win is an inverter-chain delay, so it is an absolute time and its ratio to the reference period changes across the reference range.",
     "Limitation -- schematic-level. No extracted parasitics; the integrating node is high-impedance and its post-layout capacitance and leakage will move both the assert time and the window. #18 must re-take this.",
     "Statistical switches: sw_stat_global = sw_stat_mismatch = 0.",
-    "History: 20260802-050119-c24ee3a superseded 20260731-162119-0a12e6c (same claim, same then-95-point corner matrix, run through the sim/lib/simenv.sh shim rather than sim/harness) as a tooling migration. This manifest's corner set was subsequently widened from 'mos' (5 bundles, 95 points total) to 'full' (13 bundles, 167 points total) per DR-010's re-characterization (issue #393), evaluating T1'/T2' (the assert-window band DR-010 replaced T1/T2 with) rather than the retired T1/T2 pair -- see spec/pll.md's Lock detector section."
+    "History: 20260802-050119-c24ee3a superseded 20260731-162119-0a12e6c (same claim, same then-95-point corner matrix, run through the sim/lib/simenv.sh shim rather than sim/harness) as a tooling migration. This manifest's corner set was subsequently widened from 'mos' (5 bundles, 95 points total) to 'full' (13 bundles, 167 points total) per DR-010's re-characterization (issue #393), evaluating T1'/T2' (the assert-window band DR-010 replaced T1/T2 with) rather than the retired T1/T2 pair -- see spec/pll.md's Lock detector section.",
+    "The delay window carries a fixed, test-set trim code since #411 (DR-014): kldt3..kldt0, active high, code = 8*kldt3 + 4*kldt2 + 2*kldt1 + kldt0, larger code = wider window. This manifest's default is code 8, the code design/pll_top.sch ties off and the code sim/lock-window-trim's per-bundle table picks for the `typical` bundle. A run at this single code therefore characterises an UNTRIMMED population -- every bundle at `typical`'s code -- which is NOT what a trimmed part experiences. The in-situ re-characterisation DR-013 Decision 1 requires, each bundle at its own code, sweeps kldt3..kldt0 as an extra axis; see sim/lock-window-trim for the code table it must use."
   ],
   "dut": [
     "design/netlist/lock_detector.spice"
@@ -47,7 +48,11 @@
     "kterrbig": "8n",
     "ktpert": "2.40u",
     "ktstep": "200p",
-    "ktstop": "3.40u"
+    "ktstop": "3.40u",
+    "kldt0": "0",
+    "kldt1": "0",
+    "kldt2": "0",
+    "kldt3": "1"
   },
   "sweeps": {
     "terr": {

@@ -39,7 +39,7 @@ XPFD REF FB CPB0 CPB1 IBN ICN IBP ICP VCTRL UP DN VDD VSS pfd_cp
 XLF VCTRL VSS loop_filter
 XVCO VCTRL B0 B1 B2 CLK VDD_VCO GND_VCO vco
 XDIV CLK P0 P1 P2 P3 P4 P5 SEL0 SEL1 SEL2 SEL3 SEL4 SEL5 DIVOUT FB VDD_DIV VSS divider_chain
-XLD UP DN LOCK VWIN VDD VSS lock_detector
+XLD UP DN VSS VSS VSS VDD LOCK VWIN VDD VSS lock_detector
 .ends
 
 * expanding   symbol:  pfd_cp.sym # of pins=13
@@ -167,18 +167,22 @@ XFRT DIVOUT VCO FB FBB VDD_DIV VSS dff_tg_3v3
 .ends
 
 
-* expanding   symbol:  lock_detector.sym # of pins=6
+* expanding   symbol:  lock_detector.sym # of pins=10
 ** sym_path: design/lock_detector.sym
 ** sch_path: design/lock_detector.sch
-.subckt lock_detector UP DN LOCK VWIN VDD VSS
+.subckt lock_detector UP DN LDT0 LDT1 LDT2 LDT3 LOCK VWIN VDD VSS
 *.ipin UP
 *.ipin DN
+*.ipin LDT0
+*.ipin LDT1
+*.ipin LDT2
+*.ipin LDT3
 *.opin LOCK
 *.opin VWIN
 *.iopin VDD
 *.iopin VSS
 XERR UP DN ERR VDD VSS xor2_3v3
-XDLY ERR ERRD VDD VSS delaywin_3v3
+XDLY ERR ERRD LDT0 LDT1 LDT2 LDT3 VDD VSS delaywin_3v3
 XNW ERR ERRD WIDEB VDD VSS nand2_3v3
 XIW WIDEB WIDE VDD VSS inv_3v3
 XMDNW VWIN WIDE VSS VSS nfet_03v3 L=0.5u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
@@ -556,25 +560,77 @@ XG4 N2 N3 Y VDD VSS nand2_3v3
 .ends
 
 
-* expanding   symbol:  delaywin_3v3.sym # of pins=4
+* expanding   symbol:  delaywin_3v3.sym # of pins=8
 ** sym_path: design/delaywin_3v3.sym
 ** sch_path: design/delaywin_3v3.sch
-.subckt delaywin_3v3 A Y VDD VSS
+.subckt delaywin_3v3 A Y T0 T1 T2 T3 VDD VSS
 *.ipin A
 *.opin Y
+*.ipin T0
+*.ipin T1
+*.ipin T2
+*.ipin T3
 *.iopin VDD
 *.iopin VSS
 XI1 A D1 VDD VSS inv_3v3
-XMC1 VSS D1 VSS VSS nfet_03v3 L=2u W=9.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
+XMB1 VSS D1 VSS VSS nfet_03v3 L=2u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB01 T0 NB0_1 VDD VSS inv_3v3
+XMT01 NB0_1 D1 NB0_1 VSS nfet_03v3 L=2u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB11 T1 NB1_1 VDD VSS inv_3v3
+XMT11 NB1_1 D1 NB1_1 VSS nfet_03v3 L=2u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB21 T2 NB2_1 VDD VSS inv_3v3
+XMT21 NB2_1 D1 NB2_1 VSS nfet_03v3 L=2u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB31 T3 NB3_1 VDD VSS inv_3v3
+XMT31 NB3_1 D1 NB3_1 VSS nfet_03v3 L=2u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
 + ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
 XI2 D1 D2 VDD VSS inv_3v3
-XMC2 VSS D2 VSS VSS nfet_03v3 L=2u W=9.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
+XMB2 VSS D2 VSS VSS nfet_03v3 L=2u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB02 T0 NB0_2 VDD VSS inv_3v3
+XMT02 NB0_2 D2 NB0_2 VSS nfet_03v3 L=2u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB12 T1 NB1_2 VDD VSS inv_3v3
+XMT12 NB1_2 D2 NB1_2 VSS nfet_03v3 L=2u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB22 T2 NB2_2 VDD VSS inv_3v3
+XMT22 NB2_2 D2 NB2_2 VSS nfet_03v3 L=2u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB32 T3 NB3_2 VDD VSS inv_3v3
+XMT32 NB3_2 D2 NB3_2 VSS nfet_03v3 L=2u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
 + ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
 XI3 D2 D3 VDD VSS inv_3v3
-XMC3 VSS D3 VSS VSS nfet_03v3 L=2u W=9.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
+XMB3 VSS D3 VSS VSS nfet_03v3 L=2u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB03 T0 NB0_3 VDD VSS inv_3v3
+XMT03 NB0_3 D3 NB0_3 VSS nfet_03v3 L=2u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB13 T1 NB1_3 VDD VSS inv_3v3
+XMT13 NB1_3 D3 NB1_3 VSS nfet_03v3 L=2u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB23 T2 NB2_3 VDD VSS inv_3v3
+XMT23 NB2_3 D3 NB2_3 VSS nfet_03v3 L=2u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB33 T3 NB3_3 VDD VSS inv_3v3
+XMT33 NB3_3 D3 NB3_3 VSS nfet_03v3 L=2u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
 + ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
 XI4 D3 Y VDD VSS inv_3v3
-XMC4 VSS Y VSS VSS nfet_03v3 L=2u W=9.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
+XMB4 VSS Y VSS VSS nfet_03v3 L=2u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB04 T0 NB0_4 VDD VSS inv_3v3
+XMT04 NB0_4 Y NB0_4 VSS nfet_03v3 L=2u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB14 T1 NB1_4 VDD VSS inv_3v3
+XMT14 NB1_4 Y NB1_4 VSS nfet_03v3 L=2u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB24 T2 NB2_4 VDD VSS inv_3v3
+XMT24 NB2_4 Y NB2_4 VSS nfet_03v3 L=2u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XNB34 T3 NB3_4 VDD VSS inv_3v3
+XMT34 NB3_4 Y NB3_4 VSS nfet_03v3 L=2u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
 + ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
 .ends
 

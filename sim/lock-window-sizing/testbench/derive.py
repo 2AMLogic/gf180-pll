@@ -1,16 +1,9 @@
 """gf180-pll :: lock-window-sizing :: the reduction this campaign claims.
 
-Two hooks:
+SUPERSEDED FOR NEW RUNS by ``sim/lock-window-trim`` (#411) -- see this
+campaign's ``tb.json`` methodology and ``tb_lock_window.sp``'s header.
 
-``derive_point``
-    ``repl_err_pct`` -- at the ``w08`` sizing point ONLY, the percentage
-    disagreement between the parameterised replica (``twin_r``) and the
-    committed ``delaywin_3v3`` control (``ctl_r``). At ``w08`` the replica is
-    the same circuit as the control, so this column is the campaign's own
-    proof that the swept device really is a faithful stand-in for the drawn
-    cell -- checked (``|repl_err_pct| <= 1``) rather than asserted in prose.
-    At every other sizing the replica differs by design, so the measure is
-    deliberately not produced and is recorded ``not measured``.
+One hook:
 
 ``derive_tables``
     ``window_sizing`` -- one row per sizing point, reducing the 117 PVT points
@@ -69,19 +62,14 @@ WIN_HI_NS = 2.0
 #: on a part ~4.8x outside the ratified Lock criterion.
 T1_MIN_NS = 2.5
 
-#: The sizing point at which the replica and the committed cell are the same
-#: circuit, and therefore the only one where disagreement is a defect.
-CONTROL_POINT = "w08"
-
-
-def derive_point(point):
-    if point.axes.get("wc") != CONTROL_POINT:
-        return {}
-    replica = point.get("twin_r")
-    control = point.get("ctl_r")
-    if replica is None or control is None or control == 0:
-        return {}
-    return {"repl_err_pct": 100.0 * (replica - control) / control}
+# ``derive_point`` used to produce ``repl_err_pct`` here: at ``w08`` the
+# parameterised replica and the committed ``delaywin_3v3`` were the same
+# circuit, so their disagreement was a defect and was checked rather than
+# asserted. #411 replaced the committed cell with a trimmed segment array, so
+# the two are no longer the same circuit at ANY sizing and that claim is false
+# rather than merely loose. The hook is removed instead of being weakened; the
+# record it was minted for (20260915-202802-79c0cee) keeps the column it
+# measured, as append-only evidence about the cell that existed then.
 
 
 def _fmt(value):

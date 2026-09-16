@@ -1,0 +1,105 @@
+{
+  "name": "lock-window-trim",
+  "description": "delaywin_3v3's trim-code ladder: where the comparator window t_win lands for each of the sixteen trim codes over the full 13-bundle, 117-point PVT grid, and which code each process bundle must be trimmed to so that the whole trimmed population holds T1'/T2' with a PVT spread at or under DR-013 Decision 4's 1.65x target",
+  "claim": "#411 -> spec/pll.md#lock-detector (row 16) via DR-013 Decision 4 and DR-014. DR-010's re-sizing of the untrimmed delaywin_3v3 met T1' but missed T2' by 1.0-2.0 %, and sim/lock-window-sizing/records/20260915-202802-79c0cee.md showed why no further re-sizing can close it: the window's own PVT spread is ~1.93x while the [1, 2] ns band it must fit inside is only 2.0x wide, so geometry re-centres the window but does not narrow it. DR-013 Decision 4 therefore fixed the target on the SPREAD (<= 1.65x) and DR-014 picked the mechanism: a fixed, test-set trim code, not a bias-referenced delay. Question, asked of the trimmed cell now that it exists: for each process bundle, is there a single trim code whose within-bundle voltage/temperature envelope sits inside [1, 2] ns -- and taken together over all 13 bundles at their own codes, does the trimmed population's window spread reach the 1.65x target? The reduction is per bundle because that is what the mechanism is: a part is one process bundle, gets one code once at test, and thereafter only has to survive its own voltage and temperature range.",
+  "methodology": [
+    "DUT is design/delaywin_3v3.sch as drawn after #411: four inv_3v3 stages, each loaded by one always-present base MOS cap (nfet_03v3, W = 5 um, L = 2 um, drain = source = bulk = VSS, gate on the delayed node) plus four binary-weighted switched segments (W = 0.5 / 1 / 2 / 4 um, same device and length) whose back plates are driven by local inv_3v3 buffers off the trim bits. Exported inside design/netlist/lock_detector.spice.",
+    "A segment is switched by its BACK PLATE, not by a series switch: trim bit high drives the shorted drain/source to VSS so the gate inverts the channel over the whole 0..VDD swing (segment enabled, full Cox), and trim bit low drives it to VDD so the channel cannot be supplied from the now reverse-biased drain/source and the gate sees depletion instead (segment mostly off). The residual capacitance of a disabled segment is therefore NOT zero, which is exactly why this campaign measures the ladder's floor, ceiling and step rather than computing them from the drawn widths.",
+    "Code is active high and monotonic: code = 8*T3 + 4*T2 + 2*T1 + T0, and a larger code means more capacitance, a longer t_win and a wider window. All sixteen codes are run, i.e. the whole code space, not a sampled subset.",
+    "Two copies share every transient. XCTL is the COMMITTED delaywin_3v3 subcircuit verbatim and is the campaign's SUBJECT -- every number in the reduction comes from it. XVAR is a parameterised structural replica (same leaf cells, same topology, same L = 2u; the five widths are parameters kwbase/kw0..kw3) and is the campaign's CONTROL: at the drawn widths the two are the same circuit, and the derived repl_err_pct column proves that per point rather than assuming it. The replica is what the segment widths were explored on before they were committed to the schematic: a 3-bit, 1 um-LSB first cut (base 5 um, segments 1/2/4 um) measured a 6-8 % code step, i.e. a +/-3 to 4 % quantization error that inflates the trimmed population's spread to ~1.64x and leaves DR-013 Decision 4's 1.65x target no usable margin, and put the ff bundle's best code at the very top of the range with no headroom. The fourth bit and the 0.5 um LSB are that measurement's answer, and this manifest is the re-take at those widths.",
+    "The measured window is ctl_r, the step-to-output RISING delay of the committed cell: ERR rises at t0 and falls at t0 + tau; ERRD rises at t0 + twin_r and falls at t0 + tau + twin_f; WIDE = ERR . ERRD is non-empty exactly when tau > twin_r. ctl_f is measured and reported too, so the chain's rise/fall asymmetry is visible, but it does not set the threshold.",
+    "Stimulus is an ideal 100 ps-edge step, not a PFD pulse pair, so the number is the chain's own propagation delay and not the driving XOR's corner-dependent edge rate -- the same stimulus sim/lock-window-sizing and sim/lock-detector's own XW probe use, which is what makes this ladder directly comparable to both.",
+    "Band under test, restated so the verdict is not read as an arbitrary threshold: the LOWER edge is spec/pll.md's ratified Lock criterion itself (static phase error at the PFD inputs <= 1 ns) -- a window narrower than that at any corner can refuse to assert on a part that meets the criterion. The UPPER edge is 2x that criterion -- a window wider than that lets the flag assert on a part more than 2x outside the criterion, the unsafe direction for a consumer gating logic on lock. DR-013 Decision 4 adds a third, tighter requirement on top: the observable window's PVT spread must be <= 1.65x, so that the band is met with margin rather than exactly.",
+    "The reduction is PER PROCESS BUNDLE, which is the whole difference from sim/lock-window-sizing. A part is one process bundle and is trimmed once at test, so the code is chosen per bundle and the surviving spread within a bundle is its own voltage and temperature range only. The trimmed-population row then re-joins the per-bundle envelopes at their chosen codes -- that number, not any single bundle's, is what DR-013 Decision 4's 1.65x target is evaluated against.",
+    "Code selection rule, stated here rather than left to the reader: for each bundle the chosen code is the one whose within-bundle geometric centre sqrt(min*max) is closest to sqrt(1*2) = 1.4142 ns, the geometric centre of the band -- the placement that maximises the multiplicative margin to both edges at once, which is the right objective for a quantity whose spread is multiplicative. Ties and near-ties are visible in the per-code, per-bundle table that accompanies the choice.",
+    "Limitation -- schematic-level. No extracted parasitics. The delay chain's nodes are lightly loaded, so wire capacitance adds delay (widening the window) and interconnect RC will not scale with the segment widths, so both the absolute window and the ladder's own step move post-extraction. This matters MORE for a trimmed cell than for the untrimmed one, because a trim is only useful if the step it takes is the step it was sized for: #18 must re-take this, and the code table below is provisional against extraction.",
+    "Limitation -- no mismatch. sw_stat_global = sw_stat_mismatch = 0. The trim removes the PROCESS-BUNDLE half of the window's spread by construction; it cannot remove device mismatch between the four stages or between the window and the rest of the block, and this campaign does not characterise that residual. A Monte Carlo re-take is owed before the code table is treated as final.",
+    "Limitation -- the trim is characterised against the BARE delay chain here, not at the flag. DR-013 Decision 1 requires T1'/T2' to be judged on the observable window through the assembled detector loop, which is sim/lock-detector's measurement, not this deck's. This campaign's job is to pick the code; confirming it at the flag is a separate, in-situ campaign.",
+    "Passive corner axes ARE swept (the full 13-bundle set, 117 points per code), for the same reason sim/lock-window-sizing swept them: sim/README.md warns that a MOS-only sweep silently leaves res_*/moscap_*/mimcap_* at typical. The DUT's loads are nfet_03v3 devices wired as MOS capacitors, not devices from the PDK's moscap family, so they take their models from the MOS .lib section and the passive axes are expected to be a null here as they were there -- expected, and therefore measured rather than assumed.",
+    "Simulator settings: tran 5p 40n, the defaults otherwise."
+  ],
+  "dut": ["design/netlist/lock_detector.spice"],
+  "netlist": "tb_lock_window_trim.sp",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [-40, 27, 125],
+  "corners": ["full"],
+  "params": {
+    "ktstep": "5p",
+    "ktstop": "40n",
+    "kwbase": "5u",
+    "kw0": "0.5u",
+    "kw1": "1u",
+    "kw2": "2u",
+    "kw3": "4u"
+  },
+  "analyses": ["tran {ktstep} {ktstop}"],
+  "sweeps": {
+    "code": {
+      "description": "the trim code as four static bits (kt3 kt2 kt1 kt0), code = 8*kt3 + 4*kt2 + 2*kt1 + kt0. The whole sixteen-code space is run at every PVT point, so the per-bundle choice below is made from a complete ladder rather than interpolated between sampled codes",
+      "points": {
+"c0": {"params": {"kt0": "0", "kt1": "0", "kt2": "0", "kt3": "0"}},
+        "c1": {"params": {"kt0": "1", "kt1": "0", "kt2": "0", "kt3": "0"}},
+        "c2": {"params": {"kt0": "0", "kt1": "1", "kt2": "0", "kt3": "0"}},
+        "c3": {"params": {"kt0": "1", "kt1": "1", "kt2": "0", "kt3": "0"}},
+        "c4": {"params": {"kt0": "0", "kt1": "0", "kt2": "1", "kt3": "0"}},
+        "c5": {"params": {"kt0": "1", "kt1": "0", "kt2": "1", "kt3": "0"}},
+        "c6": {"params": {"kt0": "0", "kt1": "1", "kt2": "1", "kt3": "0"}},
+        "c7": {"params": {"kt0": "1", "kt1": "1", "kt2": "1", "kt3": "0"}},
+        "c8": {"params": {"kt0": "0", "kt1": "0", "kt2": "0", "kt3": "1"}},
+        "c9": {"params": {"kt0": "1", "kt1": "0", "kt2": "0", "kt3": "1"}},
+        "c10": {"params": {"kt0": "0", "kt1": "1", "kt2": "0", "kt3": "1"}},
+        "c11": {"params": {"kt0": "1", "kt1": "1", "kt2": "0", "kt3": "1"}},
+        "c12": {"params": {"kt0": "0", "kt1": "0", "kt2": "1", "kt3": "1"}},
+        "c13": {"params": {"kt0": "1", "kt1": "0", "kt2": "1", "kt3": "1"}},
+        "c14": {"params": {"kt0": "0", "kt1": "1", "kt2": "1", "kt3": "1"}},
+        "c15": {"params": {"kt0": "1", "kt1": "1", "kt2": "1", "kt3": "1"}}
+      }
+    }
+  },
+  "raw_measures": {
+    "ctl_r": {
+      "analysis": "tran",
+      "expr": "trig v(step) val='vdd_val/2' rise=1 targ v(octl) val='vdd_val/2' rise=1"
+    },
+    "ctl_f": {
+      "analysis": "tran",
+      "expr": "trig v(step) val='vdd_val/2' fall=1 targ v(octl) val='vdd_val/2' fall=1"
+    },
+    "twin_r": {
+      "analysis": "tran",
+      "expr": "trig v(step) val='vdd_val/2' rise=1 targ v(ovar) val='vdd_val/2' rise=1"
+    },
+    "twin_f": {
+      "analysis": "tran",
+      "expr": "trig v(step) val='vdd_val/2' fall=1 targ v(ovar) val='vdd_val/2' fall=1"
+    }
+  },
+  "derived": {
+    "module": "derive.py",
+    "measures": ["repl_err_pct"],
+    "tables": ["code_ladder", "bundle_trim"]
+  },
+  "topology_groups": {
+    "window": {
+      "description": "the committed trimmed delaywin_3v3 as drawn -- the campaign's subject, and the copy every number in the reduction comes from",
+      "measures": ["ctl_r", "ctl_f"]
+    },
+    "control": {
+      "description": "the parameterised structural replica, plus its per-point agreement with the committed cell",
+      "measures": ["twin_r", "twin_f", "repl_err_pct"]
+    }
+  },
+  "checks": {
+    "ctl_r": {
+      "min_measured_points": 1872,
+      "max_measured_points": 1872
+    },
+    "repl_err_pct": {
+      "min": -1.0,
+      "max": 1.0,
+      "min_measured_points": 1872,
+      "max_measured_points": 1872
+    }
+  }
+}

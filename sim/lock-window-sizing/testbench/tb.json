@@ -1,10 +1,11 @@
 {
   "name": "lock-window-sizing",
-  "description": "delaywin_3v3 window-sizing ladder: where t_win lands over the full 13-bundle, 117-point PVT grid as the four MOS-cap loads are scaled, and whether any one sizing holds t_win inside a two-sided band at every corner at once",
+  "description": "SUPERSEDED by sim/lock-window-trim (#411). delaywin_3v3 window-sizing ladder: where t_win lands over the full 13-bundle, 117-point PVT grid as the four MOS-cap loads are scaled, and whether any one sizing holds t_win inside a two-sided band at every corner at once",
   "claim": "#387 -> spec/pll.md#lock-detector (row 16, carved out of ratification by DR-007 Amendment A1) -- the spec's Lock detector section names two candidate fixes for its T1/T2 gap, 'widen the delay window, or scale the integrating capacitor'. Only the first moves the phase threshold at all (WIDE = ERR . ERRD fires when the error pulse outlasts the ERR->ERRD delay, so the threshold IS that delay; the integrating cap sets the assert/deassert time constants). Question: over the full PVT grid, is there a delaywin_3v3 MOS-cap sizing that holds the comparator window t_win simultaneously at or above the ratified Lock criterion (1 ns static phase error at the PFD inputs, so a part that MEETS the criterion always asserts) and at or below 2x that criterion (so the flag cannot assert on a part more than 2x outside it)? And how much margin does the answer have? The same grid also evaluates row 16's literal T1 (window >= 2.5 ns at every corner) on the same data, so the decision record can state the cost of T1 -- how far outside the ratified Lock criterion the flag would then assert -- as a measured number rather than an argument.",
   "methodology": [
+    "SUPERSEDED FOR NEW RUNS by sim/lock-window-trim (#411). This campaign characterised the UNTRIMMED delaywin_3v3, a cell #411 replaced with a base cap plus a switched, binary-weighted segment array carrying a fixed test-set trim code (DR-014). The committed record remains append-only evidence about the pre-#411 cell; the deck is kept runnable so that record's provenance still resolves, but a re-run's ctl_* columns are the trimmed cell at code 0 and are NOT comparable to the committed ones.",
     "DUT is design/delaywin_3v3.sch's four-stage inverter chain, each stage loaded by one nfet_03v3 wired as a MOS capacitor (drain = source = bulk = VSS, gate on the delayed node), exported inside design/netlist/lock_detector.spice.",
-    "Two copies share every transient. XCTL is the COMMITTED delaywin_3v3 subcircuit verbatim (W = 8u as drawn) and is the control; XVAR is a parameterised structural replica -- same inv_3v3 leaf, same nfet_03v3 load device, same L = 2u, W = kwc swept. At kwc = 8u the two are the same circuit, and the derived repl_err_pct column proves that per point rather than assuming it.",
+    "Two copies share every transient. XCTL is the COMMITTED delaywin_3v3 subcircuit verbatim and was the control; XVAR is a parameterised structural replica -- same inv_3v3 leaf, same nfet_03v3 load device, same L = 2 um, W = kwc swept. In the committed record the two were the same circuit at kwc = 8 um and the derived repl_err_pct column proved that per point. Since #411 the committed cell is the trimmed array, so the two are no longer the same circuit at ANY sizing and the repl_err_pct measure and its check have been withdrawn rather than relaxed -- the claim it made is now simply false.",
     "The measured window is twin_r, the step-to-output RISING delay: ERR rises at t0 and falls at t0 + tau; ERRD rises at t0 + twin_r and falls at t0 + tau + twin_f; WIDE = ERR . ERRD is non-empty exactly when tau > twin_r. twin_f is measured and reported too, so the chain's rise/fall asymmetry is visible, but it does not set the threshold.",
     "Stimulus is an ideal 100 ps-edge step, not a PFD pulse pair, so the number is the chain's own propagation delay and not the driving XOR's corner-dependent edge rate. This is the same stimulus sim/lock-detector's own XW window probe uses, which is what makes the kwc = 8u column directly comparable to 20260802-050119-c24ee3a's twin_r.",
     "Band under test, stated here so the verdict is not read as an arbitrary threshold: the LOWER edge is spec/pll.md's ratified Lock criterion itself (static phase error at the PFD inputs <= 1 ns) -- a window narrower than that at any corner can refuse to assert on a part that meets the criterion. The UPPER edge is 2x that criterion -- a window wider than that lets the flag assert on a part more than 2x outside the criterion, which is the unsafe direction for a consumer gating logic on lock. Both edges must hold at EVERY PVT corner simultaneously, which is why the reduction reports min and max over the whole grid per sizing rather than a nominal value.",
@@ -14,31 +15,81 @@
     "Limitation -- no mismatch. sw_stat_global = sw_stat_mismatch = 0. Four nominally identical loads in series average their own mismatch, but the chain-to-chain variation between the detector's window and the rest of the block is not characterised here.",
     "Simulator settings: tran 5p 40n, the defaults otherwise."
   ],
-  "dut": ["design/netlist/lock_detector.spice"],
+  "dut": [
+    "design/netlist/lock_detector.spice"
+  ],
   "netlist": "tb_lock_window.sp",
   "nominal_supply_v": 3.3,
   "supply_tolerance": 0.1,
-  "temperatures_c": [-40, 27, 125],
-  "corners": ["full"],
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "full"
+  ],
   "params": {
     "ktstep": "5p",
     "ktstop": "40n"
   },
-  "analyses": ["tran {ktstep} {ktstop}"],
+  "analyses": [
+    "tran {ktstep} {ktstop}"
+  ],
   "sweeps": {
     "wc": {
       "description": "MOS-capacitor load width of each of the four delay stages (kwc). w08 is the committed cell as drawn; the rest are the geometric widening spec/pll.md's Lock detector section names as one of its two candidate fixes. The ladder deliberately spans BOTH candidate answers so neither is extrapolated: w09..w12 brackets the sizing that re-centres the window on the ratified Lock criterion, and w24..w26 brackets the much larger sizing that would satisfy row 16's literal T1 (window >= 2.5 ns at every corner) -- and therefore makes the cost of T1 a measured number rather than an argued one",
       "points": {
-        "w08": {"params": {"kwc": "8u"}},
-        "w09": {"params": {"kwc": "9u"}},
-        "w095": {"params": {"kwc": "9.5u"}},
-        "w10": {"params": {"kwc": "10u"}},
-        "w11": {"params": {"kwc": "11u"}},
-        "w12": {"params": {"kwc": "12u"}},
-        "w16": {"params": {"kwc": "16u"}},
-        "w24": {"params": {"kwc": "24u"}},
-        "w25": {"params": {"kwc": "25u"}},
-        "w26": {"params": {"kwc": "26u"}}
+        "w08": {
+          "params": {
+            "kwc": "8u"
+          }
+        },
+        "w09": {
+          "params": {
+            "kwc": "9u"
+          }
+        },
+        "w095": {
+          "params": {
+            "kwc": "9.5u"
+          }
+        },
+        "w10": {
+          "params": {
+            "kwc": "10u"
+          }
+        },
+        "w11": {
+          "params": {
+            "kwc": "11u"
+          }
+        },
+        "w12": {
+          "params": {
+            "kwc": "12u"
+          }
+        },
+        "w16": {
+          "params": {
+            "kwc": "16u"
+          }
+        },
+        "w24": {
+          "params": {
+            "kwc": "24u"
+          }
+        },
+        "w25": {
+          "params": {
+            "kwc": "25u"
+          }
+        },
+        "w26": {
+          "params": {
+            "kwc": "26u"
+          }
+        }
       }
     }
   },
@@ -62,17 +113,25 @@
   },
   "derived": {
     "module": "derive.py",
-    "measures": ["repl_err_pct"],
-    "tables": ["window_sizing"]
+    "measures": [],
+    "tables": [
+      "window_sizing"
+    ]
   },
   "topology_groups": {
     "window": {
       "description": "the parameterised replica (W = kwc) -- the sizing ladder itself",
-      "measures": ["twin_r", "twin_f"]
+      "measures": [
+        "twin_r",
+        "twin_f"
+      ]
     },
     "control": {
-      "description": "the committed delaywin_3v3 as drawn (W = 8u), unaffected by kwc, plus the replica-vs-control agreement at kwc = 8u",
-      "measures": ["ctl_r", "ctl_f", "repl_err_pct"]
+      "description": "the committed delaywin_3v3 as drawn, unaffected by kwc -- the untrimmed cell in the record this deck minted, the trimmed cell held at code 0 in any re-run",
+      "measures": [
+        "ctl_r",
+        "ctl_f"
+      ]
     }
   },
   "checks": {
@@ -81,12 +140,6 @@
     },
     "twin_r": {
       "min_spread_pct": 30.0
-    },
-    "repl_err_pct": {
-      "min": -1.0,
-      "max": 1.0,
-      "min_measured_points": 117,
-      "max_measured_points": 117
     }
   }
 }
