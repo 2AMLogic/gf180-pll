@@ -236,10 +236,27 @@ xdut ref b0 b1 b2 cpb0 cpb1 p0 p1 p2 p3 p4 p5 sel0 sel1 sel2 sel3 sel4 sel5
 
 *---------------------------------------------------------------- transient ---
 * The disturbance transient IS the evidence for this criterion, so the trace is
-* retained -- as a CSV of the four signals that carry the argument, decimated
+* retained -- as a CSV of the five signals that carry the argument, decimated
 * by the runner, never as a rawfile (sim/README.md's waveform rule).
+*
+* SCHEMA CHANGE (#395), stated here because sim/README.md requires a testbench
+* change that affects comparability to be called out: v(ref) is APPENDED as a
+* fifth vector.  Nothing about the circuit, the profile or any `.meas` above
+* changes -- the numbers this deck reported before #395 are the numbers it
+* reports after it -- but the retained trace now carries BOTH edges of the
+* REF->FB phase, so the runner can extract a per-REF-cycle phase trace across
+* the whole profile instead of only the twelve `phi01..phi12` point samples.
+* That is #395's whole instrumentation requirement: DR-011 Decision 2 declined
+* to promote a post-step settling bracket to a spec bound precisely because
+* two phase samples cannot distinguish a single-pole decay from an
+* under-damped one, and the fix is more samples, not a different deck.
+*
+* v(ref) is APPENDED rather than inserted: `wrdata` emits one (time, value)
+* COLUMN PAIR per vector, so every field index the runner's decimation already
+* reads ($1/$2 vctrl, $4 lock, $6 vdd, $8 fb) keeps its meaning, and v(ref)
+* lands in the new $9/$10.
 .control
   set noaskquit
   tran $&c_tstep $&c_tstop 0 $&c_tmax
-  wrdata supply_transient_full.csv v(vctrl) v(lock) v(vdd) v(fb)
+  wrdata supply_transient_full.csv v(vctrl) v(lock) v(vdd) v(fb) v(ref)
 .endc

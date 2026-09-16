@@ -80,6 +80,16 @@
 #                            (defaults: KTA_X/KTB_X/KTSTOP_X -- see
 #                            "END-plateau settling escalation" below).
 #
+#   Every step/ramp run writes TWO artefacts next to each other (#395): the
+#   decimated four-signal transient it always wrote (<wavefile>), and a
+#   per-REFERENCE-CYCLE REF->FB phase trace (<wavefile minus .csv>_phase.csv)
+#   covering the whole profile.  The second exists because the post-step
+#   settling question is about a few nanoseconds of edge-to-edge skew, which a
+#   decimated v(fb) sample does not carry, and because the twelve phi01..phi12
+#   point samples put only TWO of themselves on the high plateau -- too few to
+#   tell a single-pole decay from an under-damped one (DR-011 Decision 2).
+#   See the "--- per-REF-cycle phase trace" block in --one-dyn below.
+#
 #   SIM_SUPERSEDES=<record-id> SIM_SUPERSEDES_NOTE='<why>' ./run.sh
 #                            mint with a **Supersedes** field (sim/README.md ::
 #                            "Status / supersession language").
@@ -809,6 +819,82 @@ if [ "${1:-}" = "--one-dyn" ]; then
         }
       }' "${rundir}/supply_transient_full.csv"
   } >"${wave}"
+
+  # --- per-REF-cycle phase trace (#395) --------------------------------------
+  # The decimated trace above answers "did LOCK come back", because LOCK is a
+  # flag with microsecond-scale dynamics that a 20 ns decimation resolves.  It
+  # cannot answer "how is the REF->FB phase decaying", because that quantity is
+  # a few NANOSECONDS of edge-to-edge skew: a decimated sample of v(fb) does
+  # not carry it at all.  Before #395 the only phase this deck reported was the
+  # twelve `phi01..phi12` point samples, of which exactly TWO (phi07/phi08) sit
+  # on the high plateau -- and DR-011 Decision 2 declined to turn the resulting
+  # post-step settling bracket into a `spec/pll.md` bound precisely because two
+  # samples cannot distinguish a single-pole decay from an under-damped one.
+  #
+  # So the phase is extracted here, once per REFERENCE CYCLE, over the WHOLE
+  # profile, from the same full-resolution trace the decimation above reads:
+  #
+  #   - the crossing instants are found by LINEAR INTERPOLATION between the two
+  #     adjacent ngspice samples that straddle the threshold.  That is the one
+  #     place this file interpolates, and it is unavoidable -- an edge crossing
+  #     is by definition between samples.  The error is bounded by the sample
+  #     spacing on the edge, which the closed-loop timestep ceiling caps at
+  #     ${KTMAX} (sim/README.md's "Closed-loop internal-timestep bound"), two
+  #     orders of magnitude below the nanosecond-scale quantity being measured;
+  #   - the threshold is `v_lo/2`, the SAME threshold `tb_supply_dyn.sp`'s own
+  #     `.meas phi01..phi12` use, on both REF and FB.  It has to be the same
+  #     one or the trace would not be comparable with the point samples;
+  #   - each REF rise is paired with the NEAREST FB rise, and the pair is
+  #     emitted only when |phi| < half a reference period.  That reproduces the
+  #     `.meas ... trig v(ref) ... targ v(fb) ...` pairing (whose probe instants
+  #     `snap()` deliberately places on a reference HALF-period so the two
+  #     edges a probe pairs are the same cycle's) and makes the aliasing
+  #     failure it guards against detectable rather than silent: a cycle whose
+  #     phase leaves that window is DROPPED from the trace, not folded into it.
+  #
+  # The cross-check that this extraction is right is free and is in the record:
+  # the deck's own `phi07`/`phi08` are measured at instants this trace also
+  # covers, so the two must agree to interpolation error.  A discrepancy means
+  # the extraction is wrong, and says so before any decay law is fitted.
+  {
+    echo "# gf180-pll :: supply-sensitivity :: per-REF-cycle REF->FB phase trace"
+    echo "# corner: ${bundle} / ${temp} C, band ${band}, N=${KN}, f_ref=${KFREF} Hz"
+    echo "# profile: ${KD_LO} V -> step(${KD_TEDGE}) -> ${KD_HI} V @ ${KD_TSTEP};"
+    echo "#          ramp ${KD_TRAMP}..${KD_TREND} -> ${KD_END} V; hold to ${KD_TSTOP}"
+    echo "# threshold: v_lo/2 = $(awk -v v="${KD_LO}" 'BEGIN{printf "%.6g", v/2}') V on BOTH v(ref) and v(fb) -- the same"
+    echo "#          threshold tb_supply_dyn.sp's own .meas phi01..phi12 use"
+    echo "# t_ref_s:  the interpolated v(ref) rising crossing, one row per reference cycle"
+    echo "# phi_ns:   (nearest v(fb) rising crossing) - t_ref_s, in ns; positive = FB LAGS REF"
+    echo "#          rows whose |phi| reaches half a reference period are DROPPED, not folded"
+    echo "# lock_v / vctrl_v / vdd_v: the ngspice sample at the crossing, un-interpolated"
+    echo "t_ref_s,phi_ns,lock_v,vctrl_v,vdd_v"
+    awk -v vth="$(awk -v v="${KD_LO}" 'BEGIN{printf "%.12g", v/2}')" \
+        -v halfT="$(awk -v f="${KFREF}" 'BEGIN{printf "%.12g", 0.5/f}')" '
+      /^[ \t]*[-0-9]/ {
+        tf = $7 + 0; vf = $8 + 0; tr = $9 + 0; vr = $10 + 0;
+        if (have) {
+          if (pvr < vth && vr >= vth) {
+            RT[++nr] = ptr + (tr - ptr) * (vth - pvr) / (vr - pvr);
+            RL[nr] = $4 + 0; RC[nr] = $2 + 0; RD[nr] = $6 + 0;
+          }
+          if (pvf < vth && vf >= vth)
+            FT[++nf] = ptf + (tf - ptf) * (vth - pvf) / (vf - pvf);
+        }
+        ptr = tr; pvr = vr; ptf = tf; pvf = vf; have = 1;
+      }
+      END {
+        if (nf < 1) exit 0;
+        j = 1;
+        for (i = 1; i <= nr; i++) {
+          while (j < nf && \
+                 (FT[j+1] - RT[i]) * (FT[j+1] - RT[i]) < \
+                 (FT[j]   - RT[i]) * (FT[j]   - RT[i])) j++;
+          d = FT[j] - RT[i];
+          if (d > -halfT && d < halfT)
+            printf "%.12g,%.6f,%.6g,%.6g,%.6g\n", RT[i], d * 1e9, RL[i], RC[i], RD[i];
+        }
+      }' "${rundir}/supply_transient_full.csv"
+  } >"${wave%.csv}_phase.csv"
   exit 0
 fi
 

@@ -94,6 +94,12 @@ for f in "${WORK}"/sdyn_*.csv; do
     "dyn_$(simenv_corner_id "${bundle}" "${temp}" 3.30)"
   cp "${WORK}/wave_${bundle}_${temp}.csv" \
      "${CORNERSDIR}/supply_transient_$(simenv_corner_id "${bundle}" "${temp}" 3.30).csv"
+  # The per-REF-cycle phase trace #395 added alongside the decimated waveform.
+  # Archived on the same rule and for the same reason: it is the observable the
+  # post-step settling question is actually about, and a record that cites a
+  # decay law has to ship the samples the law was read off.
+  cp "${WORK}/wave_${bundle}_${temp}_phase.csv" \
+     "${CORNERSDIR}/supply_phase_$(simenv_corner_id "${bundle}" "${temp}" 3.30).csv"
 done
 # The criterion-3 high-plateau settling escalation's own runs (#253) -- same
 # corner, longer hold, own work directory (the "_X<KD_TRAMP_X>" tag
@@ -105,6 +111,8 @@ for f in "${WORK}"/sdynx_*.csv; do
     "dynx_$(simenv_corner_id "${bundle}" "${temp}" 3.30)"
   cp "${WORK}/wavex_${bundle}_${temp}.csv" \
      "${CORNERSDIR}/supply_transient_$(simenv_corner_id "${bundle}" "${temp}" 3.30)_esc.csv"
+  cp "${WORK}/wavex_${bundle}_${temp}_phase.csv" \
+     "${CORNERSDIR}/supply_phase_$(simenv_corner_id "${bundle}" "${temp}" 3.30)_esc.csv"
 done
 # The criterion-3 END-plateau settling escalation's own runs (#255) -- same
 # corner again, post-ramp hold extended, own work directory again (the
@@ -124,6 +132,8 @@ for f in "${WORK}"/sdynend_*.csv; do
     "dynend_$(simenv_corner_id "${bundle}" "${temp}" 3.30)"
   cp "${WORK}/waveend_${bundle}_${temp}.csv" \
      "${CORNERSDIR}/supply_transient_$(simenv_corner_id "${bundle}" "${temp}" 3.30)_end.csv"
+  cp "${WORK}/waveend_${bundle}_${temp}_phase.csv" \
+     "${CORNERSDIR}/supply_phase_$(simenv_corner_id "${bundle}" "${temp}" 3.30)_end.csv"
 done
 
 # ---------------------------------------------------------------------------
