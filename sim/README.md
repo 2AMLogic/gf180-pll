@@ -166,6 +166,23 @@ sim/
   way has more than one current record — each stating in its **Claim** which
   half of the claim it answers and naming its companion.
 
+  **The same shape, forced by an OPERATING POINT rather than an analysis type
+  (#394).** `pfd-deadzone` grows `testbench-operating-point/` for a third
+  variant of the same reason. The DUT, the stimulus and the reduction are the
+  parent manifest's exactly; what differs is where on the operating surface the
+  measurement is taken — `period` = 80 ns instead of 40 ns, and `vctrl` swept
+  across DR-001 Decision 2's ratified window instead of pinned at its middle.
+  A `tb.json` fixes `analyses` and `params` for the whole run, so "the same
+  measurement at a second operating point" is a second manifest for the same
+  structural reason "the same DUT under a second analysis" is. It is worth
+  naming as its own case because the *motivation* differs and generalizes: a
+  number this repo's spec cites as a worst-case term is only a worst case at
+  the operating point it was measured at, and when another campaign runs the
+  same block somewhere else on that surface, the two numbers are not
+  comparable until one of them is re-measured where the other lives. Reaching
+  for a sibling slug there would split one claim across two directories; the
+  second manifest keeps the comparison inside one.
+
 - **`<record-id>`** — unique and traceable:
   `<YYYYMMDD>-<HHMMSS>-<short-git-sha>` (e.g. `20260730-142500-3f1c9ab`),
   date and time in **UTC**, sha being this repo's `HEAD` when the run

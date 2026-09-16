@@ -186,7 +186,7 @@ STEADY="${CORNERSDIR}/supply_steady.csv"
   echo "#   and the timestep-ceiling cross-check in run.sh"
   echo "bundle,temp_c,vdd_v,band,fout_hz,fdev_ppm,ferr,phi_b_s,skew_s,skew_spread_s,wup_s,wdn_s,nmeas,vctrl_avg_v,vctrl_min_v,vctrl_max_v,lock_lvl_v,i_core_a,i_vco_a,i_div_a,p_tot_w,verdict,tstop,tmax"
   sort -t, -k1,1 -k2,2n -k3,3n "${ROWS}" | awk -F, -v OFS=, \
-    -v accf="${ACC_FERR}" -v accp="${ACC_PHI_FRAC}" -v accn="${ACC_NTOL}" \
+    -v accf="${ACC_FERR}" -v accp="${ACC_PHI_S}" -v accn="${ACC_NTOL}" \
     -v accl="${ACC_LOCK_FRAC}" -v pwr="${ACC_PWR_MW}" -v dflt_ts="${KTSTOP_BASE}" \
     -v dflt_tm="${KTMAX_BASE}" '
     { rows[NR] = $0; if ($3 + 0 == 3.30) fnom[$1 "|" $2] = $10 }
@@ -207,10 +207,17 @@ STEADY="${CORNERSDIR}/supply_steady.csv"
         if (s2 > smax) smax = s2; if (s2 < smin) smin = s2;
         if (s3 > smax) smax = s3; if (s3 < smin) smin = s3;
         p = vdd * (abs(ic) + abs(iv) + abs(id));
-        tref = 1.0 / fref;
         v = "PASS";
         if (abs(ferr) > accf) v = "FAIL:ferr";
-        else if (abs(phib) > accp * tref) v = "FAIL:phi";
+        # spec/pll.md ratified Lock criterion: an ABSOLUTE bound in seconds on
+        # the static phase error at the PFD inputs (#394).  This test was
+        # `abs(phib) > accp * (1/fref)` -- 2 % of a reference period -- until
+        # #394 found that threshold 1.6x looser than the ratified one at this
+        # campaign own f_ref, so 15 corners of record 20260901-155456-46b92f8
+        # carry a PASS while standing off more static phase than the spec
+        # allows.  The per-reference-period reading is still quoted in the
+        # record prose for scale; it no longer sets a verdict anywhere.
+        else if (abs(phib) > accp) v = "FAIL:phi";
         else if (abs(nmeas - n) > accn) v = "FAIL:N";
         else if (abs(fout - n * fref) / (n * fref) > accf) v = "FAIL:fout";
         else if (lock < accl * vdd) v = "FAIL:lock";
@@ -330,7 +337,14 @@ SETTLE="${CORNERSDIR}/settling_rerun.csv"
 {
   simenv_provenance "supply-sensitivity (settling re-run)" "${RID}" \
     "design/pll_top.sch -> sim/supply-sensitivity/netlist-snapshots/${RID}.spice" \
-    "every corner whose residual frequency error exceeded ${ACC_FERR} at ${KTSTOP_BASE}, re-run at ${KTSTOP_X}"
+    "every corner not settled in FREQUENCY (|ferr| > ${ACC_FERR}) or in PHASE (|ferr| * (tb - ta) > ${ACC_PHI_SETTLE_S} s) at ${KTSTOP_BASE}, re-run at ${KTSTOP_X}"
+  echo "# TWO escalation gates, not one (#394).  The frequency gate alone is"
+  echo "#   blind to the criterion the phase column is judged against: a small"
+  echo "#   residual frequency error integrated over a long late window is a"
+  echo "#   large phase shift, so a corner can sit well inside ACC_FERR while"
+  echo "#   its 'static' phase is still visibly moving.  A row reaching the"
+  echo "#   record without tripping either gate has been shown to hold its"
+  echo "#   phase, not merely to have been sampled once."
   echo "# tstop_short/tstop_long: the two transient lengths, same corner, same"
   echo "#   calibrated warm start, same band -- only the run length differs."
   echo "# decay_ratio: |ferr_long| / |ferr_short|; decay_expected is what a"
@@ -353,7 +367,7 @@ SETTLE="${CORNERSDIR}/settling_rerun.csv"
     if [ -f "${fine}" ]; then paste -d, "${short}" "${f}" "${fine}"
     else                      paste -d, "${short}" "${f}"; fi
   done | awk -F, -v accf="${ACC_FERR}" -v accn="${ACC_NTOL}" \
-              -v accp="${ACC_PHI_FRAC}" -v accl="${ACC_LOCK_FRAC}" \
+              -v accp="${ACC_PHI_S}" -v accl="${ACC_LOCK_FRAC}" \
               -v dexp="${SETTLE_DECAY_EXPECTED}" -v NW=28 '
     {
       # `paste` joined two or three summary rows of identical width NW: the
@@ -372,7 +386,7 @@ SETTLE="${CORNERSDIR}/settling_rerun.csv"
       fe_f = (nb >= 3 ? sprintf("%.4g", $(F+13)+0) : "--");
       feb  = $(Bo+13)+0;
       fr=$(Bo+7)+0; n=$(Bo+8)+0; fo=$(Bo+10)+0; nm=$(Bo+12)+0; ph=$(Bo+14)+0;
-      vca=$(Bo+20)+0; lk=$(Bo+23)+0; tref=1.0/fr;
+      vca=$(Bo+20)+0; lk=$(Bo+23)+0;
       locked = (abs(nm - n) <= accn) && (abs(fo - n*fr)/(n*fr) <= accf);
       if (!locked)                       cls = "not-locked";
       else if (abs(feb) > accf)          cls = "under-damped";
@@ -380,7 +394,7 @@ SETTLE="${CORNERSDIR}/settling_rerun.csv"
       # of the same length: the only thing that changed is the integration, so
       # that is what the earlier failure was.
       else if (nb >= 3 && fel > accf)    cls = "integration";
-      else if (abs(ph) > accp*tref || lk < accl*v) cls = "settles-phi";
+      else if (abs(ph) > accp || lk < accl*v) cls = "settles-phi";
       else                               cls = "settles";
       printf "%s,%s,%.2f,%s,%s,%.4g,%s,%.4g,%.4g,%.4g,%s,%s,%.4g,%.6g,%.6g,%.6g,%.4g,%.4g,%s\n",
         b, t, v, band, ts_s, $13+0, ts_l, $(L+13)+0,
@@ -1588,8 +1602,13 @@ SUBSET
     comparable): residual fractional frequency error <= ${ACC_FERR}, measured
     as the DRIFT of the REF->FB phase between t = ${KTA} and t = ${KTB} (in a
     type-II loop a residual frequency error slips the phase linearly at
-    exactly df/f seconds per second); static phase error <= ${ACC_PHI_FRAC} of
-    a reference period; f_out/f_fb = N +/- ${ACC_NTOL}; |f_out - N f_ref| /
+    exactly df/f seconds per second); static phase error at the PFD inputs
+    <= $(awk -v p="${ACC_PHI_S}" 'BEGIN{printf "%.4g", p*1e9}') ns, which is
+    \`spec/pll.md\`'s ratified Lock criterion CITED rather than a
+    per-reference-period proxy (#394 -- the proxy this campaign used through
+    record \`20260901-155456-46b92f8\`, 2 % of a period, is 1.6x looser at
+    ${KFREF} Hz and passed 15 corners the ratified bound fails);
+    f_out/f_fb = N +/- ${ACC_NTOL}; |f_out - N f_ref| /
     N f_ref <= ${ACC_FERR}; LOCK-flag late-window average >= ${ACC_LOCK_FRAC}
     of the rail. Both phase instants sit on a reference HALF-period, so the
     REF and FB rises a probe pairs are the same cycle's and the measurement
@@ -1802,12 +1821,16 @@ ${FDEV_TABLE}
     are the settling question, and section 1c resolves each of them as a
     transient-budget artefact, an integration artefact, or a genuine
     design-margin finding. This is the only class that can reach #10 / #8.
-  - **static phase error over ${ACC_PHI_FRAC} of a reference period:
+  - **static phase error over the ratified
+    $(awk -v p="${ACC_PHI_S}" 'BEGIN{printf "%.4g", p*1e9}') ns Lock criterion:
     ${N_F_PHI} corner(s)** -- ${PHI_LIST}. Settled in frequency, but standing
-    off more phase than the criterion allows. That is the charge pump's
-    per-event charge asymmetry (\`pfd_cp\`, #9, post-#24), read against the
-    same criterion \`sim/pll-top-smoke\` applies; section 2 reports the number
-    itself and #15's \`mc-cp-mismatch\` adds the random component on top.
+    off more phase than the criterion allows. Part of that is the charge pump's
+    per-event charge asymmetry (\`pfd_cp\`, #9, post-#24); section 2 reports the
+    number itself and #15's \`mc-cp-mismatch\` adds the random component on top.
+    **Settled in frequency is not the same as settled in phase** (#394): the
+    settling escalation now gates on both, so a corner reaching this line has
+    been shown to hold that phase at the escalated transient length, not merely
+    to have been sampled there.
   - **block's own LOCK flag below ${ACC_LOCK_FRAC} of the rail:
     ${N_F_LOCK} corner(s)** -- ${LOCK_LIST}. At these corners everything
     electrical settled and the window comparator did not assert, which is a
@@ -1871,8 +1894,11 @@ ${MARGIN_NOTE}
 ${PHI_TABLE}
 
   - Worst static phase offset anywhere on the grid: **${WPHI_NS} ns** at
-    ${WPHI_ID}; the criterion is ${ACC_PHI_FRAC} of a reference period
-    ($(awk -v f="${KFREF}" -v p="${ACC_PHI_FRAC}" 'BEGIN{printf "%.4g", p/f*1e9}') ns at ${KFREF} Hz).
+    ${WPHI_ID}; the criterion is \`spec/pll.md\`'s ratified
+    $(awk -v p="${ACC_PHI_S}" 'BEGIN{printf "%.4g", p*1e9}') ns at the PFD
+    inputs, an absolute bound -- for scale, that is
+    $(awk -v f="${KFREF}" -v p="${ACC_PHI_S}" 'BEGIN{printf "%.3g", p*f*100}') %
+    of a reference period at ${KFREF} Hz.
   - UP/DN pulse-width skew over the grid: **${MNSK_NS} .. ${MXSK_NS} ns**
     (most negative ${MNSK_ID}, most positive ${MXSK_ID}).
   - Worst cycle-to-cycle spread of the skew across its three probes:
@@ -2122,7 +2148,7 @@ fi)
   | 1. output frequency vs. supply, full grid | **${V_FREQ}** |
   | 1b. control voltage inside DR-001's usable window at every corner | **${V_VCTRL}** |
   | 1c. re-runs: budget artefact vs. integration artefact vs. genuine under-damping | ${V_SETTLE} |
-  | 2. static phase offset vs. supply, full grid, post-#24 CP | reported (no ratified spec line; ${N_FAIL} corner(s) outside the ${ACC_PHI_FRAC}-of-a-period lock criterion) |
+  | 2. static phase offset vs. supply, full grid, post-#24 CP | reported (${N_FAIL} corner(s) outside \`spec/pll.md\`'s ratified $(awk -v p="${ACC_PHI_S}" 'BEGIN{printf "%.4g", p*1e9}') ns Lock criterion) |
   | 3. stays locked through a supply step and a supply ramp | **${V_DYN}** |
   | 3b. high-plateau re-runs: settling-budget artefact vs. genuine design-margin | ${V_DYN_SETTLE} |
   | 3c. END-plateau re-runs: settling-budget artefact vs. genuine design-margin | ${V_DEND} |
