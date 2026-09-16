@@ -27,7 +27,7 @@ C {lab_pin.sym} -40 0 0 0 {name=la1 lab=A}
 C {lab_pin.sym} 40 0 0 0 {name=la2 lab=D1}
 C {lab_pin.sym} 0 -40 0 0 {name=la3 lab=VDD}
 C {lab_pin.sym} 0 40 0 0 {name=la4 lab=VSS}
-C {nfet_03v3.sym} 0 300 0 0 {name=MC1 model=nfet_03v3 W=8u L=2u nf=1 m=1}
+C {nfet_03v3.sym} 0 300 0 0 {name=MC1 model=nfet_03v3 W=9.5u L=2u nf=1 m=1}
 C {lab_pin.sym} -20 300 0 0 {name=lb1 lab=D1}
 C {lab_pin.sym} 20 270 0 0 {name=lb2 lab=VSS}
 C {lab_pin.sym} 20 330 0 0 {name=lb3 lab=VSS}
@@ -37,7 +37,7 @@ C {lab_pin.sym} 360 0 0 0 {name=lc1 lab=D1}
 C {lab_pin.sym} 440 0 0 0 {name=lc2 lab=D2}
 C {lab_pin.sym} 400 -40 0 0 {name=lc3 lab=VDD}
 C {lab_pin.sym} 400 40 0 0 {name=lc4 lab=VSS}
-C {nfet_03v3.sym} 400 300 0 0 {name=MC2 model=nfet_03v3 W=8u L=2u nf=1 m=1}
+C {nfet_03v3.sym} 400 300 0 0 {name=MC2 model=nfet_03v3 W=9.5u L=2u nf=1 m=1}
 C {lab_pin.sym} 380 300 0 0 {name=ld1 lab=D2}
 C {lab_pin.sym} 420 270 0 0 {name=ld2 lab=VSS}
 C {lab_pin.sym} 420 330 0 0 {name=ld3 lab=VSS}
@@ -47,7 +47,7 @@ C {lab_pin.sym} 760 0 0 0 {name=le1 lab=D2}
 C {lab_pin.sym} 840 0 0 0 {name=le2 lab=D3}
 C {lab_pin.sym} 800 -40 0 0 {name=le3 lab=VDD}
 C {lab_pin.sym} 800 40 0 0 {name=le4 lab=VSS}
-C {nfet_03v3.sym} 800 300 0 0 {name=MC3 model=nfet_03v3 W=8u L=2u nf=1 m=1}
+C {nfet_03v3.sym} 800 300 0 0 {name=MC3 model=nfet_03v3 W=9.5u L=2u nf=1 m=1}
 C {lab_pin.sym} 780 300 0 0 {name=lf1 lab=D3}
 C {lab_pin.sym} 820 270 0 0 {name=lf2 lab=VSS}
 C {lab_pin.sym} 820 330 0 0 {name=lf3 lab=VSS}
@@ -57,7 +57,7 @@ C {lab_pin.sym} 1160 0 0 0 {name=lg1 lab=D3}
 C {lab_pin.sym} 1240 0 0 0 {name=lg2 lab=Y}
 C {lab_pin.sym} 1200 -40 0 0 {name=lg3 lab=VDD}
 C {lab_pin.sym} 1200 40 0 0 {name=lg4 lab=VSS}
-C {nfet_03v3.sym} 1200 300 0 0 {name=MC4 model=nfet_03v3 W=8u L=2u nf=1 m=1}
+C {nfet_03v3.sym} 1200 300 0 0 {name=MC4 model=nfet_03v3 W=9.5u L=2u nf=1 m=1}
 C {lab_pin.sym} 1180 300 0 0 {name=lh1 lab=Y}
 C {lab_pin.sym} 1220 270 0 0 {name=lh2 lab=VSS}
 C {lab_pin.sym} 1220 330 0 0 {name=lh3 lab=VSS}

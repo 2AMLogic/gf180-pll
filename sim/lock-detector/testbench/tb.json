@@ -1,6 +1,6 @@
 {
   "name": "lock-detector",
-  "description": "window-comparator lock detector: assert/deassert acceptance over the full PVT grid, and the comparator window's edges over a phase-error ladder at the PVT extremes",
+  "description": "window-comparator lock detector: assert/deassert acceptance over the full 13-bundle PVT grid, and the comparator window's edges over a phase-error ladder at the PVT extremes",
   "claim": "#11 -> DR-002 Decision 4 (design input, not a spec line) -- does the window-comparator lock detector assert once the phase error has stayed inside its window, refuse to assert on a large static phase error or on a frequency error, and deassert when the loop is deliberately perturbed out of lock -- at every PVT corner? And where are the EDGES of that window, measured rather than inferred? DR-002 Decision 4 puts a digital lock output in v1 scope as a passive monitor (no band-search or calibration FSM), and names #12's closed-loop testbench as the consumer of the signal.",
   "methodology": [
     "Stimulus models the tri-state PFD's UP/DN pair: with the reference edge leading the feedback edge by tau, UP is high for tau + t_reset and DN for t_reset (ktrst = 1 ns), both falling on the reset path, so the DUT's input XOR sees exactly tau and the common reset overlap cancels.",
@@ -16,7 +16,7 @@
     "Limitation -- absolute window. The comparator window t_win is an inverter-chain delay, so it is an absolute time and its ratio to the reference period changes across the reference range.",
     "Limitation -- schematic-level. No extracted parasitics; the integrating node is high-impedance and its post-layout capacitance and leakage will move both the assert time and the window. #18 must re-take this.",
     "Statistical switches: sw_stat_global = sw_stat_mismatch = 0.",
-    "This record supersedes 20260731-162119-0a12e6c (same claim, same 95-point corner matrix, run through the sim/lib/simenv.sh shim rather than sim/harness) as a tooling migration."
+    "History: 20260802-050119-c24ee3a superseded 20260731-162119-0a12e6c (same claim, same then-95-point corner matrix, run through the sim/lib/simenv.sh shim rather than sim/harness) as a tooling migration. This manifest's corner set was subsequently widened from 'mos' (5 bundles, 95 points total) to 'full' (13 bundles, 167 points total) per DR-010's re-characterization (issue #393), evaluating T1'/T2' (the assert-window band DR-010 replaced T1/T2 with) rather than the retired T1/T2 pair -- see spec/pll.md's Lock detector section."
   ],
   "dut": [
     "design/netlist/lock_detector.spice"
@@ -30,7 +30,7 @@
     125
   ],
   "corners": [
-    "mos"
+    "full"
   ],
   "analyses": [
     "tran 200p 3.40u"
@@ -113,7 +113,7 @@
   },
   "grid": [
     {
-      "description": "full 45-point PVT grid at a fixed phase error (4 ns) comfortably outside the nominal ~1.2 ns window, so the grid point is an unambiguous out-of-window case at every corner",
+      "description": "full 117-point PVT grid (all 13 corner bundles x 3 temperatures x 3 supplies) at a fixed phase error (4 ns) comfortably outside the nominal ~1.4 ns window, so the grid point is an unambiguous out-of-window case at every corner. Widened from the 45-point MOS-only grid to the full 13-bundle set per DR-010's re-characterization (issue #393): delaywin_3v3's load is an nfet_03v3 MOS capacitor with no independent passive corner axis (sim/lock-window-sizing/records/20260915-202802-79c0cee.md measured this as a deliberate null over the same 13 bundles), but sim/README.md's warning against a MOS-only sweep leaving res_*/moscap_*/mimcap_* silently at typical applies here as much as there, so the full set is now run rather than assumed equivalent.",
       "axes": {
         "terr": [
           "e4.0n"
@@ -281,10 +281,10 @@
       "max_measured_points": 0
     },
     "tb_asrt": {
-      "min_measured_points": 95
+      "min_measured_points": 167
     },
     "te_deas": {
-      "min_measured_points": 95
+      "min_measured_points": 167
     }
   },
   "derived": {

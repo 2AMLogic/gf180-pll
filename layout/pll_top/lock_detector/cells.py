@@ -317,7 +317,7 @@ def draw_delaywin(
     gate_pitch: float = 6.0,
 ) -> tuple[tuple[float, float, float, float], list[float]]:
     """``delaywin_3v3.sch``: 4x ``inv_3v3`` (non-inverting overall), each
-    loaded by an ``nfet_03v3`` MOS cap (``W=8u L=2u``, D=S=B=VSS) on its
+    loaded by an ``nfet_03v3`` MOS cap (``W=9.5u L=2u``, D=S=B=VSS) on its
     output node.
 
     Returns ``(bbox, tap_xs)`` -- see ``draw_xor2``'s docstring; this macro
@@ -343,7 +343,7 @@ def draw_delaywin(
             vss,
             prefix=f"{prefix}I{i + 1}_",
         )
-        cap = dev.moscap_fet(f"{prefix}MC{i + 1}", 8.0, 2.0, stage_out, vss)
+        cap = dev.moscap_fet(f"{prefix}MC{i + 1}", 9.5, 2.0, stage_out, vss)
         cap_box = draw_discrete_fet(canvas, nets, pwells, x0 + i * gate_pitch, y_cap, cap, tab_up=False)
         stage_boxes.append(bbox_union([inv_box, cap_box]))
 
