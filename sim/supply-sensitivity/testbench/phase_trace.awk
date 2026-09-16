@@ -24,11 +24,19 @@
 #            FB LAGS REF
 #   lock_v / vctrl_v / vdd_v
 #            the ngspice sample nearest the REF crossing, un-interpolated
+#
+# Naming note: the REF crossing-time array is REFT, not RT.  `RT` is a RESERVED
+# special variable in GNU awk (the record terminator matched by a regex RS),
+# and gawk fatally rejects using it as an array -- "attempt to use scalar `RT'
+# as an array" -- which breaks both this file's unit tests and --one-dyn itself
+# on any host whose /usr/bin/awk is gawk (most Linux distros, and CI).  BSD awk
+# and mawk do not reserve it, so the breakage is invisible on macOS.  Do not
+# "tidy" REFT back to RT to match the RL/RC/RD prefix family.
 /^[ \t]*[-0-9]/ {
   tf = $7 + 0; vf = $8 + 0; tr = $9 + 0; vr = $10 + 0;
   if (have) {
     if (pvr < vth && vr >= vth) {
-      RT[++nr] = ptr + (tr - ptr) * (vth - pvr) / (vr - pvr);
+      REFT[++nr] = ptr + (tr - ptr) * (vth - pvr) / (vr - pvr);
       RL[nr] = $4 + 0; RC[nr] = $2 + 0; RD[nr] = $6 + 0;
     }
     if (pvf < vth && vf >= vth)
@@ -41,10 +49,10 @@ END {
   j = 1;
   for (i = 1; i <= nr; i++) {
     while (j < nf && \
-           (FT[j+1] - RT[i]) * (FT[j+1] - RT[i]) < \
-           (FT[j]   - RT[i]) * (FT[j]   - RT[i])) j++;
-    d = FT[j] - RT[i];
+           (FT[j+1] - REFT[i]) * (FT[j+1] - REFT[i]) < \
+           (FT[j]   - REFT[i]) * (FT[j]   - REFT[i])) j++;
+    d = FT[j] - REFT[i];
     if (d > -halfT && d < halfT)
-      printf "%.12g,%.6f,%.6g,%.6g,%.6g\n", RT[i], d * 1e9, RL[i], RC[i], RD[i];
+      printf "%.12g,%.6f,%.6g,%.6g,%.6g\n", REFT[i], d * 1e9, RL[i], RC[i], RD[i];
   }
 }
