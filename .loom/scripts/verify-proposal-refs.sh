@@ -163,7 +163,7 @@ for raw_candidate in ${CANDIDATES[@]+"${CANDIDATES[@]}"}; do
     is_recognized_top "$path" || continue
     CHECKED_PATHS=$((CHECKED_PATHS + 1))
 
-    if ! grep -qFx "$path" <<<"$(full_tree)"; then
+    if ! full_tree | grep -qFx "$path"; then
         MISSES+=("MISSING FILE: \`$path\` does not exist on origin/main")
         continue
     fi
