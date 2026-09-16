@@ -963,9 +963,11 @@ implemented and re-characterized by #393; supersedes
    **The systematic term is not a worst case and may not be quoted as one**
    (DR-012 Decision 4). 0.671 ns is `pfd-deadzone`'s worst corner
    (`ff`/125 °C/3.63 V) **at f_ref = 25 MHz with the control node pinned at
-   1.65 V** — one point on a surface the term varies over by more than 100× at
-   a fixed corner. Re-measured across DR-001 Decision 2's ratified 0.9–2.4 V
-   control window at the closed loop's own f_ref = 12.5 MHz (405 points,
+   1.65 V** — one point on a surface the term varies over by up to **87×** at a
+   fixed corner (`ss`/−40 °C/2.97 V: 0.0089 ns at 1.65 V, 0.778 ns at 0.90 V),
+   and by at least 4× at every one of the 45. Re-measured across DR-001
+   Decision 2's ratified 0.9–2.4 V control window at the closed loop's own
+   f_ref = 12.5 MHz (405 points,
    `sim/pfd-deadzone/records/20260916-051356-8cedbba.md`), it rises to
    **1.873 ns** at the window's bottom — 2.8× the cited figure — and at
    Vctrl = 0.90 V it exceeds the entire ratified 1 ns criterion **by itself at

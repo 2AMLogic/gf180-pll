@@ -76,8 +76,10 @@ Decision 2's whole ratified 0.9–2.4 V control window. 405 points, 45 corners �
 
 **The variable that matters is the control voltage, and the budget never
 mentioned it.** Across the ratified control window the systematic term varies
-by more than **100×** at a fixed corner (`ff`/27 °C/3.63 V: 0.175 ns at 2.40 V,
-0.657 ns at 1.65 V, 1.823 ns at 0.90 V), and at the window's bottom it exceeds
+by up to **87×** at a fixed corner (`ss`/−40 °C/2.97 V: 0.0089 ns at 1.65 V
+against 0.778 ns at 0.90 V) and by **at least 4× at every one of the 45**
+(`ff`/27 °C/3.63 V, 10.4×: 0.175 ns at 2.40 V, 0.657 at 1.65, 1.823 at 0.90).
+At the window's bottom it exceeds
 the entire ratified criterion by itself at 36 of the 45 corners. By contrast
 the **reference frequency is nearly irrelevant**: at the cited corner and the
 cited 1.65 V, halving f_ref from 25 MHz to 12.5 MHz moves the term only from
@@ -136,8 +138,8 @@ design gap.
 **4. The 0.671 ns systematic term is not a worst case and may not be cited as
 one.** `spec/pll.md`'s budget presents it as *the* worst-corner systematic
 static offset. It is the worst **corner** at one **operating point** —
-f_ref = 25 MHz, Vctrl pinned at 1.65 V — and the term varies by more than 100×
-across the ratified control window at a fixed corner. The worst case over
+f_ref = 25 MHz, Vctrl pinned at 1.65 V — and across the ratified control window
+the term varies by at least 4× at every corner and by up to 87× at one. The worst case over
 DR-001 Decision 2's ratified 0.9–2.4 V window is **1.873 ns**
 (`ff`/125 °C/3.63 V at Vctrl = 0.90 V), **2.8× the cited figure**. Wherever the
 budget cites 0.671 ns it must carry the operating point it was taken at and
