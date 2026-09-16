@@ -29,9 +29,14 @@
 #       measured against, and `phi07`/`phi08` -- which are NOT used as a
 #       result here, only as the free self-check that the trace extraction is
 #       right (they sit at instants the trace also covers, so they must agree)
-#   sim/lock-detector/corners/20260802-050119-c24ee3a/window_edges.csv
+#   sim/lock-detector/corners/20260916-052313-b1633b5/window_edges.csv
 #       the detector's own assert edge, the threshold the phase has to get
-#       back inside before `lock` CAN assert
+#       back inside before `lock` CAN assert.  This is the T1'/T2'
+#       re-characterization against DR-010's resized delaywin_3v3 (W=9.5 um,
+#       #393/#402) -- the design this deck's DUT is actually assembled from.
+#       The pre-resize record (20260802-050119-c24ee3a, W=8 um) is stale for
+#       this purpose: it characterizes a lock_detector no PLL in this repo is
+#       built from any more.
 #   corners/20260901-155456-46b92f8/supply_steady.csv
 #       the same corner's undisturbed steady-state LOCK verdict at the same
 #       3.63 V rail -- the control condition, unchanged in role from
@@ -101,7 +106,7 @@ OUT="${2:-${EXP}/corners/${RID}}"
 SRC="${EXP}/corners/${RID}"
 [ -d "${SRC}" ] || { echo "ERROR: ${SRC} not found -- run the campaign first" >&2; exit 1; }
 
-LD_WINDOW="${ROOT}/sim/lock-detector/corners/20260802-050119-c24ee3a/window_edges.csv"
+LD_WINDOW="${ROOT}/sim/lock-detector/corners/20260916-052313-b1633b5/window_edges.csv"
 [ -f "${LD_WINDOW}" ] || { echo "ERROR: ${LD_WINDOW} not found" >&2; exit 1; }
 PRIOR="${EXP}/corners/20260901-155456-46b92f8"
 [ -f "${PRIOR}/supply_steady.csv" ] || { echo "ERROR: ${PRIOR}/supply_steady.csv not found" >&2; exit 1; }
@@ -138,7 +143,7 @@ CORNERS="typical 27|ss -40|ff 125"
   echo "# Every time column below is MEASURED -- an instant the transient actually reached -- not extrapolated. This is what replaces 20260915-202323-62391c6's two-sample bracket."
   echo "# dominant closed-loop pole f_p = ${FP_HZ} Hz (spec/pll.md 'Lock time': 1/(2 pi R C1) = 17.09 kHz); tau_loop_us = 1e6/(2 pi f_p)"
   echo "# ratified Lock criterion (spec/pll.md 'Lock criterion'): |phi| <= ${LOCK_PHI_NS} ns AND |df_out/f_target| <= ${LOCK_FERR}, held for >= ${LOCK_CYCLES} consecutive reference cycles"
-  echo "# ld_assert_ns: this corner's detector assert edge (asserted_up_to_s, sim/lock-detector 20260802-050119-c24ee3a) -- a DIFFERENT threshold from the 1 ns criterion, per DR-010"
+  echo "# ld_assert_ns: this corner's detector assert edge (asserted_up_to_s, sim/lock-detector 20260916-052313-b1633b5, DR-010's resized W=9.5um delaywin_3v3) -- a DIFFERENT threshold from the 1 ns criterion, per DR-010"
   echo "# steady_lock_ok: does THIS corner's undisturbed steady state at the SAME 3.63 V rail assert LOCK? 'no' means structural (spec row 16 / #393) and its t_lockflag_us is a detector result, not a settling one"
   echo "# ALL t_*_us columns are measured from the END of the supply step edge (t_step + t_edge) and mean '...and STAYS satisfied to the end of the hold' (scanned backward from the hold end, so a momentary excursion through the threshold during a ringing tail cannot be reported as the answer)"
   echo "# '>hold' means the threshold was still not satisfied at the hold's end: a LOWER BOUND, not a number"

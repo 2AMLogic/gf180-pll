@@ -868,32 +868,12 @@ if [ "${1:-}" = "--one-dyn" ]; then
     echo "#          rows whose |phi| reaches half a reference period are DROPPED, not folded"
     echo "# lock_v / vctrl_v / vdd_v: the ngspice sample at the crossing, un-interpolated"
     echo "t_ref_s,phi_ns,lock_v,vctrl_v,vdd_v"
+    # phase_trace.awk (#395) -- extracted to its own file so it can be
+    # unit-tested against a synthetic trace (testbench/tests/) without a
+    # multi-hour ngspice run.  Behaviour is unchanged from before extraction.
     awk -v vth="$(awk -v v="${KD_LO}" 'BEGIN{printf "%.12g", v/2}')" \
-        -v halfT="$(awk -v f="${KFREF}" 'BEGIN{printf "%.12g", 0.5/f}')" '
-      /^[ \t]*[-0-9]/ {
-        tf = $7 + 0; vf = $8 + 0; tr = $9 + 0; vr = $10 + 0;
-        if (have) {
-          if (pvr < vth && vr >= vth) {
-            RT[++nr] = ptr + (tr - ptr) * (vth - pvr) / (vr - pvr);
-            RL[nr] = $4 + 0; RC[nr] = $2 + 0; RD[nr] = $6 + 0;
-          }
-          if (pvf < vth && vf >= vth)
-            FT[++nf] = ptf + (tf - ptf) * (vth - pvf) / (vf - pvf);
-        }
-        ptr = tr; pvr = vr; ptf = tf; pvf = vf; have = 1;
-      }
-      END {
-        if (nf < 1) exit 0;
-        j = 1;
-        for (i = 1; i <= nr; i++) {
-          while (j < nf && \
-                 (FT[j+1] - RT[i]) * (FT[j+1] - RT[i]) < \
-                 (FT[j]   - RT[i]) * (FT[j]   - RT[i])) j++;
-          d = FT[j] - RT[i];
-          if (d > -halfT && d < halfT)
-            printf "%.12g,%.6f,%.6g,%.6g,%.6g\n", RT[i], d * 1e9, RL[i], RC[i], RD[i];
-        }
-      }' "${rundir}/supply_transient_full.csv"
+        -v halfT="$(awk -v f="${KFREF}" 'BEGIN{printf "%.12g", 0.5/f}')" \
+        -f "${HERE}/phase_trace.awk" "${rundir}/supply_transient_full.csv"
   } >"${wave%.csv}_phase.csv"
   exit 0
 fi
