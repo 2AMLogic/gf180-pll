@@ -552,7 +552,9 @@ def declutter_riser_x(
     return result
 
 
-def _verify_riser_plan(planned: Sequence[tuple[str, float, float]], min_pitch: float) -> None:
+def _verify_riser_plan(
+    planned: Sequence[tuple[str, float, float]], min_pitch: float, module: str = "cp_array"
+) -> None:
     """Raise unless ``planned`` (an already-decluttered ``(net, x, y)`` riser
     plan) puts exactly one net on every Metal3 riser column, with every two
     distinct columns at least ``min_pitch`` apart. Split out from
@@ -560,18 +562,24 @@ def _verify_riser_plan(planned: Sequence[tuple[str, float, float]], min_pitch: f
     synthetic two-nets-one-column plan without needing an input that also
     survives :func:`declutter_riser_x`'s own (now correct) net-aware
     decluttering to reach it -- see issue #359's own test plan.
+
+    ``module`` labels the error messages below -- callers that re-export
+    this function under a different module name (``cp_dumpbuf.py``, issue
+    #413) pass their own name so the message still points at the caller
+    whose riser plan actually failed, not at this function's own home
+    module.
     """
     by_x: dict[float, set[str]] = {}
     for net, x, _y in planned:
         by_x.setdefault(round(x, 6), set()).add(net)
     for x, nets in sorted(by_x.items()):
         if len(nets) > 1:
-            raise ValueError(f"cp_array: riser column x={x} carries more than one net: {sorted(nets)}")
+            raise ValueError(f"{module}: riser column x={x} carries more than one net: {sorted(nets)}")
     xs = sorted(by_x)
     for a, b in zip(xs, xs[1:]):
         if b - a < min_pitch - 1e-9:
             raise ValueError(
-                f"cp_array: riser columns x={a} ({sorted(by_x[a])}) and x={b} "
+                f"{module}: riser columns x={a} ({sorted(by_x[a])}) and x={b} "
                 f"({sorted(by_x[b])}) are {b - a:.3f} um apart; needs >= {min_pitch}"
             )
 
