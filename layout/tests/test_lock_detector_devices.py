@@ -85,7 +85,7 @@ class DeviceTranscriptionTests(unittest.TestCase):
             *dev.inv_fets("", "A", "Y", "VDD", "VSS"),
             *dev.nand2_fets("", "A", "B", "Y", "VDD", "VSS"),
             *dev.schmitt_fets("", "A", "Y", "VDD", "VSS"),
-            dev.moscap_fet("MC", 8.0, 2.0, "D1", "VSS"),
+            dev.moscap_fet("MC", 9.5, 2.0, "D1", "VSS"),
             dev.mdnw_fet("VWIN", "WIDE", "VSS"),
             dev.mupw_fet("VWIN", "VDD", "VSS"),
             dev.mcw_fet("VWIN", "VSS"),
@@ -143,7 +143,7 @@ class NarrowDeviceDogboneTests(unittest.TestCase):
             *dev.inv_fets("", "A", "Y", "VDD", "VSS"),
             *dev.nand2_fets("", "A", "B", "Y", "VDD", "VSS"),
             *dev.schmitt_fets("", "A", "Y", "VDD", "VSS"),
-            dev.moscap_fet("MC", 8.0, 2.0, "D1", "VSS"),
+            dev.moscap_fet("MC", 9.5, 2.0, "D1", "VSS"),
             dev.mdnw_fet("VWIN", "WIDE", "VSS"),
             dev.mcw_fet("VWIN", "VSS"),
         ]
