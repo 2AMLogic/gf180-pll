@@ -107,7 +107,7 @@ are at risk. Nothing in this repository has been fabricated or measured.
 | 7 | [Reference spur](#reference-spur) | ≤ −55 dBc | measured worst −57.0 dBc at f_out = 150 MHz (`sf`/−40 °C/2.97 V), i.e. −54.5 dBc scaled to 200 MHz; derived worst case −61 dBc at 200 MHz | **measured** (5 spanning corners, 150 MHz); **budget** (the 200 MHz binding point and the other 40 corners — see [Verification owed](#verification-owed)) |
 | 8 | [Loop bandwidth](#loop-bandwidth) | f_c = 26 – 430 kHz over the ratified space, with `f_c < f_ref/10` as a hard ceiling | min 25.96 kHz at f_ref = 1 MHz / 4 legs; max 429.5 kHz at f_ref = 25 MHz / 1 leg; worst realized ratio `f_ref/13` | **measured** |
 | 8a | [Phase margin](#phase-margin) | ≥ 45° everywhere in the contracted space | 47.4° at f_ref = 1 MHz, 4 legs (the tightest cell of the trim rule) | **measured** |
-| 9 | [Lock time](#lock-time) | < 100 µs to the stated [lock criterion](#lock-time). **The < 20 µs stretch is dropped** | 71 µs at f_ref = 1 MHz under the trim rule; structural floor 43 µs | **measured** (small-signal settling); **budget** (cold-start, owed to #163) |
+| 9 | [Lock time](#lock-time) | < 100 µs to the stated [lock criterion](#lock-time). **The < 20 µs stretch is dropped** | 71 µs at f_ref = 1 MHz under the trim rule; structural floor 43 µs. **The criterion this time is measured *to* is not met at 2 of the 45 mandated corners** — the static-phase half settles at 1.227 ns (`ff`/27 °C/3.63 V) and 1.049 ns (`typical`/−40 °C/3.63 V) against the ratified ≤ 1 ns, so at those corners there is no instant for a lock time to be measured to (DR-012) | **measured** (small-signal settling); **budget** (cold-start, owed to #163); target **not met** at 2/45 corners because the criterion itself is not reached there |
 | 10 | [Power](#power) | < 5 mW at 100 MHz, all domains, locked | `all-fast`/125 °C/3.63 V — derived total ≈ 1.98 mW | **derived** |
 | 11 | [Standby current](#standby-current) | **no power-down mode in v1** — the block is always-on whenever its rails are up | n/a — no standby state exists to bind a corner to | **waived, with rationale** |
 | 12 | [Supply sensitivity](#supply-sensitivity) | `vdd_vco` ripple ≤ 20 mV pp (100 kHz – 100 MHz); DC rail excursion over 2.97–3.63 V must consume ≤ 0.6 V of the Vctrl window | pushing worst −50.7 %/V at `ss`/−40 °C, band 4 (−52.3 %/V on the coarser tuning-range grid) | **measured** (pushing); **derived** (the two budgets) |
@@ -577,6 +577,22 @@ measured window sits (0.877 … 1.702 ns), so the criterion and the on-chip
 observable are describing the same event rather than two different ones. The
 20-cycle hold excludes a late re-acquisition from counting as lock.
 
+**Both thresholds are absolute, and the phase one deliberately does not scale
+with f_ref.** The `lock_detector` window is an inverter-chain delay — a fixed
+number of nanoseconds — so a criterion expressed as a fraction of a reference
+period would stop describing the same event as the flag watching it, and
+DR-010's T1′/T2′ (which tie that window to this criterion's value) would lose
+their anchor. A testbench judging this quantity therefore cites the 1 ns
+itself; a per-period proxy is not an acceptable substitute, and one campaign
+was found applying a 1.6× looser one (DR-012 Decision 5).
+
+**This criterion is not met at every mandated corner today.** The loop settles
+at 1.227 ns of static phase at `ff`/27 °C/3.63 V and 1.049 ns at
+`typical`/−40 °C/3.63 V — nominal skew, systematic only, at f_ref = 12.5 MHz /
+N = 8 / Icp b1b0 = 10. The criterion is **not** relaxed to accommodate them
+(DR-012 Decision 1); the gap is recorded against the design in
+[Verification owed](#verification-owed).
+
 | Quantity | Value | Binding point |
 |---|---|---|
 | Worst small-signal 1 % settling **under the trim rule** | 71 µs | f_ref = 1 MHz, 4 legs |
@@ -929,23 +945,42 @@ implemented and re-characterized by #393; supersedes
    **4.924 ns** — the flag would assert on a part 4.9× outside the very
    criterion it exists to observe. T1/T2's premise was that the window must
    cover "the worst-case static phase offset the loop actually stands off in
-   lock" — 0.671 ns systematic worst-corner (`pfd-deadzone`, `ff`/125 °C/
-   3.63 V) plus 0.576 ns statistical (`mc-cp-mismatch` term 4, |mean| + 3σ)
-   plus 0.239 ns of divider-retiming flop clk→Q mismatch, up to ≈1.49 ns
-   summed, and worse at the top of the reference range because the
-   charge-derived component scales as `ΔQ/Icp` while the
-   [trim rule](#icp-trim-code-rule) mandates the *smallest* Icp (1 leg,
-   ≈1.7 µA) at f_ref ≥ 16 MHz. But ≈1.49 ns is **itself already outside** the
-   ratified ≤ 1 ns Lock criterion: a part standing off that much phase is not
-   locked, and a flag refusing to assert there is correct.
+   lock" — 0.671 ns systematic worst-corner plus 0.576 ns statistical
+   (`mc-cp-mismatch` term 4, |mean| + 3σ) plus 0.239 ns of divider-retiming
+   flop clk→Q mismatch, up to ≈1.49 ns summed, and worse at the top of the
+   reference range because the charge-derived component scales as `ΔQ/Icp`
+   while the [trim rule](#icp-trim-code-rule) mandates the *smallest* Icp
+   (1 leg, ≈1.7 µA) at f_ref ≥ 16 MHz. But ≈1.49 ns is **itself already
+   outside** the ratified ≤ 1 ns Lock criterion: a part standing off that much
+   phase is not locked, and a flag refusing to assert there is correct.
 
-   **A separate, larger finding this does not fix**: at `ff`/125 °C/3.63 V the
-   *loop* stands off **1.796 ns** of static phase in its own undisturbed
-   steady state (`sim/supply-sensitivity`, `supply_steady.csv` row
-   `ff,125,3.63`; found by #384/#389 from the supply-step campaign). That
-   corner does not meet the ratified Lock criterion at all, and no window
-   change can make it do so without making the flag lie. It is owed to **#394**
-   as a static-phase-offset question — see
+   **The systematic term carries an operating point and may not be quoted
+   without it** (DR-012 Decision 4). 0.671 ns is `pfd-deadzone`'s worst corner
+   (`ff`/125 °C/3.63 V) **at f_ref = 25 MHz with the control node pinned at
+   1.65 V** — one cell of a surface the term varies strongly over. Measured
+   across DR-001 Decision 2's ratified 0.9–2.4 V control window at the closed
+   loop's own f_ref = 12.5 MHz, PFD_OP_SPEC_SENTENCE
+   (`sim/pfd-deadzone/records/PFD_OP_RECORD_ID.md`). The budget above is
+   therefore a floor on its own systematic term, not a worst case over the
+   operating surface.
+
+   **A separate, larger finding this does not fix**, restated on better
+   evidence by **DR-012** (#394). The loop **does** miss the ratified ≤ 1 ns
+   Lock criterion in its own undisturbed steady state, and no window change can
+   make it do so without making the flag lie — but not at the corner this
+   paragraph previously named. `sim/supply-sensitivity`'s 45-point
+   steady-state grid, re-read as a population in
+   `records/20260916-051708-8cedbba.md`, settles at **1.227 ns** at
+   `ff`/27 °C/3.63 V and **1.049 ns** at `typical`/−40 °C/3.63 V — both
+   stationary to ≈11 ps across the run's late window and cross-checked from
+   the PFD's UP/DN pulse-width difference to better than 2.3 %. The
+   **1.796 ns** previously quoted for `ff`/125 °C/3.63 V is **not a steady
+   state**: that run was stopped at ≈1.3 of the loop's slowest time constant
+   with the phase still falling (2.518 ns one window earlier), so it is an
+   upper bound on a decaying tail and the settled value there is unmeasured.
+   The detector agrees with the criterion at both settled violations — each
+   carries `FAIL:lock` in the source record — which is Decision 4 of DR-010
+   reporting correctly, not failing. See
    [Verification owed](#verification-owed).
 3. **T4/T5 are unverified below 25 MHz.** The detector was characterized at
    f_ref = 25 MHz only. Its assert hold-off is an *absolute* time set by a weak
@@ -1077,7 +1112,7 @@ to reconstruct it from the status column.
 | [Output duty cycle](#output-duty-cycle) | the design does not meet its own 45 % floor at 7/90 measured points (`fs` bundle, `lo` edge, nominal-or-above supply); post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the measurement itself now exists (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |
 | [Output levels and drive](#output-levels-and-drive) | post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the loaded-output swing/edge-rate measurement itself now exists and PASSES at every point (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |
 | [Lock detector](#lock-detector) | T1′ window widening — **implemented and re-characterized** (DR-010: W = 9.5 µm, #393): T1′ is met (+4–6 % margin at `ff`/−40 °C/3.63 V). **T2′ is now the open item**: exceeded by 0–5 % at `ss`/125 °C/2.97 V under this in-situ re-characterization, a finding DR-010's idealized sizing campaign did not show — needs a wider T2′ reach or a lower-spread delay reference, not another re-size; T4/T5 characterization below 25 MHz, still untouched | #401 (T2′ decision); T4/T5 unowned |
-| [Lock criterion](#lock-time) | `ff`/125 °C/3.63 V stands off **1.796 ns** of static phase in its own undisturbed steady state, against the ratified ≤ 1 ns bound — the loop, not the detector, misses the criterion at that corner. Also unreconciled: the itemized static-phase-offset budget (≈1.49 ns summed) already exceeds the criterion it is supposed to fit inside | #394 |
+| [Lock criterion](#lock-time) | **a design gap, now measured** (DR-012): the loop misses the ratified ≤ 1 ns static-phase bound at 2 of the 45 mandated corners in its own undisturbed steady state — **1.227 ns** at `ff`/27 °C/3.63 V and 1.049 ns at `typical`/−40 °C/3.63 V, nominal-skew and systematic-only, before `mc-cp-mismatch`'s 0.576 ns statistical term is added. What is *owed* is the rest of the picture, not the existence of the gap: (a) the settled static phase at the **15** further corners that exceed the bound with the phase still decaying — their committed values are upper bounds on a tail, needing `run.sh`'s 36.8 µs settling escalation (≈10 h of ngspice per corner); (b) any measurement at all at an (f_ref, N, trim-code) cell other than 12.5 MHz / N = 8 / b1b0 = 10, the only cell characterized; (c) the design resolution, which DR-012 Decision 7 deliberately does not pick. The earlier entry here — "`ff`/125 °C/3.63 V stands off 1.796 ns" — was a sample on a decaying tail and is withdrawn by DR-012 Decision 2; that corner is neither cleared nor confirmed | #394 (found); #399 (owed measurement) |
 | [Lock time](#lock-time) | any bound at all on **re-lock after a mid-operation supply excursion** — distinct from row 9's cold-start acquisition. Measured today only as a lower bound: `lock` had not re-asserted 34.4 µs (3.70 τ) after a +10 % step at 2 of 3 sampled corners (DR-011) | #395 |
 | [Area](#area) | everything except the loop filter; the block has no floorplan | #17 (floorplan), #18 (extraction) |
 | [Kvco](#kvco), [Output band](#output-band) | Monte Carlo band-select mirror mismatch; **post-extraction re-run of every VCO number** | #15, #18 |

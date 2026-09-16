@@ -409,7 +409,30 @@ KVPRE_HI=2.95
 
 # Acceptance thresholds.  Stated here, before the run, not discovered from it.
 ACC_FERR=1e-3          # |residual fractional frequency error| in lock
-ACC_PHI_FRAC=0.02      # |static phase error| as a fraction of a reference period
+# |static phase error at the PFD inputs|, an ABSOLUTE bound in seconds.
+#
+# THIS IS `spec/pll.md`'S RATIFIED LOCK CRITERION, CITED (#394).  It used to be
+# `ACC_PHI_FRAC=0.02` -- 2 % of a reference period -- which is 1.6 ns at this
+# campaign's 12.5 MHz and 3.2 ns at its 6.25 MHz power-split bundle, i.e. 1.6x
+# and 3.2x looser than the criterion the spec ratifies.  Record
+# `20260901-155456-46b92f8` consequently wrote `PASS` on 15 corners standing
+# off more static phase than the ratified bound allows (see
+# `static_phase_reconciliation.sh` and the record it backs).  A testbench whose
+# acceptance threshold is looser than the ratified spec cannot substantiate a
+# claim about that spec, so the fraction is replaced by the bound itself.
+#
+# It is absolute rather than fractional because the ratified criterion is: the
+# spec bounds the static phase error in seconds at the PFD inputs, with no
+# reference to f_ref.  A scale-free 2 % was the right shape for a criterion
+# that had no ratified value yet; it is the wrong shape for one that does.
+ACC_PHI_S=1e-9
+# How far the "static" phase is allowed to MOVE across the run's own late
+# window before the measurement is treated as unsettled rather than as a
+# result.  A tenth of the criterion the row is being judged against: a phase
+# that shifted by more than that between `ta` and `tb` has not been shown to
+# be the offset the loop stands off, only to be on its way somewhere.  See the
+# settling escalation in Main, which this gates.
+ACC_PHI_SETTLE_S=1e-10
 ACC_NTOL=0.01          # |f_out/f_fb - N|
 ACC_LOCK_FRAC=0.90     # LOCK flag level in the late window, fraction of the rail
 ACC_VCTRL_LO=0.9       # DR-001 Decision 2's usable control window
@@ -977,25 +1000,76 @@ xargs -P "$(simenv_jobs)" -L 1 \
 # reading the short run harder.  So the runner does it itself: escalation is
 # mechanism, not a note in the record asking someone to follow up.
 #
+# TWO GATES, NOT ONE (#394).  Until #394 the only gate was `|ferr| > ACC_FERR`,
+# and that gate is blind to exactly the failure it exists to prevent: the
+# PHASE criterion is judged from a single sample at `tb`, and nothing checked
+# whether the phase was still moving when that sample was taken.  Record
+# `20260901-155456-46b92f8` reported 1.796 ns of "static" phase at
+# `ff`/125 C/3.63 V -- 1.8x the ratified criterion, and the number #394 was
+# filed about -- from a run whose `ferr` was 2.255e-4, comfortably INSIDE
+# ACC_FERR, so the corner was never escalated. Inverting the deck's own
+# `ferr = -(phi_b - phi_a)/(tb - ta)` identity shows that phase had moved from
+# 2.518 ns to 1.796 ns across the late window and was still falling: a sample
+# on a tail, reported as a design result. 30 of that grid's 45 rows are in the
+# same state, and 15 of its 17 rows over the ratified bound.
+#
+# So a corner is now escalated when EITHER
+#
+#   (a) |ferr| > ACC_FERR                    -- still converging in FREQUENCY
+#   (b) |phi_b - phi_a| > ACC_PHI_SETTLE_S   -- still converging in PHASE
+#
+# where (b) is computed from the same two committed columns, |ferr| * (tb - ta),
+# with no new measurement and no model.  The two gates are independent: (a) can
+# pass while (b) fails, which is precisely the `ff`/125 C/3.63 V case, and the
+# whole point of adding it.  Gate (b) is not a stricter (a): a small residual
+# frequency error integrated over a long late window is a large phase shift,
+# and it is the phase that the criterion bounds.
+#
+# Corners are ordered for escalation by how far each is from settled on the
+# gate that fired, normalised to that gate's own threshold, so a compute cap
+# (SIM_EXTEND_MAX) takes the worst offenders whichever gate they tripped
+# rather than always preferring frequency ones.
+#
 #   SIM_EXTEND=off        skip the escalation entirely
 #   SIM_EXTEND_TSTOP/_TA/_TB   the longer transient (default 36.8u/31.2u/34.4u)
 #   SIM_EXTEND_MAX=<n>    cap the number of escalated corners (compute budget);
 #                         the worst residuals are escalated first, and
 #                         report.sh states the cap in the record when it bites.
 JOBS100X="${WORK}/jobs_100x.txt"; : >"${JOBS100X}"
+# The late window in seconds, from KTA/KTB's own "<n><u|n|p>" literals.  Gate
+# (b) needs it because the CSV carries the phase SLIP RATE (`ferr`), not the
+# phase shift, and the shift is what the criterion is about.
+KWIN_S="$(awk -v a="${KTA}" -v b="${KTB}" '
+  function s(x,  n) { n = x + 0;
+    if (x ~ /u$/) return n * 1e-6;
+    if (x ~ /n$/) return n * 1e-9;
+    if (x ~ /p$/) return n * 1e-12;
+    return n }
+  BEGIN { printf "%.12g", s(b) - s(a) }')"
 if [ "${SIM_EXTEND:-auto}" != "off" ]; then
   cat "${WORK}"/s100_*.csv 2>/dev/null | awk -F, -v accf="${ACC_FERR}" -v w="${WORK}" \
+      -v accps="${ACC_PHI_SETTLE_S}" -v win="${KWIN_S}" \
       -v fo="${KFOUT}" -v fr="${KFREF}" '
     { fe = $13 + 0; if (fe < 0) fe = -fe;
-      if (fe > accf) printf "%.6g %s %s %s %s %s %s %s %s/s100x_%s_%s_%s.csv\n",
-        fe, $1, $2, $3, $5, $9, fo, fr, w, $1, $2, $3 }' \
+      # How far the phase moved across the late window, from the definition of
+      # ferr itself: a residual frequency error slips the phase at exactly
+      # df/f seconds per second, so the shift is |ferr| * (tb - ta).
+      dphi = fe * win;
+      # Distance from settled on each gate, in units of that gate threshold, so
+      # one sort key ranks both populations comparably under SIM_EXTEND_MAX.
+      rf = (accf  > 0) ? fe   / accf  : 0;
+      rp = (accps > 0) ? dphi / accps : 0;
+      r  = (rf > rp) ? rf : rp;
+      if (fe > accf || dphi > accps)
+        printf "%.6g %s %s %s %s %s %s %s %s/s100x_%s_%s_%s.csv\n",
+          r, $1, $2, $3, $5, $9, fo, fr, w, $1, $2, $3 }' \
     | sort -rn | cut -d' ' -f2- \
     | { if [ -n "${SIM_EXTEND_MAX:-}" ]; then head -n "${SIM_EXTEND_MAX}"; else cat; fi } \
     >"${JOBS100X}"
 fi
 NX=$(wc -l <"${JOBS100X}" | tr -d ' ')
 if [ "${NX}" -gt 0 ]; then
-  echo "supply-sensitivity: ${NX} corner(s) still converging at ${KTSTOP} -- re-running at ${KTSTOP_X}"
+  echo "supply-sensitivity: ${NX} corner(s) not settled in frequency or phase at ${KTSTOP} -- re-running at ${KTSTOP_X}"
   # shellcheck disable=SC2016
   SIM_TSTOP="${KTSTOP_X}" SIM_TA="${KTA_X}" SIM_TB="${KTB_X}" \
     xargs -P "$(simenv_jobs)" -L 1 \

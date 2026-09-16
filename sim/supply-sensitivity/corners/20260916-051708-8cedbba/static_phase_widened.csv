@@ -1,0 +1,74 @@
+# campaign: supply-sensitivity (#394)
+# source record (read-only, never modified): 20260901-155456-46b92f8
+# generated_utc: 2026-09-16T05:25:12Z
+# NO SIMULATION WAS RUN. Every column is arithmetic on committed data.
+# ratified criterion: |static phase at the PFD inputs| <= 1 ns (spec/pll.md, Lock criterion)
+# deck criterion actually applied to the source record's verdict column:
+#   ACC_PHI_FRAC = 0.02 of a reference period = 1.6 ns at f_ref = 12.5e6 Hz
+# late window: ta=6.4e-6s tb=9.6e-6s (tstop=12.0u); loop tau=9.3e-6s
+#   -> ta/tb are 0.69 and 1.03 tau: ONE tau is not settled
+# phi_b_ns: the committed static REF->FB phase at tb (supply_steady.csv phi_b_s)
+# skew_ns:  the same offset read as the UP/DN pulse-width difference at the PFD outputs
+# xcheck_pct: |phi_b - skew| / |phi_b| * 100 -- the two-node cross-check; large = measurement error, not a design result
+# vctrl_avg_v: the control voltage this closed-loop row settled at. Carried
+#   because it is the JOIN KEY against sim/pfd-deadzone's open-loop t_offset:
+#   that campaign's cited 0.671 ns systematic term is measured at ONE control
+#   voltage (1.65 V), and a closed-loop row standing at a different one is not
+#   being compared against its own operating point until the two are matched.
+# phi_a_ns: the SAME phase (tb-ta) earlier, recovered exactly from ferr's own definition: phi_a = phi_b + ferr*(tb-ta)
+# d_phi_window_ns: phi_b - phi_a, how far the 'static' phase moved across the late window
+# settled: 'no' when |d_phi_window| > 10% of the ratified 1 ns criterion -- i.e. the
+#   phase moved by more than a tenth of the bound it is being judged against, between
+#   the record's own two measurement instants, so phi_b is a sample on a tail
+# asymptote_ns: single-pole continuation to t->inf at the loop's own tau. NOT A
+#   MEASUREMENT: two-point fit, numerator is a difference of near-equal numbers, and
+#   this loop is measured under-damped at one corner. Read its SIGN and ORDER only.
+# over_ratified: |phi_b| > 1 ns (the ratified criterion)
+# over_deck: |phi_b| > the deck threshold above (what the verdict column applied)
+# verdict: the source record's own verdict, unchanged
+bundle,temp_c,vdd_v,phi_b_ns,skew_ns,xcheck_pct,vctrl_avg_v,ferr,phi_a_ns,d_phi_window_ns,settled,asymptote_ns,over_ratified,over_deck,verdict
+ff,-40,2.97,0.6877,0.6747,1.88,1.129,1.696e-05,0.7419,-0.05427,yes,0.5555,no,no,PASS
+ff,-40,3.30,0.8472,0.829,2.14,1.35,1.794e-05,0.9046,-0.05741,yes,0.7074,no,no,PASS
+ff,-40,3.63,0.8072,0.7935,1.69,1.544,4.709e-06,0.8223,-0.01507,yes,0.7705,no,no,PASS
+ff,27,2.97,-0.04843,-0.06045,24.8,1.006,-7.254e-05,-0.2806,0.2321,no,0.5168,no,no,PASS
+ff,27,3.30,-0.01953,-0.01805,7.59,1.21,-5.884e-05,-0.2078,0.1883,no,0.4389,no,no,PASS
+ff,27,3.63,1.227,1.206,1.76,1.392,3.653e-06,1.239,-0.01169,yes,1.199,yes,no,FAIL:lock
+ff,125,2.97,0.81,0.7716,4.74,1.731,0.0001177,1.187,-0.3766,no,-0.107,no,no,PASS
+ff,125,3.30,1.057,1.012,4.26,2.021,0.0001489,1.534,-0.4765,no,-0.1029,yes,no,PASS
+ff,125,3.63,1.796,1.729,3.75,2.289,0.0002255,2.518,-0.7216,no,0.03919,yes,yes,FAIL:phi
+fs,-40,2.97,0.8376,0.835,0.305,0.9778,7.675e-06,0.8621,-0.02456,yes,0.7778,no,no,PASS
+fs,-40,3.30,1.102,1.095,0.595,1.224,5.301e-05,1.272,-0.1696,no,0.6888,yes,no,FAIL:lock
+fs,-40,3.63,1.331,1.303,2.09,1.446,6.694e-05,1.545,-0.2142,no,0.8091,yes,no,FAIL:lock
+fs,27,2.97,0.07986,0.03912,51,1.757,2.952e-05,0.1743,-0.09446,yes,-0.1501,no,no,PASS
+fs,27,3.30,1.088,1.052,3.27,2.11,0.0001403,1.537,-0.449,no,-0.005218,yes,no,PASS
+fs,27,3.63,0.322,0.2977,7.55,2.44,3.471e-05,0.4331,-0.1111,no,0.05156,no,no,PASS
+fs,125,2.97,0.7661,0.7404,3.35,1.539,0.0001144,1.132,-0.3661,no,-0.1253,no,no,PASS
+fs,125,3.30,0.2514,0.2252,10.4,1.847,2.276e-05,0.3242,-0.07283,yes,0.07404,no,no,PASS
+fs,125,3.63,0.3924,0.3609,8.04,2.141,2.544e-05,0.4738,-0.08141,yes,0.1942,no,no,PASS
+sf,-40,2.97,1.343,1.32,1.72,0.9911,6.695e-05,1.558,-0.2142,no,0.8218,yes,no,FAIL:lock
+sf,-40,3.30,1.283,1.272,0.907,1.261,7.205e-05,1.514,-0.2306,no,0.7219,yes,no,FAIL:lock
+sf,-40,3.63,2.136,2.105,1.49,1.493,0.000189,2.741,-0.6048,no,0.6638,yes,yes,FAIL:phi
+sf,27,2.97,0.3585,0.3309,7.69,1.839,8.599e-05,0.6337,-0.2752,no,-0.3115,no,no,PASS
+sf,27,3.30,0.5285,0.4976,5.84,2.208,0.0001015,0.8533,-0.3248,no,-0.2624,no,no,PASS
+sf,27,3.63,1.308,1.276,2.42,2.547,0.0001884,1.911,-0.6029,no,-0.1601,yes,no,FAIL:lock
+sf,125,2.97,1.044,1.01,3.31,1.588,0.000141,1.495,-0.4512,no,-0.05447,yes,no,PASS
+sf,125,3.30,0.1871,0.1643,12.2,1.91,2.536e-05,0.2683,-0.08115,yes,-0.01047,no,no,PASS
+sf,125,3.63,0.1774,0.1517,14.5,2.211,3.004e-05,0.2735,-0.09613,yes,-0.0567,no,no,PASS
+ss,-40,2.97,0.5422,0.5223,3.66,1.795,0.0001234,0.9371,-0.3949,no,-0.4193,no,no,PASS
+ss,-40,3.30,0.5844,0.559,4.35,2.225,8.115e-05,0.8441,-0.2597,no,-0.0479,no,no,PASS
+ss,-40,3.63,0.9232,0.8991,2.61,2.64,9.222e-05,1.218,-0.2951,no,0.2047,no,no,PASS
+ss,27,2.97,0.492,0.482,2.04,1.6,0.0001169,0.8661,-0.3741,no,-0.4188,no,no,PASS
+ss,27,3.30,0.999,0.9752,2.38,1.987,0.0001345,1.429,-0.4304,no,-0.04896,no,no,PASS
+ss,27,3.63,1.225,1.192,2.72,2.358,0.0001729,1.778,-0.5533,no,-0.122,yes,no,PASS
+ss,125,2.97,0.8269,0.809,2.17,1.367,0.0001199,1.211,-0.3837,no,-0.1073,no,no,PASS
+ss,125,3.30,1.416,1.383,2.3,1.708,0.0001815,1.997,-0.5808,no,0.001549,yes,no,PASS
+ss,125,3.63,0.2919,0.2681,8.13,2.032,2.079e-05,0.3584,-0.06653,yes,0.1299,no,no,PASS
+typical,-40,2.97,0.9525,0.9425,1.05,0.9843,1.708e-05,1.007,-0.05466,yes,0.8194,no,no,PASS
+typical,-40,3.30,0.9057,0.894,1.29,1.244,2.8e-05,0.9953,-0.0896,yes,0.6876,no,no,PASS
+typical,-40,3.63,1.049,1.025,2.26,1.471,3.3e-06,1.059,-0.01056,yes,1.023,yes,no,FAIL:lock
+typical,27,2.97,0.3839,0.3617,5.8,1.798,8.989e-05,0.6716,-0.2876,no,-0.3164,no,no,PASS
+typical,27,3.30,1.069,1.029,3.77,2.16,0.0001579,1.575,-0.5053,no,-0.1609,yes,no,PASS
+typical,27,3.63,-0.9422,-0.9339,0.883,2.495,-0.0002004,-1.583,0.6413,no,0.6193,no,no,PASS
+typical,125,2.97,0.143,0.12,16.1,1.564,1.822e-05,0.2013,-0.0583,yes,0.0009885,no,no,PASS
+typical,125,3.30,1.421,1.373,3.34,1.883,0.0001935,2.04,-0.6192,no,-0.08697,yes,no,FAIL:lock
+typical,125,3.63,1.019,0.9775,4.11,2.18,0.0001189,1.4,-0.3805,no,0.09293,yes,no,PASS

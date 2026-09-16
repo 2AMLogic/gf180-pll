@@ -1,0 +1,14 @@
+rows                                              : 45
+over the ratified 1 ns Lock criterion            : 17
+over the deck threshold the verdict applied       : 2
+over ratified but under the deck threshold        : 15
+over ratified yet carrying an overall PASS        : 7
+phase still moving across the late window         : 30
+  ... of the over-ratified rows                   : 15 of 17
+rows whose own LOCK flag did not assert           : 8
+  ... of those, also over the ratified criterion  : 8 of 8
+OVER THE RATIFIED CRITERION *AND* SETTLED         : 2
+    ff/27C/3.63V           phi_b =  1.227 ns  d_phi = -0.01169 ns  xcheck =  1.76 %  verdict = FAIL:lock
+    typical/-40C/3.63V     phi_b =  1.049 ns  d_phi = -0.01056 ns  xcheck =  2.26 %  verdict = FAIL:lock
+
+  worst settled violation                         : 1.227 ns at ff/27C/3.63V
