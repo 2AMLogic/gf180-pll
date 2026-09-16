@@ -197,6 +197,26 @@
           "params": {
             "kterr": "2.9n"
           }
+        },
+        "e2.02n": {
+          "params": {
+            "kterr": "2.02n"
+          }
+        },
+        "e2.04n": {
+          "params": {
+            "kterr": "2.04n"
+          }
+        },
+        "e2.06n": {
+          "params": {
+            "kterr": "2.06n"
+          }
+        },
+        "e2.08n": {
+          "params": {
+            "kterr": "2.08n"
+          }
         }
       }
     }
@@ -339,6 +359,28 @@
           "e2.9n"
         ]
       }
+    },
+    {
+      "description": "T2' fine refinement at ss/125C/2.97V (issue #407 Scope item 1, DR-013 Decision 3): the coarse ladder only bracketed the T2' edge to [2.0, 2.1) ns -- there is no measured point between the last in-window step (2.0 ns, from the hot/low-supply extreme ladder above) and the first refined out-of-window step (2.1 ns, from the T2' margin refinement above). A 0.02 ns step across exactly that interval sizes how big the miss is, the same mechanism the T1' refinement above already runs. e2.0n and e2.1n are already covered by the two blocks above and are restated here, not re-simulated (sim/harness's grid-block union de-duplicates by corner-id, keeping the first occurrence) -- only e2.02n/e2.04n/e2.06n/e2.08n are new points.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "terr": [
+          "e2.0n",
+          "e2.02n",
+          "e2.04n",
+          "e2.06n",
+          "e2.08n",
+          "e2.1n"
+        ]
+      }
     }
   ],
   "raw_measures": {
@@ -421,10 +463,10 @@
       "max_measured_points": 0
     },
     "tb_asrt": {
-      "min_measured_points": 185
+      "min_measured_points": 189
     },
     "te_deas": {
-      "min_measured_points": 185
+      "min_measured_points": 189
     }
   },
   "derived": {
