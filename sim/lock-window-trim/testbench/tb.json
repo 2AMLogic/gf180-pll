@@ -1,0 +1,77 @@
+{
+  "name": "lock-window-trim",
+  "description": "the trimmed delaywin_3v3's code-to-window map: t_win over the 3-bit trim code crossed with the full 13-bundle, 117-point PVT grid, the per-bundle code the trim rule selects, and the PVT spread that survives the trim",
+  "claim": "#407 -> spec/pll.md#lock-detector-window-trim-code-rule, against DR-013 Decision 4 (the observable window's PVT spread must be <= 1.65x) and DR-014 (the mechanism that reaches it is a fixed, test-set trim code, not a bias-referenced delay). Two questions, both of the DRAWN cell rather than of a replica: (a) is the code-to-window map monotonic, and what are its step size and total range at every corner bundle -- the numbers DR-014 Decision 3 deliberately left to this campaign; (b) with the trim rule applied (pick the code whose t_win at the reference condition, 27 C and nominal supply, is nearest the target), does the window hold inside the ratified two-sided band [1, 2] ns at every one of the grid's 117 points, with a PVT spread at or under 1.65x?",
+  "methodology": [
+    "DUT is design/delaywin_3v3.sch as drawn, exported inside design/netlist/lock_detector.spice: four inv_3v3 stages, each loaded by one always-on nfet_03v3 MOS cap (W = 7 um, L = 2 um, D = S = B = VSS) plus three switched segments binary-weighted 1:2:4 (cap W = 0.5/1/2 um, L = 2 um) selected by the static trim code T2:T1:T0.",
+    "There is no parameterised replica and therefore no replica-vs-control agreement column. The swept quantity is a real pin on the committed cell, so what this campaign measures IS what sim/lock-detector instantiates -- the agreement sim/lock-window-sizing had to prove per point is structural here.",
+    "Each segment's pass gate (a full transmission gate, both halves at W = 0.22 um x the segment weight, L = 0.28 um) and its kill device (same width, L = 0.5 um) are scaled by the SAME binary weight as the segment capacitor they switch. That is what makes the map monotonic: an unweighted switch adds a fixed, weight-independent parasitic per enabled segment, which makes code 3 (two segments enabled) slower than code 4 (one wider segment enabled). The monotonic_in_code column checks the property rather than asserting it.",
+    "A deselected segment is CLAMPED to VSS by its kill device, not left floating, so the code-to-window map does not depend on a node whose DC level is undefined.",
+    "The measured window is twin_r, the step-to-output RISING delay: WIDE = ERR . ERRD is non-empty exactly when the phase error exceeds twin_r, so twin_r is the discrimination threshold. twin_f is measured and reported so the rise/fall asymmetry the pass gates add stays visible.",
+    "Stimulus is an ideal 100 ps-edge step, not a PFD pulse pair, so the number is the chain's own propagation delay and not a driving gate's corner-dependent edge rate -- the same stimulus sim/lock-window-sizing's deck and sim/lock-detector's own XW window probe use, which is what keeps the three directly comparable.",
+    "The trim RULE, stated here because the code table below is meaningless without it: pick the code whose t_win at the REFERENCE CONDITION (27 C, nominal supply) is nearest the target, in the log sense -- exactly the shape of the Icp trim-code rule's 'set from a fixed, known condition, not a discretionary margin knob'. The reference condition is a single, testable measurement of a 1-2 ns delay; nothing on-chip performs it (DR-002 Decision 4's no-calibration-FSM boundary is untouched).",
+    "Band under test: the LOWER edge is spec/pll.md's ratified Lock criterion itself (static phase error at the PFD inputs <= 1 ns) -- a window narrower than that at any corner can refuse to assert on a part that meets the criterion. The UPPER edge is 2x it -- a window wider than that lets the flag assert on a part more than 2x outside the criterion. Both must hold at EVERY PVT point of the selected code simultaneously.",
+    "The spread the trim is for: this campaign reports BOTH the spread measured over the grid with the per-bundle code applied (the 13 bundles this grid contains) AND the worst case over a CONTINUOUS process population, which is the within-bundle spread multiplied by one trim step -- a real part is not one of 13 bundles, and the rule rounds its measured delay to the nearest code, so at most one step of the correction is left unapplied. The second number is the honest one to compare against 1.65x and is reported as such.",
+    "This deck deliberately does NOT instantiate lock_detector. The OBSERVABLE window -- what DR-013 Decision 4's target is actually stated against -- is measured through the assembled detector loop in sim/lock-detector, at the code this campaign selects. What is measured here is the bare delay that sets it, which is the quantity the trim code moves and the quantity a tester can measure.",
+    "Passive corner axes ARE swept (the full 13-bundle set, 117 points per code, not the 45-point MOS-only grid) for the same reason sim/lock-window-sizing swept them: sim/README.md warns that a MOS-only sweep silently leaves res_*/moscap_*/mimcap_* at typical. The expected result is again a null -- every device in this cell is an nfet_03v3/pfet_03v3 taking its model from the MOS .lib section, with no device from the PDK's moscap/mimcap families and no resistor anywhere -- and it is measured rather than argued.",
+    "Limitation -- schematic-level. No extracted parasitics. The trim segments are small (a 0.5 um x 2 um unit capacitor is a few fF), so interconnect capacitance is a larger fraction of a SEGMENT than it is of the always-on base load: post-extraction both the step size and the total range can move, and #18 must re-take this before the code table is treated as final.",
+    "Limitation -- no mismatch. sw_stat_global = sw_stat_mismatch = 0. Four nominally identical stages average their own mismatch, but a segment-to-segment mismatch inside one stage's binary array shows up as trim DNL and is not characterised here.",
+    "Simulator settings: tran 5p 40n, the defaults otherwise."
+  ],
+  "dut": ["design/netlist/lock_detector.spice"],
+  "netlist": "tb_lock_window_trim.sp",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [-40, 27, 125],
+  "corners": ["full"],
+  "params": {
+    "ktstep": "5p",
+    "ktstop": "40n"
+  },
+  "analyses": ["tran {ktstep} {ktstop}"],
+  "sweeps": {
+    "trim": {
+      "description": "the 3-bit window trim code T2:T1:T0 driven onto delaywin_3v3's own pins, as a static configuration input. c0 is every segment deselected (the narrowest window, only the always-on base capacitors loading the chain); c7 is every segment selected (the widest).",
+      "points": {
+        "c0": {"params": {"ktb0": "0", "ktb1": "0", "ktb2": "0"}},
+        "c1": {"params": {"ktb0": "1", "ktb1": "0", "ktb2": "0"}},
+        "c2": {"params": {"ktb0": "0", "ktb1": "1", "ktb2": "0"}},
+        "c3": {"params": {"ktb0": "1", "ktb1": "1", "ktb2": "0"}},
+        "c4": {"params": {"ktb0": "0", "ktb1": "0", "ktb2": "1"}},
+        "c5": {"params": {"ktb0": "1", "ktb1": "0", "ktb2": "1"}},
+        "c6": {"params": {"ktb0": "0", "ktb1": "1", "ktb2": "1"}},
+        "c7": {"params": {"ktb0": "1", "ktb1": "1", "ktb2": "1"}}
+      }
+    }
+  },
+  "raw_measures": {
+    "twin_r": {
+      "analysis": "tran",
+      "expr": "trig v(step) val='vdd_val/2' rise=1 targ v(wout) val='vdd_val/2' rise=1"
+    },
+    "twin_f": {
+      "analysis": "tran",
+      "expr": "trig v(step) val='vdd_val/2' fall=1 targ v(wout) val='vdd_val/2' fall=1"
+    }
+  },
+  "derived": {
+    "module": "derive.py",
+    "measures": [],
+    "tables": ["trim_ladder", "trim_code_table"]
+  },
+  "topology_groups": {
+    "window": {
+      "description": "the trimmed delay chain's window, rising (the threshold) and falling (the asymmetry)",
+      "measures": ["twin_r", "twin_f"]
+    }
+  },
+  "checks": {
+    "twin_r": {
+      "min_measured_points": 936,
+      "min_spread_pct": 30.0
+    },
+    "twin_f": {
+      "min_measured_points": 936
+    }
+  }
+}
