@@ -1,8 +1,8 @@
 * gf180-pll :: lock-window-trim :: the trimmed delaywin_3v3's code-to-window map
 *
 * ONE question, asked of the lock detector's window and nothing else: with the
-* 3-bit process trim DR-014 chose now drawn into design/delaywin_3v3.sch, what
-* does the comparator window t_win do as the trim code walks 0 -> 7 at every
+* 4-bit process trim DR-014 chose now drawn into design/delaywin_3v3.sch, what
+* does the comparator window t_win do as the trim code walks 0 -> 15 at every
 * one of the 13 corner bundles, and is there a per-bundle code that holds the
 * window inside the ratified two-sided band at every PVT point at once with
 * its PVT spread at or under DR-013 Decision 4's 1.65x target?
@@ -17,7 +17,7 @@
 * older record stays exactly as taken (sim/README.md's append-only rule).
 *
 * The DUT is the COMMITTED cell, not a replica.  delaywin_3v3 now carries the
-* trim code on its own pins (T2:T1:T0), so the code can be swept by driving
+* trim code on its own pins (T3:T2:T1:T0), so the code can be swept by driving
 * those pins on the drawn cell -- there is nothing left for a parameterised
 * stand-in to do, and no replica-vs-control agreement column is needed because
 * there is no replica.  What is measured here is exactly the netlist
@@ -41,7 +41,7 @@
 * Expects from the harness-generated header:
 *   .lib <process corner section>, .temp <temp_c>
 *   .param vdd_val=<supply volts>  vdd_nom=<nominal volts>
-*   .param ktb0/ktb1/ktb2=<0 or 1>  the trim code's bits, LSB first
+*   .param ktb0/ktb1/ktb2/ktb3=<0 or 1>  the trim code's bits, LSB first
 *   .param ktstep=<max timestep>  ktstop=<stop>
 *
 * design/netlist/lock_detector.spice is composed ahead of this fragment by the
@@ -60,6 +60,7 @@ vdd vdd 0 dc 'vdd_val'
 vt0 t0 0 dc 'vdd_val*ktb0'
 vt1 t1 0 dc 'vdd_val*ktb1'
 vt2 t2 0 dc 'vdd_val*ktb2'
+vt3 t3 0 dc 'vdd_val*ktb3'
 
 * ---- the ideal step -------------------------------------------------------
 * One rising edge at ttd and one falling edge at ttd + twide, so a single
@@ -67,4 +68,4 @@ vt2 t2 0 dc 'vdd_val*ktb2'
 vstep step 0 pulse(0 'vdd_val' 'ttd' 'ttr' 'ttr' 'twide' '1000*ktstop')
 
 * ---- the committed trimmed cell, driven at this point's code --------------
-xdly step wout t0 t1 t2 vdd 0 delaywin_3v3
+xdly step wout t0 t1 t2 t3 vdd 0 delaywin_3v3

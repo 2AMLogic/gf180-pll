@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Emit design/delaywin_3v3.sch -- the trimmed lock-detector window delay cell.
 
-The cell is a regular 4 x (stage) x 3 x (trim segment) array; writing the
-xschem source by hand would be 60+ near-identical device placements with
+The cell is a regular 4 x (stage) x 4 x (trim segment) array; writing the
+xschem source by hand would be 80+ near-identical device placements with
 hand-maintained label coordinates, so it is generated from the one table of
 sizes below instead. Re-run after changing a size:
 
@@ -10,7 +10,7 @@ sizes below instead. Re-run after changing a size:
 
 The generated file is committed (it is the schematic; xschem opens and edits
 it like any other), and this generator is committed beside it so the sizing
-table stays reviewable as a table rather than as 60 scattered W= attributes.
+table stays reviewable as a table rather than as 80 scattered W= attributes.
 """
 
 from __future__ import annotations
@@ -18,18 +18,40 @@ from __future__ import annotations
 import os
 
 # --- the sizing table (sim/lock-window-trim/records/ is the evidence) --------
-#: Always-on MOS-capacitor load on every stage, in um (L = CAP_L_UM).
-W_BASE_UM = 7.0
+#: Always-on MOS-capacitor load on every stage, in um (L = CAP_L_UM). Sized so
+#: the trim rule's reference-condition target lands near the MIDDLE of the code
+#: range at the middle of the process distribution -- i.e. so a slow part still
+#: has codes below it and a fast part still has codes above it. This is a
+#: centring number, not a delay number: the delay is set by the code.
+W_BASE_UM = 6.2
 #: Unit trim segment: MOS-cap width, in um. Segment j carries WEIGHTS[j] x this.
 W_UNIT_CAP_UM = 0.5
 #: Unit trim segment: pass-gate / kill-device width, in um. Scaled by the same
 #: weight as the segment's own capacitor so the switch's own parasitic scales
 #: with what it switches -- which is what keeps the code-to-delay map linear,
 #: and therefore monotonic, in the trim code (see design/README.md).
+#:
+#: This is why the LSB is halved in LENGTH rather than in width: gf180mcu's
+#: 3.3 V devices have a 0.22 um minimum width, so a half-width unit segment
+#: (0.25 um cap) could not have a half-width switch (0.11 um) to go with it,
+#: and an unweighted switch is exactly what breaks monotonicity. Halving
+#: CAP_L_SEG_UM instead halves the unit capacitance with every device in the
+#: array still at or above the minimum width.
 W_UNIT_SW_UM = 0.22
-#: Binary weights, LSB first: segment j is switched by trim bit Tj.
-WEIGHTS = (1, 2, 4)
+#: Binary weights, LSB first: segment j is switched by trim bit Tj. Four bits,
+#: not three: the 3-bit array measured (sim/lock-window-trim, 936 points,
+#: record 20260917-180533-92bd3ee) a 4.9-6.8 % step, which leaves the
+#: continuous-population spread at 1.631x against DR-013 Decision 4's 1.65x
+#: -- 1.2 % of margin, less than the +1.4...7.0 % by which DR-013 measured the
+#: observable window to run wider than this bare chain (delta). Halving the
+#: step buys that margin back; the cost is one more static configuration pin.
+WEIGHTS = (1, 2, 4, 8)
+#: MOS-cap length, in um: the always-on base load.
 CAP_L_UM = 2.0
+#: MOS-cap length, in um: one trim segment. Half the base's, so the unit
+#: segment is half the capacitance a full-length one of the same width would
+#: be -- see W_UNIT_SW_UM above for why the halving is in L and not in W.
+CAP_L_SEG_UM = 1.0
 SW_L_UM = 0.28
 KILL_L_UM = 0.5
 
@@ -45,8 +67,8 @@ node). The resulting propagation delay t_win is the half-width of the lock
 window: lock_detector only reacts to a phase-error pulse that is still high
 t_win later, so any |phase error| < t_win is inside the window.
 
-Each stage's load is one ALWAYS-ON capacitor plus THREE SWITCHED SEGMENTS,
-binary-weighted 1:2:4 and selected by the static trim code T2:T1:T0 -- a
+Each stage's load is one ALWAYS-ON capacitor plus FOUR SWITCHED SEGMENTS,
+binary-weighted 1:2:4:8 and selected by the static trim code T3:T2:T1:T0 -- a
 fixed, test-set process trim (DR-014), not a self-calibration loop. Raising
 the code adds capacitance and widens the window; the code-to-delay map is
 monotonic at every PVT corner because each segment's pass gate and kill
@@ -54,6 +76,12 @@ device are scaled by the SAME weight as the segment capacitor they switch, so
 the switch's own parasitic scales with the segment rather than adding a
 fixed, weight-independent step (an unweighted switch makes code 3 slower than
 code 4 -- measured, not assumed).
+
+The unit segment is HALF the length of the always-on load (1 um against
+2 um), not half its width: the PDK's 3.3 V devices stop at a 0.22 um width,
+which is already the LSB switch's width, so a half-width LSB could not carry
+a switch scaled to it. Halving in L keeps every device in the array legal and
+keeps the switch-to-capacitor ratio identical across all four segments.
 
 Segment j is connected to the delayed node by a full transmission gate (Tj
 high) and clamped to VSS by a kill device (Tj low), so a deselected segment
@@ -67,7 +95,7 @@ with no independent passive corner axis to leave silently at typical
 over PVT rather than moving against it.
 
 This file is GENERATED by design/gen_delaywin.py -- edit the sizing table
-there, not the 60 device placements here."""
+there, not the 80 device placements here."""
 
 
 def emit() -> str:
@@ -84,11 +112,11 @@ def emit() -> str:
         "C {iopin.sym} -700 200 0 0 {name=p3 lab=VDD}",
         "C {iopin.sym} -700 300 0 0 {name=p4 lab=VSS}",
     ]
-    for j in range(3):
+    for j in range(len(WEIGHTS)):
         out.append("C {ipin.sym} -700 %d 0 0 {name=p%d lab=T%d}" % (SEG_Y0 + j * SEG_PITCH, 5 + j, j))
 
     # Trim-bit complement inverters, shared by all four stages.
-    for j in range(3):
+    for j in range(len(WEIGHTS)):
         y = SEG_Y0 + j * SEG_PITCH
         out += [
             "C {inv_3v3.sym} -400 %d 0 0 {name=XIT%d}" % (y, j),
@@ -118,7 +146,7 @@ def emit() -> str:
             "C {lab_pin.sym} %d 330 0 0 {name=l%sb3 lab=VSS}" % (x + 20, tag),
             "C {lab_pin.sym} %d 300 0 0 {name=l%sb4 lab=VSS}" % (x + 20, tag),
         ]
-        # --- the three switched trim segments ---
+        # --- the switched trim segments ---
         for j, weight in enumerate(WEIGHTS):
             y = SEG_Y0 + j * SEG_PITCH
             seg = "S%d%d" % (i + 1, j)
@@ -149,7 +177,7 @@ def emit() -> str:
                 "C {lab_pin.sym} %d %d 0 0 {name=l%sk4 lab=VSS}" % (x + 280, y, n),
                 # segment MOS cap: D=S=B=VSS, G=SEG
                 "C {nfet_03v3.sym} %d %d 0 0 {name=MC%d%d model=nfet_03v3 W=%gu L=%gu nf=1 m=1}"
-                % (x + 390, y, i + 1, j, wcap, CAP_L_UM),
+                % (x + 390, y, i + 1, j, wcap, CAP_L_SEG_UM),
                 "C {lab_pin.sym} %d %d 0 0 {name=l%sc1 lab=%s}" % (x + 370, y, n, seg),
                 "C {lab_pin.sym} %d %d 0 0 {name=l%sc2 lab=VSS}" % (x + 410, y - 30, n),
                 "C {lab_pin.sym} %d %d 0 0 {name=l%sc3 lab=VSS}" % (x + 410, y + 30, n),

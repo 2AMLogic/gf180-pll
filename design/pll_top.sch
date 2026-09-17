@@ -60,12 +60,12 @@ calibration FSM in v1 (DR-001 Decision 2):
   CPB1 CPB0     charge-pump Icp trim, 2-bit unit-element (see cp.sch).
                 Named CPB* rather than B* only so the top-level net names stay
                 distinct from the VCO band bits.
-  LDT2..LDT0    lock-detector window trim, 3-bit binary (see delaywin_3v3.sch
+  LDT3..LDT0    lock-detector window trim, 4-bit binary (see delaywin_3v3.sch
                 and spec/pll.md's "Lock-detector window trim-code rule").
                 DR-014: a fixed process trim set once at test, same idiom as
                 the Icp trim code -- not a calibration loop.  It affects the
                 LOCK flag's phase-error window only; no loop node moves with
-                it.
+                it.  Nominal / unprogrammed code is 1000 (8).
   P5..P0        divider modulus bits,  N = 2^k + sum(P_j . 2^j), j < k
   SEL5..SEL0    divider chain-length code, one-hot: SEL_(k-1) = 1
 
@@ -98,6 +98,7 @@ C {ipin.sym} -900 -600 0 0 {name=p_cpb1 lab=CPB1}
 C {ipin.sym} -1100 -700 0 0 {name=p_ldt0 lab=LDT0}
 C {ipin.sym} -1100 -680 0 0 {name=p_ldt1 lab=LDT1}
 C {ipin.sym} -1100 -660 0 0 {name=p_ldt2 lab=LDT2}
+C {ipin.sym} -1100 -640 0 0 {name=p_ldt3 lab=LDT3}
 C {ipin.sym} -900 -580 0 0 {name=p_p0 lab=P0}
 C {ipin.sym} -900 -560 0 0 {name=p_p1 lab=P1}
 C {ipin.sym} -900 -540 0 0 {name=p_p2 lab=P2}
@@ -187,3 +188,4 @@ C {lab_pin.sym} 300 970 0 0 {name=l_XLD_VSS lab=VSS}
 C {lab_pin.sym} 230 920 0 0 {name=l_XLD_LDT0 lab=LDT0}
 C {lab_pin.sym} 230 940 0 0 {name=l_XLD_LDT1 lab=LDT1}
 C {lab_pin.sym} 230 960 0 0 {name=l_XLD_LDT2 lab=LDT2}
+C {lab_pin.sym} 230 980 0 0 {name=l_XLD_LDT3 lab=LDT3}

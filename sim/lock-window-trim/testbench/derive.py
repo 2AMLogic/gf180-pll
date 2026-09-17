@@ -97,7 +97,9 @@ REF_TO_GEOMEAN = 0.985
 
 #: The nominal code -- the cell's centre code, the one the UNTRIMMED summary
 #: row is taken at and the reset/default value the block documentation quotes.
-NOMINAL_CODE = 4
+#: 8 of 0..15 on the 4-bit array (the MSB alone), i.e. the same "middle of the
+#: range" choice c4 was on the 3-bit array this cell replaced.
+NOMINAL_CODE = 8
 
 
 def _code_int(axis_id):
