@@ -1019,6 +1019,7 @@ its own "evidence".
 | Reference | `REF` | reference clock in |
 | VCO band | `B2 B1 B0` | 3-bit static band select (`vco.sch`) |
 | Icp trim | `CPB1 CPB0` | 2-bit static charge-pump trim (`cp.sch`). Named `CPB*` rather than `B*` only so the top-level net names stay distinct from the VCO band bits |
+| Lock-window trim | `LDT3..LDT0` | 4-bit static **process** trim on the lock detector's comparator window (`delaywin_3v3`, DR-014/#411). Unlike the band and N codes, this one is not an application choice: it is set once at test from the part's own measured window delay, per `spec/pll.md`'s [Lock-detector window trim-code rule](../spec/pll.md#lock-detector-window-trim-code-rule). Raising the code widens the window, monotonically at every corner |
 | Divider | `P5..P0`, `SEL5..SEL0` | `N = 2^k + Σ P_j·2^j (j<k)`, one-hot `SEL_(k-1) = 1` |
 | Bias | `IBN ICN IBP ICP` | charge-pump current references — **bias generation is out of scope for this block**, testbenches drive these ideally at 4× the unit-leg current |
 | Outputs | `CLK`, `LOCK` | the block output and the lock flag |

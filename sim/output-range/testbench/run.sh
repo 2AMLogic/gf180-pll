@@ -468,7 +468,7 @@ run_one() {
   # shellcheck disable=SC2207
   params+=( $(cloop_band_params "${band}") )
   # shellcheck disable=SC2207
-params+=( $(cloop_trim_params "${ICP_CODE}") )
+  params+=( $(cloop_trim_params "${ICP_CODE}") )
   # shellcheck disable=SC2207
   params+=( $(cloop_window_trim_params "${KWINTRIM}") )
 

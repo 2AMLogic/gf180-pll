@@ -89,10 +89,12 @@ trim code, N, or `f_ref`) at which the parameter is worst. Rows that are
 conditions or interface contracts rather than PVT-varying quantities carry an
 explicit `n/a` **with a reason** — never a blank.
 
-Two rules in this file are **normative conditions**, not advice: the
-[band-selection rule](#band-selection-rule) and the
-[Icp trim-code rule](#icp-trim-code-rule). A part configured against either one
-is operating outside this specification, and no row below applies to it.
+Three rules in this file are **normative conditions**, not advice: the
+[band-selection rule](#band-selection-rule), the
+[Icp trim-code rule](#icp-trim-code-rule) and the
+[Lock-detector window trim-code rule](#lock-detector-window-trim-code-rule). A
+part configured against any one of them is operating outside this
+specification, and no row below applies to it.
 
 ### Everything here is schematic-level
 
@@ -191,6 +193,74 @@ tabulated f_ref at or below** them; 105 of the 140 measured (f_ref, N, code)
 cells pass both stability criteria unconditionally, and every one of the 35
 failures is a code away from this rule, never a corner of a correctly
 configured part.
+
+## Lock-detector window trim-code rule
+
+**The lock detector's 4-bit window trim (`LDT3:LDT0`) must be set, once per
+part at test, from the part's own measured comparator-window delay at a fixed
+reference condition.** It is not a discretionary margin knob and it is not a
+per-application setting; it is the mechanism that holds the flag's assert
+window inside the two-sided [T1′/T2′ band](#lock-detector) across the process
+distribution.
+
+Source: DR-014 (mechanism) and #411 (bit count, step, code table), from
+`sim/lock-window-trim/records/20260917-185928-8adff3d.md` (1872 points, clean
+tree).
+
+**The rule.** Measure `t_win` — the `ERR → ERRD` propagation delay of
+`delaywin_3v3`, a 1–2 ns quantity — at **27 °C and nominal supply (3.30 V)**,
+and program the code whose `t_win` at that condition is **nearest 1.343 ns**.
+"Nearest" is in the logarithmic sense, because the window's error budget is
+multiplicative. The target is derived, not chosen: it is the band's own
+geometric centre (√2 = 1.414 ns), divided by the measured 1.037× ratio between
+the flag's observable window and the bare chain delay, times the measured
+0.985 ratio between the reference condition and a bundle's geometric mean over
+its own PVT box.
+
+The reference condition is **one static measurement at one PVT point**, which
+is what a production tester can hold. Nothing on-chip performs it: there is no
+counter, no comparator and no state machine reading this code back, and
+DR-002 Decision 4's "passive monitor, no band-search or self-calibration
+hardware" boundary is unchanged by it. This is the same shape of rule as the
+[Icp trim-code rule](#icp-trim-code-rule) above — *set from a fixed, known
+condition*.
+
+**What the rule selects, per simulated corner bundle**, and what the window
+then does over that bundle's own nine voltage/temperature points:
+
+| Corner bundle | Code | `LDT3:LDT0` | `t_win` at the reference condition | `t_win` over that bundle's PVT box | Codes left below / above |
+|---|---|---|---|---|---|
+| `ss`, `all-slow` | **3** | 0011 | 1.356 ns | 1.122 … 1.726 ns | 3 / 12 |
+| `fs` | **6** | 0110 | 1.327 ns | 1.106 … 1.676 ns | 6 / 9 |
+| `typical`, `sf`, and the six passive-only bundles | **7** | 0111 | 1.357–1.358 ns | 1.135 … 1.710 ns | 7 / 8 |
+| `ff`, `all-fast` | **11** | 1011 | 1.363 ns | 1.152 … 1.694 ns | 11 / 4 |
+
+That table is **illustrative, not normative** — a real part is not one of
+thirteen simulated bundles. What is normative is the measurement and the
+"nearest 1.343 ns" rule above; the table is what the rule produces when it is
+applied to the bundles the PVT grid actually contains, and it is here so a
+reader can see that the code range is well centred (the slowest bundle still
+has 3 codes below it, the fastest 4 above) rather than running out at either
+end.
+
+**A part left untrimmed is outside this specification, and no single code
+substitutes for the rule.** Measured over all sixteen codes: the window's PVT
+spread with one fixed code is **1.977 … 1.987×** at *every* code — against a
+band only 2× wide, that leaves at most ≈1 % of joint slack, and no code
+actually holds it. The two closest both miss: code 6 falls to **0.9746 ns** at
+`all-fast`/−40 °C/3.63 V (below the 1 ns T1′ edge) and code 7 reaches
+**2.0029 ns** at `ss`/125 °C/2.97 V (above the 2 ns T2′ edge). With the rule
+applied the same grid holds **1.106 … 1.726 ns**, a spread of **1.561×**.
+
+**Step size and range**, measured rather than specified in advance
+(DR-014 Decision 3 left both to this campaign): one code step is
+**2.8–4.7 %** of window and the full 0 → 15 range is **1.69×**, against the
+**1.30×** reference-condition spread between the fastest and slowest bundle.
+The code-to-window map is **monotonic at every one of the 13 corner bundles**
+— 0 of 195 adjacent steps non-monotonic — which is a property of the cell's
+weighted switches and is checked per corner rather than assumed; see
+`design/README.md`'s window-trim section for why an *un*weighted switch breaks
+it.
 
 ---
 
