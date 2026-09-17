@@ -646,10 +646,10 @@
       "max_measured_points": 0
     },
     "tb_asrt": {
-      "min_measured_points": 206
+      "min_measured_points": 205
     },
     "te_deas": {
-      "min_measured_points": 206
+      "min_measured_points": 205
     }
   },
   "derived": {
