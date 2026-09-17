@@ -219,7 +219,7 @@ def derive_tables(run):
             (
                 bundle,
                 f"c{code}",
-                f"{code:03b}",
+                f"{code:04b}",
                 _fmt(cell["ref"] * 1e9) if cell["ref"] else "",
                 _fmt(lo_ns),
                 _fmt(hi_ns),
@@ -318,7 +318,7 @@ def derive_tables(run):
             columns=(
                 "bundle",
                 "code",
-                "bits_T2T1T0",
+                "bits_T3T2T1T0",
                 "twin_at_ref_ns",
                 "twin_min_ns",
                 "twin_max_ns",

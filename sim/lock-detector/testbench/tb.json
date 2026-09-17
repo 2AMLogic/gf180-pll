@@ -219,6 +219,35 @@
           }
         }
       }
+    },
+    "trim": {
+      "description": "the window's 4-bit static process trim code LDT3:LDT0 (DR-014), driven onto lock_detector's own pins as a DC configuration input. Only the codes sim/lock-window-trim's rule actually selects for a bundle on this grid are run here; the code-to-window map itself is that campaign's subject, not this one's.",
+      "points": {
+        "c3": {
+          "params": {
+            "ktb0": "1",
+            "ktb1": "1",
+            "ktb2": "0",
+            "ktb3": "0"
+          }
+        },
+        "c7": {
+          "params": {
+            "ktb0": "1",
+            "ktb1": "1",
+            "ktb2": "1",
+            "ktb3": "0"
+          }
+        },
+        "c11": {
+          "params": {
+            "ktb0": "1",
+            "ktb1": "1",
+            "ktb2": "0",
+            "ktb3": "1"
+          }
+        }
+      }
     }
   },
   "grid": [

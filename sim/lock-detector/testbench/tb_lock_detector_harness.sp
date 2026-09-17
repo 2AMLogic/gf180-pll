@@ -56,7 +56,17 @@
 *
 * Fed by sim/harness: process/temp/vdd_val as usual, plus this manifest's
 * fixed 'params' (kfref, ktrst, kterrbig, ktpert, ktstep, ktstop) and its
-* 'terr' sweep axis (kterr, one point per distinct phase error actually run).
+* 'terr' sweep axis (kterr, one point per distinct phase error actually run)
+* and 'trim' sweep axis (ktb0..ktb3, the window trim code's bits, LSB first).
+*
+* THE TRIM CODE (DR-014, #411). delaywin_3v3 carries a 4-bit static process
+* trim LDT3:LDT0, set once at test and held for the life of the part; it is
+* driven here from DC sources at the rails, never toggled, because a
+* configuration input is not a signal. Every copy in this deck -- the five
+* detectors AND the bare XW window probe -- sees the SAME code, so the
+* window the flag is built from and the window the probe reports stay the
+* same circuit at the same setting. Which code a corner bundle is run at is
+* the manifest's business (see its grid blocks); this file only wires it.
 *
 * lock_detector is composed ahead of this fragment by the manifest's 'dut'
 * key (design/netlist/lock_detector.spice, exported from
@@ -70,25 +80,31 @@
 
 vdd vdd 0 dc 'vdd_val'
 
+* ---- the static window trim code (DR-014) ---------------------------------
+vt0 ldt0 0 dc 'vdd_val*ktb0'
+vt1 ldt1 0 dc 'vdd_val*ktb1'
+vt2 ldt2 0 dc 'vdd_val*ktb2'
+vt3 ldt3 0 dc 'vdd_val*ktb3'
+
 * ---- XA: swept phase error ------------------------------------------------
 vupa upa 0 pulse(0 'vdd_val' 'ttd'          'ttr' 'ttr' 'kterr+ktrst' 'tref')
 vdna dna 0 pulse(0 'vdd_val' 'ttd+kterr'    'ttr' 'ttr' 'ktrst'       'tref')
-xa upa dna locka vwina vdd 0 lock_detector
+xa upa dna locka vwina ldt0 ldt1 ldt2 ldt3 vdd 0 lock_detector
 
 * ---- XB: deep in lock (zero phase error, reset overlap only) --------------
 vupb upb 0 pulse(0 'vdd_val' 'ttd' 'ttr' 'ttr' 'ktrst' 'tref')
 vdnb dnb 0 pulse(0 'vdd_val' 'ttd' 'ttr' 'ttr' 'ktrst' 'tref')
-xb upb dnb lockb vwinb vdd 0 lock_detector
+xb upb dnb lockb vwinb ldt0 ldt1 ldt2 ldt3 vdd 0 lock_detector
 
 * ---- XC: deep out of lock (static quarter-period phase error) -------------
 vupc upc 0 pulse(0 'vdd_val' 'ttd'        'ttr' 'ttr' 'tbig+ktrst' 'tref')
 vdnc dnc 0 pulse(0 'vdd_val' 'ttd+tbig'   'ttr' 'ttr' 'ktrst'      'tref')
-xc upc dnc lockc vwinc vdd 0 lock_detector
+xc upc dnc lockc vwinc ldt0 ldt1 ldt2 ldt3 vdd 0 lock_detector
 
 * ---- XD: frequency error (feedback train 25% slow) -------------------------
 vupd upd 0 pulse(0 'vdd_val' 'ttd' 'ttr' 'ttr' 'tref/2-ttr' 'tref')
 vdnd dnd 0 pulse(0 'vdd_val' 'ttd' 'ttr' 'ttr' 'tref/2-ttr' 'tref*1.25')
-xd upd dnd lockd vwind vdd 0 lock_detector
+xd upd dnd lockd vwind ldt0 ldt1 ldt2 ldt3 vdd 0 lock_detector
 
 * ---- XE: locked, then deliberately perturbed out of lock at ktpert --------
 * The wide train's delay is an integer number of reference periods after the
@@ -100,11 +116,11 @@ xoe1 upe1 upe1n vdd 0 inv_3v3
 xoe2 upe2 upe2n vdd 0 inv_3v3
 xoe3 upe1n upe2n upe vdd 0 nand2_3v3
 vdne dne 0 pulse(0 'vdd_val' 'ttd' 'ttr' 'ttr' 'ktrst' 'tref')
-xe upe dne locke vwine vdd 0 lock_detector
+xe upe dne locke vwine ldt0 ldt1 ldt2 ldt3 vdd 0 lock_detector
 
 * ---- XW: bare comparator window, ideal step in ----------------------------
 vwstep wstep 0 pulse(0 'vdd_val' 'ttd' 'ttr' 'ttr' '5*tref' '1000*tref')
-xw wstep wout vdd 0 delaywin_3v3
+xw wstep wout ldt0 ldt1 ldt2 ldt3 vdd 0 delaywin_3v3
 
 * Every integrator node starts fully discharged, i.e. every copy starts in
 * the NOT-LOCKED state. Asserting therefore has to be earned inside the run
