@@ -234,7 +234,7 @@ def derive_tables(run):
                 f"wider than the band itself ({WIN_HI_NS / WIN_LO_NS:g}x). "
                 "This table is reported so that fact is visible in this "
                 "campaign's own data rather than carried over as an assertion.",
-                "The ladder's floor (code 0) and ceiling (code 7) are what the "
+                "The ladder's floor (code 0) and ceiling (code 15) are what the "
                 "trim range actually is, including the residual capacitance of "
                 "a disabled segment -- the number that could not be computed "
                 "from the drawn widths and is the reason this campaign exists "
