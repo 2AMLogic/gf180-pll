@@ -766,7 +766,7 @@ Decision 3's "custom-cell count" argument).
 | `xor2_3v3` | four-NAND XOR |
 | `tgate_3v3` | transmission gate, separate n- and p-gate pins |
 | `schmitt_3v3` | six-transistor Schmitt inverter (hysteresis for the lock flag) |
-| `delaywin_3v3` | four inverters loaded by MOS capacitors — the lock detector's comparator window |
+| `delaywin_3v3` | four inverters loaded by MOS capacitors — the lock detector's comparator window, **trimmable**: each stage carries an always-on load plus four binary-weighted switched segments selected by a static 4-bit code (DR-014) |
 | `dff_tg_3v3` | positive-edge-triggered **transmission-gate master-slave** D flip-flop |
 
 This is the **shared** logic library: the VCO, divider and lock detector all
@@ -845,7 +845,7 @@ makes that a one-symbol substitution.
 
 ```
 ERR  = XOR(UP, DN)        the PFD's common reset overlap cancels
-ERRD = ERR delayed t_win
+ERRD = ERR delayed t_win  t_win set by LDT3:LDT0, a static 4-bit process trim
 WIDE = ERR . ERRD         pulses only if |phase error| > t_win
 VWIN                      weak always-on pull-up, WIDE-gated pull-down, MOS cap
 LOCK = /schmitt(VWIN)
@@ -859,6 +859,49 @@ quick to fall is the safe direction for a consumer gating logic on it.
 It is a **passive monitor**: no counter, no state machine, nothing driving a
 loop node. DR-001 Decision 2 keeps band select a static input with no
 calibration FSM and DR-002 Decision 4 preserves that unchanged.
+
+#### The window trim (`LDT3:LDT0`)
+
+`delaywin_3v3` carries a **4-bit static process trim**, added by **DR-014**
+and sized by #411. Each of the four delay stages is loaded by one always-on
+`nfet_03v3` MOS capacitor **plus four switched segments**, binary-weighted
+1:2:4:8, selected by the code's bits. Raising the code adds capacitance and
+widens the window; lowering it narrows the window.
+
+Three properties are worth stating because each of them is a thing that can be
+got wrong and still simulate:
+
+- **The switches are weighted with the segments they switch.** Every segment's
+  pass gate (a full transmission gate) and its kill device are scaled by the
+  *same* binary weight as that segment's capacitor. An unweighted switch adds a
+  fixed, weight-independent parasitic per *enabled* segment, which makes code 3
+  (two segments on) slower than code 4 (one wider segment on) — a non-monotonic
+  code map. `sim/lock-window-trim` checks monotonicity per corner rather than
+  asserting it.
+- **A deselected segment is clamped, not floating.** Its kill device holds it at
+  `VSS`, so the code-to-delay map never depends on a node whose DC level is
+  undefined.
+- **The unit segment is half the *length* of the always-on load, not half its
+  width.** gf180mcu's 3.3 V devices stop at a 0.22 µm width, which is already
+  the LSB switch's width — a half-*width* LSB could not carry a switch scaled
+  to it, and an unweighted switch is exactly what breaks monotonicity above.
+
+The code is a **process trim**: set once at test from a measurement of the
+cell's own delay at a fixed reference condition, and held for the life of the
+part. It is not a runtime knob, nothing on-chip writes it, and there is no
+calibration state machine — DR-002 Decision 4's scope boundary is unchanged,
+and the code is the same *shape* of static configuration input as the charge
+pump's Icp trim beside it. `spec/pll.md`'s
+[Lock-detector window trim-code rule](../spec/pll.md#lock-detector-window-trim-code-rule)
+is the normative statement of how a code is chosen; `sim/lock-window-trim` is
+the evidence behind it.
+
+The cell's own sizing table lives in `design/gen_delaywin.py`, which emits
+`delaywin_3v3.sch`: the cell is a regular 4 × (stage) × 4 × (segment) array,
+and generating it keeps the sizes reviewable as one table rather than as 80
+scattered `W=` attributes. Re-run `python3 design/gen_delaywin.py` after
+changing a size, then `design/netlist.sh --top lock_detector` (and
+`--top pll_top`) to refresh the committed exports.
 
 ---
 

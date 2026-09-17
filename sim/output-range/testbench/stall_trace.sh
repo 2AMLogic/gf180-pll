@@ -78,6 +78,11 @@ WORK="${EXP}/work"
 DECK="${WORK}/dut_output_range.sp"
 TRACE_DECK="${WORK}/dut_output_range_trace.sp"
 ICP_CODE=2
+# Lock-detector window trim code (DR-014, #411).  The CENTRE code of the
+# 4-bit array -- this campaign is not about the lock window, so it runs the
+# cell at the middle of its range rather than at a per-corner trimmed code.
+# sim/lock-window-trim owns which code a real part would carry.
+KWINTRIM=${CLOOP_WINDOW_TRIM_NOMINAL:-8}
 IUNIT=8u
 
 # Build the trace deck: the campaign deck with its final `.control` block
@@ -157,6 +162,8 @@ params+=( $(cloop_divider_params "${n}") )
 params+=( $(cloop_band_params "${band}") )
 # shellcheck disable=SC2207
 params+=( $(cloop_trim_params "${ICP_CODE}") )
+# shellcheck disable=SC2207
+params+=( $(cloop_window_trim_params "${KWINTRIM}") )
 
 tag="ortrace_${corner}_${temp}c_${vdd}v_${edge}_tmax${SIMENV_CLOSED_LOOP_TMAX}_ic${vctrl_ic}_n${nstop}"
 tag="${tag//./p}"
