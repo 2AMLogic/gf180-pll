@@ -126,3 +126,35 @@ xw wstep wout ldt0 ldt1 ldt2 ldt3 vdd 0 delaywin_3v3
 * the NOT-LOCKED state. Asserting therefore has to be earned inside the run
 * rather than inherited from the DC operating point.
 .ic v(vwina)=0 v(vwinb)=0 v(vwinc)=0 v(vwind)=0 v(vwine)=0
+
+* ---- stored output: exactly the nine vectors the .measure lines read -------
+* Five lock_detector copies plus the bare window probe is ~200 nodes, and a
+* 3.4 us transient at this deck's accepted timestep is a few hundred thousand
+* accepted points, so storing EVERY node costs a few hundred megabytes per
+* run.  ngspice sizes its output buffer against the memory it believes is
+* available at the moment the transient starts, and on a shared host running
+* several corner campaigns at once that reading can dip far enough for the
+* allocation to be refused outright --
+*
+*     Error: memory required ... is more than memory available ...!
+*     Setting the output memory is not possible.
+*     ERROR: fatal error in ngspice, exit(1)
+*
+* which kills the point rather than degrading it.  Observed on 2026-09-18:
+* 39 of 205 points of one run died this way in a single batch, all of them at
+* the cold/high-supply extreme (the fastest corner, i.e. the most accepted
+* timepoints), while the identical decks had passed in earlier batches.
+*
+* Restricting the stored set to the vectors the .measure lines actually read
+* removes the failure mode at its source: peak RSS measured 24.7 MB against
+* an unrestricted run's hundreds, on the same deck at the same corner.  It is
+* numerically transparent -- .save changes what is RETAINED, not what is
+* solved, and the two runs agree bit-for-bit on every measured quantity
+* (twin_r 1.15976e-09 both ways at ff/-40C/3.63V, code 11, terr = 10 ns).
+*
+* Keep this list in step with tb.json's raw_measures: a measure that reads a
+* vector not named here fails with "no such vector", which the harness reports
+* as a not-measured point rather than silently.
+.save v(wstep) v(wout)
++ v(locka) v(lockb) v(lockc) v(lockd) v(locke)
++ v(vwina) i(vdd)
