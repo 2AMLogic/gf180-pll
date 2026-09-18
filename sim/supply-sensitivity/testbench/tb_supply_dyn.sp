@@ -105,6 +105,17 @@ vb1   b1   0 dc 'v_lo*b1_code'
 vb2   b2   0 dc 'v_lo*b2_code'
 vcpb0 cpb0 0 dc 'v_lo*cpb0_code'
 vcpb1 cpb1 0 dc 'v_lo*cpb1_code'
+
+* Lock-detector window trim (DR-014, #411): a 4-bit STATIC process trim,
+* set once at test and held for the life of the part, so it is a DC source
+* like the band and Icp codes beside it and never changes inside a run.
+* The code this deck runs at comes from the campaign's own runner/manifest
+* (sim/lib/pll_top_dut.sh's cloop_window_trim_params), not from here.
+vldt0 ldt0 0 dc 'v_lo*ldt0_code'
+vldt1 ldt1 0 dc 'v_lo*ldt1_code'
+vldt2 ldt2 0 dc 'v_lo*ldt2_code'
+vldt3 ldt3 0 dc 'v_lo*ldt3_code'
+
 vp0   p0   0 dc 'v_lo*p0_code'
 vp1   p1   0 dc 'v_lo*p1_code'
 vp2   p2   0 dc 'v_lo*p2_code'
@@ -129,7 +140,7 @@ iicn vdd icn dc 'iunit'
 iibp ibp 0   dc 'iunit'
 iicp icp 0   dc 'iunit'
 
-xdut ref b0 b1 b2 cpb0 cpb1 p0 p1 p2 p3 p4 p5 sel0 sel1 sel2 sel3 sel4 sel5
+xdut ref b0 b1 b2 cpb0 cpb1 ldt0 ldt1 ldt2 ldt3 p0 p1 p2 p3 p4 p5 sel0 sel1 sel2 sel3 sel4 sel5
 + ibn icn ibp icp clk divout fb lock vctrl vdd vdd_vco gnd_vco vdd_div vss
 + pll_top
 

@@ -1,0 +1,23 @@
+# the trim rule applied: per corner bundle, the selected code and what the window then does over that bundle's PVT points, against the ratified band [1, 2] ns and DR-013 Decision 4's <= 1.65x spread target
+# The rule: measure t_win at the reference condition and program the code nearest 1.343 ns in the log sense. Nothing on-chip performs this measurement (DR-014 Decision 2).
+# code_headroom_lo/hi is how many codes remain below/above the selected one. A bundle at 0/N or N/0 has no room left to correct a part beyond that corner, which is a range finding, not a pass.
+# GRID is the spread over this 13-bundle grid with each bundle at its own selected code -- the literal reading of DR-013 Decision 4's target.
+# CONTINUOUS is the pessimistic reading, and the one to quote: a real population is continuous, the rule rounds to the nearest code, so up to one trim step of correction is left unapplied on top of the worst within-bundle spread. Its spread column is worst_within_bundle_spread x worst_step; the last column carries that worst step.
+# UNTRIMMED is the same grid with every bundle at the nominal code c8 -- the no-trim counterfactual, so the trim's effect is a measured delta rather than a claim.
+bundle,code,bits_T3T2T1T0,twin_at_ref_ns,twin_min_ns,twin_max_ns,spread,margin_to_lo_pct,margin_to_hi_pct,verdict,code_headroom_lo/hi
+all-fast,c11,1011,1.363,1.152,1.694,1.471,15.17,15.31,in-band,11/4
+all-slow,c3,0011,1.356,1.122,1.726,1.538,12.25,13.71,in-band,3/12
+ff,c11,1011,1.363,1.152,1.694,1.471,15.17,15.31,in-band,11/4
+fs,c6,0110,1.327,1.106,1.676,1.515,10.59,16.22,in-band,6/9
+mimcap_ff,c7,0111,1.358,1.135,1.71,1.507,13.48,14.52,in-band,7/8
+mimcap_ss,c7,0111,1.358,1.135,1.71,1.507,13.48,14.52,in-band,7/8
+moscap_ff,c7,0111,1.358,1.135,1.71,1.507,13.48,14.52,in-band,7/8
+moscap_ss,c7,0111,1.358,1.135,1.71,1.507,13.48,14.52,in-band,7/8
+res_ff,c7,0111,1.358,1.135,1.71,1.507,13.48,14.52,in-band,7/8
+res_ss,c7,0111,1.358,1.135,1.71,1.507,13.48,14.52,in-band,7/8
+sf,c7,0111,1.357,1.137,1.702,1.497,13.7,14.88,in-band,7/8
+ss,c3,0011,1.356,1.122,1.726,1.538,12.25,13.71,in-band,3/12
+typical,c7,0111,1.358,1.135,1.71,1.507,13.48,14.52,in-band,7/8
+GRID,,,,1.106,1.726,1.561,10.59,13.71,meets-1.65x,
+CONTINUOUS,,,,,,1.61,,,meets-1.65x,1.047
+UNTRIMMED,,,,1.041,2.066,1.984,4.138,-3.323,every bundle at c8,

@@ -147,6 +147,11 @@ FOUT_TARGET=80e6
 # settings this campaign has always run, restated in the shared encoding.
 BAND_CODE=5
 ICP_CODE=2
+# Lock-detector window trim code (DR-014, #411).  The CENTRE code of the
+# 4-bit array -- this campaign is not about the lock window, so it runs the
+# cell at the middle of its range rather than at a per-corner trimmed code.
+# sim/lock-window-trim owns which code a real part would carry.
+KWINTRIM=${CLOOP_WINDOW_TRIM_NOMINAL:-8}
 IUNIT=8u
 
 # PFD DN-branch integration guard floor (#69), as a fraction of the rail --
@@ -300,6 +305,8 @@ run_one() {
   params+=( $(cloop_band_params "${BAND_CODE}") )
   # shellcheck disable=SC2207
   params+=( $(cloop_trim_params "${ICP_CODE}") )
+  # shellcheck disable=SC2207
+  params+=( $(cloop_window_trim_params "${KWINTRIM}") )
 
   local log="${WORK}/${tag}/ngspice.log"
   # Idempotent re-run: a prior invocation that already produced a

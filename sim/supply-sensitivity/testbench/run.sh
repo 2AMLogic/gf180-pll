@@ -155,6 +155,23 @@ KFOUT=100e6
 KN=8
 KFREF=12.5e6
 KTRIM=2
+# Lock-detector window trim code (DR-014, #411).
+#
+#   rule     program each corner bundle at the code `spec/pll.md`'s
+#            [Lock-detector window trim-code rule] selects for it -- i.e. run
+#            the loop against the window a REAL part of that bundle would
+#            carry.  This is the default, and it is what makes this campaign's
+#            `lock` column a statement about the shipped detector rather than
+#            about an arbitrary code.
+#   <0..15>  force one fixed code at every corner.  `8`, the centre code, is
+#            what every OTHER closed-loop campaign in the tree runs (see
+#            CLOOP_WINDOW_TRIM_NOMINAL); forcing it here reproduces the
+#            untrimmed-comparison rows.
+#
+# Which code the rule selects is sim/lock-window-trim's measured answer, not
+# this file's -- window_trim_code_of() below is a transcription of that
+# record's code table and cites it.
+KWINTRIM=${SIM_WINTRIM:-rule}
 
 # The SECOND frequency point, used only for the quiescent/dynamic power split
 # (see "Quiescent vs. dynamic" below).  Same N, half the reference, so f_ref
@@ -474,6 +491,27 @@ PASSIVES="res_typical,moscap_typical,mimcap_typical"
 
 libs_for() { echo "$1,${PASSIVES}"; }
 
+# window_trim_code_of <bundle> -> the 4-bit LDT code that bundle's parts carry
+#
+# A TRANSCRIPTION of sim/lock-window-trim/records/20260917-185928-8adff3d.md's
+# code table, which is itself what `spec/pll.md`'s normative Lock-detector
+# window trim-code rule produces when the rule is applied to the thirteen
+# simulated bundles -- measure t_win at 27 C / 3.30 V, program the code whose
+# t_win there is nearest 1.343 ns.  Nothing is decided here; if the table and
+# that record ever disagree, the record is right.
+#
+# ${KWINTRIM} = <0..15> bypasses this entirely and forces one code everywhere.
+window_trim_code_of() {
+  [ "${KWINTRIM}" = "rule" ] || { echo "${KWINTRIM}"; return 0; }
+  case "$1" in
+    ss|all-slow)                  echo 3  ;;
+    fs)                           echo 6  ;;
+    ff|all-fast)                  echo 11 ;;
+    typical|sf|res_*|moscap_*|mimcap_*) echo 7 ;;
+    *) echo "ERROR: window_trim_code_of: no trim-rule code for bundle '$1'" >&2; exit 2 ;;
+  esac
+}
+
 # The corner axes.  Default is the full 45-point grid sim/README.md prescribes.
 # SIM_BUNDLES / SIM_TEMPS narrow it for a compute-limited run; whatever is
 # actually swept is what report.sh writes into the record's corner-matrix
@@ -481,6 +519,14 @@ libs_for() { echo "$1,${PASSIVES}"; }
 # reduced run can never describe itself as a full one.
 GRID_BUNDLES="${SIM_BUNDLES:-typical ff ss fs sf}"
 GRID_TEMPS="${SIM_TEMPS:--40 27 125}"
+# SIM_PICKS names explicit `<bundle> <temp>` PAIRS instead of the rectangle
+# SIM_BUNDLES x SIM_TEMPS, for a question that is about particular cells rather
+# than about a sub-grid -- e.g. DR-013's crossing check, which is about
+# `typical`/-40 C and `ff`/27 C and about no other cell of the grid.  Spelling
+# that as a rectangle would cost two irrelevant corners at ~3.2 h of ngspice
+# each.  Empty (the default) leaves the rectangle in charge; the two knobs
+# compose, with SIM_PICKS applied on top.
+GRID_PICKS="${SIM_PICKS:-}"
 # The corners the step/ramp deck runs at, and the corners the second frequency
 # point of the power split runs at.  Both are subsets by design (see the
 # record's Methodology), and both are overridable for the same reason.
@@ -489,6 +535,16 @@ SPLIT_BUNDLES="${SIM_SPLIT_BUNDLES:-typical}"
 SPLIT_TEMPS="${SIM_SPLIT_TEMPS:-27}"
 
 in_list() { case " $2 " in *" $1 "*) return 0 ;; *) return 1 ;; esac }
+
+# in_grid <bundle> <temp> -- is this cell of the PVT grid in scope for this run?
+in_grid() {
+  if [ -n "${GRID_PICKS}" ]; then
+    case " ${GRID_PICKS} " in *" $1 $2 "*) return 0 ;; *) return 1 ;; esac
+  fi
+  in_list "$1" "${GRID_BUNDLES}" || return 1
+  in_list "$2" "${GRID_TEMPS}"   || return 1
+  return 0
+}
 
 # ---------------------------------------------------------------------------
 # Operating-point derivation
@@ -576,6 +632,8 @@ if [ "${1:-}" = "--one-lock" ]; then
   # shellcheck disable=SC2207
   params+=( $(cloop_trim_params "${KTRIM}") )
   # shellcheck disable=SC2207
+  params+=( $(cloop_window_trim_params "$(window_trim_code_of "${bundle}")") )
+  # shellcheck disable=SC2207
   params+=( $(cloop_divider_params "${KN}") )
   sig="${libs}|${temp}|${params[*]}"
 
@@ -640,6 +698,8 @@ if [ "${1:-}" = "--one-vpre" ]; then
     params+=( $(cloop_band_params "${band}") )
     # shellcheck disable=SC2207
     params+=( $(cloop_trim_params "${KTRIM}") )
+    # shellcheck disable=SC2207
+    params+=( $(cloop_window_trim_params "$(window_trim_code_of "${bundle}")") )
     # shellcheck disable=SC2207
     params+=( $(cloop_divider_params "${KN}") )
     local sig="${libs}|${temp}|${params[*]}"
@@ -751,6 +811,8 @@ if [ "${1:-}" = "--one-dyn" ]; then
   params+=( $(cloop_band_params "${band}") )
   # shellcheck disable=SC2207
   params+=( $(cloop_trim_params "${KTRIM}") )
+  # shellcheck disable=SC2207
+  params+=( $(cloop_window_trim_params "$(window_trim_code_of "${bundle}")") )
   # shellcheck disable=SC2207
   params+=( $(cloop_divider_params "${KN}") )
   sig="${libs}|${temp}|${params[*]}"
@@ -945,8 +1007,7 @@ emit_pre() {  # <bundle> <temp> <band> <v297> <v330> <v363> <fout> <fref> <slug>
   done
 }
 while IFS=, read -r bundle temp band v297 v330 v363; do
-  in_list "${bundle}" "${GRID_BUNDLES}" || continue
-  in_list "${temp}"   "${GRID_TEMPS}"   || continue
+  in_grid "${bundle}" "${temp}" || continue
   if [ "${band}" = "-1" ]; then
     NOBAND="${NOBAND}${bundle}/${temp}C "
     continue
@@ -956,8 +1017,7 @@ done <"${OPTAB}"
 while IFS=, read -r bundle temp band v297 v330 v363; do
   in_list "${bundle}" "${SPLIT_BUNDLES}" || continue
   in_list "${temp}"   "${SPLIT_TEMPS}"   || continue
-  in_list "${bundle}" "${GRID_BUNDLES}"  || continue
-  in_list "${temp}"   "${GRID_TEMPS}"    || continue
+  in_grid "${bundle}" "${temp}"          || continue
   [ "${band}" = "-1" ] && continue
   emit_pre "${bundle}" "${temp}" "${band}" "${v297}" "${v330}" "${v363}" "${KFOUT2}" "${KFREF2}" 050
 done <"${OPTAB2}"
@@ -975,8 +1035,7 @@ vpre_of() {  # <slug> <bundle> <temp> <vdd> -> calibrated control voltage
 # --- job list: the steady-state grid at 100 MHz -----------------------------
 JOBS100="${WORK}/jobs_100.txt"; : >"${JOBS100}"
 while IFS=, read -r bundle temp band v297 v330 v363; do
-  in_list "${bundle}" "${GRID_BUNDLES}" || continue
-  in_list "${temp}"   "${GRID_TEMPS}"   || continue
+  in_grid "${bundle}" "${temp}" || continue
   [ "${band}" = "-1" ] && continue
   for vdd in 2.97 3.30 3.63; do
     vc="$(vpre_of 100 "${bundle}" "${temp}" "${vdd}")"
@@ -1005,8 +1064,7 @@ JOBS050="${WORK}/jobs_050.txt"; : >"${JOBS050}"
 while IFS=, read -r bundle temp band v297 v330 v363; do
   in_list "${bundle}" "${SPLIT_BUNDLES}" || continue
   in_list "${temp}"   "${SPLIT_TEMPS}"   || continue
-  in_list "${bundle}" "${GRID_BUNDLES}"  || continue
-  in_list "${temp}"   "${GRID_TEMPS}"    || continue
+  in_grid "${bundle}" "${temp}"          || continue
   [ "${band}" = "-1" ] && continue
   for vdd in 2.97 3.30 3.63; do
     vc="$(vpre_of 050 "${bundle}" "${temp}" "${vdd}")"

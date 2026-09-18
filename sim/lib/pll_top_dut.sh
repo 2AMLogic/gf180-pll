@@ -50,7 +50,7 @@
 #      `netlist-snapshots/<record-id>.spice` a record cites is self-contained
 #      and reproduces the run from the record alone.  Same shape as the
 #      existing per-block campaigns (sim/divider-ratio, sim/lock-detector).
-#   3. WHAT the configuration bits mean.  `pll_top` has 22 static inputs, and
+#   3. WHAT the configuration bits mean.  `pll_top` has 26 static inputs, and
 #      the divider's one-hot SEL / binary P encoding is easy to get subtly
 #      wrong in a way that still locks -- at the wrong N.  Encoding it once,
 #      here, from divider_chain.sch's own documented rule, means a campaign
@@ -71,11 +71,12 @@ CLOOP_NETLIST="${CLOOP_ROOT}/design/netlist/pll_top.spice"
 
 # The name of the exported subcircuit, and its port list in netlist order.
 # Kept here so a testbench's instance line is generated rather than
-# transcribed: a 32-port instance line typed by hand in four campaigns is four
+# transcribed: a 36-port instance line typed by hand in four campaigns is four
 # chances to swap two nets and still get a deck that simulates.
 CLOOP_SUBCKT="pll_top"
 CLOOP_PORTS=(
   REF B0 B1 B2 CPB0 CPB1
+  LDT0 LDT1 LDT2 LDT3
   P0 P1 P2 P3 P4 P5
   SEL0 SEL1 SEL2 SEL3 SEL4 SEL5
   IBN ICN IBP ICP
@@ -239,6 +240,38 @@ cloop_trim_params() {
   printf 'cpb0_code=%d cpb1_code=%d\n' $((c & 1)) $(((c >> 1) & 1))
 }
 
+# cloop_window_trim_params <window-trim code 0..15>
+#
+# Prints `ldt0_code=.. ldt1_code=.. ldt2_code=.. ldt3_code=..` for the lock
+# detector's 4-bit window trim (delaywin_3v3: each stage carries an always-on
+# MOS-cap load plus four binary-weighted switched segments, so raising the code
+# widens the window monotonically -- DR-014, #411).
+#
+# This is a PROCESS trim, set once at test from a measurement of the cell's own
+# delay at a fixed reference condition, and held for the life of the part.  It
+# is not a runtime knob and nothing on-chip writes it (DR-002 Decision 4's
+# no-calibration-FSM boundary).  WHICH code a corner needs is answered by
+# sim/lock-window-trim, not by this file, exactly as WHICH band a frequency
+# needs is answered by sim/vco-tuning-range -- a campaign picks the code and
+# says in its record where it got it.
+#
+# ${CLOOP_WINDOW_TRIM_NOMINAL} is the centre code, and is what a campaign that
+# is not itself about the lock window should pass: it is the middle of the
+# range, so neither the fast nor the slow end of the process distribution is
+# silently favoured.
+CLOOP_WINDOW_TRIM_NOMINAL=8
+
+cloop_window_trim_params() {
+  local c="$1"
+  case "${c}" in
+    ''|*[!0-9]*) echo "ERROR: cloop_window_trim_params: code='${c}' is not an integer" >&2; exit 2 ;;
+  esac
+  [ "${c}" -ge 0 ] && [ "${c}" -le 15 ] || {
+    echo "ERROR: cloop_window_trim_params: window trim code ${c} outside the 4-bit range 0..15" >&2; exit 2; }
+  printf 'ldt0_code=%d ldt1_code=%d ldt2_code=%d ldt3_code=%d\n' \
+    $((c & 1)) $(((c >> 1) & 1)) $(((c >> 2) & 1)) $(((c >> 3) & 1))
+}
+
 # ---------------------------------------------------- tb.json verification --
 #
 # Shared by every closed-loop campaign's check_config.sh: asserting that a
@@ -283,7 +316,7 @@ cloop_check_codes() {
 # cloop_check_instance_line <fragment.sp> [<instance-name>]
 #
 # Asserts the DUT instance line in a testbench fragment (folded onto its `+`
-# continuation lines) is byte-for-byte cloop_instance's output: same 32 ports,
+# continuation lines) is byte-for-byte cloop_instance's output: same ports,
 # same ORDER, since the instance line is positional and a swapped pair
 # simulates happily without erroring.
 cloop_check_instance_line() {
@@ -303,6 +336,6 @@ cloop_check_instance_line() {
     # shellcheck disable=SC2034 # read by the sourcing check_config.sh, not this file
     fail=1
   else
-    echo "  ok   32-port instance line matches"
+    echo "  ok   ${#CLOOP_PORTS[@]}-port instance line matches"
   fi
 }

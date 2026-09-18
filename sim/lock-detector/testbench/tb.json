@@ -1,7 +1,7 @@
 {
   "name": "lock-detector",
   "description": "window-comparator lock detector: assert/deassert acceptance over the full 13-bundle PVT grid, and the comparator window's edges over a phase-error ladder at the PVT extremes",
-  "claim": "#11 -> DR-002 Decision 4 (design input, not a spec line) -- does the window-comparator lock detector assert once the phase error has stayed inside its window, refuse to assert on a large static phase error or on a frequency error, and deassert when the loop is deliberately perturbed out of lock -- at every PVT corner? And where are the EDGES of that window, measured rather than inferred? DR-002 Decision 4 puts a digital lock output in v1 scope as a passive monitor (no band-search or calibration FSM), and names #12's closed-loop testbench as the consumer of the signal.",
+  "claim": "#11 -> DR-002 Decision 4 (design input, not a spec line) -- does the window-comparator lock detector assert once the phase error has stayed inside its window, refuse to assert on a large static phase error or on a frequency error, and deassert when the loop is deliberately perturbed out of lock -- at every PVT corner? And where are the EDGES of that window, measured rather than inferred? Since #411 the same grid additionally answers DR-013 Decision 4 against the TRIMMED delaywin_3v3 (DR-014): with each corner bundle at the code sim/lock-window-trim's trim rule selects for it, does the OBSERVABLE window -- the largest phase error at the PFD inputs for which lock asserts and stays asserted, measured through the assembled loop and not at the bare delay chain (DR-013 Decision 1) -- hold inside the ratified [1, 2] ns band at every point, with a PVT spread at or under 1.65x? DR-002 Decision 4 puts a digital lock output in v1 scope as a passive monitor (no band-search or calibration FSM), and the trim does not change that: the code is a static process trim set once at test, and nothing on-chip writes it.",
   "methodology": [
     "Stimulus models the tri-state PFD's UP/DN pair: with the reference edge leading the feedback edge by tau, UP is high for tau + t_reset and DN for t_reset (ktrst = 1 ns), both falling on the reset path, so the DUT's input XOR sees exactly tau and the common reset overlap cancels.",
     "Five independent DUT copies share each transient: swept phase error (this manifest's 'terr' sweep axis); deep in lock (tau = 0); deep out of lock (static tau = Tref/4); frequency error (feedback train 25% slow, so the error pulse beats through every width from 0 to Tref); and a copy that starts in lock and is kicked to a sustained tau = kterrbig at t = ktpert.",
@@ -16,7 +16,8 @@
     "Limitation -- absolute window. The comparator window t_win is an inverter-chain delay, so it is an absolute time and its ratio to the reference period changes across the reference range.",
     "Limitation -- schematic-level. No extracted parasitics; the integrating node is high-impedance and its post-layout capacitance and leakage will move both the assert time and the window. #18 must re-take this.",
     "Statistical switches: sw_stat_global = sw_stat_mismatch = 0.",
-    "History: 20260802-050119-c24ee3a superseded 20260731-162119-0a12e6c (same claim, same then-95-point corner matrix, run through the sim/lib/simenv.sh shim rather than sim/harness) as a tooling migration. This manifest's corner set was subsequently widened from 'mos' (5 bundles, 95 points total) to 'full' (13 bundles, 167 points total) per DR-010's re-characterization (issue #393), evaluating T1'/T2' (the assert-window band DR-010 replaced T1/T2 with) rather than the retired T1/T2 pair -- see spec/pll.md's Lock detector section."
+    "History: 20260802-050119-c24ee3a superseded 20260731-162119-0a12e6c (same claim, same then-95-point corner matrix, run through the sim/lib/simenv.sh shim rather than sim/harness) as a tooling migration. This manifest's corner set was subsequently widened from 'mos' (5 bundles, 95 points total) to 'full' (13 bundles, 167 points total) per DR-010's re-characterization (issue #393), evaluating T1'/T2' (the assert-window band DR-010 replaced T1/T2 with) rather than the retired T1/T2 pair -- see spec/pll.md's Lock detector section.",
+    "THE TRIM CODE (#411). delaywin_3v3 carries a 4-bit static process trim, and every copy in this deck -- the five detectors AND the bare XW window probe -- sees the SAME code, so the window the flag is built from and the window the probe reports are the same circuit at the same setting. Each corner bundle is run at ITS OWN code, the one sim/lock-window-trim's rule selects from that bundle's window at 27 C and nominal supply; the grid blocks below carry the assignment. A bundle is not evidence at another bundle's code, so the codes are not swept across the grid."
   ],
   "dut": [
     "design/netlist/lock_detector.spice"
@@ -51,8 +52,13 @@
   },
   "sweeps": {
     "terr": {
-      "description": "swept phase error (XA)",
+      "description": "swept phase error (XA). The ladder is re-placed for the TRIMMED window (#411): the 0.02 ns refinement ladders that bracketed the untrimmed cell's edges at 1.02-1.18 ns and 2.00-2.90 ns are retired -- those edges moved when the trim moved the window, and a ladder that no longer brackets an edge measures nothing. The committed records that used them stand as taken (sim/README.md's append-only rule).",
       "points": {
+        "e4.0n": {
+          "params": {
+            "kterr": "4.0n"
+          }
+        },
         "e0.2n": {
           "params": {
             "kterr": "0.2n"
@@ -103,31 +109,6 @@
             "kterr": "10.0n"
           }
         },
-        "e4.0n": {
-          "params": {
-            "kterr": "4.0n"
-          }
-        },
-        "e1.02n": {
-          "params": {
-            "kterr": "1.02n"
-          }
-        },
-        "e1.04n": {
-          "params": {
-            "kterr": "1.04n"
-          }
-        },
-        "e1.06n": {
-          "params": {
-            "kterr": "1.06n"
-          }
-        },
-        "e1.08n": {
-          "params": {
-            "kterr": "1.08n"
-          }
-        },
         "e1.1n": {
           "params": {
             "kterr": "1.1n"
@@ -153,69 +134,106 @@
             "kterr": "1.18n"
           }
         },
-        "e2.1n": {
+        "e1.22n": {
           "params": {
-            "kterr": "2.1n"
+            "kterr": "1.22n"
           }
         },
-        "e2.2n": {
+        "e1.24n": {
           "params": {
-            "kterr": "2.2n"
+            "kterr": "1.24n"
           }
         },
-        "e2.3n": {
+        "e1.26n": {
           "params": {
-            "kterr": "2.3n"
+            "kterr": "1.26n"
           }
         },
-        "e2.4n": {
+        "e1.72n": {
           "params": {
-            "kterr": "2.4n"
+            "kterr": "1.72n"
           }
         },
-        "e2.5n": {
+        "e1.74n": {
           "params": {
-            "kterr": "2.5n"
+            "kterr": "1.74n"
           }
         },
-        "e2.6n": {
+        "e1.76n": {
           "params": {
-            "kterr": "2.6n"
+            "kterr": "1.76n"
           }
         },
-        "e2.7n": {
+        "e1.78n": {
           "params": {
-            "kterr": "2.7n"
+            "kterr": "1.78n"
           }
         },
-        "e2.8n": {
+        "e1.8n": {
           "params": {
-            "kterr": "2.8n"
+            "kterr": "1.8n"
           }
         },
-        "e2.9n": {
+        "e1.82n": {
           "params": {
-            "kterr": "2.9n"
+            "kterr": "1.82n"
           }
         },
-        "e2.02n": {
+        "e1.84n": {
           "params": {
-            "kterr": "2.02n"
+            "kterr": "1.84n"
           }
         },
-        "e2.04n": {
+        "e1.86n": {
           "params": {
-            "kterr": "2.04n"
+            "kterr": "1.86n"
           }
         },
-        "e2.06n": {
+        "e1.88n": {
           "params": {
-            "kterr": "2.06n"
+            "kterr": "1.88n"
           }
         },
-        "e2.08n": {
+        "e1.9n": {
           "params": {
-            "kterr": "2.08n"
+            "kterr": "1.9n"
+          }
+        }
+      }
+    },
+    "trim": {
+      "description": "the window's 4-bit static process trim code LDT3:LDT0 (DR-014), driven onto lock_detector's own pins from DC sources at the rails and never toggled -- a configuration input held for the life of the part, not a signal. Only the four codes sim/lock-window-trim's trim rule actually selects on this grid are declared: c3 (ss, all-slow), c6 (fs), c7 (typical, sf and the six passive-only bundles), c11 (ff, all-fast). Every grid block below names the code for the bundles it covers, so each bundle is measured at ITS OWN code and never at another bundle's. The code-to-window map itself is sim/lock-window-trim's subject; what is measured here is the OBSERVABLE window the map's selected codes produce through the assembled loop.",
+      "points": {
+        "c3": {
+          "params": {
+            "ktb0": "1",
+            "ktb1": "1",
+            "ktb2": "0",
+            "ktb3": "0"
+          }
+        },
+        "c6": {
+          "params": {
+            "ktb0": "0",
+            "ktb1": "1",
+            "ktb2": "1",
+            "ktb3": "0"
+          }
+        },
+        "c7": {
+          "params": {
+            "ktb0": "1",
+            "ktb1": "1",
+            "ktb2": "1",
+            "ktb3": "0"
+          }
+        },
+        "c11": {
+          "params": {
+            "ktb0": "1",
+            "ktb1": "1",
+            "ktb2": "0",
+            "ktb3": "1"
           }
         }
       }
@@ -223,15 +241,72 @@
   },
   "grid": [
     {
-      "description": "full 117-point PVT grid (all 13 corner bundles x 3 temperatures x 3 supplies) at a fixed phase error (4 ns) comfortably outside the nominal ~1.4 ns window, so the grid point is an unambiguous out-of-window case at every corner. Widened from the 45-point MOS-only grid to the full 13-bundle set per DR-010's re-characterization (issue #393): delaywin_3v3's load is an nfet_03v3 MOS capacitor with no independent passive corner axis (sim/lock-window-sizing/records/20260915-202802-79c0cee.md measured this as a deliberate null over the same 13 bundles), but sim/README.md's warning against a MOS-only sweep leaving res_*/moscap_*/mimcap_* silently at typical applies here as much as there, so the full set is now run rather than assumed equivalent.",
+      "description": "full PVT grid at a fixed 4 ns phase error, c3 slice: the 2-bundle set whose trim rule selects c3 (ss, all-slow) x 3 temperatures x 3 supplies. 4 ns is comfortably outside the ~1.4 ns nominal window at every corner, so the point is an unambiguous out-of-window case everywhere and the four behavioural checks are exercised at every corner of the mandated grid. The grid is SPLIT by code rather than swept across codes: a bundle is only evidence at the code a real part of that bundle would carry, and the union of these four blocks is the whole 117-point grid exactly once.",
+      "corners": [
+        "ss",
+        "all-slow"
+      ],
       "axes": {
         "terr": [
           "e4.0n"
+        ],
+        "trim": [
+          "c3"
         ]
       }
     },
     {
-      "description": "phase-error ladder at the nominal corner",
+      "description": "full PVT grid at a fixed 4 ns phase error, c6 slice: the 1-bundle set whose trim rule selects c6 (fs) x 3 temperatures x 3 supplies. 4 ns is comfortably outside the ~1.4 ns nominal window at every corner, so the point is an unambiguous out-of-window case everywhere and the four behavioural checks are exercised at every corner of the mandated grid. The grid is SPLIT by code rather than swept across codes: a bundle is only evidence at the code a real part of that bundle would carry, and the union of these four blocks is the whole 117-point grid exactly once.",
+      "corners": [
+        "fs"
+      ],
+      "axes": {
+        "terr": [
+          "e4.0n"
+        ],
+        "trim": [
+          "c6"
+        ]
+      }
+    },
+    {
+      "description": "full PVT grid at a fixed 4 ns phase error, c7 slice: the 8-bundle set whose trim rule selects c7 (typical, sf, res_ff, res_ss, moscap_ff, moscap_ss, mimcap_ff, mimcap_ss) x 3 temperatures x 3 supplies. 4 ns is comfortably outside the ~1.4 ns nominal window at every corner, so the point is an unambiguous out-of-window case everywhere and the four behavioural checks are exercised at every corner of the mandated grid. The grid is SPLIT by code rather than swept across codes: a bundle is only evidence at the code a real part of that bundle would carry, and the union of these four blocks is the whole 117-point grid exactly once.",
+      "corners": [
+        "typical",
+        "sf",
+        "res_ff",
+        "res_ss",
+        "moscap_ff",
+        "moscap_ss",
+        "mimcap_ff",
+        "mimcap_ss"
+      ],
+      "axes": {
+        "terr": [
+          "e4.0n"
+        ],
+        "trim": [
+          "c7"
+        ]
+      }
+    },
+    {
+      "description": "full PVT grid at a fixed 4 ns phase error, c11 slice: the 2-bundle set whose trim rule selects c11 (ff, all-fast) x 3 temperatures x 3 supplies. 4 ns is comfortably outside the ~1.4 ns nominal window at every corner, so the point is an unambiguous out-of-window case everywhere and the four behavioural checks are exercised at every corner of the mandated grid. The grid is SPLIT by code rather than swept across codes: a bundle is only evidence at the code a real part of that bundle would carry, and the union of these four blocks is the whole 117-point grid exactly once.",
+      "corners": [
+        "ff",
+        "all-fast"
+      ],
+      "axes": {
+        "terr": [
+          "e4.0n"
+        ],
+        "trim": [
+          "c11"
+        ]
+      }
+    },
+    {
+      "description": "phase-error ladder at the nominal corner, at typical's own selected code (c7)",
       "corners": [
         "typical"
       ],
@@ -253,13 +328,44 @@
           "e3.0n",
           "e5.0n",
           "e10.0n"
+        ],
+        "trim": [
+          "c7"
         ]
       }
     },
     {
-      "description": "phase-error ladder at the hot/low-supply extreme of the slow and fast MOS bundles",
+      "description": "phase-error ladder at the hot/low-supply extreme of the ss bundle, at its own selected code c3 -- the widest-window end of that bundle's own PVT box, and therefore where that bundle's own T2' margin is thinnest",
       "corners": [
-        "ss",
+        "ss"
+      ],
+      "temperatures_c": [
+        125
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "terr": [
+          "e0.2n",
+          "e0.5n",
+          "e0.8n",
+          "e1.0n",
+          "e1.2n",
+          "e1.5n",
+          "e2.0n",
+          "e3.0n",
+          "e5.0n",
+          "e10.0n"
+        ],
+        "trim": [
+          "c3"
+        ]
+      }
+    },
+    {
+      "description": "phase-error ladder at the hot/low-supply extreme of the ff bundle, at its own selected code c11 -- the widest-window end of that bundle's own PVT box, and therefore where that bundle's own T2' margin is thinnest",
+      "corners": [
         "ff"
       ],
       "temperatures_c": [
@@ -280,13 +386,73 @@
           "e3.0n",
           "e5.0n",
           "e10.0n"
+        ],
+        "trim": [
+          "c11"
         ]
       }
     },
     {
-      "description": "phase-error ladder at the cold/high-supply extreme of the slow and fast MOS bundles",
+      "description": "phase-error ladder at the hot/low-supply extreme of the fs bundle, at its own selected code c6 -- the widest-window end of that bundle's own PVT box, and therefore where that bundle's own T2' margin is thinnest",
       "corners": [
-        "ss",
+        "fs"
+      ],
+      "temperatures_c": [
+        125
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "terr": [
+          "e0.2n",
+          "e0.5n",
+          "e0.8n",
+          "e1.0n",
+          "e1.2n",
+          "e1.5n",
+          "e2.0n",
+          "e3.0n",
+          "e5.0n",
+          "e10.0n"
+        ],
+        "trim": [
+          "c6"
+        ]
+      }
+    },
+    {
+      "description": "phase-error ladder at the cold/high-supply extreme of the ss bundle, at its own selected code c3 -- the narrowest-window end of that bundle's own PVT box, and therefore where that bundle's own T1' margin is thinnest",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        -40
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "terr": [
+          "e0.2n",
+          "e0.5n",
+          "e0.8n",
+          "e1.0n",
+          "e1.2n",
+          "e1.5n",
+          "e2.0n",
+          "e3.0n",
+          "e5.0n",
+          "e10.0n"
+        ],
+        "trim": [
+          "c3"
+        ]
+      }
+    },
+    {
+      "description": "phase-error ladder at the cold/high-supply extreme of the ff bundle, at its own selected code c11 -- the narrowest-window end of that bundle's own PVT box, and therefore where that bundle's own T1' margin is thinnest",
+      "corners": [
         "ff"
       ],
       "temperatures_c": [
@@ -307,13 +473,16 @@
           "e3.0n",
           "e5.0n",
           "e10.0n"
+        ],
+        "trim": [
+          "c11"
         ]
       }
     },
     {
-      "description": "T1' margin refinement at ff/-40C/3.63V (DR-010 re-characterization, issue #393): the coarse 1.0/1.2 ns ladder step brackets the T1' lower edge (>= 1 ns) but cannot resolve a single-digit-percent margin against it, so this corner gets a 0.02 ns step from 1.02 to 1.18 ns -- the same corner spec/pll.md's Lock detector section cites as where T1' binds.",
+      "description": "phase-error ladder at the cold/high-supply extreme of the fs bundle, at its own selected code c6 -- the narrowest-window end of that bundle's own PVT box, and therefore where that bundle's own T1' margin is thinnest",
       "corners": [
-        "ff"
+        "fs"
       ],
       "temperatures_c": [
         -40
@@ -323,20 +492,52 @@
       ],
       "axes": {
         "terr": [
-          "e1.02n",
-          "e1.04n",
-          "e1.06n",
-          "e1.08n",
+          "e0.2n",
+          "e0.5n",
+          "e0.8n",
+          "e1.0n",
+          "e1.2n",
+          "e1.5n",
+          "e2.0n",
+          "e3.0n",
+          "e5.0n",
+          "e10.0n"
+        ],
+        "trim": [
+          "c6"
+        ]
+      }
+    },
+    {
+      "description": "T1' edge refinement at fs/-40C/3.63V, code c6, in 0.02 ns steps from 1.10 to 1.26 ns. This is where T1' binds UNDER THE TRIM, and it is a DIFFERENT corner from the untrimmed cell's ff/-40C/3.63V: the trim rule gives each bundle its own code, so the narrowest window over the whole grid is no longer simply the fastest bundle's. sim/lock-window-trim measures the bare chain there at 1.1059 ns, the smallest of any bundle at its own selected code; the observable runs wider than the bare chain by delta, so the ladder brackets ~1.15 ns and resolves the edge to 0.02 ns rather than assuming it.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        -40
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "terr": [
           "e1.1n",
           "e1.12n",
           "e1.14n",
           "e1.16n",
-          "e1.18n"
+          "e1.18n",
+          "e1.2n",
+          "e1.22n",
+          "e1.24n",
+          "e1.26n"
+        ],
+        "trim": [
+          "c6"
         ]
       }
     },
     {
-      "description": "T2' margin refinement at ss/125C/2.97V (DR-010 re-characterization, issue #393): the coarse 2.0/3.0 ns ladder step only brackets the T2' upper edge (<= 2 ns) to within 1 ns, which cannot distinguish a small overrun from none at all, so this corner gets a 0.1 ns step from 2.1 to 2.9 ns -- the same corner spec/pll.md's Lock detector section cites as where T2' binds.",
+      "description": "T2' edge refinement at ss/125C/2.97V, code c3, in 0.02 ns steps from 1.72 to 1.90 ns. The same corner T2' bound at before the trim and the same 0.02 ns resolution DR-013 Decision 3 required, but at a different place on the axis: sim/lock-window-trim measures the bare chain there at 1.7259 ns, the largest of any bundle at its own selected code, so the observable is expected near 1.79 ns -- inside the 2 ns T2' budget rather than 1-2 % past it. The ladder resolves that expectation to 0.02 ns instead of resting on the bare-chain-to-observable conversion.",
       "corners": [
         "ss"
       ],
@@ -348,37 +549,19 @@
       ],
       "axes": {
         "terr": [
-          "e2.1n",
-          "e2.2n",
-          "e2.3n",
-          "e2.4n",
-          "e2.5n",
-          "e2.6n",
-          "e2.7n",
-          "e2.8n",
-          "e2.9n"
-        ]
-      }
-    },
-    {
-      "description": "T2' fine refinement at ss/125C/2.97V (issue #407 Scope item 1, DR-013 Decision 3): the coarse ladder only bracketed the T2' edge to [2.0, 2.1) ns -- there is no measured point between the last in-window step (2.0 ns, from the hot/low-supply extreme ladder above) and the first refined out-of-window step (2.1 ns, from the T2' margin refinement above). A 0.02 ns step across exactly that interval sizes how big the miss is, the same mechanism the T1' refinement above already runs. e2.0n and e2.1n are already covered by the two blocks above and are restated here, not re-simulated (sim/harness's grid-block union de-duplicates by corner-id, keeping the first occurrence) -- only e2.02n/e2.04n/e2.06n/e2.08n are new points.",
-      "corners": [
-        "ss"
-      ],
-      "temperatures_c": [
-        125
-      ],
-      "supplies": [
-        "low"
-      ],
-      "axes": {
-        "terr": [
-          "e2.0n",
-          "e2.02n",
-          "e2.04n",
-          "e2.06n",
-          "e2.08n",
-          "e2.1n"
+          "e1.72n",
+          "e1.74n",
+          "e1.76n",
+          "e1.78n",
+          "e1.8n",
+          "e1.82n",
+          "e1.84n",
+          "e1.86n",
+          "e1.88n",
+          "e1.9n"
+        ],
+        "trim": [
+          "c3"
         ]
       }
     }
@@ -463,10 +646,10 @@
       "max_measured_points": 0
     },
     "tb_asrt": {
-      "min_measured_points": 189
+      "min_measured_points": 205
     },
     "te_deas": {
-      "min_measured_points": 189
+      "min_measured_points": 205
     }
   },
   "derived": {
