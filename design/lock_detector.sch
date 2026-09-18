@@ -39,29 +39,15 @@ start the node already charged and mask the acquisition behaviour).
 VWIN is brought out as an observability pin for the characterisation
 testbench; it is not part of the block's functional interface.
 
-LDT3 LDT0 -- the window's TRIM CODE, passed straight through to delaywin_3v3's
-T3..T0 (DR-014, issue #411). A fixed, test-set process trim: the code is
-chosen once from a measurement of the part's own window and held for the life
-of the part, exactly as spec/pll.md's Icp trim-code rule works. It is NOT a
-calibration input and nothing on-chip writes it -- DR-002 Decision 4's "passive
-monitor, no band-search or calibration FSM" boundary is unchanged. Code is
-active high and monotonic (8*LDT3 + 4*LDT2 + 2*LDT1 + LDT0; larger code = wider
-window); see design/delaywin_3v3.sch for how a segment is switched and
-sim/lock-window-trim for the measured per-bundle code table.
-
 t_win, the assert/deassert thresholds and the assert delay are all
 PVT-dependent and are characterised over the full 45-point grid in
 sim/lock-detector.} -900 -900 0 0 0.4 0.4 {}
 C {ipin.sym} -900 0 0 0 {name=p1 lab=UP}
 C {ipin.sym} -900 100 0 0 {name=p2 lab=DN}
-C {ipin.sym} -900 200 0 0 {name=p3 lab=LDT0}
-C {ipin.sym} -900 300 0 0 {name=p4 lab=LDT1}
-C {ipin.sym} -900 400 0 0 {name=p5 lab=LDT2}
-C {ipin.sym} -900 500 0 0 {name=p6 lab=LDT3}
-C {opin.sym} 2200 0 0 0 {name=p7 lab=LOCK}
-C {opin.sym} 2200 100 0 0 {name=p8 lab=VWIN}
-C {iopin.sym} -900 600 0 0 {name=p9 lab=VDD}
-C {iopin.sym} -900 700 0 0 {name=p10 lab=VSS}
+C {opin.sym} 2200 0 0 0 {name=p3 lab=LOCK}
+C {opin.sym} 2200 100 0 0 {name=p4 lab=VWIN}
+C {iopin.sym} -900 200 0 0 {name=p5 lab=VDD}
+C {iopin.sym} -900 300 0 0 {name=p6 lab=VSS}
 C {xor2_3v3.sym} 0 0 0 0 {name=XERR}
 C {lab_pin.sym} -40 -20 0 0 {name=la1 lab=UP}
 C {lab_pin.sym} -40 20 0 0 {name=la2 lab=DN}
@@ -71,12 +57,8 @@ C {lab_pin.sym} 0 40 0 0 {name=la5 lab=VSS}
 C {delaywin_3v3.sym} 400 0 0 0 {name=XDLY}
 C {lab_pin.sym} 360 0 0 0 {name=lb1 lab=ERR}
 C {lab_pin.sym} 440 0 0 0 {name=lb2 lab=ERRD}
-C {lab_pin.sym} 400 -80 0 0 {name=lb3 lab=VDD}
-C {lab_pin.sym} 400 80 0 0 {name=lb4 lab=VSS}
-C {lab_pin.sym} 360 20 0 0 {name=lb5 lab=LDT0}
-C {lab_pin.sym} 360 40 0 0 {name=lb6 lab=LDT1}
-C {lab_pin.sym} 360 60 0 0 {name=lb7 lab=LDT2}
-C {lab_pin.sym} 360 -40 0 0 {name=lb8 lab=LDT3}
+C {lab_pin.sym} 400 -40 0 0 {name=lb3 lab=VDD}
+C {lab_pin.sym} 400 40 0 0 {name=lb4 lab=VSS}
 C {nand2_3v3.sym} 800 0 0 0 {name=XNW}
 C {lab_pin.sym} 760 -20 0 0 {name=lc1 lab=ERR}
 C {lab_pin.sym} 760 20 0 0 {name=lc2 lab=ERRD}

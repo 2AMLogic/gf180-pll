@@ -175,7 +175,3 @@ C {lab_pin.sym} 370 860 0 0 {name=l_XLD_LOCK lab=LOCK}
 C {lab_pin.sym} 370 900 0 0 {name=l_XLD_VWIN lab=VWIN}
 C {lab_pin.sym} 300 830 0 0 {name=l_XLD_VDD lab=VDD}
 C {lab_pin.sym} 300 970 0 0 {name=l_XLD_VSS lab=VSS}
-C {lab_pin.sym} 230 920 0 0 {name=l_XLD_LDT0 lab=VSS}
-C {lab_pin.sym} 230 940 0 0 {name=l_XLD_LDT1 lab=VSS}
-C {lab_pin.sym} 230 960 0 0 {name=l_XLD_LDT2 lab=VSS}
-C {lab_pin.sym} 230 880 0 0 {name=l_XLD_LDT3 lab=VDD}

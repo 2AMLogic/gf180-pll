@@ -1,27 +1,5 @@
 * gf180-pll :: lock-window-sizing :: delaywin_3v3 window-sizing ladder (#387)
 *
-* SUPERSEDED FOR NEW RUNS by sim/lock-window-trim (#411).  This campaign
-* characterised the UNTRIMMED delaywin_3v3 -- a cell that no longer exists:
-* #411 replaced its four fixed MOS-cap loads with a base cap plus a switched,
-* binary-weighted segment array carrying a fixed test-set trim code (DR-014).
-* The committed record this deck minted, records/20260915-202802-79c0cee.md, is
-* append-only evidence about the pre-#411 cell and stands unchanged; the deck
-* is kept runnable, and only runnable, so that record's provenance is not left
-* pointing at a fragment that no longer composes.
-*
-* TWO CONSEQUENCES of that replacement, both visible below rather than left
-* implicit:
-*   - XCTL is no longer the same circuit as the XVAR replica at any sizing, so
-*     the repl_err_pct identity check this campaign used to carry has been
-*     withdrawn from the manifest.  It asserted that a W = 8 um single-load
-*     replica reproduces the drawn cell; the drawn cell is now a trimmed array
-*     and the claim is simply false, so it is removed rather than relaxed.
-*   - XCTL's trim code is driven to 0 (every segment disabled), the narrowest
-*     window the trimmed cell can be set to.  That is the nearest thing the new
-*     cell has to "the load as drawn" and is NOT equal to the old W = 9.5 um
-*     load; ctl_r from a re-run is therefore not comparable to the committed
-*     record's ctl_r, and must not be quoted as if it were.
-*
 * ONE question, asked of the lock detector's window and nothing else: if
 * design/delaywin_3v3.sch's four MOS-capacitor loads are scaled, where does
 * the comparator window t_win land over the full 45-point PVT grid, and is
@@ -45,13 +23,10 @@
 * TWO copies share every transient:
 *
 *   XCTL  the COMMITTED delaywin_3v3 subcircuit, verbatim from
-*         design/netlist/lock_detector.spice.  In the record this deck minted
-*         it was the control: its delay reproduced 20260802-050119-c24ee3a's
-*         own twin_r/twin_f at the matching corner, which is what tied that
-*         record's baseline to the already-committed characterisation rather
-*         than asserting agreement.  Since #411 the committed cell is the
-*         TRIMMED one, so that tie no longer holds -- see the supersession
-*         note at the top of this file.
+*         design/netlist/lock_detector.spice.  It is the control: its delay
+*         must reproduce 20260802-050119-c24ee3a's own twin_r/twin_f at the
+*         matching corner, which is what ties this record's baseline to the
+*         already-committed characterisation rather than asserting agreement.
 *
 *   XVAR  a PARAMETERISED structural replica of the same chain -- four
 *         inv_3v3 stages, each loaded by one nfet_03v3 wired drain = source =
@@ -91,22 +66,13 @@
 
 vdd vdd 0 dc 'vdd_val'
 
-* ---- XCTL's trim code, held at 0 ------------------------------------------
-* Every switched segment disabled: the narrowest window the post-#411 cell can
-* be set to.  Written out rather than parameterised because this deck does not
-* sweep the code axis -- sim/lock-window-trim does.
-vctl0 ctlt0 0 dc 0
-vctl1 ctlt1 0 dc 0
-vctl2 ctlt2 0 dc 0
-vctl3 ctlt3 0 dc 0
-
 * ---- the shared ideal step ------------------------------------------------
 * One rising edge at ttd and one falling edge at ttd + twide, so a single
 * transient yields both twin_r and twin_f.
 vstep step 0 pulse(0 'vdd_val' 'ttd' 'ttr' 'ttr' 'twide' '1000*ktstop')
 
 * ---- XCTL: the committed cell, as drawn -----------------------------------
-xctl step octl ctlt0 ctlt1 ctlt2 ctlt3 vdd 0 delaywin_3v3
+xctl step octl vdd 0 delaywin_3v3
 
 * ---- XVAR: structural replica with W = kwc --------------------------------
 xv1 step   v1 vdd 0 inv_3v3
