@@ -761,13 +761,43 @@ simenv_meas() {
 # that finding -- see `simenv_recommend_omp_threads`/`simenv_apply_omp_pin`
 # below for the (opt-in, per-campaign) fix, and why the fix is NOT to make
 # this function threading-aware itself.
+#
+# NOTE (#422): keeping that intent actually requires an extra step, because
+# GNU coreutils' `nproc` is itself OpenMP-aware -- it reports
+# `min(available processors, OMP_NUM_THREADS, OMP_THREAD_LIMIT)`:
+#
+#   $ nproc                     -> 8
+#   $ OMP_NUM_THREADS=1 nproc   -> 1
+#   $ OMP_THREAD_LIMIT=1 nproc  -> 1
+#
+# So a campaign that calls `simenv_apply_omp_pin` before fanning out (the
+# documented order, "typically right after simenv_require_tools") used to
+# get `xargs -P 1` from every later `$(simenv_jobs)` -- the pin leaked into
+# the core count and silently serialized the whole sweep. Observed live on
+# sim/supply-sensitivity (8-core host, one ngspice alive at a time; ~16 h
+# serialized vs ~3 h fanned out for a six-point run).
+#
+# The probe therefore runs with just those two variables removed from its
+# environment. `env -u` is scoped to the `nproc` child only: the caller's
+# exported OMP_NUM_THREADS/OMP_THREAD_LIMIT are untouched, so the pin keeps
+# applying to ngspice exactly as before. Note this deliberately does NOT use
+# `nproc --all`, which would also discard the CPU-affinity/cgroup awareness
+# plain `nproc` has (and which a container or a taskset-confined run needs).
 simenv_jobs() {
+  local cores=""
   if [ -n "${SIM_JOBS:-}" ]; then
     echo "${SIM_JOBS}"
   elif command -v sysctl >/dev/null 2>&1 && sysctl -n hw.ncpu >/dev/null 2>&1; then
     sysctl -n hw.ncpu
   elif command -v nproc >/dev/null 2>&1; then
-    nproc
+    # Fall back to a bare `nproc` only if the unset-and-probe form itself
+    # fails (an `env` without `-u`), so this can never return nothing.
+    cores="$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc 2>/dev/null)"
+    if [ -n "${cores}" ]; then
+      echo "${cores}"
+    else
+      nproc
+    fi
   else
     echo 4
   fi
