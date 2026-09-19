@@ -115,7 +115,27 @@ class NetlistCrossCheckTests(unittest.TestCase):
         self.assertIn("XMCW VSS VWIN VSS VSS nfet_03v3 L=6u W=30u", self.netlist)
 
     def test_top_level_lock_detector_subckt_present(self):
-        self.assertIn(".subckt lock_detector UP DN LOCK VWIN VDD VSS", self.netlist)
+        # LDT3:LDT0 is the window's 4-bit static process trim (DR-014, #411) --
+        # a block-interface change, so the port list is asserted in full rather
+        # than as a prefix: a trim bit silently dropped from the export would
+        # otherwise become an internal node and the window would stop being
+        # programmable without anything failing.
+        self.assertIn(
+            ".subckt lock_detector UP DN LOCK VWIN LDT0 LDT1 LDT2 LDT3 VDD VSS",
+            self.netlist,
+        )
+
+    def test_delaywin_instance_carries_the_trim_code(self):
+        # The trim only reaches the delay cell if lock_detector wires its own
+        # LDT* pins through to XDLY; an unwired trim would leave delaywin_3v3's
+        # T* pins floating inside the block and simulate anyway.
+        self.assertIn(
+            "XDLY ERR ERRD LDT0 LDT1 LDT2 LDT3 VDD VSS delaywin_3v3",
+            self.netlist,
+        )
+
+    def test_delaywin_subckt_carries_the_trim_code(self):
+        self.assertIn(".subckt delaywin_3v3 A Y T0 T1 T2 T3 VDD VSS", self.netlist)
 
 
 class NarrowDeviceDogboneTests(unittest.TestCase):
