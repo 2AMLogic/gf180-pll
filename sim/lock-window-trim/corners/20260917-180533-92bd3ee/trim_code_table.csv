@@ -1,0 +1,23 @@
+# the trim rule applied: per corner bundle, the selected code and what the window then does over that bundle's PVT points, against the ratified band [1, 2] ns and DR-013 Decision 4's <= 1.65x spread target
+# The rule: measure t_win at the reference condition and program the code nearest 1.343 ns in the log sense. Nothing on-chip performs this measurement (DR-014 Decision 2).
+# code_headroom_lo/hi is how many codes remain below/above the selected one. A bundle at 0/N or N/0 has no room left to correct a part beyond that corner, which is a range finding, not a pass.
+# GRID is the spread over this 13-bundle grid with each bundle at its own selected code -- the literal reading of DR-013 Decision 4's target.
+# CONTINUOUS is the pessimistic reading, and the one to quote: a real population is continuous, the rule rounds to the nearest code, so up to one trim step of correction is left unapplied on top of the worst within-bundle spread. Its spread column is worst_within_bundle_spread x worst_step; the last column carries that worst step.
+# UNTRIMMED is the same grid with every bundle at the nominal code c4 -- the no-trim counterfactual, so the trim's effect is a measured delta rather than a claim.
+bundle,code,bits_T2T1T0,twin_at_ref_ns,twin_min_ns,twin_max_ns,spread,margin_to_lo_pct,margin_to_hi_pct,verdict,code_headroom_lo/hi
+all-fast,c6,110,1.339,1.136,1.657,1.459,13.59,17.13,in-band,6/1
+all-slow,c1,001,1.327,1.102,1.683,1.527,10.21,15.86,in-band,1/6
+ff,c6,110,1.339,1.136,1.657,1.459,13.59,17.13,in-band,6/1
+fs,c3,011,1.316,1.1,1.657,1.505,10.05,17.17,in-band,3/4
+mimcap_ff,c4,100,1.357,1.138,1.701,1.494,13.85,14.93,in-band,4/3
+mimcap_ss,c4,100,1.357,1.138,1.701,1.494,13.85,14.93,in-band,4/3
+moscap_ff,c4,100,1.357,1.138,1.701,1.494,13.85,14.93,in-band,4/3
+moscap_ss,c4,100,1.357,1.138,1.701,1.494,13.85,14.93,in-band,4/3
+res_ff,c4,100,1.357,1.138,1.701,1.494,13.85,14.93,in-band,4/3
+res_ss,c4,100,1.357,1.138,1.701,1.494,13.85,14.93,in-band,4/3
+sf,c4,100,1.35,1.137,1.687,1.484,13.67,15.65,in-band,4/3
+ss,c1,001,1.327,1.102,1.683,1.527,10.21,15.86,in-band,1/6
+typical,c4,100,1.357,1.138,1.701,1.494,13.85,14.93,in-band,4/3
+GRID,,,,1.1,1.701,1.546,10.05,14.93,meets-1.65x,
+CONTINUOUS,,,,,,1.631,,,meets-1.65x,1.068
+UNTRIMMED,,,,1.023,1.979,1.936,2.256,1.027,every bundle at c4,

@@ -119,6 +119,11 @@ KFREF=9e6
 KN=8
 KBAND=5
 KTRIM=2
+# Lock-detector window trim code (DR-014, #411).  The CENTRE code of the
+# 4-bit array -- this campaign is not about the lock window, so it runs the
+# cell at the middle of its range rather than at a per-corner trimmed code.
+# sim/lock-window-trim owns which code a real part would carry.
+KWINTRIM=${CLOOP_WINDOW_TRIM_NOMINAL:-8}
 
 # KVSTART The control node is released at 1.20 V, where band 5 runs at
 #         60.7 MHz -- 16 % below the 72 MHz target, so the loop has a real
@@ -292,6 +297,8 @@ PARAMS=(
 PARAMS+=( $(cloop_band_params "${KBAND}") )
 # shellcheck disable=SC2207
 PARAMS+=( $(cloop_trim_params "${KTRIM}") )
+# shellcheck disable=SC2207
+PARAMS+=( $(cloop_window_trim_params "${KWINTRIM}") )
 # shellcheck disable=SC2207
 PARAMS+=( $(cloop_divider_params "${KN}") )
 

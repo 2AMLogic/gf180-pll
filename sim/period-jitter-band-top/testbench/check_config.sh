@@ -38,6 +38,10 @@ TB="${HERE}/tb.json"
 # this check cannot drift from it.
 N="$(python3 -c 'import json,sys; print(int(float(json.load(open(sys.argv[1]))["params"]["nratio"])))' "${TB}")"
 TRIM=0
+# The lock detector's 4-bit window trim (DR-014, #411): the CENTRE code.
+# This campaign is not about the lock window, so it runs the cell at the
+# middle of its range; sim/lock-window-trim owns the per-part code.
+WINTRIM=${CLOOP_WINDOW_TRIM_NOMINAL:-8}
 
 fail=0
 
@@ -46,6 +50,8 @@ echo "divider (cloop_divider_params ${N}):"
 cloop_check_codes "${TB}" "$(cloop_divider_params "${N}")"
 echo "Icp trim (cloop_trim_params ${TRIM}):"
 cloop_check_codes "${TB}" "$(cloop_trim_params "${TRIM}")"
+echo "window trim (cloop_window_trim_params ${WINTRIM}):"
+cloop_check_codes "${TB}" "$(cloop_window_trim_params "${WINTRIM}")"
 
 # No fixed band bits may sit in `params`: they would be emitted BEFORE the
 # axis point's own and so would not change the deck, but the manifest would

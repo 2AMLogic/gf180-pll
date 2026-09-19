@@ -25,7 +25,7 @@ ROOT="$(cd "${EXP}/../.." && pwd)"
 # Re-read the constants run.sh declared, by sourcing its assignment block.  The
 # alternative -- restating them here -- is how the record's stated criterion and
 # the criterion actually applied drift apart.
-eval "$(sed -n '/^KFOUT=/,/^ACC_FDEV_PPM=/p;/^CITE_/p;/^VCO_TUNING=/p;/^PASSIVES=/p' "${HERE}/run.sh")"
+eval "$(sed -n '/^KFOUT=/,/^ACC_FDEV_PPM=/p;/^CITE_/p;/^VCO_TUNING=/p;/^PASSIVES=/p;/^window_trim_code_of()/,/^}$/p' "${HERE}/run.sh")"
 
 # The END-plateau escalation's instants are declared by run.sh as OFFSETS from
 # t_rend (KD_DEND_TA/_TB/_TSTOP), not as absolute times, because they compose
@@ -1504,6 +1504,16 @@ SUBSET
       ${KTRIM} of 4, VCO band code **chosen per (bundle, temperature)** --
       see Methodology; it is a static input and cannot be re-chosen when the
       supply moves.
+    - Lock-detector window trim code \`LDT3:LDT0\`: $(
+      if [ "${KWINTRIM}" = "rule" ]; then printf '**per bundle, from `spec/pll.md`'"'"'s
+      normative Lock-detector window trim-code rule** -- %s. Like the band
+      code it is a static process input, chosen once from a measurement at
+      27 C / 3.30 V and unchanged when the supply moves, so the `lock` column
+      below is the flag a REAL part of that bundle would show rather than the
+      flag at an arbitrary code.' "$(for b in ${GRID_BUNDLES_RUN}; do printf '`%s` -> %s; ' "${b}" "$(window_trim_code_of "${b}")"; done)"
+      else printf '**forced to %s at every corner** (`SIM_WINTRIM`), not the
+      per-bundle code the trim rule selects -- so the `lock` column below is
+      NOT the flag a real part of these bundles would show.' "${KWINTRIM}"; fi)
   - **Settling re-run (criterion 1c): ${N_RERUN} corner(s)** of the ${N_STEADY}
     above re-simulated at ${KTSTOP_X} instead of ${KTSTOP_BASE}, selected by
     the runner from the measured residual frequency error rather than by hand;
