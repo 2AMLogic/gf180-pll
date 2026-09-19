@@ -68,6 +68,18 @@ design/
 ./design/netlist.sh --check-paths          # assert the symbol path is unshadowed
 ```
 
+**Every committed export under `design/netlist/` was generated with xschem
+3.4.7** (stamped into each file's provenance banner). CI's `pdk-checks` job
+pins its xschem build to that exact version (a commit hash, not just the
+`3.4.7` tag — see `.github/workflows/ci.yml`), the same way it pins the
+gf180mcu PDK to an open_pdks hash: an unpinned `apt-get install xschem`
+tracks whatever the distro ships (3.4.4 on the runner's Ubuntu as of
+2026-09), which differs from 3.4.7 in both the provenance banner text and
+where it wraps long `.subckt`/device continuation lines — enough to make
+every export `STALE` under `--check` with no real connectivity change (#421).
+A local `--check` run needs a matching xschem to avoid the same false
+positive.
+
 The blocks captured here ship their exports under **two conventions**, and the
 convention is a property of the block, not of the script:
 

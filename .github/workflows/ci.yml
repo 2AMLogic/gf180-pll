@@ -151,6 +151,14 @@ jobs:
        (github.event_name == 'pull_request' &&
         (needs.design-changed.outputs.design != 'false' ||
          contains(github.event.pull_request.labels.*.name, 'ci:full'))))
+    env:
+      # #421: pin xschem to the commit the `3.4.7` tag points at -- every
+      # committed design/netlist/*.spice export was generated with 3.4.7, and
+      # apt's xschem package drifts with the distro (3.4.4 on ubuntu-latest/
+      # noble as of 2026-09). A commit, unlike a tag, cannot move; verify at
+      # https://github.com/StefanSchippers/xschem/releases/tag/3.4.7 before
+      # bumping.
+      XSCHEM_COMMIT: 92dd8fe5f4d5c1057489710d8a22f18fdc9d7ed0
     steps:
       - uses: actions/checkout@v4
 
@@ -158,10 +166,65 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Install ngspice and xschem
+      - name: Install ngspice and xschem's runtime/build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ngspice xschem
+          # ngspice: unpinned, apt's version tracks whatever this runner's
+          # Ubuntu ships. xschem is deliberately NOT installed from apt here
+          # (see the pinned build below) -- apt's xschem tracks the distro
+          # package too, which is exactly the drift #421 is about.
+          sudo apt-get install -y ngspice \
+            flex bison gawk tcl tcl-dev tk tk-dev \
+            libcairo2 libcairo2-dev xcb libxcb1 libxcb1-dev libxrender-dev \
+            libxpm-dev libxcb-render0-dev libx11-xcb1 libx11-xcb-dev
+
+      - name: Cache xschem 3.4.7 build
+        id: cache-xschem
+        uses: actions/cache@v4
+        with:
+          path: /tmp/xschem-src
+          key: xschem-${{ env.XSCHEM_COMMIT }}-${{ runner.os }}-v1
+
+      - name: Build xschem 3.4.7 from source (pinned)
+        # #421: the runner's `apt-get install -y xschem` resolves to whatever
+        # Ubuntu ships (3.4.4 on noble as of 2026-09), while every committed
+        # design/netlist/*.spice export was generated with 3.4.7 -- a version
+        # mismatch this script's provenance banner and continuation-line
+        # wrapping both surface as false STALE / leaf-cell-collision failures
+        # (see design/netlist.sh's XSCHEM_VERSION stamp and check_export's
+        # wrapped-port-list guard). Pinned to the exact commit the `3.4.7` tag
+        # points at (not just the tag name) for the same reason the PDK below
+        # is pinned to a hash rather than a branch: a tag can move, a commit
+        # cannot. Build steps mirror xschem's own CI:
+        # https://github.com/StefanSchippers/xschem/blob/3.4.7/.github/workflows/ci.yaml
+        if: steps.cache-xschem.outputs.cache-hit != 'true'
+        run: |
+          rm -rf /tmp/xschem-src
+          mkdir -p /tmp/xschem-src
+          cd /tmp/xschem-src
+          git init -q
+          git remote add origin https://github.com/StefanSchippers/xschem.git
+          git fetch --depth 1 origin "${XSCHEM_COMMIT}"
+          git checkout -q FETCH_HEAD
+          ./configure
+          make -j"$(nproc)"
+
+      - name: Install xschem 3.4.7
+        run: sudo make -C /tmp/xschem-src install
+
+      - name: Confirm the pinned xschem version is on PATH
+        # Cheap guard against the exact failure mode #421 filed: if apt's
+        # xschem (or any other build) shadows the pinned one on PATH, fail
+        # loudly here instead of producing a confusing STALE/collision
+        # failure three steps later.
+        run: |
+          version="$(xschem --no_x -q --version 2>/dev/null | head -1)"
+          echo "xschem on PATH: $(command -v xschem) ($version)"
+          case "$version" in
+            *3.4.7*) ;;
+            *) echo "ERROR: expected xschem 3.4.7 (pinned commit ${XSCHEM_COMMIT}), got: $version" >&2
+               exit 1 ;;
+          esac
 
       - name: Install the gf180mcu PDK via volare
         run: |
