@@ -12,9 +12,14 @@ name: CI
 #   pdk-checks   -- requires the gf180mcu PDK (via volare) and xschem on
 #                   PATH. These catch netlist drift against the committed
 #                   schematics, which only matters when design/ changes and
-#                   is not worth an install step on every PR. Gated to a
-#                   nightly schedule, manual dispatch, or an explicit
-#                   `ci:full` opt-in label on a PR.
+#                   is not worth an install step on every PR. So it runs on
+#                   the nightly schedule, on manual dispatch, and on any PR
+#                   that touches design/ -- the latter detected by the
+#                   design-changed job below, because GitHub Actions has no
+#                   per-job `paths:` filter. The `ci:full` label (declared in
+#                   .github/labels.yml) forces it on for a PR that leaves
+#                   design/ alone, e.g. one editing design/netlist.sh's
+#                   callers, this workflow, or the PDK pin.
 #
 # Self-checks intentionally NOT wired here:
 #   - sim/run-all.sh, sim/lib/simenv.sh, and the per-campaign
@@ -91,14 +96,61 @@ jobs:
         # going stale. Pure file-count vs. grep, no PDK dependency.
         run: bash sim/lib/check-characterization-coverage.sh
 
-  pdk-checks:
-    name: pdk-checks (nightly / ci:full -- requires gf180mcu PDK + xschem)
+  design-changed:
+    name: design-changed (path filter for pdk-checks)
     runs-on: ubuntu-latest
+    # Per-job path filter for pdk-checks below. GitHub Actions has no per-job
+    # `paths:` key, and a workflow-level `paths:` on the pull_request trigger
+    # would gate the headless `checks` job too -- so ask the API which files
+    # the PR touches. No checkout, no PDK, a couple of seconds.
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      design: ${{ steps.filter.outputs.design }}
+    steps:
+      - name: Does this PR touch design/?
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_FILES_API: repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files
+        run: |
+          set -uo pipefail
+          # Fail open: if the file list can't be read, report design=true so
+          # pdk-checks still runs. A missed netlist-drift check is the failure
+          # this job exists to prevent; a redundant PDK install is only slow.
+          if ! files="$(gh api --paginate "$PR_FILES_API" --jq '.[].filename')"; then
+            echo "Could not list the PR's changed files -- failing open (design=true)." >&2
+            echo "design=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Changed files:"
+          printf '%s\n' "$files"
+          if printf '%s\n' "$files" | grep -q '^design/'; then
+            echo "design=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "design=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  pdk-checks:
+    name: pdk-checks (design/ PRs, nightly, ci:full -- requires gf180mcu PDK + xschem)
+    runs-on: ubuntu-latest
+    needs: [design-changed]
+    # `!cancelled()` is load-bearing: design-changed is skipped on schedule /
+    # workflow_dispatch runs, and a skipped `needs` job cascades a skip here
+    # unless the condition uses a status-check function.
+    #
+    # The PR arm reads `!= 'false'` rather than `== 'true'` so that a
+    # design-changed job which failed outright (empty output) also falls open
+    # to running these checks, matching the fail-open behaviour of its script.
     if: >-
-      github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'ci:full'))
+      !cancelled() &&
+      (github.event_name == 'schedule' ||
+       github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'pull_request' &&
+        (needs.design-changed.outputs.design != 'false' ||
+         contains(github.event.pull_request.labels.*.name, 'ci:full'))))
     steps:
       - uses: actions/checkout@v4
 
