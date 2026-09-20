@@ -1213,6 +1213,14 @@ def route_all_nets(
 # ``pitch`` default (0.75 um) already equals this module's own
 # ``METAL2_TRACK_PITCH_UM``, so every existing ``NetTracks(base_y)`` call
 # site here is unchanged.
+#
+# That default is a bare literal, not a reference to the constant the way the
+# pre-#429 per-module copy's was, so raising this module's
+# ``METAL2_TRACK_PITCH_UM`` alone no longer propagates here -- it would leave
+# ``NetTracks`` handing out 0.75 um tracks into geometry that assumes the
+# larger pitch, i.e. a Metal2 spacing violation rather than a cosmetic
+# mismatch. ``layout/tests/test_canvas_nettracks.py`` asserts the equality on
+# every test run so that edit fails loudly instead (issue #432).
 NetTracks = _canvas.NetTracks
 
 
