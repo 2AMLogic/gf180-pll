@@ -1,0 +1,29 @@
+# campaign: supply-sensitivity
+# record_id: 20260920-180604-0f91a9b
+# generated_utc: 2026-09-20T18:06:04Z
+# pdk_variant: gf180mcuD
+# pdk_open_pdks_hash: c6d73a35f524070e85faff4a6a9eef49553ebc2b
+# pdk_root: /Users/rwalters/.volare/gf180mcuD
+# model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
+# switches: design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0 -> nominal skew, no Monte Carlo)
+# simulator: ngspice-46
+# netlist: design/pll_top.sch -> sim/supply-sensitivity/netlist-snapshots/20260920-180604-0f91a9b.spice
+# corners: process{typical,ff,ss,fs,sf} x temp{-40,27,125}C x vdd{2.97,3.30,3.63}V = 45 points at f_out=100e6 Hz, plus 9 points at f_out=50e6 Hz (typical bundle) for the quiescent/dynamic power split
+# dut: design/pll_top.sch (#52) -- pfd_cp (#9, post-#24 cp_dumpbuf) +
+#   loop_filter (#10) + vco (#8) + divider_chain + lock_detector (#11)
+# band/vctrl0: derived from #8's committed f(Vctrl) table,
+#   sim/vco-tuning-range/corners/20260731-175947-0a12e6c/vco_tuning.csv
+# fdev_ppm: (f_out - f_out at 3.30 V, same bundle/temp) / f_out(3.30 V), ppm
+# phi_b_s: static REF->FB phase error in the late window, seconds
+# skew_s: mean UP/DN pulse-WIDTH difference over 3 probes, seconds
+# p_tot_w: vdd * (|i_core| + |i_vco| + |i_div|)
+# tstop/tmax: the transient length and internal-timestep ceiling THIS
+#   row was run at -- per row, not per grid: see the settling escalation
+#   and the timestep-ceiling cross-check in run.sh
+bundle,temp_c,vdd_v,band,fout_hz,fdev_ppm,ferr,phi_b_s,skew_s,skew_spread_s,wup_s,wdn_s,nmeas,vctrl_avg_v,vctrl_min_v,vctrl_max_v,lock_lvl_v,i_core_a,i_vco_a,i_div_a,p_tot_w,verdict,tstop,tmax
+ff,27,2.97,6,1.00001e+08,0,5.222e-06,1.0267e-09,1.01462e-09,5.37e-12,2.65532e-09,1.63842e-09,7.99995,1.011,1.007,1.014,2.97,-8.30293e-05,-0.000189152,-0.000112075,0.00114124,FAIL:phi,36.8u,100p
+ff,27,3.30,6,1.00001e+08,0,-7.681e-06,1.01653e-09,1.00352e-09,5.8e-13,2.50756e-09,1.50428e-09,8.00014,1.215,1.211,1.218,3.3,-8.75281e-05,-0.000223594,-0.000128051,0.00144927,FAIL:phi,36.8u,100p
+ff,27,3.63,6,1.00003e+08,20,4.275e-06,1.23314e-09,1.21836e-09,1.13e-12,2.61985e-09,1.40199e-09,8.00018,1.396,1.391,1.4,6.949e-09,-9.71402e-05,-0.000258864,-0.000144589,0.00181715,FAIL:phi,12.0u,100p
+typical,-40,2.97,6,9.99998e+07,-12,5.546e-06,6.90129e-10,6.83626e-10,5.911e-12,2.37972e-09,1.69778e-09,7.99991,0.9887,0.9841,0.9906,2.97,-8.02437e-05,-0.00015824,-0.000104737,0.00101937,PASS,36.8u,100p
+typical,-40,3.30,6,1.00001e+08,0,2.395e-05,9.18308e-10,9.03902e-10,1.351e-11,2.4685e-09,1.55979e-09,7.99987,1.248,1.244,1.251,3.3,-8.63935e-05,-0.000191347,-0.000120117,0.00131293,PASS,12.0u,100p
+typical,-40,3.63,6,9.99995e+07,-15,3.032e-06,8.13503e-10,8.05578e-10,5.334e-12,2.23307e-09,1.43099e-09,7.99997,1.476,1.471,1.479,3.63,-9.04247e-05,-0.000225894,-0.000136091,0.00164225,PASS,36.8u,100p

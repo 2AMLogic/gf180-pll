@@ -1,0 +1,36 @@
+# campaign: supply-sensitivity (DR-013 window-vs-offset crossing)
+# record_id: 20260920-180604-0f91a9b
+# generated_utc: 2026-09-20T18:06:04Z
+# pdk_variant: gf180mcuD
+# pdk_open_pdks_hash: c6d73a35f524070e85faff4a6a9eef49553ebc2b
+# pdk_root: /Users/rwalters/.volare/gf180mcuD
+# model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
+# switches: design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0 -> nominal skew, no Monte Carlo)
+# simulator: ngspice-46
+# netlist: design/pll_top.sch -> sim/supply-sensitivity/netlist-snapshots/20260920-180604-0f91a9b.spice
+# corners: the cells named by XING_PICKS in run.sh, from this record's own steady-state rows
+# question: DR-013 Consequences -- 'this crossing is inferred across two
+#   campaigns, not measured in one loop'.  Every column left of
+#   twin_r_ns comes out of ONE closed-loop transient per row.
+# trim_code: the LDT3:LDT0 code this row's loop actually ran at
+# phi_b_ns: THIS run's settled REF->FB static phase offset (signed); the
+#   detector window bounds its MAGNITUDE, so |phi_b_ns| is what is compared
+# dphi_win_ns: how far that phase moved across the run's own late window
+#   (|ferr| * (tb - ta)) -- the settledness of the number left of it
+# lock_lvl_v / lock_asserted: the block's own flag in the same late window,
+#   asserted = lock_lvl_v >= 0.90 * vdd (run.sh's ACC_LOCK_FRAC)
+# in_loop_window_vs_offset: what the flag itself says about the comparison
+#   -- 'above' if it asserted while standing off |phi_b_ns|, 'at-or-below'
+#   if it did not.  This is the measurement; it is a bound, not a value.
+# twin_r_ns/twin_f_ns: CORROBORATION ONLY -- t_win at this bundle/temp/vdd
+#   and this trim code from sim/lock-detector/corners/20260919-002812-1b12179,
+#   a DIFFERENT campaign at a DIFFERENT f_ref (25 MHz vs this deck's
+#   12.5e6 Hz).  The observable window is never SMALLER than t_win
+#   (that record's own finding), so t_win > |phi_b_ns| predicts 'above'.
+# dr013_*: what DR-013 inferred for this cell at the UNTRIMMED W = 9.5 um
+#   cell, transcribed from that record so the verdict is a comparison
+# verdict: confirmed | refuted | moved -- derived from dr013_crossed and
+#   lock_asserted, never typed
+bundle,temp_c,vdd_v,trim_code,phi_b_ns,dphi_win_ns,lock_lvl_v,lock_asserted,in_loop_window_vs_offset,twin_r_ns,twin_f_ns,dr013_crossed,dr013_window_ns,dr013_offset_ns,verdict
+typical,-40,3.63,7,0.8135,0.009702,3.63,yes,above,1.14339,1.12565,crossed,1.140,1.049,confirmed
+ff,27,3.63,11,1.233,0.01368,6.949e-09,no,at-or-below,1.31028,1.2888,not-crossed,1.155,1.227,confirmed
