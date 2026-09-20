@@ -81,6 +81,16 @@ and deliberately stay local, each documented at its own definition:
 ``_via_square()``, ``_contact_positions()`` and ``bbox_union()`` are still
 shared by all of them, including the two modules above.
 
+``NetTracks`` (issue #429) joins the same convention: ``divider_chain/devgen.py``,
+``pfd_cp/cp_array.py``, ``pfd_cp/cp_dumpbuf.py``, and
+``lock_detector/primitives.py`` each independently defined a byte-for-byte
+identical Metal2 track-Y allocator class -- two of the four docstrings already
+cross-referenced each other as "whose behaviour is identical". Its ``pitch``
+default, ``0.75`` um, is what every one of those four modules' own
+``METAL2_TRACK_PITCH_UM`` already independently evaluates to (``pfd_cp/rowgen.py``
+separately defines an unrelated ``0.8`` for a different helper, not a fifth
+value for this one).
+
 ``Conductor``, ``Via``, ``VIA_LAYERS``, ``_TOUCH_EPS``, ``_boxes_touch()``,
 ``_contains()``, ``shorted_pairs()`` and ``disconnected_nets()`` (issue #364)
 join the same convention: ``lock_detector/checks.py`` (issue #322) and
@@ -345,6 +355,28 @@ def v_wire(canvas: Canvas, x: float, y0: float, y1: float, width: float) -> tupl
     x0, x1 = x - width / 2.0, x + width / 2.0
     canvas.rect("metal1", x0, y0, x1, y1)
     return (x0, min(y0, y1), x1, max(y0, y1))
+
+
+class NetTracks:
+    """Hands out a fresh, never-reused Metal2 track_y per net name.
+
+    Because every track is unique (monotonically increasing by ``pitch``),
+    two nets' buses can never be closer than the pitch on the Y axis --
+    eliminating same-layer Metal2 collisions between different nets by
+    construction, independent of each net's Metal2 bus's X extent (see
+    ``route_net``/``_riser``'s docstrings).
+    """
+
+    def __init__(self, base_y: float, pitch: float = 0.75) -> None:
+        self._next_y = base_y
+        self._pitch = pitch
+        self._assigned: dict[str, float] = {}
+
+    def get(self, net: str) -> float:
+        if net not in self._assigned:
+            self._assigned[net] = self._next_y
+            self._next_y += self._pitch
+        return self._assigned[net]
 
 
 # ---------------------------------------------------------------------------

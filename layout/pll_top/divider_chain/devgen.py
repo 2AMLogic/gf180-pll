@@ -968,26 +968,12 @@ def route_spine(
         canvas.rect("metal2", x - half, y - half, x + half, y + half)
 
 
-class NetTracks:
-    """Hands out a fresh, never-reused Metal2 track_y per net name.
-
-    Because every track is unique (monotonically increasing by
-    :data:`METAL2_TRACK_PITCH_UM`), two nets' buses can never be closer than
-    the pitch on the Y axis -- eliminating same-layer Metal2 collisions
-    between different nets by construction, independent of each net's own
-    bus's x extent (see :func:`route_net`/:func:`_riser`'s docstrings).
-    """
-
-    def __init__(self, base_y: float, pitch: float = METAL2_TRACK_PITCH_UM) -> None:
-        self._next_y = base_y
-        self._pitch = pitch
-        self._assigned: dict[str, float] = {}
-
-    def get(self, net: str) -> float:
-        if net not in self._assigned:
-            self._assigned[net] = self._next_y
-            self._next_y += self._pitch
-        return self._assigned[net]
+# Fresh, never-reused Metal2 track_y per net name -- shared with every other
+# ``layout/pll_top/*`` submodule (issue #429, ``_canvas.NetTracks``). Its
+# ``pitch`` default (0.75 um) already equals this module's own
+# ``METAL2_TRACK_PITCH_UM``, so every existing ``NetTracks(base_y)`` call
+# site here is unchanged.
+NetTracks = _canvas.NetTracks
 
 
 # --- track *reuse* for a large, mostly-local net population (issue #341) ---
