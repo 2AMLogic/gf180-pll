@@ -248,6 +248,122 @@ STEADY="${CORNERSDIR}/supply_steady.csv"
 } >"${STEADY}"
 
 # ---------------------------------------------------------------------------
+# DR-013's window-vs-offset crossing, read out of ONE loop (#417).
+#
+# DR-013 §Consequences states the limitation this block exists to remove: the
+# comparison between the lock flag's window and the loop's settled static phase
+# offset "is inferred across two campaigns, not measured in one loop".  The two
+# halves came from different decks at different reference frequencies, and the
+# closed-loop half was taken at a DUT (the untrimmed W = 8 um cell) that the
+# design no longer carries.
+#
+# What one closed-loop transient can settle, and what it cannot:
+#
+#   CAN  -- whether the flag's window is above or below the offset the loop
+#           actually stands off, because `lock` asserting IS that comparison,
+#           evaluated by the detector, against that offset, in that run.  Both
+#           columns come out of the same ngspice log.
+#   CANNOT -- the window's VALUE in nanoseconds.  Nothing in this deck sweeps a
+#           phase error against the detector; the loop presents the one offset
+#           it happens to stand off.  So the magnitude stays a citation to
+#           `sim/lock-detector` (CITE_LD_RECORD), is labelled as one, and is
+#           never what the verdict rests on.
+#
+# The verdict word is therefore derived, per cell, from two booleans -- what
+# DR-013 inferred (CITE_DR013_XING) and what this run measured -- and not typed:
+#
+#   inferred crossed     + asserted      -> confirmed
+#   inferred crossed     + not asserted  -> REFUTED
+#   inferred not-crossed + asserted      -> MOVED (the window is now above it)
+#   inferred not-crossed + not asserted  -> confirmed (still below)
+# ---------------------------------------------------------------------------
+XING="${CORNERSDIR}/window_crossing.csv"
+LD_RAW="${ROOT}/sim/lock-detector/corners/${CITE_LD_RECORD}/raw_measures.csv"
+{
+  simenv_provenance "supply-sensitivity (DR-013 window-vs-offset crossing)" "${RID}" \
+    "design/pll_top.sch -> sim/supply-sensitivity/netlist-snapshots/${RID}.spice" \
+    "the cells named by XING_PICKS in run.sh, from this record's own steady-state rows"
+  echo "# question: DR-013 Consequences -- 'this crossing is inferred across two"
+  echo "#   campaigns, not measured in one loop'.  Every column left of"
+  echo "#   twin_r_ns comes out of ONE closed-loop transient per row."
+  echo "# trim_code: the LDT3:LDT0 code this row's loop actually ran at"
+  echo "# phi_b_ns: THIS run's settled REF->FB static phase offset (signed); the"
+  echo "#   detector window bounds its MAGNITUDE, so |phi_b_ns| is what is compared"
+  echo "# dphi_win_ns: how far that phase moved across the run's own late window"
+  echo "#   (|ferr| * (tb - ta)) -- the settledness of the number left of it"
+  echo "# lock_lvl_v / lock_asserted: the block's own flag in the same late window,"
+  echo "#   asserted = lock_lvl_v >= ${ACC_LOCK_FRAC} * vdd (run.sh's ACC_LOCK_FRAC)"
+  echo "# in_loop_window_vs_offset: what the flag itself says about the comparison"
+  echo "#   -- 'above' if it asserted while standing off |phi_b_ns|, 'at-or-below'"
+  echo "#   if it did not.  This is the measurement; it is a bound, not a value."
+  echo "# twin_r_ns/twin_f_ns: CORROBORATION ONLY -- t_win at this bundle/temp/vdd"
+  echo "#   and this trim code from sim/lock-detector/corners/${CITE_LD_RECORD},"
+  echo "#   a DIFFERENT campaign at a DIFFERENT f_ref (25 MHz vs this deck's"
+  echo "#   ${KFREF} Hz).  The observable window is never SMALLER than t_win"
+  echo "#   (that record's own finding), so t_win > |phi_b_ns| predicts 'above'."
+  echo "# dr013_*: what DR-013 inferred for this cell at the UNTRIMMED W = 9.5 um"
+  echo "#   cell, transcribed from that record so the verdict is a comparison"
+  echo "# verdict: confirmed | refuted | moved -- derived from dr013_crossed and"
+  echo "#   lock_asserted, never typed"
+  echo "bundle,temp_c,vdd_v,trim_code,phi_b_ns,dphi_win_ns,lock_lvl_v,lock_asserted,in_loop_window_vs_offset,twin_r_ns,twin_f_ns,dr013_crossed,dr013_window_ns,dr013_offset_ns,verdict"
+  # The late window is (tb - ta) at both the default and the escalated
+  # transient length -- run.sh's KTA/KTB and KTA_X/KTB_X are both 3.2 us apart
+  # -- so one width covers every row, escalated or not.
+  XWIN_S="$(awk -v a="${KTA}" -v b="${KTB}" '
+    function s(x,  n) { n = x + 0;
+      if (x ~ /u$/) return n * 1e-6;
+      if (x ~ /n$/) return n * 1e-9;
+      if (x ~ /p$/) return n * 1e-12;
+      return n }
+    BEGIN { printf "%.12g", s(b) - s(a) }')"
+  # shellcheck disable=SC2086  # intentional word-splitting of the cell list
+  for cell in ${XING_PICKS}; do
+    xb="${cell%%|*}"; xrest="${cell#*|}"; xt="${xrest%%|*}"; xv="${xrest#*|}"
+    row="$(awk -F, -v b="${xb}" -v t="${xt}" -v v="${xv}" \
+      '!/^#/ && $1 != "bundle" && $1 == b && ($2 + 0) == (t + 0) && ($3 + 0) == (v + 0)' \
+      "${STEADY}" | head -1)"
+    # A cell this run did not sweep is simply absent -- the record says so
+    # rather than inventing a row for it.  SIM_PICKS / SIM_BUNDLES exist, and a
+    # reduced run must not be able to answer a question it did not run.
+    [ -n "${row}" ] || continue
+    code="$(window_trim_code_of "${xb}")"
+    # t_win at this cell AND this code, from the cited detector record.  Absent
+    # (the detector campaign did not run this cell at this code) leaves the two
+    # corroboration columns empty; it cannot change the verdict, which is the
+    # point of keeping them out of it.
+    twin="$(awk -F, -v b="${xb}" -v t="${xt}" -v v="${xv}" -v c="c${code}" '
+      !/^#/ && $1 != "corner" && $1 == b && ($2 + 0) == (t + 0) && ($3 + 0) == (v + 0) && $5 == c {
+        printf "%.6g,%.6g", $7 * 1e9, $8 * 1e9; exit }' "${LD_RAW}" 2>/dev/null)"
+    [ -n "${twin}" ] || twin=","
+    inf="$(for e in ${CITE_DR013_XING}; do
+             case "${e}" in "${cell}:"*) printf '%s' "${e#"${cell}:"}"; break ;; esac
+           done)"
+    printf '%s\n' "${row}" | awk -F, -v OFS=, -v code="${code}" -v twin="${twin}" \
+      -v inf="${inf}" -v accl="${ACC_LOCK_FRAC}" -v win="${XWIN_S}" '
+      { vdd = $3 + 0; phi = $8 + 0; fe = $7 + 0; if (fe < 0) fe = -fe;
+        lock = $17 + 0;
+        asserted = (lock >= accl * vdd) ? "yes" : "no";
+        cmp = (asserted == "yes") ? "above" : "at-or-below";
+        n = split(inf, I, ":");
+        crossed = (n >= 1) ? I[1] : "";
+        wns     = (n >= 2) ? I[2] : "";
+        ons     = (n >= 3) ? I[3] : "";
+        if      (crossed == "")                                verdict = "no-dr013-inference-for-this-cell";
+        else if (crossed == "crossed"     && asserted == "yes") verdict = "confirmed";
+        else if (crossed == "crossed"     && asserted == "no")  verdict = "refuted";
+        else if (crossed == "not-crossed" && asserted == "yes") verdict = "moved";
+        else                                                    verdict = "confirmed";
+        printf "%s,%s,%.2f,%s,%.4g,%.4g,%.4g,%s,%s,%s,%s,%s,%s,%s\n",
+          $1, $2, vdd, code, phi * 1e9, fe * win * 1e9, lock, asserted, cmp,
+          twin, crossed, wns, ons, verdict }'
+  done
+} >"${XING}"
+
+N_XING=$(awk -F, '!/^#/ && $1 != "bundle"' "${XING}" | wc -l | tr -d ' ')
+# shellcheck disable=SC2086  # intentional word-splitting of the cell list
+N_XING_ASKED=$(printf '%s\n' ${XING_PICKS} | wc -l | tr -d ' ')
+
+# ---------------------------------------------------------------------------
 # Optional generated diff against a prior record's extracted-metrics CSV.
 #
 #   SIM_COMPARE=<record-id> ./run.sh
@@ -1039,6 +1155,30 @@ else
   GRID_JUSTIFY="yes"
 fi
 
+# Is what ran a RECTANGLE (every bundle x every temperature x every supply), or
+# a set of named cells?  run.sh's SIM_PICKS deliberately allows the latter -- a
+# question about two particular cells should not pay for the two irrelevant
+# corners a rectangle would drag in -- and the corner-matrix field has to be
+# able to say which it got.  "2 bundles x 2 temperatures x 3 supplies = 6
+# points" is a false description of a 2-cell pick: the product is 12, and a
+# reader who multiplies it out is told the run covered four (bundle,
+# temperature) cells when it covered two.  So the product form is used only
+# when it is actually true, and the cell list is printed otherwise.
+CELLS_RUN="$(awk -F, '!/^#/ && $1 != "bundle" { print $1 "|" $2 }' "${STEADY}" \
+  | sort -u -t'|' -k1,1 -k2,2n)"
+N_CELLS_RUN=$(printf '%s\n' "${CELLS_RUN}" | grep -c . || true)
+if [ "${N_STEADY}" -eq $(( NB_RUN * NT_RUN * NV_RUN )) ]; then
+  GRID_SHAPE="${NB_RUN} process bundle(s) x ${NT_RUN} temperature(s) x ${NV_RUN} supplies
+    = ${N_STEADY} points, listed exactly as run."
+else
+  GRID_SHAPE="**${N_CELLS_RUN} named (bundle, temperature) cell(s)** -- NOT the
+    ${NB_RUN} x ${NT_RUN} rectangle those bundles and temperatures would span --
+    at ${NV_RUN} supplies each, = ${N_STEADY} points. The cells, listed exactly
+    as run: $(printf '%s\n' "${CELLS_RUN}" | awk -F'|' '{ printf "`%s`/%s C; ", $1, $2 }')
+    (\`SIM_PICKS\` in \`run.sh\`; the product of the axes is deliberately NOT
+    what was run and must not be read as the coverage)."
+fi
+
 N_SETTLED=$(( N_STEADY - N_FAIL ))
 N_UNSETTLED=${N_FAIL}
 
@@ -1202,6 +1342,36 @@ FDEV_TABLE="$(awk -F, '
     if (v == "FAIL:power") return "P";
     return "?";
   }' "${STEADY}")"
+
+# DR-013 crossing table and verdict prose (#417), from window_crossing.csv.
+# Every word of the verdict sentence is selected by the data; the only literals
+# are the cell names DR-013 itself asked about, which run.sh states.
+XING_TABLE="$(awk -F, '
+  !/^#/ && $1 != "bundle" {
+    printf "  | `%s` / %s C / %s V | %s | %+.4g | %.4g | %.4g | **%s** | **%s** | %s / %s | %s (%s vs %s) | **%s** |\n",
+      $1, $2, $3, $4, $5, $6, $7, $8, $9,
+      ($10 == "" ? "n/a" : $10), ($11 == "" ? "n/a" : $11),
+      ($12 == "" ? "n/a" : $12), ($13 == "" ? "n/a" : $13), ($14 == "" ? "n/a" : $14),
+      $15;
+  }' "${XING}")"
+XING_SUMMARY="$(awk -F, '
+  !/^#/ && $1 != "bundle" {
+    n++;
+    id = sprintf("`%s`/%s C/%s V", $1, $2, $3);
+    v[$15] = v[$15] (v[$15] == "" ? "" : ", ") id;
+    c[$15]++;
+  }
+  END {
+    if (n == 0) { print "No cell of this run matched a DR-013 crossing question."; exit }
+    sep = "";
+    for (k in c) { printf "%s**%s** at %s", sep, k, v[k]; sep = "; " }
+    printf ".\n";
+  }' "${XING}")"
+# The single worst piece of news, if there is one: a REFUTED cell means the
+# design's flag is not observing what DR-013 believed it observes.
+N_XING_REFUTED=$(awk -F, '!/^#/ && $1 != "bundle" && $15 == "refuted"' "${XING}" | wc -l | tr -d ' ')
+N_XING_MOVED=$(awk -F, '!/^#/ && $1 != "bundle" && $15 == "moved"' "${XING}" | wc -l | tr -d ' ')
+N_XING_CONFIRMED=$(awk -F, '!/^#/ && $1 != "bundle" && $15 == "confirmed"' "${XING}" | wc -l | tr -d ' ')
 
 # Per-(bundle,temp) static-phase table.
 PHI_TABLE="$(awk -F, '
@@ -1463,13 +1633,26 @@ $(simenv_env_block "$(simenv_xschem_version) -- the DUT
     netlist is an xschem export of design/pll_top.sch, not a hand-written deck.")
 - **Corner matrix run**:
   - **Steady state (criteria 1, 2, 4):** ${GRID_STATEMENT} --
-    ${NB_RUN} process bundle(s) x ${NT_RUN} temperature(s) x ${NV_RUN} supplies
-    = ${N_STEADY} points, listed exactly as run.
+    ${GRID_SHAPE}
     - Bundles -> \`.lib\` sections of \`sm141064.ngspice\`:
       $(for b in ${GRID_BUNDLES_RUN}; do printf '`%s` -> %s; ' "${b}" "${b}"; done) each
       with \`${PASSIVES//,/, }\`.
     - Temperature: ${GRID_TEMPS_RUN// /, } C. Supply: ${GRID_VDDS_RUN// /, } V.$(
-      if [ -n "${GRID_JUSTIFY}" ]; then cat <<'SUBSET'
+      if [ -n "${GRID_JUSTIFY}" ] && [ -n "${SUBSET_NOTE}" ]; then cat <<SUBSETNOTE
+
+    - **This is a SUBSET of the 45-point default grid, and the reason is
+      stated here rather than left to be inferred from the row count**, per
+      \`sim/README.md\` ("Any subset of the default grid ... unless the record
+      states why a subset was used").  The reason is this run's own, passed in
+      by the invocation that made the choice (\`SIM_SUBSET_NOTE\`), not a
+      description of some other reduction:
+
+      ${SUBSET_NOTE}
+
+      **Consequence, stated plainly: nothing below is worst-case over the
+      axes that were cut, and must not be cited as if it were.**
+SUBSETNOTE
+      elif [ -n "${GRID_JUSTIFY}" ]; then cat <<'SUBSET'
 
     - **This is a SUBSET, and the reason is compute, which `sim/README.md`
       explicitly does not accept on its own ("the sim was slow" is not a
@@ -1909,6 +2092,70 @@ ${SETTLE_PROSE}
 
 ${MARGIN_NOTE}
 
+  ### 1d. DR-013's window-vs-offset crossing, measured in ONE loop
+
+  DR-013 \`Consequences\` records a comparison it could not make and named as
+  a limitation in as many words:
+
+  > **This crossing is inferred across two campaigns, not measured in one
+  > loop** -- every committed \`sim/supply-sensitivity\` row is at W = 8 um,
+  > and its f_ref (12.5 MHz) differs from \`sim/lock-detector\`'s (25 MHz).
+
+  The crossing is the lock flag's own comparator window rising **past** the
+  loop's settled static phase offset. DR-013 read the two halves out of two
+  different campaigns, at two different reference frequencies, one of them at a
+  DUT the design no longer carries -- and concluded that the flag is "a
+  marginal observer at two corners and a wrong one at one". This section
+  re-makes that comparison with **both halves out of the same transient**, at
+  the trimmed \`delaywin_3v3\` (DR-014, #411) with each bundle at the code the
+  trim rule selects for it.
+
+  **What one loop can settle, and what it cannot.** \`lock\` asserting IS the
+  comparison -- the detector evaluating its own window against the offset this
+  loop actually stands off, in this run, at this f_ref. So the measurement here
+  is a **bound with a direction**: window above the offset, or at-or-below it.
+  What one loop cannot produce is the window's value in nanoseconds, because
+  nothing in this deck sweeps a phase error against the detector; the loop
+  presents the single offset it happens to stand off. The \`t_win\` column
+  below is therefore **corroboration, from
+  \`sim/lock-detector/corners/${CITE_LD_RECORD}\`** -- a different campaign at
+  a different f_ref -- and it is deliberately kept out of the verdict, which is
+  exactly the dependence DR-013 flagged and this section exists to remove.
+
+  | Cell | LDT code | phi_b (ns) | d(phi) over late window (ns) | lock (V) | asserted | window vs offset, IN LOOP | t_win rise/fall (ns, cited) | DR-013 inferred (window vs offset, ns) | verdict |
+  |---|---|---|---|---|---|---|---|---|---|
+${XING_TABLE}
+
+  ${XING_SUMMARY}
+
+  Verdict key, derived per cell from two booleans and never typed: DR-013
+  inferred **crossed** and the flag **asserted** -> \`confirmed\`; inferred
+  crossed and the flag did **not** assert -> \`refuted\`; inferred
+  **not-crossed** and the flag asserted -> \`moved\` (the window is now above
+  the offset where DR-013 had it below); inferred not-crossed and it did not
+  assert -> \`confirmed\`.
+
+  **${N_XING} of the ${N_XING_ASKED} cell(s) DR-013 asks about were run here**
+  (\`XING_PICKS\` in \`run.sh\`); ${N_XING_CONFIRMED} confirmed,
+  ${N_XING_MOVED} moved, ${N_XING_REFUTED} refuted. A cell this run did not
+  sweep is absent from the table rather than answered -- a reduced run must not
+  be able to answer a question it did not run, which is the same rule the
+  corner-matrix field above follows.
+
+  **How settled the offset is, and why the column is there.** The comparison
+  only means something against a phase that has stopped moving, so
+  \`d(phi) over late window\` (|ferr| x (tb - ta), from the same row) is
+  printed beside it: that is how far the "settled" offset travelled across the
+  run's own measurement window. #394's finding -- a sample on a decaying tail
+  reported as a design result -- is exactly what that column exists to expose,
+  and run.sh's settling escalation gates on it, so a row here that survived to
+  this table without escalating held its phase to better than
+  $(awk -v p="${ACC_PHI_SETTLE_S}" 'BEGIN{printf "%.4g", p*1e12}') ps across
+  ${KTA} .. ${KTB}.
+
+  Raw table: \`corners/${RID}/window_crossing.csv\`, whose header states every
+  column's provenance and which of them are in-loop.
+
   ### 2. Supply sensitivity -- static phase offset (criterion 2)
 
   Measured against the **post-#24** charge pump (\`design/cp_dumpbuf.sch\`,
@@ -2196,9 +2443,14 @@ fi)
     \`corners/${RID}/power_split.csv\`, \`corners/${RID}/supply_dynamic.csv\`,
     \`corners/${RID}/settling_rerun.csv\`,
     \`corners/${RID}/dyn_settling_rerun.csv\` (#253),
-    \`corners/${RID}/dyn_end_settling_rerun.csv\` (#255)${WAVE_LINK}
+    \`corners/${RID}/dyn_end_settling_rerun.csv\` (#255),
+    \`corners/${RID}/window_crossing.csv\` (#417, section 1d)${WAVE_LINK}
   - Cited: \`sim/vco-tuning-range/records/${CITE_VCO_RECORD}.md\` (#8, VCO
-    supply pushing), \`sim/loop-dynamics/records/\` (#10, loop bandwidth and
+    supply pushing),
+    \`sim/lock-detector/records/${CITE_LD_RECORD}.md\` (#411, the trimmed
+    detector's own in-situ characterization -- section 1d's \`t_win\`
+    corroboration column, and nothing else in this record),
+    \`sim/loop-dynamics/records/\` (#10, loop bandwidth and
     the passive-corner sweep), \`sim/pll-top-smoke/\` (#52, the closed-loop
     acceptance gate for this DUT -- testbench and runner only at the time of
     writing; \`sim/pll-top-smoke/records/\` is not yet minted, so nothing in
@@ -2214,5 +2466,6 @@ echo "supply-sensitivity: wrote ${DYNCSV}"
 echo "supply-sensitivity: wrote ${SETTLE}"
 echo "supply-sensitivity: wrote ${DYNSETTLE}"
 echo "supply-sensitivity: wrote ${DYN_END_SETTLE}"
+echo "supply-sensitivity: wrote ${XING}"
 [ "${V_FREQ}" = "PASS" ] || exit 1
 exit 0

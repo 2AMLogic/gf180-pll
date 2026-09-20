@@ -109,6 +109,23 @@
 #                            PR that merged it is the one fact it cannot, so it
 #                            is passed in rather than guessed.
 #
+#   SIM_SUBSET_NOTE='<why>'  the in-record justification for running fewer than
+#                            the 45 default points.  `sim/README.md` allows a
+#                            subset "only with an in-record justification" and
+#                            rejects "the sim was slow" as one, so the reason
+#                            has to travel with the RUN that chose the subset
+#                            rather than being a fixed paragraph describing one
+#                            historical reduction.  Unset keeps that historical
+#                            paragraph, which is correct only for a run of that
+#                            same shape (process axis cut, temperature and
+#                            supply whole).
+#   SIM_XING_PICKS='<b>|<t>|<v> ...'
+#                            the cells section 1d answers DR-013's
+#                            window-vs-offset crossing question at.  Default is
+#                            the two cells DR-013 itself names.  A cell not
+#                            actually swept is absent from that section rather
+#                            than answered.
+#
 # Every run is resumable: a completed run is reused only on an exact match of
 # the deck mtime AND the full parameter list, never on the deck alone.
 
@@ -225,6 +242,61 @@ KWINTRIM=${SIM_WINTRIM:-rule}
 window_trim_tag_suffix() {
   if [ "${KWINTRIM}" = "rule" ]; then printf ''; else printf '_W%s' "${KWINTRIM}"; fi
 }
+
+# DR-013's window-vs-offset crossing, and the corners it is asked at (#417).
+#
+# DR-013 Decision 4 / §Consequences compared the lock flag's own window against
+# the loop's settled static phase offset and found the window had risen PAST
+# that offset at one corner and to within 6 % of it at another -- and said, in
+# as many words, that the comparison was "inferred across two campaigns, not
+# measured in one loop", because every committed row of THIS campaign was at
+# the untrimmed W = 8 um cell and at a different f_ref from
+# `sim/lock-detector`'s.  With the trim landed (DR-014, #411) the window has
+# moved again, so the comparison has to be re-made -- this time with both
+# halves of it read out of the SAME closed-loop transient.
+#
+# XING_PICKS names the `<bundle>|<temp>|<vdd>` cells the record answers that
+# question at, and CITE_DR013_XING carries, per cell, WHAT DR-013 INFERRED, so
+# that "confirmed / refuted / moved" is a comparison the record computes rather
+# than a word someone types.  Fields, colon-separated:
+#
+#   <bundle>|<temp>|<vdd> : <crossed|not-crossed> : <window_ns> : <offset_ns>
+#
+#   crossed / not-crossed  DR-013's inference for that cell: did the flag's
+#                          window sit ABOVE the loop's settled offset (so the
+#                          flag would assert) or not?
+#   window_ns              the in-situ window DR-013 read at W = 9.5 um
+#                          (untrimmed), from `sim/lock-detector`.
+#   offset_ns              the settled static phase offset DR-012 measured at
+#                          that same cell, from THIS campaign's own committed
+#                          grid at the untrimmed cell.
+#
+# Both numbers are DR-013's, transcribed so the record can print what it is
+# being compared against; neither sets a verdict here.  What sets the verdict
+# is this run's own `lock` column against this run's own `phi_b`.
+XING_PICKS="${SIM_XING_PICKS:-typical|-40|3.63 ff|27|3.63}"
+CITE_DR013_XING="typical|-40|3.63:crossed:1.140:1.049 ff|27|3.63:not-crossed:1.155:1.227"
+# `sim/lock-detector`'s TRIMMED in-situ characterization (#411): the record
+# whose `raw_measures.csv` carries t_win at the code the trim rule selects for
+# each bundle.  Read, not re-derived; it is the independent magnitude beside
+# this campaign's in-loop above/below verdict, and it is a DIFFERENT campaign
+# at a DIFFERENT f_ref -- which is exactly the limitation #417 exists to stop
+# the crossing verdict resting on, so the record labels it as corroboration
+# and never as the measurement.
+CITE_LD_RECORD=20260919-002812-1b12179
+
+# Why this run is a subset of the default grid, in this run's own words.
+#
+# report.sh states a subset reason whenever fewer than 45 steady-state points
+# were collected.  Until #417 that reason was one hardcoded paragraph
+# describing ONE historical reduction (the 2026-08-01 run, which cut the
+# process axis and kept temperature and supply whole).  Any later subset with a
+# different shape -- #417's own two named cells, for instance -- would have
+# been described by text that did not fit it, which is a record stating
+# something untrue about its own coverage.  So the reason travels with the run
+# that made the choice.  Unset falls back to that historical paragraph, so a
+# re-run of the old reduction still describes itself correctly.
+SUBSET_NOTE="${SIM_SUBSET_NOTE:-}"
 
 # The SECOND frequency point, used only for the quiescent/dynamic power split
 # (see "Quiescent vs. dynamic" below).  Same N, half the reference, so f_ref
