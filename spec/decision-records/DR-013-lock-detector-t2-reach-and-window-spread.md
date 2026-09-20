@@ -344,8 +344,8 @@ Decision 4's target, not before.
   > the two cells this paragraph names and no others — so it re-points the
   > crossing question only. Every other cell of `sim/supply-sensitivity` is
   > still at the untrimmed window, and that campaign's PVT statement is still
-  > `20260901-155456-46b92f8`. A trimmed-window full-grid re-run remains
-  > unowned.
+  > `20260901-155456-46b92f8`. A trimmed-window full-grid re-run is
+  > **#437**.
 - **`sim/lock-time`'s 270-run re-take stays held** (Decision 7), and so does
   any interpretation of #163's 233 FAILs against a specific window.
 - **Nothing in `sim/` is invalidated and no design file changes.** This record
