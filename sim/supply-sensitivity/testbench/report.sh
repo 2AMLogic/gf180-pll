@@ -976,7 +976,7 @@ eval "$(awk -F, '
 # state which of the two situations this run is in rather than leaving a
 # reader to compare two counts and guess what the difference means.
 if [ "${N_LOCK_LOW}" -gt "${N_F_LOCK}" ]; then
-  LOCK_LOW_PROSE="**That is the case in this run**: $((N_LOCK_LOW - N_F_LOCK)) corner(s) show a flag below threshold whose verdict word names a different check, so the line above under-counts the flag and this record must not be read as saying the flag asserted everywhere except at ${LOCK_LIST}."
+  LOCK_LOW_PROSE="**That is the case in this run**: $((N_LOCK_LOW - N_F_LOCK)) corner(s) show a flag below threshold whose verdict word names a different check. The attributed line above therefore UNDER-COUNTS the flag, and nothing citing this record for the lock detector may read it as the flag's coverage -- this line and section 1d are."
 else
   LOCK_LOW_PROSE="In this run the two counts agree, so no flag failure is hidden behind an earlier check."
 fi
