@@ -989,6 +989,161 @@ class MirrorConnectivityTests(unittest.TestCase):
             self.assertIn("3 probe(s)", by_name[net], by_name[net])
 
 
+class VddFeedBandSelectionTests(unittest.TestCase):
+    """``block.vdd_feed_bands()`` feeds one tap band per n-well (issue #433).
+
+    An n-well tap band ties exactly the well it sits in. ``mirror.py`` gives
+    *every bank its own n-well*, so its two bands are two independent wells to
+    tie; every other sub-block draws one well around one PMOS row, so its
+    extra bands are redundant taps on that same well. Feeding only each
+    sub-block's topmost band -- what ``block.py`` did before #433 -- left the
+    band mirror's lower bank (well, tap band, and every pfet source
+    ``mirror.py`` rail-stubs onto that band) with no connection to the supply
+    trunk at all.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.result = vco_block.build()
+        cls.p = cls.result.placement
+
+    def _fed(self, key: str):
+        return vco_block.vdd_feed_bands(key, self.result.sub_pins[key], self.p)
+
+    def test_mirror_is_fed_once_per_bank(self):
+        fed = self._fed("mirror")
+        banks = mirror.plan().banks
+        self.assertEqual(len(fed), len(banks))
+        for bank, band in zip(banks, fed):
+            well = (
+                bank.nwell[1] + self.p.dy_mirror,
+                bank.nwell[3] + self.p.dy_mirror,
+            )
+            self.assertTrue(
+                well[0] <= band[1] and band[3] <= well[1],
+                f"fed band {band} is not inside bank n-well {well}",
+            )
+
+    def test_single_well_sub_blocks_are_fed_once(self):
+        for key in ("vtoi_core", "ring", "buffer"):
+            with self.subTest(sub_block=key):
+                self.assertEqual(len(self._fed(key)), 1)
+
+    def test_a_well_with_no_tap_band_in_it_is_an_error_not_a_silent_skip(self):
+        pins = {"VDD_VCO": [(0.0, 0.0, 1.0, 0.6)]}
+        with self.assertRaises(ValueError):
+            vco_block.vdd_feed_bands("mirror", pins, self.p)
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+class AssembledBlockVddIslandTests(unittest.TestCase):
+    """``VDD_VCO`` is one electrical node across the assembled block (#433).
+
+    Two separate checks, because the two ways this can break look nothing
+    alike:
+
+    * **Metal.** Every n-well tap band this block's own supply trunk is
+      supposed to feed must extract onto the trunk's own metal1/via1/metal2
+      cluster. This is what regressed: ``mirror.py``'s lower bank landed on
+      its own island, carrying that bank's pfet sources with it.
+    * **Well.** Counting the n-well's own ohmic continuity (``ntap`` -> well,
+      the same ``connect(nwell_con, ntap)`` the PDK's own LVS deck makes),
+      *every* ``VDD_VCO`` tap band -- including ``vtoi_core.py``'s bottom
+      band, which is deliberately tied through the shared well rather than by
+      a metal jumper -- must land on one node.
+
+    Neither check can be replaced by the assembled LVS run: the PDK deck ends
+    with ``connect_implicit('*')``, which joins same-named nets, so two
+    ``VDD_VCO`` islands that touch nothing at all still compare as one net and
+    still report ``Netlists match``. See
+    ``layout/evidence/vco-layout/PROOF-433-vdd-island-fix.md``.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import klayout.db as db
+
+        cls.db = db
+        cls.result = vco_block.build()
+        cls.p = cls.result.placement
+        canvas = cls.result.canvas
+        layout = canvas.layout
+
+        def _extract(well_aware: bool):
+            l2n = db.LayoutToNetlist(db.RecursiveShapeIterator(layout, canvas.top, []))
+            lay = {
+                name: l2n.make_polygon_layer(layout.layer(*prim.LAYER[name]), name)
+                for name in ("metal1", "via1", "metal2", "contact")
+            }
+            for region in lay.values():
+                l2n.connect(region)
+            l2n.connect(lay["metal1"], lay["via1"])
+            l2n.connect(lay["via1"], lay["metal2"])
+            l2n.connect(lay["contact"], lay["metal1"])
+            if well_aware:
+                nwell = l2n.make_polygon_layer(layout.layer(*prim.LAYER["nwell"]), "nwell")
+                comp = l2n.make_polygon_layer(layout.layer(*prim.LAYER["comp"]), "comp")
+                poly2 = l2n.make_polygon_layer(layout.layer(*prim.LAYER["poly2"]), "poly2")
+                nplus = l2n.make_layer(layout.layer(*prim.LAYER["nplus"]), "nplus")
+                # general_derivations.lvs: ntap = ncomp.and(nwell); the
+                # ``- poly2`` keeps a channel from joining source to drain,
+                # which the PDK deck gets from device extraction instead.
+                ntap = ((comp - poly2) & nplus) & nwell
+                l2n.connect(nwell)
+                l2n.connect(ntap)
+                l2n.connect(nwell, ntap)
+                l2n.connect(ntap, lay["contact"])
+                lay["nwell"] = nwell
+            l2n.extract_netlist()
+            return l2n, lay
+
+        cls.metal_l2n, cls.metal_layers = _extract(False)
+        cls.well_l2n, cls.well_layers = _extract(True)
+
+    def _cluster(self, l2n, layers, x: float, y: float):
+        net = l2n.probe_net(layers["metal1"], self.db.DPoint(x, y))
+        self.assertIsNotNone(net, f"no metal1 found at ({x:.3f}, {y:.3f})")
+        return net.cluster_id
+
+    def _trunk_point(self) -> tuple[float, float]:
+        return (self.p.vdd_trunk_x, self.result.nets["vdd_pin_y"])
+
+    def _fed_band_points(self):
+        for key in ("vtoi_core", "mirror", "ring", "buffer"):
+            for band in vco_block.vdd_feed_bands(key, self.result.sub_pins[key], self.p):
+                yield key, ((band[0] + band[2]) / 2.0, (band[1] + band[3]) / 2.0)
+
+    def test_every_fed_tap_band_lands_on_the_supply_trunks_metal_cluster(self):
+        trunk = self._cluster(self.metal_l2n, self.metal_layers, *self._trunk_point())
+        for key, (x, y) in self._fed_band_points():
+            with self.subTest(sub_block=key, band=(x, y)):
+                self.assertEqual(
+                    self._cluster(self.metal_l2n, self.metal_layers, x, y),
+                    trunk,
+                    f"{key}'s tap band at ({x:.3f}, {y:.3f}) is a floating VDD_VCO "
+                    "island -- no metal path to the supply trunk",
+                )
+
+    def test_every_tap_band_including_the_well_tied_ones_is_one_node(self):
+        trunk = self._cluster(self.well_l2n, self.well_layers, *self._trunk_point())
+        bands = [
+            (key, band)
+            for key in ("vtoi_core", "mirror", "ring", "buffer")
+            for band in self.result.sub_pins[key]["VDD_VCO"]
+        ]
+        self.assertGreater(len(bands), len(list(self._fed_band_points())))
+        for key, band in bands:
+            x = (band[0] + band[2]) / 2.0
+            y = (band[1] + band[3]) / 2.0
+            with self.subTest(sub_block=key, band=band):
+                self.assertEqual(
+                    self._cluster(self.well_l2n, self.well_layers, x, y),
+                    trunk,
+                    f"{key}'s tap band {band} is not on VDD_VCO even counting the "
+                    "n-well's own ohmic continuity",
+                )
+
+
 class GridSnapTests(unittest.TestCase):
     """geom.drc's OFFGRID section runs ongrid(0.005) on every drawn layer."""
 

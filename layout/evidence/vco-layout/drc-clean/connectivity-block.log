@@ -1,4 +1,4 @@
-wrote /home/ubuntu/loom-workspaces/gf180-pll/.loom/worktrees/issue-381/layout/evidence/vco-layout/work/vco_block.gds
+wrote /tmp/i433w/vco_block.gds
 footprint: 172.520 x 184.480 um  (31826.5 um^2)
   bias_resistors     123.560    -3.500   136.560    36.820
   vtoi_core           -4.120    -3.720   117.060    47.000
@@ -13,7 +13,7 @@ footprint: 172.520 x 184.480 um  (31826.5 um^2)
   ok   VBP              band mirror VBP output <-> ring VBP rail: 2 probe(s) -> one net
   ok   VBN              band mirror VBN output <-> ring VBN rail: 2 probe(s) -> one net
   ok   Y5               ring stage-5 output <-> output buffer input gate: 2 probe(s) -> one net
-  ok   VDD_VCO          supply trunk <-> four n-well tap bands + the block n-well ring: 6 probe(s) -> one net
+  ok   VDD_VCO          supply trunk <-> one tap band per sub-block n-well + the block n-well ring: 7 probe(s) -> one net
   ok   GND_VCO          block guard ring <-> every sub-block guard ring + bank tap strips: 7 probe(s) -> one net
   ok   CLK              output buffer's last stage <-> the block's CLK pin: 2 probe(s) -> one net
   ok   VCTRL            block VCTRL pin <-> V-to-I core's VCTRL track: 2 probe(s) -> one net
