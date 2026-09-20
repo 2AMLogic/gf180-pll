@@ -1170,7 +1170,23 @@ xargs -P "$(simenv_jobs)" -L 1 \
   "${BASH:-/bin/bash}" -c 'exec "$0" --one-vpre "$@"' "${HERE}/run.sh" <"${JOBSPRE}"
 
 vpre_of() {  # <slug> <bundle> <temp> <vdd> -> calibrated control voltage
-  awk '{print $1}' "${WORK}/vpre_$1_$2_$3_$4.txt" 2>/dev/null
+  # "The pre-pass did not calibrate this point" is a LEGITIMATE state, not an
+  # error, and it has to come back as an empty answer with a zero status.
+  # Both callers below already handle empty -- the steady grid fails with a
+  # message that names the point, the step/ramp list skips the corner -- but
+  # neither ever got the chance: with the file missing, `awk` exited 2, and a
+  # command substitution's status is the assignment's status, so `set -e`
+  # killed the whole campaign right there.  No message, no record, exit 2,
+  # after the pre-pass had already been paid for.
+  #
+  # Reachable as soon as SIM_PICKS (#411/PR #418) is used: the picks narrow
+  # which points the pre-pass calibrates, DYN_PICKS defaults to `typical 27`
+  # independently of them, and any pick set not containing `typical 27` leaves
+  # the step/ramp corner uncalibrated.  #417's two-cell run is exactly that
+  # shape and is where this was found.
+  local f="${WORK}/vpre_$1_$2_$3_$4.txt"
+  [ -f "${f}" ] || return 0
+  awk '{print $1}' "${f}" 2>/dev/null
 }
 
 # --- job list: the steady-state grid at 100 MHz -----------------------------
@@ -1230,7 +1246,16 @@ while [ "$#" -ge 2 ]; do
   band="$(echo "${row}" | cut -d, -f3)"
   [ "${band}" = "-1" ] && continue
   v330="$(vpre_of 100 "${b}" "${t}" 3.30)"
-  [ -n "${v330}" ] && [ "${v330}" != "nan" ] || continue
+  # Skipping is correct -- the step/ramp deck needs this corner's calibrated
+  # warm start and there is none -- but it must be VISIBLE.  Criterion 3 then
+  # reports as NOT MEASURED in the record, and a reader who expected a
+  # step/ramp result is entitled to know which corner dropped out and why
+  # rather than inferring it from a zero.
+  if [ -z "${v330}" ] || [ "${v330}" = "nan" ]; then
+    echo "supply-sensitivity: step/ramp corner ${b}/${t}C skipped -- no calibrated" \
+         "Vctrl at 3.30 V (not in this run's SIM_PICKS/SIM_BUNDLES x SIM_TEMPS grid)" >&2
+    continue
+  fi
   echo "${b} ${t} ${band} ${v330} ${WORK}/sdyn_${b}_${t}.csv ${WORK}/wave_${b}_${t}.csv" >>"${JOBSDYN}"
 done
 
