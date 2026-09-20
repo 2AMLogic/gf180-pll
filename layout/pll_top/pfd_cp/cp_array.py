@@ -819,20 +819,12 @@ def _route_side(
     return tracks, bus_spans
 
 
-class NetTracks:
-    """Hands out a fresh, never-reused Metal2 track_y per net name -- see
-    ``cp_dumpbuf.NetTracks``, whose behaviour is identical."""
-
-    def __init__(self, base_y: float, pitch: float = METAL2_TRACK_PITCH_UM) -> None:
-        self._next_y = base_y
-        self._pitch = pitch
-        self._assigned: dict[str, float] = {}
-
-    def get(self, net: str) -> float:
-        if net not in self._assigned:
-            self._assigned[net] = self._next_y
-            self._next_y += self._pitch
-        return self._assigned[net]
+# Fresh, never-reused Metal2 track_y per net name -- shared with every other
+# ``layout/pll_top/*`` submodule (issue #429, ``_canvas.NetTracks``). Its
+# ``pitch`` default (0.75 um) already equals this module's own
+# ``METAL2_TRACK_PITCH_UM``, so every existing ``NetTracks(base_y)`` call
+# site here is unchanged.
+NetTracks = _canvas.NetTracks
 
 
 def _diode_connect(canvas: devgen.Canvas, gate_pad: tuple, top_pad: tuple, wire_w: float = devgen.METAL1_WIRE_WIDTH_UM) -> None:
