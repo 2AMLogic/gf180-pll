@@ -818,11 +818,13 @@ eval "$(awk -F, -v accf="${ACC_FERR}" -v slowf="${DYN_SLOW_FACTOR}" '
 # ---------------------------------------------------------------------------
 # Headline scalars for the record.
 # ---------------------------------------------------------------------------
-eval "$(awk -F, -v accv_lo="${ACC_VCTRL_LO}" -v accv_hi="${ACC_VCTRL_HI}" -v pwr="${ACC_PWR_MW}" '
+eval "$(awk -F, -v accv_lo="${ACC_VCTRL_LO}" -v accv_hi="${ACC_VCTRL_HI}" -v pwr="${ACC_PWR_MW}" \
+  -v accl="${ACC_LOCK_FRAC}" '
   !/^#/ && $1 != "bundle" {
     n++;
     bundle=$1; temp=$2; vdd=$3+0; fout=$5+0; dev=$6+0; ferr=$7+0; phib=$8+0;
-    sk=$9+0; spread=$10+0; vca=$14+0; vcmin=$15+0; vcmax=$16+0; p=$21+0; v=$22;
+    sk=$9+0; spread=$10+0; vca=$14+0; vcmin=$15+0; vcmax=$16+0; lock=$17+0;
+    p=$21+0; v=$22;
     id = bundle "/" temp "C/" sprintf("%.2f", vdd) "V";
     if (v != "PASS") { nfail++; if (faillist == "") faillist = id "(" v ")"; else faillist = faillist " " id "(" v ")" }
     # Per-class failure tallies.  "N of 45 failed" is not an actionable
@@ -833,6 +835,14 @@ eval "$(awk -F, -v accv_lo="${ACC_VCTRL_LO}" -v accv_hi="${ACC_VCTRL_HI}" -v pwr
     if (v == "FAIL:phi")   { nfphi++;  phlist  = (phlist  == "" ? id : phlist  " " id) }
     if (v == "FAIL:lock")  { nflock++; lklist  = (lklist  == "" ? id : lklist  " " id) }
     if (v == "FAIL:N" || v == "FAIL:fout") { nfrange++; rglist = (rglist == "" ? id "(" v ")" : rglist " " id "(" v ")") }
+    # The verdict word above is FIRST-FAILURE-WINS (an else-if chain), so a
+    # corner that misses the phase criterion AND whose flag never asserted is
+    # recorded as FAIL:phi and contributes nothing to nflock.  That is fine for
+    # routing -- one corner, one owner -- but it is NOT fine as a statement
+    # about the flag, and this campaign is cited for exactly that.  Tally what
+    # the flag actually did, independently of which check fired first, so the
+    # record cannot say "0 corners" about a run where a flag sat at 7 nV.
+    if (lock < accl * vdd) { nlocklow++; lwlist = (lwlist == "" ? id : lwlist " " id) }
     if (abs(dev) > abs(wdev)) { wdev = dev; wdevid = id }
     if (abs(ferr) > abs(wferr)) { wferr = ferr; wferrid = id }
     if (!seenphi || abs(phib) > abs(wphi)) { wphi = phib; wphiid = id; seenphi = 1 }
@@ -867,6 +877,8 @@ eval "$(awk -F, -v accv_lo="${ACC_VCTRL_LO}" -v accv_hi="${ACC_VCTRL_HI}" -v pwr
       (phlist == "" ? "(none)" : "\"" phlist "\""),
       (lklist == "" ? "(none)" : "\"" lklist "\""),
       (rglist == "" ? "(none)" : "\"" rglist "\"");
+    printf "N_LOCK_LOW=%d\nLOCK_LOW_LIST=%s\n", nlocklow+0,
+      (lwlist == "" ? "(none)" : "\"" lwlist "\"");
     printf "WDEV_PPM=%.4g\nWDEV_ID=\"%s\"\n", wdev, wdevid;
     printf "WFERR=%.4g\nWFERR_ID=\"%s\"\n", wferr, wferrid;
     printf "WPHI_NS=%.4g\nWPHI_ID=\"%s\"\n", wphi*1e9, wphiid;
@@ -958,6 +970,16 @@ eval "$(awk -F, '
 : "${N_R_INTEG:=0}"; : "${INTEG_LIST:=(none)}"
 : "${N_F_FERR:=0}"; : "${N_F_PHI:=0}"; : "${N_F_LOCK:=0}"; : "${N_F_RANGE:=0}"
 : "${PHI_LIST:=(none)}"; : "${LOCK_LIST:=(none)}"; : "${RANGE_LIST:=(none)}"
+: "${N_LOCK_LOW:=0}"; : "${LOCK_LOW_LIST:=(none)}"
+# Whether any flag failure is hidden behind an earlier check in the
+# first-failure-wins verdict word.  Computed here so the record's prose can
+# state which of the two situations this run is in rather than leaving a
+# reader to compare two counts and guess what the difference means.
+if [ "${N_LOCK_LOW}" -gt "${N_F_LOCK}" ]; then
+  LOCK_LOW_PROSE="**That is the case in this run**: $((N_LOCK_LOW - N_F_LOCK)) corner(s) show a flag below threshold whose verdict word names a different check, so the line above under-counts the flag and this record must not be read as saying the flag asserted everywhere except at ${LOCK_LIST}."
+else
+  LOCK_LOW_PROSE="In this run the two counts agree, so no flag failure is hidden behind an earlier check."
+fi
 : "${MARGIN_WORST:=n/a}"; : "${MARGIN_WORST_FERR:=n/a}"
 : "${MARGIN_WORST_BAND:=n/a}"; : "${MARGIN_WORST_DR:=n/a}"
 [ -n "${SETTLE_TABLE}" ] || SETTLE_TABLE="  | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |"
@@ -2041,13 +2063,23 @@ ${FDEV_TABLE}
     settling escalation now gates on both, so a corner reaching this line has
     been shown to hold that phase at the escalated transient length, not merely
     to have been sampled there.
-  - **block's own LOCK flag below ${ACC_LOCK_FRAC} of the rail:
-    ${N_F_LOCK} corner(s)** -- ${LOCK_LIST}. At these corners everything
-    electrical settled and the window comparator did not assert, which is a
-    statement about **\`lock_detector\` (#11)'s window**, not about the loop.
+  - **block's own LOCK flag below ${ACC_LOCK_FRAC} of the rail, as the
+    corner's ATTRIBUTED failure: ${N_F_LOCK} corner(s)** -- ${LOCK_LIST}. At
+    these corners everything else electrical settled and the window comparator
+    still did not assert, which is a statement about
+    **\`lock_detector\` (#11)'s window**, not about the loop.
     It is flagged there rather than counted as a loop failure, and this record
     does not propose a window change -- that is #11's call with its own
     evidence.
+  - **the flag below ${ACC_LOCK_FRAC} of the rail AT ALL, counted from
+    \`lock_lvl_v\` itself rather than from the verdict word:
+    ${N_LOCK_LOW} corner(s)** -- ${LOCK_LOW_LIST}. The two counts are not the
+    same question and can differ. The verdict word is first-failure-wins, so a
+    corner that both stands off more phase than the criterion allows AND never
+    asserts is filed under the phase miss and contributes nothing to the line
+    above. That is correct for ROUTING -- one corner, one owner -- and wrong as
+    a statement ABOUT THE FLAG, which is what section 1d and everything citing
+    this campaign for the lock detector reads. ${LOCK_LOW_PROSE}
   - **divide ratio or absolute output frequency wrong: ${N_F_RANGE}
     corner(s)** -- ${RANGE_LIST}. Not a damping finding: the loop is not in
     lock at that corner at all, which is a lock-RANGE question about whether
