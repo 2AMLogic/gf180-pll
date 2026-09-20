@@ -529,6 +529,58 @@ def _shift(box: tuple, dx: float, dy: float) -> tuple:
     return (box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy)
 
 
+def _vdd_wells(key: str, p: "Placement") -> list[tuple] | None:
+    """A sub-block's own n-well boxes in block coordinates, or ``None`` for
+    "exactly one well, wherever it is".
+
+    Only the band mirror has more than one: ``mirror.py`` folds its cascade
+    into banks and gives *each bank its own n-well* (mirror.py's module
+    docstring), with that bank's NMOS row and a ``GND_VCO`` substrate tap
+    strip in between, so the wells are physically disjoint. Every other
+    sub-block draws a single n-well around its one PMOS row.
+    """
+    if key == "mirror":
+        return [_shift(bank.nwell, p.dx_mirror, p.dy_mirror) for bank in mirror.plan().banks]
+    return None
+
+
+def vdd_feed_bands(key: str, pins: dict, p: "Placement") -> list[tuple]:
+    """The ``VDD_VCO`` tap bands of sub-block ``key`` that the trunk must feed.
+
+    **One band per n-well, not one per sub-block (issue #433).** An n-well tap
+    band ties exactly the well it sits in; two bands in the *same* continuous
+    well are the same electrical node through that well's own silicon whether
+    or not any metal joins them (``vtoi_core.py`` draws two bands around one
+    PMOS row for the DF.13_MV/DF.14_MV tap-distance bound and says so), but two
+    bands in *different* wells are joined by nothing at all unless this trunk
+    joins them.
+
+    This used to return each sub-block's topmost band only. That silently
+    assumed one well per sub-block, which is false for ``mirror.py``: its lower
+    bank's n-well, its tap band, and every pfet source ``mirror.py``
+    rail-stubs onto that band were left as an electrically floating VDD island
+    -- invisible to the PDK LVS deck, which joins same-named nets via its own
+    ``connect_implicit('*')``, and invisible to ``connectivity_report()``,
+    which probed the same topmost-only band list. Both callers now go through
+    this one function so the feed list and the probe list cannot drift apart
+    again. See ``layout/evidence/vco-layout/PROOF-433-vdd-island-fix.md``.
+    """
+    bands = pins[VDD_NET]
+    wells = _vdd_wells(key, p)
+    if wells is None:
+        return [max(bands, key=lambda b: b[3])]
+    fed = []
+    for well in wells:
+        inside = [b for b in bands if well[1] <= b[1] and b[3] <= well[3]]
+        if not inside:
+            raise ValueError(
+                f"{key!r} draws an n-well at y {well[1]:.3f}..{well[3]:.3f} with no "
+                f"{VDD_NET} tap band in it -- nothing can tie that well to the supply"
+            )
+        fed.append(max(inside, key=lambda b: b[3]))
+    return fed
+
+
 def placement() -> Placement:
     vt = vtoi_core.footprint_um()
     mi = mirror.footprint_um()
@@ -883,26 +935,30 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
     r.via("Y5", y5_x, y5_y)
     r.via("Y5", buf_in_x, buf_in_y)
 
-    # --- 6. VDD_VCO: Metal1 trunk + one Metal2 hop per sub-block onto that
-    # block's own n-well tap band (see the module docstring for why the
-    # supply is the one net that cannot be Metal2 all the way in). ---
+    # --- 6. VDD_VCO: Metal1 trunk + one Metal2 hop per sub-block *n-well*
+    # onto a tap band in that well (see the module docstring for why the
+    # supply is the one net that cannot be Metal2 all the way in, and
+    # ``vdd_feed_bands()`` for why the unit is the well and not the
+    # sub-block). ---
     trunk_y0 = min(b[1] for b in boxes.values())
     trunk_y1 = max(b[3] for b in boxes.values())
     prim.v_wire(canvas, p.vdd_trunk_x, trunk_y0, trunk_y1, width=VDD_TRUNK_WIDTH_UM)
 
-    def vdd_feed(pins: dict) -> float:
-        """Hop from the trunk onto the topmost ``VDD_VCO`` tap band of a block."""
-        band = max(pins[VDD_NET], key=lambda b: b[3])
-        y = _center(band)[1]
-        x = dev.snap_um(band[2] - 0.5)
-        r.route(VDD_NET, [(x, y), (p.vdd_trunk_x, y)])
-        r.via(VDD_NET, x, y)
-        r.via(VDD_NET, p.vdd_trunk_x, y)
-        return y
+    def vdd_feed(key: str, pins: dict) -> float:
+        """Hop onto one tap band per n-well; return the topmost fed band's y."""
+        ys = []
+        for band in vdd_feed_bands(key, pins, p):
+            y = _center(band)[1]
+            x = dev.snap_um(band[2] - 0.5)
+            r.route(VDD_NET, [(x, y), (p.vdd_trunk_x, y)])
+            r.via(VDD_NET, x, y)
+            r.via(VDD_NET, p.vdd_trunk_x, y)
+            ys.append(y)
+        return max(ys)
 
-    vdd_pin_y = vdd_feed(vtoi_pins)
-    for pins in (mirror_pins, ring_pins, buffer_pins):
-        vdd_feed(pins)
+    vdd_pin_y = vdd_feed("vtoi_core", vtoi_pins)
+    for key, pins in (("mirror", mirror_pins), ("ring", ring_pins), ("buffer", buffer_pins)):
+        vdd_feed(key, pins)
 
     # ... and the same hop again for the block-level n-well tap ring (step 8b),
     # which is outside the GND_VCO ring and so is likewise only reachable on
@@ -1045,7 +1101,7 @@ CONNECTED_PROBES = (
     ("VBP", "band mirror VBP output <-> ring VBP rail"),
     ("VBN", "band mirror VBN output <-> ring VBN rail"),
     ("Y5", "ring stage-5 output <-> output buffer input gate"),
-    ("VDD_VCO", "supply trunk <-> four n-well tap bands + the block n-well ring"),
+    ("VDD_VCO", "supply trunk <-> one tap band per sub-block n-well + the block n-well ring"),
     ("GND_VCO", "block guard ring <-> every sub-block guard ring + bank tap strips"),
     ("CLK", "output buffer's last stage <-> the block's CLK pin"),
     ("VCTRL", "block VCTRL pin <-> V-to-I core's VCTRL track"),
@@ -1087,9 +1143,12 @@ def _probe_points(result: VcoBlockResult) -> dict:
     add("Y5", "metal1", *c(sp["ring"]["Y5_CLK_IN"][0]))
     add("Y5", "metal1", *c(sp["buffer"][dev.BUFFER_IN_NET][0]))
     add("VDD_VCO", "metal1", p.vdd_trunk_x, result.nets["vdd_pin_y"])
+    # Exactly the bands step 6 fed, via the same ``vdd_feed_bands()`` -- so a
+    # band the trunk stops feeding is a band this report stops proving, and the
+    # two can never silently disagree again (issue #433).
     for key in ("vtoi_core", "mirror", "ring", "buffer"):
-        band = max(sp[key][VDD_NET], key=lambda b: b[3])
-        add("VDD_VCO", "metal1", *c(band))
+        for band in vdd_feed_bands(key, sp[key], p):
+            add("VDD_VCO", "metal1", *c(band))
     # The block-level n-well tap ring, probed on the band *opposite* its single
     # Metal2 feed -- so the probe proves the ring is continuous all the way
     # round, not just that the feed's own via landed.
