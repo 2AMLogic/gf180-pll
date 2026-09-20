@@ -53,6 +53,14 @@
 #                            under-damped corner from an under-RESOLVED one.
 #   SIM_FINE_TMAX / SIM_FINE_MAX  the ceiling it re-runs at (default: the
 #                            bound), and a cap on how many corners it reaches.
+#   SIM_WINTRIM=<0..15>      run every corner at ONE forced lock-detector window
+#                            trim code instead of the code `spec/pll.md`'s
+#                            trim-code rule selects per bundle (see KWINTRIM
+#                            below).  Such a run gets its own work directory --
+#                            the "_W<code>" tag -- so a forced-code run and the
+#                            rule-selected run it exists to be compared with
+#                            keep their logs side by side instead of one
+#                            overwriting the other (#425).
 #
 #   The step/ramp deck has TWO independent settling escalations, one per
 #   plateau, because a corner can still be converging after the STEP, after
@@ -172,6 +180,51 @@ KTRIM=2
 # this file's -- window_trim_code_of() below is a transcription of that
 # record's code table and cites it.
 KWINTRIM=${SIM_WINTRIM:-rule}
+
+# window_trim_tag_suffix -> the work-directory tag suffix this run's window-trim
+# setting earns ("" at the default, "_W<code>" at a forced code).
+#
+# The trim code is a THIRD axis of the same kind as the transient length and the
+# timestep ceiling below: moving it produces a different run of the same corner,
+# which the campaign then wants to compare against the run it replaced.  The
+# `.sig` guard already invalidates the cached run when the code changes, but
+# invalidating it is not enough -- without a tag suffix the re-run lands in the
+# SAME work directory and overwrites the ngspice.log of the run it is being
+# compared with (#425).  So the suffix is what makes a trim-code cross-check ADD
+# evidence rather than destroy it, exactly as "_X${KTSTOP}" does for a settling
+# re-run.
+#
+# THE SUFFIX TAGS THE `KWINTRIM` SETTING, NOT THE PER-CORNER RESOLVED CODE
+# (`window_trim_code_of`'s output).  Both were on the table; the setting wins
+# for two reasons:
+#
+#   1. `rule` MUST stay unsuffixed.  Tagging the resolved code would rename
+#      every default run's directory ("..._W3", "..._W7", ... per bundle) and
+#      so force a full re-simulation of every `work/` tree already on disk --
+#      hours of ngspice per corner, to rename directories holding runs that
+#      are still perfectly valid.
+#   2. Where a suffix IS emitted the two choices agree by construction:
+#      window_trim_code_of() returns ${KWINTRIM} verbatim at every corner once
+#      ${KWINTRIM} is a forced code, so "_W8" IS the resolved code of every run
+#      under it.  The setting-vs-code distinction bites only in the `rule`
+#      case, where the suffix is deliberately absent.
+#
+# What that costs, stated plainly rather than hidden: an unsuffixed directory
+# means "the rule-selected code for this bundle", which is per-bundle rather
+# than one code -- recoverable, since the bundle is in the tag and
+# window_trim_code_of() maps it, and since the run's own `.sig` records the
+# resolved code that was actually passed to the deck.  And forcing a code that
+# the rule would have picked anyway (`SIM_WINTRIM=3` on `ss`) re-simulates into
+# "_W3" beside an identical unsuffixed `rule` run: one redundant run, never a
+# collision.  Losing a log is the failure worth designing against here; paying
+# for an occasional duplicate one is not.
+#
+# report.sh reconstructs these same tags to archive each run's log, and picks
+# this function up from the block it splices out of this file -- so the two
+# cannot drift.
+window_trim_tag_suffix() {
+  if [ "${KWINTRIM}" = "rule" ]; then printf ''; else printf '_W%s' "${KWINTRIM}"; fi
+}
 
 # The SECOND frequency point, used only for the quiescent/dynamic power split
 # (see "Quiescent vs. dynamic" below).  Same N, half the reference, so f_ref
@@ -619,6 +672,12 @@ if [ "${1:-}" = "--one-lock" ]; then
   # ADDS evidence rather than overwriting the run it is compared with.
   [ "${KTSTOP}" = "${KTSTOP_BASE}" ] || tag="${tag}_X${KTSTOP}"
   [ "${KTMAX}" = "${KTMAX_BASE}" ]   || tag="${tag}_M${KTMAX}"
+  # ... and so does a non-default lock-detector window trim code, on the same
+  # rule and for the same reason (#425).  The suffix names the KWINTRIM SETTING,
+  # not the per-corner resolved code -- see window_trim_tag_suffix() for why
+  # (`rule` has to stay unsuffixed, and the two agree wherever a suffix is
+  # emitted at all).
+  tag="${tag}$(window_trim_tag_suffix)"
   tag=$(simenv_mktag "${tag}")
   rundir="${WORK}/${tag}"; log="${rundir}/ngspice.log"
   libs="$(libs_for "${bundle}")"
@@ -688,6 +747,11 @@ if [ "${1:-}" = "--one-vpre" ]; then
     # A retry at the longer window gets its OWN work directory, so it adds a
     # measurement rather than overwriting the one it is replacing.
     [ "${ts}" = "$(vpre_tstop_for "${fout}")" ] || tag="${tag}_X${ts}"
+    # The calibration deck is a closed-loop run too, so it carries the window
+    # trim code (below) and needs the same per-code directory split as
+    # --one-lock (#425).  Suffix names the KWINTRIM SETTING, not the per-corner
+    # resolved code -- rationale at window_trim_tag_suffix().
+    tag="${tag}$(window_trim_tag_suffix)"
     tag=$(simenv_mktag "${tag}")
     local rundir="${WORK}/${tag}" log="${WORK}/${tag}/ngspice.log"
     local params=( "vsup=${vdd}" "fref=${fref}" "nratio=${KN}" "vctrl0=${vv}"
@@ -753,6 +817,11 @@ if [ "${1:-}" = "--one-dyn" ]; then
   # reason.  The two suffixes compose: a corner escalated on both plateaus
   # lands in "..._X<t_ramp>_E<p12>", distinct from either single escalation.
   [ -z "${KD_P12}" ] || tag="${tag}_E${KD_P12}"
+  # The step/ramp deck carries the window trim code as well, so a non-default
+  # code gets its own directory here too, composing after both hold suffixes
+  # (#425).  Suffix names the KWINTRIM SETTING, not the per-corner resolved
+  # code -- rationale at window_trim_tag_suffix().
+  tag="${tag}$(window_trim_tag_suffix)"
   tag=$(simenv_mktag "${tag}")
   rundir="${WORK}/${tag}"; log="${rundir}/ngspice.log"
   libs="$(libs_for "${bundle}")"
