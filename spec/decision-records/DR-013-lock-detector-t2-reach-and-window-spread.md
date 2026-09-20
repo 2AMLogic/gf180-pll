@@ -312,6 +312,40 @@ Decision 4's target, not before.
   against a 1.140 ns window — still crossed, but by 2 % rather than 8 %).
   Confirming it in one deck needs `sim/supply-sensitivity` re-run at
   W = 9.5 µm, which is named in #407's scope.
+
+  > **Follow-up (#417, 2026-09-20): this has since been measured in one loop,
+  > and both cells came out as inferred.** The paragraph above is left as
+  > written — it was the state of the evidence when this record was ratified,
+  > and the reasoning it records (why the cross-campaign comparison was
+  > legitimate, and by how much f_ref moved the answer) is what a reader needs
+  > to judge how much the confirmation was worth. What has changed is that it
+  > is no longer the best evidence available.
+  >
+  > `sim/supply-sensitivity/records/20260920-180604-0f91a9b.md` §1d re-makes
+  > the comparison with **both halves out of the same closed-loop transient**,
+  > at one f_ref (12.5 MHz), at the **trimmed** `delaywin_3v3` DR-014 decided
+  > and #411 built, with each bundle at the code the
+  > [trim-code rule](../pll.md#lock-detector-window-trim-code-rule) selects
+  > for it — which is the window a real part of that bundle carries, not the
+  > W = 9.5 µm untrimmed cell this paragraph reasoned about:
+  >
+  > | Cell | code | settled offset | `lock` | window vs. offset, in loop | vs. this record |
+  > |---|---|---|---|---|---|
+  > | `typical`/−40 °C/3.63 V | 7 | 0.8135 ns | 3.63 V (asserted) | **above** | crossed → **confirmed** |
+  > | `ff`/27 °C/3.63 V | 11 | 1.233 ns | 6.9 nV (not asserted) | **at-or-below** | not-crossed → **confirmed** |
+  >
+  > So Decision 4's verdict — "a marginal observer at two corners and a wrong
+  > one at one" — survives the trim and no longer depends on reading two
+  > campaigns against each other. The `ff`/27 °C/3.63 V row is the "wrong
+  > observer" case caught in the act: the loop is frequency-locked to
+  > 100.003 MHz with a settled 1.233 ns offset and the flag never rises.
+  >
+  > **What that follow-up does not do.** It is a declared two-cell subset —
+  > the two cells this paragraph names and no others — so it re-points the
+  > crossing question only. Every other cell of `sim/supply-sensitivity` is
+  > still at the untrimmed window, and that campaign's PVT statement is still
+  > `20260901-155456-46b92f8`. A trimmed-window full-grid re-run remains
+  > unowned.
 - **`sim/lock-time`'s 270-run re-take stays held** (Decision 7), and so does
   any interpretation of #163's 233 FAILs against a specific window.
 - **Nothing in `sim/` is invalidated and no design file changes.** This record
