@@ -89,7 +89,13 @@ cross-referenced each other as "whose behaviour is identical". Its ``pitch``
 default, ``0.75`` um, is what every one of those four modules' own
 ``METAL2_TRACK_PITCH_UM`` already independently evaluates to (``pfd_cp/rowgen.py``
 separately defines an unrelated ``0.8`` for a different helper, not a fifth
-value for this one).
+value for this one). Unlike ``v_wire()``'s ``width`` below, that default is a
+literal here rather than each caller's constant, because all four values agree
+and ``NetTracks`` is named in type-annotation and ``:class:`` positions that a
+``functools.partial`` re-binding would stop satisfying. The equality is
+therefore asserted, not assumed: ``layout/tests/test_canvas_nettracks.py``
+fails if any of the four constants (or this default) is changed alone, which
+is the propagation the per-module copies used to get for free (issue #432).
 
 ``Conductor``, ``Via``, ``VIA_LAYERS``, ``_TOUCH_EPS``, ``_boxes_touch()``,
 ``_contains()``, ``shorted_pairs()`` and ``disconnected_nets()`` (issue #364)
@@ -365,6 +371,12 @@ class NetTracks:
     eliminating same-layer Metal2 collisions between different nets by
     construction, independent of each net's Metal2 bus's X extent (see
     ``route_net``/``_riser``'s docstrings).
+
+    ``pitch``'s ``0.75`` um default is what each consuming module's own
+    ``METAL2_TRACK_PITCH_UM`` evaluates to -- an equality
+    ``layout/tests/test_canvas_nettracks.py`` asserts rather than assumes
+    (issue #432). A caller whose Metal2 pitch differs must pass it
+    explicitly; the default is not a claim that 0.75 um is safe everywhere.
     """
 
     def __init__(self, base_y: float, pitch: float = 0.75) -> None:
