@@ -60,36 +60,43 @@ SHA_DYN="$(simenv_sha256 "${SNAPDIR}/${RID}-dyn.spice")"
 
 # ---------------------------------------------------------------------------
 # Archive every raw log as committed evidence.
+#
+# Each tag below reconstructs a work-directory name run.sh minted, so every
+# suffix run.sh appends has to be appended here too or the archive looks for a
+# directory that does not exist.  `$(window_trim_tag_suffix)` is run.sh's own
+# function, spliced in above rather than restated, and it appends LAST at all
+# three of run.sh's tag sites -- so it appends last here as well (#425).
 # ---------------------------------------------------------------------------
+WSUF="$(window_trim_tag_suffix)"
 for f in "${WORK}"/s100_*.csv; do
   IFS=, read -r bundle temp vdd _ <<<"$(cat "${f}")"
-  tag="f100_${bundle}_T${temp}_V${vdd}"; tag="${tag//./p}"; tag="${tag//-/m}"
+  tag="f100_${bundle}_T${temp}_V${vdd}${WSUF}"; tag="${tag//./p}"; tag="${tag//-/m}"
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" \
     "f100_$(simenv_corner_id "${bundle}" "${temp}" "${vdd}")"
 done
 for f in "${WORK}"/s050_*.csv; do
   IFS=, read -r bundle temp vdd _ <<<"$(cat "${f}")"
-  tag="f050_${bundle}_T${temp}_V${vdd}"; tag="${tag//./p}"; tag="${tag//-/m}"
+  tag="f050_${bundle}_T${temp}_V${vdd}${WSUF}"; tag="${tag//./p}"; tag="${tag//-/m}"
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" \
     "f050_$(simenv_corner_id "${bundle}" "${temp}" "${vdd}")"
 done
 for f in "${WORK}"/s100x_*.csv; do
   IFS=, read -r bundle temp vdd _ <<<"$(cat "${f}")"
   ts="$(cut -d, -f27 <"${f}")"
-  tag="f100_${bundle}_T${temp}_V${vdd}_X${ts}"; tag="${tag//./p}"; tag="${tag//-/m}"
+  tag="f100_${bundle}_T${temp}_V${vdd}_X${ts}${WSUF}"; tag="${tag//./p}"; tag="${tag//-/m}"
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" \
     "f100x_$(simenv_corner_id "${bundle}" "${temp}" "${vdd}")"
 done
 for f in "${WORK}"/s100m_*.csv; do
   IFS=, read -r bundle temp vdd _ <<<"$(cat "${f}")"
   ts="$(cut -d, -f27 <"${f}")"; tm="$(cut -d, -f28 <"${f}")"
-  tag="f100_${bundle}_T${temp}_V${vdd}_X${ts}_M${tm}"; tag="${tag//./p}"; tag="${tag//-/m}"
+  tag="f100_${bundle}_T${temp}_V${vdd}_X${ts}_M${tm}${WSUF}"; tag="${tag//./p}"; tag="${tag//-/m}"
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" \
     "f100m_$(simenv_corner_id "${bundle}" "${temp}" "${vdd}")"
 done
 for f in "${WORK}"/sdyn_*.csv; do
   IFS=, read -r bundle temp _ <<<"$(cat "${f}")"
-  tag="dyn_${bundle}_T${temp}"; tag="${tag//./p}"; tag="${tag//-/m}"
+  tag="dyn_${bundle}_T${temp}${WSUF}"; tag="${tag//./p}"; tag="${tag//-/m}"
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" \
     "dyn_$(simenv_corner_id "${bundle}" "${temp}" 3.30)"
   cp "${WORK}/wave_${bundle}_${temp}.csv" \
@@ -106,7 +113,7 @@ done
 # --one-dyn's escalated invocation uses) so archiving them is additive.
 for f in "${WORK}"/sdynx_*.csv; do
   IFS=, read -r bundle temp _ <<<"$(cat "${f}")"
-  tag="dyn_${bundle}_T${temp}_X${KD_TRAMP_X}"; tag="${tag//./p}"; tag="${tag//-/m}"
+  tag="dyn_${bundle}_T${temp}_X${KD_TRAMP_X}${WSUF}"; tag="${tag//./p}"; tag="${tag//-/m}"
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" \
     "dynx_$(simenv_corner_id "${bundle}" "${temp}" 3.30)"
   cp "${WORK}/wavex_${bundle}_${temp}.csv" \
@@ -123,9 +130,9 @@ done
 for f in "${WORK}"/sdynend_*.csv; do
   IFS=, read -r bundle temp _ <<<"$(cat "${f}")"
   if [ "$(cut -d, -f49 <"${f}")" = "1" ]; then
-    tag="dyn_${bundle}_T${temp}_X${KD_TRAMP_X}_E${KD_DENDX_P12}"
+    tag="dyn_${bundle}_T${temp}_X${KD_TRAMP_X}_E${KD_DENDX_P12}${WSUF}"
   else
-    tag="dyn_${bundle}_T${temp}_E${KD_DEND_P12}"
+    tag="dyn_${bundle}_T${temp}_E${KD_DEND_P12}${WSUF}"
   fi
   tag="${tag//./p}"; tag="${tag//-/m}"
   simenv_archive_log "${WORK}" "${tag}" "${CORNERSDIR}" \
