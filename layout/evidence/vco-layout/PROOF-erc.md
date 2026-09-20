@@ -86,10 +86,39 @@ verified against the actual block rather than assumed. Doing that (via
 `klayout.db`, walking every text shape on this GDS's own `(*, 10)` layers)
 finds:
 
-- **Metal1 (`34/10`) carries `VDD_VCO` and `GND_VCO` text** — 26 instances
-  between the two nets, alongside this block's non-supply Metal1 pin text
-  (`NC`, `NOFF`, `NVI`, `S<i>.Y`, `Y<i>`, `NB1`/`NB2`, `CLK`). Declared as
-  `stackup[1].label_layer`.
+- **Metal1 (`34/10`) carries `VDD_VCO` and `GND_VCO` text** — **43 instances
+  between the two nets** (`VDD_VCO` 15, `GND_VCO` 28), alongside this block's
+  non-supply Metal1 pin text (`NC`, `NOFF`, `NVI`, `S<i>.Y`, `Y<i>`,
+  `NB1`/`NB2`, `CLK`). Declared as `stackup[1].label_layer`.
+
+  Counted directly from the committed GDS, array-aware, rather than asserted:
+
+  ```
+  $ python3 - <<'PY'
+  import collections, klayout.db as db
+  ly = db.Layout(); ly.read("layout/evidence/vco-layout/vco_block.gds")
+  it = db.RecursiveShapeIterator(ly, ly.top_cell(), ly.layer(34, 10))
+  it.shape_flags = db.Shapes.STexts
+  n = collections.Counter()
+  while not it.at_end():
+      if it.shape().is_text(): n[it.shape().text.string] += 1
+      it.next()
+  print({k: n[k] for k in ("VDD_VCO", "GND_VCO")}, "total", n["VDD_VCO"] + n["GND_VCO"])
+  PY
+  {'VDD_VCO': 15, 'GND_VCO': 28} total 43
+  ```
+
+  (KLayout Python module `0.30.10`; `vco_block.gds`
+  `sha256:b1798bf8…3b8ca5b18b`, the hash pinned under "Provenance" above.)
+  Three other counting methods agree exactly — a flattened copy of the top
+  cell, a non-recursive walk of the top cell's own shapes, and a sum over
+  every cell definition in the file — because all 43 supply texts are drawn
+  in the top cell `vco_block` itself, with no instancing or arraying to
+  disagree about. **Correction (2026-09-20):** this bullet previously read
+  "26 instances"; that number was not reproducible by any of the four
+  methods above and has been replaced with the measured one. The conclusion
+  it supports is unchanged — both supply nets do carry text on `34/10`, and
+  Metal2 carries none.
 - **Metal2 (`36/10`) carries text too, but never `VDD_VCO`/`GND_VCO`** — only
   bias/control net names (`VCTRL`, `VBP`, `VBN`, `B0`/`B1`/`B2`, plus
   `NC`/`NOFF`/`NVI`/`CLK` again). **Not** declared as a `label_layer`: doing
@@ -121,12 +150,50 @@ omits it on purpose.
 that stands in for it — this block's own well/substrate-tie connectivity —
 already exists, independently, via three other checks:
 
-- **`vco_block`'s own committed LVS is a full match**: 65/65 devices
-  (`Match` 62, `MatchWithWarning` 3 — the already-disclosed
-  `RESISTOR_LVS_MODEL` device-class deviation, unrelated to connectivity),
-  **43/43 nets `Match`, 0 mismatches**, deck verdict `Congratulations!
-  Netlists match.` (`layout/evidence/vco-layout/PROOF-381-high-rs-resistor.md`,
-  citing `lvs-clean/lvs.stdout.log`). The PDK's own LVS deck extracts real
+- **`vco_block`'s own committed LVS is a full match**: **65/65 devices
+  `Match` (0 `MatchWithWarning`, 0 mismatches), 43/43 nets `Match`**, deck
+  verdict `Congratulations! Netlists match.`
+  (`layout/evidence/vco-layout/PROOF-381-high-rs-resistor.md`, citing
+  `lvs-clean/lvs.stdout.log`).
+
+  Re-derived here from the committed cross-reference database itself, not
+  copied from the prose of another document:
+
+  ```
+  $ python3 - <<'PY'
+  import collections, klayout.db as db
+  lvs = db.LayoutVsSchematic(); lvs.read("layout/evidence/vco-layout/lvs-clean/vco_block.lvsdb")
+  xref = lvs.xref()
+  dev, net = collections.Counter(), collections.Counter()
+  for cp in xref.each_circuit_pair():
+      for dp in xref.each_device_pair(cp): dev[str(dp.status())] += 1
+      for np_ in xref.each_net_pair(cp): net[str(np_.status())] += 1
+  print("devices:", dict(dev), " nets:", dict(net))
+  PY
+  devices: {'Match': 65}  nets: {'Match': 43}
+
+  $ sha256sum layout/evidence/vco-layout/lvs-clean/vco_block.lvsdb
+  a94c9a8b84e4c2777e666942f4261ec1e55c3f1cb11501ebd0b8a76ac10b4c26  layout/evidence/vco-layout/lvs-clean/vco_block.lvsdb
+
+  $ grep -c 'Congratulations! Netlists match.' layout/evidence/vco-layout/lvs-clean/lvs.stdout.log
+  1
+  ```
+
+  The single circuit pair is `Match` as well. **Correction (2026-09-20):**
+  this bullet previously read "`Match` 62, `MatchWithWarning` 3 — the
+  already-disclosed `RESISTOR_LVS_MODEL` device-class deviation". That is
+  the **pre-fix** state — it is exactly the "Before" column of
+  [`PROOF-378-resistor-class-fix.md`](PROOF-378-resistor-class-fix.md)
+  ("Devices | 65/65 paired: 62 `Match`, 3 `MatchWithWarning` | 65/65 `Match`
+  (**0 warnings**)"), captured before DR-009 changed
+  `block.RESISTOR_LVS_MODEL` from `ppolyf_u_1k` to `ppolyf_u`. The currently
+  committed `.lvsdb` is the post-fix one and carries no `MatchWithWarning`
+  at all, which is also what the cited
+  [`PROOF-381-high-rs-resistor.md`](PROOF-381-high-rs-resistor.md) says
+  ("65/65 `Match`, 0 warnings, 0 mismatches"). The standing-in argument
+  below is strengthened, not weakened, by the correction.
+
+  The PDK's own LVS deck extracts real
   `nplus`/`pplus`/well-tap-aware derived layers — a well/substrate tie wired
   to the wrong net, or not wired at all, would show up as a net-level
   mismatch there. It does not.
