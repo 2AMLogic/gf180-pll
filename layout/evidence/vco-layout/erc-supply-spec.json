@@ -1,0 +1,50 @@
+{
+  "_description": "klt erc supply-connectivity spec for layout/evidence/vco-layout/vco_block.gds (gf180mcuD). Declares the gate+conductor stackup and the two supply nets (VDD_VCO, GND_VCO) so erc.unconnected_net / erc.supply_short can be computed. See CLAUDE.md item-11 tracking issue for the full rationale.",
+  "_ties_omitted": "No 'ties' array is declared on purpose -- klt erc's ties[] handling has a known upstream bug (klayout-tools#2169) that collapses a real routed design into one electrical island and reports a false erc.supply_short. Per klt erc's own contract (docs/cli/erc.md), omitting ties[] means erc.missing_tie is simply not computed, rather than reported as a misleading zero.",
+  "stackup": [
+    {
+      "name": "poly2",
+      "layer": "30/0",
+      "role": "gate",
+      "active_layer": "22/0",
+      "_comment": "Poly2 (30/0) is gf180mcu's gate-poly layer -- stackup[0] must set role:gate. active_layer names Comp (22/0), the diffusion/active layer, so klt erc computes true poly-and-diff gate area (issue klayout-tools#1979) rather than raw poly-net area, which would otherwise misclassify this block's poly resistors (drawn on 30/0 with the (62,0) high-Rs marker, never overlapping diffusion) as antenna-relevant gates. Cross-checked against libs.tech/klayout/tech/gf180mcu.lyp (Poly2 30/0@1, COMP 22/0@1) and klayout-tools' curated decks/gf180mcu.py layer table (both agree)."
+    },
+    {
+      "name": "metal1",
+      "layer": "34/0",
+      "label_layer": "34/10",
+      "_comment": "Metal1 (34/0) is the first routing layer above poly/diffusion via Contact (33/0). label_layer 34/10 (Metal1_Label) is declared here because it is VERIFIED (not assumed) to carry this block's own VDD_VCO/GND_VCO pin text -- confirmed by walking vco_block.gds's own text shapes on layer (34,10) with klayout.db: VDD_VCO and GND_VCO labels are present there (guard-ring taps, per-stage rail straps, and the block boundary pins), alongside this block's non-supply Metal1 pin text (NC, NOFF, NVI, S<i>.Y, Y<i>, NB1/NB2, CLK)."
+    },
+    {
+      "name": "metal2",
+      "layer": "36/0",
+      "_comment": "Metal2 (36/0) is this block's second and, in the committed vco_block.gds, LAST routing layer actually drawn (confirmed by enumerating layer_indexes() on the committed GDS: layers present are 21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0, 34/10, 35/0, 36/0, 36/10, 49/0, 62/0, 110/5 -- nothing above 36/0). No label_layer is declared here: layer (36,10) (Metal2_Label) does carry text in this block, but it is bias/control net text (VCTRL, VBP, VBN, B0/B1/B2, NC, NOFF, NVI, CLK) -- VERIFIED none of it is VDD_VCO/GND_VCO -- so declaring it as a label_layer would not help resolve either declared supply net and is omitted per the 'only where the GDS actually puts supply text' instruction."
+    },
+    {
+      "name": "metal3",
+      "layer": "42/0",
+      "_comment": "Metal3 (42/0) -- not present anywhere in the committed vco_block.gds (this block's own routing stops at Metal2; see the metal2 entry above). Declared anyway to keep this spec the same portable gf180mcu stackup shape used across this fleet's other klt erc specs -- per klt erc's own documented convention (docs/cli/erc.md, 'Spec file'), 'A stackup/vias entry naming a layer absent from the given layout is not itself an error'. Its levels[] entries will simply report zero step_area_um2 for every gate net in this run."
+    },
+    {
+      "name": "metal4",
+      "layer": "46/0",
+      "_comment": "Metal4 (46/0) -- also absent from vco_block.gds, included for the same portable-stackup reason as metal3 above."
+    },
+    {
+      "name": "metal5",
+      "layer": "81/0",
+      "_comment": "Metal5 (81/0) -- also absent from vco_block.gds, included for the same portable-stackup reason as metal3 above. No label_layer is declared for it (unlike some other blocks in this fleet that route PDN straps on Metal5): this block draws nothing on 81/0 or 81/10 at all, verified directly against the committed GDS's own layer_indexes(), so a label_layer here would be pure fiction, not a verified fact."
+    }
+  ],
+  "vias": [
+    { "name": "contact", "layer": "33/0", "between": ["poly2", "metal1"], "_comment": "Contact (33/0) is gf180mcu's single poly/diffusion-to-Metal1 contact layer (used generically for both gate and source/drain contacts)." },
+    { "name": "via1", "layer": "35/0", "between": ["metal1", "metal2"], "_comment": "Via1 (35/0), Metal1-to-Metal2 -- the only inter-metal via this block's own GDS actually draws." },
+    { "name": "via2", "layer": "38/0", "between": ["metal2", "metal3"], "_comment": "Via2 (38/0), Metal2-to-Metal3 -- unused in this block's GDS (no Metal3 present), included for the portable stackup shape." },
+    { "name": "via3", "layer": "40/0", "between": ["metal3", "metal4"], "_comment": "Via3 (40/0), Metal3-to-Metal4 -- unused in this block's GDS, included for the portable stackup shape." },
+    { "name": "via4", "layer": "41/0", "between": ["metal4", "metal5"], "_comment": "Via4 (41/0), Metal4-to-Metal5 -- unused in this block's GDS, included for the portable stackup shape." }
+  ],
+  "nets": [
+    { "name": "VDD_VCO", "kind": "supply", "_comment": "This block's positive supply rail -- matched against Metal1_Label (34/10) text, verified present in the committed GDS." },
+    { "name": "GND_VCO", "kind": "supply", "_comment": "This block's ground/substrate-tie rail (also this block's --lvs-sub name in every committed LVS run) -- matched against Metal1_Label (34/10) text, verified present in the committed GDS." }
+  ]
+}
