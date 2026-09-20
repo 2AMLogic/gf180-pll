@@ -75,11 +75,29 @@ spec/          specification + numbered decision records (DR-NNN)
 design/        xschem schematics/symbols + the SPICE netlist exporter
 sim/           testbenches, the PVT corner harness, and append-only evidence records
 layout/        DRC/LVS flow, proven on a test cell; PLL-block GDS/reports not yet drawn
+signoff/       this block's T1 evidence-tier verdict, machine-graded and CI-checked
 measurements/  silicon characterization (empty until there is silicon)
 ```
 
 Start with `spec/decision-records/` for *why the design is what it is*, and
 `sim/README.md` for *how results are recorded and how to reproduce them*.
+
+## Where this block stands against the evidence ladder
+
+The prose above is the human summary. The **machine verdict of record** is
+`signoff/tier-report.json` — every item of klayout-tools'
+[T1 evidence checklist](https://github.com/2AMLogic/klayout-tools/blob/main/docs/design-evidence-tiers.md)
+rendered `met` or `unmet` with a reason, graded by `klt signoff --manifest`
+from the evidence this repo actually cites, and re-checked in CI so it cannot
+go stale. Today it reads **0 of 22 rows met**, which is the honest state of a
+block with no `klt` evidence envelope committed anywhere yet.
+
+Read `signoff/README.md` for what that verdict does and does not say — in
+particular, three quite different situations all render as `no_evidence`, and
+the four items the tool grades on "some passing envelope was cited" are
+deliberately left uncited here rather than turned green by an unrelated report.
+No hand-maintained met/unmet checklist is kept anywhere in this repository; if
+a claim about T1 status conflicts with that report, the report wins.
 
 ## How verification works here
 
