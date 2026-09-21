@@ -72,10 +72,10 @@ as "met" against a 5.0 V condition it was never run at.
 ### 2.2 Pad table, mapped to the Challenge #5 slot budget
 
 `design/pll_top.sch`'s exported port list
-(`design/netlist/pll_top.spice`, `.subckt pll_top REF B0 B1 B2 CPB0 CPB1 P0
-P1 P2 P3 P4 P5 SEL0 SEL1 SEL2 SEL3 SEL4 SEL5 IBN ICN IBP ICP CLK DIVOUT FB
-LOCK VCTRL + VDD VDD_VCO GND_VCO VDD_DIV VSS`) is the port list this table
-maps, unedited, onto the Challenge #5 budget (per Epic #542: one
+(`design/netlist/pll_top.spice`, `.subckt pll_top REF B0 B1 B2 CPB0 CPB1 LDT0
+LDT1 LDT2 LDT3 P0 P1 P2 P3 P4 P5 SEL0 SEL1 SEL2 SEL3 SEL4 SEL5 IBN ICN IBP
+ICP CLK DIVOUT FB LOCK VCTRL + VDD VDD_VCO GND_VCO VDD_DIV VSS`) is the port
+list this table maps, unedited, onto the Challenge #5 budget (per Epic #542: one
 bandgap-referenced bias voltage, up to 2 bandgap-referenced current sources,
 up to 24 digital control inputs, up to 12 digital test outputs, up to 4
 shared analog lines, up to 4 dedicated pads, SPI control documented in the
@@ -89,6 +89,7 @@ harness).
 | `REF` | in | digital control input (budget ≤ 24) | 1 of 24 | Reference clock, CMOS square wave, rising-edge triggered, 1–25 MHz (`spec/pll.md#reference-input`); duty cycle 30–70 % (only pulse-width margin, not sampled phase, is duty-sensitive — the PFD's edge detectors fire on the rising edge only) |
 | `B0`, `B1`, `B2` | in | digital control input | 3 of 24 | VCO band select (3-bit, 8 bands). **Static configuration only** — no on-chip auto-calibration FSM exists (DR-001 Decision 2); a system must apply the [band-selection rule](../../spec/pll.md#band-selection-rule) itself |
 | `CPB0`, `CPB1` | in | digital control input | 2 of 24 | Charge-pump current trim (2-bit, 4 codes). **Not discretionary** — required to be set from `f_ref` per the [Icp trim-code rule](../../spec/pll.md#icp-trim-code-rule) |
+| `LDT0`…`LDT3` | in | digital control input | 4 of 24 | Lock-detector window trim (4-bit, 16 codes). **Not discretionary** — required to be set once per part at test, from that part's own measured comparator-window delay, per the normative [Lock-detector window trim-code rule](../../spec/pll.md#lock-detector-window-trim-code-rule) (DR-014, DR-015). Same static-configuration idiom as `CPB0`/`CPB1`; nominal/unprogrammed code is 1000 (8) |
 | `P0`…`P5`, `SEL0`…`SEL5` | in | digital control input | 12 of 24 | Feedback-divider configuration: `P5..P0` is each ÷2/3 cell's per-cycle mode; `SEL5..SEL0` is a one-hot chain-length code. Together they set `N = 2^k + Σ P_j·2^j (j<k)` for one-hot `SEL_(k-1)=1`, covering the ratified N = 4–64 range. Static configuration; the loop re-locks after any change (no glitch-free on-the-fly modulus switching, DR-001 Decision 3) |
 | `IBN`, `ICN`, `IBP`, `ICP` | in | **does not fit the ≤ 2 bandgap-referenced current-source budget — open item, see §7** | 4 requested vs. 2 offered | Charge-pump / bias-mirror reference currents. **Every closed-loop `sim/` record in this repository drives these from ideal current sources at 4× the unit-leg current** — the bias generator that would derive them from a single bandgap-referenced current is "a separate, unbuilt block" (every closed-loop evidence record's own Limitations field says so verbatim). This is not a Challenge-specific gap invented for this proposal; it is a standing, disclosed limitation of the design today |
 | `VCTRL` | analog, iopin | shared analog line (budget ≤ 4) | 1 of 4 | Loop-filter control voltage — a slow-moving DC/low-frequency analog test point, well suited to a multiplexed line. Usable window 0.9–2.7 V (DR-003 Decision 5) |
@@ -99,10 +100,11 @@ harness).
 **Totals against the Challenge #5 budget**: 0 of 1 bandgap-referenced bias
 voltage (this block draws no bandgap reference of its own — see the `IBN`/
 `ICN`/`IBP`/`ICP` row), **4 requested vs. 2 offered** bandgap-referenced
-current sources (open item, §7), 18 of ≤ 24 digital control inputs, 1–3 of
-≤ 12 digital test outputs (`LOCK` alone, or `LOCK`+`DIVOUT`+`FB`), 1 of ≤ 4
-dedicated pads, 1 of ≤ 4 shared analog lines. Every category **except the
-current-source count** fits inside budget with real headroom; the
+current sources (open item, §7), 22 of ≤ 24 digital control inputs (18 without
+the lock-detector trim; `LDT0`–`LDT3` add 4, leaving 2 slots of headroom — see
+DR-015), 1–3 of ≤ 12 digital test outputs (`LOCK` alone, or `LOCK`+`DIVOUT`+`FB`),
+1 of ≤ 4 dedicated pads, 1 of ≤ 4 shared analog lines. Every category **except
+the current-source count** fits inside budget with real headroom; the
 current-source mismatch is the one place this design does not fit the
 harness as specified, and it is stated as such rather than glossed over.
 
@@ -112,14 +114,26 @@ harness as specified, and it is stated as such rather than glossed over.
   schematic exposes is mapped to a slot above.
 - **No pin is proposed as new** relative to the schematic — `DIVOUT` and `FB`
   are both already top-level pins of the committed design, simply optional
-  as *test* outputs versus load-bearing feedback.
+  as *test* outputs versus load-bearing feedback. **`LDT0`–`LDT3` are the
+  same case, not a third one**: they are neither dropped nor newly added
+  relative to this repo's own port list — they already exist as top-level
+  `pll_top` ports (PR #418, commit `bfde9893`), mapped above in the exact
+  same static-configuration-input idiom `CPB0`/`CPB1` already use (see
+  DR-015).
 - **`SPI control` does not apply.** This block has no addressable
-  configuration register — its 18 configuration bits (`B0..B2`, `CPB0..1`,
-  `P0..5`, `SEL0..5`) are static levels, not an SPI-programmed state, and
-  nothing in `design/` implies an SPI interface. A harness wrapper that
-  drives these 18 lines from its own SPI-to-parallel shift register (rather
-  than 18 dedicated harness pins) is a harness-side integration detail, not
-  a change to this proposal's I/O list.
+  configuration register — its 21 configuration bits (`B0..B2`, `CPB0..1`,
+  `LDT0..3`, `P0..5`, `SEL0..5`) are static levels, not an SPI-programmed
+  state, and nothing in `design/` implies an SPI interface. A harness wrapper
+  that drives these 21 lines from its own SPI-to-parallel shift register
+  (rather than 21 dedicated harness pins) is a harness-side integration
+  detail, not a change to this proposal's I/O list. (`REF`, the reference
+  clock, is deliberately excluded from this count — it is a continuously
+  toggling signal, not a static configuration level — which is why this
+  count is one less than §2.2's "22 of ≤ 24 digital control inputs" total.
+  The prior revision of this sentence read "18 configuration bits" for the
+  17-bit set that existed before `LDT0`–`LDT3` were pins at all — an
+  off-by-one that predates this change and is corrected here alongside the
+  `LDT0`–`LDT3` addition.)
 - **The 4-vs-2 current-source shortfall (§2.2) is the one real gap.** Closing
   it needs a bias-generator sub-block this repository has never designed —
   either a real bandgap-referenced current mirror producing all four
