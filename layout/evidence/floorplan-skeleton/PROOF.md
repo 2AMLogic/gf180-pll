@@ -221,3 +221,41 @@ touches `skeleton.py`.
 Regenerate via `python3 -m floorplan.skeleton --outdir evidence/floorplan-skeleton`
 (from `layout/`) followed by the `run_pv.py drc` command tabulated above; do
 not hand-edit any file under this directory.
+
+## Re-run, issue #454: `DIVIDER_LOCK` shrinks again, this time from a macro-level track pack
+
+**Everything above this line describes the artifact as regenerated at #461.
+It is superseded again here, one merge later, by the same mechanism §454's
+own re-derivation names: `skeleton.py` reads `DIVIDER_CHAIN_STANDALONE_H_UM`
+from `layout/pll_top/divider_chain/divider_chain.py`'s own measured
+footprint, and that PR shrank it 100.29 → 70.29 µm by packing `div23_cell`'s
+own Metal2 track band — the same class of move `fe400132` made through
+`vco/ring.py` at #461's re-run, propagating into this file with no edit to
+`skeleton.py` itself.** `layout/tests/test_gds_reproducibility.py` caught
+it immediately (drift of exactly 40,009.8 µm² on layer 0/0), which is the
+guard added at #461 doing precisely the job it was built for.
+
+| | committed through #461 | regenerated (#454) |
+|---|---|---|
+| Bounding box | `(0, −15) … (1333.66, 458.37)` µm | **`(0, −15) … (1333.66, 428.37)`** µm |
+| Merged 0/0 area | 416,248.2 µm² | **376,238.4 µm²** (−40,009.8 µm²) |
+| `total_extent_um2()` (block rectangles only) | 611,310 µm² | **571,300 µm²** |
+| Shapes on layer 0/0 | 32 | 32 (unchanged — no block added or removed) |
+
+Only `divider_lock`'s bounding box moves (its height drops by the same 30.00
+µm `PLL-FLOORPLAN.md` §5.8 records for `divider_chain`); `vco`, `pfd_cp` and
+the loop-filter/VCO placement rules are untouched, so this is a pure height
+reduction, not a re-placement.
+
+Re-run through the same foundry deck (`gf180mcuD`, open_pdks
+`c6d73a35f524070e85faff4a6a9eef49553ebc2b`, KLayout 0.30.10, table `main`,
+`--variant=D`): `Klayout DRC run is clean. GDS has no DRC violations.` — clean
+by construction, same as every prior run of this file, since layer (0, 0)
+still carries no rule in this deck.
+
+`total_extent_um2()` is, as before, a restatement rather than a new
+finding: it is computed from `skeleton.py`'s own `Block` tuples and has
+carried the ~0.571 × 10⁶ µm² figure since this PR's own change to
+`DIVIDER_CHAIN_STANDALONE_H_UM`, independent of when this committed artifact
+catches up. See `PLL-FLOORPLAN.md` §5.8 for the divider-chain measurement
+this follows from.
