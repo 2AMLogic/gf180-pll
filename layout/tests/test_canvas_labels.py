@@ -60,6 +60,20 @@ class _ToyCanvas(_canvas.Canvas):
     PIN_LAYER = "metal1_label"
 
 
+class _NoLabelSuffixCanvas(_canvas.Canvas):
+    """A ``LAYER`` table with no ``"*_label"``-suffixed key at all -- the
+    defensive fallback case (issue #453): no submodule's table looks like
+    this today, but the default must not silently clear nothing for one that
+    somehow does, so it falls back to the pre-#453 ``(PIN_LAYER,)`` default
+    instead."""
+
+    LAYER = {
+        "metal1": (34, 0),
+        "metal1pin": (34, 10),
+    }
+    PIN_LAYER = "metal1pin"
+
+
 def _texts(canvas, layer: str) -> list[str]:
     index = canvas.layout.layer(*canvas.LAYER[layer])
     return sorted(
@@ -87,13 +101,22 @@ class ClearInheritedLabelsTests(unittest.TestCase):
         canvas = self._canvas_with_pins()
         self.assertEqual(_texts(canvas, "metal1_label"), ["EN", "ENB"])
         removed = canvas.clear_inherited_labels()
-        self.assertEqual(removed, 2)
+        self.assertEqual(removed, 3)
         self.assertEqual(_texts(canvas, "metal1_label"), [])
 
-    def test_leaves_other_label_purposes_alone_by_default(self):
+    def test_default_also_clears_every_other_label_purpose_the_canvas_defines(self):
+        # issue #453 -- the narrow issue-#440 default (PIN_LAYER only, here
+        # "metal1_label") missed a purpose-layer label on any *other*
+        # "*_label" entry in the canvas's own LAYER table, e.g. a
+        # Metal2-bus pin labelled on "metal2_label" (36/10) the way
+        # pfd_cp/block.py's own UP/DN pins are. A future assembler composing
+        # such a block by the same read-GDS-and-flatten pattern and calling
+        # the bare clear_inherited_labels() must not inherit that text.
         canvas = self._canvas_with_pins()
-        canvas.clear_inherited_labels()
-        self.assertEqual(_texts(canvas, "metal2_label"), ["UP"])
+        removed = canvas.clear_inherited_labels()
+        self.assertEqual(removed, 3)
+        self.assertEqual(_texts(canvas, "metal1_label"), [])
+        self.assertEqual(_texts(canvas, "metal2_label"), [])
 
     def test_clears_named_layers_when_asked(self):
         canvas = self._canvas_with_pins()
@@ -148,6 +171,54 @@ class ClearInheritedLabelsTests(unittest.TestCase):
         # The parent then names the net itself, and that name survives.
         parent.pin("VSS", 0.0, 0.0, 1.0, 1.0)
         self.assertEqual(_texts(parent, "metal1_label"), ["VSS"])
+
+    def test_clears_a_metal2_label_pin_inherited_by_flattening_a_read_sub_cell(self):
+        # issue #453's concrete scenario: a sub-block's boundary pin is
+        # Metal2 geometry (pfd_cp's own UP/DN), labelled with an explicit
+        # ``layer="metal2_label"`` override -- correct for that sub-block's
+        # own standalone LVS claim. A parent composing it by the same
+        # read-GDS-and-flatten pattern must not inherit that 36/10 text: the
+        # bare, no-argument ``clear_inherited_labels()`` call has to reach it
+        # too, not only the narrow "metal1_label"-only default issue #440
+        # left in place.
+        import tempfile
+
+        import klayout.db as db
+
+        sub = _ToyCanvas("sub")
+        sub.rect("metal2", 0.0, 2.0, 1.0, 3.0)
+        sub.pin("UP", 0.0, 2.0, 1.0, 3.0, layer="metal2_label")
+
+        parent = _ToyCanvas("parent")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sub.gds"
+            sub.write_gds(path)
+            parent.layout.read(str(path))
+        index = parent.layout.cell_by_name("sub")
+        parent.top.insert(db.CellInstArray(index, db.Trans(db.Vector(0, 0))))
+        parent.top.flatten(-1, True)
+
+        self.assertEqual(_texts(parent, "metal2_label"), ["UP"])
+        self.assertEqual(parent.clear_inherited_labels(), 1)
+        self.assertEqual(_texts(parent, "metal2_label"), [])
+        # The parent then names its own boundary net, and that survives.
+        parent.pin("VOUT_MIRROR", 0.0, 2.0, 1.0, 3.0, layer="metal2_label")
+        self.assertEqual(_texts(parent, "metal2_label"), ["VOUT_MIRROR"])
+
+    def test_default_falls_back_to_pin_layer_when_layer_table_has_no_label_suffix(self):
+        canvas = _NoLabelSuffixCanvas("toy")
+        canvas.rect("metal1", 0.0, 0.0, 1.0, 1.0)
+        canvas.pin("EN", 0.0, 0.0, 1.0, 1.0)
+        index = canvas.layout.layer(*canvas.LAYER["metal1pin"])
+        self.assertEqual(
+            sorted(s.text.string for s in canvas.top.shapes(index).each() if s.is_text()),
+            ["EN"],
+        )
+        removed = canvas.clear_inherited_labels()
+        self.assertEqual(removed, 1)
+        self.assertEqual(
+            [s.text.string for s in canvas.top.shapes(index).each() if s.is_text()], []
+        )
 
 
 if __name__ == "__main__":

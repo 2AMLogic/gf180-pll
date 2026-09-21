@@ -246,8 +246,12 @@ class Canvas:
         self.label(layer if layer is not None else self.PIN_LAYER, net, (x0 + x1) / 2.0, (y0 + y1) / 2.0)
 
     def clear_inherited_labels(self, layers: Sequence[str] | None = None) -> int:
-        """Delete every *text* on ``layers`` (default: this canvas's own
-        ``PIN_LAYER``) from every cell, and return how many were removed.
+        """Delete every *text* on ``layers`` from every cell, and return how
+        many were removed.
+
+        Default (``layers=None``): every ``"*_label"`` purpose this canvas's
+        own ``LAYER`` table defines -- **not** only ``PIN_LAYER`` (issue
+        #453; see "WHY THE DEFAULT COVERS EVERY ``_label`` PURPOSE" below).
 
         WHY AN ASSEMBLER HAS TO CALL THIS (issue #440)
         ----------------------------------------------
@@ -281,8 +285,39 @@ class Canvas:
         composing ``flatten()``, before the assembler promotes its own
         boundary pins with :meth:`pin`; the sub-block's own standalone GDS
         (and its own standalone LVS claim) is untouched.
+
+        WHY THE DEFAULT COVERS EVERY ``_label`` PURPOSE (issue #453)
+        --------------------------------------------------------------
+        The original (issue #440) default cleared only ``PIN_LAYER`` --
+        every submodule's own default label purpose, ``"metal1_label"``
+        (34/10). That is not the *only* purpose layer gf180mcu's LVS deck
+        reads names from: ``pfd_cp``'s own ``UP``/``DN`` boundary pins are
+        Metal2 geometry, so ``block.py`` labels them on ``"metal2_label"``
+        (36/10, ``connect(metal2_con, metal2_label)``) via ``pin()``'s
+        ``layer=`` override -- correctly, for ``pfd_cp``'s own standalone
+        claim. A *future* assembler composing ``pfd_cp`` the same
+        read-GDS-and-flatten way and calling the bare
+        ``clear_inherited_labels()`` would strip the 34/10 texts (the case
+        the narrow default covered) but inherit ``pfd_cp``'s two 36/10
+        ``UP``/``DN`` texts untouched -- reintroducing exactly #440's bug
+        class one level up, in the harder-to-see direction: a label that
+        *is* on a purpose layer the deck reads, just not the one the narrow
+        default checked. Defaulting to every ``"*_label"``-suffixed key in
+        ``LAYER`` closes that: it is the naming convention every submodule's
+        own ``LAYER`` table already uses for gf180mcu's LVS-purpose layers
+        (``"metal1_label"``, ``"metal2_label"``; see ``pfd_cp/devgen.py``'s
+        own ``LAYER`` table comments citing the deck's
+        ``layers_definitions.lvs``), so no submodule has to opt in per call
+        site. A ``LAYER`` table with no such key (none exist today, but a
+        defensive fallback costs nothing) falls back to the original
+        ``(PIN_LAYER,)`` behavior instead of silently clearing nothing.
         """
-        names = (self.PIN_LAYER,) if layers is None else tuple(layers)
+        if layers is not None:
+            names = tuple(layers)
+        else:
+            names = tuple(name for name in self.LAYER if name.endswith("_label"))
+            if not names and self.PIN_LAYER in self.LAYER:
+                names = (self.PIN_LAYER,)
         removed = 0
         for name in names:
             gds = self.LAYER.get(name)
