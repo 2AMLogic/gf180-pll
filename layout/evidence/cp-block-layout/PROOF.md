@@ -153,3 +153,40 @@ layout/tests`):
 
 Regenerate via `python3 -m pfd_cp.cp` (from `layout/pll_top/`) +
 `layout/run_pv.py drc`; do not hand-edit any file under this directory.
+
+---
+
+## Addendum (issue #448): labels-only regeneration, DRC re-run
+
+`cp`'s composed cell used to inherit its sub-cells' own standalone pin
+labels through `top.flatten(-1, True)`. Those names are local to the
+sub-cell's own LVS claim and name the wrong net one level up — in
+`pfd_cp`, the version of this defect that reached the top level put an
+`ENB` text on the block's ground rail, which broke gf180mcu's substrate
+global-net merge and mismatched all 84 n-channel bulk terminals (full
+write-up: `layout/evidence/pfd-cp-layout/PROOF.md`, "Addendum 2"). The fix
+is `_canvas.Canvas.clear_inherited_labels()`, called immediately after the
+composing `flatten()` here, before this block promotes its own boundary
+pins.
+
+**Geometry did not change.** A layer-by-layer `klayout.db.Region` XOR of
+this block's pre-change and post-change GDS is empty on all 11 drawing
+layers; only the 34/10 label purpose differs. The committed `cp.gds` was
+regenerated anyway so the tree matches its generator, and the DRC deck was
+re-run on that exact file rather than the earlier claim being carried over:
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `cp` DRC, table `main` | clean | `DRC clean: cp (D), 0 violations` | **PASS** |
+
+`drc-clean/drc.stdout.log` and `drc-clean/cp_main.lyrdb` are that run's own
+output. Every `connectivity/*.netcheck.log` record in this directory is
+unchanged, and was verified byte-identical after the rebuild — the expected
+result of a labels-only change.
+
+| | |
+|---|---|
+| Run | 2026-09-21 |
+| Branch point | `origin/main` @ `93e36cd7` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout | `KLayout 0.28.16` |

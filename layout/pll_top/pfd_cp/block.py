@@ -390,6 +390,13 @@ def build(outdir: Path | None = None) -> PfdCpLayout:  # noqa: PLR0915 -- one li
         _place(pfd_index, 0.0, 0.0)
         _place(cp_index, dx, dy)
         canvas.top.flatten(-1, True)
+    # Both sub-blocks label their own boundary nets for their own standalone
+    # LVS claims, and ``pfd`` additionally labels its own VDD/VSS rails once
+    # per row. This level owns this block's 13 boundary-pin names and draws
+    # every one of them below; anything inherited is at best a duplicate and
+    # at worst names the wrong net (issue #440) -- see
+    # _canvas.Canvas.clear_inherited_labels().
+    canvas.clear_inherited_labels()
 
     # --- Metal2 trunk rows: one dedicated Y per bridged/tied net, strictly
     # above every routing channel either placed block already uses on its
@@ -455,7 +462,12 @@ def build(outdir: Path | None = None) -> PfdCpLayout:  # noqa: PLR0915 -- one li
     for net in ("B0", "B1", "IBN", "ICN", "IBP", "ICP", "VOUT"):
         canvas.pin(net, *cp_array._translate_box(cp_layout.pins[net][0], dx, dy))
     for net in BRIDGED_NETS:
-        canvas.pin(net, *_pfd_bus_box(pfd_layout, net))
+        # Metal2 geometry, so the label goes on the Metal2 *pin* purpose
+        # (36/10), not Metal1's (34/10). A 34/10 text here attaches to
+        # whatever Metal1 lies under the bus -- which for both UP and DN is
+        # pfd's own RB row-0 bus, extracting it as ``DN,UP`` and leaving the
+        # real UP/DN nets anonymous (issue #440).
+        canvas.pin(net, *_pfd_bus_box(pfd_layout, net), layer="metal2_label")
     for net in RAIL_NETS:
         p_x, p_y = _pfd_rail_landing(pfd_layout, net, RAIL_LANDING_INSET_UM[net])
         half = cp_array.VIA1_SIZE_UM / 2.0 + cp_array.VIA_ENCLOSURE_UM

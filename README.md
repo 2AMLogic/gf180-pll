@@ -65,10 +65,12 @@ Being honest about where this actually is:
   since been drawn against that flow: **4 of the 4 PLL sub-blocks** — the VCO
   (#293), the PFD + charge pump (#294), the divider chain (#295), and the lock
   detector (#296) — now have a committed block GDS with a DRC-clean deck log
-  under `layout/evidence/`, and **2 of the 4 are LVS-matched** against an
-  independently derived reference netlist (`vco_block` and `divider_chain`;
-  `pfd_cp` and `lock_detector` each state in their own `PROOF.md` that they
-  make a DRC-clean geometry claim only). There is **no assembled `pll_top`
+  under `layout/evidence/`, and **3 of the 4 are LVS-matched** against an
+  independently derived reference netlist (`vco_block`, `divider_chain` and
+  `pfd_cp`; `lock_detector` states in its own `PROOF.md` that it makes a
+  DRC-clean geometry claim only, because its drawn delay cell predates
+  DR-014's trim network and so does not match the ratified schematic —
+  #449). There is **no assembled `pll_top`
   GDS** — the four blocks exist side by side, not wired into a top level, so
   no top-level DRC/LVS closure and no post-layout extracted-netlist
   re-verification exists either (#17, #18, #149). These counts are checked

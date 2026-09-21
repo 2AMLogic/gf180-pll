@@ -330,6 +330,34 @@ to do with whether the circuit is actually correct. `layout/harness/lvs.py`
 bakes this default in; override with `--lvs-sub` if a different reference
 netlist's convention needs it.
 
+**And the merge is by *exact* name (issue #440).** Passing `--lvs_sub=VSS`
+does not wire the substrate to anything; it names the deck's synthesized
+global net. That global net then merges into the drawn net whose name
+matches it — **exactly**. A drawn ground rail that has somehow collected a
+*second* label extracts under the merged name `ENB,VSS`, which is not
+`VSS`, so the merge silently does not happen: every n-channel bulk terminal
+lands on a net of its own and the block mismatches wholesale, with no error
+message anywhere that says "you have a stray label." `pfd_cp`'s first
+block-level LVS run failed exactly this way and no other — 84 of 93 nets,
+69 of 168 devices, all from eight inherited `ENB` texts sitting on the
+ground rail (`layout/evidence/pfd-cp-layout/PROOF.md`, "Addendum 2").
+
+Two rules follow, and both are cheap to hold:
+
+- **The level doing the assembling owns the net names.** A sub-block
+  written for its own standalone LVS claim labels its own boundary nets
+  with its own *local* port names; `read()` + `top.flatten(-1, True)`
+  carries those label shapes into the parent, where the parent may well
+  have re-tied that net to something else. Call
+  `_canvas.Canvas.clear_inherited_labels()` immediately after the composing
+  `flatten()`, before promoting the parent's own pins.
+- **Label on the purpose layer that matches the geometry.** 34/10 for a
+  Metal1 pad, 36/10 for a Metal2 bus (`connect(metal1_con, metal1_label)` /
+  `connect(metal2_con, metal2_label)`). A 34/10 text dropped over Metal2
+  attaches to whatever unrelated Metal1 lies under it and names *that* net
+  instead — and a text on the drawing datatype (34/0, 36/0) is read by
+  nothing at all, so every net so "labelled" extracts anonymous.
+
 ## `prove`: the full proof
 
 ```bash

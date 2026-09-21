@@ -1047,6 +1047,14 @@ def build(outdir: Path | None = None) -> CpArrayLayout:
     for off in offsets_p.values():
         _place(p_index, *off)
     canvas.top.flatten(-1, True)
+    # Each leg was written for its own standalone LVS claim and labels its
+    # own *local* port names (EN/ENB/VBN/VCASCN/TAIL/VDD/VSS). Flattening
+    # carries those label shapes into this cell, where most of them name the
+    # wrong net -- this array ties each base leg's EN/ENB permanently to a
+    # supply rail. The assembling level owns the names; see
+    # _canvas.Canvas.clear_inherited_labels()'s own docstring for the LVS
+    # failure this prevents (issue #440).
+    canvas.clear_inherited_labels()
 
     # --- N bias branch (MBN/MCN), adjacent below the N array ---
     bias_n_y_top = n_array_bbox[1] - BIAS_ROW_GAP_UM

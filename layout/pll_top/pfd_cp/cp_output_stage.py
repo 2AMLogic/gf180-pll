@@ -610,6 +610,11 @@ def build(outdir: Path | None = None) -> CpOutputStageLayout:  # noqa: PLR0915 -
     for dx, dy in inv_origins.values():
         _place(inv_index, dx, dy)
     canvas.top.flatten(-1, True)
+    # The array's and the glue inverters' own standalone port labels are
+    # local names, and four copies of one inverter cell contribute four
+    # copies of each. This level owns the names (issue #440) -- see
+    # _canvas.Canvas.clear_inherited_labels().
+    canvas.clear_inherited_labels()
 
     # --- draw the six switches into the same flat cell ---
     nets: dict[str, list[tuple[float, float, float, float]]] = {}

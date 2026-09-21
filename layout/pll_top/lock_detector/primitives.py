@@ -68,6 +68,24 @@ LAYER = {
     "metal2": (36, 0),
     "via2": (38, 0),
     "metal3": (42, 0),
+    # The *pin/label* purposes of Metal1/Metal2 -- NOT the drawing datatypes
+    # above. gf180mcu's own LVS deck reads net names only from these
+    # (``libs.tech/klayout/lvs/rule_decks/layers_definitions.lvs``:
+    # ``metal1_label = labels(34, 10)`` / ``metal2_label = labels(36, 10)``,
+    # then ``general_connections.lvs``: ``connect(metal1_con, metal1_label)``
+    # / ``connect(metal2_con, metal2_label)``) -- the same citation
+    # ``vco/primitives.py``, ``divider_chain/devgen.py`` and
+    # ``pfd_cp/devgen.py`` already carry for their own ``PIN_LAYER``.
+    #
+    # A text dropped on the drawing datatype instead (this module's own
+    # convention until issue #440, exactly as ``vco/primitives.py``'s was
+    # until #367) is invisible to that connectivity step: every net this
+    # package labelled was extracted as an anonymous node, so this block's
+    # first LVS run extracted as `.SUBCKT lock_detector VSS` -- one port,
+    # that one being the deck's own synthesized substrate net rather than
+    # anything drawn here.
+    "metal1_label": (34, 10),
+    "metal2_label": (36, 10),
 }
 
 # --- Metal2/Metal3/Via routing margins, used only by route_net()'s per-net
@@ -187,12 +205,18 @@ class Canvas(_canvas.Canvas):
     convention: ``klayout.db`` is imported lazily (inside ``__post_init__``),
     so anything in this package that only touches ``devices.py``'s constants
     or this module's plain-Python placement math stays importable with no PV
-    environment. This is the plain baseline of the shared
-    ``layout/pll_top/_canvas.Canvas`` (see issue #317): no grid snapping, no
-    pin-layer override -- just this module's own ``LAYER`` table.
+    environment. This is the shared ``layout/pll_top/_canvas.Canvas`` (see
+    issue #317) with no grid snapping, this module's own ``LAYER`` table,
+    and ``pin()`` labelling on ``"metal1_label"`` (34/10) -- the *purpose*
+    layer gf180mcu's own official LVS deck actually reads net names from
+    (see this module's ``LAYER`` comment), not the drawing datatype a
+    purely-visual label would use. Before issue #440 this class took the
+    base class's ``PIN_LAYER = "metal1"`` default, so every ``pin()`` call
+    in this package labelled 34/0 and the deck saw none of them.
     """
 
     LAYER: ClassVar[dict[str, tuple[int, int]]] = LAYER
+    PIN_LAYER: ClassVar[str] = "metal1_label"
 
     @contextmanager
     def net(self, name: str) -> Iterator[None]:
@@ -1205,7 +1229,10 @@ def route_all_nets(
                     x_hi + width / 2.0,
                     track_y + width / 2.0,
                 )
-        canvas.label("metal2", net, (x_lo + x_hi) / 2.0, track_y)
+        # 36/10, the Metal2 *pin* purpose the deck connects to Metal2 -- a
+        # text on 36/0 (this module's convention until issue #440) is read
+        # by nothing.
+        canvas.label("metal2_label", net, (x_lo + x_hi) / 2.0, track_y)
 
 
 # Fresh, never-reused Metal2 track_y per net name -- shared with every other
