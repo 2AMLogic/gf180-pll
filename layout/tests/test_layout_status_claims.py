@@ -38,6 +38,16 @@ BLOCKS = [
 
 LVS_MATCH_LINE = "INFO : Congratulations! Netlists match.\n"
 
+# The scope rule reads a ~100-character window either side of a negation,
+# so a synthetic document needs real distance between the boilerplate
+# "no assembled `pll_top` GDS" sentinel (which legitimately carries a scope
+# word) and the sentence under test.  Deliberately free of both negations
+# and layout nouns.
+PAD = "\n" + ("Filler prose that bears on nothing in particular. " * 5) + "\n"
+
+RATIFIED_SPEC = "# PLL target specification\n\n- **Status**: **ratified, with amendments** (#1, 2026-09-08)\n"
+UNRATIFIED_SPEC = "# PLL target specification\n\n- **Status**: proposed, not yet ratified\n"
+
 
 def _doc_text(drawn: int, lvs: int, *, no_top: bool = True) -> str:
     """A minimal document that satisfies the script at the given counts."""
@@ -57,7 +67,12 @@ class _Tree:
         self.root = root
         (root / "layout" / "lib").mkdir(parents=True)
         (root / "docs" / "chipalooza").mkdir(parents=True)
+        (root / "spec").mkdir(parents=True)
         shutil.copy2(SCRIPT, root / "layout" / "lib" / SCRIPT.name)
+        self.write_spec(RATIFIED_SPEC)
+
+    def write_spec(self, text: str) -> None:
+        (self.root / "spec" / "pll.md").write_text(text)
 
     def add_block(self, evidence_dir: str, gds: str, *, drc: bool, lvs: bool) -> None:
         base = self.root / "layout" / "evidence" / evidence_dir
@@ -79,13 +94,27 @@ class _Tree:
         (self.root / "README.md").write_text(text)
         (self.root / "docs" / "chipalooza" / "challenge-5-proposal.md").write_text(text)
 
-    def run(self) -> subprocess.CompletedProcess:
+    def run(self, env: dict | None = None) -> subprocess.CompletedProcess:
         return subprocess.run(
             ["bash", str(self.root / "layout" / "lib" / SCRIPT.name)],
             capture_output=True,
             text=True,
             check=False,
+            env=env,
         )
+
+    def path_without_python(self) -> dict:
+        """An environment whose PATH has every tool the script needs but python3."""
+        bindir = self.root / "fakebin"
+        bindir.mkdir(exist_ok=True)
+        for tool in ("bash", "dirname", "grep", "tr"):
+            resolved = shutil.which(tool)
+            if resolved is None:  # pragma: no cover - not seen on CI or macOS
+                raise unittest.SkipTest(f"{tool} not on PATH")
+            target = bindir / tool
+            if not target.exists():
+                target.symlink_to(resolved)
+        return {"PATH": str(bindir)}
 
 
 class CheckLayoutStatusClaimsTests(unittest.TestCase):
@@ -186,6 +215,156 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         )
         result = self.tree.run()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    # --- The scope rule (issue #237, second pass) -------------------------
+    #
+    # The tests below are the ones the original hand-written forbidden list
+    # could not have passed.  The list named exactly the sentences that had
+    # already gone stale; the sentence that was *still* stale in the same
+    # document -- section 3's "**No layout exists for this block**" -- was
+    # not on it, and the check reported OK on the very commit that shipped
+    # the list.
+
+    def test_the_sentence_the_forbidden_list_missed_is_caught(self):
+        # Verbatim from docs/chipalooza/challenge-5-proposal.md section 3 as
+        # it stood on main at 387d03c6 -- i.e. AFTER the first pass of this
+        # check shipped and passed over it.
+        self._all_four()
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + PAD
+            + "**No layout exists for this block** -- `layout/` currently\n"
+            "contains only the DRC/LVS flow's proof-of-flow test cell (a\n"
+            "standard-cell inverter, `layout/evidence/inv-tb-proof/PROOF.md`),\n"
+            "proven clean on that trivial circuit but never yet run against\n"
+            "any PLL sub-block or the top level.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("without saying at what scope", result.stderr)
+        self.assertIn("No layout exists for this block", result.stderr)
+
+    def test_an_absence_claim_that_names_its_scope_passes(self):
+        # The same grammatical shape, scoped to what is genuinely absent.
+        # The rule must not force a document to stop saying true things.
+        self._all_four()
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + "No GDS exists for the assembled top level, so there is no\n"
+            "post-layout extracted netlist to re-verify against.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_a_freshly_invented_unscoped_phrasing_is_caught(self):
+        # The point of the rule: it grades the claim, not a remembered
+        # sentence.  None of these wordings appears on any forbidden list.
+        self._all_four()
+        for phrasing in (
+            "Nothing has been drawn for this PLL.",
+            "This design has never been drawn as layout.",
+            "There is no layout for the PLL at this time.",
+            "PLL-block GDS: none drawn.",
+        ):
+            with self.subTest(phrasing=phrasing):
+                self.tree.write_docs(_doc_text(4, 2) + PAD + phrasing + "\n")
+                result = self.tree.run()
+                self.assertEqual(
+                    result.returncode, 1, result.stdout + result.stderr
+                )
+                self.assertIn("without saying at what scope", result.stderr)
+
+    def test_the_scope_rule_is_silent_when_nothing_is_drawn(self):
+        # Conditional on the tree, like the forbidden list: with no drawn
+        # block, "no layout exists" is simply true.
+        self.tree.write_docs(
+            _doc_text(0, 0) + "No layout exists for this block.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_top_level_scope_stops_excusing_claims_once_a_top_lands(self):
+        # Two-sided, like the assembled-top sentinel: the day a pll_top GDS
+        # is committed, every "no assembled top level" sentence in both
+        # documents is due for a re-read, and the rule forces it.
+        self._all_four()
+        self.tree.add_assembled_top()
+        self.tree.write_docs(
+            _doc_text(4, 2, no_top=False)
+            + "No GDS exists for the assembled top level.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("without saying at what scope", result.stderr)
+
+    def test_a_negation_that_is_not_about_layout_is_not_flagged(self):
+        # False positives cost real editorial freedom, so the shapes that
+        # nearly match are pinned: "now" is not "no", and a "drawn-band
+        # edge" is not a drawn layout.
+        self._all_four()
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + "All four blocks now have a committed block GDS.\n"
+            "The closed-loop campaign reaches PASS on none, at either\n"
+            "drawn-band edge.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    # --- The spec ratification guard --------------------------------------
+
+    def test_a_blanket_unratified_claim_is_caught_once_the_spec_ratifies(self):
+        self._all_four()
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + "`spec/pll.md` is pending engineering ratification through #1.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("pending engineering ratification", result.stderr)
+
+    def test_a_row_scoped_carve_out_is_not_a_blanket_unratified_claim(self):
+        # DR-007 Amendment A1 carves out two rows.  Saying so is true and
+        # must stay sayable -- only the blanket claim is forbidden.
+        self._all_four()
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + "`spec/pll.md` is ratified, with two rows still unratified per\n"
+            "DR-007 Amendment A1.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_the_guard_is_silent_while_the_spec_is_still_proposed(self):
+        self._all_four()
+        self.tree.write_spec(UNRATIFIED_SPEC)
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + "`spec/pll.md` is pending engineering ratification through #1.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_a_missing_python3_fails_rather_than_downgrading_the_check(self):
+        # Without python3 the scope rule cannot run at all.  Passing on the
+        # remaining literal-phrase checks would be the same silent downgrade
+        # that let section 3 through in the first place.
+        self._all_four()
+        self.tree.write_docs(_doc_text(4, 2))
+        env = self.tree.path_without_python()
+        result = self.tree.run(env=env)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("python3 is not on PATH", result.stderr)
+
+    def test_an_unreadable_spec_status_fails_rather_than_skipping(self):
+        # A guard that silently no-ops when its input goes missing is how a
+        # check rots.  Say so instead.
+        self._all_four()
+        self.tree.write_spec("# PLL target specification\n\nNo status line.\n")
+        self.tree.write_docs(_doc_text(4, 2))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("could not read a '- **Status**:' line", result.stderr)
 
     def test_a_missing_document_is_a_failure_not_a_silent_pass(self):
         self._all_four()

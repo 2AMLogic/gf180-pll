@@ -45,9 +45,15 @@ phase-frequency detector and charge pump, a fixed passive R–C loop filter
 with a 2-bit charge-pump current trim, a cascaded ÷2/3 feedback divider
 (integer N = 4–64), and a digital phase-window lock detector. Architecture is
 captured in
-[`spec/decision-records/DR-001-pll-architecture.md`](../../spec/decision-records/DR-001-pll-architecture.md)
-(status: **proposed**, like every decision record and `spec/pll.md` itself,
-pending engineering ratification through issue #1 — see §5.0).
+[`spec/decision-records/DR-001-pll-architecture.md`](../../spec/decision-records/DR-001-pll-architecture.md).
+That record's own Status line still reads **proposed**, as almost every
+decision record in this repository does — DR-007, the spec-review verdict,
+is the only one re-stamped **ratified** when issue #1 closed. The target
+specification those records feed, [`spec/pll.md`](../../spec/pll.md), is
+itself **ratified, with amendments** (#1, closed 2026-09-08), and §5's
+verdicts are stated against that ratified table rather than against the
+individual records' status fields. See §5.0 for the two rows the
+ratification explicitly carved out.
 
 ---
 
@@ -155,10 +161,14 @@ rule](../../spec/pll.md#icp-trim-code-rule)).
 The complete top-level assembly (`design/pll_top.sch`) is verified, at one
 nominal corner, to acquire and hold lock from a real frequency error
 (`sim/pll-top-smoke/records/20260802-160926-8456ff3.md`, all 7 checks PASS).
-**No layout exists for this block** — `layout/` currently contains only the
-DRC/LVS flow's proof-of-flow test cell (a standard-cell inverter,
-`layout/evidence/inv-tb-proof/PROOF.md`), proven clean on that trivial
-circuit but never yet run against any PLL sub-block or the top level.
+Most of the circuitry described above also exists as drawn geometry: **4 of
+the 4 PLL sub-blocks** the layout effort partitions this design into — VCO,
+PFD + charge pump, divider chain, lock detector — have a committed,
+standalone-DRC-clean transistor-level GDS, and **2 of the 4 are
+LVS-matched**. No GDS exists for the assembled top level, nor for the
+passive loop filter (whose area in §5 is computed from the sized devices
+rather than measured off geometry); §6 gives the per-block table, the
+evidence paths, and what those two absences rule out.
 
 ---
 
@@ -267,7 +277,7 @@ since no 5.0 V device exists in this design (§2.1).
 | Supply sensitivity — DC / closed-loop, full grid | ≤ 0.6 V of the `VCTRL` window consumed by a rail excursion; stays locked through a supply step + ramp | Full 45-point grid: **frequency-vs-supply criterion FAILs on 10/45 corners** (worst −294 ppm); **`VCTRL`-window criterion FAILs on 4/45** (worst 2.642 V, past the 2.4 V edge, at `ss`/−40 °C/3.63 V); **step+ramp criterion FAILs** at 1 of 3 sampled corners even after both settling-time escalations run to completion (`ss`/−40 °C, a genuine finding routed to `loop-dynamics`, #10) | **UNMET on 3 of 4 measured criteria** — a real, disclosed design-margin finding, not a settling-window artifact (both escalations ran to full length) | `sim/supply-sensitivity/records/20260901-155456-46b92f8.md` |
 | Output duty cycle | 45–55 % at `CLK`, full band, all corners | 44.375–50.696 % measured (90 points, loaded); 7/90 points below the 45 % floor, all at the low-frequency band edge, concentrated in the `fs` process bundle | **UNMET at 7/90 points** (small excursion, 0.625 pp worst-case) | `sim/output-driver/records/20260817-100354-0e9cfc9.md` |
 | Output levels and drive | V_OH ≥ 0.9·VDD_VCO, V_OL ≤ 0.1·VDD_VCO into ≤ 50 fF | V_OH 1.006–1.044·VDD_VCO, V_OL −0.040…−0.006·VDD_VCO, 90/90 points | **MET**, full 90-point grid | Same record |
-| Area | ≤ 0.15 mm² total | **Now measured at the block level, and over budget.** Every sub-block's as-drawn footprint: loop filter 0.0369 mm², VCO 0.0312 mm² (183.18 × 170.28 µm, post-fold), PFD + charge pump 0.0351 mm² (434.31 × 80.73 µm), divider chain + lock detector 0.1396 mm² (the divider chain is 0.1321 mm² / 1317.66 × 100.29 µm today — it was 0.2471 mm² as first drawn and came down 47 % through the #341 routing-track-packing and #344 row-fold passes; the lock detector is 119.3 × 62.6 µm). Sum **0.2428 mm²**, or **0.3035 mm²** after the floorplan's own ×1.25 top-level-overhead factor | **UNMET — ≈2.0× over the 0.15 mm² target**, measured rather than estimated. This supersedes this proposal's earlier "not evaluable — no layout drawn" reading. The cause is structural and stated in the evidence: every device is its own diffusion island wired by metal, so a shared-diffusion or further fold pass is the identified lever and has been applied to the VCO (#324) and divider chain (#341/#344) but not to `pfd_cp`. Note this is a **sum of block extents, not a placed-and-routed top level** — no assembled `pll_top` GDS exists, so top-level routing and inter-block spacing are not in this number | `layout/floorplan/PLL-FLOORPLAN.md` §5.1–§5.4 (the re-derived budget arithmetic); `layout/evidence/vco-layout/PROOF-fold.md`; `layout/evidence/pfd-cp-layout/PROOF.md`; `layout/evidence/divider-chain-layout/PROOF.md`; `spec/pll.md#area` |
+| Area | ≤ 0.15 mm² total | **Now measured at the block level, and over budget.** Every sub-block's as-drawn footprint: loop filter 0.0369 mm², VCO 0.0312 mm² (183.18 × 170.28 µm, post-fold), PFD + charge pump 0.0351 mm² (434.31 × 80.73 µm), divider chain + lock detector 0.1396 mm² (the divider chain is 0.1321 mm² / 1317.66 × 100.29 µm today — it was 0.2471 mm² as first drawn and came down 47 % through the #341 routing-track-packing and #344 row-fold passes; the lock detector is 119.3 × 62.6 µm). Sum **0.2428 mm²**, or **0.3035 mm²** after the floorplan's own ×1.25 top-level-overhead factor | **UNMET — ≈2.0× over the 0.15 mm² target**, measured rather than estimated. This supersedes the reading this proposal carried before the sub-blocks landed, which treated the row as unevaluable for want of measured geometry. The cause is structural and stated in the evidence: every device is its own diffusion island wired by metal, so a shared-diffusion or further fold pass is the identified lever and has been applied to the VCO (#324) and divider chain (#341/#344) but not to `pfd_cp`. Note this is a **sum of block extents, not a placed-and-routed top level** — no assembled `pll_top` GDS exists, so top-level routing and inter-block spacing are not in this number | `layout/floorplan/PLL-FLOORPLAN.md` §5.1–§5.4 (the re-derived budget arithmetic); `layout/evidence/vco-layout/PROOF-fold.md`; `layout/evidence/pfd-cp-layout/PROOF.md`; `layout/evidence/divider-chain-layout/PROOF.md`; `spec/pll.md#area` |
 | Lock detector | assert window within **1 … 2 ns** of phase error at every PVT point (T1′/T2′, DR-010/DR-013), measured at the `lock` flag rather than at the bare delay chain; hysteresis ≥ 25 % of window (T3); deassert ≤ 1 `f_ref` period (T4); no chatter 1–25 MHz (T5). **Conditioned on the [lock-detector window trim-code rule](../../spec/pll.md#lock-detector-window-trim-code-rule)** | Re-characterized in situ on the trimmed `delaywin_3v3` cell (DR-014, #411): window edge **[1.14, 1.16) ns** at `fs`/−40 °C/3.63 V and **[1.78, 1.80) ns** at `ss`/125 °C/2.97 V, each at the code the trim rule selects, PVT spread **1.53–1.58×** against DR-013 Decision 4's ≤ 1.65×. 0 of 205 points fail the four-check acceptance; worst deassert latency 5.63 ns. The **untrimmed** cell sat at [2.02, 2.04) ns with a 1.91–1.96× spread — outside the band at every fixed code | **T1′/T2′ MET, conditional on the trim rule** — this row supersedes this proposal's earlier "T1/T2 UNMET" reading, which predated #411. **T4/T5 still UNMET/uncharacterized below 25 MHz.** Two things a reader must not miss: an **untrimmed part is outside this specification**, and the trim code table is schematic-level and mismatch-free, so the rule is not yet proven against a real trimmed part. `spec/pll.md` keeps this row inside DR-007 Amendment A1's ratification carve-out for exactly those reasons | `sim/lock-detector/records/20260919-002812-1b12179.md` (the 205-point in-situ verdict); `sim/lock-window-trim/records/20260917-185928-8adff3d.md` (the 1872-point code map the trim rule's table comes from); `sim/lock-window-sizing/records/20260915-202802-79c0cee.md`; superseded predecessor `sim/lock-detector/records/20260731-162119-0a12e6c.md` |
 | Kvco | ≤ 150 MHz/V under the band-selection rule | Worst 115.8 MHz/V (`all-fast`/27 °C/2.97 V, B6); an adversarial band choice reaches 154.3 MHz/V, over the line, which is why the rule is normative | **MET**, conditional on the band-selection rule being followed | `sim/vco-tuning-range/records/20260731-175947-0a12e6c.md` |
 | Supply range | 3.3 V ± 10 %, 3.3 V devices exclusively | Every campaign above sweeps 2.97/3.30/3.63 V | **MET, as the swept independent axis of every other row** | `spec/pll.md#supply-range` |
@@ -307,9 +317,11 @@ run is the PDK's own `run_lvs.py` reporting `Congratulations! Netlists
 match.` — the recorded deck output is committed next to each GDS. These
 counts are re-derived from the evidence tree in CI by
 `layout/lib/check-layout-status-claims.sh`, so this section cannot silently
-drift from the tree (it did once, for about five weeks: this section
-asserted that no PLL-block layout existed at all, while all four blocks
-were already committed).
+drift from the tree (it did once, for about five weeks: this section denied
+the four sub-block layouts that were already committed — and §3 kept denying
+them even in the change that corrected this section, which is why that check
+now grades every absence-of-layout claim in both documents rather than a
+list of three remembered sentences).
 
 **What does not exist, stated as plainly as what does:**
 
