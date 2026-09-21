@@ -115,7 +115,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Callable, ClassVar, Iterable, Iterator
+from typing import Callable, ClassVar, Iterable, Iterator, Sequence
 
 
 def _r(v: float) -> float:
@@ -244,6 +244,58 @@ class Canvas:
         if self._pin_scope is not None:
             self._pin_scope.setdefault(net, []).append(box)
         self.label(layer if layer is not None else self.PIN_LAYER, net, (x0 + x1) / 2.0, (y0 + y1) / 2.0)
+
+    def clear_inherited_labels(self, layers: Sequence[str] | None = None) -> int:
+        """Delete every *text* on ``layers`` (default: this canvas's own
+        ``PIN_LAYER``) from every cell, and return how many were removed.
+
+        WHY AN ASSEMBLER HAS TO CALL THIS (issue #440)
+        ----------------------------------------------
+        A sub-block written for its own standalone LVS claim labels its own
+        boundary nets with its own *local* port names (``cp_leg_n``'s
+        ``EN``/``ENB``/``VBN``/``VCASCN``/``TAIL``, say). Those names are
+        only meaningful inside that sub-block's own reference netlist. When
+        an assembler composes the sub-block by reading its GDS and calling
+        ``top.flatten(-1, True)`` (the pattern ``pfd_cp``'s own
+        ``cp_array``/``cp_output_stage``/``cp``/``block`` all use), those
+        label *shapes* are flattened in with the geometry -- and gf180mcu's
+        LVS deck reads top-level net names straight off them
+        (``connect(metal1_con, metal1_label)``). The parent's net then
+        extracts under a merged name: the array ties a base leg's ``ENB``
+        permanently to the block's ground rail, so that rail extracts as
+        ``ENB,VSS`` rather than ``VSS``.
+
+        That is not cosmetic. The deck synthesizes the p-substrate as a
+        *global* net named by ``--lvs_sub`` (``VSS`` here -- see
+        ``layout/README.md``'s "substrate-net gotcha"), and a global net
+        merges into the drawn net that carries **exactly** that name. A net
+        named ``ENB,VSS`` is not that name, so the merge silently does not
+        happen: every n-channel bulk terminal lands on a net of its own,
+        disconnected from the ground rail it is drawn on, and the whole
+        block mismatches. ``pfd_cp``'s first block-level LVS run failed this
+        way and no other (84 of 93 nets, 69 of 168 devices) -- removing the
+        eight inherited ``ENB`` labels alone turned it into a match.
+
+        So the rule this method exists to enforce is: **the level doing the
+        assembling owns the net names.** Call it immediately after the
+        composing ``flatten()``, before the assembler promotes its own
+        boundary pins with :meth:`pin`; the sub-block's own standalone GDS
+        (and its own standalone LVS claim) is untouched.
+        """
+        names = (self.PIN_LAYER,) if layers is None else tuple(layers)
+        removed = 0
+        for name in names:
+            gds = self.LAYER.get(name)
+            if gds is None:
+                continue
+            index = self.layout.layer(*gds)
+            for cell in self.layout.each_cell():
+                shapes = cell.shapes(index)
+                doomed = [s for s in shapes.each() if s.is_text()]
+                for shape in doomed:
+                    shapes.erase(shape)
+                removed += len(doomed)
+        return removed
 
     def write_gds(self, path) -> None:
         options = self._db.SaveLayoutOptions()

@@ -219,3 +219,98 @@ CLAUDE.md's verification standard warns against.
 | PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
 | KLayout (application, deck runner) | `KLayout 0.28.16` |
 | LVS deck | `<pdk>/libs.tech/klayout/lvs/run_lvs.py`, `--variant=D` (default `--lvs_sub=VSS`) |
+
+---
+
+## Addendum 2 (issue #440): why the first LVS run's numbers overstated the gap — this block labelled nothing the deck could read
+
+Addendum 1 above recorded this block's first block-level LVS run as a
+mismatch and attributed it to the DR-014 trim network `build_lock_detector()`
+does not draw (tracked at [#449](https://github.com/2AMLogic/gf180-pll/issues/449)).
+That attribution is correct. The *size* of the mismatch it recorded was not:
+a second, independent defect was inflating it, and it is worth naming because
+it would have wasted #449's time.
+
+### The defect
+
+`layout/pll_top/lock_detector/primitives.py` took the shared
+`_canvas.Canvas`'s default `PIN_LAYER = "metal1"` and labelled its per-net
+Metal2 buses on `"metal2"` — i.e. both on the **drawing** datatypes, 34/0 and
+36/0. gf180mcu's LVS deck reads net names only from the *pin purposes*
+(`layers_definitions.lvs`: `metal1_label = labels(34, 10)`, `metal2_label =
+labels(36, 10)`; `general_connections.lvs`: `connect(metal1_con,
+metal1_label)`, `connect(metal2_con, metal2_label)`). So **every one of the 50
+labels this block drew was invisible to the deck**, and the first run's
+extracted netlist says exactly that, in its own first line:
+
+```
+.SUBCKT lock_detector VSS
+```
+
+One port — and that one is the deck's own synthesized substrate net
+(`--lvs_sub=VSS`), not anything drawn here. `UP`, `DN`, `LOCK`, `VWIN`, `VDD`
+and the drawn ground rail were all anonymous `$N` nodes.
+
+This is the same correction `vco/primitives.py` made for its own package at
+issue #367, whose `LAYER` comment already states the rule in as many words
+("a text dropped on the drawing datatype instead ... is invisible to that
+connectivity step"). This package simply never got it.
+
+### The fix, and what it changes
+
+`primitives.LAYER` gains `metal1_label` (34/10) and `metal2_label` (36/10);
+`primitives.Canvas` sets `PIN_LAYER = "metal1_label"`; `route_net()`'s bus
+label moves to `metal2_label`. **No geometry moves** — a layer-by-layer
+`klayout.db.Region` XOR of the generator's output before and after is empty
+on all 11 drawing layers. `layout/tests/test_lock_detector_layout.py`'s
+`PinPurposeLayerTests` pins the convention.
+
+Re-running the same deck against the same reference netlist, with nothing
+else changed, the extraction now names every net —
+
+```
+.SUBCKT lock_detector VSS XERR_G1_NMID XERR_N1 XERR_G2_NMID XERR_N2
++ XERR_G3_NMID XERR_N3 XERR_G4_NMID ERR XDLY_D1 XDLY_D2 XDLY_D3 ERRD XNW_NMID
++ WIDEB WIDE VWIN XSCH_N1 LOCKB LOCK UP DN VDD XSCH_P1
+```
+
+— and the mismatch collapses to exactly the DR-014 gap and nothing else:
+
+| | Addendum 1's run (labels on 34/0) | With labels on 34/10 | Reference |
+|---|---|---|---|
+| Nets, layout side | 79 | 24 | 48 |
+| Devices, layout side | 45 | 45 | 117 |
+
+The 79 → 24 net collapse is the label fix alone; 117 − 45 = **72 devices** is
+DR-014's trim network to the device: 4 stages × 4 binary-weighted segments ×
+4 devices, plus 4 stages × one `T`-input inverter × 2 devices. #449's
+remaining work is now bounded by that arithmetic rather than by a mixed
+signal.
+
+### What this addendum does NOT claim
+
+**No new DRC or LVS claim is made for this block, and
+`lock_detector.gds` in this directory is unchanged.** The run above was made
+against a freshly generated GDS, which cannot be committed here as evidence:
+while investigating, this block's committed GDS turned out **not to reproduce
+from its own generator** — it was committed once at #311 (2026-09-08) and the
+generator has changed seven times since, and the current generator's output
+fails the foundry DRC deck with 141 violations where the committed file is
+clean. That is a pre-existing `main` condition, reproduced from an unmodified
+`git archive HEAD` tree at `93e36cd7`, and it is filed as
+[#451](https://github.com/2AMLogic/gf180-pll/issues/451) rather than papered
+over here. Until #451 lands there is no DRC-clean `lock_detector` GDS for an
+LVS claim to stand on, so this block correctly still reads **not LVS-matched**
+in `README.md`, in `docs/chipalooza/challenge-5-proposal.md` and in
+`layout/lib/check-layout-status-claims.sh`.
+
+### Provenance of this addendum
+
+| | |
+|---|---|
+| Run | 2026-09-21 |
+| Branch point | `origin/main` @ `93e36cd7` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout (application, deck runner) | `KLayout 0.28.16` |
+| LVS deck | `<pdk>/libs.tech/klayout/lvs/run_lvs.py`, `--variant=D` (default `--lvs_sub=VSS`) |
+| Verdict | `ERROR : Netlists don't match` — expected, and now attributable to DR-014 alone (#449) |

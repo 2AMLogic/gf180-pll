@@ -22,7 +22,7 @@ submitting operator supplies outside this repository.
 **Maturity note, stated up front rather than left for a reader to discover.**
 This repository is, at the time of writing, **schematic-complete and
 partway through block-level layout**: **4 of the 4 PLL sub-blocks** have a
-committed, DRC-clean transistor-level GDS, **2 of the 4 are LVS-matched**,
+committed, DRC-clean transistor-level GDS, **3 of the 4 are LVS-matched**,
 and there is **no assembled `pll_top` GDS** (§6). Every §5 number is
 therefore a *schematic-level* simulation result: no extracted-netlist
 post-layout re-verification exists, because there is no top level to extract.
@@ -305,13 +305,13 @@ standard-cell inverter test cell — including a demonstrated catch of a
 deliberately injected DRC violation and LVS mismatch — and that flow has
 since been run against this design's own sub-blocks. **4 of the 4 PLL
 sub-blocks** now have a committed, standalone-DRC-clean transistor-level
-GDS, and **2 of the 4 are LVS-matched** against an independently derived
+GDS, and **3 of the 4 are LVS-matched** against an independently derived
 reference netlist:
 
 | Sub-block | Top cell | As-drawn footprint | DRC | LVS | Evidence |
 |---|---|---|---|---|---|
 | VCO (#293, folded at #324) | `vco_block` | 183.18 × 170.28 µm (0.0312 mm²) | clean | **matched** | `layout/evidence/vco-layout/` (`PROOF-fold.md`, `PROOF-lvs.md`, `PROOF-433-vdd-island-fix.md`) |
-| PFD + charge pump (#294 via #299–#303, #385, #386) | `pfd_cp` | 434.31 × 80.73 µm (0.0351 mm²) | clean (default **and** `--offgrid` signoff-grade) | **no claim** — the block's reference netlist is out of its own issue's scope, stated as such in its `PROOF.md` | `layout/evidence/pfd-cp-layout/PROOF.md` |
+| PFD + charge pump (#294 via #299–#303, #385, #386; LVS at #440/#448) | `pfd_cp` | 434.31 × 80.73 µm (0.0351 mm²) | clean (default **and** `--offgrid` signoff-grade) | **matched** | `layout/evidence/pfd-cp-layout/` (`PROOF.md`, including the first run's recorded mismatch and its root cause) |
 | Divider chain (#295 via #306–#310, packed at #341, folded at #344) | `divider_chain` | 1317.66 × 100.29 µm (0.1321 mm²) | clean | **matched** | `layout/evidence/divider-chain-layout/` (`PROOF.md`, `PROOF-fold.md`) |
 | Lock detector (#296) | `lock_detector` | 119.3 × 62.6 µm (0.0075 mm²) | clean | **no claim** — explicitly a DRC-clean geometry claim only | `layout/evidence/lock-detector-layout/PROOF.md` |
 
@@ -336,9 +336,11 @@ were already committed).
   extracted-netlist re-verification** (issue #18): there is nothing to
   extract. Every number in §5 is a schematic-level simulation result with
   no layout parasitics, and this proposal makes no post-layout claim.
-- **Two of the four blocks are not LVS-matched** (`pfd_cp`,
-  `lock_detector`). Each says so in its own evidence record rather than
-  leaving a reader to infer it from a missing file.
+- **One of the four blocks is not LVS-matched** (`lock_detector`). It says
+  so in its own evidence record rather than leaving a reader to infer it
+  from a missing file: its drawn window-delay cell predates DR-014's 4-bit
+  trim network, so it is a smaller circuit than the ratified schematic
+  describes and the deck correctly refuses to match the two (#449).
 - **The block footprints already exceed the area budget** — ≈2.0× over
   0.15 mm² summed with the floorplan's own overhead factor (§5's Area row,
   `layout/floorplan/PLL-FLOORPLAN.md` §5.1–§5.4). That is reported as an

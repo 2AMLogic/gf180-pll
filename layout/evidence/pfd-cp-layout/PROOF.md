@@ -320,3 +320,164 @@ suspiciously-clean first runs" this repo's own CLAUDE.md warns against.
 | PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
 | KLayout (application, deck runner) | `KLayout 0.28.16` |
 | LVS deck | `<pdk>/libs.tech/klayout/lvs/run_lvs.py`, `--variant=D` (default `--lvs_sub=VSS`) |
+
+---
+
+## Addendum 2 (issue #448): the mismatch above, root-caused and fixed — `pfd_cp` is now LVS-matched
+
+The addendum above recorded a real 84-of-93-net, 69-of-168-device mismatch
+and declined to guess at its cause. [Issue #448](https://github.com/2AMLogic/gf180-pll/issues/448)
+carried that forward. The cause turned out to be **neither** of the two
+things that addendum suspected: not missing name hints on `pfd`'s internal
+nets, and not a real `UP`/`DN` short. The drawn *geometry* was correct all
+along. What was wrong was the **net naming**, in two independent ways — and
+in this deck one of them is not cosmetic at all.
+
+### Root cause 1: a stray inherited label on the ground rail disconnected every n-channel bulk
+
+`layout/README.md`'s "substrate-net gotcha" already records that this deck
+synthesizes the p-substrate as a *global* net whose name comes from
+`--lvs_sub` (`VSS`, the harness default). What it did not yet record is the
+sharp edge on that: the global net merges into the drawn net that carries
+**exactly** that name, and a drawn net that carries *two* names does not
+qualify.
+
+`cp_leg_n`/`cp_leg_p` are built standalone for their own leaf-level LVS
+claim (`layout/evidence/cp-leg-proof/`), so each labels its own boundary
+nets with its own **local** port names — `EN`, `ENB`, `VBN`, `VCASCN`,
+`TAIL`, … . `cp_array` then composes four copies of each by reading the leg
+GDS and calling `top.flatten(-1, True)`, which carries those label *shapes*
+into the parent cell; and the array ties each always-on base leg's `EN`/
+`ENB` permanently to a supply rail. Eight `ENB` texts therefore ended up
+sitting on this block's ground rail, which extracted as the merged name
+`ENB,VSS`:
+
+```
+ENB,VSS   terminals: {'S': 53, 'D': 11, 'G': 2}     <- the drawn Metal1 rail
+VSS       terminals: {'B': 84}                      <- the deck's global substrate net
+```
+
+Two nets, and the bulk terminal of every one of the block's 84 n-channel
+devices was on the wrong one. That single naming defect accounts for the
+whole cascade: 84 mismatched nets out of 93, 69 mismatched devices out of
+168. Deleting nothing but those eight `ENB` texts from the committed GDS —
+no geometry change of any kind — turned the same deck run into
+`Congratulations! Netlists match.`, which is how the cause was confirmed
+rather than argued.
+
+### Root cause 2: `UP`/`DN` were labelled on Metal1's pin purpose over a Metal2-only bus
+
+`block.py` promotes `UP`/`DN` using `_pfd_bus_box()` — `pfd`'s own **Metal2**
+bus for each net — but `devgen.Canvas.pin()` labels on `metal1_label`
+(34/10) by default, and the deck attaches a 34/10 text to whatever *Metal1*
+lies under it (`connect(metal1_con, metal1_label)`). Under both bus edges
+lies `pfd`'s own row-0 `RB` bus. So `RB` collected both a `UP` and a `DN`
+text and extracted as `DN,UP`, while the real `UP`/`DN` nets kept only the
+labels `pfd.py` had placed for them.
+
+This is the `DN,UP` name the first addendum flagged as "not obviously
+benign … whether this is a real electrical short or a labelling artifact
+cannot be told apart yet." It is the latter, definitively: `RB` has exactly
+the six terminals `design/pfd.sch` gives it (driven by `xinv_rb`'s two
+drains, driving four NAND gate inputs), and the block now matches a
+reference netlist in which `UP`, `DN` and `RB` are three distinct nets. The
+earlier caution was right to record it as unresolved rather than call it
+either way.
+
+### The fix, in the generators
+
+Both are naming faults on correct geometry, so the fix is in how each
+assembly level names what it has drawn — nothing moved.
+
+1. **`layout/pll_top/_canvas.py`: `Canvas.clear_inherited_labels()`** (new,
+   generic, unit-tested at `layout/tests/test_canvas_labels.py`). Deletes
+   every text on a given pin purpose from the flattened cell. The rule it
+   enforces is *the level doing the assembling owns the net names*: a
+   sub-block's local port names are meaningful only inside that
+   sub-block's own standalone LVS claim, and every level here already
+   re-promotes its own boundary pins immediately afterwards. It is called
+   right after the composing `flatten()` in `cp_array.py`,
+   `cp_output_stage.py`, `cp.py` and `block.py` — all four, not just the
+   one that happened to fail, because the defect is a property of the
+   composition pattern rather than of any one block.
+2. **`block.py` labels `UP`/`DN` on `metal2_label` (36/10)**, the purpose
+   the deck connects to Metal2 (`connect(metal2_con, metal2_label)`), so
+   the name lands on the bus it was measured from. `devgen.LAYER` gains
+   that entry.
+
+The reference netlist was **not** touched: it is still the mechanical
+flattening of the frozen `design/pfd_cp.sch` export described in the first
+addendum, byte-identical, and `layout/tests/test_pfdcp_block_layout.py`
+asserts the committed `lvs-clean/pfd_cp.spice` equals what
+`block.reference_netlist()` produces today.
+
+### The clean run
+
+```bash
+python3 -m pfd_cp.block --outdir <workdir>          # (from layout/pll_top/)
+python3 layout/run_pv.py lvs layout/evidence/pfd-cp-layout/pfd_cp.gds \
+  layout/evidence/pfd-cp-layout/lvs-clean/pfd_cp.spice \
+  --top pfd_cp --run-dir <rundir>
+```
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `pfd_cp` LVS, deck verdict | match | `INFO : Congratulations! Netlists match.` | **PASS** |
+| `pfd_cp` cross-reference, circuit status | `Match` | `Match` | **PASS** |
+| `pfd_cp` net count, layout vs. reference | equal | 92 / 92 | **PASS** |
+| `pfd_cp` device count, layout vs. reference | equal | 168 / 168 | **PASS** |
+| `pfd_cp` DRC, table `main` (default) | clean | `DRC clean: pfd_cp (D), 0 violations` | **PASS** |
+| `pfd_cp` DRC, table `main`, `--offgrid` | clean | `DRC clean: pfd_cp (D), 0 violations` | **PASS** |
+| `netcheck.check_gds()` Metal1-3 connectivity | no shorts, no splits | `connectivity clean: 76 nets, no shorts, no splits` | **PASS** |
+
+**No device-class deviation is disclosed for this block** — unlike
+`vco_block`, whose own record discloses a resistor-class deviation, every
+device here extracts as the same `nfet_03v3`/`pfet_03v3` class the
+reference declares. The 13 extracted top-level ports are exactly this
+block's own 13 boundary pins, in the deck's own order:
+
+```
+.SUBCKT pfd_cp IBP REF IBN VSS DN FB UP B0 ICN ICP VDD B1 VOUT
+```
+
+Artifacts: `lvs-clean/lvs.stdout.log`, `lvs-clean/pfd_cp.cir` (extracted),
+`lvs-clean/pfd_cp.lvsdb`, `lvs-clean/pfd_cp.spice` (the flattened reference
+this run used), beside the already-frozen
+`lvs-clean/pfd_cp.schematic-export.spice`. **`lvs-attempt/` is kept, not
+deleted** — the mismatch this block's first block-level LVS run really
+found is part of the record, and a test asserts it stays (`layout/tests/
+test_pfdcp_block_layout.py::LvsEvidenceTests`).
+
+### What else moved, and why
+
+Because the fix removes label shapes from three intermediate blocks'
+composed cells, their committed GDS changed too — *texts only, no geometry*
+(`cp_array` 66 → 18 texts, `cp_output_stage` 94 → 12, `cp` 111 → 11,
+`pfd_cp` 132 → 13). That this is labels-only is checked rather than
+asserted: a layer-by-layer `klayout.db.Region` XOR of each block's
+pre-change and post-change GDS is **empty on all 11 drawing layers** for
+all four blocks (only the two label purposes, 34/10 and 36/10, differ).
+Each was nonetheless regenerated and re-run through the DRC deck rather
+than left stale:
+
+| Block | Evidence | DRC re-run |
+|---|---|---|
+| `cp_array` | `layout/evidence/cp-array-proof/` | `DRC clean: cp_array (D), 0 violations` |
+| `cp_output_stage` | `layout/evidence/cp-layout/` | `DRC clean: cp_output_stage (D), 0 violations` |
+| `cp` | `layout/evidence/cp-block-layout/` | `DRC clean: cp (D), 0 violations` |
+
+Their `connectivity/*.netcheck.log` records are unchanged and were verified
+byte-identical after the rebuild, which is the expected result of a
+labels-only change.
+
+### Provenance of this addendum
+
+| | |
+|---|---|
+| Run | 2026-09-21 |
+| Branch point | `origin/main` @ `93e36cd7` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout (application, deck runner) | `KLayout 0.28.16` |
+| LVS deck | `<pdk>/libs.tech/klayout/lvs/run_lvs.py`, `--variant=D` (default `--lvs_sub=VSS`) |
+| DRC deck | `<pdk>/libs.tech/klayout/drc/run_drc.py`, table `main`, variant D |
+| Tests | `python3 -m unittest discover -s layout/tests -t layout/tests` — 668 tests, all passing |

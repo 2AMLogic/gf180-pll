@@ -236,5 +236,129 @@ class ReferenceNetlistTests(unittest.TestCase):
         self.assertEqual(ref.splitlines()[-1], ".ends")
 
 
+#: This block's own evidence directory (issue #386, LVS claim at #440/#448).
+EVIDENCE_DIR = LAYOUT_DIR / "evidence" / "pfd-cp-layout"
+
+#: ``run_lvs.py``'s own match verdict, verbatim. The same substring
+#: ``layout/lib/check-layout-status-claims.sh`` greps for when it decides
+#: whether this block counts as LVS-matched in README.md / the Challenge #5
+#: proposal -- asserted here too so the two cannot drift apart silently.
+LVS_MATCH_VERDICT = "Congratulations! Netlists match."
+
+
+class LvsEvidenceTests(unittest.TestCase):
+    """The committed block-level LVS record (issue #440).
+
+    Pure file inspection -- no PDK, no KLayout. Re-running the deck is
+    ``layout/run_pv.py lvs``'s job and is recorded in ``PROOF.md``; what
+    these tests defend is that the *recorded* verdict stays in the tree and
+    stays a match, so a later change that quietly breaks this block's LVS
+    cannot leave a stale "matched" claim standing in two status documents.
+    """
+
+    def test_lvs_clean_directory_exists(self):
+        self.assertTrue(
+            (EVIDENCE_DIR / "lvs-clean").is_dir(),
+            f"{EVIDENCE_DIR / 'lvs-clean'} -- the deck output for this "
+            "block's LVS claim; see PROOF.md for the exact invocation",
+        )
+
+    def test_the_recorded_deck_log_reports_a_match(self):
+        log = EVIDENCE_DIR / "lvs-clean" / "lvs.stdout.log"
+        self.assertTrue(log.is_file(), f"{log} missing")
+        self.assertIn(LVS_MATCH_VERDICT, log.read_text())
+
+    def test_the_recorded_deck_log_reports_no_mismatch(self):
+        log = EVIDENCE_DIR / "lvs-clean" / "lvs.stdout.log"
+        self.assertNotIn("Netlists don't match", log.read_text())
+
+    def test_the_run_committed_its_reference_extracted_and_database_files(self):
+        for name in ("pfd_cp.spice", "pfd_cp.cir", "pfd_cp.lvsdb"):
+            with self.subTest(name=name):
+                self.assertTrue((EVIDENCE_DIR / "lvs-clean" / name).is_file())
+
+    def test_the_committed_reference_is_what_reference_netlist_produces_today(self):
+        committed = (EVIDENCE_DIR / "lvs-clean" / "pfd_cp.spice").read_text()
+        self.assertEqual(committed, block.reference_netlist())
+
+    def test_the_first_runs_recorded_mismatch_is_kept_not_deleted(self):
+        # Evidence here is append-only: the mismatch this block's first
+        # block-level LVS run actually found stays committed under
+        # lvs-attempt/ beside the match that superseded it.
+        attempt = EVIDENCE_DIR / "lvs-attempt" / "lvs.stdout.log"
+        self.assertTrue(attempt.is_file(), f"{attempt} -- do not delete")
+        self.assertIn("Netlists don't match", attempt.read_text())
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not available")
+class PinLabelTests(unittest.TestCase):
+    """Exactly one label per boundary net, on the right *purpose* layer.
+
+    This is the class of defect issue #440's first LVS run exposed, and
+    neither half of it is visible to DRC or to ``netcheck.py``:
+
+    * a label inherited from a flattened sub-block names a net that the
+      assembling level has since re-tied to something else (``ENB`` riding
+      on this block's ground rail, which broke the deck's substrate global
+      net merge and mismatched all 84 n-channel bulks); and
+    * a Metal2-geometry pin labelled on Metal1's pin purpose (34/10)
+      attaches to whatever unrelated Metal1 lies under it -- ``UP`` and
+      ``DN`` both landed on ``pfd``'s ``RB`` bus that way.
+
+    Both are *naming* faults on correct geometry, so they can only be
+    caught by looking at the labels themselves.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import klayout.db as db
+
+        cls.db = db
+        cls.layout = block.build()
+        cls.tmp = tempfile.TemporaryDirectory()
+        gds = Path(cls.tmp.name) / "pfd_cp.gds"
+        cls.layout.write_gds(gds)
+        cls.ly = db.Layout()
+        cls.ly.read(str(gds))
+        cls.top = cls.ly.top_cell()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def _texts(self, layer: int, datatype: int) -> list[str]:
+        index = self.ly.find_layer(layer, datatype)
+        if index is None:
+            return []
+        return sorted(
+            it.shape().text.string
+            for it in self.top.begin_shapes_rec(index)
+            if it.shape().is_text()
+        )
+
+    def test_metal1_pin_labels_are_exactly_the_non_bridged_boundary_pins(self):
+        expected = sorted(set(block.BOUNDARY_PINS) - set(block.BRIDGED_NETS))
+        self.assertEqual(self._texts(34, 10), expected)
+
+    def test_up_and_dn_are_labelled_on_the_metal2_pin_purpose(self):
+        # Their pin geometry is pfd's own Metal2 bus, so 36/10 is the only
+        # purpose that attaches the name to the right net.
+        self.assertEqual(self._texts(36, 10), sorted(block.BRIDGED_NETS))
+
+    def test_every_boundary_pin_is_labelled_exactly_once(self):
+        all_texts = self._texts(34, 10) + self._texts(36, 10)
+        self.assertEqual(sorted(all_texts), sorted(block.BOUNDARY_PINS))
+        self.assertEqual(len(all_texts), len(set(all_texts)))
+
+    def test_no_sub_block_local_port_name_survives_the_flattening(self):
+        # A sample of names that are real ports one level down and are NOT
+        # this block's own nets: every one of these was present in the drawn
+        # GDS before issue #440, and `ENB` on the ground rail is the one
+        # that actually broke LVS.
+        inherited = {"EN", "ENB", "VBN", "VBP", "VCASCN", "VCASCP", "TAIL", "UPT", "DNT", "VREF", "B0B", "B1B"}
+        present = set(self._texts(34, 10) + self._texts(36, 10))
+        self.assertEqual(present & inherited, set())
+
+
 if __name__ == "__main__":
     unittest.main()

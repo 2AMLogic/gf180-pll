@@ -274,5 +274,37 @@ class ReferenceNetlistTests(unittest.TestCase):
             self.assertIn(pin, ref.splitlines()[0])
 
 
+class PinPurposeLayerTests(unittest.TestCase):
+    """Net names must land on the *purpose* layers the LVS deck reads.
+
+    Until issue #440 this package took ``_canvas.Canvas``'s ``PIN_LAYER =
+    "metal1"`` default and labelled its Metal2 buses on ``"metal2"``, i.e.
+    both on the **drawing** datatypes (34/0, 36/0). gf180mcu's LVS deck
+    only reads ``labels(34, 10)`` / ``labels(36, 10)``
+    (``layers_definitions.lvs``), so every net this block labelled was
+    extracted as an anonymous node: its first LVS run extracted as
+    ``.SUBCKT lock_detector VSS`` -- a single port, and that one the deck's
+    own synthesized substrate net rather than anything drawn here.
+
+    ``vco/primitives.py`` made exactly this correction for its own package
+    at issue #367; this is the same correction for this one. Pure constant
+    inspection -- no PDK, no KLayout.
+    """
+
+    def test_layer_table_declares_both_pin_purposes(self):
+        self.assertEqual(P.LAYER["metal1_label"], (34, 10))
+        self.assertEqual(P.LAYER["metal2_label"], (36, 10))
+
+    def test_canvas_pins_on_the_metal1_pin_purpose_not_the_drawing_layer(self):
+        self.assertEqual(P.Canvas.PIN_LAYER, "metal1_label")
+        self.assertNotEqual(P.LAYER[P.Canvas.PIN_LAYER], P.LAYER["metal1"])
+
+    def test_the_two_purpose_layers_are_not_the_drawing_layers(self):
+        # A text on 34/0 or 36/0 is invisible to the deck's connectivity
+        # step -- the defect this pair of entries exists to prevent.
+        self.assertNotEqual(P.LAYER["metal1_label"], P.LAYER["metal1"])
+        self.assertNotEqual(P.LAYER["metal2_label"], P.LAYER["metal2"])
+
+
 if __name__ == "__main__":
     unittest.main()

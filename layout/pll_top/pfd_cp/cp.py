@@ -390,6 +390,10 @@ def build(outdir: Path | None = None) -> CpLayout:
         _place(stage_index, 0.0, 0.0)
         _place(dumpbuf_index, dx, dy)
         canvas.top.flatten(-1, True)
+    # NET_MAP renames six of cp_dumpbuf's own nets on the way in, so its
+    # inherited labels are actively wrong here. This level owns the names
+    # (issue #440) -- see _canvas.Canvas.clear_inherited_labels().
+    canvas.clear_inherited_labels()
 
     # --- Metal2 trunk rows: one dedicated Y per net, strictly above every
     # routing channel either placed block already uses on its own. ---

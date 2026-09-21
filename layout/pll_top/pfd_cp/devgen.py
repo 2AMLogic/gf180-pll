@@ -145,6 +145,14 @@ LAYER = {
     # invisible to that connectivity step, so a net "labelled" there is
     # still extracted as an anonymous node under LVS.
     "metal1_label": (34, 10),
+    # The same pin/label purpose one level up (``metal2_label = labels(36,
+    # 10)``; ``connect(metal2_con, metal2_label)``). An assembler whose
+    # boundary-pin geometry for a net is a *Metal2* bus rather than a Metal1
+    # pad must label it here: a text dropped on 34/10 over a Metal2 bus
+    # attaches to whatever unrelated Metal1 happens to lie under that point,
+    # naming the wrong net (issue #440 -- ``pfd_cp``'s own UP/DN pins landed
+    # on ``pfd``'s ``RB`` bus this way, which extracted as ``DN,UP``).
+    "metal2_label": (36, 10),
 }
 
 # --- Derived generator margins (deck minimum + explicit headroom) -- values
