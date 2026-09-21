@@ -539,3 +539,32 @@ BLOCKS_EXCLUDING_DIVIDER_LOCK = tuple(b for b in BLOCKS if b is not DIVIDER_LOCK
 #: tracked separately by ``test_floorplan_skeleton.py``, same as
 #: ``DIVIDER_LOCK``'s.
 VCO_FOLD_TRIPWIRE_BLOCKS = tuple(b for b in BLOCKS_EXCLUDING_DIVIDER_LOCK if b is not PFD_CP)
+
+
+def main() -> int:
+    """``python3 -m floorplan.skeleton --outdir <dir>`` -- write the skeleton.
+
+    The same ``--outdir`` calling convention every other generator in this
+    repository exposes (``pll_top/lock_detector/build.py``,
+    ``pll_top/vco/block.py``, ...), and therefore the one
+    ``harness/reproduce.py`` invokes as a subprocess to re-derive each
+    committed artifact. Through issue #398 this module had ``build()`` but
+    no CLI, so its evidence directory documented regeneration as an ad-hoc
+    ``python3 -c`` one-liner that ``reproduce.py`` could not call -- which
+    is why this was the one committed block GDS the reproducibility guard
+    (issue #451) had to exclude by name rather than check. Added at issue
+    #461 together with the regenerated artifact.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description="write pll_floorplan_skeleton.gds")
+    parser.add_argument("--outdir", default="/tmp/pll_floorplan_skeleton")
+    args = parser.parse_args()
+
+    gds_path = build(Path(args.outdir))
+    print(f"wrote {gds_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
