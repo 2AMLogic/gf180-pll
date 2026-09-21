@@ -270,6 +270,19 @@ independently-LVS-clean build -- because once an instance's own boundary is
 correctly anchored, resolving its own 60-device interior is the same
 bounded, already-proven-tractable problem that build already solves on its
 own, not a new one this module reopens.
+
+This module's own re-labeling of every routed net is a *different*
+mitigation than ``_canvas.Canvas.clear_inherited_labels()`` (issue #440,
+extended to every read-GDS-and-flatten composition site including this one
+by issue #453): re-labeling supplies the comparer's name-based hint
+matching with a name for every net (the problem this section is about), it
+does not by itself remove the six ``div23_cell`` instances' own stray
+*inherited* local-named texts (``CKIN``/``MODIN``/``P``/``CKOUT``/
+``MODOUT``/``VDD``/``VSS``, each repeated once per instance) that flattening
+those instances in also carries into this cell. :func:`build` calls
+``clear_inherited_labels()`` immediately after its own ``flatten()`` and
+before this labeling loop for exactly that reason -- both mitigations are
+needed, each for a different half of the same underlying risk.
 """
 
 from __future__ import annotations
@@ -962,6 +975,29 @@ def build(outdir: Path | None = None) -> DividerChainLayout:
     # precedent: a flat top cell needs no subcircuit correspondence with the
     # (hierarchical) reference netlist during LVS).
     canvas.top.flatten(-1, True)
+
+    # Each of the six div23_cell instances was written for its own
+    # standalone LVS claim and labels its own 7 *local* boundary-net names
+    # (``CKIN``/``MODIN``/``P``/``CKOUT``/``MODOUT``/``VDD``/``VSS`` --
+    # ``div23_cell.BOUNDARY_NETS``) on "metal1_label". Flattening carries all
+    # 42 of those label shapes (6 instances x 7 nets, each name repeated
+    # identically across instances) into this cell -- the same composition
+    # pattern _canvas.Canvas.clear_inherited_labels()'s own docstring
+    # describes (issue #440), extended here to this module (issue #453).
+    # This block does not go on to mismatch the way pfd_cp's first
+    # block-level LVS run did, because the labeling loop immediately below
+    # already re-labels *every* net this module routes -- including all six
+    # instances' own boundary nets, under this block's own reference-netlist
+    # names -- rather than relying on any inherited name (see this module's
+    # own "NAME-BASED LVS MATCHING" docstring section). But the six
+    # instances' stray local-named texts are still real duplicate labels
+    # sitting on this block's nets (the same net gaining a spurious second,
+    # colliding name across the six div23_cell copies) until cleared, which
+    # is at best inert clutter and at worst the same
+    # --lvs_sub-global-net-merge failure #440 fixed, so clear them before
+    # this module's own labeling loop draws the names that are actually
+    # meant to stick.
+    canvas.clear_inherited_labels()
 
     # Label every net this module itself routes -- not just this block's own
     # 17 official BOUNDARY_NETS -- with its own reference-netlist name. See
