@@ -13,7 +13,7 @@ verification evidence in `sim/` is the point of the repository: every claim
 this project makes is meant to be backed by a testbench and a recorded corner
 sweep, in a format designed so you can check that yourself.
 
-## Status: early. Schematic-level, pre-layout, pre-silicon.
+## Status: early. Block-level layout underway, pre-top-level, pre-silicon.
 
 Being honest about where this actually is:
 
@@ -45,28 +45,43 @@ Being honest about where this actually is:
   of its other four criteria at real corners, with one genuine design-margin
   finding routed to `loop-dynamics` (#10) and the rest to `lock-detector`
   (#11) or the post-#24 charge pump (#9) — see each campaign's own latest
-  record under `sim/*/records/` for the full accounting. `period-jitter`
-  now has **two records** covering 5 of the mandated 45 PVT corners (all at
-  27 °C/3.30 V): the first (`20260905-192724-a2ba48f`) measured the nominal
-  (`typical`) corner at **0.2334 % RMS**; the second
-  (`20260906-015602-f9bef9d`) adds all four process-corner extremes (`ff`,
-  `ss`, `fs`, `sf`), ranging **0.1333–0.2334 % RMS** — every measured corner
-  is comfortably inside the 1.0 % draft target. Temperature (−40 °C, 125 °C)
-  and supply (2.97 V, 3.63 V) remain entirely unswept, and the campaign's own
-  Acceptance Criteria (#13, `loom:blocked` on #1's spec ratification) also
-  require a **random/noise-driven** jitter component neither record measures
-  (a disclosed methodology gap, not an oversight).
-- **Not started** — PLL-block layout. `layout/` is not a placeholder: issue
-  #16 landed a repeatable `klt`-aware DRC/LVS flow against the gf180mcu
-  open-PDK decks, proven clean (and proven to catch a deliberately injected
-  DRC violation and LVS mismatch) on a trivial standard-cell inverter — see
-  `layout/evidence/inv-tb-proof/PROOF.md`. No PLL block has been drawn yet,
-  and `measurements/` stays empty until there is silicon. Nothing here has
-  been through DRC/LVS as a PLL block, and nothing has been fabricated or
-  measured. Treat every number in this repository as simulation only.
+  record under `sim/*/records/` for the full accounting. `period-jitter`'s
+  **deterministic (control-ripple) component now covers 45 of the mandated 45
+  PVT corners** — the complete 3 × 3 temperature × supply plane at all five
+  MOS bundles (`typical`, `ff`, `ss`, `fs`, `sf`), ranging **0.0508 % RMS**
+  (`ss` / 125 °C / 3.30 V) to **0.2691 % RMS** (`typical` / −40 °C / 3.63 V),
+  every point inside the 1.0 % target with at least 3.7× margin. Two things it
+  does **not** cover, stated rather than left to be inferred: the campaign's
+  own Acceptance Criteria (#13) also require a **random/noise-driven** jitter
+  component that no record measures (a disclosed methodology gap), and every
+  one of its records is at one output frequency, 150 MHz — the same
+  measurement at the 200 MHz top of the ratified band is declared as
+  `sim/period-jitter-band-top` and carries no measured record yet.
+- **Underway, block by block** — PLL-block layout. Issue #16 landed a
+  repeatable `klt`-aware DRC/LVS flow against the gf180mcu open-PDK decks,
+  proven clean (and proven to catch a deliberately injected DRC violation and
+  LVS mismatch) on a trivial standard-cell inverter
+  (`layout/evidence/inv-tb-proof/PROOF.md`). Real transistor-level layout has
+  since been drawn against that flow: **4 of the 4 PLL sub-blocks** — the VCO
+  (#293), the PFD + charge pump (#294), the divider chain (#295), and the lock
+  detector (#296) — now have a committed block GDS with a DRC-clean deck log
+  under `layout/evidence/`, and **2 of the 4 are LVS-matched** against an
+  independently derived reference netlist (`vco_block` and `divider_chain`;
+  `pfd_cp` and `lock_detector` each state in their own `PROOF.md` that they
+  make a DRC-clean geometry claim only). There is **no assembled `pll_top`
+  GDS** — the four blocks exist side by side, not wired into a top level, so
+  no top-level DRC/LVS closure and no post-layout extracted-netlist
+  re-verification exists either (#17, #18, #149). These counts are checked
+  against the evidence tree in CI by
+  `layout/lib/check-layout-status-claims.sh`, so this paragraph cannot
+  silently go stale the way its predecessor did.
+- **Not started** — silicon. `measurements/` stays empty until there is any.
+  Nothing has been fabricated or measured; treat every number in this
+  repository as simulation only.
 
 The maturity ladder being climbed: simulation-complete → layout DRC/LVS-clean
-→ shuttle seat → measured silicon over temperature. This is the first rung.
+→ shuttle seat → measured silicon over temperature. This is partway up the
+first rung: the blocks are drawn, the top level is not.
 
 ## Repository layout
 
@@ -74,7 +89,7 @@ The maturity ladder being climbed: simulation-complete → layout DRC/LVS-clean
 spec/          specification + numbered decision records (DR-NNN)
 design/        xschem schematics/symbols + the SPICE netlist exporter
 sim/           testbenches, the PVT corner harness, and append-only evidence records
-layout/        DRC/LVS flow, proven on a test cell; PLL-block GDS/reports not yet drawn
+layout/        DRC/LVS flow + the four PLL sub-block layouts drawn against it
 signoff/       this block's T1 evidence-tier verdict, machine-graded and CI-checked
 measurements/  silicon characterization (empty until there is silicon)
 ```
@@ -135,15 +150,14 @@ is this block's proposal document for Open Circuit Design's Chipalooza
 Challenge #5 (GF180MCU / Wafer.Space), re-derived from this repository's own
 `sim/` evidence. It states plainly where the block does and does not meet the
 brief today — including that the design is 3.3 V-only and does not yet
-exercise the Challenge's 5.0 V analog rail, and that `period-jitter`'s
-closed-loop PVT verification is still incomplete: its three records cover 13
-of the mandated 45 corners — the process axis at 27 °C/3.30 V, plus the
-complete temperature x supply plane at nominal process — and the
-deterministic component only, with the random/noise-driven component and the
-remaining 32 corners still open (#13). Every one of those records is also at
-one output frequency, 150 MHz; `sim/period-jitter-band-top` declares the same
-measurement at the 200 MHz top of the ratified band and carries no measured
-record yet, so the proposal marks that row **unmet** rather than omitting it.
+exercise the Challenge's 5.0 V analog rail; that `period-jitter`'s
+deterministic component now covers 45 of the mandated 45 PVT corners but its
+random/noise-driven component and its 200 MHz band-top counterpart are both
+still unmeasured (#13), so the proposal marks those rows **unmet** rather than
+omitting them; and that layout has reached the sub-block level but not the top
+level — **4 of the 4 PLL sub-blocks** are drawn and DRC-clean, **2 of the 4
+are LVS-matched**, and there is **no assembled `pll_top` GDS**, hence no
+top-level signoff and no post-layout re-verification.
 
 ## License
 
