@@ -88,6 +88,16 @@ jobs:
         # instead of misleading a reader.
         run: bash sim/lib/check-readme-status.sh
 
+      - name: layout/lib/check-layout-status-claims.sh (README + proposal vs. layout/ tree)
+        # The layout-side counterpart of the sim-side check above (issue
+        # #237). README.md and docs/chipalooza/challenge-5-proposal.md both
+        # stated that no PLL block had been drawn for about five weeks after
+        # all four sub-blocks landed with committed GDS and DRC-clean deck
+        # output -- and the proposal is a document written to be emailed
+        # verbatim to an outside reader. Pure file-existence plus a grep of
+        # the recorded deck verdicts; no PDK, no KLayout, no layout input.
+        run: bash layout/lib/check-layout-status-claims.sh
+
       - name: Install klt (klayout-tools) for the signoff tier check
         # Pinned, for the same reason xschem and the PDK are pinned below: an
         # unpinned klt would re-render signoff/tier-report.json differently the

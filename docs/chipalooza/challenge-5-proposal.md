@@ -20,15 +20,20 @@ CV and a test-equipment list, if needed, are separate attachments the
 submitting operator supplies outside this repository.
 
 **Maturity note, stated up front rather than left for a reader to discover.**
-This repository is, at the time of writing, **schematic-level and
-pre-layout** (`README.md`'s own "Status" section). This proposal documents
-the block honestly at that maturity: §5's target-specification table reports
-what the schematic-level `sim/` evidence shows, marks every row met or unmet
-against the draft (`spec/pll.md`, itself **proposed and not yet ratified** —
-see §5.0), and does not assume or forward-cite work that has not happened.
-Layout, DRC/LVS closure, and post-layout re-verification are open items
-(§7), each tracked by its own issue in this repository, not silently implied
-by this document's existence.
+This repository is, at the time of writing, **schematic-complete and
+partway through block-level layout**: **4 of the 4 PLL sub-blocks** have a
+committed, DRC-clean transistor-level GDS, **2 of the 4 are LVS-matched**,
+and there is **no assembled `pll_top` GDS** (§6). Every §5 number is
+therefore a *schematic-level* simulation result: no extracted-netlist
+post-layout re-verification exists, because there is no top level to extract.
+This proposal documents the block honestly at that maturity: §5's
+target-specification table reports what the schematic-level `sim/` evidence
+shows, marks every row met or unmet against `spec/pll.md` (**ratified with
+amendments** on 2026-09-08 via #1, with two rows explicitly carved out and
+still unratified — see §5.0), and does not assume or forward-cite work that
+has not happened. Top-level assembly, top-level DRC/LVS closure, and
+post-layout re-verification are open items (§7), each tracked by its own
+issue in this repository, not silently implied by this document's existence.
 
 ---
 
@@ -220,18 +225,24 @@ none require the Challenge's shared analog mux beyond `VCTRL`.
 ### 5.0 Citation convention and ratification status
 
 Every row below cites a specific, dated `sim/` record from this repository.
-**`spec/pll.md` itself is status "proposed" — pending engineering
-ratification through issue #1 — not yet a ratified spec.** This table
-re-derives min/typ/max directly from the underlying `sim/` evidence rather
-than treating `spec/pll.md`'s own summary table as settled, and flags, row by
-row, where newer full-PVT-grid closed-loop evidence postdates and updates
-what `spec/pll.md`'s own table currently cites (`spec/pll.md`'s summary table
-was last written 2026-07-31; the closed-loop `lock-time`, `output-range`, and
-`supply-sensitivity` full-grid records below are dated 2026-08-19 through
-2026-09-01 and are not yet reflected there). All evidence is
-**schematic-level — no layout parasitics exist yet** (§7); everything is at
-the 3.3 V digital rail only, since no 5.0 V device exists in this design
-(§2.1).
+**`spec/pll.md` is status "ratified, with amendments" (issue #1, closed
+2026-09-08)** — ratified through this repository's ratification-via-PR
+policy, with **two rows explicitly carved out and still unratified** per
+DR-007 Amendment A1: [Lock time](../../spec/pll.md#lock-time) (row 9) and
+[Lock detector](../../spec/pll.md#lock-detector) (row 16). Row 16's original
+T1′/T2′ contradiction has since been resolved (#411 trims the comparator
+window; see that row below), but the carve-out stands because T4/T5 remain
+uncharacterized below 25 MHz and the row now also rests on a normative trim
+rule. Rows marked MET/UNMET below are stated against the ratified targets
+except those two, which are stated against the draft and say so. This table
+re-derives
+min/typ/max directly from the underlying `sim/` evidence rather than treating
+`spec/pll.md`'s own summary table as settled, and flags, row by row, where
+newer full-PVT-grid closed-loop evidence postdates and updates what
+`spec/pll.md`'s own table cites. All evidence is **schematic-level — no
+extracted layout parasitics exist yet**, because there is no assembled
+top level to extract (§6, §7); everything is at the 3.3 V digital rail only,
+since no 5.0 V device exists in this design (§2.1).
 
 | Parameter | v1 draft target | Measured / derived (3.3 V) | Verdict | Source (dated) |
 |---|---|---|---|---|
@@ -242,7 +253,7 @@ the 3.3 V digital rail only, since no 5.0 V device exists in this design
 | Period jitter (open-loop sensitivity) | ≤ 1.0 % RMS, conditional on ≤ 20 mV pp `vdd_vco` ripple | Worst 2.51 % RMS at 100 mV pp ripple (`all-slow`/−40 °C/2.97 V, band 5); implies 0.50 % RMS at the 20 mV pp budget, leaving headroom for an unmeasured random component | **derived, conditional PASS** at the stated ripple budget | `sim/vco-tuning-range/records/20260731-184845-0a12e6c.md` |
 | Period jitter, **closed-loop, deterministic (control-ripple)** | Same 1.0 % RMS line | **All 45 of the mandated PVT points now measured**, at one operating point throughout (f_ref = 25 MHz, N = 6, f_out = 150 MHz, band 6, Icp code 0 — the same as `reference-spur`): the complete temperature × supply plane (−40/27/125 °C × 2.97/3.30/3.63 V) at every one of the five MOS bundles (`typical`, `ff`, `ss`, `fs`, `sf`). Range **0.0508–0.2691 % RMS** across all 45 — worst `typical`/−40 °C/3.63 V, best `ss`/125 °C/3.30 V, a 5.3× span, unchanged by the last 16 points (`fs`/`sf` span 0.0903–0.2472 % RMS, inside those bounds). Temperature is monotone at every bundle (hotter is better) — the finding from `typical`/`ff`/`ss` extends cleanly to `fs`/`sf`. The supply trend does not resolve into a clean two-valued-by-process-sign picture, though: `ff` falls and `ss` rises with supply, `fs` mostly rises (dipping slightly at −40 °C: 0.1903 → 0.1876 → 0.2097 %), and `sf` falls gently at −40 °C like `ff` (0.2472 → 0.2463 → 0.2454 %) but rises at 27 °C and dips at 125 °C — the "sign flips cleanly by process" reading from `ff`/`ss` alone does not fully generalize. One caveat is reported rather than smoothed over: one of the five records' **overall status is FAIL**, because 2 of its 18 points fail a lock gate that is not wrap-safe — both loops are demonstrably locked (`fout` within 160 ppm of target, measured N = 6.000, jitter in family with their neighbours) and the gate's phase samples wrapped by exactly one reference period. That is a measurement defect, filed as issue #273, not a jitter result | **MET at every measured corner (45/45), with a 3.7× margin at the worst of them** — but **no record of this campaign varies the output band**: every point is at band 6 / 150 MHz, so nothing here yet bounds jitter at the 200 MHz top of the ratified band — see the row immediately below | `sim/period-jitter/records/20260905-192724-a2ba48f.md` (first, `typical` only); `sim/period-jitter/records/20260906-015602-f9bef9d.md` (adds `ff`/`ss`/`fs`/`sf`); `sim/period-jitter/records/20260906-024225-12bccda.md` (adds the `typical` temperature × supply plane); `sim/period-jitter/records/20260906-063728-f3c9c23.md` (adds the `ff` and `ss` planes; overall FAIL, see #273); `sim/period-jitter/records/20260906-080511-69b36ef.md` (adds the `fs` and `sf` planes' remaining 16 points, completing the matrix; overall PASS) |
 | Period jitter, **closed-loop, deterministic, at the 200 MHz band top** | Same 1.0 % RMS line | **No measured record yet — declared, not measured.** `sim/period-jitter-band-top` is the row above's measurement moved to the binding end of the ratified band: same deck structure, same solver tolerances, same reduction module (loaded, not copied), f_ref and the Icp trim code held, N 6 → 8, f_out 150 → 200 MHz. Its full 45-point grid is declared and every point's operating point is derived from the committed VCO record `20260804-162735-72883fb` under [the band-selection rule](../../spec/pll.md#band-selection-rule), re-checkable without a simulator. One result did come out of that derivation and needs no simulator: **at 200 MHz the rule does not select a single band code across the PVT grid** — band 6 at 34 of the 45 points, band 7 at the other 11 (the cold and/or high-supply points where band 6's own curve tops out below 200 MHz) — where at 150 MHz one static code covers all 45. Local Kvco at the selected points spans 74.7–117.0 MHz/V, all inside the Kvco row's 150 MHz/V bound, but the loop gain the one fixed filter sees varies 1.6× across this grid against 1.05× across the 150 MHz one | **UNMET — explicitly.** No jitter number at 200 MHz is claimed anywhere in this document. The band split above is a derivation from committed open-loop evidence, reported as such, and is not a substitute for the measurement | `sim/period-jitter-band-top/testbench/` (manifest, deck and derivation; `band_and_vstart_from_vco_record.py --check`); `sim/vco-tuning-range/records/20260804-162735-72883fb` (the f(Vctrl) table it reads); issue #13 |
-| Period jitter, **closed-loop, random/noise-driven** | Same 1.0 % RMS line | **Zero records.** None of the three deterministic-component records above measures this — a disclosed methodology gap (DR-002 Decision 5; ngspice `TRANNOISE` produces no injected noise on this repo's pinned build, and turning its `trnoise()` PWL source into a credible device-noise-equivalent figure needs a noise-PSD calibration this repository has not done). Tracked at issue #13 | **UNMET — explicitly, not omitted.** This is the one row this proposal cannot report a number for at any maturity | issue #13 (open) |
+| Period jitter, **closed-loop, random/noise-driven** | Same 1.0 % RMS line | **Zero records.** None of the five deterministic-component records above measures this — a disclosed methodology gap (DR-002 Decision 5; ngspice `TRANNOISE` produces no injected noise on this repo's pinned build, and turning its `trnoise()` PWL source into a credible device-noise-equivalent figure needs a noise-PSD calibration this repository has not done). Tracked at issue #13 | **UNMET — explicitly, not omitted.** This is the one row this proposal cannot report a number for at any maturity | issue #13 (open) |
 | Phase noise | not spec'd (DR-002 Decision 5) | n/a by design | **N/A, by design** | `spec/pll.md#phase-noise` |
 | Reference spur | ≤ −55 dBc | −57.0…−72.7 dBc measured at 150 MHz (5 spanning corners); scaled to the binding 200 MHz, the two coldest corners land at −54.5/−54.9 dBc (0.1–0.5 dB over the line) | **PASS at 150 MHz (5/5 corners); UNMET at the scaled 200 MHz binding point for 2/5 corners** — 5 of 45 PVT points measured, not the full grid | `sim/reference-spur/records/20260816-132150-5f405e7.md` |
 | Loop bandwidth | 26–430 kHz over the ratified space, `f_c < f_ref/10` | 25.96–429.5 kHz measured; worst realized `f_c/f_ref` = `f_ref/13`, inside the ceiling at every point of the cross-product | **MET** | `sim/loop-dynamics/records/20260731-202550-82af5a9.md` |
@@ -256,8 +267,8 @@ the 3.3 V digital rail only, since no 5.0 V device exists in this design
 | Supply sensitivity — DC / closed-loop, full grid | ≤ 0.6 V of the `VCTRL` window consumed by a rail excursion; stays locked through a supply step + ramp | Full 45-point grid: **frequency-vs-supply criterion FAILs on 10/45 corners** (worst −294 ppm); **`VCTRL`-window criterion FAILs on 4/45** (worst 2.642 V, past the 2.4 V edge, at `ss`/−40 °C/3.63 V); **step+ramp criterion FAILs** at 1 of 3 sampled corners even after both settling-time escalations run to completion (`ss`/−40 °C, a genuine finding routed to `loop-dynamics`, #10) | **UNMET on 3 of 4 measured criteria** — a real, disclosed design-margin finding, not a settling-window artifact (both escalations ran to full length) | `sim/supply-sensitivity/records/20260901-155456-46b92f8.md` |
 | Output duty cycle | 45–55 % at `CLK`, full band, all corners | 44.375–50.696 % measured (90 points, loaded); 7/90 points below the 45 % floor, all at the low-frequency band edge, concentrated in the `fs` process bundle | **UNMET at 7/90 points** (small excursion, 0.625 pp worst-case) | `sim/output-driver/records/20260817-100354-0e9cfc9.md` |
 | Output levels and drive | V_OH ≥ 0.9·VDD_VCO, V_OL ≤ 0.1·VDD_VCO into ≤ 50 fF | V_OH 1.006–1.044·VDD_VCO, V_OL −0.040…−0.006·VDD_VCO, 90/90 points | **MET**, full 90-point grid | Same record |
-| Area | ≤ 0.15 mm² total (budget — no layout exists) | Loop filter alone: 0.0321 mm² (21.4 % of budget), measured from real device data; remaining 78.6 % (VCO, PFD/CP, divider, lock detector, routing, decap) **not estimated** | **Not evaluable — no layout drawn** (§7) | `spec/pll.md#area`, underlying `sim/loop-dynamics` and `sim/devchar-passives` |
-| Lock detector | assert window ≥ 2.5 ns (T1); ≥ 2× worst static phase offset (T2); hysteresis ≥ 25 % of window (T3); deassert ≤ 1 `f_ref` period (T4); no chatter 1–25 MHz (T5) | Window measured 0.877–1.702 ns; worst deassert latency 5.45 ns; characterized at `f_ref` = 25 MHz only | **T1/T2 UNMET** (summed static phase offset up to ≈1.49 ns is comparable to the window); **T3 not separately reported**; **T4/T5 unverified below 25 MHz** — genuine, disclosed design gaps, not oversights | `sim/lock-detector/records/20260731-162119-0a12e6c.md` |
+| Area | ≤ 0.15 mm² total | **Now measured at the block level, and over budget.** Every sub-block's as-drawn footprint: loop filter 0.0369 mm², VCO 0.0312 mm² (183.18 × 170.28 µm, post-fold), PFD + charge pump 0.0351 mm² (434.31 × 80.73 µm), divider chain + lock detector 0.1396 mm² (the divider chain is 0.1321 mm² / 1317.66 × 100.29 µm today — it was 0.2471 mm² as first drawn and came down 47 % through the #341 routing-track-packing and #344 row-fold passes; the lock detector is 119.3 × 62.6 µm). Sum **0.2428 mm²**, or **0.3035 mm²** after the floorplan's own ×1.25 top-level-overhead factor | **UNMET — ≈2.0× over the 0.15 mm² target**, measured rather than estimated. This supersedes this proposal's earlier "not evaluable — no layout drawn" reading. The cause is structural and stated in the evidence: every device is its own diffusion island wired by metal, so a shared-diffusion or further fold pass is the identified lever and has been applied to the VCO (#324) and divider chain (#341/#344) but not to `pfd_cp`. Note this is a **sum of block extents, not a placed-and-routed top level** — no assembled `pll_top` GDS exists, so top-level routing and inter-block spacing are not in this number | `layout/floorplan/PLL-FLOORPLAN.md` §5.1–§5.4 (the re-derived budget arithmetic); `layout/evidence/vco-layout/PROOF-fold.md`; `layout/evidence/pfd-cp-layout/PROOF.md`; `layout/evidence/divider-chain-layout/PROOF.md`; `spec/pll.md#area` |
+| Lock detector | assert window within **1 … 2 ns** of phase error at every PVT point (T1′/T2′, DR-010/DR-013), measured at the `lock` flag rather than at the bare delay chain; hysteresis ≥ 25 % of window (T3); deassert ≤ 1 `f_ref` period (T4); no chatter 1–25 MHz (T5). **Conditioned on the [lock-detector window trim-code rule](../../spec/pll.md#lock-detector-window-trim-code-rule)** | Re-characterized in situ on the trimmed `delaywin_3v3` cell (DR-014, #411): window edge **[1.14, 1.16) ns** at `fs`/−40 °C/3.63 V and **[1.78, 1.80) ns** at `ss`/125 °C/2.97 V, each at the code the trim rule selects, PVT spread **1.53–1.58×** against DR-013 Decision 4's ≤ 1.65×. 0 of 205 points fail the four-check acceptance; worst deassert latency 5.63 ns. The **untrimmed** cell sat at [2.02, 2.04) ns with a 1.91–1.96× spread — outside the band at every fixed code | **T1′/T2′ MET, conditional on the trim rule** — this row supersedes this proposal's earlier "T1/T2 UNMET" reading, which predated #411. **T4/T5 still UNMET/uncharacterized below 25 MHz.** Two things a reader must not miss: an **untrimmed part is outside this specification**, and the trim code table is schematic-level and mismatch-free, so the rule is not yet proven against a real trimmed part. `spec/pll.md` keeps this row inside DR-007 Amendment A1's ratification carve-out for exactly those reasons | `sim/lock-detector/records/20260919-002812-1b12179.md` (the 205-point in-situ verdict); `sim/lock-window-trim/records/20260917-185928-8adff3d.md` (the 1872-point code map the trim rule's table comes from); `sim/lock-window-sizing/records/20260915-202802-79c0cee.md`; superseded predecessor `sim/lock-detector/records/20260731-162119-0a12e6c.md` |
 | Kvco | ≤ 150 MHz/V under the band-selection rule | Worst 115.8 MHz/V (`all-fast`/27 °C/2.97 V, B6); an adversarial band choice reaches 154.3 MHz/V, over the line, which is why the rule is normative | **MET**, conditional on the band-selection rule being followed | `sim/vco-tuning-range/records/20260731-175947-0a12e6c.md` |
 | Supply range | 3.3 V ± 10 %, 3.3 V devices exclusively | Every campaign above sweeps 2.97/3.30/3.63 V | **MET, as the swept independent axis of every other row** | `spec/pll.md#supply-range` |
 | Supply range, **5.0 V analog rail** | Challenge #5 asks analog blocks to operate across 3.3–5.0 V | **No 5.0 V-class device exists in this design; never simulated above 3.63 V** | **UNMET / not attempted** — the single most load-bearing gap in this proposal, stated plainly per §2.1 | This proposal, §2.1 |
@@ -273,21 +284,55 @@ results pass."
 
 ## 6. Layout, DRC/LVS, and post-layout status
 
-**No PLL-block layout exists.** `layout/` holds a proven, `klt`-aware
-DRC/LVS flow (issue #16, `layout/evidence/inv-tb-proof/PROOF.md`) validated
-on a trivial standard-cell inverter test cell — including a demonstrated
-catch of a deliberately injected DRC violation and LVS mismatch — but that
-flow has never been run against any of this design's own sub-blocks (VCO,
-PFD/charge pump, loop filter, feedback divider, lock detector) or the
-assembled top level. Drawing that layout is tracked at issue #17 (floorplan:
-VCO isolation, supply routing, loop-filter capacitor, guard rings), and
-post-layout extracted-netlist re-verification is tracked at issue #18. Both
-are, at the time of writing, **blocked on issue #1** (this repository's own
-spec-ratification gate) — per #17's own tracked Dependencies, "layout-locking
-work (#16, #17, #18) needs to wait on the formal ratification itself," a
-constraint recorded independently of, and in addition to, #16's own
-now-satisfied tooling prerequisite. This proposal does not draw layout or
-claim DRC/LVS closure that has not happened.
+**Block-level layout exists; top-level layout does not.** `layout/` holds a
+proven, `klt`-aware DRC/LVS flow (issue #16,
+`layout/evidence/inv-tb-proof/PROOF.md`) validated on a trivial
+standard-cell inverter test cell — including a demonstrated catch of a
+deliberately injected DRC violation and LVS mismatch — and that flow has
+since been run against this design's own sub-blocks. **4 of the 4 PLL
+sub-blocks** now have a committed, standalone-DRC-clean transistor-level
+GDS, and **2 of the 4 are LVS-matched** against an independently derived
+reference netlist:
+
+| Sub-block | Top cell | As-drawn footprint | DRC | LVS | Evidence |
+|---|---|---|---|---|---|
+| VCO (#293, folded at #324) | `vco_block` | 183.18 × 170.28 µm (0.0312 mm²) | clean | **matched** | `layout/evidence/vco-layout/` (`PROOF-fold.md`, `PROOF-lvs.md`, `PROOF-433-vdd-island-fix.md`) |
+| PFD + charge pump (#294 via #299–#303, #385, #386) | `pfd_cp` | 434.31 × 80.73 µm (0.0351 mm²) | clean (default **and** `--offgrid` signoff-grade) | **no claim** — the block's reference netlist is out of its own issue's scope, stated as such in its `PROOF.md` | `layout/evidence/pfd-cp-layout/PROOF.md` |
+| Divider chain (#295 via #306–#310, packed at #341, folded at #344) | `divider_chain` | 1317.66 × 100.29 µm (0.1321 mm²) | clean | **matched** | `layout/evidence/divider-chain-layout/` (`PROOF.md`, `PROOF-fold.md`) |
+| Lock detector (#296) | `lock_detector` | 119.3 × 62.6 µm (0.0075 mm²) | clean | **no claim** — explicitly a DRC-clean geometry claim only | `layout/evidence/lock-detector-layout/PROOF.md` |
+
+Every DRC run above is against the PDK's own foundry signoff decks
+(`$PDK_ROOT/libs.tech/klayout/drc/…`), not a curated subset, and every LVS
+run is the PDK's own `run_lvs.py` reporting `Congratulations! Netlists
+match.` — the recorded deck output is committed next to each GDS. These
+counts are re-derived from the evidence tree in CI by
+`layout/lib/check-layout-status-claims.sh`, so this section cannot silently
+drift from the tree (it did once, for about five weeks: this section
+asserted that no PLL-block layout existed at all, while all four blocks
+were already committed).
+
+**What does not exist, stated as plainly as what does:**
+
+- **There is no assembled `pll_top` GDS.** The four blocks sit side by side
+  in `layout/pll_top/` as independent generators, not wired into a top
+  level. `layout/floorplan/` (issue #17) holds a block-placement skeleton —
+  one `DIEAREA` rectangle per block at each block's real measured extent —
+  which is a placement plan, not a routed top level.
+- **Therefore no top-level DRC/LVS closure**, and **no post-layout
+  extracted-netlist re-verification** (issue #18): there is nothing to
+  extract. Every number in §5 is a schematic-level simulation result with
+  no layout parasitics, and this proposal makes no post-layout claim.
+- **Two of the four blocks are not LVS-matched** (`pfd_cp`,
+  `lock_detector`). Each says so in its own evidence record rather than
+  leaving a reader to infer it from a missing file.
+- **The block footprints already exceed the area budget** — ≈2.0× over
+  0.15 mm² summed with the floorplan's own overhead factor (§5's Area row,
+  `layout/floorplan/PLL-FLOORPLAN.md` §5.1–§5.4). That is reported as an
+  open finding, not rounded away.
+
+Top-level assembly and formal DRC/LVS reporting are tracked at issues #17
+and #149; post-layout re-verification at #18. This proposal claims exactly
+the DRC/LVS closure the table above records, and no more.
 
 ---
 
@@ -334,22 +379,48 @@ claim DRC/LVS closure that has not happened.
    for the step/ramp criterion ran to full length before FAILing at one
    corner). They are already routed to their owning issues (#9, #10, #11)
    in this repository's own evidence records.
-5. **The lock detector does not meet its own T1/T2 targets** at several
-   corners (§5) — a correctly locked part may fail to assert `LOCK` at the
-   top of the reference range, where the required charge-pump trim code is
-   smallest. The fix identified in `spec/pll.md#lock-detector` is geometric
-   (widen the delay window or scale the integrating capacitor), not
-   architectural, but has not been implemented.
+5. **The lock detector's T1′/T2′ window targets are now met, but only on a
+   trimmed part, and T4/T5 are still uncharacterized below 25 MHz** (§5).
+   This item previously read "does not meet its own T1/T2 targets"; #411
+   closed that gap by adding a 4-bit test-set window trim and a normative
+   [trim-code rule](../../spec/pll.md#lock-detector-window-trim-code-rule),
+   re-characterized in situ across 205 points. Three residuals a reader
+   should weigh: an **untrimmed part is outside this specification** (no
+   single fixed code holds the [1, 2] ns band across PVT); the code table is
+   schematic-level and mismatch-free, so trim-array DNL is unquantified;
+   and the detector has only ever been run at `f_ref` = 25 MHz, so T4
+   (deassert latency) and T5 (no chatter) are unverified at the 1 MHz bottom
+   of the reference range, where the assert hold-off is of order one
+   reference period. `spec/pll.md` keeps this row inside its ratification
+   carve-out for those reasons.
 6. **The 4-vs-2 bandgap-current-source mismatch (§2.2) has no resolution
    today.** No bias-generator sub-block exists in this repository; every
    closed-loop simulation to date drives the four bias nodes from ideal
    current sources.
-7. **No layout, DRC/LVS closure, or post-layout re-verification exists**
-   (§6), tracked at issues #17 and #18, both currently blocked on issue #1.
-8. **This repository's own target specification (`spec/pll.md`) is not yet
-   ratified** — issue #1 is open. Every "MET"/"UNMET" verdict in §5 is
-   stated against the *draft* v1 targets, which remain subject to change
-   through #1's ratification process.
+7. **No assembled `pll_top` GDS, no top-level DRC/LVS closure, and no
+   post-layout re-verification exist** (§6). Block-level layout *does* —
+   4 of the 4 PLL sub-blocks are drawn and standalone-DRC-clean, 2 of the 4
+   LVS-matched — but the top level that would be extracted has not been
+   assembled, so every §5 number remains schematic-level. Tracked at issues
+   #17 (top-level assembly), #149 (formal DRC/LVS reporting) and #18
+   (post-layout re-verification).
+8. **The drawn blocks are already ≈2.0× over the 0.15 mm² area target**
+   (§5, §6) — 0.2428 mm² summed, 0.3035 mm² with the floorplan's ×1.25
+   top-level overhead, before any top-level routing is counted. The cause
+   is measured, not guessed (each device is its own diffusion island wired
+   by metal); folding passes have recovered area on the VCO and divider
+   chain and have not been attempted on `pfd_cp`. This is a real open
+   finding against a stated target, not a placeholder.
+9. **Two of the four drawn blocks carry no LVS claim** (`pfd_cp`,
+   `lock_detector`, §6). Their geometry is DRC-clean and their evidence
+   records say plainly that a block reference netlist was out of their own
+   issues' scope; a DRC-clean block is not a verified one.
+10. **`spec/pll.md` is ratified with amendments, but two rows remain
+    carved out and unratified** — [Lock time](../../spec/pll.md#lock-time)
+    (row 9) and [Lock detector](../../spec/pll.md#lock-detector) (row 16),
+    per DR-007 Amendment A1. Verdicts on those two rows in §5 are stated
+    against the draft targets and say so; every other row's verdict is
+    against a ratified target.
 
 None of the above items block *submitting* this proposal — consistent with
 this program's stated goal for Chipalooza proposals, the aim is to state the
