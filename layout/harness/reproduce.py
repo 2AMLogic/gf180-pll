@@ -108,6 +108,12 @@ BLOCKS: tuple[Block, ...] = (
     Block("evidence/divider-dff-proof/dff_tg_3v3.gds", "pll_top.divider_chain.dff_tg_3v3"),
     Block("evidence/divider-div23-proof/div23_cell.gds", "pll_top.divider_chain.div23_cell"),
     Block("evidence/lock-detector-layout/lock_detector.gds", "pll_top.lock_detector.build"),
+    # Not a device block: the floorplan's block-placement skeleton (layer 0/0
+    # boundary rectangles). Excluded by name through issue #451 -- its
+    # committed file was six merges behind the plan and the module had no
+    # ``--outdir`` CLI for ``rebuild()`` to call. Both fixed at issue #461;
+    # see layout/evidence/floorplan-skeleton/PROOF.md.
+    Block("evidence/floorplan-skeleton/pll_floorplan_skeleton.gds", "floorplan.skeleton"),
 )
 
 #: Committed GDS files this module deliberately does not check, each with the
@@ -124,17 +130,6 @@ EXCLUDED: dict[str, str] = {
     # reproducing it needs a PDK -- which is exactly what this module is
     # built not to require. run_pv.py build covers it where a PDK exists.
     "evidence/inv-tb-proof/inv_tb.gds": "needs the PDK stdcell GDS (harness/cell.py), not pure Python",
-    # KNOWN STALE, tracked separately: this artifact does not reproduce from
-    # floorplan/skeleton.py today -- the committed file predates the
-    # divider_chain row fold (#358), the VCO mirror (#354) and the pfd_cp
-    # assembly (#398), all of which moved blocks in the plan. Registering it
-    # here would be a red light nobody can turn green inside issue #451's
-    # scope (it is a different block's evidence, with its own PROOF.md
-    # numbers and PLL-FLOORPLAN.md prose to re-derive), so it is filed
-    # instead. Remove this entry together with that issue.
-    "evidence/floorplan-skeleton/pll_floorplan_skeleton.gds": (
-        "known stale, tracked at issue #461 -- committed file predates #354/#358/#398"
-    ),
 }
 
 

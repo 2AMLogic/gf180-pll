@@ -721,6 +721,50 @@ reproduce either (its committed file predates #354, #358 and #398) — that is
 this record's own skeleton, tracked at **#461**, and §6 below should be
 re-read against it once that lands.
 
+### 5.7 Re-derivation: the skeleton artifact was six merges stale, and §5's arithmetic is unaffected (issue #461)
+
+**Status: no figure in §5 changes.** §5.6 above closed with "`layout/evidence/
+floorplan-skeleton/` does not reproduce either … §6 below should be re-read
+against it once that lands". It has landed: the artifact is regenerated,
+re-run through the foundry DRC deck (clean), and registered in
+`layout/harness/reproduce.py`'s `BLOCKS` — 26 of 26 committed block GDS files
+now reproduce, with no stale-artifact exclusion left in that map. Full
+account, including the DRC provenance: `layout/evidence/floorplan-skeleton/
+PROOF.md` § "Re-run, issue #461".
+
+**How stale it was: six merges, not the three #451 and #461 both named.**
+Rebuilding the skeleton at every one of the 41 commits that touched `layout/`
+since the artifact was written identifies six that changed its output — PRs
+#342 (issue #310), #346 (#341), #354 (#336), #358 (#344), #377 (#371) and
+#398 (#386). The two the "three merges" framing missed (#310's `DIVIDER_LOCK`
+reconciliation, #341's track packing) are the two largest single moves, and
+one of the six (#377, a `vco/ring.py` Metal1 short fix) never touched
+`skeleton.py` at all — `VCO_CORE` is `vco/block.py`'s own `footprint_um()`,
+so a sub-block's height change propagates into the floorplan with no edit to
+this record's generator. Auditing the floorplan by `git log --
+layout/floorplan/skeleton.py` undercounts by construction.
+
+**Which figures this re-derivation does and does not change:**
+
+| Figure | Source | Changed by the regeneration? |
+|---|---|---|
+| §5's four block rows, the ×1.25 overhead, the 0.2437 mm² sum, 0.3046 mm² total, 2.03× overrun | §5.5, from each block's **own** committed GDS via `python3 layout/run_pv.py area` | **No.** The skeleton is not an input to that command. |
+| §5.5's three lever sizings and the 1.35× ceiling | same | **No.** |
+| §5.6's corrected `lock_detector` fill numbers | `lock_detector.gds`, regenerated at #451 | **No.** |
+| §5.1–§5.4's `total_extent_um2()` figures (~1.19 → ~1.09 → ~0.61 × 10⁶ µm²) | `skeleton.py` **as code**, evaluated at each revision | **No** — and this is the reason none of the above moved. `total_extent_um2()` reads the module's own `Block` tuples, never the committed GDS, so §5.3/§5.4's ~0.61 × 10⁶ µm² has been the generator's true value since #358/#398. Re-evaluated today: **611,310 µm²**, which is §5.4's ~0.611 × 10⁶ exactly. |
+| `layout/evidence/floorplan-skeleton/PROOF.md`'s "126,395 µm², ≈16 % headroom" | the **stale committed artifact** | **Yes — superseded.** The regenerated skeleton's extent is 611,310 µm², i.e. **4.08× the 0.15 mm² target**, not 16 % under it. Recorded in that file's own appended section. |
+
+So the stale artifact never reached this record's budget arithmetic; it
+reached its own evidence directory's headline number, and (through §5.6) the
+repository's claim that the committed evidence tree reproduces. Both are now
+corrected, and the second is enforced rather than asserted.
+
+**Not a DRC regression, and not a new overrun.** The regenerated skeleton is
+DRC-clean on the same `main` deck at variant D (clean by construction — layer
+(0, 0) carries no rule in this deck, as §6 below has always stated). The
+4.08× extent figure is the same overrun §5.3/§5.4 already record, now finally
+also true of the committed file.
+
 ## 6. GDS skeleton
 
 `layout/floorplan/skeleton.py` assembles a **block-placement skeleton**
@@ -758,6 +802,23 @@ netlist — `layout/pll_top/pfd_cp/block.py`,
 `layout/evidence/pfd-cp-layout/PROOF.md`. `skeleton.py`'s `PFD_CP` block is
 now sized to that measured 434.31 × 80.73 µm extent (§5.4) rather than the
 150 × 100 µm placement-plan estimate it carried through #385.
+
+**The committed artifact is the generator's output again, and is checked
+(issue #461).** Through #398 this section's own regeneration recipe was an
+ad-hoc `python3 -c "from floorplan import skeleton; skeleton.build(...)"`
+one-liner, which `layout/harness/reproduce.py` could not invoke — so this was
+the one committed block GDS that guard had to exclude by name, and the
+committed file drifted six merges behind the placement described above
+(§5.7). `skeleton.py` now exposes the same `--outdir` CLI every other
+generator in this repository does, and the artifact is registered in
+`BLOCKS`:
+
+```bash
+python3 -m floorplan.skeleton --outdir evidence/floorplan-skeleton   # from layout/
+python3 layout/run_pv.py drc layout/evidence/floorplan-skeleton/pll_floorplan_skeleton.gds \
+    --top pll_floorplan_skeleton --run-dir <run>
+python3 -m harness.reproduce                                          # from layout/
+```
 
 Evidence: `layout/evidence/floorplan-skeleton/` (see `PROOF.md` there for the
 DRC run's provenance and verdict).
