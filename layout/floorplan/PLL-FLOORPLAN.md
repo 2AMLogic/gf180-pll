@@ -816,7 +816,7 @@ generator in this repository does, and the artifact is registered in
 ```bash
 python3 -m floorplan.skeleton --outdir evidence/floorplan-skeleton   # from layout/
 python3 layout/run_pv.py drc layout/evidence/floorplan-skeleton/pll_floorplan_skeleton.gds \
-    --top pll_floorplan_skeleton
+    --top pll_floorplan_skeleton --run-dir <run>
 python3 -m harness.reproduce                                          # from layout/
 ```
 
