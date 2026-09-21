@@ -9,6 +9,7 @@ how to read a result, tool/PDK prerequisites). Quick reference:
     python3 layout/run_pv.py drc <gds> --top T   # run the foundry DRC deck
     python3 layout/run_pv.py lvs <gds> <net> --top T
     python3 layout/run_pv.py prove               # the full proof: clean run + 2 negative controls
+    python3 layout/run_pv.py area                # where every committed block's bbox goes (no PDK)
 
 Exit codes (consistent across drc/lvs/prove):
     0  clean / match -- or, for prove, every expectation (positive and negative) held
@@ -255,6 +256,48 @@ def cmd_prove(args: argparse.Namespace) -> int:
     return EXIT_OK if all_ok else EXIT_UNEXPECTED_RESULT
 
 
+#: The committed block GDS / reference netlist pairs ``area`` audits, in the
+#: order ``PLL-FLOORPLAN.md`` §5's own budget table lists them. A block appears
+#: here once its *block-level* geometry is committed under
+#: layout/evidence/ -- leaf-cell and sub-block proof directories are
+#: deliberately absent for the same reason
+#: layout/lib/check-layout-status-claims.sh excludes them: they prove a
+#: generator, not a drawn PLL block.
+AREA_AUDIT_BLOCKS: tuple[tuple[str, str, str | None], ...] = (
+    ("vco_block", "vco-layout/vco_block.gds", None),
+    ("pfd_cp", "pfd-cp-layout/pfd_cp.gds", None),
+    ("divider_chain", "divider-chain-layout/divider_chain.gds",
+     "divider-chain-layout/divider_chain.spice"),
+    ("lock_detector", "lock-detector-layout/lock_detector.gds", None),
+)
+
+
+def cmd_area(args: argparse.Namespace) -> int:
+    """Render the block area audit (issue #442). No PDK, no deck -- geometry only."""
+    # Lazy: area.py needs klayout.db, which _reexec_if_klayout_unimportable()
+    # has already secured by the time any subcommand body runs.
+    from harness import area as area_mod  # noqa: PLC0415
+
+    audits = []
+    censuses = {}
+    for name, gds_rel, spice_rel in AREA_AUDIT_BLOCKS:
+        gds = EVIDENCE_DIR / gds_rel
+        if not gds.exists():
+            print(f"error: {gds} not found", file=sys.stderr)
+            return EXIT_UNEXPECTED_RESULT
+        audits.append(area_mod.audit_gds(gds, name=name))
+        if spice_rel:
+            censuses[name] = area_mod.series_junction_census(EVIDENCE_DIR / spice_rel)
+
+    report = area_mod.render_markdown(audits, censuses)
+    if args.out:
+        Path(args.out).write_text(report)
+        print(f"wrote {args.out}")
+    else:
+        print(report, end="")
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="run_pv.py",
@@ -319,6 +362,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--timeout", type=int, default=3600)
     p.set_defaults(func=cmd_prove)
+
+    p = sub.add_parser(
+        "area",
+        help="measure where every committed block's bounding box goes (no PDK needed)",
+    )
+    p.add_argument(
+        "--out",
+        default=None,
+        help="write the Markdown report here instead of stdout "
+        "(the committed copy lives at layout/evidence/area-audit/)",
+    )
+    p.set_defaults(func=cmd_area)
 
     return parser
 

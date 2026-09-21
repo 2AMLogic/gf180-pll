@@ -285,6 +285,7 @@ python3 layout/run_pv.py build --outdir /tmp/pv         # assemble inv_tb.gds + 
 python3 layout/run_pv.py drc /tmp/pv/inv_tb.gds --top inv_tb --run-dir /tmp/pv/drc
 python3 layout/run_pv.py lvs /tmp/pv/inv_tb.gds /tmp/pv/inv_tb.spice --top inv_tb --run-dir /tmp/pv/lvs
 python3 layout/run_pv.py prove                          # the full proof, see below
+python3 layout/run_pv.py area                           # area audit, see below (no PDK needed)
 ```
 
 Each of `drc` / `lvs` runs the foundry deck exactly once and prints a
@@ -392,6 +393,33 @@ against the ~50-table `main` rule deck (`--no_offgrid` by default — the
 off-grid check class is skipped as a separate, slower class of rule this
 flow-bring-up proof does not need; pass `--offgrid` to `drc`/`prove` for a
 signoff-grade run). LVS is fast (a few seconds) by comparison.
+
+## `area`: where a drawn block's bounding box actually goes
+
+```bash
+python3 layout/run_pv.py area                            # print the audit
+python3 layout/run_pv.py area --out layout/evidence/area-audit/area-audit.md
+```
+
+`layout/harness/area.py` measures every committed block GDS directly: merged
+per-layer area, the fill fraction (and therefore the whitespace), which
+y-bands contain diffusion and which contain none, the Metal2 horizontal-track
+census with the height those tracks would occupy packed solid, and how much
+Metal2 is already in use *over* the device rows. It also counts
+shared-diffusion candidates in a block's own reference netlist. It needs
+**no PDK, no KLayout application binary and no deck** — only the `klayout`
+pip wheel — so it runs in CI's headless `checks` job alongside
+`layout/tests/`.
+
+Why it exists (issue #442): `layout/floorplan/PLL-FLOORPLAN.md` §5 tracks a
+real area overrun, and through §5.4 each revision named the next lever from a
+derived ratio (µm²/transistor) rather than a measurement. That ratio cannot
+tell "the diffusion islands are too big" from "the diffusion islands are 1 %
+of the block and the rest is empty" — and the measurement says the latter.
+See `layout/evidence/area-audit/PROOF.md` for every lever's arithmetic and
+§5.5 of the floorplan for the re-derived budget. This command measures drawn
+geometry; it makes no claim that a transformation it sizes is DRC-legal, which
+is what `drc`/`lvs` above are for.
 
 ## The trivial cell (`inv_tb`)
 
