@@ -196,12 +196,15 @@ class GeometryTests(unittest.TestCase):
         self.assertGreater(x1 - x0, 0)
         self.assertGreater(y1 - y0, 0)
         # The number layout/floorplan/skeleton.py records for DIVIDER_LOCK and
-        # layout/evidence/divider-chain-layout/PROOF-fold.md states (issue
-        # #344: ROW_PLAN folds the block's one row of 6 div23_cell instances +
+        # layout/evidence/divider-chain-layout/PROOF-macro-track-packing.md
+        # states (issue #454: div23_cell's own internal track band is packed
+        # with devgen.pack_tracks() too, 15.00 um off each of ROW_PLAN's two
+        # rows -- on top of #344's fold of one row of 6 div23_cell instances +
         # 46 glue columns into two rows, each with its own
-        # devgen.pack_tracks() band, on top of #341's own track packing).
+        # devgen.pack_tracks() band, itself on top of #341's own top-level
+        # track packing).
         self.assertAlmostEqual(x1 - x0, 1317.66, places=2)
-        self.assertAlmostEqual(y1 - y0, 100.29, places=2)
+        self.assertAlmostEqual(y1 - y0, 70.29, places=2)
 
     def test_the_fold_actually_reduced_area(self):
         """#344's own edge case: a fold must *reduce* area, not just move it.
@@ -216,6 +219,12 @@ class GeometryTests(unittest.TestCase):
         area = (x1 - x0) * (y1 - y0)
         self.assertLess(area, 2634.28 * 57.07, "the fold did not reduce area against #341")
         self.assertLess(area, 150_000.0, "the block no longer fits the 0.15 mm^2 whole-chip target")
+        # Issue #454: packing div23_cell's own internal band took the folded
+        # block from 1317.66 x 100.29 um to 1317.66 x 70.29 um. Pinned as a
+        # strict inequality against #344's measured area so a regression that
+        # re-inflates the macro's band fails here and not only on the
+        # footprint assertion above.
+        self.assertLess(area, 1317.66 * 100.29, "the macro band packing did not reduce area against #344")
 
     def test_every_boundary_net_has_a_pin(self):
         self.assertEqual(set(self.layout.pins), set(divider_chain.BOUNDARY_NETS))

@@ -281,9 +281,13 @@ LOCK_DETECTOR_STANDALONE_H_UM = 62.6
 # height reduced by issue #341's routing-track packing, layout/evidence/
 # divider-chain-layout/PROOF-track-packing.md; then folded from one row into
 # two by issue #344, layout/evidence/divider-chain-layout/PROOF-fold.md --
-# 2634.28 x 57.07 um before the fold, 1317.66 x 100.29 um after):
+# 2634.28 x 57.07 um before the fold, 1317.66 x 100.29 um after; then the
+# same packing applied one level down, inside the div23_cell macro each row's
+# height is gated by, at issue #454 -- 15.00 um off each of the two rows,
+# 1317.66 x 70.29 um, layout/evidence/divider-chain-layout/
+# PROOF-macro-track-packing.md):
 DIVIDER_CHAIN_STANDALONE_W_UM = 1317.66
-DIVIDER_CHAIN_STANDALONE_H_UM = 100.29
+DIVIDER_CHAIN_STANDALONE_H_UM = 70.29
 
 # The two blocks are on *different supply domains* -- divider_chain on
 # VDD_DIV, lock_detector on VDD (PLL-FLOORPLAN.md section 2's four-domain
@@ -324,25 +328,27 @@ DIVIDER_LOCK = Block(
     h=(LOCK_DETECTOR.y + LOCK_DETECTOR.h) - DIVIDER_CHAIN.y + 2 * DIVIDER_LOCK_MARGIN,
 )
 
-# FAIL-LOUD: this region is a 1.9x whole-chip area overrun, stated not absorbed.
+# FAIL-LOUD: this region is a 1.70x whole-chip area overrun, stated not absorbed.
 # -----------------------------------------------------------------------------
 # PLL-FLOORPLAN.md section 5 budgeted "divider chain + lock detector" at
 # 0.0038-0.0052 mm^2 (a ROM std-cell-row estimate made when no physical view
-# existed for either block). The two real blocks measure 0.1321 mm^2 +
-# 0.0075 mm^2 = 0.1396 mm^2 -- a ~27-37x overrun on that row. Section 5's own
+# existed for either block). The two real blocks measure 0.0926 mm^2 +
+# 0.0075 mm^2 = 0.1001 mm^2 -- a ~19-26x overrun on that row. Section 5's own
 # "fail-loud condition for a future pass" instructs stating an overrun
 # explicitly rather than silently rounding the total down, so:
 #
 #   * Re-running section 5's arithmetic with every measured number in place of
-#     its ROM row gives 0.0369 (loop filter) + 0.0312 (VCO) + 0.020 (PFD/CP,
-#     still ROM) + 0.1396 (divider+lock) = 0.2277 mm^2, i.e. 0.2846 mm^2 after
-#     that section's x1.25 top-level overhead -- 1.9x the 0.15 mm^2 budget,
-#     against the 2.0x recorded through issue #341 and the 2.9x through #310
-#     (and the +22 % margin the VCO-only revision recorded before those).
+#     its ROM row gives 0.0369 (loop filter) + 0.0318 (VCO) + 0.0353 (PFD/CP,
+#     real since #385/#386) + 0.1001 (divider+lock) = 0.2041 mm^2, i.e.
+#     0.2552 mm^2 after that section's x1.25 top-level overhead -- 1.70x the
+#     0.15 mm^2 budget (PLL-FLOORPLAN.md section 5.6), against the 2.03x
+#     section 5.5 re-derived from the committed GDS, the 2.0x recorded through
+#     issue #341 and the 2.9x through #310 (and the +22 % margin the VCO-only
+#     revision recorded before those).
 #   * total_extent_um2() (this skeleton's whole bounding box) is now
-#     ~0.61e6 um^2 (was ~1.09e6 um^2 through #341, ~1.19e6 through #310).
-#     The divider chain no longer swallows the floorplan on its own: at
-#     1317.66 um it is ~2x the rest of the skeleton rather than ~4x.
+#     ~0.57e6 um^2 (was ~0.61e6 through #344, ~1.09e6 through #341, ~1.19e6
+#     through #310). The divider chain no longer swallows the floorplan on its
+#     own: at 1317.66 um it is ~2x the rest of the skeleton rather than ~4x.
 #
 # The cause was structural and measurable, not a sizing slip. #310 recorded two
 # structural causes here; #341 closed one and #344 the other:
@@ -374,16 +380,40 @@ DIVIDER_LOCK = Block(
 #     full-width band and the fold would have traded width for height at
 #     roughly constant area. See layout/evidence/divider-chain-layout/
 #     PROOF-fold.md.
+#   * #341's packing was never applied one level *down*, inside the
+#     ``div23_cell`` macro each row's height is gated by. Measured at issue
+#     #442 and fixed at issue #454: that macro's own band was 46.50 um of the
+#     100.29 um (31 nets x 0.75 um, paid once per row), against only 16.50 um
+#     for the already-packed top-level bands. ``pack_tracks()`` puts those 31
+#     nets on 11 tracks -- the interval graph's clique number, so provably the
+#     minimum -- for 15.00 um per instance, 30.00 um off the block.
+#     **1317.66 x 100.29 um became 1317.66 x 70.29 um**, 0.1321 mm^2 down to
+#     0.0926 mm^2, a further 30 %. See layout/evidence/divider-chain-layout/
+#     PROOF-macro-track-packing.md.
 #
-# What is left is not structural placement any more but **device density**:
-# the diffusion-island-per-device convention this block's full-custom
-# generators use costs it ~292 um^2/transistor against lock_detector's ~187
-# for the same PDK/flavour. That lever is shared with the VCO's own residual
-# overrun and is deliberately not folded into either of the two passes above.
+# What is left is NOT device density. That hypothesis stood here through #344
+# and was **falsified** by measurement at issue #442 (layout/evidence/
+# area-audit/PROOF.md, PLL-FLOORPLAN.md section 5.5): the ~292 um^2/transistor
+# ratio it rested on cannot distinguish "the diffusion islands are too big"
+# from "the islands are 1 % of the block and the rest is empty", and the block
+# measures the latter -- comp is 1.46 % of the bbox, and merging every one of
+# the 40 shared-diffusion candidates in divider_chain.spice would free 125.4
+# um^2, about 0.1 % of what has to come out. layout/tests/test_area_audit.py
+# asserts that bound so this conclusion fails loudly if geometry ever changes
+# it.
+#
+# What is actually left is the remaining Metal2 band: 43 distinct tracks still
+# sitting in 43.97 um of no-diffusion band *above* 26.32 um of device rows,
+# with the Metal2 plane over those rows 1.0 % occupied. Routing the band over
+# the cells rather than above them is the next lever, and a riskier one (a bus
+# at a device-band track_y can cross another net's own Metal2 riser landing
+# square); it is tracked at issue #458, deliberately not folded into any of the
+# passes above.
 #
 # Nothing here is a DRC/LVS claim change: the divider chain is signoff-clean on
 # the PDK's own decks at this footprint (layout/evidence/divider-chain-layout/
-# PROOF-fold.md). It is the *area budget* that is still failing, loudly and on
+# PROOF-macro-track-packing.md, which also adds an --offgrid DRC-clean run the
+# block did not previously claim). It is the *area budget* that is still failing, loudly and on
 # the record, which is what section 5 asked a pass like this one to do -- and
 # it is now failing by less: the divider chain on its own finally fits inside
 # the 0.15 mm^2 whole-chip target, which is necessary but not sufficient for

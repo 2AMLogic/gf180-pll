@@ -264,7 +264,7 @@ class CommittedBlockTests(unittest.TestCase):
             EVIDENCE / "divider-chain-layout" / "divider_chain.spice"
         )
         self.assertGreater(c.merges, 0, "no candidates at all would mean a parser break")
-        block_um2 = 1317.66 * 100.29  # divider_chain's committed footprint
+        block_um2 = 1317.66 * 70.29  # divider_chain's committed footprint (#454)
         self.assertLess(c.merge_saving_um2, 0.01 * block_um2)
 
     @unittest.skipUnless(_HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
