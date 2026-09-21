@@ -133,8 +133,20 @@ final footprint and pin locations, as built by `div23_cell.build()`
 
 | Property | Value |
 |---|---|
-| Footprint (w x h) | 332.140 x 37.800 um (12554.9 um^2) |
-| Footprint box (x0, y0, x1, y1) | (-2.62, -0.3, 329.52, 37.5) um |
+| Footprint (w x h) | 332.140 x 22.800 um (7572.8 um^2) |
+| Footprint box (x0, y0, x1, y1) | (-2.62, -0.3, 329.52, 22.5) um |
+
+**Height revised at issue #454** (`layout/evidence/divider-chain-layout/
+PROOF-macro-track-packing.md`): 37.800 um / `y1 = 37.5` through #344, when
+this macro's internal Metal2 band gave each of its 31 nets a never-reused
+track (`devgen.NetTracks`). `devgen.pack_tracks()` -- the same substitution
+#341 made in `divider_chain.py` one level up -- puts those 31 nets on **11**
+tracks, 15.00 um less band. The committed `div23_cell.gds`, `drc-clean/` and
+`lvs-clean/` artifacts in this directory are regenerated at that geometry and
+still DRC-clean and LVS-matched; `div23_cell.spice` is byte-for-byte
+unchanged. `x0`, `x1`, `y0` and **every pin location below are unchanged** --
+only each net's own `track_y` moved, which is what makes it a pure
+routing-fabric change.
 
 | Pin | (x, y) um |
 |---|---|

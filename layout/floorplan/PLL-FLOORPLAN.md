@@ -765,6 +765,83 @@ DRC-clean on the same `main` deck at variant D (clean by construction — layer
 4.08× extent figure is the same overrun §5.3/§5.4 already record, now finally
 also true of the committed file.
 
+### 5.8 Revision: the first sized lever is spent — 2.03× to 1.70× (issue #454)
+
+**Status: still over, by 1.70× rather than 2.03×.** §5.5 sized every
+remaining lever without spending any; this is the first one spent, and the
+first revision in this series whose number moves because geometry changed
+rather than because arithmetic was corrected. Full record and reproduction:
+`layout/evidence/divider-chain-layout/PROOF-macro-track-packing.md`.
+
+`div23_cell`'s own internal Metal2 track band now uses
+`devgen.pack_tracks()` instead of `devgen.NetTracks` — the identical one-line
+substitution §5.2 made in `divider_chain.py` one level up, applied one level
+down. 31 nets go from 31 never-reused tracks to **11**, which is the interval
+graph's own clique number and therefore provably the minimum. 15.00 µm off
+the macro, paid once per `ROW_PLAN` row:
+
+| Block | §5.5 | §5.8 | Delta |
+|---|---|---|---|
+| Loop filter (R + C1 + C2) | 36,936 µm² | 36,936 µm² | — (a calculation, not a layout) |
+| `vco_block` | 31,826 µm² | 31,826 µm² | — |
+| `pfd_cp` | 35,281 µm² | 35,281 µm² | — (lever tracked at #455) |
+| `divider_chain` | 132,148 µm² | **92,618 µm²** | **−39,530 µm², −29.9 %** |
+| `lock_detector` | 7,468 µm² | 7,468 µm² | — |
+| **Sum** | 243,660 µm² (0.2437 mm²) | **204,129 µm² (0.2041 mm²)** | −16.2 % |
+| **After §5's ×1.25** | 304,575 µm² (0.3046 mm²) | **255,161 µm² (0.2552 mm²)** | |
+| **vs the 0.15 mm² target** | **2.03×** | **1.70×** | |
+
+The gap to close against §5's 120,000 µm² pre-overhead budget goes from
+123,660 µm² to **84,129 µm²**.
+
+**§5.5's estimate for this lever was 60,006 µm²; the outcome is 39,530 µm²,
+65.9 % of it.** The shortfall is an attribution error in the estimate, not in
+the execution, and it is worth recording because §5.1, §5.3 and §5.4 each made
+a version of the same mistake. §5.5 measured 73.97 µm of no-diffusion band and
+treated the block's 73 Metal2 tracks as one population that could be packed
+into 54.75 µm. They are not one population: they live at three levels of a
+hierarchy, and packing is only ever possible *within* a level, because the
+outer level places the inner one as an opaque box. The real split, measured by
+instrumenting every `pack_tracks()` call in one build:
+
+| Term | Height | Share of 100.29 µm |
+|---|---|---|
+| devices (`comp`), both rows | 26.32 µm | 26.2 % |
+| **`div23_cell`'s own band, ×2 rows** | **46.50 µm** | **46.4 %** |
+| `divider_chain`'s own packed bands | 16.50 µm | 16.5 % |
+| wells, taps, band base gaps, margin | 10.97 µm | 10.9 % |
+
+The top-level band §5.5 named was only 16.50 µm of the 73.97, precisely
+*because* §5.2 had already packed it. What had never been packed was the
+macro's own band, and because each row's height is gated by the `div23_cell`
+standing in it, the same change is worth twice as much here as it was at the
+top level.
+
+**§5.5's lever 3 survives, reduced.** What this revision did is drain the
+largest band; what it did not do is §5.5's literal proposal, moving a band
+into the plane *over* a device row. The block still carries 43 distinct Metal2
+tracks in 43.97 µm of no-diffusion band above 26.32 µm of devices, with that
+plane 1.0 % occupied — so the over-the-devices lever remains, at its own
+ceiling worth 70.29 → 32.25 µm of height. It is a materially riskier change
+(a bus at a device-band `track_y` can run through another net's Metal2 riser
+landing square — `cp.py` records four failed routing designs in that class)
+and is filed as **#458** rather than folded in, per §5.5's own one-lever-per-PR
+discipline.
+
+**`spec/pll.md#area` is still not amended, and #456's precondition is still
+not met.** 1.70× is now a *measured* number for the divider chain rather than
+an estimate, but `pfd_cp`'s lever (#455) and the residual over-the-devices
+lever (#458) are both unexecuted, so a floor still does not exist. What §5.5 said
+about not amending a ratified spec row on an estimate applies unchanged.
+
+**DRC/LVS re-verified, not assumed.** Both changed blocks are rebuilt and
+re-run: `div23_cell` and `divider_chain` are DRC clean (0 violations) and LVS
+matched at the new geometry, and `divider_chain` is additionally DRC clean
+under `--offgrid`, which it had not previously claimed. Both
+`reference_netlist()` outputs are byte-for-byte unchanged, and `div23_cell`'s
+seven pin locations and x-extent are unchanged — only each net's `track_y`
+moved.
+
 ## 6. GDS skeleton
 
 `layout/floorplan/skeleton.py` assembles a **block-placement skeleton**
