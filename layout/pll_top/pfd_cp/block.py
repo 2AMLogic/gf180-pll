@@ -157,6 +157,23 @@ except ImportError:  # this package's own dir (not its "pll_top" parent) is the
     # cp_array.py's own identical try/except for the full citation.
     import _canvas
 
+try:
+    from harness import spice_flatten
+except ImportError:  # "layout/" itself (harness's own package root) is not
+    # on sys.path under either of this module's two call conventions (the
+    # flat `python3 -m pfd_cp.block` CLI, run with cwd/sys.path rooted at
+    # layout/pll_top/; or layout/tests's own convention, which adds
+    # layout/pll_top/ but only conditionally layout/ itself) -- same
+    # "try the plain import, fall back to inserting the directory this
+    # file's own path implies" shape as the ``_canvas`` import above, one
+    # level further up (``parents[2]`` from this file is ``layout/``).
+    import sys as _sys
+
+    _LAYOUT_DIR = Path(__file__).resolve().parents[2]
+    if str(_LAYOUT_DIR) not in _sys.path:
+        _sys.path.insert(0, str(_LAYOUT_DIR))
+    from harness import spice_flatten
+
 TOP_CELL = "pfd_cp"
 
 #: design/pfd_cp.sch's own P0-P12 pin declarations, in that order: REF/FB/
@@ -473,6 +490,56 @@ def build(outdir: Path | None = None) -> PfdCpLayout:  # noqa: PLR0915 -- one li
     return layout
 
 
+#: The per-record ``design/netlist.sh --top pfd_cp <outdir>`` export, frozen
+#: verbatim under this block's own evidence directory (issue #440) -- the
+#: same "freeze the per-record export, do not commit a
+#: ``design/netlist/pfd_cp.spice`` that does not exist by this convention"
+#: discipline ``sim/*/netlist-snapshots/`` already uses, per
+#: ``design/netlist.sh``'s own header comment ("PER-RECORD (pfd_cp) ... is
+#: deliberately NOT committed[; instead] each evidence record freezes its
+#: own copy"). Regenerate with:
+#:
+#:     ./design/netlist.sh --top pfd_cp <tmpdir>
+#:     cp <tmpdir>/dut.spice layout/evidence/pfd-cp-layout/lvs-clean/pfd_cp.schematic-export.spice
+#:
+#: -- only if ``design/pfd_cp.sch`` (or a cell it instantiates) actually
+#: changes; this file is a frozen snapshot, not regenerated on every call.
+SCHEMATIC_EXPORT_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "evidence"
+    / "pfd-cp-layout"
+    / "lvs-clean"
+    / "pfd_cp.schematic-export.spice"
+)
+
+
+def reference_netlist() -> str:
+    """This block's own flattened LVS reference netlist (issue #440).
+
+    Mechanically flattened (:mod:`harness.spice_flatten`) from
+    :data:`SCHEMATIC_EXPORT_PATH` -- the frozen ``design/netlist.sh --top
+    pfd_cp`` export of ``design/pfd_cp.sch``'s own full nine-``.subckt``
+    hierarchy (``pfd_cp`` -> ``pfd``/``cp`` -> ``edgedet``/``srlatch``/
+    ``cp_leg_n``/``cp_leg_p``/``cp_dumpbuf`` -> ``pfdcp_inv_3v3``/
+    ``pfdcp_nand2_3v3``) -- not a hand transcription: every device size and
+    connection below traces directly to that frozen export's own text, via
+    a generic, unit-tested flattener (:mod:`layout.tests.test_spice_flatten`)
+    rather than a fresh 168-transistor-by-hand re-derivation. See
+    ``spice_flatten``'s own module docstring for *why* a flat reference is
+    needed at all (gf180mcu's LVS deck does not flatten a hierarchical
+    reference to match this block's own flat GDS on its own -- the same
+    finding ``divider_chain.py``'s ``reference_netlist()`` already recorded
+    for that block).
+
+    Top-level ports are exactly :data:`BOUNDARY_PINS`' own order (the frozen
+    export's own ``.subckt pfd_cp REF FB B0 B1 IBN ICN IBP ICP VOUT UP DN
+    VDD VSS`` line), matching every boundary pin this module's own
+    :func:`build` already pins under that name.
+    """
+    text = SCHEMATIC_EXPORT_PATH.read_text()
+    return spice_flatten.flatten_text(text, TOP_CELL)
+
+
 def main() -> int:
     import argparse
 
@@ -487,8 +554,11 @@ def main() -> int:
     args = parser.parse_args()
     outdir = Path(args.outdir)
     layout = build(outdir)
+    netlist_path = outdir / f"{TOP_CELL}.spice"
+    netlist_path.write_text(reference_netlist())
     x0, y0, x1, y1 = layout.footprint
     print(f"wrote {outdir}/{TOP_CELL}.gds")
+    print(f"wrote {netlist_path}")
     print(f"footprint: {x1 - x0:.3f} x {y1 - y0:.3f} um  ({(x1 - x0) * (y1 - y0):.2f} um^2)")
     print(f"cp offset: {layout.cp_offset}")
     print(f"trunk rows: {layout.trunk_rows}")

@@ -188,3 +188,135 @@ via `python3 -m unittest discover -s layout/tests -t layout/tests`:
 
 Regenerate via `python3 -m pfd_cp.block` (from `layout/pll_top/`) +
 `layout/run_pv.py drc`; do not hand-edit any file under this directory.
+
+## Addendum (issue #440): block-level LVS attempted — real mismatch found, superseding "No LVS claim, and why" above
+
+The "No LVS claim, and why" section above states that building a reference
+netlist and running LVS was out of scope for #386. Issue #440 closes that
+gap: a reference netlist now exists and the PDK's own signoff LVS deck has
+been run against it. **The result is a real mismatch, not a match** — per
+this repo's own rule that "any LVS mismatch found is a result to record,
+not paper over," it is recorded here rather than hidden, and this evidence
+directory's own LVS claim stays "attempted, not yet clean" until the
+generator defect below is fixed. This section supersedes the older one's
+"is not part of this issue's own scope" framing; it does not delete it
+(append-only).
+
+### The reference netlist
+
+`design/netlist.sh --top pfd_cp <outdir>` netlists `design/pfd_cp.sch`'s own
+nine-`.subckt` hierarchy (`pfd_cp` -> `pfd`/`cp` -> `edgedet`/`srlatch`/
+`cp_leg_n`/`cp_leg_p`/`cp_dumpbuf` -> `pfdcp_inv_3v3`/`pfdcp_nand2_3v3`) to
+`<outdir>/dut.spice` — the per-record convention `design/netlist.sh`'s own
+header comment documents for this one block (deliberately not committed as
+`design/netlist/pfd_cp.spice`, which does not exist and is not meant to).
+That export is frozen verbatim at `lvs-clean/pfd_cp.schematic-export.spice`
+in this directory (the same "freeze the per-record export" discipline
+`sim/*/netlist-snapshots/` already uses).
+
+gf180mcu's own LVS deck does not flatten a hierarchical reference to match
+a flat GDS on its own — the same finding `divider_chain.py`'s own
+`reference_netlist()` already recorded for that block. `pfd_cp`'s own
+`build()` draws one fully flat top cell (`canvas.top.flatten(-1, True)`,
+twice — once inside `cp.py`, once again in `block.py`), so the frozen
+export above needs flattening too. Rather than hand-transcribing this
+168-transistor, nine-`.subckt` hierarchy in Python (the `vco_block`/
+`divider_chain` precedent), `layout/harness/spice_flatten.py` (issue #440)
+does it mechanically: it parses every `.subckt ... .ends` block in a SPICE
+text and expands one named top recursively, qualifying every internal net
+and device name by its own instance path so two instances of the same leaf
+cell never collide once flattened. `layout/pll_top/pfd_cp/block.py`'s own
+`reference_netlist()` calls it against the frozen export; unit tests for
+the flattener itself live at `layout/tests/test_spice_flatten.py` (generic,
+no PDK), and `layout/tests/test_pfdcp_block_layout.py`'s own
+`ReferenceNetlistTests` checks the 168-device count and top-level port list
+this specific block's flattening produces.
+
+### The LVS run
+
+```bash
+python3 layout/run_pv.py lvs layout/evidence/pfd-cp-layout/pfd_cp.gds \
+  layout/evidence/pfd-cp-layout/lvs-attempt/pfd_cp.spice \
+  --top pfd_cp --run-dir <rundir>
+```
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `pfd_cp` LVS, deck verdict | match | `ERROR : Netlists don't match` | **MISMATCH — real, not yet root-caused to a specific fix** |
+
+Artifacts: `lvs-attempt/lvs.stdout.log`, `lvs-attempt/pfd_cp.cir` (extracted),
+`lvs-attempt/pfd_cp.lvsdb`, `lvs-attempt/pfd_cp.spice` (the flattened
+reference this run used). Named `lvs-attempt/`, not `lvs-clean/`, per the
+same convention `layout/evidence/vco-layout/PROOF-376-vbp0-fix.md` already
+uses for an interim non-matching run — `layout/lib/check-layout-status-claims.sh`
+only counts a block LVS-matched when its own `lvs-clean/*.log` contains the
+deck's `Netlists match.` verdict line, so this attempt does not (and must
+not) move this block's own count in that script or in README.md/
+`docs/chipalooza/challenge-5-proposal.md`.
+
+### What the mismatch actually is — not just "no match"
+
+`layout/tests/test_pfdcp_block_layout.py`'s own `ConnectivityTests` (this
+block's Python-level Metal1-3 probe check, `netcheck.py`) reports **no
+shorts, no splits** on the same drawn GDS — and it always will, by that
+module's own documented scope: it deliberately excludes comp/poly2 from
+its connectivity graph (a MOSFET's own comp island spans source/gate/drain
+as one shape; reproducing the gate-split the real deck's device extraction
+does would be re-implementing that deck). Cross-referencing the LVS run's
+own `.lvsdb` (`klayout.db.LayoutVsSchematic().xref()`, the same technique
+`PROOF-376-vbp0-fix.md` uses) shows the layout-side extracted netlist has
+**84 mismatched nets and 69 mismatched devices out of 168** — a large
+fraction, concentrated in `pfd`'s own two mirror-symmetric branches (the
+`REF`/edge-detector/latch chain and its `FB` twin) and `cp`'s own array
+legs. Two things are visible in that cross-reference and are recorded here
+plainly rather than rounded away:
+
+* **Almost none of `pfd`'s own internal nets carry a name in the drawn
+  GDS.** `pfd.py` calls no `canvas.pin()` at all (`block.py` only promotes
+  the block's own 13 boundary pins); every `edgedet`/`srlatch`/delay-chain
+  internal node (`D1`-`D5`, `PR`, `PF`, `SBR`, `SBF`, `RB`, `NRST`,
+  `RST_RAW`, `RD1`-`RD24`, `RST_DLY`, ...) is an anonymous `$N` net in the
+  layout-side extraction. That starves the comparer's name-hint matching
+  across most of this block's own devices — the same root cause
+  `divider_chain.py`'s own `PROOF.md` names ("Every routed net is labelled,
+  and that was necessary") for that block's own bring-up, not yet applied
+  here.
+* **At least one net-naming artifact is real, not just absent labels.**
+  The `.lvsdb`'s own extracted net list shows several merged names of the
+  shape `<leg-local-name>,<global-name>` (e.g. `ENB,VSS`, `EN,VDD`,
+  `IBN,VBN`) — harmless: `cp_leg_n.py`/`cp_leg_p.py` each promote their own
+  pins under their own *local* port names (`EN`/`ENB`/`VBN`/...) when built
+  standalone for their own leaf-level LVS claim (`cp-leg-proof/`), and
+  `cp_array.py`'s `CellInstArray` + `flatten()` composition carries that
+  label through even after the pin is re-tied to a different global net —
+  but one merged name is not: **`DN,UP`**, on a PMOS gate net inside the
+  mirror-symmetric latch/switch structure. Whether that specific merge is a
+  real electrical short (a `pfd`/`cp` placement or routing defect) or a
+  second labelling artifact riding on an under-labelled net is not yet
+  determined — narrowing it needs the same net-labelling pass `pfd.py`
+  does not yet have, so today's cross-reference cannot distinguish "shorted"
+  from "unlabelled and therefore mismatched by the comparer's own topology
+  fallback." Tracked as a follow-up rather than guessed at here (see below).
+
+### Disposition
+
+Per this issue's own Acceptance Criteria and CLAUDE.md's "no claim without
+a testbench" — a real mismatch is not converted into a false match, and the
+layout generator is not "fixed" by guessing. The follow-up that would
+actually close this block's own LVS-matched claim (labelling every `pfd`/
+`cp_array` internal net for the deck's own hint matching, the way
+`divider_chain.py`'s `build()` already does, and root-causing the `DN,UP`
+merge specifically) is filed separately as
+[issue #448](https://github.com/2AMLogic/gf180-pll/issues/448) rather than
+attempted here under time pressure that would risk exactly the "two
+suspiciously-clean first runs" this repo's own CLAUDE.md warns against.
+
+### Provenance of this addendum
+
+| | |
+|---|---|
+| Attempted | 2026-09-21 |
+| Branch point | `origin/main` @ `387d03c6` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout (application, deck runner) | `KLayout 0.28.16` |
+| LVS deck | `<pdk>/libs.tech/klayout/lvs/run_lvs.py`, `--variant=D` (default `--lvs_sub=VSS`) |

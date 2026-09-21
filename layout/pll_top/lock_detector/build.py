@@ -13,6 +13,22 @@ from pathlib import Path
 from . import cells, devices as dev
 from .primitives import Canvas, NetTracks, nwell_over, route_all_nets, tap_strip
 
+try:
+    from harness import spice_flatten
+except ImportError:  # "layout/" itself (harness's own package root) is not
+    # on sys.path under this package's own flat-import test convention (see
+    # pfd_cp/block.py's identical try/except for the full citation) -- one
+    # level further up than ``_canvas``-style imports would need, since this
+    # file has no such import today: ``parents[2]`` from this file is
+    # ``layout/``.
+    import sys as _sys
+
+    _LAYOUT_DIR = Path(__file__).resolve().parents[2]
+    if str(_LAYOUT_DIR) not in _sys.path:
+        _sys.path.insert(0, str(_LAYOUT_DIR))
+    from harness import spice_flatten
+
+TOP_CELL = "lock_detector"
 
 #: DF.13_LV/DF.14_LV cap the distance from any PMOS-in-nwell/NMOS-outside-
 #: nwell to its nearest well/substrate tap at 20 um. A design wider than
@@ -255,6 +271,49 @@ def build_lock_detector(top_name: str = "lock_detector", *, canvas_cls: type = C
     tap_xs = sorted({*err_taps, *dly_taps, *gap_taps})
     _finish(canvas, nets, pwells, block_box, tap_xs=tap_xs, defer_supply_routing=True)
     return canvas
+
+
+#: The committed export ``design/netlist.sh`` writes from
+#: ``design/lock_detector.sch`` (issue #440's own "COMMITTED" convention --
+#: see that script's header comment). Read at call time rather than copied
+#: in: this file is already the single source of truth on ``main``, so a
+#: second, drifting copy under this block's own evidence directory would be
+#: exactly the "second source of truth beside the... snapshot the evidence
+#: actually cites" ``design/netlist.sh``'s own header comment warns against
+#: for the *other* (per-record) convention.
+NETLIST_PATH = Path(__file__).resolve().parents[3] / "design" / "netlist" / "lock_detector.spice"
+
+
+def reference_netlist() -> str:
+    """This block's own flattened LVS reference netlist (issue #440).
+
+    Mechanically flattened (:mod:`harness.spice_flatten`) from
+    :data:`NETLIST_PATH` -- ``design/lock_detector.sch``'s own full
+    hierarchy (``lock_detector`` -> ``xor2_3v3``/``delaywin_3v3``/
+    ``nand2_3v3``/``inv_3v3``/``schmitt_3v3``) -- not a hand transcription:
+    every device size and connection below traces directly to that
+    committed file's own text, via the same generic, unit-tested flattener
+    :mod:`layout.pll_top.pfd_cp.block` uses for its own (per-record) export.
+    See ``spice_flatten``'s own module docstring for *why* a flat reference
+    is needed at all against this block's own flat GDS (:func:`build_lock_detector`
+    draws one flat macro composition, no ``CellInstArray`` sub-cell
+    hierarchy -- see this module's own docstring).
+
+    Top-level ports are exactly :data:`NETLIST_PATH`'s own ``.subckt
+    lock_detector UP DN LOCK VWIN LDT0 LDT1 LDT2 LDT3 VDD VSS`` line.
+
+    **Note (issue #440):** this reference includes ``delaywin_3v3``'s real,
+    DR-014-trimmed device set (84 transistors: four T-input inverters, a
+    per-stage always-on MOS-cap load, and four binary-weighted switched
+    trim segments per stage) and four top-level ``LDT0``-``LDT3`` pins --
+    all of which :func:`build_lock_detector` (still the #296/#322-era,
+    pre-DR-014 generator) does not draw at all. Running LVS against this
+    reference therefore does not, and is not expected to, come back
+    ``Netlists match.`` until that generator gap is closed (tracked
+    separately -- see this evidence directory's own ``PROOF.md``).
+    """
+    text = NETLIST_PATH.read_text()
+    return spice_flatten.flatten_text(text, TOP_CELL)
 
 
 _BUILDERS = {

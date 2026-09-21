@@ -199,5 +199,42 @@ class ConnectivityTests(unittest.TestCase):
         )
 
 
+class ReferenceNetlistTests(unittest.TestCase):
+    """``block.reference_netlist()`` (issue #440) -- pure Python, no
+    ``klayout.db`` needed: it only reads and flattens the frozen per-record
+    schematic export text (``harness.spice_flatten``)."""
+
+    def test_export_is_frozen_under_this_blocks_own_evidence_directory(self):
+        self.assertTrue(
+            block.SCHEMATIC_EXPORT_PATH.exists(),
+            f"{block.SCHEMATIC_EXPORT_PATH} -- regenerate with "
+            "`./design/netlist.sh --top pfd_cp <tmpdir>` and freeze "
+            "<tmpdir>/dut.spice at this path",
+        )
+
+    def test_top_level_ports_match_boundary_pins_in_the_frozen_exports_own_order(self):
+        ref = block.reference_netlist()
+        self.assertEqual(
+            ref.splitlines()[0],
+            ".subckt pfd_cp REF FB B0 B1 IBN ICN IBP ICP VOUT UP DN VDD VSS",
+        )
+        self.assertEqual(set(block.BOUNDARY_PINS), {"REF", "FB", "B0", "B1", "IBN", "ICN", "IBP", "ICP", "VOUT", "UP", "DN", "VDD", "VSS"})
+
+    def test_device_count_matches_the_nine_subckt_hierarchy(self):
+        # pfd: 40 pfdcp_inv_3v3 (2 fets) + 7 pfdcp_nand2_3v3 (4 fets) = 108.
+        # cp: 4 discrete bias fets + 4 pfdcp_inv_3v3 (8) + 4 cp_leg_n (16) +
+        # 4 cp_leg_p (16) + 6 discrete switch/dump fets + cp_dumpbuf (10) =
+        # 60. Total 168 -- see design/pfd_cp.sch's own hierarchy (frozen at
+        # SCHEMATIC_EXPORT_PATH) and this module's own reference_netlist()
+        # docstring.
+        ref = block.reference_netlist()
+        device_lines = [l for l in ref.splitlines() if l.startswith("M_")]
+        self.assertEqual(len(device_lines), 168)
+
+    def test_ends_the_subckt(self):
+        ref = block.reference_netlist()
+        self.assertEqual(ref.splitlines()[-1], ".ends")
+
+
 if __name__ == "__main__":
     unittest.main()
