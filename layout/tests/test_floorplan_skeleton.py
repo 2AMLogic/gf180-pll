@@ -112,6 +112,21 @@ class BlockPlacementTests(unittest.TestCase):
         ~0.57e6 um^2) but still real; the ratchet ceiling below is tightened
         to match each time rather than left loose.
 
+        Issue #449 then moved it the *other* way, for the first time, and
+        the ratchet was loosened rather than the growth hidden: drawing
+        DR-014's 4-bit trim network into ``lock_detector``'s ``delaywin_3v3``
+        took that block from 45 drawn devices to 117 and from
+        119.30 x 62.60 um to 294.80 x 103.75 um, i.e. the extent from
+        ~0.57e6 to ~0.63e6 um^2. That is not a placement regression of the
+        kind this ratchet exists to catch -- it is 72 devices the block's own
+        ratified schematic always had and its generator did not draw, and the
+        block's first LVS match against that schematic is what the area
+        bought (PLL-FLOORPLAN.md section 5.9,
+        ``layout/evidence/lock-detector-layout/PROOF.md`` "Addendum 4").
+        **Loosening this ceiling is only ever correct with that kind of
+        reason recorded beside it**; a placement change that grows the
+        floorplan on its own must still fail here.
+
         The assertion is *inverted rather than deleted*, plus a ratchet: the
         overrun must still be real (so this test starts failing again the
         moment a future reduction pass fixes it, forcing the record to be
@@ -128,10 +143,12 @@ class BlockPlacementTests(unittest.TestCase):
             "skeleton.py's DIVIDER_LOCK fail-loud note and PLL-FLOORPLAN.md "
             "section 5 to match",
         )
-        # Ratchet: ~0.57e6 um^2 since issue #454 packed the div23_cell macro's
-        # own track band (was ~0.61e6 at #344, ~1.09e6 at #341, ~1.19e6 at
-        # #310). Tightened to match, per this section's own convention.
-        self.assertLess(extent, 600_000.0, "floorplan extent grew beyond the recorded overrun")
+        # Ratchet: ~0.63e6 um^2 -- issue #454 packed the div23_cell macro's own
+        # track band down (was ~0.61e6 at #344, ~1.09e6 at #341, ~1.19e6 at
+        # #310) and issue #449 then grew lock_detector's own footprint back up
+        # for its first LVS match (119.30 x 62.60 -> 294.80 x 103.75 um).
+        # Allow no growth past 0.65e6.
+        self.assertLess(extent, 650_000.0, "floorplan extent grew beyond the recorded overrun")
 
     def test_divider_chain_alone_now_fits_the_whole_chip_area_target(self):
         """#344's headline: the divider chain stopped being the single block

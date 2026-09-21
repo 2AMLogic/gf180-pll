@@ -548,3 +548,114 @@ fixed out of scope here.
 | DRC deck | `<pdk>/libs.tech/klayout/drc/run_drc.py`, table `main`, `--variant=D` |
 | Artifacts refreshed | `lock_detector.gds`, `drc-clean/lock_detector_main.lyrdb`, `drc-clean/drc.stdout.log` |
 | Verdict | `Klayout DRC run is clean. GDS has no DRC violations.` — and now reproducible from the generator |
+
+---
+
+## Addendum 4 (issue #449): DR-014's trim network drawn, block LVS-matched — supersedes every "not LVS-matched" statement above
+
+Addendum 2 closed with "#449's remaining work is now bounded by [117 − 45 =
+72 devices] rather than by a mixed signal." Addendum 3 fixed the generator's
+own DRC regression but explicitly made no LVS claim. **This addendum closes
+both: `delaywin_3v3`'s DR-014 trim network is now drawn, and this block's
+own committed GDS LVS-matches `reference_netlist()` — the same flattened
+`design/netlist/lock_detector.spice` every earlier addendum's mismatch was
+measured against, unchanged.** This is the first time any addendum in this
+file has recorded a match rather than a mismatch or an explicit non-claim.
+
+### What was drawn
+
+`layout/pll_top/lock_detector/cells.py`'s `draw_delaywin()` and
+`layout/pll_top/lock_detector/devices.py` (new `base_cap_fet()`,
+`trim_segment_fets()`, `TRIM_WEIGHTS`/`TRIM_W_UNIT_SW_UM`/etc.) now draw
+every device `design/gen_delaywin.py`'s own sizing table specifies, not the
+pre-DR-014 12-device fixed-load cell Addendum 1 described:
+
+* One always-on `nfet_03v3` MOS-cap load per stage (unchanged from before
+  this issue: `W=6.2u L=2u`, D=S=B=VSS, gate on the stage's delayed output).
+* Four binary-weighted switched trim segments per stage (`TRIM_WEIGHTS =
+  (1, 2, 4, 8)`), each a full transmission gate (`MSN`/`MSP`, gated by the
+  segment's own trim bit and its complement) plus a kill device (`MK`,
+  clamping a deselected segment to `VSS` rather than leaving it floating)
+  plus its own MOS-cap load (`MC`) — 4 devices/segment x 4 segments/stage x
+  4 stages = 64 devices.
+* Four shared trim-bit complement inverters (`XIT0`-`XIT3`), one per trim
+  bit, driving every stage's `TjB` from the block's own new boundary pins.
+
+`layout/pll_top/lock_detector/build.py`'s `build_lock_detector()` routes
+those four new boundary pins (`LDT0`-`LDT3`, `build.TRIM_PINS`) the same way
+every other net in this flat, no-sub-cell-hierarchy package is routed — one
+Metal2 bus per net plus a `metal2_label` (36/10) pin text — with no
+floorplan change needed: `layout/floorplan/skeleton.py`'s `DIVIDER_LOCK`
+region is a placement/keep-out plan with no per-signal routes of its own, so
+it had nothing to update for four more block-level nets. What *did* need a
+floorplan-adjacent change is `LOCK_DETECTOR_STANDALONE_W_UM`/`_H_UM`
+(119.30 x 62.60 -> **294.80 x 103.75 um**), because the block's own real
+footprint grew; see `layout/floorplan/PLL-FLOORPLAN.md` §5.7 for the full
+area-budget accounting that growth drives.
+
+Two `primitives.py` fixes were needed to make the denser block route and
+DRC-clean at all (117 devices / 409 riser groups against the pre-#449
+block's 45 / 161): `RiserLanes._self_notch_free()` (a riser's own pad-vs-jog
+notch, never checked before because no earlier block in this package packed
+risers densely enough to hit it) and `cells.TRIM_COL_PITCH_UM` (the column
+pitch that gives `RiserLanes` enough lane width to converge at all — see
+that constant's own docstring for the swept pitch-vs-width tradeoff). Both
+are described in full, with their own failure-mode arithmetic, in
+`layout/pll_top/lock_detector/{primitives,cells}.py`'s own docstrings/inline
+comments rather than repeated here.
+
+### The LVS run
+
+```bash
+python3 layout/run_pv.py lvs layout/evidence/lock-detector-layout/lock_detector.gds \
+  <reference_netlist() output> \
+  --top lock_detector --run-dir <rundir>
+```
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `lock_detector` LVS, deck verdict | match | `Congratulations! Netlists match.` | **MATCH** |
+| Device count, layout side | 117 (reference) | 117 | **MATCH** |
+
+Artifacts promoted to `lvs-clean/` (`lvs.stdout.log`, `lock_detector.cir`
+— the deck's own extraction, `lock_detector.lvsdb`, `lock_detector.spice`
+— the flattened reference this run used), per the convention
+`layout/evidence/pfd-cp-layout/` already uses once a block's own mismatch
+run is superseded by a match: the superseded `lvs-attempt/` directory is
+**kept, not deleted** (this repository's evidence is append-only), so a
+reader can still see the exact mismatch #440 first measured and how large
+it was before this fix.
+
+`layout/lib/check-layout-status-claims.sh` now reports **4 of the 4**
+blocks LVS-matched — the first time this has been true of any PLL sub-block
+set in this repository — and `README.md`/`docs/chipalooza/challenge-5-proposal.md`
+are updated to match, moving from "3 of the 4" (`README.md`) / "2 of the 4"
+(the Chipalooza-proposal §6 paragraph, itself already stale by one block
+before this issue) to "4 of the 4" throughout both documents.
+
+### What this addendum does NOT claim
+
+**No top-level claim.** This is still block-level LVS only — `lock_detector`
+in isolation against its own `.subckt` in `design/netlist/lock_detector.spice`.
+No assembled `pll_top` GDS exists (issues #17/#149/#18), so this addendum
+says nothing about top-level DRC/LVS closure or post-layout re-verification.
+
+**A real area cost, stated not absorbed.** The block's own footprint grew
+~4.1x (7,468 -> 30,586 um²) for this match, which moves this repository's
+whole-chip area overrun from 2.03x to **2.22x** (`layout/floorplan/
+PLL-FLOORPLAN.md` §5.7, `layout/evidence/area-audit/area-audit.md`
+regenerated). This is not a placement regression — it is 72 devices the
+block's own ratified schematic always specified, finally drawn — but it is
+real, and no lever sized against it exists yet.
+
+### Provenance of this addendum
+
+| | |
+|---|---|
+| Run | 2026-09-21 |
+| Branch point | `origin/main` @ `30e67227` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout (application, deck runner) | `KLayout 0.28.16` |
+| LVS deck | `<pdk>/libs.tech/klayout/lvs/run_lvs.py`, `--variant=D` (default `--lvs_sub=VSS`) |
+| DRC deck | `<pdk>/libs.tech/klayout/drc/run_drc.py`, table `main`, `--variant=D` |
+| Verdict | DRC: `Klayout DRC run is clean. GDS has no DRC violations.` — LVS: `Congratulations! Netlists match.` |

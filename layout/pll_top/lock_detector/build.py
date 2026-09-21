@@ -47,6 +47,25 @@ ROW_Y_N = -2.5
 ROW_W_P_MAX = 2.5
 ROW_W_N_MAX = 2.0
 
+#: This block's four DR-014 static process-trim boundary pins, LSB first --
+#: ``design/lock_detector.sch``'s own ``.subckt lock_detector UP DN LOCK VWIN
+#: LDT0 LDT1 LDT2 LDT3 VDD VSS`` port list (issue #411, drawn here by issue
+#: #449). They are ordinary block-level nets like ``UP``/``DN``/``LOCK``:
+#: every net in this package gets its own Metal2 bus spanning its own pad
+#: range plus a ``metal2_label`` (36/10) text at that bus's midpoint, which
+#: is the *only* pin mechanism this package has and the one gf180mcu's LVS
+#: deck actually reads (see ``primitives.LAYER``). Nothing in
+#: ``layout/floorplan/skeleton.py`` needed changing to receive them: the
+#: skeleton is a region/keep-out plan with no per-signal routes at all --
+#: it names no ``UP``/``DN``/``LOCK`` route either -- so these four arrive
+#: exactly the way this block's other boundary nets already do.
+TRIM_PINS: tuple[str, str, str, str] = ("LDT0", "LDT1", "LDT2", "LDT3")
+
+#: The same four inputs under ``delaywin_3v3.sch``'s own local port names,
+#: for the standalone cell build (the schematic calls them ``T0``-``T3``;
+#: ``lock_detector.sch`` wires ``LDT0``-``LDT3`` into them).
+DELAYWIN_TRIM_PINS_STANDALONE: tuple[str, str, str, str] = ("T0", "T1", "T2", "T3")
+
 
 def _finish(
     canvas: Canvas,
@@ -147,8 +166,16 @@ def build_delaywin_standalone(top_name: str = "lock_detector_delaywin", *, canva
     canvas = canvas_cls(top_name)
     nets: dict[str, list[tuple[float, float, float, float]]] = {}
     pwells: list[tuple[float, float, float, float]] = []
-    box, tap_xs = cells.draw_delaywin(canvas, nets, pwells, 0.0, 2.5, -2.5, 14.0, "A", "Y", "VDD", "VSS", prefix="D")
-    _finish(canvas, nets, pwells, box, tap_xs=tap_xs)
+    box, tap_xs = cells.draw_delaywin(
+        canvas, nets, pwells, 0.0, 2.5, -2.5, 14.0, "A", "Y", "VDD", "VSS",
+        prefix="D", t_bits=DELAYWIN_TRIM_PINS_STANDALONE,
+    )
+    # ``defer_supply_routing`` (issue #347) for the same reason ``xor2`` needs
+    # it: after issue #449 this cell alone is 84 devices, dense enough that
+    # ``RiserLanes.resolve_conflicts()`` cannot converge with ``VDD``/``VSS``
+    # -- present on nearly every column -- interleaved by natural x among the
+    # signal nets still searching for their own lanes.
+    _finish(canvas, nets, pwells, box, tap_xs=tap_xs, defer_supply_routing=True)
     return canvas
 
 
@@ -195,7 +222,8 @@ def build_lock_detector(top_name: str = "lock_detector", *, canvas_cls: type = C
     x = _gap(b_err[2], 3.0)
 
     b_dly, dly_taps = cells.draw_delaywin(
-        canvas, nets, pwells, x, y_p, y_n, y_cap, "ERR", "ERRD", vdd, vss, prefix="XDLY_"
+        canvas, nets, pwells, x, y_p, y_n, y_cap, "ERR", "ERRD", vdd, vss,
+        prefix="XDLY_", t_bits=TRIM_PINS,
     )
     x = _gap(b_dly[2], 3.0)
 
@@ -262,11 +290,26 @@ def build_lock_detector(top_name: str = "lock_detector", *, canvas_cls: type = C
 
     b_ilk = cells.draw_inv(canvas, nets, pwells, x, y_p, y_n, "LOCKB", "LOCK", vdd, vss, prefix="XILK_")
 
+    # ``block_box``'s *top* sets where ``_finish()`` starts the Metal2 track
+    # band (``NetTracks(base_y=block_box[3] + 6.0)``), so it must clear every
+    # shape this build actually draws -- not just the ordinary gate rows.
+    # Before issue #449 it did not: it read ``max(y_cap + 5, b_err[3])`` =
+    # 19 um while ``MCW``'s own W=30u comp reaches y=55 and its dedicated
+    # ptap y=56.75, so the whole track band was laid down *through* that
+    # device's own pads. #451 modelled the resulting hazard
+    # (``RiserLanes._bus_clear()``) rather than removing it, and DR-014's
+    # trim network then made it fatal: with 48 nets instead of 24 the band
+    # is 36 um tall, and a riser whose pad sits inside it has to escape
+    # past *every* other net's bus to find a legal jog height -- further
+    # than ``_safe_jog_height()``'s own search reaches, i.e. ``ValueError:
+    # no free Metal3 riser lane``. Anchoring the band above every drawn
+    # shape makes ``_bus_clear()`` trivially satisfiable for every riser
+    # instead of only for most of them.
     block_box = (
         min(b_err[0], b_mcw[0]),
         min(y_n - 1.0, b_mdnw[1]),
         b_ilk[2],
-        max(y_cap + 4.0 + 1.0, b_err[3]),
+        max(b_err[3], b_dly[3], b_mcw[3], mcw_ptap_box[3]),
     )
     tap_xs = sorted({*err_taps, *dly_taps, *gap_taps})
     _finish(canvas, nets, pwells, block_box, tap_xs=tap_xs, defer_supply_routing=True)

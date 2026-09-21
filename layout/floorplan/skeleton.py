@@ -280,9 +280,15 @@ VCO_GUARD_MARGIN = 15.0
 # divider chain and asserts the match whenever klayout.db *is* importable, so
 # the two views cannot drift silently.
 #
-# lock_detector (issue #296, layout/evidence/lock-detector-layout/PROOF.md):
-LOCK_DETECTOR_STANDALONE_W_UM = 119.3
-LOCK_DETECTOR_STANDALONE_H_UM = 62.6
+# lock_detector (issue #296, layout/evidence/lock-detector-layout/PROOF.md;
+# grown from 119.30 x 62.60 um by issue #449, which drew DR-014's 4-bit trim
+# network into delaywin_3v3 -- 45 devices to 117, and with it the block's
+# first LVS match against its own committed schematic. See that record's
+# "Addendum 4" for the full before/after and PLL-FLOORPLAN.md section 5.7 for
+# what it does to the area arithmetic: ~4.1x this block's own footprint, and
+# the whole-chip overrun from 1.9x to 2.1x):
+LOCK_DETECTOR_STANDALONE_W_UM = 294.80
+LOCK_DETECTOR_STANDALONE_H_UM = 103.75
 # divider_chain (issue #310, layout/evidence/divider-chain-layout/PROOF.md;
 # height reduced by issue #341's routing-track packing, layout/evidence/
 # divider-chain-layout/PROOF-track-packing.md; then folded from one row into
@@ -334,27 +340,41 @@ DIVIDER_LOCK = Block(
     h=(LOCK_DETECTOR.y + LOCK_DETECTOR.h) - DIVIDER_CHAIN.y + 2 * DIVIDER_LOCK_MARGIN,
 )
 
-# FAIL-LOUD: this region is a 1.70x whole-chip area overrun, stated not absorbed.
+# FAIL-LOUD: this region is a 1.89x whole-chip area overrun, stated not absorbed.
 # -----------------------------------------------------------------------------
 # PLL-FLOORPLAN.md section 5 budgeted "divider chain + lock detector" at
 # 0.0038-0.0052 mm^2 (a ROM std-cell-row estimate made when no physical view
 # existed for either block). The two real blocks measure 0.0926 mm^2 +
-# 0.0075 mm^2 = 0.1001 mm^2 -- a ~19-26x overrun on that row. Section 5's own
+# 0.0306 mm^2 = 0.1232 mm^2 -- a ~24-32x overrun on that row. Section 5's own
 # "fail-loud condition for a future pass" instructs stating an overrun
 # explicitly rather than silently rounding the total down, so:
 #
 #   * Re-running section 5's arithmetic with every measured number in place of
 #     its ROM row gives 0.0369 (loop filter) + 0.0318 (VCO) + 0.0353 (PFD/CP,
-#     real since #385/#386) + 0.1001 (divider+lock) = 0.2041 mm^2, i.e.
-#     0.2552 mm^2 after that section's x1.25 top-level overhead -- 1.70x the
-#     0.15 mm^2 budget (PLL-FLOORPLAN.md section 5.6), against the 2.03x
-#     section 5.5 re-derived from the committed GDS, the 2.0x recorded through
-#     issue #341 and the 2.9x through #310 (and the +22 % margin the VCO-only
-#     revision recorded before those).
+#     real since #385/#386) + 0.1232 (divider+lock) = 0.2272 mm^2, i.e.
+#     0.2840 mm^2 after that section's x1.25 top-level overhead -- 1.89x the
+#     0.15 mm^2 budget (PLL-FLOORPLAN.md section 5.9), against the 1.70x
+#     section 5.8 recorded (divider-chain packing lever alone, old
+#     lock_detector footprint), the 2.03x section 5.5 re-derived from the
+#     committed GDS, the 2.0x recorded through issue #341 and the 2.9x
+#     through #310 (and the +22 % margin the VCO-only revision recorded
+#     before those).
 #   * total_extent_um2() (this skeleton's whole bounding box) is now
-#     ~0.57e6 um^2 (was ~0.61e6 through #344, ~1.09e6 through #341, ~1.19e6
-#     through #310). The divider chain no longer swallows the floorplan on its
-#     own: at 1317.66 um it is ~2x the rest of the skeleton rather than ~4x.
+#     ~0.63e6 um^2 (was ~0.57e6 through #454 alone, ~0.61e6 through #344,
+#     ~1.09e6 through #341, ~1.19e6 through #310). lock_detector's own growth
+#     (119.30 x 62.60 um to 294.80 x 103.75 um) pushes this region's own
+#     extent back up even though the divider chain's packing pulled it down;
+#     the divider chain still does not swallow the floorplan on its own: at
+#     1317.66 um it is ~2x the rest of the skeleton rather than ~4x.
+#   * **This is not a placement regression.** Issue #449 drew DR-014's 4-bit
+#     static process trim network into ``lock_detector``'s ``delaywin_3v3``
+#     -- 45 drawn devices to 117 -- which is what finally let that block
+#     match its own ratified schematic under the PDK's LVS deck. The block
+#     went from 119.30 x 62.60 um to 294.80 x 103.75 um (~4.1x) for it.
+#     Recorded here rather than absorbed, per the same instruction as every
+#     line above; PLL-FLOORPLAN.md section 5.9 has the full arithmetic and
+#     names which of the remaining levers sections 5.5/5.8 identified would
+#     recover it.
 #
 # The cause was structural and measurable, not a sizing slip. #310 recorded two
 # structural causes here; #341 closed one and #344 the other:

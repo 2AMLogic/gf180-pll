@@ -89,11 +89,61 @@ class DeviceTranscriptionTests(unittest.TestCase):
             dev.mdnw_fet("VWIN", "WIDE", "VSS"),
             dev.mupw_fet("VWIN", "VDD", "VSS"),
             dev.mcw_fet("VWIN", "VSS"),
+            dev.base_cap_fet("MB1", "D1", "VSS"),
+            *dev.trim_segment_fets("", 1, 0, "D1", "S10", "T0", "T0B", "VDD", "VSS"),
         ]
         for fet in fets:
             self.assertIn(fet.kind, ("nfet", "pfet"), fet.name)
             self.assertGreater(fet.w_um, 0, fet.name)
             self.assertGreater(fet.l_um, 0, fet.name)
+
+
+class DelaywinTrimNetworkTests(unittest.TestCase):
+    """``devices.base_cap_fet``/``trim_segment_fets`` (issue #449) against
+    ``design/gen_delaywin.py``'s own sizing table -- the DR-014 trim network
+    ``delaywin_3v3.sch`` is generated from and ``design/netlist/lock_detector.spice``
+    exports. Every constant asserted here is the *same number* that generator
+    carries; a sizing change made in only one of the two places fails here
+    rather than only showing up as a layout/schematic LVS mismatch."""
+
+    def test_base_cap_fet_matches_gen_delaywin_sizing_table(self):
+        # XMB1 VSS D1 VSS VSS nfet_03v3 L=2u W=6.2u
+        mb = dev.base_cap_fet("MB1", "D1", "VSS")
+        self.assertEqual((mb.kind, mb.w_um, mb.l_um), ("nfet", 6.2, 2.0))
+        self.assertEqual((mb.d, mb.g, mb.s, mb.b), ("VSS", "D1", "VSS", "VSS"))
+
+    def test_trim_weights_are_binary_lsb_first(self):
+        self.assertEqual(dev.TRIM_WEIGHTS, (1, 2, 4, 8))
+
+    def test_trim_segment_fets_j0_matches_gen_delaywin_sizing_table(self):
+        # Stage 1, segment 0 (weight 1): XMSN10/XMSP10/XMK10/XMC10.
+        msn, msp, mk, mc = dev.trim_segment_fets("", 1, 0, "D1", "S10", "T0", "T0B", "VDD", "VSS")
+        # XMSN10 D1 T0 S10 VSS nfet_03v3 L=0.28u W=0.22u
+        self.assertEqual((msn.kind, msn.w_um, msn.l_um), ("nfet", 0.22, 0.28))
+        self.assertEqual((msn.d, msn.g, msn.s, msn.b), ("D1", "T0", "S10", "VSS"))
+        # XMSP10 S10 T0B D1 VDD pfet_03v3 L=0.28u W=0.22u
+        self.assertEqual((msp.kind, msp.w_um, msp.l_um), ("pfet", 0.22, 0.28))
+        self.assertEqual((msp.d, msp.g, msp.s, msp.b), ("S10", "T0B", "D1", "VDD"))
+        # XMK10 S10 T0B VSS VSS nfet_03v3 L=0.5u W=0.22u
+        self.assertEqual((mk.kind, mk.w_um, mk.l_um), ("nfet", 0.22, 0.5))
+        self.assertEqual((mk.d, mk.g, mk.s, mk.b), ("S10", "T0B", "VSS", "VSS"))
+        # XMC10 VSS S10 VSS VSS nfet_03v3 L=1u W=0.5u
+        self.assertEqual((mc.kind, mc.w_um, mc.l_um), ("nfet", 0.5, 1.0))
+        self.assertEqual((mc.d, mc.g, mc.s, mc.b), ("VSS", "S10", "VSS", "VSS"))
+
+    def test_trim_segment_fets_width_scales_with_weight_for_every_bit(self):
+        # XMSN1<j>/XMSP1<j>/XMK1<j> W = weight * 0.22u; XMC1<j> W = weight * 0.5u
+        # (design/netlist/lock_detector.spice: j=1 -> 0.44u/0.44u/0.44u/1u,
+        # j=2 -> 0.88u/0.88u/0.88u/2u, j=3 -> 1.76u/1.76u/1.76u/4u).
+        for j, weight in enumerate(dev.TRIM_WEIGHTS):
+            msn, msp, mk, mc = dev.trim_segment_fets(
+                "", 1, j, "D1", f"S1{j}", f"T{j}", f"T{j}B", "VDD", "VSS"
+            )
+            for switch in (msn, msp, mk):
+                self.assertAlmostEqual(switch.w_um, weight * 0.22)
+                self.assertEqual(switch.l_um, 0.28 if switch is not mk else 0.5)
+            self.assertAlmostEqual(mc.w_um, weight * 0.5)
+            self.assertEqual(mc.l_um, 1.0)
 
 
 @unittest.skipUnless(NETLIST_PATH.exists(), "design/netlist/lock_detector.spice not generated")
