@@ -136,17 +136,23 @@ single row, so its width was the sum of every sub-cell's width.
 Issue #344 closed that one too, by folding the row in two -- three
 ``div23_cell`` instances per row, each row carrying its own #341-packed
 routing band, with the glue logic interleaved next to the instances it wires
-rather than parked at one end. The block is now **1317.66 x 100.29 um =
-0.1321 mm^2**, a further 12 % cut, and for the first time it fits inside the
-whole-chip 0.15 mm^2 target *on its own* -- which is a necessary, not a
-sufficient, condition for the chip to fit. The two real blocks now measure
-0.1396 mm^2 together. The full arithmetic and what is still structurally
-oversized (device density, the one lever neither #341 nor #344 touched) are
-stated at the ``DIVIDER_LOCK`` definition below. This skeleton is still a
-floorplan record of a design that does not fit its budget -- which is
-precisely what section 5's own "fail-loud condition for a future pass" asked
-for, and is tracked for further reduction separately from #310's/#341's/
-#344's own DRC/LVS-clean geometry claims.
+rather than parked at one end. That left the block at **1317.66 x 100.29 um
+= 0.1321 mm^2**, a further 12 % cut, and for the first time it fit inside
+the whole-chip 0.15 mm^2 target *on its own* -- which is a necessary, not a
+sufficient, condition for the chip to fit. Issue #454 then packed the
+``div23_cell`` macro's own Metal2 track band the same way #341 had packed
+the top-level bands, taking the block to **1317.66 x 70.29 um = 0.0926
+mm^2**, a further 30 %. The two real blocks now measure 0.1001 mm^2
+together. The full arithmetic, and what is still structurally oversized, are
+stated at the ``DIVIDER_LOCK`` definition below -- it is **not** device
+density: that hypothesis stood here through #344 and was falsified by
+measurement at #442 (the diffusion islands are ~1 % of the block's own
+bounding box, not the bulk of it). What is actually left is the remaining
+Metal2 band, tracked separately at #458. This skeleton is still a floorplan
+record of a design that does not fit its budget -- which is precisely what
+section 5's own "fail-loud condition for a future pass" asked for, and is
+tracked for further reduction separately from #310's/#341's/#344's/#454's
+own DRC/LVS-clean geometry claims.
 """
 
 from __future__ import annotations

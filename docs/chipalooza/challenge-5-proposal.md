@@ -312,7 +312,7 @@ reference netlist:
 |---|---|---|---|---|---|
 | VCO (#293, folded at #324) | `vco_block` | 183.18 × 170.28 µm (0.0312 mm²) | clean | **matched** | `layout/evidence/vco-layout/` (`PROOF-fold.md`, `PROOF-lvs.md`, `PROOF-433-vdd-island-fix.md`) |
 | PFD + charge pump (#294 via #299–#303, #385, #386; LVS at #440/#448) | `pfd_cp` | 434.31 × 80.73 µm (0.0351 mm²) | clean (default **and** `--offgrid` signoff-grade) | **matched** | `layout/evidence/pfd-cp-layout/` (`PROOF.md`, including the first run's recorded mismatch and its root cause) |
-| Divider chain (#295 via #306–#310, packed at #341, folded at #344) | `divider_chain` | 1317.66 × 100.29 µm (0.1321 mm²) | clean | **matched** | `layout/evidence/divider-chain-layout/` (`PROOF.md`, `PROOF-fold.md`) |
+| Divider chain (#295 via #306–#310, packed at #341, folded at #344, macro-track-packed at #454) | `divider_chain` | 1317.66 × 70.29 µm (0.0926 mm²) | clean | **matched** | `layout/evidence/divider-chain-layout/` (`PROOF.md`, `PROOF-fold.md`, `PROOF-macro-track-packing.md`) |
 | Lock detector (#296) | `lock_detector` | 119.3 × 62.6 µm (0.0075 mm²) | clean | **no claim** — explicitly a DRC-clean geometry claim only | `layout/evidence/lock-detector-layout/PROOF.md` |
 
 Every DRC run above is against the PDK's own foundry signoff decks
