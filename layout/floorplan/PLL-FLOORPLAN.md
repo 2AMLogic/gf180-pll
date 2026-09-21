@@ -678,6 +678,49 @@ issue behind it and no number attached.
 
 **Still not a DRC/LVS regression, trivially.** No geometry changed.
 
+### 5.6 Correction: §5.5's `lock_detector` fill figure was measured off a stale artifact (issue #451)
+
+§5.5 above reports "27.0 % of `lock_detector`" as that block's fill, and
+`layout/evidence/area-audit/area-audit.md` carried 2,013 µm² drawn and 556.4
+µm² of `comp` to match. Both were measured — correctly, from the committed
+GDS — off an artifact that **its own generator had stopped producing**.
+`layout/evidence/lock-detector-layout/lock_detector.gds` was committed once
+at #311 (2026-09-08) and the generator changed seven times afterwards without
+the file being regenerated; issue #451 found it, fixed the generator's
+DRC regression and regenerated the artifact. §5.5's own §5.5-opening
+paragraph makes the general point already ("this record's own VCO row had
+drifted … which is why the audit is now a command rather than a hand
+calculation") — this is the same failure one level down, in the *input* to
+that command rather than in the hand calculation.
+
+Re-measured against the regenerated artifact:
+
+| | §5.5 (stale artifact) | corrected |
+|---|---|---|
+| `lock_detector` fill | 27.0 % | **30.2 %** |
+| `lock_detector` drawn | 2,013 µm² | **2,254 µm²** |
+| `lock_detector` `comp` | 556.4 µm² (7.45 %) | **580.4 µm² (7.77 %)** |
+| `lock_detector` Metal2 tracks | 23 | **24** |
+
+**Nothing else in §5 moves, and no lever is resized.** The block's bounding
+box — the only `lock_detector` quantity any of §5.5's arithmetic consumes —
+is **119.30 × 62.60 µm = 7,468 µm²**, identical before and after: the
+generator fix changed how the riser lanes are packed, not how far the block
+extends. So the 243,660 µm² sum, the 123,660 µm² gap, the three levers'
+sizings and the 1.35× ceiling all stand exactly as §5.5 derived them. The
+whitespace sentence's ordering ("39.2 % of `vco_block`, 27.0 % of
+`lock_detector`, 21.2 % of `divider_chain` and 17.1 % of `pfd_cp`") is also
+unchanged in kind — `lock_detector` is still second, now at 30.2 %.
+
+`layout/tests/test_gds_reproducibility.py` (issue #451) now rebuilds every
+committed block GDS from its generator on each test run and fails on any
+difference, so the *input* to `run_pv.py area` can no longer go stale without
+the suite saying so. One artifact is a known exception and is excluded by
+name with its own issue: `layout/evidence/floorplan-skeleton/` does not
+reproduce either (its committed file predates #354, #358 and #398) — that is
+this record's own skeleton, tracked at **#461**, and §6 below should be
+re-read against it once that lands.
+
 ## 6. GDS skeleton
 
 `layout/floorplan/skeleton.py` assembles a **block-placement skeleton**

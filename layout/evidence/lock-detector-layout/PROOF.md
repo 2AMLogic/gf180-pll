@@ -314,3 +314,237 @@ in `README.md`, in `docs/chipalooza/challenge-5-proposal.md` and in
 | KLayout (application, deck runner) | `KLayout 0.28.16` |
 | LVS deck | `<pdk>/libs.tech/klayout/lvs/run_lvs.py`, `--variant=D` (default `--lvs_sub=VSS`) |
 | Verdict | `ERROR : Netlists don't match` — expected, and now attributable to DR-014 alone (#449) |
+
+---
+
+## Addendum 3 (issue #451): the committed GDS had stopped reproducing from its own generator, and the generator was not DRC-clean
+
+Addendum 2's closing section records, as an aside to a different
+investigation, that this directory's `lock_detector.gds` "turned out **not to
+reproduce from its own generator**". That is this addendum's subject. Both
+halves of it are now closed: the generator's DRC regression is fixed, and the
+committed artifact above has been **regenerated from the fixed generator** —
+so for the first time since 2026-09-08 the file this directory's DRC claim is
+made about is the file `layout/pll_top/lock_detector/build.py` actually
+produces.
+
+### What was wrong
+
+Two independent findings, both reproduced from an unmodified `git archive
+HEAD layout` tree (so: `main`'s state, not a working copy).
+
+**1. The committed file was not the generator's output.** `lock_detector.gds`
+was committed once, by #311 (issue #296, 2026-09-08), and
+`layout/pll_top/lock_detector/` changed seven times afterwards — `7c523c1d`
+(#322, riser rerouting), `e9812b75` (#357), `3c3fc6f8` (#347, `RiserLanes`
+convergence), `24a7dbe4` (#365), `dc5850be` (#402, the DR-010 resize),
+`0821e594` (#430), `ce561c85` (#435) — with no regeneration. A layer-by-layer
+`klayout.db.Region` XOR against a fresh build differed on **9 of the 11
+drawing layers**, including 24 µm² of `comp` (22/0), 27.6 µm² of `nplus`
+(32/0) and 487 µm² of `metal3` (42/0). Two different layouts, not two
+encodings of one.
+
+**2. The generator's own output was not DRC-clean.** The same deck that
+reports the committed file clean reported **141 violations** on the freshly
+generated one:
+
+```
+$ python3 layout/run_pv.py drc layout/evidence/lock-detector-layout/lock_detector.gds --top lock_detector
+DRC clean: lock_detector (D), 0 violations
+
+$ python3 layout/run_pv.py drc <freshly-generated>/lock_detector.gds --top lock_detector
+DRC violations: lock_detector (D), 141 item(s) -- M1.1x16, M1.2ax40, M2.2ax14, M3.2ax25, V1.1x2, V1.2ax1, V2.1x36, V2.2ax7
+```
+
+So this block's DRC-clean claim was true of the committed file and of nothing
+else that existed. Nothing in the repository could see that: `run_pv.py` runs
+a deck against whatever GDS it is handed, and
+`layout/lib/check-layout-status-claims.sh` grades README/proposal prose
+against the *recorded* verdict. Neither re-derives the artifact.
+
+### Which commit regressed it
+
+Bisected over the generator with the deck itself (one build + one deck run per
+commit, ~11 s each), rebuilding each commit's `layout/` + `sim/` + `design/`
+from `git archive` so the result is that commit's state and not the working
+tree's:
+
+| Commit | Issue / PR | Build | Deck verdict |
+|---|---|---|---|
+| `7c4726a2` | #296 / #311 | ok | clean, 0 violations |
+| `f5001484` | #317 / #328 | ok | clean, 0 violations |
+| `f332bcdc` | #340 | ok | clean, 0 violations |
+| `7c523c1d` | #322 / #348 | **raises** `ValueError: no free Metal3 riser lane near x=18.67` | — |
+| `e9812b75` | #357 | **raises**, same | — |
+| `3c3fc6f8` | #347 / #362 | ok | **141 items**, M1.1x16 M1.2ax40 M2.2ax14 M3.2ax25 V1.1x2 V1.2ax1 V2.1x36 V2.2ax7 |
+| `24a7dbe4` | #365 | ok | 141 items, identical breakdown |
+| `dc5850be` | #402 | ok | 141 items, identical breakdown |
+| `0821e594` | #430 | ok | 141 items, identical breakdown |
+| `ce561c85` | #435 | ok | 141 items, identical breakdown |
+
+The regression is `3c3fc6f8` (#347), and the two commits before it are part of
+the same story: `7c523c1d` (#322) introduced `RiserLanes` and left the block
+**unbuildable** — the generator raised rather than emitting anything, which is
+why the stale artifact was never overwritten in the first place — and #347
+made it converge. The count is byte-identical from #347 onwards, so none of
+the four later commits (including DR-010's device resize) contributed a single
+violation.
+
+### The root cause: a short model where a spacing rule was needed
+
+`RiserLanes` is the class #322 added to keep two nets' Metal3 risers off each
+other. Its hazard model tested for strict geometric **overlap**, with a 1e-6 µm
+margin — the same ground truth `checks.shorted_pairs()` uses — and skipped
+same-net pairs outright, on the stated argument that its job was only to rule
+out an electrical short and that "a full KLayout DRC pass over the fixed GDS
+(not run by this pure-Python model) remains the authoritative spacing
+signoff".
+
+The first half of that argument is sound. The second was never enforced
+anywhere, and this is what the generator drifted into: **zero shorts, zero
+opens, 141 deck violations.** Two shapes 0.07 µm apart short nothing and
+violate M1.2a. Every one of the 141 items traces to one of four consequences:
+
+| Items | Cause |
+|---|---|
+| 36 V2.1, 7 V2.2a, 14 M2.2a, 25 M3.2a | **Same-net lane pairs that neither coincided nor cleared the pitch.** Every riser of one net lands its top via stack on that net's single `track_y`, so two same-net lanes 0.2 µm apart merge two 0.26 µm via cuts into one 0.46 µm polygon (V2.1 wants *exactly* 0.26) and leave a 0.18 µm notch between two Metal2 landings (M2.2a wants 0.28). None of these is a short, which is exactly why the model waved them all through. |
+| 40 M1.2a | **The Metal1 jog wire was narrower (0.32 µm) than the landing square it ran into (0.44 µm)**, so the landing protruded above and below the jog — and that protrusion faced the neighbouring device pad the jog had just been routed past, across a sub-M1.2a gap. One notch, repeated. |
+| 16 M1.1 | **The Metal1 stub ended flush at `jog_y` instead of at the jog's own edge**, leaving a two-step staircase whose concave corners are 0.16 µm apart in each axis — 0.226 µm diagonally, 0.004 µm inside M1.1's 0.23 µm minimum *width*. |
+| 2 V1.1, 1 V1.2a | The same same-net lane collisions as row 1, one layer down. |
+
+A latent fifth was found while fixing these and is now modelled even though it
+had not yet fired: `MCW`'s `W=30u` comp puts this block's `VSS` pads at y≈40,
+*inside* a Metal2 track band that starts at y=25, and one of those risers
+already dropped its Via1 Metal2 landing within **0.0 µm** of `XSCH_P1`'s own
+Metal2 bus. Same layer, no via — a genuine cross-net short, avoided only by
+the two shapes' X ranges happening not to meet.
+
+### The fix
+
+`layout/pll_top/lock_detector/primitives.py`. The router now models the deck's
+spacing rules by name (`METAL1_MIN_SPACE_UM`, `METAL2_MIN_SPACE_UM`,
+`METAL3_MIN_SPACE_UM`, `VIA_MIN_SPACE_UM`, each read from its own rule deck):
+
+1. **Clearance, not overlap.** Every pair of Metal1 shapes at least one of
+   which this router positions must clear M1.2a, measured conservatively (≥
+   the minimum along X *or* Y, which also rules out the diagonal corner case
+   that produced the M1.1 items). The one exempt pair is device pad against
+   device pad: those are drawn before any riser is placed, no lane assignment
+   can move them, and their mutual spacing is an already deck-clean fact of
+   the cell library — rejecting a placement over one would only refuse to
+   route across a violation this router cannot fix. That exemption is what the
+   old 1e-6 µm epsilon was really for; it is now scoped to it.
+2. **Same-net pairs are checked too.** Sharing a lane *exactly* is still
+   allowed, and is load-bearing: two collinear same-net columns union into one
+   legal Metal3 column, which is how 161 risers fit in 168 lane slots. What is
+   no longer allowed is a same-net pair that neither coincides nor clears the
+   pitch.
+3. **The lane pitch is justified by the widest shape on a lane, not the
+   narrowest.** `ROW_LANE_OFFSET_UM` is unchanged at 0.7 µm, but its old
+   derivation only considered the 0.34 µm Metal3 *wire*; the via landings were
+   0.44 µm, i.e. 0.26 µm apart at that pitch where M2.2a wants 0.28. The via
+   enclosure moved instead (0.09 → 0.06 µm in X), because pitch is the scarce
+   resource here — see below. The landing is now rectangular, 0.38 × 0.40 µm:
+   narrow in X where lanes compete, taller in Y where nothing does, so its
+   area still clears M1.3/M2.3/M3.3's 0.1444 µm² minimum. (A uniform 0.05 µm
+   enclosure was tried first and produced a 0.36 µm square — 161 M2.3
+   violations, one per riser.) 0.06/0.07 µm also clears V1.3d/V1.4c/V2.3d/V2.4c's
+   0.04 µm threshold, past which those rules escalate to a 0.06 µm
+   adjacent-edge requirement.
+4. **Lanes are a global grid, not a per-riser ladder.** Each riser used to
+   search `x`, then `x ± k·pitch`, anchored on its *own* natural x — so every
+   riser that kept its natural position planted a lane at an arbitrary real
+   coordinate and stranded up to a pitch of space on either side of it. That
+   is affordable only while same-net risers may sit a fraction of a micron
+   apart, i.e. only while the bug exists. Measured on this block: 126 distinct
+   `(net, x)` lane demands over a 117.9 µm span — 168 slots at 0.7 µm pitch,
+   comfortable globally, but the ladder stranded enough of it that `VDD`'s
+   riser at x=21.21 had no legal lane within 20 µm and was dumped 7 µm away
+   behind an unchecked 7 µm Metal1 jog. Every lane is now a whole number of
+   pitches from one shared origin, chosen as the phase minimising total
+   displacement so the common case stays a sub-0.1 µm nudge.
+5. **The jog and stub are drawn flush.** The jog wire is exactly as tall as
+   the landing it runs into (`METAL1_JOG_HEIGHT_UM`), and the stub runs past
+   `jog_y` by half that height, so the union of pad + stub + jog + landing has
+   no notch and no staircase.
+6. **A riser's Metal2 landing keeps clear of every other net's Metal2 bus** in
+   Y — the latent `MCW`/`XSCH_P1` hazard above.
+
+### Results
+
+Regenerated with this directory's own documented command and checked with the
+same deck, same PDK, same KLayout as every run above:
+
+```
+python3 -m lock_detector.build --outdir layout/evidence/lock-detector-layout   # from layout/pll_top/
+python3 layout/run_pv.py drc layout/evidence/lock-detector-layout/lock_detector.gds --top lock_detector --run-dir <rundir>
+```
+
+| Check | Cell | Expected | Got | Verdict |
+|---|---|---|---|---|
+| 1 | `lock_detector` (full block, the committed GDS) | clean | `Klayout DRC run is clean. GDS has no DRC violations.` | **PASS** |
+| 2 | `lock_detector_xor2` (standalone) | clean | clean, 0 violations | **PASS** |
+| 3 | `lock_detector_delaywin` (standalone) | clean | clean, 0 violations | **PASS** |
+| 4 | `lock_detector_nand2` (standalone) | clean | clean, 0 violations | **PASS** |
+| 5 | `lock_detector_inv` (standalone) | clean | clean, 0 violations | **PASS** |
+| 6 | `lock_detector_schmitt` (standalone) | clean | clean, 0 violations | **PASS** |
+| 7 | `checks.shorted_pairs()` / `disconnected_nets()`, all six cells | 0 / 0 | 0 shorts, 0 opens in every cell | **PASS** |
+| 8 | committed GDS vs. a fresh `build.py` run, `Region` XOR per drawing layer | empty | empty on all 11 layers | **PASS** |
+
+Check 8 is new and is the one this whole addendum is about: the committed
+artifact is now *reproducible*, and stays that way — see below.
+
+**Footprint is unchanged: 119.30 × 62.60 µm (7,468 µm²)**, identical to the
+stale artifact's, so nothing in `layout/floorplan/skeleton.py`'s `DIVIDER_LOCK`
+sizing or `PLL-FLOORPLAN.md` §5's area arithmetic moves. What does change,
+because it was measured off the stale file, is this block's *fill*: 27.0 % →
+30.2 %, drawn 2,013 → 2,254 µm², `comp` 556.4 → 580.4 µm², Metal2 tracks 23 →
+24. `layout/evidence/area-audit/area-audit.md` is regenerated and
+`PLL-FLOORPLAN.md` gains §5.6 recording the correction; no lever is resized.
+
+**This addendum makes no LVS claim.** Addendum 2's conclusion stands unchanged:
+this block is still **not LVS-matched**, and closing that still needs DR-014's
+trim network in `cells.py`/`build.py` (issue #449) — now, finally, on top of a
+generator that is DRC-clean to begin with, which is what #449 was blocked on.
+`README.md`, `docs/chipalooza/challenge-5-proposal.md` and
+`layout/lib/check-layout-status-claims.sh` therefore still read 4/4 drawn +
+DRC-clean, 3/4 LVS-matched, and that script re-verifies it.
+
+### What stops this recurring
+
+The stale artifact was invisible to every check the repository ran, so fixing
+one file fixes one file. `layout/harness/reproduce.py` (new) rebuilds **every**
+committed block GDS under `layout/evidence/` by running its own documented
+regeneration command and compares the result layer by layer as merged
+`klayout.db.Region` geometry — not byte by byte, since a GDS carries a write
+timestamp in its own header and two runs of one unchanged generator are never
+byte-identical. `layout/tests/test_gds_reproducibility.py` runs it on every
+test run, with a **negative control** (a deliberately stale artifact must be
+reported as drift, per `layout/harness/faults.py`'s own "a flow only ever shown
+reporting clean is not evidence" discipline) and a **coverage assertion**
+(every `*.gds` in the evidence tree is registered or excluded-with-a-reason, so
+an unchecked artifact cannot appear by omission). No PDK and no deck — only the
+`klayout` pip wheel — so it runs in CI's headless job.
+
+Run across the whole evidence tree, **25 of 26 registered blocks reproduced
+exactly on the first attempt**; the drift really was confined to this one
+block's generator. The exception is not this block:
+`layout/evidence/floorplan-skeleton/pll_floorplan_skeleton.gds` does not
+reproduce either (its committed file predates #354, #358 and #398 — the plan
+was re-laid-out three times around it), which is a different block's evidence
+with its own PROOF.md and floorplan arithmetic to re-derive. It is excluded by
+name, with the reason, and filed as
+[issue #461](https://github.com/2AMLogic/gf180-pll/issues/461) rather than
+fixed out of scope here.
+
+### Provenance of this addendum
+
+| | |
+|---|---|
+| Regenerated | 2026-09-21 |
+| Branch point | `origin/main` @ `c357e13e` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout (application, deck runner) | `KLayout 0.28.16` |
+| DRC deck | `<pdk>/libs.tech/klayout/drc/run_drc.py`, table `main`, `--variant=D` |
+| Artifacts refreshed | `lock_detector.gds`, `drc-clean/lock_detector_main.lyrdb`, `drc-clean/drc.stdout.log` |
+| Verdict | `Klayout DRC run is clean. GDS has no DRC violations.` — and now reproducible from the generator |
