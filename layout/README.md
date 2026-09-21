@@ -73,6 +73,7 @@ layout/
     drc.py                    drives the foundry DRC deck, normalises the verdict
     lvs.py                    drives the foundry LVS deck, normalises the verdict
     faults.py                 negative-control fault injection (DRC + LVS)
+    reproduce.py              does each committed block GDS still come out of its generator?
   tools/
     pmap                      macOS pmap(1) shim the foundry decks' logger needs (see below)
   floorplan/                 PLL block-placement floorplan (issue #17)
@@ -420,6 +421,53 @@ See `layout/evidence/area-audit/PROOF.md` for every lever's arithmetic and
 §5.5 of the floorplan for the re-derived budget. This command measures drawn
 geometry; it makes no claim that a transformation it sizes is DRC-legal, which
 is what `drc`/`lvs` above are for.
+
+## Does the committed GDS still come out of the generator?
+
+```bash
+python3 -m harness.reproduce          # from layout/ -- prints one line per block
+python3 -m unittest discover -s layout/tests -t layout/tests -k Reproduc
+```
+
+Every DRC/LVS claim in `layout/evidence/` is a claim about a **committed
+file**, and nothing in this flow re-derives that file: `run_pv.py` runs a deck
+against whatever GDS it is handed, and `layout/lib/check-layout-status-claims.sh`
+grades README/proposal prose against the *recorded* verdict. So a generator
+could drift arbitrarily far from the artifact carrying its evidence with every
+check here still green.
+
+That is not hypothetical (issue #451).
+`layout/evidence/lock-detector-layout/lock_detector.gds` was committed once at
+#311 and its generator changed seven times over the next fortnight; when it
+was finally re-derived, the committed file and the generator's output differed
+on **9 of 11 drawing layers**, and the generator's own output failed the
+foundry DRC deck with **141 violations** where the committed file was clean.
+The block's "DRC-clean" claim was true of the committed file and of nothing
+else that existed.
+
+`layout/harness/reproduce.py` closes that: it rebuilds every registered block
+by running its own documented regeneration command
+(`python3 -m <generator> --outdir <tmp>`) and compares the result against the
+committed artifact **layer by layer as merged geometry** (`klayout.db.Region`
+XOR, drawing datatypes only). Not byte by byte — a GDS carries a write
+timestamp in its own header, so two runs of one unchanged generator are never
+byte-identical and a checksum would be a permanently red light.
+
+`layout/tests/test_gds_reproducibility.py` runs it on every test run, and
+asserts two things beyond the comparison itself:
+
+- a **negative control** — a deliberately stale artifact (one real GDS plus a
+  single 0.1 µm box) must be reported as drift, because a check only ever
+  shown reporting clean is not evidence it can report dirty (the same
+  discipline `harness/faults.py` applies to the DRC/LVS decks);
+- **registry coverage** — every `*.gds` under `layout/evidence/` is either
+  registered with a generator or listed in `EXCLUDED` with a stated reason, so
+  an unchecked artifact cannot appear by omission.
+
+No PDK, no KLayout application binary, no deck — only the `klayout` pip wheel,
+so it runs in CI's headless `checks` job. It says nothing about whether a
+block is DRC-clean; it says the file you ran the deck against is the file the
+generator produces today.
 
 ## The trivial cell (`inv_tb`)
 

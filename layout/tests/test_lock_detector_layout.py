@@ -43,6 +43,40 @@ class RiserLanesTests(unittest.TestCase):
         clearance = P.ROW_LANE_OFFSET_UM - P.METAL3_WIRE_WIDTH_UM
         self.assertGreater(clearance, 0.28)
 
+    def test_offset_clears_every_shape_a_lane_actually_carries(self):
+        # The Metal3 *wire* is not the widest thing on a lane -- the Via1/
+        # Via2 metal landing is, and until issue #451 it was 0.44 um wide
+        # against a 0.7 um pitch, i.e. 0.26 um apart where M2.2a wants 0.28.
+        # The assertion above was true and the geometry still failed the
+        # deck. Check every shape the lane carries, not the narrowest.
+        landing_w = 2 * P.VIA_LANDING_HALF_UM
+        self.assertGreaterEqual(landing_w, P.METAL3_WIRE_WIDTH_UM - 1e-9, "the landing is the widest shape on a lane")
+        self.assertGreater(P.ROW_LANE_OFFSET_UM - landing_w, P.METAL2_MIN_SPACE_UM, "M2.2a between two landings")
+        self.assertGreater(P.ROW_LANE_OFFSET_UM - landing_w, P.METAL3_MIN_SPACE_UM, "M3.2a between two landings")
+        self.assertGreater(P.ROW_LANE_OFFSET_UM - landing_w, P.METAL1_MIN_SPACE_UM, "M1.2a between two landings")
+        self.assertGreater(P.ROW_LANE_OFFSET_UM - P.VIA2_SIZE_UM, P.VIA_MIN_SPACE_UM, "V1.2a/V2.2a between two cuts")
+
+    def test_a_via_landing_clears_the_metal_minimum_area(self):
+        # M1.3/M2.3/M3.3: 0.1444 um^2. The Metal2 landing at a riser's jog
+        # height is an isolated island -- Via1 below and Via2 above are
+        # other layers -- so nothing merges with it to make up the area.
+        # Shrinking the enclosure uniformly (issue #451's first attempt)
+        # produced 161 M2.3 violations, one per riser.
+        area = (2 * P.VIA_LANDING_HALF_UM) * (2 * P.VIA_LANDING_HALF_Y_UM)
+        self.assertGreater(area, 0.1444)
+
+    def test_a_via_enclosure_clears_the_adjacent_edge_escalation_threshold(self):
+        # V1.3d/V1.4c/V2.3d/V2.4c escalate to a 0.06 um adjacent-edge
+        # requirement once the metal overlaps the via by < 0.04 um anywhere.
+        self.assertGreaterEqual(P.VIA_ENCLOSURE_UM, 0.04)
+        self.assertGreaterEqual(P.VIA_ENCLOSURE_Y_UM, 0.04)
+
+    def test_the_jog_wire_is_as_tall_as_the_landing_it_runs_into(self):
+        # A narrower jog leaves the landing protruding above and below it,
+        # and that protrusion faces whatever the jog was routed past --
+        # 49 of issue #451's M1.2a items were that one notch, repeated.
+        self.assertEqual(P.METAL1_JOG_HEIGHT_UM, 2 * P.VIA_LANDING_HALF_Y_UM)
+
     def test_first_riser_at_a_given_x_keeps_its_natural_position(self):
         lanes = P.RiserLanes([])
         x, jog_y = lanes.place("A", 1.0, y_pad=0.0, track_y=10.0)
@@ -156,6 +190,112 @@ class RiserLanesTests(unittest.TestCase):
         x, jog_y = lanes.place("A", 1.0, y_pad=0.0, track_y=10.0, half_w=hw, half_h=hh)
         if abs(x - 1.7) < P.ROW_LANE_OFFSET_UM - 1e-9:
             self.assertGreater(abs(jog_y - 0.0), 1e-6)
+
+
+class RiserLanesAreADrcModelTests(unittest.TestCase):
+    """``RiserLanes`` must model *clearance*, not overlap (issue #451).
+
+    Until #451 every hazard test in this class was a strict-overlap test
+    with a 1e-6 um margin -- an electrical-short test, the same ground truth
+    ``checks.shorted_pairs()`` uses -- and same-net pairs were skipped
+    outright on the grounds that a net merging with itself is never a short.
+    Both are true and neither is sufficient: the block it produced had zero
+    shorts, zero opens, and 141 foundry-deck violations. Every case below is
+    one of those 141, reduced to the placement decision behind it.
+    """
+
+    HW = HH = 0.23  # this package's own narrowest real pad half-extent
+
+    def _lanes(self, groups=()):
+        return P.RiserLanes(groups)
+
+    def test_two_same_net_risers_may_share_a_lane_exactly(self):
+        # The legal same-net case, and the reason sharing is allowed at all:
+        # two collinear columns of one net union into a single legal Metal3
+        # column, and via stacks a whole track pitch apart on it cannot
+        # interact. This is how a 161-riser block fits in 168 lane slots.
+        lanes = self._lanes()
+        first, _ = lanes.place("VDD", 1.0, y_pad=2.5, track_y=10.0, half_w=self.HW, half_h=self.HH)
+        second, _ = lanes.place("VDD", 1.0, y_pad=-2.5, track_y=10.0, half_w=self.HW, half_h=self.HH)
+        self.assertEqual(first, second)
+
+    def test_two_same_net_risers_never_land_a_fraction_of_a_pitch_apart(self):
+        # The single largest source of issue #451's violations: every riser
+        # of one net lands its top via stack on that net's own single
+        # track_y, so two same-net lanes 0.2 um apart merge two 0.26 um via
+        # cuts into one 0.46 um polygon (V2.1 wants exactly 0.26) and leave
+        # a 0.18 um notch between two Metal2 landings (M2.2a wants 0.28).
+        # 36 V2.1 + 7 V2.2a + 14 M2.2a items, all same-net, none a short.
+        lanes = self._lanes()
+        first, _ = lanes.place("VDD", 1.0, y_pad=2.5, track_y=10.0, half_w=self.HW, half_h=self.HH)
+        second, _ = lanes.place("VDD", 1.2, y_pad=2.5, track_y=10.0, half_w=self.HW, half_h=self.HH)
+        gap = abs(second - first)
+        self.assertTrue(
+            gap < 1e-9 or gap >= P.ROW_LANE_OFFSET_UM - 1e-9,
+            f"same-net lanes {first} and {second} neither coincide nor clear the pitch",
+        )
+
+    def test_a_same_net_lane_pair_a_fraction_of_a_pitch_apart_is_a_conflict(self):
+        # The predicate directly: resolve_conflicts() must see this pair as
+        # something to repair, not as a same-net merge to wave through.
+        lanes = self._lanes()
+        lanes._placed.append(("VDD", 1.0, 1.0, 2.5, 10.0, 2.5, self.HW, self.HH))
+        lanes._placed.append(("VDD", 1.2, 1.2, 2.5, 10.0, 2.5, self.HW, self.HH))
+        self.assertIsNotNone(lanes._find_metal1_conflict())
+
+    def test_two_shapes_a_tenth_of_a_micron_apart_are_a_conflict(self):
+        # 0.07 um apart is not a short and is a plain M1.2a violation --
+        # 40 of #451's items. The old strict-overlap predicate said "clear".
+        gap = 0.07
+        self.assertLess(gap, P.METAL1_MIN_SPACE_UM)
+        a = (0.0, 0.0, 1.0, 1.0)
+        b = (1.0 + gap, 0.0, 2.0, 1.0)
+        self.assertTrue(P.RiserLanes._too_close(a, b, P.METAL1_MIN_SPACE_UM))
+        self.assertFalse(P.RiserLanes._boxes_overlap(a, b), "not a short -- which is exactly the point")
+
+    def test_two_shapes_touching_only_at_a_corner_are_a_conflict(self):
+        # A staircase of two rectangles whose concave corners are 0.16 um
+        # apart in each axis measures 0.226 um diagonally -- 0.004 um inside
+        # M1.1's 0.23 um minimum *width*. 16 of #451's items. An axis-wise
+        # test would call this clear; _too_close() deliberately does not.
+        a = (0.0, 0.0, 1.0, 1.0)
+        b = (1.1, 1.1, 2.0, 2.0)
+        self.assertTrue(P.RiserLanes._too_close(a, b, P.METAL1_MIN_SPACE_UM))
+
+    def test_two_device_pads_are_never_a_conflict_with_each_other(self):
+        # The one exempt pair, and the reason the old epsilon existed:
+        # mosfet()/tap_strip() draw device pads before any riser is placed,
+        # so their mutual spacing is a fixed, already deck-clean fact this
+        # router cannot improve. Rejecting a placement over one would only
+        # refuse to route across a violation it has no way to fix.
+        a = (0.0, 0.0, 1.0, 1.0)
+        b = (1.05, 0.0, 2.0, 1.0)
+        self.assertFalse(P.RiserLanes._pair_too_close(a, True, b, True))
+        self.assertTrue(P.RiserLanes._pair_too_close(a, True, b, False))
+        self.assertTrue(P.RiserLanes._pair_too_close(a, False, b, False))
+
+    def test_a_riser_landing_never_sits_on_another_nets_metal2_bus(self):
+        # A riser whose own pad sits inside the track band drops a Metal2
+        # landing there; MCW's W=30u comp puts this block's VSS pads at
+        # y~40, and one of them already landed within 0.0 um of XSCH_P1's
+        # own bus -- a cross-net Metal2 short avoided only by the two
+        # shapes' X ranges happening not to meet.
+        lanes = P.RiserLanes([("VSS", 1.0, 40.0, 30.0, 0.23, 0.23)], bus_ys={"VSS": 30.0, "OTHER": 40.0})
+        _x, jog_y = lanes.place("VSS", 1.0, y_pad=40.0, track_y=30.0, half_w=0.23, half_h=0.23)
+        keepout = P.VIA_LANDING_HALF_Y_UM + P.METAL2_WIRE_WIDTH_UM / 2.0 + P.METAL2_MIN_SPACE_UM
+        self.assertGreaterEqual(abs(jog_y - 40.0), keepout - 1e-9)
+
+    def test_lanes_are_a_global_grid_not_a_per_riser_ladder(self):
+        # A ladder anchored on each riser's own natural x plants lanes at
+        # arbitrary real coordinates and strands up to a pitch of space on
+        # either side of each. Measured on this block, that stranding left
+        # VDD's riser at x=21.21 with no legal lane within 20 um. Every lane
+        # must be a whole number of pitches from one shared origin.
+        groups = [("A", 0.0, 0.0, 10.0, 0.23, 0.23), ("B", 1.11, 0.0, 10.0, 0.23, 0.23)]
+        lanes = P.RiserLanes(groups)
+        placed = [lanes.place(net, x, y_pad=0.0, track_y=10.0, half_w=0.23, half_h=0.23)[0] for net, x, *_ in groups]
+        steps = (placed[1] - placed[0]) / P.ROW_LANE_OFFSET_UM
+        self.assertAlmostEqual(steps, round(steps), places=9, msg=f"lanes {placed} are not on one grid")
 
 
 class BuiltLayoutConnectivityTests(unittest.TestCase):
