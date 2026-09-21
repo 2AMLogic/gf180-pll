@@ -124,3 +124,98 @@ above, per this repo's append-only evidence convention.
 - The combined region is a large overrun against `PLL-FLOORPLAN.md` section
   5's ROM budget; that is stated in full in that record's new section 5.1 and
   is dominated by `divider_chain`, not by this block.
+
+## Addendum (issue #440): block-level LVS attempted — real mismatch found, superseding "This is a DRC-clean geometry claim only" above
+
+The "What this is, and is not" section above states plainly that LVS is not
+run and not claimed for this block. Issue #440 closes that gap: a reference
+netlist now exists and the PDK's own signoff LVS deck has been run against
+it. **The result is a real mismatch, not a match**, and per this repo's own
+rule that "any LVS mismatch found is a result to record, not paper over,"
+it is recorded here. This section supersedes the older section's framing;
+it does not delete it (append-only).
+
+### The reference netlist
+
+`lock_detector` is a **committed** top per `design/netlist.sh`'s own header
+comment: `design/netlist/lock_detector.spice` already exists on `main`,
+generated from `design/lock_detector.sch` + the leaf-cell schematics it
+instantiates (`xor2_3v3.sch`, `delaywin_3v3.sch`, `nand2_3v3.sch`,
+`inv_3v3.sch`, `schmitt_3v3.sch`), no `--top` regeneration needed for this
+addendum. `layout/pll_top/lock_detector/build.py`'s new `reference_netlist()`
+(issue #440) reads that committed file and flattens it with
+`layout/harness/spice_flatten.py` — the same generic, unit-tested flattener
+`pfd_cp/block.py`'s own `reference_netlist()` uses (see that block's own
+`PROOF.md` addendum for why a flat reference is needed at all against this
+block's own flat GDS, which `build_lock_detector()` already draws with no
+`CellInstArray` sub-cell hierarchy). `layout/tests/test_lock_detector_layout.py`'s
+`ReferenceNetlistTests` checks the resulting 117-device count and top-level
+port list.
+
+### The LVS run
+
+```bash
+python3 layout/run_pv.py lvs layout/evidence/lock-detector-layout/lock_detector.gds \
+  layout/evidence/lock-detector-layout/lvs-attempt/lock_detector.spice \
+  --top lock_detector --run-dir <rundir>
+```
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `lock_detector` LVS, deck verdict | match | `ERROR : Netlists don't match` | **MISMATCH — expected, see below** |
+
+Artifacts: `lvs-attempt/lvs.stdout.log`, `lvs-attempt/lock_detector.cir`
+(extracted), `lvs-attempt/lock_detector.lvsdb`,
+`lvs-attempt/lock_detector.spice` (the flattened reference this run used).
+Named `lvs-attempt/`, not `lvs-clean/`, per the same convention
+`layout/evidence/vco-layout/PROOF-376-vbp0-fix.md` already uses for an
+interim non-matching run — `layout/lib/check-layout-status-claims.sh` only
+counts a block LVS-matched when its own `lvs-clean/*.log` contains the
+deck's `Netlists match.` verdict line, so this attempt does not (and must
+not) move this block's own count in that script or in README.md/
+`docs/chipalooza/challenge-5-proposal.md`.
+
+### Why this mismatch is not a surprise, and what closing it needs
+
+This is **not** the "DRC-clean but electrically wrong" class of finding
+`vco_block`/`divider_chain` each hit on their own first LVS pass — it is a
+generator/schematic **staleness** gap, already visible from the pin lists
+alone before looking at a single device:
+
+* The reference's own top-level ports are `UP DN LOCK VWIN LDT0 LDT1 LDT2
+  LDT3 VDD VSS` (`design/lock_detector.sch`'s own declaration). `LDT0`-`LDT3`
+  are the 4-bit static process trim DR-014 (issue #411, merged to `main`
+  2026-09-19) added to `delaywin_3v3` — but `build_lock_detector()` (this
+  block's own layout generator, landed for issue #296/#322, both **before**
+  DR-014) draws no `LDT0`-`LDT3` pin at all, and `cells.draw_delaywin()`
+  still draws the **pre-DR-014** delay cell: a fixed 4-stage inverter chain,
+  each stage loaded by one fixed-size MOS cap, no trim-select network.
+* The device counts make the gap's size concrete: the reference's
+  `delaywin_3v3` alone is **84 transistors** (4 `T`-input inverters, 4
+  stage inverters, 4 always-on load caps, and 4 stages x 4 binary-weighted
+  switched trim segments x 4 devices/segment — `design/gen_delaywin.py`'s
+  own sizing table) against `cells.draw_delaywin()`'s **12** (4 stage
+  inverters + 4 fixed-size load caps, no trim network at all — see that
+  function's own docstring, which already states the DR-014 delta as
+  future work: "each loaded by an `nfet_03v3` MOS capacitor... on its
+  output node," with no mention of a switched segment).
+
+Closing this block's own LVS-matched claim therefore needs a real, sized
+increment — implementing DR-014's trim network in `cells.py`/`build.py`
+(four `LDT0`-`LDT3` boundary pins, the per-stage switched-segment mux array,
+re-routing) — not a labelling pass or a small connectivity fix. That is
+filed as a separate follow-up,
+[issue #449](https://github.com/2AMLogic/gf180-pll/issues/449), rather than
+attempted here; attempting it under this issue's own time budget would risk
+exactly the rushed, unreviewed "two suspiciously-clean first runs"
+CLAUDE.md's verification standard warns against.
+
+### Provenance of this addendum
+
+| | |
+|---|---|
+| Attempted | 2026-09-21 |
+| Branch point | `origin/main` @ `387d03c6` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout (application, deck runner) | `KLayout 0.28.16` |
+| LVS deck | `<pdk>/libs.tech/klayout/lvs/run_lvs.py`, `--variant=D` (default `--lvs_sub=VSS`) |

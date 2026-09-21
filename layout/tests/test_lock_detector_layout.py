@@ -237,5 +237,42 @@ class StandaloneCellConnectivityTests(unittest.TestCase):
         self._assert_clean(build.build_delaywin_standalone(canvas_cls=checks.RecordingCanvas))
 
 
+class ReferenceNetlistTests(unittest.TestCase):
+    """``build.reference_netlist()`` (issue #440) -- pure Python, no
+    ``klayout.db`` needed: it only reads and flattens the already-committed
+    ``design/netlist/lock_detector.spice`` (``harness.spice_flatten``)."""
+
+    def test_committed_netlist_exists(self):
+        self.assertTrue(
+            build.NETLIST_PATH.exists(),
+            f"{build.NETLIST_PATH} -- regenerate with ./design/netlist.sh --top lock_detector",
+        )
+
+    def test_top_level_ports_are_the_full_schematic_pin_list(self):
+        ref = build.reference_netlist()
+        self.assertEqual(
+            ref.splitlines()[0],
+            ".subckt lock_detector UP DN LOCK VWIN LDT0 LDT1 LDT2 LDT3 VDD VSS",
+        )
+
+    def test_device_count_is_117_the_dr014_trimmed_delaywin_included(self):
+        # xor2 (4x nand2 = 16) + delaywin (84, DR-014's trimmed cell -- see
+        # design/gen_delaywin.py) + nand2 (4) + inv (2) + MDNW/MUPW/MCW (3,
+        # standalone) + schmitt (6) + inv (2) = 117.
+        ref = build.reference_netlist()
+        device_lines = [l for l in ref.splitlines() if l.startswith("M_")]
+        self.assertEqual(len(device_lines), 117)
+
+    def test_reference_names_ldt_pins_the_current_generator_does_not_draw(self):
+        # build_lock_detector() (this module, pre-DR-014) draws no LDT0-3
+        # pin and a 12-device (not 84-device) delaywin load -- see that
+        # function's own module-level docstring and this evidence
+        # directory's own PROOF.md for why LVS against this reference is
+        # expected to mismatch until that generator gap is closed.
+        ref = build.reference_netlist()
+        for pin in ("LDT0", "LDT1", "LDT2", "LDT3"):
+            self.assertIn(pin, ref.splitlines()[0])
+
+
 if __name__ == "__main__":
     unittest.main()
