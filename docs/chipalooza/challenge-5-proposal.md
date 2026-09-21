@@ -438,6 +438,8 @@ the DRC/LVS closure the table above records, and no more.
    guard-ring isolation alone are 57 % of the budget. A decision record
    amending the target is the likely end state, but it is deliberately
    not written yet — it needs the real post-lever floor, not this bound.
+   Tracked at issues #454 and #455 (the two levers) and #456 (the
+   amend-or-close decision, blocked on both).
 9. **Two of the four drawn blocks carry no LVS claim** (`pfd_cp`,
    `lock_detector`, §6). Their geometry is DRC-clean and their evidence
    records say plainly that a block reference netlist was out of their own

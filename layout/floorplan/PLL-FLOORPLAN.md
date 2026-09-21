@@ -607,9 +607,9 @@ blocks are *composed*, not of the leaf cells they are composed from.
 
 | Lever | Sized at | Share of the 123,660 µm² gap | Verdict |
 |---|---|---|---|
-| **1. `pfd_cp` fold** (§5.4's lever) | 7,015 µm² | 5.7 % | Worth executing on its own merits; does not close the gap. Own issue. |
+| **1. `pfd_cp` fold** (§5.4's lever) | 7,015 µm² | 5.7 % | Worth executing on its own merits; does not close the gap. Issue #455. |
 | **2. Divider-chain shared diffusion** (§5.3's "what is left is device density") | 125 µm² | **0.10 %** | **Falsified. Not worth executing.** |
-| **3. The Metal2 track band over the cells rather than above them** (unnamed until now) | 77,869 µm² | 63.0 % | This is the lever. Own issue per block. |
+| **3. The Metal2 track band over the cells rather than above them** (unnamed until now) | 77,869 µm² | 63.0 % | This is the lever. Issues #454 (`divider_chain`) and #455 (`pfd_cp`). |
 
 **Lever 2 is the one this record kept naming, and the measurement disposes of
 it.** §5.1, §5.3 and §5.4 all reason from µm²/transistor — 132,148 µm² / 452
@@ -671,7 +671,8 @@ ratified spec row on an estimate is exactly the move this repo's own
 instructions forbid ("agents do not relax the ratified spec to make results
 pass"). The amendment, if the evidence ends up supporting one, is owed after
 lever 3 is built and DRC/LVS-clean on at least the divider chain — the block
-that is 54 % of the sum. What this revision replaces is the state §5.4 left
+that is 54 % of the sum. That amendment is tracked at **#456**, blocked on
+**#454** and **#455**. What this revision replaces is the state §5.4 left
 behind: an overrun whose remaining lever was "tracked as a follow-up" with no
 issue behind it and no number attached.
 

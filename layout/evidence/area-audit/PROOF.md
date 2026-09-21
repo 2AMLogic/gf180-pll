@@ -135,7 +135,8 @@ why the choice does not change the verdict.
 **Verdict: worth executing, and it does not close the gap.** −20 % on a block
 is a real result by this repo's own precedent (#324 took the VCO's mirror
 −29 %, #344 the divider chain −12 %). It is also 1/17th of what is needed. It
-needs its own issue, because it is exactly the kind of work `pfd_cp`'s own
+needs its own issue (**#455**, which pairs it with lever 3 on the same block
+because the two interact), because it is exactly the kind of work `pfd_cp`'s own
 module docstrings record as hazardous — "four designs were tried before this
 one held" for the `cp` bridge alone — and because `pfd_cp` now carries both a
 DRC (`--offgrid`, signoff-grade) and an LVS claim (#448/#452) that a
@@ -256,7 +257,8 @@ A real implementation pays for all three. Quoted as a ceiling because that is
 what makes it decisive — if the ceiling does not close the gap, nothing
 inside it does.
 
-**Verdict: this is the lever, and it needs its own issue per block.** It is a
+**Verdict: this is the lever, and it needs its own issue per block — #454
+(`divider_chain`) and #455 (`pfd_cp`, paired with lever 1 there).** It is a
 change to the composite routing fabric (`devgen.route_net`/`NetTracks`/
 `pack_tracks`), which is shared by every cell in a block family, and every
 block it touches must be re-run through DRC and — for `divider_chain`,
@@ -310,7 +312,8 @@ DR-006 and a VCO whose whitespace is the guard-ring isolation §1 requires.
 licence to.** 1.35× is a *bound derived from unexecuted levers*, not a
 measured floor. An amendment to a ratified spec row needs the real number,
 and the real number needs lever 3 actually built and DRC/LVS-clean on at
-least the divider chain — the block that is 54 % of the sum. Writing the
+least the divider chain — the block that is 54 % of the sum. That end state is
+tracked at **#456**, blocked on #454 and #455. Writing the
 decision record first would be exactly the mistake of relaxing the ratified
 spec to make a result pass, with an estimate standing in for evidence.
 
@@ -326,5 +329,5 @@ owning issues rather than being parked as "tracked as a follow-up".
 | Each lever's expected saving estimated with shown arithmetic before it is spent | This record, "Lever 1/2/3"; reproducible via `layout/run_pv.py area` |
 | `PLL-FLOORPLAN.md` carries a new revision section with the re-derived budget | §5.5 |
 | Every block whose geometry changes is re-run through DRC/LVS | **vacuous — no geometry changes.** No GDS, generator or deck verdict is touched. The two execution issues carry this criterion. |
-| Outcome is ≤ 0.15 mm² or a decision record amending the target | **Neither, deliberately** — see "What this record does not conclude". The overrun stays tracked, now with sized levers and owning issues rather than an unnamed follow-up. |
+| Outcome is ≤ 0.15 mm² or a decision record amending the target | **Neither, deliberately** — see "What this record does not conclude". The overrun stays tracked at **#456** (blocked on #454/#455), with sized levers and owning issues rather than as an unnamed follow-up. |
 | `docs/chipalooza/challenge-5-proposal.md`'s Area row updated | Area row + "Known gaps" item 8: 2.03× on the current GDS, with the falsified device-density cause replaced by the measured one |
