@@ -330,3 +330,50 @@ result of a labels-only change.
 | Branch point | `origin/main` @ `93e36cd7` |
 | PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
 | KLayout | `KLayout 0.28.16` |
+
+## Addendum (issue #469): the glue-bus track band is packed — 14 tracks to 13
+
+This block's own Metal2 glue channel gave each of its 14 nets a dedicated
+`track_y` (`cp_array._route_side()` → `NetTracks`). It now uses
+`cp_array.pack_tracks()` — the left-edge interval-graph track assignment
+`divider_chain` has carried since #341 — and lands on **13** tracks, which is
+the band's own clique number and so the provable minimum for this geometry.
+`DNT` and `UPB` share one track, 9.26 µm apart in x against the 0.41 µm the
+clearance rule requires; the other twelve are each alone on theirs, six of
+them because this block extends them to a link column on *both* sides and
+they are therefore live across its whole width.
+
+| | before | after |
+|---|---|---|
+| `footprint` tuple | 130.310 × 66.725 µm (8,695.94 µm²) | **130.310 × 65.975 µm (8,597.20 µm²)** |
+| committed GDS bbox | 128.75 × 66.20 µm (8,523 µm²) | **128.75 × 65.45 µm (8,426 µm²)** |
+| glue-bus tracks | 14 (y 43.98 … 53.73) | **13** (y 43.98 … 52.98) |
+
+No device, riser column, link column, boundary pin or pad moved. The one new
+hazard a shared track creates — two nets' Metal2 at the same y, with this
+block's own `_extend_bus()` free to drive one through the other — is what
+`glue_bus_reach()` declares to the packing and
+`cp_array.check_track_separation()` re-proves afterwards against the x values
+the link loop really drew.
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `cp_output_stage` DRC, table `main` | clean | `DRC clean: cp_output_stage (D), 0 violations` | **PASS** |
+| `netcheck.check_gds()` Metal1-3 connectivity | no shorts, no splits | `connectivity clean: 18 nets, no shorts, no splits` | **PASS** |
+
+`drc-clean/cp_output_stage.drc.stdout.log`,
+`drc-clean/cp_output_stage_main.lyrdb` and
+`connectivity/cp_output_stage.netcheck.log` are that run's own output;
+`connectivity/cp_array.netcheck.log` is unchanged, as `cp_array` itself is
+(its own two array channels are measured in the full record and left
+unpacked — one of them cannot pack at all, the other's saving does not reach
+any block's bbox).
+
+| | |
+|---|---|
+| Run | 2026-09-22 |
+| Branch point | `origin/main` @ `62ceb087` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout | `KLayout 0.28.16` |
+
+Full record: `layout/evidence/pfd-cp-layout/PROOF-469-glue-bus-packing.md`.

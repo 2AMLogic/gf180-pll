@@ -37,7 +37,7 @@ except ImportError:
     _HAVE_KLAYOUT = False
 
 from pfd_cp import cp_output_stage as cos  # noqa: E402
-from pfd_cp import devgen, netcheck  # noqa: E402
+from pfd_cp import cp_array, devgen, netcheck  # noqa: E402
 
 
 def _by_name(devices, name):
@@ -248,6 +248,23 @@ class LinkColumnTests(unittest.TestCase):
         self.assertEqual(len(set(cols.values())), 4)
 
 
+class GlueBusReachTests(unittest.TestCase):
+    """glue_bus_reach() -- the declaration cp_array._route_side()'s packing
+    rests on (issue #469). An x this block extends a glue bus to and does not
+    declare is a cross-net Metal2 merge no DRC deck can report.
+    """
+
+    def test_every_glue_net_appears_even_with_no_reach(self):
+        reach = cos.glue_bus_reach(["A", "B", "C"], {"A": -1.0}, {})
+        self.assertEqual(sorted(reach), ["A", "B", "C"])
+        self.assertEqual(reach["B"], [])
+
+    def test_a_net_shared_on_both_sides_declares_both_columns(self):
+        reach = cos.glue_bus_reach(["VDD", "DNT"], {"VDD": -20.0, "DNT": -21.0}, {"VDD": 95.0})
+        self.assertEqual(reach["VDD"], [-20.0, 95.0])
+        self.assertEqual(reach["DNT"], [-21.0])
+
+
 class InheritedShortsConstantTests(unittest.TestCase):
     """INHERITED_ARRAY_SHORTS: cp_array's own former B0/B0B and
     B1/B1B/VDD/VSS shorts are fixed (issue #359); this constant is asserted
@@ -372,6 +389,51 @@ class BuildTests(unittest.TestCase):
         block_x1 = max(self.layout.array.footprint[2], self.layout.glue_bbox[2])
         self.assertLessEqual(left, block_x0 - cos.CONN_COLUMN_MARGIN_UM + 1e-9)
         self.assertGreaterEqual(right, block_x1 + cos.CONN_COLUMN_MARGIN_UM - 1e-9)
+
+    # --- the packed glue band (issue #469) ---
+
+    def test_the_glue_band_is_packed_not_one_track_per_net(self):
+        """14 nets, 13 tracks -- the band's own clique number, which for an
+        interval graph is the provable minimum. 14 would mean the packing
+        silently reverted to ``NetTracks``."""
+        self.assertEqual(len(self.layout.glue_bus), 14)
+        self.assertEqual(len({span[0] for span in self.layout.glue_bus.values()}), 13)
+
+    def test_the_band_top_matches_the_number_of_packed_tracks(self):
+        base_y = self.layout.glue_bbox[3] + cp_array.CHANNEL_MARGIN_UM
+        n_tracks = len({span[0] for span in self.layout.glue_bus.values()})
+        self.assertAlmostEqual(
+            self.layout.footprint[3], base_y + n_tracks * cp_array.METAL2_TRACK_PITCH_UM
+        )
+
+    def test_every_net_sharing_a_track_is_kept_apart_in_x(self):
+        """The property the whole packing rests on, re-checked here against
+        the *drawn* buses and this block's own link-column extensions -- the
+        same arithmetic ``build()`` asserts, so a future edit that packs
+        without declaring an extension fails the suite too (issue #469)."""
+        arr = self.layout.array
+        extents = {}
+        for net, (_ty, x_lo, x_hi) in self.layout.glue_bus.items():
+            xs = [x_lo, x_hi]
+            for side, bus in (("N", arr.n_bus), ("P", arr.p_bus)):
+                if net in bus:
+                    xs.append(self.layout.link_columns[f"{side}:{net}"])
+            extents[net] = cp_array._net_x_extent(xs)
+        cp_array.check_track_separation(
+            {net: span[0] for net, span in self.layout.glue_bus.items()}, extents
+        )  # must not raise
+
+    def test_the_six_both_sided_nets_are_each_alone_on_their_track(self):
+        """VDD/VSS/B0/B0B/B1/B1B are extended to a left column *and* a right
+        one, so each is live across the whole block and can share with
+        nothing. This is why the band's floor is 13 and not the 9 #455 sized
+        from the bus spans alone -- see PROOF-469-glue-bus-packing.md."""
+        by_y = {}
+        for net, (ty, _lo, _hi) in self.layout.glue_bus.items():
+            by_y.setdefault(round(ty, 6), []).append(net)
+        for net in ("VDD", "VSS", "B0", "B0B", "B1", "B1B"):
+            ty = round(self.layout.glue_bus[net][0], 6)
+            self.assertEqual(by_y[ty], [net], f"{net} unexpectedly shares a track")
 
 
 @unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")

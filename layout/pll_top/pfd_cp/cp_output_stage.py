@@ -125,6 +125,38 @@ with ``promote_pins=False``: this block promotes its own twelve boundary
 pins explicitly (:data:`BOUNDARY_PINS`), rather than exposing every internal
 node (``DNT``, ``UPT``, ``B0B``, ``B1B``, ``UPB``, ``DNB``) as a pin.
 
+A PACKED GLUE BAND, AND THE DECLARATION THAT MAKES IT SAFE (issue #469)
+-------------------------------------------------------------------------
+This is also the one call site in the family that passes ``bus_reach``, so
+its channel is assigned by ``cp_array.pack_tracks()`` (one ``track_y``
+shared by every set of nets whose drawn extents do not collide in x) rather
+than ``cp_array.NetTracks`` (one never-reused track per net) -- the same
+substitution ``divider_chain`` made at #341 and again at #454. Fourteen nets
+land on **thirteen** tracks, which is the band's own interval-graph clique
+number and therefore the provable minimum.
+
+The reason it is only thirteen, and not the nine a census of the buses alone
+suggests, is the link step above: six of the fourteen (``VDD``, ``VSS``,
+``B0``, ``B0B``, ``B1``, ``B1B``) are shared with **both** array polarities,
+so each is extended to a left link column *and* a right one and is live
+across the whole block. Those six can share a track with nothing, by
+construction, because tying the two polarities together is what this block
+is for.
+
+That same extension is why the packing cannot be switched on blind.
+:func:`_extend_bus` draws Metal2 at a net's own ``track_y``, straight
+through wherever its track-mate happens to be -- a cross-net merge that is
+one legal polygon to the DRC deck and a short to everything else. So
+:func:`build` allocates its link columns *before* routing, hands them to the
+packing as :func:`glue_bus_reach`, and then re-proves the result with
+``cp_array.check_track_separation()`` against the x values its link loop
+really drew. See ``cp_array.py``'s own "track *reuse*" section for the full
+statement of the contract, and
+``layout/evidence/pfd-cp-layout/PROOF-469-glue-bus-packing.md`` for the
+measurement (including why ``cp_array``'s own two array channels are left
+unpacked: one of them cannot pack at all, and the other's saving does not
+reach this block's bbox).
+
 CONNECTIVITY IS CHECKED, NOT ASSUMED
 --------------------------------------
 :meth:`CpOutputStageLayout.probe_pads` hands every Metal1 landing pad this
@@ -144,7 +176,7 @@ from __future__ import annotations
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Sequence
+from typing import Iterable, Sequence
 
 from . import cp_array, devgen, netcheck, pfdcp_inv
 
@@ -438,6 +470,42 @@ def link_columns(
     return {net: base_x + direction * i * pitch for i, net in enumerate(nets)}
 
 
+def glue_bus_reach(
+    nets: Iterable[str],
+    n_cols: dict[str, float],
+    p_cols: dict[str, float],
+) -> dict[str, list[float]]:
+    """``net -> every x this block will extend that net's glue-bus track out
+    to`` -- the declaration ``cp_array._route_side()``'s own ``bus_reach``
+    needs before it may pack the glue band (issue #469).
+
+    Exactly the two link-column dicts :func:`build` hands its own link loop,
+    inverted into per-net form, with an empty list for every glue net neither
+    array side shares. Pure arithmetic, so
+    ``layout/tests/test_cp_output_stage.py`` can assert the property the
+    packing's safety rests on -- *every* drawn extension is declared -- with
+    no PV environment.
+
+    WHY THIS COSTS THE PACKING MOST OF ITS THEORETICAL WIN
+    -------------------------------------------------------
+    Six of the glue block's fourteen nets (``VDD``, ``VSS``, ``B0``,
+    ``B0B``, ``B1``, ``B1B``) are shared with **both** array polarities, so
+    each is extended to a left column *and* a right column and is therefore
+    live across the block's whole width. They can share a track with nothing,
+    and no assignment can do better. Measured on the bus spans alone -- with
+    these extensions omitted -- the band's clique number is 9; with them it
+    is 13, and 13 is what :func:`cp_array.pack_tracks` achieves. The
+    difference is not slack in the algorithm, it is the cost of tying the two
+    polarities' rails and trim bits together, which is this block's own job
+    (see the module docstring's "REACHING THE ARRAY BLOCK'S NETS").
+    """
+    reach: dict[str, list[float]] = {net: [] for net in nets}
+    for cols in (n_cols, p_cols):
+        for net, x in cols.items():
+            reach[net].append(x)
+    return reach
+
+
 # ---------------------------------------------------------------------------
 # klayout-dependent geometry helpers.
 # ---------------------------------------------------------------------------
@@ -708,22 +776,34 @@ def build(outdir: Path | None = None) -> CpOutputStageLayout:  # noqa: PLR0915 -
     ]
     check_riser_columns(riser_points)
 
-    glue_tracks, glue_bus = cp_array._route_side(canvas, nets, glue_bbox, promote_pins=False)
+    # --- the array<->glue link columns, allocated BEFORE routing (issue
+    # #469). Every one of them is an x this block will extend a glue-bus
+    # track out to, and a packed track band is only safe if the packing
+    # already knows about them -- see cp_array's own "track *reuse*" section
+    # and glue_bus_reach()'s docstring. Nothing here draws geometry; the
+    # loop below consumes the identical dicts. ---
+    n_shared = [net for net in arr.n_bus if net in nets]
+    p_shared = [net for net in arr.p_bus if net in nets]
+    left_base = min(arr.footprint[0], glue_bbox[0]) - CONN_COLUMN_MARGIN_UM
+    right_base = max(arr.footprint[2], glue_bbox[2]) + CONN_COLUMN_MARGIN_UM
+    n_cols = link_columns(n_shared, left_base, -1)
+    p_cols = link_columns(p_shared, right_base, +1)
+
+    glue_tracks, glue_bus = cp_array._route_side(
+        canvas, nets, glue_bbox, promote_pins=False,
+        bus_reach=glue_bus_reach(nets, n_cols, p_cols),
+    )
 
     # --- link every net this block shares with the array block: extend that
     # side's Metal2 bus into a clear column, extend this block's own track to
     # the same column, join with a Metal3 vertical. N side goes left, P side
     # right -- never across each other (see module docstring). ---
-    n_shared = [net for net in arr.n_bus if net in glue_bus]
-    p_shared = [net for net in arr.p_bus if net in glue_bus]
-    left_base = min(arr.footprint[0], glue_bbox[0]) - CONN_COLUMN_MARGIN_UM
-    right_base = max(arr.footprint[2], glue_bbox[2]) + CONN_COLUMN_MARGIN_UM
     columns: dict[str, float] = {}
-    for side, shared, bus, base, direction in (
-        ("N", n_shared, arr.n_bus, left_base, -1),
-        ("P", p_shared, arr.p_bus, right_base, +1),
+    extended_at: dict[str, list[float]] = {net: [] for net in glue_bus}
+    for side, cols, bus, direction in (
+        ("N", n_cols, arr.n_bus, -1),
+        ("P", p_cols, arr.p_bus, +1),
     ):
-        cols = link_columns(shared, base, direction)
         for net, x in cols.items():
             columns[f"{side}:{net}"] = x
             track_y, x_lo, x_hi = bus[net]
@@ -731,6 +811,21 @@ def build(outdir: Path | None = None) -> CpOutputStageLayout:  # noqa: PLR0915 -
             _extend_bus(canvas, track_y, x, x_lo if direction < 0 else x_hi)
             _extend_bus(canvas, glue_y, x, glue_lo if direction < 0 else glue_hi)
             _link_tracks(canvas, x, track_y, glue_y)
+            extended_at[net].append(x)
+
+    # --- the packed band's own re-proof, against the x values the loop above
+    # really drew rather than against the reach it was handed (see
+    # cp_array.check_track_separation()). Two glue nets sharing one track_y
+    # are kept apart only in x, and an extension added here without being
+    # declared to the packing is a cross-net Metal2 merge the DRC deck cannot
+    # report -- so this fails the build instead. ---
+    cp_array.check_track_separation(
+        {net: span[0] for net, span in glue_bus.items()},
+        {
+            net: cp_array._net_x_extent([span[1], span[2], *extended_at[net]])
+            for net, span in glue_bus.items()
+        },
+    )
 
     # --- boundary pins. IBN/ICN/IBP/ICP are pure array nets (no glue
     # terminal), so their pin is the array's own already-routed landing pad;

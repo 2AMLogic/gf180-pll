@@ -309,3 +309,25 @@ clean by construction, same as every prior run of this file, since layer
 See `layout/evidence/pfd-cp-layout/PROOF-455-fold.md` for the block
 measurement this follows from, and `PLL-FLOORPLAN.md` §5.10 for the re-run
 whole-chip arithmetic.
+
+## Addendum (issue #469): `PFD_CP`'s rectangle follows the block down one more track
+
+`skeleton.PFD_CP_STANDALONE_H_UM` records `pfd_cp`'s own standalone footprint,
+so packing `cp_output_stage`'s glue-bus track band (14 tracks to 13) shrinks
+this rectangle with the block: **347.41 × 76.23 → 347.41 × 75.48 µm**. Width
+is unchanged, so no other block in the skeleton moves and the skeleton's own
+bounding box is unchanged (`DIVIDER_LOCK`'s width still sets it). Regenerated
+here rather than left to drift; `test_gds_reproducibility.py` rebuilds this
+artifact from `floorplan.skeleton` on every run, and
+`test_floorplan_skeleton.py`'s `RecordedFootprintDriftTests` rebuilds the real
+block and asserts the recorded constant matches it.
+
+Re-run through the same foundry deck (`gf180mcuD`, open_pdks
+`c6d73a35f524070e85faff4a6a9eef49553ebc2b`, KLayout 0.28.16, table `main`,
+`--variant=D`): `DRC clean: pll_floorplan_skeleton (D), 0 violations` — clean
+by construction, as every prior run of this file, since layer (0, 0) still
+carries no rule in this deck.
+
+See `layout/evidence/pfd-cp-layout/PROOF-469-glue-bus-packing.md` for the block
+measurement this follows from, and `PLL-FLOORPLAN.md` §5.11 for the re-run
+whole-chip arithmetic.

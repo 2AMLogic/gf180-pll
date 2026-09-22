@@ -210,7 +210,7 @@ from __future__ import annotations
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from . import cp_leg_n, cp_leg_p, devgen, netcheck
 
@@ -754,7 +754,8 @@ def _route_side(
     channel_margin_um: float = CHANNEL_MARGIN_UM,
     min_pitch: float = RISER_MIN_PITCH_UM,
     promote_pins: bool = True,
-) -> tuple[NetTracks, dict[str, tuple[float, float, float]]]:
+    bus_reach: Mapping[str, Sequence[float]] | None = None,
+) -> tuple[NetTracks | PackedTracks, dict[str, tuple[float, float, float]]]:
     """Mesh-route every net in ``nets`` (dict of net -> its own Metal1 pad
     boxes) to its own dedicated Metal2 track in one channel above
     ``side_bbox``'s own topmost drawn edge, then promote each as a top-level
@@ -781,8 +782,22 @@ def _route_side(
     boundary pins explicitly. Geometry drawn is identical either way --
     ``canvas.pin()`` only labels and records (see ``_canvas.py``'s own
     docstring).
+
+    ``bus_reach`` switches this side's track assignment from
+    :class:`NetTracks` (one never-reused track per net, the default and what
+    this module's own two array channels still use) to :func:`pack_tracks`
+    (one track shared by any set of nets whose drawn extents do not collide
+    in x). It maps each net to **every x this caller will later extend that
+    net's Metal2 bus out to** -- an empty sequence for a net the caller will
+    not extend at all. That declaration is the safety precondition, not a
+    hint: see this module's own "track *reuse*" section for why an
+    undeclared extension is a short the DRC deck cannot report, and
+    :func:`check_track_separation` for the post-hoc re-proof a caller owes
+    against the extensions it actually drew. Every key must name a net in
+    ``nets``; a net absent from ``bus_reach`` entirely is treated as having
+    no reach beyond its own risers.
     """
-    tracks = NetTracks(base_y=side_bbox[3] + channel_margin_um)
+    base_y = side_bbox[3] + channel_margin_um
 
     flat_nets: list[str] = []
     flat_boxes: list[tuple[float, float, float, float]] = []
@@ -792,6 +807,19 @@ def _route_side(
             flat_boxes.append(box)
     flat_points = [(flat_nets[i], *pad_center(flat_boxes[i])) for i in range(len(flat_boxes))]
     planned = check_riser_columns(flat_points, min_pitch)
+
+    if bus_reach is None:
+        tracks: NetTracks | PackedTracks = NetTracks(base_y=base_y)
+    else:
+        unknown = sorted(set(bus_reach) - set(nets))
+        if unknown:
+            raise ValueError(f"cp_array._route_side(): bus_reach names nets this side does not route: {unknown}")
+        reach_x: dict[str, list[float]] = {net: [] for net in nets}
+        for net, rx, _ry in planned:
+            reach_x[net].append(rx)
+        for net, xs in bus_reach.items():
+            reach_x[net].extend(xs)
+        tracks = PackedTracks(pack_tracks(reach_x, base_y))
 
     bus_x: dict[str, list[float]] = {}
     seen_riser: set[tuple[str, float, float]] = set()
@@ -833,6 +861,183 @@ def _route_side(
 # mismatch. ``layout/tests/test_canvas_nettracks.py`` asserts the equality on
 # every test run so that edit fails loudly instead (issue #432).
 NetTracks = _canvas.NetTracks
+
+
+# --- track *reuse* for a band whose nets are mostly local (issue #469) ------
+#
+# :class:`NetTracks` hands every net its own never-reused ``track_y``, so a
+# band costs ``n_nets * METAL2_TRACK_PITCH_UM`` of height regardless of how
+# much of the band's width each net actually occupies. That is the right
+# trade for a band whose nets are nearly all full-width anyway (this module's
+# own two array-side channels -- see "WHEN THIS DOES NOT HELP" below), and
+# the wrong one for ``cp_output_stage``'s own glue bus, where 14 nets share
+# one band and most of them span a fraction of its width.
+#
+# :func:`pack_tracks` is the same substitution ``divider_chain/devgen.py``
+# already carries (issues #341 and #454, one level down each time): the
+# *track assignment* step a real channel router performs, reusing one
+# ``track_y`` for every net whose drawn Metal2 extent stays
+# :data:`METAL2_TRACK_PITCH_UM` - :data:`METAL2_WIRE_WIDTH_UM` clear of every
+# net already on that track. It is the textbook left-edge algorithm for
+# interval-graph track assignment, which is known to use the *minimum*
+# possible number of tracks -- the interval graph's own clique number, i.e.
+# the largest number of nets live at any single x -- so a band packed this
+# way cannot be improved by a smarter assignment, only by moving the
+# geometry that sets the clique.
+#
+# WHAT A CALLER MUST DECLARE, AND WHY GETTING IT WRONG IS INVISIBLE
+# ------------------------------------------------------------------
+# Two nets on one ``track_y`` are two same-layer Metal2 runs at the same y,
+# kept apart only by their x extents. A *parent* block that later extends one
+# of those buses sideways (``cp_output_stage._extend_bus()``, how this
+# package links a sub-block's bus to a link column) can drive it straight
+# through the other net's bus: a cross-net Metal2 merge, which is a legal
+# polygon to the DRC deck and a short to nothing else -- precisely the class
+# of defect ``cp.py``'s own docstring records four failed routing designs
+# for. So :func:`_route_side`'s ``bus_reach`` argument is not an optimisation
+# hint, it is the safety precondition: every x a caller will later extend a
+# net's bus to has to be declared there, and :func:`check_track_separation`
+# is the post-hoc re-proof against the x values a caller actually drew.
+#
+# WHEN THIS DOES NOT HELP (measured, issue #469)
+# ------------------------------------------------
+# A band every one of whose nets is reached by a parent from the *same* side
+# cannot be packed at all: every such net's extent runs out to that side's
+# own link-column region, so they all overlap there and the clique number
+# equals the net count. That is this module's own N and P array channels --
+# ``cp_output_stage`` extends 7 of the N side's 9 buses left and 7 of the P
+# side's 9 right -- which is why :func:`build` still routes both with
+# :class:`NetTracks` and passes no ``bus_reach``: measured, the P channel
+# packs 9 nets onto 9 tracks (no change at all), and the N channel 9 onto 7,
+# but the N channel's top sits 2.11 um below this block's own
+# ``footprint[3]`` (which the P channel sets) and so buys nothing either.
+# See ``layout/evidence/pfd-cp-layout/PROOF-469-glue-bus-packing.md``.
+def _net_x_extent(xs: Sequence[float]) -> tuple[float, float]:
+    """The x range one net's drawn Metal2 geometry occupies at its own
+    ``track_y``, given every x that net has a riser or a bus end at.
+
+    Not simply :func:`_route_side`'s own bus rectangle
+    (``x_lo - METAL2_WIRE_WIDTH_UM/2 .. x_hi + METAL2_WIRE_WIDTH_UM/2``): at
+    each extreme x the widest drawn shape is that riser's own Metal2 landing
+    square (:func:`_riser`'s ``half_v2 = VIA2_SIZE_UM/2 + VIA_ENCLOSURE_UM``
+    = 0.22 um, against the bus wire's own 0.17 um half-width), and a parent's
+    own link riser (``cp_output_stage._link_tracks()``) lands the same square
+    at whatever x it reaches in at. Taking the wider of the two is what keeps
+    a net's true leftmost/rightmost drawn edge from being under-reported --
+    the identical derivation ``divider_chain/devgen.py``'s own
+    ``_net_x_extent()`` states, for the same reason.
+    """
+    xs = list(xs)
+    if not xs:
+        raise ValueError("_net_x_extent(): no x coordinates")
+    half = max(METAL2_WIRE_WIDTH_UM / 2.0, VIA2_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM)
+    return (min(xs) - half, max(xs) + half)
+
+
+def check_track_separation(
+    track_y: Mapping[str, float],
+    extents: Mapping[str, tuple[float, float]],
+    clearance: float = METAL2_TRACK_PITCH_UM - METAL2_WIRE_WIDTH_UM,
+) -> None:
+    """Raise unless every two nets assigned the *same* ``track_y`` keep at
+    least ``clearance`` between their drawn x extents.
+
+    :func:`pack_tracks` produces an assignment with this property by
+    construction and calls this on its own output; the reason it is a
+    separate public function is that the property has to survive the
+    *caller's* own later geometry too. ``cp_output_stage.build()`` re-checks
+    it against the x values its link loop really extended each bus to, not
+    against the ``bus_reach`` it declared beforehand -- so an extension added
+    later without updating that declaration fails the build instead of
+    silently drawing a cross-net Metal2 merge no DRC deck can report (see
+    this section's own module-level comment, and ``netcheck.py``'s).
+    """
+    by_track: dict[float, list[str]] = {}
+    for net, y in track_y.items():
+        by_track.setdefault(round(y, 6), []).append(net)
+    for y, nets in sorted(by_track.items()):
+        ordered = sorted(nets, key=lambda n: extents[n][0])
+        for a, b in zip(ordered, ordered[1:]):
+            gap = extents[b][0] - extents[a][1]
+            if gap < clearance - 1e-9:
+                raise ValueError(
+                    f"cp_array: nets {a!r} {extents[a]} and {b!r} {extents[b]} share "
+                    f"track_y={y} but are only {gap:.3f} um apart; needs >= {clearance}"
+                )
+
+
+def pack_tracks(
+    nets: Mapping[str, Sequence[float]],
+    base_y: float,
+    *,
+    pitch: float = METAL2_TRACK_PITCH_UM,
+    clearance: float = METAL2_TRACK_PITCH_UM - METAL2_WIRE_WIDTH_UM,
+) -> dict[str, float]:
+    """Assign every net in ``nets`` (net -> every x its own Metal2 geometry
+    reaches: its risers, and any x a parent will later extend its bus to) a
+    ``track_y``, reusing one track across any nets whose extents
+    (:func:`_net_x_extent`) stay ``clearance`` apart.
+
+    ``clearance`` defaults to the same margin :class:`NetTracks` already
+    keeps *between* two tracks in y (``METAL2_TRACK_PITCH_UM -
+    METAL2_WIRE_WIDTH_UM`` = 0.41 um, over ``M2.2a``'s 0.28 um minimum Metal2
+    spacing), reused here along the x axis because it is the same rule --
+    exactly as ``divider_chain/devgen.pack_tracks()`` derives it.
+
+    Deterministic: nets are processed in increasing left-edge order with the
+    net name as the tie-break, so the same geometry always yields the same
+    band.
+    """
+    extents = {net: _net_x_extent(xs) for net, xs in nets.items()}
+
+    # Left-edge algorithm: place each net on the first track whose
+    # most-recent occupant ends early enough to clear this net's own left
+    # edge by `clearance`; open a new track only when none does.
+    order = sorted(extents, key=lambda n: (extents[n][0], n))
+    track_right: list[float] = []
+    track_of: dict[str, int] = {}
+    for net in order:
+        lo, hi = extents[net]
+        for i, right in enumerate(track_right):
+            if lo >= right + clearance:
+                track_right[i] = hi
+                track_of[net] = i
+                break
+        else:
+            track_right.append(hi)
+            track_of[net] = len(track_right) - 1
+
+    assignment = {net: base_y + i * pitch for net, i in track_of.items()}
+    check_track_separation(assignment, extents, clearance)
+    return assignment
+
+
+class PackedTracks:
+    """A :class:`NetTracks`-shaped read-only view over an already-computed
+    :func:`pack_tracks` assignment.
+
+    :func:`_route_side` reads a track allocator through exactly two members
+    -- ``get(net)`` while drawing, and ``_next_y`` (one pitch above the
+    topmost track) when its caller sizes the band -- so a packed band drops
+    into the same call site as an unpacked one with nothing else changed.
+    Unlike :class:`NetTracks` this allocates nothing on demand: a net the
+    packing was never given is a caller bug and raises, rather than quietly
+    opening a fresh track above the band the caller has already measured.
+    """
+
+    def __init__(self, assignment: Mapping[str, float], pitch: float = METAL2_TRACK_PITCH_UM) -> None:
+        self._assigned = dict(assignment)
+        self._pitch = pitch
+        self._next_y = (max(self._assigned.values()) + pitch) if self._assigned else 0.0
+
+    def get(self, net: str) -> float:
+        if net not in self._assigned:
+            raise KeyError(f"cp_array.PackedTracks: net {net!r} was not in the packed assignment")
+        return self._assigned[net]
+
+    @property
+    def n_tracks(self) -> int:
+        return len(set(self._assigned.values()))
 
 
 def _diode_connect(canvas: devgen.Canvas, gate_pad: tuple, top_pad: tuple, wire_w: float = devgen.METAL1_WIRE_WIDTH_UM) -> None:

@@ -227,3 +227,28 @@ untouched.
 outputs. Driven by issue #455's work on `pfd_cp`, the block that composes
 this one — full record at
 `layout/evidence/pfd-cp-layout/PROOF-455-fold.md`.
+
+## Addendum (issue #469): 0.75 µm inherited from `cp_output_stage`'s packed glue bus
+
+| | before | after |
+|---|---|---|
+| `footprint` tuple | 347.410 × 73.225 µm | **347.410 × 72.475 µm** |
+| committed GDS bbox | 344.98 × 74.30 µm (25,630 µm²) | **344.98 × 73.55 µm (25,372 µm²)** |
+| backbone rows | y 56.48 … 60.23 | y 55.73 … 59.48 |
+
+Nothing in `cp.py` changed. Issue #469 packed `cp_output_stage`'s own glue-bus
+track band from 14 tracks to 13 (`cp_array.pack_tracks()` in place of
+`NetTracks`), which makes that sub-block 0.75 µm shorter and moves this
+block's backbone band down with it. One of `cp_output_stage`'s tracks now
+carries two nets (`DNT` and `UPB`, 9.26 µm apart in x); this module reaches
+every glue bus at that bus's own edge and extends none of them, so the
+invariant a packed band adds is `cp_output_stage`'s to hold — it re-proves it
+on every build with `cp_array.check_track_separation()`.
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `cp` DRC, table `main` (default) | clean | `DRC clean: cp (D), 0 violations` | **PASS** |
+| `netcheck.check_gds()` Metal1-3 connectivity | no shorts, no splits | `connectivity clean: 22 nets, no shorts, no splits` | **PASS** |
+
+`drc-clean/` and `connectivity/` in this directory are the new runs' outputs.
+Full record: `layout/evidence/pfd-cp-layout/PROOF-469-glue-bus-packing.md`.
