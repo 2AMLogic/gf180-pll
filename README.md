@@ -95,7 +95,12 @@ measurements/  silicon characterization (empty until there is silicon)
 ```
 
 Start with `spec/decision-records/` for *why the design is what it is*, and
-`sim/README.md` for *how results are recorded and how to reproduce them*.
+`sim/README.md` for *how results are recorded and how to reproduce them*. An
+integrator taking this block — top cell, port list, netlist/GDS paths,
+measured area, maturity rung — reads
+[`manifests/integrator.json`](manifests/integrator.json); a repo that
+declares itself a consumer of this block is tracked in
+[`spec/pll.md#consumers`](spec/pll.md#consumers).
 
 ## Where this block stands against the evidence ladder
 
