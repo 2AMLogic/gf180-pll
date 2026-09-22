@@ -259,3 +259,53 @@ carried the ~0.571 × 10⁶ µm² figure since this PR's own change to
 `DIVIDER_CHAIN_STANDALONE_H_UM`, independent of when this committed artifact
 catches up. See `PLL-FLOORPLAN.md` §5.8 for the divider-chain measurement
 this follows from.
+
+---
+
+## Re-run, issue #455: `PFD_CP` shrinks by the fold; the skeleton's bounding box does not move
+
+The same propagation mechanism the #454 section above describes, one more
+merge on: `skeleton.py` records `pfd_cp`'s own standalone footprint as
+`PFD_CP_STANDALONE_W_UM`/`_H_UM`, and issue #455 folded `pfd` into `cp`'s own
+empty band and corrected the Metal2 trunk band's pitch and base — 434.31 ×
+80.73 → **347.41 × 76.23 µm**. Regenerated here rather than left to drift;
+`layout/tests/test_gds_reproducibility.py` would have caught it either way.
+
+| | committed before | regenerated (#455) |
+|---|---|---|
+| Bounding box | `(0, −15) … (1333.66, 469.52)` µm | **unchanged** |
+| Merged 0/0 area | 431,118.5 µm² | **422,539.7 µm²** (−8,578.8 µm²) |
+| `total_extent_um2()` (block rectangles only) | 634,759 µm² | **626,180 µm²** |
+| Shapes on layer 0/0 | 32 | 32 (unchanged — no block added or removed) |
+
+**Only the `PFD_CP` rectangle changes size**, and the −8,578.8 µm² of merged
+0/0 area is exactly `pfd_cp`'s own footprint reduction — nothing is
+double-counted and nothing else moved area. `LOOP_FILTER` and `VCO_CORE`
+*do* shift 86.90 µm left (their x is defined off `PFD_CP.x + PFD_CP.w +
+DOMAIN_SPACING`), but the skeleton's overall bounding box is set by
+`DIVIDER_LOCK`'s own 1333.66 µm width, which they stay well inside, and its
+height by `LOOP_FILTER`'s 195 µm, which `PFD_CP` at 76.23 µm does not
+approach. So this is a pure area reduction, not a re-placement.
+
+**A note on the #454 section's own figures, which had gone stale.** That
+section records a regenerated bounding box of `(0, −15) … (1333.66, 428.37)`
+µm, 376,238.4 µm² and a `total_extent_um2()` of 571,300 µm². The committed
+artifact at the branch point of this run measures 469.52 µm tall,
+431,118.5 µm² and 634,759 µm² — the difference is issue #449's
+`lock_detector` growth (7,468 → 30,586 µm², `PLL-FLOORPLAN.md` §5.9), which
+propagated into `LOCK_DETECTOR_STANDALONE_W_UM`/`_H_UM` and from there into
+this artifact through exactly the mechanism both the #461 and #454 sections
+name. The *artifact* tracked it (the reproducibility guard has been green
+throughout); this *record's prose* did not. Stated here rather than silently
+corrected, and the table above is measured against the real committed file,
+not against that prose.
+
+Re-run through the same foundry deck (`gf180mcuD`, open_pdks
+`c6d73a35f524070e85faff4a6a9eef49553ebc2b`, KLayout 0.28.16, table `main`,
+`--variant=D`): `DRC clean: pll_floorplan_skeleton (D), 0 violations` —
+clean by construction, same as every prior run of this file, since layer
+(0, 0) still carries no rule in this deck.
+
+See `layout/evidence/pfd-cp-layout/PROOF-455-fold.md` for the block
+measurement this follows from, and `PLL-FLOORPLAN.md` §5.10 for the re-run
+whole-chip arithmetic.

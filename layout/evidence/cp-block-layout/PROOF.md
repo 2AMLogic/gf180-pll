@@ -190,3 +190,40 @@ result of a labels-only change.
 | Branch point | `origin/main` @ `93e36cd7` |
 | PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
 | KLayout | `KLayout 0.28.16` |
+
+---
+
+## Addendum (issue #455): trunk-row pitch corrected — 26,062 → 25,630 µm²
+
+`BACKBONE_PITCH_UM`, the Y pitch between two of this block's six Metal2
+backbone trunk rows, was `cp_array.RISER_MIN_PITCH_UM` (1.00 µm). That
+constant is `cp_array`'s minimum centre-to-centre separation between two
+Metal3 *riser columns* — an **X** pitch between vertical Metal3 strips,
+sized against `M3.2a`. A trunk row is a horizontal **Metal2** strip, and the
+pitch two of those need is `cp_array.METAL2_TRACK_PITCH_UM` (0.75 µm), which
+leaves 0.75 − 0.44 = 0.31 µm between two adjacent rows' Via2 landing pads,
+above `M2.2a`'s 0.28 µm minimum. `cp_output_stage`'s own glue bus inside
+this very block already stacks 14 tracks at that pitch *with* Via2 landings
+on them and is signoff-clean, so this is a correction to the wrong constant
+being used for the axis, not a new tolerance being claimed.
+
+| | before | after |
+|---|---|---|
+| `footprint` tuple | 347.410 × 74.725 µm | **347.410 × 73.225 µm** |
+| committed GDS bbox | 344.98 × 75.55 µm (26,062 µm²) | **344.98 × 74.30 µm (25,630 µm²)** |
+| backbone rows | y 56.48 … 61.48 (1.00 µm pitch) | y 56.48 … 60.23 (0.75 µm pitch) |
+
+Nothing else about this block changes: the same six nets bridge across the
+same two sub-blocks by the same Riser+Trunk construction at the same X
+columns, no boundary pin moves, and `cp_output_stage`/`cp_dumpbuf` are
+untouched.
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `cp` DRC, table `main` (default) | clean | `DRC clean: cp (D), 0 violations` | **PASS** |
+| `netcheck.check_gds()` Metal1-3 connectivity | no shorts, no splits | `connectivity clean: 22 nets, no shorts, no splits` | **PASS** |
+
+`drc-clean/` and `connectivity/` in this directory are the new runs'
+outputs. Driven by issue #455's work on `pfd_cp`, the block that composes
+this one — full record at
+`layout/evidence/pfd-cp-layout/PROOF-455-fold.md`.

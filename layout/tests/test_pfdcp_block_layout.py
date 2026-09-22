@@ -103,16 +103,18 @@ class BuildTests(unittest.TestCase):
         self.assertGreater(x1 - x0, 0.0)
         self.assertGreater(y1 - y0, 0.0)
 
+    @staticmethod
+    def _placed(box, offset):
+        dx, dy = offset
+        return (box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy)
+
     def test_footprint_encloses_both_pfd_and_cp(self):
         fx0, fy0, fx1, fy1 = self.layout.footprint
-        dx, dy = self.layout.cp_offset
-        cp_box = (
-            self.layout.cp.footprint[0] + dx,
-            self.layout.cp.footprint[1] + dy,
-            self.layout.cp.footprint[2] + dx,
-            self.layout.cp.footprint[3] + dy,
+        boxes = (
+            self._placed(self.layout.pfd.footprint(), self.layout.pfd_offset),
+            self._placed(self.layout.cp.footprint, self.layout.cp_offset),
         )
-        for box in (self.layout.pfd.footprint(), cp_box):
+        for box in boxes:
             self.assertLessEqual(fx0, box[0])
             self.assertLessEqual(fy0, box[1])
             self.assertGreaterEqual(fx1, box[2])
@@ -125,32 +127,72 @@ class BuildTests(unittest.TestCase):
         for net in block.BOUNDARY_PINS:
             self.assertEqual(len(self.layout.pins[net]), 1, f"{net}: {self.layout.pins[net]}")
 
-    def test_pfd_placed_at_the_origin(self):
-        # pfd's own drawn geometry is unmodified by this composition (placed
-        # at a zero offset), so any coordinate pfd.py itself records stays
-        # valid in this block's own frame -- same invariant cp.py's own
-        # build() holds for cp_output_stage.
-        self.assertEqual(self.layout.pfd.footprint(), block.pfd.build().footprint())
+    def test_cp_placed_at_the_origin(self):
+        # Since issue #455's fold it is `cp`, not `pfd`, that lands at a zero
+        # offset -- so every coordinate cp.py itself records (footprint, pins,
+        # backbone_rows, stage.glue_bus) stays valid unmodified in this
+        # block's own frame. Same invariant cp.py's own build() holds for
+        # cp_output_stage.
+        self.assertEqual(self.layout.cp_offset, (0.0, 0.0))
 
-    def test_cp_is_placed_clear_of_pfd(self):
-        dx, dy = self.layout.cp_offset
-        self.assertGreater(dx, 0.0)
-        cp_x0_g = self.layout.cp.footprint[0] + dx
-        self.assertGreaterEqual(cp_x0_g, self.layout.pfd.footprint()[2])
+    def test_the_fold_puts_pfd_inside_cps_own_extent(self):
+        # Issue #455 lever 1: pfd is placed in the empty band above
+        # cp_dumpbuf rather than beside cp, so the block's own bounding box
+        # is cp's own bounding box (plus this block's four trunk rows). If
+        # pfd ever stopped fitting there the fold would silently grow the
+        # block instead of shrinking it -- build() raises in that case; this
+        # asserts the property that makes the saving real.
+        pfd_box = self._placed(self.layout.pfd.footprint(), self.layout.pfd_offset)
+        cp_box = self._placed(self.layout.cp.footprint, self.layout.cp_offset)
+        self.assertLessEqual(pfd_box[2], cp_box[2])
+        self.assertLessEqual(pfd_box[3], cp_box[3])
+        self.assertEqual(self.layout.footprint[2] - self.layout.footprint[0],
+                         cp_box[2] - cp_box[0])
+
+    def test_pfd_sits_clear_above_cp_dumpbuf(self):
+        # The band pfd folds into is the one above cp_dumpbuf: pfd's own
+        # bottom must clear cp_dumpbuf's own topmost drawn edge by at least
+        # BLOCK_GAP_UM, and its left edge must clear everything cp itself
+        # draws above that edge (its backbone trunk rows and their
+        # dumpbuf-side Metal3 risers) by the same margin.
+        pfd_box = self._placed(self.layout.pfd.footprint(), self.layout.pfd_offset)
+        dumpbuf_top = self.layout.cp.dumpbuf.footprint[3] + self.layout.cp.dumpbuf_offset[1]
+        self.assertGreaterEqual(pfd_box[1] - dumpbuf_top, block.BLOCK_GAP_UM - 1e-9)
+        self.assertGreater(pfd_box[0], self.layout.cp.stage.footprint[2])
 
     def test_four_distinct_trunk_rows_are_used(self):
         rows = self.layout.trunk_rows
         self.assertEqual(set(rows), {"UP", "DN", "VDD", "VSS"})
         ys = sorted(rows.values())
         for a, b in zip(ys, ys[1:]):
-            self.assertGreaterEqual(b - a, block.BACKBONE_PITCH_UM - 1e-9)
+            self.assertAlmostEqual(b - a, block.BACKBONE_PITCH_UM)
 
-    def test_trunk_rows_sit_above_both_placed_blocks(self):
-        dx, dy = self.layout.cp_offset
-        cp_top_g = self.layout.cp.footprint[3] + dy
-        pfd_top = self.layout.pfd.footprint()[3]
+    def test_trunk_rows_continue_cps_own_backbone_band_at_cps_own_pitch(self):
+        # Issue #455 lever 2, at the only level this block owns any track at
+        # all: its four trunk rows are the next four rows of cp's own Metal2
+        # backbone band, not a fresh band a full BACKBONE_MARGIN_UM above it.
+        # Four rows still above every row cp drew (no two nets share a row),
+        # and the lowest of them exactly one track pitch above cp's highest.
+        cp_rows = sorted(y + self.layout.cp_offset[1] for y in self.layout.cp.backbone_rows.values())
+        ours = sorted(self.layout.trunk_rows.values())
+        self.assertGreater(ours[0], cp_rows[-1])
+        self.assertAlmostEqual(ours[0] - cp_rows[-1], block.BACKBONE_PITCH_UM)
+
+    def test_trunk_rows_sit_above_both_placed_blocks_drawn_geometry(self):
+        pfd_top = self._placed(self.layout.pfd.footprint(), self.layout.pfd_offset)[3]
         for y in self.layout.trunk_rows.values():
-            self.assertGreaterEqual(y, max(pfd_top, cp_top_g) + block.BACKBONE_MARGIN_UM - 1e-9)
+            self.assertGreaterEqual(y, pfd_top + block.BACKBONE_MARGIN_UM - 1e-9)
+
+    def test_the_trunk_band_uses_the_metal2_track_pitch_not_the_riser_column_pitch(self):
+        # A trunk row is a horizontal Metal2 strip; the pitch two of them
+        # need is the Metal2 track pitch (0.75 um), not cp_array's minimum
+        # Metal3 *riser column* X pitch (1.0 um), which is what both this
+        # module and cp.py used before issue #455. Asserted so the two
+        # constants cannot silently drift back apart.
+        from pfd_cp import cp_array  # noqa: PLC0415
+
+        self.assertEqual(block.BACKBONE_PITCH_UM, cp_array.METAL2_TRACK_PITCH_UM)
+        self.assertEqual(block.BACKBONE_PITCH_UM, block.cp.BACKBONE_PITCH_UM)
 
 
 @unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")

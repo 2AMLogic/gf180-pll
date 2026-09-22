@@ -203,15 +203,21 @@ DOMAIN_SPACING = 40.0  # um between domain guard rings/trunks (section 2)
 # whenever klayout.db *is* importable, so the two views cannot drift
 # silently.
 #
-# FAIL-LOUD: 434.31 x 80.73 um (35,059.67 um^2 = 0.0351 mm^2) against
-# PLL-FLOORPLAN.md section 5's 0.010-0.020 mm^2 ROM estimate -- a 1.76-3.5x
-# overrun (and 2.34x the 150x100 um / 0.015 mm^2 placeholder this replaces),
-# stated here rather than silently absorbed, following the same
-# "FAIL-LOUD condition for a future pass" convention the VCO/divider-chain
-# docstrings above already use. See PLL-FLOORPLAN.md section 5's own
-# revision note for the re-run whole-chip arithmetic.
-PFD_CP_STANDALONE_W_UM = 434.31
-PFD_CP_STANDALONE_H_UM = 80.73
+# FAIL-LOUD: 347.41 x 76.23 um (26,481.33 um^2 = 0.0265 mm^2) against
+# PLL-FLOORPLAN.md section 5's 0.010-0.020 mm^2 ROM estimate -- still a
+# 1.32-2.65x overrun, stated here rather than silently absorbed, following
+# the same "FAIL-LOUD condition for a future pass" convention the VCO/
+# divider-chain docstrings above already use. See PLL-FLOORPLAN.md section
+# 5's own revision notes for the re-run whole-chip arithmetic.
+#
+# Was 434.31 x 80.73 um (0.0351 mm^2) through issue #386. Issue #455 folded
+# pfd into cp's own empty band above cp_dumpbuf (so the block is now exactly
+# as wide as cp) and continued cp's own Metal2 trunk band rather than
+# starting a fresh one above it: -86.90 um of width and -4.50 um of height,
+# -8,578 um^2 (-24.5 %) on the footprint tuple this constant records. See
+# layout/evidence/pfd-cp-layout/PROOF-455-fold.md.
+PFD_CP_STANDALONE_W_UM = 347.41
+PFD_CP_STANDALONE_H_UM = 76.23
 PFD_CP = Block("pfd_cp", x=0.0, y=0.0, w=PFD_CP_STANDALONE_W_UM, h=PFD_CP_STANDALONE_H_UM)
 # LOOP_FILTER's width/height are sized to actually contain its two real
 # sub-block geometries below (C1 array + C2, each with margin) -- see the
