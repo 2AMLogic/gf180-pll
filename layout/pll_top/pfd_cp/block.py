@@ -55,6 +55,60 @@ and ``dbu`` (0.001, ``rowgen.LAYER``) are identical to ``devgen.LAYER``'s,
 so reading it into a ``devgen.Canvas``'s ``klayout.db.Layout`` needs no
 layer remapping.
 
+THE FOLD: ``pfd`` GOES *INSIDE* ``cp``'s OWN EMPTY BAND, NOT BESIDE IT
+-----------------------------------------------------------------------
+Through issue #386 this module placed ``pfd`` at the origin and ``cp``
+:data:`BLOCK_GAP_UM` to its right, which added ``pfd``'s full 80.90 um of
+width to a block whose height was set entirely by ``cp``. The column that
+bought was 21.0 % filled, and the 58.24 um of it above ``pfd`` was 2.2 %
+filled: 4,712 um^2 of nothing, paid for at full price.
+
+``cp`` has a hole of its own exactly big enough. ``cp_dumpbuf`` (211.10 x
+36.00 um) sits beside the much taller ``cp_output_stage`` (130.31 x 66.73
+um), so the band above the dump buffer -- 217.10 x 38.72 um, 8,407 um^2 --
+is **99.0 % empty**: the only things ``cp`` draws in it are its own six
+Metal2 backbone trunk rows and the six Metal3 risers those land on, all of
+which stop at ``cp_dumpbuf``'s own native bus edge near the *left* wall of
+the band. ``pfd`` is 1,819 um^2 and fits there with room to spare.
+
+So since issue #455 ``cp`` is the block that lands at a zero offset and
+``pfd`` is the one that is translated, into that band:
+
+* **horizontally**, :data:`BLOCK_GAP_UM` clear of the rightmost thing ``cp``
+  draws above ``cp_dumpbuf`` -- *measured* off ``cp``'s own finished GDS
+  (:func:`_cp_band_right_edge`), not re-derived, because the quantity in
+  question is ``cp.py``'s own ``d_riser_x`` and that is local to its
+  ``build()``;
+* **vertically**, :data:`BLOCK_GAP_UM` above ``cp_dumpbuf``'s own topmost
+  drawn edge.
+
+The result is a block exactly as wide as ``cp`` itself (347.41 um, down from
+434.31) with no change in height, and :func:`build` raises rather than
+returning a *larger* block if ``pfd`` ever stops fitting inside ``cp``'s own
+extent. The one property the fold costs: this module's own four trunks are
+now long runs from ``cp_output_stage``'s glue bus, on the far left, out to
+``pfd``'s riser columns on the right. They are still drawn strictly above
+every row either sub-block drew, which is the property that makes a trunk
+safe (see ROUTING below) -- length is not what made the four failed designs
+in ``cp.py``'s own docstring fail.
+
+**Why the trunk band could not simply be merged into ``cp``'s.** ``cp``'s own
+six backbone rows and this module's own four trunks are x-disjoint enough,
+*before* the fold, to have been interval-graph-coloured into ``cp``'s six
+existing rows for free -- with ``pfd`` on the left, the four trunks run x
+[-14, +97] and ``cp``'s six rows run x [86, 189], and a four-colouring of
+that interval graph exists. The fold destroys it: every one of this module's
+trunks then spans from ``cp_output_stage``'s glue bus (x ~ -17) out to
+``pfd``'s riser columns (x ~ 120-200), covering all six of ``cp``'s rows.
+The two levers genuinely do not compose -- and they are not worth the same.
+Taking the row-sharing alone leaves the block 434.31 um wide and 73.23 um
+tall (31,803 um^2); taking the fold alone leaves it 347.41 x 80.73 um
+(28,045 um^2); the fold plus a trunk band merely *continued* above ``cp``'s
+own top row, which is what :func:`build` does, gives 347.41 x 76.23 um
+(26,481 um^2). So the four rows stay their own four rows, one track pitch
+above ``cp``'s highest instead of a full :data:`BACKBONE_MARGIN_UM` above
+``cp``'s footprint.
+
 FINDING ``pfd``'s OWN PIN LOCATIONS
 -------------------------------------
 ``pfd.py``'s ``PfdLayout`` (returned by ``build()``) does not expose a
@@ -101,6 +155,15 @@ Via2** yet:
   substrate taps and ``pfd``'s own row-to-row Metal3 stitches (which already
   carry a via stack of their own).
 
+The fold (above) adds one more thing of this kind to stay clear of, on the
+``pfd`` side rather than the ``cp`` side: all four of this module's
+``pfd``-side riser columns sit inside ``pfd``'s own translated footprint,
+which the fold puts to the *right* of ``cp``'s own six dumpbuf-side Metal3
+riser columns. :func:`_cp_band_right_edge` is what guarantees the two sets
+never meet -- it is the rightmost extent of everything ``cp`` draws above
+``cp_dumpbuf``, which is precisely those risers and the trunk rows they
+land on, and ``pfd`` starts :data:`BLOCK_GAP_UM` past it.
+
 ROUTING: A METAL3 RISER AT EACH SIDE'S OWN NATIVE EDGE, JOINED BY A METAL2
 TRUNK FAR ABOVE BOTH PLACED BLOCKS
 -----------------------------------------------------------------------------
@@ -108,9 +171,8 @@ Same two-step technique as ``cp.py``'s own module docstring (which itself
 records four earlier designs that failed, and why): a Metal3 riser straight
 up from each side's own native edge/landing point -- no shared link column,
 no long Metal2 "reach" across either block's own interior -- to a dedicated
-per-net Metal2 trunk row, strictly above both placed blocks' own topmost
-drawn edge (:data:`BACKBONE_MARGIN_UM` clear of it), then a plain Metal2
-trunk joining the two risers' own trunk-row landings
+per-net Metal2 trunk row, above every row either placed block drew, then a
+plain Metal2 trunk joining the two risers' own trunk-row landings
 (:func:`cp_output_stage._extend_bus`). Four distinct nets get four distinct
 trunk rows (:data:`BACKBONE_PITCH_UM` apart) and four distinct riser
 columns (on each side), so no two different nets' risers ever share an X
@@ -118,6 +180,19 @@ columns (on each side), so no two different nets' risers ever share an X
 arithmetically for its own placement, here held by construction rather than
 checked, since only four fixed points are involved rather than a device
 row).
+
+**"Above" is measured against ``cp``'s own top *row*, not its footprint**
+(issue #455). ``cp``'s topmost drawn edge *is* the top row of its own Metal2
+backbone band, and what one more row of the same band needs above it is one
+track pitch, not a block-to-block margin: the two are parallel, non-touching
+same-layer strips, exactly as ``cp``'s own six rows are to each other. The
+old ``max(pfd_top, cp_top) + BACKBONE_MARGIN_UM`` rule spent 2.00 um of
+block height restating a clearance ``cp`` had already applied once, on top
+of the 0.25 um per row both modules were losing to a Metal3 *column* pitch
+misapplied as a Metal2 *row* pitch (see :data:`cp.BACKBONE_PITCH_UM`).
+:data:`BACKBONE_MARGIN_UM` still applies to ``pfd``, whose top is not a
+trunk row -- post-fold it sits low enough in ``cp``'s band that it never
+binds, but the rule is stated rather than assumed.
 
 ``VDD``/``VSS`` need one extra step ``UP``/``DN`` do not: ``pfd``'s own
 landing point is Metal1, not Metal2, so this module uses
@@ -204,24 +279,34 @@ BRIDGED_NETS: tuple[str, ...] = ("UP", "DN")
 RAIL_NETS: tuple[str, ...] = ("VDD", "VSS")
 
 BLOCK_GAP_UM = cos.GLUE_GAP_UM
-"""Horizontal clearance between pfd's own footprint (placed at the origin)
-and cp's own footprint (placed to the right). Same value/rationale as
+"""Clearance between pfd's own drawn geometry and the nearest geometry cp
+draws, on both axes (issue #455 folded pfd into cp's own empty band, so this
+is now a vertical clearance above cp_dumpbuf as well as a horizontal one
+clear of cp's own dumpbuf-side riser columns). Same value/rationale as
 cp.py's own BLOCK_GAP_UM -- the routing itself needs no dedicated width in
 this gap; it only keeps the two placed blocks' own drawn geometry from
 touching (every riser lands at its own native edge, inside each block's own
-footprint, and the trunk runs far above both footprints)."""
+footprint, and the trunk runs above both footprints)."""
 
 BACKBONE_MARGIN_UM = cos.CONN_COLUMN_MARGIN_UM
-"""Vertical clearance from the taller of the two (placed) blocks' own
-topmost drawn edge to the lowest Metal3 trunk row -- same value/rationale as
-cp.py's own BACKBONE_MARGIN_UM."""
+"""Vertical clearance from a placed block's own topmost drawn edge to the
+lowest Metal3 trunk row, for a block whose own top is *not* already a trunk
+row -- same value/rationale as cp.py's own BACKBONE_MARGIN_UM.
 
-BACKBONE_PITCH_UM = cp_array.RISER_MIN_PITCH_UM
-"""Y pitch between two different nets' own Metal2 trunk rows -- same
-value/rationale as cp.py's own BACKBONE_PITCH_UM (parallel, non-touching
-same-layer strips; the only thing that ever crosses between rows, a net's
-own Metal3 riser, has no DRC relationship to a Metal2 row it merely passes
-under)."""
+Since issue #455 this only ever binds against ``pfd``, which the fold puts
+low enough that it never does. Against ``cp`` the binding constraint is
+:data:`BACKBONE_PITCH_UM`, not this: cp's own topmost drawn edge *is* the
+top row of its own Metal2 trunk band, and one more row of the same band at
+the same pitch needs a track pitch above it, not a block-to-block margin.
+See :func:`build`."""
+
+BACKBONE_PITCH_UM = cp.BACKBONE_PITCH_UM
+"""Y pitch between two different nets' own Metal2 trunk rows -- deliberately
+*the same object* as cp.py's own BACKBONE_PITCH_UM, not a second constant
+that happens to agree, because since issue #455 this block's own trunk rows
+continue cp's own band at cp's own pitch rather than starting a fresh band
+above it. Two independent constants that silently drifted apart would put
+this block's lowest row a fraction of a micron from cp's highest one."""
 
 RAIL_LANDING_INSET_UM: dict[str, float] = {"VDD": 3.0, "VSS": 6.0}
 """How far in from the right edge of pfd's own continuous VDD/VSS Metal1
@@ -239,6 +324,46 @@ nets' Metal3 risers on one column, the exact short
 ``cp_output_stage.check_riser_columns()`` guards against for its own
 placement.
 """
+
+
+def _cp_band_right_edge(layout, cell, y_floor: float) -> float:
+    """The rightmost x of any shape ``cp`` draws strictly above ``y_floor``,
+    read off ``cp``'s own finished (flat) GDS as read into ``layout``.
+
+    This is the left wall of the empty band issue #455 folds ``pfd`` into,
+    measured rather than re-derived. Above ``cp_dumpbuf``'s own topmost drawn
+    edge ``cp`` draws exactly three things: ``cp_output_stage`` (whose own
+    footprint ends well to the left), its six Metal2 backbone trunk rows, and
+    the six Metal3 risers those rows land on at ``cp_dumpbuf``'s side. The
+    last two share one right-hand extreme -- ``cp.py``'s own ``d_riser_x``,
+    which is ``cp_dumpbuf``'s own native bus edge stepped left by
+    ``cp.DUMPBUF_REACH_MARGIN_UM`` -- and ``cp.py`` exposes neither, because
+    both are local to its ``build()``'s routing loop.
+
+    Measuring the finished cell is the same "read the geometry back out of
+    its own finished GDS" convention :func:`cp._dumpbuf_bus_track` already
+    established for the mirror-image problem one level down, and for the same
+    reason: it needs no cooperation from -- and cannot drift out of sync with
+    -- ``cp.py``'s own implementation.
+
+    ``y_floor`` is compared against each shape's own *top*, so a shape that
+    merely reaches up to the floor (``cp_dumpbuf``'s own topmost geometry,
+    which defines it) is excluded and the band's own wall is not mistaken for
+    the block's full width.
+    """
+    dbu = layout.dbu
+    floor_dbu = int(round((y_floor + 1e-6) / dbu))
+    right = None
+    for layer_index in layout.layer_indexes():
+        for shape in cell.shapes(layer_index).each():
+            box = shape.bbox()
+            if box.empty() or box.top <= floor_dbu:
+                continue
+            if right is None or box.right > right:
+                right = box.right
+    if right is None:
+        raise ValueError(f"cp: no geometry at all above y={y_floor}")
+    return right * dbu
 
 
 def _pfd_bus(pfd_layout: "pfd.PfdLayout", net: str) -> tuple[float, float, float]:
@@ -302,7 +427,18 @@ class PfdCpLayout:
     pins: dict[str, list[tuple[float, float, float, float]]]
     pfd: "pfd.PfdLayout"
     cp: cp.CpLayout
+    #: Where ``cp`` was placed. ``(0.0, 0.0)`` since issue #455 folded ``pfd``
+    #: into ``cp``'s own empty band -- ``cp`` is now the block that lands at a
+    #: zero offset, so every coordinate ``cp.py`` itself records (its own
+    #: ``footprint``/``pins``/``backbone_rows``/``stage.glue_bus``) stays valid
+    #: unmodified in this block's own frame. Kept as a field rather than
+    #: dropped: it is what :meth:`probe_pads` and the boundary-pin promotion
+    #: translate by, and pinning it to a literal zero in those call sites
+    #: would hide the assumption instead of stating it.
     cp_offset: tuple[float, float]
+    #: Where ``pfd`` was placed -- inside ``cp``'s own band above
+    #: ``cp_dumpbuf`` (issue #455). See :func:`build`.
+    pfd_offset: tuple[float, float] = (0.0, 0.0)
     trunk_rows: dict[str, float] = field(default_factory=dict)
 
     def write_gds(self, path) -> None:
@@ -344,11 +480,12 @@ class PfdCpLayout:
         development.
         """
         pads: dict[str, list[tuple[float, float, float, float]]] = {}
+        pdx, pdy = self.pfd_offset
         for net, layer, x0, y0, x1, y1 in self.pfd.conductors:
             if layer != "metal1":
                 continue
             key = net if net in _SHARED_PROBE_NET_NAMES else f"pfd.{net}"
-            pads.setdefault(key, []).append((x0, y0, x1, y1))
+            pads.setdefault(key, []).append((x0 + pdx, y0 + pdy, x1 + pdx, y1 + pdy))
         dx, dy = self.cp_offset
         for net, boxes in self.cp.probe_pads().items():
             key = net if net in _SHARED_PROBE_NET_NAMES else f"cp.{net}"
@@ -370,13 +507,6 @@ def build(outdir: Path | None = None) -> PfdCpLayout:  # noqa: PLR0915 -- one li
         pfd_layout.write_gds(pfd_gds)
         cp_layout.write_gds(cp_gds)
 
-        # --- place cp far enough right that its own footprint never
-        # overlaps pfd's own (BLOCK_GAP_UM's own docstring). dy aligns the
-        # two blocks' own footprint bottoms purely for a tidy combined bbox;
-        # nothing depends on it. ---
-        dx = pfd_layout.footprint()[2] - cp_layout.footprint[0] + BLOCK_GAP_UM
-        dy = pfd_layout.footprint()[1] - cp_layout.footprint[1]
-
         dbu_per_um = int(round(1.0 / canvas.dbu))
 
         def _place(index, x: float, y: float) -> None:
@@ -387,9 +517,36 @@ def build(outdir: Path | None = None) -> PfdCpLayout:  # noqa: PLR0915 -- one li
         canvas.layout.read(str(cp_gds))
         pfd_index = canvas.layout.cell_by_name(pfd.TOP_CELL)
         cp_index = canvas.layout.cell_by_name(cp.TOP_CELL)
-        _place(pfd_index, 0.0, 0.0)
+
+        # --- THE FOLD (issue #455). cp lands at a zero offset; pfd is placed
+        # inside cp's own empty band above cp_dumpbuf, not beside cp. See the
+        # module docstring's "THE FOLD" section for the measurement. ---
+        dx, dy = 0.0, 0.0
+        dumpbuf_top = cp_array._translate_box(
+            cp_layout.dumpbuf.footprint, *cp_layout.dumpbuf_offset
+        )[3] + dy
+        band_x0 = _cp_band_right_edge(canvas.layout, canvas.layout.cell(cp_index), dumpbuf_top)
+        pfd_dx = (band_x0 + BLOCK_GAP_UM) - pfd_layout.footprint()[0]
+        pfd_dy = (dumpbuf_top + BLOCK_GAP_UM) - pfd_layout.footprint()[1]
+
+        _place(pfd_index, pfd_dx, pfd_dy)
         _place(cp_index, dx, dy)
         canvas.top.flatten(-1, True)
+
+    pfd_box_g = cp_array._translate_box(pfd_layout.footprint(), pfd_dx, pfd_dy)
+    cp_footprint_g = cp_array._translate_box(cp_layout.footprint, dx, dy)
+    # Fail loud rather than silently give back a block that is taller or
+    # wider than the one the fold set out to shrink: the whole point of
+    # placing pfd in this band is that the band already exists, so pfd must
+    # fit inside cp's own extent on both axes. (Its *height* has one micron
+    # of subtlety -- the band's ceiling is cp's own backbone band, whose
+    # rows stop well to the left of pfd's own column -- so the test is
+    # against cp's footprint, the quantity the block's own bbox is made of.)
+    if pfd_box_g[2] > cp_footprint_g[2] or pfd_box_g[3] > cp_footprint_g[3]:
+        raise ValueError(
+            f"pfd {pfd_box_g} does not fit inside cp's own band {cp_footprint_g} -- "
+            "the fold would grow the block rather than shrink it"
+        )
     # Both sub-blocks label their own boundary nets for their own standalone
     # LVS claims, and ``pfd`` additionally labels its own VDD/VSS rails once
     # per row. This level owns this block's 13 boundary-pin names and draws
@@ -398,12 +555,19 @@ def build(outdir: Path | None = None) -> PfdCpLayout:  # noqa: PLR0915 -- one li
     # _canvas.Canvas.clear_inherited_labels().
     canvas.clear_inherited_labels()
 
-    # --- Metal2 trunk rows: one dedicated Y per bridged/tied net, strictly
-    # above every routing channel either placed block already uses on its
-    # own (including cp's own internal array<->glue and
-    # stage<->dumpbuf trunk rows, all below cp_footprint_g[3]). ---
-    cp_footprint_g = cp_array._translate_box(cp_layout.footprint, dx, dy)
-    trunk_base_y = max(pfd_layout.footprint()[3], cp_footprint_g[3]) + BACKBONE_MARGIN_UM
+    # --- Metal2 trunk rows: one dedicated Y per bridged/tied net, above
+    # every routing channel either placed block already uses on its own
+    # (including cp's own internal array<->glue and stage<->dumpbuf trunk
+    # rows). Since issue #455 these four rows *continue cp's own backbone
+    # band* at cp's own pitch instead of starting a fresh band a full
+    # BACKBONE_MARGIN_UM above it: cp's topmost drawn edge is the top row of
+    # that band, and what one more row of the same band needs above it is a
+    # track pitch, not a block-to-block margin. BACKBONE_MARGIN_UM still
+    # binds against pfd, which (post-fold) sits far below and never does. ---
+    trunk_base_y = max(
+        max(cp_layout.backbone_rows.values()) + dy + BACKBONE_PITCH_UM,
+        pfd_box_g[3] + BACKBONE_MARGIN_UM,
+    )
     bridge_nets = (*BRIDGED_NETS, *RAIL_NETS)
     trunk_rows = {net: trunk_base_y + i * BACKBONE_PITCH_UM for i, net in enumerate(bridge_nets)}
 
@@ -423,8 +587,8 @@ def build(outdir: Path | None = None) -> PfdCpLayout:  # noqa: PLR0915 -- one li
         # Metal3 short). The far edge is clear of both by construction: the
         # branch chains (where each net's own far-edge lane lives) are well
         # outboard of the axis-straddling reset NAND/delay-row nets.
-        p_riser_x = p_x_lo if abs(p_x_lo) > abs(p_x_hi) else p_x_hi
-        cos._link_tracks(canvas, p_riser_x, p_track_y, trunk_y)
+        p_riser_x = (p_x_lo if abs(p_x_lo) > abs(p_x_hi) else p_x_hi) + pfd_dx
+        cos._link_tracks(canvas, p_riser_x, p_track_y + pfd_dy, trunk_y)
 
         c_track_y, c_x_lo, _c_x_hi = cp_layout.stage.glue_bus[net]
         c_x_lo_g, c_track_y_g = c_x_lo + dx, c_track_y + dy
@@ -440,6 +604,7 @@ def build(outdir: Path | None = None) -> PfdCpLayout:  # noqa: PLR0915 -- one li
         trunk_y = trunk_rows[net]
 
         p_x, p_y = _pfd_rail_landing(pfd_layout, net, RAIL_LANDING_INSET_UM[net])
+        p_x, p_y = p_x + pfd_dx, p_y + pfd_dy
         cp_array._riser(canvas, p_x, p_y, trunk_y)
 
         c_track_y, c_x_lo, _c_x_hi = cp_layout.stage.glue_bus[net]
@@ -458,7 +623,7 @@ def build(outdir: Path | None = None) -> PfdCpLayout:  # noqa: PLR0915 -- one li
             for n, layer, x0, y0, x1, y1 in pfd_layout.conductors
             if n == net and layer == "metal1"
         ]
-        canvas.pin(net, *boxes[0])
+        canvas.pin(net, *cp_array._translate_box(boxes[0], pfd_dx, pfd_dy))
     for net in ("B0", "B1", "IBN", "ICN", "IBP", "ICP", "VOUT"):
         canvas.pin(net, *cp_array._translate_box(cp_layout.pins[net][0], dx, dy))
     for net in BRIDGED_NETS:
@@ -467,19 +632,24 @@ def build(outdir: Path | None = None) -> PfdCpLayout:  # noqa: PLR0915 -- one li
         # whatever Metal1 lies under the bus -- which for both UP and DN is
         # pfd's own RB row-0 bus, extracting it as ``DN,UP`` and leaving the
         # real UP/DN nets anonymous (issue #440).
-        canvas.pin(net, *_pfd_bus_box(pfd_layout, net), layer="metal2_label")
+        canvas.pin(
+            net,
+            *cp_array._translate_box(_pfd_bus_box(pfd_layout, net), pfd_dx, pfd_dy),
+            layer="metal2_label",
+        )
     for net in RAIL_NETS:
         p_x, p_y = _pfd_rail_landing(pfd_layout, net, RAIL_LANDING_INSET_UM[net])
+        p_x, p_y = p_x + pfd_dx, p_y + pfd_dy
         half = cp_array.VIA1_SIZE_UM / 2.0 + cp_array.VIA_ENCLOSURE_UM
         canvas.pin(net, p_x - half, p_y - half, p_x + half, p_y + half)
 
     footprint = _canvas.bbox_union(
         (
-            pfd_layout.footprint(),
+            pfd_box_g,
             cp_footprint_g,
             (
-                pfd_layout.footprint()[0],
-                pfd_layout.footprint()[1],
+                cp_footprint_g[0],
+                cp_footprint_g[1],
                 cp_footprint_g[2],
                 trunk_base_y + len(bridge_nets) * BACKBONE_PITCH_UM,
             ),
@@ -493,6 +663,7 @@ def build(outdir: Path | None = None) -> PfdCpLayout:  # noqa: PLR0915 -- one li
         pfd=pfd_layout,
         cp=cp_layout,
         cp_offset=(dx, dy),
+        pfd_offset=(pfd_dx, pfd_dy),
         trunk_rows=dict(trunk_rows),
     )
     if outdir is not None:

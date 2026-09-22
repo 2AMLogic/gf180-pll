@@ -481,3 +481,28 @@ labels-only change.
 | LVS deck | `<pdk>/libs.tech/klayout/lvs/run_lvs.py`, `--variant=D` (default `--lvs_sub=VSS`) |
 | DRC deck | `<pdk>/libs.tech/klayout/drc/run_drc.py`, table `main`, variant D |
 | Tests | `python3 -m unittest discover -s layout/tests -t layout/tests` — 668 tests, all passing |
+
+---
+
+## Addendum 3 (issue #455): the block is folded — 35,281 → 26,665 µm², −24.4 %
+
+The footprint recorded at the top of this file (434.310 × 80.725 µm,
+35,059.67 µm²) and the "`pfd` at a zero offset, `cp` placed to the right"
+composition described under "Composition and routing" are **superseded**.
+Issue #455 folded `pfd` into `cp`'s own 99.0 %-empty band above
+`cp_dumpbuf`, so `cp` is now the block at a zero offset and `pfd` is the one
+translated; and it corrected the Metal2 trunk band's pitch and base. The
+block is now **347.410 × 76.225 µm (26,481.33 µm²)** on the `footprint`
+tuple, **344.98 × 77.30 µm (26,665 µm²)** on the committed GDS bbox.
+
+Every claim this file makes is re-proved against the new geometry rather
+than inherited: DRC `main` clean, DRC `main --offgrid` (signoff-grade)
+clean, LVS `Congratulations! Netlists match.` at 92/92 nets and 168/168
+devices, `netcheck` clean at 76 nets with no short and no split. The
+`drc-clean/`, `drc-clean-offgrid/`, `lvs-clean/` and `connectivity/`
+artifacts in this directory are the new runs' outputs; `lvs-attempt/` (the
+first block-level run's real mismatch) is untouched.
+
+Full record, including the achieved-against-ceiling arithmetic, why the
+issue's −58 % ceiling is not reachable, and the sizing of what is left:
+**`PROOF-455-fold.md`** in this directory.

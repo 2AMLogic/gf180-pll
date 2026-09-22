@@ -943,6 +943,131 @@ been true of any PLL sub-block set in this repository — so `README.md` and
 `docs/chipalooza/challenge-5-proposal.md` move from "3 of the 4" to "4 of the
 4 are LVS-matched", checked by `layout/lib/check-layout-status-claims.sh`.
 
+### 5.10 Revision: the second sized lever is spent, and the first one whose ceiling was measurably wrong — 1.89× to 1.82× (issue #455)
+
+**Status: still over, by 1.82× rather than 1.89×.** §5.5 sized `pfd_cp`'s two
+levers — the fold (§5.4's named lever, 7,015 µm²) and the Metal2 track band
+over the cells (16,785 µm² on this block) — and paired them in one issue
+because they interact. Both are now spent. Full record and reproduction:
+`layout/evidence/pfd-cp-layout/PROOF-455-fold.md`.
+
+`pfd` (80.90 × 22.48 µm) no longer sits beside `cp`; it sits **inside** `cp`'s
+own 99.0 %-empty band above `cp_dumpbuf`, so the block is now exactly as wide
+as the `cp` it contains. And the Metal2 trunk band above both was pitched at
+`cp_array.RISER_MIN_PITCH_UM` (1.00 µm) — a minimum Metal3 *riser column* **X**
+pitch, applied to a horizontal Metal2 **row** spacing — and based a full
+`BACKBONE_MARGIN_UM` above a top edge that already *was* a trunk row. Both
+corrected: 0.75 µm pitch (`METAL2_TRACK_PITCH_UM`, the pitch
+`cp_output_stage`'s own glue bus already carries 14 Via2-landed tracks at),
+and this block's four rows continue `cp`'s band rather than starting a new one.
+
+| Block | §5.9 | §5.10 | Delta |
+|---|---|---|---|
+| Loop filter (R + C1 + C2) | 36,936 µm² | 36,936 µm² | — (a calculation, not a layout) |
+| `vco_block` | 31,826 µm² | 31,826 µm² | — |
+| `pfd_cp` | 35,281 µm² | **26,665 µm²** | **−8,616 µm², −24.4 %** |
+| `divider_chain` | 92,618 µm² | 92,618 µm² | — |
+| `lock_detector` | 30,586 µm² | 30,586 µm² | — |
+| **Sum** | 227,247 µm² (0.2272 mm²) | **218,631 µm² (0.2186 mm²)** | −3.8 % |
+| **After §5's ×1.25** | 284,059 µm² (0.2841 mm²) | **273,289 µm² (0.2733 mm²)** | |
+| **vs the 0.15 mm² target** | **1.89×** | **1.82×** | |
+
+The gap to close against §5's 120,000 µm² pre-overhead budget goes from
+107,247 µm² to **98,631 µm²**. `cp`'s own committed block shrinks with it
+(26,062 → 25,630 µm², the pitch correction), but `cp` is not a row in this
+table — it is inside `pfd_cp`'s.
+
+**§5.5's ceiling for these two levers was 14,852 µm²; the outcome is 26,665
+µm², 42 % of it — and this time the shortfall is in the *ceiling*, not the
+execution.** One of the two levers reached its sizing exactly: the fold
+removed all 86.90 µm of width it was sized at, because 347.41 µm is `cp`'s
+own width and no arrangement keeping `cp` intact is narrower. The height
+lever delivered 4.25 µm of the 38.80 µm its ceiling assumed. Three measured
+reasons, and the first is the mistake §5.8 already recorded for #454:
+
+1. **The 57-track census is flat over five levels, and only 4 of the 57
+   belong to `pfd_cp`.** Rebuilding each sub-block standalone and running the
+   same census on each: `pfd` 5, `cp_dumpbuf` 10, `cp_output_stage` (incl.
+   `cp_array`) 32, `cp`'s own backbone band 6, `pfd_cp`'s own trunk band
+   **4** — 57 exactly. Composition is hierarchical, so a track can only be
+   re-assigned within the level that drew it. "57 tracks packed solid into
+   42.75 µm" is not a transformation any one module can perform.
+2. **The fold moves the binding constraint from tracks to devices.** The
+   37.18 µm device-band figure in the ceiling was measured *before* the fold,
+   when `pfd`'s devices shared y-bands with `cp`'s. Giving `pfd` a band of
+   its own takes the block's device bands to **49.05 µm** — above the
+   42.75 µm packed-track floor. Re-derived post-fold, the same
+   `max(packed, devices)` ceiling is 344.98 × 49.05 = **16,921 µm²**, −52.0 %,
+   not −58 %. Lever 1 invalidated part of lever 2's sizing, which is the
+   interaction #455 existed to force into one decision, sharpened into a
+   number.
+3. **One sub-block exceeds the ceiling height on its own.**
+   `cp_output_stage`'s drawn diffusion spans 52.23 µm of y standalone (`cp`'s
+   spans 54.03 µm). No arrangement of `pfd_cp` is 42.75 µm tall while
+   containing a block whose own devices are 52.23 µm tall.
+
+**What a composition-level lever *can* do, measured.** The honest denominator
+for a lever at this level is what the composition costs over the blocks it
+composes: `pfd_cp`'s bbox minus the `cp` bbox inside it was **9,219 µm²**; it
+is now **1,035 µm²** — four trunk rows and nothing else. `pfd` itself now
+costs zero block area. **−88.8 % of this level's own additive cost**, which
+is what "fold the block and route its track band over its own cells" could
+be worth once the 53 tracks it does not own are excluded from the claim.
+
+**The residual is sized, and it is below this level.** Post-fold, the gap
+between `pfd_cp` as drawn (26,665 µm²) and its re-derived ceiling
+(16,921 µm²) is **9,744 µm², 36.5 % of the block**, living entirely inside
+`cp_output_stage`/`cp_array`/`cp_dumpbuf`: `cp_output_stage`'s glue bus gives
+each of 14 nets a dedicated track where the interval graph's own clique
+number is 9, and `cp_dumpbuf` spends 25.87 µm of its 37.07 µm height on a
+band whose 10 tracks pack into 7.50 µm. That is one change across
+`cp_array._route_side` rippling through four committed GDS artifacts with
+their own DRC and LVS claims, so it is filed as **#469** rather than folded
+in — the same split #458 got out of #454, per §5.5's own one-lever-per-PR
+discipline.
+
+**§5.5's 1.35× ceiling should now be read as optimistic, and §5.9's 1.54×
+with it.** Both are built from the same flat-track-census premise that this
+block's execution just falsified, and `divider_chain`'s own 43-track census
+is flat over the same kind of hierarchy. Re-running §5.9's table with
+`pfd_cp`'s row at its achieved figure rather than the ceiling it will not
+reach:
+
+| | Sum | After ×1.25 | vs 0.15 mm² |
+|---|---|---|---|
+| As drawn | 218,631 µm² | 273,289 µm² | 1.82× |
+| Every remaining lever at its ceiling (`pfd_cp` spent, counted as-drawn; `lock_detector` un-levered) | **197,076 µm²** | **246,345 µm²** | **1.64×** |
+
+This is a *worse* projected floor than §5.9's 1.54×, and the movement is
+information, not a regression: the block moved 8,616 µm² in the right
+direction while the projection moved 0.10× in the wrong one, because 11,813
+µm² of the projection was a ceiling that has now been measured as
+unreachable. Whether #458's own ceiling survives contact the same way is not
+claimed here — it is the same class of estimate, and #456 is where that has
+to be settled, not this section.
+
+**`spec/pll.md#area` is still not amended, and #456's precondition is still
+not met.** #456 is blocked on #454 and #455; #454 landed at §5.8 and #455
+lands here, so the *named* blockers are now clear — but what #456 needs is a
+measured floor, and the residual levers on `pfd_cp` (above), `divider_chain`
+(#458) and `lock_detector` (unnamed) are all unexecuted. What §5.5 said about
+not amending a ratified spec row on an estimate applies unchanged, and this
+revision is the second piece of direct evidence that these estimates run
+optimistic.
+
+**DRC/LVS re-verified, not assumed.** `pfd_cp` is DRC clean (0 violations) on
+the `main` deck in both the default *and* the `--offgrid` signoff-grade run,
+and LVS-matched against its own unchanged reference netlist (92/92 nets,
+168/168 devices, the 13 declared boundary ports) — the claims #386 and
+#448/#452 established, re-proved against the moved geometry rather than
+inherited. `netcheck.check_gds()` reports 76 nets, no short, no split.
+`cp` is DRC clean and `netcheck`-clean at its new height. The whole
+`layout/tests` suite (719 tests) passes, including
+`test_gds_reproducibility.py`, which rebuilds all 26 committed block GDS
+files — so `pfd`, `cp_output_stage`, `cp_array`, `cp_dumpbuf` and the
+`cp_leg_*`/`pfdcp_inv` leaves are proven *unchanged* rather than assumed to
+be.
+
 ## 6. GDS skeleton
 
 `layout/floorplan/skeleton.py` assembles a **block-placement skeleton**
@@ -978,8 +1103,11 @@ their own bridging routing (`UP`/`DN`/`VDD`/`VSS`) are now one flat,
 standalone-DRC-clean `pfd_cp` GDS matching `design/pfd_cp.sch`'s full
 netlist — `layout/pll_top/pfd_cp/block.py`,
 `layout/evidence/pfd-cp-layout/PROOF.md`. `skeleton.py`'s `PFD_CP` block is
-now sized to that measured 434.31 × 80.73 µm extent (§5.4) rather than the
-150 × 100 µm placement-plan estimate it carried through #385.
+now sized to that block's own measured extent rather than the 150 × 100 µm
+placement-plan estimate it carried through #385 — 434.31 × 80.73 µm when
+written (§5.4), **347.41 × 76.23 µm since the fold at §5.10 (#455)**, which
+shifts `LOOP_FILTER`/`VCO_CORE` 86.90 µm left without moving the skeleton's
+own bounding box (`DIVIDER_LOCK`'s width still sets it).
 
 **The committed artifact is the generator's output again, and is checked
 (issue #461).** Through #398 this section's own regeneration recipe was an

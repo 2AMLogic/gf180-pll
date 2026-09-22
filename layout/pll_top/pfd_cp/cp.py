@@ -203,16 +203,29 @@ DUMPBUF_REACH_MARGIN_UM = cos.CONN_COLUMN_MARGIN_UM
 #: clear of every routing channel either sub-block already uses on its own.
 BACKBONE_MARGIN_UM = cos.CONN_COLUMN_MARGIN_UM
 
-#: Y pitch between two different nets' own Metal2 trunk rows -- same value
-#: (and the same minimum-metal-pitch citation) as
-#: ``cp_array.RISER_MIN_PITCH_UM``. Trunk rows may be stacked this tightly
-#: because they are parallel, non-touching same-layer strips (each net's own
-#: trunk never touches a neighbour's, the same invariant
-#: ``cp_output_stage``'s own ``NetTracks`` already guarantees for its own
-#: per-net Metal2 tracks) and the only thing that ever crosses *between*
-#: rows -- a net's own Metal3 riser -- has no DRC relationship to a Metal2
-#: row it merely passes under.
-BACKBONE_PITCH_UM = cp_array.RISER_MIN_PITCH_UM
+#: Y pitch between two different nets' own Metal2 trunk rows. Trunk rows may
+#: be stacked this tightly because they are parallel, non-touching same-layer
+#: strips (each net's own trunk never touches a neighbour's, the same
+#: invariant ``cp_output_stage``'s own ``NetTracks`` already guarantees for
+#: its own per-net Metal2 tracks) and the only thing that ever crosses
+#: *between* rows -- a net's own Metal3 riser -- has no DRC relationship to a
+#: Metal2 row it merely passes under.
+#:
+#: **Corrected at issue #455** from ``cp_array.RISER_MIN_PITCH_UM`` (1.0 um)
+#: to ``cp_array.METAL2_TRACK_PITCH_UM`` (0.75 um). ``RISER_MIN_PITCH_UM`` is
+#: that module's minimum centre-to-centre separation between two Metal3
+#: *riser columns* -- an **X** pitch between vertical Metal3 strips, sized
+#: against ``M3.2a``. A trunk row is a horizontal **Metal2** strip, and the
+#: pitch two of them need is the one ``cp_array.METAL2_TRACK_PITCH_UM``
+#: already states and every other Metal2 track band in this package already
+#: uses: 0.75 um, leaving 0.75 - 0.44 = 0.31 um between two adjacent rows'
+#: own Via2 landing pads (``half_v2`` = 0.22 um each side), above ``M2.2a``'s
+#: 0.28 um minimum. That is not an argument from first principles either --
+#: ``cp_output_stage``'s own glue bus already stacks 14 tracks at exactly
+#: this pitch *with* Via2 landings on them, and is DRC-clean at signoff grade
+#: (``layout/evidence/cp-layout/``). 1.0 um was simply the wrong constant for
+#: the axis; using it cost this block 0.25 um per row for nothing.
+BACKBONE_PITCH_UM = cp_array.METAL2_TRACK_PITCH_UM
 
 
 def _dumpbuf_bus_track(
