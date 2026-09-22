@@ -1095,6 +1095,218 @@ def pack_tracks(
     return {net: base_y + i * pitch for net, i in track_of.items()}
 
 
+# --- routing *into* the plane over the device rows (issue #458) -------------
+#
+# :func:`pack_tracks` above packs a block's nets into the fewest tracks an
+# interval assignment can use, but it still hands out those tracks from a
+# single ``base_y`` upwards -- an exclusive band stacked *on top of* the
+# block's device rows, whose whole height is added to the block's own. That is
+# the shape every composite in this package had through issue #454, and
+# ``layout/evidence/divider-chain-layout/PROOF-macro-track-packing.md``
+# measured what it costs on ``divider_chain``: 43 packed tracks in 43.97 um of
+# band over 26.32 um of device rows, with the Metal2 plane *over* those device
+# rows 1.0 % occupied.
+#
+# Metal2 has no DRC relationship to the diffusion, poly, implant, well or
+# Metal1 underneath it, so that plane is not reserved -- it is merely unused.
+# What a track there genuinely must not do is collide with *another Metal2
+# shape*, and in a composite like this one there are exactly two kinds:
+#
+#   1. the Via1/Metal2 landing square :func:`_canvas._riser` drops on **every**
+#      routed pad (0.44 um square, at the pad's own y) -- the
+#      ``M2.2a``/``V1.1``/``V2.1`` failure class ``pfd_cp/cp.py``'s module
+#      docstring records four separate routing designs failing against, and
+#      the reason #454 explicitly did *not* take this lever;
+#   2. every Metal2 shape a *placed sub-block* already contains -- for
+#      ``divider_chain`` that is each ``div23_cell`` instance's own interior:
+#      its packed track band plus its own pads' landing squares.
+#
+# :func:`pack_tracks_over_devices` is :func:`pack_tracks` made aware of both.
+# It keeps the left-edge order and the same-track x-clearance rule unchanged
+# (so two nets sharing a track are separated exactly as before), and replaces
+# "track i sits at ``base_y + i * pitch``" with "this net sits on the lowest
+# :data:`METAL2_TRACK_PITCH_UM` grid step, at or above ``y_floor``, whose
+# drawn rectangle clears every obstacle". Tracks therefore fall into whatever
+# Metal2-free horizontal corridors the device rows themselves leave -- on this
+# package's fixed row-cell frame the widest is the inter-row channel between
+# the pulldown and pullup device rows, which no pad and no sub-block track
+# ever occupies -- and only the nets that genuinely cannot fit in one (because
+# their x-extent crosses a sub-block's own full-height band) are left to open
+# a track above the rows.
+#
+# Two deliberate asymmetries in the clearance model, both chosen so this
+# function can never be *less* strict than what is already proven clean:
+#
+# * **Against an obstacle** the test is a full 2-D box test at ``clearance``
+#   (0.41 um) on both axes, applied to the net's own drawn rectangle -- x from
+#   :func:`_net_x_extent`, y from :data:`TRACK_HALF_HEIGHT_UM` (the *landing
+#   square's* half-height, 0.22 um, not the narrower bus wire's 0.17 um).
+#   0.41 um is well past M2.2a's 0.28 um minimum; the extra is deliberate
+#   headroom, since an obstacle is geometry this function does not control.
+# * **Against another net already placed** the test is exactly
+#   :func:`pack_tracks`'s: an x-clearance check, and only between nets on the
+#   *same* track. Two nets on *adjacent* tracks are 0.75 um apart in y, i.e.
+#   0.31 um between their landing squares -- under this function's own 0.41 um
+#   obstacle clearance but over M2.2a's 0.28 um minimum, and exactly the
+#   relationship every :func:`pack_tracks` band in this repo already ships
+#   DRC-clean. Re-testing it here at 0.41 would reject the pitch this package
+#   is built on.
+#
+# No shape :func:`route_net` draws moves as a result of this -- it draws the
+# same one bus rectangle plus one riser per pad it always did, at whatever
+# ``track_y`` it is handed. What changes is only which ``track_y`` is legal,
+# and this function is where that judgement now lives.
+
+#: Half-height of everything :func:`route_net`/:func:`_canvas._riser` draw at a
+#: net's own ``track_y``. The Via2/Metal2 landing square
+#: (``VIA2_SIZE_UM / 2 + VIA_ENCLOSURE_UM`` = 0.22 um) is *taller* than half
+#: the bus wire (``METAL2_WIRE_WIDTH_UM / 2`` = 0.17 um), so it -- not the
+#: wire -- is what a track has to clear an obstacle by. Same "never
+#: underestimate the extreme shape" reasoning :func:`_net_x_extent` already
+#: applies along x.
+TRACK_HALF_HEIGHT_UM = max(METAL2_WIRE_WIDTH_UM / 2.0, VIA2_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM)
+
+_Box = tuple[float, float, float, float]
+
+
+def metal2_boxes(canvas: Canvas, layer: str = "metal2") -> list[_Box]:
+    """Every Metal2 rectangle already drawn in ``canvas``, in absolute microns.
+
+    Recursive (``begin_shapes_rec``), so a sub-block placed as an un-flattened
+    ``db.CellInstArray`` -- which is exactly how ``divider_chain.py`` places
+    its six ``div23_cell`` instances -- contributes its own interior Metal2
+    too, translated into the top cell's coordinates. That interior is the
+    dominant obstacle :func:`pack_tracks_over_devices` has to route around, so
+    reading it back off the canvas (rather than re-deriving it from the
+    sub-block's own generator) is what keeps the obstacle map honest: whatever
+    the sub-block actually drew is what is avoided, with no second model of it
+    to drift.
+    """
+    li = canvas.layout.layer(*canvas.LAYER[layer])
+    dbu = canvas.dbu
+    boxes: list[_Box] = []
+    it = canvas.top.begin_shapes_rec(li)
+    while not it.at_end():
+        box = it.shape().box
+        if box is not None:
+            box = box.transformed(it.trans())
+            boxes.append((box.left * dbu, box.bottom * dbu, box.right * dbu, box.top * dbu))
+        it.next()
+    return boxes
+
+
+def riser_landing_boxes(pad_centers: Sequence[tuple[float, float]]) -> list[_Box]:
+    """The Metal2 landing square :func:`_canvas._riser` drops on each pad.
+
+    ``route_net()`` has not run yet when :func:`pack_tracks_over_devices` needs
+    its obstacle map -- the whole point is to decide *where* it may run -- so
+    the squares it is about to draw at every pad of every net have to be added
+    to that map up front. This states them once, from the same
+    ``VIA1_SIZE_UM``/``VIA_ENCLOSURE_UM`` constants ``_riser()`` itself uses.
+    """
+    half = VIA1_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM
+    return [(x - half, y - half, x + half, y + half) for x, y in pad_centers]
+
+
+#: Tie tolerance for the spacing predicate below, in microns: one millionth of
+#: a database unit (``Canvas.dbu`` is 0.001 um), i.e. far below any distance
+#: this package can actually draw. It exists because every quantity compared
+#: there is a *binary float* built out of decimal constants -- ``clearance``
+#: is ``0.75 - 0.34``, which is 0.41000000000000003, while a gap of exactly
+#: 0.41 um between two on-grid edges evaluates to 0.40999999999999992. Without
+#: the tolerance a spacing that is exactly legal lands on the wrong side of a
+#: rounding error and the track is pushed a whole 0.75 um pitch up for nothing.
+#: Anything this tolerance changes the answer to is a *tie*; it can never
+#: admit a gap that is smaller than ``clearance`` by any drawable amount.
+_SPACING_EPS_UM = 1e-9
+
+
+def _boxes_clear(a: _Box, b: _Box, clearance: float) -> bool:
+    """True when two boxes are at least ``clearance`` apart along some axis.
+
+    The separating-axis form of a spacing check: two axis-aligned rectangles
+    are ``clearance``-legal exactly when their x-ranges or their y-ranges are
+    that far apart, because for rectangles the minimum edge-to-edge distance
+    is always achieved along one of the two axes. Exactly ``clearance`` counts
+    as clear, to within :data:`_SPACING_EPS_UM` (see there for why the
+    tolerance is needed at all).
+    """
+    limit = clearance - _SPACING_EPS_UM
+    return (
+        b[0] - a[2] >= limit
+        or a[0] - b[2] >= limit
+        or b[1] - a[3] >= limit
+        or a[1] - b[3] >= limit
+    )
+
+
+def pack_tracks_over_devices(
+    nets: dict[str, Sequence[tuple[float, float]]],
+    *,
+    y_floor: float,
+    obstacles: Sequence[_Box] = (),
+    pitch: float = METAL2_TRACK_PITCH_UM,
+    clearance: float = METAL2_TRACK_PITCH_UM - METAL2_WIRE_WIDTH_UM,
+    half_height: float = TRACK_HALF_HEIGHT_UM,
+) -> dict[str, float]:
+    """Assign every net in ``nets`` the lowest obstacle-free track_y at or
+    above ``y_floor`` -- see this section's own module-level comment for the
+    full derivation and the clearance model.
+
+    ``obstacles`` is every Metal2 rectangle the assignment must stay clear of,
+    in absolute microns: whatever is already drawn
+    (:func:`metal2_boxes`) plus the landing squares ``route_net()`` is about
+    to add (:func:`riser_landing_boxes`). Pass none and this degrades to
+    "stack every track from ``y_floor`` up", i.e. :func:`pack_tracks` with
+    ``base_y=y_floor`` -- which is the right no-obstacle answer, not a
+    silent failure mode.
+
+    ``y_floor`` is a hard lower bound, not a hint: no track is ever placed
+    below it even when the plane below is empty. ``divider_chain.py`` passes
+    each row's own baseline, so a row's tracks can drop into that row's own
+    device plane but never into the clearance gap under it (where they would
+    close on the row below's own band).
+
+    Every net gets at least one pad, same precondition (and same one-net-at-a-
+    time ``ValueError``) as :func:`pack_tracks`.
+    """
+    extents: dict[str, tuple[float, float]] = {}
+    for net, pads in nets.items():
+        pads = list(pads)
+        if not pads:
+            raise ValueError(f"pack_tracks_over_devices(): net {net!r} has no pads to route")
+        extents[net] = _net_x_extent(pads)
+
+    obstacles = list(obstacles)
+    # Left-edge order, identical to pack_tracks() -- ties broken by name so the
+    # result is a pure function of the net table, never of dict ordering.
+    order = sorted(extents, key=lambda n: (extents[n][0], n))
+    placed: list[tuple[float, float, float]] = []  # (track_y, x_lo, x_hi)
+    result: dict[str, float] = {}
+
+    for net in order:
+        lo, hi = extents[net]
+        # Only obstacles this net's own x-extent can possibly reach matter --
+        # the other axis is what the per-step test below actually varies. This
+        # is a pure speed filter (the full 2-D test still runs on everything it
+        # keeps); on this block it takes the inner loop from every Metal2 shape
+        # in the row to a handful for a glue-local net.
+        near = [o for o in obstacles if o[0] - hi < clearance and lo - o[2] < clearance]
+        step = 0
+        while True:
+            y = y_floor + step * pitch
+            box = (lo, y - half_height, hi, y + half_height)
+            if all(_boxes_clear(box, o, clearance) for o in near) and all(
+                py != y or lo - phi >= clearance or plo - hi >= clearance for py, plo, phi in placed
+            ):
+                result[net] = y
+                placed.append((y, lo, hi))
+                break
+            step += 1
+
+    return result
+
+
 # ===========================================================================
 # ROW CELLS -- static-CMOS gates with real fan-in (issue #307, Part 2 of #295)
 # ===========================================================================

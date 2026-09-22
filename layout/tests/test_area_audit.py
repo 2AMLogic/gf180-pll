@@ -8,11 +8,15 @@ is known by construction -- a known bbox, a known diffusion band, a known
 number of Metal2 tracks -- and only then assert the one property of the real
 committed blocks that this issue's whole argument rests on:
 
-    the divider chain's diffusion is ~1 % of its bounding box, so a
+    the divider chain's diffusion is a small share of its bounding box, so a
     shared-diffusion lever cannot be worth more than ~1 % of the block.
 
 If a future geometry change falsifies that, the floorplan's §5.5 reasoning
-needs re-deriving, and this test is what says so.
+needs re-deriving, and this test is what says so. (The share itself is a
+moving number and deliberately not the assertion: it was ~1.46 % when #442
+measured it and is 2.44 % since #458 took 40 % of the *bbox* out without
+touching a device. What §5.5 rests on is that it is nowhere near the bulk of
+the block.)
 
 :func:`harness.area.series_junction_census` needs no KLayout at all (it reads
 SPICE text), so its tests always run.
@@ -265,22 +269,43 @@ class CommittedBlockTests(unittest.TestCase):
             EVIDENCE / "divider-chain-layout" / "divider_chain.spice"
         )
         self.assertGreater(c.merges, 0, "no candidates at all would mean a parser break")
-        block_um2 = 1317.66 * 70.29  # divider_chain's committed footprint (#454)
+        block_um2 = 1317.66 * 41.99  # divider_chain's committed footprint (#458)
         self.assertLess(c.merge_saving_um2, 0.01 * block_um2)
 
     @unittest.skipUnless(_HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
-    def test_the_divider_chains_diffusion_is_about_one_percent_of_its_bbox(self):
+    def test_the_divider_chains_diffusion_is_still_a_small_share_of_its_bbox(self):
+        """§5.5's falsification of the device-density hypothesis, one lever on.
+
+        The bound was ``< 2 %`` against #454's 1317.66 x 70.29 um footprint.
+        Issue #458 took 40 % of the *bbox* out without touching a single
+        device, so the same unchanged diffusion is now a larger share of a
+        smaller box (1.46 % -> 2.44 %) -- which is the shape a real area win
+        has, not a regression. The bound is re-derived, not relaxed: what §5.5
+        actually rests on is that diffusion is nowhere near the bulk of the
+        block, so this stays an order of magnitude below the ~25 % a
+        device-density-bound block would show.
+        """
         a = area.audit_gds(EVIDENCE / "divider-chain-layout" / "divider_chain.gds")
         comp_share = 100.0 * a.layer_area_um2["comp"] / a.bbox_um2
-        self.assertLess(comp_share, 2.0, f"comp is {comp_share:.2f} % of the bbox")
+        self.assertLess(comp_share, 5.0, f"comp is {comp_share:.2f} % of the bbox")
 
     @unittest.skipUnless(_HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
-    def test_the_metal2_plane_over_the_divider_chains_cells_is_essentially_free(self):
-        """§5.5's lever C: the track band sits above the cells by generator
-        convention, not because the plane over them is occupied."""
+    def test_the_metal2_plane_over_the_divider_chains_cells_is_now_used(self):
+        """§5.5's lever 3, spent in full (issue #458).
+
+        This assertion is the inverse of the one it replaces. §5.5 observed
+        that the track band sat above the cells by *generator convention*, not
+        because the plane over them was occupied -- 1.0 % Metal2 fill there --
+        and named putting tracks into it as the block's last sized lever (§5.5's
+        "lever 3", which §5.8 took only the packing half of).
+        ``devgen.pack_tracks_over_devices()`` spends it, and the same
+        measurement is now the evidence that it was spent: the plane over the
+        device rows carries most of both levels' Metal2, and the no-device
+        routing band is no longer the taller of the two.
+        """
         a = area.audit_gds(EVIDENCE / "divider-chain-layout" / "divider_chain.gds")
-        self.assertLess(a.metal2_over_devices_pct, 5.0)
-        self.assertGreater(a.routing_band_um, a.device_band_um)
+        self.assertGreater(a.metal2_over_devices_pct, 10.0)
+        self.assertLess(a.routing_band_um, a.device_band_um)
 
     @unittest.skipUnless(_HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
     def test_every_audited_block_gds_is_readable_and_renders(self):

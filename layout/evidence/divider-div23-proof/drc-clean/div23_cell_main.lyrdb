@@ -2,7 +2,7 @@
 <report-database>
  <description>DRC Run Report at</description>
  <original-file/>
- <generator>drc: script='/tmp/pr459-rebuild/rundir/div23-drc/main.drc'</generator>
+ <generator>drc: script='/tmp/i458/step2/drc-div23/main.drc'</generator>
  <top-cell>div23_cell</top-cell>
  <tags>
  </tags>

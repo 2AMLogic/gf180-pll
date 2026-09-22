@@ -215,12 +215,16 @@ class FootprintStabilityTests(unittest.TestCase):
         self.assertAlmostEqual(x0, -2.62, places=2)
         self.assertAlmostEqual(y0, -0.3, places=2)
         self.assertAlmostEqual(x1, 329.52, places=2)
-        # 37.5 through issue #344; 22.5 since issue #454 packed this macro's
-        # own internal Metal2 track band (31 nets -> 11 tracks) the way #341
-        # packed divider_chain.py's top-level one. Only each net's track_y
-        # moved: x0/x1/y0 and every pin location below are unchanged, which
-        # is the property that makes this a pure routing-fabric change.
-        self.assertAlmostEqual(y1, 22.5, places=2)
+        # 37.5 through issue #344; 22.5 at issue #454, which packed this
+        # macro's own internal Metal2 track band (31 nets -> 11 tracks) the
+        # way #341 packed divider_chain.py's top-level one; 12.22 since issue
+        # #458 made that same assignment obstacle-aware
+        # (devgen.pack_tracks_over_devices()), so 10 of those 11 tracks now sit
+        # in Metal2-free corridors *between* this macro's own device rows
+        # rather than in a band above them. Only each net's track_y moved:
+        # x0/x1/y0 and every pin location below are unchanged, which is the
+        # property that makes this a pure routing-fabric change.
+        self.assertAlmostEqual(y1, 12.22, places=2)
 
     def test_pin_locations_match_the_recorded_evidence(self):
         expected = {

@@ -196,15 +196,16 @@ class GeometryTests(unittest.TestCase):
         self.assertGreater(x1 - x0, 0)
         self.assertGreater(y1 - y0, 0)
         # The number layout/floorplan/skeleton.py records for DIVIDER_LOCK and
-        # layout/evidence/divider-chain-layout/PROOF-macro-track-packing.md
-        # states (issue #454: div23_cell's own internal track band is packed
-        # with devgen.pack_tracks() too, 15.00 um off each of ROW_PLAN's two
-        # rows -- on top of #344's fold of one row of 6 div23_cell instances +
-        # 46 glue columns into two rows, each with its own
-        # devgen.pack_tracks() band, itself on top of #341's own top-level
-        # track packing).
+        # layout/evidence/divider-chain-layout/PROOF-over-device-rows.md
+        # states (issue #458: both this block's own track assignment and
+        # div23_cell's are now obstacle-aware -- devgen.pack_tracks_over_devices()
+        # rather than devgen.pack_tracks() -- so a track sits at the lowest
+        # Metal2-free y instead of in a band stacked above the device rows;
+        # on top of #454's packing of div23_cell's own band, #344's fold of
+        # one row of 6 div23_cell instances + 46 glue columns into two rows,
+        # and #341's own top-level track packing).
         self.assertAlmostEqual(x1 - x0, 1317.66, places=2)
-        self.assertAlmostEqual(y1 - y0, 70.29, places=2)
+        self.assertAlmostEqual(y1 - y0, 41.99, places=2)
 
     def test_the_fold_actually_reduced_area(self):
         """#344's own edge case: a fold must *reduce* area, not just move it.
@@ -225,6 +226,10 @@ class GeometryTests(unittest.TestCase):
         # re-inflates the macro's band fails here and not only on the
         # footprint assertion above.
         self.assertLess(area, 1317.66 * 100.29, "the macro band packing did not reduce area against #344")
+        # Issue #458: routing both levels' tracks into the plane over the
+        # device rows took it from 1317.66 x 70.29 um to 1317.66 x 41.99 um.
+        # Same discipline, one lever later.
+        self.assertLess(area, 1317.66 * 70.29, "the tracks are back in an exclusive band above the rows (#458)")
 
     def test_every_boundary_net_has_a_pin(self):
         self.assertEqual(set(self.layout.pins), set(divider_chain.BOUNDARY_NETS))

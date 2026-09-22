@@ -142,17 +142,21 @@ the whole-chip 0.15 mm^2 target *on its own* -- which is a necessary, not a
 sufficient, condition for the chip to fit. Issue #454 then packed the
 ``div23_cell`` macro's own Metal2 track band the same way #341 had packed
 the top-level bands, taking the block to **1317.66 x 70.29 um = 0.0926
-mm^2**, a further 30 %. The two real blocks now measure 0.1001 mm^2
-together. The full arithmetic, and what is still structurally oversized, are
-stated at the ``DIVIDER_LOCK`` definition below -- it is **not** device
-density: that hypothesis stood here through #344 and was falsified by
-measurement at #442 (the diffusion islands are ~1 % of the block's own
-bounding box, not the bulk of it). What is actually left is the remaining
-Metal2 band, tracked separately at #458. This skeleton is still a floorplan
-record of a design that does not fit its budget -- which is precisely what
-section 5's own "fail-loud condition for a future pass" asked for, and is
-tracked for further reduction separately from #310's/#341's/#344's/#454's
-own DRC/LVS-clean geometry claims.
+mm^2**, a further 30 %. Issue #458 took the last of that lever by making
+both levels' track assignment *obstacle-aware*
+(``devgen.pack_tracks_over_devices()``): a track is placed at the lowest
+Metal2-free y rather than in a band stacked above the device rows, so most
+of both bands now hide in the Metal2-free corridors those rows already
+leave. **1317.66 x 41.99 um = 0.0553 mm^2**, a further 40 %. The full
+arithmetic, and what is still structurally oversized, are stated at the
+``DIVIDER_LOCK`` definition below -- it is **not** device density: that
+hypothesis stood here through #344 and was falsified by measurement at #442
+(the diffusion islands are ~1 % of the block's own bounding box, not the
+bulk of it). This skeleton is still a floorplan record of a design that does
+not fit its budget -- which is precisely what section 5's own "fail-loud
+condition for a future pass" asked for, and is tracked for further reduction
+separately from #310's/#341's/#344's/#454's/#458's own DRC/LVS-clean
+geometry claims.
 """
 
 from __future__ import annotations
@@ -312,9 +316,12 @@ LOCK_DETECTOR_STANDALONE_H_UM = 103.75
 # same packing applied one level down, inside the div23_cell macro each row's
 # height is gated by, at issue #454 -- 15.00 um off each of the two rows,
 # 1317.66 x 70.29 um, layout/evidence/divider-chain-layout/
-# PROOF-macro-track-packing.md):
+# PROOF-macro-track-packing.md; then both levels' track assignment made
+# obstacle-aware at issue #458, so a track sits at the lowest Metal2-free y
+# instead of in a band above the device rows -- 1317.66 x 41.99 um,
+# layout/evidence/divider-chain-layout/PROOF-over-device-rows.md):
 DIVIDER_CHAIN_STANDALONE_W_UM = 1317.66
-DIVIDER_CHAIN_STANDALONE_H_UM = 70.29
+DIVIDER_CHAIN_STANDALONE_H_UM = 41.99
 
 # The two blocks are on *different supply domains* -- divider_chain on
 # VDD_DIV, lock_detector on VDD (PLL-FLOORPLAN.md section 2's four-domain
@@ -367,11 +374,12 @@ DIVIDER_LOCK = Block(
 #
 #   * loop filter 36,936 (a DR-006 calculation) + vco_block 31,826 + pfd_cp
 #     26,406 (folded at #455, was 35,281; glue bus packed at #469, was 26,665)
-#     + divider_chain 92,618 + lock_detector 30,586 = **218,372 um^2**, i.e.
-#     **272,965 um^2 (0.2730 mm^2)** after this section's x1.25 -- **1.82x** the
-#     draft target and **91.0 %** of the amended 0.30 mm^2 row. PLL-FLOORPLAN.md
-#     sections 5.11 (DR-016, on 218,631 um^2) and 5.12 (#469, this figure) carry
-#     the derivation.
+#     + divider_chain 55,329 (tracks routed over the device rows at #458, was
+#     92,618) + lock_detector 30,586 = **181,083 um^2**, i.e.
+#     **226,354 um^2 (0.2264 mm^2)** after this section's x1.25 -- **1.51x** the
+#     draft target and **75.5 %** of the amended 0.30 mm^2 row. PLL-FLOORPLAN.md
+#     sections 5.11 (DR-016, on 218,631 um^2), 5.12 (#469, on 218,372 um^2) and
+#     5.13 (#458, this figure) carry the derivation.
 #   * The draft target was not reachable, and that is a measurement rather than
 #     a projection: strike Metal2 routing entirely and each block's own drawn
 #     device bands still sum (with the loop filter) to 136,141 um^2 ->
@@ -459,6 +467,23 @@ DIVIDER_LOCK = Block(
 #     **1317.66 x 100.29 um became 1317.66 x 70.29 um**, 0.1321 mm^2 down to
 #     0.0926 mm^2, a further 30 %. See layout/evidence/divider-chain-layout/
 #     PROOF-macro-track-packing.md.
+#   * Both of those bands were still *bands* -- stacked on top of the device
+#     rows, whose own Metal2 plane #442 measured 1.0 % occupied. Metal2 has no
+#     DRC relationship to the diffusion/poly/well/Metal1 under it, so that
+#     plane was unused, not reserved; what a track there must clear is other
+#     Metal2, namely the Via1/Metal2 landing square every riser drops on every
+#     pad plus each placed div23_cell instance's own interior. Issue #458
+#     replaced both levels' ``pack_tracks()`` call with
+#     ``pack_tracks_over_devices()``, which takes that obstacle map explicitly
+#     and gives each net the lowest 0.75 um step whose drawn rectangle clears
+#     it. On this package's fixed row-cell frame the widest free corridor is
+#     the one between the pulldown and pullup device rows: 10 of div23_cell's
+#     11 tracks land below its own topmost pad (footprint 332.14 x 22.80 ->
+#     332.14 x 12.52 um) and the top level keeps only the nets whose extent
+#     crosses an instance in a band above.
+#     **1317.66 x 70.29 um became 1317.66 x 41.99 um**, 0.0926 mm^2 down to
+#     0.0553 mm^2, a further 40 %. See layout/evidence/divider-chain-layout/
+#     PROOF-over-device-rows.md.
 #
 # What is left is NOT device density. That hypothesis stood here through #344
 # and was **falsified** by measurement at issue #442 (layout/evidence/
@@ -493,7 +518,7 @@ DIVIDER_LOCK_AREA_UM2 = DIVIDER_LOCK.w * DIVIDER_LOCK.h
 #: from the draft 150,000 um^2 on the measured post-lever total. Every "0.15
 #: mm^2" sentence in the comment block above and in PLL-FLOORPLAN.md sections
 #: 5.1-5.10 predates that amendment and is kept as written; section 5.11 states
-#: the amendment and section 5.12 the live measurement under it.
+#: the amendment and section 5.13 the live measurement under it.
 AREA_BUDGET_UM2 = 300_000.0
 
 #: The draft target the overrun series above is written against. Kept as its own

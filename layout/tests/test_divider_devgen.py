@@ -241,5 +241,206 @@ class NetResolutionEdgeCaseTests(unittest.TestCase):
             devgen.build_stack_cell("bad_stack_test", three_way)
 
 
+PITCH = devgen.METAL2_TRACK_PITCH_UM          # 0.75
+CLEAR = PITCH - devgen.METAL2_WIRE_WIDTH_UM   # 0.41
+HALF = devgen.TRACK_HALF_HEIGHT_UM            # 0.22
+
+
+class BoxesClearTests(unittest.TestCase):
+    """devgen._boxes_clear(): the separating-axis spacing predicate
+    pack_tracks_over_devices() is built on (issue #458).
+
+    Every case below is arithmetic on the literal boxes, so the expected
+    answer is checkable by hand rather than by running the router.
+    """
+
+    def test_far_apart_in_x_is_clear_however_much_they_overlap_in_y(self):
+        self.assertTrue(devgen._boxes_clear((0, 0, 1, 1), (1.5, 0, 2.5, 1), 0.41))
+
+    def test_far_apart_in_y_is_clear_however_much_they_overlap_in_x(self):
+        self.assertTrue(devgen._boxes_clear((0, 0, 1, 1), (0, 1.5, 1, 2.5), 0.41))
+
+    def test_close_on_both_axes_is_not_clear(self):
+        # 0.4 um apart in x AND 0.4 um apart in y, against a 0.41 requirement.
+        self.assertFalse(devgen._boxes_clear((0, 0, 1, 1), (1.4, 1.4, 2, 2), 0.41))
+
+    def test_exactly_the_clearance_counts_as_clear(self):
+        self.assertTrue(devgen._boxes_clear((0, 0, 1, 1), (1.41, 0, 2, 1), 0.41))
+
+    def test_a_hair_under_the_clearance_does_not(self):
+        self.assertFalse(devgen._boxes_clear((0, 0, 1, 1), (1.40, 0, 2, 1), 0.41))
+
+
+class RiserLandingBoxesTests(unittest.TestCase):
+    """The squares _riser() drops on each pad, stated up front so the track
+    assignment can avoid them before route_net() has drawn anything."""
+
+    def test_one_square_per_pad_sized_from_the_via1_constants(self):
+        half = devgen.VIA1_SIZE_UM / 2.0 + devgen.VIA_ENCLOSURE_UM
+        (box,) = devgen.riser_landing_boxes([(10.0, 4.0)])
+        self.assertAlmostEqual(box[0], 10.0 - half, places=6)
+        self.assertAlmostEqual(box[1], 4.0 - half, places=6)
+        self.assertAlmostEqual(box[2], 10.0 + half, places=6)
+        self.assertAlmostEqual(box[3], 4.0 + half, places=6)
+        # 0.44 um square -- the number devgen's own docstrings quote.
+        self.assertAlmostEqual(box[2] - box[0], 0.44, places=6)
+
+    def test_the_landing_square_is_taller_than_the_bus_wire(self):
+        """Why TRACK_HALF_HEIGHT_UM is 0.22 and not METAL2_WIRE_WIDTH_UM/2."""
+        self.assertGreater(devgen.TRACK_HALF_HEIGHT_UM, devgen.METAL2_WIRE_WIDTH_UM / 2.0)
+        self.assertAlmostEqual(devgen.TRACK_HALF_HEIGHT_UM, 0.22, places=6)
+
+
+class PackTracksOverDevicesTests(unittest.TestCase):
+    """Known-answer tests for the obstacle-aware track assignment (issue #458).
+
+    The synthetic nets below are pad lists, exactly what
+    ``divider_chain.build()``/``div23_cell.build()`` hand it; every expected
+    track_y is ``y_floor + k*0.75`` for a k derivable by hand from the
+    obstacles given.
+    """
+
+    def test_with_no_obstacles_it_stacks_from_y_floor_like_pack_tracks(self):
+        """The degenerate case must equal pack_tracks(base_y=y_floor), so the
+        new function is a strict generalization rather than a different
+        algorithm wearing the same name."""
+        nets = {
+            "A": [(0.0, 0.0), (10.0, 0.0)],
+            "B": [(5.0, 0.0), (15.0, 0.0)],   # overlaps A
+            "C": [(30.0, 0.0), (40.0, 0.0)],  # overlaps neither
+        }
+        got = devgen.pack_tracks_over_devices(nets, y_floor=100.0, obstacles=[])
+        self.assertEqual(got, devgen.pack_tracks(nets, base_y=100.0))
+        # and, concretely: A and C share the bottom track, B opens a second.
+        self.assertEqual(got, {"A": 100.0, "C": 100.0, "B": 100.0 + PITCH})
+
+    def test_y_floor_is_a_hard_lower_bound_even_with_the_plane_below_empty(self):
+        got = devgen.pack_tracks_over_devices({"A": [(0.0, -50.0)]}, y_floor=7.0, obstacles=[])
+        self.assertEqual(got["A"], 7.0)
+
+    def test_a_track_steps_up_past_an_obstacle_band_in_its_own_x_range(self):
+        # One obstacle spanning y = -1 .. 1 across the net's whole x range.
+        # y = 0 and 0.75 are blocked (0.75 - 0.22 = 0.53 < 1 + 0.41); 1.50 is
+        # the first legal step (1.50 - 0.22 = 1.28 >= 1 + 0.41 = 1.41? no) --
+        # 2.25 - 0.22 = 2.03 >= 1.41, so 2.25 is the answer.
+        got = devgen.pack_tracks_over_devices(
+            {"A": [(0.0, 0.0), (10.0, 0.0)]},
+            y_floor=0.0,
+            obstacles=[(-5.0, -1.0, 15.0, 1.0)],
+        )
+        self.assertAlmostEqual(got["A"], 2.25, places=6)
+
+    def test_an_obstacle_outside_a_nets_x_range_does_not_push_it_up(self):
+        """The property the whole lever rests on: clearance is judged per net,
+        against the obstacles that net's own drawn rectangle can actually
+        reach -- which is why a glue-local net can use a y a block-wide supply
+        trunk cannot."""
+        obstacle = [(100.0, -1.0, 120.0, 1.0)]
+        local = devgen.pack_tracks_over_devices(
+            {"A": [(0.0, 0.0), (10.0, 0.0)]}, y_floor=0.0, obstacles=obstacle
+        )
+        spanning = devgen.pack_tracks_over_devices(
+            {"A": [(0.0, 0.0), (200.0, 0.0)]}, y_floor=0.0, obstacles=obstacle
+        )
+        self.assertAlmostEqual(local["A"], 0.0, places=6)
+        self.assertAlmostEqual(spanning["A"], 2.25, places=6)
+
+    def test_a_free_corridor_between_two_obstacle_bands_is_used(self):
+        """The inter-row channel, in miniature: two obstacle bands with a gap
+        between them, and a net that fits in the gap rather than climbing over
+        the upper band."""
+        obstacles = [(-5.0, -1.0, 15.0, 0.20), (-5.0, 3.0, 15.0, 9.0)]
+        got = devgen.pack_tracks_over_devices(
+            {"A": [(0.0, 0.0), (10.0, 0.0)]}, y_floor=0.0, obstacles=obstacles
+        )
+        # Legal window: 0.20 + 0.41 + 0.22 = 0.83 up to 3.0 - 0.63 = 2.37.
+        # On the 0.75 grid from 0.0 that is 1.50 (and 2.25); the lowest wins.
+        self.assertAlmostEqual(got["A"], 1.50, places=6)
+        self.assertLess(got["A"], 9.0, "the net climbed over the corridor instead of into it")
+
+    def test_two_nets_that_overlap_in_x_never_share_a_track(self):
+        got = devgen.pack_tracks_over_devices(
+            {"A": [(0.0, 0.0), (10.0, 0.0)], "B": [(5.0, 0.0), (15.0, 0.0)]},
+            y_floor=0.0,
+            obstacles=[],
+        )
+        self.assertNotEqual(got["A"], got["B"])
+        self.assertAlmostEqual(abs(got["A"] - got["B"]), PITCH, places=6)
+
+    def test_two_nets_on_one_track_keep_pack_tracks_own_x_clearance(self):
+        """Same-track separation is judged exactly as pack_tracks() judges it
+        -- an x gap of at least `clearance` between the two drawn extents,
+        landing squares included."""
+        # Extents are pad-x +/- 0.22, so pads at 0 and 0.85 give a 0.41 gap.
+        just_clear = devgen.pack_tracks_over_devices(
+            {"A": [(0.0, 0.0)], "B": [(0.44 + CLEAR, 0.0)]}, y_floor=0.0, obstacles=[]
+        )
+        self.assertEqual(just_clear["A"], just_clear["B"])
+        too_close = devgen.pack_tracks_over_devices(
+            {"A": [(0.0, 0.0)], "B": [(0.44 + CLEAR - 0.01, 0.0)]}, y_floor=0.0, obstacles=[]
+        )
+        self.assertNotEqual(too_close["A"], too_close["B"])
+
+    def test_a_nets_own_pad_square_is_an_obstacle_to_itself(self):
+        """Deliberately conservative: M2.2a is a raw spacing check with no net
+        awareness, so a track that lands a hair away from its *own* pad's
+        landing square would leave exactly the notch that rule reports."""
+        pads = [(0.0, 0.0)]
+        got = devgen.pack_tracks_over_devices(
+            {"A": pads}, y_floor=0.0, obstacles=devgen.riser_landing_boxes(pads)
+        )
+        self.assertGreaterEqual(got["A"] - HALF, 0.22 + CLEAR)
+
+    def test_it_raises_by_name_on_a_net_with_no_pads(self):
+        with self.assertRaises(ValueError) as cm:
+            devgen.pack_tracks_over_devices({"EMPTY": []}, y_floor=0.0, obstacles=[])
+        self.assertIn("EMPTY", str(cm.exception))
+
+    def test_the_result_does_not_depend_on_dict_insertion_order(self):
+        a = {"A": [(0.0, 0.0), (10.0, 0.0)], "B": [(5.0, 0.0), (15.0, 0.0)], "C": [(30.0, 0.0)]}
+        b = {"C": [(30.0, 0.0)], "B": [(5.0, 0.0), (15.0, 0.0)], "A": [(0.0, 0.0), (10.0, 0.0)]}
+        self.assertEqual(
+            devgen.pack_tracks_over_devices(a, y_floor=0.0, obstacles=[]),
+            devgen.pack_tracks_over_devices(b, y_floor=0.0, obstacles=[]),
+        )
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
+class Metal2BoxesTests(unittest.TestCase):
+    """metal2_boxes() must see through a placed instance, because that is the
+    obstacle divider_chain.py actually has to route around."""
+
+    def test_it_reads_back_shapes_drawn_directly_into_the_canvas(self):
+        canvas = devgen.Canvas("metal2_boxes_direct_test")
+        canvas.rect("metal2", 1.0, 2.0, 3.0, 4.0)
+        self.assertEqual(
+            [tuple(round(v, 6) for v in b) for b in devgen.metal2_boxes(canvas)],
+            [(1.0, 2.0, 3.0, 4.0)],
+        )
+
+    def test_it_ignores_other_layers(self):
+        canvas = devgen.Canvas("metal2_boxes_layers_test")
+        canvas.rect("metal1", 0.0, 0.0, 1.0, 1.0)
+        canvas.rect("metal3", 0.0, 0.0, 1.0, 1.0)
+        self.assertEqual(devgen.metal2_boxes(canvas), [])
+
+    def test_it_sees_metal2_inside_an_unflattened_placed_instance(self):
+        import klayout.db as db
+
+        canvas = devgen.Canvas("metal2_boxes_instance_test")
+        sub = canvas.layout.create_cell("sub")
+        dbu_per_um = int(round(1.0 / canvas.dbu))
+        sub.shapes(canvas.layout.layer(*devgen.LAYER["metal2"])).insert(
+            db.Box(0, 0, 2 * dbu_per_um, 1 * dbu_per_um)
+        )
+        canvas.top.insert(
+            db.CellInstArray(sub.cell_index(), db.Trans(db.Vector(10 * dbu_per_um, 20 * dbu_per_um)))
+        )
+        self.assertEqual(
+            [tuple(round(v, 6) for v in b) for b in devgen.metal2_boxes(canvas)],
+            [(10.0, 20.0, 12.0, 21.0)],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
