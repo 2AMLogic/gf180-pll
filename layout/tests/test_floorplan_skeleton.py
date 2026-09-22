@@ -138,10 +138,11 @@ class BlockPlacementTests(unittest.TestCase):
         self.assertGreater(
             extent,
             skeleton.AREA_BUDGET_UM2,
-            "floorplan now fits the 0.15 mm^2 budget -- if a reduction pass "
-            "achieved this, restore the original assertLess() form and update "
-            "skeleton.py's DIVIDER_LOCK fail-loud note and PLL-FLOORPLAN.md "
-            "section 5 to match",
+            "floorplan now fits the 0.30 mm^2 budget (spec/pll.md#area as "
+            "amended by DR-016) -- if a reduction pass achieved this, restore "
+            "the original assertLess() form and update skeleton.py's "
+            "DIVIDER_LOCK fail-loud note and PLL-FLOORPLAN.md section 5 to "
+            "match",
         )
         # Ratchet: ~0.63e6 um^2 -- issue #454 packed the div23_cell macro's own
         # track band down (was ~0.61e6 at #344, ~1.09e6 at #341, ~1.19e6 at
@@ -158,11 +159,18 @@ class BlockPlacementTests(unittest.TestCase):
         over the entire 0.15 mm^2 die target for one block. Folding the row
         (#344) brought it to 0.1321 mm^2, and packing the div23_cell macro's
         own track band (#454) to 0.0926 mm^2. This is a necessary condition
-        for the chip to fit, never a sufficient one: PLL-FLOORPLAN.md section
-        5.6's re-summed total is still 1.70x the budget.
+        for the chip to fit, never a sufficient one: the re-summed total is
+        1.82x that target as drawn today (PLL-FLOORPLAN.md section 5.11).
+
+        Asserted against ``AREA_BUDGET_DRAFT_UM2`` rather than the row
+        ``AREA_BUDGET_UM2`` now carries: DR-016 amended the spec row to
+        0.30 mm^2, and re-pointing this assertion at the amended number would
+        leave the test passing while saying nothing (any one block is under
+        0.30 mm^2 by a wide margin). The claim this test makes is about the
+        draft target, so it keeps that constant.
         """
         area = skeleton.DIVIDER_CHAIN_STANDALONE_W_UM * skeleton.DIVIDER_CHAIN_STANDALONE_H_UM
-        self.assertLess(area, skeleton.AREA_BUDGET_UM2)
+        self.assertLess(area, skeleton.AREA_BUDGET_DRAFT_UM2)
         self.assertLess(area, 2634.28 * 57.07, "the recorded footprint did not shrink against #341")
 
     def test_pfd_cp_standalone_footprint_is_recorded_and_positive(self):

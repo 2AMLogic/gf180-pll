@@ -346,8 +346,35 @@ DIVIDER_LOCK = Block(
     h=(LOCK_DETECTOR.y + LOCK_DETECTOR.h) - DIVIDER_CHAIN.y + 2 * DIVIDER_LOCK_MARGIN,
 )
 
-# FAIL-LOUD: this region is a 1.89x whole-chip area overrun, stated not absorbed.
+# FAIL-LOUD: this region drove a whole-chip area overrun against the draft
+# 0.15 mm^2 target -- 2.9x at its worst, 1.82x as drawn today -- which is why
+# spec/pll.md#area is now **0.30 mm^2** (DR-016, issue #456).
 # -----------------------------------------------------------------------------
+# READ THE NEXT PARAGRAPHS AS HISTORICAL. Every "1.89x", "0.15 mm^2" and
+# "0.2272 mm^2" figure below was correct against the target and the geometry in
+# force when it was written, and is kept rather than rewritten, per
+# PLL-FLOORPLAN.md's append-only revision convention. The current position, all
+# of it measured off committed GDS by ``python3 layout/run_pv.py area``:
+#
+#   * loop filter 36,936 (a DR-006 calculation) + vco_block 31,826 + pfd_cp
+#     26,665 (folded at #455, was 35,281) + divider_chain 92,618 +
+#     lock_detector 30,586 = **218,631 um^2**, i.e. **273,289 um^2
+#     (0.2733 mm^2)** after this section's x1.25 -- **1.82x** the draft target
+#     and **91.1 %** of the amended 0.30 mm^2 row. PLL-FLOORPLAN.md section
+#     5.11 and DR-016 carry the derivation.
+#   * The draft target was not reachable, and that is a measurement rather than
+#     a projection: strike Metal2 routing entirely and each block's own drawn
+#     device bands still sum (with the loop filter) to 136,141 um^2 ->
+#     170,176 um^2, 1.13x the draft target. 57.2 % of what that target allowed
+#     is the loop filter (capacitance-set, DR-006) plus vco_block's guard-ring
+#     and tap spacing -- neither a layout lever.
+#   * ``test_area_audit.py`` now re-derives that sum from the committed GDS on
+#     every run and asserts it against ``AREA_BUDGET_BLOCK_SUM_UM2`` below, so
+#     geometry growing past the amended row is a red build rather than a note
+#     nobody re-read.
+#
+# The historical record follows.
+#
 # PLL-FLOORPLAN.md section 5 budgeted "divider chain + lock detector" at
 # 0.0038-0.0052 mm^2 (a ROM std-cell-row estimate made when no physical view
 # existed for either block). The two real blocks measure 0.0926 mm^2 +
@@ -451,7 +478,35 @@ DIVIDER_LOCK = Block(
 # the 0.15 mm^2 whole-chip target, which is necessary but not sufficient for
 # the chip to.
 DIVIDER_LOCK_AREA_UM2 = DIVIDER_LOCK.w * DIVIDER_LOCK.h
-AREA_BUDGET_UM2 = 150_000.0
+
+#: ``spec/pll.md#area``'s whole-block target, **amended by DR-016 (issue #456)**
+#: from the draft 150,000 um^2 on the measured post-lever total. Every "0.15
+#: mm^2" sentence in the comment block above and in PLL-FLOORPLAN.md sections
+#: 5.1-5.10 predates that amendment and is kept as written; section 5.11 is the
+#: live statement.
+AREA_BUDGET_UM2 = 300_000.0
+
+#: The draft target the overrun series above is written against. Kept as its own
+#: name because several assertions are statements about *that* number ("the
+#: divider chain alone no longer busts the whole-chip target") and mean nothing
+#: if silently re-pointed at the amended one.
+AREA_BUDGET_DRAFT_UM2 = 150_000.0
+
+#: PLL-FLOORPLAN.md section 5's top-level overhead multiplier (guard ring,
+#: four-domain supply trunk routing, block-to-block spacing). Still a ROM
+#: estimate: no assembled pll_top GDS exists to measure it against (issue #17).
+TOP_LEVEL_OVERHEAD = 1.25
+
+#: What the amended row allows as a *sum of block footprints*, i.e. before the
+#: overhead multiplier above. 240,000 um^2.
+AREA_BUDGET_BLOCK_SUM_UM2 = AREA_BUDGET_UM2 / TOP_LEVEL_OVERHEAD
+
+#: The loop filter's contribution to that sum: DR-006 / PLL-FLOORPLAN.md
+#: section 3's 32,118 um^2 device sum (R 856 + C1 30,276 + C2 986) x1.15 for
+#: bulk taps and interconnect. A **calculation, not a layout** -- the loop
+#: filter has no drawn cell -- which is why it is a constant here rather than a
+#: GDS the area audit measures.
+LOOP_FILTER_AREA_UM2 = 36_936.0
 
 BLOCKS = (PFD_CP, LOOP_FILTER, VCO_CORE, DIVIDER_LOCK)
 

@@ -3,9 +3,10 @@
 WHY THIS EXISTS
 ---------------
 ``layout/floorplan/PLL-FLOORPLAN.md`` §5.1-§5.4 track a real, growing area
-overrun against ``spec/pll.md#area``'s <= 0.15 mm2 target, and each revision
-names the next lever to pull. Through §5.4 those levers were named from
-*derived* quantities -- most consequentially "at 0.1321 mm2 for 452
+overrun against ``spec/pll.md#area``'s then-<= 0.15 mm2 target (amended to
+<= 0.30 mm2 by DR-016 / issue #456, on the total this module measures), and
+each revision names the next lever to pull. Through §5.4 those levers were
+named from *derived* quantities -- most consequentially "at 0.1321 mm2 for 452
 transistors the block spends ~292 um2/transistor ... the
 diffusion-island-per-device convention" (§5.3), which reads device density as
 the cause because um2/transistor is the only number that had been computed.
