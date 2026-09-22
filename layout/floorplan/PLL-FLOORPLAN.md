@@ -180,7 +180,9 @@ as-drawn device geometry, not an estimate.** `design/loop_filter.sch`:
 
 **C1 is the area-dominant element of the whole block, confirmed**: 30,276 µm²
 against the < 0.15 mm² (150,000 µm²) budget is **≈20.2 %** of the entire
-floorplan's area on this one device group alone — DR-006 and #10's own
+floorplan's area on this one device group alone — **≈10.1 % of the amended
+≤ 0.30 mm² row** (DR-016, #456; see §5.11), the *ratio* being the point either
+way — DR-006 and #10's own
 acceptance criteria already flag this; this record's job is to place it, not
 re-derive it. Placement:
 
@@ -304,6 +306,19 @@ pass. Subtotal = 0.0369 (loop filter) + 0.014 (VCO midpoint) + 0.015 (PFD+CP
 midpoint) + 0.0045 (divider+lock midpoint) mm²; conservative = 0.0369 + 0.017
 + 0.020 + 0.0052 mm², both ×1.25 for top-level overhead.
 
+> **The target this section is written against has been amended, and the
+> fail-loud clause below now fires against the amended one.** `spec/pll.md`'s
+> Area row is **≤ 0.30 mm² (300,000 µm²)** as of **DR-016** (#456), amended from
+> the draft ≤ 0.15 mm² on the measured post-lever total this section's own
+> revisions produced. **Read every "< 0.15 mm²", "150,000 µm²", "120,000 µm²
+> pre-overhead" and "N× over" figure in §5 and §5.1–§5.10 below as historical**
+> — each was correct against the target in force when it was written, and none
+> is rewritten, per this record's append-only revision convention. §5.11 states
+> the current position: **0.2733 mm² measured against the 0.30 mm² row, met,
+> with 8.9 % margin on the block sum.** The fail-loud clause at the end of this
+> section is restated against 0.30 mm² there, and *that* restatement is the live
+> one.
+
 **Against the draft < 0.15 mm² (150,000 µm²) target: PASS at both the
 midpoint (≈0.088 mm², ≈41 % margin) and the conservative high-end estimate
 (≈0.099 mm², ≈34 % margin).** The loop filter alone (the only fully-pinned
@@ -322,6 +337,17 @@ future pass**: if real per-block layout pushes the conservative estimate's
 methodology predicts is plausible (the ROM ranges above already span a
 factor of ~1.4–1.5×), not a surprise — the next floorplan revision should
 state the overrun explicitly rather than silently rounding the total down.
+
+**Fail-loud condition, as it stands today (DR-016, #456 — this supersedes the
+paragraph above, which is kept as written because it is the clause that
+fired).** The target is **≤ 0.30 mm² (300,000 µm²)**, i.e. ≤ **240,000 µm²** of
+summed block footprint against this section's ×1.25 top-level overhead. The
+condition is unchanged in kind and now reads: **if the measured block sum
+exceeds 240,000 µm², or if an assembled `pll_top` measures a top-level overhead
+above ×1.372, say so in a new revision rather than re-deriving the budget to
+fit.** Measured today: **218,631 µm²**, **×1.25 → 273,289 µm² (0.2733 mm²)**,
+**met, 8.9 % margin on the block sum** — the margin being sized to the overhead
+factor's own uncertainty and nothing else. See §5.11.
 
 ### 5.1 Revision: the fail-loud condition has fired (issues #293/#324, #296, #310)
 
@@ -1067,6 +1093,97 @@ inherited. `netcheck.check_gds()` reports 76 nets, no short, no split.
 files — so `pfd`, `cp_output_stage`, `cp_array`, `cp_dumpbuf` and the
 `cp_leg_*`/`pfdcp_inv` leaves are proven *unchanged* rather than assumed to
 be.
+
+### 5.11 Revision: the spec row is amended, and the overrun series ends at a measurement (issue #456, DR-016)
+
+**Status: the target is now ≤ 0.30 mm² and the block meets it at 0.2733 mm².**
+This is the end state §5.5 named and §5.5, §5.8, §5.9 and §5.10 each declined to
+write — "**`spec/pll.md#area` is still not amended, and #456's precondition is
+still not met**" — because each of them was looking at a projection. The two
+sized levers (#454, #455) are now spent and DRC/LVS-clean, so the total is a
+measurement, and the decision record is **DR-016**
+(`spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md`).
+**No geometry changes in this revision**: nothing under `layout/pll_top/`, no
+committed GDS, no generator, no deck verdict is touched. What changes is the
+number the fail-loud clause fires against.
+
+Re-derived from committed geometry at `origin/main` @ `62ceb087` by
+`python3 layout/run_pv.py area`, not from any estimate — and identical to
+§5.10's table, because the committed `layout/evidence/area-audit/area-audit.md`
+was already current:
+
+| Block | as-drawn | Basis |
+|---|---|---|
+| Loop filter (R + C1 + C2) | 36,936 µm² | DR-006 / §3 — still a calculation; no loop-filter layout exists |
+| `vco_block` | 31,826 µm² | committed GDS |
+| `pfd_cp` | 26,665 µm² | committed GDS (folded at §5.10/#455) |
+| `divider_chain` | 92,618 µm² | committed GDS (packed at §5.8/#454) |
+| `lock_detector` | 30,586 µm² | committed GDS (trim network drawn at §5.9/#449) |
+| **Sum** | **218,631 µm² (0.2186 mm²)** | |
+| **After §5's ×1.25** | **273,289 µm² (0.2733 mm²)** | **1.82× the draft 0.15 mm²; 91.1 % of the amended 0.30 mm²** |
+
+**Why 0.15 mm² is unreachable, as three measured bounds rather than one
+projection.** DR-016 §Context carries the full arithmetic; the shape of it is
+that each bound is tighter than the last and none reaches the draft target:
+
+| Bound | Sum | After ×1.25 | vs 0.15 mm² |
+|---|---|---|---|
+| As drawn | 218,631 µm² | 273,289 µm² | **1.82×** |
+| Every remaining named lever at its geometric ceiling | 143,955 µm² | 179,944 µm² | **1.20×** |
+| **Every Metal2 track routed at zero area cost** | **136,141 µm²** | **170,176 µm²** | **1.13×** |
+
+The third is the one that settles it. Strike routing entirely and what is left
+is each block's drawn device bands — `width × device band`, which is invariant
+under folding, since a fold halves the width and doubles the band — plus the
+loop filter: 31,654 + 16,921 + 34,681 + 15,949 + 36,936. Every lever this
+record has ever named or sized, spent or unspent, is a Metal2-band lever, so
+**1.13× is a bound on all of them at once.**
+
+Two terms carry it, and §5.5 identified both correctly: the loop filter
+(36,936 µm², set by DR-006's C1/C2 *capacitance* at 3.988 fF/µm² — a
+loop-dynamics change, not a layout one) and `vco_block` at its ceiling
+(31,654 µm², whose height *is* its 183.48 µm device band against a 1.00 µm
+no-device band, its 60.8 % whitespace being the §1 guard-ring and 15 µm
+tap-pitch spacing the foundry deck requires). 68,590 µm² between them — **57.2 %
+of the 120,000 µm² a 0.15 mm² row allowed**, for two of five blocks.
+
+**§5.9's and §5.10's projections carried a stale `divider_chain` ceiling, and
+the correction moves the projection the *other* way.** §5.9 reached 185,263 µm²
+as `162,145 − 7,468 + 30,586` — #442's whole-chip ceiling sum with
+`lock_detector`'s row swapped — which (a) inherits `divider_chain`'s
+**pre-#454** ceiling of 72,142 µm², computed on the 73-track / 100.29 µm block
+§5.8 replaced with a 43-track / 70.29 µm one, and (b) subtracts `lock_detector`'s
+*as-drawn* 7,468 µm² where that sum contained its 6,562 µm² ceiling, a 906 µm²
+double-count. §5.10's 197,076 µm² is §5.9's figure plus 11,813 µm², so it
+inherits both. Re-derived from the current audit — `max(packed-track floor,
+device band) × width`, the same rule #442 defined — the ceiling is 143,955 µm²
+and **1.20×, not 1.64×**. This is recorded because the direction is inconvenient
+for the amendment: the projected floor is *better* than this record has been
+carrying, and it is still over.
+
+**The amendment, and what its margin is for.** `spec/pll.md#area` and summary
+table row 15 now read **≤ 0.30 mm²**. That is the measured 273,289 µm² carrying
+§5's ×1.25 overhead factor up to **×1.372** before the row fails — margin sized
+to the one term in the product that is *not* measured, since no assembled
+`pll_top` GDS exists (#17). Equivalently: ≤ 240,000 µm² of block footprint
+against the 218,631 µm² drawn, **8.9 %**. It is not an allowance for block
+growth, and DR-016 was deliberately **not** set at either projected bound above
+— those are estimates of the class §5.8 and §5.10 each measured delivering
+65.9 % and 42 % of its sizing when actually built.
+
+**This is not the end of area reduction, and the row can still go down.** Three
+levers remain open and unexecuted: **#458** (`divider_chain`'s residual
+band-over-cells — the 7,814 µm² between the 1.20× and 1.13× bounds above, and
+the only block where the two differ), **#469** (`cp_output_stage`'s glue bus and
+`cp_dumpbuf`'s band inside `pfd_cp`, 9,744 µm² / 36.5 % of that block, §5.10),
+and an **unnamed** lever against `lock_detector`'s 65.5 % whitespace (§5.9 left
+it unnamed rather than guess a number, and this revision keeps that discipline).
+Each landing is grounds for a successor record amending the row *downward*, on
+the same standard: measured, from committed geometry, DRC/LVS-clean.
+
+**Still not a DRC/LVS regression, trivially.** No geometry changed. The
+`layout/tests` suite passes unchanged, `area-audit.md` is byte-identical to
+what is committed, and every block's signoff status is what §5.10 left it.
 
 ## 6. GDS skeleton
 

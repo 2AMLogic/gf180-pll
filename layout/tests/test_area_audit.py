@@ -37,6 +37,7 @@ try:
 except ImportError:
     _HAVE_KLAYOUT = False
 
+from floorplan import skeleton  # noqa: E402
 from harness import area  # noqa: E402
 
 EVIDENCE = LAYOUT_DIR / "evidence"
@@ -328,6 +329,62 @@ class CommittedBlockTests(unittest.TestCase):
             "layout/evidence/area-audit/area-audit.md is stale -- regenerate with "
             "`python3 layout/run_pv.py area --out layout/evidence/area-audit/area-audit.md` "
             "and re-read PLL-FLOORPLAN.md §5.5's arithmetic against the new figures",
+        )
+
+
+@unittest.skipUnless(_HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
+class WholeChipAreaRowTests(unittest.TestCase):
+    """``spec/pll.md#area``'s fail-loud clause, as a check rather than a sentence.
+
+    ``PLL-FLOORPLAN.md`` §5 has carried a "fail-loud condition for a future
+    pass" in prose since it was written, and it worked -- §5.1 through §5.11
+    are that clause firing, pass after pass. It fired because a human (or an
+    agent) re-read it each time, which is exactly the hand-maintenance §5.5
+    switched the audit away from after the VCO row drifted 634 um^2 with three
+    documents still quoting the old figure.
+
+    DR-016 (#456) amended the row to 0.30 mm^2 on the measured total. These
+    two tests make that number load-bearing: the whole-chip sum is re-derived
+    from the committed GDS on every run, so geometry that grows past the
+    amended row is a red build, and the historical claim that the *draft*
+    target was missed cannot silently stop being true either.
+    """
+
+    def _total_um2(self) -> float:
+        """Loop filter + every committed block bbox, as PLL-FLOORPLAN.md §5.11 sums them."""
+        import run_pv  # noqa: PLC0415 -- CLI module, imported only for its block table
+
+        blocks = sum(
+            area.audit_gds(EVIDENCE / rel, name=name).bbox_um2
+            for name, rel, _ in run_pv.AREA_AUDIT_BLOCKS
+        )
+        return blocks + skeleton.LOOP_FILTER_AREA_UM2
+
+    def test_the_whole_chip_total_still_meets_the_amended_area_row(self):
+        total = self._total_um2()
+        self.assertLessEqual(
+            total,
+            skeleton.AREA_BUDGET_BLOCK_SUM_UM2,
+            f"summed block footprint is {total:,.0f} um^2, past the "
+            f"{skeleton.AREA_BUDGET_BLOCK_SUM_UM2:,.0f} um^2 that spec/pll.md#area's "
+            f"{skeleton.AREA_BUDGET_UM2 / 1e6:.2f} mm^2 row allows before "
+            f"PLL-FLOORPLAN.md §5's x{skeleton.TOP_LEVEL_OVERHEAD} overhead. "
+            "State the overrun in a new PLL-FLOORPLAN.md §5 revision and amend the "
+            "spec row through a decision record -- do not re-derive the budget to fit",
+        )
+
+    def test_the_draft_015_mm2_target_is_still_missed_as_DR_016_records(self):
+        """The other direction: DR-016's whole argument is that 0.15 mm^2 is not
+        reachable. If a future reduction pass ever gets there, that record is
+        superseded and this test is where it says so.
+        """
+        total = self._total_um2() * skeleton.TOP_LEVEL_OVERHEAD
+        self.assertGreater(
+            total,
+            skeleton.AREA_BUDGET_DRAFT_UM2,
+            f"the whole-chip total is now {total:,.0f} um^2, inside the draft "
+            "0.15 mm^2 target DR-016 amended away -- write the successor record "
+            "amending spec/pll.md#area back down, and update PLL-FLOORPLAN.md §5.11",
         )
 
 

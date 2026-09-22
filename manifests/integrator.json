@@ -119,23 +119,27 @@
   "area": {
     "measured_um2": null,
     "measured_mm2": null,
-    "budget_mm2": 0.15,
-    "note": "No pll_top-level (placed-and-routed) area exists — there is no top cell to measure. Each of the four non-passive sub-blocks below has an independently measured, DRC/LVS-clean drawn bounding-box area; the loop filter (passive-only) has no drawn layout and its figure is a device-data calculation (DR-006, x1.15 for bulk taps + interconnect on top of the devices' own body-tie/guard). Summing all five with no placement, routing, or block-to-block guard-ring overhead already exceeds the ratified budget below — see layout/floorplan/PLL-FLOORPLAN.md §5.9 for the current, actively-revised whole-chip accounting (this is fast-moving work; re-derive from that section rather than trusting this snapshot to stay current).",
+    "budget_mm2": 0.3,
+    "budget_source": "spec/pll.md#area, amended by spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md (issue #456)",
+    "draft_budget_mm2": 0.15,
+    "note": "No pll_top-level (placed-and-routed) area exists — there is no top cell to measure. Each of the four non-passive sub-blocks below has an independently measured, DRC/LVS-clean drawn bounding-box area; the loop filter (passive-only) has no drawn layout and its figure is a device-data calculation (DR-006, x1.15 for bulk taps + interconnect on top of the devices' own body-tie/guard). Summing all five, with no top-level placement or routing counted, already exceeds the DRAFT 0.15 mm2 budget by 1.82x — which is why spec/pll.md#area was amended to 0.30 mm2 by DR-016 on this measurement. An integrator should read the amendment, not just the number: the draft target is unreachable for this design (assume every Metal2 track routes at zero area cost and the blocks' own drawn device bands plus the loop filter are still 1.13x it), 57.2 % of what it allowed is the loop filter's DR-006 capacitance plus the VCO's guard-ring/tap spacing, and the amended row's margin is sized to the unmeasured x1.25 top-level overhead factor (it holds up to x1.372) rather than to block growth. Area reduction remains open at issues #458, #469 and an unnamed lock_detector lever. See layout/floorplan/PLL-FLOORPLAN.md §5.11 for the current whole-chip accounting and `python3 layout/run_pv.py area` to reproduce every sub-block figure below.",
     "sub_block_areas_um2": {
       "vco_block": {"value_um2": 31826, "status": "measured (drawn bbox)", "source": "layout/evidence/vco-layout/PROOF-block.md, layout/evidence/area-audit/area-audit.md"},
-      "pfd_cp": {"value_um2": 35281, "status": "measured (drawn bbox)", "source": "layout/evidence/pfd-cp-layout/PROOF.md, layout/evidence/area-audit/area-audit.md"},
+      "pfd_cp": {"value_um2": 26665, "status": "measured (drawn bbox)", "source": "layout/evidence/pfd-cp-layout/PROOF-455-fold.md, layout/evidence/area-audit/area-audit.md"},
       "divider_chain": {"value_um2": 92618, "status": "measured (drawn bbox)", "source": "layout/evidence/divider-chain-layout/PROOF.md, layout/evidence/area-audit/area-audit.md"},
       "lock_detector": {"value_um2": 30586, "status": "measured (drawn bbox)", "source": "layout/evidence/lock-detector-layout/PROOF.md, layout/evidence/area-audit/area-audit.md"},
       "loop_filter": {"value_um2": 36936, "status": "calculation, not a layout", "source": "layout/floorplan/PLL-FLOORPLAN.md §3 (32,118 um2 device sum: R 856 + C1 30,276 + C2 986) x1.15 overhead"}
     },
-    "as_drawn_sum_um2": 227247,
-    "as_drawn_sum_mm2": 0.2272,
-    "after_top_level_overhead_um2": 284059,
-    "after_top_level_overhead_mm2": 0.2841,
-    "overhead_factor_note": "x1.25 whole-block placement/routing overhead, per layout/floorplan/PLL-FLOORPLAN.md §5",
-    "budget_ratio": 1.89,
-    "source": "layout/floorplan/PLL-FLOORPLAN.md §5.9 (issue #449), layout/evidence/area-audit/area-audit.md",
-    "as_of_commit": "0fca67d4"
+    "as_drawn_sum_um2": 218631,
+    "as_drawn_sum_mm2": 0.2186,
+    "after_top_level_overhead_um2": 273289,
+    "after_top_level_overhead_mm2": 0.2733,
+    "overhead_factor_note": "x1.25 whole-block placement/routing overhead, per layout/floorplan/PLL-FLOORPLAN.md §5. Still a ROM estimate — no assembled pll_top GDS exists to measure it against (issue #17) — and it is the only unmeasured term in the total above.",
+    "budget_ratio": 0.91,
+    "budget_ratio_note": "against the amended 0.30 mm2 row: MET. Against the draft 0.15 mm2 target the same total is 1.82x — see draft_budget_ratio.",
+    "draft_budget_ratio": 1.82,
+    "source": "spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md (issue #456), layout/floorplan/PLL-FLOORPLAN.md §5.11, layout/evidence/area-audit/area-audit.md",
+    "as_of_commit": "62ceb087"
   },
   "maturity": {
     "ladder": "simulation-complete -> layout DRC/LVS-clean -> shuttle seat -> measured silicon over temperature (README.md)",
