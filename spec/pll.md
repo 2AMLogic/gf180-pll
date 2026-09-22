@@ -113,6 +113,14 @@ No layout parasitics, no extracted netlists, no silicon. Every measured number
 is a pre-layout simulation result, and extraction (#18) is where most of them
 are at risk. Nothing in this repository has been fabricated or measured.
 
+### Who else reads this file
+
+[Consumers](#consumers), near the end of this document, names every repo that
+declares a dependency on this block and checks its stated requirements
+against the rows above. The structured, machine-readable counterpart —
+top cell, port list, netlist/GDS paths, measured area, maturity rung — is
+[`manifests/integrator.json`](../manifests/integrator.json).
+
 ---
 
 ## Summary table
@@ -1280,6 +1288,96 @@ Three separate supply domains, as a pin-list commitment (DR-001 Decisions 2 and
 Corner binding: **n/a** — the supply is the independent variable every other
 row's corner binding is stated against. All three supply points (2.97 / 3.30 /
 3.63 V) are swept on every campaign.
+
+---
+
+# Consumers
+
+**This block's consumers are part of its spec** (2am cross-cutting rule 9,
+`2AMLogic/2am` `REUSE.md` §"Adopt or record", ratified 2am#899, widened
+2026-09-21 to same-PDK sub-blocks and cross-repo clock interfaces). A repo
+becomes a consumer of this block exactly when `2AMLogic/2am` `repos.yml`
+records a `consumes: [gf180-pll]` edge on it. **As of a live read of that
+file at commit `9032d1d`, 2026-09-21, three repos do**: `gf180-tmds-tx`,
+`gf180-usb2-phy`, and one private full-chip canary. Each gets a row set
+below. "Unknown" is a legitimate row value (the consumer states no bound);
+an unnamed consumer or an unstamped row is not.
+
+The machine-readable integrator view this section's Meets/Unknown column is
+checked against — top cell, port list, netlist/GDS paths, measured area,
+maturity rung — lives at [`manifests/integrator.json`](../manifests/integrator.json),
+not duplicated here.
+
+## gf180-tmds-tx — DVI-mode TMDS transmitter (gf180mcu)
+
+[`gf180-tmds-tx`](https://github.com/2AMLogic/gf180-tmds-tx) `README.md`
+(§Scope, read at commit `8578f8b`, 2026-09-15) states: *"Not in scope: the
+PLL. It comes from a sibling canary; specify the interface to it, including
+the jitter budget, and stop."* — the sibling is never named. The numeric
+interface contract is `spec/tmds-tx.md` §2 / DR-0004, read at the same
+repo's commit `595b5c1` (2026-09-15):
+
+| Requirement | Consumer's value (`gf180-tmds-tx` @ `595b5c1`) | This block's ratified spec | Verdict |
+|---|---|---|---|
+| Reference input | 27.000 MHz, single-ended CMOS, ±100 ppm | [Reference input](#reference-input): 1 – 25 MHz | **Not met** — 27.000 MHz is 2 MHz (8 %) above the ratified 25 MHz ceiling |
+| Output ("bit-rate clock"), 720p60 target | 742.5 MHz | [Output band](#output-band): 10 – 200 MHz, ratified; measured ceiling 247.8 MHz at one fast-corner point (`all-slow`/−40 °C/3.63 V) is evidence, not a ratified extension | **Not met** — over 3.7× the ratified ceiling, and over 3× even the unratified measured point |
+| Output ("bit-rate clock"), 480p fallback | 270 MHz | same | **Not met** — 35 % over the ratified 200 MHz ceiling, and 9 % over the unratified 247.8 MHz measured point |
+| PLL-attributable jitter | ≤ 0.10 UI peak-to-peak on the bit-rate clock (≈135 ps @ 742.5 MHz, ≈370 ps @ 270 MHz) | [Period jitter](#period-jitter): ≤ 1.0 % of the output period, RMS — a different quantity (RMS-of-period vs. peak-to-peak-in-UI) at a different frequency | **Unknown** — no closed-loop jitter measurement exists at either requested frequency (both are outside the ratified band), and the unit mismatch means an in-band number would still need an explicit conversion before comparison |
+| Clock relationship | bit-rate and pixel-rate clocks delivered as a fixed, edge-aligned 10:1 pair | n/a — this block has one output (`CLK`) and a static integer divider ratio `N` = 4 – 64 in the *feedback* path, not a second, pixel-rate output | **Not met as stated** — supplying both outputs described would need a second divided output or a different integration architecture, neither of which exists here |
+
+Both requested frequencies exceed the ratified [output band](#output-band)
+ceiling, and the reference frequency separately exceeds the ratified
+[reference input](#reference-input) ceiling. This is the mismatch
+[`gf180-tmds-tx#194`](https://github.com/2AMLogic/gf180-tmds-tx/issues/194)
+(open, `loom:operator-only` as of 2026-09-21) exists to resolve, naming three
+options: (a) this repo extends its output band, (b) `gf180-tmds-tx` takes a
+lower-rate clock and multiplies/serializes locally, or (c) a different,
+named clock source. **This section does not decide that question.**
+Extending the ratified [output band](#output-band) past 200 MHz is a scope
+change [Output band](#output-band) already prices as non-trivial: past
+200 MHz the extracted Kvco reaches 206 MHz/V, past the fixed loop filter's
+bound, so the stretch needs a filter re-design or a finer band map, not just
+more Vctrl — it is not undertaken by this PR. When `gf180-tmds-tx#194`
+decides, the outcome is carried here as a spec row change or a new decision
+record.
+
+## gf180-usb2-phy — USB 2.0 device PHY (gf180mcu)
+
+[`gf180-usb2-phy`](https://github.com/2AMLogic/gf180-usb2-phy) records
+`consumes: [gf180-pll]` in `2am/repos.yml` (@ `9032d1d`) with the comment
+*"clock source not yet named in the repo; the kit PLL per product's block
+matrix"*. That repo's own ratified spec (`spec/usb2-device-phy.md` §7, read
+at commit `e831a7b`, 2026-09-05) states a **12 MHz external
+crystal/resonator** as its reference clock and a 12 MHz UTMI interface
+clock — it names no PLL-derived clock requirement anywhere in its ratified
+target table.
+
+| Requirement | Consumer's value (`gf180-usb2-phy` @ `e831a7b`) | This block's ratified spec | Verdict |
+|---|---|---|---|
+| Any clock this block would supply | **Unknown** — not stated in `gf180-usb2-phy`'s own ratified spec; the `repos.yml` edge comment itself says the source is unnamed | n/a — nothing named to check a ratified row against | **Unknown** |
+
+## Private full-chip canary
+
+`2am/repos.yml` (@ `9032d1d`) records a third `consumes: [gf180-pll]` edge,
+on a private full-chip canary. Per this repo's own `CLAUDE.md` ("nothing
+about ... the contents of other 2AM Logic repositories belongs in this
+one"), no requirement rows or other content from that repo are reproduced
+here — a private repo is also not a public audience for a public spec
+section. What is stated publicly is the edge's existence and its date. If
+that consumer's own requirements are ever made public, this section gains a
+row set for it the same way the two above have one.
+
+## Mechanism for future consumers
+
+A new row set is added here the same way the three above were: a `consumes:
+[gf180-pll]` edge appears in `2AMLogic/2am` `repos.yml`, this section
+records the consumer's stated requirements (or the literal value `Unknown`
+where none is stated, with a note naming where was checked) against this
+block's ratified rows, and a verdict is recorded. Findings about a
+consumer's *own* block belong on that consumer's repo, not here (the
+`sky130-sar-adc#346` pattern cited in `2am/REUSE.md`) — this section records
+what a consumer *requires* of this block, not defects in the consumer's own
+design.
 
 ---
 
