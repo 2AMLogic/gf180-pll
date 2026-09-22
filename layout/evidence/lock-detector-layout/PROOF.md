@@ -1,5 +1,5 @@
 > **This block is LVS-matched** (issue #449's layout work, verdict recorded
-> in [Addendum 4](#addendum-4-issue-449-dr-014s-trim-network-drawn-block-now-lvs-matched--supersedes-every-not-lvs-matched-statement-above),
+> in [Addendum 4](#addendum-4-issue-449-dr-014s-trim-network-drawn-block-lvs-matched--supersedes-every-not-lvs-matched-statement-above),
 > re-derived on a second KLayout and pinned by a test in
 > [Addendum 5](#addendum-5-issue-440-the-match-re-derived-on-a-second-machine-and-a-second-klayout-and-pinned-by-a-test)).
 > Everything below this pointer is the original issue #296 record, unedited
@@ -703,7 +703,7 @@ python3 layout/run_pv.py lvs \
 | Deck verdict | `Congratulations! Netlists match.` | `Congratulations! Netlists match.` | **MATCH** |
 | Extracted devices | 117 | 117 | **MATCH** |
 | Extracted device lines, sorted | — | byte-identical to Addendum 4's `lock_detector.cir` | **MATCH** |
-| `.SUBCKT` port list | declaration order | same 45 ports, sorted differently by this KLayout | cosmetic |
+| `.SUBCKT` port list | declaration order | same 48 ports, sorted differently by this KLayout | cosmetic |
 | Deck run time | — | 27.99 s | — |
 
 Artifacts are committed beside — not on top of — the promoted run, at
