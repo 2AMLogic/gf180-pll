@@ -107,7 +107,9 @@ tall (31,803 um^2); taking the fold alone leaves it 347.41 x 80.73 um
 own top row, which is what :func:`build` does, gives 347.41 x 76.23 um
 (26,481 um^2). So the four rows stay their own four rows, one track pitch
 above ``cp``'s highest instead of a full :data:`BACKBONE_MARGIN_UM` above
-``cp``'s footprint.
+``cp``'s footprint. (All three figures are as of #455. Issue #469 then
+packed ``cp_output_stage``'s own glue band one track tighter, which this
+block inherits whole: 76.23 -> 75.48 um.)
 
 FINDING ``pfd``'s OWN PIN LOCATIONS
 -------------------------------------

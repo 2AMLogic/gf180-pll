@@ -314,10 +314,11 @@ midpoint) + 0.0045 (divider+lock midpoint) mm²; conservative = 0.0369 + 0.017
 > pre-overhead" and "N× over" figure in §5 and §5.1–§5.10 below as historical**
 > — each was correct against the target in force when it was written, and none
 > is rewritten, per this record's append-only revision convention. §5.11 states
-> the current position: **0.2733 mm² measured against the 0.30 mm² row, met,
-> with 8.9 % margin on the block sum.** The fail-loud clause at the end of this
-> section is restated against 0.30 mm² there, and *that* restatement is the live
-> one.
+> the position DR-016 was written on: **0.2733 mm² measured against the
+> 0.30 mm² row, met, with 8.9 % margin on the block sum**; §5.12 (#469) refines
+> that measurement to **0.2730 mm², met, 9.0 % margin**, without moving the row.
+> The fail-loud clause at the end of this section is restated against 0.30 mm²
+> there, and *that* restatement is the live one.
 
 **Against the draft < 0.15 mm² (150,000 µm²) target: PASS at both the
 midpoint (≈0.088 mm², ≈41 % margin) and the conservative high-end estimate
@@ -345,9 +346,12 @@ summed block footprint against this section's ×1.25 top-level overhead. The
 condition is unchanged in kind and now reads: **if the measured block sum
 exceeds 240,000 µm², or if an assembled `pll_top` measures a top-level overhead
 above ×1.372, say so in a new revision rather than re-deriving the budget to
-fit.** Measured today: **218,631 µm²**, **×1.25 → 273,289 µm² (0.2733 mm²)**,
-**met, 8.9 % margin on the block sum** — the margin being sized to the overhead
-factor's own uncertainty and nothing else. See §5.11.
+fit.** Measured when DR-016 was written: **218,631 µm²**, **×1.25 →
+273,289 µm² (0.2733 mm²)**, **met, 8.9 % margin on the block sum**. Measured
+today, since §5.12 (#469) packed `cp_output_stage`'s glue bus: **218,372 µm²**,
+**×1.25 → 272,965 µm² (0.2730 mm²)**, **met, 9.0 % margin**, the condition above
+holding to a top-level overhead of ×1.374 on that sum — the margin being sized
+to the overhead factor's own uncertainty and nothing else. See §5.11 and §5.12.
 
 ### 5.1 Revision: the fail-loud condition has fired (issues #293/#324, #296, #310)
 
@@ -1185,6 +1189,150 @@ the same standard: measured, from committed geometry, DRC/LVS-clean.
 `layout/tests` suite passes unchanged, `area-audit.md` is byte-identical to
 what is committed, and every block's signoff status is what §5.10 left it.
 
+### 5.12 Revision: the first of §5.11's three open levers is spent, and its ceiling was wrong for a third, new reason (issue #469)
+
+§5.10 closed by sizing the 9,744 µm² residual it had measured below
+`pfd_cp`'s own level, and named the larger half: `cp_output_stage`'s glue bus
+gives each of 14 nets a dedicated Metal2 track "where the interval graph's own
+clique number is 9", worth 3.75 µm of block height (≈1,290 µm²). §5.11 carried
+it forward as **#469**, one of the three reduction levers it left open once
+DR-016 had amended the row, and it is the first of those three to land. That
+lever is now spent. Full record and reproduction:
+`layout/evidence/pfd-cp-layout/PROOF-469-glue-bus-packing.md`.
+
+**This revision is written against the amended row, not the draft one.**
+`spec/pll.md#area` has read **≤ 0.30 mm² (300,000 µm²)** since DR-016 (#456,
+§5.11); every figure below is stated against it, with the draft 0.15 mm² kept
+alongside only because §5.11's three bounds are quoted in those terms.
+**259 µm² is not grounds for the successor record §5.11 described.** That
+standard is for a landing that moves the measured total materially, and 0.1 %
+of the block sum is not one — the row stays at **≤ 0.30 mm²**, and what moves
+is the measurement under it (0.2733 → 0.2730 mm², 91.1 % → 91.0 % of the row;
+the overhead factor the row's margin is sized to rises ×1.372 → ×1.374).
+
+`cp_array._route_side()` — the router `cp_array`'s two array channels and
+`cp_output_stage`'s glue bus all share — now takes a `bus_reach` argument, and
+a caller that supplies it gets `cp_array.pack_tracks()` (the left-edge
+interval-graph track assignment `divider_chain` has carried since §5.2/#341
+and reused one level down at §5.8/#454) instead of `NetTracks`. The glue bus
+is the one call site that supplies it. No device, riser column, link column,
+pin or pad moved; the only quantity that changed is which `track_y` each glue
+net's bus sits at.
+
+| Block | §5.11 (DR-016) | §5.12 | Delta |
+|---|---|---|---|
+| Loop filter (R + C1 + C2) | 36,936 µm² | 36,936 µm² | — (a calculation, not a layout) |
+| `vco_block` | 31,826 µm² | 31,826 µm² | — |
+| `pfd_cp` | 26,665 µm² | **26,406 µm²** | **−259 µm², −1.0 %** |
+| `divider_chain` | 92,618 µm² | 92,618 µm² | — |
+| `lock_detector` | 30,586 µm² | 30,586 µm² | — |
+| **Sum** | 218,631 µm² (0.2186 mm²) | **218,372 µm² (0.2184 mm²)** | −0.1 % |
+| **After §5's ×1.25** | 273,289 µm² (0.2733 mm²) | **272,965 µm² (0.2730 mm²)** | |
+| **vs the amended ≤ 0.30 mm² row** | 91.1 %, **met** | **91.0 %, met** | margin on the block sum 8.9 % → **9.0 %** |
+| **vs the draft 0.15 mm² target** | **1.82×** | **1.82×** | |
+
+**The projected floor does not move at all, which is the honest summary of a
+0.1 % block-level saving.** §5.11 re-derived the ceiling projection §5.9 and
+§5.10 had been carrying: 143,955 µm², **179,944 µm² after the ×1.25, 1.20×**
+the draft target. `pfd_cp` enters that sum at its 16,921 µm² *device-band*
+ceiling either way, and this is a routing-track lever — every routing track is
+already struck from that bound — so 143,955 µm² and §5.11's tighter
+zero-routing 136,141 µm² (1.13×) are both unchanged by it. What narrows is the
+gap between drawn and ceiling: `pfd_cp` was 9,744 µm² above its own ceiling and
+is now 9,485 µm². (This section was first drafted against §5.10's 197,076 µm²
+projection, which would have moved 197,076 → 196,817 µm² and stayed at 1.64×;
+§5.11 established that that figure carried `divider_chain`'s pre-#454 ceiling
+and a 906 µm² double-count, so the corrected bound above is the live one and
+the conclusion is the same either way.)
+
+**The lever returned 20 % of its sizing, and the shortfall is in the ceiling
+again — for a reason §5.10 did not have.** §5.10's own correction was that a
+*flat* track census over five hierarchy levels over-states what any one module
+can pack. This one is narrower and new: **a census over a single level's own
+bus spans over-states it too, when the level above draws on the same tracks.**
+Six of the glue bus's fourteen nets (`VDD`, `VSS`, `B0`, `B0B`, `B1`, `B1B`)
+are shared with *both* array polarities, so `cp_output_stage` extends each of
+them to a left link column **and** a right one — each is live across the whole
+block and can share a track with nothing. Counting those extensions, the
+band's clique number is **13**, not 9:
+
+| | clique | achievable tracks |
+|---|---|---|
+| bus spans only (what §5.10 measured) | 9 | 9 |
+| bus spans **+ the level above's own link extensions** | **13** | **13** |
+| as drawn before | — | 14 |
+
+`pack_tracks()` achieves 13 — the clique number, provably minimal for an
+interval graph — so the shortfall is not slack in the assignment. 14 → 13
+tracks is 0.75 µm of `cp_output_stage`, which `cp` and then `pfd_cp` inherit
+whole: 77.30 → **76.55 µm**, 26,665 → **26,406 µm²**.
+
+**The other two candidate bands were measured, not skipped.** `cp_array`'s own
+N and P channels are 9 nets each. The P channel packs 9 onto 9 — *no* saving
+at all — and the N channel 9 onto 7, but the N channel's top sits 2.11 µm
+below `cp_array.footprint[3]`, which the P channel sets, so it buys nothing
+either. The generalisation is now stated in `cp_array.py`: **a band every one
+of whose nets is reached by a parent from the same side cannot be packed**,
+because every such net's extent runs out to that side's link-column region.
+Packing the N channel anyway would have changed a fifth committed GDS with its
+own DRC claim for zero block area, so it is not done.
+
+**The `cp_dumpbuf` fold (§5.10's second residual target) is decided and
+closed, not deferred.** #469 required the two targets to be decided together
+because they are mutually exclusive, and the arithmetic resolves it: folding
+`cp_dumpbuf`'s 25.87 µm routing band over its own devices wins height inside a
+block that is already ~29 µm shorter than the `cp_output_stage` beside it, so
+`cp`'s bbox does not move at all; it only pays in combination with relocating
+`cp_dumpbuf` at `cp` level, and the band that would need is exactly where
+§5.10 put `pfd` — worth 8,616 µm², 33× what this could be. It is *foreclosed*
+by the fold that already landed, which is a property of the geometry rather
+than of scheduling.
+
+**What the residual is now, and where the next lever actually is.** The gap
+between `pfd_cp` as drawn and its 16,921 µm² ceiling is 9,485 µm² (35.9 % of
+the block), and after this pass its composition is measured rather than
+estimated: 9.75 µm of glue band (at its clique number), 6.75 µm of array
+channels (parent-reached from one side), 4.50 µm of `cp`'s backbone band and
+3.00 µm of this block's trunk band (both all-spanning, §5.10), over 49.05 µm
+of device bands. **No routing-track lever remains in this block.** The one the
+measurement does expose is a *placement* lever: 7 of the glue band's 13 tracks
+are a local clique caused by `cp_output_stage` putting all four glue inverters
+in one row at its right-hand end, so `DN`/`DNB`/`UP`/`UPB` each run most of
+the block's width from a switch on the left to an inverter on the right.
+Interleaving the inverters with the switches they drive would shorten all four
+— filed as **#473** per §5.5's one-lever-per-PR discipline rather than folded
+in here, and filed with its own "measure the resulting clique before building,
+and close it with that number if it does not improve" precondition, because
+the 6 full-width nets floor it at 6 + whatever local clique survives.
+
+**This is the third consecutive measured over-estimate in the same family, and
+it should be read as a property of the estimating method.** §5.8 (#454), §5.10
+(#455) and now §5.12 each sized a track-packing lever from a census and each
+recovered materially less, for a different structural reason every time. §5.5's
+1.35× and §5.9's 1.54× projections rest on that method; §5.10 already advised
+reading them as optimistic and this adds a third data point rather than a new
+caveat. **What it does *not* change is the spec row**, and that is the point of
+having amended it on a measurement: DR-016 was written on the measured post-lever
+total rather than on any of these projections (§5.11), so a third over-estimate
+in the estimating method leaves the ≤ 0.30 mm² row exactly where it is. Of
+§5.11's three open reduction levers this closes one — there is now no unexecuted
+routing lever left in `pfd_cp` — and leaves `divider_chain` (#458) and the
+unnamed `lock_detector` lever where §5.11 left them, alongside the new
+*placement* lever #473 above.
+
+**DRC/LVS re-verified on every changed block, not assumed.** `cp_output_stage`
+and `cp` are DRC clean (0 violations, `main`); `pfd_cp` is DRC clean in both
+the default *and* the `--offgrid` signoff-grade run and LVS-matched against its
+own unchanged reference netlist (92/92 nets, 168/168 devices, the 13 declared
+boundary ports). `netcheck.check_gds()` reports no short and no split on all
+three (18 / 22 / 76 nets). The whole `layout/tests` suite (746 tests) passes,
+including `test_gds_reproducibility.py`, which rebuilds all 26 committed block
+GDS files — so `cp_array`, `cp_dumpbuf`, `pfd` and the `cp_leg_*`/`pfdcp_inv`
+leaves are proven *unchanged* rather than assumed to be. `#448`'s inherited-label
+regression was watched for specifically: all four
+`_canvas.Canvas.clear_inherited_labels()` call sites are untouched, this change
+draws no label, and the LVS match is the end-to-end proof.
+
 ## 6. GDS skeleton
 
 `layout/floorplan/skeleton.py` assembles a **block-placement skeleton**
@@ -1222,9 +1370,11 @@ netlist — `layout/pll_top/pfd_cp/block.py`,
 `layout/evidence/pfd-cp-layout/PROOF.md`. `skeleton.py`'s `PFD_CP` block is
 now sized to that block's own measured extent rather than the 150 × 100 µm
 placement-plan estimate it carried through #385 — 434.31 × 80.73 µm when
-written (§5.4), **347.41 × 76.23 µm since the fold at §5.10 (#455)**, which
-shifts `LOOP_FILTER`/`VCO_CORE` 86.90 µm left without moving the skeleton's
-own bounding box (`DIVIDER_LOCK`'s width still sets it).
+written (§5.4), 347.41 × 76.23 µm after the fold at §5.10 (#455), and
+**347.41 × 75.48 µm since the glue-bus packing at §5.12 (#469)**. The fold is
+what shifted `LOOP_FILTER`/`VCO_CORE` 86.90 µm left, without moving the
+skeleton's own bounding box (`DIVIDER_LOCK`'s width still sets it); #469's
+0.75 µm is height only and moves nothing else.
 
 **The committed artifact is the generator's output again, and is checked
 (issue #461).** Through #398 this section's own regeneration recipe was an

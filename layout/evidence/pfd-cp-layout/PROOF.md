@@ -506,3 +506,30 @@ first block-level run's real mismatch) is untouched.
 Full record, including the achieved-against-ceiling arithmetic, why the
 issue's −58 % ceiling is not reachable, and the sizing of what is left:
 **`PROOF-455-fold.md`** in this directory.
+
+## Addendum 4 (issue #469): the glue bus is packed — 26,665 → 26,406 µm², −1.0 %
+
+Addendum 3's figures are superseded on height only. Issue #469 substituted
+`cp_array.pack_tracks()` for `NetTracks` in the one channel below this block
+where packing pays — `cp_output_stage`'s own glue bus, 14 nets on 14 tracks —
+and the band came out at **13** tracks, its own interval-graph clique number
+and therefore the provable minimum. `cp_output_stage` is 0.75 µm shorter, `cp`
+inherits it, and so does this block: **347.410 × 75.475 µm (26,220.77 µm²)**
+on the `footprint` tuple, **344.98 × 76.55 µm (26,406 µm²)** on the committed
+GDS bbox.
+
+No device, riser column, link column, boundary pin or pad moved; the only
+quantity that changed is which `track_y` each glue net's bus sits at. Every
+claim this file makes is re-proved against the new geometry rather than
+inherited: DRC `main` clean, DRC `main --offgrid` (signoff-grade) clean, LVS
+match at 92/92 nets and 168/168 devices, `netcheck` clean at 76 nets with no
+short and no split. The `drc-clean/`, `drc-clean-offgrid/`, `lvs-clean/` and
+`connectivity/` artifacts are the new runs' outputs; `lvs-attempt/` is
+untouched.
+
+Addendum 3's residual sizing (14 → 9 tracks, ≈1,290 µm²) is **corrected**: it
+counted only the buses' own spans, and six of the fourteen nets are extended
+across the whole block by `cp_output_stage`'s own array↔glue link step. The
+real floor is 13 tracks, and the `cp_dumpbuf` fold that residual paired this
+with is decided and closed rather than deferred. Full record:
+**`PROOF-469-glue-bus-packing.md`** in this directory.

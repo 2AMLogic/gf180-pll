@@ -203,9 +203,9 @@ DOMAIN_SPACING = 40.0  # um between domain guard rings/trunks (section 2)
 # whenever klayout.db *is* importable, so the two views cannot drift
 # silently.
 #
-# FAIL-LOUD: 347.41 x 76.23 um (26,481.33 um^2 = 0.0265 mm^2) against
+# FAIL-LOUD: 347.41 x 75.48 um (26,220.77 um^2 = 0.0262 mm^2) against
 # PLL-FLOORPLAN.md section 5's 0.010-0.020 mm^2 ROM estimate -- still a
-# 1.32-2.65x overrun, stated here rather than silently absorbed, following
+# 1.31-2.62x overrun, stated here rather than silently absorbed, following
 # the same "FAIL-LOUD condition for a future pass" convention the VCO/
 # divider-chain docstrings above already use. See PLL-FLOORPLAN.md section
 # 5's own revision notes for the re-run whole-chip arithmetic.
@@ -216,8 +216,17 @@ DOMAIN_SPACING = 40.0  # um between domain guard rings/trunks (section 2)
 # starting a fresh one above it: -86.90 um of width and -4.50 um of height,
 # -8,578 um^2 (-24.5 %) on the footprint tuple this constant records. See
 # layout/evidence/pfd-cp-layout/PROOF-455-fold.md.
+#
+# Issue #469 then packed cp_output_stage's own glue-bus track band (14 nets
+# on 13 tracks instead of 14, cp_array.pack_tracks() in place of NetTracks),
+# which is one track of cp_output_stage height and therefore one track of
+# this block's: 76.23 -> 75.48 um, -261 um^2 (-1.0 %). The band's clique
+# number is 13, not the 9 #455 sized from the bus spans alone, because this
+# block's own array<->glue link extends six of the fourteen nets across its
+# full width -- see layout/evidence/pfd-cp-layout/
+# PROOF-469-glue-bus-packing.md.
 PFD_CP_STANDALONE_W_UM = 347.41
-PFD_CP_STANDALONE_H_UM = 76.23
+PFD_CP_STANDALONE_H_UM = 75.48
 PFD_CP = Block("pfd_cp", x=0.0, y=0.0, w=PFD_CP_STANDALONE_W_UM, h=PFD_CP_STANDALONE_H_UM)
 # LOOP_FILTER's width/height are sized to actually contain its two real
 # sub-block geometries below (C1 array + C2, each with margin) -- see the
@@ -357,11 +366,12 @@ DIVIDER_LOCK = Block(
 # of it measured off committed GDS by ``python3 layout/run_pv.py area``:
 #
 #   * loop filter 36,936 (a DR-006 calculation) + vco_block 31,826 + pfd_cp
-#     26,665 (folded at #455, was 35,281) + divider_chain 92,618 +
-#     lock_detector 30,586 = **218,631 um^2**, i.e. **273,289 um^2
-#     (0.2733 mm^2)** after this section's x1.25 -- **1.82x** the draft target
-#     and **91.1 %** of the amended 0.30 mm^2 row. PLL-FLOORPLAN.md section
-#     5.11 and DR-016 carry the derivation.
+#     26,406 (folded at #455, was 35,281; glue bus packed at #469, was 26,665)
+#     + divider_chain 92,618 + lock_detector 30,586 = **218,372 um^2**, i.e.
+#     **272,965 um^2 (0.2730 mm^2)** after this section's x1.25 -- **1.82x** the
+#     draft target and **91.0 %** of the amended 0.30 mm^2 row. PLL-FLOORPLAN.md
+#     sections 5.11 (DR-016, on 218,631 um^2) and 5.12 (#469, this figure) carry
+#     the derivation.
 #   * The draft target was not reachable, and that is a measurement rather than
 #     a projection: strike Metal2 routing entirely and each block's own drawn
 #     device bands still sum (with the loop filter) to 136,141 um^2 ->
@@ -482,8 +492,8 @@ DIVIDER_LOCK_AREA_UM2 = DIVIDER_LOCK.w * DIVIDER_LOCK.h
 #: ``spec/pll.md#area``'s whole-block target, **amended by DR-016 (issue #456)**
 #: from the draft 150,000 um^2 on the measured post-lever total. Every "0.15
 #: mm^2" sentence in the comment block above and in PLL-FLOORPLAN.md sections
-#: 5.1-5.10 predates that amendment and is kept as written; section 5.11 is the
-#: live statement.
+#: 5.1-5.10 predates that amendment and is kept as written; section 5.11 states
+#: the amendment and section 5.12 the live measurement under it.
 AREA_BUDGET_UM2 = 300_000.0
 
 #: The draft target the overrun series above is written against. Kept as its own
