@@ -403,12 +403,13 @@ class ReferenceNetlistTests(unittest.TestCase):
         device_lines = [l for l in ref.splitlines() if l.startswith("M_")]
         self.assertEqual(len(device_lines), 117)
 
-    def test_reference_names_ldt_pins_the_current_generator_does_not_draw(self):
-        # build_lock_detector() (this module, pre-DR-014) draws no LDT0-3
-        # pin and a 12-device (not 84-device) delaywin load -- see that
-        # function's own module-level docstring and this evidence
-        # directory's own PROOF.md for why LVS against this reference is
-        # expected to mismatch until that generator gap is closed.
+    def test_reference_names_the_ldt_trim_pins(self):
+        # DR-014's 4-bit static process trim (issue #411). Before issue #449,
+        # build_lock_detector() drew no LDT0-3 pin and a 12-device (not
+        # 84-device) delaywin load, so LVS against this reference mismatched
+        # -- see this evidence directory's own PROOF.md addenda. #449 closed
+        # that gap: build_lock_detector() now draws all four pins too (see
+        # build.TRIM_PINS), and the block LVS-matches this same reference.
         ref = build.reference_netlist()
         for pin in ("LDT0", "LDT1", "LDT2", "LDT3"):
             self.assertIn(pin, ref.splitlines()[0])

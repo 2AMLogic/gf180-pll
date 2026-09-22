@@ -780,6 +780,52 @@ class RiserLanes:
                 return False
         return True
 
+    @staticmethod
+    def _self_notch_free(natural_x: float, cand_x: float, y_pad: float, jog_y: float, half_h: float) -> bool:
+        """Does a riser's own jog bar clear a **notch** against its own pad?
+
+        Every check in this class compares one riser's apparatus against
+        *another* riser's. This one is the pair nothing compared until issue
+        #449: a riser's own pad against its own jog wire (and the Via1/Via2
+        landing at the far end of it, which #451 made exactly as tall as the
+        jog, so the two share one Y band).
+
+        The three shapes are all one net and all connected -- pad, then a
+        narrow vertical stub down/up to ``jog_y``, then the jog bar sideways
+        -- so this is never a short and never an "are two shapes far enough
+        apart" question. It is a **notch**: the stub (``METAL1_WIRE_WIDTH_UM``
+        = 0.32 um) is narrower than the pad it grows out of (0.46 um for this
+        package's narrowest S/D pad, wider for a gate tab or a tap strip), so
+        where the pad overhangs the stub, the pad's own edge faces the jog
+        bar's own edge across a slot of
+
+            ``|jog_y - y_pad| - METAL1_JOG_HEIGHT_UM/2 - half_h``
+
+        and M1.2a applies to a slot in one polygon exactly as it does to the
+        space between two. At ``JOG_HEIGHT_STEP_UM`` = 0.5 um and this
+        package's own narrowest pad that slot is 0.5 - 0.2 - 0.23 = **0.07
+        um** -- which is what 16 of issue #449's first DRC run's M1.2a items
+        were, one per riser that happened to settle exactly one jog step away
+        from its own pad.
+
+        Two dispositions are legal and both are kept:
+
+        * the jog is far enough away that the slot is a legal M1.2a space
+          (``>= METAL1_MIN_SPACE_UM``), or
+        * the jog's own Y band reaches *into* the pad's, so there is no slot
+          at all -- just a step from the pad's height down to the jog's,
+          whose two edges are perpendicular and so face nothing. ``jog_y ==
+          y_pad`` (``_safe_jog_height()``'s own first candidate) is this
+          case, and is why the overwhelmingly common placement was already
+          clean.
+
+        Only the in-between -- close, but not touching -- is rejected.
+        """
+        if cand_x == natural_x:
+            return True  # no jog is drawn at all (see ``_riser()``)
+        slot = abs(jog_y - y_pad) - METAL1_JOG_HEIGHT_UM / 2.0 - half_h
+        return slot <= 1e-9 or slot >= METAL1_MIN_SPACE_UM - 1e-9
+
     def _candidate_clear(
         self,
         net: str,
@@ -795,6 +841,7 @@ class RiserLanes:
         return (
             self._lane_clear(net, cand_x, y_pad, track_y, jog_y)
             and self._bus_clear(net, jog_y)
+            and self._self_notch_free(natural_x, cand_x, y_pad, jog_y, half_h)
             and self._metal1_apparatus_safe(net, natural_x, cand_x, y_pad, jog_y, half_w, half_h)
         )
 

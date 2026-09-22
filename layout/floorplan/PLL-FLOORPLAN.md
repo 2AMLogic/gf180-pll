@@ -842,6 +842,107 @@ under `--offgrid`, which it had not previously claimed. Both
 seven pin locations and x-extent are unchanged — only each net's `track_y`
 moved.
 
+### 5.9 Revision: `lock_detector` grows ~4.1x for its own first LVS match, and the overrun moves 1.70x -> 1.89x (issue #449)
+
+**Status: the overrun is now 1.89x, and for the first time all four PLL
+sub-blocks are LVS-matched.** `lock_detector`'s drawn `delaywin_3v3` cell
+predated DR-014's 4-bit static process trim (issue #411, ratified into
+`design/lock_detector.sch` and `design/netlist/lock_detector.spice` on
+2026-09-19) — the generator drew a fixed 4-stage delay chain with no
+`LDT0`-`LDT3` trim inputs and no switched-segment network at all, so the
+block's own first block-level LVS run (#440) correctly reported a mismatch
+rather than a match. Issue #449 closes that gap: `cells.draw_delaywin()` now
+draws every device `design/gen_delaywin.py`'s own sizing table specifies —
+the always-on base load plus four binary-weighted switched segments per
+stage, each gated by its own trim bit through a `T`-input inverter — and
+`build_lock_detector()` routes the four new `LDT0`-`LDT3` boundary pins in
+from wherever the rest of this block's boundary nets already arrive (no
+floorplan route needed: `layout/floorplan/skeleton.py`'s `DIVIDER_LOCK`
+region is a placement/keep-out plan with no per-signal routes of its own).
+Full device-level record: `layout/evidence/lock-detector-layout/PROOF.md`
+"Addendum 4"; this section is the area-budget consequence.
+
+**This is not a placement regression — it is 72 devices the block's own
+ratified schematic always specified (45 -> 117) finally being drawn**, and
+the area those devices need is what buys the block's first LVS match. The
+block's own bounding box grows **119.30 x 62.60 um (7,468 um²) -> 294.80 x
+103.75 um (30,586 um²), ~4.1x**, driven by the same scarce resource named in
+§5.5/§5.6 for the other blocks: not diffusion (`lock_detector`'s own `comp`
+share actually *drops*, 7.77 % -> 2.48 %, because the added devices are
+mostly minimum-width switches) but Metal3 riser-lane width — 45 devices/161
+riser groups became 117/409, and `layout/pll_top/lock_detector/cells.py`'s
+own `TRIM_COL_PITCH_UM` docstring records the swept pitch-vs-width tradeoff
+that resolved it (issue #449). `lock_detector`'s own fill correspondingly
+*drops*, 30.2 % -> 34.5 % filled by area but 2.48 % `comp` against 7.77 %
+before — the new devices are individually small; there are just many more
+of them, spread across proportionally more riser-lane whitespace.
+
+Re-running §5.5's table with the regenerated evidence
+(`layout/evidence/area-audit/area-audit.md`, `python3 layout/run_pv.py
+area`) — the loop filter and `vco_block`/`pfd_cp` rows unchanged from
+§5.5/§5.6, `divider_chain` already at §5.8's packed geometry, and only
+`lock_detector`'s row moving here:
+
+| Block | as-drawn | Basis |
+|---|---|---|
+| Loop filter (R + C1 + C2) | 36,936 µm² | DR-006 / §3 — still a calculation |
+| `vco_block` | 31,826 µm² | committed GDS |
+| `pfd_cp` | 35,281 µm² | committed GDS |
+| `divider_chain` | 92,618 µm² | committed GDS (packed at §5.8/#454) |
+| `lock_detector` | **30,586 µm²** | committed GDS (was 7,468 through §5.6) |
+| **Sum** | **227,247 µm² (0.2272 mm²)** | |
+| **After §5's ×1.25** | **284,059 µm² (0.2841 mm²)** | **1.89× over the 0.15 mm² target** |
+
+Against §5's ×1.25 factor the sum of block footprints must still be ≤
+120,000 µm², so the gap to close grows from 84,129 µm² (§5.8, after the
+divider-chain packing lever alone) to **107,247 µm²**. None of §5.5's three
+named levers (the `pfd_cp` fold #455, `divider_chain` shared diffusion —
+falsified — and the residual Metal2-band-over-cells lever #458, now that
+§5.8 has already spent the `div23_cell` macro-band portion of that third
+lever) is sized against `lock_detector`, so taking the remaining ceiling of
+those and adding `lock_detector`'s new, unlevered footprint in full:
+
+| | Sum | After ×1.25 | vs 0.15 mm² |
+|---|---|---|---|
+| As drawn | 227,247 µm² | 284,059 µm² | 1.89× |
+| Every remaining lever at its ceiling (`lock_detector` un-levered) | **185,263 µm²** | **231,579 µm²** | **1.54×** |
+
+**A fourth lever — sized for `lock_detector`'s own newly-measured 65.5 %
+whitespace — is not named or sized here.** Per §5.5's own discipline, an
+unmeasured lever is not claimed as a number; naming and sizing it is left to
+whichever future pass takes it up, the same way §5.4 left "the levers are
+measured" to §5.5 rather than guessing.
+
+**This revision deliberately does not amend `spec/pll.md#area`**, for the
+same reason §5.5/§5.8 gave: 1.54× is a bound derived from unexecuted levers,
+not a measured floor, and every remaining named lever belongs to a different
+block than the one that moved this revision.
+
+`layout/floorplan/skeleton.py`'s own `DIVIDER_LOCK` fail-loud comment block
+carries the same conclusion in the region-local (not whole-chip-table) form
+it has used since #310, now also using every block's own measured GDS —
+§5.8 already moved it off the ROM-era `pfd_cp` figure — so its own
+arithmetic reaches the same **1.89×** this section does, and
+`LOCK_DETECTOR_STANDALONE_W_UM`/`_H_UM` there are the same 294.80 x 103.75 um
+this section's table sums.
+
+`layout/tests/test_floorplan_skeleton.py`'s `total_extent_um2()` ratchet
+(§5.8's context: was ~0.57e6 um² after the divider-chain packing lever
+alone) is loosened from 600,000 to 650,000 um² for this revision — measured
+~0.63e6 — with the same "only ever correct with a reason recorded beside
+it" discipline that test's own docstring now states explicitly, so a future
+placement-only regression still fails there.
+
+**DRC/LVS status: `lock_detector` re-proven clean on both decks against the
+regrown geometry** (`layout/evidence/lock-detector-layout/lock_detector.gds`,
+`drc-clean/`, `lvs-clean/` — promoted from `lvs-attempt/`, which is kept
+alongside it per the same convention `pfd-cp-layout/` uses for its own
+superseded mismatch run). **All four PLL sub-blocks are now LVS-matched
+against their own committed, ratified schematics** — the first time this has
+been true of any PLL sub-block set in this repository — so `README.md` and
+`docs/chipalooza/challenge-5-proposal.md` move from "3 of the 4" to "4 of the
+4 are LVS-matched", checked by `layout/lib/check-layout-status-claims.sh`.
+
 ## 6. GDS skeleton
 
 `layout/floorplan/skeleton.py` assembles a **block-placement skeleton**

@@ -65,12 +65,10 @@ Being honest about where this actually is:
   since been drawn against that flow: **4 of the 4 PLL sub-blocks** — the VCO
   (#293), the PFD + charge pump (#294), the divider chain (#295), and the lock
   detector (#296) — now have a committed block GDS with a DRC-clean deck log
-  under `layout/evidence/`, and **3 of the 4 are LVS-matched** against an
-  independently derived reference netlist (`vco_block`, `divider_chain` and
-  `pfd_cp`; `lock_detector` states in its own `PROOF.md` that it makes a
-  DRC-clean geometry claim only, because its drawn delay cell predates
-  DR-014's trim network and so does not match the ratified schematic —
-  #449). There is **no assembled `pll_top`
+  under `layout/evidence/`, and **4 of the 4 are LVS-matched** against an
+  independently derived reference netlist (`vco_block`, `divider_chain`,
+  `pfd_cp` and, since issue #449 drew DR-014's 4-bit trim network into its
+  delay cell, `lock_detector`). There is **no assembled `pll_top`
   GDS** — the four blocks exist side by side, not wired into a top level, so
   no top-level DRC/LVS closure and no post-layout extracted-netlist
   re-verification exists either (#17, #18, #149). These counts are checked
@@ -157,7 +155,7 @@ deterministic component now covers 45 of the mandated 45 PVT corners but its
 random/noise-driven component and its 200 MHz band-top counterpart are both
 still unmeasured (#13), so the proposal marks those rows **unmet** rather than
 omitting them; and that layout has reached the sub-block level but not the top
-level — **4 of the 4 PLL sub-blocks** are drawn and DRC-clean, **2 of the 4
+level — **4 of the 4 PLL sub-blocks** are drawn and DRC-clean, **4 of the 4
 are LVS-matched**, and there is **no assembled `pll_top` GDS**, hence no
 top-level signoff and no post-layout re-verification.
 
