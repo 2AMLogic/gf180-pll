@@ -199,6 +199,17 @@ through another net's own Metal2 riser landing square, which is the
 separate attempts against. It is filed as **#458**: one lever per PR, per
 #442's own staged-execution note.
 
+**Taken since, at #458** — see
+[`PROOF-over-device-rows.md`](PROOF-over-device-rows.md). The risk named above
+is real and was handled by making the *track assignment* obstacle-aware rather
+than by moving a bus blind: `devgen.pack_tracks_over_devices()` takes every
+riser landing square and every placed instance's own interior Metal2 as an
+explicit obstacle map and places each net on the lowest 0.75 µm step that
+clears it. `route_net()`/`_riser()` still draw exactly what they drew here.
+Outcome: 1317.66 × 70.29 → **1317.66 × 41.99 µm** (92,618 → 55,329 µm²,
+−40.3 %), 74.4 % of the ceiling stated above, DRC-clean on both decks and
+LVS-matched at both levels.
+
 **Width is unchanged**, as at #341: 1317.66 µm, six `div23_cell` instances plus
 46 glue columns in two rows.
 

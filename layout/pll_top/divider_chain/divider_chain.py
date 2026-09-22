@@ -83,14 +83,58 @@ net's own riser upward, at the same x, is the "two risers for the same
 net... not a problem" case ``devgen.py``'s own "Composite macro routing
 fabric" section documents).
 
-This module's own track-assignment pass is :func:`devgen.pack_tracks`, not
-:class:`devgen.NetTracks` (issue #341) -- every other composite in this
-package still uses the latter, unchanged; see :func:`devgen.pack_tracks`'s
-own docstring/module-level comment for why this block's own top-level pass
+This module's own track-assignment pass is
+:func:`devgen.pack_tracks_over_devices`, not :class:`devgen.NetTracks`
+(issue #341 moved it to :func:`devgen.pack_tracks`; issue #458 to the
+obstacle-aware form) -- see :func:`devgen.pack_tracks`'s own
+docstring/module-level comment for why this block's own top-level pass
 specifically benefits from reusing a track across non-colliding nets rather
-than handing out a fresh one per net, and
-``layout/evidence/divider-chain-layout/PROOF-track-packing.md`` for the
-measured result.
+than handing out a fresh one per net,
+``layout/evidence/divider-chain-layout/PROOF-track-packing.md`` for that
+measured result, and "ROUTING OVER THE DEVICE ROWS" below for the second
+half of the same lever.
+
+ROUTING OVER THE DEVICE ROWS, NOT IN A BAND ABOVE THEM (issue #458)
+----------------------------------------------------------------------
+Through issue #454 every track this block assigned -- at both levels of its
+hierarchy -- came out of a band stacked *on top of* the device rows, at
+``content_top + 3.0`` and upwards. Packing (#341, #454) made that band as
+short as an interval assignment can make it (43 distinct tracks, a 32.25 um
+packed floor), but the band's whole height was still added to the block's:
+43.97 um of it over 26.32 um of device rows, with the Metal2 plane over
+those rows measured 1.0 % occupied
+(``layout/evidence/area-audit/area-audit.md``).
+
+Metal2 has no DRC relationship to the diffusion, poly, implant, well or
+Metal1 beneath it, so that plane was never reserved -- only unused. What a
+track there does have to clear is other *Metal2*, and this block has exactly
+two sources of it: the Via1/Metal2 landing square
+:func:`devgen.route_net`'s own risers drop on every pad, and each placed
+``div23_cell`` instance's own interior. :func:`devgen.pack_tracks_over_devices`
+takes both as an explicit obstacle map (:func:`devgen.metal2_boxes` reads the
+second straight back off the canvas, so no second model of the macro's
+geometry exists to drift) and gives each net the lowest
+:data:`devgen.METAL2_TRACK_PITCH_UM` step at or above the row's own baseline
+whose drawn rectangle clears every obstacle.
+
+On this package's fixed row-cell frame (``devgen.ROW_PD_Y0`` = 0,
+``devgen.ROW_PU_Y0`` = 10) that opens a Metal2-free horizontal corridor
+between the pulldown and pullup device rows which no pad and no sub-block
+track occupies, plus several narrower ones; tracks fall into them, and only
+the nets that genuinely cannot fit -- their x-extent crosses a
+``div23_cell`` instance's own full-height interior -- still open a track
+above the rows. The same one-line substitution is made inside
+``div23_cell.py`` (see its own "ROUTING OVER THE DEVICE ROWS" section); the
+two levels compete for the same corridor, and giving it to the macro is
+worth more, because a row's height is gated by the instance standing in it.
+Measured together: **1317.66 x 70.29 um -> 1317.66 x 41.99 um**, -40.3 %,
+re-verified DRC-clean (default and ``--offgrid``) and LVS-matched at both
+levels -- ``layout/evidence/divider-chain-layout/PROOF-over-device-rows.md``.
+
+Nothing about what :func:`devgen.route_net` *draws* changed: it still draws
+one Metal2 bus rectangle plus one riser per pad, at whatever ``track_y`` it
+is handed. Only which ``track_y`` values are legal changed, which is why
+:func:`reference_netlist` is byte-for-byte what it was.
 
 FOLDING THE ROW: TWO ROWS, ONE PACKED BAND EACH (issue #344)
 ---------------------------------------------------------------
@@ -99,7 +143,10 @@ instances plus 46 glue-logic columns placed left to right, so its width
 (2634.28 um) was the sum of every sub-cell's width and the block on its own
 (0.1503 mm^2) was just over the entire 0.15 mm^2 whole-chip area target.
 :data:`ROW_PLAN` now folds that into **two rows**, each with its own
-independent :func:`devgen.pack_tracks` band above it.
+independent track-assignment pass (a :func:`devgen.pack_tracks` band above
+the row through issue #454; a
+:func:`devgen.pack_tracks_over_devices` assignment placed into the row's own
+device plane since #458 -- see above).
 
 Why the fold pays off now and did not before #341: with
 :class:`devgen.NetTracks`'s one-never-reused-track-per-net scheme, every new
@@ -296,7 +343,7 @@ from . import devgen, dff_tg_3v3, div23_cell, inv2x_3v3, inv_3v3, nand2_3v3, nan
 from .devgen import (
     Canvas,
     offset_pad_x,
-    pack_tracks,
+    pack_tracks_over_devices,
     pad_center,
     route_net,
     route_spine,
@@ -375,19 +422,23 @@ DIV23_GAP_X_UM = 6.0
 #: which start well inside the run's own first column).
 GLUE_GAP_X_UM = 6.0
 
-#: Vertical clearance from one row's own Metal2 track band (its topmost
-#: drawn bus edge) to the next row up's own bottom-most drawn shape -- see
-#: the module docstring's "FOLDING THE ROW" section. Nothing overlaps across
-#: this gap: a row's band is Metal2/Metal3 only and the next row's own bottom
-#: is device geometry (comp/implant) plus its own Metal1/2/3 fabric, so the
-#: only rule in play is same-layer Metal2/Metal3 spacing (M2.2a/M3.2a,
-#: 0.28 um min). 3.0 um is the same margin this module already leaves between
-#: a row's own content top and its band's first track.
+#: Vertical clearance from one row's own topmost drawn shape (its Metal2
+#: track band's top edge, or its own content top if every track fell below
+#: it) to the next row up's own bottom-most drawn shape -- see the module
+#: docstring's "FOLDING THE ROW" section. Nothing overlaps across this gap: a
+#: row's band is Metal2/Metal3 only and the next row's own bottom is device
+#: geometry (comp/implant) plus its own Metal1/2/3 fabric, so the only rule
+#: in play is same-layer Metal2/Metal3 spacing (M2.2a/M3.2a, 0.28 um min).
+#:
+#: Deliberately left at 3.0 um by issue #458, which removed the *other* blanket
+#: 3.0 um margin this module used to carry (the band base gap, now computed
+#: per net against the real Metal2 obstacle map -- see the module docstring's
+#: "ROUTING OVER THE DEVICE ROWS" section). This one stays a flat, generous
+#: number on purpose: every track a row assigns is bounded below by that row's
+#: own baseline, so no track is ever placed *into* this gap and nothing here
+#: is obstacle-checked. It is the one clearance in this module that no
+#: computed check backs up, so it keeps its full ~10x headroom.
 ROW_GAP_Y_UM = 3.0
-
-#: Vertical clearance from a row's own tallest drawn shape to the first track
-#: of that row's own Metal2 band.
-BAND_BASE_GAP_UM = 3.0
 
 #: Left-hand spine (see the module docstring's "CROSS-ROW NETS" section):
 #: clearance from every row's own left edge (x = 0) to the *rightmost* spine
@@ -945,20 +996,26 @@ def build(outdir: Path | None = None) -> DividerChainLayout:
         if pfet_boxes:
             content_top = max(content_top, devgen.nwell_over(canvas, pfet_boxes)[3])
 
-        # --- this row's own packed track assignment -- see devgen.py's "track
-        # reuse" section (issue #341) for why one track_y is reused across
-        # every net whose drawn extent does not collide, and the module
-        # docstring's "FOLDING THE ROW" section (issue #344) for why each row
-        # gets its own independent pass rather than one band for the block. ---
+        # --- this row's own packed, obstacle-aware track assignment -- see
+        # devgen.py's "track reuse" section (issue #341) for why one track_y is
+        # reused across every net whose drawn extent does not collide, its
+        # "routing *into* the plane over the device rows" section (issue #458)
+        # for why a track is placed at the lowest Metal2-free y rather than in
+        # a band stacked above the row, and the module docstring's "FOLDING THE
+        # ROW" section (issue #344) for why each row gets its own independent
+        # pass rather than one band for the block. ---
         extent_pads = {
             net: (pads + [(spine_x[net], row_y)] if net in spine_x else pads)
             for net, pads in row_nets.items()
         }
-        track_y = pack_tracks(extent_pads, base_y=content_top + BAND_BASE_GAP_UM)
+        obstacles = devgen.metal2_boxes(canvas)
+        for pads in row_nets.values():
+            obstacles += devgen.riser_landing_boxes(pads)
+        track_y = pack_tracks_over_devices(extent_pads, y_floor=row_y, obstacles=obstacles)
         for net, pads in row_nets.items():
             route_net(canvas, net, pads, track_y[net], bus_to_x=spine_x.get(net))
 
-        band_top = max(track_y.values()) + devgen.METAL2_WIRE_WIDTH_UM / 2.0
+        band_top = max(content_top, max(track_y.values()) + devgen.TRACK_HALF_HEIGHT_UM)
         rows.append((row_y, band_top, x_cursor))
         row_tracks.append(track_y)
         for net, pads in row_nets.items():

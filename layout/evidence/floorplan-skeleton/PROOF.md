@@ -331,3 +331,50 @@ carries no rule in this deck.
 See `layout/evidence/pfd-cp-layout/PROOF-469-glue-bus-packing.md` for the block
 measurement this follows from, and `PLL-FLOORPLAN.md` §5.11 for the re-run
 whole-chip arithmetic.
+
+---
+
+## Regenerated again at issue #458 — the divider chain's tracks move over its device rows
+
+The same propagation mechanism the #454, #455 and #469 sections above describe,
+one more merge on: `skeleton.py` records the divider chain's own standalone
+footprint as `DIVIDER_CHAIN_STANDALONE_W_UM`/`_H_UM`, and issue #458 made both
+of that block's Metal2 track assignments obstacle-aware
+(`devgen.pack_tracks_over_devices()`), so its tracks sit in the plane over its
+own device rows rather than in a band above them — 1317.66 × 70.29 →
+**1317.66 × 41.99 µm**. Regenerated here rather than left to drift;
+`layout/tests/test_gds_reproducibility.py` would have caught it either way.
+
+**The "committed before" column below is the post-#469 artifact**, not the
+post-#455 one the section above it was written against: #474 (issue #469)
+landed its `cp_output_stage` glue-bus packing on `main` while this branch was
+in review, taking `PFD_CP_STANDALONE_H_UM` 76.23 → 75.48 µm, and this branch
+was rebased onto it. Both levers are therefore in the "regenerated" column;
+the merged 0/0 baseline is 260.6 µm² smaller than the #455 section's for that
+reason, and the −37,742.5 µm² delta below is this issue's own contribution
+measured on top of it.
+
+| | committed before (post-#469) | regenerated (#458, on top of #469) |
+|---|---|---|
+| Bounding box | `(0, −15) … (1333.66, 469.52)` µm | **`(0, −15) … (1333.66, 441.22)` µm** (−28.30 µm tall) |
+| Merged 0/0 area | 422,279.1 µm² | **384,536.6 µm²** (−37,742.5 µm²) |
+| `total_extent_um2()` (block rectangles only) | 626,180 µm² | **588,437 µm²** |
+| Shapes on layer 0/0 | 32 | 32 (unchanged — no block added or removed) |
+
+**Only the `DIVIDER_LOCK` region changes size**, and unlike the #455 merge this
+one *does* move the skeleton's overall bounding box: the divider chain is the
+block `DIVIDER_LOCK`'s height is sized from, and `DIVIDER_LOCK` is the topmost
+region, so the whole skeleton gets 28.30 µm shorter. Nothing is re-placed —
+every block's x and every other block's y is unchanged, and the −37,742.5 µm²
+of merged 0/0 area is `DIVIDER_LOCK`'s own reduction (its 1333.66 µm width ×
+28.30 µm) to within rounding.
+
+Re-run through the same foundry deck (`gf180mcuD`, open_pdks
+`c6d73a35f524070e85faff4a6a9eef49553ebc2b`, KLayout 0.28.16, table `main`,
+`--variant=D`): `DRC clean: pll_floorplan_skeleton (D), 0 violations` —
+clean by construction, same as every prior run of this file, since layer
+(0, 0) still carries no rule in this deck.
+
+See `layout/evidence/divider-chain-layout/PROOF-over-device-rows.md` for the
+block measurement this follows from, and `PLL-FLOORPLAN.md` §5.13 for the
+re-run whole-chip arithmetic.

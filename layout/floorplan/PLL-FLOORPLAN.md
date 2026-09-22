@@ -316,9 +316,10 @@ midpoint) + 0.0045 (divider+lock midpoint) mm²; conservative = 0.0369 + 0.017
 > is rewritten, per this record's append-only revision convention. §5.11 states
 > the position DR-016 was written on: **0.2733 mm² measured against the
 > 0.30 mm² row, met, with 8.9 % margin on the block sum**; §5.12 (#469) refines
-> that measurement to **0.2730 mm², met, 9.0 % margin**, without moving the row.
-> The fail-loud clause at the end of this section is restated against 0.30 mm²
-> there, and *that* restatement is the live one.
+> that measurement to **0.2730 mm², met, 9.0 % margin**, and §5.13 (#458) to
+> **0.2264 mm², met, 24.6 % margin** — neither moving the row. The fail-loud
+> clause at the end of this section is restated against 0.30 mm² there, and
+> *that* restatement is the live one.
 
 **Against the draft < 0.15 mm² (150,000 µm²) target: PASS at both the
 midpoint (≈0.088 mm², ≈41 % margin) and the conservative high-end estimate
@@ -348,10 +349,12 @@ exceeds 240,000 µm², or if an assembled `pll_top` measures a top-level overhea
 above ×1.372, say so in a new revision rather than re-deriving the budget to
 fit.** Measured when DR-016 was written: **218,631 µm²**, **×1.25 →
 273,289 µm² (0.2733 mm²)**, **met, 8.9 % margin on the block sum**. Measured
-today, since §5.12 (#469) packed `cp_output_stage`'s glue bus: **218,372 µm²**,
-**×1.25 → 272,965 µm² (0.2730 mm²)**, **met, 9.0 % margin**, the condition above
-holding to a top-level overhead of ×1.374 on that sum — the margin being sized
-to the overhead factor's own uncertainty and nothing else. See §5.11 and §5.12.
+today, since §5.12 (#469) packed `cp_output_stage`'s glue bus and §5.13 (#458)
+routed `divider_chain`'s Metal2 tracks over its own device rows:
+**181,083 µm²**, **×1.25 → 226,354 µm² (0.2264 mm²)**, **met, 24.6 % margin**,
+the condition above holding to a top-level overhead of ×1.657 on that sum —
+the margin being sized to the overhead factor's own uncertainty and nothing
+else. See §5.11, §5.12 and §5.13.
 
 ### 5.1 Revision: the fail-loud condition has fired (issues #293/#324, #296, #310)
 
@@ -1332,6 +1335,136 @@ leaves are proven *unchanged* rather than assumed to be. `#448`'s inherited-labe
 regression was watched for specifically: all four
 `_canvas.Canvas.clear_inherited_labels()` call sites are untouched, this change
 draws no label, and the LVS match is the end-to-end proof.
+
+### 5.13 Revision: §5.5's lever 3 is spent in full — 1.82× to 1.51×, and 75.5 % of the amended row (issue #458)
+
+**Status: still over the 0.15 mm² draft target, by 1.51× rather than 1.82×;
+comfortably inside the ratified ≤ 0.30 mm² row, at 75.5 % of it rather than
+91.0 %.** This is the fourth sized lever spent, and the one §5.5 named as
+"lever 3" and §5.8 took only half of ("§5.5's lever 3 survives, reduced"). Full record and reproduction:
+`layout/evidence/divider-chain-layout/PROOF-over-device-rows.md`.
+
+**This section is stated against §5.12, not §5.11.** #474 (issue #469) landed
+`cp_output_stage`'s glue-bus packing on `main` while this work was in review,
+and this revision is measured on the rebased tree that carries it — so
+`pfd_cp` enters every table below at §5.12's **26,406 µm²**, not §5.11's
+26,665 µm², and the whole-chip figures are the two levers *together*. The
+`divider_chain` delta itself is untouched by that rebase: the two blocks share
+no geometry and `area-audit.md` regenerates both from their own committed GDS.
+
+Both of `divider_chain`'s Metal2 track populations — the top-level one §5.2
+packed and the `div23_cell` one §5.8 packed — are now assigned by
+`devgen.pack_tracks_over_devices()` instead of `devgen.pack_tracks()`. A track
+is placed at the lowest 0.75 µm step whose drawn rectangle clears an explicit
+obstacle map (every riser's Via1/Metal2 landing square, plus every placed
+`div23_cell` instance's own interior Metal2, read recursively back off the
+canvas), rather than at `base_y + i·pitch` in a band above the device rows.
+`route_net()` and `_riser()` draw exactly what they always drew; only which
+`track_y` values are legal changed.
+
+| Block | §5.12 | §5.13 | Delta |
+|---|---|---|---|
+| Loop filter (R + C1 + C2) | 36,936 µm² | 36,936 µm² | — (a calculation, not a layout) |
+| `vco_block` | 31,826 µm² | 31,826 µm² | — |
+| `pfd_cp` | 26,406 µm² | 26,406 µm² | — (#469 spent at §5.12; no routing lever left) |
+| `divider_chain` | 92,618 µm² | **55,329 µm²** | **−37,289 µm², −40.3 %** |
+| `lock_detector` | 30,586 µm² | 30,586 µm² | — (unnamed lever, §5.9) |
+| **Sum** | 218,372 µm² (0.2184 mm²) | **181,083 µm² (0.1811 mm²)** | −17.1 % |
+| **After §5's ×1.25** | 272,965 µm² (0.2730 mm²) | **226,354 µm² (0.2264 mm²)** | |
+| **vs the 0.15 mm² draft** | 1.82× | **1.51×** | |
+| **vs the ratified ≤ 0.30 mm² row (DR-016)** | 91.0 % | **75.5 %** | |
+
+Every figure in that table is regenerated, not carried forward: `python3
+layout/run_pv.py area --out layout/evidence/area-audit/area-audit.md` on the
+rebased tree reproduces the committed audit byte-for-byte, and the §5.13
+column is its four block rows plus DR-006's loop-filter calculation.
+
+The gap to close against §5's 120,000 µm² pre-overhead budget goes from
+98,631 µm² (§5.11) / 98,372 µm² (§5.12) to **61,083 µm²**. `divider_chain`
+stops being the chip's dominant block: at 55,329 µm² it is 1.5× the loop
+filter rather than 2.5× it. The overhead factor the amended row's margin is
+sized to rises ×1.374 → **×1.657**, and the margin on the block sum against
+the row's implied ≤ 240,000 µm² goes 9.0 % → **24.6 %**.
+
+**This is the first lever in the series to beat the 20 %–66 % band the
+previous three landed in: 74.4 % of its own ceiling.** #458 sized itself at
+1317.66 × 32.25 µm = 42,494 µm² (a 50,124 µm² saving); the outcome is
+1317.66 × 41.99 µm = 55,329 µm² (37,289 µm²). The residual 12,835 µm² is
+9.74 µm of height carrying the nets whose x-extent crosses a `div23_cell`
+instance's own interior — they cannot drop into the channel the macro's own
+tracks now occupy, and they cannot cross on Metal3 either, because the macro's
+own risers are vertical Metal3 through exactly that span. Closing it needs a
+fourth routing layer or a macro that reserves a through-corridor for its
+parent, neither of which is a `track_y` change.
+
+**Correction: §5.11 mis-sized this lever, and the direction is again
+inconvenient.** §5.11's closing list describes #458 as "the 7,814 µm² between
+the 1.20× and 1.13× bounds above". That is the residual *after* #458 reaches
+its ceiling, not the lever: §5.11's own 1.20× bound already valued
+`divider_chain` at its 42,494 µm² post-#458 ceiling, so the lever inside that
+bound is the 50,124 µm² this revision took 74.4 % of. The 7,814 µm² is real
+but unnamed — it is the distance from the ceiling to the device-band floor,
+and this revision leaves 20,648 µm² of it rather than 7,814, because it landed
+short of the ceiling. The 1.20× and 1.13× *bounds* themselves are unaffected;
+only the sentence attributing the difference to #458 was wrong.
+
+**#442's `max(packed-track floor, device band) × width` ceiling no longer
+bounds this block, because this change is what breaks its premise.** That rule
+assumes tracks occupy an exclusive band. `area-audit.md` now reports 53
+distinct Metal2 tracks for `divider_chain` — *up* from 43, since the same nets
+sit at more distinct y values once they are no longer all on one band's pitch
+grid — for a nominal 39.75 µm "packed floor" against the 15.67 µm of no-device
+band actually drawn. The formula's output is now larger than the geometry it
+describes. For this block the honest floor is the device band alone,
+26.32 × 1317.66 = 34,681 µm², i.e. DR-016's 1.13× term; the block is now
+20,648 µm² above it rather than 57,937 µm². **The rule is still correct for
+the other three blocks**, none of which routes over its own device rows, so
+nothing about §5.11's whole-chip bounds is withdrawn — but a future
+whole-chip ceiling sum must take `divider_chain`'s term from the device band,
+not from the formula.
+
+**`spec/pll.md#area` is not amended here, and does not need to be.** DR-016
+ratified ≤ 0.30 mm²; this revision moves the measured total further *under*
+that row, which requires no amendment and is not a spec change. DR-016's own
+closing paragraph invites a successor record amending the row downward once a
+remaining lever lands — that is a decision record's judgement (how much margin
+the unmeasured ×1.25 top-level overhead still warrants with no assembled
+`pll_top` GDS), not a layout PR's, and is left to one.
+
+**The cost of that, named rather than left for a reader to trip over**:
+`spec/pll.md#area`'s *measured* table reproduces DR-016's block-by-block
+figures, so it now lags the committed geometry by **two** levers, not one —
+#469 (§5.12) did not refresh it either, for the same reason. It still reads
+`pfd_cp` at 344.98 × 77.30 µm / 0.0267 mm², `divider_chain` at
+1317.66 × 70.29 µm / 0.0926 mm², the sum at 0.2186 mm² and the total at
+0.2733 mm² / 91.1 % / 1.82×. Those are DR-016's measurement as ratified, not a
+claim about the GDS committed today. Refreshing them is the same act as
+amending the row they sit under and goes through `spec/` with a decision
+record (CLAUDE.md) — filed as **#476**, whose scope covers both lagging levers.
+Until that lands, **this section and
+`layout/evidence/area-audit/area-audit.md` are the current measurement**, and
+`area-audit.md` is regenerable from the committed GDS by `python3
+layout/run_pv.py area` by anyone who wants to check.
+
+**DRC/LVS re-verified, not assumed.** Both changed blocks are rebuilt and
+re-run on `KLayout 0.28.16`, this repo's pinned version, so #360's
+false-mismatch caveat does not arise: `div23_cell` and `divider_chain` are
+each DRC clean (0 violations) **and** DRC clean under `--offgrid` **and** LVS
+matched at the new geometry. Both `reference_netlist()` outputs are
+byte-for-byte unchanged; `div23_cell`'s seven pin locations and x-extent are
+unchanged; #295's six-identical-instances criterion is re-proved
+geometrically at the new footprint; and the minimum positive edge-to-edge gap
+on Metal2 and on Metal3 is 0.3100 µm in both cells both *before and after* the
+change — the tracks moved, their closest approach did not. Re-verified a
+second time on the rebased tree that carries #469: identical verdicts, as
+expected — the two changes share no cell, and `pfd_cp`'s own committed GDS is
+byte-identical to what #474 merged.
+
+**§5.11's three open levers are now two spent and one open.** #469 closed at
+§5.12 and #458 closes here; what remains from that list is the **unnamed**
+`lock_detector` lever against its 65.5 % whitespace, plus the *placement*
+lever §5.12 filed as **#473**. Neither is sized here, on §5.11's own
+discipline of not guessing a number.
 
 ## 6. GDS skeleton
 

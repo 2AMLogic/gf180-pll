@@ -107,10 +107,13 @@ class BlockPlacementTests(unittest.TestCase):
         tracks instead of giving every net a never-reused one, and #344 folded
         its single row in two, taking it to 1317.66 x 100.29 um. Issue #454
         applied #341's packing one level down, inside the div23_cell macro
-        each row's height is gated by, taking it to 1317.66 x 70.29 um. The
-        overrun is smaller at each step (~1.19e6 -> ~1.09e6 -> ~0.61e6 ->
-        ~0.57e6 um^2) but still real; the ratchet ceiling below is tightened
-        to match each time rather than left loose.
+        each row's height is gated by, taking it to 1317.66 x 70.29 um, and
+        #458 made both levels' track assignment obstacle-aware so those tracks
+        sit in the plane over the device rows rather than in a band above
+        them, taking it to 1317.66 x 41.99 um. The overrun is smaller at each
+        step (~1.19e6 -> ~1.09e6 -> ~0.61e6 -> ~0.57e6 um^2) but still real;
+        the ratchet ceiling below is tightened to match each time rather than
+        left loose.
 
         Issue #449 then moved it the *other* way, for the first time, and
         the ratchet was loosened rather than the growth hidden: drawing
@@ -144,12 +147,14 @@ class BlockPlacementTests(unittest.TestCase):
             "DIVIDER_LOCK fail-loud note and PLL-FLOORPLAN.md section 5 to "
             "match",
         )
-        # Ratchet: ~0.63e6 um^2 -- issue #454 packed the div23_cell macro's own
-        # track band down (was ~0.61e6 at #344, ~1.09e6 at #341, ~1.19e6 at
-        # #310) and issue #449 then grew lock_detector's own footprint back up
-        # for its first LVS match (119.30 x 62.60 -> 294.80 x 103.75 um).
-        # Allow no growth past 0.65e6.
-        self.assertLess(extent, 650_000.0, "floorplan extent grew beyond the recorded overrun")
+        # Ratchet: ~0.59e6 um^2 -- issue #458 routed both of the divider
+        # chain's Metal2 track populations into the plane over its own device
+        # rows (1317.66 x 70.29 -> 1317.66 x 41.99 um), taking the extent from
+        # ~0.63e6. Earlier steps: ~1.19e6 at #310, ~1.09e6 at #341, ~0.61e6 at
+        # #344, ~0.61e6 at #454, then back up to ~0.63e6 at #449, which grew
+        # lock_detector's own footprint for its first LVS match (119.30 x
+        # 62.60 -> 294.80 x 103.75 um). Allow no growth past 0.60e6.
+        self.assertLess(extent, 600_000.0, "floorplan extent grew beyond the recorded overrun")
 
     def test_divider_chain_alone_now_fits_the_whole_chip_area_target(self):
         """#344's headline: the divider chain stopped being the single block
@@ -157,10 +162,12 @@ class BlockPlacementTests(unittest.TestCase):
 
         It measured 0.2471 mm^2 at #310 and 0.1503 mm^2 after #341 -- both
         over the entire 0.15 mm^2 die target for one block. Folding the row
-        (#344) brought it to 0.1321 mm^2, and packing the div23_cell macro's
-        own track band (#454) to 0.0926 mm^2. This is a necessary condition
-        for the chip to fit, never a sufficient one: the re-summed total is
-        1.82x that target as drawn today (PLL-FLOORPLAN.md section 5.11).
+        (#344) brought it to 0.1321 mm^2, packing the div23_cell macro's own
+        track band (#454) to 0.0926 mm^2, and routing both levels' tracks into
+        the plane over the device rows (#458) to 0.0553 mm^2. This is a
+        necessary condition for the chip to fit, never a sufficient one: the
+        re-summed total is still over that target as drawn today
+        (PLL-FLOORPLAN.md section 5.13).
 
         Asserted against ``AREA_BUDGET_DRAFT_UM2`` rather than the row
         ``AREA_BUDGET_UM2`` now carries: DR-016 amended the spec row to

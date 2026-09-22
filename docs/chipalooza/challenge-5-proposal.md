@@ -281,7 +281,7 @@ since no 5.0 V device exists in this design (§2.1).
 | Supply sensitivity — DC / closed-loop, full grid | ≤ 0.6 V of the `VCTRL` window consumed by a rail excursion; stays locked through a supply step + ramp | Full 45-point grid: **frequency-vs-supply criterion FAILs on 10/45 corners** (worst −294 ppm); **`VCTRL`-window criterion FAILs on 4/45** (worst 2.642 V, past the 2.4 V edge, at `ss`/−40 °C/3.63 V); **step+ramp criterion FAILs** at 1 of 3 sampled corners even after both settling-time escalations run to completion (`ss`/−40 °C, a genuine finding routed to `loop-dynamics`, #10) | **UNMET on 3 of 4 measured criteria** — a real, disclosed design-margin finding, not a settling-window artifact (both escalations ran to full length) | `sim/supply-sensitivity/records/20260901-155456-46b92f8.md` |
 | Output duty cycle | 45–55 % at `CLK`, full band, all corners | 44.375–50.696 % measured (90 points, loaded); 7/90 points below the 45 % floor, all at the low-frequency band edge, concentrated in the `fs` process bundle | **UNMET at 7/90 points** (small excursion, 0.625 pp worst-case) | `sim/output-driver/records/20260817-100354-0e9cfc9.md` |
 | Output levels and drive | V_OH ≥ 0.9·VDD_VCO, V_OL ≤ 0.1·VDD_VCO into ≤ 50 fF | V_OH 1.006–1.044·VDD_VCO, V_OL −0.040…−0.006·VDD_VCO, 90/90 points | **MET**, full 90-point grid | Same record |
-| Area | ≤ **0.30 mm²** total — **amended by DR-016** (issue #456) from the draft ≤ 0.15 mm², on the measurement in the next column | **Measured at the block level, and the spec row is now amended to it.** Every sub-block's as-drawn footprint, taken from the committed GDS bounding box rather than a hand-recorded figure: loop filter 0.0369 mm² (still a calculation — no loop-filter layout exists), VCO 0.0318 mm² (172.52 × 184.48 µm), PFD + charge pump 0.0264 mm² (344.98 × 76.55 µm — it was 0.0353 mm² before the #455 fold and 0.0267 mm² before the #469 glue-bus packing), divider chain 0.0926 mm² (1317.66 × 70.29 µm — it was 0.2471 mm² as first drawn and came down 63 % through the #341 routing-track-packing, #344 row-fold and #454 macro-track-packing passes), lock detector 0.0306 mm² (294.80 × 103.75 µm — grown ~4.1× from 0.0075 mm² by issue #449, which drew DR-014's 4-bit trim network into `delaywin_3v3` and, with it, the block's first LVS match against its own ratified schematic). Sum **0.2184 mm²**, or **0.2730 mm²** after the floorplan's own ×1.25 top-level-overhead factor (DR-016 was written on 0.2186 / 0.2733 mm²; #469's glue-bus packing has taken 259 µm² off `pfd_cp` since, without moving the row) | **MET against the amended row — 0.2730 mm², 91.0 % of ≤ 0.30 mm² — and 1.82× over the draft 0.15 mm² target, which is now *measured* to be unreachable rather than merely unmet.** DR-016 is the amendment and the honest reading of it is this: the draft number was never derived from anything (DR-007 Amendment A3 called it "the one `budget` row in the table with no rationale behind the number at all"), and the 78.6 % of it that had no estimate of any kind is now four committed, DRC/LVS-clean block layouts. Three measured bounds, each tighter than the last, and none reaching 0.15 mm²: as drawn **1.82×**; every remaining named layout lever at its geometric ceiling **1.20×**; and — the one that settles it — **every Metal2 track routed at zero area cost, 1.13×**, a bound that survives any row fold and covers every lever this design has. 57.2 % of what a 0.15 mm² row allowed is consumed by two terms no layout lever touches: the loop filter (set by DR-006's C1/C2 *capacitance*, so reducing it is a loop-dynamics change) and `vco_block`, whose height *is* its device band and whose 60.8 % whitespace is the guard-ring and 15 µm tap-pitch spacing the foundry deck requires. The amended row is the measured total plus margin sized to the single unmeasured factor in it (it holds for a top-level overhead up to ×1.374 on the sum as drawn today), **not** an allowance for block growth — and the reduction work stays open (#458, an unnamed `lock_detector` lever, and the placement lever #473; #469 is spent, and at 259 µm² is not itself grounds for a successor record), each *material* landing being grounds for a successor record amending the row back *down*. The divider-chain packing lever (#454) is already spent: packing the `div23_cell` macro's own Metal2 track band (31 nets onto 11 tracks, the provable minimum) took that block from 0.1321 to 0.0926 mm², moving the total from 2.03× to 1.70× on its own. Shared-diffusion device stacking — which this proposal previously named as *the* cause — remains worth only **0.10 %** of the (now larger) gap, falsified rather than deferred, because the divider chain's drawn diffusion is ~1 % of its own bounding box. The `pfd_cp` fold (#455) is spent as well, taking that block 0.0353 → 0.0265 mm² and the total from 1.89× to 1.82× (and #469's glue-bus packing has since taken it to 0.0262 mm², a further 0.1 % of the total — "Known gaps" item 8) — but it landed at **42 % of its sized ceiling**, and the shortfall was measured to be in the ceiling (a flat 57-track census over five levels of composition, of which `pfd_cp` owns 4) rather than in the execution. `lock_detector`'s own new footprint is not yet levered against at all: with the divider chain's residual band-over-cells lever (#458) at its geometric ceiling, `pfd_cp` at its achieved figure and `lock_detector` un-levered, the sum is 0.1971 mm² (0.2463 mm² with overhead), **1.64×** the target — a *worse* projected floor than the 1.54× previously recorded, because 0.0118 mm² of that figure was a ceiling now known to be unreachable. (Both of those projections have since been re-derived: they carried `divider_chain`'s pre-#454 ceiling, and the corrected figure is the 1.20× above — *better* than the record had been carrying, and still over. PLL-FLOORPLAN.md §5.11.) A fourth lever, sized against `lock_detector`'s own newly-measured 65.5 % whitespace, is still not named. Note this is a **sum of block extents, not a placed-and-routed top level** — no assembled `pll_top` GDS exists, so top-level routing and inter-block spacing are not in this number, and that is exactly the uncertainty the amended row's margin is sized to | `spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md` (the amendment); `layout/evidence/area-audit/PROOF.md` (every lever's arithmetic; reproduce with `python3 layout/run_pv.py area`); `layout/floorplan/PLL-FLOORPLAN.md` §5.1–§5.12 (the re-derived budget); `layout/evidence/vco-layout/PROOF-381-high-rs-resistor.md`; `layout/evidence/pfd-cp-layout/PROOF.md` + `PROOF-455-fold.md`; `layout/evidence/divider-chain-layout/PROOF-macro-track-packing.md`; `layout/evidence/lock-detector-layout/PROOF.md` "Addendum 4"; `spec/pll.md#area` |
+| Area | ≤ **0.30 mm²** total — **amended by DR-016** (issue #456) from the draft ≤ 0.15 mm², on the measurement in the next column | **Measured at the block level, and the spec row is now amended to it.** Every sub-block's as-drawn footprint, taken from the committed GDS bounding box rather than a hand-recorded figure: loop filter 0.0369 mm² (still a calculation — no loop-filter layout exists), VCO 0.0318 mm² (172.52 × 184.48 µm), PFD + charge pump 0.0264 mm² (344.98 × 76.55 µm — it was 0.0353 mm² before the #455 fold and 0.0267 mm² before the #469 glue-bus packing), divider chain 0.0553 mm² (1317.66 × 41.99 µm — it was 0.2471 mm² as first drawn and came down 78 % through the #341 routing-track-packing, #344 row-fold, #454 macro-track-packing and #458 route-over-the-device-rows passes), lock detector 0.0306 mm² (294.80 × 103.75 µm — grown ~4.1× from 0.0075 mm² by issue #449, which drew DR-014's 4-bit trim network into `delaywin_3v3` and, with it, the block's first LVS match against its own ratified schematic). Sum **0.1811 mm²**, or **0.2264 mm²** after the floorplan's own ×1.25 top-level-overhead factor (it was 0.2186 / 0.2733 mm² when DR-016 was written; #469's glue-bus packing and #458's route-over-the-device-rows pass have taken 37,548 µm² off since, without moving the row) | **MET against the amended row — 0.2264 mm², 75.5 % of ≤ 0.30 mm² — and 1.51× over the draft 0.15 mm² target, which is now *measured* to be unreachable rather than merely unmet.** DR-016 is the amendment and the honest reading of it is this: the draft number was never derived from anything (DR-007 Amendment A3 called it "the one `budget` row in the table with no rationale behind the number at all"), and the 78.6 % of it that had no estimate of any kind is now four committed, DRC/LVS-clean block layouts. Three measured bounds, each tighter than the last, and none reaching 0.15 mm²: as drawn **1.51×** (1.82× when DR-016 was written; #469 and #458 have since landed, below); every remaining named layout lever at its geometric ceiling **1.20×**; and — the one that settles it — **every Metal2 track routed at zero area cost, 1.13×**, a bound that survives any row fold and covers every lever this design has. 57.2 % of what a 0.15 mm² row allowed is consumed by two terms no layout lever touches: the loop filter (set by DR-006's C1/C2 *capacitance*, so reducing it is a loop-dynamics change) and `vco_block`, whose height *is* its device band and whose 60.8 % whitespace is the guard-ring and 15 µm tap-pitch spacing the foundry deck requires. The amended row is the measured total plus margin sized to the single unmeasured factor in it (it holds for a top-level overhead up to ×1.657 on the sum as drawn today), **not** an allowance for block growth — and the reduction work stays open (an unnamed `lock_detector` lever and the placement lever #473), each *material* landing being grounds for a successor record amending the row back *down*. Two levers have landed since DR-016 and neither has moved the row: #469's glue-bus packing, at 259 µm², does not clear that bar on its own; **#458** does — it routed the divider chain's Metal2 tracks into the plane over its own device rows, 0.0926 → 0.0553 mm² (74.4 % of its sized ceiling), DRC-clean on both decks and still LVS-matched, moving the total 1.82× → 1.51× under an unchanged row. The divider-chain packing lever (#454) is already spent: packing the `div23_cell` macro's own Metal2 track band (31 nets onto 11 tracks, the provable minimum) took that block from 0.1321 to 0.0926 mm², moving the total from 2.03× to 1.70× on its own. Shared-diffusion device stacking — which this proposal previously named as *the* cause — remains worth only **0.10 %** of the (now larger) gap, falsified rather than deferred, because the divider chain's drawn diffusion is ~1 % of its own bounding box. The `pfd_cp` fold (#455) is spent as well, taking that block 0.0353 → 0.0265 mm² and the total from 1.89× to 1.82× (and #469's glue-bus packing has since taken it to 0.0262 mm², a further 0.1 % of the total — "Known gaps" item 8) — but it landed at **42 % of its sized ceiling**, and the shortfall was measured to be in the ceiling (a flat 57-track census over five levels of composition, of which `pfd_cp` owns 4) rather than in the execution. `lock_detector`'s own new footprint is not yet levered against at all. Earlier revisions of this row projected a post-lever floor of 1.64×, then 1.54×; both carried `divider_chain`'s pre-#454 ceiling, and re-derived from the current audit the figure is the 1.20× above — *better* than the record had been carrying, and still over (PLL-FLOORPLAN.md §5.11). §5.13 adds one caveat to that ceiling: `max(packed-track floor, device band) × width` assumes a block's tracks occupy an exclusive band, which is exactly what #458 stopped being true for `divider_chain`, so that block's term in any future ceiling sum has to come from its device band (0.0347 mm²) instead. A fourth lever, sized against `lock_detector`'s own newly-measured 65.5 % whitespace, is still not named. Note this is a **sum of block extents, not a placed-and-routed top level** — no assembled `pll_top` GDS exists, so top-level routing and inter-block spacing are not in this number, and that is exactly the uncertainty the amended row's margin is sized to | `spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md` (the amendment); `layout/evidence/area-audit/PROOF.md` (every lever's arithmetic; reproduce with `python3 layout/run_pv.py area`); `layout/floorplan/PLL-FLOORPLAN.md` §5.1–§5.13 (the re-derived budget); `layout/evidence/vco-layout/PROOF-381-high-rs-resistor.md`; `layout/evidence/pfd-cp-layout/PROOF.md` + `PROOF-455-fold.md` + `PROOF-469-glue-bus-packing.md`; `layout/evidence/divider-chain-layout/PROOF-macro-track-packing.md` + `PROOF-over-device-rows.md`; `layout/evidence/lock-detector-layout/PROOF.md` "Addendum 4"; `spec/pll.md#area` |
 | Lock detector | assert window within **1 … 2 ns** of phase error at every PVT point (T1′/T2′, DR-010/DR-013), measured at the `lock` flag rather than at the bare delay chain; hysteresis ≥ 25 % of window (T3); deassert ≤ 1 `f_ref` period (T4); no chatter 1–25 MHz (T5). **Conditioned on the [lock-detector window trim-code rule](../../spec/pll.md#lock-detector-window-trim-code-rule)** | Re-characterized in situ on the trimmed `delaywin_3v3` cell (DR-014, #411): window edge **[1.14, 1.16) ns** at `fs`/−40 °C/3.63 V and **[1.78, 1.80) ns** at `ss`/125 °C/2.97 V, each at the code the trim rule selects, PVT spread **1.53–1.58×** against DR-013 Decision 4's ≤ 1.65×. 0 of 205 points fail the four-check acceptance; worst deassert latency 5.63 ns. The **untrimmed** cell sat at [2.02, 2.04) ns with a 1.91–1.96× spread — outside the band at every fixed code | **T1′/T2′ MET, conditional on the trim rule** — this row supersedes this proposal's earlier "T1/T2 UNMET" reading, which predated #411. **T4/T5 still UNMET/uncharacterized below 25 MHz.** Two things a reader must not miss: an **untrimmed part is outside this specification**, and the trim code table is schematic-level and mismatch-free, so the rule is not yet proven against a real trimmed part. `spec/pll.md` keeps this row inside DR-007 Amendment A1's ratification carve-out for exactly those reasons | `sim/lock-detector/records/20260919-002812-1b12179.md` (the 205-point in-situ verdict); `sim/lock-window-trim/records/20260917-185928-8adff3d.md` (the 1872-point code map the trim rule's table comes from); `sim/lock-window-sizing/records/20260915-202802-79c0cee.md`; superseded predecessor `sim/lock-detector/records/20260731-162119-0a12e6c.md` |
 | Kvco | ≤ 150 MHz/V under the band-selection rule | Worst 115.8 MHz/V (`all-fast`/27 °C/2.97 V, B6); an adversarial band choice reaches 154.3 MHz/V, over the line, which is why the rule is normative | **MET**, conditional on the band-selection rule being followed | `sim/vco-tuning-range/records/20260731-175947-0a12e6c.md` |
 | Supply range | 3.3 V ± 10 %, 3.3 V devices exclusively | Every campaign above sweeps 2.97/3.30/3.63 V | **MET, as the swept independent axis of every other row** | `spec/pll.md#supply-range` |
@@ -312,7 +312,7 @@ reference netlist:
 |---|---|---|---|---|---|
 | VCO (#293, folded at #324) | `vco_block` | 183.18 × 170.28 µm (0.0312 mm²) | clean | **matched** | `layout/evidence/vco-layout/` (`PROOF-fold.md`, `PROOF-lvs.md`, `PROOF-433-vdd-island-fix.md`) |
 | PFD + charge pump (#294 via #299–#303, #385, #386; LVS at #440/#448; folded at #455; glue bus packed at #469) | `pfd_cp` | 347.41 × 75.48 µm (0.0262 mm²) | clean (default **and** `--offgrid` signoff-grade) | **matched** | `layout/evidence/pfd-cp-layout/` (`PROOF.md`, including the first run's recorded mismatch and its root cause) |
-| Divider chain (#295 via #306–#310, packed at #341, folded at #344, macro-track-packed at #454) | `divider_chain` | 1317.66 × 70.29 µm (0.0926 mm²) | clean | **matched** | `layout/evidence/divider-chain-layout/` (`PROOF.md`, `PROOF-fold.md`, `PROOF-macro-track-packing.md`) |
+| Divider chain (#295 via #306–#310, packed at #341, folded at #344, macro-track-packed at #454, routed over its device rows at #458) | `divider_chain` | 1317.66 × 41.99 µm (0.0553 mm²) | clean (also under `--offgrid`) | **matched** | `layout/evidence/divider-chain-layout/` (`PROOF.md`, `PROOF-fold.md`, `PROOF-macro-track-packing.md`, `PROOF-over-device-rows.md`) |
 | Lock detector (#296; DR-014 trim network + LVS at #440/#449) | `lock_detector` | 294.80 × 103.75 µm (0.0306 mm²) | clean | **matched** | `layout/evidence/lock-detector-layout/PROOF.md` (including the first run's recorded mismatch, its DR-014-staleness root cause, and the regrown geometry's clean re-proof) |
 
 Every DRC run above is against the PDK's own foundry signoff decks
@@ -342,20 +342,25 @@ were already committed).
   schematic describes and the deck correctly refused to match the two; issue
   #449 drew that trim network and the deck now reports a match, closing the
   last gap of the four.
-- **The block footprints exceed the *draft* 0.15 mm² area budget by 1.82×, and
+- **The block footprints exceed the *draft* 0.15 mm² area budget by 1.51×, and
   the spec row has since been amended to ≤ 0.30 mm² on that measurement**
   (§5's Area row, "Known gaps" item 8,
-  `layout/floorplan/PLL-FLOORPLAN.md` §5.1–§5.12, and
+  `layout/floorplan/PLL-FLOORPLAN.md` §5.1–§5.13, and
   `spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md`).
   The draft target is unreachable by measurement, not by projection: even
   assuming every Metal2 track routes at zero area cost, the blocks' own drawn
   device bands plus the loop filter are 1.13× it. The block meets the amended
-  row at 0.2730 mm², with the margin sized to the ×1.25 top-level overhead
-  factor nothing has yet measured. Reduction work stays open: #469 is now
-  spent (0.2733 → 0.2730 mm², §5.12), leaving #458, an unnamed
-  `lock_detector` lever (that block's footprint having grown ~4.1× for the LVS
-  match above) and the placement lever #473 that #469's own measurement
-  exposed. Reported as a spec amendment on the record, not rounded away.
+  row at 0.2264 mm² — 75.5 % of it — with the margin sized to the ×1.25
+  top-level overhead factor nothing has yet measured. It was 0.2733 mm² when
+  DR-016 was written; two levers have since landed — #469 packed
+  `cp_output_stage`'s glue-bus track band (0.2733 → 0.2730 mm², §5.12) and
+  #458 routed the divider chain's Metal2 tracks into the plane over its own
+  device rows (0.0926 → 0.0553 mm² for that block, 0.2730 → 0.2264 mm²,
+  §5.13) — which is why the number moved *down* under an unchanged row.
+  Reduction work stays open: an unnamed `lock_detector` lever (that block's
+  footprint having grown ~4.1× for the LVS match above) and the placement
+  lever #473 that #469's own measurement exposed. Reported as a spec
+  amendment on the record, not rounded away.
 
 Top-level assembly and formal DRC/LVS reporting are tracked at issues #17
 and #149; post-layout re-verification at #18. This proposal claims exactly
@@ -431,9 +436,9 @@ the DRC/LVS closure the table above records, and no more.
    extracted has not been assembled, so every §5 number remains
    schematic-level. Tracked at issues #17 (top-level assembly), #149
    (formal DRC/LVS reporting) and #18 (post-layout re-verification).
-8. **The drawn blocks are 1.82× over the *draft* 0.15 mm² area target, that
+8. **The drawn blocks are 1.51× over the *draft* 0.15 mm² area target, that
    target is measured to be unreachable, and the spec row has been amended to
-   ≤ 0.30 mm² on that measurement — which the block meets at 0.2730 mm²**
+   ≤ 0.30 mm² on that measurement — which the block meets at 0.2264 mm²**
    (§5, §6; `spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md`).
    **Read that as a spec change, not as a solved area problem.** The draft
    number was never derived from anything — DR-007's own review raised it as
@@ -441,7 +446,8 @@ the DRC/LVS closure the table above records, and no more.
    the number at all, not even a disposition-only hand calc" — and the 78.6 %
    of it that A3 said had no estimate of any kind is now four committed,
    DRC-clean, LVS-matched block layouts measured off GDS by a reproducible
-   command. The answer is that the aspiration was 1.82× off, and DR-016
+   command. The answer is that the aspiration was 1.82× off when DR-016 was
+   written (1.51× since issue #458, below), and DR-016
    records that permanently rather than letting it live as an indefinite
    "still over" in a layout file. What makes it unreachable is measured, not
    projected: strike **all** Metal2 routing — every net free, no band anywhere
@@ -453,22 +459,30 @@ the DRC/LVS closure the table above records, and no more.
    [Phase margin](../../spec/pll.md#phase-margin), both ratified *and*
    measured) plus `vco_block`'s guard-ring and 15 µm tap-pitch spacing, which
    the foundry deck requires. The amended row's margin — 8.9 % on the sum
-   DR-016 was written on, 9.0 % on the sum as drawn today — is sized to one
+   DR-016 was written on, 24.6 % on the sum as drawn today — is sized to one
    thing — the ×1.25 top-level overhead factor, which no assembled `pll_top`
    has ever measured (gap 7 above) — and **not** to block growth; it holds for
-   an overhead up to ×1.372 at DR-016's sum and ×1.374 at today's. Reduction
-   remains open and a lower row is still the goal: #458 (`divider_chain`'s
-   residual band-over-cells), #473 (interleaving `cp_output_stage`'s glue
-   inverters, the *placement* lever #469's own measurement exposed) and an
-   unnamed lever against `lock_detector`'s 65.5 % whitespace, each material
-   landing being grounds for a successor record amending the row back down on
-   the same standard — measured, from committed geometry, DRC/LVS-clean.
-   #469, the first of those levers to land, is spent at 259 µm² (0.1 % of the
-   sum) and does not clear that bar on its own. The figures, and the sequence
-   of passes that produced them: 0.2184 mm² summed, 0.2730 mm² with the
-   floorplan's ×1.25 top-level overhead, before any top-level routing is
-   counted (0.2186 / 0.2733 mm² when DR-016 was written, the difference being
-   #469 below). The divider-chain packing lever is already
+   an overhead up to ×1.372 at DR-016's sum and ×1.657 at today's. Reduction
+   remains open and a lower row is still the goal: #473 (interleaving
+   `cp_output_stage`'s glue inverters, the *placement* lever #469's own
+   measurement exposed) and an unnamed lever against `lock_detector`'s 65.5 %
+   whitespace, each material landing being grounds for a successor record
+   amending the row back down on the same standard — measured, from committed
+   geometry, DRC/LVS-clean. **Two such landings have already happened and the
+   row has not yet followed either.** #469, the first, is spent at 259 µm²
+   (0.1 % of the sum) and does not clear that bar on its own (0.2733 →
+   0.2730 mm², PLL-FLOORPLAN.md §5.12). #458, the second, does move the total
+   materially: it made both of `divider_chain`'s Metal2 track assignments
+   obstacle-aware, so its tracks sit in the plane over its own device rows
+   rather than in a band above them — 0.0926 → **0.0553 mm²** for that block,
+   74.4 % of its own sized ceiling, DRC-clean on both decks and still
+   LVS-matched
+   (`layout/evidence/divider-chain-layout/PROOF-over-device-rows.md`,
+   PLL-FLOORPLAN.md §5.13). The figures, and the sequence of passes that
+   produced them: **0.1811 mm² summed, 0.2264 mm²** with the floorplan's ×1.25
+   top-level overhead, before any top-level routing is counted (0.2186 /
+   0.2733 mm² when DR-016 was written, the difference being those two levers).
+   The divider-chain packing lever is already
    spent: issue #454 packed the `div23_cell` macro's own Metal2 track band
    (31 nets onto 11 tracks, the provable minimum), taking that block
    0.1321 → 0.0926 mm² and the total 2.03× → 1.70× on its own, DRC- and
@@ -500,16 +514,17 @@ the DRC/LVS closure the table above records, and no more.
    extends six of the fourteen nets across the block's whole width. 0.0265 →
    **0.0262 mm²**, 20 % of what the lever was sized at
    (`layout/evidence/pfd-cp-layout/PROOF-469-glue-bus-packing.md`). There is
-   now no unexecuted routing-track lever left in `pfd_cp`. With the divider
-   chain's residual band-over-cells lever (#458) at its geometric ceiling,
-   `pfd_cp` counted at its achieved figure, and `lock_detector`'s footprint
-   left un-levered, the total is 0.2463 mm², **1.64×** the target — a worse
-   projected floor than the 1.54× this record carried before, because part of
-   that figure was a ceiling now measured as unreachable. A fourth lever,
+   now no unexecuted routing-track lever left in `pfd_cp`. A fourth lever,
    sized against `lock_detector`'s own 65.5 % whitespace, is still not
-   named. (Both of those projections carried `divider_chain`'s pre-#454
-   ceiling; re-derived from the current audit the figure is **1.20×** — better
-   than the record had been carrying, and still over. PLL-FLOORPLAN.md §5.11.)
+   named. (Earlier revisions of this item projected a post-lever floor of
+   1.64×, then 1.54×; both carried `divider_chain`'s pre-#454 ceiling, and
+   re-derived from the current audit the figure is **1.20×** — better than the
+   record had been carrying, and still over. PLL-FLOORPLAN.md §5.11. #458 has
+   since taken that block to 0.0553 mm², 74.4 % of the way from as-drawn to
+   its own ceiling, and §5.13 records that the `max(packed-track floor, device
+   band)` rule that ceiling uses no longer bounds a block which routes over
+   its own device rows — for `divider_chain` the honest floor is now its
+   device band alone, 0.0347 mm².)
    The decision record this history was waiting on is DR-016, written on the
    measured post-lever total once both sized levers (#454, #455) had landed
    DRC/LVS-clean — not on the bound.

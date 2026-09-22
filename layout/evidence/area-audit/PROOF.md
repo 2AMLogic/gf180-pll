@@ -358,3 +358,44 @@ owning issues rather than being parked as "tracked as a follow-up".
 | Every block whose geometry changes is re-run through DRC/LVS | **vacuous — no geometry changes.** No GDS, generator or deck verdict is touched. The two execution issues carry this criterion. |
 | Outcome is ≤ 0.15 mm² or a decision record amending the target | **Neither at the time of this record, deliberately** — see "What this record does not conclude". The overrun stayed tracked at **#456** (blocked on #454/#455), with sized levers and owning issues rather than as an unnamed follow-up. **Discharged since**: both levers landed and #456 wrote the decision record on the measured total — `spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md`, amending the row to ≤ 0.30 mm² against a measured 0.2733 mm². This record's "1.35× even at every lever's ceiling" was optimistic in one direction and pessimistic in another, and `PLL-FLOORPLAN.md` §5.11 states both: the executed levers delivered 66 % and 42 % of their sizings, while the ceiling itself re-derives to 1.20× once `divider_chain`'s post-#454 track census replaces the one below. |
 | `docs/chipalooza/challenge-5-proposal.md`'s Area row updated | Area row + "Known gaps" item 8: 2.03× on the current GDS, with the falsified device-density cause replaced by the measured one |
+
+## Addendum (issue #458): lever 3 is spent in full, and this record's ceiling formula no longer bounds `divider_chain`
+
+Two updates, one to the ledger and one to the method.
+
+**The ledger.** Lever 3 — "the Metal2 track band over the cells rather than
+above them", sized here at 77,869 µm² and 63.0 % of the gap — is now executed
+on the divider chain. #454 took the packing half of it (39,530 µm²) and left
+the band still stacked above the device rows; #458 took the rest, moving both
+that block's track populations into the plane over its own device rows via
+`devgen.pack_tracks_over_devices()`. `divider_chain` goes 92,618 → **55,329
+µm²**, the whole-chip sum 218,372 → **181,083 µm²**, and the ×1.25 total
+0.2730 → **0.2264 mm²** — 75.5 % of the ≤ 0.30 mm² row DR-016 ratified, and
+1.51× the 0.15 mm² draft. (The sum this is measured against is #469's
+218,372 µm², not DR-016's own 218,631 µm²: #474 landed `cp_output_stage`'s
+glue-bus packing on `main` while this work was in review, and the figures
+above are regenerated on the rebased tree that carries both levers.) Full
+record: `layout/evidence/divider-chain-layout/PROOF-over-device-rows.md`;
+whole-chip arithmetic: `PLL-FLOORPLAN.md` §5.13.
+
+**The method.** This record's per-block ceiling, `max(packed-track floor,
+device band) × width`, assumes a block's Metal2 tracks occupy an *exclusive*
+band — which is precisely the assumption lever 3 exists to break, and which
+`divider_chain` no longer satisfies. Re-running `run_pv.py area` on the new
+geometry reports **53** distinct Metal2 tracks for that block, *up* from 43
+(the same nets at more distinct y values, now that they are not all on one
+band's pitch grid), for a nominal 39.75 µm floor against 15.67 µm of
+no-device band actually drawn: the formula's output is larger than the
+geometry it describes. For a block that routes over its own device rows the
+honest floor is the **device band alone** — 26.32 × 1317.66 = 34,681 µm² here,
+which is the same quantity DR-016's third bound ("every Metal2 track routed at
+zero area cost") already uses.
+
+This does not withdraw anything above. The formula remains correct for
+`vco_block`, `pfd_cp` and `lock_detector`, none of which routes over its own
+device rows, and the 1.35× conclusion this record reached — that 0.15 mm² is
+unreachable because the loop filter and the VCO alone commit 57.2 % of the
+pre-overhead budget — is untouched by it: both of those terms are device-band
+and capacitance terms, not routing terms. What changes is that a future
+whole-chip ceiling sum must take `divider_chain`'s row from its device band
+rather than from `packed_track_floor_um`.
