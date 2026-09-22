@@ -182,9 +182,12 @@ block**, and it lives entirely below this level:
   tracks whose packed floor is 7.50 µm.
 * Neither is a `pfd_cp` change: both ripple through `cp_array`,
   `cp_output_stage`, `cp` and this block, four committed GDS artifacts with
-  their own DRC (and, here, LVS) claims. Filed as its own issue per §5.5's
+  their own DRC (and, here, LVS) claims. Filed as **issue #469** per §5.5's
   one-lever-per-PR discipline, the same way #458 was split out of #454
-  rather than folded in.
+  rather than folded in — with the sizings above, and with the note that a
+  `cp_dumpbuf` fold and *this* block's fold are mutually exclusive (`pfd`
+  now occupies the band a folded dump buffer would need), so that pair has
+  to be decided together the same way #455's own two levers were.
 
 ## Verification
 

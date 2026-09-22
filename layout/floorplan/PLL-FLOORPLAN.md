@@ -1022,9 +1022,9 @@ each of 14 nets a dedicated track where the interval graph's own clique
 number is 9, and `cp_dumpbuf` spends 25.87 µm of its 37.07 µm height on a
 band whose 10 tracks pack into 7.50 µm. That is one change across
 `cp_array._route_side` rippling through four committed GDS artifacts with
-their own DRC and LVS claims, so it is filed as its own issue rather than
-folded in — the same split #458 got out of #454, per §5.5's own
-one-lever-per-PR discipline.
+their own DRC and LVS claims, so it is filed as **#469** rather than folded
+in — the same split #458 got out of #454, per §5.5's own one-lever-per-PR
+discipline.
 
 **§5.5's 1.35× ceiling should now be read as optimistic, and §5.9's 1.54×
 with it.** Both are built from the same flat-track-census premise that this
