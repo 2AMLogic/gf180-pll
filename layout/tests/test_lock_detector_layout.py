@@ -415,6 +415,79 @@ class ReferenceNetlistTests(unittest.TestCase):
             self.assertIn(pin, ref.splitlines()[0])
 
 
+#: This block's own evidence directory (DRC claim at #296, LVS claim at #440).
+EVIDENCE_DIR = LAYOUT_DIR / "evidence" / "lock-detector-layout"
+
+#: ``run_lvs.py``'s own match verdict, verbatim. The same substring
+#: ``layout/lib/check-layout-status-claims.sh`` greps for when it decides
+#: whether this block counts as LVS-matched in README.md / the Challenge #5
+#: proposal -- asserted here too so the two cannot drift apart silently.
+LVS_MATCH_VERDICT = "Congratulations! Netlists match."
+
+
+class LvsEvidenceTests(unittest.TestCase):
+    """The committed block-level LVS record (issue #440).
+
+    Pure file inspection -- no PDK, no KLayout. Re-running the deck is
+    ``layout/run_pv.py lvs``'s job and is recorded in ``PROOF.md``; what
+    these tests defend is that the *recorded* verdict stays in the tree and
+    stays a match, so a later change that quietly breaks this block's LVS
+    cannot leave a stale "4 of the 4 are LVS-matched" claim standing in two
+    status documents. This is the same guard
+    ``test_pfdcp_block_layout.LvsEvidenceTests`` applies to ``pfd_cp``.
+    """
+
+    def test_lvs_clean_directory_exists(self):
+        self.assertTrue(
+            (EVIDENCE_DIR / "lvs-clean").is_dir(),
+            f"{EVIDENCE_DIR / 'lvs-clean'} -- the deck output for this "
+            "block's LVS claim; see PROOF.md for the exact invocation",
+        )
+
+    def test_the_recorded_deck_log_reports_a_match(self):
+        log = EVIDENCE_DIR / "lvs-clean" / "lvs.stdout.log"
+        self.assertTrue(log.is_file(), f"{log} missing")
+        self.assertIn(LVS_MATCH_VERDICT, log.read_text())
+
+    def test_the_recorded_deck_log_reports_no_mismatch(self):
+        log = EVIDENCE_DIR / "lvs-clean" / "lvs.stdout.log"
+        self.assertNotIn("Netlists don't match", log.read_text())
+
+    def test_the_run_committed_its_reference_extracted_and_database_files(self):
+        for name in ("lock_detector.spice", "lock_detector.cir", "lock_detector.lvsdb"):
+            with self.subTest(name=name):
+                self.assertTrue((EVIDENCE_DIR / "lvs-clean" / name).is_file())
+
+    def test_the_committed_reference_is_what_reference_netlist_produces_today(self):
+        # The claim is only as good as what it was compared against: if
+        # design/netlist/lock_detector.spice or the flattener moves, the
+        # committed match log is measuring a netlist that no longer exists.
+        committed = (EVIDENCE_DIR / "lvs-clean" / "lock_detector.spice").read_text()
+        self.assertEqual(committed, build.reference_netlist())
+
+    def test_the_first_runs_recorded_mismatch_is_kept_not_deleted(self):
+        # Evidence here is append-only: the mismatch this block's first
+        # block-level LVS run actually found (issue #440's own first pass,
+        # 117 reference devices vs. a 45-device pre-DR-014 layout) stays
+        # committed under lvs-attempt/ beside the match that superseded it.
+        attempt = EVIDENCE_DIR / "lvs-attempt" / "lvs.stdout.log"
+        self.assertTrue(attempt.is_file(), f"{attempt} -- do not delete")
+        self.assertIn("Netlists don't match", attempt.read_text())
+
+    def test_the_independent_recheck_run_also_matched(self):
+        # Issue #360: a KLayout newer than this repo's 0.28.16 pin has been
+        # observed reporting a *false* LVS mismatch on an unchanged, clean
+        # layout. The lvs-clean/ run above was captured on the pinned
+        # 0.28.16; PROOF.md Addendum 5 records an independent re-run of the
+        # same GDS + same reference on KLayout 0.30.10, which matched. Both
+        # logs are committed, and both must keep saying so.
+        log = EVIDENCE_DIR / "lvs-recheck-klayout-0.30.10" / "lvs.stdout.log"
+        self.assertTrue(log.is_file(), f"{log} missing")
+        text = log.read_text()
+        self.assertIn(LVS_MATCH_VERDICT, text)
+        self.assertNotIn("Netlists don't match", text)
+
+
 class PinPurposeLayerTests(unittest.TestCase):
     """Net names must land on the *purpose* layers the LVS deck reads.
 

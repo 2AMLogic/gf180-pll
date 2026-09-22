@@ -1,3 +1,15 @@
+> **This block is LVS-matched** (issue #449's layout work, verdict recorded
+> in [Addendum 4](#addendum-4-issue-449-dr-014s-trim-network-drawn-block-lvs-matched--supersedes-every-not-lvs-matched-statement-above),
+> re-derived on a second KLayout and pinned by a test in
+> [Addendum 5](#addendum-5-issue-440-the-match-re-derived-on-a-second-machine-and-a-second-klayout-and-pinned-by-a-test)).
+> Everything below this pointer is the original issue #296 record, unedited
+> — `sim/`-style append-only discipline applied to `layout/` evidence, as
+> [`../vco-layout/PROOF.md`](../vco-layout/PROOF.md) does. Where the section
+> immediately below says "This is a **DRC-clean geometry claim only** — LVS
+> … is not run here and is not claimed", read it as history: that was true
+> when this file was written and stopped being true at #449. The addenda
+> carry the current claim.
+
 # lock_detector block layout — DRC run (issue #296)
 
 Real, transistor-level layout for the `lock_detector` block (phase-error
@@ -659,3 +671,102 @@ real, and no lever sized against it exists yet.
 | LVS deck | `<pdk>/libs.tech/klayout/lvs/run_lvs.py`, `--variant=D` (default `--lvs_sub=VSS`) |
 | DRC deck | `<pdk>/libs.tech/klayout/drc/run_drc.py`, table `main`, `--variant=D` |
 | Verdict | DRC: `Klayout DRC run is clean. GDS has no DRC violations.` — LVS: `Congratulations! Netlists match.` |
+
+---
+
+## Addendum 5 (issue #440): the match re-derived on a second machine and a second KLayout, and pinned by a test
+
+Addendum 4 recorded this block's first LVS match, and that match is what
+closed the *layout* half of issue #440. What was still missing is the part
+that makes a recorded verdict durable rather than a snapshot: **nothing in
+the test suite read `lvs-clean/` at all**, so a later change to the
+generator, to `design/netlist/lock_detector.spice`, or to the flattener
+could have left the committed "4 of the 4 are LVS-matched" claim standing
+on a log that no longer described the tree. This addendum closes that, and
+records an independent re-derivation of the verdict while doing so.
+
+### The deck was re-run, not re-read
+
+The same committed GDS and the same reference netlist were run through the
+same deck again, from a pristine worktree of `origin/main` @ `28caa814`, on
+a **different host and a different KLayout build** from Addendum 4's:
+
+```bash
+python3 layout/run_pv.py lvs \
+  layout/evidence/lock-detector-layout/lock_detector.gds \
+  layout/evidence/lock-detector-layout/lvs-clean/lock_detector.spice \
+  --top lock_detector --run-dir <rundir>
+```
+
+| Check | Addendum 4 (KLayout 0.28.16) | This run (KLayout 0.30.10) | Verdict |
+|---|---|---|---|
+| Deck verdict | `Congratulations! Netlists match.` | `Congratulations! Netlists match.` | **MATCH** |
+| Extracted devices | 117 | 117 | **MATCH** |
+| Extracted device lines, sorted | — | byte-identical to Addendum 4's `lock_detector.cir` | **MATCH** |
+| `.SUBCKT` port list | declaration order | same 48 ports, sorted differently by this KLayout | cosmetic |
+| Deck run time | — | 27.99 s | — |
+
+Artifacts are committed beside — not on top of — the promoted run, at
+`lvs-recheck-klayout-0.30.10/` (`lvs.stdout.log`, `lock_detector.cir`,
+`lock_detector.lvsdb`). `lvs-clean/` is left exactly as Addendum 4 promoted
+it; evidence here is append-only, and the claim-bearing run stays the one
+captured on this repository's pinned KLayout.
+
+This is also a data point for **issue #360**, the open report that a KLayout
+newer than the 0.28.16 pin can report a *false* `LVS mismatch` on an
+unchanged, LVS-clean layout (reproduced there on `divider_chain` with
+0.30.9). It did not bite here: 0.30.10 matched this block on the first
+attempt, with an identical extracted device set. That narrows #360 — the
+newer deck is not uniformly broken on this PDK — but it **does not retire
+the pin**: one block matching says nothing about whichever extraction path
+`divider_chain` exercised, and `layout/harness/env.py`'s
+`KNOWN_GOOD_KLAYOUT_VERSION` warning is deliberately left in place.
+
+### The verdict is now a test, not a document
+
+`layout/tests/test_lock_detector_layout.py::LvsEvidenceTests` (the same
+guard `test_pfdcp_block_layout.py` already applies to `pfd_cp`) asserts, on
+every run of the suite and with no PDK or KLayout needed:
+
+* `lvs-clean/` exists and its `lvs.stdout.log` contains
+  `Congratulations! Netlists match.` and does **not** contain
+  `Netlists don't match` — the exact substring
+  `layout/lib/check-layout-status-claims.sh` keys the 4/4 count on, so the
+  script's arithmetic and the suite cannot drift apart silently;
+* the run committed all three of its artifacts (`.spice` reference, `.cir`
+  extraction, `.lvsdb`);
+* **the committed reference is still what `build.reference_netlist()`
+  produces today** — the assertion that actually catches the dangerous
+  drift, because a match log is only worth what it was compared against;
+* the first run's mismatch under `lvs-attempt/` is still present and still
+  says `Netlists don't match` — append-only evidence, enforced;
+* this addendum's 0.30.10 re-run log is present and also reports the match.
+
+### What this addendum does NOT claim
+
+**No new layout claim.** No geometry, generator, or netlist changed here.
+Every claim about *what is drawn* remains Addendum 4's, unaltered.
+
+**Still block-level only.** `lock_detector` in isolation against its own
+`.subckt`. No assembled `pll_top` GDS exists (issues #17/#149/#18).
+
+**No PVT axis.** DRC and LVS are geometry/topology checks against a rule
+deck and a netlist; they have no process/voltage/temperature corner to
+sweep, so this repository's "PVT corners on every recorded result"
+convention applies to the simulated results under `sim/`, not here. The
+corresponding axis for a deck run is the tool/PDK identity, which is why
+every addendum in this file carries a provenance table — and why this one
+re-ran under a second tool version rather than re-reading the first.
+
+### Provenance of this addendum
+
+| | |
+|---|---|
+| Run | 2026-09-21 |
+| Branch point | `origin/main` @ `28caa814` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout (application, deck runner) | `KLayout 0.30.10` — **not** the repo's `KNOWN_GOOD_KLAYOUT_VERSION` 0.28.16 pin; deliberately, see above |
+| LVS deck | `<pdk>/libs.tech/klayout/lvs/run_lvs.py`, `--variant=D`, `--poly-res=3k` (DR-009 default), `--lvs_sub=VSS` |
+| Verdict | LVS: `Congratulations! Netlists match.` (`run_pv.py` exit 0, `LVS match: lock_detector (D) layout == schematic`) |
+| Artifacts | `lvs-recheck-klayout-0.30.10/{lvs.stdout.log,lock_detector.cir,lock_detector.lvsdb}` |
+| Status-claim check | `layout/lib/check-layout-status-claims.sh` -> `OK … 4/4 drawn + DRC-clean, 4/4 LVS-matched, assembled pll_top: no` |
