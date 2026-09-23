@@ -118,15 +118,28 @@
 #
 # THE RAISE CHANGED A VERDICT, which is the reason to record it here rather
 # than only in one record's prose. At n=20/corner term 1 measured 11.7211%
-# against design/README.md's +-12% budget -- a PASS by a 2.3% relative
-# margin. At n=100/corner, same corner grid, same seeds-from-1 convention,
-# same decks, it measures 13.2172% -- a FAIL, by 4.4 standard errors of the
-# mean. The n=20 PASS was inside its own sampling noise and did not survive
-# contact with a sample large enough to resolve it. Nothing in this script
-# widens the budget in response: design/README.md states that the resolution
-# of a budget the statistics do not fit is a decision record, not a quiet
-# relaxation, so the FAIL is emitted as a FAIL and the record names the
-# decision record as the next step. Do not "fix" this by lowering N_DC.
+# against design/README.md's then-current +-12% budget -- a PASS by a 2.3%
+# relative margin. At n=100/corner, same corner grid, same seeds-from-1
+# convention, same decks, it measures 13.2172% -- which was a FAIL against
+# that budget, by 4.4 standard errors of the mean. The n=20 PASS was inside
+# its own sampling noise and did not survive contact with a sample large
+# enough to resolve it. This script did NOT widen the budget in response:
+# design/README.md states that the resolution of a budget the statistics do
+# not fit is a decision record, so the FAIL was emitted as a FAIL and the
+# record named the decision record as the next step. Do not "fix" the sample
+# size by lowering N_DC.
+#
+# THE BUDGET HAS SINCE MOVED, AND THAT IS WHY THE VERDICT WILL FLIP (#483).
+# DR-018 re-derived term 1's budget from the ratified <= -55 dBc
+# reference-spur line -- via the PFD-reset-overlap mechanism that turns
+# current mismatch into ripple charge, dQ1 = m * Icp * T_ov -- and widened it
+# from +-12% to +-20% (TERM1_BUDGET_PCT below is the single place that number
+# lives now). The next run of this campaign will therefore report PASS on the
+# SAME design and the SAME measurement that the committed
+# `20260923-095854-1655e11` record reports FAIL on. That is a budget change,
+# not a measurement change; sim/ is append-only, so that record keeps its FAIL
+# and its bytes, and anyone comparing the two must read the difference that
+# way. Do not "reconcile" them by editing the older record.
 #
 # Deliberately does NOT attempt a closed-loop reference-spur check: the
 # acceptance criteria (#15) ask for one using #12's lock-time/output-range
@@ -652,10 +665,18 @@ done
 # estimation error) -- reported as the honest, conservative side of that
 # uncertainty, not a claim of exact precision.
 WORST_DC_SE=$(awk -v s="${WORST_DC_SD}" -v n="${WORST_DC_N}" 'BEGIN{printf "%.6g", (n>0)? s/sqrt(n) : 0}')
-WORST_DC_MARGIN_SE=$(awk -v m="${WORST_DC_3S}" -v se="${WORST_DC_SE}" 'BEGIN{printf "%.4g", (se>0)? (12-m)/se : 0}')
+
+# Term 1's budget, in percent, and the ONLY place it is written down in this
+# script. DR-018 (#483) sets it at 20%, derived from the ratified <= -55 dBc
+# reference-spur line rather than from headroom over the systematic value; it
+# was 12% before that record. design/README.md's "Up/down mismatch budget"
+# table is the human-readable copy and must agree with this constant.
+TERM1_BUDGET_PCT=20
+
+WORST_DC_MARGIN_SE=$(awk -v m="${WORST_DC_3S}" -v se="${WORST_DC_SE}" -v b="${TERM1_BUDGET_PCT}" 'BEGIN{printf "%.4g", (se>0)? (b-m)/se : 0}')
 
 verdict() { awk -v v="$1" -v b="$2" 'BEGIN{print (v<=b)?"PASS":"FAIL"}'; }
-V1=$(verdict "${WORST_DC_3S}" 12)
+V1=$(verdict "${WORST_DC_3S}" "${TERM1_BUDGET_PCT}")
 V2=$(verdict "${WORST_SW_3S}" 3e-9)
 V2A=$(verdict "${WORST_SW_3S}" 2e-9)
 V3=$(verdict "${WORST_PFDQ_3S}" 20e-15)
@@ -684,22 +705,32 @@ if [ "${V1}" = "FAIL" ]; then
   TERM1_NOTE="
   **Term 1 EXCEEDS its stated budget at the binding corner, and this record
   does not widen the budget to absorb it.** At \`N_DC=${N_DC}\`/corner the
-  worst-corner \`|mean|+3sigma\` is ${WORST_DC_3S}% against design/README.md's
-  stated +-12%, i.e. the budget line sits $(awk -v x="${WORST_DC_MARGIN_SE}" 'BEGIN{printf "%.4g", (x<0?-x:x)}') standard errors of the mean BELOW the
+  worst-corner term-1 statistic is ${WORST_DC_3S}% against design/README.md's
+  stated +-${TERM1_BUDGET_PCT}% (DR-018), i.e. the budget line sits $(awk -v x="${WORST_DC_MARGIN_SE}" 'BEGIN{printf "%.4g", (x<0?-x:x)}') standard errors of the mean BELOW the
   measured statistic (sd ${WORST_DC_SD}%, n=${WORST_DC_N}, SE ${WORST_DC_SE}%)
-  -- an exceedance, not a coin-flip. The prior corner-combined record
-  (\`20260817-135712-0e9cfc9\`, n=20/corner) reported the same term at
-  11.7211%, a PASS by 2.3% relative margin; that margin was smaller than the
-  sampling uncertainty behind it, and raising n resolved it in the failing
-  direction. design/README.md's own rule for this case is explicit -- \"If
-  #15's statistics or #10's spur analysis show these values do not buy the
-  spur/jitter performance the ratified spec asks for, the resolution is a
-  decision record superseding this budget -- not a quiet relaxation here\" --
-  so the budget column is left exactly as it stands and the resolution is
-  deferred to that decision record.
+  -- an exceedance, not a coin-flip. design/README.md's own rule for this case
+  is explicit -- \"If #15's statistics or #10's spur analysis show these values
+  do not buy the spur/jitter performance the ratified spec asks for, the
+  resolution is a decision record superseding this budget -- not a quiet
+  relaxation here\" -- so the budget column is left exactly as it stands and
+  the resolution is deferred to a NEW decision record. DR-018 already spent
+  the widening argument once (12% -> ${TERM1_BUDGET_PCT}%, derived from the
+  ratified <= -55 dBc reference-spur line, which it leaves only ~1.6 dB of
+  derived margin); a second widening needs a mechanism this campaign has not
+  measured, not a repeat of that reasoning.
 "
 else
-  TERM1_NOTE=""
+  TERM1_NOTE="
+  **Term 1 fits, against the budget DR-018 derived rather than the +-12% that
+  preceded it.** At \`N_DC=${N_DC}\`/corner the worst-corner term-1 statistic
+  is ${WORST_DC_3S}% against +-${TERM1_BUDGET_PCT}% (sd ${WORST_DC_SD}%,
+  n=${WORST_DC_N}, SE ${WORST_DC_SE}%), i.e. the budget line sits
+  ${WORST_DC_MARGIN_SE} standard errors of the mean ABOVE the measured
+  statistic. Readers comparing this against
+  \`sim/mc-cp-mismatch/records/20260923-095854-1655e11.md\` -- which reports a
+  FAIL on the same design -- should note that what changed between the two is
+  the BUDGET (#483/DR-018), not the measurement.
+"
 fi
 
 RECORD="${RECORDSDIR}/${RID}.md"
@@ -727,11 +758,14 @@ cat >"${RECORD}" <<EOF
   gap to close of the two item-6 sub-criteria issue #482 identified. It
   SUPERSEDES that record for this claim (see Supersedes field) -- the prior
   record's bytes remain committed, unedited, as historical evidence.
-  **The answer to the claim changed as a result**: at the raised sample
-  count term 1 does NOT fit inside its stated budget (${WORST_DC_3S}% against
-  +-12%, verdict **${V1}**), where the superseded record's thinner sample
-  reported a PASS at 11.7211%. Terms 2/2a, 3 and 4 still fit. Read the
-  Result field before citing the superseded record's term-1 verdict anywhere.
+  **Term 1's figure moved materially as a result**: at the raised sample
+  count it measures ${WORST_DC_3S}% against the +-${TERM1_BUDGET_PCT}% budget
+  in force (verdict **${V1}**), where the superseded record's thinner sample
+  measured 11.7211% against the +-12% budget in force before DR-018. Terms
+  2/2a, 3 and 4 still fit. Read the Result field before citing the superseded
+  record's term-1 verdict anywhere -- and note that term 1's budget itself
+  changed at DR-018 (#483), so a verdict difference between records is not
+  necessarily a measurement difference.
 - **Model-capability gate**: unchanged from the nominal-only record -- see
   \`sim/mc-cp-mismatch/records/20260731-212614-640560e.md\`'s "Model-capability
   gate" and "What did NOT work" notes for the full \`agauss()\`/parse-time-seed
@@ -808,15 +842,22 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     single-instance invocations PER CORNER (\`$(( N_DC * NUM_CORNERS ))\` total),
     one \`.option rndseed\` per sample. Reported statistic is the WORST-magnitude
     mismatch across the 3 Vctrl points per (corner, seed) sample, matching
-    \`cp-compliance\`'s own "worst point in window" convention for term 1.
+    \`cp-compliance\`'s own "worst point in window" convention for term 1 --
+    i.e. \`mean(|x|) + 3*sd(|x|)\` on FOLDED (absolute-value) samples. DR-018
+    §Context notes that this form is LESS conservative than a signed
+    \`|mean| + 3*sigma\` on the same draws (13.2172% vs 17.48% on the n=100
+    record's 300 samples), and prices the budget against both readings;
+    correcting the LABEL (which would make this figure larger, not smaller) is
+    issue #487.
   - **Term 1's margin, re-measured at raised n (issue #482)**: the prior
     record (n=20/corner) passed term 1 at 11.7211% against the +-12% budget
-    at its binding corner (\`ff\`/-40C/3.63V) -- a 2.3% relative margin, the
-    thinnest of the four budget terms, and one this record's own text called
-    out as too close to call from n=20 alone. At \`N_DC=${N_DC}\`/corner, the
+    in force at that time, at its binding corner (\`ff\`/-40C/3.63V) -- a 2.3%
+    relative margin, the thinnest of the four budget terms, and one that
+    record's own text called out as too close to call from n=20 alone. At
+    \`N_DC=${N_DC}\`/corner, the
     binding corner is \`${WORST_DC_CORNER}\`, with sample standard deviation
     ${WORST_DC_SD}% (n=${WORST_DC_N}) -> standard error of the mean
-    ${WORST_DC_SE}%. The signed budget headroom (12% minus the
+    ${WORST_DC_SE}%. The signed budget headroom (${TERM1_BUDGET_PCT}% minus the
     \`|mean|+3sigma\` figure below) is ${WORST_DC_MARGIN_SE} standard errors
     of the mean at this sample size -- a NEGATIVE value means the measured
     statistic has crossed the budget, by that many standard errors, rather
@@ -904,7 +945,7 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
 
   | # | Term | Statistical, worst-corner \|mean\|+3sigma | Budget (design/README.md) | Verdict |
   |---|---|---|---|---|
-  | 1 | DC UP/DN mismatch, worst of 0.9/1.65/2.4 V | ${WORST_DC_3S}% | +-12% | **${V1}** |
+  | 1 | DC UP/DN mismatch, worst of 0.9/1.65/2.4 V | ${WORST_DC_3S}% | +-${TERM1_BUDGET_PCT}% (DR-018) | **${V1}** |
   | 2 | Switching-time skew, whole window (assessed at mid-window) | ${WORST_SW_3S} s | +-3 ns | **${V2}** |
   | 2a | Switching-time skew, mid-window (Vctrl=1.65 V) | ${WORST_SW_3S} s | +-2 ns | **${V2A}** |
   | 3 | Residual net charge at zero phase error | ${WORST_PFDQ_3S} C | +-20 fC | **${V3}** |
