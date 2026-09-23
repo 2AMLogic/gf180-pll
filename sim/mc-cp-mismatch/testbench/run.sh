@@ -670,8 +670,12 @@ restat() {
   # out of an empty sample as 0, and the summary happily prints an all-PASS
   # verdict derived from no data at all. Refuse instead: a diagnostic that
   # fabricates a PASS is worse than one that does not run.
+  # `head -1` closes its read end after the first line, which can SIGPIPE an
+  # upstream `grep` still writing on a large file; under `set -o pipefail`
+  # that 141 would masquerade as this check's own failure. Scope the waiver
+  # to just this pipeline rather than disabling pipefail script-wide.
   local got_hdr
-  got_hdr=$(grep -v '^#' "${OUT_DC}" | head -1)
+  got_hdr=$(set +o pipefail; grep -v '^#' "${OUT_DC}" | head -1)
   [ "${got_hdr}" = "${DC_HEADER}" ] || {
     echo "ERROR: ${OUT_DC} has header '${got_hdr}'," >&2
     echo "       expected '${DC_HEADER}' -- this is not a corner-combined campaign" >&2
@@ -682,7 +686,13 @@ restat() {
   for point in "${CORNER_POINTS[@]}"; do
     read -r pc pt pv <<<"${point}"
     ctag="${pc}_${pt}c_${pv}v"
-    simenv_datarows "${OUT_DC}" | grep -q "^${ctag}," || {
+    # `grep -q` exits at the first match, closing its read end before
+    # `simenv_datarows`'s pipeline finishes writing -- a SIGPIPE race that
+    # under `set -o pipefail` can turn a real match into a false "no rows"
+    # error (see the header-check comment above). `-c` must read to EOF to
+    # produce an accurate count, so it can't race-quit; discard the count and
+    # keep the same 0-vs-nonzero exit status `grep -q` gave us.
+    simenv_datarows "${OUT_DC}" | grep -c "^${ctag}," >/dev/null || {
       echo "ERROR: ${OUT_DC} has no rows for corner '${ctag}' -- the committed" >&2
       echo "       campaign's corner grid does not match this script's CORNER_POINTS." >&2
       exit 1
