@@ -645,13 +645,24 @@ restatement of what one simulation happened to produce: the measured
 systematic values are corner-swept worst cases, and the budget adds allocation
 for the terms this block's own testbenches deliberately exclude.
 
-| # | Term | Systematic (measured, all 45 PVT corners) | **Budget (3σ, incl. random mismatch)** | Verified by |
+| # | Term | Systematic (measured, all 45 PVT corners) | **Budget (checked against `\|mean\| + 3σ`, incl. random mismatch)** | Verified by |
 |---|---|---|---|---|
 | 1 | DC UP/DN current mismatch, `(Iup−Idn)/Iavg`, worst point in 0.9–2.4 V | −2.7 % … +4.7 % | **±20 %** (**DR-018**, widened from ±12 %) | #15 |
 | 2 | Effective UP/DN switching-time skew, `w_up − w_dn`, over the whole Vctrl window | −0.60 ns … −0.05 ns | **±3 ns** | #15 |
 | 2a | — the same term at mid-window (Vctrl = 1.65 V) only | −0.47 ns … −0.05 ns | **±2 ns** | #15 |
 | 3 | Residual net charge per reference cycle at zero phase error (Vctrl = 1.65 V) | −3.50 fC … +0.30 fC | **±20 fC** | #15 |
 | 4 | Resulting static phase offset, `q_zero / Kd` (Vctrl = 1.65 V) | −0.06 ns … +0.67 ns | **±3 ns** over the full Vctrl window (= term 2) | #12 (closed loop) |
+
+**What the budget column is checked against** (#487): the statistic
+`sim/mc-cp-mismatch` forms per term is `|mean| + 3σ` — the 3σ tail on the worse
+side of that term's systematic mean — computed on the **signed** samples, at
+the **worst corner**, not pooled. No term is folded to `|x|` before the
+statistic is taken. (Term 1 was, until #487: it reported
+`mean(|x|) + 3·sd(|x|)` under this column's old plain "3σ" header, which is a
+*smaller* number than the header claims — see the "Which statistic" bullet
+below. Terms 2/2a, 3 and 4 were re-checked at the same time and were never
+folded.) The divider-retiming flop's separate figure, further down, is `3σ`
+with no `|mean|` term, for the reason stated there.
 
 **Provenance of the measured column**: term 1 and term 2 from `cp-compliance`
 record `20260731-194124-afa338c`; terms 3 and 4 from `pfd-deadzone` record
@@ -674,14 +685,20 @@ Notes on how to read this table:
   the measured systematic worst case as an allowance for mismatch. #15's Monte
   Carlo campaign, run corner-combined at n = 100 samples per corner
   (`sim/mc-cp-mismatch/records/20260923-095854-1655e11.md`), measures a
-  worst-corner statistic of **13.2172 %** at `ff`/−40 °C/3.63 V — outside that
-  ±12 %, and not marginally: the sample standard deviation is 2.76942 %, so the
-  old line sat 4.4 standard errors of the mean below the measured statistic.
-  (The earlier n = 20/corner record's 11.7211 % PASS had a 2.3 % relative
-  margin *smaller than its own sampling uncertainty*. Nothing about the design
-  changed between the two records; only `N_DC` did.) Per the "budget is not a
-  spec line" rule at the end of this section, that routed to a decision record,
-  and **DR-018** is it. In summary:
+  worst-corner statistic of **17.4798 %** at `ff`/−40 °C/3.63 V (mean
+  +2.85976 %, σ 4.87334 %, n = 100) — outside that ±12 %, and nowhere near
+  marginally. That record, minted before #487, states the same corner as
+  **13.2172 %**, its *folded* `mean(|x|) + 3·sd(|x|)`; both figures come from
+  the same committed 300 samples and either can be re-derived from them with
+  `sim/mc-cp-mismatch/testbench/run.sh --restat 20260923-095854-1655e11`
+  (committed CSVs only — no simulation). The record keeps its bytes and its
+  figure, as `sim/` evidence always does; this table quotes the signed
+  statistic its own column header describes. (The earlier n = 20/corner
+  record's 11.7211 % PASS had a 2.3 % relative margin *smaller than its own
+  sampling uncertainty*. Nothing about the design changed between any of these
+  records; `N_DC` did, and then the reported statistic did.) Per the "budget is
+  not a spec line" rule at the end of this section, that routed to a decision
+  record, and **DR-018** is it. In summary:
 
   - The only path from term 1 to a ratified spec row is the PFD reset overlap,
     which turns current mismatch into a once-per-cycle charge on C2 —
@@ -695,20 +712,46 @@ Notes on how to read this table:
     itself fails.
   - **±20 %** is the largest 5 %-granular value that keeps that (deliberately
     over-stacked) derivation ≥ 1.5 dB inside −55 dBc. It sits 1.63× under the
-    ceiling and 1.51× over the measurement, and the measured 13.2172 % uses
-    66 % of it.
-  - **Which statistic**: term 1's verdict is `mean(|x|) + 3·sd(|x|)` on the
-    per-sample worst-magnitude across the Vctrl window, at the worst corner, as
-    `sim/mc-cp-mismatch/testbench/run.sh` computes it. That folded form is
-    *less* conservative than this table's "3σ" header implies — the same 300
-    samples read 17.48 % signed — so DR-018 priced both, and ±20 % holds under
-    either. The label is what is wrong, and it is tracked in **#487**; fixing
-    it makes term 1's reported figure *larger*. Do not swap the statistic for
-    a looser one to buy margin.
+    ceiling and **1.14× over the measurement**, which uses **87.4 %** of it.
+    (DR-018 states the same two numbers as 1.51× and 66 % — those are against
+    the *folded* 13.2172 % it was written before #487 corrected. It priced both
+    readings explicitly and set ±20 % so the budget holds under either; 1.14×
+    is the figure that now applies, and it is DR-018's own.)
+  - **Which statistic** (corrected by **#487**): term 1's verdict is
+    `|mean| + 3σ` on the **signed** per-sample worst-magnitude sample across
+    the Vctrl window, at the worst corner, as
+    `sim/mc-cp-mismatch/testbench/run.sh` computes it — the same statistic
+    every other row of this table is checked with, and the one this column's
+    header describes. It used to be `mean(|x|) + 3·sd(|x|)` on samples folded
+    to their absolute value first, reported under the `|mean| + 3σ` label:
+    folding merges the distribution's two tails before the tail is formed, so
+    it reads *smaller* (13.2172 % against 17.4798 % on the same 300 samples,
+    ~1.3× optimistic, and not a clean quantile of anything — roughly the
+    98.5th percentile, where a 3σ tail sits at 99.87th). DR-018 priced ±20 %
+    against **both** readings and pre-authorised this switch without a further
+    record. The correction makes term 1's reported figure *larger*; it is not
+    a margin-recovery change, and the folded form must not be swapped back in
+    to buy margin. `run.sh` still prints it, named for what it is, beside the
+    verdict statistic.
   - **±20 % does not pre-allocate for the bias generator** (still excluded, see
     below) or for the 42 PVT points the 3-corner campaign does not visit; that
-    is what the margin between 13.22 % and 20 % is for. A measurement above
-    20 % is a new decision record, not another widening.
+    is what the margin between 17.48 % and 20 % is for — 2.5 points, or
+    5.2 standard errors of the binding corner's mean (SE 0.487334 %, n = 100).
+    DR-018 wrote that sentence against the folded 13.22 %; the headroom it
+    describes is the smaller of the two, and it is the one to plan against. A
+    measurement above 20 % is a new decision record, not another widening.
+  - **Two ratified-document rows still quote the folded reading, deliberately
+    left alone here.** `spec/pll.md`'s charge-accounting table carries a
+    "…plus term 1 at its **measured** 13.2172 %" row (10.40 fC, −57.6 dBc),
+    and DR-018 §Decision carries the 1.51× / 66 % pair above. Carrying the
+    corrected 17.4798 % through the same chain gives 3.26 fC for term 1,
+    11.19 fC total and ≈ **−57.0 dBc** — still inside the ratified ≤ −55 dBc,
+    and the *binding* row of that table is the **budgeted** ±20 % one
+    (11.66 fC, −56.6 dBc), which does not move at all because the budget does
+    not move. So no ratified row changes value; what is stale is a derived
+    intermediate. Refreshing it is a `spec/` edit and goes through `spec/`
+    with its own record rather than being done as a side effect of a
+    reporting fix — tracked separately.
   - **It does not disturb term 4 either.** At ±20 % the overlap mechanism
     implies at most `Δt = 0.20 × 2.584 ns = 0.517 ns` of static phase offset —
     and that mechanism is *already inside* term 4's measured 0.864 ns, because
