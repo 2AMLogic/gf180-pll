@@ -144,21 +144,26 @@ class NetNamingTests(unittest.TestCase):
 
 
 class SwitchRowTests(unittest.TestCase):
-    """switch_row_x() -- the single-row placement the riser-column scheme
-    depends on (see cp_output_stage.py's own docstring)."""
+    """row_x() -- the single-row placement the riser-column scheme depends on
+    (see cp_output_stage.py's own docstring). Since issue #473 the row holds
+    the four glue inverters as well as the six switches, interleaved."""
 
     def setUp(self):
-        self.row = cos.switch_row_x()
-        self.order = [d.name for d in (*cos.SWITCH_DEVICES_N, *cos.SWITCH_DEVICES_P)]
+        self.row, self.inv = cos.row_x()
+        self.order = list(cos.ROW_ORDER)
 
-    def test_every_device_is_placed_exactly_once(self):
-        self.assertEqual(sorted(self.row), sorted(self.order))
+    def test_every_switch_and_inverter_is_placed_exactly_once(self):
+        self.assertEqual(
+            sorted([*self.row, *self.inv]),
+            sorted([d.name for d in (*cos.SWITCH_DEVICES_N, *cos.SWITCH_DEVICES_P)]
+                   + [s.name for s in cos.GLUE_INVERTERS]),
+        )
 
-    def test_devices_are_monotonic_left_to_right_and_never_overlap(self):
+    def test_row_items_are_monotonic_left_to_right_and_never_overlap(self):
         prev_x1 = None
         for name in self.order:
-            x0, x1 = self.row[name]
-            self.assertGreater(x1, x0)
+            x0, x1 = self.row[name] if name in self.row else (self.inv[name], self.inv[name])
+            self.assertGreaterEqual(x1, x0)
             if prev_x1 is not None:
                 self.assertGreaterEqual(x0, prev_x1)
             prev_x1 = x1
@@ -168,19 +173,64 @@ class SwitchRowTests(unittest.TestCase):
             x0, x1 = self.row[d.name]
             self.assertAlmostEqual(x1 - x0, d.w_um)
 
-    def test_n_and_p_groups_clear_the_well_boundary_gap(self):
-        last_n = self.row[cos.SWITCH_DEVICES_N[-1].name][1]
-        first_p = self.row[cos.SWITCH_DEVICES_P[0].name][0]
-        self.assertAlmostEqual(first_p - last_n, cos.SWITCH_WELL_GAP_UM)
+    def test_the_two_switch_groups_are_contiguous_and_well_separated(self):
+        # Contiguity is what lets each group carry ONE tap strip and the P
+        # group ONE n-well (check_row_groups()); the gap between the two
+        # groups is the well-boundary clearance.
+        cos.check_row_groups()  # must not raise
+        n_x1 = max(self.row[d.name][1] for d in cos.SWITCH_DEVICES_N)
+        p_x0 = min(self.row[d.name][0] for d in cos.SWITCH_DEVICES_P)
+        first_p_in_row = next(n for n in self.order if n in {d.name for d in cos.SWITCH_DEVICES_P})
+        prev = self.order[self.order.index(first_p_in_row) - 1]
+        if prev in self.row:
+            self.assertAlmostEqual(p_x0 - self.row[prev][1], cos.SWITCH_WELL_GAP_UM)
+        else:
+            self.assertGreater(p_x0, n_x1)
 
-    def test_escape_landings_clear_the_next_device_gate_pad(self):
-        for group in (cos.SWITCH_DEVICES_N, cos.SWITCH_DEVICES_P):
-            cos.check_escape_clearance(self.row, [d.name for d in group])  # must not raise
+    def test_a_glue_inverter_inside_a_switch_group_is_rejected(self):
+        bad = ("MSWDN", "xi_dn", "MDMPDN", "MDUMN", "xi_up", "MSWUP", "MDMPUP",
+               "MDUMP", "xi_b0", "xi_b1")
+        with self.assertRaises(ValueError) as ctx:
+            cos.check_row_groups(bad)
+        self.assertIn("not contiguous", str(ctx.exception))
+
+    def test_a_row_order_that_drops_or_duplicates_an_item_is_rejected(self):
+        with self.assertRaises(ValueError):
+            cos.check_row_groups(cos.ROW_ORDER[:-1])
+        with self.assertRaises(ValueError):
+            cos.check_row_groups((*cos.ROW_ORDER[:-1], cos.ROW_ORDER[-2]))
+
+    def test_each_steering_inverter_is_adjacent_to_the_group_it_drives(self):
+        # The whole point of issue #473: xi_dn immediately before the N
+        # group, xi_up immediately before the P group.
+        self.assertEqual(self.order[self.order.index("xi_dn") + 1],
+                         cos.SWITCH_DEVICES_N[0].name)
+        self.assertEqual(self.order[self.order.index("xi_up") + 1],
+                         cos.SWITCH_DEVICES_P[0].name)
+
+    def test_escape_landings_clear_the_next_row_item_gate_pad(self):
+        worst = cos.check_escape_clearance(
+            cos.row_metal1_extents(self.row, self.inv), self.order
+        )  # must not raise
+        self.assertGreater(worst, 0.0)
 
     def test_escape_clearance_raises_when_the_row_is_packed_too_tightly(self):
-        tight = cos.switch_row_x(device_gap_um=0.5, well_gap_um=0.5)
+        row, inv = cos.row_x(
+            device_gap_um=0.5, well_gap_um=0.5, inv_gap_um=0.5,
+            inv_to_switch_gap_um=0.5, inv_pitch_um=0.5,
+        )
         with self.assertRaises(ValueError):
-            cos.check_escape_clearance(tight, [d.name for d in cos.SWITCH_DEVICES_N])
+            cos.check_escape_clearance(cos.row_metal1_extents(row, inv), cos.ROW_ORDER)
+
+    def test_an_inverter_reaches_further_right_of_its_origin_than_a_switch(self):
+        # Why INV_TO_SWITCH_GAP_UM is bigger than INV_GROUP_GAP_UM: an
+        # inverter's escape columns all run rightward from its origin.
+        extents = cos.row_metal1_extents(self.row, self.inv)
+        self.assertAlmostEqual(
+            extents["xi_dn"][1] - self.inv["xi_dn"],
+            max(cos.INV_ESCAPE_UM) + cos.LANDING_HALF_UM,
+        )
+        self.assertGreater(cos.INV_TO_SWITCH_GAP_UM, cos.INV_GROUP_GAP_UM)
 
     def test_gate_pad_center_is_derived_from_devgen_constants(self):
         # Re-derived independently here, so a devgen geometry change that
@@ -215,7 +265,7 @@ class RiserColumnTests(unittest.TestCase):
         # The same arithmetic build() runs, re-derived here from the module's
         # own placement functions rather than from a built layout, so it also
         # covers a no-klayout checkout.
-        row = cos.switch_row_x()
+        row, inv = cos.row_x()
         points: list[tuple[str, float, float]] = []
         for d in (*cos.SWITCH_DEVICES_N, *cos.SWITCH_DEVICES_P):
             x0, x1 = row[d.name]
@@ -225,9 +275,8 @@ class RiserColumnTests(unittest.TestCase):
                 points.append((d.bottom_net, (x0 + x1) / 2.0, 0.21))
             else:
                 points.append((d.bottom_net, x1 + cos.SWITCH_ESCAPE_UM, 0.21))
-        inv_x0 = row[cos.SWITCH_DEVICES_P[-1].name][1] + cos.INV_GROUP_GAP_UM
-        for i, spec in enumerate(cos.GLUE_INVERTERS):
-            ix = inv_x0 + i * cos.INV_PITCH_UM
+        for spec in cos.GLUE_INVERTERS:
+            ix = inv[spec.name]
             points.append((spec.a_net, cos.gate_pad_center_x(ix), 0.65))
             y_esc, vss_esc, vdd_esc = (ix + o for o in cos.INV_ESCAPE_UM)
             points.append((spec.y_net, y_esc, 1.09))
@@ -352,15 +401,96 @@ class BuildTests(unittest.TestCase):
             self.assertAlmostEqual(p.x1 - p.x0, d.w_um, msg=d.name)
             self.assertAlmostEqual(p.y3 - p.y0, 2 * devgen.SD_OVERHANG_UM + d.l_um, msg=d.name)
 
-    def test_all_four_glue_inverters_are_placed_on_one_row_at_the_stated_pitch(self):
+    def test_all_four_glue_inverters_share_the_switches_own_row(self):
         origins = [self.layout.inverter_origins[s.name] for s in cos.GLUE_INVERTERS]
         self.assertEqual(len({y for _x, y in origins}), 1, "inverters must share one row")
-        xs = [x for x, _y in origins]
-        for a, b in zip(xs, xs[1:]):
-            self.assertAlmostEqual(b - a, cos.INV_PITCH_UM)
+        row_y = origins[0][1]
+        for p in self.layout.switch_ports.values():
+            self.assertAlmostEqual(p.y0, row_y)
+
+    def test_the_built_row_matches_ROW_ORDER_left_to_right(self):
+        # ROW_ORDER is the placement's single source of truth (issue #473);
+        # this is the built geometry agreeing with it.
+        anchors = {n: p.x0 for n, p in self.layout.switch_ports.items()}
+        anchors.update({n: x for n, (x, _y) in self.layout.inverter_origins.items()})
+        self.assertEqual(sorted(anchors, key=anchors.get), list(cos.ROW_ORDER))
+
+    def test_each_steering_inverter_sits_beside_the_gates_it_drives(self):
+        # The measured property issue #473 bought: every one of DN/DNB/UP/UPB
+        # is now a local net, not a block-wide one. Before the interleave they
+        # spanned 34.0-82.0 um; the longest structural net that remains (VOUT,
+        # which ties the N and P groups together by definition) is 56.5 um.
+        for net in ("DN", "DNB", "UP", "UPB"):
+            _y, x_lo, x_hi = self.layout.glue_bus[net]
+            self.assertLess(x_hi - x_lo, 30.0, f"{net} spans {x_hi - x_lo:.2f} um")
 
     def test_riser_columns_of_the_built_block_need_no_declutter(self):
         cos.check_riser_columns(self.layout.riser_points)  # must not raise
+
+    def test_the_arithmetic_riser_model_matches_what_build_actually_drew(self):
+        """``glue_riser_x()`` is what costed every candidate row order before
+        issue #473 moved anything (see its docstring). A model that has
+        drifted from ``build()`` would have chosen ROW_ORDER on fiction, so
+        the two are pinned together here rather than merely believed."""
+        row, inv = cos.row_x(x0=self.layout.array.footprint[0] + cos.CONN_COLUMN_MARGIN_UM)
+        predicted = {net: [round(x, 6) for x in xs]
+                     for net, xs in cos.glue_riser_x(row, inv).items()}
+        drawn: dict[str, list[float]] = {}
+        for net, x, _y in self.layout.riser_points:
+            drawn.setdefault(net, []).append(round(x, 6))
+        self.assertEqual(predicted, {net: sorted(xs) for net, xs in drawn.items()})
+
+    def test_no_legal_row_order_packs_the_glue_band_below_ten_tracks(self):
+        """The exhaustive sweep behind :data:`cos.ROW_ORDER` (issue #473), as
+        a test rather than as a claim in a markdown file: all 25,920 orderings
+        that keep both switch groups contiguous, costed with the same
+        ``pack_tracks()`` the router uses. Ten is the floor, and ROW_ORDER
+        reaches it.
+
+        The link columns are held at the built block's own x. That is exact
+        for any of these orderings: each keeps the row inside ``cp_array``'s
+        own footprint (asserted below), and the columns are placed relative
+        to whichever of the array and the glue row reaches further.
+        """
+        import itertools  # noqa: PLC0415
+
+        arr = self.layout.array
+        x0 = arr.footprint[0] + cos.CONN_COLUMN_MARGIN_UM
+        link: dict[str, list[float]] = {}
+        for key, x in self.layout.link_columns.items():
+            link.setdefault(key.split(":", 1)[1], []).append(x)
+
+        n_names = [d.name for d in cos.SWITCH_DEVICES_N]
+        p_names = [d.name for d in cos.SWITCH_DEVICES_P]
+        blocks = ("N", "P", "xi_up", "xi_dn", "xi_b0", "xi_b1")
+        counted = 0
+        best = None
+        for n_perm in itertools.permutations(n_names):
+            for p_perm in itertools.permutations(p_names):
+                for arrangement in itertools.permutations(blocks):
+                    order: list[str] = []
+                    for b in arrangement:
+                        order += list(n_perm) if b == "N" else list(p_perm) if b == "P" else [b]
+                    cos.check_row_groups(order)
+                    row, inv = cos.row_x(order, x0=x0)
+                    self.assertLess(
+                        max(max(x1 for _x, x1 in row.values()),
+                            max(inv.values()) + max(cos.INV_ESCAPE_UM)),
+                        arr.footprint[2],
+                        f"{order} pushes the row past the array's own right edge",
+                    )
+                    reach = cos.glue_riser_x(row, inv)
+                    for net, xs in link.items():
+                        reach[net].extend(xs)
+                    n_tracks = len(set(cp_array.pack_tracks(reach, 0.0).values()))
+                    best = n_tracks if best is None else min(best, n_tracks)
+                    counted += 1
+        self.assertEqual(counted, 25920)
+        self.assertEqual(best, 10)
+        self.assertEqual(
+            len({span[0] for span in self.layout.glue_bus.values()}), best,
+            "ROW_ORDER no longer reaches the floor its own sweep found",
+        )
 
     def test_link_columns_exist_for_every_shared_net_and_are_all_distinct(self):
         arr = self.layout.array
@@ -393,11 +523,13 @@ class BuildTests(unittest.TestCase):
     # --- the packed glue band (issue #469) ---
 
     def test_the_glue_band_is_packed_not_one_track_per_net(self):
-        """14 nets, 13 tracks -- the band's own clique number, which for an
+        """14 nets, 10 tracks -- the band's own clique number, which for an
         interval graph is the provable minimum. 14 would mean the packing
-        silently reverted to ``NetTracks``."""
+        silently reverted to ``NetTracks`` (issue #469); 13 would mean the
+        row had drifted back to grouping its glue inverters at the right-hand
+        end instead of interleaving them (issue #473)."""
         self.assertEqual(len(self.layout.glue_bus), 14)
-        self.assertEqual(len({span[0] for span in self.layout.glue_bus.values()}), 13)
+        self.assertEqual(len({span[0] for span in self.layout.glue_bus.values()}), 10)
 
     def test_the_band_top_matches_the_number_of_packed_tracks(self):
         base_y = self.layout.glue_bbox[3] + cp_array.CHANNEL_MARGIN_UM

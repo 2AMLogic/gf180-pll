@@ -377,3 +377,57 @@ any block's bbox).
 | KLayout | `KLayout 0.28.16` |
 
 Full record: `layout/evidence/pfd-cp-layout/PROOF-469-glue-bus-packing.md`.
+
+## Addendum 2 (issue #473): the glue inverters are interleaved with the switches — 13 tracks to 10
+
+The addendum above closed at 13 tracks, which is the clique number of the
+band **as placed**, and named the qualifier: 13 = 6 structurally full-width
+nets + a local clique of 7, and the 7 existed because this row grouped all
+four glue inverters past the right-hand end, so `DN`/`DNB`/`UP`/`UPB` each ran
+most of the block's width from a switch gate to an inverter.
+
+The row is now ordered by `ROW_ORDER`, with each steering pair's own inverter
+immediately **before** the switch group whose gates it feeds (`xi_dn` then the
+N group, `xi_up` then the P group, `xi_b0`/`xi_b1` at the right-hand end where
+the whole group used to be). The four nets go 237.6 µm of total span to
+66.4 µm, and the band packs onto **10** tracks.
+
+| | before | after |
+|---|---|---|
+| `footprint` tuple | 130.310 × 65.975 µm (8,597.20 µm²) | **130.310 × 63.725 µm (8,304.00 µm²)** |
+| committed GDS bbox | 128.75 × 65.45 µm (8,426 µm²) | **128.75 × 63.20 µm (8,136 µm²)** |
+| glue-bus tracks | 13 (y 43.98 … 52.98) | **10** (y 43.98 … 50.73) |
+
+Ten is a structural floor, not a lucky assignment: `VOUT` and `VDUMP` each tie
+the N group to the P group by definition, `UPT` runs from the P group out to
+its own link column, and at least one of `UP`/`UPB` is live inside the P
+group — six full-width nets plus those four. All 25,920 orderings that keep
+both switch groups contiguous were costed with `cp_array.pack_tracks()`
+before anything was drawn, and none goes below 10.
+
+Unlike the addendum above, **this change moves devices**: every switch and
+inverter sits at a new x, with new well edges, tap-strip spans, escape
+landings and riser columns. `check_escape_clearance()` now runs over the whole
+row rather than once per group (tightest clearance 0.66 µm against a 0.12 µm
+floor), and the new `check_row_groups()` keeps each switch group contiguous —
+one tap strip and, for the P group, one n-well, neither of which may be drawn
+through an inverter.
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `cp_output_stage` DRC, table `main` | clean | `DRC clean: cp_output_stage (D), 0 violations` | **PASS** |
+| `netcheck.check_gds()` Metal1-3 connectivity | no shorts, no splits | `connectivity clean: 18 nets, no shorts, no splits` | **PASS** |
+
+`drc-clean/cp_output_stage.drc.stdout.log`,
+`drc-clean/cp_output_stage_main.lyrdb` and
+`connectivity/cp_output_stage.netcheck.log` are that run's own output;
+`connectivity/cp_array.netcheck.log` is unchanged, as `cp_array` itself is.
+
+| | |
+|---|---|
+| Run | 2026-09-23 |
+| Branch point | `origin/main` @ `e9eb5ba0` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout | `KLayout 0.28.16` |
+
+Full record: `layout/evidence/pfd-cp-layout/PROOF-473-glue-inverter-interleave.md`.

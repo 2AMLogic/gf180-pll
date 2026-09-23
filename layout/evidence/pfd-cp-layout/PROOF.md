@@ -533,3 +533,34 @@ across the whole block by `cp_output_stage`'s own array↔glue link step. The
 real floor is 13 tracks, and the `cp_dumpbuf` fold that residual paired this
 with is decided and closed rather than deferred. Full record:
 **`PROOF-469-glue-bus-packing.md`** in this directory.
+
+## Addendum 5 (issue #473): the glue inverters are interleaved — 26,406 → 25,630 µm², −2.9 %
+
+Addendum 4's figures are superseded on height only, and by the other half of
+the same band. Its 13 tracks were the clique number of the glue bus **as
+placed**: 6 nets that `cp_output_stage` extends to a link column on both sides
+and so are live across its whole width, plus a local clique of 7 that existed
+only because that block grouped its four glue inverters past the right-hand
+end of its row. Issue #473 interleaves them —
+`cp_output_stage.ROW_ORDER` puts each steering pair's inverter immediately
+before the switch group whose gates it feeds — and the band packs onto **10**
+tracks. `cp_output_stage` is 2.25 µm shorter, `cp` inherits it, and so does
+this block: **347.410 × 73.225 µm (25,439.10 µm²)** on the `footprint` tuple,
+**344.98 × 74.30 µm (25,630 µm²)** on the committed GDS bbox.
+
+Unlike addendum 4, devices moved: every switch and glue inverter in
+`cp_output_stage`'s row sits at a new x. Nothing at *this* level changed —
+same `pfd` placement, same four trunk rows, same boundary pins, same reference
+netlist — and every claim this file makes is re-proved against the new
+geometry rather than inherited: DRC `main` clean, DRC `main --offgrid`
+(signoff-grade) clean, LVS match at 92/92 nets and 168/168 devices, `netcheck`
+clean at 76 nets with no short and no split. The `drc-clean/`,
+`drc-clean-offgrid/`, `lvs-clean/` and `connectivity/` artifacts are the new
+runs' outputs; `lvs-attempt/` is untouched.
+
+Ten tracks is a structural floor: `VOUT` and `VDUMP` each tie the charge
+pump's N and P groups together by definition, `UPT` runs out to its own link
+column, and one of `UP`/`UPB` is live inside the P group — 6 + 4. All 25,920
+row orderings that keep both switch groups contiguous were costed before
+anything was drawn and none goes below it. Full record:
+**`PROOF-473-glue-inverter-interleave.md`** in this directory.

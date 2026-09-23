@@ -1466,6 +1466,118 @@ byte-identical to what #474 merged.
 lever §5.12 filed as **#473**. Neither is sized here, on §5.11's own
 discipline of not guessing a number.
 
+### 5.14 Revision: the *placement* half of §5.12's band — 1.51× to 1.50× (issue #473)
+
+**Status: still over the 0.15 mm² draft target, by 1.50× rather than 1.51×;
+inside the ratified ≤ 0.30 mm² row at 75.1 %.** This is the fifth sized lever
+spent, the second of the two §5.12 exposed in `cp_output_stage`'s glue band,
+and the smallest of the five. Full record and reproduction:
+`layout/evidence/pfd-cp-layout/PROOF-473-glue-inverter-interleave.md`.
+
+§5.12 packed that band onto 13 Metal2 tracks and proved 13 was its clique
+number — the minimum *for a track assignment*. It also decomposed the 13 as
+**6 structurally full-width nets + a local clique of 7**, and named the 7 as a
+placement artifact: `cp_output_stage` grouped all four glue inverters past the
+right-hand end of its single device row, so `DN`, `DNB`, `UP` and `UPB` each
+ran most of the block's width from a switch gate to an inverter (237.6 µm of
+span between them). Filed as #473 under §5.5's one-lever-per-PR discipline,
+and filed with the caveat that it might measure out at zero.
+
+It does not. Each steering pair's own inverter now sits immediately before the
+switch group whose gates it feeds (`cp_output_stage.ROW_ORDER`), the four nets
+come to 66.4 µm of span, and the band packs onto **10** tracks.
+
+| Block | §5.13 | §5.14 | Delta |
+|---|---|---|---|
+| Loop filter (R + C1 + C2) | 36,936 µm² | 36,936 µm² | — (a calculation, not a layout) |
+| `vco_block` | 31,826 µm² | 31,826 µm² | — |
+| `pfd_cp` | 26,406 µm² | **25,630 µm²** | **−776 µm², −2.9 %** |
+| `divider_chain` | 55,329 µm² | 55,329 µm² | — (#458 spent at §5.13) |
+| `lock_detector` | 30,586 µm² | 30,586 µm² | — (unnamed lever, §5.9) |
+| **Sum** | 181,083 µm² (0.1811 mm²) | **180,307 µm² (0.1803 mm²)** | −0.4 % |
+| **After §5's ×1.25** | 226,354 µm² (0.2264 mm²) | **225,384 µm² (0.2254 mm²)** | |
+| **vs the 0.15 mm² draft** | 1.51× | **1.50×** | |
+| **vs the ratified ≤ 0.30 mm² row (DR-016)** | 75.5 % | **75.1 %** | |
+
+Every figure is regenerated, not carried forward: `python3 layout/run_pv.py
+area --out layout/evidence/area-audit/area-audit.md` reproduces the committed
+audit, and the §5.14 column is its four block rows plus DR-006's loop-filter
+calculation. The gap to §5's 120,000 µm² pre-overhead budget goes 61,083 →
+**60,307 µm²**; the top-level overhead factor the amended row's margin still
+holds to goes ×1.657 → **×1.664**.
+
+**Ten tracks is a floor that is structural, not algorithmic, and this is the
+first section in the series able to say so exhaustively.** `glue_riser_x()` is
+a pure-arithmetic twin of the riser set `cp_output_stage.build()` draws — the
+same x values, pinned to the builder's own output by a test — so a candidate
+row order can be costed with the router's own `cp_array.pack_tracks()` with no
+geometry drawn. All **25,920** orderings that keep both switch groups
+contiguous were costed that way *before* any layout code changed, per the
+issue's own "measure before building" precondition: 1,260 reach 10, none goes
+below it, and the as-built order before this change is one of the 6,120 at 13.
+The sweep is a unit test, so "10 is the floor" is re-derived on every run.
+
+Why 10 and not less: `VOUT` (`MSWDN`'s drain to `MSWUP`'s) and `VDUMP`
+(`MDMPDN`'s to `MDMPUP`'s) each tie the charge pump's N group to its P group
+by definition and are live everywhere between them; `UPT` runs from the P
+group out to its own right-hand link column; and at whichever P device is not
+the one bounding `VOUT`, one of `UP`/`UPB` is live. Six full-width nets plus
+those four. No placement removes any of them — which also means **this block's
+glue band is finished as a lever**: both halves are spent and what remains is
+structure.
+
+**Both levers in this band landed in the same 20 %–66 % band as the rest of
+the series, and the pair together are still small.** #455 sized the glue-bus
+lever at 14 → 9 tracks (3.75 µm, ≈1,290 µm² of `pfd_cp`); the outcome across
+#469 and #473 together is 14 → 10 (3.00 µm, 1,035 µm²), **80 % of that
+sizing** — and the 20 % shortfall is the six full-width nets #455's
+bus-span-only census could not see. Read as one lever, this is the closest any
+of the five has come to its own ceiling; read as the two PRs it actually was,
+#469 took 20 % of it and #473 the other 60 %.
+
+**A third failure mode is now catalogued for this family, and it is a
+placement one.** §5.8, §5.10 and §5.12 each recorded a track census that
+over-stated what packing could recover, for a different structural reason each
+time (a flat census over five levels; a census over one level's own bus spans
+ignoring its parent's; the parent's own link extensions). This section records
+the converse: a clique number that is *correct* and still not a floor, because
+a clique is a property of the intervals, and where the intervals end is a
+placement decision. "13 is the provable minimum" was true and was about the
+wrong graph. Anyone reading a `pack_tracks()` result in this repository as a
+floor should check what set the endpoints first.
+
+**What is not done, and why it is not sized.** Dropping an inverter *inside* a
+switch group — which would shorten `DNB` and `UP`, the two nets that still
+span their own group because they gate two devices at its opposite ends — is
+rejected by a new build-time invariant, `check_row_groups()`, not by
+preference: each group carries one `_tap_strip()` across its whole span (whose
+comp, implant and contacts would be drawn straight through an inverter's own
+tap, which sits in the identical y band) and the P group one n-well (which
+would enclose an interleaved inverter's NMOS). Both are defects a
+spacing-based DRC deck cannot report. Splitting the strips and the well per
+contiguous run is a real, bigger change; it is not sized here, because the
+clique arithmetic above shows it could not take the band below 10 anyway.
+
+**`spec/pll.md#area` still lags, now by three levers.** #476 already covers the
+#469 and #458 lag; this section adds a third to the same list rather than
+opening a new one. `spec/pll.md`'s measured table still reads DR-016's figures
+(`pfd_cp` at 344.98 × 77.30 µm / 0.0267 mm², total 0.2733 mm² / 91.1 % /
+1.82×), which are that decision record's measurement as ratified and not a
+claim about the GDS committed today. Until #476 lands, this section and
+`layout/evidence/area-audit/area-audit.md` are the current measurement, and
+the audit is regenerable from the committed GDS by anyone who wants to check.
+
+**§5.11's three open levers are now all spent or unnamed.** #469 closed at
+§5.12, #458 at §5.13, and the placement lever §5.12 filed as #473 closes here.
+What remains from that list is the **unnamed** `lock_detector` lever against
+its 65.5 % whitespace — still unsized, on §5.11's own discipline of not
+guessing a number. The one class of lever this record can see that has not
+been tried on `pfd_cp` is §5.13's: routing a band *over* its own device rows
+rather than above them. It is not sized either, and the reason is arithmetic
+rather than reticence — `cp_output_stage`'s device row is 1.3 µm tall against
+`divider_chain`'s 26.32 µm, so the obstacle-free y that made that lever pay
+there barely exists here.
+
 ## 6. GDS skeleton
 
 `layout/floorplan/skeleton.py` assembles a **block-placement skeleton**
@@ -1503,11 +1615,12 @@ netlist — `layout/pll_top/pfd_cp/block.py`,
 `layout/evidence/pfd-cp-layout/PROOF.md`. `skeleton.py`'s `PFD_CP` block is
 now sized to that block's own measured extent rather than the 150 × 100 µm
 placement-plan estimate it carried through #385 — 434.31 × 80.73 µm when
-written (§5.4), 347.41 × 76.23 µm after the fold at §5.10 (#455), and
-**347.41 × 75.48 µm since the glue-bus packing at §5.12 (#469)**. The fold is
-what shifted `LOOP_FILTER`/`VCO_CORE` 86.90 µm left, without moving the
-skeleton's own bounding box (`DIVIDER_LOCK`'s width still sets it); #469's
-0.75 µm is height only and moves nothing else.
+written (§5.4), 347.41 × 76.23 µm after the fold at §5.10 (#455),
+347.41 × 75.48 µm after the glue-bus packing at §5.12 (#469), and
+**347.41 × 73.23 µm since the glue-inverter interleave at §5.14 (#473)**. The
+fold is what shifted `LOOP_FILTER`/`VCO_CORE` 86.90 µm left, without moving
+the skeleton's own bounding box (`DIVIDER_LOCK`'s width still sets it);
+#469's 0.75 µm and #473's 2.25 µm are height only and move nothing else.
 
 **The committed artifact is the generator's output again, and is checked
 (issue #461).** Through #398 this section's own regeneration recipe was an

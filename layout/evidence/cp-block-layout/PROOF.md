@@ -252,3 +252,30 @@ on every build with `cp_array.check_track_separation()`.
 
 `drc-clean/` and `connectivity/` in this directory are the new runs' outputs.
 Full record: `layout/evidence/pfd-cp-layout/PROOF-469-glue-bus-packing.md`.
+
+## Addendum 2 (issue #473): 2.25 µm more, from interleaving `cp_output_stage`'s glue inverters
+
+| | before | after |
+|---|---|---|
+| `footprint` tuple | 347.410 × 72.475 µm | **347.410 × 70.225 µm** |
+| committed GDS bbox | 344.98 × 73.55 µm (25,372 µm²) | **344.98 × 71.30 µm (24,595 µm²)** |
+| backbone rows | y 55.73 … 59.48 | y 53.48 … 57.23 |
+
+Nothing in `cp.py` changed here either. Issue #473 reordered
+`cp_output_stage`'s single device row so each steering pair's own glue
+inverter sits beside the switch group it drives (`cp_output_stage.ROW_ORDER`),
+which shortens `DN`/`DNB`/`UP`/`UPB` and takes that block's glue band from 13
+tracks to 10 — 2.25 µm, which this block inherits whole and passes on to
+`pfd_cp`.
+
+Three of `cp_output_stage`'s tracks now carry more than one net. As with the
+addendum above, that invariant is `cp_output_stage`'s to hold: this module
+reaches every glue bus at that bus's own edge and extends none of them.
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `cp` DRC, table `main` (default) | clean | `DRC clean: cp (D), 0 violations` | **PASS** |
+| `netcheck.check_gds()` Metal1-3 connectivity | no shorts, no splits | `connectivity clean: 22 nets, no shorts, no splits` | **PASS** |
+
+`drc-clean/` and `connectivity/` in this directory are the new runs' outputs.
+Full record: `layout/evidence/pfd-cp-layout/PROOF-473-glue-inverter-interleave.md`.
