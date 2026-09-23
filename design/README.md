@@ -647,7 +647,7 @@ for the terms this block's own testbenches deliberately exclude.
 
 | # | Term | Systematic (measured, all 45 PVT corners) | **Budget (3σ, incl. random mismatch)** | Verified by |
 |---|---|---|---|---|
-| 1 | DC UP/DN current mismatch, `(Iup−Idn)/Iavg`, worst point in 0.9–2.4 V | −2.7 % … +4.7 % | **±12 %** | #15 |
+| 1 | DC UP/DN current mismatch, `(Iup−Idn)/Iavg`, worst point in 0.9–2.4 V | −2.7 % … +4.7 % | **±20 %** (**DR-018**, widened from ±12 %) | #15 |
 | 2 | Effective UP/DN switching-time skew, `w_up − w_dn`, over the whole Vctrl window | −0.60 ns … −0.05 ns | **±3 ns** | #15 |
 | 2a | — the same term at mid-window (Vctrl = 1.65 V) only | −0.47 ns … −0.05 ns | **±2 ns** | #15 |
 | 3 | Residual net charge per reference cycle at zero phase error (Vctrl = 1.65 V) | −3.50 fC … +0.30 fC | **±20 fC** | #15 |
@@ -664,27 +664,58 @@ Notes on how to read this table:
 
 - **Term 1 is dominated by finite output resistance**, and is measured at the
   *worst point inside the window*, not at mid-window: the two polarities' `ro`
-  are not equal, so their curves diverge across the compliance range. The
-  budget is set at ±12 % — well above the measured systematic value — because
-  random `Vth`/`β` mismatch on the mirror devices is *not* in the measured
-  number (`sw_stat_mismatch = 0`) and is the term #15 adds.
+  are not equal, so their curves diverge across the compliance range. Random
+  `Vth`/`β` mismatch on the mirror devices is *not* in the measured column
+  (`sw_stat_mismatch = 0`) and is the term #15 adds on top of it.
 
-  **That ±12 % does not hold, and is deliberately left as it stands.** #15's
-  Monte Carlo campaign, run corner-combined at n = 100 samples per corner
+  **The budget is ±20 %, and it is derived from the reference-spur line, not
+  from headroom over the systematic value — see DR-018.** The ±12 % this row
+  used to carry was never derived from anything: it was set comfortably above
+  the measured systematic worst case as an allowance for mismatch. #15's Monte
+  Carlo campaign, run corner-combined at n = 100 samples per corner
   (`sim/mc-cp-mismatch/records/20260923-095854-1655e11.md`), measures a
-  worst-corner `|mean| + 3σ` of **13.2172 %** at `ff`/−40 °C/3.63 V — outside
-  the stated ±12 %. The exceedance is not a marginal call: the sample standard
-  deviation is 2.76942 %, so the budget line sits 4.4 standard errors of the
-  mean below the measured statistic. The earlier corner-combined record
-  (`20260817-135712-0e9cfc9`, n = 20/corner) reported 11.7211 % — a PASS by a
-  2.3 % relative margin that was *smaller than its own sampling uncertainty*,
-  and did not survive a sample large enough to resolve it. Nothing about the
-  design changed between the two records; only `N_DC` did. Per the "budget is
-  not a spec line" rule at the end of this section, the resolution is a
-  decision record, so **the ±12 % is not widened here** — tracked in #483,
-  which lays out the three candidate resolutions (widen with a spur-analysis
-  justification, lean on the 2-bit `Icp` trim, or ratify a different
-  statistic).
+  worst-corner statistic of **13.2172 %** at `ff`/−40 °C/3.63 V — outside that
+  ±12 %, and not marginally: the sample standard deviation is 2.76942 %, so the
+  old line sat 4.4 standard errors of the mean below the measured statistic.
+  (The earlier n = 20/corner record's 11.7211 % PASS had a 2.3 % relative
+  margin *smaller than its own sampling uncertainty*. Nothing about the design
+  changed between the two records; only `N_DC` did.) Per the "budget is not a
+  spec line" rule at the end of this section, that routed to a decision record,
+  and **DR-018** is it. In summary:
+
+  - The only path from term 1 to a ratified spec row is the PFD reset overlap,
+    which turns current mismatch into a once-per-cycle charge on C2 —
+    `Δt = m·T_ov` of static phase offset and `ΔQ₁ = m·Icp·T_ov` of ripple.
+  - Running `spec/pll.md`'s own narrowband-FM chain backwards from the ratified
+    ≤ −55 dBc spur at 200 MHz allows 14.005 fC per cycle in total; the
+    systematic asymmetry (3.68 fC) and term 3's statistical residual
+    (4.25246 fC) take 7.933 fC of it, leaving 6.073 fC for term 1. At the
+    bounding trim code (11, `Icp` ≤ 7.21 µA) and the worst measured overlap
+    (2.584 ns) that is a **32.6 % ceiling** — the point at which the spur line
+    itself fails.
+  - **±20 %** is the largest 5 %-granular value that keeps that (deliberately
+    over-stacked) derivation ≥ 1.5 dB inside −55 dBc. It sits 1.63× under the
+    ceiling and 1.51× over the measurement, and the measured 13.2172 % uses
+    66 % of it.
+  - **Which statistic**: term 1's verdict is `mean(|x|) + 3·sd(|x|)` on the
+    per-sample worst-magnitude across the Vctrl window, at the worst corner, as
+    `sim/mc-cp-mismatch/testbench/run.sh` computes it. That folded form is
+    *less* conservative than this table's "3σ" header implies — the same 300
+    samples read 17.48 % signed — so DR-018 priced both, and ±20 % holds under
+    either. The label is what is wrong, and it is tracked in **#487**; fixing
+    it makes term 1's reported figure *larger*. Do not swap the statistic for
+    a looser one to buy margin.
+  - **±20 % does not pre-allocate for the bias generator** (still excluded, see
+    below) or for the 42 PVT points the 3-corner campaign does not visit; that
+    is what the margin between 13.22 % and 20 % is for. A measurement above
+    20 % is a new decision record, not another widening.
+  - **It does not disturb term 4 either.** At ±20 % the overlap mechanism
+    implies at most `Δt = 0.20 × 2.584 ns = 0.517 ns` of static phase offset —
+    and that mechanism is *already inside* term 4's measured 0.864 ns, because
+    the `pfd_cp` Monte Carlo bench runs the real PFD, with its real overlap,
+    on mismatched devices. Even double-counted on top of the 0.871 ns combined
+    figure in the next bullet it gives **1.39 ns against term 4's ±3 ns**. The
+    two rows do not interact silently in either direction.
 
 - **The divider-retiming flop's clk→Q mismatch does not get a line in this
   table.** #15's campaign measures it (`dff_tg_3v3`, the flop that retimes the
@@ -774,9 +805,19 @@ Notes on how to read this table:
   above. Against the pre-#24 tail-charge term that was two orders down and
   safely ignorable; against the post-#24 residual (0.60 ns worst case) it is
   only about 6× down. It is still not the binding term, but it is the one that
-  would have to be attacked next — by trimming `Icp` (term 1 is what the 2-bit
-  trim exists for) or by shortening the reset overlap — if the static offset
-  ever had to shrink another order of magnitude.
+  would have to be attacked next if the static offset ever had to shrink
+  another order of magnitude — and **the 2-bit `Icp` trim is not the lever for
+  it**, contrary to what this bullet used to say. One `B0`/`B1` pair gates four
+  N legs *and* four P legs (`design/cp.sch`), so a code change scales `Iup` and
+  `Idn` together and leaves their ratio alone: across all 45 corners, stepping
+  00 → 11 moves term 1 by at most **0.066 percentage points**
+  (`sim/cp-compliance/corners/20260801-190821-734f483/cp_dc.csv`). The trim
+  sets loop bandwidth and, through `ΔQ₁ = m·Icp·T_ov`, the *size* of the ripple
+  that mismatch produces — it has no differential authority over the mismatch
+  itself, and `Δt = m·T_ov` does not move with it at all. See DR-018
+  §Alternatives. Shortening the reset overlap is the real lever, and
+  `sim/pfd-deadzone` measures what it costs (a 6-stage chain flattened the
+  phase-to-charge transfer at 9 of 45 corners; 24 stages is where that stops).
 - **Bias-generator contribution is excluded** from both the measured column
   and, deliberately, from the budget: it is a separate block. When it lands,
   its mirror mismatch adds to term 1 and the budget must be re-derived rather
@@ -788,10 +829,15 @@ Notes on how to read this table:
   charge-pump mismatch (#1 is open). If #15's statistics or #10's spur
   analysis show these values do not buy the spur/jitter performance the
   ratified spec asks for, the resolution is a decision record superseding this
-  budget — not a quiet relaxation here. **This rule has now been exercised**:
-  #15's statistics put term 1 outside its ±12 % (see that term's note above),
-  and the budget column was left exactly as it stands, with the resolution
-  routed to #483. Terms 2/2a, 3 and 4 still fit.
+  budget — not a quiet relaxation here. **This rule has now been exercised end
+  to end**: #15's statistics put term 1 outside its ±12 %, the campaign that
+  found it left the column untouched and routed the resolution to #483, and
+  **DR-018** re-derived the row from the ratified ≤ −55 dBc reference-spur line
+  and widened it to ±20 %. The ratified spur row itself did not move, and
+  terms 2/2a, 3 and 4 were not touched. Note what the exercise cost: DR-018's
+  refreshed accounting leaves the spur derivation ~1.6 dB inside −55 dBc rather
+  than the ~6 dB `spec/pll.md` reserves for uncovered mechanisms, so the next
+  term to breach a budget here is a spec-row problem, not a table edit.
 
 ---
 
