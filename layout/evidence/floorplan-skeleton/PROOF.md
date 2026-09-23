@@ -378,3 +378,38 @@ clean by construction, same as every prior run of this file, since layer
 See `layout/evidence/divider-chain-layout/PROOF-over-device-rows.md` for the
 block measurement this follows from, and `PLL-FLOORPLAN.md` §5.13 for the
 re-run whole-chip arithmetic.
+
+---
+
+## Regenerated again at issue #473 — `PFD_CP`'s rectangle follows the block down three more tracks
+
+Same propagation mechanism once more. `skeleton.PFD_CP_STANDALONE_H_UM`
+records `pfd_cp`'s own standalone footprint, and issue #473 reordered
+`cp_output_stage`'s single device row so each steering pair's glue inverter
+sits beside the switch group it drives — taking that block's glue band from 13
+Metal2 tracks to 10, which `cp` and `pfd_cp` inherit whole: **347.41 × 75.48 →
+347.41 × 73.23 µm**.
+
+| | committed before (post-#458) | regenerated (#473) |
+|---|---|---|
+| Bounding box | `(0, −15) … (1333.66, 441.22)` µm | `(0, −15) … (1333.66, 441.22)` µm (unchanged) |
+| Merged 0/0 area | 384,536.6 µm² | **383,754.9 µm²** (−781.7 µm²) |
+| Shapes on layer 0/0 | 32 | 32 (unchanged — no block added or removed) |
+
+Height only, on one block: the skeleton's own bounding box is unchanged
+(`DIVIDER_LOCK` still sets both dimensions) and nothing is re-placed, so the
+−781.7 µm² is exactly `PFD_CP`'s own 347.41 µm width × 2.25 µm. Regenerated
+here rather than left to drift; `test_gds_reproducibility.py` rebuilds this
+artifact from `floorplan.skeleton` on every run, and
+`test_floorplan_skeleton.py`'s `RecordedFootprintDriftTests` rebuilds the real
+block and asserts the recorded constant matches it.
+
+Re-run through the same foundry deck (`gf180mcuD`, open_pdks
+`c6d73a35f524070e85faff4a6a9eef49553ebc2b`, KLayout 0.28.16, table `main`,
+`--variant=D`): `DRC clean: pll_floorplan_skeleton (D), 0 violations` — clean
+by construction, same as every prior run of this file, since layer (0, 0)
+still carries no rule in this deck.
+
+See `layout/evidence/pfd-cp-layout/PROOF-473-glue-inverter-interleave.md` for
+the block measurement this follows from, and `PLL-FLOORPLAN.md` §5.14 for the
+re-run whole-chip arithmetic.

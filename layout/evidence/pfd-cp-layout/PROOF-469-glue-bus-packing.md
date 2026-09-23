@@ -297,3 +297,24 @@ unintended change to any of them fails the suite rather than riding along.
 `lvs-attempt/` — the mismatch this block's first block-level LVS run really
 found (#440) — is untouched, as `test_pfdcp_block_layout.py::LvsEvidenceTests`
 requires.
+
+---
+
+## Addendum: the placement lever did not measure out at zero (issue #473)
+
+The "What the residual actually is now" section above filed the placement half
+of this band as issue #473 "with the caveat that it may well measure out at
+zero, since the floor is the 6 full-width nets plus whatever local clique
+survives, and nothing guarantees interleaving takes that below 7".
+
+It takes it to **4**. Interleaving each steering pair's glue inverter with the
+switch group whose gates it drives takes the band 13 → **10** tracks and
+`pfd_cp` 26,406 → 25,630 µm² (−776 µm², −2.9 %), three times what this record's
+own lever was worth. The two levers together are 14 → 10 tracks, 80 % of the
+14 → 9 that #455 sized the band at.
+
+The correction this record makes to #455's sizing therefore needs one of its
+own, and it is a generalisable one: **13 was the clique number of the band as
+placed, and a clique number is a floor for an assignment, not for a layout.**
+Where the intervals end is a placement decision. Full record:
+`PROOF-473-glue-inverter-interleave.md` in this directory.
