@@ -97,6 +97,17 @@ therefore asserted, not assumed: ``layout/tests/test_canvas_nettracks.py``
 fails if any of the four constants (or this default) is changed alone, which
 is the propagation the per-module copies used to get for free (issue #432).
 
+``pad_center()`` (issue #475) joins the same convention:
+``lock_detector/primitives.py``, ``divider_chain/devgen.py``,
+``pfd_cp/cp_dumpbuf.py``, and ``pfd_cp/cp_array.py`` each independently
+defined the same one-line box-midpoint helper, byte-for-byte identical in all
+four. Each re-exports it under its own original module-level name
+(``pad_center = _canvas.pad_center``), so every call site is unchanged --
+including the ``from .devgen import pad_center`` importers
+``divider_chain/divider_chain.py``, ``divider_chain/div23_cell.py``, and
+``divider_chain/dff_tg_3v3.py``, and the ``cp_array.pad_center(...)`` /
+``cp_output_stage``/``cp.py`` qualified call sites.
+
 ``Conductor``, ``Via``, ``VIA_LAYERS``, ``_TOUCH_EPS``, ``_boxes_touch()``,
 ``_contains()``, ``shorted_pairs()`` and ``disconnected_nets()`` (issue #364)
 join the same convention: ``lock_detector/checks.py`` (issue #322) and
@@ -348,6 +359,11 @@ def bbox_union(boxes: Iterable[tuple[float, float, float, float]]) -> tuple[floa
         max(b[2] for b in boxes),
         max(b[3] for b in boxes),
     )
+
+
+def pad_center(pad: tuple[float, float, float, float]) -> tuple[float, float]:
+    """The centre point of an axis-aligned pad box ``(x0, y0, x1, y1)``."""
+    return ((pad[0] + pad[2]) / 2.0, (pad[1] + pad[3]) / 2.0)
 
 
 def _contact_positions(
