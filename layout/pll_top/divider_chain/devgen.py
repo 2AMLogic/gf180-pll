@@ -792,8 +792,9 @@ def build_stack_cell(
 # a net's pads happen to be.
 
 
-def pad_center(pad: tuple[float, float, float, float]) -> tuple[float, float]:
-    return ((pad[0] + pad[2]) / 2.0, (pad[1] + pad[3]) / 2.0)
+# Centre point of a pad box -- shared with every other
+# ``layout/pll_top/*`` submodule (issue #475, ``_canvas.pad_center()``).
+pad_center = _canvas.pad_center
 
 
 # Smallest axis-aligned box enclosing every box given -- shared with every
