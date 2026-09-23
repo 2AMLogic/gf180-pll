@@ -136,11 +136,14 @@ derivation of §Context at least **1.5 dB inside** the ratified −55 dBc (20 % 
 1.59 dB; 25 % → 0.93 dB, rejected). It lands at:
 
 - **1.63×** below the 32.6 % ceiling the spur line puts on this term;
-- **1.51×** above the measured 13.2172 % (66 % budget utilisation, against
-  110 % under the outgoing ±12 %);
-- **1.14×** above the stricter signed 17.48 % reading, i.e. the budget holds
+- **1.14×** above the signed 17.48 % reading (**87.4 %** budget utilisation) —
+  the statistic the campaign reports since #487, and the one to plan against;
+- 1.51× above the folded 13.2172 % reading this record was drafted against
+  (66 % utilisation, against 110 % under the outgoing ±12 %). The budget holds
   under *both* readings of the statistic — which is the reason it is not set at
-  15 %, a value that would fit the measurement and fail the column header.
+  15 %, a value that would fit the folded measurement and fail the column
+  header. (Emphasis reordered by Amendment A1; both figures are as originally
+  derived.)
 
 **3. The statistic the budget is checked against is named, so it cannot drift.**
 Term 1's verdict is `mean(|x|) + 3·sd(|x|)` on the per-sample worst-magnitude
@@ -298,3 +301,64 @@ every other term already at its worst case.
 - **Nothing in `design/` changes.** No schematic, no netlist, no sizing, no
   trim code — this record is an allocation decision on a measured design, and
   the design is byte-identical before and after it.
+
+## Amendment A1 — the derived rows follow the corrected statistic (issue #490)
+
+- **Date**: 2026-09-23
+- **Trigger**: #487 (PR #489) switched `sim/mc-cp-mismatch`'s term-1 verdict
+  statistic from the folded `mean(|x|) + 3·sd(|x|)` (13.2172 %) to the signed
+  `|mean| + 3σ` (**17.4798 %**) on the same committed 300 samples, as
+  §Decision 3 anticipated. That left `spec/pll.md`'s reference-spur
+  charge-accounting table quoting a derived row built on the statistic the
+  campaign no longer reports.
+
+**Why an amendment here, and not a new decision record.** CLAUDE.md requires a
+decision record for spec changes; this change has one already. §Decision 3
+names this exact switch and authorises it "without a further record", and
+§Context's table priced the signed reading before the switch happened
+(17.48 % → 3.257 fC → 11.189 fC → −56.95 dBc). Nothing is being decided that
+this record has not already decided: no target, no budget and no verdict
+moves, and the refreshed row moves in the conservative direction. A new record
+would suggest a new decision where there is none, and would split the term-1
+rationale over two files. The opposite choice, silently editing `spec/pll.md`
+with no note, would leave the ratified document's change with no written
+reason. So the change is recorded here, in the record that authorised it, and
+the `spec/pll.md` edit points back to this section. If a future change moves
+a ratified value, or goes past what §Decision 3 authorised, it needs a new
+record; it does not belong in this amendment.
+
+**What changes in `spec/pll.md` § Reference spur:**
+
+| Item | Was (folded 13.2172 %) | Now (signed 17.4798 %) |
+|---|---|---|
+| "…plus term 1 at its **measured** …" row, term-1 charge | 2.46 fC | 3.26 fC |
+| same row, total ΔQ | 10.40 fC | 11.19 fC |
+| same row, derived spur at 200 MHz | −57.6 dBc | ≈ −57.0 dBc (−56.95; 1.95 dB margin) |
+| prose, term 1 "stacked" | 2.46 fC | 3.26 fC |
+| prose, term 1 "corner-consistent" | 1.02 – 1.53 fC | ≈ 1.35 – 1.94 fC |
+
+Arithmetic: `0.174798 × 7.21 µA × 2.584 ns = 3.257 fC`; `7.933 + 3.257 =
+11.189 fC`; `−55 + 20·log₁₀(11.189 / 14.005) = −56.95 dBc`. That matches
+§Context's "17.48 %" row. The corner-consistent figures scale this record's
+folded per-corner products by each corner's signed/folded ratio. Each corner
+keeps its own `Icp` and `T_ov`, so only the statistic changes:
+`ff`/−40 °C/3.63 V 1.02 × 17.4798/13.2172 = 1.35 fC, `typical`
+1.08 × 12.3679/9.52302 = 1.40 fC, `ss`/125 °C/2.97 V
+1.53 × 10.5808/8.33674 = 1.94 fC. The per-corner ratios come from
+`sim/mc-cp-mismatch/testbench/run.sh --restat 20260923-095854-1655e11`.
+
+**What does not change:** the ≤ −55 dBc target; the −61 dBc historical
+cross-check row; the budgeted ±20 % row (11.66 fC, −56.6 dBc), which is the
+binding row of that table and the figure `spec/pll.md`'s summary row 7
+quotes; the ±20 % budget; the 32.6 % ceiling; and §Decision 5's fail-loud
+condition.
+
+**In this record:** §Decision 2's utilisation bullets are reordered so that
+the signed-reading pair (1.14×, 87.4 %) comes first. Both pairs keep the
+values they were derived with. §Context, §Alternatives and §Consequences
+are left as written because they describe the evidence when the record was
+filed. Their folded-reading figures (the bold 13.2172 % table row, "the
+stacked 2.46 fC row", "2.46 fC stacked" under §Consequences, and the 13.22 %
+lower edge of §Decision 4's headroom) should be read against this amendment.
+Planned against the signed reading, the headroom under the budget is 17.48 %
+→ 20 %, not 13.22 % → 20 %.

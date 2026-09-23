@@ -630,16 +630,26 @@ statistical residual row is the *nominal-only* 2.99 fC (the corner-combined
 figure is 4.25246 fC), and it excludes term-1 current mismatch entirely, on the
 "under 1 fC" estimate in the paragraph above. That estimate is right for the
 systematic 4.7 % (0.88 fC at the largest trim code and the worst measured reset
-overlap); at the measured 3σ tail the same product is 1.02 – 1.53 fC
-corner-consistent and 2.46 fC stacked, and at the ±20 % term-1 budget DR-018
+overlap); at the measured 3σ tail the same product is ≈ 1.35 – 1.94 fC
+corner-consistent and 3.26 fC stacked, and at the ±20 % term-1 budget DR-018
 derives it is 3.73 fC. Carrying those through the same chain:
 
 | Charge accounting at 200 MHz | Total ΔQ | Derived spur |
 |---|---|---|
 | The table above (systematic 3.68 fC + nominal-only statistical 2.99 fC) | 6.67 fC | **−61 dBc** |
 | Corner-combined statistical residual, term 1 still excluded | 7.93 fC | −59.9 dBc |
-| …plus term 1 at its **measured** 13.2172 % | 10.40 fC | −57.6 dBc |
+| …plus term 1 at its **measured** 17.4798 % (signed `\|mean\| + 3σ`) | 11.19 fC | ≈ −57.0 dBc |
 | …plus term 1 at its **budgeted** ±20 % | 11.66 fC | **−56.6 dBc** |
+
+The "measured" row quotes term 1 as the signed `|mean| + 3σ` at the worst
+corner (`ff`/−40 °C/3.63 V), the statistic `sim/mc-cp-mismatch` has reported
+since #487. It previously quoted 13.2172 % (10.40 fC, −57.6 dBc), which was
+`mean(|x|) + 3·sd(|x|)` on samples folded to their absolute value; both come
+from the same committed 300 samples
+(`sim/mc-cp-mismatch/testbench/run.sh --restat 20260923-095854-1655e11`). The
+refresh is DR-018 Amendment A1, made under that record's Decision 3, which
+pre-authorised the switch of statistic; it restates a derived row in the
+conservative direction and moves nothing below.
 
 The −55 dBc **target does not move**, and neither does the −61 dBc row, which
 is retained as the historical cross-check it always was. What changes is how
