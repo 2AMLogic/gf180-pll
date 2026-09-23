@@ -668,6 +668,52 @@ Notes on how to read this table:
   budget is set at ±12 % — well above the measured systematic value — because
   random `Vth`/`β` mismatch on the mirror devices is *not* in the measured
   number (`sw_stat_mismatch = 0`) and is the term #15 adds.
+
+  **That ±12 % does not hold, and is deliberately left as it stands.** #15's
+  Monte Carlo campaign, run corner-combined at n = 100 samples per corner
+  (`sim/mc-cp-mismatch/records/20260923-095854-1655e11.md`), measures a
+  worst-corner `|mean| + 3σ` of **13.2172 %** at `ff`/−40 °C/3.63 V — outside
+  the stated ±12 %. The exceedance is not a marginal call: the sample standard
+  deviation is 2.76942 %, so the budget line sits 4.4 standard errors of the
+  mean below the measured statistic. The earlier corner-combined record
+  (`20260817-135712-0e9cfc9`, n = 20/corner) reported 11.7211 % — a PASS by a
+  2.3 % relative margin that was *smaller than its own sampling uncertainty*,
+  and did not survive a sample large enough to resolve it. Nothing about the
+  design changed between the two records; only `N_DC` did. Per the "budget is
+  not a spec line" rule at the end of this section, the resolution is a
+  decision record, so **the ±12 % is not widened here** — tracked in #483,
+  which lays out the three candidate resolutions (widen with a spur-analysis
+  justification, lean on the 2-bit `Icp` trim, or ratify a different
+  statistic).
+
+- **The divider-retiming flop's clk→Q mismatch does not get a line in this
+  table.** #15's campaign measures it (`dff_tg_3v3`, the flop that retimes the
+  divider output into the PFD) because a feedback-path delay is a static
+  REF→DIV phase offset, and the question of whether it needed its own budget
+  line was left open. It does not, for two measured reasons:
+
+  - **It is a different block.** Same exclusion this table already applies to
+    the bias generator two bullets down — a separate block's mismatch is
+    re-derived when it lands, not silently absorbed here.
+  - **The figure that made it look budget-sized was the wrong statistic.**
+    Earlier records quoted the flop's `|mean| + 3σ` (378 ps) next to terms 1–4's,
+    but those terms' means are *errors* centred near zero, whereas the flop's
+    mean is a nominal *propagation delay*. At the campaign's worst corner
+    (`ss`/125 °C/2.97 V) the mean is 98.4 % of that 378 ps — so the number was
+    reporting a systematic delay, already swept over the full 45-point grid by
+    `sim/divider-ratio-dff` (record `20260801-125114-3f883e3`, worst-case
+    `tcq_r` 370.952 ps at that same corner, which the campaign's own mean
+    reproduces) and already checked there against the divider chain's retiming
+    setup/hold margin. A line here would double-count it.
+
+  What was genuinely unchecked was the *dispersion*, and it now has a verdict.
+  The mismatch-only figure is `3σ` = **6.21 ps** at the worst corner. Added to
+  term 4 at the PFD input — the same node, so the two are additive there — the
+  combined worst-case static phase offset is **0.871 ns against term 4's ±3 ns**,
+  a PASS with the flop contributing 0.7 % of the sum. That combined check is
+  emitted by `sim/mc-cp-mismatch/testbench/run.sh` on every run, so it cannot
+  drift out of date; it is a check inside term 4's existing envelope, not a new
+  budget line.
 - **Terms 2, 3 and 4 are one physical effect** seen three ways, and it is
   **not** current mismatch. It is the **tail-node charge exchange**: when a
   steering switch closes, the tail it was holding at the dump-node voltage is
@@ -742,7 +788,10 @@ Notes on how to read this table:
   charge-pump mismatch (#1 is open). If #15's statistics or #10's spur
   analysis show these values do not buy the spur/jitter performance the
   ratified spec asks for, the resolution is a decision record superseding this
-  budget — not a quiet relaxation here.
+  budget — not a quiet relaxation here. **This rule has now been exercised**:
+  #15's statistics put term 1 outside its ±12 % (see that term's note above),
+  and the budget column was left exactly as it stands, with the resolution
+  routed to #483. Terms 2/2a, 3 and 4 still fit.
 
 ---
 
