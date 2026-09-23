@@ -316,10 +316,13 @@ midpoint) + 0.0045 (divider+lock midpoint) mm²; conservative = 0.0369 + 0.017
 > is rewritten, per this record's append-only revision convention. §5.11 states
 > the position DR-016 was written on: **0.2733 mm² measured against the
 > 0.30 mm² row, met, with 8.9 % margin on the block sum**; §5.12 (#469) refines
-> that measurement to **0.2730 mm², met, 9.0 % margin**, and §5.13 (#458) to
-> **0.2264 mm², met, 24.6 % margin** — neither moving the row. The fail-loud
-> clause at the end of this section is restated against 0.30 mm² there, and
-> *that* restatement is the live one.
+> that measurement to **0.2730 mm², met, 9.0 % margin**, §5.13 (#458) to
+> **0.2264 mm², met, 24.6 % margin**, and §5.14 (#473) to **0.2254 mm², met,
+> 24.9 % margin** — none of them moving the row. **DR-017** (#476, §5.15) then
+> holds the row at ≤ 0.30 mm² on that re-measured floor and refreshes
+> `spec/pll.md#area`'s own table onto it. The fail-loud clause at the end of
+> this section is restated against 0.30 mm² there, and *that* restatement is
+> the live one.
 
 **Against the draft < 0.15 mm² (150,000 µm²) target: PASS at both the
 midpoint (≈0.088 mm², ≈41 % margin) and the conservative high-end estimate
@@ -340,21 +343,26 @@ methodology predicts is plausible (the ROM ranges above already span a
 factor of ~1.4–1.5×), not a surprise — the next floorplan revision should
 state the overrun explicitly rather than silently rounding the total down.
 
-**Fail-loud condition, as it stands today (DR-016, #456 — this supersedes the
-paragraph above, which is kept as written because it is the clause that
-fired).** The target is **≤ 0.30 mm² (300,000 µm²)**, i.e. ≤ **240,000 µm²** of
-summed block footprint against this section's ×1.25 top-level overhead. The
-condition is unchanged in kind and now reads: **if the measured block sum
-exceeds 240,000 µm², or if an assembled `pll_top` measures a top-level overhead
-above ×1.372, say so in a new revision rather than re-deriving the budget to
-fit.** Measured when DR-016 was written: **218,631 µm²**, **×1.25 →
-273,289 µm² (0.2733 mm²)**, **met, 8.9 % margin on the block sum**. Measured
-today, since §5.12 (#469) packed `cp_output_stage`'s glue bus and §5.13 (#458)
-routed `divider_chain`'s Metal2 tracks over its own device rows:
-**181,083 µm²**, **×1.25 → 226,354 µm² (0.2264 mm²)**, **met, 24.6 % margin**,
-the condition above holding to a top-level overhead of ×1.657 on that sum —
-the margin being sized to the overhead factor's own uncertainty and nothing
-else. See §5.11, §5.12 and §5.13.
+**Fail-loud condition, as it stands today (DR-016, #456; re-stated on the
+current measurement by DR-017, #476 — this supersedes the paragraph above,
+which is kept as written because it is the clause that fired).** The target is
+**≤ 0.30 mm² (300,000 µm²)**, i.e. ≤ **240,000 µm²** of summed block footprint
+against this section's ×1.25 top-level overhead. The condition is unchanged in
+kind and now reads: **if the measured block sum exceeds 240,000 µm², or if an
+assembled `pll_top` measures a top-level overhead above ×1.664, say so in a new
+revision rather than re-deriving the budget to fit.** Measured when DR-016 was
+written: **218,631 µm²**, **×1.25 → 273,289 µm² (0.2733 mm²)**, **met, 8.9 %
+margin on the block sum**. Measured today, since §5.12 (#469) packed
+`cp_output_stage`'s glue bus, §5.13 (#458) routed `divider_chain`'s Metal2
+tracks over its own device rows and §5.14 (#473) interleaved the glue
+inverters: **180,307 µm²**, **×1.25 → 225,384 µm² (0.2254 mm²)**, **met,
+24.9 % margin**, the condition above holding to a top-level overhead of ×1.664
+on that sum — the margin being sized to the overhead factor's own uncertainty
+and nothing else, which is precisely why DR-017 **held** the row rather than
+amending it down onto the smaller measurement (§5.15). This condition is also
+asserted mechanically, not only in prose:
+`layout/tests/test_area_audit.py::WholeChipAreaRowTests` re-derives the sum
+from the committed GDS on every test run. See §5.11 – §5.15.
 
 ### 5.1 Revision: the fail-loud condition has fired (issues #293/#324, #296, #310)
 
@@ -1446,6 +1454,11 @@ Until that lands, **this section and
 `area-audit.md` is regenerable from the committed GDS by `python3
 layout/run_pv.py area` by anyone who wants to check.
 
+**[Discharged at §5.15 (#476, DR-017).]** #476 has landed: `spec/pll.md#area`'s
+measured table now carries the committed GDS's own figures, so the paragraph
+above is history rather than a live caveat. The row it sits under is unchanged
+at ≤ 0.30 mm².
+
 **DRC/LVS re-verified, not assumed.** Both changed blocks are rebuilt and
 re-run on `KLayout 0.28.16`, this repo's pinned version, so #360's
 false-mismatch caveat does not arise: `div23_cell` and `divider_chain` are
@@ -1567,6 +1580,11 @@ claim about the GDS committed today. Until #476 lands, this section and
 `layout/evidence/area-audit/area-audit.md` are the current measurement, and
 the audit is regenerable from the committed GDS by anyone who wants to check.
 
+**[Discharged at §5.15 (#476, DR-017).]** All three lagging levers — #469,
+#458 and this section's #473 — are now carried by `spec/pll.md#area`'s own
+measured table, on the same `area-audit.md` figures. The row is unchanged at
+≤ 0.30 mm².
+
 **§5.11's three open levers are now all spent or unnamed.** #469 closed at
 §5.12, #458 at §5.13, and the placement lever §5.12 filed as #473 closes here.
 What remains from that list is the **unnamed** `lock_detector` lever against
@@ -1577,6 +1595,83 @@ rather than above them. It is not sized either, and the reason is arithmetic
 rather than reticence — `cp_output_stage`'s device row is 1.3 µm tall against
 `divider_chain`'s 26.32 µm, so the obstacle-free y that made that lever pay
 there barely exists here.
+
+### 5.15 Revision: the spec catches up and the row is *held* — 0.2254 mm², 75.1 % of ≤ 0.30 mm² (issue #476, DR-017)
+
+**Status: no geometry changes here at all.** This is the spec-side counterpart
+of §5.12 – §5.14: the three levers those sections landed are now carried by
+`spec/pll.md#area`'s own measured table, and the ratified row above it is
+**held at ≤ 0.30 mm²** rather than amended down. The record is
+`spec/decision-records/DR-017-area-row-held-at-0.30-on-the-refreshed-measured-floor.md`;
+the lag caveats at the end of §5.13 and §5.14 are discharged by it.
+
+**What the spec now says, and what it said before** — every figure re-derived
+from the committed GDS at `main` @ `8c6cb7f3` by `python3 layout/run_pv.py
+area`, i.e. from `layout/evidence/area-audit/area-audit.md`, not copied from
+any of the sections above:
+
+| Block | §5.11 (DR-016, what the spec carried) | §5.15 (what the spec carries now) | Delta |
+|---|---|---|---|
+| Loop filter (R + C1 + C2) | 36,936 µm² | 36,936 µm² | — (a calculation, not a layout) |
+| `vco_block` | 31,826 µm² | 31,826 µm² | — |
+| `pfd_cp` | 26,665 µm² | **25,630 µm²** | **−1,035 µm², −3.9 %** (§5.12 + §5.14) |
+| `divider_chain` | 92,618 µm² | **55,329 µm²** | **−37,289 µm², −40.3 %** (§5.13) |
+| `lock_detector` | 30,586 µm² | 30,586 µm² | — |
+| **Sum** | 218,631 µm² (0.2186 mm²) | **180,307 µm² (0.1803 mm²)** | **−38,324 µm², −17.5 %** |
+| **After §5's ×1.25** | 273,289 µm² (0.2733 mm²) | **225,384 µm² (0.2254 mm²)** | −17.5 % |
+| **vs the ratified ≤ 0.30 mm² row** | 91.1 %, met, 8.9 % margin | **75.1 %, met, 24.9 % margin** | the row **does not move** |
+| **vs the draft 0.15 mm² target** | 1.82× | **1.50×** | |
+
+**Why the row is held, in one sentence** (DR-017 Decision 1): a margin sized to
+an uncertainty does not shrink because the measurement it sits on top of
+shrank. DR-016 Decision 2 defined this row's margin as covering §5's ×1.25
+top-level overhead and nothing else, and that factor is identical today — same
+ROM multiplier, same absent `pll_top` (#17), same absent loop-filter layout.
+All three levers since were Metal2 routing-track levers inside already-drawn
+blocks; not one of them measured the overhead or drew the loop filter. What a
+≤ 0.25 mm² row would have bought, and why DR-017 rejected it: it holds the
+measured total to an overhead of ×1.386 — 11 % above a ROM figure nobody has
+ever checked — so a first `pll_top` measurement at ×1.4 would falsify it with
+zero block growth, and the repair would be an *upward* re-amendment. The row as
+held goes to **×1.664**.
+
+**DR-016 Decision 4's trigger is replaced, and this is the section that shows
+why it needed to be.** That decision made any lever landing grounds for a
+downward re-amendment; §5.12 then had to argue in prose that its own 259 µm²
+(0.1 % of the block sum) was "not grounds for the successor record §5.11
+described", and §5.14's 776 µm² (0.4 %) is the same case. DR-017 Decision 3
+narrows it to the two events that actually shrink the uncertainty: an assembled
+`pll_top` (#17) turning ×1.25 into a measurement, or the loop filter being
+drawn so its 36,936 µm² — **20.5 % of the block sum**, the largest single term
+in it — stops being DR-006's device sum ×1.15. Block-level levers refresh the
+measured table; they do not move the row.
+
+**One arithmetic consequence of §5.13, recorded here because the spec now
+states it.** DR-016 carried two bounds below the as-drawn total — 143,955 µm²
+(every named lever at its geometric ceiling, 1.20×) and 136,141 µm² (all Metal2
+routing free, 1.13×). #458 spent exactly the 7,814 µm² of `divider_chain` that
+separated them, and §5.13 established that the `max(packed-track floor, device
+band) × width` ceiling no longer applies to a block routing over its own device
+rows. Re-derived with that correction, the two bounds **converge**:
+31,654 + 16,921 + 34,681 + 15,949 + 36,936 = **136,141 µm²**, ×1.25 →
+170,176 µm² (**0.1702 mm², 1.13×**). DR-016 Decision 3 — that 0.15 mm² is not
+reachable — therefore survives on a *single* bound rather than two, and it is
+the one that assumes all routing is free.
+
+**Nothing in `layout/` changes and nothing is re-verified, because nothing
+moved.** No generator, no committed GDS, no DRC or LVS run, and neither area
+constant in `skeleton.py` (`AREA_BUDGET_UM2 = 300_000.0`,
+`TOP_LEVEL_OVERHEAD = 1.25`) — holding the row is exactly what leaves those
+untouched. `layout/evidence/area-audit/area-audit.md` was already current after
+§5.14; DR-017's table *is* that file. What did change outside `spec/` is
+`manifests/integrator.json`, which was one lever stale (`pfd_cp` at 26,406 µm²,
+a 1.51× draft ratio) and is re-synced to the same figures, so the
+machine-readable integrator view and the ratified table cannot disagree.
+
+**The `lock_detector` lever is still open, still unnamed and still unsized** —
+30,586 µm² drawn against a 15,949 µm² device-band term, 65.5 % whitespace. Per
+DR-017 Decision 5 it will move the table above when it lands and will not, on
+its own, move the row.
 
 ## 6. GDS skeleton
 
