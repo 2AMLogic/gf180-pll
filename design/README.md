@@ -713,10 +713,10 @@ Notes on how to read this table:
   - **±20 %** is the largest 5 %-granular value that keeps that (deliberately
     over-stacked) derivation ≥ 1.5 dB inside −55 dBc. It sits 1.63× under the
     ceiling and **1.14× over the measurement**, which uses **87.4 %** of it.
-    (DR-018 states the same two numbers as 1.51× and 66 % — those are against
-    the *folded* 13.2172 % it was written before #487 corrected. It priced both
-    readings explicitly and set ±20 % so the budget holds under either; 1.14×
-    is the figure that now applies, and it is DR-018's own.)
+    (DR-018 also states 1.51× and 66 %, against the *folded* 13.2172 % it was
+    drafted before #487 corrected. It priced both readings explicitly and set
+    ±20 % so the budget holds under either; its Amendment A1 (#490) puts the
+    1.14× / 87.4 % pair first.)
   - **Which statistic** (corrected by **#487**): term 1's verdict is
     `|mean| + 3σ` on the **signed** per-sample worst-magnitude sample across
     the Vctrl window, at the worst corner, as
@@ -740,18 +740,16 @@ Notes on how to read this table:
     DR-018 wrote that sentence against the folded 13.22 %; the headroom it
     describes is the smaller of the two, and it is the one to plan against. A
     measurement above 20 % is a new decision record, not another widening.
-  - **Two ratified-document rows still quote the folded reading, deliberately
-    left alone here.** `spec/pll.md`'s charge-accounting table carries a
-    "…plus term 1 at its **measured** 13.2172 %" row (10.40 fC, −57.6 dBc),
-    and DR-018 §Decision carries the 1.51× / 66 % pair above. Carrying the
-    corrected 17.4798 % through the same chain gives 3.26 fC for term 1,
-    11.19 fC total and ≈ **−57.0 dBc** — still inside the ratified ≤ −55 dBc,
-    and the *binding* row of that table is the **budgeted** ±20 % one
-    (11.66 fC, −56.6 dBc), which does not move at all because the budget does
-    not move. So no ratified row changes value; what is stale is a derived
-    intermediate. Refreshing it is a `spec/` edit and goes through `spec/`
-    with its own record rather than being done as a side effect of a
-    reporting fix — tracked separately.
+  - **The spec's derived rows follow the corrected statistic (DR-018
+    Amendment A1, #490).** `spec/pll.md`'s charge-accounting table now carries
+    term 1 "at its **measured** 17.4798 %" (signed `|mean| + 3σ`): 3.26 fC for
+    term 1, 11.19 fC total and ≈ **−57.0 dBc**, still inside the ratified
+    ≤ −55 dBc. It used to read 13.2172 % (10.40 fC, −57.6 dBc). The *binding*
+    row of that table is the **budgeted** ±20 % one (11.66 fC, −56.6 dBc). It
+    does not move, because the budget does not move, so no ratified row
+    changes value. The refresh restates a derived intermediate, and DR-018
+    §Decision 3 already authorised it, which is why it is an amendment and
+    not a new record.
   - **It does not disturb term 4 either.** At ±20 % the overlap mechanism
     implies at most `Δt = 0.20 × 2.584 ns = 0.517 ns` of static phase offset —
     and that mechanism is *already inside* term 4's measured 0.864 ns, because
