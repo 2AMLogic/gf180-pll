@@ -1,14 +1,18 @@
 # DR-018: Charge-pump term 1's up/down mismatch budget is widened ±12 % → **±20 %**, and is re-derived from the ratified reference-spur line instead of from headroom over the systematic measurement
 
-- **Status**: **ratified** — 2026-09-23, by the operator's approval and merge of
-  the PR for #483, per this repo's spec/DR-ratification-via-PR policy
-  (`2AMLogic/2am#357`, the route DR-007 records: a builder drafts the record on
-  the evidence, the operator's PR approval is the ratifying act). It is filed
-  `ratified` rather than `proposed` deliberately, for two stated reasons:
-  `design/README.md`'s budget table is *downstream* of this decision and cites
-  it as binding in the same commit, and #446 is open on exactly the failure
-  mode of records whose Status field never gets flipped. If the PR is not
-  approved, the record does not land at all.
+- **Status**: proposed, drafting for operator ratification via PR review — the
+  same `2AMLogic/2am#357` ratification-via-PR route DR-007, DR-009 … DR-017
+  record (a builder drafts the record on the evidence; the operator's PR
+  approval is the ratifying act). Status stays `proposed` until that approval
+  and merge. `design/README.md`'s budget table is *downstream* of this decision
+  and cites it as binding in the same commit; that is the same position DR-016
+  was in when it amended a ratified `spec/pll.md` row inside its own filing
+  commit, and it left this field `proposed` — the downstream prose is
+  declarative about the *decision*, not about this field, and reads correctly
+  either way. Whether a record in that position should instead be filed
+  `ratified` is the governance question #446 refers to the operator; this
+  record does not pre-empt it, and #483's acceptance criterion asking for
+  `ratified` is relaxed on that basis (see the note on #483).
 - **Date**: 2026-09-23
 - **Decided by**: Builder agent, issue #483 (successor to the measurement in
   PR #484 / issue #482)

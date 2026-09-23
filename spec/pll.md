@@ -632,7 +632,7 @@ figure is 4.25246 fC), and it excludes term-1 current mismatch entirely, on the
 systematic 4.7 % (0.88 fC at the largest trim code and the worst measured reset
 overlap); at the measured 3σ tail the same product is 1.02 – 1.53 fC
 corner-consistent and 2.46 fC stacked, and at the ±20 % term-1 budget DR-018
-ratifies it is 3.73 fC. Carrying those through the same chain:
+derives it is 3.73 fC. Carrying those through the same chain:
 
 | Charge accounting at 200 MHz | Total ΔQ | Derived spur |
 |---|---|---|
