@@ -95,18 +95,38 @@
 # `fs`/`sf` and the two dropped ss/ff x temp/supply combinations are the
 # residual corner-grid gap a future full(er)-grid pass would close.
 #
-# Per-corner sample counts are correspondingly SMALLER than the nominal-only
-# record's (N_DC=200, N_SW=40, N_PFD=40, N_DFF=50 there; N_DC=20, N_SW=2,
-# N_PFD=2, N_DFF=10 PER CORNER here, 3 corners => 60/6/6/30 total samples).
-# The per-corner n for sw/pfd (2) is deliberately too thin on its own to
-# assert a tight per-corner sigma -- this record reports it honestly as such.
-# What it answers, and what n=40-at-one-corner cannot, is whether any corner's
-# dispersion is qualitatively worse than nominal's -- i.e. whether the
-# nominal-only record's dispersion figure is representative of the corner
-# grid or an outlier. The COMBINED n across all 3 corners (pooled) is a
-# fraction of the nominal-only record's own n (accepted here in exchange for
-# the corner dimension the acceptance criterion asks for) and is reported
-# alongside the per-corner breakdown.
+# Per-corner sample counts are still SMALLER than the nominal-only record's
+# (N_DC=200, N_SW=40, N_PFD=40, N_DFF=50 there), but were RAISED from #146's
+# original N_DC=20/N_SW=2/N_PFD=2/N_DFF=10 to N_DC=100/N_SW=16/N_PFD=16/N_DFF=20
+# PER CORNER (issue #482) once direct timing on this build host (`--one-sw`/
+# `--one-pfd` isolated invocations, ~21s/~26s respectively with the
+# `OMP_NUM_THREADS=1` fix already applied) showed the ORIGINAL n=2/corner for
+# sw/pfd was the cheaper of the two remaining item-6 gaps to close, not a
+# wall-clock necessity in its own right: the FULL raised campaign (below)
+# measured well under the ~44x-slower unfixed baseline this file's earlier
+# comment describes. n=2/corner was "deliberately thin" -- thin enough that a
+# term binding the budget verdict at a 2.3% relative margin (term 1, see
+# design/README.md's table) could not be told apart from sampling noise at
+# that n. n=16 (sw/pfd) and n=100 (dc, cheap enough to raise further almost
+# for free) do not reach the nominal-only record's own per-point n, but they
+# are a real, measured improvement, not a re-assertion of the same thin
+# sample at a later date. The COMBINED n across all 3 corners (pooled) is
+# still a fraction of the nominal-only record's own n (accepted here in
+# exchange for the corner dimension the acceptance criterion asks for) and is
+# reported alongside the per-corner breakdown, which is what the binding
+# worst-corner verdict actually uses.
+#
+# THE RAISE CHANGED A VERDICT, which is the reason to record it here rather
+# than only in one record's prose. At n=20/corner term 1 measured 11.7211%
+# against design/README.md's +-12% budget -- a PASS by a 2.3% relative
+# margin. At n=100/corner, same corner grid, same seeds-from-1 convention,
+# same decks, it measures 13.2172% -- a FAIL, by 4.4 standard errors of the
+# mean. The n=20 PASS was inside its own sampling noise and did not survive
+# contact with a sample large enough to resolve it. Nothing in this script
+# widens the budget in response: design/README.md states that the resolution
+# of a budget the statistics do not fit is a decision record, not a quiet
+# relaxation, so the FAIL is emitted as a FAIL and the record names the
+# decision record as the next step. Do not "fix" this by lowering N_DC.
 #
 # Deliberately does NOT attempt a closed-loop reference-spur check: the
 # acceptance criteria (#15) ask for one using #12's lock-time/output-range
@@ -184,21 +204,31 @@ VCTRL_MID=1.65
 # varies wildly under shared-host contention (the SAME isolated `sw`
 # invocation measured 10.7 s, 1m40s, and 57 min at different points during
 # this campaign's own build, with no change other than ambient host load).
-# N_SW/N_PFD are kept small per corner for exactly this reason: the dominant
-# cost of this campaign is per-invocation WALL-CLOCK LATENCY under
-# contention, not sample count (sw/pfd invocations already run at full
-# `simenv_jobs` parallelism, so wall clock per batch is set by the SLOWEST
-# invocation in it, not the sum) -- more samples cannot be "amortized" the
-# way they can on an uncontended host, so this campaign keeps N small and
-# leans on the corner-vs-sample-count tradeoff (per-corner breakdown is
-# necessarily thin; the pooled, all-corner statistic is the tighter
-# combined-distribution estimate) rather than trying to buy tighter
-# per-corner sigma with more samples on a host where that sample count
-# directly costs unpredictable wall clock.
-N_DC="${N_DC:-20}"
-N_SW="${N_SW:-2}"
-N_PFD="${N_PFD:-2}"
-N_DFF="${N_DFF:-10}"
+# The dominant cost of this campaign is per-invocation WALL-CLOCK LATENCY
+# under contention, not sample count: sw/pfd invocations already run at full
+# `simenv_jobs` parallelism (8 on this host), so wall clock per BATCH is set
+# by the slowest invocation in it, not the sum -- which means raising N only
+# multiplies the number of BATCHES (ceil(N / simenv_jobs)), not the raw
+# invocation count's wall-clock cost. #146 originally kept N_SW=N_PFD=2 (one
+# batch, whatever that batch's slowest invocation happened to cost) --
+# "deliberately too thin ... to assert a tight per-corner sigma" by that
+# record's own admission, and specifically what issue #482 flagged as the
+# thinner and cheaper of item 6's two remaining gaps to close. #482 raised
+# N_SW/N_PFD to 16 (two batches instead of one, roughly 2x this campaign's
+# per-corner sw/pfd wall clock, not 8x) and N_DC to 100 (dc is cheap enough,
+# <1s/invocation even under contention, that raising it costs single-digit
+# seconds per corner). N_DFF was raised to 20 for the same cheap-enough
+# reason, tightening the divider-retiming-flop contribution's own worst-case
+# estimate. This still leans on the corner-vs-sample-count tradeoff (the
+# per-corner breakdown is tighter than #146's but still short of the
+# nominal-only record's own per-point n; the pooled, all-corner statistic
+# remains the tighter combined-distribution estimate) -- it does not attempt
+# the full 45-point grid, which the header comment's cost analysis above
+# still rules out.
+N_DC="${N_DC:-100}"
+N_SW="${N_SW:-16}"
+N_PFD="${N_PFD:-16}"
+N_DFF="${N_DFF:-20}"
 
 DC_HEADER="corner,seed,vctrl_v,iup_a,idn_a,mism_pct"
 SW_HEADER="corner,seed,vctrl_v,wskew_s"
@@ -402,6 +432,16 @@ for point in "${CORNER_POINTS[@]}"; do
     "${BASH:-/bin/bash}" -c "\"${HERE}/run.sh\" --one-dff {} \"${WORK}/dff_${ctag}_{}.csv\""
 done
 
+# The aggregate files below are named `<stage>_all.csv`, which MATCHES the
+# `<stage>_*.csv` per-sample glob they are built from. On a from-scratch run
+# that is harmless (the clean-slate wipe above removed them before the glob is
+# expanded), but on a SIM_RESUME=1 re-run after a run that already COMPLETED,
+# the previous aggregate is still on disk and would be concatenated into its
+# own successor -- doubling every row and tripping the row-count assertions
+# below with a count exactly 2x the expected one. Remove them explicitly so
+# the resume path is correct regardless of how the previous run ended
+# (issue #482, which re-minted a record from an already-complete work dir).
+rm -f "${WORK}"/dc_all.csv "${WORK}"/sw_all.csv "${WORK}"/pfd_all.csv "${WORK}"/dff_all.csv
 cat "${WORK}"/dc_*.csv | sort -t, -k1,1 -k2,2n >"${WORK}/dc_all.csv"
 cat "${WORK}"/sw_*.csv | sort -t, -k1,1 -k2,2n >"${WORK}/sw_all.csv"
 cat "${WORK}"/pfd_*.csv | sort -t, -k1,1 -k2,2n >"${WORK}/pfd_all.csv"
@@ -534,6 +574,17 @@ echo "DFF tcq_f, pooled: mean=${DFF_F_MEAN}s sd=${DFF_F_SD}s +-3sigma=${DFF_F_3S
 # --------------------------------------------------------------------------
 PERCORNER_ROWS=""
 WORST_DC_3S=0; WORST_SW_3S=0; WORST_PFDQ_3S=0; WORST_PFDT_3S=0; WORST_DFF_3S=0
+# Term 1's binding worst-corner sample also gets its own standard error
+# tracked alongside it (issue #482) -- the verdict table states a PASS/FAIL
+# against a budget, but a margin narrower than a few standard errors is not
+# distinguishable from sampling noise at the sample size actually used, and
+# the record should say so explicitly rather than let a bare percentage imply
+# more precision than the sample size supports.
+WORST_DC_SD=0; WORST_DC_N=0; WORST_DC_CORNER=""
+# Worst-corner MISMATCH-ONLY dispersion for the divider-retiming flop (3sigma
+# with no |mean| term) -- see the in-loop comment below for why this, and not
+# WORST_DFF_3S, is the flop's actual contribution (issue #482).
+WORST_DFF_SIG3=0; WORST_DFF_SIG3_CORNER=""; WORST_DFF_SIG3_MEAN=0; WORST_DFF_SIG3_N=0
 for point in "${CORNER_POINTS[@]}"; do
   read -r pc pt pv <<<"${point}"
   ctag="${pc}_${pt}c_${pv}v"
@@ -562,9 +613,30 @@ for point in "${CORNER_POINTS[@]}"; do
   c_dfff_3s=$(sig3 "${c_dfff_m}" "${c_dfff_s}")
   c_dff_3s=$(awk -v a="${c_dffr_3s}" -v b="${c_dfff_3s}" 'BEGIN{print (a>b)?a:b}')
 
-  PERCORNER_ROWS="${PERCORNER_ROWS}  | ${ctag} | ${c_dc_3s}% (n=${c_dc_n}) | ${c_sw_3s} s (n=${c_sw_n}) | ${c_pfdq_3s} C | ${c_pfdt_3s} s (n=${c_pfdt_n}) | ${c_dff_3s} s (n=${c_dffr_n}) |
+  # Mismatch-ONLY dispersion for the flop: 3*sigma with NO |mean| term
+  # (issue #482). Terms 1-4's sample mean is itself an ERROR centred near
+  # zero, so `|mean|+3sigma` is the right worst-case magnitude for them. The
+  # flop's tcq mean is NOT an error -- it is the nominal clk->Q PROPAGATION
+  # DELAY, which sim/divider-ratio-dff already sweeps systematically over the
+  # full 45-point grid (`sw_stat_mismatch=0`). Quoting `|mean|+3sigma` for
+  # this quantity therefore reports the systematic delay with a sliver of
+  # mismatch on top -- at this campaign's own worst corner the mean is ~98%
+  # of that figure -- and double-counts a delay already measured elsewhere.
+  # What THIS campaign uniquely measures for the flop is the dispersion the
+  # mismatch draw adds, which is 3*sigma alone.
+  c_dff_sig3=$(awk -v a="${c_dffr_s}" -v b="${c_dfff_s}" 'BEGIN{x=(a>b)?a:b; printf "%.6g", 3*x}')
+  c_dff_mean=$(awk -v a="${c_dffr_m}" -v b="${c_dfff_m}" 'BEGIN{printf "%.6g", (a>b)?a:b}')
+  if awk -v a="${WORST_DFF_SIG3}" -v b="${c_dff_sig3}" 'BEGIN{exit !(b+0>a+0)}'; then
+    WORST_DFF_SIG3="${c_dff_sig3}"; WORST_DFF_SIG3_CORNER="${ctag}"
+    WORST_DFF_SIG3_MEAN="${c_dff_mean}"; WORST_DFF_SIG3_N="${c_dffr_n}"
+  fi
+
+  PERCORNER_ROWS="${PERCORNER_ROWS}  | ${ctag} | ${c_dc_3s}% (n=${c_dc_n}) | ${c_sw_3s} s (n=${c_sw_n}) | ${c_pfdq_3s} C | ${c_pfdt_3s} s (n=${c_pfdt_n}) | ${c_dff_sig3} s (mean ${c_dff_mean} s, n=${c_dffr_n}) |
 "
 
+  if awk -v a="${WORST_DC_3S}" -v b="${c_dc_3s}" 'BEGIN{exit !(b+0>a+0)}'; then
+    WORST_DC_SD="${c_dc_s}"; WORST_DC_N="${c_dc_n}"; WORST_DC_CORNER="${ctag}"
+  fi
   WORST_DC_3S=$(awk -v a="${WORST_DC_3S}" -v b="${c_dc_3s}" 'BEGIN{print (a>b)?a:b}')
   WORST_SW_3S=$(awk -v a="${WORST_SW_3S}" -v b="${c_sw_3s}" 'BEGIN{print (a>b)?a:b}')
   WORST_PFDQ_3S=$(awk -v a="${WORST_PFDQ_3S}" -v b="${c_pfdq_3s}" 'BEGIN{print (a>b)?a:b}')
@@ -572,12 +644,63 @@ for point in "${CORNER_POINTS[@]}"; do
   WORST_DFF_3S=$(awk -v a="${WORST_DFF_3S}" -v b="${c_dff_3s}" 'BEGIN{print (a>b)?a:b}')
 done
 
+# Term 1's standard error of the MEAN at its binding (worst) corner, and the
+# raw budget margin expressed in units of that SE -- issue #482's
+# "re-measure or re-state term 1's margin" ask. This is the standard error
+# of the SAMPLE MEAN (sd/sqrt(n)), a lower bound on the uncertainty in
+# WORST_DC_3S itself (which also carries the 3-sigma multiplier's own
+# estimation error) -- reported as the honest, conservative side of that
+# uncertainty, not a claim of exact precision.
+WORST_DC_SE=$(awk -v s="${WORST_DC_SD}" -v n="${WORST_DC_N}" 'BEGIN{printf "%.6g", (n>0)? s/sqrt(n) : 0}')
+WORST_DC_MARGIN_SE=$(awk -v m="${WORST_DC_3S}" -v se="${WORST_DC_SE}" 'BEGIN{printf "%.4g", (se>0)? (12-m)/se : 0}')
+
 verdict() { awk -v v="$1" -v b="$2" 'BEGIN{print (v<=b)?"PASS":"FAIL"}'; }
 V1=$(verdict "${WORST_DC_3S}" 12)
 V2=$(verdict "${WORST_SW_3S}" 3e-9)
 V2A=$(verdict "${WORST_SW_3S}" 2e-9)
 V3=$(verdict "${WORST_PFDQ_3S}" 20e-15)
 V4=$(verdict "${WORST_PFDT_3S}" 3e-9)
+
+# Combined static phase offset at the PFD input: the charge-pump-side term 4
+# statistic PLUS the divider-retiming flop's mismatch-driven clk->Q dispersion
+# (issue #482's "does the flop need its own budget line" question). Both are
+# phase offsets referred to the same node, so they are additive there, and
+# term 4's +-3 ns envelope is the budget they have to share. Checking the SUM
+# is what gives the flop contribution a verdict without inventing a second
+# budget line for a quantity that is not an up/down mismatch term. Worst
+# corners are taken independently (the two sub-campaigns' worst corners need
+# not coincide), which makes this a conservative bound, not a per-die figure.
+DFF_PLUS_T4=$(awk -v a="${WORST_PFDT_3S}" -v b="${WORST_DFF_SIG3}" 'BEGIN{printf "%.6g", a+b}')
+V4C=$(verdict "${DFF_PLUS_T4}" 3e-9)
+DFF_T4_SHARE=$(awk -v a="${WORST_DFF_SIG3}" -v t="${DFF_PLUS_T4}" 'BEGIN{printf "%.3g", (t>0)? 100*a/t : 0}')
+
+# Term 1 exceedance note. design/README.md is explicit that if this campaign's
+# statistics do not fit inside the stated budget, "the resolution is a decision
+# record, not a quiet widening here" -- so a FAIL is reported as a FAIL, with
+# the margin expressed in standard errors so a reader can tell an exceedance
+# from sampling noise, and the required next step named. Emitted conditionally
+# so a passing run's record is not cluttered with a hypothetical.
+if [ "${V1}" = "FAIL" ]; then
+  TERM1_NOTE="
+  **Term 1 EXCEEDS its stated budget at the binding corner, and this record
+  does not widen the budget to absorb it.** At \`N_DC=${N_DC}\`/corner the
+  worst-corner \`|mean|+3sigma\` is ${WORST_DC_3S}% against design/README.md's
+  stated +-12%, i.e. the budget line sits $(awk -v x="${WORST_DC_MARGIN_SE}" 'BEGIN{printf "%.4g", (x<0?-x:x)}') standard errors of the mean BELOW the
+  measured statistic (sd ${WORST_DC_SD}%, n=${WORST_DC_N}, SE ${WORST_DC_SE}%)
+  -- an exceedance, not a coin-flip. The prior corner-combined record
+  (\`20260817-135712-0e9cfc9\`, n=20/corner) reported the same term at
+  11.7211%, a PASS by 2.3% relative margin; that margin was smaller than the
+  sampling uncertainty behind it, and raising n resolved it in the failing
+  direction. design/README.md's own rule for this case is explicit -- \"If
+  #15's statistics or #10's spur analysis show these values do not buy the
+  spur/jitter performance the ratified spec asks for, the resolution is a
+  decision record superseding this budget -- not a quiet relaxation here\" --
+  so the budget column is left exactly as it stands and the resolution is
+  deferred to that decision record.
+"
+else
+  TERM1_NOTE=""
+fi
 
 RECORD="${RECORDSDIR}/${RID}.md"
 cat >"${RECORD}" <<EOF
@@ -595,7 +718,20 @@ cat >"${RECORD}" <<EOF
   "Statistical claims / Monte Carlo evidence") the nominal-only record
   \`20260731-212614-640560e\` left open -- that record stands unmodified as
   historical evidence (append-only); this one adds the corner dimension on
-  top of the same claim, it does not supersede or invalidate it.
+  top of the same claim, it does not supersede or invalidate it. This
+  specific record raises the corner-combined campaign's per-corner sample
+  counts (issue #482) over \`sim/mc-cp-mismatch/records/20260817-135712-0e9cfc9.md\`'s
+  original n=2/corner (sw, pfd) and n=20/corner (dc) -- see the Methodology
+  field's "Term 1's margin, re-measured at raised n" and "Per-corner sample
+  sizes" bullets for what changed and why n=2/corner was the thinner, cheaper
+  gap to close of the two item-6 sub-criteria issue #482 identified. It
+  SUPERSEDES that record for this claim (see Supersedes field) -- the prior
+  record's bytes remain committed, unedited, as historical evidence.
+  **The answer to the claim changed as a result**: at the raised sample
+  count term 1 does NOT fit inside its stated budget (${WORST_DC_3S}% against
+  +-12%, verdict **${V1}**), where the superseded record's thinner sample
+  reported a PASS at 11.7211%. Terms 2/2a, 3 and 4 still fit. Read the
+  Result field before citing the superseded record's term-1 verdict anywhere.
 - **Model-capability gate**: unchanged from the nominal-only record -- see
   \`sim/mc-cp-mismatch/records/20260731-212614-640560e.md\`'s "Model-capability
   gate" and "What did NOT work" notes for the full \`agauss()\`/parse-time-seed
@@ -673,6 +809,23 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     one \`.option rndseed\` per sample. Reported statistic is the WORST-magnitude
     mismatch across the 3 Vctrl points per (corner, seed) sample, matching
     \`cp-compliance\`'s own "worst point in window" convention for term 1.
+  - **Term 1's margin, re-measured at raised n (issue #482)**: the prior
+    record (n=20/corner) passed term 1 at 11.7211% against the +-12% budget
+    at its binding corner (\`ff\`/-40C/3.63V) -- a 2.3% relative margin, the
+    thinnest of the four budget terms, and one this record's own text called
+    out as too close to call from n=20 alone. At \`N_DC=${N_DC}\`/corner, the
+    binding corner is \`${WORST_DC_CORNER}\`, with sample standard deviation
+    ${WORST_DC_SD}% (n=${WORST_DC_N}) -> standard error of the mean
+    ${WORST_DC_SE}%. The signed budget headroom (12% minus the
+    \`|mean|+3sigma\` figure below) is ${WORST_DC_MARGIN_SE} standard errors
+    of the mean at this sample size -- a NEGATIVE value means the measured
+    statistic has crossed the budget, by that many standard errors, rather
+    than sitting inside it. This is the sample MEAN's standard
+    error, a lower bound on the full statistic's uncertainty (the
+    \`|mean|+3sigma\` figure also carries the 3-sigma multiplier's own
+    estimation error on top) -- reported so the verdict's margin can be
+    weighed against sampling noise explicitly rather than read as an exact
+    percentage.
   - **sw** (terms 2/2a): transient switching bench at Vctrl = 1.65 V ONLY
     (mid-window, same scope decision as the nominal-only record -- see that
     record's Methodology field for the post-#24 flatness finding this
@@ -688,18 +841,34 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
   - **dff** (divider-retiming flop): single clean 0->1 / 1->0 capture per
     invocation, \`N_DFF=${N_DFF}\` invocations PER CORNER x 2 directions
     (\`$(( N_DFF * NUM_CORNERS * 2 ))\` total samples). Same one-for-one
-    phase-offset conversion as the nominal-only record.
-  - **Per-corner sample sizes are deliberately thin (n=${N_SW}/corner for
-    sw, n=${N_PFD}/corner for pfd) compared to the nominal-only record's
-    n=40.** This is the corner-vs-sample-count tradeoff the header comment
-    documents: the per-corner breakdown table below answers "is any corner's
-    dispersion qualitatively worse than nominal's", not "what is corner X's
-    sigma to two significant figures" -- the pooled (all-corners) statistic
-    reported above the table, at n comparable to the nominal-only record's
-    own, is the tighter combined-distribution estimate. A future pass wanting
-    tighter PER-corner sigmas would need to either shrink the corner set
-    further or accept a larger total wall clock; this record does not attempt
-    that tradeoff.
+    phase-offset conversion as the nominal-only record. **The reported
+    statistic changed in this record (issue #482)**: the flop's contribution is
+    now quoted as \`3sigma\` (mismatch dispersion ONLY, no \`|mean|\` term),
+    with the mean clk->Q delay reported beside it rather than folded into it.
+    The earlier \`|mean|+3sigma\` form is the correct worst-case magnitude for
+    terms 1-4, whose means are errors centred near zero, but for a
+    propagation delay it reports mostly the delay itself -- a quantity
+    \`sim/divider-ratio-dff\` already sweeps over the full 45-point grid and
+    checks against the divider chain's retiming margin. See the Result field
+    for the numbers and the resulting budget-line decision. The pooled
+    all-corner \`sigma\` for this sub-campaign is deliberately NOT used as the
+    flop's dispersion figure for the same reason: pooling across corners mixes
+    the systematic corner-to-corner delay spread (165 ps to 371 ps across this
+    3-point subset) into what is supposed to be a within-corner mismatch
+    sigma, inflating it by roughly an order of magnitude.
+  - **Per-corner sample sizes were raised (issue #482) but are still short of
+    the nominal-only record's n=40** (n=${N_SW}/corner for sw, n=${N_PFD}/corner
+    for pfd, up from #146's original n=2/corner for both -- see this file's
+    header comment for the timing measurement that motivated the raise and
+    the reasoning for not going further). The per-corner breakdown table
+    below answers "is any corner's dispersion qualitatively worse than
+    nominal's" with a tighter sample than #146's original record could, but
+    still not "what is corner X's sigma to two significant figures" -- the
+    pooled (all-corners) statistic reported above the table, now at a larger
+    n than #146's original pooled figure, is the tighter combined-distribution
+    estimate. A future pass wanting tighter PER-corner sigmas still would need
+    to either shrink the corner set further or accept a larger total wall
+    clock; this record does not attempt that tradeoff.
   - **Negative-control re-check at a non-nominal corner**: run manually (not
     part of \`run.sh\`, to avoid adding wall clock to every future run) at
     \`ff_-40c_3.63v\`: two \`tb_mc_cp_dc.sp\` invocations with the SAME
@@ -740,16 +909,44 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
   | 2a | Switching-time skew, mid-window (Vctrl=1.65 V) | ${WORST_SW_3S} s | +-2 ns | **${V2A}** |
   | 3 | Residual net charge at zero phase error | ${WORST_PFDQ_3S} C | +-20 fC | **${V3}** |
   | 4 | Static phase offset, q_zero / Kd | ${WORST_PFDT_3S} s | +-3 ns | **${V4}** |
+${TERM1_NOTE}
+  **Divider-retiming flop clk->Q mismatch, worst corner -- now checked against
+  something (issue #482).** The flop's mismatch-driven clk->Q DISPERSION is
+  \`3sigma\` = ${WORST_DFF_SIG3} s at \`${WORST_DFF_SIG3_CORNER}\`
+  (n=${WORST_DFF_SIG3_N}), on a mean clk->Q delay of ${WORST_DFF_SIG3_MEAN} s at
+  that corner. Added to term 4 at the PFD input -- the same node, so the two
+  are additive there -- the combined worst-case static phase offset is
+  ${DFF_PLUS_T4} s against term 4's stated +-3 ns envelope: **${V4C}**. The
+  flop contributes ${DFF_T4_SHARE}% of that sum.
 
-  **Divider-retiming flop clk->Q mismatch, worst corner** (not a budget-table
-  term; see Methodology): \`|mean|+3sigma\` = ${WORST_DFF_3S} s -- a direct
-  (one-for-one) phase-offset contribution, additive to term 4 at the PFD
-  input; not checked against a budget line (design/README.md's table does not
-  carry one for this contribution).
+  **This is why the flop does NOT get its own budget-table line**, which is
+  the question issue #482 asked. Two reasons, both measured rather than
+  asserted:
+
+  1. It is not an up/down mismatch term and not a charge-pump/PFD block term.
+     design/README.md's table already applies exactly this exclusion to the
+     bias generator ("it is a separate block ... the budget must be re-derived
+     rather than silently absorbed").
+  2. The number that made it look budget-sized was the wrong statistic. Prior
+     records quoted the flop's \`|mean|+3sigma\` (${WORST_DFF_3S} s at its
+     worst corner) alongside terms 1-4's, but those terms' means are ERRORS
+     centred near zero while the flop's mean is a nominal PROPAGATION DELAY.
+     At this campaign's worst corner the mean is
+     $(awk -v m="${WORST_DFF_SIG3_MEAN}" -v t="${WORST_DFF_3S}" 'BEGIN{printf "%.3g", (t>0)? 100*m/t : 0}')% of that figure -- i.e. it was reporting a
+     systematic delay, not a mismatch contribution, and that systematic delay
+     is already swept over the full 45-point grid by
+     \`sim/divider-ratio-dff\` (record \`20260801-125114-3f883e3\`, worst-case
+     \`tcq_r\` 3.70952e-10 s at \`ss\`/125C/2.97V -- which this campaign's own
+     worst-corner mean reproduces) and already checked there, against the
+     divider chain's retiming setup/hold margin. A budget line here would
+     double-count it.
+
+  What was genuinely unchecked was the DISPERSION, and the combined-offset
+  check above is now its verdict.
 
 - **Result -- per-corner breakdown**:
 
-  | Corner | Term 1 \|mean\|+3sigma | Term 2/2a \|mean\|+3sigma | Term 3 \|mean\|+3sigma | Term 4 \|mean\|+3sigma | DFF worst-dir \|mean\|+3sigma |
+  | Corner | Term 1 \|mean\|+3sigma | Term 2/2a \|mean\|+3sigma | Term 3 \|mean\|+3sigma | Term 4 \|mean\|+3sigma | DFF clk->Q mismatch 3sigma (and mean delay) |
   |---|---|---|---|---|---|
 ${PERCORNER_ROWS}
 - **Result -- pooled (all ${NUM_CORNERS} corners combined; a fraction of the
@@ -785,7 +982,7 @@ ${PERCORNER_ROWS}
     \`sim/mc-cp-mismatch/records/20260731-212614-640560e.md\`
   - Reduced-corner-grid precedent: \`sim/lock-detector/testbench/run.sh\`
     (\`WINDOW_CORNERS\`)
-- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (issue #146)
+- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (issue #482)
 $(simenv_supersedes_field "${SIM_SUPERSEDES:-}")
 EOF
 
