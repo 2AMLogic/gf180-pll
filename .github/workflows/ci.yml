@@ -85,7 +85,12 @@ jobs:
         # (issue #117: it drifted silently to a stale "16 records / 9
         # campaigns" while the tree grew to 52/18). Pure file-count vs.
         # grep, no PDK dependency -- fails the build the next time it drifts
-        # instead of misleading a reader.
+        # instead of misleading a reader. Every occurrence of each count in
+        # README.md is graded as of #237, not only the first: the
+        # period-jitter coverage rule in the same script already worked that
+        # way, but these two used `head -1`, so a contradicting sibling count
+        # further down the file would have passed -- the same gap #495 closed
+        # on the layout side.
         run: bash sim/lib/check-readme-status.sh
 
       - name: layout/lib/check-layout-status-claims.sh (README + proposal vs. layout/ tree and spec/pll.md)
@@ -145,7 +150,16 @@ jobs:
         # headline result from every sim/*/records/ campaign directory.
         # Fails the build if a new campaign directory lands without a
         # matching entry in the report, instead of the aggregation silently
-        # going stale. Pure file-count vs. grep, no PDK dependency.
+        # going stale. Second pass (#237) grades the report's own count of
+        # what it aggregates, not just whether each row is present: the
+        # bullet stating "N campaign directories, M evidence records" spent
+        # six weeks describing a tree 19 records and 3 campaigns smaller,
+        # and asserting that README's already-graded line agreed with it --
+        # a claim the row-coverage rule cannot see. Every occurrence of the
+        # count is graded, wherever it sits, and one must be present;
+        # a figure explicitly marked as the report's original writing is
+        # exempt. Needs python3 (set up above) for the count rule; still
+        # reads only committed files, no PDK dependency.
         run: bash sim/lib/check-characterization-coverage.sh
 
   design-changed:

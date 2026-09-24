@@ -4,9 +4,10 @@
 migration status; `spec/pll.md`'s summary table states each parameter's
 *target* and its overall status (measured / derived / budget / waived). Until
 now, nothing pulled every campaign's *headline result* into one place with a
-citation a reader can check without opening 19 directories. This report is
-that aggregation: one row per `sim/*/records/` campaign directory, each
-citing its own current evidence record(s) by path and content hash.
+citation a reader can check without opening every campaign directory in turn.
+This report is that aggregation: one row per `sim/*/records/` campaign
+directory, each citing its own current evidence record(s) by path and content
+hash.
 
 This report does not create new evidence, re-derive any number, or relax
 `spec/pll.md`. It transcribes what is already committed under `sim/` and
@@ -25,13 +26,25 @@ finding that no such aggregated artifact existed as of this repository's
 - **Coverage.** One entry below for every directory under `sim/` that
   contains a `records/` subdirectory. At this report's original writing that
   was **20 campaign directories, 61 evidence records**; the tree has grown
-  since, and the current count is **21 campaign directories, 72 evidence
-  records** (`find sim -maxdepth 1 -type d` / `find sim -path
-  '*/records/*.md' -type f | wc -l`), matching `README.md`'s own "72 evidence
-  records across 21 verification campaigns" line (README.md:23) at the same
-  commit. `sim/lib/check-readme-status.sh` enforces that README line against
-  the tree on every CI run; this bullet is hand-maintained and should be
-  re-derived, not trusted, if the two ever disagree.
+  since, and the current count is **24 campaign directories, 91 evidence
+  records**. Both figures are derived, not remembered: the records are
+  `find sim -path '*/records/*.md' -type f | wc -l`, and the campaigns are the
+  distinct `sim/<name>/` prefixes of those same paths — the enumeration
+  `sim/lib/record-campaigns.sh` exports and both sim-side CI checks share.
+  (An earlier revision of this bullet offered `find sim -maxdepth 1 -type d`
+  for the campaign count; that counts every directory under `sim/`, including
+  `harness/`, `lib/`, `tests/` and any campaign whose `records/` is still
+  empty, so it never produced the number stated next to it.) `README.md`'s
+  status section states the same pair as **91 evidence records across 24
+  verification campaigns**; `sim/lib/check-readme-status.sh` grades that line
+  against the tree on every CI run, and since #237's aggregate-count rule
+  `sim/lib/check-characterization-coverage.sh` grades *this* bullet the same
+  way. It needed to: for six weeks this bullet carried the counts of a much
+  smaller tree — 19 records and 3 campaigns behind — *and* asserted that the
+  graded README line agreed with those figures, which it had not for as long.
+  Quoting a checked document is not the same as being checked, so a count
+  stated here is now a build failure when it drifts rather than a sentence
+  someone is expected to re-read.
 - **"Latest record."** Record IDs are `<YYYYMMDD>-<HHMMSS>-<sha>`
   (`sim/README.md`'s naming convention), so a lexicographic sort of
   `records/*.md` gives chronological order for free. Unless noted otherwise
