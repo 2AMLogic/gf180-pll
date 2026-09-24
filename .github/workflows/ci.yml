@@ -88,7 +88,7 @@ jobs:
         # instead of misleading a reader.
         run: bash sim/lib/check-readme-status.sh
 
-      - name: layout/lib/check-layout-status-claims.sh (README + proposal vs. layout/ tree)
+      - name: layout/lib/check-layout-status-claims.sh (README + proposal vs. layout/ tree and spec/pll.md)
         # The layout-side counterpart of the sim-side check above (issue
         # #237). README.md and docs/chipalooza/challenge-5-proposal.md both
         # stated that no PLL block had been drawn for about five weeks after
@@ -96,6 +96,11 @@ jobs:
         # output -- and the proposal is a document written to be emailed
         # verbatim to an outside reader. Pure file-existence plus a grep of
         # the recorded deck verdicts; no PDK, no KLayout, no layout input.
+        # Also grades every absence-of-layout sentence in both documents for
+        # a stated scope, and their claims about spec/pll.md's ratification
+        # state against the spec's own Status line -- both of which went
+        # stale in the same document after the first pass of this check
+        # shipped. Needs python3 (set up above) for the prose rule.
         run: bash layout/lib/check-layout-status-claims.sh
 
       - name: Install klt (klayout-tools) for the signoff tier check
