@@ -105,8 +105,13 @@ jobs:
         # layout/evidence/area-audit/area-audit.md, and the proposal must
         # state one for every block the audit records -- section 6's table
         # had drifted two geometry changes behind section 5 of the same
-        # document. Needs python3 (set up above) for the prose and footprint
-        # rules; still reads only committed files, no PDK, no KLayout.
+        # document. Fourth pass grades every occurrence of a "N of the 4
+        # ..." drawn/LVS-matched count, not just whether the correct one
+        # appears once -- the commit that fixed section 6's count left a
+        # contradicting stale count in section 3 of the same document, and
+        # the presence-only check reported OK on that tree. Needs python3
+        # (set up above) for the prose and footprint rules; still reads
+        # only committed files, no PDK, no KLayout.
         run: bash layout/lib/check-layout-status-claims.sh
 
       - name: Install klt (klayout-tools) for the signoff tier check
