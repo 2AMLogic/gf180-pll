@@ -45,8 +45,10 @@ cd "$REPO_ROOT"
 
 if ! command -v klt >/dev/null 2>&1; then
   echo "error: klt not found on PATH -- install it with:" >&2
-  echo "         pip install 'klayout-tools==0.5.0'" >&2
+  echo "         pip install 'klayout-tools==0.6.0'" >&2
   echo "       (https://github.com/2AMLogic/klayout-tools)" >&2
+  echo "       (see .github/workflows/ci.yml's 'Install klt' step for the" >&2
+  echo "       version CI actually pins, if this has drifted)" >&2
   exit 2
 fi
 

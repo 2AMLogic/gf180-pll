@@ -4,8 +4,19 @@
   "kind": "mixed-signal",
   "tier": null,
   "t1_item_count": 22,
+  "build_t1_item_count": 22,
   "t1_met_count": 0,
   "source_doc": "signoff/design-evidence-tiers.md",
+  "source_doc_content_hash": "sha256:275964ed6cdc3ed57566710540daa76beb26c1b67fb4b3dbf598d05b640a7ce0",
+  "build": {
+    "version": "0.6.0+gef984d3414d4",
+    "package_version": "0.6.0",
+    "git_commit": "ef984d3414d4b74aba8cf8fe5ef56f5e78884cf1",
+    "git_tag": null,
+    "dirty": false,
+    "is_release": false,
+    "grading_ruleset_id": "sha256:9b7a35673726d7b3df3151b2dbfb3eaa88077028cea1e56e1cdf50ecfac8202d"
+  },
   "items": [
     {
       "tier": "T1",
@@ -16,6 +27,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -27,6 +39,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -38,6 +51,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -49,6 +63,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -60,6 +75,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -71,6 +87,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -82,6 +99,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -93,6 +111,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -106,6 +125,7 @@
       ],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -119,6 +139,7 @@
       ],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -130,6 +151,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -141,6 +163,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -154,6 +177,7 @@
       ],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -167,6 +191,7 @@
       ],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -178,6 +203,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -189,6 +215,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -200,6 +227,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -211,6 +239,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -222,6 +251,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -233,6 +263,7 @@
       "notes": [],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -246,6 +277,7 @@
       ],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {
@@ -259,6 +291,7 @@
       ],
       "status": "unmet",
       "reason": "no_evidence",
+      "graded_by_build": true,
       "citation": null
     },
     {

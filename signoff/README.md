@@ -24,7 +24,7 @@ the evidence does rather than after.
 ## Reproducing
 
 ```sh
-pip install 'klayout-tools==0.5.0'
+pip install 'klayout-tools==0.6.0'
 bash signoff/run-signoff.sh --check    # verify the committed report
 bash signoff/run-signoff.sh            # re-render it after changing the manifest
 ```
@@ -35,6 +35,19 @@ the manifest pinned its `content_hash` re-renders as `unmet` /
 `stale_evidence`, the committed report no longer matches, and the build fails
 instead of a stale green row surviving. Both halves of that are demonstrated
 under "Negative controls" below.
+
+**A local `--check` run is only meaningful against the klt version CI
+currently pins.** `klt signoff --format json` output is not guaranteed
+byte-stable across releases -- 0.6.0 added new provenance fields (`build`,
+`build_t1_item_count`, `source_doc_content_hash`, and a per-item
+`graded_by_build`) that 0.5.0 did not emit, so running `--check` on a
+different local klt version than the one CI pins can report the committed
+report "stale" even when no T1 verdict actually changed. The version CI
+pins is always `.github/workflows/ci.yml`'s "Install klt (klayout-tools) for
+the signoff tier check" step (`pip install 'klayout-tools==…'`) -- treat that
+line, not this README, as the source of truth if the two ever drift, and
+match your local `klt --version` against it before trusting a `--check`
+failure as real.
 
 ## Block kind: `mixed-signal`, and the partition boundary
 
