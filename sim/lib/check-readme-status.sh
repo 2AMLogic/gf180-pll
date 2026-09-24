@@ -9,6 +9,11 @@
 # README to grow with it, and it silently underreported the repository for
 # months. This check makes that drift a CI failure instead of a stale claim.
 #
+# Every occurrence of each claim in README.md is graded, not only the first;
+# the sibling copy of the same two counts in sim/CHARACTERIZATION.md is graded
+# by sim/lib/check-characterization-coverage.sh's aggregate-count rule, which
+# is where that document's other tree-derived claim already lives (#237).
+#
 # It also guards period-jitter's PVT-corner coverage claim (issue #237).
 # That campaign's coverage grew from 5 corners to the full mandated 45 over
 # six records in a single day, and the README kept claiming 5 (in one
@@ -36,28 +41,46 @@ campaigns_actual=$(sim_record_campaigns "${REPO_ROOT}" | wc -l | tr -d ' ')
 # Claimed counts, scraped from README.md's status section, e.g.:
 #   "**52 evidence records** across 18\nverification campaigns"
 # Prose may wrap across lines, so collapse whitespace before matching.
+#
+# EVERY occurrence of each claim is graded, not just the first. The
+# period-jitter rule below already worked that way, because the drift it was
+# written for was two different stale numbers in two paragraphs of this same
+# file -- but these two claims were checked with `head -1`, so a second,
+# contradicting count further down README.md would have passed silently. That
+# is the identical gap the layout-side count rule closed in #495 (a commit
+# fixed one count and left a stale sibling four sections later, and a
+# presence-only check reported OK on that tree); it is closed here before it
+# is needed rather than after.
 readme_flat=$(tr '\n' ' ' < "${README}" | tr -s ' ')
-records_claimed=$(echo "${readme_flat}" | grep -oE '[0-9]+ evidence records' | head -1 | grep -oE '[0-9]+')
-campaigns_claimed=$(echo "${readme_flat}" | grep -oE '[0-9]+ verification campaigns' | head -1 | grep -oE '[0-9]+')
+mapfile -t records_claims < <(echo "${readme_flat}" | grep -oE '[0-9]+ evidence records' | grep -oE '^[0-9]+')
+mapfile -t campaigns_claims < <(echo "${readme_flat}" | grep -oE '[0-9]+ verification campaigns' | grep -oE '^[0-9]+')
 
 status=0
 
-if [ -z "${records_claimed:-}" ]; then
+if [ "${#records_claims[@]}" -eq 0 ]; then
   echo "FAIL: could not find '<N> evidence records' in README.md" >&2
   status=1
-elif [ "${records_claimed}" != "${records_actual}" ]; then
-  echo "FAIL: README.md claims ${records_claimed} evidence records," \
-    "but sim/*/records/*.md has ${records_actual}" >&2
-  status=1
+else
+  for claimed in "${records_claims[@]}"; do
+    if [ "${claimed}" != "${records_actual}" ]; then
+      echo "FAIL: README.md claims ${claimed} evidence records," \
+        "but sim/*/records/*.md has ${records_actual}" >&2
+      status=1
+    fi
+  done
 fi
 
-if [ -z "${campaigns_claimed:-}" ]; then
+if [ "${#campaigns_claims[@]}" -eq 0 ]; then
   echo "FAIL: could not find '<N> verification campaigns' in README.md" >&2
   status=1
-elif [ "${campaigns_claimed}" != "${campaigns_actual}" ]; then
-  echo "FAIL: README.md claims ${campaigns_claimed} verification campaigns," \
-    "but sim/*/records/*.md spans ${campaigns_actual} campaign directories" >&2
-  status=1
+else
+  for claimed in "${campaigns_claims[@]}"; do
+    if [ "${claimed}" != "${campaigns_actual}" ]; then
+      echo "FAIL: README.md claims ${claimed} verification campaigns," \
+        "but sim/*/records/*.md spans ${campaigns_actual} campaign directories" >&2
+      status=1
+    fi
+  done
 fi
 
 # period-jitter PVT-corner coverage. Each corner run leaves exactly one
