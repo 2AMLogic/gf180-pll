@@ -162,6 +162,28 @@ jobs:
         # reads only committed files, no PDK dependency.
         run: bash sim/lib/check-characterization-coverage.sh
 
+      - name: sim/lib/check-record-supersession.sh (cited evidence vs. the sim/ supersession graph)
+        # The three checks above all grade what a document *says*. None of
+        # them grades whether the evidence it *cites* is still the current
+        # evidence (issue #237). sim/README.md deliberately gives a
+        # superseded record no back-reference -- "Standing is found by
+        # reading forward from the superseded record" -- and nothing ran
+        # that forward scan, so docs/chipalooza/challenge-5-proposal.md, the
+        # document written to be sent verbatim to an outside reader,
+        # described the period-jitter campaign's one FAIL as a live open
+        # defect for 18 days after issue #273 closed and a successor record
+        # recorded both affected points as PASS. Three more of its citations
+        # pointed at pre-sim/harness records whose migrated successors it
+        # never named. Two rules: every cited record id must exist on the
+        # tree, and a cited record some later record supersedes must have a
+        # successor named somewhere in the same document (which, because
+        # naming one is itself a citation, means following a chain to a
+        # current record). spec/pll.md is deliberately not graded -- DR-007
+        # Amendment A4 already governs its one stale citation with a
+        # reasoned, ratified carve-out; see the script header. Needs python3
+        # (set up above); reads only committed Markdown, no PDK.
+        run: bash sim/lib/check-record-supersession.sh
+
   design-changed:
     name: design-changed (path filter for pdk-checks)
     runs-on: ubuntu-latest
