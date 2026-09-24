@@ -72,6 +72,18 @@
 # state a current footprint for every block the audit records, so a stale
 # number cannot be "fixed" by deleting the column.
 #
+# A fourth guard, the COUNT RULE, covers a drift the drawn_claim/lvs_claim
+# substring checks below cannot see: they only require the *correct* "N of
+# the 4 ..." sentence to appear somewhere in the document, so a *second*,
+# contradicting count elsewhere passes silently. That is exactly what
+# happened: the same commit (#445) that correctly wrote "4 of the 4 are
+# LVS-matched" in the proposal's maturity note and section 6 left section 3
+# still saying "2 of the 4 are LVS-matched" a few paragraphs later, true
+# only before #452/#466 landed the last two LVS matches. The count rule
+# grades every occurrence of the claim, not just its presence once: any "N
+# of the 4 [PLL] sub-blocks" or "N of the 4 [are] LVS-matched" phrase whose
+# N disagrees with the tree fails, wherever in the document it sits.
+#
 # Usage: layout/lib/check-layout-status-claims.sh
 # Exit codes: 0 all claims match the tree, 1 any mismatch.
 
@@ -452,6 +464,48 @@ sys.exit(1 if failed else 0)
 PY
 }
 
+# The count rule (see the header). Grades *every* occurrence of a "N of the
+# 4 ..." claim in a document, not just whether the correct one is present
+# somewhere -- the gap that let a stale duplicate survive in the very commit
+# that fixed the sentence next to it.
+count_rule() {
+  local doc_path="$1" doc_label="$2" drawn="$3" lvs_matched="$4"
+  python3 - "${doc_path}" "${doc_label}" "${drawn}" "${lvs_matched}" <<'PY'
+import re
+import sys
+
+doc_path, label, drawn, lvs_matched = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+
+with open(doc_path, encoding="utf-8") as fh:
+    flat = re.sub(r"\s+", " ", fh.read())
+low = flat.lower()
+
+failed = False
+
+
+def check(pattern, expected, what):
+    global failed
+    for m in re.finditer(pattern, low):
+        stated = int(m.group(1))
+        if stated == expected:
+            continue
+        failed = True
+        quoted = flat[max(0, m.start() - 40):m.end() + 40].strip()
+        sys.stderr.write(
+            'FAIL: %s states "%s of the 4 %s", but layout/evidence/ records '
+            '%s of the 4: "...%s..."\n' % (label, stated, what, expected, quoted)
+        )
+
+
+# "N of the 4 [PLL] sub-blocks" -- the drawn+DRC-clean count.
+check(r"([0-9]+)\s+of the 4\s+(?:pll\s+)?sub-blocks", drawn, "sub-blocks drawn and DRC-clean")
+# "N of the 4 [are] LVS-matched" -- the LVS-matched count.
+check(r"([0-9]+)\s+of the 4\s+(?:are\s+)?lvs-matched", lvs_matched, "LVS-matched")
+
+sys.exit(1 if failed else 0)
+PY
+}
+
 for doc in "${DOCS[@]}"; do
   path="${REPO_ROOT}/${doc}"
   if [ ! -f "${path}" ]; then
@@ -496,6 +550,7 @@ for doc in "${DOCS[@]}"; do
         scope_tokens=""
       fi
       scope_rule "${path}" "${doc}" "${scope_tokens}" || status=1
+      count_rule "${path}" "${doc}" "${drawn}" "${lvs_matched}" || status=1
 
       if [ -f "${AUDIT}" ]; then
         require_all=no

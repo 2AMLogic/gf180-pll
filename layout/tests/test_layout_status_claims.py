@@ -383,6 +383,82 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         result = self.tree.run()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    # --- The count rule (issue #237, third pass) ---------------------------
+    #
+    # drawn_claim/lvs_claim above only require the *correct* "N of the 4
+    # ..." sentence to appear somewhere in the document -- so a second,
+    # contradicting count elsewhere is invisible to them. That is exactly
+    # what happened in the real proposal: the commit (#445) that correctly
+    # wrote "4 of the 4 are LVS-matched" in the maturity note and section 6
+    # left section 3 saying "2 of the 4 are LVS-matched" a few paragraphs
+    # later -- true only before #452/#466 landed the last two LVS matches --
+    # and this check reported OK on that tree.
+
+    def test_a_second_stale_lvs_count_elsewhere_in_the_document_is_caught(self):
+        # The regression this pass was written for, reproduced with the
+        # real shape of the bug: the correct claim once, a contradicting
+        # duplicate later, all four blocks actually LVS-matched.
+        self._all_four(lvs_for=[d for d, _ in BLOCKS])
+        self.tree.write_docs(
+            _doc_text(4, 4)
+            + PAD
+            + "Most of the circuitry also exists as drawn geometry: 4 of\n"
+            "the 4 PLL sub-blocks have a committed, DRC-clean GDS, and 2 of\n"
+            "the 4 are LVS-matched. No GDS exists for the assembled top\n"
+            "level.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            'states "2 of the 4 LVS-matched", but layout/evidence/ records '
+            "4 of the 4",
+            result.stderr,
+        )
+
+    def test_a_second_stale_drawn_count_elsewhere_in_the_document_is_caught(self):
+        # Same shape, the other claim: a stale "N of the 4 sub-blocks"
+        # duplicate that disagrees with the tree.
+        self._all_four()
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + PAD
+            + "As of the last update, 3 of the 4 sub-blocks were drawn.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            'states "3 of the 4 sub-blocks drawn and DRC-clean", but '
+            "layout/evidence/ records 4 of the 4",
+            result.stderr,
+        )
+
+    def test_every_repeated_correct_count_passes(self):
+        # The real documents state each count several times over (a
+        # maturity note, section 3, section 6, section 7, README's own
+        # summary paragraph) -- every correct repetition must keep passing,
+        # not just the first.
+        self._all_four()
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + PAD
+            + "Restated: 4 of the 4 PLL sub-blocks are drawn, and 2 of the\n"
+            "4 are LVS-matched, consistent with the summary above.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_an_unrelated_of_the_denominator_is_not_graded_as_a_count(self):
+        # "34 of the 45 points" must not be mistaken for a "45" claim about
+        # the 4 sub-blocks -- the denominator must literally be "4".
+        self._all_four()
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + PAD
+            + "band 6 at 34 of the 45 points, band 7 at the other 11.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     # --- The spec ratification guard --------------------------------------
 
     def test_a_blanket_unratified_claim_is_caught_once_the_spec_ratifies(self):

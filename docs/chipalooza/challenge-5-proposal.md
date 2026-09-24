@@ -178,7 +178,7 @@ nominal corner, to acquire and hold lock from a real frequency error
 Most of the circuitry described above also exists as drawn geometry: **4 of
 the 4 PLL sub-blocks** the layout effort partitions this design into — VCO,
 PFD + charge pump, divider chain, lock detector — have a committed,
-standalone-DRC-clean transistor-level GDS, and **2 of the 4 are
+standalone-DRC-clean transistor-level GDS, and **4 of the 4 are
 LVS-matched**. No GDS exists for the assembled top level, nor for the
 passive loop filter (whose area in §5 is computed from the sized devices
 rather than measured off geometry); §6 gives the per-block table, the
