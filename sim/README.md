@@ -579,7 +579,14 @@ is in turn adapted from bandgap's), so the two conventions read as one:
 - The superseding record carries **Supersedes: `<record-id>`**; the superseded
   record is **not edited** to add a back-reference — that would be a rewrite.
   Standing is therefore found by reading *forward* from the superseded record:
-  scan for the record that names it.
+  scan for the record that names it. **`sim/lib/check-record-supersession.sh`
+  runs that scan in CI** for the three reader-facing status documents
+  (`README.md`, `sim/CHARACTERIZATION.md`,
+  `docs/chipalooza/challenge-5-proposal.md`): none of them may cite a record
+  that has been superseded without naming a successor, and none may cite a
+  record id that is not on the tree. It grades the citation graph, not the
+  prose around a citation — see that script's header for what it deliberately
+  does not do, and for why `spec/pll.md` is not in the list.
 - **[PLL delta] — one deliberate divergence from the decision-record
   convention.** `spec/decision-records/TEMPLATE.md` supersedes a decision
   record by editing the **old** record's `Status` to `superseded by DR-NNN`, a
