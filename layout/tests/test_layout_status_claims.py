@@ -36,6 +36,17 @@ BLOCKS = [
     ("lock-detector-layout", "lock_detector.gds"),
 ]
 
+# The block geometry the footprint rule grades against, as it stands in the
+# real layout/evidence/area-audit/area-audit.md: top cell -> (width um,
+# height um, bbox um2).  Using the repo's own numbers keeps these tests
+# readable next to the documents they are about.
+AUDIT_GEOMETRY = {
+    "vco_block": (172.52, 184.48, 31826),
+    "pfd_cp": (344.98, 74.30, 25630),
+    "divider_chain": (1317.66, 41.99, 55329),
+    "lock_detector": (294.80, 103.75, 30586),
+}
+
 LVS_MATCH_LINE = "INFO : Congratulations! Netlists match.\n"
 
 # The scope rule reads a ~100-character window either side of a negation,
@@ -49,7 +60,27 @@ RATIFIED_SPEC = "# PLL target specification\n\n- **Status**: **ratified, with am
 UNRATIFIED_SPEC = "# PLL target specification\n\n- **Status**: proposed, not yet ratified\n"
 
 
-def _doc_text(drawn: int, lvs: int, *, no_top: bool = True) -> str:
+def _footprint_lines(geometry: dict | None = None) -> str:
+    """One correct footprint claim per block, in both adjacency shapes.
+
+    Section 6's table writes the mm2 figure after the tuple and section 5's
+    area row writes it before, so the fixture alternates between the two --
+    both are graded, and both must keep passing.
+    """
+    geometry = AUDIT_GEOMETRY if geometry is None else geometry
+    lines = []
+    for i, (top, (w, h, bbox)) in enumerate(geometry.items()):
+        mm2 = f"{bbox / 1e6:.4f}"
+        if i % 2 == 0:
+            lines.append(f"`{top}` measures {w:g} × {h:g} µm ({mm2} mm²).")
+        else:
+            lines.append(f"`{top}` measures {mm2} mm² ({w:g} × {h:g} µm).")
+    return "\n".join(lines) + "\n"
+
+
+def _doc_text(
+    drawn: int, lvs: int, *, no_top: bool = True, footprints: bool = True
+) -> str:
     """A minimal document that satisfies the script at the given counts."""
     body = [
         f"Layout status: {drawn} of the 4 PLL sub-blocks are drawn and",
@@ -57,7 +88,10 @@ def _doc_text(drawn: int, lvs: int, *, no_top: bool = True) -> str:
     ]
     if no_top:
         body.append("There is no assembled `pll_top` GDS.")
-    return "\n".join(body) + "\n"
+    text = "\n".join(body) + "\n"
+    if footprints:
+        text += _footprint_lines()
+    return text
 
 
 class _Tree:
@@ -70,9 +104,41 @@ class _Tree:
         (root / "spec").mkdir(parents=True)
         shutil.copy2(SCRIPT, root / "layout" / "lib" / SCRIPT.name)
         self.write_spec(RATIFIED_SPEC)
+        self.write_audit()
 
     def write_spec(self, text: str) -> None:
         (self.root / "spec" / "pll.md").write_text(text)
+
+    def write_audit(self, geometry: dict | None = None, *, body: str | None = None):
+        """Write layout/evidence/area-audit/area-audit.md.
+
+        Shaped like the real, machine-generated file: a geometry table
+        first, then further tables whose first cell is also a top-cell name
+        but whose second cell is not a "W x H" pair.  The parser must take
+        its numbers from the first table without counting tables.
+        """
+        base = self.root / "layout" / "evidence" / "area-audit"
+        base.mkdir(parents=True, exist_ok=True)
+        if body is None:
+            geometry = AUDIT_GEOMETRY if geometry is None else geometry
+            rows = [
+                "| Block | Footprint (um) | bbox (um2) | Drawn (um2) | Fill | Whitespace |",
+                "|---|---|---|---|---|---|",
+            ]
+            for top, (w, h, bbox) in geometry.items():
+                rows.append(f"| `{top}` | {w:.2f} x {h:.2f} | {bbox:,} | 1,000 | 3.1 % | 1 (1.0 %) |")
+            rows += [
+                "",
+                "| Block | comp (um2) | comp share |",
+                "|---|---|---|",
+            ]
+            for top in geometry:
+                rows.append(f"| `{top}` | 4,387.1 | 13.78 % |")
+            body = "\n".join(rows) + "\n"
+        (base / "area-audit.md").write_text(body)
+
+    def remove_audit(self) -> None:
+        (self.root / "layout" / "evidence" / "area-audit" / "area-audit.md").unlink()
 
     def add_block(self, evidence_dir: str, gds: str, *, drc: bool, lvs: bool) -> None:
         base = self.root / "layout" / "evidence" / evidence_dir
@@ -91,7 +157,13 @@ class _Tree:
         (base / "pll_top.gds").write_bytes(b"")
 
     def write_docs(self, text: str) -> None:
+        self.write_readme(text)
+        self.write_proposal(text)
+
+    def write_readme(self, text: str) -> None:
         (self.root / "README.md").write_text(text)
+
+    def write_proposal(self, text: str) -> None:
         (self.root / "docs" / "chipalooza" / "challenge-5-proposal.md").write_text(text)
 
     def run(self, env: dict | None = None) -> subprocess.CompletedProcess:
@@ -365,6 +437,158 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         result = self.tree.run()
         self.assertEqual(result.returncode, 1)
         self.assertIn("could not read a '- **Status**:' line", result.stderr)
+
+    # --- The footprint rule (issue #237, third pass) ----------------------
+    #
+    # Existence was graded; size was not, and drifted next.  Four area
+    # levers landed in one week (#469/#470/#473/#477) and every one of them
+    # updated the proposal's section 5 area row while leaving section 6's
+    # table on an older number -- so this is drift with a measured
+    # recurrence rate, graded here against the machine-generated audit.
+
+    # The two section 6 rows verbatim as they stood on main at e25b3368,
+    # trimmed to the cells the rule reads.
+    STALE_SECTION_6 = (
+        "| Sub-block | Top cell | As-drawn footprint | DRC | LVS |\n"
+        "|---|---|---|---|---|\n"
+        "| VCO (#293, folded at #324) | `vco_block` | 183.18 × 170.28 µm "
+        "(0.0312 mm²) | clean | **matched** |\n"
+        "| PFD + charge pump (#294; folded at #455) | `pfd_cp` | "
+        "347.41 × 73.23 µm (0.0254 mm²) | clean | **matched** |\n"
+    )
+
+    def test_the_stale_section_6_footprints_are_caught(self):
+        # The regression this pass was written for.  If this ever passes
+        # silently, the footprint rule has stopped doing its job.
+        self._all_four()
+        self.tree.write_docs(_doc_text(4, 2) + PAD + self.STALE_SECTION_6)
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("states `vco_block` at 183.18 x 170.28 um", result.stderr)
+        self.assertIn("172.52 x 184.48 um", result.stderr)
+        self.assertIn("states `pfd_cp` at 347.41 x 73.23 um", result.stderr)
+        self.assertIn("344.98 x 74.30 um", result.stderr)
+
+    def test_footprints_that_match_the_audit_pass_in_both_adjacency_shapes(self):
+        # Section 6 writes "W x H um (A mm2)" and section 5 writes
+        # "A mm2 (W x H um)".  Both must keep passing.
+        self._all_four()
+        self.tree.write_docs(_doc_text(4, 2))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("every stated block footprint matches", result.stdout)
+
+    def test_a_stale_mm2_after_a_correct_tuple_is_caught(self):
+        self._all_four()
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + PAD
+            + "| `vco_block` | 172.52 × 184.48 µm (0.0312 mm²) |\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("0.0312 mm2 next to its footprint", result.stderr)
+        self.assertIn("31,826 um2 = 0.0318 mm2", result.stderr)
+
+    def test_a_stale_mm2_before_a_correct_tuple_is_caught(self):
+        self._all_four()
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + PAD
+            + "divider chain 0.0921 mm² (1317.66 × 41.99 µm) as drawn.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("0.0921 mm2 next to its footprint", result.stderr)
+
+    def test_the_rule_follows_the_audit_when_a_lever_lands(self):
+        # The recurrence case, in the direction it actually recurs: the
+        # audit moves because a block got smaller, and the documents do not.
+        self._all_four()
+        self.tree.write_docs(_doc_text(4, 2))
+        moved = dict(AUDIT_GEOMETRY)
+        moved["pfd_cp"] = (344.98, 60.00, 20699)
+        self.tree.write_audit(moved)
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("states `pfd_cp` at 344.98 x 74.30 um", result.stderr)
+        self.assertIn("344.98 x 60.00 um", result.stderr)
+
+    def test_deleting_a_footprint_from_the_proposal_is_caught(self):
+        # Two-sided: a stale number must not be fixable by removing the
+        # column it sits in.
+        self._all_four()
+        geometry = {k: v for k, v in AUDIT_GEOMETRY.items() if k != "lock_detector"}
+        self.tree.write_docs(_doc_text(4, 2, footprints=False) + _footprint_lines(geometry))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("states no current footprint for `lock_detector`", result.stderr)
+
+    def test_the_readme_is_not_required_to_state_footprints(self):
+        # Completeness is the proposal's obligation -- it is the document
+        # written for a reader outside this repository.  README carries no
+        # block geometry today and must not be forced to.
+        self._all_four()
+        self.tree.write_readme(_doc_text(4, 2, footprints=False))
+        self.tree.write_proposal(_doc_text(4, 2))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_a_footprint_that_names_no_block_is_caught(self):
+        # A size a reader cannot attribute is not a checkable claim, and
+        # would otherwise be the easy way around the rule.
+        self._all_four()
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + PAD
+            + "The block as drawn is 999.99 × 888.88 µm.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("names no block within", result.stderr)
+
+    def test_a_dimension_pair_that_is_not_a_footprint_is_not_graded(self):
+        # False positives cost editorial freedom, so the near misses are
+        # pinned: a PVT grid is not a footprint, and neither is a track
+        # pitch or a device width.
+        self._all_four()
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + "`vco_block` is swept over the full 3 x 3 temperature "
+            "× supply grid at a 0.75 µm Metal2 track pitch, with "
+            "1.20 × 0.28 µm devices reported per row.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertNotIn("3.00 x 3.00", result.stderr)
+        # The device pair IS a decimal "W x H um" next to a block name, so
+        # it is graded and fails -- the rule's one documented sharp edge.
+        self.assertIn("states `vco_block` at 1.20 x 0.28 um", result.stderr)
+
+    def test_the_footprint_rule_is_silent_when_nothing_is_drawn(self):
+        # Conditional on the tree, like every other rule in this script.
+        self.tree.write_docs(_doc_text(0, 0) + PAD + self.STALE_SECTION_6)
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_a_missing_area_audit_is_a_failure_not_a_silent_pass(self):
+        self._all_four()
+        self.tree.write_docs(_doc_text(4, 2))
+        self.tree.remove_audit()
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("area-audit.md is missing", result.stderr)
+
+    def test_an_unparseable_area_audit_is_a_failure_not_a_silent_pass(self):
+        # The file exists but its geometry table has gone: passing on the
+        # remaining checks is the silent downgrade this script keeps
+        # refusing to make.
+        self._all_four()
+        self.tree.write_docs(_doc_text(4, 2))
+        self.tree.write_audit(body="# Area audit\n\nRegeneration failed.\n")
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("parsed to zero block rows", result.stderr)
 
     def test_a_missing_document_is_a_failure_not_a_silent_pass(self):
         self._all_four()

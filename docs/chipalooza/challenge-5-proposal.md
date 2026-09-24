@@ -318,10 +318,10 @@ sub-blocks** now have a committed, standalone-DRC-clean transistor-level
 GDS, and **4 of the 4 are LVS-matched** against an independently derived
 reference netlist:
 
-| Sub-block | Top cell | As-drawn footprint | DRC | LVS | Evidence |
+| Sub-block | Top cell | As-drawn footprint (committed-GDS bounding box) | DRC | LVS | Evidence |
 |---|---|---|---|---|---|
-| VCO (#293, folded at #324) | `vco_block` | 183.18 × 170.28 µm (0.0312 mm²) | clean | **matched** | `layout/evidence/vco-layout/` (`PROOF-fold.md`, `PROOF-lvs.md`, `PROOF-433-vdd-island-fix.md`) |
-| PFD + charge pump (#294 via #299–#303, #385, #386; LVS at #440/#448; folded at #455; glue bus packed at #469, glue inverters interleaved at #473) | `pfd_cp` | 347.41 × 73.23 µm (0.0254 mm²) | clean (default **and** `--offgrid` signoff-grade) | **matched** | `layout/evidence/pfd-cp-layout/` (`PROOF.md`, including the first run's recorded mismatch and its root cause) |
+| VCO (#293, folded at #324, mirror re-arrayed at #336, resistor re-shaped at #381) | `vco_block` | 172.52 × 184.48 µm (0.0318 mm²) | clean | **matched** | `layout/evidence/vco-layout/` (`PROOF-fold.md`, `PROOF-2d-fold.md`, `PROOF-lvs.md`, `PROOF-381-high-rs-resistor.md`, `PROOF-433-vdd-island-fix.md`) |
+| PFD + charge pump (#294 via #299–#303, #385, #386; LVS at #440/#448; folded at #455; glue bus packed at #469, glue inverters interleaved at #473) | `pfd_cp` | 344.98 × 74.30 µm (0.0256 mm²) | clean (default **and** `--offgrid` signoff-grade) | **matched** | `layout/evidence/pfd-cp-layout/` (`PROOF.md`, including the first run's recorded mismatch and its root cause; `PROOF-455-fold.md`, `PROOF-469-glue-bus-packing.md`, `PROOF-473-glue-inverter-interleave.md`) |
 | Divider chain (#295 via #306–#310, packed at #341, folded at #344, macro-track-packed at #454, routed over its device rows at #458) | `divider_chain` | 1317.66 × 41.99 µm (0.0553 mm²) | clean (also under `--offgrid`) | **matched** | `layout/evidence/divider-chain-layout/` (`PROOF.md`, `PROOF-fold.md`, `PROOF-macro-track-packing.md`, `PROOF-over-device-rows.md`) |
 | Lock detector (#296; DR-014 trim network + LVS at #440/#449) | `lock_detector` | 294.80 × 103.75 µm (0.0306 mm²) | clean | **matched** | `layout/evidence/lock-detector-layout/PROOF.md` (including the first run's recorded mismatch, its DR-014-staleness root cause, and the regrown geometry's clean re-proof) |
 
@@ -336,6 +336,24 @@ the four sub-block layouts that were already committed — and §3 kept denying
 them even in the change that corrected this section, which is why that check
 now grades every absence-of-layout claim in both documents rather than a
 list of three remembered sentences).
+
+The footprint column is the **committed GDS bounding box**, re-derived in CI
+by the same check from `layout/evidence/area-audit/area-audit.md` — the
+audit `python3 layout/run_pv.py area` regenerates by measuring each
+committed GDS — so it is the same measurement §5's Area row sums, not a
+separately maintained figure. It was maintained separately once, and drifted
+for exactly as long as one would expect. This table carried `vco_block` at
+the extent #324's fold produced, two later geometry changes out of date
+(#336's 2-D mirror array and #381's re-shaped high-Rs resistor each moved
+it), and it carried `pfd_cp` at that block's `footprint` tuple — a union of
+recorded sub-block extents — rather than at the drawn-shape bounding box
+this column's heading promises. §5 carried the correct figure for both at
+the same time, so the document stated two different sizes for the same
+block. The numbers are now graded the way the prose already was; the exact
+superseded figures are recorded in
+`layout/evidence/area-audit/PROOF.md` and `layout/floorplan/PLL-FLOORPLAN.md`
+§5.5 rather than restated here, because a check that grades a claim cannot
+tell asserting it from quoting it.
 
 **What does not exist, stated as plainly as what does:**
 
