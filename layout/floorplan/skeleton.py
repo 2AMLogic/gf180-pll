@@ -136,17 +136,27 @@ single row, so its width was the sum of every sub-cell's width.
 Issue #344 closed that one too, by folding the row in two -- three
 ``div23_cell`` instances per row, each row carrying its own #341-packed
 routing band, with the glue logic interleaved next to the instances it wires
-rather than parked at one end. The block is now **1317.66 x 100.29 um =
-0.1321 mm^2**, a further 12 % cut, and for the first time it fits inside the
-whole-chip 0.15 mm^2 target *on its own* -- which is a necessary, not a
-sufficient, condition for the chip to fit. The two real blocks now measure
-0.1396 mm^2 together. The full arithmetic and what is still structurally
-oversized (device density, the one lever neither #341 nor #344 touched) are
-stated at the ``DIVIDER_LOCK`` definition below. This skeleton is still a
-floorplan record of a design that does not fit its budget -- which is
-precisely what section 5's own "fail-loud condition for a future pass" asked
-for, and is tracked for further reduction separately from #310's/#341's/
-#344's own DRC/LVS-clean geometry claims.
+rather than parked at one end. That left the block at **1317.66 x 100.29 um
+= 0.1321 mm^2**, a further 12 % cut, and for the first time it fit inside
+the whole-chip 0.15 mm^2 target *on its own* -- which is a necessary, not a
+sufficient, condition for the chip to fit. Issue #454 then packed the
+``div23_cell`` macro's own Metal2 track band the same way #341 had packed
+the top-level bands, taking the block to **1317.66 x 70.29 um = 0.0926
+mm^2**, a further 30 %. Issue #458 took the last of that lever by making
+both levels' track assignment *obstacle-aware*
+(``devgen.pack_tracks_over_devices()``): a track is placed at the lowest
+Metal2-free y rather than in a band stacked above the device rows, so most
+of both bands now hide in the Metal2-free corridors those rows already
+leave. **1317.66 x 41.99 um = 0.0553 mm^2**, a further 40 %. The full
+arithmetic, and what is still structurally oversized, are stated at the
+``DIVIDER_LOCK`` definition below -- it is **not** device density: that
+hypothesis stood here through #344 and was falsified by measurement at #442
+(the diffusion islands are ~1 % of the block's own bounding box, not the
+bulk of it). This skeleton is still a floorplan record of a design that does
+not fit its budget -- which is precisely what section 5's own "fail-loud
+condition for a future pass" asked for, and is tracked for further reduction
+separately from #310's/#341's/#344's/#454's/#458's own DRC/LVS-clean
+geometry claims.
 """
 
 from __future__ import annotations
@@ -197,15 +207,39 @@ DOMAIN_SPACING = 40.0  # um between domain guard rings/trunks (section 2)
 # whenever klayout.db *is* importable, so the two views cannot drift
 # silently.
 #
-# FAIL-LOUD: 434.31 x 80.73 um (35,059.67 um^2 = 0.0351 mm^2) against
-# PLL-FLOORPLAN.md section 5's 0.010-0.020 mm^2 ROM estimate -- a 1.76-3.5x
-# overrun (and 2.34x the 150x100 um / 0.015 mm^2 placeholder this replaces),
-# stated here rather than silently absorbed, following the same
-# "FAIL-LOUD condition for a future pass" convention the VCO/divider-chain
-# docstrings above already use. See PLL-FLOORPLAN.md section 5's own
-# revision note for the re-run whole-chip arithmetic.
-PFD_CP_STANDALONE_W_UM = 434.31
-PFD_CP_STANDALONE_H_UM = 80.73
+# FAIL-LOUD: 347.41 x 73.23 um (25,439.10 um^2 = 0.0254 mm^2) against
+# PLL-FLOORPLAN.md section 5's 0.010-0.020 mm^2 ROM estimate -- still a
+# 1.27-2.54x overrun, stated here rather than silently absorbed, following
+# the same "FAIL-LOUD condition for a future pass" convention the VCO/
+# divider-chain docstrings above already use. See PLL-FLOORPLAN.md section
+# 5's own revision notes for the re-run whole-chip arithmetic.
+#
+# Was 434.31 x 80.73 um (0.0351 mm^2) through issue #386. Issue #455 folded
+# pfd into cp's own empty band above cp_dumpbuf (so the block is now exactly
+# as wide as cp) and continued cp's own Metal2 trunk band rather than
+# starting a fresh one above it: -86.90 um of width and -4.50 um of height,
+# -8,578 um^2 (-24.5 %) on the footprint tuple this constant records. See
+# layout/evidence/pfd-cp-layout/PROOF-455-fold.md.
+#
+# Issue #469 then packed cp_output_stage's own glue-bus track band (14 nets
+# on 13 tracks instead of 14, cp_array.pack_tracks() in place of NetTracks),
+# which is one track of cp_output_stage height and therefore one track of
+# this block's: 76.23 -> 75.48 um, -261 um^2 (-1.0 %). The band's clique
+# number is 13, not the 9 #455 sized from the bus spans alone, because this
+# block's own array<->glue link extends six of the fourteen nets across its
+# full width -- see layout/evidence/pfd-cp-layout/
+# PROOF-469-glue-bus-packing.md.
+#
+# Issue #473 then took the other half of that same band: the clique of 13 was
+# 6 structurally full-width nets plus a local clique of 7, and the 7 existed
+# because cp_output_stage grouped its four glue inverters at the row's right
+# end, so DN/DNB/UP/UPB each ran most of the block's width from a switch gate
+# to an inverter. Interleaving each steering pair's inverter with the group it
+# drives (cp_output_stage.ROW_ORDER) takes the clique to 10 -- three more
+# tracks, 75.48 -> 73.23 um, -782 um^2 (-3.0 %). See
+# layout/evidence/pfd-cp-layout/PROOF-473-glue-inverter-interleave.md.
+PFD_CP_STANDALONE_W_UM = 347.41
+PFD_CP_STANDALONE_H_UM = 73.23
 PFD_CP = Block("pfd_cp", x=0.0, y=0.0, w=PFD_CP_STANDALONE_W_UM, h=PFD_CP_STANDALONE_H_UM)
 # LOOP_FILTER's width/height are sized to actually contain its two real
 # sub-block geometries below (C1 array + C2, each with margin) -- see the
@@ -274,16 +308,29 @@ VCO_GUARD_MARGIN = 15.0
 # divider chain and asserts the match whenever klayout.db *is* importable, so
 # the two views cannot drift silently.
 #
-# lock_detector (issue #296, layout/evidence/lock-detector-layout/PROOF.md):
-LOCK_DETECTOR_STANDALONE_W_UM = 119.3
-LOCK_DETECTOR_STANDALONE_H_UM = 62.6
+# lock_detector (issue #296, layout/evidence/lock-detector-layout/PROOF.md;
+# grown from 119.30 x 62.60 um by issue #449, which drew DR-014's 4-bit trim
+# network into delaywin_3v3 -- 45 devices to 117, and with it the block's
+# first LVS match against its own committed schematic. See that record's
+# "Addendum 4" for the full before/after and PLL-FLOORPLAN.md section 5.7 for
+# what it does to the area arithmetic: ~4.1x this block's own footprint, and
+# the whole-chip overrun from 1.9x to 2.1x):
+LOCK_DETECTOR_STANDALONE_W_UM = 294.80
+LOCK_DETECTOR_STANDALONE_H_UM = 103.75
 # divider_chain (issue #310, layout/evidence/divider-chain-layout/PROOF.md;
 # height reduced by issue #341's routing-track packing, layout/evidence/
 # divider-chain-layout/PROOF-track-packing.md; then folded from one row into
 # two by issue #344, layout/evidence/divider-chain-layout/PROOF-fold.md --
-# 2634.28 x 57.07 um before the fold, 1317.66 x 100.29 um after):
+# 2634.28 x 57.07 um before the fold, 1317.66 x 100.29 um after; then the
+# same packing applied one level down, inside the div23_cell macro each row's
+# height is gated by, at issue #454 -- 15.00 um off each of the two rows,
+# 1317.66 x 70.29 um, layout/evidence/divider-chain-layout/
+# PROOF-macro-track-packing.md; then both levels' track assignment made
+# obstacle-aware at issue #458, so a track sits at the lowest Metal2-free y
+# instead of in a band above the device rows -- 1317.66 x 41.99 um,
+# layout/evidence/divider-chain-layout/PROOF-over-device-rows.md):
 DIVIDER_CHAIN_STANDALONE_W_UM = 1317.66
-DIVIDER_CHAIN_STANDALONE_H_UM = 100.29
+DIVIDER_CHAIN_STANDALONE_H_UM = 41.99
 
 # The two blocks are on *different supply domains* -- divider_chain on
 # VDD_DIV, lock_detector on VDD (PLL-FLOORPLAN.md section 2's four-domain
@@ -324,25 +371,71 @@ DIVIDER_LOCK = Block(
     h=(LOCK_DETECTOR.y + LOCK_DETECTOR.h) - DIVIDER_CHAIN.y + 2 * DIVIDER_LOCK_MARGIN,
 )
 
-# FAIL-LOUD: this region is a 1.9x whole-chip area overrun, stated not absorbed.
+# FAIL-LOUD: this region drove a whole-chip area overrun against the draft
+# 0.15 mm^2 target -- 2.9x at its worst, 1.82x as drawn today -- which is why
+# spec/pll.md#area is now **0.30 mm^2** (DR-016, issue #456).
 # -----------------------------------------------------------------------------
+# READ THE NEXT PARAGRAPHS AS HISTORICAL. Every "1.89x", "0.15 mm^2" and
+# "0.2272 mm^2" figure below was correct against the target and the geometry in
+# force when it was written, and is kept rather than rewritten, per
+# PLL-FLOORPLAN.md's append-only revision convention. The current position, all
+# of it measured off committed GDS by ``python3 layout/run_pv.py area``:
+#
+#   * loop filter 36,936 (a DR-006 calculation) + vco_block 31,826 + pfd_cp
+#     25,630 (folded at #455, was 35,281; glue bus packed at #469, was 26,665;
+#     glue inverters interleaved at #473, was 26,406) + divider_chain 55,329
+#     (tracks routed over the device rows at #458, was 92,618) + lock_detector
+#     30,586 = **180,307 um^2**, i.e. **225,384 um^2 (0.2254 mm^2)** after this
+#     section's x1.25 -- **1.50x** the draft target and **75.1 %** of the
+#     amended 0.30 mm^2 row. PLL-FLOORPLAN.md sections 5.11 (DR-016, on
+#     218,631 um^2), 5.12 (#469, on 218,372 um^2), 5.13 (#458, on
+#     181,083 um^2) and 5.14 (#473, this figure) carry the derivation.
+#   * The draft target was not reachable, and that is a measurement rather than
+#     a projection: strike Metal2 routing entirely and each block's own drawn
+#     device bands still sum (with the loop filter) to 136,141 um^2 ->
+#     170,176 um^2, 1.13x the draft target. 57.2 % of what that target allowed
+#     is the loop filter (capacitance-set, DR-006) plus vco_block's guard-ring
+#     and tap spacing -- neither a layout lever.
+#   * ``test_area_audit.py`` now re-derives that sum from the committed GDS on
+#     every run and asserts it against ``AREA_BUDGET_BLOCK_SUM_UM2`` below, so
+#     geometry growing past the amended row is a red build rather than a note
+#     nobody re-read.
+#
+# The historical record follows.
+#
 # PLL-FLOORPLAN.md section 5 budgeted "divider chain + lock detector" at
 # 0.0038-0.0052 mm^2 (a ROM std-cell-row estimate made when no physical view
-# existed for either block). The two real blocks measure 0.1321 mm^2 +
-# 0.0075 mm^2 = 0.1396 mm^2 -- a ~27-37x overrun on that row. Section 5's own
+# existed for either block). The two real blocks measure 0.0926 mm^2 +
+# 0.0306 mm^2 = 0.1232 mm^2 -- a ~24-32x overrun on that row. Section 5's own
 # "fail-loud condition for a future pass" instructs stating an overrun
 # explicitly rather than silently rounding the total down, so:
 #
 #   * Re-running section 5's arithmetic with every measured number in place of
-#     its ROM row gives 0.0369 (loop filter) + 0.0312 (VCO) + 0.020 (PFD/CP,
-#     still ROM) + 0.1396 (divider+lock) = 0.2277 mm^2, i.e. 0.2846 mm^2 after
-#     that section's x1.25 top-level overhead -- 1.9x the 0.15 mm^2 budget,
-#     against the 2.0x recorded through issue #341 and the 2.9x through #310
-#     (and the +22 % margin the VCO-only revision recorded before those).
+#     its ROM row gives 0.0369 (loop filter) + 0.0318 (VCO) + 0.0353 (PFD/CP,
+#     real since #385/#386) + 0.1232 (divider+lock) = 0.2272 mm^2, i.e.
+#     0.2840 mm^2 after that section's x1.25 top-level overhead -- 1.89x the
+#     0.15 mm^2 budget (PLL-FLOORPLAN.md section 5.9), against the 1.70x
+#     section 5.8 recorded (divider-chain packing lever alone, old
+#     lock_detector footprint), the 2.03x section 5.5 re-derived from the
+#     committed GDS, the 2.0x recorded through issue #341 and the 2.9x
+#     through #310 (and the +22 % margin the VCO-only revision recorded
+#     before those).
 #   * total_extent_um2() (this skeleton's whole bounding box) is now
-#     ~0.61e6 um^2 (was ~1.09e6 um^2 through #341, ~1.19e6 through #310).
-#     The divider chain no longer swallows the floorplan on its own: at
+#     ~0.63e6 um^2 (was ~0.57e6 through #454 alone, ~0.61e6 through #344,
+#     ~1.09e6 through #341, ~1.19e6 through #310). lock_detector's own growth
+#     (119.30 x 62.60 um to 294.80 x 103.75 um) pushes this region's own
+#     extent back up even though the divider chain's packing pulled it down;
+#     the divider chain still does not swallow the floorplan on its own: at
 #     1317.66 um it is ~2x the rest of the skeleton rather than ~4x.
+#   * **This is not a placement regression.** Issue #449 drew DR-014's 4-bit
+#     static process trim network into ``lock_detector``'s ``delaywin_3v3``
+#     -- 45 drawn devices to 117 -- which is what finally let that block
+#     match its own ratified schematic under the PDK's LVS deck. The block
+#     went from 119.30 x 62.60 um to 294.80 x 103.75 um (~4.1x) for it.
+#     Recorded here rather than absorbed, per the same instruction as every
+#     line above; PLL-FLOORPLAN.md section 5.9 has the full arithmetic and
+#     names which of the remaining levers sections 5.5/5.8 identified would
+#     recover it.
 #
 # The cause was structural and measurable, not a sizing slip. #310 recorded two
 # structural causes here; #341 closed one and #344 the other:
@@ -374,22 +467,91 @@ DIVIDER_LOCK = Block(
 #     full-width band and the fold would have traded width for height at
 #     roughly constant area. See layout/evidence/divider-chain-layout/
 #     PROOF-fold.md.
+#   * #341's packing was never applied one level *down*, inside the
+#     ``div23_cell`` macro each row's height is gated by. Measured at issue
+#     #442 and fixed at issue #454: that macro's own band was 46.50 um of the
+#     100.29 um (31 nets x 0.75 um, paid once per row), against only 16.50 um
+#     for the already-packed top-level bands. ``pack_tracks()`` puts those 31
+#     nets on 11 tracks -- the interval graph's clique number, so provably the
+#     minimum -- for 15.00 um per instance, 30.00 um off the block.
+#     **1317.66 x 100.29 um became 1317.66 x 70.29 um**, 0.1321 mm^2 down to
+#     0.0926 mm^2, a further 30 %. See layout/evidence/divider-chain-layout/
+#     PROOF-macro-track-packing.md.
+#   * Both of those bands were still *bands* -- stacked on top of the device
+#     rows, whose own Metal2 plane #442 measured 1.0 % occupied. Metal2 has no
+#     DRC relationship to the diffusion/poly/well/Metal1 under it, so that
+#     plane was unused, not reserved; what a track there must clear is other
+#     Metal2, namely the Via1/Metal2 landing square every riser drops on every
+#     pad plus each placed div23_cell instance's own interior. Issue #458
+#     replaced both levels' ``pack_tracks()`` call with
+#     ``pack_tracks_over_devices()``, which takes that obstacle map explicitly
+#     and gives each net the lowest 0.75 um step whose drawn rectangle clears
+#     it. On this package's fixed row-cell frame the widest free corridor is
+#     the one between the pulldown and pullup device rows: 10 of div23_cell's
+#     11 tracks land below its own topmost pad (footprint 332.14 x 22.80 ->
+#     332.14 x 12.52 um) and the top level keeps only the nets whose extent
+#     crosses an instance in a band above.
+#     **1317.66 x 70.29 um became 1317.66 x 41.99 um**, 0.0926 mm^2 down to
+#     0.0553 mm^2, a further 40 %. See layout/evidence/divider-chain-layout/
+#     PROOF-over-device-rows.md.
 #
-# What is left is not structural placement any more but **device density**:
-# the diffusion-island-per-device convention this block's full-custom
-# generators use costs it ~292 um^2/transistor against lock_detector's ~187
-# for the same PDK/flavour. That lever is shared with the VCO's own residual
-# overrun and is deliberately not folded into either of the two passes above.
+# What is left is NOT device density. That hypothesis stood here through #344
+# and was **falsified** by measurement at issue #442 (layout/evidence/
+# area-audit/PROOF.md, PLL-FLOORPLAN.md section 5.5): the ~292 um^2/transistor
+# ratio it rested on cannot distinguish "the diffusion islands are too big"
+# from "the islands are 1 % of the block and the rest is empty", and the block
+# measures the latter -- comp is 1.46 % of the bbox, and merging every one of
+# the 40 shared-diffusion candidates in divider_chain.spice would free 125.4
+# um^2, about 0.1 % of what has to come out. layout/tests/test_area_audit.py
+# asserts that bound so this conclusion fails loudly if geometry ever changes
+# it.
+#
+# What is actually left is the remaining Metal2 band: 43 distinct tracks still
+# sitting in 43.97 um of no-diffusion band *above* 26.32 um of device rows,
+# with the Metal2 plane over those rows 1.0 % occupied. Routing the band over
+# the cells rather than above them is the next lever, and a riskier one (a bus
+# at a device-band track_y can cross another net's own Metal2 riser landing
+# square); it is tracked at issue #458, deliberately not folded into any of the
+# passes above.
 #
 # Nothing here is a DRC/LVS claim change: the divider chain is signoff-clean on
 # the PDK's own decks at this footprint (layout/evidence/divider-chain-layout/
-# PROOF-fold.md). It is the *area budget* that is still failing, loudly and on
+# PROOF-macro-track-packing.md, which also adds an --offgrid DRC-clean run the
+# block did not previously claim). It is the *area budget* that is still failing, loudly and on
 # the record, which is what section 5 asked a pass like this one to do -- and
 # it is now failing by less: the divider chain on its own finally fits inside
 # the 0.15 mm^2 whole-chip target, which is necessary but not sufficient for
 # the chip to.
 DIVIDER_LOCK_AREA_UM2 = DIVIDER_LOCK.w * DIVIDER_LOCK.h
-AREA_BUDGET_UM2 = 150_000.0
+
+#: ``spec/pll.md#area``'s whole-block target, **amended by DR-016 (issue #456)**
+#: from the draft 150,000 um^2 on the measured post-lever total. Every "0.15
+#: mm^2" sentence in the comment block above and in PLL-FLOORPLAN.md sections
+#: 5.1-5.10 predates that amendment and is kept as written; section 5.11 states
+#: the amendment and section 5.13 the live measurement under it.
+AREA_BUDGET_UM2 = 300_000.0
+
+#: The draft target the overrun series above is written against. Kept as its own
+#: name because several assertions are statements about *that* number ("the
+#: divider chain alone no longer busts the whole-chip target") and mean nothing
+#: if silently re-pointed at the amended one.
+AREA_BUDGET_DRAFT_UM2 = 150_000.0
+
+#: PLL-FLOORPLAN.md section 5's top-level overhead multiplier (guard ring,
+#: four-domain supply trunk routing, block-to-block spacing). Still a ROM
+#: estimate: no assembled pll_top GDS exists to measure it against (issue #17).
+TOP_LEVEL_OVERHEAD = 1.25
+
+#: What the amended row allows as a *sum of block footprints*, i.e. before the
+#: overhead multiplier above. 240,000 um^2.
+AREA_BUDGET_BLOCK_SUM_UM2 = AREA_BUDGET_UM2 / TOP_LEVEL_OVERHEAD
+
+#: The loop filter's contribution to that sum: DR-006 / PLL-FLOORPLAN.md
+#: section 3's 32,118 um^2 device sum (R 856 + C1 30,276 + C2 986) x1.15 for
+#: bulk taps and interconnect. A **calculation, not a layout** -- the loop
+#: filter has no drawn cell -- which is why it is a constant here rather than a
+#: GDS the area audit measures.
+LOOP_FILTER_AREA_UM2 = 36_936.0
 
 BLOCKS = (PFD_CP, LOOP_FILTER, VCO_CORE, DIVIDER_LOCK)
 
@@ -539,3 +701,32 @@ BLOCKS_EXCLUDING_DIVIDER_LOCK = tuple(b for b in BLOCKS if b is not DIVIDER_LOCK
 #: tracked separately by ``test_floorplan_skeleton.py``, same as
 #: ``DIVIDER_LOCK``'s.
 VCO_FOLD_TRIPWIRE_BLOCKS = tuple(b for b in BLOCKS_EXCLUDING_DIVIDER_LOCK if b is not PFD_CP)
+
+
+def main() -> int:
+    """``python3 -m floorplan.skeleton --outdir <dir>`` -- write the skeleton.
+
+    The same ``--outdir`` calling convention every other generator in this
+    repository exposes (``pll_top/lock_detector/build.py``,
+    ``pll_top/vco/block.py``, ...), and therefore the one
+    ``harness/reproduce.py`` invokes as a subprocess to re-derive each
+    committed artifact. Through issue #398 this module had ``build()`` but
+    no CLI, so its evidence directory documented regeneration as an ad-hoc
+    ``python3 -c`` one-liner that ``reproduce.py`` could not call -- which
+    is why this was the one committed block GDS the reproducibility guard
+    (issue #451) had to exclude by name rather than check. Added at issue
+    #461 together with the regenerated artifact.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description="write pll_floorplan_skeleton.gds")
+    parser.add_argument("--outdir", default="/tmp/pll_floorplan_skeleton")
+    args = parser.parse_args()
+
+    gds_path = build(Path(args.outdir))
+    print(f"wrote {gds_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

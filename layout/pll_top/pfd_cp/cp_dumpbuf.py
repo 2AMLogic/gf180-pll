@@ -325,8 +325,9 @@ def _riser(canvas: devgen.Canvas, x: float, y_pad: float, track_y: float) -> Non
     _rect_extra(canvas, "metal2", x - half_v2, track_y - half_v2, x + half_v2, track_y + half_v2)
 
 
-def pad_center(pad: tuple[float, float, float, float]) -> tuple[float, float]:
-    return ((pad[0] + pad[2]) / 2.0, (pad[1] + pad[3]) / 2.0)
+# Centre point of a pad box -- shared with every other
+# ``layout/pll_top/*`` submodule (issue #475, ``_canvas.pad_center()``).
+pad_center = _canvas.pad_center
 
 
 def _stub(canvas: devgen.Canvas, a: tuple[float, float], b: tuple[float, float], width: float = devgen.METAL1_WIRE_WIDTH_UM) -> None:

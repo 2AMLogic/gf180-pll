@@ -133,8 +133,33 @@ final footprint and pin locations, as built by `div23_cell.build()`
 
 | Property | Value |
 |---|---|
-| Footprint (w x h) | 332.140 x 37.800 um (12554.9 um^2) |
-| Footprint box (x0, y0, x1, y1) | (-2.62, -0.3, 329.52, 37.5) um |
+| Footprint (w x h) | 332.140 x 12.520 um (4158.4 um^2) |
+| Footprint box (x0, y0, x1, y1) | (-2.62, -0.3, 329.52, 12.22) um |
+
+**Height revised twice, at issues #454 and #458.** It was 37.800 um /
+`y1 = 37.5` through #344, when this macro's internal Metal2 band gave each of
+its 31 nets a never-reused track (`devgen.NetTracks`).
+
+* **#454** (`layout/evidence/divider-chain-layout/PROOF-macro-track-packing.md`):
+  `devgen.pack_tracks()` -- the same substitution #341 made in
+  `divider_chain.py` one level up -- puts those 31 nets on **11** tracks,
+  15.00 um less band. 22.800 um / `y1 = 22.5`.
+* **#458** (`layout/evidence/divider-chain-layout/PROOF-over-device-rows.md`):
+  `devgen.pack_tracks_over_devices()` makes that assignment *obstacle-aware*,
+  so a track sits at the lowest y whose drawn rectangle clears every Metal2
+  shape already there (the Via1/Metal2 landing square each riser drops on each
+  of this macro's ~200 device pads) rather than in a band above the device
+  rows at all. **12 of the resulting 13 tracks land below this macro's own
+  topmost pad**, in the Metal2-free corridors its own row-cell frame leaves --
+  the widest being the inter-row channel between the pulldown and pullup
+  device rows. A further 10.28 um off. 12.520 um / `y1 = 12.22`.
+
+After each, the committed `div23_cell.gds`, `drc-clean/` and `lvs-clean/`
+artifacts in this directory are regenerated at the new geometry and still
+DRC-clean (and, since #458, DRC-clean under `--offgrid` too) and LVS-matched;
+`div23_cell.spice` is byte-for-byte unchanged both times. `x0`, `x1`, `y0` and
+**every pin location below are unchanged** by either -- only each net's own
+`track_y` moved, which is what makes both pure routing-fabric changes.
 
 | Pin | (x, y) um |
 |---|---|

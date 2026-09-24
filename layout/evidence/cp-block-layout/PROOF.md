@@ -153,3 +153,129 @@ layout/tests`):
 
 Regenerate via `python3 -m pfd_cp.cp` (from `layout/pll_top/`) +
 `layout/run_pv.py drc`; do not hand-edit any file under this directory.
+
+---
+
+## Addendum (issue #448): labels-only regeneration, DRC re-run
+
+`cp`'s composed cell used to inherit its sub-cells' own standalone pin
+labels through `top.flatten(-1, True)`. Those names are local to the
+sub-cell's own LVS claim and name the wrong net one level up — in
+`pfd_cp`, the version of this defect that reached the top level put an
+`ENB` text on the block's ground rail, which broke gf180mcu's substrate
+global-net merge and mismatched all 84 n-channel bulk terminals (full
+write-up: `layout/evidence/pfd-cp-layout/PROOF.md`, "Addendum 2"). The fix
+is `_canvas.Canvas.clear_inherited_labels()`, called immediately after the
+composing `flatten()` here, before this block promotes its own boundary
+pins.
+
+**Geometry did not change.** A layer-by-layer `klayout.db.Region` XOR of
+this block's pre-change and post-change GDS is empty on all 11 drawing
+layers; only the 34/10 label purpose differs. The committed `cp.gds` was
+regenerated anyway so the tree matches its generator, and the DRC deck was
+re-run on that exact file rather than the earlier claim being carried over:
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `cp` DRC, table `main` | clean | `DRC clean: cp (D), 0 violations` | **PASS** |
+
+`drc-clean/drc.stdout.log` and `drc-clean/cp_main.lyrdb` are that run's own
+output. Every `connectivity/*.netcheck.log` record in this directory is
+unchanged, and was verified byte-identical after the rebuild — the expected
+result of a labels-only change.
+
+| | |
+|---|---|
+| Run | 2026-09-21 |
+| Branch point | `origin/main` @ `93e36cd7` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout | `KLayout 0.28.16` |
+
+---
+
+## Addendum (issue #455): trunk-row pitch corrected — 26,062 → 25,630 µm²
+
+`BACKBONE_PITCH_UM`, the Y pitch between two of this block's six Metal2
+backbone trunk rows, was `cp_array.RISER_MIN_PITCH_UM` (1.00 µm). That
+constant is `cp_array`'s minimum centre-to-centre separation between two
+Metal3 *riser columns* — an **X** pitch between vertical Metal3 strips,
+sized against `M3.2a`. A trunk row is a horizontal **Metal2** strip, and the
+pitch two of those need is `cp_array.METAL2_TRACK_PITCH_UM` (0.75 µm), which
+leaves 0.75 − 0.44 = 0.31 µm between two adjacent rows' Via2 landing pads,
+above `M2.2a`'s 0.28 µm minimum. `cp_output_stage`'s own glue bus inside
+this very block already stacks 14 tracks at that pitch *with* Via2 landings
+on them and is signoff-clean, so this is a correction to the wrong constant
+being used for the axis, not a new tolerance being claimed.
+
+| | before | after |
+|---|---|---|
+| `footprint` tuple | 347.410 × 74.725 µm | **347.410 × 73.225 µm** |
+| committed GDS bbox | 344.98 × 75.55 µm (26,062 µm²) | **344.98 × 74.30 µm (25,630 µm²)** |
+| backbone rows | y 56.48 … 61.48 (1.00 µm pitch) | y 56.48 … 60.23 (0.75 µm pitch) |
+
+Nothing else about this block changes: the same six nets bridge across the
+same two sub-blocks by the same Riser+Trunk construction at the same X
+columns, no boundary pin moves, and `cp_output_stage`/`cp_dumpbuf` are
+untouched.
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `cp` DRC, table `main` (default) | clean | `DRC clean: cp (D), 0 violations` | **PASS** |
+| `netcheck.check_gds()` Metal1-3 connectivity | no shorts, no splits | `connectivity clean: 22 nets, no shorts, no splits` | **PASS** |
+
+`drc-clean/` and `connectivity/` in this directory are the new runs'
+outputs. Driven by issue #455's work on `pfd_cp`, the block that composes
+this one — full record at
+`layout/evidence/pfd-cp-layout/PROOF-455-fold.md`.
+
+## Addendum (issue #469): 0.75 µm inherited from `cp_output_stage`'s packed glue bus
+
+| | before | after |
+|---|---|---|
+| `footprint` tuple | 347.410 × 73.225 µm | **347.410 × 72.475 µm** |
+| committed GDS bbox | 344.98 × 74.30 µm (25,630 µm²) | **344.98 × 73.55 µm (25,372 µm²)** |
+| backbone rows | y 56.48 … 60.23 | y 55.73 … 59.48 |
+
+Nothing in `cp.py` changed. Issue #469 packed `cp_output_stage`'s own glue-bus
+track band from 14 tracks to 13 (`cp_array.pack_tracks()` in place of
+`NetTracks`), which makes that sub-block 0.75 µm shorter and moves this
+block's backbone band down with it. One of `cp_output_stage`'s tracks now
+carries two nets (`DNT` and `UPB`, 9.26 µm apart in x); this module reaches
+every glue bus at that bus's own edge and extends none of them, so the
+invariant a packed band adds is `cp_output_stage`'s to hold — it re-proves it
+on every build with `cp_array.check_track_separation()`.
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `cp` DRC, table `main` (default) | clean | `DRC clean: cp (D), 0 violations` | **PASS** |
+| `netcheck.check_gds()` Metal1-3 connectivity | no shorts, no splits | `connectivity clean: 22 nets, no shorts, no splits` | **PASS** |
+
+`drc-clean/` and `connectivity/` in this directory are the new runs' outputs.
+Full record: `layout/evidence/pfd-cp-layout/PROOF-469-glue-bus-packing.md`.
+
+## Addendum 2 (issue #473): 2.25 µm more, from interleaving `cp_output_stage`'s glue inverters
+
+| | before | after |
+|---|---|---|
+| `footprint` tuple | 347.410 × 72.475 µm | **347.410 × 70.225 µm** |
+| committed GDS bbox | 344.98 × 73.55 µm (25,372 µm²) | **344.98 × 71.30 µm (24,595 µm²)** |
+| backbone rows | y 55.73 … 59.48 | y 53.48 … 57.23 |
+
+Nothing in `cp.py` changed here either. Issue #473 reordered
+`cp_output_stage`'s single device row so each steering pair's own glue
+inverter sits beside the switch group it drives (`cp_output_stage.ROW_ORDER`),
+which shortens `DN`/`DNB`/`UP`/`UPB` and takes that block's glue band from 13
+tracks to 10 — 2.25 µm, which this block inherits whole and passes on to
+`pfd_cp`.
+
+Three of `cp_output_stage`'s tracks now carry more than one net. As with the
+addendum above, that invariant is `cp_output_stage`'s to hold: this module
+reaches every glue bus at that bus's own edge and extends none of them.
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `cp` DRC, table `main` (default) | clean | `DRC clean: cp (D), 0 violations` | **PASS** |
+| `netcheck.check_gds()` Metal1-3 connectivity | no shorts, no splits | `connectivity clean: 22 nets, no shorts, no splits` | **PASS** |
+
+`drc-clean/` and `connectivity/` in this directory are the new runs' outputs.
+Full record: `layout/evidence/pfd-cp-layout/PROOF-473-glue-inverter-interleave.md`.

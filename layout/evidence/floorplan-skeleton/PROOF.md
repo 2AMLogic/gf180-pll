@@ -83,3 +83,333 @@ and `layout/floorplan/skeleton.py`'s own module docstring.
 Regenerate via `layout/floorplan/skeleton.py` + `layout/run_pv.py drc` (see
 `PLL-FLOORPLAN.md` § "GDS skeleton"); do not hand-edit any file under this
 directory.
+
+---
+
+## Re-run, issue #461: the committed artifact was **six** merges behind its generator, not three
+
+**Everything above this line is the record as it stood on 2026-09-09, when
+the committed `pll_floorplan_skeleton.gds` was last written. It described a
+placement that six subsequent merges had moved.** This section is appended
+rather than folded into it, per this repository's append-only evidence
+convention; the numbers above are left exactly as they were recorded, and are
+now historical.
+
+### How it was found, and how far behind it was
+
+`layout/harness/reproduce.py` (issue #451) rebuilds every committed block GDS
+under `layout/evidence/` from its own generator and compares the result
+layer by layer as merged geometry. 25 of 26 registered blocks reproduced;
+this artifact did not, and #451 registered it in that module's `EXCLUDED` map
+pointing at issue #461 rather than fixing another block's evidence out of
+scope. Both that exclusion comment and #461's own body say the file predates
+**three** merges (PRs #354, #358, #398). Re-derived here against the actual
+history — `git archive <sha> layout` into a scratch tree, then
+`python3 -m floorplan.skeleton` at **every one of the 41 commits that touched
+`layout/` since the artifact was written**, keeping the ones whose output
+differs from their predecessor's — it is **six**:
+
+| Commit | Merge | What it moved | Skeleton bbox | `total_extent_um2()` |
+|---|---|---|---|---|
+| `f27abb94` | #337 (issue #324) | **the committed artifact's own placement** | `(0, −15) … (663.18, 195)` | 126,395 µm² |
+| `155f0628` | #342 (issue #310) | `DIVIDER_LOCK` stops being the 90 × 50 µm placement estimate; real `divider_chain` + `lock_detector` | `(0, −15) … (2650.28, 447.42)` | 1,185,788 µm² |
+| `8d793429` | #346 (issue #341) | divider-chain routing-track packing (height 93.82 → 57.07 µm) | `(0, −15) … (2650.28, 410.67)` | 1,088,390 µm² |
+| `a64c7ddf` | #354 (issue #336) | VCO band mirror's 2-D common-centroid fold | `(0, −15) … (2650.28, 414.15)` | 1,097,614 µm² |
+| `30345cc2` | #358 (issue #344) | divider-chain six-instance row folded in two | `(0, −15) … (1333.66, 457.37)` | 609,976 µm² |
+| `fe400132` | #377 (issue #371) | `vco/ring.py` Metal1 short fix + VBP/VBN Metal2 trunk — grew `VCO_CORE` by 1.0 µm in height | `(0, −15) … (1333.66, 458.37)` | 611,310 µm² |
+| `13a24af2` | #398 (issue #386) | `pfd_cp` placeholder replaced by the assembled block | `(0, −15) … (1333.66, 458.37)` | 611,310 µm² |
+
+The committed file reproduced **exactly** from `f27abb94`'s generator (28
+shapes, merged 0/0 area 108,020.7 µm², bbox `(0, −15) … (663.18, 195)`), which
+is what pins the artifact to that commit and dates the drift to the very next
+one.
+
+Two things the "three merges" framing missed, both worth recording because
+they are the general shape of this failure rather than details of this block:
+
+- **The two largest single moves are not in it.** #310's `DIVIDER_LOCK`
+  reconciliation (+1.06 × 10⁶ µm² of extent) and #341's track packing
+  (−97,398 µm²) each moved the plan further than any of the three named.
+- **A merge that never touches `skeleton.py` can still move the plan.**
+  `fe400132` is a `vco/ring.py` DRC fix; the skeleton's `VCO_CORE` is
+  `vco/block.py`'s `footprint_um()`, so the block's own height change
+  propagated into the floorplan with no edit to this module at all. Auditing
+  "what changed the floorplan" by `git log -- layout/floorplan/skeleton.py`
+  therefore undercounts by construction — which is exactly why the guard
+  below rebuilds rather than inspects.
+
+### Result of the re-run
+
+Regenerated with the module's new CLI (added in this same change — see below)
+and re-run through the same foundry deck:
+
+| | |
+|---|---|
+| Generated | 2026-09-21T19:59 UTC, from `30e67227` (`main` at the time of the re-run) |
+| Generator | `python3 -m floorplan.skeleton --outdir evidence/floorplan-skeleton`, run from `layout/` |
+| DRC invoked as | `python3 layout/run_pv.py drc layout/evidence/floorplan-skeleton/pll_floorplan_skeleton.gds --top pll_floorplan_skeleton --run-dir /tmp/pll-floorplan-461/drc` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout (application, deck runner) | `KLayout 0.28.16` |
+| DRC deck | `<pdk>/libs.tech/klayout/drc/run_drc.py`, table `main`, `--variant=D` |
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `pll_floorplan_skeleton` DRC, table `main` | clean (no rule keys off layer 0/0) | `Klayout DRC run is clean. GDS has no DRC violations.` | **PASS** |
+
+The "what this is, and is not" section at the top of this file is unchanged
+and still governs: layer (0, 0) carries no rule in this deck, so this run is
+clean **by construction**. It is a flow exercise over a multi-block layout,
+never a device-level DRC claim about blocks whose real geometry lives in
+their own evidence directories.
+
+### What the regenerated artifact contains
+
+| | committed through #324 | regenerated (#461) |
+|---|---|---|
+| Shapes on layer 0/0 | 28 (14 boxes + 14 labels) | **32** (16 boxes + 16 labels) |
+| Bounding box | `(0, −15) … (663.18, 195)` µm | **`(0, −15) … (1333.66, 458.37)` µm** |
+| Merged 0/0 area | 108,020.7 µm² | **416,248.2 µm²** |
+| `total_extent_um2()` (block rectangles only) | 126,395 µm² (≈16 % under the 0.15 mm² target) | **611,310 µm² — 4.08× the 0.15 mm² target** |
+| `pfd_cp` | `(0, 0) … (150, 100)` — placement estimate | **`(0, 0) … (434.31, 80.73)`** — real, #386 |
+| `divider_lock` | `(0, 140) … (90, 190)` — placement estimate | **`(0, 239.48) … (1333.66, 458.37)`** — sized to the two real blocks, #310/#341/#344 |
+| `vco` | `(465, 0) … (648.18, 170.28)` | **`(749.31, 0) … (921.83, 184.48)`** — #336's 2-D fold, then #371's ring fix |
+| Labels | 14 | **16** (`divider_lock.divider_chain`, `divider_lock.lock_detector` added at #310) |
+
+Not one box is common to the two files: every block's origin moved, because
+`LOOP_FILTER`/`VCO_CORE` are placed relative to `PFD_CP.w` and `DIVIDER_LOCK`
+is placed above the tallest of them.
+
+**The `total_extent_um2()` row is a restatement, not a new finding.** That
+number is computed from `skeleton.py` itself, not from this artifact, so
+`PLL-FLOORPLAN.md` §5.3/§5.4 have carried the ~0.61 × 10⁶ µm² figure since
+#358/#398 and were never derived from the stale file. The 126,395 µm² / ≈16 %
+headroom stated at the top of *this* file is the figure that was stale, and it
+is superseded here. See `PLL-FLOORPLAN.md` §5.7 for which §5 figures the
+regeneration does and does not change (answer: none of the budget arithmetic).
+
+### Why it could drift, and what now stops it
+
+Through #398 this module had `build(outdir)` and **no CLI**, so this file
+documented regeneration as `python3 -c "from floorplan import skeleton;
+skeleton.build(...)"` — an ad-hoc one-liner that `harness/reproduce.py` could
+not invoke, which is precisely why this was the one committed block GDS the
+reproducibility guard had to exclude by name. `skeleton.py` now has a
+`main()` taking `--outdir`, matching every other generator in the repository,
+and the entry has moved out of `reproduce.py`'s `EXCLUDED` and into its
+`BLOCKS`:
+
+```
+$ python3 -m harness.reproduce          # from layout/
+...
+ok    evidence/floorplan-skeleton/pll_floorplan_skeleton.gds
+26/26 committed block GDS files reproduce from their generators
+```
+
+So a seventh silent move of the plan is no longer possible: it fails
+`layout/tests/test_gds_reproducibility.py` at the commit that introduces it —
+including a move that, like `fe400132` above, edits a VCO sub-block and never
+touches `skeleton.py`.
+
+### Artifacts refreshed by this run
+
+| Path | What it is |
+|---|---|
+| `pll_floorplan_skeleton.gds` | the regenerated skeleton (16 rectangles + 16 text labels, all on layer 0/0) |
+| `drc-clean/pll_floorplan_skeleton_main.lyrdb` | KLayout DRC report database from the 2026-09-21 run (empty violations) |
+| `drc-clean/drc.stdout.log` | captured `run_drc.py` stdout+stderr from the same run |
+
+Regenerate via `python3 -m floorplan.skeleton --outdir evidence/floorplan-skeleton`
+(from `layout/`) followed by the `run_pv.py drc` command tabulated above; do
+not hand-edit any file under this directory.
+
+## Re-run, issue #454: `DIVIDER_LOCK` shrinks again, this time from a macro-level track pack
+
+**Everything above this line describes the artifact as regenerated at #461.
+It is superseded again here, one merge later, by the same mechanism §454's
+own re-derivation names: `skeleton.py` reads `DIVIDER_CHAIN_STANDALONE_H_UM`
+from `layout/pll_top/divider_chain/divider_chain.py`'s own measured
+footprint, and that PR shrank it 100.29 → 70.29 µm by packing `div23_cell`'s
+own Metal2 track band — the same class of move `fe400132` made through
+`vco/ring.py` at #461's re-run, propagating into this file with no edit to
+`skeleton.py` itself.** `layout/tests/test_gds_reproducibility.py` caught
+it immediately (drift of exactly 40,009.8 µm² on layer 0/0), which is the
+guard added at #461 doing precisely the job it was built for.
+
+| | committed through #461 | regenerated (#454) |
+|---|---|---|
+| Bounding box | `(0, −15) … (1333.66, 458.37)` µm | **`(0, −15) … (1333.66, 428.37)`** µm |
+| Merged 0/0 area | 416,248.2 µm² | **376,238.4 µm²** (−40,009.8 µm²) |
+| `total_extent_um2()` (block rectangles only) | 611,310 µm² | **571,300 µm²** |
+| Shapes on layer 0/0 | 32 | 32 (unchanged — no block added or removed) |
+
+Only `divider_lock`'s bounding box moves (its height drops by the same 30.00
+µm `PLL-FLOORPLAN.md` §5.8 records for `divider_chain`); `vco`, `pfd_cp` and
+the loop-filter/VCO placement rules are untouched, so this is a pure height
+reduction, not a re-placement.
+
+Re-run through the same foundry deck (`gf180mcuD`, open_pdks
+`c6d73a35f524070e85faff4a6a9eef49553ebc2b`, KLayout 0.30.10, table `main`,
+`--variant=D`): `Klayout DRC run is clean. GDS has no DRC violations.` — clean
+by construction, same as every prior run of this file, since layer (0, 0)
+still carries no rule in this deck.
+
+`total_extent_um2()` is, as before, a restatement rather than a new
+finding: it is computed from `skeleton.py`'s own `Block` tuples and has
+carried the ~0.571 × 10⁶ µm² figure since this PR's own change to
+`DIVIDER_CHAIN_STANDALONE_H_UM`, independent of when this committed artifact
+catches up. See `PLL-FLOORPLAN.md` §5.8 for the divider-chain measurement
+this follows from.
+
+---
+
+## Re-run, issue #455: `PFD_CP` shrinks by the fold; the skeleton's bounding box does not move
+
+The same propagation mechanism the #454 section above describes, one more
+merge on: `skeleton.py` records `pfd_cp`'s own standalone footprint as
+`PFD_CP_STANDALONE_W_UM`/`_H_UM`, and issue #455 folded `pfd` into `cp`'s own
+empty band and corrected the Metal2 trunk band's pitch and base — 434.31 ×
+80.73 → **347.41 × 76.23 µm**. Regenerated here rather than left to drift;
+`layout/tests/test_gds_reproducibility.py` would have caught it either way.
+
+| | committed before | regenerated (#455) |
+|---|---|---|
+| Bounding box | `(0, −15) … (1333.66, 469.52)` µm | **unchanged** |
+| Merged 0/0 area | 431,118.5 µm² | **422,539.7 µm²** (−8,578.8 µm²) |
+| `total_extent_um2()` (block rectangles only) | 634,759 µm² | **626,180 µm²** |
+| Shapes on layer 0/0 | 32 | 32 (unchanged — no block added or removed) |
+
+**Only the `PFD_CP` rectangle changes size**, and the −8,578.8 µm² of merged
+0/0 area is exactly `pfd_cp`'s own footprint reduction — nothing is
+double-counted and nothing else moved area. `LOOP_FILTER` and `VCO_CORE`
+*do* shift 86.90 µm left (their x is defined off `PFD_CP.x + PFD_CP.w +
+DOMAIN_SPACING`), but the skeleton's overall bounding box is set by
+`DIVIDER_LOCK`'s own 1333.66 µm width, which they stay well inside, and its
+height by `LOOP_FILTER`'s 195 µm, which `PFD_CP` at 76.23 µm does not
+approach. So this is a pure area reduction, not a re-placement.
+
+**A note on the #454 section's own figures, which had gone stale.** That
+section records a regenerated bounding box of `(0, −15) … (1333.66, 428.37)`
+µm, 376,238.4 µm² and a `total_extent_um2()` of 571,300 µm². The committed
+artifact at the branch point of this run measures 469.52 µm tall,
+431,118.5 µm² and 634,759 µm² — the difference is issue #449's
+`lock_detector` growth (7,468 → 30,586 µm², `PLL-FLOORPLAN.md` §5.9), which
+propagated into `LOCK_DETECTOR_STANDALONE_W_UM`/`_H_UM` and from there into
+this artifact through exactly the mechanism both the #461 and #454 sections
+name. The *artifact* tracked it (the reproducibility guard has been green
+throughout); this *record's prose* did not. Stated here rather than silently
+corrected, and the table above is measured against the real committed file,
+not against that prose.
+
+Re-run through the same foundry deck (`gf180mcuD`, open_pdks
+`c6d73a35f524070e85faff4a6a9eef49553ebc2b`, KLayout 0.28.16, table `main`,
+`--variant=D`): `DRC clean: pll_floorplan_skeleton (D), 0 violations` —
+clean by construction, same as every prior run of this file, since layer
+(0, 0) still carries no rule in this deck.
+
+See `layout/evidence/pfd-cp-layout/PROOF-455-fold.md` for the block
+measurement this follows from, and `PLL-FLOORPLAN.md` §5.10 for the re-run
+whole-chip arithmetic.
+
+## Addendum (issue #469): `PFD_CP`'s rectangle follows the block down one more track
+
+`skeleton.PFD_CP_STANDALONE_H_UM` records `pfd_cp`'s own standalone footprint,
+so packing `cp_output_stage`'s glue-bus track band (14 tracks to 13) shrinks
+this rectangle with the block: **347.41 × 76.23 → 347.41 × 75.48 µm**. Width
+is unchanged, so no other block in the skeleton moves and the skeleton's own
+bounding box is unchanged (`DIVIDER_LOCK`'s width still sets it). Regenerated
+here rather than left to drift; `test_gds_reproducibility.py` rebuilds this
+artifact from `floorplan.skeleton` on every run, and
+`test_floorplan_skeleton.py`'s `RecordedFootprintDriftTests` rebuilds the real
+block and asserts the recorded constant matches it.
+
+Re-run through the same foundry deck (`gf180mcuD`, open_pdks
+`c6d73a35f524070e85faff4a6a9eef49553ebc2b`, KLayout 0.28.16, table `main`,
+`--variant=D`): `DRC clean: pll_floorplan_skeleton (D), 0 violations` — clean
+by construction, as every prior run of this file, since layer (0, 0) still
+carries no rule in this deck.
+
+See `layout/evidence/pfd-cp-layout/PROOF-469-glue-bus-packing.md` for the block
+measurement this follows from, and `PLL-FLOORPLAN.md` §5.11 for the re-run
+whole-chip arithmetic.
+
+---
+
+## Regenerated again at issue #458 — the divider chain's tracks move over its device rows
+
+The same propagation mechanism the #454, #455 and #469 sections above describe,
+one more merge on: `skeleton.py` records the divider chain's own standalone
+footprint as `DIVIDER_CHAIN_STANDALONE_W_UM`/`_H_UM`, and issue #458 made both
+of that block's Metal2 track assignments obstacle-aware
+(`devgen.pack_tracks_over_devices()`), so its tracks sit in the plane over its
+own device rows rather than in a band above them — 1317.66 × 70.29 →
+**1317.66 × 41.99 µm**. Regenerated here rather than left to drift;
+`layout/tests/test_gds_reproducibility.py` would have caught it either way.
+
+**The "committed before" column below is the post-#469 artifact**, not the
+post-#455 one the section above it was written against: #474 (issue #469)
+landed its `cp_output_stage` glue-bus packing on `main` while this branch was
+in review, taking `PFD_CP_STANDALONE_H_UM` 76.23 → 75.48 µm, and this branch
+was rebased onto it. Both levers are therefore in the "regenerated" column;
+the merged 0/0 baseline is 260.6 µm² smaller than the #455 section's for that
+reason, and the −37,742.5 µm² delta below is this issue's own contribution
+measured on top of it.
+
+| | committed before (post-#469) | regenerated (#458, on top of #469) |
+|---|---|---|
+| Bounding box | `(0, −15) … (1333.66, 469.52)` µm | **`(0, −15) … (1333.66, 441.22)` µm** (−28.30 µm tall) |
+| Merged 0/0 area | 422,279.1 µm² | **384,536.6 µm²** (−37,742.5 µm²) |
+| `total_extent_um2()` (block rectangles only) | 626,180 µm² | **588,437 µm²** |
+| Shapes on layer 0/0 | 32 | 32 (unchanged — no block added or removed) |
+
+**Only the `DIVIDER_LOCK` region changes size**, and unlike the #455 merge this
+one *does* move the skeleton's overall bounding box: the divider chain is the
+block `DIVIDER_LOCK`'s height is sized from, and `DIVIDER_LOCK` is the topmost
+region, so the whole skeleton gets 28.30 µm shorter. Nothing is re-placed —
+every block's x and every other block's y is unchanged, and the −37,742.5 µm²
+of merged 0/0 area is `DIVIDER_LOCK`'s own reduction (its 1333.66 µm width ×
+28.30 µm) to within rounding.
+
+Re-run through the same foundry deck (`gf180mcuD`, open_pdks
+`c6d73a35f524070e85faff4a6a9eef49553ebc2b`, KLayout 0.28.16, table `main`,
+`--variant=D`): `DRC clean: pll_floorplan_skeleton (D), 0 violations` —
+clean by construction, same as every prior run of this file, since layer
+(0, 0) still carries no rule in this deck.
+
+See `layout/evidence/divider-chain-layout/PROOF-over-device-rows.md` for the
+block measurement this follows from, and `PLL-FLOORPLAN.md` §5.13 for the
+re-run whole-chip arithmetic.
+
+---
+
+## Regenerated again at issue #473 — `PFD_CP`'s rectangle follows the block down three more tracks
+
+Same propagation mechanism once more. `skeleton.PFD_CP_STANDALONE_H_UM`
+records `pfd_cp`'s own standalone footprint, and issue #473 reordered
+`cp_output_stage`'s single device row so each steering pair's glue inverter
+sits beside the switch group it drives — taking that block's glue band from 13
+Metal2 tracks to 10, which `cp` and `pfd_cp` inherit whole: **347.41 × 75.48 →
+347.41 × 73.23 µm**.
+
+| | committed before (post-#458) | regenerated (#473) |
+|---|---|---|
+| Bounding box | `(0, −15) … (1333.66, 441.22)` µm | `(0, −15) … (1333.66, 441.22)` µm (unchanged) |
+| Merged 0/0 area | 384,536.6 µm² | **383,754.9 µm²** (−781.7 µm²) |
+| Shapes on layer 0/0 | 32 | 32 (unchanged — no block added or removed) |
+
+Height only, on one block: the skeleton's own bounding box is unchanged
+(`DIVIDER_LOCK` still sets both dimensions) and nothing is re-placed, so the
+−781.7 µm² is exactly `PFD_CP`'s own 347.41 µm width × 2.25 µm. Regenerated
+here rather than left to drift; `test_gds_reproducibility.py` rebuilds this
+artifact from `floorplan.skeleton` on every run, and
+`test_floorplan_skeleton.py`'s `RecordedFootprintDriftTests` rebuilds the real
+block and asserts the recorded constant matches it.
+
+Re-run through the same foundry deck (`gf180mcuD`, open_pdks
+`c6d73a35f524070e85faff4a6a9eef49553ebc2b`, KLayout 0.28.16, table `main`,
+`--variant=D`): `DRC clean: pll_floorplan_skeleton (D), 0 violations` — clean
+by construction, same as every prior run of this file, since layer (0, 0)
+still carries no rule in this deck.
+
+See `layout/evidence/pfd-cp-layout/PROOF-473-glue-inverter-interleave.md` for
+the block measurement this follows from, and `PLL-FLOORPLAN.md` §5.14 for the
+re-run whole-chip arithmetic.

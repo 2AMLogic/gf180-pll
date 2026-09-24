@@ -46,12 +46,23 @@ METAL2 TRUNK FAR ABOVE BOTH BLOCKS
 --------------------------------------------------------------------------
 Both sub-blocks are already **fully mesh-routed**: every pad either side
 believes belongs to a shared net already carries a Via1/Metal2/Via2/Metal3
-riser up to that net's own dedicated Metal2 track (``cp_output_stage``'s own
+riser up to that net's own Metal2 track (``cp_output_stage``'s own
 "REACHING THE ARRAY BLOCK'S NETS" docstring section states the exact DRC
 failure -- ``V1.1``/``V2.1``/``M2.2a`` -- from landing a *second* via stack on
 a pad that already carries one; ``cp_dumpbuf``'s own external pins are no
 different, each one already riser-routed by its own ``build()``). So this
 module never lands a fresh via directly on either side's own pad.
+
+Since issue #469 one of those tracks is no longer that net's *exclusively*:
+``cp_output_stage``'s glue band is packed, and ``DNT``/``UPB`` share one
+``track_y`` there (the two are 9.26 um apart in x). Nothing in this module
+changes as a result -- every quantity it reads is a bus's own
+``(track_y, x_lo, x_hi)``, and it lands only at that bus's own edge, which
+is still that net's own x whoever else is on the same y. The invariant that
+would matter here is the one ``cp_output_stage`` owns and re-proves on every
+build (``cp_array.check_track_separation()``): a parent may not extend a
+packed bus through its track-mate. This module extends no glue bus at all --
+it rises from ``s_x_hi`` straight to a trunk row far above both blocks.
 
 Four designs were tried before this one held, each instructively:
 
@@ -203,16 +214,30 @@ DUMPBUF_REACH_MARGIN_UM = cos.CONN_COLUMN_MARGIN_UM
 #: clear of every routing channel either sub-block already uses on its own.
 BACKBONE_MARGIN_UM = cos.CONN_COLUMN_MARGIN_UM
 
-#: Y pitch between two different nets' own Metal2 trunk rows -- same value
-#: (and the same minimum-metal-pitch citation) as
-#: ``cp_array.RISER_MIN_PITCH_UM``. Trunk rows may be stacked this tightly
-#: because they are parallel, non-touching same-layer strips (each net's own
-#: trunk never touches a neighbour's, the same invariant
-#: ``cp_output_stage``'s own ``NetTracks`` already guarantees for its own
-#: per-net Metal2 tracks) and the only thing that ever crosses *between*
-#: rows -- a net's own Metal3 riser -- has no DRC relationship to a Metal2
-#: row it merely passes under.
-BACKBONE_PITCH_UM = cp_array.RISER_MIN_PITCH_UM
+#: Y pitch between two different nets' own Metal2 trunk rows. Trunk rows may
+#: be stacked this tightly because they are parallel, non-touching same-layer
+#: strips (each net's own trunk never touches a neighbour's, the same
+#: invariant ``cp_output_stage``'s own ``NetTracks`` already guarantees for
+#: its own per-net Metal2 tracks) and the only thing that ever crosses
+#: *between* rows -- a net's own Metal3 riser -- has no DRC relationship to a
+#: Metal2 row it merely passes under.
+#:
+#: **Corrected at issue #455** from ``cp_array.RISER_MIN_PITCH_UM`` (1.0 um)
+#: to ``cp_array.METAL2_TRACK_PITCH_UM`` (0.75 um). ``RISER_MIN_PITCH_UM`` is
+#: that module's minimum centre-to-centre separation between two Metal3
+#: *riser columns* -- an **X** pitch between vertical Metal3 strips, sized
+#: against ``M3.2a``. A trunk row is a horizontal **Metal2** strip, and the
+#: pitch two of them need is the one ``cp_array.METAL2_TRACK_PITCH_UM``
+#: already states and every other Metal2 track band in this package already
+#: uses: 0.75 um, leaving 0.75 - 0.44 = 0.31 um between two adjacent rows'
+#: own Via2 landing pads (``half_v2`` = 0.22 um each side), above ``M2.2a``'s
+#: 0.28 um minimum. That is not an argument from first principles either --
+#: ``cp_output_stage``'s own glue bus already stacks 13 tracks (14 before
+#: issue #469 packed it) at exactly
+#: this pitch *with* Via2 landings on them, and is DRC-clean at signoff grade
+#: (``layout/evidence/cp-layout/``). 1.0 um was simply the wrong constant for
+#: the axis; using it cost this block 0.25 um per row for nothing.
+BACKBONE_PITCH_UM = cp_array.METAL2_TRACK_PITCH_UM
 
 
 def _dumpbuf_bus_track(
@@ -390,6 +415,10 @@ def build(outdir: Path | None = None) -> CpLayout:
         _place(stage_index, 0.0, 0.0)
         _place(dumpbuf_index, dx, dy)
         canvas.top.flatten(-1, True)
+    # NET_MAP renames six of cp_dumpbuf's own nets on the way in, so its
+    # inherited labels are actively wrong here. This level owns the names
+    # (issue #440) -- see _canvas.Canvas.clear_inherited_labels().
+    canvas.clear_inherited_labels()
 
     # --- Metal2 trunk rows: one dedicated Y per net, strictly above every
     # routing channel either placed block already uses on its own. ---

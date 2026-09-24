@@ -29,8 +29,11 @@ module places every one of the 8 instances' own devices -- flattening
 ``dff_tg_3v3``'s own 10-instance internal structure too, rather than
 instancing its already-built GDS -- as bare columns in one shared ``Canvas``
 and resolves every net itself, composite-wide, with the same
-``devgen.route_net()``/``devgen.NetTracks`` Metal2/3 fabric ``dff_tg_3v3.py``
-already proved out. This is flat macro-composition, not GDS-level
+``devgen.route_net()`` Metal2/3 riser-to-bus fabric ``dff_tg_3v3.py`` already
+proved out (on a *packed* track band since issue #442 -- see "TRACK PACKING"
+below -- rather than ``devgen.NetTracks``'s one-track-per-net band, which is
+the only part of that fabric this module does not share with it). This is
+flat macro-composition, not GDS-level
 ``CellInstArray`` placement of 8 already-built leaf/composite cells -- see
 ``dff_tg_3v3.py``'s own module docstring and ``layout/pll_top/lock_detector/``
 for the style precedent this generalizes.
@@ -128,6 +131,100 @@ follow-up collision (the "gate" role's own worst-case reach creeping back
 towards a *different* role's always-present natural geometry) and why both
 roles need a fixed anchor, not just one.
 
+TRACK PACKING: THIS MACRO'S BAND IS THE DIVIDER CHAIN'S DOMINANT ROUTING COST
+--------------------------------------------------------------------------------
+Issue #341 replaced ``divider_chain.py``'s own *top-level*
+:class:`devgen.NetTracks` pass (one never-reused track per net) with
+:func:`devgen.pack_tracks` (one track shared by every set of nets whose drawn
+Metal2 extents do not collide in x). That lever was never applied one level
+down, here -- and measured against the committed GDS (issue #442), **here is
+where almost all of the height was**:
+
+===================================  ============  =========================
+Term                                  Height (um)   Share of the 100.29 um
+===================================  ============  =========================
+devices (``comp``), both rows            26.32       26.2 %
+**this macro's own band, x2 rows**     **46.50**     **46.4 %**
+``divider_chain``'s own packed bands     16.50       16.5 %
+wells, taps, band base gaps, margin      10.97       10.9 %
+===================================  ============  =========================
+
+Measured, not asserted: the ``comp`` figure is the coalesced diffusion band
+``python3 layout/run_pv.py area`` reports for this block; the two band
+figures are the track counts :func:`devgen.pack_tracks` actually returns at
+each level (31 nets -> 11 tracks here; 38 -> 12 and 40 -> 10 at top level,
+i.e. 9.00 + 7.50 um), times the shared 0.75 um pitch; the last row is the
+remainder and is not independently derived.
+
+``layout/evidence/area-audit/PROOF.md`` (issue #442) read a block-wide
+Metal2 profile and attributed 73.97 um of "no-diffusion band" to the
+*top-level* track fabric. That measurement is right and its attribution was
+wrong: the top-level bands are only 16.50 um of it. The bulk is this macro's
+own internal band, counted once per instance and therefore once per
+``ROW_PLAN`` row, because each row's height is gated by the
+``div23_cell`` instance standing in it.
+
+This macro routes **31 nets**. Under :class:`devgen.NetTracks` that is 31
+tracks x 0.75 um = 23.25 um of band (footprint top 37.50 um). Under
+:func:`devgen.pack_tracks` the same 31 nets need **11** tracks -- the
+interval graph's own clique number, which the left-edge algorithm provably
+achieves -- i.e. 8.25 um (footprint top 22.50 um). Only six nets here reach
+across most of the macro's 332 um width (``VSS``, ``VDD``, ``MODOUT``,
+``MODIN``, ``CKIN``, ``QB``); the other 25 are local to one or two adjacent
+columns, which is exactly the regime :func:`devgen.pack_tracks`'s own
+module-level comment describes as the win.
+
+15.00 um per instance x 2 rows = 30.00 um off the block, measured:
+``divider_chain`` goes 1317.66 x 100.29 um (132,148 um^2) to 1317.66 x
+70.29 um (92,618 um^2), **-29.9 %**. Nothing electrical changes -- both
+modules' :func:`reference_netlist` outputs are byte-for-byte what they were,
+the devices, pads and pad-to-track risers are drawn exactly as before, and
+this macro's own footprint x0/x1/y0 and all seven pin locations are
+unchanged; only each net's own ``track_y`` moves. See
+``layout/evidence/divider-chain-layout/PROOF-macro-track-packing.md``.
+
+What that did **not** do is issue #454's literal framing -- moving a band
+into the plane *over* a device row. It emptied the band instead, leaving the
+block's 43 distinct Metal2 tracks in 43.97 um of no-diffusion band above
+26.32 um of devices. That remaining lever is what the next section takes.
+
+ROUTING OVER THE DEVICE ROWS (issue #458)
+--------------------------------------------
+A packed band is still a band: its whole height is added to this macro's
+own, and through #454 it started at ``nwell_box.top + 3.0`` -- 14.78 um --
+with 11 tracks stacked above that to a footprint top of 22.50 um. Nothing
+about *Metal2* required that. The 3.0 um was a blanket margin over the
+n-well edge, and Metal2 has no DRC relationship to a well, to diffusion, to
+poly or to Metal1; the only shapes a Metal2 bus here genuinely has to clear
+are the Via1/Metal2 landing squares :func:`devgen.route_net`'s own risers
+drop on this macro's ~200 device pads.
+
+:func:`devgen.pack_tracks_over_devices` (see that function's own
+module-level comment for the clearance model, and why it is *not* less
+strict than :func:`devgen.pack_tracks` anywhere it matters) takes exactly
+those squares as an obstacle map and hands each net the lowest 0.75 um step,
+at or above :data:`devgen.ROW_PD_Y0`, whose drawn rectangle clears all of
+them. On this package's fixed row-cell frame that leaves a wide Metal2-free
+corridor between the pulldown row (comp topping out around y = 5.0) and the
+pullup row (pads from y = 10.2), plus several narrow ones between individual
+pad rows -- and the left-edge order and same-track x-clearance rule are
+unchanged, so nets still share a track exactly as they did.
+
+**10 of this macro's 11 tracks land below its own topmost pad**, one
+(``Q``/``XFQ_NMB``) above. Footprint top 22.50 -> **12.22 um**, i.e.
+332.14 x 22.80 -> **332.14 x 12.52 um** (7,573 -> 4,158 um^2, -45.1 %), with
+``x0``/``x1``/``y0`` and all seven pin locations again unchanged -- the same
+property that made #454 a pure routing-fabric change.
+
+Both levels now do this, and they compete: a top-level bus crossing this
+macro can only use a corridor this macro left free. Giving the corridor to
+the macro is worth more, because a ``ROW_PLAN`` row's height is gated by the
+instance standing in it -- measured both ways, top-level-only takes
+``divider_chain`` to 1317.66 x 53.99 um and both levels to **1317.66 x
+41.99 um** (92,618 -> 55,329 um^2, **-40.3 %**). Re-verified DRC-clean
+(default and ``--offgrid``) and LVS-matched at both levels; see
+``layout/evidence/divider-chain-layout/PROOF-over-device-rows.md``.
+
 REFERENCE NETLIST
 ------------------
 :func:`reference_netlist` is hand-written and independently stated (same
@@ -152,7 +249,17 @@ from pathlib import Path
 from typing import Sequence
 
 from . import devgen, dff_tg_3v3, inv2x_3v3, inv_3v3, nand2_3v3, nand3_3v3
-from .devgen import Canvas, Column, Device, NetTracks, nwell_over, offset_pad_x, pad_center, route_net, well_tap
+from .devgen import (
+    Canvas,
+    Column,
+    Device,
+    nwell_over,
+    offset_pad_x,
+    pack_tracks_over_devices,
+    pad_center,
+    route_net,
+    well_tap,
+)
 
 TOP_CELL = "div23_cell"
 
@@ -415,10 +522,26 @@ def build(outdir: Path | None = None) -> Div23Layout:
     # comp box (not just its net -- see devgen.py's "WELL/SUBSTRATE TIES"). ---
     nwell_box = nwell_over(canvas, pfet_boxes)
 
-    # --- route every net once, each on its own Metal2 track. ---
-    tracks = NetTracks(base_y=nwell_box[3] + 3.0)
+    # --- route every net once, on a *packed* Metal2 track assignment placed
+    # into the plane over this macro's own device rows -- see this module's
+    # own "TRACK PACKING" docstring section for why this macro's band, not the
+    # top-level one, is the divider chain's dominant routing cost (issue
+    # #442), and its "ROUTING OVER THE DEVICE ROWS" section for why the band
+    # is no longer stacked above them at all (issue #458).
+    #
+    # The obstacle map is every Metal2 shape this macro has drawn so far
+    # (nothing, as it happens -- draw_column()/well_tap() are Metal1-only, so
+    # metal2_boxes() is empty here and the call is kept for the same reason
+    # divider_chain.py needs it: it is the honest question to ask, and the
+    # answer stops being empty the moment this macro places anything) plus the
+    # Via1/Metal2 landing square route_net() is about to drop on every pad of
+    # every net. ---
+    obstacles = devgen.metal2_boxes(canvas)
+    for pads in nets.values():
+        obstacles += devgen.riser_landing_boxes(pads)
+    track_y = pack_tracks_over_devices(nets, y_floor=devgen.ROW_PD_Y0, obstacles=obstacles)
     for net, pads in nets.items():
-        route_net(canvas, net, pads, tracks.get(net))
+        route_net(canvas, net, pads, track_y[net])
 
     # --- boundary pin labels (Metal1, purpose 10), one per top-level I/O
     # net, dropped on that net's own first device pad. ---

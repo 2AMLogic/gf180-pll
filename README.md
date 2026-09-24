@@ -20,7 +20,7 @@ Being honest about where this actually is:
 - **Done** — architecture and scope captured as numbered decision records in
   `spec/`; xschem schematics for the VCO, PFD, charge pump, feedback divider,
   lock detector, and the shared 3.3 V logic cells they are built from; a
-  reproducible PVT corner harness; **89 evidence records** across 24
+  reproducible PVT corner harness; **91 evidence records** across 24
   verification campaigns (device characterization, VCO tuning range, PFD
   dead-zone freedom, charge-pump compliance and mismatch, divider moduli,
   lock-detector window, its sizing ladder and its trim-code map, loop
@@ -65,10 +65,10 @@ Being honest about where this actually is:
   since been drawn against that flow: **4 of the 4 PLL sub-blocks** — the VCO
   (#293), the PFD + charge pump (#294), the divider chain (#295), and the lock
   detector (#296) — now have a committed block GDS with a DRC-clean deck log
-  under `layout/evidence/`, and **2 of the 4 are LVS-matched** against an
-  independently derived reference netlist (`vco_block` and `divider_chain`;
-  `pfd_cp` and `lock_detector` each state in their own `PROOF.md` that they
-  make a DRC-clean geometry claim only). There is **no assembled `pll_top`
+  under `layout/evidence/`, and **4 of the 4 are LVS-matched** against an
+  independently derived reference netlist (`vco_block`, `divider_chain`,
+  `pfd_cp` and, since issue #449 drew DR-014's 4-bit trim network into its
+  delay cell, `lock_detector`). There is **no assembled `pll_top`
   GDS** — the four blocks exist side by side, not wired into a top level, so
   no top-level DRC/LVS closure and no post-layout extracted-netlist
   re-verification exists either (#17, #18, #149). These counts are checked
@@ -95,7 +95,12 @@ measurements/  silicon characterization (empty until there is silicon)
 ```
 
 Start with `spec/decision-records/` for *why the design is what it is*, and
-`sim/README.md` for *how results are recorded and how to reproduce them*.
+`sim/README.md` for *how results are recorded and how to reproduce them*. An
+integrator taking this block — top cell, port list, netlist/GDS paths,
+measured area, maturity rung — reads
+[`manifests/integrator.json`](manifests/integrator.json); a repo that
+declares itself a consumer of this block is tracked in
+[`spec/pll.md#consumers`](spec/pll.md#consumers).
 
 ## Where this block stands against the evidence ladder
 
@@ -155,7 +160,7 @@ deterministic component now covers 45 of the mandated 45 PVT corners but its
 random/noise-driven component and its 200 MHz band-top counterpart are both
 still unmeasured (#13), so the proposal marks those rows **unmet** rather than
 omitting them; and that layout has reached the sub-block level but not the top
-level — **4 of the 4 PLL sub-blocks** are drawn and DRC-clean, **2 of the 4
+level — **4 of the 4 PLL sub-blocks** are drawn and DRC-clean, **4 of the 4
 are LVS-matched**, and there is **no assembled `pll_top` GDS**, hence no
 top-level signoff and no post-layout re-verification.
 

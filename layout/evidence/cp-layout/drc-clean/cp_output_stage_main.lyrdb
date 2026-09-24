@@ -2,7 +2,7 @@
 <report-database>
  <description>DRC Run Report at</description>
  <original-file/>
- <generator>drc: script='/tmp/cpout359-drc/main.drc'</generator>
+ <generator>drc: script='/home/ubuntu/GitHub/gf180-pll/.loom/worktrees/issue-473/layout/evidence/cp-layout/drc-clean/main.drc'</generator>
  <top-cell>cp_output_stage</top-cell>
  <tags>
  </tags>

@@ -68,6 +68,24 @@ LAYER = {
     "metal2": (36, 0),
     "via2": (38, 0),
     "metal3": (42, 0),
+    # The *pin/label* purposes of Metal1/Metal2 -- NOT the drawing datatypes
+    # above. gf180mcu's own LVS deck reads net names only from these
+    # (``libs.tech/klayout/lvs/rule_decks/layers_definitions.lvs``:
+    # ``metal1_label = labels(34, 10)`` / ``metal2_label = labels(36, 10)``,
+    # then ``general_connections.lvs``: ``connect(metal1_con, metal1_label)``
+    # / ``connect(metal2_con, metal2_label)``) -- the same citation
+    # ``vco/primitives.py``, ``divider_chain/devgen.py`` and
+    # ``pfd_cp/devgen.py`` already carry for their own ``PIN_LAYER``.
+    #
+    # A text dropped on the drawing datatype instead (this module's own
+    # convention until issue #440, exactly as ``vco/primitives.py``'s was
+    # until #367) is invisible to that connectivity step: every net this
+    # package labelled was extracted as an anonymous node, so this block's
+    # first LVS run extracted as `.SUBCKT lock_detector VSS` -- one port,
+    # that one being the deck's own synthesized substrate net rather than
+    # anything drawn here.
+    "metal1_label": (34, 10),
+    "metal2_label": (36, 10),
 }
 
 # --- Metal2/Metal3/Via routing margins, used only by route_net()'s per-net
@@ -95,43 +113,125 @@ LAYER = {
 # inv/nand2/schmitt column in this package) puts two different nets' pads at
 # the exact same x. Every riser then runs the *full* pad-to-track_y span, so
 # those two risers' Y ranges overlap almost everywhere (track_y always sits
-# above the whole block). route_net()/_riser() below fix this with RiserLanes:
-# a Metal3 riser only keeps its own pad's natural x if that clears every
-# *other* riser already placed anywhere in the same build; otherwise it moves
-# to the nearest clear lane. See RiserLanes' own docstring for why a simpler
-# fixed per-row shift was tried and rejected. ---
+# above the whole block). route_all_nets()/_riser() below fix this with
+# RiserLanes: every riser is assigned a lane on one global grid of pitch
+# ROW_LANE_OFFSET_UM, and two distinct lanes are therefore always at least
+# that far apart. See RiserLanes' own docstring for why a simpler fixed
+# per-row shift, and then a per-riser search ladder, were each tried and
+# rejected.
+#
+# The riser-to-riser argument above is about *shorts*, and issue #451 found
+# that it is not sufficient on its own. A router whose output has to pass a
+# DRC deck has to model spacing rules, not just overlap: geometry with zero
+# shorts and zero opens still failed this deck 141 times, most of it between
+# two risers of the *same* net -- never a short, and a V2.1/V2.2a/M2.2a
+# violation all the same. Every constant below that RiserLanes consumes is
+# now named after the rule it satisfies, and the same-net exemption is gone
+# except for an exact lane merge (see RiserLanes._lane_clear()). ---
 VIA1_SIZE_UM = 0.26  # V1.1 min/max
 VIA2_SIZE_UM = 0.26  # V2.1 min/max
-VIA_ENCLOSURE_UM = 0.09  # V1.3a/V2.3b min is ~0 um; headroom for the enclosing metal pad
+#: Metal overhang around every Via1/Via2 ``_riser()`` draws, **in X** -- the
+#: axis riser lanes are packed along, so this is what sets the lane pitch.
+#: The deck's own enclosure minima are tiny (V1.3a "metal1 overlap of via1
+#: >= 0.0", V1.4a/V2.3b/V2.4a ">= 0.01 um"); what actually bounds this from
+#: below is V1.3d/V1.4c/V2.3d/V2.4c, which escalate to a 0.06 um
+#: adjacent-edge requirement as soon as the metal overlaps the via by *less
+#: than* 0.04 um on any one side. 0.06 clears that threshold with headroom
+#: and keeps the landing 0.26 + 2*0.06 = 0.38 um wide -- narrow enough for
+#: two of them one lane pitch apart to clear M2.2a/M3.2a (see
+#: ROW_LANE_OFFSET_UM below).
+#:
+#: Lowered from 0.09 um for issue #451: at 0.09 the landing was 0.44 um
+#: wide, 0.02 um too wide to fit two per 0.7 um pitch, which is where 14
+#: M2.2a and 7 V2.2a items came from.
+VIA_ENCLOSURE_UM = 0.06
+#: The same overhang **in Y**, where no lane packing competes for the space:
+#: sized so the landing's own area, 0.38 x 0.40 = 0.152 um^2, clears
+#: M1.3/M2.3/M3.3's 0.1444 um^2 minimum. That minimum is a real constraint
+#: on this shape and not a hypothetical: the Metal2 landing at a riser's jog
+#: height is an *isolated* Metal2 island (Via1 below it and Via2 above it are
+#: both other layers), so nothing else merges with it to make up the area --
+#: shrinking the enclosure uniformly to 0.05 um, the first attempt at issue
+#: #451, produced a 0.36 um square and 161 M2.3 violations, one per riser.
+VIA_ENCLOSURE_Y_UM = 0.07
 METAL2_WIRE_WIDTH_UM = 0.34  # > M2.1's 0.28 min
 METAL3_WIRE_WIDTH_UM = 0.34  # > M3.1's 0.28 min
 METAL2_TRACK_PITCH_UM = 0.75  # (pitch - width) = 0.41 > M2.2a's 0.28 min, between two tracks
-#: Two Metal3 risers whose x differs by this amount clear M3.2a's 0.28 um
-#: min Metal3 spacing with headroom: 0.7 - METAL3_WIRE_WIDTH_UM(0.34) = 0.36
-#: > 0.28. See RiserLanes (issue #322).
+
+# --- Deck minimum same-layer spacings, read from the same gf180mcuD rule
+# decks as every other constant in this module (``metal1.drc`` M1.2a,
+# ``metal2.drc`` M2.2a, ``metal3.drc`` M3.2a, ``via1.drc`` V1.2a,
+# ``via2.drc`` V2.2a). ``RiserLanes`` (below) needs these *by name*, not just
+# as headroom baked into a wire pitch: issue #451 found it placing geometry
+# that was electrically correct (zero shorts, zero opens) but geometrically
+# illegal, because its hazard model tested for strict *overlap* -- an
+# electrical-short test -- where the deck tests for *clearance*. Two shapes
+# 0.07 um apart short nothing and violate M1.2a. ---
+METAL1_MIN_SPACE_UM = 0.23  # M1.2a
+METAL2_MIN_SPACE_UM = 0.28  # M2.2a
+METAL3_MIN_SPACE_UM = 0.28  # M3.2a
+VIA_MIN_SPACE_UM = 0.26  # V1.2a / V2.2a
+
+#: Half-extents of the metal landing ``_riser()`` draws around every Via1/
+#: Via2 it places (on Metal1, Metal2 *and* Metal3 -- see ``_riser()``).
+#: ``VIA_LANDING_HALF_UM``, not ``METAL3_WIRE_WIDTH_UM``, is the widest
+#: same-layer shape sitting on a riser lane, so it is what sets the lane
+#: pitch below.
+VIA_LANDING_HALF_UM = VIA2_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM  # 0.19
+VIA_LANDING_HALF_Y_UM = VIA2_SIZE_UM / 2.0 + VIA_ENCLOSURE_Y_UM  # 0.20
+
+#: Height of the horizontal Metal1 jog wire a lane change rides on -- set
+#: equal to the landing it runs into so their union has no step (see
+#: ``_riser()``), rather than to ``METAL1_WIRE_WIDTH_UM``.
+METAL1_JOG_HEIGHT_UM = 2.0 * VIA_LANDING_HALF_Y_UM  # 0.40
+
+#: Two Metal3 risers whose x differs by this amount clear every same-layer
+#: deck minimum their apparatus can present to each other, edge to edge:
+#:
+#:   * the Via1/Via2 metal landings (2 * VIA_LANDING_HALF_UM = 0.38 wide, the
+#:     widest shape on a lane): 0.7 - 0.38 = 0.32 > M2.2a/M3.2a's 0.28;
+#:   * the Metal3 riser wire itself (0.34 wide): 0.7 - 0.34 = 0.36 > 0.28;
+#:   * the via cuts themselves (0.26): 0.7 - 0.26 = 0.44 > V1.2a/V2.2a's 0.26;
+#:   * the Metal1 components of the same landings: 0.32 > M1.2a's 0.23.
+#:
+#: Unchanged in value by issue #451, but no longer justified by the Metal3
+#: *wire* alone: the landing squares are the widest shape on a lane, and at
+#: the 0.09 um via enclosure this module used until #451 they were 0.44 um
+#: wide -- 0.02 um too wide to fit two per pitch, so two risers one pitch
+#: apart were legal by this constant's own stated argument and still failed
+#: M2.2a. The enclosure moved (see VIA_ENCLOSURE_UM) rather than this pitch
+#: because pitch is the scarce resource here: every one of this block's 161
+#: risers runs from its own pad up to a track above the whole block, so every
+#: pair of them overlaps in Y and this rule applies globally -- at 0.8 um
+#: they do not fit in the block's own 119 um width at all. See RiserLanes
+#: (issues #322, #451).
 ROW_LANE_OFFSET_UM = 0.7
-#: A Metal2 jog wire (RiserLanes, issue #322) is ``METAL2_WIRE_WIDTH_UM``
-#: wide, and another riser's own Via1/Via2 landing square extends roughly
-#: ``VIA2_SIZE_UM/2 + VIA_ENCLOSURE_UM`` beyond its own y_pad/track_y in
-#: every direction (see ``_riser()``) -- both shapes have real width, not
-#: just the point at their own y. This is that headroom, added to both ends
-#: of a placed riser's [y_pad, track_y] range before checking whether a new
-#: jog's height falls inside it.
-_JOG_Y_MARGIN_UM = METAL2_WIRE_WIDTH_UM / 2.0 + VIA2_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM
-#: Numerical-precision-only headroom added to *each* of two compared Metal2
-#: shapes (``RiserLanes._metal2_boxes()``) -- this class's job is only to
-#: rule out a genuine same-layer *overlap* (the electrical short issue #322
-#: reports), the same strict-overlap test ``checks.shorted_pairs()`` runs
-#: as this fix's own ground truth, not to additionally re-derive M2.2a's
-#: full DRC minimum spacing for a router that never ran DRC in the first
-#: place. An earlier version used a much larger, DRC-sized margin here and
-#: it made real, already-DRC-clean geometry in ``inv``'s own dense column
-#: (see ``layout/evidence/lock-detector-layout/``) look unplaceable, since
-#: some already-legal pad pairs in this design sit closer together than
-#: that margin allowed. A full KLayout DRC pass over the fixed GDS (not run
-#: by this pure-Python model) remains the authoritative spacing signoff,
-#: same as before this fix.
-_M2_SPACING_HALF_UM = 1e-6
+
+#: Two *same-net* risers assigned the identical lane draw one merged Metal3
+#: column (legal, and the reason same-lane merging is allowed at all -- see
+#: ``RiserLanes._lane_clear()``), but each still drops its own via stack at
+#: its own ``jog_y`` on that shared column. Two such stacks must either
+#: coincide exactly (identical squares merge to exactly one legal via) or be
+#: this far apart in Y: landing half + M2.2a + landing half = 0.64, rounded
+#: up to the Metal2 track pitch for headroom.
+VIA_STACK_MIN_DY_UM = METAL2_TRACK_PITCH_UM
+#: Numerical-precision-only headroom, used *only* where two already-drawn,
+#: not-placement-dependent shapes are compared (device pad against device
+#: pad -- see ``RiserLanes._metal1_apparatus_safe()``). Those pads are fixed
+#: geometry: ``mosfet()``/``tap_strip()`` draw them before any riser is
+#: placed, no lane assignment can move them, and their mutual spacing is
+#: already a deck-clean fact of the cell library (``SD_OVERHANG_UM``'s own
+#: comment carries the M1.2a derivation). Applying a DRC-sized margin to
+#: *that* pair only ever rejects placements over a violation this router
+#: cannot fix -- which is what an earlier version of this constant did, and
+#: why it was set to a numerical epsilon.
+#:
+#: Every pair where at least one side *is* placement-dependent (a riser's
+#: Metal1 stub, its lane jog, its via landing) is checked against
+#: ``METAL1_MIN_SPACE_UM`` instead, not against this epsilon (issue #451):
+#: an epsilon there tests for an electrical short where the deck tests for
+#: clearance, so it passed 40 M1.2a and 16 M1.1 violations straight through.
+_PAD_SPACING_HALF_UM = 1e-6
 #: When a riser has to move lanes, ``RiserLanes._safe_jog_height()`` starts
 #: searching for a safe jog height this far *above* its own pad -- 0 means
 #: "try the pad's own exact height first". A riser's own Via1 landing at
@@ -187,12 +287,18 @@ class Canvas(_canvas.Canvas):
     convention: ``klayout.db`` is imported lazily (inside ``__post_init__``),
     so anything in this package that only touches ``devices.py``'s constants
     or this module's plain-Python placement math stays importable with no PV
-    environment. This is the plain baseline of the shared
-    ``layout/pll_top/_canvas.Canvas`` (see issue #317): no grid snapping, no
-    pin-layer override -- just this module's own ``LAYER`` table.
+    environment. This is the shared ``layout/pll_top/_canvas.Canvas`` (see
+    issue #317) with no grid snapping, this module's own ``LAYER`` table,
+    and ``pin()`` labelling on ``"metal1_label"`` (34/10) -- the *purpose*
+    layer gf180mcu's own official LVS deck actually reads net names from
+    (see this module's ``LAYER`` comment), not the drawing datatype a
+    purely-visual label would use. Before issue #440 this class took the
+    base class's ``PIN_LAYER = "metal1"`` default, so every ``pin()`` call
+    in this package labelled 34/0 and the deck saw none of them.
     """
 
     LAYER: ClassVar[dict[str, tuple[int, int]]] = LAYER
+    PIN_LAYER: ClassVar[str] = "metal1_label"
 
     @contextmanager
     def net(self, name: str) -> Iterator[None]:
@@ -270,7 +376,7 @@ class RiserLanes:
     happen here. Via1 and Via2 are now co-located (both land at the chosen
     lane, at the chosen jog height) rather than split across two x
     positions, so the existing Metal3-column pitch check (see
-    ``_overlapping_x_clear()``) already keeps them apart -- Metal1 is the
+    ``_lane_clear()``) already keeps them apart -- Metal1 is the
     only layer this class still needs its own, separate check for (see
     ``_metal1_apparatus_safe()``).
 
@@ -294,6 +400,35 @@ class RiserLanes:
     up front), so ``groups`` -- the complete set, not just what's been
     placed so far -- is required at construction and checked the same way a
     placed riser's own pad is (see ``_metal1_apparatus_safe()``).
+
+    **Issue #451: this is a DRC model now, not a short model.** Everything
+    above is about shorts -- two nets' shapes merging into one polygon --
+    and every check in this class was written as a strict geometric overlap
+    test with a 1e-6 um margin, deliberately, on the argument that "a full
+    KLayout DRC pass over the fixed GDS (not run by this pure-Python model)
+    remains the authoritative spacing signoff". Nothing ever enforced that
+    second half, and what this class went on to produce had **zero shorts,
+    zero opens and 141 foundry-deck violations**. Two shapes 0.07 um apart
+    short nothing and violate M1.2a; two *same-net* lanes 0.2 um apart merge
+    two 0.26 um via cuts into one 0.46 um polygon, which V2.1 (min *and*
+    max 0.26) rejects. Three things changed:
+
+    * every pair where at least one side is a shape this class positions is
+      held to the deck's own minimum spacing (``METAL1_MIN_SPACE_UM`` and
+      friends, each read from its rule deck) rather than to an epsilon.
+      Pad-against-pad keeps the epsilon, and is the only pair that does --
+      device pads are drawn before any riser is placed and no lane
+      assignment can move them;
+    * same-net pairs are no longer exempt. Sharing a lane *exactly* is
+      still allowed and is load-bearing (two collinear same-net columns
+      union into one legal Metal3 column, which is how 161 risers fit in
+      168 lane slots); sharing it *approximately* is the single largest
+      source of #451's violations;
+    * lanes come from one global grid rather than a ladder anchored on each
+      riser's own natural x. A ladder strands up to a pitch of space beside
+      every riser that keeps its natural position -- affordable only while
+      same-net risers may sit a fraction of a micron apart, i.e. only while
+      the bug above exists. See ``_candidate_lanes()``.
     """
 
     #: How many of a riser's own most-recent lanes ``resolve_conflicts()``
@@ -308,10 +443,23 @@ class RiserLanes:
         pitch: float = ROW_LANE_OFFSET_UM,
         max_tries: int = 24,
         max_height_tries: int = 24,
+        bus_ys: dict[str, float] | None = None,
     ) -> None:
         self._pitch = pitch
         self._max_tries = max_tries
         self._max_height_tries = max_height_tries
+        #: ``{net: track_y}`` for every net in the build, i.e. where each
+        #: net's own horizontal Metal2 bus runs (``route_all_nets()`` knows
+        #: all of them before placing anything). A riser's Via1 landing is a
+        #: Metal2 square too (see ``_riser()``), so a riser whose own pad
+        #: happens to sit *inside* the track band -- this block has some:
+        #: ``MCW``'s W=30u comp puts its S/D pads at y~40, well above
+        #: ``_finish()``'s own ``base_y`` -- can drop that square right on
+        #: top of an unrelated net's bus. Same layer, no via: a short if
+        #: their x ranges overlap, an M2.2a violation if they merely come
+        #: close. Empty (the default) skips the check entirely, for callers
+        #: (this class's own tests) with no bus geometry at all.
+        self._bus_ys: dict[str, float] = dict(bus_ys or {})
         #: (net, natural_x, assigned_x, y_pad, track_y, jog_y, half_w,
         #: half_h) for every riser placed so far. jog_y == y_pad (no
         #: separate jog height) when assigned_x == natural_x -- no jog is
@@ -327,6 +475,38 @@ class RiserLanes:
         self._future_pads: list[tuple[str, float, float, float, float]] = [
             (net, x, y_pad, half_w, half_h) for net, x, y_pad, _t, half_w, half_h in groups
         ]
+        #: Origin of the global lane grid every assigned lane is a multiple
+        #: of ``pitch`` from (issue #451 -- see ``_candidate_lanes()``).
+        #: Chosen as the phase minimising every riser's distance from its own
+        #: nearest slot, so the common case stays a sub-0.1 um nudge rather
+        #: than a jog; an arbitrary origin would route Metal1 jogs this
+        #: design does not need. ``None`` when no groups were declared up
+        #: front (callers that place risers ad hoc -- this class's own
+        #: tests): the first ``place()`` call then sets the phase, so a lone
+        #: riser still keeps its own natural x.
+        self._lane_origin: float | None = (
+            self._best_lane_phase([x for _n, x, _y, _hw, _hh in self._future_pads], pitch)
+            if self._future_pads
+            else None
+        )
+
+    @staticmethod
+    def _best_lane_phase(xs: list[float], pitch: float, steps: int = 140) -> float:
+        """The lane-grid origin minimising every riser's own displacement.
+
+        Plain scan over ``steps`` phases across one pitch -- the objective
+        (total squared distance from each natural x to its nearest slot) is
+        cheap and the input is a few hundred coordinates at most.
+        """
+        if not xs:
+            return 0.0
+        best_phase, best_cost = xs[0], None
+        for i in range(steps):
+            phase = xs[0] + i * pitch / steps
+            cost = sum((x - phase - round((x - phase) / pitch) * pitch) ** 2 for x in xs)
+            if best_cost is None or cost < best_cost:
+                best_phase, best_cost = phase, cost
+        return best_phase
 
     def _safe_jog_height(
         self,
@@ -334,6 +514,7 @@ class RiserLanes:
         natural_x: float,
         cand_x: float,
         y_pad: float,
+        track_y: float,
         half_w: float,
         half_h: float,
         max_height_tries: int | None = None,
@@ -365,14 +546,14 @@ class RiserLanes:
                 y_pad + JOG_HEIGHT_BASE_UM + j * JOG_HEIGHT_STEP_UM,
                 y_pad - JOG_HEIGHT_BASE_UM - j * JOG_HEIGHT_STEP_UM,
             ):
-                if self._metal1_apparatus_safe(net, natural_x, cand_x, y_pad, jog_y, half_w, half_h):
+                if self._candidate_clear(net, natural_x, cand_x, y_pad, track_y, jog_y, half_w, half_h):
                     return jog_y
         return None
 
     @staticmethod
     def _metal1_boxes(
         nat_x: float, asg_x: float, y_pad: float, jog_y: float, half_w: float, half_h: float
-    ) -> list[tuple[float, float, float, float]]:
+    ) -> list[tuple[tuple[float, float, float, float], bool]]:
         """Every Metal1 box a riser's own pad-to-lane apparatus occupies.
 
         Always includes the pad footprint itself (every riser has one,
@@ -385,7 +566,7 @@ class RiserLanes:
         collision and let a short slip past this exact check building
         ``nand2``), and the Via1/Via2 landing's own Metal1 component (always
         at ``(asg_x, jog_y)`` -- see ``_riser()``): the Metal3-column pitch
-        check in ``_overlapping_x_clear()`` only rules out two *lanes*
+        check in ``_lane_clear()`` only rules out two *lanes*
         landing too close together, not some *other* riser's Metal1
         stub/jog (which lives at that riser's own natural x, unrelated to
         any lane) sweeping past this landing's Metal1 side on its way
@@ -398,38 +579,86 @@ class RiserLanes:
         final Metal2 bus -- neither is Metal1.
 
         Every box is sized to the *exact* geometry ``_riser()`` actually
-        draws (same formulas), padded by only ``_M2_SPACING_HALF_UM`` --
-        half of M1.2a's minimum spacing -- on every side, so two boxes are
-        flagged unsafe only when the real shapes they model would be closer
-        than the deck allows.
+        draws (same formulas); the clearance each pair of boxes needs is
+        applied by ``_metal1_apparatus_safe()``, not baked in here, because
+        it differs by pair: two device *pads* are fixed geometry whose
+        mutual spacing no placement can change (see
+        ``_PAD_SPACING_HALF_UM``), while anything this router positions must
+        clear ``METAL1_MIN_SPACE_UM``.
+
+        Each entry is ``(box, is_pad)`` -- ``is_pad`` marking the one box
+        (the device pad) that is *not* a placement decision.
         """
         half_wire = METAL1_WIRE_WIDTH_UM / 2.0
-        half_via = VIA1_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM
-        s = _M2_SPACING_HALF_UM
-        boxes = [
-            (nat_x - half_w - s, y_pad - half_h - s, nat_x + half_w + s, y_pad + half_h + s),
-            (asg_x - half_via - s, jog_y - half_via - s, asg_x + half_via + s, jog_y + half_via + s),
+        lx, ly = VIA_LANDING_HALF_UM, VIA_LANDING_HALF_Y_UM
+        boxes: list[tuple[tuple[float, float, float, float], bool]] = [
+            ((nat_x - half_w, y_pad - half_h, nat_x + half_w, y_pad + half_h), True),
+            ((asg_x - lx, jog_y - ly, asg_x + lx, jog_y + ly), False),
         ]
         if asg_x != nat_x:
-            stub_lo, stub_hi = (y_pad, jog_y) if y_pad <= jog_y else (jog_y, y_pad)
-            boxes.append((nat_x - half_wire - s, stub_lo - s, nat_x + half_wire + s, stub_hi + s))  # stub
+            half_jog = METAL1_JOG_HEIGHT_UM / 2.0
+            stub_lo = min(y_pad, jog_y - half_jog)
+            stub_hi = max(y_pad, jog_y + half_jog)
+            boxes.append(((nat_x - half_wire, stub_lo, nat_x + half_wire, stub_hi), False))  # stub
             jog_lo, jog_hi = (nat_x, asg_x) if nat_x <= asg_x else (asg_x, nat_x)
-            boxes.append((jog_lo - s, jog_y - half_wire - s, jog_hi + s, jog_y + half_wire + s))  # jog wire
+            boxes.append(((jog_lo, jog_y - half_jog, jog_hi, jog_y + half_jog), False))  # jog wire
         return boxes
 
     @staticmethod
     def _boxes_overlap(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:
         return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
 
+    @staticmethod
+    def _too_close(
+        a: tuple[float, float, float, float], b: tuple[float, float, float, float], space: float
+    ) -> bool:
+        """Are two boxes closer than ``space``, edge to edge (overlap included)?
+
+        Two rectangles clear a same-layer spacing rule when they are at
+        least ``space`` apart along X *or* along Y -- the conservative
+        reading, which also rules out the diagonal corner-to-corner case a
+        purely axis-wise test would let through. That case is not academic:
+        two Metal1 rectangles whose corners nearly touch merge into a
+        staircase whose notch is narrower than M1.1's own minimum *width*,
+        which is exactly what issue #451's 16 M1.1 violations were.
+        """
+        gap_x = max(b[0] - a[2], a[0] - b[2])
+        gap_y = max(b[1] - a[3], a[1] - b[3])
+        return max(gap_x, gap_y) < space - 1e-9
+
     def _metal1_apparatus_safe(
         self, net: str, natural_x: float, cand_x: float, y_pad: float, jog_y: float, half_w: float, half_h: float
     ) -> bool:
-        """Would this riser's own Metal1 apparatus (pad footprint, and, if
-        it moves, its stub/jog wire -- see ``_metal1_boxes()``) collide with
-        any *other* net's Metal1? Checked as plain box overlap in both
-        directions (e.g. this riser's own new stub against an earlier
-        riser's already-drawn jog wire, not just this riser's jog wire
-        against earlier stubs).
+        """Does this riser's own Metal1 apparatus (pad footprint, and, if it
+        moves, its stub/jog wire -- see ``_metal1_boxes()``) clear every
+        other riser's by ``METAL1_MIN_SPACE_UM``?
+
+        **Clearance, not overlap (issue #451).** Until #451 this was a
+        strict-overlap test with a 1e-6 um margin -- the same ground truth
+        ``checks.shorted_pairs()`` uses -- on the argument that this class's
+        job was only to rule out an electrical short and that a full DRC
+        pass remained the authoritative spacing signoff. The first half of
+        that argument is sound; the second was never actually enforced
+        anywhere, and the generator drifted into geometry with zero shorts
+        and 141 deck violations, 56 of them M1.1/M1.2a from Metal1 shapes
+        0.01-0.07 um apart. A router that has to satisfy a spacing rule has
+        to model a spacing rule.
+
+        **Same-net pairs are checked too (issue #451).** Two of one net's
+        own shapes merging is never a *short*, which is why this check used
+        to skip them outright -- but a partial merge is still a real
+        geometry defect: two same-net rectangles overlapping at a corner
+        leave an M1.1-narrow notch, and two sitting 0.07 um apart are a
+        plain M1.2a violation whatever net they carry. The only same-net
+        merge this class still permits is an exact one (two risers sharing a
+        lane draw one identical column -- see ``_lane_clear()``).
+
+        **Pad-against-pad pairs are exempt**, and only those: device pads
+        are drawn by ``mosfet()``/``tap_strip()`` before any riser is
+        placed, so their mutual spacing is a fixed, already deck-clean fact
+        of the cell library that no lane assignment can improve. Rejecting a
+        candidate over one would only ever refuse to route across a
+        violation this router cannot fix.
 
         Checked against every *already-placed* riser's full apparatus, and
         separately against every *not yet placed* net's own pad footprint
@@ -444,45 +673,177 @@ class RiserLanes:
         """
         my_boxes = self._metal1_boxes(natural_x, cand_x, y_pad, jog_y, half_w, half_h)
         for unet, nat_x, asg_x, uy_pad, _utrack_y, ujog, uhalf_w, uhalf_h in self._placed:
-            if unet == net:
-                continue  # same net: merging is safe, never a short
-            for ob in self._metal1_boxes(nat_x, asg_x, uy_pad, ujog, uhalf_w, uhalf_h):
-                for mb in my_boxes:
-                    if self._boxes_overlap(mb, ob):
+            for ob, o_is_pad in self._metal1_boxes(nat_x, asg_x, uy_pad, ujog, uhalf_w, uhalf_h):
+                for mb, m_is_pad in my_boxes:
+                    if self._pair_too_close(mb, m_is_pad, ob, o_is_pad):
                         return False
         for unet, nat_x, u_y_pad, uhalf_w, uhalf_h in self._future_pads:
-            if unet == net:
-                continue
+            if unet == net and (nat_x, u_y_pad) == (natural_x, y_pad):
+                continue  # this riser's own pad, already box 0 of my_boxes
             # Only the raw pad footprint is a known, fixed fact for a net
             # that hasn't been placed yet -- _metal1_boxes()'s own Via1/Via2
             # landing box assumes an *unmoved* lane, which is not yet known
             # to be true, so using only boxes[0] here avoids over-rejecting
             # a placement against a landing position that may never exist.
-            pad_box = self._metal1_boxes(nat_x, nat_x, u_y_pad, u_y_pad, uhalf_w, uhalf_h)[0]
-            for mb in my_boxes:
-                if self._boxes_overlap(mb, pad_box):
+            pad_box = self._metal1_boxes(nat_x, nat_x, u_y_pad, u_y_pad, uhalf_w, uhalf_h)[0][0]
+            for mb, m_is_pad in my_boxes:
+                if self._pair_too_close(mb, m_is_pad, pad_box, True):
                     return False
         return True
 
-    def _overlapping_x_clear(self, net: str, cand_x: float, y_pad: float, track_y: float) -> bool:
-        """Is ``cand_x`` clear, as a Metal3 lane, of every other net's own
-        Metal3 column (and its co-located Via1/Via2 landing, both well
-        within one lane pitch of ``cand_x``)? Two columns only collide
-        where their Y ranges actually overlap; Metal1 (pad footprints, jog
-        wires, ...) is an entirely separate, more precise check -- see
+    @classmethod
+    def _pair_too_close(
+        cls,
+        a: tuple[float, float, float, float],
+        a_is_pad: bool,
+        b: tuple[float, float, float, float],
+        b_is_pad: bool,
+    ) -> bool:
+        """Spacing verdict for one pair of Metal1 boxes -- see
+        ``_metal1_apparatus_safe()`` for why pad-against-pad is the one pair
+        held to an epsilon rather than to M1.2a."""
+        space = _PAD_SPACING_HALF_UM if (a_is_pad and b_is_pad) else METAL1_MIN_SPACE_UM
+        return cls._too_close(a, b, space)
+
+    def _lane_clear(self, net: str, cand_x: float, y_pad: float, track_y: float, jog_y: float) -> bool:
+        """Is ``cand_x`` usable as a Metal3 lane against every riser already
+        placed -- its column, its via stacks, and the Metal2 landings those
+        stacks carry?
+
+        Two lanes either coincide exactly or are at least
+        ``ROW_LANE_OFFSET_UM`` apart, and only where the two columns' Y
+        ranges actually overlap. Metal1 (pad footprints, jog wires, ...) is
+        an entirely separate, more precise check -- see
         ``_metal1_apparatus_safe()`` -- since a Metal3 column crossing
         another net's Metal1/Metal2 is a different-layer crossing with no
         via, and so never a short by itself (the same top-of-file argument
         that makes a riser safe to cross an unrelated Metal2 bus).
+
+        **Same-net risers are no longer exempt (issue #451.)** Sharing a
+        lane exactly is still allowed and still merges cleanly: two
+        collinear same-net columns of identical width union into one
+        column, and (if their via stacks also coincide exactly) into one
+        pair of legal via squares. What is *not* allowed, and was the
+        single largest source of #451's 141 violations, is a same-net lane
+        pair that neither coincides nor clears the pitch: every riser of one
+        net lands its top via stack on that net's own single ``track_y``, so
+        two same-net lanes 0.2 um apart merge two 0.26 um via cuts into one
+        0.46 um polygon (V2.1 wants exactly 0.26) and leave a 0.18 um notch
+        between two Metal2 landings (M2.2a wants 0.28). 36 V2.1, 7 V2.2a and
+        14 M2.2a items came from exactly that, all of them same-net, none of
+        them a short.
+
+        Two same-net stacks *sharing* a lane must in turn either sit at the
+        identical height -- drawn twice at one spot, merging to exactly one
+        legal via -- or be ``VIA_STACK_MIN_DY_UM`` apart on the shared
+        column.
         """
         lo, hi = min(y_pad, track_y), max(y_pad, track_y)
-        for unet, _nat_x, asg_x, uy_pad, utrack_y, _ujog, _uhw, _uhh in self._placed:
-            if unet == net:
-                continue  # same net: merging is safe, never a short (see _riser_groups())
+        for unet, _nat_x, asg_x, uy_pad, utrack_y, ujog, _uhw, _uhh in self._placed:
+            same_lane = abs(cand_x - asg_x) < 1e-9
+            if unet == net and same_lane:
+                # One merged column. Legal as long as the two via stacks on
+                # it either coincide exactly or clear each other.
+                if abs(jog_y - ujog) < 1e-9 or abs(jog_y - ujog) >= VIA_STACK_MIN_DY_UM - 1e-9:
+                    continue
+                return False
             ulo, uhi = min(uy_pad, utrack_y), max(uy_pad, utrack_y)
             if not (hi < ulo - 1e-9 or lo > uhi + 1e-9) and abs(cand_x - asg_x) < self._pitch - 1e-9:
                 return False
         return True
+
+    def _bus_clear(self, net: str, jog_y: float) -> bool:
+        """Does this riser's own Via1 Metal2 landing (a
+        ``VIA_LANDING_HALF_UM`` square at its jog height -- see
+        ``_riser()``) clear every *other* net's horizontal Metal2 bus?
+
+        Only the Y axis is checked, deliberately: a bus spans its whole
+        net's pad range in X, which is not known until every riser of that
+        net is placed, so an X-aware test would be circular. Rejecting on Y
+        alone is the conservative side of that trade.
+
+        A riser whose own pad sits below the track band (almost all of them)
+        clears every bus trivially. The ones that do not are real: ``MCW``'s
+        W=30u comp puts its S/D pads at y~40, inside a track band that
+        starts at y=25 (see ``build._finish()``), and its VSS landing
+        already lands within 0.0 um of ``XSCH_P1``'s bus today -- a
+        cross-net Metal2 short avoided only by the two shapes' X ranges
+        happening not to meet.
+        """
+        if not self._bus_ys:
+            return True
+        keepout = VIA_LANDING_HALF_Y_UM + METAL2_WIRE_WIDTH_UM / 2.0 + METAL2_MIN_SPACE_UM
+        for unet, uty in self._bus_ys.items():
+            if unet == net:
+                continue
+            if abs(jog_y - uty) < keepout - 1e-9:
+                return False
+        return True
+
+    @staticmethod
+    def _self_notch_free(natural_x: float, cand_x: float, y_pad: float, jog_y: float, half_h: float) -> bool:
+        """Does a riser's own jog bar clear a **notch** against its own pad?
+
+        Every check in this class compares one riser's apparatus against
+        *another* riser's. This one is the pair nothing compared until issue
+        #449: a riser's own pad against its own jog wire (and the Via1/Via2
+        landing at the far end of it, which #451 made exactly as tall as the
+        jog, so the two share one Y band).
+
+        The three shapes are all one net and all connected -- pad, then a
+        narrow vertical stub down/up to ``jog_y``, then the jog bar sideways
+        -- so this is never a short and never an "are two shapes far enough
+        apart" question. It is a **notch**: the stub (``METAL1_WIRE_WIDTH_UM``
+        = 0.32 um) is narrower than the pad it grows out of (0.46 um for this
+        package's narrowest S/D pad, wider for a gate tab or a tap strip), so
+        where the pad overhangs the stub, the pad's own edge faces the jog
+        bar's own edge across a slot of
+
+            ``|jog_y - y_pad| - METAL1_JOG_HEIGHT_UM/2 - half_h``
+
+        and M1.2a applies to a slot in one polygon exactly as it does to the
+        space between two. At ``JOG_HEIGHT_STEP_UM`` = 0.5 um and this
+        package's own narrowest pad that slot is 0.5 - 0.2 - 0.23 = **0.07
+        um** -- which is what 16 of issue #449's first DRC run's M1.2a items
+        were, one per riser that happened to settle exactly one jog step away
+        from its own pad.
+
+        Two dispositions are legal and both are kept:
+
+        * the jog is far enough away that the slot is a legal M1.2a space
+          (``>= METAL1_MIN_SPACE_UM``), or
+        * the jog's own Y band reaches *into* the pad's, so there is no slot
+          at all -- just a step from the pad's height down to the jog's,
+          whose two edges are perpendicular and so face nothing. ``jog_y ==
+          y_pad`` (``_safe_jog_height()``'s own first candidate) is this
+          case, and is why the overwhelmingly common placement was already
+          clean.
+
+        Only the in-between -- close, but not touching -- is rejected.
+        """
+        if cand_x == natural_x:
+            return True  # no jog is drawn at all (see ``_riser()``)
+        slot = abs(jog_y - y_pad) - METAL1_JOG_HEIGHT_UM / 2.0 - half_h
+        return slot <= 1e-9 or slot >= METAL1_MIN_SPACE_UM - 1e-9
+
+    def _candidate_clear(
+        self,
+        net: str,
+        natural_x: float,
+        cand_x: float,
+        y_pad: float,
+        track_y: float,
+        jog_y: float,
+        half_w: float,
+        half_h: float,
+    ) -> bool:
+        """Every hazard check one candidate ``(lane, jog height)`` must pass."""
+        return (
+            self._lane_clear(net, cand_x, y_pad, track_y, jog_y)
+            and self._bus_clear(net, jog_y)
+            and self._self_notch_free(natural_x, cand_x, y_pad, jog_y, half_h)
+            and self._metal1_apparatus_safe(net, natural_x, cand_x, y_pad, jog_y, half_w, half_h)
+        )
 
     def place(
         self,
@@ -499,20 +860,22 @@ class RiserLanes:
     ) -> tuple[float, float]:
         """Return ``(assigned_x, jog_y)`` for a riser whose pad-natural x is ``x``.
 
-        ``assigned_x`` is the Metal3 lane to use (equal to ``x`` when no
-        move is needed, in which case ``jog_y`` is just ``y_pad`` and
-        ``_riser()`` draws no separate jog at all). ``y_pad``/``track_y``
-        are this riser's own vertical extent (see ``_riser()``) -- required
-        so this instance can tell which other risers are actually a hazard,
-        not just which ones happen to exist anywhere in the design.
-        ``half_w``/``half_h`` are this riser's own pad's real half-extent
-        (see ``_riser_groups()``) -- 0.0 defaults to
+        ``assigned_x`` is the Metal3 lane to use -- always a slot on this
+        instance's own global lane grid (see ``_candidate_lanes()``), which
+        equals ``x`` only when ``x`` is itself on that grid, in which case
+        ``jog_y`` is just ``y_pad`` and ``_riser()`` draws no separate jog
+        at all. ``y_pad``/``track_y`` are this riser's own vertical extent
+        (see ``_riser()``) -- required so this instance can tell which other
+        risers are actually a hazard, not just which ones happen to exist
+        anywhere in the design. ``half_w``/``half_h`` are this riser's own
+        pad's real half-extent (see ``_riser_groups()``) -- 0.0 defaults to
         ``RiserLanes._metal1_boxes()``'s own minimum, only safe for callers
         (e.g. this class's own tests) that don't care about the pad's exact
-        footprint. ``net`` excludes this riser's *own* net from every
-        clearance/jog-safety check -- two of the same net's own risers
-        merging (even landing on the exact same lane) is never a short, only
-        ``_riser_groups()``'s own merge distance (issue #322) needs it.
+        footprint. ``net`` lets two risers of one net share a lane
+        *exactly*, which is never a short and (at the jog heights this
+        design produces) never a spacing violation either; it is no longer a
+        blanket exemption from the clearance checks, which is what issue
+        #451 found producing 141 deck violations.
         ``max_tries``/``max_height_tries`` override this instance's own
         defaults for just this call -- ``resolve_conflicts()`` uses a much
         larger budget than the initial placement pass (see its own
@@ -525,25 +888,18 @@ class RiserLanes:
         max_height_tries = self._max_height_tries if max_height_tries is None else max_height_tries
         half_w = max(half_w, _MIN_PAD_HALF_UM)
         half_h = max(half_h, _MIN_PAD_HALF_UM)
-        if (
-            x not in avoid_lanes
-            and self._overlapping_x_clear(net, x, y_pad, track_y)
-            and self._metal1_apparatus_safe(net, x, x, y_pad, y_pad, half_w, half_h)
-        ):
-            self._placed.append((net, x, x, y_pad, track_y, y_pad, half_w, half_h))
-            return x, y_pad
 
-        for k in range(1, max_tries):
-            for cand in (x + k * self._pitch, x - k * self._pitch):
-                if cand in avoid_lanes:
-                    continue
-                if not self._overlapping_x_clear(net, cand, y_pad, track_y):
-                    continue
-                jog_y = self._safe_jog_height(net, x, cand, y_pad, half_w, half_h, max_height_tries)
-                if jog_y is None:
-                    continue
-                self._placed.append((net, x, cand, y_pad, track_y, jog_y, half_w, half_h))
-                return cand, jog_y
+        for cand in self._candidate_lanes(net, x, max_tries):
+            if cand in avoid_lanes:
+                continue
+            if cand == x and self._candidate_clear(net, x, x, y_pad, track_y, y_pad, half_w, half_h):
+                self._placed.append((net, x, x, y_pad, track_y, y_pad, half_w, half_h))
+                return x, y_pad
+            jog_y = self._safe_jog_height(net, x, cand, y_pad, track_y, half_w, half_h, max_height_tries)
+            if jog_y is None:
+                continue
+            self._placed.append((net, x, cand, y_pad, track_y, jog_y, half_w, half_h))
+            return cand, jog_y
 
         # No (lane, jog height) pair looked safe against everything known
         # so far -- can genuinely happen even for a solvable design, since
@@ -560,14 +916,45 @@ class RiserLanes:
         # resulting Metal1 conflict is easier to move, with full knowledge
         # of everyone's *actual* final geometry -- something no single-pass
         # placement can have.
-        for k in range(max_tries):
-            for cand in (x,) if k == 0 else (x + k * self._pitch, x - k * self._pitch):
-                if cand in avoid_lanes:
-                    continue
-                if self._overlapping_x_clear(net, cand, y_pad, track_y):
-                    self._placed.append((net, x, cand, y_pad, track_y, y_pad, half_w, half_h))
-                    return cand, y_pad
+        for cand in self._candidate_lanes(net, x, max_tries):
+            if cand in avoid_lanes:
+                continue
+            if self._lane_clear(net, cand, y_pad, track_y, y_pad) and self._bus_clear(net, y_pad):
+                self._placed.append((net, x, cand, y_pad, track_y, y_pad, half_w, half_h))
+                return cand, y_pad
         raise ValueError(f"no free Metal3 riser lane near x={x} -- widen ROW_LANE_OFFSET_UM or max_tries")
+
+    def _candidate_lanes(self, net: str, x: float, max_tries: int) -> list[float]:
+        """Lanes to try for a riser whose pad-natural x is ``x``, nearest first.
+
+        **A global lane grid, not a per-riser ladder (issue #451).** Until
+        #451 each riser searched ``x``, then ``x +/- k * pitch`` -- a ladder
+        anchored on its *own* natural x, so every riser that kept its
+        natural position planted a lane at an arbitrary real coordinate and
+        left up to one pitch of unusable space on either side of it. That is
+        affordable only while same-net risers are allowed to sit a fraction
+        of a micron apart, which is precisely what #451 found the deck
+        rejecting. Measured on this block: 126 distinct ``(net, x)`` lane
+        demands over a 117.9 um span, i.e. 168 slots at this pitch for 126
+        demands -- comfortable globally, but the per-riser ladder stranded
+        so much of it that ``VDD``'s own riser at x=21.21 had no legal lane
+        within 20 um and had to be dumped 7 um away with an unchecked
+        7 um Metal1 jog (the placement that produced both of the residual
+        Metal1 conflicts ``resolve_conflicts()`` then could not repair).
+
+        Every lane is now a multiple of ``pitch`` from one shared origin, so
+        two distinct lanes are *always* exactly a multiple of the pitch
+        apart and no space is stranded between them. A lane this same net
+        already occupies is offered first at equal distance: two collinear
+        same-net columns union into one legal Metal3 column (see
+        ``_lane_clear()``), so reusing one costs no slot at all.
+        """
+        if self._lane_origin is None:
+            self._lane_origin = x
+        k0 = round((x - self._lane_origin) / self._pitch)
+        slots = [self._lane_origin + (k0 + d) * self._pitch for k in range(max_tries) for d in ((k,) if k == 0 else (k, -k))]
+        mine = {asg for unet, _n, asg, _y, _t, _j, _hw, _hh in self._placed if unet == net}
+        return sorted(slots, key=lambda c: (abs(c - x), c not in mine))
 
     def _find_metal1_conflict(self) -> tuple[int, int] | None:
         """``(i, j)`` indices into ``self._placed`` of one pair of risers
@@ -587,17 +974,50 @@ class RiserLanes:
         knowledge of every other riser's *actual* final geometry.
         """
         for j in range(1, len(self._placed)):
-            net_j, nat_j, asg_j, y_j, _t_j, jog_j, hw_j, hh_j = self._placed[j]
+            net_j, nat_j, asg_j, y_j, t_j, jog_j, hw_j, hh_j = self._placed[j]
             boxes_j = self._metal1_boxes(nat_j, asg_j, y_j, jog_j, hw_j, hh_j)
             for i in range(j):
-                net_i, nat_i, asg_i, y_i, _t_i, jog_i, hw_i, hh_i = self._placed[i]
-                if net_i == net_j:
-                    continue
-                for bi in self._metal1_boxes(nat_i, asg_i, y_i, jog_i, hw_i, hh_i):
-                    for bj in boxes_j:
-                        if self._boxes_overlap(bi, bj):
+                net_i, nat_i, asg_i, y_i, t_i, jog_i, hw_i, hh_i = self._placed[i]
+                # Same-net pairs are checked too (issue #451): a partial
+                # same-net merge is not a short but is still an M1.1/M1.2a
+                # defect -- see _metal1_apparatus_safe().
+                for bi, i_is_pad in self._metal1_boxes(nat_i, asg_i, y_i, jog_i, hw_i, hh_i):
+                    for bj, j_is_pad in boxes_j:
+                        if self._pair_too_close(bi, i_is_pad, bj, j_is_pad):
                             return i, j
+                # A lane pair that neither coincides nor clears the pitch is
+                # a Metal3/via-level conflict the initial pass's own
+                # best-effort fallback can leave behind -- resolve it here
+                # for the same reason (issue #451).
+                if not self._lane_pair_ok(net_i, asg_i, y_i, t_i, jog_i, net_j, asg_j, y_j, t_j, jog_j):
+                    return i, j
         return None
+
+    def _lane_pair_ok(
+        self,
+        net_i: str,
+        asg_i: float,
+        y_i: float,
+        t_i: float,
+        jog_i: float,
+        net_j: str,
+        asg_j: float,
+        y_j: float,
+        t_j: float,
+        jog_j: float,
+    ) -> bool:
+        """``_lane_clear()``'s verdict for two already-placed risers."""
+        same_lane = abs(asg_i - asg_j) < 1e-9
+        if same_lane:
+            if net_i != net_j:
+                return False
+            d = abs(jog_i - jog_j)
+            return d < 1e-9 or d >= VIA_STACK_MIN_DY_UM - 1e-9
+        lo_i, hi_i = min(y_i, t_i), max(y_i, t_i)
+        lo_j, hi_j = min(y_j, t_j), max(y_j, t_j)
+        if hi_i < lo_j - 1e-9 or lo_i > hi_j + 1e-9:
+            return True
+        return abs(asg_i - asg_j) >= self._pitch - 1e-9
 
     def resolve_conflicts(self, max_rounds: int = 32, max_tries: int = 32, max_height_tries: int = 32) -> None:
         """Re-place both sides of any Metal1 conflict (see
@@ -889,8 +1309,9 @@ def h_wire(canvas: Canvas, x0: float, x1: float, y: float, width: float = METAL1
 v_wire = partial(_canvas.v_wire, width=METAL1_WIRE_WIDTH_UM)
 
 
-def pad_center(pad: tuple[float, float, float, float]) -> tuple[float, float]:
-    return ((pad[0] + pad[2]) / 2.0, (pad[1] + pad[3]) / 2.0)
+# Centre point of a pad box -- shared with every other
+# ``layout/pll_top/*`` submodule (issue #475, ``_canvas.pad_center()``).
+pad_center = _canvas.pad_center
 
 
 # Smallest axis-aligned box enclosing every box given -- shared with every
@@ -1020,19 +1441,41 @@ def _riser(
             # riser's own jog height, then the horizontal jog itself, all
             # still on Metal1 -- same net as the pad it grows out of, so
             # merging is never a short, and safely below Via1 (drawn next).
+            #
+            # Two shape choices here are about *this* riser's own union,
+            # not about its neighbours (issue #451):
+            #
+            #  * the jog is exactly as tall as the landing it runs into
+            #    (``METAL1_JOG_HEIGHT_UM``), not METAL1_WIRE_WIDTH_UM. A
+            #    narrower jog leaves the landing protruding above and below
+            #    it, and that protrusion faces the neighbouring device pad
+            #    the jog was routed *past* across a sub-M1.2a gap -- 49 of
+            #    #451's M1.2a items were this one notch, repeated.
+            #  * the stub runs past ``jog_y`` by half that height, so the
+            #    stub and the jog end flush instead of in a staircase. Two
+            #    concave corners 0.16 um apart in each axis are 0.226 um
+            #    apart diagonally, 0.004 um inside M1.1's 0.23 um minimum
+            #    width -- #451's other 16 items.
             half_stub = METAL1_WIRE_WIDTH_UM / 2.0
-            canvas.rect("metal1", x - half_stub, min(y_pad, jog_y), x + half_stub, max(y_pad, jog_y))
-            half_jog = METAL1_WIRE_WIDTH_UM / 2.0
+            half_jog = METAL1_JOG_HEIGHT_UM / 2.0
+            stub_lo = min(y_pad, jog_y - half_jog)
+            stub_hi = max(y_pad, jog_y + half_jog)
+            canvas.rect("metal1", x - half_stub, stub_lo, x + half_stub, stub_hi)
             jog_lo, jog_hi = (x, x_top) if x <= x_top else (x_top, x)
             canvas.rect("metal1", jog_lo, jog_y - half_jog, jog_hi, jog_y + half_jog)
 
-        half_m2 = _via_square(canvas, "via1", x_top, jog_y, VIA1_SIZE_UM, VIA_ENCLOSURE_UM)
-        canvas.rect("metal2", x_top - half_m2, jog_y - half_m2, x_top + half_m2, jog_y + half_m2)
-        canvas.rect("metal1", x_top - half_m2, jog_y - half_m2, x_top + half_m2, jog_y + half_m2)
+        # Landings are rectangles, not squares (issue #451): narrow in X,
+        # where lanes compete for room (see ROW_LANE_OFFSET_UM), and taller
+        # in Y, where nothing does, so the isolated Metal2 island at this
+        # jog height still clears M2.3's 0.1444 um^2 minimum area.
+        lx, ly = VIA_LANDING_HALF_UM, VIA_LANDING_HALF_Y_UM
+        _via_square(canvas, "via1", x_top, jog_y, VIA1_SIZE_UM, 0.0)
+        canvas.rect("metal2", x_top - lx, jog_y - ly, x_top + lx, jog_y + ly)
+        canvas.rect("metal1", x_top - lx, jog_y - ly, x_top + lx, jog_y + ly)
         canvas.via(net, "via1", x_top, jog_y)
 
-        half_m3 = _via_square(canvas, "via2", x_top, jog_y, VIA2_SIZE_UM, VIA_ENCLOSURE_UM)
-        canvas.rect("metal3", x_top - half_m3, jog_y - half_m3, x_top + half_m3, jog_y + half_m3)
+        _via_square(canvas, "via2", x_top, jog_y, VIA2_SIZE_UM, 0.0)
+        canvas.rect("metal3", x_top - lx, jog_y - ly, x_top + lx, jog_y + ly)
         # Via1's own Metal2 landing (just above) already sits at this exact
         # (x_top, jog_y) point -- Via1 and Via2 are always co-located now
         # that the lane change happens on Metal1 before Via1 ever runs, so
@@ -1042,9 +1485,9 @@ def _riser(
         half_w = METAL3_WIRE_WIDTH_UM / 2.0
         canvas.rect("metal3", x_top - half_w, min(jog_y, track_y), x_top + half_w, max(jog_y, track_y))
 
-        half_m3_top = _via_square(canvas, "via2", x_top, track_y, VIA2_SIZE_UM, VIA_ENCLOSURE_UM)
-        canvas.rect("metal3", x_top - half_m3_top, track_y - half_m3_top, x_top + half_m3_top, track_y + half_m3_top)
-        canvas.rect("metal2", x_top - half_m3_top, track_y - half_m3_top, x_top + half_m3_top, track_y + half_m3_top)
+        _via_square(canvas, "via2", x_top, track_y, VIA2_SIZE_UM, 0.0)
+        canvas.rect("metal3", x_top - lx, track_y - ly, x_top + lx, track_y + ly)
+        canvas.rect("metal2", x_top - lx, track_y - ly, x_top + lx, track_y + ly)
         canvas.via(net, "via2", x_top, track_y)
 
 
@@ -1079,13 +1522,17 @@ def _riser_groups(pads: Iterable[tuple[float, float, float, float]]) -> list[tup
     real Y separation never risked an overlapping-via square in the first
     place, so there was never a reason to merge them.
 
-    Returns ``(gx, gy, half_w, half_h)`` -- the merged riser position plus
-    the *largest* half-width/half-height of any pad folded into it, so
-    ``RiserLanes`` can build an accurate Metal1 footprint for it (issue
-    #322: some of this package's own S/D pads are far wider than a single
-    Via1 landing, e.g. ``nand2``'s own wide devices -- assuming every pad is
-    via-sized underestimated a real collision and let a short slip past this
-    exact check).
+    Returns ``(gx, gy, half_w, half_h)`` -- the merged riser position plus a
+    half-width/half-height that covers every pad folded into it *measured
+    from that merged position*, so ``RiserLanes`` can build an accurate
+    Metal1 footprint for it (issue #322: some of this package's own S/D pads
+    are far wider than a single Via1 landing, e.g. ``nand2``'s own wide
+    devices -- assuming every pad is via-sized underestimated a real
+    collision and let a short slip past this exact check). Measuring from
+    the merged position rather than taking the largest single pad's own half
+    extent matters once a group holds more than one pad: the group sits at
+    their average, so the union they cover reaches further than any one of
+    them does from its own centre (issue #451).
     """
     grid = METAL2_TRACK_PITCH_UM
     merged: dict[tuple[int, int], list[tuple[float, float, float, float]]] = {}
@@ -1097,8 +1544,8 @@ def _riser_groups(pads: Iterable[tuple[float, float, float, float]]) -> list[tup
         centers = [pad_center(p) for p in group]
         gx = sum(c[0] for c in centers) / len(centers)
         gy = sum(c[1] for c in centers) / len(centers)
-        half_w = max(_MIN_PAD_HALF_UM, *((p[2] - p[0]) / 2.0 for p in group))
-        half_h = max(_MIN_PAD_HALF_UM, *((p[3] - p[1]) / 2.0 for p in group))
+        half_w = max(_MIN_PAD_HALF_UM, *(max(gx - p[0], p[2] - gx) for p in group))
+        half_h = max(_MIN_PAD_HALF_UM, *(max(gy - p[1], p[3] - gy) for p in group))
         groups.append((gx, gy, half_w, half_h))
     return groups
 
@@ -1170,7 +1617,10 @@ def route_all_nets(
             all_groups.append((gx, net, gy, track_y, half_w, half_h))
     all_groups.sort(key=lambda g: (g[1] in late_nets, g[0]))
 
-    lanes = RiserLanes((net, gx, gy, track_y, half_w, half_h) for gx, net, gy, track_y, half_w, half_h in all_groups)
+    lanes = RiserLanes(
+        ((net, gx, gy, track_y, half_w, half_h) for gx, net, gy, track_y, half_w, half_h in all_groups),
+        bus_ys=per_net_track_y,
+    )
 
     # Placement first, drawing second: a riser placed early only knows about
     # every *other* net's fixed pad position (RiserLanes' own "future pads"
@@ -1205,7 +1655,10 @@ def route_all_nets(
                     x_hi + width / 2.0,
                     track_y + width / 2.0,
                 )
-        canvas.label("metal2", net, (x_lo + x_hi) / 2.0, track_y)
+        # 36/10, the Metal2 *pin* purpose the deck connects to Metal2 -- a
+        # text on 36/0 (this module's convention until issue #440) is read
+        # by nothing.
+        canvas.label("metal2_label", net, (x_lo + x_hi) / 2.0, track_y)
 
 
 # Fresh, never-reused Metal2 track_y per net name -- shared with every other

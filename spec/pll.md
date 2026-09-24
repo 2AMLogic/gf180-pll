@@ -17,7 +17,8 @@
   (A2, A3, A5) are evidence-maturity and traceability follow-ups, not
   additional blocking conditions, and are not applied as edits in this
   revision — see DR-007 and the ratifying PR's description for what each
-  amendment's disposition was and why. Amendment A4 (stale `sim/`
+  amendment's disposition was and why. **A3 has since been discharged** by
+  DR-016 (#456) — see the Area-row revision bullet below. Amendment A4 (stale `sim/`
   citations) is partially applied in this revision: the `cp-compliance`,
   `lock-detector`, and `divider-ratio` citations below now point at their
   current `sim/harness`-migrated records; the `vco-tuning-range`
@@ -71,6 +72,45 @@
   Decision 7's *hold* on its re-take is released by #411's window landing.
   Lifting the carve-out is a ratification act on evidence that does not exist
   yet, not a consequence of these revisions.
+- **Revision to a ratified row** (#456, 2026-09-22, under #442): **[Area](#area)
+  (row 15) is amended from ≤ 0.15 mm² to ≤ 0.30 mm² by DR-016.** This is the
+  first amendment in this file that *weakens* a ratified target, so the
+  standard it was held to is stated here rather than left in the record: the
+  draft number was never derived from anything (DR-007 **Amendment A3** — "the
+  one `budget` row in the table with no rationale behind the number at all"),
+  and the 78.6 % of it that A3 said had "no estimate of any kind" is now four
+  committed, DRC-clean, LVS-matched block layouts **measured** off GDS by
+  `python3 layout/run_pv.py area` — 0.2733 mm², **1.82×** the draft target, as
+  measured when DR-016 was ratified (0.2254 mm², 1.50× today — see the DR-017
+  bullet below).
+  DR-016's amendment rests on measurement, not on projection: it is set at the
+  measured total, explicitly *not* at either of the two bounds that also fail
+  0.15 mm² (0.1799 mm² granting every remaining lever its geometric ceiling;
+  0.1702 mm² assuming all Metal2 routing is free), because those are estimates
+  of a class this repository has now measured delivering 42 % and 66 % of their
+  sizing when built (#455, #454). **A3 is thereby discharged** — by
+  measurement rather than by the hand-estimate it asked for. No other row moves,
+  and the carve-out set (rows 9 and 16) is unchanged.
+- **Revision to a ratified row's *evidence*, with the row itself unchanged**
+  (#476, 2026-09-23, follow-up to #458): **[Area](#area) (row 15) keeps
+  ≤ 0.30 mm², and its measured table is refreshed to the committed GDS by
+  DR-017.** Three Metal2 routing-track levers landed after DR-016 was ratified
+  — #469 and #473 inside `pfd_cp`, #458 on `divider_chain` — taking the summed
+  block footprint 218,631 → **180,307 µm²** (−17.5 %) and the total, after the
+  floorplan's ×1.25 top-level overhead, 0.2733 → **0.2254 mm²** (91.1 % →
+  **75.1 %** of the row; 1.82× → **1.50×** the draft target). None of those PRs
+  refreshed this file, because refreshing DR-016's block-by-block figures is
+  the same act as amending the row they sit under; DR-017 is that act.
+  **The row is held, not amended down**, and the reason is that its margin is
+  defined (DR-016 Decision 2) as covering the one factor nothing has measured —
+  §5's ×1.25 multiplier, with no assembled `pll_top` to check it against (#17)
+  — and that factor has not changed at all. DR-017 Decision 3 accordingly
+  narrows DR-016 Decision 4's re-amendment trigger: a lower row now requires
+  the uncertainty itself to shrink (an assembled `pll_top`, or a drawn loop
+  filter whose 36,936 µm² stops being a DR-006 calculation), not another
+  block-level lever. **No ratified row is relaxed by this revision** — the
+  measured total moves further *under* the row, not past it — and no other row
+  moves.
 - **Supersedes**: nothing. The DRAFT target table that used to live in
   `README.md` was removed by the pre-publication audit (#38, PR #47) and is not
   restored there; this file is where the target spec lives from now on.
@@ -113,6 +153,14 @@ No layout parasitics, no extracted netlists, no silicon. Every measured number
 is a pre-layout simulation result, and extraction (#18) is where most of them
 are at risk. Nothing in this repository has been fabricated or measured.
 
+### Who else reads this file
+
+[Consumers](#consumers), near the end of this document, names every repo that
+declares a dependency on this block and checks its stated requirements
+against the rows above. The structured, machine-readable counterpart —
+top cell, port list, netlist/GDS paths, measured area, maturity rung — is
+[`manifests/integrator.json`](../manifests/integrator.json).
+
 ---
 
 ## Summary table
@@ -125,7 +173,7 @@ are at risk. Nothing in this repository has been fabricated or measured.
 | 4 | [Integrated RMS jitter](#integrated-rms-jitter) | **not spec'd** — derived-only (DR-002 Decision 5) | n/a — deliberately unspecified; see the section for why this is visible rather than silent | **n/a** |
 | 5 | [Period jitter](#period-jitter) | ≤ 1.0 % of the output period, RMS, **conditional on ≤ 20 mV pp `vdd_vco` ripple** | `all-slow`/−40 °C/2.97 V, band 5 (2.51 % RMS at 100 mV pp ripple, open-loop); closed-loop deterministic jitter measured at all 45 mandated PVT corners, 0.0508–0.2691 % RMS, PASS at every corner (`sim/period-jitter/`, #13) | **measured** (sensitivity); **derived** (the ripple condition) |
 | 6 | [Phase noise](#phase-noise) | **not spec'd** — derived-only (DR-002 Decision 5) | n/a — deliberately unspecified | **n/a** |
-| 7 | [Reference spur](#reference-spur) | ≤ −55 dBc | measured worst −57.0 dBc at f_out = 150 MHz (`sf`/−40 °C/2.97 V), i.e. −54.5 dBc scaled to 200 MHz; derived worst case −61 dBc at 200 MHz | **measured** (5 spanning corners, 150 MHz); **budget** (the 200 MHz binding point and the other 40 corners — see [Verification owed](#verification-owed)) |
+| 7 | [Reference spur](#reference-spur) | ≤ −55 dBc | measured worst −57.0 dBc at f_out = 150 MHz (`sf`/−40 °C/2.97 V), i.e. −54.5 dBc scaled to 200 MHz; derived worst case −61 dBc at 200 MHz, or **−56.6 dBc** once DR-018's corner-combined statistical charge terms are folded into the same derivation | **measured** (5 spanning corners, 150 MHz); **budget** (the 200 MHz binding point and the other 40 corners — see [Verification owed](#verification-owed)) |
 | 8 | [Loop bandwidth](#loop-bandwidth) | f_c = 26 – 430 kHz over the ratified space, with `f_c < f_ref/10` as a hard ceiling | min 25.96 kHz at f_ref = 1 MHz / 4 legs; max 429.5 kHz at f_ref = 25 MHz / 1 leg; worst realized ratio `f_ref/13` | **measured** |
 | 8a | [Phase margin](#phase-margin) | ≥ 45° everywhere in the contracted space | 47.4° at f_ref = 1 MHz, 4 legs (the tightest cell of the trim rule) | **measured** |
 | 9 | [Lock time](#lock-time) | < 100 µs to the stated [lock criterion](#lock-time). **The < 20 µs stretch is dropped** | 71 µs at f_ref = 1 MHz under the trim rule; structural floor 43 µs. **The criterion this time is measured *to* is not met at 2 of the 45 mandated corners** — the static-phase half settles at 1.227 ns (`ff`/27 °C/3.63 V) and 1.049 ns (`typical`/−40 °C/3.63 V) against the ratified ≤ 1 ns, so at those corners there is no instant for a lock time to be measured to (DR-012) | **measured** (small-signal settling); **budget** (cold-start, owed to #163); target **not met** at 2/45 corners because the criterion itself is not reached there |
@@ -134,7 +182,7 @@ are at risk. Nothing in this repository has been fabricated or measured.
 | 12 | [Supply sensitivity](#supply-sensitivity) | `vdd_vco` ripple ≤ 20 mV pp (100 kHz – 100 MHz); DC rail excursion over 2.97–3.63 V must consume ≤ 0.6 V of the Vctrl window | pushing worst −50.7 %/V at `ss`/−40 °C, band 4 (−52.3 %/V on the coarser tuning-range grid) | **measured** (pushing); **derived** (the two budgets) |
 | 13 | [Output duty cycle](#output-duty-cycle) | 45 – 55 % at `CLK`, over the whole band and all corners | measured 44.375 – 50.696 % (90 points); worst `fs`/27 °C/3.63 V at the `lo` edge (band 0, Vctrl 0.9 V) — the bottom-of-band binding condition the design basis predicted | **measured** (90 points, loaded); target **not met** at 7/90 points, all at the `lo` edge |
 | 14 | [Output levels and drive](#output-levels-and-drive) | rail-to-rail CMOS on `vdd_vco`: V_OH ≥ 0.9·VDD_VCO, V_OL ≤ 0.1·VDD_VCO into ≤ 50 fF external load | measured V_OH 1.006 – 1.044·VDD_VCO, V_OL −0.040 … −0.006·VDD_VCO into a 50 fF load, at every one of 90 points | **measured** (90 points); target **met** at every point |
-| 15 | [Area](#area) | ≤ 0.15 mm² total — **a budget, not a result** (no layout exists) | n/a — drawn area is not a PVT quantity; the *capacitance* it buys is (C1 = 107.1 … 133 pF over corners) | **budget**; loop-filter allocation is **measured** |
+| 15 | [Area](#area) | ≤ **0.30 mm²** total — **amended by DR-016** from the draft ≤ 0.15 mm², which was never derived from anything (DR-007 Amendment A3) and is *measured* to be unreachable, and **held** at that value by **DR-017** on a floor re-measured 17.5 % lower. The drawn blocks sum to 0.1803 mm², 0.2254 mm² after the floorplan's ×1.25 top-level overhead, **1.50×** that draft target; assuming *all* Metal2 routing is free still gives 0.1702 mm² (1.13×), and every remaining named lever is above that bound. 57.2 % of what a 0.15 mm² row allowed is consumed by two terms no layout lever touches: the loop filter (capacitance-set by DR-006) and `vco_block`'s guard-ring/tap spacing. The row is the measured total *as DR-016 measured it* plus margin sized to the one unmeasured factor in it (it now holds for a top-level overhead up to ×1.664) — **not** an allowance for block growth. It did not move with the three levers that have landed since (#469, #458, #473): per DR-017 Decision 3, a downward re-amendment now needs the *uncertainty* to shrink — an assembled `pll_top` (#17), or a drawn loop filter — not another block-level lever | n/a — drawn area is not a PVT quantity; the *capacitance* it buys is (C1 = 107.1 … 133 pF over corners) | **measured** (the four drawn blocks, off committed DRC/LVS-clean GDS via `python3 layout/run_pv.py area`); **derived** (the loop filter — DR-006's measured device area ×1.15; it has no layout); **budget** (the ×1.25 top-level overhead — no assembled `pll_top` GDS exists, #17). Target **met** at 0.2254 mm² against the amended row |
 | 16 | [Lock detector](#lock-detector) | digital `lock` output; assert window within **1 … 2 ns** of phase error — i.e. ≥ the ratified Lock criterion and ≤ 2× it — at every PVT point (T1′/T2′, DR-010), **measured at the flag** (the largest phase error for which `lock` asserts and stays asserted through the assembled detector loop) rather than at the bare delay chain (DR-013 Decision 1); hysteresis ≥ 25 % of the assert window; no chatter. Conditioned on the [Lock-detector window trim-code rule](#lock-detector-window-trim-code-rule) | **T1′ and T2′ are both met**, at the trimmed `delaywin_3v3` (DR-014, #411) with each part at the code the trim rule selects: window edge **[1.14, 1.16) ns** at `fs`/−40 °C/3.63 V (code 6, **+14 … +16 %** above the 1 ns lower edge) and **[1.78, 1.80) ns** at `ss`/125 °C/2.97 V (code 3, **10.0 … 11.0 % below** the 2 ns upper edge), each resolved to 0.02 ns at the corner it binds at. The observable's PVT spread is **1.53 … 1.58×** (≤ 1.62× as a resolution-independent bound), against DR-013 Decision 4's **≤ 1.65×** and **1.91–1.96×** for the untrimmed cell, whose edge sat at [2.02, 2.04) ns — 1.0–2.0 % past budget. Behaviour is unchanged by the trim: 0 of 205 points fail the four-check acceptance, no large static phase error and no frequency error asserted anywhere, worst deassert latency 5.63 ns. **An untrimmed part is outside this specification** — the spread at any one fixed code is 1.977–1.988× and no code holds the band | **measured** (205-point in-situ re-characterization, clean tree, plus a 1872-point code map); targets **met** (T1′/T2′), conditional on the trim rule; **T4/T5 below 25 MHz still uncharacterized** |
 | 17 | [Kvco](#kvco) | ≤ 150 MHz/V at every legal operating point under the [band-selection rule](#band-selection-rule) | 115.8 MHz/V at `all-fast`/27 °C/2.97 V, band 6, Vctrl 1.54 V (target 200 MHz) | **measured** |
 | 18 | [Supply range](#supply-range) | 3.3 V ± 10 % (2.97 – 3.63 V), `nfet_03v3`/`pfet_03v3` only; three domains | n/a — the supply axis is the *independent* variable of every other row's corner binding | **measured** as a swept axis on every campaign |
@@ -574,6 +622,47 @@ rail, and layout coupling that does not exist yet. The bound improves at lower
 output frequencies (−67 dBc at 100 MHz), so 200 MHz is the binding frequency as
 well as the binding corner.
 
+**That ~6 dB reserve is now ~1.6 dB, once the first mechanism it lists —
+UP/DN current mismatch — is priced at its statistical 3σ instead of its
+systematic value, and the table's own statistical-residual row is refreshed to
+the corner-combined campaign (DR-018).** The table predates that campaign: its
+statistical residual row is the *nominal-only* 2.99 fC (the corner-combined
+figure is 4.25246 fC), and it excludes term-1 current mismatch entirely, on the
+"under 1 fC" estimate in the paragraph above. That estimate is right for the
+systematic 4.7 % (0.88 fC at the largest trim code and the worst measured reset
+overlap); at the measured 3σ tail the same product is ≈ 1.35 – 1.94 fC
+corner-consistent and 3.26 fC stacked, and at the ±20 % term-1 budget DR-018
+derives it is 3.73 fC. Carrying those through the same chain:
+
+| Charge accounting at 200 MHz | Total ΔQ | Derived spur |
+|---|---|---|
+| The table above (systematic 3.68 fC + nominal-only statistical 2.99 fC) | 6.67 fC | **−61 dBc** |
+| Corner-combined statistical residual, term 1 still excluded | 7.93 fC | −59.9 dBc |
+| …plus term 1 at its **measured** 17.4798 % (signed `\|mean\| + 3σ`) | 11.19 fC | ≈ −57.0 dBc |
+| …plus term 1 at its **budgeted** ±20 % | 11.66 fC | **−56.6 dBc** |
+
+The "measured" row quotes term 1 as the signed `|mean| + 3σ` at the worst
+corner (`ff`/−40 °C/3.63 V), the statistic `sim/mc-cp-mismatch` has reported
+since #487. It previously quoted 13.2172 % (10.40 fC, −57.6 dBc), which was
+`mean(|x|) + 3·sd(|x|)` on samples folded to their absolute value; both come
+from the same committed 300 samples
+(`sim/mc-cp-mismatch/testbench/run.sh --restat 20260923-095854-1655e11`). The
+refresh is DR-018 Amendment A1, made under that record's Decision 3, which
+pre-authorised the switch of statistic; it restates a derived row in the
+conservative direction and moves nothing below.
+
+The −55 dBc **target does not move**, and neither does the −61 dBc row, which
+is retained as the historical cross-check it always was. What changes is how
+much of the target's margin is spoken for: the last row above is a deliberately
+conservative stack (three different worst corners added linearly, the largest
+trim code, the longest overlap, and term 1 counted on top of a term-3
+measurement that already contains it), but it is the honest upper bound, and it
+sits 1.6 dB from the line. Read alongside the measured table's −54.5 dBc at the
+two cold corners once scaled to 200 MHz, the spur row has less slack than the
+−61 dBc figure alone suggests. Closing [Verification
+owed](#verification-owed)'s direct 200 MHz measurement is what would settle it;
+a wider charge-pump mismatch budget is not.
+
 The derivation's own −61 dBc lands inside the measured −57…−73 dBc range above,
 which is a useful agreement and not a verification: the derivation is stated at
 200 MHz and at its own worst corner, the measurement is at 150 MHz at five
@@ -946,18 +1035,71 @@ regulates `vdd_vco` to meet Budget 1 changes the output swing at the same time.
 
 ## Area
 
-**Budget: ≤ 0.15 mm² for the whole block. This is a budget, not a result** —
-`layout/` is empty, nothing has been through DRC/LVS, and no area number in
-this repository comes from a drawn cell.
+**Budget: ≤ 0.30 mm² for the whole block — amended by DR-016 from the draft's
+≤ 0.15 mm², and held there by DR-017.** The draft number was never derived
+from anything — DR-007's review raised it as Amendment A3, "the one `budget`
+row in the table with no rationale behind the number at all" — and the design
+is now measured at **0.2254 mm²**, 1.50× that draft target, which itself stays
+out of reach even with every Metal2 track in the design assumed to route for
+free (0.1702 mm², **1.13×**). DR-016 is the amendment and carries the full
+derivation; **DR-017** (#476) re-measures the floor after three reduction
+levers, holds the row where DR-016 put it, and is what the table below is
+refreshed onto.
 
-Committed allocation so far, from real device data:
+**This row is no longer a budget for the drawn blocks.** Four of the five items
+are **measured**, read from committed, DRC-clean, LVS-matched GDS by
+`python3 layout/run_pv.py area`; the fifth (the loop filter) is **derived**
+from DR-006's measured device area, because the loop filter has no layout.
+What *is* still a **budget** is the top-level overhead factor: no assembled
+`pll_top` GDS exists (#17), so nothing has measured it.
 
-| Item | Area | % of the 0.15 mm² budget | Status |
+Measured at `main` @ `8c6cb7f3` (2026-09-23), reproducible with
+`python3 layout/run_pv.py area`; the per-block rows are
+[`layout/evidence/area-audit/area-audit.md`](../layout/evidence/area-audit/area-audit.md),
+which `layout/tests/test_area_audit.py` re-derives from the committed GDS and
+byte-compares on every test run:
+
+| Item | As-drawn | % of the 0.30 mm² row | Status |
 |---|---|---|---|
-| C1 (4 × `cap_nmos_03v3_b`, 30 276 µm² drawn) | 0.0303 mm² | **20.2 %** | **measured** — real 3.988 fF/µm² density at the typical corner |
-| R + C2 | 0.0018 mm² | 1.23 % | measured |
-| **Loop filter total** | **0.0321 mm²** | **21.4 %** | measured |
-| Everything else (VCO, PFD/CP, divider, lock detector, routing, decap) | unallocated | 78.6 % | **not estimated** — owed to #17 |
+| Loop filter (R + C1 + C2) | 0.0369 mm² (36,936 µm²) | 12.3 % | **derived** — DR-006's 32,118 µm² of *measured* device area (C1 30,276 at the measured 3.988 fF/µm², R 856, C2 986) ×1.15 for bulk taps and interconnect. Not measured: the loop filter has no drawn layout |
+| `vco_block` (172.52 × 184.48 µm) | 0.0318 mm² (31,826 µm²) | 10.6 % | **measured** — committed GDS bbox |
+| `pfd_cp` (344.98 × 74.30 µm) | 0.0256 mm² (25,630 µm²) | 8.5 % | **measured** — committed GDS bbox (folded at #455, glue bus packed at #469, glue inverters interleaved at #473) |
+| `divider_chain` (1317.66 × 41.99 µm) | 0.0553 mm² (55,329 µm²) | 18.4 % | **measured** — committed GDS bbox (macro band packed at #454, tracks routed over the device rows at #458) |
+| `lock_detector` (294.80 × 103.75 µm) | 0.0306 mm² (30,586 µm²) | 10.2 % | **measured** — committed GDS bbox |
+| **Sum of block footprints** | **0.1803 mm² (180,307 µm²)** | **60.1 %** | |
+| **× the floorplan's ×1.25 top-level overhead** | **0.2254 mm² (225,384 µm²)** | **75.1 %** | **budget** — ROM multiplier; no assembled `pll_top` exists to measure it (#17) |
+
+**Met, at 0.2254 mm² against 0.30 mm².** The 24.9 % margin on the block-sum
+allowance is sized to exactly one thing — the unmeasured ×1.25 factor, which
+the row now carries up to **×1.664** before it fails — and is not an allowance
+for block growth. It was 0.2733 mm² / 8.9 % / ×1.372 when DR-016 was ratified;
+three routing-track levers have since landed (#469, #458, #473, in
+`PLL-FLOORPLAN.md` §5.12–§5.14), taking the block sum down 17.5 %. **The row
+did not move with them**, and DR-017 §Decision 1 states why in one sentence: a
+margin sized to an uncertainty does not shrink because the measurement it sits
+on top of shrank. Nothing has yet measured the ×1.25, and the loop filter still
+has no layout.
+
+**Why 0.15 mm² was not reachable, stated as a measurement** (DR-016 §Context,
+re-derived at DR-017 §Context): two terms no layout lever touches consume
+57.2 % of the 120,000 µm² of block footprint that a 0.15 mm² row allowed — the
+loop filter (36,936 µm², set by DR-006's C1/C2 *capacitance*, so reducing it
+moves [Loop bandwidth](#loop-bandwidth) and [Phase margin](#phase-margin), not
+layout) and `vco_block` at its own ceiling (31,654 µm², whose height *is* its
+device band, its 60.8 % whitespace being the guard-ring and 15 µm tap-pitch
+spacing the foundry deck requires). DR-016's two bounds have since converged on
+one, because #458 spent exactly the `divider_chain` term that separated them:
+assuming **all** Metal2 routing is free gives 0.1702 mm² (**1.13×**), a bound
+that survives any row fold and that every remaining named lever is also above.
+
+**Reduction is still tracked, and a lower row now needs a *measurement*, not a
+lever**: one unnamed `lock_detector` lever remains open, and DR-017 Decision 3
+replaces DR-016 Decision 4's "any lever landing is grounds" trigger with a
+narrower one — this row is re-amended downward when an assembled `pll_top`
+(#17) turns the ×1.25 overhead into a measurement, or when the loop filter is
+drawn and its 36,936 µm² (20.5 % of the block sum) stops being a calculation.
+Further block-level reduction refreshes the table above; it does not move the
+row.
 
 Corner binding: **n/a** — drawn area does not vary with PVT. What *does* vary
 is the capacitance that area buys: C1 spans 107.1 … 133 pF over the 27 passive
@@ -967,7 +1109,9 @@ Vctrl window (the body-tied connection is what buys that; the raw
 
 The 32 kHz reference mode is excluded partly on this row: it would need
 single-digit-nF loop-filter capacitance, roughly 0.9 mm² — about **6× the
-entire block budget** (DR-002 Decision 1).
+entire block budget** as that exclusion was ratified against the draft
+≤ 0.15 mm² (DR-002 Decision 1), and still **3×** the amended ≤ 0.30 mm² row, so
+the exclusion stands unchanged.
 
 ## Lock detector
 
@@ -1283,6 +1427,96 @@ row's corner binding is stated against. All three supply points (2.97 / 3.30 /
 
 ---
 
+# Consumers
+
+**This block's consumers are part of its spec** (2am cross-cutting rule 9,
+`2AMLogic/2am` `REUSE.md` §"Adopt or record", ratified 2am#899, widened
+2026-09-21 to same-PDK sub-blocks and cross-repo clock interfaces). A repo
+becomes a consumer of this block exactly when `2AMLogic/2am` `repos.yml`
+records a `consumes: [gf180-pll]` edge on it. **As of a live read of that
+file at commit `9032d1d`, 2026-09-21, three repos do**: `gf180-tmds-tx`,
+`gf180-usb2-phy`, and one private full-chip canary. Each gets a row set
+below. "Unknown" is a legitimate row value (the consumer states no bound);
+an unnamed consumer or an unstamped row is not.
+
+The machine-readable integrator view this section's Meets/Unknown column is
+checked against — top cell, port list, netlist/GDS paths, measured area,
+maturity rung — lives at [`manifests/integrator.json`](../manifests/integrator.json),
+not duplicated here.
+
+## gf180-tmds-tx — DVI-mode TMDS transmitter (gf180mcu)
+
+[`gf180-tmds-tx`](https://github.com/2AMLogic/gf180-tmds-tx) `README.md`
+(§Scope, read at commit `8578f8b`, 2026-09-15) states: *"Not in scope: the
+PLL. It comes from a sibling canary; specify the interface to it, including
+the jitter budget, and stop."* — the sibling is never named. The numeric
+interface contract is `spec/tmds-tx.md` §2 / DR-0004, read at the same
+repo's commit `595b5c1` (2026-09-15):
+
+| Requirement | Consumer's value (`gf180-tmds-tx` @ `595b5c1`) | This block's ratified spec | Verdict |
+|---|---|---|---|
+| Reference input | 27.000 MHz, single-ended CMOS, ±100 ppm | [Reference input](#reference-input): 1 – 25 MHz | **Not met** — 27.000 MHz is 2 MHz (8 %) above the ratified 25 MHz ceiling |
+| Output ("bit-rate clock"), 720p60 target | 742.5 MHz | [Output band](#output-band): 10 – 200 MHz, ratified; measured ceiling 247.8 MHz at one fast-corner point (`all-slow`/−40 °C/3.63 V) is evidence, not a ratified extension | **Not met** — over 3.7× the ratified ceiling, and over 3× even the unratified measured point |
+| Output ("bit-rate clock"), 480p fallback | 270 MHz | same | **Not met** — 35 % over the ratified 200 MHz ceiling, and 9 % over the unratified 247.8 MHz measured point |
+| PLL-attributable jitter | ≤ 0.10 UI peak-to-peak on the bit-rate clock (≈135 ps @ 742.5 MHz, ≈370 ps @ 270 MHz) | [Period jitter](#period-jitter): ≤ 1.0 % of the output period, RMS — a different quantity (RMS-of-period vs. peak-to-peak-in-UI) at a different frequency | **Unknown** — no closed-loop jitter measurement exists at either requested frequency (both are outside the ratified band), and the unit mismatch means an in-band number would still need an explicit conversion before comparison |
+| Clock relationship | bit-rate and pixel-rate clocks delivered as a fixed, edge-aligned 10:1 pair | n/a — this block has one output (`CLK`) and a static integer divider ratio `N` = 4 – 64 in the *feedback* path, not a second, pixel-rate output | **Not met as stated** — supplying both outputs described would need a second divided output or a different integration architecture, neither of which exists here |
+
+Both requested frequencies exceed the ratified [output band](#output-band)
+ceiling, and the reference frequency separately exceeds the ratified
+[reference input](#reference-input) ceiling. This is the mismatch
+[`gf180-tmds-tx#194`](https://github.com/2AMLogic/gf180-tmds-tx/issues/194)
+(open, `loom:operator-only` as of 2026-09-21) exists to resolve, naming three
+options: (a) this repo extends its output band, (b) `gf180-tmds-tx` takes a
+lower-rate clock and multiplies/serializes locally, or (c) a different,
+named clock source. **This section does not decide that question.**
+Extending the ratified [output band](#output-band) past 200 MHz is a scope
+change [Output band](#output-band) already prices as non-trivial: past
+200 MHz the extracted Kvco reaches 206 MHz/V, past the fixed loop filter's
+bound, so the stretch needs a filter re-design or a finer band map, not just
+more Vctrl — it is not undertaken by this PR. When `gf180-tmds-tx#194`
+decides, the outcome is carried here as a spec row change or a new decision
+record.
+
+## gf180-usb2-phy — USB 2.0 device PHY (gf180mcu)
+
+[`gf180-usb2-phy`](https://github.com/2AMLogic/gf180-usb2-phy) records
+`consumes: [gf180-pll]` in `2am/repos.yml` (@ `9032d1d`) with the comment
+*"clock source not yet named in the repo; the kit PLL per product's block
+matrix"*. That repo's own ratified spec (`spec/usb2-device-phy.md` §7, read
+at commit `e831a7b`, 2026-09-05) states a **12 MHz external
+crystal/resonator** as its reference clock and a 12 MHz UTMI interface
+clock — it names no PLL-derived clock requirement anywhere in its ratified
+target table.
+
+| Requirement | Consumer's value (`gf180-usb2-phy` @ `e831a7b`) | This block's ratified spec | Verdict |
+|---|---|---|---|
+| Any clock this block would supply | **Unknown** — not stated in `gf180-usb2-phy`'s own ratified spec; the `repos.yml` edge comment itself says the source is unnamed | n/a — nothing named to check a ratified row against | **Unknown** |
+
+## Private full-chip canary
+
+`2am/repos.yml` (@ `9032d1d`) records a third `consumes: [gf180-pll]` edge,
+on a private full-chip canary. Per this repo's own `CLAUDE.md` ("nothing
+about ... the contents of other 2AM Logic repositories belongs in this
+one"), no requirement rows or other content from that repo are reproduced
+here — a private repo is also not a public audience for a public spec
+section. What is stated publicly is the edge's existence and its date. If
+that consumer's own requirements are ever made public, this section gains a
+row set for it the same way the two above have one.
+
+## Mechanism for future consumers
+
+A new row set is added here the same way the three above were: a `consumes:
+[gf180-pll]` edge appears in `2AMLogic/2am` `repos.yml`, this section
+records the consumer's stated requirements (or the literal value `Unknown`
+where none is stated, with a note naming where was checked) against this
+block's ratified rows, and a verdict is recorded. Findings about a
+consumer's *own* block belong on that consumer's repo, not here (the
+`sky130-sar-adc#346` pattern cited in `2am/REUSE.md`) — this section records
+what a consumer *requires* of this block, not defects in the consumer's own
+design.
+
+---
+
 ## Anchor index
 
 Every anchor `sim/` cites against `spec/pll.md#…`, and where:
@@ -1326,7 +1560,7 @@ to reconstruct it from the status column.
 | [Lock detector](#lock-detector) | **T1′ and T2′ are both met** at the trimmed `delaywin_3v3` under the [Lock-detector window trim-code rule](#lock-detector-window-trim-code-rule) (DR-010 → DR-013 → DR-014 → #411): edges [1.14, 1.16) ns at `fs`/−40 °C/3.63 V and [1.78, 1.80) ns at `ss`/125 °C/2.97 V, observable spread 1.53–1.58× against DR-013 Decision 4's ≤ 1.65×. What is still owed against this row: (a) **T4/T5 below 25 MHz** — the detector has only ever been characterized at f_ref = 25 MHz, its assert hold-off is an absolute time, and at the 1 MHz bottom of the reference range that hold-off is of order one reference period, where the flag would be expected to chatter; **unowned**; (b) **discharged at the two cells DR-013 names, and only there** — `sim/supply-sensitivity` has now been run at the trimmed window and DR-013's window-vs-offset crossing is **measured inside one closed loop** rather than inferred across two campaigns (**#417**, `sim/supply-sensitivity/records/20260920-180604-0f91a9b.md`, `SIM_PICKS='typical -40 ff 27'` at `KWINTRIM=rule`): at `typical`/−40 °C/3.63 V (code 7) the loop settles at a **0.814 ns** static offset and the flag **asserts** — window above the offset; at `ff`/27 °C/3.63 V (code 11) it settles at **1.233 ns** and the flag stays at **6.9 nV** — window at-or-below the offset. Both are what DR-013 inferred, so Decision 4's "marginal observer at two corners and a wrong one at one" now rests on an in-loop measurement at one f_ref, not on two campaigns at two. **The residual is coverage, not method**: that record is a declared 2-cell / 6-point subset of the 45-point grid, so every other cell of the campaign is still at the untrimmed cell and the full-grid `20260901-155456-46b92f8` record remains its PVT statement — a trimmed-window **full-grid** re-run of that campaign is **#437**; (c) a **0.02 ns edge refinement at `ff`/−40 °C/3.63 V (code 11) and `ss`/−40 °C/3.63 V (code 3)** — only the coarse ladder ran at those two, so each is bounded to [1.0, 1.2) ns: T1′ is met at both, but their margin is stated as [0, 20) % rather than to 0.02 ns, and the spread figure leans on the `t_win` bound (1.62×) instead of a measured edge there; (d) **extraction (#18) and device mismatch**, both still unquantified — including segment-to-segment mismatch inside one stage's binary trim array, which would appear as trim DNL | DR-013 (decision, #401); DR-014 (mechanism, #407); #411 (implementation + re-characterization); **#417** (b, discharged at DR-013's two cells); **#18** (d); **#437** (the trimmed-window full-grid `supply-sensitivity` re-run); T4/T5 unowned |
 | [Lock criterion](#lock-time) | **a design gap, now measured** (DR-012): the loop misses the ratified ≤ 1 ns static-phase bound at 2 of the 45 mandated corners in its own undisturbed steady state — **1.227 ns** at `ff`/27 °C/3.63 V and 1.049 ns at `typical`/−40 °C/3.63 V, nominal-skew and systematic-only, before `mc-cp-mismatch`'s 0.576 ns statistical term is added. What is *owed* is the rest of the picture, not the existence of the gap: (a) the settled static phase at the **15** further corners that exceed the bound with the phase still decaying — their committed values are upper bounds on a tail, needing `run.sh`'s 36.8 µs settling escalation (≈10 h of ngspice per corner); (b) any **closed-loop** measurement at an (f_ref, N, trim-code) cell other than 12.5 MHz / N = 8 / b1b0 = 10, the only cell characterized — the open-loop systematic term is now swept over the whole ratified control window at all 45 corners (`sim/pfd-deadzone/records/20260916-051356-8cedbba.md`) and exceeds the criterion by itself at 36 of 45 at Vctrl = 0.90 V, so a closed-loop cell that parks low on that window is expected to miss and has never been run; (c) the design resolution, which DR-012 Decision 7 deliberately does not pick, though it does establish that the cause is the pump's residual charge at low Vctrl. The earlier entry here — "`ff`/125 °C/3.63 V stands off 1.796 ns" — was a sample on a decaying tail and is withdrawn by DR-012 Decision 2; that corner is neither cleared nor confirmed | #394 (found); #399 (owed measurement) |
 | [Lock time](#lock-time) | any bound at all on **re-lock after a mid-operation supply excursion** — distinct from row 9's cold-start acquisition. Measured today only as a lower bound: `lock` had not re-asserted 34.4 µs (3.70 τ) after a +10 % step at 2 of 3 sampled corners (DR-011) | #395 |
-| [Area](#area) | everything except the loop filter; the block has no floorplan | #17 (floorplan), #18 (extraction) |
+| [Area](#area) | **the block-level numbers are no longer owed** — a floorplan exists (`layout/floorplan/PLL-FLOORPLAN.md`) and all four non-passive sub-blocks are drawn, DRC-clean, LVS-matched and measured off committed GDS by `python3 layout/run_pv.py area`, which is what DR-016 amends the row on and DR-017 refreshes it against. What remains owed is (a) an **assembled `pll_top`**, which would replace the ×1.25 top-level overhead factor — the only estimated term left in the row — with a measured extent, and (b) the loop filter's own **layout**, whose 36,936 µm² (20.5 % of the block sum) is still DR-006's device-data calculation ×1.15, not a drawn cell. **These two are now also the only triggers for a downward re-amendment of the row** (DR-017 Decision 3): the block-level reduction levers refresh the measured table, not the budget | #17 (top-level assembly, and the loop-filter layout with it), #18 (extraction) |
 | [Kvco](#kvco), [Output band](#output-band) | Monte Carlo band-select mirror mismatch; **post-extraction re-run of every VCO number** | #15, #18 |
 | [Multiplication ratio](#multiplication-ratio) | post-extraction retiming setup margin at N = 64, 200 MHz — the thinnest margin in the block at 6.1 % of a VCO period | #18 |
 

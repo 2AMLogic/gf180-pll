@@ -24,6 +24,13 @@ from pathlib import Path
 
 from . import devgen
 
+try:
+    from .. import _cli
+except ImportError:  # this package's own dir (not its "pll_top" parent) is the
+    # sys.path root under layout/tests's flat-import convention -- see
+    # devgen.py's own ``_canvas`` import for the full explanation.
+    import _cli
+
 TOP_CELL = "inv_3v3"
 
 # design/inv_3v3.sch's own MP/MN instances -- W/L only (nf=1, m=1 for both).
@@ -68,22 +75,7 @@ def reference_netlist() -> str:
 
 
 def main() -> int:
-    import argparse
-
-    parser = argparse.ArgumentParser(description=__doc__)
-    default_outdir = Path(__file__).resolve().parents[2] / "evidence" / "divider-inv-proof" / "work"
-    parser.add_argument("--outdir", default=str(default_outdir))
-    args = parser.parse_args()
-    outdir = Path(args.outdir)
-    leaf = build(outdir)
-    netlist_path = outdir / f"{TOP_CELL}.spice"
-    netlist_path.write_text(reference_netlist())
-    x0, y0, x1, y1 = leaf.footprint
-    print(f"wrote {outdir}/{TOP_CELL}.gds")
-    print(f"wrote {netlist_path}")
-    print(f"footprint: {x1 - x0:.3f} x {y1 - y0:.3f} um  ({(x1 - x0) * (y1 - y0):.2f} um^2)")
-    print(f"pins: {sorted(leaf.pins)}")
-    return 0
+    return _cli.leaf_cli_main(build, TOP_CELL, reference_netlist, "divider-inv-proof", description=__doc__)
 
 
 if __name__ == "__main__":

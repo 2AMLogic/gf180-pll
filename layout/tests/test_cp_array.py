@@ -228,6 +228,94 @@ class CheckRiserColumnsTests(unittest.TestCase):
             cp_array._verify_riser_plan([("A", 0.0, 0.0), ("B", 0.4, 0.0)], 1.0)
 
 
+class PackTracksTests(unittest.TestCase):
+    """pack_tracks()/PackedTracks/check_track_separation -- the glue-bus track
+    band's own assignment (issue #469). Pure arithmetic, no PV environment.
+    """
+
+    PITCH = cp_array.METAL2_TRACK_PITCH_UM
+    CLEARANCE = cp_array.METAL2_TRACK_PITCH_UM - cp_array.METAL2_WIRE_WIDTH_UM
+
+    def test_extent_uses_the_via2_landing_not_the_bus_half_width(self):
+        # _riser()'s Metal2 landing square is wider than half the bus wire, so
+        # the landing is what sets a net's true leftmost/rightmost edge.
+        lo, hi = cp_array._net_x_extent([0.0, 10.0])
+        half = cp_array.VIA2_SIZE_UM / 2.0 + cp_array.VIA_ENCLOSURE_UM
+        self.assertGreater(half, cp_array.METAL2_WIRE_WIDTH_UM / 2.0)
+        self.assertAlmostEqual(lo, -half)
+        self.assertAlmostEqual(hi, 10.0 + half)
+
+    def test_empty_extent_raises(self):
+        with self.assertRaises(ValueError):
+            cp_array._net_x_extent([])
+
+    def test_disjoint_nets_share_one_track(self):
+        y = cp_array.pack_tracks({"A": [0.0, 1.0], "B": [50.0, 60.0]}, base_y=100.0)
+        self.assertEqual(y["A"], 100.0)
+        self.assertEqual(y["B"], 100.0)
+
+    def test_overlapping_nets_get_their_own_tracks(self):
+        y = cp_array.pack_tracks({"A": [0.0, 40.0], "B": [10.0, 60.0]}, base_y=100.0)
+        self.assertEqual(sorted(y.values()), [100.0, 100.0 + self.PITCH])
+
+    def test_nets_closer_than_the_clearance_do_not_share(self):
+        # Two extents whose gap is under METAL2_TRACK_PITCH - METAL2_WIRE_WIDTH
+        # are an M2.2a risk, not a packing opportunity.
+        half = cp_array.VIA2_SIZE_UM / 2.0 + cp_array.VIA_ENCLOSURE_UM
+        gap = self.CLEARANCE / 2.0
+        y = cp_array.pack_tracks({"A": [0.0], "B": [2 * half + gap]}, base_y=0.0)
+        self.assertNotEqual(y["A"], y["B"])
+
+    def test_track_count_equals_the_clique_number(self):
+        # Three mutually overlapping nets plus one disjoint tail: the left-edge
+        # algorithm is optimal for an interval graph, so this must be 3.
+        y = cp_array.pack_tracks(
+            {"A": [0.0, 30.0], "B": [5.0, 35.0], "C": [10.0, 40.0], "D": [60.0, 70.0]},
+            base_y=0.0,
+        )
+        self.assertEqual(len(set(y.values())), 3)
+
+    def test_assignment_is_deterministic(self):
+        nets = {"Z": [0.0, 5.0], "A": [0.0, 5.0], "M": [50.0, 55.0]}
+        self.assertEqual(cp_array.pack_tracks(nets, 0.0), cp_array.pack_tracks(dict(reversed(list(nets.items()))), 0.0))
+
+    def test_check_track_separation_raises_on_a_synthetic_collision(self):
+        # The defect the whole mechanism exists to catch, fed directly to the
+        # verification half: two nets on one track_y whose extents overlap.
+        # This is what an *undeclared* parent bus extension would produce.
+        with self.assertRaisesRegex(ValueError, r"share track_y"):
+            cp_array.check_track_separation(
+                {"A": 10.0, "B": 10.0}, {"A": (0.0, 20.0), "B": (5.0, 25.0)}
+            )
+
+    def test_check_track_separation_passes_on_separated_nets(self):
+        cp_array.check_track_separation(
+            {"A": 10.0, "B": 10.0}, {"A": (0.0, 20.0), "B": (30.0, 40.0)}
+        )  # must not raise
+
+    def test_packed_tracks_exposes_the_nettracks_surface(self):
+        tracks = cp_array.PackedTracks({"A": 10.0, "B": 10.0, "C": 10.75})
+        self.assertEqual(tracks.get("A"), 10.0)
+        self.assertEqual(tracks.n_tracks, 2)
+        self.assertAlmostEqual(tracks._next_y, 10.75 + self.PITCH)
+
+    def test_packed_tracks_refuses_an_unknown_net(self):
+        # Unlike NetTracks this allocates nothing on demand: a net the packing
+        # never saw would silently land above the band the caller measured.
+        tracks = cp_array.PackedTracks({"A": 10.0})
+        with self.assertRaises(KeyError):
+            tracks.get("B")
+
+    def test_route_side_rejects_bus_reach_for_an_unrouted_net(self):
+        with self.assertRaisesRegex(ValueError, "bus_reach names nets"):
+            cp_array._route_side(
+                canvas=None,
+                nets={"A": [(0.0, 0.0, 1.0, 1.0)]},
+                side_bbox=(0.0, 0.0, 1.0, 1.0),
+                bus_reach={"NOT_A_NET": [5.0]},
+            )
+
+
 class BiasDeviceTableTests(unittest.TestCase):
     """BIAS_DEVICES_N/BIAS_DEVICES_P match design/cp.sch's own MBN/MCN/MBP/MCP
     instances (sizes and diode-connected nets)."""

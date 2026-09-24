@@ -73,6 +73,7 @@ layout/
     drc.py                    drives the foundry DRC deck, normalises the verdict
     lvs.py                    drives the foundry LVS deck, normalises the verdict
     faults.py                 negative-control fault injection (DRC + LVS)
+    reproduce.py              does each committed block GDS still come out of its generator?
   tools/
     pmap                      macOS pmap(1) shim the foundry decks' logger needs (see below)
   floorplan/                 PLL block-placement floorplan (issue #17)
@@ -285,6 +286,7 @@ python3 layout/run_pv.py build --outdir /tmp/pv         # assemble inv_tb.gds + 
 python3 layout/run_pv.py drc /tmp/pv/inv_tb.gds --top inv_tb --run-dir /tmp/pv/drc
 python3 layout/run_pv.py lvs /tmp/pv/inv_tb.gds /tmp/pv/inv_tb.spice --top inv_tb --run-dir /tmp/pv/lvs
 python3 layout/run_pv.py prove                          # the full proof, see below
+python3 layout/run_pv.py area                           # area audit, see below (no PDK needed)
 ```
 
 Each of `drc` / `lvs` runs the foundry deck exactly once and prints a
@@ -330,6 +332,34 @@ to do with whether the circuit is actually correct. `layout/harness/lvs.py`
 bakes this default in; override with `--lvs-sub` if a different reference
 netlist's convention needs it.
 
+**And the merge is by *exact* name (issue #440).** Passing `--lvs_sub=VSS`
+does not wire the substrate to anything; it names the deck's synthesized
+global net. That global net then merges into the drawn net whose name
+matches it — **exactly**. A drawn ground rail that has somehow collected a
+*second* label extracts under the merged name `ENB,VSS`, which is not
+`VSS`, so the merge silently does not happen: every n-channel bulk terminal
+lands on a net of its own and the block mismatches wholesale, with no error
+message anywhere that says "you have a stray label." `pfd_cp`'s first
+block-level LVS run failed exactly this way and no other — 84 of 93 nets,
+69 of 168 devices, all from eight inherited `ENB` texts sitting on the
+ground rail (`layout/evidence/pfd-cp-layout/PROOF.md`, "Addendum 2").
+
+Two rules follow, and both are cheap to hold:
+
+- **The level doing the assembling owns the net names.** A sub-block
+  written for its own standalone LVS claim labels its own boundary nets
+  with its own *local* port names; `read()` + `top.flatten(-1, True)`
+  carries those label shapes into the parent, where the parent may well
+  have re-tied that net to something else. Call
+  `_canvas.Canvas.clear_inherited_labels()` immediately after the composing
+  `flatten()`, before promoting the parent's own pins.
+- **Label on the purpose layer that matches the geometry.** 34/10 for a
+  Metal1 pad, 36/10 for a Metal2 bus (`connect(metal1_con, metal1_label)` /
+  `connect(metal2_con, metal2_label)`). A 34/10 text dropped over Metal2
+  attaches to whatever unrelated Metal1 lies under it and names *that* net
+  instead — and a text on the drawing datatype (34/0, 36/0) is read by
+  nothing at all, so every net so "labelled" extracts anonymous.
+
 ## `prove`: the full proof
 
 ```bash
@@ -364,6 +394,80 @@ against the ~50-table `main` rule deck (`--no_offgrid` by default — the
 off-grid check class is skipped as a separate, slower class of rule this
 flow-bring-up proof does not need; pass `--offgrid` to `drc`/`prove` for a
 signoff-grade run). LVS is fast (a few seconds) by comparison.
+
+## `area`: where a drawn block's bounding box actually goes
+
+```bash
+python3 layout/run_pv.py area                            # print the audit
+python3 layout/run_pv.py area --out layout/evidence/area-audit/area-audit.md
+```
+
+`layout/harness/area.py` measures every committed block GDS directly: merged
+per-layer area, the fill fraction (and therefore the whitespace), which
+y-bands contain diffusion and which contain none, the Metal2 horizontal-track
+census with the height those tracks would occupy packed solid, and how much
+Metal2 is already in use *over* the device rows. It also counts
+shared-diffusion candidates in a block's own reference netlist. It needs
+**no PDK, no KLayout application binary and no deck** — only the `klayout`
+pip wheel — so it runs in CI's headless `checks` job alongside
+`layout/tests/`.
+
+Why it exists (issue #442): `layout/floorplan/PLL-FLOORPLAN.md` §5 tracks a
+real area overrun, and through §5.4 each revision named the next lever from a
+derived ratio (µm²/transistor) rather than a measurement. That ratio cannot
+tell "the diffusion islands are too big" from "the diffusion islands are 1 %
+of the block and the rest is empty" — and the measurement says the latter.
+See `layout/evidence/area-audit/PROOF.md` for every lever's arithmetic and
+§5.5 of the floorplan for the re-derived budget. This command measures drawn
+geometry; it makes no claim that a transformation it sizes is DRC-legal, which
+is what `drc`/`lvs` above are for.
+
+## Does the committed GDS still come out of the generator?
+
+```bash
+python3 -m harness.reproduce          # from layout/ -- prints one line per block
+python3 -m unittest discover -s layout/tests -t layout/tests -k Reproduc
+```
+
+Every DRC/LVS claim in `layout/evidence/` is a claim about a **committed
+file**, and nothing in this flow re-derives that file: `run_pv.py` runs a deck
+against whatever GDS it is handed, and `layout/lib/check-layout-status-claims.sh`
+grades README/proposal prose against the *recorded* verdict. So a generator
+could drift arbitrarily far from the artifact carrying its evidence with every
+check here still green.
+
+That is not hypothetical (issue #451).
+`layout/evidence/lock-detector-layout/lock_detector.gds` was committed once at
+#311 and its generator changed seven times over the next fortnight; when it
+was finally re-derived, the committed file and the generator's output differed
+on **9 of 11 drawing layers**, and the generator's own output failed the
+foundry DRC deck with **141 violations** where the committed file was clean.
+The block's "DRC-clean" claim was true of the committed file and of nothing
+else that existed.
+
+`layout/harness/reproduce.py` closes that: it rebuilds every registered block
+by running its own documented regeneration command
+(`python3 -m <generator> --outdir <tmp>`) and compares the result against the
+committed artifact **layer by layer as merged geometry** (`klayout.db.Region`
+XOR, drawing datatypes only). Not byte by byte — a GDS carries a write
+timestamp in its own header, so two runs of one unchanged generator are never
+byte-identical and a checksum would be a permanently red light.
+
+`layout/tests/test_gds_reproducibility.py` runs it on every test run, and
+asserts two things beyond the comparison itself:
+
+- a **negative control** — a deliberately stale artifact (one real GDS plus a
+  single 0.1 µm box) must be reported as drift, because a check only ever
+  shown reporting clean is not evidence it can report dirty (the same
+  discipline `harness/faults.py` applies to the DRC/LVS decks);
+- **registry coverage** — every `*.gds` under `layout/evidence/` is either
+  registered with a generator or listed in `EXCLUDED` with a stated reason, so
+  an unchecked artifact cannot appear by omission.
+
+No PDK, no KLayout application binary, no deck — only the `klayout` pip wheel,
+so it runs in CI's headless `checks` job. It says nothing about whether a
+block is DRC-clean; it says the file you ran the deck against is the file the
+generator produces today.
 
 ## The trivial cell (`inv_tb`)
 

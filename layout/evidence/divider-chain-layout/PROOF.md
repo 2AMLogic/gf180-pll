@@ -293,3 +293,97 @@ this design's own labelling (applied in `divider_chain.py`), not upstream.
 | `lvs-clean/lvs.stdout.log` | full LVS deck run log (`Netlists match.`) |
 | `lvs-clean/divider_chain.cir` | the extracted netlist |
 | `lvs-clean/divider_chain.lvsdb` | LVS results database |
+
+## Addendum — `clear_inherited_labels()` extended to this module (issue #453)
+
+Filed as a follow-up gap in PR #452's Judge review: #452 gave
+`_canvas.Canvas.clear_inherited_labels()` (the "the level doing the
+assembling owns the net names" guard, issue #440) to `pfd_cp`'s own four
+GDS-read-and-flatten composition sites, but not to this module's own fifth
+one (`div23_cell`'s GDS is read in and placed six times, then `top.flatten(-1,
+True)`). This block was not LVS-mismatched by the gap — see "Every routed
+net is labelled, and that was necessary" above — because `build()` already
+re-labels *every* net it routes, under its own reference-netlist name, after
+flattening. That is a different mitigation (it seeds the comparer's
+name-based hint matching) than the one `clear_inherited_labels()` provides
+(it removes the stray *inherited* local-named texts in the first place), and
+having only the first left duplicate/colliding label shapes sitting on this
+block's own nets: each `div23_cell` instance's own local
+`CKIN`/`MODIN`/`P`/`CKOUT`/`MODOUT`/`VDD`/`VSS` texts (`BOUNDARY_NETS`) and
+its own 60 periodic-tap `VDD`/`VSS` texts, flattened in from all six
+instances (67 texts x 6 = 402), plus this module's own supply-tap labels
+drawn directly by `well_tap()` *before* the final relabeling loop overwrites
+them anyway (92 more) — 494 redundant/stray `metal1_label` texts in total,
+none of them load-bearing, all silently relying on the final loop's own
+complete relabeling to paper over them.
+
+`divider_chain.py`'s `build()` now calls `canvas.clear_inherited_labels()`
+immediately after `canvas.top.flatten(-1, True)` and before that relabeling
+loop — the same call, same position, as `pfd_cp`'s four sites. Every net the
+final loop labels is unaffected (it draws a fresh, correctly-named text for
+every net in its own `nets` dict regardless of what came before), so this is
+pure cleanup, not a functional change to which name any net ends up with.
+
+**Confirmed to be a labels-only change.** A layer-by-layer
+`klayout.db.Region` XOR between the pre-#453 and post-#453 GDS is **empty on
+all 12 of this module's drawing/via layers** (`comp`, `poly2`, `contact`,
+`nplus`, `pplus`, `nwell`, `metal1`, `via1`, `metal2`, `via2`, `metal3`) —
+only `metal1_label` (34/10) text count differs, **565 → 71**. 71 is exactly
+this block's own already-documented "labels every net in its own `nets`
+dict — all 71" count above; the 494 removed are exactly the stray/redundant
+texts enumerated above (`494 = 6 x 67 + 92`).
+
+Re-run against the regenerated GDS (`divider_chain.spice` byte-identical to
+the version above — `reference_netlist()` was not touched):
+
+| | |
+|---|---|
+| Re-verified | 2026-09-21 |
+| Branch point | `origin/main` @ `c357e13e` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout (application, deck runner) | `KLayout 0.28.16` |
+| KLayout (pip wheel, geometry generation) | `0.30.10` |
+
+```bash
+python3 -m layout.pll_top.divider_chain.divider_chain --outdir <workdir>
+python3 layout/run_pv.py drc <workdir>/divider_chain.gds --top divider_chain --run-dir <rundir>
+python3 layout/run_pv.py lvs <workdir>/divider_chain.gds <workdir>/divider_chain.spice \
+  --top divider_chain --run-dir <rundir>
+```
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `divider_chain` DRC, table `main` | clean | `DRC clean: divider_chain (D), 0 violations` | **PASS** |
+| `divider_chain` LVS | match | `LVS match: divider_chain (D) layout == schematic` (deck: `Congratulations! Netlists match.`) | **PASS** |
+| `divider_chain` net count, layout vs. reference | equal | 71 / 71 | **PASS** |
+| `divider_chain` device count, layout vs. reference | equal | 452 / 452 | **PASS** |
+| `metal1_label` text count | 71 (down from 565) | 71 | **PASS** |
+| `klayout.db.Region` XOR, all 12 drawing/via layers | empty | empty | **PASS** |
+
+`drc-clean/`, `lvs-clean/`, and `divider_chain.gds` above are all
+**replaced** by this re-run (same file names, refreshed content) —
+`divider_chain.spice` is untouched since its bytes did not change. The
+regression coverage for `clear_inherited_labels()`'s default-argument
+behavior (a separate but related issue #453 fix — see next section) lives
+in `layout/tests/test_canvas_labels.py`, not here; this file stays scoped to
+this one block's own DRC/LVS claim per this repo's append-only evidence
+discipline.
+
+### `_canvas.Canvas.clear_inherited_labels()`'s own default, widened (issue #453)
+
+A second, independent issue #453 gap: `clear_inherited_labels()`'s default
+argument cleared only the canvas's own `PIN_LAYER` (here, `"metal1_label"`),
+not every purpose-layer a canvas's `LAYER` table defines. `pfd_cp/block.py`
+labels its `UP`/`DN` boundary pins on `"metal2_label"` (36/10) instead,
+correctly, for its own standalone claim (#452) — a future assembler
+composing `pfd_cp` by this same read-GDS-and-flatten pattern and calling the
+bare `clear_inherited_labels()` would strip the 34/10 texts but inherit
+those two 36/10 texts untouched, reintroducing #440's bug class one level up
+in the harder-to-see direction (a label on a purpose layer the deck reads).
+`clear_inherited_labels()`'s default now covers every `"*_label"`-suffixed
+key in the canvas's own `LAYER` table (falling back to the original
+`(PIN_LAYER,)` behavior if none exist), unit-tested in
+`layout/tests/test_canvas_labels.py`. This module's own `LAYER` table has no
+`"metal2_label"` entry, so the default's behavior here is unchanged by that
+part of the fix; the divider_chain-specific gap above is the one that
+touches this block's own committed GDS.

@@ -293,3 +293,141 @@ one track per net).
 
 Regenerate via `python3 -m pfd_cp.cp_output_stage` (from `layout/pll_top/`) +
 `layout/run_pv.py drc`; do not hand-edit any file under this directory.
+
+---
+
+## Addendum (issue #448): labels-only regeneration, DRC re-run
+
+`cp_output_stage`'s composed cell used to inherit its sub-cells' own standalone pin
+labels through `top.flatten(-1, True)`. Those names are local to the
+sub-cell's own LVS claim and name the wrong net one level up — in
+`pfd_cp`, the version of this defect that reached the top level put an
+`ENB` text on the block's ground rail, which broke gf180mcu's substrate
+global-net merge and mismatched all 84 n-channel bulk terminals (full
+write-up: `layout/evidence/pfd-cp-layout/PROOF.md`, "Addendum 2"). The fix
+is `_canvas.Canvas.clear_inherited_labels()`, called immediately after the
+composing `flatten()` here, before this block promotes its own boundary
+pins.
+
+**Geometry did not change.** A layer-by-layer `klayout.db.Region` XOR of
+this block's pre-change and post-change GDS is empty on all 11 drawing
+layers; only the 34/10 label purpose differs. The committed `cp_output_stage.gds` was
+regenerated anyway so the tree matches its generator, and the DRC deck was
+re-run on that exact file rather than the earlier claim being carried over:
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `cp_output_stage` DRC, table `main` | clean | `DRC clean: cp_output_stage (D), 0 violations` | **PASS** |
+
+`drc-clean/cp_output_stage.drc.stdout.log` and `drc-clean/cp_output_stage_main.lyrdb` are that run's own
+output. Every `connectivity/*.netcheck.log` record in this directory is
+unchanged, and was verified byte-identical after the rebuild — the expected
+result of a labels-only change.
+
+| | |
+|---|---|
+| Run | 2026-09-21 |
+| Branch point | `origin/main` @ `93e36cd7` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout | `KLayout 0.28.16` |
+
+## Addendum (issue #469): the glue-bus track band is packed — 14 tracks to 13
+
+This block's own Metal2 glue channel gave each of its 14 nets a dedicated
+`track_y` (`cp_array._route_side()` → `NetTracks`). It now uses
+`cp_array.pack_tracks()` — the left-edge interval-graph track assignment
+`divider_chain` has carried since #341 — and lands on **13** tracks, which is
+the band's own clique number and so the provable minimum for this geometry.
+`DNT` and `UPB` share one track, 9.26 µm apart in x against the 0.41 µm the
+clearance rule requires; the other twelve are each alone on theirs, six of
+them because this block extends them to a link column on *both* sides and
+they are therefore live across its whole width.
+
+| | before | after |
+|---|---|---|
+| `footprint` tuple | 130.310 × 66.725 µm (8,695.94 µm²) | **130.310 × 65.975 µm (8,597.20 µm²)** |
+| committed GDS bbox | 128.75 × 66.20 µm (8,523 µm²) | **128.75 × 65.45 µm (8,426 µm²)** |
+| glue-bus tracks | 14 (y 43.98 … 53.73) | **13** (y 43.98 … 52.98) |
+
+No device, riser column, link column, boundary pin or pad moved. The one new
+hazard a shared track creates — two nets' Metal2 at the same y, with this
+block's own `_extend_bus()` free to drive one through the other — is what
+`glue_bus_reach()` declares to the packing and
+`cp_array.check_track_separation()` re-proves afterwards against the x values
+the link loop really drew.
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `cp_output_stage` DRC, table `main` | clean | `DRC clean: cp_output_stage (D), 0 violations` | **PASS** |
+| `netcheck.check_gds()` Metal1-3 connectivity | no shorts, no splits | `connectivity clean: 18 nets, no shorts, no splits` | **PASS** |
+
+`drc-clean/cp_output_stage.drc.stdout.log`,
+`drc-clean/cp_output_stage_main.lyrdb` and
+`connectivity/cp_output_stage.netcheck.log` are that run's own output;
+`connectivity/cp_array.netcheck.log` is unchanged, as `cp_array` itself is
+(its own two array channels are measured in the full record and left
+unpacked — one of them cannot pack at all, the other's saving does not reach
+any block's bbox).
+
+| | |
+|---|---|
+| Run | 2026-09-22 |
+| Branch point | `origin/main` @ `62ceb087` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout | `KLayout 0.28.16` |
+
+Full record: `layout/evidence/pfd-cp-layout/PROOF-469-glue-bus-packing.md`.
+
+## Addendum 2 (issue #473): the glue inverters are interleaved with the switches — 13 tracks to 10
+
+The addendum above closed at 13 tracks, which is the clique number of the
+band **as placed**, and named the qualifier: 13 = 6 structurally full-width
+nets + a local clique of 7, and the 7 existed because this row grouped all
+four glue inverters past the right-hand end, so `DN`/`DNB`/`UP`/`UPB` each ran
+most of the block's width from a switch gate to an inverter.
+
+The row is now ordered by `ROW_ORDER`, with each steering pair's own inverter
+immediately **before** the switch group whose gates it feeds (`xi_dn` then the
+N group, `xi_up` then the P group, `xi_b0`/`xi_b1` at the right-hand end where
+the whole group used to be). The four nets go 237.6 µm of total span to
+66.4 µm, and the band packs onto **10** tracks.
+
+| | before | after |
+|---|---|---|
+| `footprint` tuple | 130.310 × 65.975 µm (8,597.20 µm²) | **130.310 × 63.725 µm (8,304.00 µm²)** |
+| committed GDS bbox | 128.75 × 65.45 µm (8,426 µm²) | **128.75 × 63.20 µm (8,136 µm²)** |
+| glue-bus tracks | 13 (y 43.98 … 52.98) | **10** (y 43.98 … 50.73) |
+
+Ten is a structural floor, not a lucky assignment: `VOUT` and `VDUMP` each tie
+the N group to the P group by definition, `UPT` runs from the P group out to
+its own link column, and at least one of `UP`/`UPB` is live inside the P
+group — six full-width nets plus those four. All 25,920 orderings that keep
+both switch groups contiguous were costed with `cp_array.pack_tracks()`
+before anything was drawn, and none goes below 10.
+
+Unlike the addendum above, **this change moves devices**: every switch and
+inverter sits at a new x, with new well edges, tap-strip spans, escape
+landings and riser columns. `check_escape_clearance()` now runs over the whole
+row rather than once per group (tightest clearance 0.66 µm against a 0.12 µm
+floor), and the new `check_row_groups()` keeps each switch group contiguous —
+one tap strip and, for the P group, one n-well, neither of which may be drawn
+through an inverter.
+
+| Check | Expected | Got | Verdict |
+|---|---|---|---|
+| `cp_output_stage` DRC, table `main` | clean | `DRC clean: cp_output_stage (D), 0 violations` | **PASS** |
+| `netcheck.check_gds()` Metal1-3 connectivity | no shorts, no splits | `connectivity clean: 18 nets, no shorts, no splits` | **PASS** |
+
+`drc-clean/cp_output_stage.drc.stdout.log`,
+`drc-clean/cp_output_stage_main.lyrdb` and
+`connectivity/cp_output_stage.netcheck.log` are that run's own output;
+`connectivity/cp_array.netcheck.log` is unchanged, as `cp_array` itself is.
+
+| | |
+|---|---|
+| Run | 2026-09-23 |
+| Branch point | `origin/main` @ `e9eb5ba0` |
+| PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
+| KLayout | `KLayout 0.28.16` |
+
+Full record: `layout/evidence/pfd-cp-layout/PROOF-473-glue-inverter-interleave.md`.

@@ -89,8 +89,9 @@ different nets' pads at identical X wholesale. Any of those, fed to a
 nudge-based declutterer, either shorts two nets onto one Metal3 column or
 drags a Metal1 stub off its pad into a neighbour.
 
-This module therefore places every device in **one row** (so X is
-monotonic), and gives every riser an explicitly chosen X:
+This module therefore places every device and every glue inverter in **one
+row** (:data:`ROW_ORDER`, so X is monotonic), and gives every riser an
+explicitly chosen X:
 
 * a device's gate pad and top (drain/source) pad already sit >1 um apart in
   X, so they rise where they are;
@@ -125,6 +126,77 @@ with ``promote_pins=False``: this block promotes its own twelve boundary
 pins explicitly (:data:`BOUNDARY_PINS`), rather than exposing every internal
 node (``DNT``, ``UPT``, ``B0B``, ``B1B``, ``UPB``, ``DNB``) as a pin.
 
+A PACKED GLUE BAND, AND THE DECLARATION THAT MAKES IT SAFE (issue #469)
+-------------------------------------------------------------------------
+This is also the one call site in the family that passes ``bus_reach``, so
+its channel is assigned by ``cp_array.pack_tracks()`` (one ``track_y``
+shared by every set of nets whose drawn extents do not collide in x) rather
+than ``cp_array.NetTracks`` (one never-reused track per net) -- the same
+substitution ``divider_chain`` made at #341 and again at #454. Fourteen nets
+land on **thirteen** tracks, which is the band's own interval-graph clique
+number and therefore the provable minimum.
+
+The reason it is only thirteen, and not the nine a census of the buses alone
+suggests, is the link step above: six of the fourteen (``VDD``, ``VSS``,
+``B0``, ``B0B``, ``B1``, ``B1B``) are shared with **both** array polarities,
+so each is extended to a left link column *and* a right one and is live
+across the whole block. Those six can share a track with nothing, by
+construction, because tying the two polarities together is what this block
+is for.
+
+That same extension is why the packing cannot be switched on blind.
+:func:`_extend_bus` draws Metal2 at a net's own ``track_y``, straight
+through wherever its track-mate happens to be -- a cross-net merge that is
+one legal polygon to the DRC deck and a short to everything else. So
+:func:`build` allocates its link columns *before* routing, hands them to the
+packing as :func:`glue_bus_reach`, and then re-proves the result with
+``cp_array.check_track_separation()`` against the x values its link loop
+really drew. See ``cp_array.py``'s own "track *reuse*" section for the full
+statement of the contract, and
+``layout/evidence/pfd-cp-layout/PROOF-469-glue-bus-packing.md`` for the
+measurement (including why ``cp_array``'s own two array channels are left
+unpacked: one of them cannot pack at all, and the other's saving does not
+reach this block's bbox).
+
+INTERLEAVED, NOT GROUPED: THE PLACEMENT HALF OF THAT BAND (issue #473)
+-------------------------------------------------------------------------
+Thirteen tracks was the clique number of the band **as placed**, and that
+qualifier turned out to be load-bearing. The 13 decomposed as *6 structural
+full-width nets + a local clique of 7*, and the 7 existed because this row
+used to place all six switches left to right and then all four glue
+inverters in one group past the right-hand end. Every inverter therefore sat
+34-82 um from the gate it drives, and ``DN``, ``DNB``, ``UP`` and ``UPB``
+each ran most of the block's width for no reason but that.
+
+:data:`ROW_ORDER` now puts each steering pair's own inverter immediately
+**before** the switch group whose gates it feeds -- ``xi_dn`` ahead of
+``MSWDN``/``MDMPDN``/``MDUMN``, ``xi_up`` ahead of
+``MSWUP``/``MDMPUP``/``MDUMP`` -- and leaves ``xi_b0``/``xi_b1`` at the row's
+right-hand end, since ``B0``/``B0B``/``B1``/``B1B`` are full-width whatever
+happens. The band's clique drops **13 -> 10**, which is 2.25 um of block
+height and, inherited whole by ``cp`` and ``pfd_cp``, 782 um^2 of the
+assembled block.
+
+Ten is the floor for a one-row placement of these six devices, not merely
+what the packing found. ``VOUT`` (``MSWDN``'s drain to ``MSWUP``'s) and
+``VDUMP`` (``MDMPDN``'s drain to ``MDMPUP``'s) each span the N group to the
+P group by definition, so both are live everywhere between the two groups;
+``UPT`` runs from the P group out to its own right-hand link column; and at
+whichever P device is not the one bounding ``VOUT``, one of ``UP``/``UPB`` is
+live too. Six full-width nets plus those four is 10, at an x inside the P
+group -- no reordering removes it. The measurement, including the exhaustive
+sweep over all 25,920 legal orderings that found none below 10, is in
+``layout/evidence/pfd-cp-layout/PROOF-473-glue-inverter-interleave.md``, and
+:func:`glue_riser_x` is the pure arithmetic that sweep (and this change's own
+"measure before building" precondition) is run on.
+
+Two invariants are what keep this a placement change and not a redesign.
+:func:`check_row_groups` holds each switch group contiguous -- one tap strip
+and, for the P group, one n-well, neither of which may be drawn through an
+inverter. :func:`check_escape_clearance` now runs over the whole row rather
+than once per group, because a switch's neighbour is as likely to be an
+inverter as another switch.
+
 CONNECTIVITY IS CHECKED, NOT ASSUMED
 --------------------------------------
 :meth:`CpOutputStageLayout.probe_pads` hands every Metal1 landing pad this
@@ -144,7 +216,7 @@ from __future__ import annotations
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Sequence
+from typing import Iterable, Sequence
 
 from . import cp_array, devgen, netcheck, pfdcp_inv
 
@@ -287,12 +359,24 @@ the same ``DF.16_LV``-derived clearance ``devgen.build_stack_cell()`` uses
 across a well boundary in its own column (direction-agnostic)."""
 
 INV_GROUP_GAP_UM = 4.0
-"""P switch group's rightmost comp -> first glue inverter's own comp."""
+"""A switch's own comp right edge -> the next glue inverter's own origin."""
+
+INV_TO_SWITCH_GAP_UM = 7.0
+"""A glue inverter's own origin -> the next switch's comp left edge -- the
+mirror of :data:`INV_GROUP_GAP_UM` for an inverter that sits *before* the
+group it feeds (issue #473). Larger because an inverter's own drawn geometry
+runs to the **right** of its origin while a switch's runs to the *left* of
+its comp: the inverter's outermost escape landing sits at
+``INV_ESCAPE_UM[-1] + LANDING_HALF_UM`` = 5.22 um past the origin and the
+switch's gate-tab pad hangs 1.12 um before its comp, so anything under
+~6.5 um merges two nets' Metal1. :func:`check_escape_clearance` proves the
+arithmetic on every build, over the whole row rather than per group."""
 
 INV_PITCH_UM = 8.0
-"""Glue-inverter instance pitch. The leaf cell is only ~2.8 um wide; the
-pitch is set by its own three right-hand escape columns
-(:data:`INV_ESCAPE_UM`) plus a clear gap to the next instance's gate pad."""
+"""Glue-inverter instance pitch, inverter origin to inverter origin. The
+leaf cell is only ~2.8 um wide; the pitch is set by its own three right-hand
+escape columns (:data:`INV_ESCAPE_UM`) plus a clear gap to the next
+instance's gate pad."""
 
 INV_ESCAPE_UM: tuple[float, float, float] = (2.0, 3.5, 5.0)
 """Escape columns for one glue inverter's ``Y``/``VSS``/``VDD`` pins,
@@ -315,6 +399,35 @@ enclosure, identical derivation to ``cp_array._riser()``'s own."""
 
 SWITCH_ROW_H_UM = 2.0 * devgen.SD_OVERHANG_UM + SWITCH_L_UM
 
+#: This block's single device row, left to right -- every switch and every
+#: glue inverter, named once. **Each steering pair's own inverter sits
+#: immediately to the left of the group whose gates it drives** (issue
+#: #473): ``xi_dn`` before the N group, ``xi_up`` before the P group, and
+#: ``xi_b0``/``xi_b1`` (whose nets are full-width whatever happens -- see
+#: :func:`glue_bus_reach`) parked at the row's right-hand end where the whole
+#: group used to be. That is worth three Metal2 tracks off the glue band; see
+#: the module docstring's "INTERLEAVED, NOT GROUPED" section and
+#: ``layout/evidence/pfd-cp-layout/PROOF-473-glue-inverter-interleave.md``.
+#:
+#: Both switch groups stay **contiguous**, which is not a style preference:
+#: each group is drawn under one tap strip (and the P group under one n-well)
+#: spanning its whole x range, and an inverter inside that span would collide
+#: with the strip's own comp or -- worse, invisibly to DRC's spacing rules --
+#: land the inverter's own NMOS inside the P group's n-well.
+#: :func:`check_row_groups` enforces it on every build.
+ROW_ORDER: tuple[str, ...] = (
+    "xi_dn",
+    "MSWDN",
+    "MDMPDN",
+    "MDUMN",
+    "xi_up",
+    "MSWUP",
+    "MDMPUP",
+    "MDUMP",
+    "xi_b0",
+    "xi_b1",
+)
+
 
 # ---------------------------------------------------------------------------
 # Pure-Python placement math -- no klayout import, testable with no PV
@@ -323,34 +436,108 @@ SWITCH_ROW_H_UM = 2.0 * devgen.SD_OVERHANG_UM + SWITCH_L_UM
 # ---------------------------------------------------------------------------
 
 
-def switch_row_x(
+def check_row_groups(
+    order: Sequence[str] = ROW_ORDER,
     devices_n: Sequence[Device] = SWITCH_DEVICES_N,
     devices_p: Sequence[Device] = SWITCH_DEVICES_P,
+    inverters: Sequence[InverterSpec] = GLUE_INVERTERS,
+) -> None:
+    """Raise unless ``order`` names every switch and every glue inverter
+    exactly once, and keeps each switch group contiguous.
+
+    The row's *order* is a free parameter (issue #473 reordered it), but two
+    of this block's drawing steps assume each group occupies one unbroken
+    span of x, and neither failure they produce is one a spacing-based DRC
+    deck can report:
+
+    * each group is tapped by a **single** ``cp_array._tap_strip()`` running
+      from its leftmost comp to its rightmost one. A glue inverter inside
+      that span sits in the identical y band as the strip (the leaf's own
+      substrate tap and the row's are both ``TAP_GAP_UM + TAP_SIZE_UM``
+      below the row baseline), so the strip's comp, implant and contact row
+      would be drawn straight through the inverter's own;
+    * the P group is covered by a **single** n-well box spanning its comps
+      and its tap strip. A glue inverter inside that span would have its own
+      NMOS -- which sits *below* its PMOS, inside the row's own y band --
+      enclosed by that n-well: a body-tie inversion LVS would catch only
+      because the well is named, and DRC would not flag at all.
+
+    Reordering *within* a group, and moving inverters between the gaps
+    outside both groups, is free; this is the line that is not.
+    """
+    expected = sorted([d.name for d in (*devices_n, *devices_p)] + [s.name for s in inverters])
+    if sorted(order) != expected:
+        raise ValueError(f"row order {list(order)} is not a permutation of {expected}")
+    index = {name: i for i, name in enumerate(order)}
+    for label, group in (("N", devices_n), ("P", devices_p)):
+        js = sorted(index[d.name] for d in group)
+        if js != list(range(js[0], js[0] + len(js))):
+            between = [order[j] for j in range(js[0], js[-1] + 1) if order[j] not in {d.name for d in group}]
+            raise ValueError(
+                f"the {label} switch group is not contiguous in the row: {between} "
+                f"sit inside its span (one tap strip, one n-well -- see check_row_groups)"
+            )
+
+
+def row_x(
+    order: Sequence[str] = ROW_ORDER,
     x0: float = 0.0,
+    devices_n: Sequence[Device] = SWITCH_DEVICES_N,
+    devices_p: Sequence[Device] = SWITCH_DEVICES_P,
     device_gap_um: float = SWITCH_DEVICE_GAP_UM,
     well_gap_um: float = SWITCH_WELL_GAP_UM,
-) -> dict[str, tuple[float, float]]:
-    """``device name -> (comp x0, comp x1)`` for the single switch row.
+    inv_gap_um: float = INV_GROUP_GAP_UM,
+    inv_to_switch_gap_um: float = INV_TO_SWITCH_GAP_UM,
+    inv_pitch_um: float = INV_PITCH_UM,
+) -> tuple[dict[str, tuple[float, float]], dict[str, float]]:
+    """Lay ``order`` out left to right and return
+    ``({switch name: (comp x0, comp x1)}, {inverter name: origin x})``.
 
-    The N group is placed left-to-right at ``device_gap_um`` spacing, then
-    the P group after a ``well_gap_um`` well-boundary gap. Pure arithmetic:
-    no geometry is drawn, so a test can check the row's own spacing
-    invariants with no PV environment.
+    One gap rule per kind of adjacency, all of them comp-relative so the
+    arithmetic does not depend on what a leaf cell happens to draw:
+
+    ==================== =============================== ====================
+    left item            right item                      gap
+    ==================== =============================== ====================
+    switch               switch, same flavour            ``device_gap_um``
+    switch               switch, across the well edge    ``well_gap_um``
+    switch               inverter                        ``inv_gap_um``
+    inverter             switch                          ``inv_to_switch_gap_um``
+    inverter             inverter                        ``inv_pitch_um``
+    ==================== =============================== ====================
+
+    Pure arithmetic: no geometry is drawn, so a test (or a trial placement
+    being measured against :func:`cp_array.pack_tracks` before anything is
+    committed to, which is how issue #473 chose :data:`ROW_ORDER`) can check
+    the row's spacing invariants with no PV environment.
     """
-    placed: dict[str, tuple[float, float]] = {}
+    kind = {d.name: d.kind for d in (*devices_n, *devices_p)}
+    width = {d.name: d.w_um for d in (*devices_n, *devices_p)}
+    switches: dict[str, tuple[float, float]] = {}
+    inverters: dict[str, float] = {}
     x = x0
-    for i, dev in enumerate(devices_n):
-        if i:
-            x += device_gap_um
-        placed[dev.name] = (x, x + dev.w_um)
-        x += dev.w_um
-    x += well_gap_um
-    for i, dev in enumerate(devices_p):
-        if i:
-            x += device_gap_um
-        placed[dev.name] = (x, x + dev.w_um)
-        x += dev.w_um
-    return placed
+    prev: str | None = None
+    for name in order:
+        is_inv = name not in kind
+        if prev is not None:
+            prev_inv = prev not in kind
+            if prev_inv and is_inv:
+                x = inverters[prev] + inv_pitch_um
+            elif prev_inv:
+                x = inverters[prev] + inv_to_switch_gap_um
+            elif is_inv:
+                x = switches[prev][1] + inv_gap_um
+            else:
+                x = switches[prev][1] + (
+                    device_gap_um if kind[prev] == kind[name] else well_gap_um
+                )
+        if is_inv:
+            inverters[name] = x
+        else:
+            switches[name] = (x, x + width[name])
+            x += width[name]
+        prev = name
+    return switches, inverters
 
 
 def gate_pad_center_x(comp_x0: float) -> float:
@@ -365,32 +552,129 @@ def gate_pad_center_x(comp_x0: float) -> float:
     return tab_x1 - devgen.GATE_TAB_W_UM / 2.0
 
 
-def check_escape_clearance(
-    row: dict[str, tuple[float, float]],
-    order: Sequence[str],
+def row_metal1_extents(
+    switches: dict[str, tuple[float, float]],
+    inverters: dict[str, float],
+    devices_n: Sequence[Device] = SWITCH_DEVICES_N,
+    devices_p: Sequence[Device] = SWITCH_DEVICES_P,
     escape_um: float = SWITCH_ESCAPE_UM,
     landing_half_um: float = LANDING_HALF_UM,
+) -> dict[str, tuple[float, float]]:
+    """``row item -> (leftmost, rightmost) x of the Metal1 that item puts on
+    the row``, for every switch in ``switches`` and every inverter in
+    ``inverters``.
+
+    Both kinds are asymmetric in the same direction and for the same reason,
+    which is the whole content of :data:`INV_TO_SWITCH_GAP_UM`:
+
+    * on the **left**, both a ``devgen.mosfet()`` and a ``pfdcp_inv_3v3``
+      hang a gate-tab pad off the poly end-cap, before the comp
+      (:func:`gate_pad_center_x`, identical arithmetic for both -- the leaf's
+      own ``MN`` comp starts at its origin);
+    * on the **right**, a switch whose two diffusions are different nets ends
+      at its :func:`_escape` landing and one whose diffusions share a net
+      ends at its comp, while an inverter always ends at the outermost of its
+      three :data:`INV_ESCAPE_UM` landings.
+    """
+    kind = {d.name: d for d in (*devices_n, *devices_p)}
+    extents: dict[str, tuple[float, float]] = {}
+    for name, (x0, x1) in switches.items():
+        dev = kind[name]
+        left = gate_pad_center_x(x0) - devgen.GATE_TAB_W_UM / 2.0 - devgen.METAL1_PAD_MARGIN_UM
+        escapes = dev.bottom_net != dev.top_net
+        right = x1 + escape_um + landing_half_um if escapes else x1
+        extents[name] = (left, right)
+    for name, dx in inverters.items():
+        left = gate_pad_center_x(dx) - devgen.GATE_TAB_W_UM / 2.0 - devgen.METAL1_PAD_MARGIN_UM
+        extents[name] = (left, dx + max(INV_ESCAPE_UM) + landing_half_um)
+    return extents
+
+
+def glue_riser_x(
+    switches: dict[str, tuple[float, float]],
+    inverters: dict[str, float],
+    devices_n: Sequence[Device] = SWITCH_DEVICES_N,
+    devices_p: Sequence[Device] = SWITCH_DEVICES_P,
+    glue_inverters: Sequence[InverterSpec] = GLUE_INVERTERS,
+    escape_um: float = SWITCH_ESCAPE_UM,
+) -> dict[str, list[float]]:
+    """``net -> every x at which this row rises to the glue bus``, in
+    ascending order -- the pure-arithmetic twin of the riser set
+    :func:`build` really draws.
+
+    It exists so a **trial** row order can be costed before any of it is
+    built: feed the result (plus this block's own link columns, which
+    :func:`glue_bus_reach` supplies) to :func:`cp_array.pack_tracks` and the
+    answer is the glue band's track count for that order, with no geometry
+    drawn and no PV environment. That is how :data:`ROW_ORDER` was chosen
+    (issue #473) -- exhaustively, over every legal ordering, before one line
+    of layout code changed. ``layout/tests/test_cp_output_stage.py`` pins it
+    against ``build()``'s own drawn risers so the two cannot drift.
+
+    Every x here is a position ``build()`` derives from a real pad: a
+    ``devgen.mosfet()`` gate tab (:func:`gate_pad_center_x`), a diffusion
+    pad's comp centre, an :func:`_escape` landing, or one of an inverter's
+    :data:`INV_ESCAPE_UM` columns.
+    """
+    table = {d.name: d for d in (*devices_n, *devices_p)}
+    risers: dict[str, list[float]] = {}
+
+    def add(net: str, x: float) -> None:
+        risers.setdefault(net, []).append(x)
+
+    for name, (x0, x1) in switches.items():
+        dev = table[name]
+        add(dev.gate_net, gate_pad_center_x(x0))
+        add(dev.top_net, (x0 + x1) / 2.0)
+        add(dev.bottom_net, (x0 + x1) / 2.0 if dev.bottom_net == dev.top_net else x1 + escape_um)
+    for spec in glue_inverters:
+        dx = inverters[spec.name]
+        y_esc, vss_esc, vdd_esc = (dx + o for o in INV_ESCAPE_UM)
+        add(spec.a_net, gate_pad_center_x(dx))
+        add(spec.y_net, y_esc)
+        add("VSS", vss_esc)
+        add("VDD", vdd_esc)
+    # The two tap strips are continuous Metal1, so build() rises from a
+    # chosen point on each rather than from its midpoint: the gap between
+    # that group's two leftmost comps.
+    for group, net in ((devices_n, "VSS"), (devices_p, "VDD")):
+        spans = sorted(switches[d.name] for d in group)
+        add(net, (spans[0][1] + spans[1][0]) / 2.0)
+    return {net: sorted(xs) for net, xs in risers.items()}
+
+
+def check_escape_clearance(
+    extents: dict[str, tuple[float, float]],
+    order: Sequence[str],
     min_gap_um: float = devgen.METAL1_PAD_MARGIN_UM,
 ) -> float:
-    """Raise unless every switch's Metal1 escape landing clears the *next*
-    device's own gate-tab pad in X. Returns the tightest clearance found.
+    """Raise unless every row item's rightmost Metal1 feature -- an escape
+    landing, a comp-wide diffusion pad, an inverter's own escape column --
+    clears the *next* item's own gate-tab pad in X. Returns the tightest
+    clearance found.
 
-    This is the one thing :data:`SWITCH_DEVICE_GAP_UM` has to buy, stated as
-    arithmetic rather than as a comment: an escape landing that reached into
-    the neighbour's gate pad would merge two unrelated nets on Metal1 -- a
-    short the DRC deck cannot see (nothing is spaced too closely; the two
+    This is the one thing :data:`SWITCH_DEVICE_GAP_UM`,
+    :data:`INV_GROUP_GAP_UM` and :data:`INV_TO_SWITCH_GAP_UM` have to buy,
+    stated as arithmetic rather than as a comment: a landing that reached
+    into the neighbour's gate pad would merge two unrelated nets on Metal1 --
+    a short the DRC deck cannot see (nothing is spaced too closely; the two
     shapes simply become one polygon).
+
+    Since issue #473 this runs over the **whole row** (:data:`ROW_ORDER`),
+    not once per switch group: the glue inverters are interleaved with the
+    switches now, so a switch's neighbour is as likely to be an inverter as
+    another switch.
     """
     worst = float("inf")
     for name, nxt in zip(order, order[1:]):
-        landing_x1 = row[name][1] + escape_um + landing_half_um
-        gate_pad_x0 = gate_pad_center_x(row[nxt][0]) - devgen.GATE_TAB_W_UM / 2.0 - devgen.METAL1_PAD_MARGIN_UM
-        gap = gate_pad_x0 - landing_x1
+        right_x = extents[name][1]
+        next_left_x = extents[nxt][0]
+        gap = next_left_x - right_x
         worst = min(worst, gap)
         if gap < min_gap_um:
             raise ValueError(
-                f"{name}'s escape landing (x1={landing_x1:.3f}) is only {gap:.3f} um "
-                f"from {nxt}'s gate pad (x0={gate_pad_x0:.3f}); needs >= {min_gap_um}"
+                f"{name}'s rightmost Metal1 (x1={right_x:.3f}) is only {gap:.3f} um "
+                f"from {nxt}'s gate pad (x0={next_left_x:.3f}); needs >= {min_gap_um}"
             )
     return worst
 
@@ -436,6 +720,42 @@ def link_columns(
     so a rebuild is byte-stable.
     """
     return {net: base_x + direction * i * pitch for i, net in enumerate(nets)}
+
+
+def glue_bus_reach(
+    nets: Iterable[str],
+    n_cols: dict[str, float],
+    p_cols: dict[str, float],
+) -> dict[str, list[float]]:
+    """``net -> every x this block will extend that net's glue-bus track out
+    to`` -- the declaration ``cp_array._route_side()``'s own ``bus_reach``
+    needs before it may pack the glue band (issue #469).
+
+    Exactly the two link-column dicts :func:`build` hands its own link loop,
+    inverted into per-net form, with an empty list for every glue net neither
+    array side shares. Pure arithmetic, so
+    ``layout/tests/test_cp_output_stage.py`` can assert the property the
+    packing's safety rests on -- *every* drawn extension is declared -- with
+    no PV environment.
+
+    WHY THIS COSTS THE PACKING MOST OF ITS THEORETICAL WIN
+    -------------------------------------------------------
+    Six of the glue block's fourteen nets (``VDD``, ``VSS``, ``B0``,
+    ``B0B``, ``B1``, ``B1B``) are shared with **both** array polarities, so
+    each is extended to a left column *and* a right column and is therefore
+    live across the block's whole width. They can share a track with nothing,
+    and no assignment can do better. Measured on the bus spans alone -- with
+    these extensions omitted -- the band's clique number is 9; with them it
+    is 13, and 13 is what :func:`cp_array.pack_tracks` achieves. The
+    difference is not slack in the algorithm, it is the cost of tying the two
+    polarities' rails and trim bits together, which is this block's own job
+    (see the module docstring's "REACHING THE ARRAY BLOCK'S NETS").
+    """
+    reach: dict[str, list[float]] = {net: [] for net in nets}
+    for cols in (n_cols, p_cols):
+        for net, x in cols.items():
+            reach[net].append(x)
+    return reach
 
 
 # ---------------------------------------------------------------------------
@@ -598,18 +918,23 @@ def build(outdir: Path | None = None) -> CpOutputStageLayout:  # noqa: PLR0915 -
     row_y0 = arr.footprint[3] + GLUE_GAP_UM - glue_drop
     sub_tap_y = row_y0 - devgen.TAP_GAP_UM - devgen.TAP_SIZE_UM / 2.0
 
-    row = switch_row_x(x0=row_x0)
-    switch_order = [d.name for d in (*SWITCH_DEVICES_N, *SWITCH_DEVICES_P)]
-    check_escape_clearance(row, [d.name for d in SWITCH_DEVICES_N])
-    check_escape_clearance(row, [d.name for d in SWITCH_DEVICES_P])
+    check_row_groups(ROW_ORDER)
+    row, inv_x = row_x(ROW_ORDER, x0=row_x0)
+    check_escape_clearance(row_metal1_extents(row, inv_x), ROW_ORDER)
 
-    inv_x0 = row[switch_order[-1]][1] + INV_GROUP_GAP_UM
-    inv_origins = {spec.name: (inv_x0 + i * INV_PITCH_UM, row_y0) for i, spec in enumerate(GLUE_INVERTERS)}
+    # Keyed in GLUE_INVERTERS' own order, not the row's, so the four cell
+    # instances are inserted in a fixed order whatever ROW_ORDER says.
+    inv_origins = {spec.name: (inv_x[spec.name], row_y0) for spec in GLUE_INVERTERS}
 
     _place(arr_index, 0.0, 0.0)
     for dx, dy in inv_origins.values():
         _place(inv_index, dx, dy)
     canvas.top.flatten(-1, True)
+    # The array's and the glue inverters' own standalone port labels are
+    # local names, and four copies of one inverter cell contribute four
+    # copies of each. This level owns the names (issue #440) -- see
+    # _canvas.Canvas.clear_inherited_labels().
+    canvas.clear_inherited_labels()
 
     # --- draw the six switches into the same flat cell ---
     nets: dict[str, list[tuple[float, float, float, float]]] = {}
@@ -636,8 +961,11 @@ def build(outdir: Path | None = None) -> CpOutputStageLayout:  # noqa: PLR0915 -
         add(dev.bottom_net, bottom)
         named_pad[(dev.name, "bottom")] = bottom
 
-    n_group = [ports[d.name] for d in SWITCH_DEVICES_N]
-    p_group = [ports[d.name] for d in SWITCH_DEVICES_P]
+    # Sorted by x, not by table order: ROW_ORDER may permute a group
+    # internally, and each group's tap strip / n-well spans its own leftmost
+    # comp to its own rightmost one.
+    n_group = sorted((ports[d.name] for d in SWITCH_DEVICES_N), key=lambda p: p.x0)
+    p_group = sorted((ports[d.name] for d in SWITCH_DEVICES_P), key=lambda p: p.x0)
 
     # --- switch-row substrate tap strip (NMOS bodies -> VSS) and n-well tap
     # strip (PMOS bodies -> VDD), each spanning its own group's full X range
@@ -703,22 +1031,34 @@ def build(outdir: Path | None = None) -> CpOutputStageLayout:  # noqa: PLR0915 -
     ]
     check_riser_columns(riser_points)
 
-    glue_tracks, glue_bus = cp_array._route_side(canvas, nets, glue_bbox, promote_pins=False)
+    # --- the array<->glue link columns, allocated BEFORE routing (issue
+    # #469). Every one of them is an x this block will extend a glue-bus
+    # track out to, and a packed track band is only safe if the packing
+    # already knows about them -- see cp_array's own "track *reuse*" section
+    # and glue_bus_reach()'s docstring. Nothing here draws geometry; the
+    # loop below consumes the identical dicts. ---
+    n_shared = [net for net in arr.n_bus if net in nets]
+    p_shared = [net for net in arr.p_bus if net in nets]
+    left_base = min(arr.footprint[0], glue_bbox[0]) - CONN_COLUMN_MARGIN_UM
+    right_base = max(arr.footprint[2], glue_bbox[2]) + CONN_COLUMN_MARGIN_UM
+    n_cols = link_columns(n_shared, left_base, -1)
+    p_cols = link_columns(p_shared, right_base, +1)
+
+    glue_tracks, glue_bus = cp_array._route_side(
+        canvas, nets, glue_bbox, promote_pins=False,
+        bus_reach=glue_bus_reach(nets, n_cols, p_cols),
+    )
 
     # --- link every net this block shares with the array block: extend that
     # side's Metal2 bus into a clear column, extend this block's own track to
     # the same column, join with a Metal3 vertical. N side goes left, P side
     # right -- never across each other (see module docstring). ---
-    n_shared = [net for net in arr.n_bus if net in glue_bus]
-    p_shared = [net for net in arr.p_bus if net in glue_bus]
-    left_base = min(arr.footprint[0], glue_bbox[0]) - CONN_COLUMN_MARGIN_UM
-    right_base = max(arr.footprint[2], glue_bbox[2]) + CONN_COLUMN_MARGIN_UM
     columns: dict[str, float] = {}
-    for side, shared, bus, base, direction in (
-        ("N", n_shared, arr.n_bus, left_base, -1),
-        ("P", p_shared, arr.p_bus, right_base, +1),
+    extended_at: dict[str, list[float]] = {net: [] for net in glue_bus}
+    for side, cols, bus, direction in (
+        ("N", n_cols, arr.n_bus, -1),
+        ("P", p_cols, arr.p_bus, +1),
     ):
-        cols = link_columns(shared, base, direction)
         for net, x in cols.items():
             columns[f"{side}:{net}"] = x
             track_y, x_lo, x_hi = bus[net]
@@ -726,6 +1066,21 @@ def build(outdir: Path | None = None) -> CpOutputStageLayout:  # noqa: PLR0915 -
             _extend_bus(canvas, track_y, x, x_lo if direction < 0 else x_hi)
             _extend_bus(canvas, glue_y, x, glue_lo if direction < 0 else glue_hi)
             _link_tracks(canvas, x, track_y, glue_y)
+            extended_at[net].append(x)
+
+    # --- the packed band's own re-proof, against the x values the loop above
+    # really drew rather than against the reach it was handed (see
+    # cp_array.check_track_separation()). Two glue nets sharing one track_y
+    # are kept apart only in x, and an extension added here without being
+    # declared to the packing is a cross-net Metal2 merge the DRC deck cannot
+    # report -- so this fails the build instead. ---
+    cp_array.check_track_separation(
+        {net: span[0] for net, span in glue_bus.items()},
+        {
+            net: cp_array._net_x_extent([span[1], span[2], *extended_at[net]])
+            for net, span in glue_bus.items()
+        },
+    )
 
     # --- boundary pins. IBN/ICN/IBP/ICP are pure array nets (no glue
     # terminal), so their pin is the array's own already-routed landing pad;
@@ -795,8 +1150,11 @@ def main() -> int:
     print(f"wrote {outdir}/{TOP_CELL}.gds")
     print(f"footprint: {x1 - x0:.3f} x {y1 - y0:.3f} um  ({(x1 - x0) * (y1 - y0):.2f} um^2)")
     print(f"glue bbox: {layout.glue_bbox}")
+    print(f"row order: {' -> '.join(ROW_ORDER)}")
     print(f"switch row: { {n: (p.x0, p.x1) for n, p in layout.switch_ports.items()} }")
     print(f"inverter origins: {layout.inverter_origins}")
+    print(f"glue band: {len({round(y, 6) for y, _lo, _hi in layout.glue_bus.values()})} "
+          f"tracks for {len(layout.glue_bus)} nets")
     print(f"link columns: {layout.link_columns}")
     print(f"boundary pins: {sorted(layout.pins)}")
     if args.no_netcheck:

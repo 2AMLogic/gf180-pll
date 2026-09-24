@@ -1,0 +1,165 @@
+{
+  "block": "gf180-pll",
+  "pdk": "gf180mcu",
+  "description": "Integer-N ring-oscillator PLL for the GF180MCU open PDK. This is the integrator view: what a full-chip integrator takes, as structured data (2am cross-cutting rule 9, 2AMLogic/2am REUSE.md §\"Adopt or record\"). Prose lives in README.md; consumer requirement rows live in spec/pll.md#consumers.",
+  "top_cell": "pll_top",
+  "supply": {
+    "devices": ["nfet_03v3", "pfet_03v3"],
+    "nominal_v": 3.3,
+    "tolerance": "±10% (2.97 - 3.63 V)",
+    "domains": [
+      {
+        "pins": ["VDD_VCO", "GND_VCO"],
+        "note": "VCO's own quiet domain (bias generator, band-select mirror, 5-stage ring, output buffer, on-chip decap); the block's supply-sensitive rail (spec/pll.md#supply-sensitivity)"
+      },
+      {
+        "pins": ["VDD_DIV"],
+        "note": "feedback divider chain, output mux, retiming flop; shares VSS"
+      },
+      {
+        "pins": ["VDD"],
+        "note": "reference/PFD/charge-pump/lock-detector domain; shares VSS"
+      },
+      {
+        "pins": ["VSS"],
+        "note": "shared ground for every domain except the VCO (which has its own GND_VCO)"
+      }
+    ],
+    "source": "design/README.md#pins, spec/pll.md#supply-range"
+  },
+  "netlist": {
+    "path": "design/netlist/pll_top.spice",
+    "top_subckt": "pll_top",
+    "provenance": "schematic (design/pll_top.sch, exported by design/netlist.sh, checked for staleness by design/netlist.sh --check)",
+    "note": "Schematic-level only — no extracted (post-layout) netlist exists for the assembled block. design/README.md documents the two-block netlist-export convention this repo uses."
+  },
+  "layout": {
+    "top_cell_gds": null,
+    "top_cell_status": "No pll_top-level (placed-and-routed) layout exists. Each non-passive sub-block below has its own independent, DRC/LVS-clean transistor-level layout; the loop filter (passive-only) has no drawn layout; nothing has been assembled into one pll_top physical view, and no PLL block has been fabricated or measured (README.md Status).",
+    "floorplan_plan": "layout/floorplan/PLL-FLOORPLAN.md",
+    "floorplan_skeleton_gds": "layout/evidence/floorplan-skeleton/pll_floorplan_skeleton.gds",
+    "floorplan_skeleton_note": "A block-placement GDS skeleton (issue #17) that exercises the DRC flow end to end — placement rectangles and keep-outs, not device-level geometry for any block.",
+    "sub_blocks": [
+      {
+        "name": "vco",
+        "top_cell": "vco_block",
+        "gds": "layout/evidence/vco-layout/vco_block.gds",
+        "proof": "layout/evidence/vco-layout/PROOF-block.md",
+        "drc_lvs": "clean / matched"
+      },
+      {
+        "name": "pfd_cp",
+        "top_cell": "pfd_cp",
+        "gds": "layout/evidence/pfd-cp-layout/pfd_cp.gds",
+        "proof": "layout/evidence/pfd-cp-layout/PROOF.md",
+        "drc_lvs": "clean / matched"
+      },
+      {
+        "name": "divider_chain",
+        "top_cell": "divider_chain",
+        "gds": "layout/evidence/divider-chain-layout/divider_chain.gds",
+        "proof": "layout/evidence/divider-chain-layout/PROOF.md",
+        "drc_lvs": "clean / matched"
+      },
+      {
+        "name": "lock_detector",
+        "top_cell": "lock_detector",
+        "gds": "layout/evidence/lock-detector-layout/lock_detector.gds",
+        "proof": "layout/evidence/lock-detector-layout/PROOF.md",
+        "drc_lvs": "clean / matched"
+      },
+      {
+        "name": "loop_filter",
+        "top_cell": null,
+        "gds": null,
+        "note": "Passive-only (R + C1 + C2). No drawn layout exists; its area entry below is a device-data calculation (DR-006), not a GDS measurement."
+      }
+    ],
+    "as_of_commit": "0fca67d4"
+  },
+  "ports": [
+    {"name": "REF", "direction": "input", "meaning": "reference clock input, CMOS square wave (spec/pll.md#reference-input)"},
+    {"name": "B0", "direction": "input", "meaning": "VCO band select, bit 0 of 3 (band-selection rule, spec/pll.md#band-selection-rule)"},
+    {"name": "B1", "direction": "input", "meaning": "VCO band select, bit 1 of 3"},
+    {"name": "B2", "direction": "input", "meaning": "VCO band select, bit 2 of 3"},
+    {"name": "CPB0", "direction": "input", "meaning": "charge-pump current trim, bit 0 of 2 (Icp trim-code rule, spec/pll.md#icp-trim-code-rule); named CPB* rather than B* only to keep net names distinct from the VCO band bits"},
+    {"name": "CPB1", "direction": "input", "meaning": "charge-pump current trim, bit 1 of 2"},
+    {"name": "LDT0", "direction": "input", "meaning": "lock-detector window trim, bit 0 of 4 — a static process trim set once at test, not an application choice (Lock-detector window trim-code rule, spec/pll.md#lock-detector-window-trim-code-rule)"},
+    {"name": "LDT1", "direction": "input", "meaning": "lock-detector window trim, bit 1 of 4"},
+    {"name": "LDT2", "direction": "input", "meaning": "lock-detector window trim, bit 2 of 4"},
+    {"name": "LDT3", "direction": "input", "meaning": "lock-detector window trim, bit 3 of 4"},
+    {"name": "P0", "direction": "input", "meaning": "divider modulus control, bit 0 of 6; N = 2^k + sum(P_j * 2^j, j<k) (spec/pll.md#multiplication-ratio)"},
+    {"name": "P1", "direction": "input", "meaning": "divider modulus control, bit 1 of 6"},
+    {"name": "P2", "direction": "input", "meaning": "divider modulus control, bit 2 of 6"},
+    {"name": "P3", "direction": "input", "meaning": "divider modulus control, bit 3 of 6"},
+    {"name": "P4", "direction": "input", "meaning": "divider modulus control, bit 4 of 6"},
+    {"name": "P5", "direction": "input", "meaning": "divider modulus control, bit 5 of 6"},
+    {"name": "SEL0", "direction": "input", "meaning": "divider chain-length select, one-hot, bit 0 of 6 (SEL_(k-1)=1 terminates the modulus chain at N's own length)"},
+    {"name": "SEL1", "direction": "input", "meaning": "divider chain-length select, bit 1 of 6"},
+    {"name": "SEL2", "direction": "input", "meaning": "divider chain-length select, bit 2 of 6"},
+    {"name": "SEL3", "direction": "input", "meaning": "divider chain-length select, bit 3 of 6"},
+    {"name": "SEL4", "direction": "input", "meaning": "divider chain-length select, bit 4 of 6"},
+    {"name": "SEL5", "direction": "input", "meaning": "divider chain-length select, bit 5 of 6"},
+    {"name": "IBN", "direction": "input", "meaning": "charge-pump bias current reference (n-side); bias generation is out of scope for this block — driven ideally at 4x the unit-leg current in every sim/ testbench"},
+    {"name": "ICN", "direction": "input", "meaning": "charge-pump bias current reference (n-side cascode)"},
+    {"name": "IBP", "direction": "input", "meaning": "charge-pump bias current reference (p-side)"},
+    {"name": "ICP", "direction": "input", "meaning": "charge-pump bias current reference (p-side cascode)"},
+    {"name": "CLK", "direction": "output", "meaning": "the block's output clock, rail-to-rail CMOS on VDD_VCO (spec/pll.md#output-levels-and-drive)"},
+    {"name": "DIVOUT", "direction": "output", "meaning": "monitor only: pre-retiming divider/mux output, delay moves with the programmed N — not the feedback edge the PFD sees"},
+    {"name": "FB", "direction": "output", "meaning": "monitor + PFD feedback: the retiming flop's output, one VCO-clocked clk→Q after the divider edge, independent of N"},
+    {"name": "LOCK", "direction": "output", "meaning": "digital lock-status flag from the phase-error window comparator (spec/pll.md#lock-detector)"},
+    {"name": "VCTRL", "direction": "monitor (iopin in the netlist)", "meaning": "the loop filter's control node; brought out for observability, not an external control input"},
+    {"name": "VDD", "direction": "power", "meaning": "reference/PFD/charge-pump/lock-detector domain supply"},
+    {"name": "VDD_VCO", "direction": "power", "meaning": "VCO domain supply"},
+    {"name": "GND_VCO", "direction": "power", "meaning": "VCO domain ground (the VCO's own, separate from VSS)"},
+    {"name": "VDD_DIV", "direction": "power", "meaning": "divider domain supply"},
+    {"name": "VSS", "direction": "power", "meaning": "shared ground for every domain except the VCO"}
+  ],
+  "port_list_source": "design/netlist/pll_top.spice (.subckt pll_top line + *.ipin/*.opin/*.iopin annotations), cross-checked against design/README.md#pins",
+  "area": {
+    "measured_um2": null,
+    "measured_mm2": null,
+    "budget_mm2": 0.3,
+    "budget_source": "spec/pll.md#area, amended by spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md (issue #456) and held at that value by spec/decision-records/DR-017-area-row-held-at-0.30-on-the-refreshed-measured-floor.md (issue #476)",
+    "draft_budget_mm2": 0.15,
+    "note": "No pll_top-level (placed-and-routed) area exists — there is no top cell to measure. Each of the four non-passive sub-blocks below has an independently measured, DRC/LVS-clean drawn bounding-box area; the loop filter (passive-only) has no drawn layout and its figure is a device-data calculation (DR-006, x1.15 for bulk taps + interconnect on top of the devices' own body-tie/guard). Summing all five, with no top-level placement or routing counted, already exceeds the DRAFT 0.15 mm2 budget by 1.50x — which is why spec/pll.md#area was amended to 0.30 mm2 by DR-016 on this measurement. An integrator should read the amendment, not just the number: the draft target is unreachable for this design (assume every Metal2 track routes at zero area cost and the blocks' own drawn device bands plus the loop filter are still 1.13x it), 57.2 % of what it allowed is the loop filter's DR-006 capacitance plus the VCO's guard-ring/tap spacing, and the row's margin is sized to the unmeasured x1.25 top-level overhead factor rather than to block growth. Three levers have landed since DR-016 was ratified and are why this total is below that record's own 0.2733 mm2 measurement: issue #469 packed cp_output_stage's glue-bus track band and issue #473 interleaved its glue inverters with the switches they drive (pfd_cp 0.0267 -> 0.0256 mm2, PLL-FLOORPLAN.md §5.12 and §5.14), and issue #458 moved the divider chain's Metal2 tracks into the plane over its own device rows rather than a band above them (0.0926 -> 0.0553 mm2, §5.13). Together they move the draft-target ratio 1.82x -> 1.50x and the block sum down 17.5 %, under an unchanged spec row: DR-017 (issue #476) re-measured the floor, refreshed spec/pll.md#area's measured table onto it and HELD the row at 0.30 mm2, because the row's margin covers the top-level overhead factor's own uncertainty and none of those levers measured it (the row now holds to an overhead of x1.664). Per DR-017 a downward re-amendment now needs that uncertainty to shrink — an assembled pll_top (issue #17), or a drawn loop filter whose 36,936 um2 stops being a calculation — not another block-level lever. Area reduction remains open at an unnamed lock_detector lever. See layout/floorplan/PLL-FLOORPLAN.md §5.15 for the current whole-chip accounting and `python3 layout/run_pv.py area` to reproduce every sub-block figure below.",
+    "sub_block_areas_um2": {
+      "vco_block": {"value_um2": 31826, "status": "measured (drawn bbox)", "source": "layout/evidence/vco-layout/PROOF-block.md, layout/evidence/area-audit/area-audit.md"},
+      "pfd_cp": {"value_um2": 25630, "status": "measured (drawn bbox)", "source": "layout/evidence/pfd-cp-layout/PROOF-455-fold.md, PROOF-469-glue-bus-packing.md, PROOF-473-glue-inverter-interleave.md, layout/evidence/area-audit/area-audit.md"},
+      "divider_chain": {"value_um2": 55329, "status": "measured (drawn bbox)", "source": "layout/evidence/divider-chain-layout/PROOF.md, PROOF-over-device-rows.md, layout/evidence/area-audit/area-audit.md"},
+      "lock_detector": {"value_um2": 30586, "status": "measured (drawn bbox)", "source": "layout/evidence/lock-detector-layout/PROOF.md, layout/evidence/area-audit/area-audit.md"},
+      "loop_filter": {"value_um2": 36936, "status": "calculation, not a layout", "source": "layout/floorplan/PLL-FLOORPLAN.md §3 (32,118 um2 device sum: R 856 + C1 30,276 + C2 986) x1.15 overhead"}
+    },
+    "as_drawn_sum_um2": 180307,
+    "as_drawn_sum_mm2": 0.1803,
+    "after_top_level_overhead_um2": 225384,
+    "after_top_level_overhead_mm2": 0.2254,
+    "overhead_factor_note": "x1.25 whole-block placement/routing overhead, per layout/floorplan/PLL-FLOORPLAN.md §5. Still a ROM estimate — no assembled pll_top GDS exists to measure it against (issue #17) — and it is the only unmeasured term in the total above. The 0.30 mm2 row holds to a measured overhead of x1.664 on the block sum as drawn; above that, or past 240,000 um2 of block sum, PLL-FLOORPLAN.md §5's fail-loud clause fires (asserted by layout/tests/test_area_audit.py, not only in prose).",
+    "budget_ratio": 0.75,
+    "budget_ratio_note": "against the amended 0.30 mm2 row: MET, with more headroom than when DR-016 was written (0.91 then) — 24.9 % margin on the 240,000 um2 of block sum the row allows. Against the draft 0.15 mm2 target the same total is 1.50x — see draft_budget_ratio.",
+    "draft_budget_ratio": 1.5,
+    "source": "spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md (issue #456) for the amended row and DR-017-area-row-held-at-0.30-on-the-refreshed-measured-floor.md (issue #476) for holding it on the current measurement; layout/floorplan/PLL-FLOORPLAN.md §5.12 (issue #469), §5.13 (issue #458), §5.14 (issue #473) and §5.15 (issue #476) for the current total; layout/evidence/area-audit/area-audit.md",
+    "as_of_commit": "8c6cb7f3"
+  },
+  "maturity": {
+    "ladder": "simulation-complete -> layout DRC/LVS-clean -> shuttle seat -> measured silicon over temperature (README.md)",
+    "verdict_of_record": "signoff/tier-report.json",
+    "manifest": "signoff/block-manifest.json",
+    "readme": "signoff/README.md",
+    "grader": "klt signoff --manifest",
+    "regenerate": "bash signoff/run-signoff.sh",
+    "rung": "pre-T1 (klayout-tools design-evidence tiers) — 0 of 22 T1 rows met as of the committed tier-report.json",
+    "note": "0/22 is the correct, honestly-graded result today, not a bug — see signoff/README.md 'Why every row is unmet': no evidence envelope is cited into signoff/block-manifest.json yet. Independently of that grading gap, four of the block's five sub-blocks (vco, pfd_cp, divider_chain, lock_detector) already have committed, DRC/LVS-clean, LVS-matched transistor-level layouts and closed-loop schematic-level simulation evidence spans dozens of campaigns (both per README.md's own Status section) — but there is no pll_top-level placed-and-routed layout, so the block as a whole has reached neither the 'simulation-complete' nor the 'layout DRC/LVS-clean' rung of the ladder above as a single, assembled unit.",
+    "readme_status_anchor": "README.md#status-early-block-level-layout-underway-pre-top-level-pre-silicon",
+    "as_of_commit": "0fca67d4"
+  },
+  "spec": {
+    "target_table": "spec/pll.md#summary-table",
+    "consumers": "spec/pll.md#consumers"
+  },
+  "provenance": {
+    "as_of_commit": "0fca67d4",
+    "generated_for": "issue #465",
+    "generated_on": "2026-09-22"
+  }
+}

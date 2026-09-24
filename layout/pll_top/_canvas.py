@@ -97,6 +97,17 @@ therefore asserted, not assumed: ``layout/tests/test_canvas_nettracks.py``
 fails if any of the four constants (or this default) is changed alone, which
 is the propagation the per-module copies used to get for free (issue #432).
 
+``pad_center()`` (issue #475) joins the same convention:
+``lock_detector/primitives.py``, ``divider_chain/devgen.py``,
+``pfd_cp/cp_dumpbuf.py``, and ``pfd_cp/cp_array.py`` each independently
+defined the same one-line box-midpoint helper, byte-for-byte identical in all
+four. Each re-exports it under its own original module-level name
+(``pad_center = _canvas.pad_center``), so every call site is unchanged --
+including the ``from .devgen import pad_center`` importers
+``divider_chain/divider_chain.py``, ``divider_chain/div23_cell.py``, and
+``divider_chain/dff_tg_3v3.py``, and the ``cp_array.pad_center(...)`` /
+``cp_output_stage``/``cp.py`` qualified call sites.
+
 ``Conductor``, ``Via``, ``VIA_LAYERS``, ``_TOUCH_EPS``, ``_boxes_touch()``,
 ``_contains()``, ``shorted_pairs()`` and ``disconnected_nets()`` (issue #364)
 join the same convention: ``lock_detector/checks.py`` (issue #322) and
@@ -115,7 +126,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Callable, ClassVar, Iterable, Iterator
+from typing import Callable, ClassVar, Iterable, Iterator, Sequence
 
 
 def _r(v: float) -> float:
@@ -245,6 +256,93 @@ class Canvas:
             self._pin_scope.setdefault(net, []).append(box)
         self.label(layer if layer is not None else self.PIN_LAYER, net, (x0 + x1) / 2.0, (y0 + y1) / 2.0)
 
+    def clear_inherited_labels(self, layers: Sequence[str] | None = None) -> int:
+        """Delete every *text* on ``layers`` from every cell, and return how
+        many were removed.
+
+        Default (``layers=None``): every ``"*_label"`` purpose this canvas's
+        own ``LAYER`` table defines -- **not** only ``PIN_LAYER`` (issue
+        #453; see "WHY THE DEFAULT COVERS EVERY ``_label`` PURPOSE" below).
+
+        WHY AN ASSEMBLER HAS TO CALL THIS (issue #440)
+        ----------------------------------------------
+        A sub-block written for its own standalone LVS claim labels its own
+        boundary nets with its own *local* port names (``cp_leg_n``'s
+        ``EN``/``ENB``/``VBN``/``VCASCN``/``TAIL``, say). Those names are
+        only meaningful inside that sub-block's own reference netlist. When
+        an assembler composes the sub-block by reading its GDS and calling
+        ``top.flatten(-1, True)`` (the pattern ``pfd_cp``'s own
+        ``cp_array``/``cp_output_stage``/``cp``/``block`` all use), those
+        label *shapes* are flattened in with the geometry -- and gf180mcu's
+        LVS deck reads top-level net names straight off them
+        (``connect(metal1_con, metal1_label)``). The parent's net then
+        extracts under a merged name: the array ties a base leg's ``ENB``
+        permanently to the block's ground rail, so that rail extracts as
+        ``ENB,VSS`` rather than ``VSS``.
+
+        That is not cosmetic. The deck synthesizes the p-substrate as a
+        *global* net named by ``--lvs_sub`` (``VSS`` here -- see
+        ``layout/README.md``'s "substrate-net gotcha"), and a global net
+        merges into the drawn net that carries **exactly** that name. A net
+        named ``ENB,VSS`` is not that name, so the merge silently does not
+        happen: every n-channel bulk terminal lands on a net of its own,
+        disconnected from the ground rail it is drawn on, and the whole
+        block mismatches. ``pfd_cp``'s first block-level LVS run failed this
+        way and no other (84 of 93 nets, 69 of 168 devices) -- removing the
+        eight inherited ``ENB`` labels alone turned it into a match.
+
+        So the rule this method exists to enforce is: **the level doing the
+        assembling owns the net names.** Call it immediately after the
+        composing ``flatten()``, before the assembler promotes its own
+        boundary pins with :meth:`pin`; the sub-block's own standalone GDS
+        (and its own standalone LVS claim) is untouched.
+
+        WHY THE DEFAULT COVERS EVERY ``_label`` PURPOSE (issue #453)
+        --------------------------------------------------------------
+        The original (issue #440) default cleared only ``PIN_LAYER`` --
+        every submodule's own default label purpose, ``"metal1_label"``
+        (34/10). That is not the *only* purpose layer gf180mcu's LVS deck
+        reads names from: ``pfd_cp``'s own ``UP``/``DN`` boundary pins are
+        Metal2 geometry, so ``block.py`` labels them on ``"metal2_label"``
+        (36/10, ``connect(metal2_con, metal2_label)``) via ``pin()``'s
+        ``layer=`` override -- correctly, for ``pfd_cp``'s own standalone
+        claim. A *future* assembler composing ``pfd_cp`` the same
+        read-GDS-and-flatten way and calling the bare
+        ``clear_inherited_labels()`` would strip the 34/10 texts (the case
+        the narrow default covered) but inherit ``pfd_cp``'s two 36/10
+        ``UP``/``DN`` texts untouched -- reintroducing exactly #440's bug
+        class one level up, in the harder-to-see direction: a label that
+        *is* on a purpose layer the deck reads, just not the one the narrow
+        default checked. Defaulting to every ``"*_label"``-suffixed key in
+        ``LAYER`` closes that: it is the naming convention every submodule's
+        own ``LAYER`` table already uses for gf180mcu's LVS-purpose layers
+        (``"metal1_label"``, ``"metal2_label"``; see ``pfd_cp/devgen.py``'s
+        own ``LAYER`` table comments citing the deck's
+        ``layers_definitions.lvs``), so no submodule has to opt in per call
+        site. A ``LAYER`` table with no such key (none exist today, but a
+        defensive fallback costs nothing) falls back to the original
+        ``(PIN_LAYER,)`` behavior instead of silently clearing nothing.
+        """
+        if layers is not None:
+            names = tuple(layers)
+        else:
+            names = tuple(name for name in self.LAYER if name.endswith("_label"))
+            if not names and self.PIN_LAYER in self.LAYER:
+                names = (self.PIN_LAYER,)
+        removed = 0
+        for name in names:
+            gds = self.LAYER.get(name)
+            if gds is None:
+                continue
+            index = self.layout.layer(*gds)
+            for cell in self.layout.each_cell():
+                shapes = cell.shapes(index)
+                doomed = [s for s in shapes.each() if s.is_text()]
+                for shape in doomed:
+                    shapes.erase(shape)
+                removed += len(doomed)
+        return removed
+
     def write_gds(self, path) -> None:
         options = self._db.SaveLayoutOptions()
         options.select_cell(self.top.cell_index())
@@ -261,6 +359,11 @@ def bbox_union(boxes: Iterable[tuple[float, float, float, float]]) -> tuple[floa
         max(b[2] for b in boxes),
         max(b[3] for b in boxes),
     )
+
+
+def pad_center(pad: tuple[float, float, float, float]) -> tuple[float, float]:
+    """The centre point of an axis-aligned pad box ``(x0, y0, x1, y1)``."""
+    return ((pad[0] + pad[2]) / 2.0, (pad[1] + pad[3]) / 2.0)
 
 
 def _contact_positions(
