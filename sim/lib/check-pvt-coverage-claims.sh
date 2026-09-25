@@ -46,17 +46,45 @@
 #    from the harness leaves a stale corner name in an outward-facing document
 #    that nothing else would catch.
 #
-# 2. OFF-GRID CORNERS ARE DISCLOSED. A table row that quotes a corner triple
-#    whose bundle is NOT one of REQUIRED_MOS_CORNERS must name the wider grid
-#    that corner comes from: the row must carry an `<N>-point` or `<N>-bundle`
-#    token equal to the distinct PVT-point count, or the distinct-bundle count,
-#    of a record the row cites -- and strictly larger than the mandated grid,
-#    since a disclosure that repeats the mandated numbers discloses nothing.
+# 2. OFF-GRID ROWS ARE DISCLOSED. A table row is off the mandated grid if
+#    EITHER of two things is true:
+#
+#      (a) it QUOTES a corner triple whose bundle is not one of
+#          REQUIRED_MOS_CORNERS; or
+#      (b) a record it CITES has committed per-corner evidence at such a
+#          bundle -- whatever corner the row chose to quote.
+#
+#    Such a row must name the grid it was measured on: an `<N>-point` or
+#    `<N>-bundle` token equal to the distinct PVT-point count, or the
+#    distinct-bundle count, of a record the row cites, and not equal to the
+#    mandated grid's own 45 / 5, since a disclosure that repeats the mandated
+#    numbers discloses nothing.
 #
 #    Both spellings are accepted because both are already in honest use:
 #    sim/CHARACTERIZATION.md's `lock-window-trim` row says "the full 13-bundle"
 #    set and passes this rule unchanged, while the vco-tuning-range rows are
 #    naturally stated as a 63-point grid.
+#
+#    Trigger (b) was added on 2026-09-25, after trigger (a) alone was found to
+#    be a disclosure rule keyed on WHAT A ROW HAPPENS TO SAY. A row can rest
+#    entirely on a 13-bundle campaign and stay silent simply by quoting only
+#    its `ss` and `fs` corners -- which is exactly what the proposal's Lock
+#    detector row did. Its five cited records (`lock-detector`,
+#    `lock-window-trim`, `lock-window-sizing` and two superseded predecessors)
+#    each cover 117 PVT points across 13 bundles, and the row said 205 points
+#    and nothing about the grid. Four more rows across two documents were in
+#    the same state, including `sim/CHARACTERIZATION.md`'s `harness-selftest`
+#    row, which called a record's grid "45-point" when that record's own
+#    corner field reads "63 point full-factorial grid" over 7 bundles -- an
+#    error rule 3 structurally cannot catch, because it allows the mandated
+#    size unconditionally.
+#
+#    Trigger (b) also accepts a SUBSET disclosure, which trigger (a) could
+#    not: `devchar-passives` sweeps `typical`/`all-fast`/`all-slow` at one
+#    supply, 9 points across 3 bundles -- off the mandated grid in both
+#    directions at once. "9-point" and "3-bundle" are honest names for it, so
+#    the token is required to differ from the mandated numbers rather than to
+#    exceed them.
 #
 # 3. CORNER COUNTS HAVE EVIDENCE BEHIND THEM. Every PVT-qualified corner or
 #    grid count in a graded table row -- "10/45 corners", "5 of 45 PVT points",
@@ -87,6 +115,20 @@
 # that is a different and much larger check. It grades the corner a value is
 # attributed to and the grid that corner sits in. A row that quotes no corner
 # triple and no corner count is trivially clean; so is a derived or waived row.
+#
+# Two grid-shape claims are also still taken on trust, both of them hand-
+# verified and written into section 5.0 of the proposal rather than graded
+# (issue #516):
+#
+#   * A record whose corner axis is NOT the MOS grid. sim/loop-dynamics sweeps
+#     the passive loop filter over 27 passive-corner bundles x 3 temperatures
+#     and declares the MOS and supply axes N/A; its committed artifacts are
+#     named for filter corners, so evidence() returns zero points and zero
+#     bundles -- indistinguishable here from a parser that found nothing.
+#   * A deliberately non-rectangular sample of a cross-product.
+#     sim/divider-ratio-chain runs 235 of the 2835 cells of a 61-N x 45-corner
+#     product; every bundle it touches is on-grid and its PVT point set IS the
+#     mandated 45, so both triggers above pass it.
 #
 # Usage: sim/lib/check-pvt-coverage-claims.sh
 # Exit codes: 0 every quoted corner is a real bundle, every off-grid corner is
@@ -188,7 +230,7 @@ _evidence_cache = {}
 
 
 def evidence(record_id):
-    """(distinct PVT points, distinct bundles, {committed CSV row counts}).
+    """(distinct PVT points, the set of distinct bundles, {CSV row counts}).
 
     Read from sim/<campaign>/corners/<record-id>/ -- the committed per-corner
     artifacts of that record, which is the only place the tree says how much of
@@ -226,9 +268,31 @@ def evidence(record_id):
             for row in table:
                 points.add((row[bundle_col], _f(row["temp_c"]), _f(row[vdd_col])))
                 bundles.add(row[bundle_col])
-    result = (len(points), len(bundles), rows)
+    result = (len(points), frozenset(bundles), rows)
     _evidence_cache[record_id] = result
     return result
+
+
+def names_its_grid(tokens, candidates):
+    """True if the row names the grid one of ``candidates`` was measured on.
+
+    ``candidates`` is the off-grid record(s) the row must account for -- not
+    every record it cites. A number that happens to match some *on-grid*
+    record's coverage is not a disclosure of the off-grid one: the aggregation
+    row for `period-jitter` says "16 points" about the `fs`/`sf` block that
+    completed its 45-point grid, and that must not excuse its silence about
+    the 63-point `vco-tuning-range` record in the same cell.
+
+    The token must not be the mandated grid's own 45 / 5 either: repeating the
+    mandated numbers is not a disclosure that the row is off them.
+    """
+    for rid in candidates:
+        n_points, bundles, _ = evidence(rid)
+        for count in (n_points, len(bundles)):
+            if count and count not in (MANDATED_GRID, MANDATED_BUNDLES):
+                if count in tokens:
+                    return True
+    return False
 
 
 failed = False
@@ -276,45 +340,65 @@ for doc in graded:
                 allowed.add(n_points)
             allowed |= row_counts
 
-        # Rule 2.
-        off_grid = sorted(
+        # Rule 2, trigger (a): the row quotes a corner outside the grid.
+        quoted_off_grid = sorted(
             {
                 b
                 for b in CORNER_TRIPLE.findall(line)
                 if b in CORNERS and b not in REQUIRED_MOS_CORNERS
             }
         )
-        if off_grid:
+        # Rule 2, trigger (b): the row's evidence sits outside the grid,
+        # whatever corner it chose to quote.
+        measured_off_grid = []
+        for rid in cited:
+            _, bundles, _ = evidence(rid)
+            extra = sorted(bundles - REQUIRED_MOS_CORNERS)
+            if extra:
+                measured_off_grid.append((rid, extra))
+
+        if quoted_off_grid or measured_off_grid:
             tokens = {int(n) for n in DISCLOSURE.findall(line)}
-            widths = []
-            disclosed = False
-            for rid in cited:
-                n_points, n_bundles, _ = evidence(rid)
-                widths.append((rid, n_points, n_bundles))
-                if n_points > MANDATED_GRID and n_points in tokens:
-                    disclosed = True
-                if n_bundles > MANDATED_BUNDLES and n_bundles in tokens:
-                    disclosed = True
-            if disclosed:
+            widths = [(rid,) + evidence(rid)[:2] for rid in cited]
+            # A row that only *quotes* an off-grid corner has no off-grid
+            # record to point at, so every record it cites is a candidate.
+            candidates = [rid for rid, _ in measured_off_grid] or cited
+            if names_its_grid(tokens, candidates):
                 disclosures_seen += 1
             else:
                 failed = True
+                why = []
+                if quoted_off_grid:
+                    why.append(
+                        "quotes a measurement at %s"
+                        % ", ".join("`%s`" % b for b in quoted_off_grid)
+                    )
+                if measured_off_grid:
+                    why.append(
+                        "rests on evidence measured at %s"
+                        % "; ".join(
+                            "%s (%s)" % (rid, ", ".join("`%s`" % b for b in extra))
+                            for rid, extra in measured_off_grid
+                        )
+                    )
                 sys.stderr.write(
-                    "FAIL: %s quotes a measurement at %s, which sim/harness/"
-                    "corners.py places outside the %d-point mandated grid's "
-                    "%d MOS bundles, and the row does not say which grid it "
-                    "came from. Name the wider grid in the row -- an "
-                    "`<N>-point` or `<N>-bundle` token matching the cited "
-                    "record's own coverage%s.\n  row: %s\n"
+                    "FAIL: %s %s, which sim/harness/corners.py places outside "
+                    "the %d-point mandated grid's %d MOS bundles, and the row "
+                    "does not say which grid it came from. Name the grid in "
+                    "the row -- an `<N>-point` or `<N>-bundle` token matching "
+                    "the cited record's own coverage, and not the mandated "
+                    "%d / %d%s.\n  row: %s\n"
                     % (
                         doc,
-                        ", ".join("`%s`" % b for b in off_grid),
+                        " and ".join(why),
+                        MANDATED_GRID,
+                        MANDATED_BUNDLES,
                         MANDATED_GRID,
                         MANDATED_BUNDLES,
                         (
                             " (" + "; ".join(
                                 "%s covers %d PVT points across %d bundles"
-                                % (rid, pts, bnd)
+                                % (rid, pts, len(bnd))
                                 for rid, pts, bnd in widths
                             ) + ")"
                         )
@@ -359,9 +443,10 @@ if failed:
 
 print(
     "OK: %d distinct corner bundles quoted across %d documents are all in "
-    "sim/harness/corners.py; %d off-grid corner row(s) name the wider grid "
-    "they were measured on; %d PVT corner count(s) match the %d-point "
-    "mandated grid or the cited record's committed evidence"
+    "sim/harness/corners.py; %d row(s) quoting or resting on an off-grid "
+    "corner name the grid they were measured on; %d PVT corner count(s) "
+    "match the %d-point mandated grid or the cited record's committed "
+    "evidence"
     % (triples_seen, len(graded), disclosures_seen, counts_seen, MANDATED_GRID)
 )
 PY

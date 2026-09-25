@@ -284,12 +284,25 @@ jobs:
         #
         # Three rules: every process bundle a graded document quotes in a
         # corner triple is one sim/harness/corners.py defines; a table row
-        # quoting a bundle outside the mandated grid names the wider grid it
-        # came from (an `<N>-point` or `<N>-bundle` token matching the cited
-        # record's own committed coverage, and larger than the mandated
-        # numbers, since repeating them discloses nothing); and every
-        # PVT-qualified corner count in a row is the mandated grid size or a
-        # count the cited record's committed per-corner evidence produces.
+        # that is off the mandated grid names the grid it came from (an
+        # `<N>-point` or `<N>-bundle` token matching the cited record's own
+        # committed coverage, and not the mandated numbers, since repeating
+        # them discloses nothing); and every PVT-qualified corner count in a
+        # row is the mandated grid size or a count the cited record's
+        # committed per-corner evidence produces.
+        #
+        # "Off the mandated grid" has two triggers, because the first alone
+        # was a disclosure rule keyed on what a row happens to SAY. A row is
+        # off the grid if it quotes a corner outside it, OR if a record it
+        # cites was MEASURED outside it. The proposal's Lock detector row
+        # rests on three campaigns that each run 13 bundles / 117 PVT points
+        # and quoted only their `fs` and `ss` corners, so it disclosed
+        # nothing; sim/CHARACTERIZATION.md's harness-selftest row called its
+        # record's grid "45-point" when that record's own corner field reads
+        # "63 point full-factorial grid" -- an error the third rule
+        # structurally cannot catch, because it allows the mandated size
+        # unconditionally. Five more rows across the two documents were in the
+        # same state on 2026-09-25.
         #
         # The mandated size is computed from REQUIRED_MOS_CORNERS x
         # DEFAULT_TEMPERATURES_C x supply_points(), imported rather than
