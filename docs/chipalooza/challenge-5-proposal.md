@@ -108,7 +108,7 @@ it at all.
 | `CPB0`, `CPB1` | in | digital control input | 2 of 24 | Charge-pump current trim (2-bit, 4 codes). **Not discretionary** — required to be set from `f_ref` per the [Icp trim-code rule](../../spec/pll.md#icp-trim-code-rule) |
 | `LDT0`…`LDT3` | in | digital control input | 4 of 24 | Lock-detector window trim (4-bit, 16 codes). **Not discretionary** — required to be set once per part at test, from that part's own measured comparator-window delay, per the normative [Lock-detector window trim-code rule](../../spec/pll.md#lock-detector-window-trim-code-rule) (DR-014, DR-015). Same static-configuration idiom as `CPB0`/`CPB1`; nominal/unprogrammed code is 1000 (8) |
 | `P0`…`P5`, `SEL0`…`SEL5` | in | digital control input | 12 of 24 | Feedback-divider configuration: `P5..P0` is each ÷2/3 cell's per-cycle mode; `SEL5..SEL0` is a one-hot chain-length code. Together they set `N = 2^k + Σ P_j·2^j (j<k)` for one-hot `SEL_(k-1)=1`, covering the ratified N = 4–64 range. Static configuration; the loop re-locks after any change (no glitch-free on-the-fly modulus switching, DR-001 Decision 3) |
-| `IBN`, `ICN`, `IBP`, `ICP` | in | **does not fit the ≤ 2 bandgap-referenced current-source budget — open item, see §7** | 4 requested vs. 2 offered | Charge-pump / bias-mirror reference currents. **Every closed-loop `sim/` record in this repository drives these from ideal current sources at 4× the unit-leg current** — the bias generator that would derive them from a single bandgap-referenced current is "a separate, unbuilt block" (every closed-loop evidence record's own Limitations field says so verbatim). This is not a Challenge-specific gap invented for this proposal; it is a standing, disclosed limitation of the design today |
+| `IBN`, `ICN`, `IBP`, `ICP` | in | **does not fit the ≤ 2 bandgap-referenced current-source budget — open item, see §7** | 4 requested vs. 2 offered | Charge-pump / bias-mirror reference currents. **Every closed-loop `sim/` record in this repository drives these from ideal current sources at 4× the unit-leg current** — the bias generator that would derive them from a single bandgap-referenced current is "a separate, unbuilt block" (quoted verbatim from the Limitations field of `sim/pll-top-smoke/records/20260802-160926-8456ff3.md` and of `sim/supply-sensitivity/records/20260901-155456-46b92f8.md`; the lock-time, output-range, period-jitter and reference-spur records drive the same ideal sources without restating why — an earlier revision attributed the phrase to all of them, which `sim/lib/check-bias-drive-claims.sh` now fails). This is not a Challenge-specific gap invented for this proposal; it is a standing, disclosed limitation of the design today |
 | `VCTRL` | analog, iopin | shared analog line (budget ≤ 4) | 1 of 4 | Loop-filter control voltage — a slow-moving DC/low-frequency analog test point, well suited to a multiplexed line. Usable window 0.9–2.7 V (DR-003 Decision 5) |
 | `CLK` | out, dedicated | dedicated pad (budget ≤ 4) | 1 of 4 | PLL output clock, 10–200 MHz continuous across the 8 bands. **Needs a low-resistance, dedicated path** — a shared-mux line's added series resistance and capacitance would degrade the measured edge rates and duty cycle (`spec/pll.md#output-duty-cycle`, `#output-levels-and-drive`) directly |
 | `LOCK` | out | digital test output (budget ≤ 12) | 1 of 12 | Digital lock-status flag from the phase-window comparator (DR-002 Decision 4). See §5's Lock detector row for the two disclosed gaps in this signal's own assert/deassert behavior — it is a real, measured signal, not an idealized one |
@@ -245,10 +245,16 @@ work around from the rest of the text.
    is expected to work**: `IBN` and `ICN` are sourced *into* the die from the
    supply side, `IBP` and `ICP` are sunk *out of* the die to `VSS`, each at
    the 8 µA every closed-loop record in this repository drives them with
-   (`.param iunit=8u` in `sim/lock-time/testbench/tb_lock_time.sp`,
-   `sim/period-jitter`, `sim/reference-spur`, `sim/supply-sensitivity`,
-   `sim/output-range` and `sim/pll-top-smoke` alike; the polarity is those
-   decks' own `iibn vdd ibn` / `iibp ibp 0`). There is no bias generator on
+   (`.param iunit=8u` in the decks of `sim/period-jitter`,
+   `sim/reference-spur`, `sim/supply-sensitivity` and `sim/pll-top-smoke`;
+   `IUNIT=8u` in `sim/lock-time/testbench/run.sh` and
+   `sim/output-range/testbench/run.sh`, which pass it to decks that set no
+   value of their own; the polarity is those decks' own `iibn vdd ibn` /
+   `iibp ibp 0`). Current, setting sites and polarity are all
+   machine-checked against the committed decks
+   (`sim/lib/check-bias-drive-claims.sh`) — an earlier revision of this step
+   sent the reader to a `.param` line `tb_lock_time.sp` does not contain.
+   There is no bias generator on
    this die — §2.2's 4-requested-vs-2-offered row and §7 item 6 are that
    same fact stated against the Challenge's budget — so with these four pins
    unconnected the charge pump passes no current and **no step below

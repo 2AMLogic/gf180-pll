@@ -387,6 +387,28 @@ jobs:
         # committed SPICE decks and committed Markdown, no PDK, no ngspice.
         run: bash sim/lib/check-ref-drive-claims.sh
 
+      - name: sim/lib/check-bias-drive-claims.sh (bias-pin drive and quoted Limitations vs. the decks and records)
+        # The PLL has no bias generator: every closed-loop deck drives
+        # IBN/ICN/IBP/ICP from ideal current sources, and the proposal turns
+        # that into a bench instruction (section 4 step 1: what current, into
+        # which pin, set where) and a pad-table justification (section 2.2:
+        # a phrase quoted "verbatim" from the records' Limitations). Both
+        # cited evidence and neither was graded. Step 1 sent the reader to a
+        # `.param iunit=8u` line tb_lock_time.sp does not contain -- its value
+        # comes from run.sh -- and section 2.2 attributed its quotation to
+        # every closed-loop record when 7 of 35 say it.
+        #
+        # Five rules: every campaign a drive claim cites runs at the stated
+        # current; every path it cites is where the quoted setting actually
+        # lives for the decks it stands for; quoted source lines and the
+        # stated sourced/sunk polarity match the decks; "every closed-loop
+        # record" holds over every closed-loop deck, cited or not; and a
+        # verbatim quotation is in every record it is attributed to. Its unit
+        # tests run under `bash sim/selftest.sh` above (sim/tests discovery).
+        # Needs python3 (set up above); reads committed decks, testbench
+        # scripts, tb.json manifests and records -- no PDK, no ngspice.
+        run: bash sim/lib/check-bias-drive-claims.sh
+
       - name: docs/tests (unit tests for the issue-reference-state check)
         # Same shape as the three discover steps above, for the check added in
         # #237 that grades what the outward-facing documents claim about the
