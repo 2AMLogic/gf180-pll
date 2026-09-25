@@ -391,7 +391,7 @@ against a no-measurement control:
    before it was tried.
 
 **Of the two routes DR-022 named, one has now been measured and does not
-work.** DR-028 (#527) characterizes the **symmetric `REF` phase-step
+work.** DR-029 (#527) characterizes the **symmetric `REF` phase-step
 bisection** — step `REF`'s phase by a signed Δ with the loop locked, bisect Δ
 in both directions for the thresholds at which `LOCK` drops, and take their
 mean as the flag window with the loop's static offset cancelled. The deassert
@@ -413,7 +413,7 @@ trim. Both tiers **FAIL**, and by a margin no ladder resolution can reach: the
 discrepancy is 3.7× the measurement's own bracket and 19× the reference
 interval's width.
 
-The obstacle generalizes past this particular stimulus, which is why DR-028
+The obstacle generalizes past this particular stimulus, which is why DR-029
 closes the route rather than deferring it. The flag's measurand is a
 **sustained** phase error; a locked loop holds exactly its own `φ_ss` and
 corrects everything else, `FB` is an output with no drive path, and so every
@@ -428,7 +428,7 @@ no allowance for.
 through matched observation buffers onto two of the free digital-test-output
 slots, making `t_win` a pad-to-pad edge difference with the buffers' own delays
 cancelling to first order. That is a `design/` change and **still needs its own
-decision record first**; neither DR-022 nor DR-028 authorizes it. What DR-028
+decision record first**; neither DR-022 nor DR-029 authorizes it. What DR-029
 adds to its case is that the cheaper route is not merely uncharacterized — it
 is measured, and it fails on what it measures rather than on how precisely it
 measures it.

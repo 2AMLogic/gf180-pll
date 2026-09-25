@@ -1,4 +1,4 @@
-# DR-028: The symmetric `REF` phase-step bisection does not execute the lock-detector window trim rule — a locked loop cannot be asked to hold the error the flag measures
+# DR-029: The symmetric `REF` phase-step bisection does not execute the lock-detector window trim rule — a locked loop cannot be asked to hold the error the flag measures
 
 - **Status**: proposed, drafting for operator ratification via PR review — the
   same `2AMLogic/2am#357` ratification-via-PR route DR-007, DR-009, DR-010,
@@ -7,6 +7,12 @@
   stays `proposed` until that approval and merge.
 - **Date**: 2026-09-25
 - **Decided by**: Builder agent, issue #527
+- **Numbering note**: `DR-027` is claimed by open PR #535 (unmerged) and
+  `DR-028` was taken by #536's batch-image record while this one was being
+  written, so this record takes `029`, per the collision rule in
+  `TEMPLATE.md` and the precedent DR-028's own numbering note sets. If PR
+  #535 is abandoned, `027` stays an unused gap — `DR-NNN` is a stable
+  identifier, not a dense sequence.
 - **Revises**: `spec/pll.md`'s
   [Executing the rule at test](../pll.md#executing-the-rule-at-test--the-rule-is-normative-and-on-this-die-it-is-executable-only-in-simulation)
   subsection — closes out the first of the two routes DR-022 Decision 5 named,
@@ -298,6 +304,13 @@ resolution or of a better bisection.
   --backend batch` shapes all 45 jobs correctly and is re-runnable the moment
   the layer resolves subnets again. It is recorded here because it is the reason
   a reader will find fewer points than the manifest was written for.
+- **The local fallback was not purely a loss, and DR-028 is why.** That record
+  (#536) establishes that the batch job image runs **ngspice-42** against this
+  repository's ngspice-46 pin, and that a batch-executed record must disclose
+  the divergence. Every point here ran on the pinned **ngspice-46**, so this
+  record carries no such divergence — an off-host run of the same 45-rung
+  ladder would have, and a re-take that takes the batch path must read DR-028
+  before quoting these numbers alongside its own.
 
 [Executing the rule at test]: ../pll.md#executing-the-rule-at-test--the-rule-is-normative-and-on-this-die-it-is-executable-only-in-simulation
 [Lock detector]: ../pll.md#lock-detector

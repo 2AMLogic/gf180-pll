@@ -74,7 +74,7 @@ is therefore required, and what it says lands verbatim on the record.
 ## What the first record found
 
 `records/20260925-162032-e341b58.md`, graded in full by
-[DR-028](../../spec/decision-records/DR-028-ref-phase-step-bisection-measures-the-wrong-quantity.md):
+[DR-029](../../spec/decision-records/DR-029-ref-phase-step-bisection-measures-the-wrong-quantity.md):
 
 - **The deassert is observable at the pad, cleanly.** `VWIN` at 3.2865 V of a
   3.30 V rail before the step; `LOCK` to ground **80.3–163.1 ns** after it and
@@ -91,7 +91,7 @@ is therefore required, and what it says lands verbatim on the record.
   Schmitt trigger's falling threshold, the discharge device and the loop's
   bandwidth — four quantities that are not the delay chain the trim moves and
   vary independently of it, so no fixed factor removes it.
-- **The route is closed.** DR-028 makes DR-022 Decision 5's output-side
+- **The route is closed.** DR-029 makes DR-022 Decision 5's output-side
   `ERR`/`ERRD` observation tap the successor; that is a design change and needs
   its own decision record.
 
@@ -100,7 +100,7 @@ the record carries the pre-fix labels: a wrapped edge-pair phase reading at a
 bundle with a negative static offset (the #273 hazard), and a bundle whose flag
 was never asserted labelled `upper_bound` rather than `no_baseline_assert`.
 `sim/` is append-only, so the record is not edited; its own per-point
-`FAIL — lock_pre` verdicts are what make both readable, and DR-028 states the
+`FAIL — lock_pre` verdicts are what make both readable, and DR-029 states the
 unwrapped values.
 
 ## Scope of that record, and what it does not close
