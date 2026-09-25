@@ -495,6 +495,21 @@ class BatchBackend:
             )
 
     def _launch(self, plan: JobPlan) -> None:
+        # `--region`/`--profile` are passed for the same reason `_aws` passes
+        # them: the resolved config is the submission's identity, and every
+        # transport call must run under it. Omitting them here let the launch
+        # script fall back to its OWN default profile -- its *admin*
+        # provisioning identity, which a day-to-day submitting host has no
+        # credential for -- and the failure was neither a permission error nor
+        # a refusal but a silently empty subnet list, surfacing several layers
+        # later as `only 0 subnet/AZ(s) resolved, floor is 3`. That reads as
+        # "the fleet is not provisioned" when the fleet was fine and the
+        # submitter had simply asked as the wrong principal (#509). The layer's
+        # own env file says as much -- its admin profile "can create the bucket
+        # / launch template / SG", while "day-to-day launches use
+        # --profile <submit>" -- so passing the resolved profile is what the
+        # contract already asked for, not a new policy.
+        #
         # No subprocess keywords here: `_default_runner` already applies
         # capture_output/text/check, and repeating them made every real
         # submission die with `TypeError: subprocess.run() got multiple values
@@ -508,6 +523,10 @@ class BatchBackend:
                 "--job",
                 plan.job_id,
                 "--apply",
+                "--region",
+                self.config.region,
+                "--profile",
+                self.config.profile,
             ]
         )
         if proc.returncode != 0:

@@ -439,6 +439,23 @@ class SubmissionTests(unittest.TestCase):
         self.assertTrue(got.timed_out)
         self.assertIn("never reached a terminal state", got.detail)
 
+    def test_the_launch_runs_under_the_resolved_region_and_profile(self):
+        """#509: a launch that omits them asks as the launch script's OWN default.
+
+        That default is the layer's *admin* provisioning identity, which a
+        day-to-day submitting host has no credential for -- and the resulting
+        failure is not a permission error but an empty subnet list, surfacing
+        later as `only 0 subnet/AZ(s) resolved, floor is 3`, i.e. "the fleet is
+        not provisioned" when the fleet was fine. Every transport call must run
+        under the submission's resolved identity, the launch included.
+        """
+        transport = _FakeTransport(["done"], outputs={batch.RC_NAME: "0"})
+        backend = self._backend(transport)
+        backend.run_deck(self.deck, self.rundir, 60, None)
+        argv = transport.launched()[0]
+        self.assertEqual(argv[argv.index("--region") + 1], backend.config.region)
+        self.assertEqual(argv[argv.index("--profile") + 1], backend.config.profile)
+
     def test_a_failed_upload_raises_rather_than_launching_a_job_with_no_inputs(self):
         def transport(argv, **kwargs):
             argv = list(argv)

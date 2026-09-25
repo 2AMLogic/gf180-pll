@@ -79,7 +79,8 @@
 #    sentence that does not mean it. Rule 5 is what that author still cannot
 #    get past, and it needs no wording at all.
 #
-# 5. A DEVIATING DECK HAS PRODUCED NO EVIDENCE. Every deck classified as a
+# 5. A DEVIATING DECK HAS PRODUCED NO EVIDENCE -- UNLESS THE PREMISE WAS
+#    RE-ARGUED, IN A NAMED DECISION RECORD. Every deck classified as a
 #    deviation must belong to a campaign with no committed record. This is the
 #    substance the wording is about: `spec/pll.md`'s Reference input row
 #    excludes reference-source quality from the jitter and spur budgets, and
@@ -88,6 +89,21 @@
 #    produces a record, that premise stops being true by construction and has
 #    to be re-argued -- so it must not pass quietly, whatever any document
 #    happens to say. Unlike rules 2-4, this one grades the tree alone.
+#
+#    That day arrived with issue #509, and the rule's own closing sentence said
+#    what the price of passing is: "Re-state the Reference input row and the
+#    exclusion it carries before this check is made to pass." So the rule now
+#    has exactly one way through, and it is not a flag: the campaign must be
+#    named in `REARGUED` below, mapping it to the decision record that
+#    re-argues the premise, and this check verifies that record exists, is not
+#    a stub, and names the campaign back. Editing a table in a CI script and
+#    landing a ratified decision record is a deliberate act with a reviewer in
+#    front of it; an environment variable or a file dropped in a directory is
+#    not, which is why neither is offered.
+#
+#    A re-argued campaign is still counted and still reported as a deviation --
+#    the summary line names it. What the allowance buys is "this deviation is
+#    accounted for", never "this deviation is invisible".
 #
 # WHAT "SHAPE" MEANS
 #
@@ -103,6 +119,27 @@
 # tr or tf unless it varies duty alone. That residual is a real limit of this
 # classifier and is stated here rather than implied away.
 #
+# A REFERENCE THAT IS NOT A `pulse()` AT ALL
+#
+# The enumeration above reads one shape of line: an independent source driving
+# the `ref` node with a `pulse(...)`. `sim/reference-phase-transfer` (#509)
+# drives `ref` from a **behavioural** source instead -- two `pulse()` trains on
+# private nodes, blended onto `ref` by a `b`-source so the reference edge can be
+# displaced *in time* mid-run -- and the original regex could not see it: its
+# `v<name> ref 0 pulse(` shape matches neither `vrefa refa 0 pulse(`, which
+# drives a private node, nor `bref ref 0 v='...'`, which is not a `pulse()`.
+#
+# That blindness is the #237 defect wearing different clothes. A check that
+# enumerates "how REF is driven" and cannot see the one deck in the repository
+# whose whole purpose is to drive it differently reports a clean tree for the
+# same reason the original `*.sp` glob did: the counterexample was outside the
+# pattern, not absent from the tree. So the scan now also matches a dependent
+# or behavioural source on `ref` (`b`/`e`/`g`, and a `pwl`/`pulse`-less `v`),
+# and classifies every one of them a DEVIATION *without* inspecting arguments:
+# a synthesised reference is not the construction-ideal periodic pulse whatever
+# its expression says, and pretending to parse an arbitrary B-source expression
+# would be a classifier that fails silently rather than one that abstains.
+#
 # WHAT IT DOES NOT DO
 #
 # It does not run ngspice, open a record, or check that a deck measures what it
@@ -115,13 +152,15 @@
 #
 # Usage: sim/lib/check-ref-drive-claims.sh
 # Exit codes: 0 every quoted REF-enumerating command reaches every REF-driving
-#             deck, every uniformity claim holds or scopes itself, and no
-#             deviating deck has produced evidence;
+#             deck, every uniformity claim holds or scopes itself, and every
+#             deviating deck either has produced no evidence or is re-argued in
+#             a named decision record;
 #             1 a quoted glob excludes a matching deck, a deviating deck is
 #             unnamed, an unqualified uniformity claim is false over the decks
 #             its own command can reach, a deviating deck has a committed
-#             record, a graded document is missing, or the deck scan found
-#             nothing.
+#             record with no re-argument, a named re-argument is missing or does
+#             not name its campaign, a graded document is missing, or the deck
+#             scan found nothing.
 
 set -uo pipefail
 
@@ -156,6 +195,19 @@ repo_root, graded = sys.argv[1], sys.argv[2:]
 # the same line under any other instance name a deck might use.
 REF_SOURCE = re.compile(
     r"^(?P<inst>v[a-z0-9_]*)[ \t]+ref[ \t]+0[ \t]+pulse\((?P<args>[^)]*)\)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# A SYNTHESISED reference: anything else that drives the `ref` node from a
+# source instance -- a behavioural `b`-source, a controlled `e`/`g` source, or a
+# `v` source whose waveform is not a `pulse()` (a `pwl`, a table, an
+# expression). `sim/reference-phase-transfer` (#509) is the first: it blends two
+# private `pulse()` trains onto `ref` through a `b`-source so the reference edge
+# can be displaced in time mid-run. Every match is a DEVIATION with no argument
+# parsing -- see "A REFERENCE THAT IS NOT A `pulse()` AT ALL" in the header for
+# why abstaining from parsing is the honest classification here.
+REF_SYNTHESISED = re.compile(
+    r"^(?P<inst>[bevg][a-z0-9_]*)[ \t]+ref[ \t]+0[ \t]+(?P<rest>(?!pulse\()\S.*)$",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -210,11 +262,23 @@ for pattern in DECK_GLOBS:
         with open(path, encoding="utf-8") as fh:
             text = fh.read()
         m = REF_SOURCE.search(text)
+        if m:
+            line_no = text.count("\n", 0, m.start()) + 1
+            shape, why = shape_of(m.group("args"))
+            decks[rel] = (line_no, m.group(0), shape, why)
+            continue
+        m = REF_SYNTHESISED.search(text)
         if not m:
             continue
         line_no = text.count("\n", 0, m.start()) + 1
-        shape, why = shape_of(m.group("args"))
-        decks[rel] = (line_no, m.group(0), shape, why)
+        decks[rel] = (
+            line_no,
+            m.group(0),
+            "deviation",
+            "`ref` is synthesised by source %s, not driven by an independent "
+            "pulse() -- the reference waveform is constructed by the deck"
+            % m.group("inst"),
+        )
 
 if not decks:
     sys.stderr.write(
@@ -244,22 +308,83 @@ commands_checked = 0
 claims_checked = 0
 
 # ---------------------------------------------------------------- rule 5
+#
+# The only way past rule 5: campaign -> the decision record that re-argues the
+# "every number is measured against an ideal reference" premise for it. Adding
+# an entry is a deliberate code change with a reviewer in front of it, and the
+# record it names is verified to exist, to be more than a stub, and to name the
+# campaign back -- so an entry cannot be a bare assertion that the work was
+# done. See rule 5 in the header.
+REARGUED = {
+    # #509: this campaign perturbs the reference edge IN TIME on purpose, to
+    # measure the 20*log10(N) transfer the exclusion asserts. It reports no
+    # jitter and no spur number, which is what keeps the premise true for the
+    # rows that do -- DR-023 states that in as many words.
+    "reference-phase-transfer": (
+        "spec/decision-records/"
+        "DR-023-reference-phase-transfer-measures-the-exclusions-transfer.md"
+    ),
+}
+
+#: A decision record short enough to be a placeholder is not a re-argument.
+#: 1500 bytes is roughly the template's own skeleton with nothing said in it.
+REARGUMENT_MIN_BYTES = 1500
+
+reargued_with_records = []
+
 for path, (_line, _src, _shape, why) in sorted(deviations.items()):
     campaign = campaign_of(path)
     found = records_of(campaign)
     if not found:
         continue
-    failed = True
-    sys.stderr.write(
-        "FAIL: `%s` varies the reference waveform (%s) and its campaign "
-        "sim/%s/ has %d committed record(s), the first being %s. Every jitter, "
-        "spur and phase number this repository reports is stated against an "
-        "ideal reference *by construction*; a record measured with a varied "
-        "reference means that premise now has to be argued rather than "
-        "assumed. Re-state the Reference input row and the exclusion it "
-        "carries before this check is made to pass.\n"
-        % (path, why, campaign, len(found), found[0])
-    )
+
+    dr_rel = REARGUED.get(campaign)
+    if dr_rel is None:
+        failed = True
+        sys.stderr.write(
+            "FAIL: `%s` varies the reference waveform (%s) and its campaign "
+            "sim/%s/ has %d committed record(s), the first being %s. Every "
+            "jitter, spur and phase number this repository reports is stated "
+            "against an ideal reference *by construction*; a record measured "
+            "with a varied reference means that premise now has to be argued "
+            "rather than assumed. Re-state the Reference input row and the "
+            "exclusion it carries in a decision record, then name that record "
+            "against `%s` in this check's own REARGUED table -- do not make "
+            "this check pass any other way.\n"
+            % (path, why, campaign, len(found), found[0], campaign)
+        )
+        continue
+
+    dr_path = os.path.join(repo_root, dr_rel)
+    if not os.path.isfile(dr_path):
+        failed = True
+        sys.stderr.write(
+            "FAIL: sim/%s/ is listed in this check's REARGUED table against "
+            "%s, and that file does not exist. A re-argument this check cannot "
+            "read is not a re-argument.\n" % (campaign, dr_rel)
+        )
+        continue
+
+    with open(dr_path, encoding="utf-8") as fh:
+        dr_text = fh.read()
+    if len(dr_text) < REARGUMENT_MIN_BYTES:
+        failed = True
+        sys.stderr.write(
+            "FAIL: %s is only %d bytes, below the %d-byte floor for a "
+            "re-argument of the ideal-reference premise. A stub is not an "
+            "argument.\n" % (dr_rel, len(dr_text), REARGUMENT_MIN_BYTES)
+        )
+        continue
+    if campaign not in dr_text:
+        failed = True
+        sys.stderr.write(
+            "FAIL: %s is named as the re-argument for sim/%s/ and never "
+            "mentions `%s`. The record has to be about the campaign it "
+            "excuses.\n" % (dr_rel, campaign, campaign)
+        )
+        continue
+
+    reargued_with_records.append((campaign, dr_rel, len(found)))
 
 
 def parse_grep(command):
@@ -410,16 +535,24 @@ for doc in graded:
 if failed:
     sys.exit(1)
 
+if reargued_with_records:
+    carrying = "; ".join(
+        "sim/%s (%d record(s), re-argued in %s)" % (c, n, dr)
+        for c, dr, n in sorted(reargued_with_records)
+    )
+else:
+    carrying = "none of the deviating ones carrying a record"
+
 print(
-    "OK: %d REF-driving decks under %s (%d ideal, %d deviating, none of the "
-    "deviating ones carrying a record); %d quoted REF-enumerating command(s) "
-    "across %d uniformity claim(s) reach every deck their own pattern matches, "
-    "and every claim names its exceptions"
+    "OK: %d REF-driving decks under %s (%d ideal, %d deviating, %s); %d quoted "
+    "REF-enumerating command(s) across %d uniformity claim(s) reach every deck "
+    "their own pattern matches, and every claim names its exceptions"
     % (
         len(decks),
         " / ".join(DECK_GLOBS),
         len(decks) - len(deviations),
         len(deviations),
+        carrying,
         commands_checked,
         claims_checked,
     )
