@@ -1767,12 +1767,20 @@ SUBSET
     f(Vctrl) evidence (\`${VCO_TUNING#"${ROOT}/"}\`) by
     linear interpolation inside the one bracketing interval of the measured
     curve -- never extrapolated. For each (bundle, temperature) the band is
-    the single code that reaches ${KFOUT} Hz at **all three** supplies with
-    the control voltage closest to mid-window. Choosing it per (bundle,
-    temperature) rather than per corner is load-bearing: band select is a
-    static input with no calibration FSM (DR-001 Decision 2), so re-choosing
-    it when the supply moves would measure a different configuration at each
-    supply and call the difference "supply sensitivity".
+    the **lowest** code that reaches ${KFOUT} Hz at **all three** supplies
+    inside DR-003 Decision 5's measured 0.9-2.7 V control window -- i.e.
+    \`spec/pll.md\`'s normative [Band-selection rule], applied rather than
+    approximated. Choosing it per (bundle, temperature) rather than per corner
+    is load-bearing: band select is a static input with no calibration FSM
+    (DR-001 Decision 2), so re-choosing it when the supply moves would measure
+    a different configuration at each supply and call the difference "supply
+    sensitivity". **Until #511/DR-024 this derivation used a mid-window
+    heuristic instead of the rule**, and the two disagree at exactly one of
+    the 15 cells -- \`ff\`/27 C, the cell carrying the largest settled
+    violation of the ratified <= 1 ns Lock criterion on the committed grid.
+    Any record minted before that change describes a band-6 configuration
+    there that the rule does not select; see
+    \`sim/supply-sensitivity/records/20260925-090649-4422f1d.md\`.
   - **The warm start is calibrated against THIS DUT, not assumed from #8.**
     #8's f(Vctrl) table is measured on the STANDALONE VCO, whose \`CLK\` drives
     only its own output buffer; inside \`pll_top\` the same \`CLK\` also drives

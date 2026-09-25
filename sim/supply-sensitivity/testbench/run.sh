@@ -678,16 +678,44 @@ in_grid() {
 # input with no calibration FSM (DR-001 Decision 2), so it cannot be re-chosen
 # when the supply moves, and picking it per supply would measure a different
 # configuration at each supply point and call the difference "supply
-# sensitivity".  The chosen code is the one that reaches the target frequency
-# at ALL THREE supplies with the control voltage as close to mid-window as
-# possible; the per-supply control voltage it implies is the warm start.
+# sensitivity".  The chosen code is **the lowest band code that reaches the
+# target frequency at all three supplies inside the control window** -- i.e.
+# `spec/pll.md`'s normative [Band-selection rule], applied rather than
+# approximated.  The per-supply control voltage it implies is the warm start.
+#
+# THIS USED TO BE A MID-WINDOW HEURISTIC, AND THE DIFFERENCE MATTERED (#511,
+# DR-024).  Until that issue this function picked the band whose control
+# voltage was closest to the midpoint of the search window -- a selector that
+# is not the rule and was the only band selector in `sim/` that was not
+# (`sim/pll-top-smoke` states and applies the rule by name).  The two agree at
+# 14 of the 15 (bundle, temperature) cells at KFOUT, and disagree at exactly
+# one: `ff`/27 C, where the heuristic chose band 6 (Vctrl 1.008-1.394 V) and
+# the rule chooses band 5 (1.967-2.595 V).  That is the cell carrying the
+# largest settled violation of the ratified <= 1 ns Lock criterion on the
+# committed grid (1.227 ns at 3.63 V), and the open-loop systematic term
+# `sim/pfd-deadzone` measures at the two control voltages differs by 2.7x -- so
+# the heuristic was measuring a configuration no compliant part carries, at the
+# one cell where it changes a spec verdict.  See
+# `sim/supply-sensitivity/records/20260925-090649-4422f1d.md`.
+#
+# THE WINDOW IS DR-003 DECISION 5'S **MEASURED** 0.9-2.7 V, not DR-001
+# Decision 2's predicted 0.9-2.4 V.  `spec/pll.md` states the rule without
+# naming a window, and the choice is load-bearing: under the predicted window
+# the rule has NO answer at 4 of the 15 cells at 100 MHz (no single static band
+# reaches it across the ratified rail without leaving that window), so the
+# measured window is the only reading under which the rule is satisfiable.
+# The old default bottom edge was 0.85 V, 50 mV below either ratified window.
 #
 # Prints: bundle,temp_c,band,vctrl_2.97,vctrl_3.30,vctrl_3.63
 # A (bundle, temperature) row for which NO band reaches the target at all three
-# supplies inside the search window is printed with band = -1, and the caller
-# treats that as a campaign-level finding rather than papering over it.
+# supplies inside the window is printed with band = -1, and the caller treats
+# that as a campaign-level finding rather than papering over it.
+#
+# Where the rule and the retired heuristic disagree, a note is written to
+# stderr naming the cell and both bands, so a run that lands on the one
+# contested cell says so in its own log rather than only in this comment.
 derive_op_points() {
-  local target="$1" lo="${2:-0.85}" hi="${3:-2.70}"
+  local target="$1" lo="${2:-0.90}" hi="${3:-2.70}"
   awk -F, -v target="${target}" -v LO="${lo}" -v HI="${hi}" '
     !/^#/ && $1 != "bundle" {
       b=$1; t=$2; v=$3; bd=$4; vc=$5; f=$6;
@@ -711,7 +739,11 @@ derive_op_points() {
       ns = split("2.97 3.30 3.63", SU, " ");
       mid = 0.5 * (LO + HI);
       for (bi = 1; bi <= nb; bi++) for (ti = 1; ti <= nt; ti++) {
-        bestband = -1; bestcost = 1e9; bestline = ",,,";
+        # ruleband: the LOWEST feasible code -- the normative rule.
+        # heurband: the retired mid-window pick, computed only so a
+        #           disagreement can be REPORTED; it never sets the answer.
+        ruleband = -1; ruleline = ",,,";
+        heurband = -1; heurcost = 1e9;
         for (bd = 0; bd <= 7; bd++) {
           ok = 1; cost = 0; line = "";
           for (si = 1; si <= ns; si++) {
@@ -723,9 +755,15 @@ derive_op_points() {
             if (d > cost) cost = d;
             line = line sprintf(",%.4f", vv);
           }
-          if (ok && cost < bestcost) { bestcost = cost; bestband = bd; bestline = line }
+          if (!ok) continue;
+          if (ruleband == -1) { ruleband = bd; ruleline = line }
+          if (cost < heurcost) { heurcost = cost; heurband = bd }
         }
-        printf "%s,%s,%d%s\n", BU[bi], TE[ti], bestband, bestline;
+        if (ruleband != -1 && heurband != -1 && ruleband != heurband)
+          printf "supply-sensitivity: band-selection rule picks B%d at %s/%s C" \
+                 " (the retired mid-window heuristic picked B%d) -- see DR-024\n", \
+                 ruleband, BU[bi], TE[ti], heurband > "/dev/stderr";
+        printf "%s,%s,%d%s\n", BU[bi], TE[ti], ruleband, ruleline;
       }
     }' "${VCO_TUNING}"
 }
