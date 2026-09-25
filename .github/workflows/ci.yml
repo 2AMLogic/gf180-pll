@@ -254,16 +254,33 @@ jobs:
         # proposal described a part that could not be configured into its own
         # ratified spec" (DR-015) -- with a stale 18-of-24 slot total beside it.
         #
-        # Five rules: every exported port is mapped by a pad row; every signal
-        # a pad row names is a real port; the `.subckt pll_top` line the
-        # document quotes is the netlist's ports in the netlist's order; a pad
-        # row's "K of M" count equals the signals beside it; and every port is
-        # named somewhere in section 4's bench test plan. The last rule found
-        # the drift DR-015 handed to "future harness integration work" and
-        # nobody picked up: the plan named neither LDT0-LDT3 nor the four bias
-        # references IBN/ICN/IBP/ICP, so it described a bench that could not
-        # power the charge pump and a lock-detector step that compared an
-        # untrimmed part against a spec which says such a part is outside it.
+        # Five rules on the pin mapping: every exported port is mapped by a pad
+        # row; every signal a pad row names is a real port; the `.subckt
+        # pll_top` line the document quotes is the netlist's ports in the
+        # netlist's order; a pad row's "K of M" count equals the signals beside
+        # it; and every port is named somewhere in section 4's bench test plan.
+        # The last of those found the drift DR-015 handed to "future harness
+        # integration work" and nobody picked up: the plan named neither
+        # LDT0-LDT3 nor the four bias references IBN/ICN/IBP/ICP, so it
+        # described a bench that could not power the charge pump and a
+        # lock-detector step that compared an untrimmed part against a spec
+        # which says such a part is outside it.
+        #
+        # Four more on the budget accounting, because #441's stale row count
+        # came with a stale slot total and a stale configuration-bit sentence
+        # two sections away: every pad row's Challenge slot is a category
+        # section 2.2's own transcribed budget names (and any cap it quotes is
+        # that category's); each category's total equals the sum of the rows
+        # carrying it, with "(proposed)" rows counting toward the upper figure
+        # of a range only; every transcribed category is totalled somewhere;
+        # and section 2.3's "N configuration bits (...)" count is its own bus
+        # list expanded, with an omitted pin explained in the same bullet. The
+        # taxonomy is read out of the document, never encoded in the check, so
+        # amending the transcription moves what CI enforces in the same commit.
+        # Those rules found the rail rows sitting in a slot -- "3.3 V digital
+        # rail" -- that the budget does not have, with the five supply/ground
+        # pads missing from a totals paragraph that claims to cover every
+        # category.
         # Needs python3 (set up above); reads one committed netlist and one
         # committed Markdown file, no PDK, no xschem.
         run: bash design/lib/check-io-list-coverage.sh
