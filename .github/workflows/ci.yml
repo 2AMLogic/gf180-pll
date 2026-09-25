@@ -333,6 +333,37 @@ jobs:
         # No PDK, no ngspice, no KLayout.
         run: bash sim/lib/check-pvt-coverage-claims.sh
 
+      - name: sim/lib/check-ref-drive-claims.sh (quoted reproduction commands vs. the decks they promise)
+        # The seven checks above grade what a document says, where it was
+        # measured, what it cites, and what the forge holds. None grades the
+        # one thing a document can offer that looks strongest of all: a shell
+        # command the reader is invited to run.
+        #
+        # docs/chipalooza/challenge-5-proposal.md's Reference input row and
+        # spec/decision-records/DR-019's Context both rested on
+        # `grep -n '^vref ' sim/*/testbench/*.sp` returning one reference
+        # waveform shape in every deck -- the basis for the claim that the
+        # ratified Reference input contract's levels, edge rate and duty are
+        # conditions nothing has ever varied, and with it for every jitter and
+        # spur number in the document being the block's own contribution
+        # against an ideal reference. The command did return one shape. This
+        # repository held thirteen REF-driving decks, and the one that varies
+        # the waveform is `.spice` while the glob says `*.sp` -- so the command
+        # quoted as proof could not return the counterexample, which had landed
+        # in the same commit (#518, issue #499) that wrote both sentences.
+        #
+        # Five rules: the deck scan must find decks at all; a quoted command's
+        # glob may not be outreached by its own pattern (only the extension is
+        # relaxed, never the directory); a deviating deck must be named by any
+        # document claiming uniformity; an unscoped uniformity claim must hold
+        # over every deck its command can reach, union the widening, so
+        # re-narrowing the glob is not a way out; and -- the rule that needs no
+        # wording at all -- a deck that varies the reference waveform must
+        # carry no record. Its unit tests run under `bash sim/selftest.sh`
+        # above (sim/tests discovery). Needs python3 (set up above); reads
+        # committed SPICE decks and committed Markdown, no PDK, no ngspice.
+        run: bash sim/lib/check-ref-drive-claims.sh
+
       - name: docs/tests (unit tests for the issue-reference-state check)
         # Same shape as the three discover steps above, for the check added in
         # #237 that grades what the outward-facing documents claim about the

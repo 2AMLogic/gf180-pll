@@ -20,12 +20,18 @@ measurement:
 | Duty cycle | 30 – 70 % | argued from `design/pfd.sch` (rising-edge-only detectors), not measured |
 | Source quality | excluded from the jitter and spur budgets | an explicit assumption, not a number |
 
-That is not an oversight in the record-keeping: **no simulation in this
-repository has ever varied any of the three.** Every testbench here that drives
-`REF` drives it identically — `grep -n '^vref ' sim/*/testbench/*.sp` returns
-the same `pulse(0 <vdd> <tstart> 200p 200p <half-period> <period>)` shape in
-every one — so the reference is ideal by construction in every jitter, spur and
-phase number this repository reports.
+That is not an oversight in the record-keeping: **no simulation *result* in
+this repository has ever varied any of the three.** Every testbench here that
+has produced a record drives `REF` identically —
+`grep -n '^vref ' sim/*/testbench*/*.sp sim/*/testbench*/*.spice` returns 13
+decks, 12 of them the same
+`pulse(0 <vdd> <tstart> 200p 200p <half-period> <period>)` shape — so the
+reference is ideal by construction in every jitter, spur and phase number this
+repository reports. The thirteenth is this record's own campaign deck,
+`sim/reference-input-contract/testbench/tb_reference_input_contract.spice`,
+which varies the waveform on purpose and carries no record (§"What now
+exists"). See Amendment A1 for why this paragraph is scoped to records rather
+than to decks, and why its command names both deck extensions.
 
 **Two separate defects follow from that, and this record addresses the one that
 is a spec defect.**
@@ -234,3 +240,46 @@ stays **UNMET**.
   re-derive, and the candidate levers are the reference contract itself
   (tightening the ≤ 5 ns edge-rate budget) or the PFD input path. Widening the
   static-phase bound to fit the result is not one of them.
+
+## Amendment A1 — the REF-drive premise is scoped to records, and its reproduction command reaches both deck extensions (issue #237)
+
+**Date**: 2026-09-25. **No decision, target, budget or verdict moves.** This
+amendment corrects a factual imprecision in §Context that this record's own
+§"What now exists" already contradicted on the day it was written.
+
+§Context asserted its uniformity over the *decks* this repository holds rather
+than over the *records* they produced, and offered a `.sp`-only glob over
+`sim/*/testbench/` as the reproduction. (Neither the superseded sentence nor
+its glob is reproduced here: the check described below cannot tell a document
+asserting a claim from one quoting it, and `git log -p` on this file is where
+the exact prior wording belongs.) Both halves were wrong in the same way, and
+in this record's own favour:
+
+- **The claim was about decks when the premise it supports is about records.**
+  The campaign this record lands exists precisely to vary the reference
+  waveform. Its deck was committed by the same PR (#518) that wrote the
+  sentence, so the sentence was false about decks from the moment it was
+  written — while the thing it is used for, that every jitter, spur and phase
+  number in this repository was measured against an ideal reference, was and
+  remains true, because that deck has produced no record.
+- **The reproduction command could not return the counterexample.** This
+  repository writes SPICE decks as both `.sp` and `.spice` (`sim/harness/batch.py`
+  loops `for f in *.spice *.sp` for exactly that reason); the campaign deck is
+  `.spice`, and the quoted glob says `*.sp`. The command therefore returned ten
+  decks of one shape and read as a confirmation. A reproduction command offered
+  as evidence has to be able to return the thing that would disprove it.
+
+Both are corrected in place above: the premise is scoped to testbenches that
+have produced a record, and the command names both extensions and both
+`testbench*/` directories — 13 decks, 12 of one shape, the deviating one named.
+
+`docs/chipalooza/challenge-5-proposal.md`'s Reference input row carried the
+same sentence and the same glob, transcribed from here, and is corrected in the
+same change. `sim/lib/check-ref-drive-claims.sh` now grades both documents in
+CI: a quoted command's glob may not be outreached by its own pattern, an
+unscoped uniformity claim must hold over every deck its command can reach, a
+deviating deck must be named, and — the rule that needs no wording at all — a
+deck that varies the reference waveform must carry no record. The last is the
+one that guards this record's actual premise; if it ever fires, the
+source-quality exclusion of Decision 3 has to be re-argued rather than
+re-asserted.
