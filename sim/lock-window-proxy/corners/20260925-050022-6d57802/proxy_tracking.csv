@@ -1,0 +1,18 @@
+# at the trim rule's reference condition (27 C, nominal supply): how far each bundle's window sits from typical's, and how far each candidate pad-referred observable does
+# twin_rel_to_typical is the geometric mean, over all sixteen codes, of this bundle's t_win divided by typical's t_win at the same code. Its spread across the bundles is the process variation the trim exists to remove.
+# <candidate>_rel is the same ratio for the candidate observable. <candidate>_residual = twin_rel / <candidate>_rel, which is 1 exactly when the candidate is a perfect stand-in. A residual FURTHER from 1 than twin_rel itself means the candidate is worse than measuring nothing: it moves the estimate the wrong way.
+# ring_a and ring_b are ring PERIODS in ns; clk_fb and clk_do are CLK-referred skews in ns, recovered modulo the ring period.
+bundle,twin_rel_to_typical,ring_a_ns,ring_a_rel,ring_a_residual,ring_b_ns,ring_b_rel,ring_b_residual,clk_fb_ns,clk_fb_rel,clk_fb_residual,clk_do_ns,clk_do_rel,clk_do_residual
+all-fast,0.8816,15.312,0.76684,1.1497,1.9886,0.75422,1.1689,0.20941,0.78225,1.127,1.0487,0.80146,1.1
+all-slow,1.1601,23.951,1.1995,0.96721,3.2318,1.2258,0.94646,0.3113,1.1629,0.99763,1.488,1.1372,1.0201
+ff,0.8816,20.86,1.0447,0.84392,2.7507,1.0433,0.84503,0.1491,0.55698,1.5828,1.0187,0.77855,1.1324
+fs,1.0143,19.56,0.97955,1.0355,2.6336,0.99889,1.0155,0.25691,0.95973,1.0569,1.2606,0.96341,1.0528
+mimcap_ff,1,19.968,1,1,2.6366,1,1,0.2677,1,1,1.3085,1,1
+mimcap_ss,1,19.968,1,1,2.6366,1,1,0.2677,1,1,1.3085,1,1
+moscap_ff,1,19.968,1,1,2.6366,1,1,0.2677,1,1,1.3085,1,1
+moscap_ss,1,19.968,1,1,2.6366,1,1,0.2677,1,1,1.3085,1,1
+res_ff,1,14.505,0.72638,1.3767,1.9751,0.7491,1.3349,0.26205,0.97892,1.0215,1.2215,0.93357,1.0712
+res_ss,1,25.334,1.2687,0.78821,3.3574,1.2734,0.78529,0.23345,0.87207,1.1467,1.2599,0.96293,1.0385
+sf,0.99961,20.305,1.0169,0.98302,2.6464,1.0037,0.99591,0.2383,0.89019,1.1229,1.2912,0.98678,1.013
+ss,1.1601,18.716,0.9373,1.2377,2.5892,0.98202,1.1814,0.31235,1.1668,0.99428,1.5079,1.1524,1.0067
+typical,1,19.968,1,1,2.6366,1,1,0.2677,1,1,1.3085,1,1
