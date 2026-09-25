@@ -115,6 +115,16 @@ DEFAULT_JOBS_PREFIX = "jobs"
 
 
 def _default_runner(argv: Sequence[str], **kwargs) -> subprocess.CompletedProcess:
+    """Run one transport command, capturing its output.
+
+    **``capture_output`` / ``text`` / ``check`` are this function's to set, and
+    a call site must not repeat them** -- ``subprocess.run`` rejects a
+    duplicated keyword with ``TypeError: got multiple values for keyword
+    argument``, which is a submission that dies *after* its inputs are already
+    uploaded. See the regression test in ``sim/tests/test_execution_backend.py``
+    (``StrictRunnerSignatureTests``), which applies these keyword rules to
+    every call site the submission path makes.
+    """
     return subprocess.run(
         list(argv), capture_output=True, text=True, check=False, **kwargs
     )
@@ -465,11 +475,12 @@ class BatchBackend:
             )
 
     def _launch(self, plan: JobPlan) -> None:
-        # No ``capture_output``/``text``/``check`` here: the runner protocol
-        # owns those (see ``_default_runner``), and re-supplying them through
-        # ``**kwargs`` makes ``subprocess.run`` receive each one twice --
-        # ``TypeError: got multiple values for keyword argument``. ``_aws()``
-        # forwards kwargs untouched for the same reason.
+        # No subprocess keywords here: `_default_runner` already applies
+        # capture_output/text/check, and repeating them made every real
+        # submission die with `TypeError: subprocess.run() got multiple values
+        # for keyword argument 'capture_output'` -- after `_upload` had already
+        # put the job document and inputs in the bucket. Every other call site
+        # passes argv alone; this one is now uniform with them.
         proc = self._run(
             [
                 str(self.config.provision_script),

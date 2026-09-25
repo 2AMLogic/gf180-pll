@@ -96,6 +96,7 @@ sim/
   | `output-range` | closed-loop output-band coverage | #12 |
   | `period-jitter` | period jitter (deterministic + random), at 150 MHz / band 6 / N = 6 | #13 |
   | `period-jitter-band-top` | the same deterministic period jitter at the **200 MHz top of the ratified band** — N = 8, and the VCO band code per corner because `spec/pll.md`'s band-selection rule splits this grid across bands 6 and 7 | #13 |
+  | `reference-input-contract` | the `REF` electrical contract itself — levels, 10–90 % edge rate and duty cycle driven to each boundary `spec/pll.md` states, graded as the per-corner shift of the PFD's reference-path set delay. **Declared, not measured**: manifest, deck and reduction are committed and self-checking, zero of 288 declared points have run | #499 → DR-019 |
   | `supply-sensitivity` | supply pushing, quiescent/dynamic power | #14 |
   | `mc-cp-mismatch` | charge-pump mismatch distribution | #15 |
   | `reference-spur` | closed-loop reference spur measured directly, as the ±f_ref sidebands of the locked output spectrum | #145 |

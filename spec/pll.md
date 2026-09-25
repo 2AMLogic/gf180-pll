@@ -168,7 +168,7 @@ top cell, port list, netlist/GDS paths, measured area, maturity rung — is
 | # | Parameter | v1 target | Corner binding | Status |
 |---|---|---|---|---|
 | 1 | [Output band](#output-band) | 10 – 200 MHz, continuous | floor `all-fast`/125 °C/2.97 V (6.449 MHz, 36 % below the line); ceiling `all-slow`/−40 °C/3.63 V (247.8 MHz, 24 % above) | **measured** |
-| 2 | [Reference input](#reference-input) | 1 – 25 MHz, CMOS square wave, rising-edge triggered, duty 30–70 % | n/a — interface contract; the electrical limits are conditions on the driving system, not PVT-varying outputs | **budget** (levels/edge rate); range is **measured** as an operating condition of rows 8/9 |
+| 2 | [Reference input](#reference-input) | 1 – 25 MHz, CMOS square wave, rising-edge triggered, duty 30–70 % | n/a — interface contract; the electrical limits are conditions on the driving system, not PVT-varying outputs | **budget** (levels, edge rate **and** duty — duty is argued from `design/pfd.sch`, not measured); range is **measured** as an operating condition of rows 8/9. The sweep that would discharge all three is declared and unmeasured at `sim/reference-input-contract`, owed from #499; DR-019 re-points that obligation off closed issue #12 and restates the reference-source-quality exclusion with its owner |
 | 3 | [Multiplication ratio](#multiplication-ratio) | N = 4 – 64, every integer, static configuration | retiming setup `ss`/125 °C/2.97 V at N = 64, 200 MHz (6.1 % of a VCO period) | **measured** |
 | 4 | [Integrated RMS jitter](#integrated-rms-jitter) | **not spec'd** — derived-only (DR-002 Decision 5) | n/a — deliberately unspecified; see the section for why this is visible rather than silent | **n/a** |
 | 5 | [Period jitter](#period-jitter) | ≤ 1.0 % of the output period, RMS, **conditional on ≤ 20 mV pp `vdd_vco` ripple** | `all-slow`/−40 °C/2.97 V, band 5 (2.51 % RMS at 100 mV pp ripple, open-loop); closed-loop deterministic jitter measured at all 45 mandated PVT corners, 0.0508–0.2691 % RMS, PASS at every corner (`sim/period-jitter/`, #13) | **measured** (sensitivity); **derived** (the ripple condition) |
@@ -370,10 +370,23 @@ outputs**, hence the `n/a` corner binding:
 | Item | v1 requirement | Basis |
 |---|---|---|
 | Waveform | CMOS square wave into `REF`, referenced to the `vdd_ref` domain | design intent |
-| Levels | V_IL ≤ 0.2·VDD, V_IH ≥ 0.8·VDD | budget — no input-threshold sweep exists |
-| Edge rate | ≤ 5 ns, 10–90 % | budget |
-| Duty cycle | 30 – 70 % | the PFD's edge detectors fire on the **rising** edge only (`design/pfd.sch`), so duty affects only pulse-width margin, not the sampled phase |
+| Levels | V_IL ≤ 0.2·VDD, V_IH ≥ 0.8·VDD | **budget** — `sim/reference-input-contract` declares the sweep; no point of it is measured (DR-019) |
+| Edge rate | ≤ 5 ns, 10–90 % | **budget** — same campaign, same state |
+| Duty cycle | 30 – 70 % | **argued, not measured**: the PFD's edge detectors fire on the **rising** edge only (`design/pfd.sch`), so duty affects only pulse-width margin, not the sampled phase. `sim/reference-input-contract` states that argument falsifiably — the sampled phase must shift by ≤ 1 % of the reference-path set delay between 30 %, 50 % and 70 % duty — and does not yet test it |
 | Source quality | **excluded from the jitter and spur budgets** — see below | explicit assumption, see rationale |
+
+**None of the three lines above is measured**, and until DR-019 they were owed
+from a closed issue on an unrelated subject (#12), which read as discharged.
+The campaign that would discharge them now exists as a committed, self-checking
+manifest and deck with **zero measured points** — `sim/reference-input-contract`
+holds the DUT at `sim/pfd-deadzone`'s operating point and sweeps the `REF`
+*waveform* to each boundary of this table, grading the per-corner shift of the
+reference-path set delay `d_ref` (the interval from the reference edge's
+mid-rail crossing to the instant the PFD acts on it — i.e. the phase the
+detector sampled) against the 1 ns static-phase bound of the
+[Lock criterion](#lock-time). A campaign directory is not evidence; see
+[Verification owed](#verification-owed) for what is owed against each line, and
+#499 for the measurement.
 
 **Reference-source quality assumption (the "[no recorded value]" item, resolved
 as an explicit exclusion rather than an invented number).** No
@@ -384,9 +397,32 @@ jitter and spur number in this file is the block's own contribution, measured
 or derived against an ideal reference.** Reference phase noise inside the loop
 bandwidth transfers to the output multiplied by `20·log₁₀(N)` = 12 dB at N = 4
 to 36 dB at N = 64, so a system integrating this block must budget its
-reference against that multiplication itself. Converting this assumption into a
-numeric reference-jitter limit requires the closed-loop bench (#12) and is
-named in [Verification owed](#verification-owed).
+reference against that multiplication itself.
+
+**What this exclusion does and does not cover (DR-019 Decision 3).** It
+excludes the *reference source's* own phase noise. It does **not** license this
+block's reference-input path to contribute: that path's contribution is inside
+this block's budget, not the integrator's, and is what
+`sim/reference-input-contract` measures. Two things follow for an integrating
+system, and the second is not covered by the `20·log₁₀(N)` line above:
+
+- a reference whose edges sit at the ≤ 5 ns budget converts its own **amplitude**
+  noise into timing noise at the input, at a rate set by the mid-rail slope —
+  the campaign reports that coefficient per corner as `dtdv_worst`, in seconds
+  of sampling-instant displacement per volt, so it can be budgeted; a reference
+  with fast edges does not pay it;
+- a reference well inside the contract still moves the *locked* reference-to-output
+  phase by whatever `d_ref` shift its waveform causes, which is a static offset
+  rather than jitter.
+
+Converting the exclusion into a numeric reference-jitter limit requires the
+closed-loop noise bench. This paragraph previously pointed that at **#12**,
+which is closed and was never about it. It is **not** re-pointed at #13 either:
+#13 is *also* closed (2026-09-08), and its own successor gap is #505. The
+honest state is that the numeric limit is **unowned**, sequenced behind the
+noise methodology at #505 — and [Verification owed](#verification-owed) now
+records it that way. Naming a plausible-looking owner is what hid this
+obligation twice; an empty owner column is the more useful fact.
 
 ## Multiplication ratio
 
@@ -1553,7 +1589,8 @@ to reconstruct it from the status column.
 | [Period jitter](#period-jitter) | the **output-band** axis of that sweep — the temperature × supply axis is retired by the row above, but every measured closed-loop point is at band 6 / f_out = 150 MHz, so no jitter number exists at the binding f_out = 200 MHz top of [Output band](#output-band), and the open-loop band sweep (B0 → B6) remains nominal temperature and supply only. The 200 MHz sweep is now a declared campaign of its own, `sim/period-jitter-band-top` — its 45-point grid, manifest, deck and per-corner operating-point derivation are committed and self-checking, and **every measured point of it is still owed** (`sim/CHARACTERIZATION.md`'s "Period jitter — band sweep at non-nominal temp/supply" row). That derivation already shows the normative [band-selection rule](#band-selection-rule) does not hold one band code across the 200 MHz grid (band 6 at 34 of the 45 points, band 7 at the other 11), so the loop gain the one fixed filter sees varies 1.6× across it against 1.05× across the 150 MHz grid | #13 (`period-jitter-band-top`) |
 | [Reference spur](#reference-spur) | the remaining 40 PVT points, and a direct measurement at the binding f_out = 200 MHz rather than the 150 MHz one static band code holds across corners — the closed-loop measurement itself now exists (`sim/reference-spur/records/20260816-132150-5f405e7.md`, 5 spanning corners), and the two cold corners do not clear −55 dBc once scaled to 200 MHz | #145 (`reference-spur`) |
 | [Lock time](#lock-time) | cold-start acquisition including cycle slipping — the closed-loop measurement itself now exists (`sim/lock-time/records/20260831-052456-effc505.md`, full 270-run PVT × N grid against the design's own `lock_detector` criterion): 22 PASS / 233 FAIL / 15 ERROR of 270; most `cold` FAILs read as a transient window too short for the detector to assert rather than a broken loop, and the majority of `relock` FAILs are not yet attributed to a cause (see `sim/CHARACTERIZATION.md`'s `lock-time` row and #284). **The re-take of that grid is no longer held.** DR-013 Decision 7 held it until #411 landed a window meeting Decision 4's ≤ 1.65× spread target, because the grid's verdicts are taken against the design's own `lock_detector` and would otherwise be read against a window that was about to move. #411 has landed that window (`sim/lock-detector/records/20260919-002812-1b12179.md`, observable spread 1.53–1.58×, T1′ and T2′ both met), so the hold is **released** and the re-take is owed on its own merits. Anyone re-running it must configure the lock detector's trim per the [Lock-detector window trim-code rule](#lock-detector-window-trim-code-rule) — the 233 FAILs above were taken against the untrimmed cell and are not comparable point-for-point to a re-take at the rule's codes | #163 (`lock-time`); hold released by #411 |
-| [Reference input](#reference-input) | input thresholds/edge-rate sweep; a numeric reference-jitter limit to replace the current exclusion | #12 |
+| [Reference input](#reference-input) | **the input-threshold / edge-rate / duty sweep** — every point of it. `sim/reference-input-contract`'s manifest, deck and reduction are committed and self-checking, and **zero of its 288 declared points are measured** (the full mandated 45-point PVT grid × six `REF` waveform variants — the ideal pulse every other record here drives, plus one at each stated boundary of the [Reference input](#reference-input) contract and one at all three at once — plus an 18-point detector-gain slice at three corners). What is owed there is compute, not mechanism or design. The three lines it would discharge stay **budget** until it has a record; a campaign directory is not evidence | **#499** (`reference-input-contract`) |
+| [Reference input](#reference-input) | a numeric reference-jitter limit to replace the current exclusion — which needs the closed-loop noise bench, i.e. this repository's noise methodology, **not** the closed-loop lock bench. **It has no owner, and this row now says so rather than naming one.** Its prerequisite is the noise methodology tracked at #505 (itself the successor to issue #13, which is closed too); the reference-jitter limit is a further measurement on top of that and is unowned today. The exclusion itself is defensible and is restated with its boundary in [Reference input](#reference-input); what is owed is the number, and its input-side half (`dtdv_worst`, the AM-to-PM coefficient at the worst legal reference slope) is a deliverable of the campaign in the row above | **unowned** — sequenced behind #505 |
 | [Power](#power) | a measured `vdd_ref` domain current, and a closed-loop total | #14 (`supply-sensitivity`) |
 | [Output duty cycle](#output-duty-cycle) | the design does not meet its own 45 % floor at 7/90 measured points (`fs` bundle, `lo` edge, nominal-or-above supply); post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the measurement itself now exists (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |
 | [Output levels and drive](#output-levels-and-drive) | post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the loaded-output swing/edge-rate measurement itself now exists and PASSES at every point (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |
