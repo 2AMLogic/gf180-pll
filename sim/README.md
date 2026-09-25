@@ -95,7 +95,7 @@ sim/
   | `pll-top-smoke` | does the assembled `design/pll_top.sch` acquire and hold lock at all — the acceptance gate for the top-level wiring, **one nominal corner by design** (see below) | #52 |
   | `lock-time` | closed-loop lock acquisition | #12 |
   | `output-range` | closed-loop output-band coverage | #12 |
-  | `period-jitter` | period jitter (deterministic + random), at 150 MHz / band 6 / N = 6 | #13 minted the six committed records (deterministic half, 45/45); the random half is owed at **#505**, disposition in DR-020 |
+  | `period-jitter` | period jitter (deterministic + random), at 150 MHz / band 6 / N = 6 | #13 minted the six committed records (deterministic half, 45/45); the random half is owed at **#520** (open) — #505, which carried it before, closed 2026-09-25 — disposition in DR-020, narrowed by DR-023 |
   | `period-jitter-band-top` | the same deterministic period jitter at the **200 MHz top of the ratified band** — N = 8, and the VCO band code per corner because `spec/pll.md`'s band-selection rule splits this grid across bands 6 and 7 | **#503** (the campaign run); declared by #13, which is closed |
   | `reference-input-contract` | the `REF` electrical contract itself — levels, 10–90 % edge rate and duty cycle driven to each boundary `spec/pll.md` states, graded as the per-corner shift of the PFD's reference-path set delay. **Declared, not measured**: manifest, deck and reduction are committed and self-checking, zero of 288 declared points have run | #499 → DR-019 |
   | `supply-sensitivity` | supply pushing, quiescent/dynamic power | #14 |
@@ -894,14 +894,20 @@ A **recorded methodology gap** instead of a number (#13):
 ```
 
 > This example stopped being hypothetical. The six committed `period-jitter`
-> records each carry exactly this shape, and **DR-020** ratifies the last
+> records each carry exactly this shape, and **DR-020** adopts the last
 > sentence of its Methodology field — the jitter claim *is* stated as
-> deterministic-only in simulation, with the random half deferred to silicon
-> (`measurements/`), the ≤ 1.0 % RMS target unchanged, and the gap owed at
-> **#505**. The finding is stronger than the wording above: it is not that
-> the transient-noise estimate fails to converge, it is that ngspice has no
-> transient device-noise analysis to converge, and its `.noise` analysis
-> needs a DC operating point a free-running oscillator does not have.
+> deterministic-only in simulation, with the ≤ 1.0 % RMS target unchanged.
+> The gap is owed at **#520** (open); DR-020 named #505 instead, which closed
+> the day DR-020 landed. The finding is stronger than the wording above: it is
+> not that the transient-noise estimate fails to converge, it is that
+> `.option TRANNOISE=1` injects no device noise into a transient on this
+> build at all. **DR-023** then narrowed DR-020's reason, on committed,
+> re-runnable probes (`sim/period-jitter/noise-toolchain-probe/`): `.noise`
+> *does* report per-device thermal and flicker PSDs at a bias point, and what
+> is missing is a periodic-steady-state / `pnoise` path to weight them over
+> the oscillation cycle — so the routes #520 lists are a noise-referral
+> pipeline, a toolchain that has that analysis, or a recorded negative
+> result, rather than silicon.
 
 A **distribution claim** with the statistical convention (#15):
 

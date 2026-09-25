@@ -65,12 +65,16 @@ Being honest about where this actually is:
   does **not** cover, stated rather than left to be inferred: the campaign's
   own Acceptance Criteria (#13) also require a **random/noise-driven** jitter
   component that no record measures — a disclosed methodology gap, tracked at
-  #520, whose disposition is
-  `spec/decision-records/DR-020-random-period-jitter-is-not-obtainable-on-this-toolchain.md`:
-  no analysis this project's open-source flow offers produces that component,
-  so the 1.0 % RMS line is satisfied in simulation for its deterministic half
-  only and the random half is deferred to silicon. The target itself is
-  unchanged. And every one of the campaign's records is at one output
+  #520. Its disposition was first recorded in
+  `spec/decision-records/DR-020-random-period-jitter-is-not-obtainable-on-this-toolchain.md`
+  and is narrowed by
+  `spec/decision-records/DR-023-random-period-jitter-owner-and-cyclostationary-gap.md`:
+  the open-source flow does report per-device noise PSDs at a bias point, but
+  has no periodic-steady-state noise analysis to carry them over the ring's
+  oscillation cycle, so no simulation here produces that component. The
+  1.0 % RMS line is therefore met in simulation for its deterministic half
+  only, and the 0.50 % RMS its own ripple derivation leaves for the random
+  half is an unverified budget. The target itself is unchanged. And every one of the campaign's records is at one output
   frequency, 150 MHz — the same measurement at the 200 MHz top of the
   ratified band is declared as `sim/period-jitter-band-top`, tracked at #503,
   and carries no measured record yet.

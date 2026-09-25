@@ -34,6 +34,8 @@ CHECK = DOCS_DIR / "lib" / "check-issue-reference-state.sh"
 
 PROPOSAL = "docs/chipalooza/challenge-5-proposal.md"
 README = "README.md"
+SIM_README = "sim/README.md"
+CHARACTERIZATION = "sim/CHARACTERIZATION.md"
 
 #: The forge fixture every test starts from: which numbers exist, and how.
 STATES = {
@@ -45,7 +47,8 @@ STATES = {
     297: "open",
     499: "open",
     503: "open",
-    505: "open",
+    505: "closed",
+    520: "open",
 }
 
 #: A `gh` that answers `gh api repos/OWNER/NAME/issues/N --jq .state` from a
@@ -84,7 +87,7 @@ def _gh_stub(states=None) -> str:
 
 def _proposal(section5_rows=None, section6="", section7="") -> str:
     rows = section5_rows if section5_rows is not None else (
-        ("Period jitter, random", "UNMET", "issue #505 (open)"),
+        ("Period jitter, random", "UNMET", "issue #520 (open)"),
     )
     lines = [
         "# Chipalooza Challenge #5 — integer-N PLL proposal",
@@ -121,6 +124,8 @@ class _Tree:
         self.set_forge(_gh_stub())
         self.write(PROPOSAL, _proposal())
         self.write(README, _readme())
+        self.write(SIM_README, "# sim\n\nCampaigns.\n")
+        self.write(CHARACTERIZATION, "# Characterization\n\nCoverage.\n")
 
     def set_forge(self, script: str) -> None:
         stub = self.bin / "gh"
@@ -200,6 +205,16 @@ class TestResolvableRule(_TreeTest):
     def test_the_readme_is_graded_too(self):
         self.tree.write(README, _readme("Routed to #542 by name."))
         self.assertFails("README.md", "#542")
+
+    def test_the_sim_documents_are_graded_too(self):
+        """sim/README.md's campaign table named closed #505 as an owner, and
+        nothing graded it: the check read only the proposal and README.md."""
+        for rel in (SIM_README, CHARACTERIZATION):
+            with self.subTest(rel=rel):
+                self.tree.write(rel, "# x\n\nThe random half is tracked at #505.\n")
+                self.assertFails("%s:3 hands work to #505" % rel)
+                self.tree.write(rel, "# x\n\nThe random half is tracked at #520.\n")
+                self.assertPasses()
 
 
 class TestStateAnnotationRule(_TreeTest):
@@ -285,6 +300,67 @@ class TestOwnershipRule(_TreeTest):
         )
         self.assertPasses()
 
+    def test_owed_at_a_closed_issue_is_caught(self):
+        """The real drift: sim/README.md said the random half "is owed at **#505**"
+        for as long as #505 had been closed, because "owed at" was not a phrase
+        the check recognised."""
+        self.tree.write(
+            PROPOSAL,
+            _proposal(section7="The random half is owed at **#505**."),
+        )
+        self.assertFails('hands work to #505 with "owed at", but #505 is closed')
+
+    def test_owed_by_and_owed_from_are_ownership_too(self):
+        for phrase in ("owed by", "owed from"):
+            with self.subTest(phrase=phrase):
+                self.tree.write(
+                    PROPOSAL, _proposal(section7="The sweep is %s #13." % phrase)
+                )
+                self.assertFails('with "%s", but #13 is closed' % phrase)
+
+    def test_owed_at_an_open_issue_passes(self):
+        self.tree.write(
+            PROPOSAL,
+            _proposal(section7="The random half is owed at **#520** (open)."),
+        )
+        self.assertPasses()
+
+    def test_past_tense_owed_is_exempt(self):
+        self.tree.write(
+            PROPOSAL,
+            _proposal(section7="Until 2026-09-25 it was owed at #505."),
+        )
+        self.assertPasses()
+
+    def test_owned_at_a_closed_issue_is_caught(self):
+        """The real drift: sim/CHARACTERIZATION.md's `owned at **#505**`."""
+        self.tree.write(
+            CHARACTERIZATION,
+            "# x\n\nThe owed item is a methodology, owned at **#505**.\n",
+        )
+        self.assertFails('hands work to #505 with "owned at"')
+
+    def test_a_closed_issue_the_document_marks_closed_is_not_an_owner(self):
+        """`owed from #499 ... (the successor to #505, itself closed)` names
+        #505 as history inside #499's ownership clause, and says so."""
+        for text in (
+            "The sweep is owed from **#499** (the successor to #505, itself closed).",
+            "The loop was routed to the now-closed #13 (owner **#297**).",
+            "The row is tracked at #297, not closed issue #13.",
+        ):
+            with self.subTest(text=text):
+                self.tree.write(PROPOSAL, _proposal(section7=text))
+                self.assertPasses()
+
+    def test_a_hyphenated_adjective_does_not_hide_a_closed_owner(self):
+        """Only named sibling repositories qualify a reference; an adjective
+        like `differently-shaped` in front of `#13` does not."""
+        self.tree.write(
+            PROPOSAL,
+            _proposal(section7="It is tracked at the differently-shaped #13."),
+        )
+        self.assertFails('hands work to #13 with "tracked at"')
+
     def test_an_ownership_clause_does_not_reach_the_next_paragraph(self):
         self.tree.write(
             PROPOSAL,
@@ -326,6 +402,20 @@ class TestSourceColumnRule(_TreeTest):
         self.assertPasses()
 
 
+class TestForeignRepositoryReferences(_TreeTest):
+    def test_a_sibling_repository_reference_is_not_graded_here(self):
+        """`klayout-tools #309` is not this repository's #309 -- which here is
+        a closed layout issue -- and must not be resolved against it."""
+        for text in (
+            "The tool is tracked at klayout-tools #309.",
+            "Filed upstream as 2AMLogic/klayout-tools #999.",
+            "Copied from gf180-bandgap #4242.",
+        ):
+            with self.subTest(text=text):
+                self.tree.write(CHARACTERIZATION, "# x\n\n%s\n" % text)
+                self.assertPasses()
+
+
 class TestForgeFailureModes(_TreeTest):
     def test_an_unreachable_forge_skips_rather_than_failing(self):
         """A rate-limited `gh` must not report every reference as missing."""
@@ -334,8 +424,13 @@ class TestForgeFailureModes(_TreeTest):
         self.assertIn("A skip is not a pass", result.stdout)
 
     def test_a_missing_graded_document_fails(self):
-        (self.tree.root / README).unlink()
-        self.assertFails("README.md does not exist")
+        for rel in (README, SIM_README, CHARACTERIZATION):
+            with self.subTest(rel=rel):
+                path = self.tree.root / rel
+                saved = path.read_text(encoding="utf-8")
+                path.unlink()
+                self.assertFails("%s does not exist" % rel)
+                path.write_text(saved, encoding="utf-8")
 
     def test_a_pull_request_number_resolves(self):
         """`gh api .../issues/N` answers for pull requests too, and must pass."""

@@ -648,24 +648,36 @@ more.
    150 MHz** — which matters because 200 MHz, not 150 MHz, is the end of
    the ratified band that binds. The random/noise-driven component is
    tracked at issue #520 and the 200 MHz band-top campaign at #503.
-   **DR-023 records the disposition of the first**: the random component is
-   not obtainable from any analysis this project's toolchain offers — ngspice
-   has no device-noise model in a transient analysis, its small-signal
-   `.noise` analysis needs a DC operating point a free-running oscillator
-   does not have, and its `trnoise()` source injects an amplitude the deck
-   author chooses. The ≤ 1.0 % RMS target is **not** relaxed by that record;
-   it is satisfied in simulation for its deterministic half only, with the
-   random half deferred to silicon or to a noise-referral pipeline this
-   project has not built. Until
+   **DR-020 recorded the disposition of the first, and DR-023 narrows its
+   reason without reversing it.** DR-020 found the random component not
+   obtainable from any analysis this project's toolchain offers — no device
+   noise in a transient analysis, a small-signal `.noise` analysis that needs
+   a DC operating point a free-running oscillator does not have, and a
+   `trnoise()` source whose amplitude the deck author chooses — and deferred
+   it to silicon or to a noise-referral pipeline this project has not built.
+   DR-023 re-measured those claims as committed, re-runnable probes
+   (`sim/period-jitter/noise-toolchain-probe/`, where DR-020 had run
+   inline, uncommitted ones) and located the gap more precisely: `.noise`
+   **does** report per-device channel-thermal and flicker PSDs for the
+   gf180mcu models at a bias point, so the device noise data is not what is
+   missing. What is missing is a periodic-steady-state / `pnoise` path (`pss`
+   is not a command in this build) to weight those PSDs over the ring's
+   switching trajectory, across which they move by 46.6 dB (thermal) and
+   95.9 dB (flicker). An earlier revision of this item credited DR-023 with
+   DR-020's broader wording, which DR-023 exists to narrow. Neither record
+   relaxes the ≤ 1.0 % RMS target, and DR-023 Decision 3 states what that
+   leaves: the target's own supply-ripple derivation already allocates
+   **0.50 % RMS** to this component, so the line is met in simulation for its
+   deterministic half only and **the other half is an unverified budget**,
+   not a demonstrated margin. Until
    2026-09-25 this item handed both to **#13**, which closed on 2026-09-08,
    so for seventeen days it named a closed issue as the owner of the only
    row this document cannot report a number for. It then named **#505**,
    which was the bookkeeping issue for that ownership gap and closed
-   `completed` the same day DR-020 (DR-023's predecessor at this slot) landed
-   naming #505 itself as owner — a stale reference from the moment it merged;
-   #520 owns the measurement, and DR-023 commits the toolchain finding as a
-   reproducible `sim/period-jitter/noise-toolchain-probe/` campaign rather
-   than the inline, uncommitted probes DR-020 ran. A defect in the
+   `completed` the same day DR-020 landed naming #505 itself as owner — a
+   stale reference from the moment it merged. DR-023, numbered after DR-020
+   because DR-020 merged first against the same row, re-points the
+   measurement at #520. A defect in the
    campaign's own lock gate, which reported FAIL at two demonstrably-locked
    corners, was tracked separately at issue #273 and never affected any
    jitter number reported here; **#273 is closed** — the gate is wrap-safe

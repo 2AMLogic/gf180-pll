@@ -433,8 +433,13 @@ jobs:
         #
         # Four rules: every `#N` resolves here; an annotated state (`(open)` /
         # `is closed`) matches the forge; a present-tense owner ("tracked at",
-        # "routed to", "filed as") is OPEN, past-tense narration exempt; and a
-        # section-5 Source-column issue carries an explicit state annotation.
+        # "routed to", "filed as", "owed at", "owned at") is OPEN, past-tense
+        # narration exempt; and a section-5 Source-column issue carries an
+        # explicit state annotation. sim/README.md and sim/CHARACTERIZATION.md
+        # are graded too: both named the closed #505 as the live owner of the
+        # random period-jitter component ("owed at", "owned at") after DR-023
+        # re-pointed it at #520, and CHARACTERIZATION.md told its reader that
+        # klayout-tools #309 "remains open" six weeks after it shipped.
         #
         # THIS IS THE ONLY CHECK HERE THAT IS NOT DETERMINISTIC ON A TREE, by
         # necessity -- the fact it grades lives on the forge. Two consequences,
