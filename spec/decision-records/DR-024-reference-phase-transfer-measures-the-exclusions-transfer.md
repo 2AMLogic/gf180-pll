@@ -248,9 +248,13 @@ pre-existing `sim/` record is edited or reinterpreted.
      deck's log byte-for-byte. It failed loudly here only because a `phases`
      manifest's two decks expect different measurement names; on a single-deck
      manifest the wrong point's numbers would have parsed cleanly and been
-     recorded against the wrong corner. Every batch-executed record predating
-     the fix should be checked for duplicate corner logs the way this
-     campaign's were (`md5sum sim/<slug>/corners/<record-id>/*.log`).
+     recorded against the wrong corner. **No pre-existing record is affected,
+     and that is checked rather than assumed**: this campaign's three records
+     are the only batch-executed records in the tree
+     (`grep -l 'execution backend' sim/*/records/*.md`), and every committed
+     corner log of all three is distinct except the three the defect produced
+     (`md5sum sim/*/corners/*/*.log`). That check is the one to repeat on any
+     future batch grid taken before the fix reaches it.
   3. **The execution layer's job image runs a different ngspice than the
      submitting host**, and provenance printed the submitter's. This
      repository treats the ngspice version as part of a run's identity
