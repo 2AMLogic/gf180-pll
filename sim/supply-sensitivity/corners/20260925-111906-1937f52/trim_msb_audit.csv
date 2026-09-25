@@ -1,0 +1,42 @@
+# campaign: supply-sensitivity (issue #515 -- which trim code the loop ran at)
+# source_record: 20260920-180604-0f91a9b
+# generated_utc: 2026-09-25T11:19:06Z
+# re-simulates: NOTHING. Every column is read out of artifacts committed under
+#   prior records; no PDK file is opened and no simulator is invoked.
+# code_requested/bits_requested: the LDT3:LDT0 code the DECK programmed, from
+#   the log's own `.param ldt<i>_code` lines
+# ldt3_pad_v: the DC level of pll_top's LDT3 PAD in the same log
+# stray_net_v: the DC level of `xdut.net1`, the xschem auto-named net XLD's
+#   eighth terminal landed on while the pad went nowhere (issue #515). Blank
+#   means the log has no such node -- a netlist where the pad IS the terminal
+# msb_reached_cell: no = the pad's level did not reach the detector
+# code_effective: the code the DETECTOR saw -- `code & 0b0111` when the MSB
+#   did not reach it
+# log_tstop/row_tstop/supplied_row: run.sh's settling escalation re-runs the
+#   SAME steady-state deck at a longer tstop under an `f<N>x_` name, so two
+#   logs can share one (bundle, temperature, supply). supplied_row = yes marks
+#   the one whose tstop matches the committed supply_steady.csv row, i.e. the
+#   run that actually produced the measurement
+# abs_phi_b_ns/lock_lvl_v/asserted: this point's own settled |static phase
+#   offset| and lock level, read from supply_steady.csv; `asserted` re-derives
+#   run.sh's own >= 0.9 x vdd criterion from the committed level
+# twin_requested_ns/twin_effective_ns: rise/fall t_win at the SAME (bundle,
+#   temperature, supply) for each code, from sim/lock-window-trim's committed
+#   1872-point code map (sim/lock-window-trim/corners/20260917-185928-8adff3d/raw_measures.csv) -- CORROBORATION from a different
+#   campaign at a different f_ref, exactly as window_crossing.csv cites it
+# predict_at_*: the one-sided bound window_crossing.csv's header states -- the
+#   observable window is never smaller than t_win, so t_win > |phi_b| predicts
+#   `assert`; below it the bound predicts nothing (`unpredicted`)
+# discriminates: yes = the two codes predict different flags and the observed
+#   flag matches only the effective one
+log,deck,bundle,temp_c,vdd_v,code_requested,bits_requested,ldt3_pad_v,stray_net_v,msb_reached_cell,code_effective,bits_effective,code_corrupted,log_tstop,row_tstop,supplied_row,abs_phi_b_ns,lock_lvl_v,asserted,twin_requested_ns,twin_effective_ns,predict_at_requested,predict_at_effective,discriminates
+f100_ff_27c_2.97v.log,f100,ff,27,2.97,11,1011,2.97,0,no,3,0011,yes,12.0u,36.8u,no,1.0267,2.97,yes,1.4428/1.4252,1.0952/1.0849,assert,assert,no
+f100_ff_27c_3.30v.log,f100,ff,27,3.30,11,1011,3.3,0,no,3,0011,yes,12.0u,36.8u,no,1.0165,3.3,yes,1.3631/1.3430,1.0338/1.0209,assert,assert,no
+f100_ff_27c_3.63v.log,f100,ff,27,3.63,11,1011,3.63,0,no,3,0011,yes,12.0u,12.0u,yes,1.2331,6.949e-09,no,1.3015/1.2801,0.9865/0.9721,assert,unpredicted,yes
+f100_typical_-40c_2.97v.log,f100,typical,-40,2.97,7,0111,0,0,unknown,7,0111,no,12.0u,36.8u,no,0.6901,2.97,yes,1.2727/1.2616,1.2727/1.2616,assert,assert,no
+f100_typical_-40c_3.30v.log,f100,typical,-40,3.30,7,0111,0,0,unknown,7,0111,no,12.0u,12.0u,yes,0.9183,3.3,yes,1.1941/1.1789,1.1941/1.1789,assert,assert,no
+f100_typical_-40c_3.63v.log,f100,typical,-40,3.63,7,0111,0,0,unknown,7,0111,no,12.0u,36.8u,no,0.8135,3.63,yes,1.1348/1.1171,1.1348/1.1171,assert,assert,no
+f100x_ff_27c_2.97v.log,f100x,ff,27,2.97,11,1011,2.97,0,no,3,0011,yes,36.8u,36.8u,yes,1.0267,2.97,yes,1.4428/1.4252,1.0952/1.0849,assert,assert,no
+f100x_ff_27c_3.30v.log,f100x,ff,27,3.30,11,1011,3.3,0,no,3,0011,yes,36.8u,36.8u,yes,1.0165,3.3,yes,1.3631/1.3430,1.0338/1.0209,assert,assert,no
+f100x_typical_-40c_2.97v.log,f100x,typical,-40,2.97,7,0111,0,0,unknown,7,0111,no,36.8u,36.8u,yes,0.6901,2.97,yes,1.2727/1.2616,1.2727/1.2616,assert,assert,no
+f100x_typical_-40c_3.63v.log,f100x,typical,-40,3.63,7,0111,0,0,unknown,7,0111,no,36.8u,36.8u,yes,0.8135,3.63,yes,1.1348/1.1171,1.1348/1.1171,assert,assert,no
