@@ -195,16 +195,23 @@ stays **UNMET**.
   alike.
 - **The blocker on those points is not a missing mechanism, and is not in this
   repository.** Two distinct faults were found in the path to the fleet:
-  1. *In this repository, and fixed here*: `sim/harness/batch.py`'s `_launch`
-     passed `capture_output` / `text` / `check` into a runner that already
-     supplies all three, so every real submission died with
-     `TypeError: subprocess.run() got multiple values for keyword argument
-     'capture_output'` — **after** `_upload` had already written the job
-     document and inputs to the bucket. The suite's transport stub accepts and
-     drops arbitrary keywords, which is why it stayed green. A full-grid
-     submission from this campaign failed at point 0 of 288 on it. The fix and
-     a regression test that applies `subprocess.run`'s real keyword rules to
-     every submission call site land with this record's PR. **This also blocked
+  1. *In this repository, and fixed, but not by this record's PR*:
+     `sim/harness/batch.py`'s `_launch` passed `capture_output` / `text` /
+     `check` into a runner that already supplies all three, so every real
+     submission died with `TypeError: subprocess.run() got multiple values
+     for keyword argument 'capture_output'` — **after** `_upload` had already
+     written the job document and inputs to the bucket. The suite's transport
+     stub accepts and drops arbitrary keywords, which is why it stayed green.
+     A full-grid submission from this campaign failed at point 0 of 288 on
+     it. The fix was diagnosed here, but landed independently on `main` via
+     issue #512 / PR #519 (`b6114ad4`) while this record's PR was still open;
+     this record's own copy of the same fix was dropped in favor of theirs on
+     rebase, and `sim/tests/test_execution_backend.py` carries both regression
+     suites — `DefaultRunnerTests` (#512/#519) and this record's
+     `StrictRunnerSignatureTests`, kept because it binds against
+     `subprocess.run`'s real signature and so catches an illegal keyword at
+     *any* submission call site, not only the three runner-owned ones
+     `DefaultRunnerTests` checks by name. **This also blocked
      `sim/period-jitter-band-top` (#503)**, whose own unrun grid was waiting on
      the same path believing it to work.
   2. *Outside this repository, and not fixed here*: with that repaired, the
