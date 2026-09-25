@@ -34,7 +34,7 @@ exists"). See Amendment A1 for why this paragraph is scoped to records rather
 than to decks, and why its command names both deck extensions — and Amendment
 A3 for the fourteenth deck this command's own **pattern** cannot reach, which
 does now carry a record and is the reason the scoping above was narrowed
-further (DR-026, #509).
+further (DR-027, #509).
 
 **Two separate defects follow from that, and this record addresses the one that
 is a spec defect.**
@@ -307,18 +307,18 @@ source-quality exclusion. `sim/lib/check-ref-drive-claims.sh` grades the
 property rather than the number, which is why it passed across this change
 without either document being edited.
 
-## Amendment A3 — rule 5 fired, as A1 said it would; the premise is re-argued in DR-026 and the enumeration is widened to a reference that is not a `pulse()` (issue #509)
+## Amendment A3 — rule 5 fired, as A1 said it would; the premise is re-argued in DR-027 and the enumeration is widened to a reference that is not a `pulse()` (issue #509)
 
 **Date**: 2026-09-25. **No decision, target, budget or verdict of this record
 moves.** Amendment A1 closed by naming the rule that guards this record's
 premise and what its firing would mean: "if it ever fires, the source-quality
 exclusion of Decision 3 has to be re-argued rather than re-asserted." It has
-fired. `sim/reference-phase-transfer` (#509, **DR-026**) is a deck that varies
+fired. `sim/reference-phase-transfer` (#509, **DR-027**) is a deck that varies
 the reference on purpose — it displaces the reference edge **in time** — and it
 now carries a committed record. Two things follow.
 
 **1. The premise is re-argued, not re-asserted, and it survives — narrowed.**
-DR-026 does the re-argument and this amendment does not duplicate it. In one
+DR-027 does the re-argument and this amendment does not duplicate it. In one
 sentence: the premise that matters is *every jitter and spur number in this
 repository is the block's own contribution against an ideal reference*, and
 `reference-phase-transfer` reports **no jitter number and no spur number**. It

@@ -44,7 +44,7 @@ WHAT IS REPORTED
                    differential's own solver-noise floor, which is not zero
                    (the stepped deck's `refb` source puts a breakpoint where
                    the control deck has none).  Checked at +/-50 ps, 5% of
-                   dphi; DR-026 records why that band and not the +/-1 ps a
+                   dphi; DR-027 records why that band and not the +/-1 ps a
                    bit-identical pairing would imply.
     drift_ctl    = unwrap(cphi_post - cphi_pre)
                    the baseline drift the control run alone saw, reported so

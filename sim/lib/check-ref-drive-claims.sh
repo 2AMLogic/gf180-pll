@@ -319,10 +319,10 @@ REARGUED = {
     # #509: this campaign perturbs the reference edge IN TIME on purpose, to
     # measure the 20*log10(N) transfer the exclusion asserts. It reports no
     # jitter and no spur number, which is what keeps the premise true for the
-    # rows that do -- DR-026 states that in as many words.
+    # rows that do -- DR-027 states that in as many words.
     "reference-phase-transfer": (
         "spec/decision-records/"
-        "DR-026-reference-phase-transfer-measures-the-exclusions-transfer.md"
+        "DR-027-reference-phase-transfer-measures-the-exclusions-transfer.md"
     ),
 }
 

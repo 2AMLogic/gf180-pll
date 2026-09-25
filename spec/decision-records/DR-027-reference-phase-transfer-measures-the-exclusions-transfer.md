@@ -1,4 +1,4 @@
-# DR-026: The reference-source-quality exclusion's 20·log₁₀(N) transfer is measured, not asserted — the exclusion stands, now backed by a measurement, and the numeric reference-jitter limit is untouched
+# DR-027: The reference-source-quality exclusion's 20·log₁₀(N) transfer is measured, not asserted — the exclusion stands, now backed by a measurement, and the numeric reference-jitter limit is untouched
 
 - **Status**: proposed, drafting for operator ratification via PR review — the
   same route DR-007, DR-009 … DR-023 record (a builder drafts the record on the
