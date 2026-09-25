@@ -32,9 +32,9 @@ repository reports. The thirteenth is this record's own campaign deck,
 which varies the waveform on purpose and carries no record (§"What now
 exists"). See Amendment A1 for why this paragraph is scoped to records rather
 than to decks, and why its command names both deck extensions — and Amendment
-A2 for the fourteenth deck this command's own **pattern** cannot reach, which
+A3 for the fourteenth deck this command's own **pattern** cannot reach, which
 does now carry a record and is the reason the scoping above was narrowed
-further (DR-024, #509).
+further (DR-026, #509).
 
 **Two separate defects follow from that, and this record addresses the one that
 is a spec defect.**

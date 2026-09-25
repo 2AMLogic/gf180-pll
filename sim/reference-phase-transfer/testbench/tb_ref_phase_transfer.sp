@@ -68,7 +68,7 @@
 *                                  decks were not the same run before tphase,
 *                                  which would invalidate the whole
 *                                  differential; it is checked at +/-50 ps
-*                                  (5% of dphi), not argued.  DR-024 records
+*                                  (5% of dphi), not argued.  DR-026 records
 *                                  why that band and not the +/-1 ps a
 *                                  bit-identical pairing would imply.
 *   tfast   ~0.3-1.2 loop time     d(tfast)/dphi is the transfer to a
