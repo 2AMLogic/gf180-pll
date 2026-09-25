@@ -550,7 +550,12 @@ apply is written as `N/A` **with a reason**, not omitted.
     and must disclose any point the backend could not attribute rather than
     crediting it to the recording host. A record that claims one host for a
     run that used forty-five is not reconstructable, which is the whole
-    purpose of this field.
+    purpose of this field. It must also name the **executing simulator
+    version** whenever that differs from the `Simulator:` bullet's, which
+    under an off-host backend reports the version resolved on the
+    *submitting* host — a host that ran no deck at all. The batch job image's
+    version is **not** this repository's pin; see "ngspice binary pin (#259)"
+    below and DR-028.
 
   A record naming corner sections without naming the model library and PDK
   hash that define them is not traceable — model sections are only
@@ -999,6 +1004,34 @@ hours against a defective, uncited simulator build. `sim/harness`'s own
 already carries its own PATH-resolved-version warning
 (`nonlinear_moscap_ngspice47_warning`) for the same underlying #153 defect,
 scoped to the DUTs that actually nest the moscap family.
+
+**The batch backend's job image is NOT at this pin, and the divergence is
+ratified rather than aligned ([DR-028](../spec/decision-records/DR-028-batch-executed-records-run-a-second-ngspice-version.md),
+#536).** The pin above binds what runs *here*; a campaign dispatched off-host
+(`sim/run_corners.py --backend batch`) runs on an image built by operator-owned
+provisioning outside this repository, and that image's simulator is
+**ngspice-42** — its corner logs sign off `ngspice-42 done`. Nothing in a PR
+here can change it, so DR-028 records the divergence instead of denying it, and
+states what follows for a reader of a batch-executed record:
+
+- **It is a comparability limit, not an impeachment.** Those grids converge and
+  pass their own guards, and the pin's known defect (#153) is an ngspice-**47**
+  parse failure that ngspice-42 does not show. A batch-executed record is
+  evidence on its own terms and may be cited as such.
+- **It may not be merged into pinned-local evidence.** Until the divergence is
+  measured, a batch-executed number may not supersede an ngspice-46 record, be
+  composed point-for-point with ngspice-46 numbers into one corner-consistent
+  total, or be quoted as completing a grid whose other points were taken on the
+  pin. A mixed-version grid must state the split.
+- **The size of the divergence is unknown and deliberately unquoted.** No
+  cross-version overlap measurement exists — no operating point has been run on
+  both. That measurement is owed at **#549**, in the shape of
+  `sim/period-jitter`'s cross-*host* overlap (records
+  `20260906-015602-f9bef9d` / `20260906-063728-f3c9c23`, which re-run two
+  27 °C/3.30 V points on a second host at the *same* version and differ by
+  3.7 % and 9.3 % — the floor any cross-version result has to be read against).
+  Aligning the image at ngspice-46 remains the preferred resolution and stays
+  open; DR-028 is what makes the interim state honest, not a substitute for it.
 
 **`sim/harness` is the convention for every new campaign — `sim/lib/simenv.sh`
 is legacy.** The interim shim and the campaigns still built on it remain the
