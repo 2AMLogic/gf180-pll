@@ -1,0 +1,12 @@
+# the answer: each way of choosing the trim code, scored over the whole grid -- the normative rule, each pad-referred candidate, and the no-measurement control
+# residual_spread is max/min over the bundles of twin_rel / observable_rel. 1.0 is a perfect stand-in. The RULE row has no residual (it measures the quantity itself) and the NONE row has none (it measures nothing); for those two the number to compare a candidate against is the process spread of the window itself, which is the spread of twin_rel_to_typical in proxy_tracking.
+# worst_code_error is the largest |proxy code - rule code| over the bundles. It is diagnostic, not the verdict: a proxy that misses the rule's code but still holds the band everywhere has executed the rule's intent, which is what spec/pll.md's Lock detector row is conditioned on.
+# twin_min/max and the verdict are over every PVT point of every bundle with that bundle at the code the policy chose -- the same band test sim/lock-window-trim applies to the rule's own code.
+# The typical bundle is every candidate's calibration point and agrees with the rule there by construction; it is included in the counts so the grid is the same grid for every row, but it is not evidence for a candidate.
+policy,n_bundles,residual_spread,worst_code_error,n_points,twin_min_ns,twin_max_ns,spread,margin_to_lo_pct,margin_to_hi_pct,verdict,what it is
+RULE (internal t_win),13,,0,117,1.106,1.726,1.561,10.59,13.71,all in-band,the normative rule -- not executable at the pads
+ring_a,13,1.7466,8,117,0.9001,2.191,2.434,-9.993,-9.551,OUT OF BAND somewhere,"free-running ring period, band 4 / Vctrl 1.80 V (CLK pad)"
+ring_b,13,1.6999,8,117,0.9001,2.191,2.434,-9.993,-9.551,OUT OF BAND somewhere,"free-running ring period, band 7 / Vctrl 2.70 V (CLK pad)"
+clk_fb,13,1.5919,4,117,1.122,1.947,1.735,12.25,2.633,all in-band,"CLK -> FB retiming skew, the flop's clock-to-Q (CLK and FB pads)"
+clk_do,13,1.1324,4,117,1.122,1.905,1.697,12.25,4.757,all in-band,"CLK -> DIVOUT skew, the divider's own output path (CLK and DIVOUT pads)"
+"NONE (untrimmed, c8)",13,,5,117,1.041,2.066,1.984,4.138,-3.323,OUT OF BAND somewhere,"the control: no measurement at all, every part left at the power-up code"
