@@ -1,0 +1,36 @@
+# criterion 1b of 20260901-155456-46b92f8, re-read against the RATIFIED lines.
+# Budget 2 (spec/pll.md row 12): a DC rail excursion must consume <= 0.6 V
+#   of the control window. span_full_v is that excursion as the ROW states it
+#   (2.97-3.63 V, 0.66 V of rail); span_half_v is the worse of the
+#   two 0.33 V half-excursions, which is the excursion the budget's own
+#   derivation prices (its pushing table computes 'worst frequency shift over a
+#   +/-10 % rail' as %/V x 0.33 V). The two do not agree on whether the row is met;
+#   that disagreement is the finding, and this file does not resolve it.
+# leaves_dr001_window: DR-001 Decision 2's PREDICTED (0.9, 2.4) V window -- what
+#   the source record's own 1b check graded against.
+# leaves_dr003_window: DR-003 Decision 5's MEASURED (0.9, 2.7) V window, which
+#   supersedes that prediction and is what spec/pll.md now states.
+# Both window columns test the RIPPLE PEAKS (peak_min_v/peak_max_v), not the
+#   average, because headroom is lost at the peak -- the source record's own rule.
+# openloop_predicted_travel_v: the control voltage the SAME band needs at 3.63 V
+#   to hold the frequency it makes at 2.97 V with vctrl_lo_v, from #8's committed
+#   f(Vctrl, vdd) table (20260731-175947-0a12e6c/vco_tuning.csv) by interpolation inside the
+#   one bracketing interval -- never extrapolated. Agreement with span_full_v means
+#   the consumption is what the selected band requires, not an anomaly.
+# NO SIMULATION WAS RUN. Every column is arithmetic on committed data.
+bundle,temp_c,band,vctrl_lo_v,vctrl_nom_v,vctrl_hi_v,peak_min_v,peak_max_v,span_full_v,span_half_v,dvctrl_dvdd,over_budget2_full_range,over_budget2_half_range,leaves_dr001_window,leaves_dr003_window,margin_dr001_v,margin_dr003_v,openloop_predicted_travel_v,predicted_minus_measured_v
+ss,-40,5,1.7960,2.2270,2.6420,1.7950,2.6470,0.8460,0.4310,1.2818,yes,no,yes,no,-0.2470,+0.0530,0.8479,+0.0019
+ss,27,5,1.6020,1.9890,2.3600,1.6000,2.3640,0.7580,0.3870,1.1485,yes,no,no,no,+0.0360,+0.3360,0.7577,-0.0003
+sf,27,5,1.8410,2.2090,2.5490,1.8390,2.5540,0.7080,0.3680,1.0727,yes,no,yes,no,-0.1540,+0.1460,0.7074,-0.0006
+typical,27,5,1.8000,2.1620,2.4980,1.7980,2.5020,0.6980,0.3620,1.0576,yes,no,yes,no,-0.1020,+0.1980,0.6996,+0.0016
+fs,27,5,1.7600,2.1110,2.4420,1.7570,2.4470,0.6820,0.3510,1.0333,yes,no,yes,no,-0.0470,+0.2530,0.6836,+0.0016
+ss,125,5,1.3700,1.7100,2.0350,1.3670,2.0390,0.6650,0.3400,1.0076,yes,no,no,no,+0.3610,+0.4670,0.6674,+0.0024
+sf,125,5,1.5890,1.9130,2.2130,1.5880,2.2190,0.6240,0.3240,0.9455,yes,no,no,no,+0.1810,+0.4810,0.6250,+0.0010
+typical,125,5,1.5670,1.8850,2.1830,1.5640,2.1860,0.6160,0.3180,0.9333,yes,no,no,no,+0.2140,+0.5140,0.6168,+0.0008
+fs,125,5,1.5410,1.8500,2.1430,1.5390,2.1470,0.6020,0.3090,0.9121,yes,no,no,no,+0.2530,+0.5530,0.6016,-0.0004
+ff,125,5,1.7330,2.0230,2.2910,1.7310,2.2950,0.5580,0.2900,0.8455,no,no,no,no,+0.1050,+0.4050,0.5592,+0.0012
+sf,-40,6,0.9949,1.2650,1.4970,0.9911,1.5000,0.5021,0.2701,0.7608,no,no,no,no,+0.0911,+0.0911,0.5077,+0.0056
+typical,-40,6,0.9887,1.2480,1.4760,0.9843,1.4790,0.4873,0.2593,0.7383,no,no,no,no,+0.0843,+0.0843,0.4930,+0.0057
+fs,-40,6,0.9826,1.2290,1.4510,0.9778,1.4540,0.4684,0.2464,0.7097,no,no,no,no,+0.0778,+0.0778,0.4706,+0.0022
+ff,-40,6,1.1330,1.3540,1.5490,1.1290,1.5510,0.4160,0.2210,0.6303,no,no,no,no,+0.2290,+0.2290,0.4184,+0.0024
+ff,27,6,1.0110,1.2150,1.3960,1.0060,1.4000,0.3850,0.2040,0.5833,no,no,no,no,+0.1060,+0.1060,0.3874,+0.0024
