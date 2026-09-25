@@ -1,14 +1,22 @@
-# DR-024: The band-selection axis is measured and eliminated as the Lock-criterion resolution — what the ratified Lock-criterion and Lock-time rows mean given the gap that remains
+# DR-025: The band-selection axis is measured and eliminated as the Lock-criterion resolution — what the ratified Lock-criterion and Lock-time rows mean given the gap that remains
 
 - **Status**: proposed, drafting for operator ratification via PR review — the
-  same route DR-007, DR-009 … DR-023 record (a builder drafts the record on the
+  same route DR-007, DR-009 … DR-024 record (a builder drafts the record on the
   evidence; the operator's PR approval is the ratifying act). Status stays
   `proposed` until that approval and merge.
 - **Date**: 2026-09-25
 - **Decided by**: Builder agent, issue #511
-- **Numbering**: DR-024 is the next unused slot as of `4422f1d` (highest on
-  `main` is DR-023). Per TEMPLATE.md's collision rule this was re-checked
-  immediately before the PR was opened.
+- **Numbering**: this record was drafted as DR-024 (the next unused slot as of
+  `4422f1d`, where the highest on `main` was DR-023) and **renumbered to
+  DR-025** when it was rebased onto `023360d4`: `main` had meanwhile taken
+  DR-024 for
+  `DR-024-reference-spur-binding-point-owner-and-mismatch-relation.md` (#510,
+  PR #537). That is exactly the re-check TEMPLATE.md's collision rule mandates
+  "after any rebase onto a moved main". DR-025 is the next unused slot as of
+  `023360d4`. Note that PR #535 is also open carrying a record numbered DR-024
+  (`DR-024-reference-phase-transfer-measures-the-exclusions-transfer.md`); it
+  has not yet rebased, and whichever of the two open PRs merges second must run
+  this same re-check again.
 
 ## Context
 
@@ -120,7 +128,8 @@ this is a change of *attribution*, not of target, and the row's `< 100 µs`
 number is untouched.
 
 **6. The design gap is accepted for v1, with a measured bound and a named
-cause, and the work it needs is filed rather than implied.** No circuit change
+cause, and each piece of the work it needs is either filed with a number or
+said plainly to be unfiled.** No circuit change
 is made by this record: DR-012 Decision 7's four loci are narrowed to one (the
 pump's `q_zero` at low Vctrl) by Decision 2 above, and choosing *how* to reduce
 it is a circuit-design campaign with its own characterization, not a
@@ -134,12 +143,21 @@ carry-through of an evidence join. What this record fixes is that the gap is now
   which the [Icp trim-code rule](../pll.md#icp-trim-code-rule) maps to the
   16 MHz row (one unit leg, b1b0 = 00): a different cell on all three axes from
   the only one ever characterized. The prediction it must test is stated in
-  advance in the evidence record so it can be wrong.
+  advance in the evidence record so it can be wrong. **Filed as #540.**
 - **Owed measurement (`ff`/27 °C at the rule-selected band 5)**, without which
   the reclassification in Decision 4 stays a reclassification and never becomes
-  a clearance.
+  a clearance. **Filed as #540** (same issue, run 1).
+- **Owed normative clarification**: which control window the band-selection
+  rule's "reaches `f`" is evaluated over — the choice Decision 4's
+  reclassification turns on. **Filed as #542.**
 - **Owed design work (item c)**: reduce `q_zero` at low Vctrl, or the criterion
   is not met over the ratified `(f_out × PVT)` space on DR-012 4a's budget.
+  **This one is surfaced and NOT filed as its own issue.** It is the gap #511's
+  own title names ("no issue owns the design resolution"), and this record does
+  not close it — it narrows it from DR-012 Decision 7's four candidate loci to
+  one quantity. Whoever ratifies this record should decide whether #511 stays
+  open to hold item (c) or a successor issue is filed for it; an agent should
+  not pick the circuit mechanism, and this record does not.
 
 **7. What this record does not establish, stated plainly.** It does not measure
 anything. Every `t_sys` it reasons from is open-loop, at f_ref = 12.5 MHz, and
@@ -172,8 +190,12 @@ size of the retiming term.
   the measured window is the only reading under which the rule is satisfiable —
   which is an argument for writing it down, not for calling it a fix. Making it
   normative is a separate spec change with its own blast radius (it governs
-  every campaign's operating-point derivation, not just this one) and is filed
-  rather than smuggled in here on a Lock-criterion record.
+  every campaign's operating-point derivation, not just this one), so it is
+  filed as **#542** rather than smuggled in here on a Lock-criterion record.
+  #542 carries the disagreement, the four campaigns that derive a band code from
+  the rule and would have to be re-checked against any answer, and the three
+  dispositions available; it takes no position among them, and neither does this
+  record.
 
 - **Declare `ff`/27 °C/3.63 V cleared, on the strength of the 0.1750 ns
   measured at 2.40 V and the 2.7× improvement at the two supplies that are on
@@ -197,7 +219,9 @@ size of the retiming term.
   closed-loop re-characterization, and nothing in the committed data ranks them
   against each other. Decision 2 narrows Decision 7's four loci to the one
   quantity any of them must move (`q_zero` at low Vctrl); choosing the mechanism
-  is filed, not guessed.
+  is left to a design campaign and its own record, not guessed here. Decision 6
+  states plainly that this is the one owed item with **no** issue number of its
+  own, rather than implying a filing that a reader cannot open.
 
 - **Leave the `derive_op_points` deviation alone, since it agrees with the rule
   at 14 of 15 cells.** Rejected: the one cell it disagrees at is the cell
@@ -229,7 +253,15 @@ size of the retiming term.
 
 - **`sim/supply-sensitivity` changes what it measures at one cell.**
   `derive_op_points` now applies the normative rule, so a future run puts
-  `ff`/27 °C on band 5 at 1.967–2.595 V instead of band 6 at 1.008–1.394 V. Every
+  `ff`/27 °C on band 5 at 1.967–2.595 V instead of band 6 at 1.008–1.394 V.
+  **Both of those spans are `derive_op_points`'s *derived* control voltages**
+  (the evidence record's `vctrl_campaign_v` column), which is the right quantity
+  for a statement about what the selector will ask for. The committed band-6
+  closed-loop run actually settled at **1.006–1.392 V** (`vctrl_run_v`) — the
+  evidence record quotes that span in its Claim for the same cell. The ≤ 2 mV
+  difference is not a transcription slip: it is how closely the reimplemented
+  selector reproduces the voltages the campaign really ran at, and it is the
+  cross-check that establishes the reconstruction is of the right selector. Every
   cached run under `work/` for that cell is invalidated by the parameter change
   (the `.sig` guard handles this), and the re-run is **expensive** — of order
   3.2 h of ngspice per corner at the unescalated length. The other 14 cells are
@@ -243,23 +275,47 @@ size of the retiming term.
   extending that campaign's control-voltage axis to the measured window's top is
   a second, smaller owed measurement this record surfaces and does not close.
 
-- **An ambiguity in a normative rule is now written down and unresolved.**
-  `spec/pll.md`'s band-selection rule does not name the control window "reaches
-  `f`" is evaluated over, and the answer at `ff`/27 °C / 100 MHz changes with
-  the choice. This record reports it under both readings and uses the measured
-  one; making the window normative is filed separately (see Decision 6's
-  Alternatives entry) because it governs every campaign's operating-point
-  derivation, not only this one.
+- **An ambiguity in a normative rule is now written down, unresolved, and
+  owned.** `spec/pll.md`'s band-selection rule does not name the control window
+  "reaches `f`" is evaluated over, and the answer at `ff`/27 °C / 100 MHz
+  changes with the choice. This record reports it under both readings and uses
+  the measured one; making the window normative is filed separately as **#542**
+  (the second Alternatives entry above states the ground) because it governs
+  every campaign's operating-point derivation, not only this one. **This is not
+  a cosmetic follow-up**: Decision 4's reclassification of `ff`/27 °C — and with
+  it the 2/45 → "1/45 measured, 1/45 owed" restatement of a ratified spec row in
+  Decision 5 — is true under DR-003 Decision 5's window and false under DR-001
+  Decision 2's. Anyone re-reading this record should read #542 first and check
+  which way it landed.
 
-- **A structural property of the band map is exposed that no row tracks.** At
-  f_out = 100 MHz, 4 of the 15 (bundle, temperature) cells have **no single
-  static band code** that reaches the target across the ratified ±10 % rail
-  inside DR-001 Decision 2's predicted 0.9–2.4 V window; across the swept output
-  band, 2 (f_out, cell) pairs have none inside the *measured* 0.9–2.7 V window
-  either. Band select has no calibration FSM (DR-001 Decision 2), so this is a
-  property of the shipped part, not of a search. It is consistent with — and
-  independently reproduces — `20260925-044237-4ff4f65`'s criterion-1b finding,
-  and it is not otherwise owned.
+- **A structural property of the band map is exposed that no *spec row* tracks,
+  and it is owned by #534.** At f_out = 100 MHz, 4 of the 15 (bundle,
+  temperature) cells have **no single static band code** that reaches the target
+  across the ratified ±10 % rail inside DR-001 Decision 2's predicted 0.9–2.4 V
+  window; across the swept output band, 2 (f_out, cell) pairs have none inside
+  the *measured* 0.9–2.7 V window either. Band select has no calibration FSM
+  (DR-001 Decision 2), so this is a property of the shipped part, not of a
+  search. It is consistent with — and independently reproduces —
+  `20260925-044237-4ff4f65`'s criterion-1b finding.
+
+  **#534 already owns this property and this record does not claim it.** #534
+  reads the same band map, under the same normative rule, inside the same
+  DR-003 Decision 5 window, and states it at f_out = **200 MHz**: no single
+  static code covers the ratified temperature × supply box at four of the five
+  MOS bundles. What this record's sweep adds is **only** extra breadth on the
+  frequency axis, and it is worth stating exactly so nobody re-derives it:
+  (i) the property is not peculiar to the 200 MHz top — it also appears at
+  **100 MHz**, and at 100 MHz it appears in the stronger form where *no code
+  reaches the target at all* under DR-001's predicted window (4 of 15 cells),
+  not merely where no *single* code covers the whole box; (ii) swept across all
+  39 output frequencies rather than at one, the count of (f_out, cell) pairs
+  with no covering code inside the **measured** window is **2** — i.e. the
+  measured window makes the property rare but does not eliminate it; and
+  (iii) the frequency axis is therefore a third axis of #534's question, on top
+  of the temperature and supply axes it already names. **None of that changes
+  #534's scope or its four candidate dispositions**, and this record makes no
+  recommendation among them — it is #534's evidence base widened, filed here
+  because the sweep that produced it was run for a different purpose.
 
 - **What is still not known, stated plainly**: whether the loop meets the
   criterion at the rule-selected `ff`/27 °C cell; whether it meets it at the

@@ -1774,7 +1774,7 @@ SUBSET
     is load-bearing: band select is a static input with no calibration FSM
     (DR-001 Decision 2), so re-choosing it when the supply moves would measure
     a different configuration at each supply and call the difference "supply
-    sensitivity". **Until #511/DR-024 this derivation used a mid-window
+    sensitivity". **Until #511/DR-025 this derivation used a mid-window
     heuristic instead of the rule**, and the two disagree at exactly one of
     the 15 cells -- \`ff\`/27 C, the cell carrying the largest settled
     violation of the ratified <= 1 ns Lock criterion on the committed grid.

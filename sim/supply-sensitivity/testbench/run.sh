@@ -684,7 +684,7 @@ in_grid() {
 # approximated.  The per-supply control voltage it implies is the warm start.
 #
 # THIS USED TO BE A MID-WINDOW HEURISTIC, AND THE DIFFERENCE MATTERED (#511,
-# DR-024).  Until that issue this function picked the band whose control
+# DR-025).  Until that issue this function picked the band whose control
 # voltage was closest to the midpoint of the search window -- a selector that
 # is not the rule and was the only band selector in `sim/` that was not
 # (`sim/pll-top-smoke` states and applies the rule by name).  The two agree at
@@ -761,7 +761,7 @@ derive_op_points() {
         }
         if (ruleband != -1 && heurband != -1 && ruleband != heurband)
           printf "supply-sensitivity: band-selection rule picks B%d at %s/%s C" \
-                 " (the retired mid-window heuristic picked B%d) -- see DR-024\n", \
+                 " (the retired mid-window heuristic picked B%d) -- see DR-025\n", \
                  ruleband, BU[bi], TE[ti], heurband > "/dev/stderr";
         printf "%s,%s,%d%s\n", BU[bi], TE[ti], ruleband, ruleline;
       }
