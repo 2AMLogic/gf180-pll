@@ -98,8 +98,13 @@ criterion**, in the terms CLAUDE.md sets:
   later, ngspice breaks a timestep at every source discontinuity, and the two
   runs therefore walk different internal timesteps from t = 0. A guard a
   *correctly functioning* pairing cannot clear is not measuring the pairing; it
-  is measuring the transcription error. Three corners failing it while the
-  other two passed by luck of the solver is what that looks like from outside.
+  is measuring the transcription error. What that looks like from outside is a
+  gate **nothing** cleared: of that record's five corners, the three that
+  produced measurements all FAILED `pair_resid` (three of three), and the
+  remaining two — `ss_125c_2.97v_vs1p093` and `sf_-40c_2.97v_vs1p677` — did not
+  pass it either; they ERRORed out at `ngspice exit 1, no measurements parsed`
+  before producing any measurement to grade. A 0-of-5 gate is a broken guard,
+  not a discriminating one.
 - **`pair_resid` grades the differential's validity, not the design.** No
   ratified `spec/pll.md` number and no quantity this record reports about the
   DUT is graded by it. It exists to catch the single failure mode that would
@@ -109,11 +114,20 @@ criterion**, in the terms CLAUDE.md sets:
   Widening it does not let any *result* through; it lets a valid pairing be
   recognised as one.
 - **±50 ps is argued from the measurement, not fitted to it.** It is 5 % of
-  `dphi`, an order of magnitude below the smallest thing this record claims to
-  resolve (the −4 … +97 ps untracked residual) and two orders below a real
-  divergence. It is also where the floor actually sits: the measured spread is
-  −10.485 … +26.298 ps, so the band is about 2× the worst point rather than
-  drawn just past it.
+  `dphi`, so the one failure mode the guard exists to catch — a divergence of
+  order `dphi` itself — is still caught with the factor of 20 named in the
+  bullet above. And it is where the floor actually sits: the measured spread is
+  −10.485 … +26.298 ps, so the band is about 2× (1.9×) the worst point rather
+  than drawn just past it. **What ±50 ps is not is small compared with the
+  residual this record reports.** `phi_shift` spans −3.968 … +96.882 ps on this
+  grid, so the band is 0.52× the largest of those
+  (`ff_-40c_3.63v_vs2p430`, 96.882 ps) and *larger in magnitude* than
+  `phi_shift` at the other four corners — 1.2–1.3× at `fs`/`typical`
+  (42.271 / 38.295 ps), 4.6× at `ss` (10.799 ps) and 12.6× at
+  `sf_-40c_2.97v_vs1p677` (−3.968 ps). That is the honest shape of this
+  measurement, and it is exactly why the next bullet reads the reported
+  residual against the *measured* floor rather than against the band, and why
+  the headline is "to about 1 dB" rather than three digits.
 - **The reported dB numbers are read against the measured floor, not against
   the band.** The widening softens no result — it is *why* this record claims
   the multiplication holds "to about 1 dB" instead of quoting three digits:
@@ -287,14 +301,24 @@ committed, and no re-simulation is implied by any of them.
    and off #505 in turn. `tb.json`, `spec/pll.md`, `sim/CHARACTERIZATION.md`, the
    deck and this record now all say #520. **Read "#505" on any of the three
    committed records as "#520".**
-2. **The `pair_resid` band in `tb.json` Limitation (6).** It said ±1 ps while the
-   gate actually in force — stated correctly two bullets earlier in the same
-   manifest, and in each record's own machine-readable check table as
-   `min=-5.000000e-11, max=5.000000e-11` — was ±50 ps. Limitation (6) is the
-   sentence a reviewer reads to judge the differential's validity, so it
-   overstated the guard by 50×. **Read "+/-1 ps" in Limitation (6) of any of the
-   three committed records as "+/-50 ps"**; the check table on each record's own
-   next page is the gate that actually ran.
+2. **The `pair_resid` band in `tb.json` Limitation (6) — on the citable record
+   only.** `tb.json` Limitation (6) still said ±1 ps after the band was widened,
+   so on `20260925-080736-b722f33` that sentence contradicts both the manifest's
+   own methodology bullet two bullets earlier and that record's own
+   machine-readable check table, which reads
+   `min=-5.000000e-11, max=5.000000e-11`. Limitation (6) is the sentence a
+   reviewer reads to judge the differential's validity, so there it overstated
+   the guard by 50×. **Read "+/-1 ps" in Limitation (6) of
+   `20260925-080736-b722f33` as "+/-50 ps".** That instruction is scoped to that
+   one record and must **not** be generalised across the chain:
+   `20260925-074549-1f4b734`'s ±1 ps is not a defect — its own check table reads
+   `min=-1.000000e-12, max=1.000000e-12`, ±1 ps genuinely was the gate it was
+   graded against, and its three `pair_resid` FAIL verdicts are only intelligible
+   against that band; rewriting it to ±50 ps would re-obscure the very band
+   change this section exists to disclose. `20260925-073001-ed38ff1` predates the
+   paired-deck method and contains no `pair_resid` text at all. The general rule
+   is the one that holds everywhere: the check table on each record's own next
+   page is the gate that actually ran for that record.
 3. **The measured `pair_resid` range in `tb.json` methodology bullet 3.** It said
    "Measured 10-18 ps on this grid", which is the *second* record's range, and
    reasoned a 0.15 dB gain impact from that 18 ps worst point. This grid spans
