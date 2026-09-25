@@ -73,7 +73,14 @@ Being honest about where this actually is:
   unchanged. And every one of the campaign's records is at one output
   frequency, 150 MHz — the same measurement at the 200 MHz top of the
   ratified band is declared as `sim/period-jitter-band-top`, tracked at #503,
-  and carries no measured record yet.
+  and carries no measured record yet. The **reference spur** is in the same
+  position and matters more, because that is the frequency its ≤ −55 dBc line
+  is stated at: the one closed-loop spur record is 5 of the 45 PVT corners at
+  150 MHz, and scaling it to 200 MHz puts the two coldest corners 0.1–0.5 dB
+  *over* the line. The binding-frequency sweep is declared as
+  `sim/reference-spur-band-top` — all 45 points, none measured — tracked at
+  #533, and DR-024 re-points the spec's owed line off the closed issue that
+  used to hold it.
 - **Underway, block by block** — PLL-block layout. Issue #16 landed a
   repeatable `klt`-aware DRC/LVS flow against the gf180mcu open-PDK decks,
   proven clean (and proven to catch a deliberately injected DRC violation and

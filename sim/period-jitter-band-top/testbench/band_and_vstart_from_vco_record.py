@@ -265,8 +265,17 @@ def declared_map(manifest):
     return declared
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(manifest_path=None, doc=None):
+    """Report (and optionally check or emit) one manifest's operating points.
+
+    `manifest_path` defaults to this campaign's own `tb.json`. It is a
+    parameter because the rule implemented here is not this campaign's: it is
+    `spec/pll.md`'s band-selection rule at 200 MHz, and a sibling campaign at
+    the same binding frequency (`sim/reference-spur-band-top`, #510) must
+    apply the identical arithmetic to its own manifest rather than a copy of
+    it -- so its generator calls this one with its own path and docstring.
+    """
+    parser = argparse.ArgumentParser(description=doc or __doc__)
     parser.add_argument(
         "--check", action="store_true",
         help="compare against tb.json's sweeps.op + grid and exit non-zero on a mismatch",
@@ -281,7 +290,7 @@ def main():
     )
     args = parser.parse_args()
 
-    manifest = json.loads((HERE / "tb.json").read_text())
+    manifest = json.loads(Path(manifest_path or (HERE / "tb.json")).read_text())
     rows, target = derive_table(manifest)
 
     if args.emit:

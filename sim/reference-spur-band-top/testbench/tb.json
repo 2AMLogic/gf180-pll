@@ -1,0 +1,1371 @@
+{
+  "name": "reference-spur-band-top",
+  "description": "closed-loop reference spur MEASURED at the 200 MHz top of the ratified output band: the same +/- f_ref sidebands sim/reference-spur reads out of the locked output spectrum at 150 MHz, taken at the frequency spec/pll.md's -55 dBc line actually binds at instead of scaled to it (#510). f_ref and the Icp trim code are held; N goes 6 -> 8 and the VCO band code becomes per-corner, because spec/pll.md's band-selection rule selects band 6 at 34 of the 45 PVT points and band 7 at the other 11",
+  "claim": "spec/pll.md#reference-spur -- reference spur, target <= -55 dBc at f_ref offset from the carrier, in lock, at the binding f_out = 200 MHz end of spec/pll.md#output-band. SYSTEMATIC (corner-driven) spur only; device mismatch is off -- see Methodology for how that reads against DR-018's derived stack",
+  "methodology": [
+    "WHY THIS CAMPAIGN EXISTS -- AND WHY IT IS NOT A SECOND GRID INSIDE sim/reference-spur. sim/reference-spur (#145) measures the closed-loop spur at f_out = 150 MHz, the highest output frequency one static band code holds across the whole mandated PVT matrix. The spur grows with output frequency (theta = 2*pi*f_out*TIE), so spec/pll.md's <= -55 dBc line binds at the 200 MHz ceiling of the ratified output band, and spec/pll.md's own derivation is stated there. That record therefore reports its binding-point figure as ARITHMETIC -- spur_dbc + 20*log10(200/150) = +2.50 dB, labelled as such -- and at two corners (ff/-40 C/3.63 V: -54.88 dBc; sf/-40 C/2.97 V: -54.51 dBc) the arithmetic lands on the wrong side of the line. This campaign measures the same sideband AT 200 MHz, over the whole mandated 45-point matrix, so the number that binds is a measured one. It is a sibling campaign rather than another grid inside sim/reference-spur because the manifest-level `checks` that decide whether a point is locked -- `fout` inside its band, `nmeas` at the configured N -- are per manifest, not per point (sim/harness/README.md), and this operating point has a different N and a different output band. Same reason sim/period-jitter-band-top is a sibling of sim/period-jitter.",
+    "WHAT CHANGES FROM sim/reference-spur, AND WHAT DELIBERATELY DOES NOT. Changed, and only these three: f_out 150 -> 200 MHz; N 6 -> 8; band code 6-everywhere -> per corner. Held identical, so any difference between the two campaigns' numbers is attributable to the output frequency and not to how the measurement was made: f_ref = 25 MHz (the same once-per-reference-cycle charge event, excited at the same rate, modulating a faster ring), the Icp trim code 0 that spec/pll.md's Icp trim-code rule REQUIRES at 25 MHz, the ideal 4x-unit-leg bias sources every closed-loop campaign here uses, every .tran control and every spectral-window parameter (wa/wb/wcyc), every solver option and tolerance, every raw .measure card, and the reduction module itself -- derive.py here LOADS sim/reference-spur/testbench/derive.py rather than copying it.",
+    "THE BAND CODE IS NOT A FREE CHOICE, AND AT 200 MHz IT IS NOT CONSTANT. spec/pll.md's band-selection rule (normative, DR-003 Decision 4) requires the LOWEST 3-bit band code that reaches the target frequency, inside DR-003 Decision 5's 0.9-2.7 V control window. Applied to sim/vco-tuning-range's committed f(Vctrl) table (record 20260804-162735-72883fb) at 200 MHz, that rule selects band 6 at 34 of the 45 PVT points and band 7 at the other 11 -- the cold and/or high-supply points where band 6's curve tops out below 200 MHz (its ceiling falls to 166.3 MHz at ff/-40 C/3.63 V). No single static code reaches 200 MHz at all 45 points: band 6 misses 11 of them from below, band 7 misses 4 of them from above (its floor rises to 225.4 MHz at ss/125 C/2.97 V). That is exactly why 200 MHz could not be dialled into sim/reference-spur's manifest, whose band bits are fixed in `params`; here the band bits live per point on the `op` sweep axis. A campaign that picked one convenient static band for all 45 corners would be measuring a MIS-CONFIGURED part at some of them, and spec/pll.md says plainly that no row of the specification applies to such a part. band_and_vstart_from_vco_record.py in this directory derives all 45 (band, vstart) pairs from the committed record and the ratified rule, `--check`s the manifest against them, and loads its arithmetic from sim/period-jitter-band-top's generator, which loads the interpolation from sim/reference-spur's -- so the three campaigns cannot disagree about what the committed VCO record says a corner does.",
+    "WHAT THE BAND SPLIT DOES TO THE LOOP, STATED IN ADVANCE OF THE MEASUREMENT. Local Kvco at the selected operating point ranges 74.7-117.0 MHz/V across the 45 points, all inside spec/pll.md row 17's 150 MHz/V bound, so the rule delivers what DR-003 says it delivers. But the loop gain A = Icp*Kvco/N this campaign presents to the fixed filter therefore varies by 1.57x across its own grid, where sim/reference-spur's varies by 1.05x, and N is 8 rather than 6. Both matter for a spur: the ripple that reaches the control node is filtered by the loop, and the phase deviation it produces is Kvco/f_ref times that ripple. A point-to-point spread in this campaign that sim/reference-spur's grid does not show is therefore expected rather than anomalous, and is the reason the per-point table reports vstart and the band code beside every number.",
+    "WHAT IS MEASURED. Once locked, the PFD fires both branches for its reset-delay overlap once per reference cycle, the charge pump's per-event charge asymmetry lands on C2, and the resulting Vctrl ripple phase-modulates the ring. The deck writes v(clk) and v(vctrl) over the measurement region with `wrdata`, and derive.py -- sim/reference-spur's own module, unmodified -- resamples onto 512 samples per reference period with a local four-point Lagrange cubic, applies a periodic Hann window over exactly 16 reference periods, and evaluates the DFT at exactly k*f_ref. In lock the whole loop is periodic at f_ref, so the carrier (at 8*f_ref here, rather than sim/reference-spur's 6*f_ref) and both sidebands land exactly on bins: coherent, no scalloping loss, no peak search. The reported spur is the LARGER (worse) of the two sidebands in the LAST window. An independent TIE path -- rising mid-supply crossings only, de-trended into a time-interval-error sequence whose f_ref component gives 20*log10(theta/2) -- shares no arithmetic with the DFT path and is reported beside it as the cross-check that neither the resampling grid nor the window is manufacturing the answer. sim/reference-spur/testbench/tb.json carries the full derivation of every choice here; sim/tests/test_reference_spur_derive.py pins the reduction against synthetic waveforms of known phase deviation at -45, -55, -61 and -65 dBc, and covers this campaign because this campaign runs that exact file.",
+    "THE 200 MHz COLUMN IS NO LONGER ARITHMETIC. The shared reduction derives its binding-point scaling from the run's own declared operating point (nratio*fref) rather than from a constant: 20*log10(200/150) = +2.50 dB for sim/reference-spur's records, and exactly 0.00 dB here. So `spur_dbc_at_200mhz` is an extrapolation in that campaign's tables and is the measurement itself in this one, and each table's own notes say which. The column is kept rather than dropped so the two campaigns' tables can be laid side by side, and it is checked against the same -55 dBc line as `spur_dbc`, which is what makes a manifest edit that quietly changed N visible as two diverging columns rather than as one silently re-based number.",
+    "DEVICE MISMATCH IS OFF, AND HERE IS HOW THAT READS AGAINST DR-018's -56.6 dBc. This deck runs no Monte Carlo: it measures the SYSTEMATIC, corner-driven spur, exactly as sim/reference-spur does. spec/pll.md's derived stack is not the same quantity and must not be read against a number from this campaign as though it were. That stack (DR-018) adds three charges linearly, each at its own worst corner, and pushes the sum through the narrowband-FM chain at 200 MHz: 3.68 fC systematic charge asymmetry (sim/cp-compliance, fs/125 C/3.63 V) + 4.25 fC corner-combined statistical residual (sim/mc-cp-mismatch term 3) + 3.73 fC of term-1 UP/DN current mismatch at its ratified +-20 % budget = 11.66 fC -> -56.6 dBc. The comparable row for a mismatch-off measurement is the FIRST term alone: 3.68 fC through the same chain is -66.6 dBc at 200 MHz. A measured number from this campaign therefore sits against -66.6 dBc, not against -56.6 dBc, and the statistical terms remain sim/mc-cp-mismatch's (#15, #487) to supply. Two consequences worth writing down before any point runs. (1) The committed 150 MHz record already exceeds that systematic-only figure by roughly 12 dB at the two cold corners (-54.5 and -54.9 dBc scaled, against -66.6 dBc derived) while sitting 3.6 dB BELOW it at fs/125 C/3.63 V, the derivation's own worst corner -- with mismatch off in both cases. Whatever drives the cold-corner spur is therefore not the charge-asymmetry term the derivation is built from, and a closed-loop measurement at the binding frequency is the only instrument here that sees it. (2) Because these are different quantities, a PASS from this campaign does not discharge the statistical half of the spur budget and a FAIL does not by itself impeach DR-018's charge-pump mismatch budget; what either one does is replace the extrapolated binding-point number with a measured one. A closed-loop Monte Carlo spur campaign -- the measurement that would put both halves in one number -- is not this campaign and is not owned by anything today.",
+    "WHY THE WHOLE MANDATED MATRIX, RATHER THAN A SPANNING SUBSET. sim/reference-spur ran 5 of the 45 points and said so, on the argument that the spur's PVT dependence enters through two quantities characterized over the full matrix elsewhere (the charge-pump asymmetry, sim/cp-compliance, 45 points; the VCO gain, sim/vco-tuning-range, 63 points). That argument bounds the INPUT to the spur, not the spur: the 5-point grid's own measured spread is 15.6 dB (-57.0 to -72.7 dBc), the two extremes are not the two corners the derivation predicts, and nothing in the subset explains why. At 200 MHz there is a second, independent reason the subset argument does not survive: the band code is no longer constant across the grid, so a 5-point subset would sample one band at four points and the other at one, and the 11 band-7 points are precisely the cold/high-supply ones the committed record already fails at once scaled. This campaign therefore declares all 45. A subset of it may of course be RUN -- `--axis`, `--corners`, `--temps` all thin a grid -- but sim/harness requires `--subset-reason` or `--no-write` for that, so a thinned run is visible as one in the record it mints rather than being mistaken for the matrix.",
+    "LOCK CRITERION (the same one sim/reference-spur, sim/period-jitter and sim/pll-top-smoke use, retargeted to N = 8). Locked when (a) the REF->FB delay measured at two late instants ta and tb does not drift -- in a type-II loop a residual frequency error slips that delay at exactly (df/f) seconds per second, so differencing it gives the residual fractional frequency error `ferr` directly -- and (b) that static phase error is small against a reference period. `dphi` unwraps the difference into (-T_ref/2, +T_ref/2] before `ferr` differentiates it (#273), and `ferr_fb` = ffb/fref - 1, read from a period COUNT with no wrap at all, closes the aliasing blind spot unwrapping leaves. `nmeas` = f_out/f_fb is measured independently, so a divider running at the wrong N shows up as a ratio rather than hiding inside a single frequency. A spectrum from an unlocked loop is not a spur, and these checks are what refuse it.",
+    "STEADY STATE: WHAT IS ASSUMED, WHAT IS MEASURED. The loop's slow closed-loop pole is 1/(R*C1) = 9.3 us regardless of Icp (DR-006 Decision 7), so no practical run length drives the residual control-voltage error to zero. Two things follow and both are done rather than assumed. FIRST, each point is released at its own predicted lock point IN ITS OWN SELECTED BAND (`vstart`, from the committed VCO record), which across this grid spans 1.525-2.679 V; releasing every corner at one voltage would spend tens of microseconds slewing the control node at Icp/C1 = 14 mV/us before a window could open. SECOND, the residual that remains is MEASURED: derive.py fits the control-node slope in every spectral window and converts it to `drift_q_fc`, the extra charge that drift moves per reference cycle, to be read against the 2.16-3.68 fC charge-pump asymmetry the spur is made of. `drift_q_fc` is SIGNED and is of either sign in the committed 150 MHz record, so it can add to or partly cancel the asymmetry: a point whose drift charge is comparable to that asymmetry is reporting a bound rather than a settled value, `spur_dbc_first_window` beside `spur_dbc` shows how far the number moved across the run, and `spur_dbc_zero_drift_fit` with its `fit_r2` says whether a linear extrapolation to zero drift describes that point at all.",
+    "SIMULATOR SETTINGS. .tran 2n 8u 2.4u 100p -- identical to sim/reference-spur's, deliberately: the fourth argument is the 100 ps ceiling on the ngspice INTERNAL timestep that every campaign whose DUT contains the PFD inherits (sim/README.md, 'Closed-loop internal-timestep bound'; SIMENV_CLOSED_LOOP_TMAX in sim/lib/simenv.sh), a property of the PFD's internal 0.33-0.39 ns SR-latch set pulse rather than of any one testbench, and violating it produces a confident false 'the loop does not lock'. A tb.json manifest does not inherit that shell constant, so it is written here as an explicit .tran argument and then VERIFIED per point: `dt_int_mean` is the mean internal timestep derived from the waveform the deck actually wrote, checked against a 100 ps ceiling. Note what the ceiling means at this operating point: 100 ps is 1/50 of a 200 MHz output period, against 1/67 of a 150 MHz one, so the same bound resolves this campaign's carrier more coarsely than sim/reference-spur's -- which is a reason to read `dt_int_mean` and the DFT/TIE agreement rather than to assume the reduction's floor is unchanged. .option rshunt=1e12 itl4=200 reltol=1e-3 abstol=1e-13 vntol=1e-6 -- identical to sim/reference-spur's and sim/pll-top-smoke's, so this deck's converged solution is comparable with theirs. The standing DN-branch guard (sim/README.md) is carried as the `dn_lvl` check.",
+    "LIMITATIONS. (1) MOS-only sweep: res_typical / moscap_typical / mimcap_typical are held at typical at every point, so the loop filter's R, C1 and C2 do not skew -- and the peak ripple is dQ/C2 with C2 a MIM cap, so this campaign bounds the spur against MOS skew only. The C2 spread is covered by DR-006 Decision 1's worst-case minimum, which spec/pll.md's own derivation already uses. (2) One (f_ref, N, trim) operating point of the ratified space -- the binding one for this claim, but the 1-25 MHz reference range and the 4-64 multiplier range are not swept here. (3) Schematic-level: no layout parasitics, and no supply or substrate coupling of f_ref into the VCO rail -- spec/pll.md budgets part of the -55 dBc target for exactly those mechanisms and this campaign measures none of them. (4) The reference is ideal: no reference jitter, no duty-cycle error; the reference input's own electrical contract is sim/reference-input-contract's (#499, DR-019). (5) Device mismatch is OFF -- see the DR-018 paragraph above for what that makes the number comparable with. (6) Not a lock-time result: the control node is deliberately released near its lock point, so no acquisition-time number may be read from any record this manifest mints -- sim/lock-time (#12) owns that claim."
+  ],
+  "dut": [
+    "design/netlist/pll_top.spice"
+  ],
+  "netlist": "tb_reference_spur_band_top.sp",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "mos"
+  ],
+  "params": {
+    "fref": "25e6",
+    "nratio": "8",
+    "cpb0_code": "0",
+    "cpb1_code": "0",
+    "ldt0_code": "0",
+    "ldt1_code": "0",
+    "ldt2_code": "0",
+    "ldt3_code": "1",
+    "p0_code": "0",
+    "p1_code": "0",
+    "p2_code": "0",
+    "p3_code": "0",
+    "p4_code": "0",
+    "p5_code": "0",
+    "sel0_code": "0",
+    "sel1_code": "0",
+    "sel2_code": "1",
+    "sel3_code": "0",
+    "sel4_code": "0",
+    "sel5_code": "0",
+    "ktstep": "2e-9",
+    "ktstop": "8.0e-6",
+    "ktstart": "2.4e-6",
+    "ktmax": "100e-12",
+    "ta": "2.52e-6",
+    "tb": "7.60e-6",
+    "wa": "2.52e-6",
+    "wb": "7.96e-6",
+    "wcyc": "16"
+  },
+  "options": [
+    "rshunt=1e12",
+    "itl4=200",
+    "reltol=1e-3",
+    "abstol=1e-13",
+    "vntol=1e-6"
+  ],
+  "analyses": [
+    "save v(ref) v(fb) v(clk) v(vctrl) v(lock) v(xdut.up) v(xdut.dn)",
+    "tran {ktstep} {ktstop} {ktstart} {ktmax}",
+    "set wr_singlescale",
+    "wrdata spur.dat v(clk) v(vctrl)"
+  ],
+  "raw_files": {
+    "spur.dat": {
+      "description": "the locked output and control node over the measurement region, at ngspice's internal timesteps -- the waveform derive.py takes the spectrum of",
+      "columns": [
+        "t",
+        "clk",
+        "vctrl"
+      ],
+      "retain": false
+    }
+  },
+  "raw_measures": {
+    "phi_a": {
+      "analysis": "tran",
+      "expr": "trig v(ref) val='vdd_val/2' rise=1 td='ta' targ v(fb) val='vdd_val/2' rise=1 td='ta'"
+    },
+    "phi_b": {
+      "analysis": "tran",
+      "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tb' targ v(fb) val='vdd_val/2' rise=1 td='tb'"
+    },
+    "dphi": {
+      "analysis": "tran",
+      "expr": "param='(phi_b-phi_a) - (1/fref)*floor((phi_b-phi_a)*fref + 0.5)'"
+    },
+    "ferr": {
+      "analysis": "tran",
+      "expr": "param='-dphi/(tb-ta)'"
+    },
+    "tclk160": {
+      "analysis": "tran",
+      "expr": "trig v(clk) val='vdd_val/2' rise=1 td='ta' targ v(clk) val='vdd_val/2' rise=161 td='ta'"
+    },
+    "fout": {
+      "analysis": "tran",
+      "expr": "param='160/tclk160'"
+    },
+    "tfb20": {
+      "analysis": "tran",
+      "expr": "trig v(fb) val='vdd_val/2' rise=1 td='ta' targ v(fb) val='vdd_val/2' rise=21 td='ta'"
+    },
+    "ffb": {
+      "analysis": "tran",
+      "expr": "param='20/tfb20'"
+    },
+    "nmeas": {
+      "analysis": "tran",
+      "expr": "param='fout/ffb'"
+    },
+    "ferr_fb": {
+      "analysis": "tran",
+      "expr": "param='ffb/fref - 1'"
+    },
+    "lock_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(lock) from='ta' to='tb'"
+    },
+    "up_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(xdut.up) from='ta' to='tb'"
+    },
+    "dn_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(xdut.dn) from='ta' to='tb'"
+    }
+  },
+  "derived": {
+    "module": "derive.py",
+    "measures": [
+      "spur_dbc",
+      "spur_lsb_dbc",
+      "spur_usb_dbc",
+      "spur_dbc_first",
+      "spur_tie_dbc",
+      "spur_dbc_200m",
+      "spur_dbc_fit",
+      "spur_fit_r2",
+      "carrier_v",
+      "fout_edge",
+      "tie_pk_ps",
+      "vctrl_ripple_mv",
+      "drift_q_fc",
+      "dt_int_mean"
+    ],
+    "tables": [
+      "spur_by_corner",
+      "spectrum_worst"
+    ]
+  },
+  "topology_groups": {
+    "spur": {
+      "description": "the measurement this record exists for -- the sideband read out of the locked output spectrum",
+      "measures": [
+        "spur_dbc",
+        "spur_lsb_dbc",
+        "spur_usb_dbc",
+        "spur_dbc_200m",
+        "spur_dbc_fit",
+        "spur_fit_r2",
+        "spur_tie_dbc",
+        "spur_dbc_first",
+        "carrier_v",
+        "fout_edge",
+        "tie_pk_ps"
+      ]
+    },
+    "lock": {
+      "description": "is the loop actually locked, and how far from steady state -- a spectrum from an unlocked loop is not a spur",
+      "measures": [
+        "ferr",
+        "ferr_fb",
+        "dphi",
+        "phi_a",
+        "phi_b",
+        "fout",
+        "ffb",
+        "nmeas",
+        "lock_lvl",
+        "drift_q_fc",
+        "vctrl_ripple_mv"
+      ]
+    },
+    "integration": {
+      "description": "the standing guards: the PFD's DN branch must assert at all, and the internal timestep ceiling must actually be in force",
+      "measures": [
+        "dn_lvl",
+        "up_lvl",
+        "dt_int_mean"
+      ]
+    }
+  },
+  "checks": {
+    "spur_dbc": {
+      "max": -55.0
+    },
+    "spur_dbc_200m": {
+      "max": -55.0
+    },
+    "ferr": {
+      "min": -0.001,
+      "max": 0.001
+    },
+    "ferr_fb": {
+      "min": -0.002,
+      "max": 0.002
+    },
+    "nmeas": {
+      "min": 7.99,
+      "max": 8.01
+    },
+    "fout": {
+      "min": 198000000.0,
+      "max": 202000000.0
+    },
+    "dn_lvl": {
+      "min": 0.00089
+    },
+    "dt_int_mean": {
+      "max": 1e-10
+    }
+  },
+  "sweeps": {
+    "op": {
+      "description": "the per-PVT-point operating point: the VCO band code the band-selection rule selects for 200.0000 MHz at that corner, and the control-node release voltage at which that band's committed f(Vctrl) curve (record 20260804-162735-72883fb) reaches it. band_and_vstart_from_vco_record.py in this directory recomputes all 45 from that record and the ratified rule, and diffs them against this manifest. The band code is a real static configuration input of the part, so getting it wrong would mean measuring a mis-configured part; the release voltage only sets where the loop STARTS, and a point whose estimate missed far enough to leave the loop unlocked fails this manifest's ferr/fout/nmeas checks rather than being reported as jitter.",
+      "points": {
+        "b6vs2p235": {
+          "params": {
+            "vstart": "2.235",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p679": {
+          "params": {
+            "vstart": "2.679",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b7vs1p782": {
+          "params": {
+            "vstart": "1.782",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p026": {
+          "params": {
+            "vstart": "2.026",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p417": {
+          "params": {
+            "vstart": "2.417",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b7vs1p570": {
+          "params": {
+            "vstart": "1.570",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs1p786": {
+          "params": {
+            "vstart": "1.786",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p123": {
+          "params": {
+            "vstart": "2.123",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p451": {
+          "params": {
+            "vstart": "2.451",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p427": {
+          "params": {
+            "vstart": "2.427",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b7vs1p636": {
+          "params": {
+            "vstart": "1.636",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b7vs1p886": {
+          "params": {
+            "vstart": "1.886",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p202": {
+          "params": {
+            "vstart": "2.202",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p578": {
+          "params": {
+            "vstart": "2.578",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b7vs1p680": {
+          "params": {
+            "vstart": "1.680",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs1p949": {
+          "params": {
+            "vstart": "1.949",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p275": {
+          "params": {
+            "vstart": "2.275",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p585": {
+          "params": {
+            "vstart": "2.585",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p093": {
+          "params": {
+            "vstart": "2.093",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p501": {
+          "params": {
+            "vstart": "2.501",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b7vs1p648": {
+          "params": {
+            "vstart": "1.648",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs1p884": {
+          "params": {
+            "vstart": "1.884",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p253": {
+          "params": {
+            "vstart": "2.253",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p639": {
+          "params": {
+            "vstart": "2.639",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs1p642": {
+          "params": {
+            "vstart": "1.642",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs1p967": {
+          "params": {
+            "vstart": "1.967",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p300": {
+          "params": {
+            "vstart": "2.300",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p206": {
+          "params": {
+            "vstart": "2.206",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p623": {
+          "params": {
+            "vstart": "2.623",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b7vs1p753": {
+          "params": {
+            "vstart": "1.753",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p001": {
+          "params": {
+            "vstart": "2.001",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p374": {
+          "params": {
+            "vstart": "2.374",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b7vs1p554": {
+          "params": {
+            "vstart": "1.554",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs1p770": {
+          "params": {
+            "vstart": "1.770",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p094": {
+          "params": {
+            "vstart": "2.094",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p415": {
+          "params": {
+            "vstart": "2.415",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p283": {
+          "params": {
+            "vstart": "2.283",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b7vs1p525": {
+          "params": {
+            "vstart": "1.525",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b7vs1p808": {
+          "params": {
+            "vstart": "1.808",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p063": {
+          "params": {
+            "vstart": "2.063",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p463": {
+          "params": {
+            "vstart": "2.463",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b7vs1p583": {
+          "params": {
+            "vstart": "1.583",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs1p806": {
+          "params": {
+            "vstart": "1.806",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p150": {
+          "params": {
+            "vstart": "2.150",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        },
+        "b6vs2p482": {
+          "params": {
+            "vstart": "2.482",
+            "b0_code": "0",
+            "b1_code": "1",
+            "b2_code": "1"
+          }
+        }
+      }
+    }
+  },
+  "grid": [
+    {
+      "description": "typical / -40 C / 2.97 V -- nominal MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.235 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 87.2 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p235"
+        ]
+      }
+    },
+    {
+      "description": "typical / -40 C / 3.30 V -- nominal MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.679 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 75.2 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p679"
+        ]
+      }
+    },
+    {
+      "description": "typical / -40 C / 3.63 V -- nominal MOS. Band 7 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.782 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 100.2 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "b7vs1p782"
+        ]
+      }
+    },
+    {
+      "description": "typical / 27 C / 2.97 V -- nominal MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.026 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 93.0 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p026"
+        ]
+      }
+    },
+    {
+      "description": "typical / 27 C / 3.30 V -- nominal MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.417 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 84.2 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p417"
+        ]
+      }
+    },
+    {
+      "description": "typical / 27 C / 3.63 V -- nominal MOS. Band 7 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.570 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 114.0 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "b7vs1p570"
+        ]
+      }
+    },
+    {
+      "description": "typical / 125 C / 2.97 V -- nominal MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.786 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 98.8 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "b6vs1p786"
+        ]
+      }
+    },
+    {
+      "description": "typical / 125 C / 3.30 V -- nominal MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.123 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 91.1 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p123"
+        ]
+      }
+    },
+    {
+      "description": "typical / 125 C / 3.63 V -- nominal MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.451 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 81.9 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p451"
+        ]
+      }
+    },
+    {
+      "description": "ff / -40 C / 2.97 V -- fastest MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.427 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 85.6 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p427"
+        ]
+      }
+    },
+    {
+      "description": "ff / -40 C / 3.30 V -- fastest MOS. Band 7 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.636 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 112.5 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "b7vs1p636"
+        ]
+      }
+    },
+    {
+      "description": "ff / -40 C / 3.63 V -- fastest MOS. Band 7 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.886 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 100.1 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "b7vs1p886"
+        ]
+      }
+    },
+    {
+      "description": "ff / 27 C / 2.97 V -- fastest MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.202 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 92.8 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p202"
+        ]
+      }
+    },
+    {
+      "description": "ff / 27 C / 3.30 V -- fastest MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.578 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 80.1 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p578"
+        ]
+      }
+    },
+    {
+      "description": "ff / 27 C / 3.63 V -- fastest MOS. Band 7 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.680 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 109.0 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "b7vs1p680"
+        ]
+      }
+    },
+    {
+      "description": "ff / 125 C / 2.97 V -- fastest MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.949 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 100.2 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "b6vs1p949"
+        ]
+      }
+    },
+    {
+      "description": "ff / 125 C / 3.30 V -- fastest MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.275 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 88.5 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p275"
+        ]
+      }
+    },
+    {
+      "description": "ff / 125 C / 3.63 V -- fastest MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.585 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 79.2 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p585"
+        ]
+      }
+    },
+    {
+      "description": "ss / -40 C / 2.97 V -- slowest MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.093 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 82.7 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p093"
+        ]
+      }
+    },
+    {
+      "description": "ss / -40 C / 3.30 V -- slowest MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.501 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 76.9 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p501"
+        ]
+      }
+    },
+    {
+      "description": "ss / -40 C / 3.63 V -- slowest MOS. Band 7 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.648 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 104.3 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "b7vs1p648"
+        ]
+      }
+    },
+    {
+      "description": "ss / 27 C / 2.97 V -- slowest MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.884 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 88.8 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "b6vs1p884"
+        ]
+      }
+    },
+    {
+      "description": "ss / 27 C / 3.30 V -- slowest MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.253 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 82.5 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p253"
+        ]
+      }
+    },
+    {
+      "description": "ss / 27 C / 3.63 V -- slowest MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.639 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 74.7 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p639"
+        ]
+      }
+    },
+    {
+      "description": "ss / 125 C / 2.97 V -- slowest MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.642 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 93.8 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "b6vs1p642"
+        ]
+      }
+    },
+    {
+      "description": "ss / 125 C / 3.30 V -- slowest MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.967 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 87.8 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "b6vs1p967"
+        ]
+      }
+    },
+    {
+      "description": "ss / 125 C / 3.63 V -- slowest MOS. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.300 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 80.7 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p300"
+        ]
+      }
+    },
+    {
+      "description": "fs / -40 C / 2.97 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.206 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 87.5 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p206"
+        ]
+      }
+    },
+    {
+      "description": "fs / -40 C / 3.30 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.623 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 76.9 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p623"
+        ]
+      }
+    },
+    {
+      "description": "fs / -40 C / 3.63 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way. Band 7 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.753 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 103.3 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "b7vs1p753"
+        ]
+      }
+    },
+    {
+      "description": "fs / 27 C / 2.97 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.001 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 94.1 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p001"
+        ]
+      }
+    },
+    {
+      "description": "fs / 27 C / 3.30 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.374 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 83.7 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p374"
+        ]
+      }
+    },
+    {
+      "description": "fs / 27 C / 3.63 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way. Band 7 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.554 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 117.0 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "b7vs1p554"
+        ]
+      }
+    },
+    {
+      "description": "fs / 125 C / 2.97 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.770 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 100.6 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "b6vs1p770"
+        ]
+      }
+    },
+    {
+      "description": "fs / 125 C / 3.30 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.094 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 90.8 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p094"
+        ]
+      }
+    },
+    {
+      "description": "fs / 125 C / 3.63 V -- skewed MOS -- the sign of the UP/DN current asymmetry one way. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.415 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 83.8 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p415"
+        ]
+      }
+    },
+    {
+      "description": "sf / -40 C / 2.97 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.283 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 85.0 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p283"
+        ]
+      }
+    },
+    {
+      "description": "sf / -40 C / 3.30 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way. Band 7 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.525 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 115.0 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "b7vs1p525"
+        ]
+      }
+    },
+    {
+      "description": "sf / -40 C / 3.63 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way. Band 7 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.808 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 102.3 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "b7vs1p808"
+        ]
+      }
+    },
+    {
+      "description": "sf / 27 C / 2.97 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.063 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 90.6 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p063"
+        ]
+      }
+    },
+    {
+      "description": "sf / 27 C / 3.30 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.463 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 82.0 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p463"
+        ]
+      }
+    },
+    {
+      "description": "sf / 27 C / 3.63 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way. Band 7 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.583 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 110.4 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "b7vs1p583"
+        ]
+      }
+    },
+    {
+      "description": "sf / 125 C / 2.97 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 1.806 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 98.6 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "b6vs1p806"
+        ]
+      }
+    },
+    {
+      "description": "sf / 125 C / 3.30 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.150 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 88.8 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p150"
+        ]
+      }
+    },
+    {
+      "description": "sf / 125 C / 3.63 V -- skewed MOS -- the sign of the UP/DN current asymmetry the other way. Band 6 is the LOWEST code that reaches 200.0000 MHz at this corner (spec/pll.md#band-selection-rule, normative), and 2.482 V is where that band's committed f(Vctrl) curve from VCO record 20260804-162735-72883fb crosses it; local Kvco there is 79.9 MHz/V. One block per PVT point because both the band code and the release voltage are per point; the union of the 45 blocks is exactly the mandated PVT matrix.",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "b6vs2p482"
+        ]
+      }
+    }
+  ]
+}
