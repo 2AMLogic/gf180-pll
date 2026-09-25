@@ -80,6 +80,14 @@ jobs:
         # full PDK toolchain and belong in pdk-checks, not this headless job.
         run: python3 -m unittest discover -s layout/tests -t layout/tests
 
+      - name: spec/tests (unit tests for the spec-row coverage check)
+        # Same shape as the two discover steps above, for the check added in
+        # #237 that grades docs/chipalooza/challenge-5-proposal.md's section-5
+        # table against spec/pll.md's summary table. Every test builds a
+        # throwaway tree and runs the real script in it -- no PDK, no KLayout,
+        # no simulation input.
+        run: python3 -m unittest discover -s spec/tests -t spec/tests
+
       - name: sim/lib/check-readme-status.sh (README evidence counts vs. sim/ tree)
         # README.md's status section hand-states a record/campaign count
         # (issue #117: it drifted silently to a stale "16 records / 9
@@ -183,6 +191,25 @@ jobs:
         # reasoned, ratified carve-out; see the script header. Needs python3
         # (set up above); reads only committed Markdown, no PDK.
         run: bash sim/lib/check-record-supersession.sh
+
+      - name: spec/lib/check-spec-row-coverage.sh (proposal section 5 vs. spec/pll.md's summary table)
+        # The four checks above all grade something a document *has* -- its
+        # counts, its rows against the sim/ tree, its citations, its layout
+        # claims. None can see a spec row a document does not mention at all,
+        # and #237's acceptance criteria require exactly that: every spec row
+        # "either closed or explicitly marked unmet -- not silently omitted
+        # from the table". One was omitted for the proposal's whole life:
+        # spec/pll.md's summary-table row 2, Reference input, whose levels and
+        # edge rate are unmeasured `budget` items with a Verification-owed line
+        # of their own, and which carries the ideal-reference exclusion every
+        # jitter and spur number in section 5 rests on. None of it reached the
+        # document written to be emailed verbatim to an outside reader. Three
+        # rules: every spec summary-table row is named by some section-5 row,
+        # at least one row covering it states an explicit verdict, and no
+        # section-5 row names a parameter the specification does not have (so
+        # a spec rename cannot leave a stale row looking like coverage). Needs
+        # python3 (set up above); reads only committed Markdown, no PDK.
+        run: bash spec/lib/check-spec-row-coverage.sh
 
   design-changed:
     name: design-changed (path filter for pdk-checks)
