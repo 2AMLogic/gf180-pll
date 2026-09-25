@@ -1,0 +1,44 @@
+* Probe 3b template -- the ring stage nfet's own noise generators vs. gate bias.
+*
+* Substituted by run.sh: @VGS@, @DESIGN_NGSPICE@, @MODELS_NGSPICE@.
+*
+* WHY A TEMPLATE AND NOT A .control LOOP. `alter` on the gate source inside a
+* foreach, combined with ngspice's plot scoping across a re-run `noise`
+* analysis, silently reports the FIRST iteration's vectors for every iteration
+* -- the sweep appears to run and every row comes back identical. One process
+* per bias point is slower and cannot do that.
+*
+* The DUT is the ring stage's switching nfet exactly as drawn in
+* design/netlist/vco.spice: `XMN Y A NT VSS nfet_03v3 L=0.28u W=2u nf=1`.
+*
+* CAVEAT this probe states rather than hides: V_ds is held at 1.65 V while V_gs
+* sweeps. The real device traverses a two-dimensional (V_gs, V_ds) trajectory,
+* not this one-dimensional slice. That makes the spans measured here a LOWER
+* bound on the true cyclostationary variation, which is all DR-023 needs --
+* the argument is that the variation is far too large to ignore, so a lower
+* bound is the conservative direction.
+*
+* rs is a 1 ohm sense resistor: small enough that the device sees essentially
+* the fixed V_ds the source sets, and its own thermal noise is the runner's
+* units check (sqrt(4kT*1*1Hz) = 1.2875e-10 V RMS).
+
+.include "@DESIGN_NGSPICE@"
+.lib "@MODELS_NGSPICE@" typical
+
+vg  g  0  dc @VGS@ ac 1
+vd  dd 0  dc 1.65
+rs  dd d  1
+xm1 d g 0 0 nfet_03v3 W=2u L=0.28u nf=1 m=1
+
+.control
+op
+print -i(vd)
+* 1 Hz band at 1 MHz -- integrated result == spectral density at 1 MHz.
+noise v(d) vg lin 2 1meg 1000001 1
+setplot noise2
+print onoise_total_rs_thermal
+print onoise_total.m.xm1.m0.id
+print onoise_total.m.xm1.m0.1overf
+.endc
+
+.end
