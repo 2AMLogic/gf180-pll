@@ -142,7 +142,7 @@ iibp ibp 0   dc 'iunit'
 iicp icp 0   dc 'iunit'
 
 * The DUT.  This instance line matches `cloop_instance`'s output verbatim
-* (same 32-port order as sim/period-jitter's and sim/reference-spur's).
+* (same 36-port order as sim/period-jitter's and sim/reference-spur's).
 xdut ref b0 b1 b2 cpb0 cpb1 ldt0 ldt1 ldt2 ldt3 p0 p1 p2 p3 p4 p5 sel0 sel1 sel2 sel3 sel4 sel5
 + ibn icn ibp icp clk divout fb lock vctrl vdd vdd_vco gnd_vco vdd_div vss
 + pll_top
