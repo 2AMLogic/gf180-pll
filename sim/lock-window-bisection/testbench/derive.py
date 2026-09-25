@@ -102,6 +102,14 @@ def _param(point, name):
     return None if raw is None else float(raw)
 
 
+def _unwrap(value, tref):
+    """Fold an edge-pair delay into +/- tref/2, the only range a static offset
+    can occupy. ``None`` in, ``None`` out; no tref, no unwrapping."""
+    if value is None or tref is None or tref <= 0:
+        return value
+    return value - tref * math.floor(value / tref + 0.5)
+
+
 def _tphi(point):
     """The nominal step instant, exactly as the deck computes it."""
     fref = _param(point, "fref")
@@ -140,10 +148,26 @@ def derive_point(point):
     tup_r, tup_f = _f(point, "tup_r"), _f(point, "tup_f")
     tdn_r, tdn_f = _f(point, "tdn_r"), _f(point, "tdn_f")
     if None not in (tup_r, tup_f, tdn_r, tdn_f):
-        out["skew_pw"] = (tup_f - tup_r) - (tdn_f - tdn_r)
+        # Same wrap hazard: each `when` search starts at the same instant, so a
+        # negative offset puts the UP and DN edges in different reference
+        # cycles and the raw difference comes out a period too large.
+        out["skew_pw"] = _unwrap((tup_f - tup_r) - (tdn_f - tdn_r),
+                                 None if fref is None else 1.0 / fref)
 
-    # Was the offset still moving when the step arrived? Measured, not assumed.
-    phi_pre, phi_early = _f(point, "phi_pre"), _f(point, "phi_early")
+    # UNWRAP BEFORE USING EITHER PHASE NUMBER. `phi_pre`/`phi_early` are
+    # `trig`/`targ` edge-pair delays, so each is wrapped into one reference
+    # period: an FB edge 1.76 ns AHEAD of REF reads as +78.24 ns at
+    # f_ref = 12.5 MHz, not as -1.76 ns. This repository has already been
+    # bitten by exactly that (#273, where a wrapped phase pair made a locked
+    # loop's apparent frequency drift read as one reference period per
+    # microsecond and failed two points' lock gate). Unwrapped into
+    # +/- T_ref/2, which is the only range a settled static offset can occupy,
+    # so the same measure works at a bundle whose offset is negative.
+    tref = None if fref is None else 1.0 / fref
+    phi_pre = _unwrap(_f(point, "phi_pre"), tref)
+    phi_early = _unwrap(_f(point, "phi_early"), tref)
+    if phi_pre is not None:
+        out["phi_ss"] = phi_pre
     if phi_pre is not None and phi_early is not None:
         out["phi_drift"] = phi_pre - phi_early
 
@@ -237,6 +261,41 @@ def _tier(codes_err, kind, low, high):
     return "unresolved"
 
 
+def _baseline_asserted(points):
+    """Was the flag actually asserted before the step at this bundle?
+
+    Read at the unperturbed rung when there is one (that is what it is for),
+    and otherwise at whichever rung has a `lock_pre`. A bundle with no
+    `lock_pre` anywhere is treated as not asserted, because the prerequisite
+    cannot be shown rather than because it is known to have failed.
+    """
+    baseline = [p for p in points if _param(p, "delta") == 0.0] or list(points)
+    for p in baseline:
+        lock_pre = _f(p, "lock_pre")
+        if lock_pre is not None and lock_pre >= 0.5 * p.vdd:
+            return True
+    return False
+
+
+def _no_baseline_row(bundle, code, ref_lo, ref_hi):
+    return (bundle, fmt_scalar(code, "%d"), "no_baseline_assert",
+            "", "", "", "", "", "", "", "",
+            "", "",
+            fmt_scalar(None if ref_lo is None else ref_lo * 1e9, "%.4f"),
+            fmt_scalar(None if ref_hi is None else ref_hi * 1e9, "%.4f"),
+            "", "n/a", "", "", "")
+
+
+def _no_baseline_verdict(bundle, code, step, t_flag_ref):
+    one_step_ps = (None if (t_flag_ref is None or step is None)
+                   else t_flag_ref * step * 1e12)
+    return (bundle, fmt_scalar(code, "%d"),
+            fmt_scalar(None if step is None else step * 100.0, "%.2f"),
+            fmt_scalar(one_step_ps, "%.1f"),
+            fmt_scalar(None if one_step_ps is None else one_step_ps / 2.0, "%.1f"),
+            "", "no_baseline_assert", "", "", "", "", "n/a", "n/a")
+
+
 def _by_bundle(run):
     groups = {}
     for p in run.points:
@@ -301,7 +360,7 @@ def derive_tables(run):
                 fmt_scalar(p.get("vwin_min"), "%.4g"),
                 fmt_scalar(p.get("deassert_lat_ns"), "%.3g"),
                 fmt_scalar(p.get("dip_ns"), "%.3g"),
-                fmt_scalar((_f(p, "phi_pre") or 0.0) * 1e9, "%.4f"),
+                fmt_scalar((p.get("phi_ss") or 0.0) * 1e9, "%.4f"),
                 fmt_scalar((p.get("skew_pw") or 0.0) * 1e9, "%.4f"),
                 fmt_scalar((p.get("phi_drift") or 0.0) * 1e12, "%.1f"),
             ))
@@ -347,6 +406,27 @@ def derive_tables(run):
         ref_hi = None if twin is None else twin * (1.0 + DELTA_MAX)
         t_flag_ref = None if twin is None else 0.5 * (ref_lo + ref_hi)
 
+        # NO ASSERTED FLAG, NO THRESHOLD. A threshold is "the smallest step that
+        # drops LOCK"; if LOCK was already low before any step, every rung
+        # trivially reads `deasserted` and the bracket logic below would report
+        # the smallest rung run as an upper bound on a threshold that does not
+        # exist. That is not a small mislabel -- it is a number where there
+        # should be a refusal. Gate on the pad reading the procedure itself
+        # depends on: `lock_pre` at or above half rail. The manifest's own
+        # `lock_pre` check fails such a point independently, so the two agree.
+        #
+        # (Added after this campaign's first record, where `ff` and `ss` both
+        # settled at a static offset wider than their own rule-selected window
+        # and their flag was correctly low at every rung. That record's derived
+        # tables label those two bundles `upper_bound`; every one of their
+        # points also carries a `FAIL -- lock_pre` verdict in the same record,
+        # which is what makes the mislabel readable there.)
+        if not _baseline_asserted(pts):
+            thresh_rows.append(_no_baseline_row(bundle, code, ref_lo, ref_hi))
+            verdict_rows.append(_no_baseline_verdict(bundle, code, step,
+                                                     t_flag_ref))
+            continue
+
         held_p, drop_p = _threshold(pts, True)
         held_m, drop_m = _threshold(pts, False)
 
@@ -387,13 +467,13 @@ def derive_tables(run):
             else:
                 t_flag_kind = "mixed_bound"
 
-        phi_meas = _f(ref_pt, "phi_pre")
+        phi_meas = ref_pt.get("phi_ss")
         # The baseline rung (delta = 0) is the one whose pre-step read is not
         # contaminated by anything; every rung shares the same pre-step
         # transient, but read the baseline's when it is there.
         for p in pts:
-            if _param(p, "delta") == 0.0 and _f(p, "phi_pre") is not None:
-                phi_meas = _f(p, "phi_pre")
+            if _param(p, "delta") == 0.0 and p.get("phi_ss") is not None:
+                phi_meas = p.get("phi_ss")
                 break
 
         codes_err = codes_err_hw = codes_err_ref = None
@@ -470,7 +550,11 @@ def derive_tables(run):
             "`lower_bound` (every rung held -- theta_ps is the largest of them and the true "
             "threshold is ABOVE it, so every derived number is the least unfavourable value "
             "consistent with the data), or `upper_bound` (the smallest rung already dropped). "
-            "hw_ps is blank for a bound, because a bound has no half-width.",
+            "hw_ps is blank for a bound, because a bound has no half-width. A fourth value, "
+            "`no_baseline_assert`, means the flag was NOT asserted before the step at this "
+            "bundle -- its loop settled at a static offset wider than its own window -- so "
+            "there is no threshold to bracket and every derived cell is left empty rather than "
+            "filled from rungs that only re-observe an already-low flag.",
             "t_flag_meas_ns = (theta+ + theta-)/2, the procedure's estimate with the loop's "
             "static offset cancelled. t_flag_ref_lo_ns .. t_flag_ref_hi_ns is what the flag "
             "window at this point is KNOWN to be from committed evidence: t_win x [1.014, "

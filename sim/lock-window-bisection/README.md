@@ -71,17 +71,60 @@ execute it, and the process axis is the three bundles carrying the three
 distinct codes the rule selects across the five MOS bundles. `--subset-reason`
 is therefore required, and what it says lands verbatim on the record.
 
-## Scope of the first record
+## What the first record found
+
+`records/20260925-162032-e341b58.md`, graded in full by
+[DR-028](../../spec/decision-records/DR-028-ref-phase-step-bisection-measures-the-wrong-quantity.md):
+
+- **The deassert is observable at the pad, cleanly.** `VWIN` at 3.2865 V of a
+  3.30 V rail before the step; `LOCK` to ground **80.3–163.1 ns** after it and
+  low for **1.04–1.37 µs**. (That latency is one to two *reference periods* —
+  not the 5.63 ns `spec/pll.md` records, which is the large-perturbation case.)
+- **The threshold in Δ is not `t_flag`.** At `typical`/code 7 both directions
+  bracket at **2.200 ± 0.200 ns** against the **1.3769–1.4529 ns** committed
+  evidence supports — **+55.5 %**, i.e. **−12.6 codes** of selection error on a
+  16-code trim. **Tier A and Tier B both FAIL**, by 3.7× the measurement's own
+  bracket: no finer ladder reaches it.
+- **Why.** `t_flag` is a per-reference-cycle *charge balance* in the detector's
+  `VWIN` integrator; a step threshold is a *stored-charge* question. The
+  difference is an additive time set by the integrator's capacitance, the
+  Schmitt trigger's falling threshold, the discharge device and the loop's
+  bandwidth — four quantities that are not the delay chain the trim moves and
+  vary independently of it, so no fixed factor removes it.
+- **The route is closed.** DR-028 makes DR-022 Decision 5's output-side
+  `ERR`/`ERRD` observation tap the successor; that is a design change and needs
+  its own decision record.
+
+Two reduction defects the run exposed are fixed in `derive.py` **after** it, so
+the record carries the pre-fix labels: a wrapped edge-pair phase reading at a
+bundle with a negative static offset (the #273 hazard), and a bundle whose flag
+was never asserted labelled `upper_bound` rather than `no_baseline_assert`.
+`sim/` is append-only, so the record is not edited; its own per-point
+`FAIL — lock_pre` verdicts are what make both readable, and DR-028 states the
+unwrapped values.
+
+## Scope of that record, and what it does not close
 
 Issue #527 lists six things that must be measured before any of this can be
 written into `spec/`, and states up front that the full crossing is far beyond
-what has ever been run here. The first record answers the four that are about
-the *method's validity* — is the deassert observable at the pad; does the
-threshold in Δ reproduce `t_flag`; does the ± cancellation survive the loop's
-own asymmetric correction; what Δ resolution does one trim step demand — and
-declares the other two out of scope: the worst-code-error grid over temperature
-and supply, and the f_ref dependence below 25 MHz. Those are only worth buying
-if the first four come back clean, and the record says which way they came
-back.
+what has ever been run here. The record answers the ones that are about the
+*method's validity* and declares the rest out of scope: the worst-code-error
+grid over temperature and supply, and the f_ref dependence below 25 MHz. Those
+are only worth buying if the validity questions come back clean, and they do
+not.
+
+Two further limits are worth knowing before re-running this campaign:
+
+- **The pre-step window reaches the detector's integrator but not the loop's
+  slowest pole** (τ ≈ 9.3 µs, `sim/loop-dynamics`). At `ff` and `ss` the static
+  offset at the step instant (−1.760 / +1.604 ns) was still wider than that
+  bundle's own window, so their flag was correctly low and no threshold exists
+  in those rows. A re-take wanting thresholds at those bundles needs a longer
+  pre-step window, which is the campaign's dominant cost.
+- **The off-host batch path is the right way to run this and did not work.**
+  The 45-rung ladder was shaped and submitted first; the execution layer
+  refused every job (`only 0 subnet/AZ(s) resolved, floor is 3`). The manifest
+  and the backend are fine — `--backend batch` plans all 45 correctly — so this
+  is re-runnable off-host the moment that layer resolves subnets again.
 
 [Lock-detector window trim-code rule]: ../../spec/pll.md#lock-detector-window-trim-code-rule

@@ -162,6 +162,7 @@
       "delta_meas",
       "delta_err",
       "skew_pw",
+      "phi_ss",
       "phi_drift",
       "deasserted",
       "vwin_drop",
@@ -202,6 +203,7 @@
         "vwin_drop",
         "phi_pre",
         "phi_early",
+        "phi_ss",
         "phi_drift",
         "skew_pw"
       ]
