@@ -1,0 +1,13 @@
+SECTION 1 -- the committed 100 MHz grid
+  cells where run.sh's selector and the rule (measured window) disagree: 1 of 15 -> ['ff/27C']
+  cells where the rule has NO answer inside DR-001's predicted window: 4 -> ['fs/27C', 'sf/27C', 'ss/-40C', 'typical/27C']
+  settled violation typical/-40C/3.63V: phi_b 1.049 ns at Vctrl 1.471 V | campaign band 6 (Vctrl 1.476 V, t_sys 0.8354 ns) | rule band 6 (Vctrl 1.476 V, t_sys 0.8354 ns) | selectors agree: yes
+  settled violation ff/27C/3.63V: phi_b 1.227 ns at Vctrl 1.392 V | campaign band 6 (Vctrl 1.394 V, t_sys 1.0546 ns) | rule band 5 (Vctrl 2.595 V, t_sys unmeasured ns) | selectors agree: NO
+
+SECTION 2 -- the rule swept over the ratified output band
+  graded points: 1628 (+121 parked above the 2.40 V top of the measured offset grid, +2 (f_out, cell) with no feasible static band)
+  systematic term alone over the ratified 1 ns: 2 (0.1 %)
+  DR-012 4a budget (t_sys + 0.576 + 0.239) over the ratified 1 ns: 1397 (85.8 %)
+  output frequencies with at least one rule-selected cell at Vctrl <= 1.05 V: 23 of 39
+  lowest rule-selected Vctrl anywhere: 0.919 V at ss/125C/2.97V, f_out 135 MHz, band 6 (t_sys 0.8762 ns, budget sum 1.6912 ns)
+  worst rule-selected systematic term: 1.0052 ns at ff/125C/3.63V, f_out 40 MHz, band 4, Vctrl 1.423 V
