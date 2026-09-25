@@ -252,6 +252,43 @@ jobs:
         # committed Markdown file, no PDK, no xschem.
         run: bash design/lib/check-io-list-coverage.sh
 
+      - name: docs/tests (unit tests for the issue-reference-state check)
+        # Same shape as the three discover steps above, for the check added in
+        # #237 that grades what the outward-facing documents claim about the
+        # forge. Hermetic despite the check itself needing the forge: every
+        # test puts a stub `gh` first on PATH, so the issue states are part of
+        # the fixture. No network, no token, no PDK.
+        run: python3 -m unittest discover -s docs/tests -t docs/tests
+
+      - name: docs/lib/check-issue-reference-state.sh (issue references vs. the forge)
+        # The six checks above grade documents against the tree. This one
+        # grades the other half of what docs/chipalooza/challenge-5-proposal.md
+        # and README.md assert -- their claims about the *forge*: "Tracked at
+        # issue #13", "issue #499 (open)", "routed to their owning issues (#9,
+        # #10, #11)". Nothing in the tree changes when an issue closes, so no
+        # tree-reading check could see those rot, and they did: #13 and #17
+        # both closed on 2026-09-08 and were still named as live owners
+        # seventeen days later; #9/#10/#11 were all closed while the proposal
+        # told its reader they owned three FAILing supply-sensitivity
+        # criteria; and `Epic #542` never resolved in this repository at all,
+        # i.e. it was a 404 for the outside reader this document is written to
+        # be emailed to.
+        #
+        # Four rules: every `#N` resolves here; an annotated state (`(open)` /
+        # `is closed`) matches the forge; a present-tense owner ("tracked at",
+        # "routed to", "filed as") is OPEN, past-tense narration exempt; and a
+        # section-5 Source-column issue carries an explicit state annotation.
+        #
+        # THIS IS THE ONLY CHECK HERE THAT IS NOT DETERMINISTIC ON A TREE, by
+        # necessity -- the fact it grades lives on the forge. Two consequences,
+        # both intended: it SKIPS (exit 0, saying "a skip is not a pass") when
+        # `gh` cannot answer, and it can fail a PR that changed nothing because
+        # someone closed a cited issue. The document went stale at that moment,
+        # not at the moment someone next edited it.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash docs/lib/check-issue-reference-state.sh
+
   design-changed:
     name: design-changed (path filter for pdk-checks)
     runs-on: ubuntu-latest

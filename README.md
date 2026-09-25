@@ -42,10 +42,12 @@ Being honest about where this actually is:
   grid reaches **0/45** sustained in-window PASS at either drawn-band edge;
   `supply-sensitivity`'s full 45-point grid (plus all three step/ramp corners)
   PASSes on power (0.99–1.98 mW, under the 5 mW draft target) but FAILs three
-  of its other four criteria at real corners, with one genuine design-margin
-  finding routed to `loop-dynamics` (#10) and the rest to `lock-detector`
-  (#11) or the post-#24 charge pump (#9) — see each campaign's own latest
-  record under `sim/*/records/` for the full accounting. `period-jitter`'s
+  of its other four criteria at real corners, its record naming
+  `loop-dynamics` (#10), `lock-detector` (#11) and the post-#24 charge pump
+  (#9) for each class of finding — all three of those issues have since
+  closed, so the findings are recorded but unowned, which is #506 — see each
+  campaign's own latest record under `sim/*/records/` for the full
+  accounting. `period-jitter`'s
   **deterministic (control-ripple) component now covers 45 of the mandated 45
   PVT corners** — the complete 3 × 3 temperature × supply plane at all five
   MOS bundles (`typical`, `ff`, `ss`, `fs`, `sf`), ranging **0.0508 % RMS**
@@ -157,8 +159,9 @@ Challenge #5 (GF180MCU / Wafer.Space), re-derived from this repository's own
 brief today — including that the design is 3.3 V-only and does not yet
 exercise the Challenge's 5.0 V analog rail; that `period-jitter`'s
 deterministic component now covers 45 of the mandated 45 PVT corners but its
-random/noise-driven component and its 200 MHz band-top counterpart are both
-still unmeasured (#13), so the proposal marks those rows **unmet** rather than
+random/noise-driven component (#505) and its 200 MHz band-top counterpart
+(#503) are both still unmeasured, so the proposal marks those rows
+**unmet** rather than
 omitting them; and that layout has reached the sub-block level but not the top
 level — **4 of the 4 PLL sub-blocks** are drawn and DRC-clean, **4 of the 4
 are LVS-matched**, and there is **no assembled `pll_top` GDS**, hence no
