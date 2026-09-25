@@ -65,6 +65,12 @@ SLICE_FS_SF = "20260906-080511-ccccce3"
 #: is never measured and 3.00 V is measured instead. Only a point-by-point
 #: rule can tell it apart from the real thing.
 SKEWED_REC = "20260907-101112-dddddd4"
+#: A record whose corner axis is not the MOS grid at all -- the
+#: `sim/loop-dynamics` shape (issue #516).
+NON_MOS_REC = "20260731-202550-1a2b3c4"
+#: A record that is a deliberately non-rectangular sample of a larger
+#: cross-product -- the `sim/divider-ratio-chain` shape (issue #516).
+NON_RECT_REC = "20260802-100727-5d6e7f8"
 
 MOS_BUNDLES = ("typical", "ff", "ss", "fs", "sf")
 COMBINED_BUNDLES = ("all-slow", "all-fast")
@@ -152,6 +158,15 @@ class PvtCoverageCheckTest(unittest.TestCase):
             self.write(doc, "# placeholder\n")
 
     # -- fixture helpers -------------------------------------------------
+
+    def _record(self, campaign: str, record_id: str, text: str) -> None:
+        """A committed records/<record-id>.md -- rules 5 and 6 read this
+        directly, since a non-MOS axis's own file names are not something
+        evidence() can turn into a bundle/point count, and a non-rectangular
+        sample's declared total is not itself a per-corner artifact."""
+        d = self.tmp / "sim" / campaign / "records"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{record_id}.md").write_text(text, encoding="utf-8")
 
     def _evidence(self, campaign: str, record_id: str, files) -> None:
         d = self.tmp / "sim" / campaign / "corners" / record_id
@@ -642,6 +657,125 @@ class PvtCoverageCheckTest(unittest.TestCase):
             "n/a |",
         )
         self.assertPasses(self.run_check())
+
+    # -- rule 5: a non-MOS corner axis claim is checked against the record --
+
+    def _non_mos_record(self) -> None:
+        self._record(
+            "non-mos-campaign",
+            NON_MOS_REC,
+            "# Record\n\n"
+            "- **Corner matrix run**: 81 filter-impedance points (27 "
+            "passive-corner bundles x 3 temperatures), each swept over 6 "
+            "Vctrl bias points.\n"
+            "  - **Axes not swept**: MOS process bundles (`tt/ff/ss/fs/sf`) "
+            "N/A -- the filter contains no active device; supply (`vdd`) "
+            "N/A for the same reason.\n",
+        )
+
+    def test_a_non_mos_axis_claim_matching_the_record_passes(self):
+        self._non_mos_record()
+        self.proposal(
+            "| Loop bandwidth | 26-430 kHz | loop-dynamics sweeps 81 "
+            "filter-impedance points (27 passive-corner bundles x 3 "
+            "temperatures) and declares the MOS axis N/A "
+            f"| **MET** | `sim/non-mos-campaign/records/{NON_MOS_REC}.md` |"
+        )
+        self.assertPasses(self.run_check())
+
+    def test_a_non_mos_axis_claim_with_the_wrong_count_fails(self):
+        self._non_mos_record()
+        self.proposal(
+            "| Loop bandwidth | 26-430 kHz | loop-dynamics sweeps 82 "
+            "filter-impedance points (27 passive-corner bundles x 3 "
+            "temperatures) and declares the MOS axis N/A "
+            f"| **MET** | `sim/non-mos-campaign/records/{NON_MOS_REC}.md` |"
+        )
+        self.assertFailsWith(
+            self.run_check(),
+            "states a non-MOS corner axis as 82 points",
+            "declare 81 points (27 bundles x 3 temperatures)",
+        )
+
+    def test_a_bare_non_mos_axis_token_matching_the_record_passes(self):
+        self._non_mos_record()
+        self.proposal(
+            "| Loop bandwidth | 26-430 kHz | worst case over the cross-product "
+            f"| **MET** | `sim/non-mos-campaign/records/{NON_MOS_REC}.md` |",
+            "| Phase margin | >= 45 deg | Same 81-point filter-impedance basis "
+            f"as the row above | **MET** | `sim/non-mos-campaign/records/{NON_MOS_REC}.md` |",
+        )
+        self.assertPasses(self.run_check())
+
+    def test_a_bare_non_mos_axis_token_not_matching_the_record_fails(self):
+        self._non_mos_record()
+        self.proposal(
+            "| Loop bandwidth | 26-430 kHz | worst case over the cross-product "
+            f"| **MET** | `sim/non-mos-campaign/records/{NON_MOS_REC}.md` |",
+            "| Phase margin | >= 45 deg | Same 82-point filter-impedance basis "
+            f"as the row above | **MET** | `sim/non-mos-campaign/records/{NON_MOS_REC}.md` |",
+        )
+        self.assertFailsWith(
+            self.run_check(),
+            'states "82" as a point/bundle count',
+            "declare 81 points (27 bundles x 3 temperatures) and 82 matches neither",
+        )
+
+    # -- rule 6: a non-rectangular sample is checked against declared slices --
+
+    def _non_rect_record(self) -> None:
+        self._record(
+            "non-rect-campaign",
+            NON_RECT_REC,
+            "# Record\n\n"
+            "- **Corner matrix run**: ...\n"
+            "  - **Deliberately non-rectangular**: 12 points run of the 100 "
+            "a full cross-product of the axes above would be.\n",
+        )
+        self._evidence(
+            "non-rect-campaign",
+            NON_RECT_REC,
+            [
+                "typical_27c_3.30v_f200n04.log",
+                "typical_27c_3.30v_f200n05.log",
+                "ss_125c_2.97v_f200n06.log",
+            ],
+        )
+
+    def test_a_non_rectangular_sample_claim_matching_the_record_passes(self):
+        self._non_rect_record()
+        self.proposal(
+            "| Multiplication ratio | N = 4-64 | 3 distinct N exercised; "
+            "12 of its 100 cells, not a grid "
+            f"| **MET** | `sim/non-rect-campaign/records/{NON_RECT_REC}.md` |"
+        )
+        self.assertPasses(self.run_check())
+
+    def test_a_non_rectangular_sample_fraction_mismatch_fails(self):
+        self._non_rect_record()
+        self.proposal(
+            "| Multiplication ratio | N = 4-64 | 3 distinct N exercised; "
+            "13 of its 100 cells, not a grid "
+            f"| **MET** | `sim/non-rect-campaign/records/{NON_RECT_REC}.md` |"
+        )
+        self.assertFailsWith(
+            self.run_check(),
+            "states 13 of 100 cells",
+            "declare 12 of 100 cells",
+        )
+
+    def test_a_distinct_n_claim_not_matching_the_committed_files_fails(self):
+        self._non_rect_record()
+        self.proposal(
+            "| Multiplication ratio | N = 4-64 | 4 distinct N exercised; "
+            "12 of its 100 cells, not a grid "
+            f"| **MET** | `sim/non-rect-campaign/records/{NON_RECT_REC}.md` |"
+        )
+        self.assertFailsWith(
+            self.run_check(),
+            "claims 4 distinct N",
+            "carry 3 distinct N values",
+        )
 
     # -- guards: a check that did not run is not a check that passed ------
 

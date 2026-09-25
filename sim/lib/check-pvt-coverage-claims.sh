@@ -166,27 +166,56 @@
 # prose -- the proposal's numbered "Known gaps" list restates several -- are
 # not graded, because prose has no citation column to check them against.
 #
-# Two grid-shape claims are also still taken on trust, both of them hand-
-# verified and written into section 5.0 of the proposal rather than graded
-# (issue #516):
+# 5. A NON-MOS CORNER AXIS CLAIM IS CHECKED, NOT ASSERTED (issue #516). A
+#    record can legitimately sweep no MOS/supply corner at all -- its DUT has
+#    no MOS device -- and declare so via sim/README.md's non-MOS-axis
+#    convention: an "Axes not swept: MOS ... N/A" statement paired with a
+#    leading "<N> <label> points (<M> <label> bundles x <T> temperatures)"
+#    sentence in the same "Corner matrix run" field. evidence() cannot see
+#    such a record's corner-file names (they are not sim/harness/corners.py
+#    bundle names), so rules 1-4 pass it in total silence, and a row citing it
+#    was free to state any point/bundle/temperature count it liked.
+#    sim/loop-dynamics is the one campaign of this shape on the tree today:
+#    27 passive-corner bundles x 3 temperatures = 81 filter-impedance points.
+#    This rule reads the record's own declaration and fails a row that quotes
+#    the full sentence with different numbers, or a bare "<N>-point"/
+#    "<N> bundle" token elsewhere in the row that matches none of the
+#    declared axis numbers.
 #
-#   * A record whose corner axis is NOT the MOS grid. sim/loop-dynamics sweeps
-#     the passive loop filter over 27 passive-corner bundles x 3 temperatures
-#     and declares the MOS and supply axes N/A; its committed artifacts are
-#     named for filter corners, so evidence() returns zero points and zero
-#     bundles -- indistinguishable here from a parser that found nothing.
-#   * A deliberately non-rectangular sample of a cross-product.
-#     sim/divider-ratio-chain runs 235 of the 2835 cells of a 61-N x 45-corner
-#     product; every bundle it touches is on-grid and its PVT point set IS the
-#     mandated 45, so both triggers above pass it.
+# 6. A NON-RECTANGULAR CROSS-PRODUCT SAMPLE IS CHECKED AGAINST THE RECORD'S
+#    OWN DECLARED SLICES (issue #516). sim/divider-ratio-chain runs 235 of the
+#    2835 cells of a 61-N x 45-corner product -- every bundle it touches is
+#    on-grid and its PVT point set IS the mandated 45, so rules 1-4 all pass
+#    it; "61 distinct N exercised ... MET" is a claim about the cross-product
+#    shape, not either axis alone, and nothing graded it. This rule reads the
+#    record's own "Deliberately non-rectangular: <N> points run of the <M>"
+#    declaration and requires a row's own "<N> of/out of <M> cells"-shaped
+#    claim to match it, and counts the record's own committed corner-file
+#    names for the distinct value of the extra sample axis (the divide ratio
+#    N encoded in each file's `..._f<rate>nNN` suffix), checking a row's
+#    "<K> distinct N" claim against that count directly rather than trusting
+#    the record's prose to have summed its own slices correctly.
+#
+#    Both rules read a record's own text or its own committed corner-file
+#    names, never a graded document's — the record is the ground truth, the
+#    document is what is graded against it. Neither rule requires a record
+#    to carry a new field: sim/loop-dynamics and sim/divider-ratio-chain
+#    already state what rules 5 and 6 need, in the "Corner matrix run" field
+#    sim/README.md's Summary record format section already mandates. See that
+#    section's "Non-MOS corner axis and non-rectangular sample" note for the
+#    two sentence shapes this reads, ratified there rather than left implicit
+#    in a regular expression.
 #
 # Usage: sim/lib/check-pvt-coverage-claims.sh
 # Exit codes: 0 every quoted corner is a real bundle, every off-grid corner is
-#             disclosed, every corner count is backed by evidence, and every
-#             claim of full mandated coverage cites evidence that covers it;
-#             1 any rule fails, a graded document is missing, the harness
-#             cannot be imported, or the document yields no corner triples at
-#             all (a broken parser must not look like a clean document).
+#             disclosed, every corner count is backed by evidence, every claim
+#             of full mandated coverage cites evidence that covers it, every
+#             non-MOS-axis claim matches the record's own declaration, and
+#             every non-rectangular sample claim matches the record's own
+#             declared total and committed distinct-N count; 1 any rule fails,
+#             a graded document is missing, the harness cannot be imported, or
+#             the document yields no corner triples at all (a broken parser
+#             must not look like a clean document).
 
 set -uo pipefail
 
@@ -295,6 +324,43 @@ FULL_FRACTION = re.compile(r"\b(\d+)\s*(?:/|\s+of\s+(?:the\s+)?)\s*(\d+)\b")
 #: A Source cell that defers to the row above instead of repeating the id.
 SAME_RECORD = re.compile(r"\bSame\s+(?:record|as\s+above)\b", re.IGNORECASE)
 
+#: Rule 5. A record's own "Axes not swept: MOS ... N/A" statement -- the
+#: sim/README.md-mandated marker that its corner axis is not the MOS grid at
+#: all, so evidence() (bundle/point names from sim/harness/corners.py) will
+#: never see anything for it.
+NON_MOS_AXIS_MARKER = re.compile(r"MOS\b[^\n]{0,80}?N/A", re.IGNORECASE)
+#: The declaration sentence that must accompany it: "81 filter-impedance
+#: points (27 passive-corner bundles x 3 temperatures)". Read from both a
+#: record's own text (the ground truth) and a row that restates it in full.
+NON_MOS_AXIS_DECLARATION = re.compile(
+    r"\b(\d+)\s+[\w-]+\s+points?\s*\(\s*(\d+)\s+[\w-]+\s+bundles?"
+    r"\s*[x×]\s*(\d+)\s+temperatures?\s*\)"
+)
+
+#: Rule 6. A record's own "Deliberately non-rectangular: <N> points run of
+#: the <M>" declaration -- the sim/README.md-mandated statement of a
+#: campaign's total against the full cross-product it deliberately does not
+#: fill.
+NON_RECT_DECLARATION = re.compile(
+    r"[Dd]eliberately non-rectangular\*{0,2}:?\s*(\d+)\s+points?\s+run\s+of"
+    r"\s+the\s+(\d+)"
+)
+#: The same claim as a graded document restates it: "235 of its 2835 cells".
+NON_RECT_ROW_FRACTION = re.compile(r"(\d+)\s+of\s+(?:its|the)\s+(\d+)\s+cells?\b")
+#: "61 distinct N exercised" -- the cross-product-shape claim rule 6 checks
+#: against the record's own committed corner-file names, not its prose.
+DISTINCT_N_CLAIM = re.compile(r"(\d+)\s+distinct\s+N\b")
+#: A corner-point file that carries an extra sample-axis token beyond
+#: (bundle, temperature, supply) -- e.g. divider-ratio-chain's
+#: `ss_125c_2.97v_f200n64.log` (input rate x divide ratio N). Anchored on the
+#: same known bundle names as CORNER_FILE so this only fires for a genuine
+#: MOS-grid record whose manifest adds a further axis, never for a non-MOS
+#: record like loop-dynamics (whose file names do not start with a bundle
+#: CORNER_FILE recognizes followed by `_<temp>c_<vdd>v` at all).
+POINT_FILE = re.compile(
+    r"(?:^|[_/])(" + _BUNDLE_ALT + r")_(-?\d+)c_([0-9.]+)v_\w*?n(\d+)\b"
+)
+
 
 def _f(text):
     try:
@@ -350,6 +416,94 @@ def evidence(record_id):
     return result
 
 
+_record_text_cache = {}
+
+
+def record_text(record_id):
+    """The raw text of a cited record's own records/<record-id>.md, or None.
+
+    Rules 5 and 6 grade a claim stated in the record's own prose (a non-MOS
+    axis's shape, a non-rectangular sample's declared total) that its
+    committed corners/ file names either cannot express at all (rule 5 -- a
+    non-MOS bundle name is not something CORNER_FILE can recognize) or express
+    only as a count to cross-check, not a citable sentence (rule 6). The
+    record is still the ground truth; this just reads a different part of it.
+    """
+    if record_id in _record_text_cache:
+        return _record_text_cache[record_id]
+    text = None
+    sim_dir = os.path.join(repo_root, "sim")
+    for campaign in sorted(os.listdir(sim_dir)):
+        record_path = os.path.join(sim_dir, campaign, "records", record_id + ".md")
+        if os.path.isfile(record_path):
+            with open(record_path, encoding="utf-8") as fh:
+                text = fh.read()
+            break
+    _record_text_cache[record_id] = text
+    return text
+
+
+def non_mos_axis_declaration(record_id):
+    """(points, bundles, temperatures) a record declares for its OWN, non-MOS
+    corner axis, or None if this record does not carry sim/README.md's
+    non-MOS-axis marker (an ordinary MOS-grid record) or states no matching
+    declaration sentence (a documentation gap in the record itself, which
+    this function does not try to paper over).
+    """
+    text = record_text(record_id)
+    if not text or not NON_MOS_AXIS_MARKER.search(text):
+        return None
+    match = NON_MOS_AXIS_DECLARATION.search(text)
+    if not match:
+        return None
+    return tuple(int(g) for g in match.groups())
+
+
+def non_rect_sample_declaration(record_id):
+    """(declared total points, declared full cross-product size) a record
+    states for itself, or None if it never says "Deliberately
+    non-rectangular" (an ordinary record) or states no matching declaration.
+    """
+    text = record_text(record_id)
+    if not text or "non-rectangular" not in text.lower():
+        return None
+    match = NON_RECT_DECLARATION.search(text)
+    if not match:
+        return None
+    return tuple(int(g) for g in match.groups())
+
+
+_point_file_cache = {}
+
+
+def sampled_point_evidence(record_id):
+    """(total committed corner-point files, the set of distinct extra-axis N
+    values) for a record whose corner-file names carry an additional sample
+    axis beyond (bundle, temperature, supply) -- rule 6's ground truth for a
+    non-rectangular cross-product's actual shape, read from the same
+    committed corners/<record-id>/ artifacts evidence() reads, not from
+    either the record's or the graded document's prose.
+    """
+    if record_id in _point_file_cache:
+        return _point_file_cache[record_id]
+    total = 0
+    distinct_n = set()
+    sim_dir = os.path.join(repo_root, "sim")
+    for campaign in sorted(os.listdir(sim_dir)):
+        corner_dir = os.path.join(sim_dir, campaign, "corners", record_id)
+        if not os.path.isdir(corner_dir):
+            continue
+        for name in sorted(os.listdir(corner_dir)):
+            match = POINT_FILE.search(name)
+            if not match:
+                continue
+            total += 1
+            distinct_n.add(int(match.group(4)))
+    result = (total, frozenset(distinct_n))
+    _point_file_cache[record_id] = result
+    return result
+
+
 def names_its_grid(tokens, candidates):
     """True if the row names the grid one of ``candidates`` was measured on.
 
@@ -377,6 +531,8 @@ triples_seen = 0
 counts_seen = 0
 disclosures_seen = 0
 full_claims_seen = 0
+non_mos_seen = 0
+non_rect_seen = 0
 
 for doc in graded:
     doc_path = os.path.join(repo_root, doc)
@@ -556,6 +712,116 @@ for doc in graded:
                     )
                 )
 
+        # Rule 5: a non-MOS corner axis claim is checked against the record's
+        # own declaration, not asserted.
+        non_mos = {}
+        for rid in cited:
+            decl = non_mos_axis_declaration(rid)
+            if decl is not None:
+                non_mos[rid] = decl
+        if non_mos:
+            non_mos_seen += 1
+            declared_set = set(non_mos.values())
+            declared_numbers = {n for d in declared_set for n in d}
+            for quoted in NON_MOS_AXIS_DECLARATION.findall(line):
+                quoted = tuple(int(g) for g in quoted)
+                if quoted not in declared_set:
+                    failed = True
+                    sys.stderr.write(
+                        "FAIL: %s states a non-MOS corner axis as %d points "
+                        "(%d bundles x %d temperatures), but the record(s) "
+                        "this row cites declare %s in their own 'Corner "
+                        "matrix run' field. A non-MOS-axis claim is checked "
+                        "against the record's own declaration, not asserted.\n"
+                        "  row: %s\n"
+                        % (
+                            doc,
+                            quoted[0],
+                            quoted[1],
+                            quoted[2],
+                            "; ".join(
+                                "%d points (%d bundles x %d temperatures)" % d
+                                for d in declared_set
+                            ),
+                            line.strip()[:220],
+                        )
+                    )
+            for bare in {int(n) for n in DISCLOSURE.findall(line)}:
+                if bare in declared_numbers or bare in allowed:
+                    continue
+                failed = True
+                sys.stderr.write(
+                    "FAIL: %s states \"%d\" as a point/bundle count, but the "
+                    "non-MOS-axis record(s) this row cites declare %s and %d "
+                    "matches neither. A row citing a non-MOS-axis record may "
+                    "only quote that record's own declared axis numbers here.\n"
+                    "  row: %s\n"
+                    % (
+                        doc,
+                        bare,
+                        "; ".join(
+                            "%d points (%d bundles x %d temperatures)" % d
+                            for d in declared_set
+                        ),
+                        bare,
+                        line.strip()[:220],
+                    )
+                )
+
+        # Rule 6: a non-rectangular cross-product sample is checked against
+        # the record's own declared total and its own committed distinct-N
+        # evidence, not asserted.
+        non_rect = {}
+        for rid in cited:
+            decl = non_rect_sample_declaration(rid)
+            if decl is not None:
+                non_rect[rid] = decl
+        if non_rect:
+            non_rect_seen += 1
+            declared_fractions = set(non_rect.values())
+            for quoted in NON_RECT_ROW_FRACTION.findall(line):
+                quoted = tuple(int(g) for g in quoted)
+                if quoted not in declared_fractions:
+                    failed = True
+                    sys.stderr.write(
+                        "FAIL: %s states %d of %d cells, but the record(s) "
+                        "this row cites declare %s in their own 'Deliberately "
+                        "non-rectangular' statement. A non-rectangular "
+                        "cross-product claim is checked against the record's "
+                        "own declared total, not asserted.\n  row: %s\n"
+                        % (
+                            doc,
+                            quoted[0],
+                            quoted[1],
+                            "; ".join(
+                                "%d of %d cells" % d for d in declared_fractions
+                            ),
+                            line.strip()[:220],
+                        )
+                    )
+            distinct_n_evidence = {
+                rid: sampled_point_evidence(rid)[1] for rid in non_rect
+            }
+            all_n = frozenset().union(*distinct_n_evidence.values())
+            for quoted in {int(n) for n in DISTINCT_N_CLAIM.findall(line)}:
+                if quoted == len(all_n):
+                    continue
+                failed = True
+                sys.stderr.write(
+                    "FAIL: %s claims %d distinct N, but the committed "
+                    "corner-point files of the record(s) this row cites carry "
+                    "%d distinct N values (%s). A distinct-N claim about a "
+                    "non-rectangular sample is checked against the record's "
+                    "own committed corner files, not asserted.\n  row: %s\n"
+                    % (
+                        doc,
+                        quoted,
+                        len(all_n),
+                        ", ".join(str(n) for n in sorted(all_n)[:4]) + (" ..." if len(all_n) > 4 else ""),
+                        line.strip()[:220],
+                    )
+                )
+
 if not triples_seen:
     sys.stderr.write(
         "FAIL: no corner triple (`` `<bundle>`/<T> °C ``) was found in any of "
@@ -573,7 +839,10 @@ print(
     "corner name the grid they were measured on; %d PVT corner count(s) "
     "match the %d-point mandated grid or the cited record's committed "
     "evidence; %d row(s) claiming the full mandated grid cite evidence "
-    "covering all %d of its points"
+    "covering all %d of its points; %d row(s) citing a non-MOS-axis record "
+    "match its own declared axis shape; %d row(s) citing a non-rectangular "
+    "cross-product sample match its own declared total and committed "
+    "distinct-N count"
     % (
         triples_seen,
         len(graded),
@@ -582,6 +851,8 @@ print(
         MANDATED_GRID,
         full_claims_seen,
         MANDATED_GRID,
+        non_mos_seen,
+        non_rect_seen,
     )
 )
 PY
