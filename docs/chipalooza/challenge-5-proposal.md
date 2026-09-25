@@ -484,13 +484,19 @@ directories instead of records and now names the five its 45 points come from.
 
 The mandated grid is
 computed from the harness, not written into the check, so widening the
-temperature or supply axis moves what CI enforces in the same commit. Two of
-the bullets above are still beyond it and are stated here on a hand check
-rather than a machine one — `loop-dynamics`' non-MOS corner axis and
-`divider-ratio-chain`'s non-rectangular sample, both of which the committed
-records declare and neither of which the check can currently read. That gap
-is filed as **#516**, named here rather than left as an unmarked difference
-between what this section asserts and what CI enforces.
+temperature or supply axis moves what CI enforces in the same commit. Two
+more bullets above were, until **#516**, stated here on a hand check rather
+than a machine one — `loop-dynamics`' non-MOS corner axis and
+`divider-ratio-chain`'s non-rectangular sample. Both are now read from the
+committed record rather than trusted: `sim/lib/check-pvt-coverage-claims.sh`
+fails if a row restating `loop-dynamics`' "81 filter-impedance points (27
+passive-corner bundles x 3 temperatures)" declaration — in full or as a bare
+"81-point" echo — disagrees with the record's own sentence, and fails if a
+row's restatement of `divider-ratio-chain`'s "235 points run of the 2835"
+declaration, or its "61 distinct N" claim, disagrees with the record's own
+declared total or the distinct divide-ratio values its committed
+`corners/<record-id>/` file names actually carry. `sim/README.md`'s Summary
+record format section ratifies the two sentence shapes this reads.
 
 | Parameter | v1 draft target | Measured / derived (3.3 V) | Verdict | Source (dated) |
 |---|---|---|---|---|

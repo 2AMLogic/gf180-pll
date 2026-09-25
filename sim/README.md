@@ -569,6 +569,45 @@ apply is written as `N/A` **with a reason**, not omitted.
   *not* swept (see "Default corner matrix"). Must be the full default grid
   unless the record states why a subset was used.
 
+  **Non-MOS corner axis and non-rectangular sample.** Two shapes of this
+  field are common enough, and load-bearing enough for a reader-facing
+  document quoting one, that `sim/lib/check-pvt-coverage-claims.sh` grades a
+  document's restatement of them against the record itself (issue #516)
+  rather than trusting the document's own arithmetic:
+
+  - **A record whose corner axis is not the MOS grid at all** — its DUT has
+    no MOS device (`sim/loop-dynamics`' passive loop filter is the case on
+    this tree today). Pair the `**Axes not swept**: MOS ... N/A` statement
+    this field already requires with a leading declaration sentence in the
+    same shape the mandated grid uses: `` `<N>` `<label>` points (`<M>`
+    `<label>` bundles x `<T>` temperatures) ``, e.g. "81 filter-impedance
+    points (27 passive-corner bundles x 3 temperatures)". A document citing
+    this record may restate that sentence in full, or echo a bare
+    `` `<N>`-point `` / `` `<M>` bundle `` token from it — both are checked
+    against these numbers, not asserted independently.
+  - **A deliberately non-rectangular sample of a larger cross-product** —
+    the record runs some points of a full-factorial product of its own axes
+    and not others, on purpose (`sim/divider-ratio-chain` runs 235 of a
+    61-N x 45-corner-equivalent 2835-cell product; `sim/harness/README.md`'s
+    "Sweeping beyond the PVT grid" `grid` key is what produces this shape).
+    State it as `` **Deliberately non-rectangular**: `<N>` points run of the
+    `<M>` `` a full cross-product of the axes above would be, followed by the
+    slices actually covered and why. A document citing this record may
+    restate `` `<N>` of `<M>` cells `` or `` `<N>` of its `<M>` `` — checked
+    against this sentence's own numbers — and any `` `<K>` distinct `<axis>`
+    `` claim about the sampled axis is checked against the distinct values
+    the record's own committed `corners/<record-id>/` file names carry for
+    it (e.g. the divide ratio N encoded in each file's
+    `..._f<rate>n<N>.log` suffix), not against the record's prose.
+
+  Neither shape is a new record field: both are the "Corner matrix run" field
+  this bullet already requires, stated in a form specific enough for a check
+  to read back. A record that predates this note and lacks the leading
+  declaration sentence is not retroactively wrong — `sim/` is append-only —
+  but a document that then cites it for one of these two claims has nothing
+  to be checked against and should say so rather than assert a number the
+  record's own text does not carry.
+
 - **Methodology / criteria / limitations** — **[PLL delta]**, absorbed from
   #12 and #13. The measurement criterion stated alongside the number, and
   the honest limits of the method:
