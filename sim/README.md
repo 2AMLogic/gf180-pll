@@ -100,7 +100,8 @@ sim/
   | `reference-input-contract` | the `REF` electrical contract itself — levels, 10–90 % edge rate and duty cycle driven to each boundary `spec/pll.md` states, graded as the per-corner shift of the PFD's reference-path set delay. **Declared, not measured**: manifest, deck and reduction are committed and self-checking, zero of 288 declared points have run | #499 → DR-019 |
   | `supply-sensitivity` | supply pushing, quiescent/dynamic power | #14 |
   | `mc-cp-mismatch` | charge-pump mismatch distribution | #15 |
-  | `reference-spur` | closed-loop reference spur measured directly, as the ±f_ref sidebands of the locked output spectrum | #145 |
+  | `reference-spur` | closed-loop reference spur measured directly, as the ±f_ref sidebands of the locked output spectrum, at 150 MHz / band 6 / N = 6 | #145 minted the one committed record (5 of the 45 PVT points); the binding-frequency grid is the row below |
+  | `reference-spur-band-top` | the same sidebands at the **200 MHz binding top of the ratified band**, where `spec/pll.md`'s −55 dBc line is stated — N = 8, and the VCO band code per corner because the band-selection rule splits this grid across bands 6 and 7. **Declared, not measured**: manifest, deck, per-corner operating-point derivation and reduction are committed and self-checking, zero of 45 declared points have run | **#533** (the campaign run) → DR-024 |
   | `output-driver` | loaded buffered-output duty cycle, levels and drive-strength (edge rate) at the two extremes of the ratified band/Vctrl window | #144 |
 
   **`supply-sensitivity`'s HIGH-plateau `not-locked` verdict, disambiguated

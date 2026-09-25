@@ -283,3 +283,23 @@ deck that varies the reference waveform must carry no record. The last is the
 one that guards this record's actual premise; if it ever fires, the
 source-quality exclusion of Decision 3 has to be re-argued rather than
 re-asserted.
+
+## Amendment A2 — the deck count moved, the claim did not (issue #510)
+
+**Date**: 2026-09-25. **No decision, target, budget or verdict moves.** §Context
+and Amendment A1 state a *count* alongside the claim they support — "13 decks,
+12 of one shape, the deviating one named". Issue #510 lands one more
+ideal-`REF` deck, `sim/reference-spur-band-top/testbench/tb_reference_spur_band_top.sp`,
+so the same command now returns **14 decks, 13 of one shape**, with the same
+single deviating deck (`sim/reference-input-contract`'s). The counts above are
+left as written — they were true of the tree that minted this record — and are
+corrected here rather than in place.
+
+**The premise is unaffected, and that is the point of recording this.** What
+Decision 3 rests on is not how many decks exist but that every deck which has
+produced a *record* drives `REF` with the identical ideal pulse. The new deck
+carries no record (its campaign is declared and unmeasured, DR-024), and it is
+of the ideal shape in any case, so it neither weakens nor strengthens the
+source-quality exclusion. `sim/lib/check-ref-drive-claims.sh` grades the
+property rather than the number, which is why it passed across this change
+without either document being edited.

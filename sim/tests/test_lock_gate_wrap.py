@@ -59,7 +59,12 @@ sys.path.insert(0, str(SIM_DIR))
 #: Campaigns whose manifests carry the `phi_a`/`phi_b` -> `dphi` -> `ferr`
 #: idiom this issue is about, with the reference period and phase baseline
 #: each one measures over.
-JSON_CAMPAIGNS = ("period-jitter", "reference-spur", "period-jitter-band-top")
+JSON_CAMPAIGNS = (
+    "period-jitter",
+    "reference-spur",
+    "period-jitter-band-top",
+    "reference-spur-band-top",
+)
 
 #: The gate every one of them applies to `ferr`. Pinned so a future "fix" that
 #: widens the tolerance instead of unwrapping fails here rather than in a

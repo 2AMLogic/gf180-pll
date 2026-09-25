@@ -178,7 +178,7 @@ top cell, port list, netlist/GDS paths, measured area, maturity rung — is
 | 4 | [Integrated RMS jitter](#integrated-rms-jitter) | **not spec'd** — derived-only (DR-002 Decision 5) | n/a — deliberately unspecified; see the section for why this is visible rather than silent | **n/a** |
 | 5 | [Period jitter](#period-jitter) | ≤ 1.0 % of the output period, RMS, **conditional on ≤ 20 mV pp `vdd_vco` ripple** | `all-slow`/−40 °C/2.97 V, band 5 (2.51 % RMS at 100 mV pp ripple, open-loop); closed-loop deterministic jitter measured at all 45 mandated PVT corners, 0.0508–0.2691 % RMS, PASS at every corner (`sim/period-jitter/`, #13) | **measured** (sensitivity, and the closed-loop **deterministic** half at 45/45); **derived** (the ripple condition); the **random (noise-driven) half is not measured and is not obtainable from any analysis this flow offers** — DR-023, owed at #520. The row is not discharged by the deterministic PASS |
 | 6 | [Phase noise](#phase-noise) | **not spec'd** — derived-only (DR-002 Decision 5) | n/a — deliberately unspecified | **n/a** |
-| 7 | [Reference spur](#reference-spur) | ≤ −55 dBc | measured worst −57.0 dBc at f_out = 150 MHz (`sf`/−40 °C/2.97 V), i.e. −54.5 dBc scaled to 200 MHz; derived worst case −61 dBc at 200 MHz, or **−56.6 dBc** once DR-018's corner-combined statistical charge terms are folded into the same derivation | **measured** (5 spanning corners, 150 MHz); **budget** (the 200 MHz binding point and the other 40 corners — see [Verification owed](#verification-owed)) |
+| 7 | [Reference spur](#reference-spur) | ≤ −55 dBc | measured worst −57.0 dBc at f_out = 150 MHz (`sf`/−40 °C/2.97 V), i.e. −54.5 dBc scaled to 200 MHz; derived worst case −61 dBc at 200 MHz, or **−56.6 dBc** once DR-018's corner-combined statistical charge terms are folded into the same derivation, against **−66.6 dBc** for the systematic-only stack a mismatch-off measurement is comparable with (DR-024) | **measured** (5 spanning corners, 150 MHz); **budget** (the 200 MHz binding point and the other 40 corners). The binding-point sweep is a declared campaign, `sim/reference-spur-band-top`, with **zero measured points**, owed at #533 — see [Verification owed](#verification-owed) |
 | 8 | [Loop bandwidth](#loop-bandwidth) | f_c = 26 – 430 kHz over the ratified space, with `f_c < f_ref/10` as a hard ceiling | min 25.96 kHz at f_ref = 1 MHz / 4 legs; max 429.5 kHz at f_ref = 25 MHz / 1 leg; worst realized ratio `f_ref/13` | **measured** |
 | 8a | [Phase margin](#phase-margin) | ≥ 45° everywhere in the contracted space | 47.4° at f_ref = 1 MHz, 4 legs (the tightest cell of the trim rule) | **measured** |
 | 9 | [Lock time](#lock-time) | < 100 µs to the stated [lock criterion](#lock-time). **The < 20 µs stretch is dropped** | 71 µs at f_ref = 1 MHz under the trim rule; structural floor 43 µs. **The criterion this time is measured *to* is not met at 2 of the 45 mandated corners** — the static-phase half settles at 1.227 ns (`ff`/27 °C/3.63 V) and 1.049 ns (`typical`/−40 °C/3.63 V) against the ratified ≤ 1 ns, so at those corners there is no instant for a lock time to be measured to (DR-012) | **measured** (small-signal settling); **budget** (cold-start, owed to #163); target **not met** at 2/45 corners because the criterion itself is not reached there |
@@ -685,12 +685,30 @@ Corner binding: **n/a** — no target.
 ratified operating space.
 
 Status: **measured** at five spanning PVT corners, against the derivation
-below. `sim/reference-spur` (#145) runs the assembled `pll_top` to lock and
-reads the sidebands straight out of the locked output spectrum — the first
-closed-loop spur measurement in `sim/`. It does **not** retire the whole row:
+below. `sim/reference-spur` (delivered by #145, **closed**) runs the assembled
+`pll_top` to lock and reads the sidebands straight out of the locked output
+spectrum — the first closed-loop spur measurement in `sim/`. It does **not**
+retire the whole row:
 it is five of the 45 PVT points, at one (f_ref, N, band, trim) operating point,
 and at f_out = 150 MHz rather than the binding 200 MHz. What remains owed is
 named in [Verification owed](#verification-owed).
+
+The measurement at the binding frequency is now a **declared campaign of its
+own**, `sim/reference-spur-band-top` — the full mandated 45-point PVT matrix at
+f_ref = 25 MHz, N = 8, f_out = 200 MHz, Icp trim code 0, sharing
+`sim/reference-spur`'s deck, spectral reduction and solver settings so the two
+are comparable point for point. **Every point of it is owed**: its manifest,
+deck and per-corner operating-point derivation are committed and self-checking,
+and zero of its 45 points are measured (DR-024). A campaign directory is not
+evidence. One property of it is a finding in its own right and is why 200 MHz
+could not simply be dialled into the campaign above: the normative
+[band-selection rule](#band-selection-rule) does **not** hold one band code
+across the 200 MHz grid — band 6 at 34 of the 45 points, band 7 at the other 11
+— so the binding-point measurement is configured per corner. Projected onto a
+*static* code that split leaves four of the five MOS bundles with no single
+code that reaches 200 MHz across the full ratified temperature × supply box;
+that bears on [Output band](#output-band) rather than on this row and is filed
+at #534, which this row does not pre-empt.
 
 Measured — `sim/reference-spur/records/20260816-132150-5f405e7.md`, f_ref =
 25 MHz, N = 6, f_out = 150 MHz, band 6, Icp trim code 0 (the trim the
@@ -766,6 +784,7 @@ derives it is 3.73 fC. Carrying those through the same chain:
 
 | Charge accounting at 200 MHz | Total ΔQ | Derived spur |
 |---|---|---|
+| **Systematic asymmetry alone**, no statistical term — the row a **mismatch-off measurement** is comparable with (DR-024 Decision 4) | 3.68 fC | **−66.6 dBc** |
 | The table above (systematic 3.68 fC + nominal-only statistical 2.99 fC) | 6.67 fC | **−61 dBc** |
 | Corner-combined statistical residual, term 1 still excluded | 7.93 fC | −59.9 dBc |
 | …plus term 1 at its **measured** 17.4798 % (signed `\|mean\| + 3σ`) | 11.19 fC | ≈ −57.0 dBc |
@@ -789,7 +808,31 @@ trim code, the longest overlap, and term 1 counted on top of a term-3
 measurement that already contains it), but it is the honest upper bound, and it
 sits 1.6 dB from the line. Read alongside the measured table's −54.5 dBc at the
 two cold corners once scaled to 200 MHz, the spur row has less slack than the
-−61 dBc figure alone suggests. Closing [Verification
+−61 dBc figure alone suggests.
+
+**Which of these rows a measurement may be read against** (DR-024 Decision 4).
+Every closed-loop spur campaign in this repository — `sim/reference-spur` and
+the owed `sim/reference-spur-band-top` — runs with **device mismatch off**, so
+what they measure is the systematic, corner-driven spur. The comparable row is
+therefore the **first** one, −66.6 dBc, *not* the −56.6 dBc stack, which adds
+two statistical terms each at its own worst corner. Two things follow, and the
+second is the reason this paragraph exists rather than being left to inference:
+
+- A PASS from the binding-point campaign will not discharge the statistical
+  half of this budget, and a FAIL will not by itself impeach DR-018's
+  charge-pump mismatch budget. What either does is replace the binding-point
+  number with a measured one. The closed-loop **statistical** spur — a
+  Monte-Carlo closed-loop sideband, as distinct from `sim/mc-cp-mismatch`'s
+  mismatch *charge* — is **unowned**.
+- **The derivation does not predict the measurement's corner ordering.** The
+  measured table above, scaled, exceeds the systematic-only −66.6 dBc by ~12 dB
+  at the two cold corners (−54.5 and −54.9 dBc) while sitting 3.6 dB *below* it
+  at `fs`/125 °C/3.63 V — the derivation's own worst corner — with mismatch off
+  in every case. Whatever drives the cold-corner spur is not the
+  charge-asymmetry term this derivation is built from. That is an argument for
+  measuring at the frequency the line binds at, not for widening the line.
+
+Closing [Verification
 owed](#verification-owed)'s direct 200 MHz measurement is what would settle it;
 a wider charge-pump mismatch budget is not.
 
@@ -1741,7 +1784,7 @@ to reconstruct it from the status column.
 |---|---|---|
 | [Period jitter](#period-jitter) | any **random** (noise-driven) jitter number at all — the closed-loop **deterministic** component (and the temperature/supply sweep it was taken over) now exists at all 45 mandated PVT corners, the full temperature × supply plane (`sim/period-jitter/`, 0.0508–0.2691 % RMS, PASS against the draft target at every corner); the random component remains unmeasured, and **not measurable on this toolchain** — not for want of device noise models, which `.noise` supplies per device and per mechanism, but because no periodic-steady-state/`pnoise` path exists on this repo's pinned ngspice-46 (`pss` is not a command in it, and `TRANNOISE` injects nothing) to weight those stationary PSDs over the ring's own switching trajectory, across which they move by 46.6 dB (thermal) and 95.9 dB (flicker). Re-derived rather than assumed: `sim/period-jitter/noise-toolchain-probe/`. **The 0.50 % RMS this row's [supply-ripple derivation](#period-jitter) leaves for the random/thermal contribution is an unverified budget, not a result** — see DR-023 §Decision 3 | #520 (`period-jitter`, random component); [DR-023](decision-records/DR-023-random-period-jitter-owner-and-cyclostationary-gap.md) re-points this row off the closed #13 (and its since-closed successor, #505) |
 | [Period jitter](#period-jitter) | the **output-band** axis of that sweep — the temperature × supply axis is retired by the row above, but every measured closed-loop point is at band 6 / f_out = 150 MHz, so no jitter number exists at the binding f_out = 200 MHz top of [Output band](#output-band), and the open-loop band sweep (B0 → B6) remains nominal temperature and supply only. The 200 MHz sweep is now a declared campaign of its own, `sim/period-jitter-band-top` — its 45-point grid, manifest, deck and per-corner operating-point derivation are committed and self-checking, and **every measured point of it is still owed** (`sim/CHARACTERIZATION.md`'s "Period jitter — band sweep at non-nominal temp/supply" row). That derivation already shows the normative [band-selection rule](#band-selection-rule) does not hold one band code across the 200 MHz grid (band 6 at 34 of the 45 points, band 7 at the other 11), so the loop gain the one fixed filter sees varies 1.6× across it against 1.05× across the 150 MHz grid | **#503** (`period-jitter-band-top`, the campaign run). Re-pointed off closed issue #13 by DR-020 Decision 3 — attribution only; that decision makes no statement about this row's measurement, which is a deterministic campaign with no dependence on DR-020's noise finding. #496, which also held this work, closed 2026-09-25 |
-| [Reference spur](#reference-spur) | the remaining 40 PVT points, and a direct measurement at the binding f_out = 200 MHz rather than the 150 MHz one static band code holds across corners — the closed-loop measurement itself now exists (`sim/reference-spur/records/20260816-132150-5f405e7.md`, 5 spanning corners), and the two cold corners do not clear −55 dBc once scaled to 200 MHz | #145 (`reference-spur`) |
+| [Reference spur](#reference-spur) | **the mandated 45 PVT points at the binding f_out = 200 MHz** — restated from "the remaining 40 points [at 150 MHz], and a direct 200 MHz measurement" by DR-024 Decision 3, because completing the 150 MHz grid would produce 40 more numbers that still have to be scaled by +2.50 dB before they can be read against this row's line. The closed-loop measurement itself exists at 150 MHz (`sim/reference-spur/records/20260816-132150-5f405e7.md`, 5 spanning corners, not superseded), and its two cold corners do **not** clear −55 dBc once scaled to 200 MHz (−54.5 and −54.9 dBc). The binding-point sweep is now a declared campaign of its own, `sim/reference-spur-band-top` — 45-point grid, manifest, deck and per-corner operating-point derivation committed and self-checking, **zero measured points**, blocked on fleet access (#499) rather than on mechanism. Its derivation shows the normative [band-selection rule](#band-selection-rule) does not hold one band code across the 200 MHz grid (band 6 at 34 of the 45 points, band 7 at the other 11), which is why the measurement is configured per corner; the per-part consequence of that split is #534's, not this row's. **Not owed against this row**: the statistical half of the spur, which no closed-loop campaign here measures — see the derivation's own "which of these rows a measurement may be read against" | **#533** (`reference-spur-band-top`, the campaign run). Re-pointed off closed issue #145 by [DR-024](decision-records/DR-024-reference-spur-binding-point-owner-and-mismatch-relation.md) Decision 1 — attribution and scope; no target moves. The closed-loop **statistical** spur is **unowned** |
 | [Lock time](#lock-time) | cold-start acquisition including cycle slipping — the closed-loop measurement itself now exists (`sim/lock-time/records/20260831-052456-effc505.md`, full 270-run PVT × N grid against the design's own `lock_detector` criterion): 22 PASS / 233 FAIL / 15 ERROR of 270; most `cold` FAILs read as a transient window too short for the detector to assert rather than a broken loop, and the majority of `relock` FAILs are not yet attributed to a cause (see `sim/CHARACTERIZATION.md`'s `lock-time` row and #284). **The re-take of that grid is no longer held.** DR-013 Decision 7 held it until #411 landed a window meeting Decision 4's ≤ 1.65× spread target, because the grid's verdicts are taken against the design's own `lock_detector` and would otherwise be read against a window that was about to move. #411 has landed that window (`sim/lock-detector/records/20260919-002812-1b12179.md`, observable spread 1.53–1.58×, T1′ and T2′ both met), so the hold is **released** and the re-take is owed on its own merits. Anyone re-running it must configure the lock detector's trim per the [Lock-detector window trim-code rule](#lock-detector-window-trim-code-rule) — the 233 FAILs above were taken against the untrimmed cell and are not comparable point-for-point to a re-take at the rule's codes | #163 (`lock-time`); hold released by #411 |
 | [Reference input](#reference-input) | **the input-threshold / edge-rate / duty sweep** — every point of it. `sim/reference-input-contract`'s manifest, deck and reduction are committed and self-checking, and **zero of its 288 declared points are measured** (the full mandated 45-point PVT grid × six `REF` waveform variants — the ideal pulse every other record here drives, plus one at each stated boundary of the [Reference input](#reference-input) contract and one at all three at once — plus an 18-point detector-gain slice at three corners). What is owed there is compute, not mechanism or design. The three lines it would discharge stay **budget** until it has a record; a campaign directory is not evidence | **#499** (`reference-input-contract`) |
 | [Reference input](#reference-input) | a numeric reference-jitter limit to replace the current exclusion — which needs the closed-loop noise bench, i.e. this repository's noise methodology, **not** the closed-loop lock bench. **It has no owner, and this row now says so rather than naming one.** Its prerequisite is the noise methodology tracked at #520 (the successor to issue #505, closed, which was itself the successor to issue #13, closed too — DR-023); the reference-jitter limit is a further measurement on top of that and is unowned today. The exclusion itself is defensible and is restated with its boundary in [Reference input](#reference-input); what is owed is the number, and its input-side half (`dtdv_worst`, the AM-to-PM coefficient at the worst legal reference slope) is a deliverable of the campaign in the row above | **unowned** — sequenced behind #520 |

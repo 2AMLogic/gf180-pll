@@ -247,5 +247,59 @@ class SpurWindowing(unittest.TestCase):
         )
 
 
+class SpurBindingPointScaling(unittest.TestCase):
+    """`spur_dbc_at_200mhz` is derived from the run, not from a constant.
+
+    This reduction is shared by two campaigns at two output frequencies:
+    `sim/reference-spur` at 150 MHz, where the binding-point column is an
+    EXTRAPOLATION of +2.50 dB, and `sim/reference-spur-band-top` at 200 MHz,
+    where it is the measurement itself and no scaling may be applied. Before
+    #510 the scaling was a module constant (`F_OUT_MEASURED = 150e6`), which
+    would have silently added 2.5 dB to a number already at the binding
+    frequency -- the class of mistake that produces a plausible-looking spur
+    rather than an obvious error, which is what this whole file exists for.
+    """
+
+    def test_a_150mhz_run_is_extrapolated_by_the_committed_2_5_db(self):
+        params = {"fref": "25e6", "nratio": "6"}
+        self.assertAlmostEqual(D.f_out_of(params), 150e6, delta=1.0)
+        # 20*log10(200/150) -- the figure spec/pll.md and the committed record
+        # both quote as +2.50 dB.
+        self.assertAlmostEqual(D.binding_scale_db(params), 2.4988, places=3)
+
+    def test_a_200mhz_run_is_not_scaled_at_all(self):
+        params = {"fref": "25e6", "nratio": "8"}
+        self.assertAlmostEqual(D.f_out_of(params), D.F_OUT_BINDING, delta=1.0)
+        self.assertAlmostEqual(D.binding_scale_db(params), 0.0, places=9)
+
+    def test_the_note_says_which_one_a_reader_is_looking_at(self):
+        class _Point:
+            def __init__(self, params):
+                self.params = params
+
+        class _Run:
+            def __init__(self, params):
+                self.points = [_Point(params)]
+
+        extrapolated = D._binding_note(_Run({"fref": "25e6", "nratio": "6"}))
+        measured = D._binding_note(_Run({"fref": "25e6", "nratio": "8"}))
+        self.assertIn("not a", extrapolated)  # "...not a measurement."
+        self.assertIn("+2.50", extrapolated)
+        self.assertIn("the measurement itself", measured)
+        self.assertNotIn("+2.50", measured)
+
+    def test_the_committed_manifests_are_the_two_cases_above(self):
+        import json
+
+        for testbench, want_mhz in (
+            (TESTBENCH, 150.0),
+            (SIM_DIR / "reference-spur-band-top" / "testbench", 200.0),
+        ):
+            params = json.loads((testbench / "tb.json").read_text())["params"]
+            self.assertAlmostEqual(
+                D.f_out_of(params) / 1e6, want_mhz, delta=1e-6, msg=str(testbench)
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

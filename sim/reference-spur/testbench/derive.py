@@ -72,13 +72,37 @@ KMAX = 20
 #: 20260731-194124-afa338c via DR-006 section 8).
 C1_F = 120.8e-12
 
-#: The measurement runs at 150 MHz -- the highest output frequency one static
-#: band code holds across the corner grid (see tb.json's methodology). The
-#: ratified band's binding frequency for spur is its 200 MHz ceiling, and
-#: theta = 2*pi*f_out*TIE makes that scaling exact arithmetic, reported as its
-#: own separately labelled measure rather than folded into the measurement.
-F_OUT_MEASURED = 150e6
+#: The ratified band's binding frequency for the spur: `spec/pll.md`'s
+#: <= -55 dBc line is stated at the 200 MHz ceiling of `spec/pll.md#output-band`,
+#: because theta = 2*pi*f_out*TIE makes the spur grow with output frequency.
 F_OUT_BINDING = 200e6
+
+
+def f_out_of(params):
+    """The output frequency a run's own manifest declares, in Hz.
+
+    Read from the point's parameters (`nratio * fref`) rather than fixed as a
+    module constant, because this reduction is shared by two campaigns at two
+    different output frequencies: `sim/reference-spur` at 150 MHz (the highest
+    frequency one static band code holds across the whole corner grid) and
+    `sim/reference-spur-band-top` at the binding 200 MHz itself. A constant
+    here would have silently reported the 150 MHz scaling for a 200 MHz run.
+    """
+    return float(params["fref"]) * int(round(float(params["nratio"])))
+
+
+def binding_scale_db(params):
+    """dB to add to a spur measured at `f_out_of(params)` to reach 200 MHz.
+
+    Exact arithmetic on the narrowband-FM relation (theta = 2*pi*f_out*TIE),
+    not a measurement -- which is why it is reported as its own separately
+    labelled measure rather than folded into `spur_dbc`. A run already AT the
+    binding frequency returns 0.0, i.e. no extrapolation at all.
+    """
+    f_out = f_out_of(params)
+    if f_out <= 0.0:
+        return None
+    return 20.0 * math.log10(F_OUT_BINDING / f_out)
 
 #: The spec line this campaign is scored against (spec/pll.md, Reference spur).
 SPUR_TARGET_DBC = -55.0
@@ -348,10 +372,9 @@ def derive_point(point):
     out["spur_lsb_dbc"] = _dbc(last.get("lsb"))
     out["spur_usb_dbc"] = _dbc(last.get("usb"))
     out["spur_dbc"] = _dbc(last.get("ratio"))
-    if out["spur_dbc"] is not None:
-        out["spur_dbc_200m"] = out["spur_dbc"] + 20.0 * math.log10(
-            F_OUT_BINDING / F_OUT_MEASURED
-        )
+    scale_db = binding_scale_db(p)
+    if out["spur_dbc"] is not None and scale_db is not None:
+        out["spur_dbc_200m"] = out["spur_dbc"] + scale_db
     out["spur_dbc_first"] = _dbc(first.get("ratio"))
     for key, name in (
         ("tie_dbc", "spur_tie_dbc"),
@@ -381,6 +404,44 @@ def derive_point(point):
 
 
 # ------------------------------------------------------------------ per run
+def _binding_note(run):
+    """What the `spur_dbc_at_200mhz` column of this run's table actually is.
+
+    Two campaigns share this reduction and they stand in different relations
+    to the 200 MHz binding point, so the note is written from the run's own
+    declared operating point rather than asserted: a 150 MHz run is being
+    EXTRAPOLATED (+2.50 dB of arithmetic that no simulator performed), while a
+    run at 200 MHz is being reported unchanged and the column repeats the
+    measurement. Stating which one a reader is looking at is the whole point
+    of keeping the column in both tables.
+    """
+    params = run.points[0].params if run.points else {}
+    try:
+        f_out = f_out_of(params)
+        scale_db = binding_scale_db(params)
+    except (KeyError, TypeError, ValueError):
+        f_out, scale_db = None, None
+    if f_out is None or scale_db is None:
+        return (
+            "spur_dbc_at_200mhz scales spur_dbc to the ratified band's binding "
+            "output frequency; this run declares no output frequency, so the "
+            "factor could not be derived."
+        )
+    if abs(scale_db) < 1e-9:
+        return (
+            "spur_dbc_at_200mhz repeats spur_dbc: this run is AT the ratified "
+            "band's binding output frequency (%.4f MHz), so no extrapolation "
+            "is applied and the column is the measurement itself, not "
+            "arithmetic." % (f_out / 1e6)
+        )
+    return (
+        "spur_dbc_at_200mhz scales spur_dbc by 20*log10(%.0f/%.0f) = %+.2f dB "
+        "from this run's %.4f MHz to the ratified band's binding output "
+        "frequency. That is arithmetic on the narrowband-FM relation, not a "
+        "measurement." % (F_OUT_BINDING / 1e6, f_out / 1e6, scale_db, f_out / 1e6)
+    )
+
+
 def derive_tables(run):
     rows = []
     worst_point = None
@@ -443,9 +504,7 @@ def derive_tables(run):
                 "of the run. It is the CONSERVATIVE number: the residual "
                 "settling drift still present adds to the ripple rather than "
                 "subtracting from it.",
-                "spur_dbc_at_200mhz scales spur_dbc by 20*log10(200/150) = "
-                "+2.50 dB to the ratified band's binding output frequency. That "
-                "is arithmetic on the narrowband-FM relation, not a measurement.",
+                _binding_note(run),
                 "spur_dbc_zero_drift_fit extrapolates the per-window (drift "
                 "charge, sideband amplitude) pairs to zero residual drift; "
                 "fit_r2 says how well the linear model held. drift_q_fc is the "
