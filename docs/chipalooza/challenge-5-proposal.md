@@ -392,7 +392,27 @@ repository's CI if a row quotes a corner outside the mandated grid **or rests
 on a record measured outside it** without naming the grid it came from, if a
 row names a process bundle `sim/harness/corners.py` does not define, or if a
 PVT corner count in a row is neither the mandated grid size nor a count the
-cited record's committed per-corner evidence produces. The mandated size is
+cited record's committed per-corner evidence produces.
+
+Since 2026-09-25 it also grades the **converse** claim — a row asserting it
+covers the *whole* mandated grid ("Full 45-point PVT grid", "All 45 of the
+mandated PVT points", "45/45") must cite records whose committed per-corner
+evidence, taken in **union**, contains every one of those 45 points. That is a
+point-by-point test rather than a count: 45 measured points that are not *the*
+45 fail it, while a grid completed across several partial records passes — the
+closed-loop period-jitter row below reached the mandated 45 across five
+records covering 1, 4, 8, 18 and 16 points, none of them the grid on its own.
+The rule was needed because "of 45" is a legitimate thing for a partly-measured
+row to say (**Reference spur**'s "5 of 45 PVT points measured, not the full
+grid" is honest and stays legal), so the count rule has to allow 45
+unconditionally — leaving the strongest claim a row can make, *I measured all
+of it*, as the one claim nothing verified. Thirteen rows across this document
+and `sim/CHARACTERIZATION.md` make a full-coverage claim; twelve were already
+backed point for point, and the thirteenth — `sim/CHARACTERIZATION.md`'s
+Verification-owed cross-reference for period jitter — cited campaign
+directories instead of records and now names the five its 45 points come from.
+
+The mandated grid is
 computed from the harness, not written into the check, so widening the
 temperature or supply axis moves what CI enforces in the same commit. Two of
 the bullets above are still beyond it and are stated here on a hand check
