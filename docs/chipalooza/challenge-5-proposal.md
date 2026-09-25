@@ -312,13 +312,20 @@ work around from the rest of the text.
    deliberate, recorded value; treat that code as a property of every `LOCK`
    measurement taken from the part and report it alongside the result; and do
    not read §5's Lock detector row as met by a part whose code was chosen by
-   any means other than the ratified rule. **Two preconditions a reader must
-   not miss**: `pll_top` presently leaves `LDT3` unconnected (**#515**), so
-   only 8 of the 16 codes are reachable on the assembled part and the rule's
-   own code 11 is not among them; and the one route that could close this
+   any means other than the ratified rule. **Two things a reader must not
+   miss.** The code space is complete but the *selection* is not: `pll_top`
+   used to leave `LDT3` unconnected (**#515**), so only 8 of the 16 codes
+   were reachable on the assembled part and the rule's own code 11 was not
+   among them — **DR-026** has since connected it, and all 16 codes are
+   reachable. And the one route that could have closed the selection gap
    without a design change — a symmetric `REF` phase-step bisection read at
-   `LOCK` — is unmeasured and owed by **#527**. **Steps 5 and 8 below are not
-   valid on an untrimmed part, and no step below discharges the trim rule.**
+   `LOCK` — has now been measured and **does not work**: **DR-029** (#527,
+   closed) finds that the threshold in Δ is not the flag window but the
+   window plus an additive time set by the detector's integrator and the
+   loop's own bandwidth, **+55.5 %** at the rule's own reference condition,
+   worth **−12.6 codes** of selection error on a 16-code trim. **Steps 5 and
+   8 below are not valid on an untrimmed part, and no step below discharges
+   the trim rule.**
 5. **Closed-loop lock acquisition and lock time.** Apply `REF` at a chosen
    frequency with the matching `B0..B2` (band-selection rule) and `CPB0..1`
    (Icp trim-code rule) codes, release the loop from a cold start, and
@@ -355,11 +362,19 @@ work around from the rest of the text.
    other code is not a measurement against that row — and per DR-022 no
    procedure available at these pads selects the rule's code, so **this step
    produces a characterization of the part at a known code, not a T1′/T2′
-   verdict.** A worthwhile addition while the board is set up: step `REF`'s
-   phase by a known ±Δ and bisect the Δ at which `LOCK` drops, in both
-   directions. That is the measurement #527 exists to characterize in
-   simulation, and bench data on it would be directly useful to that work
-   even though nothing may be concluded from it here.
+   verdict.** A related observation is worth taking while the board is set
+   up, provided it is read for what it is: step `REF`'s phase by a known ±Δ
+   and bisect the Δ at which `LOCK` drops, in both directions. **That
+   bisection does not measure the window.** DR-029 (#527, closed)
+   characterized exactly this procedure in simulation and returned a negative
+   result: the threshold in Δ is the window plus an additive time set by the
+   detector's integrator, its trigger threshold, the discharge device and the
+   loop's bandwidth — none of them the delay chain the trim moves — so no
+   fixed factor removes it. What the bench can usefully confirm is the half
+   that came back clean: the deassert is observable at the `LOCK` pad
+   promptly and unambiguously, one to two reference periods after the step
+   rather than at the nanosecond scale `spec/pll.md`'s large-signal 5.63 ns
+   figure would suggest.
 9. **Repeat across the daughterboard's available supply/temperature range**
    and record any deviation from §5's simulated PVT grid as a genuine
    silicon finding requiring a new, dated `sim/` record — not folded
@@ -930,14 +945,23 @@ more.
     So the honest statement is that a part from this die is **characterized at
     a recorded trim code**, not trimmed to rule, and §5's Lock detector row's
     T1′/T2′ verdict is conditional on a trim no procedure available at these
-    pads can perform. Two routes could still close it, neither authorized by
-    DR-022: a symmetric `REF` phase-step bisection read at `LOCK`, which needs
-    no design change and is owed a characterization (**#527**), and exposing
-    `ERR`/`ERRD` through matched observation buffers onto two of the 9 free
-    digital-test-output slots, which is a design change needing its own
-    decision record. Both are blocked behind **#515** — `pll_top` leaves
-    `LDT3` unconnected, so only 8 of the 16 codes are reachable on the
-    assembled part and the rule's own code 11 is not among them.
+    pads can perform. DR-022 named two routes that could still close it and
+    authorized neither; **one of them has since been measured and does not
+    work.** DR-029 (#527, closed) characterized the symmetric `REF`
+    phase-step bisection read at `LOCK` — the route needing no design change
+    — and found that the threshold in Δ is not the flag window: **+55.5 %**
+    at the rule's own reference condition, **−12.6 codes** of selection error
+    on a 16-code trim, failing both of DR-022's accuracy tiers by a margin no
+    finer ladder reaches. The obstacle is structural rather than one of
+    resolution: the flag's measurand is a *sustained* phase error, and a loop
+    driven only at `REF` can be given nothing but transients. **The successor
+    is DR-022's second route** — exposing `ERR`/`ERRD` through matched
+    observation buffers onto two of the 9 free digital-test-output slots —
+    which is a design change needing its own decision record, and which
+    nothing in this repository presently owns. The precondition both routes
+    shared is discharged: **DR-026** connects `LDT3` at `pll_top` (**#515**),
+    so all 16 codes, including the rule's own code 11, are reachable on the
+    assembled part.
 
 None of the above items block *submitting* this proposal — consistent with
 this program's stated goal for Chipalooza proposals, the aim is to state the
