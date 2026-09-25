@@ -439,6 +439,52 @@ class SubmissionTests(unittest.TestCase):
         self.assertTrue(got.timed_out)
         self.assertIn("never reached a terminal state", got.detail)
 
+    def test_two_decks_sharing_one_rundir_do_not_read_each_others_output(self):
+        """#509, observed live: three of ten decks came back with a fourth's log.
+
+        Every job's outputs are named identically (`ngspice.log`/`.rc`/`.host`),
+        and `runner._run_phase` hands the batch backend the run's SHARED work
+        directory for any manifest that declares no `raw_files`. Collecting into
+        it let concurrent points overwrite one another, and the caller read back
+        whichever job landed last -- one point's output attributed to another
+        point's corner, which parses cleanly (and silently) whenever the two
+        decks expect the same measurement names.
+        """
+        other = self.root / "ss_125c_2.97v.spice"
+        other.write_text("* a different deck\n.end\n")
+
+        first = self._backend(
+            _FakeTransport(
+                ["done"],
+                outputs={batch.LOG_NAME: "MINE = 1\n", batch.RC_NAME: "0"},
+            )
+        ).run_deck(self.deck, self.rundir, 60, None)
+        second = self._backend(
+            _FakeTransport(
+                ["done"],
+                outputs={batch.LOG_NAME: "THEIRS = 2\n", batch.RC_NAME: "0"},
+            )
+        ).run_deck(other, self.rundir, 60, None)
+
+        self.assertEqual(first.output, "MINE = 1\n")
+        self.assertEqual(second.output, "THEIRS = 2\n")
+        # And the shared rundir holds neither, so a later job cannot pick one up.
+        self.assertFalse((self.rundir / batch.LOG_NAME).exists())
+        self.assertFalse((self.rundir / batch.RC_NAME).exists())
+
+    def test_a_decks_own_artefact_is_still_published_where_a_local_run_leaves_it(self):
+        """A `raw_files` waveform must land in `rundir`, or the reduction is blind."""
+        transport = _FakeTransport(
+            ["done"],
+            outputs={
+                batch.LOG_NAME: "m = 1\n",
+                batch.RC_NAME: "0",
+                "jit.dat": "0 1 2\n",
+            },
+        )
+        self._backend(transport).run_deck(self.deck, self.rundir, 60, None)
+        self.assertEqual((self.rundir / "jit.dat").read_text(), "0 1 2\n")
+
     def test_the_launch_runs_under_the_resolved_region_and_profile(self):
         """#509: a launch that omits them asks as the launch script's OWN default.
 

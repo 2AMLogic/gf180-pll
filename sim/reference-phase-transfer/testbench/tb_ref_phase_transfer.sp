@@ -23,23 +23,58 @@
 * period far too short to resolve a real-world REF phase step directly --
 * N*dphi approaches or exceeds a whole output cycle long before dphi is
 * large enough to be distinguishable from edge-rate and solver noise), this
-* deck reads the loop's own REF-vs-FB static phase error before and after
-* the step:
+* deck reads the loop's own REF-vs-FB static phase error:
 *
-*   phi_pre  = t(first FB edge after ta)    - t(first REF edge after ta)
-*   phi_post = t(first FB edge after tb)    - t(first REF edge after tb)
+*   phi(t) = t(first FB rising edge after t) - t(first REF rising edge after t)
 *
-* If the loop fully re-tracks the injected step, FB's edges move by the same
-* physical `dphi` REF's edges moved by, so phi_post == phi_pre and the
-* unwrapped difference (`phi_shift`, see raw_measures below) is zero.  A
-* nonzero phi_shift is exactly the fraction of the step FB failed to track,
-* and because the divider is an exact digital ratio (CLK = N*FB, structurally,
-* not statistically), the same fraction applies to the OUTPUT: the measured
-* REF-to-output transfer is N*(1 - phi_shift/dphi), in dB
-* 20*log10(N*(1 - phi_shift/dphi)), which derive.py compares against the
-* spec's 20*log10(N).  A third measurement (`phi_mid`, halfway through the
-* post-step settling window) checks the run gave the loop enough time to
-* actually finish settling before phi_post is trusted as the final value.
+* DIFFERENTIALLY, AGAINST A PAIRED CONTROL RUN, NOT AGAINST ITS OWN PAST.
+* This is the one thing record 20260925-073001-ed38ff1 got wrong and this
+* version fixes.  That record differenced phi AFTER the step against phi
+* BEFORE it, inside one run, and the differencing was confounded: at this
+* release point the loop's static phase error is still winding at ~1e-4
+* fractional frequency error 9.2 us in (0.12-0.19 ns per microsecond,
+* monotonic at every corner, consistent with the +72 ppm the same points
+* measure on `ffb`), so over the 6.4 us between the two readings the baseline
+* moves 0.4-1.4 ns against a 1 ns step.  Subtracting a drifting baseline from
+* a step response measures their sum, and nothing separates them.
+*
+* So the campaign now runs TWO decks per PVT point (tb.json's `phases`),
+* identical in every respect except the phase selector `apply`:
+*
+*   ctl   apply=0   dstep = 0      -- no step is applied
+*   stp   apply=1   dstep = dphi   -- the KNOWN step is applied at tphase
+*
+* Both decks are bit-identical up to `tphase` -- same netlist, same PVT point,
+* same `.ic` release, same gate -- so the winding baseline is common-mode by
+* construction and the DIFFERENCE of their phi readings at the same instant is
+* the step response alone:
+*
+*   d(t) = unwrap( phi_stp(t) - phi_ctl(t) )
+*
+* d is 0 before the step (both runs are the same run), -dphi immediately after
+* it (REF's edges moved by +dphi and FB's have not moved yet), and returns to 0
+* as the loop re-tracks.  Whatever is left of it long after the step is exactly
+* the fraction of the step FB failed to track, with the drift removed rather
+* than assumed small.  Because the divider is an exact digital ratio (CLK =
+* N*FB, structurally, not statistically), the same fraction applies to the
+* OUTPUT: the measured REF-to-output transfer is N*(1 + d/dphi), i.e.
+* 20*log10(N*(1 + d/dphi)) in dB, which derive.py compares against the spec's
+* 20*log10(N).
+*
+* FOUR INSTANTS, AND WHAT EACH ONE IS FOR.
+*   ta      before the step        d(ta) must be EXACTLY 0 -- `pair_resid`.
+*                                  A nonzero value means the two decks were
+*                                  not the same run before tphase, which would
+*                                  invalidate the whole differential; it is
+*                                  checked at +/-1 ps, not argued.
+*   tfast   ~0.3-1.2 loop time     d(tfast)/dphi is the transfer to a
+*           constants after it     perturbation FASTER than the loop can
+*                                  follow -- near -1, i.e. a transfer near
+*                                  ZERO, which is the roll-off ABOVE the loop
+*                                  bandwidth the same spec paragraph asserts.
+*   tc, tb  15-60 loop time        the settled, in-band readings.  Two of them,
+*           constants after it     3 us apart, so the run proves it waited:
+*                                  `settle_resid` = d(tb) - d(tc) near zero.
 *
 * WHY A PHASE STEP AND NOT A TONE.  #509's methodology note treats a
 * deterministic step and a deterministic single tone as equivalent first
@@ -54,7 +89,8 @@
 * sim/reference-spur.
 *
 * HOW THE STEP IS APPLIED.  Two ideal periodic pulse sources, `refa`
-* (unperturbed) and `refb` (identical, delayed by `dphi`), are blended by a
+* (unperturbed) and `refb` (identical, delayed by `dstep` = `dphi`*`apply`),
+* are blended by a
 * B-source through a fast (200 ps) linear gate that transitions from
 * refa->refb at `tphase`.  `tphase` is placed in the middle of a reference
 * LOW gap common to both trains (the gap `refb`'s own delay shrinks by
@@ -84,13 +120,16 @@
 * Expects from the harness-generated header:
 *   vdd_val   supply for this PVT point        vdd_nom  nominal supply
 *   temp_c    temperature for this PVT point
-* and from tb.json's `params` / `sweeps`:
+* and from tb.json's `params` / `sweeps` / `phases`:
 *   fref      reference frequency, Hz (25 MHz, fixed across this campaign)
-*   dphi      the KNOWN reference phase step applied at tphase, seconds
+*   dphi      the KNOWN reference phase step size, seconds (shared, so
+*             derive.py can see it -- see `apply` for which deck applies it)
+*   apply     PHASE SELECTOR: 0 in the `ctl` control deck, 1 in `stp`
 *   tphase    the instant the step is applied
-*   ta        pre-step measurement instant (loop already locked)
-*   tc        intermediate post-step instant (settling-progress check)
-*   tb        final post-step measurement instant (loop re-settled)
+*   ta        pre-step instant (the pairing check: d(ta) must be 0)
+*   tfast     post-step instant ~0.3-1.2 loop time constants after the step
+*   tc        intermediate settled post-step instant
+*   tb        final settled post-step instant
 *   b*_code, cpb*_code, ldt*_code, sel*_code, p*_code  static config bits
 *     (sim/lib/pll_top_dut.sh)
 *   vstart    control-node voltage the loop is released from, per corner
@@ -119,8 +158,16 @@ vvss     vss     0 dc 0
 * zero-rise-time stimulus flatters every delay in the PFD's set path, and the
 * PFD set path is precisely what this campaign's timestep ceiling is sized
 * from (sim/README.md, "Closed-loop internal-timestep bound").
+*
+* `apply` is the PHASE SELECTOR (tb.json's `phases`): 0 for the `ctl` control
+* deck and 1 for the `stp` stepped deck.  `dstep` is therefore 0 in the control
+* deck, which makes `refb` bit-identical to `refa` and the blend below a sum of
+* two identical signals for the whole run -- a control that is the stepped deck
+* in every other respect, gate included, so the gate's own 200 ps blend
+* transient is common-mode too and cancels with everything else.
+.param dstep='dphi*apply'
 vrefa refa 0 pulse(0 'vdd_val' 'tstart' 200p 200p '0.5*tref' 'tref')
-vrefb refb 0 pulse(0 'vdd_val' 'tstart+dphi' 200p 200p '0.5*tref' 'tref')
+vrefb refb 0 pulse(0 'vdd_val' 'tstart+dstep' 200p 200p '0.5*tref' 'tref')
 vgate gate 0 pwl(0 0 'tphase' 0 'tphase+gate_tr' 'vdd_val')
 bref  ref  0 v='v(refa)*(1-v(gate)/vdd_val) + v(refb)*(v(gate)/vdd_val)'
 

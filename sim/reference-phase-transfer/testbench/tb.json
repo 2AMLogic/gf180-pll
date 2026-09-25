@@ -1,24 +1,24 @@
 {
   "name": "reference-phase-transfer",
-  "description": "closed-loop REF-to-output phase transfer, measured against a known reference phase step, compared to spec/pll.md's 20*log10(N) exclusion figure (#509)",
+  "description": "closed-loop REF-to-output phase transfer, measured differentially against a known reference phase step and a paired control run, compared to spec/pll.md's 20*log10(N) exclusion figure (#509)",
   "claim": "spec/pll.md#reference-input -- reference-source-quality exclusion: the 20*log10(N) in-band REF-to-output phase transfer, measured rather than only asserted from theory",
   "methodology": [
-    "MEASUREMENT, NOT DERIVATION. spec/pll.md's Reference input row excludes reference-source quality from this block's own jitter/spur numbers and states a 20*log10(N) in-band transfer from theory alone -- no testbench in sim/ has ever perturbed REF in time and read the consequence at the output; every closed-loop record before this one drives REF from a perfectly periodic pulse source. This is that measurement: a KNOWN, single reference-phase STEP is applied at `tphase` and the loop's own re-tracking is read out via its REF-vs-FB static phase error, which is exact (not statistical) because the divider is a digital ratio.",
+    "MEASUREMENT, NOT DERIVATION. spec/pll.md's Reference input row excludes reference-source quality from this block's own jitter/spur numbers and states a 20*log10(N) in-band transfer from theory alone -- no testbench in sim/ had ever perturbed REF in time and read the consequence at the output; every closed-loop record before this campaign drives REF from a perfectly periodic pulse source. This is that measurement: a KNOWN, single reference-phase STEP is applied at `tphase` and the loop's own re-tracking is read out via its REF-vs-FB static phase error, which is exact (not statistical) because the divider is a digital ratio.",
+    "DIFFERENTIAL AGAINST A PAIRED CONTROL RUN -- the correction this record makes to 20260925-073001-ed38ff1. That record differenced phi AFTER the step against phi BEFORE it inside ONE run, and the differencing was confounded: at this release point the loop's static phase error is still winding at ~1e-4 fractional frequency error 9.2 us in (0.12-0.19 ns/us, monotonic at every corner, consistent with the +72 ppm the same points measure on `ffb`), so the baseline moved 0.4-1.4 ns across the 6.4 us between readings, against a 1 ns step. Subtracting a drifting baseline from a step response measures their sum. So each PVT point now runs TWO decks (`phases`): `ctl` with the step selector `apply` = 0, and `stp` with `apply` = 1. They are bit-identical up to `tphase` -- same netlist, same PVT point, same `.ic` release, same blend gate -- so the winding baseline is common-mode BY CONSTRUCTION, and d(t) = unwrap(phi_stp(t) - phi_ctl(t)) is the step response with the drift removed rather than assumed small. `drift_ctl` reports the drift the control run alone saw, so the record states the size of what the pairing cancelled instead of hiding it.",
+    "THE PAIRING IS CHECKED, NOT ASSERTED -- AND ITS RESIDUAL IS THIS RECORD'S OWN NOISE FLOOR. `pair_resid` = d(`ta`), read before the step at an instant where the two decks are still the same run, would be exactly zero if they were bit-identical. They are not, and the reason is worth stating rather than discovering: the stepped deck's `refb` source transitions 1 ns later than the control deck's, and ngspice takes a breakpoint at every source discontinuity -- so the two runs take slightly different internal timesteps from t = 0, even though `ref` itself is identical in both until `tphase` (the blend gate holds `refb` off the `ref` node entirely). `pair_resid` therefore measures the solver-noise floor of the whole differential, directly, on every point. It is checked at +/-50 ps: 5% of `dphi`, far tighter than any real divergence (which would be of order a nanosecond, i.e. `dphi` itself) and honest about what a 9.2 us closed-loop transient at 100 ps internal steps can resolve. Measured 10-18 ps on this grid. Read the reported `phi_shift` against it: a residual only a few times the floor is resolved, not resolved precisely, and the record's dB numbers carry that -- 18 ps of 1 ns is 1.8% of the step, about 0.15 dB of gain.",
     "WHY A STEP, AND WHY NOT DIRECTLY ON THE OUTPUT. #509 accepts a deterministic single-step or single-tone bench as the cheap first increment -- no noise/spectral methodology needed. A phase step's residual, read many loop time constants later, IS the loop's deep-in-band (near-DC) transfer, which is exactly the regime spec/pll.md's 20*log10(N) line describes ('inside the loop bandwidth'). The output itself is not measured directly: for N at the top of the ratified 4-64 range the output period is short enough that N*dphi (the theoretically expected output-phase excursion) exceeds a whole output cycle long before dphi is large enough to resolve against 200 ps edge rates and solver noise -- the wraparound this note exists to flag. Reading the untouched REF-vs-FB static phase error instead sidesteps that: FB's own excursion is at most a few nanoseconds (dphi itself), always well inside one reference period, and the divider (CLK = N*FB, an exact digital ratio) carries that same fractional tracking onto the output without needing to resolve it directly.",
-    "THREE INSTANTS, ONE STEP. phi_pre (at `ta`, before the step) is the loop's pre-existing static phase error. phi_mid (at `tc`) and phi_post (at `tb`) are read after the step, spaced several loop time constants apart so the run itself proves it waited long enough: settle_resid = unwrap(phi_post - phi_mid) close to zero is the record's own evidence that `tb` is not still inside the settling transient. phi_shift = unwrap(phi_post - phi_pre) is the quantity of interest -- zero means FULL re-tracking of the injected `dphi`, and any residual is the fraction of the step the loop failed to track. derive.py turns that into tracking_ratio, measured_gain (= nratio * tracking_ratio) and measured_gain_db, compared against target_gain_db = 20*log10(nratio).",
-    "HOW THE STEP IS APPLIED. Two ideal periodic pulse trains (`refa`, unperturbed; `refb`, identical but delayed by `dphi`) are blended through a fast (200 ps) linear gate that switches from refa to refb at `tphase`, placed in the middle of a reference LOW gap common to both trains so the blend never sees the two disagree -- REF is refa exactly before tphase and refb exactly after, a genuinely glitch-free stitch. Verified in isolation (a standalone prototype .tran trace) before this deck was written: one clean 41 ns gap against a background of 40 ns gaps, nothing else moved.",
+    "FOUR INSTANTS, AND THE ROLL-OFF COMES FREE. d is read at four instants. `ta` (2.6 us, BEFORE the step) is the pairing check above. `tfast` (120 ns after the step, i.e. 0.3-1.2 of the 100-400 ns loop time constant sim/loop-dynamics measured at this operating point) is the transfer to a perturbation FASTER than the loop can follow: the loop has barely begun to re-track, d is near -dphi, and the transfer is near ZERO rather than N -- which is the roll-off ABOVE the loop bandwidth the same spec paragraph asserts, in the time domain and at no extra cost. `tc` (3 us after) and `tb` (6 us after) are the settled in-band readings, 15-60 time constants out and 3 us apart so `settle_resid` = d(tb) - d(tc) is the run's own proof it waited long enough rather than a claim that it did. The in-band number the record reports is read at `tb`.",
+    "HOW THE STEP IS APPLIED. Two ideal periodic pulse trains (`refa`, unperturbed; `refb`, identical but delayed by `dstep` = `dphi`*`apply`) are blended through a fast (200 ps) linear gate that switches from refa to refb at `tphase`, placed in the middle of a reference LOW gap common to both trains so the blend never sees the two disagree -- REF is refa exactly before tphase and refb exactly after, a genuinely glitch-free stitch. Verified in isolation (a standalone prototype .tran trace) before this deck was written: one clean 41 ns gap against a background of 40 ns gaps, nothing else moved. In the `ctl` deck `dstep` is 0, so refb IS refa and the same gate blends two identical signals -- the gate's own blend transient is therefore common-mode as well, and cancels with the drift.",
     "OPERATING POINT, REUSED FROM sim/reference-spur ON PURPOSE. N = 6, VCO band code 6, Icp trim code 0 (one unit leg, the trim-code rule REQUIRES it there per spec/pll.md from DR-006 Decision 5), f_ref = 25 MHz, f_out = 150 MHz -- the identical operating point sim/reference-spur (#145) already measured at this exact PVT subset. This campaign's `vstart` release table is that record's own vco-tuning-range-derived values (record 20260804-162735-72883fb, band 6), reused verbatim rather than re-derived, because it is the same (N, band, f_out) triple -- see sim/reference-spur/testbench/vstart_from_vco_record.py for the derivation this campaign cites rather than duplicates. N = 6 is inside the ratified 4-64 range; this record measures at that one value. The mechanism the record measures -- a type-II loop's DC phase tracking, and an exact digital divide ratio -- is structural rather than N-specific, but this record itself is evidence at N = 6 only; a second N would need its own vco-tuning-range-derived vstart table at a different (N, f_ref) operating point and is not run here (see Limitations).",
-    "WHY A SHORTER RUN THAN sim/reference-spur SUFFICES. That campaign's release-to-measurement budget (2.4-8.0 us) targets a spectral floor several orders of magnitude below a single reference cycle; this campaign only needs the SAME lock quality at `ta` (2.6 us, comfortably inside that campaign's own validated settle window at the identical release point) plus enough time after the step for the loop's own re-tracking transient to finish. sim/loop-dynamics measured this operating point's loop bandwidth in the f_ref/15-f_ref/60 range (worst-case phase margin ~35-67 deg across the grid), i.e. a settling time constant of roughly 100-400 ns; `tb` is set 6 us after `tphase`, 15-60x that time constant, and the run's own settle_resid measurement is the check that this margin was actually enough rather than merely assumed.",
     "dphi = 1 ns: about 2.5% of the 40 ns reference period (~9 degrees), comfortably larger than the 200 ps edge rate and solver-noise floor so the step is resolvable, and comfortably smaller than the reference LOW gap (half a period) so the stitch stays glitch-free and comfortably inside the loop's small-signal-tracking regime (no PFD dead-zone or CP-compliance-limit interaction is expected at this size).",
-    "STANDING GUARDS. dn_lvl (mean PFD DN level, post-step window) is the closed-loop internal-timestep-bound self-check sim/README.md requires: a value near zero is proof the loop's set-pulse edges are being missed, which would fabricate a false 'the loop tracks' or 'does not track' reading rather than a real one. nmeas (= fout/ffb, both measured over the post-step window by counting edges) and fout independently confirm the loop is actually locked at N = 6 / 150 MHz throughout the measurement window, not merely that FB and REF happen to read close together once.",
-    "SIMULATOR SETTINGS. .tran 2n 9.2u 0 100p -- the fourth argument is the 100 ps ceiling on the ngspice INTERNAL transient timestep every campaign whose DUT contains the PFD inherits (sim/README.md, 'Closed-loop internal-timestep bound'). .option rshunt=1e12 itl4=200 reltol=1e-3 abstol=1e-13 vntol=1e-6 -- identical to sim/reference-spur's and sim/pll-top-smoke's, so this deck's converged solution is comparable with the other closed-loop campaigns'.",
-    "CORNER MATRIX -- the SAME five-point subset sim/reference-spur runs, for the same reason stated there: one point here is a closed-loop transient of the whole PLL at a 100 ps internal-timestep ceiling, tens of thousands of internal steps, and the full 45-point cross-product at this run length is not affordable on the wall-clock this campaign has. The union spans every mandated axis (all five MOS bundles, all three temperatures, all three supplies) without being the full cross-product; the full-grid re-run remains owed, same as sim/reference-spur's.",
-    "LIMITATIONS. (1) One (f_ref, N, band, trim) operating point: N = 6 only. The mechanism measured (type-II DC phase tracking, an exact digital divide ratio) does not structurally depend on N, but this record is evidence at N = 6, not a swept confirmation across the ratified 4-64 range -- broader N coverage is follow-up work, not delivered here. (2) MOS-only sweep: res_typical/moscap_typical/mimcap_typical are held at typical at every point (same caveat as sim/reference-spur, and less consequential here -- the loop-filter R/C values set the loop's TIME CONSTANT, not its DC gain, and DC gain is what a phase step's long-settled residual actually probes). (3) Schematic-level: no layout parasitics. (4) The reference's OWN edges are ideal apart from the single deliberate `dphi` step -- no reference jitter, no duty-cycle error; this measures the loop's transfer FUNCTION, not a jitter budget (spec/pll.md's Reference input row's own distinction). (5) This is an IN-BAND measurement only (a phase step's long-settled residual is the loop's near-DC response); it does not by itself demonstrate the roll-off ABOVE the loop bandwidth spec/pll.md's derivation also asserts -- that remains a further increment (#509's 'option 1', which additionally needs a swept-frequency or noise methodology)."
+    "STANDING GUARDS. dn_lvl (mean PFD DN level over the post-step window, in the stepped deck) is the closed-loop internal-timestep-bound self-check sim/README.md requires: a value near zero is proof the loop's set-pulse edges are being missed, which would fabricate a false 'the loop tracks' or 'does not track' reading rather than a real one. nmeas (= fout/ffb, both measured over the post-step window by counting edges) and fout independently confirm the loop is running at N = 6 / 150 MHz throughout the measurement window, not merely that FB and REF happen to read close together once. NOTE what these guards do NOT claim: `lock` (the design's own detector flag) does not assert at four of the five corners on this grid, and the differential measurement does not need it to -- see Limitations (6).",
+    "SIMULATOR SETTINGS. .tran 2n 9.2u 0 100p -- the fourth argument is the 100 ps ceiling on the ngspice INTERNAL transient timestep every campaign whose DUT contains the PFD inherits (sim/README.md, 'Closed-loop internal-timestep bound'). .option rshunt=1e12 itl4=200 reltol=1e-3 abstol=1e-13 vntol=1e-6 -- identical to sim/reference-spur's and sim/pll-top-smoke's, so this deck's converged solution is comparable with the other closed-loop campaigns'. Both phases run the identical analysis line; that is why `analyses` is declared once, shared.",
+    "CORNER MATRIX -- the SAME five-point subset sim/reference-spur runs, for the same reason stated there: one point here is a closed-loop transient of the whole PLL at a 100 ps internal-timestep ceiling, tens of thousands of internal steps, and the full 45-point cross-product at this run length is not affordable on the wall-clock this campaign has. Two decks per point makes it ten invocations, not five. The union spans every mandated axis (all five MOS bundles, all three temperatures, all three supplies) without being the full cross-product; the full-grid re-run remains owed, same as sim/reference-spur's.",
+    "LIMITATIONS. (1) One (f_ref, N, band, trim) operating point: N = 6 only. The mechanism measured (type-II DC phase tracking, an exact digital divide ratio) does not structurally depend on N, but this record is evidence at N = 6, not a swept confirmation across the ratified 4-64 range -- broader N coverage is follow-up work, not delivered here. (2) MOS-only sweep: res_typical/moscap_typical/mimcap_typical are held at typical at every point (same caveat as sim/reference-spur, and less consequential here -- the loop-filter R/C values set the loop's TIME CONSTANT, not its DC gain, and DC gain is what a phase step's long-settled residual actually probes). (3) Schematic-level: no layout parasitics. (4) The reference's OWN edges are ideal apart from the single deliberate step -- no reference jitter, no duty-cycle error; this measures the loop's transfer FUNCTION, not a jitter budget (spec/pll.md's Reference input row's own distinction), and it does NOT convert the exclusion into a numeric reference-jitter limit, which needs the noise methodology owed at #505. (5) TWO frequency points, not a swept transfer function: the settled reading is the deep-in-band (near-DC) transfer and `tfast` is one point above the loop bandwidth. A continuous magnitude-vs-frequency curve, and therefore the loop bandwidth read off this measurement rather than cited from sim/loop-dynamics, is a further increment. (6) The design's own `lock` flag does not assert at four of the five corners at this release point, and this record does not claim it does. The differential does not depend on it: what it needs is that both decks are the same run up to `tphase` (checked at +/-1 ps by `pair_resid`) and that the loop is tracking at N = 6 through the measurement window (checked by `nmeas`/`fout`/`dn_lvl`). Whether the detector asserts is a lock-detector-window question this repository already owns elsewhere (spec/pll.md row 16, sim/lock-detector, #437), not a defect in this measurement -- but it does mean this record is NOT evidence about lock, and must not be cited for it."
   ],
   "dut": [
     "design/netlist/pll_top.spice"
   ],
-  "netlist": "tb_ref_phase_transfer.sp",
   "nominal_supply_v": 3.3,
   "supply_tolerance": 0.1,
   "temperatures_c": [
@@ -35,6 +35,7 @@
     "dphi": "1e-9",
     "tphase": "3.01e-6",
     "ta": "2.6e-6",
+    "tfast": "3.13e-6",
     "tc": "6.01e-6",
     "tb": "9.01e-6",
     "b0_code": "0",
@@ -73,67 +74,116 @@
     "save v(ref) v(fb) v(clk) v(lock) v(xdut.up) v(xdut.dn)",
     "tran {ktstep} {ktstop} 0 {ktmax}"
   ],
-  "raw_measures": {
-    "phi_pre": {
-      "analysis": "tran",
-      "expr": "trig v(ref) val='vdd_val/2' rise=1 td='ta' targ v(fb) val='vdd_val/2' rise=1 td='ta'"
+  "phases": {
+    "ctl": {
+      "description": "CONTROL: the identical deck with no step applied (apply = 0), so the loop's own winding baseline is measured rather than assumed",
+      "netlist": "tb_ref_phase_transfer.sp",
+      "params": {
+        "apply": "0"
+      },
+      "raw_measures": {
+        "cphi_pre": {
+          "analysis": "tran",
+          "expr": "trig v(ref) val='vdd_val/2' rise=1 td='ta' targ v(fb) val='vdd_val/2' rise=1 td='ta'"
+        },
+        "cphi_fast": {
+          "analysis": "tran",
+          "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tfast' targ v(fb) val='vdd_val/2' rise=1 td='tfast'"
+        },
+        "cphi_mid": {
+          "analysis": "tran",
+          "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tc' targ v(fb) val='vdd_val/2' rise=1 td='tc'"
+        },
+        "cphi_post": {
+          "analysis": "tran",
+          "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tb' targ v(fb) val='vdd_val/2' rise=1 td='tb'"
+        },
+        "cdn_lvl": {
+          "analysis": "tran",
+          "expr": "avg v(xdut.dn) from='tc' to='tb'"
+        }
+      }
     },
-    "phi_mid": {
-      "analysis": "tran",
-      "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tc' targ v(fb) val='vdd_val/2' rise=1 td='tc'"
-    },
-    "phi_post": {
-      "analysis": "tran",
-      "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tb' targ v(fb) val='vdd_val/2' rise=1 td='tb'"
-    },
-    "tclk160": {
-      "analysis": "tran",
-      "expr": "trig v(clk) val='vdd_val/2' rise=1 td='tc' targ v(clk) val='vdd_val/2' rise=161 td='tc'"
-    },
-    "fout": {
-      "analysis": "tran",
-      "expr": "param='160/tclk160'"
-    },
-    "tfb20": {
-      "analysis": "tran",
-      "expr": "trig v(fb) val='vdd_val/2' rise=1 td='tc' targ v(fb) val='vdd_val/2' rise=21 td='tc'"
-    },
-    "ffb": {
-      "analysis": "tran",
-      "expr": "param='20/tfb20'"
-    },
-    "nmeas": {
-      "analysis": "tran",
-      "expr": "param='fout/ffb'"
-    },
-    "lock_lvl": {
-      "analysis": "tran",
-      "expr": "avg v(lock) from='tc' to='tb'"
-    },
-    "up_lvl": {
-      "analysis": "tran",
-      "expr": "avg v(xdut.up) from='tc' to='tb'"
-    },
-    "dn_lvl": {
-      "analysis": "tran",
-      "expr": "avg v(xdut.dn) from='tc' to='tb'"
+    "stp": {
+      "description": "STEPPED: the same deck with the known dphi reference phase step applied at tphase (apply = 1)",
+      "netlist": "tb_ref_phase_transfer.sp",
+      "params": {
+        "apply": "1"
+      },
+      "raw_measures": {
+        "sphi_pre": {
+          "analysis": "tran",
+          "expr": "trig v(ref) val='vdd_val/2' rise=1 td='ta' targ v(fb) val='vdd_val/2' rise=1 td='ta'"
+        },
+        "sphi_fast": {
+          "analysis": "tran",
+          "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tfast' targ v(fb) val='vdd_val/2' rise=1 td='tfast'"
+        },
+        "sphi_mid": {
+          "analysis": "tran",
+          "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tc' targ v(fb) val='vdd_val/2' rise=1 td='tc'"
+        },
+        "sphi_post": {
+          "analysis": "tran",
+          "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tb' targ v(fb) val='vdd_val/2' rise=1 td='tb'"
+        },
+        "tclk160": {
+          "analysis": "tran",
+          "expr": "trig v(clk) val='vdd_val/2' rise=1 td='tc' targ v(clk) val='vdd_val/2' rise=161 td='tc'"
+        },
+        "fout": {
+          "analysis": "tran",
+          "expr": "param='160/tclk160'"
+        },
+        "tfb20": {
+          "analysis": "tran",
+          "expr": "trig v(fb) val='vdd_val/2' rise=1 td='tc' targ v(fb) val='vdd_val/2' rise=21 td='tc'"
+        },
+        "ffb": {
+          "analysis": "tran",
+          "expr": "param='20/tfb20'"
+        },
+        "nmeas": {
+          "analysis": "tran",
+          "expr": "param='fout/ffb'"
+        },
+        "lock_lvl": {
+          "analysis": "tran",
+          "expr": "avg v(lock) from='tc' to='tb'"
+        },
+        "up_lvl": {
+          "analysis": "tran",
+          "expr": "avg v(xdut.up) from='tc' to='tb'"
+        },
+        "dn_lvl": {
+          "analysis": "tran",
+          "expr": "avg v(xdut.dn) from='tc' to='tb'"
+        }
+      }
     }
   },
   "derived": {
     "module": "derive.py",
     "measures": [
+      "pair_resid",
+      "drift_ctl",
+      "d_fast",
+      "d_mid",
       "phi_shift",
       "settle_resid",
       "tracking_ratio",
       "measured_gain",
       "measured_gain_db",
       "target_gain_db",
-      "transfer_error_db"
+      "transfer_error_db",
+      "fast_gain",
+      "fast_gain_db",
+      "fast_rejection_db"
     ]
   },
   "topology_groups": {
     "transfer": {
-      "description": "the measurement this record exists for -- the REF-to-output phase transfer, measured against a known reference phase step",
+      "description": "the measurement this record exists for -- the settled, in-band REF-to-output phase transfer, differential against the paired control run, compared against the spec's 20*log10(N)",
       "measures": [
         "phi_shift",
         "tracking_ratio",
@@ -143,17 +193,39 @@
         "transfer_error_db"
       ]
     },
-    "settling": {
-      "description": "did the run wait long enough after the step for phi_post to be a settled reading",
+    "rolloff": {
+      "description": "the same transfer read 120 ns after the step -- 0.3-1.2 loop time constants, i.e. ABOVE the loop bandwidth, where the spec's own derivation says the multiplication does not apply",
       "measures": [
-        "phi_pre",
-        "phi_mid",
-        "phi_post",
+        "d_fast",
+        "fast_gain",
+        "fast_gain_db",
+        "fast_rejection_db"
+      ]
+    },
+    "pairing": {
+      "description": "is the control run a valid control, and did the run wait long enough for the settled reading",
+      "measures": [
+        "pair_resid",
+        "drift_ctl",
+        "d_mid",
         "settle_resid"
       ]
     },
-    "lock": {
-      "description": "is the loop actually locked at N=6/150 MHz throughout the post-step measurement window",
+    "phases": {
+      "description": "the raw REF-vs-FB static phase error each deck measured at each instant",
+      "measures": [
+        "cphi_pre",
+        "cphi_fast",
+        "cphi_mid",
+        "cphi_post",
+        "sphi_pre",
+        "sphi_fast",
+        "sphi_mid",
+        "sphi_post"
+      ]
+    },
+    "operating-point": {
+      "description": "is the loop tracking at N=6/150 MHz throughout the measurement window",
       "measures": [
         "fout",
         "ffb",
@@ -162,21 +234,26 @@
       ]
     },
     "integration": {
-      "description": "the standing guard: the PFD's DN branch must assert at all, proof the internal-timestep ceiling is actually in force",
+      "description": "the standing guard: the PFD's DN branch must assert at all, in both decks, proof the internal-timestep ceiling is actually in force",
       "measures": [
         "dn_lvl",
+        "cdn_lvl",
         "up_lvl"
       ]
     }
   },
   "checks": {
+    "pair_resid": {
+      "min": -5e-11,
+      "max": 5e-11
+    },
     "settle_resid": {
       "min": -1e-10,
       "max": 1e-10
     },
     "tracking_ratio": {
-      "min": 0.8,
-      "max": 1.2
+      "min": 0.9,
+      "max": 1.1
     },
     "nmeas": {
       "min": 5.99,
@@ -187,6 +264,9 @@
       "max": 151500000.0
     },
     "dn_lvl": {
+      "min": 0.00089
+    },
+    "cdn_lvl": {
       "min": 0.00089
     }
   },
