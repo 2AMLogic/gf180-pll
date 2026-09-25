@@ -62,11 +62,15 @@
 * 20*log10(N).
 *
 * FOUR INSTANTS, AND WHAT EACH ONE IS FOR.
-*   ta      before the step        d(ta) must be EXACTLY 0 -- `pair_resid`.
-*                                  A nonzero value means the two decks were
-*                                  not the same run before tphase, which would
-*                                  invalidate the whole differential; it is
-*                                  checked at +/-1 ps, not argued.
+*   ta      before the step        d(ta) is the differential's own
+*                                  solver-noise floor -- `pair_resid`.  A
+*                                  value far ABOVE that floor means the two
+*                                  decks were not the same run before tphase,
+*                                  which would invalidate the whole
+*                                  differential; it is checked at +/-50 ps
+*                                  (5% of dphi), not argued.  DR-024 records
+*                                  why that band and not the +/-1 ps a
+*                                  bit-identical pairing would imply.
 *   tfast   ~0.3-1.2 loop time     d(tfast)/dphi is the transfer to a
 *           constants after it     perturbation FASTER than the loop can
 *                                  follow -- near -1, i.e. a transfer near
@@ -84,7 +88,7 @@
 * bottom of the spectrum, which is what the exclusion's 20*log10(N) line
 * claims holds "inside the loop bandwidth".  It needs no noise methodology
 * (sim/README.md's "Verification owed" for a NUMERIC reference-jitter limit
-* is sequenced behind #505's still-unavailable noise/cyclostationary bridge,
+* is sequenced behind #520's still-unavailable noise/cyclostationary bridge,
 * DR-020) -- this is a transient, exactly like sim/lock-time or
 * sim/reference-spur.
 *
@@ -115,7 +119,10 @@
 * on purpose: this campaign reuses that record's own vco-tuning-range-derived
 * `vstart` release table (record 20260804-162735-72883fb, band 6) verbatim,
 * rather than re-deriving it, because it is the exact same (N, band, f_out)
-* triple.  See vstart.json in this directory for the shared provenance note.
+* triple.  See sim/reference-spur/testbench/vstart_from_vco_record.py for the
+* derivation this campaign cites rather than duplicates -- the per-corner
+* values it produced live in tb.json's `sweeps.vs`, not in a separate file in
+* this directory.
 *
 * Expects from the harness-generated header:
 *   vdd_val   supply for this PVT point        vdd_nom  nominal supply

@@ -38,9 +38,14 @@ loop re-tracks.
 
 WHAT IS REPORTED
 ----------------
-    pair_resid   = d(ta)              must be 0 -- the two decks are the same
-                   run before the step, so this is a VALIDITY check on the
-                   pairing, not a physical quantity.  Checked at +/-1 ps.
+    pair_resid   = d(ta)              the two decks are the same run before
+                   the step, so this is a VALIDITY check on the pairing rather
+                   than a physical quantity -- and its size IS the
+                   differential's own solver-noise floor, which is not zero
+                   (the stepped deck's `refb` source puts a breakpoint where
+                   the control deck has none).  Checked at +/-50 ps, 5% of
+                   dphi; DR-024 records why that band and not the +/-1 ps a
+                   bit-identical pairing would imply.
     drift_ctl    = unwrap(cphi_post - cphi_pre)
                    the baseline drift the control run alone saw, reported so
                    the record states the size of what the pairing cancelled.
