@@ -188,4 +188,4 @@ C {lab_pin.sym} 300 970 0 0 {name=l_XLD_VSS lab=VSS}
 C {lab_pin.sym} 230 920 0 0 {name=l_XLD_LDT0 lab=LDT0}
 C {lab_pin.sym} 230 940 0 0 {name=l_XLD_LDT1 lab=LDT1}
 C {lab_pin.sym} 230 960 0 0 {name=l_XLD_LDT2 lab=LDT2}
-C {lab_pin.sym} 230 980 0 0 {name=l_XLD_LDT3 lab=LDT3}
+C {lab_pin.sym} 230 840 0 0 {name=l_XLD_LDT3 lab=LDT3}

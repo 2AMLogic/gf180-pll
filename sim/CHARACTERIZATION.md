@@ -26,7 +26,7 @@ finding that no such aggregated artifact existed as of this repository's
 - **Coverage.** One entry below for every directory under `sim/` that
   contains a `records/` subdirectory. At this report's original writing that
   was **20 campaign directories, 61 evidence records**; the tree has grown
-  since, and the current count is **25 campaign directories, 94 evidence
+  since, and the current count is **25 campaign directories, 95 evidence
   records**. Both figures are derived, not remembered: the records are
   `find sim -path '*/records/*.md' -type f | wc -l`, and the campaigns are the
   distinct `sim/<name>/` prefixes of those same paths — the enumeration
@@ -35,7 +35,7 @@ finding that no such aggregated artifact existed as of this repository's
   for the campaign count; that counts every directory under `sim/`, including
   `harness/`, `lib/`, `tests/` and any campaign whose `records/` is still
   empty, so it never produced the number stated next to it.) `README.md`'s
-  status section states the same pair as **94 evidence records across 25
+  status section states the same pair as **95 evidence records across 25
   verification campaigns**; `sim/lib/check-readme-status.sh` grades that line
   against the tree on every CI run, and since #237's aggregate-count rule
   `sim/lib/check-characterization-coverage.sh` grades *this* bullet the same

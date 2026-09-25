@@ -88,13 +88,15 @@ jobs:
         # no simulation input.
         run: python3 -m unittest discover -s spec/tests -t spec/tests
 
-      - name: design/tests (unit tests for the I/O-list coverage check)
-        # Same shape again, for the check added in #237 that grades
-        # docs/chipalooza/challenge-5-proposal.md's section-2.2 pad table and
-        # section-4 bench plan against design/netlist/pll_top.spice's own
-        # `.subckt pll_top` port list. Every test builds a throwaway tree --
-        # one miniature netlist, one miniature proposal -- and runs the real
-        # script in it; no xschem, no PDK, no simulation input.
+      - name: design/tests (unit tests for the I/O-list and port-connectivity checks)
+        # Same shape again, for the two design-side checks: #237's, which
+        # grades docs/chipalooza/challenge-5-proposal.md's section-2.2 pad
+        # table and section-4 bench plan against design/netlist/pll_top.spice's
+        # own `.subckt pll_top` port list, and #515's, which grades a netlist
+        # against ITSELF (a declared port nothing inside the subcircuit wires).
+        # Every test builds a throwaway tree -- one miniature netlist, one
+        # miniature proposal -- and runs the real script in it; no xschem, no
+        # PDK, no simulation input.
         run: python3 -m unittest discover -s design/tests -t design/tests
 
       - name: sim/lib/check-readme-status.sh (README evidence counts vs. sim/ tree)
@@ -284,6 +286,28 @@ jobs:
         # Needs python3 (set up above); reads one committed netlist and one
         # committed Markdown file, no PDK, no xschem.
         run: bash design/lib/check-io-list-coverage.sh
+
+      - name: design/lib/check-port-connectivity.sh (declared ports vs. what a netlist actually wires)
+        # The check above grades a netlist's port list against a DOCUMENT.
+        # Issue #515 found the gap on the other side: `design/pll_top.sch`
+        # placed the `LDT3` trim label three grid rows off the `XLD`
+        # lock-detector instance's real `LDT3` pin, so the exported netlist
+        # wired that instance's eighth argument to `net1` -- an xschem
+        # auto-named net with exactly one connection -- while `.subckt
+        # pll_top` still declared a real `LDT3` port two lines above it.
+        # `design/netlist.sh --check` could not catch it: the export was
+        # internally consistent with the broken schematic, so there was
+        # nothing to diff against. Only 8 of the 16 lock-detector window trim
+        # codes were reachable on the assembled part as a result.
+        #
+        # Two rules, checked against every committed design/netlist/*.spice
+        # file: every port a top-level `.subckt` declares must be connected
+        # somewhere inside that same subcircuit's own body; and no
+        # `net<N>`-shaped auto-named net anywhere in the file may carry
+        # exactly one connection -- the mechanically detectable signature a
+        # dropped label leaves behind. Needs python3 (set up above); reads
+        # only committed `.spice` text, no PDK, no xschem.
+        run: bash design/lib/check-port-connectivity.sh
 
       - name: sim/lib/check-pvt-coverage-claims.sh (quoted corners vs. the harness's corner registry)
         # The six checks above all grade WHAT a document says -- its counts, its

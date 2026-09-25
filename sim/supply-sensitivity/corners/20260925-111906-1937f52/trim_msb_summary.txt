@@ -1,0 +1,10 @@
+source record: 20260920-180604-0f91a9b
+logs audited: 10
+points whose programmed code did NOT reach the detector: 5
+  f100_ff_27c_2.97v.log: programmed 11 (1011), detector saw 3 (0011); pad 2.97 V, xdut.net1 0 V
+  f100_ff_27c_3.30v.log: programmed 11 (1011), detector saw 3 (0011); pad 3.3 V, xdut.net1 0 V
+  f100_ff_27c_3.63v.log: programmed 11 (1011), detector saw 3 (0011); pad 3.63 V, xdut.net1 0 V
+  f100x_ff_27c_2.97v.log: programmed 11 (1011), detector saw 3 (0011); pad 2.97 V, xdut.net1 0 V
+  f100x_ff_27c_3.30v.log: programmed 11 (1011), detector saw 3 (0011); pad 3.3 V, xdut.net1 0 V
+points that DISCRIMINATE between the two codes: 1
+  f100_ff_27c_3.63v.log: |phi_b| 1.2331 ns, t_win at 11 = 1.3015/1.2801 ns -> predicts assert; t_win at 3 = 0.9865/0.9721 ns -> predicts unpredicted; observed asserted=no
