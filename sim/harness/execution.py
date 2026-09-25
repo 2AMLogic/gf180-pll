@@ -171,6 +171,31 @@ class LocalBackend:
         )
 
 
+#: ngspice's own closing banner -- ``ngspice-46 done`` -- printed by the binary
+#: that actually ran the deck. This is the only statement of the simulator
+#: version that travels *with* the measurement: everything else the harness
+#: knows about ``ngspice`` was resolved on the submitting host, which under an
+#: off-host backend never ran the deck at all (#509).
+SIMULATOR_RE = re.compile(r"^\s*(ngspice-\d+)\s+done\s*$", re.IGNORECASE | re.MULTILINE)
+
+
+def simulator_of(output: str) -> str:
+    """The ngspice version that produced ``output``, or ``""`` if it did not say.
+
+    Reads the *last* banner in the text: a deck's output is one invocation, but
+    a transport that concatenates stdout and stderr (or a future backend that
+    retries) may carry more than one, and the run that produced the
+    measurements is the last one.
+
+    Abstains rather than guessing. An empty string means "this output does not
+    name a simulator", which provenance renders as unattributed -- never as the
+    recording host's own version, which is exactly the substitution this
+    function exists to stop.
+    """
+    found = SIMULATOR_RE.findall(output or "")
+    return found[-1].lower() if found else ""
+
+
 @dataclass
 class HostTally:
     """Which hosts ran a grid's points, and how many each ran.
@@ -178,6 +203,12 @@ class HostTally:
     Assembled from the per-point ``host`` fields rather than from the backend,
     so it reports what actually happened (including points a backend could not
     attribute) instead of what was intended.
+
+    Also used, unchanged, to tally the **executing simulator** per point
+    (:func:`simulator_of`): the question has the identical shape -- "which
+    distinct values ran how many points, and how many were unattributed" --
+    and giving it a second, near-identical class would only invite the two to
+    drift apart.
     """
 
     counts: dict[str, int] = field(default_factory=dict)

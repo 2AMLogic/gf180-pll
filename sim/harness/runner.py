@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .corners import PvtPoint
 from .derived import DerivedError, PointView, RawFile, derive_point_measures
-from .execution import DeckRun, LocalBackend
+from .execution import DeckRun, LocalBackend, simulator_of
 from .omp import omp_env_overrides
 from .pdk import Pdk
 from .testbench import Phase, Testbench
@@ -377,6 +377,11 @@ class PhaseRun:
     #: backend (``sim/harness/execution.py``). Empty when the backend could
     #: not attribute it -- never silently filled in with the minting host.
     host: str = ""
+    #: The ngspice version that actually ran this deck, read out of the deck's
+    #: OWN output (``execution.simulator_of``). Empty when the output does not
+    #: say -- never filled in from the submitting host's resolved binary, which
+    #: under an off-host backend ran no deck at all (#509).
+    simulator: str = ""
 
     def as_dict(self) -> dict:
         record = {
@@ -388,6 +393,8 @@ class PhaseRun:
         }
         if self.host:
             record["host"] = self.host
+        if self.simulator:
+            record["simulator"] = self.simulator
         if self.message:
             record["message"] = self.message
         return record
@@ -441,6 +448,10 @@ class PointResult:
     #: them joined by ``+`` rather than picking one -- the record must not
     #: claim a single host it does not have.
     host: str = ""
+    #: The ngspice version(s) that ran this point's deck(s), read from the decks'
+    #: own output. Joined by ``+`` on the (pathological, but reportable) case of
+    #: a phased point whose decks ran on different versions.
+    simulator: str = ""
 
     def as_dict(self) -> dict:
         record = self.point.as_dict()
@@ -455,6 +466,8 @@ class PointResult:
         )
         if self.host:
             record["host"] = self.host
+        if self.simulator:
+            record["simulator"] = self.simulator
         # Keyed on a phase having a *name*, not on there being more than one of
         # them, so the point entry and the filenames on disk always agree: a
         # named phase writes `<phase>_<corner-id>.log`, so it must be listed
@@ -590,6 +603,9 @@ def run_point(
     # single-host point into a "host-a+" string, and a phased point that ran
     # entirely on one machine still reports that one machine.
     hosts = list(dict.fromkeys(run.host for run in runs if run.host))
+    # Same rule as hosts: distinct, named values only, so a deck whose output
+    # did not name a version cannot turn a single-version point into "x+".
+    simulators = list(dict.fromkeys(run.simulator for run in runs if run.simulator))
     common = {
         "point": point,
         "raw_files": raw_files,
@@ -599,6 +615,7 @@ def run_point(
         "log": runs[0].log,
         "phases": tuple(runs),
         "host": "+".join(hosts),
+        "simulator": "+".join(simulators),
     }
 
     if failed is not None:
@@ -755,6 +772,7 @@ def _run_phase(
                 seconds=elapsed,
                 message=message,
                 host=deck_run.host,
+                simulator=simulator_of(output),
             ),
             measurements=measurements,
             missing=missing,
@@ -778,6 +796,7 @@ def _run_phase(
                 seconds=elapsed,
                 message=log_write_error,
                 host=deck_run.host,
+                simulator=simulator_of(output),
             ),
             measurements=measurements,
             not_measured=not_measured,
@@ -793,6 +812,7 @@ def _run_phase(
             log=log_path.name,
             seconds=elapsed,
             host=deck_run.host,
+            simulator=simulator_of(output),
         ),
         measurements=measurements,
         # Carried even on success so that a *later* phase's failure still

@@ -908,6 +908,103 @@ class ExecutionProvenanceTests(unittest.TestCase):
         self.assertIn("`elsewhere` (3)", lines[1])
 
 
+# ===========================================================================
+# 8b. Which ngspice actually ran the points (#509)
+# ===========================================================================
+
+class ExecutingSimulatorTests(unittest.TestCase):
+    RECORDING = "ngspice-46 : Circuit level simulation program"
+
+    def test_the_version_is_read_from_the_decks_own_closing_banner(self):
+        self.assertEqual(
+            execution.simulator_of("...\n\nngspice-42 done\n"), "ngspice-42"
+        )
+
+    def test_output_that_names_no_version_abstains_rather_than_guessing(self):
+        self.assertEqual(execution.simulator_of("no banner here"), "")
+        self.assertEqual(execution.simulator_of(""), "")
+
+    def test_the_last_banner_wins_when_output_carries_more_than_one(self):
+        self.assertEqual(
+            execution.simulator_of("ngspice-42 done\nretry\nngspice-46 done\n"),
+            "ngspice-46",
+        )
+
+    def test_no_line_when_every_point_ran_the_version_provenance_already_names(self):
+        lines = report._execution_lines(
+            {
+                "jobs": 4,
+                "omp": {},
+                "backend": "local",
+                "hosts": {"box": 5},
+                "simulators": {"ngspice-46": 5},
+            },
+            "box",
+            self.RECORDING,
+        )
+        self.assertEqual(len(lines), 1)
+
+    def test_a_version_other_than_the_recording_hosts_is_called_out(self):
+        """The #509 case: the batch image's pinned ngspice is not the submitter's."""
+        lines = report._execution_lines(
+            {
+                "jobs": 5,
+                "omp": {},
+                "backend": "batch",
+                "hosts": {"i-0a": 5},
+                "simulators": {"ngspice-42": 5},
+            },
+            "submitter",
+            self.RECORDING,
+        )
+        line = lines[-1]
+        self.assertIn("Executing simulator", line)
+        self.assertIn("`ngspice-42` (5)", line)
+        self.assertIn("**not** the `ngspice-46`", line)
+        self.assertIn("not interchangeable point-for-point", line)
+
+    def test_a_point_whose_output_named_no_version_is_disclosed(self):
+        lines = report._execution_lines(
+            {
+                "jobs": 2,
+                "omp": {},
+                "backend": "batch",
+                "hosts": {"i-0a": 2},
+                "simulators": {"ngspice-46": 1, "": 1},
+            },
+            "submitter",
+            self.RECORDING,
+        )
+        self.assertIn("unattributed (1)", lines[-1])
+
+    def test_a_mixed_version_grid_reports_every_version_it_ran(self):
+        lines = report._execution_lines(
+            {
+                "jobs": 2,
+                "omp": {},
+                "backend": "batch",
+                "hosts": {"i-0a": 3},
+                "simulators": {"ngspice-42": 2, "ngspice-46": 1},
+            },
+            "submitter",
+            self.RECORDING,
+        )
+        self.assertIn("`ngspice-42` (2)", lines[-1])
+        self.assertIn("`ngspice-46` (1)", lines[-1])
+        # ngspice-46 IS present, so the "not the version above" clause is wrong
+        # here and must not fire -- the grid is mixed, not uniformly foreign.
+        self.assertNotIn("**not** the", lines[-1])
+
+    def test_no_simulators_key_renders_nothing_extra(self):
+        """Every record minted before this field existed stays byte-comparable."""
+        lines = report._execution_lines(
+            {"jobs": 4, "omp": {}, "backend": "local", "hosts": {"box": 5}},
+            "box",
+            self.RECORDING,
+        )
+        self.assertEqual(len(lines), 1)
+
+
 
 # ===========================================================================
 # 9. The transport contract itself: every call site must be callable through
