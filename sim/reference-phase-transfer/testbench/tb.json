@@ -1,0 +1,312 @@
+{
+  "name": "reference-phase-transfer",
+  "description": "closed-loop REF-to-output phase transfer, measured against a known reference phase step, compared to spec/pll.md's 20*log10(N) exclusion figure (#509)",
+  "claim": "spec/pll.md#reference-input -- reference-source-quality exclusion: the 20*log10(N) in-band REF-to-output phase transfer, measured rather than only asserted from theory",
+  "methodology": [
+    "MEASUREMENT, NOT DERIVATION. spec/pll.md's Reference input row excludes reference-source quality from this block's own jitter/spur numbers and states a 20*log10(N) in-band transfer from theory alone -- no testbench in sim/ has ever perturbed REF in time and read the consequence at the output; every closed-loop record before this one drives REF from a perfectly periodic pulse source. This is that measurement: a KNOWN, single reference-phase STEP is applied at `tphase` and the loop's own re-tracking is read out via its REF-vs-FB static phase error, which is exact (not statistical) because the divider is a digital ratio.",
+    "WHY A STEP, AND WHY NOT DIRECTLY ON THE OUTPUT. #509 accepts a deterministic single-step or single-tone bench as the cheap first increment -- no noise/spectral methodology needed. A phase step's residual, read many loop time constants later, IS the loop's deep-in-band (near-DC) transfer, which is exactly the regime spec/pll.md's 20*log10(N) line describes ('inside the loop bandwidth'). The output itself is not measured directly: for N at the top of the ratified 4-64 range the output period is short enough that N*dphi (the theoretically expected output-phase excursion) exceeds a whole output cycle long before dphi is large enough to resolve against 200 ps edge rates and solver noise -- the wraparound this note exists to flag. Reading the untouched REF-vs-FB static phase error instead sidesteps that: FB's own excursion is at most a few nanoseconds (dphi itself), always well inside one reference period, and the divider (CLK = N*FB, an exact digital ratio) carries that same fractional tracking onto the output without needing to resolve it directly.",
+    "THREE INSTANTS, ONE STEP. phi_pre (at `ta`, before the step) is the loop's pre-existing static phase error. phi_mid (at `tc`) and phi_post (at `tb`) are read after the step, spaced several loop time constants apart so the run itself proves it waited long enough: settle_resid = unwrap(phi_post - phi_mid) close to zero is the record's own evidence that `tb` is not still inside the settling transient. phi_shift = unwrap(phi_post - phi_pre) is the quantity of interest -- zero means FULL re-tracking of the injected `dphi`, and any residual is the fraction of the step the loop failed to track. derive.py turns that into tracking_ratio, measured_gain (= nratio * tracking_ratio) and measured_gain_db, compared against target_gain_db = 20*log10(nratio).",
+    "HOW THE STEP IS APPLIED. Two ideal periodic pulse trains (`refa`, unperturbed; `refb`, identical but delayed by `dphi`) are blended through a fast (200 ps) linear gate that switches from refa to refb at `tphase`, placed in the middle of a reference LOW gap common to both trains so the blend never sees the two disagree -- REF is refa exactly before tphase and refb exactly after, a genuinely glitch-free stitch. Verified in isolation (a standalone prototype .tran trace) before this deck was written: one clean 41 ns gap against a background of 40 ns gaps, nothing else moved.",
+    "OPERATING POINT, REUSED FROM sim/reference-spur ON PURPOSE. N = 6, VCO band code 6, Icp trim code 0 (one unit leg, the trim-code rule REQUIRES it there per spec/pll.md from DR-006 Decision 5), f_ref = 25 MHz, f_out = 150 MHz -- the identical operating point sim/reference-spur (#145) already measured at this exact PVT subset. This campaign's `vstart` release table is that record's own vco-tuning-range-derived values (record 20260804-162735-72883fb, band 6), reused verbatim rather than re-derived, because it is the same (N, band, f_out) triple -- see sim/reference-spur/testbench/vstart_from_vco_record.py for the derivation this campaign cites rather than duplicates. N = 6 is inside the ratified 4-64 range; this record measures at that one value. The mechanism the record measures -- a type-II loop's DC phase tracking, and an exact digital divide ratio -- is structural rather than N-specific, but this record itself is evidence at N = 6 only; a second N would need its own vco-tuning-range-derived vstart table at a different (N, f_ref) operating point and is not run here (see Limitations).",
+    "WHY A SHORTER RUN THAN sim/reference-spur SUFFICES. That campaign's release-to-measurement budget (2.4-8.0 us) targets a spectral floor several orders of magnitude below a single reference cycle; this campaign only needs the SAME lock quality at `ta` (2.6 us, comfortably inside that campaign's own validated settle window at the identical release point) plus enough time after the step for the loop's own re-tracking transient to finish. sim/loop-dynamics measured this operating point's loop bandwidth in the f_ref/15-f_ref/60 range (worst-case phase margin ~35-67 deg across the grid), i.e. a settling time constant of roughly 100-400 ns; `tb` is set 6 us after `tphase`, 15-60x that time constant, and the run's own settle_resid measurement is the check that this margin was actually enough rather than merely assumed.",
+    "dphi = 1 ns: about 2.5% of the 40 ns reference period (~9 degrees), comfortably larger than the 200 ps edge rate and solver-noise floor so the step is resolvable, and comfortably smaller than the reference LOW gap (half a period) so the stitch stays glitch-free and comfortably inside the loop's small-signal-tracking regime (no PFD dead-zone or CP-compliance-limit interaction is expected at this size).",
+    "STANDING GUARDS. dn_lvl (mean PFD DN level, post-step window) is the closed-loop internal-timestep-bound self-check sim/README.md requires: a value near zero is proof the loop's set-pulse edges are being missed, which would fabricate a false 'the loop tracks' or 'does not track' reading rather than a real one. nmeas (= fout/ffb, both measured over the post-step window by counting edges) and fout independently confirm the loop is actually locked at N = 6 / 150 MHz throughout the measurement window, not merely that FB and REF happen to read close together once.",
+    "SIMULATOR SETTINGS. .tran 2n 9.2u 0 100p -- the fourth argument is the 100 ps ceiling on the ngspice INTERNAL transient timestep every campaign whose DUT contains the PFD inherits (sim/README.md, 'Closed-loop internal-timestep bound'). .option rshunt=1e12 itl4=200 reltol=1e-3 abstol=1e-13 vntol=1e-6 -- identical to sim/reference-spur's and sim/pll-top-smoke's, so this deck's converged solution is comparable with the other closed-loop campaigns'.",
+    "CORNER MATRIX -- the SAME five-point subset sim/reference-spur runs, for the same reason stated there: one point here is a closed-loop transient of the whole PLL at a 100 ps internal-timestep ceiling, tens of thousands of internal steps, and the full 45-point cross-product at this run length is not affordable on the wall-clock this campaign has. The union spans every mandated axis (all five MOS bundles, all three temperatures, all three supplies) without being the full cross-product; the full-grid re-run remains owed, same as sim/reference-spur's.",
+    "LIMITATIONS. (1) One (f_ref, N, band, trim) operating point: N = 6 only. The mechanism measured (type-II DC phase tracking, an exact digital divide ratio) does not structurally depend on N, but this record is evidence at N = 6, not a swept confirmation across the ratified 4-64 range -- broader N coverage is follow-up work, not delivered here. (2) MOS-only sweep: res_typical/moscap_typical/mimcap_typical are held at typical at every point (same caveat as sim/reference-spur, and less consequential here -- the loop-filter R/C values set the loop's TIME CONSTANT, not its DC gain, and DC gain is what a phase step's long-settled residual actually probes). (3) Schematic-level: no layout parasitics. (4) The reference's OWN edges are ideal apart from the single deliberate `dphi` step -- no reference jitter, no duty-cycle error; this measures the loop's transfer FUNCTION, not a jitter budget (spec/pll.md's Reference input row's own distinction). (5) This is an IN-BAND measurement only (a phase step's long-settled residual is the loop's near-DC response); it does not by itself demonstrate the roll-off ABOVE the loop bandwidth spec/pll.md's derivation also asserts -- that remains a further increment (#509's 'option 1', which additionally needs a swept-frequency or noise methodology)."
+  ],
+  "dut": [
+    "design/netlist/pll_top.spice"
+  ],
+  "netlist": "tb_ref_phase_transfer.sp",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "mos"
+  ],
+  "params": {
+    "fref": "25e6",
+    "nratio": "6",
+    "dphi": "1e-9",
+    "tphase": "3.01e-6",
+    "ta": "2.6e-6",
+    "tc": "6.01e-6",
+    "tb": "9.01e-6",
+    "b0_code": "0",
+    "b1_code": "1",
+    "b2_code": "1",
+    "cpb0_code": "0",
+    "cpb1_code": "0",
+    "ldt0_code": "0",
+    "ldt1_code": "0",
+    "ldt2_code": "0",
+    "ldt3_code": "1",
+    "sel0_code": "0",
+    "sel1_code": "1",
+    "sel2_code": "0",
+    "sel3_code": "0",
+    "sel4_code": "0",
+    "sel5_code": "0",
+    "p0_code": "0",
+    "p1_code": "1",
+    "p2_code": "0",
+    "p3_code": "0",
+    "p4_code": "0",
+    "p5_code": "0",
+    "ktstep": "2e-9",
+    "ktstop": "9.2e-6",
+    "ktmax": "100e-12"
+  },
+  "options": [
+    "rshunt=1e12",
+    "itl4=200",
+    "reltol=1e-3",
+    "abstol=1e-13",
+    "vntol=1e-6"
+  ],
+  "analyses": [
+    "save v(ref) v(fb) v(clk) v(lock) v(xdut.up) v(xdut.dn)",
+    "tran {ktstep} {ktstop} 0 {ktmax}"
+  ],
+  "raw_measures": {
+    "phi_pre": {
+      "analysis": "tran",
+      "expr": "trig v(ref) val='vdd_val/2' rise=1 td='ta' targ v(fb) val='vdd_val/2' rise=1 td='ta'"
+    },
+    "phi_mid": {
+      "analysis": "tran",
+      "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tc' targ v(fb) val='vdd_val/2' rise=1 td='tc'"
+    },
+    "phi_post": {
+      "analysis": "tran",
+      "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tb' targ v(fb) val='vdd_val/2' rise=1 td='tb'"
+    },
+    "tclk160": {
+      "analysis": "tran",
+      "expr": "trig v(clk) val='vdd_val/2' rise=1 td='tc' targ v(clk) val='vdd_val/2' rise=161 td='tc'"
+    },
+    "fout": {
+      "analysis": "tran",
+      "expr": "param='160/tclk160'"
+    },
+    "tfb20": {
+      "analysis": "tran",
+      "expr": "trig v(fb) val='vdd_val/2' rise=1 td='tc' targ v(fb) val='vdd_val/2' rise=21 td='tc'"
+    },
+    "ffb": {
+      "analysis": "tran",
+      "expr": "param='20/tfb20'"
+    },
+    "nmeas": {
+      "analysis": "tran",
+      "expr": "param='fout/ffb'"
+    },
+    "lock_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(lock) from='tc' to='tb'"
+    },
+    "up_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(xdut.up) from='tc' to='tb'"
+    },
+    "dn_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(xdut.dn) from='tc' to='tb'"
+    }
+  },
+  "derived": {
+    "module": "derive.py",
+    "measures": [
+      "phi_shift",
+      "settle_resid",
+      "tracking_ratio",
+      "measured_gain",
+      "measured_gain_db",
+      "target_gain_db",
+      "transfer_error_db"
+    ]
+  },
+  "topology_groups": {
+    "transfer": {
+      "description": "the measurement this record exists for -- the REF-to-output phase transfer, measured against a known reference phase step",
+      "measures": [
+        "phi_shift",
+        "tracking_ratio",
+        "measured_gain",
+        "measured_gain_db",
+        "target_gain_db",
+        "transfer_error_db"
+      ]
+    },
+    "settling": {
+      "description": "did the run wait long enough after the step for phi_post to be a settled reading",
+      "measures": [
+        "phi_pre",
+        "phi_mid",
+        "phi_post",
+        "settle_resid"
+      ]
+    },
+    "lock": {
+      "description": "is the loop actually locked at N=6/150 MHz throughout the post-step measurement window",
+      "measures": [
+        "fout",
+        "ffb",
+        "nmeas",
+        "lock_lvl"
+      ]
+    },
+    "integration": {
+      "description": "the standing guard: the PFD's DN branch must assert at all, proof the internal-timestep ceiling is actually in force",
+      "measures": [
+        "dn_lvl",
+        "up_lvl"
+      ]
+    }
+  },
+  "checks": {
+    "settle_resid": {
+      "min": -1e-10,
+      "max": 1e-10
+    },
+    "tracking_ratio": {
+      "min": 0.8,
+      "max": 1.2
+    },
+    "nmeas": {
+      "min": 5.99,
+      "max": 6.01
+    },
+    "fout": {
+      "min": 148500000.0,
+      "max": 151500000.0
+    },
+    "dn_lvl": {
+      "min": 0.00089
+    }
+  },
+  "sweeps": {
+    "vs": {
+      "description": "control-node release voltage, one per corner: the SAME per-corner lock-point estimate sim/reference-spur's vstart_from_vco_record.py computed for this identical (N=6, band 6, f_out=150 MHz) operating point, reused verbatim.",
+      "points": {
+        "vs1p795": {
+          "params": {
+            "vstart": "1.795"
+          }
+        },
+        "vs2p430": {
+          "params": {
+            "vstart": "2.430"
+          }
+        },
+        "vs1p093": {
+          "params": {
+            "vstart": "1.093"
+          }
+        },
+        "vs1p791": {
+          "params": {
+            "vstart": "1.791"
+          }
+        },
+        "vs1p677": {
+          "params": {
+            "vstart": "1.677"
+          }
+        }
+      }
+    }
+  },
+  "grid": [
+    {
+      "description": "nominal reference point: typical MOS at 27 C / 3.30 V -- the point every other row is read against",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p795"
+        ]
+      }
+    },
+    {
+      "description": "fastest MOS, cold, high supply -- the highest control voltage on this grid",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        -40
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs2p430"
+        ]
+      }
+    },
+    {
+      "description": "slowest MOS, hot, low supply -- the lowest control voltage on this grid and the least charge-pump headroom",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p093"
+        ]
+      }
+    },
+    {
+      "description": "fs at 125 C / 3.63 V",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        125
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p791"
+        ]
+      }
+    },
+    {
+      "description": "sf at -40 C / 2.97 V -- the opposite MOS skew, at the cold/low-supply extreme",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        -40
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "vs": [
+          "vs1p677"
+        ]
+      }
+    }
+  ]
+}
