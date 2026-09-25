@@ -244,6 +244,91 @@ threaded build the per-point wall clock is not reproducible from `jobs` alone.
 Records minted before this field existed do not grow the line — `sim/` is
 append-only, so an old record is never rewritten to match a newer format.
 
+### `--backend`: *where* each point's ngspice runs
+
+Everything above budgets **this** host. Some of this repository's campaigns
+cannot be run on this host at all: a 45-point closed-loop transient grid is
+hours of simulation, and the machines agents are dispatched onto are shared
+boxes whose operating rules forbid launching a multi-corner `ngspice` grid on
+them. That is why `sim/period-jitter-band-top` had a complete, self-checking
+manifest and zero measured points (#496).
+
+`--backend` makes *where* a choice instead of an assumption. The seam is one
+function — "run this one composed deck, return what ngspice printed and how it
+exited" (`harness/execution.py`) — so **everything downstream of execution is
+identical whichever backend ran the point**: deck composition, measurement
+parsing, optional/required classification, raw-file capture, the campaign's
+`derive_point`/`derive_tables` reduction, the checks, and the record itself. A
+record produced through a remote backend is not a different kind of record.
+
+| `--backend` | Behaviour |
+|---|---|
+| `local` (default) | `ngspice -b` as a child process of the harness — byte-for-byte the invocation every committed record was taken through. Unchanged by this seam, in argv, `cwd`, environment handling and output join. |
+| `batch` | One job per composed deck, dispatched to an external batch execution layer. The submitting host runs no ngspice at all. |
+
+**`--backend batch` never submits anything on its own.** Launching jobs spends
+from a shared budget, so it mirrors the execution layer's own "nothing mutates
+without `--apply`" discipline: by default it *plans* — composes every deck,
+relocates it, shapes each job document, prints them, and exits without running
+or recording anything. `--batch-apply` is the deliberate second step.
+
+```bash
+# 1. look: 45 shaped jobs, nothing submitted, no record minted
+python3 sim/run_corners.py period-jitter-band-top --backend batch
+
+# 2. leap: submit them, 12 in flight at a time, and mint the record
+python3 sim/run_corners.py period-jitter-band-top --backend batch --batch-apply \
+    -j 12 --timeout 5400
+```
+
+Three things are worth knowing before the second command:
+
+- **`-j` means something different.** Under `batch` it bounds how many *jobs
+  are in flight*, not how many local processes exist, so it may freely exceed
+  the submitting host's core count — the host is polling, not simulating. For
+  the same reason `harness/omp.py`'s budget is **not** applied (and the record
+  says so): it divides the recording host between workers, and under this
+  backend the recording host has no workers.
+- **`--timeout` is the point's budget on the job instance**, not on this host.
+  The default (300 s) is far below what a closed-loop transient point needs —
+  the 150 MHz sibling campaign's points run in the thousands of seconds — so
+  set it deliberately or every job will be killed at its budget.
+- **One job per point, on purpose.** A point that times out, fails to
+  converge, or loses its log degrades *that point* and leaves the rest of the
+  grid intact and recorded, exactly as under `local`. A lost job is a lost
+  point, never a lost grid.
+
+**Relocating the deck.** A composed deck names this host's absolute paths in
+its `.include`/`.lib` cards, which do not exist on a job instance. The batch
+backend rewrites the *composed* deck rather than teaching the composer about
+remote execution: a path under the resolved PDK variant directory becomes a
+token the job command substitutes with the instance's own resolved PDK
+(the PDK is in the job image, so it is never uploaded), and any other
+referenced file — the DUT export, the stimulus fragment — is uploaded flat and
+referenced by base name. Both are driven by reading the deck, so a manifest
+that adds a fragment needs no change in the backend. A dependency that is
+neither is a **refused submission**, not a job that arrives with a dangling
+include; so are two distinct files sharing one base name.
+
+**Configuration.** Nothing site-specific or credential-bearing lives in this
+repository. The bucket, region, `aws` profile, jobs prefix and the launch
+entry point each resolve from `$SIM_BATCH_*`, then `$KLT_BATCH_*` (the names
+an installed `klt` already uses for the same layer, so one host export drives
+both), then the layer's own env file beside the launch script. An unresolvable
+value is an error naming all three places it looked, never a guess.
+
+**What reaches the record.** The record's Environment provenance gains the
+backend and, when the points did not all run on the machine that minted the
+record, an `Execution hosts:` line naming each executing host and how many
+points it ran — assembled from the per-point results, so it can only claim
+hosts that actually reported a point, and a point the backend could not
+attribute is disclosed as `unattributed` rather than silently credited to the
+recording host. The bucket name and the launch script's path are deliberately
+**withheld** from provenance: the first commonly embeds an account identifier
+and the second is a home path on the submitting host, and neither is needed to
+reconstruct a measurement. A single-host local record renders exactly the one
+`- Execution:` line it always did.
+
 ## Writing a testbench
 
 Create `sim/<experiment-slug>/testbench/` with a manifest and a netlist

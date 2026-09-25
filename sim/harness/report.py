@@ -41,6 +41,7 @@ from .corners import (
     REQUIRED_MOS_CORNERS,
     PvtPoint,
 )
+from .execution import HostTally
 from .pdk import Pdk
 from .runner import PointResult
 from .testbench import Testbench
@@ -275,6 +276,13 @@ def environment(
     in provenance because ngspice is internally threaded on some builds, so
     the two together -- not either alone -- determine the true thread demand a
     reader would have to reproduce to get comparable per-point wall clock.
+
+    Since #496 it also carries ``backend`` (which execution backend ran the
+    points, ``sim/harness/execution.py``) and ``hosts`` (``{host: points}``,
+    assembled from the per-point results). ``host`` above is the machine that
+    *minted* the record; under an off-host backend that is not the machine
+    that ran any of the points, and a record that reported only the former
+    would misdescribe where its own evidence came from.
     """
     try:
         user = getpass.getuser()
@@ -410,6 +418,17 @@ def build_record(
     summary = summarize(results, measure_names, optional_names)
     failures = evaluate_checks(tb.checks, results, summary)
     n_ok = sum(1 for r in results if r.status == "ok")
+    # Per-point execution attribution (#496). Assembled from the results
+    # themselves rather than from the backend's own intent, so the record can
+    # only ever claim hosts that actually reported a point. Folded in only
+    # when the caller supplied an ``execution`` block at all, preserving the
+    # "a record minted before this field existed stays byte-comparable"
+    # guarantee `_execution_lines` documents.
+    if execution:
+        tally = HostTally()
+        for result in results:
+            tally.add(result.host)
+        execution = {**execution, "hosts": tally.as_dict()}
     # A run that raised out of run_grid() (#271) hands back fewer results than
     # points -- `results` only covers what completed before the fault. That
     # must never be mistaken for a clean run just because every point that DID
@@ -581,7 +600,7 @@ def write_netlist_snapshot(tb: Testbench, experiment_dir: Path, record_id: str) 
     return path
 
 
-def _execution_lines(execution: dict) -> list[str]:
+def _execution_lines(execution: dict, recording_host: str = "") -> list[str]:
     """The scheduling half of Environment provenance, or nothing.
 
     Emitted only when the caller supplied it, so every record minted before
@@ -589,11 +608,26 @@ def _execution_lines(execution: dict) -> list[str]:
     append-only convention means old records are never rewritten to match a
     newer format, and a reader diffing two records should see a *new* line,
     not a reshuffled one.
+
+    A second line follows whenever the points did **not** all run on the
+    machine that minted the record (#496): a multi-host run, an off-host
+    backend, or a backend that could not attribute some point. A single-host
+    local run emits exactly the one line it always did, because for it the
+    ``Host:`` bullet above already says everything true.
     """
     if not execution:
         return []
     jobs = execution.get("jobs")
+    backend = execution.get("backend") or "local"
     omp = execution.get("omp") or {}
+    if backend == "local":
+        scheduling = f"{jobs} parallel ngspice job(s)"
+    else:
+        scheduling = (
+            f"{jobs} concurrent off-host job(s) dispatched through the "
+            f"`{backend}` execution backend (sim/harness/execution.py) -- the "
+            "host that minted this record ran no ngspice of its own"
+        )
     if omp:
         pin = ", ".join(f"`{k}={v}`" for k, v in sorted(omp.items()))
         threads = (
@@ -601,13 +635,51 @@ def _execution_lines(execution: dict) -> list[str]:
             f"build links an OpenMP runtime, so each worker's own threads are "
             f"capped to keep total demand at or under the core count)"
         )
+    elif backend != "local":
+        threads = (
+            "ngspice internal-thread budget: not set by this harness -- each "
+            "point ran on its own execution host, where that host's own "
+            "per-job core allocation applied instead (sim/harness/omp.py "
+            "budgets the recording host, which ran nothing)"
+        )
     else:
         threads = (
             "ngspice internal-thread budget: none applied (serial run, or no "
             "OpenMP runtime detected in the `ngspice` binary) -- the ambient "
             "environment's threading behavior was used unchanged"
         )
-    return [f"  - Execution: {jobs} parallel ngspice job(s); {threads}"]
+    lines = [f"  - Execution: {scheduling}; {threads}"]
+    lines += _execution_host_lines(execution.get("hosts") or {}, recording_host)
+    return lines
+
+
+def _execution_host_lines(hosts: dict, recording_host: str) -> list[str]:
+    """Which machine ran which point, when that is not one obvious answer.
+
+    ``sim/README.md``'s Environment provenance used to carry one ``Host:``
+    bullet, sampled at record time -- which is correct precisely when the
+    recording host is also the executing host. It silently stops being true
+    the moment points are dispatched elsewhere, so this states the executing
+    set explicitly whenever it differs from that single-host assumption.
+
+    Returns nothing for the case that assumption *does* hold (every point
+    attributed to the recording host), so a local record's provenance block
+    is unchanged.
+    """
+    if not hosts:
+        return []
+    named = {host: n for host, n in hosts.items() if host}
+    unattributed = hosts.get("", 0)
+    if not unattributed and set(named) == {recording_host}:
+        return []
+    total = sum(hosts.values())
+    parts = [f"`{host}` ({n})" for host, n in sorted(named.items())]
+    if unattributed:
+        parts.append(f"unattributed ({unattributed})")
+    return [
+        f"  - Execution hosts: {total} point(s) across "
+        f"{len(named)} named execution host(s) -- " + ", ".join(parts)
+    ]
 
 
 def _corner_matrix_lines(record: dict) -> list[str]:
@@ -1047,7 +1119,7 @@ def render_record(record: dict, experiment: str) -> str:
         f"  - Repo commit: `{git['commit']}` ({'DIRTY' if git['dirty'] else 'clean'} tree)",
         f"  - Host: {env['platform']} ({env['host']})",
     ]
-    lines += _execution_lines(env.get("execution") or {})
+    lines += _execution_lines(env.get("execution") or {}, env.get("host") or "")
     lines += _corner_matrix_lines(record)
     lines += _methodology_lines(record)
     lines.append(

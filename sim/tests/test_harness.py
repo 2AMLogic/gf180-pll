@@ -799,7 +799,10 @@ class CliPartialGridRecoveryTests(ManifestFixture):
         return status, buf_out.getvalue(), buf_err.getvalue()
 
     def test_an_exception_out_of_run_grid_still_mints_a_partial_record(self):
-        def fake_run_grid(tb, pdk, points, workdir, jobs=1, timeout_s=300, on_result=None, log_dir=None):
+        def fake_run_grid(
+            tb, pdk, points, workdir, jobs=1, timeout_s=300, on_result=None,
+            log_dir=None, backend=None,
+        ):
             self.assertEqual(len(points), 2)
             first = runner.PointResult(point=points[0], status="ok", measurements={"vout": 1.65})
             if on_result:

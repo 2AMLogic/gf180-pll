@@ -10,7 +10,9 @@ import time
 from pathlib import Path
 
 from . import HARNESS_VERSION, corners as corners_mod, report, runner, testbench as tb_mod
+from . import batch as batch_mod
 from . import derived as derived_mod
+from . import execution as execution_mod
 from . import omp
 from . import raw_measures as raw_measures_mod
 from .pdk import PdkNotFound, find_pdk
@@ -62,6 +64,9 @@ def build_parser() -> argparse.ArgumentParser:
             "      --subset-reason 'retiming worst case only'\n"
             "  python3 sim/run_corners.py divider-ratio \\\n"
             "      --join dff=divider-ratio/corners/<record-id>/dff_setup_hold.csv\n"
+            "  python3 sim/run_corners.py period-jitter-band-top --backend batch\n"
+            "  python3 sim/run_corners.py period-jitter-band-top --backend batch \\\n"
+            "      --batch-apply -j 12\n"
             "  python3 sim/run_corners.py --list\n"
             "  python3 sim/run_corners.py --check-env\n"
             "  python3 sim/run_corners.py --check-env vco-tuning-range\n"
@@ -136,7 +141,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="supply or override a derived-metric join input: a CSV written by "
         "another record, path relative to sim/ (repeatable)",
     )
-    parser.add_argument("-j", "--jobs", type=int, default=0, help="parallel ngspice runs")
+    parser.add_argument(
+        "-j",
+        "--jobs",
+        type=int,
+        default=0,
+        help="parallel ngspice runs; under --backend batch this bounds how "
+        "many off-host jobs are in flight at once, not how many local "
+        "processes, so it may exceed the local core count",
+    )
+    parser.add_argument(
+        "--backend",
+        choices=("local", "batch"),
+        default="local",
+        help="where each point's ngspice invocation runs (sim/harness/"
+        "execution.py). 'local' is this host, exactly as before. 'batch' "
+        "dispatches one job per point to an external batch execution layer "
+        "and, without --batch-apply, only PRINTS the submission plan and "
+        "exits without running or recording anything",
+    )
+    parser.add_argument(
+        "--batch-apply",
+        action="store_true",
+        help="with --backend batch, actually submit the planned jobs. "
+        "Launching jobs spends from a shared budget, so submission is a "
+        "deliberate second step, never the default",
+    )
+    parser.add_argument(
+        "--batch-cores-per-job",
+        type=int,
+        default=1,
+        help="cores requested per off-host job (--backend batch); one "
+        "closed-loop transient point is a single ngspice process, so the "
+        "default is 1",
+    )
     parser.add_argument(
         "--timeout",
         type=int,
@@ -377,6 +415,63 @@ def build_derived_tables(tb, results, join_args: list[str]) -> list:
     return derived_mod.derive_run_tables(spec, view)
 
 
+def build_backend(args: argparse.Namespace, pdk):
+    """The execution backend this invocation asked for.
+
+    Constructed once per run and handed to ``runner.run_grid``, so every
+    point of a record goes through the same backend and the record's
+    ``execution.backend`` field cannot disagree with what actually ran.
+    """
+    if args.backend == "local":
+        return execution_mod.LocalBackend()
+    return batch_mod.BatchBackend(
+        pdk_variant_dir=pdk.path,
+        pdk_variant=pdk.variant,
+        apply=bool(args.batch_apply),
+        cores_per_job=args.batch_cores_per_job,
+    )
+
+
+def print_batch_plan(tb, pdk, points, workdir, backend, timeout_s) -> int:
+    """Shape every point's job and print it. Submits nothing, records nothing.
+
+    This is the first half of ``--backend batch``: the deliberate look before
+    the leap that the execution layer's own "nothing mutates without --apply"
+    discipline asks for. It composes the decks (locally, cheaply -- deck
+    composition never runs a simulator) and relocates each one, so a broken
+    dependency or a name collision surfaces here rather than after 45
+    submissions.
+    """
+    workdir.mkdir(parents=True, exist_ok=True)
+    plans = []
+    for point in points:
+        for phase in tb.run_phases:
+            run_id = phase.run_id(point.corner_id)
+            deck_path = workdir / f"{run_id}.spice"
+            deck_path.write_text(runner.compose_deck(tb, pdk, point, phase))
+            plans.append((run_id, backend.plan_deck(deck_path, timeout_s)))
+
+    print()
+    print(f"batch submission plan: {len(plans)} job(s), one per composed deck")
+    print("  NOTHING IS SUBMITTED AND NO RECORD IS MINTED -- re-run with "
+          "--batch-apply to submit.")
+    print()
+    first_id, first = plans[0]
+    print(f"first job ({first_id}), in full:")
+    print(first.render())
+    print()
+    print("uploaded inputs are identical in shape for every job: "
+          + ", ".join(sorted(first.inputs)))
+    print()
+    print("every job:")
+    for run_id, plan in plans:
+        print(f"  {run_id:<32} -> {plan.job_uri}")
+    print()
+    print(f"total: {len(plans)} job(s) at {timeout_s}s each, "
+          f"{first.spec['cores_per_job']} core(s) per job")
+    return EXIT_OK
+
+
 def run(args: argparse.Namespace) -> int:
     tb_path = _resolve_tb_path(args.testbench)
     tb = tb_mod.load(tb_path)
@@ -454,14 +549,23 @@ def run(args: argparse.Namespace) -> int:
         )
         return EXIT_ENVIRONMENT
 
+    try:
+        backend = build_backend(args, pdk)
+    except execution_mod.BackendError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ENVIRONMENT
+
     experiment_dir = tb.experiment_dir
     records_dir = experiment_dir / report.RECORDS_DIR
 
     jobs = args.jobs or min(8, (os.cpu_count() or 2))
     # Resolved once, here, so the value the record discloses is provably the
     # same one run_grid hands to every ngspice worker (omp_env_overrides is
-    # pure given `jobs` and the ambient environment).
-    omp_pin = omp.omp_env_overrides(jobs)
+    # pure given `jobs` and the ambient environment). Only meaningful for a
+    # backend that runs ngspice on *this* host: under an off-host backend the
+    # recording host runs nothing, so pinning (and disclosing) its thread
+    # budget would describe a machine that did no work (#496).
+    omp_pin = omp.omp_env_overrides(jobs) if backend.name == "local" else {}
     started = _dt.datetime.now(_dt.timezone.utc)
     # Sample git state *before* the run: the harness writes its own per-corner
     # logs into the tracked evidence tree, so sampling afterwards would mark
@@ -470,6 +574,18 @@ def run(args: argparse.Namespace) -> int:
     record_id = report.allocate_record_id(REPO_ROOT, records_dir, started, git=git)
     workdir = experiment_dir / "work" / record_id
     log_dir = None if args.no_write else experiment_dir / report.CORNERS_DIR / record_id
+
+    # `--backend batch` without `--batch-apply` is a plan, not a run: shape
+    # every job, print it, and stop. Deliberately *after* the PVT-subset gate
+    # above, so a plan for a thinned grid is refused on the same terms a
+    # record of one would be -- the plan is what an operator reads before
+    # spending, and it must describe a run that would be recordable.
+    if backend.name == "batch" and not args.batch_apply:
+        try:
+            return print_batch_plan(tb, pdk, points, workdir, backend, args.timeout)
+        except execution_mod.BackendError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_ENVIRONMENT
 
     if not args.quiet:
         print(f"experiment: {tb.experiment}"
@@ -538,6 +654,7 @@ def run(args: argparse.Namespace) -> int:
             timeout_s=args.timeout,
             on_result=progress,
             log_dir=log_dir,
+            backend=backend,
         )
     except NgspiceMissing as exc:
         # Kept fail-fast and separate from the broad net below: no ngspice on
@@ -590,7 +707,7 @@ def run(args: argparse.Namespace) -> int:
         git=git,
         derived_tables=derived_tables,
         conformance=conformance,
-        execution={"jobs": jobs, "omp": omp_pin},
+        execution={"jobs": jobs, "omp": omp_pin, **backend.describe()},
         abort_reason=abort_reason,
     )
 
