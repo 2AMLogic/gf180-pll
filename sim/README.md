@@ -294,6 +294,24 @@ allowed **only** with an in-record justification. "The sim was slow" is not a
 justification; "mismatch distribution is evaluated at nominal PVT, corner
 sensitivity covered separately by record X" is.
 
+**A *superset* of the default grid must be declared just as loudly as a
+subset.** `all-slow` and `all-fast` — the combined bundles that skew every
+device family together, passives included — are not among the five MOS
+bundles above, so a campaign that sweeps all seven runs a **63-point** grid,
+not a 45-point one. Its worst case is then a worst case over a wider corner
+universe, and it routinely *binds at a corner the default grid does not
+contain*: `vco-tuning-range`'s output-band floor, ceiling, worst Kvco and
+worst ripple-induced jitter all land on `all-fast` or `all-slow`. Reporting
+such a number beside a 45-point one without saying which grid it came from
+makes two different claims look like one, which is what happened in section 5
+of `docs/chipalooza/challenge-5-proposal.md` until 2026-09-25.
+**`sim/lib/check-pvt-coverage-claims.sh` fails CI** if a reader-facing
+document quotes a corner outside the default grid without naming the grid it
+was measured on, quotes a bundle `sim/harness/corners.py` does not define, or
+states a PVT corner count that neither matches the default grid size nor any
+count the cited record's committed per-corner evidence produces. The default
+grid's size is computed from the harness, never written into the check.
+
 **A worked example of an acceptable one-point justification** — `pll-top-smoke`
 (#52), the only single-corner campaign in the table above. The question it
 answers is a *connectivity and closed-loop-existence* question about a newly
