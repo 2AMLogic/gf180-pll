@@ -56,7 +56,7 @@ Being honest about where this actually is:
   does **not** cover, stated rather than left to be inferred: the campaign's
   own Acceptance Criteria (#13) also require a **random/noise-driven** jitter
   component that no record measures — a disclosed methodology gap, tracked at
-  #505, whose disposition is
+  #520, whose disposition is
   `spec/decision-records/DR-020-random-period-jitter-is-not-obtainable-on-this-toolchain.md`:
   no analysis this project's open-source flow offers produces that component,
   so the 1.0 % RMS line is satisfied in simulation for its deterministic half
@@ -165,7 +165,7 @@ Challenge #5 (GF180MCU / Wafer.Space), re-derived from this repository's own
 brief today — including that the design is 3.3 V-only and does not yet
 exercise the Challenge's 5.0 V analog rail; that `period-jitter`'s
 deterministic component now covers 45 of the mandated 45 PVT corners but its
-random/noise-driven component (#505) and its 200 MHz band-top counterpart
+random/noise-driven component (#520) and its 200 MHz band-top counterpart
 (#503) are both still unmeasured, so the proposal marks those rows
 **unmet** rather than
 omitting them; and that layout has reached the sub-block level but not the top
