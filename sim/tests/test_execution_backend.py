@@ -663,5 +663,89 @@ class ExecutionProvenanceTests(unittest.TestCase):
         self.assertIn("`elsewhere` (3)", lines[1])
 
 
+
+# ===========================================================================
+# 9. The transport contract itself: every call site must be callable through
+#    the REAL default runner
+# ===========================================================================
+
+class StrictRunnerSignatureTests(unittest.TestCase):
+    """The keyword rules ``_FakeTransport`` does not enforce, enforced.
+
+    ``_FakeTransport.__call__(self, argv, **kwargs)`` accepts and silently
+    drops whatever keywords a call site passes. That is the right shape for a
+    stub *recording* calls, but it means the suite above says nothing about
+    whether those keywords are legal for the runner the harness actually ships
+    -- :func:`batch._default_runner`, which itself supplies
+    ``capture_output``/``text``/``check`` to ``subprocess.run``.
+
+    They were not. ``_launch`` repeated all three, so every real submission
+    raised ``TypeError: subprocess.run() got multiple values for keyword
+    argument 'capture_output'`` -- and did so *after* ``_upload`` had already
+    written the job document and inputs to the bucket, i.e. the one failure
+    mode that spends on a job that can never run. A full-grid submission from
+    this repository failed at point 0 of 288 on it.
+
+    This test closes the gap without a process, a credential or a network
+    call: the transport binds each call against ``subprocess.run``'s own
+    signature exactly as ``_default_runner`` would, and a duplicated keyword
+    raises there the same way it does in production.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.pdk_dir = self.root / "gf180mcuD"
+        self.pdk_dir.mkdir()
+        self.deck = self.root / "typical_27c_3.30v.spice"
+        self.deck.write_text("* deck\n.end\n")
+
+    @staticmethod
+    def _strict(inner):
+        """Wrap a transport so it applies ``_default_runner``'s keyword rules."""
+        import inspect
+
+        signature = inspect.signature(subprocess.run)
+
+        def transport(argv, **kwargs):
+            # Exactly what _default_runner does with the call, minus running it.
+            signature.bind(
+                list(argv), capture_output=True, text=True, check=False, **kwargs
+            )
+            return inner(argv, **kwargs)
+
+        return transport
+
+    def test_every_submission_call_site_is_legal_for_the_default_runner(self):
+        inner = _FakeTransport(
+            ["done"],
+            outputs={
+                batch.LOG_NAME: "m_vout = 1.65\n",
+                batch.RC_NAME: "0",
+                batch.HOST_NAME: "ip-10-0-0-7\n",
+            },
+        )
+        backend = batch.BatchBackend(
+            pdk_variant_dir=self.pdk_dir,
+            pdk_variant="gf180mcuD",
+            config=_config(self.root),
+            apply=True,
+            runner=self._strict(inner),
+            poll_interval_s=0,
+        )
+        got = backend.run_deck(self.deck, self.root / "run", 60, None)
+        self.assertEqual(got.returncode, 0)
+        # The launch call is the one that was broken; assert it was reached,
+        # so a future refactor that stops launching cannot pass this test.
+        self.assertEqual(len(inner.launched()), 1)
+
+    def test_the_strict_transport_would_have_caught_the_defect(self):
+        """The guard is real: re-introduce the duplicate and this fails."""
+        transport = self._strict(_FakeTransport(["done"]))
+        with self.assertRaises(TypeError):
+            transport(["/provision.sh", "launch"], capture_output=True)
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

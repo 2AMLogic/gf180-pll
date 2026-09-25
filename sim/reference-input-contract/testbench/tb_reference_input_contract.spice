@@ -1,0 +1,111 @@
+* gf180-pll :: reference-input-contract :: the REF electrical contract, measured
+*
+* sim/harness fragment.  The DUT (`pfd_cp`, the tri-state PFD driving its real
+* charge pump) is NOT in this file: the manifest's `dut_export` block has
+* design/netlist.sh export the xschem hierarchy once per record and the harness
+* `.include`s it ahead of this fragment.  This file is stimulus and measurement
+* topology only.
+*
+* WHAT IS UNDER TEST HERE IS THE STIMULUS, NOT THE DUT.
+*
+* `spec/pll.md`'s [Reference input](../../spec/pll.md#reference-input) row
+* states three electrical limits on the driving system -- levels
+* (V_IL <= 0.2*VDD, V_IH >= 0.8*VDD), edge rate (<= 5 ns, 10-90 %) and duty
+* cycle (30-70 %) -- and until this campaign every one of them was *budget*:
+* every testbench in this repository that drives REF drives it identically, as
+* an ideal full-rail pulse with 200 ps edges and exactly 50 % duty.  So the DUT
+* is held fixed at what four other campaigns already characterize, and the REF
+* *waveform* is the swept axis: six variants that walk the contract to each of
+* its stated boundaries, plus the ideal pulse every prior record used, as the
+* comparison anchor.
+*
+* The measured quantity is the PFD's REFERENCE-PATH SET DELAY
+*
+*     d_ref = t(UP crosses VDD/2, rising) - t(REF crosses VDD/2, rising)
+*
+* -- the interval between the reference edge as a driving system would time it
+* (the mid-rail crossing, the only timing reference that is well defined for
+* every variant here, since all six swing symmetrically about VDD/2) and the
+* instant the phase detector acts on it.  THAT interval *is* "the phase the
+* PFD sampled": a reference waveform that shifts d_ref shifts the whole
+* reference-to-output phase relationship of the locked loop by the same amount,
+* because at lock the loop drives (t_ref + d_ref) = (t_fb + d_fb).
+*
+* Three supporting measurements make the record self-checking rather than
+* self-reporting:
+*
+*   - `slew_ref` and `thigh_ref` measure the 10-90 % edge time and the mid-rail
+*     high span OF THE APPLIED WAVEFORM.  The record therefore proves each
+*     point was inside the contract it claims to test, instead of asserting it
+*     from the `pulse()` arguments.
+*   - `d_fb` is the same set delay measured down the FEEDBACK path, whose
+*     stimulus is byte-for-byte identical at every point of the sweep.  Any
+*     movement in `d_fb` across the waveform axis is a defect in this deck, not
+*     a property of the reference contract, so it is the experiment's own
+*     control.
+*   - `qnet`, `width_up` and `width_dn` are the charge-domain and logic-domain
+*     quantities `sim/pfd-deadzone` reports, measured here the same way (same
+*     DUT, same 25 MHz reference, same Vctrl, same trim code), so a degraded
+*     reference can be compared against that campaign's ideal-reference numbers
+*     directly.
+*
+* Reference period 40 ns (25 MHz) -- the TOP of DR-002 Decision 1's ratified
+* 1-25 MHz v1 range, and deliberately the demanding end for this claim: a 5 ns
+* 10-90 % edge is 15.6 % of a 25 MHz period and 0.6 % of a 1 MHz one, so a
+* result that holds here holds for every slower reference in the range.
+*
+* Expects from the harness header:
+*   .lib <process corner bundle>, .temp <temp_c>
+*   .param vdd_val=<supply volts>  (also vdd_nom, temp_c)
+*   .param iunit, b0_code, b1_code, vctrl, period, tstart, tmid  (manifest `params`)
+*   .param vlo, vhi, trf, duty, pw    (the `w` waveform axis)
+*   .param dphi                       (the `p` applied-phase-offset axis)
+
+*------------------------------------------------------------------ supplies
+vdd vdd 0 dc 'vdd_val'
+vss vss 0 dc 0
+
+* REF -- the waveform under test.
+*
+* The pulse is placed by its MID-RAIL CROSSING, not by its `pulse()` delay:
+* `tmid - 0.5*trf` puts the rising 50 % point of every variant at exactly
+* `tmid` however slow its edge is, so the applied phase error is the axis
+* parameter `dphi` and nothing else.  Aligning on the pulse delay instead
+* would have silently folded half the edge time into the phase error, and the
+* 5 ns-edge variants would have read as a 3 ns phase step.
+*
+* `pw` is likewise the width at the TOP of the pulse, so the mid-rail high
+* span -- which is what "duty cycle" means for a clock -- is `pw + trf`; the
+* manifest's axis therefore sets `pw = duty*period - trf` rather than
+* `duty*period`, and `thigh_ref` below measures the result.
+vref ref 0 pulse('vlo' 'vhi' 'tmid-0.5*trf' 'trf' 'trf' 'pw' period)
+
+* FB -- ALWAYS the ideal buffered edge, identical at every point of the sweep.
+* This is the control: the feedback path is not what this campaign varies, and
+* `d_fb` measured down it must not move when the reference waveform does.
+vfb  fb  0 pulse(0 'vdd_val' 'tmid-100p+dphi' 200p 200p '0.5*period-200p' period)
+
+* Static trim code: b1 b0 = 1 0 -> Icp = 3 units (the nominal setting,
+* mid-range of the 2-bit trim -- see design/README.md).  Same code
+* sim/pfd-deadzone holds, so the two campaigns' charge numbers compare.
+vb0 b0 0 dc 'vdd_val*b0_code'
+vb1 b1 0 dc 'vdd_val*b1_code'
+
+* Charge-pump bias reference.  As in sim/devchar-cp and sim/pfd-deadzone, the
+* four bias nodes are driven from ideal current sources at 4x the unit-leg
+* current (the bias diodes are 4x the unit geometry, so each leg still mirrors
+* one unit): reference generation is a separate block, and driving it ideally
+* here keeps the measured behaviour the PFD+CP's own.
+iibn vdd ibn dc 'iunit'
+iicn vdd icn dc 'iunit'
+iibp ibp 0 dc 'iunit'
+iicp icp 0 dc 'iunit'
+
+xdut ref fb b0 b1 ibn icn ibp icp vout up dn vdd vss pfd_cp
+
+* Control node held at vctrl through an ammeter, so i(vam) is exactly the
+* charge-pump output current (positive = pump sourcing into the control node).
+* vctrl = 1.65 V is the mid of DR-001 Decision 2's ~0.9-2.4 V Vctrl window --
+* the same operating point sim/pfd-deadzone holds it at.
+vam vout vctrl_src 0
+vctrl vctrl_src 0 dc 'vctrl'
