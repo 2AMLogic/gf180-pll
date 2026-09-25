@@ -465,6 +465,11 @@ class BatchBackend:
             )
 
     def _launch(self, plan: JobPlan) -> None:
+        # No ``capture_output``/``text``/``check`` here: the runner protocol
+        # owns those (see ``_default_runner``), and re-supplying them through
+        # ``**kwargs`` makes ``subprocess.run`` receive each one twice --
+        # ``TypeError: got multiple values for keyword argument``. ``_aws()``
+        # forwards kwargs untouched for the same reason.
         proc = self._run(
             [
                 str(self.config.provision_script),
@@ -472,10 +477,7 @@ class BatchBackend:
                 "--job",
                 plan.job_id,
                 "--apply",
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
+            ]
         )
         if proc.returncode != 0:
             raise BackendError(
