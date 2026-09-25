@@ -268,10 +268,22 @@ extracted layout parasitics exist yet**, because there is no assembled
 top level to extract (§6, §7); everything is at the 3.3 V digital rail only,
 since no 5.0 V device exists in this design (§2.1).
 
+**This table is complete against `spec/pll.md`, and that completeness is
+machine-checked rather than asserted.** Every row of that specification's
+summary table appears below with an explicit verdict —
+`spec/lib/check-spec-row-coverage.sh` fails this repository's CI if one does
+not, and if a row is reported here under a parameter name the specification
+does not have. The check was written because one row was missing: **Reference
+input** had no row here at all until 2026-09-24, so its unmeasured `budget`
+limits and the ideal-reference exclusion every jitter and spur number below
+rests on reached no reader of this document. A row this table cannot
+substantiate is reported UNMET; it is not left out.
+
 | Parameter | v1 draft target | Measured / derived (3.3 V) | Verdict | Source (dated) |
 |---|---|---|---|---|
 | Output band | 10–200 MHz continuous | Floor 6.449 MHz (`all-fast`/125 °C/2.97 V); ceiling 247.8 MHz (`all-slow`/−40 °C/3.63 V); 0 non-monotonic curves of 504; worst adjacent-band overlap 27 % | **MET** (open-loop characterization) | `sim/vco-tuning-range/records/20260731-175947-0a12e6c.md` |
 | Output band, **closed-loop** | Same, at any legal (N, band, `f_ref`) | Full 45-point PVT grid at both drawn-band edges (90 runs, `pll_top` DUT): **0 of 45 corners reach a sustained in-window PASS at either edge** | **UNMET / open finding** — closed-loop band-edge settling has not yet been demonstrated within the campaign's own measurement window at any corner | `sim/output-range/records/20260819-160843-4e32f91.md` (full grid); `sim/output-range/records/20260819-190341-70a4128.md` (supersedes that record's single `ff`/27 °C/3.30 V `hi` row only, replacing a hand-killed ERROR with a reproducible CAPPED/stall characterization — still not a PASS) |
+| Reference input | 1–25 MHz CMOS square wave into `REF`, rising-edge triggered; duty 30–70 %; V_IL ≤ 0.2·VDD, V_IH ≥ 0.8·VDD; edge rate ≤ 5 ns (10–90 %); **reference-source quality explicitly excluded from the jitter and spur budgets** | **The frequency axis is exercised; the electrical contract is not.** `f_ref` spans the whole ratified range: the small-signal `loop-dynamics` cross-product is evaluated at 1/2/4/8/16/25 MHz (the six reference frequencies the [Icp trim-code rule](../../spec/pll.md#icp-trim-code-rule) is stated at), and closed-loop transients run at 1.25/5/20 MHz (`lock-time`, N = 4/16/64 at f_out = 80 MHz), 6.25/12.5 MHz (`supply-sensitivity`) and 25 MHz (`period-jitter`, `reference-spur`). **No record exercises the input contract itself**: every testbench in this repository that drives `REF` drives it the same way — an ideal full-rail 0 → VDD pulse, 200 ps edges, nominal 50 % duty (`grep -n '^vref ' sim/*/testbench/*.sp` returns that one shape in every one; two decks trim the width by a single edge time) — so the levels, the ≤ 5 ns edge-rate budget and the 30–70 % duty range are conditions no simulation has ever varied. `spec/pll.md` states levels and edge rate as **budget**; `sim/CHARACTERIZATION.md` carries the row as a known gap with no campaign directory behind it | **Range MET as a swept operating condition; levels, edge rate and duty range UNMET — budget, never measured.** The half of this row a reader must not skip is the exclusion: **every jitter and spur number in this section is the block's own contribution, measured or derived against an ideal reference.** Reference phase noise inside the loop bandwidth reaches the output multiplied by 20·log₁₀(N) — 12 dB at N = 4, 36 dB at N = 64 — so a system integrating this block must budget its own reference against that multiplication; this proposal does not do it for them. Converting the exclusion into a numeric reference-jitter limit needs a reference-perturbation bench that does not exist. `spec/pll.md`'s own Verification-owed line for this row names issue #12, which is **closed** and whose subject is closed-loop lock acquisition — so the work was, until now, unowned; it is filed as **#499** | `spec/pll.md#reference-input` (the contract and the exclusion); `sim/loop-dynamics/records/20260731-202550-82af5a9.md` (the 1–25 MHz small-signal axis); `sim/lock-time/records/20260831-052456-effc505.md` (closed-loop `f_ref` = 1.25/5/20 MHz); issue #499 (open) |
 | Multiplication ratio | N = 4–64, every integer | 61 distinct N exercised at 200 MHz, 0 ratio errors of 235 chain points; worst retiming setup margin 6.1 % of a VCO period (`ss`/125 °C/2.97 V) | **MET** | `sim/divider-ratio-chain/records/20260802-100727-082c879.md` (chain — the `sim/harness`-migrated successor to `sim/divider-ratio/records/20260731-171817-0a12e6c.md`, which is where the chain bench also moved into its own campaign directory; a tooling migration, not a value correction — the superseded record's 235 points, its 61 distinct N and its 3.0283e-10 s worst setup margin at `ss`/125 °C/2.97 V are all reproduced, per that record's own numeric-agreement check), sibling flop/cell records same date |
 | Integrated RMS jitter | not spec'd (DR-002 Decision 5) | n/a by design — never presented as a spec'd figure | **N/A, by design** | `spec/pll.md#integrated-rms-jitter` |
 | Period jitter (open-loop sensitivity) | ≤ 1.0 % RMS, conditional on ≤ 20 mV pp `vdd_vco` ripple | Worst 2.51 % RMS at 100 mV pp ripple (`all-slow`/−40 °C/2.97 V, band 5); implies 0.50 % RMS at the 20 mV pp budget, leaving headroom for an unmeasured random component | **derived, conditional PASS** at the stated ripple budget | `sim/vco-tuning-range/records/20260804-211600-f599a65.md` — the `sim/harness`-migrated successor to `20260731-184845-0a12e6c`, which reports the same 2.51 % RMS worst case at the same corner and carries its own `migration_delta` table over the 1872 measurements the two runs share |
@@ -299,7 +311,8 @@ since no 5.0 V device exists in this design (§2.1).
 
 No row above is relaxed, narrowed, or omitted to make it pass — the `period-
 jitter` random/noise-driven row, the `output-range` closed-loop row, three of four
-`supply-sensitivity` criteria, the lock-detector T1/T2/T4/T5 gaps, and the
+`supply-sensitivity` criteria, the lock-detector T1/T2/T4/T5 gaps, the
+reference-input electrical contract, and the
 5.0 V-rail row are all reported UNMET, exactly as the underlying evidence
 states, per `CLAUDE.md`'s "agents do not relax the ratified spec to make
 results pass."
@@ -579,6 +592,19 @@ the DRC/LVS closure the table above records, and no more.
    per DR-007 Amendment A1. Verdicts on those two rows in §5 are stated
    against the draft targets and say so; every other row's verdict is
    against a ratified target.
+10. **The reference input's electrical contract is unmeasured, and every
+    jitter and spur number here assumes an ideal reference** (§5). The
+    1–25 MHz frequency range is exercised as an operating condition of other
+    campaigns, but the input levels, the ≤ 5 ns edge-rate budget and the
+    30–70 % duty range are conditions no simulation has varied — every
+    testbench drives `REF` with the same ideal full-rail pulse, 200 ps
+    edges, nominal 50 % duty. A system integrating this block must budget its own reference
+    phase noise against the loop's 20·log₁₀(N) multiplication (12 dB at
+    N = 4, 36 dB at N = 64); this proposal does not do that for it.
+    `spec/pll.md` names issue #12 as this row's owed verification, but #12
+    is closed and is about closed-loop lock acquisition, so the work is
+    newly filed as **#499** — re-pointing the specification's own row at it
+    is a decision-record act, not an edit made here.
 
 None of the above items block *submitting* this proposal — consistent with
 this program's stated goal for Chipalooza proposals, the aim is to state the
