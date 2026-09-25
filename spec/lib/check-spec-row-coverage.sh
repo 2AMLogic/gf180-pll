@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Fails if a row of spec/pll.md's summary table has no verdict in the
-# Chipalooza proposal's target-specification table.
+# Chipalooza proposal's target-specification table, or is reported there
+# without the decision records the spec row itself says it rests on.
 #
 # WHY THIS EXISTS (issue #237)
 #
@@ -65,6 +66,47 @@
 #    the proposal's stale row sitting there looking like coverage while the
 #    renamed row silently goes unreported.
 #
+# 4. DECISION-RECORD CARRY-THROUGH. Every decision record (`DR-NNN`) named in
+#    a spec summary-table row must be named by at least one section-5 row
+#    covering it (same covering relation as rule 1).
+#
+#    Rules 1-3 grade that a row is *there*; none grades whether what it
+#    reports is the row the specification currently has. A spec summary-table
+#    row names a decision record when that decision set or changed the row's
+#    target or its reading -- that is what the citation is for. A section-5
+#    row reporting the same spec row without that decision is reporting a
+#    reading the specification has moved past, and the outside reader of the
+#    proposal has no way to see it. Found on 2026-09-25, and fixed in the
+#    commit that added this rule -- three spec rows, three decisions no line
+#    of the proposal had ever named:
+#
+#      - Area rests on DR-016 *and* DR-017. DR-017 held the row at 0.30 mm^2
+#        and replaced DR-016 Decision 4's re-amendment trigger ("each lever
+#        landing is grounds for a downward successor record") with one aimed
+#        at the uncertainty (an assembled `pll_top`, or a drawn loop filter).
+#        The proposal still told its reader the old trigger, and that "three
+#        such landings have already happened and the row has not yet followed
+#        any of them" -- a lapse the specification had already ruled is not
+#        one.
+#      - Lock time rests on DR-012: the Lock criterion this time is measured
+#        *to* is itself not reached at 2 of the 45 mandated corners (1.227 ns
+#        and 1.049 ns against a ratified <= 1 ns), so the spec row states its
+#        target "not met at 2/45 corners". The proposal's covering row read a
+#        bare MET.
+#      - Reference spur rests on DR-018: once term-1 current mismatch is
+#        priced at its budgeted 3-sigma the derived 200 MHz spur is -56.6 dBc,
+#        1.6 dB inside the line rather than the ~6 dB the -61 dBc figure
+#        implied. The proposal had neither number.
+#
+#    The rule is one-directional on purpose. A section-5 row may name more
+#    decisions than the spec row does (it usually does -- it re-derives from
+#    evidence); what it may not do is name fewer.
+#
+# 5. DECISION-RECORD EXISTENCE. Every `DR-NNN` the proposal names anywhere
+#    must resolve to exactly one spec/decision-records/DR-NNN-*.md. Rule 4 is
+#    satisfiable by naming a decision; this keeps "naming" meaning a record a
+#    reader can open.
+#
 # Deleting a spec row silences rule 1 for it, and that is not a loophole:
 # spec/pll.md is the ratified target specification, amended only through a
 # decision record (CLAUDE.md: "agents do not relax the ratified spec to make
@@ -74,16 +116,23 @@
 # WHAT IT DOES NOT DO
 #
 # It does not read the verdict's *content*: it cannot tell a correct MET from
-# an incorrect one, only a stated one from an absent one. Whether the numbers
+# an incorrect one, only a stated one from an absent one. Rule 4 narrows that
+# gap without closing it -- it can tell that a row names the decision that
+# changed the spec row, not that it states the change correctly. Nor does it
+# grade the spec's own citations: a summary-table row that *should* name a
+# decision and does not is a spec defect, fixed by a decision record, not by
+# the proposal. Whether the numbers
 # beside that verdict are the current evidence is check-record-supersession.sh's
 # rule, and whether they are the current *counts* is the other two checks'.
 #
 # Usage: spec/lib/check-spec-row-coverage.sh
-# Exit codes: 0 every spec summary-table row is reported with a verdict,
+# Exit codes: 0 every spec summary-table row is reported with a verdict and
+#               with the decision records it rests on,
 #             1 a row is omitted, a covered row carries no verdict, a
-#             section-5 row names no spec row, a graded file is missing, or
-#             either table fails to parse (a broken parser must not look like
-#             a clean tree).
+#             section-5 row names no spec row, a covered row omits a decision
+#             record its spec row names, the proposal names a decision record
+#             that does not exist, a graded file is missing, or either table
+#             fails to parse (a broken parser must not look like a clean tree).
 
 set -uo pipefail
 
@@ -91,6 +140,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 SPEC="spec/pll.md"
 PROPOSAL="docs/chipalooza/challenge-5-proposal.md"
+DECISIONS="spec/decision-records"
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "FAIL: python3 is not on PATH -- this check could not run, and a" \
@@ -98,12 +148,17 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-python3 - "${REPO_ROOT}" "${SPEC}" "${PROPOSAL}" <<'PY'
+python3 - "${REPO_ROOT}" "${SPEC}" "${PROPOSAL}" "${DECISIONS}" <<'PY'
 import os
 import re
 import sys
 
-repo_root, spec_rel, proposal_rel = sys.argv[1], sys.argv[2], sys.argv[3]
+repo_root, spec_rel, proposal_rel, decisions_rel = sys.argv[1:5]
+
+#: A decision-record citation: `DR-016`, `DR-007 Amendment A3`. Three digits,
+#: exactly -- `DR-0004` in spec/pll.md's Consumers section is another
+#: repository's numbering and must not be read as this one's DR-004.
+DR_TOKEN = re.compile(r"(?<![A-Za-z0-9-])DR-(\d{3})(?!\d)")
 
 #: The verdict vocabulary section 5 actually uses. Bounded by non-letters so
 #: that "MET" does not match inside "UNMET" (both are listed anyway) and so
@@ -211,7 +266,7 @@ for row in spec_rows[1:]:
         continue
     name = normalize(row[col])
     if name:
-        spec_params.append((name, row[col].strip()))
+        spec_params.append((name, row[col].strip(), " | ".join(row)))
 
 proposal_entries = []
 for row in proposal_rows[1:]:
@@ -223,7 +278,7 @@ for row in proposal_rows[1:]:
         )
         sys.exit(1)
     proposal_entries.append(
-        (normalize(row[pcol]), row[pcol].strip(), row[vcol])
+        (normalize(row[pcol]), row[pcol].strip(), row[vcol], " | ".join(row))
     )
 
 if not spec_params or not proposal_entries:
@@ -244,7 +299,9 @@ def covers(param, spec_name):
 
 failed = False
 
-for spec_name, spec_raw in spec_params:
+decision_rows = 0
+
+for spec_name, spec_raw, spec_line in spec_params:
     covering = [e for e in proposal_entries if covers(e[0], spec_name)]
     if not covering:
         failed = True
@@ -269,9 +326,34 @@ for spec_name, spec_raw in spec_params:
                 ", ".join(repr(e[1]) for e in covering),
             )
         )
+    # Rule 4: the decisions the spec row says it rests on must reach the
+    # section-5 rows reporting it.
+    owed = sorted(set(DR_TOKEN.findall(spec_line)))
+    if owed:
+        decision_rows += 1
+    carried = set(DR_TOKEN.findall(" ".join(e[3] for e in covering)))
+    for number in owed:
+        if number in carried:
+            continue
+        failed = True
+        sys.stderr.write(
+            "FAIL: %s's summary table row %r rests on DR-%s, and no row of %s "
+            "section 5 covering it (%s) names that decision. The spec row "
+            "cites it because it set or changed what the row says; a report "
+            "of the row without it is a report of a reading the specification "
+            "has moved past -- carry the decision, and what it changed, into "
+            "the section-5 row\n"
+            % (
+                spec_rel,
+                spec_raw,
+                number,
+                proposal_rel,
+                ", ".join(repr(e[1]) for e in covering),
+            )
+        )
 
-for param, raw, _verdict in proposal_entries:
-    if not any(covers(param, spec_name) for spec_name, _ in spec_params):
+for param, raw, _verdict, _line in proposal_entries:
+    if not any(covers(param, spec_name) for spec_name, _, _ in spec_params):
         failed = True
         sys.stderr.write(
             "FAIL: %s section 5 has a row %r naming no row of %s's summary "
@@ -280,12 +362,46 @@ for param, raw, _verdict in proposal_entries:
             "a target that does not exist\n" % (proposal_rel, raw, spec_rel)
         )
 
+# Rule 5: every decision record the proposal names is one a reader can open.
+decisions_dir = os.path.join(repo_root, decisions_rel)
+named = sorted(set(DR_TOKEN.findall(proposal_text)))
+for number in named:
+    matches = []
+    if os.path.isdir(decisions_dir):
+        matches = sorted(
+            f
+            for f in os.listdir(decisions_dir)
+            if re.fullmatch(r"DR-%s(-[^/]*)?\.md" % number, f)
+        )
+    if len(matches) != 1:
+        failed = True
+        sys.stderr.write(
+            "FAIL: %s names DR-%s, which resolves to %s under %s/ -- a "
+            "decision a reader is pointed at must be exactly one record they "
+            "can open\n"
+            % (
+                proposal_rel,
+                number,
+                ", ".join(matches) if matches else "no record",
+                decisions_rel,
+            )
+        )
+
 if failed:
     sys.exit(1)
 
 print(
     "OK: all %d rows of %s's summary table are reported with a verdict in %s "
-    "section 5 (%d rows), and every section-5 row names a spec row"
-    % (len(spec_params), spec_rel, proposal_rel, len(proposal_entries))
+    "section 5 (%d rows), and every section-5 row names a spec row; the %d "
+    "spec rows that rest on a decision record are reported with it, and all "
+    "%d decision records the proposal names exist"
+    % (
+        len(spec_params),
+        spec_rel,
+        proposal_rel,
+        len(proposal_entries),
+        decision_rows,
+        len(named),
+    )
 )
 PY

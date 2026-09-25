@@ -66,8 +66,10 @@ def _spec(rows=SPEC_ROWS, heading="## Summary table") -> str:
         "| # | Parameter | v1 target | Corner binding | Status |",
         "|---|---|---|---|---|",
     ]
-    for num, param in rows:
-        lines.append(f"| {num} | {param} | a target | a corner | **measured** |")
+    for row in rows:
+        num, param = row[0], row[1]
+        target = row[2] if len(row) > 2 else "a target"
+        lines.append(f"| {num} | {param} | {target} | a corner | **measured** |")
     lines += ["", "# Normative conditions", "", "Text after the table."]
     return "\n".join(lines) + "\n"
 
@@ -89,8 +91,10 @@ def _proposal(
         header,
         "|---|---|---|---|---|",
     ]
-    for param, verdict in rows:
-        lines.append(f"| {param} | a target | a measurement | {verdict} | a record |")
+    for row in rows:
+        param, verdict = row[0], row[1]
+        source = row[2] if len(row) > 2 else "a record"
+        lines.append(f"| {param} | a target | a measurement | {verdict} | {source} |")
     lines += ["", "## 6. Layout, DRC/LVS, and post-layout status", "", "Text after."]
     return "\n".join(lines) + "\n"
 
@@ -109,6 +113,12 @@ class _Tree:
         path = self.root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
+
+    def decision(self, number: str, slug: str = "a-decision") -> None:
+        self.write(
+            f"spec/decision-records/DR-{number}-{slug}.md",
+            f"# DR-{number}: a decision\n\n- **Status**: proposed\n",
+        )
 
     def run(self) -> subprocess.CompletedProcess:
         return subprocess.run(
@@ -275,6 +285,125 @@ class TestOrphanRowRule(_TreeTest):
         self.assertFails("naming no row of spec/pll.md's summary table")
 
 
+#: The real regression, in miniature: spec row 15 cites the decision that
+#: amended it and the one that later held it; the proposal's Area row knew only
+#: the first.
+AREA_SPEC = ("15", "[Area](#area)", "≤ 0.30 mm², amended by DR-016 and held by DR-017")
+
+
+class TestDecisionRecordCarryThroughRule(_TreeTest):
+    def setUp(self) -> None:
+        super().setUp()
+        for number in ("016", "017"):
+            self.tree.decision(number)
+        self.tree.write(SPEC_DOC, _spec(SPEC_ROWS + (AREA_SPEC,)))
+
+    def _with_area(self, *area_rows):
+        self.tree.write(PROPOSAL, _proposal(PROPOSAL_ROWS + tuple(area_rows)))
+
+    def test_the_real_drift_shape_is_caught(self):
+        """The proposal at `fe11b034`: Area reported on DR-016 alone."""
+        self._with_area(("Area", "**MET** against the row DR-016 amended"))
+        result = self.assertFails(
+            "[Area](#area)", "rests on DR-017", "no row of " + PROPOSAL
+        )
+        self.assertNotIn("rests on DR-016", result.stderr)
+
+    def test_carrying_every_decision_passes(self):
+        self._with_area(("Area", "**MET** (DR-016, held by DR-017)"))
+        self.assertPasses()
+
+    def test_the_decision_may_sit_in_any_cell_of_the_row(self):
+        self._with_area(
+            ("Area", "**MET**", "DR-016; `spec/decision-records/DR-017-a-decision.md`")
+        )
+        self.assertPasses()
+
+    def test_one_of_several_covering_rows_is_enough(self):
+        """Section 5 splits spec rows; the decision need reach only one part."""
+        self._with_area(
+            ("Area", "**MET** (DR-016)"),
+            ("Area, **top-level overhead**", "**UNMET** — held by DR-017"),
+        )
+        self.assertPasses()
+
+    def test_naming_it_in_some_other_row_does_not_count(self):
+        """Per row, not per document: the reader of the Area row must see it."""
+        self.tree.write(
+            PROPOSAL,
+            _proposal(
+                tuple(
+                    (p, v + " (see DR-017)") if p == "Output band" else (p, v)
+                    for p, v in PROPOSAL_ROWS
+                )
+                + (("Area", "**MET** (DR-016)"),)
+            ),
+        )
+        self.assertFails("rests on DR-017")
+
+    def test_naming_more_decisions_than_the_spec_row_passes(self):
+        self.tree.decision("007")
+        self._with_area(("Area", "**MET** (DR-007 Amendment A3, DR-016, DR-017)"))
+        self.assertPasses()
+
+    def test_every_decision_of_a_row_is_graded(self):
+        self._with_area(("Area", "**MET** (DR-017)"))
+        result = self.assertFails("rests on DR-016")
+        self.assertNotIn("rests on DR-017", result.stderr)
+
+    def test_a_spec_row_with_no_decision_owes_none(self):
+        """The default fixture's rows cite no decision and pass as before."""
+        self._with_area(("Area", "**MET** (DR-016, DR-017)"))
+        result = self.assertPasses()
+        self.assertIn("the 1 spec rows that rest on a decision record", result.stdout)
+
+    def test_another_repositorys_four_digit_number_is_not_a_decision(self):
+        """spec/pll.md's Consumers section cites a foreign `DR-0004`."""
+        self.tree.write(
+            SPEC_DOC,
+            _spec(SPEC_ROWS + (("15", "[Area](#area)", "per tmds-tx DR-0004"),)),
+        )
+        self._with_area(("Area", "**MET**"))
+        self.assertPasses()
+
+
+class TestDecisionRecordExistenceRule(_TreeTest):
+    def test_a_named_record_that_does_not_exist_fails(self):
+        self.tree.write(
+            PROPOSAL,
+            _proposal(
+                tuple(
+                    (p, v + " (DR-099)") if p == "Output band" else (p, v)
+                    for p, v in PROPOSAL_ROWS
+                )
+            ),
+        )
+        self.assertFails("names DR-099, which resolves to no record")
+
+    def test_a_record_named_outside_section_5_is_graded_too(self):
+        text = _proposal().replace(
+            "Reference clock |", "Reference clock, per DR-042 |"
+        )
+        self.assertIn("DR-042", text)
+        self.tree.write(PROPOSAL, text)
+        self.assertFails("names DR-042")
+
+    def test_an_existing_record_passes(self):
+        self.tree.decision("042")
+        self.tree.write(
+            PROPOSAL, _proposal().replace("Reference clock |", "Reference clock, per DR-042 |")
+        )
+        self.assertPasses()
+
+    def test_an_ambiguous_number_fails(self):
+        self.tree.decision("042", "one-title")
+        self.tree.decision("042", "another-title")
+        self.tree.write(
+            PROPOSAL, _proposal().replace("Reference clock |", "Reference clock, per DR-042 |")
+        )
+        self.assertFails("names DR-042, which resolves to DR-042-another-title.md")
+
+
 class TestSelfDefence(_TreeTest):
     def test_a_missing_spec_fails(self):
         (self.tree.root / SPEC_DOC).unlink()
@@ -312,6 +441,7 @@ class TestTheRealTree(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("are reported with a verdict", result.stdout)
+        self.assertIn("rest on a decision record are reported with it", result.stdout)
 
 
 if __name__ == "__main__":
