@@ -1,0 +1,20 @@
+pss: no such command available in ngspice
+Error: incomplete or empty netlist
+       or no ".plot", ".print", or ".fourier" lines in batch mode;
+no simulations run!
+
+Note: No compatibility mode selected!
+
+
+Circuit: * probe 4 of 4 -- is a periodic-steady-state analysis available?
+
+PROBE pss -- help pss:
+Sorry, no help for pss.
+
+For further details please see the latest official ngspice manual in PDF format at
+  https://ngspice.sourceforge.io/docs/ngspice-manual.pdf
+or in HTML format at
+  https://ngspice.sourceforge.io/docs/ngspice-html-manual/manual.xhtml
+
+PROBE pss -- invoking pss:
+PROBE pss -- done

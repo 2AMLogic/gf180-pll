@@ -1,0 +1,25 @@
+
+Note: No compatibility mode selected!
+
+
+Circuit: * probe 2 of 4 -- does the explicit `trnoise()` pwl source function work?
+
+Doing analysis at TEMP = 27.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+Initial Transient Solution
+--------------------------
+
+Node                                   Voltage
+----                                   -------
+n1                                           0
+v1#branch                                    0
+
+ Reference value :  6.85318e-06 Reference value :  1.34770e-05 Reference value :  2.02827e-05 Reference value :  2.72532e-05 Reference value :  3.44634e-05 Reference value :  4.15307e-05 Reference value :  4.87282e-05
+No. of Data Rows : 250008
+PROBE trnoise
+vmin = -4.55810e-03
+vmax = 4.025258e-03
+vrms = 8.646545e-04
+Note: Simulation executed from .control section 

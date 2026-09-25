@@ -176,7 +176,7 @@ top cell, port list, netlist/GDS paths, measured area, maturity rung — is
 | 2 | [Reference input](#reference-input) | 1 – 25 MHz, CMOS square wave, rising-edge triggered, duty 30–70 % | n/a — interface contract; the electrical limits are conditions on the driving system, not PVT-varying outputs | **budget** (levels, edge rate **and** duty — duty is argued from `design/pfd.sch`, not measured); range is **measured** as an operating condition of rows 8/9. The sweep that would discharge all three is declared and unmeasured at `sim/reference-input-contract`, owed from #499; DR-019 re-points that obligation off closed issue #12 and restates the reference-source-quality exclusion with its owner |
 | 3 | [Multiplication ratio](#multiplication-ratio) | N = 4 – 64, every integer, static configuration | retiming setup `ss`/125 °C/2.97 V at N = 64, 200 MHz (6.1 % of a VCO period) | **measured** |
 | 4 | [Integrated RMS jitter](#integrated-rms-jitter) | **not spec'd** — derived-only (DR-002 Decision 5) | n/a — deliberately unspecified; see the section for why this is visible rather than silent | **n/a** |
-| 5 | [Period jitter](#period-jitter) | ≤ 1.0 % of the output period, RMS, **conditional on ≤ 20 mV pp `vdd_vco` ripple** | `all-slow`/−40 °C/2.97 V, band 5 (2.51 % RMS at 100 mV pp ripple, open-loop); closed-loop deterministic jitter measured at all 45 mandated PVT corners, 0.0508–0.2691 % RMS, PASS at every corner (`sim/period-jitter/`, #13) | **measured** (sensitivity, and the closed-loop **deterministic** half at 45/45); **derived** (the ripple condition); the **random (noise-driven) half is not measured and is not obtainable from any analysis this flow offers** — DR-020, owed at #505. The row is not discharged by the deterministic PASS |
+| 5 | [Period jitter](#period-jitter) | ≤ 1.0 % of the output period, RMS, **conditional on ≤ 20 mV pp `vdd_vco` ripple** | `all-slow`/−40 °C/2.97 V, band 5 (2.51 % RMS at 100 mV pp ripple, open-loop); closed-loop deterministic jitter measured at all 45 mandated PVT corners, 0.0508–0.2691 % RMS, PASS at every corner (`sim/period-jitter/`, #13) | **measured** (sensitivity, and the closed-loop **deterministic** half at 45/45); **derived** (the ripple condition); the **random (noise-driven) half is not measured and is not obtainable from any analysis this flow offers** — DR-023, owed at #520. The row is not discharged by the deterministic PASS |
 | 6 | [Phase noise](#phase-noise) | **not spec'd** — derived-only (DR-002 Decision 5) | n/a — deliberately unspecified | **n/a** |
 | 7 | [Reference spur](#reference-spur) | ≤ −55 dBc | measured worst −57.0 dBc at f_out = 150 MHz (`sf`/−40 °C/2.97 V), i.e. −54.5 dBc scaled to 200 MHz; derived worst case −61 dBc at 200 MHz, or **−56.6 dBc** once DR-018's corner-combined statistical charge terms are folded into the same derivation | **measured** (5 spanning corners, 150 MHz); **budget** (the 200 MHz binding point and the other 40 corners — see [Verification owed](#verification-owed)) |
 | 8 | [Loop bandwidth](#loop-bandwidth) | f_c = 26 – 430 kHz over the ratified space, with `f_c < f_ref/10` as a hard ceiling | min 25.96 kHz at f_ref = 1 MHz / 4 legs; max 429.5 kHz at f_ref = 25 MHz / 1 leg; worst realized ratio `f_ref/13` | **measured** |
@@ -487,9 +487,10 @@ system, and the second is not covered by the `20·log₁₀(N)` line above:
 Converting the exclusion into a numeric reference-jitter limit requires the
 closed-loop noise bench. This paragraph previously pointed that at **#12**,
 which is closed and was never about it. It is **not** re-pointed at #13 either:
-#13 is *also* closed (2026-09-08), and its own successor gap is #505. The
+#13 is *also* closed (2026-09-08), and its bookkeeping successor #505 is
+closed too (DR-023). The
 honest state is that the numeric limit is **unowned**, sequenced behind the
-noise methodology at #505 — and [Verification owed](#verification-owed) now
+noise methodology at #520 — and [Verification owed](#verification-owed) now
 records it that way. Naming a plausible-looking owner is what hid this
 obligation twice; an empty owner column is the more useful fact.
 
@@ -622,34 +623,38 @@ merged records (`20260905-192724-a2ba48f` through `20260906-095050-3a8a6ef`,
 #13) covering all 45 mandated PVT corners, the full temperature × supply
 plane at every MOS bundle: 0.0508–0.2691 % RMS, PASS against the draft
 target at every corner (see `sim/CHARACTERIZATION.md`'s `period-jitter`
-row). **No random (noise-driven) jitter number exists, and DR-020 records
-that none is obtainable from any analysis this flow offers** — not merely
-that none has been run. Three things are true at once and only together do
-they make the gap: ngspice has **no** device-noise model in a `.tran`
-analysis at all (`.option TRANNOISE=1` is silently accepted and injects
-nothing — an option name from other simulators, so this is not a property of
-this build); its `.noise` analysis *does* evaluate the gf180mcu models'
-thermal and flicker PSDs correctly (`fnoimod = 1`, `ef = 0.95`,
-`noia`/`noib`/`noic` are all present and reproduce a 0.95 power-law slope
-into a thermal floor), but it is a small-signal analysis about a **DC
-operating point**, which a free-running ring oscillator does not have — its
-steady state is a limit cycle and its noise is cyclostationary; and its
-`trnoise()` source works but injects an amplitude the deck author *chooses*,
-so a figure built on it measures that choice. Bridging `.noise` to the
-oscillator needs a cyclostationary noise-referral pipeline (impulse
-sensitivity function, or an equivalent PSS/Pnoise route) that this repository
-has not built. **DR-002 Decision 5's quantity clause is therefore confirmed
-by this campaign and its method clause is not realizable here** (DR-020);
-Decision 5's own status stays `proposed`, unchanged, and DR-020 states why a
-whole-record supersession of DR-002 would be wrong. Per DR-020 Decision 2 the
-**≤ 1.0 % RMS target is unchanged and unrelaxed** — it is *satisfied in
-simulation for its deterministic half only*, with the random half deferred to
-silicon (`measurements/`) or to one of DR-020 Decision 4's named exit
-conditions. Reading the 45-corner PASS as discharging the row is the specific
-error that decision exists to prevent. The
-band sweep (1.18 % at B0 rising to 2.46 % at B6, as a fraction of the
-period) is a separate, open-loop measurement that varies band rather than
-temperature/supply, and was taken at nominal temperature and supply only.
+row). The band sweep (1.18 % at B0 rising to 2.46 % at B6, as a fraction of
+the period) is a separate, open-loop measurement that varies band rather
+than temperature/supply, and was taken at nominal temperature and supply
+only.
+
+**No random (noise-driven) jitter number exists, and none is obtainable on
+this toolchain** (DR-023). Every record's Methodology field discloses that
+DR-002 Decision 5's specified transient-noise method (`.option TRANNOISE=1`)
+injects no noise on this repo's pinned ngspice-46 build. DR-023 narrows the
+reason: the device noise data is *not* the missing piece — `.noise` reports
+each device's channel-thermal and flicker generators, for the gf180mcu models,
+at a bias point. What is missing is any periodic-steady-state/`pnoise` path
+(`pss` is not a command in this build) to weight those stationary PSDs over
+the ring's switching trajectory, across which they move by 46.6 dB and
+95.9 dB respectively. DR-002 Decision 5 therefore remains `proposed`, and is
+**not** superseded: its method has not failed on the physics, it has not been
+runnable. The measurement is owed at **#520**; the probes are committed at
+`sim/period-jitter/noise-toolchain-probe/`.
+
+**Consequently this line's 1.0 % target is not demonstrated — half of it is
+an unverified budget.** Stated explicitly rather than left in the arithmetic
+of the ripple derivation above:
+
+| Component | Status | Number |
+|---|---|---|
+| Deterministic, closed-loop (control ripple) | **measured**, 45/45 corners | 0.0508–0.2691 % RMS |
+| Supply-ripple sensitivity at the normative 20 mV pp condition | **derived** from a measured 100 mV pp open-loop sensitivity | 0.50 % RMS |
+| Random / noise-driven | **budget — unverified, not measurable on this toolchain** | ≤ 0.50 % RMS *assumed*, owed at #520 |
+
+A measured random component above 0.50 % RMS at any mandated corner would
+break this split and put the 1.0 % line itself in question; DR-023
+§Consequences names that as one of the conditions forcing a new record.
 
 Evidence: `sim/vco-tuning-range/records/20260804-211600-f599a65.md`, the
 `sim/harness`-migrated successor to `20260731-184845-0a12e6c.md` (DR-007
@@ -1734,12 +1739,12 @@ to reconstruct it from the status column.
 
 | Row | What is owed | Whose campaign |
 |---|---|---|
-| [Period jitter](#period-jitter) | any **random** (noise-driven) jitter number at all — the closed-loop **deterministic** component (and the temperature/supply sweep it was taken over) now exists at all 45 mandated PVT corners, the full temperature × supply plane (`sim/period-jitter/`, 0.0508–0.2691 % RMS, PASS against the draft target at every corner); the random component remains unmeasured, and **DR-020 records that it is not obtainable from any analysis this repository's toolchain offers**: ngspice has no device-noise model in `.tran` (`TRANNOISE` is an option name from other simulators, silently ignored here), its `.noise` analysis needs a DC operating point a free-running oscillator does not have, and its `trnoise()` source injects an amplitude the deck author chooses. What is owed is therefore a **methodology before a number**, and DR-020 Decision 4 names the three things that would discharge it: (a) build and validate a cyclostationary noise-referral pipeline on top of the `.noise` primitive that does work (result would be **derived**, not measured), (b) run it in a simulator with native transient device noise — an operator-level tool-policy call, not a Builder's, (c) measure it on silicon into `measurements/`. **Nothing in the ≤ 1.0 % RMS target moves** (DR-020 Decision 2): the row is satisfied in simulation for its deterministic half only | **#505** (`period-jitter`, random half); DR-020 (the disposition). Re-pointed off closed issue #13 by DR-020 Decision 3 |
+| [Period jitter](#period-jitter) | any **random** (noise-driven) jitter number at all — the closed-loop **deterministic** component (and the temperature/supply sweep it was taken over) now exists at all 45 mandated PVT corners, the full temperature × supply plane (`sim/period-jitter/`, 0.0508–0.2691 % RMS, PASS against the draft target at every corner); the random component remains unmeasured, and **not measurable on this toolchain** — not for want of device noise models, which `.noise` supplies per device and per mechanism, but because no periodic-steady-state/`pnoise` path exists on this repo's pinned ngspice-46 (`pss` is not a command in it, and `TRANNOISE` injects nothing) to weight those stationary PSDs over the ring's own switching trajectory, across which they move by 46.6 dB (thermal) and 95.9 dB (flicker). Re-derived rather than assumed: `sim/period-jitter/noise-toolchain-probe/`. **The 0.50 % RMS this row's [supply-ripple derivation](#period-jitter) leaves for the random/thermal contribution is an unverified budget, not a result** — see DR-023 §Decision 3 | #520 (`period-jitter`, random component); [DR-023](decision-records/DR-023-random-period-jitter-owner-and-cyclostationary-gap.md) re-points this row off the closed #13 (and its since-closed successor, #505) |
 | [Period jitter](#period-jitter) | the **output-band** axis of that sweep — the temperature × supply axis is retired by the row above, but every measured closed-loop point is at band 6 / f_out = 150 MHz, so no jitter number exists at the binding f_out = 200 MHz top of [Output band](#output-band), and the open-loop band sweep (B0 → B6) remains nominal temperature and supply only. The 200 MHz sweep is now a declared campaign of its own, `sim/period-jitter-band-top` — its 45-point grid, manifest, deck and per-corner operating-point derivation are committed and self-checking, and **every measured point of it is still owed** (`sim/CHARACTERIZATION.md`'s "Period jitter — band sweep at non-nominal temp/supply" row). That derivation already shows the normative [band-selection rule](#band-selection-rule) does not hold one band code across the 200 MHz grid (band 6 at 34 of the 45 points, band 7 at the other 11), so the loop gain the one fixed filter sees varies 1.6× across it against 1.05× across the 150 MHz grid | **#503** (`period-jitter-band-top`, the campaign run). Re-pointed off closed issue #13 by DR-020 Decision 3 — attribution only; that decision makes no statement about this row's measurement, which is a deterministic campaign with no dependence on DR-020's noise finding. #496, which also held this work, closed 2026-09-25 |
 | [Reference spur](#reference-spur) | the remaining 40 PVT points, and a direct measurement at the binding f_out = 200 MHz rather than the 150 MHz one static band code holds across corners — the closed-loop measurement itself now exists (`sim/reference-spur/records/20260816-132150-5f405e7.md`, 5 spanning corners), and the two cold corners do not clear −55 dBc once scaled to 200 MHz | #145 (`reference-spur`) |
 | [Lock time](#lock-time) | cold-start acquisition including cycle slipping — the closed-loop measurement itself now exists (`sim/lock-time/records/20260831-052456-effc505.md`, full 270-run PVT × N grid against the design's own `lock_detector` criterion): 22 PASS / 233 FAIL / 15 ERROR of 270; most `cold` FAILs read as a transient window too short for the detector to assert rather than a broken loop, and the majority of `relock` FAILs are not yet attributed to a cause (see `sim/CHARACTERIZATION.md`'s `lock-time` row and #284). **The re-take of that grid is no longer held.** DR-013 Decision 7 held it until #411 landed a window meeting Decision 4's ≤ 1.65× spread target, because the grid's verdicts are taken against the design's own `lock_detector` and would otherwise be read against a window that was about to move. #411 has landed that window (`sim/lock-detector/records/20260919-002812-1b12179.md`, observable spread 1.53–1.58×, T1′ and T2′ both met), so the hold is **released** and the re-take is owed on its own merits. Anyone re-running it must configure the lock detector's trim per the [Lock-detector window trim-code rule](#lock-detector-window-trim-code-rule) — the 233 FAILs above were taken against the untrimmed cell and are not comparable point-for-point to a re-take at the rule's codes | #163 (`lock-time`); hold released by #411 |
 | [Reference input](#reference-input) | **the input-threshold / edge-rate / duty sweep** — every point of it. `sim/reference-input-contract`'s manifest, deck and reduction are committed and self-checking, and **zero of its 288 declared points are measured** (the full mandated 45-point PVT grid × six `REF` waveform variants — the ideal pulse every other record here drives, plus one at each stated boundary of the [Reference input](#reference-input) contract and one at all three at once — plus an 18-point detector-gain slice at three corners). What is owed there is compute, not mechanism or design. The three lines it would discharge stay **budget** until it has a record; a campaign directory is not evidence | **#499** (`reference-input-contract`) |
-| [Reference input](#reference-input) | a numeric reference-jitter limit to replace the current exclusion — which needs the closed-loop noise bench, i.e. this repository's noise methodology, **not** the closed-loop lock bench. **It has no owner, and this row now says so rather than naming one.** Its prerequisite is the noise methodology tracked at #505 (itself the successor to issue #13, which is closed too); the reference-jitter limit is a further measurement on top of that and is unowned today. The exclusion itself is defensible and is restated with its boundary in [Reference input](#reference-input); what is owed is the number, and its input-side half (`dtdv_worst`, the AM-to-PM coefficient at the worst legal reference slope) is a deliverable of the campaign in the row above | **unowned** — sequenced behind #505 |
+| [Reference input](#reference-input) | a numeric reference-jitter limit to replace the current exclusion — which needs the closed-loop noise bench, i.e. this repository's noise methodology, **not** the closed-loop lock bench. **It has no owner, and this row now says so rather than naming one.** Its prerequisite is the noise methodology tracked at #520 (the successor to issue #505, closed, which was itself the successor to issue #13, closed too — DR-023); the reference-jitter limit is a further measurement on top of that and is unowned today. The exclusion itself is defensible and is restated with its boundary in [Reference input](#reference-input); what is owed is the number, and its input-side half (`dtdv_worst`, the AM-to-PM coefficient at the worst legal reference slope) is a deliverable of the campaign in the row above | **unowned** — sequenced behind #520 |
 | [Power](#power) | a measured `vdd_ref` domain current, and a closed-loop total | #14 (`supply-sensitivity`) |
 | [Supply sensitivity](#supply-sensitivity) | **Budget 2 is measured and missed, and what is owed is the decision, not the measurement** (DR-021): the closed loop consumes 0.385 … 0.846 V of the control window across the ratified 2.97–3.63 V rail, over the 0.6 V budget at **9 of the 15** (bundle, temperature) cells, worst `ss`/−40 °C at 1.41×. Three residuals. (a) **Which excursion the row governs** — its derivation prices ±0.33 V, under which 0 of 15 cells exceed the budget, while the row specifies the 0.66 V full range; the row is read as written until this is ratified, and the deck's criterion 1b must then grade the ratified budget instead of DR-001's superseded 0.9–2.4 V window (DR-012 Decision 5). (b) **The passive process axes** — every input is pinned `res_typical`/`moscap_typical`/`mimcap_typical`, and C1 alone spans 107.1–133 pF over corners (DR-006), so nothing bounds this consumption over the loop filter's own spread. (c) **The 10 of 45 rows the source grid flags as still converging**, nine of which sit in cells graded over budget — their settled `vctrl_avg_v` would move the count, which is why the 9-of-15 figure is the count on *that* grid and #437's re-take is entitled to another | **#525** (a, the decision + the deck); **#437** (c, the trimmed-window full-grid re-take); (b) unowned |
 | [Output duty cycle](#output-duty-cycle) | the design does not meet its own 45 % floor at 7/90 measured points (`fs` bundle, `lo` edge, nominal-or-above supply); post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the measurement itself now exists (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |

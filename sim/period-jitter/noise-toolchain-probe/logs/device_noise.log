@@ -1,0 +1,67 @@
+
+Note: No compatibility mode selected!
+
+
+Circuit: * probe 3 of 4 -- does `.noise` report per-device, per-mechanism noise for the
+
+Doing analysis at TEMP = 27.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+Doing analysis at TEMP = 27.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+PROBE device_noise -- vectors produced by .noise:
+Here are the vectors currently active:
+
+Title: * probe 3 of 4 -- does `.noise` report per-device, per-mechanism noise for the
+Name: noise2 (Integrated Noise)
+Date: Fri Sep 25 04:06:57  2026
+
+    inoise_total        : voltage, real, 1 long
+    inoise_total.m.xm1.m0: voltage, real, 1 long
+    inoise_total.m.xm1.m0.1overf: voltage, real, 1 long
+    inoise_total.m.xm1.m0.id: voltage, real, 1 long
+    inoise_total.m.xm1.m0.igb: voltage, real, 1 long
+    inoise_total.m.xm1.m0.igd: voltage, real, 1 long
+    inoise_total.m.xm1.m0.igs: voltage, real, 1 long
+    inoise_total.m.xm1.m0.rbdb: voltage, real, 1 long
+    inoise_total.m.xm1.m0.rbpb: voltage, real, 1 long
+    inoise_total.m.xm1.m0.rbpd: voltage, real, 1 long
+    inoise_total.m.xm1.m0.rbps: voltage, real, 1 long
+    inoise_total.m.xm1.m0.rbsb: voltage, real, 1 long
+    inoise_total.m.xm1.m0.rd: voltage, real, 1 long
+    inoise_total.m.xm1.m0.rg: voltage, real, 1 long
+    inoise_total.m.xm1.m0.rs: voltage, real, 1 long
+    inoise_total_rs     : voltage, real, 1 long
+    inoise_total_rs_1overf: voltage, real, 1 long
+    inoise_total_rs_thermal: voltage, real, 1 long
+    onoise_total        : voltage, real, 1 long
+    onoise_total.m.xm1.m0: voltage, real, 1 long
+    onoise_total.m.xm1.m0.1overf: voltage, real, 1 long
+    onoise_total.m.xm1.m0.id: voltage, real, 1 long
+    onoise_total.m.xm1.m0.igb: voltage, real, 1 long
+    onoise_total.m.xm1.m0.igd: voltage, real, 1 long
+    onoise_total.m.xm1.m0.igs: voltage, real, 1 long
+    onoise_total.m.xm1.m0.rbdb: voltage, real, 1 long
+    onoise_total.m.xm1.m0.rbpb: voltage, real, 1 long
+    onoise_total.m.xm1.m0.rbpd: voltage, real, 1 long
+    onoise_total.m.xm1.m0.rbps: voltage, real, 1 long
+    onoise_total.m.xm1.m0.rbsb: voltage, real, 1 long
+    onoise_total.m.xm1.m0.rd: voltage, real, 1 long [default scale]
+    onoise_total.m.xm1.m0.rg: voltage, real, 1 long
+    onoise_total.m.xm1.m0.rs: voltage, real, 1 long
+    onoise_total_rs     : voltage, real, 1 long
+    onoise_total_rs_1overf: voltage, real, 1 long
+    onoise_total_rs_thermal: voltage, real, 1 long
+PROBE device_noise -- results:
+onoise_total = 1.306295e-10
+onoise_total_rs_thermal = 1.287453e-10
+onoise_total.m.xm1.m0.id = 3.115195e-12
+onoise_total.m.xm1.m0.1overf = 2.188615e-11
+Note: Simulation executed from .control section 
