@@ -57,12 +57,25 @@
 #    behind and the one a reader is most likely to act on.
 #
 # 3. OWNERSHIP. A reference introduced by a present-tense ownership phrase --
-#    "tracked at", "tracked by", "filed as", "routed to", "owned by" -- must
-#    be OPEN. Closed work owns nothing. The phrase in the *past* tense ("was
-#    filed as #273", "were tracked at") is exempt: it narrates history, which
-#    is exactly what this repository's evidence records are for, and a
-#    history that named a then-open issue does not become false when that
-#    issue closes.
+#    "tracked at", "tracked by", "filed as", "routed to", "owned at/by",
+#    "owed at/by/from" -- must be OPEN. Closed work owns nothing. The phrase
+#    in the *past* tense ("was filed as #273", "were tracked at") is exempt:
+#    it narrates history, which is exactly what this repository's evidence
+#    records are for, and a history that named a then-open issue does not
+#    become false when that issue closes. So is a reference the document
+#    itself marks closed ("#505, itself closed", "the now-closed #10"): the
+#    reader has been told, and rule 2 grades the telling.
+#
+#    "owed at" and "owned at" were added after they let a stale owner
+#    through twice. sim/README.md's campaign table said the random half of
+#    period jitter "is owed at **#505**", and sim/CHARACTERIZATION.md said
+#    it was "owned at **#505**", for as long as #505 had been closed --
+#    because neither file was graded, and neither phrase was one this rule
+#    recognised. Both files are graded now.
+#
+# A reference qualified by a sibling repository's name ("klayout-tools
+# #309") is a different repository's issue and is not graded here at all;
+# resolving it against this repository would grade the wrong issue.
 #
 # 4. SOURCE-COLUMN STATE. An issue cited in the Source column of the section-5
 #    specification table must carry an explicit `(open)` or `(closed)`
@@ -112,6 +125,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GRADED=(
   "docs/chipalooza/challenge-5-proposal.md"
   "README.md"
+  "sim/README.md"
+  "sim/CHARACTERIZATION.md"
 )
 
 if ! command -v python3 >/dev/null 2>&1; then
@@ -146,7 +161,7 @@ NOT_AN_ISSUE = ("challenge", "challenge's")
 STATE_ANNOTATION = re.compile(
     r"^\s*(?:\**\s*)?"
     r"(?:\(|--\s*|—\s*|,\s*)?\s*"
-    r"(?:is\s+|are\s+|remains\s+|stays\s+|now\s+|still\s+|both\s+)*"
+    r"(?:is\s+|are\s+|remains\s+|stays\s+|now\s+|still\s+|both\s+|itself\s+)*"
     r"(?:fixed\s+and\s+)?"
     r"\**(?P<state>open|closed)\**"
     r"(?=[\s).,;:|*]|$)",
@@ -158,7 +173,7 @@ STATE_ANNOTATION = re.compile(
 OWNERSHIP = re.compile(
     r"(?<!\bwas\s)(?<!\bwere\s)(?<!\bpreviously\s)"
     r"\b(?:tracked(?:\s+separately)?\s+(?:at|by)|filed\s+as|routed\s+to|"
-    r"owned\s+by|raised\s+against)\b",
+    r"owned\s+(?:at|by)|owed\s+(?:at|by|from)|raised\s+against)\b",
     re.IGNORECASE,
 )
 
@@ -175,6 +190,21 @@ SPAN_END = re.compile(r"(?<=[.;])\s|\s\|\s|\s[—–]\s|\n\n|$")
 #: exemption, checked on the text before the match because Python's
 #: lookbehind must be fixed-width and "was tracked separately at" is not.
 PAST_TENSE = re.compile(r"\b(?:was|were|had\s+been|previously)\s+$", re.IGNORECASE)
+
+#: "the now-closed #10", "closed issue #13" -- a state annotation written in
+#: front of the reference rather than after it. Rule 3 reads it the same way it
+#: reads a trailing "(closed)": the document has told its reader the issue is
+#: closed, so it is not presenting it as a live owner.
+LEADING_CLOSED = re.compile(r"\b(?:now-)?closed\s+(?:issues?\s+)?\**$", re.IGNORECASE)
+
+#: A reference qualified by another repository's name -- "klayout-tools #309".
+#: That number is not this repository's #309, and grading it here would
+#: resolve it against the wrong issue, so it is not graded at all. The names
+#: are listed rather than pattern-matched because a pattern loose enough to
+#: find a repository name also finds a hyphenated adjective ("the now-closed
+#: #10", "a differently-shaped #12"), which this document uses constantly;
+#: these are the two sibling repositories CLAUDE.md sends work to.
+FOREIGN_REPO = re.compile(r"(?:\b[\w.-]+/)?\b(?:klayout-tools|gf180-bandgap)\s+$")
 
 #: "issue #13", "issues #496" -- the spelling section 5's Source column uses
 #: when it presents an issue as a row's source of record rather than as
@@ -225,6 +255,8 @@ def references(text):
         before = text[max(0, match.start() - 24):match.start()]
         word = re.search(r"([A-Za-z']+)\s*$", before)
         if word and word.group(1).casefold() in NOT_AN_ISSUE:
+            continue
+        if FOREIGN_REPO.search(before):
             continue
         found.append((int(match.group(1)), match.start(), match.end()))
     return found
@@ -345,7 +377,14 @@ for rel, text in graded_text.items():
         # Rule 3 -- ownership. A compound modifier (`post-#24 charge pump`)
         # names a state of the design, not an owner of the work, so a
         # reference glued to the preceding word by a hyphen is exempt.
-        if state == "closed" and not text[start - 1:start] == "-":
+        # A reference the document itself marks closed -- "#505, itself
+        # closed", "the now-closed #10" -- is narrated, not handed work.
+        self_marked_closed = (
+            (annotation and annotation.group("state").casefold() == "closed")
+            or LEADING_CLOSED.search(text[max(0, start - 24):start])
+        )
+        if state == "closed" and not text[start - 1:start] == "-" \
+                and not self_marked_closed:
             for span_start, span_end, phrase in spans:
                 if span_start <= start < span_end:
                     fail("%s hands work to #%d with \"%s\", but #%d is closed. "
