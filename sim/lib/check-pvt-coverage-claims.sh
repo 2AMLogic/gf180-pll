@@ -101,6 +101,42 @@
 #    loop-dynamics cells) that are not PVT grids and must not be forced to look
 #    like one.
 #
+# 4. A CLAIM OF FULL MANDATED COVERAGE IS CHECKED POINT BY POINT. A row that
+#    says it covers the whole mandated grid -- "Full 45-point PVT grid", "all
+#    45 of the mandated PVT points", "45/45" -- must cite record(s) whose
+#    committed per-corner evidence, taken in UNION, contains every one of the
+#    mandated (bundle, temperature, supply) triples. Not the count: the points.
+#
+#    Rule 3 cannot do this, and not by oversight. Its allowed-count set starts
+#    at {MANDATED_GRID} unconditionally, because "of 45" is a legitimate thing
+#    for a row to say about a grid it only partly measured ("5 of 45 PVT points
+#    measured, not the full grid" is the reference-spur row, and is honest).
+#    The cost of that unconditional allowance is that the strongest claim in
+#    the table -- I measured all of it -- is the one claim nothing verified.
+#    Rules 1 and 2 do not reach it either: both grade corners that ARE named,
+#    and a row overclaiming full coverage is characterized by the corners it
+#    does not name.
+#
+#    The union matters as much as the rule. `sim/period-jitter` reached the
+#    mandated 45 across five records that cover 1, 4, 8, 18 and 16 points; no
+#    single one of them covers the grid, and a per-record test would reject the
+#    honest row. A sixth record re-measures 2 of those points against #273's
+#    wrap-safe lock gate and adds no new corner -- so citing it alone would
+#    satisfy a count-based rule at 2 points and a point-based one at none.
+#
+#    Trigger (b) of rule 2 grades evidence WIDER than the grid; this rule
+#    grades evidence NARROWER than the grid the row claims. Added on
+#    2026-09-25 after a sweep of all three graded documents for full-coverage
+#    claims found one row resting on nothing: `sim/CHARACTERIZATION.md`'s
+#    Verification-owed cross-reference said the deterministic jitter component
+#    is "measured at all 45 of the mandated PVT corners" and cited campaign
+#    directories rather than records, so there was no evidence for the check --
+#    or for a reader -- to reach. The claim was true; it was unsupported in the
+#    place it was made. That sweep found 13 rows making a full-coverage claim;
+#    the other 12 were verified point-by-point against the union of their own
+#    citations in the same pass, and the count this check prints on success is
+#    that same number.
+#
 # THE MANDATED GRID SIZE IS DERIVED, NOT WRITTEN DOWN HERE
 #
 # It is len(REQUIRED_MOS_CORNERS) x len(DEFAULT_TEMPERATURES_C) x
@@ -114,7 +150,21 @@
 # It does not check that a quoted *value* is the value in the cited record --
 # that is a different and much larger check. It grades the corner a value is
 # attributed to and the grid that corner sits in. A row that quotes no corner
-# triple and no corner count is trivially clean; so is a derived or waived row.
+# triple, no corner count and no full-coverage claim is trivially clean; so is
+# a derived or waived row.
+#
+# Rule 4 does not check that the cited evidence covering the grid is evidence
+# OF the claim. A row could satisfy it by citing an unrelated record that
+# happens to run the mandated grid, exactly as rule 2's disclosure tokens could
+# be satisfied by an unrelated record's width before `names_its_grid` narrowed
+# them to the off-grid candidates. The rule grades that a full-coverage claim
+# has full-coverage evidence behind it and that a reader can follow the
+# citation to it; pairing a claim with the right record is the reader's job,
+# and the record's own campaign name is what makes it doable.
+#
+# Rule 4 is also row-scoped, like rules 2 and 3. Full-coverage claims made in
+# prose -- the proposal's numbered "Known gaps" list restates several -- are
+# not graded, because prose has no citation column to check them against.
 #
 # Two grid-shape claims are also still taken on trust, both of them hand-
 # verified and written into section 5.0 of the proposal rather than graded
@@ -132,10 +182,11 @@
 #
 # Usage: sim/lib/check-pvt-coverage-claims.sh
 # Exit codes: 0 every quoted corner is a real bundle, every off-grid corner is
-#             disclosed, and every corner count is backed by evidence; 1 any
-#             rule fails, a graded document is missing, the harness cannot be
-#             imported, or the document yields no corner triples at all (a
-#             broken parser must not look like a clean document).
+#             disclosed, every corner count is backed by evidence, and every
+#             claim of full mandated coverage cites evidence that covers it;
+#             1 any rule fails, a graded document is missing, the harness
+#             cannot be imported, or the document yields no corner triples at
+#             all (a broken parser must not look like a clean document).
 
 set -uo pipefail
 
@@ -180,7 +231,19 @@ except Exception as exc:  # pragma: no cover - exercised by the import-guard tes
     sys.exit(1)
 
 MANDATED_BUNDLES = len(REQUIRED_MOS_CORNERS)
-MANDATED_GRID = MANDATED_BUNDLES * len(DEFAULT_TEMPERATURES_C) * len(supply_points())
+#: Every (bundle, temperature, supply) triple the mandated grid is made of --
+#: the same product whose size is MANDATED_GRID, kept as points because rule 4
+#: has to say *which* of them a row's evidence is missing.
+MANDATED_POINTS = frozenset(
+    (bundle, float(temp), float(vdd))
+    for bundle in REQUIRED_MOS_CORNERS
+    for temp in DEFAULT_TEMPERATURES_C
+    for vdd in supply_points()
+)
+MANDATED_GRID = len(MANDATED_POINTS)
+assert MANDATED_GRID == (
+    MANDATED_BUNDLES * len(DEFAULT_TEMPERATURES_C) * len(supply_points())
+), "the mandated grid is a full-factorial product; a duplicate axis value broke it"
 
 RECORD_ID = r"\d{8}-\d{6}-[0-9a-f]{7}"
 
@@ -215,6 +278,20 @@ GRID_SIZE = re.compile(
 #: Rule 2's disclosure tokens: "63-point", "13-bundle", "13 bundles".
 DISCLOSURE = re.compile(r"\b(\d+)[\s -]*(?:point|bundle)s?\b")
 
+#: Rule 4's claim forms, in the spellings the three graded documents already
+#: use: "Full 45-point PVT grid", "full 45-corner sweep", "full mandated
+#: 45-point grid", "All 45 of the mandated PVT points".
+FULL_COVERAGE = re.compile(
+    r"\b(?:full|complete|all)\s+(?:the\s+)?(?:mandated\s+)?(\d+)"
+    r"(?:[\s-]*(?:point|corner)"
+    r"|\s+of\s+(?:the\s+)?(?:mandated[\s-]+)?(?:PVT[\s-]+)?(?:point|corner))",
+    re.IGNORECASE,
+)
+#: The same claim written as a saturated fraction: "45/45", "45 of 45". Both
+#: sides must be the same number, so "0 of 45" and "5 of 45" are untouched --
+#: those are rule 3's, and are honest statements of partial coverage.
+FULL_FRACTION = re.compile(r"\b(\d+)\s*(?:/|\s+of\s+(?:the\s+)?)\s*(\d+)\b")
+
 #: A Source cell that defers to the row above instead of repeating the id.
 SAME_RECORD = re.compile(r"\bSame\s+(?:record|as\s+above)\b", re.IGNORECASE)
 
@@ -230,7 +307,7 @@ _evidence_cache = {}
 
 
 def evidence(record_id):
-    """(distinct PVT points, the set of distinct bundles, {CSV row counts}).
+    """(the set of distinct PVT points, the set of distinct bundles, {CSV rows}).
 
     Read from sim/<campaign>/corners/<record-id>/ -- the committed per-corner
     artifacts of that record, which is the only place the tree says how much of
@@ -268,7 +345,7 @@ def evidence(record_id):
             for row in table:
                 points.add((row[bundle_col], _f(row["temp_c"]), _f(row[vdd_col])))
                 bundles.add(row[bundle_col])
-    result = (len(points), frozenset(bundles), rows)
+    result = (frozenset(points), frozenset(bundles), rows)
     _evidence_cache[record_id] = result
     return result
 
@@ -287,8 +364,8 @@ def names_its_grid(tokens, candidates):
     mandated numbers is not a disclosure that the row is off them.
     """
     for rid in candidates:
-        n_points, bundles, _ = evidence(rid)
-        for count in (n_points, len(bundles)):
+        points, bundles, _ = evidence(rid)
+        for count in (len(points), len(bundles)):
             if count and count not in (MANDATED_GRID, MANDATED_BUNDLES):
                 if count in tokens:
                     return True
@@ -299,6 +376,7 @@ failed = False
 triples_seen = 0
 counts_seen = 0
 disclosures_seen = 0
+full_claims_seen = 0
 
 for doc in graded:
     doc_path = os.path.join(repo_root, doc)
@@ -334,11 +412,13 @@ for doc in graded:
         elif SAME_RECORD.search(line):
             cited = inherited
         allowed = {MANDATED_GRID}
+        measured = set()
         for rid in cited:
-            n_points, _, row_counts = evidence(rid)
-            if n_points:
-                allowed.add(n_points)
+            points, _, row_counts = evidence(rid)
+            if points:
+                allowed.add(len(points))
             allowed |= row_counts
+            measured |= points
 
         # Rule 2, trigger (a): the row quotes a corner outside the grid.
         quoted_off_grid = sorted(
@@ -359,7 +439,9 @@ for doc in graded:
 
         if quoted_off_grid or measured_off_grid:
             tokens = {int(n) for n in DISCLOSURE.findall(line)}
-            widths = [(rid,) + evidence(rid)[:2] for rid in cited]
+            widths = [
+                (rid, len(evidence(rid)[0]), evidence(rid)[1]) for rid in cited
+            ]
             # A row that only *quotes* an off-grid corner has no off-grid
             # record to point at, so every record it cites is a candidate.
             candidates = [rid for rid, _ in measured_off_grid] or cited
@@ -430,6 +512,50 @@ for doc in graded:
                     )
                 )
 
+        # Rule 4: a claim of full mandated coverage, checked point by point.
+        claims = [
+            m.group(0).strip()
+            for m in FULL_COVERAGE.finditer(line)
+            if int(m.group(1)) == MANDATED_GRID
+        ]
+        claims += [
+            m.group(0).strip()
+            for m in FULL_FRACTION.finditer(line)
+            if m.group(1) == m.group(2) == str(MANDATED_GRID)
+        ]
+        if claims:
+            full_claims_seen += 1
+            missing = MANDATED_POINTS - measured
+            if missing:
+                failed = True
+                shown = sorted(missing)[:4]
+                sys.stderr.write(
+                    "FAIL: %s claims %s, but the committed evidence of the "
+                    "record(s) this row cites covers %d of the %d mandated PVT "
+                    "points -- %d missing, e.g. %s%s. A row that claims the "
+                    "whole mandated grid has to cite evidence that covers it%s."
+                    "\n  row: %s\n"
+                    % (
+                        doc,
+                        " and ".join('"%s"' % c for c in claims),
+                        len(MANDATED_POINTS & measured),
+                        MANDATED_GRID,
+                        len(missing),
+                        ", ".join(
+                            "`%s`/%g °C/%g V" % (b, t, v) for b, t, v in shown
+                        ),
+                        " ..." if len(missing) > len(shown) else "",
+                        (
+                            " (the union across every record it cites is what "
+                            "counts -- no one record has to cover the grid alone)"
+                            if cited
+                            else ", and the row cites no record at all -- name "
+                            "the record(s) whose evidence covers it"
+                        ),
+                        line.strip()[:220],
+                    )
+                )
+
 if not triples_seen:
     sys.stderr.write(
         "FAIL: no corner triple (`` `<bundle>`/<T> °C ``) was found in any of "
@@ -446,7 +572,16 @@ print(
     "sim/harness/corners.py; %d row(s) quoting or resting on an off-grid "
     "corner name the grid they were measured on; %d PVT corner count(s) "
     "match the %d-point mandated grid or the cited record's committed "
-    "evidence"
-    % (triples_seen, len(graded), disclosures_seen, counts_seen, MANDATED_GRID)
+    "evidence; %d row(s) claiming the full mandated grid cite evidence "
+    "covering all %d of its points"
+    % (
+        triples_seen,
+        len(graded),
+        disclosures_seen,
+        counts_seen,
+        MANDATED_GRID,
+        full_claims_seen,
+        MANDATED_GRID,
+    )
 )
 PY

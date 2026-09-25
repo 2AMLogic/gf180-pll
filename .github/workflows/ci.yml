@@ -282,14 +282,16 @@ jobs:
         # sim/CHARACTERIZATION.md carried the same undisclosed row, plus
         # "21/135 corners" for what is 135 rows over a 45-corner grid.
         #
-        # Three rules: every process bundle a graded document quotes in a
+        # Four rules: every process bundle a graded document quotes in a
         # corner triple is one sim/harness/corners.py defines; a table row
         # that is off the mandated grid names the grid it came from (an
         # `<N>-point` or `<N>-bundle` token matching the cited record's own
         # committed coverage, and not the mandated numbers, since repeating
-        # them discloses nothing); and every PVT-qualified corner count in a
+        # them discloses nothing); every PVT-qualified corner count in a
         # row is the mandated grid size or a count the cited record's
-        # committed per-corner evidence produces.
+        # committed per-corner evidence produces; and a row that claims it
+        # covers the WHOLE mandated grid cites records whose committed
+        # evidence, in union, contains every mandated point.
         #
         # "Off the mandated grid" has two triggers, because the first alone
         # was a disclosure rule keyed on what a row happens to SAY. A row is
@@ -303,6 +305,23 @@ jobs:
         # structurally cannot catch, because it allows the mandated size
         # unconditionally. Five more rows across the two documents were in the
         # same state on 2026-09-25.
+        #
+        # The fourth rule is the converse of that trigger: it grades evidence
+        # NARROWER than the grid a row claims, where trigger (b) grades
+        # evidence wider than the grid a row quotes. It is point-by-point, not
+        # count-by-count, and it takes the union across every record the row
+        # cites -- sim/period-jitter reached the mandated 45 across five
+        # records covering 1, 4, 8, 18 and 16 points, so a per-record test
+        # would reject the honest row and a count test would accept 45 points
+        # that are not the 45. Rule 3 cannot do this job: "5 of 45 PVT points
+        # measured, not the full grid" is an honest sentence, so 45 has to
+        # stay unconditionally allowed as a denominator, and the cost is that
+        # the strongest claim in the table -- I measured all of it -- was the
+        # one claim nothing verified. A sweep of all three graded documents on
+        # 2026-09-25 found 13 rows making a full-coverage claim; 12 were backed
+        # point for point, and sim/CHARACTERIZATION.md's Verification-owed
+        # cross-reference cited campaign directories rather than records, so
+        # neither a check nor a reader could reach the evidence for it.
         #
         # The mandated size is computed from REQUIRED_MOS_CORNERS x
         # DEFAULT_TEMPERATURES_C x supply_points(), imported rather than

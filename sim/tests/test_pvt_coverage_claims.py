@@ -11,6 +11,11 @@ that skew every device family together and are **not** in this repository's
 45-point mandated grid -- in a column whose every other row means "of 45", and
 said so nowhere.
 
+It has since grown the converse rule: a row claiming it covers the *whole*
+mandated grid must cite records whose committed evidence, in union, contains
+every mandated point.  Rules 1-3 grade corners a row names; a row overclaiming
+coverage is characterized by the corners it does not name.
+
 Every test builds a throwaway tree whose answer is known and runs the real
 script in it, because a check that only ever runs where it passes proves
 nothing about what it would have caught.  The fixture copies the real
@@ -50,6 +55,16 @@ WIDE_REC = "20260919-002812-1b12179"
 NARROW_REC = "20260801-102454-79f398e"
 #: 16 PVT points, all on-grid bundles -- `sim/period-jitter`'s `fs`/`sf` block.
 PARTIAL_REC = "20260906-080511-69b36ef"
+#: Three slices that reach the mandated grid only in union -- the shape
+#: `sim/period-jitter` actually has (5 records covering 1, 4, 8, 18 and 16
+#: points, none of them the grid).
+SLICE_TYPICAL = "20260906-024225-aaaaaa1"
+SLICE_FF_SS = "20260906-063728-bbbbbb2"
+SLICE_FS_SF = "20260906-080511-ccccce3"
+#: 45 points, every bundle on-grid, and NOT the mandated grid: the 3.63 V rail
+#: is never measured and 3.00 V is measured instead. Only a point-by-point
+#: rule can tell it apart from the real thing.
+SKEWED_REC = "20260907-101112-dddddd4"
 
 MOS_BUNDLES = ("typical", "ff", "ss", "fs", "sf")
 COMBINED_BUNDLES = ("all-slow", "all-fast")
@@ -120,6 +135,17 @@ class PvtCoverageCheckTest(unittest.TestCase):
             "partial-campaign",
             PARTIAL_REC,
             _corner_files(("fs", "sf"))[:16],
+        )
+        # One campaign, three records, 9 + 18 + 18 = the mandated 45 -- but
+        # only in union, which is how `sim/period-jitter` got there.
+        self._evidence("union-campaign", SLICE_TYPICAL, _corner_files(("typical",)))
+        self._evidence("union-campaign", SLICE_FF_SS, _corner_files(("ff", "ss")))
+        self._evidence("union-campaign", SLICE_FS_SF, _corner_files(("fs", "sf")))
+        # 45 points that are not the 45: the mandated top rail is missing.
+        self._evidence(
+            "skewed-campaign",
+            SKEWED_REC,
+            _corner_files(MOS_BUNDLES, supplies=("2.97", "3.30", "3.00")),
         )
 
         for doc in GRADED:
@@ -452,7 +478,142 @@ class PvtCoverageCheckTest(unittest.TestCase):
         )
         self.assertFailsWith(self.run_check(), "3/5 corners")
 
+    # -- rule 4: a full-coverage claim is checked point by point -----------
+
+    def test_a_full_coverage_claim_met_by_the_union_of_several_records_passes(self):
+        """`sim/period-jitter` reached 45 across five records covering 1-18 each.
+
+        A per-record test would reject the honest row; the union is the unit.
+        """
+        self.proposal(
+            "| Period jitter | ≤ 1.0 % RMS | **All 45 of the mandated PVT "
+            "points now measured**, 0.0508–0.2691 % RMS | **MET** | "
+            f"`sim/union-campaign/records/{SLICE_TYPICAL}.md`; "
+            f"`sim/union-campaign/records/{SLICE_FF_SS}.md`; "
+            f"`sim/union-campaign/records/{SLICE_FS_SF}.md` |"
+        )
+        self.assertPasses(self.run_check())
+
+    def test_a_full_coverage_claim_missing_part_of_the_grid_fails(self):
+        """Drop the `fs`/`sf` slice: the claim outruns the evidence by 18 points."""
+        self.proposal(
+            "| Period jitter | ≤ 1.0 % RMS | **All 45 of the mandated PVT "
+            "points now measured** | **MET** | "
+            f"`sim/union-campaign/records/{SLICE_TYPICAL}.md`; "
+            f"`sim/union-campaign/records/{SLICE_FF_SS}.md` |"
+        )
+        self.assertFailsWith(
+            self.run_check(),
+            "covers 27 of the 45 mandated PVT points -- 18 missing",
+            "`fs`/-40 °C/2.97 V",
+            "has to cite evidence that covers it",
+        )
+
+    def test_a_full_coverage_claim_that_cites_no_record_fails(self):
+        """The row this rule was written for: a campaign directory is not a citation.
+
+        `sim/CHARACTERIZATION.md`'s Verification-owed cross-reference said the
+        deterministic jitter component is "measured at all 45 of the mandated
+        PVT corners" and pointed at `sim/period-jitter/`, so nothing -- no
+        check and no reader -- could follow the claim to evidence.
+        """
+        self.proposal(
+            "| Period jitter | ≤ 1.0 % RMS | measured at all 45 of the mandated "
+            "PVT corners | **MET** | `sim/period-jitter/` |"
+        )
+        self.assertFailsWith(
+            self.run_check(),
+            "covers 0 of the 45 mandated PVT points",
+            "the row cites no record at all -- name the record(s) whose "
+            "evidence covers it",
+        )
+
+    def test_full_coverage_is_the_points_and_not_the_count(self):
+        """45 measured points that are not the mandated 45 still fail.
+
+        Rules 1-3 all pass this row: every bundle is real and on-grid, and the
+        count it states is the mandated grid's own, which rule 3 allows
+        unconditionally.
+        """
+        self.proposal(
+            "| Supply sensitivity | ≤ 0.6 V | Full 45-point PVT grid measured "
+            f"| **MET** | `sim/skewed-campaign/records/{SKEWED_REC}.md` |"
+        )
+        self.assertFailsWith(
+            self.run_check(),
+            "covers 30 of the 45 mandated PVT points -- 15 missing",
+            "3.63 V",
+        )
+
+    def test_a_saturated_fraction_is_a_full_coverage_claim(self):
+        self.proposal(
+            "| Period jitter | ≤ 1.0 % RMS | **MET at every measured corner "
+            f"(45/45)** | **MET** | `sim/partial-campaign/records/{PARTIAL_REC}.md` |"
+        )
+        self.assertFailsWith(
+            self.run_check(), "covers 16 of the 45 mandated PVT points"
+        )
+
+    def test_a_partial_fraction_is_not_a_full_coverage_claim(self):
+        """"5 of 45 PVT points measured, not the full grid" is honest, and stays legal.
+
+        This is why rule 3 keeps allowing the mandated size unconditionally:
+        naming the grid you did *not* cover is exactly the disclosure these
+        checks exist to encourage. Only a saturated fraction is a claim.
+        """
+        self._evidence(
+            "spur-campaign",
+            "20260816-132150-5f405e7",
+            _corner_files(MOS_BUNDLES)[:5],
+        )
+        self.proposal(
+            "| Reference spur | ≤ −55 dBc | PASS at 5 spanning corners -- 5 of "
+            "45 PVT points measured, not the full grid | **UNMET** | "
+            "`sim/spur-campaign/records/20260816-132150-5f405e7.md` |"
+        )
+        self.assertPasses(self.run_check())
+
+    def test_a_full_coverage_claim_backed_by_a_superset_record_passes(self):
+        """`period-jitter-band-top` declares the mandated 45 from a 63-point record.
+
+        The superset contains the grid, so the claim is covered; the row still
+        has to disclose the wider grid under rule 2, which it does here.
+        """
+        self.proposal(
+            "| Period jitter at band top | ≤ 1.0 % RMS | its full 45-point grid "
+            "is declared, derived from a 63-point superset grid | **UNMET** | "
+            f"`sim/superset-campaign/records/{SUPERSET_REC}.md` |"
+        )
+        self.assertPasses(self.run_check())
+
+    def test_a_row_with_no_full_coverage_claim_is_not_graded_by_rule_4(self):
+        """The no-false-positive guard: partial coverage, stated plainly, passes."""
+        self.proposal(
+            "| Period jitter | ≤ 1.0 % RMS | 16 points measured so far "
+            f"| **UNMET** | `sim/partial-campaign/records/{PARTIAL_REC}.md` |"
+        )
+        self.assertPasses(self.run_check())
+
     # -- the mandated size is derived, not remembered ---------------------
+
+    def test_mandated_grid_points_are_derived_from_the_harness(self):
+        """Widen the temperature axis: the 45-point record now covers 45 of 75."""
+        corners = self.tmp / "sim" / "harness" / "corners.py"
+        text = corners.read_text(encoding="utf-8")
+        widened = text.replace(
+            "DEFAULT_TEMPERATURES_C: tuple[float, ...] = (-40.0, 27.0, 125.0)",
+            "DEFAULT_TEMPERATURES_C: tuple[float, ...] = (-40.0, 0.0, 27.0, 85.0, 125.0)",
+        )
+        self.assertNotEqual(text, widened, "the temperature axis declaration moved")
+        corners.write_text(widened, encoding="utf-8")
+
+        self.proposal(
+            "| Supply sensitivity | ≤ 0.6 V | measured at all 75 of the mandated "
+            f"PVT corners | **MET** | `sim/mandated-campaign/records/{MANDATED_REC}.md` |"
+        )
+        self.assertFailsWith(
+            self.run_check(), "covers 45 of the 75 mandated PVT points -- 30 missing"
+        )
 
     def test_mandated_grid_size_is_derived_from_the_harness(self):
         """Widen the temperature axis: 45 stops being the mandated grid, 75 starts."""
