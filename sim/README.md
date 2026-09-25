@@ -125,6 +125,22 @@ sim/
   plateau and to `typical`/27 C. Both findings are carried forward as design
   issue #387; #384 itself is disambiguation-only.
 
+  **`vco-tuning-range`'s band-select mirror mismatch finding at band 0,
+  closed (#482).** The band-select mirror Monte Carlo campaign's first
+  record, `sim/vco-tuning-range/records/20260817-143524-0e9cfc9.md`, gave
+  band 0 a mid-window (`typical`/27 °C/3.30 V, Vctrl = 1.8 V) dispersion of
+  38.8 % of mean against band 7's 26.8 % worst-adjacent-overlap headroom — a
+  different corner and a different band pair, so that comparison was an
+  order-of-magnitude proxy only, not a matching-corner combined verdict, and
+  the record said so itself. `sim/vco-tuning-range/records/20260923-084925-1655e11.md`
+  (`cc6531ef6b75`) closes that gap: at band 0's own worst corner and Vctrl —
+  `ss`/125 °C/3.63 V, Vctrl = 2.7 V, the exact point the B0→B1 overlap ratio
+  (1.319, 31.88 % headroom) is taken at — band 0's random mismatch dispersion
+  is 24.79 % of mean, **under** that headroom at N = 100. The earlier record
+  and its 38.8 % figure are unmodified, append-only evidence at their own
+  (different) point; they are not superseded, and the new record does not
+  re-measure band 7.
+
   New campaigns add rows here as they are created; the list is descriptive,
   not a closed set.
 

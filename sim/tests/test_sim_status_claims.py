@@ -23,6 +23,7 @@ and count paths.
 
 from __future__ import annotations
 
+import hashlib
 import shutil
 import subprocess
 import tempfile
@@ -39,6 +40,19 @@ CAMPAIGN_LIB = LIB / "record-campaigns.sh"
 CAMPAIGNS = {"lock-time": 3, "output-range": 2, "period-jitter": 1}
 N_CAMPAIGNS = len(CAMPAIGNS)
 N_RECORDS = sum(CAMPAIGNS.values())
+
+# _Tree names each campaign's records "2026010<i>-000000-deadbee.md" for
+# i in range(count) (see _Tree.__init__ below); a lexical sort is a
+# chronological sort for this repo's <timestamp>-<hash> naming, so the
+# highest i is the chronologically-latest record the latest-record-cited
+# rule (#544) looks for in each campaign.
+_LATEST = {name: f"2026010{count - 1}-000000-deadbee" for name, count in CAMPAIGNS.items()}
+
+# Every synthetic record file is written with this exact body (see
+# _Tree.__init__), so they all share one sha256 -- convenient for the
+# content-hash rule (#544), which only cares that *a* hash matches *a* file.
+_RECORD_BODY = "# record\n"
+_RECORD_HASH = hashlib.sha256(_RECORD_BODY.encode()).hexdigest()[:12]
 
 
 def _coverage_bullet(campaigns: int, records: int) -> str:
@@ -70,7 +84,11 @@ def _report_text(
     body.append("| Campaign | Latest record | Headline |")
     body.append("|---|---|---|")
     for name in rows:
-        body.append(f"| `{name}` | `sim/{name}/records/x.md` | fine |")
+        # Cites the actual chronologically-latest record id (see _LATEST)
+        # so the latest-record-cited rule (#544) passes by default -- every
+        # test below that does not target that rule specifically should not
+        # have to think about it.
+        body.append(f"| `{name}` | `sim/{name}/records/{_LATEST[name]}.md` | fine |")
     if extra:
         body.append("")
         body.append(extra)
@@ -284,6 +302,104 @@ class TestReadmeCountsEveryOccurrence(_TreeTest):
     def test_a_missing_count_still_fails(self):
         self.tree.write_readme("# gf180-pll\n\nNothing quantified here.\n")
         self.assertFails(README_CHECK, "could not find '<N> evidence records'")
+
+
+class TestLatestRecordCitedRule(_TreeTest):
+    """check-characterization-coverage.sh's reverse-direction rule (#544).
+
+    The real regression: `sim/vco-tuning-range/records/20260923-084925-1655e11.md`
+    closed #482's band-0 finding inside an already-listed campaign, and
+    nothing forced `sim/CHARACTERIZATION.md` to cite it -- the pre-existing
+    coverage rule only asks whether the *campaign* has a row, which it
+    already did.
+    """
+
+    def test_every_campaigns_latest_record_cited_passes(self):
+        """The baseline fixture cites each campaign's newest record by
+        construction (see `_LATEST`) -- this is the rule's quiet case."""
+        self.assertPasses(COVERAGE_CHECK)
+
+    def test_an_uncited_latest_record_fails(self):
+        """A row that cites something other than the tree's newest record."""
+        stale = _report_text().replace(
+            f"`sim/period-jitter/records/{_LATEST['period-jitter']}.md`",
+            "`sim/period-jitter/records/20260099-000000-deadbee.md`",
+        )
+        self.tree.write_report(stale)
+        self.assertFails(
+            COVERAGE_CHECK,
+            f"period-jitter:{_LATEST['period-jitter']}",
+            "NOT_AGGREGATED",
+        )
+
+    def test_an_allowlisted_record_need_not_be_cited(self):
+        """The script's shipped NOT_AGGREGATED entry is live, not dead code.
+
+        Exercises the one exclusion check-characterization-coverage.sh ships
+        with (`sim/supply-sensitivity/records/20260925-111906-1937f52.md`,
+        #544) against a minimal tree carrying only that record, cited
+        nowhere -- the check must still pass.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "sim" / "lib").mkdir(parents=True)
+            for script in (README_CHECK, COVERAGE_CHECK, CAMPAIGN_LIB):
+                shutil.copy2(script, root / "sim" / "lib" / script.name)
+            records = root / "sim" / "supply-sensitivity" / "records"
+            records.mkdir(parents=True)
+            (records / "20260925-111906-1937f52.md").write_text(_RECORD_BODY)
+            (root / "sim" / "CHARACTERIZATION.md").write_text(
+                "# sim/ — aggregated characterization report\n\n"
+                + _coverage_bullet(1, 1)
+                + "\n| Campaign | Latest record | Headline |\n|---|---|---|\n"
+                "| `supply-sensitivity` | (allowlisted, not cited on purpose) | fine |\n"
+            )
+            result = subprocess.run(
+                ["bash", str(root / "sim" / "lib" / COVERAGE_CHECK.name)],
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+
+class TestContentHashRule(_TreeTest):
+    """check-characterization-coverage.sh's optional content-hash leg (#544)."""
+
+    def test_no_path_hash_citations_is_trivially_clean(self):
+        """The baseline fixture cites no `path` (`hash`) pairs -- same
+        doctrine as check-record-supersession.sh: nothing cited, nothing to
+        grade."""
+        result = self.assertPasses(COVERAGE_CHECK)
+        self.assertIn("nothing to check", result.stdout)
+
+    def test_a_matching_hash_passes(self):
+        report = _report_text().replace(
+            f"`sim/lock-time/records/{_LATEST['lock-time']}.md`",
+            f"`sim/lock-time/records/{_LATEST['lock-time']}.md` (`{_RECORD_HASH}`)",
+        )
+        self.tree.write_report(report)
+        result = self.assertPasses(COVERAGE_CHECK)
+        self.assertIn("path` (`hash`) citations", result.stdout)
+
+    def test_a_stale_hash_fails(self):
+        report = _report_text().replace(
+            f"`sim/lock-time/records/{_LATEST['lock-time']}.md`",
+            f"`sim/lock-time/records/{_LATEST['lock-time']}.md` (`deadbeefcafe`)",
+        )
+        self.tree.write_report(report)
+        self.assertFails(
+            COVERAGE_CHECK,
+            f"cites `sim/lock-time/records/{_LATEST['lock-time']}.md` with hash `deadbeefcafe`",
+            f"on disk is `{_RECORD_HASH}`",
+        )
+
+    def test_a_citation_of_a_nonexistent_file_fails(self):
+        report = _report_text().replace(
+            f"`sim/lock-time/records/{_LATEST['lock-time']}.md`",
+            f"`sim/lock-time/records/20269999-000000-nope.md` (`{_RECORD_HASH}`)",
+        )
+        self.tree.write_report(report)
+        self.assertFails(COVERAGE_CHECK, "which does not exist on disk")
 
 
 if __name__ == "__main__":
