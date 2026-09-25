@@ -503,10 +503,27 @@ apply is written as `N/A` **with a reason**, not omitted.
   - this repo's git commit, **and whether the tree was dirty**
   - host OS/arch, if the result is at all sensitive to it (long transients
     and RNG-seeded analyses are)
+  - **where the points actually ran**, when that is not the host that minted
+    the record. The `Host:` bullet names the *recording* host, which is the
+    executing host only while every point runs locally. A campaign dispatched
+    off-host (`sim/run_corners.py --backend batch`, see
+    `sim/harness/README.md`) must additionally name the execution backend and
+    the set of hosts that ran the points, with the per-host point counts —
+    and must disclose any point the backend could not attribute rather than
+    crediting it to the recording host. A record that claims one host for a
+    run that used forty-five is not reconstructable, which is the whole
+    purpose of this field.
 
   A record naming corner sections without naming the model library and PDK
   hash that define them is not traceable — model sections are only
   meaningful against a pinned PDK.
+
+  Provenance is **not** a place for operator infrastructure identifiers. An
+  object-store bucket, an account id, a credential profile, or an absolute
+  path on the submitting host are all configuration on the operator's side,
+  not facts about the measurement, and `sim/` records are committed in a
+  repository prepared to be public. Name the region and the executing hosts;
+  withhold the rest.
 
 - **Corner matrix run** — explicit list of (corner bundle, temperature,
   supply) points actually executed, **with each bundle name expanded into

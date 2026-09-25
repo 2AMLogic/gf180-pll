@@ -58,6 +58,20 @@ schema these implement):
   files take its name as the ``[<kind>_]`` corner-id prefix ``sim/README.md``
   already ratifies, and the record renders one topology sub-table per deck.
   Distinct from ``dut``, which composes several files into one deck.
+- ``execution.py`` / ``batch.py`` add an execution-backend seam bandgap's
+  pattern does not have: *where* one composed deck's ``ngspice -b`` runs is a
+  choice (``--backend``), not an assumption. ``LocalBackend`` is byte-for-byte
+  the child-process invocation every committed record was taken through;
+  ``batch.BatchBackend`` dispatches one job per deck to an external batch
+  execution layer, so a 45-point closed-loop grid can be run by a host that
+  may not launch one itself (#496). The seam is deliberately one function --
+  "run this deck, return what ngspice printed and how it exited" -- so deck
+  composition, measurement parsing, raw-file capture, the reduction, the
+  checks and the record are identical whichever backend ran the point. The
+  one thing that is *not* identical is provenance: each point carries the
+  host that actually ran it, and ``report.py`` renders the executing-host set
+  whenever it differs from the recording host, replacing the single-host
+  assumption ``sim/README.md``'s Environment provenance used to bake in.
 - ``report.py`` renders this repo's ratified field set from ``sim/README.md``
   (Record ID, Claim, Netlist provenance, **Environment provenance**, Corner
   matrix run, **Methodology / criteria / limitations**, Statistical

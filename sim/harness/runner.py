@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .corners import PvtPoint
 from .derived import DerivedError, PointView, RawFile, derive_point_measures
+from .execution import DeckRun, LocalBackend
 from .omp import omp_env_overrides
 from .pdk import Pdk
 from .testbench import Phase, Testbench
@@ -372,6 +373,10 @@ class PhaseRun:
     log: str
     seconds: float = 0.0
     message: str = ""
+    #: The machine that actually ran this deck, as reported by the execution
+    #: backend (``sim/harness/execution.py``). Empty when the backend could
+    #: not attribute it -- never silently filled in with the minting host.
+    host: str = ""
 
     def as_dict(self) -> dict:
         record = {
@@ -381,6 +386,8 @@ class PhaseRun:
             "log": self.log,
             "seconds": round(self.seconds, 3),
         }
+        if self.host:
+            record["host"] = self.host
         if self.message:
             record["message"] = self.message
         return record
@@ -429,6 +436,11 @@ class PointResult:
     #: One entry per deck this point ran, in phase order. Length 1 (and unnamed)
     #: for every manifest that does not declare ``phases``.
     phases: tuple[PhaseRun, ...] = ()
+    #: The machine that ran this point's deck(s), from the execution backend.
+    #: A phased point whose decks somehow landed on different machines reports
+    #: them joined by ``+`` rather than picking one -- the record must not
+    #: claim a single host it does not have.
+    host: str = ""
 
     def as_dict(self) -> dict:
         record = self.point.as_dict()
@@ -441,6 +453,8 @@ class PointResult:
                 "log": self.log,
             }
         )
+        if self.host:
+            record["host"] = self.host
         # Keyed on a phase having a *name*, not on there being more than one of
         # them, so the point entry and the filenames on disk always agree: a
         # named phase writes `<phase>_<corner-id>.log`, so it must be listed
@@ -516,6 +530,7 @@ def run_point(
     timeout_s: int = DEFAULT_TIMEOUT_S,
     log_dir: Path | None = None,
     omp_env: Mapping[str, str] | None = None,
+    backend=None,
 ) -> PointResult:
     """Simulate one PVT point. Never raises for simulation failure.
 
@@ -557,7 +572,8 @@ def run_point(
 
     for phase in tb.run_phases:
         outcome = _run_phase(
-            tb, phase, pdk, point, workdir, timeout_s, log_dir, omp_env=omp_env
+            tb, phase, pdk, point, workdir, timeout_s, log_dir,
+            omp_env=omp_env, backend=backend,
         )
         runs.append(outcome.run)
         elapsed += outcome.run.seconds
@@ -570,6 +586,10 @@ def run_point(
             failed = outcome.run
             break
 
+    # Distinct, named hosts only: an unattributed deck must not turn a
+    # single-host point into a "host-a+" string, and a phased point that ran
+    # entirely on one machine still reports that one machine.
+    hosts = list(dict.fromkeys(run.host for run in runs if run.host))
     common = {
         "point": point,
         "raw_files": raw_files,
@@ -578,6 +598,7 @@ def run_point(
         "deck": runs[0].deck,
         "log": runs[0].log,
         "phases": tuple(runs),
+        "host": "+".join(hosts),
     }
 
     if failed is not None:
@@ -641,6 +662,7 @@ def _run_phase(
     timeout_s: int,
     log_dir: Path,
     omp_env: Mapping[str, str] | None = None,
+    backend=None,
 ) -> _PhaseOutcome:
     """One deck, one PVT point: compose, run, parse, capture.
 
@@ -661,31 +683,22 @@ def _run_phase(
     # An empty/absent `omp_env` must leave the child's environment BIT-FOR-BIT
     # ambient -- passing `env=dict(os.environ)` instead of `env=None` is not
     # equivalent for every libc/OS combination, and this path is the one every
-    # committed evidence record was taken through.
-    child_env = {**os.environ, **omp_env} if omp_env else None
+    # committed evidence record was taken through. The local backend applies
+    # exactly that rule; an off-host backend documents why it ignores the pin.
+    backend = backend if backend is not None else LocalBackend()
 
-    started = time.monotonic()
     try:
-        proc = subprocess.run(
-            [NGSPICE, "-b", str(deck_path)],
-            capture_output=True,
-            text=True,
-            timeout=timeout_s,
-            cwd=rundir,
-            check=False,
-            env=child_env,
-        )
-        output = proc.stdout + "\n" + proc.stderr
-        returncode = proc.returncode
+        deck_run = backend.run_deck(deck_path, rundir, timeout_s, omp_env or None)
     except FileNotFoundError as exc:
         raise NgspiceMissing(str(exc)) from exc
-    except subprocess.TimeoutExpired:
-        elapsed = time.monotonic() - started
+    if deck_run.timed_out:
         log_write_error = _write_log(log_path, f"TIMEOUT after {timeout_s}s\n")
         # A killed deck never reached its `wrdata` line, so every declared raw
         # file is reported absent rather than left unexplained.
         timed_out_raw = capture_raw_files(tb, point, rundir, log_dir, phase)
         message = f"ngspice timed out after {timeout_s}s"
+        if deck_run.detail:
+            message = f"{message} ({deck_run.detail})"
         if log_write_error:
             message = f"{message}; {log_write_error}"
         return _PhaseOutcome(
@@ -694,13 +707,16 @@ def _run_phase(
                 status="error",
                 deck=deck_path.name,
                 log=log_path.name,
-                seconds=elapsed,
+                seconds=deck_run.seconds,
                 message=message,
+                host=deck_run.host,
             ),
             raw_files=timed_out_raw,
             raw_missing=[n for n, raw in timed_out_raw.items() if not raw.exists()],
         )
-    elapsed = time.monotonic() - started
+    output = deck_run.output
+    returncode = deck_run.returncode
+    elapsed = deck_run.seconds
     log_write_error = _write_log(log_path, output)
 
     # Capture what the deck wrote BEFORE anything else looks at this point: a
@@ -738,6 +754,7 @@ def _run_phase(
                 log=log_path.name,
                 seconds=elapsed,
                 message=message,
+                host=deck_run.host,
             ),
             measurements=measurements,
             missing=missing,
@@ -760,6 +777,7 @@ def _run_phase(
                 log=log_path.name,
                 seconds=elapsed,
                 message=log_write_error,
+                host=deck_run.host,
             ),
             measurements=measurements,
             not_measured=not_measured,
@@ -774,6 +792,7 @@ def _run_phase(
             deck=deck_path.name,
             log=log_path.name,
             seconds=elapsed,
+            host=deck_run.host,
         ),
         measurements=measurements,
         # Carried even on success so that a *later* phase's failure still
@@ -856,6 +875,7 @@ def run_grid(
     timeout_s: int = DEFAULT_TIMEOUT_S,
     on_result=None,
     log_dir: Path | None = None,
+    backend=None,
 ) -> list[PointResult]:
     """Run every PVT point; results come back in grid order regardless of jobs.
 
@@ -866,12 +886,20 @@ def run_grid(
     for this one. A serial run is left exactly as it was.
     """
     results: list[PointResult | None] = [None] * len(points)
-    omp_env = omp_env_overrides(jobs)
+    backend = backend if backend is not None else LocalBackend()
+    # The OpenMP budget divides *this* host between *this* host's ngspice
+    # workers. It is meaningless -- and actively misleading in provenance --
+    # when the workers are not on this host, so it is only computed for a
+    # backend that actually runs ngspice here.
+    omp_env = omp_env_overrides(jobs) if backend.name == LocalBackend.name else {}
+    if hasattr(backend, "prepare"):
+        backend.prepare(len(points))
 
     def _one(index_point):
         index, point = index_point
         result = run_point(
-            tb, pdk, point, workdir, timeout_s=timeout_s, log_dir=log_dir, omp_env=omp_env
+            tb, pdk, point, workdir, timeout_s=timeout_s, log_dir=log_dir,
+            omp_env=omp_env, backend=backend,
         )
         results[index] = result
         if on_result is not None:
