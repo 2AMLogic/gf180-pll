@@ -39,15 +39,61 @@
 # the report is allowed to say where it started, and pinning that exemption
 # is what keeps this rule from forcing history to be rewritten.
 #
-# It does NOT detect a stale per-campaign headline number, a hash that no
-# longer matches its cited record, or a new record added inside an
-# already-listed campaign -- see CHARACTERIZATION.md's own "Maintenance"
-# section for what still needs human review.
+# A third guard, the LATEST-RECORD-CITED RULE (#544), closes the one
+# direction the two rules above still miss: a campaign that already has a
+# row, and whose *directory* is therefore invisible to the coverage rule
+# above, can grow a new record whose headline nobody folds into that row.
+# That happened for real: PR #484 added
+# `sim/vco-tuning-range/records/20260923-084925-1655e11.md`, closing #482's
+# band-0 coverage-hole finding, to the already-listed `vco-tuning-range`
+# campaign -- and `sim/CHARACTERIZATION.md`'s row kept citing only the
+# earlier, superseded-in-substance-but-not-in-form record, so its Status
+# column asserted an open finding the tree had already closed, for two days,
+# with every existing check green throughout. The rule: for every campaign
+# directory, the chronologically-latest record under its `records/`
+# (records are named `<timestamp>-<hash>.md`, so lexical sort is
+# chronological) must either be cited somewhere in `sim/CHARACTERIZATION.md`,
+# or be named -- record id plus a one-line reason -- in this script's own
+# NOT_AGGREGATED allowlist below. The allowlist exists because
+# `sim/README.md`'s supersession-is-per-bench rule means a campaign
+# directory can legitimately carry several live sub-claims and diagnostic /
+# re-examination records that are deliberately not the campaign's headline
+# (see e.g. this report's `supply-sensitivity` row, which already names
+# several such records by hand) -- a bare "every record must be cited" rule
+# would be wrong, not merely strict. Putting an exclusion on the allowlist
+# makes it a written decision instead of a silent omission.
+#
+# It does NOT detect a stale headline number *inside* a citation that is
+# already present (only a whole new, wholly uncited record) -- see
+# CHARACTERIZATION.md's own "Maintenance" section for what still needs
+# human review there.
+#
+# A fourth, optional guard (also #544) recomputes the sha256 of every
+# `path` (`hash`) citation pair this report makes and fails on mismatch, so
+# the "records are append-only, so a citation's hash never goes stale"
+# claim several records make is self-enforcing rather than self-asserted.
 #
 # Usage: sim/lib/check-characterization-coverage.sh
-# Exit codes: 0 every campaign is covered and the stated counts match the
-#             tree, 1 a campaign is missing, a count disagrees, or the report
-#             file is absent.
+# Exit codes: 0 every campaign is covered, the stated counts match the tree,
+#             every campaign's latest record is cited or allowlisted, and
+#             every cited content hash matches; 1 otherwise (a campaign is
+#             missing, a count disagrees, an uncited/unallowlisted latest
+#             record exists, a cited hash is stale, or the report file is
+#             absent).
+
+# NOT_AGGREGATED: deliberate exclusions from the latest-record-cited rule.
+# One "<campaign>:<record-id>  # <one-line reason>" entry per exclusion.
+# A campaign/record pair not on this list, and not cited in
+# sim/CHARACTERIZATION.md, fails the check below.
+NOT_AGGREGATED=(
+  # Text/arithmetic re-examination of already-committed logs (trim-code
+  # wiring audit, #515) -- 0 new simulations, no verdict in this report's
+  # supply-sensitivity row changes as a result. Same class as the
+  # DR-021/DR-025 re-examination records that row already names by hand;
+  # see sim/supply-sensitivity/records/20260925-111906-1937f52.md's own
+  # "Claim" and "Limitations" sections.
+  "supply-sensitivity:20260925-111906-1937f52  # DR-025-class re-examination record, 0 new simulations, no verdict changed"
+)
 
 set -uo pipefail
 
@@ -92,6 +138,52 @@ if [ "${status}" -ne 0 ]; then
   echo "FAIL: sim/CHARACTERIZATION.md has no entry for:" >&2
   for campaign in "${missing[@]}"; do
     echo "  - ${campaign}" >&2
+  done
+fi
+
+# The latest-record-cited rule (see the header, #544): every campaign's
+# chronologically-latest record must be cited or allowlisted.
+uncited=()
+
+for campaign in "${campaigns[@]}"; do
+  rec_dir="${REPO_ROOT}/sim/${campaign}/records"
+  # Records are named <timestamp>-<hash>.md, e.g. 20260923-084925-1655e11.md,
+  # so a plain lexical sort of the filenames is a chronological sort too.
+  latest_file=$(find "${rec_dir}" -maxdepth 1 -name '*.md' -type f | sort | tail -1)
+  if [ -z "${latest_file}" ]; then
+    echo "FAIL: ${rec_dir} has no *.md records -- enumeration is broken" >&2
+    status=1
+    continue
+  fi
+  latest_id="$(basename "${latest_file}" .md)"
+
+  if grep -qF "${latest_id}" "${REPORT}"; then
+    continue
+  fi
+
+  allowlisted=0
+  for entry in "${NOT_AGGREGATED[@]:-}"; do
+    # Strip the trailing "  # reason" comment before matching the key.
+    key="${entry%%#*}"
+    key="${key%"${key##*[![:space:]]}"}"
+    if [ "${key}" = "${campaign}:${latest_id}" ]; then
+      allowlisted=1
+      break
+    fi
+  done
+
+  if [ "${allowlisted}" -eq 0 ]; then
+    uncited+=("${campaign}:${latest_id}")
+    status=1
+  fi
+done
+
+if [ "${#uncited[@]}" -gt 0 ]; then
+  echo "FAIL: the chronologically-latest record in these campaigns is" \
+    "neither cited by sim/CHARACTERIZATION.md nor listed in this script's" \
+    "own NOT_AGGREGATED allowlist:" >&2
+  for entry in "${uncited[@]}"; do
+    echo "  - ${entry}" >&2
   done
 fi
 
@@ -165,6 +257,79 @@ if graded == 0:
         "aggregates -- it must say how many campaign directories and evidence "
         "records it covers (%d and %d today). Deleting the number is not a way "
         "to stop it being stale.\n" % (campaigns, records)
+    )
+
+sys.exit(1 if failed else 0)
+PY
+then
+  status=1
+fi
+
+# The optional content-hash rule (see the header, #544): recompute the
+# sha256 of every "`path` (`12-hex-prefix`)" citation this report makes and
+# fail if any no longer matches the file on disk. Needs python3, same as
+# the aggregate-count rule above; a missing interpreter fails this leg too.
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "FAIL: python3 is not on PATH -- the content-hash rule could not run," \
+    "and a partial pass is not a pass" >&2
+  status=1
+elif ! python3 - "${REPO_ROOT}" "${REPORT}" <<'PY'
+import hashlib
+import re
+import sys
+from pathlib import Path
+
+repo_root, report_path = Path(sys.argv[1]), Path(sys.argv[2])
+
+with open(report_path, encoding="utf-8") as fh:
+    text = fh.read()
+
+# `` `sim/<campaign>/records/<record-id>.md` (`<12-hex-prefix>`) `` -- the
+# citation convention this report documents and uses at every cited record.
+# The parenthesis sometimes carries a trailing annotation after the hash
+# (e.g. "(`92c02f50a4a2`, #58)"), so the hash need not be the parenthesis's
+# only content -- just its first, immediately after the opening `(`.
+CITATION = re.compile(
+    r"`(sim/[A-Za-z0-9_./-]+\.md)`\s*\(`([0-9a-f]{12})`[^)]*\)"
+)
+
+pairs = sorted(set(CITATION.findall(text)))
+
+# A document that cites nothing in this format is trivially clean -- same
+# doctrine sim/lib/check-record-supersession.sh states for its own citation
+# graph. The real sim/CHARACTERIZATION.md always carries dozens of these
+# pairs, so an empty result here in CI is a real signal (see the report's
+# own coverage rule above, which would already be failing by then); it is
+# not grounds to fail *this* leg on its own.
+if not pairs:
+    print("OK: sim/CHARACTERIZATION.md cites no `path` (`hash`) pairs -- nothing to check")
+    sys.exit(0)
+
+failed = False
+for rel_path, cited_hash in pairs:
+    full_path = repo_root / rel_path
+    if not full_path.is_file():
+        failed = True
+        sys.stderr.write(
+            "FAIL: sim/CHARACTERIZATION.md cites `%s` (`%s`), which does not "
+            "exist on disk\n" % (rel_path, cited_hash)
+        )
+        continue
+    actual_hash = hashlib.sha256(full_path.read_bytes()).hexdigest()[:12]
+    if actual_hash != cited_hash:
+        failed = True
+        sys.stderr.write(
+            "FAIL: sim/CHARACTERIZATION.md cites `%s` with hash `%s`, but its "
+            "sha256 12-hex prefix on disk is `%s` -- sim/ records are "
+            "append-only, so a cited record's bytes should never change; "
+            "re-check whether the citation itself is stale.\n"
+            % (rel_path, cited_hash, actual_hash)
+        )
+
+if not failed:
+    print(
+        "OK: all %d `path` (`hash`) citations in sim/CHARACTERIZATION.md "
+        "match the files on disk" % len(pairs)
     )
 
 sys.exit(1 if failed else 0)
