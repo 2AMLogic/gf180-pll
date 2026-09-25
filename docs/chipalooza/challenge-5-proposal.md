@@ -189,14 +189,31 @@ evidence paths, and what those two absences rule out.
 ## 4. Bench test plan
 
 All measurements below use only the pads in §2.2 — `REF`, `B0..B2`,
-`CPB0..1`, `P0..5`/`SEL0..5`, `CLK`, `LOCK`, and (optionally) `DIVOUT`/`FB`;
-none require the Challenge's shared analog mux beyond `VCTRL`.
+`CPB0..1`, `LDT0..3`, `P0..5`/`SEL0..5`, the four bias-reference currents
+`IBN`/`ICN`/`IBP`/`ICP`, `CLK`, `LOCK`, and (optionally) `DIVOUT`/`FB`; none
+require the Challenge's shared analog mux beyond `VCTRL`. **Every pin §2.2
+maps is named by some step below**, which is a CI-enforced property of this
+document rather than a claim (`design/lib/check-io-list-coverage.sh`) — an
+earlier revision of this plan silently omitted both the bias references and
+the lock-detector trim, and neither omission is one a bench operator could
+work around from the rest of the text.
 
 1. **Bring-up / DC sanity.** Power `VDD`, `VDD_VCO`, `VDD_DIV` (all proposed
    at the Challenge's 3.3 V digital rail, §2.1) with `VSS`/`GND_VCO` tied at
-   a single low-impedance ground reference. Confirm `VCTRL` sits inside its
-   0.9–2.7 V usable window at a chosen static `B0..B2` code with no `REF`
-   applied.
+   a single low-impedance ground reference. **Supply the four charge-pump /
+   bias-mirror reference currents from external sources before anything else
+   is expected to work**: `IBN` and `ICN` are sourced *into* the die from the
+   supply side, `IBP` and `ICP` are sunk *out of* the die to `VSS`, each at
+   the 8 µA every closed-loop record in this repository drives them with
+   (`.param iunit=8u` in `sim/lock-time/testbench/tb_lock_time.sp`,
+   `sim/period-jitter`, `sim/reference-spur`, `sim/supply-sensitivity`,
+   `sim/output-range` and `sim/pll-top-smoke` alike; the polarity is those
+   decks' own `iibn vdd ibn` / `iibp ibp 0`). There is no bias generator on
+   this die — §2.2's 4-requested-vs-2-offered row and §7 item 6 are that
+   same fact stated against the Challenge's budget — so with these four pins
+   unconnected the charge pump passes no current and **no step below
+   functions at all**. Confirm `VCTRL` sits inside its 0.9–2.7 V usable
+   window at a chosen static `B0..B2` code with no `REF` applied.
 2. **Open-loop VCO characterization.** With the loop broken (or `REF` held
    static so the PFD does not drive the charge pump), sweep `VCTRL` from an
    external source across each of the 8 band codes and measure `CLK`'s
@@ -206,7 +223,38 @@ none require the Challenge's shared analog mux beyond `VCTRL`.
    (or observe them directly with the loop closed) and confirm the measured
    ratio matches the programmed `P0..5`/`SEL0..5` code, across the N = 4–64
    range.
-4. **Closed-loop lock acquisition and lock time.** Apply `REF` at a chosen
+4. **Program the lock-detector window trim — before any step that reads
+   `LOCK`.** `LDT3:LDT0` is not a margin knob: `spec/pll.md`'s normative
+   [Lock-detector window trim-code rule](../../spec/pll.md#lock-detector-window-trim-code-rule)
+   (DR-014, sized by #411) requires the 4-bit code to be set **once per part
+   at test** from that part's own measured comparator-window delay, and
+   states in terms that **a part left untrimmed is outside this
+   specification** — measured over all sixteen codes, the window's PVT spread
+   at any one fixed code is 1.977…1.988× against a band only 2× wide, and
+   neither of the two codes that come closest holds it (code 6 falls to
+   0.9746 ns, code 7 reaches 2.0029 ns). A part powered up at the
+   unprogrammed nominal code 1000 (8) and measured against §5's Lock detector
+   row would therefore read as a failure it is not. **Steps 5 and 8 below are
+   not valid on an untrimmed part.**
+
+   The rule's own measurand is `t_win`, the `ERR → ERRD` propagation delay of
+   the `delaywin_3v3` cell at 27 °C and 3.30 V, programmed to the code whose
+   `t_win` is nearest 1.343 ns in the logarithmic sense. **This proposal
+   cannot yet state a pad-referred procedure for executing that
+   measurement**, and says so rather than implying one: `ERR` and `ERRD` are
+   internal nodes with no pad in §2.2's list, and the quantity the pads *do*
+   expose — the flag's own assert window, which `spec/pll.md` relates to the
+   chain delay by a measured 1.037× ratio — is defined as the largest phase
+   error at the PFD inputs for which `LOCK` stays asserted, which a bench
+   cannot impose directly because `FB` is an output of this block, not an
+   input to it. Closing that gap is a real piece of work, not an editorial
+   one; it is §7 item 11, filed as **#501**. Until it closes, the
+   honest bench posture is that the trim code must be set and recorded per
+   part, that the part's own trim code is a property of every `LOCK`
+   measurement taken from it, and that any code chosen by a means other than
+   the ratified rule must be reported alongside the result rather than
+   folded into it.
+5. **Closed-loop lock acquisition and lock time.** Apply `REF` at a chosen
    frequency with the matching `B0..B2` (band-selection rule) and `CPB0..1`
    (Icp trim-code rule) codes, release the loop from a cold start, and
    measure the time to `LOCK` assertion and to the output frequency settling
@@ -215,12 +263,12 @@ none require the Challenge's shared analog mux beyond `VCTRL`.
    against this proposal's own §5 disclosure that the closed-loop cold-start
    PVT grid has not yet demonstrated a sustained in-window PASS at most
    simulated corners.
-5. **Output band, duty cycle, and levels.** Sweep every band code across the
+6. **Output band, duty cycle, and levels.** Sweep every band code across the
    available supply/temperature range on the daughterboard (environmental
    chamber or temperature-controlled socket) and compare `CLK`'s frequency
    range, duty cycle, and levels against `spec/pll.md`'s Output band,
    Output duty cycle, and Output levels and drive rows.
-6. **Reference spur and jitter.** With the loop locked, capture `CLK`'s
+7. **Reference spur and jitter.** With the loop locked, capture `CLK`'s
    spectrum and measure the ±`f_ref` sideband level against the −55 dBc
    target (`spec/pll.md#reference-spur`); measure period jitter directly on
    a scope/TIA against the 1.0 % RMS draft target
@@ -231,12 +279,15 @@ none require the Challenge's shared analog mux beyond `VCTRL`.
    (§5, §7). Measuring at the 200 MHz top of the band is therefore of
    particular interest on silicon: no simulation in this repository bounds
    closed-loop jitter there.
-7. **Lock detector window and chatter.** Perturb the loop (a small `REF`
+8. **Lock detector window and chatter — on a trimmed part only.** With
+   `LDT3:LDT0` programmed per step 4, perturb the loop (a small `REF`
    frequency step) and observe `LOCK`'s deassert/reassert behavior against
    `spec/pll.md#lock-detector`'s targets, particularly near the bottom of
    the 1–25 MHz reference range where the design's own evidence flags T4/T5
-   as unverified.
-8. **Repeat across the daughterboard's available supply/temperature range**
+   as unverified. Record the part's trim code with the result: §5's T1′/T2′
+   verdict is conditional on the trim rule, so a window measured at some
+   other code is not a measurement against that row.
+9. **Repeat across the daughterboard's available supply/temperature range**
    and record any deviation from §5's simulated PVT grid as a genuine
    silicon finding requiring a new, dated `sim/` record — not folded
    silently into this document, per this repository's evidence-trail
@@ -304,7 +355,7 @@ substantiate is reported UNMET; it is not left out.
 | Output duty cycle | 45–55 % at `CLK`, full band, all corners | 44.375–50.696 % measured (90 points, loaded); 7/90 points below the 45 % floor, all at the low-frequency band edge, concentrated in the `fs` process bundle | **UNMET at 7/90 points** (small excursion, 0.625 pp worst-case) | `sim/output-driver/records/20260817-100354-0e9cfc9.md` |
 | Output levels and drive | V_OH ≥ 0.9·VDD_VCO, V_OL ≤ 0.1·VDD_VCO into ≤ 50 fF | V_OH 1.006–1.044·VDD_VCO, V_OL −0.040…−0.006·VDD_VCO, 90/90 points | **MET**, full 90-point grid | Same record |
 | Area | ≤ **0.30 mm²** total — **amended by DR-016** (issue #456) from the draft ≤ 0.15 mm², on the measurement in the next column | **Measured at the block level, and the spec row is now amended to it.** Every sub-block's as-drawn footprint, taken from the committed GDS bounding box rather than a hand-recorded figure: loop filter 0.0369 mm² (still a calculation — the loop filter has no placed-and-routed layout yet), VCO 0.0318 mm² (172.52 × 184.48 µm), PFD + charge pump 0.0256 mm² (344.98 × 74.30 µm — it was 0.0353 mm² before the #455 fold, 0.0267 mm² before the #469 glue-bus packing and 0.0264 mm² before the #473 glue-inverter interleave), divider chain 0.0553 mm² (1317.66 × 41.99 µm — it was 0.2471 mm² as first drawn and came down 78 % through the #341 routing-track-packing, #344 row-fold, #454 macro-track-packing and #458 route-over-the-device-rows passes), lock detector 0.0306 mm² (294.80 × 103.75 µm — grown ~4.1× from 0.0075 mm² by issue #449, which drew DR-014's 4-bit trim network into `delaywin_3v3` and, with it, the block's first LVS match against its own ratified schematic). Sum **0.1803 mm²**, or **0.2254 mm²** after the floorplan's own ×1.25 top-level-overhead factor (it was 0.2186 / 0.2733 mm² when DR-016 was written; #469's glue-bus packing, #458's route-over-the-device-rows pass and #473's glue-inverter interleave have taken 38,324 µm² off since, without moving the row) | **MET against the amended row — 0.2254 mm², 75.1 % of ≤ 0.30 mm² — and 1.50× over the draft 0.15 mm² target, which is now *measured* to be unreachable rather than merely unmet.** DR-016 is the amendment and the honest reading of it is this: the draft number was never derived from anything (DR-007 Amendment A3 called it "the one `budget` row in the table with no rationale behind the number at all"), and the 78.6 % of it that had no estimate of any kind is now four committed, DRC/LVS-clean block layouts. Three measured bounds, each tighter than the last, and none reaching 0.15 mm²: as drawn **1.50×** (1.82× when DR-016 was written; #469, #458 and #473 have since landed, below); every remaining named layout lever at its geometric ceiling **1.20×**; and — the one that settles it — **every Metal2 track routed at zero area cost, 1.13×**, a bound that survives any row fold and covers every lever this design has. 57.2 % of what a 0.15 mm² row allowed is consumed by two terms no post-layout lever touches: the loop filter (set by DR-006's C1/C2 *capacitance*, so reducing it is a loop-dynamics change) and `vco_block`, whose height *is* its device band and whose 60.8 % whitespace is the guard-ring and 15 µm tap-pitch spacing the foundry deck requires. The amended row is the measured total plus margin sized to the single unmeasured factor in it (it holds for a top-level overhead up to ×1.664 on the sum as drawn today), **not** an allowance for block growth — and the reduction work stays open (an unnamed `lock_detector` lever), each *material* landing being grounds for a successor record amending the row back *down*. Three levers have landed since DR-016 and none has moved the row: #469's glue-bus packing, at 259 µm², and #473's glue-inverter interleave, at 776 µm², do not clear that bar on their own; **#458** does — it routed the divider chain's Metal2 tracks into the plane over its own device rows, 0.0926 → 0.0553 mm² (74.4 % of its sized ceiling), DRC-clean on both decks and still LVS-matched, moving the total 1.82× → 1.51× under an unchanged row. The divider-chain packing lever (#454) is already spent: packing the `div23_cell` macro's own Metal2 track band (31 nets onto 11 tracks, the provable minimum) took that block from 0.1321 to 0.0926 mm², moving the total from 2.03× to 1.70× on its own. Shared-diffusion device stacking — which this proposal previously named as *the* cause — remains worth only **0.10 %** of the (now larger) gap, falsified rather than deferred, because the divider chain's drawn diffusion is ~1 % of its own bounding box. The `pfd_cp` fold (#455) is spent as well, taking that block 0.0353 → 0.0265 mm² and the total from 1.89× to 1.82× (and #469's glue-bus packing plus #473's glue-inverter interleave have since taken it to 0.0256 mm², a further 0.5 % of the total — "Known gaps" item 8) — but it landed at **42 % of its sized ceiling**, and the shortfall was measured to be in the ceiling (a flat 57-track census over five levels of composition, of which `pfd_cp` owns 4) rather than in the execution. `lock_detector`'s own new footprint is not yet levered against at all. Earlier revisions of this row projected a post-lever floor of 1.64×, then 1.54×; both carried `divider_chain`'s pre-#454 ceiling, and re-derived from the current audit the figure is the 1.20× above — *better* than the record had been carrying, and still over (PLL-FLOORPLAN.md §5.11). §5.13 adds one caveat to that ceiling: `max(packed-track floor, device band) × width` assumes a block's tracks occupy an exclusive band, which is exactly what #458 stopped being true for `divider_chain`, so that block's term in any future ceiling sum has to come from its device band (0.0347 mm²) instead. A fourth lever, sized against `lock_detector`'s own newly-measured 65.5 % whitespace, is still not named. Note this is a **sum of block extents, not a placed-and-routed top level** — no assembled `pll_top` GDS exists, so top-level routing and inter-block spacing are not in this number, and that is exactly the uncertainty the amended row's margin is sized to | `spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md` (the amendment); `layout/evidence/area-audit/PROOF.md` (every lever's arithmetic; reproduce with `python3 layout/run_pv.py area`); `layout/floorplan/PLL-FLOORPLAN.md` §5.1–§5.14 (the re-derived budget); `layout/evidence/vco-layout/PROOF-381-high-rs-resistor.md`; `layout/evidence/pfd-cp-layout/PROOF.md` + `PROOF-455-fold.md` + `PROOF-469-glue-bus-packing.md` + `PROOF-473-glue-inverter-interleave.md`; `layout/evidence/divider-chain-layout/PROOF-macro-track-packing.md` + `PROOF-over-device-rows.md`; `layout/evidence/lock-detector-layout/PROOF.md` "Addendum 4"; `spec/pll.md#area` |
-| Lock detector | assert window within **1 … 2 ns** of phase error at every PVT point (T1′/T2′, DR-010/DR-013), measured at the `lock` flag rather than at the bare delay chain; hysteresis ≥ 25 % of window (T3); deassert ≤ 1 `f_ref` period (T4); no chatter 1–25 MHz (T5). **Conditioned on the [lock-detector window trim-code rule](../../spec/pll.md#lock-detector-window-trim-code-rule)** | Re-characterized in situ on the trimmed `delaywin_3v3` cell (DR-014, #411): window edge **[1.14, 1.16) ns** at `fs`/−40 °C/3.63 V and **[1.78, 1.80) ns** at `ss`/125 °C/2.97 V, each at the code the trim rule selects, PVT spread **1.53–1.58×** against DR-013 Decision 4's ≤ 1.65×. 0 of 205 points fail the four-check acceptance; worst deassert latency 5.63 ns. The **untrimmed** cell sat at [2.02, 2.04) ns with a 1.91–1.96× spread — outside the band at every fixed code | **T1′/T2′ MET, conditional on the trim rule** — this row supersedes this proposal's earlier "T1/T2 UNMET" reading, which predated #411. **T4/T5 still UNMET/uncharacterized below 25 MHz.** Two things a reader must not miss: an **untrimmed part is outside this specification**, and the trim code table is schematic-level and mismatch-free, so the rule is not yet proven against a real trimmed part. `spec/pll.md` keeps this row inside DR-007 Amendment A1's ratification carve-out for exactly those reasons | `sim/lock-detector/records/20260919-002812-1b12179.md` (the 205-point in-situ verdict); `sim/lock-window-trim/records/20260917-185928-8adff3d.md` (the 1872-point code map the trim rule's table comes from); `sim/lock-window-sizing/records/20260915-202802-79c0cee.md`; superseded predecessors `sim/lock-detector/records/20260731-162119-0a12e6c.md` and its immediate `sim/harness`-migrated successor `sim/lock-detector/records/20260802-050119-c24ee3a.md` (a tooling migration over the same 95-point matrix, not a value correction), which the DR-010 re-characterization `sim/lock-detector/records/20260916-052313-b1633b5.md` (#393) supersedes in turn — the untrimmed `20260916-122705-98c935b` and then the DR-014-trimmed re-run cited first above carry the claim from there |
+| Lock detector | assert window within **1 … 2 ns** of phase error at every PVT point (T1′/T2′, DR-010/DR-013), measured at the `lock` flag rather than at the bare delay chain; hysteresis ≥ 25 % of window (T3); deassert ≤ 1 `f_ref` period (T4); no chatter 1–25 MHz (T5). **Conditioned on the [lock-detector window trim-code rule](../../spec/pll.md#lock-detector-window-trim-code-rule)** | Re-characterized in situ on the trimmed `delaywin_3v3` cell (DR-014, #411): window edge **[1.14, 1.16) ns** at `fs`/−40 °C/3.63 V and **[1.78, 1.80) ns** at `ss`/125 °C/2.97 V, each at the code the trim rule selects, PVT spread **1.53–1.58×** against DR-013 Decision 4's ≤ 1.65×. 0 of 205 points fail the four-check acceptance; worst deassert latency 5.63 ns. The **untrimmed** cell sat at [2.02, 2.04) ns with a 1.91–1.96× spread — outside the band at every fixed code | **T1′/T2′ MET, conditional on the trim rule** — this row supersedes this proposal's earlier "T1/T2 UNMET" reading, which predated #411. **T4/T5 still UNMET/uncharacterized below 25 MHz.** Three things a reader must not miss: an **untrimmed part is outside this specification**; the trim code table is schematic-level and mismatch-free, so the rule is not yet proven against a real trimmed part; and **the rule has no stated route to execution on silicon at all** — its measurand is `t_win`, the `ERR → ERRD` delay of an internal cell, and neither node is a pad, while the window the pads do expose is defined as a phase error at the PFD inputs that a bench cannot impose because `FB` is an output of this block (§4 step 4, §7 item 11, issue #501). `spec/pll.md` keeps this row inside DR-007 Amendment A1's ratification carve-out for exactly those reasons | `sim/lock-detector/records/20260919-002812-1b12179.md` (the 205-point in-situ verdict); `sim/lock-window-trim/records/20260917-185928-8adff3d.md` (the 1872-point code map the trim rule's table comes from); `sim/lock-window-sizing/records/20260915-202802-79c0cee.md`; superseded predecessors `sim/lock-detector/records/20260731-162119-0a12e6c.md` and its immediate `sim/harness`-migrated successor `sim/lock-detector/records/20260802-050119-c24ee3a.md` (a tooling migration over the same 95-point matrix, not a value correction), which the DR-010 re-characterization `sim/lock-detector/records/20260916-052313-b1633b5.md` (#393) supersedes in turn — the untrimmed `20260916-122705-98c935b` and then the DR-014-trimmed re-run cited first above carry the claim from there |
 | Kvco | ≤ 150 MHz/V under the band-selection rule | Worst 115.8 MHz/V (`all-fast`/27 °C/2.97 V, B6); an adversarial band choice reaches 154.3 MHz/V, over the line, which is why the rule is normative | **MET**, conditional on the band-selection rule being followed | `sim/vco-tuning-range/records/20260731-175947-0a12e6c.md` |
 | Supply range | 3.3 V ± 10 %, 3.3 V devices exclusively | Every campaign above sweeps 2.97/3.30/3.63 V | **MET, as the swept independent axis of every other row** | `spec/pll.md#supply-range` |
 | Supply range, **5.0 V analog rail** | Challenge #5 asks analog blocks to operate across 3.3–5.0 V | **No 5.0 V-class device exists in this design; never simulated above 3.63 V** | **UNMET / not attempted** — the single most load-bearing gap in this proposal, stated plainly per §2.1 | This proposal, §2.1 |
@@ -605,6 +656,22 @@ the DRC/LVS closure the table above records, and no more.
     is closed and is about closed-loop lock acquisition, so the work is
     newly filed as **#499** — re-pointing the specification's own row at it
     is a decision-record act, not an edit made here.
+11. **The lock-detector window trim-code rule is normative but has no stated
+    route to execution on silicon** (§4 step 4). `spec/pll.md`'s rule is not
+    optional — "a part left untrimmed is outside this specification" — yet
+    its measurand is `t_win`, the `ERR → ERRD` delay of an internal cell, and
+    neither node is a pad in §2.2's list. The window quantity the pads *do*
+    expose is defined as the largest phase error at the PFD inputs for which
+    `LOCK` holds, and a bench cannot impose that error directly because `FB`
+    is an output of this block rather than an input. So the rule is
+    executable in simulation and, as written, not on a tester. Filed as
+    **#501**, which enumerates the four dispositions that would close it (a
+    characterized pad-referred equivalent, a code sweep with a stated
+    acceptance, an output-side observation point, or a decision record
+    amending what a production tester is expected to do). Nothing is asserted
+    here in the meantime: §4's step 4 states the obligation and the gap, and
+    §5's Lock detector row's verdict remains conditional on the trim rule
+    exactly as `spec/pll.md` states it.
 
 None of the above items block *submitting* this proposal — consistent with
 this program's stated goal for Chipalooza proposals, the aim is to state the

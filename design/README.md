@@ -10,6 +10,9 @@ design/
   xschemrc              project-local xschem config (symbol path, netlist dir)
   netlist.sh            batch netlist exporter — every block, one script
   netlist/*.spice       committed exports (checked by `netlist.sh --check`)
+  lib/check-io-list-coverage.sh   the Chipalooza proposal's I/O list, graded
+                        against `netlist/pll_top.spice`'s own port list (#237)
+  tests/                unit tests for the check above (throwaway trees, no PDK)
 
   # Closed-loop top level (#52, DR-001 Decisions 1-3)
   pll_top.sch / .sym    the five blocks below, wired into the loop
