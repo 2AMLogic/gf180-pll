@@ -31,7 +31,10 @@ repository reports. The thirteenth is this record's own campaign deck,
 `sim/reference-input-contract/testbench/tb_reference_input_contract.spice`,
 which varies the waveform on purpose and carries no record (§"What now
 exists"). See Amendment A1 for why this paragraph is scoped to records rather
-than to decks, and why its command names both deck extensions.
+than to decks, and why its command names both deck extensions — and Amendment
+A2 for the fourteenth deck this command's own **pattern** cannot reach, which
+does now carry a record and is the reason the scoping above was narrowed
+further (DR-024, #509).
 
 **Two separate defects follow from that, and this record addresses the one that
 is a spec defect.**
@@ -303,3 +306,48 @@ of the ideal shape in any case, so it neither weakens nor strengthens the
 source-quality exclusion. `sim/lib/check-ref-drive-claims.sh` grades the
 property rather than the number, which is why it passed across this change
 without either document being edited.
+
+## Amendment A3 — rule 5 fired, as A1 said it would; the premise is re-argued in DR-026 and the enumeration is widened to a reference that is not a `pulse()` (issue #509)
+
+**Date**: 2026-09-25. **No decision, target, budget or verdict of this record
+moves.** Amendment A1 closed by naming the rule that guards this record's
+premise and what its firing would mean: "if it ever fires, the source-quality
+exclusion of Decision 3 has to be re-argued rather than re-asserted." It has
+fired. `sim/reference-phase-transfer` (#509, **DR-026**) is a deck that varies
+the reference on purpose — it displaces the reference edge **in time** — and it
+now carries a committed record. Two things follow.
+
+**1. The premise is re-argued, not re-asserted, and it survives — narrowed.**
+DR-026 does the re-argument and this amendment does not duplicate it. In one
+sentence: the premise that matters is *every jitter and spur number in this
+repository is the block's own contribution against an ideal reference*, and
+`reference-phase-transfer` reports **no jitter number and no spur number**. It
+reports a transfer — how much of a known reference phase displacement reaches
+the output — which is the very multiplication §Decision 3's exclusion asks an
+integrating system to budget against. So the premise holds, for a reason that
+now has to be stated rather than being true by construction: not "no deck ever
+varied the reference" (false as of this record's own campaign, per A1) and no
+longer "no deck that varied it produced evidence" (false as of #509), but "no
+record that reports a jitter or spur number was measured against a varied
+reference." That is a weaker, checkable claim, and it is the one both this
+record and `docs/chipalooza/challenge-5-proposal.md` now make.
+
+**2. The enumeration could not see the deck that fired the rule.** A1's own
+correction was that a `.sp`-only glob could not return the counterexample. The
+same defect recurred one layer down, in the *pattern* rather than the glob:
+`sim/lib/check-ref-drive-claims.sh` enumerated `v<name> ref 0 pulse(`, and a
+deck that must move the reference edge mid-run cannot be written that way. It
+takes two `pulse()` trains on private nodes and blends them onto `ref` through
+a behavioural source, so **neither** line matches — and the check reported a
+clean tree with 13 decks while the 14th sat in front of it. The enumerator now
+also matches a dependent or behavioural source on `ref` and classifies every
+one of them a deviation without parsing its expression, and rule 5 gains
+exactly one way through: a table in the check naming the decision record that
+re-argues the premise for that campaign, verified to exist, to be more than a
+stub, and to name the campaign back. Not an environment variable, and not a
+file dropped in a directory — both of those are ways to make a check pass
+without a reviewer, which is what rule 5 exists to prevent.
+
+The lesson A1 drew generalizes one step further than A1 drew it: a
+reproduction command has to be able to return what would disprove it, **and so
+does the CI check that grades the command.**
