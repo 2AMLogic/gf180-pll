@@ -84,6 +84,26 @@
 # of the 4 [PLL] sub-blocks" or "N of the 4 [are] LVS-matched" phrase whose
 # N disagrees with the tree fails, wherever in the document it sits.
 #
+# A fifth guard, added 2026-09-25, extends the footprint rule's reach rather
+# than adding a new one. spec/pll.md's own "## Area" section states the same
+# four "W x H um" block footprints README.md and the proposal do (it is the
+# ratified spec's own accounting of what the 0.30 mm2 budget row now measures)
+# and nothing graded it: this script's DOCS list has never included
+# spec/pll.md, because the rest of the script's rules (the scope rule, the
+# count rule, the two forbidden-phrase lists) do not fit a normative spec the
+# way they fit a status narrative written for an outside reader. That left the
+# one claim class already proven to drift on a recurring, roughly weekly
+# cadence (four area-reduction levers in the single week noted above)
+# ungraded in the one place it is also load-bearing: DR-016/DR-017's area
+# budget is amended against these very numbers. Grading is scoped to the
+# section's own text, not the whole file -- spec/pll.md also states unrelated
+# device dimensions in the same "W x H um" shape (the loop filter's C2 plate,
+# `31.4 x 31.4 um`, in the Loop bandwidth section), which have no row in
+# area-audit.md and are not block footprints; a whole-document scan would
+# misreport them as an unattributable claim. Requires a current footprint for
+# all four blocks, like the proposal -- spec/pll.md's Area table already
+# states all four.
+#
 # Usage: layout/lib/check-layout-status-claims.sh
 # Exit codes: 0 all claims match the tree, 1 any mismatch.
 
@@ -308,11 +328,16 @@ done
 
 footprint_rule() {
   local doc_path="$1" doc_label="$2" audit_path="$3" spec="$4" require_all="$5"
-  python3 - "${doc_path}" "${doc_label}" "${audit_path}" "${spec}" "${require_all}" <<'PY'
+  # Optional 6th arg: an "## <heading>" section name (without the "## ") to
+  # scope grading to, so a document that also states unrelated "W x H um"
+  # dimensions elsewhere is not misread as making an unattributable footprint
+  # claim there. Empty (the default) means the whole document, as before.
+  local section="${6:-}"
+  python3 - "${doc_path}" "${doc_label}" "${audit_path}" "${spec}" "${require_all}" "${section}" <<'PY'
 import re
 import sys
 
-doc_path, label, audit_path, spec, require_all = sys.argv[1:6]
+doc_path, label, audit_path, spec, require_all, section = sys.argv[1:7]
 
 # --- The tree's own numbers ------------------------------------------------
 #
@@ -359,7 +384,27 @@ for item in spec.split(";"):
     blocks.append((top, name))
 
 with open(doc_path, encoding="utf-8") as fh:
-    flat = re.sub(r"\s+", " ", fh.read())
+    raw = fh.read()
+
+if section:
+    # "## <section>" up to (not including) the next "## " heading, or end of
+    # file. re.S so "." spans lines; re.M so "^" anchors each line, matching
+    # the section-extraction convention spec/lib/check-spec-row-coverage.sh
+    # already uses for spec/pll.md's own tables.
+    heading = re.search(
+        r"^##\s+" + re.escape(section) + r"\b[^\n]*\n(.*?)(?=^##\s|\Z)",
+        raw,
+        re.M | re.S,
+    )
+    if heading is None:
+        sys.stderr.write(
+            "FAIL: %s has no '## %s' section -- the footprint claims there "
+            "cannot be graded\n" % (label, section)
+        )
+        sys.exit(1)
+    raw = heading.group(1)
+
+flat = re.sub(r"\s+", " ", raw)
 low = flat.lower()
 
 # (end offset, top cell) for every place a block is introduced by either of
@@ -569,6 +614,16 @@ for doc in "${DOCS[@]}"; do
   fi
 done
 
+# The fifth guard (see the header): spec/pll.md's own "## Area" section
+# states the same four block footprints, and nothing above touches it -- the
+# DOCS loop's other rules (scope, count, forbidden phrases) do not fit a
+# normative spec the way they fit a status narrative. Scoped to that one
+# section, not the whole file, so the loop filter's unrelated device
+# dimensions elsewhere in the document are not misread as a footprint claim.
+if [ "${drawn}" -gt 0 ] && [ "${have_python}" = yes ] && [ -f "${AUDIT}" ] && [ -f "${SPEC}" ]; then
+  footprint_rule "${SPEC}" "spec/pll.md" "${AUDIT}" "${BLOCK_SPEC}" yes Area || status=1
+fi
+
 if [ "${have_python}" = no ] && [ "${drawn}" -gt 0 ]; then
   fail "python3 is not on PATH -- the scope rule (the main prose check here) could not run, and a partial pass is not a pass"
 fi
@@ -589,7 +644,8 @@ if [ "${status}" -eq 0 ]; then
   echo "OK: README.md and docs/chipalooza/challenge-5-proposal.md match layout/evidence/" \
     "(${drawn}/4 drawn + DRC-clean, ${lvs_matched}/4 LVS-matched, assembled pll_top: ${top_assembled})" \
     "and spec/pll.md (ratified: ${spec_ratified}); no unscoped absence-of-layout claim;" \
-    "every stated block footprint matches layout/evidence/area-audit/area-audit.md"
+    "every stated block footprint matches layout/evidence/area-audit/area-audit.md," \
+    "including spec/pll.md's own '## Area' section"
 fi
 
 exit "${status}"

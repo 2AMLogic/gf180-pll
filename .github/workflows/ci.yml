@@ -131,9 +131,15 @@ jobs:
         # ..." drawn/LVS-matched count, not just whether the correct one
         # appears once -- the commit that fixed section 6's count left a
         # contradicting stale count in section 3 of the same document, and
-        # the presence-only check reported OK on that tree. Needs python3
-        # (set up above) for the prose and footprint rules; still reads
-        # only committed files, no PDK, no KLayout.
+        # the presence-only check reported OK on that tree. Fifth pass grades
+        # spec/pll.md's own "## Area" section against the same audit --
+        # DR-016/DR-017's 0.30 mm2 budget row is amended against these exact
+        # numbers, which had never been graded anywhere, only the two status
+        # documents' copies of them. Scoped to that one section: the loop
+        # filter's C2 plate size elsewhere in the file is stated in the same
+        # "W x H um" shape and is not a block footprint. Needs python3 (set
+        # up above) for the prose and footprint rules; still reads only
+        # committed files, no PDK, no KLayout.
         run: bash layout/lib/check-layout-status-claims.sh
 
       - name: Install klt (klayout-tools) for the signoff tier check
