@@ -85,16 +85,24 @@ list this table maps, unedited, onto the Challenge #5 budget as this
 repository understands it: one bandgap-referenced bias voltage, up to 2
 bandgap-referenced current sources, up to 24 digital control inputs, up to 12
 digital test outputs, up to 4 shared analog lines, up to 4 dedicated pads, SPI
-control documented in the harness. **That budget is transcribed here, not
-authored here** — the challenge's own rules page is the authority, and the
-submitting operator should confirm these slot counts against it in the same
-pass that confirms the deadline (see this document's opening note).
+control documented in the harness, and no transcribed line at all for
+supply/ground pads. **That budget is transcribed here, not authored here** —
+the challenge's own rules page is the authority, and the submitting operator
+should confirm these slot counts against it in the same pass that confirms the
+deadline (see this document's opening note). The rail line is written as an
+*absence* rather than left out, because it is load-bearing: this block asks for
+**five** supply/ground pads, and the table's own rail rows are what forbid
+sharing them down — `VDD_VCO`/`GND_VCO` "must not be tied to the same physical
+rail node as `VDD`", and `VDD_DIV` is "kept separate from the other two for the
+same reason". A harness that budgets rails per block therefore has to be told
+that number, and until this revision the totals paragraph below did not state
+it at all.
 
 | Signal(s) | Dir | Challenge slot | Count used | Notes |
 |---|---|---|---|---|
-| `VDD`, `VSS` | supply | 3.3 V digital rail | — (rail) | PFD, charge pump, `cp_dumpbuf`, lock detector domain (`vdd_ref` in `spec/pll.md`'s naming) |
-| `VDD_VCO`, `GND_VCO` | supply | 3.3 V digital rail (proposed — see §2.1) | — (rail) | VCO bias/ring/output-buffer domain, kept electrically separate from `VDD`/`VSS` by design (DR-001 Decisions 2–3) specifically so ring switching noise does not couple into the reference domain; **must not be tied to the same physical rail node as `VDD` on the harness board**, even though both are proposed at 3.3 V |
-| `VDD_DIV` | supply | 3.3 V digital rail (proposed — see §2.1) | — (rail) | ÷2/3 chain, output mux, retiming flop domain — kept separate from the other two for the same reason |
+| `VDD`, `VSS` | supply | supply/ground pad — 3.3 V digital rail | — (rail) | PFD, charge pump, `cp_dumpbuf`, lock detector domain (`vdd_ref` in `spec/pll.md`'s naming) |
+| `VDD_VCO`, `GND_VCO` | supply | supply/ground pad — 3.3 V digital rail (proposed, see §2.1) | — (rail) | VCO bias/ring/output-buffer domain, kept electrically separate from `VDD`/`VSS` by design (DR-001 Decisions 2–3) specifically so ring switching noise does not couple into the reference domain; **must not be tied to the same physical rail node as `VDD` on the harness board**, even though both are proposed at 3.3 V |
+| `VDD_DIV` | supply | supply/ground pad — 3.3 V digital rail (proposed, see §2.1) | — (rail) | ÷2/3 chain, output mux, retiming flop domain — kept separate from the other two for the same reason |
 | `REF` | in | digital control input (budget ≤ 24) | 1 of 24 | Reference clock, CMOS square wave, rising-edge triggered, 1–25 MHz (`spec/pll.md#reference-input`); duty cycle 30–70 % (only pulse-width margin, not sampled phase, is duty-sensitive — the PFD's edge detectors fire on the rising edge only) |
 | `B0`, `B1`, `B2` | in | digital control input | 3 of 24 | VCO band select (3-bit, 8 bands). **Static configuration only** — no on-chip auto-calibration FSM exists (DR-001 Decision 2); a system must apply the [band-selection rule](../../spec/pll.md#band-selection-rule) itself |
 | `CPB0`, `CPB1` | in | digital control input | 2 of 24 | Charge-pump current trim (2-bit, 4 codes). **Not discretionary** — required to be set from `f_ref` per the [Icp trim-code rule](../../spec/pll.md#icp-trim-code-rule) |
@@ -112,10 +120,33 @@ voltage (this block draws no bandgap reference of its own — see the `IBN`/
 current sources (open item, §7), 22 of ≤ 24 digital control inputs (18 without
 the lock-detector trim; `LDT0`–`LDT3` add 4, leaving 2 slots of headroom — see
 DR-015), 1–3 of ≤ 12 digital test outputs (`LOCK` alone, or `LOCK`+`DIVOUT`+`FB`),
-1 of ≤ 4 dedicated pads, 1 of ≤ 4 shared analog lines. Every category **except
-the current-source count** fits inside budget with real headroom; the
+1 of ≤ 4 dedicated pads, 1 of ≤ 4 shared analog lines, 5 supply/ground pads
+(`VDD`, `VDD_VCO`, `VDD_DIV`, `VSS`, `GND_VCO` — three supplies the rail rows
+above require be *distinct nodes* rather than one rail fanned out on the board,
+plus two grounds, which §4's step 1 ties at a single low-impedance reference
+off-die). Every *budgeted* category **except the
+current-source count** fits inside budget with real headroom; the
 current-source mismatch is the one place this design does not fit the
 harness as specified, and it is stated as such rather than glossed over.
+
+**The rails are the one line with no budget to fit inside**: the transcribed
+budget above has no slot count for them, so five is a *request* — and until
+this revision it was not even that, because the totals paragraph claimed to
+cover every category while silently omitting the five pads without which
+nothing on this die powers up. The submitting operator should confirm what the
+harness offers for rails in the same pass that confirms the slot counts and the
+deadline.
+
+**Every number in that paragraph is the sum of the rows above it**,
+machine-checked rather than maintained by hand:
+`design/lib/check-io-list-coverage.sh` fails this repository's CI if a
+category's total stops matching the pad rows carrying that slot, if a pad row's
+slot is one the transcribed budget does not name, if a category the budget
+names has no total, or if a "K of M" count quotes a budget M the transcription
+does not have. That last class of drift is not hypothetical — this paragraph
+read 18 of 24 digital control inputs against a real 22 for three days (issue
+#441, DR-015), because a total is the cheapest thing in a document to leave
+behind when the rows above it change.
 
 ### 2.3 What's dropped, multiplexed, substituted, or new relative to this repo's own port list
 
@@ -142,7 +173,13 @@ harness as specified, and it is stated as such rather than glossed over.
   The prior revision of this sentence read "18 configuration bits" for the
   17-bit set that existed before `LDT0`–`LDT3` were pins at all — an
   off-by-one that predates this change and is corrected here alongside the
-  `LDT0`–`LDT3` addition.)
+  `LDT0`–`LDT3` addition.) That arithmetic is now machine-checked too:
+  `design/lib/check-io-list-coverage.sh` expands the bus list in this
+  sentence and fails if the stated count disagrees with what it expands to, if
+  a bit named here has no pad row in §2.2, if those rows span more than one
+  Challenge slot, or if a pin sharing their slot is dropped from this count
+  without being named in this bullet as excluded — which is the only reason
+  `REF` may be missing from it.
 - **The 4-vs-2 current-source shortfall (§2.2) is the one real gap.** Closing
   it needs a bias-generator sub-block this repository has never designed —
   either a real bandgap-referenced current mirror producing all four
