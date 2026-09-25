@@ -312,6 +312,23 @@ states a PVT corner count that neither matches the default grid size nor any
 count the cited record's committed per-corner evidence produces. The default
 grid's size is computed from the harness, never written into the check.
 
+**The obligation is on the row's *evidence*, not on the corner it happens to
+quote.** A row that rests on an off-grid campaign has to name that campaign's
+grid even when every corner it chose to quote is on the default one — which
+is the ordinary case, because a campaign's worst case does not have to land
+on the bundles the campaign added. `sim/lock-detector` runs 13 bundles
+(117 PVT points) and both of its window edges bind at `fs` and `ss`; the
+proposal's Lock detector row therefore quoted nothing off-grid and disclosed
+nothing, for five days. `sim/CHARACTERIZATION.md`'s `harness-selftest` row
+went further and called its record's grid "45-point" when that record's own
+corner field reads "63 point full-factorial grid". Naming the grid is cheap
+and it is also where the useful sentence lives: for `vco-tuning-range` the
+superset changes the answer (four worst cases move off the default grid),
+while for `sim/lock-detector` it demonstrably does not (the eight added
+bundles re-skew only the passive sections, and every one of their points
+reproduces its MOS twin to the digit). Both facts are worth a reader's time;
+neither is visible from a number alone.
+
 **A worked example of an acceptable one-point justification** — `pll-top-smoke`
 (#52), the only single-corner campaign in the table above. The question it
 answers is a *connectivity and closed-loop-existence* question about a newly

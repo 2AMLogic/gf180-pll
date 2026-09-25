@@ -41,23 +41,37 @@ CHARACTERIZATION = "sim/CHARACTERIZATION.md"
 PROPOSAL = "docs/chipalooza/challenge-5-proposal.md"
 GRADED = (README, CHARACTERIZATION, PROPOSAL)
 
-#: Two record ids in this tree's format: <YYYYMMDD>-<HHMMSS>-<7 hex>.
+#: Record ids in this tree's format: <YYYYMMDD>-<HHMMSS>-<7 hex>.
 MANDATED_REC = "20260901-155456-46b92f8"
 SUPERSET_REC = "20260731-175947-0a12e6c"
+#: 13 bundles / 117 PVT points, the shape `sim/lock-detector` runs.
+WIDE_REC = "20260919-002812-1b12179"
+#: 3 bundles / 9 points at one supply, the shape `sim/devchar-passives` runs.
+NARROW_REC = "20260801-102454-79f398e"
+#: 16 PVT points, all on-grid bundles -- `sim/period-jitter`'s `fs`/`sf` block.
+PARTIAL_REC = "20260906-080511-69b36ef"
 
 MOS_BUNDLES = ("typical", "ff", "ss", "fs", "sf")
 COMBINED_BUNDLES = ("all-slow", "all-fast")
+PASSIVE_BUNDLES = (
+    "res_ff",
+    "res_ss",
+    "moscap_ff",
+    "moscap_ss",
+    "mimcap_ff",
+    "mimcap_ss",
+)
 TEMPS = ("-40", "27", "125")
 SUPPLIES = ("2.97", "3.30", "3.63")
 
 
-def _corner_files(bundles) -> list[str]:
+def _corner_files(bundles, temps=TEMPS, supplies=SUPPLIES) -> list[str]:
     """One log stem per PVT point, in the `<bundle>_<T>c_<V>v` form the tree uses."""
     return [
         f"{bundle}_{temp}c_{vdd}v.log"
         for bundle in bundles
-        for temp in TEMPS
-        for vdd in SUPPLIES
+        for temp in temps
+        for vdd in supplies
     ]
 
 
@@ -86,6 +100,26 @@ class PvtCoverageCheckTest(unittest.TestCase):
             "superset-campaign",
             SUPERSET_REC,
             _corner_files(MOS_BUNDLES + COMBINED_BUNDLES),
+        )
+        # 13 bundles / 117 points: the mandated five, the two combined
+        # bundles, and the six passive-only ones.
+        self._evidence(
+            "wide-campaign",
+            WIDE_REC,
+            _corner_files(MOS_BUNDLES + COMBINED_BUNDLES + PASSIVE_BUNDLES),
+        )
+        # 3 bundles / 9 points at one supply -- off the grid in both
+        # directions at once.
+        self._evidence(
+            "narrow-campaign",
+            NARROW_REC,
+            _corner_files(("typical",) + COMBINED_BUNDLES, supplies=("3.30",)),
+        )
+        # 16 PVT points, every bundle on-grid.
+        self._evidence(
+            "partial-campaign",
+            PARTIAL_REC,
+            _corner_files(("fs", "sf"))[:16],
         )
 
         for doc in GRADED:
@@ -235,6 +269,110 @@ class PvtCoverageCheckTest(unittest.TestCase):
         self.proposal(
             "| Supply sensitivity | ≤ 0.6 V | Worst 2.642 V (`ss`/−40 °C/3.63 V) "
             f"| **UNMET** | `sim/mandated-campaign/records/{MANDATED_REC}.md` |"
+        )
+        self.assertPasses(self.run_check())
+
+    # -- rule 2, trigger (b): off-grid *evidence* is disclosed too ---------
+
+    def test_off_grid_evidence_fails_even_when_every_quoted_corner_is_on_grid(self):
+        """The Lock detector case: 13 bundles measured, `fs` and `ss` quoted.
+
+        Trigger (a) alone is a disclosure rule keyed on what a row happens to
+        say, and a campaign's worst case does not have to land on the bundles
+        the campaign added.
+        """
+        self.proposal(
+            "| Lock detector | 1 … 2 ns | Window edge [1.14, 1.16) ns at "
+            "`fs`/−40 °C/3.63 V and [1.78, 1.80) ns at `ss`/125 °C/2.97 V; "
+            "0 of 205 points fail | **MET** | "
+            f"`sim/wide-campaign/records/{WIDE_REC}.md` |"
+        )
+        self.assertFailsWith(
+            self.run_check(),
+            "rests on evidence measured at",
+            "does not say which grid it came from",
+            "covers 117 PVT points across 13 bundles",
+        )
+
+    def test_off_grid_evidence_disclosed_by_bundle_count_passes(self):
+        self.proposal(
+            "| Lock detector | 1 … 2 ns | Window edge [1.14, 1.16) ns at "
+            "`fs`/−40 °C/3.63 V, measured over a 13-bundle PVT grid | **MET** | "
+            f"`sim/wide-campaign/records/{WIDE_REC}.md` |"
+        )
+        self.assertPasses(self.run_check())
+
+    def test_off_grid_evidence_disclosed_by_point_count_passes(self):
+        self.proposal(
+            "| Lock detector | 1 … 2 ns | Window edge [1.14, 1.16) ns at "
+            "`fs`/−40 °C/3.63 V, measured over a 117-point PVT grid | **MET** | "
+            f"`sim/wide-campaign/records/{WIDE_REC}.md` |"
+        )
+        self.assertPasses(self.run_check())
+
+    def test_a_subset_campaign_off_the_grid_discloses_with_a_smaller_count(self):
+        """`devchar-passives` is off the grid in both directions at once.
+
+        9 points across 3 bundles: the passive axes reach `ff`/`ss` extremes
+        the mandated grid never does, while the five MOS bundles and the
+        supply axis are not swept at all. "9-point" is the honest name for
+        that, which is why the token has to differ from the mandated numbers
+        rather than exceed them.
+        """
+        self.proposal(
+            "| Cap C–V | linear to 5 % | Worst at `all-slow`/125 °C/3.30 V "
+            "over this campaign's 9-point passive-corner grid | **MET** | "
+            f"`sim/narrow-campaign/records/{NARROW_REC}.md` |"
+        )
+        self.assertPasses(self.run_check())
+
+        self.proposal(
+            "| Cap C–V | linear to 5 % | Worst at `all-slow`/125 °C/3.30 V "
+            f"| **MET** | `sim/narrow-campaign/records/{NARROW_REC}.md` |"
+        )
+        self.assertFailsWith(
+            self.run_check(), "covers 9 PVT points across 3 bundles"
+        )
+
+    def test_a_count_belonging_to_an_on_grid_record_does_not_disclose(self):
+        """A number that matches some *other*, on-grid record is not a grid.
+
+        `sim/CHARACTERIZATION.md`'s period-jitter row says "16 points" about
+        the `fs`/`sf` block that completed its 45-point grid, in the same cell
+        that cites a 63-point `vco-tuning-range` record.
+        """
+        self.proposal(
+            "| Period jitter | ≤ 1.0 % RMS | the last 16 points close the grid "
+            f"| **MET** | `sim/partial-campaign/records/{PARTIAL_REC}.md`, "
+            f"`sim/superset-campaign/records/{SUPERSET_REC}.md` |"
+        )
+        self.assertFailsWith(
+            self.run_check(),
+            "covers 63 PVT points across 7 bundles",
+        )
+
+    def test_a_stated_mandated_grid_the_cited_record_contradicts_fails(self):
+        """Rule 3 allows 45 unconditionally, so only trigger (b) catches this.
+
+        `sim/CHARACTERIZATION.md`'s `harness-selftest` row called its record's
+        grid "45-point" when that record's own corner field reads "63 point
+        full-factorial grid" over 7 bundles.
+        """
+        self.proposal(
+            "| Harness self-test | n/a | real 45-point PVT grid, no design claim "
+            f"| **PASS** | `sim/superset-campaign/records/{SUPERSET_REC}.md` |"
+        )
+        self.assertFailsWith(
+            self.run_check(),
+            "does not say which grid it came from",
+            "covers 63 PVT points across 7 bundles",
+        )
+
+    def test_a_row_resting_only_on_mandated_evidence_needs_no_disclosure(self):
+        """The no-false-positive guard for trigger (b)."""
+        self.proposal(
+            "| Power | < 5 mW | 0.9863–1.98 mW over the full grid | **MET** | "
+            f"`sim/mandated-campaign/records/{MANDATED_REC}.md` |"
         )
         self.assertPasses(self.run_check())
 
