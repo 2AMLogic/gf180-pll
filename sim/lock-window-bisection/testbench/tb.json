@@ -1,0 +1,648 @@
+{
+  "name": "lock-window-bisection",
+  "description": "can a symmetric REF phase-step bisection read at the LOCK pad select the lock-detector window trim code? A closed-loop pll_top phase-step ladder at the trim rule's own reference condition (27 C, nominal supply), one bundle per rule-selected trim code, both step directions, graded against DR-022 Decision 2's two accuracy tiers",
+  "claim": "#527 -> spec/pll.md#lock-detector-window-trim-code-rule, via DR-022 Decision 5 route 1. The trim rule is normative and its measurand is internal: t_win is the ERR -> ERRD delay of delaywin_3v3 and neither node is a port of pll_top. DR-022 measured every quantity pll_top's pads DO expose against it and found none that selects the code to the accuracy spec/pll.md's Lock detector row assumes, leaving the rule executable only in simulation. Its Decision 5 names two candidate routes and authorizes neither; this record characterizes the first, the one that needs no design change and no new pad. With the loop locked, step REF's phase by a known signed Delta -- once, instantaneously -- and watch the design's own LOCK output. The detector sees phi_ss +/- Delta immediately while the loop's <= 430 kHz bandwidth takes microseconds to absorb the step, so the two step directions give Delta+ = t_flag - phi_ss and Delta- = t_flag + phi_ss, whose mean is t_flag with the static offset CANCELLED and whose half-difference is phi_ss. The question is not whether that algebra is right but whether the thresholds a tester would actually measure obey it: does the deassert happen and is it observable at the pad; does the threshold in Delta reproduce t_flag or a larger, integrator-limited quantity; does the +/- cancellation survive the loop's own asymmetric correction; and what Delta resolution does one trim step demand of the instrument.",
+  "methodology": [
+    "ONE deck, one ladder, one reduction. Each point is a closed-loop pll_top transient that warm-starts at this corner's own predicted lock control voltage, runs nstep reference cycles, steps REF's phase by this point's signed Delta at a single instant, and runs 20 more reference cycles. The threshold Delta+/Delta- is a reduction over the Delta axis at one (bundle, code) cell -- testbench/derive.py -- not a per-point number.",
+    "The phase step is exact by construction, not generated. Two identical periodic sources whose start times differ by exactly `delta` are selected between at an instant when both are at 0 V (0.2 reference periods before the nominal step boundary, 0.3 periods after both high plateaus ended), so the step introduces no stimulus glitch and no edge-placement rounding. Every point measures the achieved step (`delta_meas`, the REF period straddling the boundary minus the nominal period) and the record checks it against the requested one, so a stimulus that did not do what the manifest asked is a failed point rather than a silently wrong threshold.",
+    "Operating point: f_out = 100 MHz, f_ref = 12.5 MHz, N = 8, Icp trim code 2, VCO band 5, warm-started from the per-(bundle, temperature, supply) control voltage sim/supply-sensitivity derives from #8's committed f(Vctrl) record (sim/vco-tuning-range/corners/20260731-175947-0a12e6c/vco_tuning.csv) and the ratified band-selection rule. That campaign is the reason this operating point and not another: it is the only committed closed-loop cell in this tree where the flag is known to ASSERT in steady state at the rule's own trim code, and its 45-point steady-state grid reports LOCK at the rail and a settled static offset of -0.018 .. 1.052 ns at every MOS bundle at 27 C / 3.30 V (record 20260901-155456-46b92f8, supply_steady.csv). A procedure that reads a deassert threshold needs a part whose flag was asserted to begin with; at f_ref = 25 MHz / N = 6 / 150 MHz (sim/period-jitter's cell) the settled offset is 2-4 ns at most points and LOCK is legitimately low, so no threshold exists to measure there. The band code is the one the normative band-selection rule picks at 27 C for all five MOS bundles (band 5), so this is not a conveniently-chosen configuration: DR-025 is explicit that a run at a band the rule does not select is not evidence about a rule-compliant part.",
+    "Each bundle runs at the code the trim rule itself selects for it at the reference condition -- typical 7, ff 11, ss 3 -- transcribed from sim/lock-window-trim's committed code table and independently re-derivable from sim/lock-window-proxy's committed 16-code window map (record 20260925-050022-6d57802, raw_measures.csv, 27 C / 3.30 V rows). Three bundles rather than one because those are the three DISTINCT codes the rule selects across the five MOS bundles, and because ff's code 11 sets the trim MSB: it exercises LDT3 through the assembled part's own wiring of it, which only became possible with DR-026 (#515).",
+    "The reference t_flag each threshold is graded against is NOT measured by this deck. It is 1.037 x t_win at that (bundle, code, 27 C, 3.30 V) point, with t_win from the committed 16-code map above and 1.037 the flag-to-chain ratio spec/pll.md records from sim/lock-detector's own 205-point in-situ characterization. Measuring it here would mean probing the internal node whose inaccessibility is the entire problem, so the grading is against committed evidence instead -- and the 1.037 ratio is itself an f_ref = 25 MHz number applied at f_ref = 12.5 MHz, which the record states as a limitation rather than hides.",
+    "The verdict is taken from LOCK, the pad. v(xdut.vwin) -- the detector's integrator node, of which LOCK is a Schmitt trigger -- is measured alongside as a continuous stand-in for the same threshold crossing, because a binary search needs of order nine transients per threshold and a graded observable brackets the same crossing from a ladder. Where the two disagree, LOCK is the answer and vwin is the explanation.",
+    "The loop's own settled static offset is measured directly, two independent ways, over the last two pre-step reference cycles: the REF -> FB skew, and the PFD's UP/DN pulse-width difference (w_up - w_dn, which equals the skew for a reset-type PFD). That is the same cross-check sim/supply-sensitivity's tb_supply_lock.sp applies. It is the ground truth the bisection's OWN derived phi_ss = (Delta- - Delta+)/2 is compared against, which is how the +/- cancellation is tested rather than assumed.",
+    "Whether the offset was still drifting at the moment of the step is measured, not assumed: the REF -> FB skew is read twice, ten reference cycles apart, and `phi_drift` is reported at every point. The pre-step transient is identical for every Delta by construction (the two sources are selected between after it), so a drift biases all of a bundle's thresholds together rather than differently -- but the record reports the number instead of relying on that argument.",
+    "Declared subset -- the rule's reference condition, not the PVT grid. Temperature is 27 C and supply 3.30 V at every point, because that is the condition at which spec/pll.md's trim rule is DEFINED and at which a tester would execute it; the three-bundle process axis is the three distinct codes the rule selects. The full worst-code-error grid over temperature and supply -- issue #527's fifth measurement checkbox, and the only one that needs it -- is deliberately not paid for here: the issue's own cost note scopes a first record to a declared bundle subset at one (f_ref, N) cell, and a full crossing is only worth buying if the four method-validity checkboxes come back clean. f_ref dependence (the sixth checkbox) is likewise out of scope and is discussed analytically in the record, not measured.",
+    "Limitation -- schematic-level, no extracted parasitics (#18) and no mismatch (sw_stat_global = sw_stat_mismatch = 0). The detector's integrator is an 800 fF-class MOS cap charged by a ~0.011 W/L pfet; extraction moves both that and the delay chain's ~1 fF trim segments, and there is no reason it moves them by the same factor. Within-die mismatch between the delay chain and the integrator is exactly what a corner grid cannot see.",
+    "Limitation -- LOCK has no output pad driver in design/. The procedure is stated at the pads, but design/ contains no output driver for LOCK, FB or DIVOUT (CLK alone is buffered). A tester's own threshold additionally carries that driver's delay and its PVT behaviour; a driver delay common to both step directions cancels out of t_flag by the same argument the procedure rests on, and one that does not is outside what any record here can bound.",
+    "Simulator settings: tran 2 ns print step to 4.6 us with a 100 ps internal-timestep ceiling -- the same ceiling every closed-loop deck in this tree runs at, and the reason the standing dn_lvl guard below is read at every point. rshunt/itl4/tolerances match sim/period-jitter's so this deck's converged solution is comparable with the closed-loop evidence it cites."
+  ],
+  "dut": [
+    "design/netlist/pll_top.spice"
+  ],
+  "netlist": "tb_bisection.sp",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.0,
+  "temperatures_c": [
+    27
+  ],
+  "corners": [
+    "typical",
+    "ff",
+    "ss"
+  ],
+  "params": {
+    "fref": "12.5e6",
+    "nratio": "8",
+    "nstep": "74",
+    "cpb0_code": "0",
+    "cpb1_code": "1",
+    "sel0_code": "0",
+    "sel1_code": "0",
+    "sel2_code": "1",
+    "sel3_code": "0",
+    "sel4_code": "0",
+    "sel5_code": "0",
+    "p0_code": "0",
+    "p1_code": "0",
+    "p2_code": "0",
+    "p3_code": "0",
+    "p4_code": "0",
+    "p5_code": "0",
+    "ktstep": "2e-9",
+    "ktstop": "7.7e-6",
+    "ktmax": "100e-12"
+  },
+  "options": [
+    "rshunt=1e12",
+    "itl4=200",
+    "reltol=1e-3",
+    "abstol=1e-13",
+    "vntol=1e-6"
+  ],
+  "analyses": [
+    "save v(ref) v(fb) v(clk) v(lock) v(vctrl) v(xdut.vwin) v(xdut.up) v(xdut.dn)",
+    "tran {ktstep} {ktstop} 0 {ktmax}"
+  ],
+  "raw_measures": {
+    "lock_pre": {
+      "analysis": "tran",
+      "expr": "avg v(lock) from='tqa' to='tphi'"
+    },
+    "vwin_pre": {
+      "analysis": "tran",
+      "expr": "avg v(xdut.vwin) from='tqa' to='tphi'"
+    },
+    "lock_min": {
+      "analysis": "tran",
+      "expr": "min v(lock) from='tphi' to='ktstop'"
+    },
+    "vwin_min": {
+      "analysis": "tran",
+      "expr": "min v(xdut.vwin) from='tphi' to='ktstop'"
+    },
+    "lock_post": {
+      "analysis": "tran",
+      "expr": "avg v(lock) from='tphi' to='ktstop'"
+    },
+    "t_deassert": {
+      "analysis": "tran",
+      "expr": "when v(lock)='vdd_val/2' fall=1 td='tphi'",
+      "optional": true
+    },
+    "t_reassert": {
+      "analysis": "tran",
+      "expr": "when v(lock)='vdd_val/2' rise=1 td='tphi'",
+      "optional": true
+    },
+    "phi_pre": {
+      "analysis": "tran",
+      "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tqa' targ v(fb) val='vdd_val/2' rise=1 td='tqa'"
+    },
+    "phi_early": {
+      "analysis": "tran",
+      "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tqb' targ v(fb) val='vdd_val/2' rise=1 td='tqb'"
+    },
+    "tup_r": {
+      "analysis": "tran",
+      "expr": "when v(xdut.up)='vdd_val/2' rise=1 td='tqa'"
+    },
+    "tup_f": {
+      "analysis": "tran",
+      "expr": "when v(xdut.up)='vdd_val/2' fall=1 td='tqa'"
+    },
+    "tdn_r": {
+      "analysis": "tran",
+      "expr": "when v(xdut.dn)='vdd_val/2' rise=1 td='tqa'"
+    },
+    "tdn_f": {
+      "analysis": "tran",
+      "expr": "when v(xdut.dn)='vdd_val/2' fall=1 td='tqa'"
+    },
+    "tref_span": {
+      "analysis": "tran",
+      "expr": "trig v(ref) val='vdd_val/2' rise=1 td='tphi-1.5*tref' targ v(ref) val='vdd_val/2' rise=2 td='tphi-1.5*tref'"
+    },
+    "tclk20": {
+      "analysis": "tran",
+      "expr": "trig v(clk) val='vdd_val/2' rise=1 td='tqb' targ v(clk) val='vdd_val/2' rise=21 td='tqb'"
+    },
+    "fout": {
+      "analysis": "tran",
+      "expr": "param='20/tclk20'"
+    },
+    "tfb5": {
+      "analysis": "tran",
+      "expr": "trig v(fb) val='vdd_val/2' rise=1 td='tqb' targ v(fb) val='vdd_val/2' rise=6 td='tqb'"
+    },
+    "ffb": {
+      "analysis": "tran",
+      "expr": "param='5/tfb5'"
+    },
+    "nmeas": {
+      "analysis": "tran",
+      "expr": "param='fout/ffb'"
+    },
+    "ferr_fb": {
+      "analysis": "tran",
+      "expr": "param='ffb/fref - 1'"
+    },
+    "vctrl_pre": {
+      "analysis": "tran",
+      "expr": "avg v(vctrl) from='tqa' to='tphi'"
+    },
+    "dn_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(xdut.dn) from='tqb' to='tphi'"
+    }
+  },
+  "derived": {
+    "module": "derive.py",
+    "measures": [
+      "delta_s",
+      "delta_meas",
+      "delta_err",
+      "skew_pw",
+      "phi_ss",
+      "phi_drift",
+      "deasserted",
+      "vwin_drop",
+      "dip_ns",
+      "deassert_lat_ns"
+    ],
+    "tables": [
+      "step_ladder",
+      "bisection_thresholds",
+      "tier_verdict"
+    ],
+    "joins": {
+      "winmap": "lock-window-proxy/corners/20260925-050022-6d57802/raw_measures.csv"
+    }
+  },
+  "topology_groups": {
+    "procedure": {
+      "description": "what the procedure under test can actually see: the LOCK pad before and after the step, and the step it was given",
+      "measures": [
+        "lock_pre",
+        "lock_min",
+        "lock_post",
+        "deasserted",
+        "delta_s",
+        "delta_meas",
+        "delta_err",
+        "t_deassert",
+        "t_reassert",
+        "deassert_lat_ns",
+        "dip_ns"
+      ]
+    },
+    "ground_truth": {
+      "description": "the internal quantities the procedure is graded against, not inputs to it: the integrator node, and the loop's own settled static offset measured two independent ways",
+      "measures": [
+        "vwin_pre",
+        "vwin_min",
+        "vwin_drop",
+        "phi_pre",
+        "phi_early",
+        "phi_ss",
+        "phi_drift",
+        "skew_pw"
+      ]
+    },
+    "lock": {
+      "description": "is the loop actually locked before the step -- a threshold read off an unlocked loop is not evidence of anything",
+      "measures": [
+        "fout",
+        "ffb",
+        "nmeas",
+        "ferr_fb",
+        "vctrl_pre"
+      ]
+    },
+    "integration": {
+      "description": "the standing guard every closed-loop deck here carries: the PFD's DN branch must assert at all",
+      "measures": [
+        "dn_lvl"
+      ]
+    }
+  },
+  "checks": {
+    "nmeas": {
+      "min": 7.99,
+      "max": 8.01
+    },
+    "ferr_fb": {
+      "min": -0.002,
+      "max": 0.002
+    },
+    "fout": {
+      "min": 99000000.0,
+      "max": 101000000.0
+    },
+    "lock_pre": {
+      "min": 3.2
+    },
+    "delta_err": {
+      "min": -2e-12,
+      "max": 2e-12
+    },
+    "dn_lvl": {
+      "min": 0.00089
+    }
+  },
+  "sweeps": {
+    "op": {
+      "description": "the per-bundle operating point: the trim code the normative trim-code rule selects for that bundle at the reference condition, the VCO band the normative band-selection rule selects at 100 MHz / 27 C, and the control-node warm-start voltage that band's committed f(Vctrl) curve (sim/vco-tuning-range record 20260731-175947-0a12e6c) reaches 100 MHz at, at 3.30 V. All three are derivations from committed evidence and ratified rules, re-derived and diffed against this manifest by testbench/check_config.py. Band and code are real static configuration inputs of the part, so getting either wrong would mean measuring a mis-configured part; the warm-start voltage only sets where the loop starts, and a point whose seed missed far enough to leave the loop unlocked fails this manifest's fout/nmeas/ferr_fb checks rather than being reported as a threshold.",
+      "points": {
+        "c7v2p168": {
+          "params": {
+            "vstart": "2.1682",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "1",
+            "ldt0_code": "1",
+            "ldt1_code": "1",
+            "ldt2_code": "1",
+            "ldt3_code": "0"
+          }
+        },
+        "c11v2p295": {
+          "params": {
+            "vstart": "2.2945",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "1",
+            "ldt0_code": "1",
+            "ldt1_code": "1",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "c3v1p988": {
+          "params": {
+            "vstart": "1.9884",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "1",
+            "ldt0_code": "1",
+            "ldt1_code": "1",
+            "ldt2_code": "0",
+            "ldt3_code": "0"
+          }
+        }
+      }
+    },
+    "d": {
+      "description": "the phase-step ladder: the signed phase step applied to REF at the step instant, in picoseconds, spelled in the point id (dp = REF retarded, dm = advanced, d0000 = no step). The threshold in each direction is the reduction over this axis; the coarse rungs bracket it and the fine rungs resolve it to one trim step or better. d0000 is not a filler point: it is issue #527 checkbox 1's prerequisite, the confirmation that LOCK was asserted and stayed asserted with no perturbation at all.",
+      "points": {
+        "d0000": {
+          "params": {
+            "delta": "0e-12"
+          }
+        },
+        "dp0100": {
+          "params": {
+            "delta": "100e-12"
+          }
+        },
+        "dm0100": {
+          "params": {
+            "delta": "-100e-12"
+          }
+        },
+        "dp0200": {
+          "params": {
+            "delta": "200e-12"
+          }
+        },
+        "dm0200": {
+          "params": {
+            "delta": "-200e-12"
+          }
+        },
+        "dp0300": {
+          "params": {
+            "delta": "300e-12"
+          }
+        },
+        "dm0300": {
+          "params": {
+            "delta": "-300e-12"
+          }
+        },
+        "dp0400": {
+          "params": {
+            "delta": "400e-12"
+          }
+        },
+        "dm0400": {
+          "params": {
+            "delta": "-400e-12"
+          }
+        },
+        "dp0500": {
+          "params": {
+            "delta": "500e-12"
+          }
+        },
+        "dm0500": {
+          "params": {
+            "delta": "-500e-12"
+          }
+        },
+        "dp0600": {
+          "params": {
+            "delta": "600e-12"
+          }
+        },
+        "dm0600": {
+          "params": {
+            "delta": "-600e-12"
+          }
+        },
+        "dp0700": {
+          "params": {
+            "delta": "700e-12"
+          }
+        },
+        "dm0700": {
+          "params": {
+            "delta": "-700e-12"
+          }
+        },
+        "dp0800": {
+          "params": {
+            "delta": "800e-12"
+          }
+        },
+        "dm0800": {
+          "params": {
+            "delta": "-800e-12"
+          }
+        },
+        "dp0900": {
+          "params": {
+            "delta": "900e-12"
+          }
+        },
+        "dm0900": {
+          "params": {
+            "delta": "-900e-12"
+          }
+        },
+        "dp1000": {
+          "params": {
+            "delta": "1000e-12"
+          }
+        },
+        "dm1000": {
+          "params": {
+            "delta": "-1000e-12"
+          }
+        },
+        "dp1100": {
+          "params": {
+            "delta": "1100e-12"
+          }
+        },
+        "dm1100": {
+          "params": {
+            "delta": "-1100e-12"
+          }
+        },
+        "dp1200": {
+          "params": {
+            "delta": "1200e-12"
+          }
+        },
+        "dm1200": {
+          "params": {
+            "delta": "-1200e-12"
+          }
+        },
+        "dp1300": {
+          "params": {
+            "delta": "1300e-12"
+          }
+        },
+        "dm1300": {
+          "params": {
+            "delta": "-1300e-12"
+          }
+        },
+        "dp1400": {
+          "params": {
+            "delta": "1400e-12"
+          }
+        },
+        "dm1400": {
+          "params": {
+            "delta": "-1400e-12"
+          }
+        },
+        "dp1500": {
+          "params": {
+            "delta": "1500e-12"
+          }
+        },
+        "dm1500": {
+          "params": {
+            "delta": "-1500e-12"
+          }
+        },
+        "dp1600": {
+          "params": {
+            "delta": "1600e-12"
+          }
+        },
+        "dm1600": {
+          "params": {
+            "delta": "-1600e-12"
+          }
+        },
+        "dp1700": {
+          "params": {
+            "delta": "1700e-12"
+          }
+        },
+        "dm1700": {
+          "params": {
+            "delta": "-1700e-12"
+          }
+        },
+        "dp1800": {
+          "params": {
+            "delta": "1800e-12"
+          }
+        },
+        "dm1800": {
+          "params": {
+            "delta": "-1800e-12"
+          }
+        },
+        "dp1900": {
+          "params": {
+            "delta": "1900e-12"
+          }
+        },
+        "dm1900": {
+          "params": {
+            "delta": "-1900e-12"
+          }
+        },
+        "dp2000": {
+          "params": {
+            "delta": "2000e-12"
+          }
+        },
+        "dm2000": {
+          "params": {
+            "delta": "-2000e-12"
+          }
+        },
+        "dp2100": {
+          "params": {
+            "delta": "2100e-12"
+          }
+        },
+        "dm2100": {
+          "params": {
+            "delta": "-2100e-12"
+          }
+        },
+        "dp2200": {
+          "params": {
+            "delta": "2200e-12"
+          }
+        },
+        "dm2200": {
+          "params": {
+            "delta": "-2200e-12"
+          }
+        },
+        "dp2300": {
+          "params": {
+            "delta": "2300e-12"
+          }
+        },
+        "dm2300": {
+          "params": {
+            "delta": "-2300e-12"
+          }
+        },
+        "dp2400": {
+          "params": {
+            "delta": "2400e-12"
+          }
+        },
+        "dm2400": {
+          "params": {
+            "delta": "-2400e-12"
+          }
+        },
+        "dp2500": {
+          "params": {
+            "delta": "2500e-12"
+          }
+        },
+        "dm2500": {
+          "params": {
+            "delta": "-2500e-12"
+          }
+        },
+        "dp2600": {
+          "params": {
+            "delta": "2600e-12"
+          }
+        },
+        "dm2600": {
+          "params": {
+            "delta": "-2600e-12"
+          }
+        },
+        "dp2700": {
+          "params": {
+            "delta": "2700e-12"
+          }
+        },
+        "dm2700": {
+          "params": {
+            "delta": "-2700e-12"
+          }
+        },
+        "dp2800": {
+          "params": {
+            "delta": "2800e-12"
+          }
+        },
+        "dm2800": {
+          "params": {
+            "delta": "-2800e-12"
+          }
+        }
+      }
+    }
+  },
+  "grid": [
+    {
+      "description": "typical at trim code 7 -- the code spec/pll.md's Lock-detector window trim-code rule selects for this bundle at the reference condition, on VCO band 5 (the band the band-selection rule selects at 100 MHz / 27 C), warm-started at 2.1682 V. One block per bundle because the code, the band and the seed are all per bundle; the whole phase-step ladder runs at each. The ladder is centred on 2.0-2.8 ns rather than on the flag window because a scouting pass (--no-write, same manifest) found the LOCK pad still asserted at a +2.0 ns step while the detector's integrator had already fallen 1.41 V from the rail: the threshold is far above t_flag, so rungs near t_flag measure nothing at all. Three magnitudes at 400 ps in each direction bracket it, which is ample against an effect measured in whole trim codes.",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "axes": {
+        "op": [
+          "c7v2p168"
+        ],
+        "d": [
+          "d0000",
+          "dp2000",
+          "dm2000",
+          "dp2400",
+          "dm2400",
+          "dp2800",
+          "dm2800"
+        ]
+      }
+    },
+    {
+      "description": "ff at trim code 11 -- the code spec/pll.md's Lock-detector window trim-code rule selects for this bundle at the reference condition, on VCO band 5 (the band the band-selection rule selects at 100 MHz / 27 C), warm-started at 2.2945 V. One block per bundle because the code, the band and the seed are all per bundle; the whole phase-step ladder runs at each. One magnitude in each direction, and deliberately the SMALLER of the two the typical ladder brackets with (2.0 ns, which held there): at this bundle the ladder exists to show the threshold is the same multiple of the window as at typical rather than to resolve it, and to exercise the trim MSB (code 11) through the assembled part's own wiring of LDT3 (DR-026). A single rung can only bound a threshold, never bracket it, and a rung that HOLDS bounds it from below -- which is the conclusive direction for this campaign's question, because the finding is that the threshold is far ABOVE the flag window. A rung that dropped would have bounded it from above and said nothing.",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "axes": {
+        "op": [
+          "c11v2p295"
+        ],
+        "d": [
+          "d0000",
+          "dp2000",
+          "dm2000"
+        ]
+      }
+    },
+    {
+      "description": "ss at trim code 3 -- the code spec/pll.md's Lock-detector window trim-code rule selects for this bundle at the reference condition, on VCO band 5 (the band the band-selection rule selects at 100 MHz / 27 C), warm-started at 1.9884 V. One block per bundle because the code, the band and the seed are all per bundle; the whole phase-step ladder runs at each. One magnitude in each direction at the same 2.0 ns, for the same reason as ff: this bundle carries the lowest code the rule selects (3), so with ff it brackets the trim range the rule uses across the five MOS bundles. A single rung can only bound a threshold, never bracket it, and a rung that HOLDS bounds it from below -- which is the conclusive direction for this campaign's question, because the finding is that the threshold is far ABOVE the flag window. A rung that dropped would have bounded it from above and said nothing.",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "axes": {
+        "op": [
+          "c3v1p988"
+        ],
+        "d": [
+          "d0000",
+          "dp2000",
+          "dm2000"
+        ]
+      }
+    }
+  ]
+}

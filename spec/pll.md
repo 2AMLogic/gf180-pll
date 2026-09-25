@@ -380,15 +380,58 @@ against a no-measurement control:
 3. **The [Lock detector](#lock-detector) row's T1′/T2′ verdict is conditional
    on a trim no present bench or tester procedure can select** to the accuracy
    that row's own 1.53–1.58× spread figure assumes.
-4. **A precondition on all of it**: `pll_top` does not currently connect
-   `LDT3` (#515), so only 8 of the 16 codes are reachable on the assembled
-   part — and the table above selects code 11 for `ff`/`all-fast`.
+4. **A precondition on all of it, now met**: `pll_top` used to leave `LDT3`
+   unconnected (#515), so only 8 of the 16 codes were reachable on the
+   assembled part — and the table above selects code 11 for `ff`/`all-fast`.
+   **DR-026 connects it**: the `XLD` instance wires `LDT3` through to the
+   top-level port, all 16 codes are reachable, and
+   `design/lib/check-port-connectivity.sh` fails CI if any committed netlist
+   again declares a port nothing inside the subcircuit connects to. Removing
+   that obstacle validated no route; it only stopped one from being defeated
+   before it was tried.
 
-Two routes could still close this, neither authorized by DR-022: a symmetric
-`REF` phase-step bisection read at `LOCK`, which needs no design change and is
-owed a characterization (#527), and exposing `ERR`/`ERRD` through matched
-observation buffers onto two of the free digital-test-output slots, which is a
-design change and needs its own decision record first.
+**Of the two routes DR-022 named, one has now been measured and does not
+work.** DR-029 (#527) characterizes the **symmetric `REF` phase-step
+bisection** — step `REF`'s phase by a signed Δ with the loop locked, bisect Δ
+in both directions for the thresholds at which `LOCK` drops, and take their
+mean as the flag window with the loop's static offset cancelled. The deassert
+*is* observable at the pad, promptly and unambiguously, at `pll_top` rather
+than through a block-level loop. But **the threshold in Δ is not `t_flag`**:
+the flag window is a per-reference-cycle *charge balance* in the detector's
+`VWIN` integrator, while a step threshold is a *stored-charge* question —
+`LOCK` drops only if the discharge integrated over the handful of cycles before
+the loop absorbs the step exceeds `C_VWIN·(V_rail − V_TL)`. The step threshold
+therefore exceeds the flag window by an additive time set by the integrator's
+capacitance, the Schmitt trigger's falling threshold, the discharge device and
+the loop's own bandwidth — **four quantities, none of them the delay chain the
+trim moves, each with its own corner dependence** — so no fixed factor removes
+it. Measured at the rule's reference condition (`typical`/27 °C/3.30 V, at the
+rule's own code 7): the threshold is **2.200 ± 0.200 ns** against a flag window
+committed evidence puts at **1.3769 … 1.4529 ns** — **+55.5 %**, which at the
+measured 50.4 ps per trim code is **−12.6 codes** of selection error on a 16-code
+trim. Both tiers **FAIL**, and by a margin no ladder resolution can reach: the
+discrepancy is 3.7× the measurement's own bracket and 19× the reference
+interval's width.
+
+The obstacle generalizes past this particular stimulus, which is why DR-029
+closes the route rather than deferring it. The flag's measurand is a
+**sustained** phase error; a locked loop holds exactly its own `φ_ss` and
+corrects everything else, `FB` is an output with no drive path, and so every
+`REF`-side stimulus is a transient whose effect on the flag is governed by the
+integrator's stored charge and the loop's correction speed. A phase ramp is no
+escape (an integrating filter's steady-state phase error to a frequency offset
+is zero), and eliminating the additive term with a second measurement would be
+a fit against a model whose four terms vary independently — which Tier B leaves
+no allowance for.
+
+**The successor is therefore DR-022's second route**: exposing `ERR`/`ERRD`
+through matched observation buffers onto two of the free digital-test-output
+slots, making `t_win` a pad-to-pad edge difference with the buffers' own delays
+cancelling to first order. That is a `design/` change and **still needs its own
+decision record first**; neither DR-022 nor DR-029 authorizes it. What DR-029
+adds to its case is that the cheaper route is not merely uncharacterized — it
+is measured, and it fails on what it measures rather than on how precisely it
+measures it.
 
 ---
 
