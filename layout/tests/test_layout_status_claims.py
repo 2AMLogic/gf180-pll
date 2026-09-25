@@ -56,10 +56,6 @@ LVS_MATCH_LINE = "INFO : Congratulations! Netlists match.\n"
 # and layout nouns.
 PAD = "\n" + ("Filler prose that bears on nothing in particular. " * 5) + "\n"
 
-RATIFIED_SPEC = "# PLL target specification\n\n- **Status**: **ratified, with amendments** (#1, 2026-09-08)\n"
-UNRATIFIED_SPEC = "# PLL target specification\n\n- **Status**: proposed, not yet ratified\n"
-
-
 def _footprint_lines(geometry: dict | None = None) -> str:
     """One correct footprint claim per block, in both adjacency shapes.
 
@@ -76,6 +72,30 @@ def _footprint_lines(geometry: dict | None = None) -> str:
         else:
             lines.append(f"`{top}` measures {mm2} mm² ({w:g} × {h:g} µm).")
     return "\n".join(lines) + "\n"
+
+
+def _area_section(geometry: dict | None = None, *, heading: str = "Area") -> str:
+    """A "## <heading>" section carrying one footprint line per block.
+
+    The fifth guard (issue #237) grades spec/pll.md's own "## Area" section
+    against layout/evidence/area-audit/area-audit.md, scoped to that section
+    so the document's unrelated device dimensions elsewhere are not swept in.
+    Every spec fixture below needs a valid one by default so tests aimed at
+    the other rules are not incidentally broken by this one.
+    """
+    return "\n## %s\n\n%s" % (heading, _footprint_lines(geometry))
+
+
+RATIFIED_SPEC = (
+    "# PLL target specification\n\n"
+    "- **Status**: **ratified, with amendments** (#1, 2026-09-08)\n"
+    + _area_section()
+)
+UNRATIFIED_SPEC = (
+    "# PLL target specification\n\n"
+    "- **Status**: proposed, not yet ratified\n"
+    + _area_section()
+)
 
 
 def _doc_text(
@@ -672,6 +692,93 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         result = self.tree.run()
         self.assertEqual(result.returncode, 1)
         self.assertIn("does not exist", result.stderr)
+
+    # --- The fifth guard: spec/pll.md's own "## Area" section (2026-09-25) --
+    #
+    # README.md and the proposal are graded for the same "W x H um" footprint
+    # drift already; spec/pll.md's ratified Area table states the identical
+    # four numbers -- DR-016/DR-017's 0.30 mm2 budget row is amended against
+    # them -- and nothing graded it. These tests drive that guard on its own,
+    # independent of the DOCS-loop rules the default RATIFIED_SPEC/
+    # UNRATIFIED_SPEC fixtures already exercise implicitly (every test above
+    # this point passes a spec whose "## Area" section states the correct
+    # footprints, by construction).
+
+    def test_a_stale_spec_pll_area_footprint_is_caught(self):
+        self._all_four()
+        self.tree.write_docs(_doc_text(4, 2))
+        self.tree.write_spec(
+            "# PLL target specification\n\n"
+            "- **Status**: **ratified, with amendments** (#1, 2026-09-08)\n"
+            + _area_section({**AUDIT_GEOMETRY, "pfd_cp": (344.98, 60.50, 20699)})
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("spec/pll.md", result.stderr)
+        self.assertIn("states `pfd_cp` at 344.98 x 60.50 um", result.stderr)
+        self.assertIn("344.98 x 74.30 um", result.stderr)
+
+    def test_spec_pll_area_footprints_must_state_all_four_blocks(self):
+        # Two-sided, like the proposal's own completeness rule: a stale
+        # number cannot be "fixed" by deleting the row it sits in.
+        self._all_four()
+        self.tree.write_docs(_doc_text(4, 2))
+        geometry = {k: v for k, v in AUDIT_GEOMETRY.items() if k != "lock_detector"}
+        self.tree.write_spec(
+            "# PLL target specification\n\n"
+            "- **Status**: **ratified, with amendments** (#1, 2026-09-08)\n"
+            + _area_section(geometry)
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "states no current footprint for `lock_detector`", result.stderr
+        )
+
+    def test_a_missing_spec_pll_area_section_is_caught(self):
+        # A document that states no footprints at all (no "## Area" heading)
+        # is a parse failure against this rule, not a vacuously clean one --
+        # spec/pll.md's Area table is where the row DR-016/DR-017 amend lives.
+        self._all_four()
+        self.tree.write_docs(_doc_text(4, 2))
+        self.tree.write_spec(
+            "# PLL target specification\n\n"
+            "- **Status**: **ratified, with amendments** (#1, 2026-09-08)\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("has no '## Area' section", result.stderr)
+
+    def test_a_device_dimension_outside_the_area_section_is_not_graded(self):
+        # The reason grading is scoped to the section rather than the whole
+        # file: spec/pll.md's Loop bandwidth section states the loop filter's
+        # C2 plate size, `31.4 x 31.4 um`, in the identical "W x H um" shape a
+        # footprint claim uses, and it names no PLL sub-block. A whole-
+        # document scan would misreport it as an unattributable footprint
+        # claim (the "names no block within N characters" failure) even
+        # though the Area section itself is completely correct.
+        self._all_four()
+        self.tree.write_docs(_doc_text(4, 2))
+        self.tree.write_spec(
+            "# PLL target specification\n\n"
+            "- **Status**: **ratified, with amendments** (#1, 2026-09-08)\n"
+            "\n## Loop bandwidth\n\n"
+            "The loop filter's C2 is a single MIM cap, 31.4 x 31.4 um.\n"
+            + _area_section()
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_spec_pll_area_footprints_are_silent_when_nothing_is_drawn(self):
+        # Conditional on the tree, like every other footprint check here.
+        self.tree.write_docs(_doc_text(0, 0))
+        self.tree.write_spec(
+            "# PLL target specification\n\n"
+            "- **Status**: **ratified, with amendments** (#1, 2026-09-08)\n"
+            + _area_section({"pfd_cp": (999.99, 888.88, 1)})
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":
