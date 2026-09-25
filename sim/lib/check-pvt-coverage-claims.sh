@@ -1,0 +1,367 @@
+#!/usr/bin/env bash
+#
+# Fails if a reader-facing status document quotes a measurement at a process
+# corner without saying which PVT grid that corner belongs to, or states a
+# corner count no committed evidence produces.
+#
+# WHY THIS EXISTS (issue #237)
+#
+# CLAUDE.md's standing rule for this repository is "PVT corners on every
+# recorded result", and #237's first acceptance criterion is closed-loop
+# behavior "verified across the full PVT corner matrix, not just the single
+# nominal corner". Seven checks already grade docs/chipalooza/
+# challenge-5-proposal.md -- its counts, its layout claims, its citations and
+# their supersession, its spec-row and decision-record coverage, its I/O list,
+# and its forge references. Every one of them grades *what* the document says.
+# None grades *where the number was measured*.
+#
+# That gap had a consequence, found on 2026-09-25 and fixed in the same commit
+# that added this check. Section 5's table reports most rows against the
+# 45-point mandated grid and says so -- "Full 45-point PVT grid", "All 45 of
+# the mandated PVT points", "5 of 45 PVT points measured, not the full grid".
+# Four rows in the same column report a worst case at `all-fast` or `all-slow`:
+#
+#   Output band       floor 6.449 MHz  (`all-fast`/125 °C/2.97 V)
+#   Period jitter     2.51 % RMS       (`all-slow`/-40 °C/2.97 V)
+#   Power             1.98 mW          (`all-fast`/125 °C/3.63 V)
+#   Kvco              115.8 MHz/V      (`all-fast`/27 °C/2.97 V)
+#
+# `all-fast` and `all-slow` are not in the mandated grid. sim/harness/corners.py
+# defines them as combined bundles -- every device family skewed together,
+# passives included -- outside the five MOS bundles (`typical`/`ff`/`ss`/`fs`/
+# `sf`) that grid is built from. The records behind those four rows say so
+# plainly; sim/vco-tuning-range/records/20260731-175947-0a12e6c.md's own corner
+# field reads "The PVT grid is 63 points, a **superset** of the 45-point default
+# grid". None of that reached the document written to be emailed verbatim to an
+# outside reader, who had no way to tell that four rows of one table are worst
+# cases over a different -- and wider, hence stricter -- corner universe than
+# the rest of it. The numbers were right; the grid they were measured on was
+# not stated.
+#
+# THE RULES
+#
+# 1. CORNER NAMES ARE REAL. Every process bundle a graded document names in a
+#    corner triple (`` `<bundle>`/<T> °C/<V> V ``) must be a key of
+#    sim/harness/corners.py's CORNERS registry. A bundle renamed or dropped
+#    from the harness leaves a stale corner name in an outward-facing document
+#    that nothing else would catch.
+#
+# 2. OFF-GRID CORNERS ARE DISCLOSED. A table row that quotes a corner triple
+#    whose bundle is NOT one of REQUIRED_MOS_CORNERS must name the wider grid
+#    that corner comes from: the row must carry an `<N>-point` or `<N>-bundle`
+#    token equal to the distinct PVT-point count, or the distinct-bundle count,
+#    of a record the row cites -- and strictly larger than the mandated grid,
+#    since a disclosure that repeats the mandated numbers discloses nothing.
+#
+#    Both spellings are accepted because both are already in honest use:
+#    sim/CHARACTERIZATION.md's `lock-window-trim` row says "the full 13-bundle"
+#    set and passes this rule unchanged, while the vco-tuning-range rows are
+#    naturally stated as a 63-point grid.
+#
+# 3. CORNER COUNTS HAVE EVIDENCE BEHIND THEM. Every PVT-qualified corner or
+#    grid count in a graded table row -- "10/45 corners", "5 of 45 PVT points",
+#    "full 90-point grid" -- must equal the mandated grid size or a count the
+#    committed per-corner evidence of a record cited in that row actually
+#    produces (its distinct PVT-point count, or the row count of one of its
+#    committed CSVs). A count matching nothing on the tree is a number with no
+#    evidence behind it.
+#
+#    Deliberately narrow: only counts qualified by "corner", "PVT point" or
+#    "<N>-point grid" are graded. A bare "<N> points" is left alone, because
+#    this tree uses it for run counts on extra sweep axes (90 output-driver
+#    runs = 45 PVT points x 2 band edges; 205 lock-detector points; 140
+#    loop-dynamics cells) that are not PVT grids and must not be forced to look
+#    like one.
+#
+# THE MANDATED GRID SIZE IS DERIVED, NOT WRITTEN DOWN HERE
+#
+# It is len(REQUIRED_MOS_CORNERS) x len(DEFAULT_TEMPERATURES_C) x
+# len(supply_points()), imported from sim/harness/corners.py. Widening the
+# temperature axis or the supply tolerance changes the number this check
+# enforces in the same commit that changes the harness, rather than leaving a
+# remembered 45 behind in eight documents.
+#
+# WHAT IT DOES NOT DO
+#
+# It does not check that a quoted *value* is the value in the cited record --
+# that is a different and much larger check. It grades the corner a value is
+# attributed to and the grid that corner sits in. A row that quotes no corner
+# triple and no corner count is trivially clean; so is a derived or waived row.
+#
+# Usage: sim/lib/check-pvt-coverage-claims.sh
+# Exit codes: 0 every quoted corner is a real bundle, every off-grid corner is
+#             disclosed, and every corner count is backed by evidence; 1 any
+#             rule fails, a graded document is missing, the harness cannot be
+#             imported, or the document yields no corner triples at all (a
+#             broken parser must not look like a clean document).
+
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# The same three reader-facing documents check-record-supersession.sh grades,
+# for the same reason: they are read by people who will not open sim/.
+GRADED=(
+  "README.md"
+  "sim/CHARACTERIZATION.md"
+  "docs/chipalooza/challenge-5-proposal.md"
+)
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "FAIL: python3 is not on PATH -- this check could not run, and a" \
+    "check that did not run is not a check that passed" >&2
+  exit 1
+fi
+
+python3 - "${REPO_ROOT}" "${GRADED[@]}" <<'PY'
+import csv
+import os
+import re
+import sys
+
+repo_root, graded = sys.argv[1], sys.argv[2:]
+
+sys.path.insert(0, os.path.join(repo_root, "sim"))
+try:
+    from harness.corners import (
+        CORNERS,
+        DEFAULT_TEMPERATURES_C,
+        REQUIRED_MOS_CORNERS,
+        supply_points,
+    )
+except Exception as exc:  # pragma: no cover - exercised by the import-guard test
+    sys.stderr.write(
+        "FAIL: could not import sim/harness/corners.py (%s) -- the mandated "
+        "grid size and the corner registry are derived from it, so this check "
+        "cannot run\n" % exc
+    )
+    sys.exit(1)
+
+MANDATED_BUNDLES = len(REQUIRED_MOS_CORNERS)
+MANDATED_GRID = MANDATED_BUNDLES * len(DEFAULT_TEMPERATURES_C) * len(supply_points())
+
+RECORD_ID = r"\d{8}-\d{6}-[0-9a-f]{7}"
+
+#: `` `all-fast`/125 °C/2.97 V `` -- the corner spelling every graded document
+#: uses. The degree sign is optional because README.md writes one without it.
+CORNER_TRIPLE = re.compile(
+    r"`([A-Za-z][A-Za-z0-9_-]*)`\s*/\s*[-−]?\d+\s*°?\s*C"
+)
+
+#: A corner-file stem: `<bundle>_<temp>c_<vdd>v`, possibly behind a
+#: campaign-specific prefix (`jit_all-fast_-40c_2.97v.log`). Anchored on a known
+#: bundle name so a prefix is never mistaken for one.
+_BUNDLE_ALT = "|".join(
+    re.escape(name) for name in sorted(CORNERS, key=len, reverse=True)
+)
+CORNER_FILE = re.compile(
+    r"(?:^|[_/])(" + _BUNDLE_ALT + r")_(-?\d+)c_([0-9.]+)v"
+)
+
+#: "10/45 corners", "5 of 45 PVT points", "2 of the 45 mandated corners".
+#: Qualified by `corner` or `PVT point` only -- see rule 3's note on bare
+#: "<N> points".
+DENOMINATOR = re.compile(
+    r"\b\d+\s*(?:of\s+(?:the\s+)?|/)\s*(\d+)[\s -]+"
+    r"(?:mandated[\s -]+)?(?:PVT[\s -]+point|corner)s?\b"
+)
+#: "Full 45-point PVT grid", "full 90-point grid", "63-point superset grid".
+GRID_SIZE = re.compile(
+    r"\b(\d+)[\s -]point"
+    r"(?:[\s -]+(?:mandated|PVT|superset|default))*[\s -]+grid\b"
+)
+#: Rule 2's disclosure tokens: "63-point", "13-bundle", "13 bundles".
+DISCLOSURE = re.compile(r"\b(\d+)[\s -]*(?:point|bundle)s?\b")
+
+#: A Source cell that defers to the row above instead of repeating the id.
+SAME_RECORD = re.compile(r"\bSame\s+(?:record|as\s+above)\b", re.IGNORECASE)
+
+
+def _f(text):
+    try:
+        return float(text)
+    except ValueError:
+        return text
+
+
+_evidence_cache = {}
+
+
+def evidence(record_id):
+    """(distinct PVT points, distinct bundles, {committed CSV row counts}).
+
+    Read from sim/<campaign>/corners/<record-id>/ -- the committed per-corner
+    artifacts of that record, which is the only place the tree says how much of
+    a grid a run actually covered. Points are normalized to (bundle, float
+    temperature, float supply) so a log stem (`ss_-40c_2.97v`) and a CSV row
+    (`ss`, `-40.0`, `2.97`) count once, not twice.
+    """
+    if record_id in _evidence_cache:
+        return _evidence_cache[record_id]
+    points, bundles, rows = set(), set(), set()
+    sim_dir = os.path.join(repo_root, "sim")
+    for campaign in sorted(os.listdir(sim_dir)):
+        corner_dir = os.path.join(sim_dir, campaign, "corners", record_id)
+        if not os.path.isdir(corner_dir):
+            continue
+        for name in sorted(os.listdir(corner_dir)):
+            for match in CORNER_FILE.finditer(name):
+                bundle, temp, vdd = match.groups()
+                points.add((bundle, _f(temp), _f(vdd)))
+                bundles.add(bundle)
+            if not name.endswith(".csv"):
+                continue
+            path = os.path.join(corner_dir, name)
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                lines = [ln for ln in fh if not ln.startswith("#")]
+            table = list(csv.DictReader(lines))
+            if not table:
+                continue
+            rows.add(len(table))
+            head = table[0]
+            bundle_col = next((c for c in ("corner", "bundle") if c in head), None)
+            vdd_col = next((c for c in ("vdd", "vdd_v") if c in head), None)
+            if not (bundle_col and "temp_c" in head and vdd_col):
+                continue
+            for row in table:
+                points.add((row[bundle_col], _f(row["temp_c"]), _f(row[vdd_col])))
+                bundles.add(row[bundle_col])
+    result = (len(points), len(bundles), rows)
+    _evidence_cache[record_id] = result
+    return result
+
+
+failed = False
+triples_seen = 0
+counts_seen = 0
+disclosures_seen = 0
+
+for doc in graded:
+    doc_path = os.path.join(repo_root, doc)
+    if not os.path.isfile(doc_path):
+        sys.stderr.write("FAIL: %s does not exist\n" % doc)
+        failed = True
+        continue
+    with open(doc_path, encoding="utf-8") as fh:
+        text = fh.read()
+
+    # Rule 1, document-wide: a corner name anywhere must be a real bundle.
+    for bundle in sorted(set(CORNER_TRIPLE.findall(text))):
+        triples_seen += 1
+        if bundle in CORNERS:
+            continue
+        failed = True
+        sys.stderr.write(
+            "FAIL: %s quotes a measurement at corner `%s`, which is not a "
+            "bundle sim/harness/corners.py defines. Known bundles: %s\n"
+            % (doc, bundle, ", ".join(sorted(CORNERS)))
+        )
+
+    # Rules 2 and 3 are row-scoped: a table row is the unit that carries both a
+    # number and the citation that number rests on.
+    inherited = []
+    for line in text.splitlines():
+        if not line.startswith("| "):
+            inherited = []
+            continue
+        cited = re.findall(RECORD_ID, line)
+        if cited:
+            inherited = cited
+        elif SAME_RECORD.search(line):
+            cited = inherited
+        allowed = {MANDATED_GRID}
+        for rid in cited:
+            n_points, _, row_counts = evidence(rid)
+            if n_points:
+                allowed.add(n_points)
+            allowed |= row_counts
+
+        # Rule 2.
+        off_grid = sorted(
+            {
+                b
+                for b in CORNER_TRIPLE.findall(line)
+                if b in CORNERS and b not in REQUIRED_MOS_CORNERS
+            }
+        )
+        if off_grid:
+            tokens = {int(n) for n in DISCLOSURE.findall(line)}
+            widths = []
+            disclosed = False
+            for rid in cited:
+                n_points, n_bundles, _ = evidence(rid)
+                widths.append((rid, n_points, n_bundles))
+                if n_points > MANDATED_GRID and n_points in tokens:
+                    disclosed = True
+                if n_bundles > MANDATED_BUNDLES and n_bundles in tokens:
+                    disclosed = True
+            if disclosed:
+                disclosures_seen += 1
+            else:
+                failed = True
+                sys.stderr.write(
+                    "FAIL: %s quotes a measurement at %s, which sim/harness/"
+                    "corners.py places outside the %d-point mandated grid's "
+                    "%d MOS bundles, and the row does not say which grid it "
+                    "came from. Name the wider grid in the row -- an "
+                    "`<N>-point` or `<N>-bundle` token matching the cited "
+                    "record's own coverage%s.\n  row: %s\n"
+                    % (
+                        doc,
+                        ", ".join("`%s`" % b for b in off_grid),
+                        MANDATED_GRID,
+                        MANDATED_BUNDLES,
+                        (
+                            " (" + "; ".join(
+                                "%s covers %d PVT points across %d bundles"
+                                % (rid, pts, bnd)
+                                for rid, pts, bnd in widths
+                            ) + ")"
+                        )
+                        if widths
+                        else ", and the row cites no record at all -- name one",
+                        line.strip()[:220],
+                    )
+                )
+
+        # Rule 3.
+        for pattern in (DENOMINATOR, GRID_SIZE):
+            for match in pattern.finditer(line):
+                counts_seen += 1
+                count = int(match.group(1))
+                if count in allowed:
+                    continue
+                failed = True
+                sys.stderr.write(
+                    "FAIL: %s states \"%s\", but %d is neither the %d-point "
+                    "mandated grid nor a count the committed evidence of the "
+                    "record(s) this row cites produces (%s).\n  row: %s\n"
+                    % (
+                        doc,
+                        match.group(0).strip(),
+                        count,
+                        MANDATED_GRID,
+                        ", ".join(str(n) for n in sorted(allowed)) or "none",
+                        line.strip()[:220],
+                    )
+                )
+
+if not triples_seen:
+    sys.stderr.write(
+        "FAIL: no corner triple (`` `<bundle>`/<T> °C ``) was found in any of "
+        "the %d graded documents. These documents quote corners throughout, so "
+        "this is a parser failure, not a clean tree.\n" % len(graded)
+    )
+    failed = True
+
+if failed:
+    sys.exit(1)
+
+print(
+    "OK: %d distinct corner bundles quoted across %d documents are all in "
+    "sim/harness/corners.py; %d off-grid corner row(s) name the wider grid "
+    "they were measured on; %d PVT corner count(s) match the %d-point "
+    "mandated grid or the cited record's committed evidence"
+    % (triples_seen, len(graded), disclosures_seen, counts_seen, MANDATED_GRID)
+)
+PY

@@ -262,6 +262,45 @@ jobs:
         # committed Markdown file, no PDK, no xschem.
         run: bash design/lib/check-io-list-coverage.sh
 
+      - name: sim/lib/check-pvt-coverage-claims.sh (quoted corners vs. the harness's corner registry)
+        # The six checks above all grade WHAT a document says -- its counts, its
+        # rows, its citations, its spec and decision-record coverage, its I/O
+        # list. None grades WHERE a number was measured, and CLAUDE.md's
+        # standing rule for this repository is "PVT corners on every recorded
+        # result" (#237 AC1).
+        #
+        # Section 5 of docs/chipalooza/challenge-5-proposal.md reports most
+        # rows against the 45-point mandated grid and says so. Four rows in the
+        # same column -- Output band, open-loop period jitter, Power, Kvco --
+        # reported worst cases at `all-fast` / `all-slow`, combined bundles
+        # that skew every device family together (passives included) and are
+        # NOT in that grid: they come from vco-tuning-range's 63-point superset
+        # grid, whose own record says so in as many words ("a **superset** of
+        # the 45-point default grid"). The document written to be emailed
+        # verbatim to an outside reader said none of it, so four rows were read
+        # as "of 45" when they were worst cases over a wider corner universe.
+        # sim/CHARACTERIZATION.md carried the same undisclosed row, plus
+        # "21/135 corners" for what is 135 rows over a 45-corner grid.
+        #
+        # Three rules: every process bundle a graded document quotes in a
+        # corner triple is one sim/harness/corners.py defines; a table row
+        # quoting a bundle outside the mandated grid names the wider grid it
+        # came from (an `<N>-point` or `<N>-bundle` token matching the cited
+        # record's own committed coverage, and larger than the mandated
+        # numbers, since repeating them discloses nothing); and every
+        # PVT-qualified corner count in a row is the mandated grid size or a
+        # count the cited record's committed per-corner evidence produces.
+        #
+        # The mandated size is computed from REQUIRED_MOS_CORNERS x
+        # DEFAULT_TEMPERATURES_C x supply_points(), imported rather than
+        # written down, so widening an axis moves what CI enforces in the same
+        # commit that widens it. Its unit tests run under `bash sim/selftest.sh`
+        # above (sim/tests discovery), which is why there is no separate
+        # discover step here. Needs python3 (set up above); reads committed
+        # Markdown plus the committed CSV/log artifacts under sim/*/corners/.
+        # No PDK, no ngspice, no KLayout.
+        run: bash sim/lib/check-pvt-coverage-claims.sh
+
       - name: docs/tests (unit tests for the issue-reference-state check)
         # Same shape as the three discover steps above, for the check added in
         # #237 that grades what the outward-facing documents claim about the
@@ -271,7 +310,7 @@ jobs:
         run: python3 -m unittest discover -s docs/tests -t docs/tests
 
       - name: docs/lib/check-issue-reference-state.sh (issue references vs. the forge)
-        # The six checks above grade documents against the tree. This one
+        # The seven checks above grade documents against the tree. This one
         # grades the other half of what docs/chipalooza/challenge-5-proposal.md
         # and README.md assert -- their claims about the *forge*: "Tracked at
         # issue #13", "issue #499 (open)", "routed to their owning issues (#9,
