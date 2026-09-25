@@ -452,6 +452,89 @@ class SubmissionTests(unittest.TestCase):
 
 
 # ===========================================================================
+# 6b. The default runner: the one seam an injected `runner=` cannot cover
+# ===========================================================================
+
+class _RecordingRun(_FakeTransport):
+    """A `subprocess.run` stand-in that also records the keywords it got."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.kwargs: list[dict] = []
+
+    def __call__(self, argv, **kwargs):
+        self.kwargs.append(dict(kwargs))
+        return super().__call__(argv, **kwargs)
+
+
+class DefaultRunnerTests(unittest.TestCase):
+    """Drive `batch._default_runner` itself, with `subprocess.run` patched.
+
+    Every other test in this file injects its own ``runner=``, and such a stub
+    absorbs any keyword a call site adds. The real submission path goes through
+    ``batch._default_runner``, which already fixes ``capture_output``/``text``/
+    ``check`` -- so a call site that re-supplies one of them hands
+    ``subprocess.run`` the same keyword twice and raises ``TypeError`` before
+    ``aws`` or the provision script is ever reached (#512). Patching
+    ``subprocess.run`` rather than the backend's runner keeps the collision
+    reachable while still spawning no process.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.pdk_dir = self.root / "gf180mcuD"
+        self.pdk_dir.mkdir()
+        self.deck = self.root / "typical_27c_3.30v.spice"
+        self.deck.write_text("* deck\n.end\n")
+        self.rundir = self.root / "run"
+
+    def _default_backend(self):
+        return batch.BatchBackend(
+            pdk_variant_dir=self.pdk_dir,
+            pdk_variant="gf180mcuD",
+            config=_config(self.root),
+            apply=True,
+            poll_interval_s=0,
+        )
+
+    def test_launch_composes_a_call_the_default_runner_accepts(self):
+        """The regressed call site: `_launch` through the real default runner."""
+        backend = self._default_backend()
+        plan = backend.plan_deck(self.deck, 60)
+        run = _RecordingRun(["done"])
+        with mock.patch.object(batch.subprocess, "run", run):
+            backend._launch(plan)
+        self.assertEqual(len(run.launched()), 1)
+        self.assertIn("--apply", run.launched()[0])
+
+    def test_a_whole_submission_runs_through_the_default_runner(self):
+        backend = self._default_backend()
+        run = _RecordingRun(
+            ["running", "done"],
+            outputs={batch.LOG_NAME: "m_vout = 1.65\n", batch.RC_NAME: "0"},
+        )
+        with mock.patch.object(batch.subprocess, "run", run):
+            got = backend.run_deck(self.deck, self.rundir, 60, None)
+        self.assertEqual(got.returncode, 0)
+        self.assertEqual(got.output, "m_vout = 1.65\n")
+        self.assertEqual(len(run.launched()), 1)
+
+    def test_the_runner_owned_keywords_are_supplied_exactly_once_each(self):
+        """No call site may re-specify what `_default_runner` already sets."""
+        backend = self._default_backend()
+        run = _RecordingRun(["done"], outputs={batch.RC_NAME: "0"})
+        with mock.patch.object(batch.subprocess, "run", run):
+            backend.run_deck(self.deck, self.rundir, 60, None)
+        self.assertTrue(run.kwargs)
+        for seen in run.kwargs:
+            self.assertEqual(seen.get("capture_output"), True)
+            self.assertEqual(seen.get("text"), True)
+            self.assertEqual(seen.get("check"), False)
+
+
+# ===========================================================================
 # 7. The harness end of the seam: per-point attribution reaches the record
 # ===========================================================================
 
