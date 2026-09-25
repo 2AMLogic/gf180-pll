@@ -19,6 +19,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -535,6 +536,189 @@ class DefaultRunnerTests(unittest.TestCase):
 
 
 # ===========================================================================
+# 6c. Two points, one rundir: a collected log/rc/host belongs to ONE job
+# ===========================================================================
+
+class _ConcurrentCollectTransport:
+    """Transport that makes two overlapping collects interleave on purpose.
+
+    ``run_grid`` runs points concurrently (``ThreadPoolExecutor``, at the CLI's
+    own default ``-j``), and a testbench that declares no ``raw_files`` gives
+    every point of the grid the *same* ``rundir``. The job contract's output
+    names are fixed (``ngspice.log``/``ngspice.rc``/``ngspice.host``), so the
+    download-then-read sequence in :meth:`batch.BatchBackend.run_deck` is only
+    safe if each job's download lands somewhere no other job writes.
+
+    This stub forces the worst ordering rather than hoping for it: every
+    ``outputs/`` download writes *that job's own* marked content and then waits
+    on a barrier, so **neither** point may read its collected files until
+    **both** have downloaded. Any implementation that reads the three fixed
+    names out of the shared ``rundir`` therefore serves both points whichever
+    job wrote last -- misattributing one point's log, exit code and host.
+    """
+
+    def __init__(self, parties: int, timeout: float = 30.0):
+        self.barrier = threading.Barrier(parties, timeout=timeout)
+        #: Extra files a *deck* wrote (``wrdata`` output), which the harness
+        #: reads back from the rundir via ``runner.capture_raw_files``.
+        self.extra_outputs: dict[str, str] = {}
+        #: The job command copies every file in its work directory to
+        #: ``$EDA_OUTPUT_DIR``, so a job's own *inputs* -- the relocated deck,
+        #: with the instance's PDK path substituted in -- come back too.
+        self.echo_inputs = False
+        #: Prepended to the log so a point can be made to measure cleanly.
+        self.log_prefix = ""
+        self.collected: list[str] = []
+        #: ``{job id: the local staging directory it was uploaded from}``.
+        self.staged: dict[str, Path] = {}
+
+    @staticmethod
+    def job_id_of(uri: str) -> str:
+        """``s3://bucket/jobs/<job-id>/outputs/`` -> ``<job-id>``."""
+        return uri.rstrip("/").rsplit("/", 2)[-2]
+
+    def inputs_of(self, job_id: str) -> list[str]:
+        """What this job's upload staged under ``inputs/``."""
+        staging = self.staged.get(job_id)
+        if staging is None:
+            return []
+        return sorted(p.name for p in (staging / "inputs").iterdir() if p.is_file())
+
+    @staticmethod
+    def rc_for(job_id: str) -> str:
+        """A distinct exit code per point, so a swap cannot hide."""
+        return "3" if "pointa" in job_id else "4"
+
+    def __call__(self, argv, **kwargs):
+        argv = list(argv)
+        if argv[0] != "aws":
+            return subprocess.CompletedProcess(argv, 0, "", "")
+        if "status.json" in " ".join(argv):
+            body = json.dumps({"state": "done", "instance_id": "i-unattributed"})
+            return subprocess.CompletedProcess(argv, 0, body, "")
+        if "cp" in argv:
+            index = argv.index("cp")
+            source, dest = argv[index + 1], argv[index + 2]
+            if not source.startswith("s3://") and dest.startswith("s3://"):
+                # Upload: remember where this job's inputs were staged.
+                self.staged[dest.rstrip("/").rsplit("/", 1)[-1]] = Path(source)
+            if source.endswith("/outputs/"):
+                job_id = self.job_id_of(source)
+                out = Path(dest)
+                out.mkdir(parents=True, exist_ok=True)
+                (out / batch.LOG_NAME).write_text(
+                    f"{self.log_prefix}* log for {job_id}\n"
+                )
+                (out / batch.RC_NAME).write_text(self.rc_for(job_id))
+                (out / batch.HOST_NAME).write_text(f"host-{job_id}\n")
+                for name, text in self.extra_outputs.items():
+                    (out / name).write_text(f"{text} {job_id}\n")
+                if self.echo_inputs:
+                    for name in self.inputs_of(job_id):
+                        (out / name).write_text("* as the instance ran it\n")
+                self.collected.append(job_id)
+                self.barrier.wait()
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+
+class ConcurrentRundirTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.pdk_dir = self.root / "gf180mcuD"
+        self.pdk_dir.mkdir()
+        # The shared scratch directory `_run_phase` hands every point of a
+        # grid whose manifest declares no `raw_files`.
+        self.rundir = self.root / "work"
+        self.decks = []
+        for stem in ("pointa", "pointb"):
+            deck = self.root / f"{stem}.spice"
+            deck.write_text("* deck\n.end\n")
+            self.decks.append(deck)
+
+    def _backend(self, transport):
+        return batch.BatchBackend(
+            pdk_variant_dir=self.pdk_dir,
+            pdk_variant="gf180mcuD",
+            config=_config(self.root),
+            apply=True,
+            runner=transport,
+            poll_interval_s=0,
+        )
+
+    def test_two_points_sharing_a_rundir_each_read_their_own_log_rc_and_host(self):
+        transport = _ConcurrentCollectTransport(len(self.decks))
+        backend = self._backend(transport)
+        results: dict[str, execution.DeckRun] = {}
+        failures: list[BaseException] = []
+
+        def _point(deck: Path) -> None:
+            try:
+                results[deck.stem] = backend.run_deck(deck, self.rundir, 60, None)
+            except BaseException as exc:  # noqa: BLE001 - reported below
+                failures.append(exc)
+
+        threads = [threading.Thread(target=_point, args=(d,)) for d in self.decks]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(60)
+        self.assertEqual([repr(f) for f in failures], [])
+        self.assertEqual(sorted(results), ["pointa", "pointb"])
+        self.assertEqual(len(transport.collected), 2)
+
+        for stem, got in results.items():
+            job_id = got.detail.split()[-1]
+            self.assertIn(stem, job_id, "the detail must name this point's own job")
+            self.assertEqual(got.output, f"* log for {job_id}\n")
+            self.assertEqual(got.host, f"host-{job_id}")
+            self.assertEqual(got.returncode, int(transport.rc_for(job_id)))
+        self.assertNotEqual(results["pointa"].host, results["pointb"].host)
+
+    def test_a_decks_own_outputs_still_reach_the_rundir_the_harness_reads(self):
+        """`runner.capture_raw_files` reads the rundir, so collect must fill it."""
+        transport = _ConcurrentCollectTransport(1)
+        transport.extra_outputs = {"jit.dat": "* raw from"}
+        backend = self._backend(transport)
+        got = backend.run_deck(self.decks[0], self.rundir, 60, None)
+        job_id = got.detail.split()[-1]
+
+        raw = self.rundir / "jit.dat"
+        self.assertTrue(raw.is_file(), "the deck's own output must land in rundir")
+        self.assertIn(job_id, raw.read_text())
+        # ...while the three harness-internal names stay job-scoped, where a
+        # second point running into the same rundir cannot overwrite them.
+        collected = self.rundir / f".batch-{job_id}" / "outputs"
+        self.assertEqual((collected / batch.LOG_NAME).read_text(), got.output)
+        self.assertEqual((collected / batch.HOST_NAME).read_text().strip(), got.host)
+
+    def test_the_composed_deck_the_record_names_is_never_overwritten(self):
+        """A job returns its own inputs too -- and one of them is the deck.
+
+        The job command copies everything in its work directory into
+        ``$EDA_OUTPUT_DIR``, so a collect brings back the *relocated* deck with
+        the job instance's own PDK path substituted into it. The rundir a
+        testbench without ``raw_files`` gets is the workdir the harness wrote
+        ``<run-id>.spice`` into -- the very file the record's ``deck`` field
+        names as the reproduction input -- so an input that came back must not
+        be published over it.
+        """
+        transport = _ConcurrentCollectTransport(1)
+        transport.echo_inputs = True
+        deck = self.rundir / "typical_27c_3.30v.spice"
+        self.rundir.mkdir(parents=True, exist_ok=True)
+        composed = "* composed on THIS host\n.end\n"
+        deck.write_text(composed)
+        backend = self._backend(transport)
+        got = backend.run_deck(deck, self.rundir, 60, None)
+
+        job_id = got.detail.split()[-1]
+        self.assertEqual(transport.inputs_of(job_id), [deck.name])
+        self.assertEqual(deck.read_text(), composed)
+
+
+# ===========================================================================
 # 7. The harness end of the seam: per-point attribution reaches the record
 # ===========================================================================
 
@@ -614,6 +798,50 @@ class BackendAttributionTests(ManifestFixture):
                 backend=backend,
             )
         self.assertIsNone(seen["env"])
+
+
+class BatchRawFileCaptureTests(ManifestFixture):
+    """A manifest that declares ``raw_files`` is unaffected by job isolation.
+
+    Those testbenches already get a private per-point ``rundir``
+    (``<workdir>/<run-id>.d``, ``runner._run_phase``), and the file the *deck*
+    wrote is resolved from that rundir by ``runner.capture_raw_files`` -- so a
+    batch collect that isolates only its own three contract files must still
+    deliver the deck's output to the rundir the harness reads.
+    """
+
+    def test_a_raw_file_the_job_produced_is_captured_from_the_points_rundir(self):
+        self.write(
+            {
+                "measure": {"vout": "v(out)"},
+                "analyses": ["tran 1n 10n"],
+                "raw_files": ["jit.dat"],
+            }
+        )
+        tb = testbench.load(self.tb_dir)
+        pdk = fake_pdk(self.root / "pdk")
+        points = corners.build_sweep_grid(
+            corners.resolve_corners(["typical"]), [27.0], [3.3]
+        )
+        transport = _ConcurrentCollectTransport(1)
+        transport.extra_outputs = {"jit.dat": "* raw from"}
+        transport.log_prefix = "m_vout = 1.65\n"
+        backend = batch.BatchBackend(
+            pdk_variant_dir=pdk.path,
+            pdk_variant=pdk.variant,
+            config=_config(self.root),
+            apply=True,
+            runner=transport,
+            poll_interval_s=0,
+        )
+        results = runner.run_grid(
+            tb, pdk, points, self.root / "work", backend=backend
+        )
+        self.assertEqual(results[0].status, "ok")
+        self.assertEqual(results[0].measurements["vout"], 1.65)
+        raw = results[0].raw_files["jit.dat"]
+        self.assertTrue(raw.exists(), "the collected raw file must be readable")
+        self.assertIn(backend.jobs[0].job_id, Path(raw.path).read_text())
 
 
 # ===========================================================================

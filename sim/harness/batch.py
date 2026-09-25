@@ -57,6 +57,20 @@ Both rewrites are content-addressed by the *deck itself* (see
 ``execution.deck_dependencies``), so a manifest that adds a fragment needs no
 change here.
 
+One directory per job, in both directions
+-----------------------------------------
+The job contract's own output names are fixed (``ngspice.log``,
+``ngspice.rc``, ``ngspice.host``), while the ``rundir`` the harness hands a
+point is *shared* by every point of a grid unless the manifest declares
+``raw_files``. So both halves of the transport are scoped to
+``<rundir>/.batch-<job-id>/``: the upload stages ``job.json``/``inputs/``
+there, and the download collects ``outputs/`` there -- never into the shared
+rundir, where a concurrent point's download would otherwise overwrite those
+three files between this point's own download and its read of them, and
+silently attribute another PVT point's log, exit code and host to this one
+(#507). What the *deck* wrote is then published into the rundir, because that
+is where the harness resolves a manifest's ``raw_files``.
+
 Safety: nothing is submitted without ``apply``
 ----------------------------------------------
 Launching jobs spends real money from a shared budget. Mirroring the
@@ -92,6 +106,12 @@ PDK_TOKEN = "@PDK_VARIANT_DIR@"
 LOG_NAME = "ngspice.log"
 RC_NAME = "ngspice.rc"
 HOST_NAME = "ngspice.host"
+
+#: The three above, as a set. These names are fixed by the job contract, so two
+#: jobs' copies of them may never share a directory -- they are collected into
+#: a per-job directory and deliberately not published into a point's (possibly
+#: shared) rundir. See :meth:`BatchBackend._collect`.
+CONTRACT_OUTPUT_NAMES = frozenset({LOG_NAME, RC_NAME, HOST_NAME})
 
 #: Terminal ``status.json`` states. ``interrupted`` is terminal *for one
 #: submission*: the layer's own reconcile step may relaunch it, but this
@@ -507,16 +527,91 @@ class BatchBackend:
         except json.JSONDecodeError:
             return {}
 
-    def _collect(self, plan: JobPlan, rundir: Path) -> None:
-        rundir.mkdir(parents=True, exist_ok=True)
+    @staticmethod
+    def _staging(plan: JobPlan, rundir: Path) -> Path:
+        """This job's private directory under the (possibly shared) rundir.
+
+        One directory per job id, used for both halves of the transport: the
+        upload's staged ``job.json``/``inputs/``, and the download's collected
+        ``outputs/``. Job ids are unique per submission, so nothing another
+        point is doing can be inside it.
+        """
+        return rundir / f".batch-{plan.job_id}"
+
+    def _collect(self, plan: JobPlan, rundir: Path) -> Path:
+        """Download one job's outputs into a directory only that job writes.
+
+        **The download target must be job-scoped, not the rundir itself.** A
+        testbench that declares no ``raw_files`` gives every point of a grid
+        the same ``rundir`` (``runner._run_phase``), points run concurrently at
+        the CLI's own default ``-j``, and the job contract's output names are
+        fixed (:data:`LOG_NAME`/:data:`RC_NAME`/:data:`HOST_NAME`). Collecting
+        straight into the shared rundir therefore let one point's download
+        overwrite those three files between another point's own download and
+        its read of them -- silently recording a *different* PVT point's
+        ngspice log, exit code and executing host (#507). The upload side was
+        already isolated this way; this is the same isolation on the way back.
+
+        Returns the directory the outputs landed in, which is what
+        :meth:`run_deck` reads the three contract files from.
+        """
+        collected = self._staging(plan, rundir) / "outputs"
+        collected.mkdir(parents=True, exist_ok=True)
         self._aws(
             "s3",
             "cp",
             plan.job_uri + "/outputs/",
-            str(rundir),
+            str(collected),
             "--recursive",
             "--only-show-errors",
         )
+        return collected
+
+    def _publish(self, plan: JobPlan, collected: Path, rundir: Path) -> None:
+        """Copy what the *deck* produced out of the job directory into rundir.
+
+        The harness resolves a manifest's ``raw_files`` against the point's
+        ``rundir`` (``runner.capture_raw_files``), so a collected waveform has
+        to arrive there for a reduction to read it -- job isolation is for the
+        three files *this module's* job command writes, not for the deck's own
+        output.
+
+        Two classes of collected file are deliberately **not** published, and
+        both are about not overwriting something the harness owns:
+
+        - the three fixed contract names (:data:`CONTRACT_OUTPUT_NAMES`), which
+          are already carried back in the returned :class:`DeckRun` and whose
+          shared-rundir collision is the whole point of this isolation. The
+          point's log is written to ``corners/<record-id>/<run-id>.log`` by the
+          runner, not from here;
+        - the job's own **inputs**. ``job_command`` copies every file in the
+          instance's work directory to ``$EDA_OUTPUT_DIR``, so the *relocated*
+          deck comes back with the instance's PDK path substituted into it --
+          and for a testbench without ``raw_files`` the rundir *is* the workdir
+          holding ``<run-id>.spice``, the file the record's ``deck`` field names
+          as the reproduction input. Publishing it would replace a deck composed
+          for this host with one naming a path that exists only on a job
+          instance.
+
+        A copy that fails is not fatal here: a declared raw file that does not
+        arrive is reported as missing by the record (``raw_files_missing``),
+        which is a disclosed degradation of one point rather than a lost grid.
+        """
+        withheld = CONTRACT_OUTPUT_NAMES | set(plan.inputs)
+        rundir.mkdir(parents=True, exist_ok=True)
+        for source in sorted(collected.rglob("*")):
+            relative = source.relative_to(collected)
+            if relative.as_posix() in withheld:
+                continue
+            destination = rundir / relative
+            try:
+                if source.is_dir():
+                    destination.mkdir(parents=True, exist_ok=True)
+                    continue
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(source.read_bytes())
+            except OSError:
+                continue
 
     # -- the backend interface ------------------------------------------- #
 
@@ -543,7 +638,7 @@ class BatchBackend:
             )
         plan = self.plan_deck(deck_path, timeout_s)
         self.jobs.append(plan)
-        staging = rundir / f".batch-{plan.job_id}"
+        staging = self._staging(plan, rundir)
         started = time.monotonic()
         self._upload(plan, staging)
         self._launch(plan)
@@ -575,17 +670,25 @@ class BatchBackend:
                 ),
             )
 
-        self._collect(plan, rundir)
-        log_path = rundir / LOG_NAME
+        # Read this job's own log/rc/host out of ITS OWN collect directory. A
+        # concurrent point collecting into the same rundir writes only inside
+        # its own `.batch-<job-id>/`, so nothing it does can reach these three
+        # reads (#507).
+        collected = self._collect(plan, rundir)
+        log_path = collected / LOG_NAME
         output = log_path.read_text() if log_path.is_file() else ""
-        host_path = rundir / HOST_NAME
+        host_path = collected / HOST_NAME
         if host_path.is_file():
             host = host_path.read_text().strip() or host
-        rc_path = rundir / RC_NAME
+        rc_path = collected / RC_NAME
         try:
             returncode = int((rc_path.read_text() or "").strip())
         except (OSError, ValueError):
             returncode = -1
+        # Whatever the deck itself wrote belongs in the rundir the harness
+        # resolves `raw_files` against -- for every terminal state, since a
+        # timed-out or failed point's partial output is still evidence.
+        self._publish(plan, collected, rundir)
 
         if state == "timeout":
             return DeckRun(
