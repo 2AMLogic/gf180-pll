@@ -1,0 +1,40 @@
+# criterion 3 / section 3c of 20260901-155456-46b92f8: the POST-RAMP (END-plateau)
+#   recovery, read off the retained waveform instead of from two samples.
+# The recorded classification is made from decay_ratio (the ratio of the
+#   frequency-residual samples at the short and long holds) against
+#   decay_expected = exp(-dt/tau) -- a discriminant that ASSUMES the recovery is
+#   an exponential at the loop's own pole. decay_expected_recheck recomputes that
+#   expectation from the two holds' own instants, so the comparison is verified
+#   rather than taken on trust.
+# better_fit answers the assumption: a straight line and a single exponential are
+#   both fitted to the SAME ripple-averaged control-node samples over the segment
+#   from the ramp's end to the instant the node first comes within 20 mV of its
+#   own final value (the mean of the last 5 us of the hold), and their residuals
+#   are compared IN VOLTS. Ripple is averaged in 0.5 us bins; the trace itself is
+#   decimated at 20 ns and carries the loop filter's own ripple, so one sample is
+#   not a position.
+# overshoot_mv / reversals: the model-free damping test -- how far the
+#   ripple-averaged node goes PAST its own final value, and how many direction
+#   changes larger than 20 mV it makes over the whole post-ramp hold. An
+#   under-damped recovery overshoots and reverses; a current-limited slew
+#   approaches from one side and stops. This statement depends on no fit.
+# settled_ripple_pp_mv: the control line's own peak-to-peak ripple on the RAW
+#   trace over the same settled window. Read overshoot_mv against it -- an
+#   excursion at the ripple's own scale is not an overshoot, and the tolerance
+#   the reversal count uses (20 mV) is of that order by construction.
+# segment_range_mv: how far the node actually moved over the fitted segment. Read
+#   the two rms columns against THIS: where the segment is short, both models fit
+#   a nearly-straight piece of anything and better_fit does not discriminate.
+# required_travel_v: how far this cell's control node has to move across the
+#   2.97-3.63 V rail in the steady state (criterion 1b's own span_full_v). The ramp
+#   demands that travel in 6.4 us.
+# t_to_close_phase_us: the phase still outstanding at the extended hold's own end
+#   (phi12) divided by the slip rate measured there (ferr_end). At that rate, not a
+#   settling prediction: a decaying response slows as it converges, so this is the
+#   OPTIMISTIC end of a bracket -- the same shape DR-011 declined to promote to a
+#   spec bound for the high plateau.
+# NO SIMULATION WAS RUN. Every column is arithmetic on committed data.
+bundle,temp_c,band,t_rend_us,t_hold_end_us,vctrl_final_v,vctrl_at_t_rend_v,required_travel_v,t_arrived_us,recovery_us,n_fit_samples,segment_range_mv,overshoot_mv,settled_ripple_pp_mv,reversals,slope_mv_per_us,rms_linear_mv,rms_exponential_mv,tau_fit_us,better_fit,phi12_ns,ferr_end,t_to_close_phase_us,decay_ratio_recorded,decay_expected_recorded,decay_expected_recheck,classification_recorded
+ff,125,5,47.50,84.30,1.7322,1.9365,0.5580,49.75,2.25,4,20.4,22.5,5.5,4,-31.70,30.34,30.45,6.01,linear,-2.207,-0.000315178,7.00,0.02069,0.04925,0.04946,settles
+ss,-40,5,47.50,84.28,1.7925,2.3245,0.8460,66.25,18.75,37,425.5,17.2,20.0,4,-20.30,20.54,30.75,15.10,linear,-13.114,-0.00170451,7.69,0.809,0.04925,0.04946,under-damped
+typical,27,5,47.50,84.30,1.7989,2.1534,0.6980,57.25,9.75,19,307.5,19.5,11.6,5,-24.93,32.64,41.18,8.04,linear,-4.966,-0.000616174,8.06,0.06828,0.04925,0.04946,settles

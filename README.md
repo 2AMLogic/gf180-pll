@@ -20,7 +20,7 @@ Being honest about where this actually is:
 - **Done** — architecture and scope captured as numbered decision records in
   `spec/`; xschem schematics for the VCO, PFD, charge pump, feedback divider,
   lock detector, and the shared 3.3 V logic cells they are built from; a
-  reproducible PVT corner harness; **91 evidence records** across 24
+  reproducible PVT corner harness; **92 evidence records** across 24
   verification campaigns (device characterization, VCO tuning range, PFD
   dead-zone freedom, charge-pump compliance and mismatch, divider moduli,
   lock-detector window, its sizing ladder and its trim-code map, loop
@@ -42,12 +42,21 @@ Being honest about where this actually is:
   grid reaches **0/45** sustained in-window PASS at either drawn-band edge;
   `supply-sensitivity`'s full 45-point grid (plus all three step/ramp corners)
   PASSes on power (0.99–1.98 mW, under the 5 mW draft target) but FAILs three
-  of its other four criteria at real corners, its record naming
+  of its other four criteria at real corners. Its record named
   `loop-dynamics` (#10), `lock-detector` (#11) and the post-#24 charge pump
-  (#9) for each class of finding — all three of those issues have since
-  closed, so the findings are recorded but unowned, which is #506 — see each
-  campaign's own latest record under `sim/*/records/` for the full
-  accounting. `period-jitter`'s
+  (#9) for each class of finding, and all three of those issues later closed,
+  leaving the findings recorded but unowned (#506). DR-021 re-read each one
+  against the ratified spec line — arithmetic on the same committed grid, no
+  new simulation — and two of the three are not what the record's headings
+  say: the frequency-vs-supply FAIL contains **no** failing frequency check
+  (3.4× and 4.4× headroom), and is the static-phase finding DR-012 owns; the
+  `VCTRL`-window FAIL is graded against a control window DR-003 superseded,
+  while the budget the spec actually ratifies — never graded before — is
+  **missed at 9 of 15 corner cells** (worst 1.41×, 53 mV of window left); and
+  the step+ramp FAIL is a hold ≈8 µs short of a measurably slew-limited
+  recovery rather than an under-damped loop. Each now has a named open owner:
+  #525, #511, #399, #437 and #405. See each campaign's own latest record under
+  `sim/*/records/` for the full accounting. `period-jitter`'s
   **deterministic (control-ripple) component now covers 45 of the mandated 45
   PVT corners** — the complete 3 × 3 temperature × supply plane at all five
   MOS bundles (`typical`, `ff`, `ss`, `fs`, `sf`), ranging **0.0508 % RMS**

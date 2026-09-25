@@ -1,0 +1,59 @@
+# criterion 1 of 20260901-155456-46b92f8, by FAILING CHECK rather than by count.
+# failing_check: the lock criterion is five checks against three blocks; the
+#   verdict column names the one that failed. 'phi' = static phase error over the
+#   DECK's 0.02-of-a-period threshold (1.6 ns at 12.5 MHz, 1.6x looser than the
+#   ratified 1 ns -- DR-012 Decision 5); 'lock' = the block's own LOCK flag did
+#   not assert; 'ferr'/'fabs'/'ndiv' = the frequency and divide-ratio checks.
+# fdev_headroom_x / ferr_headroom_x: the criterion divided by the measured value.
+#   Criteria: |fdev| <= 1000 ppm, |ferr| <= 0.001.
+# settled_dr012 / over_ratified_1ns_dr012 / phi_b_ns / d_phi_window_ns are read
+#   from DR-012's committed grading (20260916-051708-8cedbba/static_phase_widened.csv),
+#   not recomputed here. The join of that grading to the verdict class is the
+#   only new column set in this file.
+# NO SIMULATION WAS RUN. Every column is arithmetic on committed data.
+bundle,temp_c,vdd_v,verdict,failing_check,fdev_ppm,fdev_headroom_x,ferr,ferr_headroom_x,phi_b_ns,d_phi_window_ns,settled_dr012,over_ratified_1ns_dr012
+ff,-40,2.97,PASS,,-10,100.0,1.696e-05,59.0,0.6877,-0.05427,yes,no
+ff,-40,3.30,PASS,,0,1000000000000.0,1.794e-05,55.7,0.8472,-0.05741,yes,no
+ff,-40,3.63,PASS,,-40,25.0,4.709e-06,212.4,0.8072,-0.01507,yes,no
+ff,27,2.97,PASS,,-4,250.0,-7.254e-05,13.8,-0.04843,0.2321,no,no
+ff,27,3.30,PASS,,0,1000000000000.0,-5.884e-05,17.0,-0.01953,0.1883,no,no
+ff,27,3.63,FAIL:lock,lock,98.01,10.2,3.653e-06,273.7,1.227,-0.01169,yes,yes
+ff,125,2.97,PASS,,-20,50.0,0.0001177,8.5,0.81,-0.3766,no,no
+ff,125,3.30,PASS,,0,1000000000000.0,0.0001489,6.7,1.057,-0.4765,no,yes
+ff,125,3.63,FAIL:phi,phi,40,25.0,0.0002255,4.4,1.796,-0.7216,no,yes
+fs,-40,2.97,PASS,,40,25.0,7.675e-06,130.3,0.8376,-0.02456,yes,no
+fs,-40,3.30,FAIL:lock,lock,0,1000000000000.0,5.301e-05,18.9,1.102,-0.1696,no,yes
+fs,-40,3.63,FAIL:lock,lock,100,10.0,6.694e-05,14.9,1.331,-0.2142,no,yes
+fs,27,2.97,PASS,,-89.99,11.1,2.952e-05,33.9,0.07986,-0.09446,yes,no
+fs,27,3.30,PASS,,0,1000000000000.0,0.0001403,7.1,1.088,-0.449,no,yes
+fs,27,3.63,PASS,,-69.99,14.3,3.471e-05,28.8,0.322,-0.1111,no,no
+fs,125,2.97,PASS,,30,33.3,0.0001144,8.7,0.7661,-0.3661,no,no
+fs,125,3.30,PASS,,0,1000000000000.0,2.276e-05,43.9,0.2514,-0.07283,yes,no
+fs,125,3.63,PASS,,10,100.0,2.544e-05,39.3,0.3924,-0.08141,yes,no
+sf,-40,2.97,FAIL:lock,lock,-20,50.0,6.695e-05,14.9,1.343,-0.2142,no,yes
+sf,-40,3.30,FAIL:lock,lock,0,1000000000000.0,7.205e-05,13.9,1.283,-0.2306,no,yes
+sf,-40,3.63,FAIL:phi,phi,40,25.0,0.000189,5.3,2.136,-0.6048,no,yes
+sf,27,2.97,PASS,,-9.999,100.0,8.599e-05,11.6,0.3585,-0.2752,no,no
+sf,27,3.30,PASS,,0,1000000000000.0,0.0001015,9.9,0.5285,-0.3248,no,no
+sf,27,3.63,FAIL:lock,lock,70,14.3,0.0001884,5.3,1.308,-0.6029,no,yes
+sf,125,2.97,PASS,,90,11.1,0.000141,7.1,1.044,-0.4512,no,yes
+sf,125,3.30,PASS,,0,1000000000000.0,2.536e-05,39.4,0.1871,-0.08115,yes,no
+sf,125,3.63,PASS,,0,1000000000000.0,3.004e-05,33.3,0.1774,-0.09613,yes,no
+ss,-40,2.97,PASS,,30,33.3,0.0001234,8.1,0.5422,-0.3949,no,no
+ss,-40,3.30,PASS,,0,1000000000000.0,8.115e-05,12.3,0.5844,-0.2597,no,no
+ss,-40,3.63,PASS,,0,1000000000000.0,9.222e-05,10.8,0.9232,-0.2951,no,no
+ss,27,2.97,PASS,,-30,33.3,0.0001169,8.6,0.492,-0.3741,no,no
+ss,27,3.30,PASS,,0,1000000000000.0,0.0001345,7.4,0.999,-0.4304,no,no
+ss,27,3.63,PASS,,30,33.3,0.0001729,5.8,1.225,-0.5533,no,yes
+ss,125,2.97,PASS,,-39.99,25.0,0.0001199,8.3,0.8269,-0.3837,no,no
+ss,125,3.30,PASS,,0,1000000000000.0,0.0001815,5.5,1.416,-0.5808,no,yes
+ss,125,3.63,PASS,,-99.99,10.0,2.079e-05,48.1,0.2919,-0.06653,yes,no
+typical,-40,2.97,PASS,,-22,45.5,1.708e-05,58.5,0.9525,-0.05466,yes,no
+typical,-40,3.30,PASS,,0,1000000000000.0,2.8e-05,35.7,0.9057,-0.0896,yes,no
+typical,-40,3.63,FAIL:lock,lock,70,14.3,3.3e-06,303.0,1.049,-0.01056,yes,yes
+typical,27,2.97,PASS,,-69.99,14.3,8.989e-05,11.1,0.3839,-0.2876,no,no
+typical,27,3.30,PASS,,0,1000000000000.0,0.0001579,6.3,1.069,-0.5053,no,yes
+typical,27,3.63,PASS,,-294,3.4,-0.0002004,5.0,-0.9422,0.6413,no,no
+typical,125,2.97,PASS,,-89.99,11.1,1.822e-05,54.9,0.143,-0.0583,yes,no
+typical,125,3.30,FAIL:lock,lock,0,1000000000000.0,0.0001935,5.2,1.421,-0.6192,no,yes
+typical,125,3.63,PASS,,9.999,100.0,0.0001189,8.4,1.019,-0.3805,no,yes
