@@ -216,8 +216,18 @@ jobs:
         # rules: every spec summary-table row is named by some section-5 row,
         # at least one row covering it states an explicit verdict, and no
         # section-5 row names a parameter the specification does not have (so
-        # a spec rename cannot leave a stale row looking like coverage). Needs
-        # python3 (set up above); reads only committed Markdown, no PDK.
+        # a spec rename cannot leave a stale row looking like coverage).
+        #
+        # Two more rules grade whether a present row reports the row the spec
+        # *currently* has: every decision record (DR-NNN) a spec summary-table
+        # row cites must be named by a section-5 row covering it, and every
+        # DR-NNN the proposal names must be exactly one record on disk. The
+        # first found three rows reporting readings the spec had moved past:
+        # Lock time as a bare MET without DR-012 (its Lock criterion is not
+        # reached at 2 of 45 corners), Area still describing the re-amendment
+        # trigger DR-017 replaced, and Reference spur without DR-018's
+        # re-priced 1.6 dB margin. Needs python3 (set up above); reads only
+        # committed Markdown, no PDK.
         run: bash spec/lib/check-spec-row-coverage.sh
 
       - name: design/lib/check-io-list-coverage.sh (proposal I/O list vs. the exported port list)
