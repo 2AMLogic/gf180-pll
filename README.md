@@ -55,10 +55,16 @@ Being honest about where this actually is:
   every point inside the 1.0 % target with at least 3.7× margin. Two things it
   does **not** cover, stated rather than left to be inferred: the campaign's
   own Acceptance Criteria (#13) also require a **random/noise-driven** jitter
-  component that no record measures (a disclosed methodology gap), and every
-  one of its records is at one output frequency, 150 MHz — the same
-  measurement at the 200 MHz top of the ratified band is declared as
-  `sim/period-jitter-band-top` and carries no measured record yet.
+  component that no record measures — a disclosed methodology gap, tracked at
+  #505, whose disposition is
+  `spec/decision-records/DR-020-random-period-jitter-is-not-obtainable-on-this-toolchain.md`:
+  no analysis this project's open-source flow offers produces that component,
+  so the 1.0 % RMS line is satisfied in simulation for its deterministic half
+  only and the random half is deferred to silicon. The target itself is
+  unchanged. And every one of the campaign's records is at one output
+  frequency, 150 MHz — the same measurement at the 200 MHz top of the
+  ratified band is declared as `sim/period-jitter-band-top`, tracked at #503,
+  and carries no measured record yet.
 - **Underway, block by block** — PLL-block layout. Issue #16 landed a
   repeatable `klt`-aware DRC/LVS flow against the gf180mcu open-PDK decks,
   proven clean (and proven to catch a deliberately injected DRC violation and
