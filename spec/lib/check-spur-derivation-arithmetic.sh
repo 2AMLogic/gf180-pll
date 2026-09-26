@@ -113,11 +113,13 @@
 # that, reducing the corner-combined statistical residual and term-1 products
 # DR-018 derives in prose straight from `sim/mc-cp-mismatch`'s 300 committed
 # samples (the reduction this check's own header used to say did not exist),
-# and chaining them into the same three totals graded here. That check still
-# takes `Icp`, `T_ov` and the systematic charge asymmetry from DR-018's own
-# Input table rather than re-sweeping `cp-compliance`/`pfd-deadzone`'s
-# 45-corner grids -- see its own header for that boundary; that remainder is
-# owed at issue #573.
+# and chaining them into the same three totals graded here. Since issue #573
+# it also re-derives `Icp`, `T_ov` and the systematic charge asymmetry from
+# `cp-compliance`'s and `pfd-deadzone`'s own 45-corner grids rather than
+# reading them from DR-018's Input table, so every ingredient of those totals
+# is now reduced from committed evidence -- see its own header for what that
+# leaves. What this check takes as given is downstream of the totals: C2 and
+# the TIE scale point.
 #
 # Term 1's own statistic -- the signed `|mean| + 3σ` reading, 17.48 % -- is
 # additionally graded by `sim/lib/check-quoted-value-provenance.sh`, whose
