@@ -536,7 +536,7 @@ record format section ratifies the two sentence shapes this reads.
 | Power, **closed-loop measured** | Same line | Full 45-point grid + all 3 step/ramp corners: **0.9863–1.98 mW measured directly** (not derived), all points under the 5 mW target; quiescent/dynamic split reported per corner | **MET, measured** — supersedes the derived figure above with a direct closed-loop measurement | `sim/supply-sensitivity/records/20260901-155456-46b92f8.md` |
 | Standby current | waived — no power-down mode in v1 | n/a — no standby state exists | **N/A, by design** | `spec/pll.md#standby-current` |
 | Supply sensitivity — AC (ripple) budget | `vdd_vco` ripple ≤ 20 mV pp | Derived from the 2.51 %/100 mV pp measured sensitivity above, so it inherits that row's corner universe: this campaign's **63-point PVT grid**, a superset of the 45-point mandated one (§5.0), whose measured sensitivity binds at an `all-slow` bundle the mandated grid does not contain. The budget is therefore stated against the stricter of the two grids, not the mandated one. It also inherits that row's *ripple-frequency* limit: scaling the f_osc/4 sub-sweep's 3.24 % instead gives 0.65 % RMS at this budget rather than 0.50 %, still inside the 1.0 % line but at 1.5× margin instead of 2× (§5.1) | **derived, conditional** | Same record — `sim/vco-tuning-range/records/20260804-211600-f599a65.md` |
-| Supply sensitivity — DC / closed-loop, full grid | ≤ 0.6 V of the `VCTRL` window consumed by a rail excursion (`spec/pll.md` Budget 2); stays locked through a supply step + ramp | Full 45-point grid, with each of the record's three FAILs read against the **ratified** line rather than the deck's proxy for it (**DR-021**). **(1) The frequency-vs-supply FAIL has no frequency content**: 0 of 45 corners missed either frequency check — worst deviation −294 ppm against a 1000 ppm criterion (3.4× headroom), worst residual frequency error 2.255e-4 against 1e-3 (4.4×). Its 10 failing corners are the composite lock criterion's *other* checks, 2 static-phase and 8 lock-flag, and DR-012 measured both classes against the ratified ≤ 1 ns static-phase bound: the 2 were sampled while still decaying (0.60–0.72 ns of movement across the run's own window), and the 2 settled violations — the corners that **are** over the bound once settled — are inside the 8. It is the same static-phase finding as the Lock time row above. **(2) Budget 2 is measured for the first time, and missed**: the closed loop consumes 0.385 … 0.846 V of the `VCTRL` window over the ratified 2.97–3.63 V rail — over the 0.6 V budget at **9 of the 15 (bundle, temperature) cells**, worst `ss`/−40 °C at **0.846 V** (1.41×, 47 % of the 1.8 V window). It is not an anomaly: it matches what each cell's selected band requires, from the open-loop `f(VCTRL, vdd)` table, to within 5.7 mV at every cell. The record's own "4 of 45 outside the window" FAIL is graded against DR-001's *predicted* 0.9–2.4 V window, which DR-003 Decision 5 superseded with a measured 0.9–2.7 V; against that window **0 of 45 points leave it**, by 53 mV at the tightest. **(3) The step+ramp FAIL is a hold ≈8 µs short of a slew-limited recovery, not an under-damped loop**: the retained waveform shows the control node slewing at a near-constant −20.3 mV/µs for 18.75 µs after the ramp at `ss`/−40 °C (a straight line fits it with 33 % less residual than a single exponential, in volts, on the same samples), and the model-free damping test — overshoot past the final value — does not separate that corner from the two the record calls `settles` (17.2 mV on 20.0 mV of its own ripple, against 19.5 and 22.5 mV). What separates it is that it is criterion 2's worst cell: the corner that consumes the most `VCTRL` window for a rail excursion takes longest to recover from one | **UNMET on Budget 2, at 9 of 15 cells** — and that is the sharper of two readings, not the softer one: Budget 2's own derivation prices a ±0.33 V excursion (under which 0 of 15 cells exceed it) while the row specifies the 0.66 V full range, and this proposal reports the row as written rather than the reading under which it passes. The consequence the budget guards against — re-cutting the band plan — is **not** observed, and is 53 mV away. **Every finding now has a named open owner**, which is what #506 was filed for: the excursion question and the deck's mis-graded criterion are **#525 (open)**; the static-phase finding is DR-012's, narrowed by DR-025 — **#511 is closed** (DR-025 discharged it without running either cell it named), and the two runs that would settle it are owed at **#540 (open)** — plus **#399 (open)** (the 15 corners sampled on a tail) and **#437 (open)** (the full-grid re-take at the trimmed detector window); the post-ramp settling measurement is **#405 (open)**. No recorded verdict or value changes — `sim/` is append-only | `sim/supply-sensitivity/records/20260925-044237-4ff4f65.md` (the re-reading, arithmetic only, no new simulation) over `sim/supply-sensitivity/records/20260901-155456-46b92f8.md` (the grid); `spec/decision-records/DR-021-supply-sensitivity-fail-criteria-ownership.md`; `spec/decision-records/DR-003-vco-band-map-and-kvco-contract.md` Decision 5 (the measured control window); issue #525 (open); issue #511 (closed); issue #540 (open); issue #399 (open); issue #437 (open); issue #405 (open) |
+| Supply sensitivity — DC / closed-loop, full grid | ≤ 0.6 V of the `VCTRL` window consumed by a rail excursion (`spec/pll.md` Budget 2); stays locked through a supply step + ramp | Full 45-point grid, with each of the record's three FAILs read against the **ratified** line rather than the deck's proxy for it (**DR-021**). **(1) The frequency-vs-supply FAIL has no frequency content**: 0 of 45 corners missed either frequency check — worst deviation −294 ppm against a 1000 ppm criterion (3.4× headroom), worst residual frequency error 2.255e-4 against 1e-3 (4.4×). Its 10 failing corners are the composite lock criterion's *other* checks, 2 static-phase and 8 lock-flag, and DR-012 measured both classes against the ratified ≤ 1 ns static-phase bound: the 2 were sampled while still decaying (0.60–0.72 ns of movement across the run's own window), and the 2 settled violations — the corners that **are** over the bound once settled — are inside the 8. It is the same static-phase finding as the Lock time row above. **(2) Budget 2 is measured for the first time, and missed**: the closed loop consumes 0.385 … 0.846 V of the `VCTRL` window over the ratified 2.97–3.63 V rail — over the 0.6 V budget at **9 of the 15 (bundle, temperature) cells**, worst `ss`/−40 °C at **0.846 V** (1.41×, 47 % of the 1.8 V window). It is not an anomaly: it matches what each cell's selected band requires, from the open-loop `f(VCTRL, vdd)` table, to within 5.7 mV at every cell. The record's own "4 of 45 outside the window" FAIL is graded against DR-001's *predicted* 0.9–2.4 V window, which DR-003 Decision 5 superseded with a measured 0.9–2.7 V; against that window **0 of 45 points leave it**, by 53 mV at the tightest. **(3) The step+ramp FAIL is a hold ≈8 µs short of a slew-limited recovery, not an under-damped loop**: the retained waveform shows the control node slewing at a near-constant −20.3 mV/µs for 18.75 µs after the ramp at `ss`/−40 °C (a straight line fits it with 33 % less residual than a single exponential — **20.54 mV** rms against **30.75 mV**, in volts, on the same samples), and the model-free damping test — overshoot past the final value — does not separate that corner from the two the record calls `settles` (17.2 mV on 20.0 mV of its own ripple, against 19.5 and 22.5 mV). What separates it is that it is criterion 2's worst cell: the corner that consumes the most `VCTRL` window for a rail excursion takes longest to recover from one | **UNMET on Budget 2, at 9 of 15 cells** — and that is the sharper of two readings, not the softer one: Budget 2's own derivation prices a ±0.33 V excursion (under which 0 of 15 cells exceed it) while the row specifies the 0.66 V full range, and this proposal reports the row as written rather than the reading under which it passes. The consequence the budget guards against — re-cutting the band plan — is **not** observed, and is 53 mV away. **Every finding now has a named open owner**, which is what #506 was filed for: the excursion question and the deck's mis-graded criterion are **#525 (open)**; the static-phase finding is DR-012's, narrowed by DR-025 — **#511 is closed** (DR-025 discharged it without running either cell it named), and the two runs that would settle it are owed at **#540 (open)** — plus **#399 (open)** (the 15 corners sampled on a tail) and **#437 (open)** (the full-grid re-take at the trimmed detector window); the post-ramp settling measurement is **#405 (open)**. No recorded verdict or value changes — `sim/` is append-only | `sim/supply-sensitivity/records/20260925-044237-4ff4f65.md` (the re-reading, arithmetic only, no new simulation) over `sim/supply-sensitivity/records/20260901-155456-46b92f8.md` (the grid); `spec/decision-records/DR-021-supply-sensitivity-fail-criteria-ownership.md`; `spec/decision-records/DR-003-vco-band-map-and-kvco-contract.md` Decision 5 (the measured control window); issue #525 (open); issue #511 (closed); issue #540 (open); issue #399 (open); issue #437 (open); issue #405 (open) |
 | Output duty cycle | 45–55 % at `CLK`, full band, all corners | 44.375–50.696 % measured (90 points, loaded); 7/90 points below the 45 % floor, all at the low-frequency band edge, concentrated in the `fs` process bundle | **UNMET at 7/90 points** (small excursion, 0.625 pp worst-case) | `sim/output-driver/records/20260817-100354-0e9cfc9.md` |
 | Output levels and drive | V_OH ≥ 0.9·VDD_VCO, V_OL ≤ 0.1·VDD_VCO into ≤ 50 fF | V_OH 1.006–1.044·VDD_VCO, V_OL −0.040…−0.006·VDD_VCO, 90/90 points | **MET**, full 90-point grid | Same record |
 | Area | ≤ **0.30 mm²** total — **amended by DR-016** (issue #456) from the draft ≤ 0.15 mm², on the measurement in the next column, and **held** there by **DR-017** (issue #476) on a floor re-measured 17.5 % lower | **Measured at the block level, and the spec row is now amended to it.** Every sub-block's as-drawn footprint, taken from the committed GDS bounding box rather than a hand-recorded figure: loop filter 0.0369 mm² (still a calculation — the loop filter has no placed-and-routed layout yet), VCO 0.0318 mm² (172.52 × 184.48 µm), PFD + charge pump 0.0256 mm² (344.98 × 74.30 µm — it was 0.0353 mm² before the #455 fold, 0.0267 mm² before the #469 glue-bus packing and 0.0264 mm² before the #473 glue-inverter interleave), divider chain 0.0553 mm² (1317.66 × 41.99 µm — it was 0.2471 mm² as first drawn and came down 78 % through the #341 routing-track-packing, #344 row-fold, #454 macro-track-packing and #458 route-over-the-device-rows passes), lock detector 0.0306 mm² (294.80 × 103.75 µm — grown ~4.1× from 0.0075 mm² by issue #449, which drew DR-014's 4-bit trim network into `delaywin_3v3` and, with it, the block's first LVS match against its own ratified schematic). Sum **0.1803 mm²**, or **0.2254 mm²** after the floorplan's own ×1.25 top-level-overhead factor (it was 0.2186 / 0.2733 mm² when DR-016 was written; #469's glue-bus packing, #458's route-over-the-device-rows pass and #473's glue-inverter interleave have taken 38,324 µm² off since, without moving the row) | **MET against the amended row — 0.2254 mm², 75.1 % of ≤ 0.30 mm² — and 1.50× over the draft 0.15 mm² target, which is now *measured* to be unreachable rather than merely unmet.** DR-016 is the amendment and the honest reading of it is this: the draft number was never derived from anything (DR-007 Amendment A3 called it "the one `budget` row in the table with no rationale behind the number at all"), and the 78.6 % of it that had no estimate of any kind is now four committed, DRC/LVS-clean block layouts. Three measured bounds, each tighter than the last, and none reaching 0.15 mm²: as drawn **1.50×** (1.82× when DR-016 was written; #469, #458 and #473 have since landed, below); every remaining named layout lever at its geometric ceiling **1.20×**; and — the one that settles it — **every Metal2 track routed at zero area cost, 1.13×**, a bound that survives any row fold and covers every lever this design has. 57.2 % of what a 0.15 mm² row allowed is consumed by two terms no post-layout lever touches: the loop filter (set by DR-006's C1/C2 *capacitance*, so reducing it is a loop-dynamics change) and `vco_block`, whose height *is* its device band and whose 60.8 % whitespace is the guard-ring and 15 µm tap-pitch spacing the foundry deck requires. The amended row is the measured total plus margin sized to the single unmeasured factor in it (it holds for a top-level overhead up to ×1.664 on the sum as drawn today), **not** an allowance for block growth. Three levers have landed since DR-016 and none has moved the row — **by decision, not by lag**: DR-017 re-measured the floor after all three and **held** the row, because a margin sized to an uncertainty does not shrink when the measurement beneath it does, and the ×1.25 top-level overhead it covers has not moved. DR-017 Decision 3 also **replaced** DR-016's original trigger (any material lever landing is grounds for a downward successor record), which fired three times in two days: the row is now re-amended *down* when the uncertainty itself shrinks — an assembled `pll_top` GDS measures the top-level overhead, or the loop filter is drawn — and a further block-level lever (an unnamed `lock_detector` one remains open) earns a measured-table refresh, not a new row. Of the three: #469's glue-bus packing, at 259 µm², and #473's glue-inverter interleave, at 776 µm², are small; **#458** is not — it routed the divider chain's Metal2 tracks into the plane over its own device rows, 0.0926 → 0.0553 mm² (74.4 % of its sized ceiling), DRC-clean on both decks and still LVS-matched, moving the total 1.82× → 1.51× under an unchanged row. The divider-chain packing lever (#454) is already spent: packing the `div23_cell` macro's own Metal2 track band (31 nets onto 11 tracks, the provable minimum) took that block from 0.1321 to 0.0926 mm², moving the total from 2.03× to 1.70× on its own. Shared-diffusion device stacking — which this proposal previously named as *the* cause — remains worth only **0.10 %** of the (now larger) gap, falsified rather than deferred, because the divider chain's drawn diffusion is ~1 % of its own bounding box. The `pfd_cp` fold (#455) is spent as well, taking that block 0.0353 → 0.0265 mm² and the total from 1.89× to 1.82× (and #469's glue-bus packing plus #473's glue-inverter interleave have since taken it to 0.0256 mm², a further 0.5 % of the total — "Known gaps" item 8) — but it landed at **42 % of its sized ceiling**, and the shortfall was measured to be in the ceiling (a flat 57-track census over five levels of composition, of which `pfd_cp` owns 4) rather than in the execution. `lock_detector`'s own new footprint is not yet levered against at all. Earlier revisions of this row projected a post-lever floor of 1.64×, then 1.54×; both carried `divider_chain`'s pre-#454 ceiling, and re-derived from the current audit the figure is the 1.20× above — *better* than the record had been carrying, and still over (PLL-FLOORPLAN.md §5.11). §5.13 adds one caveat to that ceiling: `max(packed-track floor, device band) × width` assumes a block's tracks occupy an exclusive band, which is exactly what #458 stopped being true for `divider_chain`, so that block's term in any future ceiling sum has to come from its device band (0.0347 mm²) instead. A fourth lever, sized against `lock_detector`'s own newly-measured 65.5 % whitespace, is still not named. Note this is a **sum of block extents, not a placed-and-routed top level** — no assembled `pll_top` GDS exists, so top-level routing and inter-block spacing are not in this number, and that is exactly the uncertainty the amended row's margin is sized to | `spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md` (the amendment); `layout/evidence/area-audit/PROOF.md` (every lever's arithmetic; reproduce with `python3 layout/run_pv.py area`); `spec/decision-records/DR-017-area-row-held-at-0.30-on-the-refreshed-measured-floor.md` (the hold, and the replaced trigger); `layout/floorplan/PLL-FLOORPLAN.md` §5.1–§5.15 (the re-derived budget; §5.15 is DR-017's); `layout/evidence/vco-layout/PROOF-381-high-rs-resistor.md`; `layout/evidence/pfd-cp-layout/PROOF.md` + `PROOF-455-fold.md` + `PROOF-469-glue-bus-packing.md` + `PROOF-473-glue-inverter-interleave.md`; `layout/evidence/divider-chain-layout/PROOF-macro-track-packing.md` + `PROOF-over-device-rows.md`; `layout/evidence/lock-detector-layout/PROOF.md` "Addendum 4"; `spec/pll.md#area` |
@@ -608,8 +608,8 @@ re-derived value does not equal the figure **rounded to the precision written**
 (`247.8 MHz` against a derived 247.751 passes; against 247.6 it does not), if
 the figure has drifted between §5 and this table in either direction, if an
 entry reduces a record the §5 row does not itself cite, or if a §5 row is
-accounted for by neither a graded value (this table or the derived-figure one
-below) nor a stated reason.
+accounted for by neither a graded value (this table or either of the two
+derived-figure tables below) nor a stated reason.
 
 The reduction language is `min`/`max`/`mean`/`sum`/`sig3`/`maxmag`/`count` over
 one committed table, optionally grouped (`max(min(fosc_hz) by bundle+temp_c+vdd_v)`
@@ -845,8 +845,12 @@ at once, so either aggregate would have graded half of a two-sided bound and
 called it the bound. That is a statement about the *grammar*, not about the
 evidence — the same kind of obstacle as the range refusal below, and with the
 same disposition: it is work owed, not an exemption. `maxmag(COL)` is that
-work. The remaining ratio is still declared in the fourth table, for a reason
-that is about neither the grammar's extrema nor the sentence's shape.
+work. **The third ratio is graded in the fifth table**, for the reason the
+fourth table had recorded against it: its divisor is not a ratified line but
+another measurement, `rms_exponential_mv`, so there was nothing for the third
+table's registry to resolve. That was a true statement about the third
+table's reach and a wrong place to stop — none of the four figures left out
+of that pass is still ungraded.
 
 | §5 row | Quoted value | Record(s) | Evidence file | Reduction | Scale |
 |---|---|---|---|---|---|
@@ -938,6 +942,8 @@ that is about neither the grammar's extrema nor the sentence's shape.
 | Supply sensitivity — DC / closed-loop, full grid | `20.0 mV` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(settled_ripple_pp_mv where bundle == ss and temp_c == -40)` | `1` |
 | Supply sensitivity — DC / closed-loop, full grid | `19.5` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(overshoot_mv where bundle == typical)` | `1` |
 | Supply sensitivity — DC / closed-loop, full grid | `22.5 mV` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(overshoot_mv where bundle == ff)` | `1` |
+| Supply sensitivity — DC / closed-loop, full grid | `20.54 mV` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(rms_linear_mv where bundle == ss and temp_c == -40)` | `1` |
+| Supply sensitivity — DC / closed-loop, full grid | `30.75 mV` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(rms_exponential_mv where bundle == ss and temp_c == -40)` | `1` |
 
 **And the rows that have no re-derived value, with the reason.** This second
 table is what makes the grading tables' coverage a claim rather than a sample:
@@ -1052,12 +1058,59 @@ range is not a figure.** The figure parser reads the number at the front of the
 string, so a quoted `0.1–0.5 dB` would have been graded as `0.1` and the other
 end would never have been looked at — *grading half of a two-sided bound and
 calling it the bound*, which is the defect the fourth table below exists to make
-visible. A range-shaped figure is refused outright in all three tables. That
+visible. A range-shaped figure is refused outright in all three grading
+tables — this one, the first, and the fifth below. That
 refusal is not a way of declining work, and the entry it produced did not
 survive the day: `0.1–0.5 dB` was refused on 2026-09-26 and graded on
 2026-09-26, as the two entries above, once §5 wrote the two ends as two
 figures. Refusing a shape is meant to end in a rewritten claim, not a permanent
 exemption.
+
+**One figure's second ingredient is not written down anywhere, because it is
+measured.** The third table reaches a figure whose other operand is a ratified
+line a resolver can read out of `spec/pll.md`. `33 %` — how much less residual
+a straight line leaves than a single exponential over the same post-ramp
+samples — has no line to read: its divisor is `rms_exponential_mv`, another
+column of the same committed CSV. The ungraded list said exactly that, and was
+right about the third table's reach and wrong to stop there. A fifth table
+carries the shape:
+
+| §5 row | Quoted value | Record(s) | Evidence file | Derivation | Scale |
+|---|---|---|---|---|---|
+| Supply sensitivity — DC / closed-loop, full grid | `33 %` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(rms_linear_mv where bundle == ss and temp_c == -40) shortfall-from max(rms_exponential_mv where bundle == ss and temp_c == -40)` | `100` |
+
+`A shortfall-from B` is `(B − A) / B`: how far the first measurement falls
+short of the second, as a fraction of the second. It is **not** a ratio, and
+the distinction is the claim — 20.54/30.75 is 67 %, a true number that is not
+what "33 % less residual" says. There is one operator here where the third
+table has two, because this document states one shape of figure; a
+ratio-of-two-measurements would be owed its own operator, its own tests and its
+own paragraph, the way the subtraction was.
+
+Four guards, and the second is the one that keeps this table from becoming a
+fresh source of the omission the fourth table exists to expose:
+
+- **One evidence file, structurally.** The table has a single Evidence column,
+  so both operands necessarily reduce the same committed table under the same
+  records. A reader re-derives the whole figure from one file.
+- **Both operands must themselves be graded in the first table**, for this same
+  §5 row. This is the third table's Constant rule in its own dialect: there,
+  the stated constant is what makes `0.846 / 0.6` checkable by eye. Here there
+  is no constant to state, so the reader's handle is that both ingredients are
+  quoted in §5 and re-derived above — `1 − 20.54/30.75` is checkable by eye,
+  `1 − max(…)/max(…)` is not. §5 did not previously quote either residual;
+  that it does now is this entry's half of the bargain, exactly as writing
+  `0.1 dB` and `0.5 dB` as two figures was the range refusal's.
+- **No count on either side.** What this grades is a relative difference
+  between two measurements of one quantity — two residuals in volts. A count
+  is not that, and a figure that needs one needs a stated reason first.
+- **The two reductions may not be the same text.** `1 − A/A` is 0 for every
+  `A`, and 0 is a legitimate figure here — "no better fit at all" — so a
+  column quietly compared with itself would report exactly what a real null
+  result reports. The same column under two *different filters* is a real
+  figure shape and is allowed; identical text is not. A measured zero divisor
+  is refused for the third table's reason in the same dialect: there is then
+  nothing for the other measurement to fall short of.
 
 **And the figures inside graded rows that are still not re-derived.** Coverage
 above is per *row*, not per *number*: a row with one re-derived value is not a
@@ -1087,11 +1140,14 @@ exclusion table above had ever been audited against the records they excuse.
 false, not superseded, but *incomplete*: `1.41×` and `47 %` were declined
 because a ratio to a spec line "is arithmetic on the line, not a column of the
 committed evidence," which stated a true fact about the evidence and drew the
-wrong conclusion from it. They are graded in the third table above now. Their
-departure sharpens what the remaining arithmetic-shaped entry has to say:
-"arithmetic rather than a column" is no longer a reason by itself, so it now
-names the ingredient that is genuinely missing — a divisor that is another
-measurement rather than a line.
+wrong conclusion from it. They are graded in the third table above now, and
+`33 %` — the last arithmetic-shaped entry, and the one whose stated reason was
+that its divisor is another *measurement* rather than a line — is graded in
+the fifth. The lesson those three leave is that **"arithmetic rather than a
+column" was never a reason at all**: it named the shape of the figure instead
+of a missing ingredient, and in all three cases every ingredient was already
+committed. An entry that reaches for that phrasing again should be read as an
+unfinished derivation.
 
 **And one came off it for a reason of a fourth kind: the reason was true, and
 the document changed so that it stopped being.** `0.1–0.5 dB` was declined
@@ -1112,18 +1168,23 @@ the signed column all along. `maxmag(COL)` is that gap closed, and the entry
 is graded in the first table above. It sits alongside the range refusal as the
 second shape of obstacle this list must never let harden: a missing *operator*
 and a two-ended *sentence* are both work owed, and neither is a property of
-the measurement. What is left below is the residue after both kinds are
-subtracted.
+the measurement.
 
-What remains is three figures in three rows. One was added when grading the
-closed-loop lock-time row put a disclosure obligation on it, and one when
-grading the Supply sensitivity — DC row did:
+**Taking the three kinds together, every entry this list has ever carried whose
+obstacle was the language rather than the evidence is now gone** — a shape, an
+operator, an aggregate, and three "arithmetic, not a column" readings that were
+each an unfinished derivation. That is the whole disposition of this table: it
+is a queue of work owed, and only an entry naming something the *evidence* does
+not contain may sit in it indefinitely.
+
+What remains is two figures in two rows, and neither is about the grammar.
+Both were added when grading their own rows put a disclosure obligation on
+them:
 
 | §5 row | Figure | Why it is not re-derived |
 |---|---|---|
 | Kvco | `115.8 MHz/V` | Two reasons, either sufficient. Selecting the point evaluates [the band-selection rule](../../spec/pll.md#band-selection-rule) (lowest band code that reaches the target) at every corner — a derivation, and one over a rule whose control window `spec/pll.md` does not presently name, an ambiguity tracked at #542 under which the two candidate windows select different bands. And the point itself is at Vctrl = 1.54 V, which the 7-point control sweep does not sample (its neighbours are 114.93 MHz/V at 1.50 V and 120.85 at 1.80 V), so no reduction of this CSV returns it. The adversarial `154.3 MHz/V` figure the rule exists to exclude *is* graded above, which is the half that bounds the risk |
 | Lock time, closed-loop cold-start / worst-case re-lock | `{4,16,64}` | A stimulus *set*, not a number: the grammar above re-derives a figure, and this one is the three divide ratios the grid was run at. Its cardinality is pinned from both sides by figures that are graded — the 270 rows, the 45 corners and the two conditions the record's own table carries, which multiply to 45 × 3 × 2 — while the membership is graded against the record's declared sweep axis by `check-pvt-coverage-claims.sh`, as the `f_ref` span is for the Reference input row |
-| Supply sensitivity — DC / closed-loop, full grid | `33 %` | `1 − rms_linear_mv / rms_exponential_mv` at `ss`/−40 °C (20.54 against 30.75 mV in `criterion3_end_recovery.csv`). **Both** operands are columns of the committed evidence, which is what the third table's form does not reach: it combines one reduction with one *written-down* constant, by a ratio or a distance, and there is no ratified line here to read — the divisor is another measurement. Adding the subtraction did not help this one, because the missing ingredient was never the operator. Neither operand is quoted in §5 either, so grading it would have to introduce both |
 
 Nothing mechanically enumerates "every headline figure" out of §5's prose
 cells, which quote hundreds of numbers, most of them commentary on a figure

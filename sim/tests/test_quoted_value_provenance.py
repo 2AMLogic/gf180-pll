@@ -153,6 +153,19 @@ c,c2,+0.0031
 d,c2,0.0000
 """
 
+#: The rule-8 fixture: two residuals of the SAME quantity, in one table.
+#:
+#: 20 mV against 50 mV, so the linear fit falls 60 % short of the exponential
+#: one -- while the RATIO of the two is 40 %, a true number that is not the
+#: claim "60 % less residual". The `zero_mv` column is the measured-zero
+#: divisor; `cell` gives two different filters over one column, which the
+#: same-text guard must NOT refuse.
+FITS_CSV = """\
+cell,corner,rms_linear_mv,rms_exponential_mv,zero_mv
+a,c1,20,50,0
+b,c1,10,25,0
+"""
+
 #: The contracted-space fixture: `on-icp-trim-rule` must select only the rows
 #: whose (f_ref, trim) pairing the spec table requires -- 47.4 and not 25.4.
 MARGINS_CSV = """\
@@ -254,8 +267,9 @@ PM_MEASURED = (
 
 SPEC_ROWS = (
     # (name, measured cell, verdict, source cell)
-    ("Output band", "Floor 12 MHz; ceiling 20 MHz", "**MET**",
-     f"`sim/{CAMPAIGN}/records/{RECORD}.md`"),
+    ("Output band",
+     "Floor 12 MHz; ceiling 20 MHz; the floor is 40 % short of the ceiling",
+     "**MET**", f"`sim/{CAMPAIGN}/records/{RECORD}.md`"),
     ("Phase margin", PM_MEASURED, "**MET**", "Same record"),
     ("Standby current", "n/a -- no standby state exists", "**N/A**",
      "`spec/pll.md#standby-current`"),
@@ -266,8 +280,8 @@ SPEC_ROWS = (
 #: keeps the two tables one artefact.
 CURVE_SPEC_ROW = (
     "Output band",
-    "Floor 12 MHz; ceiling 20 MHz; 0 non-monotonic curves of 5; "
-    "worst adjacent overlap 5.9 %",
+    "Floor 12 MHz; ceiling 20 MHz; the floor is 40 % short of the ceiling; "
+    "0 non-monotonic curves of 5; worst adjacent overlap 5.9 %",
     "**MET**",
     f"`sim/{CAMPAIGN}/records/{RECORD}.md`",
 )
@@ -288,6 +302,10 @@ PROVENANCE_HEADER = (
 DERIVED_HEADER = (
     "| §5 row | Quoted value | Record(s) | Evidence file | Derivation | "
     "Constant | Scale |\n|---|---|---|---|---|---|---|\n"
+)
+RELATIVE_HEADER = (
+    "| §5 row | Quoted value | Record(s) | Evidence file | Derivation | "
+    "Scale |\n|---|---|---|---|---|---|\n"
 )
 EXCLUSION_HEADER = (
     "| §5 row | Why no value here is re-derived from a CSV |\n|---|---|\n"
@@ -316,6 +334,17 @@ DEFAULT_DERIVED = [
      "max(span_v) / budget2-vctrl-consumption-v", "0.5 V", "1"),
     ("Phase margin", "`50 %`", RECORD, "budget.csv",
      "max(span_v) / dr003-vctrl-window-width-v", "2.0 V", "100"),
+]
+
+#: Rule 8: one measurement against another. The fixture's floor is 12 MHz and
+#: its ceiling 20 MHz, so the floor falls 40 % short of the ceiling -- while
+#: the RATIO of the two is 60 %, a true number that is not the claim. Both
+#: operands are reductions DEFAULT_PROVENANCE already grades, which is rule
+#: 8b: this table may not introduce an ingredient nobody graded.
+DEFAULT_RELATIVE = [
+    ("Output band", "`40 %`", RECORD, "vco_tuning.csv",
+     "max(min(fosc_hz) by bundle+temp_c+vdd_v) shortfall-from "
+     "min(max(fosc_hz) by bundle+temp_c+vdd_v)", "100"),
 ]
 
 DEFAULT_EXCLUSIONS = [
@@ -355,6 +384,13 @@ def _derived_table(entries) -> str:
     return DERIVED_HEADER + body
 
 
+def _relative_table(entries) -> str:
+    body = "".join(
+        "| %s | %s | `%s` | `%s` | `%s` | `%s` |\n" % entry for entry in entries
+    )
+    return RELATIVE_HEADER + body
+
+
 def _exclusion_table(entries) -> str:
     body = "".join("| %s | %s |\n" % entry for entry in entries)
     return EXCLUSION_HEADER + body
@@ -369,13 +405,16 @@ def proposal(
     spec_rows=SPEC_ROWS,
     provenance=None,
     derived=None,
+    relative=None,
     exclusions=None,
     ungraded=None,
     include_5_1=True,
     include_derived=True,
+    include_relative=True,
 ) -> str:
     provenance = DEFAULT_PROVENANCE if provenance is None else provenance
     derived = DEFAULT_DERIVED if derived is None else derived
+    relative = DEFAULT_RELATIVE if relative is None else relative
     exclusions = DEFAULT_EXCLUSIONS if exclusions is None else exclusions
     ungraded = DEFAULT_UNGRADED if ungraded is None else ungraded
     text = "# proposal\n\n## 5. Target specification\n\n"
@@ -385,6 +424,8 @@ def proposal(
         text += _provenance_table(provenance) + "\n"
         if include_derived:
             text += _derived_table(derived) + "\n"
+        if include_relative:
+            text += _relative_table(relative) + "\n"
         text += _exclusion_table(exclusions) + "\n"
         text += _ungraded_table(ungraded) + "\n"
     text += "## 6. Next section\n"
@@ -414,6 +455,7 @@ class _Tree:
         (corners / "budget.csv").write_text(BUDGET_CSV)
         (corners / "spur_by_corner.csv").write_text(SPUR_CSV)
         (corners / "signed.csv").write_text(SIGNED_CSV)
+        (corners / "fits.csv").write_text(FITS_CSV)
 
         (root / "spec").mkdir()
         (root / SPEC).write_text(SPEC_TEXT)
@@ -538,7 +580,9 @@ class TestValueRule(_TreeTest):
         drift test covers that direction.
         """
         rows = list(SPEC_ROWS)
-        rows[0] = ("Output band", "Floor 12.0000 MHz; ceiling 20 MHz",
+        rows[0] = ("Output band",
+                   "Floor 12.0000 MHz; ceiling 20 MHz; the floor is 40 % "
+                   "short of the ceiling",
                    "**MET**", f"`sim/{CAMPAIGN}/records/{RECORD}.md`")
         entries = list(DEFAULT_PROVENANCE)
         entries[0] = ("Output band", "`12.0000 MHz`", RECORD, "vco_tuning.csv",
@@ -1319,7 +1363,8 @@ class TestColumnExistence(_TreeTest):
         rows = list(SPEC_ROWS)
         rows[0] = (
             "Output band",
-            "Floor 12 MHz; ceiling 20 MHz; %s" % quoted,
+            "Floor 12 MHz; ceiling 20 MHz; the floor is 40 %% short of the "
+            "ceiling; %s" % quoted,
             "**MET**",
             f"`sim/{CAMPAIGN}/records/{RECORD}.md`",
         )
@@ -1961,6 +2006,142 @@ class TestDistanceFromARatifiedLine(_TreeTest):
         self._spur(spec_rows=rows, derived=entries)
         self.assertFails("the measured operand is a count",
                          "a count minus one is not a distance")
+
+
+class TestRelativeToAnotherMeasurement(_TreeTest):
+    """Rule 8: a figure whose second ingredient is measured, not ratified.
+
+    `A shortfall-from B` is `(B - A) / B`. The repository figure it exists for
+    is `33 %` -- how much less residual a straight line leaves than a single
+    exponential over the same post-ramp samples. Its divisor is another column
+    of the same CSV, so rule 7's registry has no line to resolve, which is
+    exactly what section 5.1's ungraded list said before this table existed.
+
+    The fixture's two residuals are 20 and 50, so the shortfall is 60 % and the
+    RATIO is 40 %: a check that divided where the table says "falls short of"
+    would produce a number with no digit in common with the figure.
+    """
+
+    ROW = (
+        "Fit residual",
+        "a straight line leaves 60 % less residual -- 20 mV rms against "
+        "50 mV, over 2 rows; the degenerate self-comparison is 0 %; a zero "
+        "divisor reads 0 mV; one cell's 10 mV is 50 % short of another's "
+        "20 mV",
+        "**MET**",
+        f"`sim/{CAMPAIGN}/records/{RECORD}.md`",
+    )
+    LEFT = "max(rms_linear_mv)"
+    RIGHT = "max(rms_exponential_mv)"
+
+    #: Every operand rule 8b can legally see, graded in the first table.
+    OPERANDS = [
+        ("Fit residual", "`20 mV`", RECORD, "fits.csv",
+         "max(rms_linear_mv)", "1"),
+        ("Fit residual", "`50 mV`", RECORD, "fits.csv",
+         "max(rms_exponential_mv)", "1"),
+        ("Fit residual", "`2 rows`", RECORD, "fits.csv", "count(rows)", "1"),
+        ("Fit residual", "`0 mV`", RECORD, "fits.csv", "max(zero_mv)", "1"),
+        ("Fit residual", "`10 mV`", RECORD, "fits.csv",
+         "max(rms_linear_mv where cell == b)", "1"),
+        ("Fit residual", "`20 mV`", RECORD, "fits.csv",
+         "max(rms_linear_mv where cell == a)", "1"),
+    ]
+
+    def write(self, value="`60 %`", derivation=None, scale="100",
+              operands=None):
+        rows = list(SPEC_ROWS) + [self.ROW]
+        entries = self.OPERANDS if operands is None else operands
+        self.tree.write(proposal(
+            spec_rows=tuple(rows),
+            provenance=DEFAULT_PROVENANCE + entries,
+            relative=[(
+                "Fit residual", value, RECORD, "fits.csv",
+                ("%s shortfall-from %s" % (self.LEFT, self.RIGHT))
+                if derivation is None else derivation,
+                scale,
+            )],
+        ))
+
+    def test_the_shortfall_is_graded_and_counted(self):
+        self.write()
+        result = self.assertPasses()
+        self.assertIn(
+            "1 figure(s) derived as one measurement against another, both "
+            "operands graded in the first table",
+            result.stdout,
+        )
+
+    def test_the_ratio_is_not_the_figure(self):
+        """20/50 is 40 %, a true number that is not "60 % less"."""
+        self.write(value="`40 %`")
+        self.assertFails("20 short of 50 is 60", "does not round to it")
+
+    def test_the_operands_are_not_interchangeable(self):
+        """(20 - 50)/20 is -150 %: the direction is part of the claim."""
+        self.write(derivation="%s shortfall-from %s" % (self.RIGHT, self.LEFT))
+        self.assertFails("50 short of 20 is -150", "does not round to it")
+
+    def test_an_operand_nobody_graded_is_refused(self):
+        """Rule 8b: this table may not introduce an ungraded ingredient."""
+        self.write(derivation="mean(rms_linear_mv) shortfall-from %s"
+                              % self.RIGHT)
+        self.assertFails(
+            "`mean(rms_linear_mv)` is not graded in the value-provenance "
+            "table",
+            "introduces an ingredient nobody graded",
+        )
+
+    def test_both_ungraded_operands_are_named(self):
+        self.write(derivation="mean(rms_linear_mv) shortfall-from "
+                              "mean(rms_exponential_mv)")
+        self.assertFails("`mean(rms_linear_mv)` is",
+                         "`mean(rms_exponential_mv)` is")
+
+    def test_a_column_compared_with_itself_is_refused(self):
+        """`1 - A/A` is 0 for any A, and 0 is a legitimate figure here."""
+        self.write(value="`0 %`",
+                   derivation="%s shortfall-from %s" % (self.LEFT, self.LEFT))
+        self.assertFails("both sides of the derivation are the same reduction",
+                         "0 for any evidence at all")
+
+    def test_the_same_column_under_two_filters_is_allowed(self):
+        """The guard above refuses identical TEXT, not a repeated column."""
+        self.write(
+            value="`50 %`",
+            derivation="max(rms_linear_mv where cell == b) shortfall-from "
+                       "max(rms_linear_mv where cell == a)",
+        )
+        self.assertPasses()
+
+    def test_a_count_is_not_a_measurement(self):
+        self.write(derivation="count(rows) shortfall-from %s" % self.RIGHT)
+        self.assertFails("`count(rows)` is a count",
+                         "a relative difference between two measurements")
+
+    def test_a_measured_zero_divisor_is_refused(self):
+        self.write(derivation="%s shortfall-from max(zero_mv)" % self.LEFT)
+        self.assertFails("`max(zero_mv)` measures zero",
+                         "nothing for the other measurement to fall short of")
+
+    def test_a_symbolic_operator_is_not_this_form(self):
+        """Rule 7's `/` between two reductions is not silently accepted."""
+        self.write(derivation="%s / %s" % (self.LEFT, self.RIGHT))
+        self.assertFails("cannot read the derivation",
+                         "<reduction> shortfall-from <reduction>")
+
+    def test_a_figure_missing_from_the_section_5_row_fails(self):
+        self.write(value="`61 %`")
+        self.assertFails("the relative figure does not appear in that section "
+                         "5 row")
+
+    def test_deleting_the_table_is_not_a_way_to_pass(self):
+        self.tree.write(proposal(include_relative=False))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no non-empty section 5.1 relative-figure table",
+                      result.stderr)
+        self.assertIn("ungraded and silent", result.stderr)
 
 
 class TestARangeIsNotAFigure(_TreeTest):
