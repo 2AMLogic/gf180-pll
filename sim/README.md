@@ -95,7 +95,7 @@ sim/
   | `pll-top-smoke` | does the assembled `design/pll_top.sch` acquire and hold lock at all — the acceptance gate for the top-level wiring, **one nominal corner by design** (see below) | #52 |
   | `lock-time` | closed-loop lock acquisition | #12 |
   | `output-range` | closed-loop output-band coverage | #12 |
-  | `period-jitter` | period jitter (deterministic + random), at 150 MHz / band 6 / N = 6 | #13 minted the six committed records (deterministic half, 45/45); the random half is owed at **#520** (open) — #505, which carried it before, closed 2026-09-25 — disposition in DR-020, narrowed by DR-023, and its pipeline's three ingredients built and validated, but with **no number**, by DR-030 (the ISF) and DR-031 (the per-device generator PSDs along the trajectory, and the stationary-approximation bound). Three sub-directories here are **method directories, not campaigns**, and none has a `records/`: `noise-toolchain-probe/` (what ngspice can and cannot do, DR-023), `isf-bringup/` (the impulse-sensitivity-function extraction, DR-030) and `sid-trajectory/` (the generator PSDs and the trajectory, DR-031) |
+  | `period-jitter` | period jitter (deterministic + random), at 150 MHz / band 6 / N = 6 | #13 minted the six committed records (deterministic half, 45/45); the random half is **bounded, not estimated**, at all 45 points — ≤ 0.338 % RMS against its 0.50 % allocation, DR-032 — with the in-band generators (charge pump, PFD, divider, lock detector) owed at **#580** (open); the disposition that no analysis here *estimates* it is DR-020's, narrowed by DR-023, and the ISF route's three ingredients are built and validated by DR-030 and DR-031 but not assembled. Four sub-directories here are **method directories, not campaigns**, and none has a `records/`: `noise-toolchain-probe/` (what ngspice can and cannot do, DR-023), `isf-bringup/` (the impulse-sensitivity-function extraction, DR-030), `sid-trajectory/` (the generator PSDs and the trajectory, DR-031) and `random-bound/` (the 45-point upper bound, DR-032 — committed results, several decks per point with a reduction between them, so it runs outside `sim/harness`) |
   | `period-jitter-band-top` | the same deterministic period jitter at the **200 MHz top of the ratified band** — N = 8, and the VCO band code per corner because `spec/pll.md`'s band-selection rule splits this grid across bands 6 and 7 | **#503** (the campaign run); declared by #13, which is closed |
   | `reference-input-contract` | the `REF` electrical contract itself — levels, 10–90 % edge rate and duty cycle driven to each boundary `spec/pll.md` states, graded as the per-corner shift of the PFD's reference-path set delay. **Declared, not measured**: manifest, deck and reduction are committed and self-checking, zero of 288 declared points have run | #499 → DR-019 |
   | `reference-phase-transfer` | the closed-loop REF-to-output **phase transfer** — a single known reference phase step, read out through the loop's own REF-vs-FB static phase error **differentially against a paired control run**, compared against `spec/pll.md`'s `20·log₁₀(N)` reference-source-quality exclusion. A different question from `reference-input-contract` above (waveform *shape* at a fixed phase, not phase *in time*), and the first deck in this tree to displace the reference edge in time at all. **Measured at N = 6**, 5/5 corners PASS: 15.529 … 16.366 dB against the stated 15.563 dB, plus the roll-off above the loop bandwidth at one frequency. The campaign holds three records and its supersession chain is the method's own history — see "Two decks per point, one record" below | #509 → DR-027 |
@@ -990,7 +990,7 @@ A **recorded methodology gap** instead of a number (#13):
 > records each carry exactly this shape, and **DR-020** adopts the last
 > sentence of its Methodology field — the jitter claim *is* stated as
 > deterministic-only in simulation, with the ≤ 1.0 % RMS target unchanged.
-> The gap is owed at **#520** (open); DR-020 named #505 instead, which closed
+> DR-023 re-pointed the gap to #520; DR-020 had named #505, which closed
 > the day DR-020 landed. The finding is stronger than the wording above: it is
 > not that the transient-noise estimate fails to converge, it is that
 > `.option TRANNOISE=1` injects no device noise into a transient on this
@@ -1024,6 +1024,16 @@ A **recorded methodology gap** instead of a number (#13):
 > what a single-bias noise density costs against the correctly-weighted one —
 > because the deficits common to numerator and denominator divide out of a ratio
 > and do not divide out of an absolute.
+>
+> **DR-032** is where the example ends, and the ending is not the one the
+> pipeline was building towards: the row gets a pass/fail from an **upper bound**
+> rather than from an estimate. `sim/period-jitter/random-bound/` sizes each
+> injected noise source at the maximum of that device's own density over its
+> trajectory, so the stationary approximation can only over-state the jitter —
+> an error whose sign is known needs no ISF to bound it. Its README's "What this
+> does NOT establish" section is the same discipline as the refusals above,
+> pointed the other way: it says what the number is *not* (an estimate; a bound
+> on the in-band generators, owed at #580) as carefully as what it is.
 
 A **distribution claim** with the statistical convention (#15):
 
