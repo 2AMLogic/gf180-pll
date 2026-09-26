@@ -434,6 +434,76 @@ class TestSelfDefence(_TreeTest):
         self.assertFails("has no 'verdict' column")
 
 
+#: Section 5.1's two tables, in miniature: a 6-column value-provenance table
+#: and a 2-column exclusion table, both inside the `## 5.` block. Neither has
+#: the 5 columns of the specification table, and their rows must not be read as
+#: rows of it.
+SECTION_5_1 = """\
+### 5.1 Value provenance
+
+| §5 row | Quoted value | Record(s) | Evidence file | Reduction | Scale |
+|---|---|---|---|---|---|
+| Output band | `12 MHz` | `20260731-175947-0a12e6c` | `vco_tuning.csv` | `min(f)` | `1e-6` |
+
+| §5 row | Why no value here is re-derived from a CSV |
+|---|---|
+| Reference input | Reports a budget and an exclusion, not a measurement |
+"""
+
+
+class TestMoreThanOneTableInSectionFive(_TreeTest):
+    """Section 5 holds three tables since 5.1 landed (issue #237).
+
+    Before the parser split blocks on their `|---|` separator rows, every
+    pipe-delimited line in the `## 5.` block was appended to one flat row list.
+    5.1's 6-cell and 2-cell rows were therefore read as malformed rows of the
+    5-column specification table -- which is how a 2-cell exclusion row could
+    be mistaken for a report of a spec row that section 5 never graded.
+    """
+
+    def _with_5_1(self, rows=PROPOSAL_ROWS) -> None:
+        self.tree.write(
+            PROPOSAL,
+            _proposal(rows).replace(
+                "## 6. Layout", SECTION_5_1 + "\n## 6. Layout"
+            ),
+        )
+
+    def test_the_extra_tables_do_not_break_a_clean_document(self):
+        self._with_5_1()
+        self.assertPasses()
+
+    def test_a_spec_row_named_only_in_5_1_is_still_uncovered(self):
+        """The rule the split protects: only the §5 table can cover a row.
+
+        `Supply sensitivity` is dropped from the specification table and left
+        naming itself inside 5.1. A parser that pools every table's rows sees
+        it and reports the document clean; the real one still fails.
+        """
+        self._with_5_1(
+            tuple(r for r in PROPOSAL_ROWS if not r[0].startswith("Supply sensitivity"))
+        )
+        self.assertFails(
+            "[Supply sensitivity](#supply-sensitivity)",
+            "has no row in docs/chipalooza/challenge-5-proposal.md section 5",
+        )
+
+    def test_a_missing_verdict_column_still_names_the_column(self):
+        """With other tables present, the fallback must not pick one of them.
+
+        `table_with()` falls back to the block's first table when none has
+        every wanted column, so the error stays "no 'verdict' column" rather
+        than a row count from whichever table happened to parse.
+        """
+        self.tree.write(
+            PROPOSAL,
+            _proposal(
+                header="| Parameter | Target | Measured | Status | Source |"
+            ).replace("## 6. Layout", SECTION_5_1 + "\n## 6. Layout"),
+        )
+        self.assertFails("has no 'verdict' column")
+
+
 class TestTheRealTree(unittest.TestCase):
     def test_the_committed_tree_passes(self):
         result = subprocess.run(

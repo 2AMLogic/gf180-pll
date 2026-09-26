@@ -189,17 +189,47 @@ def normalize(cell):
     return re.sub(r"\s+", " ", text).strip().casefold()
 
 
-def table_rows(block):
-    """[[cell, ...]] for a GitHub-flavoured Markdown table, header included."""
-    rows = []
+def tables(block):
+    """Every GitHub-flavoured Markdown table in a block, header row first.
+
+    Tables are split on their own `|---|` separator rows, so a section holding
+    more than one table yields more than one table rather than one impossible
+    table with three different column counts. Section 5 gained exactly that
+    shape when 5.1's value-provenance and exclusion tables landed (issue
+    #237): before this split, 5.1's 6-cell and 2-cell rows were appended to
+    the 5-column specification table and read as malformed rows of it.
+    """
+    found, current = [], None
     for line in block.splitlines():
         line = line.strip()
         if not line.startswith("|"):
+            current = None
             continue
         if re.fullmatch(r"\|[\s:|-]+\|", line):
             continue
-        rows.append([c.strip() for c in line.strip("|").split("|")])
-    return rows
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if current is None:
+            current = [cells]
+            found.append(current)
+        else:
+            current.append(cells)
+    return found
+
+
+def table_with(block, wanted):
+    """The first table in `block` whose header has every wanted column.
+
+    When no table has them all, the block's FIRST table is returned anyway, so
+    that `columns()` below reports precisely which column is missing. Falling
+    back matters: "section 5's table has no 'verdict' column" is actionable,
+    where "parsed -1 rows" only says the parser gave up.
+    """
+    found = tables(block)
+    for table in found:
+        lowered = [normalize(c) for c in table[0]]
+        if all(name in lowered for name in wanted):
+            return table
+    return found[0] if found else []
 
 
 def columns(header, wanted, where):
@@ -239,8 +269,8 @@ if proposal_block is None:
     )
     sys.exit(1)
 
-spec_rows = table_rows(spec_block.group(1))
-proposal_rows = table_rows(proposal_block.group(1))
+spec_rows = table_with(spec_block.group(1), ("parameter",))
+proposal_rows = table_with(proposal_block.group(1), ("parameter", "verdict"))
 
 # Two data rows is not a threshold anyone should ever be near: this tree has 19
 # spec rows and 26 section-5 rows. It exists so that a regex that silently
