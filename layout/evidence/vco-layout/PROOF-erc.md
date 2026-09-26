@@ -321,7 +321,9 @@ Measured, not assumed — and the reason `klt erc` itself gives is the one
 predicted above. `klt erc` has no per-tie disclosure for a class a spec
 deliberately leaves out *while declaring another* (`ties_disclosure` is
 top-level and consulted only when `ties[]` is empty), so this section is the
-disclosure. Filed upstream as a generic tool gap — see "Upstream friction".
+disclosure. Filed upstream as a generic tool gap —
+[klayout-tools#2541](https://github.com/2AMLogic/klayout-tools/issues/2541),
+see "Upstream friction".
 
 <details>
 <summary>Superseded: why <code>ties[]</code> used to be omitted (issue #427's known blocker)</summary>
@@ -657,10 +659,14 @@ assumptions.
 
 ## Upstream friction (new this pass, 2026-09-26)
 
-Filed generically at `2AMLogic/klayout-tools` per CLAUDE.md's friction
-protocol — described as tool gaps, not as facts about this design:
+Two gaps this pass found, filed generically at `2AMLogic/klayout-tools` per
+CLAUDE.md's friction protocol — described as tool gaps, not as facts about
+this design. Each was reproduced against the pinned `klt`
+`0.6.0+gf2d249ab23d4` before filing, and the filed issue carries that
+reproduction:
 
-- **A `ties[]` class a spec cannot express has no disclosure path when the
+- **[klayout-tools#2541](https://github.com/2AMLogic/klayout-tools/issues/2541)
+  — a `ties[]` class a spec cannot express has no disclosure path when the
   spec declares another class.** `ties_disclosure` is a top-level key and its
   reason is consulted only when `ties[]` is empty, so a spec that declares its
   n-well tie and genuinely cannot declare its substrate tie renders
@@ -670,15 +676,21 @@ protocol — described as tool gaps, not as facts about this design:
   ("a `ties_disclosure` describes only *undeclared* work, so a design that
   declared its n-well tie could not even disclose the missing substrate half")
   and #2255 closed only the sub-case where an asserted region is
-  non-degenerate.
-- **Well-side class selection has no caller-assertion counterpart.**
+  non-degenerate. The filed issue measures it: adding a `ties_disclosure` to
+  this block's own one-entry spec leaves `erc_coverage` **identical**, the
+  disclosure surviving only as a top-level echo field no grader keys on.
+- **[klayout-tools#2540](https://github.com/2AMLogic/klayout-tools/issues/2540)
+  — well-side class selection has no caller-assertion counterpart.**
   `ties[].well_requires`/`well_excludes` (klayout-tools#2339) select whole
   drawn well shapes by interaction with a *marker layer*; a stream with two
   deliberately differently-biased well classes and no layer that separates
   them cannot use it, and there is no `well_boxes`-style literal-geometry
   escape hatch on the well-selection side the way `ties[].tap_boxes`
   (klayout-tools#2234) is one on the tap side. `pfd_cp` is that case — see
-  [`../pfd-cp-layout/PROOF-erc.md`](../pfd-cp-layout/PROOF-erc.md).
+  [`../pfd-cp-layout/PROOF-erc.md`](../pfd-cp-layout/PROOF-erc.md). #2540 is
+  the residual of #2339's own unimplemented "shape 2" (`well_boxes`
+  composable with a drawn `well_layer`): #2339 shipped shape 1
+  (`well_requires`) only, which is the half that needs a marker layer.
 
 ## Net effect on T1 checklist item 11 (structural power delivery)
 

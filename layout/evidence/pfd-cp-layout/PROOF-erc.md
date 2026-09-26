@@ -23,7 +23,8 @@ So the spec declares a machine-readable **`ties_disclosure`** (`kind:
 renders item 11 `supply_spec_disclosed_tool_limitation` — still `unmet`, because
 a disclosure is the caller's word and never a computed `erc.missing_tie` result,
 but mechanically distinguishable from "nobody asked the question". The obstacle
-is measured below, not asserted, and the gap is filed upstream.
+is measured below, not asserted, and the gap is filed upstream as
+[klayout-tools#2540](https://github.com/2AMLogic/klayout-tools/issues/2540).
 
 ## Artifacts
 
@@ -365,17 +366,28 @@ territory — which is why this run is still item-11 evidence.
 ## Upstream friction
 
 Filed generically at `2AMLogic/klayout-tools` per CLAUDE.md's friction protocol,
-described as a tool gap rather than a fact about this design: **well-side class
-selection has no caller-assertion counterpart.**
+described as a tool gap rather than a fact about this design:
+**[klayout-tools#2540](https://github.com/2AMLogic/klayout-tools/issues/2540) —
+well-side class selection has no caller-assertion counterpart.**
 `ties[].well_requires`/`well_excludes` select drawn well shapes by interaction
 with a marker layer; a stream with two deliberately differently-biased well
 classes and no layer that separates them cannot use it, and there is no
 `well_boxes`-style literal-geometry escape hatch on the well-selection side the
-way `ties[].tap_boxes` is one on the tap side. Cross-referenced from
+way `ties[].tap_boxes` is one on the tap side. The filed issue carries the
+measured reproduction on the pinned `klt` `0.6.0+gf2d249ab23d4`: `well_boxes`
+alongside a drawn `well_layer` is rejected outright (its own error text
+redirecting to `well_requires`/`well_excludes`, which is what this shape cannot
+use), and a `well_requires` built from any layer that does not separate the
+classes is graded `degenerate_well_selection` rather than checked. Every route
+therefore ends in a false finding or skipped work — which is why this block's
+spec discloses instead of declaring.
+
+Cross-referenced from
 [`../vco-layout/PROOF-erc.md`](../vco-layout/PROOF-erc.md) → "Upstream
-friction", which also carries the second gap this pass found (a `ties[]` class a
-spec cannot express has no disclosure path when the spec declares another
-class).
+friction", which also carries the second gap this pass found
+([klayout-tools#2541](https://github.com/2AMLogic/klayout-tools/issues/2541) —
+a `ties[]` class a spec cannot express has no disclosure path when the spec
+declares another class).
 
 ## Scope
 

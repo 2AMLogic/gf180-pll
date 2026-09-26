@@ -203,8 +203,9 @@ run is **not** the committed one, precisely because it is worse evidence; it is
 quoted so the omission is falsifiable rather than asserted. `klt erc` has no
 per-tie disclosure for a class a spec leaves out while declaring another
 (`ties_disclosure` is top-level and consulted only when `ties[]` is empty), so
-this section is the disclosure — and the gap is filed upstream, see
-[`../vco-layout/PROOF-erc.md`](../vco-layout/PROOF-erc.md) → "Upstream
+this section is the disclosure — and the gap is filed upstream as
+[klayout-tools#2541](https://github.com/2AMLogic/klayout-tools/issues/2541);
+see [`../vco-layout/PROOF-erc.md`](../vco-layout/PROOF-erc.md) → "Upstream
 friction".
 
 ## Coverage: what the spec did and did not look at
