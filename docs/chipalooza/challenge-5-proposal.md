@@ -422,7 +422,9 @@ The same check also requires that **every decision record a specification row
 rests on is named by the row reporting it here**, because a row can be
 present and still report a reading the specification has moved past. Three
 were: until 2026-09-25 the Lock time row read a bare MET without DR-012 (the
-Lock criterion it is timed to is not reached at 2 of 45 corners), the Area
+Lock criterion it is timed to is not reached at 1 of the 45 mandated corners
+at a rule-compliant configuration, with a second owed — DR-012 as since
+narrowed by DR-025), the Area
 row still described the re-amendment trigger DR-017 replaced, and the
 Reference spur row carried neither DR-018's re-priced margin nor any owner
 for its unmeasured points.
@@ -543,14 +545,49 @@ record format section ratifies the two sentence shapes this reads.
 | Supply range | 3.3 V ± 10 %, 3.3 V devices exclusively | Every campaign above sweeps 2.97/3.30/3.63 V | **MET, as the swept independent axis of every other row** | `spec/pll.md#supply-range` |
 | Supply range, **5.0 V analog rail** | Challenge #5 asks analog blocks to operate across 3.3–5.0 V | **No 5.0 V-class device exists in this design; never simulated above 3.63 V** | **UNMET / not attempted** — the single most load-bearing gap in this proposal, stated plainly per §2.1 | This proposal, §2.1 |
 
-No row above is relaxed, narrowed, or omitted to make it pass — the `period-
-jitter` random/noise-driven row, the `output-range` closed-loop row, three of four
-`supply-sensitivity` criteria, the lock-detector T1/T2/T4/T5 gaps, the
-Lock criterion's static-phase half at 2 of 45 corners (and with it the lock
-time there), the reference-input electrical contract, and the
-5.0 V-rail row are all reported UNMET, exactly as the underlying evidence
+No row above is relaxed, narrowed, or omitted to make it pass. Every row the
+table reports as wholly or partly not met is listed here, by its own parameter
+name, with the part that is not met — exactly as the underlying evidence
 states, per `CLAUDE.md`'s "agents do not relax the ratified spec to make
-results pass."
+results pass":
+
+- **Output band, closed-loop** — no sustained in-window PASS at either
+  drawn-band edge at any of the 45 mandated corners.
+- **Reference input** — the levels, edge-rate and duty-range lines are budget,
+  never measured; every jitter and spur number here assumes an ideal reference.
+- **Period jitter, closed-loop, deterministic, at the 200 MHz band top** —
+  declared, not measured; no jitter number at 200 MHz exists.
+- **Period jitter, closed-loop, random/noise-driven** — no record at any
+  corner, so the half of the 1.0 % RMS line allocated to it is an unverified
+  budget.
+- **Reference spur** — over the line at the scaled 200 MHz binding point at 2
+  of the 5 measured corners; the other 40 mandated points are unmeasured.
+- **Lock time (small-signal settling)** — the Lock criterion it is timed to is
+  not reached at 1 of the 45 mandated corners at a rule-compliant
+  configuration, with a second corner's rule-selected run owed (DR-012,
+  narrowed by DR-025).
+- **Lock time, closed-loop cold-start / worst-case re-lock** — no closed PASS
+  bound; most rows do not reach a sustained `LOCK` within the tested window.
+- **Supply sensitivity — DC / closed-loop, full grid** — Budget 2 missed at 9
+  of 15 cells; the record's other two FAILs are re-read under DR-021 as the
+  static-phase finding and a slew-limited step+ramp recovery, each with an
+  open owner.
+- **Output duty cycle** — below the 45 % floor at the low-frequency band edge.
+- **Lock detector** — T4/T5 uncharacterized below 25 MHz. T1′/T2′ are met only
+  on a part trimmed to the rule, which no procedure available at this die's
+  pads can perform (DR-022, DR-029).
+- **Supply range, 5.0 V analog rail** — no 5.0 V-class device; never simulated
+  above 3.63 V.
+
+This list is machine-checked against the table rather than kept by hand:
+`spec/lib/check-spec-row-coverage.sh` fails if a row whose Verdict says UNMET
+or NOT MET has no bullet here, or if a bullet names a row that no longer says
+so. Until 2026-09-26 it was a single hand-kept sentence, and it had drifted
+three ways: it omitted four of the rows above outright (the 200 MHz band-top
+jitter, the reference spur, the closed-loop cold-start lock time and the output
+duty cycle), it still listed the lock detector's T1/T2 window as unmet after
+#411's trim met it on a trimmed part, and it counted the Lock-criterion miss at
+2 of 45 corners after DR-025 narrowed it to 1.
 
 ### 5.1 Value provenance: which quoted numbers CI re-derives from committed evidence
 
