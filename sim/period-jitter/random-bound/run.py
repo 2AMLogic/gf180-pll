@@ -153,11 +153,13 @@ def run_deck(deck: str, work: Path, log: Path, expect: str | None = None) -> tup
 #: condition moved by these offsets, in order (`rb_deck._ic`).  Measured need:
 #: the trajectory deck at `ff_125c_3.63v` stalls at t = 45 fs, deterministically,
 #: and runs cleanly with its third copy's control source moved by 0.1 uV -- a
-#: numerical accident of the starting point, not a property of the circuit.  A
-#: stall after STARTUP_T is never retried: that would be a real failure.
-STARTUP_IC_OFFSETS = (0.0, 1e-3, 2e-3)
+#: numerical accident of the starting point, not a property of the circuit --
+#: it stalls again at 1 mV ("initial timepoint") and runs at 2, 10, 50 and
+#: 100 mV.  A stall after STARTUP_T is never retried: that would be a real
+#: failure.
+STARTUP_IC_OFFSETS = (0.0, 1e-3, 1e-2, 5e-2, 1e-1)
 STARTUP_T = 1e-9
-_STALL_RE = re.compile(r"Timestep too small; time = ([-+0-9.eEdD]+)")
+_STALL_RE = re.compile(r"Timestep too small; (?:time = ([-+0-9.eEdD]+)|initial timepoint)")
 
 
 def run_deck_startup_retry(build, work: Path, log: Path, expect: str):
@@ -168,10 +170,10 @@ def run_deck_startup_retry(build, work: Path, log: Path, expect: str):
             return el, out, off
         except SystemExit:
             m = _STALL_RE.search(log.read_text() if log.is_file() else "")
-            if (not m or float(m.group(1)) >= STARTUP_T
-                    or off == STARTUP_IC_OFFSETS[-1]):
+            t_stall = float(m.group(1)) if m and m.group(1) else 0.0
+            if not m or t_stall >= STARTUP_T or off == STARTUP_IC_OFFSETS[-1]:
                 raise
-            print(f"start-up stall at t = {m.group(1)} s -- retrying with "
+            print(f"start-up stall at t = {t_stall:g} s -- retrying with "
                   f".ic offset {STARTUP_IC_OFFSETS[STARTUP_IC_OFFSETS.index(off) + 1]:g} V",
                   flush=True)
     raise AssertionError("unreachable")
