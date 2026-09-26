@@ -1114,12 +1114,24 @@ reading (the `cp-compliance` "worst point in window" convention), forms the
 signed and folded `|mean| + 3*sd` per corner, and keeps the worst corner of
 each — the same reduction `sim/mc-cp-mismatch/testbench/run.sh --restat`
 implements, independently re-derived rather than trusted. It does the same
-for term 3's residual net charge from `mc_pfd_cp.csv`, then chains both
-through the Icp and `T_ov` figures DR-018's own Input table states (taken as
-given, not re-swept from `cp-compliance`/`pfd-deadzone`'s own 45-corner
-grids — the same boundary `check-spur-derivation-arithmetic.sh` draws around
-C2 and the TIE scale point) into the three charge totals above, and fails CI
-if any of them no longer reproduces.
+for term 3's residual net charge from `mc_pfd_cp.csv`, and — since #573 — for
+the three remaining ingredients as well, each from its own campaign's
+committed 45-corner grid rather than from the value DR-018's Input table
+states for it:
+
+| Ingredient | Re-derived from | By the reduction stated in |
+|---|---|---|
+| `Icp` = 7.21 µA at trim code 11 | `sim/cp-compliance/…-190821-734f483`'s `cp_dc.csv` | the campaign's own `cp_trim_range.csv` header ("mean of the two polarities at Vctrl = 1.65 V, min/max across every corner"), cross-checked against that file's own committed reduction |
+| `T_ov` = 2.584 ns | `sim/pfd-deadzone/…-051356-8cedbba`'s `raw_measures.csv` | DR-018's own row label ("min UP/DN pulse at zero phase error, 45 corners"), with the zero-phase rows selected by parsing the dphi axis and cross-checked against the campaign's own `q_zero` marker |
+| Systematic `\|q_up + q_dn\|` = 3.68 fC | `sim/cp-compliance/…-061841-c24ee3a`'s `cp_switch.csv` | DR-006 §8, whose worst case **and** median are both graded |
+
+Every figure DR-018's Input table states for those three is graded against the
+reduction rather than trusted, the corner grid each is a worst case over is
+counted (45, read out of the table's own rows), and the trim code priced, the
+named worst corner and the record ids are all read out of the documents rather
+than hardcoded. The three charge totals are then built from the reduced
+figures — not the written ones — and CI fails if any of them no longer
+reproduces.
 
 **That same term-1 statistic is graded a second, independent way in §5.1**, and
 that is deliberate rather than duplicated by accident. §5.1's provenance table
@@ -1136,15 +1148,18 @@ same number by two routes, a change to either one that moves the statistic makes
 CI disagree with itself rather than drift quietly, and each script's header names
 the other so the pairing is discoverable from either end.
 
-What is still not re-derived, stated so the narrower gap is visible rather than
-implied: `Icp`, `T_ov` and the 3.68 fC systematic charge asymmetry are
-worst-of-45-corners figures taken from DR-018's Input table, not independently
-re-swept from `sim/cp-compliance`'s and `sim/pfd-deadzone`'s own 45-corner grids
-here. That remainder is owed at **#573 (open)** — no new simulation with it,
-only a reduction of campaigns already committed. Nor does either check grade the
-dB *margins* stated in prose ("1.6 dB inside the line", "~12 dB at the two cold
-corners"), because a bare "dB" in this document is as often a spread or a
-reserve as it is a difference of two graded numbers.
+What is still not re-derived, stated so the remaining gap is visible rather
+than implied: both checks read committed evidence and neither runs a
+simulator, so neither can say whether the simulation behind a CSV was the
+right experiment — that is what each campaign's manifest, testbench and
+record Methodology field answer, and what
+`sim/lib/check-record-supersession.sh` keeps honest about *which* record is
+current. C2 (1.814 pF) and the TIE scale point (0.669 ps at 1.825 mV) are
+still taken as given, downstream of the charge totals, which is the boundary
+`check-spur-derivation-arithmetic.sh` draws for itself. Nor does either check
+grade the dB *margins* stated in prose ("1.6 dB inside the line", "~12 dB at
+the two cold corners"), because a bare "dB" in this document is as often a
+spread or a reserve as it is a difference of two graded numbers.
 
 ---
 

@@ -276,11 +276,17 @@ jobs:
         # now. Term 1 (DC UP/DN mismatch) and term 3 (residual net charge) are
         # reduced straight from sim/mc-cp-mismatch's committed per-corner
         # samples -- the same worst-of-three-Vctrl-point / worst-corner
-        # convention sim/mc-cp-mismatch/testbench/run.sh implements -- and
-        # chained through DR-018's own stated Icp/T_ov/systematic-charge
-        # inputs into the three totals the sibling check takes as given. Needs
-        # python3 (set up above); reads only committed Markdown and CSVs, no
-        # PDK, no ngspice, no simulation.
+        # convention sim/mc-cp-mismatch/testbench/run.sh implements -- and so
+        # (since #573) are the other three ingredients: Icp at the trim code
+        # DR-018 prices, from sim/cp-compliance's cp_dc.csv; the reset overlap
+        # T_ov, from sim/pfd-deadzone's raw_measures.csv; and the systematic
+        # per-event charge asymmetry, from sim/cp-compliance's cp_switch.csv.
+        # Each uses the campaign's OWN stated reduction, read out of the
+        # documents and CSV headers that state it, and DR-018's Input table is
+        # graded against the result rather than trusted as the source of it.
+        # The three totals the sibling check takes as given are then built
+        # from the reduced figures. Needs python3 (set up above); reads only
+        # committed Markdown and CSVs, no PDK, no ngspice, no simulation.
         run: bash spec/lib/check-mismatch-charge-derivation.sh
 
       - name: design/lib/check-io-list-coverage.sh (proposal I/O list vs. the exported port list)
