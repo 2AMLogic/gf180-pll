@@ -1,0 +1,1133 @@
+* gf180-pll :: sim/period-jitter/sid-trajectory :: stage `checks`
+* point ff_-40c_3.63v, device XMPH -- the two bias-method checks.
+* `_newton` is the two-pass observed-residual settle the S_id table
+* uses; `plus_IdR`/`minus_IdR` are the closed-form alternative in both
+* signs; `_interp` is the same phase's INTERPOLATED trajectory row.
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_peak_id_newton_pass1
+======================================================================
+.temp -40
+vg g 0 dc -1.069593830000e+00
+vb b 0 dc 7.878190370000e-06
+vd dd 0 dc -1.607747190000e+00
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.069586e+00
+@m.xm1.m0[vds] = 1.607731e+00
+@m.xm1.m0[vbs] = -1.57734e-05
+@m.xm1.m0[id] = 6.266027e-05
+@m.xm1.m0[gm] = 3.382822e-04
+@m.xm1.m0[gds] = 2.110982e-06
+v(d) = -1.60775e+00
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 1.000000e-03
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588304e-12
+onoise_total.m.xm1.m0.id = 1.852956e-15
+onoise_total.m.xm1.m0.1overf = 1.390966e-15
+inoise_total.m.xm1.m0.id = 1.852956e-12
+inoise_total.m.xm1.m0.1overf = 1.390966e-12
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_peak_id_newton
+======================================================================
+.temp -40
+vg g 0 dc -1.069601660000e+00
+vb b 0 dc -1.701926000000e-08
+vd dd 0 dc -1.607763380000e+00
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.069594e+00
+@m.xm1.m0[vds] = 1.607748e+00
+@m.xm1.m0[vbs] = -7.87865e-06
+@m.xm1.m0[id] = 6.266407e-05
+@m.xm1.m0[gm] = 3.382913e-04
+@m.xm1.m0[gds] = 2.111081e-06
+v(d) = -1.60776e+00
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 1.000000e-03
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588304e-12
+onoise_total.m.xm1.m0.id = 1.852986e-15
+onoise_total.m.xm1.m0.1overf = 1.391023e-15
+inoise_total.m.xm1.m0.id = 1.852986e-12
+inoise_total.m.xm1.m0.1overf = 1.391023e-12
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_peak_id_plus_IdR
+======================================================================
+.temp -40
+vg g 0 dc -1.069593830000e+00
+vb b 0 dc 7.878190370000e-06
+vd dd 0 dc -1.607766191160e+00
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.069586e+00
+@m.xm1.m0[vds] = 1.607750e+00
+@m.xm1.m0[vbs] = -1.57734e-05
+@m.xm1.m0[id] = 6.266031e-05
+@m.xm1.m0[gm] = 3.382824e-04
+@m.xm1.m0[gds] = 2.110964e-06
+v(d) = -1.60777e+00
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 1.000000e-03
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588304e-12
+onoise_total.m.xm1.m0.id = 1.852956e-15
+onoise_total.m.xm1.m0.1overf = 1.390969e-15
+inoise_total.m.xm1.m0.id = 1.852956e-12
+inoise_total.m.xm1.m0.1overf = 1.390969e-12
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_peak_id_minus_IdR
+======================================================================
+.temp -40
+vg g 0 dc -1.069593830000e+00
+vb b 0 dc 7.878190370000e-06
+vd dd 0 dc -1.607728188840e+00
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.069586e+00
+@m.xm1.m0[vds] = 1.607712e+00
+@m.xm1.m0[vbs] = -1.57734e-05
+@m.xm1.m0[id] = 6.266023e-05
+@m.xm1.m0[gm] = 3.382820e-04
+@m.xm1.m0[gds] = 2.111001e-06
+v(d) = -1.60773e+00
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 1.000000e-03
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588304e-12
+onoise_total.m.xm1.m0.id = 1.852956e-15
+onoise_total.m.xm1.m0.1overf = 1.390963e-15
+inoise_total.m.xm1.m0.id = 1.852956e-12
+inoise_total.m.xm1.m0.1overf = 1.390963e-12
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_peak_id_interp_pass1
+======================================================================
+.temp -40
+vg g 0 dc -1.069580317777e+00
+vb b 0 dc 7.876130074032e-06
+vd dd 0 dc -1.606558957680e+00
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.069572e+00
+@m.xm1.m0[vds] = 1.606543e+00
+@m.xm1.m0[vbs] = -1.57704e-05
+@m.xm1.m0[id] = 6.265319e-05
+@m.xm1.m0[gm] = 3.382589e-04
+@m.xm1.m0[gds] = 2.112002e-06
+v(d) = -1.60656e+00
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 1.000000e-03
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588304e-12
+onoise_total.m.xm1.m0.id = 1.852918e-15
+onoise_total.m.xm1.m0.1overf = 1.390720e-15
+inoise_total.m.xm1.m0.id = 1.852918e-12
+inoise_total.m.xm1.m0.1overf = 1.390720e-12
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_peak_id_interp
+======================================================================
+.temp -40
+vg g 0 dc -1.069588635554e+00
+vb b 0 dc -1.813985193660e-08
+vd dd 0 dc -1.606574915360e+00
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.069581e+00
+@m.xm1.m0[vds] = 1.606559e+00
+@m.xm1.m0[vbs] = -7.87666e-06
+@m.xm1.m0[id] = 6.265716e-05
+@m.xm1.m0[gm] = 3.382685e-04
+@m.xm1.m0[gds] = 2.112106e-06
+v(d) = -1.60657e+00
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 1.000000e-03
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588304e-12
+onoise_total.m.xm1.m0.id = 1.852949e-15
+onoise_total.m.xm1.m0.1overf = 1.390780e-15
+inoise_total.m.xm1.m0.id = 1.852949e-12
+inoise_total.m.xm1.m0.1overf = 1.390780e-12
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_median_id_newton_pass1
+======================================================================
+.temp -40
+vg g 0 dc -1.066019560000e+00
+vb b 0 dc -1.232789700000e-06
+vd dd 0 dc 2.416216100000e-02
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.066021e+00
+@m.xm1.m0[vds] = -2.41598e-02
+@m.xm1.m0[vbs] = 2.419593e-06
+@m.xm1.m0[id] = 9.419071e-06
+@m.xm1.m0[gm] = 2.572236e-05
+@m.xm1.m0[gds] = 3.738870e-04
+v(d) = 2.416215e-02
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999996e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588303e-12
+onoise_total.m.xm1.m0.id = 2.297753e-15
+onoise_total.m.xm1.m0.1overf = 8.363920e-17
+inoise_total.m.xm1.m0.id = 2.297754e-12
+inoise_total.m.xm1.m0.1overf = 8.363923e-14
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_median_id_newton
+======================================================================
+.temp -40
+vg g 0 dc -1.066018120000e+00
+vb b 0 dc -4.598640000000e-08
+vd dd 0 dc 2.416452200000e-02
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.066019e+00
+@m.xm1.m0[vds] = -2.41621e-02
+@m.xm1.m0[vbs] = 1.232905e-06
+@m.xm1.m0[id] = 9.419992e-06
+@m.xm1.m0[gm] = 2.572485e-05
+@m.xm1.m0[gds] = 3.738855e-04
+v(d) = 2.416451e-02
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999996e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588303e-12
+onoise_total.m.xm1.m0.id = 2.297752e-15
+onoise_total.m.xm1.m0.1overf = 8.364739e-17
+inoise_total.m.xm1.m0.id = 2.297753e-12
+inoise_total.m.xm1.m0.1overf = 8.364743e-14
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_median_id_plus_IdR
+======================================================================
+.temp -40
+vg g 0 dc -1.066019560000e+00
+vb b 0 dc -1.232789700000e-06
+vd dd 0 dc 2.415930464244e-02
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.066021e+00
+@m.xm1.m0[vds] = -2.41569e-02
+@m.xm1.m0[vbs] = 2.419444e-06
+@m.xm1.m0[id] = 9.417894e-06
+@m.xm1.m0[gm] = 2.571936e-05
+@m.xm1.m0[gds] = 3.738863e-04
+v(d) = 2.415930e-02
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999996e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588303e-12
+onoise_total.m.xm1.m0.id = 2.297746e-15
+onoise_total.m.xm1.m0.1overf = 8.362897e-17
+inoise_total.m.xm1.m0.id = 2.297747e-12
+inoise_total.m.xm1.m0.1overf = 8.362900e-14
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_median_id_minus_IdR
+======================================================================
+.temp -40
+vg g 0 dc -1.066019560000e+00
+vb b 0 dc -1.232789700000e-06
+vd dd 0 dc 2.416501735756e-02
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.066021e+00
+@m.xm1.m0[vds] = -2.41626e-02
+@m.xm1.m0[vbs] = 2.419741e-06
+@m.xm1.m0[id] = 9.420247e-06
+@m.xm1.m0[gm] = 2.572536e-05
+@m.xm1.m0[gds] = 3.738877e-04
+v(d) = 2.416501e-02
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999996e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588303e-12
+onoise_total.m.xm1.m0.id = 2.297759e-15
+onoise_total.m.xm1.m0.1overf = 8.364943e-17
+inoise_total.m.xm1.m0.id = 2.297760e-12
+inoise_total.m.xm1.m0.1overf = 8.364946e-14
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_median_id_interp_pass1
+======================================================================
+.temp -40
+vg g 0 dc -1.066035403254e+00
+vb b 0 dc -1.223337733453e-06
+vd dd 0 dc 2.417940454882e-02
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.066037e+00
+@m.xm1.m0[vds] = -2.41770e-02
+@m.xm1.m0[vbs] = 2.411087e-06
+@m.xm1.m0[id] = 9.426580e-06
+@m.xm1.m0[gm] = 2.574027e-05
+@m.xm1.m0[gds] = 3.739080e-04
+v(d) = 2.417940e-02
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999996e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588303e-12
+onoise_total.m.xm1.m0.id = 2.297839e-15
+onoise_total.m.xm1.m0.1overf = 8.370297e-17
+inoise_total.m.xm1.m0.id = 2.297840e-12
+inoise_total.m.xm1.m0.1overf = 8.370301e-14
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_median_id_interp
+======================================================================
+.temp -40
+vg g 0 dc -1.066033806507e+00
+vb b 0 dc -3.558846690670e-08
+vd dd 0 dc 2.418180909764e-02
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.066035e+00
+@m.xm1.m0[vds] = -2.41794e-02
+@m.xm1.m0[vbs] = 1.223455e-06
+@m.xm1.m0[id] = 9.427515e-06
+@m.xm1.m0[gm] = 2.574281e-05
+@m.xm1.m0[gds] = 3.739063e-04
+v(d) = 2.418180e-02
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999996e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588303e-12
+onoise_total.m.xm1.m0.id = 2.297838e-15
+onoise_total.m.xm1.m0.1overf = 8.371130e-17
+inoise_total.m.xm1.m0.id = 2.297839e-12
+inoise_total.m.xm1.m0.1overf = 8.371134e-14
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_min_id_newton_pass1
+======================================================================
+.temp -40
+vg g 0 dc -1.067574530000e+00
+vb b 0 dc 5.367570700000e-08
+vd dd 0 dc -6.790788060000e-04
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.067574e+00
+@m.xm1.m0[vds] = 6.790154e-04
+@m.xm1.m0[vbs] = -8.52318e-08
+@m.xm1.m0[id] = 2.504455e-07
+@m.xm1.m0[gm] = 7.332748e-07
+@m.xm1.m0[gds] = 3.683912e-04
+v(d) = -6.79079e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999996e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588303e-12
+onoise_total.m.xm1.m0.id = 2.248441e-15
+onoise_total.m.xm1.m0.1overf = 2.272835e-18
+inoise_total.m.xm1.m0.id = 2.248441e-12
+inoise_total.m.xm1.m0.1overf = 2.272836e-15
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_min_id_newton
+======================================================================
+.temp -40
+vg g 0 dc -1.067575060000e+00
+vb b 0 dc 2.211961400000e-08
+vd dd 0 dc -6.791422120000e-04
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.067575e+00
+@m.xm1.m0[vds] = 6.790788e-04
+@m.xm1.m0[vbs] = -5.36787e-08
+@m.xm1.m0[id] = 2.504693e-07
+@m.xm1.m0[gm] = 7.333431e-07
+@m.xm1.m0[gds] = 3.683917e-04
+v(d) = -6.79142e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999996e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588303e-12
+onoise_total.m.xm1.m0.id = 2.248442e-15
+onoise_total.m.xm1.m0.1overf = 2.273049e-18
+inoise_total.m.xm1.m0.id = 2.248443e-12
+inoise_total.m.xm1.m0.1overf = 2.273050e-15
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_min_id_plus_IdR
+======================================================================
+.temp -40
+vg g 0 dc -1.067574530000e+00
+vb b 0 dc 5.367570700000e-08
+vd dd 0 dc -6.791547537836e-04
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.067574e+00
+@m.xm1.m0[vds] = 6.790914e-04
+@m.xm1.m0[vbs] = -8.52354e-08
+@m.xm1.m0[id] = 2.504735e-07
+@m.xm1.m0[gm] = 7.333568e-07
+@m.xm1.m0[gds] = 3.683911e-04
+v(d) = -6.79155e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999996e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588303e-12
+onoise_total.m.xm1.m0.id = 2.248440e-15
+onoise_total.m.xm1.m0.1overf = 2.273089e-18
+inoise_total.m.xm1.m0.id = 2.248441e-12
+inoise_total.m.xm1.m0.1overf = 2.273090e-15
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_min_id_minus_IdR
+======================================================================
+.temp -40
+vg g 0 dc -1.067574530000e+00
+vb b 0 dc 5.367570700000e-08
+vd dd 0 dc -6.790028582164e-04
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.067574e+00
+@m.xm1.m0[vds] = 6.789395e-04
+@m.xm1.m0[vbs] = -8.52283e-08
+@m.xm1.m0[id] = 2.504175e-07
+@m.xm1.m0[gm] = 7.331928e-07
+@m.xm1.m0[gds] = 3.683913e-04
+v(d) = -6.79003e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999996e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588303e-12
+onoise_total.m.xm1.m0.id = 2.248441e-15
+onoise_total.m.xm1.m0.1overf = 2.272581e-18
+inoise_total.m.xm1.m0.id = 2.248442e-12
+inoise_total.m.xm1.m0.1overf = 2.272582e-15
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_min_id_interp_pass1
+======================================================================
+.temp -40
+vg g 0 dc -1.067584999064e+00
+vb b 0 dc 5.172469572043e-08
+vd dd 0 dc -6.754839794837e-04
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.067585e+00
+@m.xm1.m0[vds] = 6.754209e-04
+@m.xm1.m0[vbs] = -8.31149e-08
+@m.xm1.m0[id] = 2.491289e-07
+@m.xm1.m0[gm] = 7.293901e-07
+@m.xm1.m0[gds] = 3.684072e-04
+v(d) = -6.75484e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999996e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588303e-12
+onoise_total.m.xm1.m0.id = 2.248483e-15
+onoise_total.m.xm1.m0.1overf = 2.260848e-18
+inoise_total.m.xm1.m0.id = 2.248484e-12
+inoise_total.m.xm1.m0.1overf = 2.260849e-15
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_min_id_interp
+======================================================================
+.temp -40
+vg g 0 dc -1.067584998128e+00
+vb b 0 dc 2.033449144085e-08
+vd dd 0 dc -6.755470589674e-04
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.067585e+00
+@m.xm1.m0[vds] = 6.754840e-04
+@m.xm1.m0[vbs] = -5.17277e-08
+@m.xm1.m0[id] = 2.491522e-07
+@m.xm1.m0[gm] = 7.294582e-07
+@m.xm1.m0[gds] = 3.684071e-04
+v(d) = -6.75547e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999996e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588303e-12
+onoise_total.m.xm1.m0.id = 2.248483e-15
+onoise_total.m.xm1.m0.1overf = 2.261059e-18
+inoise_total.m.xm1.m0.id = 2.248484e-12
+inoise_total.m.xm1.m0.1overf = 2.261060e-15
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_steepest_id_newton_pass1
+======================================================================
+.temp -40
+vg g 0 dc -1.059746200000e+00
+vb b 0 dc 4.547033080000e-06
+vd dd 0 dc -1.222659440000e-01
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.059742e+00
+@m.xm1.m0[vds] = 1.222572e-01
+@m.xm1.m0[vbs] = -8.89268e-06
+@m.xm1.m0[id] = 3.448929e-05
+@m.xm1.m0[gm] = 1.295399e-04
+@m.xm1.m0[gds] = 2.048502e-04
+v(d) = -1.22266e-01
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999998e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588304e-12
+onoise_total.m.xm1.m0.id = 1.956288e-15
+onoise_total.m.xm1.m0.1overf = 3.640296e-16
+inoise_total.m.xm1.m0.id = 1.956288e-12
+inoise_total.m.xm1.m0.1overf = 3.640297e-13
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_steepest_id_newton
+======================================================================
+.temp -40
+vg g 0 dc -1.059750400000e+00
+vb b 0 dc 2.013861600000e-07
+vd dd 0 dc -1.222746880000e-01
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.059746e+00
+@m.xm1.m0[vds] = 1.222660e-01
+@m.xm1.m0[vbs] = -4.54736e-06
+@m.xm1.m0[id] = 3.449188e-05
+@m.xm1.m0[gm] = 1.295488e-04
+@m.xm1.m0[gds] = 2.048456e-04
+v(d) = -1.22275e-01
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999998e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588304e-12
+onoise_total.m.xm1.m0.id = 1.956295e-15
+onoise_total.m.xm1.m0.1overf = 3.640568e-16
+inoise_total.m.xm1.m0.id = 1.956295e-12
+inoise_total.m.xm1.m0.1overf = 3.640569e-13
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_steepest_id_plus_IdR
+======================================================================
+.temp -40
+vg g 0 dc -1.059746200000e+00
+vb b 0 dc 4.547033080000e-06
+vd dd 0 dc -1.222764027164e-01
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.059742e+00
+@m.xm1.m0[vds] = 1.222677e-01
+@m.xm1.m0[vbs] = -8.89295e-06
+@m.xm1.m0[id] = 3.449143e-05
+@m.xm1.m0[gm] = 1.295507e-04
+@m.xm1.m0[gds] = 2.048372e-04
+v(d) = -1.22276e-01
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999998e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588304e-12
+onoise_total.m.xm1.m0.id = 1.956271e-15
+onoise_total.m.xm1.m0.1overf = 3.640577e-16
+inoise_total.m.xm1.m0.id = 1.956271e-12
+inoise_total.m.xm1.m0.1overf = 3.640578e-13
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_steepest_id_minus_IdR
+======================================================================
+.temp -40
+vg g 0 dc -1.059746200000e+00
+vb b 0 dc 4.547033080000e-06
+vd dd 0 dc -1.222554852836e-01
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.059742e+00
+@m.xm1.m0[vds] = 1.222468e-01
+@m.xm1.m0[vbs] = -8.89241e-06
+@m.xm1.m0[id] = 3.448715e-05
+@m.xm1.m0[gm] = 1.295291e-04
+@m.xm1.m0[gds] = 2.048631e-04
+v(d) = -1.22255e-01
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999998e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588304e-12
+onoise_total.m.xm1.m0.id = 1.956305e-15
+onoise_total.m.xm1.m0.1overf = 3.640015e-16
+inoise_total.m.xm1.m0.id = 1.956305e-12
+inoise_total.m.xm1.m0.1overf = 3.640016e-13
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_steepest_id_interp_pass1
+======================================================================
+.temp -40
+vg g 0 dc -1.059735710902e+00
+vb b 0 dc 4.543630471987e-06
+vd dd 0 dc -1.220806325764e-01
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.059731e+00
+@m.xm1.m0[vds] = 1.220719e-01
+@m.xm1.m0[vbs] = -8.88432e-06
+@m.xm1.m0[id] = 3.444996e-05
+@m.xm1.m0[gm] = 1.293492e-04
+@m.xm1.m0[gds] = 2.050683e-04
+v(d) = -1.22081e-01
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999998e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588304e-12
+onoise_total.m.xm1.m0.id = 1.956552e-15
+onoise_total.m.xm1.m0.1overf = 3.635254e-16
+inoise_total.m.xm1.m0.id = 1.956552e-12
+inoise_total.m.xm1.m0.1overf = 3.635254e-13
+Note: Simulation executed from .control section 
+
+======================================================================
+=== chk_ff_-40c_3.63v_xmph_steepest_id_interp
+======================================================================
+.temp -40
+vg g 0 dc -1.059740421803e+00
+vb b 0 dc 2.029409439739e-07
+vd dd 0 dc -1.220893651529e-01
+rs dd d 1.00000000e-03
+--- ngspice output ---
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.059736e+00
+@m.xm1.m0[vds] = 1.220806e-01
+@m.xm1.m0[vbs] = -4.54397e-06
+@m.xm1.m0[id] = 3.445261e-05
+@m.xm1.m0[gm] = 1.293581e-04
+@m.xm1.m0[gds] = 2.050643e-04
+v(d) = -1.22089e-01
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 9.999998e-04
+Doing analysis at TEMP = -40.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 3.588304e-12
+onoise_total.m.xm1.m0.id = 1.956560e-15
+onoise_total.m.xm1.m0.1overf = 3.635528e-16
+inoise_total.m.xm1.m0.id = 1.956561e-12
+inoise_total.m.xm1.m0.1overf = 3.635529e-13
+Note: Simulation executed from .control section 

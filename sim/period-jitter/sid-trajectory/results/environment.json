@@ -1,0 +1,21 @@
+{
+  "ngspice": "** ngspice-46 : Circuit level simulation program",
+  "pdk_models": "/home/ubuntu/.volare/gf180mcuD/libs.tech/ngspice",
+  "repo_head": "8681ae3d",
+  "vco_netlist_sha1": "45fd0568fbbc260de835154ba06273540527b4cf",
+  "python": "3.12.3",
+  "utc": "2026-09-26T08:07:03Z",
+  "quick": false,
+  "points": [
+    "typical_27c_3.30v",
+    "ss_125c_2.97v",
+    "ff_-40c_3.63v"
+  ],
+  "stages": [
+    "trajectory",
+    "sid",
+    "checks",
+    "cost",
+    "weighted"
+  ]
+}

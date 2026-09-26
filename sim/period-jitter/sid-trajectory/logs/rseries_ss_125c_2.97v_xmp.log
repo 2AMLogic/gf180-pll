@@ -1,0 +1,37 @@
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: s_id along the trajectory -- generated.
+
+Doing analysis at TEMP = 125.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+@m.xm1.m0[vgs] = 1.301949e+00
+@m.xm1.m0[vds] = 2.178607e+00
+@m.xm1.m0[vbs] = -4.29396e-01
+@m.xm1.m0[id] = 5.465839e-05
+@m.xm1.m0[gm] = 2.074508e-04
+@m.xm1.m0[gds] = 5.404262e-06
+v(d) = -2.17863e+00
+Doing analysis at TEMP = 125.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 1
+zm0 = 1.000000e-03
+Doing analysis at TEMP = 125.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+No. of Data Rows : 2
+
+No. of Data Rows : 1
+onoise_total_rs_thermal = 4.689159e-12
+onoise_total.m.xm1.m0.id = 1.813821e-15
+onoise_total.m.xm1.m0.1overf = 2.160968e-15
+inoise_total.m.xm1.m0.id = 1.813821e-12
+inoise_total.m.xm1.m0.1overf = 2.160968e-12
+Note: Simulation executed from .control section 

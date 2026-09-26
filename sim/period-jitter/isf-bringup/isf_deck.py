@@ -240,11 +240,28 @@ def build_deck(
     options=("rshunt=1e12", "reltol=1e-4", "abstol=1e-15", "vntol=1e-7", "itl4=200"),
     wrdata: str = "clk.dat",
     src: str | None = None,
+    extra_vectors=(),
 ) -> str:
     """One ISF deck.
 
     `injections` is an iterable of `(copy, node_class, stage, t_inject, dq, pw)`.
     Copy 0 is the UNPERTURBED reference and must carry no injection.
+
+    `extra_vectors` appends further ngspice vector expressions to the `wrdata`
+    line, AND emits a `save` card naming them.  Both halves are required and the
+    `save` is the load-bearing one: a device operating-point expression such as
+    `@m.x0.xs1.xmn.m0[vgs]` that is only named on `wrdata` comes back FROZEN at
+    its DC value for every timepoint -- the column varies not at all, the run
+    exits 0, and nothing announces it.  Only a vector listed on a `save` before
+    the `tran` is tracked through the transient.
+
+    Additive by construction: with the default empty tuple the generated deck is
+    byte-identical to what it was before this parameter existed, so the ISF
+    bring-up's own committed evidence is unaffected.  It exists so that
+    `sim/period-jitter/sid-trajectory/` can sample the ring's bias trajectory
+    out of *this* deck -- the same construction, options, initial conditions and
+    therefore the same adaptive timestep sequence the committed `h(x)` table was
+    measured on -- rather than out of a second, nominally-equivalent one.
     """
     if src is None:
         src = read_vco_netlist(repo_root)
@@ -292,9 +309,15 @@ def build_deck(
         a(injection_element(spec, copy, stage, f"inj{copy}", t_inject, dq, pw))
     a(".option " + " ".join(options))
     a(".control")
+    cols = [f"v(clk{k})" for k in range(ncopy)]
+    extra = [str(v) for v in extra_vectors]
+    if extra:
+        # MUST precede the `tran`, and MUST name every column: see the
+        # docstring -- an unsaved @m...[...] column is silently constant.
+        a("save " + " ".join(cols + extra))
     a(f"tran {tstep:.6e} {tstop:.6e} 0 {tmax:.6e}")
     a("set wr_singlescale")
-    a(f"wrdata {wrdata} " + " ".join(f"v(clk{k})" for k in range(ncopy)))
+    a(f"wrdata {wrdata} " + " ".join(cols + extra))
     a(".endc")
     a(".end")
     return "\n".join(out) + "\n"
