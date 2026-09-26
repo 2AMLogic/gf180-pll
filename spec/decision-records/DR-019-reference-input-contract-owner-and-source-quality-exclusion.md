@@ -351,3 +351,27 @@ without a reviewer, which is what rule 5 exists to prevent.
 The lesson A1 drew generalizes one step further than A1 drew it: a
 reproduction command has to be able to return what would disprove it, **and so
 does the CI check that grades the command.**
+
+## Amendment A4 — a second deck fired rule 5 while this branch was in flight, and it is re-argued the same way (issue #527, #552)
+
+**Date**: 2026-09-25. **No decision, target, budget or verdict of this record
+moves.** `sim/lock-window-bisection`'s deck landed on `main` (#552, closed by
+DR-029) independently of this record's own branch, and A3's widened enumerator
+— which now matches any dependent or behavioural source on `ref`, not only
+`pulse()` — sees it too: `bref  ref  0 v='time < tsw ? v(refa) : v(refb)'`
+switches between two pre-step/post-step `pulse()` trains so the campaign can
+bisect the lock-detector window trim rule against a stepped reference, and it
+now carries a committed record. The same reproduction command returns **16
+decks, 13 of one shape**, with three exceptions: `sim/reference-input-contract`
+(no record), `sim/reference-phase-transfer` (DR-027), and
+`sim/lock-window-bisection` (DR-029).
+
+The premise is re-argued the same way A3 re-argued it, and survives for the
+same reason: `sim/lock-window-bisection`'s record reports the `LOCK`-pad
+deassert latency the trim-code bisection route needs, not a jitter or spur
+number — and DR-029's own verdict is a negative result, that the route is not
+viable, which reports nothing this repository's jitter, spur or phase-transfer
+budgets could rest on either way. The surviving claim is unchanged from A3: no
+record that reports a jitter or spur number was measured against a varied
+reference. `sim/lib/check-ref-drive-claims.sh`'s `REARGUED` table now names
+both campaigns against their respective decision records.

@@ -324,6 +324,16 @@ REARGUED = {
         "spec/decision-records/"
         "DR-027-reference-phase-transfer-measures-the-exclusions-transfer.md"
     ),
+    # #527/#552: this campaign phase-steps REF to trigger the LOCK-pad
+    # deassert transition and reads the trim-code window it selects. DR-029
+    # is a negative-result method characterization -- it reports deassert
+    # latency and trim-code viability, no jitter or spur number, so the
+    # ideal-reference premise the rest of this tree's jitter/spur/phase-
+    # transfer figures rest on is untouched.
+    "lock-window-bisection": (
+        "spec/decision-records/"
+        "DR-029-ref-phase-step-bisection-measures-the-wrong-quantity.md"
+    ),
 }
 
 #: A decision record short enough to be a placeholder is not a re-argument.
