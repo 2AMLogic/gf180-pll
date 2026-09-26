@@ -309,6 +309,34 @@ jobs:
         # only committed `.spice` text, no PDK, no xschem.
         run: bash design/lib/check-port-connectivity.sh
 
+      - name: sim/lib/check-record-trim-connectivity.sh (committed evidence vs. the netlist snapshot it was taken on)
+        # The check above stops #515's defect recurring in `design/`. It says
+        # nothing about the evidence already taken on the broken export, and
+        # DR-026's audit of that -- `grep -rl 'ldt3_code=1' sim/*/corners/*/`
+        # -- read as exhaustive and was not. Three `sim/reference-phase-
+        # transfer` records (#509) had been run that morning on the same
+        # pre-fix netlist while programming trim code 8, so their detector ran
+        # at code 0, and they reached `main` after DR-026 merged. That grep
+        # could never have returned them: their decks take the code from
+        # `testbench/tb.json` through the harness, so the string it looks for
+        # appears in none of their logs (#557). A grep for one campaign's
+        # parameter spelling is not an audit of a tree.
+        #
+        # This grades artifacts instead, and needs both halves of the defect:
+        # a committed `sim/*/netlist-snapshots/*.spice` that leaves a declared
+        # port wired to a single-connection auto-named `net<N>`, AND that same
+        # record's own committed per-corner log showing the matching pad
+        # driven. Either alone is not a finding -- an unused dead pin changed
+        # nothing (`sim/lock-window-proxy`), and a driven pad on a netlist
+        # that wires it is every post-DR-026 record. A record that has both
+        # must be named in the check's DISCLOSED table against a decision
+        # record that exists, is more than a stub, and names the campaign
+        # back. Its unit tests run under `bash sim/selftest.sh` above
+        # (sim/tests discovery). Needs python3 (set up above); reads committed
+        # `.spice` snapshots, committed logs and committed Markdown -- no PDK,
+        # no ngspice.
+        run: bash sim/lib/check-record-trim-connectivity.sh
+
       - name: sim/lib/check-pvt-coverage-claims.sh (quoted corners vs. the harness's corner registry)
         # The six checks above all grade WHAT a document says -- its counts, its
         # rows, its citations, its spec and decision-record coverage, its I/O

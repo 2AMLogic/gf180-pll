@@ -224,11 +224,12 @@ loop-filter R/C sets the loop's time *constant* and a long-settled step
 residual probes its DC *gain*, but it is a limitation, not an absence of one.
 (e) **Schematic-level**, no layout parasitics (#18). (f) **Not evidence about
 lock.** The design's own `lock` flag does not assert at four of these five
-corners at this release point. The differential does not depend on it — what it
-needs is that both decks are the same run up to `tphase` (checked) and that the
-loop is tracking at N = 6 through the window (checked by `nmeas`/`fout`/
-`dn_lvl`) — but this record must not be cited for a lock verdict. That is
-`spec/pll.md` row 16's territory, and #437's.
+corners at this release point — **at the detector's effective window trim code
+0, not at the code 8 the decks programmed; see Amendment A1**. The differential
+does not depend on it — what it needs is that both decks are the same run up to
+`tphase` (checked) and that the loop is tracking at N = 6 through the window
+(checked by `nmeas`/`fout`/`dn_lvl`) — but this record must not be cited for a
+lock verdict. That is `spec/pll.md` row 16's territory, and #437's.
 
 **5. `docs/chipalooza/challenge-5-proposal.md`'s §5 Reference input row is
 re-derived from the record, and its verdict does not move.** The row's
@@ -394,3 +395,121 @@ figure, and are likewise not edited; a frozen snapshot is the deck that ran.
      their own faces. Aligning the job image with the repository's pin is a
      worker-provisioning matter, not a design one.
 - **Nothing in `design/` changes.**
+
+## Amendment A1 — all three records ran the lock detector at effective code 0, not the programmed code 8; the transfer figure is untouched and the lock remark is re-scoped (issue #557)
+
+**Date**: 2026-09-26. **No measured value, no verdict, no target and no
+ratified number moves.** The `20·log₁₀(N)` result this record exists to report
+— 15.529 … 16.366 dB against the stated 15.563 dB, 5/5 PASS — stands exactly as
+committed, for a reason given below that is structural rather than
+reassuring. What is corrected is a *configuration* statement: which
+lock-detector window trim code the three committed records actually ran at, and
+therefore what Decision 4 (f)'s "the design's own `lock` flag does not assert at
+four of these five corners" is a statement about.
+
+### What was found
+
+All three records were taken on a `pll_top` export that predates DR-026's fix
+of issue #515. In every one of the three frozen snapshots,
+
+    sim/reference-phase-transfer/netlist-snapshots/20260925-073001-ed38ff1.spice
+    sim/reference-phase-transfer/netlist-snapshots/20260925-074549-1f4b734.spice
+    sim/reference-phase-transfer/netlist-snapshots/20260925-080736-b722f33.spice
+
+the lock-detector instance line reads
+
+    XLD UP DN LOCK VWIN LDT0 LDT1 LDT2 net1 VDD VSS lock_detector
+
+— the trim MSB terminal wired to `net1`, xschem's auto-generated name for the
+wire nobody labeled, rather than to the declared `LDT3` port. Today's
+`design/netlist/pll_top.spice` carries `LDT3` in that position. So the detector
+in these runs saw `code & 0b0111`, exactly as DR-026 describes.
+
+The campaign programmed `ldt0_code=0`, `ldt1_code=0`, `ldt2_code=0`,
+`ldt3_code=1` (`testbench/tb.json`, and `testbench/check_config.sh` asserts it)
+— `CLOOP_WINDOW_TRIM_NOMINAL` = **code 8**, a code whose only set bit is the one
+that came loose. **8 & 0b0111 = 0**, so the effective code was **0**, the
+narrowest window the trim offers.
+
+The records' own logs show it without needing any of the above: in all 25
+committed per-corner logs across the three `corners/` directories, the DC
+operating-point table prints the `ldt3` pad at a supply rail (2.97 / 3.30 /
+3.63 V) and `xdut.net1` at 0 V. The pad was driven; nothing inside the
+subcircuit read it.
+
+### Why the measured transfer is unaffected, structurally
+
+In `.subckt lock_detector`, `LDT0`–`LDT3` reach exactly one instance, `XDLY`
+(`delaywin_3v3`); `UP`/`DN` reach exactly one, `XERR` (`xor2_3v3`), whose
+behaviour does not depend on the trim code. And inside `.subckt pll_top`, the
+detector's outputs `LOCK` and `VWIN` appear on **no instance line but `XLD`'s
+own** — they leave as ports and drive nothing in the loop. The detector is a
+pure observer of the loop it watches, so no trim code, connected or not, can
+move the loop's phase response. `phi_shift`, `tracking_ratio`, `drift_ctl`,
+`pair_resid`, `nmeas`, `fout`, `dn_lvl`, the in-band dB figures and the
+roll-off reading are all untouched, and none of them is re-derived here. This
+amendment disputes no number in any of the three records.
+
+### What is re-scoped
+
+Decision 4 (f) is amended in place to name the effective code, and it is the
+only sentence in this record that moves. The sentence was a true observation
+and remains one; what it was silently scoped to was wrong. Read it, and the
+corresponding Limitation (6) on all three committed record faces and in
+`testbench/tb.json`, as:
+
+> the design's own `lock` flag does not assert at four of these five corners
+> **with the lock-detector window trim at effective code 0** (the pre-DR-026
+> netlist's `code & 0b0111` of the programmed code 8), at this release point.
+
+That is a materially weaker statement than the one a reader would otherwise
+take from it. Code 0 is the narrowest window the trim can select; it is neither
+the campaign's intended nominal (8) nor any code the normative
+[Lock-detector window trim-code rule](../pll.md#lock-detector-window-trim-code-rule)
+selects for any bundle (3 / 6 / 7 / 11). A non-assert at the narrowest window
+is close to uninformative about the part as programmed, whereas the unqualified
+sentence reads as a lock-detector-window fact about it. `spec/pll.md`'s
+Verification-owed Reference input row and `sim/CHARACTERIZATION.md`'s
+`reference-phase-transfer` row carried the same unqualified sentence,
+transcribed from here, and are qualified the same way in the same change.
+
+**The three records are not edited, and no superseding record is manufactured
+to carry this.** `sim/README.md`'s append-only rule forbids both, and the
+records are truthful about the code the decks *programmed* — which is the same
+disposition DR-026 reached for `20260920-180604-0f91a9b.md`. The correction
+belongs here.
+
+### What is not done here, and why
+
+**The five-corner campaign is not re-run.** A re-take on a post-DR-026 netlist
+would make the lock-flag remark a statement about code 8, which is a strictly
+better sentence — but the transfer figure this record exists for does not need
+it (see the structural argument above), and ten more whole-PLL closed-loop
+transients at the mandatory 100 ps internal-timestep ceiling is a real cost for
+a caveat. It is available to anyone who wants the code-8 observation; nothing
+here depends on it, and this amendment does not sequence it.
+
+**Decision 4 (f)'s referral is unchanged.** Whether the detector asserts at a
+rule-selected code is still `spec/pll.md` row 16's question and #437's — which
+DR-026 Decision 4 already requires to run on a post-fix netlist.
+
+### How this was found, and what now catches it
+
+Not by DR-026's audit, which could not have found it. DR-026's Context offers
+`grep -rl 'ldt3_code=1' sim/*/corners/*/` as returning "exactly those five logs
+across the whole repository". That grep still returns exactly those five logs
+today — and these three records are invisible to it, because their decks take
+the trim code from `tb.json` through the harness rather than from a
+`.param ldt3_code=` line, so the string it looks for appears in none of their
+25 logs. It was found by the #127 T1-checklist re-derivation over
+`1937f52e..e9fb1176`, reading the snapshots.
+
+`sim/lib/check-record-trim-connectivity.sh` now grades the artifacts instead,
+in CI, over every committed record in the tree: a frozen netlist snapshot that
+leaves a declared port on a single-connection auto-named `net<N>`, *together
+with* that same record's own frozen log showing the matching pad driven, is the
+finding — and it is admitted only by a decision record named against that
+(campaign, record) in the check's own table, verified to exist, to be more than
+a stub, and to name the campaign back. This record is that entry for all three
+`reference-phase-transfer` records. DR-026 Amendment A1 records the same check
+from the other side.
