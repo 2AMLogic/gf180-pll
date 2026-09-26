@@ -17,14 +17,13 @@
 #
 # Exit codes:
 #   0  the report was written (default mode), or matches (--check)
-#   1  the committed report is stale (--check), or the manifest/doc is bad
+#   1  the committed report is stale (--check), or the manifest is bad
 #   2  `klt` is not installed
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MANIFEST="signoff/block-manifest.json"
-TIERS_DOC="signoff/design-evidence-tiers.md"
 REPORT="signoff/tier-report.json"
 
 mode="write"
@@ -54,6 +53,13 @@ fi
 
 echo "klt: $(command -v klt) ($(klt --version 2>&1))" >&2
 
+# No --tiers-doc: the report is graded against the checklist bundled inside
+# the pinned `klt` release itself (klt 0.6.0 bundles all eleven T1 items), so
+# the report's `source_doc_content_hash` is that bundled checklist's hash. A
+# klt pin bump that ships an amended checklist therefore changes the rendered
+# report and fails --check until someone re-renders it -- which is the moment
+# to re-read the checklist diff (signoff/README.md, issue #564).
+#
 # `klt signoff --manifest` exits 3 when the block is not yet T1 -- which is
 # the expected, honest state of this block today (see signoff/README.md). Only
 # 0 (T1 reached) and 3 (not yet T1) are verdicts; anything else is a tool or
@@ -63,7 +69,6 @@ trap 'rm -f "$tmp"' EXIT
 status=0
 klt signoff \
   --manifest "$MANIFEST" \
-  --tiers-doc "$TIERS_DOC" \
   --format json >"$tmp" || status=$?
 
 case "$status" in

@@ -18,7 +18,7 @@ the evidence does rather than after.
 | --- | --- |
 | `block-manifest.json` | The block manifest: this block's `block` name, its `kind`, and the evidence envelope cited per T1 item. Hand-edited; the only file here a human writes. |
 | `tier-report.json` | `klt signoff --manifest … --format json` output. **Generated — do not edit.** Re-render with `bash signoff/run-signoff.sh`. |
-| `design-evidence-tiers.md` | A pinned copy of `klayout-tools`' T1 checklist. See "Why the checklist is vendored here". |
+| ~~`design-evidence-tiers.md`~~ | ~~A pinned copy of `klayout-tools`' T1 checklist. See "Why the checklist is vendored here".~~ — **removed (2026-09-26, issue #564):** klt 0.6.0 bundles the eleven-item checklist, which was this file's own stated deletion condition. See "Which checklist this is graded against". |
 | `run-signoff.sh` | Renders the report (`bash signoff/run-signoff.sh`) or verifies the committed one (`--check`, which is what CI runs). |
 
 ## Reproducing
@@ -118,8 +118,17 @@ assembled VCO, the PFD, divider and lock-detector leaf cells) — but T1 is
 block-scoped, and a sub-block's clean DRC is not the block's item 3. Item 7
 (post-layout verification) accepts only a `klt pex` report for an analog
 partition, and there is neither a PEX run nor a block layout to extract one
-from. Item 11 (power delivery, structural) needs a `klt erc` supply spec and
-report; this repo has neither — that gap is tracked separately as #427.
+from. ~~Item 11 (power delivery, structural) needs a `klt erc` supply spec and
+report; this repo has neither — that gap is tracked separately as #427.~~ —
+**corrected (2026-09-26, issue #564):** item 11 (power delivery, structural)
+needs a `klt erc` supply-spec run *and* a `klt lvs` envelope. A supply spec and
+report exist for one sub-block, `vco_block`, and have been committed since
+2026-09-20 (`layout/evidence/vco-layout/erc-supply-spec.json` and
+`erc-report.json`, PR #434, which closed #427). They are not cited here: they
+cover one sub-block rather than the block, no `klt lvs` envelope exists to
+pair them with, and they would not grade `met` even if both of those were
+fixed (see "Item 11 under the klt 0.6.0 checklist" below). The remaining
+item-11 gap is filed as #565 (open).
 
 **3. The tool cannot check what the item claims, and we decline to game it.**
 Items **1** (design sources), **2** (layout), **9** (testbenches shipped) and
@@ -148,42 +157,141 @@ made from it:
   disclosed. Those disclosures have to be written into the claim, not inferred
   from the row.
 
-## Why the checklist is vendored here
+## Which checklist this is graded against
 
-`run-signoff.sh` passes `--tiers-doc signoff/design-evidence-tiers.md` rather
+**Corrected (2026-09-26, issue #564).** `run-signoff.sh` no longer passes
+`--tiers-doc`. It grades against the checklist bundled inside the pinned `klt`
+release itself — klt 0.6.0, whose bundled `docs/design-evidence-tiers.md`
+carries all eleven T1 items — and the vendored bridge copy that used to live in
+this directory has been deleted, exactly as its own stated deletion condition
+("once a released `klt` bundles an eleven-item checklist") required. The
+report's `source_doc` now reads `docs/design-evidence-tiers.md` and its
+`source_doc_content_hash` is the bundled file's hash,
+`sha256:63eeec72e3d849761cf32dcf091af5728b069b1515e32bb3138e9454303671e5`.
+
+That also closes the bridge's first stated limit (below, struck). Because the
+report pins the bundled checklist's hash, a future `klt` pin bump that ships an
+amended checklist re-renders a different report and fails CI's `--check` until
+someone re-renders it — so an upstream amendment can no longer arrive silently
+through the pin. **No separate re-hash guard was added**, because there is no
+longer a vendored copy for one to guard. What this does *not* do: the
+`--check` failure only says the report changed; re-reading the checklist diff
+at that moment is still a deliberate act, as the next section is.
+
+The re-render against the bundled checklist changed four lines of
+`tier-report.json` and no verdict: `source_doc`, `source_doc_content_hash`, and
+item 11's `text` on each of its two partition rows. All 22 T1 rows are still
+`unmet` / `no_evidence`, and all 22 still read `graded_by_build: true`.
+
+### Item 11 under the klt 0.6.0 checklist
+
+The vendored copy had fallen behind the klt 0.6.0 bundle by three unified-diff
+hunks (`diff -u signoff/design-evidence-tiers.md` against the installed
+wheel's `klayout_tools/data/design-evidence-tiers.md`):
+
+1. **Mixed-signal partition boundary** — a new, optional manifest field,
+   `partition_boundary` (klayout-tools#2278), which the report echoes onto
+   every row of the partition it names. It is reported, not graded. This
+   repo's manifest does not declare it yet; the boundary is stated in prose in
+   "Block kind" above.
+2. **Item 11, power delivery** — the substantive change, read below.
+3. **Staleness** — every citation now reports `input_verified: true | false |
+   null` (klayout-tools#2196): whether `klt signoff` re-hashed the artifact
+   itself rather than only comparing the envelope's self-reported hash. Never
+   graded on. This manifest cites nothing, so no row carries it.
+
+Item 11's text gained, among other things, two rules that bear on the only
+item-11 evidence this repository has — the `vco_block` supply spec and report
+under `layout/evidence/vco-layout/` (see "Why every row is `unmet`"). Neither
+is cited, so neither changes today's verdict; this is what they would render
+if they were. The ERC half was checked by calling klt 0.6.0's own item-11
+supply-spec grader (`klayout_tools.signoff._resolve_erc_supply_spec`) on the
+committed report and spec directly. A full manifest run cannot reach that code
+path here: item 11 also requires a `klt lvs` envelope, none exists, and the
+grader returns `wrong_kind` for a set without one before it reads the ERC half.
+
+- **A spec declaring no `ties[]` now renders `supply_spec_incomplete`.** The
+  committed `erc-supply-spec.json` declares no `ties[]` and no
+  `ties_disclosure`, and the grader returns exactly that reason for it. The
+  spec's own `_ties_omitted` note gives klayout-tools#2169 (a `ties[]` bug that
+  falsely merged routed supplies) as the reason for omitting them; that bug was
+  fixed upstream on 2026-09-20, so the rationale no longer holds. Adding a
+  `ties_disclosure` to the spec file would not change the reason on its own:
+  0.6.0 reads the disclosure from the ERC *envelope's* recorded coverage, and
+  the committed report was produced by a 0.5.0 build that records none. The
+  route to a graded item-11 ERC half is a fresh `klt erc` run on 0.6.0 with
+  `ties[]` declared, which is #565's work, not this directory's.
+- **`VDD_VCO`'s second island no longer reads as a confirmed defect.** The
+  report's one supply finding is `erc.unconnected_net`: `VDD_VCO` resolves to
+  two islands. The new item-11 caveat (klayout-tools#2180) says a multi-island
+  finding on a well-tap-strapped supply is not a confirmed power-delivery
+  defect on its own, and asks for a cross-check against an independent,
+  device-aware LVS extraction whose deck does not join nets by label alone
+  (naming a bare `connect_implicit('*')` as the trap). That cross-check is
+  already committed: `layout/evidence/vco-layout/PROOF-433-vdd-island-fix.md`
+  identified this PDK deck's `connect_implicit('*')` name-join, bypassed it by
+  counting geometric islands of the extracted `VDD_VCO` net's own shapes on
+  every extracted layer including the n-well, and found the remaining island
+  (`vtoi_core`'s bottom tap band) joined to the rest through the continuous
+  n-well. Under the caveat, then, that island is a false positive of the
+  metal-only model, which is what `PROOF-erc.md` already concluded. **The
+  caveat is guidance for a reader, not a grading exemption:** the grader still
+  returns the `VDD_VCO` finding as a supply finding, and would render
+  `supply_not_continuous` for it once the `ties[]` rule above was satisfied.
+  (It checks `ties[]` first, so today the finding is masked by
+  `supply_spec_incomplete`.) Whether declaring `ties[]` in a 0.6.0 re-run also
+  merges the second island in `klt erc`'s own model is not verified here.
+
+Net: item 11 is `unmet` for this block for more reasons than the row's
+`no_evidence` says, and none of them is a known power-delivery defect.
+
+### Superseded: why the checklist was vendored here
+
+The section below is kept for its history and struck, per this repository's
+convention for withdrawn claims. Every present-tense statement in it is false
+as of issue #564; the correction is the section above.
+
+~~`run-signoff.sh` passes `--tiers-doc signoff/design-evidence-tiers.md` rather
 than using the checklist bundled inside the installed `klt` wheel. The released
 wheel (`klayout-tools` 0.5.0, released 2026-09-15) bundles a **ten**-item
 checklist; T1 item 11 landed upstream on 2026-09-17 (klayout-tools#2025). Graded
 against the bundled copy this block renders 20 rows and item 11 does not exist
 at all — which is exactly the silent staleness this directory is here to
 prevent. (The underlying release lag is upstream's own klayout-tools#2173, not
-something this repo can close.)
+something this repo can close.)~~ — **corrected:** CI pins klt 0.6.0, whose
+bundled checklist has eleven items and renders 22 T1 rows for this block.
 
-`--tiers-doc` is `klt signoff`'s own documented override for this, so the
+~~`--tiers-doc` is `klt signoff`'s own documented override for this, so the
 vendored copy is a bridge, not a fork. It is a byte-for-byte copy of
 `2AMLogic/klayout-tools` `docs/design-evidence-tiers.md` at commit
 `428951e036935d37161732adb55915049c598cc4` ("feat(signoff): add T1 item 11,
-power delivery (structural) (#2057)", 2026-09-19), sha256
+power delivery (structural) (klayout-tools#2057)", 2026-09-19), sha256
 `275964ed6cdc3ed57566710540daa76beb26c1b67fb4b3dbf598d05b640a7ce0`. It carries
 no local edits and must not acquire any: the checklist is upstream's to write,
 and an edit here would be this repo grading itself against its own rules.
 **Delete this file and the `--tiers-doc` flag once a released `klt` bundles an
 eleven-item checklist.** Editing it is caught immediately — every item's text
 is copied verbatim into `tier-report.json`, so any change re-renders the report
-and fails CI's `--check`.
+and fails CI's `--check`.~~ — **corrected:** the copy was also stale — three
+hunks behind the 0.6.0 bundle, all read above — and both it and the flag are
+deleted.
 
 Two limits of the bridge, stated rather than assumed:
 
-- Because item text is baked into the committed report, a *silent* upstream
+- ~~Because item text is baked into the committed report, a *silent* upstream
   amendment to the checklist is not detected here — only a change to this
   pinned copy is. Re-pinning is a deliberate act, and re-reading the diff is
-  part of it.
-- klt 0.5.0 parses and renders item 11's row but has none of item 11's grading
+  part of it.~~ — **corrected:** with no pinned copy, an amended checklist
+  arriving through a `klt` pin bump changes the report's
+  `source_doc_content_hash` and fails `--check`.
+- ~~klt 0.5.0 parses and renders item 11's row but has none of item 11's grading
   logic (its compound array-of-citations evidence entry, its `erc` /
   `place-and-route` accepted kinds). With no citation the row is `unmet` either
   way, so the verdict is correct today — but **do not cite item 11 evidence
   against 0.5.0 and read the result as graded.** Filed upstream as the friction
-  issues named below.
+  issues named below.~~ — **corrected:** CI pins 0.6.0, which implements item
+  11's grading, and the committed report says so mechanically: item 11 reads
+  `graded_by_build: true` on both partition rows.
 
 ## Negative controls
 
@@ -215,18 +323,28 @@ Editing one field of the committed `tier-report.json` and re-running
 
 Per this repo's friction protocol (`CLAUDE.md`), tool gaps hit while wiring
 this up were filed generically against `2AMLogic/klayout-tools` rather than
-worked around silently:
+worked around silently. Their upstream state was re-checked on 2026-09-26
+(issue #564); two of the three are fixed, and the committed report shows it.
 
-- **klayout-tools#2175** — the tier report names the checklist it graded
+- **klayout-tools#2175** — ~~the tier report names the checklist it graded
   against (`source_doc`) but does not pin its content, so a committed report
   cannot be checked against a checklist that has since changed. The grader
   demands `content_hash` pinning from every citation for exactly this reason
-  and does not apply it to its own governing document.
-- **klayout-tools#2176** — with `--tiers-doc`, the doc's item list and the
+  and does not apply it to its own governing document.~~ — **corrected:**
+  closed as completed upstream on 2026-09-20 and shipped in klt 0.6.0 as the
+  report's `source_doc_content_hash`, which `tier-report.json` carries.
+- **klayout-tools#2176** — ~~with `--tiers-doc`, the doc's item list and the
   build's grading logic can be at different versions, and the report says
   nothing about which items the running build actually implements. An
-  ungradeable row is indistinguishable from a correctly-graded `unmet` one.
+  ungradeable row is indistinguishable from a correctly-graded `unmet` one.~~
+  — **corrected:** closed as completed upstream on 2026-09-20 and shipped in
+  klt 0.6.0 as the report's `build` block, `build_t1_item_count`, and
+  per-item `graded_by_build`, all of which `tier-report.json` carries.
 - **klayout-tools#2177** — a manifest cannot record *why* an item is honestly
   uncited, so the machine verdict and its explanation live in two files that
   drift apart. Most of the section "Why every row is `unmet`" above is prose
-  that wants to be manifest data.
+  that wants to be manifest data. **Still a gap in klt 0.6.0.** The issue was
+  closed upstream on 2026-09-20 as *not planned* — on a citation-accuracy
+  defect in its implementation guidance, not on the merits, with a re-filed
+  proposal invited — so nothing shipped. It has not been re-filed from this
+  repository as of issue #564.
