@@ -1,0 +1,45 @@
+{
+  "ngspice": "** ngspice-46 : Circuit level simulation program",
+  "pdk_models": "/home/ubuntu/.volare/gf180mcuD/libs.tech/ngspice",
+  "operating_point": {
+    "vctrl": 1.795,
+    "vsup": 3.3,
+    "temp_c": 27.0,
+    "band": [
+      0,
+      1,
+      1
+    ]
+  },
+  "t_inject0_s": 4e-08,
+  "tstop_s": 1.2e-07,
+  "tstep_s": 2e-12,
+  "tmax_s": 2e-12,
+  "pulse_width_s": 1e-11,
+  "pilot_dq_C": 2e-15,
+  "pulse_ramp_s": 1e-12,
+  "injection_amplitude_A": 0.00018181818181818183,
+  "target_dt_s": 2e-12,
+  "dq_min_C": 1.25e-16,
+  "dq_max_C": 8e-15,
+  "diff_phases_cycles": [
+    0.0,
+    0.08333333333333333,
+    0.16666666666666666,
+    0.5,
+    0.5833333333333334,
+    0.6666666666666666
+  ],
+  "diff_pairs_drain_source": [
+    "Y-NT",
+    "Y-NH"
+  ],
+  "capacity_probe_ncopy": [
+    25,
+    31,
+    37,
+    41,
+    61
+  ],
+  "quick": false
+}

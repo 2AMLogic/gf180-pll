@@ -95,7 +95,7 @@ sim/
   | `pll-top-smoke` | does the assembled `design/pll_top.sch` acquire and hold lock at all — the acceptance gate for the top-level wiring, **one nominal corner by design** (see below) | #52 |
   | `lock-time` | closed-loop lock acquisition | #12 |
   | `output-range` | closed-loop output-band coverage | #12 |
-  | `period-jitter` | period jitter (deterministic + random), at 150 MHz / band 6 / N = 6 | #13 minted the six committed records (deterministic half, 45/45); the random half is owed at **#520** (open) — #505, which carried it before, closed 2026-09-25 — disposition in DR-020, narrowed by DR-023 |
+  | `period-jitter` | period jitter (deterministic + random), at 150 MHz / band 6 / N = 6 | #13 minted the six committed records (deterministic half, 45/45); the random half is owed at **#520** (open) — #505, which carried it before, closed 2026-09-25 — disposition in DR-020, narrowed by DR-023, and its first pipeline ingredient built and validated (but no number) by DR-030. Two sub-directories here are **method directories, not campaigns**, and neither has a `records/`: `noise-toolchain-probe/` (what ngspice can and cannot do, DR-023) and `isf-bringup/` (the impulse-sensitivity-function extraction, DR-030) |
   | `period-jitter-band-top` | the same deterministic period jitter at the **200 MHz top of the ratified band** — N = 8, and the VCO band code per corner because `spec/pll.md`'s band-selection rule splits this grid across bands 6 and 7 | **#503** (the campaign run); declared by #13, which is closed |
   | `reference-input-contract` | the `REF` electrical contract itself — levels, 10–90 % edge rate and duty cycle driven to each boundary `spec/pll.md` states, graded as the per-corner shift of the PFD's reference-path set delay. **Declared, not measured**: manifest, deck and reduction are committed and self-checking, zero of 288 declared points have run | #499 → DR-019 |
   | `reference-phase-transfer` | the closed-loop REF-to-output **phase transfer** — a single known reference phase step, read out through the loop's own REF-vs-FB static phase error **differentially against a paired control run**, compared against `spec/pll.md`'s `20·log₁₀(N)` reference-source-quality exclusion. A different question from `reference-input-contract` above (waveform *shape* at a fixed phase, not phase *in time*), and the first deck in this tree to displace the reference edge in time at all. **Measured at N = 6**, 5/5 corners PASS: 15.529 … 16.366 dB against the stated 15.563 dB, plus the roll-off above the loop bandwidth at one frequency. The campaign holds three records and its supersession chain is the method's own history — see "Two decks per point, one record" below | #509 → DR-027 |
@@ -1001,6 +1001,16 @@ A **recorded methodology gap** instead of a number (#13):
 > the oscillation cycle — so the routes #520 lists are a noise-referral
 > pipeline, a toolchain that has that analysis, or a recorded negative
 > result, rather than silicon.
+>
+> **DR-030** is what that worked example looks like one increment in, and it is
+> worth reading as the other half of the pattern: `sim/period-jitter/isf-bringup/`
+> builds the first of the noise-referral pipeline's three ingredients, shows it
+> **converged** against the one risk #520 named as load-bearing, and still
+> reports **no number** — so it mints no record, appears in no coverage table,
+> and moves nothing in `spec/pll.md` except the description of what is left. The
+> convention that makes that possible is the same one above: a directory under
+> `sim/<slug>/` with no `records/` is a method directory, and the append-only
+> evidence rule binds records, not methods.
 
 A **distribution claim** with the statistical convention (#15):
 

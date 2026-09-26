@@ -1,0 +1,37 @@
+{
+  "tstop_s": 3e-09,
+  "rows": [
+    {
+      "ncopy": 25,
+      "aborted": false,
+      "data_rows": 1508,
+      "elapsed_s": 17.709554195404053
+    },
+    {
+      "ncopy": 31,
+      "aborted": false,
+      "data_rows": 1508,
+      "elapsed_s": 28.563020944595337
+    },
+    {
+      "ncopy": 37,
+      "aborted": true,
+      "data_rows": 3,
+      "elapsed_s": 12.183790922164917
+    },
+    {
+      "ncopy": 41,
+      "aborted": true,
+      "data_rows": 1,
+      "elapsed_s": 14.213857889175415
+    },
+    {
+      "ncopy": 61,
+      "aborted": true,
+      "data_rows": 2,
+      "elapsed_s": 26.849440574645996
+    }
+  ],
+  "largest_completing": 31,
+  "smallest_aborting": 37
+}

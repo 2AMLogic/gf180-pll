@@ -1,0 +1,260 @@
+{
+  "tmax_s": [
+    8e-12,
+    4e-12,
+    2e-12,
+    1e-12
+  ],
+  "phases_cycles": [
+    0.0,
+    0.25,
+    0.5,
+    0.75
+  ],
+  "runs": [
+    {
+      "period_s": 6.6686503386026765e-09,
+      "f0_Hz": 149955380.65796027,
+      "n_ref_crossings": 17,
+      "rows": [
+        {
+          "copy": 1,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.0,
+          "dq_C": 2e-15,
+          "t_inject_s": 4e-08,
+          "dt_s": -3.1655936180221275e-11,
+          "dt_spread_s": 3.982313296885881e-14,
+          "dt_drift_s_per_cycle": -3.1806450920318724e-15,
+          "n_settled": 10,
+          "h_rad_per_C": 14913071085854.664
+        },
+        {
+          "copy": 2,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.25,
+          "dq_C": 2e-15,
+          "t_inject_s": 4.1667178314103066e-08,
+          "dt_s": 2.2226502250142565e-12,
+          "dt_spread_s": 1.6442427463362832e-13,
+          "dt_drift_s_per_cycle": 2.397090318006803e-14,
+          "n_settled": 9,
+          "h_rad_per_C": -1047087680993.5741
+        },
+        {
+          "copy": 3,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.5,
+          "dq_C": 2e-15,
+          "t_inject_s": 4.333435662820614e-08,
+          "dt_s": 1.8817394668887596e-11,
+          "dt_spread_s": 1.425942953612751e-13,
+          "dt_drift_s_per_cycle": 1.871521508751102e-14,
+          "n_settled": 9,
+          "h_rad_per_C": -8864850584423.365
+        },
+        {
+          "copy": 4,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.75,
+          "dq_C": 2e-15,
+          "t_inject_s": 4.5001534942309204e-08,
+          "dt_s": -2.951121245362863e-12,
+          "dt_spread_s": 9.168980688933799e-14,
+          "dt_drift_s_per_cycle": 6.925293388143649e-15,
+          "n_settled": 9,
+          "h_rad_per_C": 1390269447869.625
+        }
+      ],
+      "elapsed_s": 17.43873691558838,
+      "tmax_s": 8e-12
+    },
+    {
+      "period_s": 6.668677960870993e-09,
+      "f0_Hz": 149954759.52918717,
+      "n_ref_crossings": 17,
+      "rows": [
+        {
+          "copy": 1,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.0,
+          "dq_C": 2e-15,
+          "t_inject_s": 4e-08,
+          "dt_s": -3.1625550949628625e-11,
+          "dt_spread_s": 2.0332732679855942e-14,
+          "dt_drift_s_per_cycle": 6.655716030732701e-16,
+          "n_settled": 10,
+          "h_rad_per_C": 14898694930547.574
+        },
+        {
+          "copy": 2,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.25,
+          "dq_C": 2e-15,
+          "t_inject_s": 4.1667178314103066e-08,
+          "dt_s": 2.172354879546654e-12,
+          "dt_spread_s": 5.757260027599278e-14,
+          "dt_drift_s_per_cycle": -1.4546835437986255e-15,
+          "n_settled": 9,
+          "h_rad_per_C": -1023389369020.0543
+        },
+        {
+          "copy": 3,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.5,
+          "dq_C": 2e-15,
+          "t_inject_s": 4.333435662820614e-08,
+          "dt_s": 1.873090894647587e-11,
+          "dt_spread_s": 4.9254592367777605e-14,
+          "dt_drift_s_per_cycle": -6.612362314517262e-16,
+          "n_settled": 9,
+          "h_rad_per_C": -8824070720851.275
+        },
+        {
+          "copy": 4,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.75,
+          "dq_C": 2e-15,
+          "t_inject_s": 4.5001534942309204e-08,
+          "dt_s": -2.9584167856361743e-12,
+          "dt_spread_s": 4.7688901450030996e-14,
+          "dt_drift_s_per_cycle": -1.059616202981761e-17,
+          "n_settled": 9,
+          "h_rad_per_C": 1393700594712.3936
+        }
+      ],
+      "elapsed_s": 28.970690965652466,
+      "tmax_s": 4e-12
+    },
+    {
+      "period_s": 6.668687217685476e-09,
+      "f0_Hz": 149954551.3767661,
+      "n_ref_crossings": 17,
+      "rows": [
+        {
+          "copy": 1,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.0,
+          "dq_C": 2e-15,
+          "t_inject_s": 4e-08,
+          "dt_s": -3.162127365361848e-11,
+          "dt_spread_s": 8.091420460453229e-15,
+          "dt_drift_s_per_cycle": -2.5034587481927243e-16,
+          "n_settled": 10,
+          "h_rad_per_C": 14896659232105.8
+        },
+        {
+          "copy": 2,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.25,
+          "dq_C": 2e-15,
+          "t_inject_s": 4.1667178314103066e-08,
+          "dt_s": 2.1718344878339695e-12,
+          "dt_spread_s": 4.794130645540781e-15,
+          "dt_drift_s_per_cycle": -7.029748775412093e-17,
+          "n_settled": 9,
+          "h_rad_per_C": -1023142793936.621
+        },
+        {
+          "copy": 3,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.5,
+          "dq_C": 2e-15,
+          "t_inject_s": 4.333435662820614e-08,
+          "dt_s": 1.8729140312906413e-11,
+          "dt_spread_s": 1.37718694611943e-14,
+          "dt_drift_s_per_cycle": -3.6451003652741755e-17,
+          "n_settled": 9,
+          "h_rad_per_C": -8823225275738.871
+        },
+        {
+          "copy": 4,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.75,
+          "dq_C": 2e-15,
+          "t_inject_s": 4.5001534942309204e-08,
+          "dt_s": -2.9630683024664107e-12,
+          "dt_spread_s": 1.4967438599142513e-14,
+          "dt_drift_s_per_cycle": -3.8233236434694817e-16,
+          "n_settled": 9,
+          "h_rad_per_C": 1395889971631.3394
+        }
+      ],
+      "elapsed_s": 52.568973541259766,
+      "tmax_s": 2e-12
+    },
+    {
+      "period_s": 6.6686886542629316e-09,
+      "f0_Hz": 149954519.07336447,
+      "n_ref_crossings": 17,
+      "rows": [
+        {
+          "copy": 1,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.0,
+          "dq_C": 2e-15,
+          "t_inject_s": 4e-08,
+          "dt_s": -3.162013067321457e-11,
+          "dt_spread_s": 3.61318105803416e-15,
+          "dt_drift_s_per_cycle": 8.116059542572386e-17,
+          "n_settled": 10,
+          "h_rad_per_C": 14896117569534.31
+        },
+        {
+          "copy": 2,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.25,
+          "dq_C": 2e-15,
+          "t_inject_s": 4.1667178314103066e-08,
+          "dt_s": 2.171417541637566e-12,
+          "dt_spread_s": 2.021309860665358e-15,
+          "dt_drift_s_per_cycle": -1.377117900581665e-17,
+          "n_settled": 9,
+          "h_rad_per_C": -1022946151838.0884
+        },
+        {
+          "copy": 3,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.5,
+          "dq_C": 2e-15,
+          "t_inject_s": 4.333435662820614e-08,
+          "dt_s": 1.8726568877791402e-11,
+          "dt_spread_s": 2.549083768417108e-15,
+          "dt_drift_s_per_cycle": 9.235415952617391e-18,
+          "n_settled": 9,
+          "h_rad_per_C": -8822011982191.594
+        },
+        {
+          "copy": 4,
+          "node": "Y",
+          "stage": 1,
+          "phase_cycles": 0.75,
+          "dq_C": 2e-15,
+          "t_inject_s": 4.5001534942309204e-08,
+          "dt_s": -2.962596193421371e-12,
+          "dt_spread_s": 8.897811251503386e-16,
+          "dt_drift_s_per_cycle": 3.977185565887485e-17,
+          "n_settled": 9,
+          "h_rad_per_C": 1395667262236.9363
+        }
+      ],
+      "elapsed_s": 107.09778118133545,
+      "tmax_s": 1e-12
+    }
+  ]
+}

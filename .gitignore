@@ -11,6 +11,12 @@
 # `.noise` does decompose per device and per mechanism. Those four logs are
 # what makes the decision record's claims checkable without re-running it.
 !sim/period-jitter/noise-toolchain-probe/logs/*.log
+# Same story for the period-jitter ISF bring-up (issue #520): its captured
+# ngspice output is what lets a reader confirm that the multi-copy charge-
+# injection decks ran without a convergence retry or a timestep-floor warning
+# — the one class of failure that would invalidate a Gamma number while
+# leaving the reduction looking perfectly healthy.
+!sim/period-jitter/isf-bringup/logs/*.log
 # Same story for layout/'s DRC/LVS proof evidence (layout/README.md): the
 # captured deck stdout under layout/evidence/inv-tb-proof/ is the evidence,
 # not scratch output.
