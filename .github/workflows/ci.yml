@@ -433,6 +433,37 @@ jobs:
         # scripts, tb.json manifests and records -- no PDK, no ngspice.
         run: bash sim/lib/check-bias-drive-claims.sh
 
+      - name: sim/lib/check-quoted-value-provenance.sh (quoted values vs. the committed per-corner CSVs)
+        # Every check above grades something *about* a number -- its count, its
+        # citation and whether that citation is current, its grid, its verdict,
+        # its reproduction command, its forge reference. None graded THE NUMBER.
+        # So a section 5 row could cite the right record, name the right grid,
+        # carry the right verdict, and quote a figure that is not in that
+        # record at all -- or was right once and drifted when a superseding run
+        # moved it -- and nothing in this job would have seen it. #237's own
+        # ledger named the gap on 2026-09-25 and verified a sample by hand; a
+        # hand check is not a check.
+        #
+        # Section 5.1 of the proposal is the convention this grades: for each
+        # value, the record, the committed evidence file inside it, the
+        # reduction that produces it, and the scale. Five rules: the record and
+        # file are committed; the record is one the section 5 row itself cites
+        # (or inherits via "Same record"); the figure appears verbatim in that
+        # row, so the two tables cannot drift apart in either direction; the
+        # re-derived value equals the figure ROUNDED TO THE PRECISION WRITTEN;
+        # and every section 5 row is either graded or carries a stated reason
+        # why it has no re-derivable value -- the same "nothing is silently
+        # omitted" rule section 5 already applies to verdicts.
+        #
+        # The contracted-space figures (loop bandwidth, phase margin, settling)
+        # are selected by an `on-icp-trim-rule` predicate READ OUT OF
+        # spec/pll.md's normative Icp trim-code rule table, never written into
+        # the check, so a change to the ratified rule moves what CI enforces in
+        # the same commit. Its unit tests run under `bash sim/selftest.sh`
+        # above (sim/tests discovery). Needs python3 (set up above); reduces
+        # committed CSVs only -- no PDK, no ngspice, no network.
+        run: bash sim/lib/check-quoted-value-provenance.sh
+
       - name: docs/tests (unit tests for the issue-reference-state check)
         # Same shape as the three discover steps above, for the check added in
         # #237 that grades what the outward-facing documents claim about the
