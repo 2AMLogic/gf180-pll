@@ -134,6 +134,8 @@ layout/evidence/work/
 .loom/claude-config/
 .loom/native-tools/
 .loom/tokens/
+.loom/tokens.*/
+.loom/tokens-*/
 .loom/accounts.env
 .loom/api-keys/
 .loom/account-health.json
