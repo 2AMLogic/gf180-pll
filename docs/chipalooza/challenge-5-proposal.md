@@ -631,14 +631,21 @@ orders each of the 504 (corner, band) curves by control voltage and counts the
 curves that are neither non-decreasing nor non-increasing — *monotonic* as this
 document words it, in either direction. `min(adjacent-overlap(fosc_hz by band)
 by bundle+temp_c+vdd_v)` takes, per corner, the worst
-`max(f in band k) / min(f in band k+1) − 1` over consecutive band codes, which
-is negative if a corner leaves a coverage hole. **The monotonicity figure is a
-zero, which is the most dangerous kind of figure to grade**: a derivation that
-quietly examined nothing reports the same `0` as a clean grid. So the check
-treats an empty group set, a curve with fewer than two points, and a repeated
-control voltage inside a curve as failures rather than passes, and prints the
-number of groups it examined (`867` here: `504` curves, `63` corners, and the
-`300` Monte Carlo samples of the next paragraph) in its own OK line.
+`max(f in band k) / min(f in band k+1) − 1` over every band code `k` and its
+successor `k+1`, which is negative if a corner leaves a coverage hole. The
+pairing is `band` with `band+1` rather than "the next band code present", so
+the ordering column has to be integer-coded and spaced by exactly 1: a corner
+holding bands `0, 1, 3` is **rejected** rather than examined over its one
+remaining pair. **The monotonicity figure is a zero, which is the most
+dangerous kind of figure to grade**: a derivation that quietly examined nothing
+reports the same `0` as a clean grid. So the check treats an empty group set, a
+curve with fewer than two points, and a repeated control voltage inside a curve
+as failures rather than passes, and prints the number of groups it examined
+(`867` here: `504` curves, `63` corners, and the `300` Monte Carlo samples of
+the next paragraph) in its own OK line. A worst *overlap* is silent in the same
+way about how many intervals it was the worst of, so that line also prints the
+number of adjacent band pairs examined (`441` here: `7` pairs across each of
+the `63` corners' `8` bands).
 
 **One figure is a statistic rather than an extremum, and it needed the language
 to grow** — the Reference spur row's term-1 mismatch figure, **17.48 %**. It is
