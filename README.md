@@ -80,9 +80,18 @@ Being honest about where this actually is:
   `sim/period-jitter/isf-bringup/` extracts the ring's impulse sensitivity
   function from charge-injection transients and shows it **converged** against
   the internal-timestep ceiling — retiring the risk #520 named as the route's
-  load-bearing one — while producing no jitter number, because two of the
-  three ingredients a number needs still do not exist. A converging
-  ingredient is not a converging pipeline, and #520 stays open on exactly the
+  load-bearing one — while producing no jitter number.
+  `spec/decision-records/DR-031-sid-along-the-trajectory-and-the-bound-option-b-owes.md`
+  adds the other two ingredients (`sim/period-jitter/sid-trajectory/`: each ring
+  device's thermal and flicker generator at the bias it actually occupies across
+  the cycle, and the trajectory it is evaluated along, at three PVT points) and
+  the bound the cheaper route was refused for want of — against the
+  ISF-weighted average the jitter integral contains, biasing a device at its own
+  peak-current phase reproduces its thermal generator to about 1 dB. **Still no
+  jitter number**: the assembly is not built, that bound is measured at one of
+  45 corners, and the flicker half is not a defined quantity until the spec
+  states an observation interval — which it now says it owes. Ingredients are
+  not a pipeline, and #520 stays open on exactly the
   same terms. And every one of the campaign's records is at one output
   frequency, 150 MHz — the same measurement at the 200 MHz top of the
   ratified band is declared as `sim/period-jitter-band-top`, tracked at #503,

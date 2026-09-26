@@ -17,6 +17,14 @@
 # — the one class of failure that would invalidate a Gamma number while
 # leaving the reduction looking perfectly healthy.
 !sim/period-jitter/isf-bringup/logs/*.log
+# Same story for the S_id-along-the-trajectory campaign (issue #520, DR-031): its
+# captured ngspice output is what lets a reader confirm each `.noise` point's own
+# operating point, the sense resistor's units anchor and the two independent
+# normalisations, per phase and per device — the checks that fail silently and
+# would leave a smooth, wrong S_id table behind. The per-phase runs are
+# consolidated one file per (point, device) rather than one per run, so this
+# pattern covers ~40 files and not ~600.
+!sim/period-jitter/sid-trajectory/logs/*.log
 # Same story for layout/'s DRC/LVS proof evidence (layout/README.md): the
 # captured deck stdout under layout/evidence/inv-tb-proof/ is the evidence,
 # not scratch output.

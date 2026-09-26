@@ -58,8 +58,9 @@ of them is this directory:
 |---|---|
 | **`h(x)`** — phase shift per unit injected charge, per node, across the cycle | **this directory** |
 | **`h_ds(x)`** — the same thing for a two-terminal generator, i.e. `h(drain) − h(source)`, which is what a device's channel noise is actually weighted by | **this directory**, and see [What it found](#what-it-found): it is not obtainable from the per-node tables by subtraction |
-| `S_id(V_gs, V_ds)` — each ring device's thermal and flicker generator across the bias it actually traverses | not built; [`probe_sid_bias.sp.in`](../noise-toolchain-probe/probe_sid_bias.sp.in) is one 1-D slice of it |
-| the trajectory itself — `(V_gs, V_ds)(t)` per device, to evaluate `S_i(t)` along | not built |
+| `S_id(V_gs, V_ds)` — each ring device's thermal and flicker generator across the bias it actually traverses | **built** since DR-031, at three PVT points: [`../sid-trajectory/`](../sid-trajectory/). ([`probe_sid_bias.sp.in`](../noise-toolchain-probe/probe_sid_bias.sp.in) is the 1-D existence probe that preceded it.) |
+| the trajectory itself — `(V_gs, V_ds)(t)` per device, to evaluate `S_i(t)` along | **built** since DR-031: [`../sid-trajectory/`](../sid-trajectory/), sampled out of *this* directory's own reference deck so the two ingredients share one phase axis |
+| the assembly — the integral, over the mandated 45-point PVT grid | not built. DR-031 §Decision 2 states what still blocks it and why it refuses a partial evaluation |
 
 `h` rather than `Γ` is reported throughout, deliberately. `q_max` is a modelling
 convention (which node, which swing, which capacitance) while `h` is directly

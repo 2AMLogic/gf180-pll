@@ -1,0 +1,131 @@
+
+Note: No compatibility mode selected!
+
+
+Circuit: * gf180-pll :: period-jitter :: isf bring-up -- generated, do not edit.
+
+Doing analysis at TEMP = 125.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+Initial Transient Solution
+--------------------------
+
+Node                                   Voltage
+----                                   -------
+vdd                                       2.97
+bc0                                          0
+bc1                                       2.97
+bc2                                       2.97
+vc                                       1.093
+x0.xbias.na                            1.13256
+x0.xbias.vbpc                           1.8575
+x0.xbias.nc                           0.184038
+x0.xbias.xrcg.11                      0.183748
+x0.xbias.xrcg.21                   0.000290592
+x0.xbias.nsu                        0.00601688
+x0.xbias.vfix                          1.94868
+x0.xbias.nmd                          0.832844
+x0.xbias.vbp0                           2.0724
+x0.xbias.noff                          0.85941
+x0.xbias.xroff.11                     0.859172
+x0.xbias.xroff.21                  0.000237223
+x0.xbias.nvi                          0.279273
+x0.xbias.xrdeg.11                     0.279195
+x0.xbias.xrdeg.21                  7.70878e-05
+x0.xbias.b0b                              2.97
+x0.xbias.b1b                       1.13919e-08
+x0.xbias.b2b                       1.13919e-08
+x0.xbias.vbn1                         0.755172
+x0.xbias.ga                               2.97
+x0.xbias.vbp2                          2.00521
+x0.xbias.gb                           0.755172
+x0.vbn                                 1.01564
+x0.xbias.gc                            2.00521
+x0.vbp                                 1.79164
+nh0_1                                   1.4781
+y0_1                                         0
+y0_5                                         0
+nt0_1                              1.60758e-17
+nh0_2                                     2.97
+y0_2                                      2.97
+nt0_2                              1.63836e-07
+nh0_3                                     2.97
+y0_3                                         0
+nt0_3                              2.69117e-35
+nh0_4                                     2.97
+y0_4                                      2.97
+nt0_4                              1.63836e-07
+nh0_5                                     2.97
+nt0_5                              2.69117e-35
+x0.nb1                                    2.97
+x0.nb2                             9.42945e-09
+clk0                                      2.97
+x0.xcdec1.c_moscap_int1                  -2.97
+x0.xcdec2.c_moscap_int1                  -2.97
+e.x0.xcdec2.ec_moscap#branch          2.97e-12
+e.x0.xcdec1.ec_moscap#branch          2.97e-12
+vvc#branch                          -1.093e-12
+vbc2#branch                          -2.97e-12
+vbc1#branch                          -2.97e-12
+vbc0#branch                                  0
+vdd#branch                        -0.000168795
+
+ Reference value :  1.43256e-09
+ Reference value :  3.43856e-09
+ Reference value :  5.54656e-09
+ Reference value :  7.81856e-09
+ Reference value :  1.00206e-08
+ Reference value :  1.21446e-08
+ Reference value :  1.43486e-08
+ Reference value :  1.67666e-08
+ Reference value :  1.87246e-08
+ Reference value :  2.08066e-08
+ Reference value :  2.30526e-08
+ Reference value :  2.52406e-08
+ Reference value :  2.75386e-08
+ Reference value :  2.97246e-08
+ Reference value :  3.17286e-08
+ Reference value :  3.37526e-08
+ Reference value :  3.56846e-08
+ Reference value :  3.76066e-08
+ Reference value :  3.95006e-08
+ Reference value :  4.16286e-08
+ Reference value :  4.35846e-08
+ Reference value :  4.56226e-08
+ Reference value :  4.75646e-08
+ Reference value :  4.98526e-08
+ Reference value :  5.18846e-08
+ Reference value :  5.38306e-08
+ Reference value :  5.61386e-08
+ Reference value :  5.84646e-08
+ Reference value :  6.04206e-08
+ Reference value :  6.27166e-08
+ Reference value :  6.47026e-08
+ Reference value :  6.66366e-08
+ Reference value :  6.85586e-08
+ Reference value :  7.09366e-08
+ Reference value :  7.28766e-08
+ Reference value :  7.47566e-08
+ Reference value :  7.67066e-08
+ Reference value :  7.86726e-08
+ Reference value :  8.05786e-08
+ Reference value :  8.24826e-08
+ Reference value :  8.47486e-08
+ Reference value :  8.68026e-08
+ Reference value :  8.87046e-08
+ Reference value :  9.09966e-08
+ Reference value :  9.33266e-08
+ Reference value :  9.57946e-08
+ Reference value :  9.79966e-08
+ Reference value :  1.00047e-07
+ Reference value :  1.02383e-07
+ Reference value :  1.04743e-07
+ Reference value :  1.07083e-07
+ Reference value :  1.09305e-07
+ Reference value :  1.12007e-07
+ Reference value :  1.14469e-07
+ Reference value :  1.16615e-07
+ Reference value :  1.19237e-07
+No. of Data Rows : 60008
+Note: Simulation executed from .control section 
