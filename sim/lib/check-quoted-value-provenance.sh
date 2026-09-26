@@ -135,10 +135,10 @@
 #    neither graded nor disclosed until it was graded in this pass).
 #
 # 7. DERIVED AGAINST A RATIFIED LINE. Some headline figures are not a reduction
-#    of committed evidence at all: they are a reduction DIVIDED BY A CONSTANT
-#    THAT IS WRITTEN DOWN IN A NORMATIVE DOCUMENT. `1.41x` is the worst
-#    measured VCTRL travel over the 0.6 V Budget 2 allows; `47 %` is the same
-#    travel over the 1.8 V width of DR-003 Decision 5's measured control
+#    of committed evidence at all: they are a reduction COMBINED WITH A
+#    CONSTANT THAT IS WRITTEN DOWN IN A NORMATIVE DOCUMENT. `1.41x` is the
+#    worst measured VCTRL travel over the 0.6 V Budget 2 allows; `47 %` is the
+#    same travel over the 1.8 V width of DR-003 Decision 5's measured control
 #    window. Both sat in the ungraded list until 2026-09-26 for the reason "a
 #    ratio to a spec line is arithmetic on the line, not a column of the
 #    committed evidence" -- true about the column and wrong about the
@@ -148,10 +148,22 @@
 #    reduction this check already evaluates; the ratified one is a line in
 #    spec/pll.md.
 #
+#    TWO OPERATORS, because two shapes of figure say "against the line". A
+#    RATIO (`/`) answers "how many times the allowance", which is what a budget
+#    row states. A DISTANCE (`-`) answers "how far past the line", which is what
+#    a dBc row states: the reference spur's two cold corners are `0.5 dB` and
+#    `0.1 dB` over the ratified -55 dBc, which is -54.51 and -54.88 minus the
+#    line. Before 2026-09-26 the table divided and only divided, so section 5
+#    wrote that pair as the RANGE `0.1-0.5 dB` and the ungraded list had to
+#    decline it -- not for want of evidence (both ends were already graded as
+#    dBc values in the first table) but because a range is not a figure. The
+#    operator is what let section 5 write the two ends as two figures.
+#
 #    A THIRD TABLE in section 5.1 carries them:
 #
 #      | section 5 row | Quoted value | Record(s) | Evidence file | Derivation | Constant | Scale |
 #      | Supply sensitivity -- DC ... | `1.41x` | `20260925-044237-4ff4f65` | `criterion1b_vctrl_budget.csv` | `max(span_full_v) / budget2-vctrl-consumption-v` | `0.6 V` | `1` |
+#      | Reference spur | `0.5 dB` | `20260816-132150-5f405e7` | `spur_by_corner.csv` | `max(spur_dbc_at_200mhz) - reference-spur-line-dbc` | `-55 dBc` | `1` |
 #
 #    Rules 1-5 apply to it unchanged -- the record must resolve and be cited by
 #    the row, the evidence must be committed, the figure must appear verbatim
@@ -170,18 +182,29 @@
 #         differ. Budget 2's 0.6 V is stated twice in spec/pll.md (the spec
 #         table's row 12 and the Budget 2 section heading); the 0.9-2.7 V
 #         control window is stated in spec/pll.md's ratified assumptions and
-#         in DR-003 Decision 5, which that section 5 row cites. A document
-#         that contradicts itself about a ratified number is a failure here
-#         rather than a coin toss over which statement the check happened to
-#         match first.
+#         in DR-003 Decision 5, which that section 5 row cites; the -55 dBc
+#         spur line is stated in the spec table's row 7 target cell and again
+#         as the `**Target:**` line of the '## Reference spur' section that
+#         derives it. A document that contradicts itself about a ratified
+#         number is a failure here rather than a coin toss over which
+#         statement the check happened to match first.
 #
 #      c. THE TABLE'S OWN STATEMENT OF THE CONSTANT IS GRADED TOO. The
 #         Constant column is what a reader checks the arithmetic with, so it
 #         is compared against the resolved value at the precision written. It
 #         is not an input -- the derivation uses the resolved value.
 #
-#      d. NO COUNT NUMERATOR. A count over a ratified voltage is not a ratio;
-#         if a figure ever needs one, it needs a stated reason first.
+#      d. NO COUNT AS THE MEASURED OPERAND. A count over a ratified voltage is
+#         not a ratio, and a count minus a ratified line is not a distance; if
+#         a figure ever needs either, it needs a stated reason first.
+#
+#      e. A CONSTANT THAT READS AS ZERO IS A FAILED READ, not a datum. Nothing
+#         normative in this specification is a zero, so a resolver returning
+#         one means its regex stopped matching the document. That is rejected
+#         for both operators, even though subtracting zero would be harmless
+#         arithmetic: a silently-zero line would grade `-54.51 - 0` as the
+#         distance from the line and report -54.51 dB of overshoot as if it
+#         were evidence.
 #
 #    And one guard shared with rule 4, which is what makes the remaining
 #    entries in the ungraded list honest: A RANGE IS NOT A FIGURE. The quoted
@@ -189,7 +212,11 @@
 #    because the figure parser reads the number at the front and would grade
 #    the low end alone -- "grading half of a two-sided bound and calling it
 #    the bound" is the named defect the ungraded list exists to catch, and
-#    before this guard the check would have committed it silently.
+#    before this guard the check would have committed it silently. The guard
+#    is not a way of declining work: `0.1-0.5 dB` was refused by it on
+#    2026-09-26 and graded the same day, as two entries, once section 5 wrote
+#    the two ends as two figures. Refusing the shape is what made the rewrite
+#    necessary, not what made the figure ungradeable.
 #
 # WHAT IT DOES NOT DO
 #
@@ -470,6 +497,21 @@ RANGE_FIGURE = re.compile(
 )
 
 
+#: A rule-7 derivation: one reduction, one named operator, one ratified
+#: constant.
+#:
+#: The operator must carry whitespace on BOTH sides. That is not cosmetic: a
+#: where-clause inside the reduction can hold a negative literal
+#: (`where temp_c == -40`), which has a space before its minus sign and none
+#: after, so requiring both keeps a filter from being read as the subtraction.
+#: The constant is an identifier, anchored to the end of the cell, which is
+#: what makes the non-greedy reduction split at the operator rather than
+#: inside the constant's own hyphens (`reference-spur-line-dbc`).
+DERIVATION = re.compile(
+    r"^(?P<reduction>.+?)\s+(?P<op>[/-])\s+(?P<constant>[A-Za-z][\w.-]*)$"
+)
+
+
 def is_range_figure(raw):
     return bool(RANGE_FIGURE.match(raw.strip().strip("`").strip()))
 
@@ -638,9 +680,56 @@ def read_dr003_window_width_v(docs):
     return _one_agreed_value("dr003-vctrl-window-width-v", widths), widths
 
 
+def read_reference_spur_line_dbc(docs):
+    """The ratified reference-spur line, in dBc (spec/pll.md).
+
+    Stated twice, independently, and both statements are required to agree:
+    in the summary table's Reference spur target cell, and as the `**Target:**`
+    line of the `## Reference spur` section that derives it -- the same
+    two-places shape Budget 2's allowance is read in.
+
+    The target cell is located by the ROW that links to the section
+    (`[Reference spur](#reference-spur)`) and then by the cell AFTER the link,
+    required to be nothing but the line. spec/pll.md's "Verification owed"
+    table carries a row that links to the same section, so a looser match would
+    read an owner cell as a target; requiring the whole cell to be `<= <x> dBc`
+    is what keeps the two apart.
+    """
+    spec = docs["spec"]
+    readings = []
+    for line in spec.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or "(#reference-spur)" not in stripped:
+            continue
+        cells = [c.strip() for c in stripped.strip("|").split("|")]
+        for i, cell in enumerate(cells[:-1]):
+            if "(#reference-spur)" not in cell:
+                continue
+            target = cells[i + 1].replace("−", "-").replace("–", "-")
+            m = re.match(r"^(?:≤|<=)\s*([+-]?\d+(?:\.\d+)?)\s*dBc$", target)
+            if m:
+                readings.append(
+                    ("%s summary-table target cell" % spec_rel, float(m.group(1)))
+                )
+    section = re.search(
+        r"^## Reference spur[^\n]*\n(.*?)(?=^## )", spec, re.M | re.S
+    )
+    if section is not None:
+        m = re.search(
+            r"\*\*Target:\s*(?:≤|<=)\s*([+-]?\d+(?:\.\d+)?)\s*dBc\*\*",
+            section.group(1).replace("−", "-").replace("–", "-"),
+        )
+        if m:
+            readings.append(
+                ("%s '## Reference spur' target line" % spec_rel, float(m.group(1)))
+            )
+    return _one_agreed_value("reference-spur-line-dbc", readings), readings
+
+
 CONSTANTS = {
     "budget2-vctrl-consumption-v": read_budget2_consumption_v,
     "dr003-vctrl-window-width-v": read_dr003_window_width_v,
+    "reference-spur-line-dbc": read_reference_spur_line_dbc,
 }
 
 
@@ -1901,15 +1990,21 @@ for cells in derived_figures or []:
             "edited and the other was not." % ctx
         )
 
-    parts = re.split(r"\s+/\s+", derivation)
-    if len(parts) != 2:
+    parsed_derivation = DERIVATION.match(derivation)
+    if parsed_derivation is None:
         fail(
             "%s: cannot read the derivation `%s`. The form is "
-            "`<reduction> / <ratified constant>`, one divisor, named."
-            % (ctx, derivation)
+            "`<reduction> <op> <ratified constant>`, with <op> one of `/` "
+            "(a measurement over a line) or `-` (a measurement's distance "
+            "from a line), one operand each side, the constant named. The "
+            "operator must be surrounded by spaces, which is what keeps it "
+            "apart from a negative literal inside a where-clause "
+            "(`temp_c == -40`)." % (ctx, derivation)
         )
         continue
-    reduction, constant_name = parts[0].strip(), parts[1].strip()
+    reduction = parsed_derivation.group("reduction").strip()
+    operator = parsed_derivation.group("op")
+    constant_name = parsed_derivation.group("constant").strip()
 
     if not record_ids:
         fail("%s: names no record id" % ctx)
@@ -1951,8 +2046,8 @@ for cells in derived_figures or []:
     if stated is None:
         fail(
             "%s: the Constant column `%s` states no number. It has to state "
-            "the line the derivation divides by, so a reader can do the "
-            "arithmetic." % (ctx, constant_stated)
+            "the line the derivation divides by or subtracts, so a reader can "
+            "do the arithmetic." % (ctx, constant_stated)
         )
     elif not rounds_to(constant_value, *stated):
         fail(
@@ -1974,28 +2069,35 @@ for cells in derived_figures or []:
 
     if is_count:
         fail(
-            "%s: the numerator is a count. A count over a ratified quantity "
-            "is not a ratio; a figure that needs one needs a stated reason "
-            "first." % ctx
+            "%s: the measured operand is a count. A count over a ratified "
+            "quantity is not a ratio and a count minus one is not a distance; "
+            "a figure that needs either needs a stated reason first." % ctx
         )
         continue
 
-    derived = (raw_value / constant_value) * scale
+    if operator == "/":
+        derived = (raw_value / constant_value) * scale
+        against = "and over the ratified %.6g that is %.6g" % (
+            constant_value, derived
+        )
+    else:
+        derived = (raw_value - constant_value) * scale
+        against = "and its distance from the ratified %.6g is %.6g" % (
+            constant_value, derived
+        )
     derived_checked += 1
 
     if not rounds_to(derived, mantissa, exp, decimals):
         fail(
-            "%s: section 5 says %s; `%s` over %s gives %.6g, and over the "
-            "ratified %.6g that is %.6g, which does not round to it at the "
-            "%d decimal place(s) written"
+            "%s: section 5 says %s; `%s` over %s gives %.6g, %s, which does "
+            "not round to it at the %d decimal place(s) written"
             % (
                 ctx,
                 quoted_plain,
                 reduction,
                 evidence_file,
                 raw_value,
-                constant_value,
-                derived,
+                against,
                 decimals,
             )
         )
