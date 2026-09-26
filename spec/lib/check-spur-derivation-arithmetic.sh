@@ -107,15 +107,16 @@
 #
 # WHAT IT DOES NOT DO
 #
-# It does not grade where the charge terms themselves come from. The
-# accounting table's 7.93 / 11.19 / 11.66 fC totals add a corner-combined
-# statistical residual (4.25246 fC) and term-1 products (3.26 / 3.73 fC) that
-# DR-018 derives in prose from `sim/mc-cp-mismatch`'s 300 committed samples;
-# reducing those samples is `sim/lib/check-quoted-value-provenance.sh`'s kind
-# of work and needs a reduction language for a signed `|mean| + 3σ` statistic,
-# which it does not have. So this check grades the derivation *from* its
-# charge totals, not the totals themselves -- which is why section 5.1 still
-# declares the `≈ −57.0 dBc` figure partly ungraded, with that narrower reason.
+# It grades the derivation *from* its charge totals (7.93 / 11.19 / 11.66 fC)
+# onward to a dBc figure, not where those totals themselves come from --
+# `spec/lib/check-mismatch-charge-derivation.sh` is the sibling check for
+# that, reducing the corner-combined statistical residual and term-1 products
+# DR-018 derives in prose straight from `sim/mc-cp-mismatch`'s 300 committed
+# samples (the reduction this check's own header used to say did not exist),
+# and chaining them into the same three totals graded here. That check still
+# takes `Icp`, `T_ov` and the systematic charge asymmetry from DR-018's own
+# Input table rather than re-sweeping `cp-compliance`/`pfd-deadzone`'s
+# 45-corner grids -- see its own header for that boundary.
 #
 # Nor does it grade the dB *margins* stated in prose ("1.6 dB inside the
 # line", "~12 dB at the two cold corners"): rule 6 is restricted to absolute

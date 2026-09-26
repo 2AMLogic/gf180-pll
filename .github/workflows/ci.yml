@@ -80,13 +80,15 @@ jobs:
         # full PDK toolchain and belong in pdk-checks, not this headless job.
         run: python3 -m unittest discover -s layout/tests -t layout/tests
 
-      - name: spec/tests (unit tests for the spec-row coverage and spur-derivation checks)
-        # Same shape as the two discover steps above, for the two spec-side
+      - name: spec/tests (unit tests for the spec-row coverage, spur-derivation and charge-derivation checks)
+        # Same shape as the two discover steps above, for the three spec-side
         # checks added in #237: one grades
         # docs/chipalooza/challenge-5-proposal.md's section-5 table against
-        # spec/pll.md's summary table, the other re-derives spec/pll.md's
-        # reference-spur arithmetic from its own ingredients. Every test builds
-        # a throwaway tree and runs the real script in it -- no PDK, no
+        # spec/pll.md's summary table, the second re-derives spec/pll.md's
+        # reference-spur arithmetic from its own ingredients, and the third
+        # re-derives that arithmetic's own charge totals from
+        # sim/mc-cp-mismatch's committed raw samples. Every test builds a
+        # throwaway tree and runs the real script in it -- no PDK, no
         # KLayout, no simulation input.
         run: python3 -m unittest discover -s spec/tests -t spec/tests
 
@@ -264,6 +266,22 @@ jobs:
         # figure in the proposal must be one the specification contains. Needs
         # python3 (set up above); reads only committed Markdown, no PDK.
         run: bash spec/lib/check-spur-derivation-arithmetic.sh
+
+      - name: spec/lib/check-mismatch-charge-derivation.sh (the reference-spur charge totals vs. their own raw samples)
+        # check-spur-derivation-arithmetic.sh above grades the derivation's
+        # arithmetic *from* its charge totals (7.93 / 11.19 / 11.66 fC) onward
+        # to a dBc figure, and states plainly what it does not grade: where
+        # those totals come from, because that needs "a reduction language for
+        # a signed |mean| + 3sigma statistic, which it does not have". It does
+        # now. Term 1 (DC UP/DN mismatch) and term 3 (residual net charge) are
+        # reduced straight from sim/mc-cp-mismatch's committed per-corner
+        # samples -- the same worst-of-three-Vctrl-point / worst-corner
+        # convention sim/mc-cp-mismatch/testbench/run.sh implements -- and
+        # chained through DR-018's own stated Icp/T_ov/systematic-charge
+        # inputs into the three totals the sibling check takes as given. Needs
+        # python3 (set up above); reads only committed Markdown and CSVs, no
+        # PDK, no ngspice, no simulation.
+        run: bash spec/lib/check-mismatch-charge-derivation.sh
 
       - name: design/lib/check-io-list-coverage.sh (proposal I/O list vs. the exported port list)
         # The five checks above grade documents against documents, against the
