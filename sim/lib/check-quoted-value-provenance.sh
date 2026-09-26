@@ -320,6 +320,44 @@
 # figures are stated over "the contracted (trim-rule) space", so if the
 # ratified rule changes, what CI enforces has to change in the same commit.
 #
+# EVERY COLUMN A REDUCTION NAMES MUST EXIST IN ITS EVIDENCE
+#
+# A reduction that names a column its evidence does not have fails here, before
+# any row is reduced, naming the column, the evidence source, and the columns
+# that source DOES have -- so a renamed or mistyped column is a one-line
+# diagnosis rather than a hunt.
+#
+# That is a rule and not a nicety, because the natural behaviour of a filter
+# over a column that does not exist is to match NOTHING, and zero is a
+# legitimate value for the figures this check grades -- the most load-bearing
+# one it grades. `0 of 45 corners` and `0 ratio errors of 235 chain points` are
+# both `count(rows where COL ...)`. Mistype `Status` in
+# `count(rows where Status == PASS)` and the reduction returns 0, equals the
+# quoted 0, and prints OK: a green check asserting a number it never computed,
+# which is the precise failure the whole convention exists to prevent, one
+# level up (issue #579). `!=` fails the same way in the other direction -- a
+# missing column turns `count(rows where COL != X)` from the row count into a
+# zero.
+#
+# Every column-consuming position is covered, including the two that are not
+# written in the reduction at all:
+#
+#   where COL OP LITERAL            the filtered column
+#   AGG(COL)                        the aggregated column, at either level
+#   ... by KEY[+KEY...]             the group keys, at either level
+#   count(distinct KEY[+KEY...])    the distinct keys
+#   VERB(COL by AXIS)               a sequence verb's value and axis columns
+#   on-icp-trim-rule                `f_ref_hz` and `trim_units`, which the
+#                                   predicate reads implicitly -- and an
+#                                   implicit column name is exactly the kind
+#                                   that goes missing without anyone editing
+#                                   the reduction that depends on it
+#
+# A column must be present in EVERY row an entry reduces, not merely in one:
+# an entry may name several records (the closed-loop period-jitter figures
+# reduce six), and a name only some of them carry would silently reduce a
+# subset of the evidence.
+#
 # Usage: sim/lib/check-quoted-value-provenance.sh
 # Exit codes: 0 every graded value re-derives, every derived figure follows
 #             from its reduction and its ratified constant, every section 5 row
@@ -606,6 +644,71 @@ CONSTANTS = {
 }
 
 
+# ----------------------------------------------------------- the evidence ---
+
+class Evidence:
+    """The rows one section 5.1 entry reduces, and where a reader finds them.
+
+    Rows and source travel together so that a column-existence failure can name
+    the artefact to open -- `sim/<campaign>/corners/<id>/<file>.csv`, or
+    `sim/<campaign>/records/<id>.md § <first column>` for a table committed
+    inside a record -- rather than "the evidence file", which is not a path at
+    all in the second case.
+
+    `columns` is the set of names EVERY row carries, in the order the evidence
+    heads them. Header order rather than sorted order because the reader of a
+    failure is diagnosing a rename, and a renamed column is next to where it
+    used to be. Every row rather than any row because an entry may name several
+    records -- the closed-loop period-jitter figures reduce six -- and a name
+    only some of them carry is not a name a reduction may use: reducing it
+    would silently read a subset of the evidence.
+    """
+
+    def __init__(self, rows, source):
+        self.rows = rows
+        self.source = source
+        # csv.DictReader files a row's surplus fields under the key None; a
+        # column nothing can name is not a column to offer in a diagnosis.
+        columns = [c for c in (rows[0] if rows else {}) if isinstance(c, str)]
+        for row in rows[1:]:
+            columns = [c for c in columns if c in row]
+        self.columns = columns
+
+
+def require_columns(evidence, needed, ctx, what):
+    """False, having reported, if any of `needed` is not a column of `evidence`.
+
+    WHY THIS IS AN ERROR AND NOT A SKIP. Reducing a column the evidence does not
+    have is naturally SILENT: a where-clause over a missing column matches no
+    rows, and a count of no rows is 0 -- a legitimate, and the most load-bearing,
+    value for the figures section 5.1 grades. So the missing column is reported
+    once, here, before any row is reduced, instead of per row where it reads as
+    an answer (issue #579).
+
+    `what` is the whole leading phrase rather than just a column position, so
+    each call site says which part of the grammar named the column: a
+    where-clause, an aggregate, a group key, a distinct key, or the implicit
+    pairing the `on-icp-trim-rule` predicate reads.
+    """
+    missing = [col for col in needed if col not in evidence.columns]
+    if not missing:
+        return True
+    fail(
+        "%s: %s `%s`, which %s does not have. Its columns are: %s. A reduction "
+        "over a column its evidence does not have selects nothing rather than "
+        "failing, and a zero is a legitimate value for the figures this check "
+        "grades -- so this is an error, never a passing zero."
+        % (
+            ctx,
+            what,
+            missing[0],
+            evidence.source,
+            ", ".join(evidence.columns) or "(none)",
+        )
+    )
+    return False
+
+
 # --------------------------------------------------------------- reductions ---
 
 # A column name here may hold a hyphen or a space, because a record's own
@@ -616,11 +719,20 @@ CONSTANTS = {
 COND = re.compile(r"^([A-Za-z_][\w.\- ]*?)\s*(~=|==|!=|<=|>=|<|>)\s*(.+)$")
 
 
-def make_predicate(where, icp_rule, ctx):
+#: The columns the `on-icp-trim-rule` predicate reads. They are the only column
+#: names in this grammar that a reduction does not spell out, which is exactly
+#: why they are named here and validated with the rest: an implicit name is the
+#: kind that goes missing without anyone editing the reduction that needs it.
+ICP_RULE_COLUMNS = ("f_ref_hz", "trim_units")
+
+
+def make_predicate(where, icp_rule, evidence, reduction, ctx):
     """` where ...` -> a function of one CSV row. None means "every row"."""
     if not where:
         return lambda row: True
     tests = []
+    where_cols = []
+    reads_icp_rule = False
     for clause in [c.strip() for c in where.split(" and ")]:
         if clause == "on-icp-trim-rule":
             if not icp_rule:
@@ -633,6 +745,7 @@ def make_predicate(where, icp_rule, ctx):
                 )
                 return None
             tests.append(("icp", None, None))
+            reads_icp_rule = True
             continue
         m = COND.match(clause)
         if not m:
@@ -646,7 +759,27 @@ def make_predicate(where, icp_rule, ctx):
                 "and != are defined for strings" % (ctx, clause)
             )
             return None
+        where_cols.append(col)
         tests.append(("cmp", (col, op, literal, lit_num), None))
+
+    # Both checks are made HERE, at parse time, and not inside the predicate:
+    # a per-row answer to "does this row have that column" is `no`, and `no`
+    # filters the row out, which is a zero rather than a failure.
+    if where_cols and not require_columns(
+        evidence,
+        where_cols,
+        ctx,
+        "reduction `%s`'s where-clause names column" % reduction,
+    ):
+        return None
+    if reads_icp_rule and not require_columns(
+        evidence,
+        ICP_RULE_COLUMNS,
+        ctx,
+        "reduction `%s`'s `on-icp-trim-rule` predicate reads column"
+        % reduction,
+    ):
+        return None
 
     def predicate(row):
         for kind, spec, _ in tests:
@@ -658,8 +791,8 @@ def make_predicate(where, icp_rule, ctx):
                     return False
                 continue
             col, op, literal, lit_num = spec
-            if col not in row:
-                return False
+            # `col` is a column of every row: require_columns proved it above,
+            # rather than this loop answering "no" and filtering the row out.
             cell = row[col]
             if op == "~=":
                 # Substring containment, always on the text, even when both
@@ -767,24 +900,25 @@ INNER_SEQ_NESTED = re.compile(
 seq_stats = {"derivations": 0, "groups": 0, "pairs": 0}
 
 
-def group_sequences(rows, keys, columns, reduction, ctx):
+def group_sequences(evidence, rows, keys, columns, reduction, ctx):
     """Group `rows` by `keys`, keeping `columns` as floats. Fails loudly.
 
     Unlike the reduction path, a non-numeric or missing cell is an error here
     rather than a skipped row: a dropped point silently weakens a sequence
     test, and the figure these derivations grade is one a weakened test still
     reports as passing.
+
+    `rows` may be one partition of `evidence` (the three-level form calls this
+    once per outer group), so the column names are validated against the whole
+    evidence rather than against whichever rows this call was handed.
     """
-    if rows:
-        have = set(rows[0])
-        for col in list(keys) + list(columns):
-            if col not in have:
-                fail(
-                    "%s: reduction `%s` names column `%s`, which the evidence "
-                    "file does not have (columns: %s)"
-                    % (ctx, reduction, col, ", ".join(sorted(have)))
-                )
-                return None
+    if not require_columns(
+        evidence,
+        list(keys) + list(columns),
+        ctx,
+        "reduction `%s` names column" % reduction,
+    ):
+        return None
     groups = {}
     for row in rows:
         values = [as_float(row.get(col)) for col in columns]
@@ -870,9 +1004,11 @@ def ordered_group_points(groups, verb, axis, reduction, ctx):
     return ordered
 
 
-def sequence_group_scalars(verb, col, axis, keys, rows, reduction, ctx):
+def sequence_group_scalars(
+    evidence, verb, col, axis, keys, rows, reduction, ctx
+):
     """{group key: the verb's scalar for that group} for a SEQ_SCALAR verb."""
-    groups = group_sequences(rows, keys, [col, axis], reduction, ctx)
+    groups = group_sequences(evidence, rows, keys, [col, axis], reduction, ctx)
     if groups is None:
         return None
     ordered = ordered_group_points(groups, verb, axis, reduction, ctx)
@@ -969,7 +1105,8 @@ def sequence_group_scalars(verb, col, axis, keys, rows, reduction, ctx):
 
 
 def apply_nested_group_sequence(
-    outer, inner, verb, col, axis, inner_keys, outer_keys, rows, reduction, ctx
+    outer, inner, verb, col, axis, inner_keys, outer_keys, evidence, reduction,
+    ctx
 ):
     """Evaluate AGG(AGG(VERB(COL by AXIS) by KEY...) by KEY...).
 
@@ -986,13 +1123,13 @@ def apply_nested_group_sequence(
             "count(%s(...) by ...) is defined over it" % (ctx, verb, verb)
         )
         return None
-    missing = [col for col in list(outer_keys) if rows and col not in rows[0]]
-    if missing:
-        fail(
-            "%s: reduction `%s` groups by column `%s`, which the evidence file "
-            "does not have (columns: %s)"
-            % (ctx, reduction, missing[0], ", ".join(sorted(rows[0])))
-        )
+    rows = evidence.rows
+    if not require_columns(
+        evidence,
+        outer_keys,
+        ctx,
+        "reduction `%s` groups by column" % reduction,
+    ):
         return None
     partitions = {}
     for row in rows:
@@ -1013,7 +1150,8 @@ def apply_nested_group_sequence(
     inner_values = []
     for key in sorted(partitions):
         scalars = sequence_group_scalars(
-            verb, col, axis, inner_keys, partitions[key], reduction, ctx
+            evidence, verb, col, axis, inner_keys, partitions[key], reduction,
+            ctx
         )
         if scalars is None:
             return None
@@ -1027,8 +1165,11 @@ def apply_nested_group_sequence(
     return value, False
 
 
-def apply_group_sequence(outer, verb, col, axis, keys, rows, reduction, ctx):
+def apply_group_sequence(
+    outer, verb, col, axis, keys, evidence, reduction, ctx
+):
     """Evaluate AGG(VERB(COL by AXIS) by KEY[+KEY...]). (value, is_count)."""
+    rows = evidence.rows
     if verb in SEQ_PREDICATES and outer != "count":
         fail(
             "%s: `%s` is a group predicate -- it is true or false of one group "
@@ -1044,7 +1185,9 @@ def apply_group_sequence(outer, verb, col, axis, keys, rows, reduction, ctx):
         return None
 
     if verb == "non-monotonic":
-        groups = group_sequences(rows, keys, [col, axis], reduction, ctx)
+        groups = group_sequences(
+            evidence, rows, keys, [col, axis], reduction, ctx
+        )
         if groups is None:
             return None
         ordered_groups = ordered_group_points(
@@ -1065,7 +1208,9 @@ def apply_group_sequence(outer, verb, col, axis, keys, rows, reduction, ctx):
         return float(violations), True
 
     seq_stats["derivations"] += 1
-    scalars = sequence_group_scalars(verb, col, axis, keys, rows, reduction, ctx)
+    scalars = sequence_group_scalars(
+        evidence, verb, col, axis, keys, rows, reduction, ctx
+    )
     if scalars is None:
         return None
     value = apply_agg(outer, list(scalars.values()), reduction, ctx)
@@ -1074,8 +1219,9 @@ def apply_group_sequence(outer, verb, col, axis, keys, rows, reduction, ctx):
     return value, False
 
 
-def apply_reduction(reduction, rows, icp_rule, ctx):
-    """Evaluate a reduction over `rows`. Returns (value, is_count) or None."""
+def apply_reduction(reduction, evidence, icp_rule, ctx):
+    """Evaluate a reduction over `evidence`. (value, is_count), or None."""
+    rows = evidence.rows
     m = OUTER.match(reduction.strip())
     if not m:
         fail("%s: cannot parse reduction `%s`" % (ctx, reduction))
@@ -1098,7 +1244,7 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
             three_level.group(4).strip(),
             three_level.group(5).split("+"),
             three_level.group(6).split("+"),
-            rows,
+            evidence,
             reduction,
             ctx,
         )
@@ -1117,7 +1263,19 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
             nested.group(3),
         )
         col, _, where = [p.strip() for p in _split_where(inner_body)]
-        predicate = make_predicate(where, icp_rule, ctx)
+        group_keys = keys.split("+")
+        if not require_columns(
+            evidence, [col], ctx, "reduction `%s` names column" % reduction
+        ):
+            return None
+        if not require_columns(
+            evidence,
+            group_keys,
+            ctx,
+            "reduction `%s` groups by column" % reduction,
+        ):
+            return None
+        predicate = make_predicate(where, icp_rule, evidence, reduction, ctx)
         if predicate is None:
             return None
         groups = {}
@@ -1128,7 +1286,7 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
             if value is None:
                 continue
             groups.setdefault(
-                tuple(str(row.get(k, "")).strip() for k in keys.split("+")), []
+                tuple(str(row.get(k, "")).strip() for k in group_keys), []
             ).append(value)
         if not groups:
             fail("%s: reduction `%s` selected no rows" % (ctx, reduction))
@@ -1152,7 +1310,7 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
             sequence.group(2).strip(),
             sequence.group(3).strip(),
             sequence.group(4).split("+"),
-            rows,
+            evidence,
             reduction,
             ctx,
         )
@@ -1167,7 +1325,7 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
         return None
 
     target, _, where = [p.strip() for p in _split_where(body)]
-    predicate = make_predicate(where, icp_rule, ctx)
+    predicate = make_predicate(where, icp_rule, evidence, reduction, ctx)
     if predicate is None:
         return None
     selected = [row for row in rows if predicate(row)]
@@ -1177,6 +1335,13 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
             return float(len(selected)), True
         if target.startswith("distinct "):
             keys = target[len("distinct ") :].strip().split("+")
+            if not require_columns(
+                evidence,
+                keys,
+                ctx,
+                "reduction `%s` counts distinct values of column" % reduction,
+            ):
+                return None
             seen = {
                 tuple(str(row.get(k, "")).strip() for k in keys)
                 for row in selected
@@ -1188,15 +1353,12 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
         )
         return None
 
+    if not require_columns(
+        evidence, [target], ctx, "reduction `%s` names column" % reduction
+    ):
+        return None
     values = []
     for row in selected:
-        if target not in row:
-            fail(
-                "%s: reduction `%s` names column `%s`, which the evidence file "
-                "does not have (columns: %s)"
-                % (ctx, reduction, target, ", ".join(sorted(row)))
-            )
-            return None
         value = as_float(row.get(target))
         if value is not None:
             values.append(value)
@@ -1371,8 +1533,24 @@ def read_record_table(rid, campaign, first_col, ctx):
     return rows
 
 
+def describe_sources(sources):
+    """The evidence an entry reduces, as one phrase a failure can name.
+
+    Compacted past two because an entry may name six records of one file (the
+    closed-loop period-jitter figures do) and a column-existence failure has to
+    stay readable; the count is kept rather than dropped, so the phrase never
+    understates what was read.
+    """
+    if len(sources) <= 2:
+        return "; ".join(sources) or "(no evidence)"
+    return "%s (and %d more record(s) of the same evidence file)" % (
+        sources[0],
+        len(sources) - 1,
+    )
+
+
 def collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx):
-    """The committed rows an entry reduces, or None if any rule 1/2 fails.
+    """The committed evidence an entry reduces, or None if a rule 1/2 fails.
 
     Shared by the graded-value table (rule 4) and the derived-figure table
     (rule 7) so that "which evidence an entry may read" has exactly one
@@ -1381,6 +1559,7 @@ def collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx):
     cites -- is the one that stops section 5.1 smuggling in evidence.
     """
     rows = []
+    sources = []
     resolved = True
     for rid in record_ids:
         if rid not in records:
@@ -1412,6 +1591,10 @@ def collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx):
                 resolved = False
                 continue
             rows.extend(in_record)
+            sources.append(
+                "sim/%s/records/%s.md § %s"
+                % (records[rid], rid, table_spec.group(2))
+            )
             continue
         path = os.path.join(
             repo_root, "sim", records[rid], "corners", rid, evidence_file
@@ -1424,12 +1607,15 @@ def collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx):
             resolved = False
             continue
         rows.extend(read_csv_rows(path))
+        sources.append(
+            "sim/%s/corners/%s/%s" % (records[rid], rid, evidence_file)
+        )
     if not resolved:
         return None
     if not rows:
         fail("%s: the evidence file(s) hold no data rows" % ctx)
         return None
-    return rows
+    return Evidence(rows, describe_sources(sources))
 
 
 records = {}
@@ -1627,8 +1813,8 @@ for cells in provenance:
         fail("%s: names no record id" % ctx)
         continue
 
-    rows = collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx)
-    if rows is None:
+    evidence = collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx)
+    if evidence is None:
         continue
 
     if is_range_figure(quoted_raw):
@@ -1651,7 +1837,7 @@ for cells in provenance:
         fail("%s: scale `%s` is not a number" % (ctx, scale_raw))
         continue
 
-    result = apply_reduction(reduction, rows, icp_rule, ctx)
+    result = apply_reduction(reduction, evidence, icp_rule, ctx)
     if result is None:
         continue
     raw_value, is_count = result
@@ -1729,8 +1915,8 @@ for cells in derived_figures or []:
         fail("%s: names no record id" % ctx)
         continue
 
-    rows = collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx)
-    if rows is None:
+    evidence = collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx)
+    if evidence is None:
         continue
 
     if is_range_figure(quoted_raw):
@@ -1781,7 +1967,7 @@ for cells in derived_figures or []:
             )
         )
 
-    result = apply_reduction(reduction, rows, icp_rule, ctx)
+    result = apply_reduction(reduction, evidence, icp_rule, ctx)
     if result is None:
         continue
     raw_value, is_count = result

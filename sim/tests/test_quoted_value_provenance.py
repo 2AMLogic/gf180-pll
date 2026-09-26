@@ -376,6 +376,17 @@ class _Tree:
         (self.root / "sim" / CAMPAIGN / "corners" / RECORD
          / name).write_text(text)
 
+    def write_other_evidence(self, name: str, text: str) -> None:
+        """Evidence under the SECOND record, for a multi-record entry.
+
+        Section 5.1 has entries that reduce six records of one file at once, so
+        "the columns this entry may name" is a property of all of them together
+        rather than of whichever one happens to be read first.
+        """
+        corners = self.root / "sim" / CAMPAIGN / "corners" / OTHER
+        corners.mkdir(parents=True, exist_ok=True)
+        (corners / name).write_text(text)
+
     def write_spec(self, text: str) -> None:
         (self.root / SPEC).write_text(text)
 
@@ -710,7 +721,9 @@ class TestGroupSequenceDerivations(_TreeTest):
         ]
         self.write(entries=entries)
         self.assertFails("names column `bundel`",
-                         "which the evidence file does not have")
+                         "kvco_by_point.csv does not have",
+                         "Its columns are: bundle, temp_c, vdd_v, band, "
+                         "vctrl_v, fosc_hz")
 
     def test_an_evidence_file_with_no_data_rows_cannot_report_zero(self):
         self.write(csv_text="bundle,temp_c,vdd_v,band,vctrl_v,fosc_hz\n")
@@ -942,7 +955,8 @@ class TestSignedTailStatistic(_TreeTest):
             "max(sig3(worst-magnitude(mism_pct by vctrl_v) by seed) by cornor)"
         ))
         self.assertFails("groups by column `cornor`",
-                         "which the evidence file does not have")
+                         "mc_cp_dc.csv does not have",
+                         "Its columns are: corner, seed, vctrl_v, mism_pct")
 
     def test_a_group_predicate_does_not_compose_three_deep(self):
         self.write(reduction=(
@@ -1086,7 +1100,10 @@ class TestSelfDefence(_TreeTest):
         entries[0] = ("Output band", "`12 MHz`", RECORD, "vco_tuning.csv",
                       "min(not_a_column)", "1e-6")
         self.tree.write(proposal(provenance=entries))
-        self.assertFails("which the evidence file does not have")
+        self.assertFails("names column `not_a_column`",
+                         "vco_tuning.csv does not have",
+                         "Its columns are: bundle, temp_c, vdd_v, band, "
+                         "fosc_hz, isupply_a")
 
     def test_a_where_clause_selecting_nothing_fails(self):
         entries = list(DEFAULT_PROVENANCE)
@@ -1101,6 +1118,194 @@ class TestSelfDefence(_TreeTest):
                       "count(rows where pass_pm == 1)", "1e-6")
         self.tree.write(proposal(provenance=entries))
         self.assertFails("count reduction must carry scale 1")
+
+
+class TestColumnExistence(_TreeTest):
+    """Every column a reduction names must exist in its evidence (issue #579).
+
+    This is the one validation rule whose absence was INVISIBLE rather than
+    loud, because the natural behaviour of a filter over a column that does not
+    exist is to match no rows -- and a count of no rows is `0`, which is a
+    legitimate and load-bearing value here: `0 of 45 corners` and `0 ratio
+    errors of 235 chain points` are both graded figures on the real tree. A
+    mistyped `Status` in `count(rows where Status == PASS)` returned 0, equalled
+    the quoted 0, and printed OK: a green check asserting a number it had never
+    computed.
+
+    Six of the nine cases below printed `OK` before this check existed, and each
+    of those says so in its docstring -- because "it fails now" is only half the
+    claim, and the half that matters is what it used to do instead. The other
+    three already failed, but for the wrong reason ("selected no rows", which
+    reads as a too-narrow filter rather than a column that is not there, and the
+    two have opposite fixes).
+    """
+
+    def _grade(self, quoted, reduction, evidence="vco_tuning.csv", scale="1"):
+        """One extra graded entry on the Output band row, and the row to match.
+
+        The figure is appended to the section 5 row verbatim so that rule 3 is
+        satisfied and the failure under test is the only one reported.
+        """
+        rows = list(SPEC_ROWS)
+        rows[0] = (
+            "Output band",
+            "Floor 12 MHz; ceiling 20 MHz; %s" % quoted,
+            "**MET**",
+            f"`sim/{CAMPAIGN}/records/{RECORD}.md`",
+        )
+        entries = list(DEFAULT_PROVENANCE) + [
+            ("Output band", "`%s`" % quoted, RECORD, evidence, reduction, scale),
+        ]
+        self.tree.write(proposal(spec_rows=tuple(rows), provenance=entries))
+
+    def test_a_zero_count_over_a_mistyped_where_column_fails(self):
+        """THE dangerous case: a filtered count whose honest answer is zero.
+
+        Spelled right, `where bundle == nonesuch` selects nothing and 0 is the
+        true count -- asserted first, so this test cannot pass merely because
+        the entry is broken some other way. Mistyped, the filter selects nothing
+        FOR A DIFFERENT REASON, and before this check the two were
+        indistinguishable: both printed OK against the quoted 0.
+        """
+        self._grade("0 corners out of band",
+                    "count(rows where bundle == nonesuch)")
+        self.assertPasses()
+        self._grade("0 corners out of band",
+                    "count(rows where bundel == nonesuch)")
+        self.assertFails(
+            "where-clause names column `bundel`",
+            "sim/%s/corners/%s/vco_tuning.csv does not have"
+            % (CAMPAIGN, RECORD),
+            "Its columns are: bundle, temp_c, vdd_v, band, fosc_hz, isupply_a",
+            "never a passing zero",
+        )
+
+    def test_a_mistyped_where_column_under_not_equals_fails(self):
+        """`!=` fails the other way: a total silently becomes a zero.
+
+        `count(rows where band != 99)` is the whole table (6 rows). Mistype the
+        column and the same reduction returned 0 -- so a mistyped column could
+        turn a count of everything into a count of nothing, which is a much
+        easier number to quote by accident.
+        """
+        self._grade("6 corners measured", "count(rows where band != 99)")
+        self.assertPasses()
+        self._grade("6 corners measured", "count(rows where bnad != 99)")
+        self.assertFails("where-clause names column `bnad`",
+                         "vco_tuning.csv does not have")
+
+    def test_a_mistyped_group_key_fails_rather_than_pooling(self):
+        """Before this check, a mistyped `by` key pooled every row silently.
+
+        `max(min(fosc_hz) by bundel)` puts all six rows in one group keyed on
+        the empty string, so the guaranteed floor collapses into the flat
+        minimum: it returned 5 MHz, and a document quoting 5 MHz would have been
+        graded green against a reduction that had stopped grouping at all.
+        """
+        self._grade("5 MHz floor", "max(min(fosc_hz) by bundel)", scale="1e-6")
+        self.assertFails("groups by column `bundel`",
+                         "vco_tuning.csv does not have",
+                         "Its columns are: bundle, temp_c, vdd_v, band, "
+                         "fosc_hz, isupply_a")
+
+    def test_a_mistyped_distinct_key_fails_rather_than_counting_one(self):
+        """`count(distinct bundel)` counted 1 -- one empty-string key.
+
+        Any document quoting `1` for a distinct count would have passed against
+        evidence the reduction never actually read.
+        """
+        self._grade("1 distinct bundle", "count(distinct bundel)")
+        self.assertFails("counts distinct values of column `bundel`",
+                         "vco_tuning.csv does not have")
+
+    def test_a_mistyped_aggregated_column_inside_a_group_fails(self):
+        """The inner aggregate's column, which only the flat form checked.
+
+        `max(min(fosc_hzz) by ...)` used to fail with "selected no rows" -- a
+        failure, but one that reads as "the where-clause was too narrow" rather
+        than "that column does not exist", and the two have opposite fixes.
+        """
+        self._grade("12 MHz guaranteed",
+                    "max(min(fosc_hzz) by bundle+temp_c+vdd_v)", scale="1e-6")
+        self.assertFails("names column `fosc_hzz`",
+                         "vco_tuning.csv does not have")
+
+    def test_a_mistyped_sequence_axis_column_fails(self):
+        """The ordering column of a group-sequence derivation.
+
+        This position was already covered, and is asserted here so that routing
+        it through the shared check did not lose it -- what it gains is the
+        evidence source in the message.
+        """
+        self._grade(
+            "0 non-monotonic curves of 5",
+            "count(non-monotonic(fosc_hz by vctrl_vv) "
+            "by bundle+temp_c+vdd_v+band)",
+            evidence="kvco_by_point.csv",
+        )
+        self.assertFails("names column `vctrl_vv`",
+                         "kvco_by_point.csv does not have")
+
+    def test_the_icp_trim_rule_predicate_needs_its_implicit_columns(self):
+        """The two column names no reduction spells out.
+
+        `on-icp-trim-rule` reads `f_ref_hz` and `trim_units` itself, so a
+        reduction carrying it over evidence that has neither matched no rows at
+        all -- and `count(rows where on-icp-trim-rule)` therefore returned a
+        clean, passing 0 over a CSV with nothing to do with the trim rule.
+        """
+        self._grade("0 contracted corners",
+                    "count(rows where on-icp-trim-rule)")
+        self.assertFails(
+            "`on-icp-trim-rule` predicate reads column `f_ref_hz`",
+            "vco_tuning.csv does not have",
+        )
+
+    def test_the_icp_trim_rule_predicate_needs_both_of_them(self):
+        """Half the pairing is not the pairing: `trim_units` is required too."""
+        self.tree.write_evidence(
+            "half_rule.csv", "f_ref_hz,pm_min_deg\n1e6,47.41\n2e6,60.40\n")
+        self._grade("0 contracted corners",
+                    "count(rows where on-icp-trim-rule)",
+                    evidence="half_rule.csv")
+        self.assertFails(
+            "`on-icp-trim-rule` predicate reads column `trim_units`",
+            "half_rule.csv does not have",
+            "Its columns are: f_ref_hz, pm_min_deg",
+        )
+
+    def test_a_column_only_some_of_the_records_have_is_refused(self):
+        """A multi-record entry may only name columns ALL of its records have.
+
+        Section 5.1's closed-loop period-jitter figures reduce six records of
+        one filename at once. If one of them renamed the column, a reduction
+        naming it would read a SUBSET of the evidence -- the rows that still
+        have it -- and quietly grade a worst case over part of the grid. So the
+        usable columns are the ones every row carries, and the failure lists
+        exactly those.
+        """
+        self.tree.write_other_evidence(
+            "vco_tuning.csv", TUNING_CSV.replace("fosc_hz", "f_osc_hz"))
+        rows = list(SPEC_ROWS)
+        rows[0] = (
+            "Output band",
+            "Floor 12 MHz; ceiling 20 MHz",
+            "**MET**",
+            f"`sim/{CAMPAIGN}/records/{RECORD}.md`, "
+            f"`sim/{CAMPAIGN}/records/{OTHER}.md`",
+        )
+        entries = list(DEFAULT_PROVENANCE)
+        entries[0] = ("Output band", "`12 MHz`", f"{RECORD}`, `{OTHER}",
+                      "vco_tuning.csv",
+                      "max(min(fosc_hz) by bundle+temp_c+vdd_v)", "1e-6")
+        self.tree.write(proposal(spec_rows=tuple(rows), provenance=entries))
+        self.assertFails(
+            "names column `fosc_hz`",
+            "sim/%s/corners/%s/vco_tuning.csv; "
+            "sim/%s/corners/%s/vco_tuning.csv does not have"
+            % (CAMPAIGN, RECORD, CAMPAIGN, OTHER),
+            "Its columns are: bundle, temp_c, vdd_v, band, isupply_a",
+        )
 
 
 class TestInRecordTableEvidence(_TreeTest):
