@@ -42,7 +42,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import partial
-from typing import ClassVar, Iterable
+from typing import TYPE_CHECKING, ClassVar, Iterable
+
+if TYPE_CHECKING:
+    import klayout.db as db
 
 try:
     from .. import _canvas
@@ -564,6 +567,29 @@ def via1_stack(canvas: Canvas, x: float, y: float) -> tuple:
     canvas.rect("metal1", *pad)
     canvas.rect("metal2", *pad)
     return pad
+
+
+def metal_l2n(canvas: Canvas) -> tuple[db.LayoutToNetlist, dict]:
+    """Build a metal1/via1/metal2 ``LayoutToNetlist`` extraction over ``canvas``.
+
+    Shared by ``block.py``'s and ``mirror.py``'s own ``connectivity_report()``
+    (issue #570) -- both were extracting an identical metal1/via1/metal2
+    ``LayoutToNetlist`` over their own ``result.canvas`` before probing it for
+    their own, distinct set of nets; only this bootstrap step was duplicated.
+    """
+    import klayout.db as db  # noqa: PLC0415
+
+    l2n = db.LayoutToNetlist(db.RecursiveShapeIterator(canvas.layout, canvas.top, []))
+    layers = {}
+    for name in ("metal1", "via1", "metal2"):
+        layers[name] = l2n.make_polygon_layer(canvas.layout.layer(*LAYER[name]), name)
+    l2n.connect(layers["metal1"])
+    l2n.connect(layers["via1"])
+    l2n.connect(layers["metal2"])
+    l2n.connect(layers["metal1"], layers["via1"])
+    l2n.connect(layers["via1"], layers["metal2"])
+    l2n.extract_netlist()
+    return l2n, layers
 
 
 # Smallest axis-aligned box enclosing every box given -- shared with every
