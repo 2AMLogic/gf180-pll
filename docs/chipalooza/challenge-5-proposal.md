@@ -683,7 +683,7 @@ four figures in three rows:
 | Kvco | `115.8 MHz/V` | Two reasons, either sufficient. Selecting the point evaluates [the band-selection rule](../../spec/pll.md#band-selection-rule) (lowest band code that reaches the target) at every corner — a derivation, and one over a rule whose control window `spec/pll.md` does not presently name, an ambiguity tracked at #542 under which the two candidate windows select different bands. And the point itself is at Vctrl = 1.54 V, which the 7-point control sweep does not sample (its neighbours are 114.93 MHz/V at 1.50 V and 120.85 at 1.80 V), so no reduction of this CSV returns it. The adversarial `154.3 MHz/V` figure the rule exists to exclude *is* graded above, which is the half that bounds the risk |
 | Multiplication ratio | `61 distinct N` | The record commits `retiming_margin.csv` (17 rows, the margin claim) but not the per-point ratio table, so the set of divide ratios actually exercised cannot be recomputed from committed evidence. `check-pvt-coverage-claims.sh` does grade this count against the record's own declared value, which is a weaker claim than re-deriving it |
 | Multiplication ratio | `0 ratio errors of 235 chain points` | Same missing per-point table: only the retiming figure in this row is re-derivable. The `235` and its `2835`-cell cross-product are graded against the record's declaration by `check-pvt-coverage-claims.sh`, not against per-point evidence |
-| Reference spur | `≈ −57.0 dBc` | A hand derivation that re-prices DR-018's term stack over a Monte Carlo campaign, not a reduction of one CSV. The *measured* spur figures in the same row — `−57.0`, `−72.7`, `−54.5` — are graded above |
+| Reference spur | `≈ −57.0 dBc` | Its **arithmetic** is graded, in §5.2: the check there carries this figure's own 11.19 fC charge total through the derivation and matches the result at the precision written. What is still not re-derived is that **total** — it adds a corner-combined statistical residual and a term-1 product DR-018 derives in prose from `sim/mc-cp-mismatch`'s 300 committed samples, and reducing those needs a signed `\|mean\| + 3σ` statistic this section's reduction language does not have. The *measured* spur figures in the same row — `−57.0`, `−72.7`, `−54.5` — are graded above |
 
 Nothing mechanically enumerates "every headline figure" out of §5's prose
 cells, which quote hundreds of numbers, most of them commentary on a figure
@@ -706,6 +706,71 @@ row's own derivation scales, 3.24 % becomes **0.65 % RMS** rather than 0.50 % �
 still inside the 1.0 % line, so no verdict here changes, but the margin is
 1.5× rather than 2×. Tracked as an owed measurement, not folded silently into
 the existing number.
+
+### 5.2 Derivation provenance: the derived spur figures CI re-derives arithmetically
+
+§5.1 grades a **measured** value by reducing a committed per-corner CSV. One
+row above does not rest on a measured value at all: **Reference spur**. Its
+closed-loop campaign measures 5 of the 45 PVT points, every one of them at
+150 MHz and with device mismatch off, so what this document tells you about the
+binding 200 MHz point — **1.6 dB inside the line**, rather than the ~6 dB the
+older −61 dBc figure implied — is a hand derivation: a per-event charge total
+carried through C2, a recorded TIE scale point, the narrowband-FM relation
+`θ = 2π·f_out·TIE`, and a `20·log₁₀(θ/2)` at the end. Five derived figures, in
+two tables of `spec/pll.md`, quoted here in a third document. §5.1's own
+ungraded list declined that figure because it is "not a reduction of one CSV",
+which was true and incomplete: **a hand derivation is not ungradeable, because
+every ingredient it uses is written down beside it.**
+
+`spec/lib/check-spur-derivation-arithmetic.sh` re-derives it, and fails this
+repository's CI if the derivation stops reproducing its own figures. It reads
+the two relations out of `spec/pll.md` rather than asserting them — as
+`check-quoted-value-provenance.sh` reads the Icp trim-code rule and
+`check-pvt-coverage-claims.sh` computes the mandated grid size from the harness
+— so a re-ratified derivation fails the check in the same commit instead of
+being graded against the superseded chain. Six rules: the stated relations must
+be the ones it implements; the worst-case sum must be the linear add it calls
+itself; the step table's chain must follow row by row from its own displayed
+figures, with the unrounded end-to-end chain agreeing within 0.1 dB so that
+rounding cannot stand in for arithmetic; every charge-accounting row must
+reproduce its spur from its own total ΔQ; the measured table's scaled column
+must add the `20·log₁₀(200/150)` = +2.50 dB constant its own header names (the
+arithmetic on which two cold corners are UNMET at 200 MHz, written out by hand
+five times); and **every absolute dBc figure anywhere in this proposal must be
+one the specification contains** — measured, scaled, derived, or the ratified
+`≤ −55 dBc` line itself, either at the precision `spec/pll.md` writes it or at
+the finer precision its own arithmetic produces (which is how the −56.95 dBc
+disclosure below is allowed to be stated at all).
+
+| Derived figure | Total ΔQ | What that total prices |
+|---|---|---|
+| `−66.6 dBc` | 3.68 fC | Systematic asymmetry alone — the row DR-024 says a mismatch-off measurement is comparable with |
+| `−61 dBc` | 6.67 fC | The original derivation: systematic plus the nominal-only statistical residual |
+| `−59.9 dBc` | 7.93 fC | Statistical residual refreshed to the corner-combined campaign, term 1 still excluded |
+| `≈ −57.0 dBc` | 11.19 fC | …plus term 1 (UP/DN current mismatch) at its measured 3σ |
+| `−56.6 dBc` | 11.66 fC | …plus term 1 at its ±20 % budget — the figure this row's 1.6 dB margin is stated from |
+
+**One disclosure this produced.** `≈ −57.0 dBc` is −56.95 dBc carried through
+unrounded, which rounds to −56.9 at the precision it is written to. The `≈` is
+load-bearing, and the check grants a figure carrying that marker one unit of
+its last written place — the only place in it that accepts a figure not
+matching at the precision written. The figure is not wrong (the stack it ends
+is a deliberately conservative upper bound, and the difference is 0.05 dB), and
+it is not quietly re-rounded here: `spec/pll.md` is the ratified specification,
+amended through a decision record rather than by an agent rounding it
+differently.
+
+**What this does not grade**, stated so the gap is visible rather than implied:
+where the charge totals themselves come from. The 7.93 / 11.19 / 11.66 fC
+totals add a corner-combined statistical residual and term-1 products that
+DR-018 derives in prose from `sim/mc-cp-mismatch`'s committed samples; reducing
+those is §5.1's kind of work and needs a signed `|mean| + 3σ` statistic its
+reduction language does not have. So the derivation is graded **from** its
+charge totals, not **to** them — which is why §5.1 still lists the figure, with
+that narrower reason. Nor does it grade the dB *margins* stated in prose ("1.6 dB
+inside the line", "~12 dB at the two cold corners"), because a bare "dB" in this
+document is as often a spread or a reserve as it is a difference of two graded
+numbers.
 
 ---
 
