@@ -231,9 +231,18 @@
 #
 #   min|max|mean|sum|sig3(adjacent-overlap(COL by AXIS) by KEY[+KEY...])
 #       Per group, the worst (smallest) fractional overlap between the COL
-#       intervals of consecutive AXIS values: max(COL at k) / min(COL at k+1)
-#       - 1, where negative is a hole rather than an overlap. A group with no
-#       pair of consecutive AXIS values is an error.
+#       interval at AXIS and the one at AXIS+1: max(COL at k) / min(COL at
+#       k+1) - 1, where negative is a hole rather than an overlap. The pairing
+#       is AXIS with AXIS+1 -- NOT "the next AXIS value in sort order" -- so
+#       AXIS must be integer-coded and spaced by exactly 1 (`band` is), and
+#       two things are errors rather than passes. A group holding no such pair
+#       at all has no adjacent interval to overlap. And a group whose AXIS run
+#       has a HOLE in it (`0, 1, 3`) would be examined over one pair while
+#       looking like it was examined over two -- the same "quietly examined
+#       less than it looks like" failure the anti-vacuity treatment of
+#       count(non-monotonic(...)) above refuses, and just as invisible in a
+#       worst case as it is in a zero. The OK line therefore prints how many
+#       adjacent pairs were examined alongside the group count.
 #
 #   min|max|mean|sum|sig3(worst-magnitude(COL by AXIS) by KEY[+KEY...])
 #       Per group, the SIGNED COL value of the point with the largest
@@ -748,11 +757,14 @@ INNER_SEQ_NESTED = re.compile(
     re.DOTALL,
 )
 
-#: How many group-sequence derivations ran, and over how many groups. Reported
-#: in the OK line because the headline figure one of them grades is a ZERO: a
-#: derivation that quietly examined nothing would produce the same 0 as a
-#: derivation that examined 504 curves and found none violating.
-seq_stats = {"derivations": 0, "groups": 0}
+#: How many group-sequence derivations ran, over how many groups, and -- for
+#: `adjacent-overlap` -- over how many adjacent AXIS pairs. Reported in the OK
+#: line because the headline figure one of them grades is a ZERO: a derivation
+#: that quietly examined nothing would produce the same 0 as a derivation that
+#: examined 504 curves and found none violating. The pair count is the same
+#: guard one level down: a worst overlap is equally silent about how many
+#: intervals it was the worst of.
+seq_stats = {"derivations": 0, "groups": 0, "pairs": 0}
 
 
 def group_sequences(rows, keys, columns, reduction, ctx):
@@ -793,6 +805,14 @@ def group_sequences(rows, keys, columns, reduction, ctx):
             tuple(str(row.get(k, "")).strip() for k in keys), []
         ).append(values)
     if not groups:
+        # UNREACHABLE TODAY, AND DELIBERATELY KEPT. `groups` can only be empty
+        # when `rows` is, and collect_evidence_rows() has already refused that
+        # with "the evidence file(s) hold no data rows" -- which is the guard
+        # that actually delivers "an empty derivation must not read as a
+        # passing zero", and which the empty-file test asserts. This branch is
+        # defence in depth for a future caller that reaches this function by
+        # some other route; it is not the one the anti-vacuity guarantee rests
+        # on, so do not read it as such.
         fail(
             "%s: reduction `%s` formed no groups at all. There is nothing to "
             "derive, and an empty derivation must not read as a passing zero."
@@ -885,16 +905,56 @@ def sequence_group_scalars(verb, col, axis, keys, rows, reduction, ctx):
             continue
 
         # adjacent-overlap: the worst (smallest) fractional overlap between the
-        # COL intervals of consecutive AXIS values. max(COL at k) / min(COL at
-        # k+1) - 1; negative means a hole rather than an overlap.
+        # COL interval at AXIS and the one at AXIS+1. max(COL at k) / min(COL
+        # at k+1) - 1; negative means a hole rather than an overlap. The
+        # pairing is k with k+1, so AXIS is integer-coded and unit-spaced --
+        # see the grammar note in the header -- and a gap in the run is an
+        # error rather than a pair this walk steps over.
         spans = {}
         for value, step in points:
             low, high = spans.get(step, (value, value))
             spans[step] = (min(low, value), max(high, value))
+        steps = sorted(spans)
+        paired = [step for step in steps if step + 1 in spans]
+        if not paired:
+            fail(
+                "%s: group %s holds no pair of consecutive `%s` values, so it "
+                "has no adjacent interval to overlap"
+                % (ctx, "/".join(key), axis)
+            )
+            return None
+        holes = [
+            (low, high)
+            for low, high in zip(steps, steps[1:])
+            if high - low != 1
+        ]
+        if holes:
+            where = ", ".join(
+                "%g then %g" % (low, high) for low, high in holes
+            )
+            fail(
+                "%s: group %s has a gap in its `%s` run (%s): this derivation "
+                "pairs `%s` with `%s`+1, so it would examine %d pair(s) of "
+                "the %d that %d values look like they hold. A partially "
+                "gapped group is an error rather than a shorter walk -- a "
+                "worst overlap taken over fewer intervals than the group "
+                "appears to hold reads exactly like one taken over all of "
+                "them."
+                % (
+                    ctx,
+                    "/".join(key),
+                    axis,
+                    where,
+                    axis,
+                    axis,
+                    len(paired),
+                    len(steps) - 1,
+                    len(steps),
+                )
+            )
+            return None
         overlaps = []
-        for step in sorted(spans):
-            if step + 1 not in spans:
-                continue
+        for step in paired:
             upper, lower = spans[step][1], spans[step + 1][0]
             if lower == 0:
                 fail(
@@ -903,13 +963,7 @@ def sequence_group_scalars(verb, col, axis, keys, rows, reduction, ctx):
                 )
                 return None
             overlaps.append(upper / lower - 1.0)
-        if not overlaps:
-            fail(
-                "%s: group %s holds no pair of consecutive `%s` values, so it "
-                "has no adjacent interval to overlap"
-                % (ctx, "/".join(key), axis)
-            )
-            return None
+        seq_stats["pairs"] += len(overlaps)
         scalars[key] = min(overlaps)
     return scalars
 
@@ -946,6 +1000,9 @@ def apply_nested_group_sequence(
             tuple(str(row.get(k, "")).strip() for k in outer_keys), []
         ).append(row)
     if not partitions:
+        # Same standing as group_sequences()' twin of this branch: unreachable
+        # behind collect_evidence_rows()' no-data-rows refusal, kept as defence
+        # in depth rather than as the guarantee's source.
         fail(
             "%s: reduction `%s` formed no groups at all. There is nothing to "
             "derive, and an empty derivation must not read as a passing zero."
@@ -1845,8 +1902,9 @@ if errors:
 print(
     "OK: %d quoted values re-derived from committed per-corner evidence and "
     "matched at the precision written (%d of them group-sequence derivations "
-    "over %d groups); %d further figure(s) derived against %d ratified "
-    "constant(s) read from the spec and its decision records (%s); %d "
+    "over %d groups, %d adjacent-axis pair(s) examined); %d further figure(s) "
+    "derived against %d ratified constant(s) read from the spec and its "
+    "decision records (%s); %d "
     "in-record table(s) read, %d checked row-for-row "
     "against the committed logs by point id and %d by row count alone; all %d "
     "section 5 rows accounted for (%d graded, %d with a stated reason) and %d "
@@ -1856,6 +1914,7 @@ print(
         checked,
         seq_stats["derivations"],
         seq_stats["groups"],
+        seq_stats["pairs"],
         derived_checked,
         len(constants_used),
         "; ".join(

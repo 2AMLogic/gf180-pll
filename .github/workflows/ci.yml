@@ -539,7 +539,12 @@ jobs:
         # and `min(adjacent-overlap(fosc_hz by band) by ...)`. The first
         # grades a ZERO, so the check treats an empty group set, a one-point
         # curve and a repeated control voltage as failures rather than passes,
-        # and prints the number of groups it examined.
+        # and prints the number of groups it examined. The second pairs `band`
+        # with `band+1`, so a GAP in a corner's band codes (`0, 1, 3`) is a
+        # failure too rather than a pair the walk steps over (#566): a worst
+        # overlap says nothing about how many intervals it was the worst of,
+        # so the count of adjacent pairs examined is printed beside the group
+        # count for the same anti-vacuity reason.
         #
         # One figure is a STATISTIC rather than an extremum -- the reference
         # spur row's term-1 mismatch reading, 17.48 % -- and the grammar

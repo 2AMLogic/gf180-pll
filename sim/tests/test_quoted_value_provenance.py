@@ -647,12 +647,31 @@ class TestGroupSequenceDerivations(_TreeTest):
         )
         self.tree.write(proposal(spec_rows=tuple(rows), provenance=provenance))
 
+    @staticmethod
+    def remap_bands(csv_text, bundle, mapping):
+        """CURVES_CSV with one bundle's band codes relabelled.
+
+        One pass over the rows rather than chained `str.replace` calls, which
+        would re-match rows an earlier substitution had just renamed.
+        """
+        out = [csv_text.strip().split("\n")[0]]
+        for line in csv_text.strip().split("\n")[1:]:
+            fields = line.split(",")
+            if fields[0] == bundle:
+                fields[3] = mapping.get(fields[3], fields[3])
+            out.append(",".join(fields))
+        return "\n".join(out) + "\n"
+
     def test_both_curve_derivations_pass_and_report_their_group_count(self):
         self.write()
         result = self.assertPasses()
         self.assertIn("6 quoted values re-derived", result.stdout)
-        self.assertIn("2 of them group-sequence derivations over 7 groups",
-                      result.stdout)
+        # Seven groups: five curves for the monotonicity derivation and two
+        # corners for the overlap one. Three pairs: c1's single 0-1 and c2's
+        # 0-1 and 1-2 -- the count that tells a worst overlap taken over every
+        # adjacent band apart from one taken over a gapped subset of them.
+        self.assertIn("2 of them group-sequence derivations over 7 groups, "
+                      "3 adjacent-axis pair(s) examined", result.stdout)
 
     def test_a_dip_in_one_curve_is_counted(self):
         """The fault the figure exists to exclude: f falls back mid-sweep."""
@@ -744,6 +763,62 @@ class TestGroupSequenceDerivations(_TreeTest):
         self.write(csv_text=CURVES_CSV.replace(
             "c1,27,3.30,1,", "c1,27,3.30,3,"))
         self.assertFails("no pair of consecutive `band` values")
+
+    def test_a_partially_gapped_corner_fails(self):
+        """The case a `continue` used to pass quietly (issue #566).
+
+        A corner holding bands `0, 1, 3` has one pair where it looks like it
+        has two, and the figure the derivation reports -- a worst overlap --
+        says nothing about how many intervals it was the worst of. So a gap is
+        an error, not a shorter walk: the wholly gapped corner above already
+        hard-fails, and it would be strange for a corner that is *half* missing
+        to be the one that passes.
+
+        Gaps at the end of the run, at the start, and in the middle are each
+        exercised, because a walk that pairs `k` with `k+1` fails differently
+        at each position.
+
+        The first case is the negative control: c2's bands become `1, 2, 5`,
+        whose surviving `1`-`2` pair is the 5.88 % one the document quotes, so
+        the whole tree still GRADES CLEAN and the gap is the only thing wrong
+        with it. That fixture passed under the `continue` this replaced.
+        """
+        cases = (
+            # bands 1, 2, 5 -- the quoted 5.9 % survives the gap untouched
+            ({"0": "5"}, None, "2 then 5", "1 pair(s) of the 2 that 3 values"),
+            # bands 0, 1, 3 -- gap after the last pair
+            ({"2": "3"}, None, "1 then 3", "1 pair(s) of the 2 that 3 values"),
+            # bands 1, 3, 4 -- gap before the only pair
+            ({"0": "1", "1": "3", "2": "4"}, None,
+             "1 then 3", "1 pair(s) of the 2 that 3 values"),
+            # bands 0, 1, 3, 4 -- a pair on either side of the gap
+            ({"2": "3"},
+             "c2,27,3.30,4,0.90,22000000\nc2,27,3.30,4,1.20,24000000\n"
+             "c2,27,3.30,4,1.50,26000000\n",
+             "1 then 3", "2 pair(s) of the 3 that 4 values"),
+        )
+        for mapping, extra, gap, counted in cases:
+            with self.subTest(mapping=mapping, extra=extra):
+                csv_text = self.remap_bands(CURVES_CSV, "c2", mapping)
+                self.write(csv_text=csv_text + (extra or ""))
+                self.assertFails(
+                    "group c2/27/3.30 has a gap in its `band` run (%s)" % gap,
+                    "pairs `band` with `band`+1",
+                    "would examine %s look like they hold" % counted,
+                )
+
+    def test_a_whole_run_of_bands_is_not_read_as_a_gap(self):
+        """The other direction: relabelling a whole run must still pass.
+
+        Without this, "fail on a gap" could be satisfied by a check that fails
+        on any band code it does not recognise. c2's bands become 5, 6, 7 --
+        still unit-spaced, so still two pairs, and 5.9 % is unchanged because
+        the frequencies did not move.
+        """
+        self.write(csv_text=self.remap_bands(
+            CURVES_CSV, "c2", {"0": "5", "1": "6", "2": "7"}))
+        result = self.assertPasses()
+        self.assertIn("3 adjacent-axis pair(s) examined", result.stdout)
 
     def test_count_over_a_group_scalar_is_rejected(self):
         entries = [
@@ -1466,6 +1541,24 @@ class TestTheRealTree(unittest.TestCase):
             result.stdout.split("group-sequence derivations over ")[1].split(" ")[0]
         )
         self.assertGreaterEqual(groups, 500, msg=result.stdout)
+
+    def test_the_overlap_derivation_examined_every_adjacent_band_pair(self):
+        """The same anti-vacuity assertion one level down (issue #566).
+
+        The group count says 63 corners were examined; it does not say how many
+        of each corner's seven adjacent band pairs were. A gap in a corner's
+        band codes is now an error rather than a skipped pair, so the floor
+        asserted here is the whole grid's worth of pairs -- again a floor, not a
+        second copy of a number §5.1 already states.
+        """
+        result = subprocess.run(
+            ["bash", str(CHECK)], capture_output=True, text=True, cwd=REPO_ROOT
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        match = re.search(r"(\d+) adjacent-axis pair\(s\) examined",
+                          result.stdout)
+        self.assertIsNotNone(match, msg=result.stdout)
+        self.assertGreaterEqual(int(match.group(1)), 400, msg=result.stdout)
 
     def test_it_derives_the_ratio_figures_against_the_ratified_lines(self):
         """Rule 7 on the real tree, asserted from the other side.
