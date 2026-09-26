@@ -165,8 +165,9 @@ channel, drain to source, with `NA = √(S_inj / 2NT)`, `NT = 10 ps`. `S_inj` is
 the device's maximum over its trajectory; the ring's is the maximum over the
 class across all five stages. Four noisy copies and one clean reference copy
 share one deck and so one timestep sequence; 60 periods per copy after 40 ns of
-settling; `rndseed` fixed per point so a re-run reproduces the sequence bit for
-bit. The period is rising-edge to rising-edge at mid-supply on `CLK`. The
+settling. `rndseed` is set per point, but on this build it does not reproduce a
+`trnoise` realisation (see Validation), so a re-run reproduces the statistics,
+not the sequence. The period is rising-edge to rising-edge at mid-supply on `CLK`. The
 figure carried forward is the pooled standard deviation's one-sided 95 % upper
 confidence limit.
 
