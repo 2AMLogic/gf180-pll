@@ -15,9 +15,55 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+import isf_extract  # noqa: E402
+
+
+def _ranks(xs):
+    """Average-tied ranks of `xs`, for a Spearman coefficient."""
+    order = sorted(range(len(xs)), key=lambda i: xs[i])
+    ranks = [0.0] * len(xs)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and xs[order[j + 1]] == xs[order[i]]:
+            j += 1
+        avg = (i + j) / 2.0 + 1.0
+        for k in range(i, j + 1):
+            ranks[order[k]] = avg
+        i = j + 1
+    return ranks
+
+
+def _spearman(xs, ys):
+    """Spearman rank correlation of two equal-length sequences.
+
+    Hand-rolled because this repository's simulation-side code has no numpy or
+    scipy dependency and is not going to acquire one for a twelve-row table.
+    Pinned by `sim/tests/test_isf_bringup.py` against cases whose answer is
+    known by hand (+1 for a monotone rise, -1 for a monotone fall).
+    """
+    if len(xs) != len(ys) or len(xs) < 2:
+        return float("nan")
+    rx, ry = _ranks(list(xs)), _ranks(list(ys))
+    mx, my = sum(rx) / len(rx), sum(ry) / len(ry)
+    num = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
+    dx = math.sqrt(sum((a - mx) ** 2 for a in rx))
+    dy = math.sqrt(sum((b - my) ** 2 for b in ry))
+    return num / (dx * dy) if dx and dy else float("nan")
+
+
+def _ratio(c):
+    """The larger/smaller of a cross-check row's two injected charges."""
+    a, b = abs(c["h_direct_dq_C"]), abs(c.get("h_subtracted_dq_C") or 0.0)
+    if not a or not b:
+        return float("nan")
+    return max(a, b) / min(a, b)
 
 
 def _load(results: Path, name: str):
@@ -182,6 +228,85 @@ def section_sweep(res, out, *, title, key, keyfmt, colname, blurb):
         )
     out.append("")
 
+    # PER-STEP, PER-PHASE, so no restatement of this sweep has to compress
+    # "the last step" into "per step".  The two tables below are what a
+    # document quoting a single percentage must point at: the first says how
+    # far each individual step moves `h`, the second how far each setting sits
+    # from the limit and in which direction.  Both exist because the first
+    # revision of this directory quoted the last step's figure as if it applied
+    # to every step, and a sweep whose last step is 0.02 % can have a first
+    # step of 2.26 %.
+    asc = sorted(run[key] for run in res["runs"])
+    if len(asc) >= 2:
+        steps = [(asc[i + 1], asc[i]) for i in range(len(asc) - 1)][::-1]
+        out.append(
+            f"### Step by step: how far `h` moves over each individual step "
+            f"of the {colname} sweep\n"
+        )
+        out.append(
+            "Each cell is normalised by the value on the **limit** side of that "
+            "step (the smaller "
+            f"{colname}), the same convention as the "
+            "\"worst change over the last step\" figure above, so the last "
+            "column of this table and that bullet are the same quantity. Note "
+            "that a step is only a *halving* where the swept values are a "
+            "factor of two apart — read the column headers rather than "
+            "assuming.\n"
+        )
+        out.append(
+            "| phase x/2pi | "
+            + " | ".join(f"{keyfmt(a)} -> {keyfmt(b)}" for a, b in steps)
+            + " |"
+        )
+        out.append("|---" * (len(steps) + 1) + "|")
+        per_step = {s: 0.0 for s in steps}
+        for ph in sorted(table):
+            row = table[ph]
+            cells = []
+            for a, b in steps:
+                va, vb = row.get(keyfmt(a)), row.get(keyfmt(b))
+                if va is None or vb is None or not vb:
+                    cells.append("--")
+                    continue
+                d = abs(vb - va) / abs(vb)
+                per_step[(a, b)] = max(per_step[(a, b)], d)
+                cells.append(f"{d * 100:.4f} %")
+            out.append(f"| {ph:.4f} | " + " | ".join(cells) + " |")
+        out.append("")
+        out.append(
+            "- worst over all phases, per step: "
+            + "; ".join(
+                f"**{keyfmt(a)} -> {keyfmt(b)}: {per_step[(a, b)] * 100:.2f} %**"
+                for a, b in steps
+            )
+        )
+        out.append("")
+        out.append(
+            f"### Signed deviation of each {colname} from the {ref_col} limit\n"
+        )
+        out.append(
+            "Signed, because the direction is information: a bias that grows "
+            "monotonically with the swept value is a different statement from "
+            "one that changes sign across the sweep.\n"
+        )
+        out.append(
+            "| phase x/2pi | " + " | ".join(f"{c}" for c in cols) + " |"
+        )
+        out.append("|---" * (len(cols) + 1) + "|")
+        for ph in sorted(table):
+            row = table[ph]
+            fine = row.get(ref_col)
+            cells = []
+            for c in cols:
+                v = row.get(c)
+                cells.append(
+                    "--"
+                    if v is None or not fine
+                    else f"{(v - fine) / abs(fine) * 100:+.2f} %"
+                )
+            out.append(f"| {ph:.4f} | " + " | ".join(cells) + " |")
+        out.append("")
+
 
 def section_capacity(res, out):
     """The one-deck construction's copy ceiling."""
@@ -218,8 +343,8 @@ def section_capacity(res, out):
     out.append("")
 
 
-def section_diff(res, out):
-    """The differential ISFs, and the two constructions of them agreeing."""
+def section_diff(res, out, gamma=None, nodes=None):
+    """The differential ISFs, and how far the two constructions of them agree."""
     if not res:
         return
     out.append("## The differential ISF a channel-noise generator sees\n")
@@ -232,10 +357,11 @@ def section_diff(res, out):
         "changes no result — it changes whether two constructions of it are "
         "comparable.) Every copy below is in ONE deck, on one timestep sequence: "
         "the single-node injections, and a direct injection BETWEEN each pair of "
-        "nodes. By linearity the two must give the same `h_gen`, and their "
-        "agreeing is evidence about the deck — that the pair element landed on "
-        "the nets it names — that no internal check on either construction alone "
-        "can give.\n"
+        "nodes. By linearity the two must give the same `h_gen`, so comparing "
+        "them is the only evidence available about the deck — that the pair "
+        "element landed on the nets it names — that no internal check on either "
+        "construction alone can give. It is evidence with a MEASURED limit: see "
+        "the cross-check table's last two columns.\n"
     )
     out.append(
         f"f0 from the reference copy: {res['f0_Hz'] / 1e6:.4f} MHz; "
@@ -285,19 +411,51 @@ def section_diff(res, out):
             "found.\n"
         )
         out.append(
-            "| pair | phase x/2pi | dq direct | h_gen direct | dq single-node | "
-            "h_gen subtracted | signed | magnitude |"
+            "The last two columns are why the agreement is uneven, and they "
+            "replace the guess that the charge RATIO explains it (it does not — "
+            "the `Y-NH` row at phase 0.0833 disagrees by under 0.5 % at a 16x "
+            "charge ratio). `|dlnh/dx|` is the logarithmic slope of the sampled "
+            "`h(Y)` curve at that phase, per cycle: where it is large, `h` is "
+            "small and steep, the second-order (`dq**2 * dh/dx`) term in the "
+            "response is comparable to the linear one, and no finite charge "
+            "measures the `dq -> 0` ISF. `h(Y)` vs. charge is that prediction "
+            "measured directly — how far the single-node `h(Y)` at this exact "
+            "phase moved between the pilot charge and this stage's charge. It "
+            "bounds what ANY two differently-stimulated constructions can agree "
+            "to here, independently of either one's numerical floor.\n"
         )
-        out.append("|---" * 8 + "|")
+        out.append(
+            "| pair | phase x/2pi | dq direct | h_gen direct | dq single-node | "
+            "h_gen subtracted | signed | magnitude | \\|dlnh/dx\\| (/cycle) | "
+            "h(Y) vs. charge |"
+        )
+        out.append("|---" * 10 + "|")
+        pilot = list((gamma or {}).get("rows", [])) + list(
+            (nodes or {}).get("rows", [])
+        )
+        diag = {}
         for c in cc:
+            ph = c["phase_cycles"]
+            slope = nonlin = float("nan")
+            if gamma:
+                try:
+                    slope = isf_extract.phase_log_slope(gamma["rows"], ph, "Y")
+                except ValueError:
+                    slope = float("nan")
+            if pilot:
+                cd = isf_extract.charge_dependence(pilot, res["rows"], "Y", ph)
+                if cd:
+                    nonlin = cd[0]
+            diag[(c["pair"], round(ph, 9))] = (slope, nonlin)
             out.append(
-                f"| {c['pair']} | {c['phase_cycles']:.4f} | "
+                f"| {c['pair']} | {ph:.4f} | "
                 f"{c['h_direct_dq_C'] * 1e15:g} fC | "
                 f"{c['h_direct_rad_per_C']:+.4e} | "
                 f"{(c['h_subtracted_dq_C'] or 0) * 1e15:g} fC | "
                 f"{c['h_subtracted_rad_per_C']:+.4e} | "
                 f"{c['rel_disagreement'] * 100:.2f} % | "
-                f"{c.get('rel_disagreement_magnitude', float('nan')) * 100:.2f} % |"
+                f"{c.get('rel_disagreement_magnitude', float('nan')) * 100:.2f} % | "
+                f"{slope:.1f} | {nonlin * 100:.1f} % |"
             )
         out.append("")
         worst = max(cc, key=lambda c: c["rel_disagreement"])
@@ -306,6 +464,27 @@ def section_diff(res, out):
         medm = sorted(
             c.get("rel_disagreement_magnitude", float("nan")) for c in cc
         )[len(cc) // 2]
+        agree = [c for c in cc if c["rel_disagreement"] < 0.01]
+        bad = [c for c in cc if c["rel_disagreement"] >= 0.36]
+        out.append(
+            f"- **{len(agree)} of {len(cc)} rows agree to better than 1 %** "
+            + (
+                "("
+                + "; ".join(
+                    f"{c['pair']} at {c['phase_cycles']:.4f}, "
+                    f"{c['rel_disagreement'] * 100:.2f} %"
+                    for c in agree
+                )
+                + ")"
+                if agree
+                else ""
+            )
+        )
+        out.append(
+            f"- **{len(bad)} of {len(cc)} rows disagree by 36 % or more** — the "
+            "comparison is not uniformly a pass, and the table above is the "
+            "honest form of it"
+        )
         out.append(
             f"- worst SIGNED disagreement: {worst['rel_disagreement'] * 100:.2f} % "
             f"({worst['pair']} at phase {worst['phase_cycles']:.4f}); "
@@ -317,6 +496,31 @@ def section_diff(res, out):
             f"({wm['pair']} at phase {wm['phase_cycles']:.4f}); "
             f"median {medm * 100:.2f} %"
         )
+        clean = sorted(
+            (
+                (diag[(c["pair"], round(c["phase_cycles"], 9))][1],
+                 c["rel_disagreement"], c["pair"], c["phase_cycles"])
+                for c in cc
+                if diag[(c["pair"], round(c["phase_cycles"], 9))][1]
+                == diag[(c["pair"], round(c["phase_cycles"], 9))][1]
+            ),
+            key=lambda t: t[0],
+        )
+        if len(clean) >= 4:
+            rho = _spearman([t[0] for t in clean], [t[1] for t in clean])
+            out.append(
+                "- **the disagreement rises with the single-node charge "
+                f"dependence at the same phase (Spearman rho = {rho:+.2f} over "
+                f"{len(clean)} rows)**, and does NOT rise with the ratio of the "
+                "two charges (rho = "
+                f"{_spearman([_ratio(c) for c in cc], [c['rel_disagreement'] for c in cc]):+.2f}"
+                ") — which is what makes the charge dependence an explanation "
+                "and the charge ratio not one. Ordered by it: "
+                + "; ".join(
+                    f"{p} @ {x:.4f}: {nl * 100:.1f} % -> {rd * 100:.1f} %"
+                    for nl, rd, p, x in clean
+                )
+            )
         out.append("")
 
 
@@ -346,6 +550,18 @@ def render(results: Path) -> str:
             f"{env['pulse_width_s'] * 1e12:g} ps, default dq = "
             f"{env['pilot_dq_C'] * 1e15:g} fC"
         )
+        if env.get("pulse_ramp_s") is not None:
+            pw, tr = env["pulse_width_s"], env["pulse_ramp_s"]
+            amp = env.get("pilot_dq_C", 0.0) / (pw + tr)
+            out.append(
+                f"- injection pulse: ngspice `PULSE` is a TRAPEZOID, so the "
+                f"delivered charge is `amp*(PW + TR/2 + TF/2)`, not `amp*PW`. "
+                f"TR = TF = {tr * 1e12:g} ps, PW = {pw * 1e12:g} ps, and the "
+                f"amplitude is sized `dq/(PW + TR)` — "
+                f"{amp * 1e6:.4f} uA at the {env['pilot_dq_C'] * 1e15:g} fC "
+                f"pilot charge — so the area delivered is the nominal `dq` every "
+                f"`h` below is normalised by"
+            )
         out.append(
             f"- `diff` stage: charges chosen per phase to land the displacement "
             f"near {env['target_dt_s'] * 1e12:g} ps, clipped to "
@@ -384,7 +600,12 @@ def render(results: Path) -> str:
         "weights it is the DIFFERENCE h(Y) - h(NT), not h(Y) alone.",
     )
     section_capacity(_load(results, "capacity"), out)
-    section_diff(_load(results, "diff"), out)
+    section_diff(
+        _load(results, "diff"),
+        out,
+        gamma=_load(results, "gamma"),
+        nodes=_load(results, "nodes"),
+    )
     section_sweep(
         _load(results, "timestep"),
         out,

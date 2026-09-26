@@ -165,12 +165,64 @@ class DeckAssembly(unittest.TestCase):
         with self.assertRaises(ValueError):
             _deck.injection_net("VBP", 1, 1)
 
-    def test_injected_amplitude_is_charge_over_width(self):
-        deck = self._build(injections=[(2, "NT", 3, 4e-8, 4e-15, 1e-11)])
+    @staticmethod
+    def _pulse_args(line):
+        """`(amp, td, tr, tf, pw)` parsed out of an element line's `pulse(...)`."""
+        body = line.split("pulse(")[1].rstrip(")").split()
+        return tuple(float(x) for x in (body[1], body[2], body[3], body[4], body[5]))
+
+    def test_injected_charge_is_the_trapezoid_area_not_the_plateau(self):
+        """The DELIVERED charge -- area, not plateau -- must equal the nominal dq.
+
+        This is the assertion that catches the defect a plateau-amplitude check
+        structurally cannot.  ngspice's `PULSE(V1 V2 TD TR TF PW PER)` is a
+        trapezoid, so the charge it delivers is `amp*(PW + TR/2 + TF/2)`.  The
+        first version of this deck set `amp = dq/PW`, which at `PW = 10 ps` and
+        `TR = TF = 1 ps` delivered `1.10*dq` -- a silent +10 % bias on every `h`
+        (and +21 % on every `h**2`), invisible to an amplitude assertion because
+        the amplitude was exactly what that version intended it to be.
+
+        Pinned here from the element line's OWN parsed parameters, so the test
+        would still fail if the ramps changed without the amplitude following.
+        """
+        dq, pw = 4e-15, 1e-11
+        deck = self._build(injections=[(2, "NT", 3, 4e-8, dq, pw)])
         line = next(ln for ln in deck.splitlines() if ln.startswith("iinj2"))
         self.assertIn("nt2_3", line)
-        amp = float(line.split("pulse(0 ")[1].split()[0])
-        self.assertAlmostEqual(amp, 4e-15 / 1e-11, places=12)
+        amp, _td, tr, tf, got_pw = self._pulse_args(line)
+        self.assertAlmostEqual(got_pw, pw, places=15)
+        delivered = amp * (got_pw + 0.5 * tr + 0.5 * tf)
+        # 1e-8 rather than exact: the amplitude reaches the deck as text with 9
+        # significant digits, so ~1e-9 of relative rounding is irreducible.  The
+        # bias this test exists to catch was 1e-1.
+        self.assertLess(abs(delivered / dq - 1.0), 1e-8, line)
+        # And the naive rectangular reading is NOT dq -- i.e. this circuit really
+        # does have ramps, so the assertion above has teeth rather than being
+        # trivially satisfied by tr = tf = 0.
+        self.assertGreater(tr, 0.0)
+        self.assertGreater(tf, 0.0)
+        self.assertNotAlmostEqual(amp * got_pw / dq, 1.0, places=3)
+
+    def test_injected_charge_helpers_agree_with_the_element_line(self):
+        """`injected_charge`/`injection_amplitude` are each other's inverse.
+
+        The deck writes `injection_amplitude(dq, pw)`; anything reasoning about
+        what a recorded row actually received uses `injected_charge`.  If those
+        two ever disagree the reported `h` is biased by exactly their ratio, so
+        the round trip is pinned rather than trusted.
+        """
+        for dq, pw in ((2e-15, 1e-11), (8e-15, 1e-11), (1.25e-16, 5e-12)):
+            amp = _deck.injection_amplitude(dq, pw)
+            self.assertAlmostEqual(_deck.injected_charge(amp, pw) / dq, 1.0,
+                                   places=12)
+        deck = self._build(injections=[(1, "Y", 1, 4e-8, 2e-15, 1e-11)])
+        line = next(ln for ln in deck.splitlines() if ln.startswith("iinj1"))
+        amp, _td, tr, tf, pw = self._pulse_args(line)
+        self.assertAlmostEqual(amp, _deck.injection_amplitude(2e-15, pw),
+                               places=12)
+        self.assertLess(
+            abs(_deck.injected_charge(amp, pw, tr, tf) / 2e-15 - 1.0), 1e-8
+        )
 
     def test_a_node_pair_injects_between_the_two_nets(self):
         """A two-terminal generator must be an element ACROSS drain and source.
@@ -184,8 +236,10 @@ class DeckAssembly(unittest.TestCase):
         deck = self._build(injections=[(1, ("Y", "NT"), 3, 4e-8, 4e-14, 1e-11)])
         line = next(ln for ln in deck.splitlines() if ln.startswith("iinj1"))
         self.assertEqual(line.split()[1:3], ["y1_3", "nt1_3"])
-        amp = float(line.split("pulse(0 ")[1].split()[0])
-        self.assertAlmostEqual(amp, 4e-14 / 1e-11, places=9)
+        amp, _td, tr, tf, pw = self._pulse_args(line)
+        self.assertLess(
+            abs(_deck.injected_charge(amp, pw, tr, tf) / 4e-14 - 1.0), 1e-8
+        )
         self.assertIn(" 4.00000000e-08 ", line)
 
     def test_a_node_pair_with_an_unknown_class_is_refused(self):
@@ -417,6 +471,152 @@ class DifferentialReduction(unittest.TestCase):
         rows = [self._row("Y", 0.0, 1.6e13), self._row("NT", 0.0, 1.5e13)]
         diffs = _extract.node_differences(rows, self.T, pairs=(("Y", "NT"),))
         self.assertEqual(_extract.crosscheck_pairs(rows, diffs, (("Y", "NT"),)), [])
+
+
+class CrossCheckDiagnostics(unittest.TestCase):
+    """Why the two `h_gen` constructions disagree where they disagree.
+
+    The bring-up's first pass attributed the cross-check's ~100 % rows to the two
+    constructions' charges differing "by 2-25x".  The committed data refutes
+    that: the worst-disagreeing rows have charge ratios of 1.19x and 1.55x, while
+    a row at a 16x ratio agrees to 0.45 %.  These two quantities are what the
+    disagreement actually tracks, so they are computed from the committed JSON
+    and pinned here rather than asserted in prose.
+    """
+
+    T = 1.0 / 150e6
+
+    @classmethod
+    def setUpClass(cls):
+        cls.sm = load_module(ISF / "summarize.py")
+
+    @staticmethod
+    def _sweep(hs, node="Y"):
+        n = len(hs)
+        return [
+            {"node": node, "phase_cycles": i / n, "h_rad_per_C": h, "dq_C": 2e-15}
+            for i, h in enumerate(hs)
+        ]
+
+    def test_log_slope_is_small_at_an_extremum_and_huge_near_a_zero(self):
+        """The dimensionless number that says whether a finite charge can work.
+
+        A triangle wave through zero: at its peak `h` is large and flat, so
+        `|dh/dx|/|h|` is small; one sample either side of the zero crossing `h`
+        is small and the slope is unchanged, so the ratio explodes.  That
+        contrast -- not the charge -- is what distinguishes the phases where the
+        two constructions agree from the phases where they do not.
+        """
+        # 8 phases: +4,+2,~0,-2,-4,-2,~0,+2 (units of 1e12)
+        hs = [4e12, 2e12, 1e10, -2e12, -4e12, -2e12, -1e10, 2e12]
+        rows = self._sweep(hs)
+        peak = _extract.phase_log_slope(rows, 0.0)       # the extremum itself
+        shoulder = _extract.phase_log_slope(rows, 0.125)  # half way down
+        near_zero = _extract.phase_log_slope(rows, 0.25)  # one sample off zero
+        self.assertAlmostEqual(peak, 0.0, places=9)
+        self.assertLess(shoulder, 10.0)
+        self.assertGreater(near_zero, 1000.0)
+        self.assertGreater(near_zero / shoulder, 100.0)
+
+    def test_log_slope_wraps_at_the_period(self):
+        """`h(x)` is periodic, so phase 0's neighbours include the last sample."""
+        rows = self._sweep([0.0 + 1e12, 2e12, 3e12, 2e12])
+        # neighbours of phase 0 are the 0.75 and 0.25 samples, both 2e12 ->
+        # central difference 0, not a one-sided slope against a missing point.
+        self.assertAlmostEqual(_extract.phase_log_slope(rows, 0.0), 0.0, places=9)
+
+    def test_log_slope_refuses_a_non_uniform_grid(self):
+        rows = self._sweep([1e12, 2e12, 3e12, 4e12])
+        rows[2]["phase_cycles"] = 0.55
+        with self.assertRaises(ValueError):
+            _extract.phase_log_slope(rows, 0.0)
+
+    def test_charge_dependence_measures_h_moving_between_two_charges(self):
+        pilot = [
+            {"node": "Y", "phase_cycles": 0.25, "h_rad_per_C": 1.0e12,
+             "dq_C": 2e-15},
+        ]
+        rows = [
+            {"node": "Y", "phase_cycles": 0.25, "h_rad_per_C": 1.4e12,
+             "dq_C": 1e-15},
+            {"node": "NH", "phase_cycles": 0.25, "h_rad_per_C": 9.0e11,
+             "dq_C": 1e-15},
+        ]
+        rel, dq_a, dq_b = _extract.charge_dependence(pilot, rows, "Y", 0.25)
+        self.assertAlmostEqual(rel, 0.4, places=9)
+        self.assertEqual((dq_a, dq_b), (2e-15, 1e-15))
+        self.assertIsNone(_extract.charge_dependence(pilot, rows, "NT", 0.25))
+        self.assertIsNone(_extract.charge_dependence(pilot, rows, "Y", 0.5))
+
+    def test_spearman_is_plus_one_for_a_rise_and_minus_one_for_a_fall(self):
+        xs = [1.0, 2.0, 3.0, 4.0, 5.0]
+        self.assertAlmostEqual(
+            self.sm._spearman(xs, [2.0, 9.0, 11.0, 30.0, 31.0]), 1.0, places=9
+        )
+        self.assertAlmostEqual(
+            self.sm._spearman(xs, [31.0, 30.0, 11.0, 9.0, 2.0]), -1.0, places=9
+        )
+        # Ties average their ranks rather than being ordered arbitrarily.
+        self.assertAlmostEqual(
+            self.sm._spearman([1.0, 1.0, 2.0, 2.0], [1.0, 1.0, 2.0, 2.0]),
+            1.0, places=9,
+        )
+
+    def test_charge_ratio_is_the_larger_over_the_smaller_either_way_round(self):
+        self.assertAlmostEqual(
+            self.sm._ratio({"h_direct_dq_C": 2e-15, "h_subtracted_dq_C": 1.25e-16}),
+            16.0, places=9,
+        )
+        self.assertAlmostEqual(
+            self.sm._ratio({"h_direct_dq_C": 2e-15, "h_subtracted_dq_C": 3.1e-15}),
+            1.55, places=9,
+        )
+
+    def test_the_diff_section_reports_both_diagnostics(self):
+        """The rendered table must carry the two columns the prose leans on."""
+        gamma = {"rows": self._sweep([4e12, 2e12, 1e10, -2e12]), "f0_Hz": 150e6,
+                 "elapsed_s": 1.0}
+        diff = {
+            "f0_Hz": 150e6,
+            "elapsed_s": 1.0,
+            "period_s": self.T,
+            "target_dt_s": 2e-12,
+            "rows": [
+                {"node": "Y", "phase_cycles": 0.0, "h_rad_per_C": 4.4e12,
+                 "dq_C": 1e-15, "stage": 1, "dt_s": 1e-12,
+                 "dt_spread_s": 1e-15, "dt_drift_s_per_cycle": 0.0,
+                 "n_settled": 9},
+            ],
+            "differences": [
+                {"pair": "Y-NT", "phase_cycles": 0.0, "dq_C": 1e-15,
+                 "h_drain_rad_per_C": 4.4e12, "h_source_rad_per_C": 4.0e12,
+                 "h_gen_rad_per_C": -4.0e11, "cancellation_ratio": -0.0909,
+                 "floor_rad_per_C": 1e9, "snr": 400.0},
+            ],
+            "crosscheck": [
+                {"pair": "Y-NT", "phase_cycles": 0.0,
+                 "h_direct_rad_per_C": -4.1e11, "h_direct_dq_C": 2e-15,
+                 "h_direct_dt_s": 1e-12, "h_direct_spread_s": 1e-15,
+                 "h_subtracted_rad_per_C": -4.0e11,
+                 "h_subtracted_dq_C": 1e-15,
+                 "rel_disagreement": 0.0244,
+                 "rel_disagreement_magnitude": 0.0244},
+            ],
+        }
+        out = []
+        self.sm.section_diff(diff, out, gamma=gamma, nodes=None)
+        text = "\n".join(out)
+        self.assertIn("|dlnh/dx| (/cycle)", text.replace("\\", ""))
+        self.assertIn("h(Y) vs. charge", text)
+        # h(Y) at phase 0 moved 4.0e12 -> 4.4e12 between the two charges: 10 %.
+        self.assertIn("10.0 %", text)
+        # The 4-phase gamma stub gives |dlnh/dx| = |2e12-(-2e12)|/(2*0.25)/4e12
+        # = 2.0 per cycle at phase 0, and both diagnostics land in the row.
+        self.assertIn("| 2.0 | 10.0 % |", text)
+        # Both bucket counts are stated, so a reader is never shown only the
+        # rows that agree.
+        self.assertIn("0 of 1 rows agree to better than 1 %", text)
+        self.assertIn("0 of 1 rows disagree by 36 % or more", text)
 
 
 class SweepReferenceColumn(unittest.TestCase):

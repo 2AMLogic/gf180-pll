@@ -156,6 +156,80 @@ def rms(xs):
     return math.sqrt(sum(x * x for x in xs) / len(xs)) if xs else 0.0
 
 
+def phase_log_slope(rows, phase, node="Y"):
+    """|d ln h / dx| at `phase`, per cycle, from a UNIFORM phase sweep of `h`.
+
+    WHY THIS IS REPORTED BESIDE A CROSS-CHECK.  `h(x)` is not slowly varying: on
+    this ring it swings from +2e13 through zero to -2e13 within a tenth of a
+    cycle, so there are phases where `h` is small and its slope is enormous.  At
+    such a phase the second-order term in the response to a FINITE injected
+    charge -- which scales as `dq**2 * dh/dx`, because the injection displaces
+    the trajectory while it is still being delivered -- is comparable to the
+    linear `h*dq` term, and where the linear term nearly vanishes the
+    second-order one can dominate it outright and even set its sign.  The
+    dimensionless number that says whether that is happening is this one: the
+    logarithmic slope, `|dh/dx| / |h|`, in units of per cycle.  It is a property
+    of the PHASE, not of the charge, which is why it -- and not the ratio of two
+    charges -- is what the cross-check disagreements below track.
+
+    Central difference on the sweep's own uniform grid, wrapping at the period
+    (`h` is periodic in `x`).  Raises if the grid is not uniform, since a
+    central difference on a non-uniform grid is silently wrong rather than
+    obviously wrong.
+    """
+    pts = sorted(
+        (round(r["phase_cycles"], 9), r["h_rad_per_C"])
+        for r in rows
+        if r["node"] == node
+    )
+    if len(pts) < 3:
+        raise ValueError(
+            f"need >= 3 sampled phases of h({node}) for a slope, got {len(pts)}"
+        )
+    xs = [p for p, _ in pts]
+    step = xs[1] - xs[0]
+    if any(abs((xs[i + 1] - xs[i]) - step) > 1e-9 for i in range(len(xs) - 1)):
+        raise ValueError(
+            f"h({node}) is not sampled on a uniform phase grid: {xs}"
+        )
+    i = min(range(len(xs)), key=lambda k: abs(xs[k] - round(phase, 9)))
+    h = pts[i][1]
+    if not h:
+        return float("inf")
+    hm = pts[(i - 1) % len(pts)][1]
+    hp = pts[(i + 1) % len(pts)][1]
+    return abs((hp - hm) / (2.0 * step)) / abs(h)
+
+
+def charge_dependence(pilot_rows, rows, node, phase):
+    """|dh| / |h| for `node` at `phase` between two runs at different charges.
+
+    The DIRECTLY measured finite-amplitude sensitivity of a single-node `h` at
+    one phase: how much `h` moved when the same node at the same phase was
+    re-measured at a different injected charge.  Returns `(rel, dq_pilot,
+    dq_other)`, or `None` if either run has no row for that node and phase.
+
+    This is the quantity that bounds what any comparison of two differently
+    stimulated constructions can agree to at that phase, and it is measured
+    rather than argued: if one term of a subtraction moves 39 % with charge,
+    the subtraction cannot agree with a differently-charged direct measurement
+    to better than that, whatever either measurement's own numerical floor says.
+    """
+    key = round(phase, 9)
+
+    def find(rs):
+        for r in rs:
+            if r["node"] == node and round(r["phase_cycles"], 9) == key:
+                return r
+        return None
+
+    a, b = find(pilot_rows), find(rows)
+    if a is None or b is None or not a["h_rad_per_C"]:
+        return None
+    rel = abs(b["h_rad_per_C"] - a["h_rad_per_C"]) / abs(a["h_rad_per_C"])
+    return rel, a["dq_C"], b["dq_C"]
+
+
 def node_differences(rows, period, pairs=(("Y", "NT"), ("Y", "NH"))):
     """The DIFFERENTIAL ISFs a two-terminal noise generator is weighted by.
 

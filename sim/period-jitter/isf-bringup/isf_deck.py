@@ -58,6 +58,44 @@ INJECTION_NODES = {
 
 _STAGES = (1, 2, 3, 4, 5)
 
+#: Rise and fall time of the injection pulse, seconds.  Named rather than
+#: inlined because the delivered charge depends on it -- see `injected_charge`.
+RAMP_S = 1e-12
+
+
+def injected_charge(amp: float, pw: float, tr: float = RAMP_S,
+                    tf: float = RAMP_S) -> float:
+    """Charge an ngspice `PULSE(0 amp TD TR TF PW PER)` element ACTUALLY delivers.
+
+    ngspice's PULSE is a TRAPEZOID, not a rectangle: `PW` is the flat top and
+    `TR`/`TF` are additional ramps on either side of it.  The area is therefore
+
+        amp * (PW + TR/2 + TF/2)
+
+    and NOT `amp * PW`.  This distinction is the whole reason this function
+    exists: the first version of this deck set `amp = dq / pw`, which with
+    `PW = 10 ps` and `TR = TF = 1 ps` delivered `1.10 * dq` and biased every
+    reported `h` 10 % high (and every `h**2` 21 % high), because
+    `isf_extract.sensitivity()` normalises by the NOMINAL `dq`.  The plateau
+    amplitude on its own cannot reveal that error; only the area can, so the
+    area is computed here and pinned by a test.
+    """
+    return amp * (pw + 0.5 * tr + 0.5 * tf)
+
+
+def injection_amplitude(dq: float, pw: float, ramp: float = RAMP_S) -> float:
+    """Pulse amplitude whose TRAPEZOIDAL area is exactly `dq`.
+
+    Inverts `injected_charge` for `tr = tf = ramp`:
+    `amp * (pw + ramp) == dq`.  Sizing the amplitude (rather than reporting the
+    delivered charge as a separate quantity) keeps ONE charge number flowing
+    through the reduction, the per-phase charge rules in `run.py`, the
+    equal-charge guard in `isf_extract.node_differences` and the committed
+    JSON -- so the nominal `dq` a row is normalised by is, by construction, the
+    charge that row's copy received.
+    """
+    return dq / (pw + ramp)
+
 
 def read_vco_netlist(repo_root) -> str:
     return (Path(repo_root) / "design" / "netlist" / "vco.spice").read_text()
@@ -156,10 +194,18 @@ def injection_element(spec, copy: int, stage: int, name: str, t_inject, dq, pw) 
     equals `h(drain) - h(source)`.  On this ring those two terms are nearly
     equal, so the difference is a small residue of two large numbers: measuring
     it as a difference costs ~20x in precision, while measuring it directly does
-    not, and the two constructions agreeing is the bring-up's own cross-check
-    that the injection is landing where it is supposed to.
+    not, and comparing the two constructions is the bring-up's own cross-check
+    on whether the injection is landing where it is supposed to.
+
+    CHARGE, not amplitude.  The amplitude is sized by `injection_amplitude` so
+    the TRAPEZOID's area -- not its plateau times `pw` -- equals `dq`; see
+    `injected_charge` for what goes wrong otherwise.
     """
-    shape = f"pulse(0 {dq / pw:.8e} {t_inject:.8e} 1p 1p {pw:.6e} 1)"
+    amp = injection_amplitude(dq, pw)
+    ramp = f"{RAMP_S:.6e}"
+    shape = (
+        f"pulse(0 {amp:.8e} {t_inject:.8e} {ramp} {ramp} {pw:.6e} 1)"
+    )
     if isinstance(spec, str):
         return f"i{name} 0 {injection_net(spec, copy, stage)} {shape}"
     drain, source = spec

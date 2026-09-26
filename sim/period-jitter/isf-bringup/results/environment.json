@@ -17,6 +17,8 @@
   "tmax_s": 2e-12,
   "pulse_width_s": 1e-11,
   "pilot_dq_C": 2e-15,
+  "pulse_ramp_s": 1e-12,
+  "injection_amplitude_A": 0.00018181818181818183,
   "target_dt_s": 2e-12,
   "dq_min_C": 1.25e-16,
   "dq_max_C": 8e-15,

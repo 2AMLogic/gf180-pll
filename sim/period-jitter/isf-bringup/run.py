@@ -226,7 +226,7 @@ def stage_nodes(models, out, logs, work, quick, period):
 def stage_linearity(models, out, logs, work, quick, period):
     """Is the phase response linear in the injected charge?
 
-    Six charges spanning 64x, at four phases spanning the cycle, each in its
+    Six charges spanning 64x, at six phases spanning the cycle, each in its
     own deck so that all six charges at a given phase are compared on
     trajectories that saw the same injection times.
 
@@ -234,8 +234,24 @@ def stage_linearity(models, out, logs, work, quick, period):
     the pilot charge turns out not to be in the linear regime at the switching
     edges and the question "where does linearity start?" cannot be answered by
     a sweep whose smallest value is the one under suspicion.
+
+    WHICH PHASES, and why two of them are not on a uniform grid.  `h(x)` on this
+    ring swings from +2e13 through zero to -2e13 within a tenth of a cycle, so
+    the linear window is not a property of the ring alone -- it is a property of
+    the phase.  At a phase where `h` is small and `dh/dx` is enormous the
+    second-order term in the response (which scales as `dq**2 * dh/dx`, the
+    injection displacing the trajectory while it is still being delivered) is
+    comparable to the linear `h*dq` term, so the window closes.  `1/6` and `2/3`
+    are added for exactly that reason: they are the two phases sitting on the
+    steep flanks immediately before `h(Y)`'s two zero crossings, and they are
+    where the `diff` stage's two constructions of `h_gen` disagree most.  A
+    linearity sweep taken only at the peaks and the flats would establish a
+    window that does not hold where it is needed, and would leave that
+    disagreement unexplained -- which is precisely what the first pass of this
+    bring-up did.  Both are multiples of 1/24, so they coincide with the `gamma`
+    sweep's grid and with `diff`'s phase set.
     """
-    phases = [0.0, 0.25, 0.5, 0.75]
+    phases = [0.0, 1 / 6, 0.25, 0.5, 2 / 3, 0.75]
     charges = [0.125e-15, 0.25e-15, 0.5e-15, 1e-15, 2e-15, 8e-15]
     runs = []
     for dq in charges:
@@ -258,6 +274,16 @@ def stage_timestep(models, out, logs, work, quick, period):
     such.  Four ceilings spanning 16x, at four phases including the two the
     `gamma` stage finds h largest at (the switching edges, where timestep
     control is weakest and where a non-converging method would show it).
+
+    WHAT THIS PHASE SET DOES NOT COVER, stated because the convergence claim is
+    read more broadly than it is measured.  These four phases are the peaks and
+    the flats.  They do NOT include the two phases on the steep flanks before
+    `h(Y)`'s zero crossings (1/6 and 2/3), where `stage_linearity` shows the
+    charge response is not linear even at 0.125 fC.  A convergence-in-`tmax`
+    statement from this stage therefore covers the peaks and flats -- which is
+    where a Gamma^2-weighted sum is dominated -- and is silent about those two
+    phases.  Extending it there is work for the pipeline, not a gap this
+    bring-up hides.
     """
     phases = [0.0, 0.25, 0.5, 0.75]
     ceilings = [8e-12, 4e-12, 2e-12, 1e-12] if not quick else [8e-12, 4e-12]
@@ -521,6 +547,12 @@ def main(argv=None):
                             for k, v in OP.items()},
         "t_inject0_s": T_INJECT0, "tstop_s": TSTOP, "tstep_s": TSTEP,
         "tmax_s": TMAX, "pulse_width_s": PW, "pilot_dq_C": DQ,
+        # Recorded because the DELIVERED charge is the trapezoid's area,
+        # amp*(PW + TR/2 + TF/2), not amp*PW: without the ramp time a reader
+        # cannot check that the amplitude in a deck matches the `dq` its row is
+        # normalised by.  See `isf_deck.injected_charge`.
+        "pulse_ramp_s": isf_deck.RAMP_S,
+        "injection_amplitude_A": isf_deck.injection_amplitude(DQ, PW),
         # The `diff` stage's per-phase charge rule and phase set, and the
         # `capacity` probe's copy counts -- recorded because every `diff` number
         # is a function of them and a reader should not have to read the source

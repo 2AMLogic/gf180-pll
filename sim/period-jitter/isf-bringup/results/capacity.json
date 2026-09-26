@@ -5,31 +5,31 @@
       "ncopy": 25,
       "aborted": false,
       "data_rows": 1508,
-      "elapsed_s": 22.806411743164062
+      "elapsed_s": 17.709554195404053
     },
     {
       "ncopy": 31,
       "aborted": false,
       "data_rows": 1508,
-      "elapsed_s": 37.72355580329895
+      "elapsed_s": 28.563020944595337
     },
     {
       "ncopy": 37,
       "aborted": true,
       "data_rows": 3,
-      "elapsed_s": 23.141390800476074
+      "elapsed_s": 12.183790922164917
     },
     {
       "ncopy": 41,
       "aborted": true,
       "data_rows": 1,
-      "elapsed_s": 21.098066091537476
+      "elapsed_s": 14.213857889175415
     },
     {
       "ncopy": 61,
       "aborted": true,
       "data_rows": 2,
-      "elapsed_s": 23.925652265548706
+      "elapsed_s": 26.849440574645996
     }
   ],
   "largest_completing": 31,
