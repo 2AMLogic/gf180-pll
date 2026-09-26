@@ -44,7 +44,9 @@ nothing to diff against. `design/lib/check-io-list-coverage.sh` (#237) grades
 whether a port is *named* in the Chipalooza pad table, not whether it is
 *wired*, and `LDT3` had every right to its row.
 
-**One committed record programmed a code with its MSB set.**
+**One committed record programmed a code with its MSB set** — one *on the tree
+this record was written against*; Amendment A1 names three more that landed on
+`main` afterwards and were already in flight when this was written.
 `sim/supply-sensitivity/records/20260920-180604-0f91a9b.md` (#417) is the
 run `spec/pll.md`'s Lock detector row cites to discharge DR-013 Decision 4's
 item (b): the window-vs-offset crossing measured **inside one closed loop**
@@ -72,7 +74,9 @@ independent readings of committed artifacts, that the loop ran at **code 3**
 - **The node dump.** All five `ff` logs print the `ldt3` pad at the rail
   (2.97 / 3.30 / 3.63 V) and `xdut.net1` at 0 V in the same DC operating-point
   table. `grep -rl 'ldt3_code=1' sim/*/corners/*/` returns exactly those five
-  logs across the whole repository.
+  logs **of the tree this record was written against** — a scope this record
+  originally left off the sentence, and which Amendment A1 corrects: that grep
+  is not a repository-wide audit and never was one.
 - **The window comparison, which discriminates.** At `ff`/27 °C/3.63 V the
   settled offset is 1.2331 ns. `sim/lock-window-trim`'s committed 1872-point
   code map measures `t_win` at that same (bundle, temperature, supply) as
@@ -193,7 +197,10 @@ after it.
 - **Every `pll_top`-level result taken before this change is now cheap to
   audit**, and has been: `grep -rl 'ldt3_code' sim/*/corners/*/` and
   `grep -rl 'xdut.net1' sim/` both return the ten logs of one record, so the
-  blast radius is bounded to the cell this record withdraws. `sim/lock-detector`
+  blast radius is bounded to the cell this record withdraws. **Both counts are
+  of the tree this record was written against, and both have since moved —
+  Amendment A1; the second grep is the one that would have kept up, and this
+  record did not run it as the audit.** `sim/lock-detector`
   and `sim/lock-window-trim` drive `lock_detector` / `delaywin_3v3` directly,
   never through `pll_top`, so the 205-point re-characterization and the
   1872-point code map — the evidence T1′/T2′ actually rest on — never passed
@@ -209,3 +216,77 @@ after it.
   are satisfied by a mis-wired net that has two connections. That class remains
   the responsibility of `check-io-list-coverage.sh`, of review, and of the
   recorded evidence in `sim/`.
+
+## Amendment A1 — the `ldt3_code=1` audit was never repository-wide, and what replaces it reads snapshots and logs instead of parameter spellings (issue #557)
+
+**Date**: 2026-09-26. **No decision, target, budget or verdict of this record
+moves.** Decision 2's withdrawal of the `ff`/27 °C/3.63 V crossing verdict
+stands exactly as written, Decision 5's CI check stands, and the `typical`
+cell's `confirmed` verdict is untouched. What is corrected is a claim about
+the *reach of this record's own audit*.
+
+**The claim.** §Context offers, as the evidence that the blast radius is one
+record, that `grep -rl 'ldt3_code=1' sim/*/corners/*/` "returns exactly those
+five logs across the whole repository"; §Consequences repeats it, adding
+`grep -rl 'xdut.net1' sim/`. Those sentences were true of the tree this record
+was written against. Read as standing repository-wide facts — which is how
+they are phrased — they are **false**, and the first of them is false in a way
+no later run could repair.
+
+**What it missed.** Three `sim/reference-phase-transfer` records (#509,
+DR-027) were run on the morning of 2026-09-25 on the same pre-fix `pll_top`
+export, programming window trim code 8, so their detector ran at effective
+code **0**. They reached `main` at 01:06Z on 2026-09-26, after this record
+merged at 11:37Z on 2026-09-25, so this record's audit could not have seen
+them. But it also *could not have returned them at any time*: their decks take
+the trim code from `testbench/tb.json` through the harness rather than from a
+`.param ldt3_code=` line, so the string `ldt3_code=1` appears in none of their
+25 committed logs. The defect was fully visible in those logs — the `ldt3` pad
+at a rail and `xdut.net1` at 0 V in the same operating-point table, the exact
+two-node signature Decision 2 reads — just not as that string.
+
+The second grep, `grep -rl 'xdut.net1' sim/`, *would* have kept up: it returns
+all four affected corner directories today. This record ran it as a
+corroboration of a conclusion it had already reached from the first, rather
+than as the audit. That is the methodological point worth recording: **the
+audit was a grep for the way one campaign happened to spell a parameter, and a
+parameter spelling is a property of a deck, not of a netlist.**
+
+**What replaces it.** `sim/lib/check-record-trim-connectivity.sh` (#557) runs
+in CI over every campaign in `sim/` with a committed record, and grades frozen
+artifacts rather than text conventions. It finds a committed
+`sim/*/netlist-snapshots/*.spice` that leaves a declared port wired to an
+xschem auto-named `net<N>` with exactly one connection — the same signature
+Decision 5's `design/lib/check-port-connectivity.sh` rule 2 grades `design/`
+on, resolved through the instantiated subcircuit's own port list to the pin's
+*name* — and then reads that record's own committed per-corner logs for the
+matching pad. **Both halves are required**, which is what makes it a finding
+rather than a flag: a dead port nobody drove changed nothing (that is
+`sim/lock-window-proxy`'s record, on the same broken export but driving
+`delaywin_3v3` directly, and the check passes it while naming it), and a driven
+`ldt3` pad on a netlist that wires it is every post-fix record. A record with
+both must be named in the check's own `DISCLOSED` table against a decision
+record that exists, is more than a stub, and names the campaign back — the same
+shape of allowance `sim/lib/check-ref-drive-claims.sh` rule 5 uses, and for the
+same reason: editing a table in a CI script and landing a decision record is a
+deliberate act with a reviewer in front of it, where an environment variable is
+not. Against the tree as of this amendment it reports two disclosed records,
+`20260920-180604-0f91a9b` (this record) and
+`20260925-{073001,074549,080736}-*` (DR-027 Amendment A1), and zero
+undisclosed ones.
+
+**What the replacement still cannot see, stated rather than implied.** A
+campaign that committed no netlist snapshot, and a record whose logs carry no
+operating-point table, are both ungradeable by it; it names them in its summary
+instead of counting them clean. It inherits Decision 5's blind spot unchanged —
+a port wired to the *wrong* place rather than to nothing leaves no
+single-connection signature. And it grades the netlist a run *froze*, so a
+campaign that never committed the snapshot it ran is outside it by
+construction.
+
+**Nothing in `sim/` is edited.** The three `reference-phase-transfer` records
+and `20260920-180604-0f91a9b.md` all stand exactly as committed, on
+`sim/README.md`'s append-only rule and on the same reasoning §Alternatives
+considered gives for not editing `20260920-180604-0f91a9b.md`: each states the
+code its deck *programmed*, truthfully. The correction to what the design
+*saw* belongs in this record and in DR-027.
