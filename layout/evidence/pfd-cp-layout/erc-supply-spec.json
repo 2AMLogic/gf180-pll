@@ -1,0 +1,42 @@
+{
+  "_description": "klt erc supply-connectivity spec for layout/evidence/pfd-cp-layout/pfd_cp.gds (gf180mcuD). Declares the gate+conductor stackup and the two supply nets (VDD, VSS) so erc.unconnected_net / erc.supply_short can be computed. Run with '--deck gf180mcu' so the curated extraction deck's own device-body markers are carved out of the matching conductor roles rather than hand-transcribed. The well/substrate-tie half is declared as a disclosed non-declaration (see 'ties_disclosure' below and PROOF-erc.md), not omitted silently.",
+  "stackup": [
+    {
+      "name": "poly2",
+      "layer": "30/0",
+      "role": "gate",
+      "active_layer": "22/0",
+      "_comment": "Poly2 (30/0) is gf180mcu's gate-poly layer -- stackup[0] must set role:gate. active_layer names Comp (22/0), the diffusion/active layer, so klt erc accumulates true poly-and-diff gate area (klayout-tools#1979) rather than raw poly-net area. Cross-checked against libs.tech/klayout/tech/gf180mcu.lyp and klayout-tools' curated decks/gf180mcu.py layer table (both agree: Poly2 30/0, COMP 22/0)."
+    },
+    {
+      "name": "metal1",
+      "layer": "34/0",
+      "label_layer": "34/10",
+      "_comment": "Metal1 (34/0), reached from poly/diffusion through Contact (33/0). label_layer 34/10 (Metal1_Label) is declared because it is VERIFIED to carry this block's own VDD/VSS pin text -- walking every text shape on (34,10) of the committed GDS with klayout.db finds exactly one instance each of VDD and VSS, alongside this block's eleven non-supply Metal1 pin texts (REF, FB, B0, B1, IBN, ICN, IBP, ICP, VOUT). One text per supply is a weak island bound, and PROOF-erc.md states it explicitly rather than letting a clean read imply more."
+    },
+    {
+      "name": "metal2",
+      "layer": "36/0",
+      "_comment": "Metal2 (36/0), reached through Via1 (35/0). No label_layer: layer (36,10) (Metal2_Label) does carry text in this block, but only UP and DN -- VERIFIED none of it is VDD/VSS -- so declaring it would not help resolve either declared supply net."
+    },
+    {
+      "name": "metal3",
+      "layer": "42/0",
+      "_comment": "Metal3 (42/0), reached through Via2 (38/0) -- this block's last routing layer actually drawn. Confirmed by enumerating layer_indexes() on the committed GDS: layers present are 21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0, 34/10, 35/0, 36/0, 36/10, 38/0, 42/0 -- nothing above 42/0, and no 42/10 to declare as a label layer. Unlike layout/evidence/vco-layout/erc-supply-spec.json, which declares metal3/metal4/metal5 as a portable gf180mcu stackup shape even where absent, this spec declares exactly the conductor layers the stream draws: klt erc now reports its own coverage gap (erc_coverage.layers_in_stream_without_declaration, klayout-tools#2389), so portability no longer buys anything a reader has to take on trust."
+    }
+  ],
+  "vias": [
+    { "name": "contact", "layer": "33/0", "between": ["poly2", "metal1"], "_comment": "Contact (33/0) is gf180mcu's single poly/diffusion-to-Metal1 contact layer (used generically for both gate and source/drain contacts)." },
+    { "name": "via1", "layer": "35/0", "between": ["metal1", "metal2"], "_comment": "Via1 (35/0), Metal1-to-Metal2." },
+    { "name": "via2", "layer": "38/0", "between": ["metal2", "metal3"], "_comment": "Via2 (38/0), Metal2-to-Metal3. No Via3 (40/0) or above is drawn in this block." }
+  ],
+  "nets": [
+    { "name": "VDD", "kind": "supply", "_comment": "This block's positive supply rail -- the shared VDD domain PLL-FLOORPLAN.md section 2 assigns to the reference / PFD / charge pump / lock detector. Matched against Metal1_Label (34/10) text, verified present in the committed GDS." },
+    { "name": "VSS", "kind": "supply", "_comment": "This block's ground rail -- the shared VSS domain of PLL-FLOORPLAN.md section 2 (every block except the VCO, which owns a private GND_VCO). Matched against Metal1_Label (34/10) text, verified present in the committed GDS." }
+  ],
+  "ties_disclosure": {
+    "kind": "tool_limitation",
+    "reason": "This block's one drawn tub layer (Nwell 21/0) carries two deliberately differently-biased well classes, and klt 0.6.0 cannot express the split for a stream with no marker layer to select on. Fourteen of the fifteen merged Nwell shapes hold an n-tap reaching VDD; the fifteenth -- (176.820, 7.755)-(279.820, 12.555) um, holding the charge-pump dump buffer's two W=48u pfets -- is deliberately body-tied to its own source node cp.PSRC, as design/pfd_cp.sch itself specifies and as the PDK's own device-aware LVS extraction independently confirms (that well, its tap and its Metal1/2/3 rail are all net $30 in the committed pfd_cp.lvsdb, the same net pfd_cp.netcheck.log names cp.PSRC). A single ties[] entry grades EVERY shape of the declared well_layer against its own one net, so declaring net VDD reports a false erc.missing_tie on that fifteenth well; the well-side class selectors klt erc provides for exactly this shape (ties[].well_requires / well_excludes, klayout-tools#2339) select whole drawn shapes by interaction with a marker layer, and this stream draws no layer that separates the two classes -- verified by testing every one of the twelve non-Nwell layers the GDS contains: seven (22/0, 30/0, 31/0, 32/0, 33/0, 34/0, 42/0) interact with all fifteen wells, three (35/0, 36/0, 38/0) interact with ten wells and the PSRC well is one of the ten, and the two label layers (34/10, 36/10) hold only zero-area text and interact with none. There is no caller-assertion counterpart on the well side (the tap side has ties[].tap_boxes, klayout-tools#2234), so the tap is nameable and this build still cannot grade it. Filed generically upstream; see PROOF-erc.md, 'Upstream friction'.",
+    "_comment": "Machine-readable disclosure of a deliberate zero-ties[] declaration (klayout-tools#2234/#2247). This keeps T1 item 11 UNMET for this block -- it renders supply_spec_disclosed_tool_limitation rather than the bare supply_spec_incomplete -- because a disclosure is the caller's word, never a computed erc.missing_tie result. That is the honest outcome, and it is deliberately not softened: the measured run with the tie declared anyway, and its one false finding, are both quoted in PROOF-erc.md so a reader can reproduce the obstacle rather than take this reason string on faith."
+  }
+}
