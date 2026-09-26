@@ -424,8 +424,9 @@ def transient_deck(*, repo_root, pdk_models, op, variants, tstop, tstep, tmax,
     variants in ONE deck is how the `validate` stage compares amplitude and `NT`
     settings on a single adaptive timestep sequence.
 
-    `rndseed` is set explicitly so that a re-run reproduces the committed
-    period sequences bit for bit rather than statistically.
+    `rndseed` is set, but on this build it does NOT reproduce a `trnoise`
+    realisation (the `validate` stage's `repeat` deck measures that), so a
+    re-run reproduces the committed statistics, not the period sequences.
 
     Returns `(deck, copies)` where `copies[k]` describes copy `k`'s variant.
     """

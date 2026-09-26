@@ -176,13 +176,15 @@ variance `S R/(4C)` of a white current of one-sided density `S = 2 NA² NT`; and
 the correlation between two instances, which must be zero for the copies to be
 independent realisations.
 
-**Validation** (stage `validate`, reference point). Three decks with the same
-seed and the same structure — so one noise realisation — at the default
-settings, at a 2.5 ps timestep ceiling, and at 3× amplitude, compared period
-by period: a converged timestep gives slope 1, a linear circuit slope 3. One
-mixed deck compares trnoise sample intervals of 5 and 20 ps at equal density,
-and decomposes the bound into white-only and per-block (ring, bias generator,
-buffer) injections.
+**Validation** (stage `validate`, reference point). Nine independent decks of
+the transient stage's own shape, each compared statistically with that stage's
+result: the same deck again (`repeat`), a 2.5 ps timestep ceiling, `trnoise`
+sample intervals of 5 and 20 ps at equal density, every amplitude × 3, the
+flicker parts removed, and each block (ring, bias generator, buffer) alone.
+Statistically, because a period-by-period comparison on one shared realisation
+is not available: on this build fixing `rndseed` does not reproduce a
+`trnoise` realisation — `repeat` is the evidence. And the noise deck's summed,
+multi-phase form against one `.noise` per device.
 
 <!-- RESULT-BODY -->
 

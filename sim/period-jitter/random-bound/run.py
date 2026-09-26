@@ -684,14 +684,21 @@ def stage_transient(point, op, outdir, logs, work, models, quick):
 # validate (reference point)
 # ---------------------------------------------------------------------------
 VAL_PERIODS = 60
-VAL_NCOPY = 2
+VAL_NCOPY = NCOPY
 VAL_SCALE = 3.0
 VAL_TMAX_FINE = 2.5e-12
 
 
-def _only(inj: dict, devs, block: str) -> dict:
-    blk = {d["path"]: d["block"] for d in devs}
-    return {k: (v if blk[k] == block else 0.0) for k, v in inj.items()}
+def _ratio(num: dict, den: dict) -> dict:
+    """`sigma_num / sigma_den` with its standard error, for two independent estimates.
+
+    The relative standard error of a sample standard deviation with `dof`
+    degrees of freedom is ~`1/sqrt(2 dof)`; for a ratio of two independent ones
+    the relative errors add in quadrature.
+    """
+    r = num["sigma_s"] / den["sigma_s"]
+    rel = math.sqrt(1.0 / (2 * num["dof"]) + 1.0 / (2 * den["dof"]))
+    return {"ratio": r, "se": r * rel}
 
 
 def _compare_noise_forms(point, op, sid, devs, models, work, logdir):
@@ -739,56 +746,76 @@ def _compare_noise_forms(point, op, sid, devs, models, work, logdir):
 def stage_validate(point, op, outdir, logs, work, models, quick):
     """Is the transient a measurement of what it claims to measure?
 
-    PAIRWISE (one noise realisation): `base`, `fine_tmax` and `x3` are the same
-    deck with the same `rndseed`, differing only in the timestep ceiling or in a
-    uniform amplitude scale, so their period sequences are compared period by
-    period rather than statistically.  A converged timestep gives slope 1 with a
-    small residual; a linear circuit gives slope exactly `VAL_SCALE`.
+    Every comparison is STATISTICAL: each variant is its own deck -- one clean
+    copy and `VAL_NCOPY` noisy ones, the transient stage's own shape -- and its
+    pooled period deviation is compared with the transient stage's result at
+    this point (`base`), as a ratio with a standard error.  (A period-by-period
+    comparison on one shared noise realisation is not available: on this build
+    a `trnoise` realisation is not reproduced by fixing the seed -- `repeat`,
+    the transient stage's deck run again unchanged, is the evidence, and is
+    also a second independent estimate of `base`.)  The variants:
 
-    STATISTICAL (one mixed deck, one timestep sequence): trnoise's sample
-    interval at 5 ps and 20 ps against the 10 ps default, at the same PSD; and
-    the decomposition of the bound -- white generators only, and each block
-    (ring, bias generator, output buffer) alone -- because a bound is only as
-    useful as knowing which of its parts is loose.
+      repeat     the transient stage's deck, unchanged           -> 1
+      fine_tmax  timestep ceiling 2.5 ps instead of 10 ps          -> 1 (converged)
+      nt5, nt20  trnoise sample interval 5 / 20 ps, same PSD       -> 1 (white)
+      x3         every amplitude x3                                -> 3 (linear)
+      white      flicker parts removed                             -> share
+      ring, bias, buffer   one block's generators alone          -> shares, summing to 1
+
+    The decks are independent, so they run side by side.  And the noise deck's
+    summed, multi-phase form is compared with the per-device form
+    (`_compare_noise_forms`).
     """
+    from concurrent.futures import ThreadPoolExecutor
+
     src = rb_deck.isf_deck.read_vco_netlist(REPO)
     devs = rb_deck.devices(src)
     sid = _load(outdir, f"sid_{point}.json")
+    base = _load(outdir, f"transient_{point}.json")
     inj = sid["S_inj_A2_per_Hz"]
     n_per = 12 if quick else VAL_PERIODS
-    seed = seed_for(point, "validate")
-    runs = {}
-    for name, scale, tmax in (("base", 1.0, TR_TMAX), ("fine_tmax", 1.0, VAL_TMAX_FINE),
-                              ("x3", VAL_SCALE, TR_TMAX)):
+    ncopy = 2 if quick else VAL_NCOPY
+    plan = {
+        "repeat": (inj, 1.0, NT, TR_TMAX, seed_for(point)),
+        "fine_tmax": (inj, 1.0, NT, VAL_TMAX_FINE, seed_for(point, "fine_tmax")),
+        "nt5": (inj, 1.0, 5e-12, TR_TMAX, seed_for(point, "nt5")),
+        "nt20": (inj, 1.0, 20e-12, TR_TMAX, seed_for(point, "nt20")),
+        "x3": (inj, VAL_SCALE, NT, TR_TMAX, seed_for(point, "x3")),
+        "white": (sid["S_inj_white_only_A2_per_Hz"], 1.0, NT, TR_TMAX, seed_for(point, "white")),
+        "ring": (_only(inj, devs, "ring"), 1.0, NT, TR_TMAX, seed_for(point, "ring")),
+        "bias": (_only(inj, devs, "bias"), 1.0, NT, TR_TMAX, seed_for(point, "bias")),
+        "buffer": (_only(inj, devs, "buffer"), 1.0, NT, TR_TMAX, seed_for(point, "buffer")),
+    }
+
+    def one(name):
+        amps, scale, nt, tmax, seed = plan[name]
         el, copies, _ = _run_transient(
             point, op, models, work / name, logs / f"validate_{name}_{point}.log",
-            [("", _amps(inj, scale, NT), NT, VAL_NCOPY)], seed, n_per, tmax)
-        runs[name] = {"elapsed_s": el, "copies": copies, "tmax_s": tmax,
-                      "scale": scale, "summary": _summarise(copies, "", quick)}
-    mix = [
-        ("nt5", _amps(inj, 1.0, 5e-12), 5e-12, VAL_NCOPY),
-        ("nt20", _amps(inj, 1.0, 20e-12), 20e-12, VAL_NCOPY),
-        ("white", _amps(sid["S_inj_white_only_A2_per_Hz"], 1.0, NT), NT, VAL_NCOPY),
-        ("ring", _amps(_only(inj, devs, "ring"), 1.0, NT), NT, VAL_NCOPY),
-        ("bias", _amps(_only(inj, devs, "bias"), 1.0, NT), NT, VAL_NCOPY),
-        ("buffer", _amps(_only(inj, devs, "buffer"), 1.0, NT), NT, VAL_NCOPY),
-    ]
-    el, copies, _ = _run_transient(point, op, models, work / "mix",
-                                   logs / f"validate_mix_{point}.log", mix,
-                                   seed_for(point, "mix"), n_per, TR_TMAX)
-    runs["mix"] = {"elapsed_s": el, "copies": copies,
-                   "summary": {v[0]: _summarise(copies, v[0], quick) for v in mix}}
-    runs["noise_deck_forms"] = _compare_noise_forms(point, op, sid, devs, models, work / "forms",
-                                                    logs / f"validate_noise_forms_{point}")
-    pair = {}
-    for other in ("fine_tmax", "x3"):
-        pair[other] = [
-            rb_extract.pairwise_deviation_ratio(ca["periods_s"], cb["periods_s"])
-            for ca, cb in zip(runs["base"]["copies"], runs[other]["copies"])
-            if ca["variant"] != "clean"
-        ]
-    _save(outdir, f"validate_{point}.json", {"point": point, "runs": runs,
-                                              "pairwise": pair})
+            [("", _amps(amps, scale, nt), nt, ncopy)], seed, n_per, tmax)
+        return name, {"elapsed_s": el, "copies": copies, "tmax_s": tmax, "nt_s": nt,
+                      "scale": scale, "rndseed": seed,
+                      "summary": _summarise(copies, "", quick)}
+
+    with ThreadPoolExecutor(max_workers=len(plan)) as ex:
+        runs = dict(ex.map(one, plan))
+    ratios = {k: _ratio(v["summary"], base["noisy"]) for k, v in runs.items()}
+    shares = {k: ratios[k]["ratio"] ** 2 for k in ("ring", "bias", "buffer", "white")}
+    # Same seed, same deck: if `set rndseed` reproduced a realisation, the
+    # repeat's period sequence would equal the transient stage's bit for bit.
+    rep = [rb_extract.pairwise_deviation_ratio(ca["periods_s"], cb["periods_s"])
+           for ca, cb in zip(base["copies"], runs["repeat"]["copies"])
+           if ca["variant"] != "clean"]
+    forms = _compare_noise_forms(point, op, sid, devs, models, work / "forms",
+                                 logs / f"validate_noise_forms_{point}")
+    _save(outdir, f"validate_{point}.json", {
+        "point": point, "environment": environment(models),
+        "base": {k: base["noisy"][k] for k in ("sigma_s", "dof", "n_periods")},
+        "runs": runs, "ratios": ratios,
+        "block_shares_of_variance": shares,
+        "block_shares_sum": shares["ring"] + shares["bias"] + shares["buffer"],
+        "repeat_vs_transient_same_seed": rep,
+        "noise_deck_forms": forms,
+    })
 
 
 ALL = ("calibrate", "loop", "trajectory", "sid", "transient", "validate")

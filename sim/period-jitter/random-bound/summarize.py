@@ -222,38 +222,50 @@ def main() -> int:
     if val:
         a(f"## Is the transient converged and linear? (stage `validate`, `{ref}`)")
         a("")
-        runs, pair = val["runs"], val["pairwise"]
-        a("Pairwise — one noise realisation (same deck, same `rndseed`), period by period:")
+        b = val["base"]
+        a("Each variant is an independent deck of the transient stage's own shape, "
+          "compared statistically with that stage's result at this point "
+          f"(`base`: σ̂ = {b['sigma_s'] * 1e12:.3f} ps over {b['n_periods']} periods). "
+          "`± 1σ` is the ratio's standard error from the two estimates' degrees of "
+          "freedom.")
         a("")
-        a("| comparison | copy | periods | slope | expected | residual / RMS | correlation |")
+        want = {"repeat": "1", "fine_tmax": "1 (timestep converged)",
+                "nt5": "1 (source white)", "nt20": "1 (source white)",
+                "x3": f"{run.VAL_SCALE:g} (linear)", "white": "share of `base`",
+                "ring": "share", "bias": "share", "buffer": "share"}
+        a("| variant | what changes | periods | σ̂ (ps) | σ̂ / base | ± 1σ | expected |")
         a("|---|---|---|---|---|---|---|")
-        for name, want in (("fine_tmax", 1.0), ("x3", run.VAL_SCALE)):
-            for i, p in enumerate(pair[name], 1):
-                a(f"| `base` → `{name}` | {i} | {p['n']} | {p['slope']:.5f} | {want:g} | "
-                  f"{p['resid_rel']:.2e} | {p['corr']:.6f} |")
+        what = {"repeat": "nothing", "fine_tmax": "timestep ceiling 2.5 ps",
+                "nt5": "`trnoise` NT = 5 ps", "nt20": "`trnoise` NT = 20 ps",
+                "x3": "every amplitude × 3", "white": "flicker parts removed",
+                "ring": "ring generators only", "bias": "bias-generator generators only",
+                "buffer": "output-buffer generators only"}
+        for k, r in val["runs"].items():
+            q = val["ratios"][k]
+            s_ = r["summary"]
+            a(f"| `{k}` | {what[k]} | {s_['n_periods']} | {s_['sigma_s'] * 1e12:.3f} | "
+              f"{q['ratio']:.3f} | {q['se']:.3f} | {want[k]} |")
         a("")
-        base = runs["base"]["summary"]
-        a("Statistical — independent realisations at equal PSD, and the decomposition:")
+        sh = val["block_shares_of_variance"]
+        a(f"Shares of `base`'s variance: ring {sh['ring']:.3f}, bias generator "
+          f"{sh['bias']:.3f}, output buffer {sh['buffer']:.3f} — sum "
+          f"**{val['block_shares_sum']:.3f}** (1 for independent generators in a "
+          f"linear circuit); white generators alone {sh['white']:.3f}.")
         a("")
-        a("| variant | periods | σ̂ (ps) | σ̂ / base | σ̂² share of `base` |")
-        a("|---|---|---|---|---|")
-        a(f"| `base` (NT 10 ps, everything) | {base['n_periods']} | "
-          f"{base['sigma_s'] * 1e12:.3f} | 1 | 1 |")
-        for k, s in runs["mix"]["summary"].items():
-            r = s["sigma_s"] / base["sigma_s"]
-            a(f"| `{k}` | {s['n_periods']} | {s['sigma_s'] * 1e12:.3f} | {r:.3f} | {r * r:.3f} |")
+        rep = val["repeat_vs_transient_same_seed"]
+        a("Same deck, same `rndseed`, run twice — period-by-period correlation of "
+          "the two runs' noisy copies: " + ", ".join(f"{p['corr']:+.3f}" for p in rep)
+          + ". A realisation is **not** reproduced by fixing the seed on this build, "
+          "which is why every comparison above is statistical.")
         a("")
-        a(f"Relative standard error of each σ̂ ≈ 1/√(2·dof) ≈ "
-          f"{1 / math.sqrt(2 * (base['dof'])):.3f}.")
-        a("")
-        forms = runs.get("noise_deck_forms")
+        forms = val.get("noise_deck_forms")
         if forms:
-            a("Noise deck — one `.noise` per frequency referred to the sum of every "
-              "drain (what `sid` runs) against one `.noise` per device, on one deck "
-              f"body at phase {forms['phase']:.4f} (selected by `{forms['selected_by']}`), "
-              "largest relative difference over all 62 MOS devices and both "
-              "frequencies: " + ", ".join(f"`{k}` {v:.1e}" for k, v in
-                                          sorted(forms["max_rel_diff"].items())) + ".")
+            a("Noise deck — the summed, multi-phase form `sid` runs, against one "
+              "`.noise` per device on a single-phase deck, at phase "
+              f"{forms['phase']:.4f} (selected by `{forms['selected_by']}`); largest "
+              "relative difference over all 62 MOS devices and both frequencies: "
+              + ", ".join(f"`{k}` {v:.1e}" for k, v in sorted(forms["max_rel_diff"].items()))
+              + ".")
             a("")
     print("\n".join(out))
     return 0
