@@ -74,7 +74,16 @@ Being honest about where this actually is:
   oscillation cycle, so no simulation here produces that component. The
   1.0 % RMS line is therefore met in simulation for its deterministic half
   only, and the 0.50 % RMS its own ripple derivation leaves for the random
-  half is an unverified budget. The target itself is unchanged. And every one of the campaign's records is at one output
+  half is an unverified budget. The target itself is unchanged.
+  `spec/decision-records/DR-030-isf-gamma-converges-and-the-gap-moves-to-the-remaining-two-ingredients.md`
+  records the first piece of the substitute for that missing analysis:
+  `sim/period-jitter/isf-bringup/` extracts the ring's impulse sensitivity
+  function from charge-injection transients and shows it **converged** against
+  the internal-timestep ceiling — retiring the risk #520 named as the route's
+  load-bearing one — while producing no jitter number, because two of the
+  three ingredients a number needs still do not exist. A converging
+  ingredient is not a converging pipeline, and #520 stays open on exactly the
+  same terms. And every one of the campaign's records is at one output
   frequency, 150 MHz — the same measurement at the 200 MHz top of the
   ratified band is declared as `sim/period-jitter-band-top`, tracked at #503,
   and carries no measured record yet. The **reference spur** is in the same
