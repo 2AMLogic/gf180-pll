@@ -611,8 +611,8 @@ entry reduces a record the §5 row does not itself cite, or if a §5 row is
 accounted for by neither a graded value (this table or the derived-figure one
 below) nor a stated reason.
 
-The reduction language is `min`/`max`/`mean`/`sum`/`sig3`/`count` over one
-committed table, optionally grouped (`max(min(fosc_hz) by bundle+temp_c+vdd_v)`
+The reduction language is `min`/`max`/`mean`/`sum`/`sig3`/`maxmag`/`count` over
+one committed table, optionally grouped (`max(min(fosc_hz) by bundle+temp_c+vdd_v)`
 is the worst-case *guaranteed* floor: the lowest frequency each corner can
 reach, taken over corners) and optionally filtered (` where col op value`, with
 `~=` for substring containment on an id column). One named
@@ -666,6 +666,32 @@ samples to the same statistic by its own arithmetic, because it needs the number
 as an *ingredient* of the charge totals rather than as a figure quoted in prose;
 the two are deliberately independent routes to one number, and each script's
 header names the other so neither can drift quietly.
+
+**One figure is a bound rather than an end, and the language grew a second
+non-extremum aggregate for it** — the Supply sensitivity — DC row's
+**`5.7 mV`**, the agreement between each cell's measured `VCTRL` travel and
+what its selected band requires from the open-loop table. The column it
+reduces, `predicted_minus_measured_v`, is *signed*: it runs from −0.6 mV to
++5.7 mV over the 15 cells. A claim written "to within 5.7 mV at every cell" is
+therefore not `max()` — `max()` reports the positive end and `min()` the
+negative one, and either would grade one side of a two-sided bound and print
+it as the bound, which is precisely the defect the fourth table exists to
+catch. `maxmag(predicted_minus_measured_v)` is `max(|v|)`: the smallest number
+that bounds the column from both sides, whichever side happens to be the
+larger today. If a future re-read moved the negative end past −5.7 mV, `max()`
+would still report 5.7 and pass; `maxmag` reports the new bound and fails.
+
+Discarding the sign is what makes the aggregate right, and it is also what
+makes it quiet — `5.7` alone cannot tell a reader whether the set ever had two
+sides at all, the same silence a worst adjacent overlap has about how many
+intervals it beat. So the check prints, in its own OK line, how many signed
+values each bound covered and how many of them fell on the far side of zero
+from the binding end (`15` and `3` here). And one guard that `worst-magnitude`
+carries is deliberately **absent** here: that verb keeps the selected point's
+sign, so a tie between `+x` and `−x` is a coin toss and is refused; this
+aggregate discards the sign, so both ties give the same answer and there is
+nothing to be ambiguous about. A guard copied without its reason would reject
+a document that is not wrong.
 
 Two things this grading turned up rather than fixed silently. **`17.48 %` was
 quoted in §5 and appeared in neither this table nor the ungraded list below** —
@@ -810,8 +836,17 @@ needed are stated rather than left in the reductions:
 Four figures of the row were left out of that pass, none of them a reduction
 of one column: three ratios and one two-sided magnitude bound. Two of the
 three ratios — `1.41×` and `47 %`, the ones whose second ingredient is a
-*ratified line* — are graded in the third table below; the other ratio and the
-magnitude bound are declared in the fourth.
+*ratified line* — are graded in the third table below. **The magnitude bound
+is graded in the first table now, and it is the entry that says most about
+what this list is for.** `5.7 mV` was declined because the grammar had only
+extrema: `max()` returns a signed column's positive end and `min()` its
+negative one, and "matches … to within 5.7 mV at every cell" claims both ends
+at once, so either aggregate would have graded half of a two-sided bound and
+called it the bound. That is a statement about the *grammar*, not about the
+evidence — the same kind of obstacle as the range refusal below, and with the
+same disposition: it is work owed, not an exemption. `maxmag(COL)` is that
+work. The remaining ratio is still declared in the fourth table, for a reason
+that is about neither the grammar's extrema nor the sentence's shape.
 
 | §5 row | Quoted value | Record(s) | Evidence file | Reduction | Scale |
 |---|---|---|---|---|---|
@@ -895,6 +930,7 @@ magnitude bound are declared in the fourth.
 | Supply sensitivity — DC / closed-loop, full grid | `0 of 45 points leave it` | `20260901-155456-46b92f8` | `supply_steady.csv` | `count(rows where vctrl_min_v < 0.9)` | `1` |
 | Supply sensitivity — DC / closed-loop, full grid | `0 of 45 points leave it` | `20260901-155456-46b92f8` | `supply_steady.csv` | `count(rows where vctrl_max_v > 2.7)` | `1` |
 | Supply sensitivity — DC / closed-loop, full grid | `53 mV` | `20260925-044237-4ff4f65` | `criterion1b_vctrl_budget.csv` | `min(margin_dr003_v)` | `1e3` |
+| Supply sensitivity — DC / closed-loop, full grid | `5.7 mV` | `20260925-044237-4ff4f65` | `criterion1b_vctrl_budget.csv` | `maxmag(predicted_minus_measured_v)` | `1e3` |
 | Supply sensitivity — DC / closed-loop, full grid | `−20.3 mV/µs` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `min(slope_mv_per_us where bundle == ss and temp_c == -40)` | `1` |
 | Supply sensitivity — DC / closed-loop, full grid | `18.75 µs` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(recovery_us where bundle == ss and temp_c == -40)` | `1` |
 | Supply sensitivity — DC / closed-loop, full grid | `8 µs short` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(t_to_close_phase_us where bundle == ss and temp_c == -40)` | `1` |
@@ -1052,10 +1088,10 @@ false, not superseded, but *incomplete*: `1.41×` and `47 %` were declined
 because a ratio to a spec line "is arithmetic on the line, not a column of the
 committed evidence," which stated a true fact about the evidence and drew the
 wrong conclusion from it. They are graded in the third table above now. Their
-departure sharpens what the remaining arithmetic-shaped entries have to say:
-"arithmetic rather than a column" is no longer a reason by itself, so each now
-names the ingredient that is genuinely missing — a second end the figure's own
-shape would hide, or a divisor that is another measurement rather than a line.
+departure sharpens what the remaining arithmetic-shaped entry has to say:
+"arithmetic rather than a column" is no longer a reason by itself, so it now
+names the ingredient that is genuinely missing — a divisor that is another
+measurement rather than a line.
 
 **And one came off it for a reason of a fourth kind: the reason was true, and
 the document changed so that it stopped being.** `0.1–0.5 dB` was declined
@@ -1068,15 +1104,25 @@ here whose only obstacle is the shape of the sentence is a **rewrite owed by
 §5**, not a standing exemption, and it should be read that way every time one
 appears.
 
-What remains is four figures in three rows. One was added when grading the
-closed-loop lock-time row put a disclosure obligation on it, and two when
+**And one came off it for a reason of a fifth kind: the reason was true about
+the grammar, and the grammar grew.** `5.7 mV` was declined because "the
+grammar has no magnitude aggregate" — an accurate statement about the language
+the first table was written in, not about the evidence, which had committed
+the signed column all along. `maxmag(COL)` is that gap closed, and the entry
+is graded in the first table above. It sits alongside the range refusal as the
+second shape of obstacle this list must never let harden: a missing *operator*
+and a two-ended *sentence* are both work owed, and neither is a property of
+the measurement. What is left below is the residue after both kinds are
+subtracted.
+
+What remains is three figures in three rows. One was added when grading the
+closed-loop lock-time row put a disclosure obligation on it, and one when
 grading the Supply sensitivity — DC row did:
 
 | §5 row | Figure | Why it is not re-derived |
 |---|---|---|
 | Kvco | `115.8 MHz/V` | Two reasons, either sufficient. Selecting the point evaluates [the band-selection rule](../../spec/pll.md#band-selection-rule) (lowest band code that reaches the target) at every corner — a derivation, and one over a rule whose control window `spec/pll.md` does not presently name, an ambiguity tracked at #542 under which the two candidate windows select different bands. And the point itself is at Vctrl = 1.54 V, which the 7-point control sweep does not sample (its neighbours are 114.93 MHz/V at 1.50 V and 120.85 at 1.80 V), so no reduction of this CSV returns it. The adversarial `154.3 MHz/V` figure the rule exists to exclude *is* graded above, which is the half that bounds the risk |
 | Lock time, closed-loop cold-start / worst-case re-lock | `{4,16,64}` | A stimulus *set*, not a number: the grammar above re-derives a figure, and this one is the three divide ratios the grid was run at. Its cardinality is pinned from both sides by figures that are graded — the 270 rows, the 45 corners and the two conditions the record's own table carries, which multiply to 45 × 3 × 2 — while the membership is graded against the record's declared sweep axis by `check-pvt-coverage-claims.sh`, as the `f_ref` span is for the Reference input row |
-| Supply sensitivity — DC / closed-loop, full grid | `5.7 mV` | A *magnitude* bound — `predicted_minus_measured_v` in `criterion1b_vctrl_budget.csv` is signed and spans −0.6 … +5.7 mV over the 15 cells, and the grammar has no magnitude aggregate. `max()` would return 5.7 here only because the positive side happens to be the larger one; grading half of a two-sided bound and calling it the bound is the defect this table exists to catch, so it is declared instead |
 | Supply sensitivity — DC / closed-loop, full grid | `33 %` | `1 − rms_linear_mv / rms_exponential_mv` at `ss`/−40 °C (20.54 against 30.75 mV in `criterion3_end_recovery.csv`). **Both** operands are columns of the committed evidence, which is what the third table's form does not reach: it combines one reduction with one *written-down* constant, by a ratio or a distance, and there is no ratified line here to read — the divisor is another measurement. Adding the subtraction did not help this one, because the missing ingredient was never the operator. Neither operand is quoted in §5 either, so grading it would have to introduce both |
 
 Nothing mechanically enumerates "every headline figure" out of §5's prose

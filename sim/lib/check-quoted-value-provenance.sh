@@ -279,12 +279,43 @@
 #       points tying on magnitude with opposite signs is an error, not a
 #       coin toss.
 #
-# plus one STATISTIC, which is an aggregate rather than a verb and so composes
-# with everything above:
+# plus two AGGREGATES THAT ARE NOT EXTREMA, which compose with everything
+# above because they are aggregates rather than verbs:
 #
 #   sig3(COL)   `|mean| + 3*sigma` over the selected values, with sigma the
 #               SAMPLE standard deviation (N-1). Fewer than two values is an
 #               error: a one-sample "3 sigma" is not a tail, it is a reading.
+#
+#   maxmag(COL) `max(|v|)` -- a TWO-SIDED bound over a signed column.
+#               `max()` over such a column returns its positive end and
+#               `min()` its negative one, and a figure written "to within
+#               5.7 mV at every cell" claims BOTH ends at once. Until this
+#               aggregate existed, section 5.1's ungraded list carried exactly
+#               that figure with exactly that reason -- "the grammar has no
+#               magnitude aggregate ... grading half of a two-sided bound and
+#               calling it the bound is the defect this table exists to
+#               catch". Two guards, one present and one deliberately absent:
+#
+#                 Fewer than two values is an error, for sig3's reason rather
+#                 than a statistical one -- the figures a magnitude bound
+#                 grades are stated OVER A SET ("at every cell"), and a bound
+#                 over a single value is that value.
+#
+#                 worst-magnitude's opposite-sign tie is NOT an error here.
+#                 That verb KEEPS the selected point's sign, so +x against -x
+#                 is a coin toss; this aggregate discards the sign, so both
+#                 ties give the same answer and there is nothing to be
+#                 ambiguous about. A guard copied without its reason would
+#                 reject a document that is not wrong.
+#
+#               A magnitude bound is silent about the sign it was taken over
+#               in the same way a worst overlap is silent about how many
+#               intervals it beat: `5.7` alone cannot tell a reader whether
+#               the set ever had two sides. So the OK line prints how many
+#               signed values each bound covered AND how many of them fell on
+#               the far side of zero from the binding end -- which is the
+#               evidence that this is a two-sided bound rather than a `max()`
+#               in different clothing.
 #
 # THE THREE-LEVEL FORM, and why it exists
 #
@@ -937,17 +968,58 @@ def _sig3(values):
     return abs(mean) + 3.0 * math.sqrt(variance)
 
 
+#: How many magnitude bounds ran, over how many signed values, and how many of
+#: those values lay on the far side of zero from the binding end. Reported in
+#: the OK line for the reason the adjacent-pair count is: a magnitude bound
+#: DISCARDS the sign it was taken over, so the figure alone cannot tell a
+#: reader whether both sides of zero were ever in the set. The opposite-side
+#: count is the evidence that the bound is genuinely two-sided.
+mag_stats = {"bounds": 0, "values": 0, "opposite": 0}
+
+
+def _maxmag(values):
+    """`max(|v|)` over the selected values -- a two-sided bound.
+
+    See THE REDUCTION GRAMMAR above for why this is not `max()` and why
+    `worst-magnitude`'s opposite-sign tie guard deliberately has no twin here.
+    """
+    if len(values) < 2:
+        raise AggError(
+            "a magnitude bound is a bound over a set; maxmag was given %d "
+            "value, and a bound over one value is that value" % len(values)
+        )
+    magnitudes = [abs(v) for v in values]
+    bound = max(magnitudes)
+    binding_is_negative = values[magnitudes.index(bound)] < 0
+    mag_stats["bounds"] += 1
+    mag_stats["values"] += len(values)
+    mag_stats["opposite"] += sum(
+        1 for v in values if v != 0 and (v < 0) != binding_is_negative
+    )
+    return bound
+
+
 AGGS = {
     "min": min,
     "max": max,
     "mean": lambda vs: sum(vs) / len(vs),
     "sum": sum,
     "sig3": _sig3,
+    "maxmag": _maxmag,
 }
 
-#: Every aggregate name, for the regexes below. `count` is deliberately not one
-#: of these -- it takes `rows`/`distinct ...` rather than a column.
-AGG_NAMES = "|".join(AGGS)
+#: Every aggregate name, for the regexes below, LONGEST FIRST. `count` is
+#: deliberately not one of these -- it takes `rows`/`distinct ...` rather than
+#: a column.
+#:
+#: The ordering is load-bearing rather than tidy. One aggregate name is now a
+#: PREFIX of another (`max` of `maxmag`), and a regex alternation is
+#: first-match, not longest-match. Every use below happens to be anchored by a
+#: `(` immediately after the name, so Python's backtracking would recover --
+#: but that is a property of the engine and of today's regexes, not of this
+#: grammar, and the next form added here would silently inherit the hazard.
+#: Sorting removes the dependency instead of resting on it.
+AGG_NAMES = "|".join(sorted(AGGS, key=len, reverse=True))
 
 OUTER = re.compile(r"^(" + AGG_NAMES + r"|count)\((.*)\)$", re.DOTALL)
 INNER_BY = re.compile(
@@ -2190,7 +2262,9 @@ if errors:
 print(
     "OK: %d quoted values re-derived from committed per-corner evidence and "
     "matched at the precision written (%d of them group-sequence derivations "
-    "over %d groups, %d adjacent-axis pair(s) examined); %d further figure(s) "
+    "over %d groups, %d adjacent-axis pair(s) examined; %d magnitude bound(s) "
+    "over %d signed value(s), %d of them on the far side of zero from the "
+    "binding end); %d further figure(s) "
     "derived against %d ratified constant(s) read from the spec and its "
     "decision records (%s); %d "
     "in-record table(s) read, %d checked row-for-row "
@@ -2203,6 +2277,9 @@ print(
         seq_stats["derivations"],
         seq_stats["groups"],
         seq_stats["pairs"],
+        mag_stats["bounds"],
+        mag_stats["values"],
+        mag_stats["opposite"],
         derived_checked,
         len(constants_used),
         "; ".join(

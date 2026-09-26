@@ -134,6 +134,25 @@ k2,2,1
 k2,3,5
 """
 
+#: The magnitude-bound fixture, for `maxmag`.
+#:
+#: Its binding end is the NEGATIVE one, which the repository's own
+#: `predicted_minus_measured_v` column is not: there the positive end happens
+#: to be the larger, so a `max()` masquerading as a magnitude bound would pass
+#: against the real tree and prove nothing. Here the three readings are three
+#: different numbers -- `max` is +3.1 mV, `min` is -5.7 mV, and the bound is
+#: 5.7 mV -- so only an implementation that folds the sign produces the figure.
+#:
+#: The zero row is deliberate too: it belongs to neither side of zero, and the
+#: opposite-side count the OK line prints must not claim it for either.
+SIGNED_CSV = """\
+cell,corner,err_v
+a,c1,+0.0020
+b,c1,-0.0057
+c,c2,+0.0031
+d,c2,0.0000
+"""
+
 #: The contracted-space fixture: `on-icp-trim-rule` must select only the rows
 #: whose (f_ref, trim) pairing the spec table requires -- 47.4 and not 25.4.
 MARGINS_CSV = """\
@@ -394,6 +413,7 @@ class _Tree:
         (corners / "mc_term3.csv").write_text(TERM3_CSV)
         (corners / "budget.csv").write_text(BUDGET_CSV)
         (corners / "spur_by_corner.csv").write_text(SPUR_CSV)
+        (corners / "signed.csv").write_text(SIGNED_CSV)
 
         (root / "spec").mkdir()
         (root / SPEC).write_text(SPEC_TEXT)
@@ -1037,6 +1057,117 @@ class TestSignedTailStatistic(_TreeTest):
             "max(sig3(qnet_c) by corner)", "1",
         )])
         self.assertFails("sig3 needs at least two samples")
+
+
+class TestMagnitudeBound(_TreeTest):
+    """`maxmag`: a two-sided bound over a signed column.
+
+    Section 5's `5.7 mV` says the closed loop's measured `VCTRL` travel agrees
+    with what the selected band requires "to within 5.7 mV at every cell" --
+    a claim about BOTH ends of a signed column. `max()` grades its positive
+    end and `min()` its negative one, so either would have graded half of a
+    two-sided bound and printed it as the bound. That is why the figure sat in
+    section 5.1's ungraded list until this aggregate existed, with the reason
+    "the grammar has no magnitude aggregate".
+
+    The fixture's binding end is NEGATIVE on purpose (the repository's is
+    positive), so a `max()` wearing the new name cannot pass these tests by
+    matching the real tree's arithmetic by luck.
+    """
+
+    ROW = (
+        "Supply sensitivity",
+        "the open-loop prediction agrees to within 5.7 mV at every cell",
+        "**MET**",
+        f"`sim/{CAMPAIGN}/records/{RECORD}.md`",
+    )
+
+    def write(self, value="`5.7 mV`", reduction="maxmag(err_v)", scale="1e3",
+              measured=None):
+        rows = list(SPEC_ROWS) + [
+            (self.ROW[0], self.ROW[1] if measured is None else measured,
+             self.ROW[2], self.ROW[3])
+        ]
+        self.tree.write(proposal(
+            spec_rows=tuple(rows),
+            provenance=DEFAULT_PROVENANCE + [
+                (self.ROW[0], value, RECORD, "signed.csv", reduction, scale),
+            ],
+        ))
+
+    def test_the_bound_is_the_largest_magnitude_either_side_of_zero(self):
+        self.write()
+        result = self.assertPasses()
+        # 4 signed values, 2 of them positive against a negative binding end;
+        # the zero row is claimed by neither side.
+        self.assertIn(
+            "1 magnitude bound(s) over 4 signed value(s), 2 of them on the "
+            "far side of zero from the binding end",
+            result.stdout,
+        )
+
+    def test_max_grades_the_other_end_and_fails(self):
+        """The half-bound this aggregate exists to stop being written."""
+        self.write(reduction="max(err_v)")
+        self.assertFails("gives 3.1", "does not round to it")
+
+    def test_min_is_a_signed_end_not_a_bound(self):
+        """`min` returns -5.7 mV: the right magnitude, the wrong figure."""
+        self.write(reduction="min(err_v)")
+        self.assertFails("gives -5.7", "does not round to it")
+
+    def test_the_name_is_not_parsed_as_max(self):
+        """`max` is a PREFIX of `maxmag`, and alternations are first-match.
+
+        If the grammar's name list were read in declaration order without the
+        length sort, a regex engine that did not backtrack would match `max`
+        and then fail on the leading `mag` -- or, worse, a future form added
+        to this grammar would. The passing case above already depends on this;
+        this test names the hazard so a regression is diagnosed rather than
+        puzzled over.
+        """
+        self.write(reduction="maxmag(err_v)", value="`3.1 mV`",
+                   measured="the open-loop prediction agrees to within "
+                            "3.1 mV at every cell")
+        self.assertFails("gives 5.7", "does not round to it")
+
+    def test_a_bound_over_a_single_value_is_that_value(self):
+        self.write(reduction="maxmag(err_v where cell == b)")
+        self.assertFails("a magnitude bound is a bound over a set",
+                         "a bound over one value is that value")
+
+    def test_an_opposite_sign_tie_is_not_ambiguous_here(self):
+        """`worst-magnitude` refuses this tie; `maxmag` must not.
+
+        That verb keeps the selected point's sign, so +x against -x is a coin
+        toss. This aggregate discards the sign, so both ties give the same
+        answer -- and a guard copied without its reason would reject a
+        document that is not wrong.
+        """
+        self.tree.write_evidence(
+            "signed.csv", SIGNED_CSV.replace("c,c2,+0.0031", "c,c2,+0.0057"))
+        self.write()
+        self.assertPasses()
+
+    def test_it_composes_with_grouping(self):
+        """`min(maxmag(COL) by KEY)`: the best corner's own bound, 3.1 mV.
+
+        Different from the flat bound (5.7), so a check that dropped the
+        grouping could not pass this.
+        """
+        self.write(
+            value="`3.1 mV`",
+            reduction="min(maxmag(err_v) by corner)",
+            measured="no corner's own bound is worse than 3.1 mV at best",
+        )
+        result = self.assertPasses()
+        self.assertIn("2 magnitude bound(s) over 4 signed value(s), 1 of "
+                      "them on the far side of zero", result.stdout)
+
+    def test_a_misspelled_column_fails(self):
+        self.write(reduction="maxmag(errr_v)")
+        self.assertFails("names column `errr_v`",
+                         "signed.csv does not have")
 
 
 class TestUngradedFigureDisclosure(_TreeTest):
