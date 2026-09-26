@@ -600,8 +600,9 @@ verdict, and still quote a value that is not in that record. The largest
 remaining ungraded surface was the measured value itself.
 
 The table below closes it for the values it names. Each entry gives the
-`sim/` record, the committed per-corner evidence file inside it, and the
-reduction that produces the figure, and
+`sim/` record, the committed per-corner evidence inside it — a reduced CSV, or
+the record's own per-point table where that is what the campaign committed — and
+the reduction that produces the figure, and
 `sim/lib/check-quoted-value-provenance.sh` fails this repository's CI if the
 re-derived value does not equal the figure **rounded to the precision written**
 (`247.8 MHz` against a derived 247.751 passes; against 247.6 it does not), if
@@ -610,9 +611,10 @@ entry reduces a record the §5 row does not itself cite, or if a §5 row appears
 in neither of this section's first two tables.
 
 The reduction language is `min`/`max`/`mean`/`sum`/`sig3`/`count` over one
-committed CSV, optionally grouped (`max(min(fosc_hz) by bundle+temp_c+vdd_v)` is
-the worst-case *guaranteed* floor: the lowest frequency each corner can reach,
-taken over corners) and optionally filtered (` where col op value`). One named
+committed table, optionally grouped (`max(min(fosc_hz) by bundle+temp_c+vdd_v)`
+is the worst-case *guaranteed* floor: the lowest frequency each corner can
+reach, taken over corners) and optionally filtered (` where col op value`, with
+`~=` for substring containment on an id column). One named
 filter, `on-icp-trim-rule`, is the contracted space the loop-dynamics rows are
 stated over — the (f_ref, trim-code) pairing
 [the Icp trim-code rule](../../spec/pll.md#icp-trim-code-rule) requires. **That
@@ -668,6 +670,82 @@ citation also states what the campaign is: a **3-corner subset** of the mandated
 45 at n = 100 mismatch samples each, which is why this entry's Record column
 names the subset rather than letting a reader assume the grid.
 
+**Three rows were ungraded for a reason that was false, and the reason was
+always the same one.** Two rows sat in the exclusion table below — Output band,
+closed-loop ("the `output-range` records' `corners/` directories hold per-corner
+simulator logs only; no reduced CSV was committed, so the '0 of 45 corners'
+verdict cannot be re-derived without re-running the campaign") and Lock time,
+closed-loop ("not a reduced per-corner CSV, so the 21/135 and 1/135 row counts
+cannot be recomputed from committed evidence") — and two figures of a third,
+Multiplication ratio, sat in the ungraded-figure table ("the record commits
+`retiming_margin.csv` (17 rows, the margin claim) but not the per-point ratio
+table"). **All three were wrong in the same way.** Each of those three records
+commits its full per-point table: `sim/output-range`'s 90 closed-loop
+band-edge runs with a `Status` per run, `sim/lock-time`'s 270 cold/relock runs
+with a `Status` and a `DN guard` per run, and `sim/divider-ratio-chain`'s 235
+chain points with the programmed `n_target`, the measured `n_fb` and
+`testbench/derive.py`'s own `ratio_pass`. They are committed in the records' own
+Markdown rather than in a `.csv` beside them, and **"no CSV" had been read as "no
+evidence"** three times without anyone opening a record to look. Two of the
+three excuses even said which files the directory *does* hold, so the reading
+was never blocked by missing information — only by the assumption that evidence
+means a file with a `.csv` on the end.
+
+So the reduction language now accepts a second evidence form,
+`<record-id>.md § <first column>` — the pipe table inside a record, named by its
+first column. A markdown table can be elided where a CSV cannot, so that form
+carries a correspondence rule a CSV does not need: **the table must have exactly
+one row per committed per-corner log** — 90 rows against 90 logs, 270 against
+270, 235 against 235 — and where the table's first column is the per-corner
+point id (`sim/divider-ratio-chain` writes one; the other two head that column
+`Corner` and split the corner across three) the row *sets* are compared too, not
+merely their sizes. A truncated, summarised or hand-trimmed table fails instead
+of reporting a smaller count that reads like an answer; the correspondence is
+checked against the raw logs, never against the record's own declared point
+count, which is the claim and not the evidence; and the check's OK line says
+which tables got the stricter of the two rules, so the weaker one is never
+applied silently.
+
+Ten figures across those two formerly-excluded rows are now graded: the closed-
+loop band-edge row's `45-point PVT grid`, `90 runs` and its headline
+`0 of 45 corners` (`count(rows where Status == PASS)` — a **zero**, of the kind
+§5.1 already treats as the most dangerous figure to grade, which is why the row
+count and the corner count beside it are graded from the same table rather than
+assumed), and the closed-loop lock-time row's `270-run grid`, `45 corners`, both
+`135` halves, `21/135`, `1/135` and the `255/270` DN-branch guard. Grading the
+numerators while trusting the denominators would have been the same half-job this
+section keeps catching, so each `135` is re-derived as its own
+`count(rows where Condition == …)`. One caveat that the grading makes visible
+rather than fixes: the band-edge row also cites `20260819-190341-70a4128`, which
+supersedes exactly one of those 90 rows (`ff`/27 °C/3.30 V `hi`, replacing a
+hand-killed `ERROR` with a reproducible CAPPED/stall characterization). That
+record commits one row against four logs, so it is not readable under the
+correspondence rule above, and its own status — still not a `PASS` — is what
+keeps the graded zero true. The zero is therefore re-derived over the 90-run
+table and *reasoned* over that one superseding row, which is stated here rather
+than left for a reader to notice.
+
+The Multiplication ratio row makes three claims, and each is now graded against
+its 235 points.
+**Coverage** — `61 distinct N` at 200 MHz — is graded twice deliberately, once
+over the *programmed* ratio (`n_target`) and once over the *measured* one
+(`n_fb`): the first is what "exercised" means, the second is what the chain
+actually produced, and the two agreeing at 61 is the "every integer from 4 to
+64, no holes" claim that neither count carries alone. The 200 MHz restriction is
+`where corner-id ~= f200` because the per-point table has no input-rate column
+of its own; the twelve 10 MHz bottom-of-band points reuse N ∈ {4, 64}, so
+dropping the filter would give 61 by accident today and go wrong silently the
+first time a bottom-of-band point adds an N the 200 MHz sweep does not have.
+**Correctness** — `0 ratio errors` — is `count(rows where ratio_pass != 1)`, the
+record's own two-node criterion: the settled retimed-FB period *and* the
+un-retimed DIVOUT period both within 0.05 of the programmed N, so a mis-read on
+either shows up as a disagreement rather than as a period counted twice. And the
+denominator, `235 chain points`, is `count(rows)`, which the one-row-per-log rule
+ties to 235 simulations that ran. `check-pvt-coverage-claims.sh` already graded
+`235` and its `2835`-cell cross-product against the record's *declaration*;
+these are the same numbers against the per-point evidence, which is precisely
+what the ungraded list said could not be done.
+
 | §5 row | Quoted value | Record(s) | Evidence file | Reduction | Scale |
 |---|---|---|---|---|---|
 | Output band | `6.449 MHz` | `20260731-175947-0a12e6c` (63-point grid) | `vco_tuning.csv` | `max(min(fosc_hz) by bundle+temp_c+vdd_v)` | `1e-6` |
@@ -676,6 +754,10 @@ names the subset rather than letting a reader assume the grid.
 | Output band | `0 non-monotonic curves of 504` | `20260731-175947-0a12e6c` (63-point grid) | `kvco_by_point.csv` | `count(non-monotonic(fosc_hz by vctrl_v) by bundle+temp_c+vdd_v+band)` | `1` |
 | Output band | `27 %` | `20260731-175947-0a12e6c` (63-point grid) | `kvco_by_point.csv` | `min(adjacent-overlap(fosc_hz by band) by bundle+temp_c+vdd_v)` | `100` |
 | Multiplication ratio | `302.83 ps` | `20260802-100727-082c879` | `retiming_margin.csv` | `min(setup_margin_s)` | `1e12` |
+| Multiplication ratio | `235 chain points` | `20260802-100727-082c879` | `20260802-100727-082c879.md § corner-id` | `count(rows)` | `1` |
+| Multiplication ratio | `0 ratio errors of 235 chain points` | `20260802-100727-082c879` | `20260802-100727-082c879.md § corner-id` | `count(rows where ratio_pass != 1)` | `1` |
+| Multiplication ratio | `61 distinct N` | `20260802-100727-082c879` | `20260802-100727-082c879.md § corner-id` | `count(distinct n_target where corner-id ~= f200)` | `1` |
+| Multiplication ratio | `61 distinct N` | `20260802-100727-082c879` | `20260802-100727-082c879.md § corner-id` | `count(distinct n_fb where corner-id ~= f200)` | `1` |
 | Period jitter (open-loop sensitivity) | `2.51 %` | `20260804-211600-f599a65` (63-point grid) | `raw_measures.csv` | `max(rip_tj_rms_pct where rdiv == r16)` | `1` |
 | Period jitter, closed-loop, deterministic (control-ripple) | `0.0508` | `20260905-192724-a2ba48f`, `20260906-015602-f9bef9d`, `20260906-024225-12bccda`, `20260906-063728-f3c9c23`, `20260906-080511-69b36ef`, `20260906-095050-3a8a6ef` | `period_jitter_by_corner.csv` | `min(tj_rms_pct)` | `1` |
 | Period jitter, closed-loop, deterministic (control-ripple) | `0.2691` | `20260905-192724-a2ba48f`, `20260906-015602-f9bef9d`, `20260906-024225-12bccda`, `20260906-063728-f3c9c23`, `20260906-080511-69b36ef`, `20260906-095050-3a8a6ef` | `period_jitter_by_corner.csv` | `max(tj_rms_pct)` | `1` |
@@ -711,22 +793,35 @@ names the subset rather than letting a reader assume the grid.
 | Lock detector | `1.78` | `20260919-002812-1b12179` (117-point grid) | `window_edges.csv` | `min(asserted_up_to_s where process == ss and temp_c == 125.0 and vdd_v == 2.97)` | `1e9` |
 | Lock detector | `1.80` | `20260919-002812-1b12179` (117-point grid) | `window_edges.csv` | `min(did_not_assert_from_s where process == ss and temp_c == 125.0 and vdd_v == 2.97)` | `1e9` |
 | Kvco | `154.3` | `20260731-175947-0a12e6c` (63-point grid) | `kvco_by_point.csv` | `max(kvco_hz_per_v where inside_v1_band == 1)` | `1e-6` |
+| Output band, closed-loop | `45-point PVT grid` | `20260819-160843-4e32f91` | `20260819-160843-4e32f91.md § Corner` | `count(distinct Corner+Temp+VDD)` | `1` |
+| Output band, closed-loop | `90 runs` | `20260819-160843-4e32f91` | `20260819-160843-4e32f91.md § Corner` | `count(rows)` | `1` |
+| Output band, closed-loop | `0 of 45 corners` | `20260819-160843-4e32f91` | `20260819-160843-4e32f91.md § Corner` | `count(rows where Status == PASS)` | `1` |
+| Lock time, closed-loop cold-start / worst-case re-lock | `270-run grid` | `20260831-052456-effc505` | `20260831-052456-effc505.md § Corner` | `count(rows)` | `1` |
+| Lock time, closed-loop cold-start / worst-case re-lock | `45 corners` | `20260831-052456-effc505` | `20260831-052456-effc505.md § Corner` | `count(distinct Corner+Temp+VDD)` | `1` |
+| Lock time, closed-loop cold-start / worst-case re-lock | `135` | `20260831-052456-effc505` | `20260831-052456-effc505.md § Corner` | `count(rows where Condition == cold)` | `1` |
+| Lock time, closed-loop cold-start / worst-case re-lock | `135` | `20260831-052456-effc505` | `20260831-052456-effc505.md § Corner` | `count(rows where Condition == relock)` | `1` |
+| Lock time, closed-loop cold-start / worst-case re-lock | `21/135` | `20260831-052456-effc505` | `20260831-052456-effc505.md § Corner` | `count(rows where Status == PASS and Condition == cold)` | `1` |
+| Lock time, closed-loop cold-start / worst-case re-lock | `1/135` | `20260831-052456-effc505` | `20260831-052456-effc505.md § Corner` | `count(rows where Status == PASS and Condition == relock)` | `1` |
+| Lock time, closed-loop cold-start / worst-case re-lock | `255/270` | `20260831-052456-effc505` | `20260831-052456-effc505.md § Corner` | `count(rows where DN guard == PASS)` | `1` |
 
 **And the rows that have no re-derived value, with the reason.** This second
 table is what makes the first one's coverage a claim rather than a sample:
 every row of §5 appears in one table or the other, and CI fails if one appears
 in neither. A row here is not a row nobody checked — it is a row whose number
-is not the kind of thing a committed CSV can settle.
+is not the kind of thing committed evidence can settle. **Three rows left this
+table on 2026-09-26 because their reason was false rather than superseded** —
+they said no reduced evidence was committed, and it had been committed all
+along (above). The wording of the reason matters accordingly: "no CSV exists"
+is not a reason, because a CSV is not the only committed evidence; "no evidence
+of this exists" is.
 
-| §5 row | Why no value here is re-derived from a CSV |
+| §5 row | Why no value here is re-derived from committed evidence |
 |---|---|
-| Output band, closed-loop | The `output-range` records' `corners/` directories hold per-corner simulator logs only; no reduced CSV was committed, so the "0 of 45 corners" verdict cannot be re-derived without re-running the campaign. Owed at **#18**'s sibling coverage work rather than fixed by editing a record (`sim/` is append-only) |
 | Reference input | Reports a *budget* and an exclusion, not a measurement: the electrical contract (V_IL/V_IH, edge rate, duty) is unmeasured and the row says so. Its one numeric claim — the `f_ref` span exercised — is a set of stimulus settings, graded by `check-ref-drive-claims.sh` against the decks rather than by reducing an output |
 | Integrated RMS jitter | N/A by design (DR-002 Decision 5). There is no number to re-derive and deliberately never will be |
 | Period jitter, closed-loop, deterministic, at the 200 MHz band top | **Declared, not measured** — the campaign has no record at all, so it has no committed evidence. This is the row's own stated status, and the absence is the claim |
 | Period jitter, closed-loop, random/noise-driven | Zero records, and DR-023 locates why: no periodic-steady-state path exists on the pinned toolchain. Nothing to reduce |
 | Phase noise | N/A by design (DR-002 Decision 5) |
-| Lock time, closed-loop cold-start / worst-case re-lock | Same shape as the closed-loop output-band row: `sim/lock-time`'s record directory commits per-corner logs and two waveform traces, not a reduced per-corner CSV, so the 21/135 and 1/135 row counts cannot be recomputed from committed evidence |
 | Standby current | Waived — no power-down mode exists in v1, so there is no state to measure |
 | Area | Re-derived in CI already, by `layout/lib/check-layout-status-claims.sh`, from `layout/evidence/area-audit/area-audit.md` — the GDS bounding boxes `python3 layout/run_pv.py area` measures. Its evidence is `layout/`, not `sim/`, so it is graded there and deliberately not duplicated here |
 | Supply range | States the swept independent axis of every other row (2.97/3.30/3.63 V), which `check-pvt-coverage-claims.sh` grades against the harness's supply points. There is no measured quantity of its own |
@@ -747,14 +842,22 @@ re-derived nor declared ungraded. It is graded above now — as is the
 monotonicity count, which this list previously carried — and so is the
 Reference spur row's `≈ −57.0 dBc` charge **total**, now that
 `check-mismatch-charge-derivation.sh` (§5.2) reduces it from
-`sim/mc-cp-mismatch`'s own committed samples rather than taking it on faith —
-so what remains is three figures in two rows:
+`sim/mc-cp-mismatch`'s own committed samples rather than taking it on faith. The
+two Multiplication ratio figures this list carried are graded above too, and
+they came off it for a different and worse reason than the others: **the reason
+they were listed was false**, not merely superseded — the per-point evidence the
+entry said the record did not commit had been committed all along, in the
+record's own Markdown (see above), exactly as for the two rows that left the
+exclusion table in the same pass. A disclosure that cannot rot is still only as
+good as the reading behind each line of it, and neither this table nor the
+exclusion table above had ever been audited against the records they excuse.
+What remains is two figures in two rows, one of them new here because grading
+the closed-loop lock-time row is what put a disclosure obligation on it:
 
 | §5 row | Figure | Why it is not re-derived |
 |---|---|---|
 | Kvco | `115.8 MHz/V` | Two reasons, either sufficient. Selecting the point evaluates [the band-selection rule](../../spec/pll.md#band-selection-rule) (lowest band code that reaches the target) at every corner — a derivation, and one over a rule whose control window `spec/pll.md` does not presently name, an ambiguity tracked at #542 under which the two candidate windows select different bands. And the point itself is at Vctrl = 1.54 V, which the 7-point control sweep does not sample (its neighbours are 114.93 MHz/V at 1.50 V and 120.85 at 1.80 V), so no reduction of this CSV returns it. The adversarial `154.3 MHz/V` figure the rule exists to exclude *is* graded above, which is the half that bounds the risk |
-| Multiplication ratio | `61 distinct N` | The record commits `retiming_margin.csv` (17 rows, the margin claim) but not the per-point ratio table, so the set of divide ratios actually exercised cannot be recomputed from committed evidence. `check-pvt-coverage-claims.sh` does grade this count against the record's own declared value, which is a weaker claim than re-deriving it |
-| Multiplication ratio | `0 ratio errors of 235 chain points` | Same missing per-point table: only the retiming figure in this row is re-derivable. The `235` and its `2835`-cell cross-product are graded against the record's declaration by `check-pvt-coverage-claims.sh`, not against per-point evidence |
+| Lock time, closed-loop cold-start / worst-case re-lock | `{4,16,64}` | A stimulus *set*, not a number: the grammar above re-derives a figure, and this one is the three divide ratios the grid was run at. Its cardinality is pinned from both sides by figures that are graded — the 270 rows, the 45 corners and the two conditions the record's own table carries, which multiply to 45 × 3 × 2 — while the membership is graded against the record's declared sweep axis by `check-pvt-coverage-claims.sh`, as the `f_ref` span is for the Reference input row |
 
 Nothing mechanically enumerates "every headline figure" out of §5's prose
 cells, which quote hundreds of numbers, most of them commentary on a figure
