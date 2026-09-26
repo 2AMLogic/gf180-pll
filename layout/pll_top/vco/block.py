@@ -1199,18 +1199,7 @@ def connectivity_report(result: VcoBlockResult) -> list[tuple[str, bool, str]]:
     """
     import klayout.db as db  # noqa: PLC0415
 
-    layout = result.canvas.layout
-    cell = result.canvas.top
-    l2n = db.LayoutToNetlist(db.RecursiveShapeIterator(layout, cell, []))
-    layers = {}
-    for name in ("metal1", "via1", "metal2"):
-        layers[name] = l2n.make_polygon_layer(layout.layer(*prim.LAYER[name]), name)
-    l2n.connect(layers["metal1"])
-    l2n.connect(layers["via1"])
-    l2n.connect(layers["metal2"])
-    l2n.connect(layers["metal1"], layers["via1"])
-    l2n.connect(layers["via1"], layers["metal2"])
-    l2n.extract_netlist()
+    l2n, layers = prim.metal_l2n(result.canvas)
 
     pts = _probe_points(result)
     net_of: dict[str, object] = {}
