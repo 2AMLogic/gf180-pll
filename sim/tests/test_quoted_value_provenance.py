@@ -80,6 +80,60 @@ c2,27,3.30,2,1.20,19000000
 c2,27,3.30,2,1.50,21000000
 """
 
+#: The statistic fixture, for `sig3` and the `worst-magnitude` group verb.
+#:
+#: Two corners x three Monte Carlo samples x three control voltages. Each
+#: sample's worst-MAGNITUDE signed value is designed, so every level of
+#: `max(sig3(worst-magnitude(mism_pct by vctrl_v) by seed) by corner)` produces
+#: a DIFFERENT number and a collapsed implementation cannot pass by accident:
+#:
+#:   per-sample worst magnitudes   k1: -3, 1, 5      k2: 1, 2, 3
+#:   signed |mean|+3sigma          k1: 1 + 3*4 = 13  k2: 2 + 3*1 = 5
+#:   the figure (worst corner)     13
+#:   folded to magnitudes first    k1: 3 + 3*2 = 9   k2: 5        -> 9
+#:   corners pooled, still signed  9.4937 -> 9.49
+#:   selection by signed max       8.9117 -> 8.91
+#:
+#: 13 against 9 against 9.49 against 8.91 is the whole point: the campaign's
+#: own readings differ the same way, level for level -- 17.4798 signed
+#: per-corner (the figure DR-018 Amendment A1 states), 13.2172 folded,
+#: 13.7936 pooled-but-still-signed, 10.944 pooled AND folded -- and a check
+#: that quietly dropped a level would grade the wrong one of them.
+MISMATCH_CSV = """\
+# a committed Monte Carlo reduction
+corner,seed,vctrl_v,mism_pct
+k1,1,0.90,-3
+k1,1,1.65,2
+k1,1,2.40,1
+k1,2,0.90,1
+k1,2,1.65,-0.5
+k1,2,2.40,0.25
+k1,3,0.90,4
+k1,3,1.65,5
+k1,3,2.40,-2
+k2,1,0.90,1
+k2,1,1.65,0.5
+k2,1,2.40,-0.25
+k2,2,0.90,-1
+k2,2,1.65,2
+k2,2,2.40,1
+k2,3,0.90,3
+k2,3,1.65,-2
+k2,3,2.40,1
+"""
+
+#: One value per sample, so `sig3` is exercised without the selection step:
+#: grouped by corner the worst is 13, pooled over every row it is 9.49.
+TERM3_CSV = """\
+corner,seed,qnet_c
+k1,1,1
+k1,2,2
+k1,3,3
+k2,1,-3
+k2,2,1
+k2,3,5
+"""
+
 #: The contracted-space fixture: `on-icp-trim-rule` must select only the rows
 #: whose (f_ref, trim) pairing the spec table requires -- 47.4 and not 25.4.
 MARGINS_CSV = """\
@@ -233,6 +287,8 @@ class _Tree:
         (corners / "vco_tuning.csv").write_text(TUNING_CSV)
         (corners / "loop_margins.csv").write_text(MARGINS_CSV)
         (corners / "kvco_by_point.csv").write_text(CURVES_CSV)
+        (corners / "mc_cp_dc.csv").write_text(MISMATCH_CSV)
+        (corners / "mc_term3.csv").write_text(TERM3_CSV)
 
         (root / "spec").mkdir()
         (root / SPEC).write_text(SPEC_TEXT)
@@ -246,6 +302,10 @@ class _Tree:
     def write_curves(self, text: str) -> None:
         (self.root / "sim" / CAMPAIGN / "corners" / RECORD
          / "kvco_by_point.csv").write_text(text)
+
+    def write_evidence(self, name: str, text: str) -> None:
+        (self.root / "sim" / CAMPAIGN / "corners" / RECORD
+         / name).write_text(text)
 
     def write_spec(self, text: str) -> None:
         (self.root / SPEC).write_text(text)
@@ -580,6 +640,139 @@ class TestGroupSequenceDerivations(_TreeTest):
         ]
         self.write(entries=entries)
         self.assertFails("takes no where-clause")
+
+
+class TestSignedTailStatistic(_TreeTest):
+    """`sig3` and `worst-magnitude`: the statistic DR-018's term 1 is.
+
+    Every other reduction in this grammar is an extremum or a count -- a figure
+    a reader can find by eye in the CSV. This one is not: it is a selection
+    (worst point of the control window), then a tail (`|mean| + 3*sigma` over
+    that corner's samples), then a worst case (over corners). Collapsing any
+    level gives a smaller, plausible-looking number, which is exactly how the
+    campaign's own reported figure was 13.2172 % for months when the honest
+    reading of its column header was 17.4798 % (DR-018 Amendment A1, #487). So
+    most of these tests assert that a COLLAPSED reading fails.
+    """
+
+    SPUR_ROW = (
+        "Reference spur",
+        "term 1 at its measured 13 %; term 3 residual 13 C",
+        "**MET**",
+        f"`sim/{CAMPAIGN}/records/{RECORD}.md`",
+    )
+    THREE_LEVEL = (
+        "max(sig3(worst-magnitude(mism_pct by vctrl_v) by seed) by corner)"
+    )
+
+    def write(self, value="`13 %`", reduction=None, measured=None,
+              entries=None):
+        rows = list(SPEC_ROWS) + [
+            (self.SPUR_ROW[0],
+             self.SPUR_ROW[1] if measured is None else measured,
+             self.SPUR_ROW[2], self.SPUR_ROW[3])
+        ]
+        if entries is None:
+            entries = [(
+                "Reference spur", value, RECORD, "mc_cp_dc.csv",
+                self.THREE_LEVEL if reduction is None else reduction, "1",
+            )]
+        self.tree.write(proposal(
+            spec_rows=tuple(rows),
+            provenance=DEFAULT_PROVENANCE + entries,
+            exclusions=DEFAULT_EXCLUSIONS,
+        ))
+
+    def test_the_three_level_statistic_passes_and_counts_its_groups(self):
+        self.write()
+        result = self.assertPasses()
+        self.assertIn("5 quoted values re-derived", result.stdout)
+        # One derivation (this entry), six innermost groups (2 corners x 3
+        # samples) -- not two derivations, one per corner partition.
+        self.assertIn("1 of them group-sequence derivations over 6 groups",
+                      result.stdout)
+
+    def test_folding_the_samples_to_magnitudes_gives_a_different_number(self):
+        """9 is the folded reading. It is the mistake DR-018 A1 corrected."""
+        self.write(value="`9 %`", measured="term 1 at its measured 9 %")
+        self.assertFails("gives 13", "does not round to it")
+
+    def test_pooling_the_corners_gives_a_different_number(self):
+        """9.49 pools the six samples into one tail instead of two."""
+        self.write(value="`9.49 %`", measured="term 1 at its measured 9.49 %")
+        self.assertFails("gives 13", "does not round to it")
+
+    def test_selecting_the_window_point_by_value_gives_a_different_number(self):
+        """8.91 is what selecting each sample's largest SIGNED value gives.
+
+        `worst-magnitude` compares magnitudes and then keeps the sign, which is
+        the "worst point in the window" convention sim/cp-compliance uses; a
+        plain max would silently drop every negative worst case.
+        """
+        self.write(value="`8.91 %`", measured="term 1 at its measured 8.91 %")
+        self.assertFails("gives 13", "does not round to it")
+
+    def test_a_magnitude_tie_with_opposite_signs_is_ambiguous(self):
+        self.write_tie = MISMATCH_CSV.replace(
+            "k1,1,1.65,2", "k1,1,1.65,3")
+        self.tree.write_evidence("mc_cp_dc.csv", self.write_tie)
+        self.write()
+        self.assertFails("tying at magnitude", "sign is ambiguous")
+
+    def test_a_repeated_control_voltage_inside_a_window_is_ambiguous(self):
+        self.tree.write_evidence("mc_cp_dc.csv", MISMATCH_CSV.replace(
+            "k1,1,1.65,2", "k1,1,0.90,2"))
+        self.write()
+        self.assertFails("repeats a value of the ordering column `vctrl_v`")
+
+    def test_a_misspelled_outer_grouping_column_fails(self):
+        """Without this the two corners pool and the tail is the wrong one."""
+        self.write(reduction=(
+            "max(sig3(worst-magnitude(mism_pct by vctrl_v) by seed) by cornor)"
+        ))
+        self.assertFails("groups by column `cornor`",
+                         "which the evidence file does not have")
+
+    def test_a_group_predicate_does_not_compose_three_deep(self):
+        self.write(reduction=(
+            "max(sig3(non-monotonic(mism_pct by vctrl_v) by seed) by corner)"
+        ))
+        self.assertFails("is a group predicate",
+                         "does not compose into a three-level reduction")
+
+    def test_count_over_the_worst_magnitude_verb_is_rejected(self):
+        self.write(reduction=(
+            "count(worst-magnitude(mism_pct by vctrl_v) by seed)"
+        ))
+        self.assertFails("is a group scalar, not a predicate")
+
+    def test_the_grouped_statistic_is_the_worst_corner(self):
+        """Two-level `max(sig3(COL) by KEY)`, no selection step."""
+        self.write(entries=[(
+            "Reference spur", "`13 C`", RECORD, "mc_term3.csv",
+            "max(sig3(qnet_c) by corner)", "1",
+        )])
+        self.assertPasses()
+
+    def test_the_flat_statistic_is_the_pooled_one(self):
+        """`sig3(COL)` with no grouping pools every row, and says so: 9.49."""
+        self.write(
+            measured="term 1 at its measured 13 %; term 3 residual 9.49 C",
+            entries=[(
+                "Reference spur", "`9.49 C`", RECORD, "mc_term3.csv",
+                "sig3(qnet_c)", "1",
+            )],
+        )
+        self.assertPasses()
+
+    def test_a_one_sample_group_is_not_a_tail(self):
+        """A single sample has no standard deviation, so no 3 sigma either."""
+        self.tree.write_evidence("mc_term3.csv", TERM3_CSV + "k3,1,7\n")
+        self.write(entries=[(
+            "Reference spur", "`13 C`", RECORD, "mc_term3.csv",
+            "max(sig3(qnet_c) by corner)", "1",
+        )])
+        self.assertFails("sig3 needs at least two samples")
 
 
 class TestUngradedFigureDisclosure(_TreeTest):

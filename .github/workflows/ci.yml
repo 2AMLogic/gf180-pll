@@ -541,6 +541,16 @@ jobs:
         # curve and a repeated control voltage as failures rather than passes,
         # and prints the number of groups it examined.
         #
+        # One figure is a STATISTIC rather than an extremum -- the reference
+        # spur row's term-1 mismatch reading, 17.48 % -- and the grammar
+        # carries a `sig3` aggregate (`|mean| + 3*sigma`, sample sigma) and a
+        # `worst-magnitude` group verb for it, composed three deep:
+        # `max(sig3(worst-magnitude(mism_pct by vctrl_v) by seed) by corner)`.
+        # Every level matters and collapsing one makes the number SMALLER
+        # (13.2172 % folded, 10.94 % pooled-and-folded, against 17.4798 %
+        # signed), which is exactly the drift DR-018 Amendment A1 corrected --
+        # so the tests for it assert that each collapsed reading FAILS.
+        #
         # The contracted-space figures (loop bandwidth, phase margin, settling)
         # are selected by an `on-icp-trim-rule` predicate READ OUT OF
         # spec/pll.md's normative Icp trim-code rule table, never written into
