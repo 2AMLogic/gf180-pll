@@ -31,7 +31,8 @@
 #
 # THE CONVENTION IT ENFORCES (proposal section 5.1)
 #
-# Section 5.1 of the proposal carries three tables. The first names, for each
+# Section 5.1 of the proposal carries four tables (the third is rule 7's, and
+# arrived after this header was first written). The first names, for each
 # graded value, the record, the committed evidence file, the reduction that
 # produces it, and the unit scale:
 #
@@ -44,7 +45,10 @@
 # omitted" rule #237's acceptance criterion 5 states for verdicts, applied to
 # values.
 #
-# The third names the headline figures INSIDE graded rows that are still not
+# The third names the figures that are a reduction DIVIDED BY A RATIFIED
+# LINE -- rule 7's, described there.
+#
+# The fourth names the headline figures INSIDE graded rows that are still not
 # re-derived, and why:
 #
 #   | section 5 row | Figure | Why it is not re-derived |
@@ -120,7 +124,7 @@
 #
 # 6. DISCLOSED PER FIGURE, AND NOT STALE. Rule 5 is per row, not per number: a
 #    graded row can still hold a headline figure nothing re-derives. Section
-#    5.1's third table names each of those, and this check requires that each
+#    5.1's fourth table names each of those, and this check requires that each
 #    entry names a real section 5 row, that the row is one this check grades
 #    (a fully excluded row's figures are the exclusion table's business), that
 #    the figure is not also a graded value for that row, that a reason is
@@ -129,6 +133,63 @@
 #    had already gone wrong. It named four ungraded figures and missed a fifth
 #    (the output band row's `27 %` worst adjacent-band overlap, which was
 #    neither graded nor disclosed until it was graded in this pass).
+#
+# 7. DERIVED AGAINST A RATIFIED LINE. Some headline figures are not a reduction
+#    of committed evidence at all: they are a reduction DIVIDED BY A CONSTANT
+#    THAT IS WRITTEN DOWN IN A NORMATIVE DOCUMENT. `1.41x` is the worst
+#    measured VCTRL travel over the 0.6 V Budget 2 allows; `47 %` is the same
+#    travel over the 1.8 V width of DR-003 Decision 5's measured control
+#    window. Both sat in the ungraded list until 2026-09-26 for the reason "a
+#    ratio to a spec line is arithmetic on the line, not a column of the
+#    committed evidence" -- true about the column and wrong about the
+#    conclusion, in exactly the way section 5.2 had already shown for the spur
+#    derivation: a hand derivation is not ungradeable when every ingredient it
+#    uses is written down. Here both ingredients are. The measured one is a
+#    reduction this check already evaluates; the ratified one is a line in
+#    spec/pll.md.
+#
+#    A THIRD TABLE in section 5.1 carries them:
+#
+#      | section 5 row | Quoted value | Record(s) | Evidence file | Derivation | Constant | Scale |
+#      | Supply sensitivity -- DC ... | `1.41x` | `20260925-044237-4ff4f65` | `criterion1b_vctrl_budget.csv` | `max(span_full_v) / budget2-vctrl-consumption-v` | `0.6 V` | `1` |
+#
+#    Rules 1-5 apply to it unchanged -- the record must resolve and be cited by
+#    the row, the evidence must be committed, the figure must appear verbatim
+#    in the row, and a row graded here counts as graded for rule 5. On top of
+#    those:
+#
+#      a. THE CONSTANT IS READ, NEVER WRITTEN INTO THIS CHECK. The name in the
+#         derivation resolves through the CONSTANTS registry below, which
+#         reads the value out of spec/pll.md (and, where the spec cites one,
+#         out of that decision record), for the same reason the Icp trim rule
+#         is read rather than asserted: a re-ratified line has to fail this
+#         check in the same commit, not be graded against the superseded one.
+#
+#      b. EVERY STATEMENT OF THE CONSTANT MUST AGREE. Each resolver requires
+#         at least two independent statements of its line and fails if they
+#         differ. Budget 2's 0.6 V is stated twice in spec/pll.md (the spec
+#         table's row 12 and the Budget 2 section heading); the 0.9-2.7 V
+#         control window is stated in spec/pll.md's ratified assumptions and
+#         in DR-003 Decision 5, which that section 5 row cites. A document
+#         that contradicts itself about a ratified number is a failure here
+#         rather than a coin toss over which statement the check happened to
+#         match first.
+#
+#      c. THE TABLE'S OWN STATEMENT OF THE CONSTANT IS GRADED TOO. The
+#         Constant column is what a reader checks the arithmetic with, so it
+#         is compared against the resolved value at the precision written. It
+#         is not an input -- the derivation uses the resolved value.
+#
+#      d. NO COUNT NUMERATOR. A count over a ratified voltage is not a ratio;
+#         if a figure ever needs one, it needs a stated reason first.
+#
+#    And one guard shared with rule 4, which is what makes the remaining
+#    entries in the ungraded list honest: A RANGE IS NOT A FIGURE. The quoted
+#    value may not be a two-ended range (`0.1-0.5 dB`, `0.385 ... 0.846 V`),
+#    because the figure parser reads the number at the front and would grade
+#    the low end alone -- "grading half of a two-sided bound and calling it
+#    the bound" is the named defect the ungraded list exists to catch, and
+#    before this guard the check would have committed it silently.
 #
 # WHAT IT DOES NOT DO
 #
@@ -251,8 +312,10 @@
 # ratified rule changes, what CI enforces has to change in the same commit.
 #
 # Usage: sim/lib/check-quoted-value-provenance.sh
-# Exit codes: 0 every graded value re-derives, every section 5 row is accounted
-#             for, and every disclosed ungraded figure is still in its row;
+# Exit codes: 0 every graded value re-derives, every derived figure follows
+#             from its reduction and its ratified constant, every section 5 row
+#             is accounted for, and every disclosed ungraded figure is still in
+#             its row;
 #             1 any rule above is violated, a table is missing or empty, or the
 #             section 5 table cannot be parsed (a broken parser must not look
 #             like a clean tree).
@@ -345,6 +408,24 @@ def read_tables(text):
 
 NUMBER = re.compile(r"^([+-]?\d+(?:\.\d+)?)(?:[eE]([+-]?\d+))?")
 
+#: A two-ended range, which is NOT a figure this check may grade.
+#:
+#: `parse_quoted` reads the number at the front of the string, so `0.1-0.5 dB`
+#: would be graded as `0.1` and the other end of the bound would never be
+#: looked at -- "grading half of a two-sided bound and calling it the bound",
+#: which is the defect section 5.1's ungraded list exists to make visible. The
+#: separator must be followed by a digit so that a figure whose UNITS carry a
+#: hyphen is untouched: `45-point PVT grid` and `0 non-monotonic curves of 504`
+#: are figures, `2.255e-4` is a figure, `0.385 ... 0.846 V` is a range.
+RANGE_FIGURE = re.compile(
+    r"^\s*[+\-−]?\d[\d.]*\s*(?:[–—−-]|\.\.\.|…)\s*"
+    r"[+\-−]?\d"
+)
+
+
+def is_range_figure(raw):
+    return bool(RANGE_FIGURE.match(raw.strip().strip("`").strip()))
+
 
 def parse_quoted(raw):
     """A quoted figure -> (Decimal mantissa, exponent, decimals as written).
@@ -416,6 +497,104 @@ def read_icp_trim_rule(spec_text):
             mult = {"": 1, "k": 1e3, "M": 1e6, "G": 1e9}[fm.group(2)]
             rule[float(fm.group(1)) * mult] = int(tm.group(1))
     return rule
+
+
+# ------------------------------------------------------ the ratified lines ---
+#
+# The constants a rule-7 derivation may divide by. Each resolver returns
+# (value, [(where it was read, value as stated), ...]) and is required to find
+# the line stated at least TWICE, in independent places, and to find the
+# statements in agreement. That is not belt-and-braces: a ratified number that
+# two sections of the spec disagree about is a spec defect, and a check that
+# matched whichever statement came first in the file would hide it behind a
+# figure that still "grades".
+#
+# Nothing here writes a number into this check. Every value is a capture group
+# out of a committed document, for the same reason read_icp_trim_rule is: when
+# a line is re-ratified, this check has to fail in the same commit rather than
+# keep grading the superseded one.
+
+class ConstantError(ValueError):
+    """A ratified constant that could not be read, or that disagrees."""
+
+
+def _one_agreed_value(label, readings):
+    """[(where, value)] -> the value, if there are >= 2 and they agree."""
+    if len(readings) < 2:
+        raise ConstantError(
+            "%s: found %d statement(s) of this ratified line, and at least 2 "
+            "independent ones are required (%s). A constant read from one "
+            "place is a constant nothing corroborates."
+            % (label, len(readings), "; ".join(w for w, _ in readings) or "none")
+        )
+    values = {round(v, 12) for _, v in readings}
+    if len(values) > 1:
+        raise ConstantError(
+            "%s: the ratified line is stated inconsistently -- %s. Which one "
+            "governs is a spec question, not this check's to pick."
+            % (label, "; ".join("%s says %g" % (w, v) for w, v in readings))
+        )
+    return readings[0][1]
+
+
+def read_budget2_consumption_v(docs):
+    """Budget 2's allowance, in volts of the VCTRL window (spec/pll.md).
+
+    Stated twice: in the spec table's Supply sensitivity target cell and in
+    the `Budget 2 -- DC` section heading that derives it.
+    """
+    readings = [
+        ("%s statement %d" % (spec_rel, i + 1), float(m))
+        for i, m in enumerate(
+            re.findall(
+                r"must consume ≤\s*([\d.]+)\s*V of the Vctrl window",
+                docs["spec"],
+            )
+        )
+    ]
+    return _one_agreed_value("budget2-vctrl-consumption-v", readings), readings
+
+
+def _window_readings(docs):
+    out = []
+    m = re.search(
+        r"Vctrl operating window \*\*([\d.]+)\s*[–-]\s*([\d.]+)\s*V\*\*",
+        docs["spec"],
+    )
+    if m:
+        out.append(("%s (ratified assumptions)" % spec_rel,
+                    (float(m.group(1)), float(m.group(2)))))
+    m = re.search(
+        r"usable Vctrl window is \*{0,2}([\d.]+)\s*[–-]\s*([\d.]+)\s*V",
+        docs.get("dr003", ""),
+    )
+    if m:
+        out.append(("DR-003 Decision 5",
+                    (float(m.group(1)), float(m.group(2)))))
+    return out
+
+
+def read_dr003_window_width_v(docs):
+    """The width of DR-003 Decision 5's measured 0.9-2.7 V control window.
+
+    The WIDTH is nowhere a primary number -- the window is ratified by its two
+    ends, so the width is derived from them here rather than matched against
+    the "1.8 V wide" the spec writes in passing. Reading the ends from both
+    spec/pll.md and the decision record it cites is what makes the derivation
+    safe: the proposal's own section 5 row cites DR-003 Decision 5, so a
+    divergence between the two documents is a divergence this figure rests on.
+    """
+    readings = _window_readings(docs)
+    widths = [(where, hi - lo) for where, (lo, hi) in readings]
+    ends = [(where, lo) for where, (lo, _) in readings]
+    _one_agreed_value("dr003-vctrl-window-width-v (window floor)", ends)
+    return _one_agreed_value("dr003-vctrl-window-width-v", widths), widths
+
+
+CONSTANTS = {
+    "budget2-vctrl-consumption-v": read_budget2_consumption_v,
+    "dr003-vctrl-window-width-v": read_dr003_window_width_v,
+}
 
 
 # --------------------------------------------------------------- reductions ---
@@ -1135,6 +1314,67 @@ def read_record_table(rid, campaign, first_col, ctx):
     return rows
 
 
+def collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx):
+    """The committed rows an entry reduces, or None if any rule 1/2 fails.
+
+    Shared by the graded-value table (rule 4) and the derived-figure table
+    (rule 7) so that "which evidence an entry may read" has exactly one
+    implementation. A second copy would be free to drift, and the rule it
+    encodes -- an entry may only reduce a record the section 5 row itself
+    cites -- is the one that stops section 5.1 smuggling in evidence.
+    """
+    rows = []
+    resolved = True
+    for rid in record_ids:
+        if rid not in records:
+            fail("%s: record `%s` is not on the tree" % (ctx, rid))
+            resolved = False
+            continue
+        if rid not in spec_cited:
+            fail(
+                "%s: reduces record `%s`, which that section 5 row does not "
+                "cite. A value may only be re-derived from evidence the row "
+                "itself points a reader at." % (ctx, rid)
+            )
+            resolved = False
+            continue
+        table_spec = RECORD_TABLE.match(evidence_file)
+        if table_spec:
+            if table_spec.group(1) != rid:
+                fail(
+                    "%s: names evidence inside record `%s`'s markdown while "
+                    "reducing record `%s`. An entry may only read the record it "
+                    "declares." % (ctx, table_spec.group(1), rid)
+                )
+                resolved = False
+                continue
+            in_record = read_record_table(
+                rid, records[rid], table_spec.group(2), ctx
+            )
+            if in_record is None:
+                resolved = False
+                continue
+            rows.extend(in_record)
+            continue
+        path = os.path.join(
+            repo_root, "sim", records[rid], "corners", rid, evidence_file
+        )
+        if not os.path.isfile(path):
+            fail(
+                "%s: no committed evidence file at sim/%s/corners/%s/%s"
+                % (ctx, records[rid], rid, evidence_file)
+            )
+            resolved = False
+            continue
+        rows.extend(read_csv_rows(path))
+    if not resolved:
+        return None
+    if not rows:
+        fail("%s: the evidence file(s) hold no data rows" % ctx)
+        return None
+    return rows
+
+
 records = {}
 sim_root = os.path.join(repo_root, "sim")
 for campaign in sorted(os.listdir(sim_root)) if os.path.isdir(sim_root) else []:
@@ -1159,11 +1399,53 @@ if os.path.isfile(spec_path):
         spec_text = fh.read()
 icp_rule = read_icp_trim_rule(spec_text)
 
+# The documents a rule-7 constant may be read out of: the ratified spec, and
+# the decision records the spec cites for a line it does not restate in full.
+dr_dir = os.path.join(repo_root, "spec", "decision-records")
+constant_docs = {"spec": spec_text, "dr003": ""}
+if os.path.isdir(dr_dir):
+    for name in sorted(os.listdir(dr_dir)):
+        if name.startswith("DR-003-") and name.endswith(".md"):
+            with open(os.path.join(dr_dir, name), encoding="utf-8") as fh:
+                constant_docs["dr003"] = fh.read()
+            break
+
+#: name -> (value, [(where it was read, value)]), resolved on first use.
+resolved_constants = {}
+
+
+def resolve_constant(name, ctx):
+    if name in resolved_constants:
+        return resolved_constants[name]
+    if name not in CONSTANTS:
+        fail(
+            "%s: `%s` is not a ratified constant this check knows how to "
+            "read. Known constants: %s. A constant is added by teaching this "
+            "check to READ it out of a committed document, never by writing "
+            "the number here." % (ctx, name, ", ".join(sorted(CONSTANTS)))
+        )
+        resolved_constants[name] = None
+        return None
+    try:
+        value, readings = CONSTANTS[name](constant_docs)
+    except ConstantError as exc:
+        fail("%s: %s" % (ctx, exc))
+        resolved_constants[name] = None
+        return None
+    if value == 0:
+        fail("%s: ratified constant `%s` reads as zero" % (ctx, name))
+        resolved_constants[name] = None
+        return None
+    resolved_constants[name] = (value, readings)
+    return resolved_constants[name]
+
+
 tables = read_tables(proposal)
 
 spec_rows = None          # normalized name -> (cells, source records)
 spec_row_order = []
 provenance = None
+derived_figures = None
 exclusions = None
 ungraded_figures = None
 
@@ -1181,6 +1463,15 @@ for header, body in tables:
                 inherited = cited
             spec_rows[name] = (cells, cited or list(inherited))
             spec_row_order.append(name)
+    elif (
+        len(header) >= 7
+        and header[1].lower().startswith("quoted value")
+        and header[4].lower().startswith("derivation")
+    ):
+        # The rule-7 table. Discriminated on its `Derivation` column BEFORE
+        # the graded-value table, because both are headed `Quoted value` and
+        # a bare "second column" test would read one as the other.
+        derived_figures = body
     elif len(header) >= 6 and header[1].lower().startswith("quoted value"):
         provenance = body
     elif len(header) >= 2 and header[1].lower().startswith("why no value"):
@@ -1205,6 +1496,16 @@ if not provenance:
         "FAIL: %s has no non-empty section 5.1 value-provenance table (a "
         "header row whose second column is `Quoted value`). Every measured "
         "figure in section 5 would then be ungraded.\n" % proposal_rel
+    )
+    sys.exit(1)
+
+if not derived_figures:
+    sys.stderr.write(
+        "FAIL: %s has no non-empty section 5.1 derived-figure table (a header "
+        "row whose second column is `Quoted value` and whose fifth is "
+        "`Derivation`). Deleting it would not make the figures it grades "
+        "ungraded-and-declared; it would make them ungraded and silent, which "
+        "is the state this section exists to prevent.\n" % proposal_rel
     )
     sys.exit(1)
 
@@ -1269,53 +1570,17 @@ for cells in provenance:
         fail("%s: names no record id" % ctx)
         continue
 
-    rows = []
-    resolved = True
-    for rid in record_ids:
-        if rid not in records:
-            fail("%s: record `%s` is not on the tree" % (ctx, rid))
-            resolved = False
-            continue
-        if rid not in spec_cited:
-            fail(
-                "%s: reduces record `%s`, which that section 5 row does not "
-                "cite. A value may only be re-derived from evidence the row "
-                "itself points a reader at." % (ctx, rid)
-            )
-            resolved = False
-            continue
-        table_spec = RECORD_TABLE.match(evidence_file)
-        if table_spec:
-            if table_spec.group(1) != rid:
-                fail(
-                    "%s: names evidence inside record `%s`'s markdown while "
-                    "reducing record `%s`. An entry may only read the record it "
-                    "declares." % (ctx, table_spec.group(1), rid)
-                )
-                resolved = False
-                continue
-            in_record = read_record_table(
-                rid, records[rid], table_spec.group(2), ctx
-            )
-            if in_record is None:
-                resolved = False
-                continue
-            rows.extend(in_record)
-            continue
-        path = os.path.join(
-            repo_root, "sim", records[rid], "corners", rid, evidence_file
+    rows = collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx)
+    if rows is None:
+        continue
+
+    if is_range_figure(quoted_raw):
+        fail(
+            "%s: the quoted value is a two-ended range. Only the number at "
+            "its front would be graded, which is grading half of a two-sided "
+            "bound and calling it the bound -- grade each end as its own "
+            "entry, or declare the range in the ungraded-figure table." % ctx
         )
-        if not os.path.isfile(path):
-            fail(
-                "%s: no committed evidence file at sim/%s/corners/%s/%s"
-                % (ctx, records[rid], rid, evidence_file)
-            )
-            resolved = False
-            continue
-        rows.extend(read_csv_rows(path))
-    if not resolved or not rows:
-        if resolved:
-            fail("%s: the evidence file(s) hold no data rows" % ctx)
         continue
 
     parsed = parse_quoted(quoted_raw)
@@ -1354,6 +1619,142 @@ for cells in provenance:
             "%s: section 5 says %s; `%s` over %s gives %.6g, which does not "
             "round to it at the %d decimal place(s) written"
             % (ctx, quoted_plain, reduction, evidence_file, derived, decimals)
+        )
+
+# ---- rule 7: figures derived from a reduction and a ratified constant -------
+
+derived_checked = 0
+constants_used = set()
+
+for cells in derived_figures or []:
+    if len(cells) < 7:
+        fail("section 5.1 derived-figure row has %d columns, expected 7: %r"
+             % (len(cells), cells))
+        continue
+    row_name = normalize_row_name(cells[0])
+    quoted_raw = cells[1].strip()
+    record_ids = re.findall(RECORD_ID, cells[2])
+    evidence_file = cells[3].strip().strip("`")
+    derivation = cells[4].strip().strip("`")
+    constant_stated = cells[5].strip().strip("`")
+    scale_raw = cells[6].strip().strip("`")
+    ctx = "section 5.1 derived figure %s / %s" % (row_name, quoted_raw)
+
+    if row_name not in spec_rows:
+        fail(
+            "%s: names a section 5 row that does not exist. Section 5's rows "
+            "are: %s" % (ctx, "; ".join(spec_row_order))
+        )
+        continue
+    graded_rows.add(row_name)
+    spec_cells, spec_cited = spec_rows[row_name]
+
+    quoted_plain = quoted_raw.strip("`").strip()
+    graded_values.setdefault(row_name, set()).add(quoted_plain)
+    if quoted_plain not in " || ".join(spec_cells[1:4]):
+        fail(
+            "%s: the derived figure does not appear in that section 5 row. "
+            "Section 5.1 and section 5 have drifted apart -- one of them was "
+            "edited and the other was not." % ctx
+        )
+
+    parts = re.split(r"\s+/\s+", derivation)
+    if len(parts) != 2:
+        fail(
+            "%s: cannot read the derivation `%s`. The form is "
+            "`<reduction> / <ratified constant>`, one divisor, named."
+            % (ctx, derivation)
+        )
+        continue
+    reduction, constant_name = parts[0].strip(), parts[1].strip()
+
+    if not record_ids:
+        fail("%s: names no record id" % ctx)
+        continue
+
+    rows = collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx)
+    if rows is None:
+        continue
+
+    if is_range_figure(quoted_raw):
+        fail(
+            "%s: the derived figure is a two-ended range. Only the number at "
+            "its front would be graded, which is grading half of a two-sided "
+            "bound and calling it the bound -- derive each end as its own "
+            "entry, or declare the range in the ungraded-figure table." % ctx
+        )
+        continue
+
+    parsed = parse_quoted(quoted_raw)
+    if parsed is None:
+        fail("%s: cannot read a number out of the derived figure" % ctx)
+        continue
+    mantissa, exp, decimals = parsed
+
+    scale = as_float(scale_raw)
+    if scale is None:
+        fail("%s: scale `%s` is not a number" % (ctx, scale_raw))
+        continue
+
+    constant = resolve_constant(constant_name, ctx)
+    if constant is None:
+        continue
+    constant_value, constant_readings = constant
+    constants_used.add(constant_name)
+
+    # The table's own statement of the line is graded against the documents.
+    # It is a reader's handle on the arithmetic, not an input to it.
+    stated = parse_quoted(constant_stated)
+    if stated is None:
+        fail(
+            "%s: the Constant column `%s` states no number. It has to state "
+            "the line the derivation divides by, so a reader can do the "
+            "arithmetic." % (ctx, constant_stated)
+        )
+    elif not rounds_to(constant_value, *stated):
+        fail(
+            "%s: the Constant column states %s, but `%s` reads %.6g out of "
+            "%s. The document and the ratified line have drifted apart."
+            % (
+                ctx,
+                constant_stated,
+                constant_name,
+                constant_value,
+                "; ".join(where for where, _ in constant_readings),
+            )
+        )
+
+    result = apply_reduction(reduction, rows, icp_rule, ctx)
+    if result is None:
+        continue
+    raw_value, is_count = result
+
+    if is_count:
+        fail(
+            "%s: the numerator is a count. A count over a ratified quantity "
+            "is not a ratio; a figure that needs one needs a stated reason "
+            "first." % ctx
+        )
+        continue
+
+    derived = (raw_value / constant_value) * scale
+    derived_checked += 1
+
+    if not rounds_to(derived, mantissa, exp, decimals):
+        fail(
+            "%s: section 5 says %s; `%s` over %s gives %.6g, and over the "
+            "ratified %.6g that is %.6g, which does not round to it at the "
+            "%d decimal place(s) written"
+            % (
+                ctx,
+                quoted_plain,
+                reduction,
+                evidence_file,
+                raw_value,
+                constant_value,
+                derived,
+                decimals,
+            )
         )
 
 excluded_rows = set()
@@ -1444,7 +1845,9 @@ if errors:
 print(
     "OK: %d quoted values re-derived from committed per-corner evidence and "
     "matched at the precision written (%d of them group-sequence derivations "
-    "over %d groups); %d in-record table(s) read, %d checked row-for-row "
+    "over %d groups); %d further figure(s) derived against %d ratified "
+    "constant(s) read from the spec and its decision records (%s); %d "
+    "in-record table(s) read, %d checked row-for-row "
     "against the committed logs by point id and %d by row count alone; all %d "
     "section 5 rows accounted for (%d graded, %d with a stated reason) and %d "
     "ungraded figure(s) in graded rows disclosed and still present in their "
@@ -1453,6 +1856,13 @@ print(
         checked,
         seq_stats["derivations"],
         seq_stats["groups"],
+        derived_checked,
+        len(constants_used),
+        "; ".join(
+            "%s = %g" % (name, resolved_constants[name][0])
+            for name in sorted(constants_used)
+            if resolved_constants.get(name)
+        ) or "none",
         record_table_stats["id_matched"] + record_table_stats["count_matched"],
         record_table_stats["id_matched"],
         record_table_stats["count_matched"],

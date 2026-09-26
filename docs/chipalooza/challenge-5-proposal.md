@@ -607,8 +607,9 @@ the reduction that produces the figure, and
 re-derived value does not equal the figure **rounded to the precision written**
 (`247.8 MHz` against a derived 247.751 passes; against 247.6 it does not), if
 the figure has drifted between §5 and this table in either direction, if an
-entry reduces a record the §5 row does not itself cite, or if a §5 row appears
-in neither of this section's first two tables.
+entry reduces a record the §5 row does not itself cite, or if a §5 row is
+accounted for by neither a graded value (this table or the derived-figure one
+below) nor a stated reason.
 
 The reduction language is `min`/`max`/`mean`/`sum`/`sig3`/`count` over one
 committed table, optionally grouped (`max(min(fosc_hz) by bundle+temp_c+vdd_v)`
@@ -662,7 +663,7 @@ header names the other so neither can drift quietly.
 Two things this grading turned up rather than fixed silently. **`17.48 %` was
 quoted in §5 and appeared in neither this table nor the ungraded list below** —
 a figure nobody had graded and nobody had declared ungraded, which is exactly
-the omission the third table exists to make visible, found in the row whose
+the omission the fourth table exists to make visible, found in the row whose
 verdict rests on a derivation. And the §5 row cited the decision record that
 *interprets* the campaign without citing the campaign itself, so the
 `sim/mc-cp-mismatch` record is added to that row's Source cell here. That
@@ -754,7 +755,7 @@ figure the row's three findings rest on came from the re-reading record
 `20260925-044237-4ff4f65` (DR-021), which the row cites and which commits all
 three of its analyses as per-corner CSVs, and none of them was graded or
 declared ungraded: the verdict's own count was the omission this section's
-third table exists to make visible, sitting in the row it was least safe to
+fourth table exists to make visible, sitting in the row it was least safe to
 miss. Twenty-nine entries now grade it. (The Reference spur row had the same
 hole at a smaller scale: its `−54.5` was graded, but not the `5/5 corners` and
 `2/5 corners` its verdict states, nor `−54.9`, the other of the "two coldest
@@ -799,9 +800,11 @@ needed are stated rather than left in the reductions:
   decaying" is the phase class's count of DR-012 `settled == no` — the whole
   class, not a sample of it.
 
-Four figures of the row are declared in the third table below instead: three
-ratios and one two-sided magnitude bound, none of them a reduction of one
-column.
+Four figures of the row were left out of that pass, none of them a reduction
+of one column: three ratios and one two-sided magnitude bound. Two of the
+three ratios — `1.41×` and `47 %`, the ones whose second ingredient is a
+*ratified line* — are graded in the third table below; the other ratio and the
+magnitude bound are declared in the fourth.
 
 | §5 row | Quoted value | Record(s) | Evidence file | Reduction | Scale |
 |---|---|---|---|---|---|
@@ -894,9 +897,10 @@ column.
 | Supply sensitivity — DC / closed-loop, full grid | `22.5 mV` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(overshoot_mv where bundle == ff)` | `1` |
 
 **And the rows that have no re-derived value, with the reason.** This second
-table is what makes the first one's coverage a claim rather than a sample:
-every row of §5 appears in one table or the other, and CI fails if one appears
-in neither. A row here is not a row nobody checked — it is a row whose number
+table is what makes the grading tables' coverage a claim rather than a sample:
+every row of §5 is either graded (above, or in the derived-figure table that
+follows) or given a reason here, and CI fails if one is in neither — or in
+both. A row here is not a row nobody checked — it is a row whose number
 is not the kind of thing committed evidence can settle. **Three rows left this
 table on 2026-09-26 because their reason was false rather than superseded** —
 they said no reduced evidence was committed, and it had been committed all
@@ -916,9 +920,64 @@ of this exists" is.
 | Supply range | States the swept independent axis of every other row (2.97/3.30/3.63 V), which `check-pvt-coverage-claims.sh` grades against the harness's supply points. There is no measured quantity of its own |
 | Supply range, 5.0 V analog rail | **UNMET / not attempted.** No 5.0 V-class device exists in this design and nothing was ever simulated above 3.63 V, so there is no evidence of any kind to reduce — the point of the row |
 
+**And the figures that are a measurement divided by a ratified line.** The
+first table reduces committed evidence and stops there, so a figure whose
+second ingredient is a *spec line* rather than a column fell outside it. Two
+did, both in the Supply sensitivity — DC row: **`1.41×`**, the worst measured
+`VCTRL` travel over the 0.6 V Budget 2 allows, and **`47 %`**, the same travel
+over the 1.8 V width of DR-003 Decision 5's measured control window. Until
+2026-09-26 this section declined both, in the ungraded list below, for the
+reason "a ratio to a spec line is arithmetic on the line, not a column of the
+committed evidence." That is true about the column and wrong about the
+conclusion — and §5.2 below had already shown why, for the spur derivation:
+**a hand derivation is not ungradeable, because every ingredient it uses is
+written down beside it.** Here there are exactly two ingredients. One is a
+reduction this section already evaluates. The other is a number in `spec/pll.md`.
+
+So a third table grades them, under the same rules as the first — the record
+must resolve and be cited by the §5 row, the evidence must be committed, and
+the figure must appear verbatim in the row — plus three the division needs:
+
+- **The constant is read out of the document, never written into the check.**
+  `budget2-vctrl-consumption-v` and `dr003-vctrl-window-width-v` resolve by
+  reading `spec/pll.md` (and, for the window, the decision record the spec
+  cites), for the same reason the Icp trim-code rule and the mandated grid size
+  are read rather than asserted: when a line is re-ratified, CI has to fail in
+  that same commit instead of grading the figure against the superseded line.
+- **Every statement of the line must agree.** Each constant is required to be
+  stated at least **twice**, independently, and the check fails if the
+  statements differ. Budget 2's 0.6 V is stated in the spec table's Supply
+  sensitivity target cell *and* in the heading of the section that derives it;
+  the 0.9–2.7 V control window is stated in `spec/pll.md`'s ratified
+  assumptions *and* in DR-003 Decision 5, which this proposal's own §5 row
+  cites. A document that contradicts itself about a ratified number is a
+  failure here rather than a coin toss over whichever statement the check's
+  regex reached first. The **width** is then derived from the two ends rather
+  than matched against the "1.8 V wide" the spec writes in passing, because the
+  ends are what is ratified.
+- **The table's own statement of the constant is graded too.** The Constant
+  column is the reader's handle on the arithmetic — `0.846 / 0.6` is checkable
+  by eye, `0.846 / budget2-vctrl-consumption-v` is not — so it is compared
+  against the resolved value and is not an input to the derivation.
+
+| §5 row | Quoted value | Record(s) | Evidence file | Derivation | Constant | Scale |
+|---|---|---|---|---|---|---|
+| Supply sensitivity — DC / closed-loop, full grid | `1.41×` | `20260925-044237-4ff4f65` | `criterion1b_vctrl_budget.csv` | `max(span_full_v) / budget2-vctrl-consumption-v` | `0.6 V` | `1` |
+| Supply sensitivity — DC / closed-loop, full grid | `47 %` | `20260925-044237-4ff4f65` | `criterion1b_vctrl_budget.csv` | `max(span_full_v) / dr003-vctrl-window-width-v` | `1.8 V` | `100` |
+
+Both numerators are the same `0.846 V` graded in the first table, re-derived
+rather than quoted from it, so the three figures cannot drift apart. And one
+guard arrived with this table that the first one needed all along: **a range is
+not a figure.** The figure parser reads the number at the front of the string,
+so a quoted `0.1–0.5 dB` would have been graded as `0.1` and the other end
+would never have been looked at — *grading half of a two-sided bound and
+calling it the bound*, which is the defect the fourth table below exists to make
+visible. A range-shaped figure is now refused outright in both tables, which is
+what makes one of the entries below a declaration rather than an oversight.
+
 **And the figures inside graded rows that are still not re-derived.** Coverage
 above is per *row*, not per *number*: a row with one re-derived value is not a
-fully re-derived row. This third table is where the remainder is declared, and
+fully re-derived row. This fourth table is where the remainder is declared, and
 CI grades each entry — the row must exist and must be one of the graded rows,
 the reason must be given, the figure may not also appear as a graded value, and
 **the figure must still appear verbatim in the §5 row it is declared against**,
@@ -940,21 +999,28 @@ record's own Markdown (see above), exactly as for the two rows that left the
 exclusion table in the same pass. A disclosure that cannot rot is still only as
 good as the reading behind each line of it, and neither this table nor the
 exclusion table above had ever been audited against the records they excuse.
-What remains is seven figures in four rows. One was added when grading the
-closed-loop lock-time row put a disclosure obligation on it; four when grading
-the Supply sensitivity — DC row did — three ratios and one two-sided magnitude
-bound, none of them a reduction of one column; and one when grading the
-Reference spur row's two coldest corners did:
+**Two more came off it in the same pass for a reason of the third kind** — not
+false, not superseded, but *incomplete*: `1.41×` and `47 %` were declined
+because a ratio to a spec line "is arithmetic on the line, not a column of the
+committed evidence," which stated a true fact about the evidence and drew the
+wrong conclusion from it. They are graded in the third table above now. Their
+departure sharpens what the remaining arithmetic-shaped entries have to say:
+"arithmetic rather than a column" is no longer a reason by itself, so each now
+names the ingredient that is genuinely missing — a second end the figure's own
+shape would hide, or a divisor that is another measurement rather than a line.
+
+What remains is five figures in four rows. One was added when grading the
+closed-loop lock-time row put a disclosure obligation on it; two when grading
+the Supply sensitivity — DC row did; and one when grading the Reference spur
+row's two coldest corners did:
 
 | §5 row | Figure | Why it is not re-derived |
 |---|---|---|
 | Kvco | `115.8 MHz/V` | Two reasons, either sufficient. Selecting the point evaluates [the band-selection rule](../../spec/pll.md#band-selection-rule) (lowest band code that reaches the target) at every corner — a derivation, and one over a rule whose control window `spec/pll.md` does not presently name, an ambiguity tracked at #542 under which the two candidate windows select different bands. And the point itself is at Vctrl = 1.54 V, which the 7-point control sweep does not sample (its neighbours are 114.93 MHz/V at 1.50 V and 120.85 at 1.80 V), so no reduction of this CSV returns it. The adversarial `154.3 MHz/V` figure the rule exists to exclude *is* graded above, which is the half that bounds the risk |
 | Lock time, closed-loop cold-start / worst-case re-lock | `{4,16,64}` | A stimulus *set*, not a number: the grammar above re-derives a figure, and this one is the three divide ratios the grid was run at. Its cardinality is pinned from both sides by figures that are graded — the 270 rows, the 45 corners and the two conditions the record's own table carries, which multiply to 45 × 3 × 2 — while the membership is graded against the record's declared sweep axis by `check-pvt-coverage-claims.sh`, as the `f_ref` span is for the Reference input row |
-| Reference spur | `0.1–0.5 dB` | The two coldest corners' distance over the −55 dBc line — `−54.9` and `−54.5` (both graded above) against a `spec/pll.md` constant. Arithmetic on the line, not a column of `spur_by_corner.csv` |
-| Supply sensitivity — DC / closed-loop, full grid | `1.41×` | The worst `VCTRL` travel over the ratified 0.6 V of Budget 2 — `0.846 V` (graded above) divided by a `spec/pll.md` constant. A ratio to a spec line is arithmetic on the line, not a column of the committed evidence |
-| Supply sensitivity — DC / closed-loop, full grid | `47 %` | The same `0.846 V` over the 1.8 V width of DR-003 Decision 5's measured 0.9–2.7 V control window: a ratio to a decision-record constant, for the same reason as `1.41×` |
+| Reference spur | `0.1–0.5 dB` | **A two-ended range, which is not a figure.** Both ends are a distance over the −55 dBc line — `−54.9` and `−54.5`, both graded above, against a `spec/pll.md` constant — so the arithmetic is no obstacle now that the third table grades a reduction against a ratified line. What stops it is the shape: the figure parser reads the number at the front, so grading this string would grade `0.1` and never look at `0.5`. That is refused outright rather than accepted quietly, which is why this stays a declaration; closing it means §5 writing the two ends as two figures |
 | Supply sensitivity — DC / closed-loop, full grid | `5.7 mV` | A *magnitude* bound — `predicted_minus_measured_v` in `criterion1b_vctrl_budget.csv` is signed and spans −0.6 … +5.7 mV over the 15 cells, and the grammar has no magnitude aggregate. `max()` would return 5.7 here only because the positive side happens to be the larger one; grading half of a two-sided bound and calling it the bound is the defect this table exists to catch, so it is declared instead |
-| Supply sensitivity — DC / closed-loop, full grid | `33 %` | `1 − rms_linear_mv / rms_exponential_mv` at `ss`/−40 °C (20.54 against 30.75 mV in `criterion3_end_recovery.csv`): a ratio of two columns of one row, where the grammar reduces one column. Neither operand is quoted in §5 |
+| Supply sensitivity — DC / closed-loop, full grid | `33 %` | `1 − rms_linear_mv / rms_exponential_mv` at `ss`/−40 °C (20.54 against 30.75 mV in `criterion3_end_recovery.csv`). **Both** operands are columns of the committed evidence, which is what the third table's form does not reach: it divides one reduction by one *written-down* constant, and there is no ratified line here to read — the divisor is another measurement. Neither operand is quoted in §5 either, so grading it would have to introduce both |
 
 Nothing mechanically enumerates "every headline figure" out of §5's prose
 cells, which quote hundreds of numbers, most of them commentary on a figure
