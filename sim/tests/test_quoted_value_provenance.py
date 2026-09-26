@@ -144,6 +144,19 @@ f_ref_hz,trim_units,fc_min_hz,pm_min_deg,pass_pm
 2e6,2,30000,55.00,1
 """
 
+#: The rule-7 fixture: one measured column whose worst case is 1.0 V, to be
+#: divided by the two ratified lines the fixture spec states.
+BUDGET_CSV = """\
+cell,span_v
+a,0.40
+b,1.00
+"""
+
+#: Ratified lines, DELIBERATELY NOT THE REPOSITORY'S OWN. Budget 2 is 0.5 V
+#: here against the real 0.6, and the control window is 1.0-3.0 V (2.0 V wide)
+#: against the real 0.9-2.7 (1.8 V). A check that had the repository's numbers
+#: written into it would grade 1.00/0.6 = 1.67 and fail every test below --
+#: which is the point: the constants have to be READ out of these documents.
 SPEC_TEXT = """\
 # spec
 
@@ -154,15 +167,39 @@ SPEC_TEXT = """\
 | 1 MHz | **4** | 47.4 deg |
 | 2 MHz | **4** | 60.4 deg |
 
+## Ratified assumptions
+
+- Vctrl operating window **1.0 – 3.0 V** (DR-003 Decision 5);
+
+## Supply sensitivity
+
+A DC rail excursion must consume ≤ 0.5 V of the Vctrl window.
+
+### Budget 2 -- DC: a full-range rail excursion must consume ≤ 0.5 V of the Vctrl window
+
 ## Something else
 """
+
+DR003_TEXT = """\
+# DR-003 -- VCO band map
+
+**5. The usable Vctrl window is 1.0–3.0 V**, wider than DR-001 predicted.
+"""
+
+#: The Phase margin row's measured cell. Every figure section 5.1's tables
+#: grade against this row has to appear here verbatim, including the two
+#: rule-7 derived ones, so the tests that override the row build on this
+#: string rather than retyping a shorter one and losing them.
+PM_MEASURED = (
+    "Worst 47.4 deg; 3/4 cells pass; 1.9 deg of margin; travel 2.00x of the "
+    "budget, 50 % of the window"
+)
 
 SPEC_ROWS = (
     # (name, measured cell, verdict, source cell)
     ("Output band", "Floor 12 MHz; ceiling 20 MHz", "**MET**",
      f"`sim/{CAMPAIGN}/records/{RECORD}.md`"),
-    ("Phase margin", "Worst 47.4 deg; 3/4 cells pass; 1.9 deg of margin",
-     "**MET**", "Same record"),
+    ("Phase margin", PM_MEASURED, "**MET**", "Same record"),
     ("Standby current", "n/a -- no standby state exists", "**N/A**",
      "`spec/pll.md#standby-current`"),
 )
@@ -191,6 +228,10 @@ PROVENANCE_HEADER = (
     "| §5 row | Quoted value | Record(s) | Evidence file | Reduction | Scale |\n"
     "|---|---|---|---|---|---|\n"
 )
+DERIVED_HEADER = (
+    "| §5 row | Quoted value | Record(s) | Evidence file | Derivation | "
+    "Constant | Scale |\n|---|---|---|---|---|---|---|\n"
+)
 EXCLUSION_HEADER = (
     "| §5 row | Why no value here is re-derived from a CSV |\n|---|---|\n"
 )
@@ -207,6 +248,17 @@ DEFAULT_PROVENANCE = [
      "min(pm_min_deg where on-icp-trim-rule)", "1"),
     ("Phase margin", "`3`", RECORD, "loop_margins.csv",
      "count(rows where pass_pm == 1)", "1"),
+]
+
+#: Rule 7: a measurement over a ratified line. 1.00 V of travel is 2.00x the
+#: fixture's 0.5 V budget and 50 % of its 2.0 V window -- two different
+#: arithmetics over one reduction, so a check that ignored the constant or the
+#: scale could not pass both.
+DEFAULT_DERIVED = [
+    ("Phase margin", "`2.00x`", RECORD, "budget.csv",
+     "max(span_v) / budget2-vctrl-consumption-v", "0.5 V", "1"),
+    ("Phase margin", "`50 %`", RECORD, "budget.csv",
+     "max(span_v) / dr003-vctrl-window-width-v", "2.0 V", "100"),
 ]
 
 DEFAULT_EXCLUSIONS = [
@@ -238,6 +290,14 @@ def _provenance_table(entries) -> str:
     return PROVENANCE_HEADER + body
 
 
+def _derived_table(entries) -> str:
+    body = "".join(
+        "| %s | %s | `%s` | `%s` | `%s` | `%s` | `%s` |\n" % entry
+        for entry in entries
+    )
+    return DERIVED_HEADER + body
+
+
 def _exclusion_table(entries) -> str:
     body = "".join("| %s | %s |\n" % entry for entry in entries)
     return EXCLUSION_HEADER + body
@@ -251,11 +311,14 @@ def _ungraded_table(entries) -> str:
 def proposal(
     spec_rows=SPEC_ROWS,
     provenance=None,
+    derived=None,
     exclusions=None,
     ungraded=None,
     include_5_1=True,
+    include_derived=True,
 ) -> str:
     provenance = DEFAULT_PROVENANCE if provenance is None else provenance
+    derived = DEFAULT_DERIVED if derived is None else derived
     exclusions = DEFAULT_EXCLUSIONS if exclusions is None else exclusions
     ungraded = DEFAULT_UNGRADED if ungraded is None else ungraded
     text = "# proposal\n\n## 5. Target specification\n\n"
@@ -263,6 +326,8 @@ def proposal(
     if include_5_1:
         text += "### 5.1 Value provenance\n\n"
         text += _provenance_table(provenance) + "\n"
+        if include_derived:
+            text += _derived_table(derived) + "\n"
         text += _exclusion_table(exclusions) + "\n"
         text += _ungraded_table(ungraded) + "\n"
     text += "## 6. Next section\n"
@@ -289,9 +354,13 @@ class _Tree:
         (corners / "kvco_by_point.csv").write_text(CURVES_CSV)
         (corners / "mc_cp_dc.csv").write_text(MISMATCH_CSV)
         (corners / "mc_term3.csv").write_text(TERM3_CSV)
+        (corners / "budget.csv").write_text(BUDGET_CSV)
 
         (root / "spec").mkdir()
         (root / SPEC).write_text(SPEC_TEXT)
+        dr_dir = root / "spec" / "decision-records"
+        dr_dir.mkdir()
+        (dr_dir / "DR-003-vco-band-map.md").write_text(DR003_TEXT)
 
         (root / "docs" / "chipalooza").mkdir(parents=True)
         self.write(proposal())
@@ -309,6 +378,10 @@ class _Tree:
 
     def write_spec(self, text: str) -> None:
         (self.root / SPEC).write_text(text)
+
+    def write_dr003(self, text: str) -> None:
+        (self.root / "spec" / "decision-records"
+         / "DR-003-vco-band-map.md").write_text(text)
 
     def write_record(self, rid: str, text: str) -> None:
         (self.root / "sim" / CAMPAIGN / "records" / f"{rid}.md").write_text(text)
@@ -408,8 +481,9 @@ class TestValueRule(_TreeTest):
         entries[3] = ("Phase margin", "`4`", RECORD, "loop_margins.csv",
                       "count(rows where pass_pm == 1)", "1")
         rows = list(SPEC_ROWS)
-        rows[1] = ("Phase margin", "Worst 47.4 deg; 4/4 cells pass", "**MET**",
-                   "Same record")
+        rows[1] = ("Phase margin",
+                   PM_MEASURED.replace("3/4 cells pass", "4/4 cells pass"),
+                   "**MET**", "Same record")
         self.tree.write(proposal(spec_rows=tuple(rows), provenance=entries))
         self.assertFails("counts 3")
 
@@ -441,8 +515,8 @@ class TestSignFlippingScale(_TreeTest):
         self.tree.write_evidence("phase_decay.csv", self.DECAY_CSV)
         rows = list(SPEC_ROWS)
         rows[1] = ("Phase margin",
-                   "Worst 47.4 deg; 3/4 cells pass; 1.9 deg of margin; "
-                   "0.60-0.72 ns of movement", "**MET**", "Same record")
+                   PM_MEASURED + "; 0.60-0.72 ns of movement",
+                   "**MET**", "Same record")
         entries = list(DEFAULT_PROVENANCE) + [
             ("Phase margin", "`%s`" % quoted, RECORD, "phase_decay.csv",
              reduction, scale),
@@ -1125,6 +1199,238 @@ class TestInRecordTableEvidence(_TreeTest):
                          "table nothing corroborates is prose")
 
 
+class TestDerivedAgainstARatifiedLine(_TreeTest):
+    """Rule 7: a reduction divided by a constant read out of the documents.
+
+    The figures this grades -- `1.41x` and `47 %` on the real tree -- are a
+    measurement over a *spec line*, and sat in the ungraded list until
+    2026-09-26 for the reason "arithmetic on the line, not a column of the
+    committed evidence". Both ingredients are written down, so the arithmetic
+    is checkable; what these tests assert is that it is checked against the
+    DOCUMENTS and not against anything written into the script.
+    """
+
+    def _derived(self, **kwargs):
+        self.tree.write(proposal(**kwargs))
+
+    def test_a_derived_figure_passes_and_is_reported(self):
+        result = self.assertPasses()
+        self.assertIn("2 further figure(s) derived against 2 ratified", result.stdout)
+        self.assertIn("budget2-vctrl-consumption-v = 0.5", result.stdout)
+        self.assertIn("dr003-vctrl-window-width-v = 2", result.stdout)
+
+    def test_a_drifted_derived_figure_fails(self):
+        rows = list(SPEC_ROWS)
+        rows[1] = ("Phase margin", PM_MEASURED.replace("2.00x", "1.90x"),
+                   "**MET**", "Same record")
+        entries = list(DEFAULT_DERIVED)
+        entries[0] = ("Phase margin", "`1.90x`", RECORD, "budget.csv",
+                      "max(span_v) / budget2-vctrl-consumption-v", "0.5 V", "1")
+        self._derived(spec_rows=tuple(rows), derived=entries)
+        self.assertFails("over the ratified 0.5 that is 2", "does not round to it")
+
+    def test_the_constant_is_read_from_the_documents_not_the_check(self):
+        """Re-ratify the line and the figure must fail in the same commit.
+
+        The fixture's budget moves 0.5 -> 1.0 V in both of its statements, so
+        the documents stay self-consistent and only the ARITHMETIC changes:
+        1.00 / 1.0 is 1.00x, not the 2.00x section 5 states.
+        """
+        self.tree.write_spec(SPEC_TEXT.replace("0.5 V", "1.0 V"))
+        self.assertFails("the Constant column states 0.5 V",
+                         "budget2-vctrl-consumption-v` reads 1")
+
+    def test_a_line_stated_once_is_not_corroborated(self):
+        spec = SPEC_TEXT.replace(
+            "A DC rail excursion must consume ≤ 0.5 V of the Vctrl window.",
+            "A DC rail excursion is budgeted.",
+        )
+        self.tree.write_spec(spec)
+        self.assertFails("found 1 statement(s) of this ratified line",
+                         "at least 2 independent ones are required")
+
+    def test_two_statements_that_disagree_fail(self):
+        spec = SPEC_TEXT.replace(
+            "### Budget 2 -- DC: a full-range rail excursion must consume "
+            "≤ 0.5 V",
+            "### Budget 2 -- DC: a full-range rail excursion must consume "
+            "≤ 0.7 V",
+        )
+        self.tree.write_spec(spec)
+        self.assertFails("stated inconsistently", "is a spec question")
+
+    def test_the_decision_record_must_agree_with_the_spec(self):
+        """The window is ratified in two documents; a split between them fails.
+
+        The real proposal's own section 5 row cites DR-003 Decision 5 for this
+        window, so a divergence between the decision record and the spec is a
+        divergence the figure rests on -- not a detail.
+        """
+        self.tree.write_dr003(DR003_TEXT.replace("3.0 V", "2.5 V"))
+        self.assertFails("dr003-vctrl-window-width-v", "stated inconsistently")
+
+    def test_a_missing_decision_record_is_not_silently_a_pass(self):
+        self.tree.write_dr003("# DR-003\n\nNothing about the window here.\n")
+        self.assertFails("found 1 statement(s) of this ratified line")
+
+    def test_the_tables_own_statement_of_the_constant_is_graded(self):
+        entries = list(DEFAULT_DERIVED)
+        entries[0] = ("Phase margin", "`2.00x`", RECORD, "budget.csv",
+                      "max(span_v) / budget2-vctrl-consumption-v", "0.6 V", "1")
+        self._derived(derived=entries)
+        self.assertFails("the Constant column states 0.6 V",
+                         "The document and the ratified line have drifted apart")
+
+    def test_an_unknown_constant_fails(self):
+        entries = list(DEFAULT_DERIVED)
+        entries[0] = ("Phase margin", "`2.00x`", RECORD, "budget.csv",
+                      "max(span_v) / some-number-i-made-up", "0.5 V", "1")
+        self._derived(derived=entries)
+        self.assertFails("is not a ratified constant this check knows how to read")
+
+    def test_an_unparsable_derivation_fails(self):
+        entries = list(DEFAULT_DERIVED)
+        entries[0] = ("Phase margin", "`2.00x`", RECORD, "budget.csv",
+                      "max(span_v)", "0.5 V", "1")
+        self._derived(derived=entries)
+        self.assertFails("cannot read the derivation")
+
+    def test_a_count_numerator_is_refused(self):
+        rows = list(SPEC_ROWS)
+        rows[1] = ("Phase margin", PM_MEASURED + "; 4 over the line",
+                   "**MET**", "Same record")
+        entries = list(DEFAULT_DERIVED) + [
+            ("Phase margin", "`4`", RECORD, "budget.csv",
+             "count(rows) / budget2-vctrl-consumption-v", "0.5 V", "1"),
+        ]
+        self._derived(spec_rows=tuple(rows), derived=entries)
+        self.assertFails("the numerator is a count", "is not a ratio")
+
+    def test_the_scale_is_applied_to_the_ratio(self):
+        """The two entries share a numerator and a row; only scale differs."""
+        entries = list(DEFAULT_DERIVED)
+        entries[1] = ("Phase margin", "`50 %`", RECORD, "budget.csv",
+                      "max(span_v) / dr003-vctrl-window-width-v", "2.0 V", "1")
+        self._derived(derived=entries)
+        self.assertFails("does not round to it")
+
+    def test_a_derived_figure_not_in_its_section_5_row_fails(self):
+        rows = list(SPEC_ROWS)
+        rows[1] = ("Phase margin", "Worst 47.4 deg; 1.9 deg of margin; 50 %",
+                   "**MET**", "Same record")
+        self._derived(spec_rows=tuple(rows))
+        self.assertFails("the derived figure does not appear in that section 5 row")
+
+    def test_reducing_a_record_the_row_does_not_cite_fails(self):
+        entries = list(DEFAULT_DERIVED)
+        entries[0] = ("Phase margin", "`2.00x`", OTHER, "budget.csv",
+                      "max(span_v) / budget2-vctrl-consumption-v", "0.5 V", "1")
+        self._derived(derived=entries)
+        self.assertFails("which that section 5 row does not cite")
+
+    def test_a_row_graded_only_here_counts_as_graded(self):
+        """Rule 5 is satisfied by a derived figure, not only by a reduction."""
+        rows = list(SPEC_ROWS) + [
+            ("Loop bandwidth", "travel 2.00x of the budget", "**MET**",
+             f"`sim/{CAMPAIGN}/records/{RECORD}.md`"),
+        ]
+        entries = list(DEFAULT_DERIVED) + [
+            ("Loop bandwidth", "`2.00x`", RECORD, "budget.csv",
+             "max(span_v) / budget2-vctrl-consumption-v", "0.5 V", "1"),
+        ]
+        self._derived(spec_rows=tuple(rows), derived=entries)
+        result = self.assertPasses()
+        self.assertIn("all 4 section 5 rows accounted for", result.stdout)
+
+    def test_a_row_graded_here_and_excluded_fails(self):
+        exclusions = list(DEFAULT_EXCLUSIONS) + [
+            ("Phase margin", "There is nothing here to re-derive at all"),
+        ]
+        self._derived(exclusions=exclusions)
+        self.assertFails("is both graded and excluded")
+
+    def test_a_derived_figure_also_declared_ungraded_fails(self):
+        ungraded = list(DEFAULT_UNGRADED) + [
+            ("Phase margin", "2.00x",
+             "A ratio to a spec line is arithmetic on the line, not a column"),
+        ]
+        self._derived(ungraded=ungraded)
+        self.assertFails("cannot be both re-derived and declared un-re-derived")
+
+    def test_a_missing_derived_table_fails(self):
+        self._derived(include_derived=False)
+        self.assertFails("no non-empty section 5.1 derived-figure table",
+                         "ungraded and silent")
+
+    def test_an_empty_derived_table_fails(self):
+        self._derived(derived=[])
+        self.assertFails("no non-empty section 5.1 derived-figure table")
+
+
+class TestARangeIsNotAFigure(_TreeTest):
+    """Both grading tables refuse a two-ended range.
+
+    `parse_quoted` reads the number at the front of the string, so a quoted
+    `0.1-0.5 dB` would be graded as `0.1` and the other end would never be
+    looked at. "Grading half of a two-sided bound and calling it the bound" is
+    the named defect section 5.1's ungraded list exists to make visible, and
+    before this guard the check would have committed it silently.
+    """
+
+    def test_a_range_in_the_graded_table_is_refused(self):
+        rows = list(SPEC_ROWS)
+        rows[0] = ("Output band", "Floor 12-20 MHz", "**MET**",
+                   f"`sim/{CAMPAIGN}/records/{RECORD}.md`")
+        entries = list(DEFAULT_PROVENANCE)
+        entries[0] = ("Output band", "`12-20 MHz`", RECORD, "vco_tuning.csv",
+                      "max(min(fosc_hz) by bundle+temp_c+vdd_v)", "1e-6")
+        self.tree.write(proposal(spec_rows=tuple(rows), provenance=entries))
+        self.assertFails("two-ended range", "calling it the bound")
+
+    def test_an_en_dash_range_is_refused(self):
+        rows = list(SPEC_ROWS)
+        rows[1] = ("Phase margin", PM_MEASURED + "; 0.1–0.5 dB over",
+                   "**MET**", "Same record")
+        entries = list(DEFAULT_DERIVED) + [
+            ("Phase margin", "`0.1–0.5 dB`", RECORD, "budget.csv",
+             "max(span_v) / budget2-vctrl-consumption-v", "0.5 V", "1"),
+        ]
+        self.tree.write(proposal(spec_rows=tuple(rows), derived=entries))
+        self.assertFails("two-ended range")
+
+    def test_an_ellipsis_range_is_refused(self):
+        rows = list(SPEC_ROWS)
+        rows[0] = ("Output band", "Floor 12 … 20 MHz", "**MET**",
+                   f"`sim/{CAMPAIGN}/records/{RECORD}.md`")
+        entries = list(DEFAULT_PROVENANCE)
+        entries[0] = ("Output band", "`12 … 20 MHz`", RECORD,
+                      "vco_tuning.csv",
+                      "max(min(fosc_hz) by bundle+temp_c+vdd_v)", "1e-6")
+        self.tree.write(proposal(spec_rows=tuple(rows), provenance=entries))
+        self.assertFails("two-ended range")
+
+    def test_a_hyphenated_unit_is_still_a_figure(self):
+        """`45-point PVT grid` and `2.255e-4` are figures, not ranges.
+
+        The guard requires a DIGIT after the separator, which is what keeps it
+        from swallowing the figures the tables already grade. Asserted here
+        because a guard that over-fires would silently stop grading them.
+        """
+        self.tree.write_evidence(
+            "hyphen.csv", "cell,v\na,0.0002255\nb,0.0001\nc,0.0002\n")
+        rows = list(SPEC_ROWS)
+        rows[1] = ("Phase margin",
+                   PM_MEASURED + "; 2.255e-4 residual on a 3-point PVT grid",
+                   "**MET**", "Same record")
+        entries = list(DEFAULT_PROVENANCE) + [
+            ("Phase margin", "`2.255e-4`", RECORD, "hyphen.csv", "max(v)", "1"),
+            ("Phase margin", "`3-point PVT grid`", RECORD, "hyphen.csv",
+             "count(distinct cell)", "1"),
+        ]
+        self.tree.write(proposal(spec_rows=tuple(rows), provenance=entries))
+        self.assertPasses()
+
+
 class TestTheRealTree(unittest.TestCase):
     """The check must pass on this repository, and grade a real amount."""
 
@@ -1160,6 +1466,26 @@ class TestTheRealTree(unittest.TestCase):
             result.stdout.split("group-sequence derivations over ")[1].split(" ")[0]
         )
         self.assertGreaterEqual(groups, 500, msg=result.stdout)
+
+    def test_it_derives_the_ratio_figures_against_the_ratified_lines(self):
+        """Rule 7 on the real tree, asserted from the other side.
+
+        The count and the resolved constants are asserted as floors and as
+        names, not as a second copy of the document's own numbers: what must
+        not happen is the derived table quietly emptying out and the check
+        still reporting OK.
+        """
+        result = subprocess.run(
+            ["bash", str(CHECK)], capture_output=True, text=True, cwd=REPO_ROOT
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        match = re.search(r"(\d+) further figure\(s\) derived against (\d+) "
+                          r"ratified constant", result.stdout)
+        self.assertIsNotNone(match, msg=result.stdout)
+        self.assertGreaterEqual(int(match.group(1)), 2, msg=result.stdout)
+        self.assertGreaterEqual(int(match.group(2)), 2, msg=result.stdout)
+        self.assertIn("budget2-vctrl-consumption-v", result.stdout)
+        self.assertIn("dr003-vctrl-window-width-v", result.stdout)
 
     def test_it_reports_the_ungraded_figures_it_disclosed(self):
         result = subprocess.run(
