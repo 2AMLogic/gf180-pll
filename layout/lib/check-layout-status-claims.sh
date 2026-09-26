@@ -201,6 +201,7 @@ fail() {
 drawn=0
 lvs_matched=0
 summary=()
+erc_entries=()
 
 for entry in "${BLOCKS[@]}"; do
   IFS='|' read -r label dir gds top <<<"${entry}"
@@ -232,6 +233,12 @@ for entry in "${BLOCKS[@]}"; do
 
   summary+=("$(printf '  %-20s gds=%-3s drc-clean=%-3s lvs-matched=%-3s (%s)' \
     "${label}" "${has_gds}" "${has_drc}" "${has_lvs}" "${top}")")
+
+  # The ERC rule asks for klt erc supply evidence from every block that is
+  # LVS-*matched*, using the very verdict derived above rather than a looser
+  # "an lvs-clean/ directory exists" test -- a block whose deck said the
+  # netlists do not match has a different problem to fix first.
+  erc_entries+=("${label}|${dir}|${gds}|${top}|${has_lvs}")
 done
 
 # Is there an assembled top level? Nothing in the tree publishes one today;
@@ -342,7 +349,7 @@ lines = []
 for item in blocks_spec.split(";"):
     if not item:
         continue
-    label, directory, gds, top = item.split("|")
+    label, directory, gds, top, lvs_matched = item.split("|")
     base = os.path.join(evidence, directory)
     gds_path = os.path.join(base, gds)
     spec_path = os.path.join(base, "erc-supply-spec.json")
@@ -350,17 +357,12 @@ for item in blocks_spec.split(";"):
     proof_path = os.path.join(base, "PROOF-erc.md")
     rel = "layout/evidence/%s" % directory
 
-    # An LVS-clean block is a block whose supply spec is cheap to produce and
+    # An LVS-matched block is one whose supply spec is cheap to produce and
     # therefore owed: item 11's own ERC half needs nothing the LVS run did not
-    # already need. Blocks with no LVS evidence yet are not asked for one.
-    has_lvs = any(
-        name.endswith(".log")
-        for name in (
-            os.listdir(os.path.join(base, "lvs-clean"))
-            if os.path.isdir(os.path.join(base, "lvs-clean"))
-            else []
-        )
-    )
+    # already need. The verdict is the one the caller already derived from the
+    # deck's own "Netlists match." line -- a block whose netlists do not match
+    # has a different problem to fix first, and is not asked for one.
+    has_lvs = lvs_matched == "yes"
 
     present = [
         os.path.isfile(spec_path),
@@ -378,7 +380,7 @@ for item in blocks_spec.split(";"):
                 if not ok
             ]
             fail(
-                "%s has committed LVS-clean evidence but no complete klt erc "
+                "%s is LVS-matched but has no complete klt erc "
                 "supply evidence: missing %s. T1 item 11's ERC half needs "
                 "nothing the LVS run did not already need, so an LVS-clean "
                 "block without it is a gap, not a choice."
@@ -538,7 +540,7 @@ PY
 }
 
 BLOCK_ERC_SPEC=""
-for entry in "${BLOCKS[@]}"; do
+for entry in "${erc_entries[@]}"; do
   BLOCK_ERC_SPEC="${BLOCK_ERC_SPEC}${BLOCK_ERC_SPEC:+;}${entry}"
 done
 
