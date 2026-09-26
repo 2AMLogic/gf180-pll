@@ -134,6 +134,38 @@ k2,2,1
 k2,3,5
 """
 
+#: The magnitude-bound fixture, for `maxmag`.
+#:
+#: Its binding end is the NEGATIVE one, which the repository's own
+#: `predicted_minus_measured_v` column is not: there the positive end happens
+#: to be the larger, so a `max()` masquerading as a magnitude bound would pass
+#: against the real tree and prove nothing. Here the three readings are three
+#: different numbers -- `max` is +3.1 mV, `min` is -5.7 mV, and the bound is
+#: 5.7 mV -- so only an implementation that folds the sign produces the figure.
+#:
+#: The zero row is deliberate too: it belongs to neither side of zero, and the
+#: opposite-side count the OK line prints must not claim it for either.
+SIGNED_CSV = """\
+cell,corner,err_v
+a,c1,+0.0020
+b,c1,-0.0057
+c,c2,+0.0031
+d,c2,0.0000
+"""
+
+#: The rule-8 fixture: two residuals of the SAME quantity, in one table.
+#:
+#: 20 mV against 50 mV, so the linear fit falls 60 % short of the exponential
+#: one -- while the RATIO of the two is 40 %, a true number that is not the
+#: claim "60 % less residual". The `zero_mv` column is the measured-zero
+#: divisor; `cell` gives two different filters over one column, which the
+#: same-text guard must NOT refuse.
+FITS_CSV = """\
+cell,corner,rms_linear_mv,rms_exponential_mv,zero_mv
+a,c1,20,50,0
+b,c1,10,25,0
+"""
+
 #: The contracted-space fixture: `on-icp-trim-rule` must select only the rows
 #: whose (f_ref, trim) pairing the spec table requires -- 47.4 and not 25.4.
 MARGINS_CSV = """\
@@ -152,13 +184,41 @@ a,0.40
 b,1.00
 """
 
+#: The rule-7 SUBTRACTION fixture: a dBc column read against a ratified line.
+#:
+#: The fixture's line is -60 dBc (not the repository's -55), and the numbers
+#: are chosen so the two operators cannot be confused for each other. The
+#: worst corner is -58.5, whose DISTANCE from the line is 1.5 dB and whose
+#: RATIO to it is 0.975 -- and the `ff`/-40 corner is -59.4, 0.6 dB out and
+#: 0.99 of the line. A check that divided where the table says subtract would
+#: produce a number with no decimal in common with either figure.
+SPUR_CSV = """\
+corner,process,temp_c,spur_dbc_at_200mhz
+a,sf,-40,-58.5
+b,ff,-40,-59.4
+c,typical,27,-65.0
+"""
+
 #: Ratified lines, DELIBERATELY NOT THE REPOSITORY'S OWN. Budget 2 is 0.5 V
-#: here against the real 0.6, and the control window is 1.0-3.0 V (2.0 V wide)
-#: against the real 0.9-2.7 (1.8 V). A check that had the repository's numbers
-#: written into it would grade 1.00/0.6 = 1.67 and fail every test below --
-#: which is the point: the constants have to be READ out of these documents.
+#: here against the real 0.6, the control window is 1.0-3.0 V (2.0 V wide)
+#: against the real 0.9-2.7 (1.8 V), and the spur line is -60 dBc against the
+#: real -55. A check that had the repository's numbers written into it would
+#: grade 1.00/0.6 = 1.67 and fail every test below -- which is the point: the
+#: constants have to be READ out of these documents.
+#:
+#: The summary table carries TWO rows linking to `#reference-spur`: the target
+#: row, whose next cell is nothing but the line, and a "Verification owed" row
+#: whose next cell is an owner. spec/pll.md has exactly this pair, and reading
+#: the owner cell as a second statement of the line would report a document
+#: that contradicts itself -- so the fixture keeps both rows present.
 SPEC_TEXT = """\
 # spec
+
+## Summary
+
+| # | Parameter | Target | Notes |
+|---|---|---|---|
+| 7 | [Reference spur](#reference-spur) | ≤ −60 dBc | measured at five corners |
 
 ## Icp trim-code rule
 
@@ -176,6 +236,16 @@ SPEC_TEXT = """\
 A DC rail excursion must consume ≤ 0.5 V of the Vctrl window.
 
 ### Budget 2 -- DC: a full-range rail excursion must consume ≤ 0.5 V of the Vctrl window
+
+## Reference spur
+
+**Target: ≤ −60 dBc**, at `f_ref` offset from the carrier, in lock.
+
+## Verification owed
+
+| Parameter | What is owed | Owner |
+|---|---|---|
+| [Reference spur](#reference-spur) | the mandated grid at the binding point | **#533** |
 
 ## Something else
 """
@@ -197,8 +267,9 @@ PM_MEASURED = (
 
 SPEC_ROWS = (
     # (name, measured cell, verdict, source cell)
-    ("Output band", "Floor 12 MHz; ceiling 20 MHz", "**MET**",
-     f"`sim/{CAMPAIGN}/records/{RECORD}.md`"),
+    ("Output band",
+     "Floor 12 MHz; ceiling 20 MHz; the floor is 40 % short of the ceiling",
+     "**MET**", f"`sim/{CAMPAIGN}/records/{RECORD}.md`"),
     ("Phase margin", PM_MEASURED, "**MET**", "Same record"),
     ("Standby current", "n/a -- no standby state exists", "**N/A**",
      "`spec/pll.md#standby-current`"),
@@ -209,8 +280,8 @@ SPEC_ROWS = (
 #: keeps the two tables one artefact.
 CURVE_SPEC_ROW = (
     "Output band",
-    "Floor 12 MHz; ceiling 20 MHz; 0 non-monotonic curves of 5; "
-    "worst adjacent overlap 5.9 %",
+    "Floor 12 MHz; ceiling 20 MHz; the floor is 40 % short of the ceiling; "
+    "0 non-monotonic curves of 5; worst adjacent overlap 5.9 %",
     "**MET**",
     f"`sim/{CAMPAIGN}/records/{RECORD}.md`",
 )
@@ -231,6 +302,10 @@ PROVENANCE_HEADER = (
 DERIVED_HEADER = (
     "| §5 row | Quoted value | Record(s) | Evidence file | Derivation | "
     "Constant | Scale |\n|---|---|---|---|---|---|---|\n"
+)
+RELATIVE_HEADER = (
+    "| §5 row | Quoted value | Record(s) | Evidence file | Derivation | "
+    "Scale |\n|---|---|---|---|---|---|\n"
 )
 EXCLUSION_HEADER = (
     "| §5 row | Why no value here is re-derived from a CSV |\n|---|---|\n"
@@ -259,6 +334,17 @@ DEFAULT_DERIVED = [
      "max(span_v) / budget2-vctrl-consumption-v", "0.5 V", "1"),
     ("Phase margin", "`50 %`", RECORD, "budget.csv",
      "max(span_v) / dr003-vctrl-window-width-v", "2.0 V", "100"),
+]
+
+#: Rule 8: one measurement against another. The fixture's floor is 12 MHz and
+#: its ceiling 20 MHz, so the floor falls 40 % short of the ceiling -- while
+#: the RATIO of the two is 60 %, a true number that is not the claim. Both
+#: operands are reductions DEFAULT_PROVENANCE already grades, which is rule
+#: 8b: this table may not introduce an ingredient nobody graded.
+DEFAULT_RELATIVE = [
+    ("Output band", "`40 %`", RECORD, "vco_tuning.csv",
+     "max(min(fosc_hz) by bundle+temp_c+vdd_v) shortfall-from "
+     "min(max(fosc_hz) by bundle+temp_c+vdd_v)", "100"),
 ]
 
 DEFAULT_EXCLUSIONS = [
@@ -298,6 +384,13 @@ def _derived_table(entries) -> str:
     return DERIVED_HEADER + body
 
 
+def _relative_table(entries) -> str:
+    body = "".join(
+        "| %s | %s | `%s` | `%s` | `%s` | `%s` |\n" % entry for entry in entries
+    )
+    return RELATIVE_HEADER + body
+
+
 def _exclusion_table(entries) -> str:
     body = "".join("| %s | %s |\n" % entry for entry in entries)
     return EXCLUSION_HEADER + body
@@ -312,13 +405,16 @@ def proposal(
     spec_rows=SPEC_ROWS,
     provenance=None,
     derived=None,
+    relative=None,
     exclusions=None,
     ungraded=None,
     include_5_1=True,
     include_derived=True,
+    include_relative=True,
 ) -> str:
     provenance = DEFAULT_PROVENANCE if provenance is None else provenance
     derived = DEFAULT_DERIVED if derived is None else derived
+    relative = DEFAULT_RELATIVE if relative is None else relative
     exclusions = DEFAULT_EXCLUSIONS if exclusions is None else exclusions
     ungraded = DEFAULT_UNGRADED if ungraded is None else ungraded
     text = "# proposal\n\n## 5. Target specification\n\n"
@@ -328,6 +424,8 @@ def proposal(
         text += _provenance_table(provenance) + "\n"
         if include_derived:
             text += _derived_table(derived) + "\n"
+        if include_relative:
+            text += _relative_table(relative) + "\n"
         text += _exclusion_table(exclusions) + "\n"
         text += _ungraded_table(ungraded) + "\n"
     text += "## 6. Next section\n"
@@ -355,6 +453,9 @@ class _Tree:
         (corners / "mc_cp_dc.csv").write_text(MISMATCH_CSV)
         (corners / "mc_term3.csv").write_text(TERM3_CSV)
         (corners / "budget.csv").write_text(BUDGET_CSV)
+        (corners / "spur_by_corner.csv").write_text(SPUR_CSV)
+        (corners / "signed.csv").write_text(SIGNED_CSV)
+        (corners / "fits.csv").write_text(FITS_CSV)
 
         (root / "spec").mkdir()
         (root / SPEC).write_text(SPEC_TEXT)
@@ -375,6 +476,17 @@ class _Tree:
     def write_evidence(self, name: str, text: str) -> None:
         (self.root / "sim" / CAMPAIGN / "corners" / RECORD
          / name).write_text(text)
+
+    def write_other_evidence(self, name: str, text: str) -> None:
+        """Evidence under the SECOND record, for a multi-record entry.
+
+        Section 5.1 has entries that reduce six records of one file at once, so
+        "the columns this entry may name" is a property of all of them together
+        rather than of whichever one happens to be read first.
+        """
+        corners = self.root / "sim" / CAMPAIGN / "corners" / OTHER
+        corners.mkdir(parents=True, exist_ok=True)
+        (corners / name).write_text(text)
 
     def write_spec(self, text: str) -> None:
         (self.root / SPEC).write_text(text)
@@ -468,7 +580,9 @@ class TestValueRule(_TreeTest):
         drift test covers that direction.
         """
         rows = list(SPEC_ROWS)
-        rows[0] = ("Output band", "Floor 12.0000 MHz; ceiling 20 MHz",
+        rows[0] = ("Output band",
+                   "Floor 12.0000 MHz; ceiling 20 MHz; the floor is 40 % "
+                   "short of the ceiling",
                    "**MET**", f"`sim/{CAMPAIGN}/records/{RECORD}.md`")
         entries = list(DEFAULT_PROVENANCE)
         entries[0] = ("Output band", "`12.0000 MHz`", RECORD, "vco_tuning.csv",
@@ -647,12 +761,31 @@ class TestGroupSequenceDerivations(_TreeTest):
         )
         self.tree.write(proposal(spec_rows=tuple(rows), provenance=provenance))
 
+    @staticmethod
+    def remap_bands(csv_text, bundle, mapping):
+        """CURVES_CSV with one bundle's band codes relabelled.
+
+        One pass over the rows rather than chained `str.replace` calls, which
+        would re-match rows an earlier substitution had just renamed.
+        """
+        out = [csv_text.strip().split("\n")[0]]
+        for line in csv_text.strip().split("\n")[1:]:
+            fields = line.split(",")
+            if fields[0] == bundle:
+                fields[3] = mapping.get(fields[3], fields[3])
+            out.append(",".join(fields))
+        return "\n".join(out) + "\n"
+
     def test_both_curve_derivations_pass_and_report_their_group_count(self):
         self.write()
         result = self.assertPasses()
         self.assertIn("6 quoted values re-derived", result.stdout)
-        self.assertIn("2 of them group-sequence derivations over 7 groups",
-                      result.stdout)
+        # Seven groups: five curves for the monotonicity derivation and two
+        # corners for the overlap one. Three pairs: c1's single 0-1 and c2's
+        # 0-1 and 1-2 -- the count that tells a worst overlap taken over every
+        # adjacent band apart from one taken over a gapped subset of them.
+        self.assertIn("2 of them group-sequence derivations over 7 groups, "
+                      "3 adjacent-axis pair(s) examined", result.stdout)
 
     def test_a_dip_in_one_curve_is_counted(self):
         """The fault the figure exists to exclude: f falls back mid-sweep."""
@@ -691,7 +824,9 @@ class TestGroupSequenceDerivations(_TreeTest):
         ]
         self.write(entries=entries)
         self.assertFails("names column `bundel`",
-                         "which the evidence file does not have")
+                         "kvco_by_point.csv does not have",
+                         "Its columns are: bundle, temp_c, vdd_v, band, "
+                         "vctrl_v, fosc_hz")
 
     def test_an_evidence_file_with_no_data_rows_cannot_report_zero(self):
         self.write(csv_text="bundle,temp_c,vdd_v,band,vctrl_v,fosc_hz\n")
@@ -744,6 +879,62 @@ class TestGroupSequenceDerivations(_TreeTest):
         self.write(csv_text=CURVES_CSV.replace(
             "c1,27,3.30,1,", "c1,27,3.30,3,"))
         self.assertFails("no pair of consecutive `band` values")
+
+    def test_a_partially_gapped_corner_fails(self):
+        """The case a `continue` used to pass quietly (issue #566).
+
+        A corner holding bands `0, 1, 3` has one pair where it looks like it
+        has two, and the figure the derivation reports -- a worst overlap --
+        says nothing about how many intervals it was the worst of. So a gap is
+        an error, not a shorter walk: the wholly gapped corner above already
+        hard-fails, and it would be strange for a corner that is *half* missing
+        to be the one that passes.
+
+        Gaps at the end of the run, at the start, and in the middle are each
+        exercised, because a walk that pairs `k` with `k+1` fails differently
+        at each position.
+
+        The first case is the negative control: c2's bands become `1, 2, 5`,
+        whose surviving `1`-`2` pair is the 5.88 % one the document quotes, so
+        the whole tree still GRADES CLEAN and the gap is the only thing wrong
+        with it. That fixture passed under the `continue` this replaced.
+        """
+        cases = (
+            # bands 1, 2, 5 -- the quoted 5.9 % survives the gap untouched
+            ({"0": "5"}, None, "2 then 5", "1 pair(s) of the 2 that 3 values"),
+            # bands 0, 1, 3 -- gap after the last pair
+            ({"2": "3"}, None, "1 then 3", "1 pair(s) of the 2 that 3 values"),
+            # bands 1, 3, 4 -- gap before the only pair
+            ({"0": "1", "1": "3", "2": "4"}, None,
+             "1 then 3", "1 pair(s) of the 2 that 3 values"),
+            # bands 0, 1, 3, 4 -- a pair on either side of the gap
+            ({"2": "3"},
+             "c2,27,3.30,4,0.90,22000000\nc2,27,3.30,4,1.20,24000000\n"
+             "c2,27,3.30,4,1.50,26000000\n",
+             "1 then 3", "2 pair(s) of the 3 that 4 values"),
+        )
+        for mapping, extra, gap, counted in cases:
+            with self.subTest(mapping=mapping, extra=extra):
+                csv_text = self.remap_bands(CURVES_CSV, "c2", mapping)
+                self.write(csv_text=csv_text + (extra or ""))
+                self.assertFails(
+                    "group c2/27/3.30 has a gap in its `band` run (%s)" % gap,
+                    "pairs `band` with `band`+1",
+                    "would examine %s look like they hold" % counted,
+                )
+
+    def test_a_whole_run_of_bands_is_not_read_as_a_gap(self):
+        """The other direction: relabelling a whole run must still pass.
+
+        Without this, "fail on a gap" could be satisfied by a check that fails
+        on any band code it does not recognise. c2's bands become 5, 6, 7 --
+        still unit-spaced, so still two pairs, and 5.9 % is unchanged because
+        the frequencies did not move.
+        """
+        self.write(csv_text=self.remap_bands(
+            CURVES_CSV, "c2", {"0": "5", "1": "6", "2": "7"}))
+        result = self.assertPasses()
+        self.assertIn("3 adjacent-axis pair(s) examined", result.stdout)
 
     def test_count_over_a_group_scalar_is_rejected(self):
         entries = [
@@ -867,7 +1058,8 @@ class TestSignedTailStatistic(_TreeTest):
             "max(sig3(worst-magnitude(mism_pct by vctrl_v) by seed) by cornor)"
         ))
         self.assertFails("groups by column `cornor`",
-                         "which the evidence file does not have")
+                         "mc_cp_dc.csv does not have",
+                         "Its columns are: corner, seed, vctrl_v, mism_pct")
 
     def test_a_group_predicate_does_not_compose_three_deep(self):
         self.write(reduction=(
@@ -909,6 +1101,117 @@ class TestSignedTailStatistic(_TreeTest):
             "max(sig3(qnet_c) by corner)", "1",
         )])
         self.assertFails("sig3 needs at least two samples")
+
+
+class TestMagnitudeBound(_TreeTest):
+    """`maxmag`: a two-sided bound over a signed column.
+
+    Section 5's `5.7 mV` says the closed loop's measured `VCTRL` travel agrees
+    with what the selected band requires "to within 5.7 mV at every cell" --
+    a claim about BOTH ends of a signed column. `max()` grades its positive
+    end and `min()` its negative one, so either would have graded half of a
+    two-sided bound and printed it as the bound. That is why the figure sat in
+    section 5.1's ungraded list until this aggregate existed, with the reason
+    "the grammar has no magnitude aggregate".
+
+    The fixture's binding end is NEGATIVE on purpose (the repository's is
+    positive), so a `max()` wearing the new name cannot pass these tests by
+    matching the real tree's arithmetic by luck.
+    """
+
+    ROW = (
+        "Supply sensitivity",
+        "the open-loop prediction agrees to within 5.7 mV at every cell",
+        "**MET**",
+        f"`sim/{CAMPAIGN}/records/{RECORD}.md`",
+    )
+
+    def write(self, value="`5.7 mV`", reduction="maxmag(err_v)", scale="1e3",
+              measured=None):
+        rows = list(SPEC_ROWS) + [
+            (self.ROW[0], self.ROW[1] if measured is None else measured,
+             self.ROW[2], self.ROW[3])
+        ]
+        self.tree.write(proposal(
+            spec_rows=tuple(rows),
+            provenance=DEFAULT_PROVENANCE + [
+                (self.ROW[0], value, RECORD, "signed.csv", reduction, scale),
+            ],
+        ))
+
+    def test_the_bound_is_the_largest_magnitude_either_side_of_zero(self):
+        self.write()
+        result = self.assertPasses()
+        # 4 signed values, 2 of them positive against a negative binding end;
+        # the zero row is claimed by neither side.
+        self.assertIn(
+            "1 magnitude bound(s) over 4 signed value(s), 2 of them on the "
+            "far side of zero from the binding end",
+            result.stdout,
+        )
+
+    def test_max_grades_the_other_end_and_fails(self):
+        """The half-bound this aggregate exists to stop being written."""
+        self.write(reduction="max(err_v)")
+        self.assertFails("gives 3.1", "does not round to it")
+
+    def test_min_is_a_signed_end_not_a_bound(self):
+        """`min` returns -5.7 mV: the right magnitude, the wrong figure."""
+        self.write(reduction="min(err_v)")
+        self.assertFails("gives -5.7", "does not round to it")
+
+    def test_the_name_is_not_parsed_as_max(self):
+        """`max` is a PREFIX of `maxmag`, and alternations are first-match.
+
+        If the grammar's name list were read in declaration order without the
+        length sort, a regex engine that did not backtrack would match `max`
+        and then fail on the leading `mag` -- or, worse, a future form added
+        to this grammar would. The passing case above already depends on this;
+        this test names the hazard so a regression is diagnosed rather than
+        puzzled over.
+        """
+        self.write(reduction="maxmag(err_v)", value="`3.1 mV`",
+                   measured="the open-loop prediction agrees to within "
+                            "3.1 mV at every cell")
+        self.assertFails("gives 5.7", "does not round to it")
+
+    def test_a_bound_over_a_single_value_is_that_value(self):
+        self.write(reduction="maxmag(err_v where cell == b)")
+        self.assertFails("a magnitude bound is a bound over a set",
+                         "a bound over one value is that value")
+
+    def test_an_opposite_sign_tie_is_not_ambiguous_here(self):
+        """`worst-magnitude` refuses this tie; `maxmag` must not.
+
+        That verb keeps the selected point's sign, so +x against -x is a coin
+        toss. This aggregate discards the sign, so both ties give the same
+        answer -- and a guard copied without its reason would reject a
+        document that is not wrong.
+        """
+        self.tree.write_evidence(
+            "signed.csv", SIGNED_CSV.replace("c,c2,+0.0031", "c,c2,+0.0057"))
+        self.write()
+        self.assertPasses()
+
+    def test_it_composes_with_grouping(self):
+        """`min(maxmag(COL) by KEY)`: the best corner's own bound, 3.1 mV.
+
+        Different from the flat bound (5.7), so a check that dropped the
+        grouping could not pass this.
+        """
+        self.write(
+            value="`3.1 mV`",
+            reduction="min(maxmag(err_v) by corner)",
+            measured="no corner's own bound is worse than 3.1 mV at best",
+        )
+        result = self.assertPasses()
+        self.assertIn("2 magnitude bound(s) over 4 signed value(s), 1 of "
+                      "them on the far side of zero", result.stdout)
+
+    def test_a_misspelled_column_fails(self):
+        self.write(reduction="maxmag(errr_v)")
+        self.assertFails("names column `errr_v`",
+                         "signed.csv does not have")
 
 
 class TestUngradedFigureDisclosure(_TreeTest):
@@ -1011,7 +1314,10 @@ class TestSelfDefence(_TreeTest):
         entries[0] = ("Output band", "`12 MHz`", RECORD, "vco_tuning.csv",
                       "min(not_a_column)", "1e-6")
         self.tree.write(proposal(provenance=entries))
-        self.assertFails("which the evidence file does not have")
+        self.assertFails("names column `not_a_column`",
+                         "vco_tuning.csv does not have",
+                         "Its columns are: bundle, temp_c, vdd_v, band, "
+                         "fosc_hz, isupply_a")
 
     def test_a_where_clause_selecting_nothing_fails(self):
         entries = list(DEFAULT_PROVENANCE)
@@ -1026,6 +1332,195 @@ class TestSelfDefence(_TreeTest):
                       "count(rows where pass_pm == 1)", "1e-6")
         self.tree.write(proposal(provenance=entries))
         self.assertFails("count reduction must carry scale 1")
+
+
+class TestColumnExistence(_TreeTest):
+    """Every column a reduction names must exist in its evidence (issue #579).
+
+    This is the one validation rule whose absence was INVISIBLE rather than
+    loud, because the natural behaviour of a filter over a column that does not
+    exist is to match no rows -- and a count of no rows is `0`, which is a
+    legitimate and load-bearing value here: `0 of 45 corners` and `0 ratio
+    errors of 235 chain points` are both graded figures on the real tree. A
+    mistyped `Status` in `count(rows where Status == PASS)` returned 0, equalled
+    the quoted 0, and printed OK: a green check asserting a number it had never
+    computed.
+
+    Six of the nine cases below printed `OK` before this check existed, and each
+    of those says so in its docstring -- because "it fails now" is only half the
+    claim, and the half that matters is what it used to do instead. The other
+    three already failed, but for the wrong reason ("selected no rows", which
+    reads as a too-narrow filter rather than a column that is not there, and the
+    two have opposite fixes).
+    """
+
+    def _grade(self, quoted, reduction, evidence="vco_tuning.csv", scale="1"):
+        """One extra graded entry on the Output band row, and the row to match.
+
+        The figure is appended to the section 5 row verbatim so that rule 3 is
+        satisfied and the failure under test is the only one reported.
+        """
+        rows = list(SPEC_ROWS)
+        rows[0] = (
+            "Output band",
+            "Floor 12 MHz; ceiling 20 MHz; the floor is 40 %% short of the "
+            "ceiling; %s" % quoted,
+            "**MET**",
+            f"`sim/{CAMPAIGN}/records/{RECORD}.md`",
+        )
+        entries = list(DEFAULT_PROVENANCE) + [
+            ("Output band", "`%s`" % quoted, RECORD, evidence, reduction, scale),
+        ]
+        self.tree.write(proposal(spec_rows=tuple(rows), provenance=entries))
+
+    def test_a_zero_count_over_a_mistyped_where_column_fails(self):
+        """THE dangerous case: a filtered count whose honest answer is zero.
+
+        Spelled right, `where bundle == nonesuch` selects nothing and 0 is the
+        true count -- asserted first, so this test cannot pass merely because
+        the entry is broken some other way. Mistyped, the filter selects nothing
+        FOR A DIFFERENT REASON, and before this check the two were
+        indistinguishable: both printed OK against the quoted 0.
+        """
+        self._grade("0 corners out of band",
+                    "count(rows where bundle == nonesuch)")
+        self.assertPasses()
+        self._grade("0 corners out of band",
+                    "count(rows where bundel == nonesuch)")
+        self.assertFails(
+            "where-clause names column `bundel`",
+            "sim/%s/corners/%s/vco_tuning.csv does not have"
+            % (CAMPAIGN, RECORD),
+            "Its columns are: bundle, temp_c, vdd_v, band, fosc_hz, isupply_a",
+            "never a passing zero",
+        )
+
+    def test_a_mistyped_where_column_under_not_equals_fails(self):
+        """`!=` fails the other way: a total silently becomes a zero.
+
+        `count(rows where band != 99)` is the whole table (6 rows). Mistype the
+        column and the same reduction returned 0 -- so a mistyped column could
+        turn a count of everything into a count of nothing, which is a much
+        easier number to quote by accident.
+        """
+        self._grade("6 corners measured", "count(rows where band != 99)")
+        self.assertPasses()
+        self._grade("6 corners measured", "count(rows where bnad != 99)")
+        self.assertFails("where-clause names column `bnad`",
+                         "vco_tuning.csv does not have")
+
+    def test_a_mistyped_group_key_fails_rather_than_pooling(self):
+        """Before this check, a mistyped `by` key pooled every row silently.
+
+        `max(min(fosc_hz) by bundel)` puts all six rows in one group keyed on
+        the empty string, so the guaranteed floor collapses into the flat
+        minimum: it returned 5 MHz, and a document quoting 5 MHz would have been
+        graded green against a reduction that had stopped grouping at all.
+        """
+        self._grade("5 MHz floor", "max(min(fosc_hz) by bundel)", scale="1e-6")
+        self.assertFails("groups by column `bundel`",
+                         "vco_tuning.csv does not have",
+                         "Its columns are: bundle, temp_c, vdd_v, band, "
+                         "fosc_hz, isupply_a")
+
+    def test_a_mistyped_distinct_key_fails_rather_than_counting_one(self):
+        """`count(distinct bundel)` counted 1 -- one empty-string key.
+
+        Any document quoting `1` for a distinct count would have passed against
+        evidence the reduction never actually read.
+        """
+        self._grade("1 distinct bundle", "count(distinct bundel)")
+        self.assertFails("counts distinct values of column `bundel`",
+                         "vco_tuning.csv does not have")
+
+    def test_a_mistyped_aggregated_column_inside_a_group_fails(self):
+        """The inner aggregate's column, which only the flat form checked.
+
+        `max(min(fosc_hzz) by ...)` used to fail with "selected no rows" -- a
+        failure, but one that reads as "the where-clause was too narrow" rather
+        than "that column does not exist", and the two have opposite fixes.
+        """
+        self._grade("12 MHz guaranteed",
+                    "max(min(fosc_hzz) by bundle+temp_c+vdd_v)", scale="1e-6")
+        self.assertFails("names column `fosc_hzz`",
+                         "vco_tuning.csv does not have")
+
+    def test_a_mistyped_sequence_axis_column_fails(self):
+        """The ordering column of a group-sequence derivation.
+
+        This position was already covered, and is asserted here so that routing
+        it through the shared check did not lose it -- what it gains is the
+        evidence source in the message.
+        """
+        self._grade(
+            "0 non-monotonic curves of 5",
+            "count(non-monotonic(fosc_hz by vctrl_vv) "
+            "by bundle+temp_c+vdd_v+band)",
+            evidence="kvco_by_point.csv",
+        )
+        self.assertFails("names column `vctrl_vv`",
+                         "kvco_by_point.csv does not have")
+
+    def test_the_icp_trim_rule_predicate_needs_its_implicit_columns(self):
+        """The two column names no reduction spells out.
+
+        `on-icp-trim-rule` reads `f_ref_hz` and `trim_units` itself, so a
+        reduction carrying it over evidence that has neither matched no rows at
+        all -- and `count(rows where on-icp-trim-rule)` therefore returned a
+        clean, passing 0 over a CSV with nothing to do with the trim rule.
+        """
+        self._grade("0 contracted corners",
+                    "count(rows where on-icp-trim-rule)")
+        self.assertFails(
+            "`on-icp-trim-rule` predicate reads column `f_ref_hz`",
+            "vco_tuning.csv does not have",
+        )
+
+    def test_the_icp_trim_rule_predicate_needs_both_of_them(self):
+        """Half the pairing is not the pairing: `trim_units` is required too."""
+        self.tree.write_evidence(
+            "half_rule.csv", "f_ref_hz,pm_min_deg\n1e6,47.41\n2e6,60.40\n")
+        self._grade("0 contracted corners",
+                    "count(rows where on-icp-trim-rule)",
+                    evidence="half_rule.csv")
+        self.assertFails(
+            "`on-icp-trim-rule` predicate reads column `trim_units`",
+            "half_rule.csv does not have",
+            "Its columns are: f_ref_hz, pm_min_deg",
+        )
+
+    def test_a_column_only_some_of_the_records_have_is_refused(self):
+        """A multi-record entry may only name columns ALL of its records have.
+
+        Section 5.1's closed-loop period-jitter figures reduce six records of
+        one filename at once. If one of them renamed the column, a reduction
+        naming it would read a SUBSET of the evidence -- the rows that still
+        have it -- and quietly grade a worst case over part of the grid. So the
+        usable columns are the ones every row carries, and the failure lists
+        exactly those.
+        """
+        self.tree.write_other_evidence(
+            "vco_tuning.csv", TUNING_CSV.replace("fosc_hz", "f_osc_hz"))
+        rows = list(SPEC_ROWS)
+        rows[0] = (
+            "Output band",
+            "Floor 12 MHz; ceiling 20 MHz",
+            "**MET**",
+            f"`sim/{CAMPAIGN}/records/{RECORD}.md`, "
+            f"`sim/{CAMPAIGN}/records/{OTHER}.md`",
+        )
+        entries = list(DEFAULT_PROVENANCE)
+        entries[0] = ("Output band", "`12 MHz`", f"{RECORD}`, `{OTHER}",
+                      "vco_tuning.csv",
+                      "max(min(fosc_hz) by bundle+temp_c+vdd_v)", "1e-6")
+        self.tree.write(proposal(spec_rows=tuple(rows), provenance=entries))
+        self.assertFails(
+            "names column `fosc_hz`",
+            "sim/%s/corners/%s/vco_tuning.csv; "
+            "sim/%s/corners/%s/vco_tuning.csv does not have"
+            % (CAMPAIGN, RECORD, CAMPAIGN, OTHER),
+            "Its columns are: bundle, temp_c, vdd_v, band, isupply_a",
+        )
 
 
 class TestInRecordTableEvidence(_TreeTest):
@@ -1304,7 +1799,7 @@ class TestDerivedAgainstARatifiedLine(_TreeTest):
              "count(rows) / budget2-vctrl-consumption-v", "0.5 V", "1"),
         ]
         self._derived(spec_rows=tuple(rows), derived=entries)
-        self.assertFails("the numerator is a count", "is not a ratio")
+        self.assertFails("the measured operand is a count", "is not a ratio")
 
     def test_the_scale_is_applied_to_the_ratio(self):
         """The two entries share a numerator and a row; only scale differs."""
@@ -1365,6 +1860,288 @@ class TestDerivedAgainstARatifiedLine(_TreeTest):
     def test_an_empty_derived_table_fails(self):
         self._derived(derived=[])
         self.assertFails("no non-empty section 5.1 derived-figure table")
+
+
+#: The section 5 row the subtraction tests grade against. Both distances have
+#: to appear verbatim in it, so the tests that override the row build on this
+#: string rather than retyping a shorter one and losing them.
+SPUR_MEASURED = (
+    "Worst −58.5 dBc scaled to the binding point; the two cold corners are "
+    "1.5 dB and 0.6 dB over the line"
+)
+
+SPUR_ROW = (
+    "Reference spur", SPUR_MEASURED, "**UNMET at 2 corners**",
+    f"`sim/{CAMPAIGN}/records/{RECORD}.md`",
+)
+
+SPUR_DERIVED = [
+    ("Reference spur", "`1.5 dB`", RECORD, "spur_by_corner.csv",
+     "max(spur_dbc_at_200mhz) - reference-spur-line-dbc", "−60 dBc", "1"),
+    ("Reference spur", "`0.6 dB`", RECORD, "spur_by_corner.csv",
+     "max(spur_dbc_at_200mhz where process == ff and temp_c == -40) "
+     "- reference-spur-line-dbc", "−60 dBc", "1"),
+]
+
+
+class TestDistanceFromARatifiedLine(_TreeTest):
+    """Rule 7's second operator: a measurement's DISTANCE from a spec line.
+
+    A ratio answers "how many times the allowance", which is what a budget row
+    states; a distance answers "how far past the line", which is what a dBc row
+    states. Until the subtraction existed the real proposal could not write the
+    reference spur's two cold corners as figures at all -- it wrote them as the
+    range `0.1-0.5 dB`, which the range guard refuses, and the ungraded list
+    carried the pair as a declaration. Both ends were already graded as dBc
+    values; only the operator was missing.
+
+    The fixture's line is -60 dBc and its worst corner is -58.5, so the
+    distance is 1.5 dB and the RATIO is 0.975 -- no decimal in common, which is
+    what makes "it divided where the table says subtract" a visible failure
+    rather than a near miss.
+    """
+
+    def _spur(self, spec_rows=None, derived=None, **kwargs):
+        rows = tuple(SPEC_ROWS) + (SPUR_ROW,) if spec_rows is None else spec_rows
+        entries = list(DEFAULT_DERIVED) + SPUR_DERIVED if derived is None else derived
+        self.tree.write(proposal(spec_rows=rows, derived=entries, **kwargs))
+
+    def test_a_distance_passes_and_the_line_is_reported(self):
+        self._spur()
+        result = self.assertPasses()
+        self.assertIn("4 further figure(s) derived against 3 ratified",
+                      result.stdout)
+        self.assertIn("reference-spur-line-dbc = -60", result.stdout)
+        self.assertIn("all 4 section 5 rows accounted for", result.stdout)
+
+    def test_dividing_where_the_table_subtracts_is_a_different_number(self):
+        """The operator is load-bearing: 0.975 is not 1.5."""
+        entries = list(DEFAULT_DERIVED) + [
+            ("Reference spur", "`1.5 dB`", RECORD, "spur_by_corner.csv",
+             "max(spur_dbc_at_200mhz) / reference-spur-line-dbc", "−60 dBc", "1"),
+            SPUR_DERIVED[1],
+        ]
+        self._spur(derived=entries)
+        self.assertFails("over the ratified -60 that is 0.975",
+                         "does not round to it")
+
+    def test_a_drifted_distance_fails(self):
+        rows = tuple(SPEC_ROWS) + (
+            ("Reference spur", SPUR_MEASURED.replace("1.5 dB", "1.4 dB"),
+             "**UNMET at 2 corners**",
+             f"`sim/{CAMPAIGN}/records/{RECORD}.md`"),
+        )
+        entries = list(DEFAULT_DERIVED) + [
+            ("Reference spur", "`1.4 dB`", RECORD, "spur_by_corner.csv",
+             "max(spur_dbc_at_200mhz) - reference-spur-line-dbc", "−60 dBc", "1"),
+            SPUR_DERIVED[1],
+        ]
+        self._spur(spec_rows=rows, derived=entries)
+        self.assertFails("its distance from the ratified -60 is 1.5",
+                         "does not round to it")
+
+    def test_the_line_is_read_from_the_spec_not_the_check(self):
+        """Re-ratify the line in both places and the figure fails with it.
+
+        -58.5 is 1.5 dB past -60 and 0.5 dB past -59, so moving the line moves
+        both distances -- which is the whole reason the constant is read rather
+        than written down here.
+        """
+        self._spur()
+        self.tree.write_spec(SPEC_TEXT.replace("−60 dBc", "−59 dBc"))
+        self.assertFails("the Constant column states −60 dBc",
+                         "reference-spur-line-dbc` reads -59")
+
+    def test_the_owed_row_is_not_a_second_statement_of_the_line(self):
+        """Dropping the target line leaves ONE statement, not two.
+
+        spec/pll.md's "Verification owed" table links to the same section as
+        the summary table's target row, so a looser match would read its owner
+        cell as a corroborating statement and this tree would pass with the
+        line stated once. The fixture keeps that row present; removing only the
+        `**Target:**` line has to be enough to leave the constant
+        uncorroborated.
+        """
+        self._spur()
+        self.tree.write_spec(
+            SPEC_TEXT.replace("**Target: ≤ −60 dBc**", "**Target: as below**")
+        )
+        self.assertFails("reference-spur-line-dbc",
+                         "found 1 statement(s) of this ratified line")
+
+    def test_two_statements_of_the_line_that_disagree_fail(self):
+        self._spur()
+        self.tree.write_spec(
+            SPEC_TEXT.replace("**Target: ≤ −60 dBc**", "**Target: ≤ −62 dBc**")
+        )
+        self.assertFails("reference-spur-line-dbc",
+                         "stated inconsistently", "is a spec question")
+
+    def test_a_negative_literal_in_a_where_clause_is_not_the_operator(self):
+        """`where temp_c == -40` must not be split as the subtraction.
+
+        The operator carries whitespace on both sides and a negative literal
+        does not, which is what keeps the two apart. With the operator removed
+        the derivation is unreadable -- it must say so rather than quietly
+        deriving `max(... temp_c ==` minus `40) ...`.
+        """
+        entries = list(DEFAULT_DERIVED) + [
+            SPUR_DERIVED[0],
+            ("Reference spur", "`0.6 dB`", RECORD, "spur_by_corner.csv",
+             "max(spur_dbc_at_200mhz where process == ff and temp_c == -40)",
+             "−60 dBc", "1"),
+        ]
+        self._spur(derived=entries)
+        self.assertFails("cannot read the derivation", "<reduction> <op>")
+
+    def test_a_count_as_the_measured_operand_is_refused(self):
+        rows = tuple(SPEC_ROWS) + (
+            ("Reference spur", SPUR_MEASURED + "; 3 corners", "**UNMET**",
+             f"`sim/{CAMPAIGN}/records/{RECORD}.md`"),
+        )
+        entries = list(DEFAULT_DERIVED) + SPUR_DERIVED + [
+            ("Reference spur", "`3`", RECORD, "spur_by_corner.csv",
+             "count(rows) - reference-spur-line-dbc", "−60 dBc", "1"),
+        ]
+        self._spur(spec_rows=rows, derived=entries)
+        self.assertFails("the measured operand is a count",
+                         "a count minus one is not a distance")
+
+
+class TestRelativeToAnotherMeasurement(_TreeTest):
+    """Rule 8: a figure whose second ingredient is measured, not ratified.
+
+    `A shortfall-from B` is `(B - A) / B`. The repository figure it exists for
+    is `33 %` -- how much less residual a straight line leaves than a single
+    exponential over the same post-ramp samples. Its divisor is another column
+    of the same CSV, so rule 7's registry has no line to resolve, which is
+    exactly what section 5.1's ungraded list said before this table existed.
+
+    The fixture's two residuals are 20 and 50, so the shortfall is 60 % and the
+    RATIO is 40 %: a check that divided where the table says "falls short of"
+    would produce a number with no digit in common with the figure.
+    """
+
+    ROW = (
+        "Fit residual",
+        "a straight line leaves 60 % less residual -- 20 mV rms against "
+        "50 mV, over 2 rows; the degenerate self-comparison is 0 %; a zero "
+        "divisor reads 0 mV; one cell's 10 mV is 50 % short of another's "
+        "20 mV",
+        "**MET**",
+        f"`sim/{CAMPAIGN}/records/{RECORD}.md`",
+    )
+    LEFT = "max(rms_linear_mv)"
+    RIGHT = "max(rms_exponential_mv)"
+
+    #: Every operand rule 8b can legally see, graded in the first table.
+    OPERANDS = [
+        ("Fit residual", "`20 mV`", RECORD, "fits.csv",
+         "max(rms_linear_mv)", "1"),
+        ("Fit residual", "`50 mV`", RECORD, "fits.csv",
+         "max(rms_exponential_mv)", "1"),
+        ("Fit residual", "`2 rows`", RECORD, "fits.csv", "count(rows)", "1"),
+        ("Fit residual", "`0 mV`", RECORD, "fits.csv", "max(zero_mv)", "1"),
+        ("Fit residual", "`10 mV`", RECORD, "fits.csv",
+         "max(rms_linear_mv where cell == b)", "1"),
+        ("Fit residual", "`20 mV`", RECORD, "fits.csv",
+         "max(rms_linear_mv where cell == a)", "1"),
+    ]
+
+    def write(self, value="`60 %`", derivation=None, scale="100",
+              operands=None):
+        rows = list(SPEC_ROWS) + [self.ROW]
+        entries = self.OPERANDS if operands is None else operands
+        self.tree.write(proposal(
+            spec_rows=tuple(rows),
+            provenance=DEFAULT_PROVENANCE + entries,
+            relative=[(
+                "Fit residual", value, RECORD, "fits.csv",
+                ("%s shortfall-from %s" % (self.LEFT, self.RIGHT))
+                if derivation is None else derivation,
+                scale,
+            )],
+        ))
+
+    def test_the_shortfall_is_graded_and_counted(self):
+        self.write()
+        result = self.assertPasses()
+        self.assertIn(
+            "1 figure(s) derived as one measurement against another, both "
+            "operands graded in the first table",
+            result.stdout,
+        )
+
+    def test_the_ratio_is_not_the_figure(self):
+        """20/50 is 40 %, a true number that is not "60 % less"."""
+        self.write(value="`40 %`")
+        self.assertFails("20 short of 50 is 60", "does not round to it")
+
+    def test_the_operands_are_not_interchangeable(self):
+        """(20 - 50)/20 is -150 %: the direction is part of the claim."""
+        self.write(derivation="%s shortfall-from %s" % (self.RIGHT, self.LEFT))
+        self.assertFails("50 short of 20 is -150", "does not round to it")
+
+    def test_an_operand_nobody_graded_is_refused(self):
+        """Rule 8b: this table may not introduce an ungraded ingredient."""
+        self.write(derivation="mean(rms_linear_mv) shortfall-from %s"
+                              % self.RIGHT)
+        self.assertFails(
+            "`mean(rms_linear_mv)` is not graded in the value-provenance "
+            "table",
+            "introduces an ingredient nobody graded",
+        )
+
+    def test_both_ungraded_operands_are_named(self):
+        self.write(derivation="mean(rms_linear_mv) shortfall-from "
+                              "mean(rms_exponential_mv)")
+        self.assertFails("`mean(rms_linear_mv)` is",
+                         "`mean(rms_exponential_mv)` is")
+
+    def test_a_column_compared_with_itself_is_refused(self):
+        """`1 - A/A` is 0 for any A, and 0 is a legitimate figure here."""
+        self.write(value="`0 %`",
+                   derivation="%s shortfall-from %s" % (self.LEFT, self.LEFT))
+        self.assertFails("both sides of the derivation are the same reduction",
+                         "0 for any evidence at all")
+
+    def test_the_same_column_under_two_filters_is_allowed(self):
+        """The guard above refuses identical TEXT, not a repeated column."""
+        self.write(
+            value="`50 %`",
+            derivation="max(rms_linear_mv where cell == b) shortfall-from "
+                       "max(rms_linear_mv where cell == a)",
+        )
+        self.assertPasses()
+
+    def test_a_count_is_not_a_measurement(self):
+        self.write(derivation="count(rows) shortfall-from %s" % self.RIGHT)
+        self.assertFails("`count(rows)` is a count",
+                         "a relative difference between two measurements")
+
+    def test_a_measured_zero_divisor_is_refused(self):
+        self.write(derivation="%s shortfall-from max(zero_mv)" % self.LEFT)
+        self.assertFails("`max(zero_mv)` measures zero",
+                         "nothing for the other measurement to fall short of")
+
+    def test_a_symbolic_operator_is_not_this_form(self):
+        """Rule 7's `/` between two reductions is not silently accepted."""
+        self.write(derivation="%s / %s" % (self.LEFT, self.RIGHT))
+        self.assertFails("cannot read the derivation",
+                         "<reduction> shortfall-from <reduction>")
+
+    def test_a_figure_missing_from_the_section_5_row_fails(self):
+        self.write(value="`61 %`")
+        self.assertFails("the relative figure does not appear in that section "
+                         "5 row")
+
+    def test_deleting_the_table_is_not_a_way_to_pass(self):
+        self.tree.write(proposal(include_relative=False))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no non-empty section 5.1 relative-figure table",
+                      result.stderr)
+        self.assertIn("ungraded and silent", result.stderr)
 
 
 class TestARangeIsNotAFigure(_TreeTest):
@@ -1467,6 +2244,24 @@ class TestTheRealTree(unittest.TestCase):
         )
         self.assertGreaterEqual(groups, 500, msg=result.stdout)
 
+    def test_the_overlap_derivation_examined_every_adjacent_band_pair(self):
+        """The same anti-vacuity assertion one level down (issue #566).
+
+        The group count says 63 corners were examined; it does not say how many
+        of each corner's seven adjacent band pairs were. A gap in a corner's
+        band codes is now an error rather than a skipped pair, so the floor
+        asserted here is the whole grid's worth of pairs -- again a floor, not a
+        second copy of a number §5.1 already states.
+        """
+        result = subprocess.run(
+            ["bash", str(CHECK)], capture_output=True, text=True, cwd=REPO_ROOT
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        match = re.search(r"(\d+) adjacent-axis pair\(s\) examined",
+                          result.stdout)
+        self.assertIsNotNone(match, msg=result.stdout)
+        self.assertGreaterEqual(int(match.group(1)), 400, msg=result.stdout)
+
     def test_it_derives_the_ratio_figures_against_the_ratified_lines(self):
         """Rule 7 on the real tree, asserted from the other side.
 
@@ -1482,10 +2277,35 @@ class TestTheRealTree(unittest.TestCase):
         match = re.search(r"(\d+) further figure\(s\) derived against (\d+) "
                           r"ratified constant", result.stdout)
         self.assertIsNotNone(match, msg=result.stdout)
-        self.assertGreaterEqual(int(match.group(1)), 2, msg=result.stdout)
-        self.assertGreaterEqual(int(match.group(2)), 2, msg=result.stdout)
+        self.assertGreaterEqual(int(match.group(1)), 4, msg=result.stdout)
+        self.assertGreaterEqual(int(match.group(2)), 3, msg=result.stdout)
         self.assertIn("budget2-vctrl-consumption-v", result.stdout)
         self.assertIn("dr003-vctrl-window-width-v", result.stdout)
+        self.assertIn("reference-spur-line-dbc", result.stdout)
+
+    def test_the_spur_line_it_reads_is_the_one_the_spec_ratifies(self):
+        """The −55 dBc line, resolved out of spec/pll.md's two statements.
+
+        This is the one resolved constant whose value is asserted here rather
+        than only named, because the two Reference spur distances are small
+        (0.5 dB and 0.1 dB) and a line read a few dB away would still produce
+        a plausible-looking pair. `check-spur-derivation-arithmetic.sh` reads
+        the same line independently for its own rule 6; if the spec re-ratifies
+        it, both checks and this assertion have to move in that same commit.
+        """
+        result = subprocess.run(
+            ["bash", str(CHECK)], capture_output=True, text=True, cwd=REPO_ROOT
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("reference-spur-line-dbc = -55", result.stdout)
+        spec = (REPO_ROOT / SPEC).read_text(encoding="utf-8")
+        self.assertEqual(
+            2,
+            len(re.findall(r"(?:≤|<=)\s*−55\s*dBc", spec)),
+            msg="the spur line must be stated exactly twice in spec/pll.md -- "
+                "the summary-table target cell and the '## Reference spur' "
+                "target line",
+        )
 
     def test_it_reports_the_ungraded_figures_it_disclosed(self):
         result = subprocess.run(

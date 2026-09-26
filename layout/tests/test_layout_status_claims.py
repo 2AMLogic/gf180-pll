@@ -19,6 +19,8 @@ relative position and runs it there.  No PDK, no KLayout, no layout input.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import shutil
 import subprocess
 import tempfile
@@ -49,6 +51,24 @@ AUDIT_GEOMETRY = {
 }
 
 LVS_MATCH_LINE = "INFO : Congratulations! Netlists match.\n"
+
+# The klt version the fixture's .github/workflows/ci.yml pins. The ERC rule
+# (issue #565) reads the pin from that file rather than restating it, so the
+# fixture must carry one for the rule to have anything to grade against -- and
+# a report claiming a different version must fail, which is what
+# test_a_report_from_an_unpinned_klt_is_caught drives.
+PINNED_KLT = "0.6.0"
+
+CI_WORKFLOW = """\
+name: CI
+on: [push]
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install klt (klayout-tools) for the signoff tier check
+        run: pip install 'klayout-tools==%s'
+"""
 
 # The scope rule reads a ~100-character window either side of a negation,
 # so a synthetic document needs real distance between the boilerplate
@@ -126,6 +146,23 @@ class _Tree:
         shutil.copy2(SCRIPT, root / "layout" / "lib" / SCRIPT.name)
         self.write_spec(RATIFIED_SPEC)
         self.write_audit()
+        self.write_ci_workflow()
+
+    def write_ci_workflow(self, pin: str | None = PINNED_KLT) -> None:
+        """Write .github/workflows/ci.yml, the ERC rule's source of truth for
+        which klt version a committed klt artifact must come from.
+
+        ``pin=None`` writes a workflow with no ``klayout-tools==`` line at all,
+        which the rule must report rather than pass over -- a version claim
+        gradeable against nothing is the failure mode, not a free pass.
+        """
+        base = self.root / ".github" / "workflows"
+        base.mkdir(parents=True, exist_ok=True)
+        text = CI_WORKFLOW % pin if pin is not None else CI_WORKFLOW.split("      - name")[0]
+        (base / "ci.yml").write_text(text)
+
+    def remove_ci_workflow(self) -> None:
+        (self.root / ".github" / "workflows" / "ci.yml").unlink()
 
     def write_spec(self, text: str) -> None:
         (self.root / "spec" / "pll.md").write_text(text)
@@ -161,7 +198,9 @@ class _Tree:
     def remove_audit(self) -> None:
         (self.root / "layout" / "evidence" / "area-audit" / "area-audit.md").unlink()
 
-    def add_block(self, evidence_dir: str, gds: str, *, drc: bool, lvs: bool) -> None:
+    def add_block(
+        self, evidence_dir: str, gds: str, *, drc: bool, lvs: bool, erc: bool = True
+    ) -> None:
         base = self.root / "layout" / "evidence" / evidence_dir
         base.mkdir(parents=True, exist_ok=True)
         (base / gds).write_bytes(b"")
@@ -171,6 +210,123 @@ class _Tree:
         if lvs:
             (base / "lvs-clean").mkdir(exist_ok=True)
             (base / "lvs-clean" / "lvs.stdout.log").write_text(LVS_MATCH_LINE)
+            # An LVS-clean block owes klt erc supply evidence (issue #565), so
+            # the default fixture supplies a valid set. Tests that want the
+            # missing-evidence failure pass erc=False.
+            if erc:
+                self.add_erc(evidence_dir, gds)
+
+    def add_erc(
+        self,
+        evidence_dir: str,
+        gds: str,
+        *,
+        ties: bool = True,
+        disclosure_kind: str | None = None,
+        disclosure_reason: str = "nothing in this stream to narrow or bound",
+        extra_spec_keys: dict | None = None,
+        klt_version: str | None = None,
+        input_hash: str | None = None,
+        antenna_skipped: int = 3,
+        proof_antenna_claim: str | None = None,
+        proof: bool = True,
+    ) -> None:
+        """Write a block's ``klt erc`` supply evidence set (issue #565).
+
+        Valid by default -- both provenance hashes computed from the files
+        actually written, the pinned klt version, a declared-and-checked tie,
+        and a PROOF-erc.md stating the report's own antenna coverage. Every
+        keyword exists to break exactly one of those, so each half of the ERC
+        rule can be driven to a known failure.
+        """
+        base = self.root / "layout" / "evidence" / evidence_dir
+        base.mkdir(parents=True, exist_ok=True)
+
+        spec: dict = {
+            "_description": "fixture supply spec",
+            "stackup": [
+                {"name": "poly2", "layer": "30/0", "role": "gate"},
+                {"name": "metal1", "layer": "34/0", "label_layer": "34/10"},
+            ],
+            "vias": [
+                {"name": "contact", "layer": "33/0", "between": ["poly2", "metal1"]}
+            ],
+            "nets": [{"name": "VDD", "kind": "supply"}],
+        }
+        if ties:
+            spec["ties"] = [
+                {
+                    "name": "nwell_vdd",
+                    "well_layer": "21/0",
+                    "tap_layer": "22/0",
+                    "tap_requires": ["32/0"],
+                    "connect_to": "metal1",
+                    "net": "VDD",
+                }
+            ]
+        if disclosure_kind is not None:
+            spec["ties_disclosure"] = {
+                "kind": disclosure_kind,
+                "reason": disclosure_reason,
+            }
+        if extra_spec_keys:
+            spec.update(extra_spec_keys)
+        spec_path = base / "erc-supply-spec.json"
+        spec_path.write_text(json.dumps(spec, indent=2) + "\n")
+
+        def digest(path: Path) -> str:
+            return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+        skipped = [
+            {"id": 'antenna:["gate%d","metal1"]' % i, "reason": "missing_antenna_pdk"}
+            for i in range(antenna_skipped)
+        ]
+        report = {
+            "schema_version": 1,
+            "file": "layout/evidence/%s/%s" % (evidence_dir, gds),
+            "spec": "layout/evidence/%s/erc-supply-spec.json" % evidence_dir,
+            "pdk": None,
+            "erc_findings": [],
+            "erc_finding_count": 0,
+            "erc_status": "clean",
+            "status": "not_checked",
+            "erc_coverage": {
+                "checked": (['erc.missing_tie:["nwell_vdd"]'] if ties else []),
+                "skipped": [],
+                "inapplicable": (
+                    []
+                    if ties
+                    else [
+                        {
+                            "id": "erc.missing_tie:[]",
+                            "reason": "ties_disclosed_%s"
+                            % (disclosure_kind or "unexpressible"),
+                        }
+                    ]
+                ),
+                "layers_in_stream_without_declaration": [],
+            },
+            "coverage": {"scope": "antenna", "checked": [], "skipped": skipped},
+            "provenance": {
+                "klt_version": klt_version or PINNED_KLT,
+                "input": {"content_hash": input_hash or digest(base / gds)},
+                "spec": {"content_hash": digest(spec_path)},
+                "devices": [],
+            },
+        }
+        (base / "erc-report.json").write_text(json.dumps(report, indent=2) + "\n")
+
+        if proof:
+            claim = (
+                proof_antenna_claim
+                if proof_antenna_claim is not None
+                else "checked: 0, skipped: %d" % antenna_skipped
+            )
+            (base / "PROOF-erc.md").write_text(
+                "# fixture ERC proof\n\n"
+                "Antenna coverage: %s, reason `missing_antenna_pdk` on every one.\n"
+                % claim
+            )
 
     def add_assembled_top(self) -> None:
         base = self.root / "layout" / "evidence" / "pll-top-layout"
@@ -780,6 +936,255 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         )
         result = self.tree.run()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    # --- The ERC rule (issue #565) ------------------------------------------
+    #
+    # `layout/evidence/vco-layout/erc-report.json` was the only `klt erc`
+    # supply report in the repository, and it had gone stale in three ways at
+    # once: a `/tmp` scratch `file` field, a `provenance.klt_version` behind
+    # the CI pin, and a free-text `_ties_omitted` rationale citing an upstream
+    # bug that had since been fixed. Each of those is a claim about a
+    # committed file that a committed file could have been checked against --
+    # these tests drive the rule that now does, against synthetic trees where
+    # the answer is known.
+
+    def _all_four_erc_ready(self):
+        # Every block LVS-matched, so every block is owed -- and, by
+        # add_block's default, every block gets a valid erc-supply-spec.json
+        # / erc-report.json / PROOF-erc.md set from add_erc. Individual tests
+        # then break exactly one artifact on one block.
+        self._all_four(lvs_for=[d for d, _ in BLOCKS])
+
+    def test_lvs_matched_block_without_erc_evidence_is_caught(self):
+        for evidence_dir, gds in BLOCKS:
+            self.tree.add_block(evidence_dir, gds, drc=True, lvs=True, erc=False)
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "layout/evidence/vco-layout is LVS-matched but has no complete "
+            "klt erc supply evidence: missing erc-supply-spec.json, "
+            "erc-report.json, PROOF-erc.md.",
+            result.stderr,
+        )
+
+    def test_a_stale_erc_report_input_hash_is_caught(self):
+        # The report describes a file that is not the one committed beside
+        # it -- exactly the drift a `/tmp` scratch `file` field let through.
+        self._all_four_erc_ready()
+        self.tree.add_erc(
+            "vco-layout", "vco_block.gds", input_hash="sha256:" + "0" * 64
+        )
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "layout/evidence/vco-layout/erc-report.json's "
+            "provenance.input.content_hash is", result.stderr,
+        )
+        self.assertIn("re-run `klt erc`", result.stderr)
+
+    def test_a_stale_erc_report_spec_hash_is_caught(self):
+        self._all_four_erc_ready()
+        self.tree.add_erc(
+            "divider-chain-layout",
+            "divider_chain.gds",
+            input_hash=None,
+        )
+        # Corrupt only the recorded spec hash, leaving the input hash valid.
+        report_path = (
+            self.tree.root
+            / "layout" / "evidence" / "divider-chain-layout" / "erc-report.json"
+        )
+        report = json.loads(report_path.read_text())
+        report["provenance"]["spec"]["content_hash"] = "sha256:" + "f" * 64
+        report_path.write_text(json.dumps(report, indent=2) + "\n")
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "layout/evidence/divider-chain-layout/erc-report.json's "
+            "provenance.spec.content_hash is", result.stderr,
+        )
+
+    def test_a_report_from_an_unpinned_klt_is_caught(self):
+        self._all_four_erc_ready()
+        self.tree.add_erc("pfd-cp-layout", "pfd_cp.gds", klt_version="0.5.0")
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "layout/evidence/pfd-cp-layout/erc-report.json was produced on "
+            "klt '0.5.0', but .github/workflows/ci.yml pins "
+            "klayout-tools==0.6.0.",
+            result.stderr,
+        )
+
+    def test_ci_workflow_with_no_pin_is_caught(self):
+        self._all_four_erc_ready()
+        self.tree.write_ci_workflow(pin=None)
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "names no 'klayout-tools==<version>' pin", result.stderr
+        )
+
+    def test_a_missing_ci_workflow_is_caught(self):
+        self._all_four_erc_ready()
+        self.tree.remove_ci_workflow()
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("cannot read", result.stderr)
+        self.assertIn("ci.yml", result.stderr)
+
+    def test_a_stray_spec_key_is_caught(self):
+        # The structural half of the stale-rationale fix: a free-text
+        # rationale key is exactly how the real `_ties_omitted` note went on
+        # citing a fixed upstream bug, so it must be unrepresentable.
+        self._all_four_erc_ready()
+        self.tree.add_erc(
+            "vco-layout",
+            "vco_block.gds",
+            extra_spec_keys={
+                "_ties_omitted": "klayout-tools#2169 (fixed upstream)"
+            },
+        )
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "layout/evidence/vco-layout/erc-supply-spec.json carries "
+            "top-level key(s) '_ties_omitted' outside", result.stderr,
+        )
+
+    def test_no_ties_and_no_disclosure_is_caught(self):
+        self._all_four_erc_ready()
+        self.tree.add_erc("lock-detector-layout", "lock_detector.gds", ties=False)
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "layout/evidence/lock-detector-layout/erc-supply-spec.json "
+            "declares no `ties[]` and no usable `ties_disclosure`",
+            result.stderr,
+        )
+
+    def test_a_ties_disclosure_with_an_unrecognized_kind_is_caught(self):
+        self._all_four_erc_ready()
+        self.tree.add_erc(
+            "pfd-cp-layout",
+            "pfd_cp.gds",
+            ties=False,
+            disclosure_kind="citation",
+        )
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "declares no `ties[]` and no usable `ties_disclosure` (kind "
+            "'citation'", result.stderr,
+        )
+
+    def test_a_ties_disclosure_without_a_reason_is_caught(self):
+        self._all_four_erc_ready()
+        self.tree.add_erc(
+            "pfd-cp-layout",
+            "pfd_cp.gds",
+            ties=False,
+            disclosure_kind="tool_limitation",
+            disclosure_reason="",
+        )
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "layout/evidence/pfd-cp-layout/erc-supply-spec.json's "
+            "`ties_disclosure` states no `reason`.",
+            result.stderr,
+        )
+
+    def test_a_valid_ties_disclosure_passes(self):
+        # A block that genuinely cannot express a tie is not the same
+        # failure as one that simply never declared it -- kt#2180's
+        # first-class `ties_disclosure` field is how a grader tells them
+        # apart, and this is the shape `pfd_cp`'s real spec uses.
+        self._all_four_erc_ready()
+        self.tree.add_erc(
+            "pfd-cp-layout",
+            "pfd_cp.gds",
+            ties=False,
+            disclosure_kind="tool_limitation",
+            disclosure_reason=(
+                "well_requires/well_excludes needs a marker layer this "
+                "stream draws none of"
+            ),
+        )
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("tie=disclosed", result.stdout)
+
+    def test_proof_erc_that_understates_its_own_antenna_coverage_is_caught(self):
+        # The antenna half of `klt erc` has never run in this repository;
+        # PROOF-erc.md must say so in the report's own numbers, not a
+        # different, incorrect count.
+        self._all_four_erc_ready()
+        self.tree.add_erc(
+            "divider-chain-layout",
+            "divider_chain.gds",
+            antenna_skipped=3,
+            proof_antenna_claim="checked: 0, skipped: 1",
+        )
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "layout/evidence/divider-chain-layout/PROOF-erc.md does not "
+            'state "checked: 0, skipped: 3"', result.stderr,
+        )
+
+    def test_all_four_erc_evidence_passes_and_the_count_is_stated(self):
+        self._all_four_erc_ready()
+        self.tree.write_docs(
+            _doc_text(4, 4) + "4 of the 4 blocks are ERC-checked.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("4 of the 4 blocks ERC-checked", result.stdout)
+        self.assertIn("4/4 ERC-checked", result.stdout)
+
+    def test_a_stale_erc_checked_count_is_caught(self):
+        # The count rule (issue #237's third pass) extended to this claim:
+        # a document may state "N of the 4 blocks ERC-checked", but only the
+        # correct N.
+        self._all_four_erc_ready()
+        self.tree.write_docs(
+            _doc_text(4, 4) + "1 of the 4 blocks are ERC-checked.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            'states "1 of the 4 blocks ERC-checked", but layout/evidence/ '
+            "records 4 of the 4", result.stderr,
+        )
+
+    def test_an_lvs_mismatched_block_is_not_asked_for_erc_even_with_a_stale_directory(self):
+        # The point of the erc_entries plumbing: coverage is owed from the
+        # already-derived LVS-matched verdict, not from a looser "an
+        # lvs-clean/ directory exists" test. A block whose deck says the
+        # netlists do not match is not asked for `klt erc` evidence, even
+        # though its lvs-clean/ directory is present.
+        for evidence_dir, gds in BLOCKS:
+            self.tree.add_block(evidence_dir, gds, drc=True, lvs=False)
+        base = self.tree.root / "layout" / "evidence" / "vco-layout" / "lvs-clean"
+        base.mkdir(parents=True, exist_ok=True)
+        (base / "lvs.stdout.log").write_text("ERROR: Netlists don't match.\n")
+        self.tree.write_docs(_doc_text(4, 0))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("0/4 ERC-checked", result.stdout)
 
 
 if __name__ == "__main__":

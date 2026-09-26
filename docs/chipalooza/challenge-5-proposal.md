@@ -527,7 +527,7 @@ record format section ratifies the two sentence shapes this reads.
 | Period jitter, **closed-loop, deterministic, at the 200 MHz band top** | Same 1.0 % RMS line | **No measured record yet — declared, not measured.** `sim/period-jitter-band-top` is the row above's measurement moved to the binding end of the ratified band: same deck structure, same solver tolerances, same reduction module (loaded, not copied), f_ref and the Icp trim code held, N 6 → 8, f_out 150 → 200 MHz. Its full 45-point grid is declared and every point's operating point is derived from the committed VCO record `20260804-162735-72883fb` under [the band-selection rule](../../spec/pll.md#band-selection-rule), re-checkable without a simulator. That VCO record itself runs the **63-point** superset grid, but the derivation reads only its five mandated MOS bundles (`MOS_BUNDLES` in `band_and_vstart_from_vco_record.py`), so what this campaign declares is the mandated grid and not the wider one it is derived from (§5.0). One result did come out of that derivation and needs no simulator: **at 200 MHz the rule does not select a single band code across the PVT grid** — band 6 at 34 of the 45 points, band 7 at the other 11 (the cold and/or high-supply points where band 6's own curve tops out below 200 MHz) — where at 150 MHz one static code covers all 45. Local Kvco at the selected points spans 74.7–117.0 MHz/V, all inside the Kvco row's 150 MHz/V bound, but the loop gain the one fixed filter sees varies 1.6× across this grid against 1.05× across the 150 MHz one | **UNMET — explicitly.** No jitter number at 200 MHz is claimed anywhere in this document. The band split above is a derivation from committed open-loop evidence, reported as such, and is not a substitute for the measurement | `sim/period-jitter-band-top/testbench/` (manifest, deck and derivation; `band_and_vstart_from_vco_record.py --check`); `sim/vco-tuning-range/records/20260804-162735-72883fb` (the f(Vctrl) table it reads); issue #503 (open) — the campaign's unrun measurement, now that #496 (closed 2026-09-25) has landed the batch backend it was waiting on |
 | Period jitter, **closed-loop, random/noise-driven** | Same 1.0 % RMS line | **Bounded, not estimated — ≤ 0.338 % RMS at all 45 of the mandated PVT points** (worst `sf`/−40 °C/2.97 V, one-sided 95 % confidence), from `sim/period-jitter/random-bound/` (DR-032). No analysis this toolchain offers *estimates* the random component: ngspice `TRANNOISE` injects nothing on the pinned build, and there is no periodic-steady-state/`pnoise` path to weight the per-device noise PSDs `.noise` does report over the ring's switching trajectory (DR-020, narrowed by DR-023; probes re-runnable at `sim/period-jitter/noise-toolchain-probe/`). DR-032 bounds it instead, in three independent terms. **The ring and output buffer**: a `trnoise()` current source across every channel, each sized at the **maximum** of that device's own `.noise` density over its own trajectory (sampled to the trajectory's 2 ps resolution around each switching device's peaks), so the stationary approximation can only over-state the jitter — with the ring's true impulse sensitivity, which the transient integrates itself; flicker folded into that injection through the closed loop's error transfer over every loop the as-built filter admits at the 45° floor, which is also why the bound needs no observation interval. **The bias generator**, whose noise moves the frequency for many periods and so cannot be held in a one-period window: `.noise` about its DC operating point, referred to the ring's frequency through measured sensitivities to its two outputs, integrated through the same loop envelope, and checked against the transient at the reference point (0.910 ± 0.042). It is the largest term. **The loop-filter resistor**: equipartition through the control node. Validated at the reference point for timestep, `trnoise` sample interval, 3× linearity and block decomposition. The impulse-sensitivity-function route to an *estimate* has its ingredients built and validated (DR-030: Γ converges at ≤ 0.02 % over the last halving of the timestep ceiling; DR-031: the per-device PSDs along the trajectory) but is not assembled, and the bound does not need it. **Scope**: the charge pump, PFD, divider and lock detector are in-band sources, argued small (through the loop's ≤ 1.4 MHz low-pass, then the period difference's `(2πfT)²`) but **not bounded** | **MET — as an upper bound, at 45/45 corners, with a 1.48× margin** on the 0.50 % RMS `spec/pll.md`'s supply-ripple derivation allocates to this component, which is therefore a verified allocation rather than the unverified budget DR-023 Decision 3 recorded (DR-032 supersedes that status). Two limits travel with it: it is **not an estimate** of the part's random jitter — only its ceiling — and it does **not cover the in-band generators**, whose bound is owed separately | `spec/decision-records/DR-032-random-period-jitter-bounded-over-the-grid.md` (the bound, its inequalities, its scope); `sim/period-jitter/random-bound/results/transient_*.json` (the 45 per-point bounds) and `sim/period-jitter/random-bound/results/SUMMARY.md` (every figure, regenerated from them); `spec/decision-records/DR-023-random-period-jitter-owner-and-cyclostationary-gap.md` (why no estimate exists, and the budget split); `sim/period-jitter/noise-toolchain-probe/`; issue #580 (open) — the in-band generators' bound |
 | Phase noise | not spec'd (DR-002 Decision 5) | n/a by design | **N/A, by design** | `spec/pll.md#phase-noise` |
-| Reference spur | ≤ −55 dBc | −57.0…−72.7 dBc measured at 150 MHz (5 spanning corners); scaled to the binding 200 MHz, the two coldest corners land at −54.5/−54.9 dBc (0.1–0.5 dB over the line). **That measurement runs with charge-pump mismatch off.** The derivation it cross-checks has since been re-priced by DR-018 (#483): with the UP/DN current mismatch ("term 1") counted at its statistical 3σ instead of its systematic value, and the statistical residual refreshed to the corner-combined Monte Carlo campaign, the deliberately conservative 200 MHz stack lands at ≈ −57.0 dBc with term 1 at its measured 17.48 % and **−56.6 dBc** at its ±20 % budget — **1.6 dB inside the line**, where the older −61 dBc derivation, which left term 1 out, implied a ~6 dB reserve | **PASS at 150 MHz (5/5 corners); UNMET at the scaled 200 MHz binding point for 2/5 corners** — 5 of 45 PVT points measured, not the full grid. The derived stack including mismatch clears the line, but by 1.6 dB rather than ~6 dB (DR-018), so the reserve this row was once argued on is mostly spoken for. The owed work was handed by `spec/pll.md` to #145, which is closed. **DR-024 (#510) re-points it and restates it**: what is owed is the mandated 45 points *at the binding 200 MHz* — not 40 more at 150 MHz that would still have to be scaled by +2.50 dB. **#510 is closed** (superseded by #533, per the Curator's 2026-09-25 disposition on the Judge's review of #537 — #510's own remaining acceptance criteria, the 45-point 200 MHz grid, are exactly #533's scope, so the obligation moved rather than closing unmet) — and it is owed at **#533**, against a campaign that now exists and is declared-and-unmeasured (`sim/reference-spur-band-top`, 0 of 45 points). DR-024 also states which derived row a *mismatch-off* measurement may be read against: the systematic-only **−66.6 dBc**, not the −56.6 dBc stack above, which adds two statistical terms at their own worst corners. Read that way, the committed 150 MHz measurement already exceeds the systematic derivation by ~12 dB at the two cold corners while sitting 3.6 dB below it at the derivation's own worst corner — so the derivation does not predict the measurement's corner ordering, and the closed-loop **statistical** spur is unowned | `sim/reference-spur/records/20260816-132150-5f405e7.md`; `spec/pll.md#reference-spur` (the re-priced derivation table); `spec/decision-records/DR-018-cp-term1-mismatch-budget-derived-from-the-spur-line.md`; `sim/mc-cp-mismatch/records/20260923-095854-1655e11.md` (the Monte Carlo campaign the 17.48 % comes from — a **3-corner subset** of the mandated 45, `ff`/−40 °C/3.63 V, `typical`/27 °C/3.30 V and `ss`/125 °C/2.97 V, at n = 100 mismatch samples each); `spec/decision-records/DR-024-reference-spur-binding-point-owner-and-mismatch-relation.md`; `sim/reference-spur-band-top/testbench/tb.json` (declared, no record); issue #510 (closed); issue #533 (open) |
+| Reference spur | ≤ −55 dBc | −57.0…−72.7 dBc measured at 150 MHz (5 spanning corners); scaled to the binding 200 MHz, the two coldest corners land at −54.5/−54.9 dBc — **0.5 dB** and **0.1 dB** over the line respectively. **That measurement runs with charge-pump mismatch off.** The derivation it cross-checks has since been re-priced by DR-018 (#483): with the UP/DN current mismatch ("term 1") counted at its statistical 3σ instead of its systematic value, and the statistical residual refreshed to the corner-combined Monte Carlo campaign, the deliberately conservative 200 MHz stack lands at ≈ −57.0 dBc with term 1 at its measured 17.48 % and **−56.6 dBc** at its ±20 % budget — **1.6 dB inside the line**, where the older −61 dBc derivation, which left term 1 out, implied a ~6 dB reserve | **PASS at 150 MHz (5/5 corners); UNMET at the scaled 200 MHz binding point for 2/5 corners** — 5 of 45 PVT points measured, not the full grid. The derived stack including mismatch clears the line, but by 1.6 dB rather than ~6 dB (DR-018), so the reserve this row was once argued on is mostly spoken for. The owed work was handed by `spec/pll.md` to #145, which is closed. **DR-024 (#510) re-points it and restates it**: what is owed is the mandated 45 points *at the binding 200 MHz* — not 40 more at 150 MHz that would still have to be scaled by +2.50 dB. **#510 is closed** (superseded by #533, per the Curator's 2026-09-25 disposition on the Judge's review of #537 — #510's own remaining acceptance criteria, the 45-point 200 MHz grid, are exactly #533's scope, so the obligation moved rather than closing unmet) — and it is owed at **#533**, against a campaign that now exists and is declared-and-unmeasured (`sim/reference-spur-band-top`, 0 of 45 points). DR-024 also states which derived row a *mismatch-off* measurement may be read against: the systematic-only **−66.6 dBc**, not the −56.6 dBc stack above, which adds two statistical terms at their own worst corners. Read that way, the committed 150 MHz measurement already exceeds the systematic derivation by ~12 dB at the two cold corners while sitting 3.6 dB below it at the derivation's own worst corner — so the derivation does not predict the measurement's corner ordering, and the closed-loop **statistical** spur is unowned | `sim/reference-spur/records/20260816-132150-5f405e7.md`; `spec/pll.md#reference-spur` (the re-priced derivation table); `spec/decision-records/DR-018-cp-term1-mismatch-budget-derived-from-the-spur-line.md`; `sim/mc-cp-mismatch/records/20260923-095854-1655e11.md` (the Monte Carlo campaign the 17.48 % comes from — a **3-corner subset** of the mandated 45, `ff`/−40 °C/3.63 V, `typical`/27 °C/3.30 V and `ss`/125 °C/2.97 V, at n = 100 mismatch samples each); `spec/decision-records/DR-024-reference-spur-binding-point-owner-and-mismatch-relation.md`; `sim/reference-spur-band-top/testbench/tb.json` (declared, no record); issue #510 (closed); issue #533 (open) |
 | Loop bandwidth | 26–430 kHz over the ratified space, `f_c < f_ref/10` | 25.96–429.5 kHz measured; worst realized `f_c/f_ref` = `f_ref/13`, inside the ceiling at every point of the cross-product. **Not measured on the MOS grid, because the DUT has no MOS device in it**: `loop-dynamics` sweeps the passive loop filter over 81 filter-impedance points (27 passive-corner bundles × 3 temperatures) and declares the MOS and supply axes N/A, folding the active devices' spread in as measured extremes — Icp from `cp-compliance`'s own 45 PVT corners, Kvco from `vco-tuning-range`'s 63 — rather than re-simulating them. That is a wider envelope than the mandated grid on the axis that sets stability, not a narrower one (§5.0) | **MET** | `sim/loop-dynamics/records/20260731-202550-82af5a9.md` |
 | Phase margin | ≥ 45° in the contracted (trim-rule) space | Worst 47.4° at `f_ref` = 1 MHz, 4 legs; 105/140 cells pass unconditionally, all 35 failures are off-rule trim codes. Same 81-point filter-impedance basis as the row above (§5.0) | **MET** (in the contracted space) | Same record |
 | Lock time (small-signal settling) | < 100 µs to the ratified Lock criterion (output frequency within ±0.1 % **and** static phase error at the PFD inputs ≤ 1 ns) | Worst 71 µs (`f_ref` = 1 MHz, 4 legs); structural floor ≈ 43 µs (set by `1/(2πRC1)`, a derivation rather than a grid minimum); 120/140 cells meet the line, 0/140 meet the dropped < 20 µs stretch. The settling half of this row shares the Loop bandwidth row's 81-point filter-impedance basis, not the MOS grid (§5.0); the static-phase half below is measured on the mandated 45. **But the criterion this time is measured *to* is not reached at 1 of the 45 mandated corners at the configuration the normative band-selection rule selects, with a second corner owed** (DR-012, narrowed by **DR-025**): closed-loop, the loop settles at 1.049 ns of static phase at `typical`/−40 °C/3.63 V against the ratified ≤ 1 ns — nominal skew, systematic only, before the 0.576 ns statistical mismatch term — so at that corner there is no instant for a lock time to be measured to. The **1.227 ns** at `ff`/27 °C/3.63 V is a correct measurement of **band 6**, which is not the band the rule selects there over DR-003 Decision 5's measured 0.9–2.7 V control window (it selects band 5, `VCTRL` 1.967–2.595 V); that cell has never been run closed-loop, so the corner is neither cleared nor confirmed and the count returns to 2 of 45 if it misses. The axis it is lost on is the control voltage, not the corner: at `VCTRL` = 0.90 V the charge pump's residual charge alone exceeds the whole criterion at 36 of 45 corners, open-loop — and **DR-025 measures that the band-selection rule cannot fix that**: applied across the ratified 10–200 MHz output band it still parks some corner at `VCTRL` ≤ 1.05 V at 23 of 39 output frequencies (floor 0.919 V) and still misses the criterion on DR-012 Decision 4a's summed budget at 1397 of 1628 rule-selected points, so the resolution must reduce the pump's residual charge at low `VCTRL` | **MET as a settling estimate (not cold-start) — and NOT MET at 1 of 45 corners at a rule-compliant configuration, with a 2nd corner's rule-selected configuration owed**, where the Lock criterion itself is never reached, exactly as `spec/pll.md`'s own row states it. DR-012 Decision 1 keeps the criterion unrelaxed and DR-025 Decision 1 restates it unchanged, so this is a design gap, not a spec one — and DR-025 narrows DR-012 Decision 7's four candidate loci to one (the pump's residual charge at low `VCTRL`) by eliminating the band-selection axis on measurement. Its settled value at 15 further over-bound corners is owed at #399 (open). **#511 is closed** (COMPLETED) — it is the issue DR-025 was filed against, and DR-025 discharges it by narrowing the four candidate loci to one; it did not run either closed-loop cell it named, and does not claim to. Those two runs (the rule-selected `ff`/27 °C band-5 cell, and the lowest rule-compliant parking anywhere in the output band — f_out = 135 MHz at `ss`/125 °C, `VCTRL` 0.919 V) are owed at **#540 (open)**, filed because both are multi-hour ngspice campaigns outside a Builder session's scope | `sim/loop-dynamics/records/20260731-202550-82af5a9.md` (settling); `sim/supply-sensitivity/records/20260916-051708-8cedbba.md` (the 1.227 / 1.049 ns settled static phase); `sim/supply-sensitivity/records/20260925-090649-4422f1d.md` (the band-selection re-derivation, arithmetic only, no new simulation); `spec/decision-records/DR-012-static-phase-offset-evidence.md`; `spec/decision-records/DR-025-band-selection-is-not-the-lock-criterion-resolution.md`; issue #399 (open); issue #511 (closed); issue #540 (open) |
@@ -536,7 +536,7 @@ record format section ratifies the two sentence shapes this reads.
 | Power, **closed-loop measured** | Same line | Full 45-point grid + all 3 step/ramp corners: **0.9863–1.98 mW measured directly** (not derived), all points under the 5 mW target; quiescent/dynamic split reported per corner | **MET, measured** — supersedes the derived figure above with a direct closed-loop measurement | `sim/supply-sensitivity/records/20260901-155456-46b92f8.md` |
 | Standby current | waived — no power-down mode in v1 | n/a — no standby state exists | **N/A, by design** | `spec/pll.md#standby-current` |
 | Supply sensitivity — AC (ripple) budget | `vdd_vco` ripple ≤ 20 mV pp | Derived from the 2.51 %/100 mV pp measured sensitivity above, so it inherits that row's corner universe: this campaign's **63-point PVT grid**, a superset of the 45-point mandated one (§5.0), whose measured sensitivity binds at an `all-slow` bundle the mandated grid does not contain. The budget is therefore stated against the stricter of the two grids, not the mandated one. It also inherits that row's *ripple-frequency* limit: scaling the f_osc/4 sub-sweep's 3.24 % instead gives 0.65 % RMS at this budget rather than 0.50 %, still inside the 1.0 % line but at 1.5× margin instead of 2× (§5.1) | **derived, conditional** | Same record — `sim/vco-tuning-range/records/20260804-211600-f599a65.md` |
-| Supply sensitivity — DC / closed-loop, full grid | ≤ 0.6 V of the `VCTRL` window consumed by a rail excursion (`spec/pll.md` Budget 2); stays locked through a supply step + ramp | Full 45-point grid, with each of the record's three FAILs read against the **ratified** line rather than the deck's proxy for it (**DR-021**). **(1) The frequency-vs-supply FAIL has no frequency content**: 0 of 45 corners missed either frequency check — worst deviation −294 ppm against a 1000 ppm criterion (3.4× headroom), worst residual frequency error 2.255e-4 against 1e-3 (4.4×). Its 10 failing corners are the composite lock criterion's *other* checks, 2 static-phase and 8 lock-flag, and DR-012 measured both classes against the ratified ≤ 1 ns static-phase bound: the 2 were sampled while still decaying (0.60–0.72 ns of movement across the run's own window), and the 2 settled violations — the corners that **are** over the bound once settled — are inside the 8. It is the same static-phase finding as the Lock time row above. **(2) Budget 2 is measured for the first time, and missed**: the closed loop consumes 0.385 … 0.846 V of the `VCTRL` window over the ratified 2.97–3.63 V rail — over the 0.6 V budget at **9 of the 15 (bundle, temperature) cells**, worst `ss`/−40 °C at **0.846 V** (1.41×, 47 % of the 1.8 V window). It is not an anomaly: it matches what each cell's selected band requires, from the open-loop `f(VCTRL, vdd)` table, to within 5.7 mV at every cell. The record's own "4 of 45 outside the window" FAIL is graded against DR-001's *predicted* 0.9–2.4 V window, which DR-003 Decision 5 superseded with a measured 0.9–2.7 V; against that window **0 of 45 points leave it**, by 53 mV at the tightest. **(3) The step+ramp FAIL is a hold ≈8 µs short of a slew-limited recovery, not an under-damped loop**: the retained waveform shows the control node slewing at a near-constant −20.3 mV/µs for 18.75 µs after the ramp at `ss`/−40 °C (a straight line fits it with 33 % less residual than a single exponential, in volts, on the same samples), and the model-free damping test — overshoot past the final value — does not separate that corner from the two the record calls `settles` (17.2 mV on 20.0 mV of its own ripple, against 19.5 and 22.5 mV). What separates it is that it is criterion 2's worst cell: the corner that consumes the most `VCTRL` window for a rail excursion takes longest to recover from one | **UNMET on Budget 2, at 9 of 15 cells** — and that is the sharper of two readings, not the softer one: Budget 2's own derivation prices a ±0.33 V excursion (under which 0 of 15 cells exceed it) while the row specifies the 0.66 V full range, and this proposal reports the row as written rather than the reading under which it passes. The consequence the budget guards against — re-cutting the band plan — is **not** observed, and is 53 mV away. **Every finding now has a named open owner**, which is what #506 was filed for: the excursion question and the deck's mis-graded criterion are **#525 (open)**; the static-phase finding is DR-012's, narrowed by DR-025 — **#511 is closed** (DR-025 discharged it without running either cell it named), and the two runs that would settle it are owed at **#540 (open)** — plus **#399 (open)** (the 15 corners sampled on a tail) and **#437 (open)** (the full-grid re-take at the trimmed detector window); the post-ramp settling measurement is **#405 (open)**. No recorded verdict or value changes — `sim/` is append-only | `sim/supply-sensitivity/records/20260925-044237-4ff4f65.md` (the re-reading, arithmetic only, no new simulation) over `sim/supply-sensitivity/records/20260901-155456-46b92f8.md` (the grid); `spec/decision-records/DR-021-supply-sensitivity-fail-criteria-ownership.md`; `spec/decision-records/DR-003-vco-band-map-and-kvco-contract.md` Decision 5 (the measured control window); issue #525 (open); issue #511 (closed); issue #540 (open); issue #399 (open); issue #437 (open); issue #405 (open) |
+| Supply sensitivity — DC / closed-loop, full grid | ≤ 0.6 V of the `VCTRL` window consumed by a rail excursion (`spec/pll.md` Budget 2); stays locked through a supply step + ramp | Full 45-point grid, with each of the record's three FAILs read against the **ratified** line rather than the deck's proxy for it (**DR-021**). **(1) The frequency-vs-supply FAIL has no frequency content**: 0 of 45 corners missed either frequency check — worst deviation −294 ppm against a 1000 ppm criterion (3.4× headroom), worst residual frequency error 2.255e-4 against 1e-3 (4.4×). Its 10 failing corners are the composite lock criterion's *other* checks, 2 static-phase and 8 lock-flag, and DR-012 measured both classes against the ratified ≤ 1 ns static-phase bound: the 2 were sampled while still decaying (0.60–0.72 ns of movement across the run's own window), and the 2 settled violations — the corners that **are** over the bound once settled — are inside the 8. It is the same static-phase finding as the Lock time row above. **(2) Budget 2 is measured for the first time, and missed**: the closed loop consumes 0.385 … 0.846 V of the `VCTRL` window over the ratified 2.97–3.63 V rail — over the 0.6 V budget at **9 of the 15 (bundle, temperature) cells**, worst `ss`/−40 °C at **0.846 V** (1.41×, 47 % of the 1.8 V window). It is not an anomaly: it matches what each cell's selected band requires, from the open-loop `f(VCTRL, vdd)` table, to within 5.7 mV at every cell. The record's own "4 of 45 outside the window" FAIL is graded against DR-001's *predicted* 0.9–2.4 V window, which DR-003 Decision 5 superseded with a measured 0.9–2.7 V; against that window **0 of 45 points leave it**, by 53 mV at the tightest. **(3) The step+ramp FAIL is a hold ≈8 µs short of a slew-limited recovery, not an under-damped loop**: the retained waveform shows the control node slewing at a near-constant −20.3 mV/µs for 18.75 µs after the ramp at `ss`/−40 °C (a straight line fits it with 33 % less residual than a single exponential — **20.54 mV** rms against **30.75 mV**, in volts, on the same samples), and the model-free damping test — overshoot past the final value — does not separate that corner from the two the record calls `settles` (17.2 mV on 20.0 mV of its own ripple, against 19.5 and 22.5 mV). What separates it is that it is criterion 2's worst cell: the corner that consumes the most `VCTRL` window for a rail excursion takes longest to recover from one | **UNMET on Budget 2, at 9 of 15 cells** — and that is the sharper of two readings, not the softer one: Budget 2's own derivation prices a ±0.33 V excursion (under which 0 of 15 cells exceed it) while the row specifies the 0.66 V full range, and this proposal reports the row as written rather than the reading under which it passes. The consequence the budget guards against — re-cutting the band plan — is **not** observed, and is 53 mV away. **Every finding now has a named open owner**, which is what #506 was filed for: the excursion question and the deck's mis-graded criterion are **#525 (open)**; the static-phase finding is DR-012's, narrowed by DR-025 — **#511 is closed** (DR-025 discharged it without running either cell it named), and the two runs that would settle it are owed at **#540 (open)** — plus **#399 (open)** (the 15 corners sampled on a tail) and **#437 (open)** (the full-grid re-take at the trimmed detector window); the post-ramp settling measurement is **#405 (open)**. No recorded verdict or value changes — `sim/` is append-only | `sim/supply-sensitivity/records/20260925-044237-4ff4f65.md` (the re-reading, arithmetic only, no new simulation) over `sim/supply-sensitivity/records/20260901-155456-46b92f8.md` (the grid); `spec/decision-records/DR-021-supply-sensitivity-fail-criteria-ownership.md`; `spec/decision-records/DR-003-vco-band-map-and-kvco-contract.md` Decision 5 (the measured control window); issue #525 (open); issue #511 (closed); issue #540 (open); issue #399 (open); issue #437 (open); issue #405 (open) |
 | Output duty cycle | 45–55 % at `CLK`, full band, all corners | 44.375–50.696 % measured (90 points, loaded); 7/90 points below the 45 % floor, all at the low-frequency band edge, concentrated in the `fs` process bundle | **UNMET at 7/90 points** (small excursion, 0.625 pp worst-case) | `sim/output-driver/records/20260817-100354-0e9cfc9.md` |
 | Output levels and drive | V_OH ≥ 0.9·VDD_VCO, V_OL ≤ 0.1·VDD_VCO into ≤ 50 fF | V_OH 1.006–1.044·VDD_VCO, V_OL −0.040…−0.006·VDD_VCO, 90/90 points | **MET**, full 90-point grid | Same record |
 | Area | ≤ **0.30 mm²** total — **amended by DR-016** (issue #456) from the draft ≤ 0.15 mm², on the measurement in the next column, and **held** there by **DR-017** (issue #476) on a floor re-measured 17.5 % lower | **Measured at the block level, and the spec row is now amended to it.** Every sub-block's as-drawn footprint, taken from the committed GDS bounding box rather than a hand-recorded figure: loop filter 0.0369 mm² (still a calculation — the loop filter has no placed-and-routed layout yet), VCO 0.0318 mm² (172.52 × 184.48 µm), PFD + charge pump 0.0256 mm² (344.98 × 74.30 µm — it was 0.0353 mm² before the #455 fold, 0.0267 mm² before the #469 glue-bus packing and 0.0264 mm² before the #473 glue-inverter interleave), divider chain 0.0553 mm² (1317.66 × 41.99 µm — it was 0.2471 mm² as first drawn and came down 78 % through the #341 routing-track-packing, #344 row-fold, #454 macro-track-packing and #458 route-over-the-device-rows passes), lock detector 0.0306 mm² (294.80 × 103.75 µm — grown ~4.1× from 0.0075 mm² by issue #449, which drew DR-014's 4-bit trim network into `delaywin_3v3` and, with it, the block's first LVS match against its own ratified schematic). Sum **0.1803 mm²**, or **0.2254 mm²** after the floorplan's own ×1.25 top-level-overhead factor (it was 0.2186 / 0.2733 mm² when DR-016 was written; #469's glue-bus packing, #458's route-over-the-device-rows pass and #473's glue-inverter interleave have taken 38,324 µm² off since, without moving the row) | **MET against the amended row — 0.2254 mm², 75.1 % of ≤ 0.30 mm² — and 1.50× over the draft 0.15 mm² target, which is now *measured* to be unreachable rather than merely unmet.** DR-016 is the amendment and the honest reading of it is this: the draft number was never derived from anything (DR-007 Amendment A3 called it "the one `budget` row in the table with no rationale behind the number at all"), and the 78.6 % of it that had no estimate of any kind is now four committed, DRC/LVS-clean block layouts. Three measured bounds, each tighter than the last, and none reaching 0.15 mm²: as drawn **1.50×** (1.82× when DR-016 was written; #469, #458 and #473 have since landed, below); every remaining named layout lever at its geometric ceiling **1.20×**; and — the one that settles it — **every Metal2 track routed at zero area cost, 1.13×**, a bound that survives any row fold and covers every lever this design has. 57.2 % of what a 0.15 mm² row allowed is consumed by two terms no post-layout lever touches: the loop filter (set by DR-006's C1/C2 *capacitance*, so reducing it is a loop-dynamics change) and `vco_block`, whose height *is* its device band and whose 60.8 % whitespace is the guard-ring and 15 µm tap-pitch spacing the foundry deck requires. The amended row is the measured total plus margin sized to the single unmeasured factor in it (it holds for a top-level overhead up to ×1.664 on the sum as drawn today), **not** an allowance for block growth. Three levers have landed since DR-016 and none has moved the row — **by decision, not by lag**: DR-017 re-measured the floor after all three and **held** the row, because a margin sized to an uncertainty does not shrink when the measurement beneath it does, and the ×1.25 top-level overhead it covers has not moved. DR-017 Decision 3 also **replaced** DR-016's original trigger (any material lever landing is grounds for a downward successor record), which fired three times in two days: the row is now re-amended *down* when the uncertainty itself shrinks — an assembled `pll_top` GDS measures the top-level overhead, or the loop filter is drawn — and a further block-level lever (an unnamed `lock_detector` one remains open) earns a measured-table refresh, not a new row. Of the three: #469's glue-bus packing, at 259 µm², and #473's glue-inverter interleave, at 776 µm², are small; **#458** is not — it routed the divider chain's Metal2 tracks into the plane over its own device rows, 0.0926 → 0.0553 mm² (74.4 % of its sized ceiling), DRC-clean on both decks and still LVS-matched, moving the total 1.82× → 1.51× under an unchanged row. The divider-chain packing lever (#454) is already spent: packing the `div23_cell` macro's own Metal2 track band (31 nets onto 11 tracks, the provable minimum) took that block from 0.1321 to 0.0926 mm², moving the total from 2.03× to 1.70× on its own. Shared-diffusion device stacking — which this proposal previously named as *the* cause — remains worth only **0.10 %** of the (now larger) gap, falsified rather than deferred, because the divider chain's drawn diffusion is ~1 % of its own bounding box. The `pfd_cp` fold (#455) is spent as well, taking that block 0.0353 → 0.0265 mm² and the total from 1.89× to 1.82× (and #469's glue-bus packing plus #473's glue-inverter interleave have since taken it to 0.0256 mm², a further 0.5 % of the total — "Known gaps" item 8) — but it landed at **42 % of its sized ceiling**, and the shortfall was measured to be in the ceiling (a flat 57-track census over five levels of composition, of which `pfd_cp` owns 4) rather than in the execution. `lock_detector`'s own new footprint is not yet levered against at all. Earlier revisions of this row projected a post-lever floor of 1.64×, then 1.54×; both carried `divider_chain`'s pre-#454 ceiling, and re-derived from the current audit the figure is the 1.20× above — *better* than the record had been carrying, and still over (PLL-FLOORPLAN.md §5.11). §5.13 adds one caveat to that ceiling: `max(packed-track floor, device band) × width` assumes a block's tracks occupy an exclusive band, which is exactly what #458 stopped being true for `divider_chain`, so that block's term in any future ceiling sum has to come from its device band (0.0347 mm²) instead. A fourth lever, sized against `lock_detector`'s own newly-measured 65.5 % whitespace, is still not named. Note this is a **sum of block extents, not a placed-and-routed top level** — no assembled `pll_top` GDS exists, so top-level routing and inter-block spacing are not in this number, and that is exactly the uncertainty the amended row's margin is sized to | `spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md` (the amendment); `layout/evidence/area-audit/PROOF.md` (every lever's arithmetic; reproduce with `python3 layout/run_pv.py area`); `spec/decision-records/DR-017-area-row-held-at-0.30-on-the-refreshed-measured-floor.md` (the hold, and the replaced trigger); `layout/floorplan/PLL-FLOORPLAN.md` §5.1–§5.15 (the re-derived budget; §5.15 is DR-017's); `layout/evidence/vco-layout/PROOF-381-high-rs-resistor.md`; `layout/evidence/pfd-cp-layout/PROOF.md` + `PROOF-455-fold.md` + `PROOF-469-glue-bus-packing.md` + `PROOF-473-glue-inverter-interleave.md`; `layout/evidence/divider-chain-layout/PROOF-macro-track-packing.md` + `PROOF-over-device-rows.md`; `layout/evidence/lock-detector-layout/PROOF.md` "Addendum 4"; `spec/pll.md#area` |
@@ -605,11 +605,11 @@ re-derived value does not equal the figure **rounded to the precision written**
 (`247.8 MHz` against a derived 247.751 passes; against 247.6 it does not), if
 the figure has drifted between §5 and this table in either direction, if an
 entry reduces a record the §5 row does not itself cite, or if a §5 row is
-accounted for by neither a graded value (this table or the derived-figure one
-below) nor a stated reason.
+accounted for by neither a graded value (this table or either of the two
+derived-figure tables below) nor a stated reason.
 
-The reduction language is `min`/`max`/`mean`/`sum`/`sig3`/`count` over one
-committed table, optionally grouped (`max(min(fosc_hz) by bundle+temp_c+vdd_v)`
+The reduction language is `min`/`max`/`mean`/`sum`/`sig3`/`maxmag`/`count` over
+one committed table, optionally grouped (`max(min(fosc_hz) by bundle+temp_c+vdd_v)`
 is the worst-case *guaranteed* floor: the lowest frequency each corner can
 reach, taken over corners) and optionally filtered (` where col op value`, with
 `~=` for substring containment on an id column). One named
@@ -628,14 +628,21 @@ orders each of the 504 (corner, band) curves by control voltage and counts the
 curves that are neither non-decreasing nor non-increasing — *monotonic* as this
 document words it, in either direction. `min(adjacent-overlap(fosc_hz by band)
 by bundle+temp_c+vdd_v)` takes, per corner, the worst
-`max(f in band k) / min(f in band k+1) − 1` over consecutive band codes, which
-is negative if a corner leaves a coverage hole. **The monotonicity figure is a
-zero, which is the most dangerous kind of figure to grade**: a derivation that
-quietly examined nothing reports the same `0` as a clean grid. So the check
-treats an empty group set, a curve with fewer than two points, and a repeated
-control voltage inside a curve as failures rather than passes, and prints the
-number of groups it examined (`867` here: `504` curves, `63` corners, and the
-`300` Monte Carlo samples of the next paragraph) in its own OK line.
+`max(f in band k) / min(f in band k+1) − 1` over every band code `k` and its
+successor `k+1`, which is negative if a corner leaves a coverage hole. The
+pairing is `band` with `band+1` rather than "the next band code present", so
+the ordering column has to be integer-coded and spaced by exactly 1: a corner
+holding bands `0, 1, 3` is **rejected** rather than examined over its one
+remaining pair. **The monotonicity figure is a zero, which is the most
+dangerous kind of figure to grade**: a derivation that quietly examined nothing
+reports the same `0` as a clean grid. So the check treats an empty group set, a
+curve with fewer than two points, and a repeated control voltage inside a curve
+as failures rather than passes, and prints the number of groups it examined
+(`867` here: `504` curves, `63` corners, and the `300` Monte Carlo samples of
+the next paragraph) in its own OK line. A worst *overlap* is silent in the same
+way about how many intervals it was the worst of, so that line also prints the
+number of adjacent band pairs examined (`441` here: `7` pairs across each of
+the `63` corners' `8` bands).
 
 **One figure is a statistic rather than an extremum, and it needed the language
 to grow** — the Reference spur row's term-1 mismatch figure, **17.48 %**. It is
@@ -656,6 +663,32 @@ samples to the same statistic by its own arithmetic, because it needs the number
 as an *ingredient* of the charge totals rather than as a figure quoted in prose;
 the two are deliberately independent routes to one number, and each script's
 header names the other so neither can drift quietly.
+
+**One figure is a bound rather than an end, and the language grew a second
+non-extremum aggregate for it** — the Supply sensitivity — DC row's
+**`5.7 mV`**, the agreement between each cell's measured `VCTRL` travel and
+what its selected band requires from the open-loop table. The column it
+reduces, `predicted_minus_measured_v`, is *signed*: it runs from −0.6 mV to
++5.7 mV over the 15 cells. A claim written "to within 5.7 mV at every cell" is
+therefore not `max()` — `max()` reports the positive end and `min()` the
+negative one, and either would grade one side of a two-sided bound and print
+it as the bound, which is precisely the defect the fourth table exists to
+catch. `maxmag(predicted_minus_measured_v)` is `max(|v|)`: the smallest number
+that bounds the column from both sides, whichever side happens to be the
+larger today. If a future re-read moved the negative end past −5.7 mV, `max()`
+would still report 5.7 and pass; `maxmag` reports the new bound and fails.
+
+Discarding the sign is what makes the aggregate right, and it is also what
+makes it quiet — `5.7` alone cannot tell a reader whether the set ever had two
+sides at all, the same silence a worst adjacent overlap has about how many
+intervals it beat. So the check prints, in its own OK line, how many signed
+values each bound covered and how many of them fell on the far side of zero
+from the binding end (`15` and `3` here). And one guard that `worst-magnitude`
+carries is deliberately **absent** here: that verb keeps the selected point's
+sign, so a tie between `+x` and `−x` is a coin toss and is refused; this
+aggregate discards the sign, so both ties give the same answer and there is
+nothing to be ambiguous about. A guard copied without its reason would reject
+a document that is not wrong.
 
 Two things this grading turned up rather than fixed silently. **`17.48 %` was
 quoted in §5 and appeared in neither this table nor the ungraded list below** —
@@ -800,8 +833,21 @@ needed are stated rather than left in the reductions:
 Four figures of the row were left out of that pass, none of them a reduction
 of one column: three ratios and one two-sided magnitude bound. Two of the
 three ratios — `1.41×` and `47 %`, the ones whose second ingredient is a
-*ratified line* — are graded in the third table below; the other ratio and the
-magnitude bound are declared in the fourth.
+*ratified line* — are graded in the third table below. **The magnitude bound
+is graded in the first table now, and it is the entry that says most about
+what this list is for.** `5.7 mV` was declined because the grammar had only
+extrema: `max()` returns a signed column's positive end and `min()` its
+negative one, and "matches … to within 5.7 mV at every cell" claims both ends
+at once, so either aggregate would have graded half of a two-sided bound and
+called it the bound. That is a statement about the *grammar*, not about the
+evidence — the same kind of obstacle as the range refusal below, and with the
+same disposition: it is work owed, not an exemption. `maxmag(COL)` is that
+work. **The third ratio is graded in the fifth table**, for the reason the
+fourth table had recorded against it: its divisor is not a ratified line but
+another measurement, `rms_exponential_mv`, so there was nothing for the third
+table's registry to resolve. That was a true statement about the third
+table's reach and a wrong place to stop — none of the four figures left out
+of that pass is still ungraded.
 
 | §5 row | Quoted value | Record(s) | Evidence file | Reduction | Scale |
 |---|---|---|---|---|---|
@@ -885,6 +931,7 @@ magnitude bound are declared in the fourth.
 | Supply sensitivity — DC / closed-loop, full grid | `0 of 45 points leave it` | `20260901-155456-46b92f8` | `supply_steady.csv` | `count(rows where vctrl_min_v < 0.9)` | `1` |
 | Supply sensitivity — DC / closed-loop, full grid | `0 of 45 points leave it` | `20260901-155456-46b92f8` | `supply_steady.csv` | `count(rows where vctrl_max_v > 2.7)` | `1` |
 | Supply sensitivity — DC / closed-loop, full grid | `53 mV` | `20260925-044237-4ff4f65` | `criterion1b_vctrl_budget.csv` | `min(margin_dr003_v)` | `1e3` |
+| Supply sensitivity — DC / closed-loop, full grid | `5.7 mV` | `20260925-044237-4ff4f65` | `criterion1b_vctrl_budget.csv` | `maxmag(predicted_minus_measured_v)` | `1e3` |
 | Supply sensitivity — DC / closed-loop, full grid | `−20.3 mV/µs` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `min(slope_mv_per_us where bundle == ss and temp_c == -40)` | `1` |
 | Supply sensitivity — DC / closed-loop, full grid | `18.75 µs` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(recovery_us where bundle == ss and temp_c == -40)` | `1` |
 | Supply sensitivity — DC / closed-loop, full grid | `8 µs short` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(t_to_close_phase_us where bundle == ss and temp_c == -40)` | `1` |
@@ -892,6 +939,8 @@ magnitude bound are declared in the fourth.
 | Supply sensitivity — DC / closed-loop, full grid | `20.0 mV` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(settled_ripple_pp_mv where bundle == ss and temp_c == -40)` | `1` |
 | Supply sensitivity — DC / closed-loop, full grid | `19.5` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(overshoot_mv where bundle == typical)` | `1` |
 | Supply sensitivity — DC / closed-loop, full grid | `22.5 mV` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(overshoot_mv where bundle == ff)` | `1` |
+| Supply sensitivity — DC / closed-loop, full grid | `20.54 mV` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(rms_linear_mv where bundle == ss and temp_c == -40)` | `1` |
+| Supply sensitivity — DC / closed-loop, full grid | `30.75 mV` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(rms_exponential_mv where bundle == ss and temp_c == -40)` | `1` |
 
 **And the rows that have no re-derived value, with the reason.** This second
 table is what makes the grading tables' coverage a claim rather than a sample:
@@ -917,7 +966,7 @@ of this exists" is.
 | Supply range | States the swept independent axis of every other row (2.97/3.30/3.63 V), which `check-pvt-coverage-claims.sh` grades against the harness's supply points. There is no measured quantity of its own |
 | Supply range, 5.0 V analog rail | **UNMET / not attempted.** No 5.0 V-class device exists in this design and nothing was ever simulated above 3.63 V, so there is no evidence of any kind to reduce — the point of the row |
 
-**And the figures that are a measurement divided by a ratified line.** The
+**And the figures that are a measurement read against a ratified line.** The
 first table reduces committed evidence and stops there, so a figure whose
 second ingredient is a *spec line* rather than a column fell outside it. Two
 did, both in the Supply sensitivity — DC row: **`1.41×`**, the worst measured
@@ -931,9 +980,25 @@ conclusion — and §5.2 below had already shown why, for the spur derivation:
 written down beside it.** Here there are exactly two ingredients. One is a
 reduction this section already evaluates. The other is a number in `spec/pll.md`.
 
+**Two shapes of figure say "against the line," and the table now carries
+both.** A *ratio* answers "how many times the allowance," which is the shape a
+budget row states — `1.41×` of Budget 2. A *distance* answers "how far past the
+line," which is the shape a dBc row states: the Reference spur row's two cold
+corners are **`0.5 dB`** and **`0.1 dB`** over the ratified −55 dBc, which is
+`−54.51` and `−54.88` minus that line. When this table graded ratios and only
+ratios, those two had nowhere to go, so §5 wrote the pair as the single range
+`0.1–0.5 dB` and the ungraded list below had to decline it — **not for want of
+evidence.** Both ends were *already* graded in the first table, as the dBc
+figures `−54.5` and `−54.9`, and the ratified line was already being read out
+of `spec/pll.md` for two other constants. What blocked it was the shape: a
+range is not a figure (below), so the number at the front would have been
+graded and the other end never looked at. Adding the subtraction is what let §5
+write the two ends as two figures, which is how a refusal of a *shape* is meant
+to end — in a rewritten claim, not a permanent exemption.
+
 So a third table grades them, under the same rules as the first — the record
 must resolve and be cited by the §5 row, the evidence must be committed, and
-the figure must appear verbatim in the row — plus three the division needs:
+the figure must appear verbatim in the row — plus three the arithmetic needs:
 
 - **The constant is read out of the document, never written into the check.**
   `budget2-vctrl-consumption-v` and `dr003-vctrl-window-width-v` resolve by
@@ -951,26 +1016,98 @@ the figure must appear verbatim in the row — plus three the division needs:
   failure here rather than a coin toss over whichever statement the check's
   regex reached first. The **width** is then derived from the two ends rather
   than matched against the "1.8 V wide" the spec writes in passing, because the
-  ends are what is ratified.
+  ends are what is ratified. The −55 dBc spur line reads the same way, from the
+  spec table's row-7 target cell *and* from the `**Target:**` line of the
+  `## Reference spur` section that derives it. `spec/pll.md`'s "Verification
+  owed" table has a row that links to that same section, so the target cell is
+  located as *the cell after the link whose whole content is the line* — a
+  looser match would read an owner cell as a target and then report that the
+  document contradicts itself.
 - **The table's own statement of the constant is graded too.** The Constant
   column is the reader's handle on the arithmetic — `0.846 / 0.6` is checkable
   by eye, `0.846 / budget2-vctrl-consumption-v` is not — so it is compared
   against the resolved value and is not an input to the derivation.
 
+One more guard belongs to the subtraction specifically. **A constant that reads
+as zero is a failed read, not a datum**, and is rejected for both operators even
+though subtracting zero is harmless arithmetic. Nothing normative in this
+specification is a zero, so a resolver returning one means its regex has stopped
+matching the document — and a silently-zero line would grade `−54.51 − 0` and
+report 54.51 dB of overshoot as though it were evidence.
+
 | §5 row | Quoted value | Record(s) | Evidence file | Derivation | Constant | Scale |
 |---|---|---|---|---|---|---|
 | Supply sensitivity — DC / closed-loop, full grid | `1.41×` | `20260925-044237-4ff4f65` | `criterion1b_vctrl_budget.csv` | `max(span_full_v) / budget2-vctrl-consumption-v` | `0.6 V` | `1` |
 | Supply sensitivity — DC / closed-loop, full grid | `47 %` | `20260925-044237-4ff4f65` | `criterion1b_vctrl_budget.csv` | `max(span_full_v) / dr003-vctrl-window-width-v` | `1.8 V` | `100` |
+| Reference spur | `0.5 dB` | `20260816-132150-5f405e7` | `spur_by_corner.csv` | `max(spur_dbc_at_200mhz) - reference-spur-line-dbc` | `−55 dBc` | `1` |
+| Reference spur | `0.1 dB` | `20260816-132150-5f405e7` | `spur_by_corner.csv` | `max(spur_dbc_at_200mhz where process == ff and temp_c == -40) - reference-spur-line-dbc` | `−55 dBc` | `1` |
 
-Both numerators are the same `0.846 V` graded in the first table, re-derived
-rather than quoted from it, so the three figures cannot drift apart. And one
-guard arrived with this table that the first one needed all along: **a range is
-not a figure.** The figure parser reads the number at the front of the string,
-so a quoted `0.1–0.5 dB` would have been graded as `0.1` and the other end
-would never have been looked at — *grading half of a two-sided bound and
+Both `VCTRL` numerators are the same `0.846 V` graded in the first table, and
+both spur minuends are the same `−54.5` and `−54.9` graded there, each
+re-derived here rather than quoted from there, so no figure can drift from the
+reduction it is made of. The two spur entries are also **the same two reductions
+in a different unit** — that is the whole content of the claim "0.5 dB over the
+line," and writing it that way is what makes the −55 dBc line an ingredient CI
+reads rather than a number a reader is asked to subtract in their head.
+
+And one guard arrived with this table that the first one needed all along: **a
+range is not a figure.** The figure parser reads the number at the front of the
+string, so a quoted `0.1–0.5 dB` would have been graded as `0.1` and the other
+end would never have been looked at — *grading half of a two-sided bound and
 calling it the bound*, which is the defect the fourth table below exists to make
-visible. A range-shaped figure is now refused outright in both tables, which is
-what makes one of the entries below a declaration rather than an oversight.
+visible. A range-shaped figure is refused outright in all three grading
+tables — this one, the first, and the fifth below. That
+refusal is not a way of declining work, and the entry it produced did not
+survive the day: `0.1–0.5 dB` was refused on 2026-09-26 and graded on
+2026-09-26, as the two entries above, once §5 wrote the two ends as two
+figures. Refusing a shape is meant to end in a rewritten claim, not a permanent
+exemption.
+
+**One figure's second ingredient is not written down anywhere, because it is
+measured.** The third table reaches a figure whose other operand is a ratified
+line a resolver can read out of `spec/pll.md`. `33 %` — how much less residual
+a straight line leaves than a single exponential over the same post-ramp
+samples — has no line to read: its divisor is `rms_exponential_mv`, another
+column of the same committed CSV. The ungraded list said exactly that, and was
+right about the third table's reach and wrong to stop there. A fifth table
+carries the shape:
+
+| §5 row | Quoted value | Record(s) | Evidence file | Derivation | Scale |
+|---|---|---|---|---|---|
+| Supply sensitivity — DC / closed-loop, full grid | `33 %` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(rms_linear_mv where bundle == ss and temp_c == -40) shortfall-from max(rms_exponential_mv where bundle == ss and temp_c == -40)` | `100` |
+
+`A shortfall-from B` is `(B − A) / B`: how far the first measurement falls
+short of the second, as a fraction of the second. It is **not** a ratio, and
+the distinction is the claim — 20.54/30.75 is 67 %, a true number that is not
+what "33 % less residual" says. There is one operator here where the third
+table has two, because this document states one shape of figure; a
+ratio-of-two-measurements would be owed its own operator, its own tests and its
+own paragraph, the way the subtraction was.
+
+Four guards, and the second is the one that keeps this table from becoming a
+fresh source of the omission the fourth table exists to expose:
+
+- **One evidence file, structurally.** The table has a single Evidence column,
+  so both operands necessarily reduce the same committed table under the same
+  records. A reader re-derives the whole figure from one file.
+- **Both operands must themselves be graded in the first table**, for this same
+  §5 row. This is the third table's Constant rule in its own dialect: there,
+  the stated constant is what makes `0.846 / 0.6` checkable by eye. Here there
+  is no constant to state, so the reader's handle is that both ingredients are
+  quoted in §5 and re-derived above — `1 − 20.54/30.75` is checkable by eye,
+  `1 − max(…)/max(…)` is not. §5 did not previously quote either residual;
+  that it does now is this entry's half of the bargain, exactly as writing
+  `0.1 dB` and `0.5 dB` as two figures was the range refusal's.
+- **No count on either side.** What this grades is a relative difference
+  between two measurements of one quantity — two residuals in volts. A count
+  is not that, and a figure that needs one needs a stated reason first.
+- **The two reductions may not be the same text.** `1 − A/A` is 0 for every
+  `A`, and 0 is a legitimate figure here — "no better fit at all" — so a
+  column quietly compared with itself would report exactly what a real null
+  result reports. The same column under two *different filters* is a real
+  figure shape and is allowed; identical text is not. A measured zero divisor
+  is refused for the third table's reason in the same dialect: there is then
+  nothing for the other measurement to fall short of.
 
 **And the figures inside graded rows that are still not re-derived.** Coverage
 above is per *row*, not per *number*: a row with one re-derived value is not a
@@ -1000,24 +1137,51 @@ exclusion table above had ever been audited against the records they excuse.
 false, not superseded, but *incomplete*: `1.41×` and `47 %` were declined
 because a ratio to a spec line "is arithmetic on the line, not a column of the
 committed evidence," which stated a true fact about the evidence and drew the
-wrong conclusion from it. They are graded in the third table above now. Their
-departure sharpens what the remaining arithmetic-shaped entries have to say:
-"arithmetic rather than a column" is no longer a reason by itself, so each now
-names the ingredient that is genuinely missing — a second end the figure's own
-shape would hide, or a divisor that is another measurement rather than a line.
+wrong conclusion from it. They are graded in the third table above now, and
+`33 %` — the last arithmetic-shaped entry, and the one whose stated reason was
+that its divisor is another *measurement* rather than a line — is graded in
+the fifth. The lesson those three leave is that **"arithmetic rather than a
+column" was never a reason at all**: it named the shape of the figure instead
+of a missing ingredient, and in all three cases every ingredient was already
+committed. An entry that reaches for that phrasing again should be read as an
+unfinished derivation.
 
-What remains is five figures in four rows. One was added when grading the
-closed-loop lock-time row put a disclosure obligation on it; two when grading
-the Supply sensitivity — DC row did; and one when grading the Reference spur
-row's two coldest corners did:
+**And one came off it for a reason of a fourth kind: the reason was true, and
+the document changed so that it stopped being.** `0.1–0.5 dB` was declined
+because a two-ended range is not a figure — an accurate statement about how it
+was *written*, not about what was known. Both ends were already graded as dBc
+values, and the ratified line was already being read. So §5 now writes the two
+ends as two figures and the third table subtracts the line from each. That is
+the disposition this list is supposed to push a shape-refusal toward: an entry
+here whose only obstacle is the shape of the sentence is a **rewrite owed by
+§5**, not a standing exemption, and it should be read that way every time one
+appears.
+
+**And one came off it for a reason of a fifth kind: the reason was true about
+the grammar, and the grammar grew.** `5.7 mV` was declined because "the
+grammar has no magnitude aggregate" — an accurate statement about the language
+the first table was written in, not about the evidence, which had committed
+the signed column all along. `maxmag(COL)` is that gap closed, and the entry
+is graded in the first table above. It sits alongside the range refusal as the
+second shape of obstacle this list must never let harden: a missing *operator*
+and a two-ended *sentence* are both work owed, and neither is a property of
+the measurement.
+
+**Taking the three kinds together, every entry this list has ever carried whose
+obstacle was the language rather than the evidence is now gone** — a shape, an
+operator, an aggregate, and three "arithmetic, not a column" readings that were
+each an unfinished derivation. That is the whole disposition of this table: it
+is a queue of work owed, and only an entry naming something the *evidence* does
+not contain may sit in it indefinitely.
+
+What remains is two figures in two rows, and neither is about the grammar.
+Both were added when grading their own rows put a disclosure obligation on
+them:
 
 | §5 row | Figure | Why it is not re-derived |
 |---|---|---|
 | Kvco | `115.8 MHz/V` | Two reasons, either sufficient. Selecting the point evaluates [the band-selection rule](../../spec/pll.md#band-selection-rule) (lowest band code that reaches the target) at every corner — a derivation, and one over a rule whose control window `spec/pll.md` does not presently name, an ambiguity tracked at #542 under which the two candidate windows select different bands. And the point itself is at Vctrl = 1.54 V, which the 7-point control sweep does not sample (its neighbours are 114.93 MHz/V at 1.50 V and 120.85 at 1.80 V), so no reduction of this CSV returns it. The adversarial `154.3 MHz/V` figure the rule exists to exclude *is* graded above, which is the half that bounds the risk |
 | Lock time, closed-loop cold-start / worst-case re-lock | `{4,16,64}` | A stimulus *set*, not a number: the grammar above re-derives a figure, and this one is the three divide ratios the grid was run at. Its cardinality is pinned from both sides by figures that are graded — the 270 rows, the 45 corners and the two conditions the record's own table carries, which multiply to 45 × 3 × 2 — while the membership is graded against the record's declared sweep axis by `check-pvt-coverage-claims.sh`, as the `f_ref` span is for the Reference input row |
-| Reference spur | `0.1–0.5 dB` | **A two-ended range, which is not a figure.** Both ends are a distance over the −55 dBc line — `−54.9` and `−54.5`, both graded above, against a `spec/pll.md` constant — so the arithmetic is no obstacle now that the third table grades a reduction against a ratified line. What stops it is the shape: the figure parser reads the number at the front, so grading this string would grade `0.1` and never look at `0.5`. That is refused outright rather than accepted quietly, which is why this stays a declaration; closing it means §5 writing the two ends as two figures |
-| Supply sensitivity — DC / closed-loop, full grid | `5.7 mV` | A *magnitude* bound — `predicted_minus_measured_v` in `criterion1b_vctrl_budget.csv` is signed and spans −0.6 … +5.7 mV over the 15 cells, and the grammar has no magnitude aggregate. `max()` would return 5.7 here only because the positive side happens to be the larger one; grading half of a two-sided bound and calling it the bound is the defect this table exists to catch, so it is declared instead |
-| Supply sensitivity — DC / closed-loop, full grid | `33 %` | `1 − rms_linear_mv / rms_exponential_mv` at `ss`/−40 °C (20.54 against 30.75 mV in `criterion3_end_recovery.csv`). **Both** operands are columns of the committed evidence, which is what the third table's form does not reach: it divides one reduction by one *written-down* constant, and there is no ratified line here to read — the divisor is another measurement. Neither operand is quoted in §5 either, so grading it would have to introduce both |
 
 Nothing mechanically enumerates "every headline figure" out of §5's prose
 cells, which quote hundreds of numbers, most of them commentary on a figure
@@ -1104,12 +1268,24 @@ reading (the `cp-compliance` "worst point in window" convention), forms the
 signed and folded `|mean| + 3*sd` per corner, and keeps the worst corner of
 each — the same reduction `sim/mc-cp-mismatch/testbench/run.sh --restat`
 implements, independently re-derived rather than trusted. It does the same
-for term 3's residual net charge from `mc_pfd_cp.csv`, then chains both
-through the Icp and `T_ov` figures DR-018's own Input table states (taken as
-given, not re-swept from `cp-compliance`/`pfd-deadzone`'s own 45-corner
-grids — the same boundary `check-spur-derivation-arithmetic.sh` draws around
-C2 and the TIE scale point) into the three charge totals above, and fails CI
-if any of them no longer reproduces.
+for term 3's residual net charge from `mc_pfd_cp.csv`, and — since #573 — for
+the three remaining ingredients as well, each from its own campaign's
+committed 45-corner grid rather than from the value DR-018's Input table
+states for it:
+
+| Ingredient | Re-derived from | By the reduction stated in |
+|---|---|---|
+| `Icp` = 7.21 µA at trim code 11 | `sim/cp-compliance/…-190821-734f483`'s `cp_dc.csv` | the campaign's own `cp_trim_range.csv` header ("mean of the two polarities at Vctrl = 1.65 V, min/max across every corner"), cross-checked against that file's own committed reduction |
+| `T_ov` = 2.584 ns | `sim/pfd-deadzone/…-051356-8cedbba`'s `raw_measures.csv` | DR-018's own row label ("min UP/DN pulse at zero phase error, 45 corners"), with the zero-phase rows selected by parsing the dphi axis and cross-checked against the campaign's own `q_zero` marker |
+| Systematic `\|q_up + q_dn\|` = 3.68 fC | `sim/cp-compliance/…-061841-c24ee3a`'s `cp_switch.csv` | DR-006 §8, whose worst case **and** median are both graded |
+
+Every figure DR-018's Input table states for those three is graded against the
+reduction rather than trusted, the corner grid each is a worst case over is
+counted (45, read out of the table's own rows), and the trim code priced, the
+named worst corner and the record ids are all read out of the documents rather
+than hardcoded. The three charge totals are then built from the reduced
+figures — not the written ones — and CI fails if any of them no longer
+reproduces.
 
 **That same term-1 statistic is graded a second, independent way in §5.1**, and
 that is deliberate rather than duplicated by accident. §5.1's provenance table
@@ -1126,15 +1302,18 @@ same number by two routes, a change to either one that moves the statistic makes
 CI disagree with itself rather than drift quietly, and each script's header names
 the other so the pairing is discoverable from either end.
 
-What is still not re-derived, stated so the narrower gap is visible rather than
-implied: `Icp`, `T_ov` and the 3.68 fC systematic charge asymmetry are
-worst-of-45-corners figures taken from DR-018's Input table, not independently
-re-swept from `sim/cp-compliance`'s and `sim/pfd-deadzone`'s own 45-corner grids
-here. That remainder is owed at **#573 (open)** — no new simulation with it,
-only a reduction of campaigns already committed. Nor does either check grade the
-dB *margins* stated in prose ("1.6 dB inside the line", "~12 dB at the two cold
-corners"), because a bare "dB" in this document is as often a spread or a
-reserve as it is a difference of two graded numbers.
+What is still not re-derived, stated so the remaining gap is visible rather
+than implied: both checks read committed evidence and neither runs a
+simulator, so neither can say whether the simulation behind a CSV was the
+right experiment — that is what each campaign's manifest, testbench and
+record Methodology field answer, and what
+`sim/lib/check-record-supersession.sh` keeps honest about *which* record is
+current. C2 (1.814 pF) and the TIE scale point (0.669 ps at 1.825 mV) are
+still taken as given, downstream of the charge totals, which is the boundary
+`check-spur-derivation-arithmetic.sh` draws for itself. Nor does either check
+grade the dB *margins* stated in prose ("1.6 dB inside the line", "~12 dB at
+the two cold corners"), because a bare "dB" in this document is as often a
+spread or a reserve as it is a difference of two graded numbers.
 
 ---
 
