@@ -1,0 +1,4 @@
+typical_-40c_3.30v trajectory: already done, skipped (--resume)
+typical_-40c_3.30v sid: 740.0 s
+typical_-40c_3.30v bias: 213.4 s
+typical_-40c_3.30v transient: 4598.5 s

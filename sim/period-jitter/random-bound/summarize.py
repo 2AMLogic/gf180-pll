@@ -298,7 +298,7 @@ def main() -> int:
           "the `bias` stage's open-loop white-only prediction is "
           f"{bc['lti_open_white_sigma_s'] * 1e12:.3f} ps — ratio **{bc['ratio']:.3f} "
           f"± {bc['se']:.3f}** (1 if the small-signal model describes the circuit; "
-          "the transient's densities are the trajectory maxima, ≤ 0.22 dB above "
+          "the transient's densities are the trajectory maxima, ≤ 0.24 dB above "
           "the DC values the model uses).")
         a("")
         rep = val["repeat_vs_transient_same_seed"]

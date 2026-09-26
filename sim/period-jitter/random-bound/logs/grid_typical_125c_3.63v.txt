@@ -1,0 +1,4 @@
+typical_125c_3.63v trajectory: already done, skipped (--resume)
+typical_125c_3.63v sid: 737.6 s
+typical_125c_3.63v bias: 198.9 s
+typical_125c_3.63v transient: 4464.6 s

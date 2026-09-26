@@ -1,0 +1,4 @@
+ff_125c_3.63v trajectory: already done, skipped (--resume)
+ff_125c_3.63v sid: 1146.3 s
+ff_125c_3.63v bias: 321.6 s
+ff_125c_3.63v transient: 5383.8 s

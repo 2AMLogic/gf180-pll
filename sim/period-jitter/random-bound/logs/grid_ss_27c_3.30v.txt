@@ -1,0 +1,4 @@
+ss_27c_3.30v trajectory: already done, skipped (--resume)
+ss_27c_3.30v sid: 1144.4 s
+ss_27c_3.30v bias: 323.0 s
+ss_27c_3.30v transient: 5107.0 s

@@ -683,6 +683,23 @@ def _parse_bias_noise(text: str, freqs) -> list[dict]:
     return out
 
 
+_CONTRIB_RE = re.compile(r"^[io]noise_total[._]\S+\s*=")
+
+
+def trim_bias_log(text: str) -> str:
+    """The committed form of a bias LTI log: everything but the per-contributor lines.
+
+    `print all` at 101 frequencies is ~6 MB per point, almost all of it one
+    line per (device, mechanism).  The committed log keeps the deck's echo,
+    the operating point and each frequency's `onoise_total`; the reduction of
+    the breakdown (total, flicker and white density per frequency) is in
+    `results/bias_<point>.json`, and a re-run regenerates the full log.
+    """
+    kept = [ln for ln in text.splitlines() if not _CONTRIB_RE.match(ln.strip())]
+    return ("* per-contributor noise lines removed (run.py trim_bias_log); "
+            "their reduction is results/bias_<point>.json\n" + "\n".join(kept) + "\n")
+
+
 def _stage_mean(rows, path, q):
     return sum(r[path][q] for r in rows) / len(rows)
 
@@ -733,7 +750,9 @@ def stage_bias(point, op, outdir, logs, work, models, quick):
     deck = rb_deck.bias_lti_deck(pdk_models=models, repo_root=REPO, op=op, src=src,
                                  kp=kp, kn=kn, nh=nh, nt=nt, resistors=res,
                                  kf_body=kf, af_body=af, freqs=freqs)
-    el_n, out = run_deck(deck, work / "lti", logs / f"bias_lti_{point}.log")
+    log_path = logs / f"bias_lti_{point}.log"
+    el_n, out = run_deck(deck, work / "lti", log_path)
+    log_path.write_text(trim_bias_log(log_path.read_text()))
     op_v = {k: v for k, v in rb_extract.parse_print(out) if k in ("v(vbp)", "v(vbn)")}
     spec = _parse_bias_noise(out, freqs)
     f0 = traj["f0_Hz"]

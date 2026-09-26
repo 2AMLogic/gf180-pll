@@ -12,9 +12,9 @@ noise has a memory of many periods, is bounded by a small-signal analysis
 instead, where that analysis is exact. The decision record is
 [`DR-032`](../../../spec/decision-records/DR-032-random-period-jitter-bounded-over-the-grid.md).
 
-**Result: the random period jitter is at most @@WORST@@ % RMS at every one of
-the 45 mandated PVT points** (worst @@WORST_TRIPLE@@), against the 0.50 % RMS
-`spec/pll.md` allocates to it — a @@MARGIN@@× margin. It is an upper bound, not
+**Result: the random period jitter is at most 0.338 % RMS at every one of
+the 45 mandated PVT points** (worst `sf`/−40 °C/2.97 V), against the 0.50 % RMS
+`spec/pll.md` allocates to it — a 1.48× margin. It is an upper bound, not
 an estimate, and it does not cover the charge pump, PFD, divider or lock
 detector; see [What this does NOT establish](#what-this-does-not-establish).
 
@@ -109,7 +109,7 @@ generator's spread past `f₀/2`. The factor is `1 + 2 T_w ∫ (env − 1)₊ df
 (`white_loop_factor`) = 1.142 — not the envelope's 2.571 peak.
 
 **4. The bias generator, small-signal.** It is quasi-DC — every one of its
-devices' noise densities moves by ≤ 0.22 dB over the cycle — so it is analysed
+devices' noise densities moves by ≤ 0.24 dB over the cycle — so it is analysed
 where a small-signal analysis is exact: `.noise` about its DC operating point,
 loaded as in the VCO, with the output taken as the ring's instantaneous
 frequency deviation `δf = K_p v(VBP) + K_n v(VBN)` through the ring's measured
@@ -240,42 +240,46 @@ deck's summed, multi-phase form against one `.noise` per device.
 
 ## What it found
 
-Every figure here is in [`results/SUMMARY.md`](results/SUMMARY.md).
+Every figure here is in [`results/SUMMARY.md`](results/SUMMARY.md). The
+points ran at two recorded repository heads, `1c57daf4` and `89ead93d`; between
+them only this README changed, and nothing under `design/` or
+`sim/period-jitter/` was modified at run time at any point (both recorded per
+point).
 
-- **The bound clears the allocation everywhere**: @@RANGE@@ over the 45
-  points, worst @@WORST_TRIPLE@@ at @@WORST@@ %, a @@MARGIN@@× margin on 0.50 %.
-  Its three terms: ring and output buffer @@RB_RANGE@@, bias generator
-  @@BIAS_RANGE@@, loop-filter resistor ≤ @@LF_MAX@@.
+- **The bound clears the allocation everywhere**: 0.255 … 0.338 % RMS over the 45
+  points, worst `sf`/−40 °C/2.97 V at 0.338 %, a 1.48× margin on 0.50 %.
+  Its three terms: ring and output buffer 0.106 … 0.188 %, bias generator
+  0.229 … 0.281 %, loop-filter resistor ≤ 0.0056 %.
 - **The bias generator sets it.** Its term is the largest at every point —
-  @@BIASSHARE@@ — though its devices are fewer and quieter than the ring's
-  per device: VBP and VBN are shared by all five stages, so its noise reaches
-  every stage at once. That is the place to look if this bound ever needs to
+  69–83 % of the bound's variance — because VBP and VBN are shared by all
+  five stages, so each of its generators reaches every stage at once, and
+  coherently. That is the place to look if this bound ever needs to
   be tighter, or the design quieter.
 - **The window the ring/buffer factors assume holds.** With only the ring's and
   buffer's generators injected, the period sequence's lag-1 autocorrelation is
-  @@RHO1@@ and its lag-2 @@RHO2@@ over the grid (standard error ≈ 0.065 each) —
+  -0.258 … +0.160 and its lag-2 -0.117 … +0.127 over the grid (standard error ≈ 0.065 each) —
   no memory beyond the next period. The bias generator's white generators
-  alone, by contrast, give @@BIAS_RHO1@@ at the reference point: the memory that
+  alone, by contrast, give +0.43 at the reference point: the memory that
   is why it is analysed small-signal.
 - **The maximum is resolved.** Sampling each switching device's density at the
   trajectory's own 2.17 ps around its peaks raised its 17 ps-sampled maximum
-  by at most @@CB@@ %; a 48-phase grid alone would have missed the output
-  buffer's peak by up to @@BA@@×.
+  by at most 8.6 %; a 48-phase grid alone would have missed the output
+  buffer's peak by up to 8.1×.
 - **The transient measures what it claims** (reference point, as ratios of
   independent decks to the transient's own result): 2.5 ps timestep ceiling
-  @@TMAX@@; `trnoise` sample interval 5 / 20 ps @@NT@@; every amplitude × 3
-  @@X3@@; the same deck again @@REPEAT_RATIO@@; the ring's and buffer's
-  variance shares sum to @@SUM@@. White generators alone carry @@WHITE_SHARE@@
+  1.028 ± 0.067; `trnoise` sample interval 5 / 20 ps 1.061 ± 0.069 and 1.126 ± 0.073; every amplitude × 3
+  3.161 ± 0.206; the same deck again 1.114 ± 0.073; the ring's and buffer's
+  variance shares sum to 1.104 ± 0.14. White generators alone carry 0.54
   of the ring/buffer variance — the rest is the flicker folded in through `Φ`.
 - **The bias generator's model is conservative against the circuit**: its
-  white generators injected in the transient give @@BIASCHECK@@ of the model's
+  white generators injected in the transient give 0.910 ± 0.042 of the model's
   open-loop white prediction — the model over-states them, the safe direction
   for a bound.
 - **Two toolchain facts.** Fixing `rndseed` does not reproduce a `trnoise`
-  realisation on this build (same deck run twice: @@REPEAT@@, where a
+  realisation on this build (same deck run twice: correlations +0.172, +0.342, +0.053, +0.069, where a
   reproduced realisation would give 1), so every comparison is statistical.
   And the summed, multi-phase noise deck reports each device exactly as a
-  per-device `.noise` does (@@FORMS@@).
+  per-device `.noise` does — identical in every printed digit.
 
 ## What this does NOT establish
 

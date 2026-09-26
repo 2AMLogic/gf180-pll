@@ -1,0 +1,4 @@
+typical_27c_2.97v trajectory: already done, skipped (--resume)
+typical_27c_2.97v sid: 735.8 s
+typical_27c_2.97v bias: 202.1 s
+typical_27c_2.97v transient: 4385.9 s

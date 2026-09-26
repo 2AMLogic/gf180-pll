@@ -1,0 +1,4 @@
+ff_27c_2.97v trajectory: already done, skipped (--resume)
+ff_27c_2.97v sid: 739.2 s
+ff_27c_2.97v bias: 205.3 s
+ff_27c_2.97v transient: 4436.8 s

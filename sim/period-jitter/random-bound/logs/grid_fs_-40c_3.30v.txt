@@ -1,0 +1,4 @@
+fs_-40c_3.30v trajectory: 450.5 s
+fs_-40c_3.30v sid: 1166.6 s
+fs_-40c_3.30v bias: 327.1 s
+fs_-40c_3.30v transient: 4998.7 s

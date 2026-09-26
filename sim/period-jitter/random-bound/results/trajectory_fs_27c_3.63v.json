@@ -1,0 +1,26 @@
+{
+ "elapsed_s": 287.50799202919006,
+ "f0_Hz": 149944595.0967928,
+ "ic_offset_V": 0.0,
+ "kvco_Hz_per_V": 69847140.65413028,
+ "kvco_dv_V": 0.01,
+ "max_snap_phase_error": 0.00014963438629478354,
+ "n_dense": 3072,
+ "operating_point": {
+  "band": [
+   0,
+   1,
+   1
+  ],
+  "mos_section": "fs",
+  "moscap_section": "moscap_typical",
+  "res_section": "res_typical",
+  "temp_c": 27.0,
+  "vctrl": 2.055,
+  "vsup": 3.63
+ },
+ "period_s": 6.669130016687006e-09,
+ "phase_origin_s": 4.0334752722633854e-08,
+ "point": "fs_27c_3.63v",
+ "tmax_s": 2e-12
+}

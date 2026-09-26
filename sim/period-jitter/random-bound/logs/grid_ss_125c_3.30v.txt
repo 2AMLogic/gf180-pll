@@ -1,0 +1,4 @@
+ss_125c_3.30v trajectory: already done, skipped (--resume)
+ss_125c_3.30v sid: 1154.9 s
+ss_125c_3.30v bias: 317.8 s
+ss_125c_3.30v transient: 4970.0 s

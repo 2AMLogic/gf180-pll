@@ -1,0 +1,5 @@
+start-up stall at t = 4e-14 s -- retrying with .ic offset 0.001 V
+fs_125c_3.63v trajectory: 316.7 s
+fs_125c_3.63v sid: 775.4 s
+fs_125c_3.63v bias: 183.9 s
+fs_125c_3.63v transient: 6370.3 s

@@ -1,0 +1,50 @@
+{
+ "C_F": 1e-09,
+ "R_ohm": 1.0,
+ "corr_a_b": -0.0044123253888724,
+ "corr_expected_std": 0.02241676382136511,
+ "effective_independent_samples": 1990.0049999999999,
+ "elapsed_s": 92.48357105255127,
+ "environment": {
+  "ngspice": "ngspice-46",
+  "pdk_models": "n/a",
+  "repo_dirty": false,
+  "repo_head": "5dc89b40",
+  "run_utc": "2026-09-26T14:33:19Z"
+ },
+ "sources": [
+  {
+   "NA_A": 0.001,
+   "NT_s": 1e-11,
+   "S_one_sided_theory_A2_per_Hz": 1.9999999999999998e-17,
+   "measured_over_theory": 1.0459099304482593,
+   "rel_std_error": 0.03170209142068907,
+   "source": "a"
+  },
+  {
+   "NA_A": 0.001,
+   "NT_s": 1e-11,
+   "S_one_sided_theory_A2_per_Hz": 1.9999999999999998e-17,
+   "measured_over_theory": 0.9990740120835567,
+   "rel_std_error": 0.03170209142068907,
+   "source": "b"
+  },
+  {
+   "NA_A": 0.001,
+   "NT_s": 5e-12,
+   "S_one_sided_theory_A2_per_Hz": 9.999999999999999e-18,
+   "measured_over_theory": 0.9847867353085937,
+   "rel_std_error": 0.03170209142068907,
+   "source": "c"
+  },
+  {
+   "NA_A": 0.001,
+   "NT_s": 2e-11,
+   "S_one_sided_theory_A2_per_Hz": 3.9999999999999997e-17,
+   "measured_over_theory": 0.9849456205225184,
+   "rel_std_error": 0.03170209142068907,
+   "source": "d"
+  }
+ ],
+ "tstop_s": 4e-06
+}

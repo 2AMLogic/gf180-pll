@@ -601,12 +601,13 @@ def noise_deck(*, pdk_models, op, entries, freqs, rsense, combined: bool = True)
 #: Why the bias generator is not in the transient.  Its outputs VBP/VBN are
 #: slow nets shared by all five stages, so a generator inside it moves the
 #: ring's frequency for many periods after it acts -- the injected transient's
-#: period sequence shows it as a POSITIVE lag-1 autocorrelation (+0.29 with
-#: the bias generator alone, against -0.18 for the ring alone and -0.44 for
-#: the buffer alone, at the reference point).  The flicker and loop factors
+#: period sequence shows it as a POSITIVE lag-1 autocorrelation (+0.43 with
+#: the bias generator's white generators alone, against +0.00 for the ring
+#: alone and -0.47 for the buffer alone -- the `validate` stage, reference
+#: point).  The flicker and loop factors
 #: `rb_extract` applies to the transient assume a response no longer than
 #: `1 + WINDOW_MARGIN` periods, which that memory breaks.  The bias generator
-#: is quasi-DC (its devices' densities move by <= 0.22 dB over the cycle), so
+#: is quasi-DC (its devices' densities move by <= 0.24 dB over the cycle), so
 #: it is analysed where it is exact: `.noise` about its DC operating point,
 #: referred to the ring's instantaneous frequency through the two measured
 #: static sensitivities `df/dV_BP` and `df/dV_BN`, and integrated with its own
