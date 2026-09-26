@@ -3,7 +3,8 @@
 Everything that turns ngspice output into the numbers this directory reports,
 kept free of any simulator so `sim/tests/test_random_bound.py` can pin it.
 
-THE BOUND, IN THREE INEQUALITIES.  Each is stated where it is used; together:
+THE BOUND.  The ring's and output buffer's generators are bounded by a
+transient through three inequalities, each stated where it is used:
 
   1. WHITE, CYCLOSTATIONARY -> WHITE, STATIONARY.  A white generator of
      time-varying density `S(t)` contributes `(1/w0^2)(1/2) int h(t)^2 S(t) dt`
@@ -21,12 +22,16 @@ THE BOUND, IN THREE INEQUALITIES.  Each is stated where it is used; together:
   3. OPEN LOOP -> CLOSED LOOP.  In lock the output phase is the free-running
      phase times the loop's error transfer `1/(1 + T(jw))`.  For a white
      generator that can raise the period variance only inside a band around
-     the crossover -- `white_loop_factor`, ~1.08, not the envelope's ~2.57
-     peak, which is reported beside it.
+     the crossover -- `white_loop_factor`, not the envelope's peak.
 
-The bound is conservative by construction in all three places.  How
-conservative is reported, not hidden: `S_inj` against the per-phase values it
-dominates, and the loop factors against 1.
+The bias generator's generators are bounded by a small-signal analysis
+instead, because their memory is longer than the window 2 and 3 assume
+(`lti_period_variance`); the loop-filter resistor by equipartition
+(`kt_over_c_bound`).  `assemble_bound` adds the three in quadrature.
+
+The bound is conservative by construction.  How conservative is reported, not
+hidden: `S_inj` against the per-phase values it dominates, and the loop
+factors against 1.
 """
 
 from __future__ import annotations
