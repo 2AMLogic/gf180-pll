@@ -86,6 +86,17 @@ class NoisyDerivation(unittest.TestCase):
     def test_one_source_per_device(self):
         self.assertEqual(self.text.count("trnoise("), len(self.devs))
 
+    def test_zero_amplitude_emits_no_source(self):
+        """0 is how the transient leaves the bias generator to the `bias` stage:
+        exactly the zero-amplitude devices lose their source, no others."""
+        amps = {d["path"]: (0.0 if d["block"] == "bias" else 1e-7) for d in self.devs}
+        text = _deck.noisy_subckts(self.src, amps, 1e-11)
+        n_bias = sum(d["block"] == "bias" for d in self.devs)
+        self.assertEqual(text.count("trnoise("), len(self.devs) - n_bias)
+        for d in self.devs:
+            if d["block"] == "bias":
+                self.assertNotIn(f"in_{d['instance'].lower()} ", text)
+
     def test_missing_amplitude_raises(self):
         amps = dict(self.amps)
         amps.pop(self.devs[0]["path"])
@@ -230,6 +241,65 @@ class Decks(unittest.TestCase):
                                 freqs=(), rsense=1e-3)
         self.assertNotIn("noise v(", deck)
         self.assertIn("@m.xm0.m0[vgs]", deck)
+
+
+class BiasSmallSignal(unittest.TestCase):
+    def setUp(self):
+        self.src = _src()
+        self.devs = _deck.devices(self.src)
+
+    def test_ideal_bias_vco_drops_only_xbias(self):
+        text = _deck.ideal_bias_vco_subckt(self.src)
+        self.assertTrue(text.startswith(".subckt vco_ib "))
+        self.assertTrue(text.split("\n", 1)[0].endswith(" VBP VBN"))
+        self.assertNotRegex(text, r"(?m)^XBIAS ")
+        wrappers = _deck.isf_deck.derive_wrappers(self.src)
+        vco_isf = re.search(r"^\.subckt vco_isf\b.*?^\.ends", wrappers, re.M | re.S).group(0)
+        kept = [ln for ln in vco_isf.splitlines()[1:] if not ln.startswith("XBIAS ")]
+        self.assertEqual(text.rstrip().splitlines()[1:], kept)
+
+    def test_lti_deck_structure(self):
+        res = {d["instance"]: {"R_ohm": 1e5, "I_A": 1e-5}
+               for d in self.devs if d["block"] == "bias" and d["kind"] == "res"}
+        nh = {s: 2.0 for s in _deck.STAGES}
+        nt = {s: 0.1 for s in _deck.STAGES}
+        freqs = (1.0, 10.0, 100.0)
+        deck = _deck.bias_lti_deck(pdk_models="/pdk", repo_root=REPO, op=OP, src=self.src,
+                                   kp=1e8, kn=-2e8, nh=nh, nt=nt, resistors=res,
+                                   kf_body=1e-25, af_body=1.0, freqs=freqs)
+        for ln in _deck.subckt_lines(self.src, "vco_bias"):  # verbatim device text
+            self.assertIn(ln, deck)
+        self.assertEqual(len(re.findall(r"(?m)^noise v\(out\) vvc ", deck)), len(freqs))
+        for tag in (t.lower() for t in res):
+            # dummy body resistor, its sense source, the mirror and the DC cancel
+            self.assertRegex(deck, rf"(?m)^rd_{tag} da_{tag} db_{tag} rbody_{tag} ")
+            self.assertRegex(deck, rf"(?m)^f_{tag} \S+ \S+ vs_{tag} 1$")
+            self.assertRegex(deck, rf"(?m)^ic_{tag} \S+ \S+ dc 1\.0+e-05$")
+        self.assertEqual(len(re.findall(r"(?m)^xlp\d dlp\d vbp vdd vdd pfet_03v3", deck)), 5)
+        self.assertEqual(len(re.findall(r"(?m)^xln\d dln\d vbn 0 0 nfet_03v3", deck)), 5)
+        self.assertIn("eo1 o1 0 vbp 0 1.000000000e+08", deck)
+        self.assertIn("eout out o1 vbn 0 -2.000000000e+08", deck)
+
+    def test_lti_variance_white_closed_form(self):
+        """A white frequency noise S gives var(D)/T^2 = S/(2 f0) open-loop
+        (int_0^inf sinc^2(f/f0) df = f0/2), and an envelope of 1 changes nothing."""
+        f0 = 150e6
+        freqs = [10 ** (k / 40) for k in range(0, 40 * 13 + 1)]  # 1 Hz .. 1 THz
+        s = [1e6] * len(freqs)
+        v = _x.lti_period_variance(freqs, s, f0)
+        self.assertAlmostEqual(v / (1e6 / (2 * f0)), 1.0, delta=2e-3)
+        ones = [1.0] * 10
+        ef = [10 ** k for k in range(10)]
+        self.assertAlmostEqual(_x.lti_period_variance(freqs, s, f0, ef, ones) / v, 1.0, places=12)
+
+    def test_lti_variance_uses_the_peak_above_half_f0(self):
+        f0 = 150e6
+        freqs = [10 ** (k / 40) for k in range(0, 40 * 12 + 1)]
+        s = [1e6] * len(freqs)
+        ef = [10 ** k for k in range(11)]
+        env = [2.0] * 11
+        self.assertAlmostEqual(_x.lti_period_variance(freqs, s, f0, ef, env)
+                               / _x.lti_period_variance(freqs, s, f0), 2.0, places=6)
 
 
 class FlickerFactor(unittest.TestCase):

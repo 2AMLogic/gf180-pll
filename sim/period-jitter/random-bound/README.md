@@ -17,7 +17,7 @@ Run it:
 ```sh
 sim/period-jitter/random-bound/grid.sh 6        # all 45 points, 6 side by side; hours
 sim/period-jitter/random-bound/run.py --point typical_27c_3.30v \
-    --stage trajectory --stage sid --stage transient   # one point
+    --stage trajectory --stage sid --stage bias --stage transient   # one point
 sim/period-jitter/random-bound/summarize.py > sim/period-jitter/random-bound/results/SUMMARY.md
 ```
 

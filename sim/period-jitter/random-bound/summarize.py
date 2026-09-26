@@ -41,7 +41,7 @@ def main() -> int:
     for name in points:
         tr, sid, tj = (load(f"transient_{name}.json"), load(f"sid_{name}.json"),
                        load(f"trajectory_{name}.json"))
-        if not (tr and sid and tj):
+        if not (tr and sid and tj and load(f"bias_{name}.json")):
             missing.append(name)
             continue
         rows.append((name, tr, sid, tj))
@@ -91,25 +91,62 @@ def main() -> int:
           f"Points whose bound exceeds the budget: "
           f"**{sum(t > run.BUDGET_PCT for t in tot)}**.")
         a("")
-        a("`σ̂` is the pooled period standard deviation of the noisy copies, "
-          f"`σ₉₅` its one-sided {int(100 * rows[0][1]['confidence'])} % upper "
-          "confidence limit (χ², `dof` = periods − copies). `floor` is the clean "
-          "reference copy's own period spread in the same deck — the solver, "
-          "not the circuit. `w` is the white loop factor (`white_loop_factor`). "
-          "`VCO` = `σ₉₅·√w`, `LF` = the loop-filter resistor through the "
-          "control node, `bound` = their quadrature sum; all in % of the period.")
+        a("`σ̂` is the pooled period standard deviation of the noisy copies — the "
+          "ring's and the output buffer's generators — and `σ₉₅` its one-sided "
+          f"{int(100 * rows[0][1]['confidence'])} % upper confidence limit (χ², `dof` = "
+          "periods − copies). `ρ₁`/`ρ₂` are the lag-1/lag-2 autocorrelations of the "
+          "period sequence (the window check: a response longer than two periods "
+          "would make `ρ₂` non-zero). `floor` is the clean reference copy's own period "
+          "spread in the same deck — the solver, not the circuit. `w` is the white "
+          "loop factor. `R+B` = `σ₉₅·√w`; `bias` = the bias generator, small-signal, "
+          "closed-loop (`bias` stage); `LF` = the loop-filter resistor through the "
+          "control node; `bound` = their quadrature sum; all in % of the period.")
         a("")
-        a("| Point | f0 (MHz) | K_vco (MHz/V) | periods | σ̂ (ps) | σ₉₅ (ps) | "
-          "floor (fs) | lag-1 ρ | w | VCO | LF | **bound** | margin |")
-        a("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+        a("| Point | f0 (MHz) | periods | σ̂ (ps) | σ₉₅ (ps) | floor (fs) | ρ₁ | ρ₂ | w | "
+          "R+B | bias | LF | **bound** | margin |")
+        a("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
         for name, tr, sid, tj in rows:
             n, b = tr["noisy"], tr["bound"]
-            a(f"| `{name}` | {tj['f0_Hz'] / 1e6:.3f} | {tj['kvco_Hz_per_V'] / 1e6:.1f} | "
-              f"{n['n_periods']} | {n['sigma_s'] * 1e12:.2f} | "
-              f"{n['sigma_upper_s'] * 1e12:.2f} | {tr['floor']['sigma_s'] * 1e15:.1f} | "
-              f"{n['lag1_autocorrelation']:+.3f} | {tr['white_loop_factor']:.4f} | "
-              f"{b['vco_pct']:.4f} | {b['loop_filter_pct']:.4f} | "
-              f"**{b['total_pct']:.4f}** | {run.BUDGET_PCT / b['total_pct']:.2f}× |")
+            a(f"| `{name}` | {tj['f0_Hz'] / 1e6:.3f} | {n['n_periods']} | "
+              f"{n['sigma_s'] * 1e12:.2f} | {n['sigma_upper_s'] * 1e12:.2f} | "
+              f"{tr['floor']['sigma_s'] * 1e15:.1f} | {n['lag1_autocorrelation']:+.3f} | "
+              f"{n['lag2_autocorrelation']:+.3f} | {tr['white_loop_factor']:.4f} | "
+              f"{b['ring_buffer_pct']:.4f} | {b['bias_generator_pct']:.4f} | "
+              f"{b['loop_filter_pct']:.4f} | **{b['total_pct']:.4f}** | "
+              f"{run.BUDGET_PCT / b['total_pct']:.2f}× |")
+        a("")
+        l2 = [r[1]["noisy"]["lag2_autocorrelation"] for r in rows]
+        l1 = [r[1]["noisy"]["lag1_autocorrelation"] for r in rows]
+        a(f"Across the grid: ρ₁ {min(l1):+.3f} … {max(l1):+.3f}, ρ₂ {min(l2):+.3f} … "
+          f"{max(l2):+.3f} (standard error of each ≈ "
+          f"{1 / math.sqrt(rows[0][1]['noisy']['dof']):.3f}).")
+        a("")
+
+    # ------------------------------------------------------------ bias
+    if rows:
+        a("## The bias generator, small-signal (stage `bias`)")
+        a("")
+        a("`K_p`, `K_n`: the ring's static frequency sensitivity to VBP and VBN "
+          "(central differences, ± 5 mV, VBP/VBN held by ideal sources). `ideal/in-situ` "
+          "is how far holding VBP/VBN at their cycle averages moves the frequency from "
+          "the VCO with its own bias generator. `ΔV_op` is the largest difference "
+          "between the small-signal deck's own operating point and those averages. "
+          "`σ open, white` is the open-loop white-only prediction; `σ closed` the "
+          "closed-loop bound term, flicker included, through the envelope.")
+        a("")
+        a("| Point | K_p (MHz/V) | K_n (MHz/V) | ideal/in-situ − 1 | ΔV_op (mV) | "
+          "σ open, white (%) | σ closed (%) |")
+        a("|---|---|---|---|---|---|---|")
+        for name, tr, sid, tj in rows:
+            bj = load(f"bias_{name}.json")
+            if not bj:
+                continue
+            dv = max(abs(bj["lti_op_vbp_V"] - bj["vbp_avg_V"]),
+                     abs(bj["lti_op_vbn_V"] - bj["vbn_avg_V"]))
+            a(f"| `{name}` | {bj['sens']['kp_Hz_per_V'] / 1e6:.1f} | "
+              f"{bj['sens']['kn_Hz_per_V'] / 1e6:.1f} | "
+              f"{bj['sens']['ideal_over_insitu_minus_1']:+.2e} | {dv * 1e3:.2f} | "
+              f"{bj['sigma_pct_open_white']:.4f} | {bj['sigma_pct_closed_bound']:.4f} |")
         a("")
 
     # ------------------------------------------------------------ injection
@@ -232,25 +269,37 @@ def main() -> int:
         want = {"repeat": "1", "fine_tmax": "1 (timestep converged)",
                 "nt5": "1 (source white)", "nt20": "1 (source white)",
                 "x3": f"{run.VAL_SCALE:g} (linear)", "white": "share of `base`",
-                "ring": "share", "bias": "share", "buffer": "share"}
+                "ring": "share", "buffer": "share"}
         a("| variant | what changes | periods | σ̂ (ps) | σ̂ / base | ± 1σ | expected |")
         a("|---|---|---|---|---|---|---|")
         what = {"repeat": "nothing", "fine_tmax": "timestep ceiling 2.5 ps",
                 "nt5": "`trnoise` NT = 5 ps", "nt20": "`trnoise` NT = 20 ps",
                 "x3": "every amplitude × 3", "white": "flicker parts removed",
-                "ring": "ring generators only", "bias": "bias-generator generators only",
+                "ring": "ring generators only",
                 "buffer": "output-buffer generators only"}
         for k, r in val["runs"].items():
+            if k == "bias_white":
+                continue
             q = val["ratios"][k]
             s_ = r["summary"]
             a(f"| `{k}` | {what[k]} | {s_['n_periods']} | {s_['sigma_s'] * 1e12:.3f} | "
               f"{q['ratio']:.3f} | {q['se']:.3f} | {want[k]} |")
         a("")
         sh = val["block_shares_of_variance"]
-        a(f"Shares of `base`'s variance: ring {sh['ring']:.3f}, bias generator "
-          f"{sh['bias']:.3f}, output buffer {sh['buffer']:.3f} — sum "
-          f"**{val['block_shares_sum']:.3f}** (1 for independent generators in a "
-          f"linear circuit); white generators alone {sh['white']:.3f}.")
+        a(f"Shares of `base`'s variance: ring {sh['ring']:.3f}, output buffer "
+          f"{sh['buffer']:.3f} — sum **{val['block_shares_sum']:.3f}** (1 for "
+          f"independent generators in a linear circuit); white generators alone "
+          f"{sh['white']:.3f}.")
+        a("")
+        bc = val["bias_lti_vs_transient"]
+        a("The bias generator's model, checked against the circuit: its white "
+          "generators alone, injected in the transient, give σ̂ = "
+          f"{bc['transient_sigma_s'] * 1e12:.3f} ps (ρ₁ {bc['lag1_autocorrelation']:+.3f}); "
+          "the `bias` stage's open-loop white-only prediction is "
+          f"{bc['lti_open_white_sigma_s'] * 1e12:.3f} ps — ratio **{bc['ratio']:.3f} "
+          f"± {bc['se']:.3f}** (1 if the small-signal model describes the circuit; "
+          "the transient's densities are the trajectory maxima, ≤ 0.22 dB above "
+          "the DC values the model uses).")
         a("")
         rep = val["repeat_vs_transient_same_seed"]
         a("Same deck, same `rndseed`, run twice — period-by-period correlation of "

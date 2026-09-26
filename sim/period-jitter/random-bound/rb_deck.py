@@ -259,7 +259,9 @@ def noisy_subckts(src: str, amps: dict, nt: float, tag: str = "") -> str:
 
     `amps` maps every device `path` (see `devices`) to its `trnoise` amplitude
     in A; a missing path raises, because a silently noiseless device would make
-    the result a lower bound presented as a bound.  `tag` lets several amplitude
+    the result a lower bound presented as a bound.  An amplitude of exactly 0
+    is an explicit "not injected here" (the bias generator, which is bounded by
+    `bias_lti_deck` instead) and emits no source.  `tag` lets several amplitude
     variants coexist in one deck.
 
     `vco_rb{tag}` has `vco_isf`'s port list -- the ring nodes and each stage's
@@ -287,6 +289,7 @@ def noisy_subckts(src: str, amps: dict, nt: float, tag: str = "") -> str:
         noise = [
             _noise_line(d["instance"], d["d"], d["s"], amps[d["path"]], nt)
             for d in devs if d["block"] == "ring" and d["stage"] == s
+            and amps[d["path"]] > 0
         ]
         body = re.sub(r"^\.ends\s*$", "\n".join(noise) + "\n.ends", body,
                       count=1, flags=re.M)
@@ -299,7 +302,8 @@ def noisy_subckts(src: str, amps: dict, nt: float, tag: str = "") -> str:
         if d["block"] != "bias":
             continue
         a, b = (d["d"], d["s"]) if d["kind"] == "mos" else (d["n1"], d["n2"])
-        noise.append(_noise_line(d["instance"], a, b, amps[d["path"]], nt))
+        if amps[d["path"]] > 0:
+            noise.append(_noise_line(d["instance"], a, b, amps[d["path"]], nt))
     out.append(bias + "\n" + "\n".join(noise) + "\n.ends")
 
     vco = vco_isf.replace(".subckt vco_isf ", f".subckt vco_rb{tag} ", 1)
@@ -315,7 +319,7 @@ def noisy_subckts(src: str, amps: dict, nt: float, tag: str = "") -> str:
         raise ValueError("could not re-point XBIAS / the stages in the derived vco")
     noise = [
         _noise_line(d["instance"], d["d"], d["s"], amps[d["path"]], nt)
-        for d in devs if d["block"] == "buffer"
+        for d in devs if d["block"] == "buffer" and amps[d["path"]] > 0
     ]
     vco = re.sub(r"^\.ends\s*$", "\n".join(noise) + "\n.ends", vco, count=1,
                  flags=re.M)
@@ -586,6 +590,159 @@ def noise_deck(*, pdk_models, op, entries, freqs, rsense, combined: bool = True)
                      f"{f + NOISE_BANDWIDTH_HZ:.12g} 1")
             a.append(f"setplot noise{2 * n_noise}")
             _print(j)
+    a.append(".endc")
+    a.append(".end")
+    return "\n".join(a) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# the bias generator, small-signal
+# ---------------------------------------------------------------------------
+#: Why the bias generator is not in the transient.  Its outputs VBP/VBN are
+#: slow nets shared by all five stages, so a generator inside it moves the
+#: ring's frequency for many periods after it acts -- the injected transient's
+#: period sequence shows it as a POSITIVE lag-1 autocorrelation (+0.29 with
+#: the bias generator alone, against -0.18 for the ring alone and -0.44 for
+#: the buffer alone, at the reference point).  The flicker and loop factors
+#: `rb_extract` applies to the transient assume a response no longer than
+#: `1 + WINDOW_MARGIN` periods, which that memory breaks.  The bias generator
+#: is quasi-DC (its devices' densities move by <= 0.22 dB over the cycle), so
+#: it is analysed where it is exact: `.noise` about its DC operating point,
+#: referred to the ring's instantaneous frequency through the two measured
+#: static sensitivities `df/dV_BP` and `df/dV_BN`, and integrated with its own
+#: flicker spectrum through the loop (`rb_extract.lti_period_variance`).
+
+
+def ideal_bias_vco_subckt(src: str) -> str:
+    """`vco_ib`: `vco_isf` with the bias generator removed and VBP/VBN as ports.
+
+    Every line but `XBIAS` is `vco_isf`'s own, so the ring and buffer are the
+    committed netlist's; only where VBP and VBN come from changes.
+    """
+    wrappers = isf_deck.derive_wrappers(src)
+    vco_isf = re.search(r"^\.subckt vco_isf\b.*?^\.ends\s*$", wrappers, re.M | re.S).group(0)
+    head, rest = vco_isf.split("\n", 1)
+    body, n = re.subn(r"^XBIAS .*\n", "", rest, flags=re.M)
+    if n != 1:
+        raise ValueError("vco_isf: expected exactly one XBIAS line")
+    head = head.replace(".subckt vco_isf ", ".subckt vco_ib ", 1) + " VBP VBN"
+    return head + "\n" + body
+
+
+def sensitivity_deck(*, repo_root, pdk_models, op, vbp: float, vbn: float, dv: float,
+                     tstop, tstep, tmax, src=None, ic_offset: float = 0.0,
+                     wrdata="sens.dat") -> tuple[str, list[str]]:
+    """The ring's static frequency sensitivity to VBP and to VBN.
+
+    Six clean copies in one deck, so one timestep sequence: `x0` the in-situ
+    VCO (its own bias generator); `x1` the VCO with VBP/VBN held by ideal
+    sources at `vbp`/`vbn` (the trajectory's cycle averages) -- which must
+    reproduce `x0`'s frequency if the replacement is faithful; `x2`/`x3` with
+    VBP at `vbp +/- dv`; `x4`/`x5` with VBN at `vbn +/- dv`.  Columns
+    `v(clk0)` .. `v(clk5)`.
+    """
+    if src is None:
+        src = isf_deck.read_vco_netlist(repo_root)
+    out = _header(repo_root, pdk_models, op, "bias-sensitivity deck")
+    out.append(isf_deck.derive_wrappers(src).rstrip())
+    out.append(ideal_bias_vco_subckt(src).rstrip())
+    out += _sources(op)
+    levels = [(vbp, vbn), (vbp + dv, vbn), (vbp - dv, vbn), (vbp, vbn + dv), (vbp, vbn - dv)]
+    out.append(f"x0 vc bc0 bc1 bc2 clk0 vdd 0 {_ports(0)} vco_isf")
+    for k, (p, n) in enumerate(levels, start=1):
+        out.append(f"vbp{k} bp{k} 0 dc {p:.9g}")
+        out.append(f"vbn{k} bn{k} 0 dc {n:.9g}")
+        out.append(f"x{k} vc bc0 bc1 bc2 clk{k} vdd 0 {_ports(k)} bp{k} bn{k} vco_ib")
+    for k in range(len(levels) + 1):
+        out.append(_load(k))
+        out.append(_ic(k, ic_offset))
+    cols = [f"v(clk{k})" for k in range(len(levels) + 1)]
+    out.append(".option " + " ".join(OPTIONS))
+    out.append(".control")
+    out.append("save " + " ".join(cols))
+    out.append(f"tran {tstep:.6e} {tstop:.6e} 0 {tmax:.6e}")
+    out.append("set wr_singlescale")
+    out.append(f"wrdata {wrdata} " + " ".join(cols))
+    out.append(".endc")
+    out.append(".end")
+    return "\n".join(out) + "\n", cols
+
+
+def bias_lti_deck(*, pdk_models, repo_root, op, src, kp: float, kn: float,
+                  nh: dict, nt: dict, resistors: dict, kf_body: float, af_body: float,
+                  freqs, first_pass: bool = False) -> str:
+    """`.noise` of the bias generator about its DC point, referred to ring frequency.
+
+    `vco_bias`'s own lines, in a derived `vco_bias_lti` whose only additions
+    are, per poly resistor, the noise its body carries and `.noise` does not
+    report (ngspice treats the PDK's voltage-dependent body as a noiseless
+    behavioural source): a dummy resistor of the body's value, carrying the
+    body's DC current so the card's own `KF |I|^AF / f` flicker applies (on
+    all three segments, as `sid` counts it), whose short-circuit noise current
+    a noiseless CCCS mirrors across the real resistor's terminals, with the
+    mirrored DC current cancelled by an equal and opposite ideal source.
+    `resistors` maps an instance name to `{"R_ohm", "I_A"}` (from `sid`).
+
+    VBP and VBN are loaded as in the VCO: five `XMPH`-like pfets on VBP and
+    five `XMNT`-like nfets on VBN, the committed device text, each drain held at
+    that stage's cycle-average `NH`/`NT` voltage (`nh`/`nt`, by stage) -- so the
+    nets see the ring's gate capacitance, and the loads' own channel noise
+    flows into an ideal source and reaches nothing (it is in the transient).
+
+    The output is `kp v(VBP) + kn v(VBN)`, in Hz: the ring's instantaneous
+    frequency deviation.  One `.noise` per frequency over a 1 Hz band, so the
+    integrated plot IS the density, with every contributor printed.
+    `first_pass=True` omits the resistor dummies and the noise (an operating
+    point only).
+    """
+    models = Path(pdk_models)
+    devs = devices(src)
+    a = [f"* gf180-pll :: period-jitter :: random-bound -- bias-generator LTI noise deck. GENERATED.",
+         f'.include "{models / "design.ngspice"}"',
+         f'.lib "{models / "sm141064.ngspice"}" {op["mos_section"]}',
+         f'.lib "{models / "sm141064.ngspice"}" {op["res_section"]}']
+    body = subckt_lines(src, "vco_bias")
+    extra = []
+    if not first_pass:
+        for d in devs:
+            if d["block"] != "bias" or d["kind"] != "res":
+                continue
+            r = resistors[d["instance"]]
+            i = abs(r["I_A"])
+            tag = d["instance"].lower()
+            extra += [
+                f"vd_{tag} da_{tag} {d['n2']} dc {i * r['R_ohm']:.9e}",
+                f"rd_{tag} da_{tag} db_{tag} rbody_{tag} {r['R_ohm']:.9e}",
+                f"vs_{tag} db_{tag} {d['n2']} dc 0",
+                f"f_{tag} {d['n2']} {d['n1']} vs_{tag} 1",
+                f"ic_{tag} {d['n1']} {d['n2']} dc {i:.9e}",
+                f".model rbody_{tag} r (kf={3.0 * kf_body:.6e} af={af_body:.6g})",
+            ]
+    a.append(".subckt vco_bias_lti VCTRL B0 B1 B2 VBP VBN VDD VSS")
+    a += body + extra
+    a.append(".ends")
+    # `.noise` needs an AC input to refer to; which one is irrelevant to the
+    # output density this reads, and VCTRL is the natural one.
+    a += [ln + " ac 1" if ln.startswith("vvc ") else ln for ln in _sources(op)]
+    a.append("xb vc bc0 bc1 bc2 vbp vbn vdd 0 vco_bias_lti")
+    ring = {d["instance"]: d for d in devs if d["block"] == "ring" and d["stage"] == 1}
+    for s in STAGES:
+        p, n = ring["XMPH"], ring["XMNT"]
+        a.append(f"vlp{s} dlp{s} 0 dc {nh[s]:.9g}")
+        a.append(f"xlp{s} dlp{s} vbp vdd vdd {p['model']} {p['params']}")
+        a.append(f"vln{s} dln{s} 0 dc {nt[s]:.9g}")
+        a.append(f"xln{s} dln{s} vbn 0 0 {n['model']} {n['params']}")
+    a.append(f"eo1 o1 0 vbp 0 {kp:.9e}")
+    a.append(f"eout out o1 vbn 0 {kn:.9e}")
+    a.append(".control")
+    a.append("op")
+    a.append("print v(vbp) v(vbn)")
+    if not first_pass:
+        for k, f in enumerate(freqs, start=1):
+            a.append(f"noise v(out) vvc lin 2 {f:.12g} {f + NOISE_BANDWIDTH_HZ:.12g} 1")
+            a.append(f"setplot noise{2 * k}")
+            a.append(f"echo @@f {f:.12g}")
+            a.append("print all")
     a.append(".endc")
     a.append(".end")
     return "\n".join(a) + "\n"

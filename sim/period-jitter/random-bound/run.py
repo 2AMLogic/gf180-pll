@@ -650,6 +650,115 @@ def stage_sid(point, op, outdir, logs, work, models, quick):
 
 
 # ---------------------------------------------------------------------------
+# bias (the bias generator, small-signal; see rb_deck's section of that name)
+# ---------------------------------------------------------------------------
+SENS_DV = 5e-3
+SENS_PERIODS = 8
+#: `.noise` frequencies: 10 per decade, 1 Hz .. 10 GHz.
+BIAS_FREQS = tuple(10 ** (k / 10) for k in range(0, 101))
+_PRINT_ALL_RE = re.compile(r"^(\S+)\s*=\s*([-+0-9.eE]+)\s*$")
+
+
+def _parse_bias_noise(text: str, freqs) -> list[dict]:
+    """The LTI deck's per-frequency `print all` blocks -> total and flicker densities (Hz^2/Hz)."""
+    blocks = text.split("@@f ")[1:]
+    if len(blocks) != len(freqs):
+        raise SystemExit(f"bias LTI deck: {len(blocks)} noise blocks for {len(freqs)} frequencies")
+    out = []
+    for f, blk in zip(freqs, blocks):
+        vals = {}
+        for line in blk.splitlines()[1:]:
+            m = _PRINT_ALL_RE.match(line.strip())
+            if m:
+                vals[m.group(1)] = float(m.group(2))
+        if "onoise_total" not in vals:
+            raise SystemExit(f"bias LTI deck: no onoise_total at {f:g} Hz")
+        # Flicker: every contributor's 1/f part -- MOS `.1overf`, resistor
+        # `_1overf` (the body dummies').  Contributions add in power.
+        fl = sum(v * v for k, v in vals.items()
+                 if k.startswith("onoise_total") and k.endswith("1overf"))
+        tot = vals["onoise_total"] ** 2
+        out.append({"freq_Hz": f, "S_total": tot, "S_flicker": fl,
+                    "S_white": max(tot - fl, 0.0)})
+    return out
+
+
+def _stage_mean(rows, path, q):
+    return sum(r[path][q] for r in rows) / len(rows)
+
+
+def stage_bias(point, op, outdir, logs, work, models, quick):
+    """The bias generator's contribution, from `.noise` about its DC point.
+
+    1. Cycle averages of VBP, VBN and each stage's NH/NT from the trajectory.
+    2. The ring's static sensitivities `df/dV_BP`, `df/dV_BN` (central
+       differences), with VBP/VBN held by ideal sources -- and a check that
+       holding them at their averages reproduces the in-situ frequency.
+    3. `.noise` of the bias generator, loaded as in the VCO, referred to the
+       ring's frequency; the resistor bodies' noise added explicitly.
+    4. Integrated open-loop (white only: the validation's comparison) and
+       closed-loop through the envelope (the bound's term).
+    """
+    src = rb_deck.isf_deck.read_vco_netlist(REPO)
+    devs = rb_deck.devices(src)
+    rows = json.loads((work.parent / "traj_rows.json").read_text())
+    traj = _load(outdir, f"trajectory_{point}.json")
+    sid = _load(outdir, f"sid_{point}.json")
+    loop = _load(outdir, "loop.json")
+    vsup = op["vsup"]
+    vbp = vsup - sum(_stage_mean(rows, f"xs{s}.xmph", "vgs") for s in rb_deck.STAGES) / 5
+    vbn = sum(_stage_mean(rows, f"xs{s}.xmnt", "vgs") for s in rb_deck.STAGES) / 5
+    nh = {s: vsup - _stage_mean(rows, f"xs{s}.xmph", "vds") for s in rb_deck.STAGES}
+    nt = {s: _stage_mean(rows, f"xs{s}.xmnt", "vds") for s in rb_deck.STAGES}
+    # -- sensitivities
+    tstop = T_SETTLE + (SENS_PERIODS + 1.5) * 6.9e-9
+
+    def build(off):
+        return rb_deck.sensitivity_deck(
+            repo_root=REPO, pdk_models=models, op=op, vbp=vbp, vbn=vbn, dv=SENS_DV,
+            tstop=tstop, tstep=TR_TSTEP, tmax=TR_TMAX, src=src, ic_offset=off)
+    _, cols = build(0.0)
+    el_s, _, ic_off = run_deck_startup_retry(lambda off: build(off)[0], work / "sens",
+                                            logs / f"bias_sens_{point}.log", expect="sens.dat")
+    t, data = rb_extract.read_wrdata(work / "sens" / "sens.dat", len(cols))
+    freq = [1.0 / _crossing_period(t, v, vsup / 2, T_SETTLE)[0] for v in data]
+    kp = (freq[2] - freq[3]) / (2 * SENS_DV)
+    kn = (freq[4] - freq[5]) / (2 * SENS_DV)
+    # -- the noise deck
+    res = {d["instance"]: {"R_ohm": sid["devices"][d["path"]]["at_argmax"]["R_ohm"],
+                           "I_A": sid["devices"][d["path"]]["at_argmax"]["I_A"]}
+           for d in devs if d["block"] == "bias" and d["kind"] == "res"}
+    kf, af = resistor_flicker_card(models)
+    freqs = BIAS_FREQS[::10] if quick else BIAS_FREQS
+    deck = rb_deck.bias_lti_deck(pdk_models=models, repo_root=REPO, op=op, src=src,
+                                 kp=kp, kn=kn, nh=nh, nt=nt, resistors=res,
+                                 kf_body=kf, af_body=af, freqs=freqs)
+    el_n, out = run_deck(deck, work / "lti", logs / f"bias_lti_{point}.log")
+    op_v = {k: v for k, v in rb_extract.parse_print(out) if k in ("v(vbp)", "v(vbn)")}
+    spec = _parse_bias_noise(out, freqs)
+    f0 = traj["f0_Hz"]
+    fs = [r["freq_Hz"] for r in spec]
+    closed = rb_extract.lti_period_variance(fs, [r["S_total"] for r in spec], f0,
+                                            loop["envelope_freqs_Hz"], loop["envelope"])
+    open_all = rb_extract.lti_period_variance(fs, [r["S_total"] for r in spec], f0)
+    open_white = rb_extract.lti_period_variance(fs, [r["S_white"] for r in spec], f0)
+    _save(outdir, f"bias_{point}.json", {
+        "point": point, "f0_Hz": f0,
+        "vbp_avg_V": vbp, "vbn_avg_V": vbn, "nh_avg_V": nh, "nt_avg_V": nt,
+        "lti_op_vbp_V": op_v.get("v(vbp)"), "lti_op_vbn_V": op_v.get("v(vbn)"),
+        "sens": {"dv_V": SENS_DV, "freqs_Hz": freq, "kp_Hz_per_V": kp, "kn_Hz_per_V": kn,
+                 "ideal_over_insitu_minus_1": freq[1] / freq[0] - 1.0,
+                 "elapsed_s": el_s, "ic_offset_V": ic_off},
+        "resistors": res, "resistor_kf_af": [kf, af],
+        "spectrum": spec, "elapsed_noise_s": el_n,
+        "var_frac_closed_bound": closed, "var_frac_open": open_all,
+        "var_frac_open_white": open_white,
+        "sigma_pct_closed_bound": 100 * math.sqrt(closed),
+        "sigma_pct_open_white": 100 * math.sqrt(open_white),
+    })
+
+
+# ---------------------------------------------------------------------------
 # transient
 # ---------------------------------------------------------------------------
 def _amps(inj: dict, scale: float, nt: float) -> dict:
@@ -685,14 +794,19 @@ def _summarise(copies, variant, quick=False):
             "sigma_s": math.sqrt(var), "sigma_pct": 100 * math.sqrt(var) / m,
             "sigma_upper_s": rb_extract.sigma_upper(var, dof, CONF),
             "sigma_upper_pct": 100 * rb_extract.sigma_upper(var, dof, CONF) / m,
-            "lag1_autocorrelation": rb_extract.lag1_autocorrelation(groups)}
+            "lag1_autocorrelation": rb_extract.lag1_autocorrelation(groups),
+            "lag2_autocorrelation": rb_extract.lag_autocorrelation(groups, 2)}
 
 
 def stage_transient(point, op, outdir, logs, work, models, quick):
     sid = _load(outdir, f"sid_{point}.json")
+    bias = _load(outdir, f"bias_{point}.json")
+    devs = rb_deck.devices(rb_deck.isf_deck.read_vco_netlist(REPO))
     n_per = 12 if quick else N_PERIODS
     ncopy = 2 if quick else NCOPY
-    variants = [("", _amps(sid["S_inj_A2_per_Hz"], 1.0, NT), NT, ncopy)]
+    # The ring and the output buffer only: the bias generator is `bias`'s.
+    variants = [("", _amps(_only(sid["S_inj_A2_per_Hz"], devs, "ring", "buffer"), 1.0, NT),
+                 NT, ncopy)]
     elapsed, copies, tstop = _run_transient(
         point, op, models, work, logs / f"transient_{point}.log", variants,
         seed_for(point), n_per, TR_TMAX)
@@ -707,7 +821,8 @@ def stage_transient(point, op, outdir, logs, work, models, quick):
     bound = rb_extract.assemble_bound(
         sigma_upper_s=noisy["sigma_upper_s"], mean_period_s=noisy["mean_period_s"],
         white_factor=wf, peak_sq=loop["peak_sq"], kt_over_c_v2=ktc,
-        kvco_hz_per_v=traj["kvco_Hz_per_V"], f0_hz=traj["f0_Hz"])
+        kvco_hz_per_v=traj["kvco_Hz_per_V"], f0_hz=traj["f0_Hz"],
+        bias_var_frac=bias["var_frac_closed_bound"])
     _save(outdir, f"transient_{point}.json", {
         "point": point, "operating_point": op, "environment": environment(models),
         "elapsed_s": elapsed, "tstop_s": tstop, "tmax_s": TR_TMAX, "nt_s": NT,
@@ -728,6 +843,12 @@ VAL_PERIODS = 60
 VAL_NCOPY = NCOPY
 VAL_SCALE = 3.0
 VAL_TMAX_FINE = 2.5e-12
+
+
+def _only(inj: dict, devs, *blocks: str) -> dict:
+    """`inj` with every device outside `blocks` set to 0 (not injected)."""
+    blk = {d["path"]: d["block"] for d in devs}
+    return {k: (v if blk[k] in blocks else 0.0) for k, v in inj.items()}
 
 
 def _ratio(num: dict, den: dict) -> dict:
@@ -801,7 +922,9 @@ def stage_validate(point, op, outdir, logs, work, models, quick):
       nt5, nt20  trnoise sample interval 5 / 20 ps, same PSD       -> 1 (white)
       x3         every amplitude x3                                -> 3 (linear)
       white      flicker parts removed                             -> share
-      ring, bias, buffer   one block's generators alone          -> shares, summing to 1
+      ring, buffer   one block's generators alone                -> shares, summing to 1
+      bias_white the bias generator's white generators alone     -> the `bias`
+                 stage's open-loop white prediction (its model's check)
 
     The decks are independent, so they run side by side.  And the noise deck's
     summed, multi-phase form is compared with the per-device form
@@ -813,7 +936,9 @@ def stage_validate(point, op, outdir, logs, work, models, quick):
     devs = rb_deck.devices(src)
     sid = _load(outdir, f"sid_{point}.json")
     base = _load(outdir, f"transient_{point}.json")
-    inj = sid["S_inj_A2_per_Hz"]
+    bias = _load(outdir, f"bias_{point}.json")
+    inj = _only(sid["S_inj_A2_per_Hz"], devs, "ring", "buffer")
+    inj_w = sid["S_inj_white_only_A2_per_Hz"]
     n_per = 12 if quick else VAL_PERIODS
     ncopy = 2 if quick else VAL_NCOPY
     plan = {
@@ -822,10 +947,14 @@ def stage_validate(point, op, outdir, logs, work, models, quick):
         "nt5": (inj, 1.0, 5e-12, TR_TMAX, seed_for(point, "nt5")),
         "nt20": (inj, 1.0, 20e-12, TR_TMAX, seed_for(point, "nt20")),
         "x3": (inj, VAL_SCALE, NT, TR_TMAX, seed_for(point, "x3")),
-        "white": (sid["S_inj_white_only_A2_per_Hz"], 1.0, NT, TR_TMAX, seed_for(point, "white")),
+        "white": (_only(inj_w, devs, "ring", "buffer"), 1.0, NT, TR_TMAX, seed_for(point, "white")),
         "ring": (_only(inj, devs, "ring"), 1.0, NT, TR_TMAX, seed_for(point, "ring")),
-        "bias": (_only(inj, devs, "bias"), 1.0, NT, TR_TMAX, seed_for(point, "bias")),
         "buffer": (_only(inj, devs, "buffer"), 1.0, NT, TR_TMAX, seed_for(point, "buffer")),
+        # The bias generator's WHITE generators, in the transient, against the
+        # small-signal analysis's open-loop white prediction: the check that
+        # the `bias` stage's model (sensitivities, loading, quasi-static ring
+        # response, the resistor bodies) describes what the circuit does.
+        "bias_white": (_only(inj_w, devs, "bias"), 1.0, NT, TR_TMAX, seed_for(point, "bias_white")),
     }
 
     def one(name):
@@ -839,8 +968,15 @@ def stage_validate(point, op, outdir, logs, work, models, quick):
 
     with ThreadPoolExecutor(max_workers=len(plan)) as ex:
         runs = dict(ex.map(one, plan))
-    ratios = {k: _ratio(v["summary"], base["noisy"]) for k, v in runs.items()}
-    shares = {k: ratios[k]["ratio"] ** 2 for k in ("ring", "bias", "buffer", "white")}
+    ratios = {k: _ratio(v["summary"], base["noisy"]) for k, v in runs.items()
+              if k != "bias_white"}
+    shares = {k: ratios[k]["ratio"] ** 2 for k in ("ring", "buffer", "white")}
+    bw = runs["bias_white"]["summary"]
+    pred = math.sqrt(bias["var_frac_open_white"]) * bw["mean_period_s"]
+    bias_check = {"transient_sigma_s": bw["sigma_s"], "lti_open_white_sigma_s": pred,
+                  "ratio": bw["sigma_s"] / pred,
+                  "se": bw["sigma_s"] / pred / math.sqrt(2 * bw["dof"]),
+                  "lag1_autocorrelation": bw["lag1_autocorrelation"]}
     # Same seed, same deck: if `set rndseed` reproduced a realisation, the
     # repeat's period sequence would equal the transient stage's bit for bit.
     rep = [rb_extract.pairwise_deviation_ratio(ca["periods_s"], cb["periods_s"])
@@ -853,13 +989,14 @@ def stage_validate(point, op, outdir, logs, work, models, quick):
         "base": {k: base["noisy"][k] for k in ("sigma_s", "dof", "n_periods")},
         "runs": runs, "ratios": ratios,
         "block_shares_of_variance": shares,
-        "block_shares_sum": shares["ring"] + shares["bias"] + shares["buffer"],
+        "block_shares_sum": shares["ring"] + shares["buffer"],
+        "bias_lti_vs_transient": bias_check,
         "repeat_vs_transient_same_seed": rep,
         "noise_deck_forms": forms,
     })
 
 
-ALL = ("calibrate", "loop", "trajectory", "sid", "transient", "validate")
+ALL = ("calibrate", "loop", "trajectory", "sid", "bias", "transient", "validate")
 
 
 def main(argv=None):
@@ -873,6 +1010,9 @@ def main(argv=None):
                          "scratch --outdir gets scratch logs)")
     ap.add_argument("--work", default=None)
     ap.add_argument("--quick", action="store_true")
+    ap.add_argument("--resume", action="store_true",
+                    help="skip a per-point stage whose results/<stage>_<point>.json "
+                         "already exists (trajectory: and whose work rows exist)")
     ap.add_argument("--list-points", action="store_true")
     a = ap.parse_args(argv)
     points = load_points()
@@ -892,8 +1032,12 @@ def main(argv=None):
             stage_calibrate(outdir, logs, work / "cal")
         elif st == "loop":
             stage_loop(outdir)
+        elif a.resume and (outdir / f"{st}_{a.point}.json").is_file() and (
+                st != "trajectory" or (work / "traj_rows.json").is_file()):
+            print(f"{a.point} {st}: already done, skipped (--resume)", flush=True)
+            continue
         else:
-            fn = {"trajectory": stage_trajectory, "sid": stage_sid,
+            fn = {"trajectory": stage_trajectory, "sid": stage_sid, "bias": stage_bias,
                   "transient": stage_transient, "validate": stage_validate}[st]
             fn(a.point, op, outdir, logs, work / st, models, a.quick)
         print(f"{a.point} {st}: {time.time() - t0:.1f} s", flush=True)

@@ -8,6 +8,9 @@
 #
 #   sim/period-jitter/random-bound/grid.sh [JOBS]      # default 6
 #
+# `--resume` skips a stage whose result is already in results/ (so a stopped
+# grid picks up where it stopped); delete results/ for a clean run.
+#
 # A failed point prints FAILED and the script exits non-zero after the rest
 # finish; nothing is summarised over a partial grid without saying so --
 # summarize.py lists every point it did not find.
@@ -23,7 +26,7 @@ python3 run.py --stage calibrate --stage loop
 status=0
 python3 run.py --list-points \
   | xargs -P "${JOBS}" -I{} sh -c \
-      'python3 run.py --point {} --stage trajectory --stage sid --stage transient \
+      'python3 run.py --resume --point {} --stage trajectory --stage sid --stage bias --stage transient \
          > "logs/grid_{}.txt" 2>&1 || { echo "FAILED {}"; exit 1; }' \
   || status=1
 python3 run.py --point typical_27c_3.30v --stage validate || status=1

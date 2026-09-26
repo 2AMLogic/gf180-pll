@@ -114,6 +114,18 @@ def pooled_variance(groups):
     return ss / dof, dof, n
 
 
+def lag_autocorrelation(groups, lag: int):
+    """Lag-`lag` autocorrelation of the period sequence, pooled over groups."""
+    num = 0.0
+    den = 0.0
+    for g in groups:
+        m = mean(g)
+        d = [x - m for x in g]
+        num += sum(a * b for a, b in zip(d, d[lag:]))
+        den += sum(a * a for a in d)
+    return num / den if den > 0 else float("nan")
+
+
 def lag1_autocorrelation(groups):
     """Lag-1 autocorrelation of the period sequence, pooled over groups.
 
@@ -342,13 +354,18 @@ def flicker_exponent(f1: float, s1: float, f2: float, s2: float) -> float:
 # inequality 2: flicker folded into an equivalent white density
 # ---------------------------------------------------------------------------
 #: How far past one period the linear response of one period's length can
-#: reach, as a fraction of the period.  A ring device's noise changes the phase
-#: accumulated in the cycle it falls in, so its window is exactly one period;
-#: the output buffer's generators move ONE edge, so the period between two
-#: edges sees a window of one period plus one edge's duration.  10 % of a
-#: period is ~0.67 ns at 150 MHz, several times any edge in this VCO, so it is
-#: a margin rather than a fitted number.  See `flicker_white_equivalent`.
-WINDOW_MARGIN = 0.10
+#: reach, as a fraction of the period.  Every generator the transient injects
+#: sits in the ring or the output buffer, whose memory is an edge or a stage's
+#: amplitude recovery: noise in period k changes period k, and -- by moving an
+#: edge before the ring has settled back to its limit cycle -- period k+1 in
+#: the opposite sense, which is the negative lag-1 autocorrelation the
+#: transient reports for them.  A full extra period is allowed for that, and
+#: the lag-2 autocorrelation, which a longer memory would make non-zero, is
+#: reported beside every result.  The bias generator's generators are NOT
+#: covered by this window: their memory is the bias nets' time constant, many
+#: periods, and they are bounded separately by a small-signal analysis
+#: (`lti_period_variance`).  See `flicker_factor`.
+WINDOW_MARGIN = 1.0
 
 
 def flicker_corner_frequency(alpha: float, f0: float) -> float:
@@ -545,31 +562,101 @@ def kt_over_c_bound(*, temp_c: float, c1: float, c2: float) -> float:
 
 
 # ---------------------------------------------------------------------------
+# the bias generator: a small-signal (LTI) bound
+# ---------------------------------------------------------------------------
+def sinc2(x: float) -> float:
+    """`(sin(pi x) / (pi x))^2`."""
+    if x == 0:
+        return 1.0
+    y = math.pi * x
+    return (math.sin(y) / y) ** 2
+
+
+def lti_period_variance(freqs, s_df, f0: float, env_freqs=None, env=None) -> float:
+    """Period variance, as a fraction of the period squared, from a frequency-noise PSD.
+
+    `s_df` is the one-sided PSD of the oscillator's instantaneous-frequency
+    deviation, Hz^2/Hz, on the log-spaced grid `freqs`.  One period's
+    deviation is `D = -T^2 * mean over the period of df`, so
+
+        var(D) / T^2 = (1/f0^2) int S_df(f) sinc^2(f/f0) df
+
+    open loop.  In lock the sequence of `D` is filtered by the error transfer;
+    with `env` (the upper envelope of `|1/(1+T)|^2` over every admissible
+    loop) the closed-loop variance is at most
+
+        (1/f0^2) [ int_0^{f0/2} S sinc^2 env df + max(env) int_{f0/2}^inf S sinc^2 df ]
+
+    -- the second term because a component above `f0/2` aliases onto some
+    frequency below it, where the envelope is at most its peak.  `env=None`
+    gives the open-loop variance.  Trapezoid in `ln f`; below the grid's first
+    point the integrand is dropped (with the loop: the type-II envelope falls
+    as `f^4`, so the omitted part is below 1e-9 of the total for any density
+    here; without the loop: a white or `1/f^a` density with `a < 1` below 1 Hz
+    carries nothing a 150 MHz period can see, and the open-loop figure is used
+    only for the validation's white-only comparison).
+    """
+    def env_at(f):
+        if env is None:
+            return 1.0
+        if f <= env_freqs[0]:
+            return env[0]
+        if f >= env_freqs[-1]:
+            return env[-1]
+        lf = math.log(f)
+        lo, hi = 0, len(env_freqs) - 1
+        while hi - lo > 1:
+            mid = (lo + hi) // 2
+            if math.log(env_freqs[mid]) <= lf:
+                lo = mid
+            else:
+                hi = mid
+        w = (lf - math.log(env_freqs[lo])) / (math.log(env_freqs[hi]) - math.log(env_freqs[lo]))
+        return env[lo] + w * (env[hi] - env[lo])
+
+    peak = max(env) if env is not None else 1.0
+    acc = 0.0
+    prev = None
+    for f, s in zip(freqs, s_df):
+        weight = env_at(f) if f <= f0 / 2 else peak
+        cur = (math.log(f), f * s * sinc2(f / f0) * weight)
+        if prev is not None:
+            acc += 0.5 * (cur[0] - prev[0]) * (cur[1] + prev[1])
+        prev = cur
+    return acc / f0 ** 2
+
+
+# ---------------------------------------------------------------------------
 # the assembled bound
 # ---------------------------------------------------------------------------
 def assemble_bound(*, sigma_upper_s: float, mean_period_s: float, white_factor: float,
                    peak_sq: float, kt_over_c_v2: float, kvco_hz_per_v: float,
-                   f0_hz: float) -> dict:
+                   f0_hz: float, bias_var_frac: float) -> dict:
     """The random period-jitter bound at one PVT point, in % of the period.
 
-    Two terms, added in quadrature because their sources are independent:
+    Three terms, added in quadrature because their sources are independent:
 
-      * the VCO's own generators -- every MOS channel and every resistor in
-        `vco` -- measured by the transient at its one-sided confidence limit,
-        times `white_factor` (`white_loop_factor`) for what the loop can do to
-        it in lock.  The flicker half is already inside it (`flicker_factor`
-        includes the loop), so applying `white_factor` to the whole variance
-        over-counts slightly, in the safe direction;
+      * the ring's and the output buffer's generators, measured by the
+        transient at its one-sided confidence limit, times `white_factor`
+        (`white_loop_factor`) for what the loop can do to them in lock.  The
+        flicker half is already inside it (`flicker_factor` includes the
+        loop), so applying `white_factor` to the whole variance over-counts
+        slightly, in the safe direction;
+      * the bias generator's generators, `bias_var_frac` (a variance as a
+        fraction of the period squared, closed-loop, from
+        `lti_period_variance`);
       * the loop-filter resistor, through the control node: `kT C1/(C2(C1+C2))`
         of voltage variance (`kt_over_c_bound`), times the loop's peak error
         transfer `peak_sq`, into fractional frequency by `K_vco / f0`.  A
         single period's frequency is an average of the instantaneous one, and
         averaging cannot raise a variance, so this bounds the period term.
     """
-    vco = sigma_upper_s * math.sqrt(white_factor) / mean_period_s
+    ring = sigma_upper_s * math.sqrt(white_factor) / mean_period_s
+    bias = math.sqrt(bias_var_frac)
     lf = math.sqrt(peak_sq * kt_over_c_v2) * abs(kvco_hz_per_v) / f0_hz
     return {
-        "vco_pct": 100.0 * vco,
+        "ring_buffer_pct": 100.0 * ring,
+        "bias_generator_pct": 100.0 * bias,
         "loop_filter_pct": 100.0 * lf,
-        "total_pct": 100.0 * math.hypot(vco, lf),
+        "total_pct": 100.0 * math.sqrt(ring * ring + bias * bias + lf * lf),
     }
