@@ -712,15 +712,17 @@ That last rule exists because this list was prose until 2026-09-26, and prose
 does not get graded. It named four figures and silently missed a fifth: the
 Output band row's `27 %` worst adjacent-band overlap, which was neither
 re-derived nor declared ungraded. It is graded above now — as is the
-monotonicity count, which this list previously carried — so what remains is
-four figures in three rows:
+monotonicity count, which this list previously carried — and so is the
+Reference spur row's `≈ −57.0 dBc` charge **total**, now that
+`check-mismatch-charge-derivation.sh` (§5.2) reduces it from
+`sim/mc-cp-mismatch`'s own committed samples rather than taking it on faith —
+so what remains is three figures in two rows:
 
 | §5 row | Figure | Why it is not re-derived |
 |---|---|---|
 | Kvco | `115.8 MHz/V` | Two reasons, either sufficient. Selecting the point evaluates [the band-selection rule](../../spec/pll.md#band-selection-rule) (lowest band code that reaches the target) at every corner — a derivation, and one over a rule whose control window `spec/pll.md` does not presently name, an ambiguity tracked at #542 under which the two candidate windows select different bands. And the point itself is at Vctrl = 1.54 V, which the 7-point control sweep does not sample (its neighbours are 114.93 MHz/V at 1.50 V and 120.85 at 1.80 V), so no reduction of this CSV returns it. The adversarial `154.3 MHz/V` figure the rule exists to exclude *is* graded above, which is the half that bounds the risk |
 | Multiplication ratio | `61 distinct N` | The record commits `retiming_margin.csv` (17 rows, the margin claim) but not the per-point ratio table, so the set of divide ratios actually exercised cannot be recomputed from committed evidence. `check-pvt-coverage-claims.sh` does grade this count against the record's own declared value, which is a weaker claim than re-deriving it |
 | Multiplication ratio | `0 ratio errors of 235 chain points` | Same missing per-point table: only the retiming figure in this row is re-derivable. The `235` and its `2835`-cell cross-product are graded against the record's declaration by `check-pvt-coverage-claims.sh`, not against per-point evidence |
-| Reference spur | `≈ −57.0 dBc` | Its **arithmetic** is graded, in §5.2: the check there carries this figure's own 11.19 fC charge total through the derivation and matches the result at the precision written. What is still not re-derived is that **total** — it adds a corner-combined statistical residual and a term-1 product DR-018 derives in prose from `sim/mc-cp-mismatch`'s 300 committed samples, and reducing those needs a signed `\|mean\| + 3σ` statistic this section's reduction language does not have. The *measured* spur figures in the same row — `−57.0`, `−72.7`, `−54.5` — are graded above |
 
 Nothing mechanically enumerates "every headline figure" out of §5's prose
 cells, which quote hundreds of numbers, most of them commentary on a figure
@@ -744,7 +746,7 @@ still inside the 1.0 % line, so no verdict here changes, but the margin is
 1.5× rather than 2×. Tracked as an owed measurement, not folded silently into
 the existing number.
 
-### 5.2 Derivation provenance: the derived spur figures CI re-derives arithmetically
+### 5.2 Derivation provenance: the derived spur figures CI re-derives arithmetically and to their own raw samples
 
 §5.1 grades a **measured** value by reducing a committed per-corner CSV. One
 row above does not rest on a measured value at all: **Reference spur**. Its
@@ -797,17 +799,28 @@ it is not quietly re-rounded here: `spec/pll.md` is the ratified specification,
 amended through a decision record rather than by an agent rounding it
 differently.
 
-**What this does not grade**, stated so the gap is visible rather than implied:
-where the charge totals themselves come from. The 7.93 / 11.19 / 11.66 fC
-totals add a corner-combined statistical residual and term-1 products that
-DR-018 derives in prose from `sim/mc-cp-mismatch`'s committed samples; reducing
-those is §5.1's kind of work and needs a signed `|mean| + 3σ` statistic its
-reduction language does not have. So the derivation is graded **from** its
-charge totals, not **to** them — which is why §5.1 still lists the figure, with
-that narrower reason. Nor does it grade the dB *margins* stated in prose ("1.6 dB
-inside the line", "~12 dB at the two cold corners"), because a bare "dB" in this
-document is as often a spread or a reserve as it is a difference of two graded
-numbers.
+**Where the charge totals themselves come from, now graded too.** The 7.93 /
+11.19 / 11.66 fC totals add a corner-combined statistical residual and a
+term-1 product that DR-018 derives in prose from `sim/mc-cp-mismatch`'s 300
+committed samples. `spec/lib/check-mismatch-charge-derivation.sh` gives that
+derivation its own machine reduction: for every (corner, seed) triple of
+Vctrl points in the committed `mc_cp_dc.csv`, it selects the worst-magnitude
+reading (the `cp-compliance` "worst point in window" convention), forms the
+signed and folded `|mean| + 3*sd` per corner, and keeps the worst corner of
+each — the same reduction `sim/mc-cp-mismatch/testbench/run.sh --restat`
+implements, independently re-derived rather than trusted. It does the same
+for term 3's residual net charge from `mc_pfd_cp.csv`, then chains both
+through the Icp and `T_ov` figures DR-018's own Input table states (taken as
+given, not re-swept from `cp-compliance`/`pfd-deadzone`'s own 45-corner
+grids — the same boundary `check-spur-derivation-arithmetic.sh` draws around
+C2 and the TIE scale point) into the three charge totals above, and fails CI
+if any of them no longer reproduces. What is still not re-derived, stated so
+the narrower gap is visible rather than implied: `Icp`, `T_ov` and the 3.68 fC
+systematic charge asymmetry are worst-of-45-corners figures taken from
+DR-018's Input table, not independently re-swept here. Nor does either check
+grade the dB *margins* stated in prose ("1.6 dB inside the line", "~12 dB at
+the two cold corners"), because a bare "dB" in this document is as often a
+spread or a reserve as it is a difference of two graded numbers.
 
 ---
 
