@@ -152,13 +152,41 @@ a,0.40
 b,1.00
 """
 
+#: The rule-7 SUBTRACTION fixture: a dBc column read against a ratified line.
+#:
+#: The fixture's line is -60 dBc (not the repository's -55), and the numbers
+#: are chosen so the two operators cannot be confused for each other. The
+#: worst corner is -58.5, whose DISTANCE from the line is 1.5 dB and whose
+#: RATIO to it is 0.975 -- and the `ff`/-40 corner is -59.4, 0.6 dB out and
+#: 0.99 of the line. A check that divided where the table says subtract would
+#: produce a number with no decimal in common with either figure.
+SPUR_CSV = """\
+corner,process,temp_c,spur_dbc_at_200mhz
+a,sf,-40,-58.5
+b,ff,-40,-59.4
+c,typical,27,-65.0
+"""
+
 #: Ratified lines, DELIBERATELY NOT THE REPOSITORY'S OWN. Budget 2 is 0.5 V
-#: here against the real 0.6, and the control window is 1.0-3.0 V (2.0 V wide)
-#: against the real 0.9-2.7 (1.8 V). A check that had the repository's numbers
-#: written into it would grade 1.00/0.6 = 1.67 and fail every test below --
-#: which is the point: the constants have to be READ out of these documents.
+#: here against the real 0.6, the control window is 1.0-3.0 V (2.0 V wide)
+#: against the real 0.9-2.7 (1.8 V), and the spur line is -60 dBc against the
+#: real -55. A check that had the repository's numbers written into it would
+#: grade 1.00/0.6 = 1.67 and fail every test below -- which is the point: the
+#: constants have to be READ out of these documents.
+#:
+#: The summary table carries TWO rows linking to `#reference-spur`: the target
+#: row, whose next cell is nothing but the line, and a "Verification owed" row
+#: whose next cell is an owner. spec/pll.md has exactly this pair, and reading
+#: the owner cell as a second statement of the line would report a document
+#: that contradicts itself -- so the fixture keeps both rows present.
 SPEC_TEXT = """\
 # spec
+
+## Summary
+
+| # | Parameter | Target | Notes |
+|---|---|---|---|
+| 7 | [Reference spur](#reference-spur) | ≤ −60 dBc | measured at five corners |
 
 ## Icp trim-code rule
 
@@ -176,6 +204,16 @@ SPEC_TEXT = """\
 A DC rail excursion must consume ≤ 0.5 V of the Vctrl window.
 
 ### Budget 2 -- DC: a full-range rail excursion must consume ≤ 0.5 V of the Vctrl window
+
+## Reference spur
+
+**Target: ≤ −60 dBc**, at `f_ref` offset from the carrier, in lock.
+
+## Verification owed
+
+| Parameter | What is owed | Owner |
+|---|---|---|
+| [Reference spur](#reference-spur) | the mandated grid at the binding point | **#533** |
 
 ## Something else
 """
@@ -355,6 +393,7 @@ class _Tree:
         (corners / "mc_cp_dc.csv").write_text(MISMATCH_CSV)
         (corners / "mc_term3.csv").write_text(TERM3_CSV)
         (corners / "budget.csv").write_text(BUDGET_CSV)
+        (corners / "spur_by_corner.csv").write_text(SPUR_CSV)
 
         (root / "spec").mkdir()
         (root / SPEC).write_text(SPEC_TEXT)
@@ -1304,7 +1343,7 @@ class TestDerivedAgainstARatifiedLine(_TreeTest):
              "count(rows) / budget2-vctrl-consumption-v", "0.5 V", "1"),
         ]
         self._derived(spec_rows=tuple(rows), derived=entries)
-        self.assertFails("the numerator is a count", "is not a ratio")
+        self.assertFails("the measured operand is a count", "is not a ratio")
 
     def test_the_scale_is_applied_to_the_ratio(self):
         """The two entries share a numerator and a row; only scale differs."""
@@ -1365,6 +1404,152 @@ class TestDerivedAgainstARatifiedLine(_TreeTest):
     def test_an_empty_derived_table_fails(self):
         self._derived(derived=[])
         self.assertFails("no non-empty section 5.1 derived-figure table")
+
+
+#: The section 5 row the subtraction tests grade against. Both distances have
+#: to appear verbatim in it, so the tests that override the row build on this
+#: string rather than retyping a shorter one and losing them.
+SPUR_MEASURED = (
+    "Worst −58.5 dBc scaled to the binding point; the two cold corners are "
+    "1.5 dB and 0.6 dB over the line"
+)
+
+SPUR_ROW = (
+    "Reference spur", SPUR_MEASURED, "**UNMET at 2 corners**",
+    f"`sim/{CAMPAIGN}/records/{RECORD}.md`",
+)
+
+SPUR_DERIVED = [
+    ("Reference spur", "`1.5 dB`", RECORD, "spur_by_corner.csv",
+     "max(spur_dbc_at_200mhz) - reference-spur-line-dbc", "−60 dBc", "1"),
+    ("Reference spur", "`0.6 dB`", RECORD, "spur_by_corner.csv",
+     "max(spur_dbc_at_200mhz where process == ff and temp_c == -40) "
+     "- reference-spur-line-dbc", "−60 dBc", "1"),
+]
+
+
+class TestDistanceFromARatifiedLine(_TreeTest):
+    """Rule 7's second operator: a measurement's DISTANCE from a spec line.
+
+    A ratio answers "how many times the allowance", which is what a budget row
+    states; a distance answers "how far past the line", which is what a dBc row
+    states. Until the subtraction existed the real proposal could not write the
+    reference spur's two cold corners as figures at all -- it wrote them as the
+    range `0.1-0.5 dB`, which the range guard refuses, and the ungraded list
+    carried the pair as a declaration. Both ends were already graded as dBc
+    values; only the operator was missing.
+
+    The fixture's line is -60 dBc and its worst corner is -58.5, so the
+    distance is 1.5 dB and the RATIO is 0.975 -- no decimal in common, which is
+    what makes "it divided where the table says subtract" a visible failure
+    rather than a near miss.
+    """
+
+    def _spur(self, spec_rows=None, derived=None, **kwargs):
+        rows = tuple(SPEC_ROWS) + (SPUR_ROW,) if spec_rows is None else spec_rows
+        entries = list(DEFAULT_DERIVED) + SPUR_DERIVED if derived is None else derived
+        self.tree.write(proposal(spec_rows=rows, derived=entries, **kwargs))
+
+    def test_a_distance_passes_and_the_line_is_reported(self):
+        self._spur()
+        result = self.assertPasses()
+        self.assertIn("4 further figure(s) derived against 3 ratified",
+                      result.stdout)
+        self.assertIn("reference-spur-line-dbc = -60", result.stdout)
+        self.assertIn("all 4 section 5 rows accounted for", result.stdout)
+
+    def test_dividing_where_the_table_subtracts_is_a_different_number(self):
+        """The operator is load-bearing: 0.975 is not 1.5."""
+        entries = list(DEFAULT_DERIVED) + [
+            ("Reference spur", "`1.5 dB`", RECORD, "spur_by_corner.csv",
+             "max(spur_dbc_at_200mhz) / reference-spur-line-dbc", "−60 dBc", "1"),
+            SPUR_DERIVED[1],
+        ]
+        self._spur(derived=entries)
+        self.assertFails("over the ratified -60 that is 0.975",
+                         "does not round to it")
+
+    def test_a_drifted_distance_fails(self):
+        rows = tuple(SPEC_ROWS) + (
+            ("Reference spur", SPUR_MEASURED.replace("1.5 dB", "1.4 dB"),
+             "**UNMET at 2 corners**",
+             f"`sim/{CAMPAIGN}/records/{RECORD}.md`"),
+        )
+        entries = list(DEFAULT_DERIVED) + [
+            ("Reference spur", "`1.4 dB`", RECORD, "spur_by_corner.csv",
+             "max(spur_dbc_at_200mhz) - reference-spur-line-dbc", "−60 dBc", "1"),
+            SPUR_DERIVED[1],
+        ]
+        self._spur(spec_rows=rows, derived=entries)
+        self.assertFails("its distance from the ratified -60 is 1.5",
+                         "does not round to it")
+
+    def test_the_line_is_read_from_the_spec_not_the_check(self):
+        """Re-ratify the line in both places and the figure fails with it.
+
+        -58.5 is 1.5 dB past -60 and 0.5 dB past -59, so moving the line moves
+        both distances -- which is the whole reason the constant is read rather
+        than written down here.
+        """
+        self._spur()
+        self.tree.write_spec(SPEC_TEXT.replace("−60 dBc", "−59 dBc"))
+        self.assertFails("the Constant column states −60 dBc",
+                         "reference-spur-line-dbc` reads -59")
+
+    def test_the_owed_row_is_not_a_second_statement_of_the_line(self):
+        """Dropping the target line leaves ONE statement, not two.
+
+        spec/pll.md's "Verification owed" table links to the same section as
+        the summary table's target row, so a looser match would read its owner
+        cell as a corroborating statement and this tree would pass with the
+        line stated once. The fixture keeps that row present; removing only the
+        `**Target:**` line has to be enough to leave the constant
+        uncorroborated.
+        """
+        self._spur()
+        self.tree.write_spec(
+            SPEC_TEXT.replace("**Target: ≤ −60 dBc**", "**Target: as below**")
+        )
+        self.assertFails("reference-spur-line-dbc",
+                         "found 1 statement(s) of this ratified line")
+
+    def test_two_statements_of_the_line_that_disagree_fail(self):
+        self._spur()
+        self.tree.write_spec(
+            SPEC_TEXT.replace("**Target: ≤ −60 dBc**", "**Target: ≤ −62 dBc**")
+        )
+        self.assertFails("reference-spur-line-dbc",
+                         "stated inconsistently", "is a spec question")
+
+    def test_a_negative_literal_in_a_where_clause_is_not_the_operator(self):
+        """`where temp_c == -40` must not be split as the subtraction.
+
+        The operator carries whitespace on both sides and a negative literal
+        does not, which is what keeps the two apart. With the operator removed
+        the derivation is unreadable -- it must say so rather than quietly
+        deriving `max(... temp_c ==` minus `40) ...`.
+        """
+        entries = list(DEFAULT_DERIVED) + [
+            SPUR_DERIVED[0],
+            ("Reference spur", "`0.6 dB`", RECORD, "spur_by_corner.csv",
+             "max(spur_dbc_at_200mhz where process == ff and temp_c == -40)",
+             "−60 dBc", "1"),
+        ]
+        self._spur(derived=entries)
+        self.assertFails("cannot read the derivation", "<reduction> <op>")
+
+    def test_a_count_as_the_measured_operand_is_refused(self):
+        rows = tuple(SPEC_ROWS) + (
+            ("Reference spur", SPUR_MEASURED + "; 3 corners", "**UNMET**",
+             f"`sim/{CAMPAIGN}/records/{RECORD}.md`"),
+        )
+        entries = list(DEFAULT_DERIVED) + SPUR_DERIVED + [
+            ("Reference spur", "`3`", RECORD, "spur_by_corner.csv",
+             "count(rows) - reference-spur-line-dbc", "−60 dBc", "1"),
+        ]
+        self._spur(spec_rows=rows, derived=entries)
+        self.assertFails("the measured operand is a count",
+                         "a count minus one is not a distance")
 
 
 class TestARangeIsNotAFigure(_TreeTest):
@@ -1482,10 +1667,35 @@ class TestTheRealTree(unittest.TestCase):
         match = re.search(r"(\d+) further figure\(s\) derived against (\d+) "
                           r"ratified constant", result.stdout)
         self.assertIsNotNone(match, msg=result.stdout)
-        self.assertGreaterEqual(int(match.group(1)), 2, msg=result.stdout)
-        self.assertGreaterEqual(int(match.group(2)), 2, msg=result.stdout)
+        self.assertGreaterEqual(int(match.group(1)), 4, msg=result.stdout)
+        self.assertGreaterEqual(int(match.group(2)), 3, msg=result.stdout)
         self.assertIn("budget2-vctrl-consumption-v", result.stdout)
         self.assertIn("dr003-vctrl-window-width-v", result.stdout)
+        self.assertIn("reference-spur-line-dbc", result.stdout)
+
+    def test_the_spur_line_it_reads_is_the_one_the_spec_ratifies(self):
+        """The −55 dBc line, resolved out of spec/pll.md's two statements.
+
+        This is the one resolved constant whose value is asserted here rather
+        than only named, because the two Reference spur distances are small
+        (0.5 dB and 0.1 dB) and a line read a few dB away would still produce
+        a plausible-looking pair. `check-spur-derivation-arithmetic.sh` reads
+        the same line independently for its own rule 6; if the spec re-ratifies
+        it, both checks and this assertion have to move in that same commit.
+        """
+        result = subprocess.run(
+            ["bash", str(CHECK)], capture_output=True, text=True, cwd=REPO_ROOT
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("reference-spur-line-dbc = -55", result.stdout)
+        spec = (REPO_ROOT / SPEC).read_text(encoding="utf-8")
+        self.assertEqual(
+            2,
+            len(re.findall(r"(?:≤|<=)\s*−55\s*dBc", spec)),
+            msg="the spur line must be stated exactly twice in spec/pll.md -- "
+                "the summary-table target cell and the '## Reference spur' "
+                "target line",
+        )
 
     def test_it_reports_the_ungraded_figures_it_disclosed(self):
         result = subprocess.run(
