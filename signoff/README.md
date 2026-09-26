@@ -120,7 +120,7 @@ block-scoped, and a sub-block's clean DRC is not the block's item 3. Item 7
 partition, and there is neither a PEX run nor a block layout to extract one
 from. ~~Item 11 (power delivery, structural) needs a `klt erc` supply spec and
 report; this repo has neither — that gap is tracked separately as #427.~~ —
-**corrected (2026-09-26, issue #564):** item 11 (power delivery, structural)
+**corrected (2026-09-26, issue #564):** ~~item 11 (power delivery, structural)
 needs a `klt erc` supply-spec run *and* a `klt lvs` envelope. A supply spec and
 report exist for one sub-block, `vco_block`, and have been committed since
 2026-09-20 (`layout/evidence/vco-layout/erc-supply-spec.json` and
@@ -128,7 +128,17 @@ report exist for one sub-block, `vco_block`, and have been committed since
 cover one sub-block rather than the block, no `klt lvs` envelope exists to
 pair them with, and they would not grade `met` even if both of those were
 fixed (see "Item 11 under the klt 0.6.0 checklist" below). The remaining
-item-11 gap is filed as #565 (open).
+item-11 gap was filed as #565 (then open).~~ — **corrected (2026-09-26, issue
+#588):** PR #587 closed #565: every real block (`vco_block`, `pfd_cp`,
+`divider_chain`, `lock_detector`) now has a committed `klt erc` supply spec
+and report, produced on the klt version CI pins (see "Item 11 under the klt
+0.6.0 checklist" below for what each one renders). None of the four is cited
+in `signoff/block-manifest.json`, so none of it changes today's verdict, and
+citing the clean ones would not be enough on its own either: item 11 grades a
+*set*, a `klt erc` supply citation paired with a `klt lvs` citation, and no
+`klt lvs` envelope exists for any block — the same "not a `klt` envelope" gap
+point 1 above names for items 3, 4, 5 and 6. No open issue in this repository
+tracks producing that envelope; the remaining item-11 gap is unowned.
 
 **3. The tool cannot check what the item claims, and we decline to game it.**
 Items **1** (design sources), **2** (layout), **9** (testbenches shipped) and
@@ -201,7 +211,7 @@ wheel's `klayout_tools/data/design-evidence-tiers.md`):
    itself rather than only comparing the envelope's self-reported hash. Never
    graded on. This manifest cites nothing, so no row carries it.
 
-Item 11's notes gained, among other things, two rules that bear on the only
+~~Item 11's notes gained, among other things, two rules that bear on the only
 item-11 evidence this repository has — the `vco_block` supply spec and report
 under `layout/evidence/vco-layout/` (see "Why every row is `unmet`"). Neither
 is cited, so neither changes today's verdict; this is what they would render
@@ -244,7 +254,54 @@ grader returns `wrong_kind` for a set without one before it reads the ERC half.
   merges the second island in `klt erc`'s own model is not verified here.
 
 Net: item 11 is `unmet` for this block for more reasons than the row's
-`no_evidence` says, and none of them is a known power-delivery defect.
+`no_evidence` says, and none of them is a known power-delivery defect.~~ —
+**corrected (2026-09-26, issue #588):** the above described `vco_block` as the
+only block with item-11 evidence, and worked out what its ERC half would
+render by calling the grader directly, because no fresh run existed yet. PR
+#587 (issue #565) did that fresh run, on the klt version CI pins, for
+`vco_block` and the three blocks that had none — `pfd_cp`, `divider_chain`,
+`lock_detector`. Each block's own `PROOF-erc.md` under `layout/evidence/` is
+now the record of what the grader renders for it; this section summarizes
+rather than re-derives them:
+
+- **`vco_block`** (`layout/evidence/vco-layout/PROOF-erc.md`): the `ties[]`
+  rule above is now satisfied — a real declaration, not the closed-bug
+  rationale this section used to describe — but `VDD_VCO` still resolves to
+  two electrical islands under `klt erc`'s metal-only model, so the grader
+  renders `supply_not_continuous`, unmasked. Cross-checked against an
+  independent, device-aware LVS extraction as klayout-tools#2180's caveat
+  requires (`PROOF-433-vdd-island-fix.md`, reused rather than re-run): the
+  second island is real silicon, joined to the first through the shared
+  n-well, and not a power-delivery defect — but `klt erc` has no
+  well-mediated-continuity model to credit that with, so the block stays
+  `unmet` for this precisely named, non-defect reason.
+- **`pfd_cp`** (`layout/evidence/pfd-cp-layout/PROOF-erc.md`): the
+  supply-continuity finding is clean, but the block's dual-biased well cannot
+  be expressed as a single `ties[]` takeoff, so the spec discloses the
+  omission (`ties_disclosure`, `kind: "tool_limitation"`) rather than
+  declaring or silently omitting it. The grader renders
+  `supply_spec_disclosed_tool_limitation` — an honest disclosure, still
+  `unmet`. The underlying gap in `ties[]`'s well-side selector is filed
+  upstream (klayout-tools#2540, klayout-tools#2541), not tracked in this
+  repository.
+- **`divider_chain`** and **`lock_detector`** (their own `PROOF-erc.md`
+  files): both declare and check a real `ties[]` entry with zero
+  `erc.missing_tie` findings, and both declared supplies resolve to exactly
+  one labelled island — the ERC half's supply-continuity finding is clean for
+  both.
+
+None of the four is cited in `signoff/block-manifest.json`, so none of this
+changes `tier-report.json`'s verdict today, and citing `divider_chain` and
+`lock_detector` — the two blocks with no adverse ERC-half reason at all —
+would not be enough on its own either: item 11 also requires a `klt lvs`
+envelope, none exists for any block, and the grader returns `wrong_kind` for a
+set without one before it reads the ERC half at all (see "Scope note" in each
+`PROOF-erc.md`).
+
+Net: item 11 is `unmet` for every block, for reasons that are now precisely
+named per block rather than uniform, and none of them is a known
+power-delivery defect. The one gap left with no open owner is the `klt lvs`
+envelope itself.
 
 ### Superseded: why the checklist was vendored here
 
