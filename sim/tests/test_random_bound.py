@@ -311,6 +311,28 @@ class Points(unittest.TestCase):
         self.assertIn(run.REFERENCE_POINT, pts)
         self.assertAlmostEqual(pts[run.REFERENCE_POINT]["vctrl"], 1.795)
 
+    def test_local_maxima_are_circular_and_ranked(self):
+        """Round C zooms on these; a peak straddling phase 0 must not be lost,
+        and the largest must come first."""
+        run = load_module(RB / "run.py")
+        ks = [0, 8, 16, 24, 32]
+        val = {0: 5.0, 8: 1.0, 16: 3.0, 24: 2.0, 32: 4.0}
+        self.assertEqual(run._local_maxima(ks, val, 40), [0, 16])
+        val = {0: 1.0, 8: 2.0, 16: 1.0, 24: 1.0, 32: 9.0}
+        self.assertEqual(run._local_maxima(ks, val, 40)[0], 32)
+
+    def test_sampling_grids_nest(self):
+        """Round A and round B must be subsets of the dense grid at the trajectory's
+        own resolution, and round B's stride must make round C's window
+        (+/- stride-1 steps) cover every step between two round-B samples."""
+        run = load_module(RB / "run.py")
+        n = run.N_DENSE
+        self.assertEqual(n % run.N_PHASE, 0)
+        self.assertEqual(n % run.N_PHASE_SWITCHING, 0)
+        self.assertEqual((n // run.N_PHASE) % (n // run.N_PHASE_SWITCHING), 0)
+        # the dense step is within 10 % of the trajectory's timestep ceiling
+        self.assertLess(1.0 / 150e6 / n, 1.1 * run.TRAJ_TMAX)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -121,22 +121,32 @@ def main() -> int:
           "flicker part's white equivalent. The bias it was calibrated at is "
           "the argmax row in `results/sid_<point>.json` (`at_argmax`).")
         a("")
+        a("`C/B` is the largest factor by which sampling a switching device at "
+          "every 2.17 ps step (round C) raised its 17 ps maximum (round B) — the "
+          "maximum's convergence against sampling resolution. `B/A` is the same "
+          "for 17 ps against the 48-phase round A. `bias span` is the largest "
+          "round-A max/min of any bias-generator device, which is also the "
+          "margin its injection density is raised by.")
+        a("")
         a("| Point | units anchor | I_d reproduction | Φ (by exponent) | "
-          "refined phases | max refinement gain | max bias-block span (dB) | "
+          "evaluated A / B / C | max C/B | max B/A | max bias span (dB) | "
           "Σ S_inj ring / bias / buffer (A²/Hz) |")
-        a("|---|---|---|---|---|---|---|---|")
+        a("|---|---|---|---|---|---|---|---|---|")
         for name, tr, sid, tj in rows:
             dv = sid["devices"]
-            gain = max(v["refinement_gain"] for v in dv.values())
-            span = max((v["round1_span_dB"] or 0.0) for v in dv.values()
+            sw = [v for v in dv.values() if v["block"] in ("ring", "buffer")]
+            gcb = max(v["gain_c_over_b"] for v in sw)
+            gba = max(v["gain_b_over_a"] for v in sw)
+            span = max((v["round_a_span_dB"] or 0.0) for v in dv.values()
                        if v["block"] == "bias")
             inj = sid["S_inj_A2_per_Hz"]
             blk = {b: sum(inj[k] for k, v in dv.items() if v["block"] == b)
                    for b in ("ring", "bias", "buffer")}
             phi = ", ".join(f"{p['alpha']:.2f}→{p['phi']:.2f}" for p in sid["phi"])
             lo, hi = sid["units_anchor_range"]
+            ne = sid["n_evaluated"]
             a(f"| `{name}` | {lo:.7f}–{hi:.7f} | ≤ {sid['repro_worst_id_rel']:.1e} | {phi} | "
-              f"{sid['n_refined']} | {gain:.4f} | {span:.2f} | "
+              f"{ne['A']} / {ne['B']} / {ne['C']} | {gcb:.4f} | {gba:.3f} | {span:.3f} | "
               f"{blk['ring']:.2e} / {blk['bias']:.2e} / {blk['buffer']:.2e} |")
         a("")
         # the reference point's largest generators

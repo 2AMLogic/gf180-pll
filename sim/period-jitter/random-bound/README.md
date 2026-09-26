@@ -50,9 +50,11 @@ to one period's variance, with `h(t)² ≥ 0` whatever the impulse sensitivity
 function `h` is. So a **stationary** injection at any `S_inj ≥ max_t S(t)`
 produces **at least** that variance. The transient integrates the ring's true
 `h` itself — no ISF table is read — and the only thing that has to be right is
-that `S_inj` really is the maximum. That is why the density is measured at 48
-phases of every device's own trajectory, refined around each switching device's
-maximum, and why the refinement's gain is reported.
+that `S_inj` really is the maximum. That is why every switching device's
+density is sampled along its own trajectory down to the trajectory's own 2 ps
+resolution around its peaks, why each bias-generator device's is raised by its
+own sampled span, and why the maximum's convergence against sampling
+resolution is reported per point.
 
 This is the bound #520 asked option (B) to state, and it is not the one DR-031
 measured. DR-031 compared a **peak-|I_d|** calibration with the `h²`-weighted
@@ -118,25 +120,39 @@ jitter row are measured at the same 45 points.
 **The trajectory** (stage `trajectory`). One clean VCO copy at a 2 ps ceiling —
 the ISF bring-up's converged setting — with every device's `V_gs, V_ds, V_bs,
 I_d, g_m, g_ds` saved (a `save` card, not only `wrdata`: an unsaved
-`@m…[…]` column comes back frozen at its DC value), sampled on a 384-point
-phase grid by snapping to solved timepoints. Two more clean copies at
+`@m…[…]` column comes back frozen at its DC value), sampled on a 3072-point
+phase grid (2.17 ps) by snapping to solved timepoints. Two more clean copies at
 `V_ctrl ± 10 mV` measure `K_vco` at the operating point on the same timestep
 sequence.
 
-**The densities** (stage `sid`). Every device, standalone, at one trajectory
-timepoint — all 62 MOS devices and 3 resistors in ONE deck, each in its own
-sub-network with its own ideal bias sources, sense resistor and 1 A AC probe,
-so a `.noise` referred to one device's drain sees that device alone. One Newton
-step on the observed bias residual (`../sid-trajectory/`'s method); the
+**The densities** (stage `sid`). Every device, standalone, at a trajectory
+timepoint, each in its own sub-network with its own ideal bias sources, sense
+resistor and 1 A AC probe. The sub-networks are disjoint, so one deck holds
+many of them — every device at several phases — and one `.noise` per
+frequency, referred to the sum of every drain voltage through unit-gain
+VCVSs, reports each device's contribution separately (the `validate` stage
+compares this against one `.noise` per device on a single-phase deck). One
+Newton step on the observed bias residual (`../sid-trajectory/`'s method); the
 standalone device must reproduce the in-situ `I_d` to 10⁻³ or the point is
-refused, and the sense resistor's own thermal noise must match its closed form
-to 0.5 % on every call or the point is refused. The density used is ngspice's
-per-**device** total (channel thermal, flicker and the `rd`/`rs`/`rg`
-terminal generators), split into its white part and its flicker part at
-`F = 0.475 f₀`; the flicker exponent is measured at every row from a second
-frequency, 1 MHz. Round one is 48 uniform phases; round two refines ±1, ±2, ±4
-dense steps (17, 35, 70 ps) around each output-buffer device's maximum and each
-ring class's pooled maximum.
+refused, and each sub-network's sense resistor must reproduce its own
+closed-form thermal noise to 0.5 % on every call or the point is refused. The
+density used is ngspice's per-**device** total (channel thermal, flicker and
+the `rd`/`rs`/`rg` terminal generators), split into its white part and its
+flicker part at `F = 0.475 f₀`; the flicker exponent is measured at every row
+from a second frequency, 1 MHz. Three rounds:
+
+| Round | Devices | Phases |
+|---|---|---|
+| A | all 65 | 48 uniform (139 ps) |
+| B | the 26 switching devices (ring, output buffer) | 384 uniform (17 ps) |
+| C | the same 26 | every 2.17 ps step between the round-B neighbours of each device's three largest round-B local maxima |
+
+A switching device's injection density is its maximum over all three rounds;
+C over B is reported per point as the maximum's convergence against sampling
+resolution. A bias-generator device is quasi-DC — its round-A span is
+reported — and its injection density is its round-A maximum raised by that
+same span, a margin that covers any excursion between samples no larger than
+the samples themselves show.
 
 The **poly resistors** get no `.noise`: the PDK models the body resistance as a
 voltage-dependent expression, which ngspice turns into a behavioural source and
@@ -169,6 +185,47 @@ and decomposes the bound into white-only and per-block (ring, bias generator,
 buffer) injections.
 
 <!-- RESULT-BODY -->
+
+## What this does NOT establish
+
+Each of these is a limit of the bound, stated so that nobody has to infer it.
+
+- **It is an upper bound, not an estimate.** The random period jitter of this
+  PLL is *at most* the figure per point; how far below it the true value sits
+  is not measured here. Two of the three inequalities are loose on purpose —
+  every generator is injected at its trajectory maximum for the whole cycle,
+  and the flicker factor `Φ` is taken over every loop the as-built filter
+  admits at the 45° floor, crossovers down to ~14 kHz, not the loop the trim
+  rule selects. A bound that clears the budget clears it; a bound that did not
+  would have said nothing about the part.
+- **Which generators it covers.** Every MOS channel (with its `rd`/`rs`/`rg`
+  terminal generators) and every resistor in `vco` — ring, bias generator,
+  output buffer — and the loop-filter resistor. It does **not** cover the
+  charge pump, the PFD, the feedback divider or the lock detector. Those are
+  in-band sources: they reach the output only through the closed loop's
+  low-pass transfer, whose bandwidth (≤ 1.4 MHz over every admissible loop) is
+  ~1 % of `f₀`, and period jitter is the first difference of phase, which
+  attenuates in-band phase by `(2π f T)²` — ≈ 3.4 × 10⁻³ at 1.4 MHz. That is
+  an argument for why they are small, not a bound on them; it is the scope
+  DR-002 Decision 5 itself specified ("a transient-noise testbench dominated
+  by the VCO plus a jitter-transfer argument through the closed loop"), and it
+  is stated as a scope, not as a result. The reference source is excluded by
+  `spec/pll.md` (DR-019).
+- **Schematic level, ideal supply.** No layout parasitics; the supply and
+  control sources are ideal, which is also why the two MOS decoupling
+  capacitors are noiseless here. Supply-borne noise is the supply-ripple
+  campaign's quantity, not this one's.
+- **The PDK's noise models, as the PDK states them.** BSIM4 channel thermal
+  and flicker, per device, from `.noise`; flicker treated as a
+  modulated-stationary process (`S(t, f) = m(t)² K f^−α`), the model every
+  periodic-noise analysis uses. The poly resistors' body flicker uses the
+  card's own `KF`/`AF`, which `.noise` cannot report for a behavioural body.
+- **One output frequency.** 150 MHz, band 6 — the same operating point as the
+  deterministic half of the row, and not the 200 MHz band top, which is
+  #503's campaign for the deterministic half and is not covered here either.
+- **Linear response.** The bound's first inequality is a small-signal
+  statement; the `validate` stage's 3× amplitude run is what shows the ring
+  responds linearly at the injected level.
 
 ## Files
 

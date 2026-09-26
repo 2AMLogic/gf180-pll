@@ -10,9 +10,10 @@ Stages (see README.md for what each establishes):
               simulator
   trajectory  per point: one clean VCO, every device's operating point, and
               K_vco at the operating point
-  sid         per point: every VCO device's noise densities at N_PHASE
-              trajectory timepoints, and the injection density that dominates
-              all of them
+  sid         per point: every VCO device's noise densities along its
+              trajectory (three rounds, down to the trajectory's own 2 ps
+              resolution for switching devices), and the injection density
+              that dominates all of them
   transient   per point: NCOPY noisy VCO copies plus one clean one, the period
               sequence, and its variance with a confidence limit
   validate    reference point only: does the transient converge in timestep
@@ -355,16 +356,46 @@ def stage_trajectory(point, op, outdir, logs, work, models, quick):
 # ---------------------------------------------------------------------------
 # sid
 # ---------------------------------------------------------------------------
-def _noise_pass(models, op, devs, row, offsets, freqs, work, log, combined=True):
-    entries = []
-    for j, d in enumerate(devs):
-        entries.append((j, d, row[d["path"]], offsets.get(j) if offsets else None))
+def _noise_eval(models, op, entries, freqs, work, log, combined=True):
+    """One noise deck over `entries` (`(id, dev, bias, offsets)`) -> parsed, keyed by id."""
     deck = rb_deck.noise_deck(pdk_models=models, op=op, entries=entries,
                               freqs=freqs, rsense=RSENSE, combined=combined)
     _, out = run_deck(deck, work, log)
-    mos = [j for j, d in enumerate(devs) if d["kind"] == "mos"]
-    res = [j for j, d in enumerate(devs) if d["kind"] == "res"]
+    mos = [i for i, d, _, _ in entries if d["kind"] == "mos"]
+    res = [i for i, d, _, _ in entries if d["kind"] == "res"]
     return rb_extract.parse_noise_log(out, mos, res, freqs)
+
+
+def _measure(models, op, pairs, rows, devs, freqs, work, logdir, tag, chunk=None):
+    """`(device index, dense index)` pairs -> `{pair: (op record, [block per freq] | None)}`.
+
+    Every pair is its own disjoint sub-network, so pairs at DIFFERENT phases
+    share one deck exactly as devices at one phase do (`rb_deck.noise_deck`):
+    a deck is a set of standalone devices, and nothing in it knows or cares
+    which trajectory timepoint each one's bias came from.  `chunk` pairs per
+    deck.  Two passes per deck: an operating point only, then -- after one
+    Newton step on each device's observed bias residual, sign-agnostic, the
+    method `../sid-trajectory/` measured and adopted (DR-031) -- the noise.
+    """
+    chunk = chunk or CHUNK
+    out = {}
+    for c0 in range(0, len(pairs), chunk):
+        part = pairs[c0:c0 + chunk]
+        ents = [(i, devs[j], rows[k][devs[j]["path"]], None) for i, (j, k) in enumerate(part)]
+        name = f"{tag}_{c0 // chunk:03d}"
+        first = _noise_eval(models, op, ents, (), work, logdir / f"{name}_pass1.log")
+        ents2 = []
+        for i, d, bias, _ in ents:
+            off = None
+            if d["kind"] == "mos":
+                p = rb_deck.polarity(d)
+                got = first["op"][i]
+                off = {"v" + q[1]: p * (bias[q] - got[q]) for q in ("vgs", "vds", "vbs")}
+            ents2.append((i, d, bias, off))
+        parsed = _noise_eval(models, op, ents2, freqs, work, logdir / f"{name}.log")
+        for i, pair in enumerate(part):
+            out[pair] = (parsed["op"][i], parsed["per_freq"].get(i))
+    return out
 
 
 def resistor_flicker_card(models) -> tuple[float, float]:
@@ -377,15 +408,50 @@ def resistor_flicker_card(models) -> tuple[float, float]:
     return float(kv["kf"]), float(kv["af"])
 
 
-#: Dense trajectory grid, and the offsets (in dense steps) the refinement round
-#: samples around each switching device's round-1 maximum.  384 steps is 17 ps
-#: at 150 MHz.
-N_DENSE = 384
-N_DENSE_QUICK = 48
-REFINE_STEPS = (-4, -2, -1, 1, 2, 4)
+#: The dense trajectory grid.  3072 steps is 2.17 ps at 150 MHz -- the
+#: trajectory's own 2 ps timestep ceiling, so the grid is as fine as the
+#: waveform the densities are evaluated along; nothing finer exists.
+N_DENSE = 3072
+N_DENSE_QUICK = 384
+#: Round B: every switching (ring and output-buffer) device on this many
+#: phases -- 17 ps at 150 MHz.
+N_PHASE_SWITCHING = 384
+#: Round C: around this many of each switching device's largest round-B local
+#: maxima, every dense step between the neighbouring round-B samples.
+N_PEAKS = 3
+#: Sub-networks per noise deck.
+CHUNK = 600
+
+
+def _local_maxima(ks, val, n):
+    """Indices in the (circular, sorted) grid `ks` whose value is >= both neighbours."""
+    out = []
+    for i, k in enumerate(ks):
+        a, b = ks[i - 1], ks[(i + 1) % len(ks)]
+        if val[k] >= val[a] and val[k] >= val[b]:
+            out.append(k)
+    return sorted(out, key=lambda k: -val[k])
 
 
 def stage_sid(point, op, outdir, logs, work, models, quick):
+    """Every VCO device's noise densities along its trajectory, and the injection density.
+
+    Three rounds, each one noise deck (or a few) of many disjoint sub-networks:
+
+      A. every device, at `N_PHASE` phases;
+      B. every switching device (ring and output buffer), at `N_PHASE_SWITCHING`
+         phases -- 17 ps;
+      C. every switching device, at every dense step (2.17 ps, the trajectory's
+         own resolution) between the round-B neighbours of each of its
+         `N_PEAKS` largest round-B local maxima.
+
+    The injection density is the maximum over all three.  C over B, per device,
+    is reported as the maximum's convergence against sampling resolution.  The
+    bias generator's devices are quasi-DC and are sampled in round A only; the
+    injection density given them is their round-A maximum RAISED by their own
+    round-A span (max/min), a margin that covers any excursion between samples
+    no larger than the excursion the samples themselves show.
+    """
     src = rb_deck.isf_deck.read_vco_netlist(REPO)
     devs = rb_deck.devices(src)
     traj = _load(outdir, f"trajectory_{point}.json")
@@ -393,6 +459,7 @@ def stage_sid(point, op, outdir, logs, work, models, quick):
     if not rows_path.is_file():
         raise SystemExit(f"{rows_path} missing -- run `trajectory` with the same --work")
     rows = json.loads(rows_path.read_text())
+    n = len(rows)
     loop = _load(outdir, "loop.json")
     f0 = traj["f0_Hz"]
     t_w = (1.0 + rb_extract.WINDOW_MARGIN) / f0
@@ -409,136 +476,121 @@ def stage_sid(point, op, outdir, logs, work, models, quick):
                 alpha, f_star, t_w, loop["envelope_freqs_Hz"], loop["envelope"])
         return phi_cache[key]
 
-    per_dev = {d["path"]: {} for d in devs}  # dense index -> record
-    anchors = []
-    repro = []
-    # Per-deck logs are ~54 kB each and a point runs ~180 of them, so they go to
-    # the WORK area; the committed JSON carries every check made on them (units
-    # anchor, bias reproduction), and for the reference point the logs of the
-    # phases that set some device's injection density are copied into `logs/`
-    # at the end -- the calibration bias points, as #520 asks them to be stated.
+    # Per-deck logs are large and there are several per point, so they go to
+    # the WORK area; the committed JSON carries every check made on them
+    # (units anchor, bias reproduction) and, per device, the bias its
+    # injection density was calibrated at.
     plog = work.parent / "sid_logs"
     plog.mkdir(parents=True, exist_ok=True)
+    per_dev = {d["path"]: {} for d in devs}  # dense index -> record
+    anchors, repro = [], []
 
-    def evaluate(k):
-        row = rows[k]
-        tag = f"i{k:03d}"
-        # Pass 1 needs only the operating point, so it runs no `.noise` at all.
-        first = _noise_pass(models, op, devs, row, None, (), work, plog / f"{tag}_pass1.log")
-        offs = {}
-        for j, d in enumerate(devs):
-            if d["kind"] == "mos":
-                p = rb_deck.polarity(d)
-                ins, got = row[d["path"]], first["op"][j]
-                # One Newton step on the OBSERVED residual, sign-agnostic -- the
-                # method ../sid-trajectory/ measured and adopted (DR-031).
-                offs[j] = {"v" + q[1]: p * (ins[q] - got[q]) for q in ("vgs", "vds", "vbs")}
-        parsed = _noise_pass(models, op, devs, row, offs, freqs, work, plog / f"{tag}.log")
-        for j, d in enumerate(devs):
-            ins = row[d["path"]]
-            if d["kind"] == "res":
-                i = parsed["op"][j]["i"]
-                r = abs(ins["v"] / i) if i else float("inf")
-                s_th = 4 * rb_extract.K_B * tk / r
-                # Flicker from the card's own KF/AF in ngspice's resistor form
-                # KF |I|^AF / f (EF = 1), on all three segments (body + two
-                # terminals) -- which `.noise` cannot report for the body.
-                s_fl = 3 * kf * abs(i) ** af / f_star
-                per_dev[d["path"]][k] = {
-                    "phase": row["phase"], "R_ohm": r, "I_A": i, "S_white": s_th,
+    def record(j, k, got, blks):
+        d = devs[j]
+        ins = rows[k][d["path"]]
+        if d["kind"] == "res":
+            i = got["i"]
+            r = abs(ins["v"] / i) if i else float("inf")
+            s_th = 4 * rb_extract.K_B * tk / r
+            # Flicker from the card's own KF/AF in ngspice's resistor form
+            # KF |I|^AF / f (EF = 1), on all three segments (body + two
+            # terminals) -- which `.noise` cannot report for the body.
+            s_fl = 3 * kf * abs(i) ** af / f_star
+            return {"phase": rows[k]["phase"], "R_ohm": r, "I_A": i, "S_white": s_th,
                     "S_flicker_F": s_fl, "alpha": 1.0, "phi": phi(1.0),
                     "S_equiv": s_th + phi(1.0) * s_fl}
-                continue
-            got = parsed["op"][j]
-            if abs(ins["id"]) > 1e-9:
-                repro.append(abs(abs(got["id"]) / abs(ins["id"]) - 1.0))
-            blk_lo, blk_hi = parsed["per_freq"][j]
-            for blk in (blk_lo, blk_hi):
-                an = rb_extract.units_anchor(blk, rsense=RSENSE, temp_c=op["temp_c"])
-                anchors.append(an)
-                if abs(an - 1) > ANCHOR_TOL:
-                    raise SystemExit(f"{point} {tag} {d['path']}: units anchor {an:.6f}")
-            lo = rb_extract.densities(blk_lo)
-            hi = rb_extract.densities(blk_hi)
-            if hi["flicker"] > 0 and lo["flicker"] > 0:
-                alpha = rb_extract.flicker_exponent(F_LO, lo["flicker"], f_star, hi["flicker"])
-                if not 0 < alpha < 5:
-                    raise SystemExit(f"{point} {tag} {d['path']}: flicker exponent {alpha}")
-                ph = phi(alpha)
-            else:
-                alpha, ph = None, 0.0
-            per_dev[d["path"]][k] = {
-                "phase": row["phase"], "bias": {q: ins[q] for q in ("vgs", "vds", "vbs", "id")},
+        if abs(ins["id"]) > 1e-9:
+            repro.append(abs(abs(got["id"]) / abs(ins["id"]) - 1.0))
+        blk_lo, blk_hi = blks
+        for blk in (blk_lo, blk_hi):
+            an = rb_extract.units_anchor(blk, rsense=RSENSE, temp_c=op["temp_c"])
+            anchors.append(an)
+            if abs(an - 1) > ANCHOR_TOL:
+                raise SystemExit(f"{point} {d['path']} @ {k}: units anchor {an:.6f}")
+        lo = rb_extract.densities(blk_lo)
+        hi = rb_extract.densities(blk_hi)
+        if hi["flicker"] > 0 and lo["flicker"] > 0:
+            alpha = rb_extract.flicker_exponent(F_LO, lo["flicker"], f_star, hi["flicker"])
+            if not 0 < alpha < 5:
+                raise SystemExit(f"{point} {d['path']} @ {k}: flicker exponent {alpha}")
+            ph = phi(alpha)
+        else:
+            alpha, ph = None, 0.0
+        return {"phase": rows[k]["phase"],
+                "bias": {q: ins[q] for q in ("vgs", "vds", "vbs", "id")},
                 "S_white": hi["white"], "S_channel_thermal": hi["channel_thermal"],
                 "S_flicker_F": hi["flicker"], "alpha": alpha, "phi": ph,
                 "S_equiv": hi["white"] + ph * hi["flicker"]}
 
-    n = len(rows)
-    step = max(1, n // (8 if quick else N_PHASE))
-    round1 = list(range(0, n, step))
-    for k in round1:
-        evaluate(k)
+    def run_round(pairs, tag):
+        todo = [(j, k) for j, k in pairs if k not in per_dev[devs[j]["path"]]]
+        got = _measure(models, op, todo, rows, devs, freqs, work, plog, tag,
+                       chunk=CHUNK)
+        for (j, k), (o, blks) in got.items():
+            per_dev[devs[j]["path"]][k] = record(j, k, o, blks)
+        return len(todo)
 
-    def argmax(path):
-        return max(per_dev[path], key=lambda k: per_dev[path][k]["S_equiv"])
+    everyone = list(range(len(devs)))
+    switching = [j for j, d in enumerate(devs) if d["block"] in ("ring", "buffer")]
+    round_a = list(range(0, n, n // (8 if quick else N_PHASE)))
+    round_b = list(range(0, n, n // (48 if quick else N_PHASE_SWITCHING)))
+    stride_b = round_b[1] - round_b[0]
+    n_a = run_round([(j, k) for k in round_a for j in everyone], "A")
+    n_b = run_round([(j, k) for k in round_b for j in switching], "B")
+    pairs_c = []
+    peaks = {}
+    for j in switching:
+        val = {k: per_dev[devs[j]["path"]][k]["S_equiv"] for k in round_b}
+        top = _local_maxima(round_b, val, n)[:N_PEAKS]
+        peaks[devs[j]["path"]] = [rows[k]["phase"] for k in top]
+        for k0 in top:
+            pairs_c += [(j, (k0 + m) % n) for m in range(-(stride_b - 1), stride_b)]
+    n_c = run_round(pairs_c, "C")
 
-    # Refinement: around each switching device's round-1 maximum.  Ring devices
-    # are pooled per class over the five stages below, which already samples one
-    # trajectory 5x more finely (the stages are one trajectory shifted by 0.6
-    # cycle, DR-031 Decision 4); the output buffer has no such replication.
-    # Bias-generator devices are quasi-DC -- their round-1 span is reported and
-    # is what licenses not refining them.
-    round1_max = {p: per_dev[p][argmax(p)]["S_equiv"] for p in per_dev}
-    extra = set()
-    targets = [d["path"] for d in devs if d["block"] == "buffer"]
-    for inst in rb_deck.RING_DEVICES:
-        cls = [d["path"] for d in devs if d["block"] == "ring" and d["instance"] == inst]
-        targets.append(max(cls, key=lambda pth: round1_max[pth]))
-    for pth in targets:
-        k0 = argmax(pth)
-        extra |= {(k0 + s) % n for s in REFINE_STEPS}
-    extra -= set(round1)
-    for k in sorted(extra):
-        evaluate(k)
+    def vmax(path, ks):
+        recs = per_dev[path]
+        return max(recs[k]["S_equiv"] for k in ks if k in recs)
 
     out = {}
     for d in devs:
-        recs = per_dev[d["path"]]
-        k0 = argmax(d["path"])
-        r1 = [recs[k]["S_equiv"] for k in round1]
-        out[d["path"]] = {
+        p = d["path"]
+        recs = per_dev[p]
+        k0 = max(recs, key=lambda k: recs[k]["S_equiv"])
+        ra = [recs[k]["S_equiv"] for k in round_a]
+        span = max(ra) / min(ra) if min(ra) > 0 else float("inf")
+        rec = {
             "block": d["block"], "instance": d["instance"], "kind": d["kind"],
             "model": d["model"], "argmax_phase": recs[k0]["phase"],
             "at_argmax": recs[k0], "S_equiv_max": recs[k0]["S_equiv"],
-            "round1_max": round1_max[d["path"]],
-            "refinement_gain": recs[k0]["S_equiv"] / round1_max[d["path"]]
-                               if round1_max[d["path"]] > 0 else 1.0,
-            "round1_span_dB": (10 * math.log10(max(r1) / min(r1))
-                               if min(r1) > 0 else None),
-            "round1_S_equiv": [float(f"{v:.4g}") for v in r1],
-            "round1_S_white": [float(f"{recs[k]['S_white']:.4g}") for k in round1],
+            "n_phases": len(recs),
+            "max_round_a": max(ra),
+            "round_a_span_dB": 10 * math.log10(span) if math.isfinite(span) else None,
+            "round_a_S_equiv": [float(f"{v:.4g}") for v in ra],
         }
-    # The injection density.  Ring: the maximum over the class across all five
-    # stages, so every stage's generator is dominated by one density.
-    inj = {}
-    for d in devs:
-        if d["block"] == "ring":
-            inj[d["path"]] = max(out[e["path"]]["S_equiv_max"] for e in devs
-                                 if e["block"] == "ring" and e["instance"] == d["instance"])
+        if d["block"] in ("ring", "buffer"):
+            mb = vmax(p, round_b)
+            rec.update({"max_round_b": mb, "peaks_round_b": peaks[p],
+                        "gain_c_over_b": recs[k0]["S_equiv"] / mb if mb > 0 else 1.0,
+                        "gain_b_over_a": mb / max(ra) if max(ra) > 0 else 1.0,
+                        "margin_factor": 1.0})
         else:
-            inj[d["path"]] = out[d["path"]]["S_equiv_max"]
-    inj_white = {}
+            rec["margin_factor"] = span if math.isfinite(span) else 1.0
+        out[p] = rec
+    # The injection density.  Ring: the maximum over the class across all five
+    # stages, so every stage's generator is dominated by one density.  Bias
+    # generator: its maximum times its margin.
+    def pool(d):
+        if d["block"] == "ring":
+            return [e["path"] for e in devs
+                    if e["block"] == "ring" and e["instance"] == d["instance"]]
+        return [d["path"]]
+
+    inj, inj_white = {}, {}
     for d in devs:
-        pool = [e["path"] for e in devs if e["block"] == "ring"
-                and e["instance"] == d["instance"]] if d["block"] == "ring" else [d["path"]]
-        inj_white[d["path"]] = max(r["S_white"] for pth in pool for r in per_dev[pth].values())
-    if point == REFERENCE_POINT:
-        keep = logs / f"sid_{point}"
-        keep.mkdir(parents=True, exist_ok=True)
-        for k in sorted({min(per_dev[p_], key=lambda i: -per_dev[p_][i]["S_equiv"])
-                         for p_ in per_dev}):
-            src_log = plog / f"i{k:03d}.log"
-            (keep / src_log.name).write_text(src_log.read_text())
+        pl = pool(d)
+        inj[d["path"]] = max(out[q]["S_equiv_max"] * out[q]["margin_factor"] for q in pl)
+        inj_white[d["path"]] = max(r["S_white"] * out[q]["margin_factor"]
+                                   for q in pl for r in per_dev[q].values())
     worst_repro = max(repro) if repro else 0.0
     if worst_repro > REPRO_TOL:
         raise SystemExit(f"{point}: standalone bias reproduces I_d only to {worst_repro:.2e}")
@@ -546,10 +598,12 @@ def stage_sid(point, op, outdir, logs, work, models, quick):
         "point": point, "f0_Hz": f0, "freqs_Hz": list(freqs), "F_Hz": f_star,
         "window_margin": rb_extract.WINDOW_MARGIN, "t_window_s": t_w,
         "rsense_ohm": RSENSE, "units_anchor_range": [min(anchors), max(anchors)],
+        "n_units_anchor_checks": len(anchors),
         "repro_worst_id_rel": worst_repro, "resistor_kf_af": [kf, af],
         "phi": [{"alpha": a_, "phi": v} for a_, v in sorted(phi_cache.items())],
-        "n_dense": n, "round1_phases": [rows[k]["phase"] for k in round1],
-        "n_refined": len(extra), "devices": out,
+        "n_dense": n, "round_a_phases": [rows[k]["phase"] for k in round_a],
+        "n_evaluated": {"A": n_a, "B": n_b, "C": n_c},
+        "devices": out,
         "S_inj_A2_per_Hz": inj, "S_inj_white_only_A2_per_Hz": inj_white,
     })
 
@@ -638,28 +692,38 @@ def _only(inj: dict, devs, block: str) -> dict:
 def _compare_noise_forms(point, op, sid, devs, models, work, logdir):
     """Does the one-`.noise`-per-frequency deck report what per-device `.noise` does?
 
-    `sid` runs the combined form (`rb_deck.noise_deck(combined=True)`) because it
-    is ~10x cheaper; this runs BOTH forms on one identical deck body -- at the
-    phase that set the largest ring injection density, where the switching
-    devices are strongly on -- and returns the largest relative difference of
-    every quantity the reduction reads.  Zero is the expected answer: the
-    sub-networks are disjoint, so the sum node sees each device through its own
-    drain only.
+    `sid` runs the summed form (`rb_deck.noise_deck(combined=True)`) over decks
+    that batch many phases, because it is orders of magnitude cheaper.  This
+    compares it, at the phase that set the largest ring injection density
+    (where the switching devices are strongly on), against the per-device form
+    on a deck holding that phase alone, and returns the largest relative
+    difference of every quantity the reduction reads.  Zero is the expected
+    answer: the sub-networks are disjoint, so the sum node sees each device
+    through its own drain only, and a second phase's sub-networks are simply
+    more disjoint sub-networks.
     """
     rows = json.loads((work.parent.parent / "traj_rows.json").read_text())
+    n = len(rows)
     ring = [(p, v) for p, v in sid["devices"].items() if v["block"] == "ring"]
     top_path, top = max(ring, key=lambda kv: kv[1]["S_equiv_max"])
-    k = round(top["argmax_phase"] * sid["n_dense"]) % sid["n_dense"]
+    k = round(top["argmax_phase"] * n) % n
+    k2 = (k + n // 2) % n
     freqs = tuple(sid["freqs_Hz"])
-    got = {}
-    for comb in (True, False):
-        got[comb] = _noise_pass(models, op, devs, rows[k], None, freqs, work,
-                                logdir / f"combined_{comb}.log", combined=comb)
+    nd = len(devs)
+    # Form 1, as `sid` runs it: one summed `.noise` per frequency over a deck
+    # that holds every device at TWO phases (2 x 65 sub-networks).
+    batch = ([(j, d, rows[k][d["path"]], None) for j, d in enumerate(devs)]
+             + [(nd + j, d, rows[k2][d["path"]], None) for j, d in enumerate(devs)])
+    got_b = _noise_eval(models, op, batch, freqs, work, logdir / "batched_summed.log")
+    # Form 2: one phase, one `.noise` per device per frequency.
+    single = [(j, d, rows[k][d["path"]], None) for j, d in enumerate(devs)]
+    got_s = _noise_eval(models, op, single, freqs, work, logdir / "per_device.log",
+                        combined=False)
     worst = {}
     for j, d in enumerate(devs):
         if d["kind"] != "mos":
             continue
-        for a_, b_ in zip(got[True]["per_freq"][j], got[False]["per_freq"][j]):
+        for a_, b_ in zip(got_b["per_freq"][j], got_s["per_freq"][j]):
             for key in ("zm_ohm", "on_total", "on_flicker", "on_thermal", "on_rsense"):
                 if b_[key]:
                     worst[key] = max(worst.get(key, 0.0), abs(a_[key] / b_[key] - 1.0))
