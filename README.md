@@ -64,35 +64,25 @@ Being honest about where this actually is:
   every point inside the 1.0 % target with at least 3.7× margin. Two things it
   does **not** cover, stated rather than left to be inferred: the campaign's
   own Acceptance Criteria (#13) also require a **random/noise-driven** jitter
-  component that no record measures — a disclosed methodology gap, tracked at
-  #520. Its disposition was first recorded in
-  `spec/decision-records/DR-020-random-period-jitter-is-not-obtainable-on-this-toolchain.md`
-  and is narrowed by
-  `spec/decision-records/DR-023-random-period-jitter-owner-and-cyclostationary-gap.md`:
-  the open-source flow does report per-device noise PSDs at a bias point, but
-  has no periodic-steady-state noise analysis to carry them over the ring's
-  oscillation cycle, so no simulation here produces that component. The
-  1.0 % RMS line is therefore met in simulation for its deterministic half
-  only, and the 0.50 % RMS its own ripple derivation leaves for the random
-  half is an unverified budget. The target itself is unchanged.
-  `spec/decision-records/DR-030-isf-gamma-converges-and-the-gap-moves-to-the-remaining-two-ingredients.md`
-  records the first piece of the substitute for that missing analysis:
-  `sim/period-jitter/isf-bringup/` extracts the ring's impulse sensitivity
-  function from charge-injection transients and shows it **converged** against
-  the internal-timestep ceiling — retiring the risk #520 named as the route's
-  load-bearing one — while producing no jitter number.
-  `spec/decision-records/DR-031-sid-along-the-trajectory-and-the-bound-option-b-owes.md`
-  adds the other two ingredients (`sim/period-jitter/sid-trajectory/`: each ring
-  device's thermal and flicker generator at the bias it actually occupies across
-  the cycle, and the trajectory it is evaluated along, at three PVT points) and
-  the bound the cheaper route was refused for want of — against the
-  ISF-weighted average the jitter integral contains, biasing a device at its own
-  peak-current phase reproduces its thermal generator to about 1 dB. **Still no
-  jitter number**: the assembly is not built, that bound is measured at one of
-  45 corners, and the flicker half is not a defined quantity until the spec
-  states an observation interval — which it now says it owes. Ingredients are
-  not a pipeline, and #520 stays open on exactly the
-  same terms. And every one of the campaign's records is at one output
+  component, which no analysis this toolchain offers can *estimate* (DR-020,
+  narrowed by DR-023: the flow reports per-device noise PSDs at a bias point,
+  but has no periodic-steady-state noise analysis to carry them over the ring's
+  oscillation cycle). It is now **bounded** instead —
+  `spec/decision-records/DR-032-random-period-jitter-bounded-over-the-grid.md`:
+  `sim/period-jitter/random-bound/` injects a noise source across every device
+  of the ring and output buffer, each sized at the maximum of that device's own
+  noise density over the oscillation cycle, which can only over-state the
+  jitter, and folds flicker in through the closed loop; it bounds the VCO's
+  bias generator — the largest term — by a small-signal analysis about its DC
+  point, and the loop-filter resistor separately. The
+  result is **≤ 0.338 % RMS at all 45 mandated PVT corners** — an upper
+  bound, not an estimate — against the 0.50 % RMS the target's own ripple
+  derivation leaves for it. Its scope is stated: the charge pump, PFD, divider
+  and lock detector are argued small but not bounded, tracked at #580. The
+  impulse-sensitivity-function route to an *estimate* has its ingredients built
+  and validated (`sim/period-jitter/isf-bringup/`, DR-030;
+  `sim/period-jitter/sid-trajectory/`, DR-031) but not assembled, and the bound
+  does not need it. The target itself is unchanged. And every one of the campaign's records is at one output
   frequency, 150 MHz — the same measurement at the 200 MHz top of the
   ratified band is declared as `sim/period-jitter-band-top`, tracked at #503,
   and carries no measured record yet. The **reference spur** is in the same
@@ -202,11 +192,10 @@ Challenge #5 (GF180MCU / Wafer.Space), re-derived from this repository's own
 `sim/` evidence. It states plainly where the block does and does not meet the
 brief today — including that the design is 3.3 V-only and does not yet
 exercise the Challenge's 5.0 V analog rail; that `period-jitter`'s
-deterministic component now covers 45 of the mandated 45 PVT corners but its
-random/noise-driven component (#520) and its 200 MHz band-top counterpart
-(#503) are both still unmeasured, so the proposal marks those rows
-**unmet** rather than
-omitting them; and that layout has reached the sub-block level but not the top
+deterministic component now covers 45 of the mandated 45 PVT corners and its
+random/noise-driven component is bounded there (an upper bound, not an
+estimate), but its 200 MHz band-top counterpart (#503) is still unmeasured, so
+the proposal marks that row **unmet** rather than omitting it; and that layout has reached the sub-block level but not the top
 level — **4 of the 4 PLL sub-blocks** are drawn and DRC-clean, **4 of the 4
 are LVS-matched**, and there is **no assembled `pll_top` GDS**, hence no
 top-level signoff and no post-layout re-verification.

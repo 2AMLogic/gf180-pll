@@ -1,0 +1,4 @@
+sf_-40c_2.97v trajectory: 311.1 s
+sf_-40c_2.97v sid: 774.9 s
+sf_-40c_2.97v bias: 187.9 s
+sf_-40c_2.97v transient: 6282.6 s

@@ -1,0 +1,4 @@
+ff_-40c_2.97v trajectory: already done, skipped (--resume)
+ff_-40c_2.97v sid: 740.1 s
+ff_-40c_2.97v bias: 215.4 s
+ff_-40c_2.97v transient: 4618.0 s

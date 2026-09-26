@@ -543,6 +543,39 @@ class PvtCoverageCheckTest(unittest.TestCase):
             "evidence covers it",
         )
 
+    def _method_results(self, family_points: dict) -> None:
+        """A method directory's committed results: `<family>_<point>.json`."""
+        d = self.tmp / "sim" / "method-campaign" / "results"
+        d.mkdir(parents=True, exist_ok=True)
+        for family, stems in family_points.items():
+            for stem in stems:
+                (d / f"{family}_{stem.replace('.log', '')}.json").write_text("{}\n")
+
+    def test_a_full_coverage_claim_met_by_a_method_directory_family_passes(self):
+        """A method directory has no record id; the result family it cites is
+        its per-point evidence, graded point by point like a record's (#520)."""
+        self._method_results({"transient": _corner_files(MOS_BUNDLES)})
+        self.proposal(
+            "| Period jitter, random | ≤ 1.0 % RMS | bounded at all 45 of the "
+            "mandated PVT points | **MET** | "
+            "`sim/method-campaign/results/transient_*.json` |"
+        )
+        self.assertPasses(self.run_check())
+
+    def test_a_method_directory_family_is_graded_by_the_family_cited(self):
+        """An earlier stage having run everywhere does not cover the grid for
+        a number that comes from a later stage that did not."""
+        self._method_results({
+            "trajectory": _corner_files(MOS_BUNDLES),
+            "transient": _corner_files(MOS_BUNDLES)[:44],
+        })
+        self.proposal(
+            "| Period jitter, random | ≤ 1.0 % RMS | bounded at all 45 of the "
+            "mandated PVT points | **MET** | "
+            "`sim/method-campaign/results/transient_*.json` |"
+        )
+        self.assertFailsWith(self.run_check(), "covers 44 of the 45 mandated PVT points")
+
     def test_full_coverage_is_the_points_and_not_the_count(self):
         """45 measured points that are not the mandated 45 still fail.
 

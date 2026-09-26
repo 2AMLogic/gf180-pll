@@ -1,0 +1,4 @@
+sf_125c_3.30v trajectory: 285.2 s
+sf_125c_3.30v sid: 735.9 s
+sf_125c_3.30v bias: 212.1 s
+sf_125c_3.30v transient: 6028.1 s

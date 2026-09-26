@@ -1,0 +1,4 @@
+fs_125c_2.97v trajectory: 302.5 s
+fs_125c_2.97v sid: 777.8 s
+fs_125c_2.97v bias: 181.9 s
+fs_125c_2.97v transient: 6217.1 s

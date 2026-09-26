@@ -1,0 +1,4 @@
+fs_27c_3.30v trajectory: 461.8 s
+fs_27c_3.30v sid: 1150.3 s
+fs_27c_3.30v bias: 305.2 s
+fs_27c_3.30v transient: 4785.4 s
