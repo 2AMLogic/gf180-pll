@@ -148,6 +148,35 @@ def run_deck(deck: str, work: Path, log: Path, expect: str | None = None) -> tup
     return elapsed, out
 
 
+#: Start-up retry.  A transient whose solver stalls ("Timestep too small")
+#: within its first nanosecond is re-run with the symmetry-breaking initial
+#: condition moved by these offsets, in order (`rb_deck._ic`).  Measured need:
+#: the trajectory deck at `ff_125c_3.63v` stalls at t = 45 fs, deterministically,
+#: and runs cleanly with its third copy's control source moved by 0.1 uV -- a
+#: numerical accident of the starting point, not a property of the circuit.  A
+#: stall after STARTUP_T is never retried: that would be a real failure.
+STARTUP_IC_OFFSETS = (0.0, 1e-3, 2e-3)
+STARTUP_T = 1e-9
+_STALL_RE = re.compile(r"Timestep too small; time = ([-+0-9.eEdD]+)")
+
+
+def run_deck_startup_retry(build, work: Path, log: Path, expect: str):
+    """`build(ic_offset) -> deck`; returns `(elapsed, output, ic_offset used)`."""
+    for off in STARTUP_IC_OFFSETS:
+        try:
+            el, out = run_deck(build(off), work, log, expect)
+            return el, out, off
+        except SystemExit:
+            m = _STALL_RE.search(log.read_text() if log.is_file() else "")
+            if (not m or float(m.group(1)) >= STARTUP_T
+                    or off == STARTUP_IC_OFFSETS[-1]):
+                raise
+            print(f"start-up stall at t = {m.group(1)} s -- retrying with "
+                  f".ic offset {STARTUP_IC_OFFSETS[STARTUP_IC_OFFSETS.index(off) + 1]:g} V",
+                  flush=True)
+    raise AssertionError("unreachable")
+
+
 #: spec/pll.md "Period jitter": the share of the 1.0 % RMS line the supply-ripple
 #: derivation leaves for the random contribution (DR-023 Decision 3).
 BUDGET_PCT = 0.50
@@ -304,11 +333,15 @@ def stage_trajectory(point, op, outdir, logs, work, models, quick):
     src = rb_deck.isf_deck.read_vco_netlist(REPO)
     devs = rb_deck.devices(src)
     tstop = T_SETTLE + (TRAJ_PERIODS + 0.2) * 6.9e-9
-    deck, cols = rb_deck.trajectory_deck(
-        repo_root=REPO, pdk_models=models, op=op, devs=devs, tstop=tstop,
-        tstep=TRAJ_TSTEP, tmax=TRAJ_TMAX, kvco_dv=KVCO_DV, src=src)
-    elapsed, _ = run_deck(deck, work, logs / f"trajectory_{point}.log",
-                          expect="traj.dat")
+    def build(off):
+        return rb_deck.trajectory_deck(
+            repo_root=REPO, pdk_models=models, op=op, devs=devs, tstop=tstop,
+            tstep=TRAJ_TSTEP, tmax=TRAJ_TMAX, kvco_dv=KVCO_DV, src=src,
+            ic_offset=off)
+    _, cols = build(0.0)
+    elapsed, _, ic_off = run_deck_startup_retry(
+        lambda off: build(off)[0], work, logs / f"trajectory_{point}.log",
+        expect="traj.dat")
     t, data = rb_extract.read_wrdata(work / "traj.dat", len(cols))
     lvl = op["vsup"] / 2
     period, cross = _crossing_period(t, data[0], lvl, T_SETTLE)
@@ -347,6 +380,7 @@ def stage_trajectory(point, op, outdir, logs, work, models, quick):
         "point": point, "operating_point": op, "elapsed_s": elapsed,
         "tmax_s": TRAJ_TMAX, "period_s": period, "f0_Hz": 1 / period,
         "kvco_Hz_per_V": kvco, "kvco_dv_V": KVCO_DV, "phase_origin_s": t0,
+        "ic_offset_V": ic_off,
         "n_dense": n,
         "max_snap_phase_error": max(abs((r["t_s"] - t0) / period - r["phase"])
                                     for r in rows),
@@ -623,10 +657,15 @@ def _amps(inj: dict, scale: float, nt: float) -> dict:
 def _run_transient(point, op, models, work, log, variants, rndseed, n_periods, tmax):
     src = rb_deck.isf_deck.read_vco_netlist(REPO)
     tstop = T_SETTLE + (n_periods + 1.5) * 6.9e-9
-    deck, copies = rb_deck.transient_deck(
-        repo_root=REPO, pdk_models=models, op=op, variants=variants, tstop=tstop,
-        tstep=TR_TSTEP, tmax=tmax, rndseed=rndseed, src=src)
-    elapsed, _ = run_deck(deck, work, log, expect="clk.dat")
+    def build(off):
+        return rb_deck.transient_deck(
+            repo_root=REPO, pdk_models=models, op=op, variants=variants, tstop=tstop,
+            tstep=TR_TSTEP, tmax=tmax, rndseed=rndseed, src=src, ic_offset=off)
+    _, copies = build(0.0)
+    elapsed, _, ic_off = run_deck_startup_retry(
+        lambda off: build(off)[0], work, log, expect="clk.dat")
+    for c in copies:
+        c["ic_offset_V"] = ic_off
     t, cols = rb_extract.read_wrdata(work / "clk.dat", len(copies))
     for c, v in zip(copies, cols):
         cr = rb_extract.rising_crossings(t, v, op["vsup"] / 2)

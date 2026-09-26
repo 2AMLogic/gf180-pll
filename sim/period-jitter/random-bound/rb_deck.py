@@ -330,12 +330,20 @@ def _ports(copy: int) -> str:
     )
 
 
-def _ic(copy: int) -> str:
-    # Identical to isf_deck.build_deck's symmetry-breaking initial condition.
-    return ".ic " + " ".join(
-        f"v(y{copy}_{s})={'0' if s % 2 else chr(39) + 'vsup' + chr(39)}"
-        for s in STAGES
-    )
+def _ic(copy: int, offset: float = 0.0) -> str:
+    """isf_deck.build_deck's symmetry-breaking initial condition.
+
+    `offset` (V) is added to the first ring node's value only when a deck has
+    to be re-run because the solver stalled at start-up (`run.py`'s startup
+    retry): an oscillator forgets its initial condition within the settling
+    time, and every quantity this directory reads is taken after it.  With the
+    default 0.0 the line is exactly the ISF bring-up's.
+    """
+    def val(s):
+        if s % 2:
+            return f"{offset:g}" if (s == 1 and offset) else "0"
+        return "'vsup'"
+    return ".ic " + " ".join(f"v(y{copy}_{s})={val(s)}" for s in STAGES)
 
 
 #: `div23_cell` mode pins held static for the CLK load: MODIN = P = 0 is the
@@ -377,7 +385,7 @@ OPTIONS = ("rshunt=1e12", "reltol=1e-4", "abstol=1e-15", "vntol=1e-7", "itl4=200
 
 
 def trajectory_deck(*, repo_root, pdk_models, op, devs, tstop, tstep, tmax,
-                    kvco_dv: float, src=None,
+                    kvco_dv: float, src=None, ic_offset: float = 0.0,
                     wrdata="traj.dat") -> tuple[str, list[str]]:
     """One clean VCO copy, CLK loaded, every device's operating point saved.
 
@@ -401,7 +409,7 @@ def trajectory_deck(*, repo_root, pdk_models, op, devs, tstop, tstep, tmax,
     out.append(f"x2 vcm bc0 bc1 bc2 clk2 vdd 0 {_ports(2)} vco_isf")
     for k in (0, 1, 2):
         out.append(_load(k))
-        out.append(_ic(k))
+        out.append(_ic(k, ic_offset))
     out.append(".option " + " ".join(OPTIONS))
     out.append(".control")
     # `save` BEFORE `tran`, naming every column: an unsaved @m...[...] column
@@ -416,7 +424,8 @@ def trajectory_deck(*, repo_root, pdk_models, op, devs, tstop, tstep, tmax,
 
 
 def transient_deck(*, repo_root, pdk_models, op, variants, tstop, tstep, tmax,
-                   rndseed: int, src=None, wrdata="clk.dat") -> tuple[str, list[dict]]:
+                   rndseed: int, src=None, wrdata="clk.dat",
+                   ic_offset: float = 0.0) -> tuple[str, list[dict]]:
     """Clean copy `x0` plus noisy copies, all in one deck.
 
     `variants` is a list of `(tag, amps, nt, ncopy)`: `ncopy` copies of
@@ -444,13 +453,13 @@ def transient_deck(*, repo_root, pdk_models, op, variants, tstop, tstep, tmax,
     out += _sources(op)
     out.append(f"x0 vc bc0 bc1 bc2 clk0 vdd 0 {_ports(0)} vco_isf")
     out.append(_load(0))
-    out.append(_ic(0))
+    out.append(_ic(0, ic_offset))
     k = 1
     for tag, _amps, nt, ncopy in variants:
         for _ in range(ncopy):
             out.append(f"x{k} vc bc0 bc1 bc2 clk{k} vdd 0 {_ports(k)} vco_rb{tag}")
             out.append(_load(k))
-            out.append(_ic(k))
+            out.append(_ic(k, ic_offset))
             copies.append({"copy": k, "variant": tag, "nt_s": nt})
             k += 1
     out.append(".option " + " ".join(OPTIONS))

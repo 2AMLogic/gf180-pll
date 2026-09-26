@@ -159,6 +159,14 @@ class Decks(unittest.TestCase):
         self.assertIn("set rndseed=1234", deck)
         self.assertLess(deck.index("\nsave "), deck.index("\ntran "))
 
+    def test_ic_offset_only_moves_the_first_ring_node(self):
+        """The start-up retry's only change: with no offset the `.ic` is the ISF
+        bring-up's, byte for byte; with one, only `y<k>_1` moves."""
+        self.assertEqual(_deck._ic(3),
+                         ".ic v(y3_1)=0 v(y3_2)='vsup' v(y3_3)=0 v(y3_4)='vsup' v(y3_5)=0")
+        self.assertEqual(_deck._ic(3, 1e-3),
+                         ".ic v(y3_1)=0.001 v(y3_2)='vsup' v(y3_3)=0 v(y3_4)='vsup' v(y3_5)=0")
+
     def test_trajectory_deck_saves_before_tran(self):
         deck, cols = _deck.trajectory_deck(
             repo_root=REPO, pdk_models="/pdk", op=OP, devs=self.devs, tstop=5e-8,
