@@ -36,6 +36,7 @@ PROPOSAL = "docs/chipalooza/challenge-5-proposal.md"
 README = "README.md"
 SIM_README = "sim/README.md"
 CHARACTERIZATION = "sim/CHARACTERIZATION.md"
+SIGNOFF_README = "signoff/README.md"
 
 #: The forge fixture every test starts from: which numbers exist, and how.
 STATES = {
@@ -126,6 +127,7 @@ class _Tree:
         self.write(README, _readme())
         self.write(SIM_README, "# sim\n\nCampaigns.\n")
         self.write(CHARACTERIZATION, "# Characterization\n\nCoverage.\n")
+        self.write(SIGNOFF_README, "# Signoff\n\nVerdict of record.\n")
 
     def set_forge(self, script: str) -> None:
         stub = self.bin / "gh"
@@ -424,7 +426,7 @@ class TestForgeFailureModes(_TreeTest):
         self.assertIn("A skip is not a pass", result.stdout)
 
     def test_a_missing_graded_document_fails(self):
-        for rel in (README, SIM_README, CHARACTERIZATION):
+        for rel in (README, SIM_README, CHARACTERIZATION, SIGNOFF_README):
             with self.subTest(rel=rel):
                 path = self.tree.root / rel
                 saved = path.read_text(encoding="utf-8")
@@ -451,7 +453,16 @@ class TestScriptHygiene(unittest.TestCase):
 
     def test_the_header_states_the_forge_dependency(self):
         """The one check here that is not deterministic on a tree must say so."""
-        header = CHECK.read_text(encoding="utf-8")[:6000]
+        # The header is the leading comment block, however long it grows --
+        # a fixed character window silently dropped its own tail when
+        # issue #564 added a paragraph above it.
+        lines = CHECK.read_text(encoding="utf-8").splitlines()
+        header_lines = []
+        for line in lines:
+            if not line.startswith("#"):
+                break
+            header_lines.append(line)
+        header = "\n".join(header_lines)
         self.assertIn("THIS IS THE ONE CHECK IN THIS REPOSITORY THAT NEEDS THE FORGE",
                       header)
         self.assertIn("A skip is not a pass", header)

@@ -180,7 +180,8 @@ at that moment is still a deliberate act, as the next section is.
 
 The re-render against the bundled checklist changed four lines of
 `tier-report.json` and no verdict: `source_doc`, `source_doc_content_hash`, and
-item 11's `text` on each of its two partition rows. All 22 T1 rows are still
+item 11's `notes` entry on each of its two partition rows (its `text`
+is unchanged). All 22 T1 rows are still
 `unmet` / `no_evidence`, and all 22 still read `graded_by_build: true`.
 
 ### Item 11 under the klt 0.6.0 checklist
@@ -200,7 +201,7 @@ wheel's `klayout_tools/data/design-evidence-tiers.md`):
    itself rather than only comparing the envelope's self-reported hash. Never
    graded on. This manifest cites nothing, so no row carries it.
 
-Item 11's text gained, among other things, two rules that bear on the only
+Item 11's notes gained, among other things, two rules that bear on the only
 item-11 evidence this repository has — the `vco_block` supply spec and report
 under `layout/evidence/vco-layout/` (see "Why every row is `unmet`"). Neither
 is cited, so neither changes today's verdict; this is what they would render
