@@ -29,20 +29,12 @@ bug without needing the PDK.
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
+from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 
-try:
-    import klayout.db as kdb  # noqa: F401
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
+if HAVE_KLAYOUT:
+    import klayout.db as kdb
 
 from divider_chain import devgen  # noqa: E402
 from divider_chain import inv2x_3v3, inv_3v3, nand2_3v3, nand3_3v3, nor2_3v3  # noqa: E402
@@ -200,7 +192,7 @@ class ReferenceNetlistTests(unittest.TestCase):
                     self.assertIn(net, header.split())
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class RowCellFrameTests(unittest.TestCase):
     """All four cells share one row-cell frame (the abutment contract).
 
@@ -271,7 +263,7 @@ class RowCellFrameTests(unittest.TestCase):
                 self.assertEqual(set(leaf.pins), expected[name])
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class Metal1IslandTests(unittest.TestCase):
     """No merged Metal1 island carries two different nets' device pads.
 
@@ -326,7 +318,7 @@ class Metal1IslandTests(unittest.TestCase):
                     seen[idx] = net
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class BuildRowCellValidationTests(unittest.TestCase):
     """build_row_cell() refuses what it cannot draw, rather than drawing it wrong."""
 

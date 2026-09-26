@@ -19,21 +19,11 @@ that can see a short or an open (a DRC deck cannot; see ``netcheck.py``).
 
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
-
-try:
-    import klayout.db  # noqa: F401
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
+from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 
 from pfd_cp import cp  # noqa: E402
 from pfd_cp import cp_dumpbuf, netcheck  # noqa: E402
@@ -84,7 +74,7 @@ class NetcheckReportTests(unittest.TestCase):
         self.assertEqual(pts, {"A": [(1.0, 0.5)]})
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class BuildTests(unittest.TestCase):
     """cp.build() on the real, assembled cp_output_stage + cp_dumpbuf
     geometry."""
@@ -154,7 +144,7 @@ class BuildTests(unittest.TestCase):
             self.assertGreater(trunk_y, top)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class ConnectivityTests(unittest.TestCase):
     """The finished GDS's own extracted Metal1-3 connectivity -- the only
     check that can see a short or an open (``layout/run_pv.py drc`` cannot;

@@ -33,15 +33,12 @@ The DRC-clean claim itself needs the foundry deck and lives in
 from __future__ import annotations
 
 import re
-import sys
 import unittest
-from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
+from _env import LAYOUT_DIR
+
 REPO_ROOT = LAYOUT_DIR.parent
 DESIGN_DIR = REPO_ROOT / "design"
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
 
 from pfd_cp import pfd  # noqa: E402
 from pfd_cp import pfd_cells as cells  # noqa: E402

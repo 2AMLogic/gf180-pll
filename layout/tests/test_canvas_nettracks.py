@@ -36,12 +36,9 @@ pitch=METAL2_TRACK_PITCH_UM)``) before relaxing anything here.
 from __future__ import annotations
 
 import inspect
-import sys
 import unittest
-from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
+from _env import LAYOUT_DIR  # noqa: F401
 
 from pll_top import _canvas  # noqa: E402
 from pll_top.divider_chain import devgen  # noqa: E402

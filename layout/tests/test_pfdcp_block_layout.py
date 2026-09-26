@@ -21,21 +21,11 @@ short or an open (a DRC deck cannot; see ``netcheck.py``).
 
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
-
-try:
-    import klayout.db  # noqa: F401
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
+from _env import HAVE_KLAYOUT, LAYOUT_DIR
 
 from pfd_cp import block, netcheck  # noqa: E402
 
@@ -90,7 +80,7 @@ class RailLandingInsetTests(unittest.TestCase):
         self.assertEqual(set(block.RAIL_LANDING_INSET_UM), set(block.RAIL_NETS))
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class BuildTests(unittest.TestCase):
     """block.build() on the real pfd + cp geometry."""
 
@@ -195,7 +185,7 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(block.BACKBONE_PITCH_UM, block.cp.BACKBONE_PITCH_UM)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class ConnectivityTests(unittest.TestCase):
     """The finished GDS's own extracted Metal1-3 connectivity -- the only
     check that can see a short or an open (``layout/run_pv.py drc`` cannot;
@@ -332,7 +322,7 @@ class LvsEvidenceTests(unittest.TestCase):
         self.assertIn("Netlists don't match", attempt.read_text())
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not available")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not available")
 class PinLabelTests(unittest.TestCase):
     """Exactly one label per boundary net, on the right *purpose* layer.
 

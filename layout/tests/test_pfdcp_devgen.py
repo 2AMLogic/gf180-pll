@@ -17,20 +17,9 @@ the decks.
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
-
-try:
-    import klayout.db  # noqa: F401
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
+from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 
 from pfd_cp import devgen  # noqa: E402
 from pfd_cp import pfdcp_inv  # noqa: E402
@@ -73,7 +62,7 @@ class ReferenceNetlistTests(unittest.TestCase):
         self.assertIn(f".subckt {pfdcp_inv.TOP_CELL} ", netlist)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class BuildStackCellTests(unittest.TestCase):
     """devgen.build_stack_cell() on the representative inverter device list."""
 

@@ -26,20 +26,14 @@ SPICE text), so its tests always run.
 
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
+from _env import HAVE_KLAYOUT, LAYOUT_DIR
 
-try:
+if HAVE_KLAYOUT:
     import klayout.db as db
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
 
 from floorplan import skeleton  # noqa: E402
 from harness import area  # noqa: E402
@@ -65,7 +59,7 @@ def _write_gds(path: Path, shapes: list[tuple[str, float, float, float, float]])
     layout.write(str(path))
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
 class SyntheticGeometryTests(unittest.TestCase):
     """Known-answer tests: every figure below is arithmetic on the boxes written."""
 
@@ -272,7 +266,7 @@ class CommittedBlockTests(unittest.TestCase):
         block_um2 = 1317.66 * 41.99  # divider_chain's committed footprint (#458)
         self.assertLess(c.merge_saving_um2, 0.01 * block_um2)
 
-    @unittest.skipUnless(_HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
+    @unittest.skipUnless(HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
     def test_the_divider_chains_diffusion_is_still_a_small_share_of_its_bbox(self):
         """§5.5's falsification of the device-density hypothesis, one lever on.
 
@@ -289,7 +283,7 @@ class CommittedBlockTests(unittest.TestCase):
         comp_share = 100.0 * a.layer_area_um2["comp"] / a.bbox_um2
         self.assertLess(comp_share, 5.0, f"comp is {comp_share:.2f} % of the bbox")
 
-    @unittest.skipUnless(_HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
+    @unittest.skipUnless(HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
     def test_the_metal2_plane_over_the_divider_chains_cells_is_now_used(self):
         """§5.5's lever 3, spent in full (issue #458).
 
@@ -307,7 +301,7 @@ class CommittedBlockTests(unittest.TestCase):
         self.assertGreater(a.metal2_over_devices_pct, 10.0)
         self.assertLess(a.routing_band_um, a.device_band_um)
 
-    @unittest.skipUnless(_HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
+    @unittest.skipUnless(HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
     def test_every_audited_block_gds_is_readable_and_renders(self):
         import run_pv  # noqa: PLC0415 -- CLI module, imported only for its table
 
@@ -324,7 +318,7 @@ class CommittedBlockTests(unittest.TestCase):
         for a in audits:
             self.assertIn(f"`{a.name}`", rendered)
 
-    @unittest.skipUnless(_HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
+    @unittest.skipUnless(HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
     def test_the_committed_report_still_matches_the_committed_geometry(self):
         """``layout/evidence/area-audit/area-audit.md`` is machine-rendered, never
         hand-maintained -- the same discipline ``signoff/tier-report.json`` and
@@ -357,7 +351,7 @@ class CommittedBlockTests(unittest.TestCase):
         )
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
 class WholeChipAreaRowTests(unittest.TestCase):
     """``spec/pll.md#area``'s fail-loud clause, as a check rather than a sentence.
 

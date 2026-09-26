@@ -25,7 +25,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
+from _env import LAYOUT_DIR
+
 SCRIPT = LAYOUT_DIR / "lib" / "check-layout-status-claims.sh"
 
 # The four sub-blocks the script grades, as (evidence dir, block GDS name).

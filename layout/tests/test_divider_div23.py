@@ -17,20 +17,10 @@ running the decks.
 
 from __future__ import annotations
 
-import sys
 import unittest
 from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
-
-try:
-    import klayout.db  # noqa: F401
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
+from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 
 from divider_chain import div23_cell, inv_3v3, nand3_3v3  # noqa: E402
 
@@ -159,7 +149,7 @@ class ReferenceNetlistTests(unittest.TestCase):
         self.assertTrue(self.netlist.rstrip().endswith(".ends"))
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class BuildLayoutTests(unittest.TestCase):
     """div23_cell.build() draws the claimed geometry."""
 
@@ -191,7 +181,7 @@ class BuildLayoutTests(unittest.TestCase):
             self.assertGreater(out.stat().st_size, 0)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class FootprintStabilityTests(unittest.TestCase):
     """This macro's footprint/pin locations are stable, non-hand-tuned outputs.
 
@@ -243,7 +233,7 @@ class FootprintStabilityTests(unittest.TestCase):
                 self.assertAlmostEqual(ay, ey, places=2)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class RoleReferenceCollisionTests(unittest.TestCase):
     """The "gate"/"channel" role reference anchors stay clear of each other
     and of a column's own natural (unmodified) pad geometry -- the concrete

@@ -19,20 +19,9 @@ substitute for running the decks.
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
-
-try:
-    import klayout.db  # noqa: F401
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
+from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 
 from pfd_cp import cp_leg, cp_leg_n, cp_leg_p  # noqa: E402
 
@@ -94,7 +83,7 @@ class ReferenceNetlistTests(unittest.TestCase):
             self.assertNotIn("MID", ports)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class HandRoutedBgTapGeometryTests(unittest.TestCase):
     """The precondition _route_bg_tap()/_route_rail_strap_and_tap() rely on
     (see cp_leg.py's own module docstring's "HAND-ROUTED BG TAP" section)
@@ -119,7 +108,7 @@ class HandRoutedBgTapGeometryTests(unittest.TestCase):
             self.assertLessEqual(gate_y, pad_y1)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class BuildLegTests(unittest.TestCase):
     """cp_leg.build_leg() on both cp_leg_n/cp_leg_p device specs."""
 
