@@ -31,10 +31,10 @@
 #
 # THE CONVENTION IT ENFORCES (proposal section 5.1)
 #
-# Section 5.1 of the proposal carries four tables (the third is rule 7's, and
-# arrived after this header was first written). The first names, for each
-# graded value, the record, the committed evidence file, the reduction that
-# produces it, and the unit scale:
+# Section 5.1 of the proposal carries five tables (the third is rule 7's and
+# the fifth is rule 8's; both arrived after this header was first written).
+# The first names, for each graded value, the record, the committed evidence
+# file, the reduction that produces it, and the unit scale:
 #
 #   | section 5 row | Quoted value | Record(s) | Evidence file | Reduction | Scale |
 #   | Output band | `6.449 MHz` | `20260731-175947-0a12e6c` | `vco_tuning.csv` | `max(min(fosc_hz) by bundle+temp_c+vdd_v)` | `1e-6` |
@@ -57,6 +57,9 @@
 # That list used to be prose, and prose does not get graded: it named four
 # figures and silently missed a fifth. Rule 6 below makes it an artefact CI
 # maintains.
+#
+# The fifth names the figures that are one measurement AGAINST ANOTHER
+# MEASUREMENT -- rule 8's, described there.
 #
 # THE RULES
 #
@@ -218,6 +221,68 @@
 #    the two ends as two figures. Refusing the shape is what made the rewrite
 #    necessary, not what made the figure ungradeable.
 #
+# 8. DERIVED AGAINST ANOTHER MEASUREMENT. Rule 7 reaches a figure whose second
+#    ingredient is WRITTEN DOWN. One figure's second ingredient is measured:
+#    `33 %`, how much less residual a straight line leaves than a single
+#    exponential over the same post-ramp samples -- 20.54 mV rms against
+#    30.75 mV, both columns of `criterion3_end_recovery.csv`. There is no
+#    ratified line to read, so rule 7's registry has nothing to resolve, and
+#    the ungraded list said so correctly: "the divisor is another
+#    measurement".
+#
+#    A FIFTH TABLE in section 5.1 carries the figures of that shape:
+#
+#      | section 5 row | Quoted value | Record(s) | Evidence file | Derivation | Scale |
+#      | Supply sensitivity -- DC ... | `33 %` | `20260925-044237-4ff4f65` | `criterion3_end_recovery.csv` | `max(rms_linear_mv where ...) shortfall-from max(rms_exponential_mv where ...)` | `100` |
+#
+#    ONE OPERATOR, because the document states one shape of figure:
+#
+#      A shortfall-from B    (B - A) / B -- how far A falls short of B, as a
+#                            fraction of B. "33 % less residual than" is
+#                            exactly that and is not a ratio: 20.54/30.75 is
+#                            67 %, a true number that is not the claim.
+#
+#    Rule 7 has two operators because the document states two shapes. Adding a
+#    plain ratio here "for symmetry" would add an untested, unused path; if a
+#    ratio-of-two-measurements figure is ever written, it is owed its own
+#    operator, its own tests and its own paragraph, the way the subtraction
+#    was.
+#
+#    Rules 1-5 apply unchanged, plus four of its own:
+#
+#      a. ONE EVIDENCE FILE, structurally. The table has a single Evidence
+#         column, so both operands necessarily reduce the same committed
+#         table under the same records -- a reader re-derives the whole figure
+#         from one file rather than joining two.
+#
+#      b. BOTH OPERANDS MUST BE GRADED IN THE FIRST TABLE, for that same
+#         section 5 row. This is rule 7c's analogue: there, the Constant
+#         column is graded against the spec so that `0.846 / 0.6` is checkable
+#         by eye. Here there is no constant to state, so the reader's handle
+#         on the arithmetic is that BOTH ingredients are themselves quoted in
+#         section 5 and re-derived in the first table -- `1 - 20.54/30.75` is
+#         checkable by eye, `1 - max(...)/max(...)` is not. The consequence is
+#         the point: this table can never introduce an ingredient nobody
+#         graded, which is the omission section 5.1's fourth table exists to
+#         make visible and which this one would otherwise be a fresh source
+#         of.
+#
+#      c. NO COUNT ON EITHER SIDE. The figures this grades are relative
+#         differences between two measurements of ONE quantity (two residuals
+#         in volts). A count is not that; a figure that needs one needs a
+#         stated reason first, exactly as under rule 7d.
+#
+#      d. THE TWO REDUCTIONS MAY NOT BE THE SAME TEXT. `1 - A/A` is 0 for
+#         every A, and 0 is a legitimate figure here -- "no better fit at
+#         all". So a derivation that quietly compared a column with itself
+#         would report the same clean zero as a real null result. Identical
+#         text is refused; the SAME column under two different filters is not,
+#         because that is a real figure shape.
+#
+#    And a zero divisor is refused rather than divided by, for rule 7e's
+#    reason in its own dialect: `B` is a measurement, and a measured zero here
+#    means the fit had no residual to be short of.
+#
 # WHAT IT DOES NOT DO
 #
 # Rule 6 makes the ungraded-figure list non-rotting, not complete: nothing can
@@ -279,12 +344,43 @@
 #       points tying on magnitude with opposite signs is an error, not a
 #       coin toss.
 #
-# plus one STATISTIC, which is an aggregate rather than a verb and so composes
-# with everything above:
+# plus two AGGREGATES THAT ARE NOT EXTREMA, which compose with everything
+# above because they are aggregates rather than verbs:
 #
 #   sig3(COL)   `|mean| + 3*sigma` over the selected values, with sigma the
 #               SAMPLE standard deviation (N-1). Fewer than two values is an
 #               error: a one-sample "3 sigma" is not a tail, it is a reading.
+#
+#   maxmag(COL) `max(|v|)` -- a TWO-SIDED bound over a signed column.
+#               `max()` over such a column returns its positive end and
+#               `min()` its negative one, and a figure written "to within
+#               5.7 mV at every cell" claims BOTH ends at once. Until this
+#               aggregate existed, section 5.1's ungraded list carried exactly
+#               that figure with exactly that reason -- "the grammar has no
+#               magnitude aggregate ... grading half of a two-sided bound and
+#               calling it the bound is the defect this table exists to
+#               catch". Two guards, one present and one deliberately absent:
+#
+#                 Fewer than two values is an error, for sig3's reason rather
+#                 than a statistical one -- the figures a magnitude bound
+#                 grades are stated OVER A SET ("at every cell"), and a bound
+#                 over a single value is that value.
+#
+#                 worst-magnitude's opposite-sign tie is NOT an error here.
+#                 That verb KEEPS the selected point's sign, so +x against -x
+#                 is a coin toss; this aggregate discards the sign, so both
+#                 ties give the same answer and there is nothing to be
+#                 ambiguous about. A guard copied without its reason would
+#                 reject a document that is not wrong.
+#
+#               A magnitude bound is silent about the sign it was taken over
+#               in the same way a worst overlap is silent about how many
+#               intervals it beat: `5.7` alone cannot tell a reader whether
+#               the set ever had two sides. So the OK line prints how many
+#               signed values each bound covered AND how many of them fell on
+#               the far side of zero from the binding end -- which is the
+#               evidence that this is a two-sided bound rather than a `max()`
+#               in different clothing.
 #
 # THE THREE-LEVEL FORM, and why it exists
 #
@@ -387,9 +483,10 @@
 #
 # Usage: sim/lib/check-quoted-value-provenance.sh
 # Exit codes: 0 every graded value re-derives, every derived figure follows
-#             from its reduction and its ratified constant, every section 5 row
-#             is accounted for, and every disclosed ungraded figure is still in
-#             its row;
+#             from its reduction and its ratified constant, every relative
+#             figure follows from two reductions that are themselves graded,
+#             every section 5 row is accounted for, and every disclosed
+#             ungraded figure is still in its row;
 #             1 any rule above is violated, a table is missing or empty, or the
 #             section 5 table cannot be parsed (a broken parser must not look
 #             like a clean tree).
@@ -509,6 +606,19 @@ RANGE_FIGURE = re.compile(
 #: inside the constant's own hyphens (`reference-spur-line-dbc`).
 DERIVATION = re.compile(
     r"^(?P<reduction>.+?)\s+(?P<op>[/-])\s+(?P<constant>[A-Za-z][\w.-]*)$"
+)
+
+#: A rule-8 derivation: two reductions of one committed table, the second of
+#: which is the thing the first is measured against.
+#:
+#: The operator is a WORD rather than a symbol, which is what keeps this form
+#: unambiguous against rule 7's `-`: both sides here are whole reductions, so
+#: a symbol split would have to guess where a where-clause's own arithmetic
+#: ended. The left side is non-greedy and the right runs to the end of the
+#: cell, so the split lands at the one operator either side of which is a
+#: reduction this grammar can parse.
+RELATIVE = re.compile(
+    r"^(?P<left>.+?)\s+(?P<op>shortfall-from)\s+(?P<right>.+)$"
 )
 
 
@@ -937,17 +1047,58 @@ def _sig3(values):
     return abs(mean) + 3.0 * math.sqrt(variance)
 
 
+#: How many magnitude bounds ran, over how many signed values, and how many of
+#: those values lay on the far side of zero from the binding end. Reported in
+#: the OK line for the reason the adjacent-pair count is: a magnitude bound
+#: DISCARDS the sign it was taken over, so the figure alone cannot tell a
+#: reader whether both sides of zero were ever in the set. The opposite-side
+#: count is the evidence that the bound is genuinely two-sided.
+mag_stats = {"bounds": 0, "values": 0, "opposite": 0}
+
+
+def _maxmag(values):
+    """`max(|v|)` over the selected values -- a two-sided bound.
+
+    See THE REDUCTION GRAMMAR above for why this is not `max()` and why
+    `worst-magnitude`'s opposite-sign tie guard deliberately has no twin here.
+    """
+    if len(values) < 2:
+        raise AggError(
+            "a magnitude bound is a bound over a set; maxmag was given %d "
+            "value, and a bound over one value is that value" % len(values)
+        )
+    magnitudes = [abs(v) for v in values]
+    bound = max(magnitudes)
+    binding_is_negative = values[magnitudes.index(bound)] < 0
+    mag_stats["bounds"] += 1
+    mag_stats["values"] += len(values)
+    mag_stats["opposite"] += sum(
+        1 for v in values if v != 0 and (v < 0) != binding_is_negative
+    )
+    return bound
+
+
 AGGS = {
     "min": min,
     "max": max,
     "mean": lambda vs: sum(vs) / len(vs),
     "sum": sum,
     "sig3": _sig3,
+    "maxmag": _maxmag,
 }
 
-#: Every aggregate name, for the regexes below. `count` is deliberately not one
-#: of these -- it takes `rows`/`distinct ...` rather than a column.
-AGG_NAMES = "|".join(AGGS)
+#: Every aggregate name, for the regexes below, LONGEST FIRST. `count` is
+#: deliberately not one of these -- it takes `rows`/`distinct ...` rather than
+#: a column.
+#:
+#: The ordering is load-bearing rather than tidy. One aggregate name is now a
+#: PREFIX of another (`max` of `maxmag`), and a regex alternation is
+#: first-match, not longest-match. Every use below happens to be anchored by a
+#: `(` immediately after the name, so Python's backtracking would recover --
+#: but that is a property of the engine and of today's regexes, not of this
+#: grammar, and the next form added here would silently inherit the hazard.
+#: Sorting removes the dependency instead of resting on it.
+AGG_NAMES = "|".join(sorted(AGGS, key=len, reverse=True))
 
 OUTER = re.compile(r"^(" + AGG_NAMES + r"|count)\((.*)\)$", re.DOTALL)
 INNER_BY = re.compile(
@@ -1778,6 +1929,7 @@ spec_rows = None          # normalized name -> (cells, source records)
 spec_row_order = []
 provenance = None
 derived_figures = None
+relative_figures = None
 exclusions = None
 ungraded_figures = None
 
@@ -1799,11 +1951,22 @@ for header, body in tables:
         len(header) >= 7
         and header[1].lower().startswith("quoted value")
         and header[4].lower().startswith("derivation")
+        and header[5].lower().startswith("constant")
     ):
-        # The rule-7 table. Discriminated on its `Derivation` column BEFORE
-        # the graded-value table, because both are headed `Quoted value` and
-        # a bare "second column" test would read one as the other.
+        # The rule-7 table. Discriminated on its `Derivation` AND `Constant`
+        # columns BEFORE the two six-column tables, because all three are
+        # headed `Quoted value` and a bare "second column" test would read one
+        # as another. `Constant` is what separates it from the rule-8 table,
+        # which is `Derivation` without a line to state.
         derived_figures = body
+    elif (
+        len(header) >= 6
+        and header[1].lower().startswith("quoted value")
+        and header[4].lower().startswith("derivation")
+    ):
+        # The rule-8 table: `Derivation` where the provenance table has
+        # `Reduction`, and no `Constant` column at all.
+        relative_figures = body
     elif len(header) >= 6 and header[1].lower().startswith("quoted value"):
         provenance = body
     elif len(header) >= 2 and header[1].lower().startswith("why no value"):
@@ -1841,6 +2004,17 @@ if not derived_figures:
     )
     sys.exit(1)
 
+if not relative_figures:
+    sys.stderr.write(
+        "FAIL: %s has no non-empty section 5.1 relative-figure table (a "
+        "header row whose second column is `Quoted value`, whose fifth is "
+        "`Derivation` and which has no `Constant` column). Deleting it would "
+        "not make the figure it grades ungraded-and-declared; it would make "
+        "it ungraded and silent, which is the state this section exists to "
+        "prevent.\n" % proposal_rel
+    )
+    sys.exit(1)
+
 if exclusions is None:
     sys.stderr.write(
         "FAIL: %s has no section 5.1 exclusion table (a header row whose "
@@ -1864,6 +2038,11 @@ if not ungraded_figures:
 
 graded_rows = set()
 graded_values = {}        # normalized row name -> {quoted figure as written}
+#: normalized row name -> {reduction text graded in the FIRST table}. Rule 8b
+#: reads it: a relative figure's two operands have to be reductions a reader
+#: can also find re-derived there, so that the arithmetic is checkable from
+#: two quoted numbers rather than from two unevaluated reductions.
+graded_reductions = {}
 checked = 0
 
 for cells in provenance:
@@ -1890,6 +2069,7 @@ for cells in provenance:
 
     quoted_plain = quoted_raw.strip("`").strip()
     graded_values.setdefault(row_name, set()).add(quoted_plain)
+    graded_reductions.setdefault(row_name, set()).add(reduction)
     haystack = " || ".join(spec_cells[1:4])
     if quoted_plain not in haystack:
         fail(
@@ -2102,6 +2282,153 @@ for cells in derived_figures or []:
             )
         )
 
+# ---- rule 8: figures derived from one measurement against another ----------
+
+relative_checked = 0
+
+for cells in relative_figures:
+    if len(cells) < 6:
+        fail("section 5.1 relative-figure row has %d columns, expected 6: %r"
+             % (len(cells), cells))
+        continue
+    row_name = normalize_row_name(cells[0])
+    quoted_raw = cells[1].strip()
+    record_ids = re.findall(RECORD_ID, cells[2])
+    evidence_file = cells[3].strip().strip("`")
+    derivation = cells[4].strip().strip("`")
+    scale_raw = cells[5].strip().strip("`")
+    ctx = "section 5.1 relative figure %s / %s" % (row_name, quoted_raw)
+
+    if row_name not in spec_rows:
+        fail(
+            "%s: names a section 5 row that does not exist. Section 5's rows "
+            "are: %s" % (ctx, "; ".join(spec_row_order))
+        )
+        continue
+    graded_rows.add(row_name)
+    spec_cells, spec_cited = spec_rows[row_name]
+
+    quoted_plain = quoted_raw.strip("`").strip()
+    graded_values.setdefault(row_name, set()).add(quoted_plain)
+    if quoted_plain not in " || ".join(spec_cells[1:4]):
+        fail(
+            "%s: the relative figure does not appear in that section 5 row. "
+            "Section 5.1 and section 5 have drifted apart -- one of them was "
+            "edited and the other was not." % ctx
+        )
+
+    parsed = RELATIVE.match(derivation)
+    if parsed is None:
+        fail(
+            "%s: cannot read the derivation `%s`. The form is "
+            "`<reduction> shortfall-from <reduction>`, which is (B - A) / B: "
+            "how far the first measurement falls short of the second, as a "
+            "fraction of the second. Both sides are whole reductions of the "
+            "one evidence file this row names." % (ctx, derivation)
+        )
+        continue
+    left = parsed.group("left").strip()
+    right = parsed.group("right").strip()
+
+    if left == right:
+        fail(
+            "%s: both sides of the derivation are the same reduction, so it "
+            "is 0 for any evidence at all. Zero is a legitimate figure here "
+            "-- no better fit than the other model -- so a column quietly "
+            "compared with itself would report exactly what a real null "
+            "result reports. The SAME column under two different filters is "
+            "fine; the same text is not." % ctx
+        )
+        continue
+
+    if not record_ids:
+        fail("%s: names no record id" % ctx)
+        continue
+
+    if is_range_figure(quoted_raw):
+        fail(
+            "%s: the relative figure is a two-ended range. Only the number at "
+            "its front would be graded, which is grading half of a two-sided "
+            "bound and calling it the bound -- derive each end as its own "
+            "entry, or declare the range in the ungraded-figure table." % ctx
+        )
+        continue
+
+    parsed_figure = parse_quoted(quoted_raw)
+    if parsed_figure is None:
+        fail("%s: cannot read a number out of the relative figure" % ctx)
+        continue
+    mantissa, exp, decimals = parsed_figure
+
+    scale = as_float(scale_raw)
+    if scale is None:
+        fail("%s: scale `%s` is not a number" % (ctx, scale_raw))
+        continue
+
+    # Rule 8b. Both ingredients must be quoted figures a reader can find
+    # re-derived in the first table, which is what makes the arithmetic
+    # checkable by eye rather than by re-running two reductions.
+    ungraded_operands = [
+        side for side in (left, right)
+        if side not in graded_reductions.get(row_name, set())
+    ]
+    if ungraded_operands:
+        fail(
+            "%s: %s not graded in the value-provenance table for this section "
+            "5 row. Both ingredients of a figure derived against another "
+            "measurement have to be quoted in section 5 and re-derived there "
+            "-- otherwise this table introduces an ingredient nobody graded, "
+            "which is the omission the ungraded-figure table exists to make "
+            "visible."
+            % (
+                ctx,
+                " and ".join("`%s` is" % side for side in ungraded_operands),
+            )
+        )
+        continue
+
+    evidence = collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx)
+    if evidence is None:
+        continue
+
+    operands = []
+    for side in (left, right):
+        result = apply_reduction(side, evidence, icp_rule, ctx)
+        if result is None:
+            break
+        value, is_count = result
+        if is_count:
+            fail(
+                "%s: `%s` is a count. This table grades a relative difference "
+                "between two measurements of one quantity; a count is not "
+                "that, and a figure that needs one needs a stated reason "
+                "first." % (ctx, side)
+            )
+            break
+        operands.append(value)
+    if len(operands) != 2:
+        continue
+    left_value, right_value = operands
+
+    if right_value == 0:
+        fail(
+            "%s: `%s` measures zero, so there is nothing for the other "
+            "measurement to fall short of. A measured zero divisor is a "
+            "failed reading rather than a datum here, for the same reason a "
+            "ratified constant that reads as zero is." % (ctx, right)
+        )
+        continue
+
+    derived = ((right_value - left_value) / right_value) * scale
+    relative_checked += 1
+
+    if not rounds_to(derived, mantissa, exp, decimals):
+        fail(
+            "%s: section 5 says %s; %.6g short of %.6g is %.6g, which does "
+            "not round to it at the %d decimal place(s) written"
+            % (ctx, quoted_plain, left_value, right_value, derived, decimals)
+        )
+
 excluded_rows = set()
 for cells in exclusions:
     if len(cells) < 2:
@@ -2190,9 +2517,12 @@ if errors:
 print(
     "OK: %d quoted values re-derived from committed per-corner evidence and "
     "matched at the precision written (%d of them group-sequence derivations "
-    "over %d groups, %d adjacent-axis pair(s) examined); %d further figure(s) "
+    "over %d groups, %d adjacent-axis pair(s) examined; %d magnitude bound(s) "
+    "over %d signed value(s), %d of them on the far side of zero from the "
+    "binding end); %d further figure(s) "
     "derived against %d ratified constant(s) read from the spec and its "
-    "decision records (%s); %d "
+    "decision records (%s); %d figure(s) derived as one measurement against "
+    "another, both operands graded in the first table; %d "
     "in-record table(s) read, %d checked row-for-row "
     "against the committed logs by point id and %d by row count alone; all %d "
     "section 5 rows accounted for (%d graded, %d with a stated reason) and %d "
@@ -2203,6 +2533,9 @@ print(
         seq_stats["derivations"],
         seq_stats["groups"],
         seq_stats["pairs"],
+        mag_stats["bounds"],
+        mag_stats["values"],
+        mag_stats["opposite"],
         derived_checked,
         len(constants_used),
         "; ".join(
@@ -2210,6 +2543,7 @@ print(
             for name in sorted(constants_used)
             if resolved_constants.get(name)
         ) or "none",
+        relative_checked,
         record_table_stats["id_matched"] + record_table_stats["count_matched"],
         record_table_stats["id_matched"],
         record_table_stats["count_matched"],
