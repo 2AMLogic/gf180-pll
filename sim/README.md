@@ -98,6 +98,7 @@ sim/
   | `period-jitter` | period jitter (deterministic + random), at 150 MHz / band 6 / N = 6 | #13 minted the six committed records (deterministic half, 45/45); the random half is owed at **#520** (open) — #505, which carried it before, closed 2026-09-25 — disposition in DR-020, narrowed by DR-023 |
   | `period-jitter-band-top` | the same deterministic period jitter at the **200 MHz top of the ratified band** — N = 8, and the VCO band code per corner because `spec/pll.md`'s band-selection rule splits this grid across bands 6 and 7 | **#503** (the campaign run); declared by #13, which is closed |
   | `reference-input-contract` | the `REF` electrical contract itself — levels, 10–90 % edge rate and duty cycle driven to each boundary `spec/pll.md` states, graded as the per-corner shift of the PFD's reference-path set delay. **Declared, not measured**: manifest, deck and reduction are committed and self-checking, zero of 288 declared points have run | #499 → DR-019 |
+  | `reference-phase-transfer` | the closed-loop REF-to-output **phase transfer** — a single known reference phase step, read out through the loop's own REF-vs-FB static phase error **differentially against a paired control run**, compared against `spec/pll.md`'s `20·log₁₀(N)` reference-source-quality exclusion. A different question from `reference-input-contract` above (waveform *shape* at a fixed phase, not phase *in time*), and the first deck in this tree to displace the reference edge in time at all. **Measured at N = 6**, 5/5 corners PASS: 15.529 … 16.366 dB against the stated 15.563 dB, plus the roll-off above the loop bandwidth at one frequency. The campaign holds three records and its supersession chain is the method's own history — see "Two decks per point, one record" below | #509 → DR-027 |
   | `supply-sensitivity` | supply pushing, quiescent/dynamic power | #14 |
   | `mc-cp-mismatch` | charge-pump mismatch distribution | #15 |
   | `reference-spur` | closed-loop reference spur measured directly, as the ±f_ref sidebands of the locked output spectrum, at 150 MHz / band 6 / N = 6 | #145 minted the one committed record (5 of the 45 PVT points); the binding-frequency grid is the row below |
@@ -277,6 +278,37 @@ sim/
   never have to guess which stimulus produced which half of a result. The
   harness expresses this as `tb.json`'s `phases` key (see
   `sim/harness/README.md`).
+
+  **Two decks per point, one record — the CONTROL-RUN case (#509).**
+  `reference-phase-transfer` uses the same key for a differently-shaped reason,
+  worth naming because it generalizes to any campaign measuring a *perturbation*
+  rather than a level. Its two phases are **the same netlist file** at two
+  values of one parameter: `ctl` applies no reference phase step, `stp` applies
+  the known one. They are paired so the quantity reported is the *difference* of
+  their readings at the same instant, which cancels whatever the two share.
+  Here that matters because the loop's own static phase error is still winding
+  slowly at the release point, by up to 1.4 ns across the measurement window
+  against a 1 ns injected step — so differencing the stepped run against *its
+  own past* (which is what this campaign's first record,
+  `20260925-073001-ed38ff1`, did) measures the step and the drift added
+  together, with nothing to separate them. Differencing it against a control
+  run that drifts identically removes the drift instead of bounding it.
+
+  Two conventions follow for a campaign built this way, and both are in
+  `reference-phase-transfer`'s manifest:
+
+  - **Publish what the pairing cancelled.** The control run's own drift is a
+    reported measurement (`drift_ctl`), not a discarded intermediate, so a
+    reader can see that it was up to 15× the residual being reported.
+  - **Check that the pair is a pair, at a tolerance that is not physical.**
+    Read the differenced quantity at an instant *before* the perturbation,
+    where the two decks are the same run, and check it against zero
+    (`pair_resid`). That check is the validity of the whole measurement, and it
+    doubles as the measurement's own noise floor — which is the honest thing to
+    quote a residual against. It will not be exactly zero: ngspice takes a
+    breakpoint at every source discontinuity, so two decks whose stimulus
+    sources transition at different times do not take bit-identical internal
+    timesteps even where their node voltages agree.
 
 - **`testbench/`** is not versioned per record — it holds the current
   testbench netlist(s)/xschem export(s) used to generate records. If the

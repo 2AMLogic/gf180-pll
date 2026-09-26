@@ -29,6 +29,7 @@ from __future__ import annotations
 import datetime as _dt
 import getpass
 import platform
+import re
 import socket
 import subprocess
 import sys
@@ -428,7 +429,18 @@ def build_record(
         tally = HostTally()
         for result in results:
             tally.add(result.host)
-        execution = {**execution, "hosts": tally.as_dict()}
+        # The executing SIMULATOR, per point, on the same terms and for the same
+        # reason (#509). `ngspice` above is the version resolved on the host that
+        # minted the record, which under an off-host backend ran no deck at all
+        # -- the batch image carries its own pinned binary, and a record that
+        # names the submitter's version for a point the submitter did not run is
+        # a false provenance claim, not an approximation. This is read out of
+        # each deck's own output, so it can only report versions that actually
+        # produced a measurement.
+        sims = HostTally()
+        for result in results:
+            sims.add(result.simulator)
+        execution = {**execution, "hosts": tally.as_dict(), "simulators": sims.as_dict()}
     # A run that raised out of run_grid() (#271) hands back fewer results than
     # points -- `results` only covers what completed before the fault. That
     # must never be mistaken for a clean run just because every point that DID
@@ -600,7 +612,9 @@ def write_netlist_snapshot(tb: Testbench, experiment_dir: Path, record_id: str) 
     return path
 
 
-def _execution_lines(execution: dict, recording_host: str = "") -> list[str]:
+def _execution_lines(
+    execution: dict, recording_host: str = "", recording_simulator: str = ""
+) -> list[str]:
     """The scheduling half of Environment provenance, or nothing.
 
     Emitted only when the caller supplied it, so every record minted before
@@ -650,7 +664,58 @@ def _execution_lines(execution: dict, recording_host: str = "") -> list[str]:
         )
     lines = [f"  - Execution: {scheduling}; {threads}"]
     lines += _execution_host_lines(execution.get("hosts") or {}, recording_host)
+    lines += _execution_simulator_lines(
+        execution.get("simulators") or {}, recording_simulator
+    )
     return lines
+
+
+#: `ngspice-46` inside whatever longer banner the resolved binary printed, so
+#: the recording host's version can be compared with the executing one without
+#: depending on the rest of that banner's wording.
+_NGSPICE_VERSION_RE = re.compile(r"ngspice-\d+", re.IGNORECASE)
+
+
+def _execution_simulator_lines(simulators: dict, recording_simulator: str) -> list[str]:
+    """Which ngspice actually ran the points, when that is not the one named above.
+
+    Silent in the case that needs no line: every point reported the same
+    version, and it is the version the `Simulator:` bullet already states --
+    which is always true of a local run, and is what a reader assumes unless
+    told otherwise.
+
+    Emitted whenever that assumption fails, which an off-host backend makes
+    routine (#509): the execution layer's job image carries its own pinned
+    ngspice, and `sim/README.md` treats the ngspice version as part of a
+    closed-loop record's identity (#259/#153), not as a detail. A point whose
+    output named no version is disclosed as `unattributed` rather than credited
+    to the recording host's binary.
+    """
+    if not simulators:
+        return []
+    named = {k: v for k, v in simulators.items() if k}
+    unattributed = simulators.get("", 0)
+    expected = ""
+    match = _NGSPICE_VERSION_RE.search(recording_simulator or "")
+    if match:
+        expected = match.group(0).lower()
+    if not unattributed and list(named) == [expected]:
+        return []
+
+    parts = [f"`{name}` ({count})" for name, count in sorted(named.items())]
+    if unattributed:
+        parts.append(f"unattributed ({unattributed})")
+    detail = ", ".join(parts)
+    if named and expected and expected not in named:
+        detail += (
+            f" -- **not** the `{expected}` the `Simulator:` bullet above names, "
+            "which is the binary resolved on the host that MINTED this record "
+            "and ran no deck. Numbers here are not interchangeable point-for-point "
+            "with records taken on that version (sim/README.md, ngspice binary pin)"
+        )
+    elif named and not expected:
+        detail += " -- the recording host's own version could not be parsed for comparison"
+    return [f"  - Executing simulator: {detail}"]
 
 
 def _execution_host_lines(hosts: dict, recording_host: str) -> list[str]:
@@ -1119,7 +1184,11 @@ def render_record(record: dict, experiment: str) -> str:
         f"  - Repo commit: `{git['commit']}` ({'DIRTY' if git['dirty'] else 'clean'} tree)",
         f"  - Host: {env['platform']} ({env['host']})",
     ]
-    lines += _execution_lines(env.get("execution") or {}, env.get("host") or "")
+    lines += _execution_lines(
+        env.get("execution") or {},
+        env.get("host") or "",
+        env.get("ngspice") or "",
+    )
     lines += _corner_matrix_lines(record)
     lines += _methodology_lines(record)
     lines.append(

@@ -318,6 +318,106 @@ class TestDeviatingDeckHasNoRecord(_TreeTest):
         self.assertPasses()
 
 
+# A behavioural REF driver: `refa`/`refb` are private nodes, and `ref` is
+# synthesised from them. Neither line is `v<name> ref 0 pulse(`, which is why
+# the original enumerator could not see the one deck in this repository whose
+# whole purpose is to drive REF differently (#509).
+SYNTHESISED = (
+    "vrefa refa 0 pulse(0 'vdd_val' 'tstart' 200p 200p '0.5*tref' 'tref')\n"
+    "vrefb refb 0 pulse(0 'vdd_val' 'tstart+dstep' 200p 200p '0.5*tref' 'tref')\n"
+    "bref  ref  0 v='v(refa)*(1-v(gate)/vdd_val) + v(refb)*(v(gate)/vdd_val)'"
+)
+
+
+class TestSynthesisedReference(_TreeTest):
+    """Rule 1, widened: a reference that is not a `pulse()` at all (#509)."""
+
+    #: Deliberately NOT `reference-phase-transfer`: the real check's REARGUED
+    #: table excuses that campaign, and these tests are about whether the
+    #: enumerator can SEE such a deck at all.
+    CAMPAIGN = "ref-phase-probe"
+
+    def test_a_behaviourally_driven_ref_is_seen_and_classified_a_deviation(self):
+        self.tree.deck(
+            "sim/%s/testbench/tb_ref_phase.sp" % self.CAMPAIGN, SYNTHESISED
+        )
+        self.tree.record(self.CAMPAIGN)
+        self.assertFails("synthesised by source bref", "committed record(s)")
+
+    def test_it_must_be_named_by_a_document_asserting_uniformity(self):
+        self.tree.deck(
+            "sim/%s/testbench/tb_ref_phase.sp" % self.CAMPAIGN, SYNTHESISED
+        )
+        self.tree.write(
+            PROPOSAL,
+            "every testbench in this repository that drives `REF` drives it the "
+            "same way, as the records show\n",
+        )
+        self.assertFails("never names", self.CAMPAIGN)
+
+    def test_a_private_pulse_train_alone_is_not_a_ref_driver(self):
+        """`vrefa refa 0 pulse(...)` drives a private node, not `ref`."""
+        self.tree.deck(
+            "sim/somewhere/testbench/tb_private.sp",
+            "vrefa refa 0 pulse(0 'v' 'ts' 1n 1n '20n' '40n')",
+        )
+        self.tree.record("somewhere")
+        self.assertPasses()
+
+
+class TestReargument(_TreeTest):
+    """Rule 5's one way through: a named, readable, on-topic decision record."""
+
+    DR = "spec/decision-records/DR-999-reargued.md"
+
+    def _install(self, campaign="deviating-campaign"):
+        """A deviating deck plus a record, with the check pointed at self.DR."""
+        self.tree.deck(
+            "sim/%s/testbench/tb_dev.spice" % campaign, VARYING
+        )
+        self.tree.record(campaign)
+        check = self.tree.root / "sim" / "lib" / CHECK.name
+        text = check.read_text(encoding="utf-8")
+        marker = 'REARGUED = {'
+        assert marker in text
+        text = text.replace(
+            marker,
+            'REARGUED = {\n    "%s": "%s",' % (campaign, self.DR),
+            1,
+        )
+        check.write_text(text, encoding="utf-8")
+
+    def test_a_named_record_that_argues_the_premise_lets_the_record_stand(self):
+        self._install()
+        self.tree.write(
+            self.DR,
+            "# DR-999\n\ndeviating-campaign measures the transfer.\n" + "x" * 2000,
+        )
+        result = self.assertPasses()
+        self.assertIn("re-argued in", result.stdout)
+
+    def test_a_missing_record_is_not_a_reargument(self):
+        self._install()
+        self.assertFails("does not exist", "cannot read is not a re-argument")
+
+    def test_a_stub_is_not_an_argument(self):
+        self._install()
+        self.tree.write(self.DR, "# DR-999\n\ndeviating-campaign\n")
+        self.assertFails("below the", "A stub is not an argument")
+
+    def test_a_record_that_never_mentions_the_campaign_does_not_excuse_it(self):
+        self._install()
+        self.tree.write(self.DR, "# DR-999\n\nabout something else entirely\n" + "x" * 2000)
+        self.assertFails("and never", "mentions", "about the campaign it")
+
+    def test_an_unlisted_campaign_still_fails_and_is_told_what_to_do(self):
+        self.tree.deck("sim/other-campaign/testbench/tb_dev.spice", VARYING)
+        self.tree.record("other-campaign")
+        self.assertFails(
+            "REARGUED table", "do not make this check pass any other way"
+        )
+
+
 class TestRealTree(unittest.TestCase):
     """The check must pass on this repository as committed."""
 

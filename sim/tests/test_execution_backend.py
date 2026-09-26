@@ -439,6 +439,69 @@ class SubmissionTests(unittest.TestCase):
         self.assertTrue(got.timed_out)
         self.assertIn("never reached a terminal state", got.detail)
 
+    def test_two_decks_sharing_one_rundir_do_not_read_each_others_output(self):
+        """#509, observed live: three of ten decks came back with a fourth's log.
+
+        Every job's outputs are named identically (`ngspice.log`/`.rc`/`.host`),
+        and `runner._run_phase` hands the batch backend the run's SHARED work
+        directory for any manifest that declares no `raw_files`. Collecting into
+        it let concurrent points overwrite one another, and the caller read back
+        whichever job landed last -- one point's output attributed to another
+        point's corner, which parses cleanly (and silently) whenever the two
+        decks expect the same measurement names.
+        """
+        other = self.root / "ss_125c_2.97v.spice"
+        other.write_text("* a different deck\n.end\n")
+
+        first = self._backend(
+            _FakeTransport(
+                ["done"],
+                outputs={batch.LOG_NAME: "MINE = 1\n", batch.RC_NAME: "0"},
+            )
+        ).run_deck(self.deck, self.rundir, 60, None)
+        second = self._backend(
+            _FakeTransport(
+                ["done"],
+                outputs={batch.LOG_NAME: "THEIRS = 2\n", batch.RC_NAME: "0"},
+            )
+        ).run_deck(other, self.rundir, 60, None)
+
+        self.assertEqual(first.output, "MINE = 1\n")
+        self.assertEqual(second.output, "THEIRS = 2\n")
+        # And the shared rundir holds neither, so a later job cannot pick one up.
+        self.assertFalse((self.rundir / batch.LOG_NAME).exists())
+        self.assertFalse((self.rundir / batch.RC_NAME).exists())
+
+    def test_a_decks_own_artefact_is_still_published_where_a_local_run_leaves_it(self):
+        """A `raw_files` waveform must land in `rundir`, or the reduction is blind."""
+        transport = _FakeTransport(
+            ["done"],
+            outputs={
+                batch.LOG_NAME: "m = 1\n",
+                batch.RC_NAME: "0",
+                "jit.dat": "0 1 2\n",
+            },
+        )
+        self._backend(transport).run_deck(self.deck, self.rundir, 60, None)
+        self.assertEqual((self.rundir / "jit.dat").read_text(), "0 1 2\n")
+
+    def test_the_launch_runs_under_the_resolved_region_and_profile(self):
+        """#509: a launch that omits them asks as the launch script's OWN default.
+
+        That default is the layer's *admin* provisioning identity, which a
+        day-to-day submitting host has no credential for -- and the resulting
+        failure is not a permission error but an empty subnet list, surfacing
+        later as `only 0 subnet/AZ(s) resolved, floor is 3`, i.e. "the fleet is
+        not provisioned" when the fleet was fine. Every transport call must run
+        under the submission's resolved identity, the launch included.
+        """
+        transport = _FakeTransport(["done"], outputs={batch.RC_NAME: "0"})
+        backend = self._backend(transport)
+        backend.run_deck(self.deck, self.rundir, 60, None)
+        argv = transport.launched()[0]
+        self.assertEqual(argv[argv.index("--region") + 1], backend.config.region)
+        self.assertEqual(argv[argv.index("--profile") + 1], backend.config.profile)
+
     def test_a_failed_upload_raises_rather_than_launching_a_job_with_no_inputs(self):
         def transport(argv, **kwargs):
             argv = list(argv)
@@ -889,6 +952,103 @@ class ExecutionProvenanceTests(unittest.TestCase):
         )
         self.assertEqual(len(lines), 2)
         self.assertIn("`elsewhere` (3)", lines[1])
+
+
+# ===========================================================================
+# 8b. Which ngspice actually ran the points (#509)
+# ===========================================================================
+
+class ExecutingSimulatorTests(unittest.TestCase):
+    RECORDING = "ngspice-46 : Circuit level simulation program"
+
+    def test_the_version_is_read_from_the_decks_own_closing_banner(self):
+        self.assertEqual(
+            execution.simulator_of("...\n\nngspice-42 done\n"), "ngspice-42"
+        )
+
+    def test_output_that_names_no_version_abstains_rather_than_guessing(self):
+        self.assertEqual(execution.simulator_of("no banner here"), "")
+        self.assertEqual(execution.simulator_of(""), "")
+
+    def test_the_last_banner_wins_when_output_carries_more_than_one(self):
+        self.assertEqual(
+            execution.simulator_of("ngspice-42 done\nretry\nngspice-46 done\n"),
+            "ngspice-46",
+        )
+
+    def test_no_line_when_every_point_ran_the_version_provenance_already_names(self):
+        lines = report._execution_lines(
+            {
+                "jobs": 4,
+                "omp": {},
+                "backend": "local",
+                "hosts": {"box": 5},
+                "simulators": {"ngspice-46": 5},
+            },
+            "box",
+            self.RECORDING,
+        )
+        self.assertEqual(len(lines), 1)
+
+    def test_a_version_other_than_the_recording_hosts_is_called_out(self):
+        """The #509 case: the batch image's pinned ngspice is not the submitter's."""
+        lines = report._execution_lines(
+            {
+                "jobs": 5,
+                "omp": {},
+                "backend": "batch",
+                "hosts": {"i-0a": 5},
+                "simulators": {"ngspice-42": 5},
+            },
+            "submitter",
+            self.RECORDING,
+        )
+        line = lines[-1]
+        self.assertIn("Executing simulator", line)
+        self.assertIn("`ngspice-42` (5)", line)
+        self.assertIn("**not** the `ngspice-46`", line)
+        self.assertIn("not interchangeable point-for-point", line)
+
+    def test_a_point_whose_output_named_no_version_is_disclosed(self):
+        lines = report._execution_lines(
+            {
+                "jobs": 2,
+                "omp": {},
+                "backend": "batch",
+                "hosts": {"i-0a": 2},
+                "simulators": {"ngspice-46": 1, "": 1},
+            },
+            "submitter",
+            self.RECORDING,
+        )
+        self.assertIn("unattributed (1)", lines[-1])
+
+    def test_a_mixed_version_grid_reports_every_version_it_ran(self):
+        lines = report._execution_lines(
+            {
+                "jobs": 2,
+                "omp": {},
+                "backend": "batch",
+                "hosts": {"i-0a": 3},
+                "simulators": {"ngspice-42": 2, "ngspice-46": 1},
+            },
+            "submitter",
+            self.RECORDING,
+        )
+        self.assertIn("`ngspice-42` (2)", lines[-1])
+        self.assertIn("`ngspice-46` (1)", lines[-1])
+        # ngspice-46 IS present, so the "not the version above" clause is wrong
+        # here and must not fire -- the grid is mixed, not uniformly foreign.
+        self.assertNotIn("**not** the", lines[-1])
+
+    def test_no_simulators_key_renders_nothing_extra(self):
+        """Every record minted before this field existed stays byte-comparable."""
+        lines = report._execution_lines(
+            {"jobs": 4, "omp": {}, "backend": "local", "hosts": {"box": 5}},
+            "box",
+            self.RECORDING,
+        )
+        self.assertEqual(len(lines), 1)
 
 
 
