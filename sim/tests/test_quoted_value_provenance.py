@@ -18,6 +18,7 @@ input -- the script reduces committed CSVs and reads committed Markdown.
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -49,6 +50,36 @@ all-slow,-40,3.63,7,40000000,4.0e-4
 all-slow,-40,3.63,6,33333333,3.5e-4
 """
 
+#: The group-sequence fixture: five (corner, band) CURVES, not five cells.
+#: Corner c1 holds bands 0-1 and c2 holds bands 0-2; every curve rises with
+#: control voltage, so `non-monotonic` counts 0 -- the figure whose zero a
+#: derivation that examined nothing would also report.
+#:
+#: Its adjacent-band overlaps are chosen so that a flattened implementation
+#: gives a different answer: c1's only pair is 14/13 - 1 = 7.69 %, c2's first
+#: is 15/14 - 1 = 7.14 % and its second 18/17 - 1 = 5.88 %. The worst pair of
+#: the worst corner is therefore 5.88 % -- 5.9 % to one decimal -- and an
+#: implementation that took the first pair, or the best one, or pooled the
+#: corners would not produce it.
+CURVES_CSV = """\
+bundle,temp_c,vdd_v,band,vctrl_v,fosc_hz
+c1,27,3.30,0,0.90,10000000
+c1,27,3.30,0,1.20,12000000
+c1,27,3.30,0,1.50,14000000
+c1,27,3.30,1,0.90,13000000
+c1,27,3.30,1,1.20,16000000
+c1,27,3.30,1,1.50,20000000
+c2,27,3.30,0,0.90,11000000
+c2,27,3.30,0,1.20,13000000
+c2,27,3.30,0,1.50,15000000
+c2,27,3.30,1,0.90,14000000
+c2,27,3.30,1,1.20,16000000
+c2,27,3.30,1,1.50,18000000
+c2,27,3.30,2,0.90,17000000
+c2,27,3.30,2,1.20,19000000
+c2,27,3.30,2,1.50,21000000
+"""
+
 #: The contracted-space fixture: `on-icp-trim-rule` must select only the rows
 #: whose (f_ref, trim) pairing the spec table requires -- 47.4 and not 25.4.
 MARGINS_CSV = """\
@@ -76,9 +107,30 @@ SPEC_ROWS = (
     # (name, measured cell, verdict, source cell)
     ("Output band", "Floor 12 MHz; ceiling 20 MHz", "**MET**",
      f"`sim/{CAMPAIGN}/records/{RECORD}.md`"),
-    ("Phase margin", "Worst 47.4 deg; 3/4 cells pass", "**MET**", "Same record"),
+    ("Phase margin", "Worst 47.4 deg; 3/4 cells pass; 1.9 deg of margin",
+     "**MET**", "Same record"),
     ("Standby current", "n/a -- no standby state exists", "**N/A**",
      "`spec/pll.md#standby-current`"),
+)
+
+#: The section 5 Output band row as the group-sequence tests need it: the two
+#: curve figures have to appear verbatim in the row, which is the rule that
+#: keeps the two tables one artefact.
+CURVE_SPEC_ROW = (
+    "Output band",
+    "Floor 12 MHz; ceiling 20 MHz; 0 non-monotonic curves of 5; "
+    "worst adjacent overlap 5.9 %",
+    "**MET**",
+    f"`sim/{CAMPAIGN}/records/{RECORD}.md`",
+)
+
+MONOTONIC_ENTRY = (
+    "Output band", "`0 non-monotonic curves of 5`", RECORD, "kvco_by_point.csv",
+    "count(non-monotonic(fosc_hz by vctrl_v) by bundle+temp_c+vdd_v+band)", "1",
+)
+OVERLAP_ENTRY = (
+    "Output band", "`5.9 %`", RECORD, "kvco_by_point.csv",
+    "min(adjacent-overlap(fosc_hz by band) by bundle+temp_c+vdd_v)", "100",
 )
 
 PROVENANCE_HEADER = (
@@ -87,6 +139,9 @@ PROVENANCE_HEADER = (
 )
 EXCLUSION_HEADER = (
     "| §5 row | Why no value here is re-derived from a CSV |\n|---|---|\n"
+)
+UNGRADED_HEADER = (
+    "| §5 row | Figure | Why it is not re-derived |\n|---|---|---|\n"
 )
 
 DEFAULT_PROVENANCE = [
@@ -103,6 +158,14 @@ DEFAULT_PROVENANCE = [
 DEFAULT_EXCLUSIONS = [
     ("Standby current", "Waived -- no power-down mode exists in v1, so there "
                         "is no state to measure"),
+]
+
+#: A figure inside a GRADED row that nothing re-derives. The check requires
+#: this list to exist and to stay attached to a figure section 5 still writes.
+DEFAULT_UNGRADED = [
+    ("Phase margin", "1.9 deg of margin",
+     "The distance to the line is a spec arithmetic, not a column of the "
+     "committed evidence file"),
 ]
 
 
@@ -126,17 +189,28 @@ def _exclusion_table(entries) -> str:
     return EXCLUSION_HEADER + body
 
 
+def _ungraded_table(entries) -> str:
+    body = "".join("| %s | %s | %s |\n" % entry for entry in entries)
+    return UNGRADED_HEADER + body
+
+
 def proposal(
-    spec_rows=SPEC_ROWS, provenance=None, exclusions=None, include_5_1=True
+    spec_rows=SPEC_ROWS,
+    provenance=None,
+    exclusions=None,
+    ungraded=None,
+    include_5_1=True,
 ) -> str:
     provenance = DEFAULT_PROVENANCE if provenance is None else provenance
     exclusions = DEFAULT_EXCLUSIONS if exclusions is None else exclusions
+    ungraded = DEFAULT_UNGRADED if ungraded is None else ungraded
     text = "# proposal\n\n## 5. Target specification\n\n"
     text += _spec_table(spec_rows) + "\n"
     if include_5_1:
         text += "### 5.1 Value provenance\n\n"
         text += _provenance_table(provenance) + "\n"
         text += _exclusion_table(exclusions) + "\n"
+        text += _ungraded_table(ungraded) + "\n"
     text += "## 6. Next section\n"
     return text
 
@@ -158,6 +232,7 @@ class _Tree:
         corners.mkdir(parents=True)
         (corners / "vco_tuning.csv").write_text(TUNING_CSV)
         (corners / "loop_margins.csv").write_text(MARGINS_CSV)
+        (corners / "kvco_by_point.csv").write_text(CURVES_CSV)
 
         (root / "spec").mkdir()
         (root / SPEC).write_text(SPEC_TEXT)
@@ -167,6 +242,10 @@ class _Tree:
 
     def write(self, text: str) -> None:
         (self.root / PROPOSAL).write_text(text)
+
+    def write_curves(self, text: str) -> None:
+        (self.root / "sim" / CAMPAIGN / "corners" / RECORD
+         / "kvco_by_point.csv").write_text(text)
 
     def write_spec(self, text: str) -> None:
         (self.root / SPEC).write_text(text)
@@ -353,6 +432,208 @@ class TestCoverageRule(_TreeTest):
         self.assertFails("names a section 5 row that does not exist")
 
 
+class TestGroupSequenceDerivations(_TreeTest):
+    """The two figures that are properties of a CURVE, not of cells.
+
+    `count(non-monotonic(...))` grades a **zero**, which is the most dangerous
+    kind of figure to grade: a derivation that examined nothing reports exactly
+    what a clean grid reports. Most of these tests exist to show that this one
+    does not pass vacuously.
+    """
+
+    def write(self, entries=None, spec_rows=None, csv_text=None):
+        if csv_text is not None:
+            self.tree.write_curves(csv_text)
+        rows = list(SPEC_ROWS)
+        rows[0] = CURVE_SPEC_ROW if spec_rows is None else spec_rows
+        provenance = DEFAULT_PROVENANCE + (
+            [MONOTONIC_ENTRY, OVERLAP_ENTRY] if entries is None else entries
+        )
+        self.tree.write(proposal(spec_rows=tuple(rows), provenance=provenance))
+
+    def test_both_curve_derivations_pass_and_report_their_group_count(self):
+        self.write()
+        result = self.assertPasses()
+        self.assertIn("6 quoted values re-derived", result.stdout)
+        self.assertIn("2 of them group-sequence derivations over 7 groups",
+                      result.stdout)
+
+    def test_a_dip_in_one_curve_is_counted(self):
+        """The fault the figure exists to exclude: f falls back mid-sweep."""
+        self.write(csv_text=CURVES_CSV.replace(
+            "c1,27,3.30,0,1.50,14000000", "c1,27,3.30,0,1.50,11000000"))
+        self.assertFails("counts 1")
+
+    def test_a_falling_curve_is_still_monotonic(self):
+        """"Monotonic" is the document's word, and it has two directions.
+
+        This pins the definition rather than assuming it: a curve that falls
+        throughout is monotonic, and the check must not silently grade the
+        stronger "strictly rising" claim the document does not make.
+        """
+        self.write(csv_text=CURVES_CSV.replace(
+            "c1,27,3.30,1,0.90,13000000\nc1,27,3.30,1,1.20,16000000\n"
+            "c1,27,3.30,1,1.50,20000000",
+            "c1,27,3.30,1,0.90,20000000\nc1,27,3.30,1,1.20,16000000\n"
+            "c1,27,3.30,1,1.50,13000000"))
+        # c1's overlap pair is now 14/13 - 1 with band 1's minimum at 13 MHz
+        # still, so 5.9 % is unchanged and only monotonicity is under test.
+        self.assertPasses()
+
+    def test_a_tie_inside_a_curve_is_still_monotonic(self):
+        self.write(csv_text=CURVES_CSV.replace(
+            "c1,27,3.30,0,1.20,12000000", "c1,27,3.30,0,1.20,10000000"))
+        self.assertPasses()
+
+    def test_a_misspelled_grouping_column_fails(self):
+        """Without this, every curve pools into one group and 0 is a fluke."""
+        entries = [
+            ("Output band", "`0 non-monotonic curves of 5`", RECORD,
+             "kvco_by_point.csv",
+             "count(non-monotonic(fosc_hz by vctrl_v) by bundel+band)", "1"),
+            OVERLAP_ENTRY,
+        ]
+        self.write(entries=entries)
+        self.assertFails("names column `bundel`",
+                         "which the evidence file does not have")
+
+    def test_an_evidence_file_with_no_data_rows_cannot_report_zero(self):
+        self.write(csv_text="bundle,temp_c,vdd_v,band,vctrl_v,fosc_hz\n")
+        self.assertFails("hold no data rows")
+
+    def test_a_one_point_curve_is_not_a_sequence_test(self):
+        self.write(csv_text=CURVES_CSV + "c3,27,3.30,0,0.90,9000000\n")
+        self.assertFails("a sequence test over fewer than two points is not a "
+                         "test")
+
+    def test_a_repeated_ordering_value_is_ambiguous(self):
+        self.write(csv_text=CURVES_CSV.replace(
+            "c1,27,3.30,0,1.20,12000000", "c1,27,3.30,0,0.90,12000000"))
+        self.assertFails("repeats a value of the ordering column `vctrl_v`")
+
+    def test_a_non_numeric_cell_is_an_error_not_a_skip(self):
+        self.write(csv_text=CURVES_CSV.replace(
+            "c1,27,3.30,0,1.20,12000000", "c1,27,3.30,0,1.20,n/a"))
+        self.assertFails("is not a number",
+                         "error rather than a skip")
+
+    def test_the_overlap_is_the_worst_pair_of_the_worst_corner(self):
+        """7.1 % is c2's FIRST pair; 7.7 % is c1's only one. Neither passes.
+
+        Both are figures a flattened implementation would produce, so quoting
+        either against this fixture must fail.
+        """
+        for wrong in ("7.1 %", "7.7 %"):
+            with self.subTest(wrong=wrong):
+                entries = [
+                    MONOTONIC_ENTRY,
+                    ("Output band", "`%s`" % wrong, RECORD,
+                     "kvco_by_point.csv",
+                     "min(adjacent-overlap(fosc_hz by band) "
+                     "by bundle+temp_c+vdd_v)", "100"),
+                ]
+                self.write(
+                    entries=entries,
+                    spec_rows=(
+                        "Output band",
+                        "Floor 12 MHz; ceiling 20 MHz; 0 non-monotonic curves "
+                        "of 5; worst adjacent overlap %s" % wrong,
+                        "**MET**",
+                        f"`sim/{CAMPAIGN}/records/{RECORD}.md`",
+                    ),
+                )
+                self.assertFails("does not round to it")
+
+    def test_a_corner_with_no_consecutive_bands_fails(self):
+        self.write(csv_text=CURVES_CSV.replace(
+            "c1,27,3.30,1,", "c1,27,3.30,3,"))
+        self.assertFails("no pair of consecutive `band` values")
+
+    def test_count_over_a_group_scalar_is_rejected(self):
+        entries = [
+            MONOTONIC_ENTRY,
+            ("Output band", "`5.9 %`", RECORD, "kvco_by_point.csv",
+             "count(adjacent-overlap(fosc_hz by band) by bundle+temp_c+vdd_v)",
+             "100"),
+        ]
+        self.write(entries=entries)
+        self.assertFails("is a group scalar, not a predicate")
+
+    def test_an_aggregate_over_a_group_predicate_is_rejected(self):
+        entries = [
+            ("Output band", "`0 non-monotonic curves of 5`", RECORD,
+             "kvco_by_point.csv",
+             "min(non-monotonic(fosc_hz by vctrl_v) by bundle+band)", "1"),
+            OVERLAP_ENTRY,
+        ]
+        self.write(entries=entries)
+        self.assertFails("is a group predicate")
+
+    def test_a_where_clause_on_a_sequence_derivation_is_rejected(self):
+        """Rejected explicitly rather than silently misparsed."""
+        entries = [
+            ("Output band", "`0 non-monotonic curves of 5`", RECORD,
+             "kvco_by_point.csv",
+             "count(non-monotonic(fosc_hz by vctrl_v) by bundle+band "
+             "where band == 0)", "1"),
+            OVERLAP_ENTRY,
+        ]
+        self.write(entries=entries)
+        self.assertFails("takes no where-clause")
+
+
+class TestUngradedFigureDisclosure(_TreeTest):
+    """Rule 6: the per-figure disclosure is an artefact, not prose.
+
+    It was prose until 2026-09-26, and it had already gone wrong -- it named
+    four ungraded figures and silently missed a fifth.
+    """
+
+    def test_a_missing_disclosure_table_fails(self):
+        text = proposal()
+        text = text[: text.index(UNGRADED_HEADER)] + "\n## 6. Next section\n"
+        self.tree.write(text)
+        self.assertFails("no non-empty section 5.1 ungraded-figure table")
+
+    def test_an_empty_disclosure_table_fails(self):
+        self.tree.write(proposal(ungraded=[]))
+        self.assertFails("no non-empty section 5.1 ungraded-figure table")
+
+    def test_a_figure_no_longer_in_its_row_fails(self):
+        """The rule with teeth: section 5 edited, the disclosure not."""
+        self.tree.write(proposal(ungraded=[
+            ("Phase margin", "2.4 deg of margin", DEFAULT_UNGRADED[0][2]),
+        ]))
+        self.assertFails("does not appear in the section 5 row it is declared "
+                         "against", "gone stale")
+
+    def test_a_figure_that_is_also_graded_fails(self):
+        self.tree.write(proposal(ungraded=[
+            ("Phase margin", "47.4", DEFAULT_UNGRADED[0][2]),
+        ]))
+        self.assertFails("cannot be both re-derived and declared "
+                         "un-re-derived")
+
+    def test_a_disclosure_against_a_fully_excluded_row_fails(self):
+        self.tree.write(proposal(ungraded=[
+            ("Standby current", "n/a -- no standby state exists",
+             DEFAULT_UNGRADED[0][2]),
+        ]))
+        self.assertFails("already accounted for by the exclusion table")
+
+    def test_a_disclosure_naming_no_section_5_row_fails(self):
+        self.tree.write(proposal(ungraded=[
+            ("Ghost row", "1.9 deg of margin", DEFAULT_UNGRADED[0][2]),
+        ]))
+        self.assertFails("names a section 5 row that does not exist")
+
+    def test_a_disclosure_without_a_reason_fails(self):
+        self.tree.write(proposal(ungraded=[
+            ("Phase margin", "1.9 deg of margin", "no CSV"),
+        ]))
+        self.assertFails("gives no real reason")
+
+
 class TestIcpTrimRulePredicate(_TreeTest):
     def test_the_rule_is_read_from_the_spec_not_the_check(self):
         """Move the ratified pairing and the graded figure must move with it.
@@ -435,6 +716,33 @@ class TestTheRealTree(unittest.TestCase):
         )
         count = int(result.stdout.split("OK: ")[1].split(" ")[0])
         self.assertGreaterEqual(count, 30, msg=result.stdout)
+
+    def test_the_curve_derivations_examined_the_real_grid(self):
+        """The zero-valued figure's anti-vacuity assertion on the real tree.
+
+        `0 non-monotonic curves of 504` is reported by a derivation that
+        examined 504 curves and by a derivation that examined none. Only the
+        group count tells them apart, so it is asserted here (as a floor, not
+        as a second copy of a number the document already states and CI
+        already grades).
+        """
+        result = subprocess.run(
+            ["bash", str(CHECK)], capture_output=True, text=True, cwd=REPO_ROOT
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        groups = int(
+            result.stdout.split("group-sequence derivations over ")[1].split(" ")[0]
+        )
+        self.assertGreaterEqual(groups, 500, msg=result.stdout)
+
+    def test_it_reports_the_ungraded_figures_it_disclosed(self):
+        result = subprocess.run(
+            ["bash", str(CHECK)], capture_output=True, text=True, cwd=REPO_ROOT
+        )
+        match = re.search(r"and (\d+) ungraded figure", result.stdout)
+        self.assertIsNotNone(match, msg=result.stdout)
+        disclosed = int(match.group(1))
+        self.assertGreaterEqual(disclosed, 1, msg=result.stdout)
 
     def test_it_sees_every_row_of_the_real_section_5_table(self):
         """The other half of the check's own MIN_SPEC_ROWS guard.

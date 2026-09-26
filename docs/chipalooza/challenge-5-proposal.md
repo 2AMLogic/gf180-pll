@@ -570,7 +570,7 @@ re-derived value does not equal the figure **rounded to the precision written**
 (`247.8 MHz` against a derived 247.751 passes; against 247.6 it does not), if
 the figure has drifted between §5 and this table in either direction, if an
 entry reduces a record the §5 row does not itself cite, or if a §5 row appears
-in neither of this section's two tables.
+in neither of this section's first two tables.
 
 The reduction language is `min`/`max`/`mean`/`sum`/`count` over one committed
 CSV, optionally grouped (`max(min(fosc_hz) by bundle+temp_c+vdd_v)` is the
@@ -584,11 +584,29 @@ same reason `check-pvt-coverage-claims.sh` computes the mandated grid size from
 the harness: if the ratified rule changes, what CI enforces changes in the same
 commit.
 
+Two figures in the Output band row are properties of an ordered *curve* rather
+than reductions of cells, and the language carries a group-sequence form for
+them. `count(non-monotonic(fosc_hz by vctrl_v) by bundle+temp_c+vdd_v+band)`
+orders each of the 504 (corner, band) curves by control voltage and counts the
+curves that are neither non-decreasing nor non-increasing — *monotonic* as this
+document words it, in either direction. `min(adjacent-overlap(fosc_hz by band)
+by bundle+temp_c+vdd_v)` takes, per corner, the worst
+`max(f in band k) / min(f in band k+1) − 1` over consecutive band codes, which
+is negative if a corner leaves a coverage hole. **The monotonicity figure is a
+zero, which is the most dangerous kind of figure to grade**: a derivation that
+quietly examined nothing reports the same `0` as a clean grid. So the check
+treats an empty group set, a curve with fewer than two points, and a repeated
+control voltage inside a curve as failures rather than passes, and prints the
+number of groups it examined (`504` curves and `63` corners here) in its own OK
+line.
+
 | §5 row | Quoted value | Record(s) | Evidence file | Reduction | Scale |
 |---|---|---|---|---|---|
 | Output band | `6.449 MHz` | `20260731-175947-0a12e6c` (63-point grid) | `vco_tuning.csv` | `max(min(fosc_hz) by bundle+temp_c+vdd_v)` | `1e-6` |
 | Output band | `247.8 MHz` | `20260731-175947-0a12e6c` (63-point grid) | `vco_tuning.csv` | `min(max(fosc_hz) by bundle+temp_c+vdd_v)` | `1e-6` |
 | Output band | `504` | `20260731-175947-0a12e6c` (63-point grid) | `kvco_by_point.csv` | `count(distinct bundle+temp_c+vdd_v+band)` | `1` |
+| Output band | `0 non-monotonic curves of 504` | `20260731-175947-0a12e6c` (63-point grid) | `kvco_by_point.csv` | `count(non-monotonic(fosc_hz by vctrl_v) by bundle+temp_c+vdd_v+band)` | `1` |
+| Output band | `27 %` | `20260731-175947-0a12e6c` (63-point grid) | `kvco_by_point.csv` | `min(adjacent-overlap(fosc_hz by band) by bundle+temp_c+vdd_v)` | `100` |
 | Multiplication ratio | `302.83 ps` | `20260802-100727-082c879` | `retiming_margin.csv` | `min(setup_margin_s)` | `1e12` |
 | Period jitter (open-loop sensitivity) | `2.51 %` | `20260804-211600-f599a65` (63-point grid) | `raw_measures.csv` | `max(rip_tj_rms_pct where rdiv == r16)` | `1` |
 | Period jitter, closed-loop, deterministic (control-ripple) | `0.0508` | `20260905-192724-a2ba48f`, `20260906-015602-f9bef9d`, `20260906-024225-12bccda`, `20260906-063728-f3c9c23`, `20260906-080511-69b36ef`, `20260906-095050-3a8a6ef` | `period_jitter_by_corner.csv` | `min(tj_rms_pct)` | `1` |
@@ -645,24 +663,33 @@ is not the kind of thing a committed CSV can settle.
 | Supply range | States the swept independent axis of every other row (2.97/3.30/3.63 V), which `check-pvt-coverage-claims.sh` grades against the harness's supply points. There is no measured quantity of its own |
 | Supply range, 5.0 V analog rail | **UNMET / not attempted.** No 5.0 V-class device exists in this design and nothing was ever simulated above 3.63 V, so there is no evidence of any kind to reduce — the point of the row |
 
-**What this does not grade, stated rather than implied.** Coverage above is per
-*row*, not per *number*: a row with one re-derived value is not a fully
-re-derived row. Four headline figures in graded rows are still ungraded, each
-for a reason that is a piece of work rather than an oversight:
+**And the figures inside graded rows that are still not re-derived.** Coverage
+above is per *row*, not per *number*: a row with one re-derived value is not a
+fully re-derived row. This third table is where the remainder is declared, and
+CI grades each entry — the row must exist and must be one of the graded rows,
+the reason must be given, the figure may not also appear as a graded value, and
+**the figure must still appear verbatim in the §5 row it is declared against**,
+so that editing §5 and not this list fails the build.
 
-- **Kvco's `115.8 MHz/V` worst case** — selecting it requires evaluating
-  [the band-selection rule](../../spec/pll.md#band-selection-rule) (lowest band
-  code that reaches the target) at every corner, which is a derivation, not a
-  reduction. The adversarial `154.3 MHz/V` figure the rule exists to exclude
-  *is* graded, which is the half that bounds the risk.
-- **`0` non-monotonic curves of 504** — the count of curves is graded; the
-  monotonicity test over each curve is not.
-- **The divider chain's `235`-point sample and `61` distinct N** — the record
-  commits `retiming_margin.csv` (17 rows, the margin claim) but not the
-  per-point ratio table, so only the retiming figure is re-derivable.
-- **The reference-spur derivation's DR-018 re-priced ≈ −57.0 dBc stack** — a
-  hand derivation over a Monte Carlo campaign, not a reduction of one CSV. The
-  *measured* spur figures in the same row are graded.
+That last rule exists because this list was prose until 2026-09-26, and prose
+does not get graded. It named four figures and silently missed a fifth: the
+Output band row's `27 %` worst adjacent-band overlap, which was neither
+re-derived nor declared ungraded. It is graded above now — as is the
+monotonicity count, which this list previously carried — so what remains is
+four figures in three rows:
+
+| §5 row | Figure | Why it is not re-derived |
+|---|---|---|
+| Kvco | `115.8 MHz/V` | Two reasons, either sufficient. Selecting the point evaluates [the band-selection rule](../../spec/pll.md#band-selection-rule) (lowest band code that reaches the target) at every corner — a derivation, and one over a rule whose control window `spec/pll.md` does not presently name, an ambiguity tracked at #542 under which the two candidate windows select different bands. And the point itself is at Vctrl = 1.54 V, which the 7-point control sweep does not sample (its neighbours are 114.93 MHz/V at 1.50 V and 120.85 at 1.80 V), so no reduction of this CSV returns it. The adversarial `154.3 MHz/V` figure the rule exists to exclude *is* graded above, which is the half that bounds the risk |
+| Multiplication ratio | `61 distinct N` | The record commits `retiming_margin.csv` (17 rows, the margin claim) but not the per-point ratio table, so the set of divide ratios actually exercised cannot be recomputed from committed evidence. `check-pvt-coverage-claims.sh` does grade this count against the record's own declared value, which is a weaker claim than re-deriving it |
+| Multiplication ratio | `0 ratio errors of 235 chain points` | Same missing per-point table: only the retiming figure in this row is re-derivable. The `235` and its `2835`-cell cross-product are graded against the record's declaration by `check-pvt-coverage-claims.sh`, not against per-point evidence |
+| Reference spur | `≈ −57.0 dBc` | A hand derivation that re-prices DR-018's term stack over a Monte Carlo campaign, not a reduction of one CSV. The *measured* spur figures in the same row — `−57.0`, `−72.7`, `−54.5` — are graded above |
+
+Nothing mechanically enumerates "every headline figure" out of §5's prose
+cells, which quote hundreds of numbers, most of them commentary on a figure
+rather than a figure. So this list's *completeness* is still a reviewer's
+judgement; what CI now guarantees is that it cannot rot, and that what it
+declares ungraded is genuinely not graded elsewhere in this section.
 
 **One disclosure this check produced on its first run.** Grading the open-loop
 period-jitter row's `2.51 % RMS` showed that the figure is the worst case over
