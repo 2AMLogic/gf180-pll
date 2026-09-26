@@ -80,12 +80,14 @@ jobs:
         # full PDK toolchain and belong in pdk-checks, not this headless job.
         run: python3 -m unittest discover -s layout/tests -t layout/tests
 
-      - name: spec/tests (unit tests for the spec-row coverage check)
-        # Same shape as the two discover steps above, for the check added in
-        # #237 that grades docs/chipalooza/challenge-5-proposal.md's section-5
-        # table against spec/pll.md's summary table. Every test builds a
-        # throwaway tree and runs the real script in it -- no PDK, no KLayout,
-        # no simulation input.
+      - name: spec/tests (unit tests for the spec-row coverage and spur-derivation checks)
+        # Same shape as the two discover steps above, for the two spec-side
+        # checks added in #237: one grades
+        # docs/chipalooza/challenge-5-proposal.md's section-5 table against
+        # spec/pll.md's summary table, the other re-derives spec/pll.md's
+        # reference-spur arithmetic from its own ingredients. Every test builds
+        # a throwaway tree and runs the real script in it -- no PDK, no
+        # KLayout, no simulation input.
         run: python3 -m unittest discover -s spec/tests -t spec/tests
 
       - name: design/tests (unit tests for the I/O-list and port-connectivity checks)
@@ -237,6 +239,31 @@ jobs:
         # re-priced 1.6 dB margin. Needs python3 (set up above); reads only
         # committed Markdown, no PDK.
         run: bash spec/lib/check-spec-row-coverage.sh
+
+      - name: spec/lib/check-spur-derivation-arithmetic.sh (the reference-spur derivation vs. its own ingredients)
+        # check-quoted-value-provenance.sh below grades a *measured* figure by
+        # reducing a committed per-corner CSV. Reference spur is the one row of
+        # the proposal whose verdict turns on a *derived* number instead: the
+        # closed-loop campaign measures 5 of 45 PVT points, all at 150 MHz with
+        # device mismatch off, so what the document tells an outside reader
+        # about the binding 200 MHz point -- "1.6 dB inside the line" rather
+        # than the ~6 dB the older -61 dBc figure implied -- is a hand
+        # derivation. That derivation's own section-5.1 entry said it could not
+        # be graded because it is "not a reduction of one CSV". It can: every
+        # ingredient is written down beside it.
+        #
+        # Six rules. The derivation must still state the two relations the
+        # check implements (read out of the spec, not asserted by the check, so
+        # a re-ratification fails here in the same commit); the worst-case sum
+        # must be the linear add it calls itself; the step table's chain must
+        # follow row by row from its own displayed figures, with the unrounded
+        # end-to-end chain agreeing within 0.1 dB so rounding cannot stand in
+        # for arithmetic; every charge-accounting row must reproduce its spur
+        # from its own total dQ; the measured table's scaled column must add
+        # the 20*log10(hi/lo) constant its own header names; and every dBc
+        # figure in the proposal must be one the specification contains. Needs
+        # python3 (set up above); reads only committed Markdown, no PDK.
+        run: bash spec/lib/check-spur-derivation-arithmetic.sh
 
       - name: design/lib/check-io-list-coverage.sh (proposal I/O list vs. the exported port list)
         # The five checks above grade documents against documents, against the
