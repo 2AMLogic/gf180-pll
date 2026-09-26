@@ -419,8 +419,13 @@ N_PHASE_SWITCHING = 384
 #: Round C: around this many of each switching device's largest round-B local
 #: maxima, every dense step between the neighbouring round-B samples.
 N_PEAKS = 3
-#: Sub-networks per noise deck.
-CHUNK = 600
+#: Sub-networks per noise deck.  The cost per sub-network grows with the deck
+#: (measured on this build: 21, 23, 33, 61 and ~150 ms at 40, 80, 150, 300 and
+#: 600), and a 600-sub-network deck holds ~0.7 GB, enough for ngspice's own
+#: available-memory check to refuse the noise output when many points run side
+#: by side -- which it does loudly ("memory required ... is more than memory
+#: available", caught by FATAL), not silently.
+CHUNK = 80
 
 
 def _local_maxima(ks, val, n):
