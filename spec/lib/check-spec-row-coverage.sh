@@ -107,6 +107,36 @@
 #    satisfiable by naming a decision; this keeps "naming" meaning a record a
 #    reader can open.
 #
+# 6. UNMET ROLL CALL. Section 5 closes its table with a paragraph that opens
+#    "No row above is relaxed, narrowed, or omitted" and lists, one bullet per
+#    row, every row the table reports as not met. That list is where a reader
+#    skimming for the gaps looks, so it is graded in both directions:
+#
+#      - every section-5 row whose Verdict cell says UNMET or NOT MET must
+#        have a bullet whose leading bold text is that row's parameter name
+#        (same normalization as rule 1, so emphasis and dash style do not
+#        matter, but the name must be the row's own, not a paraphrase);
+#      - every bullet's leading bold name must be a section-5 row that does
+#        say UNMET or NOT MET -- a row that has since been met, or a name no
+#        row carries, is a stale entry.
+#
+#    Found on 2026-09-26, and fixed in the commit that added this rule: the
+#    roll call was one hand-kept sentence that named seven gaps by informal
+#    names ("the lock-detector T1/T2/T4/T5 gaps", "three of four
+#    supply-sensitivity criteria") and had drifted three ways. It omitted four
+#    rows the table reports UNMET outright -- the 200 MHz band-top period
+#    jitter, the reference spur at its scaled binding point, the closed-loop
+#    cold-start lock time, and the output duty cycle. It still listed the lock
+#    detector's T1/T2 window as unmet after #411's trim met it (on a trimmed
+#    part). And it counted the Lock-criterion miss at 2 of 45 corners after
+#    DR-025 narrowed it to 1 with a second owed. None of the rules above could
+#    see any of it: every row was present, every verdict stated, and the
+#    paragraph summarizing them is prose.
+#
+#    The rule grades names, not what each bullet says about its row: a bullet
+#    that names the right row and misstates its gap passes. What it does
+#    guarantee is that the list is the table's UNMET set, no more and no less.
+#
 # Deleting a spec row silences rule 1 for it, and that is not a loophole:
 # spec/pll.md is the ratified target specification, amended only through a
 # decision record (CLAUDE.md: "agents do not relax the ratified spec to make
@@ -131,7 +161,8 @@
 #             1 a row is omitted, a covered row carries no verdict, a
 #             section-5 row names no spec row, a covered row omits a decision
 #             record its spec row names, the proposal names a decision record
-#             that does not exist, a graded file is missing, or either table
+#             that does not exist, the UNMET roll call is missing or disagrees
+#             with the table's UNMET rows, a graded file is missing, or either table
 #             fails to parse (a broken parser must not look like a clean tree).
 
 set -uo pipefail
@@ -170,6 +201,15 @@ VERDICT = re.compile(r"(?<![A-Za-z])(UNMET|MET|PASS|FAIL|N/A|WAIVED)(?![A-Za-z])
 #: (small-signal settling)", "Supply sensitivity -- AC (ripple) budget".
 CONTINUES = re.compile(r"^\s*[,(:;-]")
 
+#: Rule 6. A verdict that says a row, or part of it, is not met.
+UNMET = re.compile(r"(?<![A-Za-z])(UNMET|NOT MET)(?![A-Za-z])")
+
+#: Rule 6. The roll call runs from its opening words to the next heading; its
+#: entries are bullets whose leading bold text is a section-5 parameter name.
+ROLLCALL_ANCHOR = "No row above is relaxed, narrowed, or omitted"
+ROLLCALL = re.compile(re.escape(ROLLCALL_ANCHOR) + r".*?(?=^#{1,6} |\Z)", re.M | re.S)
+ROLLCALL_BULLET = re.compile(r"^\s*[-*]\s+\*\*(.+?)\*\*", re.M)
+
 
 def read(rel):
     path = os.path.join(repo_root, rel)
@@ -207,7 +247,12 @@ def tables(block):
             continue
         if re.fullmatch(r"\|[\s:|-]+\|", line):
             continue
-        cells = [c.strip() for c in line.strip("|").split("|")]
+        # GitHub-flavoured Markdown writes a literal pipe inside a cell as
+        # `\|`; only an unescaped pipe is a column boundary. The random-jitter
+        # row's "peak-\|I_d\|" was split into two extra cells until issue
+        # #237's roll-call rule read its Verdict column and found text from
+        # the Measured column there instead.
+        cells = [c.strip() for c in re.split(r"(?<!\\)\|", line.strip("|"))]
         if current is None:
             current = [cells]
             found.append(current)
@@ -417,6 +462,55 @@ for number in named:
             )
         )
 
+# Rule 6: the roll call of UNMET rows is the table's UNMET set, exactly.
+unmet_rows = {}
+for param, raw, verdict, _line in proposal_entries:
+    if UNMET.search(verdict):
+        unmet_rows.setdefault(param, raw)
+
+rollcall = ROLLCALL.search(proposal_block.group(1))
+rollcall_names = []
+if unmet_rows and rollcall is None:
+    failed = True
+    sys.stderr.write(
+        "FAIL: %s section 5 reports %d row(s) UNMET but has no roll call "
+        "paragraph opening %r after its table -- the one place a reader "
+        "skimming for the gaps looks must list them\n"
+        % (proposal_rel, len(unmet_rows), ROLLCALL_ANCHOR)
+    )
+elif rollcall is not None:
+    for match in ROLLCALL_BULLET.finditer(rollcall.group(0)):
+        rollcall_names.append((normalize(match.group(1)), match.group(1).strip()))
+    listed = {name for name, _ in rollcall_names}
+    for param, raw in sorted(unmet_rows.items()):
+        if param in listed:
+            continue
+        failed = True
+        sys.stderr.write(
+            "FAIL: %s section 5 reports row %r as UNMET/NOT MET, and the roll "
+            "call opening %r has no bullet naming it (a bullet whose leading "
+            "bold text is the row's own parameter name) -- a gap the table "
+            "states and its summary omits is invisible to the reader who reads "
+            "only the summary\n" % (proposal_rel, raw, ROLLCALL_ANCHOR)
+        )
+    for name, raw in rollcall_names:
+        if name in unmet_rows:
+            continue
+        failed = True
+        known = any(name == e[0] for e in proposal_entries)
+        sys.stderr.write(
+            "FAIL: %s section 5's roll call of unmet rows lists %r, which %s "
+            "-- a stale entry; drop it, or name the row by its own parameter "
+            "text\n"
+            % (
+                proposal_rel,
+                raw,
+                "the table reports with no UNMET/NOT MET verdict"
+                if known
+                else "names no row of the section-5 table",
+            )
+        )
+
 if failed:
     sys.exit(1)
 
@@ -424,7 +518,8 @@ print(
     "OK: all %d rows of %s's summary table are reported with a verdict in %s "
     "section 5 (%d rows), and every section-5 row names a spec row; the %d "
     "spec rows that rest on a decision record are reported with it, and all "
-    "%d decision records the proposal names exist"
+    "%d decision records the proposal names exist; the roll call of unmet "
+    "rows names exactly the %d row(s) the table reports UNMET"
     % (
         len(spec_params),
         spec_rel,
@@ -432,6 +527,7 @@ print(
         len(proposal_entries),
         decision_rows,
         len(named),
+        len(unmet_rows),
     )
 )
 PY

@@ -21,6 +21,7 @@ input -- the script reads committed Markdown.
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -74,11 +75,33 @@ def _spec(rows=SPEC_ROWS, heading="## Summary table") -> str:
     return "\n".join(lines) + "\n"
 
 
+ROLLCALL_OPENING = "No row above is relaxed, narrowed, or omitted to make it pass."
+
+_UNMET = re.compile(r"(?<![A-Za-z])(UNMET|NOT MET)(?![A-Za-z])")
+
+
+def _rollcall(names) -> list[str]:
+    """Section 5's closing roll call, one bullet per named row."""
+    lines = ["", ROLLCALL_OPENING, ""]
+    # A bullet's name is plain text inside one bold span, as the real
+    # document writes it; the row's own inner emphasis is dropped.
+    lines += [f"- **{name.replace('*', '')}** — what is not met." for name in names]
+    return lines
+
+
 def _proposal(
     rows=PROPOSAL_ROWS,
     heading="## 5. Target specification at the Challenge #5 rails",
     header="| Parameter | v1 draft target | Measured / derived (3.3 V) | Verdict | Source (dated) |",
+    rollcall=None,
 ) -> str:
+    """A proposal whose section 5 holds `rows`.
+
+    `rollcall` is the list of row names the closing roll call bullets; the
+    default names exactly the rows whose verdict says UNMET or NOT MET, which
+    is what rule 6 requires. Pass `()` for a roll call with no bullets, or
+    `False` for no roll call paragraph at all.
+    """
     lines = [
         "# Chipalooza Challenge #5 — integer-N PLL proposal",
         "",
@@ -95,6 +118,10 @@ def _proposal(
         param, verdict = row[0], row[1]
         source = row[2] if len(row) > 2 else "a record"
         lines.append(f"| {param} | a target | a measurement | {verdict} | {source} |")
+    if rollcall is None:
+        rollcall = [r[0] for r in rows if _UNMET.search(r[1])]
+    if rollcall is not False:
+        lines += _rollcall(rollcall)
     lines += ["", "## 6. Layout, DRC/LVS, and post-layout status", "", "Text after."]
     return "\n".join(lines) + "\n"
 
@@ -504,6 +531,85 @@ class TestMoreThanOneTableInSectionFive(_TreeTest):
         self.assertFails("has no 'verdict' column")
 
 
+class TestUnmetRollCallRule(_TreeTest):
+    """Rule 6: section 5's roll call lists exactly the table's UNMET rows."""
+
+    def test_the_default_fixture_passes(self):
+        result = self.assertPasses()
+        self.assertIn("names exactly the 2 row(s) the table reports UNMET", result.stdout)
+
+    def test_the_real_drift_shape_is_caught(self):
+        """A roll call that silently leaves out a row the table reports UNMET.
+
+        The proposal at `60e1996a` omitted four such rows, among them the
+        output duty cycle.
+        """
+        rows = PROPOSAL_ROWS + (("Output band, **duty cycle**", "**UNMET at 7/90 points**"),)
+        self.tree.write(
+            PROPOSAL,
+            _proposal(rows, rollcall=["Reference input", "Supply sensitivity — DC / closed-loop, full grid"]),
+        )
+        self.assertFails("'Output band, **duty cycle**' as UNMET/NOT MET", "has no bullet naming it")
+
+    def test_not_met_counts_as_unmet(self):
+        rows = PROPOSAL_ROWS + (("Output band, settling", "**MET as an estimate — and NOT MET at 1 of 45**"),)
+        self.tree.write(PROPOSAL, _proposal(rows, rollcall=["Reference input", "Supply sensitivity — DC / closed-loop, full grid"]))
+        self.assertFails("'Output band, settling' as UNMET/NOT MET")
+
+    def test_a_met_row_listed_as_unmet_is_stale(self):
+        """A row that has since been met must leave the roll call."""
+        self.tree.write(
+            PROPOSAL,
+            _proposal(rollcall=["Reference input", "Supply sensitivity — DC / closed-loop, full grid", "Output band"]),
+        )
+        self.assertFails("lists 'Output band'", "with no UNMET/NOT MET verdict")
+
+    def test_a_paraphrased_name_fails_both_ways(self):
+        self.tree.write(
+            PROPOSAL,
+            _proposal(rollcall=["Reference input", "the supply-sensitivity criteria"]),
+        )
+        self.assertFails("has no bullet naming it", "names no row of the section-5 table")
+
+    def test_emphasis_and_dash_style_do_not_matter(self):
+        self.tree.write(
+            PROPOSAL,
+            _proposal(rollcall=["Reference input", "Supply sensitivity - DC / closed-loop, full grid"]),
+        )
+        self.assertPasses()
+
+    def test_a_missing_roll_call_fails(self):
+        self.tree.write(PROPOSAL, _proposal(rollcall=False))
+        self.assertFails("has no roll call paragraph")
+
+    def test_no_unmet_rows_needs_no_roll_call(self):
+        rows = tuple((p, "**MET**") for p, _ in PROPOSAL_ROWS)
+        self.tree.write(PROPOSAL, _proposal(rows, rollcall=False))
+        self.assertPasses()
+
+    def test_bullets_after_the_next_heading_are_not_the_roll_call(self):
+        text = _proposal(rollcall=["Reference input"]).replace(
+            "## 6. Layout", "### 5.1 Something else\n\n- **Supply sensitivity — DC / closed-loop, full grid** — elsewhere.\n\n## 6. Layout"
+        )
+        self.tree.write(PROPOSAL, text)
+        self.assertFails("has no bullet naming it")
+
+    def test_an_escaped_pipe_does_not_shift_the_verdict_column(self):
+        """GFM writes a literal pipe in a cell as `\\|`.
+
+        The real random-jitter row quotes "peak-\\|I_d\\|" in its Measured
+        column; split on every pipe, that row's Verdict column read Measured
+        text and its UNMET was invisible to this rule.
+        """
+        text = _proposal().replace(
+            "| Reference input | a target | a measurement |",
+            "| Reference input | a target | peak-\\|I_d\\| at a phase |",
+        )
+        self.assertIn("\\|I_d\\|", text)
+        self.tree.write(PROPOSAL, text.replace("- **Reference input** — what is not met.\n", ""))
+        self.assertFails("'Reference input' as UNMET/NOT MET")
+
+
 class TestTheRealTree(unittest.TestCase):
     def test_the_committed_tree_passes(self):
         result = subprocess.run(
@@ -512,6 +618,7 @@ class TestTheRealTree(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("are reported with a verdict", result.stdout)
         self.assertIn("rest on a decision record are reported with it", result.stdout)
+        self.assertIn("the roll call of unmet rows names exactly", result.stdout)
 
 
 if __name__ == "__main__":
