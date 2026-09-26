@@ -8,7 +8,7 @@
 #
 # `spec/lib/check-spur-derivation-arithmetic.sh` grades the reference-spur
 # derivation's arithmetic *from* its charge totals (7.93 / 11.19 / 11.66 fC)
-# onward to a dBc figure. Its own header states what it does not do:
+# onward to a dBc figure. Its own header used to state what it does not do:
 #
 #   It does not grade where the charge terms themselves come from ... reducing
 #   those samples ... needs a reduction language for a signed `|mean| + 3σ`
@@ -69,6 +69,26 @@
 # term 1's signed `|mean| + 3sigma` and term 3's -- now have a machine
 # reduction, and the totals `check-spur-derivation-arithmetic.sh` receives are
 # graded back to it.
+#
+# SECOND IMPLEMENTATION OF THE SAME STATISTIC -- KEEP THEM IN AGREEMENT
+#
+# Rule 2's reduction is deliberately duplicated. `sim/lib/check-quoted-value-
+# provenance.sh` computes the *same* term-1 statistic from the *same*
+# `mc_cp_dc.csv` -- its section 5.1 provenance entry
+#
+#   max(sig3(worst-magnitude(mism_pct by vctrl_v) by seed) by corner)   = 17.48 %
+#
+# where `sig3` is `|mean| + 3*sd` with sample sd (N-1) and `worst-magnitude`
+# is this rule's per-(corner,seed) selection. The two exist for different
+# reasons and neither subsumes the other: this check asks whether
+# `spec/pll.md`'s **charge totals** still follow from their samples, while
+# that one asks whether a **percentage quoted in the proposal's section 5
+# prose** is a reduction of committed evidence at all (the "quoted in section
+# 5, graded in neither accounting table" defect). So do not collapse one into
+# the other -- but do change them together: if the selection convention, the
+# sd convention (N-1), the nesting order, or the signed-vs-folded reading
+# moves here, move it there too, and check the other check still passes.
+# Agreeing by two routes is what makes a silent drift in either one loud.
 #
 # Usage: spec/lib/check-mismatch-charge-derivation.sh
 # Exit codes: 0 term 1 and term 3 reproduce from their committed samples and

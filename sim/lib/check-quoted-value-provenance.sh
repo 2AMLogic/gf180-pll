@@ -129,11 +129,58 @@
 #       examined nothing would report exactly what a clean grid reports. The
 #       OK line therefore prints how many groups were examined.
 #
-#   min|max|mean|sum(adjacent-overlap(COL by AXIS) by KEY[+KEY...])
+#   min|max|mean|sum|sig3(adjacent-overlap(COL by AXIS) by KEY[+KEY...])
 #       Per group, the worst (smallest) fractional overlap between the COL
 #       intervals of consecutive AXIS values: max(COL at k) / min(COL at k+1)
 #       - 1, where negative is a hole rather than an overlap. A group with no
 #       pair of consecutive AXIS values is an error.
+#
+#   min|max|mean|sum|sig3(worst-magnitude(COL by AXIS) by KEY[+KEY...])
+#       Per group, the SIGNED COL value of the point with the largest
+#       magnitude across AXIS -- the "worst point in the window" selection
+#       sim/cp-compliance and sim/mc-cp-mismatch both use, which compares
+#       magnitudes to pick the point and then keeps that point's sign. Two
+#       points tying on magnitude with opposite signs is an error, not a
+#       coin toss.
+#
+# plus one STATISTIC, which is an aggregate rather than a verb and so composes
+# with everything above:
+#
+#   sig3(COL)   `|mean| + 3*sigma` over the selected values, with sigma the
+#               SAMPLE standard deviation (N-1). Fewer than two values is an
+#               error: a one-sample "3 sigma" is not a tail, it is a reading.
+#
+# THE THREE-LEVEL FORM, and why it exists
+#
+#   AGG(AGG(VERB(COL by AXIS) by KEY[+KEY...]) by KEY[+KEY...])
+#       Outer groups, each sub-grouped again, each sub-group's sequence
+#       reduced by VERB. The statistic that needs it is DR-018's term 1, the
+#       charge pump's UP/DN current mismatch: per Monte Carlo sample the
+#       worst-magnitude of three Vctrl points, then `|mean| + 3*sigma` over
+#       the samples of one corner, then the worst corner --
+#
+#         max(sig3(worst-magnitude(mism_pct by vctrl_v) by seed) by corner)
+#
+#       which is three nested reductions because the statistic is: a
+#       selection, a tail, and a worst case. Collapsing any level (pooling
+#       corners, folding the samples to their magnitudes) gives a DIFFERENT
+#       and smaller number -- 10.94 % pooled and 13.2172 % folded against
+#       17.4798 % -- which is exactly why DR-018 Decision 3 names the
+#       statistic rather than describing it, and why this grammar spells it
+#       out instead of hiding it in a verb.
+#
+#       SECOND IMPLEMENTATION -- KEEP THEM IN AGREEMENT.
+#       `spec/lib/check-mismatch-charge-derivation.sh` (rule 2) computes this
+#       same statistic from this same `mc_cp_dc.csv` in its own hard-coded
+#       arithmetic rather than through this grammar, because it needs the
+#       number as an ingredient of spec/pll.md's charge-accounting totals.
+#       Neither check subsumes the other -- that one asks whether the CHARGE
+#       TOTALS still follow from their samples, this one asks whether a
+#       PERCENTAGE QUOTED IN SECTION 5's PROSE is a reduction of committed
+#       evidence at all -- but they must not disagree. If the selection
+#       convention, the sample-sd (N-1) convention, the nesting order, or the
+#       signed-vs-folded reading moves in one, move it in the other and re-run
+#       both. Two routes to one number is what makes a silent drift loud.
 #
 # any of which may carry ` where COND[ and COND...]`, where COND is
 # `COL OP LITERAL` with OP one of == != < <= > >=. A literal that parses as a
@@ -173,6 +220,7 @@ fi
 
 python3 - "${REPO_ROOT}" "${PROPOSAL}" "${SPEC}" <<'PY'
 import csv
+import math
 import os
 import re
 import sys
@@ -390,26 +438,69 @@ def make_predicate(where, icp_rule, ctx):
     return predicate
 
 
+class AggError(ValueError):
+    """An aggregate that cannot be formed over the values it was given."""
+
+
+def _sig3(values):
+    """`|mean| + 3*sigma`, sigma the SAMPLE standard deviation (N-1).
+
+    The worst-case magnitude of a signed error that has both a systematic
+    offset and a random spread, which is what DR-018 term 1 and term 3 are and
+    what `sim/mc-cp-mismatch/testbench/run.sh`'s own `sig3()` computes. Folding
+    the samples to their magnitudes first gives a SMALLER number (13.2172 %
+    against 17.4798 % on the same 300 samples, DR-018 Amendment A1), so the two
+    readings are not interchangeable and this one is the signed one.
+    """
+    if len(values) < 2:
+        raise AggError(
+            "sig3 needs at least two samples to have a standard deviation at "
+            "all; it was given %d" % len(values)
+        )
+    mean = sum(values) / len(values)
+    variance = sum((v - mean) ** 2 for v in values) / (len(values) - 1)
+    return abs(mean) + 3.0 * math.sqrt(variance)
+
+
 AGGS = {
     "min": min,
     "max": max,
     "mean": lambda vs: sum(vs) / len(vs),
     "sum": sum,
+    "sig3": _sig3,
 }
 
-OUTER = re.compile(r"^(min|max|mean|sum|count)\((.*)\)$", re.DOTALL)
-INNER_BY = re.compile(r"^(min|max|mean|sum)\((.*)\)\s+by\s+([\w+.]+)$", re.DOTALL)
+#: Every aggregate name, for the regexes below. `count` is deliberately not one
+#: of these -- it takes `rows`/`distinct ...` rather than a column.
+AGG_NAMES = "|".join(AGGS)
+
+OUTER = re.compile(r"^(" + AGG_NAMES + r"|count)\((.*)\)$", re.DOTALL)
+INNER_BY = re.compile(
+    r"^(" + AGG_NAMES + r")\((.*)\)\s+by\s+([\w+.]+)$", re.DOTALL
+)
 
 # A group-sequence derivation: the group's rows are a SEQUENCE along an axis,
 # and the figure is a property of that sequence rather than a reduction of its
 # cells. `non-monotonic` is a group *predicate* (true or false of one curve, so
-# only count(...) is defined over it); `adjacent-overlap` is a group *scalar*.
+# only count(...) is defined over it); `adjacent-overlap` and `worst-magnitude`
+# are group *scalars*, which is also what lets them compose three deep under a
+# second aggregate (see INNER_SEQ_NESTED) where a predicate cannot.
 SEQ_PREDICATES = ("non-monotonic",)
-SEQ_SCALARS = ("adjacent-overlap",)
+SEQ_SCALARS = ("adjacent-overlap", "worst-magnitude")
 SEQ_VERBS = SEQ_PREDICATES + SEQ_SCALARS
+SEQ_VERB_NAMES = "|".join(SEQ_VERBS)
 INNER_SEQ = re.compile(
-    r"^(" + "|".join(SEQ_VERBS) + r")\(\s*([\w.]+)\s+by\s+([\w.]+)\s*\)"
+    r"^(" + SEQ_VERB_NAMES + r")\(\s*([\w.]+)\s+by\s+([\w.]+)\s*\)"
     r"\s+by\s+([\w+.]+)$",
+    re.DOTALL,
+)
+
+# The three-level form: AGG(AGG(VERB(COL by AXIS) by KEY...) by KEY...). Matched
+# BEFORE INNER_BY, whose greedy `(.*)` would otherwise swallow the verb call and
+# then look for a column by that name.
+INNER_SEQ_NESTED = re.compile(
+    r"^(" + AGG_NAMES + r")\(\s*(" + SEQ_VERB_NAMES + r")\(\s*([\w.]+)\s+by\s+"
+    r"([\w.]+)\s*\)\s+by\s+([\w+.]+)\s*\)\s+by\s+([\w+.]+)$",
     re.DOTALL,
 )
 
@@ -467,40 +558,43 @@ def group_sequences(rows, keys, columns, reduction, ctx):
     return groups
 
 
-def apply_group_sequence(outer, verb, col, axis, keys, rows, reduction, ctx):
-    """Evaluate AGG(VERB(COL by AXIS) by KEY[+KEY...]). (value, is_count)."""
-    if verb in SEQ_PREDICATES and outer != "count":
-        fail(
-            "%s: `%s` is a group predicate -- it is true or false of one group "
-            "-- so only count(...) is defined over it, not %s(...)"
-            % (ctx, verb, outer)
-        )
-        return None
-    if verb in SEQ_SCALARS and outer == "count":
-        fail(
-            "%s: `%s` is a group scalar, not a predicate; count(...) over it is "
-            "not defined -- use min/max/mean/sum" % (ctx, verb)
-        )
+def apply_agg(name, values, reduction, ctx):
+    """AGGS[name](values), turning an AggError into a reported failure."""
+    try:
+        return AGGS[name](values)
+    except AggError as exc:
+        fail("%s: reduction `%s` cannot be formed -- %s" % (ctx, reduction, exc))
         return None
 
-    groups = group_sequences(rows, keys, [col, axis], reduction, ctx)
-    if groups is None:
-        return None
-    seq_stats["derivations"] += 1
-    seq_stats["groups"] += len(groups)
 
-    if verb == "non-monotonic":
-        violations = 0
-        for key, points in sorted(groups.items()):
-            ordered = sorted(points, key=lambda point: point[1])
-            if len(ordered) < 2:
-                fail(
-                    "%s: group %s holds %d point(s); a sequence test over fewer "
-                    "than two points is not a test"
-                    % (ctx, "/".join(key), len(ordered))
-                )
-                return None
-            axis_values = [point[1] for point in ordered]
+#: The verbs that read one point PER AXIS VALUE, so that a group holding two
+#: rows at the same AXIS value is ambiguous rather than richer. `non-monotonic`
+#: reads a curve and `worst-magnitude` selects one point of a window; both are
+#: in this set. `adjacent-overlap` deliberately is NOT: its groups hold a whole
+#: control sweep at each band code, and collapsing those to one point per band
+#: is the interval it measures.
+SEQ_VERBS_ONE_POINT_PER_AXIS_VALUE = ("non-monotonic", "worst-magnitude")
+
+
+def ordered_group_points(groups, verb, axis, reduction, ctx):
+    """Each group's points ordered by AXIS, with the ambiguity guards applied.
+
+    A group of fewer than two points is not a sequence for any verb. A repeated
+    AXIS value is an error only for the verbs that read one point per axis value
+    (see above). Both are errors rather than skips -- see group_sequences().
+    """
+    ordered = {}
+    for key, points in sorted(groups.items()):
+        points = sorted(points, key=lambda point: point[1])
+        if len(points) < 2:
+            fail(
+                "%s: group %s holds %d point(s); a sequence test over fewer "
+                "than two points is not a test"
+                % (ctx, "/".join(key), len(points))
+            )
+            return None
+        if verb in SEQ_VERBS_ONE_POINT_PER_AXIS_VALUE:
+            axis_values = [point[1] for point in points]
             if len(set(axis_values)) != len(axis_values):
                 fail(
                     "%s: group %s repeats a value of the ordering column `%s`, "
@@ -508,19 +602,47 @@ def apply_group_sequence(outer, verb, col, axis, keys, rows, reduction, ctx):
                     % (ctx, "/".join(key), axis)
                 )
                 return None
-            series = [point[0] for point in ordered]
-            steps = list(zip(series, series[1:]))
-            rising = all(b >= a for a, b in steps)
-            falling = all(b <= a for a, b in steps)
-            if not rising and not falling:
-                violations += 1
-        return float(violations), True
+        ordered[key] = points
+    return ordered
 
-    # adjacent-overlap: per group, the worst (smallest) fractional overlap
-    # between the COL intervals of consecutive AXIS values. max(COL at k) /
-    # min(COL at k+1) - 1; negative means a hole rather than an overlap.
-    worst_per_group = []
-    for key, points in sorted(groups.items()):
+
+def sequence_group_scalars(verb, col, axis, keys, rows, reduction, ctx):
+    """{group key: the verb's scalar for that group} for a SEQ_SCALAR verb."""
+    groups = group_sequences(rows, keys, [col, axis], reduction, ctx)
+    if groups is None:
+        return None
+    ordered = ordered_group_points(groups, verb, axis, reduction, ctx)
+    if ordered is None:
+        return None
+    # Group accounting only: a three-level reduction calls this once per outer
+    # partition, and the OK line counts DERIVATIONS (one per section 5.1 entry),
+    # not invocations. Its callers do that half.
+    seq_stats["groups"] += len(ordered)
+
+    scalars = {}
+    for key, points in ordered.items():
+        if verb == "worst-magnitude":
+            best = max(abs(value) for value, _ in points)
+            candidates = {value for value, _ in points if abs(value) == best}
+            if len(candidates) > 1:
+                fail(
+                    "%s: group %s has two points tying at magnitude %g with "
+                    "different signs (%s), so the worst point's sign is "
+                    "ambiguous"
+                    % (
+                        ctx,
+                        "/".join(key),
+                        best,
+                        ", ".join("%g" % c for c in sorted(candidates)),
+                    )
+                )
+                return None
+            scalars[key] = candidates.pop()
+            continue
+
+        # adjacent-overlap: the worst (smallest) fractional overlap between the
+        # COL intervals of consecutive AXIS values. max(COL at k) / min(COL at
+        # k+1) - 1; negative means a hole rather than an overlap.
         spans = {}
         for value, step in points:
             low, high = spans.get(step, (value, value))
@@ -544,8 +666,111 @@ def apply_group_sequence(outer, verb, col, axis, keys, rows, reduction, ctx):
                 % (ctx, "/".join(key), axis)
             )
             return None
-        worst_per_group.append(min(overlaps))
-    return AGGS[outer](worst_per_group), False
+        scalars[key] = min(overlaps)
+    return scalars
+
+
+def apply_nested_group_sequence(
+    outer, inner, verb, col, axis, inner_keys, outer_keys, rows, reduction, ctx
+):
+    """Evaluate AGG(AGG(VERB(COL by AXIS) by KEY...) by KEY...).
+
+    The outer keys partition the rows; inside each partition the inner keys do
+    it again, each innermost group's AXIS sequence collapses to the verb's
+    scalar, `inner` combines those and `outer` combines the partitions. Only
+    SEQ_SCALAR verbs compose this way: a group predicate is true or false, and
+    `sig3` of a set of booleans is not a statistic anyone means.
+    """
+    if verb in SEQ_PREDICATES:
+        fail(
+            "%s: `%s` is a group predicate -- it is true or false of one group "
+            "-- so it does not compose into a three-level reduction; only "
+            "count(%s(...) by ...) is defined over it" % (ctx, verb, verb)
+        )
+        return None
+    missing = [col for col in list(outer_keys) if rows and col not in rows[0]]
+    if missing:
+        fail(
+            "%s: reduction `%s` groups by column `%s`, which the evidence file "
+            "does not have (columns: %s)"
+            % (ctx, reduction, missing[0], ", ".join(sorted(rows[0])))
+        )
+        return None
+    partitions = {}
+    for row in rows:
+        partitions.setdefault(
+            tuple(str(row.get(k, "")).strip() for k in outer_keys), []
+        ).append(row)
+    if not partitions:
+        fail(
+            "%s: reduction `%s` formed no groups at all. There is nothing to "
+            "derive, and an empty derivation must not read as a passing zero."
+            % (ctx, reduction)
+        )
+        return None
+    seq_stats["derivations"] += 1
+    inner_values = []
+    for key in sorted(partitions):
+        scalars = sequence_group_scalars(
+            verb, col, axis, inner_keys, partitions[key], reduction, ctx
+        )
+        if scalars is None:
+            return None
+        value = apply_agg(inner, list(scalars.values()), reduction, ctx)
+        if value is None:
+            return None
+        inner_values.append(value)
+    value = apply_agg(outer, inner_values, reduction, ctx)
+    if value is None:
+        return None
+    return value, False
+
+
+def apply_group_sequence(outer, verb, col, axis, keys, rows, reduction, ctx):
+    """Evaluate AGG(VERB(COL by AXIS) by KEY[+KEY...]). (value, is_count)."""
+    if verb in SEQ_PREDICATES and outer != "count":
+        fail(
+            "%s: `%s` is a group predicate -- it is true or false of one group "
+            "-- so only count(...) is defined over it, not %s(...)"
+            % (ctx, verb, outer)
+        )
+        return None
+    if verb in SEQ_SCALARS and outer == "count":
+        fail(
+            "%s: `%s` is a group scalar, not a predicate; count(...) over it is "
+            "not defined -- use %s" % (ctx, verb, "/".join(AGGS))
+        )
+        return None
+
+    if verb == "non-monotonic":
+        groups = group_sequences(rows, keys, [col, axis], reduction, ctx)
+        if groups is None:
+            return None
+        ordered_groups = ordered_group_points(
+            groups, verb, axis, reduction, ctx
+        )
+        if ordered_groups is None:
+            return None
+        seq_stats["derivations"] += 1
+        seq_stats["groups"] += len(ordered_groups)
+        violations = 0
+        for _, points in sorted(ordered_groups.items()):
+            series = [point[0] for point in points]
+            steps = list(zip(series, series[1:]))
+            rising = all(b >= a for a, b in steps)
+            falling = all(b <= a for a, b in steps)
+            if not rising and not falling:
+                violations += 1
+        return float(violations), True
+
+    seq_stats["derivations"] += 1
+    scalars = sequence_group_scalars(verb, col, axis, keys, rows, reduction, ctx)
+    if scalars is None:
+        return None
+    value = apply_agg(outer, list(scalars.values()), reduction, ctx)
+    if value is None:
+        return None
+    return value, False
 
 
 def apply_reduction(reduction, rows, icp_rule, ctx):
@@ -555,6 +780,27 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
         fail("%s: cannot parse reduction `%s`" % (ctx, reduction))
         return None
     outer, body = m.group(1), m.group(2).strip()
+
+    three_level = INNER_SEQ_NESTED.match(body)
+    if three_level:
+        if outer == "count":
+            fail(
+                "%s: `count(... by ...)` is not defined -- use "
+                "count(distinct KEY+KEY)" % ctx
+            )
+            return None
+        return apply_nested_group_sequence(
+            outer,
+            three_level.group(1),
+            three_level.group(2),
+            three_level.group(3).strip(),
+            three_level.group(4).strip(),
+            three_level.group(5).split("+"),
+            three_level.group(6).split("+"),
+            rows,
+            reduction,
+            ctx,
+        )
 
     nested = INNER_BY.match(body)
     if nested:
@@ -586,8 +832,16 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
         if not groups:
             fail("%s: reduction `%s` selected no rows" % (ctx, reduction))
             return None
-        inner = [AGGS[inner_agg](v) for v in groups.values()]
-        return AGGS[outer](inner), False
+        inner = []
+        for values in groups.values():
+            value = apply_agg(inner_agg, values, reduction, ctx)
+            if value is None:
+                return None
+            inner.append(value)
+        value = apply_agg(outer, inner, reduction, ctx)
+        if value is None:
+            return None
+        return value, False
 
     sequence = INNER_SEQ.match(body)
     if sequence:
@@ -601,11 +855,13 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
             reduction,
             ctx,
         )
-    if re.match(r"^(" + "|".join(SEQ_VERBS) + r")\(", body):
+    if re.search(r"(?:^|\()(?:" + SEQ_VERB_NAMES + r")\(", body):
         fail(
             "%s: cannot parse reduction `%s` -- a group-sequence derivation is "
-            "spelled AGG(VERB(COL by AXIS) by KEY[+KEY...]) and takes no "
-            "where-clause" % (ctx, reduction)
+            "spelled AGG(VERB(COL by AXIS) by KEY[+KEY...]), or "
+            "AGG(AGG(VERB(COL by AXIS) by KEY[+KEY...]) by KEY[+KEY...]) for "
+            "the three-level form, and takes no where-clause"
+            % (ctx, reduction)
         )
         return None
 
@@ -646,7 +902,10 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
     if not values:
         fail("%s: reduction `%s` selected no numeric values" % (ctx, reduction))
         return None
-    return AGGS[outer](values), False
+    value = apply_agg(outer, values, reduction, ctx)
+    if value is None:
+        return None
+    return value, False
 
 
 def _split_where(body):
