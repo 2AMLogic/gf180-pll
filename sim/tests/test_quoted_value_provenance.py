@@ -424,6 +424,52 @@ class TestValueRule(_TreeTest):
         self.assertFails("does not round to it")
 
 
+class TestSignFlippingScale(_TreeTest):
+    """A magnitude quoted from a uniformly-signed column, graded at scale -1.
+
+    The Supply sensitivity -- DC row quotes `0.60-0.72 ns` of static-phase
+    movement from a column holding -0.6048 and -0.7216. Scale -1 grades it,
+    and swaps which aggregate gives which end. What makes that safe is that
+    the check compares the SIGNED product: a positive value in the selection,
+    or a larger negative one, moves the result off the quoted figure rather
+    than being read as a magnitude. Each of those is asserted here.
+    """
+
+    DECAY_CSV = "corner,d_phi_ns\nc1,-0.6048\nc2,-0.7216\n"
+
+    def _grade(self, quoted, reduction, scale):
+        self.tree.write_evidence("phase_decay.csv", self.DECAY_CSV)
+        rows = list(SPEC_ROWS)
+        rows[1] = ("Phase margin",
+                   "Worst 47.4 deg; 3/4 cells pass; 1.9 deg of margin; "
+                   "0.60-0.72 ns of movement", "**MET**", "Same record")
+        entries = list(DEFAULT_PROVENANCE) + [
+            ("Phase margin", "`%s`" % quoted, RECORD, "phase_decay.csv",
+             reduction, scale),
+        ]
+        self.tree.write(proposal(spec_rows=tuple(rows), provenance=entries))
+
+    def test_both_ends_pass_at_scale_minus_one(self):
+        self._grade("0.60", "max(d_phi_ns)", "-1")
+        self.assertPasses()
+        self._grade("0.72 ns", "min(d_phi_ns)", "-1")
+        self.assertPasses()
+
+    def test_without_the_sign_flip_the_magnitude_fails(self):
+        self._grade("0.60", "max(d_phi_ns)", "1")
+        self.assertFails("gives -0.6048")
+
+    def test_the_flip_swaps_which_aggregate_gives_which_end(self):
+        self._grade("0.72 ns", "max(d_phi_ns)", "-1")
+        self.assertFails("gives 0.6048")
+
+    def test_a_mixed_sign_column_is_not_read_as_a_magnitude(self):
+        self._grade("0.60", "max(d_phi_ns)", "-1")
+        self.tree.write_evidence("phase_decay.csv",
+                                 self.DECAY_CSV + "c3,0.6048\n")
+        self.assertFails("gives -0.6048")
+
+
 class TestDriftBetweenTheTwoTables(_TreeTest):
     def test_a_figure_not_present_in_the_section_5_row_fails(self):
         """The rule that makes the two tables one artefact rather than two.
