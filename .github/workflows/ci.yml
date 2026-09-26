@@ -506,7 +506,7 @@ jobs:
         # scripts, tb.json manifests and records -- no PDK, no ngspice.
         run: bash sim/lib/check-bias-drive-claims.sh
 
-      - name: sim/lib/check-quoted-value-provenance.sh (quoted values vs. the committed per-corner CSVs)
+      - name: sim/lib/check-quoted-value-provenance.sh (quoted values vs. the committed per-corner evidence)
         # Every check above grades something *about* a number -- its count, its
         # citation and whether that citation is current, its grid, its verdict,
         # its reproduction command, its forge reference. None graded THE NUMBER.
@@ -555,9 +555,28 @@ jobs:
         # are selected by an `on-icp-trim-rule` predicate READ OUT OF
         # spec/pll.md's normative Icp trim-code rule table, never written into
         # the check, so a change to the ratified rule moves what CI enforces in
-        # the same commit. Its unit tests run under `bash sim/selftest.sh`
+        # the same commit.
+        #
+        # Evidence is not only a CSV, as of 2026-09-26. Three section 5 rows
+        # were ungraded for the reason "no reduced CSV was committed, so the
+        # count cannot be re-derived" -- the two closed-loop rows in the
+        # exclusion table and the multiplication-ratio figures in the
+        # ungraded-figure table -- and all three records had committed their
+        # full per-point table all along, in the record's own Markdown
+        # (sim/output-range 90 rows, sim/lock-time 270, sim/divider-ratio-chain
+        # 235). "No CSV" had been read as "no evidence" three times. So an
+        # entry may name `<record-id>.md § <first column>` and reduce that
+        # table, under one rule a CSV does not need: the table must have exactly
+        # one row per committed per-corner log, and where its first column is
+        # the per-corner point id the row SETS are compared too -- a truncated
+        # or hand-trimmed table must not read as a smaller, passing count. The
+        # logs are read as NAMES only; this check still never parses a logfile's
+        # contents.
+        #
+        # Its unit tests run under `bash sim/selftest.sh`
         # above (sim/tests discovery). Needs python3 (set up above); reduces
-        # committed CSVs only -- no PDK, no ngspice, no network.
+        # committed CSVs and in-record tables only -- no PDK, no ngspice, no
+        # network.
         run: bash sim/lib/check-quoted-value-provenance.sh
 
       - name: docs/tests (unit tests for the issue-reference-state check)

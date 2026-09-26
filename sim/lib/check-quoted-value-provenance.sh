@@ -57,9 +57,45 @@
 # THE RULES
 #
 # 1. RESOLVABLE. Every record id in the first table must resolve to a real
-#    sim/*/records/<id>.md, and the named evidence file must exist at
-#    sim/<campaign>/corners/<id>/<file>. A reduction over a file that is not
-#    committed is not reproducible by a reader.
+#    sim/*/records/<id>.md, and the named evidence must be committed. Two forms
+#    of evidence are accepted, both committed and both reduced by the same
+#    grammar:
+#
+#      <file>.csv              sim/<campaign>/corners/<id>/<file>, the usual
+#                              case: a per-corner CSV the harness wrote.
+#
+#      <id>.md § <first-col>   the pipe table INSIDE that record whose first
+#                              column is <first-col> -- for a campaign whose
+#                              per-point table was committed only in the
+#                              record's own Markdown. Three rows of section 5
+#                              are graded this way, and all three were in the
+#                              EXCLUSION table until 2026-09-26 for the reason
+#                              "no reduced CSV was committed, so the count
+#                              cannot be re-derived": sim/divider-ratio-chain's
+#                              235-point ratio table, sim/output-range's 90-row
+#                              closed-loop band-edge table, and sim/lock-time's
+#                              270-row cold/relock table. All three had been
+#                              committed all along. "No CSV" is not "no
+#                              evidence", and that reading cost three rows of
+#                              grading; this form exists so it cannot recur.
+#
+#                              A markdown table CAN be elided where a CSV
+#                              cannot, so this form carries a correspondence
+#                              rule a CSV does not need: the table must have
+#                              exactly one row per committed per-corner log in
+#                              sim/<campaign>/corners/<id>/ -- one row per
+#                              simulation that ran. Where the table's first
+#                              column is the per-corner point id (some records
+#                              write one; others head it `Corner` and split the
+#                              corner over several columns) the row SETS are
+#                              compared as well, which additionally catches a
+#                              duplicated or mistyped row at the right count.
+#                              Which tables got the stricter rule is printed in
+#                              the OK line -- the weaker one is never applied
+#                              silently.
+#
+#    A reduction over evidence that is not committed is not reproducible by a
+#    reader.
 #
 # 2. CITED. Every record a section 5.1 entry reduces must be cited by the
 #    section 5 row it is attached to -- or, where that row's Source cell says
@@ -104,10 +140,13 @@
 # figure (rule 6) -- never "every number in section 5 is accounted for".
 # Overstating it would be the same defect this check exists to catch.
 #
-# It reduces committed CSVs only. It never runs a simulator, reads no logfile,
-# and cannot tell whether the simulation behind a CSV was the right experiment
-# -- that is what the record's own Methodology field and its campaign's
-# testbench are for.
+# It reduces committed *reduced* evidence only -- a per-corner CSV, or a
+# per-point table committed inside a record (rule 1). It never runs a simulator
+# and never parses a logfile's contents: the per-corner logs are read only as
+# NAMES, to prove a markdown table has one row per simulation that ran. So it
+# cannot tell whether the simulation behind a number was the right experiment --
+# that is what the record's own Methodology field and its campaign's testbench
+# are for.
 #
 # THE REDUCTION GRAMMAR
 #
@@ -183,8 +222,21 @@
 #       both. Two routes to one number is what makes a silent drift loud.
 #
 # any of which may carry ` where COND[ and COND...]`, where COND is
-# `COL OP LITERAL` with OP one of == != < <= > >=. A literal that parses as a
-# number is compared numerically, otherwise as a string (== and != only).
+# `COL OP LITERAL` with OP one of == != < <= > >= ~=. A literal that parses as a
+# number is compared numerically, otherwise as a string (== and != only). COL
+# may contain a space or a hyphen -- a record's own tables head their columns
+# `DN guard` and `corner-id`.
+#
+# `~=` is the one operator that is not a comparison: it is SUBSTRING
+# CONTAINMENT, always on the cell's text, never numeric. It exists because a
+# per-point evidence table's only handle on a swept axis can be the point id
+# itself -- sim/divider-ratio-chain's per-point table has a `corner-id` of
+# `ss_125c_2.97v_f200n04` and no separate input-rate column, so "the divide
+# ratios exercised AT 200 MHz" is `where corner-id ~= f200` and nothing else.
+# Grading that figure without the filter would count the 10 MHz points too;
+# they happen to reuse N in {4, 64} today, so the count would be right by
+# accident and would go wrong silently the first time a bottom-of-band point
+# added an N the 200 MHz sweep does not have.
 #
 # One named predicate is available in a where clause:
 #
@@ -368,7 +420,12 @@ def read_icp_trim_rule(spec_text):
 
 # --------------------------------------------------------------- reductions ---
 
-COND = re.compile(r"^([A-Za-z_][\w.]*)\s*(==|!=|<=|>=|<|>)\s*(.+)$")
+# A column name here may hold a hyphen or a space, because a record's own
+# tables head their columns as a reader reads them -- `corner-id`, `DN guard`,
+# `Target f_out` -- and a where-clause needs to name them. The column is
+# therefore everything left of the operator, matched non-greedily; clauses are
+# split on ` and ` first and no evidence column contains that token.
+COND = re.compile(r"^([A-Za-z_][\w.\- ]*?)\s*(~=|==|!=|<=|>=|<|>)\s*(.+)$")
 
 
 def make_predicate(where, icp_rule, ctx):
@@ -395,7 +452,7 @@ def make_predicate(where, icp_rule, ctx):
             return None
         col, op, literal = m.group(1), m.group(2), m.group(3).strip().strip("`")
         lit_num = as_float(literal)
-        if lit_num is None and op not in ("==", "!="):
+        if lit_num is None and op not in ("==", "!=", "~="):
             fail(
                 "%s: where-clause `%s` orders a non-numeric literal; only == "
                 "and != are defined for strings" % (ctx, clause)
@@ -416,6 +473,14 @@ def make_predicate(where, icp_rule, ctx):
             if col not in row:
                 return False
             cell = row[col]
+            if op == "~=":
+                # Substring containment, always on the text, even when both
+                # sides parse as numbers: `~=` selects a slice of an id, and
+                # "is 200 inside 1200" is not a comparison anyone would want
+                # answered numerically.
+                if literal not in str(cell).strip():
+                    return False
+                continue
             cell_num = as_float(cell)
             if lit_num is not None and cell_num is not None:
                 a, b = cell_num, lit_num
@@ -921,6 +986,155 @@ def read_csv_rows(path):
     return list(csv.DictReader(lines))
 
 
+#: How many in-record tables were read, and under which of the two
+#: correspondence rules (see read_record_table). Reported in the OK line
+#: because the weaker rule must never be applied silently.
+record_table_stats = {"id_matched": 0, "count_matched": 0}
+
+#: `<record-id>.md § <first column name>` -- the record's own per-point table as
+#: an evidence source (rule 1). The record id is repeated inside the spec on
+#: purpose: an entry may only read the markdown of the record it declares.
+RECORD_TABLE = re.compile(r"^(" + RECORD_ID + r")\.md\s*§\s*([\w.\-/]+)$")
+
+
+def read_record_table(rid, campaign, first_col, ctx):
+    """A pipe table committed inside a record, in CSV-row shape.
+
+    The table is identified by its first column's name, which must be unique
+    among the record's tables. Cells are stripped of the backticks the record
+    writes ids in, so a reduction sees the same strings a CSV would give it.
+
+    THE ANTI-TRUNCATION RULE. A CSV cannot be abbreviated without being wrong;
+    a markdown table can be elided, summarised, or hand-trimmed, and a
+    `count(rows)` over an elided table is a smaller number that still looks
+    like an answer. So the table must have exactly one row per committed
+    per-corner log -- one row per simulation that ran. That correspondence is
+    checked against the logs, which are raw evidence, and never against the
+    record's own declared point count, which is the claim rather than the
+    evidence.
+
+    Where the table's first column IS the per-corner point id -- which some
+    campaigns write and others do not, heading it `Corner` and splitting the
+    corner across several columns instead -- the row SETS are compared too, not
+    just their sizes: that additionally catches a duplicated or mistyped row
+    that the count rule alone would let through. The stricter rule is applied
+    whenever the evidence supports it and its absence is never silent: the OK
+    line names which tables got which.
+    """
+    rec_path = os.path.join(repo_root, "sim", campaign, "records", rid + ".md")
+    if not os.path.isfile(rec_path):
+        fail("%s: no record at sim/%s/records/%s.md" % (ctx, campaign, rid))
+        return None
+    with open(rec_path, encoding="utf-8") as fh:
+        record_text = fh.read()
+    matches = [
+        (header, body)
+        for header, body in read_tables(record_text)
+        if header and header[0].strip().strip("`") == first_col
+    ]
+    if not matches:
+        fail(
+            "%s: sim/%s/records/%s.md has no table whose first column is `%s`"
+            % (ctx, campaign, rid, first_col)
+        )
+        return None
+    if len(matches) > 1:
+        fail(
+            "%s: sim/%s/records/%s.md has %d tables whose first column is `%s`. "
+            "An evidence source has to name one table, not a shape several "
+            "tables share." % (ctx, campaign, rid, len(matches), first_col)
+        )
+        return None
+    header, body = matches[0]
+    names = [cell.strip().strip("`") for cell in header]
+    rows = []
+    for cells in body:
+        if len(cells) != len(names):
+            fail(
+                "%s: a row of the `%s` table in sim/%s/records/%s.md has %d "
+                "cells, not the %d its header declares: %r"
+                % (ctx, first_col, campaign, rid, len(cells), len(names), cells)
+            )
+            return None
+        rows.append(
+            {
+                name: cell.strip().strip("`")
+                for name, cell in zip(names, cells)
+            }
+        )
+
+    corners_dir = os.path.join(repo_root, "sim", campaign, "corners", rid)
+    logs = (
+        sorted(
+            name[: -len(".log")]
+            for name in os.listdir(corners_dir)
+            if name.endswith(".log")
+        )
+        if os.path.isdir(corners_dir)
+        else []
+    )
+    if not logs:
+        fail(
+            "%s: sim/%s/corners/%s/ commits no per-corner logs, so the `%s` "
+            "table's row set cannot be checked against the simulations that "
+            "ran. A markdown table nothing corroborates is prose."
+            % (ctx, campaign, rid, first_col)
+        )
+        return None
+    if len(rows) != len(logs):
+        fail(
+            "%s: the `%s` table in sim/%s/records/%s.md has %d row(s) against "
+            "the %d per-corner log(s) sim/%s/corners/%s/ commits. One row per "
+            "simulation that ran is what makes a count over this table a claim "
+            "about the campaign; a table that was truncated, summarised or "
+            "hand-trimmed must not read as a smaller, passing answer."
+            % (
+                ctx,
+                first_col,
+                campaign,
+                rid,
+                len(rows),
+                len(logs),
+                campaign,
+                rid,
+            )
+        )
+        return None
+
+    ids = sorted(str(row.get(first_col, "")).strip() for row in rows)
+    log_set = set(logs)
+    if any(i in log_set for i in ids):
+        # The first column is the per-corner point id, so the row SETS are
+        # comparable and not merely their sizes.
+        record_table_stats["id_matched"] += 1
+        if ids != logs:
+            missing = sorted(log_set - set(ids))
+            extra = sorted(set(ids) - log_set)
+            dupes = sorted({i for i in ids if ids.count(i) > 1})
+            fail(
+                "%s: the `%s` table in sim/%s/records/%s.md has one row per "
+                "committed log by count, but not by identity -- %d log(s) with "
+                "no row (%s), %d row(s) with no log (%s), %d duplicated row id "
+                "(%s)."
+                % (
+                    ctx,
+                    first_col,
+                    campaign,
+                    rid,
+                    len(missing),
+                    ", ".join(missing[:3]) or "-",
+                    len(extra),
+                    ", ".join(extra[:3]) or "-",
+                    len(dupes),
+                    ", ".join(dupes[:3]) or "-",
+                )
+            )
+            return None
+    else:
+        record_table_stats["count_matched"] += 1
+    return rows
+
+
 records = {}
 sim_root = os.path.join(repo_root, "sim")
 for campaign in sorted(os.listdir(sim_root)) if os.path.isdir(sim_root) else []:
@@ -1070,6 +1284,24 @@ for cells in provenance:
             )
             resolved = False
             continue
+        table_spec = RECORD_TABLE.match(evidence_file)
+        if table_spec:
+            if table_spec.group(1) != rid:
+                fail(
+                    "%s: names evidence inside record `%s`'s markdown while "
+                    "reducing record `%s`. An entry may only read the record it "
+                    "declares." % (ctx, table_spec.group(1), rid)
+                )
+                resolved = False
+                continue
+            in_record = read_record_table(
+                rid, records[rid], table_spec.group(2), ctx
+            )
+            if in_record is None:
+                resolved = False
+                continue
+            rows.extend(in_record)
+            continue
         path = os.path.join(
             repo_root, "sim", records[rid], "corners", rid, evidence_file
         )
@@ -1212,14 +1444,18 @@ if errors:
 print(
     "OK: %d quoted values re-derived from committed per-corner evidence and "
     "matched at the precision written (%d of them group-sequence derivations "
-    "over %d groups); all %d section 5 rows accounted for (%d graded, %d with a "
-    "stated reason) and %d ungraded figure(s) in graded rows disclosed and "
-    "still present in their row; Icp trim-code rule read from %s (%d reference "
-    "frequencies)"
+    "over %d groups); %d in-record table(s) read, %d checked row-for-row "
+    "against the committed logs by point id and %d by row count alone; all %d "
+    "section 5 rows accounted for (%d graded, %d with a stated reason) and %d "
+    "ungraded figure(s) in graded rows disclosed and still present in their "
+    "row; Icp trim-code rule read from %s (%d reference frequencies)"
     % (
         checked,
         seq_stats["derivations"],
         seq_stats["groups"],
+        record_table_stats["id_matched"] + record_table_stats["count_matched"],
+        record_table_stats["id_matched"],
+        record_table_stats["count_matched"],
         len(spec_row_order),
         len(graded_rows),
         len(excluded_rows),

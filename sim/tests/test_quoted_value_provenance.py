@@ -310,6 +310,22 @@ class _Tree:
     def write_spec(self, text: str) -> None:
         (self.root / SPEC).write_text(text)
 
+    def write_record(self, rid: str, text: str) -> None:
+        (self.root / "sim" / CAMPAIGN / "records" / f"{rid}.md").write_text(text)
+
+    def write_logs(self, rid: str, names) -> None:
+        """The per-corner logs a record's own table is checked against.
+
+        Their CONTENTS are never read -- the check reads their names, to prove
+        a markdown table has one row per simulation that ran.
+        """
+        corners = self.root / "sim" / CAMPAIGN / "corners" / rid
+        corners.mkdir(parents=True, exist_ok=True)
+        for name in corners.glob("*.log"):
+            name.unlink()
+        for name in names:
+            (corners / f"{name}.log").write_text("ngspice log\n")
+
     def run(self) -> subprocess.CompletedProcess:
         return subprocess.run(
             ["bash", str(self.root / "sim" / "lib" / CHECK.name)],
@@ -890,6 +906,177 @@ class TestSelfDefence(_TreeTest):
                       "count(rows where pass_pm == 1)", "1e-6")
         self.tree.write(proposal(provenance=entries))
         self.assertFails("count reduction must carry scale 1")
+
+
+class TestInRecordTableEvidence(_TreeTest):
+    """Rule 1's second evidence form: the table committed INSIDE a record.
+
+    Three rows of section 5 were ungraded until 2026-09-26 for the reason "no
+    reduced CSV was committed, so the count cannot be re-derived" -- and all
+    three records had committed their full per-point table all along, in their
+    own Markdown. "No CSV" is not "no evidence". These tests cover the form
+    that closed that, and above all the correspondence rule that stops a
+    markdown table from being trusted the way a CSV can be: a CSV cannot be
+    abbreviated without being wrong, a markdown table can.
+    """
+
+    #: Four points: two at 200 MHz with N in {4, 5}, one 10 MHz point at N = 9,
+    #: and a second corner at N = 5. So `count(distinct n_target)` is 3 over the
+    #: whole table and 2 once the `~= f200` filter selects the 200 MHz points --
+    #: the filter is load-bearing, which is what makes it worth testing.
+    POINT_TABLE = """\
+  | corner-id | n_target | ratio_pass | DN guard |
+  |---|---|---|---|
+  | `ss_125c_2.97v_f200n04` | 4 | 1 | PASS |
+  | `ss_125c_2.97v_f200n05` | 5 | 1 | PASS |
+  | `ss_125c_2.97v_f010n09` | 9 | 1 | ERROR |
+  | `ff_-40c_3.63v_f200n05` | 5 | 1 | PASS |
+"""
+
+    #: The same four runs as a record that does NOT write a point-id column:
+    #: the corner is spread over three columns, as sim/output-range and
+    #: sim/lock-time write it. Only the row-count rule is available here.
+    CORNER_TABLE = """\
+  | Corner | Temp | VDD | Status |
+  |---|---|---|---|
+  | `ss` | 125C | 2.97V | FAIL |
+  | `ss` | 125C | 2.97V | FAIL |
+  | `ss` | 125C | 2.97V | FAIL |
+  | `ff` | -40C | 3.63V | FAIL |
+"""
+
+    POINT = "20260901-010203-abcdef0"
+    LOGS = (
+        "ss_125c_2.97v_f200n04",
+        "ss_125c_2.97v_f200n05",
+        "ss_125c_2.97v_f010n09",
+        "ff_-40c_3.63v_f200n05",
+    )
+
+    MEASURED = (
+        "4 chain points, 0 ratio errors, 2 distinct N at 200 MHz, "
+        "3 guard passes"
+    )
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tree.write_record(self.POINT, "# record\n\n" + self.POINT_TABLE)
+        self.tree.write_logs(self.POINT, self.LOGS)
+        self.write()
+
+    def entries(self, **overrides):
+        entries = {
+            "points": ("`4 chain points`", "count(rows)"),
+            "errors": ("`0 ratio errors`", "count(rows where ratio_pass != 1)"),
+            "ratios": ("`2 distinct N`",
+                       "count(distinct n_target where corner-id ~= f200)"),
+            "guard": ("`3 guard passes`", "count(rows where DN guard == PASS)"),
+        }
+        entries.update(overrides)
+        evidence = overrides.pop("evidence", f"{self.POINT}.md § corner-id")
+        return list(DEFAULT_PROVENANCE) + [
+            ("Multiplication ratio", quoted, self.POINT, evidence,
+             reduction, "1")
+            for quoted, reduction in entries.values()
+        ]
+
+    def write(self, provenance=None, measured=None) -> None:
+        row = ("Multiplication ratio", measured or self.MEASURED, "**MET**",
+               f"`sim/{CAMPAIGN}/records/{self.POINT}.md`")
+        spec_rows = SPEC_ROWS[:2] + (row,) + SPEC_ROWS[2:]
+        self.tree.write(proposal(
+            spec_rows=spec_rows,
+            provenance=self.entries() if provenance is None else provenance,
+        ))
+
+    def test_a_table_committed_inside_a_record_is_gradeable(self):
+        result = self.assertPasses()
+        self.assertIn("8 quoted values re-derived", result.stdout)
+        self.assertIn("4 checked row-for-row against the committed logs by "
+                      "point id", result.stdout)
+
+    def test_the_substring_filter_is_load_bearing(self):
+        """Drop ` where corner-id ~= f200` and the answer changes.
+
+        The fixture's 10 MHz point runs an N the 200 MHz sweep does not, so an
+        implementation that ignored the filter would count 3 where the document
+        says 2. That is exactly the accident the real campaign's figure would
+        have been graded by: its own 10 MHz points reuse N in {4, 64}, so the
+        unfiltered count is right today and wrong the first time one does not.
+        """
+        self.write(provenance=self.entries(
+            ratios=("`2 distinct N`", "count(distinct n_target)")))
+        self.assertFails("counts 3")
+
+    def test_a_column_name_with_a_space_is_usable(self):
+        """`DN guard` is how a record heads that column, so it has to work."""
+        self.assertPasses()
+        self.write(provenance=self.entries(
+            guard=("`3 guard passes`", "count(rows where DN guard != PASS)")))
+        self.assertFails("counts 1")
+
+    def test_a_truncated_table_fails(self):
+        """The rule with teeth: an elided table must not read as an answer."""
+        trimmed = "\n".join(self.POINT_TABLE.strip().split("\n")[:-1]) + "\n"
+        self.tree.write_record(self.POINT, "# record\n\n" + trimmed)
+        self.assertFails("3 row(s) against the 4 per-corner log(s)",
+                         "must not read as a smaller, passing answer")
+
+    def test_a_duplicated_row_at_the_right_count_fails(self):
+        """The count rule alone would pass this; the point-id rule must not."""
+        doubled = self.POINT_TABLE.replace(
+            "| `ss_125c_2.97v_f010n09` | 9 |",
+            "| `ss_125c_2.97v_f200n04` | 9 |",
+        )
+        self.tree.write_record(self.POINT, "# record\n\n" + doubled)
+        self.assertFails("not by identity", "duplicated row id")
+
+    def test_a_table_with_no_point_id_column_uses_the_count_rule_and_says_so(self):
+        """The weaker rule is applied where it is all the evidence supports.
+
+        A record that heads its first column `Corner` cannot be checked row for
+        row, so it is checked by count -- and the OK line has to report which
+        rule each table got, because a weaker check applied silently is how a
+        reader ends up trusting the stronger one.
+        """
+        self.tree.write_record(self.POINT, "# record\n\n" + self.CORNER_TABLE)
+        self.write(
+            provenance=list(DEFAULT_PROVENANCE) + [(
+                "Multiplication ratio", "`4 chain points`", self.POINT,
+                f"{self.POINT}.md § Corner", "count(rows)", "1",
+            )],
+            measured="4 chain points",
+        )
+        result = self.assertPasses()
+        self.assertIn("1 in-record table(s) read, 0 checked row-for-row "
+                      "against the committed logs by point id and 1 by row "
+                      "count alone", result.stdout)
+
+    def test_an_entry_may_not_read_another_records_markdown(self):
+        self.write(provenance=list(DEFAULT_PROVENANCE) + [(
+            "Multiplication ratio", "`4 chain points`", self.POINT,
+            f"{OTHER}.md § corner-id", "count(rows)", "1",
+        )])
+        self.assertFails("may only read the record it declares")
+
+    def test_a_table_name_that_matches_nothing_fails(self):
+        self.write(provenance=list(DEFAULT_PROVENANCE) + [(
+            "Multiplication ratio", "`4 chain points`", self.POINT,
+            f"{self.POINT}.md § not_a_column", "count(rows)", "1",
+        )])
+        self.assertFails("has no table whose first column is `not_a_column`")
+
+    def test_an_ambiguous_table_name_fails(self):
+        self.tree.write_record(
+            self.POINT, "# record\n\n" + self.POINT_TABLE + "\n"
+            + self.POINT_TABLE)
+        self.assertFails("has 2 tables whose first column is `corner-id`",
+                         "name one table")
+
+    def test_a_record_committing_no_logs_fails(self):
+        self.tree.write_logs(self.POINT, ())
+        self.assertFails("commits no per-corner logs",
+                         "table nothing corroborates is prose")
 
 
 class TestTheRealTree(unittest.TestCase):
