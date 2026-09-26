@@ -1,0 +1,48 @@
+{
+  "_description": "klt erc supply-connectivity spec for layout/evidence/divider-chain-layout/divider_chain.gds (gf180mcuD). Declares the gate+conductor stackup, the n-well tie, and the two supply nets (VDD_DIV, VSS) so erc.unconnected_net / erc.supply_short / erc.missing_tie can all be computed. Run with '--deck gf180mcu' so the curated extraction deck's own device-body markers are carved out of the matching conductor roles rather than hand-transcribed.",
+  "stackup": [
+    {
+      "name": "poly2",
+      "layer": "30/0",
+      "role": "gate",
+      "active_layer": "22/0",
+      "_comment": "Poly2 (30/0) is gf180mcu's gate-poly layer -- stackup[0] must set role:gate. active_layer names Comp (22/0), the diffusion/active layer, so klt erc accumulates true poly-and-diff gate area (klayout-tools#1979) rather than raw poly-net area. Cross-checked against libs.tech/klayout/tech/gf180mcu.lyp and klayout-tools' curated decks/gf180mcu.py layer table (both agree: Poly2 30/0, COMP 22/0)."
+    },
+    {
+      "name": "metal1",
+      "layer": "34/0",
+      "label_layer": "34/10",
+      "_comment": "Metal1 (34/0), reached from poly/diffusion through Contact (33/0). label_layer 34/10 (Metal1_Label) is declared because it is VERIFIED to carry this block's own VDD_DIV/VSS pin text -- walking every text shape on (34,10) of the committed GDS with klayout.db finds exactly one instance each of VDD_DIV and VSS, among 70 Metal1 texts in total (this block labels nearly every internal node: MA, MB, DIVOUT, DIVOUTB, VCO, FB, FBB, the per-stage MI<i>/MO<i>/SEL<i>/T<i>/P<i>/CK<i> nets, and the XM*/XNR*/XFRT* internal midpoints). One text per supply is a weak island bound, and PROOF-erc.md states it explicitly rather than letting a clean read imply more."
+    },
+    {
+      "name": "metal2",
+      "layer": "36/0",
+      "_comment": "Metal2 (36/0), reached through Via1 (35/0) -- this block's per-net track band (PLL-FLOORPLAN.md sections 5.1/5.13). No label_layer: this GDS draws nothing at all on (36,10) (Metal2_Label), verified directly from its own layer_indexes(), so declaring one would be pure fiction."
+    },
+    {
+      "name": "metal3",
+      "layer": "42/0",
+      "_comment": "Metal3 (42/0), reached through Via2 (38/0) -- this block's last routing layer actually drawn. Confirmed by enumerating layer_indexes() on the committed GDS: layers present are 21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0, 34/10, 35/0, 36/0, 38/0, 42/0 -- nothing above 42/0, and no 42/10 to declare as a label layer. Unlike layout/evidence/vco-layout/erc-supply-spec.json, which declares metal3/metal4/metal5 as a portable gf180mcu stackup shape even where absent, this spec declares exactly the conductor layers the stream draws: klt erc now reports its own coverage gap (erc_coverage.layers_in_stream_without_declaration, klayout-tools#2389), so portability no longer buys anything a reader has to take on trust."
+    }
+  ],
+  "vias": [
+    { "name": "contact", "layer": "33/0", "between": ["poly2", "metal1"], "_comment": "Contact (33/0) is gf180mcu's single poly/diffusion-to-Metal1 contact layer (used generically for both gate and source/drain contacts)." },
+    { "name": "via1", "layer": "35/0", "between": ["metal1", "metal2"], "_comment": "Via1 (35/0), Metal1-to-Metal2." },
+    { "name": "via2", "layer": "38/0", "between": ["metal2", "metal3"], "_comment": "Via2 (38/0), Metal2-to-Metal3. No Via3 (40/0) or above is drawn in this block." }
+  ],
+  "nets": [
+    { "name": "VDD_DIV", "kind": "supply", "_comment": "This block's positive supply rail -- the divider's own domain per PLL-FLOORPLAN.md section 2 and DR-001 Decisions 2/3, physically separate from VDD and VDD_VCO. Matched against Metal1_Label (34/10) text, verified present in the committed GDS." },
+    { "name": "VSS", "kind": "supply", "_comment": "This block's ground rail -- the shared VSS domain of PLL-FLOORPLAN.md section 2 (every block except the VCO, which owns a private GND_VCO). Matched against Metal1_Label (34/10) text, verified present in the committed GDS." }
+  ],
+  "ties": [
+    {
+      "name": "nwell_vdd_div",
+      "well_layer": "21/0",
+      "tap_layer": "22/0",
+      "tap_requires": ["32/0"],
+      "connect_to": "metal1",
+      "net": "VDD_DIV",
+      "_comment": "Every one of this block's fourteen merged Nwell (21/0) shapes must hold at least one n-tap -- Comp (22/0) narrowed by Nplus (32/0), which is how gf180mcu actually draws an n-well tap, as against a pfet source/drain (Comp narrowed by Pplus) -- wired up to Metal1 and reaching VDD_DIV. Reported zero erc.missing_tie findings on klt 0.6.0, and the check lands in erc_coverage.checked rather than in inapplicable or skipped: the tap_requires narrowing is what keeps it out of the degenerate_tap_declaration bucket (klayout-tools#2199). The p-substrate/VSS side is deliberately NOT declared as a second entry -- gf180mcu draws no pwell layer, and the one expressible form (ties[].well_boxes over a native substrate) is graded degenerate on a whole-die substrate region. See PROOF-erc.md, 'Why the p-substrate tie is left undeclared'."
+    }
+  ]
+}

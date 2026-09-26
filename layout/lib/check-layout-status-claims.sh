@@ -104,6 +104,40 @@
 # all four blocks, like the proposal -- spec/pll.md's Area table already
 # states all four.
 #
+# A sixth guard, the ERC RULE, added 2026-09-26 (issue #565), is the first one
+# here that grades an *evidence artifact* against the tree rather than prose
+# against the tree -- and it exists because the artifact it grades had already
+# gone stale in three different ways at once while nothing noticed.
+# `layout/evidence/vco-layout/erc-report.json` was the only `klt erc` supply
+# report in the repository; its `file` field named a `/tmp/i433w/` scratch path
+# no reader could open, its `provenance.klt_version` was `0.5.0` while CI had
+# pinned 0.6.0 for weeks, and its spec's reason for declaring no `ties[]` cited
+# an upstream bug that had been fixed five days earlier. Every one of those is a
+# claim about a committed file that a committed file could have been checked
+# against. Now each is:
+#
+#   * every block with committed LVS-clean evidence must also carry an
+#     `erc-supply-spec.json`, an `erc-report.json` and a `PROOF-erc.md` --
+#     coverage is derived from the tree, so "N of the 4 blocks ERC-checked" is a
+#     fact this script prints rather than a sentence someone re-derives by hand;
+#   * the report's `provenance.input.content_hash` must equal the committed
+#     GDS's own sha256, and `provenance.spec.content_hash` the committed spec's
+#     -- so a regenerated block with a stale ERC report beside it fails the
+#     build instead of silently describing a layout that no longer exists;
+#   * the report's `provenance.klt_version` must match the klt version
+#     `.github/workflows/ci.yml` pins, read from that file rather than restated
+#     here;
+#   * a spec's top-level keys must come from `klt erc`'s own documented schema
+#     (plus a `_description`). This is the structural half of the stale-rationale
+#     fix: the `_ties_omitted` free-text key that carried the fixed-bug citation
+#     is not merely removed, it is now unrepresentable. A deliberate zero-`ties[]`
+#     declaration must use the first-class `ties_disclosure` field, whose
+#     machine-readable `kind` a grader can actually act on;
+#   * and every `PROOF-erc.md` must state its own report's antenna coverage
+#     (`checked: 0, skipped: N`, reason `missing_antenna_pdk`) with N matching
+#     the report, because the antenna half of `klt erc` has never run in this
+#     repository and "`klt erc` was run" must never be read as broader than it is.
+#
 # Usage: layout/lib/check-layout-status-claims.sh
 # Exit codes: 0 all claims match the tree, 1 any mismatch.
 
@@ -138,6 +172,11 @@ BLOCKS=(
   "divider chain|divider-chain-layout|divider_chain.gds|divider_chain"
   "lock detector|lock-detector-layout|lock_detector.gds|lock_detector"
 )
+
+# The workflow file that is the single source of truth for which klt
+# (klayout-tools) version this repository's committed klt artifacts must have
+# been produced on. Read, never restated -- see the ERC RULE below.
+CI_WORKFLOW="${REPO_ROOT}/.github/workflows/ci.yml"
 
 # Documents whose prose is checked, relative to the repo root.
 DOCS=(
@@ -223,6 +262,298 @@ printf '%s\n' "${summary[@]}"
 echo "  assembled pll_top GDS: ${top_assembled}"
 echo "spec/pll.md says: ratified=${spec_ratified}"
 echo
+
+# --- The ERC rule (see the header) ----------------------------------------
+#
+# Grades the committed `klt erc` supply evidence against the tree it describes:
+# per-block presence, both provenance content hashes, the pinned klt version,
+# the spec's top-level schema, and each PROOF-erc.md's own antenna-coverage
+# disclosure. Python rather than shell because it reads JSON and needs sha256;
+# it still reads only committed files -- no PDK, no KLayout, no klt.
+#
+# Prints a human summary on stdout and, as its last line, a machine-readable
+# "COUNTS <spec> <tie_checked> <supply_clean>" the count rule below consumes.
+erc_rule() {
+  local evidence="$1" ci_workflow="$2" blocks="$3"
+  python3 - "${evidence}" "${ci_workflow}" "${blocks}" <<'PY'
+import hashlib
+import json
+import os
+import re
+import sys
+
+evidence, ci_workflow, blocks_spec = sys.argv[1], sys.argv[2], sys.argv[3]
+
+failed = False
+
+
+def fail(msg):
+    global failed
+    failed = True
+    sys.stderr.write("FAIL: %s\n" % msg)
+
+
+def sha256(path):
+    with open(path, "rb") as fh:
+        return "sha256:" + hashlib.sha256(fh.read()).hexdigest()
+
+
+# The klt version CI pins, read from the workflow rather than restated here.
+# Absence is a failure: the version claim in every committed report would then
+# be gradeable against nothing.
+pinned = None
+try:
+    with open(ci_workflow, encoding="utf-8") as fh:
+        m = re.search(r"klayout-tools==([0-9][^'\"\s]*)", fh.read())
+        if m:
+            pinned = m.group(1)
+except OSError as exc:
+    fail("cannot read %s: %s" % (ci_workflow, exc))
+if pinned is None and not failed:
+    fail(
+        "%s names no 'klayout-tools==<version>' pin -- the klt version every "
+        "committed klt artifact claims cannot be graded against anything"
+        % ci_workflow
+    )
+
+# `klt erc`'s own documented top-level spec keys (docs/cli/erc.md), plus the
+# `_description` this repository puts at the head of each spec. Anything else
+# is rejected on purpose: a free-text rationale key is how the stale
+# `_ties_omitted` citation survived a fixed upstream bug by five days. Per-entry
+# `_comment` annotations are untouched by this rule -- they annotate a
+# declaration that exists, rather than standing in for one that does not.
+SPEC_KEYS = {
+    "_description",
+    "stackup",
+    "vias",
+    "nets",
+    "ties",
+    "ties_disclosure",
+    "devices",
+}
+
+# The `ties_disclosure.kind` values klt 0.6.0 recognises. An unrecognised token
+# is not a disclosure a grader can act on, so it is not one here either.
+DISCLOSURE_KINDS = {"unexpressible", "tool_limitation"}
+
+n_spec = n_tie_checked = n_supply_clean = 0
+lines = []
+
+for item in blocks_spec.split(";"):
+    if not item:
+        continue
+    label, directory, gds, top = item.split("|")
+    base = os.path.join(evidence, directory)
+    gds_path = os.path.join(base, gds)
+    spec_path = os.path.join(base, "erc-supply-spec.json")
+    report_path = os.path.join(base, "erc-report.json")
+    proof_path = os.path.join(base, "PROOF-erc.md")
+    rel = "layout/evidence/%s" % directory
+
+    # An LVS-clean block is a block whose supply spec is cheap to produce and
+    # therefore owed: item 11's own ERC half needs nothing the LVS run did not
+    # already need. Blocks with no LVS evidence yet are not asked for one.
+    has_lvs = any(
+        name.endswith(".log")
+        for name in (
+            os.listdir(os.path.join(base, "lvs-clean"))
+            if os.path.isdir(os.path.join(base, "lvs-clean"))
+            else []
+        )
+    )
+
+    present = [
+        os.path.isfile(spec_path),
+        os.path.isfile(report_path),
+        os.path.isfile(proof_path),
+    ]
+    if not all(present):
+        if has_lvs:
+            missing = [
+                name
+                for name, ok in zip(
+                    ("erc-supply-spec.json", "erc-report.json", "PROOF-erc.md"),
+                    present,
+                )
+                if not ok
+            ]
+            fail(
+                "%s has committed LVS-clean evidence but no complete klt erc "
+                "supply evidence: missing %s. T1 item 11's ERC half needs "
+                "nothing the LVS run did not already need, so an LVS-clean "
+                "block without it is a gap, not a choice."
+                % (rel, ", ".join(missing))
+            )
+        lines.append(
+            "  %-20s erc-spec=no  tie=n/a      supply=n/a" % label
+        )
+        continue
+
+    n_spec += 1
+
+    try:
+        with open(spec_path, encoding="utf-8") as fh:
+            spec = json.load(fh)
+        with open(report_path, encoding="utf-8") as fh:
+            report = json.load(fh)
+        with open(proof_path, encoding="utf-8") as fh:
+            proof_flat = re.sub(r"\s+", " ", fh.read())
+    except (OSError, ValueError) as exc:
+        fail("%s: cannot read its klt erc evidence: %s" % (rel, exc))
+        continue
+
+    # --- Provenance: the report must describe the files committed beside it ---
+    prov = report.get("provenance") or {}
+    for key, path, what in (
+        ("input", gds_path, "the committed GDS"),
+        ("spec", spec_path, "the committed supply spec"),
+    ):
+        stated = (prov.get(key) or {}).get("content_hash")
+        actual = sha256(path)
+        if stated != actual:
+            fail(
+                "%s/erc-report.json's provenance.%s.content_hash is %r, but %s "
+                "hashes to %r. The report describes a file that is not the one "
+                "committed beside it -- re-run `klt erc` (see that block's "
+                "PROOF-erc.md for the exact command) rather than editing the "
+                "hash." % (rel, key, stated, what, actual)
+            )
+
+    if pinned is not None:
+        stated_klt = prov.get("klt_version") or ""
+        if not stated_klt.startswith(pinned):
+            fail(
+                "%s/erc-report.json was produced on klt %r, but "
+                ".github/workflows/ci.yml pins klayout-tools==%s. A report from "
+                "a different klt is not evidence about the klt this repository "
+                "grades on." % (rel, stated_klt, pinned)
+            )
+
+    # --- The spec's own schema ------------------------------------------------
+    stray = sorted(set(spec) - SPEC_KEYS)
+    if stray:
+        fail(
+            "%s/erc-supply-spec.json carries top-level key(s) %s outside `klt "
+            "erc`'s documented schema. A free-text rationale key is exactly how "
+            "this repository's own `_ties_omitted` note went on citing a "
+            "fixed upstream bug: state a deliberate zero-`ties[]` declaration in "
+            "the first-class `ties_disclosure` field instead, and put the "
+            "narrative in PROOF-erc.md." % (rel, ", ".join(repr(k) for k in stray))
+        )
+
+    ties = spec.get("ties") or []
+    disclosure = spec.get("ties_disclosure")
+    if not ties:
+        kind = (disclosure or {}).get("kind")
+        if kind not in DISCLOSURE_KINDS:
+            fail(
+                "%s/erc-supply-spec.json declares no `ties[]` and no usable "
+                "`ties_disclosure` (kind %r; klt 0.6.0 recognises %s). An "
+                "undisclosed omission and a considered one render identically to "
+                "item 11's grader, which is the state this rule exists to "
+                "prevent."
+                % (rel, kind, " / ".join(sorted(DISCLOSURE_KINDS)))
+            )
+        if disclosure and not str(disclosure.get("reason", "")).strip():
+            fail(
+                "%s/erc-supply-spec.json's `ties_disclosure` states no `reason`. "
+                "The kind says which obstacle; the reason is what a reader needs "
+                "to go fix it." % rel
+            )
+
+    # --- Derived coverage, and the antenna disclosure ------------------------
+    coverage = report.get("erc_coverage") or {}
+    tie_checked = any(
+        isinstance(entry, str) and entry.startswith("erc.missing_tie:")
+        for entry in coverage.get("checked") or []
+    )
+    if tie_checked:
+        n_tie_checked += 1
+
+    declared = {
+        str(entry.get("name", "")).upper()
+        for entry in spec.get("nets") or []
+        if entry.get("kind") == "supply"
+    }
+    supply_findings = []
+    for finding in report.get("erc_findings") or []:
+        rule = finding.get("rule")
+        if rule in ("erc.missing_tie", "erc.supply_short"):
+            supply_findings.append(rule)
+        elif rule in ("erc.unconnected_net", "erc.expected_short_missing"):
+            if any(
+                str(finding.get(field) or "").upper() in declared
+                for field in ("net", "other_net")
+            ):
+                supply_findings.append(rule)
+    if not supply_findings:
+        n_supply_clean += 1
+
+    antenna = report.get("coverage") or {}
+    n_checked = len(antenna.get("checked") or [])
+    n_skipped = len(antenna.get("skipped") or [])
+    reasons = sorted(
+        {
+            str(entry.get("reason"))
+            for entry in antenna.get("skipped") or []
+            if isinstance(entry, dict)
+        }
+    )
+    claim = "checked: %d, skipped: %d" % (n_checked, n_skipped)
+    if claim not in proof_flat:
+        fail(
+            '%s/PROOF-erc.md does not state "%s" -- its own erc-report.json\'s '
+            "antenna coverage. The antenna half of `klt erc` has never run in "
+            "this repository, and a record that does not say so lets "
+            '"`klt erc` was run" be read as broader than it is.' % (rel, claim)
+        )
+    for reason in reasons:
+        if reason not in proof_flat:
+            fail(
+                "%s/PROOF-erc.md does not name the skip reason %r its own "
+                "erc-report.json records for the antenna half." % (rel, reason)
+            )
+
+    lines.append(
+        "  %-20s erc-spec=yes tie=%-8s supply=%s"
+        % (
+            label,
+            "checked" if tie_checked else "disclosed",
+            "clean" if not supply_findings else "+".join(sorted(set(supply_findings))),
+        )
+    )
+
+print("layout/evidence/ klt erc supply evidence says:")
+for line in lines:
+    print(line)
+print(
+    "  %d of the 4 blocks ERC-checked (supply spec + report + proof, "
+    "provenance-verified against the committed GDS); %d with a computed "
+    "erc.missing_tie; %d with no supply-side finding"
+    % (n_spec, n_tie_checked, n_supply_clean)
+)
+print("COUNTS %d %d %d" % (n_spec, n_tie_checked, n_supply_clean))
+sys.exit(1 if failed else 0)
+PY
+}
+
+BLOCK_ERC_SPEC=""
+for entry in "${BLOCKS[@]}"; do
+  BLOCK_ERC_SPEC="${BLOCK_ERC_SPEC}${BLOCK_ERC_SPEC:+;}${entry}"
+done
+
+erc_spec_count=0
+if [ "${have_python}" = yes ]; then
+  erc_out="$(erc_rule "${EVIDENCE}" "${CI_WORKFLOW}" "${BLOCK_ERC_SPEC}")" || status=1
+  printf '%s\n' "${erc_out}" | grep -v '^COUNTS ' || true
+  erc_counts="$(printf '%s\n' "${erc_out}" | grep '^COUNTS ' || true)"
+  if [ -n "${erc_counts}" ]; then
+    read -r _ erc_spec_count _ _ <<<"${erc_counts}"
+  fi
+  echo
+else
+  fail "python3 is not on PATH -- the ERC rule could not run, and a partial pass is not a pass"
+fi
 
 # --- Check each document's prose against it -------------------------------
 
@@ -514,12 +845,13 @@ PY
 # somewhere -- the gap that let a stale duplicate survive in the very commit
 # that fixed the sentence next to it.
 count_rule() {
-  local doc_path="$1" doc_label="$2" drawn="$3" lvs_matched="$4"
-  python3 - "${doc_path}" "${doc_label}" "${drawn}" "${lvs_matched}" <<'PY'
+  local doc_path="$1" doc_label="$2" drawn="$3" lvs_matched="$4" erc_checked="$5"
+  python3 - "${doc_path}" "${doc_label}" "${drawn}" "${lvs_matched}" "${erc_checked}" <<'PY'
 import re
 import sys
 
-doc_path, label, drawn, lvs_matched = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+doc_path, label = sys.argv[1], sys.argv[2]
+drawn, lvs_matched, erc_checked = (int(v) for v in sys.argv[3:6])
 
 with open(doc_path, encoding="utf-8") as fh:
     flat = re.sub(r"\s+", " ", fh.read())
@@ -546,6 +878,17 @@ def check(pattern, expected, what):
 check(r"([0-9]+)\s+of the 4\s+(?:pll\s+)?sub-blocks", drawn, "sub-blocks drawn and DRC-clean")
 # "N of the 4 [are] LVS-matched" -- the LVS-matched count.
 check(r"([0-9]+)\s+of the 4\s+(?:are\s+)?lvs-matched", lvs_matched, "LVS-matched")
+# "N of the 4 [blocks] [are] ERC-checked" -- the klt erc supply-evidence count
+# (issue #565). Graded only where a document chooses to state it: no document
+# has to carry this claim, but one that does may not carry a stale one. This is
+# the drift the ERC RULE's own derived count exists to make checkable -- four
+# separate #127 passes re-derived "1 of 4 blocks ERC-checked" by hand.
+check(
+    r"([0-9]+)\s+of the 4\s+(?:pll\s+)?(?:sub-)?blocks?\s+(?:are\s+)?erc-checked",
+    erc_checked,
+    "blocks ERC-checked",
+)
+check(r"([0-9]+)\s+of the 4\s+(?:are\s+)?erc-checked", erc_checked, "blocks ERC-checked")
 
 sys.exit(1 if failed else 0)
 PY
@@ -595,7 +938,7 @@ for doc in "${DOCS[@]}"; do
         scope_tokens=""
       fi
       scope_rule "${path}" "${doc}" "${scope_tokens}" || status=1
-      count_rule "${path}" "${doc}" "${drawn}" "${lvs_matched}" || status=1
+      count_rule "${path}" "${doc}" "${drawn}" "${lvs_matched}" "${erc_spec_count}" || status=1
 
       if [ -f "${AUDIT}" ]; then
         require_all=no
@@ -642,10 +985,13 @@ fi
 
 if [ "${status}" -eq 0 ]; then
   echo "OK: README.md and docs/chipalooza/challenge-5-proposal.md match layout/evidence/" \
-    "(${drawn}/4 drawn + DRC-clean, ${lvs_matched}/4 LVS-matched, assembled pll_top: ${top_assembled})" \
+    "(${drawn}/4 drawn + DRC-clean, ${lvs_matched}/4 LVS-matched, ${erc_spec_count}/4 ERC-checked," \
+    "assembled pll_top: ${top_assembled})" \
     "and spec/pll.md (ratified: ${spec_ratified}); no unscoped absence-of-layout claim;" \
     "every stated block footprint matches layout/evidence/area-audit/area-audit.md," \
-    "including spec/pll.md's own '## Area' section"
+    "including spec/pll.md's own '## Area' section;" \
+    "every committed klt erc report's provenance matches the GDS and spec beside it," \
+    "on the klt version .github/workflows/ci.yml pins"
 fi
 
 exit "${status}"

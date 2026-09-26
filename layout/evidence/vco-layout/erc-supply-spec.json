@@ -1,6 +1,5 @@
 {
-  "_description": "klt erc supply-connectivity spec for layout/evidence/vco-layout/vco_block.gds (gf180mcuD). Declares the gate+conductor stackup and the two supply nets (VDD_VCO, GND_VCO) so erc.unconnected_net / erc.supply_short can be computed. See CLAUDE.md item-11 tracking issue for the full rationale.",
-  "_ties_omitted": "No 'ties' array is declared on purpose -- klt erc's ties[] handling has a known upstream bug (klayout-tools#2169) that collapses a real routed design into one electrical island and reports a false erc.supply_short. Per klt erc's own contract (docs/cli/erc.md), omitting ties[] means erc.missing_tie is simply not computed, rather than reported as a misleading zero.",
+  "_description": "klt erc supply-connectivity spec for layout/evidence/vco-layout/vco_block.gds (gf180mcuD). Declares the gate+conductor stackup, the n-well substrate/well tie, and the two supply nets (VDD_VCO, GND_VCO) so erc.unconnected_net / erc.supply_short / erc.missing_tie can all be computed. Run with '--deck gf180mcu' so this block's marked poly resistors are carved out of the poly2 conductor role rather than shorting their own terminals; see PROOF-erc.md for the full record.",
   "stackup": [
     {
       "name": "poly2",
@@ -44,7 +43,18 @@
     { "name": "via4", "layer": "41/0", "between": ["metal4", "metal5"], "_comment": "Via4 (41/0), Metal4-to-Metal5 -- unused in this block's GDS, included for the portable stackup shape." }
   ],
   "nets": [
-    { "name": "VDD_VCO", "kind": "supply", "_comment": "This block's positive supply rail -- matched against Metal1_Label (34/10) text, verified present in the committed GDS." },
-    { "name": "GND_VCO", "kind": "supply", "_comment": "This block's ground/substrate-tie rail (also this block's --lvs-sub name in every committed LVS run) -- matched against Metal1_Label (34/10) text, verified present in the committed GDS." }
+    { "name": "VDD_VCO", "kind": "supply", "_comment": "This block's positive supply rail -- matched against Metal1_Label (34/10) text, verified present in the committed GDS (15 text instances)." },
+    { "name": "GND_VCO", "kind": "supply", "_comment": "This block's ground/substrate-tie rail (also this block's --lvs-sub name in every committed LVS run) -- matched against Metal1_Label (34/10) text, verified present in the committed GDS (28 text instances)." }
+  ],
+  "ties": [
+    {
+      "name": "nwell_vdd_vco",
+      "well_layer": "21/0",
+      "tap_layer": "22/0",
+      "tap_requires": ["32/0"],
+      "connect_to": "metal1",
+      "net": "VDD_VCO",
+      "_comment": "Every one of this block's six merged Nwell (21/0) shapes must hold at least one n-tap -- Comp (22/0) narrowed by Nplus (32/0), which is how gf180mcu actually draws an n-well tap, as against a pfet source/drain (Comp narrowed by Pplus) -- wired up to Metal1 and reaching VDD_VCO. This replaces the free-text '_ties_omitted' key this spec carried until 2026-09-26, whose stated reason (klayout-tools#2169's tie extraction collapsing a routed design into one island and reporting a false erc.supply_short) was fixed upstream on 2026-09-20 and re-verified fixed here: on klt 0.6.0 this declaration reports erc.missing_tie zero times and no erc.supply_short at all, with the check landing in erc_coverage.checked rather than in inapplicable. The p-substrate/GND_VCO side is deliberately NOT declared as a second entry -- gf180mcu draws no pwell layer, and the one expressible form (ties[].well_boxes over a native substrate) is graded degenerate on a whole-die substrate region. That is measured, not assumed: see PROOF-erc.md, 'Why the p-substrate tie is left undeclared', for the negative control and the upstream friction it is filed as."
+    }
   ]
 }
