@@ -137,6 +137,14 @@
 #    citations in the same pass, and the count this check prints on success is
 #    that same number.
 #
+#    A method directory -- a `sim/<slug>/` with no `records/`, whose per-point
+#    results are committed under `results/` -- is cited by the glob of the
+#    result family the row's number comes from
+#    (`sim/period-jitter/random-bound/results/transient_*.json`), and that
+#    family's file names are its per-corner evidence for every rule here
+#    (issue #520). The family, not the directory: an earlier stage having run
+#    at a point does not mean the number came out there.
+#
 # THE MANDATED GRID SIZE IS DERIVED, NOT WRITTEN DOWN HERE
 #
 # It is len(REQUIRED_MOS_CORNERS) x len(DEFAULT_TEMPERATURES_C) x
@@ -237,6 +245,7 @@ fi
 
 python3 - "${REPO_ROOT}" "${GRADED[@]}" <<'PY'
 import csv
+import glob
 import os
 import re
 import sys
@@ -275,6 +284,18 @@ assert MANDATED_GRID == (
 ), "the mandated grid is a full-factorial product; a duplicate axis value broke it"
 
 RECORD_ID = r"\d{8}-\d{6}-[0-9a-f]{7}"
+
+#: A method directory's committed per-point results, cited by the glob that
+#: names one result family: `` `sim/period-jitter/random-bound/results/transient_*.json` ``.
+#: A method directory (sim/README.md: a `sim/<slug>/` with no `records/`) has no
+#: record id, but its per-point results are committed evidence of exactly the
+#: kind corners/<record-id>/ holds -- one file per PVT point, the point in the
+#: file name -- so a row resting on one cites the family and is graded the same
+#: way (issue #520). The glob, not the directory, is what is cited: a method
+#: directory may hold several per-point families (a stage that ran at a point
+#: and a later one that did not), and only the family the row's number comes
+#: from says which points the number covers.
+METHOD_RESULTS = re.compile(r"`(sim/[A-Za-z0-9_./-]+/results/[A-Za-z0-9_.-]*\*[A-Za-z0-9_.*-]*)`")
 
 #: `` `all-fast`/125 °C/2.97 V `` -- the corner spelling every graded document
 #: uses. The degree sign is optional because README.md writes one without it.
@@ -384,6 +405,15 @@ def evidence(record_id):
     if record_id in _evidence_cache:
         return _evidence_cache[record_id]
     points, bundles, rows = set(), set(), set()
+    if "/" in record_id:  # a method directory's result family (METHOD_RESULTS)
+        for path in sorted(glob.glob(os.path.join(repo_root, record_id))):
+            for match in CORNER_FILE.finditer(os.path.basename(path)):
+                bundle, temp, vdd = match.groups()
+                points.add((bundle, _f(temp), _f(vdd)))
+                bundles.add(bundle)
+        result = (frozenset(points), frozenset(bundles), rows)
+        _evidence_cache[record_id] = result
+        return result
     sim_dir = os.path.join(repo_root, "sim")
     for campaign in sorted(os.listdir(sim_dir)):
         corner_dir = os.path.join(sim_dir, campaign, "corners", record_id)
@@ -562,7 +592,7 @@ for doc in graded:
         if not line.startswith("| "):
             inherited = []
             continue
-        cited = re.findall(RECORD_ID, line)
+        cited = re.findall(RECORD_ID, line) + METHOD_RESULTS.findall(line)
         if cited:
             inherited = cited
         elif SAME_RECORD.search(line):
