@@ -31,7 +31,7 @@
 #
 # THE CONVENTION IT ENFORCES (proposal section 5.1)
 #
-# Section 5.1 of the proposal carries two tables. The first names, for each
+# Section 5.1 of the proposal carries three tables. The first names, for each
 # graded value, the record, the committed evidence file, the reduction that
 # produces it, and the unit scale:
 #
@@ -43,6 +43,16 @@
 # neither table fails this check. That is the same "nothing is silently
 # omitted" rule #237's acceptance criterion 5 states for verdicts, applied to
 # values.
+#
+# The third names the headline figures INSIDE graded rows that are still not
+# re-derived, and why:
+#
+#   | section 5 row | Figure | Why it is not re-derived |
+#   | Kvco | 115.8 MHz/V | Selecting it evaluates the band-selection rule ... |
+#
+# That list used to be prose, and prose does not get graded: it named four
+# figures and silently missed a fifth. Rule 6 below makes it an artefact CI
+# maintains.
 #
 # THE RULES
 #
@@ -72,15 +82,27 @@
 #    first table (at least one graded value) or the second (a stated reason),
 #    and never in both.
 #
+# 6. DISCLOSED PER FIGURE, AND NOT STALE. Rule 5 is per row, not per number: a
+#    graded row can still hold a headline figure nothing re-derives. Section
+#    5.1's third table names each of those, and this check requires that each
+#    entry names a real section 5 row, that the row is one this check grades
+#    (a fully excluded row's figures are the exclusion table's business), that
+#    the figure is not also a graded value for that row, that a reason is
+#    given -- and that the figure STILL APPEARS VERBATIM in the row. That last
+#    rule is the one with teeth: before it existed the list was prose, and it
+#    had already gone wrong. It named four ungraded figures and missed a fifth
+#    (the output band row's `27 %` worst adjacent-band overlap, which was
+#    neither graded nor disclosed until it was graded in this pass).
+#
 # WHAT IT DOES NOT DO
 #
-# Rule 5 is per *row*, not per *number*. A row with one graded value is not a
-# fully graded row, and section 5.1's prose says which headline figures remain
-# ungraded and why -- the band-selection-rule Kvco worst case, the
-# monotonicity count, the divider chain's 235-point sample. Those need either
-# a spec rule evaluated over the grid or per-corner evidence this repository
-# has not committed; overstating what is graded would be the same defect this
-# check exists to catch.
+# Rule 6 makes the ungraded-figure list non-rotting, not complete: nothing can
+# mechanically enumerate "every headline figure" out of section 5's prose
+# cells, which quote hundreds of numbers, most of them commentary on a figure
+# rather than a figure. So completeness of that list remains a reviewer's job,
+# and this check's own coverage claim is per row (rule 5) plus per disclosed
+# figure (rule 6) -- never "every number in section 5 is accounted for".
+# Overstating it would be the same defect this check exists to catch.
 #
 # It reduces committed CSVs only. It never runs a simulator, reads no logfile,
 # and cannot tell whether the simulation behind a CSV was the right experiment
@@ -94,6 +116,24 @@
 #                                                   outer over the groups
 #   count(rows)                                     row count
 #   count(distinct KEY[+KEY...])                    distinct key count
+#
+# plus two GROUP-SEQUENCE derivations, for figures that are a property of an
+# ordered curve rather than a reduction of cells (these take no where-clause):
+#
+#   count(non-monotonic(COL by AXIS) by KEY[+KEY...])
+#       How many groups' COL sequence, ordered by AXIS, is neither
+#       non-decreasing nor non-increasing -- "monotonic" as the document
+#       writes it, in either direction, ties allowed. A group with fewer than
+#       two points, or with a repeated AXIS value, is an error rather than a
+#       pass: the figure this grades is a zero, so a test that quietly
+#       examined nothing would report exactly what a clean grid reports. The
+#       OK line therefore prints how many groups were examined.
+#
+#   min|max|mean|sum(adjacent-overlap(COL by AXIS) by KEY[+KEY...])
+#       Per group, the worst (smallest) fractional overlap between the COL
+#       intervals of consecutive AXIS values: max(COL at k) / min(COL at k+1)
+#       - 1, where negative is a hole rather than an overlap. A group with no
+#       pair of consecutive AXIS values is an error.
 #
 # any of which may carry ` where COND[ and COND...]`, where COND is
 # `COL OP LITERAL` with OP one of == != < <= > >=. A literal that parses as a
@@ -112,10 +152,11 @@
 # ratified rule changes, what CI enforces has to change in the same commit.
 #
 # Usage: sim/lib/check-quoted-value-provenance.sh
-# Exit codes: 0 every graded value re-derives and every section 5 row is
-#             accounted for, 1 any rule above is violated, a table is missing
-#             or empty, or the section 5 table cannot be parsed (a broken
-#             parser must not look like a clean tree).
+# Exit codes: 0 every graded value re-derives, every section 5 row is accounted
+#             for, and every disclosed ungraded figure is still in its row;
+#             1 any rule above is violated, a table is missing or empty, or the
+#             section 5 table cannot be parsed (a broken parser must not look
+#             like a clean tree).
 
 set -uo pipefail
 
@@ -359,6 +400,153 @@ AGGS = {
 OUTER = re.compile(r"^(min|max|mean|sum|count)\((.*)\)$", re.DOTALL)
 INNER_BY = re.compile(r"^(min|max|mean|sum)\((.*)\)\s+by\s+([\w+.]+)$", re.DOTALL)
 
+# A group-sequence derivation: the group's rows are a SEQUENCE along an axis,
+# and the figure is a property of that sequence rather than a reduction of its
+# cells. `non-monotonic` is a group *predicate* (true or false of one curve, so
+# only count(...) is defined over it); `adjacent-overlap` is a group *scalar*.
+SEQ_PREDICATES = ("non-monotonic",)
+SEQ_SCALARS = ("adjacent-overlap",)
+SEQ_VERBS = SEQ_PREDICATES + SEQ_SCALARS
+INNER_SEQ = re.compile(
+    r"^(" + "|".join(SEQ_VERBS) + r")\(\s*([\w.]+)\s+by\s+([\w.]+)\s*\)"
+    r"\s+by\s+([\w+.]+)$",
+    re.DOTALL,
+)
+
+#: How many group-sequence derivations ran, and over how many groups. Reported
+#: in the OK line because the headline figure one of them grades is a ZERO: a
+#: derivation that quietly examined nothing would produce the same 0 as a
+#: derivation that examined 504 curves and found none violating.
+seq_stats = {"derivations": 0, "groups": 0}
+
+
+def group_sequences(rows, keys, columns, reduction, ctx):
+    """Group `rows` by `keys`, keeping `columns` as floats. Fails loudly.
+
+    Unlike the reduction path, a non-numeric or missing cell is an error here
+    rather than a skipped row: a dropped point silently weakens a sequence
+    test, and the figure these derivations grade is one a weakened test still
+    reports as passing.
+    """
+    if rows:
+        have = set(rows[0])
+        for col in list(keys) + list(columns):
+            if col not in have:
+                fail(
+                    "%s: reduction `%s` names column `%s`, which the evidence "
+                    "file does not have (columns: %s)"
+                    % (ctx, reduction, col, ", ".join(sorted(have)))
+                )
+                return None
+    groups = {}
+    for row in rows:
+        values = [as_float(row.get(col)) for col in columns]
+        if any(value is None for value in values):
+            fail(
+                "%s: reduction `%s` meets a row whose %s is not a number (%s). "
+                "A dropped point weakens a sequence test without changing what "
+                "it reports, so this is an error rather than a skip."
+                % (
+                    ctx,
+                    reduction,
+                    " or ".join("`%s`" % c for c in columns),
+                    ", ".join("%s=%r" % (c, row.get(c)) for c in columns),
+                )
+            )
+            return None
+        groups.setdefault(
+            tuple(str(row.get(k, "")).strip() for k in keys), []
+        ).append(values)
+    if not groups:
+        fail(
+            "%s: reduction `%s` formed no groups at all. There is nothing to "
+            "derive, and an empty derivation must not read as a passing zero."
+            % (ctx, reduction)
+        )
+        return None
+    return groups
+
+
+def apply_group_sequence(outer, verb, col, axis, keys, rows, reduction, ctx):
+    """Evaluate AGG(VERB(COL by AXIS) by KEY[+KEY...]). (value, is_count)."""
+    if verb in SEQ_PREDICATES and outer != "count":
+        fail(
+            "%s: `%s` is a group predicate -- it is true or false of one group "
+            "-- so only count(...) is defined over it, not %s(...)"
+            % (ctx, verb, outer)
+        )
+        return None
+    if verb in SEQ_SCALARS and outer == "count":
+        fail(
+            "%s: `%s` is a group scalar, not a predicate; count(...) over it is "
+            "not defined -- use min/max/mean/sum" % (ctx, verb)
+        )
+        return None
+
+    groups = group_sequences(rows, keys, [col, axis], reduction, ctx)
+    if groups is None:
+        return None
+    seq_stats["derivations"] += 1
+    seq_stats["groups"] += len(groups)
+
+    if verb == "non-monotonic":
+        violations = 0
+        for key, points in sorted(groups.items()):
+            ordered = sorted(points, key=lambda point: point[1])
+            if len(ordered) < 2:
+                fail(
+                    "%s: group %s holds %d point(s); a sequence test over fewer "
+                    "than two points is not a test"
+                    % (ctx, "/".join(key), len(ordered))
+                )
+                return None
+            axis_values = [point[1] for point in ordered]
+            if len(set(axis_values)) != len(axis_values):
+                fail(
+                    "%s: group %s repeats a value of the ordering column `%s`, "
+                    "so the sequence it would be tested as is ambiguous"
+                    % (ctx, "/".join(key), axis)
+                )
+                return None
+            series = [point[0] for point in ordered]
+            steps = list(zip(series, series[1:]))
+            rising = all(b >= a for a, b in steps)
+            falling = all(b <= a for a, b in steps)
+            if not rising and not falling:
+                violations += 1
+        return float(violations), True
+
+    # adjacent-overlap: per group, the worst (smallest) fractional overlap
+    # between the COL intervals of consecutive AXIS values. max(COL at k) /
+    # min(COL at k+1) - 1; negative means a hole rather than an overlap.
+    worst_per_group = []
+    for key, points in sorted(groups.items()):
+        spans = {}
+        for value, step in points:
+            low, high = spans.get(step, (value, value))
+            spans[step] = (min(low, value), max(high, value))
+        overlaps = []
+        for step in sorted(spans):
+            if step + 1 not in spans:
+                continue
+            upper, lower = spans[step][1], spans[step + 1][0]
+            if lower == 0:
+                fail(
+                    "%s: group %s divides by a zero `%s` at %s+1"
+                    % (ctx, "/".join(key), col, step)
+                )
+                return None
+            overlaps.append(upper / lower - 1.0)
+        if not overlaps:
+            fail(
+                "%s: group %s holds no pair of consecutive `%s` values, so it "
+                "has no adjacent interval to overlap"
+                % (ctx, "/".join(key), axis)
+            )
+            return None
+        worst_per_group.append(min(overlaps))
+    return AGGS[outer](worst_per_group), False
+
 
 def apply_reduction(reduction, rows, icp_rule, ctx):
     """Evaluate a reduction over `rows`. Returns (value, is_count) or None."""
@@ -400,6 +588,26 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
             return None
         inner = [AGGS[inner_agg](v) for v in groups.values()]
         return AGGS[outer](inner), False
+
+    sequence = INNER_SEQ.match(body)
+    if sequence:
+        return apply_group_sequence(
+            outer,
+            sequence.group(1),
+            sequence.group(2).strip(),
+            sequence.group(3).strip(),
+            sequence.group(4).split("+"),
+            rows,
+            reduction,
+            ctx,
+        )
+    if re.match(r"^(" + "|".join(SEQ_VERBS) + r")\(", body):
+        fail(
+            "%s: cannot parse reduction `%s` -- a group-sequence derivation is "
+            "spelled AGG(VERB(COL by AXIS) by KEY[+KEY...]) and takes no "
+            "where-clause" % (ctx, reduction)
+        )
+        return None
 
     target, _, where = [p.strip() for p in _split_where(body)]
     predicate = make_predicate(where, icp_rule, ctx)
@@ -484,6 +692,7 @@ spec_rows = None          # normalized name -> (cells, source records)
 spec_row_order = []
 provenance = None
 exclusions = None
+ungraded_figures = None
 
 for header, body in tables:
     if len(header) >= 5 and header[0] == "Parameter" and "Verdict" in header:
@@ -503,6 +712,12 @@ for header, body in tables:
         provenance = body
     elif len(header) >= 2 and header[1].lower().startswith("why no value"):
         exclusions = body
+    elif (
+        len(header) >= 3
+        and header[1].lower().startswith("figure")
+        and header[2].lower().startswith("why it is not")
+    ):
+        ungraded_figures = body
 
 if spec_rows is None or len(spec_rows) < MIN_SPEC_ROWS:
     sys.stderr.write(
@@ -529,9 +744,20 @@ if exclusions is None:
     )
     sys.exit(1)
 
+if not ungraded_figures:
+    sys.stderr.write(
+        "FAIL: %s has no non-empty section 5.1 ungraded-figure table (a header "
+        "row whose columns are `Figure` and `Why it is not re-derived`). "
+        "Coverage here is per row, not per number, so a graded row can still "
+        "hold a figure nothing re-derives; an empty or absent list claims no "
+        "graded row does, which this check cannot verify.\n" % proposal_rel
+    )
+    sys.exit(1)
+
 # ---------------------------------------------------------------- the rules ---
 
 graded_rows = set()
+graded_values = {}        # normalized row name -> {quoted figure as written}
 checked = 0
 
 for cells in provenance:
@@ -557,6 +783,7 @@ for cells in provenance:
     spec_cells, spec_cited = spec_rows[row_name]
 
     quoted_plain = quoted_raw.strip("`").strip()
+    graded_values.setdefault(row_name, set()).add(quoted_plain)
     haystack = " || ".join(spec_cells[1:4])
     if quoted_plain not in haystack:
         fail(
@@ -659,6 +886,50 @@ for cells in exclusions:
         )
     excluded_rows.add(row_name)
 
+disclosed_figures = 0
+for cells in ungraded_figures:
+    if len(cells) < 3:
+        fail("section 5.1 ungraded-figure row has %d columns, expected 3: %r"
+             % (len(cells), cells))
+        continue
+    row_name = normalize_row_name(cells[0])
+    figure = cells[1].strip().strip("`").strip()
+    reason = cells[2].strip()
+    ctx = "section 5.1 ungraded figure %s / %s" % (row_name, figure or "(none)")
+    if not figure:
+        fail("%s: names no figure" % ctx)
+        continue
+    if row_name not in spec_rows:
+        fail(
+            "%s: names a section 5 row that does not exist. Section 5's rows "
+            "are: %s" % (ctx, "; ".join(spec_row_order))
+        )
+        continue
+    disclosed_figures += 1
+    if row_name in excluded_rows:
+        fail(
+            "%s: that section 5 row has no re-derived value at all, so every "
+            "figure in it is already accounted for by the exclusion table. "
+            "This list is for figures inside GRADED rows." % ctx
+        )
+    if figure in graded_values.get(row_name, set()):
+        fail(
+            "%s: that figure is also graded in the provenance table -- a figure "
+            "cannot be both re-derived and declared un-re-derived" % ctx
+        )
+    spec_cells, _ = spec_rows[row_name]
+    if figure not in " || ".join(spec_cells[1:4]):
+        fail(
+            "%s: that figure does not appear in the section 5 row it is "
+            "declared against. The disclosure has gone stale: the row was "
+            "edited and this list was not." % ctx
+        )
+    if len(reason) < 20:
+        fail(
+            "%s: gives no real reason (%r). A figure nothing re-derives has to "
+            "say why." % (ctx, reason)
+        )
+
 for name in spec_row_order:
     in_both = name in graded_rows and name in excluded_rows
     if in_both:
@@ -681,14 +952,19 @@ if errors:
 
 print(
     "OK: %d quoted values re-derived from committed per-corner evidence and "
-    "matched at the precision written; all %d section 5 rows accounted for "
-    "(%d graded, %d with a stated reason); Icp trim-code rule read from %s "
-    "(%d reference frequencies)"
+    "matched at the precision written (%d of them group-sequence derivations "
+    "over %d groups); all %d section 5 rows accounted for (%d graded, %d with a "
+    "stated reason) and %d ungraded figure(s) in graded rows disclosed and "
+    "still present in their row; Icp trim-code rule read from %s (%d reference "
+    "frequencies)"
     % (
         checked,
+        seq_stats["derivations"],
+        seq_stats["groups"],
         len(spec_row_order),
         len(graded_rows),
         len(excluded_rows),
+        disclosed_figures,
         spec_rel,
         len(icp_rule),
     )

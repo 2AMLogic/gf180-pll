@@ -446,14 +446,27 @@ jobs:
         #
         # Section 5.1 of the proposal is the convention this grades: for each
         # value, the record, the committed evidence file inside it, the
-        # reduction that produces it, and the scale. Five rules: the record and
+        # reduction that produces it, and the scale. Six rules: the record and
         # file are committed; the record is one the section 5 row itself cites
         # (or inherits via "Same record"); the figure appears verbatim in that
         # row, so the two tables cannot drift apart in either direction; the
         # re-derived value equals the figure ROUNDED TO THE PRECISION WRITTEN;
-        # and every section 5 row is either graded or carries a stated reason
-        # why it has no re-derivable value -- the same "nothing is silently
-        # omitted" rule section 5 already applies to verdicts.
+        # every section 5 row is either graded or carries a stated reason why
+        # it has no re-derivable value -- the same "nothing is silently
+        # omitted" rule section 5 already applies to verdicts; and every
+        # headline figure section 5.1 declares ungraded INSIDE a graded row
+        # still appears verbatim in that row, is not also graded, and gives a
+        # reason. That last rule replaced prose which had already gone wrong:
+        # it named four ungraded figures and silently missed a fifth (the
+        # output band row's `27 %` worst adjacent-band overlap).
+        #
+        # Two figures in that row are properties of an ordered CURVE rather
+        # than reductions of cells, and the grammar carries a group-sequence
+        # form for them -- `count(non-monotonic(fosc_hz by vctrl_v) by ...)`
+        # and `min(adjacent-overlap(fosc_hz by band) by ...)`. The first
+        # grades a ZERO, so the check treats an empty group set, a one-point
+        # curve and a repeated control voltage as failures rather than passes,
+        # and prints the number of groups it examined.
         #
         # The contracted-space figures (loop bandwidth, phase margin, settling)
         # are selected by an `on-icp-trim-rule` predicate READ OUT OF
