@@ -21,21 +21,11 @@ an open (a DRC deck cannot; issue #359).
 
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
-
-try:
-    import klayout.db  # noqa: F401
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
+from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 
 from pfd_cp import cp_array, netcheck  # noqa: E402
 
@@ -399,7 +389,7 @@ class NetMapTests(unittest.TestCase):
             self.assertEqual(cp_array.P_NET_MAP[name]["TAIL"], "UPT")
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class BuildTests(unittest.TestCase):
     """cp_array.build() on the real leg/bias-device geometry."""
 
@@ -518,7 +508,7 @@ class BuildTests(unittest.TestCase):
                 self.assertGreater(len(net_pads.get(net, [])), 0, net)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class ConnectivityTests(unittest.TestCase):
     """The finished GDS's own extracted Metal1-3 connectivity -- the only
     check that can see a short or an open (``layout/run_pv.py drc`` cannot;
@@ -569,7 +559,7 @@ class ConnectivityTests(unittest.TestCase):
             self.assertEqual(n_ids & p_ids, set())
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class LegPadsTests(unittest.TestCase):
     """_leg_pads() -- the per-leg EN/ENB gate-tab riser escape (issue #359)."""
 
@@ -642,10 +632,10 @@ class T1bEscapeTargetsTests(unittest.TestCase):
     def setUp(self):
         from pfd_cp import cp_leg_n
 
-        self.pins = cp_leg_n.build().pins if _HAVE_KLAYOUT else None
+        self.pins = cp_leg_n.build().pins if HAVE_KLAYOUT else None
         self.spec = cp_leg_n.SPEC
 
-    @unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+    @unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
     def test_both_targets_clear_t0s_own_escaped_column(self):
         t0_dx = -11.77
         men_x, mdis_x = cp_array._t1b_escape_targets(t0_dx, self.pins, self.spec)
@@ -654,12 +644,12 @@ class T1bEscapeTargetsTests(unittest.TestCase):
         self.assertLessEqual(men_x, t0_mdis_escaped_x - cp_array.T1B_CLEAR_PITCH_UM + 1e-9)
         self.assertLess(mdis_x, men_x)
 
-    @unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+    @unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
     def test_the_two_targets_are_pitch_separated(self):
         men_x, mdis_x = cp_array._t1b_escape_targets(-11.77, self.pins, self.spec)
         self.assertAlmostEqual(men_x - mdis_x, cp_array.T1B_CLEAR_PITCH_UM)
 
-    @unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+    @unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
     def test_result_shifts_with_t0s_own_dx(self):
         men_a, mdis_a = cp_array._t1b_escape_targets(-11.77, self.pins, self.spec)
         men_b, mdis_b = cp_array._t1b_escape_targets(-20.0, self.pins, self.spec)

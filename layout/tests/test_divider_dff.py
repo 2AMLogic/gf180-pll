@@ -17,20 +17,10 @@ the decks.
 
 from __future__ import annotations
 
-import sys
 import unittest
 from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
-
-try:
-    import klayout.db  # noqa: F401
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
+from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 
 from divider_chain import dff_tg_3v3, inv_3v3, tgate_3v3  # noqa: E402
 
@@ -134,7 +124,7 @@ class ReferenceNetlistTests(unittest.TestCase):
         self.assertTrue(self.netlist.rstrip().endswith(".ends"))
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class BuildLayoutTests(unittest.TestCase):
     """dff_tg_3v3.build() draws the claimed geometry."""
 
@@ -174,7 +164,7 @@ class BuildLayoutTests(unittest.TestCase):
             self.assertGreater(out.stat().st_size, 0)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class OffsetPadXTests(unittest.TestCase):
     """devgen.offset_pad_x() -- the same-x riser-collision fix this
     composite's own routing needed (see devgen.py's and dff_tg_3v3.py's own

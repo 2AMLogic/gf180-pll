@@ -29,20 +29,10 @@ geometry, and need no PDK.
 
 from __future__ import annotations
 
-import sys
 import unittest
 from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
-
-try:
-    import klayout.db  # noqa: F401
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
+from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 
 import _canvas  # noqa: E402
 
@@ -86,7 +76,7 @@ def _boxes(canvas, layer: str) -> int:
     return sum(1 for shape in canvas.top.shapes(index).each() if not shape.is_text())
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not available")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not available")
 class ClearInheritedLabelsTests(unittest.TestCase):
     def _canvas_with_pins(self) -> "_ToyCanvas":
         canvas = _ToyCanvas("toy")

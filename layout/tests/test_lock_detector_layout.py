@@ -22,12 +22,9 @@ the check that would have caught it, run on every build.
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
+from _env import LAYOUT_DIR
 
 from pll_top.lock_detector import build  # noqa: E402
 from pll_top.lock_detector import checks  # noqa: E402

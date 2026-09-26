@@ -10,12 +10,9 @@ version string (see that function's docstring in ``harness/env.py``).
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
+from _env import LAYOUT_DIR  # noqa: F401
 
 from harness import env  # noqa: E402
 

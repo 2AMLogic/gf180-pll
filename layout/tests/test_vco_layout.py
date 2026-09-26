@@ -11,7 +11,7 @@ environment.
 
 The one exception is ``DogBoneMosfetTests``, which exercises the geometry
 ``primitives.mosfet()`` actually *draws* and therefore does need
-``klayout.db``. It is gated behind ``@unittest.skipUnless(_HAVE_KLAYOUT, ...)``
+``klayout.db``. It is gated behind ``@unittest.skipUnless(HAVE_KLAYOUT, ...)``
 -- the same convention ``test_pfdcp_devgen.py`` uses -- so it skips (never
 errors) in the headless CI job, and this file as a whole keeps its "runs
 without KLayout" contract.
@@ -27,18 +27,8 @@ from __future__ import annotations
 
 import sys
 import unittest
-from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
-
-try:
-    import klayout.db  # noqa: F401
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
+from _env import HAVE_KLAYOUT, LAYOUT_DIR
 
 from floorplan import skeleton  # noqa: E402
 from vco import bias_resistors  # noqa: E402
@@ -216,7 +206,7 @@ class RingReferenceNetlistTests(unittest.TestCase):
         self.assertIn(" Y5 ", lines[0])  # MN's own gate net (A) for stage 1
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class RingMetal1NetSeparationTests(unittest.TestCase):
     """No Metal1 polygon in ring.py carries two nets (issues #368/#371).
 
@@ -298,7 +288,7 @@ class RingMetal1NetSeparationTests(unittest.TestCase):
             self.assertEqual(len(per_net[net]), 1, f"{net}: {per_net[net]}")
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class RingBiasTrunkTests(unittest.TestCase):
     """VBP/VBN's own Metal2 trunks (issue #371, item 4): every stage's
     natural bias-gate pad reaches the trunk, the trunk carries no other
@@ -433,7 +423,7 @@ class OutputBufferTests(unittest.TestCase):
                 )
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class OutputBufferMetal1NetSeparationTests(unittest.TestCase):
     """No Metal1 polygon in buffer.py carries two nets (issues #368/#372).
 
@@ -516,7 +506,7 @@ class OutputBufferMetal1NetSeparationTests(unittest.TestCase):
         )
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class OutputBufferSupplyRailTests(unittest.TestCase):
     """The supply rails clear every gate pad, and reach their own rings.
 
@@ -953,7 +943,7 @@ class MirrorRowFoldTests(unittest.TestCase):
         self.assertGreater(mirror.array_width_um(dev.CASCADE_C), 30.0)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class MirrorConnectivityTests(unittest.TestCase):
     """A 2-D common-centroid array's own internal row-to-row tie (issue
     #336) is a genuinely new electrical-topology claim DRC cannot see: a
@@ -1035,7 +1025,7 @@ class VddFeedBandSelectionTests(unittest.TestCase):
             vco_block.vdd_feed_bands("mirror", pins, self.p)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class AssembledBlockVddIslandTests(unittest.TestCase):
     """``VDD_VCO`` is one electrical node across the assembled block (#433).
 
@@ -1351,7 +1341,7 @@ class PolyResistorPrimitiveTests(unittest.TestCase):
         self.assertGreaterEqual(usable, prim.CONTACT_SIZE_UM)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class PolyResistorLvsClassTests(unittest.TestCase):
     """The drawn device class, the LVS reference class and the schematic's
     class are one thing, checked three ways (issue #381).
@@ -1661,7 +1651,7 @@ class VtoiCoreTapPitchTests(unittest.TestCase):
         self.assertLess(vtoi_core.max_nmos_tap_distance_um(), dev.DRC_TAP_PITCH_MAX_UM / 2.0)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class VtoiCoreNetSeparationTests(unittest.TestCase):
     """``vtoi_core.py``'s PMOS row never shorts an internal net to
     ``VDD_VCO`` (issue #376) -- same reproduction discipline as
@@ -1732,7 +1722,7 @@ class VtoiCoreNetSeparationTests(unittest.TestCase):
         self.assertNotEqual(vbp0_cluster, self._vdd_cluster())
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class DogBoneMosfetTests(unittest.TestCase):
     """primitives.mosfet()'s min_sd_width_um dog-bone widening.
 
@@ -1969,7 +1959,7 @@ class AssembledVcoBlockPlacementTests(unittest.TestCase):
         self.assertAlmostEqual(self.boxes["ring"][2] - self.boxes["ring"][0], without[2] - without[0])
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class RectFramePrimitiveTests(unittest.TestCase):
     """``primitives.rect_frame()`` draws a hole, and refuses not to (issue #339).
 
@@ -2017,7 +2007,7 @@ class RectFramePrimitiveTests(unittest.TestCase):
             prim.rect_frame(canvas, "nwell", 0.0, 0.0, 20.0, 10.0, 0.0)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class AssembledVcoBlockNwellRingGeometryTests(unittest.TestCase):
     """The block-level n-well ring the assembler actually *draws* (issue #339).
 
@@ -2191,7 +2181,7 @@ class AssembledVcoBlockFloorplanTests(unittest.TestCase):
         self.assertLess(h, skeleton.LOOP_FILTER.h)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class AssembledVcoBlockConnectivityTests(unittest.TestCase):
     """The routed nets are electrically joined, not merely DRC-legal.
 
@@ -2219,7 +2209,7 @@ class AssembledVcoBlockConnectivityTests(unittest.TestCase):
         self.assertIn("VBP != VBN", checks)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class PolyResistorPadArithmeticTests(unittest.TestCase):
     """``bias_resistors.top_pad_center_um()`` mirrors what is actually drawn."""
 
@@ -2235,7 +2225,7 @@ class PolyResistorPadArithmeticTests(unittest.TestCase):
             self.assertAlmostEqual(bias_resistors.top_pad_center_um(res)[1], drawn[1])
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class CanvasOffsetTests(unittest.TestCase):
     """``Canvas.at()`` -- the one mechanism that makes the assembly possible."""
 
@@ -2262,7 +2252,7 @@ class CanvasOffsetTests(unittest.TestCase):
         self.assertEqual(canvas.pins["M"], [(0.0, 0.0, 1.0, 1.0)])
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class ReferenceNetlistDeviceTests(unittest.TestCase):
     """``block.reference_netlist()`` matches ``devices.py``'s own tables
     (issue #367) -- per-class device count and summed drawn width, the same
@@ -2373,7 +2363,7 @@ class ReferenceNetlistDeviceTests(unittest.TestCase):
         )
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs klayout.db")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class ReferenceNetlistLabelCoverageTests(unittest.TestCase):
     """Every net ``block.py``'s router (or a sub-block generator it calls)
     routes is labelled with the exact name ``reference_netlist()`` gives it,

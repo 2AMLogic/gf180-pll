@@ -19,20 +19,9 @@ substitute for running the decks.
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
-
-try:
-    import klayout.db  # noqa: F401
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
+from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 
 from divider_chain import devgen  # noqa: E402
 from divider_chain import inv_3v3  # noqa: E402
@@ -147,7 +136,7 @@ class ReferenceNetlistTests(unittest.TestCase):
             self.assertIn(net, header.split())
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class BuildInvStackCellTests(unittest.TestCase):
     """devgen.build_stack_cell() on inv_3v3's device list."""
 
@@ -178,7 +167,7 @@ class BuildInvStackCellTests(unittest.TestCase):
         self.assertGreaterEqual(y1, pfet_port.y3)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class BuildTgateStackCellTests(unittest.TestCase):
     """devgen.build_stack_cell() on tgate_3v3's device list, bypass_nets in use."""
 
@@ -223,7 +212,7 @@ class BuildTgateStackCellTests(unittest.TestCase):
         self.assertGreaterEqual(y1, pfet_port.y3)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class NetResolutionEdgeCaseTests(unittest.TestCase):
     """build_stack_cell()'s net-count validation, generalized to this package."""
 
@@ -405,7 +394,7 @@ class PackTracksOverDevicesTests(unittest.TestCase):
         )
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
 class Metal2BoxesTests(unittest.TestCase):
     """metal2_boxes() must see through a placed instance, because that is the
     obstacle divider_chain.py actually has to route around."""

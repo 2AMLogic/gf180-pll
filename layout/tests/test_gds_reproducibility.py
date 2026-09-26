@@ -29,25 +29,19 @@ Three things are asserted here, and all three are load-bearing:
 
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
+from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 
-try:
+if HAVE_KLAYOUT:
     import klayout.db as db
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
 
 from harness import reproduce  # noqa: E402
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
 class CommittedArtifactsReproduceTests(unittest.TestCase):
     """The claim: every committed block GDS is its generator's current output."""
 
@@ -72,7 +66,7 @@ class CommittedArtifactsReproduceTests(unittest.TestCase):
         self.assertEqual(drifted, {})
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
+@unittest.skipUnless(HAVE_KLAYOUT, "needs the klayout pip wheel (klayout.db)")
 class NegativeControlTests(unittest.TestCase):
     """The check must fail on a stale artifact, or test 1 above proves nothing."""
 

@@ -23,21 +23,11 @@ module claims to route is exactly one component, not merged with another.
 
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
-
-try:
-    import klayout.db  # noqa: F401
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
+from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 
 from pfd_cp import cp_dumpbuf, netcheck  # noqa: E402
 
@@ -263,7 +253,7 @@ class CheckRiserColumnsTests(unittest.TestCase):
             cp_dumpbuf._verify_riser_plan([("A", 0.0, 0.0), ("B", 0.4, 0.0)], 1.0)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class BuildTests(unittest.TestCase):
     """cp_dumpbuf.build() on the real device table."""
 
@@ -307,7 +297,7 @@ class BuildTests(unittest.TestCase):
         self.assertLess(centres[2], centres[3])
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class ConnectivityTests(unittest.TestCase):
     """The finished GDS's own extracted Metal1-3 connectivity -- the only
     check that can see a short or an open (``layout/run_pv.py drc`` cannot;

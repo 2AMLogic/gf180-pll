@@ -11,13 +11,11 @@ foundry deck: ``parse_report_db`` (XML ``.lyrdb`` parsing) and
 
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
+from _env import LAYOUT_DIR  # noqa: F401
 
 from harness import drc  # noqa: E402
 

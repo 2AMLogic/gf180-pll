@@ -8,14 +8,11 @@ Pure-Python, no ``klayout.db``/PDK needed:
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
+from _env import LAYOUT_DIR
+
 REPO_ROOT = LAYOUT_DIR.parent
-if str(LAYOUT_DIR) not in sys.path:
-    sys.path.insert(0, str(LAYOUT_DIR))
 
 from harness import spice_flatten as sf  # noqa: E402
 

@@ -20,21 +20,11 @@ that can see a short or an open (a DRC deck cannot; see ``netcheck.py``).
 
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
-
-try:
-    import klayout.db  # noqa: F401
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
+from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 
 from pfd_cp import cp_output_stage as cos  # noqa: E402
 from pfd_cp import cp_array, devgen, netcheck  # noqa: E402
@@ -354,7 +344,7 @@ class NetcheckReportTests(unittest.TestCase):
         self.assertNotIn("comp", netcheck.METAL_LAYERS)  # see netcheck.py's docstring
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class BuildTests(unittest.TestCase):
     """cp_output_stage.build() on the real array/leaf-cell geometry."""
 
@@ -568,7 +558,7 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(by_y[ty], [net], f"{net} unexpectedly shares a track")
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class ConnectivityTests(unittest.TestCase):
     """The finished GDS's own extracted Metal1-3 connectivity -- the only
     check that can see a short or an open (``layout/run_pv.py drc`` cannot;

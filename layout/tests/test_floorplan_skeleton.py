@@ -15,20 +15,9 @@ supposed to contain it -- not KLayout/DRC behavior.
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
-
-try:
-    import klayout.db  # noqa: F401
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
+from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 
 from floorplan import skeleton  # noqa: E402
 
@@ -257,7 +246,7 @@ class BlockPlacementTests(unittest.TestCase):
         self.assertLessEqual(skeleton.VCO_GUARD_MARGIN, 15.0)
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class RecordedFootprintDriftTests(unittest.TestCase):
     """The recorded divider_chain footprint must match what the generator draws.
 

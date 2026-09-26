@@ -25,20 +25,12 @@ name, which the decks do *not* check on their own:
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-LAYOUT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(LAYOUT_DIR))
-sys.path.insert(0, str(LAYOUT_DIR / "pll_top"))
+from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 
-try:
+if HAVE_KLAYOUT:
     import klayout.db as db
-
-    _HAVE_KLAYOUT = True
-except ImportError:
-    _HAVE_KLAYOUT = False
 
 from divider_chain import devgen, div23_cell, divider_chain  # noqa: E402
 
@@ -184,7 +176,7 @@ class ReferenceNetlistTests(unittest.TestCase):
             self.assertIn(net, nets, f"XFRT does not touch {net}")
 
 
-@unittest.skipUnless(_HAVE_KLAYOUT, "klayout.db not importable in this environment")
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not importable in this environment")
 class GeometryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
