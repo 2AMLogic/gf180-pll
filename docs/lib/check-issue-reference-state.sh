@@ -73,6 +73,12 @@
 #    because neither file was graded, and neither phrase was one this rule
 #    recognised. Both files are graded now.
 #
+#    signoff/README.md joined the list for the same reason (issue #564): it
+#    is the prose beside this block's T1 verdict of record, and it went on
+#    naming #427 as the owner of the item-11 gap for days after #427 closed.
+#    Adding it also surfaced a bare `(#2057)` -- a klayout-tools commit's PR
+#    number, which rule 1 correctly rejects as unresolvable here.
+#
 # A reference qualified by a sibling repository's name ("klayout-tools
 # #309") is a different repository's issue and is not graded here at all;
 # resolving it against this repository would grade the wrong issue.
@@ -127,6 +133,7 @@ GRADED=(
   "README.md"
   "sim/README.md"
   "sim/CHARACTERIZATION.md"
+  "signoff/README.md"
 )
 
 if ! command -v python3 >/dev/null 2>&1; then

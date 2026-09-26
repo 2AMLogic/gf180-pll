@@ -506,7 +506,7 @@ jobs:
         # scripts, tb.json manifests and records -- no PDK, no ngspice.
         run: bash sim/lib/check-bias-drive-claims.sh
 
-      - name: sim/lib/check-quoted-value-provenance.sh (quoted values vs. the committed per-corner CSVs)
+      - name: sim/lib/check-quoted-value-provenance.sh (quoted values vs. the committed per-corner evidence)
         # Every check above grades something *about* a number -- its count, its
         # citation and whether that citation is current, its grid, its verdict,
         # its reproduction command, its forge reference. None graded THE NUMBER.
@@ -519,7 +519,7 @@ jobs:
         #
         # Section 5.1 of the proposal is the convention this grades: for each
         # value, the record, the committed evidence file inside it, the
-        # reduction that produces it, and the scale. Six rules: the record and
+        # reduction that produces it, and the scale. Seven rules: the record and
         # file are committed; the record is one the section 5 row itself cites
         # (or inherits via "Same record"); the figure appears verbatim in that
         # row, so the two tables cannot drift apart in either direction; the
@@ -541,13 +541,65 @@ jobs:
         # curve and a repeated control voltage as failures rather than passes,
         # and prints the number of groups it examined.
         #
+        # One figure is a STATISTIC rather than an extremum -- the reference
+        # spur row's term-1 mismatch reading, 17.48 % -- and the grammar
+        # carries a `sig3` aggregate (`|mean| + 3*sigma`, sample sigma) and a
+        # `worst-magnitude` group verb for it, composed three deep:
+        # `max(sig3(worst-magnitude(mism_pct by vctrl_v) by seed) by corner)`.
+        # Every level matters and collapsing one makes the number SMALLER
+        # (13.2172 % folded, 10.94 % pooled-and-folded, against 17.4798 %
+        # signed), which is exactly the drift DR-018 Amendment A1 corrected --
+        # so the tests for it assert that each collapsed reading FAILS.
+        #
         # The contracted-space figures (loop bandwidth, phase margin, settling)
         # are selected by an `on-icp-trim-rule` predicate READ OUT OF
         # spec/pll.md's normative Icp trim-code rule table, never written into
         # the check, so a change to the ratified rule moves what CI enforces in
-        # the same commit. Its unit tests run under `bash sim/selftest.sh`
+        # the same commit.
+        #
+        # Evidence is not only a CSV, as of 2026-09-26. Three section 5 rows
+        # were ungraded for the reason "no reduced CSV was committed, so the
+        # count cannot be re-derived" -- the two closed-loop rows in the
+        # exclusion table and the multiplication-ratio figures in the
+        # ungraded-figure table -- and all three records had committed their
+        # full per-point table all along, in the record's own Markdown
+        # (sim/output-range 90 rows, sim/lock-time 270, sim/divider-ratio-chain
+        # 235). "No CSV" had been read as "no evidence" three times. So an
+        # entry may name `<record-id>.md § <first column>` and reduce that
+        # table, under one rule a CSV does not need: the table must have exactly
+        # one row per committed per-corner log, and where its first column is
+        # the per-corner point id the row SETS are compared too -- a truncated
+        # or hand-trimmed table must not read as a smaller, passing count. The
+        # logs are read as NAMES only; this check still never parses a logfile's
+        # contents.
+        #
+        # And evidence is not the only ingredient, as of 2026-09-26. Two
+        # figures are a measurement divided by a RATIFIED LINE -- `1.41x`, the
+        # worst measured VCTRL travel over the 0.6 V Budget 2 allows, and
+        # `47 %`, the same travel over the 1.8 V width of DR-003 Decision 5's
+        # measured control window. Both sat in the ungraded-figure table for
+        # the reason "a ratio to a spec line is arithmetic on the line, not a
+        # column of the committed evidence": true about the column, wrong
+        # about the conclusion, in exactly the way section 5.2's spur
+        # derivation had already shown -- a hand derivation is gradeable when
+        # every ingredient is written down. A third table in section 5.1
+        # grades them, with the constants READ out of spec/pll.md and DR-003
+        # (never written into the check), each required to be stated at least
+        # twice and to agree between those statements, and with the table's
+        # own statement of the constant graded against what was read.
+        #
+        # One guard arrived with it that the first table needed too: A RANGE
+        # IS NOT A FIGURE. The figure parser reads the number at the front of
+        # the string, so a quoted `0.1-0.5 dB` would have been graded as `0.1`
+        # and the other end never looked at -- grading half of a two-sided
+        # bound and calling it the bound, which is the named defect the
+        # ungraded list exists to make visible. Range-shaped figures are now
+        # refused in both grading tables.
+        #
+        # Its unit tests run under `bash sim/selftest.sh`
         # above (sim/tests discovery). Needs python3 (set up above); reduces
-        # committed CSVs only -- no PDK, no ngspice, no network.
+        # committed CSVs and in-record tables only -- no PDK, no ngspice, no
+        # network.
         run: bash sim/lib/check-quoted-value-provenance.sh
 
       - name: docs/tests (unit tests for the issue-reference-state check)

@@ -116,7 +116,18 @@
 # and chaining them into the same three totals graded here. That check still
 # takes `Icp`, `T_ov` and the systematic charge asymmetry from DR-018's own
 # Input table rather than re-sweeping `cp-compliance`/`pfd-deadzone`'s
-# 45-corner grids -- see its own header for that boundary.
+# 45-corner grids -- see its own header for that boundary; that remainder is
+# owed at issue #573.
+#
+# Term 1's own statistic -- the signed `|mean| + 3σ` reading, 17.48 % -- is
+# additionally graded by `sim/lib/check-quoted-value-provenance.sh`, whose
+# reduction language now carries a `sig3` aggregate and a `worst-magnitude`
+# group verb precisely for it (the statistic this header used to say no check
+# could express). That is section 5.1's question -- whether a percentage
+# quoted in section 5's prose is a reduction of committed evidence at all --
+# not this check's, and the two arrive at the same number by different
+# routes. Keep them that way: see the cross-reference block in
+# `check-mismatch-charge-derivation.sh` before changing either statistic.
 #
 # Nor does it grade the dB *margins* stated in prose ("1.6 dB inside the
 # line", "~12 dB at the two cold corners"): rule 6 is restricted to absolute

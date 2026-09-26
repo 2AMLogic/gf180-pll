@@ -31,7 +31,8 @@
 #
 # THE CONVENTION IT ENFORCES (proposal section 5.1)
 #
-# Section 5.1 of the proposal carries three tables. The first names, for each
+# Section 5.1 of the proposal carries four tables (the third is rule 7's, and
+# arrived after this header was first written). The first names, for each
 # graded value, the record, the committed evidence file, the reduction that
 # produces it, and the unit scale:
 #
@@ -44,7 +45,10 @@
 # omitted" rule #237's acceptance criterion 5 states for verdicts, applied to
 # values.
 #
-# The third names the headline figures INSIDE graded rows that are still not
+# The third names the figures that are a reduction DIVIDED BY A RATIFIED
+# LINE -- rule 7's, described there.
+#
+# The fourth names the headline figures INSIDE graded rows that are still not
 # re-derived, and why:
 #
 #   | section 5 row | Figure | Why it is not re-derived |
@@ -57,9 +61,45 @@
 # THE RULES
 #
 # 1. RESOLVABLE. Every record id in the first table must resolve to a real
-#    sim/*/records/<id>.md, and the named evidence file must exist at
-#    sim/<campaign>/corners/<id>/<file>. A reduction over a file that is not
-#    committed is not reproducible by a reader.
+#    sim/*/records/<id>.md, and the named evidence must be committed. Two forms
+#    of evidence are accepted, both committed and both reduced by the same
+#    grammar:
+#
+#      <file>.csv              sim/<campaign>/corners/<id>/<file>, the usual
+#                              case: a per-corner CSV the harness wrote.
+#
+#      <id>.md § <first-col>   the pipe table INSIDE that record whose first
+#                              column is <first-col> -- for a campaign whose
+#                              per-point table was committed only in the
+#                              record's own Markdown. Three rows of section 5
+#                              are graded this way, and all three were in the
+#                              EXCLUSION table until 2026-09-26 for the reason
+#                              "no reduced CSV was committed, so the count
+#                              cannot be re-derived": sim/divider-ratio-chain's
+#                              235-point ratio table, sim/output-range's 90-row
+#                              closed-loop band-edge table, and sim/lock-time's
+#                              270-row cold/relock table. All three had been
+#                              committed all along. "No CSV" is not "no
+#                              evidence", and that reading cost three rows of
+#                              grading; this form exists so it cannot recur.
+#
+#                              A markdown table CAN be elided where a CSV
+#                              cannot, so this form carries a correspondence
+#                              rule a CSV does not need: the table must have
+#                              exactly one row per committed per-corner log in
+#                              sim/<campaign>/corners/<id>/ -- one row per
+#                              simulation that ran. Where the table's first
+#                              column is the per-corner point id (some records
+#                              write one; others head it `Corner` and split the
+#                              corner over several columns) the row SETS are
+#                              compared as well, which additionally catches a
+#                              duplicated or mistyped row at the right count.
+#                              Which tables got the stricter rule is printed in
+#                              the OK line -- the weaker one is never applied
+#                              silently.
+#
+#    A reduction over evidence that is not committed is not reproducible by a
+#    reader.
 #
 # 2. CITED. Every record a section 5.1 entry reduces must be cited by the
 #    section 5 row it is attached to -- or, where that row's Source cell says
@@ -84,7 +124,7 @@
 #
 # 6. DISCLOSED PER FIGURE, AND NOT STALE. Rule 5 is per row, not per number: a
 #    graded row can still hold a headline figure nothing re-derives. Section
-#    5.1's third table names each of those, and this check requires that each
+#    5.1's fourth table names each of those, and this check requires that each
 #    entry names a real section 5 row, that the row is one this check grades
 #    (a fully excluded row's figures are the exclusion table's business), that
 #    the figure is not also a graded value for that row, that a reason is
@@ -93,6 +133,63 @@
 #    had already gone wrong. It named four ungraded figures and missed a fifth
 #    (the output band row's `27 %` worst adjacent-band overlap, which was
 #    neither graded nor disclosed until it was graded in this pass).
+#
+# 7. DERIVED AGAINST A RATIFIED LINE. Some headline figures are not a reduction
+#    of committed evidence at all: they are a reduction DIVIDED BY A CONSTANT
+#    THAT IS WRITTEN DOWN IN A NORMATIVE DOCUMENT. `1.41x` is the worst
+#    measured VCTRL travel over the 0.6 V Budget 2 allows; `47 %` is the same
+#    travel over the 1.8 V width of DR-003 Decision 5's measured control
+#    window. Both sat in the ungraded list until 2026-09-26 for the reason "a
+#    ratio to a spec line is arithmetic on the line, not a column of the
+#    committed evidence" -- true about the column and wrong about the
+#    conclusion, in exactly the way section 5.2 had already shown for the spur
+#    derivation: a hand derivation is not ungradeable when every ingredient it
+#    uses is written down. Here both ingredients are. The measured one is a
+#    reduction this check already evaluates; the ratified one is a line in
+#    spec/pll.md.
+#
+#    A THIRD TABLE in section 5.1 carries them:
+#
+#      | section 5 row | Quoted value | Record(s) | Evidence file | Derivation | Constant | Scale |
+#      | Supply sensitivity -- DC ... | `1.41x` | `20260925-044237-4ff4f65` | `criterion1b_vctrl_budget.csv` | `max(span_full_v) / budget2-vctrl-consumption-v` | `0.6 V` | `1` |
+#
+#    Rules 1-5 apply to it unchanged -- the record must resolve and be cited by
+#    the row, the evidence must be committed, the figure must appear verbatim
+#    in the row, and a row graded here counts as graded for rule 5. On top of
+#    those:
+#
+#      a. THE CONSTANT IS READ, NEVER WRITTEN INTO THIS CHECK. The name in the
+#         derivation resolves through the CONSTANTS registry below, which
+#         reads the value out of spec/pll.md (and, where the spec cites one,
+#         out of that decision record), for the same reason the Icp trim rule
+#         is read rather than asserted: a re-ratified line has to fail this
+#         check in the same commit, not be graded against the superseded one.
+#
+#      b. EVERY STATEMENT OF THE CONSTANT MUST AGREE. Each resolver requires
+#         at least two independent statements of its line and fails if they
+#         differ. Budget 2's 0.6 V is stated twice in spec/pll.md (the spec
+#         table's row 12 and the Budget 2 section heading); the 0.9-2.7 V
+#         control window is stated in spec/pll.md's ratified assumptions and
+#         in DR-003 Decision 5, which that section 5 row cites. A document
+#         that contradicts itself about a ratified number is a failure here
+#         rather than a coin toss over which statement the check happened to
+#         match first.
+#
+#      c. THE TABLE'S OWN STATEMENT OF THE CONSTANT IS GRADED TOO. The
+#         Constant column is what a reader checks the arithmetic with, so it
+#         is compared against the resolved value at the precision written. It
+#         is not an input -- the derivation uses the resolved value.
+#
+#      d. NO COUNT NUMERATOR. A count over a ratified voltage is not a ratio;
+#         if a figure ever needs one, it needs a stated reason first.
+#
+#    And one guard shared with rule 4, which is what makes the remaining
+#    entries in the ungraded list honest: A RANGE IS NOT A FIGURE. The quoted
+#    value may not be a two-ended range (`0.1-0.5 dB`, `0.385 ... 0.846 V`),
+#    because the figure parser reads the number at the front and would grade
+#    the low end alone -- "grading half of a two-sided bound and calling it
+#    the bound" is the named defect the ungraded list exists to catch, and
+#    before this guard the check would have committed it silently.
 #
 # WHAT IT DOES NOT DO
 #
@@ -104,10 +201,13 @@
 # figure (rule 6) -- never "every number in section 5 is accounted for".
 # Overstating it would be the same defect this check exists to catch.
 #
-# It reduces committed CSVs only. It never runs a simulator, reads no logfile,
-# and cannot tell whether the simulation behind a CSV was the right experiment
-# -- that is what the record's own Methodology field and its campaign's
-# testbench are for.
+# It reduces committed *reduced* evidence only -- a per-corner CSV, or a
+# per-point table committed inside a record (rule 1). It never runs a simulator
+# and never parses a logfile's contents: the per-corner logs are read only as
+# NAMES, to prove a markdown table has one row per simulation that ran. So it
+# cannot tell whether the simulation behind a number was the right experiment --
+# that is what the record's own Methodology field and its campaign's testbench
+# are for.
 #
 # THE REDUCTION GRAMMAR
 #
@@ -129,15 +229,75 @@
 #       examined nothing would report exactly what a clean grid reports. The
 #       OK line therefore prints how many groups were examined.
 #
-#   min|max|mean|sum(adjacent-overlap(COL by AXIS) by KEY[+KEY...])
+#   min|max|mean|sum|sig3(adjacent-overlap(COL by AXIS) by KEY[+KEY...])
 #       Per group, the worst (smallest) fractional overlap between the COL
 #       intervals of consecutive AXIS values: max(COL at k) / min(COL at k+1)
 #       - 1, where negative is a hole rather than an overlap. A group with no
 #       pair of consecutive AXIS values is an error.
 #
+#   min|max|mean|sum|sig3(worst-magnitude(COL by AXIS) by KEY[+KEY...])
+#       Per group, the SIGNED COL value of the point with the largest
+#       magnitude across AXIS -- the "worst point in the window" selection
+#       sim/cp-compliance and sim/mc-cp-mismatch both use, which compares
+#       magnitudes to pick the point and then keeps that point's sign. Two
+#       points tying on magnitude with opposite signs is an error, not a
+#       coin toss.
+#
+# plus one STATISTIC, which is an aggregate rather than a verb and so composes
+# with everything above:
+#
+#   sig3(COL)   `|mean| + 3*sigma` over the selected values, with sigma the
+#               SAMPLE standard deviation (N-1). Fewer than two values is an
+#               error: a one-sample "3 sigma" is not a tail, it is a reading.
+#
+# THE THREE-LEVEL FORM, and why it exists
+#
+#   AGG(AGG(VERB(COL by AXIS) by KEY[+KEY...]) by KEY[+KEY...])
+#       Outer groups, each sub-grouped again, each sub-group's sequence
+#       reduced by VERB. The statistic that needs it is DR-018's term 1, the
+#       charge pump's UP/DN current mismatch: per Monte Carlo sample the
+#       worst-magnitude of three Vctrl points, then `|mean| + 3*sigma` over
+#       the samples of one corner, then the worst corner --
+#
+#         max(sig3(worst-magnitude(mism_pct by vctrl_v) by seed) by corner)
+#
+#       which is three nested reductions because the statistic is: a
+#       selection, a tail, and a worst case. Collapsing any level (pooling
+#       corners, folding the samples to their magnitudes) gives a DIFFERENT
+#       and smaller number -- 10.94 % pooled and 13.2172 % folded against
+#       17.4798 % -- which is exactly why DR-018 Decision 3 names the
+#       statistic rather than describing it, and why this grammar spells it
+#       out instead of hiding it in a verb.
+#
+#       SECOND IMPLEMENTATION -- KEEP THEM IN AGREEMENT.
+#       `spec/lib/check-mismatch-charge-derivation.sh` (rule 2) computes this
+#       same statistic from this same `mc_cp_dc.csv` in its own hard-coded
+#       arithmetic rather than through this grammar, because it needs the
+#       number as an ingredient of spec/pll.md's charge-accounting totals.
+#       Neither check subsumes the other -- that one asks whether the CHARGE
+#       TOTALS still follow from their samples, this one asks whether a
+#       PERCENTAGE QUOTED IN SECTION 5's PROSE is a reduction of committed
+#       evidence at all -- but they must not disagree. If the selection
+#       convention, the sample-sd (N-1) convention, the nesting order, or the
+#       signed-vs-folded reading moves in one, move it in the other and re-run
+#       both. Two routes to one number is what makes a silent drift loud.
+#
 # any of which may carry ` where COND[ and COND...]`, where COND is
-# `COL OP LITERAL` with OP one of == != < <= > >=. A literal that parses as a
-# number is compared numerically, otherwise as a string (== and != only).
+# `COL OP LITERAL` with OP one of == != < <= > >= ~=. A literal that parses as a
+# number is compared numerically, otherwise as a string (== and != only). COL
+# may contain a space or a hyphen -- a record's own tables head their columns
+# `DN guard` and `corner-id`.
+#
+# `~=` is the one operator that is not a comparison: it is SUBSTRING
+# CONTAINMENT, always on the cell's text, never numeric. It exists because a
+# per-point evidence table's only handle on a swept axis can be the point id
+# itself -- sim/divider-ratio-chain's per-point table has a `corner-id` of
+# `ss_125c_2.97v_f200n04` and no separate input-rate column, so "the divide
+# ratios exercised AT 200 MHz" is `where corner-id ~= f200` and nothing else.
+# Grading that figure without the filter would count the 10 MHz points too;
+# they happen to reuse N in {4, 64} today, so the count would be right by
+# accident and would go wrong silently the first time a bottom-of-band point
+# added an N the 200 MHz sweep does not have.
 #
 # One named predicate is available in a where clause:
 #
@@ -152,8 +312,10 @@
 # ratified rule changes, what CI enforces has to change in the same commit.
 #
 # Usage: sim/lib/check-quoted-value-provenance.sh
-# Exit codes: 0 every graded value re-derives, every section 5 row is accounted
-#             for, and every disclosed ungraded figure is still in its row;
+# Exit codes: 0 every graded value re-derives, every derived figure follows
+#             from its reduction and its ratified constant, every section 5 row
+#             is accounted for, and every disclosed ungraded figure is still in
+#             its row;
 #             1 any rule above is violated, a table is missing or empty, or the
 #             section 5 table cannot be parsed (a broken parser must not look
 #             like a clean tree).
@@ -173,6 +335,7 @@ fi
 
 python3 - "${REPO_ROOT}" "${PROPOSAL}" "${SPEC}" <<'PY'
 import csv
+import math
 import os
 import re
 import sys
@@ -244,6 +407,24 @@ def read_tables(text):
 # ------------------------------------------------------------------ numbers ---
 
 NUMBER = re.compile(r"^([+-]?\d+(?:\.\d+)?)(?:[eE]([+-]?\d+))?")
+
+#: A two-ended range, which is NOT a figure this check may grade.
+#:
+#: `parse_quoted` reads the number at the front of the string, so `0.1-0.5 dB`
+#: would be graded as `0.1` and the other end of the bound would never be
+#: looked at -- "grading half of a two-sided bound and calling it the bound",
+#: which is the defect section 5.1's ungraded list exists to make visible. The
+#: separator must be followed by a digit so that a figure whose UNITS carry a
+#: hyphen is untouched: `45-point PVT grid` and `0 non-monotonic curves of 504`
+#: are figures, `2.255e-4` is a figure, `0.385 ... 0.846 V` is a range.
+RANGE_FIGURE = re.compile(
+    r"^\s*[+\-−]?\d[\d.]*\s*(?:[–—−-]|\.\.\.|…)\s*"
+    r"[+\-−]?\d"
+)
+
+
+def is_range_figure(raw):
+    return bool(RANGE_FIGURE.match(raw.strip().strip("`").strip()))
 
 
 def parse_quoted(raw):
@@ -318,9 +499,112 @@ def read_icp_trim_rule(spec_text):
     return rule
 
 
+# ------------------------------------------------------ the ratified lines ---
+#
+# The constants a rule-7 derivation may divide by. Each resolver returns
+# (value, [(where it was read, value as stated), ...]) and is required to find
+# the line stated at least TWICE, in independent places, and to find the
+# statements in agreement. That is not belt-and-braces: a ratified number that
+# two sections of the spec disagree about is a spec defect, and a check that
+# matched whichever statement came first in the file would hide it behind a
+# figure that still "grades".
+#
+# Nothing here writes a number into this check. Every value is a capture group
+# out of a committed document, for the same reason read_icp_trim_rule is: when
+# a line is re-ratified, this check has to fail in the same commit rather than
+# keep grading the superseded one.
+
+class ConstantError(ValueError):
+    """A ratified constant that could not be read, or that disagrees."""
+
+
+def _one_agreed_value(label, readings):
+    """[(where, value)] -> the value, if there are >= 2 and they agree."""
+    if len(readings) < 2:
+        raise ConstantError(
+            "%s: found %d statement(s) of this ratified line, and at least 2 "
+            "independent ones are required (%s). A constant read from one "
+            "place is a constant nothing corroborates."
+            % (label, len(readings), "; ".join(w for w, _ in readings) or "none")
+        )
+    values = {round(v, 12) for _, v in readings}
+    if len(values) > 1:
+        raise ConstantError(
+            "%s: the ratified line is stated inconsistently -- %s. Which one "
+            "governs is a spec question, not this check's to pick."
+            % (label, "; ".join("%s says %g" % (w, v) for w, v in readings))
+        )
+    return readings[0][1]
+
+
+def read_budget2_consumption_v(docs):
+    """Budget 2's allowance, in volts of the VCTRL window (spec/pll.md).
+
+    Stated twice: in the spec table's Supply sensitivity target cell and in
+    the `Budget 2 -- DC` section heading that derives it.
+    """
+    readings = [
+        ("%s statement %d" % (spec_rel, i + 1), float(m))
+        for i, m in enumerate(
+            re.findall(
+                r"must consume ≤\s*([\d.]+)\s*V of the Vctrl window",
+                docs["spec"],
+            )
+        )
+    ]
+    return _one_agreed_value("budget2-vctrl-consumption-v", readings), readings
+
+
+def _window_readings(docs):
+    out = []
+    m = re.search(
+        r"Vctrl operating window \*\*([\d.]+)\s*[–-]\s*([\d.]+)\s*V\*\*",
+        docs["spec"],
+    )
+    if m:
+        out.append(("%s (ratified assumptions)" % spec_rel,
+                    (float(m.group(1)), float(m.group(2)))))
+    m = re.search(
+        r"usable Vctrl window is \*{0,2}([\d.]+)\s*[–-]\s*([\d.]+)\s*V",
+        docs.get("dr003", ""),
+    )
+    if m:
+        out.append(("DR-003 Decision 5",
+                    (float(m.group(1)), float(m.group(2)))))
+    return out
+
+
+def read_dr003_window_width_v(docs):
+    """The width of DR-003 Decision 5's measured 0.9-2.7 V control window.
+
+    The WIDTH is nowhere a primary number -- the window is ratified by its two
+    ends, so the width is derived from them here rather than matched against
+    the "1.8 V wide" the spec writes in passing. Reading the ends from both
+    spec/pll.md and the decision record it cites is what makes the derivation
+    safe: the proposal's own section 5 row cites DR-003 Decision 5, so a
+    divergence between the two documents is a divergence this figure rests on.
+    """
+    readings = _window_readings(docs)
+    widths = [(where, hi - lo) for where, (lo, hi) in readings]
+    ends = [(where, lo) for where, (lo, _) in readings]
+    _one_agreed_value("dr003-vctrl-window-width-v (window floor)", ends)
+    return _one_agreed_value("dr003-vctrl-window-width-v", widths), widths
+
+
+CONSTANTS = {
+    "budget2-vctrl-consumption-v": read_budget2_consumption_v,
+    "dr003-vctrl-window-width-v": read_dr003_window_width_v,
+}
+
+
 # --------------------------------------------------------------- reductions ---
 
-COND = re.compile(r"^([A-Za-z_][\w.]*)\s*(==|!=|<=|>=|<|>)\s*(.+)$")
+# A column name here may hold a hyphen or a space, because a record's own
+# tables head their columns as a reader reads them -- `corner-id`, `DN guard`,
+# `Target f_out` -- and a where-clause needs to name them. The column is
+# therefore everything left of the operator, matched non-greedily; clauses are
+# split on ` and ` first and no evidence column contains that token.
+COND = re.compile(r"^([A-Za-z_][\w.\- ]*?)\s*(~=|==|!=|<=|>=|<|>)\s*(.+)$")
 
 
 def make_predicate(where, icp_rule, ctx):
@@ -347,7 +631,7 @@ def make_predicate(where, icp_rule, ctx):
             return None
         col, op, literal = m.group(1), m.group(2), m.group(3).strip().strip("`")
         lit_num = as_float(literal)
-        if lit_num is None and op not in ("==", "!="):
+        if lit_num is None and op not in ("==", "!=", "~="):
             fail(
                 "%s: where-clause `%s` orders a non-numeric literal; only == "
                 "and != are defined for strings" % (ctx, clause)
@@ -368,6 +652,14 @@ def make_predicate(where, icp_rule, ctx):
             if col not in row:
                 return False
             cell = row[col]
+            if op == "~=":
+                # Substring containment, always on the text, even when both
+                # sides parse as numbers: `~=` selects a slice of an id, and
+                # "is 200 inside 1200" is not a comparison anyone would want
+                # answered numerically.
+                if literal not in str(cell).strip():
+                    return False
+                continue
             cell_num = as_float(cell)
             if lit_num is not None and cell_num is not None:
                 a, b = cell_num, lit_num
@@ -390,26 +682,69 @@ def make_predicate(where, icp_rule, ctx):
     return predicate
 
 
+class AggError(ValueError):
+    """An aggregate that cannot be formed over the values it was given."""
+
+
+def _sig3(values):
+    """`|mean| + 3*sigma`, sigma the SAMPLE standard deviation (N-1).
+
+    The worst-case magnitude of a signed error that has both a systematic
+    offset and a random spread, which is what DR-018 term 1 and term 3 are and
+    what `sim/mc-cp-mismatch/testbench/run.sh`'s own `sig3()` computes. Folding
+    the samples to their magnitudes first gives a SMALLER number (13.2172 %
+    against 17.4798 % on the same 300 samples, DR-018 Amendment A1), so the two
+    readings are not interchangeable and this one is the signed one.
+    """
+    if len(values) < 2:
+        raise AggError(
+            "sig3 needs at least two samples to have a standard deviation at "
+            "all; it was given %d" % len(values)
+        )
+    mean = sum(values) / len(values)
+    variance = sum((v - mean) ** 2 for v in values) / (len(values) - 1)
+    return abs(mean) + 3.0 * math.sqrt(variance)
+
+
 AGGS = {
     "min": min,
     "max": max,
     "mean": lambda vs: sum(vs) / len(vs),
     "sum": sum,
+    "sig3": _sig3,
 }
 
-OUTER = re.compile(r"^(min|max|mean|sum|count)\((.*)\)$", re.DOTALL)
-INNER_BY = re.compile(r"^(min|max|mean|sum)\((.*)\)\s+by\s+([\w+.]+)$", re.DOTALL)
+#: Every aggregate name, for the regexes below. `count` is deliberately not one
+#: of these -- it takes `rows`/`distinct ...` rather than a column.
+AGG_NAMES = "|".join(AGGS)
+
+OUTER = re.compile(r"^(" + AGG_NAMES + r"|count)\((.*)\)$", re.DOTALL)
+INNER_BY = re.compile(
+    r"^(" + AGG_NAMES + r")\((.*)\)\s+by\s+([\w+.]+)$", re.DOTALL
+)
 
 # A group-sequence derivation: the group's rows are a SEQUENCE along an axis,
 # and the figure is a property of that sequence rather than a reduction of its
 # cells. `non-monotonic` is a group *predicate* (true or false of one curve, so
-# only count(...) is defined over it); `adjacent-overlap` is a group *scalar*.
+# only count(...) is defined over it); `adjacent-overlap` and `worst-magnitude`
+# are group *scalars*, which is also what lets them compose three deep under a
+# second aggregate (see INNER_SEQ_NESTED) where a predicate cannot.
 SEQ_PREDICATES = ("non-monotonic",)
-SEQ_SCALARS = ("adjacent-overlap",)
+SEQ_SCALARS = ("adjacent-overlap", "worst-magnitude")
 SEQ_VERBS = SEQ_PREDICATES + SEQ_SCALARS
+SEQ_VERB_NAMES = "|".join(SEQ_VERBS)
 INNER_SEQ = re.compile(
-    r"^(" + "|".join(SEQ_VERBS) + r")\(\s*([\w.]+)\s+by\s+([\w.]+)\s*\)"
+    r"^(" + SEQ_VERB_NAMES + r")\(\s*([\w.]+)\s+by\s+([\w.]+)\s*\)"
     r"\s+by\s+([\w+.]+)$",
+    re.DOTALL,
+)
+
+# The three-level form: AGG(AGG(VERB(COL by AXIS) by KEY...) by KEY...). Matched
+# BEFORE INNER_BY, whose greedy `(.*)` would otherwise swallow the verb call and
+# then look for a column by that name.
+INNER_SEQ_NESTED = re.compile(
+    r"^(" + AGG_NAMES + r")\(\s*(" + SEQ_VERB_NAMES + r")\(\s*([\w.]+)\s+by\s+"
+    r"([\w.]+)\s*\)\s+by\s+([\w+.]+)\s*\)\s+by\s+([\w+.]+)$",
     re.DOTALL,
 )
 
@@ -467,40 +802,43 @@ def group_sequences(rows, keys, columns, reduction, ctx):
     return groups
 
 
-def apply_group_sequence(outer, verb, col, axis, keys, rows, reduction, ctx):
-    """Evaluate AGG(VERB(COL by AXIS) by KEY[+KEY...]). (value, is_count)."""
-    if verb in SEQ_PREDICATES and outer != "count":
-        fail(
-            "%s: `%s` is a group predicate -- it is true or false of one group "
-            "-- so only count(...) is defined over it, not %s(...)"
-            % (ctx, verb, outer)
-        )
-        return None
-    if verb in SEQ_SCALARS and outer == "count":
-        fail(
-            "%s: `%s` is a group scalar, not a predicate; count(...) over it is "
-            "not defined -- use min/max/mean/sum" % (ctx, verb)
-        )
+def apply_agg(name, values, reduction, ctx):
+    """AGGS[name](values), turning an AggError into a reported failure."""
+    try:
+        return AGGS[name](values)
+    except AggError as exc:
+        fail("%s: reduction `%s` cannot be formed -- %s" % (ctx, reduction, exc))
         return None
 
-    groups = group_sequences(rows, keys, [col, axis], reduction, ctx)
-    if groups is None:
-        return None
-    seq_stats["derivations"] += 1
-    seq_stats["groups"] += len(groups)
 
-    if verb == "non-monotonic":
-        violations = 0
-        for key, points in sorted(groups.items()):
-            ordered = sorted(points, key=lambda point: point[1])
-            if len(ordered) < 2:
-                fail(
-                    "%s: group %s holds %d point(s); a sequence test over fewer "
-                    "than two points is not a test"
-                    % (ctx, "/".join(key), len(ordered))
-                )
-                return None
-            axis_values = [point[1] for point in ordered]
+#: The verbs that read one point PER AXIS VALUE, so that a group holding two
+#: rows at the same AXIS value is ambiguous rather than richer. `non-monotonic`
+#: reads a curve and `worst-magnitude` selects one point of a window; both are
+#: in this set. `adjacent-overlap` deliberately is NOT: its groups hold a whole
+#: control sweep at each band code, and collapsing those to one point per band
+#: is the interval it measures.
+SEQ_VERBS_ONE_POINT_PER_AXIS_VALUE = ("non-monotonic", "worst-magnitude")
+
+
+def ordered_group_points(groups, verb, axis, reduction, ctx):
+    """Each group's points ordered by AXIS, with the ambiguity guards applied.
+
+    A group of fewer than two points is not a sequence for any verb. A repeated
+    AXIS value is an error only for the verbs that read one point per axis value
+    (see above). Both are errors rather than skips -- see group_sequences().
+    """
+    ordered = {}
+    for key, points in sorted(groups.items()):
+        points = sorted(points, key=lambda point: point[1])
+        if len(points) < 2:
+            fail(
+                "%s: group %s holds %d point(s); a sequence test over fewer "
+                "than two points is not a test"
+                % (ctx, "/".join(key), len(points))
+            )
+            return None
+        if verb in SEQ_VERBS_ONE_POINT_PER_AXIS_VALUE:
+            axis_values = [point[1] for point in points]
             if len(set(axis_values)) != len(axis_values):
                 fail(
                     "%s: group %s repeats a value of the ordering column `%s`, "
@@ -508,19 +846,47 @@ def apply_group_sequence(outer, verb, col, axis, keys, rows, reduction, ctx):
                     % (ctx, "/".join(key), axis)
                 )
                 return None
-            series = [point[0] for point in ordered]
-            steps = list(zip(series, series[1:]))
-            rising = all(b >= a for a, b in steps)
-            falling = all(b <= a for a, b in steps)
-            if not rising and not falling:
-                violations += 1
-        return float(violations), True
+        ordered[key] = points
+    return ordered
 
-    # adjacent-overlap: per group, the worst (smallest) fractional overlap
-    # between the COL intervals of consecutive AXIS values. max(COL at k) /
-    # min(COL at k+1) - 1; negative means a hole rather than an overlap.
-    worst_per_group = []
-    for key, points in sorted(groups.items()):
+
+def sequence_group_scalars(verb, col, axis, keys, rows, reduction, ctx):
+    """{group key: the verb's scalar for that group} for a SEQ_SCALAR verb."""
+    groups = group_sequences(rows, keys, [col, axis], reduction, ctx)
+    if groups is None:
+        return None
+    ordered = ordered_group_points(groups, verb, axis, reduction, ctx)
+    if ordered is None:
+        return None
+    # Group accounting only: a three-level reduction calls this once per outer
+    # partition, and the OK line counts DERIVATIONS (one per section 5.1 entry),
+    # not invocations. Its callers do that half.
+    seq_stats["groups"] += len(ordered)
+
+    scalars = {}
+    for key, points in ordered.items():
+        if verb == "worst-magnitude":
+            best = max(abs(value) for value, _ in points)
+            candidates = {value for value, _ in points if abs(value) == best}
+            if len(candidates) > 1:
+                fail(
+                    "%s: group %s has two points tying at magnitude %g with "
+                    "different signs (%s), so the worst point's sign is "
+                    "ambiguous"
+                    % (
+                        ctx,
+                        "/".join(key),
+                        best,
+                        ", ".join("%g" % c for c in sorted(candidates)),
+                    )
+                )
+                return None
+            scalars[key] = candidates.pop()
+            continue
+
+        # adjacent-overlap: the worst (smallest) fractional overlap between the
+        # COL intervals of consecutive AXIS values. max(COL at k) / min(COL at
+        # k+1) - 1; negative means a hole rather than an overlap.
         spans = {}
         for value, step in points:
             low, high = spans.get(step, (value, value))
@@ -544,8 +910,111 @@ def apply_group_sequence(outer, verb, col, axis, keys, rows, reduction, ctx):
                 % (ctx, "/".join(key), axis)
             )
             return None
-        worst_per_group.append(min(overlaps))
-    return AGGS[outer](worst_per_group), False
+        scalars[key] = min(overlaps)
+    return scalars
+
+
+def apply_nested_group_sequence(
+    outer, inner, verb, col, axis, inner_keys, outer_keys, rows, reduction, ctx
+):
+    """Evaluate AGG(AGG(VERB(COL by AXIS) by KEY...) by KEY...).
+
+    The outer keys partition the rows; inside each partition the inner keys do
+    it again, each innermost group's AXIS sequence collapses to the verb's
+    scalar, `inner` combines those and `outer` combines the partitions. Only
+    SEQ_SCALAR verbs compose this way: a group predicate is true or false, and
+    `sig3` of a set of booleans is not a statistic anyone means.
+    """
+    if verb in SEQ_PREDICATES:
+        fail(
+            "%s: `%s` is a group predicate -- it is true or false of one group "
+            "-- so it does not compose into a three-level reduction; only "
+            "count(%s(...) by ...) is defined over it" % (ctx, verb, verb)
+        )
+        return None
+    missing = [col for col in list(outer_keys) if rows and col not in rows[0]]
+    if missing:
+        fail(
+            "%s: reduction `%s` groups by column `%s`, which the evidence file "
+            "does not have (columns: %s)"
+            % (ctx, reduction, missing[0], ", ".join(sorted(rows[0])))
+        )
+        return None
+    partitions = {}
+    for row in rows:
+        partitions.setdefault(
+            tuple(str(row.get(k, "")).strip() for k in outer_keys), []
+        ).append(row)
+    if not partitions:
+        fail(
+            "%s: reduction `%s` formed no groups at all. There is nothing to "
+            "derive, and an empty derivation must not read as a passing zero."
+            % (ctx, reduction)
+        )
+        return None
+    seq_stats["derivations"] += 1
+    inner_values = []
+    for key in sorted(partitions):
+        scalars = sequence_group_scalars(
+            verb, col, axis, inner_keys, partitions[key], reduction, ctx
+        )
+        if scalars is None:
+            return None
+        value = apply_agg(inner, list(scalars.values()), reduction, ctx)
+        if value is None:
+            return None
+        inner_values.append(value)
+    value = apply_agg(outer, inner_values, reduction, ctx)
+    if value is None:
+        return None
+    return value, False
+
+
+def apply_group_sequence(outer, verb, col, axis, keys, rows, reduction, ctx):
+    """Evaluate AGG(VERB(COL by AXIS) by KEY[+KEY...]). (value, is_count)."""
+    if verb in SEQ_PREDICATES and outer != "count":
+        fail(
+            "%s: `%s` is a group predicate -- it is true or false of one group "
+            "-- so only count(...) is defined over it, not %s(...)"
+            % (ctx, verb, outer)
+        )
+        return None
+    if verb in SEQ_SCALARS and outer == "count":
+        fail(
+            "%s: `%s` is a group scalar, not a predicate; count(...) over it is "
+            "not defined -- use %s" % (ctx, verb, "/".join(AGGS))
+        )
+        return None
+
+    if verb == "non-monotonic":
+        groups = group_sequences(rows, keys, [col, axis], reduction, ctx)
+        if groups is None:
+            return None
+        ordered_groups = ordered_group_points(
+            groups, verb, axis, reduction, ctx
+        )
+        if ordered_groups is None:
+            return None
+        seq_stats["derivations"] += 1
+        seq_stats["groups"] += len(ordered_groups)
+        violations = 0
+        for _, points in sorted(ordered_groups.items()):
+            series = [point[0] for point in points]
+            steps = list(zip(series, series[1:]))
+            rising = all(b >= a for a, b in steps)
+            falling = all(b <= a for a, b in steps)
+            if not rising and not falling:
+                violations += 1
+        return float(violations), True
+
+    seq_stats["derivations"] += 1
+    scalars = sequence_group_scalars(verb, col, axis, keys, rows, reduction, ctx)
+    if scalars is None:
+        return None
+    value = apply_agg(outer, list(scalars.values()), reduction, ctx)
+    if value is None:
+        return None
+    return value, False
 
 
 def apply_reduction(reduction, rows, icp_rule, ctx):
@@ -555,6 +1024,27 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
         fail("%s: cannot parse reduction `%s`" % (ctx, reduction))
         return None
     outer, body = m.group(1), m.group(2).strip()
+
+    three_level = INNER_SEQ_NESTED.match(body)
+    if three_level:
+        if outer == "count":
+            fail(
+                "%s: `count(... by ...)` is not defined -- use "
+                "count(distinct KEY+KEY)" % ctx
+            )
+            return None
+        return apply_nested_group_sequence(
+            outer,
+            three_level.group(1),
+            three_level.group(2),
+            three_level.group(3).strip(),
+            three_level.group(4).strip(),
+            three_level.group(5).split("+"),
+            three_level.group(6).split("+"),
+            rows,
+            reduction,
+            ctx,
+        )
 
     nested = INNER_BY.match(body)
     if nested:
@@ -586,8 +1076,16 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
         if not groups:
             fail("%s: reduction `%s` selected no rows" % (ctx, reduction))
             return None
-        inner = [AGGS[inner_agg](v) for v in groups.values()]
-        return AGGS[outer](inner), False
+        inner = []
+        for values in groups.values():
+            value = apply_agg(inner_agg, values, reduction, ctx)
+            if value is None:
+                return None
+            inner.append(value)
+        value = apply_agg(outer, inner, reduction, ctx)
+        if value is None:
+            return None
+        return value, False
 
     sequence = INNER_SEQ.match(body)
     if sequence:
@@ -601,11 +1099,13 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
             reduction,
             ctx,
         )
-    if re.match(r"^(" + "|".join(SEQ_VERBS) + r")\(", body):
+    if re.search(r"(?:^|\()(?:" + SEQ_VERB_NAMES + r")\(", body):
         fail(
             "%s: cannot parse reduction `%s` -- a group-sequence derivation is "
-            "spelled AGG(VERB(COL by AXIS) by KEY[+KEY...]) and takes no "
-            "where-clause" % (ctx, reduction)
+            "spelled AGG(VERB(COL by AXIS) by KEY[+KEY...]), or "
+            "AGG(AGG(VERB(COL by AXIS) by KEY[+KEY...]) by KEY[+KEY...]) for "
+            "the three-level form, and takes no where-clause"
+            % (ctx, reduction)
         )
         return None
 
@@ -646,7 +1146,10 @@ def apply_reduction(reduction, rows, icp_rule, ctx):
     if not values:
         fail("%s: reduction `%s` selected no numeric values" % (ctx, reduction))
         return None
-    return AGGS[outer](values), False
+    value = apply_agg(outer, values, reduction, ctx)
+    if value is None:
+        return None
+    return value, False
 
 
 def _split_where(body):
@@ -660,6 +1163,216 @@ def read_csv_rows(path):
     with open(path, encoding="utf-8") as fh:
         lines = [line for line in fh if not line.lstrip().startswith("#")]
     return list(csv.DictReader(lines))
+
+
+#: How many in-record tables were read, and under which of the two
+#: correspondence rules (see read_record_table). Reported in the OK line
+#: because the weaker rule must never be applied silently.
+record_table_stats = {"id_matched": 0, "count_matched": 0}
+
+#: `<record-id>.md § <first column name>` -- the record's own per-point table as
+#: an evidence source (rule 1). The record id is repeated inside the spec on
+#: purpose: an entry may only read the markdown of the record it declares.
+RECORD_TABLE = re.compile(r"^(" + RECORD_ID + r")\.md\s*§\s*([\w.\-/]+)$")
+
+
+def read_record_table(rid, campaign, first_col, ctx):
+    """A pipe table committed inside a record, in CSV-row shape.
+
+    The table is identified by its first column's name, which must be unique
+    among the record's tables. Cells are stripped of the backticks the record
+    writes ids in, so a reduction sees the same strings a CSV would give it.
+
+    THE ANTI-TRUNCATION RULE. A CSV cannot be abbreviated without being wrong;
+    a markdown table can be elided, summarised, or hand-trimmed, and a
+    `count(rows)` over an elided table is a smaller number that still looks
+    like an answer. So the table must have exactly one row per committed
+    per-corner log -- one row per simulation that ran. That correspondence is
+    checked against the logs, which are raw evidence, and never against the
+    record's own declared point count, which is the claim rather than the
+    evidence.
+
+    Where the table's first column IS the per-corner point id -- which some
+    campaigns write and others do not, heading it `Corner` and splitting the
+    corner across several columns instead -- the row SETS are compared too, not
+    just their sizes: that additionally catches a duplicated or mistyped row
+    that the count rule alone would let through. The stricter rule is applied
+    whenever the evidence supports it and its absence is never silent: the OK
+    line names which tables got which.
+    """
+    rec_path = os.path.join(repo_root, "sim", campaign, "records", rid + ".md")
+    if not os.path.isfile(rec_path):
+        fail("%s: no record at sim/%s/records/%s.md" % (ctx, campaign, rid))
+        return None
+    with open(rec_path, encoding="utf-8") as fh:
+        record_text = fh.read()
+    matches = [
+        (header, body)
+        for header, body in read_tables(record_text)
+        if header and header[0].strip().strip("`") == first_col
+    ]
+    if not matches:
+        fail(
+            "%s: sim/%s/records/%s.md has no table whose first column is `%s`"
+            % (ctx, campaign, rid, first_col)
+        )
+        return None
+    if len(matches) > 1:
+        fail(
+            "%s: sim/%s/records/%s.md has %d tables whose first column is `%s`. "
+            "An evidence source has to name one table, not a shape several "
+            "tables share." % (ctx, campaign, rid, len(matches), first_col)
+        )
+        return None
+    header, body = matches[0]
+    names = [cell.strip().strip("`") for cell in header]
+    rows = []
+    for cells in body:
+        if len(cells) != len(names):
+            fail(
+                "%s: a row of the `%s` table in sim/%s/records/%s.md has %d "
+                "cells, not the %d its header declares: %r"
+                % (ctx, first_col, campaign, rid, len(cells), len(names), cells)
+            )
+            return None
+        rows.append(
+            {
+                name: cell.strip().strip("`")
+                for name, cell in zip(names, cells)
+            }
+        )
+
+    corners_dir = os.path.join(repo_root, "sim", campaign, "corners", rid)
+    logs = (
+        sorted(
+            name[: -len(".log")]
+            for name in os.listdir(corners_dir)
+            if name.endswith(".log")
+        )
+        if os.path.isdir(corners_dir)
+        else []
+    )
+    if not logs:
+        fail(
+            "%s: sim/%s/corners/%s/ commits no per-corner logs, so the `%s` "
+            "table's row set cannot be checked against the simulations that "
+            "ran. A markdown table nothing corroborates is prose."
+            % (ctx, campaign, rid, first_col)
+        )
+        return None
+    if len(rows) != len(logs):
+        fail(
+            "%s: the `%s` table in sim/%s/records/%s.md has %d row(s) against "
+            "the %d per-corner log(s) sim/%s/corners/%s/ commits. One row per "
+            "simulation that ran is what makes a count over this table a claim "
+            "about the campaign; a table that was truncated, summarised or "
+            "hand-trimmed must not read as a smaller, passing answer."
+            % (
+                ctx,
+                first_col,
+                campaign,
+                rid,
+                len(rows),
+                len(logs),
+                campaign,
+                rid,
+            )
+        )
+        return None
+
+    ids = sorted(str(row.get(first_col, "")).strip() for row in rows)
+    log_set = set(logs)
+    if any(i in log_set for i in ids):
+        # The first column is the per-corner point id, so the row SETS are
+        # comparable and not merely their sizes.
+        record_table_stats["id_matched"] += 1
+        if ids != logs:
+            missing = sorted(log_set - set(ids))
+            extra = sorted(set(ids) - log_set)
+            dupes = sorted({i for i in ids if ids.count(i) > 1})
+            fail(
+                "%s: the `%s` table in sim/%s/records/%s.md has one row per "
+                "committed log by count, but not by identity -- %d log(s) with "
+                "no row (%s), %d row(s) with no log (%s), %d duplicated row id "
+                "(%s)."
+                % (
+                    ctx,
+                    first_col,
+                    campaign,
+                    rid,
+                    len(missing),
+                    ", ".join(missing[:3]) or "-",
+                    len(extra),
+                    ", ".join(extra[:3]) or "-",
+                    len(dupes),
+                    ", ".join(dupes[:3]) or "-",
+                )
+            )
+            return None
+    else:
+        record_table_stats["count_matched"] += 1
+    return rows
+
+
+def collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx):
+    """The committed rows an entry reduces, or None if any rule 1/2 fails.
+
+    Shared by the graded-value table (rule 4) and the derived-figure table
+    (rule 7) so that "which evidence an entry may read" has exactly one
+    implementation. A second copy would be free to drift, and the rule it
+    encodes -- an entry may only reduce a record the section 5 row itself
+    cites -- is the one that stops section 5.1 smuggling in evidence.
+    """
+    rows = []
+    resolved = True
+    for rid in record_ids:
+        if rid not in records:
+            fail("%s: record `%s` is not on the tree" % (ctx, rid))
+            resolved = False
+            continue
+        if rid not in spec_cited:
+            fail(
+                "%s: reduces record `%s`, which that section 5 row does not "
+                "cite. A value may only be re-derived from evidence the row "
+                "itself points a reader at." % (ctx, rid)
+            )
+            resolved = False
+            continue
+        table_spec = RECORD_TABLE.match(evidence_file)
+        if table_spec:
+            if table_spec.group(1) != rid:
+                fail(
+                    "%s: names evidence inside record `%s`'s markdown while "
+                    "reducing record `%s`. An entry may only read the record it "
+                    "declares." % (ctx, table_spec.group(1), rid)
+                )
+                resolved = False
+                continue
+            in_record = read_record_table(
+                rid, records[rid], table_spec.group(2), ctx
+            )
+            if in_record is None:
+                resolved = False
+                continue
+            rows.extend(in_record)
+            continue
+        path = os.path.join(
+            repo_root, "sim", records[rid], "corners", rid, evidence_file
+        )
+        if not os.path.isfile(path):
+            fail(
+                "%s: no committed evidence file at sim/%s/corners/%s/%s"
+                % (ctx, records[rid], rid, evidence_file)
+            )
+            resolved = False
+            continue
+        rows.extend(read_csv_rows(path))
+    if not resolved:
+        return None
+    if not rows:
+        fail("%s: the evidence file(s) hold no data rows" % ctx)
+        return None
+    return rows
 
 
 records = {}
@@ -686,11 +1399,53 @@ if os.path.isfile(spec_path):
         spec_text = fh.read()
 icp_rule = read_icp_trim_rule(spec_text)
 
+# The documents a rule-7 constant may be read out of: the ratified spec, and
+# the decision records the spec cites for a line it does not restate in full.
+dr_dir = os.path.join(repo_root, "spec", "decision-records")
+constant_docs = {"spec": spec_text, "dr003": ""}
+if os.path.isdir(dr_dir):
+    for name in sorted(os.listdir(dr_dir)):
+        if name.startswith("DR-003-") and name.endswith(".md"):
+            with open(os.path.join(dr_dir, name), encoding="utf-8") as fh:
+                constant_docs["dr003"] = fh.read()
+            break
+
+#: name -> (value, [(where it was read, value)]), resolved on first use.
+resolved_constants = {}
+
+
+def resolve_constant(name, ctx):
+    if name in resolved_constants:
+        return resolved_constants[name]
+    if name not in CONSTANTS:
+        fail(
+            "%s: `%s` is not a ratified constant this check knows how to "
+            "read. Known constants: %s. A constant is added by teaching this "
+            "check to READ it out of a committed document, never by writing "
+            "the number here." % (ctx, name, ", ".join(sorted(CONSTANTS)))
+        )
+        resolved_constants[name] = None
+        return None
+    try:
+        value, readings = CONSTANTS[name](constant_docs)
+    except ConstantError as exc:
+        fail("%s: %s" % (ctx, exc))
+        resolved_constants[name] = None
+        return None
+    if value == 0:
+        fail("%s: ratified constant `%s` reads as zero" % (ctx, name))
+        resolved_constants[name] = None
+        return None
+    resolved_constants[name] = (value, readings)
+    return resolved_constants[name]
+
+
 tables = read_tables(proposal)
 
 spec_rows = None          # normalized name -> (cells, source records)
 spec_row_order = []
 provenance = None
+derived_figures = None
 exclusions = None
 ungraded_figures = None
 
@@ -708,6 +1463,15 @@ for header, body in tables:
                 inherited = cited
             spec_rows[name] = (cells, cited or list(inherited))
             spec_row_order.append(name)
+    elif (
+        len(header) >= 7
+        and header[1].lower().startswith("quoted value")
+        and header[4].lower().startswith("derivation")
+    ):
+        # The rule-7 table. Discriminated on its `Derivation` column BEFORE
+        # the graded-value table, because both are headed `Quoted value` and
+        # a bare "second column" test would read one as the other.
+        derived_figures = body
     elif len(header) >= 6 and header[1].lower().startswith("quoted value"):
         provenance = body
     elif len(header) >= 2 and header[1].lower().startswith("why no value"):
@@ -732,6 +1496,16 @@ if not provenance:
         "FAIL: %s has no non-empty section 5.1 value-provenance table (a "
         "header row whose second column is `Quoted value`). Every measured "
         "figure in section 5 would then be ungraded.\n" % proposal_rel
+    )
+    sys.exit(1)
+
+if not derived_figures:
+    sys.stderr.write(
+        "FAIL: %s has no non-empty section 5.1 derived-figure table (a header "
+        "row whose second column is `Quoted value` and whose fifth is "
+        "`Derivation`). Deleting it would not make the figures it grades "
+        "ungraded-and-declared; it would make them ungraded and silent, which "
+        "is the state this section exists to prevent.\n" % proposal_rel
     )
     sys.exit(1)
 
@@ -796,35 +1570,17 @@ for cells in provenance:
         fail("%s: names no record id" % ctx)
         continue
 
-    rows = []
-    resolved = True
-    for rid in record_ids:
-        if rid not in records:
-            fail("%s: record `%s` is not on the tree" % (ctx, rid))
-            resolved = False
-            continue
-        if rid not in spec_cited:
-            fail(
-                "%s: reduces record `%s`, which that section 5 row does not "
-                "cite. A value may only be re-derived from evidence the row "
-                "itself points a reader at." % (ctx, rid)
-            )
-            resolved = False
-            continue
-        path = os.path.join(
-            repo_root, "sim", records[rid], "corners", rid, evidence_file
+    rows = collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx)
+    if rows is None:
+        continue
+
+    if is_range_figure(quoted_raw):
+        fail(
+            "%s: the quoted value is a two-ended range. Only the number at "
+            "its front would be graded, which is grading half of a two-sided "
+            "bound and calling it the bound -- grade each end as its own "
+            "entry, or declare the range in the ungraded-figure table." % ctx
         )
-        if not os.path.isfile(path):
-            fail(
-                "%s: no committed evidence file at sim/%s/corners/%s/%s"
-                % (ctx, records[rid], rid, evidence_file)
-            )
-            resolved = False
-            continue
-        rows.extend(read_csv_rows(path))
-    if not resolved or not rows:
-        if resolved:
-            fail("%s: the evidence file(s) hold no data rows" % ctx)
         continue
 
     parsed = parse_quoted(quoted_raw)
@@ -863,6 +1619,142 @@ for cells in provenance:
             "%s: section 5 says %s; `%s` over %s gives %.6g, which does not "
             "round to it at the %d decimal place(s) written"
             % (ctx, quoted_plain, reduction, evidence_file, derived, decimals)
+        )
+
+# ---- rule 7: figures derived from a reduction and a ratified constant -------
+
+derived_checked = 0
+constants_used = set()
+
+for cells in derived_figures or []:
+    if len(cells) < 7:
+        fail("section 5.1 derived-figure row has %d columns, expected 7: %r"
+             % (len(cells), cells))
+        continue
+    row_name = normalize_row_name(cells[0])
+    quoted_raw = cells[1].strip()
+    record_ids = re.findall(RECORD_ID, cells[2])
+    evidence_file = cells[3].strip().strip("`")
+    derivation = cells[4].strip().strip("`")
+    constant_stated = cells[5].strip().strip("`")
+    scale_raw = cells[6].strip().strip("`")
+    ctx = "section 5.1 derived figure %s / %s" % (row_name, quoted_raw)
+
+    if row_name not in spec_rows:
+        fail(
+            "%s: names a section 5 row that does not exist. Section 5's rows "
+            "are: %s" % (ctx, "; ".join(spec_row_order))
+        )
+        continue
+    graded_rows.add(row_name)
+    spec_cells, spec_cited = spec_rows[row_name]
+
+    quoted_plain = quoted_raw.strip("`").strip()
+    graded_values.setdefault(row_name, set()).add(quoted_plain)
+    if quoted_plain not in " || ".join(spec_cells[1:4]):
+        fail(
+            "%s: the derived figure does not appear in that section 5 row. "
+            "Section 5.1 and section 5 have drifted apart -- one of them was "
+            "edited and the other was not." % ctx
+        )
+
+    parts = re.split(r"\s+/\s+", derivation)
+    if len(parts) != 2:
+        fail(
+            "%s: cannot read the derivation `%s`. The form is "
+            "`<reduction> / <ratified constant>`, one divisor, named."
+            % (ctx, derivation)
+        )
+        continue
+    reduction, constant_name = parts[0].strip(), parts[1].strip()
+
+    if not record_ids:
+        fail("%s: names no record id" % ctx)
+        continue
+
+    rows = collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx)
+    if rows is None:
+        continue
+
+    if is_range_figure(quoted_raw):
+        fail(
+            "%s: the derived figure is a two-ended range. Only the number at "
+            "its front would be graded, which is grading half of a two-sided "
+            "bound and calling it the bound -- derive each end as its own "
+            "entry, or declare the range in the ungraded-figure table." % ctx
+        )
+        continue
+
+    parsed = parse_quoted(quoted_raw)
+    if parsed is None:
+        fail("%s: cannot read a number out of the derived figure" % ctx)
+        continue
+    mantissa, exp, decimals = parsed
+
+    scale = as_float(scale_raw)
+    if scale is None:
+        fail("%s: scale `%s` is not a number" % (ctx, scale_raw))
+        continue
+
+    constant = resolve_constant(constant_name, ctx)
+    if constant is None:
+        continue
+    constant_value, constant_readings = constant
+    constants_used.add(constant_name)
+
+    # The table's own statement of the line is graded against the documents.
+    # It is a reader's handle on the arithmetic, not an input to it.
+    stated = parse_quoted(constant_stated)
+    if stated is None:
+        fail(
+            "%s: the Constant column `%s` states no number. It has to state "
+            "the line the derivation divides by, so a reader can do the "
+            "arithmetic." % (ctx, constant_stated)
+        )
+    elif not rounds_to(constant_value, *stated):
+        fail(
+            "%s: the Constant column states %s, but `%s` reads %.6g out of "
+            "%s. The document and the ratified line have drifted apart."
+            % (
+                ctx,
+                constant_stated,
+                constant_name,
+                constant_value,
+                "; ".join(where for where, _ in constant_readings),
+            )
+        )
+
+    result = apply_reduction(reduction, rows, icp_rule, ctx)
+    if result is None:
+        continue
+    raw_value, is_count = result
+
+    if is_count:
+        fail(
+            "%s: the numerator is a count. A count over a ratified quantity "
+            "is not a ratio; a figure that needs one needs a stated reason "
+            "first." % ctx
+        )
+        continue
+
+    derived = (raw_value / constant_value) * scale
+    derived_checked += 1
+
+    if not rounds_to(derived, mantissa, exp, decimals):
+        fail(
+            "%s: section 5 says %s; `%s` over %s gives %.6g, and over the "
+            "ratified %.6g that is %.6g, which does not round to it at the "
+            "%d decimal place(s) written"
+            % (
+                ctx,
+                quoted_plain,
+                reduction,
+                evidence_file,
+                raw_value,
+                constant_value,
+                derived,
+                decimals,
+            )
         )
 
 excluded_rows = set()
@@ -953,14 +1845,27 @@ if errors:
 print(
     "OK: %d quoted values re-derived from committed per-corner evidence and "
     "matched at the precision written (%d of them group-sequence derivations "
-    "over %d groups); all %d section 5 rows accounted for (%d graded, %d with a "
-    "stated reason) and %d ungraded figure(s) in graded rows disclosed and "
-    "still present in their row; Icp trim-code rule read from %s (%d reference "
-    "frequencies)"
+    "over %d groups); %d further figure(s) derived against %d ratified "
+    "constant(s) read from the spec and its decision records (%s); %d "
+    "in-record table(s) read, %d checked row-for-row "
+    "against the committed logs by point id and %d by row count alone; all %d "
+    "section 5 rows accounted for (%d graded, %d with a stated reason) and %d "
+    "ungraded figure(s) in graded rows disclosed and still present in their "
+    "row; Icp trim-code rule read from %s (%d reference frequencies)"
     % (
         checked,
         seq_stats["derivations"],
         seq_stats["groups"],
+        derived_checked,
+        len(constants_used),
+        "; ".join(
+            "%s = %g" % (name, resolved_constants[name][0])
+            for name in sorted(constants_used)
+            if resolved_constants.get(name)
+        ) or "none",
+        record_table_stats["id_matched"] + record_table_stats["count_matched"],
+        record_table_stats["id_matched"],
+        record_table_stats["count_matched"],
         len(spec_row_order),
         len(graded_rows),
         len(excluded_rows),
