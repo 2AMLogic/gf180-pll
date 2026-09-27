@@ -358,7 +358,10 @@ cat >"${RECORD}" <<EOF
   \`nfet_03v3_dss\`/\`pfet_03v3_dss\` subcircuits) carry independent
   per-instance \`agauss()\` mismatch draws gated by \`sw_stat_mismatch\`,
   parsed once at netlist PARSE time, reproducible via \`.option rndseed=N\`.
-  Not re-derived here.
+  That reproducibility claim is HOST-SCOPED -- same host, same build, same
+  seed -> same draw; a different host is an independent replicate, not a
+  reproduction of the same sample -- see sim/README.md's "Statistical
+  convention" field. Not re-derived here.
 - **Why a raw \`sim/lib/simenv.sh\` deck, not a \`testbench/tb.json\` manifest
   edit**: see \`run_mismatch.sh\`'s header comment for the full finding --
   in short, \`sim/harness/runner.py\`'s \`compose_deck()\` emits a manifest's

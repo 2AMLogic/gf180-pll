@@ -617,7 +617,8 @@ apply is written as `N/A` **with a reason**, not omitted.
     the netlist came from a schematic export (e.g. `xschem 3.4.7`)
   - this repo's git commit, **and whether the tree was dirty**
   - host OS/arch, if the result is at all sensitive to it (long transients
-    and RNG-seeded analyses are)
+    and RNG-seeded analyses are — see "Statistical convention" above for the
+    host-scoped seed-reproducibility claim this field documents)
   - **where the points actually ran**, when that is not the host that minted
     the record. The `Host:` bullet names the *recording* host, which is the
     executing host only while every point runs locally. A campaign dispatched
@@ -711,6 +712,44 @@ apply is written as `N/A` **with a reason**, not omitted.
   analysis) — N samples and sigma level reported, plus which mismatch/
   process variation model was enabled. Used for distribution claims that are
   not a per-corner pass/fail (#15).
+
+  **The recorded-seed reproducibility claim is host-scoped (issue #611).**
+  Every Monte Carlo record in this repository sets `.option rndseed=N` (never
+  `set rndseed=N` inside `.control` — the per-instance `agauss()` mismatch
+  draws inside `nfet_03v3_dss`/`pfet_03v3_dss` are evaluated once at netlist
+  *parse* time, before any `.control` block runs) and states that this makes
+  the draws reproducible. That is true, but narrower than it reads: the same
+  seed reproduces the same draw only **within one build on one host** — a
+  different host with the same seed, deck, and pinned `ngspice` version draws
+  a **different sample** from the same distribution, not a different
+  numerical answer to the same one. This was found comparing two committed
+  `sim/mc-cp-mismatch` records covering the same corner and seed on different
+  hosts, whose per-seed values differed by ~2.7 percentage points against a
+  ~4 % per-corner σ (`sim/mc-cp-mismatch/testbench/run.sh`'s record template
+  carries the full worked comparison). Read the reproducibility claim as:
+  same host + same build + same seed → same draw; a different host is an
+  **independent replicate** of the same campaign, not a reproduction of the
+  same sample. Consequently, a **per-seed** comparison across hosts is
+  meaningless — only a **distribution-level** comparison (N, mean, σ) is. This
+  does not affect `--restat`-style reduction: that re-reduces already-committed
+  samples from their CSVs and is exactly reproducible on any host, because
+  nothing re-draws.
+
+  This is a different case from **[DR-028](../spec/decision-records/DR-028-batch-executed-records-run-a-second-ngspice-version.md)**'s
+  cross-host finding, not a restatement of it: DR-028 measured this repo's
+  same-version cross-host floor on a **deterministic** quantity
+  (`sim/period-jitter`), where a cross-host re-run is a reproducibility
+  **check** read against that floor. Here the quantity being re-run is itself
+  a Monte Carlo sample, so a cross-host re-run has no floor to check against —
+  it is a replicate, not a check. The two findings are both about cross-host
+  behaviour but do not generalize to each other.
+
+  **Documentation of the comparison host is the Environment provenance
+  field's job, not a separate mandatory field.** A reader comparing two
+  records' seeds already has to read each record's Environment provenance
+  "where the points actually ran" host disclosure before assuming they share
+  one; no campaign runner is required to additionally assert *which* host a
+  new record should be compared against.
 
 - **Result** — per-corner pass/fail or measured value, plus an overall
   pass/fail against the ratified spec value (for a spec claim) or the

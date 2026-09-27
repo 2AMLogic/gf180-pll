@@ -285,8 +285,11 @@ cat >"${RECORD}" <<EOF
   in this repo -- see \`sim/mc-cp-mismatch/records/20260731-212614-640560e.md\`'s
   "Model-capability gate" for the full \`agauss()\`/parse-time-seed finding
   this campaign relies on (independent per-instance mismatch draws, gated by
-  \`sw_stat_mismatch\`, reproducible via \`.option rndseed=N\`). Not
-  re-derived here.
+  \`sw_stat_mismatch\`, reproducible via \`.option rndseed=N\`). That
+  reproducibility claim is HOST-SCOPED -- same host, same build, same seed ->
+  same draw; a different host is an independent replicate, not a
+  reproduction of the same sample -- see sim/README.md's "Statistical
+  convention" field. Not re-derived here.
 - **Netlist provenance**: committed export \`design/netlist/vco.spice\`
   (same DUT \`sim/vco-tuning-range/records/20260817-143524-0e9cfc9.md\` and
   the systematic \`testbench/tb.json\` sweep both compose, unmodified by this
