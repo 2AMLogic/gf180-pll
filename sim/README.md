@@ -783,6 +783,23 @@ again. A tool that would rewrite them is wrong, not convenient.
 Only `testbench/` and this README are mutable — and a testbench change that
 affects comparability must be called out in the next record.
 
+**So a text defect already committed into evidence is corrected _forward_, in
+the live `testbench/` artifact — never by editing the bytes that carry it.**
+The correction names the exact files it applies to, says which artifact is
+authoritative for them, and exists so no later run repeats the defect; the
+committed record, log or CSV keeps its bytes and its standing. Two worked
+examples on this tree, both marked "Erratum" so the family is greppable:
+`sim/lock-window-trim/testbench/tb.json` corrects a stale device width that
+one record's prose states, and the header comments of
+`sim/mc-cp-mismatch/testbench/run.sh`,
+`sim/vco-tuning-range/testbench/run_mismatch.sh` and
+`.../run_band0_worst_corner.sh` correct the `# switches:` line of fourteen
+CSVs minted before `simenv_provenance` could be told that the run had Monte
+Carlo mismatch turned on (#601). Note what the disposition does *not* buy:
+nothing a reader holding only the defective file can see. That is the price of
+immutability, and it is why the correction belongs in the artifact that mints
+the next one.
+
 ## Retention policy — what is kept
 
 | Artifact | Retained? | Why |

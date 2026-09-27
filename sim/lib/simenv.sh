@@ -363,9 +363,28 @@ simenv_stage_netlist() {
 
 # Emit a provenance header. Every extracted-metrics CSV starts with one of
 # these so a table stays self-describing away from its record.
+#
 # Args: <campaign> <record-id> <netlist-path> <corner-list-description>
+#       [switches-note]
+#
+# The optional fifth argument replaces the default statistical-switches
+# sentence on the `# switches:` line -- the exact counterpart of
+# simenv_env_block's own [switches-note] parameter below, and added for the
+# same campaigns (#15, mc-cp-mismatch; sim/vco-tuning-range's
+# tb_vco_mismatch.sp runs). #601: that parameter reached the Markdown
+# environment block but never this function, so a CSV minted by a run with
+# `sw_stat_mismatch = 1` in force carried a hardcoded header claiming
+# "nominal skew, no Monte Carlo" -- the opposite of what ran -- while the
+# record beside it said the truth. A table whose stated purpose is to stay
+# self-describing away from its record may not contradict that record about
+# the switches that produced it.
+#
+# Called with four arguments the wording is byte-identical to what it was
+# before, so every campaign that really does run at the design.ngspice
+# defaults keeps emitting exactly what it emitted before.
 simenv_provenance() {
   local campaign="$1" rid="$2" netlist="$3" corners="$4"
+  local switches="${5:-design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0 -> nominal skew, no Monte Carlo)}"
   cat <<EOF
 # campaign: ${campaign}
 # record_id: ${rid}
@@ -374,7 +393,7 @@ simenv_provenance() {
 # pdk_open_pdks_hash: $(simenv_pdk_hash)
 # pdk_root: ${SIMENV_PDK_ROOT}
 # model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
-# switches: design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0 -> nominal skew, no Monte Carlo)
+# switches: ${switches}
 # simulator: $(simenv_ngspice_version)
 # netlist: ${netlist}
 # corners: ${corners}
@@ -395,6 +414,11 @@ EOF
 #   mismatch ON would misstate the record's own environment. Called with no
 #   arguments the wording is unchanged, so every existing campaign keeps
 #   emitting exactly what it emitted before.
+#
+#   A campaign that passes this second argument must pass the corresponding
+#   note to simenv_provenance above as well, or the record and the CSV beside
+#   it disagree about the same run (#601). sim/tests/
+#   test_provenance_switches_note.py enforces that pairing statically.
 simenv_env_block() {
   local capture="${1:-N/A — these
     testbenches are hand-written SPICE, not an xschem export; there is no
