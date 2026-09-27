@@ -1,0 +1,15 @@
+== typical_125c_2.97v: {'vctrl': 1.27, 'vsup': 2.97, 'temp_c': 125.0, 'mos_section': 'typical', 'res_section': 'res_typical', 'moscap_section': 'moscap_typical', 'mimcap_section': 'mimcap_typical'}
+-- digital: stalled at gmin=1e-11 ic_offset=0 (rung 0), escalating BOTH passes
+-- digital: stalled at gmin=1e-10 ic_offset=0 (rung 1), escalating BOTH passes
+wrote results/digital_typical_125c_2.97v.json
+-- digital: 314.4 s
+wrote results/cp_typical_125c_2.97v.json
+-- cp: 18.9 s
+wrote results/cells_typical_125c_2.97v.json
+-- cells: 294.2 s
+wrote results/clkload_typical_125c_2.97v.json
+-- clkload: 60.6 s
+wrote results/ldload_typical_125c_2.97v.json
+-- ldload: 7.4 s
+wrote results/bound_typical_125c_2.97v.json
+-- bound: 0.8 s

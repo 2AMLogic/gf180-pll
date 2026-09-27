@@ -1,0 +1,13 @@
+== fs_27c_3.30v: {'vctrl': 1.764, 'vsup': 3.3, 'temp_c': 27.0, 'mos_section': 'fs', 'res_section': 'res_typical', 'moscap_section': 'moscap_typical', 'mimcap_section': 'mimcap_typical'}
+wrote results/digital_fs_27c_3.30v.json
+-- digital: 133.1 s
+wrote results/cp_fs_27c_3.30v.json
+-- cp: 20.4 s
+wrote results/cells_fs_27c_3.30v.json
+-- cells: 217.3 s
+wrote results/clkload_fs_27c_3.30v.json
+-- clkload: 38.2 s
+wrote results/ldload_fs_27c_3.30v.json
+-- ldload: 4.4 s
+wrote results/bound_fs_27c_3.30v.json
+-- bound: 0.6 s

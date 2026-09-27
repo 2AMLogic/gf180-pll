@@ -1,0 +1,7 @@
+== sf_27c_3.63v: {'vctrl': 2.128, 'vsup': 3.63, 'temp_c': 27.0, 'mos_section': 'sf', 'res_section': 'res_typical', 'moscap_section': 'moscap_typical', 'mimcap_section': 'mimcap_typical'}
+-- digital: already in results/, skipped (--resume)
+-- cp: already in results/, skipped (--resume)
+-- cells: already in results/, skipped (--resume)
+-- clkload: already in results/, skipped (--resume)
+-- ldload: already in results/, skipped (--resume)
+-- bound: already in results/, skipped (--resume)

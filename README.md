@@ -77,9 +77,13 @@ Being honest about where this actually is:
   point, and the loop-filter resistor separately. The
   result is **≤ 0.338 % RMS at all 45 mandated PVT corners** — an upper
   bound, not an estimate — against the 0.50 % RMS the target's own ripple
-  derivation leaves for it. Its scope is stated: the charge pump, PFD, divider
-  and lock detector are argued small but not bounded, tracked at #580. The
-  impulse-sensitivity-function route to an *estimate* has its ingredients built
+  derivation leaves for it. The charge pump, PFD, divider and lock detector,
+  in-band sources this term does not inject, are bounded separately
+  (`spec/decision-records/DR-033-in-band-random-period-jitter-bounded-over-the-grid.md`:
+  `sim/period-jitter/in-band-bound/`, ≤ 0.0249 % RMS at all 45 points, a
+  headroom of 15.8× against the margin the term above leaves) — so the whole
+  random half is **≤ 0.3388 % RMS at all 45 points**, combined in quadrature.
+  The impulse-sensitivity-function route to an *estimate* has its ingredients built
   and validated (`sim/period-jitter/isf-bringup/`, DR-030;
   `sim/period-jitter/sid-trajectory/`, DR-031) but not assembled, and the bound
   does not need it. The target itself is unchanged. And every one of the campaign's records is at one output

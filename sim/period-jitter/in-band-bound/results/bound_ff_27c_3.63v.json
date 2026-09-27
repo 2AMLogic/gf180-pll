@@ -1,0 +1,287 @@
+{
+ "allowance": {
+  "sigma_t_at_pfd_input_s": 8.359661461195285e-10
+ },
+ "bound": {
+  "budget_pct": 0.5,
+  "clears": true,
+  "combined_pct": 0.26143186419031195,
+  "headroom": 19.864702628925542,
+  "in_band_pct": 0.021482788881703976,
+  "remaining_pct": 0.4267492127750374,
+  "terms_pct": {
+   "cp_current": 0.01713491151362954,
+   "cp_off_state": 0.012934197847521372,
+   "cp_switch_driver": 0.00024768427663927276,
+   "divider_clk_loading": 0.00017143984505009358,
+   "divider_retime": 0.00017086096870031194,
+   "lock_detector_loading": 2.2896717414216354e-05,
+   "pfd_fb_to_dn": 0.0004243370017930809,
+   "pfd_ref_to_up": 0.0004243370017930809,
+   "pfd_reset_common": 0.00012742521210119158,
+   "pfd_reset_dn_side": 0.00023951386035488947,
+   "pfd_reset_up_side": 0.00023951386035488947
+  },
+  "vco_bound_pct": 0.26054771040230973
+ },
+ "by_block_pct": {
+  "charge_pump": 0.021469979367471106,
+  "divider_chain": 0.00024204357272195656,
+  "lock_detector": 2.2896717414216354e-05,
+  "pfd": 0.0007007815247741045
+ },
+ "detail": {
+  "_common_mode": {
+   "floor": 0.1,
+   "i_dn_A": 1.751178e-06,
+   "i_up_A": 1.748788e-06,
+   "measured_imbalance": 0.0013666607959341647,
+   "scale": 0.1,
+   "set_by": "floor"
+  },
+  "_per_cell_stage": {
+   "inv_3v3": {
+    "folded_var": 4.49262247850352e-13,
+    "in_band_var": 5.162189811350926e-13,
+    "pct_one_stage": 9.825890437947315e-05,
+    "sigma_v_V": 0.002883996749647687,
+    "slew_V_per_s": 12138641999.999916
+   },
+   "pfdcp_inv_3v3": {
+    "folded_var": 2.0409976503187163e-12,
+    "in_band_var": 4.093752439113264e-12,
+    "pct_one_stage": 0.00024768427663927276,
+    "sigma_v_V": 0.003861094270497691,
+    "slew_V_per_s": 6226221199.999995
+   },
+   "pfdcp_nand2_3v3": {
+    "folded_var": 1.1762737138093812e-12,
+    "in_band_var": 1.6920707512956933e-12,
+    "pct_one_stage": 0.00016936187484511013,
+    "sigma_v_V": 0.0030027465911702357,
+    "slew_V_per_s": 6984001599.9999895
+   },
+   "tgate_3v3": {
+    "folded_var": 2.280355419738395e-14,
+    "in_band_var": 9.982136718061643e-17,
+    "pct_one_stage": 1.5133861227249498e-05,
+    "sigma_v_V": 0.0002817649591448219,
+    "slew_V_per_s": 9508776800.000076
+   }
+  },
+  "_retired_all_device_count": {
+   "pct_per_block": {
+    "charge_pump": 0.007430528299178184,
+    "divider_chain": 0.055976646520475654,
+    "lock_detector": 0.014613372321717093,
+    "pfd": 0.013374950938520728
+   },
+   "worst_cell": "pfdcp_inv_3v3"
+  },
+  "cp_current": {
+   "block": "charge_pump",
+   "duty": 0.03570768844264365,
+   "folded_var": 2.9148538451209157e-08,
+   "icp_A": 1.748788e-06,
+   "in_band_var": 2.119808067822611e-10,
+   "pct": 0.01713491151362954,
+   "sigma_q_C": 5.879781873631088e-17,
+   "t_on_s": 1.4283075377057461e-09
+  },
+  "cp_off_state": {
+   "block": "charge_pump",
+   "pct": 0.012934197847521372,
+   "sigma_q_C": 4.787439828070343e-17,
+   "t_off_s": 3.8571692462294255e-08
+  },
+  "cp_switch_driver": {
+   "block": "charge_pump",
+   "cells": {
+    "pfdcp_inv_3v3": 1
+   },
+   "common_mode": false,
+   "common_mode_scale": null,
+   "instances": [
+    "xpfd.xcp.xi_up"
+   ],
+   "n_stages": 1,
+   "pct": 0.00024768427663927276,
+   "pct_if_perfectly_correlated": 0.00024768427663927276,
+   "var_quadrature": 6.1347500894319804e-12
+  },
+  "divider_clk_loading": {
+   "block": "divider_chain",
+   "grid_top_Hz": 100000000000000.0,
+   "pct": 0.00017143984505009358,
+   "r_drive_ohm": 100000.0,
+   "sigma_t_s": 8.086464125262184e-15,
+   "var": 2.9391620470800098e-12
+  },
+  "divider_retime": {
+   "block": "divider_chain",
+   "cells": {
+    "inv_3v3": 3,
+    "tgate_3v3": 1
+   },
+   "common_mode": false,
+   "common_mode_scale": null,
+   "instances": [
+    "xdiv.xfrt.xickb",
+    "xdiv.xfrt.xickbb",
+    "xdiv.xfrt.xtgsi",
+    "xdiv.xfrt.xic"
+   ],
+   "n_stages": 4,
+   "pct": 0.00017086096870031194,
+   "pct_if_perfectly_correlated": 0.00030991057436566895,
+   "var_quadrature": 2.9193470625208984e-12
+  },
+  "lock_detector_loading": {
+   "block": "lock_detector",
+   "grid_top_Hz": 100000000000000.0,
+   "loaded_nets": [
+    "UP",
+    "DN"
+   ],
+   "n_stages_in_timing_path": 0,
+   "pct": 2.2896717414216354e-05,
+   "r_drive_ohm": 100000.0,
+   "sigma_t_s": 3.1715691736431224e-14,
+   "sigma_v_V": 0.00034900133675033713,
+   "slew_V_per_s": 11004058799.999176
+  },
+  "pfd_fb_to_dn": {
+   "block": "pfd",
+   "cells": {
+    "pfdcp_inv_3v3": 2,
+    "pfdcp_nand2_3v3": 2
+   },
+   "common_mode": false,
+   "common_mode_scale": null,
+   "instances": [
+    "xpfd.xpfd.xed_fb.xnd",
+    "xpfd.xpfd.xed_fb.xi6",
+    "xpfd.xpfd.xinv_sf",
+    "xpfd.xpfd.xlat_fb.xn1"
+   ],
+   "n_stages": 4,
+   "pct": 0.0004243370017930809,
+   "pct_if_perfectly_correlated": 0.0008340923029687658,
+   "var_quadrature": 1.800618910907411e-11
+  },
+  "pfd_ref_to_up": {
+   "block": "pfd",
+   "cells": {
+    "pfdcp_inv_3v3": 2,
+    "pfdcp_nand2_3v3": 2
+   },
+   "common_mode": false,
+   "common_mode_scale": null,
+   "instances": [
+    "xpfd.xpfd.xed_ref.xnd",
+    "xpfd.xpfd.xed_ref.xi6",
+    "xpfd.xpfd.xinv_sr",
+    "xpfd.xpfd.xlat_ref.xn1"
+   ],
+   "n_stages": 4,
+   "pct": 0.0004243370017930809,
+   "pct_if_perfectly_correlated": 0.0008340923029687658,
+   "var_quadrature": 1.800618910907411e-11
+  },
+  "pfd_reset_common": {
+   "block": "pfd",
+   "cells": {
+    "pfdcp_inv_3v3": 26,
+    "pfdcp_nand2_3v3": 1
+   },
+   "common_mode": true,
+   "common_mode_scale": 0.1,
+   "instances": [
+    "xpfd.xpfd.xnand_rst",
+    "xpfd.xpfd.xinv_r0",
+    "xpfd.xpfd.xd1",
+    "xpfd.xpfd.xd2",
+    "xpfd.xpfd.xd3",
+    "xpfd.xpfd.xd4",
+    "xpfd.xpfd.xd5",
+    "xpfd.xpfd.xd6",
+    "xpfd.xpfd.xd7",
+    "xpfd.xpfd.xd8",
+    "xpfd.xpfd.xd9",
+    "xpfd.xpfd.xd10",
+    "xpfd.xpfd.xd11",
+    "xpfd.xpfd.xd12",
+    "xpfd.xpfd.xd13",
+    "xpfd.xpfd.xd14",
+    "xpfd.xpfd.xd15",
+    "xpfd.xpfd.xd16",
+    "xpfd.xpfd.xd17",
+    "xpfd.xpfd.xd18",
+    "xpfd.xpfd.xd19",
+    "xpfd.xpfd.xd20",
+    "xpfd.xpfd.xd21",
+    "xpfd.xpfd.xd22",
+    "xpfd.xpfd.xd23",
+    "xpfd.xpfd.xd24",
+    "xpfd.xpfd.xinv_rb"
+   ],
+   "n_stages": 27,
+   "pct": 0.00012742521210119158,
+   "pct_if_perfectly_correlated": 0.0006609153067466203,
+   "var_quadrature": 1.6237184679033659e-12
+  },
+  "pfd_reset_dn_side": {
+   "block": "pfd",
+   "cells": {
+    "pfdcp_nand2_3v3": 2
+   },
+   "common_mode": false,
+   "common_mode_scale": null,
+   "instances": [
+    "xpfd.xpfd.xlat_fb.xn2",
+    "xpfd.xpfd.xlat_fb.xn1"
+   ],
+   "n_stages": 2,
+   "pct": 0.00023951386035488947,
+   "pct_if_perfectly_correlated": 0.00033872374969022025,
+   "var_quadrature": 5.736688930210149e-12
+  },
+  "pfd_reset_up_side": {
+   "block": "pfd",
+   "cells": {
+    "pfdcp_nand2_3v3": 2
+   },
+   "common_mode": false,
+   "common_mode_scale": null,
+   "instances": [
+    "xpfd.xpfd.xlat_ref.xn2",
+    "xpfd.xpfd.xlat_ref.xn1"
+   ],
+   "n_stages": 2,
+   "pct": 0.00023951386035488947,
+   "pct_if_perfectly_correlated": 0.00033872374969022025,
+   "var_quadrature": 5.736688930210149e-12
+  }
+ },
+ "environment": {
+  "ngspice": "ngspice-46",
+  "pdk_models": "/Users/rwalters/.volare/gf180mcuD/libs.tech/ngspice",
+  "repo_dirty": false,
+  "repo_head": "41fdfbb8",
+  "run_utc": "2026-09-27T05:03:53Z"
+ },
+ "f0_Hz": 149912588.64524013,
+ "fref_Hz": 25000000.0,
+ "n_div": 6.0,
+ "operating_point": {
+  "mimcap_section": "mimcap_typical",
+  "mos_section": "ff",
+  "moscap_section": "moscap_typical",
+  "res_section": "res_typical",
+  "temp_c": 27.0,
+  "vctrl": 2.2,
+  "vsup": 3.63
+ },
+ "point": "ff_27c_3.63v",
+ "t_ref_s": 4e-08
+}
