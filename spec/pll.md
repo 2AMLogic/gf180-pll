@@ -178,7 +178,7 @@ top cell, port list, netlist/GDS paths, measured area, maturity rung — is
 | 4 | [Integrated RMS jitter](#integrated-rms-jitter) | **not spec'd** — derived-only (DR-002 Decision 5) | n/a — deliberately unspecified; see the section for why this is visible rather than silent | **n/a** |
 | 5 | [Period jitter](#period-jitter) | ≤ 1.0 % of the output period, RMS, **conditional on ≤ 20 mV pp `vdd_vco` ripple** | `all-slow`/−40 °C/2.97 V, band 5 (2.51 % RMS at 100 mV pp ripple, open-loop); closed-loop deterministic jitter measured at all 45 mandated PVT corners, 0.0508–0.2691 % RMS, PASS at every corner (`sim/period-jitter/`, #13) | **measured** (sensitivity, and the closed-loop **deterministic** half at 45/45); **derived** (the ripple condition); the **random (noise-driven) half is bounded, not measured, over its full scope: ≤ 0.3388 % RMS at every one of the 45 mandated PVT corners** (upper bound, against the 0.50 % the ripple derivation leaves for it — `sim/period-jitter/random-bound/`, DR-032, every generator in `vco` and the loop-filter resistor, ≤ 0.338 % RMS on its own; `sim/period-jitter/in-band-bound/`, DR-033, the charge pump, PFD, divider and lock detector, ≤ 0.0249 % RMS on its own, 15.8× inside the margin DR-032 leaves; the two in quadrature is the figure quoted here). No *estimate* of the random half exists — the ISF route's ingredients are built (DR-030, DR-031) but not assembled, and the bound does not need them |
 | 6 | [Phase noise](#phase-noise) | **not spec'd** — derived-only (DR-002 Decision 5) | n/a — deliberately unspecified | **n/a** |
-| 7 | [Reference spur](#reference-spur) | ≤ −55 dBc | measured worst −57.0 dBc at f_out = 150 MHz (`sf`/−40 °C/2.97 V), i.e. −54.5 dBc scaled to 200 MHz; derived worst case −61 dBc at 200 MHz, or **−56.6 dBc** once DR-018's corner-combined statistical charge terms are folded into the same derivation, against **−66.6 dBc** for the systematic-only stack a mismatch-off measurement is comparable with (DR-024) | **measured** (5 spanning corners, 150 MHz); **budget** (the 200 MHz binding point and the other 40 corners). The binding-point sweep is a declared campaign, `sim/reference-spur-band-top`, with **zero measured points**, owed at #533 — see [Verification owed](#verification-owed) |
+| 7 | [Reference spur](#reference-spur) | ≤ −55 dBc | measured worst −57.0 dBc at f_out = 150 MHz (`sf`/−40 °C/2.97 V), i.e. −54.5 dBc scaled to 200 MHz; derived worst case −61 dBc at 200 MHz, or **−55.7 dBc** once DR-018's corner-combined statistical charge terms are folded into the same derivation and re-priced at that campaign's full 21-point corner axis (DR-034; it was −56.6 dBc at the superseded 3-point axis), against **−66.6 dBc** for the systematic-only stack a mismatch-off measurement is comparable with (DR-024) | **measured** (5 spanning corners, 150 MHz); **budget** (the 200 MHz binding point and the other 40 corners). The binding-point sweep is a declared campaign, `sim/reference-spur-band-top`, with **zero measured points**, owed at #533 — see [Verification owed](#verification-owed) |
 | 8 | [Loop bandwidth](#loop-bandwidth) | f_c = 26 – 430 kHz over the ratified space, with `f_c < f_ref/10` as a hard ceiling | min 25.96 kHz at f_ref = 1 MHz / 4 legs; max 429.5 kHz at f_ref = 25 MHz / 1 leg; worst realized ratio `f_ref/13` | **measured** |
 | 8a | [Phase margin](#phase-margin) | ≥ 45° everywhere in the contracted space | 47.4° at f_ref = 1 MHz, 4 legs (the tightest cell of the trim rule) | **measured** |
 | 9 | [Lock time](#lock-time) | < 100 µs to the stated [lock criterion](#lock-time). **The < 20 µs stretch is dropped** | 71 µs at f_ref = 1 MHz under the trim rule; structural floor 43 µs. **The criterion this time is measured *to* is not met at 1 of the 45 mandated corners at the configuration the [band-selection rule](#band-selection-rule) selects, with a second corner owed** — the static-phase half settles at 1.049 ns at `typical`/−40 °C/3.63 V against the ratified ≤ 1 ns (DR-012), so at that corner there is no instant for a lock time to be measured to. The 1.227 ns at `ff`/27 °C/3.63 V is measured at **band 6**, which is not the band the rule selects there (DR-025); the rule-selected band-5 cell is unrun, so that corner is neither cleared nor confirmed and the count returns to 2 of 45 if it misses | **measured** (small-signal settling); **budget** (cold-start, owed to #163); target **not met** at 1/45 corners because the criterion itself is not reached there, with a 2nd corner's rule-selected configuration owed (DR-025, #511) |
@@ -972,51 +972,63 @@ rail, and layout coupling that does not exist yet. The bound improves at lower
 output frequencies (−67 dBc at 100 MHz), so 200 MHz is the binding frequency as
 well as the binding corner.
 
-**That ~6 dB reserve is now ~1.6 dB, once the first mechanism it lists —
+**That ~6 dB reserve is now 0.67 dB, once the first mechanism it lists —
 UP/DN current mismatch — is priced at its statistical 3σ instead of its
 systematic value, and the table's own statistical-residual row is refreshed to
-the corner-combined campaign (DR-018).** The table predates that campaign: its
-statistical residual row is the *nominal-only* 2.99 fC (the corner-combined
-figure is 4.25246 fC), and it excludes term-1 current mismatch entirely, on the
-"under 1 fC" estimate in the paragraph above. That estimate is right for the
-systematic 4.7 % (0.88 fC at the largest trim code and the worst measured reset
-overlap); at the measured 3σ tail the same product is ≈ 1.35 – 1.94 fC
-corner-consistent and 3.26 fC stacked, and at the ±20 % term-1 budget DR-018
+the corner-combined campaign at its full corner axis (DR-018, re-priced by
+DR-034).** The table predates that campaign: its statistical residual row is
+the *nominal-only* 2.99 fC, and it excludes term-1 current mismatch entirely,
+on the "under 1 fC" estimate in the paragraph above. That estimate is right for
+the systematic 4.7 % (0.88 fC at the largest trim code and the worst measured
+reset overlap); at the measured 3σ tail the same product is ≈ 1.10 – 2.08 fC
+corner-consistent and 3.18 fC stacked, and at the ±20 % term-1 budget DR-018
 derives it is 3.73 fC. Carrying those through the same chain:
 
 | Charge accounting at 200 MHz | Total ΔQ | Derived spur |
 |---|---|---|
 | **Systematic asymmetry alone**, no statistical term — the row a **mismatch-off measurement** is comparable with (DR-024 Decision 4) | 3.68 fC | **−66.6 dBc** |
 | The table above (systematic 3.68 fC + nominal-only statistical 2.99 fC) | 6.67 fC | **−61 dBc** |
-| Corner-combined statistical residual, term 1 still excluded | 7.93 fC | −59.9 dBc |
-| …plus term 1 at its **measured** 17.4798 % (signed `\|mean\| + 3σ`) | 11.19 fC | ≈ −57.0 dBc |
-| …plus term 1 at its **budgeted** ±20 % | 11.66 fC | **−56.6 dBc** |
+| Corner-combined statistical residual, term 1 still excluded | 9.24 fC | −58.6 dBc |
+| …plus term 1 at its **measured** 17.0863 % (signed `\|mean\| + 3σ`) | 12.43 fC | −56.0 dBc |
+| …plus term 1 at its **budgeted** ±20 % | 12.97 fC | **−55.7 dBc** |
+| The same terms read **corner-consistently** at that budget — each measured corner with its own term 3, asymmetry, `Icp` and `T_ov`, worst of the 21 (`sf`/125 °C/3.63 V) | 11.40 fC | −56.8 dBc |
 
-The "measured" row quotes term 1 as the signed `|mean| + 3σ` at the worst
-corner (`ff`/−40 °C/3.63 V), the statistic `sim/mc-cp-mismatch` has reported
-since #487. It previously quoted 13.2172 % (10.40 fC, −57.6 dBc), which was
-`mean(|x|) + 3·sd(|x|)` on samples folded to their absolute value; both come
-from the same committed 300 samples
-(`sim/mc-cp-mismatch/testbench/run.sh --restat 20260923-095854-1655e11`). The
-refresh is DR-018 Amendment A1, made under that record's Decision 3, which
-pre-authorised the switch of statistic; it restates a derived row in the
-conservative direction and moves nothing below.
+**Term 3, the statistical residual net charge, is priced by DR-034 at
+5.56626 fC** — the worst corner (`sf`/125 °C/3.63 V) of the 21-point corner
+axis `sim/mc-cp-mismatch` has run since #597, where DR-018 priced it at
+4.25246 fC from that campaign's superseded 3-point axis. The "measured" row
+quotes term 1 as the signed `|mean| + 3σ` at the same record's worst corner
+for that term (`sf`/−40 °C/3.63 V), the statistic `sim/mc-cp-mismatch` has
+reported since #487; the folded `mean(|x|) + 3·sd(|x|)` companion of the same
+samples, the pre-#487 convention, is quoted 15.6653 %. Both terms, and all
+three totals above, re-derive from one record's committed samples
+(`sim/mc-cp-mismatch/testbench/run.sh --restat 20260927-102154-d004d5b`) —
+term 1 and term 3 must come from the same run, or the column mixes two corner
+axes. At the superseded 3-point axis the same three rows read 7.93 / 11.19 /
+11.66 fC and −59.9 / ≈ −57.0 / −56.6 dBc (DR-018 and its Amendment A1);
+DR-034 §Context shows the substitution term by term.
 
 The −55 dBc **target does not move**, and neither does the −61 dBc row, which
 is retained as the historical cross-check it always was. What changes is how
-much of the target's margin is spoken for: the last row above is a deliberately
-conservative stack (three different worst corners added linearly, the largest
+much of the target's margin is spoken for: the **budgeted ±20 %** row above is
+a deliberately conservative stack (three different worst corners added
+linearly, the largest
 trim code, the longest overlap, and term 1 counted on top of a term-3
 measurement that already contains it), but it is the honest upper bound, and it
-sits 1.6 dB from the line. Read alongside the measured table's −54.5 dBc at the
-two cold corners once scaled to 200 MHz, the spur row has less slack than the
-−61 dBc figure alone suggests.
+sits 0.67 dB from the line. Read corner-consistently instead — each measured
+corner with its own term 1, term 3, systematic asymmetry, `Icp` and `T_ov` —
+the worst of the 21 corners is −57.95 dBc at the measured term 1 and
+−56.79 dBc at the ±20 % budget (DR-034 §Context and §Decision 4), so the gap
+between the two readings is now larger than the stacked reading's remaining
+margin. Read alongside the measured table's −54.5 dBc at the two cold corners
+once scaled to 200 MHz, the spur row has far less slack than the −61 dBc
+figure alone suggests.
 
 **Which of these rows a measurement may be read against** (DR-024 Decision 4).
 Every closed-loop spur campaign in this repository — `sim/reference-spur` and
 the owed `sim/reference-spur-band-top` — runs with **device mismatch off**, so
 what they measure is the systematic, corner-driven spur. The comparable row is
-therefore the **first** one, −66.6 dBc, *not* the −56.6 dBc stack, which adds
+therefore the **first** one, −66.6 dBc, *not* the −55.7 dBc stack, which adds
 two statistical terms each at its own worst corner. Two things follow, and the
 second is the reason this paragraph exists rather than being left to inference:
 

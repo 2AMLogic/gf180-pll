@@ -48,9 +48,24 @@
 #    The **signed** worst-corner figure must equal the percentage
 #    `spec/pll.md`'s charge-accounting table states term 1 is "measured" at.
 #
-# 3. TERM 3 REPRODUCES. Per corner, `mc_pfd_cp.csv`'s `qnet0_c` column forms
-#    `|mean| + 3*sd`; the worst corner's figure must equal DR-018's stated
-#    "Statistical residual net charge (term 3), corner-combined" input.
+# 3. TERM 3 REPRODUCES, AGAINST THE RECORD THE SPEC SAYS PRICES IT. Per
+#    corner, `mc_pfd_cp.csv`'s `qnet0_c` column forms `|mean| + 3*sd`; the
+#    worst corner's figure must equal the figure `spec/pll.md`'s own Reference
+#    spur section states in the form "priced by DR-NNN at <x> fC", AND the
+#    figure that decision record's own "Statistical residual net charge
+#    (term 3), corner-combined" Input row states, AND that row's Source column
+#    must cite the same committed run rule 1 resolved.
+#
+#    Until issue #610 this rule read the figure from DR-018 unconditionally
+#    while reducing it from whichever record `spec/pll.md` cited -- so the
+#    moment the spec's citation moved forward to a wider corner axis (#597),
+#    the check failed for the right reason in the wrong place, and the only way
+#    to make it pass was to edit a filed decision record's Context table.
+#    DR-018's 4.25246 fC is a true reduction of the 3-point axis it cites and
+#    DR-034's 5.56626 fC is a true reduction of the 21-point axis; the spec
+#    names which one its derivation is built on, and this rule follows that
+#    pointer. A re-pricing is then one sentence in the spec plus one decision
+#    record, with no check edit.
 #
 # 4. CHARGE TOTALS REPRODUCE. `spec/pll.md`'s charge-accounting table carries
 #    three totals this check can now build from ingredients instead of taking
@@ -481,54 +496,130 @@ if dr018_section is None:
     fail("%s has no '## Context' section" % dr018_rel)
     sys.exit(1)
 
-dr018_tables = tables(dr018_section.group(1))
-input_table = None
-for table in dr018_tables:
-    header = [plain(c).lower() for c in table[0]]
-    if header[:1] == ["input"]:
-        input_table = table
-        break
+def input_table_of(text, rel):
+    """The `Input | Value | Source | …` table of a decision record's Context.
+
+    Both the record that prices Icp/T_ov/the systematic asymmetry and the
+    record that prices term 3 state their ingredients this way, so the same
+    reader serves both."""
+    context = re.search(r"^## Context\s*$(.*?)(?=^## )", text, re.M | re.S)
+    if context is None:
+        fail("%s has no '## Context' section" % rel)
+        return None
+    for table in tables(context.group(1)):
+        header = [plain(c).lower() for c in table[0]]
+        if header[:1] == ["input"]:
+            return table
+    fail("%s has no 'Input | Value | Source' table" % rel)
+    return None
+
+
+input_table = input_table_of(dr018_text, dr018_rel)
 if input_table is None:
-    fail("%s has no 'Input | Value | Source' table" % dr018_rel)
     sys.exit(1)
 
 
-def input_cells(prefix):
+def row_of(table, rel, prefix):
     """The (label, value, source) triple of one Input row, markup stripped.
 
     All three matter: the label states the reduction and the grid the figure
     is a worst case over, the value is the figure to grade, and the source
     names the committed campaign to reduce."""
-    for cells in input_table[1:]:
+    for cells in table[1:]:
         if plain(cells[0]).casefold().startswith(prefix.casefold()):
             padded = [plain(c) for c in cells] + ["", "", ""]
             return padded[0], padded[1], padded[2]
-    fail(
-        "%s's Input table has no row beginning %r" % (dr018_rel, prefix)
-    )
+    fail("%s's Input table has no row beginning %r" % (rel, prefix))
     return None
+
+
+def input_cells(prefix):
+    return row_of(input_table, dr018_rel, prefix)
 
 
 t_ov_row = input_cells("Reset overlap")
 icp_row = input_cells("Icp,")
 q_sys_row = input_cells("Systematic per-event charge asymmetry")
-q_stat_row = input_cells("Statistical residual net charge (term 3)")
-if None in (t_ov_row, icp_row, q_sys_row, q_stat_row):
+if None in (t_ov_row, icp_row, q_sys_row):
     sys.exit(1)
 t_ov_cell = t_ov_row[1]
 icp_cell = icp_row[1]
 q_sys_cell = q_sys_row[1]
+
+# ---------------------------------------------------------------- rule 3 ---
+# Term 3 is priced by whichever decision record `spec/pll.md` names for it, not
+# by DR-018 unconditionally (issue #610). DR-018 priced it from that campaign's
+# 3-point corner axis; DR-034 re-prices it from the 21-point axis. Both
+# statements are true of the evidence each cites, so the check follows the
+# SPEC's pointer instead of cross-grading one record's figure against another
+# record's samples -- which is what made the spec's citation impossible to
+# move forward without editing a filed decision record.
+#: A record id as a document cites it, in full or in the elided
+#: `…-<time>-<sha>` form -- the same two spellings rule 5-7's RECORD_TAIL
+#: accepts, without its capture groups.
+RECORD_TAIL_ANY = re.compile(r"(?:\d{8}-)?\d{6}-[0-9a-f]{7}")
+
+priced_by = re.search(
+    r"priced by DR-(\d{3})\s+at\s+(%s)\s*fC" % NUMBER,
+    section_text.replace("**", "").replace("`", ""),
+)
+if priced_by is None:
+    fail(
+        "%s's Reference spur section does not name the decision record that "
+        "prices term 3, in the form 'priced by DR-NNN at <x> fC' -- this "
+        "check grades that figure against the committed samples and cannot "
+        "assume which record is the current pricing authority" % spec_rel
+    )
+    sys.exit(1)
+pricing_number = priced_by.group(1)
+pricing_matches = sorted(
+    glob.glob(
+        os.path.join(
+            repo_root, "spec", "decision-records", "DR-%s-*.md" % pricing_number
+        )
+    )
+)
+if len(pricing_matches) != 1:
+    fail(
+        "%s names DR-%s as term 3's pricing record, which resolves to %d file(s) "
+        "under spec/decision-records/ -- a pointer a reader can open has to be "
+        "exactly one record" % (spec_rel, pricing_number, len(pricing_matches))
+    )
+    sys.exit(1)
+pricing_rel = os.path.relpath(pricing_matches[0], repo_root)
+with open(pricing_matches[0], encoding="utf-8") as fh:
+    pricing_text = fh.read()
+
+if not agrees(priced_by.group(2), term3_fc):
+    fail(
+        "%s states term 3 is priced at %s fC, but reducing %s's committed "
+        "qnet0_c samples the way DR-%s's own Input row states gives %.5f fC at "
+        "%s (n=%d)"
+        % (
+            spec_rel, priced_by.group(2), pfd_path, pricing_number, term3_fc,
+            term3_corner, term3_n,
+        )
+    )
+
+pricing_table = input_table_of(pricing_text, pricing_rel)
+if pricing_table is None:
+    sys.exit(1)
+q_stat_row = row_of(
+    pricing_table, pricing_rel, "Statistical residual net charge (term 3)"
+)
+if q_stat_row is None:
+    sys.exit(1)
 q_stat_cell = q_stat_row[1]
 
 
-def stated_range(cell):
+def stated_range(cell, rel=None):
     """The written endpoints of a `a - b <unit>` range, as STRINGS (so each
     is graded at its own written precision), or `(None, x)` for a cell with a
     single figure (`x <unit> worst corner`). Anything in parentheses is a
     gloss, not a figure."""
     nums = re.findall(NUMBER, cell.split("(")[0])
     if not nums:
-        fail("%s: no number in %r" % (dr018_rel, cell))
+        fail("%s: no number in %r" % (rel or dr018_rel, cell))
         return None, None
     if len(nums) == 1:
         return None, nums[0]
@@ -539,8 +630,9 @@ def stated_range(cell):
 # Every Input cell must state a figure at all before anything is graded
 # against it; rules 5-7 below then grade each against the campaign that
 # produced it.
-for cell in (t_ov_cell, icp_cell, q_sys_cell, q_stat_cell):
+for cell in (t_ov_cell, icp_cell, q_sys_cell):
     stated_range(cell)
+stated_range(q_stat_cell, pricing_rel)
 if failures:
     sys.exit(1)
 
@@ -549,7 +641,24 @@ if not agrees(q_stat_cell.split()[0], term3_fc):
         "%s states term 3's corner-combined |mean|+3sigma as %s fC, but "
         "reducing %s's committed qnet0_c samples the same way gives %.5f fC "
         "at %s (n=%d)"
-        % (dr018_rel, q_stat_cell, pfd_path, term3_fc, term3_corner, term3_n)
+        % (pricing_rel, q_stat_cell, pfd_path, term3_fc, term3_corner, term3_n)
+    )
+
+# The pricing record and the specification must cite the SAME committed run for
+# term 3. Without this, a record could state the right figure against a
+# different campaign's samples and the agreement above would be a coincidence.
+q_stat_tail = RECORD_TAIL_ANY.search(q_stat_row[2])
+if q_stat_tail is None:
+    fail(
+        "%s's Input row for term 3 cites no record id in its Source column -- "
+        "the figure has to be traceable to the same committed run %s cites"
+        % (pricing_rel, spec_rel)
+    )
+elif not record_id.endswith(q_stat_tail.group(0)):
+    fail(
+        "%s prices term 3 from record %s, but %s's derivation reduces record "
+        "%s -- one figure cannot be graded against two campaigns"
+        % (pricing_rel, q_stat_tail.group(0), spec_rel, record_id)
     )
 
 if failures:
@@ -1266,7 +1375,7 @@ print(
     "OK: %s's reference-spur charge totals reproduce from every ingredient's "
     "own committed campaign -- term 1 signed |mean|+3sigma %.4f %% at %s "
     "(n=%d), term 1 folded mean(|x|)+3*sd(|x|) %.4f %% at %s (n=%d), term 3 "
-    "|mean|+3sigma %.5f fC at %s (n=%d), all from "
+    "|mean|+3sigma %.5f fC at %s (n=%d) as priced by %s, all from "
     "sim/mc-cp-mismatch/corners/%s; q_systematic %.5f fC worst of %d corners "
     "(median %.5f fC) from %s; Icp %.5f uA at trim code %s%s, worst of %d "
     "corners, from %s; T_ov %.5f ns at %s, worst of %d corners, from %s. The "
@@ -1283,6 +1392,7 @@ print(
         term3_fc,
         term3_corner,
         term3_n,
+        pricing_rel,
         record_id,
         q_sys_fc_measured,
         len(q_sys_corners),

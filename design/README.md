@@ -712,17 +712,29 @@ Notes on how to read this table:
     `Δt = m·T_ov` of static phase offset and `ΔQ₁ = m·Icp·T_ov` of ripple.
   - Running `spec/pll.md`'s own narrowband-FM chain backwards from the ratified
     ≤ −55 dBc spur at 200 MHz allows 14.005 fC per cycle in total; the
-    systematic asymmetry (3.68 fC) and term 3's statistical residual
-    (4.25246 fC) take 7.933 fC of it, leaving 6.073 fC for term 1. At the
-    bounding trim code (11, `Icp` ≤ 7.21 µA) and the worst measured overlap
-    (2.584 ns) that is a **32.6 % ceiling** — the point at which the spur line
-    itself fails.
-  - **±20 %** is the largest 5 %-granular value that keeps that (deliberately
-    over-stacked) derivation ≥ 1.5 dB inside −55 dBc. It sits 1.63× under the
-    ceiling and **1.14× over the measurement**, which uses **87.4 %** of it.
-    (DR-018 also states 1.51× and 66 %, against the *folded* 13.2172 % it was
-    drafted before #487 corrected. It priced both readings explicitly and set
-    ±20 % so the budget holds under either; its Amendment A1 (#490) puts the
+    systematic asymmetry (3.67840 fC) and term 3's statistical residual
+    (**5.56626 fC** at the widened 21-point corner axis, **DR-034** — it was
+    4.25246 fC at the superseded 3-point axis, DR-018) take 9.24466 fC of it,
+    leaving 4.76070 fC for term 1. At the bounding trim code (11,
+    `Icp` ≤ 7.20923 µA) and the worst measured overlap (2.58390 ns) that is a
+    **25.6 % ceiling** — the point at which the spur line itself fails.
+    (DR-018 derived 7.933 fC taken, 6.073 fC left and a **32.6 %** ceiling
+    from the narrower axis; the ingredient that moved is term 3 and only
+    term 3.)
+  - **±20 %** was the largest 5 %-granular value that kept that (deliberately
+    over-stacked) derivation ≥ 1.5 dB inside −55 dBc *at the 3-point axis*. At
+    the widened axis the stacked reading can no longer carry that criterion —
+    1.5 dB inside would need term 1 ≤ 13.6 %, below the measurement — so
+    **DR-034 moves DR-018's own 1.5 dB criterion onto the corner-consistent
+    reading, where it still selects ±20 %** (each corner with its own term 1,
+    term 3, asymmetry, `Icp` and `T_ov`: −57.31 dBc at 15 %, −56.79 dBc at
+    20 %, −56.30 dBc at 25 %), subject to the stacked reading clearing the
+    line at all (it does, by 0.67 dB). ±20 % now sits 1.28× under the ceiling
+    (DR-018: 1.63×) and **1.17× over the measurement**, which uses **85.4 %**
+    of it. (DR-018 states 1.14× / 87.4 % against the 3-point axis'
+    17.4798 %, and 1.51× / 66 % against the *folded* 13.2172 % it was drafted
+    before #487 corrected. It priced both readings explicitly and set ±20 % so
+    the budget holds under either; its Amendment A1 (#490) puts the
     1.14× / 87.4 % pair first.)
   - **Which statistic** (corrected by **#487**): term 1's verdict is
     `|mean| + 3σ` on the **signed** per-sample worst-magnitude sample across
@@ -742,10 +754,12 @@ Notes on how to read this table:
     verdict statistic.
   - **±20 % does not pre-allocate for the bias generator** (still excluded, see
     below) or for the PVT points the campaign does not visit; that
-    is what the margin between 17.48 % and 20 % is for — 2.5 points, or
-    5.2 standard errors of the binding corner's mean (SE 0.487334 %, n = 100).
-    DR-018 wrote that sentence against the folded 13.22 %; the headroom it
-    describes is the smaller of the two, and it is the one to plan against. A
+    is what the margin between 17.0863 % and 20 % is for — 2.9 points, or
+    7.6 standard errors of the binding corner's mean (SE 0.383503 %, n = 100)
+    at the 21-point axis, where the 3-point axis left 2.5 points and
+    5.2 standard errors (SE 0.487334 %). DR-018 wrote that sentence against the
+    folded 13.22 %; the headroom it describes is the smaller of the readings,
+    and it is the one to plan against. A
     measurement above 20 % is a new decision record, not another widening.
     (When DR-018 was written the unvisited count was 42, because the campaign
     ran a 3-point corner subset. It is **24** as of #597 — see the next
@@ -776,23 +790,31 @@ Notes on how to read this table:
     rest of the difference against 17.4798 % being the execution host — that
     record separates the two effects term by term, and also documents that
     `.option rndseed=N` reproduces a draw only within one build on one
-    machine). Terms 2/2a and 3 moved materially, and **term 3's move is owed
-    beyond this table**: DR-018's reference-spur derivation prices the
-    statistical residual at 4.25246 fC, and the widened grid's worst corner
-    reads 5.56626 fC. Per the "budget is not a spec line" rule at the end of
-    this section, re-pricing that ratified derivation is a decision record's
-    job; the campaign record states the measurement and flags it, and neither
-    it nor this table re-derives the stack.
-  - **The spec's derived rows follow the corrected statistic (DR-018
-    Amendment A1, #490).** `spec/pll.md`'s charge-accounting table now carries
-    term 1 "at its **measured** 17.4798 %" (signed `|mean| + 3σ`): 3.26 fC for
-    term 1, 11.19 fC total and ≈ **−57.0 dBc**, still inside the ratified
-    ≤ −55 dBc. It used to read 13.2172 % (10.40 fC, −57.6 dBc). The *binding*
-    row of that table is the **budgeted** ±20 % one (11.66 fC, −56.6 dBc). It
-    does not move, because the budget does not move, so no ratified row
-    changes value. The refresh restates a derived intermediate, and DR-018
-    §Decision 3 already authorised it, which is why it is an amendment and
-    not a new record.
+    machine). Terms 2/2a and 3 moved materially, and **term 3's move was owed
+    beyond this table — DR-034 (#610) is that record, and it is priced above**:
+    DR-018's reference-spur derivation took the statistical residual at
+    4.25246 fC, the widened grid's worst corner reads 5.56626 fC, and
+    re-pricing that derivation was a decision record's job rather than the
+    campaign's. **No budget column and no verdict in this table moves** —
+    term 3 uses 27.8 % of its ±20 fC — and what does move is `spec/pll.md`'s
+    derived spur rows, in the next bullet.
+  - **The spec's derived rows carry the corrected statistic (DR-018
+    Amendment A1, #490) at the widened corner axis (DR-034, #610).**
+    `spec/pll.md`'s charge-accounting table carries term 1 "at its
+    **measured** 17.0863 %" (signed `|mean| + 3σ`): 3.18 fC for term 1,
+    12.43 fC total and **−56.0 dBc**, still inside the ratified ≤ −55 dBc. The
+    *binding* row of that table is the **budgeted** ±20 % one, now
+    12.97 fC / **−55.7 dBc**. Its history, all on the same ±20 % budget and the
+    same ≤ −55 dBc line: 13.2172 % folded → 10.40 fC / −57.6 dBc (11.66 fC /
+    −56.6 dBc budgeted); 17.4798 % signed, 3-point axis → 11.19 fC /
+    ≈ −57.0 dBc (11.66 fC / −56.6 dBc budgeted, DR-018 A1); 17.0863 % signed,
+    21-point axis → 12.43 fC / −56.0 dBc (12.97 fC / −55.7 dBc budgeted,
+    DR-034). **No ratified row changes value in any of those steps** — the
+    target is ≤ −55 dBc throughout — but the derived margin against it has
+    fallen from ~6 dB (the old term-1-excluded −61 dBc derivation) to 1.6 dB
+    to **0.67 dB**, and DR-034 states plainly that the stack's conservatism is
+    now load-bearing: read corner-consistently, the worst of the 21 corners is
+    −56.79 dBc at the same ±20 %, 1.79 dB inside.
   - **It does not disturb term 4 either.** At ±20 % the overlap mechanism
     implies at most `Δt = 0.20 × 2.584 ns = 0.517 ns` of static phase offset —
     and that mechanism is *already inside* term 4's measured 0.864 ns, because
@@ -923,10 +945,17 @@ Notes on how to read this table:
   found it left the column untouched and routed the resolution to #483, and
   **DR-018** re-derived the row from the ratified ≤ −55 dBc reference-spur line
   and widened it to ±20 %. The ratified spur row itself did not move, and
-  terms 2/2a, 3 and 4 were not touched. Note what the exercise cost: DR-018's
-  refreshed accounting leaves the spur derivation ~1.6 dB inside −55 dBc rather
-  than the ~6 dB `spec/pll.md` reserves for uncovered mechanisms, so the next
-  term to breach a budget here is a spec-row problem, not a table edit.
+  terms 2/2a, 3 and 4 were not touched. **It has since been exercised a second
+  time, in the other direction**: #597 widened the campaign's corner axis to
+  21 points, term 3's worst corner rose to 5.56626 fC from the 4.25246 fC
+  DR-018's stack priced, the campaign again left the table untouched and routed
+  it to #610, and **DR-034** re-priced the stack. No budget column moved that
+  time and no verdict changed — but note what the two exercises have cost
+  between them: the spur derivation now sits **0.67 dB** inside −55 dBc rather
+  than the ~6 dB `spec/pll.md` reserves for uncovered mechanisms (1.6 dB after
+  DR-018, 0.67 dB after DR-034), so the next term to breach a budget here is a
+  spec-row problem, not a table edit, and a further widening of term 1 is no
+  longer available at all (DR-034 §Decision 4).
 
 ---
 
