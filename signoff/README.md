@@ -421,14 +421,31 @@ and is not a spec change:
   net charge per reference cycle, and the resulting static phase offset.
   Checked against `|mean| + 3σ` at the worst corner by `sim/mc-cp-mismatch`'s
   Monte Carlo campaign (#15), most recently
-  `sim/mc-cp-mismatch/records/20260923-095854-1655e11.md` — recorded seed
-  count n = 100/corner, corner-combined, with `sw_stat_mismatch = 0` decks
-  available as the systematic-only negative control.
-- **The VCO band-select mirror mismatch** (`sim/vco-tuning-range`, #146/#482):
-  device-level Monte Carlo at nominal PVT, N = 25/band at the two cascade
-  extremes (`sim/vco-tuning-range/records/20260817-143524-0e9cfc9.md`), and
+  `sim/mc-cp-mismatch/records/20260927-102154-d004d5b.md` (#597) — recorded
+  seed count n = 100/corner over **21 corners**: nominal plus all 20 vertices
+  of the process × temperature × supply box, so every MOS bundle appears at
+  both temperature and both supply extremes. `sw_stat_mismatch = 0` decks are
+  the systematic-only negative control, and #597's record re-ran that control
+  at `fs`/125 °C/2.97 V, a bundle no earlier record of this campaign visited.
+  That record supersedes `20260923-095854-1655e11.md`, which carried the same
+  n over a 3-point diagonal subset; three of the four terms' binding corner
+  moved to a point the subset did not contain, two of them onto a newly added
+  mixed bundle, so the corner-combination sub-criterion is now satisfied by
+  coverage rather than by a subset argument. All four terms still PASS.
+- **The VCO band-select mirror mismatch** (`sim/vco-tuning-range`,
+  #146/#482/#597): device-level Monte Carlo at nominal PVT, N = 25/band at the
+  two cascade extremes (`sim/vco-tuning-range/records/20260817-143524-0e9cfc9.md`);
   band 0's own-corner closure at N = 100
-  (`sim/vco-tuning-range/records/20260923-084925-1655e11.md`, #482).
+  (`sim/vco-tuning-range/records/20260923-084925-1655e11.md`, #482); and
+  `sim/vco-tuning-range/records/20260927-081930-d004d5b.md` (#597), the first
+  record here to draw **two band codes from one mismatch draw** — both sides of
+  the B0→B1 adjacent pair in one netlist parse, so the coverage-hole inequality
+  is measured as a per-draw ratio (1.28193 at its own one-sided 3σ tail against
+  a 1.0 floor, N = 200) instead of proxied by one band's relative dispersion.
+  The two earlier records' percentage-of-mean proxy is retired by it: the
+  measured correlation between the pair's frequencies is ρ = 0.9958, so the
+  independent-draw treatment those records were limited to double-counts
+  common-mode dispersion.
 - **The random period-jitter bound** (`spec/pll.md`'s period-jitter row,
   [DR-032](../spec/decision-records/DR-032-random-period-jitter-bounded-over-the-grid.md)) —
   new since DR-032 superseded DR-020 Decision 1 and DR-023 Decision 2's "not
