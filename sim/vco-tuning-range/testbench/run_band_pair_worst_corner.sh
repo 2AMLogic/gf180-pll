@@ -467,7 +467,11 @@ cat >"${RECORD}" <<EOF
   "Model-capability gate" for the original evidence (\`agauss()\` per-instance
   draws inside \`nfet_03v3_dss\`/\`pfet_03v3_dss\`, gated by
   \`sw_stat_mismatch\`, evaluated ONCE at netlist PARSE time, reproducible via
-  \`.option rndseed=N\`). Parse-time evaluation is exactly what makes a joint
+  \`.option rndseed=N\`). That reproducibility claim is HOST-SCOPED -- same
+  host, same build, same seed -> same draw; a different host is an
+  independent replicate, not a reproduction of the same sample -- see
+  sim/README.md's "Statistical convention" field. Parse-time evaluation is
+  exactly what makes a joint
   two-band draw possible: two \`tran\` runs inside one \`.control\` block of
   \`testbench/tb_vco_band_pair.sp\` see the SAME offsets, because the draws
   happened before either ran. The band code is moved between the two runs with
