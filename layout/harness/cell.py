@@ -70,6 +70,33 @@ M_i_1 ZN I VDD VDD pfet_05v0 W=1.83u L=0.5u
 """
 
 
+def reference_netlist_header(cell: str, issue: int) -> str:
+    """Shared boilerplate for hand-written leaf-cell ``reference_netlist()``
+    functions: a 6-line comment header + 4-line ``--lvs_sub=VSS`` footer,
+    ending with the blank-line separator before the ``.subckt`` line.
+
+    This text is byte-identical (modulo ``cell``/``issue``) across the
+    divider-chain and pfd/cp leaf cells that call it (issue #620); each
+    call site still writes its own ``.subckt``/``M_...`` device lines
+    independently -- this only dedups the surrounding operator-instruction
+    text, not the *device netlist* that this module's own docstring (above)
+    says must stay hand-written and independently derived from each cell's
+    own schematic.
+    """
+    return (
+        f"* Reference schematic for {cell} (issue #{issue}).\n"
+        "*\n"
+        "* Hand-written independently of the layout -- see\n"
+        "* layout/harness/cell.py's docstring for why. Device sizes/nodes match\n"
+        f"* design/{cell}.sch exactly.\n"
+        "*\n"
+        "* Run LVS with --lvs_sub=VSS (layout/run_pv.py's own default): the NMOS\n"
+        "* body ties to the deck's synthesized global substrate net, which this\n"
+        "* flag names VSS -- see layout/README.md's \"substrate-net gotcha\".\n"
+        "\n"
+    )
+
+
 @dataclass(frozen=True)
 class TrivialCell:
     gds: Path

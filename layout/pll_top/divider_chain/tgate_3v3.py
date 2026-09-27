@@ -87,17 +87,8 @@ def reference_netlist() -> str:
     labelled D vs. S here).
     """
     return (
-        "* Reference schematic for tgate_3v3 (issue #306).\n"
-        "*\n"
-        "* Hand-written independently of the layout -- see\n"
-        "* layout/harness/cell.py's docstring for why. Device sizes/nodes match\n"
-        "* design/tgate_3v3.sch exactly.\n"
-        "*\n"
-        "* Run LVS with --lvs_sub=VSS (layout/run_pv.py's own default): the NMOS\n"
-        "* body ties to the deck's synthesized global substrate net, which this\n"
-        "* flag names VSS -- see layout/README.md's \"substrate-net gotcha\".\n"
-        "\n"
-        ".subckt tgate_3v3 A Y GN GP VDD VSS\n"
+        _cli.reference_netlist_header("tgate_3v3", 306)
+        + ".subckt tgate_3v3 A Y GN GP VDD VSS\n"
         "M_MP Y GP A VDD pfet_03v3 W=2.5u L=0.28u\n"
         "M_MN Y GN A VSS nfet_03v3 W=1u L=0.28u\n"
         ".ends\n"
