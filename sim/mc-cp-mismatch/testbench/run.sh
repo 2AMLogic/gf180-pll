@@ -166,6 +166,40 @@
 # This record continues to state the gap honestly rather than fabricating a
 # closed-loop number as a side effect of the corner-grid extension.
 #
+# --- Erratum: the `# switches:` line of the CSVs already committed (#601) ----
+#
+# Every CSV this script writes opens with `simenv_provenance`'s header, so the
+# table stays self-describing away from its record. Until #601 that function
+# hardcoded one switches line with no parameter --
+#
+#   # switches: design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0
+#   #           -> nominal skew, no Monte Carlo)
+#
+# -- which is the exact opposite of what this campaign does: SWITCHES_NOTE
+# below records the `sw_stat_mismatch=1` this script passes on every ngspice
+# invocation, and the record's own Environment provenance field has said so
+# correctly since #15 (simenv_env_block grew the override parameter;
+# simenv_provenance did not). The twelve CSVs minted before the fix therefore
+# carry a header that contradicts their own record:
+#
+#   corners/20260731-212614-640560e/{mc_cp_dc,mc_cp_switch,mc_pfd_cp,mc_dff_ctq}.csv
+#   corners/20260817-135712-0e9cfc9/{mc_cp_dc,mc_cp_switch,mc_pfd_cp,mc_dff_ctq}.csv
+#   corners/20260923-095854-1655e11/{mc_cp_dc,mc_cp_switch,mc_pfd_cp,mc_dff_ctq}.csv
+#
+# Those bytes are NOT edited and neither are the records beside them: `sim/` is
+# append-only evidence and sim/README.md forbids rewriting a committed record
+# even to add a true, helpful pointer. The correction is made forward, here, in
+# the live testbench artifact -- the same disposition
+# sim/lock-window-trim/testbench/tb.json uses for its own stale-figure erratum.
+# For those twelve files the record's Environment provenance field is
+# authoritative and the CSV's `# switches:` line is a harness default that was
+# never true of the run; every CSV minted from this script after #601 states
+# the switches the run actually used.
+#
+# Nothing computed is affected: no figure in any record, and no check script,
+# parses that line -- simenv_datarows drops every `#` comment before the data
+# is read.
+#
 # Usage:
 #   ./run.sh                 # full corner-combined campaign -> mints a records/<id>.md
 #   ./run.sh --check         # a handful of samples per sub-campaign at nominal, to stdout
@@ -266,6 +300,16 @@ DC_HEADER="corner,seed,vctrl_v,iup_a,idn_a,mism_pct"
 SW_HEADER="corner,seed,vctrl_v,wskew_s"
 PFD_HEADER="corner,seed,qnet0_c,qplus_c,qminus_c,kd_wide_a,t_offset_s"
 DFF_HEADER="corner,seed,tcq_r_s,tcq_f_s"
+
+# The `# switches:` line of every CSV this script writes (#601). Passed to
+# simenv_provenance as its optional fifth argument, in one place so the four
+# sub-campaigns cannot drift apart; the prose counterpart is the
+# simenv_env_block switches-note in the record body below, and the fact it
+# states is the `sw_stat_mismatch=1` every ngspice invocation in this file
+# passes. Without it simenv_provenance emits its design.ngspice-default
+# wording, which for this campaign says the opposite of what ran -- see the
+# erratum in this file's header comment for the CSVs that shipped that way.
+SWITCHES_NOTE="design.ngspice defaults OVERRIDDEN by this campaign (sw_stat_global=0, sw_stat_mismatch=1 -> mismatch-only Monte Carlo, .option rndseed set per sample)"
 
 # simenv_run_deck_retried (3-attempt retry wrapper around simenv_run_deck,
 # #146 host-flakiness mitigation) is hoisted to sim/lib/simenv.sh -- #184.
@@ -870,22 +914,22 @@ OUT_PFD="${CORNERSDIR}/mc_pfd_cp.csv"
 OUT_DFF="${CORNERSDIR}/mc_dff_ctq.csv"
 {
   simenv_provenance "mc-cp-mismatch (dc)" "${RID}" "design/cp.sch (xschem export)" \
-    "${NUM_CORNERS} corners x N=${N_DC} mismatch samples/corner"
+    "${NUM_CORNERS} corners x N=${N_DC} mismatch samples/corner" "${SWITCHES_NOTE}"
   echo "${DC_HEADER}"; cat "${WORK}/dc_all.csv"
 } >"${OUT_DC}"
 {
   simenv_provenance "mc-cp-mismatch (switch)" "${RID}" "design/cp.sch (xschem export)" \
-    "${NUM_CORNERS} corners, Vctrl=${VCTRL_MID}, N=${N_SW} mismatch samples/corner"
+    "${NUM_CORNERS} corners, Vctrl=${VCTRL_MID}, N=${N_SW} mismatch samples/corner" "${SWITCHES_NOTE}"
   echo "${SW_HEADER}"; cat "${WORK}/sw_all.csv"
 } >"${OUT_SW}"
 {
   simenv_provenance "mc-cp-mismatch (pfd_cp)" "${RID}" "design/pfd_cp.sch (xschem export)" \
-    "${NUM_CORNERS} corners, dphi={-1n,0,+1n}, N=${N_PFD} mismatch samples/corner"
+    "${NUM_CORNERS} corners, dphi={-1n,0,+1n}, N=${N_PFD} mismatch samples/corner" "${SWITCHES_NOTE}"
   echo "${PFD_HEADER}"; cat "${WORK}/pfd_all.csv"
 } >"${OUT_PFD}"
 {
   simenv_provenance "mc-cp-mismatch (dff clk->Q)" "${RID}" "design/dff_tg_3v3.sch (committed netlist)" \
-    "${NUM_CORNERS} corners, N=${N_DFF} mismatch samples/corner x 2 (rise+fall)"
+    "${NUM_CORNERS} corners, N=${N_DFF} mismatch samples/corner x 2 (rise+fall)" "${SWITCHES_NOTE}"
   echo "${DFF_HEADER}"; cat "${WORK}/dff_all.csv"
 } >"${OUT_DFF}"
 

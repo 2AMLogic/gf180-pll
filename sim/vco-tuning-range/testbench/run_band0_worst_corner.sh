@@ -70,6 +70,38 @@
 # corrected, same-corner, same-Vctrl verdict for band 0 specifically that the
 # earlier one named as its own open follow-on.
 #
+# --- Erratum: the `# switches:` line of the CSV already committed (#601) -----
+#
+# Until #601 `simenv_provenance` hardcoded one switches line for every CSV it
+# headed, with no parameter and no condition --
+#
+#   # switches: design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0
+#   #           -> nominal skew, no Monte Carlo)
+#
+# -- which is the opposite of what tb_vco_mismatch.sp (this script's deck too)
+# does: it re-declares sw_stat_global=0 / sw_stat_mismatch=1 after the
+# design.ngspice include so the later declaration wins. The record's
+# Environment provenance field has stated that correctly all along, because
+# simenv_env_block took the override parameter and simenv_provenance did not.
+# One committed CSV shipped with the wrong header:
+#
+#   corners/20260923-084925-1655e11/mismatch.csv
+#
+# Its bytes are NOT edited and neither is the record beside it -- `sim/` is
+# append-only evidence and sim/README.md forbids rewriting a committed record
+# even to add a true, helpful pointer. The correction is made forward, here in
+# the live testbench artifact, the same disposition
+# sim/lock-window-trim/testbench/tb.json uses for its own stale-figure erratum;
+# run_mismatch.sh's header carries the sibling note for the other affected CSV
+# in this experiment directory. For that one file the record's Environment
+# provenance field is authoritative and the CSV's `# switches:` line is a
+# harness default that was never true of the run; every CSV minted from this
+# script after #601 states the switches the run actually used.
+#
+# Nothing computed is affected: no figure in any record, and no check script,
+# parses that line -- simenv_datarows drops every `#` comment before the data
+# is read.
+#
 # Usage:
 #   ./run_band0_worst_corner.sh          # full campaign -> mints records/<id>.md
 #   ./run_band0_worst_corner.sh --check  # 2 samples, to stdout
@@ -111,6 +143,14 @@ HEADROOM_PCT=31.88
 N_SAMPLES="${N_SAMPLES:-100}"
 
 HEADER="band,seed,f_hz,i_a"
+
+# The `# switches:` line of the CSV this script writes (#601), passed to
+# simenv_provenance as its optional fifth argument. Same deck, same wording as
+# run_mismatch.sh's; prose counterpart is the simenv_env_block switches-note in
+# the record body below. Without it simenv_provenance emits its
+# design.ngspice-default wording, which for this deck says the opposite of what
+# ran -- see the erratum in this file's header comment.
+SWITCHES_NOTE="design.ngspice defaults OVERRIDDEN by tb_vco_mismatch.sp, which re-declares them after the include (sw_stat_global=0, sw_stat_mismatch=1 -> mismatch-only Monte Carlo, .option rndseed set per sample)"
 
 stage_netlist() {
   mkdir -p "$1"
@@ -203,7 +243,8 @@ OUT="${CORNERSDIR}/mismatch.csv"
 {
   simenv_provenance "vco-tuning-range (band0 worst-corner overlap verdict)" "${RID}" \
     "design/netlist/vco.spice (committed export)" \
-    "${CORNER_TAG}/${TEMP}C/${VDD}V, Vctrl=${VCTRL}, band=0 only, N=${N_SAMPLES} mismatch samples"
+    "${CORNER_TAG}/${TEMP}C/${VDD}V, Vctrl=${VCTRL}, band=0 only, N=${N_SAMPLES} mismatch samples" \
+    "${SWITCHES_NOTE}"
   echo "${HEADER}"; cat "${WORK}/all.csv"
 } >"${OUT}"
 
