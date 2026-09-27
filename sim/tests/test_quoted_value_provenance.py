@@ -18,6 +18,7 @@ input -- the script reduces committed CSVs and reads committed Markdown.
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
@@ -1694,6 +1695,272 @@ class TestInRecordTableEvidence(_TreeTest):
                          "table nothing corroborates is prose")
 
 
+class TestMethodDirectoryEvidence(_TreeTest):
+    """Rule 1's third evidence form: a method directory of per-point JSON.
+
+    The random/noise-driven period-jitter row was ungraded until 2026-09-27 for
+    the reason "an upper bound from a method directory, not a record ... and
+    this check resolves record ids" -- which is a fact about the check, stated
+    as a property of the evidence, in the same shape as the three "no CSV was
+    committed" reasons that were false. `sim/period-jitter/random-bound` commits
+    45 per-point reductions beside the 45 logs that produced them.
+
+    The rule these tests exist for is the correspondence one. A directory of
+    per-point files can be trimmed as quietly as a markdown table can be
+    elided, and more dangerously: `max()` over 44 of 45 points still bounds
+    something, and `count(rows)` over them is 44, which reads like an answer.
+    """
+
+    METHOD = "period-jitter/random-bound"
+    #: Three points whose numbers are all different, so a reduction that read
+    #: one file, or the wrong file, cannot produce the right answer by accident:
+    #: the worst bound is 0.338 %, the best 0.255 %, and the mean neither.
+    POINTS = {
+        "typical_27c_3.30v": 0.2549,
+        "ss_-40c_2.97v": 0.3012,
+        "sf_-40c_2.97v": 0.3381,
+    }
+    MEASURED = (
+        "Bounded, not estimated -- <= 0.338 % RMS at all 3 of the mandated PVT "
+        "points, one-sided 95 % confidence"
+    )
+    RESULTS = "results/transient_*.json against logs/grid_*.txt"
+
+    def method_root(self):
+        return self.tree.root / "sim" / self.METHOD
+
+    def write_points(self, points=None, confidence=0.95, declared=None):
+        """One per-point JSON per point, plus the log that produced each.
+
+        `declared` overrides what a file says its own `point` is, which is the
+        mutation the filename-agreement rule exists for.
+        """
+        points = self.POINTS if points is None else points
+        results = self.method_root() / "results"
+        logs = self.method_root() / "logs"
+        for directory in (results, logs):
+            if directory.is_dir():
+                shutil.rmtree(directory)
+            directory.mkdir(parents=True)
+        for point, bound in points.items():
+            (results / f"transient_{point}.json").write_text(json.dumps({
+                "point": declared or point,
+                "confidence": confidence,
+                "bound": {"total_pct": bound, "bias_generator_pct": bound / 2},
+                "operating_point": {"temp_c": -40.0, "band": [0, 1, 2]},
+                "copies": [{"copy": 0, "periods_s": [1e-9, 2e-9]}],
+            }))
+            (logs / f"grid_{point}.txt").write_text("ngspice log\n")
+
+    def entries(self, extra=None, evidence=None, record=None):
+        defaults = [
+            ("`0.338 %`", "max(bound.total_pct)", "1"),
+            ("`3 of the mandated PVT points`", "count(rows)", "1"),
+            ("`95 %`", "min(confidence)", "100"),
+        ]
+        return list(DEFAULT_PROVENANCE) + [
+            ("Period jitter, random", quoted,
+             record or f"sim/{self.METHOD}",
+             evidence or self.RESULTS, reduction, scale)
+            for quoted, reduction, scale in (extra or defaults)
+        ]
+
+    def write(self, provenance=None, measured=None, source=None):
+        row = ("Period jitter, random", measured or self.MEASURED, "**MET**",
+               source if source is not None
+               else f"`sim/{self.METHOD}/results/transient_*.json`")
+        spec_rows = SPEC_ROWS[:2] + (row,) + SPEC_ROWS[2:]
+        self.tree.write(proposal(
+            spec_rows=spec_rows,
+            provenance=self.entries() if provenance is None else provenance,
+        ))
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.write_points()
+        self.write()
+
+    def test_a_method_directorys_per_point_json_is_gradeable(self):
+        result = self.assertPasses()
+        self.assertIn("7 quoted values re-derived", result.stdout)
+        self.assertIn("3 method-directory point set(s) read, 9 per-point JSON "
+                      "document(s), every one matched to a committed log by "
+                      "point id", result.stdout)
+
+    def test_a_nested_key_is_a_dotted_column(self):
+        """`bound.total_pct` must reduce the nested value, not nothing.
+
+        A reduction over a column the evidence does not have selects no rows,
+        and the check's own column-existence rule turns that into an error
+        rather than a passing zero -- so this asserts the flattening reached the
+        nested key by reducing a DIFFERENT nested key and getting its answer.
+        """
+        self.write(provenance=self.entries(extra=[
+            ("`0.338 %`", "max(bound.bias_generator_pct)", "1"),
+        ]))
+        self.assertFails("gives 0.16905")
+
+    def test_a_list_is_not_a_column(self):
+        """`copies` and `operating_point.band` are lists, so neither is a cell.
+
+        Taking a list's length, or its first element, would answer a question
+        the document did not ask -- and would do it silently. The columns that
+        DO exist are printed beside the refusal, which is the diagnosis a reader
+        needs.
+        """
+        self.write(provenance=self.entries(extra=[
+            ("`0.338 %`", "max(copies)", "1"),
+        ]))
+        self.assertFails("names column `copies`", "bound.total_pct")
+
+    def test_a_trimmed_result_set_fails(self):
+        """The rule with teeth, in this form's dialect.
+
+        Drop one point's result and leave its log: `max()` over the remaining
+        two still bounds something and `count(rows)` is 2. Both would read like
+        answers, so the set comparison must refuse before either is computed.
+        """
+        (self.method_root() / "results"
+         / "transient_sf_-40c_2.97v.json").unlink()
+        self.assertFails("the point sets differ",
+                         "1 log(s) with no result (sf_-40c_2.97v)",
+                         "must not read as a smaller, passing answer")
+
+    def test_a_result_with_no_log_fails(self):
+        """The other direction: a reduction nothing corroborates."""
+        (self.method_root() / "logs" / "grid_sf_-40c_2.97v.txt").unlink()
+        self.assertFails("the point sets differ",
+                         "1 result(s) with no log (sf_-40c_2.97v)")
+
+    def test_a_file_copied_to_another_points_name_fails(self):
+        """Set identity alone would pass this; the filename rule must not.
+
+        A file copied to a new name is counted once, matched to a log, and then
+        contributes another point's numbers under this point's id -- which is
+        how a bound over 45 points becomes 44 points and a duplicate without
+        any count changing.
+        """
+        self.write_points(declared="typical_27c_3.30v")
+        self.assertFails("declares point `typical_27c_3.30v`, not the",
+                         "passes the set comparison")
+
+    def test_a_directory_with_no_logs_at_all_fails(self):
+        shutil.rmtree(self.method_root() / "logs")
+        self.assertFails("is not a directory on the tree")
+
+    def test_a_single_point_glob_is_refused_rather_than_reduced(self):
+        """One member is a single file wearing a glob's clothes.
+
+        Every aggregate over it returns that point's own number while the
+        entry's shape says "over the grid". This is what keeps the real tree's
+        one-point `validate` stage out of the graded table.
+        """
+        self.write_points(points={"typical_27c_3.30v": 0.338})
+        self.write(provenance=self.entries(extra=[
+            ("`0.338 %`", "max(bound.total_pct)", "1"),
+        ]))
+        self.assertFails("matches 1 point (`typical_27c_3.30v`)",
+                         "proves nothing about a grid")
+
+    def test_a_method_directory_that_has_records_is_refused(self):
+        """Otherwise the form is a route around the record citation rule.
+
+        If a campaign's evidence is reachable by record id, it must be reduced
+        that way -- rules 1 and 2 are what stop section 5.1 reducing evidence
+        the row does not point a reader at, and this form has no record id to
+        compare against the row's citations.
+        """
+        (self.method_root() / "records").mkdir()
+        self.assertFails("commits a records/ directory",
+                         "not as a route around rules 1 and 2")
+
+    def test_the_row_must_cite_the_results_path_itself(self):
+        """Rule 2 in this dialect: the path, because there is no id.
+
+        Citing the directory is not citing the files: a row that points a reader
+        at `sim/period-jitter/random-bound/` leaves them to guess which of its
+        five stages' result sets a figure came from.
+        """
+        self.write(source=f"`sim/{self.METHOD}/`")
+        self.assertFails("which that section 5 row does not cite",
+                         "the results path itself")
+
+    def test_the_logs_glob_is_named_rather_than_guessed(self):
+        """A missing `against <logs glob>` is refused, not defaulted.
+
+        These results are `transient_*` and the logs that produced them are
+        `grid_*`, because one grid run per point feeds four stages. A check that
+        derived the log glob from the results glob would have compared a set
+        against itself and called it corroborated.
+        """
+        self.write(provenance=self.entries(evidence="results/transient_*.json"))
+        self.assertFails("whose evidence spec is",
+                         "stated rather than guessed")
+
+    def test_a_logs_glob_that_matches_nothing_fails(self):
+        self.write(provenance=self.entries(
+            evidence="results/transient_*.json against logs/nope_*.txt"))
+        self.assertFails("matches no committed simulation log",
+                         "nothing corroborates is prose")
+
+    def test_a_method_directory_that_is_not_on_the_tree_fails(self):
+        """With the row citing it, so the citation rule is not what fires.
+
+        The citation rule is checked before the tree is read -- an entry that
+        may not read this evidence is refused whether or not the evidence
+        exists -- so reaching this branch means citing the absent path too.
+        """
+        self.write(
+            provenance=self.entries(record="sim/period-jitter/absent"),
+            source="`sim/period-jitter/absent/results/transient_*.json`",
+        )
+        self.assertFails("no method directory at sim/period-jitter/absent")
+
+    def test_unreadable_json_fails(self):
+        (self.method_root() / "results"
+         / "transient_sf_-40c_2.97v.json").write_text("{not json")
+        self.assertFails("is not readable JSON")
+
+    def test_a_json_array_is_not_a_point_document(self):
+        (self.method_root() / "results"
+         / "transient_sf_-40c_2.97v.json").write_text("[1, 2, 3]")
+        self.assertFails("is a JSON list, not an object")
+
+    def test_the_derived_figure_table_may_not_read_a_method_directory(self):
+        """Rules 7 and 8 refuse the form rather than half-supporting it.
+
+        The real tree's `1.48x` -- the 0.50 % allocation over the 0.338 % bound
+        -- is a rule-7-shaped figure over method-directory evidence, and it is
+        declared in the ungraded-figure table for exactly this reason. A path
+        nothing exercises is not a path to ship; when that figure is graded, the
+        path arrives with its own tests.
+        """
+        derived = list(DEFAULT_DERIVED) + [(
+            "Period jitter, random", "`0.338 %`", f"sim/{self.METHOD}",
+            self.RESULTS, "max(bound.total_pct) / dr003-vctrl-window-width-v",
+            "2.0 V", "1",
+        )]
+        self.tree.write(proposal(
+            spec_rows=SPEC_ROWS[:2]
+            + (("Period jitter, random", self.MEASURED, "**MET**",
+                f"`sim/{self.METHOD}/results/transient_*.json`"),)
+            + SPEC_ROWS[2:],
+            provenance=self.entries(),
+            derived=derived,
+        ))
+        self.assertFails("Only the first section 5.1 table reads a method "
+                         "directory")
+
+    def test_a_record_id_and_a_method_directory_are_told_apart(self):
+        """The two Record(s) shapes must not be confused for one another.
+
+        A record id in that column still resolves through rules 1 and 2, and a
+        cell that is neither says so rather than silently reducing nothing.
+        """
+        self.write(provenance=self.entries(record="not-a-record-or-a-dir"))
+        self.assertFails("names neither a record id nor a method directory")
+
+
 class TestDerivedAgainstARatifiedLine(_TreeTest):
     """Rule 7: a reduction divided by a constant read out of the documents.
 
@@ -2306,6 +2573,28 @@ class TestTheRealTree(unittest.TestCase):
                 "the summary-table target cell and the '## Reference spur' "
                 "target line",
         )
+
+    def test_the_method_directory_reductions_read_the_whole_grid(self):
+        """The anti-vacuity assertion for rule 1's third evidence form.
+
+        `<= 0.338 % RMS at all 45 of the mandated PVT points` is reported by a
+        reduction over 45 committed points and by a reduction over one of them.
+        Only the point count tells them apart, so it is asserted here as a
+        floor -- not as a second copy of a number §5 already states and this
+        check already grades -- alongside the claim the OK line makes about how
+        each point was corroborated.
+        """
+        result = subprocess.run(
+            ["bash", str(CHECK)], capture_output=True, text=True, cwd=REPO_ROOT
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        match = re.search(r"(\d+) method-directory point set\(s\) read, (\d+) "
+                          r"per-point JSON document", result.stdout)
+        self.assertIsNotNone(match, msg=result.stdout)
+        self.assertGreaterEqual(int(match.group(1)), 1, msg=result.stdout)
+        self.assertGreaterEqual(int(match.group(2)), 45, msg=result.stdout)
+        self.assertIn("every one matched to a committed log by point id",
+                      result.stdout)
 
     def test_it_reports_the_ungraded_figures_it_disclosed(self):
         result = subprocess.run(

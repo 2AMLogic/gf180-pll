@@ -598,7 +598,9 @@ remaining ungraded surface was the measured value itself.
 
 The table below closes it for the values it names. Each entry gives the
 `sim/` record, the committed per-corner evidence inside it — a reduced CSV, or
-the record's own per-point table where that is what the campaign committed — and
+the record's own per-point table where that is what the campaign committed — or,
+for a campaign whose evidence is outside the record convention, a method
+directory and the per-point result set inside it; and
 the reduction that produces the figure, and
 `sim/lib/check-quoted-value-provenance.sh` fails this repository's CI if the
 re-derived value does not equal the figure **rounded to the precision written**
@@ -737,6 +739,74 @@ count, which is the claim and not the evidence; and the check's OK line says
 which tables got the stricter of the two rules, so the weaker one is never
 applied silently.
 
+**A fourth row left the exclusion table on 2026-09-27, and its reason had the
+same shape as those three: a limit of the check, written as a property of the
+evidence.** The random/noise-driven period-jitter row said "an upper bound from
+a method directory, not a record — `sim/period-jitter/random-bound/` has no
+`records/` …, and this check resolves record ids," and then said, in its own
+next clause, that the evidence *is* committed and that every figure the row
+quotes is regenerated from it. Both halves were true, and together they are not
+a reason: "this check only reads records" is a fact about the check. DR-032's
+campaign runs several decks per point with a reduction between them, which is
+why it sits outside `sim/harness`'s record convention — but its 45 per-point
+reductions are committed as `results/transient_*.json`, beside the 45
+simulation logs that produced them, which is more per-point evidence than most
+records commit, not less.
+
+So the reduction language now accepts a **third evidence form: a method
+directory.** The Record(s) column holds `sim/<campaign>/<method>` instead of a
+record id, and the Evidence column holds
+`<results glob> against <logs glob>` — two paths relative to it, each with
+exactly one `*`, which is the point id. Each matched JSON document becomes one
+row and its nested keys become dotted column names (`bound.total_pct`,
+`noisy.sigma_upper_pct`, `operating_point.temp_c`), so the same grammar reduces
+it. Four rules travel with the form, three of them the dialect of rules this
+section already applies and one new:
+
+- **The point sets must be equal by identity**, not by count — the 45 ids
+  `results/transient_*.json` matches against the 45 that `logs/grid_*.txt`
+  does. This is the in-record table's anti-truncation rule in a form where a
+  directory can be trimmed as quietly as a markdown table can be elided: a
+  `max()` over 44 of 45 points still bounds something and a `count(rows)` over
+  them is 44, which reads like an answer. Identity is always available here —
+  both names carry the id — so unlike the second form this one has **no weaker
+  count-only rule to fall back on**, and none is offered.
+- **The logs are named by the entry, not guessed by the check.** A method
+  directory's stage names need not match its log names: these results are
+  `transient_*` and the logs that produced them are `grid_*`, because one grid
+  run per point feeds four stages' reductions. A check that guessed the log
+  glob from the results glob would have compared a set against itself and
+  called it corroborated.
+- **Each document must agree with its own filename** — its `point` field must
+  be the id the name declares. A file copied to a new name passes the set
+  comparison and then contributes another point's numbers under this point's
+  id.
+- **A method directory that commits a `records/` is refused.** This form exists
+  for evidence outside the record convention, and if a campaign ever gains
+  records its evidence is reachable by id and must be reduced that way. Without
+  that guard the form would be a route around rule 2's citation requirement for
+  every record in the tree. In its place, the citation rule is enforced on the
+  **path**: the §5 row's own Source cell must name the very results glob the
+  entry reduces, not merely the directory it sits in.
+- **A per-point glob matching one point is refused rather than reduced.** The
+  form's whole purpose is to prove a *set* was complete; one member is a single
+  file wearing a glob's clothes, and every aggregate over it returns that
+  point's own number while the entry's shape says "over the grid." That refusal
+  is what keeps the `validate` stage's `0.910 ± 0.042` in the ungraded-figure
+  table below instead of being graded as a grid figure it is not.
+
+Three figures of that row are now graded against its 45 points: the headline
+bound `0.338 %` (`max(bound.total_pct)` — the worst of the 45, which is what an
+upper bound over a grid means), the `45 of the mandated PVT points` the bound is
+claimed at (`count(rows)`, tied by the rule above to 45 simulations that ran),
+and the `95 %` one-sided confidence (`min(confidence)` — a *minimum*, so a point
+that had been reduced at a weaker limit would lower it and fail, where a maximum
+would hide it behind the other 44). What the row's remaining two headline
+figures need is stated in the ungraded-figure table rather than left to a
+reader: `1.48×` is a ratified line over a measurement, the one direction the
+third table's `/` does not carry, and `0.910 ± 0.042` is a point estimate with
+an error bar from a one-point stage.
+
 Ten figures across those two formerly-excluded rows are now graded: the closed-
 loop band-edge row's `45-point PVT grid`, `90 runs` and its headline
 `0 of 45 corners` (`count(rows where Status == PASS)` — a **zero**, of the kind
@@ -864,6 +934,9 @@ of that pass is still ungraded.
 | Period jitter (open-loop sensitivity) | `2.51 %` | `20260804-211600-f599a65` (63-point grid) | `raw_measures.csv` | `max(rip_tj_rms_pct where rdiv == r16)` | `1` |
 | Period jitter, closed-loop, deterministic (control-ripple) | `0.0508` | `20260905-192724-a2ba48f`, `20260906-015602-f9bef9d`, `20260906-024225-12bccda`, `20260906-063728-f3c9c23`, `20260906-080511-69b36ef`, `20260906-095050-3a8a6ef` | `period_jitter_by_corner.csv` | `min(tj_rms_pct)` | `1` |
 | Period jitter, closed-loop, deterministic (control-ripple) | `0.2691` | `20260905-192724-a2ba48f`, `20260906-015602-f9bef9d`, `20260906-024225-12bccda`, `20260906-063728-f3c9c23`, `20260906-080511-69b36ef`, `20260906-095050-3a8a6ef` | `period_jitter_by_corner.csv` | `max(tj_rms_pct)` | `1` |
+| Period jitter, closed-loop, random/noise-driven | `0.338 %` | `sim/period-jitter/random-bound` | `results/transient_*.json against logs/grid_*.txt` | `max(bound.total_pct)` | `1` |
+| Period jitter, closed-loop, random/noise-driven | `45 of the mandated PVT points` | `sim/period-jitter/random-bound` | `results/transient_*.json against logs/grid_*.txt` | `count(rows)` | `1` |
+| Period jitter, closed-loop, random/noise-driven | `95 %` | `sim/period-jitter/random-bound` | `results/transient_*.json against logs/grid_*.txt` | `min(confidence)` | `100` |
 | Reference spur | `−57.0` | `20260816-132150-5f405e7` | `spur_by_corner.csv` | `max(spur_dbc)` | `1` |
 | Reference spur | `−72.7` | `20260816-132150-5f405e7` | `spur_by_corner.csv` | `min(spur_dbc)` | `1` |
 | Reference spur | `−54.5` | `20260816-132150-5f405e7` | `spur_by_corner.csv` | `max(spur_dbc_at_200mhz)` | `1` |
@@ -959,7 +1032,6 @@ of this exists" is.
 | Reference input | Reports a *budget* and an exclusion, not a measurement: the electrical contract (V_IL/V_IH, edge rate, duty) is unmeasured and the row says so. Its one numeric claim — the `f_ref` span exercised — is a set of stimulus settings, graded by `check-ref-drive-claims.sh` against the decks rather than by reducing an output |
 | Integrated RMS jitter | N/A by design (DR-002 Decision 5). There is no number to re-derive and deliberately never will be |
 | Period jitter, closed-loop, deterministic, at the 200 MHz band top | **Declared, not measured** — the campaign has no record at all, so it has no committed evidence. This is the row's own stated status, and the absence is the claim |
-| Period jitter, closed-loop, random/noise-driven | **An upper bound from a method directory, not a record** — `sim/period-jitter/random-bound/` has no `records/` (DR-032: several decks per point with a reduction between them, outside `sim/harness`), and this check resolves record ids. Its evidence is committed — `results/*.json` — and every figure the row quotes is regenerated from it by that directory's own `summarize.py` into `results/SUMMARY.md` |
 | Phase noise | N/A by design (DR-002 Decision 5) |
 | Standby current | Waived — no power-down mode exists in v1, so there is no state to measure |
 | Area | Re-derived in CI already, by `layout/lib/check-layout-status-claims.sh`, from `layout/evidence/area-audit/area-audit.md` — the GDS bounding boxes `python3 layout/run_pv.py area` measures. Its evidence is `layout/`, not `sim/`, so it is graded there and deliberately not duplicated here |
@@ -1182,6 +1254,8 @@ them:
 |---|---|---|
 | Kvco | `115.8 MHz/V` | Two reasons, either sufficient. Selecting the point evaluates [the band-selection rule](../../spec/pll.md#band-selection-rule) (lowest band code that reaches the target) at every corner — a derivation, and one over a rule whose control window `spec/pll.md` does not presently name, an ambiguity tracked at #542 under which the two candidate windows select different bands. And the point itself is at Vctrl = 1.54 V, which the 7-point control sweep does not sample (its neighbours are 114.93 MHz/V at 1.50 V and 120.85 at 1.80 V), so no reduction of this CSV returns it. The adversarial `154.3 MHz/V` figure the rule exists to exclude *is* graded above, which is the half that bounds the risk |
 | Lock time, closed-loop cold-start / worst-case re-lock | `{4,16,64}` | A stimulus *set*, not a number: the grammar above re-derives a figure, and this one is the three divide ratios the grid was run at. Its cardinality is pinned from both sides by figures that are graded — the 270 rows, the 45 corners and the two conditions the record's own table carries, which multiply to 45 × 3 × 2 — while the membership is graded against the record's declared sweep axis by `check-pvt-coverage-claims.sh`, as the `f_ref` span is for the Reference input row |
+| Period jitter, closed-loop, random/noise-driven | `1.48×` | **A ratified line over a measurement — the one shape the third table does not carry.** Its two ingredients are both written down, which is the test that table applies: the measurement is `max(bound.total_pct)`, graded above as `0.338 %`, and the line is the 0.50 % `spec/pll.md`'s supply-ripple derivation allocates to this component. But the operator is `constant / reduction`, and the third table's `/` is `reduction / constant` — "how many times the allowance a measurement is", not "how many times a measurement the allowance is". Grading it therefore needs the inverse operator, its own constant resolver reading the allocation out of `spec/pll.md` under rule 7b's two-independent-statements rule, and its own tests, exactly as the `-` operator was owed those before `0.5 dB` could be graded. Declared here rather than graded in the wrong direction: `0.338 / 0.50` is `0.68`, a true number that is not the claim |
+| Period jitter, closed-loop, random/noise-driven | `0.910 ± 0.042` | A ratio **and its standard error**, from the `validate` stage's single reference point rather than from the 45-point set the entries above reduce. Two things stop it: a figure with a `±` is two numbers (the point estimate and an interval half-width), so grading the number at the front would state the estimate and never look at the error bar — the same defect the two-ended-range guard exists to catch — and `results/validate_*.json` is a one-point set, which the method-directory form refuses because a per-point glob over one point proves nothing about a grid. It is regenerated into `results/SUMMARY.md` from that committed JSON by the directory's own `summarize.py`, and DR-032 states what it is: the bias generator's small-signal model against the transient, at `typical_27c_3.30v` |
 
 Nothing mechanically enumerates "every headline figure" out of §5's prose
 cells, which quote hundreds of numbers, most of them commentary on a figure
