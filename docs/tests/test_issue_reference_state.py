@@ -72,7 +72,29 @@ esac
 
 #: A `gh` that cannot answer at all -- the rate-limited / unauthenticated
 #: shape, which must SKIP rather than report every reference as missing.
+#: This mirrors real `gh api ... --jq .state`'s actual stream split on an
+#: HTTP-level failure: the pretty-printed JSON error body goes to stdout,
+#: and the one-line human message goes to stderr. That split is the whole
+#: point of the fixture (issue #595) -- a stub that only wrote to stderr
+#: could not reproduce the shape that made `combined.splitlines()[0]` return
+#: a bare `{`.
 GH_STUB_UNREACHABLE = """#!/usr/bin/env bash
+cat <<'JSON'
+{
+  "message": "API rate limit exceeded for installation ID 1.",
+  "documentation_url": "https://docs.github.com/rest"
+}
+JSON
+echo "gh: API rate limit exceeded for installation ID 1. (HTTP 403)" >&2
+exit 1
+"""
+
+#: A `gh` that cannot answer for a non-HTTP reason -- `gh` itself absent,
+#: killed, or otherwise failing without ever reaching the forge. Real `gh`
+#: writes nothing to stdout in this shape; only a one-line message on
+#: stderr. Kept distinct from `GH_STUB_UNREACHABLE` so both shapes are
+#: covered rather than one standing in for the other.
+GH_STUB_UNREACHABLE_STDERR_ONLY = """#!/usr/bin/env bash
 echo "GraphQL: API rate limit already exceeded for installation ID 1" >&2
 exit 1
 """
@@ -420,10 +442,37 @@ class TestForeignRepositoryReferences(_TreeTest):
 
 class TestForgeFailureModes(_TreeTest):
     def test_an_unreachable_forge_skips_rather_than_failing(self):
-        """A rate-limited `gh` must not report every reference as missing."""
+        """A rate-limited `gh` must not report every reference as missing,
+        whichever stream it puts its answer on."""
+        stubs = {
+            "json body on stdout, message on stderr": GH_STUB_UNREACHABLE,
+            "stderr only": GH_STUB_UNREACHABLE_STDERR_ONLY,
+        }
+        for name, stub in stubs.items():
+            with self.subTest(shape=name):
+                self.tree.set_forge(stub)
+                result = self.assertSkips()
+                self.assertIn("A skip is not a pass", result.stdout)
+
+    def test_the_skip_line_names_the_reason(self):
+        """The real drift (issue #595): on a JSON-error-body-on-stdout,
+        message-on-stderr failure -- the shape real `gh` actually produces --
+        the SKIP line must name the reason (rate limit / HTTP 403), not
+        report the JSON body's opening brace."""
         self.tree.set_forge(GH_STUB_UNREACHABLE)
         result = self.assertSkips()
-        self.assertIn("A skip is not a pass", result.stdout)
+        self.assertNotIn("({)", result.stdout)
+        self.assertTrue(
+            "rate limit" in result.stdout or "HTTP 403" in result.stdout,
+            msg=result.stdout,
+        )
+
+    def test_the_skip_line_names_the_reason_stderr_only(self):
+        """The stderr-only shape (`gh` absent / non-HTTP failure) must also
+        name its reason, not merely SKIP."""
+        self.tree.set_forge(GH_STUB_UNREACHABLE_STDERR_ONLY)
+        result = self.assertSkips()
+        self.assertIn("rate limit", result.stdout)
 
     def test_a_missing_graded_document_fails(self):
         for rel in (README, SIM_README, CHARACTERIZATION, SIGNOFF_README):

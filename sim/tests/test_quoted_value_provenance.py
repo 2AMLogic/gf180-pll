@@ -1999,6 +1999,275 @@ class TestMethodDirectoryEvidence(_TreeTest):
         self.assertFails("names neither a record id nor a method directory")
 
 
+class TestNamedSinglePointEvidence(_TreeTest):
+    """Rule 1's fourth evidence form: a NAMED single point, no glob.
+
+    The third form refuses a glob that matches one point, and is right to: a
+    glob promises a set, so one member is a promise unkept. But that refusal's
+    own comment in the check said what was owed instead -- "a single-point
+    figure is owed a named single-file form, with its own paragraph and its own
+    tests" -- and for one day the ungraded-figure table quoted the deferral and
+    not the promise, declining `0.910 +/- 0.042` as though a guard of this
+    section were a property of DR-032's evidence. It is not: the `validate`
+    stage commits results/validate_<point>.json beside the log that produced
+    it.
+
+    What these tests exist for is the pair of rules that make the form an
+    ANSWER to the one-point refusal rather than a way around it: the reduction
+    may name no aggregate (a grid-shaped verb over one row is the overclaim the
+    refusal objects to), and the document's own `point` must be the tail of
+    both filenames (with no glob there is no captured id, so the document's
+    claim about itself is the only thing that can pair the two files).
+    """
+
+    METHOD = "period-jitter/random-bound"
+    POINT = "typical_27c_3.30v"
+    RESULTS = (
+        f"results/validate_{POINT}.json against logs/validate_{POINT}.txt"
+    )
+    MEASURED = (
+        "Validated at the reference point: a transient-over-model ratio of "
+        "0.910, standard error 0.042"
+    )
+
+    def method_root(self):
+        return self.tree.root / "sim" / self.METHOD
+
+    def write_point(self, declared=None, ratio=0.9098832, se=0.0418807,
+                    results_name=None, log_name=None, drop_log=False):
+        results = self.method_root() / "results"
+        logs = self.method_root() / "logs"
+        for directory in (results, logs):
+            if directory.is_dir():
+                shutil.rmtree(directory)
+            directory.mkdir(parents=True)
+        doc = {
+            "bias_lti_vs_transient": {"ratio": ratio, "se": se},
+            "copies": [{"copy": 0}],
+            "point": self.POINT if declared is None else declared,
+        }
+        (results / (results_name or f"validate_{self.POINT}.json")).write_text(
+            json.dumps(doc)
+        )
+        if not drop_log:
+            (logs / (log_name or f"validate_{self.POINT}.txt")).write_text(
+                "ngspice log\n"
+            )
+
+    def entries(self, extra=None, evidence=None, record=None):
+        defaults = [
+            ("`0.910`", "bias_lti_vs_transient.ratio", "1"),
+            ("`0.042`", "bias_lti_vs_transient.se", "1"),
+        ]
+        return list(DEFAULT_PROVENANCE) + [
+            ("Period jitter, random", quoted,
+             record or f"sim/{self.METHOD}",
+             evidence or self.RESULTS, reduction, scale)
+            for quoted, reduction, scale in (extra or defaults)
+        ]
+
+    def write(self, provenance=None, measured=None, source=None, **kwargs):
+        row = ("Period jitter, random", measured or self.MEASURED, "**MET**",
+               source if source is not None
+               else f"`sim/{self.METHOD}/results/validate_{self.POINT}.json`")
+        spec_rows = SPEC_ROWS[:2] + (row,) + SPEC_ROWS[2:]
+        self.tree.write(proposal(
+            spec_rows=spec_rows,
+            provenance=self.entries() if provenance is None else provenance,
+            **kwargs,
+        ))
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.write_point()
+        self.write()
+
+    def test_a_named_single_point_document_is_gradeable(self):
+        """Two figures, and the OK line must say they came out of ONE file.
+
+        A form that proves nothing about a set has to say how many figures
+        were graded without one, or "graded" in this section reads as "graded
+        over the grid" -- and it must distinguish two figures from one
+        document (this case: a ratio and its standard error) from two figures
+        from two, which is a different amount of evidence.
+        """
+        result = self.assertPasses()
+        self.assertIn("6 quoted values re-derived", result.stdout)
+        self.assertIn("2 figure(s) graded from 1 named single-point "
+                      "document(s) with no aggregate over them", result.stdout)
+
+    def test_the_value_is_graded_at_the_precision_written(self):
+        """The form is not a way of quoting a number nothing checks."""
+        self.write_point(ratio=0.8)
+        self.assertFails("gives 0.8", "does not round to it")
+
+    def test_an_aggregate_over_one_point_is_refused(self):
+        """The rule that makes this an answer to the glob refusal.
+
+        `max()` over one row returns that row's number under a verb that says
+        "over the grid". Permitting it here would have defeated the third
+        form's one-point refusal rather than answering it -- the same sentence,
+        one spelling of the path later.
+        """
+        self.write(provenance=self.entries(extra=[
+            ("`0.910`", "max(bias_lti_vs_transient.ratio)", "1"),
+        ]))
+        self.assertFails("names an aggregate over a single named point",
+                         "grid-shaped verb", "Name the column itself")
+
+    def test_a_count_over_one_point_is_refused_with_the_rest(self):
+        """`count(rows)` here is 1 for every document ever written."""
+        self.write(provenance=self.entries(extra=[
+            ("`1`", "count(rows)", "1"),
+        ]))
+        self.assertFails("names an aggregate over a single named point")
+
+    def test_a_where_clause_is_refused_too(self):
+        """Filtering one row is selecting it or discarding it, not reducing."""
+        self.write(provenance=self.entries(extra=[
+            ("`0.910`", "bias_lti_vs_transient.ratio where point == x", "1"),
+        ]))
+        self.assertFails("names an aggregate over a single named point")
+
+    def test_a_column_the_document_does_not_have_fails(self):
+        self.write(provenance=self.entries(extra=[
+            ("`0.910`", "bias_lti_vs_transient.rato", "1"),
+        ]))
+        self.assertFails("names column `bias_lti_vs_transient.rato`",
+                         "bias_lti_vs_transient.ratio")
+
+    def test_a_list_is_not_a_column_here_either(self):
+        self.write(provenance=self.entries(extra=[
+            ("`0.910`", "copies", "1"),
+        ]))
+        self.assertFails("names column `copies`")
+
+    def test_a_non_numeric_cell_is_refused(self):
+        self.write(provenance=self.entries(extra=[
+            ("`0.910`", "point", "1"),
+        ]))
+        self.assertFails("is not a number")
+
+    def test_a_document_that_declares_another_point_fails(self):
+        """The filename-agreement rule, which here also does the pairing.
+
+        A file copied to another point's name is the same defect the third
+        form catches by comparing the glob's captured id; with no glob, the
+        document's own claim is what the two filenames are checked against.
+        """
+        self.write_point(declared="ss_-40c_2.97v")
+        self.assertFails("declares point `ss_-40c_2.97v`",
+                         "not the tail of the results file's own name")
+
+    def test_a_log_of_another_point_fails(self):
+        """Named, not guessed -- and named wrongly must not pass.
+
+        The entry states its log rather than deriving it from the results
+        name, which is what lets a reduction stage differ from the run that
+        produced it. The cost of that freedom is that a mis-stated log would
+        otherwise corroborate a different point's simulation, so the log's
+        name is checked against the document's declared point too.
+        """
+        self.write_point(log_name="validate_ss_-40c_2.97v.txt")
+        self.write(provenance=self.entries(
+            evidence=f"results/validate_{self.POINT}.json against "
+                     "logs/validate_ss_-40c_2.97v.txt"))
+        self.assertFails("not the tail of the log's own name")
+
+    def test_a_different_stage_prefix_on_the_log_is_allowed(self):
+        """The stems need not be equal, only to end in the same point.
+
+        A method directory's reduction stage need not share a name with the
+        run that produced it -- `transient_*` is reduced from `grid_*` in the
+        third form for exactly that reason -- so requiring equality here would
+        have rejected a document that is not wrong.
+        """
+        self.write_point(log_name=f"grid_{self.POINT}.txt")
+        self.write(provenance=self.entries(
+            evidence=f"results/validate_{self.POINT}.json against "
+                     f"logs/grid_{self.POINT}.txt"))
+        self.assertPasses()
+
+    def test_a_document_with_no_point_field_fails(self):
+        """Nothing else in this form can pair the two files."""
+        self.write_point(declared="")
+        self.assertFails("declares no `point`")
+
+    def test_a_missing_log_fails(self):
+        self.write_point(drop_log=True)
+        self.assertFails("is not a committed file")
+
+    def test_a_missing_results_file_fails(self):
+        self.write(provenance=self.entries(
+            evidence=f"results/validate_absent.json against "
+                     f"logs/validate_{self.POINT}.txt"),
+            source="`sim/period-jitter/random-bound/results/"
+                   "validate_absent.json`")
+        self.assertFails("is not a committed file")
+
+    def test_the_row_must_cite_the_results_path_itself(self):
+        """Rule 2's path dialect, unchanged by the new form."""
+        self.write(source=f"`sim/{self.METHOD}/`")
+        self.assertFails("which that section 5 row does not cite")
+
+    def test_a_method_directory_that_has_records_is_still_refused(self):
+        """The shared gate, so the new reader cannot be a route around it."""
+        (self.method_root() / "records").mkdir()
+        self.assertFails("commits a records/ directory")
+
+    def test_unreadable_json_fails(self):
+        (self.method_root() / "results"
+         / f"validate_{self.POINT}.json").write_text("{not json")
+        self.assertFails("is not readable JSON")
+
+    def test_a_json_array_is_not_a_point_document(self):
+        (self.method_root() / "results"
+         / f"validate_{self.POINT}.json").write_text("[1, 2, 3]")
+        self.assertFails("is a JSON list, not an object")
+
+    def test_the_derived_figure_table_may_not_read_a_named_single_point(self):
+        """Rule 7 states no figure of this shape today, so it stays refused.
+
+        Rule 7 gained the GLOB form on 2026-09-27 for a figure that needed it;
+        this is the separate flag that keeps that grant from having silently
+        handed it the named-point path as well, untested and unused.
+        """
+        derived = list(DEFAULT_DERIVED) + [(
+            "Period jitter, random", "`0.505x`", f"sim/{self.METHOD}",
+            self.RESULTS,
+            "bias_lti_vs_transient.ratio / dr003-vctrl-window-width-v",
+            "1.8 V", "1",
+        )]
+        self.write(measured=self.MEASURED + "; 0.505x the window",
+                   derived=derived)
+        self.assertFails("names one point of sim/period-jitter/random-bound",
+                         "Only the first section 5.1 table reads a single "
+                         "named point")
+
+    def test_the_relative_figure_table_may_not_read_one_either(self):
+        relative = [(
+            "Period jitter, random", "`95 %`", f"sim/{self.METHOD}",
+            self.RESULTS,
+            "bias_lti_vs_transient.se shortfall-from "
+            "bias_lti_vs_transient.ratio", "100",
+        )]
+        self.write(measured=self.MEASURED + "; 95 %", relative=relative)
+        self.assertFails("Only the first section 5.1 table reads a method "
+                         "directory")
+
+    def test_a_glob_in_either_path_is_still_the_third_form(self):
+        """The two forms are told apart by the `*`, not by the reader.
+
+        With a glob present this is the third form, whose one-point refusal
+        must still fire -- otherwise "name the file" would be advice a writer
+        could take by writing a glob that happens to match one file.
+        """
+        self.write(provenance=self.entries(
+            evidence="results/validate_*.json against logs/validate_*.txt"),
+            source=f"`sim/{self.METHOD}/results/validate_*.json`")
+        self.assertFails("matches 1 point", "proves nothing about a grid")
+
+
 class TestDerivedAgainstARatifiedLine(_TreeTest):
     """Rule 7: a reduction divided by a constant read out of the documents.
 
@@ -2776,6 +3045,26 @@ class TestTheRealTree(unittest.TestCase):
         self.assertGreaterEqual(int(match.group(2)), 45, msg=result.stdout)
         self.assertIn("every one matched to a committed log by point id",
                       result.stdout)
+
+    def test_the_named_single_point_figures_are_graded_without_a_set(self):
+        """Rule 1's fourth evidence form on the real tree, declared as such.
+
+        This form deliberately proves nothing about a grid, so the OK line has
+        to keep saying so: a reader who sees "95 quoted values re-derived"
+        must be able to find out how many of them rest on one point. Asserted
+        as a floor and as the presence of the no-aggregate claim, not as a
+        second copy of a count §5.1 already carries.
+        """
+        result = subprocess.run(
+            ["bash", str(CHECK)], capture_output=True, text=True, cwd=REPO_ROOT
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        match = re.search(r"(\d+) figure\(s\) graded from (\d+) named "
+                          r"single-point document", result.stdout)
+        self.assertIsNotNone(match, msg=result.stdout)
+        self.assertGreaterEqual(int(match.group(1)), 2, msg=result.stdout)
+        self.assertGreaterEqual(int(match.group(2)), 1, msg=result.stdout)
+        self.assertIn("with no aggregate over them", result.stdout)
 
     def test_it_reports_the_ungraded_figures_it_disclosed(self):
         result = subprocess.run(
