@@ -751,6 +751,45 @@ apply is written as `N/A` **with a reason**, not omitted.
   one; no campaign runner is required to additionally assert *which* host a
   new record should be compared against.
 
+  **A Monte Carlo campaign's negative control is an artifact, not a sentence
+  (#602).** A campaign whose samples are drawn from a seeded RNG must commit
+  the evidence that the draws are what it says they are, in the same run that
+  produces the samples — not describe a manual check in this field. The
+  distinction is not stylistic: it is the difference between a claim that can
+  be re-checked and regressed and one that can only be re-read, and it is
+  `CLAUDE.md`'s "no claim without a testbench" applied to the campaign's own
+  validity leg. `sim/period-jitter/random-bound` set the shape first (a
+  committed noiseless `floor` leg in every one of its per-point results);
+  `sim/mc-cp-mismatch` and `sim/vco-tuning-range` follow it.
+
+  The committed form is `corners/<record-id>/negative_control.csv`, schema and
+  helpers in `sim/lib/simenv.sh` (`simenv_control_verdicts` /
+  `simenv_control_report` / `simenv_control_md_rows`), with the raw log of
+  every control run archived beside it. Three legs per sampled point, five
+  runs:
+
+  | Leg | Runs compared | Must be |
+  |---|---|---|
+  | `repeat` | mismatch ON, same seed, twice | identical |
+  | `vary` | mismatch ON, two different seeds | **different** |
+  | `gate` | mismatch OFF, two different seeds | identical |
+
+  `vary` is not optional padding. Without it, `repeat` and `gate` are both
+  equally satisfied by a measurement that is insensitive to everything —
+  including to the mismatch the campaign exists to sample — so the pair alone
+  cannot distinguish "the seed is honoured" from "nothing here moves". Values
+  are compared as **text**, not within a tolerance: a tolerance lets a draw
+  that has begun to drift keep passing, which is the failure the leg exists to
+  catch.
+
+  The **verdict is derived from the committed CSV**, by the record generator
+  and by `run.sh --recheck-control <record-id>` alike, so a record's control
+  table cannot drift from its own bytes and a reader can re-check it with no
+  simulator and no PDK. `sim/tests/test_negative_control.py` re-derives both
+  campaigns' artifacts independently, cross-checks the shell helper against
+  that second implementation, and asserts the checker still reports a failure
+  when each leg is broken in turn.
+
 - **Result** — per-corner pass/fail or measured value, plus an overall
   pass/fail against the ratified spec value (for a spec claim) or the
   conclusion drawn (for a design-input claim). Free-form tables are fine and

@@ -28,17 +28,31 @@
 *   .option rndseed=N  (sw_stat_mismatch's per-instance draws are parsed
 *     once at netlist parse time -- set via the special-cased `rndseed=` kv
 *     key simenv_run_deck already treats specially; unchanged behavior)
-* Set directly in THIS file (not passed as a `.param` override kv, and not
-* via tb.json's `params` key -- see run_mismatch.sh's header comment for
-* why): `sw_stat_mismatch=1`, `sw_stat_global=0` -- mismatch only, matching
-* every other Monte Carlo campaign in this repo (sim/README.md's worked
-* distribution example). This line lands AFTER simenv_run_deck's
-* `.include design.ngspice` (which sets the opposite default) because
-* `.include "<this file>"` is emitted after that include -- ngspice resolves
-* `.param` redefinitions by LAST occurrence in the deck, confirmed by direct
-* experiment during #146 (see run_mismatch.sh).
+*   .param mc_mismatch=<0|1>   REQUIRED, no default here -- see below
+*
+* `sw_stat_global = 0` is set directly in THIS file (not passed as a `.param`
+* override kv, and not via tb.json's `params` key -- see run_mismatch.sh's
+* header comment for why): mismatch only, matching every other Monte Carlo
+* campaign in this repo (sim/README.md's worked distribution example). This
+* line lands AFTER simenv_run_deck's `.include design.ngspice` (which sets
+* the opposite default) because `.include "<this file>"` is emitted after
+* that include -- ngspice resolves `.param` redefinitions by LAST occurrence
+* in the deck, confirmed by direct experiment during #146 (see
+* run_mismatch.sh).
+*
+* `sw_stat_mismatch` used to be pinned to a literal `1` on the same grounds,
+* which made it unreachable from outside -- and therefore made this
+* campaign's NEGATIVE CONTROL unrunnable, since the control's whole point is
+* to run the same deck with the switch OFF and show the seed stops mattering
+* (#602). It is now `'mc_mismatch'`, and `mc_mismatch` is DELIBERATELY given
+* no default in this file: an invocation that forgets to pass it fails at
+* parse time with an unresolved-parameter error rather than silently falling
+* through to design.ngspice's `0` and producing a mismatch-free "Monte Carlo"
+* sample. Verified by direct experiment (ngspice-46): passing
+* `mc_mismatch=1` reproduces the pinned-literal deck's output exactly,
+* `mc_mismatch=0` makes the result seed-independent, and omitting it errors.
 .param sw_stat_global=0
-.param sw_stat_mismatch=1
+.param sw_stat_mismatch='mc_mismatch'
 
 .include "vco.spice"
 

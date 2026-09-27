@@ -963,3 +963,150 @@ simenv_apply_omp_pin() {
   fi
   return 0
 }
+
+# --------------------------------------------------------------------------
+# Monte Carlo negative control (#602)
+# --------------------------------------------------------------------------
+#
+# T1/bronze checklist item 6 (#127) requires every statistical claim to carry
+# a "deterministic negative control". Until #602 both of this repo's Monte
+# Carlo mismatch campaigns satisfied that in PROSE only -- a record's
+# Methodology field described a manual same-seed / `sw_stat_mismatch=0`
+# re-check that was never committed, could not be re-run, and could not be
+# regression-gated. `sim/period-jitter/random-bound` already did the opposite
+# (its per-point `floor` leg is a committed noiseless reference measured in
+# the same deck), and CLAUDE.md's "no claim without a testbench" is explicit
+# about which of the two shapes counts.
+#
+# The helpers below are the committed-artifact form, shared by both campaigns
+# so they cannot drift apart: a campaign emits a `negative_control.csv` whose
+# rows are raw per-run measurements, and the VERDICT is then DERIVED from
+# those committed bytes by `simenv_control_verdicts` -- so a reader (or CI)
+# can re-check the control without ngspice, and a future campaign that
+# silently loses its determinism fails the check instead of continuing to
+# quote a sentence.
+#
+# Three legs, five runs per (stage, corner). The third leg is the one the
+# prose form never had, and it is what makes the other two mean anything:
+# without it, "two runs produced identical output" is equally consistent with
+# "the seed is honoured" and with "this metric is insensitive to everything".
+#
+#   repeat  mc1_seedA_run1 vs mc1_seedA_run2   (mismatch ON, same seed)
+#           MUST be byte-identical -- the draw is deterministic in the seed.
+#   vary    mc1_seedA_run1 vs mc1_seedB        (mismatch ON, different seeds)
+#           MUST differ in at least one metric -- the seed actually selects a
+#           draw, so `repeat` above is not measuring an insensitive metric.
+#   gate    mc0_seedA      vs mc0_seedB        (mismatch OFF, different seeds)
+#           MUST be byte-identical -- `sw_stat_mismatch`, not the seed, is
+#           what gates the draw. This is the negative control proper.
+#
+# CSV schema (after the usual `simenv_provenance` `#` header):
+#   stage,corner,run,sw_stat_mismatch,rndseed,metric,value
+# `value` is compared as TEXT, not as a number: the claim being checked is
+# reproducibility of the emitted measurement, and a tolerance would let a
+# drifting draw pass.
+
+# The run tags every campaign's control emits, in the order the legs above
+# consume them. Named rather than positional so the CSV is readable on its
+# own and a leg cannot be silently re-pointed at the wrong run.
+SIMENV_CONTROL_RUN_MC1_A1="mc1_seedA_run1"
+SIMENV_CONTROL_RUN_MC1_A2="mc1_seedA_run2"
+SIMENV_CONTROL_RUN_MC1_B="mc1_seedB"
+SIMENV_CONTROL_RUN_MC0_A="mc0_seedA"
+SIMENV_CONTROL_RUN_MC0_B="mc0_seedB"
+SIMENV_CONTROL_HEADER="stage,corner,run,sw_stat_mismatch,rndseed,metric,value"
+
+# simenv_control_verdicts <negative_control.csv>
+#
+# Derive the three legs' verdicts from a committed control CSV. Reads nothing
+# but the file: no ngspice, no netlist, no PDK. One output line per
+# (stage, corner), space-separated:
+#
+#   <stage> <corner> <repeat> <vary> <gate> <n_metrics> <n_varied>
+#
+# Verdicts are PASS / FAIL, or INCOMPLETE when one of the five runs is
+# missing for that (stage, corner) -- an absent run is a failure of the
+# artifact, not a silently-skipped row. Exit status is 0 only when every
+# (stage, corner) passes all three legs; 1 otherwise (including an empty or
+# header-only file, which is not a control).
+simenv_control_verdicts() {
+  simenv_datarows "$1" | awk -F, \
+    -v R1="${SIMENV_CONTROL_RUN_MC1_A1}" \
+    -v R2="${SIMENV_CONTROL_RUN_MC1_A2}" \
+    -v R3="${SIMENV_CONTROL_RUN_MC1_B}" \
+    -v R4="${SIMENV_CONTROL_RUN_MC0_A}" \
+    -v R5="${SIMENV_CONTROL_RUN_MC0_B}" '
+    NF < 7 { next }
+    {
+      st = $1; co = $2; run = $3; met = $6; val = $7
+      k = st SUBSEP co
+      if (!(k in seen)) { seen[k] = 1; ord[++n] = k; stg[k] = st; cor[k] = co }
+      v[k, run, met] = val
+      present[k, run] = 1
+      if (!((k SUBSEP met) in mseen)) { mseen[k SUBSEP met] = 1; mord[k, ++mn[k]] = met }
+    }
+    END {
+      if (n == 0) { print "ERROR: no data rows -- not a negative-control artifact" > "/dev/stderr"; exit 1 }
+      fail = 0
+      for (i = 1; i <= n; i++) {
+        k = ord[i]
+        missing = 0
+        if (!((k, R1) in present)) missing = 1
+        if (!((k, R2) in present)) missing = 1
+        if (!((k, R3) in present)) missing = 1
+        if (!((k, R4) in present)) missing = 1
+        if (!((k, R5) in present)) missing = 1
+        if (missing) {
+          printf "%s %s INCOMPLETE INCOMPLETE INCOMPLETE %d 0\n", stg[k], cor[k], mn[k]
+          fail = 1
+          continue
+        }
+        rep = "PASS"; gat = "PASS"; varied = 0
+        for (j = 1; j <= mn[k]; j++) {
+          m = mord[k, j]
+          if (v[k, R1, m] != v[k, R2, m]) rep = "FAIL"
+          if (v[k, R1, m] != v[k, R3, m]) varied++
+          if (v[k, R4, m] != v[k, R5, m]) gat = "FAIL"
+        }
+        var = (varied > 0) ? "PASS" : "FAIL"
+        if (rep == "FAIL" || var == "FAIL" || gat == "FAIL") fail = 1
+        printf "%s %s %s %s %s %d %d\n", stg[k], cor[k], rep, var, gat, mn[k], varied
+      }
+      exit (fail ? 1 : 0)
+    }'
+}
+
+# simenv_control_report <negative_control.csv> [label]
+#
+# Human-readable wrapper around simenv_control_verdicts: prints a table to
+# stdout and returns that function's exit status unchanged, so a caller can
+# use it directly as a gate (`simenv_control_report "$csv" || exit 1`).
+simenv_control_report() {
+  local csv="$1" label="${2:-negative control}" out rc=0
+  out="$(simenv_control_verdicts "${csv}")" || rc=$?
+  echo "${label}: derived from ${csv} (committed bytes only -- no simulation)"
+  echo "  | stage | corner | repeat (same seed -> identical) | vary (other seed -> differs) | gate (mismatch=0 -> seed-independent) | metrics | varied |"
+  printf '%s\n' "${out}" | awk 'NF>=7 {printf "  | %s | %s | %s | %s | %s | %d | %d |\n", $1, $2, $3, $4, $5, $6, $7}'
+  if [ "${rc}" -eq 0 ]; then
+    echo "  all legs PASS"
+  else
+    echo "  NEGATIVE CONTROL FAILED -- see the rows above" >&2
+  fi
+  return "${rc}"
+}
+
+# simenv_control_md_rows <negative_control.csv>
+#
+# The same verdicts as markdown table rows, for interpolation into a record's
+# Result field. Emits the body rows only (the caller writes the header), each
+# already indented two spaces to match the record templates in this tree.
+# A FAIL verdict is rendered, not raised: a record whose control failed must
+# still be minted (and must say so in its own table), so this helper swallows
+# simenv_control_verdicts' non-zero status rather than aborting the record
+# generation it is interpolated into. The gate is simenv_control_report.
+simenv_control_md_rows() {
+  local out=""
+  out="$(simenv_control_verdicts "$1" 2>/dev/null)" || true
+  printf '%s\n' "${out}" | awk '
+    NF >= 7 { printf "  | %s | `%s` | **%s** | **%s** | **%s** | %d of %d |\n", $1, $2, $3, $4, $5, $7, $6 }'
+}
