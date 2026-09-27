@@ -42,22 +42,90 @@
 # corners" -- i.e. does mismatch DISPERSION itself vary across the PVT grid,
 # not just its mean.
 #
-# CORNER_POINTS below is a 3-point subset of the repo's 45-point default grid
-# (sim/README.md), not the full grid: `typical/27C/3.30V` (nominal) plus the
-# two ss/ff process extremes, each crossed with the temp/supply corner
-# expected to push device Vth/beta mismatch furthest from nominal in that
-# process direction (`ss/125C/2.97V`, `ff/-40C/3.63V`). This is a further
-# reduction of the 5-point `WINDOW_CORNERS` set
-# `sim/lock-detector/testbench/run.sh` established as a justified reduced-grid
-# precedent for this repo (which itself crossed both process extremes with
-# BOTH temp/supply corners, 4 points + nominal) -- see below for why 5 points
-# was cut to 3 for this campaign specifically. A full 45-point x per-corner-N
-# grid was evaluated and rejected outright: this campaign's `pfd` sub-campaign
-# already costs one ngspice transient per (seed, dphi) with a stiff
-# `cp_dumpbuf`-loaded control node, and 45 corners at the original N_PFD=40
-# would be 45x today's already-nontrivial wall clock for one metric alone.
+# CORNER_POINTS below is a 21-point subset of the repo's 45-point default grid
+# (sim/README.md): `typical/27C/3.30V` (nominal) plus ALL 20 VERTICES of the
+# process x temperature x supply box -- each of the five MOS bundles
+# (`typical`, `ss`, `ff`, `fs`, `sf`) crossed with both temperature extremes
+# (-40C, 125C) and both supply extremes (2.97 V, 3.63 V). The 24 points NOT
+# visited are all interior on the temperature and/or supply axis (27 C and/or
+# 3.30 V) and are bracketed on both sides by visited vertices at the same MOS
+# bundle. The MOS-bundle axis is swept in full, with nothing left to
+# interpolate across.
 #
-# The 5-point candidate grid was ALSO found impractical during #146's own
+# --- Why 21 and not the 3 points this grid replaced (issue #597) ------------
+#
+# #146 ran three points -- `typical/27C/3.30V`, `ss/125C/2.97V`,
+# `ff/-40C/3.63V` -- a further cut of the 5-point `WINDOW_CORNERS` set
+# `sim/lock-detector/testbench/run.sh` established as a justified reduced-grid
+# precedent, itself already a cut of the default grid. #482 then raised the
+# per-corner sample counts but left the corner axis at three points, and
+# #597's derivation of T1/bronze item 6 (#127) found the corner-combination
+# sub-criterion still failing and unowned. #482 offered two routes: widen the
+# axis, or ratify the 3-point subset in a decision record. This file takes the
+# FIRST route, because on this campaign's own evidence the second route's
+# argument cannot be made:
+#
+#   (1) `fs`/`sf` are structurally the worst case for THIS measurement and
+#   were absent. Term 1 is an UP/DN current match between a PMOS source and an
+#   NMOS sink. `ss` and `ff` skew both device flavours in the SAME direction,
+#   which largely preserves the ratio the metric measures; `fs` and `sf` skew
+#   them in OPPOSITE directions, which attacks it directly. That is not a
+#   hypothesis about this repo -- `sim/cp-compliance`'s switching bench already
+#   binds at `fs`/125C/3.63V (worst-corner `wskew` asymmetry 3.68 fC, the
+#   figure `spec/pll.md`'s reference-spur derivation consumes), and
+#   `sim/lock-window-sizing`'s two window edges bind at `fs` and `ss`
+#   (sim/README.md's own "Default corner matrix" section cites this as the
+#   reason a subset's worst case is not a default-grid worst case). A 3-point
+#   tt/ss/ff subset therefore could not be claimed to bound the dispersion the
+#   other 42 points would show, and a decision record asserting otherwise
+#   would have been ratifying a subset because the grid is expensive rather
+#   than because the subset bounds the quantity.
+#
+#   (2) The temp/supply axis was sampled on ONE diagonal only. The 3-point set
+#   visited (125C, 2.97V) and (-40C, 3.63V) -- hot/low and cold/high -- and
+#   never the anti-diagonal (-40C, 2.97V) or (125C, 3.63V). Mismatch
+#   dispersion in a current mirror scales with `gm/I * sigma(Vth)`, which is
+#   largest where the devices have the least overdrive: cold AND low-supply.
+#   That vertex was exactly the one the diagonal omitted, so the old grid could
+#   not even claim to bracket its own two axes.
+#
+# The full 45-point grid is still not run, and the cost analysis below is still
+# why. What changed is that the 21 points now run are the grid's VERTICES
+# rather than an interior diagonal, which is a coverage claim that can be
+# stated without asserting anything the campaign has not measured: every MOS
+# bundle appears, both ends of both continuous axes appear at every bundle, and
+# the 24 omitted points sit between measured ones on those axes. The per-corner
+# breakdown table in the minted record is what a reader checks that claim
+# against -- if an interior point were to bind, it would have to do so
+# non-monotonically between two measured vertices, and the table shows the
+# behaviour along each axis rather than asserting it.
+#
+# Cost, re-measured for this grid on this build host (isolated invocations,
+# `OMP_NUM_THREADS=1` applied, host load average ~12 of 18 cores): dc 1.2 s,
+# sw 30 s, pfd 57 s (three sequential transients per seed), dff 2.3 s. The
+# lever that made 21 affordable where #146 judged even 5 unaffordable is the
+# `OMP_NUM_THREADS=1` fix (1) below, whose ~44x measured effect was found
+# DURING #146's build and so could not be priced into that build's own grid
+# decision. THE 21-POINT RUN WAS THEN TIMED END TO END rather than extrapolated
+# from those per-invocation figures, because #146's finding (2) below says a
+# shared host's wall clock does not extrapolate: at `SIM_JOBS=16` on 18 cores,
+# 3864 invocations across the 21 corners took **2 h 20 min** of wall clock,
+# throughout which the host's load average -- mostly other tenants -- ranged
+# from 23 to 54, and 17 individual ngspice processes were SIGKILLed by the OS
+# under memory pressure and recovered by `simenv_run_deck_retried`'s retry (no
+# sample was lost; the per-corner row counts were asserted complete at the end,
+# as they always are). Per-corner wall clock ranged from about 6 to 13 minutes
+# depending on what else was running. The full 45-point grid at these same
+# per-corner sample counts would be roughly 2.1x that -- still a handful of
+# hours rather than the 45x the paragraph below was written against, since that
+# paragraph priced 45 corners at the ORIGINAL N_PFD=40. So the honest statement
+# after this run is NOT "45 is impossible": it is that 45 points buys 24 more
+# interior points on axes this grid already brackets at both ends, which is a
+# poor use of the next 2 hours compared with the gaps named in the record's
+# Methodology field. That is a different argument from #146's, and it is the
+# one this grid rests on.
+#
+# The 5-point candidate grid was found impractical during #146's own
 # build, for reasons worth recording in full since both were only discovered
 # empirically, not predictable from first principles:
 #
@@ -86,14 +154,19 @@
 #   fixed sample count against a fixed wall-clock target the way it could on a
 #   dedicated host.
 #
-# Given both findings, three independent levers were pulled together to keep
-# total wall clock bounded and completion realistic on a host whose OTHER
+# Given both findings, three independent levers were pulled together in #146 to
+# keep total wall clock bounded and completion realistic on a host whose OTHER
 # tenants cannot be controlled from here: the `OMP_NUM_THREADS=1` fix (1),
 # cutting the corner grid from 5 to 3 points (dropping `ss/-40C/3.63V` and
 # `ff/125C/2.97V`, the two "off-diagonal" process/temp-supply crossings), and
 # cutting the expensive sub-campaigns' per-corner sample counts (below).
-# `fs`/`sf` and the two dropped ss/ff x temp/supply combinations are the
-# residual corner-grid gap a future full(er)-grid pass would close.
+# ISSUE #597 REVERSED THE SECOND OF THOSE THREE and widened the axis past even
+# the 5-point candidate, to the 21-point vertex set above -- see "Why 21 and not
+# the 3 points this grid replaced" for the reasoning and the re-measured cost.
+# Finding (2) above still holds and is still why the grid is 21 points and not
+# 45: what changed is that lever (1)'s ~44x, discovered mid-#146 and therefore
+# unavailable to that build's own sizing decision, moved the affordable corner
+# count by roughly an order of magnitude.
 #
 # Per-corner sample counts are still SMALLER than the nominal-only record's
 # (N_DC=200, N_SW=40, N_PFD=40, N_DFF=50 there), but were RAISED from #146's
@@ -110,11 +183,14 @@
 # that n. n=16 (sw/pfd) and n=100 (dc, cheap enough to raise further almost
 # for free) do not reach the nominal-only record's own per-point n, but they
 # are a real, measured improvement, not a re-assertion of the same thin
-# sample at a later date. The COMBINED n across all 3 corners (pooled) is
-# still a fraction of the nominal-only record's own n (accepted here in
-# exchange for the corner dimension the acceptance criterion asks for) and is
+# sample at a later date. The COMBINED n pooled across every corner is
 # reported alongside the per-corner breakdown, which is what the binding
-# worst-corner verdict actually uses.
+# worst-corner verdict actually uses. (That pooled n was a fraction of the
+# nominal-only record's own n at 3 corners; at #597's 21 corners it exceeds it
+# several times over -- but pooling across corners is still NOT the figure the
+# verdict uses, for the reason the dff bullet in the minted record gives:
+# pooling mixes corner-to-corner systematic spread into a within-corner
+# mismatch sigma.)
 #
 # THE RAISE CHANGED A VERDICT, which is the reason to record it here rather
 # than only in one record's prose. At n=20/corner term 1 measured 11.7211%
@@ -404,18 +480,57 @@ run_dff() {
   printf '%s,%s,%s,%s\n' "${ctag}" "${seed}" "${tcq_r}" "${tcq_f}" >>"${sfile}"
 }
 
-# Corner grid this campaign combines MC with -- see header comment for why
-# this 3-point subset (not the full 45-point default grid, and a further cut
-# from the 5-point WINDOW_CORNERS-derived candidate) and its justification.
+# Corner grid this campaign combines MC with -- see the header comment's
+# "Corner-combined Monte Carlo" section for why this 21-point vertex set (all
+# 20 vertices of the process x temperature x supply box, plus nominal) and not
+# the 3-point diagonal subset it replaced or the full 45-point default grid.
 # bundle/temp/vdd. Defined up here, ahead of the entry points, because
 # `--restat` (below) re-derives the per-corner breakdown of an
 # already-committed campaign and needs the same corner list the run used.
 CORNER_POINTS=(
   "typical 27 3.30"
+  "typical -40 2.97"
+  "typical -40 3.63"
+  "typical 125 2.97"
+  "typical 125 3.63"
+  "ss -40 2.97"
+  "ss -40 3.63"
   "ss 125 2.97"
+  "ss 125 3.63"
+  "ff -40 2.97"
   "ff -40 3.63"
+  "ff 125 2.97"
+  "ff 125 3.63"
+  "fs -40 2.97"
+  "fs -40 3.63"
+  "fs 125 2.97"
+  "fs 125 3.63"
+  "sf -40 2.97"
+  "sf -40 3.63"
+  "sf 125 2.97"
+  "sf 125 3.63"
 )
 NUM_CORNERS=${#CORNER_POINTS[@]}
+
+# Markdown rendering of the grid above, plus the count of non-nominal points,
+# built from the SAME array the run loop and `--restat` iterate. The minted
+# record interpolates these rather than carrying a hand-written corner list, so
+# the record's "Corner matrix run" field cannot drift from the points that
+# actually ran (which is exactly how the 3-point list survived two records).
+CORNER_LIST_MD=""
+NUM_VERTICES=0
+for __point in "${CORNER_POINTS[@]}"; do
+  read -r __pc __pt __pv <<<"${__point}"
+  if [ "${__pt}" = "27" ] && [ "${__pv}" = "3.30" ]; then
+    CORNER_LIST_MD="${CORNER_LIST_MD}  - \`${__pc}/${__pt}C/${__pv}V\` (nominal)
+"
+  else
+    NUM_VERTICES=$(( NUM_VERTICES + 1 ))
+    CORNER_LIST_MD="${CORNER_LIST_MD}  - \`${__pc}/${__pt}C/${__pv}V\`
+"
+  fi
+done
+unset __point __pc __pt __pv
 
 # ===========================================================================
 # Statistics: mean, sample stddev (N-1), |mean|+3sigma
@@ -555,6 +670,7 @@ compute_term_stats() {
   PERCORNER_ROWS=""
   WORST_DC_3S=0; WORST_DCS_3S=0
   WORST_SW_3S=0; WORST_PFDQ_3S=0; WORST_PFDT_3S=0; WORST_DFF_3S=0
+  WORST_SW_CORNER=""; WORST_PFDQ_CORNER=""; WORST_PFDT_CORNER=""
   # Term 1's binding worst-corner sample also gets its own standard error
   # tracked alongside it (issue #482) -- the verdict table states a PASS/FAIL
   # against a budget, but a margin narrower than a few standard errors is not
@@ -570,6 +686,13 @@ compute_term_stats() {
   # with no |mean| term) -- see the in-loop comment below for why this, and not
   # WORST_DFF_3S, is the flop's actual contribution (issue #482).
   WORST_DFF_SIG3=0; WORST_DFF_SIG3_CORNER=""; WORST_DFF_SIG3_MEAN=0; WORST_DFF_SIG3_N=0
+  # Span of the flop's per-corner MEAN clk->Q delay across the grid -- the
+  # systematic corner-to-corner spread that pooling would fold into a
+  # within-corner mismatch sigma. Derived rather than hand-written, because the
+  # figure moves with the corner grid (issue #597 widened the grid from 3 points
+  # to ${NUM_CORNERS} and the previously hand-written "165 ps to 371 ps" was a
+  # 3-point-grid figure).
+  DFF_MEAN_MIN=""; DFF_MEAN_MAX=""
   for point in "${CORNER_POINTS[@]}"; do
     read -r pc pt pv <<<"${point}"
     ctag="${pc}_${pt}c_${pv}v"
@@ -619,6 +742,12 @@ compute_term_stats() {
       WORST_DFF_SIG3="${c_dff_sig3}"; WORST_DFF_SIG3_CORNER="${ctag}"
       WORST_DFF_SIG3_MEAN="${c_dff_mean}"; WORST_DFF_SIG3_N="${c_dffr_n}"
     fi
+    if [ -z "${DFF_MEAN_MIN}" ] || awk -v a="${DFF_MEAN_MIN}" -v b="${c_dff_mean}" 'BEGIN{exit !(b+0<a+0)}'; then
+      DFF_MEAN_MIN="${c_dff_mean}"
+    fi
+    if [ -z "${DFF_MEAN_MAX}" ] || awk -v a="${DFF_MEAN_MAX}" -v b="${c_dff_mean}" 'BEGIN{exit !(b+0>a+0)}'; then
+      DFF_MEAN_MAX="${c_dff_mean}"
+    fi
 
     PERCORNER_ROWS="${PERCORNER_ROWS}  | ${ctag} | ${c_dcs_3s}% (n=${c_dcs_n}) | ${c_dc_3s}% | ${c_sw_3s} s (n=${c_sw_n}) | ${c_pfdq_3s} C | ${c_pfdt_3s} s (n=${c_pfdt_n}) | ${c_dff_sig3} s (mean ${c_dff_mean} s, n=${c_dffr_n}) |
 "
@@ -629,6 +758,20 @@ compute_term_stats() {
     if awk -v a="${WORST_DC_3S}" -v b="${c_dc_3s}" 'BEGIN{exit !(b+0>a+0)}'; then
       WORST_DC_SD="${c_dc_s}"; WORST_DC_N="${c_dc_n}"; WORST_DC_CORNER="${ctag}"
     fi
+    # Terms 2/2a, 3 and 4 track WHICH corner binds them as well as the value
+    # (issue #597). At 3 corners all four terms happened to bind at the same
+    # point and the record could name it once; at ${NUM_CORNERS} they do not,
+    # and a re-grading table that names a corner has to read it from the data
+    # rather than have it written in by hand.
+    if awk -v a="${WORST_SW_3S}" -v b="${c_sw_3s}" 'BEGIN{exit !(b+0>a+0)}'; then
+      WORST_SW_CORNER="${ctag}"
+    fi
+    if awk -v a="${WORST_PFDQ_3S}" -v b="${c_pfdq_3s}" 'BEGIN{exit !(b+0>a+0)}'; then
+      WORST_PFDQ_CORNER="${ctag}"
+    fi
+    if awk -v a="${WORST_PFDT_3S}" -v b="${c_pfdt_3s}" 'BEGIN{exit !(b+0>a+0)}'; then
+      WORST_PFDT_CORNER="${ctag}"
+    fi
     WORST_DCS_3S=$(awk -v a="${WORST_DCS_3S}" -v b="${c_dcs_3s}" 'BEGIN{print (a>b)?a:b}')
     WORST_DC_3S=$(awk -v a="${WORST_DC_3S}" -v b="${c_dc_3s}" 'BEGIN{print (a>b)?a:b}')
     WORST_SW_3S=$(awk -v a="${WORST_SW_3S}" -v b="${c_sw_3s}" 'BEGIN{print (a>b)?a:b}')
@@ -636,6 +779,40 @@ compute_term_stats() {
     WORST_PFDT_3S=$(awk -v a="${WORST_PFDT_3S}" -v b="${c_pfdt_3s}" 'BEGIN{print (a>b)?a:b}')
     WORST_DFF_3S=$(awk -v a="${WORST_DFF_3S}" -v b="${c_dff_3s}" 'BEGIN{print (a>b)?a:b}')
   done
+
+  # The figures at the SHARED corner `ff_-40c_3.63v` -- the 3-point subset's own
+  # binding corner, present in both this grid and the superseded record's.
+  # #597's re-grading table uses it to separate the EXECUTION-HOST effect (same
+  # corner, two hosts, different `agauss()` stream -- see the record's
+  # cross-host bullet) from the CORNER-AXIS effect (this host, old binding
+  # corner vs new one). Derived here rather than written into the record text,
+  # so a re-run cannot leave a stale number behind; empty if the reference
+  # corner is not in the grid, in which case the table below is suppressed.
+  REF_CORNER="ff_-40c_3.63v"
+  REF_DCS_3S=""; REF_SW_3S=""; REF_PFDQ_3S=""; REF_PFDT_3S=""
+  # Terms 3 and 4 come out of the same sub-campaign and often, but not always,
+  # bind at the same corner. Build the phrase here rather than in the record
+  # heredoc: a conditional inside the heredoc has to emit its own backticks
+  # through `printf`, where a backtick is not an escape and survives with the
+  # backslash still attached.
+  if [ "${WORST_PFDQ_CORNER}" = "${WORST_PFDT_CORNER}" ]; then
+    WORST_QT_CORNER_PHRASE="\`${WORST_PFDQ_CORNER}\` (both terms)"
+  else
+    WORST_QT_CORNER_PHRASE="\`${WORST_PFDQ_CORNER}\` and \`${WORST_PFDT_CORNER}\` respectively"
+  fi
+  if printf '%s\n' "${CORNER_POINTS[@]}" | awk -v c="${REF_CORNER}" '
+      { split($0, f, " "); if (f[1] "_" f[2] "c_" f[3] "v" == c) found = 1 }
+      END { exit !found }'; then
+    local r
+    r=$(dc_worst signed "${REF_CORNER}" | simenv_stats_from_values)
+    REF_DCS_3S=$(sig3 "$(echo "${r}" | awk '{print $1}')" "$(echo "${r}" | awk '{print $2}')")
+    r=$(stats_corner "${OUT_SW}" 4 "${REF_CORNER}")
+    REF_SW_3S=$(sig3 "$(echo "${r}" | awk '{print $1}')" "$(echo "${r}" | awk '{print $2}')")
+    r=$(stats_corner "${OUT_PFD}" 3 "${REF_CORNER}")
+    REF_PFDQ_3S=$(sig3 "$(echo "${r}" | awk '{print $1}')" "$(echo "${r}" | awk '{print $2}')")
+    r=$(stats_corner "${OUT_PFD}" 7 "${REF_CORNER}")
+    REF_PFDT_3S=$(sig3 "$(echo "${r}" | awk '{print $1}')" "$(echo "${r}" | awk '{print $2}')")
+  fi
 
   # Term 1's standard error of the MEAN at its binding (worst) corner, and the
   # raw budget margin expressed in units of that SE -- issue #482's
@@ -726,10 +903,41 @@ restat() {
     echo "       (records before #146 are single-corner and have no corner column)." >&2
     exit 1
   }
+  # The corner grid `--restat` reduces over is the one the COMMITTED CSV holds,
+  # not this script's current `CORNER_POINTS` (issue #597). #597 widened
+  # CORNER_POINTS from 3 points to 21, and the two older corner-combined records
+  # (`20260817-135712-0e9cfc9`, `20260923-095854-1655e11`) hold only the 3 --
+  # so reducing them against the current array would report every one of the 18
+  # absent corners as a missing-rows error and refuse to run at all. That would
+  # break a reproduction path DR-018, sim/CHARACTERIZATION.md and
+  # spec/lib/check-mismatch-charge-derivation.sh all name by record id. Reading
+  # the grid out of the data instead makes `--restat` correct for ANY committed
+  # campaign of this schema, past or future, which is what a
+  # committed-evidence-only diagnostic should be. The tag parse below is the
+  # inverse of `<bundle>_<temp>c_<supply>v`: bundle names contain no underscore
+  # (sim/README.md's five MOS bundles), so field 1 is the bundle and the
+  # temperature's leading `-` survives in field 2.
+  local restat_points restat_line
+  restat_points=$(simenv_datarows "${OUT_DC}" | awk -F, '{print $1}' | awk '!seen[$0]++' \
+    | awk -F_ '{ t=$2; sub(/c$/, "", t); v=$3; sub(/v$/, "", v); print $1, t, v }')
+  [ -n "${restat_points}" ] || {
+    echo "ERROR: ${OUT_DC} holds no data rows -- nothing to reduce" >&2
+    exit 1
+  }
+  CORNER_POINTS=()
+  while IFS= read -r restat_line; do
+    [ -n "${restat_line}" ] && CORNER_POINTS+=("${restat_line}")
+  done <<<"${restat_points}"
+  NUM_CORNERS=${#CORNER_POINTS[@]}
+  echo "mc-cp-mismatch --restat: ${NUM_CORNERS} corner(s) read from the committed CSV"
   local point pc pt pv ctag
   for point in "${CORNER_POINTS[@]}"; do
     read -r pc pt pv <<<"${point}"
     ctag="${pc}_${pt}c_${pv}v"
+    # Round-trip guard on the parse above: re-assembling the tag from the three
+    # parsed fields has to match a tag actually present, or the split was wrong
+    # (a bundle name with an underscore in it, say) and every per-corner filter
+    # below would silently match nothing.
     # `grep -q` exits at the first match, closing its read end before
     # `simenv_datarows`'s pipeline finishes writing -- a SIGPIPE race that
     # under `set -o pipefail` can turn a real match into a false "no rows"
@@ -737,8 +945,9 @@ restat() {
     # produce an accurate count, so it can't race-quit; discard the count and
     # keep the same 0-vs-nonzero exit status `grep -q` gave us.
     simenv_datarows "${OUT_DC}" | grep -c "^${ctag}," >/dev/null || {
-      echo "ERROR: ${OUT_DC} has no rows for corner '${ctag}' -- the committed" >&2
-      echo "       campaign's corner grid does not match this script's CORNER_POINTS." >&2
+      echo "ERROR: ${OUT_DC} has no rows for corner '${ctag}' -- the corner tag" >&2
+      echo "       parse above did not round-trip; the CSV's corner column does" >&2
+      echo "       not follow '<bundle>_<temp>c_<supply>v'." >&2
       exit 1
     }
   done
@@ -1004,27 +1213,38 @@ cat >"${RECORD}" <<EOF
   "Statistical claims / Monte Carlo evidence") the nominal-only record
   \`20260731-212614-640560e\` left open -- that record stands unmodified as
   historical evidence (append-only); this one adds the corner dimension on
-  top of the same claim, it does not supersede or invalidate it. This
-  specific record raises the corner-combined campaign's per-corner sample
-  counts (issue #482) over \`sim/mc-cp-mismatch/records/20260817-135712-0e9cfc9.md\`'s
-  original n=2/corner (sw, pfd) and n=20/corner (dc) -- see the Methodology
-  field's "Term 1's margin, re-measured at raised n" and "Per-corner sample
-  sizes" bullets for what changed and why n=2/corner was the thinner, cheaper
-  gap to close of the two item-6 sub-criteria issue #482 identified. It
-  SUPERSEDES that record for this claim (see Supersedes field) -- the prior
-  record's bytes remain committed, unedited, as historical evidence.
-  **Term 1's figure moved materially as a result**: at the raised sample
-  count it measures ${WORST_DCS_3S}% against the +-${TERM1_BUDGET_PCT}% budget
-  in force (verdict **${V1}**), where the superseded record's thinner sample
-  measured 11.7211% against the +-12% budget in force before DR-018. Terms
-  2/2a, 3 and 4 still fit. Read the Result field before citing the superseded
-  record's term-1 verdict anywhere -- and note that BOTH term 1's budget
-  (DR-018, #483) and the STATISTIC term 1 is reported as (#487: the signed
-  \`|mean|+3sigma\`, replacing a folded \`mean(|x|)+3*sd(|x|)\` that earlier
-  records mislabelled as \`|mean|+3sigma\`) have changed since those earlier
-  records, so a difference between records is not necessarily a measurement
-  difference. On THIS run's samples the two readings are ${WORST_DCS_3S}%
-  (signed, the verdict) and ${WORST_DC_3S}% (folded, reported beside it).
+  top of the same claim, it does not supersede or invalidate it.
+  **This specific record widens the CORNER AXIS itself (issue #597)**, from the
+  3-point diagonal subset \`sim/mc-cp-mismatch/records/20260817-135712-0e9cfc9.md\`
+  (#146) chose and \`sim/mc-cp-mismatch/records/20260923-095854-1655e11.md\`
+  (#482) inherited, to the ${NUM_CORNERS} points listed in the Corner-matrix
+  field: nominal plus every vertex of the process x temperature x supply box,
+  with the MOS-bundle axis swept in full. #482 raised the per-corner SAMPLE
+  COUNTS and closed T1/bronze item 6's (#127) sub-criteria (a)-(c), but left
+  the corner-combination sub-criterion (d) at three points, offering either a
+  wider axis or a ratified justification for the subset; this record takes the
+  wider axis, for the two reasons the Corner-matrix field's "What this grid
+  replaced" note states -- both of them about what the 3-point set could not
+  bound, not about its cost. \`fs\` and \`sf\`, absent from every prior record
+  of this campaign, are measured here for the first time. It SUPERSEDES
+  \`20260923-095854-1655e11\` for this claim (see Supersedes field) -- that
+  record's bytes remain committed, unedited, as historical evidence, and its
+  own per-corner numbers at the three shared points remain readable beside
+  this record's.
+  **Term 1 at the widened axis**: it measures ${WORST_DCS_3S}% at
+  \`${WORST_DCS_CORNER}\` against the +-${TERM1_BUDGET_PCT}% budget in force
+  (verdict **${V1}**), where the superseded record read 17.4798% at
+  \`ff_-40c_3.63v\` on the same statistic and the same budget. The binding
+  corner is the figure to compare between the two records, because the whole
+  point of a widened axis is that the worst corner may not be a corner the
+  narrower grid visited. Note also that BOTH term 1's budget (DR-018, #483:
+  +-12% -> +-${TERM1_BUDGET_PCT}%) and the STATISTIC term 1 is reported as
+  (#487: the signed \`|mean|+3sigma\`, replacing a folded
+  \`mean(|x|)+3*sd(|x|)\` that earlier records mislabelled as
+  \`|mean|+3sigma\`) changed before this record, so a difference against the
+  OLDEST records is not necessarily a measurement difference. On THIS run's
+  samples the two readings are ${WORST_DCS_3S}% (signed, the verdict) and
+  ${WORST_DC_3S}% (folded, reported beside it).
 - **Model-capability gate**: unchanged from the nominal-only record -- see
   \`sim/mc-cp-mismatch/records/20260731-212614-640560e.md\`'s "Model-capability
   gate" and "What did NOT work" notes for the full \`agauss()\`/parse-time-seed
@@ -1035,9 +1255,10 @@ cat >"${RECORD}" <<EOF
   inside \`.control\` -- is what makes the draws reproducible because they are
   evaluated once at netlist PARSE time). This record's own negative-control
   re-check (same seed -> same draws, \`sw_stat_mismatch=0\` -> seed-independent)
-  was repeated at one of the NEW corners (\`ff_-40c_3.63v\`, not the nominal
-  point the original record already checked) and confirmed the same behavior
-  holds away from nominal PVT -- see the Methodology field.
+  was repeated at \`fs_125c_2.97v\` -- a MIXED MOS bundle, which no prior
+  record of this campaign visited at all -- and confirmed the same behavior
+  holds there, with the measured numbers quoted in full in the Methodology
+  field's own negative-control bullet.
 - **Netlist provenance**:
   - \`cp\`/\`pfd_cp\`: schematic (\`design/cp.sch\`, \`design/pfd_cp.sch\` and
     the cells below them) exported by \`design/netlist.sh --top pfd_cp\` ->
@@ -1063,39 +1284,72 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     only, global process variation off, exactly sim/README.md's worked
     distribution example), with \`.option rndseed\` set per sample (see the
     Statistical convention field)")
-- **Corner matrix run**: 3-point subset of \`sim/README.md\`'s 45-point
-  default grid, combined with Monte Carlo sampling at each point --
-  \`typical/27C/3.30V\` (nominal), \`ss/125C/2.97V\`, \`ff/-40C/3.63V\`. This
-  is a further cut of the 5-point \`WINDOW_CORNERS\`-style subset
-  \`sim/lock-detector/testbench/run.sh\` established as a justified reduced
-  grid in this repo (which itself crosses both process extremes with BOTH
-  temp/supply corners); this record drops the two "off-diagonal" crossings
-  (\`ss/-40C/3.63V\`, \`ff/125C/2.97V\`) to the 3 points above. **Axes not
-  swept**: \`fs\`/\`sf\` MOS corners, the two dropped ss/ff x temp/supply
-  crossings, and the intermediate temperature/supply grid points are not
-  visited; passive corner sections (\`res_*\`, \`mimcap_*\`, \`moscap_*\`)
-  N/A -- the DUTs are \`nfet_03v3\`/\`pfet_03v3\` only, same as the
-  nominal-only record.
+- **Corner matrix run**: ${NUM_CORNERS}-point subset of \`sim/README.md\`'s
+  45-point default grid, combined with Monte Carlo sampling at each point.
+  The points, listed exactly as \`run.sh\`'s \`CORNER_POINTS\` array holds them
+  so this field cannot drift from what ran:
+
+${CORNER_LIST_MD}
+  The set is \`typical/27C/3.30V\` (nominal) plus **all ${NUM_VERTICES}
+  vertices of the process x temperature x supply box** -- each of the five MOS
+  bundles \`sim/README.md\` defines (\`typical\`, \`ss\`, \`ff\`, \`fs\`,
+  \`sf\`) crossed with both temperature extremes (-40 C, 125 C) and both
+  supply extremes (2.97 V, 3.63 V). The MOS-bundle axis is swept in FULL.
+  **Axes not swept**: the $(( 45 - NUM_CORNERS )) remaining default-grid points
+  are exactly those interior on the temperature axis (27 C) and/or the supply
+  axis (3.30 V) at a non-nominal bundle -- every one of them lies between two
+  visited vertices at the same MOS bundle on each continuous axis. Passive
+  corner sections (\`res_*\`, \`mimcap_*\`, \`moscap_*\`) N/A -- the DUTs are
+  \`nfet_03v3\`/\`pfet_03v3\` only, same as every prior record of this
+  campaign.
   **Justification** (sim/README.md's "Default corner matrix" rule requires
-  one for any subset): the full 45-point grid at this campaign's original
-  per-corner sample counts would multiply this record's already-nontrivial
-  \`pfd\`/\`sw\` wall clock by 45x. Beyond that baseline cost, this record's
-  own build (#146) found the shared build host's ngspice is compiled with
-  OpenMP-parallel BSIM evaluation, so \`simenv_jobs\` PROCESS-level
-  parallelism was compounding with PER-PROCESS thread parallelism -- fixed
-  here via \`export OMP_NUM_THREADS=1\` (measured ~44x wall-clock improvement
-  for one isolated \`sw\` invocation, 7m48s -> 10.7s, for essentially
-  unchanged total CPU-seconds; see \`run.sh\`'s header comment). Even with
-  that fix, the shared build host's OTHER concurrent tenants (other repos'
-  agent campaigns, sim/README.md's oversubscription note) pushed the host
-  load average from ~4 to ~83 (on 8 physical cores) within a 15-minute window
-  during this record's own build -- external load this campaign cannot
-  control or predict. Given that combination, the corner grid itself was cut
-  from the 5-point candidate to the 3 points above (dropping the two
-  off-diagonal ss/ff x temp/supply crossings) as a second, independent lever
-  to keep total wall clock bounded and completion realistic regardless of
-  what else is sharing the host. \`fs\`/\`sf\` and the two dropped
-  crossings are the residual gap a future full(er)-grid pass would close.
+  one for any subset): the omitted points are interior to the measured box on
+  the two continuous axes, and the per-corner breakdown table below is the
+  evidence a reader grades that against -- for an omitted point to bind, its
+  dispersion would have to exceed BOTH bracketing vertices at the same MOS
+  bundle, i.e. behave non-monotonically in temperature or supply between two
+  measured values. This record states that bracketing and shows the table; it
+  does not assert monotonicity as a physical law.
+  **What this grid replaced, and why (issue #597)**: records
+  \`sim/mc-cp-mismatch/records/20260817-135712-0e9cfc9.md\` (#146) and
+  \`sim/mc-cp-mismatch/records/20260923-095854-1655e11.md\` (#482) ran THREE
+  points -- \`typical/27C/3.30V\`, \`ss/125C/2.97V\`, \`ff/-40C/3.63V\` -- and
+  #482 explicitly left the corner axis as the open half of T1/bronze item 6's
+  corner-combination sub-criterion (#127), offering either a wider axis or a
+  ratified justification for the 3-point set. The wider axis is what ran here,
+  because the 3-point set's bounding argument does not hold on this repo's own
+  evidence, in two independent ways:
+  1. **\`fs\`/\`sf\` were absent and are structurally the worst case for this
+     measurement.** Term 1 is an UP/DN match between a PMOS source and an NMOS
+     sink; \`ss\`/\`ff\` skew both flavours the same way and largely preserve
+     that ratio, while \`fs\`/\`sf\` skew them oppositely and attack it
+     directly. This repo has already measured that asymmetry binding at a
+     mixed bundle elsewhere: \`sim/cp-compliance\`'s switching bench binds at
+     \`fs\`/125C/3.63V (3.68 fC worst-corner \`wskew\`, the figure
+     \`spec/pll.md\`'s reference-spur derivation consumes), and
+     \`sim/lock-window-sizing\`'s two window edges bind at \`fs\` and \`ss\`.
+  2. **The temp/supply axis was sampled on one diagonal only.** (125C, 2.97V)
+     and (-40C, 3.63V) were visited; the anti-diagonal (-40C, 2.97V) and
+     (125C, 3.63V) were not. Mirror mismatch dispersion scales with
+     \`gm/I * sigma(Vth)\`, largest at least overdrive -- cold AND low supply
+     -- which is precisely the vertex the diagonal omitted.
+  **Why ${NUM_CORNERS} and not 45**: the cost analysis in \`run.sh\`'s header
+  comment still rules out the full grid; what it no longer rules out is the
+  vertex set. #146's own build discovered, mid-build, that this host's ngspice
+  is compiled with OpenMP-parallel BSIM evaluation, so \`simenv_jobs\`
+  process-level parallelism was compounding with per-process thread
+  parallelism -- fixed via \`export OMP_NUM_THREADS=1\`, measured ~44x
+  wall-clock improvement on one isolated \`sw\` invocation (7m48s -> 10.7s for
+  essentially unchanged CPU-seconds). That fix arrived too late to be priced
+  into #146's own grid decision, and it is what moved the affordable corner
+  count by roughly an order of magnitude. Re-measured for THIS grid on this
+  host (isolated invocations, fix applied, host load ~12 of 18 cores): dc
+  1.2 s, sw 30 s, pfd 57 s per seed (three sequential transients), dff 2.3 s.
+  The shared-host variance #146 documented (the same isolated \`sw\`
+  invocation measuring 10.7 s, 1m40s and 57 min on different occasions, purely
+  from other tenants' load) is unchanged and is still why 45 points is not
+  attempted: a campaign whose per-invocation cost can swing ~300x cannot
+  budget a fixed sample count against a fixed wall-clock target.
 - **Methodology / criteria / limitations**:
   - **dc** (term 1): \`alter\`+\`op\` at Vctrl = 0.9/1.65/2.4 V, \`N_DC=${N_DC}\`
     single-instance invocations PER CORNER (\`$(( N_DC * NUM_CORNERS ))\` total),
@@ -1176,30 +1430,136 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
     for the numbers and the resulting budget-line decision. The pooled
     all-corner \`sigma\` for this sub-campaign is deliberately NOT used as the
     flop's dispersion figure for the same reason: pooling across corners mixes
-    the systematic corner-to-corner delay spread (165 ps to 371 ps across this
-    3-point subset) into what is supposed to be a within-corner mismatch
-    sigma, inflating it by roughly an order of magnitude.
-  - **Per-corner sample sizes were raised (issue #482) but are still short of
-    the nominal-only record's n=40** (n=${N_SW}/corner for sw, n=${N_PFD}/corner
-    for pfd, up from #146's original n=2/corner for both -- see this file's
-    header comment for the timing measurement that motivated the raise and
-    the reasoning for not going further). The per-corner breakdown table
-    below answers "is any corner's dispersion qualitatively worse than
-    nominal's" with a tighter sample than #146's original record could, but
-    still not "what is corner X's sigma to two significant figures" -- the
-    pooled (all-corners) statistic reported above the table, now at a larger
-    n than #146's original pooled figure, is the tighter combined-distribution
-    estimate. A future pass wanting tighter PER-corner sigmas still would need
-    to either shrink the corner set further or accept a larger total wall
-    clock; this record does not attempt that tradeoff.
-  - **Negative-control re-check at a non-nominal corner**: run manually (not
-    part of \`run.sh\`, to avoid adding wall clock to every future run) at
-    \`ff_-40c_3.63v\`: two \`tb_mc_cp_dc.sp\` invocations with the SAME
-    \`rndseed\` produced byte-identical \`iup\`/\`idn\`, and \`sw_stat_mismatch=0\`
-    with two DIFFERENT seeds at that same corner produced identical output
-    (seed-independent, confirming the switch, not the seed, gates the draw).
-    This confirms the nominal-only record's parse-time-seeding finding is not
-    corner-specific.
+    the systematic corner-to-corner delay spread (${DFF_MEAN_MIN} s to
+    ${DFF_MEAN_MAX} s across this record's ${NUM_CORNERS} corners, a span the
+    widened axis makes larger still than the 3-point subset's) into what is
+    supposed to be a within-corner mismatch sigma, inflating it by roughly an
+    order of magnitude.
+  - **Per-corner sample sizes are unchanged from
+    \`sim/mc-cp-mismatch/records/20260923-095854-1655e11.md\` (issue #482's
+    raise) and are still short of the nominal-only record's n=40**
+    (n=${N_SW}/corner for sw, n=${N_PFD}/corner for pfd, n=${N_DC}/corner for
+    dc, n=${N_DFF}/corner for dff -- see this file's header comment for the
+    timing measurement that motivated that raise and the reasoning for not
+    going further). #597 spent its wall-clock budget on the CORNER axis rather
+    than on n, which is the tradeoff \`run.sh\`'s header comment names
+    explicitly: at these per-corner counts the breakdown table below answers
+    "is any corner's dispersion qualitatively worse than nominal's" -- which is
+    what a corner-combination criterion asks -- but not "what is corner X's
+    sigma to two significant figures". The pooled (all-corners) statistic
+    reported above the table now rests on ${NUM_CORNERS} corners' samples
+    rather than 3, so it is a tighter combined-distribution estimate than any
+    prior record's, but it is NOT the verdict statistic, for the
+    corner-mixing reason the dff bullet above gives. A future pass wanting
+    tighter PER-corner sigmas would need to either shrink the corner set again
+    or accept a larger total wall clock; this record does not attempt that
+    tradeoff.
+  - **Negative-control re-check at a non-nominal corner, repeated at a NEWLY
+    ADDED MIXED BUNDLE (issue #597)**: run manually (not part of \`run.sh\`, to
+    avoid adding wall clock to every future run). The superseded record checked
+    \`ff_-40c_3.63v\`; this record repeats the same two checks at
+    \`fs_125c_2.97v\` -- a bundle no prior record of this campaign visited at
+    all -- so item 6's deterministic-negative-control sub-criterion is met at
+    the widened axis and not only at the axis it replaced. Two
+    \`tb_mc_cp_dc.sp\` invocations at \`fs\`/125C/2.97V with the SAME
+    \`rndseed=7\` and \`sw_stat_mismatch=1\` produced byte-identical
+    \`iup\`/\`idn\` at all three Vctrl points (\`iup=5.37859E-06
+    idn=5.35313E-06\` / \`5.37306E-06\`, \`5.37675E-06\` / \`5.35868E-06\`,
+    \`5.39239E-06\` for LO/MID/HI); and \`sw_stat_mismatch=0\` with two
+    DIFFERENT seeds (11, 12) at that same corner produced identical output to
+    each other (\`iup=5.33363E-06 idn=5.41078E-06\` / \`5.32799E-06\`,
+    \`5.43735E-06\` / \`5.31351E-06\`, \`5.45498E-06\`), i.e. seed-independent,
+    confirming the switch and not the seed gates the draw. The
+    parse-time-seeding finding therefore holds on the mixed bundles too, not
+    just on the same-direction \`ss\`/\`ff\` ones. (Those mismatch-off figures
+    are also the fs systematic baseline: -2.02% at mid-Vctrl, which is the
+    \`|mean|\` this corner's dispersion sits on top of.)
+  - **THE SAME SEED DOES NOT PRODUCE THE SAME DRAW ON A DIFFERENT HOST, and
+    this record is the first in this campaign to be able to show it (issue
+    #597).** Every prior record of this campaign states that
+    \`.option rndseed=N\` makes the draws reproducible, and that is true --
+    but only within one build on one machine. The superseded record
+    \`20260923-095854-1655e11\` was taken with ngspice-46 on Linux/x86_64; this
+    one is ngspice-46 on the host named in the Environment provenance field
+    above. Both cover \`ff\`/-40C/3.63V at seeds 1..100, from the same deck and
+    the same committed CSV schema, so the two can be compared row for row --
+    and seed 1 is a DIFFERENT DRAW, not a slightly different numerical answer
+    to the same one:
+
+    | corner=\`ff_-40c_3.63v\`, seed 1 | Vctrl 0.9 V | 1.65 V | 2.4 V |
+    |---|---|---|---|
+    | \`20260923-095854-1655e11\` (Linux/x86_64) | +6.4859% | +5.9503% | +5.2664% |
+    | this record | +3.7754% | +3.1553% | +2.3918% |
+
+    Those differ by ~2.7 percentage points on a quantity whose whole
+    per-corner sd is ~4%, which is a different sample from the same
+    distribution rather than solver noise -- \`agauss()\` is drawing off a
+    different random stream. Read together with **DR-028**, which measured
+    this repo's same-version CROSS-HOST reproducibility floor on a
+    DETERMINISTIC quantity (period jitter, +3.71% and +9.31% relative), the
+    distinction matters: for a deterministic measurement a cross-host re-run
+    is a reproducibility CHECK, and for a Monte Carlo one it is an independent
+    REPLICATE. So a per-seed comparison across hosts is meaningless and a
+    DISTRIBUTION-level comparison is the only one available -- which is what
+    the re-grading bullet below does, and why it separates the two effects
+    instead of attributing the whole difference to the widened axis. The
+    campaign's reproducibility claim should be read as "same host, same build,
+    same seed -> same draw", which is what the negative control above actually
+    verifies. Nothing here weakens \`--restat\`: it re-reduces COMMITTED
+    samples and is exactly reproducible anywhere.
+  - **Re-grading the terms whose binding corner or figure moved, with the host
+    effect separated from the corner effect (issue #597).** Two things changed
+    between \`20260923-095854-1655e11\` and this record -- the corner axis
+    (3 -> ${NUM_CORNERS} points) and the execution host (see the bullet above)
+    -- so a bare difference between the two records attributes nothing. Both
+    records cover \`ff\`/-40C/3.63V, the old grid's binding corner, so that
+    shared corner isolates the host effect and the rest is the axis:
+
+    | Term | old record @ \`${REF_CORNER}\` | this record @ \`${REF_CORNER}\` | host effect | this record's WORST corner | axis effect |
+    |---|---|---|---|---|---|
+    | 1, signed \`\|mean\|+3sigma\` | 17.4798% | ${REF_DCS_3S}% | $(awk -v a="${REF_DCS_3S}" 'BEGIN{printf "%+.4f", a-17.4798}') pt | **${WORST_DCS_3S}%** at \`${WORST_DCS_CORNER}\` | $(awk -v a="${WORST_DCS_3S}" -v r="${REF_DCS_3S}" 'BEGIN{printf "%+.4f", a-r}') pt |
+    | 2/2a, \`\|mean\|+3sigma\` | 2.75395e-10 s | ${REF_SW_3S} s | $(awk -v a="${REF_SW_3S}" 'BEGIN{printf "%+.1f", (a-2.75395e-10)*1e12}') ps | **${WORST_SW_3S} s** at \`${WORST_SW_CORNER}\` | $(awk -v a="${WORST_SW_3S}" -v r="${REF_SW_3S}" 'BEGIN{printf "%+.1f", (a-r)*1e12}') ps |
+    | 3, \`\|mean\|+3sigma\` | 4.25246e-15 C | ${REF_PFDQ_3S} C | $(awk -v a="${REF_PFDQ_3S}" 'BEGIN{printf "%+.3f", (a-4.25246e-15)*1e15}') fC | **${WORST_PFDQ_3S} C** at \`${WORST_PFDQ_CORNER}\` | $(awk -v a="${WORST_PFDQ_3S}" -v r="${REF_PFDQ_3S}" 'BEGIN{printf "%+.3f", (a-r)*1e15}') fC |
+    | 4, \`\|mean\|+3sigma\` | 8.64436e-10 s | ${REF_PFDT_3S} s | $(awk -v a="${REF_PFDT_3S}" 'BEGIN{printf "%+.1f", (a-8.64436e-10)*1e12}') ps | **${WORST_PFDT_3S} s** at \`${WORST_PFDT_CORNER}\` | $(awk -v a="${WORST_PFDT_3S}" -v r="${REF_PFDT_3S}" 'BEGIN{printf "%+.1f", (a-r)*1e12}') ps |
+
+    The "old record" column is that record's own committed figures, quoted
+    verbatim; every other number is derived from this record's CSVs at record
+    time. The "host effect" column is the same corner on two hosts and the
+    "axis effect" column is this host's old binding corner against its new
+    one, so the two columns add to the total difference by construction.
+
+    Three findings follow, and all four terms still PASS:
+
+    1. **A NEWLY ADDED MIXED BUNDLE now binds term 1.** The worst corner is
+       \`${WORST_DCS_CORNER}\` -- an \`sf\` point, a bundle no prior record of
+       this campaign visited. That is the prediction \`run.sh\`'s header comment
+       makes about why \`fs\`/\`sf\` could not be assumed bounded by \`ss\`/\`ff\`,
+       confirmed rather than asserted. The margin it moves the figure by is
+       small -- the axis-effect column above -- which is the honest size of the
+       finding: the 3-point subset was not wildly wrong about term 1's
+       magnitude, it was unable to say so.
+    2. **The binding corner for terms 3 and 4 moved to ${WORST_QT_CORNER_PHRASE}, also new, and by a
+       margin that is NOT small.** Term 3 rises from ${REF_PFDQ_3S} C at the old
+       binding corner to ${WORST_PFDQ_3S} C, i.e. most of its increase over the
+       superseded record is the corner axis, not the host.
+       **This matters beyond this record**, because term 3's statistical
+       residual is an input to \`spec/pll.md\`'s reference-spur derivation:
+       DR-018 priced that stack with term 3 at 4.25246 fC, and the worst
+       corner of the widened grid reads higher. That does not change the
+       verdict here (term 3's own budget is +-20 fC and it uses
+       $(awk -v x="${WORST_PFDQ_3S}" 'BEGIN{printf "%.1f", 100*x/20e-15}')% of
+       it) and this record does NOT re-derive the spur stack or touch
+       DR-018 -- per CLAUDE.md a spec change goes through \`spec/\` with a
+       decision record, and re-pricing a ratified derivation is not something a
+       campaign runner does as a side effect. What this record owes is the
+       measurement and the flag, and both are here.
+    3. **Term 2/2a's worst corner also moved to a new point** and roughly
+       doubled over the superseded record (${WORST_SW_3S} s at
+       \`${WORST_SW_CORNER}\`, against 2.75395e-10 s). It still uses
+       $(awk -v x="${WORST_SW_3S}" 'BEGIN{printf "%.1f", 100*x/3e-9}')% of its
+       +-3 ns budget, so this is headroom consumed rather than a verdict
+       changed -- but it is the clearest single illustration of why an interior
+       diagonal is not a bound: nothing in the 3-point subset hinted at it.
   - **Closed-loop reference-spur check: NOT performed, honest gap, not
     fabricated.** Unchanged from the nominal-only record -- #12's
     lock-time/output-range bench has since landed on \`main\`, but wiring a
@@ -1278,8 +1638,10 @@ ${TERM1_NOTE}
   | Corner | Term 1 \|mean\|+3sigma (signed; verdict) | Term 1 \`mean(\|x\|)+3*sd(\|x\|)\` (folded) | Term 2/2a \|mean\|+3sigma | Term 3 \|mean\|+3sigma | Term 4 \|mean\|+3sigma | DFF clk->Q mismatch 3sigma (and mean delay) |
   |---|---|---|---|---|---|---|
 ${PERCORNER_ROWS}
-- **Result -- pooled (all ${NUM_CORNERS} corners combined; a fraction of the
-  nominal-only record's own n, per the corner-vs-sample-count tradeoff above)**:
+- **Result -- pooled (all ${NUM_CORNERS} corners combined; reported for
+  completeness, NOT the verdict statistic -- pooling across corners mixes the
+  systematic corner-to-corner spread into a within-corner mismatch sigma, which
+  is the same reason the dff bullet gives for not pooling there)**:
 
   | # | Term | Pooled mean / sd / \|mean\|+3sigma (n) |
   |---|---|---|
@@ -1293,9 +1655,9 @@ ${PERCORNER_ROWS}
   the nominal-only record): design/README.md's "Systematic (measured, all 45
   PVT corners)" column (terms 1-4) is the corner-swept MEAN (\`sw_stat_mismatch
   = 0\`). This record's numbers are the ADDITIONAL statistical dispersion
-  \`sw_stat_mismatch = 1\` adds on top, now itself corner-swept (3-point
-  subset). They are not interchangeable and this record does not add them
-  together.
+  \`sw_stat_mismatch = 1\` adds on top, now itself corner-swept over the
+  ${NUM_CORNERS}-point vertex set named in the Corner-matrix field. They are
+  not interchangeable and this record does not add them together.
 - **Links**:
   - Testbenches: \`sim/mc-cp-mismatch/testbench/tb_mc_cp_dc.sp\`,
     \`tb_mc_cp_switch.sp\`, \`tb_mc_pfd_cp.sp\`, \`tb_mc_dff_ctq.sp\`,
@@ -1310,9 +1672,17 @@ ${PERCORNER_ROWS}
     \`mc_cp_switch.csv\`, \`mc_pfd_cp.csv\`, \`mc_dff_ctq.csv\`
   - Prior record (nominal-only MC, not superseded, historical evidence):
     \`sim/mc-cp-mismatch/records/20260731-212614-640560e.md\`
-  - Reduced-corner-grid precedent: \`sim/lock-detector/testbench/run.sh\`
-    (\`WINDOW_CORNERS\`)
-- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (issue #482)
+  - Prior corner-combined records, at the 3-point diagonal subset this record's
+    axis replaces (both keep their bytes; the later one is superseded by this
+    record for this claim): \`sim/mc-cp-mismatch/records/20260817-135712-0e9cfc9.md\`
+    (#146), \`sim/mc-cp-mismatch/records/20260923-095854-1655e11.md\` (#482)
+  - Reduced-corner-grid precedent this record's axis exceeds:
+    \`sim/lock-detector/testbench/run.sh\` (\`WINDOW_CORNERS\`, 5 points)
+  - Mixed-bundle binding precedent cited in the Corner-matrix field:
+    \`sim/cp-compliance/records/20260802-061841-c24ee3a.md\` (worst-corner
+    \`wskew\` at \`fs\`/125C/3.63V), \`sim/lock-window-sizing/\` (window edges
+    binding at \`fs\` and \`ss\`)
+- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (issue #597)
 $(simenv_supersedes_field "${SIM_SUPERSEDES:-}")
 EOF
 

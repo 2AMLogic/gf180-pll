@@ -687,10 +687,14 @@ Notes on how to read this table:
   used to carry was never derived from anything: it was set comfortably above
   the measured systematic worst case as an allowance for mismatch. #15's Monte
   Carlo campaign, run corner-combined at n = 100 samples per corner
-  (`sim/mc-cp-mismatch/records/20260923-095854-1655e11.md`), measures a
+  (`sim/mc-cp-mismatch/records/20260923-095854-1655e11.md`, at that record's own
+  3-point corner axis — the campaign has since widened it, see the
+  widened-axis bullet below), measured a
   worst-corner statistic of **17.4798 %** at `ff`/−40 °C/3.63 V (mean
   +2.85976 %, σ 4.87334 %, n = 100) — outside that ±12 %, and nowhere near
-  marginally. That record, minted before #487, states the same corner as
+  marginally. That is the figure DR-018 priced ±20 % against and the one
+  `spec/pll.md`'s derivation still cites by record id, which is why it stays
+  quoted here rather than being replaced by the successor's. That record, minted before #487, states the same corner as
   **13.2172 %**, its *folded* `mean(|x|) + 3·sd(|x|)`; both figures come from
   the same committed 300 samples and either can be re-derived from them with
   `sim/mc-cp-mismatch/testbench/run.sh --restat 20260923-095854-1655e11`
@@ -737,12 +741,48 @@ Notes on how to read this table:
     to buy margin. `run.sh` still prints it, named for what it is, beside the
     verdict statistic.
   - **±20 % does not pre-allocate for the bias generator** (still excluded, see
-    below) or for the 42 PVT points the 3-corner campaign does not visit; that
+    below) or for the PVT points the campaign does not visit; that
     is what the margin between 17.48 % and 20 % is for — 2.5 points, or
     5.2 standard errors of the binding corner's mean (SE 0.487334 %, n = 100).
     DR-018 wrote that sentence against the folded 13.22 %; the headroom it
     describes is the smaller of the two, and it is the one to plan against. A
     measurement above 20 % is a new decision record, not another widening.
+    (When DR-018 was written the unvisited count was 42, because the campaign
+    ran a 3-point corner subset. It is **24** as of #597 — see the next
+    bullet — and those 24 are all interior points on the temperature and supply
+    axes rather than unexplored process bundles.)
+  - **The corner axis widened from 3 points to 21, and three of the four terms'
+    binding corner moved (#597).** `sim/mc-cp-mismatch/records/20260927-102154-d004d5b.md`
+    re-measures this campaign over `typical`/27 °C/3.30 V plus **all 20
+    vertices** of the process × temperature × supply box — so every one of the
+    five MOS bundles appears, at both temperature extremes and both supply
+    extremes, and `fs`/`sf` are visited for the first time. The measured
+    column above is unchanged (it is `cp-compliance`/`pfd-deadzone`'s
+    mismatch-off sweep, already at all 45 points) and **no budget in this table
+    moves**, but the statistical figures each budget is checked against do:
+
+    | # | 3-point axis, at its binding corner | 21-point axis, at its binding corner | Budget | Verdict |
+    |---|---|---|---|---|
+    | 1 | 17.4798 % (`ff`/−40 °C/3.63 V) | **17.0863 %** (`sf`/−40 °C/3.63 V) | ±20 % | PASS |
+    | 2/2a | 275.4 ps (`ff`/−40 °C/3.63 V) | **552.6 ps** (`ss`/125 °C/3.63 V) | ±3 ns / ±2 ns | PASS |
+    | 3 | 4.25246 fC (`ff`/−40 °C/3.63 V) | **5.56626 fC** (`sf`/125 °C/3.63 V) | ±20 fC | PASS |
+    | 4 | 864.4 ps (`ff`/−40 °C/3.63 V) | **1.02467 ns** (`sf`/125 °C/3.63 V) | ±3 ns | PASS |
+
+    Two of the new binding corners are on bundles the 3-point subset never
+    visited, which is the finding: a `tt`/`ss`/`ff` diagonal could not bound
+    an UP/DN *ratio* measurement, because `ss` and `ff` skew both device
+    flavours together while `fs`/`sf` skew them against each other. Term 1
+    barely moved (+0.16 pt over the same host's `ff`/−40 °C/3.63 V reading, the
+    rest of the difference against 17.4798 % being the execution host — that
+    record separates the two effects term by term, and also documents that
+    `.option rndseed=N` reproduces a draw only within one build on one
+    machine). Terms 2/2a and 3 moved materially, and **term 3's move is owed
+    beyond this table**: DR-018's reference-spur derivation prices the
+    statistical residual at 4.25246 fC, and the widened grid's worst corner
+    reads 5.56626 fC. Per the "budget is not a spec line" rule at the end of
+    this section, re-pricing that ratified derivation is a decision record's
+    job; the campaign record states the measurement and flags it, and neither
+    it nor this table re-derives the stack.
   - **The spec's derived rows follow the corrected statistic (DR-018
     Amendment A1, #490).** `spec/pll.md`'s charge-accounting table now carries
     term 1 "at its **measured** 17.4798 %" (signed `|mean| + 3σ`): 3.26 fC for
@@ -771,10 +811,11 @@ Notes on how to read this table:
     the bias generator two bullets down — a separate block's mismatch is
     re-derived when it lands, not silently absorbed here.
   - **The figure that made it look budget-sized was the wrong statistic.**
-    Earlier records quoted the flop's `|mean| + 3σ` (378 ps) next to terms 1–4's,
+    Earlier records quoted the flop's `|mean| + 3σ` (376 ps at the current
+    21-point axis, 378 ps at the 3-point one) next to terms 1–4's,
     but those terms' means are *errors* centred near zero, whereas the flop's
     mean is a nominal *propagation delay*. At the campaign's worst corner
-    (`ss`/125 °C/2.97 V) the mean is 98.4 % of that 378 ps — so the number was
+    (`ss`/125 °C/2.97 V) the mean is ~98.6 % of that figure — so the number was
     reporting a systematic delay, already swept over the full 45-point grid by
     `sim/divider-ratio-dff` (record `20260801-125114-3f883e3`, worst-case
     `tcq_r` 370.952 ps at that same corner, which the campaign's own mean
@@ -782,10 +823,14 @@ Notes on how to read this table:
     setup/hold margin. A line here would double-count it.
 
   What was genuinely unchecked was the *dispersion*, and it now has a verdict.
-  The mismatch-only figure is `3σ` = **6.21 ps** at the worst corner. Added to
+  The mismatch-only figure is `3σ` = **5.49 ps** at the worst corner
+  (`ss`/125 °C/2.97 V — the same corner at the 21-point axis as at the 3-point
+  one; it read 6.21 ps there). Added to
   term 4 at the PFD input — the same node, so the two are additive there — the
-  combined worst-case static phase offset is **0.871 ns against term 4's ±3 ns**,
-  a PASS with the flop contributing 0.7 % of the sum. That combined check is
+  combined worst-case static phase offset is **1.030 ns against term 4's ±3 ns**
+  (it was 0.871 ns at the 3-point axis, the increase being term 4's own move to
+  a new binding corner rather than the flop's), a PASS with the flop
+  contributing 0.53 % of the sum. That combined check is
   emitted by `sim/mc-cp-mismatch/testbench/run.sh` on every run, so it cannot
   drift out of date; it is a check inside term 4's existing envelope, not a new
   budget line.
