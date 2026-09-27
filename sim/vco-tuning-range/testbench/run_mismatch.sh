@@ -102,17 +102,28 @@
 #
 #   corners/20260817-143524-0e9cfc9/mismatch.csv
 #
-# Its bytes are NOT edited and neither is the record beside it -- `sim/` is
-# append-only evidence and sim/README.md forbids rewriting a committed record
-# even to add a true, helpful pointer. The correction is made forward, here in
-# the live testbench artifact, the same disposition
+# The negative control (#602, added below) joined this list rather than
+# escaping it: its own `simenv_provenance` call was written and merged before
+# this erratum's pairing rule (sim/tests/test_provenance_switches_note.py)
+# could see through the `mc_mismatch`-handle indirection the control needed
+# and flag it as a mismatch-on call missing its fifth argument. One more file,
+# minted before ITS fix:
+#
+#   corners/20260927-094524-b994116/negative_control.csv
+#
+# Those bytes are NOT edited and neither are the records beside them -- `sim/`
+# is append-only evidence and sim/README.md forbids rewriting a committed
+# record even to add a true, helpful pointer. The correction is made forward,
+# here in the live testbench artifact, the same disposition
 # sim/lock-window-trim/testbench/tb.json uses for its own stale-figure erratum.
-# For that one file the record's Environment provenance field is authoritative
-# and the CSV's `# switches:` line is a harness default that was never true of
-# the run; every CSV minted from this script after #601 states the switches the
-# run actually used. sim/vco-tuning-range's OTHER committed CSVs
-# (vco_tuning.csv, supply_jitter.csv, supply_pushing.csv, stage_count.csv) are
-# correctly labelled -- mismatch really is off for those runs.
+# For those two files the record's Environment provenance field (or, for the
+# negative control, its own "read the column not the header" note) is
+# authoritative and the CSV's `# switches:` line is a harness default that was
+# never true of the run; every CSV minted from this script after its own fix
+# states the switches the run actually used. sim/vco-tuning-range's OTHER
+# committed CSVs (vco_tuning.csv, supply_jitter.csv, supply_pushing.csv,
+# stage_count.csv) are correctly labelled -- mismatch really is off for those
+# runs.
 #
 # Nothing computed is affected: no figure in any record, and no check script,
 # parses that line -- simenv_datarows drops every `#` comment before the data
@@ -218,6 +229,13 @@ HEADER="band,seed,f_hz,i_a"
 # deck says the opposite of what ran -- see the erratum in this file's header
 # comment for the CSV that shipped that way.
 SWITCHES_NOTE="design.ngspice defaults OVERRIDDEN by tb_vco_mismatch.sp, which re-declares them after the include (sw_stat_global=0, sw_stat_mismatch=1 -> mismatch-only Monte Carlo, .option rndseed set per sample)"
+
+# The negative control (#602) deliberately runs BOTH switch values via the
+# deck's mc_mismatch handle -- see its own comment above -- so neither
+# SWITCHES_NOTE above nor the unmodified simenv_provenance default is honest
+# for its CSV. Same #601 pairing rule, same enforcement (sim/tests/
+# test_provenance_switches_note.py).
+CONTROL_SWITCHES_NOTE="design.ngspice defaults OVERRIDDEN per run -- this control artifact runs BOTH switch values (sw_stat_mismatch=1 for the repeat/vary legs, OFF for the gate leg, via the deck's mc_mismatch handle); read the per-row sw_stat_mismatch column, not this line, for the authoritative per-run value"
 
 stage_netlist() {
   mkdir -p "$1"
@@ -393,7 +411,8 @@ emit_control_evidence() {
   {
     simenv_provenance "vco-tuning-range (negative control)" "${RID}" \
       "design/netlist/vco.spice (committed export)" \
-      "${#CONTROL_POINTS[@]} sampled (corner, Vctrl, band) points x 5 runs (seeds ${CONTROL_SEED_A}/${CONTROL_SEED_B}, sw_stat_mismatch 1 and 0)"
+      "${#CONTROL_POINTS[@]} sampled (corner, Vctrl, band) points x 5 runs (seeds ${CONTROL_SEED_A}/${CONTROL_SEED_B}, sw_stat_mismatch 1 and 0)" \
+      "${CONTROL_SWITCHES_NOTE}"
     echo "${SIMENV_CONTROL_HEADER}"
     sort -t, -k1,1 -k2,2 -k3,3 -k6,6 "${raw}"
   } >"${cornersdir}/negative_control.csv"
@@ -496,12 +515,12 @@ $(simenv_env_block "N/A -- design/netlist/vco.spice is a committed export, this 
     (d), #597), and no frequency-dispersion figure -- it re-measures none of
     the two sample records' numbers and supersedes neither.
   - **Read the CSV's \`sw_stat_mismatch\` COLUMN, not its \`# switches:\`
-    header line.** \`simenv_provenance\` emits a fixed
-    "sw_stat_global=0, sw_stat_mismatch=0" sentence for every campaign in
-    this tree -- the separately-filed provenance-header defect (#601), left
-    untouched here rather than fixed as a side effect, and doubly wrong for
-    an artifact that deliberately runs both values. Column 4 of each data row
-    is authoritative.
+    header line.** This artifact deliberately runs BOTH switch values, so no
+    single header sentence can state its switches (#601's fifth
+    \`simenv_provenance\` argument says as much, in prose, for exactly this
+    reason); column 4 of each data row is authoritative. A record minted
+    before this note was wired (see the erratum in this file's header
+    comment) shipped the unconditional design.ngspice-default header instead.
 - **Statistical convention**: N/A as a distribution claim -- no mean, sigma
   or \`|mean|+3sigma\` is reported and no distribution is sampled. The switch
   settings are the measurement: \`sw_stat_global = 0\` throughout,

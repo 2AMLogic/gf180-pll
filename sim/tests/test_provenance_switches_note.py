@@ -73,6 +73,14 @@ _CLI_OVERRIDE = re.compile(r"(?<![\w.])sw_stat_mismatch\s*=\s*1")
 #: include-ordering hazard -- must not count as declarations.
 _DECK_DECL = re.compile(r"^\s*\.param\s+sw_stat_mismatch\s*=\s*1\b", re.MULTILINE)
 
+#: A deck that declares the switch via a named parameter handle instead of a
+#: literal -- e.g. ``.param sw_stat_mismatch='mc_mismatch'`` (#602, added so
+#: one deck can run the same DUT with the switch both on and off for a
+#: negative control). The handle alone does not turn mismatch on; the script
+#: must also pass ``<handle>=1`` on the ngspice command line (see
+#: ``_handle_set_to_one`` below).
+_DECK_HANDLE = re.compile(r"^\s*\.param\s+sw_stat_mismatch\s*=\s*['\"]([A-Za-z_][A-Za-z0-9_]*)['\"]", re.MULTILINE)
+
 #: A shell assignment of a literal string, used to resolve a note passed as
 #: ``"${SWITCHES_NOTE}"`` back to the text it will expand to.
 _ASSIGN = re.compile(r'^\s*([A-Za-z_][A-Za-z0-9_]*)=(".*?"|\'.*?\')\s*$', re.MULTILINE)
@@ -162,12 +170,25 @@ def shell_code(text: str) -> str:
     return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
 
 
+def _handle_set_to_one(handle: str, script_text: str) -> bool:
+    """Does the script pass ``<handle>=1`` to ngspice as a literal CLI override?"""
+    pattern = re.compile(rf"""["']{re.escape(handle)}\s*=\s*1["']""")
+    return bool(pattern.search(script_text))
+
+
 def runs_with_mismatch_on(script_path: Path) -> bool:
     """Does this script's ngspice run have ``sw_stat_mismatch=1`` in force?"""
     text = script_path.read_text(encoding="utf-8")
     if _CLI_OVERRIDE.search(shell_code(text)):
         return True
-    return any(_DECK_DECL.search(d.read_text(encoding="utf-8")) for d in decks_referenced(script_path, text))
+    for deck in decks_referenced(script_path, text):
+        deck_text = deck.read_text(encoding="utf-8")
+        if _DECK_DECL.search(deck_text):
+            return True
+        handle = _DECK_HANDLE.search(deck_text)
+        if handle and _handle_set_to_one(handle.group(1), text):
+            return True
+    return False
 
 
 def testbench_scripts() -> list[Path]:
@@ -316,6 +337,22 @@ class TestDetection(unittest.TestCase):
     def test_deck_declaration_detected(self) -> None:
         path = self._script('DECK="${HERE}/tb_x.sp"\n', deck=".param sw_stat_global=0\n.param sw_stat_mismatch=1\n")
         self.assertTrue(runs_with_mismatch_on(path))
+
+    def test_deck_handle_set_to_one_detected(self) -> None:
+        """#602's indirection: a deck parameter handle, set to 1 on the CLI."""
+        path = self._script(
+            'DECK="${HERE}/tb_x.sp"\nsimenv_run_deck "$D" "mc_mismatch=1" "rndseed=1"\n',
+            deck=".param sw_stat_mismatch='mc_mismatch'\n",
+        )
+        self.assertTrue(runs_with_mismatch_on(path))
+
+    def test_deck_handle_never_set_to_one_is_not_flagged(self) -> None:
+        """The handle exists but every call in this script leaves it at 0."""
+        path = self._script(
+            'DECK="${HERE}/tb_x.sp"\nsimenv_run_deck "$D" "mc_mismatch=0" "rndseed=1"\n',
+            deck=".param sw_stat_mismatch='mc_mismatch'\n",
+        )
+        self.assertFalse(runs_with_mismatch_on(path))
 
     def test_commented_deck_mention_is_not_a_declaration(self) -> None:
         path = self._script('DECK="${HERE}/tb_x.sp"\n', deck="* .param sw_stat_mismatch=1 would turn it on\n")
