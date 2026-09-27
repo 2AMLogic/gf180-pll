@@ -143,6 +143,7 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 python3 - "${REPO_ROOT}" "${GRADED[@]}" <<'PY'
+import json
 import os
 import re
 import subprocess
@@ -300,6 +301,56 @@ def section5_source_cells(text):
     return cells
 
 
+def _useful_line(text):
+    """The first line of `text` that is not blank and not bare JSON
+    punctuation (`{`, `}`, `},`, `[`, ...). A pretty-printed JSON error body
+    splits its opening brace onto its own line; that line alone never tells
+    a reader anything."""
+    for line in (text or "").splitlines():
+        stripped = line.strip()
+        if stripped and stripped.strip("{}[],"):
+            return stripped
+    return None
+
+
+def _json_message(text):
+    """The `message` field of `text`, if `text` (stripped) parses whole as a
+    JSON object with a non-empty string `message` -- the shape `gh api`
+    writes to stdout on an HTTP-level failure, e.g.
+    `{"message": "API rate limit exceeded", ...}`."""
+    stripped = (text or "").strip()
+    if not stripped:
+        return None
+    try:
+        body = json.loads(stripped)
+    except ValueError:
+        return None
+    message = body.get("message") if isinstance(body, dict) else None
+    return message if isinstance(message, str) and message else None
+
+
+def diagnostic(stdout, stderr, returncode):
+    """A human-readable reason `gh` could not answer.
+
+    Real `gh` splits an HTTP-level failure (rate limit, 401, 403, ...) across
+    both streams: the pretty-printed JSON error body goes to stdout, and the
+    one-line human message goes to stderr. Concatenating the streams and
+    taking the first line is structurally guaranteed to return stdout's
+    opening `{` whenever that shape occurs -- which is every HTTP-level
+    failure, the common case this function exists to describe. So: prefer
+    stderr's own message; only fall back to stdout (skipping a lone brace,
+    then trying to parse a JSON body's `message` field) when stderr has
+    nothing usable -- the `gh` absent / non-HTTP failure shape.
+    """
+    return (
+        _useful_line(stderr)
+        or _json_message(stdout)
+        or _json_message(stderr)
+        or _useful_line(stdout)
+        or "gh exited %d with no output" % returncode
+    )
+
+
 class Forge:
     """Issue state lookups, memoised, with one honest failure mode."""
 
@@ -331,8 +382,7 @@ class Forge:
         if "Not Found" in combined or "HTTP 404" in combined:
             self.cache[number] = "missing"
             return "missing"
-        self.unreachable = combined.strip().splitlines()[0] if combined.strip() else \
-            "gh exited %d with no output" % result.returncode
+        self.unreachable = diagnostic(result.stdout, result.stderr, result.returncode)
         return None
 
 
