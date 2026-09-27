@@ -430,7 +430,7 @@ and is not a spec change:
   band 0's own-corner closure at N = 100
   (`sim/vco-tuning-range/records/20260923-084925-1655e11.md`, #482).
 - **The random period-jitter bound** (`spec/pll.md`'s period-jitter row,
-  [DR-032](decision-records/DR-032-random-period-jitter-bounded-over-the-grid.md)) —
+  [DR-032](../spec/decision-records/DR-032-random-period-jitter-bounded-over-the-grid.md)) —
   new since DR-032 superseded DR-020 Decision 1 and DR-023 Decision 2's "not
   obtainable on this toolchain" finding.
 
