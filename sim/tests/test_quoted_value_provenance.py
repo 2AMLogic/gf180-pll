@@ -202,10 +202,14 @@ c,typical,27,-65.0
 
 #: Ratified lines, DELIBERATELY NOT THE REPOSITORY'S OWN. Budget 2 is 0.5 V
 #: here against the real 0.6, the control window is 1.0-3.0 V (2.0 V wide)
-#: against the real 0.9-2.7 (1.8 V), and the spur line is -60 dBc against the
-#: real -55. A check that had the repository's numbers written into it would
-#: grade 1.00/0.6 = 1.67 and fail every test below -- which is the point: the
-#: constants have to be READ out of these documents.
+#: against the real 0.9-2.7 (1.8 V), the spur line is -60 dBc against the real
+#: -55, and the period-jitter random-bound allocation is 0.50 % against the
+#: real 0.50 % (the one constant this fixture shares with the repository,
+#: because the figure it grades -- the ratio of two 0.338 %-scale numbers --
+#: does not need a decoy to catch an operand-order bug the way `1.00/0.6` does
+#: for Budget 2). A check that had the repository's numbers written into it
+#: would grade 1.00/0.6 = 1.67 and fail every test below -- which is the
+#: point: the constants have to be READ out of these documents.
 #:
 #: The summary table carries TWO rows linking to `#reference-spur`: the target
 #: row, whose next cell is nothing but the line, and a "Verification owed" row
@@ -241,6 +245,15 @@ A DC rail excursion must consume ≤ 0.5 V of the Vctrl window.
 ## Reference spur
 
 **Target: ≤ −60 dBc**, at `f_ref` offset from the carrier, in lock.
+
+## Period jitter
+
+At 20 mV pp that is **0.50 % RMS** — half the budget, leaving the rest to the
+random/thermal component.
+
+| Component | Status | Number |
+|---|---|---|
+| Supply-ripple sensitivity at the normative 20 mV pp condition | derived | 0.50 % RMS |
 
 ## Verification owed
 
@@ -1926,27 +1939,52 @@ class TestMethodDirectoryEvidence(_TreeTest):
          / "transient_sf_-40c_2.97v.json").write_text("[1, 2, 3]")
         self.assertFails("is a JSON list, not an object")
 
-    def test_the_derived_figure_table_may_not_read_a_method_directory(self):
-        """Rules 7 and 8 refuse the form rather than half-supporting it.
+    def test_the_derived_figure_table_may_now_read_a_method_directory(self):
+        """Rule 7 grew this path for the real tree's `1.48x` on 2026-09-27.
 
-        The real tree's `1.48x` -- the 0.50 % allocation over the 0.338 % bound
-        -- is a rule-7-shaped figure over method-directory evidence, and it is
-        declared in the ungraded-figure table for exactly this reason. A path
-        nothing exercises is not a path to ship; when that figure is graded, the
-        path arrives with its own tests.
+        Until then it was declared in the ungraded-figure table for exactly
+        this reason -- "only the first table reads a method directory" -- and
+        the declaration named the path itself as what a graded figure would
+        need to arrive with. This is that arrival: a rule-7-shaped figure
+        (`5.9154x`, a decoy constant over the fixture's `0.3381` max) reduced
+        from the same method-directory evidence the first table already reads.
         """
         derived = list(DEFAULT_DERIVED) + [(
-            "Period jitter, random", "`0.338 %`", f"sim/{self.METHOD}",
-            self.RESULTS, "max(bound.total_pct) / dr003-vctrl-window-width-v",
-            "2.0 V", "1",
+            "Period jitter, random", "`5.9154x`", f"sim/{self.METHOD}",
+            self.RESULTS,
+            "max(bound.total_pct) \\ dr003-vctrl-window-width-v", "2.0 V", "1",
         )]
         self.tree.write(proposal(
             spec_rows=SPEC_ROWS[:2]
-            + (("Period jitter, random", self.MEASURED, "**MET**",
-                f"`sim/{self.METHOD}/results/transient_*.json`"),)
+            + (("Period jitter, random", self.MEASURED + "; 5.9154x the window",
+                "**MET**", f"`sim/{self.METHOD}/results/transient_*.json`"),)
             + SPEC_ROWS[2:],
             provenance=self.entries(),
             derived=derived,
+        ))
+        result = self.assertPasses()
+        self.assertIn("dr003-vctrl-window-width-v = 2", result.stdout)
+
+    def test_the_relative_figure_table_still_may_not_read_a_method_directory(self):
+        """Rule 8 states no figure of this shape today, so it stays refused.
+
+        Both operands below are reductions `entries()` already grades in the
+        first table for this row -- rule 8b is satisfied -- so the failure
+        below is the method-directory refusal specifically, not a symptom of
+        an ungraded operand.
+        """
+        relative = [(
+            "Period jitter, random", "`10 %`", f"sim/{self.METHOD}",
+            self.RESULTS,
+            "max(bound.total_pct) shortfall-from min(confidence)", "100",
+        )]
+        self.tree.write(proposal(
+            spec_rows=SPEC_ROWS[:2]
+            + (("Period jitter, random", self.MEASURED + "; 10 %", "**MET**",
+                f"`sim/{self.METHOD}/results/transient_*.json`"),)
+            + SPEC_ROWS[2:],
+            provenance=self.entries(),
+            relative=relative,
         ))
         self.assertFails("Only the first section 5.1 table reads a method "
                          "directory")
@@ -2273,6 +2311,149 @@ class TestDistanceFromARatifiedLine(_TreeTest):
         self._spur(spec_rows=rows, derived=entries)
         self.assertFails("the measured operand is a count",
                          "a count minus one is not a distance")
+
+
+#: The section 5 row the inverse-operator tests grade against. The fixture's
+#: measured span is `min(span_v)` = 0.40 V (not the `max(span_v)` = 1.00 V the
+#: `/` tests above reduce), so a check that silently kept `/`'s operand order
+#: for `\` too would produce 0.40 / 0.50 = 0.80x, not the 1.25x this row states
+#: -- a different decimal, not a near miss.
+INVERSE_MEASURED = (
+    "Worst 0.40 V of margin over the line; the ratified allocation is 1.25x it"
+)
+
+INVERSE_ROW = (
+    "Loop bandwidth", INVERSE_MEASURED, "**MET**",
+    f"`sim/{CAMPAIGN}/records/{RECORD}.md`",
+)
+
+INVERSE_DERIVED = [
+    ("Loop bandwidth", "`1.25x`", RECORD, "budget.csv",
+     "min(span_v) \\ period-jitter-random-allocation-pct", "0.50 %", "1"),
+]
+
+
+class TestInverseOfARatifiedLine(_TreeTest):
+    """Rule 7's third operator: a ratified LINE over a measurement.
+
+    The real proposal's `1.48x` is DR-032's margin between the random/noise
+    period-jitter bound (`0.338 %`) and the 0.50 % `spec/pll.md` allocates to
+    it -- the mirror image of the existing `/`: "how many times a measurement
+    the allowance is", not "how many times the allowance a measurement is".
+    Until 2026-09-27 it sat in the ungraded list for a reason that named the
+    operand order rather than a missing ingredient; these tests assert the
+    reversed arithmetic is checked against the DOCUMENTS, exactly as `/`
+    and `-` are, and that the operator is not interchangeable with either.
+    """
+
+    def _inverse(self, spec_rows=None, derived=None, **kwargs):
+        rows = tuple(SPEC_ROWS) + (INVERSE_ROW,) if spec_rows is None else spec_rows
+        entries = (list(DEFAULT_DERIVED) + INVERSE_DERIVED
+                   if derived is None else derived)
+        self.tree.write(proposal(spec_rows=rows, derived=entries, **kwargs))
+
+    def test_an_inverse_figure_passes_and_is_reported(self):
+        self._inverse()
+        result = self.assertPasses()
+        self.assertIn("3 further figure(s) derived against 3 ratified",
+                      result.stdout)
+        self.assertIn("period-jitter-random-allocation-pct = 0.5", result.stdout)
+        self.assertIn("all 4 section 5 rows accounted for", result.stdout)
+
+    def test_dividing_the_other_way_gives_a_different_number(self):
+        """The operator is load-bearing: 0.8 is not 1.25."""
+        entries = list(DEFAULT_DERIVED) + [
+            ("Loop bandwidth", "`1.25x`", RECORD, "budget.csv",
+             "min(span_v) / period-jitter-random-allocation-pct", "0.50 %", "1"),
+        ]
+        self._inverse(derived=entries)
+        self.assertFails("over the ratified 0.5 that is 0.8",
+                         "does not round to it")
+
+    def test_a_drifted_inverse_figure_fails(self):
+        rows = tuple(SPEC_ROWS) + (
+            ("Loop bandwidth", INVERSE_MEASURED.replace("1.25x", "1.30x"),
+             "**MET**", f"`sim/{CAMPAIGN}/records/{RECORD}.md`"),
+        )
+        entries = list(DEFAULT_DERIVED) + [
+            ("Loop bandwidth", "`1.30x`", RECORD, "budget.csv",
+             "min(span_v) \\ period-jitter-random-allocation-pct", "0.50 %", "1"),
+        ]
+        self._inverse(spec_rows=rows, derived=entries)
+        self.assertFails("the ratified 0.5 is 1.25 times it",
+                         "does not round to it")
+
+    def test_the_constant_is_read_from_the_documents_not_the_check(self):
+        """Re-ratify the allocation and the figure must fail in the same commit.
+
+        The fixture's allocation moves 0.50 -> 1.00 % in both of its
+        statements, so the documents stay self-consistent and only the
+        ARITHMETIC changes: 1.00 / 0.40 is 2.50x, not the 1.25x section 5
+        states.
+        """
+        self._inverse()
+        self.tree.write_spec(SPEC_TEXT.replace("0.50 % RMS", "1.00 % RMS"))
+        self.assertFails("the Constant column states 0.50 %",
+                         "period-jitter-random-allocation-pct` reads 1")
+
+    def test_a_line_stated_once_is_not_corroborated(self):
+        self._inverse()
+        spec = SPEC_TEXT.replace(
+            "| Supply-ripple sensitivity at the normative 20 mV pp condition "
+            "| derived | 0.50 % RMS |",
+            "| Supply-ripple sensitivity at the normative 20 mV pp condition "
+            "| derived | not yet re-stated |",
+        )
+        self.tree.write_spec(spec)
+        self.assertFails("found 1 statement(s) of this ratified line",
+                         "at least 2 independent ones are required")
+
+    def test_two_statements_that_disagree_fail(self):
+        self._inverse()
+        spec = SPEC_TEXT.replace(
+            "| Supply-ripple sensitivity at the normative 20 mV pp condition "
+            "| derived | 0.50 % RMS |",
+            "| Supply-ripple sensitivity at the normative 20 mV pp condition "
+            "| derived | 0.60 % RMS |",
+        )
+        self.tree.write_spec(spec)
+        self.assertFails("stated inconsistently", "is a spec question")
+
+    def test_a_count_numerator_is_refused(self):
+        """A count cannot be `\\`'s divisor either -- the guard is shared."""
+        rows = tuple(SPEC_ROWS) + (
+            ("Loop bandwidth", INVERSE_MEASURED + "; 2 cells",
+             "**MET**", f"`sim/{CAMPAIGN}/records/{RECORD}.md`"),
+        )
+        entries = list(DEFAULT_DERIVED) + [
+            ("Loop bandwidth", "`2`", RECORD, "budget.csv",
+             "count(rows) \\ period-jitter-random-allocation-pct", "0.50 %", "1"),
+        ]
+        self._inverse(spec_rows=rows, derived=entries)
+        self.assertFails("the measured operand is a count",
+                         "not a multiple")
+
+    def test_a_zero_measured_operand_is_refused(self):
+        """`\\`'s own guard: it is the DIVISOR here, not the constant.
+
+        `fits.csv`'s `zero_mv` column is genuinely zero at every row -- the
+        measured-zero divisor the rule-8 tests use for the same reason.
+        """
+        rows = tuple(SPEC_ROWS) + (
+            ("Loop bandwidth", INVERSE_MEASURED, "**MET**",
+             f"`sim/{CAMPAIGN}/records/{RECORD}.md`"),
+        )
+        entries = list(DEFAULT_DERIVED) + [
+            ("Loop bandwidth", "`1.25x`", RECORD, "fits.csv",
+             "max(zero_mv) \\ period-jitter-random-allocation-pct",
+             "0.50 %", "1"),
+        ]
+        self._inverse(spec_rows=rows, derived=entries)
+        self.assertFails(
+            "the measured operand reduces to zero",
+            "cannot be the divisor of `period-jitter-random-allocation-pct`'s "
+            "multiple of it",
+        )
 
 
 class TestRelativeToAnotherMeasurement(_TreeTest):

@@ -801,11 +801,16 @@ upper bound over a grid means), the `45 of the mandated PVT points` the bound is
 claimed at (`count(rows)`, tied by the rule above to 45 simulations that ran),
 and the `95 %` one-sided confidence (`min(confidence)` — a *minimum*, so a point
 that had been reduced at a weaker limit would lower it and fail, where a maximum
-would hide it behind the other 44). What the row's remaining two headline
-figures need is stated in the ungraded-figure table rather than left to a
-reader: `1.48×` is a ratified line over a measurement, the one direction the
-third table's `/` does not carry, and `0.910 ± 0.042` is a point estimate with
-an error bar from a one-point stage.
+would hide it behind the other 44). A fourth figure of the same row is graded
+against a ratified line rather than against the grid directly: `1.48×`, the
+margin DR-032 states between that `0.338 %` bound and the 0.50 % `spec/pll.md`'s
+supply-ripple derivation allocates to the random component — the same
+measurement, re-derived from the same evidence, against a constant read out of
+the spec by its own resolver (§5.1's third table, which grows a `\` operator and
+a method-directory evidence form for exactly this entry, below). What the row's
+one remaining headline figure needs is stated in the ungraded-figure table
+rather than left to a reader: `0.910 ± 0.042` is a point estimate with an error
+bar from a one-point stage.
 
 Ten figures across those two formerly-excluded rows are now graded: the closed-
 loop band-edge row's `45-point PVT grid`, `90 runs` and its headline
@@ -1068,6 +1073,26 @@ graded and the other end never looked at. Adding the subtraction is what let §5
 write the two ends as two figures, which is how a refusal of a *shape* is meant
 to end — in a rewritten claim, not a permanent exemption.
 
+**A third shape said "against the line" too, and it was declined for a reason
+that named the shape's *operand order* rather than a missing ingredient.**
+`1.48×` — DR-032's margin between the random/noise-driven period-jitter row's
+`0.338 %` bound and the 0.50 % `spec/pll.md`'s supply-ripple derivation
+allocates to it — is *also* a measurement against a ratified line, but the
+other way round from a budget row: **how many times a measurement the
+allowance is**, not how many times the allowance a measurement is. The
+existing `/` computes `reduction / constant`; this needed `constant /
+reduction`, its own operator (`\`, the mirror image of `/`, since the shape
+is `/`'s own reversed rather than a third kind of figure the way the
+subtraction was) and its own constant, `period-jitter-random-allocation-pct`,
+read out of the two independent statements of the 0.50 % line already in
+`spec/pll.md` — the ripple derivation's own prose and the evidenced-split
+table beside it. It is also this table's first entry to reduce a **method
+directory** rather than a record's committed CSV: the measurement is the same
+`max(bound.total_pct)` graded in the first table's method-directory form,
+over `sim/period-jitter/random-bound`'s 45 per-point JSON documents, so the
+generalization that table's rule 1 form needed arrived here rather than being
+duplicated.
+
 So a third table grades them, under the same rules as the first — the record
 must resolve and be cited by the §5 row, the evidence must be committed, and
 the figure must appear verbatim in the row — plus three the arithmetic needs:
@@ -1100,12 +1125,16 @@ the figure must appear verbatim in the row — plus three the arithmetic needs:
   by eye, `0.846 / budget2-vctrl-consumption-v` is not — so it is compared
   against the resolved value and is not an input to the derivation.
 
-One more guard belongs to the subtraction specifically. **A constant that reads
-as zero is a failed read, not a datum**, and is rejected for both operators even
-though subtracting zero is harmless arithmetic. Nothing normative in this
-specification is a zero, so a resolver returning one means its regex has stopped
-matching the document — and a silently-zero line would grade `−54.51 − 0` and
-report 54.51 dB of overshoot as though it were evidence.
+One more guard belongs to the subtraction and the reversed ratio specifically.
+**A constant that reads as zero is a failed read, not a datum**, and is
+rejected for all three operators even though subtracting zero is harmless
+arithmetic. Nothing normative in this specification is a zero, so a resolver
+returning one means its regex has stopped matching the document — and a
+silently-zero line would grade `−54.51 − 0` and report 54.51 dB of overshoot as
+though it were evidence. `\` carries a guard the other two do not need: a
+**measured** operand that reads as zero is refused too, because it is the
+divisor there rather than the constant, and a bound that measured exactly zero
+would otherwise report an infinite margin as though it were a number.
 
 | §5 row | Quoted value | Record(s) | Evidence file | Derivation | Constant | Scale |
 |---|---|---|---|---|---|---|
@@ -1113,6 +1142,7 @@ report 54.51 dB of overshoot as though it were evidence.
 | Supply sensitivity — DC / closed-loop, full grid | `47 %` | `20260925-044237-4ff4f65` | `criterion1b_vctrl_budget.csv` | `max(span_full_v) / dr003-vctrl-window-width-v` | `1.8 V` | `100` |
 | Reference spur | `0.5 dB` | `20260816-132150-5f405e7` | `spur_by_corner.csv` | `max(spur_dbc_at_200mhz) - reference-spur-line-dbc` | `−55 dBc` | `1` |
 | Reference spur | `0.1 dB` | `20260816-132150-5f405e7` | `spur_by_corner.csv` | `max(spur_dbc_at_200mhz where process == ff and temp_c == -40) - reference-spur-line-dbc` | `−55 dBc` | `1` |
+| Period jitter, closed-loop, random/noise-driven | `1.48×` | `sim/period-jitter/random-bound` | `results/transient_*.json against logs/grid_*.txt` | `max(bound.total_pct) \ period-jitter-random-allocation-pct` | `0.50 %` | `1` |
 
 Both `VCTRL` numerators are the same `0.846 V` graded in the first table, and
 both spur minuends are the same `−54.5` and `−54.9` graded there, each
@@ -1120,7 +1150,11 @@ re-derived here rather than quoted from there, so no figure can drift from the
 reduction it is made of. The two spur entries are also **the same two reductions
 in a different unit** — that is the whole content of the claim "0.5 dB over the
 line," and writing it that way is what makes the −55 dBc line an ingredient CI
-reads rather than a number a reader is asked to subtract in their head.
+reads rather than a number a reader is asked to subtract in their head. The
+period-jitter entry's own reduction, `max(bound.total_pct)`, is the same
+method-directory reduction the first table's `0.338 %` is graded from — the
+`\` entry does not introduce a second reading of the bound, it re-derives the
+one reading against a second, ratified, operand.
 
 And one guard arrived with this table that the first one needed all along: **a
 range is not a figure.** The figure parser reads the number at the front of the
@@ -1246,15 +1280,22 @@ each an unfinished derivation. That is the whole disposition of this table: it
 is a queue of work owed, and only an entry naming something the *evidence* does
 not contain may sit in it indefinitely.
 
-What remains is two figures in two rows, and neither is about the grammar.
-Both were added when grading their own rows put a disclosure obligation on
-them:
+**A sixth figure came off this list on 2026-09-27, and its reason had the same
+shape as the range and the missing aggregate: the obstacle was the operand
+order, not the evidence.** `1.48×` was declined as "a ratified line over a
+measurement, the one direction the third table's `/` does not carry" — true
+about that table's one existing operator, and wrong to stop there, in the same
+way the range refusal and the missing `maxmag` aggregate were: the fix was a
+second operator, not a permanent exemption. It is graded in the third table
+now, as `max(bound.total_pct) \ period-jitter-random-allocation-pct`.
+
+What remains is three figures in three rows, and none of them is about the
+grammar:
 
 | §5 row | Figure | Why it is not re-derived |
 |---|---|---|
 | Kvco | `115.8 MHz/V` | Two reasons, either sufficient. Selecting the point evaluates [the band-selection rule](../../spec/pll.md#band-selection-rule) (lowest band code that reaches the target) at every corner — a derivation, and one over a rule whose control window `spec/pll.md` does not presently name, an ambiguity tracked at #542 under which the two candidate windows select different bands. And the point itself is at Vctrl = 1.54 V, which the 7-point control sweep does not sample (its neighbours are 114.93 MHz/V at 1.50 V and 120.85 at 1.80 V), so no reduction of this CSV returns it. The adversarial `154.3 MHz/V` figure the rule exists to exclude *is* graded above, which is the half that bounds the risk |
 | Lock time, closed-loop cold-start / worst-case re-lock | `{4,16,64}` | A stimulus *set*, not a number: the grammar above re-derives a figure, and this one is the three divide ratios the grid was run at. Its cardinality is pinned from both sides by figures that are graded — the 270 rows, the 45 corners and the two conditions the record's own table carries, which multiply to 45 × 3 × 2 — while the membership is graded against the record's declared sweep axis by `check-pvt-coverage-claims.sh`, as the `f_ref` span is for the Reference input row |
-| Period jitter, closed-loop, random/noise-driven | `1.48×` | **A ratified line over a measurement — the one shape the third table does not carry.** Its two ingredients are both written down, which is the test that table applies: the measurement is `max(bound.total_pct)`, graded above as `0.338 %`, and the line is the 0.50 % `spec/pll.md`'s supply-ripple derivation allocates to this component. But the operator is `constant / reduction`, and the third table's `/` is `reduction / constant` — "how many times the allowance a measurement is", not "how many times a measurement the allowance is". Grading it therefore needs the inverse operator, its own constant resolver reading the allocation out of `spec/pll.md` under rule 7b's two-independent-statements rule, and its own tests, exactly as the `-` operator was owed those before `0.5 dB` could be graded. Declared here rather than graded in the wrong direction: `0.338 / 0.50` is `0.68`, a true number that is not the claim |
 | Period jitter, closed-loop, random/noise-driven | `0.910 ± 0.042` | A ratio **and its standard error**, from the `validate` stage's single reference point rather than from the 45-point set the entries above reduce. Two things stop it: a figure with a `±` is two numbers (the point estimate and an interval half-width), so grading the number at the front would state the estimate and never look at the error bar — the same defect the two-ended-range guard exists to catch — and `results/validate_*.json` is a one-point set, which the method-directory form refuses because a per-point glob over one point proves nothing about a grid. It is regenerated into `results/SUMMARY.md` from that committed JSON by the directory's own `summarize.py`, and DR-032 states what it is: the bias generator's small-signal model against the transient, at `typical_27c_3.30v` |
 
 Nothing mechanically enumerates "every headline figure" out of §5's prose
