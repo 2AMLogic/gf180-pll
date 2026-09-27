@@ -23,6 +23,23 @@
   mismatch during the ~1 ns anti-backlash window contributes under 1 fC" —
   which is true of the *systematic* term and not of the statistical 3σ tail
   (§Consequences). No `superseded by` pointer is owed and none is added.
+- **Partially superseded by DR-034** (issue #610, added 2026-09-27 — a forward
+  pointer only; not one figure below is edited). §Decision 1's **±20 %** budget
+  and the ratified ≤ −55 dBc line still stand, and DR-034 re-derives them
+  rather than replacing them. What DR-034 supersedes is this record's *pricing*
+  of the stack: #597 widened `sim/mc-cp-mismatch`'s corner axis from the
+  3 points §Context cites to 21, and term 3's worst corner rose from the
+  **4.25246 fC** in §Context's Input table to **5.56626 fC**. Everything
+  downstream of that row therefore moves — the 7.933 fC two-term sum, the
+  6.073 fC leftover, the **32.6 %** ceiling, the dBc column of §Context's
+  term-1 table, §Decision 2's "≥ 1.5 dB inside −55 dBc" *selection rule* (which
+  DR-034 shows is unsatisfiable on the stacked reading at the wider axis, and
+  moves onto the corner-consistent one, where it still returns ±20 %), and
+  §Decision 5's 6.07 fC allocation. **Read §Context and §Decision 2/5's numbers
+  as the 3-point axis' arithmetic**, which is what they were and still
+  correctly are; DR-034 §Context shows the substitution term by term. This
+  record's figures are not restated there and are not edited here — the same
+  append-only discipline `sim/` records keep.
 
 ## Context
 

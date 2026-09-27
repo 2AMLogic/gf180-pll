@@ -237,6 +237,9 @@ Term 1 and term 3 are re-derived from the same committed 300 samples
 23.492 %% (10.55 fC-ish, folded), which was `mean(|x|) + 3*sd(|x|)` on samples
 folded to their absolute value first.
 
+**Term 3, the statistical residual net charge, is priced by DR-018 at
+7.5548 fC.**
+
 | Charge accounting at 200 MHz | Total ΔQ | Derived spur |
 |---|---|---|
 | Corner-combined statistical residual, term 1 still excluded | 10.55 fC | −60.0 dBc |
@@ -267,7 +270,7 @@ Both are measured, not assumed:
 | Reset overlap `T_ov`, min UP/DN pulse at zero phase error, 3 corners | 1.000 – 2.000 ns (worst `cornerC`/125 °C/2.97 V) | `%(tov_csv)s` |
 | `Icp`, largest trim code (11, four unit legs), 3 corners | 5.00 – 6.00 µA | `sim/cp-compliance/records/%(icp_record)s.md` |
 | Systematic per-event charge asymmetry \\|q_up + q_dn\\| | 3.00 fC worst corner | `sim/cp-compliance/…-000000-bbb2222` via DR-006 §8 |
-| Statistical residual net charge (term 3), corner-combined \\|mean\\|+3σ | 7.5548 fC | a test source |
+| Statistical residual net charge (term 3), corner-combined \\|mean\\|+3σ | 7.5548 fC | `sim/mc-cp-mismatch/…-000000-abc1234` |
 
 ## Decision
 
@@ -335,6 +338,55 @@ class MismatchChargeDerivationTest(unittest.TestCase):
         result = self.tree.run()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("does not exist", result.stderr)
+
+    # ------------------------------------------------------------ rule 3 --
+    # Which decision record prices term 3 is read out of spec/pll.md, not
+    # assumed to be DR-018 (issue #610): DR-018 priced it from a 3-point
+    # corner axis and DR-034 re-prices it from the 21-point one, both truly
+    # against the evidence each cites.
+
+    def test_no_pricing_record_named_fails(self):
+        self.tree.write(
+            SPEC_DOC, SPEC_TEXT.replace("priced by DR-018 at\n7.5548 fC", "priced")
+        )
+        result = self.tree.run()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("prices term 3", result.stderr)
+
+    def test_pricing_record_that_does_not_exist_fails(self):
+        self.tree.write(SPEC_DOC, SPEC_TEXT.replace("DR-018 at", "DR-999 at"))
+        result = self.tree.run()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("resolves to 0 file(s)", result.stderr)
+
+    def test_spec_stated_term3_figure_drift_fails(self):
+        # spec/pll.md states a term-3 figure its own cited samples do not
+        # reduce to -- the reduction is 7.5548 fC.
+        self.tree.write(SPEC_DOC, SPEC_TEXT.replace("by DR-018 at\n7.5548 fC",
+                                                   "by DR-018 at\n9.0 fC"))
+        result = self.tree.run()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("states term 3 is priced at", result.stderr)
+
+    def test_pricing_record_citing_another_campaign_fails(self):
+        # The right figure against the wrong run is an agreement by
+        # coincidence, not a graded one.
+        self.tree.write(
+            DR018_DOC,
+            DR018_TEXT.replace("…-000000-abc1234", "…-000000-zzz9999"),
+        )
+        result = self.tree.run()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("cites no record id", result.stderr)
+
+    def test_pricing_record_citing_a_different_record_id_fails(self):
+        self.tree.write(
+            DR018_DOC,
+            DR018_TEXT.replace("…-000000-abc1234", "…-111111-abc1234"),
+        )
+        result = self.tree.run()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("one figure cannot be graded against two", result.stderr)
 
     def test_pre_corner_grid_csv_schema_fails(self):
         # Records before #146 have no `corner` column -- a schema this check
