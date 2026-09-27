@@ -159,9 +159,11 @@
 #                               is a single file wearing a glob's clothes whose
 #                               every aggregate returns that point's own number
 #                               while the entry's shape says "over the grid".
-#                               That refusal is what keeps the one-point
-#                               `validate` stage's `0.910 +/- 0.042` in the
-#                               ungraded-figure table.
+#                               A single-point figure is owed the fourth form
+#                               below instead -- which is what that refusal's
+#                               own comment said it was owed, and it was owed
+#                               to the one-point `validate` stage's
+#                               `0.910 +/- 0.042`.
 #
 #                               A LIST IS NOT A CELL and is skipped rather than
 #                               summarised, so a reduction naming one fails with
@@ -178,6 +180,62 @@
 #                               (rule 8's "adding a plain ratio for symmetry
 #                               would add an untested, unused path") is that a
 #                               path nothing exercises is not a path to ship.
+#
+#      <results path>.json     A NAMED SINGLE POINT of a method directory: the
+#      against <log path>      same Record(s) cell, and an evidence spec of the
+#                              same shape as the third form with NO `*` in
+#                              either path. It is the third form's one-point
+#                              refusal answered rather than repeated.
+#
+#                              That refusal is correct about a GLOB: a glob
+#                              promises a set, so one member is a single file
+#                              wearing a glob's clothes and every aggregate
+#                              over it returns that point's own number while
+#                              the entry's shape says "over the grid". But the
+#                              refusal's own comment said what was owed -- "a
+#                              single-point figure is owed a named single-file
+#                              form, with its own paragraph and its own tests"
+#                              -- and until 2026-09-27 the ungraded-figure
+#                              table carried `0.910 +/- 0.042` citing that
+#                              refusal as though it were a property of the
+#                              evidence. It is not: DR-032's `validate` stage
+#                              commits results/validate_typical_27c_3.30v.json
+#                              beside the log that produced it, and both
+#                              numbers of the figure are in it. A form whose
+#                              name states "one point" claims nothing about a
+#                              grid and so needs no set to prove.
+#
+#                              Three rules travel with it, two of them the
+#                              third form's in this dialect and one new.
+#                              (i) EACH FILE MUST DECLARE THE POINT ITS NAME
+#                              DOES: the document's `point` field must be the
+#                              tail of BOTH basenames' stems -- the results
+#                              file's and the log's. That is the third form's
+#                              filename-agreement rule plus its named-not-
+#                              guessed rule folded together, since with no glob
+#                              there is no captured id to compare and the
+#                              document's own claim about itself is what pairs
+#                              the two files. A stage prefix may differ between
+#                              them (`transient_` is reduced from `grid_`), so
+#                              the stems are not required to be equal -- only
+#                              to end in the same declared point.
+#                              (ii) NO AGGREGATE, AND SO NO COUNT. The
+#                              reduction must be a bare dotted column name.
+#                              `max()` over one row returns that row's number
+#                              under a grid-shaped verb, which is precisely
+#                              what the glob refusal objects to; removing the
+#                              verb is what makes this form honest rather than
+#                              a way around that refusal. `count(rows)` here is
+#                              1 for every document ever written, so it is a
+#                              figure about the form and not about the design.
+#                              (iii) THE records/ REFUSAL AND RULE 2's PATH
+#                              DIALECT APPLY UNCHANGED, the latter now naming
+#                              the single results path the section 5 row must
+#                              cite.
+#
+#                              Rules 7 and 8 refuse this form too, for the
+#                              third form's reason: no figure of that shape is
+#                              graded today.
 #
 #    A reduction over evidence that is not committed is not reproducible by a
 #    reader.
@@ -1011,9 +1069,18 @@ class Evidence:
     would silently read a subset of the evidence.
     """
 
-    def __init__(self, rows, source):
+    def __init__(self, rows, source, single_point=False):
         self.rows = rows
         self.source = source
+        #: True only for rule 1's fourth evidence form, a NAMED single point.
+        #: The caller reads it to refuse an aggregate: `max()` over one row
+        #: returns that row's number under a grid-shaped verb, which is what
+        #: the glob form's one-point refusal objects to, and a form that
+        #: answered that refusal by allowing the same sentence would be the
+        #: refusal defeated rather than answered. It is a property of the
+        #: evidence rather than of the reduction, so it travels with the
+        #: evidence.
+        self.single_point = single_point
         # csv.DictReader files a row's surplus fields under the key None; a
         # column nothing can name is not a column to offer in a diagnosis.
         columns = [c for c in (rows[0] if rows else {}) if isinstance(c, str)]
@@ -1607,6 +1674,53 @@ def apply_group_sequence(
     return value, False
 
 
+#: A bare dotted column name: the whole reduction grammar rule 1's fourth
+#: evidence form admits. `bias_lti_vs_transient.ratio`, not `max(...)`.
+BARE_COLUMN = re.compile(r"^[A-Za-z_][\w.]*$")
+
+
+def read_single_cell(reduction, evidence, ctx):
+    """One cell of a NAMED single-point document. (value, False), or None.
+
+    NO AGGREGATE, AND SO NO COUNT -- the rule that makes rule 1's fourth
+    evidence form an answer to the third form's one-point refusal rather than a
+    way around it. That refusal's objection is not that one point is too little
+    evidence for any figure; it is that every aggregate over one row returns
+    that row's own number *under a grid-shaped verb*, so the sentence the entry
+    writes is broader than the evidence it reduces. Deleting the verb is what
+    removes the overclaim: `bias_lti_vs_transient.ratio` says "this number, in
+    this document" and cannot be read as anything else.
+
+    `count` is refused with the rest, and would be even if counts were
+    otherwise harmless here: `count(rows)` over a named single point is 1 for
+    every document that has ever been written, which is a figure about this
+    form and not about the design.
+    """
+    text = reduction.strip()
+    if not BARE_COLUMN.match(text):
+        fail(
+            "%s: `%s` names an aggregate over a single named point. Every "
+            "aggregate over one row returns that row's own number under a "
+            "grid-shaped verb -- which is what rule 1's third form refuses a "
+            "one-point glob for, and this form answers that refusal by "
+            "dropping the verb rather than by permitting the same sentence "
+            "over one file. Name the column itself." % (ctx, text)
+        )
+        return None
+    if not require_columns(
+        evidence, [text], ctx, "reduction `%s` names column" % reduction
+    ):
+        return None
+    value = as_float(evidence.rows[0].get(text))
+    if value is None:
+        fail(
+            "%s: `%s` is `%s` in %s, which is not a number."
+            % (ctx, text, evidence.rows[0].get(text), evidence.source)
+        )
+        return None
+    return value, False
+
+
 def apply_reduction(reduction, evidence, icp_rule, ctx):
     """Evaluate a reduction over `evidence`. (value, is_count), or None."""
     rows = evidence.rows
@@ -1800,11 +1914,28 @@ METHOD_EVIDENCE = re.compile(
     r"^([\w.\-/]*\*[\w.\-/]*\.json)\s+against\s+([\w.\-/]*\*[\w.\-/]*)$"
 )
 
+#: `<results path>.json against <log path>` -- the same spec with NO `*` in
+#: either path (rule 1, fourth evidence form). A glob promises a set and must
+#: deliver one; a name promises one point and says so, which is why this is a
+#: separate pattern rather than a relaxation of METHOD_EVIDENCE's arity.
+NAMED_POINT_EVIDENCE = re.compile(
+    r"^([\w.\-/]+\.json)\s+against\s+([\w.\-/]+)$"
+)
+
 #: How many method-directory point sets were read, and how many per-point JSON
 #: documents in total. Reported in the OK line for read_record_table's reason:
 #: a form whose whole job is to prove a set was complete must say how big the
 #: set it proved was.
 method_dir_stats = {"sets": 0, "points": 0}
+
+#: How many figures were graded from a named single point, and how many
+#: DISTINCT documents those figures came out of. Reported in the OK line for
+#: the opposite reason to method_dir_stats: a form that proves nothing about a
+#: set must say how many figures were graded without one, so that "graded" in
+#: this section is never read as "graded over the grid". Both numbers, because
+#: two figures out of one document (the real tree's ratio and its standard
+#: error) is a different claim from two figures out of two.
+named_point_stats = {"figures": 0, "paths": set()}
 
 
 def _glob_point_ids(directory, pattern, ctx, what):
@@ -1858,6 +1989,143 @@ def _flatten_json(obj, prefix, out):
             out[name] = str(value)
 
 
+def resolve_method_root(campaign, method, ctx):
+    """`sim/<campaign>/<method>` as an absolute path, or None having reported.
+
+    One function because BOTH method-directory forms need the same two gates,
+    and the second of them is a rule rather than a lookup: A METHOD DIRECTORY
+    THAT COMMITS A records/ IS REFUSED, because evidence reachable by record id
+    must be reduced that way or these forms become a route around rule 2's
+    citation requirement for every record on the tree. A second copy of that
+    gate beside the named-point reader would have been free to drift from it,
+    which is the same reason collect_evidence() is one dispatch rather than
+    three inlined ones.
+    """
+    method_root = os.path.join(repo_root, "sim", campaign, method)
+    if not os.path.isdir(method_root):
+        fail("%s: no method directory at sim/%s/%s" % (ctx, campaign, method))
+        return None
+    if os.path.isdir(os.path.join(method_root, "records")):
+        fail(
+            "%s: sim/%s/%s commits a records/ directory, so its evidence is "
+            "reachable by record id and must be reduced that way. This form "
+            "exists for evidence that is outside the record convention, not "
+            "as a route around rules 1 and 2's record citation."
+            % (ctx, campaign, method)
+        )
+        return None
+    return method_root
+
+
+def read_named_point_row(campaign, method, results_path, log_path, ctx):
+    """The one row of a method directory's NAMED single-point document.
+
+    Rule 1's fourth evidence form. The third form refuses a glob that matches
+    one point, and is right to: a glob promises a set, so one member is a
+    single file wearing a glob's clothes whose every aggregate returns that
+    point's own number under an entry whose shape says "over the grid". That
+    refusal's own comment said what was owed instead -- "a named single-file
+    form, with its own paragraph and its own tests" -- and this is it. A form
+    that names one file claims nothing about a set, so it needs no set to
+    prove; what it needs is that the file is the point it says it is, and that
+    nothing in the reduction pretends otherwise (the no-aggregate rule, which
+    lives in collect_evidence's caller because it is about the Reduction cell
+    rather than about the evidence).
+
+    THE PAIRING IS THE DOCUMENT'S OWN CLAIM. With no glob there is no captured
+    id to compare, so the `point` field must be the tail of both basenames'
+    stems -- the results file's and the log's. That is the third form's
+    filename-agreement rule (a file copied to another point's name must not
+    contribute its numbers under this point's id) and its named-not-guessed
+    rule (the log is stated by the entry, not derived from the results name)
+    folded into one comparison. The stems are not required to be EQUAL,
+    because a stage prefix may differ between a reduction and the run that
+    produced it, which is the whole reason the third form names its logs glob.
+    """
+    method_root = resolve_method_root(campaign, method, ctx)
+    if method_root is None:
+        return None
+
+    result_abs = os.path.join(method_root, results_path)
+    log_abs = os.path.join(method_root, log_path)
+    for rel, path, what in (
+        (results_path, result_abs, "the results file"),
+        (log_path, log_abs, "the log"),
+    ):
+        if not os.path.isfile(path):
+            fail(
+                "%s: %s names `%s`, and sim/%s/%s/%s is not a committed file. "
+                "A reduction over evidence that is not on the tree is not "
+                "reproducible by a reader."
+                % (ctx, what, rel, campaign, method, rel)
+            )
+            return None
+
+    try:
+        with open(result_abs, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except (OSError, ValueError) as exc:
+        fail(
+            "%s: sim/%s/%s/%s is not readable JSON: %s"
+            % (ctx, campaign, method, results_path, exc)
+        )
+        return None
+    if not isinstance(doc, dict):
+        fail(
+            "%s: sim/%s/%s/%s is a JSON %s, not an object. This form reads one "
+            "object for one point."
+            % (ctx, campaign, method, results_path, type(doc).__name__)
+        )
+        return None
+
+    flat = {}
+    _flatten_json(doc, "", flat)
+    declared = flat.get("point")
+    if not declared:
+        fail(
+            "%s: sim/%s/%s/%s declares no `point`, so nothing in it says which "
+            "point it is the reduction of. The third form compares a document "
+            "against the id its glob captured; this form has only the "
+            "document's own claim, so a document that makes none cannot be "
+            "paired with the log beside it."
+            % (ctx, campaign, method, results_path)
+        )
+        return None
+    for rel, what in ((results_path, "the results file"),
+                      (log_path, "the log")):
+        stem = os.path.splitext(os.path.basename(rel))[0]
+        if not stem.endswith(declared):
+            fail(
+                "%s: sim/%s/%s/%s declares point `%s`, which is not the tail "
+                "of %s's own name `%s`. This form has no glob to capture an "
+                "id, so a name that does not end in the point it holds pairs "
+                "two files that may be of different points -- the same defect "
+                "the third form's filename-agreement rule catches."
+                % (
+                    ctx,
+                    campaign,
+                    method,
+                    results_path,
+                    declared,
+                    what,
+                    stem,
+                )
+            )
+            return None
+
+    named_point_stats["figures"] += 1
+    named_point_stats["paths"].add(
+        "sim/%s/%s/%s" % (campaign, method, results_path)
+    )
+    return Evidence(
+        [flat],
+        "sim/%s/%s/%s (the single point `%s`, from sim/%s/%s/%s)"
+        % (campaign, method, results_path, declared, campaign, method,
+           log_path),
+        single_point=True,
+    )
+
+
 def read_method_point_rows(campaign, method, results_glob, logs_glob, ctx):
     """One row per per-point JSON document of a method directory.
 
@@ -1877,20 +2145,8 @@ def read_method_point_rows(campaign, method, results_glob, logs_glob, ctx):
     mistyped, otherwise passes the set comparison and contributes another
     point's numbers under this point's id.
     """
-    method_root = os.path.join(repo_root, "sim", campaign, method)
-    if not os.path.isdir(method_root):
-        fail(
-            "%s: no method directory at sim/%s/%s" % (ctx, campaign, method)
-        )
-        return None
-    if os.path.isdir(os.path.join(method_root, "records")):
-        fail(
-            "%s: sim/%s/%s commits a records/ directory, so its evidence is "
-            "reachable by record id and must be reduced that way. This form "
-            "exists for evidence that is outside the record convention, not "
-            "as a route around rules 1 and 2's record citation."
-            % (ctx, campaign, method)
-        )
+    method_root = resolve_method_root(campaign, method, ctx)
+    if method_root is None:
         return None
 
     result_ids = _glob_point_ids(
@@ -2229,7 +2485,7 @@ def collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx):
 
 
 def collect_evidence(record_cell, evidence_file, spec_cells, spec_cited, ctx,
-                     allow_method_dir=True):
+                     allow_method_dir=True, allow_named_point=False):
     """Dispatch on the shape of the Record(s) cell: record ids, or a method dir.
 
     The one place "which evidence an entry may read" is decided, which is why
@@ -2244,6 +2500,12 @@ def collect_evidence(record_cell, evidence_file, spec_cells, spec_cited, ctx,
     8's "adding a plain ratio for symmetry would add an untested, unused
     path"). Rule 8 still states no figure of that shape, so it stays refused
     until one does.
+
+    `allow_named_point` is a SEPARATE flag rather than a widening of the first,
+    and True for rule 1 only, for the same convention read the other way: the
+    two forms share a Record(s) cell but not a claim, and rules 7 and 8 state
+    no single-point figure today. Folding them into one flag would have handed
+    those two tables an untested path on the day rule 7 gained the glob one.
     """
     method = METHOD_DIR.match(record_cell.strip().strip("`"))
     if not method:
@@ -2269,23 +2531,36 @@ def collect_evidence(record_cell, evidence_file, spec_cells, spec_cited, ctx,
         return None
 
     spec = METHOD_EVIDENCE.match(evidence_file)
-    if not spec:
+    named = None if spec else NAMED_POINT_EVIDENCE.match(evidence_file)
+    if not spec and not named:
         fail(
             "%s: reduces the method directory sim/%s/%s, whose evidence spec "
             "is `<results glob>.json against <logs glob>` -- two paths relative "
             "to it, each holding exactly one `*`, which is the point id. A "
             "method directory has no single evidence file to name, and the "
             "logs the results are corroborated against are stated rather than "
-            "guessed. Got `%s`." % (ctx, campaign, method_name, evidence_file)
+            "guessed. (Two named paths with no `*` are the fourth form, one "
+            "point.) Got `%s`."
+            % (ctx, campaign, method_name, evidence_file)
         )
         return None
-    results_glob, logs_glob = spec.group(1), spec.group(2)
+    if named and not allow_named_point:
+        fail(
+            "%s: names one point of sim/%s/%s. Only the first section 5.1 "
+            "table reads a single named point; a derived or relative figure of "
+            "that shape is owed its own paragraph and its own tests before the "
+            "path exists -- the same bargain the glob form made when rule 7 "
+            "gained it." % (ctx, campaign, method_name)
+        )
+        return None
+    results_rel = (spec or named).group(1)
+    logs_rel = (spec or named).group(2)
 
     # Rule 2, in this form's dialect. A record id is compared against the ids
     # the section 5 row cites; a method directory has no id, so what is compared
     # is the PATH -- the row must point a reader at the very files this entry
     # reduces, not merely at the directory they sit in.
-    cited_path = "sim/%s/%s/%s" % (campaign, method_name, results_glob)
+    cited_path = "sim/%s/%s/%s" % (campaign, method_name, results_rel)
     if cited_path not in " || ".join(spec_cells):
         fail(
             "%s: reduces `%s`, which that section 5 row does not cite. A value "
@@ -2296,6 +2571,12 @@ def collect_evidence(record_cell, evidence_file, spec_cells, spec_cited, ctx,
         )
         return None
 
+    if named:
+        return read_named_point_row(
+            campaign, method_name, results_rel, logs_rel, ctx
+        )
+
+    results_glob, logs_glob = results_rel, logs_rel
     rows = read_method_point_rows(
         campaign, method_name, results_glob, logs_glob, ctx
     )
@@ -2537,7 +2818,8 @@ for cells in provenance:
         )
 
     evidence = collect_evidence(
-        record_cell, evidence_file, spec_cells, spec_cited, ctx
+        record_cell, evidence_file, spec_cells, spec_cited, ctx,
+        allow_named_point=True,
     )
     if evidence is None:
         continue
@@ -2562,7 +2844,10 @@ for cells in provenance:
         fail("%s: scale `%s` is not a number" % (ctx, scale_raw))
         continue
 
-    result = apply_reduction(reduction, evidence, icp_rule, ctx)
+    if evidence.single_point:
+        result = read_single_cell(reduction, evidence, ctx)
+    else:
+        result = apply_reduction(reduction, evidence, icp_rule, ctx)
     if result is None:
         continue
     raw_value, is_count = result
@@ -2995,7 +3280,8 @@ print(
     "in-record table(s) read, %d checked row-for-row "
     "against the committed logs by point id and %d by row count alone; %d "
     "method-directory point set(s) read, %d per-point JSON document(s), every "
-    "one matched to a committed log by point id; all %d "
+    "one matched to a committed log by point id, and %d figure(s) graded from "
+    "%d named single-point document(s) with no aggregate over them; all %d "
     "section 5 rows accounted for (%d graded, %d with a stated reason) and %d "
     "ungraded figure(s) in graded rows disclosed and still present in their "
     "row; Icp trim-code rule read from %s (%d reference frequencies)"
@@ -3020,6 +3306,8 @@ print(
         record_table_stats["count_matched"],
         method_dir_stats["sets"],
         method_dir_stats["points"],
+        named_point_stats["figures"],
+        len(named_point_stats["paths"]),
         len(spec_row_order),
         len(graded_rows),
         len(excluded_rows),
