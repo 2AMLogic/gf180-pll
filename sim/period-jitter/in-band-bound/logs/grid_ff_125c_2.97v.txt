@@ -1,0 +1,16 @@
+== ff_125c_2.97v: {'vctrl': 1.431, 'vsup': 2.97, 'temp_c': 125.0, 'mos_section': 'ff', 'res_section': 'res_typical', 'moscap_section': 'moscap_typical', 'mimcap_section': 'mimcap_typical'}
+-- digital: stalled at gmin=1e-11 ic_offset=0 (rung 0), escalating BOTH passes
+-- digital: stalled at gmin=1e-10 ic_offset=0 (rung 1), escalating BOTH passes
+-- digital: stalled at gmin=1e-09 ic_offset=0 (rung 2), escalating BOTH passes
+wrote results/digital_ff_125c_2.97v.json
+-- digital: 2272.5 s
+wrote results/cp_ff_125c_2.97v.json
+-- cp: 26.4 s
+wrote results/cells_ff_125c_2.97v.json
+-- cells: 208.8 s
+wrote results/clkload_ff_125c_2.97v.json
+-- clkload: 50.4 s
+wrote results/ldload_ff_125c_2.97v.json
+-- ldload: 11.2 s
+wrote results/bound_ff_125c_2.97v.json
+-- bound: 1.2 s

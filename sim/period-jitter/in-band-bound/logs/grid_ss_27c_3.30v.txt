@@ -1,0 +1,13 @@
+== ss_27c_3.30v: {'vctrl': 1.633, 'vsup': 3.3, 'temp_c': 27.0, 'mos_section': 'ss', 'res_section': 'res_typical', 'moscap_section': 'moscap_typical', 'mimcap_section': 'mimcap_typical'}
+wrote results/digital_ss_27c_3.30v.json
+-- digital: 272.3 s
+wrote results/cp_ss_27c_3.30v.json
+-- cp: 20.2 s
+wrote results/cells_ss_27c_3.30v.json
+-- cells: 249.4 s
+wrote results/clkload_ss_27c_3.30v.json
+-- clkload: 67.6 s
+wrote results/ldload_ss_27c_3.30v.json
+-- ldload: 8.9 s
+wrote results/bound_ss_27c_3.30v.json
+-- bound: 1.1 s

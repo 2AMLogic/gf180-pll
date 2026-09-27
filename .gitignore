@@ -80,6 +80,15 @@ __pycache__/
 sim/*/work/
 sim/*/work-*/
 
+# period-jitter in-band-bound campaign scratch (issue #580): per-point ngspice
+# decks and raw waveform data under `.work/<point>/<stage>/`. The committed
+# evidence is `results/*.json` plus one driver log per point
+# (`logs/grid_<point>.txt`, a *.txt so the blanket `*.log` rule above does not
+# need a negation here) -- the same split `../random-bound` uses for its own
+# scratch, which this directory's `.work/` mirrors without a matching
+# `sim/*/work/` glob (it is one directory level deeper and dot-prefixed).
+sim/period-jitter/in-band-bound/.work/
+
 # sim/harness PDK resolution (sim/harness/pdk.py): machine-local override,
 # never committed -- see sim/pdk.json for the committed defaults.
 sim/pdk.local.json

@@ -1,0 +1,218 @@
+{
+ "environment": {
+  "ngspice": "ngspice-46",
+  "pdk_models": "/Users/rwalters/.volare/gf180mcuD/libs.tech/ngspice",
+  "repo_dirty": false,
+  "repo_head": "9a7c0a05",
+  "run_utc": "2026-09-27T07:32:37Z"
+ },
+ "netlist_claims": {
+  "cells_characterized": [
+   "inv2x_3v3",
+   "inv_3v3",
+   "nand2_3v3",
+   "nand3_3v3",
+   "nor2_3v3",
+   "pfdcp_inv_3v3",
+   "pfdcp_nand2_3v3",
+   "schmitt_3v3",
+   "tgate_3v3"
+  ],
+  "cells_characterized_are_single_stage": true,
+  "lock_detector_consumers": [
+   "XLD"
+  ],
+  "non_mos_devices": {
+   "charge_pump": [],
+   "divider_chain": [],
+   "lock_detector": [],
+   "pfd": []
+  },
+  "shared_nets": {
+   "XDIV-XLD": [
+    "VSS"
+   ],
+   "XDIV-XLF": [
+    "VSS"
+   ],
+   "XDIV-XPFD": [
+    "FB",
+    "VSS"
+   ],
+   "XDIV-XVCO": [
+    "CLK"
+   ],
+   "XLD-XLF": [
+    "VSS"
+   ],
+   "XLD-XPFD": [
+    "DN",
+    "UP",
+    "VDD",
+    "VSS"
+   ],
+   "XLF-XPFD": [
+    "VCTRL",
+    "VSS"
+   ],
+   "XLF-XVCO": [
+    "VCTRL"
+   ],
+   "XPFD-XVCO": [
+    "VCTRL"
+   ]
+  },
+  "single_stage_cells_in_netlist": [
+   "cp_dumpbuf",
+   "cp_leg_n",
+   "cp_leg_p",
+   "inv2x_3v3",
+   "inv_3v3",
+   "nand2_3v3",
+   "nand3_3v3",
+   "nor2_3v3",
+   "pfdcp_inv_3v3",
+   "pfdcp_nand2_3v3",
+   "schmitt_3v3",
+   "tgate_3v3",
+   "vco_stage"
+  ],
+  "timing_paths": {
+   "cp_switch_driver": [
+    "xpfd.xcp.xi_up"
+   ],
+   "divider_retime": [
+    "xdiv.xfrt.xickb",
+    "xdiv.xfrt.xickbb",
+    "xdiv.xfrt.xtgsi",
+    "xdiv.xfrt.xic"
+   ],
+   "pfd_fb_to_dn": [
+    "xpfd.xpfd.xed_fb.xnd",
+    "xpfd.xpfd.xed_fb.xi6",
+    "xpfd.xpfd.xinv_sf",
+    "xpfd.xpfd.xlat_fb.xn1"
+   ],
+   "pfd_ref_to_up": [
+    "xpfd.xpfd.xed_ref.xnd",
+    "xpfd.xpfd.xed_ref.xi6",
+    "xpfd.xpfd.xinv_sr",
+    "xpfd.xpfd.xlat_ref.xn1"
+   ],
+   "pfd_reset_common": [
+    "xpfd.xpfd.xnand_rst",
+    "xpfd.xpfd.xinv_r0",
+    "xpfd.xpfd.xd1",
+    "xpfd.xpfd.xd2",
+    "xpfd.xpfd.xd3",
+    "xpfd.xpfd.xd4",
+    "xpfd.xpfd.xd5",
+    "xpfd.xpfd.xd6",
+    "xpfd.xpfd.xd7",
+    "xpfd.xpfd.xd8",
+    "xpfd.xpfd.xd9",
+    "xpfd.xpfd.xd10",
+    "xpfd.xpfd.xd11",
+    "xpfd.xpfd.xd12",
+    "xpfd.xpfd.xd13",
+    "xpfd.xpfd.xd14",
+    "xpfd.xpfd.xd15",
+    "xpfd.xpfd.xd16",
+    "xpfd.xpfd.xd17",
+    "xpfd.xpfd.xd18",
+    "xpfd.xpfd.xd19",
+    "xpfd.xpfd.xd20",
+    "xpfd.xpfd.xd21",
+    "xpfd.xpfd.xd22",
+    "xpfd.xpfd.xd23",
+    "xpfd.xpfd.xd24",
+    "xpfd.xpfd.xinv_rb"
+   ],
+   "pfd_reset_dn_side": [
+    "xpfd.xpfd.xlat_fb.xn2",
+    "xpfd.xpfd.xlat_fb.xn1"
+   ],
+   "pfd_reset_up_side": [
+    "xpfd.xpfd.xlat_ref.xn2",
+    "xpfd.xpfd.xlat_ref.xn1"
+   ]
+  },
+  "unclassified_shared_nets": []
+ },
+ "point": "typical_27c_3.30v",
+ "sense_resistance": {
+  "anchor_ratio_at_grid_bottom": 0.9998470290381696,
+  "anchor_ratio_max": 1.014602975556317,
+  "anchor_ratio_min": 0.0012927305865155956,
+  "correction_at_1MHz": 1.0000212399680193,
+  "correction_at_grid_top": 5988.543989875668,
+  "naive_ratio_at_1MHz": 0.9997515858823738,
+  "naive_ratio_at_grid_top": 0.010007067840001334,
+  "rsense_base_ohm": 1000.0,
+  "rsense_hi_ohm": 10000.0,
+  "s_i_ratio_at_1MHz": 1.0000005467752122,
+  "s_i_ratio_at_grid_top": 0.9999298907298142
+ },
+ "timestep": {
+  "converged": false,
+  "error": "typical_27c_3.30v: digital_fine stalled at every rung of ((1e-11, 0.0), (1e-10, 0.0), (1e-09, 0.0), (1e-11, 0.1), (1e-10, 0.1)): ngspice reported ['Timestep too small', 'simulation(s) aborted', 'Error:'] -- see /Users/rwalters/GitHub/gf180-pll/.loom/worktrees/issue-580/sim/period-jitter/in-band-bound/logs/digital_fine_align_gmin1e-10_ic0.1_typical_27c_3.30v.log; refused",
+  "tmax_fine_s": 2.5e-12
+ },
+ "trip_point_dominance": {
+  "inv2x_3v3": {
+   "sigma_v_at_trip_V": 0.0024169346224165956,
+   "sigma_v_worst_V": 0.0024169346224165956,
+   "worst_offset_V": 0.0
+  },
+  "inv_3v3": {
+   "sigma_v_at_trip_V": 0.003033161513621555,
+   "sigma_v_worst_V": 0.003033161513621555,
+   "worst_offset_V": 0.0
+  },
+  "nand2_3v3": {
+   "sigma_v_at_trip_V": 0.002459414016994586,
+   "sigma_v_worst_V": 0.002459414016994586,
+   "worst_offset_V": 0.0
+  },
+  "nand3_3v3": {
+   "sigma_v_at_trip_V": 0.0022266835144456034,
+   "sigma_v_worst_V": 0.0022266835144456034,
+   "worst_offset_V": 0.0
+  },
+  "nor2_3v3": {
+   "sigma_v_at_trip_V": 0.0029127571946823954,
+   "sigma_v_worst_V": 0.0029127571946823954,
+   "worst_offset_V": 0.0
+  },
+  "pfdcp_inv_3v3": {
+   "sigma_v_at_trip_V": 0.004107181300965785,
+   "sigma_v_worst_V": 0.004107181300965785,
+   "worst_offset_V": 0.0
+  },
+  "pfdcp_nand2_3v3": {
+   "sigma_v_at_trip_V": 0.003313515410885136,
+   "sigma_v_worst_V": 0.003313515410885136,
+   "worst_offset_V": 0.0
+  },
+  "schmitt_3v3": {
+   "sigma_v_at_trip_V": 0.000287409377465822,
+   "sigma_v_worst_V": 0.0006442892037636656,
+   "worst_offset_V": -0.2
+  },
+  "tgate_3v3": {
+   "sigma_v_at_trip_V": 0.0002823064640887575,
+   "sigma_v_worst_V": 0.0002823064640887575,
+   "worst_offset_V": 0.0
+  }
+ },
+ "vctrl_hold": {
+  "clk_slew_ratio": 0.9861189318330583,
+  "f_clk_ratio": 0.9999357366819369,
+  "r_hold_base_ohm": 1.0,
+  "r_hold_loose_ohm": 100.0,
+  "ripple_base_V": 0.00016812000000010485,
+  "ripple_loose_V": 0.004717880000000063,
+  "slew_min_ratio": 0.9996436015386208,
+  "t_on_ratio": 0.9998596494879997
+ }
+}
