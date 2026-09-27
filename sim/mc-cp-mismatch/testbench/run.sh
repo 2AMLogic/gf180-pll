@@ -1253,7 +1253,13 @@ cat >"${RECORD}" <<EOF
   \`mis_k = agauss(0, var_k, 1)\`, independent per instance, gated by
   \`sw_stat_mismatch\`, and \`.option rndseed=N\` -- not \`set rndseed=N\`
   inside \`.control\` -- is what makes the draws reproducible because they are
-  evaluated once at netlist PARSE time). This record's own negative-control
+  evaluated once at netlist PARSE time). That reproducibility claim is
+  HOST-SCOPED: same host, same build, same seed -> same draw; a different
+  host is an independent replicate, not a reproduction of the same sample --
+  see sim/README.md's "Statistical convention" field and (for this campaign's
+  own cross-host evidence) the Methodology field's "THE SAME SEED DOES NOT
+  PRODUCE THE SAME DRAW ON A DIFFERENT HOST" bullet below. This record's own
+  negative-control
   re-check (same seed -> same draws, \`sw_stat_mismatch=0\` -> seed-independent)
   was repeated at \`fs_125c_2.97v\` -- a MIXED MOS bundle, which no prior
   record of this campaign visited at all -- and confirmed the same behavior
