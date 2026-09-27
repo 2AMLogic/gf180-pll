@@ -1,0 +1,42 @@
+# campaign: vco-tuning-range (negative control)
+# record_id: 20260927-094524-b994116
+# generated_utc: 2026-09-27T09:45:35Z
+# pdk_variant: gf180mcuD
+# pdk_open_pdks_hash: c6d73a35f524070e85faff4a6a9eef49553ebc2b
+# pdk_root: /home/ubuntu/.volare/gf180mcuD
+# model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
+# switches: design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0 -> nominal skew, no Monte Carlo)
+# simulator: ngspice-46
+# netlist: design/netlist/vco.spice (committed export)
+# corners: 3 sampled (corner, Vctrl, band) points x 5 runs (seeds 1/97, sw_stat_mismatch 1 and 0)
+stage,corner,run,sw_stat_mismatch,rndseed,metric,value
+band0,ss_125c_3.63v,mc0_seedA,0,1,f1,9.11271e+06
+band0,ss_125c_3.63v,mc0_seedA,0,1,i1,1.00136e-04
+band0,ss_125c_3.63v,mc0_seedB,0,97,f1,9.11271e+06
+band0,ss_125c_3.63v,mc0_seedB,0,97,i1,1.00136e-04
+band0,ss_125c_3.63v,mc1_seedA_run1,1,1,f1,9.74747e+06
+band0,ss_125c_3.63v,mc1_seedA_run1,1,1,i1,1.01315e-04
+band0,ss_125c_3.63v,mc1_seedA_run2,1,1,f1,9.74747e+06
+band0,ss_125c_3.63v,mc1_seedA_run2,1,1,i1,1.01315e-04
+band0,ss_125c_3.63v,mc1_seedB,1,97,f1,1.07982e+07
+band0,ss_125c_3.63v,mc1_seedB,1,97,i1,1.04902e-04
+band0,typical_27c_3.30v,mc0_seedA,0,1,f1,6.52447e+06
+band0,typical_27c_3.30v,mc0_seedA,0,1,i1,6.38625e-05
+band0,typical_27c_3.30v,mc0_seedB,0,97,f1,6.52447e+06
+band0,typical_27c_3.30v,mc0_seedB,0,97,i1,6.38625e-05
+band0,typical_27c_3.30v,mc1_seedA_run1,1,1,f1,7.17718e+06
+band0,typical_27c_3.30v,mc1_seedA_run1,1,1,i1,6.42549e-05
+band0,typical_27c_3.30v,mc1_seedA_run2,1,1,f1,7.17718e+06
+band0,typical_27c_3.30v,mc1_seedA_run2,1,1,i1,6.42549e-05
+band0,typical_27c_3.30v,mc1_seedB,1,97,f1,8.22192e+06
+band0,typical_27c_3.30v,mc1_seedB,1,97,i1,6.75727e-05
+band7,typical_27c_3.30v,mc0_seedA,0,1,f1,2.61925e+08
+band7,typical_27c_3.30v,mc0_seedA,0,1,i1,4.08073e-04
+band7,typical_27c_3.30v,mc0_seedB,0,97,f1,2.61925e+08
+band7,typical_27c_3.30v,mc0_seedB,0,97,i1,4.08073e-04
+band7,typical_27c_3.30v,mc1_seedA_run1,1,1,f1,2.87815e+08
+band7,typical_27c_3.30v,mc1_seedA_run1,1,1,i1,4.38642e-04
+band7,typical_27c_3.30v,mc1_seedA_run2,1,1,f1,2.87815e+08
+band7,typical_27c_3.30v,mc1_seedA_run2,1,1,i1,4.38642e-04
+band7,typical_27c_3.30v,mc1_seedB,1,97,f1,2.80912e+08
+band7,typical_27c_3.30v,mc1_seedB,1,97,i1,4.30341e-04

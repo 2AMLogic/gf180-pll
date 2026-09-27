@@ -178,7 +178,7 @@ run_one() {
   simenv_run_deck_retried "${DECK}" "${WORK}" "${tag}" "${CORNER}" "${TEMP}" \
     "vsup=${VDD}" "vctrl=${VCTRL}" "b0v=0*${VDD}" "b1v=0*${VDD}" "b2v=0*${VDD}" \
     "tsettle=${tsettle}" "tstop=${tstop}" "tstep=${tmax}" "tmax=${tmax}" \
-    "rndseed=${seed}" >/dev/null
+    "mc_mismatch=1" "rndseed=${seed}" >/dev/null
   local log="${WORK}/${tag}/ngspice.log" f i
   f=$(simenv_meas "${log}" f1)
   i=$(simenv_meas "${log}" i1)
@@ -295,12 +295,19 @@ cat >"${RECORD}" <<EOF
   the systematic \`testbench/tb.json\` sweep both compose, unmodified by this
   record), frozen into
   \`sim/vco-tuning-range/netlist-snapshots/${RID}-vco-band0-worst-corner.spice\`,
-  SHA-256 \`${SHA_VCO}\`. Testbench deck (\`tb_vco_mismatch.sp\`, unchanged
-  from the sibling record) contains stimulus, measurement and the
-  \`sw_stat_mismatch\`/\`rndseed\` overrides only.
+  SHA-256 \`${SHA_VCO}\`. Testbench deck (\`tb_vco_mismatch.sp\`, the same
+  deck as the sibling record) contains stimulus, measurement and the
+  \`mc_mismatch\`/\`rndseed\` overrides only. \`mc_mismatch\` is the
+  handle #602 added in place of a pinned literal \`sw_stat_mismatch=1\`, so
+  that this campaign's negative control can run the SAME deck with the switch
+  off; this script passes \`mc_mismatch=1\` and its samples are therefore
+  byte-for-byte the same measurement the pinned-literal deck produced
+  (verified by direct experiment at the time of the change). The deck gives
+  \`mc_mismatch\` no default, so a future invocation that forgets it fails
+  at parse time rather than silently producing a mismatch-free sample.
 - **Environment provenance**:
 $(simenv_env_block "N/A -- design/netlist/vco.spice is a committed export, this testbench includes it directly" \
-  "\`design.ngspice\` included first via sim/lib/simenv.sh's simenv_run_deck; this campaign's own deck (tb_vco_mismatch.sp) then declares sw_stat_global=0 / sw_stat_mismatch=1, positioned after the design.ngspice include so the later declaration wins -- same harness-ordering finding sim/vco-tuning-range/records/20260817-143524-0e9cfc9.md documents in full")
+  "\`design.ngspice\` included first via sim/lib/simenv.sh's simenv_run_deck; this campaign's own deck (tb_vco_mismatch.sp) then declares sw_stat_global=0 and sw_stat_mismatch='mc_mismatch' (passed as 1 by this script), positioned after the design.ngspice include so the later declaration wins -- same harness-ordering finding sim/vco-tuning-range/records/20260817-143524-0e9cfc9.md documents in full")
 - **Corner matrix run**: ONE targeted point, deliberately NOT nominal --
   \`${CORNER_TAG}\` (-> \`.lib\` sections \`${CORNER}\`) / ${TEMP} C / ${VDD} V,
   Vctrl = ${VCTRL} V. **Axes not swept**: every other corner, temperature,

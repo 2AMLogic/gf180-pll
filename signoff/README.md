@@ -424,14 +424,19 @@ and is not a spec change:
   `sim/mc-cp-mismatch/records/20260927-102154-d004d5b.md` (#597) — recorded
   seed count n = 100/corner over **21 corners**: nominal plus all 20 vertices
   of the process × temperature × supply box, so every MOS bundle appears at
-  both temperature and both supply extremes. `sw_stat_mismatch = 0` decks are
-  the systematic-only negative control, and #597's record re-ran that control
-  at `fs`/125 °C/2.97 V, a bundle no earlier record of this campaign visited.
-  That record supersedes `20260923-095854-1655e11.md`, which carried the same
-  n over a 3-point diagonal subset; three of the four terms' binding corner
-  moved to a point the subset did not contain, two of them onto a newly added
-  mixed bundle, so the corner-combination sub-criterion is now satisfied by
-  coverage rather than by a subset argument. All four terms still PASS.
+  both temperature and both supply extremes. That record supersedes
+  `20260923-095854-1655e11.md`, which carried the same n over a 3-point
+  diagonal subset; three of the four terms' binding corner moved to a point
+  the subset did not contain, two of them onto a newly added mixed bundle, so
+  the corner-combination sub-criterion is now satisfied by coverage rather
+  than by a subset argument. All four terms still PASS. ~~`sw_stat_mismatch =
+  0` decks are the systematic-only negative control, and #597's record re-ran
+  that control at `fs`/125 °C/2.97 V, a bundle no earlier record of this
+  campaign visited.~~ — **corrected (#602):** an *available* deck, or a
+  manual re-check of one at however many corners, is not a control. The
+  committed control is `sim/mc-cp-mismatch/records/20260927-093235-b994116.md`
+  and its `corners/20260927-093235-b994116/negative_control.csv`; see "Item
+  6(c)" below.
 - **The VCO band-select mirror mismatch** (`sim/vco-tuning-range`,
   #146/#482/#597): device-level Monte Carlo at nominal PVT, N = 25/band at the
   two cascade extremes (`sim/vco-tuning-range/records/20260817-143524-0e9cfc9.md`);
@@ -445,7 +450,12 @@ and is not a spec change:
   The two earlier records' percentage-of-mean proxy is retired by it: the
   measured correlation between the pair's frequencies is ρ = 0.9958, so the
   independent-draw treatment those records were limited to double-counts
-  common-mode dispersion.
+  common-mode dispersion. All three of those records discharge the
+  negative-control sub-criterion by *citation* to `sim/mc-cp-mismatch` ("Not
+  re-derived here"); the campaign's own committed control is
+  `sim/vco-tuning-range/records/20260927-094524-b994116.md` (#602), covering
+  all three of the earlier two records' sampled points — one of which
+  (`ss`/125 °C/3.63 V, Vctrl = 2.7 V, band 0) #597's own record reuses too.
 - **The random period-jitter bound** (`spec/pll.md`'s period-jitter row,
   [DR-032](../spec/decision-records/DR-032-random-period-jitter-bounded-over-the-grid.md)) —
   new since DR-032 superseded DR-020 Decision 1 and DR-023 Decision 2's "not
@@ -468,6 +478,62 @@ and is not a spec change:
   one. Recorded here so the gap this row carries is not read as "the same
   problem, times three" when it is a narrower one for two of the three rows
   and a shape mismatch for the third.
+
+### Item 6(c), the negative control: which form this repository scores, and which rows have it
+
+Item 6's text names four sub-criteria — recorded seed, sample count,
+deterministic negative control, combined with (not instead of) process
+corners. Its middle clause, "deterministic negative control", does not say
+whether a control *described in a record* counts or whether it must be a
+*committed artifact*. This repository scores the **committed-artifact form**,
+and this section is where that reading is written down, because a checklist
+sub-criterion nobody has had to adjudicate is one that will be adjudicated
+differently by the next two readers.
+
+The reason is not a preference between two equally good shapes. It is
+`CLAUDE.md`'s founding rule — *"Verification is the product: no claim without
+a testbench"* — and item 9 of this same checklist, *"every claimed
+measurement's testbench committed, documented cold-start invocation"*. A
+manual invocation whose result survives only as a sentence is precisely the
+form those two rules exist to exclude: it cannot be re-run, cannot be
+regressed, and its failure mode is silence. A control is a claim about the
+campaign, so it is held to the campaign's own standard.
+
+**Concretely, a control scores here when** (a) its runs are produced by a
+committed stage of the campaign's own runner, against the campaign's own deck
+and readout, (b) its measurements are committed alongside the samples they
+validate, and (c) the verdict is *derived* from those committed bytes rather
+than asserted in the record's prose — so a reader, or CI, can re-check it
+without a simulator. `sim/README.md`'s "Statistical convention" field
+describes the shape and `sim/lib/simenv.sh` implements it.
+
+**Where each of the three statistical rows above stands today**, readable from
+this table without following a citation into a third record's prose:
+
+| Statistical row | Control | Where the bytes are | Re-check from committed bytes |
+|---|---|---|---|
+| Up/down mismatch budget, terms 1–4 (`sim/mc-cp-mismatch`) | **Committed** (#602) — `repeat`/`vary`/`gate`, all 4 sub-campaigns × all 3 sampled corners, 36/36 legs PASS | `sim/mc-cp-mismatch/corners/20260927-093235-b994116/negative_control.csv` + 60 raw logs; record `…/records/20260927-093235-b994116.md` | `sim/mc-cp-mismatch/testbench/run.sh --recheck-control 20260927-093235-b994116` |
+| VCO band-select mirror mismatch (`sim/vco-tuning-range`) | **Committed** (#602) — same three legs, at all 3 (corner, Vctrl, band) points its two Monte Carlo records sample, 9/9 legs PASS | `sim/vco-tuning-range/corners/20260927-094524-b994116/negative_control.csv` + 15 raw logs; record `…/records/20260927-094524-b994116.md` | `sim/vco-tuning-range/testbench/run_mismatch.sh --recheck-control 20260927-094524-b994116` |
+| Random period-jitter bound (`sim/period-jitter/random-bound`) | **Committed, and it always was** — a noiseless `floor` leg measured in the same deck as each point's noisy run, in all 45 committed per-point results | the `floor` object of each `sim/period-jitter/random-bound/results/transient_<point>.json` | read `floor.sigma_s` against `noisy.sigma_s` in the same file (no runner flag needed) |
+
+Two things about that third row, both re-derived from the committed JSONs
+rather than quoted: the floor leg is present at **45 of 45** points, and the
+noisy-to-floor σ ratio spans **848.6×** (`ff_-40c_3.63v`) to **6632.2×**
+(`fs_27c_2.97v`) — i.e. the noiseless reference's own period spread is three
+to four orders of magnitude below the quantity the bound reports, at every
+point. Its `validate` stage, which additionally re-runs a same-seed repeat,
+has been run at **one** point (`results/validate_typical_27c_3.30v.json`), not
+all 45; the per-point `floor` leg is what carries this row, and it needs no
+flag to re-read.
+
+**What this section does not do.** It does not move item 6's checkbox. Item
+6 fails on sub-criterion (d), corner combination — `sim/mc-cp-mismatch` samples
+3 of the 45 mandated PVT points and `sim/vco-tuning-range` 2 — which is
+tracked as `#597` and is untouched by any of the above. Nor does it change any
+measured number: the two control records re-measure nothing and supersede
+nothing, and both campaigns' sample records keep their bytes and their
+verdicts. A campaign minted before #602 has no `negative_control.csv`, and
+`--recheck-control` says so rather than inventing one.
 
 **The sample-set export: deferred, not done — and here is exactly why.** `klt
 yield`'s sample-set schema (`measurements[]`, each entry
