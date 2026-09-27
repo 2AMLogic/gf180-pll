@@ -126,6 +126,28 @@
 #                               committed as results/transient_*.json beside the
 #                               45 logs that produced them.
 #
+#                               A SECOND METHOD DIRECTORY of the same campaign
+#                               joined it on 2026-09-27, and its absence had
+#                               produced the failure this form was built to
+#                               prevent, one level up (issue #606).
+#                               sim/period-jitter/in-band-bound (DR-033) closes
+#                               DR-032's declared scope gap and section 5 quotes
+#                               four new figures for it, none of which appeared
+#                               in EITHER of this check's ledgers -- not graded,
+#                               and not disclosed as ungraded either, so the
+#                               honesty mechanism did not fire in place of the
+#                               grading one and the graded-value count did not
+#                               move at all. Five entries over
+#                               results/bound_*.json against logs/grid_*.txt now
+#                               grade the in-band bound, its point count, its
+#                               headroom and both ends of the combined bound.
+#                               Nothing about the form needed extending: the gap
+#                               was that a landed result quoted numbers into a
+#                               graded row without an entry, which is why
+#                               check-pvt-coverage-claims.sh grew a per-family
+#                               coverage rule in the same pass rather than
+#                               relying on this check alone to notice.
+#
 #                               Four rules travel with it. (i) THE POINT SETS
 #                               MUST BE EQUAL BY IDENTITY -- the ids the results
 #                               glob matches against the ids the logs glob does.

@@ -214,10 +214,41 @@
 #    two sentence shapes this reads, ratified there rather than left implicit
 #    in a regular expression.
 #
+# 7. EVERY METHOD-DIRECTORY RESULT FAMILY A FULL-COVERAGE ROW CITES COVERS THE
+#    GRID ON ITS OWN (issue #606). Rule 4 takes the UNION across a row's
+#    citations, deliberately: a campaign legitimately reaches the mandated 45
+#    across several RECORDS -- sim/period-jitter's five cover 1, 4, 8, 18 and
+#    16 points and no one of them covers the grid -- so a per-record test would
+#    reject the honest row. A method directory's RESULT FAMILY is not a record
+#    and is never a slice of another family: it is one stage of one method,
+#    written by one grid run of that method, and nothing on the tree cites two
+#    families as complementary halves of a grid. So where records are unioned,
+#    families are graded one at a time.
+#
+#    The union is strictly weaker than what such a row claims, and on
+#    2026-09-27 that gap opened on the tree. DR-033's in-band period-jitter
+#    bound (`sim/period-jitter/in-band-bound/results/bound_*.json`) landed
+#    beside DR-032's (`.../random-bound/results/transient_*.json`), cited in
+#    the same Source cell of the proposal's §5 row and of
+#    sim/CHARACTERIZATION.md's, with each row claiming all 45 points for EACH
+#    bound. Rule 4 was satisfied by DR-032's 45 alone, so DR-033's family
+#    could have been trimmed to three points with every gate green -- the same
+#    "an earlier stage having run at a point does not mean the number came out
+#    there" defect rule 4's own family-not-directory note (issue #520) names,
+#    one level up: a family BESIDE the one a number came from is no more
+#    evidence for it than a stage beside it.
+#
+#    Scoped to the claim, exactly as rule 4 is. A row citing a family that
+#    covers three points and saying so is honest and untouched; this rule
+#    grades the row that says it covered the grid. It reports per family, and
+#    names the family, because "the union is short" and "this bound is short"
+#    are different repairs.
+#
 # Usage: sim/lib/check-pvt-coverage-claims.sh
 # Exit codes: 0 every quoted corner is a real bundle, every off-grid corner is
 #             disclosed, every corner count is backed by evidence, every claim
-#             of full mandated coverage cites evidence that covers it, every
+#             of full mandated coverage cites evidence that covers it and every
+#             method-directory result family it cites covers it alone, every
 #             non-MOS-axis claim matches the record's own declaration, and
 #             every non-rectangular sample claim matches the record's own
 #             declared total and committed distinct-N count; 1 any rule fails,
@@ -561,6 +592,7 @@ triples_seen = 0
 counts_seen = 0
 disclosures_seen = 0
 full_claims_seen = 0
+family_claims_seen = 0
 non_mos_seen = 0
 non_rect_seen = 0
 
@@ -742,6 +774,45 @@ for doc in graded:
                     )
                 )
 
+            # Rule 7: and each method-directory RESULT FAMILY the row cites
+            # covers the grid on its own. Rule 4's union is right for records,
+            # which legitimately partition a grid; a result family is one stage
+            # of one method and is never a slice of another family, so a
+            # complete family beside a short one must not excuse it.
+            for rid in cited:
+                if "/" not in rid:  # a record id -- rule 4's union owns it
+                    continue
+                family_claims_seen += 1
+                family_points, _, _ = evidence(rid)
+                family_missing = MANDATED_POINTS - family_points
+                if not family_missing:
+                    continue
+                failed = True
+                shown = sorted(family_missing)[:4]
+                sys.stderr.write(
+                    "FAIL: %s claims %s, but the method-directory result "
+                    "family `%s` it cites covers %d of the %d mandated PVT "
+                    "points on its own -- %d missing, e.g. %s%s. A result "
+                    "family is one stage of one method, not a slice of a grid "
+                    "another family completes, so a row claiming the whole "
+                    "mandated grid for it has to cite a family that covers it "
+                    "alone (rule 4's union is for records, which do "
+                    "partition a grid).\n  row: %s\n"
+                    % (
+                        doc,
+                        " and ".join('"%s"' % c for c in claims),
+                        rid,
+                        len(MANDATED_POINTS & family_points),
+                        MANDATED_GRID,
+                        len(family_missing),
+                        ", ".join(
+                            "`%s`/%g °C/%g V" % (b, t, v) for b, t, v in shown
+                        ),
+                        " ..." if len(family_missing) > len(shown) else "",
+                        line.strip()[:220],
+                    )
+                )
+
         # Rule 5: a non-MOS corner axis claim is checked against the record's
         # own declaration, not asserted.
         non_mos = {}
@@ -869,7 +940,9 @@ print(
     "corner name the grid they were measured on; %d PVT corner count(s) "
     "match the %d-point mandated grid or the cited record's committed "
     "evidence; %d row(s) claiming the full mandated grid cite evidence "
-    "covering all %d of its points; %d row(s) citing a non-MOS-axis record "
+    "covering all %d of its points, and the %d method-directory result "
+    "famil(ies) those rows cite each cover all %d on their own; "
+    "%d row(s) citing a non-MOS-axis record "
     "match its own declared axis shape; %d row(s) citing a non-rectangular "
     "cross-product sample match its own declared total and committed "
     "distinct-N count"
@@ -880,6 +953,8 @@ print(
         counts_seen,
         MANDATED_GRID,
         full_claims_seen,
+        MANDATED_GRID,
+        family_claims_seen,
         MANDATED_GRID,
         non_mos_seen,
         non_rect_seen,

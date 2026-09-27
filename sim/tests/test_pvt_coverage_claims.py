@@ -576,6 +576,83 @@ class PvtCoverageCheckTest(unittest.TestCase):
         )
         self.assertFailsWith(self.run_check(), "covers 44 of the 45 mandated PVT points")
 
+    # -- rule 7: each cited family covers the grid on its own --------------
+
+    def test_a_short_family_is_not_excused_by_a_complete_one_beside_it(self):
+        """Rule 4's union is the wrong unit for two method families in one row.
+
+        This is the DR-032/DR-033 shape (issue #606): one §5 row bounds the
+        random period jitter with two independent bounds, cites both result
+        families in the same Source cell, and claims all 45 points for each.
+        Rule 4 unions them, so DR-032's complete 45 satisfied the row while
+        DR-033's family could be trimmed to 3 points with every gate green.
+        """
+        self._method_results({
+            "transient": _corner_files(MOS_BUNDLES),
+            "bound": _corner_files(MOS_BUNDLES)[:3],
+        })
+        self.proposal(
+            "| Period jitter, random | ≤ 1.0 % RMS | ≤ 0.338 % at all 45 of "
+            "the mandated PVT points, and the in-band sources ≤ 0.0249 % at "
+            "all 45 points | **MET** | "
+            "`sim/method-campaign/results/transient_*.json` and "
+            "`sim/method-campaign/results/bound_*.json` |"
+        )
+        self.assertFailsWith(
+            self.run_check(),
+            "sim/method-campaign/results/bound_*.json",
+            "covers 3 of the 45 mandated PVT points on its own",
+        )
+
+    def test_a_short_family_is_not_excused_by_a_record_beside_it(self):
+        """The same rule against the other kind of co-citation.
+
+        A record legitimately covers a slice of the grid -- which is why rule
+        4 unions records -- so a row may cite five of them and reach 45 only
+        together. A result family is one stage of one method, written by one
+        grid run of it, and is never a slice of another family.
+        """
+        self._method_results({"bound": _corner_files(MOS_BUNDLES)[:44]})
+        self.proposal(
+            "| Period jitter, random | ≤ 1.0 % RMS | bounded at all 45 of the "
+            "mandated PVT points | **MET** | "
+            f"`sim/mandated-campaign/records/{MANDATED_REC}.md`; "
+            "`sim/method-campaign/results/bound_*.json` |"
+        )
+        self.assertFailsWith(
+            self.run_check(),
+            "covers 44 of the 45 mandated PVT points on its own",
+        )
+
+    def test_two_complete_families_in_one_full_coverage_row_pass(self):
+        """The honest shape of the same row: both bounds cover the grid."""
+        self._method_results({
+            "transient": _corner_files(MOS_BUNDLES),
+            "bound": _corner_files(MOS_BUNDLES),
+        })
+        self.proposal(
+            "| Period jitter, random | ≤ 1.0 % RMS | ≤ 0.338 % at all 45 of "
+            "the mandated PVT points, and the in-band sources ≤ 0.0249 % at "
+            "all 45 points | **MET** | "
+            "`sim/method-campaign/results/transient_*.json` and "
+            "`sim/method-campaign/results/bound_*.json` |"
+        )
+        self.assertPasses(self.run_check())
+
+    def test_a_short_family_in_a_row_making_no_full_coverage_claim_passes(self):
+        """Rule 7 is scoped to the claim, exactly as rule 4 is.
+
+        A row citing a family that covers 3 points and saying so is honest;
+        this rule grades the row that says it covered the grid.
+        """
+        self._method_results({"bound": _corner_files(MOS_BUNDLES)[:3]})
+        self.proposal(
+            "| Period jitter, random | ≤ 1.0 % RMS | bounded at 3 spanning "
+            "corners so far | **UNMET** | "
+            "`sim/method-campaign/results/bound_*.json` |"
+        )
+        self.assertPasses(self.run_check())
+
     def test_full_coverage_is_the_points_and_not_the_count(self):
         """45 measured points that are not the mandated 45 still fail.
 

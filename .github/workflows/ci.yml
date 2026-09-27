@@ -449,6 +449,18 @@ jobs:
         # cross-reference cited campaign directories rather than records, so
         # neither a check nor a reader could reach the evidence for it.
         #
+        # That union is right for RECORDS and wrong for a method directory's
+        # RESULT FAMILY, which is what a seventh rule now grades one family at
+        # a time (#606). A campaign legitimately reaches the mandated 45 across
+        # several records; a result family is one stage of one method, written
+        # by one grid run of it, and is never a slice another family completes.
+        # DR-033's in-band period-jitter bound landed beside DR-032's, cited in
+        # the same Source cell of two graded rows that claim all 45 points for
+        # EACH bound, and the union was satisfied by DR-032's 45 alone -- so
+        # DR-033's family could have been trimmed to three points with every
+        # gate green. Scoped to the claim, like rule 4: a row that says it
+        # covered three corners is untouched.
+        #
         # The mandated size is computed from REQUIRED_MOS_CORNERS x
         # DEFAULT_TEMPERATURES_C x supply_points(), imported rather than
         # written down, so widening an axis moves what CI enforces in the same
