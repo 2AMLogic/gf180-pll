@@ -438,24 +438,46 @@ and is not a spec change:
   and its `corners/20260927-093235-b994116/negative_control.csv`; see "Item
   6(c)" below.
 - **The VCO band-select mirror mismatch** (`sim/vco-tuning-range`,
-  #146/#482/#597): device-level Monte Carlo at nominal PVT, N = 25/band at the
+  #146/#482/#597/#622): device-level Monte Carlo at nominal PVT, N = 25/band at the
   two cascade extremes (`sim/vco-tuning-range/records/20260817-143524-0e9cfc9.md`);
   band 0's own-corner closure at N = 100
-  (`sim/vco-tuning-range/records/20260923-084925-1655e11.md`, #482); and
+  (`sim/vco-tuning-range/records/20260923-084925-1655e11.md`, #482);
   `sim/vco-tuning-range/records/20260927-081930-d004d5b.md` (#597), the first
   record here to draw **two band codes from one mismatch draw** — both sides of
   the B0→B1 adjacent pair in one netlist parse, so the coverage-hole inequality
   is measured as a per-draw ratio (1.28193 at its own one-sided 3σ tail against
-  a 1.0 floor, N = 200) instead of proxied by one band's relative dispersion.
-  The two earlier records' percentage-of-mean proxy is retired by it: the
-  measured correlation between the pair's frequencies is ρ = 0.9958, so the
+  a 1.0 floor, N = 200) instead of proxied by one band's relative dispersion;
+  and `sim/vco-tuning-range/records/20260927-220631-546a397.md` (#622), which
+  widens that joint draw from **one point to an 11-point grid** — N = 200 per
+  point, 2200 draws — spanning **all five MOS bundles**, all four vertices of
+  the temperature × supply box at the thinnest bundle, and four of the seven
+  adjacent pairs. All 11 points PASS; the binding point is `ss`/125 °C/3.63 V
+  on **B3→B4** at 1.13935, not the B0→B1 pair the campaign had sampled until
+  then.
+  The two earliest records' percentage-of-mean proxy is retired by the joint
+  draw: the pair's two frequencies are strongly correlated, so the
   independent-draw treatment those records were limited to double-counts
-  common-mode dispersion. All three of those records discharge the
+  common-mode dispersion — on #622's grid that treatment would have failed
+  10 of the 11 points the joint statistic passes.
+  **Two findings the single-point predecessor could not have produced**, both
+  derived in the record from its own committed `per_point.csv` rather than
+  asserted: (i) mismatch did **not** move the binding point off the
+  deterministically thinnest corner — previously an assumption, now a
+  measurement over 11 points; and (ii) ρ is a property of the **band pair**,
+  not of the corner. Holding the pair at B3→B4 and varying bundle, temperature
+  and supply moves ρ only over 0.8874–0.8996 (width 0.0122), while holding the
+  corner fixed and varying the pair moves it over 0.8921–0.9958 (width 0.1037,
+  8.5× wider). That matters because less common-mode cancellation eats more
+  margin: the B3→B4 points keep ~42–56 % of their systematic overlap margin
+  against ~88 % at B0→B1, which is why the binding pair moved and why the
+  pre-#622 campaign was reading this claim at its most favourable pair.
+  All four sample records discharge the
   negative-control sub-criterion by *citation* to `sim/mc-cp-mismatch` ("Not
   re-derived here"); the campaign's own committed control is
-  `sim/vco-tuning-range/records/20260927-094524-b994116.md` (#602), covering
-  all three of the earlier two records' sampled points — one of which
-  (`ss`/125 °C/3.63 V, Vctrl = 2.7 V, band 0) #597's own record reuses too.
+  `sim/vco-tuning-range/records/20260927-214737-546a397.md` (#602, widened by
+  #622), covering all **25** (corner, temperature, supply, Vctrl, band) points
+  the four sample records draw at — the three the earlier control covered plus
+  the 11-point grid decomposed into its single-band ends — 75/75 legs PASS.
 - **The random period-jitter bound** (`spec/pll.md`'s period-jitter row,
   [DR-032](../spec/decision-records/DR-032-random-period-jitter-bounded-over-the-grid.md)) —
   new since DR-032 superseded DR-020 Decision 1 and DR-023 Decision 2's "not
@@ -513,7 +535,7 @@ this table without following a citation into a third record's prose:
 | Statistical row | Control | Where the bytes are | Re-check from committed bytes |
 |---|---|---|---|
 | Up/down mismatch budget, terms 1–4 (`sim/mc-cp-mismatch`) | **Committed** (#602) — `repeat`/`vary`/`gate`, all 4 sub-campaigns × all 3 sampled corners, 36/36 legs PASS | `sim/mc-cp-mismatch/corners/20260927-093235-b994116/negative_control.csv` + 60 raw logs; record `…/records/20260927-093235-b994116.md` | `sim/mc-cp-mismatch/testbench/run.sh --recheck-control 20260927-093235-b994116` |
-| VCO band-select mirror mismatch (`sim/vco-tuning-range`) | **Committed** (#602) — same three legs, at all 3 (corner, Vctrl, band) points its two Monte Carlo records sample, 9/9 legs PASS | `sim/vco-tuning-range/corners/20260927-094524-b994116/negative_control.csv` + 15 raw logs; record `…/records/20260927-094524-b994116.md` | `sim/vco-tuning-range/testbench/run_mismatch.sh --recheck-control 20260927-094524-b994116` |
+| VCO band-select mirror mismatch (`sim/vco-tuning-range`) | **Committed** (#602, widened #622) — same three legs, at all 25 (corner, temperature, supply, Vctrl, band) points its four Monte Carlo records sample, 75/75 legs PASS | `sim/vco-tuning-range/corners/20260927-214737-546a397/negative_control.csv` + 125 raw logs; record `…/records/20260927-214737-546a397.md` | `sim/vco-tuning-range/testbench/run_mismatch.sh --recheck-control 20260927-214737-546a397` |
 | Random period-jitter bound (`sim/period-jitter/random-bound`) | **Committed, and it always was** — a noiseless `floor` leg measured in the same deck as each point's noisy run, in all 45 committed per-point results | the `floor` object of each `sim/period-jitter/random-bound/results/transient_<point>.json` | read `floor.sigma_s` against `noisy.sigma_s` in the same file (no runner flag needed) |
 
 Two things about that third row, both re-derived from the committed JSONs
@@ -526,17 +548,37 @@ has been run at **one** point (`results/validate_typical_27c_3.30v.json`), not
 all 45; the per-point `floor` leg is what carries this row, and it needs no
 flag to re-read.
 
-**What this section does not do.** It does not move item 6's checkbox. Item 6
-still fails on sub-criterion (d), corner combination, but only on **one** of the
-three rows above — and this sentence has been corrected once already, so it is
-worth being exact about which. `sim/mc-cp-mismatch` samples **21 of the 45**
-mandated PVT points (nominal plus all 20 vertices of the process × temperature
-× supply box), which the statistical-rows bullet above records as satisfying (d)
-by coverage rather than by a subset argument; `sim/period-jitter/random-bound`
-samples all 45. `sim/vco-tuning-range` samples **2** — `typical`/27 °C/3.30 V
-and `ss`/125 °C/3.63 V, the only two points its three Monte Carlo mismatch
-records visit between them, so three of the five MOS bundles are never drawn.
-That residual is tracked at `#622`. Nor does this section change any measured
+**What this section does not do.** It does not move item 6's checkbox — but as
+of #622 the reason has changed, and the change is worth stating exactly because
+this paragraph has been corrected once already. **Sub-criterion (d), corner
+combination, is now met on all three rows.** `sim/mc-cp-mismatch` samples
+**21 of the 45** mandated PVT points (nominal plus all 20 vertices of the
+process × temperature × supply box), which the statistical-rows bullet above
+records as satisfying (d) by coverage rather than by a subset argument;
+`sim/period-jitter/random-bound` samples all 45. `sim/vco-tuning-range` samples
+**8 of the 45** — the five MOS bundles at 125 °C/3.63 V plus `ss` at the other
+three vertices of the temperature × supply box — up from the **2** it visited
+before #622, and the specific gap that issue named (three of the five MOS
+bundles never drawn) is closed.
+
+Eight is a *subset*, not coverage, so unlike `sim/mc-cp-mismatch` this row rests
+on a subset argument — and the distinction that makes it a sound one is that the
+subset is now **tested rather than assumed**. The pre-#622 single-point campaign
+asserted that the deterministically thinnest corner is also where the dispersion
+binds; #622's grid measured that ordering at 11 points and found it holds (the
+binding point did not move), while also finding that ρ tracks the band pair
+rather than the corner — which moved the binding *pair* from B0→B1 to B3→B4.
+Both findings are derived in the record from its committed `per_point.csv`, not
+argued in prose. The residual this row still carries is named in that record's
+own "What is still not measured" field: the grid is a union of three
+one-dimensional cuts, not the full 5 bundles × 4 vertices × 7 pairs cross
+product, so an interaction appearing off all three cuts is unsampled.
+
+**What still blocks item 6 is therefore not (d).** It is the `klt yield` JSON
+envelope requirement and its pinned-install gap — see "Item 6: statistical
+evidence (`klt yield`) and the pinned-install gap" above, and
+**klayout-tools#2531**, which is open and not actionable from this repository.
+Nor does this section change any measured
 number: the two control records re-measure nothing and supersede nothing, and
 both campaigns' sample records keep their bytes and their verdicts. A campaign
 minted before #602 has no `negative_control.csv`, and `--recheck-control` says
@@ -581,8 +623,9 @@ the three rows above have raw per-sample CSVs that could seed a
 up/down mismatch budget — the same campaign directory's `mc_dff_ctq.csv`
 holds the divider-retiming flop's own clk→Q mismatch samples, a related but
 separately-tracked figure that `design/README.md` deliberately keeps out of
-the four-term table — and `sim/vco-tuning-range`'s two band-select-mismatch
-`mismatch.csv` records for the VCO row. The third row, the period-jitter
+the four-term table — and `sim/vco-tuning-range`'s four band-select-mismatch
+`mismatch.csv` records for the VCO row, the largest of which (#622's 11-point
+grid) also commits a derived `per_point.csv` beside its raw per-draw rows. The third row, the period-jitter
 random bound, has none, per the shape mismatch above. But the committed statistic for, e.g., term 1 is not "every row of
 `mc_cp_dc.csv`" — it is the worst-corner, worst-Vctrl-point, signed
 `|mean| + 3σ` figure that `sim/mc-cp-mismatch/testbench/run.sh`'s own

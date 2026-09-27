@@ -285,32 +285,92 @@ run_one() {
 CONTROL_SEED_A="${CONTROL_SEED_A:-1}"
 CONTROL_SEED_B="${CONTROL_SEED_B:-97}"
 
-# Every (corner, Vctrl, band) point the two Monte Carlo records in this
-# experiment directory actually sample, with its own nominal-frequency window
-# sizing -- the same constants those scripts use, not re-derived here:
-#   stage | corner-libs | corner-tag | temp | vdd | vctrl | b0 b1 b2 | fnom
-# Points 1-2 are run_mismatch.sh's own (records/20260817-143524-0e9cfc9.md);
-# point 3 is run_band0_worst_corner.sh's (records/20260923-084925-1655e11.md),
-# whose FNOM_BAND0/corner/Vctrl constants are copied from that script.
+# Every (corner, temperature, supply, Vctrl, band) point the Monte Carlo records
+# in this experiment directory actually sample, with its own nominal-frequency
+# window sizing -- the same constants those scripts use, not re-derived here:
+#
+#   stage | corner-libs | corner-tag | temp | vdd | vctrl | b0 b1 b2 | fnom |
+#   win_lo | win_hi
+#
+# `stage` carries the Vctrl as well as the band because the SAME band appears at
+# BOTH ends of the control window in the band-pair grid below (band 1 is the
+# upper band of the B0 -> B1 pair at Vctrl = 0.9 V and the lower band of
+# B1 -> B2 at 2.7 V). simenv_control_verdicts groups by (stage, corner), so a
+# stage string that omitted Vctrl would silently merge those two points into one
+# and report five runs where there are ten.
+#
+# `win_lo`/`win_hi` are the transient-window bracket, PER POINT, because the
+# campaign's two sample paths do not use the same one: the single-band scripts
+# use +/-30% and run_band_pair_worst_corner.sh uses 45%/45% (it has to hold a
+# mismatched frequency whose 3-sigma spread is ~25% of the mean). A control run
+# through a different transient than the samples it validates is not a control
+# for those samples, so the bracket travels with the point rather than being a
+# constant here.
+#
+# GROUPS:
+#   (a) Points 1-2 are run_mismatch.sh's own (records/20260817-143524-0e9cfc9.md);
+#       point 3 is run_band0_worst_corner.sh's
+#       (records/20260923-084925-1655e11.md), whose FNOM_BAND0/corner/Vctrl
+#       constants are copied from that script. These three are what #602's
+#       original control covered.
+#   (b) Points 4-25 (#622) are the two ends of every adjacent-band pair in
+#       run_band_pair_worst_corner.sh's 11-point grid -- the widened sample grid
+#       this control has to cover for signoff/README.md's "Item 6(c)" rule (a
+#       control's grid is the grid of the samples it validates) to keep holding.
+#       Each `fnom` is that script's own GRID row field for the same point, which
+#       `run_band_pair_worst_corner.sh --grid` re-derives against
+#       corners/20260804-164956-72883fb/raw_measures.csv with no simulator.
 CONTROL_POINTS=(
-  "band0 typical,res_typical,moscap_typical typical 27 3.30 1.8 0 0 0 6526290"
-  "band7 typical,res_typical,moscap_typical typical 27 3.30 1.8 1 1 1 261947000"
-  "band0 ss,res_typical,moscap_typical      ss      125 3.63 2.7 0 0 0 9122300"
+  # (a) the three points #602's control already covered
+  "band0_vc1.8 typical,res_typical,moscap_typical typical 27 3.30 1.8 0 0 0 6526290 0.7 1.3"
+  "band7_vc1.8 typical,res_typical,moscap_typical typical 27 3.30 1.8 1 1 1 261947000 0.7 1.3"
+  "band0_vc2.7 ss,res_typical,moscap_typical      ss      125 3.63 2.7 0 0 0 9122300 0.7 1.3"
+  # (b1) the bundle axis -- B3 -> B4 at 125C/3.63V, all five MOS bundles
+  "band3_vc2.7 typical,res_typical,moscap_typical typical 125 3.63 2.7 1 1 0 40223800 0.55 1.45"
+  "band4_vc0.9 typical,res_typical,moscap_typical typical 125 3.63 0.9 0 0 1 30785300 0.55 1.45"
+  "band3_vc2.7 ff,res_typical,moscap_typical      ff      125 3.63 2.7 1 1 0 39128100 0.55 1.45"
+  "band4_vc0.9 ff,res_typical,moscap_typical      ff      125 3.63 0.9 0 0 1 29226700 0.55 1.45"
+  "band3_vc2.7 fs,res_typical,moscap_typical      fs      125 3.63 2.7 1 1 0 41040100 0.55 1.45"
+  "band4_vc0.9 fs,res_typical,moscap_typical      fs      125 3.63 0.9 0 0 1 30531400 0.55 1.45"
+  "band3_vc2.7 sf,res_typical,moscap_typical      sf      125 3.63 2.7 1 1 0 39601500 0.55 1.45"
+  "band4_vc0.9 sf,res_typical,moscap_typical      sf      125 3.63 0.9 0 0 1 31229800 0.55 1.45"
+  "band3_vc2.7 ss,res_typical,moscap_typical      ss      125 3.63 2.7 1 1 0 41913500 0.55 1.45"
+  "band4_vc0.9 ss,res_typical,moscap_typical      ss      125 3.63 0.9 0 0 1 33058900 0.55 1.45"
+  # (b2) the temperature x supply box -- the other three vertices, ss, B3 -> B4
+  "band3_vc2.7 ss,res_typical,moscap_typical      ss      -40 2.97 2.7 1 1 0 49967100 0.55 1.45"
+  "band4_vc0.9 ss,res_typical,moscap_typical      ss      -40 2.97 0.9 0 0 1 35676900 0.55 1.45"
+  "band3_vc2.7 ss,res_typical,moscap_typical      ss      -40 3.63 2.7 1 1 0 35705500 0.55 1.45"
+  "band4_vc0.9 ss,res_typical,moscap_typical      ss      -40 3.63 0.9 0 0 1 26525300 0.55 1.45"
+  "band3_vc2.7 ss,res_typical,moscap_typical      ss      125 2.97 2.7 1 1 0 57273800 0.55 1.45"
+  "band4_vc0.9 ss,res_typical,moscap_typical      ss      125 2.97 0.9 0 0 1 43730500 0.55 1.45"
+  # (b3) the pair axis at ss/125C/3.63V. band0_vc2.7 at this point is already
+  # group (a)'s third row, at the +/-30% bracket the record that sampled it used;
+  # the band-pair grid re-samples it at 45%/45%, so it appears again here under a
+  # distinct stage rather than having its existing row's bracket rewritten.
+  "band0_vc2.7_bp ss,res_typical,moscap_typical   ss      125 3.63 2.7 0 0 0 9122300 0.55 1.45"
+  "band1_vc0.9 ss,res_typical,moscap_typical      ss      125 3.63 0.9 1 0 0 6917000 0.55 1.45"
+  "band1_vc2.7 ss,res_typical,moscap_typical      ss      125 3.63 2.7 1 0 0 14890400 0.55 1.45"
+  "band2_vc0.9 ss,res_typical,moscap_typical      ss      125 3.63 0.9 0 1 0 11464100 0.55 1.45"
+  "band6_vc2.7 ss,res_typical,moscap_typical      ss      125 3.63 2.7 0 1 1 232629000 0.55 1.45"
+  "band7_vc0.9 ss,res_typical,moscap_typical      ss      125 3.63 0.9 1 1 1 169811000 0.55 1.45"
 )
 
-# control_run_one <stage> <libs> <ctag-bundle> <temp> <vdd> <vctrl> <b0> <b1> <b2> <fnom> <run-tag> <mismatch> <seed> <outfile>
+# control_run_one <stage> <libs> <ctag-bundle> <temp> <vdd> <vctrl> <b0> <b1> <b2> <fnom> <win-lo> <win-hi> <run-tag> <mismatch> <seed> <outfile>
 control_run_one() {
   local stage="$1" libs="$2" cb="$3" temp="$4" vdd="$5" vctrl="$6"
-  local b0="$7" b1="$8" b2="$9" fnom="${10}" runtag="${11}" mism="${12}" seed="${13}" sfile="${14}"
+  local b0="$7" b1="$8" b2="$9" fnom="${10}" wlo="${11}" whi="${12}"
+  local runtag="${13}" mism="${14}" seed="${15}" sfile="${16}"
   local ctag="${cb}_${temp}c_${vdd}v"
   local tag="ctl_${stage}_${ctag}_${runtag}"
   stage_netlist "${WORK}/${tag}"
-  # Identical window sizing to the production run_one() above (and to
-  # run_band0_worst_corner.sh's), so the control exercises the same transient
-  # the samples it validates were taken from.
+  # Identical window sizing to the sample path this point belongs to -- +/-30%
+  # for the single-band scripts' points, 45%/45% for run_band_pair_worst_corner.sh's
+  # (#622), carried per point in the CONTROL_POINTS row rather than hardcoded --
+  # so the control exercises the same transient the samples it validates were
+  # taken from.
   local flo fhi tsettle tstop tmax
-  flo=$(awk -v f="${fnom}" 'BEGIN{print f*0.7}')
-  fhi=$(awk -v f="${fnom}" 'BEGIN{print f*1.3}')
+  flo=$(awk -v f="${fnom}" -v k="${wlo}" 'BEGIN{print f*k}')
+  fhi=$(awk -v f="${fnom}" -v k="${whi}" 'BEGIN{print f*k}')
   tsettle=$(awk -v f="${flo}" 'BEGIN{printf "%.6g", 1.2*4/f}')
   tstop=$(awk -v ts="${tsettle}" -v f="${flo}" 'BEGIN{printf "%.6g", ts + 1.2*7/f}')
   tmax=$(awk -v f="${fhi}" 'BEGIN{printf "%.6g", 1/(80*f)}')
@@ -329,20 +389,21 @@ control_run_one() {
 # control_campaign <outfile> -- every point x the five runs, sequential (see
 # sim/mc-cp-mismatch/testbench/run.sh's control_campaign for why not xargs).
 control_campaign() {
-  local sfile="$1" point stage libs cb temp vdd vctrl b0 b1 b2 fnom
+  local sfile="$1" point stage libs cb temp vdd vctrl b0 b1 b2 fnom wlo whi i=0
   : >"${sfile}"
   for point in "${CONTROL_POINTS[@]}"; do
-    read -r stage libs cb temp vdd vctrl b0 b1 b2 fnom <<<"${point}"
-    echo "vco-tuning-range control: ${stage} at ${cb}_${temp}c_${vdd}v, Vctrl=${vctrl} ..."
-    control_run_one "${stage}" "${libs}" "${cb}" "${temp}" "${vdd}" "${vctrl}" "${b0}" "${b1}" "${b2}" "${fnom}" \
+    read -r stage libs cb temp vdd vctrl b0 b1 b2 fnom wlo whi <<<"${point}"
+    i=$(( i + 1 ))
+    echo "vco-tuning-range control [${i}/${#CONTROL_POINTS[@]}]: ${stage} at ${cb}_${temp}c_${vdd}v, Vctrl=${vctrl} ..."
+    control_run_one "${stage}" "${libs}" "${cb}" "${temp}" "${vdd}" "${vctrl}" "${b0}" "${b1}" "${b2}" "${fnom}" "${wlo}" "${whi}" \
       "${SIMENV_CONTROL_RUN_MC1_A1}" 1 "${CONTROL_SEED_A}" "${sfile}"
-    control_run_one "${stage}" "${libs}" "${cb}" "${temp}" "${vdd}" "${vctrl}" "${b0}" "${b1}" "${b2}" "${fnom}" \
+    control_run_one "${stage}" "${libs}" "${cb}" "${temp}" "${vdd}" "${vctrl}" "${b0}" "${b1}" "${b2}" "${fnom}" "${wlo}" "${whi}" \
       "${SIMENV_CONTROL_RUN_MC1_A2}" 1 "${CONTROL_SEED_A}" "${sfile}"
-    control_run_one "${stage}" "${libs}" "${cb}" "${temp}" "${vdd}" "${vctrl}" "${b0}" "${b1}" "${b2}" "${fnom}" \
+    control_run_one "${stage}" "${libs}" "${cb}" "${temp}" "${vdd}" "${vctrl}" "${b0}" "${b1}" "${b2}" "${fnom}" "${wlo}" "${whi}" \
       "${SIMENV_CONTROL_RUN_MC1_B}" 1 "${CONTROL_SEED_B}" "${sfile}"
-    control_run_one "${stage}" "${libs}" "${cb}" "${temp}" "${vdd}" "${vctrl}" "${b0}" "${b1}" "${b2}" "${fnom}" \
+    control_run_one "${stage}" "${libs}" "${cb}" "${temp}" "${vdd}" "${vctrl}" "${b0}" "${b1}" "${b2}" "${fnom}" "${wlo}" "${whi}" \
       "${SIMENV_CONTROL_RUN_MC0_A}" 0 "${CONTROL_SEED_A}" "${sfile}"
-    control_run_one "${stage}" "${libs}" "${cb}" "${temp}" "${vdd}" "${vctrl}" "${b0}" "${b1}" "${b2}" "${fnom}" \
+    control_run_one "${stage}" "${libs}" "${cb}" "${temp}" "${vdd}" "${vctrl}" "${b0}" "${b1}" "${b2}" "${fnom}" "${wlo}" "${whi}" \
       "${SIMENV_CONTROL_RUN_MC0_B}" 0 "${CONTROL_SEED_B}" "${sfile}"
   done
 }
@@ -479,21 +540,39 @@ if [ "${1:-}" = "--control" ]; then
 - **Environment provenance**:
 $(simenv_env_block "N/A -- design/netlist/vco.spice is a committed export, this testbench includes it directly (same convention as tb_vco_tuning.sp/.spice's pre-harness sibling)" \
   "\`design.ngspice\` included first via sim/lib/simenv.sh's simenv_run_deck; this record runs each point at BOTH \`sw_stat_mismatch = 1\` and \`sw_stat_mismatch = 0\` (via the deck's \`mc_mismatch\` handle, see Netlist provenance) -- comparing the two IS the measurement. \`sw_stat_global\` stays 0 throughout, with \`.option rndseed\` set per run")
-- **Corner matrix run**: every (corner, Vctrl, band) point the two Monte
-  Carlo records in this experiment directory actually sample, and no others
-  -- \`typical\`/27C/3.30V (-> \`.lib\` sections \`typical\`,
-  \`res_typical\`, \`moscap_typical\`), Vctrl = 1.8 V, bands 0 and 7
-  (\`records/20260817-143524-0e9cfc9.md\`'s points); and \`ss\`/125C/3.63V
-  (-> \`ss\`, \`res_typical\`, \`moscap_typical\`), Vctrl = 2.7 V, band 0
-  (\`records/20260923-084925-1655e11.md\`'s point).
-  **Axes not swept**: the remaining MOS corners (\`ff\`, \`fs\`, \`sf\`), the
-  intermediate temperature/supply points, the other six band codes and the
-  rest of the Vctrl window.
+- **Corner matrix run**: **${#CONTROL_POINTS[@]} (corner, temperature, supply,
+  Vctrl, band) points** -- every point the Monte Carlo sample records in this
+  experiment directory actually sample, and no others. The exact list, with each
+  point's band-select code, nominal-frequency window sizing and transient-window
+  bracket, is \`CONTROL_POINTS\` in \`testbench/run_mismatch.sh\`; the committed
+  \`corners/${RID}/negative_control.csv\` names each point in its own rows. In
+  groups:
+  - \`typical\`/27C/3.30V (-> \`.lib\` sections \`typical\`, \`res_typical\`,
+    \`moscap_typical\`), Vctrl = 1.8 V, bands 0 and 7
+    (\`records/20260817-143524-0e9cfc9.md\`'s points), and \`ss\`/125C/3.63V
+    (-> \`ss\`, \`res_typical\`, \`moscap_typical\`), Vctrl = 2.7 V, band 0
+    (\`records/20260923-084925-1655e11.md\`'s point).
+  - **All five MOS bundles** (\`typical\`, \`ff\`, \`fs\`, \`sf\`, \`ss\`) at
+    125C/3.63V, bands 3 and 4 at Vctrl = 2.7 V and 0.9 V respectively -- the two
+    ends of the B3 -> B4 pair, which is the deterministically thinnest adjacent
+    pair at every bundle.
+  - \`ss\` at the other three vertices of the temperature x supply box
+    (-40C/2.97V, -40C/3.63V, 125C/2.97V), same two bands and Vctrl values.
+  - \`ss\`/125C/3.63V at both ends of the B0 -> B1, B1 -> B2 and B6 -> B7 pairs
+    (bands 0,1,2,6,7 across Vctrl = 2.7 V and 0.9 V as each pair requires).
+
+  The last three groups are \`run_band_pair_worst_corner.sh\`'s 11-point
+  joint-draw grid, decomposed into its single-band ends (#622).
+  **Axes not swept**: the 27C temperature and 3.30V supply mid-points except
+  where the first group already visits them; the composite \`all-slow\`/
+  \`all-fast\` bundles; band 5; and the five intermediate Vctrl points.
   **Justification** (sim/README.md's "Default corner matrix" rule requires
   one for any subset): a control's grid is the grid of the samples it
-  validates. Extending this campaign's SAMPLE grid past those points is item
-  6's sub-criterion (d) and is tracked as #597; doing it here would be a
-  different record making a different claim.
+  validates -- signoff/README.md's "Item 6(c)" states that reading, and it is
+  the whole rule governing this field. Every point above is a point some
+  committed sample record in this directory draws at, and every point those
+  records draw at is above. The sample grid's own justification for being the
+  subset it is belongs to the sample records, not here.
 - **Methodology / criteria / limitations**:
   - **Five runs per point**, three legs derived from them -- \`repeat\`
     (mismatch ON, seed ${CONTROL_SEED_A}, twice) must be identical; \`vary\`
@@ -501,19 +580,35 @@ $(simenv_env_block "N/A -- design/netlist/vco.spice is a committed export, this 
     \`gate\` (mismatch OFF, seed ${CONTROL_SEED_A} vs ${CONTROL_SEED_B}) must
     be identical. Schema and rationale: \`sim/lib/simenv.sh\`'s "Monte Carlo
     negative control" section.
-  - **Same deck, same window sizing, same readout as the production
-    samples** -- \`f = 4 / tp\` off the buffered \`CLK\` output after
-    \`tsettle\`, plus the supply current \`i1\`, with the transient window
-    sized off each point's own systematic nominal frequency exactly as
-    \`run_one\`/\`run_band0_worst_corner.sh\` size it. A control taken
-    through a cheaper or simpler path would not be a control for these
-    samples.
+  - **Same window sizing and same readout as the production samples** --
+    \`f = 4 / tp\` off the buffered \`CLK\` output after \`tsettle\`, plus the
+    supply current \`i1\`, with the transient window sized off each point's own
+    systematic nominal frequency and its own sample path's bracket: +/-30% for
+    the points \`run_one\`/\`run_band0_worst_corner.sh\` sample, 45%/45% for the
+    points \`run_band_pair_worst_corner.sh\` samples (that script needs the wider
+    window to hold a mismatched frequency past 3 sigma, and a control run through
+    a narrower transient than its samples is not a control for them). The bracket
+    travels with each \`CONTROL_POINTS\` row for exactly that reason.
   - **Values compared as TEXT, not within a tolerance** -- a tolerance would
     let a drifting draw keep passing.
+  - **ONE DECK, deliberately: the single-band \`tb_vco_mismatch.sp\`, including
+    for the points whose samples come from the two-band
+    \`tb_vco_band_pair.sp\`.** What the three legs establish is a property of the
+    MODEL AND THE PARSE at a given corner -- that the \`agauss()\` draws are
+    deterministic in \`.option rndseed\` and gated by \`sw_stat_mismatch\` -- and
+    that property is per (corner, temperature, supply, band, Vctrl), which is
+    what this grid enumerates. It is NOT a check that the two-band deck's two
+    \`tran\` analyses see the same draw; that is a separate claim, and it is
+    established where it belongs, in \`tb_vco_band_pair.sp\`'s own sample
+    records, whose committed per-draw logs hold both analyses under one parse for
+    a reader to see. Stated here so the deck axis is read as a named residual
+    rather than as coverage this record implies and does not have.
   - **What this record does NOT establish**: the adequacy of this campaign's
-    sample count or its corner/band/Vctrl coverage (item 6's sub-criterion
-    (d), #597), and no frequency-dispersion figure -- it re-measures none of
-    the two sample records' numbers and supersedes neither.
+    sample count (item 6's sub-criterion (b) is a separate reading), the
+    justification for the sample grid being the subset it is -- that belongs to
+    the sample records' own "Corner matrix run" fields -- and no
+    frequency-dispersion figure: it re-measures none of the sample records'
+    numbers and supersedes none of them.
   - **Read the CSV's \`sw_stat_mismatch\` COLUMN, not its \`# switches:\`
     header line.** This artifact deliberately runs BOTH switch values, so no
     single header sentence can state its switches (#601's fifth
@@ -527,9 +622,10 @@ $(simenv_env_block "N/A -- design/netlist/vco.spice is a committed export, this 
   \`sw_stat_mismatch\` taking both 1 and 0, seeds ${CONTROL_SEED_A} and
   ${CONTROL_SEED_B} via \`.option rndseed\`. Every run's raw log is committed
   under \`corners/${RID}/\`.
-- **Result -- ${CONTROL_VERDICT}**, per (band, corner) point:
+- **Result -- ${CONTROL_VERDICT}**, per (band + Vctrl, corner) point, all
+  ${#CONTROL_POINTS[@]} of them:
 
-  | Band | Corner | \`repeat\` same seed -> identical | \`vary\` other seed -> differs | \`gate\` mismatch=0 -> seed-independent | Metrics that varied |
+  | Band @ Vctrl | Corner | \`repeat\` same seed -> identical | \`vary\` other seed -> differs | \`gate\` mismatch=0 -> seed-independent | Metrics that varied |
   |---|---|---|---|---|---|
 ${CONTROL_ROWS}
 
@@ -539,19 +635,24 @@ ${CONTROL_ROWS}
 - **Links**:
   - Testbench: \`sim/vco-tuning-range/testbench/tb_vco_mismatch.sp\`,
     \`run_mismatch.sh\` (\`--control\` / \`--recheck-control\`),
-    \`run_band0_worst_corner.sh\` (the third point's sample script)
+    \`run_band0_worst_corner.sh\` (the third point's sample script),
+    \`run_band_pair_worst_corner.sh\` (the joint-draw grid whose points groups
+    2-4 above cover; \`--grid\` prints that grid with no simulator)
   - Design: \`design/vco.sch\`, \`design/vco_bias.sch\`
   - Netlist snapshot:
     \`sim/vco-tuning-range/netlist-snapshots/${RID}-vco-mismatch.spice\`
   - Raw logs: \`sim/vco-tuning-range/corners/${RID}/\`
   - Extracted metrics:
     \`sim/vco-tuning-range/corners/${RID}/negative_control.csv\`
-  - Sample records this control validates (neither superseded):
+  - Sample records this control validates (none superseded):
     \`sim/vco-tuning-range/records/20260817-143524-0e9cfc9.md\`,
-    \`sim/vco-tuning-range/records/20260923-084925-1655e11.md\`
+    \`sim/vco-tuning-range/records/20260923-084925-1655e11.md\`,
+    \`sim/vco-tuning-range/records/20260927-081930-d004d5b.md\`,
+    and the ${#CONTROL_POINTS[@]}-point grid's own sample record minted by
+    \`run_band_pair_worst_corner.sh\` (#622)
   - Sibling campaign's own control (same three legs, same schema):
     \`sim/mc-cp-mismatch/records/\`
-- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (issue #602)
+- **Timestamp / author**: $(date -u +%Y-%m-%dT%H:%M:%SZ), agent-builder (issues #602, #622)
 $(simenv_supersedes_field "${SIM_SUPERSEDES:-}")
 EOF
   echo "vco-tuning-range: wrote ${RECORD}"
