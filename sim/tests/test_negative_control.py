@@ -333,11 +333,18 @@ class StaysWired(unittest.TestCase):
         )
 
     def test_every_script_that_uses_that_deck_passes_the_handle(self):
+        # A bare substring search for "tb_vco_mismatch.sp" also matches a
+        # script that only MENTIONS it in prose while running a different
+        # deck of its own (#597's run_band_pair_worst_corner.sh compares
+        # itself to "the single-band tb_vco_mismatch.sp both prior records
+        # use" but assigns DECK=".../tb_vco_band_pair.sp"). A script only
+        # counts as a user if it assigns the deck to its own DECK variable.
         tb = SIM_DIR / "vco-tuning-range" / "testbench"
         users = [
             p
             for p in sorted(tb.glob("*.sh"))
-            if "tb_vco_mismatch.sp" in p.read_text() and "simenv_run_deck" in p.read_text()
+            if re.search(r'DECK="\$\{HERE\}/tb_vco_mismatch\.sp"', p.read_text())
+            and "simenv_run_deck" in p.read_text()
         ]
         self.assertTrue(users, "expected at least run_mismatch.sh and run_band0_worst_corner.sh")
         for script in users:
