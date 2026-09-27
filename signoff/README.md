@@ -526,14 +526,31 @@ has been run at **one** point (`results/validate_typical_27c_3.30v.json`), not
 all 45; the per-point `floor` leg is what carries this row, and it needs no
 flag to re-read.
 
-**What this section does not do.** It does not move item 6's checkbox. Item
-6 fails on sub-criterion (d), corner combination — `sim/mc-cp-mismatch` samples
-3 of the 45 mandated PVT points and `sim/vco-tuning-range` 2 — which is
-tracked as `#597` and is untouched by any of the above. Nor does it change any
-measured number: the two control records re-measure nothing and supersede
-nothing, and both campaigns' sample records keep their bytes and their
-verdicts. A campaign minted before #602 has no `negative_control.csv`, and
-`--recheck-control` says so rather than inventing one.
+**What this section does not do.** It does not move item 6's checkbox. Item 6
+still fails on sub-criterion (d), corner combination, but only on **one** of the
+three rows above — and this sentence has been corrected once already, so it is
+worth being exact about which. `sim/mc-cp-mismatch` samples **21 of the 45**
+mandated PVT points (nominal plus all 20 vertices of the process × temperature
+× supply box), which the statistical-rows bullet above records as satisfying (d)
+by coverage rather than by a subset argument; `sim/period-jitter/random-bound`
+samples all 45. `sim/vco-tuning-range` samples **2** — `typical`/27 °C/3.30 V
+and `ss`/125 °C/3.63 V, the only two points its three Monte Carlo mismatch
+records visit between them, so three of the five MOS bundles are never drawn.
+That residual is tracked at `#622`. Nor does this section change any measured
+number: the two control records re-measure nothing and supersede nothing, and
+both campaigns' sample records keep their bytes and their verdicts. A campaign
+minted before #602 has no `negative_control.csv`, and `--recheck-control` says
+so rather than inventing one.
+
+*(Correction, 2026-09-27: this paragraph read* ~~"`sim/mc-cp-mismatch` samples 3
+of the 45 mandated PVT points … tracked as `#597`"~~ *— written before #602's PR
+was rebased onto #597's widened axis, and left standing when it merged. Both
+halves were false on `main`: the campaign was at 21 points, and #597 had closed,
+so the gap was described as tracked by the very issue that had closed it.
+`#127`'s derivation pass found it;
+`docs/lib/check-issue-reference-state.sh` did not, because its rule-3 phrase
+list had "tracked at" and "tracked by" but not "tracked as" — now fixed, so this
+class of stale owner fails CI here.)*
 
 **The sample-set export: deferred, not done — and here is exactly why.** `klt
 yield`'s sample-set schema (`measurements[]`, each entry

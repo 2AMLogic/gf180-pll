@@ -57,14 +57,17 @@
 #    behind and the one a reader is most likely to act on.
 #
 # 3. OWNERSHIP. A reference introduced by a present-tense ownership phrase --
-#    "tracked at", "tracked by", "filed as", "routed to", "owned at/by",
+#    "tracked at/by/as", "filed as", "routed to", "owned at/by",
 #    "owed at/by/from" -- must be OPEN. Closed work owns nothing. The phrase
 #    in the *past* tense ("was filed as #273", "were tracked at") is exempt:
 #    it narrates history, which is exactly what this repository's evidence
 #    records are for, and a history that named a then-open issue does not
 #    become false when that issue closes. So is a reference the document
 #    itself marks closed ("#505, itself closed", "the now-closed #10"): the
-#    reader has been told, and rule 2 grades the telling.
+#    reader has been told, and rule 2 grades the telling. So, for the same
+#    reason, is a phrase inside `~~strikethrough~~`: these documents correct
+#    themselves by striking the old sentence and writing the new one beside it,
+#    and a retracted claim is the plainest past tense there is.
 #
 #    "owed at" and "owned at" were added after they let a stale owner
 #    through twice. sim/README.md's campaign table said the random half of
@@ -78,6 +81,24 @@
 #    naming #427 as the owner of the item-11 gap for days after #427 closed.
 #    Adding it also surfaced a bare `(#2057)` -- a klayout-tools commit's PR
 #    number, which rule 1 correctly rejects as unresolvable here.
+#
+#    "tracked as" was added for the third instance of the same failure, and
+#    the first one this check was already grading the file for and still
+#    missed (#127's 2026-09-27 derivation pass). signoff/README.md's
+#    "Item 6(c)" section said the Monte Carlo corner-combination gap "is
+#    tracked as `#597`" -- present tense, live owner -- and #597 closed the
+#    same day, having in fact widened that campaign from 3 to 21 corners. The
+#    sentence was false about the tree AND about the forge, and the phrase
+#    list did not contain the one word that separates it from the "tracked
+#    at" the rule has caught since #237. A gap whose named owner is closed
+#    reads as tracked and is not: the distinction rule 3 exists to draw does
+#    not depend on which preposition follows "tracked".
+#
+#    Note it grades the phrase, not the noun after it: "Tracked as an owed
+#    measurement, not folded silently into the existing number"
+#    (docs/chipalooza/challenge-5-proposal.md §5.1) names a KIND of debt and
+#    reaches no `#N` before SPAN_END, so it is not an ownership claim about
+#    any issue and is left alone.
 #
 # A reference qualified by a sibling repository's name ("klayout-tools
 # #309") is a different repository's issue and is not graded here at all;
@@ -180,7 +201,7 @@ STATE_ANNOTATION = re.compile(
 #: statement about the past, which rule 3 exempts; so does "previously".
 OWNERSHIP = re.compile(
     r"(?<!\bwas\s)(?<!\bwere\s)(?<!\bpreviously\s)"
-    r"\b(?:tracked(?:\s+separately)?\s+(?:at|by)|filed\s+as|routed\s+to|"
+    r"\b(?:tracked(?:\s+separately)?\s+(?:at|by|as)|filed\s+as|routed\s+to|"
     r"owned\s+(?:at|by)|owed\s+(?:at|by|from)|raised\s+against)\b",
     re.IGNORECASE,
 )
@@ -198,6 +219,31 @@ SPAN_END = re.compile(r"(?<=[.;])\s|\s\|\s|\s[—–]\s|\n\n|$")
 #: exemption, checked on the text before the match because Python's
 #: lookbehind must be fixed-width and "was tracked separately at" is not.
 PAST_TENSE = re.compile(r"\b(?:was|were|had\s+been|previously)\s+$", re.IGNORECASE)
+
+#: `~~ ... ~~` -- a retraction, and the strongest past-tense marker this
+#: repository has. Its documents correct themselves by striking the old
+#: sentence and writing the new one beside it ("struck rather than deleted"),
+#: rather than by overwriting, so that a reader can see what the claim used to
+#: be. A struck ownership phrase is therefore narration of a superseded claim,
+#: exactly what the `was`/`were` exemption above covers, and rule 3 must not
+#: grade it: signoff/README.md's item-11 paragraph still contains a struck
+#: "tracked separately as #427" beside the "corrected (2026-09-26, issue #564)"
+#: sentence that replaced it, and #427 is long closed. Deliberately scoped to
+#: rule 3 (ownership): rule 2's state annotations are a cheaper, more literal
+#: claim, and a struck `(open)` is still worth telling an author about.
+#:
+#: The `(?!\n\s*\n)` is what keeps the pairing honest. `~~` markers are paired
+#: positionally, so an *odd* number of them in a graded file would pair an
+#: unclosed opener with the next real opener and silently exempt everything
+#: between the two -- an exemption with no diagnostic, which is the one failure
+#: mode a check like this must not have. Refusing to cross a blank line bounds
+#: that: GFM strikethrough is an inline construct and cannot span a paragraph
+#: break, so a pair that would have to cross one is not rendered struck to a
+#: reader either, and exempting it would be grading something the document does
+#: not actually say. `re.DOTALL` stays -- 10 of signoff/README.md's 12 spans
+#: contain a newline *within* one paragraph, so requiring a single line instead
+#: would break them.
+STRUCK = re.compile(r"~~(?:(?!\n\s*\n).)+?~~", re.DOTALL)
 
 #: "the now-closed #10", "closed issue #13" -- a state annotation written in
 #: front of the reference rather than after it. Rule 3 reads it the same way it
@@ -270,11 +316,19 @@ def references(text):
     return found
 
 
+def struck_spans(text):
+    """Character ranges inside `~~...~~`, this repository's retraction mark."""
+    return [(m.start(), m.end()) for m in STRUCK.finditer(text)]
+
+
 def owned_spans(text):
     """Character ranges an unexpired present-tense ownership phrase covers."""
+    struck = struck_spans(text)
     spans = []
     for match in OWNERSHIP.finditer(text):
         if PAST_TENSE.search(text[max(0, match.start() - 24):match.start()]):
+            continue
+        if any(start <= match.start() < end for start, end in struck):
             continue
         end = SPAN_END.search(text, match.end())
         spans.append((match.end(), end.start() if end else len(text), match.group(0)))

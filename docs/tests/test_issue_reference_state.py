@@ -283,6 +283,74 @@ class TestOwnershipRule(_TreeTest):
         )
         self.assertPasses()
 
+    def test_tracked_as_a_closed_issue_is_caught(self):
+        """The real drift (#127's 2026-09-27 pass): signoff/README.md's item-6(c)
+        section said the corner-combination gap "is tracked as `#597`" for hours
+        after #597 closed, and rule 3 did not see it -- the phrase list had
+        "tracked at" and "tracked by" but not "tracked as", which hands work to
+        an owner in exactly the same present tense."""
+        self.tree.write(PROPOSAL, _proposal(section7="The gap is tracked as #13."))
+        self.assertFails('hands work to #13 with "tracked as", but #13 is closed')
+
+    def test_tracked_as_an_open_issue_passes(self):
+        self.tree.write(PROPOSAL, _proposal(section7="The gap is tracked as #297."))
+        self.assertPasses()
+
+    def test_a_struck_ownership_phrase_is_exempt(self):
+        """`~~tracked separately as #13~~` is a retraction, not a live owner.
+        signoff/README.md's item-11 paragraph keeps exactly this shape -- the
+        superseded sentence struck, the correction written beside it -- because
+        this repository corrects itself by striking rather than overwriting."""
+        self.tree.write(
+            PROPOSAL,
+            _proposal(
+                section7="~~The gap is tracked separately as #13.~~ — "
+                "corrected: it is tracked at #297."
+            ),
+        )
+        self.assertPasses()
+
+    def test_a_struck_span_does_not_exempt_the_correction_beside_it(self):
+        """The exemption must stop at the closing `~~`, or a single struck
+        sentence would launder every stale owner after it."""
+        self.tree.write(
+            PROPOSAL,
+            _proposal(
+                section7="~~It was tracked at #297.~~ Now tracked at #13."
+            ),
+        )
+        self.assertFails("hands work to #13")
+
+    def test_an_unclosed_strike_marker_does_not_exempt_a_later_paragraph(self):
+        """`~~` markers pair positionally, so an *odd* number of them would pair
+        an unclosed opener with the next real opener and exempt every live owner
+        between the two -- silently, which is the one failure mode a check like
+        this must not have. GFM strikethrough is inline and cannot cross a
+        paragraph break, so neither may the exemption: what a reader sees
+        unstruck must still be graded."""
+        self.tree.write(
+            PROPOSAL,
+            _proposal(
+                section7="~~An unclosed retraction.\n\n"
+                "The gap is tracked as #13.\n\n"
+                "Something ~~else~~ struck, much later."
+            ),
+        )
+        self.assertFails('hands work to #13 with "tracked as"')
+
+    def test_tracked_as_a_noun_phrase_owns_nothing(self):
+        """"Tracked as an owed measurement" names a kind of debt, not an issue.
+        The clause reaches no `#N`, so it must not drag a later sentence's
+        reference into rule 3 (docs/chipalooza/challenge-5-proposal.md §5.1
+        uses exactly this wording)."""
+        self.tree.write(
+            PROPOSAL,
+            _proposal(
+                section7="Tracked as an owed measurement. Separately, #13 is closed."
+            ),
+        )
+        self.assertPasses()
+
     def test_every_issue_in_one_ownership_clause_is_graded(self):
         """`Tracked at issues #297, #17 and #18` must flag the middle one."""
         self.tree.write(
