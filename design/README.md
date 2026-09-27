@@ -817,11 +817,14 @@ Notes on how to read this table:
     −56.79 dBc at the same ±20 %, 1.79 dB inside.
   - **It does not disturb term 4 either.** At ±20 % the overlap mechanism
     implies at most `Δt = 0.20 × 2.584 ns = 0.517 ns` of static phase offset —
-    and that mechanism is *already inside* term 4's measured 0.864 ns, because
-    the `pfd_cp` Monte Carlo bench runs the real PFD, with its real overlap,
-    on mismatched devices. Even double-counted on top of the 0.871 ns combined
-    figure in the next bullet it gives **1.39 ns against term 4's ±3 ns**. The
-    two rows do not interact silently in either direction.
+    and that mechanism is *already inside* term 4's measured **1.02467 ns**
+    (it was 0.864 ns at the 3-point axis, per the comparison table above),
+    because the `pfd_cp` Monte Carlo bench runs the real PFD, with its real
+    overlap, on mismatched devices. Even double-counted on top of the
+    **1.030 ns** combined figure in the next bullet (it was 0.871 ns at the
+    3-point axis) it gives **1.547 ns against term 4's ±3 ns**
+    (0.517 ns + 1.030 ns; it was 1.39 ns at the 3-point axis). The two rows
+    do not interact silently in either direction.
 
 - **The divider-retiming flop's clk→Q mismatch does not get a line in this
   table.** #15's campaign measures it (`dff_tg_3v3`, the flop that retimes the
