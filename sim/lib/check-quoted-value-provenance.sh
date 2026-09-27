@@ -235,7 +235,7 @@
 #    reduction this check already evaluates; the ratified one is a line in
 #    spec/pll.md.
 #
-#    TWO OPERATORS, because two shapes of figure say "against the line". A
+#    THREE OPERATORS, because three shapes of figure say "against the line". A
 #    RATIO (`/`) answers "how many times the allowance", which is what a budget
 #    row states. A DISTANCE (`-`) answers "how far past the line", which is what
 #    a dBc row states: the reference spur's two cold corners are `0.5 dB` and
@@ -244,13 +244,26 @@
 #    wrote that pair as the RANGE `0.1-0.5 dB` and the ungraded list had to
 #    decline it -- not for want of evidence (both ends were already graded as
 #    dBc values in the first table) but because a range is not a figure. The
-#    operator is what let section 5 write the two ends as two figures.
+#    operator is what let section 5 write the two ends as two figures. A
+#    MULTIPLE (`\`), the mirror image of `/`, answers "how many times a
+#    measurement the allowance is" -- a margin row's shape: `1.48x` is DR-032's
+#    0.50 % random-jitter allocation over the 0.338 % bound it is measured
+#    against, and was declined until 2026-09-27 for a reason that named the
+#    operand order rather than a missing ingredient ("the operator is
+#    `constant / reduction`, and this table's `/` is `reduction / constant`").
 #
 #    A THIRD TABLE in section 5.1 carries them:
 #
 #      | section 5 row | Quoted value | Record(s) | Evidence file | Derivation | Constant | Scale |
 #      | Supply sensitivity -- DC ... | `1.41x` | `20260925-044237-4ff4f65` | `criterion1b_vctrl_budget.csv` | `max(span_full_v) / budget2-vctrl-consumption-v` | `0.6 V` | `1` |
 #      | Reference spur | `0.5 dB` | `20260816-132150-5f405e7` | `spur_by_corner.csv` | `max(spur_dbc_at_200mhz) - reference-spur-line-dbc` | `-55 dBc` | `1` |
+#      | Period jitter, random | `1.48x` | `sim/period-jitter/random-bound` | `results/transient_*.json against logs/grid_*.txt` | `max(bound.total_pct) \ period-jitter-random-allocation-pct` | `0.50 %` | `1` |
+#
+#    That third row is also this table's first to reduce a METHOD DIRECTORY
+#    (rule 1's third evidence form, below) rather than a record's committed
+#    CSV -- `allow_method_dir` is true for this table for exactly that entry,
+#    which is what makes it, and not rule 8, the one this file's own
+#    untested-path convention now applies to.
 #
 #    Rules 1-5 apply to it unchanged -- the record must resolve and be cited by
 #    the row, the evidence must be committed, the figure must appear verbatim
@@ -282,16 +295,22 @@
 #         is not an input -- the derivation uses the resolved value.
 #
 #      d. NO COUNT AS THE MEASURED OPERAND. A count over a ratified voltage is
-#         not a ratio, and a count minus a ratified line is not a distance; if
-#         a figure ever needs either, it needs a stated reason first.
+#         not a ratio, a ratified voltage over a count is not a multiple, and a
+#         count minus a ratified line is not a distance; if a figure ever
+#         needs any of the three, it needs a stated reason first.
 #
 #      e. A CONSTANT THAT READS AS ZERO IS A FAILED READ, not a datum. Nothing
 #         normative in this specification is a zero, so a resolver returning
 #         one means its regex stopped matching the document. That is rejected
-#         for both operators, even though subtracting zero would be harmless
-#         arithmetic: a silently-zero line would grade `-54.51 - 0` as the
-#         distance from the line and report -54.51 dB of overshoot as if it
+#         for all three operators, even though subtracting zero would be
+#         harmless arithmetic: a silently-zero line would grade `-54.51 - 0` as
+#         the distance from the line and report -54.51 dB of overshoot as if it
 #         were evidence.
+#
+#      f. A MEASURED OPERAND THAT READS AS ZERO IS REFUSED FOR `\` SPECIFICALLY
+#         -- it is the divisor there, not the constant, so guard (e) does not
+#         reach it; a bound that measured exactly zero would otherwise report
+#         an infinite margin as though it were a number.
 #
 #    And one guard shared with rule 4, which is what makes the remaining
 #    entries in the ungraded list honest: A RANGE IS NOT A FIGURE. The quoted
@@ -683,6 +702,15 @@ RANGE_FIGURE = re.compile(
 #: A rule-7 derivation: one reduction, one named operator, one ratified
 #: constant.
 #:
+#: Three operators, all one measurement against one ratified line: `/` is a
+#: measurement over the line ("how many times the allowance a measurement
+#: is" -- a budget row's shape), `-` is a measurement's distance from the line
+#: (a dBc row's shape), and `\` is the line over a measurement ("how many
+#: times a measurement the allowance is" -- a margin row's shape, and the
+#: mirror image of `/`, which is why it is the mirrored symbol rather than a
+#: word: unlike rule 8's two-reduction shapes, this one is `/`'s own operand
+#: order reversed, not a different kind of figure).
+#:
 #: The operator must carry whitespace on BOTH sides. That is not cosmetic: a
 #: where-clause inside the reduction can hold a negative literal
 #: (`where temp_c == -40`), which has a space before its minus sign and none
@@ -691,7 +719,7 @@ RANGE_FIGURE = re.compile(
 #: what makes the non-greedy reduction split at the operator rather than
 #: inside the constant's own hyphens (`reference-spur-line-dbc`).
 DERIVATION = re.compile(
-    r"^(?P<reduction>.+?)\s+(?P<op>[/-])\s+(?P<constant>[A-Za-z][\w.-]*)$"
+    r"^(?P<reduction>.+?)\s+(?P<op>[/\\-])\s+(?P<constant>[A-Za-z][\w.-]*)$"
 )
 
 #: A rule-8 derivation: two reductions of one committed table, the second of
@@ -922,10 +950,44 @@ def read_reference_spur_line_dbc(docs):
     return _one_agreed_value("reference-spur-line-dbc", readings), readings
 
 
+def read_period_jitter_random_allocation_pct(docs):
+    """The 0.50 % RMS the supply-ripple derivation leaves for the random half
+    of the period-jitter budget (spec/pll.md).
+
+    Stated twice, independently, the same two-places shape Budget 2's
+    allowance is read in: once in the `## Period jitter` derivation's own
+    prose ("At 20 mV pp that is **0.50 % RMS**"), and once in the Number
+    column of the evidenced-split table the DR-032 bound adds beside it
+    ("Supply-ripple sensitivity at the normative 20 mV pp condition | ... |
+    0.50 % RMS |").
+    """
+    spec = docs["spec"]
+    readings = []
+    m = re.search(r"At 20 mV pp that is \*\*([\d.]+)\s*%\s*RMS\*\*", spec)
+    if m:
+        readings.append(
+            ("%s ripple-derivation prose" % spec_rel, float(m.group(1)))
+        )
+    m = re.search(
+        r"Supply-ripple sensitivity at the normative 20 mV pp condition "
+        r"\|[^\n|]*\|\s*([\d.]+)\s*%\s*RMS\s*\|",
+        spec,
+    )
+    if m:
+        readings.append(
+            ("%s evidenced-split table" % spec_rel, float(m.group(1)))
+        )
+    return (
+        _one_agreed_value("period-jitter-random-allocation-pct", readings),
+        readings,
+    )
+
+
 CONSTANTS = {
     "budget2-vctrl-consumption-v": read_budget2_consumption_v,
     "dr003-vctrl-window-width-v": read_dr003_window_width_v,
     "reference-spur-line-dbc": read_reference_spur_line_dbc,
+    "period-jitter-random-allocation-pct": read_period_jitter_random_allocation_pct,
 }
 
 
@@ -2175,11 +2237,13 @@ def collect_evidence(record_cell, evidence_file, spec_cells, spec_cited, ctx,
     inlined at the three call sites: a second copy of either branch would be
     free to drift from the citation rule it encodes.
 
-    `allow_method_dir` is False for rules 7 and 8. Not because the form could
-    not work there -- it would -- but because neither rule states a figure of
-    that shape today, and this file's own convention (rule 8's "adding a plain
-    ratio for symmetry would add an untested, unused path") is that a path
-    nothing exercises is not a path to ship.
+    `allow_method_dir` is False for rule 8 only. Rule 7 read it as False too
+    until the `1.48x` margin figure needed the form -- a rule-7-shaped ratio
+    over `sim/period-jitter/random-bound`'s per-point evidence -- at which
+    point it arrived with its own tests, per this file's own convention (rule
+    8's "adding a plain ratio for symmetry would add an untested, unused
+    path"). Rule 8 still states no figure of that shape, so it stays refused
+    until one does.
     """
     method = METHOD_DIR.match(record_cell.strip().strip("`"))
     if not method:
@@ -2567,11 +2631,11 @@ for cells in derived_figures or []:
         fail(
             "%s: cannot read the derivation `%s`. The form is "
             "`<reduction> <op> <ratified constant>`, with <op> one of `/` "
-            "(a measurement over a line) or `-` (a measurement's distance "
-            "from a line), one operand each side, the constant named. The "
-            "operator must be surrounded by spaces, which is what keeps it "
-            "apart from a negative literal inside a where-clause "
-            "(`temp_c == -40`)." % (ctx, derivation)
+            "(a measurement over a line), `\\` (a line over a measurement), "
+            "or `-` (a measurement's distance from a line), one operand each "
+            "side, the constant named. The operator must be surrounded by "
+            "spaces, which is what keeps it apart from a negative literal "
+            "inside a where-clause (`temp_c == -40`)." % (ctx, derivation)
         )
         continue
     reduction = parsed_derivation.group("reduction").strip()
@@ -2579,12 +2643,7 @@ for cells in derived_figures or []:
     constant_name = parsed_derivation.group("constant").strip()
 
     evidence = collect_evidence(
-        record_cell,
-        evidence_file,
-        spec_cells,
-        spec_cited,
-        ctx,
-        allow_method_dir=False,
+        record_cell, evidence_file, spec_cells, spec_cited, ctx
     )
     if evidence is None:
         continue
@@ -2645,14 +2704,26 @@ for cells in derived_figures or []:
     if is_count:
         fail(
             "%s: the measured operand is a count. A count over a ratified "
-            "quantity is not a ratio and a count minus one is not a distance; "
-            "a figure that needs either needs a stated reason first." % ctx
+            "quantity is not a ratio, a ratified quantity over a count is not "
+            "a multiple, and a count minus one is not a distance; a figure "
+            "that needs any of the three needs a stated reason first." % ctx
         )
         continue
 
     if operator == "/":
         derived = (raw_value / constant_value) * scale
         against = "and over the ratified %.6g that is %.6g" % (
+            constant_value, derived
+        )
+    elif operator == "\\":
+        if raw_value == 0:
+            fail(
+                "%s: the measured operand reduces to zero, which cannot be "
+                "the divisor of `%s`'s multiple of it." % (ctx, constant_name)
+            )
+            continue
+        derived = (constant_value / raw_value) * scale
+        against = "and the ratified %.6g is %.6g times it" % (
             constant_value, derived
         )
     else:
