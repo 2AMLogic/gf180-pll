@@ -404,7 +404,7 @@ T1 item 6 is ungradeable for a release-pinning consumer") and
 **klayout-tools#1061** (the same gap for the git-pinned install method). Host
 policy forbids agents on this fleet from changing host-wide tool installs, so
 building the extension locally is not a route open to this repository's own
-agents — #2531 is the blocker's tracking issue, and closing it is upstream's
+agents — klayout-tools#2531 is the blocker's tracking issue, and closing it is upstream's
 work, not this repository's.
 
 **Which spec rows are statistical, named explicitly.** The checklist's
