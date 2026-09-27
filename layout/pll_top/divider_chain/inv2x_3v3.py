@@ -74,17 +74,8 @@ def reference_netlist() -> str:
     matching that schematic's own ``B=VDD``/``B=VSS`` instance parameters.
     """
     return (
-        "* Reference schematic for inv2x_3v3 (issue #307).\n"
-        "*\n"
-        "* Hand-written independently of the layout -- see\n"
-        "* layout/harness/cell.py's docstring for why. Device sizes/nodes match\n"
-        "* design/inv2x_3v3.sch exactly.\n"
-        "*\n"
-        "* Run LVS with --lvs_sub=VSS (layout/run_pv.py's own default): the NMOS\n"
-        "* body ties to the deck's synthesized global substrate net, which this\n"
-        "* flag names VSS -- see layout/README.md's \"substrate-net gotcha\".\n"
-        "\n"
-        ".subckt inv2x_3v3 A Y VDD VSS\n"
+        _cli.reference_netlist_header("inv2x_3v3", 307)
+        + ".subckt inv2x_3v3 A Y VDD VSS\n"
         "M_MP Y A VDD VDD pfet_03v3 W=5u L=0.28u\n"
         "M_MN Y A VSS VSS nfet_03v3 W=2u L=0.28u\n"
         ".ends\n"

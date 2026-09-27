@@ -51,17 +51,8 @@ def reference_netlist() -> str:
     declaration order (``VBN VCASCN EN ENB TAIL VSS``).
     """
     return (
-        "* Reference schematic for cp_leg_n (issue #319).\n"
-        "*\n"
-        "* Hand-written independently of the layout -- see\n"
-        "* layout/harness/cell.py's docstring for why. Device sizes/nodes match\n"
-        "* design/cp_leg_n.sch exactly.\n"
-        "*\n"
-        "* Run LVS with --lvs_sub=VSS (layout/run_pv.py's own default): the NMOS\n"
-        "* body ties to the deck's synthesized global substrate net, which this\n"
-        "* flag names VSS -- see layout/README.md's \"substrate-net gotcha\".\n"
-        "\n"
-        ".subckt cp_leg_n VBN VCASCN EN ENB TAIL VSS\n"
+        _cli.reference_netlist_header("cp_leg_n", 319)
+        + ".subckt cp_leg_n VBN VCASCN EN ENB TAIL VSS\n"
         "M_MEN BG EN VBN VSS nfet_03v3 W=1u L=0.3u\n"
         "M_MDIS BG ENB VSS VSS nfet_03v3 W=1u L=0.3u\n"
         "M_MBOT MID BG VSS VSS nfet_03v3 W=4u L=1u\n"

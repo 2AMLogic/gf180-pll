@@ -39,6 +39,16 @@ pll_top.divider_chain.inv_3v3`` from ``layout/``). Nothing in
 ``layout/tests/`` or ``layout/run_pv.py`` invokes them, and the blocks that
 *compose* these cells import ``build()`` directly -- so this module is on no
 verification path and imports nothing heavier than ``pathlib``.
+
+:func:`reference_netlist_header` is the same "one shared home, not nine
+copies" argument applied one level down (issue #620): eight of these same
+nine ``reference_netlist()`` callers previously repeated an identical
+9-line comment header/footer verbatim rather than duplicating a whole
+``main()``. The shared text now lives in
+``layout/harness/cell.py::reference_netlist_header`` -- this function is a
+thin, import-deferred re-export, routed through this module (which every
+caller already imports at module scope) so no caller needs its own copy of
+the ``harness`` sys.path fixup ``pfd_cp/block.py``'s try/except documents.
 """
 
 from __future__ import annotations
@@ -101,3 +111,35 @@ def leaf_cli_main(
     print(f"footprint: {x1 - x0:.3f} x {y1 - y0:.3f} um  ({(x1 - x0) * (y1 - y0):.2f} um^2)")
     print(f"pins: {sorted(layout.pins)}")
     return 0
+
+
+def reference_netlist_header(cell: str, issue: int) -> str:
+    """Re-export of ``harness.cell.reference_netlist_header`` (issue #620)
+    -- see the module docstring's last paragraph for why this indirection
+    exists rather than each caller importing ``harness.cell`` directly.
+
+    Import deferred for the same reason ``leaf_cli_main``'s own ``argparse``
+    import is deferred above: every one of the nine ``reference_netlist()``
+    callers imports this module at module scope (directly or via the blocks
+    that compose them), so a module-scope ``from harness.cell import ...``
+    here would need ``harness``'s sys.path fixup to run for every one of
+    them, even the ones (``build()``-only composing blocks) that never call
+    this function.
+    """
+    import sys  # noqa: PLC0415
+
+    try:
+        from harness.cell import reference_netlist_header as _impl  # noqa: PLC0415
+    except ImportError:  # "layout/" itself (harness's own package root) is
+        # not on sys.path under either of this module's two call
+        # conventions (the flat ``python3 -m divider_chain.inv_3v3`` CLI,
+        # run with cwd/sys.path rooted at ``layout/pll_top/``; or
+        # ``layout/tests``'s own convention, which adds ``layout/pll_top/``
+        # but only conditionally ``layout/`` itself) -- see
+        # ``pfd_cp/block.py``'s identical try/except for the full citation.
+        layout_dir = Path(__file__).resolve().parents[1]
+        if str(layout_dir) not in sys.path:
+            sys.path.insert(0, str(layout_dir))
+        from harness.cell import reference_netlist_header as _impl  # noqa: PLC0415
+
+    return _impl(cell, issue)

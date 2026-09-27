@@ -51,17 +51,8 @@ def reference_netlist() -> str:
     own ``B=VDD``/``B=VSS`` instance parameters.
     """
     return (
-        "* Reference schematic for pfdcp_inv_3v3 (issue #299).\n"
-        "*\n"
-        "* Hand-written independently of the layout -- see\n"
-        "* layout/harness/cell.py's docstring for why. Device sizes/nodes match\n"
-        "* design/pfdcp_inv_3v3.sch exactly.\n"
-        "*\n"
-        "* Run LVS with --lvs_sub=VSS (layout/run_pv.py's own default): the NMOS\n"
-        "* body ties to the deck's synthesized global substrate net, which this\n"
-        "* flag names VSS -- see layout/README.md's \"substrate-net gotcha\".\n"
-        "\n"
-        ".subckt pfdcp_inv_3v3 A Y VDD VSS\n"
+        _cli.reference_netlist_header("pfdcp_inv_3v3", 299)
+        + ".subckt pfdcp_inv_3v3 A Y VDD VSS\n"
         "M_MP Y A VDD VDD pfet_03v3 W=1.5u L=0.3u\n"
         "M_MN Y A VSS VSS nfet_03v3 W=0.5u L=0.3u\n"
         ".ends\n"
