@@ -304,8 +304,9 @@ Each of these is a limit of the bound, stated so that nobody has to infer it.
   an argument for why they are small, not a bound on them; it is the scope
   DR-002 Decision 5 itself specified ("a transient-noise testbench dominated
   by the VCO plus a jitter-transfer argument through the closed loop"), and it
-  is stated as a scope, not as a result. Bounding them is #580's. The
-  reference source is excluded by `spec/pll.md` (DR-019).
+  is stated as a scope, not as a result. They have since been bounded by
+  DR-033, in `../in-band-bound/`. The reference source is excluded by
+  `spec/pll.md` (DR-019).
 - **The bias generator's term rests on a model**, not on a transient: its
   noise through a quasi-static ring response, the ring's gate loading at the
   stages' average bias. The `validate` stage checks that model against the
