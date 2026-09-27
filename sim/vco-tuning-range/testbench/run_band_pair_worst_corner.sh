@@ -100,6 +100,39 @@
 # another pair is a runner change and no deck change -- but it is not done
 # here, and is stated as a residual gap rather than implied to be covered.
 #
+# --- Erratum: the `# switches:` line of the CSV already committed (#601) -----
+#
+# This script was written on a branch cut BEFORE #601 landed on main (as #607,
+# `4b8dcad9`), which gave `simenv_provenance` its optional fifth switches-note
+# argument. Its first version called `simenv_provenance` with four arguments,
+# so the `# switches:` line of the one CSV it had already minted --
+#
+#   corners/20260927-081930-d004d5b/mismatch.csv
+#
+# -- carries the pre-#601 harness default:
+#
+#   # switches: design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0
+#   #           -> nominal skew, no Monte Carlo)
+#
+# -- which is the opposite of what tb_vco_band_pair.sp does. That deck declares
+# `sw_stat_global=0` / `sw_stat_mismatch=1` after the design.ngspice include, so
+# the later declaration wins (the harness-ordering finding cited above), and
+# every one of the 200 rows under that header is a mismatch draw.
+#
+# Those bytes are NOT edited and neither is the record beside them -- sim/ is
+# append-only evidence and sim/README.md forbids editing a committed record even
+# to correct it. The correction is made forward: SWITCHES_NOTE below now feeds
+# simenv_provenance, so every CSV minted from this script states the switches
+# the run actually used, and this file names the one file that predates it. The
+# same disposition run_mismatch.sh and run_band0_worst_corner.sh use for their
+# own pre-#601 CSVs.
+#
+# For that one file the record's Environment provenance field is authoritative
+# and the CSV's `# switches:` line is a harness default that was never true of
+# the run. `records/20260927-081930-d004d5b.md` states the switches correctly in
+# both its "Environment provenance" field and its "Statistical convention"
+# field, as simenv_env_block has taken the override since #15.
+#
 # Usage:
 #   ./run_band_pair_worst_corner.sh          # full campaign -> mints records/<id>.md
 #   ./run_band_pair_worst_corner.sh --check  # 2 draws, to stdout
@@ -165,6 +198,14 @@ RATIO_FLOOR=1.0
 N_SAMPLES="${N_SAMPLES:-200}"
 
 HEADER="seed,band_a,vctrl_a_v,f_a_hz,i_a_a,band_b,vctrl_b_v,f_b_hz,i_b_a,ratio"
+
+# The `# switches:` line of the CSV this script writes (#601), passed to
+# simenv_provenance as its optional fifth argument. Prose counterpart: the
+# simenv_env_block switches-note in the record body below. Without it
+# simenv_provenance emits its design.ngspice-default wording -- "no Monte
+# Carlo" -- which for this deck says the opposite of what ran, over data that
+# is nothing but joint mismatch draws.
+SWITCHES_NOTE="design.ngspice defaults OVERRIDDEN by tb_vco_band_pair.sp, which re-declares them after the include (sw_stat_global=0, sw_stat_mismatch=1 -> mismatch-only Monte Carlo, .option rndseed set per joint draw)"
 
 stage_netlist() {
   mkdir -p "$1"
@@ -309,7 +350,8 @@ OUT="${CORNERSDIR}/mismatch.csv"
 {
   simenv_provenance "vco-tuning-range (B${BAND_A}->B${BAND_B} pair, joint two-band draw)" "${RID}" \
     "design/netlist/vco.spice (committed export)" \
-    "${CORNER_TAG}/${TEMP}C/${VDD}V, band ${BAND_A} @ Vctrl=${VCTRL_A} and band ${BAND_B} @ Vctrl=${VCTRL_B} in ONE parse per draw, N=${N_SAMPLES} joint mismatch draws"
+    "${CORNER_TAG}/${TEMP}C/${VDD}V, band ${BAND_A} @ Vctrl=${VCTRL_A} and band ${BAND_B} @ Vctrl=${VCTRL_B} in ONE parse per draw, N=${N_SAMPLES} joint mismatch draws" \
+    "${SWITCHES_NOTE}"
   echo "${HEADER}"; cat "${WORK}/all.csv"
 } >"${OUT}"
 
