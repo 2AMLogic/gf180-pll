@@ -36,9 +36,23 @@ already differ by four bytes; the same reason
 These are developer-only entry points for rebuilding one leaf cell's
 evidence GDS + reference netlist in isolation (``python3 -m
 pll_top.divider_chain.inv_3v3`` from ``layout/``). Nothing in
-``layout/tests/`` or ``layout/run_pv.py`` invokes them, and the blocks that
-*compose* these cells import ``build()`` directly -- so this module is on no
-verification path and imports nothing heavier than ``pathlib``.
+``layout/tests/`` or ``layout/run_pv.py`` invokes :func:`leaf_cli_main`, and
+the blocks that *compose* these cells import ``build()`` directly.
+
+The clause that closed that sentence until issue #620 -- *"so this module is
+on no verification path"* -- is no longer true. Corrected in issue #127's
+2026-09-27 derivation pass rather than left standing, because it is the
+sentence a reader would use to decide how carefully to review a change here.
+:func:`reference_netlist_header` **is** on the verification path: it supplies
+the leading comment lines of the LVS *golden reference* for eight leaf cells,
+so every ``mod.reference_netlist()`` call in ``layout/tests/`` reaches it,
+and the byte-identity assertion in
+``layout/tests/test_leaf_reference_netlist_evidence.py`` grades its output
+against the committed ``layout/evidence/*/<cell>.spice`` the deck was run
+on. What is still true, and is the part worth keeping, is the import
+weight: at module scope this file imports nothing heavier than ``pathlib``
+(both ``argparse`` and ``harness.cell`` are deferred into the functions that
+need them).
 
 :func:`reference_netlist_header` is the same "one shared home, not nine
 copies" argument applied one level down (issue #620): eight of these same
