@@ -64,8 +64,8 @@
 # THE RULES
 #
 # 1. RESOLVABLE. Every record id in the first table must resolve to a real
-#    sim/*/records/<id>.md, and the named evidence must be committed. Two forms
-#    of evidence are accepted, both committed and both reduced by the same
+#    sim/*/records/<id>.md, and the named evidence must be committed. Three
+#    forms of evidence are accepted, all committed and all reduced by the same
 #    grammar:
 #
 #      <file>.csv              sim/<campaign>/corners/<id>/<file>, the usual
@@ -101,6 +101,84 @@
 #                              the OK line -- the weaker one is never applied
 #                              silently.
 #
+#      <results glob> against   A METHOD DIRECTORY's per-point JSON documents.
+#      <logs glob>              Here the Record(s) column holds
+#                               `sim/<campaign>/<method>` instead of a record
+#                               id, both globs are relative to it, and each
+#                               holds exactly one `*` -- the point id. Each
+#                               matched document becomes one row and its nested
+#                               keys become dotted column names
+#                               (`bound.total_pct`, `operating_point.temp_c`).
+#
+#                               The random/noise-driven period-jitter row was
+#                               ungraded until 2026-09-27 for the reason "an
+#                               upper bound from a method directory, not a
+#                               record ... and this check resolves record ids",
+#                               whose own next clause said the evidence IS
+#                               committed. That is a fact about this check
+#                               stated as a property of the evidence -- the same
+#                               shape as the three "no CSV was committed"
+#                               reasons above, which were false.
+#                               sim/period-jitter/random-bound (DR-032) runs
+#                               several decks per point with a reduction between
+#                               them, so it sits outside sim/harness's record
+#                               convention; its 45 per-point reductions are
+#                               committed as results/transient_*.json beside the
+#                               45 logs that produced them.
+#
+#                               Four rules travel with it. (i) THE POINT SETS
+#                               MUST BE EQUAL BY IDENTITY -- the ids the results
+#                               glob matches against the ids the logs glob does.
+#                               This is the anti-truncation rule above in a form
+#                               where a directory can be trimmed as quietly as a
+#                               table can be elided: max() over 44 of 45 points
+#                               still bounds something and count(rows) over them
+#                               is 44. Identity is always available here, both
+#                               names carrying the id, so unlike the second form
+#                               there is NO weaker count-only rule and none is
+#                               offered. (ii) THE LOGS GLOB IS NAMED, NOT
+#                               GUESSED: a method directory's stage names need
+#                               not match its log names -- transient_* is
+#                               reduced from grid_*, one grid run per point
+#                               feeding four stages -- and a guess would have
+#                               compared a set against itself. (iii) EACH
+#                               DOCUMENT MUST AGREE WITH ITS OWN FILENAME: its
+#                               `point` field must be the id the name declares,
+#                               or a file copied to a new name passes the set
+#                               comparison and then contributes another point's
+#                               numbers. (iv) A METHOD DIRECTORY THAT COMMITS A
+#                               records/ IS REFUSED: evidence reachable by
+#                               record id must be reduced that way, or this form
+#                               is a route around rule 2 for every record on the
+#                               tree. In its place rule 2 is enforced on the
+#                               PATH -- see rule 2.
+#
+#                               And a per-point glob that matches ONE point is
+#                               refused rather than reduced: the form's purpose
+#                               is to prove a SET was complete, and one member
+#                               is a single file wearing a glob's clothes whose
+#                               every aggregate returns that point's own number
+#                               while the entry's shape says "over the grid".
+#                               That refusal is what keeps the one-point
+#                               `validate` stage's `0.910 +/- 0.042` in the
+#                               ungraded-figure table.
+#
+#                               A LIST IS NOT A CELL and is skipped rather than
+#                               summarised, so a reduction naming one fails with
+#                               the columns that do exist printed beside it.
+#                               Taking a list's length or its first element
+#                               would answer a question the document did not
+#                               ask, silently.
+#
+#                               Rules 7 and 8 refuse this form. Not because it
+#                               could not work there -- the real tree's `1.48x`
+#                               is a rule-7-shaped figure over exactly this
+#                               evidence -- but because no figure of that shape
+#                               is graded today, and this file's own convention
+#                               (rule 8's "adding a plain ratio for symmetry
+#                               would add an untested, unused path") is that a
+#                               path nothing exercises is not a path to ship.
+#
 #    A reduction over evidence that is not committed is not reproducible by a
 #    reader.
 #
@@ -108,6 +186,12 @@
 #    section 5 row it is attached to -- or, where that row's Source cell says
 #    "Same record", by the nearest preceding row that names one. Section 5.1
 #    may not smuggle in evidence the row itself does not point a reader at.
+#
+#    A METHOD DIRECTORY HAS NO ID, so what is compared is the PATH: the section
+#    5 row must name the very results glob the entry reduces, not merely the
+#    directory it sits in. Citing the directory is not citing the files -- a row
+#    pointing a reader at sim/period-jitter/random-bound/ leaves them to guess
+#    which of its five stages' result sets a figure came from.
 #
 # 3. PRESENT. The quoted value string must appear verbatim in that section 5
 #    row's own cells. This is what stops the two tables from drifting apart:
@@ -293,10 +377,11 @@
 # figure (rule 6) -- never "every number in section 5 is accounted for".
 # Overstating it would be the same defect this check exists to catch.
 #
-# It reduces committed *reduced* evidence only -- a per-corner CSV, or a
-# per-point table committed inside a record (rule 1). It never runs a simulator
-# and never parses a logfile's contents: the per-corner logs are read only as
-# NAMES, to prove a markdown table has one row per simulation that ran. So it
+# It reduces committed *reduced* evidence only -- a per-corner CSV, a per-point
+# table committed inside a record, or a method directory's per-point JSON
+# (rule 1). It never runs a simulator and never parses a logfile's contents: the
+# per-corner and per-point logs are read only as NAMES, to prove a markdown
+# table or a result set has one entry per simulation that ran. So it
 # cannot tell whether the simulation behind a number was the right experiment --
 # that is what the record's own Methodology field and its campaign's testbench
 # are for.
@@ -506,6 +591,7 @@ fi
 
 python3 - "${REPO_ROOT}" "${PROPOSAL}" "${SPEC}" <<'PY'
 import csv
+import json
 import math
 import os
 import re
@@ -1634,6 +1720,228 @@ record_table_stats = {"id_matched": 0, "count_matched": 0}
 #: purpose: an entry may only read the markdown of the record it declares.
 RECORD_TABLE = re.compile(r"^(" + RECORD_ID + r")\.md\s*§\s*([\w.\-/]+)$")
 
+#: A METHOD DIRECTORY in the Record(s) column -- `sim/<campaign>/<method>` --
+#: for a campaign whose per-point evidence is committed outside the record
+#: convention (rule 1, third evidence form). Two segments under sim/ exactly,
+#: so that a record's own `corners/<id>` path can never be written here.
+METHOD_DIR = re.compile(r"^sim/([\w.\-]+)/([\w.\-]+)/?$")
+
+#: `<results glob> against <logs glob>` -- the evidence spec that goes with a
+#: method directory. Both globs are relative to it and each holds exactly one
+#: `*`, which is the point id: the results glob says which per-point reductions
+#: are being reduced, the logs glob says which committed simulation logs
+#: corroborate them. The author states the second rather than this check
+#: guessing it, because a method directory's stage names need not match its log
+#: names (`results/transient_*.json` is reduced from `logs/grid_*.txt`) and a
+#: guess that missed would compare a set against itself.
+METHOD_EVIDENCE = re.compile(
+    r"^([\w.\-/]*\*[\w.\-/]*\.json)\s+against\s+([\w.\-/]*\*[\w.\-/]*)$"
+)
+
+#: How many method-directory point sets were read, and how many per-point JSON
+#: documents in total. Reported in the OK line for read_record_table's reason:
+#: a form whose whole job is to prove a set was complete must say how big the
+#: set it proved was.
+method_dir_stats = {"sets": 0, "points": 0}
+
+
+def _glob_point_ids(directory, pattern, ctx, what):
+    """The point ids the one `*` of `pattern` captures under `directory`.
+
+    A sorted list, or None having reported. Implemented by splitting on the
+    literal `*` rather than with glob/fnmatch because the captured text is the
+    thing this form compares, not a side effect of it: `glob` would return
+    paths and leave the caller to re-derive which part of each was the id.
+    """
+    head, _, tail = pattern.partition("*")
+    sub = os.path.join(directory, os.path.dirname(head))
+    prefix, suffix = os.path.basename(head), tail
+    if not os.path.isdir(sub):
+        fail(
+            "%s: %s names `%s`, and %s is not a directory on the tree."
+            % (ctx, what, pattern, os.path.relpath(sub, repo_root))
+        )
+        return None
+    ids = []
+    for name in sorted(os.listdir(sub)):
+        if name.startswith(prefix) and name.endswith(suffix) and (
+            len(name) > len(prefix) + len(suffix)
+        ):
+            ids.append(name[len(prefix): len(name) - len(suffix)])
+    return sorted(ids)
+
+
+def _flatten_json(obj, prefix, out):
+    """A JSON object's scalar leaves as dotted column names.
+
+    A LIST IS NOT A CELL, and is skipped rather than summarised. Every
+    reduction in this grammar is over a column of scalars; taking a list's
+    length, or its first element, would answer a question the document did not
+    ask and would do it silently -- `copies` is five noisy runs of 240 periods
+    each, and `count` over it is not a figure anyone wrote. A skipped list is
+    simply not a column, so a reduction that names one fails require_columns()
+    with the columns that DO exist printed beside it.
+
+    Booleans are stringified as `True`/`False`, which is what a where-clause
+    over them compares against; they are not numbers and no aggregate may
+    reduce them.
+    """
+    for key, value in obj.items():
+        name = key if not prefix else prefix + "." + key
+        if isinstance(value, dict):
+            _flatten_json(value, name, out)
+        elif isinstance(value, (list, tuple)):
+            continue
+        else:
+            out[name] = str(value)
+
+
+def read_method_point_rows(campaign, method, results_glob, logs_glob, ctx):
+    """One row per per-point JSON document of a method directory.
+
+    THE CORRESPONDENCE RULE, in this form's dialect. read_record_table's
+    anti-truncation rule exists because a markdown table can be elided while a
+    CSV cannot. A directory of per-point files can be elided the same way, and
+    more quietly: a `max()` over 44 of 45 points is a smaller number that still
+    bounds something, and a `count(rows)` over them is 44, which reads like an
+    answer. So the point ids the results glob matches must equal, BY IDENTITY
+    and not merely by count, the point ids of the committed simulation logs the
+    entry names. Identity is always available here -- both globs carry the id
+    in the filename -- so unlike read_record_table this form has no weaker rule
+    to fall back to, and none is offered.
+
+    And each document must AGREE WITH ITS OWN FILENAME: the `point` field must
+    be the id the name declares. A file copied to a new name, or a name
+    mistyped, otherwise passes the set comparison and contributes another
+    point's numbers under this point's id.
+    """
+    method_root = os.path.join(repo_root, "sim", campaign, method)
+    if not os.path.isdir(method_root):
+        fail(
+            "%s: no method directory at sim/%s/%s" % (ctx, campaign, method)
+        )
+        return None
+    if os.path.isdir(os.path.join(method_root, "records")):
+        fail(
+            "%s: sim/%s/%s commits a records/ directory, so its evidence is "
+            "reachable by record id and must be reduced that way. This form "
+            "exists for evidence that is outside the record convention, not "
+            "as a route around rules 1 and 2's record citation."
+            % (ctx, campaign, method)
+        )
+        return None
+
+    result_ids = _glob_point_ids(
+        method_root, results_glob, ctx, "the results glob"
+    )
+    log_ids = _glob_point_ids(method_root, logs_glob, ctx, "the logs glob")
+    if result_ids is None or log_ids is None:
+        return None
+    if not result_ids:
+        fail(
+            "%s: `%s` matches no committed file under sim/%s/%s."
+            % (ctx, results_glob, campaign, method)
+        )
+        return None
+    if len(result_ids) < 2:
+        # A per-point glob that matches ONE point is a single file wearing a
+        # glob's clothes, and every aggregate over it returns that one point's
+        # number -- reported, by the shape of the entry, as a figure over the
+        # grid. `max(bound.total_pct)` over 1 of 45 points is not a bound and
+        # `count(rows)` over it is 1. This form's whole purpose is to prove a
+        # SET was complete, so one member is refused rather than reduced; a
+        # single-point figure is owed a named single-file form, with its own
+        # paragraph and its own tests.
+        fail(
+            "%s: `%s` matches 1 point (`%s`) under sim/%s/%s. A per-point glob "
+            "that matches one point proves nothing about a grid -- every "
+            "aggregate over it returns that point's own number. Grade a "
+            "single-point figure through a form that names the one file, not "
+            "through a glob."
+            % (ctx, results_glob, result_ids[0], campaign, method)
+        )
+        return None
+    if not log_ids:
+        fail(
+            "%s: `%s` matches no committed simulation log under sim/%s/%s, so "
+            "the point set cannot be checked against the simulations that ran. "
+            "A directory of result files nothing corroborates is prose."
+            % (ctx, logs_glob, campaign, method)
+        )
+        return None
+    if result_ids != log_ids:
+        missing = sorted(set(log_ids) - set(result_ids))
+        extra = sorted(set(result_ids) - set(log_ids))
+        fail(
+            "%s: `%s` matches %d point(s) and `%s` matches %d, and the point "
+            "sets differ -- %d log(s) with no result (%s), %d result(s) with "
+            "no log (%s). One result per simulation that ran is what makes a "
+            "reduction over this directory a claim about the grid; a set that "
+            "was trimmed must not read as a smaller, passing answer."
+            % (
+                ctx,
+                results_glob,
+                len(result_ids),
+                logs_glob,
+                len(log_ids),
+                len(missing),
+                ", ".join(missing[:3]) or "-",
+                len(extra),
+                ", ".join(extra[:3]) or "-",
+            )
+        )
+        return None
+
+    head, _, tail = results_glob.partition("*")
+    rows = []
+    for pid in result_ids:
+        path = os.path.join(method_root, head + pid + tail)
+        try:
+            with open(path, encoding="utf-8") as fh:
+                doc = json.load(fh)
+        except (OSError, ValueError) as exc:
+            fail(
+                "%s: sim/%s/%s/%s is not readable JSON: %s"
+                % (ctx, campaign, method, head + pid + tail, exc)
+            )
+            return None
+        if not isinstance(doc, dict):
+            fail(
+                "%s: sim/%s/%s/%s is a JSON %s, not an object. This form reads "
+                "one object per point."
+                % (
+                    ctx,
+                    campaign,
+                    method,
+                    head + pid + tail,
+                    type(doc).__name__,
+                )
+            )
+            return None
+        flat = {}
+        _flatten_json(doc, "", flat)
+        declared = flat.get("point")
+        if declared != pid:
+            fail(
+                "%s: sim/%s/%s/%s declares point `%s`, not the `%s` its own "
+                "filename does. A file copied to a new name passes the set "
+                "comparison and then contributes another point's numbers."
+                % (
+                    ctx,
+                    campaign,
+                    method,
+                    head + pid + tail,
+                    declared,
+                    pid,
+                )
+            )
+            return None
+        rows.append(flat)
+
+    method_dir_stats["sets"] += 1
+    method_dir_stats["points"] += len(rows)
+    return rows
+
 
 def read_record_table(rid, campaign, first_col, ctx):
     """A pipe table committed inside a record, in CSV-row shape.
@@ -1858,6 +2166,92 @@ def collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx):
     return Evidence(rows, describe_sources(sources))
 
 
+def collect_evidence(record_cell, evidence_file, spec_cells, spec_cited, ctx,
+                     allow_method_dir=True):
+    """Dispatch on the shape of the Record(s) cell: record ids, or a method dir.
+
+    The one place "which evidence an entry may read" is decided, which is why
+    collect_evidence_rows() exists as one function and why this dispatch is not
+    inlined at the three call sites: a second copy of either branch would be
+    free to drift from the citation rule it encodes.
+
+    `allow_method_dir` is False for rules 7 and 8. Not because the form could
+    not work there -- it would -- but because neither rule states a figure of
+    that shape today, and this file's own convention (rule 8's "adding a plain
+    ratio for symmetry would add an untested, unused path") is that a path
+    nothing exercises is not a path to ship.
+    """
+    method = METHOD_DIR.match(record_cell.strip().strip("`"))
+    if not method:
+        record_ids = re.findall(RECORD_ID, record_cell)
+        if not record_ids:
+            fail(
+                "%s: names neither a record id nor a method directory "
+                "(`sim/<campaign>/<method>`)" % ctx
+            )
+            return None
+        return collect_evidence_rows(
+            record_ids, evidence_file, spec_cited, ctx
+        )
+
+    campaign, method_name = method.group(1), method.group(2)
+    if not allow_method_dir:
+        fail(
+            "%s: reduces the method directory sim/%s/%s. Only the first "
+            "section 5.1 table reads a method directory; a derived or relative "
+            "figure of that shape is owed its own paragraph and its own tests "
+            "before the path exists." % (ctx, campaign, method_name)
+        )
+        return None
+
+    spec = METHOD_EVIDENCE.match(evidence_file)
+    if not spec:
+        fail(
+            "%s: reduces the method directory sim/%s/%s, whose evidence spec "
+            "is `<results glob>.json against <logs glob>` -- two paths relative "
+            "to it, each holding exactly one `*`, which is the point id. A "
+            "method directory has no single evidence file to name, and the "
+            "logs the results are corroborated against are stated rather than "
+            "guessed. Got `%s`." % (ctx, campaign, method_name, evidence_file)
+        )
+        return None
+    results_glob, logs_glob = spec.group(1), spec.group(2)
+
+    # Rule 2, in this form's dialect. A record id is compared against the ids
+    # the section 5 row cites; a method directory has no id, so what is compared
+    # is the PATH -- the row must point a reader at the very files this entry
+    # reduces, not merely at the directory they sit in.
+    cited_path = "sim/%s/%s/%s" % (campaign, method_name, results_glob)
+    if cited_path not in " || ".join(spec_cells):
+        fail(
+            "%s: reduces `%s`, which that section 5 row does not cite. A value "
+            "may only be re-derived from evidence the row itself points a "
+            "reader at -- for a method directory that is the results path "
+            "itself, written in the row's own Source cell."
+            % (ctx, cited_path)
+        )
+        return None
+
+    rows = read_method_point_rows(
+        campaign, method_name, results_glob, logs_glob, ctx
+    )
+    if rows is None:
+        return None
+    return Evidence(
+        rows,
+        "sim/%s/%s/%s (%d point(s), one per sim/%s/%s/%s)"
+        % (
+            campaign,
+            method_name,
+            results_glob,
+            len(rows),
+            campaign,
+            method_name,
+            logs_glob,
+        ),
+    )
+
+
 records = {}
 sim_root = os.path.join(repo_root, "sim")
 for campaign in sorted(os.listdir(sim_root)) if os.path.isdir(sim_root) else []:
@@ -2052,7 +2446,7 @@ for cells in provenance:
         continue
     row_name = normalize_row_name(cells[0])
     quoted_raw = cells[1].strip()
-    record_ids = re.findall(RECORD_ID, cells[2])
+    record_cell = cells[2]
     evidence_file = cells[3].strip().strip("`")
     reduction = cells[4].strip().strip("`")
     scale_raw = cells[5].strip().strip("`")
@@ -2078,11 +2472,9 @@ for cells in provenance:
             "edited and the other was not." % ctx
         )
 
-    if not record_ids:
-        fail("%s: names no record id" % ctx)
-        continue
-
-    evidence = collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx)
+    evidence = collect_evidence(
+        record_cell, evidence_file, spec_cells, spec_cited, ctx
+    )
     if evidence is None:
         continue
 
@@ -2145,7 +2537,7 @@ for cells in derived_figures or []:
         continue
     row_name = normalize_row_name(cells[0])
     quoted_raw = cells[1].strip()
-    record_ids = re.findall(RECORD_ID, cells[2])
+    record_cell = cells[2]
     evidence_file = cells[3].strip().strip("`")
     derivation = cells[4].strip().strip("`")
     constant_stated = cells[5].strip().strip("`")
@@ -2186,11 +2578,14 @@ for cells in derived_figures or []:
     operator = parsed_derivation.group("op")
     constant_name = parsed_derivation.group("constant").strip()
 
-    if not record_ids:
-        fail("%s: names no record id" % ctx)
-        continue
-
-    evidence = collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx)
+    evidence = collect_evidence(
+        record_cell,
+        evidence_file,
+        spec_cells,
+        spec_cited,
+        ctx,
+        allow_method_dir=False,
+    )
     if evidence is None:
         continue
 
@@ -2293,7 +2688,7 @@ for cells in relative_figures:
         continue
     row_name = normalize_row_name(cells[0])
     quoted_raw = cells[1].strip()
-    record_ids = re.findall(RECORD_ID, cells[2])
+    record_cell = cells[2]
     evidence_file = cells[3].strip().strip("`")
     derivation = cells[4].strip().strip("`")
     scale_raw = cells[5].strip().strip("`")
@@ -2341,10 +2736,6 @@ for cells in relative_figures:
         )
         continue
 
-    if not record_ids:
-        fail("%s: names no record id" % ctx)
-        continue
-
     if is_range_figure(quoted_raw):
         fail(
             "%s: the relative figure is a two-ended range. Only the number at "
@@ -2387,7 +2778,14 @@ for cells in relative_figures:
         )
         continue
 
-    evidence = collect_evidence_rows(record_ids, evidence_file, spec_cited, ctx)
+    evidence = collect_evidence(
+        record_cell,
+        evidence_file,
+        spec_cells,
+        spec_cited,
+        ctx,
+        allow_method_dir=False,
+    )
     if evidence is None:
         continue
 
@@ -2524,7 +2922,9 @@ print(
     "decision records (%s); %d figure(s) derived as one measurement against "
     "another, both operands graded in the first table; %d "
     "in-record table(s) read, %d checked row-for-row "
-    "against the committed logs by point id and %d by row count alone; all %d "
+    "against the committed logs by point id and %d by row count alone; %d "
+    "method-directory point set(s) read, %d per-point JSON document(s), every "
+    "one matched to a committed log by point id; all %d "
     "section 5 rows accounted for (%d graded, %d with a stated reason) and %d "
     "ungraded figure(s) in graded rows disclosed and still present in their "
     "row; Icp trim-code rule read from %s (%d reference frequencies)"
@@ -2547,6 +2947,8 @@ print(
         record_table_stats["id_matched"] + record_table_stats["count_matched"],
         record_table_stats["id_matched"],
         record_table_stats["count_matched"],
+        method_dir_stats["sets"],
+        method_dir_stats["points"],
         len(spec_row_order),
         len(graded_rows),
         len(excluded_rows),
