@@ -110,7 +110,10 @@ plus `.lyrdb`/`.lvsdb` databases; the `sim/` campaigns recorded in
 `sim/CHARACTERIZATION.md` are this repo's own Markdown-plus-raw-log record
 format, produced by `sim/run_corners.py`, not by `klt sim`. `klt signoff`
 grades envelopes, so none of it is citable as it stands. This affects items 3,
-4, 5 and 6 most directly.
+4, 5 and 6 most directly. Item 6 also carries a further, independent gap on
+top of the envelope question — its evidence is currently unreachable on the
+pinned install regardless of format — see "Item 6: statistical evidence
+(`klt yield`) and the pinned-install gap" below.
 
 **2. The artifact does not exist yet.** No PLL-block layout has been drawn.
 `layout/pll_top/` holds real transistor-level layout for sub-blocks (the
@@ -351,6 +354,159 @@ Two limits of the bridge, stated rather than assumed:
   11's grading, and the committed report says so mechanically: item 11 reads
   `graded_by_build: true` on both partition rows.
 
+## Item 6: statistical evidence (`klt yield`) and the pinned-install gap
+
+Item 6's own text (`signoff/tier-report.json`, both partition rows, read
+against klt 0.6.0's bundled `docs/design-evidence-tiers.md`,
+`source_doc_content_hash:
+sha256:63eeec72e3d849761cf32dcf091af5728b069b1515e32bb3138e9454303671e5`):
+
+> …Where it does apply, MC runs need a recorded seed, sample count, a
+> deterministic negative control, and results combined with (not instead of)
+> process corners (#344). A `klt yield` JSON report — a yield estimate with
+> its confidence interval, sample-size verdict, and Cpk/sigma-to-spec against
+> the row's own limits — is the machine-checkable evidence for this item
+> (`klt signoff`'s tier-verdict mode grades it the same way it grades the
+> deterministic items above).
+
+That is a second, independent requirement layered on top of the four
+sub-criteria (seed, sample count, negative control, corner combination)
+`#127`'s item-6 text already assesses: a `klt yield` JSON envelope citing a
+yield estimate, its confidence interval, a sample-size verdict, and
+Cpk/sigma-to-spec against the *row's own limits*. This section names that
+requirement the way "Item 11 under the klt 0.6.0 checklist" above names item
+11's structural gap. It does not restate or revisit `#127`'s four-criteria
+assessment, and it does not move `#127`'s item-6 checkbox (#594).
+
+**Unreachable on the pinned install, regardless of citation.** `klt yield`'s
+statistics run in a separately built `klt_yield_native` Rust extension that
+is not published as a prebuilt wheel and is therefore unreachable from a
+single-package `pip install`/`uv tool install` — including its git-pinned
+`@git+…` form — on the klt version CI pins (`klt 0.6.0`), verified on this
+fleet host:
+
+```
+$ klt --help | grep -A1 '^ *yield'
+    yield               Monte Carlo sample set + spec limits -> yield estimate
+                        with CIs (needs a separately built Rust extension)
+$ .../klayout-tools/bin/python -c "import klt_yield_native"
+ModuleNotFoundError: No module named 'klt_yield_native'
+```
+
+Filed upstream and **open**: **klayout-tools#2531** ("Friction:
+`klt_yield_native` still has no prebuilt wheel after two closed friction
+reports asking for one") — filed from other work, not from this repository,
+and cited here rather than re-filed, per this repository's friction protocol.
+Two related, closed friction reports already record the consequence for this
+item specifically: **klayout-tools#2466** ("`klt yield`'s native extension is
+unreachable from every published release, so `klt signoff`'s kind-restricted
+T1 item 6 is ungradeable for a release-pinning consumer") and
+**klayout-tools#1061** (the same gap for the git-pinned install method). Host
+policy forbids agents on this fleet from changing host-wide tool installs, so
+building the extension locally is not a route open to this repository's own
+agents — klayout-tools#2531 is the blocker's tracking issue, and closing it is upstream's
+work, not this repository's.
+
+**Which spec rows are statistical, named explicitly.** The checklist's
+converse obligation is that a block whose spec has no statistical row must
+say so explicitly rather than omit the item; this block's spec *does* have
+statistical rows, so the obligation here is to name which ones, since
+`spec/pll.md` does not itself mark any row as statistical — the set below is
+assembled from where each row is actually checked, not from spec annotation,
+and is not a spec change:
+
+- **The up/down mismatch budget, terms 1–4**
+  (`design/README.md#up-down-mismatch-budget`): DC UP/DN current mismatch,
+  effective UP/DN switching-time skew (and its mid-window sub-case), residual
+  net charge per reference cycle, and the resulting static phase offset.
+  Checked against `|mean| + 3σ` at the worst corner by `sim/mc-cp-mismatch`'s
+  Monte Carlo campaign (#15), most recently
+  `sim/mc-cp-mismatch/records/20260923-095854-1655e11.md` — recorded seed
+  count n = 100/corner, corner-combined, with `sw_stat_mismatch = 0` decks
+  available as the systematic-only negative control.
+- **The VCO band-select mirror mismatch** (`sim/vco-tuning-range`, #146/#482):
+  device-level Monte Carlo at nominal PVT, N = 25/band at the two cascade
+  extremes (`sim/vco-tuning-range/records/20260817-143524-0e9cfc9.md`), and
+  band 0's own-corner closure at N = 100
+  (`sim/vco-tuning-range/records/20260923-084925-1655e11.md`, #482).
+- **The random period-jitter bound** (`spec/pll.md`'s period-jitter row,
+  [DR-032](../spec/decision-records/DR-032-random-period-jitter-bounded-over-the-grid.md)) —
+  new since DR-032 superseded DR-020 Decision 1 and DR-023 Decision 2's "not
+  obtainable on this toolchain" finding.
+
+  **This third row is statistical in kind but not in evidence shape, and that
+  distinction matters here.** The first two rows are genuine Monte Carlo
+  campaigns: repeated, seeded per-device-mismatch samples read out as a
+  scalar per `(corner, seed)` — exactly what a `klt yield` sample-set
+  document's `measurements[].samples` array is shaped to carry.
+  `sim/period-jitter/random-bound/` is not that: it is a deterministic
+  noise-injection/ISF bound computed once per corner (each committed
+  `results/*.json` holds one corner's per-device power-spectral-density and
+  ISF-integral quantities, with no `seed` field and nothing sampled), not a
+  population of repeated stochastic trials. DR-032 says as much itself — "No
+  *estimate* of the random half exists… the bound does not need [the ISF
+  route's ingredients]." A bound derived this way has no sample array for
+  `klt yield` to consume regardless of the extension: it is a different
+  *evidence shape* than item 6's clause anticipates, not merely an unreached
+  one. Recorded here so the gap this row carries is not read as "the same
+  problem, times three" when it is a narrower one for two of the three rows
+  and a shape mismatch for the third.
+
+**The sample-set export: deferred, not done — and here is exactly why.** `klt
+yield`'s sample-set schema (`measurements[]`, each entry
+`{name, samples, limits, …}`) is parsed entirely on the Python side, ahead of
+any call into the native extension — confirmed on this host by feeding the
+pinned `klt yield` a syntactically valid, minimal sample-set document: it
+clears the "neither a `klt sim` report … nor a sample-set document" check and
+fails one step later, at the extension call itself:
+
+```
+$ klt yield /tmp/test_sample_set.json --format json
+{
+  "schema_version": 1,
+  "error": {
+    "command": "yield",
+    "message": "the klt_yield_native extension is not installed -- ..."
+  }
+}
+```
+
+So *producing a well-formed sample-set document* is reachable without the
+extension, exactly as the issue that prompted this section observes — the
+remaining work is not blocked on the wheel. What is **not** reachable without
+the extension is verifying that the document says the *right* thing. Two of
+the three rows above have raw per-sample CSVs that could seed a
+`measurements[]` entry: `sim/mc-cp-mismatch`'s `mc_cp_dc.csv` (term 1),
+`mc_cp_switch.csv` (term 2), and `mc_pfd_cp.csv` (terms 3 and 4) for the
+up/down mismatch budget — the same campaign directory's `mc_dff_ctq.csv`
+holds the divider-retiming flop's own clk→Q mismatch samples, a related but
+separately-tracked figure that `design/README.md` deliberately keeps out of
+the four-term table — and `sim/vco-tuning-range`'s two band-select-mismatch
+`mismatch.csv` records for the VCO row. The third row, the period-jitter
+random bound, has none, per the shape mismatch above. But the committed statistic for, e.g., term 1 is not "every row of
+`mc_cp_dc.csv`" — it is the worst-corner, worst-Vctrl-point, signed
+`|mean| + 3σ` figure that `sim/mc-cp-mismatch/testbench/run.sh`'s own
+worst-point-selection logic derives (the same logic issue #487 corrected
+once already, from a folded to a signed statistic, after the folded form was
+found to read about 1.3× optimistic on the same 300 samples). A
+`measurements[]` entry built by flattening the CSV without reproducing that
+selection would silently misstate the very quantity `design/README.md`'s
+budget table checks each term against — and there is no way to catch that
+mistake locally: unlike the schema check above, `klt yield` cannot run its
+own statistics here to reveal a *wrong* sample set, only a malformed one.
+Committing an unverifiable derivation is the citation-that-merely-grades trap
+**klayout-tools#2467** already names for the verdict side (`klt signoff`
+grades a yield citation on status alone, so an undersized or mis-derived
+campaign can render `met`), applied here to the input side instead: an
+export nobody can validate is not evidence that would survive being read, it
+is a citation waiting to be trusted. **This is deferred**, to whoever
+next has a built `klt_yield_native` and can validate a candidate export
+against `sim/mc-cp-mismatch`'s and `sim/vco-tuning-range`'s own committed
+figures before trusting it. At that point the two exportable rows above, and
+`run.sh`'s existing worst-point-selection logic, are the starting material;
+the period-jitter random bound is out of scope for this particular artifact
+regardless of tooling, for the reason stated above.
+
 ## Negative controls
 
 Two properties were demonstrated before this directory was committed, in the
@@ -406,3 +562,11 @@ worked around silently. Their upstream state was re-checked on 2026-09-26
   defect in its implementation guidance, not on the merits, with a re-filed
   proposal invited — so nothing shipped. It has not been re-filed from this
   repository as of issue #564.
+- **klayout-tools#2531** (open) — `klt_yield_native`, the Rust extension
+  `klt yield` needs, has no prebuilt wheel, so item 6's evidence
+  (`klt yield` JSON reports) cannot be produced from this repository's pinned
+  install; see "Item 6: statistical evidence (`klt yield`) and the
+  pinned-install gap" above. Unlike the three issues above, **this one was
+  not filed from this repository's own work** — it predates issue #594 and
+  was filed from other work — and is cited here rather than duplicated, per
+  issue #594.
