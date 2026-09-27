@@ -100,7 +100,7 @@ sim/
   | `reference-input-contract` | the `REF` electrical contract itself — levels, 10–90 % edge rate and duty cycle driven to each boundary `spec/pll.md` states, graded as the per-corner shift of the PFD's reference-path set delay. **Declared, not measured**: manifest, deck and reduction are committed and self-checking, zero of 288 declared points have run | #499 → DR-019 |
   | `reference-phase-transfer` | the closed-loop REF-to-output **phase transfer** — a single known reference phase step, read out through the loop's own REF-vs-FB static phase error **differentially against a paired control run**, compared against `spec/pll.md`'s `20·log₁₀(N)` reference-source-quality exclusion. A different question from `reference-input-contract` above (waveform *shape* at a fixed phase, not phase *in time*), and the first deck in this tree to displace the reference edge in time at all. **Measured at N = 6**, 5/5 corners PASS: 15.529 … 16.366 dB against the stated 15.563 dB, plus the roll-off above the loop bandwidth at one frequency. The campaign holds three records and its supersession chain is the method's own history — see "Two decks per point, one record" below | #509 → DR-027 |
   | `supply-sensitivity` | supply pushing, quiescent/dynamic power | #14 |
-  | `mc-cp-mismatch` | charge-pump mismatch distribution | #15 |
+  | `mc-cp-mismatch` | charge-pump mismatch distribution, Monte Carlo combined with a **21-point corner axis** — nominal plus all 20 vertices of the process × temperature × supply box, so every MOS bundle appears at both temperature and both supply extremes (#597 widened this from a 3-point diagonal subset; `fs`/`sf` are visited from that record on) | #15, #146, #482, #597 |
   | `reference-spur` | closed-loop reference spur measured directly, as the ±f_ref sidebands of the locked output spectrum, at 150 MHz / band 6 / N = 6 | #145 minted the one committed record (5 of the 45 PVT points); the binding-frequency grid is the row below |
   | `reference-spur-band-top` | the same sidebands at the **200 MHz binding top of the ratified band**, where `spec/pll.md`'s −55 dBc line is stated — N = 8, and the VCO band code per corner because the band-selection rule splits this grid across bands 6 and 7. **Declared, not measured**: manifest, deck, per-corner operating-point derivation and reduction are committed and self-checking, zero of 45 declared points have run | **#533** (the campaign run) → DR-024 |
   | `output-driver` | loaded buffered-output duty cycle, levels and drive-strength (edge rate) at the two extremes of the ratified band/Vctrl window | #144 |
@@ -141,6 +141,35 @@ sim/
   and its 38.8 % figure are unmodified, append-only evidence at their own
   (different) point; they are not superseded, and the new record does not
   re-measure band 7.
+
+  **…and the proxy that check rested on is now retired, by a JOINT two-band
+  draw (#597).** Both records above measure ONE band per ngspice invocation,
+  so both had to compare a band's `|mean|+3σ` *as a percentage of its mean*
+  against a fractional overlap margin — which each record flagged in its own
+  text as "an order-of-magnitude sanity flag, not a rigorous directional
+  bound", because with one band drawn the inequality the coverage-hole check
+  actually asks about (`f_max(band 0) ≥ f_min(band 1)` **on one die**) cannot
+  be written down under mismatch at all.
+  `sim/vco-tuning-range/records/20260927-081930-d004d5b.md` writes it down.
+  Its new deck `testbench/tb_vco_band_pair.sp` runs both band codes as two
+  `tran` analyses inside ONE `.control` block, which means one netlist parse
+  and therefore — since the gf180mcu `agauss()` draws are evaluated at parse
+  time — **one mismatch draw shared by both bands**. The overlap ratio is then
+  a per-draw sample, and the criterion is its own one-sided 3σ tail:
+  **1.28193 against the 1.0 floor at N = 200, PASS**, keeping 88.4 % of the
+  1.31882 systematic margin. The same samples under the old independent-draw
+  treatment (each band pushed to its own opposite tail) would read 0.79910, a
+  FAIL — and the reason is measured, not argued: the two bands' frequencies
+  are correlated at **ρ = 0.9958** across draws, because bands 0 and 1 differ
+  by one switched leg of `design/vco_bias.sch`'s cascade and share every
+  always-on leg, the V→I converter and all five ring stages. Nearly all of
+  each band's 24–26 % dispersion is common mode and cancels in the ratio.
+  Neither earlier record is superseded; this one is additive, and it is the
+  first in this repo to draw two band codes from one draw. Still owed: the
+  other six adjacent pairs (the worst-of-all-pairs ratio, 1.268, is B3→B4 and
+  is unmeasured under mismatch), and this campaign's Monte Carlo corner axis
+  is still one point wide by design — the binding corner is already known from
+  the systematic sweep.
 
   New campaigns add rows here as they are created; the list is descriptive,
   not a closed set.
