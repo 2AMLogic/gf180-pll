@@ -415,6 +415,44 @@ def _ungraded_table(entries) -> str:
     return UNGRADED_HEADER + body
 
 
+def narration(groups=0, pairs=0, values=0, opposite=0,
+              group_terms=None, pair_terms=None) -> str:
+    """Section 5.1's prose about the check's OWN OK-line counts (rule 9).
+
+    Rule 9 grades the three sentences in which section 5.1 quotes this check's
+    OK line back to the reader, and a MISSING sentence fails rather than
+    passing quietly -- deleting a narration must not be the way to stop it
+    being stale.  So every fixture document has to carry all three, with the
+    counts *that* fixture produces: the default is the all-zero document (no
+    group-sequence derivation, no magnitude bound), and a test class that adds
+    one passes its own counts here.
+
+    ``group_terms``/``pair_terms`` are the breakdown operands, which the rule
+    requires to come to the total beside them -- summed under ``+`` and
+    multiplied under ``×``.  Both default to a two-operand breakdown of the
+    total given, because a breakdown of one operand restates the total and
+    explains nothing, which the rule refuses.
+    """
+    group_terms = ([(groups, "curves"), (0, "corners")]
+                   if group_terms is None else group_terms)
+    pair_terms = ([(pairs, "pairs"), (1, "corner")]
+                  if pair_terms is None else pair_terms)
+    sums = " + ".join("`%d` %s" % term for term in group_terms)
+    products = " × ".join("`%d` %s" % term for term in pair_terms)
+    return (
+        "A derivation that examined nothing reports the same `0` as a clean "
+        "grid, so the check prints the number of groups it examined "
+        f"(`{groups}` here: {sums}) in its own OK line.  A worst overlap is "
+        "silent the same way about how many intervals it beat, so that line "
+        f"also prints the number of adjacent band pairs examined (`{pairs}` "
+        f"here: {products}).\n\n"
+        "A magnitude bound discards the sign it was taken over, so the check "
+        "prints how many signed values each bound covered and how many of them "
+        f"fell on the far side of zero from the binding end (`{values}` and "
+        f"`{opposite}` here).\n"
+    )
+
+
 def proposal(
     spec_rows=SPEC_ROWS,
     provenance=None,
@@ -425,16 +463,19 @@ def proposal(
     include_5_1=True,
     include_derived=True,
     include_relative=True,
+    narrated=None,
 ) -> str:
     provenance = DEFAULT_PROVENANCE if provenance is None else provenance
     derived = DEFAULT_DERIVED if derived is None else derived
     relative = DEFAULT_RELATIVE if relative is None else relative
     exclusions = DEFAULT_EXCLUSIONS if exclusions is None else exclusions
     ungraded = DEFAULT_UNGRADED if ungraded is None else ungraded
+    narrated = narration() if narrated is None else narrated
     text = "# proposal\n\n## 5. Target specification\n\n"
     text += _spec_table(spec_rows) + "\n"
     if include_5_1:
         text += "### 5.1 Value provenance\n\n"
+        text += narrated + "\n"
         text += _provenance_table(provenance) + "\n"
         if include_derived:
             text += _derived_table(derived) + "\n"
@@ -773,7 +814,18 @@ class TestGroupSequenceDerivations(_TreeTest):
         provenance = DEFAULT_PROVENANCE + (
             [MONOTONIC_ENTRY, OVERLAP_ENTRY] if entries is None else entries
         )
-        self.tree.write(proposal(spec_rows=tuple(rows), provenance=provenance))
+        self.tree.write(proposal(
+            spec_rows=tuple(rows),
+            provenance=provenance,
+            # Rule 9: five curves + two corners is the group count these
+            # entries produce, and three the adjacent-pair count -- the same
+            # two numbers this class's passing test asserts out of the OK line.
+            narrated=narration(
+                groups=7, pairs=3,
+                group_terms=[(5, "curves"), (2, "corners")],
+                pair_terms=[(3, "pairs"), (1, "corner")],
+            ),
+        ))
 
     @staticmethod
     def remap_bands(csv_text, bundle, mapping):
@@ -1007,7 +1059,7 @@ class TestSignedTailStatistic(_TreeTest):
     )
 
     def write(self, value="`13 %`", reduction=None, measured=None,
-              entries=None):
+              entries=None, groups=6):
         rows = list(SPEC_ROWS) + [
             (self.SPUR_ROW[0],
              self.SPUR_ROW[1] if measured is None else measured,
@@ -1022,6 +1074,13 @@ class TestSignedTailStatistic(_TreeTest):
             spec_rows=tuple(rows),
             provenance=DEFAULT_PROVENANCE + entries,
             exclusions=DEFAULT_EXCLUSIONS,
+            # Rule 9: the default entry's innermost grouping is two corners x
+            # three samples, so section 5.1 has to narrate six groups. An
+            # override that drops the group verb narrates none.
+            narrated=narration(
+                groups=groups,
+                group_terms=[(groups, "windows"), (0, "curves")],
+            ),
         ))
 
     def test_the_three_level_statistic_passes_and_counts_its_groups(self):
@@ -1090,7 +1149,7 @@ class TestSignedTailStatistic(_TreeTest):
 
     def test_the_grouped_statistic_is_the_worst_corner(self):
         """Two-level `max(sig3(COL) by KEY)`, no selection step."""
-        self.write(entries=[(
+        self.write(groups=0, entries=[(
             "Reference spur", "`13 C`", RECORD, "mc_term3.csv",
             "max(sig3(qnet_c) by corner)", "1",
         )])
@@ -1099,6 +1158,7 @@ class TestSignedTailStatistic(_TreeTest):
     def test_the_flat_statistic_is_the_pooled_one(self):
         """`sig3(COL)` with no grouping pools every row, and says so: 9.49."""
         self.write(
+            groups=0,
             measured="term 1 at its measured 13 %; term 3 residual 9.49 C",
             entries=[(
                 "Reference spur", "`9.49 C`", RECORD, "mc_term3.csv",
@@ -1141,7 +1201,7 @@ class TestMagnitudeBound(_TreeTest):
     )
 
     def write(self, value="`5.7 mV`", reduction="maxmag(err_v)", scale="1e3",
-              measured=None):
+              measured=None, values=4, opposite=2):
         rows = list(SPEC_ROWS) + [
             (self.ROW[0], self.ROW[1] if measured is None else measured,
              self.ROW[2], self.ROW[3])
@@ -1151,6 +1211,11 @@ class TestMagnitudeBound(_TreeTest):
             provenance=DEFAULT_PROVENANCE + [
                 (self.ROW[0], value, RECORD, "signed.csv", reduction, scale),
             ],
+            # Rule 9: the flat bound covers all four signed values, two of them
+            # on the positive side of a negative binding end. Grouping the
+            # bound by corner moves the second number, and section 5.1's
+            # narration of it has to move too.
+            narrated=narration(values=values, opposite=opposite),
         ))
 
     def test_the_bound_is_the_largest_magnitude_either_side_of_zero(self):
@@ -1217,6 +1282,7 @@ class TestMagnitudeBound(_TreeTest):
             value="`3.1 mV`",
             reduction="min(maxmag(err_v) by corner)",
             measured="no corner's own bound is worse than 3.1 mV at best",
+            opposite=1,
         )
         result = self.assertPasses()
         self.assertIn("2 magnitude bound(s) over 4 signed value(s), 1 of "
@@ -1226,6 +1292,203 @@ class TestMagnitudeBound(_TreeTest):
         self.write(reduction="maxmag(errr_v)")
         self.assertFails("names column `errr_v`",
                          "signed.csv does not have")
+
+
+class TestNarratedOkLineCounts(_TreeTest):
+    """Rule 9: section 5.1's narration of this check's OWN OK-line counts.
+
+    Rules 1-8 grade section 5's numbers.  The counts in the OK line -- how many
+    groups a sequence derivation examined, how many adjacent pairs a worst
+    overlap was the worst of, how many signed values a magnitude bound covered
+    and how many of them sat on the far side of zero -- are quoted back to the
+    reader in section 5.1's prose, and until 2026-09-28 not one of them was
+    graded.
+
+    They had already drifted.  #597 widened `sim/mc-cp-mismatch`'s corner axis
+    from three corners to 21; the group count moved from 867 to 2667 and the
+    Monte Carlo addend inside the same parenthetical from 300 to 2100, the
+    check went on printing the true numbers, and CI stayed green for a day over
+    the one paragraph whose entire subject is numbers that cannot drift.  So
+    the tests below are mostly about what this rule *catches*: a drifted total,
+    a drifted addend, a narration that has been reworded past its anchor, and a
+    narration that has been deleted outright.
+    """
+
+    #: The curve fixture's counts: seven groups (five curves for the
+    #: monotonicity derivation, two corners for the overlap one) over three
+    #: adjacent band pairs -- the same numbers TestGroupSequenceDerivations
+    #: asserts out of the OK line, here asserted from the document's side.
+    GROUPS, PAIRS = 7, 3
+
+    #: The magnitude-bound row, graded exactly as TestMagnitudeBound grades it,
+    #: because this rule's third narration is about that class's two counts.
+    BOUND_ROW = TestMagnitudeBound.ROW
+
+    def write_curves(self, narrated=None, **kwargs):
+        rows = list(SPEC_ROWS)
+        rows[0] = CURVE_SPEC_ROW
+        if narrated is None:
+            narrated = self.curve_narration(**kwargs)
+        self.tree.write(proposal(
+            spec_rows=tuple(rows),
+            provenance=DEFAULT_PROVENANCE + [MONOTONIC_ENTRY, OVERLAP_ENTRY],
+            narrated=narrated,
+        ))
+
+    def curve_narration(self, groups=None, pairs=None,
+                        group_terms=None, pair_terms=None):
+        return narration(
+            groups=self.GROUPS if groups is None else groups,
+            pairs=self.PAIRS if pairs is None else pairs,
+            group_terms=([(5, "curves"), (2, "corners")]
+                         if group_terms is None else group_terms),
+            pair_terms=([(3, "pairs"), (1, "corner")]
+                        if pair_terms is None else pair_terms),
+        )
+
+    def write_bound(self, values=4, opposite=2):
+        rows = list(SPEC_ROWS) + [self.BOUND_ROW]
+        self.tree.write(proposal(
+            spec_rows=tuple(rows),
+            provenance=DEFAULT_PROVENANCE + [
+                (self.BOUND_ROW[0], "`5.7 mV`", RECORD, "signed.csv",
+                 "maxmag(err_v)", "1e3"),
+            ],
+            narrated=narration(values=values, opposite=opposite),
+        ))
+
+    # -- the counts themselves ------------------------------------------------
+
+    def test_a_document_that_narrates_its_counts_correctly_passes(self):
+        self.write_curves()
+        result = self.assertPasses()
+        self.assertIn("group-sequence derivations over 7 groups, "
+                      "3 adjacent-axis pair(s) examined", result.stdout)
+        self.assertIn("4 of this line's own count(s) re-checked against "
+                      "section 5.1's narration of them", result.stdout)
+
+    def test_a_drifted_group_count_fails(self):
+        """The 867 -> 2667 drift, in the fixture's own arithmetic."""
+        self.write_curves(groups=8, group_terms=[(6, "curves"), (2, "corners")])
+        self.assertFails("narration of the number of groups",
+                         "section 5.1 says `8` groups examined",
+                         "this run counted 7",
+                         "the tree moved and the sentence did not")
+
+    def test_a_drifted_adjacent_pair_count_fails(self):
+        self.write_curves(pairs=4, pair_terms=[(4, "pairs"), (1, "corner")])
+        self.assertFails("narration of the number of adjacent-axis pairs",
+                         "this run counted 3")
+
+    def test_a_drifted_signed_value_count_fails(self):
+        self.write_bound(values=5)
+        self.assertFails("signed values covered by a magnitude bound",
+                         "this run counted 4")
+
+    def test_a_drifted_far_side_of_zero_count_fails(self):
+        """The half of that narration a `max()` in disguise would get wrong."""
+        self.write_bound(opposite=0)
+        self.assertFails("of them on the far side of zero",
+                         "this run counted 2")
+
+    # -- a narration that is not there ---------------------------------------
+
+    def test_no_narration_at_all_fails(self):
+        """The doctrine: deleting the sentence must not silence the check.
+
+        Section 5.1's tables are all present and correct here, and every value
+        in them re-derives -- the ONLY thing wrong with this document is that
+        it no longer says what the check counted.
+        """
+        self.write_curves(narrated="")
+        result = self.assertFails(
+            "section 5.1 does not state it",
+            "a MISSING sentence fails here rather than passing quietly",
+        )
+        self.assertEqual(
+            3, result.stderr.count("section 5.1 does not state it"),
+            msg=result.stderr,
+        )
+
+    def test_a_narration_reworded_past_its_anchor_fails(self):
+        """Rewording is deletion as far as an anchor is concerned.
+
+        The number is still there and still right; what is gone is the phrase
+        that ties it to the count it claims to be -- and a number a check can
+        no longer find is a number nothing keeps honest.
+        """
+        self.write_curves(narrated=self.curve_narration().replace(
+            "number of groups it examined", "number of groups it looked at"))
+        self.assertFails("narration of the number of groups",
+                         "section 5.1 does not state it")
+
+    def test_a_missing_magnitude_bound_narration_fails(self):
+        self.write_bound()
+        text = (Path(self.tree.root) / PROPOSAL).read_text(encoding="utf-8")
+        self.tree.write(text.replace("far side of zero from the binding end",
+                                     "far side of zero from the bound"))
+        self.assertFails("how many signed values the magnitude bounds covered",
+                         "section 5.1 does not state it")
+
+    def test_a_narration_stated_twice_fails(self):
+        """Two statements of one count is a document that can disagree."""
+        self.write_curves(
+            narrated=self.curve_narration() + self.curve_narration())
+        self.assertFails("section 5.1 states it 2 times",
+                         "grading whichever matched first would hide exactly "
+                         "that")
+
+    # -- the breakdown inside the parenthetical ------------------------------
+
+    def test_a_breakdown_that_does_not_come_to_its_total_fails(self):
+        """The 300 -> 2100 drift: the total is right, an ADDEND is not.
+
+        This is the case grading the total alone would have missed, and it is
+        the case that actually happened.
+        """
+        self.write_curves(group_terms=[(5, "curves"), (3, "corners")])
+        self.assertFails("the breakdown does not come to the total it "
+                         "explains -- 5 + 3 = 8, and the parenthetical states "
+                         "`7`")
+
+    def test_a_breakdown_of_one_operand_is_not_a_breakdown(self):
+        """Restating the total once explains nothing, and would be the way out.
+
+        Without this the addend rule is opt-out: an editor faced with a failing
+        sum could delete the addends instead of fixing them and be green again.
+        """
+        self.write_curves(group_terms=[(7, "groups")])
+        self.assertFails("states the total and does not break it down",
+                         "Write at least two operands")
+
+    def test_a_product_breakdown_is_multiplied_and_not_summed(self):
+        """`×` and `+` are different arithmetic, and the check must know it.
+
+        The pair breakdown is `3` pairs × `1` corner: 3 as a product and 4 as a
+        sum, so a check that added here could not pass this document.
+        """
+        self.write_curves()
+        self.assertPasses()
+
+    def test_a_product_breakdown_that_does_not_multiply_out_fails(self):
+        """The mirror: `1` × `2` is 2, and only summing them would give 3."""
+        self.write_curves(pair_terms=[(1, "pair"), (2, "corners")])
+        self.assertFails("the breakdown does not come to the total it "
+                         "explains -- 1 × 2 = 2, and the parenthetical states "
+                         "`3`")
+
+    def test_prose_numbers_after_the_arithmetic_are_not_operands(self):
+        """The real document's parenthetical carries one, and it must pass.
+
+        `... the 2100 Monte Carlo samples of the next paragraph, which are 100
+        samples at each of that campaign's 21 corners` -- the `100` is prose,
+        not a fourth addend, and the operand run ends at the first quoted
+        number the operator does not join.
+        """
+        self.write_curves(narrated=self.curve_narration().replace(
+            "`2` corners)",
+            "`2` corners, which are `100` points at each of 21 corners)"))
+        self.assertPasses()
 
 
 class TestUngradedFigureDisclosure(_TreeTest):
@@ -3065,6 +3328,25 @@ class TestTheRealTree(unittest.TestCase):
         self.assertGreaterEqual(int(match.group(1)), 2, msg=result.stdout)
         self.assertGreaterEqual(int(match.group(2)), 1, msg=result.stdout)
         self.assertIn("with no aggregate over them", result.stdout)
+
+    def test_it_grades_its_own_ok_line_against_section_5_1s_narration(self):
+        """Rule 9 on the real tree, which is where the drift happened.
+
+        The check passing at all is the substantive assertion -- section 5.1's
+        three narrations are graded against the counts this run produced, so a
+        green exit means `2667`, `441`, `15` and `3` are this tree's numbers
+        and not remembered ones.  What is asserted here is that the rule did
+        not quietly stop running: four counts, the number section 5.1 narrates,
+        rather than a silent zero from an anchor nobody noticed had rotted.
+        """
+        result = subprocess.run(
+            ["bash", str(CHECK)], capture_output=True, text=True, cwd=REPO_ROOT
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        match = re.search(r"(\d+) of this line's own count\(s\) re-checked",
+                          result.stdout)
+        self.assertIsNotNone(match, msg=result.stdout)
+        self.assertEqual(4, int(match.group(1)), msg=result.stdout)
 
     def test_it_reports_the_ungraded_figures_it_disclosed(self):
         result = subprocess.run(

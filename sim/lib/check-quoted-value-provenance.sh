@@ -466,6 +466,52 @@
 #    reason in its own dialect: `B` is a measurement, and a measured zero here
 #    means the fit had no residual to be short of.
 #
+# 9. THIS CHECK'S OWN OK-LINE COUNTS, AS SECTION 5.1 NARRATES THEM. Rules 1-8
+#    grade section 5's numbers. This one grades the numbers THIS CHECK prints:
+#    section 5.1 explains the group-sequence and magnitude-bound machinery by
+#    quoting its OK line back to the reader -- how many groups a sequence
+#    derivation examined, how many adjacent-axis pairs a worst overlap was the
+#    worst of, and how many signed values the magnitude bounds covered against
+#    how many of those on the far side of zero. Every one of them is a fact
+#    about this tree, and until 2026-09-28 not one of them was graded: section
+#    5.1 grades section 5's values, never its own prose about the check.
+#
+#    IT HAD ALREADY DRIFTED, which is why this is a rule and not a note asking
+#    the next editor to remember. #597 widened sim/mc-cp-mismatch's corner axis
+#    from three corners to 21. The group count moved from 867 to 2667 and the
+#    Monte Carlo addend inside the same parenthetical from 300 to 2100; the
+#    check went on printing the true numbers, every graded value stayed correct
+#    because each is re-derived on every run, and CI stayed green for a day over
+#    the one paragraph in this document whose entire subject is numbers that
+#    cannot drift. Both were then corrected by hand, which is not a mechanism.
+#    This is rule 6's lesson one level up -- "that list used to be prose, and
+#    prose does not get graded" -- applied to the prose ABOUT the grading.
+#
+#    A NARRATION IS LOCATED BY AN ANCHOR, AND A MISSING ANCHOR FAILS. The
+#    sentence is found by the words it is written with, and its absence is an
+#    error rather than a silence: deleting a narration must not be a way to stop
+#    it being stale, which is the doctrine check-characterization-coverage.sh's
+#    aggregate-count rule already states. An anchor matching MORE than once
+#    fails too, for rule 7b's reason in this dialect -- two statements of one
+#    count is a document that can contradict itself, and grading whichever came
+#    first would hide exactly that.
+#
+#    THE BREAKDOWN IS ARITHMETIC, NOT DECORATION. The first two narrations do
+#    not merely state a total, they explain it (`504` curves + `63` corners +
+#    `2100` Monte Carlo samples; `7` pairs x `63` corners). The number that
+#    drifted was an ADDEND, so grading the total alone would have caught 867 and
+#    not 300. Operands joined by `+` must therefore sum to the stated total and
+#    operands joined by the multiplication sign must multiply to it, and at
+#    least two are required: a "breakdown" that restates the total once explains
+#    nothing and would be the way back to an ungraded number.
+#
+#    THE OPERAND RUN ENDS AT THE FIRST QUOTED NUMBER THE OPERATOR DOES NOT
+#    JOIN, so a parenthetical may still carry ordinary prose numbers after its
+#    arithmetic ("... which are `100` samples at each of that campaign's 21
+#    corners"). The operator is what declares an operand -- in the document, in
+#    the form a reader evaluates it, rather than in a rule about position that
+#    only this file knows.
+#
 # WHAT IT DOES NOT DO
 #
 # Rule 6 makes the ungraded-figure list non-rotting, not complete: nothing can
@@ -669,8 +715,9 @@
 # Exit codes: 0 every graded value re-derives, every derived figure follows
 #             from its reduction and its ratified constant, every relative
 #             figure follows from two reductions that are themselves graded,
-#             every section 5 row is accounted for, and every disclosed
-#             ungraded figure is still in its row;
+#             every section 5 row is accounted for, every disclosed
+#             ungraded figure is still in its row, and every count this check
+#             prints about itself is the count section 5.1 narrates;
 #             1 any rule above is violated, a table is missing or empty, or the
 #             section 5 table cannot be parsed (a broken parser must not look
 #             like a clean tree).
@@ -3285,6 +3332,190 @@ for name in spec_row_order:
             "exists to stop." % name
         )
 
+# ---- rule 9: this check's own OK-line counts, as section 5.1 narrates them --
+#
+# See THE RULES above for why prose about the grading is graded like the values
+# are. Everything below runs LAST, after every reduction has been applied,
+# because what it compares the document against is the final state of the
+# counters the OK line is about to print.
+
+
+def read_section_5_1(text):
+    """Section 5.1's body, with its whitespace flattened to single spaces.
+
+    Flattened because the narrations this rule grades are sentences that wrap
+    across source lines, and an anchor that had to reproduce the wrapping would
+    fail the first time the paragraph was reflowed -- a false failure is as
+    corrosive here as a missed one.
+    """
+    m = re.search(
+        r"^###\s*5\.1\b.*?$(.*?)(?=^#{1,3}\s|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    if not m:
+        return None
+    return re.sub(r"\s+", " ", m.group(1))
+
+
+#: A breakdown operand: a number the document quotes as code, the way it quotes
+#: every other graded figure.
+OPERAND = re.compile(r"`([+-]?\d+)`")
+
+
+def read_breakdown(text):
+    """The LEADING RUN of operands joined by one repeated operator.
+
+    -> (operator, [operands]). The run stops at the first quoted number the
+    operator does not join, which is what lets a parenthetical carry prose
+    numbers after its arithmetic without them being read as operands. A run
+    that changes operator half way stops there too rather than guessing a
+    precedence this document has no need of.
+    """
+    tokens = list(OPERAND.finditer(text))
+    if not tokens:
+        return None, []
+    operands = [int(tokens[0].group(1))]
+    operator = None
+    for previous, current in zip(tokens, tokens[1:]):
+        between = text[previous.end():current.start()]
+        if "+" in between:
+            here = "+"
+        elif "×" in between or "*" in between:
+            here = "×"
+        else:
+            break
+        if operator is None:
+            operator = here
+        elif here != operator:
+            break
+        operands.append(int(current.group(1)))
+    return operator, operands
+
+
+#: (what it narrates, anchor, [(what each captured number is, its computed
+#: value)], whether the parenthetical must break the total down).
+#:
+#: Built here rather than at the top of the file because every value in it is a
+#: counter this run has just finished filling in.
+NARRATIONS = (
+    (
+        "the number of groups a group-sequence derivation examined",
+        re.compile(
+            r"number of groups it examined \(`(\d+)` here:"
+            r"(?P<breakdown>[^)]*)\)"
+        ),
+        (("groups examined", seq_stats["groups"]),),
+        True,
+    ),
+    (
+        "the number of adjacent-axis pairs a worst overlap was the worst of",
+        re.compile(
+            r"number of adjacent band pairs examined \(`(\d+)` here:"
+            r"(?P<breakdown>[^)]*)\)"
+        ),
+        (("adjacent-axis pairs examined", seq_stats["pairs"]),),
+        True,
+    ),
+    (
+        "how many signed values the magnitude bounds covered, and how many of "
+        "them fell on the far side of zero from the binding end",
+        re.compile(
+            r"far side of zero from the binding end "
+            r"\(`(\d+)` and `(\d+)` here\)"
+        ),
+        (
+            ("signed values covered by a magnitude bound", mag_stats["values"]),
+            ("of them on the far side of zero", mag_stats["opposite"]),
+        ),
+        False,
+    ),
+)
+
+narrated_counts = 0
+section_5_1 = read_section_5_1(proposal)
+if section_5_1 is None:
+    fail(
+        "section 5.1 could not be located in %s (no `### 5.1` heading), so the "
+        "counts this check prints about itself could not be graded against the "
+        "ones section 5.1 narrates. A narration this check cannot find is a "
+        "narration nothing keeps honest." % proposal_rel
+    )
+    section_5_1 = ""
+
+for narrated, anchor, expected, needs_breakdown in NARRATIONS:
+    ctx = "section 5.1 narration of %s" % narrated
+    found = list(anchor.finditer(section_5_1))
+    if not found:
+        fail(
+            "%s: section 5.1 does not state it. This check prints %s in its "
+            "own OK line and section 5.1 explains that line to a reader, so "
+            "the sentence carrying it is graded like any other quoted number "
+            "-- and a MISSING sentence fails here rather than passing "
+            "quietly, because deleting a narration would otherwise be the way "
+            "to stop it being stale. The anchor looked for is: %s"
+            % (
+                ctx,
+                " and ".join("%d %s" % (value, name) for name, value in expected),
+                anchor.pattern,
+            )
+        )
+        continue
+    if len(found) > 1:
+        fail(
+            "%s: section 5.1 states it %d times. Two statements of one count "
+            "are a document that can contradict itself, and grading whichever "
+            "matched first would hide exactly that -- state it once."
+            % (ctx, len(found))
+        )
+        continue
+    match = found[0]
+
+    for index, (name, computed) in enumerate(expected):
+        quoted = int(match.group(index + 1))
+        if quoted != computed:
+            fail(
+                "%s: section 5.1 says `%d` %s; this run counted %d. The "
+                "narration has drifted from the OK line it narrates -- the "
+                "tree moved and the sentence did not, which is exactly what "
+                "happened to the group count when #597 widened a corner axis."
+                % (ctx, quoted, name, computed)
+            )
+    narrated_counts += len(expected)
+
+    if not needs_breakdown:
+        continue
+    total = int(match.group(1))
+    operator, operands = read_breakdown(match.group("breakdown"))
+    if operator is None or len(operands) < 2:
+        fail(
+            "%s: the parenthetical states the total and does not break it "
+            "down. The number that drifted on 2026-09-28 was an ADDEND inside "
+            "this breakdown rather than the total, so a total on its own is "
+            "the half of this narration nothing grades. Write at least two "
+            "operands joined by `+` (they must sum to the total) or by the "
+            "multiplication sign (they must multiply to it)." % ctx
+        )
+        continue
+    computed_total = operands[0]
+    for operand in operands[1:]:
+        if operator == "+":
+            computed_total += operand
+        else:
+            computed_total *= operand
+    if computed_total != total:
+        fail(
+            "%s: the breakdown does not come to the total it explains -- "
+            "%s = %d, and the parenthetical states `%d`. One of the two was "
+            "edited and the other was not."
+            % (
+                ctx,
+                (" %s " % operator).join(str(operand) for operand in operands),
+                computed_total,
+                total,
+            )
+        )
+
 if errors:
     for message in errors:
         sys.stderr.write("FAIL: %s\n" % message)
@@ -3306,7 +3537,9 @@ print(
     "%d named single-point document(s) with no aggregate over them; all %d "
     "section 5 rows accounted for (%d graded, %d with a stated reason) and %d "
     "ungraded figure(s) in graded rows disclosed and still present in their "
-    "row; Icp trim-code rule read from %s (%d reference frequencies)"
+    "row; Icp trim-code rule read from %s (%d reference frequencies); %d of "
+    "this line's own count(s) re-checked against section 5.1's narration of "
+    "them"
     % (
         checked,
         seq_stats["derivations"],
@@ -3336,6 +3569,7 @@ print(
         disclosed_figures,
         spec_rel,
         len(icp_rule),
+        narrated_counts,
     )
 )
 PY
