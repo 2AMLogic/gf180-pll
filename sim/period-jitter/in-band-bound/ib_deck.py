@@ -179,41 +179,6 @@ def non_mos_devices(src: str, top: str) -> list[str]:
     return out
 
 
-def count_cells(src: str, top: str) -> dict:
-    """How many instances of each leaf CELL `top` contains, recursively.
-
-    A leaf cell is a subcircuit that instantiates only MOS devices.  This is
-    the stage count the bound charges each block for (every stage, as if all of
-    them sat in series in the block's timing path -- see `ib_extract`'s
-    docstring), so it is derived from the netlist rather than typed in.
-    """
-    subs = subckts(src)
-    leaf = {
-        name for name, body in subs.items()
-        if body and all(_model_of(ln.split(), subs) in MOS_MODELS
-                        for ln in body if ln.split()[0].lower().startswith("x"))
-    }
-    counts: dict[str, int] = {}
-
-    def walk(name: str):
-        for ln in subs[name]:
-            tok = ln.split()
-            if not tok[0].lower().startswith("x"):
-                continue
-            model = _model_of(tok, subs)
-            if model in MOS_MODELS:
-                continue
-            if model in leaf:
-                counts[model] = counts.get(model, 0) + 1
-            elif model in subs:
-                walk(model)
-            else:
-                raise ValueError(f"{name}: unknown model {model!r}")
-
-    walk(top)
-    return dict(sorted(counts.items()))
-
-
 # ---------------------------------------------------------------------------
 # headers
 # ---------------------------------------------------------------------------
