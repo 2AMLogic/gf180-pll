@@ -145,6 +145,43 @@
 #     the report, because the antenna half of `klt erc` has never run in this
 #     repository and "`klt erc` was run" must never be read as broader than it is.
 #
+# A seventh guard, the KLAYOUT PIN RULE, added 2026-09-28 (issue #127), applies
+# the ERC RULE's own doctrine to the other engine this repository's evidence
+# comes out of. The ERC rule grades `klt`'s version because a report from an
+# unpinned klt is not evidence about the klt this repo grades on. Exactly the
+# same is true of the KLayout application binary that runs the foundry DRC and
+# LVS decks -- and nothing checked it. `layout/harness/env.py` has carried
+# `KNOWN_GOOD_KLAYOUT_VERSION = "KLayout 0.28.16"` since bring-up, with a
+# documented reason that is not cosmetic (issue #360: a newer KLayout has been
+# observed to report a *false* LVS mismatch on an unchanged, LVS-clean layout),
+# but that constant only ever produced an advisory WARNING at run time, about
+# the binary you are about to use. It said nothing about the logs already
+# committed. A census run for issue #127 found **16 of the 51** committed
+# DRC/LVS deck logs were captured on KLayout 0.30.9 or 0.30.10, not on the pin
+# -- including `vco_block`'s own block-level DRC-clean and LVS-match logs, the
+# two artifacts T1 items 3 and 4 score the VCO on. Both `layout/README.md` and
+# issue #127's own body meanwhile asserted that every committed DRC/LVS
+# artifact was produced on 0.28.16. So:
+#
+#   * every block that reads as drawn must have at least one committed DRC log
+#     for its own top cell, recorded on the pinned KLayout, carrying the deck's
+#     own `Klayout DRC run is clean.` verdict; and every block that reads as
+#     LVS-matched must likewise have at least one on-pin log carrying
+#     `Congratulations! Netlists match.`. "At least one", not "all", on purpose:
+#     `sim/`-style append-only evidence means a superseded off-pin run stays in
+#     the tree beside the on-pin one that re-derived it, and deleting it to
+#     satisfy a checker would be the wrong repair;
+#   * the pin itself is read out of `layout/harness/env.py`, never restated
+#     here -- same doctrine as the klt pin being read out of the CI workflow;
+#   * and every remaining off-pin log must be named in OFF_PIN_DISCLOSED below
+#     with a reason. A new off-pin log fails the build. This is what makes
+#     "16 of 51 are off-pin" a number this script prints rather than a sentence
+#     someone re-derives by hand. The converse -- a disclosure entry whose file
+#     has since disappeared -- is asserted against the real tree by
+#     layout/tests/test_layout_status_claims.py rather than here, because this
+#     rule must stay correct on the synthetic trees its own unit tests drive it
+#     against, which hold none of those files.
+#
 # Usage: layout/lib/check-layout-status-claims.sh
 # Exit codes: 0 all claims match the tree, 1 any mismatch.
 
@@ -185,6 +222,12 @@ BLOCKS=(
 # been produced on. Read, never restated -- see the ERC RULE below.
 CI_WORKFLOW="${REPO_ROOT}/.github/workflows/ci.yml"
 
+# The module that is the single source of truth for which KLayout application
+# binary this repository's committed DRC/LVS deck logs must have been produced
+# on (`KNOWN_GOOD_KLAYOUT_VERSION`). Read, never restated -- see the KLAYOUT
+# PIN RULE below.
+HARNESS_ENV="${REPO_ROOT}/layout/harness/env.py"
+
 # Documents whose prose is checked, relative to the repo root.
 DOCS=(
   "README.md"
@@ -209,6 +252,7 @@ drawn=0
 lvs_matched=0
 summary=()
 erc_entries=()
+pin_entries=()
 
 for entry in "${BLOCKS[@]}"; do
   IFS='|' read -r label dir gds top <<<"${entry}"
@@ -246,6 +290,12 @@ for entry in "${BLOCKS[@]}"; do
   # "an lvs-clean/ directory exists" test -- a block whose deck said the
   # netlists do not match has a different problem to fix first.
   erc_entries+=("${label}|${dir}|${gds}|${top}|${has_lvs}")
+
+  # The KLAYOUT PIN RULE asks the same two verdicts be reproducible on the
+  # pinned KLayout, so it needs both halves of the derivation above, not just
+  # the LVS one: a block that reads drawn owes an on-pin DRC log, and a block
+  # that reads LVS-matched owes an on-pin LVS log.
+  pin_entries+=("${label}|${top}|${has_drc}|${has_lvs}")
 done
 
 # Is there an assembled top level? Nothing in the tree publishes one today;
@@ -582,6 +632,199 @@ if [ "${have_python}" = yes ]; then
   echo
 else
   fail "python3 is not on PATH -- the ERC rule could not run, and a partial pass is not a pass"
+fi
+
+# --- The KLayout pin rule (see the header) ---------------------------------
+#
+# Grades the *engine* every committed DRC/LVS deck log was produced on against
+# the pin `layout/harness/env.py` declares, and requires each block's own
+# scored verdict to exist on that pin. Reads only committed files -- no PDK,
+# no KLayout.
+klayout_pin_rule() {
+  local evidence="$1" harness_env="$2" blocks="$3"
+  python3 - "${evidence}" "${harness_env}" "${blocks}" <<'PY'
+import os
+import re
+import sys
+
+evidence, harness_env, blocks_spec = sys.argv[1], sys.argv[2], sys.argv[3]
+
+failed = False
+
+
+def fail(msg):
+    global failed
+    failed = True
+    sys.stderr.write("FAIL: %s\n" % msg)
+
+
+# Off-pin logs that are committed on purpose, each with the reason it is not a
+# defect. Paths are relative to layout/evidence/. Every entry is asserted to
+# exist, so a stale one fails rather than quietly widening the exemption.
+#
+# The rule for adding to this list: a log belongs here when it is NOT one of
+# the block-level DRC/LVS verdicts T1 items 3 and 4 score, or when being
+# off-pin is the whole point of the run. Anything else must be re-run on the
+# pin instead of listed.
+OFF_PIN_DISCLOSED = {
+    # Deliberately off-pin: this IS the cross-version re-check. PR #471 re-ran
+    # lock_detector's LVS on a second KLayout to show the match does not depend
+    # on the pinned build; listing it as an exception is the point of it.
+    "lock-detector-layout/lvs-recheck-klayout-0.30.10/lvs.stdout.log":
+        "deliberate cross-version re-check (issue #440 / PR #471)",
+    # Leaf-cell generator proofs, not block-level evidence for items 3/4. They
+    # prove a generator; the blocks that instantiate them are graded on their
+    # own on-pin block-level runs.
+    "cp-leg-proof/drc-clean/cp_leg_n.drc.stdout.log": "leaf-cell generator proof",
+    "cp-leg-proof/drc-clean/cp_leg_p.drc.stdout.log": "leaf-cell generator proof",
+    "cp-leg-proof/lvs-clean/cp_leg_n.lvs.stdout.log": "leaf-cell generator proof",
+    "cp-leg-proof/lvs-clean/cp_leg_p.lvs.stdout.log": "leaf-cell generator proof",
+    # The DRC/LVS harness's own bring-up proof, including its two deliberate
+    # fault negative controls. Not a PLL block at all.
+    "inv-tb-proof/drc-clean/drc.stdout.log": "harness bring-up proof (not a PLL block)",
+    "inv-tb-proof/drc-fault/drc.stdout.log": "harness bring-up proof, negative control",
+    "inv-tb-proof/lvs-clean/lvs.stdout.log": "harness bring-up proof (not a PLL block)",
+    "inv-tb-proof/lvs-fault/lvs.stdout.log": "harness bring-up proof, negative control",
+    # vco_block's original block-level runs, captured on 0.30.10. Kept per this
+    # repository's append-only evidence convention; superseded for grading
+    # purposes by drc-recheck-klayout-0.28.16/ and lvs-recheck-klayout-0.28.16/,
+    # which re-derived both verdicts on the pin from the same committed GDS and
+    # the same committed reference netlist (issue #127, PROOF-klayout-pin.md).
+    "vco-layout/drc-clean/drc-block.stdout.log":
+        "superseded on the pin by drc-recheck-klayout-0.28.16/",
+    "vco-layout/lvs-clean/lvs.stdout.log":
+        "superseded on the pin by lvs-recheck-klayout-0.28.16/",
+    # VCO sub-cell evidence still only on 0.30.9/0.30.10. Disclosed, not
+    # excused: this is the residual issue #127's pin re-check pass left behind
+    # after re-deriving all four block-level verdicts, and the sub-cells are
+    # supporting evidence for vco_block rather than an item 3/4 verdict of
+    # their own.
+    "vco-layout/drc-clean/drc.stdout.log": "VCO sub-cell (vco_ring), off-pin residual",
+    "vco-layout/drc-clean/drc-buffer.stdout.log": "VCO sub-cell (vco_out_buffer), off-pin residual",
+    "vco-layout/drc-clean/drc-vtoi-core.stdout.log": "VCO sub-cell (vco_vtoi_core), off-pin residual",
+    "vco-layout/lvs-ring/lvs.stdout.log": "VCO sub-cell (vco_ring), off-pin residual",
+    "vco-layout/lvs-buffer/lvs.stdout.log": "VCO sub-cell (vco_out_buffer), off-pin residual",
+}
+
+DRC_CLEAN = "Klayout DRC run is clean."
+LVS_MATCH = "Congratulations! Netlists match."
+
+# The pin, read out of layout/harness/env.py rather than restated here.
+# Absence is a failure: every committed log's engine claim would then be
+# gradeable against nothing, which is the state this rule exists to end.
+pin = None
+try:
+    with open(harness_env, encoding="utf-8") as fh:
+        m = re.search(
+            r'^KNOWN_GOOD_KLAYOUT_VERSION\s*=\s*"([^"]+)"', fh.read(), re.M
+        )
+        if m:
+            pin = m.group(1)
+except OSError as exc:
+    fail("cannot read %s: %s" % (harness_env, exc))
+if pin is None and not failed:
+    fail(
+        "%s declares no KNOWN_GOOD_KLAYOUT_VERSION -- the KLayout every "
+        "committed DRC/LVS log was produced on cannot be graded against "
+        "anything" % harness_env
+    )
+
+VERSION_RE = re.compile(r"Your Klayout version is: (KLayout [0-9][0-9.]*)")
+CELL_RE = re.compile(r"on cell ([A-Za-z0-9_]+)")
+
+logs = []
+for dirpath, _dirnames, filenames in os.walk(evidence):
+    for name in sorted(filenames):
+        if not name.endswith(".log"):
+            continue
+        path = os.path.join(dirpath, name)
+        try:
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
+        except OSError:
+            continue
+        found = VERSION_RE.search(text)
+        if not found:
+            continue
+        cell = CELL_RE.search(text)
+        logs.append(
+            {
+                "rel": os.path.relpath(path, evidence),
+                "version": found.group(1),
+                "cell": cell.group(1) if cell else "",
+                "drc_clean": DRC_CLEAN in text,
+                "lvs_match": LVS_MATCH in text,
+            }
+        )
+
+on_pin = [entry for entry in logs if pin is not None and entry["version"] == pin]
+off_pin = [entry for entry in logs if pin is not None and entry["version"] != pin]
+
+for entry in sorted(off_pin, key=lambda e: e["rel"]):
+    if entry["rel"] not in OFF_PIN_DISCLOSED:
+        fail(
+            "layout/evidence/%s was produced on %s, but layout/harness/env.py "
+            "pins %s. A deck log from a different KLayout is not evidence "
+            "about the KLayout this repository grades on -- issue #360 records "
+            "a newer build reporting a FALSE LVS mismatch on an unchanged, "
+            "LVS-clean layout. Re-run it on the pin (see that block's PROOF "
+            "for the exact command), or, if being off-pin is the point of the "
+            "run, add it to OFF_PIN_DISCLOSED in this script with the reason."
+            % (entry["rel"], entry["version"], pin)
+        )
+
+# A disclosure list that outlives its files stops being a disclosure and
+# becomes a blanket excuse, so the entries are asserted to exist too -- but in
+# `layout/tests/test_layout_status_claims.py`
+# (`test_the_off_pin_disclosure_list_has_no_stale_entries`), against the real
+# tree, not here. This rule has to stay correct on a synthetic tree that holds
+# none of these files, which is the only kind of tree its own unit tests can
+# drive it against.
+
+for item in blocks_spec.split(";"):
+    if not item:
+        continue
+    label, top, has_drc, has_lvs = item.split("|")
+    for want, flag, needle, what in (
+        ("drc_clean", has_drc, DRC_CLEAN, "DRC-clean"),
+        ("lvs_match", has_lvs, LVS_MATCH, "LVS-match"),
+    ):
+        if flag != "yes":
+            continue
+        if not any(e["cell"] == top and e[want] for e in on_pin):
+            fail(
+                "%s reads as %s from the evidence tree, but no committed deck "
+                "log for top cell `%s` carries that verdict on %s -- every "
+                "such log is from some other KLayout build. T1 items 3 and 4 "
+                "score this verdict; it has to be reproducible on the engine "
+                "this repository pins." % (label, what, top, pin)
+            )
+
+print("layout/evidence/ DRC/LVS deck logs say:")
+print(
+    "  %d deck logs carry a KLayout version stamp; %d on the pin (%s), "
+    "%d off-pin"
+    % (len(logs), len(on_pin), pin, len(off_pin))
+)
+for entry in sorted(off_pin, key=lambda e: e["rel"]):
+    print(
+        "  off-pin  %-16s %-56s (%s)"
+        % (entry["version"], entry["rel"], OFF_PIN_DISCLOSED.get(entry["rel"], "UNDISCLOSED"))
+    )
+sys.exit(1 if failed else 0)
+PY
+}
+
+BLOCK_PIN_SPEC=""
+for entry in "${pin_entries[@]}"; do
+  BLOCK_PIN_SPEC="${BLOCK_PIN_SPEC}${BLOCK_PIN_SPEC:+;}${entry}"
+done
+
+if [ "${have_python}" = yes ]; then
+  klayout_pin_rule "${EVIDENCE}" "${HARNESS_ENV}" "${BLOCK_PIN_SPEC}" || status=1
+  echo
+else
+  fail "python3 is not on PATH -- the KLayout pin rule could not run, and a partial pass is not a pass"
 fi
 
 # --- Check each document's prose against it -------------------------------
