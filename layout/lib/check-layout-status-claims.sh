@@ -44,6 +44,24 @@
 # the true, top-level-scoped absence does not. That is a property of the
 # claim, not of a remembered sentence.
 #
+# The scope rule grades *negated* absence claims, and on 2026-09-28 a claim
+# escaped it by not using a negation. Section 8's "Flow" bullet -- the one
+# paragraph an outside reviewer reads to decide whether this project's layout
+# toolchain is credible -- said "layout, DRC, and LVS (once drawn) via
+# KLayout ... proven on the inverter test cell referenced in section 6",
+# while section 6 three pages earlier recorded four transistor-level blocks
+# DRC-clean and LVS-matched against the PDK's own foundry signoff decks. A
+# *deferral* ("once drawn", "when laid out") asserts exactly what a negation
+# asserts -- that the thing does not exist yet -- so the scope rule now has a
+# DEFERRAL half beside its ABSENCE half, excused by the same scope tokens.
+# It is the third time the same document has understated its own layout tree
+# in a sibling sentence the then-current mechanism could not see, which is
+# why the fix is a rule rather than a fourth remembered phrase.
+#
+# A bare deferral is what fails. One that names its subject -- "when the loop
+# filter is drawn", which this repository says truthfully and repeatedly --
+# does not, because naming the subject is what makes the claim checkable.
+#
 # A second, narrower guard covers the same drift class for `spec/pll.md`'s
 # ratification state, which went stale in the same document for the same
 # reason (section 5.0 was corrected to "ratified, with amendments"; section
@@ -653,21 +671,69 @@ ABSENCE = re.compile(
     r"[^a-z.\-][^.]{0,29}(?:layout|gds|drawn)(?![a-z-])"
 )
 
+# The DEFERRAL half of the same rule (see the header). A bare deferral --
+# "(once drawn)", "layout ... when drawn", "if ever laid out" -- asserts the
+# same falsehood as a negation without using a negation word, so ABSENCE
+# above cannot see it. The regex deliberately requires the participle to
+# follow the deferral marker with no noun phrase in between: a deferral that
+# NAMES its subject ("when the loop filter is drawn", "once the top level is
+# drawn") is checkable prose about something genuinely undrawn and must stay
+# legal, while a bare one necessarily defers whatever the sentence is about
+# -- which, in the sentence this rule was written for, was the whole flow.
+#
+# Unlike ABSENCE, the participle carries no layout noun of its own ("drawn"
+# is the whole claim), so the deferral must additionally sit near one:
+# DEFERRAL_CONTEXT below must appear within ~60 characters. That is what
+# keeps this off the sim campaigns' own vocabulary -- a Monte-Carlo sample
+# "scored once drawn from the grid" is not a statement about layout.
+DEFERRAL = re.compile(
+    r"(?<![a-z-])(?:once|when|until|after|if)\s+"
+    r"(?:it\s+is\s+|they\s+are\s+|these\s+are\s+|ever\s+)?"
+    r"(?:drawn|laid\s+out)(?![a-z-])"
+)
+DEFERRAL_CONTEXT = re.compile(r"layout|gds|\bdrc\b|\blvs\b|extract|floorplan")
+
 failed = False
-for m in ABSENCE.finditer(low):
-    start, end = max(0, m.start() - 100), m.end() + 100
-    if any(tok in low[start:end] for tok in scope_tokens):
-        continue
-    failed = True
-    sys.stderr.write(
-        "FAIL: %s asserts layout does not exist without saying at what "
-        'scope: "...%s..."\n'
-        "      PLL sub-block layouts are committed under layout/evidence/, "
+for pattern, context, complaint, remedy in (
+    (
+        ABSENCE,
+        None,
+        "asserts layout does not exist without saying at what scope",
         "so an unqualified absence claim is false. Name the scope -- the "
         "assembled top level, the extracted post-layout netlist -- within "
-        "~100 characters of the negation, or drop the sentence. Accepted "
-        "scope words: %s\n" % (label, flat[start:end].strip(), ", ".join(scope_tokens) or "(none)")
-    )
+        "~100 characters of the negation, or drop the sentence.",
+    ),
+    (
+        DEFERRAL,
+        DEFERRAL_CONTEXT,
+        "defers layout to the future without saying what is deferred",
+        "so a bare \"once drawn\" reads as though none of it is drawn yet. "
+        "Name what the deferral is about -- the assembled top level, the "
+        "loop filter -- between the deferral word and the participle, or "
+        "name the scope within ~100 characters of it.",
+    ),
+):
+    for m in pattern.finditer(low):
+        start, end = max(0, m.start() - 100), m.end() + 100
+        if any(tok in low[start:end] for tok in scope_tokens):
+            continue
+        if context is not None and not context.search(
+            low[max(0, m.start() - 60):m.end() + 60]
+        ):
+            continue
+        failed = True
+        sys.stderr.write(
+            "FAIL: %s %s: \"...%s...\"\n"
+            "      PLL sub-block layouts are committed under "
+            "layout/evidence/, %s Accepted scope words: %s\n"
+            % (
+                label,
+                complaint,
+                flat[start:end].strip(),
+                remedy,
+                ", ".join(scope_tokens) or "(none)",
+            )
+        )
 sys.exit(1 if failed else 0)
 PY
 }
@@ -1016,7 +1082,8 @@ if [ "${status}" -eq 0 ]; then
   echo "OK: README.md and docs/chipalooza/challenge-5-proposal.md match layout/evidence/" \
     "(${drawn}/4 drawn + DRC-clean, ${lvs_matched}/4 LVS-matched, ${erc_spec_count}/4 ERC-checked," \
     "assembled pll_top: ${top_assembled})" \
-    "and spec/pll.md (ratified: ${spec_ratified}); no unscoped absence-of-layout claim;" \
+    "and spec/pll.md (ratified: ${spec_ratified}); no unscoped absence-of-layout claim" \
+    "and no bare deferral of layout to the future;" \
     "every stated block footprint matches layout/evidence/area-audit/area-audit.md," \
     "including spec/pll.md's own '## Area' section;" \
     "every committed klt erc report's provenance matches the GDS and spec beside it," \
