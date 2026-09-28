@@ -200,6 +200,35 @@
 #     rule must stay correct on the synthetic trees its own unit tests drive it
 #     against, which hold none of those files.
 #
+# An eighth guard, the PIN RESTATEMENT RULE, added 2026-09-28 (issue #237),
+# closes the prose half of the rule above. The KLAYOUT PIN RULE grades the
+# *logs* against `layout/harness/env.py`; nothing graded what the documents
+# say the pin is, or what they say it guarantees -- and that is precisely
+# where the failure #127 found actually lived. `layout/README.md` asserted
+# for about five weeks that "the committed DRC/LVS evidence under
+# `layout/evidence/*/` was captured against KLayout 0.28.16" while 16 of the
+# 51 committed deck logs were not; the same sentence was live in
+# `layout/harness/env.py`'s own runtime WARNING, printed to every user of
+# `run_pv.py check-env|drc|lvs`; and §8 of the Chipalooza proposal attributed
+# the pin of "every committed layout artifact" to `.github/workflows/ci.yml`,
+# which pins `klt`, not the KLayout application binary that runs the decks.
+# Two engines, two pins, two source files -- stated as one. So:
+#
+#   * every version a graded document states *as this repository's pin* must
+#     equal `KNOWN_GOOD_KLAYOUT_VERSION`, read from `layout/harness/env.py`.
+#     Bumping the pin now fails the build until the prose follows it;
+#   * and the proposal -- the document written to be read from outside this
+#     repository, whose §6 table is the DRC/LVS claim a reviewer scores --
+#     must state the pin at least once. A verdict table that never names the
+#     engine it was produced on is not checkable by its reader.
+#
+# Deliberately narrow: it grades the `pins X` / `pinned at X` / "the `X` pin"
+# shapes, and NOT "captured against X". Both documents quote the superseded
+# "captured against" sentence on purpose, as history -- and a check that
+# grades a claim cannot tell asserting it from quoting it (the same tension
+# the footprint rule's own header records). The shape that asserts a pin is
+# graded; the shape that narrates one that was wrong is left quotable.
+#
 # Usage: layout/lib/check-layout-status-claims.sh
 # Exit codes: 0 all claims match the tree, 1 any mismatch.
 
@@ -251,6 +280,24 @@ DOCS=(
   "README.md"
   "docs/chipalooza/challenge-5-proposal.md"
 )
+
+# Documents the PIN RESTATEMENT RULE grades, relative to the repo root. A
+# separate list from DOCS on purpose: layout/README.md is the flow's own
+# operator manual, not a status narrative, so the DOCS loop's drawn/LVS-count,
+# scope and footprint rules do not fit it -- but it is where this repository's
+# KLayout pin is explained, and where the claim the pin rule exists to end
+# lived for five weeks.
+PIN_DOCS=(
+  "README.md"
+  "docs/chipalooza/challenge-5-proposal.md"
+  "layout/README.md"
+)
+
+# The one document that must state the KLayout pin, not merely avoid stating
+# it wrongly. Same reasoning as FOOTPRINT_COMPLETE_DOC above: it is the
+# document written to be read by someone outside this repository, and §6's
+# DRC/LVS verdicts are only evidence about the engine that produced them.
+PIN_STATED_DOC="docs/chipalooza/challenge-5-proposal.md"
 
 status=0
 
@@ -833,6 +880,120 @@ sys.exit(1 if failed else 0)
 PY
 }
 
+# --- The pin restatement rule (see the header) ----------------------------
+#
+# Grades what the *documents* say this repository's KLayout pin is, against
+# what `layout/harness/env.py` declares it to be. The rule above grades the
+# logs; this one grades the prose about them.
+pin_restatement_rule() {
+  local harness_env="$1" pin_stated_doc="$2"
+  shift 2
+  python3 - "${harness_env}" "${pin_stated_doc}" "$@" <<'PY'
+import os
+import re
+import sys
+
+harness_env, pin_stated_doc = sys.argv[1], sys.argv[2]
+doc_args = sys.argv[3:]
+
+failed = False
+
+
+def fail(msg):
+    global failed
+    failed = True
+    sys.stderr.write("FAIL: %s\n" % msg)
+
+
+# The pin, read out of layout/harness/env.py rather than restated here --
+# the whole point of this rule is that exactly one file gets to say it.
+pin = None
+try:
+    with open(harness_env, encoding="utf-8") as fh:
+        m = re.search(r'^KNOWN_GOOD_KLAYOUT_VERSION\s*=\s*"([^"]+)"', fh.read(), re.M)
+        if m:
+            pin = m.group(1)
+except OSError as exc:
+    fail("cannot read %s: %s" % (harness_env, exc))
+if pin is None:
+    if not failed:
+        fail(
+            "%s declares no KNOWN_GOOD_KLAYOUT_VERSION -- the pin the "
+            "documents restate cannot be graded against anything" % harness_env
+        )
+    sys.exit(1)
+
+# The numeric tail of the pin ("0.28.16" out of "KLayout 0.28.16"), for the
+# bare-version shape below.
+pin_number = pin.split()[-1]
+
+# The two shapes that *assert* a pin. "captured against X" is deliberately
+# absent -- see this script's header for why that one stays quotable.
+#
+#   "pins `KLayout 0.28.16`", "pinned at `KLayout 0.28.16`", "pin: KLayout X"
+FULL_PIN_RE = re.compile(
+    r"pin(?:s|ned)?\s*(?:at|to|:)?\s*[`'\"(]*\s*(KLayout\s+[0-9][0-9.]*)", re.I
+)
+#   "the `0.28.16` pin" -- the same assertion with the program name elided.
+BARE_PIN_RE = re.compile(r"[`'\"]?\b([0-9]+\.[0-9]+\.[0-9]+)\b[`'\"]?\s+pin\b", re.I)
+
+stated_in_required_doc = False
+
+for arg in doc_args:
+    label, path = arg.split("=", 1)
+    if not os.path.exists(path):
+        # Silently skipped, not failed. Two of these three files are already
+        # in DOCS, whose loop reports their absence; and that PIN_DOCS all
+        # exist in the real tree is asserted by
+        # layout/tests/test_layout_status_claims.py against the real tree --
+        # same doctrine as the off-pin disclosure list, and for the same
+        # reason: this rule must stay correct on the synthetic trees its own
+        # unit tests drive it against.
+        continue
+    with open(path, encoding="utf-8") as fh:
+        flat = re.sub(r"\s+", " ", fh.read())
+
+    for found in FULL_PIN_RE.finditer(flat):
+        stated = re.sub(r"\s+", " ", found.group(1))
+        if stated == pin:
+            if label == pin_stated_doc:
+                stated_in_required_doc = True
+            continue
+        quoted = flat[max(0, found.start() - 60):found.end() + 60].strip()
+        fail(
+            '%s states `%s` as this repository\'s KLayout pin, but '
+            "layout/harness/env.py declares `%s`. The pin is read from that "
+            "one file, never restated -- a document that names a different "
+            'engine is describing evidence this tree does not hold: "...%s..."'
+            % (label, stated, pin, quoted)
+        )
+
+    for found in BARE_PIN_RE.finditer(flat):
+        if found.group(1) == pin_number:
+            continue
+        quoted = flat[max(0, found.start() - 60):found.end() + 60].strip()
+        fail(
+            '%s calls `%s` the pin, but layout/harness/env.py declares `%s`: '
+            '"...%s..."' % (label, found.group(1), pin, quoted)
+        )
+
+if not stated_in_required_doc:
+    fail(
+        "%s never states this repository's KLayout pin (`%s`). Its section 6 "
+        "scores a DRC/LVS verdict table, and a verdict is only evidence about "
+        "the engine that produced it -- an outside reader must not have to "
+        "open layout/harness/env.py to learn which one that was." % (pin_stated_doc, pin)
+    )
+
+if not failed:
+    print(
+        "%d documents state or restate the KLayout pin consistently with "
+        "layout/harness/env.py (%s)" % (len(doc_args), pin)
+    )
+sys.exit(1 if failed else 0)
+PY
+}
+
 BLOCK_PIN_SPEC=""
 for entry in "${pin_entries[@]}"; do
   BLOCK_PIN_SPEC="${BLOCK_PIN_SPEC}${BLOCK_PIN_SPEC:+;}${entry}"
@@ -840,6 +1001,13 @@ done
 
 if [ "${have_python}" = yes ]; then
   klayout_pin_rule "${EVIDENCE}" "${HARNESS_ENV}" "${BLOCK_PIN_SPEC}" || status=1
+  echo
+
+  pin_doc_args=()
+  for doc in "${PIN_DOCS[@]}"; do
+    pin_doc_args+=("${doc}=${REPO_ROOT}/${doc}")
+  done
+  pin_restatement_rule "${HARNESS_ENV}" "${PIN_STATED_DOC}" "${pin_doc_args[@]}" || status=1
   echo
 else
   fail "python3 is not on PATH -- the KLayout pin rule could not run, and a partial pass is not a pass"
@@ -1330,7 +1498,9 @@ if [ "${status}" -eq 0 ]; then
     "every stated block footprint matches layout/evidence/area-audit/area-audit.md," \
     "including spec/pll.md's own '## Area' section;" \
     "every committed klt erc report's provenance matches the GDS and spec beside it," \
-    "on the klt version .github/workflows/ci.yml pins"
+    "on the klt version .github/workflows/ci.yml pins;" \
+    "and every document that states this repository's KLayout pin states the one" \
+    "layout/harness/env.py declares"
 fi
 
 exit "${status}"

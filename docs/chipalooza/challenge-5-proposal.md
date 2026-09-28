@@ -2131,7 +2131,39 @@ submission date.
   this repository uses throughout. Every cited `sim/` record's own
   Environment-provenance field states the exact pinned toolchain versions
   that produced it, so any reviewer can re-run the cited evidence from a
-  clean checkout (`sim/run_corners.py`, documented in `sim/README.md`); the
-  `klt` version every committed layout artifact was produced on is pinned by
-  `.github/workflows/ci.yml` and graded against each artifact's own
-  provenance by `layout/lib/check-layout-status-claims.sh`.
+  clean checkout (`sim/run_corners.py`, documented in `sim/README.md`).
+- **Two tool pins, two engines, and what each one actually guarantees.** The
+  layout evidence behind §6 comes out of two different programs, pinned in
+  two different files. An earlier revision of this bullet named one pin for
+  both, which was wrong in the direction that flatters the evidence, so both
+  are stated here separately. `klt` (klayout-tools), which produces the
+  committed `klt erc` reports, is pinned by `.github/workflows/ci.yml`, and
+  every committed report's own `provenance.klt_version` must equal that pin
+  exactly. The **KLayout application binary** that runs the foundry DRC and
+  LVS decks — the engine behind every verdict in §6's table, and a different
+  program from `klt` — is pinned at `KLayout 0.28.16` by
+  `KNOWN_GOOD_KLAYOUT_VERSION` in `layout/harness/env.py`. That pin is not
+  housekeeping: a newer build has been observed reporting a **false** LVS
+  mismatch on an unchanged, LVS-clean layout, while DRC on the same binary
+  was unaffected (issue #360), so a verdict is only evidence about the engine
+  that produced it.
+- **What the KLayout pin guarantees is narrower than "every log is on it",
+  and is stated here as narrowly as it holds.** Each verdict §6's table
+  scores — every block that reads DRC-clean, and every block that reads
+  LVS-matched — has at least one committed deck log carrying that verdict,
+  for that block's own top cell, produced on the pinned KLayout. Some logs in
+  `layout/evidence/` are off the pin: leaf-cell generator proofs, the DRC/LVS
+  harness's own bring-up cell and its two deliberate fault negative controls,
+  one deliberate cross-version re-check, and VCO sub-cell residuals. Each of
+  those is supporting material, and each block-level verdict §6 scores sits
+  on the pin in its own right. Off-pin runs are disclosed rather than
+  deleted — `sim/`-style
+  append-only evidence keeps a superseded run in the tree beside the on-pin
+  one that re-derived it — and every one of them is named, with its reason,
+  on every run of `layout/lib/check-layout-status-claims.sh`, which also
+  fails the build on a new undisclosed one. The same check grades the two
+  sentences above against `layout/harness/env.py`, so a pin bump cannot leave
+  this paragraph behind. It once did: the claim that the committed DRC/LVS
+  evidence had all been captured on the pin stood in `layout/README.md`, and
+  in the harness's own runtime warning, for about five weeks before the
+  census that checks it existed (issue #127).

@@ -143,7 +143,18 @@ jobs:
         # numbers, which had never been graded anywhere, only the two status
         # documents' copies of them. Scoped to that one section: the loop
         # filter's C2 plate size elsewhere in the file is stated in the same
-        # "W x H um" shape and is not a block footprint. Needs python3 (set
+        # "W x H um" shape and is not a block footprint. Eighth pass grades
+        # what the documents say this repository's KLayout pin *is*, against
+        # KNOWN_GOOD_KLAYOUT_VERSION in layout/harness/env.py -- and requires
+        # the proposal to state it. The seventh pass (issue #127) grades the
+        # deck logs' engine; nothing graded the prose about it, which is
+        # where the failure actually lived: "the committed DRC/LVS evidence
+        # was captured against KLayout 0.28.16" stood in layout/README.md,
+        # in harness/env.py's own runtime WARNING, and as a mis-attributed
+        # one-pin-for-two-engines claim in the proposal's section 8, while 16
+        # of the 51 committed deck logs were on 0.30.9/0.30.10. layout/README.md
+        # is graded by this rule alone -- it is the flow's operator manual,
+        # not a status narrative. Needs python3 (set
         # up above) for the prose and footprint rules; still reads only
         # committed files, no PDK, no KLayout.
         run: bash layout/lib/check-layout-status-claims.sh
