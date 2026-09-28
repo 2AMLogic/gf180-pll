@@ -71,13 +71,6 @@ def _load(results: Path, name: str):
     return json.loads(p.read_text()) if p.is_file() else None
 
 
-def _si(x, unit, digits=4):
-    for scale, pfx in ((1e12, "p"), (1e9, "n"), (1e6, "u"), (1e3, "m")):
-        if abs(x) * scale >= 1.0 and abs(x) * scale < 1e4:
-            return f"{x * scale:.{digits}g} {pfx}{unit}"
-    return f"{x:.{digits}g} {unit}"
-
-
 def _rows_by_phase(res):
     return sorted(res["rows"], key=lambda r: (r["node"], r["phase_cycles"]))
 
