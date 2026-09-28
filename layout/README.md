@@ -239,9 +239,9 @@ jobs, and conflating them is the single easiest way to get stuck:
 
 ### KLayout version pin — a newer install can produce a false LVS mismatch
 
-The committed DRC/LVS evidence under `layout/evidence/*/` was captured
-against `KLayout 0.28.16` — recorded as `KNOWN_GOOD_KLAYOUT_VERSION` in
-`layout/harness/env.py`. A **newer** KLayout application binary resolved off
+This repository pins `KLayout 0.28.16` — recorded as
+`KNOWN_GOOD_KLAYOUT_VERSION` in `layout/harness/env.py`. A **newer** KLayout
+application binary resolved off
 `PATH` (0.30.9 has been reproduced directly) has been observed to report a
 false `LVS mismatch` on a `divider_chain` layout that is otherwise LVS-clean
 and unchanged from a previously LVS-clean, evidenced state — while running
@@ -260,6 +260,19 @@ violations/mismatch (a clean/matching run stays silent). **If you see an
 unexpected `LVS mismatch` locally**, run `python3 layout/run_pv.py
 check-env` first and check whether the reported KLayout version matches the
 pin before concluding the layout itself regressed.
+
+**That warning grades the binary you are about to use — it says nothing
+about the logs already committed**, and until 2026-09-28 nothing did. An
+earlier revision of this section asserted that *"the committed DRC/LVS
+evidence under `layout/evidence/*/` was captured against KLayout 0.28.16"*;
+a census run for issue `#127` found **16 of the 51** committed deck logs
+were captured on 0.30.9 or 0.30.10, including `vco_block`'s own block-level
+DRC-clean and LVS-match logs — the two artifacts T1 items 3 and 4 score the
+VCO on. All four blocks' verdicts have since been re-derived on the pin from
+the committed GDS and the committed reference netlists, and the surviving
+off-pin logs are now enumerated by `layout/lib/check-layout-status-claims.sh`
+on every run rather than described in prose. See
+[`layout/evidence/vco-layout/PROOF-klayout-pin.md`](evidence/vco-layout/PROOF-klayout-pin.md).
 
 ### The `pmap` shim (macOS/BSD)
 

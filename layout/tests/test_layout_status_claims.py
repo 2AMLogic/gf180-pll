@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -51,6 +52,28 @@ AUDIT_GEOMETRY = {
 }
 
 LVS_MATCH_LINE = "INFO : Congratulations! Netlists match.\n"
+DRC_CLEAN_LINE = "INFO    | Klayout DRC run is clean. GDS has no DRC violations.\n"
+
+# The KLayout application version the fixture's layout/harness/env.py pins.
+# The KLAYOUT PIN RULE (issue #127) reads the pin from that module rather than
+# restating it, so the fixture must carry one for the rule to have anything to
+# grade against -- and a deck log recorded on a different KLayout must fail,
+# which is what test_an_undisclosed_off_pin_deck_log_is_caught drives.
+PINNED_KLAYOUT = "KLayout 0.28.16"
+
+
+def _deck_log(klayout: str, top: str, verdict: str) -> str:
+    """A deck stdout log shaped like the real gf180mcu DRC/LVS runner's.
+
+    The KLAYOUT PIN RULE reads three things out of a committed log -- the
+    engine that produced it, the top cell it ran on, and the deck's own
+    verdict line -- so the fixture must carry all three in the real wording.
+    """
+    return (
+        f"INFO    | Your Klayout version is: {klayout}\n"
+        f"INFO    | Running Global Foundries 180nm MCU design main on cell {top}:\n"
+        f"{verdict}"
+    )
 
 # The klt version the fixture's .github/workflows/ci.yml pins. The ERC rule
 # (issue #565) reads the pin from that file rather than restating it, so the
@@ -147,6 +170,7 @@ class _Tree:
         self.write_spec(RATIFIED_SPEC)
         self.write_audit()
         self.write_ci_workflow()
+        self.write_harness_env()
 
     def write_ci_workflow(self, pin: str | None = PINNED_KLT) -> None:
         """Write .github/workflows/ci.yml, the ERC rule's source of truth for
@@ -198,23 +222,60 @@ class _Tree:
     def remove_audit(self) -> None:
         (self.root / "layout" / "evidence" / "area-audit" / "area-audit.md").unlink()
 
+    def write_harness_env(self, pin: str | None = PINNED_KLAYOUT) -> None:
+        """Write layout/harness/env.py, the KLayout pin rule's source of truth.
+
+        ``pin=None`` writes a module with no ``KNOWN_GOOD_KLAYOUT_VERSION``
+        assignment at all, which the rule must report rather than pass over --
+        an engine claim gradeable against nothing is the failure mode, not a
+        free pass, exactly as for the klt pin.
+        """
+        base = self.root / "layout" / "harness"
+        base.mkdir(parents=True, exist_ok=True)
+        body = '"""Fixture harness env."""\n'
+        if pin is not None:
+            body += f'KNOWN_GOOD_KLAYOUT_VERSION = "{pin}"\n'
+        (base / "env.py").write_text(body)
+
     def add_block(
-        self, evidence_dir: str, gds: str, *, drc: bool, lvs: bool, erc: bool = True
+        self,
+        evidence_dir: str,
+        gds: str,
+        *,
+        drc: bool,
+        lvs: bool,
+        erc: bool = True,
+        drc_klayout: str = PINNED_KLAYOUT,
+        lvs_klayout: str = PINNED_KLAYOUT,
     ) -> None:
         base = self.root / "layout" / "evidence" / evidence_dir
         base.mkdir(parents=True, exist_ok=True)
         (base / gds).write_bytes(b"")
+        top = gds[: -len(".gds")]
         if drc:
             (base / "drc-clean").mkdir(exist_ok=True)
-            (base / "drc-clean" / "drc.stdout.log").write_text("0 violations\n")
+            (base / "drc-clean" / "drc.stdout.log").write_text(
+                _deck_log(drc_klayout, top, DRC_CLEAN_LINE)
+            )
         if lvs:
             (base / "lvs-clean").mkdir(exist_ok=True)
-            (base / "lvs-clean" / "lvs.stdout.log").write_text(LVS_MATCH_LINE)
+            (base / "lvs-clean" / "lvs.stdout.log").write_text(
+                _deck_log(lvs_klayout, top, LVS_MATCH_LINE)
+            )
             # An LVS-clean block owes klt erc supply evidence (issue #565), so
             # the default fixture supplies a valid set. Tests that want the
             # missing-evidence failure pass erc=False.
             if erc:
                 self.add_erc(evidence_dir, gds)
+
+    def add_deck_log(
+        self, rel: str, *, klayout: str, top: str, verdict: str = DRC_CLEAN_LINE
+    ) -> Path:
+        """Write one extra deck log under layout/evidence/ at ``rel``."""
+        path = self.root / "layout" / "evidence" / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(_deck_log(klayout, top, verdict))
+        return path
 
     def add_erc(
         self,
@@ -1326,6 +1387,211 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         result = self.tree.run()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("0/4 ERC-checked", result.stdout)
+
+    # --- The KLAYOUT PIN RULE (issue #127) ---------------------------------
+    #
+    # The rule exists because 16 of the 51 committed DRC/LVS deck logs turned
+    # out to have been captured on KLayout 0.30.9/0.30.10 rather than on the
+    # 0.28.16 pin `layout/harness/env.py` declares -- including `vco_block`'s
+    # own block-level DRC-clean and LVS-match logs, the two artifacts T1 items
+    # 3 and 4 score the VCO on -- while both layout/README.md and issue #127's
+    # body asserted every committed artifact was on the pin. Nothing checked
+    # it; the run-time WARNING in env.py grades the binary you are about to
+    # use, never the logs already in the tree.
+
+    def test_an_undisclosed_off_pin_deck_log_is_caught(self):
+        self._all_four()
+        self.tree.add_deck_log(
+            "vco-layout/drc-clean/drc-extra.stdout.log",
+            klayout="KLayout 0.30.10",
+            top="vco_block",
+        )
+        self.tree.write_docs(_doc_text(4, 2))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "vco-layout/drc-clean/drc-extra.stdout.log was produced on "
+            "KLayout 0.30.10, but layout/harness/env.py pins KLayout 0.28.16",
+            result.stderr,
+        )
+
+    def test_a_block_with_only_an_off_pin_drc_log_is_caught(self):
+        # The exact pre-fix state of vco_block: drawn and DRC-clean, but the
+        # only committed DRC log for that top cell is from 0.30.10.
+        for evidence_dir, gds in BLOCKS:
+            self.tree.add_block(
+                evidence_dir,
+                gds,
+                drc=True,
+                lvs=True,
+                drc_klayout=(
+                    "KLayout 0.30.10" if evidence_dir == "vco-layout" else PINNED_KLAYOUT
+                ),
+            )
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "VCO reads as DRC-clean from the evidence tree, but no committed "
+            "deck log for top cell `vco_block` carries that verdict on "
+            "KLayout 0.28.16",
+            result.stderr,
+        )
+
+    def test_a_block_with_only_an_off_pin_lvs_log_is_caught(self):
+        for evidence_dir, gds in BLOCKS:
+            self.tree.add_block(
+                evidence_dir,
+                gds,
+                drc=True,
+                lvs=True,
+                lvs_klayout=(
+                    "KLayout 0.30.10" if evidence_dir == "vco-layout" else PINNED_KLAYOUT
+                ),
+            )
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "VCO reads as LVS-match from the evidence tree, but no committed "
+            "deck log for top cell `vco_block` carries that verdict on "
+            "KLayout 0.28.16",
+            result.stderr,
+        )
+
+    def test_an_off_pin_log_beside_an_on_pin_rerun_passes(self):
+        # The fix shape this repository actually uses: the superseded off-pin
+        # run stays in the tree (append-only evidence), and a sibling
+        # re-check directory carries the same verdict on the pin. "At least
+        # one on-pin log", not "all logs on-pin", is what makes that legal --
+        # deleting the original to satisfy a checker would be the wrong repair.
+        for evidence_dir, gds in BLOCKS:
+            self.tree.add_block(
+                evidence_dir,
+                gds,
+                drc=True,
+                lvs=True,
+                lvs_klayout=(
+                    "KLayout 0.30.10" if evidence_dir == "vco-layout" else PINNED_KLAYOUT
+                ),
+            )
+        # Disclose the superseded one under the name the script's
+        # OFF_PIN_DISCLOSED already carries, then add the on-pin re-run.
+        self.tree.add_deck_log(
+            "vco-layout/lvs-recheck-klayout-0.28.16/lvs.stdout.log",
+            klayout=PINNED_KLAYOUT,
+            top="vco_block",
+            verdict=LVS_MATCH_LINE,
+        )
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("1 off-pin", result.stdout)
+
+    def test_a_missing_klayout_pin_fails_rather_than_skipping(self):
+        # Same doctrine as the klt pin: a version claim gradeable against
+        # nothing is the failure mode, not a free pass.
+        self._all_four()
+        self.tree.write_harness_env(pin=None)
+        self.tree.write_docs(_doc_text(4, 2))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("declares no KNOWN_GOOD_KLAYOUT_VERSION", result.stderr)
+
+    def test_the_pin_is_read_from_env_py_not_restated(self):
+        # Move the pin and the whole tree's verdict moves with it. If the
+        # script had hardcoded "KLayout 0.28.16", this would still pass on the
+        # old value and silently stop tracking the repository's real pin.
+        for evidence_dir, gds in BLOCKS:
+            self.tree.add_block(
+                evidence_dir,
+                gds,
+                drc=True,
+                lvs=True,
+                drc_klayout="KLayout 0.29.4",
+                lvs_klayout="KLayout 0.29.4",
+            )
+        self.tree.write_harness_env(pin="KLayout 0.29.4")
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("on the pin (KLayout 0.29.4), 0 off-pin", result.stdout)
+
+    def test_a_log_with_no_version_stamp_is_not_graded(self):
+        # Not every committed .log under layout/evidence/ is a deck log --
+        # connectivity transcripts and harness notes live there too. Only logs
+        # that actually record an engine are graded on one.
+        self._all_four()
+        (
+            self.tree.root / "layout" / "evidence" / "vco-layout" / "drc-clean"
+            / "connectivity-block.log"
+        ).write_text("connectivity clean: 43 nets, no shorts, no splits\n")
+        self.tree.write_docs(_doc_text(4, 2))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        # 4 DRC + 2 LVS deck logs; the connectivity transcript is not one.
+        self.assertIn("6 deck logs carry a KLayout version stamp", result.stdout)
+
+
+class OffPinDisclosureListTests(unittest.TestCase):
+    """The disclosure list, graded against the real evidence tree.
+
+    Deliberately not part of the script: the rule itself has to stay correct
+    on the synthetic trees above, which hold none of these files. The
+    guarantee is still owed, so it is asserted here instead -- a disclosure
+    list that outlives its files stops being a disclosure and becomes a
+    blanket excuse.
+    """
+
+    def setUp(self):
+        text = SCRIPT.read_text()
+        block = re.search(
+            r"OFF_PIN_DISCLOSED = \{(.*?)^\}", text, re.S | re.M
+        )
+        self.assertIsNotNone(block, "OFF_PIN_DISCLOSED not found in the script")
+        self.entries = re.findall(r'^\s*"([^"]+)":', block.group(1), re.M)
+
+    def test_the_list_is_not_empty(self):
+        self.assertTrue(self.entries)
+
+    def test_the_off_pin_disclosure_list_has_no_stale_entries(self):
+        evidence = LAYOUT_DIR / "evidence"
+        missing = [rel for rel in self.entries if not (evidence / rel).is_file()]
+        self.assertEqual(
+            missing,
+            [],
+            "OFF_PIN_DISCLOSED names files that no longer exist; drop the "
+            "entries rather than letting the list widen into a blanket excuse",
+        )
+
+    def test_every_disclosed_entry_is_actually_off_pin(self):
+        # The mirror failure: an entry that has since been re-run on the pin
+        # and is now graded, but is still listed as an exception. That would
+        # hide a future regression on that same path.
+        pin = re.search(
+            r'^KNOWN_GOOD_KLAYOUT_VERSION\s*=\s*"([^"]+)"',
+            (LAYOUT_DIR / "harness" / "env.py").read_text(),
+            re.M,
+        ).group(1)
+        evidence = LAYOUT_DIR / "evidence"
+        still_on_pin = []
+        for rel in self.entries:
+            path = evidence / rel
+            if not path.is_file():
+                continue
+            found = re.search(
+                r"Your Klayout version is: (KLayout [0-9][0-9.]*)",
+                path.read_text(errors="replace"),
+            )
+            if found and found.group(1) == pin:
+                still_on_pin.append(rel)
+        self.assertEqual(
+            still_on_pin,
+            [],
+            f"OFF_PIN_DISCLOSED names logs that are on the pin ({pin}); they "
+            "are graded like any other log now, so the exemption only hides a "
+            "future regression",
+        )
 
 
 if __name__ == "__main__":
