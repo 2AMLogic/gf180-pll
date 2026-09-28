@@ -45,9 +45,7 @@ different local klt version than the one CI pins can report the committed
 report "stale" even when no T1 verdict actually changed. The version CI
 pins is always `.github/workflows/ci.yml`'s "Install klt (klayout-tools) for
 the signoff tier check" step (`pip install 'klayout-tools==…'`) -- treat that
-line, not this README, as the source of truth if the two ever drift, and
-match your local `klt --version` against it before trusting a `--check`
-failure as real.
+line, not this README, as the source of truth if the two ever drift.
 
 **Match the *full* version string, suffix included -- a source build of the
 pinned version is not the pinned version.** 0.6.0 records its own build
@@ -69,6 +67,29 @@ python3 -m venv /tmp/klt-pinned
 /tmp/klt-pinned/bin/klt --version          # must print exactly: klt 0.6.0
 PATH=/tmp/klt-pinned/bin:$PATH bash signoff/run-signoff.sh
 ```
+
+(`uvx --from 'klayout-tools==0.6.0' klt --version` answers the same question in
+one line, but this script needs `klt` on `PATH`, so the venv above is what to
+render or `--check` through.)
+
+**`run-signoff.sh` enforces that match now rather than asking you to make it**
+(issue #630). It reads the pin out of the workflow step named above -- never
+restating it, so a pin bump needs no edit in the script -- and refuses to
+render or `--check` anything unless `klt --version` prints exactly
+`klt <pin>`, exiting 2 with both versions named and the escape hatch above
+quoted. Until it did, the mismatch surfaced as a **false `--check` failure**:
+an off-pin `klt` re-renders a current `tier-report.json` differently in the
+`build` block alone, and the script blamed the committed report ("is stale")
+rather than the tool that had moved. Both halves are driven against a stub
+`klt` by `signoff/tests/test_run_signoff.py` -- the pinned release accepted, a
+`+g<sha>` source build rejected with the new message -- so the check is
+exercised where it fails as well as where it passes.
+
+For the residual case the version check cannot catch -- two klt builds that
+report the same version but differ in `git_commit`, `dirty`, or
+`grading_ruleset_id` -- `--check` now adds a line saying that the report's own
+`build` block is the only top-level key that moved and that no T1 verdict
+changed, so "stale" is not read as a verdict having shifted when it has not.
 
 ## Block kind: `mixed-signal`, and the partition boundary
 

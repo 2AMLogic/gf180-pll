@@ -159,6 +159,19 @@ jobs:
         # committed files, no PDK, no KLayout.
         run: bash layout/lib/check-layout-status-claims.sh
 
+      - name: signoff/tests (unit tests for run-signoff.sh's klt version pin)
+        # Same shape as the three discover steps above, for the signoff-side
+        # check added in #630: run-signoff.sh used to check only that `klt`
+        # was *present*, so a post-tag source build (`0.6.0+g<sha>`) rendered
+        # a report whose `build` block no pinned-wheel host reproduces, and
+        # `--check` reported a current tier-report.json as stale. The script
+        # now reads the pin out of the "Install klt" step below -- never
+        # restating it -- and requires an exact `klt <pin>` match. Every test
+        # builds a throwaway tree with a stub `klt` on PATH reporting a
+        # version of its choosing, so this runs before klt is installed and
+        # needs neither the real tool nor a PDK.
+        run: python3 -m unittest discover -s signoff/tests -t signoff/tests
+
       - name: Install klt (klayout-tools) for the signoff tier check
         # Pinned, for the same reason xschem and the PDK are pinned below: an
         # unpinned klt would re-render signoff/tier-report.json differently the
