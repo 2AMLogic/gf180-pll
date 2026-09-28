@@ -1020,6 +1020,44 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
             result.stderr,
         )
 
+    def test_a_report_from_a_post_tag_source_build_is_caught(self):
+        # The regression this test exists for (issue #127). The rule above used
+        # to ask `stated.startswith(pinned)`, so a PEP 440 *local version* --
+        # `0.6.0+g<sha>`, a build of the klayout-tools tree *after* the v0.6.0
+        # tag -- satisfied it while not being the released wheel at all. All
+        # four committed reports sat in that state for three weeks: their JSON
+        # carried a top-level `nets[]` block and an
+        # `erc_coverage.layers_in_stream_without_declaration` key the released
+        # wheel does not emit, at an unchanged `schema_version`, so nothing
+        # inside the envelope could have announced it. Only the version string
+        # could, and a prefix test threw exactly that away.
+        self._all_four_erc_ready()
+        self.tree.add_erc(
+            "pfd-cp-layout", "pfd_cp.gds", klt_version="0.6.0+gf2d249ab23d4"
+        )
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "layout/evidence/pfd-cp-layout/erc-report.json was produced on "
+            "klt '0.6.0+gf2d249ab23d4', but .github/workflows/ci.yml pins "
+            "klayout-tools==0.6.0.",
+            result.stderr,
+        )
+        # And the message must say *why* a version that looks like the pin is
+        # not the pin -- a bare "different klt" reads as a typo here.
+        self.assertIn("local-version suffix", result.stderr)
+        self.assertIn("source build", result.stderr)
+
+    def test_the_exact_pin_is_still_accepted(self):
+        # The negative control for the test above: tightening prefix-match to
+        # equality must not reject the version it is supposed to accept.
+        self._all_four_erc_ready()
+        self.tree.add_erc("pfd-cp-layout", "pfd_cp.gds", klt_version="0.6.0")
+        self.tree.write_docs(_doc_text(4, 4))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_ci_workflow_with_no_pin_is_caught(self):
         self._all_four_erc_ready()
         self.tree.write_ci_workflow(pin=None)
