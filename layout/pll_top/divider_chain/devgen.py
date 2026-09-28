@@ -150,7 +150,7 @@ that net only through the well/substrate region itself, not a Metal1 wire.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import partial
 from typing import ClassVar, Sequence
 
@@ -556,16 +556,10 @@ def well_tap(canvas: Canvas, kind: str, x0: float, y0: float, net: str) -> tuple
     return pad
 
 
-@dataclass
-class LeafCell:
-    canvas: Canvas
-    ports: list[MosfetPorts] = field(default_factory=list)
-    pins: dict[str, tuple[float, float, float, float]] = field(default_factory=dict)
-    nwell_box: tuple[float, float, float, float] | None = None
-    footprint: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
-
-    def write_gds(self, path) -> None:
-        self.canvas.write_gds(path)
+# The finished-cell record every ``build_stack_cell()``-style generator
+# returns -- shared with every other ``layout/pll_top/*`` submodule
+# (issue #639, ``_canvas.LeafCell``).
+LeafCell = _canvas.LeafCell
 
 
 def draw_column(canvas: Canvas, devices: Sequence[Device], x0: float, y0: float = 0.0) -> list[MosfetPorts]:
