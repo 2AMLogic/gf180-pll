@@ -641,23 +641,38 @@ dangerous kind of figure to grade**: a derivation that quietly examined nothing
 reports the same `0` as a clean grid. So the check treats an empty group set, a
 curve with fewer than two points, and a repeated control voltage inside a curve
 as failures rather than passes, and prints the number of groups it examined
-(`2667` here: `504` curves, `63` corners, and the `2100` Monte Carlo samples of
+(`2667` here: `504` curves + `63` corners + the `2100` Monte Carlo samples of
 the next paragraph, which are `100` samples at each of that campaign's 21
 corners) in its own OK line. A worst *overlap* is silent in the same way
 about how many intervals it was the worst of, so that line also prints the
-number of adjacent band pairs examined (`441` here: `7` pairs across each of
-the `63` corners' `8` bands).
+number of adjacent band pairs examined (`441` here: `7` pairs × each of the
+`63` corners, one pair for each of the `8` band codes bar the last).
 
 Those two sentences read `867` and `300` until 2026-09-28, and the correction is
 worth stating rather than quietly applying: #597 widened the mismatch campaign's
 corner axis from three corners to 21, so the group count the check prints moved
 from 867 to 2667 and the sample count from 300 to 2100 — while every graded
 *value* stayed correct, because the check re-derives each of them from the
-evidence on every run. **A section that narrates what CI prints is the one part
-of this document CI does not grade**, and this is what that costs: the numbers
+evidence on every run. **A section that narrates what CI prints was the one part
+of this document CI did not grade**, and this is what that cost: the numbers
 drifted for a day in the paragraph whose whole subject is numbers that cannot
 drift. The adjacent-pair count beside them (`441`) did not move, because the
 systematic sweep it counts did not.
+
+**So the narration itself is graded now, and its arithmetic with it** (issue
+#626). `check-quoted-value-provenance.sh` locates each of the three sentences
+that narrate its OK line — the two above and the magnitude-bound one below — by
+the words it is written with, compares the count in its parenthetical
+against the count the OK line is about to print, and fails if they differ — or
+if the sentence has been **deleted**, because otherwise removing a narration
+would be the way to stop it being stale, which is the doctrine
+`check-characterization-coverage.sh`'s aggregate-count rule already states. The
+breakdowns are graded as arithmetic rather than as decoration: operands joined
+by `+` must sum to the total beside them and operands joined by `×` must
+multiply to it, which is what makes `2100` — the addend that actually drifted —
+a number CI re-derives rather than a number this paragraph remembers. The run of
+operands ends at the first quoted number the operator does not join, so the
+`100` samples per corner above is prose rather than a fourth addend.
 
 **The overlap figure's mismatch counterpart is graded in the same table, and it
 needed no new grammar.** `min(adjacent-overlap(...))` above reduces

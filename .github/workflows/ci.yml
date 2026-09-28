@@ -619,6 +619,25 @@ jobs:
         # ungraded list exists to make visible. Range-shaped figures are now
         # refused in both grading tables.
         #
+        # And as of 2026-09-28 it grades ITS OWN OK LINE. Section 5.1 explains
+        # the machinery above by quoting this check's counts back to the
+        # reader -- how many groups were examined, how many adjacent band
+        # pairs, how many signed values a magnitude bound covered and how many
+        # of those sat on the far side of zero -- and none of that prose was
+        # graded, because section 5.1 grades section 5's values rather than its
+        # own narration. It had already drifted: #597 widened
+        # sim/mc-cp-mismatch's corner axis from three corners to 21, the group
+        # count moved from 867 to 2667 and the Monte Carlo addend beside it
+        # from 300 to 2100, and this job stayed green for a day over the one
+        # paragraph whose whole subject is numbers that cannot drift (#626).
+        # Each narration is now located by an anchor and compared against the
+        # count about to be printed; a MISSING anchor fails, so deleting the
+        # sentence is not a way to stop it being stale; and the breakdown
+        # inside the parenthetical is graded as arithmetic -- operands joined
+        # by `+` must sum to the total and operands joined by the
+        # multiplication sign must multiply to it, because the number that
+        # actually drifted was an addend and not the total.
+        #
         # Its unit tests run under `bash sim/selftest.sh`
         # above (sim/tests discovery). Needs python3 (set up above); reduces
         # committed CSVs and in-record tables only -- no PDK, no ngspice, no
