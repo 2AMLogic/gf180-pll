@@ -274,6 +274,14 @@ off-pin logs are now enumerated by `layout/lib/check-layout-status-claims.sh`
 on every run rather than described in prose. See
 [`layout/evidence/vco-layout/PROOF-klayout-pin.md`](evidence/vco-layout/PROOF-klayout-pin.md).
 
+The same check also grades the sentence above. Every version this file, the
+repository README, or `docs/chipalooza/challenge-5-proposal.md` states **as
+the pin** must equal `KNOWN_GOOD_KLAYOUT_VERSION`, so bumping the constant in
+`env.py` fails the build until the prose follows it — the drift that produced
+the retired claim in the first place. Quoting a superseded pin claim, as the
+paragraph above does, is deliberately left ungraded: a check cannot tell
+asserting a claim from narrating one that was wrong.
+
 ### The `pmap` shim (macOS/BSD)
 
 The foundry DRC/LVS decks configure a Ruby logger whose message formatter

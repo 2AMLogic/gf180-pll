@@ -113,14 +113,26 @@ class ToolNotFound(RuntimeError):
     """Raised when a required physical-verification tool cannot be located."""
 
 
-# The KLayout application version this repo's committed DRC/LVS evidence
-# (``layout/evidence/*/``) was captured against. Update this by hand only
-# when evidence is deliberately regenerated against a newer KLayout -- see
-# ``klayout_version_mismatch_warning()`` below and layout/README.md's "The
-# two KLayouts" section for why this matters: a KLayout newer than this pin
-# (reproduced: 0.30.9) has been observed to report a false LVS mismatch on
-# an LVS-clean, unchanged layout, while DRC on the same binary was
-# unaffected (issue #360).
+# The KLayout application version every DRC/LVS verdict this repository
+# scores must be reproducible on. Why it matters: a KLayout newer than this
+# pin (reproduced: 0.30.9) has been observed to report a false LVS mismatch
+# on an LVS-clean, unchanged layout, while DRC on the same binary was
+# unaffected (issue #360). See ``klayout_version_mismatch_warning()`` below
+# and layout/README.md's "The two KLayouts" section.
+#
+# NOT "the version every committed log was captured against". This comment
+# and the warning below both said that until 2026-09-28, and it was false:
+# a census run for issue #127 found 16 of the 51 committed deck logs were
+# captured on 0.30.9 or 0.30.10. What holds is narrower -- every block-level
+# verdict has at least one log on this pin, and every remaining off-pin log
+# is disclosed by name. ``layout/lib/check-layout-status-claims.sh`` derives
+# both halves of that from the tree on every run; this module is only the
+# single place the pin itself is declared.
+#
+# Update this by hand only when evidence is deliberately regenerated against
+# a newer KLayout. The same check grades every document that restates the
+# pin against this constant, so a bump fails the build until the prose in
+# layout/README.md and the Chipalooza proposal follows it.
 KNOWN_GOOD_KLAYOUT_VERSION = "KLayout 0.28.16"
 
 
@@ -145,13 +157,15 @@ def klayout_version_mismatch_warning(version: str) -> str | None:
     if KNOWN_GOOD_KLAYOUT_VERSION in version:
         return None
     return (
-        f"WARNING: resolved KLayout is '{version}', but this repo's committed "
-        f"DRC/LVS evidence was captured against '{KNOWN_GOOD_KLAYOUT_VERSION}'. "
-        "KLayout releases newer than 0.28.16 (reproduced: 0.30.9) have been "
-        "observed to report a false LVS mismatch on an LVS-clean, unchanged "
-        "layout -- DRC on the same binary was unaffected. See "
-        "layout/README.md's \"The two KLayouts\" section before concluding "
-        "a regression from an LVS mismatch alone."
+        f"WARNING: resolved KLayout is '{version}', but this repo pins "
+        f"'{KNOWN_GOOD_KLAYOUT_VERSION}' as the engine its scored DRC/LVS "
+        "verdicts must be reproducible on. KLayout releases newer than the "
+        "pin (reproduced: 0.30.9) have been observed to report a false LVS "
+        "mismatch on an LVS-clean, unchanged layout -- DRC on the same "
+        "binary was unaffected. A result produced here is not evidence "
+        "about the pinned engine; see layout/README.md's \"The two "
+        "KLayouts\" section before concluding a regression from an LVS "
+        "mismatch alone."
     )
 
 
