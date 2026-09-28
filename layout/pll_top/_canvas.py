@@ -125,7 +125,7 @@ these names under their own original ``checks.shorted_pairs(...)`` /
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, ClassVar, Iterable, Iterator, Sequence
 
 
@@ -348,6 +348,41 @@ class Canvas:
         options.select_cell(self.top.cell_index())
         options.format = "GDS2"
         self.layout.write(str(path), options)
+
+
+@dataclass
+class LeafCell:
+    """The finished-cell record every ``build_stack_cell()``-style generator
+    returns: a drawn :class:`Canvas` plus the port/pin/well bookkeeping a
+    caller composing several such cells needs, without re-deriving it.
+
+    ``pfd_cp/devgen.py`` and ``divider_chain/devgen.py`` each independently
+    defined a byte-for-byte-identical copy of this dataclass (issue #639,
+    a follow-up in the same wave as this module's ``Canvas``/``_r()``
+    (#317), ``bbox_union()``/``_contact_positions()``/``_via_square()``/
+    ``_riser()`` (#332), ``v_wire()`` (#353), ``pad_center()`` (#475), and
+    ``NetTracks`` (#429) consolidations).
+
+    ``ports``'s element type (``MosfetPorts``) is deliberately left
+    unimported here: each submodule still defines its own ``MosfetPorts``
+    class (that consolidation, if it happens, is #444's job, not this
+    issue's). This module's own ``from __future__ import annotations``
+    (PEP 563) means every annotation, including ``list[MosfetPorts]``
+    below, is stored as a plain string and never evaluated at class
+    definition or instantiation time, so the annotation can name a type
+    this module never imports with no ``NameError`` -- a caller's own
+    ``MosfetPorts`` subclass or instance still works exactly as before,
+    unchanged.
+    """
+
+    canvas: Canvas
+    ports: list[MosfetPorts] = field(default_factory=list)
+    pins: dict[str, tuple[float, float, float, float]] = field(default_factory=dict)
+    nwell_box: tuple[float, float, float, float] | None = None
+    footprint: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+
+    def write_gds(self, path) -> None:
+        self.canvas.write_gds(path)
 
 
 def bbox_union(boxes: Iterable[tuple[float, float, float, float]]) -> tuple[float, float, float, float]:
