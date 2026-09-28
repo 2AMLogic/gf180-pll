@@ -30,7 +30,7 @@ dead-zone criterion would invite exactly the misreading `sim/README.md`'s
 no-fabricated-evidence rule exists to prevent.
 """
 
-from harness.derived import DerivedTable, fmt_scalar
+from harness.derived import DerivedTable, corner_key, fmt_scalar
 
 #: The dphi axis, as the manifest declares it: (sweep point id, label, seconds).
 DPHI_POINTS = (
@@ -75,11 +75,6 @@ def derive_point(point):
     return {"q_zero": q_zero}
 
 
-def _corner_key(point):
-    """`ff/125C/3.63V` -- the key the parent manifest's verdict CSV uses."""
-    return f"{point.corner}/{point.temp_c:g}C/{point.vdd:.2f}V"
-
-
 def _vctrl_v(point):
     """This point's control voltage, from the axis id rather than re-parsed.
 
@@ -102,7 +97,7 @@ def derive_tables(run):
     # Group by (PVT corner, control voltage), keeping the dphi axis inside.
     cells = {}
     for point in run.points:
-        key = (_corner_key(point), point.axes.get(VCTRL_AXIS))
+        key = (corner_key(point), point.axes.get(VCTRL_AXIS))
         cells.setdefault(key, {})[point.axes.get(DPHI_AXIS)] = point
 
     per_point_rows = []
@@ -110,7 +105,7 @@ def derive_tables(run):
     for key in sorted(
         cells, key=lambda k: (k[0], vctrl_order.get(k[1], 99))
     ):
-        corner_key, vctrl_id = key
+        ckey, vctrl_id = key
         by_dphi = cells[key]
         for point_id in sorted(by_dphi, key=lambda p: order_of.get(p, 99)):
             point = by_dphi[point_id]
@@ -144,7 +139,7 @@ def derive_tables(run):
         sample = next(iter(by_dphi.values()))
         offset_rows.append(
             (
-                corner_key,
+                ckey,
                 fmt_scalar(_vctrl_v(sample), "%.2f"),
                 fmt_scalar(kd_wide),
                 fmt_scalar(q_zero),

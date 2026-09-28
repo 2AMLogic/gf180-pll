@@ -32,7 +32,7 @@ a point that failed to drive the duty it claims fails the record instead of
 quietly reporting a delay taken under the wrong condition.
 """
 
-from harness.derived import DerivedTable, fmt_scalar
+from harness.derived import DerivedTable, corner_key, fmt_scalar
 
 #: Reference period, seconds -- the manifest's `period` param.  Spelled here
 #: rather than parsed out of `point.params` for the same reason
@@ -125,11 +125,6 @@ def derive_point(point):
     return out
 
 
-def _corner_key(point):
-    """`ff/125C/3.63V` -- the key every per-corner table in sim/ uses."""
-    return f"{point.corner}/{point.temp_c:g}C/{point.vdd:.2f}V"
-
-
 def _extract_threshold(d_fast, s_fast, d_slow, s_slow):
     """Solve `d_ref = d0 + vth_off / slope` from two (slope, delay) pairs.
 
@@ -156,7 +151,7 @@ def derive_tables(run):
     """Three tables: every point, the per-corner contract verdict, the gain."""
     by_corner = {}
     for point in run.points:
-        key = _corner_key(point)
+        key = corner_key(point)
         axes = (point.axes.get(W_AXIS), point.axes.get(P_AXIS))
         by_corner.setdefault(key, {})[axes] = point
 

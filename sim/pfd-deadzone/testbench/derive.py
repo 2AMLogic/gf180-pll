@@ -25,7 +25,7 @@ column rather than folding the dead-zone question into the record's overall
 pass/fail.
 """
 
-from harness.derived import DerivedTable, fmt_scalar
+from harness.derived import DerivedTable, corner_key, fmt_scalar
 
 #: The dphi axis, as the manifest declares it: (sweep point id, the label the
 #: pre-migration CSV used, the offset in seconds).
@@ -79,11 +79,6 @@ def derive_point(point):
     return out
 
 
-def _corner_key(point):
-    """`ff/125C/3.63V` -- the key the pre-migration verdict CSV used."""
-    return f"{point.corner}/{point.temp_c:g}C/{point.vdd:.2f}V"
-
-
 def derive_tables(run):
     """The two CSVs the pre-migration record cited, rebuilt from the same data."""
     label_of = {pid: label for pid, label, _ in DPHI_POINTS}
@@ -92,7 +87,7 @@ def derive_tables(run):
     # Group the run's points by PVT corner, keeping the dphi axis inside.
     corners = {}
     for point in run.points:
-        corners.setdefault(_corner_key(point), {})[point.axes.get(AXIS)] = point
+        corners.setdefault(corner_key(point), {})[point.axes.get(AXIS)] = point
 
     per_point_rows = []
     verdict_rows = []

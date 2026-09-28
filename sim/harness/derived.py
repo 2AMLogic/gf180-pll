@@ -344,6 +344,18 @@ class DerivedSpec:
         return getattr(self.module(), TABLES_HOOK, None)
 
 
+def corner_key(point) -> str:
+    """`ff/125C/3.63V` -- the key every per-corner table in sim/ uses.
+
+    Shared by campaign ``derive.py`` modules that group a run's points by PVT
+    corner before reducing within it -- the format is a repo-wide convention
+    (some pre-migration verdict CSVs cite it directly), not each campaign's
+    own choice, so every campaign that groups by corner should produce the
+    same string for the same point.
+    """
+    return f"{point.corner}/{point.temp_c:g}C/{point.vdd:.2f}V"
+
+
 def fmt_scalar(value, spec: str = "%.6g") -> str:
     """Format one scalar for a derived table cell, ``""`` when not measured.
 
