@@ -560,6 +560,109 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         result = self.tree.run()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    # --- The deferral half of the scope rule (issue #237) ------------------
+    #
+    # The scope rule grades NEGATED absence claims, and a claim escaped it by
+    # not using a negation: the proposal's section 8 "Flow" bullet deferred
+    # layout to the future ("(once drawn)") and named the inverter test cell
+    # as what the flow is proven on, three pages after section 6 recorded
+    # four blocks DRC-clean and LVS-matched against the foundry signoff
+    # decks. Same falsehood, no negation word, so ABSENCE could not see it.
+
+    def test_the_bare_deferral_the_scope_rule_missed_is_caught(self):
+        # Verbatim from docs/chipalooza/challenge-5-proposal.md section 8 as
+        # it stood on main at ac714b46 -- i.e. AFTER the scope rule, the
+        # count rule, the footprint rule and the ERC rule had all shipped
+        # and all reported OK over it.
+        self._all_four()
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + PAD
+            + "- **Flow**: fully open-source. Schematic capture and netlisting\n"
+            "  via xschem; simulation via ngspice; layout, DRC, and LVS (once\n"
+            "  drawn) via KLayout driven by klayout-tools (`klt`), proven on\n"
+            "  the inverter test cell referenced in §6.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("without saying what is deferred", result.stderr)
+        self.assertIn("once drawn", result.stderr)
+
+    def test_a_freshly_invented_bare_deferral_is_caught(self):
+        # The point of grading the claim rather than the phrase: none of
+        # these wordings is the one that went stale, and all of them tell a
+        # reader the same untrue thing.
+        self._all_four()
+        for phrasing in (
+            "DRC and LVS will run once drawn.",
+            "The flow handles DRC and LVS when drawn.",
+            "Layout verification waits until drawn.",
+            "The layout's area will be reported after laid out.",
+            "The block's GDS extent is unknown if ever drawn.",
+            "Metal2 track counts in the layout follow once it is drawn.",
+        ):
+            with self.subTest(phrasing=phrasing):
+                self.tree.write_docs(_doc_text(4, 2) + PAD + phrasing + "\n")
+                result = self.tree.run()
+                self.assertEqual(
+                    result.returncode, 1, result.stdout + result.stderr
+                )
+                self.assertIn("without saying what is deferred", result.stderr)
+
+    def test_a_deferral_that_names_its_subject_passes(self):
+        # This repository says all of these truthfully and repeatedly -- the
+        # loop filter really is not drawn, and neither is the top level. A
+        # rule that broke them would be forcing the document to stop making
+        # checkable statements, which is the opposite of the point.
+        self._all_four()
+        for phrasing in (
+            "The row comes down when the loop filter is drawn.",
+            "Overhead becomes a measurement once the top level is drawn.",
+            "Extraction follows once an assembled pll_top is drawn.",
+        ):
+            with self.subTest(phrasing=phrasing):
+                self.tree.write_docs(_doc_text(4, 2) + PAD + phrasing + "\n")
+                result = self.tree.run()
+                self.assertEqual(
+                    result.returncode, 0, result.stdout + result.stderr
+                )
+
+    def test_a_bare_deferral_that_names_its_scope_nearby_passes(self):
+        # The deferral half honours the same scope tokens as the absence
+        # half, so a writer may scope the sentence instead of the phrase.
+        self._all_four()
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + PAD
+            + "Top-level DRC/LVS closure and extraction run once drawn.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_the_deferral_rule_is_silent_when_nothing_is_drawn(self):
+        # Conditional on the tree, like every other rule here: with no drawn
+        # block, "(once drawn)" was the honest thing to write, and this
+        # check must not retroactively condemn it.
+        self.tree.write_docs(
+            _doc_text(0, 0) + "DRC and LVS run once drawn.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_a_deferral_that_is_not_about_layout_is_not_flagged(self):
+        # False positives cost editorial freedom, so the near-misses are
+        # pinned: "drawn" as a verb about anything else, and the repo's own
+        # "drawn-band edge" / "drawn band" phrasings from the sim campaigns.
+        self._all_four()
+        self.tree.write_docs(
+            _doc_text(4, 2)
+            + PAD
+            + "The band-pair mismatch sample is scored once drawn from the\n"
+            "grid, at either drawn-band edge.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     # --- The count rule (issue #237, third pass) ---------------------------
     #
     # drawn_claim/lvs_claim above only require the *correct* "N of the 4

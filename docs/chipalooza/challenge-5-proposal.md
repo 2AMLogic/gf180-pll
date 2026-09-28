@@ -2101,12 +2101,22 @@ submission date.
   standard open license with all modifiable sources public.
 - **Flow**: fully open-source. Schematic capture and netlisting via
   [xschem](https://xschem.sourceforge.io/); simulation via
-  [ngspice](https://ngspice.sourceforge.io/); layout, DRC, and LVS (once
-  drawn) via [KLayout](https://www.klayout.de/) driven by
-  [klayout-tools](https://github.com/2AMLogic/klayout-tools) (`klt`), proven
-  on the inverter test cell referenced in §6; the gf180mcu PDK (`gf180mcuD`
-  variant) resolved via the standard `PDK_ROOT`/`PDK` environment convention
+  [ngspice](https://ngspice.sourceforge.io/); layout, DRC, and LVS via
+  [KLayout](https://www.klayout.de/) driven by
+  [klayout-tools](https://github.com/2AMLogic/klayout-tools) (`klt`) — a flow
+  whose fault-detection was first validated on the inverter test cell
+  referenced in §6 (it catches a deliberately injected DRC violation and LVS
+  mismatch) and which has since been run in earnest against **4 of the 4 PLL
+  sub-blocks**, each DRC-clean against the PDK's own foundry signoff decks and
+  LVS-matched by the PDK's own `run_lvs.py`, with the deck output committed
+  beside each GDS (§6). What remains deferred to a drawn top level, not to a
+  drawn block, is top-level DRC/LVS closure and extraction: there is **no
+  assembled `pll_top` GDS**. The gf180mcu PDK (`gf180mcuD`
+  variant) is resolved via the standard `PDK_ROOT`/`PDK` environment convention
   this repository uses throughout. Every cited `sim/` record's own
   Environment-provenance field states the exact pinned toolchain versions
   that produced it, so any reviewer can re-run the cited evidence from a
-  clean checkout (`sim/run_corners.py`, documented in `sim/README.md`).
+  clean checkout (`sim/run_corners.py`, documented in `sim/README.md`); the
+  `klt` version every committed layout artifact was produced on is pinned by
+  `.github/workflows/ci.yml` and graded against each artifact's own
+  provenance by `layout/lib/check-layout-status-claims.sh`.
