@@ -124,9 +124,16 @@
 #     GDS's own sha256, and `provenance.spec.content_hash` the committed spec's
 #     -- so a regenerated block with a stale ERC report beside it fails the
 #     build instead of silently describing a layout that no longer exists;
-#   * the report's `provenance.klt_version` must match the klt version
+#   * the report's `provenance.klt_version` must equal the klt version
 #     `.github/workflows/ci.yml` pins, read from that file rather than restated
-#     here;
+#     here. **Equal, not merely start with** -- tightened 2026-09-28 (issue
+#     #127) after the prefix form let every one of the four committed reports
+#     claim the pinned `0.6.0` while actually recording `0.6.0+gf2d249ab23d4`,
+#     a post-tag source build whose `klt erc` JSON carried a `nets[]`
+#     supply-continuity block the released wheel does not emit, at an
+#     unchanged `schema_version`. That is the same failure this rule was
+#     created for (a `0.5.0` report under a `0.6.0` pin), one release apart and
+#     invisible to a prefix test;
 #   * a spec's top-level keys must come from `klt erc`'s own documented schema
 #     (plus a `_description`). This is the structural half of the stale-rationale
 #     fix: the `_ties_omitted` free-text key that carried the fixed-bug citation
@@ -423,12 +430,32 @@ for item in blocks_spec.split(";"):
 
     if pinned is not None:
         stated_klt = prov.get("klt_version") or ""
-        if not stated_klt.startswith(pinned):
+        # Exact equality, not a prefix match. The first version of this rule
+        # asked `stated_klt.startswith(pinned)`, and that is precisely how a
+        # source build got past it for three weeks: all four committed reports
+        # recorded `0.6.0+gf2d249ab23d4`, which starts with the pinned `0.6.0`
+        # but is a PEP 440 *local version* -- a build of the tree after the
+        # v0.6.0 tag, not the released wheel `pip install
+        # 'klayout-tools==0.6.0'` installs. signoff/README.md already documents
+        # that exact discriminator ("A source build reports a PEP 440
+        # local-version suffix ... where the released wheel reports exactly
+        # `klt 0.6.0`") and the distinction is not cosmetic: the post-tag build
+        # emitted a top-level `nets[]` supply-continuity block, and an
+        # `erc_coverage.layers_in_stream_without_declaration` key, that the
+        # release does not emit at all -- with `schema_version` unchanged at 1
+        # in both, so nothing else in the envelope could have caught it.
+        if stated_klt != pinned:
             fail(
                 "%s/erc-report.json was produced on klt %r, but "
                 ".github/workflows/ci.yml pins klayout-tools==%s. A report from "
                 "a different klt is not evidence about the klt this repository "
-                "grades on." % (rel, stated_klt, pinned)
+                "grades on -- and a %r-style local-version suffix means a "
+                "source build of the tree *after* that tag, whose JSON field "
+                "set can differ from the released wheel's without any "
+                "schema_version change to announce it. Re-run `klt erc` on the "
+                "pinned release (see that block's PROOF-erc.md for the exact "
+                "command) rather than editing the version string."
+                % (rel, stated_klt, pinned, pinned + "+g<sha>")
             )
 
     # --- The spec's own schema ------------------------------------------------

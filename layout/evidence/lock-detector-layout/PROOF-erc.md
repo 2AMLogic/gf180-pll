@@ -8,16 +8,25 @@ net connected to what it powers"), not IR-drop or EM analysis.
 
 **Result: the ERC half of item 11 is clean for this block — both declared
 supplies resolve to exactly one electrical island, the n-well tie is declared
-and checked with zero `erc.missing_tie` findings, and every conductor polygon on
-all three routing roles is reachable from a label.** Of the four PLL sub-blocks
+and checked with zero `erc.missing_tie` findings, ~~and every conductor polygon on
+all three routing roles is reachable from a label~~.** Of the four PLL sub-blocks
 this is the strongest supply evidence, for a reason specific to how it is drawn
 (per-segment rail labelling) rather than to how the spec is written.
 
-Two limits on that result are stated here rather than left to be discovered:
-the **antenna half of `klt erc` has never run in this repository** (see
-"Antenna coverage"), and item 11 grades a *set* that also needs a `klt lvs`
+— **struck 2026-09-28 (issue #127):** the label-reachability clause was sourced
+from the report's `nets[]` block (`unlabelled_islands: 0`), and the pinned
+release `klayout-tools==0.6.0` does not emit `nets[]` at all — it is a
+post-`v0.6.0` feature (klayout-tools#2510) that only the source build the
+original report was produced on had. The island-count clause is unaffected: it
+survives on the pin as a graded verdict. See "The 2026-09-28 re-run on the
+pinned release" below for the full field-by-field reproduction.
+
+~~Two~~ **Three** limits on that result are stated here rather than left to be
+discovered: the **antenna half of `klt erc` has never run in this repository**
+(see "Antenna coverage"), item 11 grades a *set* that also needs a `klt lvs`
 citation this repository does not produce (see "Scope: what this does and does
-not settle").
+not settle"), and **the label-reachability measurement is unavailable on the
+pinned klt** (the section just named).
 
 ## Artifacts
 
@@ -30,10 +39,10 @@ not settle").
 
 | | |
 |---|---|
-| Run | 2026-09-26 (issue #565) |
-| `klt` | `0.6.0+gf2d249ab23d4` — the released `klayout-tools==0.6.0` wheel, exactly what `.github/workflows/ci.yml` installs for the signoff tier check |
+| Run | 2026-09-26 (issue #565); **report regenerated 2026-09-28 (issue #127)** on the pinned release — see "The 2026-09-28 re-run on the pinned release" below |
+| `klt` | ~~`0.6.0+gf2d249ab23d4` — the released `klayout-tools==0.6.0` wheel, exactly what `.github/workflows/ci.yml` installs for the signoff tier check~~ — **corrected 2026-09-28 (issue #127): that was false.** `0.6.0+gf2d249ab23d4` is a PEP 440 *local version* — a source build of the tree after the `v0.6.0` tag, which no reader can `pip install`. The committed report is now `0.6.0`, the released wheel `.github/workflows/ci.yml` installs (`git_tag v0.6.0`, `git_commit c622e8addb362491664d44ba4d717f354ca88bbd`, `is_release: true`). |
 | KLayout (Python engine) | `0.30.12` |
-| `--deck` | `gf180mcu`, `content_hash` `sha256:8da880a4b42bb27d4710b3647c2157c42b32de22da51b0259c82aa2c1c3441b4` |
+| `--deck` | `gf180mcu`, `content_hash` ~~`sha256:8da880a4b42bb27d4710b3647c2157c42b32de22da51b0259c82aa2c1c3441b4`~~ → **`sha256:95c2eb9148b29ded02182aeca4222287ff57f813691d5e2f9f8d7a675f6cb637`** — **corrected 2026-09-28 (issue #127)**, the second field the source build moved: the extraction deck ships *inside* the klt distribution (`klayout_tools/decks/gf180mcu.py`), so the post-`v0.6.0` build's copy was not the released wheel's. The new digest is the pinned wheel's own file, checkable without running `klt erc` at all — see "The 2026-09-28 re-run on the pinned release" below. `released: false` in both. |
 | PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) — the layer numbers this spec was cross-checked against. `klt erc` itself needs no PDK install. |
 
 ```
@@ -53,12 +62,97 @@ promise**: `layout/lib/check-layout-status-claims.sh` recomputes both on every
 CI run and fails if either disagrees. The report's `file` field is the
 committed repo-relative path, not a scratch path.
 
+## The 2026-09-28 re-run on the pinned release (issue #127)
+
+The committed `erc-report.json` was regenerated on **`klayout-tools==0.6.0`, the
+released wheel**, because the original was not: it recorded
+`klt_version: "0.6.0+gf2d249ab23d4"`, a source build of the tree *after* the
+`v0.6.0` tag. `layout/lib/check-layout-status-claims.sh` was supposed to catch
+exactly that — it compares the report's `provenance.klt_version` against the
+`klayout-tools==` pin in `.github/workflows/ci.yml` — but it asked
+`stated.startswith(pinned)`, and `"0.6.0+gf2d249ab23d4".startswith("0.6.0")` is
+true. The check is now exact equality, and that change alone fails the four
+pre-existing reports (the negative control for it).
+
+**Every graded verdict reproduced exactly**, re-derived from the committed GDS
+and the committed spec, once in a `uv`-tool install and once in a throwaway
+`python3 -m venv` + `pip install 'klayout-tools==0.6.0'` (both print exactly
+`klt 0.6.0`; their outputs are byte-identical to each other):
+
+| Field | Post-tag source build | Pinned release `0.6.0` |
+|---|---|---|
+| `erc_status` / `erc_finding_count` | `clean` / `0` | **same** |
+| `erc_findings` | `[]` | **same** |
+| `erc_coverage.checked` | 39 `erc.floating_gate`, 1 `erc.missing_tie`, 2 `erc.net_connectivity` | **same** |
+| antenna `coverage` (`checked: 0, skipped: 117`) | as stated below | **byte-identical** |
+| `gates[]` as a multiset, `gate_id` ignored | 39 gates | **identical** |
+| `schema_version` | `1` | `1` |
+
+**What the pinned release does not emit at all**, and this is why the version
+string mattered rather than being cosmetic:
+
+1. the top-level **`nets[]`** block — the per-declared-supply
+   `matched_islands` / `expected_islands` / `unlabelled_islands` /
+   `unlabelled_area_um2` / `unlabelled_bbox` measurement (klayout-tools#2510),
+   which is a post-`v0.6.0` feature; and
+2. `erc_coverage.layers_in_stream_without_declaration`.
+
+`schema_version` is `1` in both, so nothing inside the envelope could have
+announced the difference — only the version string could, and a prefix test
+threw it away.
+
+**A third field moved with the version, and it is checkable without running
+`klt erc` at all.** `provenance.deck.content_hash` went from
+`sha256:8da880a4…3441b4` to `sha256:95c2eb91…6cb637`, because the extraction
+deck ships *inside* the distribution rather than beside it:
+
+```
+$ python3 -c 'import hashlib,pathlib,klayout_tools as k; \
+    print(hashlib.sha256((pathlib.Path(k.__file__).parent/"decks"/"gf180mcu.py").read_bytes()).hexdigest())'
+95c2eb9148b29ded02182aeca4222287ff57f813691d5e2f9f8d7a675f6cb637
+```
+
+and the wheel that produces it identifies itself as the release by build
+metadata, not by its version string alone: `klayout_tools._build_info` reports
+`GIT_TAG = 'v0.6.0'`, `GIT_COMMIT = 'c622e8addb362491664d44ba4d717f354ca88bbd'`,
+`GIT_DIRTY = False`. The consequence is that the source-build report was not
+merely stamped with a different version — it was produced by a **different
+extraction deck**, so every "reproduced exactly" row in the table above is a
+measured agreement between two decks, not an assumption.
+
+**Consequence for every `nets[]` claim in this document** (the JSON quoted under
+"The verdict", and point 2 of "Why `matched_islands: 1` is a strong statement
+here and not elsewhere"): those numbers were really measured, and are kept here
+for the reasoning they support, but they are **no longer reproducible from the
+committed report on the klt version this repository pins** — so they are
+withdrawn as *checkable* claims until klayout-tools#2510 ships in a release the
+pin moves to. What survives on the pin, unchanged, is the graded result: both
+declared supplies appear in `erc_coverage.checked` under
+`erc.net_connectivity`, and no `erc.unconnected_net` is reported — so "each
+declared supply resolves to exactly one electrical island" still holds as a
+verdict. What does *not* survive is the **label-reachability** half
+(`unlabelled_islands: 0` / `unlabelled_area_um2: 0.0`): the pinned release
+grades no rule for it and reports no measurement of it, so on the pin this
+block's label coverage is unmeasured rather than zero-orphan. Read the headline
+above accordingly.
+
 ## The verdict
+
+The first three fields are what the committed report carries today, on the
+pinned release. The `nets[]` block below is **not** in it — see "The 2026-09-28
+re-run on the pinned release" above — and is retained here as the post-tag
+source build's measurement, not as a field a reader can check against the
+committed file:
 
 ```json
 "erc_status": "clean",
 "erc_finding_count": 0,
 "erc_findings": [],
+```
+
+```json
+// NOT EMITTED BY klayout-tools==0.6.0 (the pin) -- source-build measurement,
+// klayout-tools#2510, kept for the record:
 "nets": [
   { "name": "VDD", "matched_islands": 1, "expected_islands": 1,
     "roles": ["metal1", "metal2", "metal3"],
@@ -70,7 +164,9 @@ committed repo-relative path, not a scratch path.
 ```
 
 No `erc.unconnected_net`, no `erc.supply_short`, no `erc.missing_tie`, and no
-`erc.floating_gate` across all 39 gate nets.
+`erc.floating_gate` across all 39 gate nets. Both declared supplies are graded
+on the pin: `erc_coverage.checked` carries an `erc.net_connectivity` entry for
+each, and neither raises a finding.
 
 **`status` is `"not_checked"` (exit 4), and that is not a weaker verdict than
 `"clean"`.** The envelope's `status` aggregates the antenna half too, and the
@@ -131,6 +227,18 @@ asserting it, two independent ways:
    somebody else's signal net would be an over-claim, and the number would
    invite exactly the wrong reading. Declared only where it is both true and
    informative.
+
+   — **not reproducible on the pin, 2026-09-28 (issue #127):** every number in
+   this point comes from the report's `nets[]` block, which
+   `klayout-tools==0.6.0` — the version `.github/workflows/ci.yml` pins — does
+   not emit. The measurement was real, on a post-`v0.6.0` source build; it is
+   kept here for the argument it makes, and the argument's conclusion
+   (`matched_islands: 1` is a *strong* one-island statement for this block,
+   because nothing can hide from the label count) is therefore **unsupported on
+   the pinned klt** until klayout-tools#2510 ships in a release the pin moves
+   to. The weaker conclusion that does survive on the pin is the same one the
+   other three blocks get: `erc.net_connectivity` was graded for both declared
+   supplies and raised no finding.
 
 ### The n-well tie is declared and checked
 
@@ -210,7 +318,20 @@ friction".
 
 ## Coverage: what the spec did and did not look at
 
+> **Correction, 2026-09-28 (issue #127): the field quoted below is no longer in
+> the committed report.** `erc_coverage.layers_in_stream_without_declaration` is
+> emitted only by the post-`v0.6.0` source build the original report came from.
+> `klayout-tools==0.6.0` — the version `.github/workflows/ci.yml` pins, and the
+> version this report is now regenerated on — does not emit it; its
+> `erc_coverage` carries `checked` / `skipped` / `inapplicable` / `unknown` /
+> `nothing_checked` (`false` here, with `nothing_checked_reasons: []`) and no
+> layer census at all. The empty result below was really measured, on that source
+> build. **On the pin, the spec's reach over the stream is undisclosed rather
+> than proven complete** — read the paragraph after the block as the source
+> build's finding, not as a claim the committed artifact supports.
+
 ```json
+// SOURCE BUILD ONLY -- not emitted by klayout-tools==0.6.0 (the pin):
 "erc_coverage": { "layers_in_stream_without_declaration": [], "nothing_checked": false }
 ```
 

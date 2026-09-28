@@ -14,10 +14,13 @@ supply net**, so the island count is a weaker bound here than on
 `lock_detector`, and the reason is stated and quantified under "The island count
 is a weak bound here — how weak, measured".
 
-Two further limits are stated rather than left to be discovered: the **antenna
-half of `klt erc` has never run in this repository** (see "Antenna coverage"),
-and item 11 grades a *set* that also needs a `klt lvs` citation this repository
-does not produce (see "Scope").
+~~Two~~ **Three** further limits are stated rather than left to be discovered:
+the **antenna half of `klt erc` has never run in this repository** (see "Antenna
+coverage"), item 11 grades a *set* that also needs a `klt lvs` citation this
+repository does not produce (see "Scope"), and — added 2026-09-28 (issue #127) —
+**every `nets[]` figure quoted below is a source-build measurement the pinned
+`klayout-tools==0.6.0` cannot reproduce**, because that release does not emit
+`nets[]` at all (see "The 2026-09-28 re-run on the pinned release").
 
 ## Artifacts
 
@@ -30,10 +33,10 @@ does not produce (see "Scope").
 
 | | |
 |---|---|
-| Run | 2026-09-26 (issue #565) |
-| `klt` | `0.6.0+gf2d249ab23d4` — the released `klayout-tools==0.6.0` wheel, exactly what `.github/workflows/ci.yml` installs for the signoff tier check |
+| Run | 2026-09-26 (issue #565); **report regenerated 2026-09-28 (issue #127)** on the pinned release — see "The 2026-09-28 re-run on the pinned release" below |
+| `klt` | ~~`0.6.0+gf2d249ab23d4` — the released `klayout-tools==0.6.0` wheel, exactly what `.github/workflows/ci.yml` installs for the signoff tier check~~ — **corrected 2026-09-28 (issue #127): that was false.** `0.6.0+gf2d249ab23d4` is a PEP 440 *local version* — a source build of the tree after the `v0.6.0` tag, which no reader can `pip install`. The committed report is now `0.6.0`, the released wheel `.github/workflows/ci.yml` installs (`GIT_TAG v0.6.0`, `GIT_COMMIT c622e8addb362491664d44ba4d717f354ca88bbd`, `GIT_DIRTY False`). |
 | KLayout (Python engine) | `0.30.12` |
-| `--deck` | `gf180mcu`, `content_hash` `sha256:8da880a4b42bb27d4710b3647c2157c42b32de22da51b0259c82aa2c1c3441b4` |
+| `--deck` | `gf180mcu`, `content_hash` ~~`sha256:8da880a4b42bb27d4710b3647c2157c42b32de22da51b0259c82aa2c1c3441b4`~~ → **`sha256:95c2eb9148b29ded02182aeca4222287ff57f813691d5e2f9f8d7a675f6cb637`** — **corrected 2026-09-28 (issue #127)**, the second field the source build moved: the extraction deck ships *inside* the klt distribution (`klayout_tools/decks/gf180mcu.py`), so the post-`v0.6.0` build's copy was not the released wheel's. `released: false` in both. |
 | PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) — the layer numbers this spec was cross-checked against. `klt erc` itself needs no PDK install. |
 
 ```
@@ -52,12 +55,82 @@ two digests — **and that pair is a build gate, not a promise**:
 fails if either disagrees. The report's `file` field is the committed
 repo-relative path, not a scratch path.
 
+## The 2026-09-28 re-run on the pinned release (issue #127)
+
+The committed `erc-report.json` was regenerated on **`klayout-tools==0.6.0`, the
+released wheel**, because the original was not: it recorded
+`klt_version: "0.6.0+gf2d249ab23d4"`, a source build of the tree *after* the
+`v0.6.0` tag. `layout/lib/check-layout-status-claims.sh` was supposed to catch
+exactly that — it compares the report's `provenance.klt_version` against the
+`klayout-tools==` pin in `.github/workflows/ci.yml` — but it asked
+`stated.startswith(pinned)`, and `"0.6.0+gf2d249ab23d4".startswith("0.6.0")` is
+true. The check is now exact equality, and that change alone fails all four
+pre-existing reports (the negative control for it).
+
+**Every graded verdict reproduced exactly** on the pin, re-derived from the
+committed GDS and the committed spec, twice — once from a `uv`-tool install and
+once from a throwaway `python3 -m venv` + `pip install 'klayout-tools==0.6.0'`,
+the two outputs byte-identical to each other and to the committed file:
+
+| Field | Post-tag source build | Pinned release `0.6.0` |
+|---|---|---|
+| `erc_status` / `erc_finding_count` | `clean` / `0` | **same** |
+| `erc_findings` | `[]` | **same** |
+| `erc_coverage.checked` | 140 `erc.floating_gate`, 1 `erc.missing_tie`, 2 `erc.net_connectivity` | **same** |
+| antenna `coverage` (`checked: 0, skipped: 420`) | as stated below | **byte-identical** |
+| `gates[]` as a multiset, `gate_id` ignored | 140 gates | **identical** |
+| `schema_version` | `1` | `1` |
+
+**What the pinned release does not emit at all:** the top-level **`nets[]`**
+block (`matched_islands` / `expected_islands` / `unlabelled_islands` /
+`unlabelled_area_um2` / `unlabelled_bbox`, klayout-tools#2510 — a post-`v0.6.0`
+feature) and `erc_coverage.layers_in_stream_without_declaration`.
+`schema_version` is `1` in both builds, so nothing inside the envelope could have
+announced the difference — only the version string could, and a prefix test threw
+it away.
+
+**A third field moved with the version**, and it is checkable without running
+`klt erc` at all: `provenance.deck.content_hash`, because the extraction deck
+ships *inside* the distribution rather than beside it —
+
+```
+$ python3 -c 'import hashlib,pathlib,klayout_tools as k; \
+    print(hashlib.sha256((pathlib.Path(k.__file__).parent/"decks"/"gf180mcu.py").read_bytes()).hexdigest())'
+95c2eb9148b29ded02182aeca4222287ff57f813691d5e2f9f8d7a675f6cb637
+```
+
+— so the source-build report was not merely stamped differently, it was produced
+by a **different extraction deck**, and every "same" above is a measured
+agreement between the two decks rather than an assumption.
+
+**Consequence for this document's `nets[]` numbers** (the JSON under "The
+verdict", and the whole `unlabelled_islands` measurement under "The island count
+is a weak bound here"): they were really measured, and are kept for the reasoning
+they support, but they are **not reproducible from the committed report on the
+klt this repository pins** — withdrawn as *checkable* claims until
+klayout-tools#2510 ships in a release the pin moves to. What survives on the pin
+is the graded result: both declared supplies appear in `erc_coverage.checked`
+under `erc.net_connectivity` and neither raises an `erc.unconnected_net`, so
+"each declared supply resolves to exactly one *labelled* island" still holds as a
+verdict — which, as this document already argues, is the weak bound here either
+way.
+
 ## The verdict
+
+The first three fields are what the committed report carries today, on the
+pinned release. The `nets[]` block below is **not** in it — see the section
+above — and is retained as the post-tag source build's measurement, not as a
+field a reader can check against the committed file:
 
 ```json
 "erc_status": "clean",
 "erc_finding_count": 0,
 "erc_findings": [],
+```
+
+```json
+// NOT EMITTED BY klayout-tools==0.6.0 (the pin) -- source-build measurement,
+// klayout-tools#2510, kept for the record:
 "nets": [
   { "name": "VDD_DIV", "matched_islands": 1, "expected_islands": 1, "roles": [], … },
   { "name": "VSS",     "matched_islands": 1, "expected_islands": 1, "roles": [], … }
@@ -100,6 +173,9 @@ does not declare it**, because on this block it would not mean what its name
 suggests. Measured, so the decision is checkable rather than asserted:
 
 ```
+$ # NOTE (2026-09-28, issue #127): reproducible only on the post-v0.6.0 source
+$ # build this was measured on -- `klayout-tools==0.6.0`, the pin, emits no
+$ # `.nets` at all (klayout-tools#2510). Figures retained, not re-checkable.
 $ # the committed spec with roles: ["metal1","metal2","metal3"] added to VDD_DIV
 $ klt erc --top divider_chain --deck gf180mcu --findings-only --format json … | jq '.nets[0]'
 { "name": "VDD_DIV", "matched_islands": 1, "expected_islands": 1,
@@ -194,7 +270,20 @@ friction".
 
 ## Coverage: what the spec did and did not look at
 
+> **Correction, 2026-09-28 (issue #127): the field quoted below is no longer in
+> the committed report.** `erc_coverage.layers_in_stream_without_declaration` is
+> emitted only by the post-`v0.6.0` source build the original report came from.
+> `klayout-tools==0.6.0` — the version `.github/workflows/ci.yml` pins, and the
+> version this report is now regenerated on — does not emit it; its
+> `erc_coverage` carries `checked` / `skipped` / `inapplicable` / `unknown` /
+> `nothing_checked` (`false` here, with `nothing_checked_reasons: []`) and no
+> layer census at all. The empty result below was really measured, on that source
+> build. **On the pin, the spec's reach over the stream is undisclosed rather
+> than proven complete** — read the paragraph after the block as the source
+> build's finding, not as a claim the committed artifact supports.
+
 ```json
+// SOURCE BUILD ONLY -- not emitted by klayout-tools==0.6.0 (the pin):
 "erc_coverage": { "layers_in_stream_without_declaration": [], "nothing_checked": false }
 ```
 

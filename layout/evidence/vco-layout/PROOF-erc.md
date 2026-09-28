@@ -18,10 +18,16 @@
 >    from a hand-built `klt`.** `erc-report.json`'s `file` field was
 >    `/tmp/i433w/vco_block.gds` — a path no checker can read — and the run came
 >    from a from-source `klt` build. Both are fixed: the run is against the
->    committed `layout/evidence/vco-layout/vco_block.gds`, on the released
->    `klayout-tools==0.6.0` wheel `.github/workflows/ci.yml` pins, and
+>    committed `layout/evidence/vco-layout/vco_block.gds`, ~~on the released
+>    `klayout-tools==0.6.0` wheel `.github/workflows/ci.yml` pins~~, and
 >    `layout/lib/check-layout-status-claims.sh` now fails the build if
 >    `provenance.input.content_hash` and the committed GDS ever disagree.
+>    — **half-struck 2026-09-28 (issue #127): the second clause was false when
+>    written.** The 2026-09-26 re-run was *still* a from-source build
+>    (`klt_version: "0.6.0+gf2d249ab23d4"`, a PEP 440 local version — a build of
+>    the tree after the `v0.6.0` tag, which nobody can `pip install`). It is true
+>    now, and only now: the committed report was regenerated on the released
+>    wheel on 2026-09-28. See "The 2026-09-28 re-run on the pinned release".
 > 3. **The `VDD_VCO` finding is unchanged, and is now adjudicated rather than
 >    merely disclosed.** Still 2 islands, and klt 0.6.0 says *where* the second
 >    one is (`erc_findings[].islands[]`, klayout-tools#2194) instead of leaving
@@ -84,13 +90,28 @@ the revised "Net effect" section at the end.)
 
 | | |
 |---|---|
-| Run | 2026-09-26 (issue #565); first written 2026-09-20 (issue #427/#433) |
+| Run | 2026-09-26 (issue #565); first written 2026-09-20 (issue #427/#433); **report regenerated 2026-09-28 (issue #127)** on the pinned release — see "The 2026-09-28 re-run on the pinned release" below |
 | PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) — matches every other committed evidence record in this directory. `klt erc` itself needs no PDK install; the `gf180mcuD` reference is for the layer numbers this spec was cross-checked against. |
-| `klt` | `0.6.0+gf2d249ab23d4` — the released `klayout-tools==0.6.0` wheel, which is exactly what `.github/workflows/ci.yml`'s "Install klt (klayout-tools) for the signoff tier check" step installs |
+| `klt` | ~~`0.6.0+gf2d249ab23d4` — the released `klayout-tools==0.6.0` wheel, which is exactly what `.github/workflows/ci.yml`'s "Install klt (klayout-tools) for the signoff tier check" step installs~~ — **corrected 2026-09-28 (issue #127): that was false.** `0.6.0+gf2d249ab23d4` is a PEP 440 *local version* — a source build of the tree after the `v0.6.0` tag, which no reader can `pip install`. The committed report is now `0.6.0`, the released wheel that step installs (`GIT_TAG v0.6.0`, `GIT_COMMIT c622e8addb362491664d44ba4d717f354ca88bbd`, `GIT_DIRTY False`). |
 | KLayout (Python engine) | `0.30.12` |
-| `--deck` | `gf180mcu`, `content_hash` `sha256:8da880a4b42bb27d4710b3647c2157c42b32de22da51b0259c82aa2c1c3441b4` (curated extraction deck, `released: false`) |
+| `--deck` | `gf180mcu`, `content_hash` ~~`sha256:8da880a4b42bb27d4710b3647c2157c42b32de22da51b0259c82aa2c1c3441b4`~~ → **`sha256:95c2eb9148b29ded02182aeca4222287ff57f813691d5e2f9f8d7a675f6cb637`** (curated extraction deck, `released: false` in both) — **corrected 2026-09-28 (issue #127)**: the deck ships *inside* the klt distribution (`klayout_tools/decks/gf180mcu.py`), so the source build's copy was not the released wheel's. |
 
-**The run is on the version CI pins, and that is checkable, not asserted.**
+**The run is on the version CI pins, and that is checkable, not asserted —
+~~verified 2026-09-26~~ verified 2026-09-28, after the 2026-09-26 claim below
+turned out to be untrue.**
+
+```
+$ klt --version
+klt 0.6.0
+$ klt erc --top vco_block --deck gf180mcu --format json \
+    layout/evidence/vco-layout/vco_block.gds \
+    layout/evidence/vco-layout/erc-supply-spec.json \
+  | cmp - layout/evidence/vco-layout/erc-report.json && echo BYTE-IDENTICAL
+BYTE-IDENTICAL
+```
+
+<details>
+<summary>Withdrawn 2026-09-26 claim (it asserted a byte-identical pinned-release run that could not have happened)</summary>
 
 ```
 $ klt --version
@@ -101,11 +122,23 @@ $ uvx --from 'klayout-tools==0.6.0' klt erc --top vco_block --deck gf180mcu --fo
 # byte-identical to the committed erc-report.json, provenance block included
 ```
 
-Verified this pass: a run through `uvx --from 'klayout-tools==0.6.0'` — a
-throwaway environment resolving the pinned release from the index, not this
-host's installed tool — produces output byte-identical to the committed
-report, provenance included. That is what makes the earlier "why a from-source
-build" note below obsolete rather than merely out of date.
+> Verified this pass: a run through `uvx --from 'klayout-tools==0.6.0'` — a
+> throwaway environment resolving the pinned release from the index, not this
+> host's installed tool — produces output byte-identical to the committed
+> report, provenance included.
+
+**That cannot have been true, and is withdrawn (issue #127).** The report it
+claimed to match recorded `provenance.klt_version: "0.6.0+gf2d249ab23d4"` and
+`provenance.deck.content_hash: sha256:8da880a4…`, neither of which a run of the
+released wheel can emit — the release writes `"0.6.0"` and
+`sha256:95c2eb91…` — and the release does not emit the report's top-level
+`nets[]` block or `erc_coverage.layers_in_stream_without_declaration` at all.
+Whatever was run in that session, its output was not byte-identical to the
+committed file. The claim is replaced by the check above, which is
+`cmp`-verified rather than narrated, and which now passes because the committed
+report was regenerated on the release.
+
+</details>
 
 ```
 $ cd layout/evidence/vco-layout && sha256sum vco_block.gds erc-supply-spec.json
@@ -130,7 +163,63 @@ GDS with a stale ERC report beside it cannot survive a push.
 The spec hash changed this pass (it was
 `sha256:890016efff277faebde42c2c085346cad26b0abefdb75c5550ef01fc22e8cc85`)
 because the `_ties_omitted` key was replaced by a real `ties[]` declaration.
-The GDS hash did **not** change: no geometry was touched by this work.
+The GDS hash did **not** change: no geometry was touched by this work. Neither
+hash changed again in the 2026-09-28 regeneration below — that pass changed the
+*tool*, not the inputs.
+
+## The 2026-09-28 re-run on the pinned release (issue #127)
+
+The committed `erc-report.json` was regenerated on **`klayout-tools==0.6.0`, the
+released wheel**, because — despite what the 2026-09-26 status note above said —
+it was not produced on it. It recorded `klt_version: "0.6.0+gf2d249ab23d4"`, a
+source build of the tree *after* the `v0.6.0` tag.
+`layout/lib/check-layout-status-claims.sh` was supposed to catch exactly that —
+it compares the report's `provenance.klt_version` against the `klayout-tools==`
+pin in `.github/workflows/ci.yml` — but it asked `stated.startswith(pinned)`,
+and `"0.6.0+gf2d249ab23d4".startswith("0.6.0")` is true. The check is now exact
+equality, and that change alone fails all four pre-existing reports (the negative
+control for it).
+
+**Every graded verdict reproduced exactly** on the pin, re-derived from the
+committed GDS and the committed spec, twice — once from a `uv`-tool install and
+once from a throwaway `python3 -m venv` + `pip install 'klayout-tools==0.6.0'`,
+the two outputs byte-identical to each other and to the committed file:
+
+| Field | Post-tag source build | Pinned release `0.6.0` |
+|---|---|---|
+| `erc_status` / `status` | `violations` / `violations` | **same** |
+| `erc_finding_count` | `1` | **same** |
+| `erc_findings` (the `VDD_VCO` two-island finding, `islands[]` bboxes included) | as quoted below | **byte-identical** |
+| `erc_coverage.checked` | 28 `erc.floating_gate`, 1 `erc.missing_tie`, 2 `erc.net_connectivity` | **same** |
+| antenna `coverage` (`checked: 0, skipped: 140`) | as stated below | **byte-identical** |
+| `gates[]` as a multiset, `gate_id` ignored | 28 gates | **identical** |
+| `schema_version` | `1` | `1` |
+
+**This block's whole result therefore survives the tool change**: the
+`erc.unconnected_net` on `VDD_VCO` is not an artifact of a development build, and
+item 11 stays unmet here for the reason "Net effect" already gives.
+
+**What the pinned release does not emit at all:** the top-level **`nets[]`**
+block (klayout-tools#2510 — a post-`v0.6.0` feature) and
+`erc_coverage.layers_in_stream_without_declaration` (klayout-tools#2389).
+`schema_version` is `1` in both builds, so nothing inside the envelope could have
+announced the difference — only the version string could, and a prefix test threw
+it away. Both fields are struck at their point of use below rather than deleted.
+
+**A third field moved with the version**, and it is checkable without running
+`klt erc` at all: `provenance.deck.content_hash`, because the extraction deck
+ships *inside* the distribution rather than beside it —
+
+```
+$ python3 -c 'import hashlib,pathlib,klayout_tools as k; \
+    print(hashlib.sha256((pathlib.Path(k.__file__).parent/"decks"/"gf180mcu.py").read_bytes()).hexdigest())'
+95c2eb9148b29ded02182aeca4222287ff57f813691d5e2f9f8d7a675f6cb637
+```
+
+— so the source-build report was not merely stamped differently, it was produced
+by a **different extraction deck**. Every "same" in the table above is therefore
+a measured agreement between two decks, which is the strongest thing this
+regeneration establishes: the `VDD_VCO` finding is deck-independent.
 
 <details>
 <summary>Superseded provenance note (2026-09-20): why the original run used a from-source <code>klt</code> build</summary>
@@ -147,10 +236,14 @@ were disclosed rather than smoothed over: `provenance.input` no longer
 carried `"role": "layout"`, and `provenance.klt_version` was the bare
 `"0.5.0"` rather than a `+g<sha>` build string.
 
-**All of that is obsolete as of 2026-09-26.** The released 0.6.0 wheel emits a
-complete `status`/`provenance` envelope (and `provenance.input.role` is back),
-so no source build is needed and none is used. The committed report is
-reproducible by `pip install 'klayout-tools==0.6.0'` and one command.
+**All of that is obsolete as of ~~2026-09-26~~ 2026-09-28.** The released 0.6.0
+wheel emits a complete `status`/`provenance` envelope (and
+`provenance.input.role` is back), so no source build is needed — but one was
+still *used* on 2026-09-26, which is why the date above is struck: that pass
+replaced a `0.5.0`-era source build with a `0.6.0+gf2d249ab23d4` source build
+and described it as the release. The committed report is reproducible by
+`pip install 'klayout-tools==0.6.0'` and one command **as of the 2026-09-28
+regeneration**, verified by `cmp` above.
 
 </details>
 
@@ -469,11 +562,19 @@ identical to the island the #433 investigation located by hand and named
 `vtoi_core.plan().tap_band_bottom`. The `islands[]` field independently
 reproduces a by-hand measurement from six days earlier, and `shape_count: 1`
 is the extra fact it adds: the second island is one polygon, i.e. an isolated
-tap strip, not a sub-block that failed to strap up. The report also carries
-the graded island counts as first-class reporting fields
-(`nets[]`, klayout-tools#2497/#2400):
+tap strip, not a sub-block that failed to strap up. ~~The report also carries
+the graded island counts as first-class reporting fields~~ — **corrected
+2026-09-28 (issue #127): the committed report does not carry them.** `nets[]`
+(klayout-tools#2497/#2400/#2510) is a post-`v0.6.0` feature, emitted only by the
+source build the 2026-09-26 report came from; `klayout-tools==0.6.0`, the pin
+this report is now regenerated on, does not emit it. **Nothing here depends on
+it**: the two-island fact is carried by the finding itself
+(`erc_findings[].islands[]`, quoted above), which reproduces on the pin
+byte-for-byte. The block below is kept as the source build's measurement:
 
 ```json
+// NOT EMITTED BY klayout-tools==0.6.0 (the pin) -- source-build measurement,
+// klayout-tools#2510, kept for the record:
 "nets": [
   { "name": "VDD_VCO", "matched_islands": 2, "expected_islands": 1, … },
   { "name": "GND_VCO", "matched_islands": 1, "expected_islands": 1, … }
@@ -590,7 +691,22 @@ marker layer subtracts nothing and its only signal is a zero area.
 **Coverage.** The spec's own reach over the layout is now disclosed rather than
 assumed (klayout-tools#2389):
 
+> **Correction, 2026-09-28 (issue #127): the field quoted below is no longer in
+> the committed report.** `erc_coverage.layers_in_stream_without_declaration` is
+> emitted only by the post-`v0.6.0` source build the 2026-09-26 report came from.
+> `klayout-tools==0.6.0` — the version `.github/workflows/ci.yml` pins, and the
+> version this report is now regenerated on — does not emit it; its
+> `erc_coverage` carries `checked` / `skipped` / `inapplicable` / `unknown` /
+> `nothing_checked` (`false` here, with `nothing_checked_reasons: []`) and no
+> layer census at all. The empty result and the eight-layer "before" list below
+> were really measured, on that source build. **On the pin, the spec's reach over
+> the stream is undisclosed rather than proven complete** — so the last sentence
+> of this sub-section ("a reader no longer has to work out what a clean supply
+> read did and did not look at") is withdrawn as a property of the committed
+> artifact until klayout-tools#2389's field ships in a release the pin moves to.
+
 ```json
+// SOURCE BUILD ONLY -- not emitted by klayout-tools==0.6.0 (the pin):
 "erc_coverage": { "layers_in_stream_without_declaration": [], "nothing_checked": false }
 ```
 
