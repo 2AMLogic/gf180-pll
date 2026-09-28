@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import math
 
-from harness.derived import DerivedTable
+from harness.derived import DerivedTable, fmt_scalar
 
 #: spec/pll.md's ratified Lock criterion, in nanoseconds -- the band's lower
 #: edge. A window narrower than this at any corner can refuse to assert on a
@@ -112,10 +112,6 @@ def _code_int(axis_id):
         return None
 
 
-def _fmt(value, digits=4):
-    return "" if value is None else f"{value:.{digits}g}"
-
-
 def _geomean(values):
     return math.exp(sum(math.log(v) for v in values) / len(values))
 
@@ -177,12 +173,12 @@ def derive_tables(run):
                     bundle,
                     f"c{code}",
                     len(values),
-                    _fmt(lo * 1e9),
-                    _fmt(hi * 1e9),
-                    _fmt(gm * 1e9),
-                    _fmt(hi / lo),
-                    _fmt(ref[0] * 1e9) if ref else "",
-                    _fmt(step) if step else "",
+                    fmt_scalar(lo * 1e9, "%.4g"),
+                    fmt_scalar(hi * 1e9, "%.4g"),
+                    fmt_scalar(gm * 1e9, "%.4g"),
+                    fmt_scalar(hi / lo, "%.4g"),
+                    fmt_scalar(ref[0] * 1e9, "%.4g") if ref else "",
+                    fmt_scalar(step, "%.4g") if step else "",
                     "" if step is None else ("yes" if step > 1.0 else "NO"),
                 )
             )
@@ -220,12 +216,12 @@ def derive_tables(run):
                 bundle,
                 f"c{code}",
                 f"{code:04b}",
-                _fmt(cell["ref"] * 1e9) if cell["ref"] else "",
-                _fmt(lo_ns),
-                _fmt(hi_ns),
-                _fmt(within),
-                _fmt(100.0 * (lo_ns - WIN_LO_NS) / WIN_LO_NS),
-                _fmt(100.0 * (WIN_HI_NS - hi_ns) / WIN_HI_NS),
+                fmt_scalar(cell["ref"] * 1e9, "%.4g") if cell["ref"] else "",
+                fmt_scalar(lo_ns, "%.4g"),
+                fmt_scalar(hi_ns, "%.4g"),
+                fmt_scalar(within, "%.4g"),
+                fmt_scalar(100.0 * (lo_ns - WIN_LO_NS) / WIN_LO_NS, "%.4g"),
+                fmt_scalar(100.0 * (WIN_HI_NS - hi_ns) / WIN_HI_NS, "%.4g"),
                 "in-band" if (lo_ns >= WIN_LO_NS and hi_ns <= WIN_HI_NS) else "OUT-OF-BAND",
                 f"{headroom_lo}/{headroom_hi}",
             )
@@ -247,9 +243,9 @@ def derive_tables(run):
     def _summary(label, lo_ns, hi_ns, spread, note):
         return (
             label, "", "", "",
-            _fmt(lo_ns), _fmt(hi_ns), _fmt(spread),
-            _fmt(100.0 * (lo_ns - WIN_LO_NS) / WIN_LO_NS) if lo_ns else "",
-            _fmt(100.0 * (WIN_HI_NS - hi_ns) / WIN_HI_NS) if hi_ns else "",
+            fmt_scalar(lo_ns, "%.4g"), fmt_scalar(hi_ns, "%.4g"), fmt_scalar(spread, "%.4g"),
+            fmt_scalar(100.0 * (lo_ns - WIN_LO_NS) / WIN_LO_NS, "%.4g") if lo_ns else "",
+            fmt_scalar(100.0 * (WIN_HI_NS - hi_ns) / WIN_HI_NS, "%.4g") if hi_ns else "",
             note, "",
         )
 
@@ -263,9 +259,9 @@ def derive_tables(run):
     cont_spread = worst_within * worst_step if (worst_within and worst_step) else None
     code_rows.append(
         (
-            "CONTINUOUS", "", "", "", "", "", _fmt(cont_spread), "", "",
+            "CONTINUOUS", "", "", "", "", "", fmt_scalar(cont_spread, "%.4g"), "", "",
             "meets-1.65x" if (cont_spread and cont_spread <= SPREAD_TARGET) else "MISSES-1.65x",
-            _fmt(worst_step) if worst_step else "",
+            fmt_scalar(worst_step, "%.4g") if worst_step else "",
         )
     )
     if unt_lo and unt_hi:

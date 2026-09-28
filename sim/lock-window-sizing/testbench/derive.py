@@ -52,7 +52,7 @@ it does not narrow".)
 
 from __future__ import annotations
 
-from harness.derived import DerivedTable
+from harness.derived import DerivedTable, fmt_scalar
 
 #: spec/pll.md's ratified Lock criterion, in nanoseconds.
 WIN_LO_NS = 1.0
@@ -82,10 +82,6 @@ def derive_point(point):
     if replica is None or control is None or control == 0:
         return {}
     return {"repl_err_pct": 100.0 * (replica - control) / control}
-
-
-def _fmt(value):
-    return "" if value is None else f"{value:.4g}"
 
 
 def derive_tables(run):
@@ -132,16 +128,16 @@ def derive_tables(run):
                 sizing,
                 kwc,
                 len(measured),
-                _fmt(lo_ns),
+                fmt_scalar(lo_ns, "%.4g"),
                 lo_point.corner_id.rsplit("_", 1)[0],
-                _fmt(hi_ns),
+                fmt_scalar(hi_ns, "%.4g"),
                 hi_point.corner_id.rsplit("_", 1)[0],
-                _fmt(ratio),
-                _fmt(margin_lo_pct),
-                _fmt(margin_hi_pct),
+                fmt_scalar(ratio, "%.4g"),
+                fmt_scalar(margin_lo_pct, "%.4g"),
+                fmt_scalar(margin_hi_pct, "%.4g"),
                 verdict,
                 "yes" if lo_ns >= T1_MIN_NS else "no",
-                _fmt(hi_ns / WIN_LO_NS),
+                fmt_scalar(hi_ns / WIN_LO_NS, "%.4g"),
             )
         )
 

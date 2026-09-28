@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import math
 
-from harness.derived import DerivedTable
+from harness.derived import DerivedTable, fmt_scalar
 
 #: The trim rule's target, spec/pll.md#lock-detector-window-trim-code-rule.
 TARGET_NS = 1.343
@@ -128,14 +128,6 @@ def _geomean(values):
     return math.exp(sum(math.log(v) for v in values) / len(values))
 
 
-def _fmt(value, digits=4):
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        return value
-    return f"{value:.{digits}g}"
-
-
 def _box(points, code):
     return [v for v in (_twin_ns(p, code) for p in points) if v]
 
@@ -212,15 +204,15 @@ def derive_tables(run):
     for bundle in bundles:
         if bundle not in twin_rel:
             continue
-        row = [bundle, _fmt(twin_rel[bundle], 5)]
+        row = [bundle, fmt_scalar(twin_rel[bundle], "%.5g")]
         point = ref_point[bundle]
         for name, _ in CANDIDATES:
             value = _observable(point, name)
             rel = obs_rel.get(bundle, {}).get(name)
             row += [
-                _fmt(value, 5),
-                _fmt(rel, 5),
-                _fmt(twin_rel[bundle] / rel, 5) if rel else "",
+                fmt_scalar(value, "%.5g"),
+                fmt_scalar(rel, "%.5g"),
+                fmt_scalar(twin_rel[bundle] / rel, "%.5g") if rel else "",
             ]
         tracking_rows.append(tuple(row))
 
@@ -314,14 +306,14 @@ def derive_tables(run):
             (
                 name,
                 len(per_bundle),
-                _fmt(max(residuals) / min(residuals), 5) if residuals else "",
+                fmt_scalar(max(residuals) / min(residuals), "%.5g") if residuals else "",
                 max(abs(d) for d in deltas) if deltas else "",
                 len(grid),
-                _fmt(lo, 4),
-                _fmt(hi, 4),
-                _fmt(hi / lo, 4),
-                _fmt(100.0 * (lo - BAND_LO_NS) / BAND_LO_NS, 4),
-                _fmt(100.0 * (BAND_HI_NS - hi) / BAND_HI_NS, 4),
+                fmt_scalar(lo, "%.4g"),
+                fmt_scalar(hi, "%.4g"),
+                fmt_scalar(hi / lo, "%.4g"),
+                fmt_scalar(100.0 * (lo - BAND_LO_NS) / BAND_LO_NS, "%.4g"),
+                fmt_scalar(100.0 * (BAND_HI_NS - hi) / BAND_HI_NS, "%.4g"),
                 "all in-band" if all(v == "in-band" for v in verdicts) else "OUT OF BAND somewhere",
                 desc,
             )
@@ -401,12 +393,12 @@ def derive_tables(run):
                     f"c{rule_code}",
                     f"c{code}",
                     code - rule_code,
-                    _fmt(TARGET_NS / obs_rel[bundle][name], 4) if name in obs_rel.get(bundle, {}) else "",
-                    _fmt(lo, 4),
-                    _fmt(hi, 4),
-                    _fmt(spread, 4),
-                    _fmt(100.0 * (lo - BAND_LO_NS) / BAND_LO_NS, 4),
-                    _fmt(100.0 * (BAND_HI_NS - hi) / BAND_HI_NS, 4),
+                    fmt_scalar(TARGET_NS / obs_rel[bundle][name], "%.4g") if name in obs_rel.get(bundle, {}) else "",
+                    fmt_scalar(lo, "%.4g"),
+                    fmt_scalar(hi, "%.4g"),
+                    fmt_scalar(spread, "%.4g"),
+                    fmt_scalar(100.0 * (lo - BAND_LO_NS) / BAND_LO_NS, "%.4g"),
+                    fmt_scalar(100.0 * (BAND_HI_NS - hi) / BAND_HI_NS, "%.4g"),
                     verdict + (" (calibration)" if bundle == CALIBRATION_BUNDLE else ""),
                 )
             )
@@ -519,9 +511,9 @@ def _crosscheck(run, by_bundle):
         rows=(
             (
                 len(ratios),
-                _fmt(min(ratios), 6),
-                _fmt(_geomean(ratios), 6),
-                _fmt(max(ratios), 6),
+                fmt_scalar(min(ratios), "%.6g"),
+                fmt_scalar(_geomean(ratios), "%.6g"),
+                fmt_scalar(max(ratios), "%.6g"),
                 worst[1] if worst else "",
                 f"c{worst[2]}" if worst else "",
             ),
