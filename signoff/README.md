@@ -124,10 +124,24 @@ The report's `reason` for all 22 T1 rows is `no_evidence`: the manifest cites
 nothing. That single machine code covers three materially different situations,
 and the difference is the point of this section.
 
-**1. The artifact exists, but not as a `klt` JSON envelope.** There is no `klt`
-`--format json` envelope of any kind committed anywhere in this repository. The
-layout evidence under `layout/evidence/*/` is the foundry runset's own stdout
-plus `.lyrdb`/`.lvsdb` databases; the `sim/` campaigns recorded in
+**1. The artifact exists, but not as a citable `klt` JSON envelope.**
+~~There is no `klt` `--format json` envelope of any kind committed anywhere in
+this repository. The layout evidence under `layout/evidence/*/` is the foundry
+runset's own stdout plus `.lyrdb`/`.lvsdb` databases;~~ — **corrected
+(2026-09-29, issue #654):** that was false from PR #587 (2026-09-26) onward, and
+contradicted case 2's own correction below. Four `klt erc --format json`
+envelopes are committed:
+`layout/evidence/vco-layout/erc-report.json`,
+`layout/evidence/pfd-cp-layout/erc-report.json`,
+`layout/evidence/divider-chain-layout/erc-report.json` and
+`layout/evidence/lock-detector-layout/erc-report.json`. None is cited in
+`signoff/block-manifest.json` (`"evidence": {}`), each covers one sub-block
+rather than the block, and item 11 additionally needs a paired `klt lvs`
+envelope with `ties[]`, which does not exist. No `klt drc`, `klt lvs`,
+`klt sim` or `klt pex` envelope exists, which is what makes items 3, 4, 5 and 6
+uncitable. Apart from those four reports, `layout/evidence/*/` holds the
+foundry runset's own stdout plus `.lyrdb`/`.lvsdb` databases; the `sim/`
+campaigns recorded in
 `sim/CHARACTERIZATION.md` are this repo's own Markdown-plus-raw-log record
 format, produced by `sim/run_corners.py`, not by `klt sim`. `klt signoff`
 grades envelopes, so none of it is citable as it stands. This affects items 3,
