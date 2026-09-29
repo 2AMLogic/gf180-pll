@@ -37,9 +37,10 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
+
+from _fixtures import TreeTestCase, TreeWriter
 
 SIM_DIR = Path(__file__).resolve().parents[1]
 CHECK = SIM_DIR / "lib" / "check-record-trim-connectivity.sh"
@@ -96,18 +97,13 @@ def log(ldt3_volts: str = "3.63", stray_net: bool = True) -> str:
     return body
 
 
-class _Tree:
+class _Tree(TreeWriter):
     """A throwaway repo tree with the real check installed."""
 
     def __init__(self, root: Path):
         self.root = root
         (root / "sim" / "lib").mkdir(parents=True)
         shutil.copy2(CHECK, root / "sim" / "lib" / CHECK.name)
-
-    def write(self, rel: str, text: str) -> None:
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
 
     def campaign(
         self,
@@ -142,11 +138,8 @@ class _Tree:
         )
 
 
-class _TreeTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self._tmp = tempfile.TemporaryDirectory()
-        self.tree = _Tree(Path(self._tmp.name))
-        self.addCleanup(self._tmp.cleanup)
+class _TreeTest(TreeTestCase):
+    tree_cls = _Tree
 
     def assertPasses(self) -> subprocess.CompletedProcess:
         result = self.tree.run()

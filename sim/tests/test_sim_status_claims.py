@@ -30,6 +30,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from _fixtures import TreeTestCase
+
 SIM_DIR = Path(__file__).resolve().parents[1]
 LIB = SIM_DIR / "lib"
 README_CHECK = LIB / "check-readme-status.sh"
@@ -146,11 +148,8 @@ class _Tree:
         )
 
 
-class _TreeTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self._tmp = tempfile.TemporaryDirectory()
-        self.tree = _Tree(Path(self._tmp.name))
-        self.addCleanup(self._tmp.cleanup)
+class _TreeTest(TreeTestCase):
+    tree_cls = _Tree
 
     def assertPasses(self, script: Path) -> subprocess.CompletedProcess:
         result = self.tree.run(script)

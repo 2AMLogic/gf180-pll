@@ -23,9 +23,10 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
+
+from _fixtures import TreeTestCase, TreeWriter
 
 SIM_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = SIM_DIR.parent
@@ -63,7 +64,7 @@ def _deck(source_line: str) -> str:
     return "* a miniature deck\n.param tref=40n\n%s\n.end\n" % source_line
 
 
-class _Tree:
+class _Tree(TreeWriter):
     """A throwaway repo tree with the real check installed."""
 
     def __init__(self, root: Path):
@@ -74,11 +75,6 @@ class _Tree:
         # rather than on what the test is about.
         for rel in (README, CHARACTERIZATION, PROPOSAL, DR019):
             self.write(rel, "# placeholder\n")
-
-    def write(self, rel: str, text: str) -> None:
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
 
     def deck(self, rel: str, source_line: str = IDEAL) -> None:
         self.write(rel, _deck(source_line))
@@ -95,11 +91,11 @@ class _Tree:
         )
 
 
-class _TreeTest(unittest.TestCase):
+class _TreeTest(TreeTestCase):
+    tree_cls = _Tree
+
     def setUp(self) -> None:
-        self._tmp = tempfile.TemporaryDirectory()
-        self.tree = _Tree(Path(self._tmp.name))
-        self.addCleanup(self._tmp.cleanup)
+        super().setUp()
         # A baseline every test starts from: two ordinary ideal-shape decks,
         # one of each extension, so nothing here passes merely because the
         # tree holds a single file type.
