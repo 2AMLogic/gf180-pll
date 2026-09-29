@@ -209,6 +209,7 @@ from __future__ import annotations
 
 import tempfile
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Mapping, Sequence
 
@@ -226,12 +227,7 @@ TOP_CELL = "cp_array"
 # --- extra GDS layers this module needs beyond devgen.Canvas's own
 # comp/poly2/contact/nplus/pplus/nwell/metal1 set -- identical citation/
 # values to cp_dumpbuf.py's own _EXTRA_LAYER. ---
-_EXTRA_LAYER = {
-    "via1": (35, 0),
-    "metal2": (36, 0),
-    "via2": (38, 0),
-    "metal3": (42, 0),
-}
+_EXTRA_LAYER = _canvas._EXTRA_LAYER  # shared, issue #666
 
 # --- Metal2/Metal3/Via routing margins -- identical values/citation to
 # cp_dumpbuf.py's own (in turn from lock_detector/primitives.py). ---
@@ -414,49 +410,24 @@ P_NET_MAP: dict[str, dict[str, str]] = {
 # ---------------------------------------------------------------------------
 
 
-def _rect_extra(canvas: devgen.Canvas, layer: str, x0: float, y0: float, x1: float, y1: float) -> None:
-    """Draw a rectangle on one of this module's own extra layers -- identical
-    technique to ``cp_dumpbuf.py``'s own ``_rect_extra()``."""
-    import klayout.db as db  # noqa: PLC0415
-
-    idx = canvas.layout.layer(*_EXTRA_LAYER[layer])
-    if x1 < x0:
-        x0, x1 = x1, x0
-    if y1 < y0:
-        y0, y1 = y1, y0
-    u = lambda v: int(round(v * 1000))  # noqa: E731 -- devgen.Canvas's own dbu=0.001 is fixed
-    canvas.top.shapes(idx).insert(db.Box(u(x0), u(y0), u(x1), u(y1)))
+# Shared with ``_canvas`` (issue #666); ``cp_output_stage`` still reaches this
+# through ``cp_array._rect_extra``.
+_rect_extra = _canvas._rect_extra
 
 
-def _riser(canvas: devgen.Canvas, x: float, y_pad: float, track_y: float) -> None:
-    """Metal1 pad -> Via1 -> Metal2 landing -> Via2 -> Metal3 riser -> Via2 ->
-    Metal2 bus landing -- structurally identical to ``cp_dumpbuf.py``'s own
-    ``_riser()`` (see this module's own docstring, "MESH ROUTING"), plus one
-    addition that module did not need: an explicit Metal1 landing square
-    under the Via1, sized to fully enclose it (``V1.3a``). ``cp_dumpbuf.py``
-    always rises directly off an already-real, already-sizable device pad;
-    this module's own :func:`declutter_riser_x` can move a riser's own X a
-    short distance off its pad's natural centre, onto a plain
-    :func:`_stub` jog that is only ``METAL1_WIRE_WIDTH_UM`` (0.28 um) wide --
-    narrower than Via1's own required enclosure (0.44 um) -- so this cannot
-    rely on the incoming Metal1 already being wide enough (a real,
-    reproduced ``V1.3a`` failure during this module's own development).
-    """
-    half_v1 = VIA1_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM
-    canvas.rect("metal1", x - half_v1, y_pad - half_v1, x + half_v1, y_pad + half_v1)
-    _rect_extra(canvas, "via1", x - VIA1_SIZE_UM / 2.0, y_pad - VIA1_SIZE_UM / 2.0, x + VIA1_SIZE_UM / 2.0, y_pad + VIA1_SIZE_UM / 2.0)
-    _rect_extra(canvas, "metal2", x - half_v1, y_pad - half_v1, x + half_v1, y_pad + half_v1)
-
-    half_v2 = VIA2_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM
-    _rect_extra(canvas, "via2", x - VIA2_SIZE_UM / 2.0, y_pad - VIA2_SIZE_UM / 2.0, x + VIA2_SIZE_UM / 2.0, y_pad + VIA2_SIZE_UM / 2.0)
-    _rect_extra(canvas, "metal3", x - half_v2, y_pad - half_v2, x + half_v2, y_pad + half_v2)
-
-    half_w = METAL3_WIRE_WIDTH_UM / 2.0
-    _rect_extra(canvas, "metal3", x - half_w, min(y_pad, track_y), x + half_w, max(y_pad, track_y))
-
-    _rect_extra(canvas, "via2", x - VIA2_SIZE_UM / 2.0, track_y - VIA2_SIZE_UM / 2.0, x + VIA2_SIZE_UM / 2.0, track_y + VIA2_SIZE_UM / 2.0)
-    _rect_extra(canvas, "metal3", x - half_v2, track_y - half_v2, x + half_v2, track_y + half_v2)
-    _rect_extra(canvas, "metal2", x - half_v2, track_y - half_v2, x + half_v2, track_y + half_v2)
+# Metal1 pad -> Via1 -> Metal2 landing -> Via2 -> Metal3 riser -> Via2 ->
+# Metal2 bus landing, including the explicit Metal1 landing square under Via1
+# (``V1.3a``, issue #391). Shared with every ``layout/pll_top/*`` submodule via
+# ``_canvas._riser`` (issue #666); ``use_extra_layers=True`` because this
+# package's ``devgen.Canvas`` has no Via1/Metal2/Via2/Metal3 layer entries.
+_riser = partial(
+    _canvas._riser,
+    via1_size_um=VIA1_SIZE_UM,
+    via2_size_um=VIA2_SIZE_UM,
+    via_enclosure_um=VIA_ENCLOSURE_UM,
+    metal3_width_um=METAL3_WIRE_WIDTH_UM,
+    use_extra_layers=True,
+)
 
 
 # Centre point of a pad box -- shared with every other
