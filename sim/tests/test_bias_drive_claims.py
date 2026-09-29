@@ -22,9 +22,10 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
+
+from _fixtures import TreeTestCase, TreeWriter
 
 SIM_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = SIM_DIR.parent
@@ -70,7 +71,7 @@ GOOD_CLAIM = (
 )
 
 
-class _Tree:
+class _Tree(TreeWriter):
     """A throwaway repo tree with the real check installed."""
 
     def __init__(self, root: Path):
@@ -79,11 +80,6 @@ class _Tree:
         shutil.copy2(CHECK, root / "sim" / "lib" / CHECK.name)
         for rel in (README, CHARACTERIZATION, PROPOSAL):
             self.write(rel, "# placeholder\n")
-
-    def write(self, rel: str, text: str) -> None:
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
 
     def run(self) -> subprocess.CompletedProcess:
         return subprocess.run(
@@ -94,11 +90,11 @@ class _Tree:
         )
 
 
-class _TreeTest(unittest.TestCase):
+class _TreeTest(TreeTestCase):
+    tree_cls = _Tree
+
     def setUp(self) -> None:
-        self._tmp = tempfile.TemporaryDirectory()
-        self.tree = _Tree(Path(self._tmp.name))
-        self.addCleanup(self._tmp.cleanup)
+        super().setUp()
         # Baseline: one closed-loop deck that sets its own value, one that
         # takes it from run.sh (lock-time's real shape), and one charge-pump-
         # only deck at another current that is not closed-loop at all.
