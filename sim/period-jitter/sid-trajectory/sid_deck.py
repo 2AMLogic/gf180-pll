@@ -72,11 +72,6 @@ import isf_deck  # noqa: E402
 #: Shared with every period-jitter deck module; defined once in `isf_deck`.
 _join_continuations = isf_deck._join_continuations
 
-#: Boltzmann constant, J/K -- CODATA 2019 exact value.
-K_B = 1.380649e-23
-#: 0 degC in kelvin.
-T0_K = 273.15
-
 #: The four devices of `vco_stage`, in the order a reader of the schematic meets
 #: them, with what each one is and which of its terminals the ring node is.
 #:

@@ -70,10 +70,6 @@ import isf_deck  # noqa: E402
 #: Shared with every period-jitter deck module; defined once in `isf_deck`.
 _join_continuations = isf_deck._join_continuations
 
-#: Boltzmann constant, J/K -- CODATA 2019 exact value.
-K_B = 1.380649e-23
-T0_K = 273.15
-
 STAGES = (1, 2, 3, 4, 5)
 RING_DEVICES = ("XMPH", "XMP", "XMN", "XMNT")
 
@@ -89,10 +85,6 @@ _MOS_RE = re.compile(
     r"^(X\w+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+([np]fet_03v3)\s+(.*)$", re.I
 )
 _RES_RE = re.compile(r"^(X\w+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(ppolyf_u\w*)\s+(.*)$", re.I)
-
-
-def kelvin(temp_c: float) -> float:
-    return temp_c + T0_K
 
 
 def subckt_lines(src: str, name: str) -> list[str]:
