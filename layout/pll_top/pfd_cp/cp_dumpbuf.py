@@ -146,6 +146,7 @@ adapted to this module's own dense, single-row-per-polarity layout (not
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -166,12 +167,7 @@ TOP_CELL = "cp_dumpbuf"
 # comp/poly2/contact/nplus/pplus/nwell/metal1 set -- confirmed against the
 # same libs.tech/klayout/drc/rule_decks/layers_def.drc citation
 # lock_detector/primitives.py's own LAYER table uses. ---
-_EXTRA_LAYER = {
-    "via1": (35, 0),
-    "metal2": (36, 0),
-    "via2": (38, 0),
-    "metal3": (42, 0),
-}
+_EXTRA_LAYER = _canvas._EXTRA_LAYER  # shared, issue #666
 
 # --- Metal2/Metal3/Via routing margins -- identical values (and citation)
 # to layout/pll_top/lock_detector/primitives.py's own riser constants. ---
@@ -269,60 +265,24 @@ ROW_Y_P = 20.0  # generous separation: N-row's own top-of-well tap and P-row's
 DIFFERENT_POTENTIAL_WELL_MIN_UM = 1.4
 
 
-def _rect_extra(canvas: devgen.Canvas, layer: str, x0: float, y0: float, x1: float, y1: float) -> None:
-    """Draw a rectangle on one of this module's own extra layers (not one of
-    ``devgen.Canvas``'s built-in named layers) directly against the
-    underlying ``klayout.db`` objects ``devgen.Canvas`` already exposes
-    (``.layout``, ``.top``) -- lazy-imports ``klayout.db`` itself, so this
-    module stays importable with no PV environment, same convention as
-    ``devgen.Canvas``.
-    """
-    import klayout.db as db  # noqa: PLC0415
-
-    idx = canvas.layout.layer(*_EXTRA_LAYER[layer])
-    if x1 < x0:
-        x0, x1 = x1, x0
-    if y1 < y0:
-        y0, y1 = y1, y0
-    u = lambda v: int(round(v * 1000))  # noqa: E731 -- devgen.Canvas's own dbu=0.001 is fixed
-    box = db.Box(u(x0), u(y0), u(x1), u(y1))
-    canvas.top.shapes(idx).insert(box)
+# Shared with ``_canvas`` (issue #666); ``cp_output_stage`` still reaches this
+# through ``cp_array._rect_extra``.
+_rect_extra = _canvas._rect_extra
 
 
-def _riser(canvas: devgen.Canvas, x: float, y_pad: float, track_y: float) -> None:
-    """Metal1 pad -> Via1 -> Metal2 landing -> Via2 -> Metal3 riser -> Via2 ->
-    Metal2 bus landing. See this module's own docstring ("ROUTING") for why;
-    identical structure to ``lock_detector/primitives.py``'s own ``_riser()``,
-    plus one addition that module did not need and ``cp_array.py``'s own
-    ``_riser()`` does (issue #391, same citation as that module's own): an
-    explicit Metal1 landing square under Via1, sized to fully enclose it
-    (``V1.3a``). This module no longer always rises directly off an
-    already-real, already-sizable device pad at its own exact centre --
-    :func:`declutter_riser_x` can now move a riser's own X a short distance
-    off that centre, possibly onto a plain :func:`_stub` jog only
-    ``METAL1_WIRE_WIDTH_UM`` (0.28 um) wide -- narrower than Via1's own
-    required enclosure (0.44 um) -- so this can no longer rely on the
-    incoming Metal1 already being wide enough. Drawing this landing square
-    even when the point is still safely inside the pad's own real geometry
-    (the common case, after :data:`PAD_SUB_OFFSET_UM`'s own within-pad
-    slide) is harmless -- an extra same-net Metal1 shape never violates a
-    width/space/enclosure rule against itself.
-    """
-    half_v1 = VIA1_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM
-    canvas.rect("metal1", x - half_v1, y_pad - half_v1, x + half_v1, y_pad + half_v1)
-    _rect_extra(canvas, "via1", x - VIA1_SIZE_UM / 2.0, y_pad - VIA1_SIZE_UM / 2.0, x + VIA1_SIZE_UM / 2.0, y_pad + VIA1_SIZE_UM / 2.0)
-    _rect_extra(canvas, "metal2", x - half_v1, y_pad - half_v1, x + half_v1, y_pad + half_v1)
-
-    half_v2 = VIA2_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM
-    _rect_extra(canvas, "via2", x - VIA2_SIZE_UM / 2.0, y_pad - VIA2_SIZE_UM / 2.0, x + VIA2_SIZE_UM / 2.0, y_pad + VIA2_SIZE_UM / 2.0)
-    _rect_extra(canvas, "metal3", x - half_v2, y_pad - half_v2, x + half_v2, y_pad + half_v2)
-
-    half_w = METAL3_WIRE_WIDTH_UM / 2.0
-    _rect_extra(canvas, "metal3", x - half_w, min(y_pad, track_y), x + half_w, max(y_pad, track_y))
-
-    _rect_extra(canvas, "via2", x - VIA2_SIZE_UM / 2.0, track_y - VIA2_SIZE_UM / 2.0, x + VIA2_SIZE_UM / 2.0, track_y + VIA2_SIZE_UM / 2.0)
-    _rect_extra(canvas, "metal3", x - half_v2, track_y - half_v2, x + half_v2, track_y + half_v2)
-    _rect_extra(canvas, "metal2", x - half_v2, track_y - half_v2, x + half_v2, track_y + half_v2)
+# Metal1 pad -> Via1 -> Metal2 landing -> Via2 -> Metal3 riser -> Via2 ->
+# Metal2 bus landing, including the explicit Metal1 landing square under Via1
+# (``V1.3a``, issue #391). Shared with every ``layout/pll_top/*`` submodule via
+# ``_canvas._riser`` (issue #666); ``use_extra_layers=True`` because this
+# package's ``devgen.Canvas`` has no Via1/Metal2/Via2/Metal3 layer entries.
+_riser = partial(
+    _canvas._riser,
+    via1_size_um=VIA1_SIZE_UM,
+    via2_size_um=VIA2_SIZE_UM,
+    via_enclosure_um=VIA_ENCLOSURE_UM,
+    metal3_width_um=METAL3_WIRE_WIDTH_UM,
+    use_extra_layers=True,
+)
 
 
 # Centre point of a pad box -- shared with every other

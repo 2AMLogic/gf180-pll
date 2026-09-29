@@ -62,11 +62,15 @@ own default via ``functools.partial`` at its own call site (already imported
 everywhere for ``_contact_positions()``/``_riser()`` above) rather than this
 module guessing one value that fits all four.
 
-Two of this package's risers are *structurally* different from ``_riser()``
-and deliberately stay local, each documented at its own definition:
+``pfd_cp/cp_array.py`` and ``pfd_cp/cp_dumpbuf.py`` (issue #666) bind
+``_riser()`` with ``use_extra_layers=True`` (their ``devgen.Canvas`` has no
+Via1/Metal2/Via2/Metal3 layers, so those are drawn with the shared
+``_rect_extra()``/``_EXTRA_LAYER`` below); the drawn geometry is identical to
+their earlier per-module copies.
 
-* ``pfd_cp/cp_dumpbuf.py``'s -- a separate ``_rect_extra()`` helper and a
-  different via-landing sequence.
+One package riser is *structurally* different from ``_riser()`` and
+deliberately stays local, documented at its own definition:
+
 * ``lock_detector/primitives.py``'s -- since issue #322 it moves each
   riser's lane change onto **Metal1** before Via1 (``lane_dx``/``jog_y``,
   driven by that module's ``RiserLanes`` placer and its
@@ -77,9 +81,8 @@ and deliberately stay local, each documented at its own definition:
   offered from here: cross-net metal that merges with no via is invisible
   to the DRC deck, which is exactly how issue #322's 114 shorts survived.
 
-``divider_chain/devgen.py`` is therefore ``_riser()``'s only caller today;
-``_via_square()``, ``_contact_positions()`` and ``bbox_union()`` are still
-shared by all of them, including the two modules above.
+``_via_square()``, ``_contact_positions()`` and ``bbox_union()`` are also
+shared by ``lock_detector``.
 
 ``NetTracks`` (issue #429) joins the same convention: ``divider_chain/devgen.py``,
 ``pfd_cp/cp_array.py``, ``pfd_cp/cp_dumpbuf.py``, and
@@ -448,6 +451,37 @@ def _via_square(canvas: Canvas, layer: str, x: float, y: float, size: float, enc
     return half_v + enclosure
 
 
+#: GDS layers for the four routing layers a submodule's own ``Canvas.LAYER``
+#: table may not carry (``pfd_cp``'s ``devgen.Canvas`` stops at Metal1). Used
+#: by :func:`_rect_extra` / ``_riser(use_extra_layers=True)`` (issue #666).
+#: Same layer/datatype numbers every submodule's own ``LAYER`` table cites
+#: from ``libs.tech/klayout/drc/rule_decks/layers_def.drc``.
+_EXTRA_LAYER = {
+    "via1": (35, 0),
+    "metal2": (36, 0),
+    "via2": (38, 0),
+    "metal3": (42, 0),
+}
+
+
+def _rect_extra(canvas: Canvas, layer: str, x0: float, y0: float, x1: float, y1: float) -> None:
+    """Draw a rectangle on one of :data:`_EXTRA_LAYER`'s layers (not one of
+    the canvas's own named layers) directly against the underlying
+    ``klayout.db`` objects the canvas already exposes (``.layout``, ``.top``).
+    Lazy-imports ``klayout.db`` itself, so this module stays importable with no
+    PV environment. The 0.001 um database unit is fixed, as in ``Canvas``.
+    """
+    import klayout.db as db  # noqa: PLC0415
+
+    idx = canvas.layout.layer(*_EXTRA_LAYER[layer])
+    if x1 < x0:
+        x0, x1 = x1, x0
+    if y1 < y0:
+        y0, y1 = y1, y0
+    u = lambda v: int(round(v * 1000))  # noqa: E731
+    canvas.top.shapes(idx).insert(db.Box(u(x0), u(y0), u(x1), u(y1)))
+
+
 def _riser(
     canvas: Canvas,
     x: float,
@@ -458,6 +492,7 @@ def _riser(
     via2_size_um: float,
     via_enclosure_um: float,
     metal3_width_um: float,
+    use_extra_layers: bool = False,
 ) -> None:
     """Metal1 pad -> Via1 -> Metal2 landing -> Via2 -> Metal3 riser -> Via2 -> Metal2 bus landing.
 
@@ -473,20 +508,33 @@ def _riser(
     submodule keeps deriving them from its own ``VIA1_SIZE_UM`` /
     ``VIA2_SIZE_UM`` / ``VIA_ENCLOSURE_UM`` / ``METAL3_WIRE_WIDTH_UM``
     constants, unchanged.
-    """
-    half_m2 = _via_square(canvas, "via1", x, y_pad, via1_size_um, via_enclosure_um)
-    canvas.rect("metal2", x - half_m2, y_pad - half_m2, x + half_m2, y_pad + half_m2)
-    canvas.rect("metal1", x - half_m2, y_pad - half_m2, x + half_m2, y_pad + half_m2)
 
-    half_m3 = _via_square(canvas, "via2", x, y_pad, via2_size_um, via_enclosure_um)
-    canvas.rect("metal3", x - half_m3, y_pad - half_m3, x + half_m3, y_pad + half_m3)
+    The Metal1 landing square under Via1 (sized to fully enclose it, ``V1.3a``)
+    is always drawn. ``use_extra_layers`` (default ``False``) is for a caller
+    whose ``Canvas.LAYER`` has no Via1/Metal2/Via2/Metal3 entries
+    (``pfd_cp``'s ``devgen.Canvas``): those four layers are then drawn with
+    :func:`_rect_extra` instead of ``canvas.rect``. Metal1 always goes through
+    ``canvas.rect``. The drawn geometry is identical either way.
+    """
+    draw = _rect_extra if use_extra_layers else (lambda c, layer, *box: c.rect(layer, *box))
+
+    half_m2 = via1_size_um / 2.0 + via_enclosure_um
+    canvas.rect("metal1", x - half_m2, y_pad - half_m2, x + half_m2, y_pad + half_m2)
+    half_v1 = via1_size_um / 2.0
+    draw(canvas, "via1", x - half_v1, y_pad - half_v1, x + half_v1, y_pad + half_v1)
+    draw(canvas, "metal2", x - half_m2, y_pad - half_m2, x + half_m2, y_pad + half_m2)
+
+    half_v2 = via2_size_um / 2.0
+    half_m3 = half_v2 + via_enclosure_um
+    draw(canvas, "via2", x - half_v2, y_pad - half_v2, x + half_v2, y_pad + half_v2)
+    draw(canvas, "metal3", x - half_m3, y_pad - half_m3, x + half_m3, y_pad + half_m3)
 
     half_w = metal3_width_um / 2.0
-    canvas.rect("metal3", x - half_w, min(y_pad, track_y), x + half_w, max(y_pad, track_y))
+    draw(canvas, "metal3", x - half_w, min(y_pad, track_y), x + half_w, max(y_pad, track_y))
 
-    half_m3_top = _via_square(canvas, "via2", x, track_y, via2_size_um, via_enclosure_um)
-    canvas.rect("metal3", x - half_m3_top, track_y - half_m3_top, x + half_m3_top, track_y + half_m3_top)
-    canvas.rect("metal2", x - half_m3_top, track_y - half_m3_top, x + half_m3_top, track_y + half_m3_top)
+    draw(canvas, "via2", x - half_v2, track_y - half_v2, x + half_v2, track_y + half_v2)
+    draw(canvas, "metal3", x - half_m3, track_y - half_m3, x + half_m3, track_y + half_m3)
+    draw(canvas, "metal2", x - half_m3, track_y - half_m3, x + half_m3, track_y + half_m3)
 
 
 def v_wire(canvas: Canvas, x: float, y0: float, y1: float, width: float) -> tuple:
