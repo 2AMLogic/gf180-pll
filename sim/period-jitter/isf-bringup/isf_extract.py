@@ -30,9 +30,21 @@ threshold crossing of the same waveform is.
 from __future__ import annotations
 
 import math
+import sys
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
+_RB = _HERE.parent / "random-bound"
+# APPENDED, NOT INSERTED AT THE FRONT: `random-bound` has its own `run.py`, and
+# a caller's own directory must keep resolving its own `run.py` first.
+if str(_RB) not in sys.path:
+    sys.path.append(str(_RB))
+
+import rb_extract  # noqa: E402
+
+#: Shared with every period-jitter extractor; defined once in `rb_extract`.
+read_wrdata = rb_extract.read_wrdata
+
 _NUMERIC = _HERE.parents[1] / "vco-tuning-range" / "testbench" / "_numeric.py"
 
 
@@ -53,27 +65,6 @@ def _load_numeric():
 def crossings(t, y, th, tmin=0.0):
     """Rising mid-supply crossings -- `sim/vco-tuning-range`'s own primitive."""
     return _load_numeric().crossings(t, y, th, tmin)
-
-
-def read_wrdata(path, ncol):
-    """ngspice `wrdata`/`wr_singlescale` output -> (t, [col0, col1, ...])."""
-    t: list[float] = []
-    cols: list[list[float]] = [[] for _ in range(ncol)]
-    with open(path) as fh:
-        for line in fh:
-            f = line.split()
-            if len(f) != ncol + 1:
-                continue
-            try:
-                vals = [float(x) for x in f]
-            except ValueError:
-                continue
-            t.append(vals[0])
-            for i in range(ncol):
-                cols[i].append(vals[i + 1])
-    if not t:
-        raise ValueError(f"{path}: no {ncol + 1}-column rows found")
-    return t, cols
 
 
 def shift_sequence(ref, perturbed):
