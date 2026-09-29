@@ -332,7 +332,8 @@ finds:
   ```
 
   (KLayout Python module `0.30.10`; `vco_block.gds`
-  `sha256:b1798bf8…3b8ca5b18b`, the hash pinned under "Provenance" above.)
+  ~~`sha256:b1798bf8…3b8ca5b18b`~~ `sha256:8c839b913756d6c31986b9d447bb8317b572a68f1dc13ccf79fffa1b4b5c47f9`, the hash pinned under "Provenance" above.)
+  **Correction (2026-09-29, issue #662):** the 43-supply-text count is re-measured against the current GDS and is unchanged.
   Three other counting methods agree exactly — a flattened copy of the top
   cell, a non-recursive walk of the top cell's own shapes, and a sum over
   every cell definition in the file — because all 43 supply texts are drawn
