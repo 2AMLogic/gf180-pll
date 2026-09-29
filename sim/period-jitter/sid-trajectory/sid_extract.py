@@ -46,47 +46,32 @@ from __future__ import annotations
 
 import math
 import re
+import sys
 from pathlib import Path
 
-#: Boltzmann constant, J/K -- CODATA 2019 exact value.
-K_B = 1.380649e-23
-#: 0 degC in kelvin.
-T0_K = 273.15
+HERE = Path(__file__).resolve().parent
+RB = HERE.parent / "random-bound"
+# APPENDED, NOT INSERTED AT THE FRONT: `random-bound` has its own `run.py`, and
+# a caller's own directory must keep resolving its own `run.py` first.
+if str(RB) not in sys.path:
+    sys.path.append(str(RB))
+
+import rb_extract  # noqa: E402
+
+#: Shared with every period-jitter extractor; defined once in `rb_extract`.
+K_B = rb_extract.K_B
+T0_K = rb_extract.T0_K
+kelvin = rb_extract.kelvin
+read_wrdata = rb_extract.read_wrdata
+
 #: Elementary charge, C -- CODATA 2019 exact value.  Used only by
 #: `shot_conductance`, the subthreshold arm of the physics bracket.
 Q_E = 1.602176634e-19
 
 
-def kelvin(temp_c: float) -> float:
-    return temp_c + T0_K
-
-
 # ---------------------------------------------------------------------------
 # the trajectory deck
 # ---------------------------------------------------------------------------
-def read_wrdata(path, ncol: int):
-    """ngspice `wrdata` + `set wr_singlescale` output -> `(t, [col, ...])`.
-
-    Same shape as `isf_extract.read_wrdata`, kept separate only because this
-    directory's column count is set by `sid_deck.trajectory_vectors` rather than
-    by a copy count.
-    """
-    t: list[float] = []
-    cols: list[list[float]] = [[] for _ in range(ncol)]
-    for line in Path(path).read_text().splitlines():
-        parts = line.split()
-        if len(parts) != ncol + 1:
-            continue
-        try:
-            vals = [float(p) for p in parts]
-        except ValueError:
-            continue
-        t.append(vals[0])
-        for i in range(ncol):
-            cols[i].append(vals[i + 1])
-    if not t:
-        raise ValueError(f"{path}: no data rows with {ncol + 1} columns")
-    return t, cols
 
 
 def interp_at(t, y, t_target: float) -> float:
