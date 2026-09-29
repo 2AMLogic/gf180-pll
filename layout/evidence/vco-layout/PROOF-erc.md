@@ -1,5 +1,26 @@
 # `vco_block` structural power-delivery ERC (T1 checklist item 11, issue #427)
 
+> **Status update (2026-09-29, issue #661): `erc-supply-spec.json`'s `metal2`
+> `_comment` carried the same wrong 14-member `layer_indexes()` census this
+> record's own "Correction (2026-09-29, issue #660)" bullet (below) fixed in
+> this document's prose — missing `(0, 0)`, the two decap marker rectangles'
+> layer. That correction deliberately left the spec's `_comment` alone,
+> because editing it moves `provenance.spec.content_hash` and so requires a
+> `klt erc` re-run rather than a prose fix — tracked separately as #661.
+> That re-run is done: the `_comment` now reads the same corrected 15-member
+> list, `erc-report.json` was regenerated on `klayout-tools==0.6.0` (the pin
+> `.github/workflows/ci.yml` installs), and **every graded verdict is
+> unchanged** — `erc_status`/`status` stay `violations`, `erc_finding_count`
+> stays `1`, `erc_findings` (the `VDD_VCO` two-island finding) is
+> byte-identical, `erc_coverage` is byte-identical, and the 28 `gates[]`
+> entries are identical as a multiset (`gate_id` values shuffled between
+> entries that compare equal otherwise — the same "ignore `gate_id`" caveat
+> the 2026-09-28 pinned-release re-run above already documents). Only the
+> two hashes anyone would expect to move, moved: `provenance.spec.content_hash`
+> now follows the edited spec, and the GDS's own `provenance.input.content_hash`
+> is untouched because no geometry changed. Every hash quoted below is updated
+> to match; the pre-edit value is kept alongside where it was already load-bearing.
+
 > **Status update (2026-09-26, issue #565): re-run on the klt version CI pins,
 > with the n-well tie now actually declared and checked.** Three things about
 > the record below have changed, and one has not.
@@ -90,7 +111,7 @@ the revised "Net effect" section at the end.)
 
 | | |
 |---|---|
-| Run | 2026-09-26 (issue #565); first written 2026-09-20 (issue #427/#433); **report regenerated 2026-09-28 (issue #127)** on the pinned release — see "The 2026-09-28 re-run on the pinned release" below |
+| Run | 2026-09-26 (issue #565); first written 2026-09-20 (issue #427/#433); report regenerated 2026-09-28 (issue #127) on the pinned release — see "The 2026-09-28 re-run on the pinned release" below; **spec `_comment` corrected and report regenerated again 2026-09-29 (issue #661)** — see the status update at the top of this document |
 | PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) — matches every other committed evidence record in this directory. `klt erc` itself needs no PDK install; the `gf180mcuD` reference is for the layer numbers this spec was cross-checked against. |
 | `klt` | ~~`0.6.0+gf2d249ab23d4` — the released `klayout-tools==0.6.0` wheel, which is exactly what `.github/workflows/ci.yml`'s "Install klt (klayout-tools) for the signoff tier check" step installs~~ — **corrected 2026-09-28 (issue #127): that was false.** `0.6.0+gf2d249ab23d4` is a PEP 440 *local version* — a source build of the tree after the `v0.6.0` tag, which no reader can `pip install`. The committed report is now `0.6.0`, the released wheel that step installs (`GIT_TAG v0.6.0`, `GIT_COMMIT c622e8addb362491664d44ba4d717f354ca88bbd`, `GIT_DIRTY False`). |
 | KLayout (Python engine) | `0.30.12` |
@@ -98,7 +119,11 @@ the revised "Net effect" section at the end.)
 
 **The run is on the version CI pins, and that is checkable, not asserted —
 ~~verified 2026-09-26~~ verified 2026-09-28, after the 2026-09-26 claim below
-turned out to be untrue.**
+turned out to be untrue; re-verified 2026-09-29 (issue #661) against the
+corrected spec and regenerated report, from a clean `python3 -m venv` +
+`pip install 'klayout-tools==0.6.0'` install rather than this host's own
+`uv`-managed `klt`, which on this pass again reported a `+g<sha>`
+local-version suffix and was therefore not used for this verification.**
 
 ```
 $ klt --version
@@ -143,13 +168,22 @@ report was regenerated on the release.
 ```
 $ cd layout/evidence/vco-layout && sha256sum vco_block.gds erc-supply-spec.json
 8c839b913756d6c31986b9d447bb8317b572a68f1dc13ccf79fffa1b4b5c47f9  vco_block.gds
-0603796af00a408a9d26bbdb296c7bb37c1f61a05360a44ecd02ee66138df7d0  erc-supply-spec.json
+bae31d4ae01879bdc25ede10b8fa4b0f3741cad8fd0fe373d8fda22db323f47f  erc-supply-spec.json
 ```
+
+**Corrected 2026-09-29 (issue #661): the spec hash above is now
+`bae31d4a…22db323f47f`**, was
+~~`sha256:0603796af00a408a9d26bbdb296c7bb37c1f61a05360a44ecd02ee66138df7d0`~~
+before this pass. Only the `metal2` stackup entry's `_comment` changed (the
+same 14→15-member `layer_indexes()` correction this document's own prose
+carries below, under "Correction (2026-09-29, issue #660)") — no
+`stackup`/`vias`/`nets`/`ties` declaration moved, and `klt erc` was re-run to
+match; see the status update at the top of this document.
 
 `erc-report.json`'s own `provenance.input.content_hash` is
 `sha256:8c839b913756d6c31986b9d447bb8317b572a68f1dc13ccf79fffa1b4b5c47f9` and
 its `provenance.spec.content_hash` is
-`sha256:0603796af00a408a9d26bbdb296c7bb37c1f61a05360a44ecd02ee66138df7d0` —
+`sha256:bae31d4ae01879bdc25ede10b8fa4b0f3741cad8fd0fe373d8fda22db323f47f` —
 **both identical** to the files committed beside it, confirming the report was
 run against exactly the committed layout and exactly the committed spec.
 `erc-report.json`'s `file` field now reads
@@ -162,10 +196,11 @@ GDS with a stale ERC report beside it cannot survive a push.
 
 The spec hash changed this pass (it was
 `sha256:890016efff277faebde42c2c085346cad26b0abefdb75c5550ef01fc22e8cc85`)
-because the `_ties_omitted` key was replaced by a real `ties[]` declaration.
-The GDS hash did **not** change: no geometry was touched by this work. Neither
-hash changed again in the 2026-09-28 regeneration below — that pass changed the
-*tool*, not the inputs.
+because the `_ties_omitted` key was replaced by a real `ties[]` declaration,
+and changed again on 2026-09-29 (issue #661, see above) for the `metal2`
+`_comment` fix. The GDS hash did **not** change on either pass: no geometry
+was touched by this work. Neither hash changed in the 2026-09-28 regeneration
+below — that pass changed the *tool*, not the inputs.
 
 ## The 2026-09-28 re-run on the pinned release (issue #127)
 
@@ -383,14 +418,19 @@ finds:
   untouched — `erc_status` stays `violations` on the disclosed `VDD_VCO`
   2-island finding, and its `provenance.input.content_hash`
   `sha256:8c839b91…4b5c47f9` still reproduces against the committed GDS,
-  re-verified at this correction. The same 14-member enumeration also appears
-  verbatim inside `erc-supply-spec.json`'s `metal2` `_comment`; it is **not**
-  corrected here, because editing that file would move the spec's own
-  `provenance.spec.content_hash`
-  (`sha256:0603796a…138df7d0`, which still reproduces) and so would require
-  re-running `klt erc` rather than a prose fix. Tracked separately in #661.
-  Nothing in CI grades a layer census against the GDS it names — which is why
-  this one stood; that gap is #663.
+  re-verified at this correction. ~~The same 14-member enumeration also
+  appears verbatim inside `erc-supply-spec.json`'s `metal2` `_comment`; it is
+  **not** corrected here, because editing that file would move the spec's own
+  `provenance.spec.content_hash` (`sha256:0603796a…138df7d0`, which still
+  reproduces) and so would require re-running `klt erc` rather than a prose
+  fix. Tracked separately in #661.~~ **Done, 2026-09-29 (issue #661): the
+  `metal2` `_comment` now carries the same corrected 15-member list, and
+  `erc-report.json` was regenerated on `klayout-tools==0.6.0` to match the
+  spec's new `provenance.spec.content_hash` `sha256:bae31d4a…22db323f47f`.
+  Every graded verdict reproduced exactly** — see the status update at the top
+  of this document for the full field-by-field comparison. Nothing in CI
+  grades a layer census against the GDS it names — which is why this one
+  stood as long as it did; that gap is #663.
 
 ## The n-well tie is now declared and checked
 

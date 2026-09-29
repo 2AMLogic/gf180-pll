@@ -17,7 +17,7 @@
     {
       "name": "metal2",
       "layer": "36/0",
-      "_comment": "Metal2 (36/0) is this block's second and, in the committed vco_block.gds, LAST routing layer actually drawn (confirmed by enumerating layer_indexes() on the committed GDS: layers present are 21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0, 34/10, 35/0, 36/0, 36/10, 49/0, 62/0, 110/5 -- nothing above 36/0). No label_layer is declared here: layer (36,10) (Metal2_Label) does carry text in this block, but it is bias/control net text (VCTRL, VBP, VBN, B0/B1/B2, NC, NOFF, NVI, CLK) -- VERIFIED none of it is VDD_VCO/GND_VCO -- so declaring it as a label_layer would not help resolve either declared supply net and is omitted per the 'only where the GDS actually puts supply text' instruction."
+      "_comment": "Metal2 (36/0) is this block's second and, in the committed vco_block.gds, LAST routing layer actually drawn (confirmed by enumerating layer_indexes() on the committed GDS: layers present are 0/0, 21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0, 34/10, 35/0, 36/0, 36/10, 49/0, 62/0, 110/5 -- nothing above 36/0). 0/0 is the two 22 pF decap marker rectangles (block.decap_boxes_um(), guarded by draw_decap) plus their vco.decap0/vco.decap1 texts -- not device geometry, and not referenced by this spec's stackup/vias/ties (see PROOF-erc.md, 'Correction (2026-09-29, issue #660)'). No label_layer is declared here: layer (36,10) (Metal2_Label) does carry text in this block, but it is bias/control net text (VCTRL, VBP, VBN, B0/B1/B2, NC, NOFF, NVI, CLK) -- VERIFIED none of it is VDD_VCO/GND_VCO -- so declaring it as a label_layer would not help resolve either declared supply net and is omitted per the 'only where the GDS actually puts supply text' instruction."
     },
     {
       "name": "metal3",
