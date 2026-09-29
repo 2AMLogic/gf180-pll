@@ -69,6 +69,7 @@ from __future__ import annotations
 import csv
 import importlib.util
 import io
+import math
 import sys
 import threading
 from dataclasses import dataclass, field
@@ -366,6 +367,21 @@ def fmt_scalar(value, spec: str = "%.6g") -> str:
     missing measurement into ``"0"`` or an empty numeric format error.
     """
     return "" if value is None else spec % value
+
+
+def geomean(values):
+    """Geometric mean of ``values`` -- the right average for a ratio.
+
+    Shared by campaign ``derive.py`` modules that reduce a set of
+    multiplicative quantities (window ratios, spread factors) to one number:
+    those errors compound as products, not sums, so the arithmetic mean would
+    bias the summary toward whichever sample happens to be large. Every
+    campaign that summarises a ratio should use the same reduction.
+
+    All values must be positive (``math.log`` domain) and ``values`` non-empty;
+    callers filter out the not-measured and non-positive cases first.
+    """
+    return math.exp(sum(math.log(v) for v in values) / len(values))
 
 
 def load_module(path: Path):

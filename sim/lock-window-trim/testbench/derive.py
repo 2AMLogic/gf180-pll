@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import math
 
-from harness.derived import DerivedTable, fmt_scalar
+from harness.derived import DerivedTable, fmt_scalar, geomean
 
 #: spec/pll.md's ratified Lock criterion, in nanoseconds -- the band's lower
 #: edge. A window narrower than this at any corner can refuse to assert on a
@@ -112,10 +112,6 @@ def _code_int(axis_id):
         return None
 
 
-def _geomean(values):
-    return math.exp(sum(math.log(v) for v in values) / len(values))
-
-
 def _target_ref_ns():
     """The trim rule's reference-condition target, in ns.
 
@@ -159,7 +155,7 @@ def derive_tables(run):
                 continue
             values = [twin for _, _, twin in rows]
             lo, hi = min(values), max(values)
-            gm = _geomean(values)
+            gm = geomean(values)
             ref = [twin for temp, vdd, twin in rows if temp == REF_TEMP_C and vdd == ref_vdd]
             stats[(bundle, code)] = {
                 "lo": lo, "hi": hi, "gm": gm,
