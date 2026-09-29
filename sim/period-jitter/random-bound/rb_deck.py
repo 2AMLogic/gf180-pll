@@ -67,6 +67,9 @@ if str(ISF) not in sys.path:
 
 import isf_deck  # noqa: E402
 
+#: Shared with every period-jitter deck module; defined once in `isf_deck`.
+_join_continuations = isf_deck._join_continuations
+
 #: Boltzmann constant, J/K -- CODATA 2019 exact value.
 K_B = 1.380649e-23
 T0_K = 273.15
@@ -90,16 +93,6 @@ _RES_RE = re.compile(r"^(X\w+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(ppolyf_u\w*)\s+(.*)$",
 
 def kelvin(temp_c: float) -> float:
     return temp_c + T0_K
-
-
-def _join_continuations(text: str) -> list[str]:
-    out: list[str] = []
-    for raw in text.splitlines():
-        if raw.startswith("+") and out:
-            out[-1] = out[-1].rstrip() + " " + raw[1:].strip()
-        else:
-            out.append(raw)
-    return out
 
 
 def subckt_lines(src: str, name: str) -> list[str]:

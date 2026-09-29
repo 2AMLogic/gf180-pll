@@ -69,6 +69,9 @@ if str(ISF) not in sys.path:
 
 import isf_deck  # noqa: E402
 
+#: Shared with every period-jitter deck module; defined once in `isf_deck`.
+_join_continuations = isf_deck._join_continuations
+
 #: Boltzmann constant, J/K -- CODATA 2019 exact value.
 K_B = 1.380649e-23
 #: 0 degC in kelvin.
@@ -94,17 +97,6 @@ RING_DEVICES = {
 #: reproduction check compares, and `gm`/`gds` are also what the extracted
 #: `S_id` is sanity-checked against as an effective noise conductance.
 OP_VECTORS = ("vgs", "vds", "vbs", "id", "gm", "gds")
-
-
-def _join_continuations(text: str) -> list[str]:
-    """SPICE `+` continuation lines folded into their parent, in order."""
-    out: list[str] = []
-    for raw in text.splitlines():
-        if raw.startswith("+") and out:
-            out[-1] = out[-1].rstrip() + " " + raw[1:].strip()
-        else:
-            out.append(raw)
-    return out
 
 
 def stage_device_lines(src: str) -> dict[str, dict[str, str]]:
