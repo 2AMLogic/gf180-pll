@@ -314,8 +314,10 @@ finds:
   anyway would be assuming rather than verifying.
 - **Metal5 (`81/0`/`81/10`) is entirely absent from this GDS.** `vco_block.gds`
   only draws layers up to Metal2 — confirmed directly by enumerating the
-  file's own `layer_indexes()`: `{21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0,
-  34/10, 35/0, 36/0, 36/10, 49/0, 62/0, 110/5}`, nothing at `42/*`, `46/*`,
+  file's own `layer_indexes()`:
+  ~~`{21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0, 34/10, 35/0, 36/0, 36/10,
+  49/0, 62/0, 110/5}`~~ → **`{0/0, 21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0,
+  34/10, 35/0, 36/0, 36/10, 49/0, 62/0, 110/5}`**, nothing at `42/*`, `46/*`,
   or `81/*` at all. Issue #427's "typically Metal1 and Metal5" guess does
   not hold for this specific block — declaring a `label_layer` there would
   have been pure fiction. `metal3`/`metal4`/`metal5` are still declared as
@@ -323,6 +325,72 @@ finds:
   spec the same portable gf180mcu shape used elsewhere in this fleet — per
   `klt erc`'s own documented convention, "a stackup/vias entry naming a
   layer absent from the given layout is not itself an error."
+
+  **Correction (2026-09-29, issue #660): the struck enumeration above had 14
+  members; the file has 15.** The omitted member is `(0, 0)`, and
+  it is not empty — it carries exactly four shapes, all in the top cell
+  `vco_block`: two 50 x 50 um boxes at `(31.06, -3.00)-(81.06, 47.00)` um and
+  `(83.06, -3.00)-(133.06, 47.00)` um, plus the texts `vco.decap0` and
+  `vco.decap1`. These are the carried-forward 22 pF **decap marker
+  rectangles** `layout/pll_top/vco/ring.py` draws
+  (`canvas.rect("boundary", ...)` / `canvas.label("boundary", ...)`, guarded
+  by `draw_decap`) and `block.decap_boxes_um()` carries into the assembled
+  block — not device geometry. Re-derived against the committed GDS
+  (`sha256:8c839b91…4b5c47f9`, the digest pinned under "Provenance" above
+  and in `erc-report.json`'s `provenance.input.content_hash`) with the same
+  one-liner this bullet quotes:
+
+  ```bash
+  python3 -c "
+  import klayout.db as db
+  ly = db.Layout(); ly.read('layout/evidence/vco-layout/vco_block.gds')
+  print(sorted('%d/%d' % (ly.get_info(i).layer, ly.get_info(i).datatype)
+               for i in ly.layer_indexes()))"
+  ['0/0', '110/5', '21/0', '22/0', '30/0', '31/0', '32/0', '33/0', '34/0',
+   '34/10', '35/0', '36/0', '36/10', '49/0', '62/0']
+  ```
+
+  (KLayout Python module `0.30.10`. The later section "The n-well tie is now
+  declared and checked" already quoted the correct 15-member list, so this
+  document previously disagreed with itself; it no longer does.)
+
+  This was a **transcription error, not staleness**: the immediately preceding
+  revision of `vco_block.gds` (`sha256:b1798bf8…3b8ca5b18b`, superseded by
+  commit `2ddf0c54`) enumerates the same 15 layers, `0/0` included, so the
+  struck list was never true of any committed revision of this file. Nothing
+  about the layout changed under the claim.
+
+  **`(0, 0)` is not referenced by `klt erc`'s stackup/vias/ties model.**
+  `erc-supply-spec.json` declares no entry whose `layer` is `0/0` — its
+  `stackup` names `30/0`, `34/0`, `36/0`, `42/0`, `46/0`, `81/0`, its `vias`
+  name `33/0`, `35/0`, `38/0`, `40/0`, `41/0`, and the one declared tie names
+  `21/0` (`well_layer`), `22/0` (`tap_layer`) and `32/0` (`tap_requires`);
+  the only declared `label_layer` is `34/10`. So the marker layer contributes
+  no conductor, via, label or tie role, and none of the ERC findings can arise
+  from it. That is the same answer the LVS record already records for its own
+  deck:
+  [`PROOF-lvs.md`](PROOF-lvs.md) states the decap pair is drawn as "two
+  boundary-layer marker rectangles (GDS layer (0, 0), a non-DRC-referenced
+  marker ... also not referenced by the LVS deck". Both evidence documents
+  now state it, rather than one naming the layer as load-bearing and the
+  other omitting it from an exhaustive list.
+
+  **Scope of this correction.** The conclusion the bullet draws is unchanged
+  and independently re-confirmed: there is still nothing on `42/*`, `46/*` or
+  `81/*`, so `metal3`/`metal4`/`metal5` really are declared-but-absent and
+  the "a stackup/vias entry naming a layer absent from the given layout is
+  not itself an error" convention really does apply. `erc-report.json` is
+  untouched — `erc_status` stays `violations` on the disclosed `VDD_VCO`
+  2-island finding, and its `provenance.input.content_hash`
+  `sha256:8c839b91…4b5c47f9` still reproduces against the committed GDS,
+  re-verified at this correction. The same 14-member enumeration also appears
+  verbatim inside `erc-supply-spec.json`'s `metal2` `_comment`; it is **not**
+  corrected here, because editing that file would move the spec's own
+  `provenance.spec.content_hash`
+  (`sha256:0603796a…138df7d0`, which still reproduces) and so would require
+  re-running `klt erc` rather than a prose fix. Tracked separately in #661.
+  Nothing in CI grades a layer census against the GDS it names — which is why
+  this one stood; that gap is #663.
 
 ## The n-well tie is now declared and checked
 
