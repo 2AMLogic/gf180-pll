@@ -29,7 +29,6 @@ No PDK and no ngspice required.
 
 from __future__ import annotations
 
-import importlib.util
 import math
 import sys
 import unittest
@@ -38,16 +37,13 @@ from pathlib import Path
 SIM_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SIM_DIR))
 
-from harness.derived import PointView, RunView  # noqa: E402
+from harness.derived import PointView, RunView, load_module  # noqa: E402
 
 DERIVE = SIM_DIR / "lock-window-proxy" / "testbench" / "derive.py"
 
 
 def _load_derive():
-    spec = importlib.util.spec_from_file_location("lock_window_proxy_derive", DERIVE)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_module(DERIVE)
 
 
 derive = _load_derive()
