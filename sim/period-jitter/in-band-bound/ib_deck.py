@@ -44,7 +44,20 @@ directory's README states, not a modelling choice hidden here.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ISF = HERE.parent / "isf-bringup"
+# APPENDED, NOT INSERTED AT THE FRONT: `isf-bringup` has its own `run.py` and
+# `summarize.py`, which must not shadow this directory's.
+if str(ISF) not in sys.path:
+    sys.path.append(str(ISF))
+
+import isf_deck  # noqa: E402
+
+#: Shared with every period-jitter deck module; defined once in `isf_deck`.
+_join_continuations = isf_deck._join_continuations
 
 #: Band width of every `.noise` call, Hz.  With a 1 Hz band ngspice's
 #: integrated plot IS the density; `../sid-trajectory/sid_deck` documents the
@@ -59,16 +72,6 @@ MOS_MODELS = ("nfet_03v3", "pfet_03v3")
 TRAN_OPTIONS = ("rshunt=1e12", "itl4=200", "reltol=1e-3", "abstol=1e-13",
                 "vntol=1e-6")
 NOISE_OPTIONS = ("rshunt=1e12",)
-
-
-def _join_continuations(text: str) -> list[str]:
-    out: list[str] = []
-    for raw in text.splitlines():
-        if raw.startswith("+") and out:
-            out[-1] = out[-1].rstrip() + " " + raw[1:].strip()
-        else:
-            out.append(raw)
-    return out
 
 
 def subckts(src: str) -> dict:

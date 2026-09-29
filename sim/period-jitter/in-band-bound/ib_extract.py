@@ -110,7 +110,14 @@ RB = HERE.parent / "random-bound"
 # shadowing a same-named module the caller's own directory already provides.
 if str(RB) not in sys.path:
     sys.path.append(str(RB))
+ISF = HERE.parent / "isf-bringup"
+if str(ISF) not in sys.path:
+    sys.path.append(str(ISF))
 
+import isf_deck  # noqa: E402
+
+#: Shared with every period-jitter deck module; defined once in `isf_deck`.
+_join_continuations = isf_deck._join_continuations
 import rb_extract  # noqa: E402
 
 K_B = rb_extract.K_B
@@ -123,16 +130,6 @@ sigma_upper = rb_extract.sigma_upper
 # ---------------------------------------------------------------------------
 # step 1: the enumeration
 # ---------------------------------------------------------------------------
-def _join_continuations(text: str) -> list[str]:
-    out: list[str] = []
-    for raw in text.splitlines():
-        if raw.startswith("+") and out:
-            out[-1] = out[-1].rstrip() + " " + raw[1:].strip()
-        else:
-            out.append(raw)
-    return out
-
-
 def subckt_body(src: str, name: str) -> list[str]:
     """The instance/device lines of `.subckt <name>`, continuations folded."""
     body: list[str] = []

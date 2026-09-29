@@ -97,6 +97,21 @@ def injection_amplitude(dq: float, pw: float, ramp: float = RAMP_S) -> float:
     return dq / (pw + ramp)
 
 
+def _join_continuations(text: str) -> list[str]:
+    """SPICE `+` continuation lines folded into their parent, in order.
+
+    Shared by every period-jitter deck builder/extractor.  An orphan leading
+    `+` line (nothing to continue) is passed through unchanged.
+    """
+    out: list[str] = []
+    for raw in text.splitlines():
+        if raw.startswith("+") and out:
+            out[-1] = out[-1].rstrip() + " " + raw[1:].strip()
+        else:
+            out.append(raw)
+    return out
+
+
 def read_vco_netlist(repo_root) -> str:
     return (Path(repo_root) / "design" / "netlist" / "vco.spice").read_text()
 
