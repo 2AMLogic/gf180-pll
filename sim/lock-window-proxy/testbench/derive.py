@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import math
 
-from harness.derived import DerivedTable, fmt_scalar
+from harness.derived import DerivedTable, fmt_scalar, geomean
 
 #: The trim rule's target, spec/pll.md#lock-detector-window-trim-code-rule.
 TARGET_NS = 1.343
@@ -124,10 +124,6 @@ def _nearest_code(table_ns, target_ns):
     return min(usable, key=lambda c: abs(math.log(usable[c] / target_ns)))
 
 
-def _geomean(values):
-    return math.exp(sum(math.log(v) for v in values) / len(values))
-
-
 def _box(points, code):
     return [v for v in (_twin_ns(p, code) for p in points) if v]
 
@@ -189,7 +185,7 @@ def derive_tables(run):
             if _twin_ns(point, c) and calib_twin[c]
         ]
         if ratios:
-            twin_rel[bundle] = _geomean(ratios)
+            twin_rel[bundle] = geomean(ratios)
         obs_rel[bundle] = {}
         for name, _ in CANDIDATES:
             value = _observable(point, name)
@@ -512,7 +508,7 @@ def _crosscheck(run, by_bundle):
             (
                 len(ratios),
                 fmt_scalar(min(ratios), "%.6g"),
-                fmt_scalar(_geomean(ratios), "%.6g"),
+                fmt_scalar(geomean(ratios), "%.6g"),
                 fmt_scalar(max(ratios), "%.6g"),
                 worst[1] if worst else "",
                 f"c{worst[2]}" if worst else "",
