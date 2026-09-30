@@ -65,15 +65,21 @@ plus the block's own boundary pins (`VCTRL`, `B0`/`B1`/`B2` in; `CLK` out;
 
 ```
 $ python3 layout/run_pv.py drc layout/evidence/vco-layout/vco_block.gds \
-      --top vco_block --run-dir <run> --offgrid
+      --top vco_block --run-dir <run>
 DRC clean: vco_block (D), 0 violations
 ```
+
+Superseded: ~~`--top vco_block --run-dir <run> --offgrid`~~ →
+`--top vco_block --run-dir <run>`. The committed
+`drc-clean/drc-block.stdout.log` records `Offgrid enabled:  false`, so what
+ran was the default `--no_offgrid` `main` table, not the signoff-grade
+off-grid class. See **Correction (issue #671)** below.
 
 | Item | Value |
 |---|---|
 | PDK | gf180mcuD, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` |
 | KLayout | 0.28.16 |
-| Deck | the PDK's own `libs.tech/klayout/drc/run_drc.py`, deep mode, `--offgrid` on |
+| Deck | the PDK's own `libs.tech/klayout/drc/run_drc.py`, deep mode, ~~`--offgrid` on~~ → `--no_offgrid` (the default; the off-grid check class did not run) |
 | Rules executed | 556 |
 | Polygons in the design | 13,291 |
 | Block footprint | 294.78 × 148.18 µm (43,680 µm²) |
@@ -92,11 +98,50 @@ and re-run the identical command:
 ```
 $ python3 -c "...faults.inject_drc_violation('vco_block.gds', 'vco_block_drcfault.gds')"
 inserted a 0.10 x 2.00 um Metal1 rectangle at (3.0, 7.0) um -- below the 0.23 um minimum Metal1 width
-$ python3 layout/run_pv.py drc vco_block_drcfault.gds --top vco_block --run-dir <run> --offgrid
+$ python3 layout/run_pv.py drc vco_block_drcfault.gds --top vco_block --run-dir <run>
 DRC violations: vco_block (D), 1 item(s) -- M1.1x1
 ```
 
 The deck sees this block's geometry and fails it when it should.
+
+## Correction (issue #671): the committed DRC log is the default run, not `--offgrid`
+
+The wording struck above claimed this run was `--offgrid` ("signoff-grade").
+The committed artifact it names says otherwise, and the artifact is the
+record — `drc-clean/drc-block.stdout.log` prints
+
+```
+Offgrid enabled:  false
+```
+
+which is what the PDK deck echoes when `layout/harness/drc.py` appends
+`--no_offgrid`, its default. So what this document evidences for `vco_block`
+is the full default `main` table — every FEOL/BEOL and connectivity rule — with
+the off-grid check class **skipped**. The superseded wording is struck rather
+than rewritten, per this repository's append-only evidence convention.
+
+The off-grid class *was* run against this same committed `vco_block.gds` on
+2026-09-30 and came back clean:
+
+```
+DRC clean: vco_block (D), 0 violations
+```
+
+over a log recording `Offgrid enabled:  true`. That run is on
+`KLayout 0.30.10`, not the `KLayout 0.28.16` that `layout/harness/env.py`
+pins, because that is the only KLayout application binary on the host that
+did the work — so that pass is **not committed** here, for the reason
+`PROOF-klayout-pin.md` gives at length: a deck log from an unpinned build is
+not evidence about the engine this repository grades on, and
+`OFF_PIN_DISCLOSED` is not a list to widen for convenience. The on-pin
+`drc-clean-offgrid/` bundle this claim is owed — in the shape
+`layout/evidence/pfd-cp-layout/drc-clean-offgrid/` already publishes — is
+tracked as issue #675.
+
+Graded from here on by the OFF-GRID RULE in
+`layout/lib/check-layout-status-claims.sh`, which reads the `Offgrid enabled:`
+line of the log a document names and fails the build on a claim that
+disagrees with it.
 
 ## DRC alone would not have caught a broken route — so connectivity is proved too
 

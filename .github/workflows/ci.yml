@@ -174,7 +174,19 @@ jobs:
         # deliberate contract change: this check used to read only committed
         # text files, and a claim about a binary artifact cannot be graded
         # from text alone. Still no PDK, no xschem, and no standalone KLayout
-        # application binary; nothing here runs a deck.
+        # application binary; nothing here runs a deck. Tenth pass (issue
+        # #671) grades the *check class* a DRC claim says it ran under against
+        # the `Offgrid enabled:` line the deck prints into every stdout log:
+        # seven vco-layout PROOF documents said their run was `--offgrid`
+        # ("signoff-grade -- the off-grid check class is included, not
+        # skipped") while each named, by path, a committed log recording
+        # `false`. A claim is attested by a committed log for its own cell
+        # recording `true` (pfd-cp-layout/drc-clean-offgrid/ is the
+        # precedent), or must disclose the `--no_offgrid` default its
+        # committed evidence actually records (cp-block-layout/PROOF.md and
+        # cp-leg-proof/PROOF.md are the precedent); anything else fails.
+        # Negated mentions ("no `--offgrid`") and struck ones are skipped.
+        # Reads only committed text files -- not even klayout.db.
         run: bash layout/lib/check-layout-status-claims.sh
 
       - name: signoff/tests (unit tests for run-signoff.sh's klt version pin)

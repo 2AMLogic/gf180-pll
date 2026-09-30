@@ -40,17 +40,17 @@ produces) is therefore an **input pin** of the mirror block for now.
 | | |
 |---|---|
 | Generated | 2026-09-08T21:08 UTC |
-| Invoked as | `python3 -m vco.mirror --outdir layout/evidence/vco-layout` / `python3 -m vco.buffer --outdir …` (from `layout/pll_top/`), then `python3 layout/run_pv.py drc <gds> --top <cell> --run-dir <tmp> --offgrid` |
+| Invoked as | `python3 -m vco.mirror --outdir layout/evidence/vco-layout` / `python3 -m vco.buffer --outdir …` (from `layout/pll_top/`), then ~~`python3 layout/run_pv.py drc <gds> --top <cell> --run-dir <tmp> --offgrid`~~ → `python3 layout/run_pv.py drc <gds> --top <cell> --run-dir <tmp>` with `--offgrid` for `vco_bandsel_mirror` and without it (the default `--no_offgrid`) for `vco_out_buffer` — see **Correction (issue #671)** below |
 | PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
 | KLayout (application, deck runner) | `KLayout 0.28.16` |
-| DRC deck | `<pdk>/libs.tech/klayout/drc/run_drc.py`, table `main`, `--variant=D`, `--offgrid` (signoff-grade — the off-grid check class is included, not skipped) |
+| DRC deck | `<pdk>/libs.tech/klayout/drc/run_drc.py`, table `main`, `--variant=D`, ~~`--offgrid` (signoff-grade — the off-grid check class is included, not skipped)~~ → `--offgrid` for `vco_bandsel_mirror` (`drc-clean/drc-mirror.stdout.log` records `Offgrid enabled:  true`); `--no_offgrid`, the default, for `vco_out_buffer` |
 
 ## Result
 
 | Check | Expected | Got | Verdict |
 |---|---|---|---|
 | `vco_bandsel_mirror` DRC, table `main`, `--offgrid` | clean | `Klayout DRC run is clean. GDS has no DRC violations.` | **PASS** |
-| `vco_out_buffer` DRC, table `main`, `--offgrid` | clean | `Klayout DRC run is clean. GDS has no DRC violations.` | **PASS** |
+| ~~`vco_out_buffer` DRC, table `main`, `--offgrid`~~ → `vco_out_buffer` DRC, table `main`, `--no_offgrid` (default) | clean | `Klayout DRC run is clean. GDS has no DRC violations.` | **PASS** |
 | `vco_ring` re-run after this increment's `primitives.py` changes | still clean, geometry unchanged | clean; KLayout XOR against the committed `vco_ring.gds` is **empty on every layer** | **PASS (no regression)** |
 
 The ring re-run matters because this increment changed shared code
@@ -64,6 +64,49 @@ Rules this increment newly exercises on top of the ones `PROOF.md` lists:
 **and** max, 0.26 µm), `V1.2a` (via1 space), `V1.3a`/`V1.4a` (metal1/metal2
 overlap of via1), and the whole `geom.drc` OFFGRID class against a block
 whose device widths are not natural grid multiples (see below).
+
+## Correction (issue #671): the committed DRC log is the default run, not `--offgrid`
+
+The wording struck above claimed this run was `--offgrid` ("signoff-grade").
+The committed artifact it names says otherwise, and the artifact is the
+record — `drc-clean/drc-buffer.stdout.log` prints
+
+```
+Offgrid enabled:  false
+```
+
+which is what the PDK deck echoes when `layout/harness/drc.py` appends
+`--no_offgrid`, its default. So what this document evidences for
+`vco_out_buffer` is the full default `main` table — every FEOL/BEOL and
+connectivity rule — with the off-grid check class **skipped**. Only the buffer
+row is affected: the `vco_bandsel_mirror` half of the table above is correct,
+and `drc-clean/drc-mirror.stdout.log` really does record `Offgrid enabled:
+true` — it is one of the two genuinely off-grid logs in this repository.
+The superseded wording is struck rather than rewritten, per this
+repository's append-only evidence convention.
+
+The off-grid class *was* run against this same committed
+`vco_out_buffer.gds` on 2026-09-30 and came back clean:
+
+```
+DRC clean: vco_out_buffer (D), 0 violations
+```
+
+over a log recording `Offgrid enabled:  true`. That run is on
+`KLayout 0.30.10`, not the `KLayout 0.28.16` that `layout/harness/env.py`
+pins, because that is the only KLayout application binary on the host that
+did the work — so that pass is **not committed** here, for the reason
+`PROOF-klayout-pin.md` gives at length: a deck log from an unpinned build is
+not evidence about the engine this repository grades on, and
+`OFF_PIN_DISCLOSED` is not a list to widen for convenience. The on-pin
+`drc-clean-offgrid/` bundle this claim is owed — in the shape
+`layout/evidence/pfd-cp-layout/drc-clean-offgrid/` already publishes — is
+tracked as issue #675.
+
+Graded from here on by the OFF-GRID RULE in
+`layout/lib/check-layout-status-claims.sh`, which reads the `Offgrid enabled:`
+line of the log a document names and fails the build on a claim that
+disagrees with it.
 
 ## The two failures this generator hit, and what they cost
 

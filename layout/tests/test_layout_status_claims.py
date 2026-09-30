@@ -73,17 +73,28 @@ DRC_CLEAN_LINE = "INFO    | Klayout DRC run is clean. GDS has no DRC violations.
 PINNED_KLAYOUT = "KLayout 0.28.16"
 
 
-def _deck_log(klayout: str, top: str, verdict: str) -> str:
+def _deck_log(
+    klayout: str, top: str, verdict: str, offgrid: bool | None = None
+) -> str:
     """A deck stdout log shaped like the real gf180mcu DRC/LVS runner's.
 
     The KLAYOUT PIN RULE reads three things out of a committed log -- the
     engine that produced it, the top cell it ran on, and the deck's own
     verdict line -- so the fixture must carry all three in the real wording.
+
+    ``offgrid`` adds the fourth thing the OFF-GRID RULE (issue #671) reads:
+    the deck's own echo of which check class ran.  ``None`` omits the line
+    entirely, which is what an LVS log looks like -- and what a DRC log
+    truncated before the deck got that far looks like, the case
+    ``test_a_claim_whose_named_log_has_no_offgrid_line_is_caught`` drives.
     """
+    text = f"INFO    | Your Klayout version is: {klayout}\n"
+    if offgrid is not None:
+        text += "INFO    | Offgrid enabled:  %s\n" % ("true" if offgrid else "false")
     return (
-        f"INFO    | Your Klayout version is: {klayout}\n"
-        f"INFO    | Running Global Foundries 180nm MCU design main on cell {top}:\n"
-        f"{verdict}"
+        text
+        + f"INFO    | Running Global Foundries 180nm MCU design main on cell {top}:\n"
+        + verdict
     )
 
 # The klt version the fixture's .github/workflows/ci.yml pins. The ERC rule
@@ -320,6 +331,7 @@ class _Tree:
         drc_klayout: str = PINNED_KLAYOUT,
         lvs_klayout: str = PINNED_KLAYOUT,
         gds_layers: list[tuple[int, int]] | None = None,
+        drc_offgrid: bool | None = False,
     ) -> None:
         base = self.root / "layout" / "evidence" / evidence_dir
         base.mkdir(parents=True, exist_ok=True)
@@ -334,7 +346,7 @@ class _Tree:
         if drc:
             (base / "drc-clean").mkdir(exist_ok=True)
             (base / "drc-clean" / "drc.stdout.log").write_text(
-                _deck_log(drc_klayout, top, DRC_CLEAN_LINE)
+                _deck_log(drc_klayout, top, DRC_CLEAN_LINE, offgrid=drc_offgrid)
             )
         if lvs:
             (base / "lvs-clean").mkdir(exist_ok=True)
@@ -348,12 +360,18 @@ class _Tree:
                 self.add_erc(evidence_dir, gds)
 
     def add_deck_log(
-        self, rel: str, *, klayout: str, top: str, verdict: str = DRC_CLEAN_LINE
+        self,
+        rel: str,
+        *,
+        klayout: str,
+        top: str,
+        verdict: str = DRC_CLEAN_LINE,
+        offgrid: bool | None = None,
     ) -> Path:
         """Write one extra deck log under layout/evidence/ at ``rel``."""
         path = self.root / "layout" / "evidence" / rel
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(_deck_log(klayout, top, verdict))
+        path.write_text(_deck_log(klayout, top, verdict, offgrid=offgrid))
         return path
 
     def add_erc(
@@ -2201,6 +2219,322 @@ class LayerCensusRealTreeTests(unittest.TestCase):
             "committed GDS's layer_indexes(); if one of those enumerations is "
             "gone, the LAYER CENSUS RULE is grading less than it was written "
             "for -- reword deliberately, not by accident",
+        )
+
+
+class OffgridRuleTests(unittest.TestCase):
+    """The tenth guard (issue #671): an off-grid DRC claim vs. the deck's log.
+
+    Seven ``layout/evidence/vco-layout/PROOF-*.md`` documents said their DRC
+    run was ``--offgrid`` -- several in the words "signoff-grade -- the
+    off-grid check class is included, not skipped" -- while each named, by
+    path, a committed log recording ``Offgrid enabled:  false``.  Nothing
+    could have caught it: the flag's own echo sits in the artifact and no
+    check read it.
+
+    These tests drive the rule that now does, against synthetic trees whose
+    logs say what the fixture chose by construction -- including the mutation
+    check the acceptance criteria ask for (flip one fixture log's
+    ``Offgrid enabled:`` value, nothing else, and the verdict must flip).
+    """
+
+    OFFGRID_LOG = "drc-clean-offgrid/drc.stdout.log"
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tree = _Tree(Path(self._tmp.name) / "repo")
+        for evidence_dir, gds in BLOCKS:
+            self.tree.add_block(evidence_dir, gds, drc=True, lvs=True)
+        self.tree.write_docs(_doc_text(4, 4))
+
+    def _commit_offgrid_log(self, offgrid: bool = True) -> Path:
+        """`vco-layout`'s own `--offgrid` bundle, in pfd-cp-layout's shape."""
+        return self.tree.add_deck_log(
+            "vco-layout/" + self.OFFGRID_LOG,
+            klayout=PINNED_KLAYOUT,
+            top="vco_block",
+            offgrid=offgrid,
+        )
+
+    @staticmethod
+    def _claim(
+        cell: str = "vco_block",
+        log: str | None = None,
+        *,
+        disclosure: str = "",
+        heading: str = "# fixture off-grid proof",
+    ) -> str:
+        """A PROOF paragraph in the real documents' own shape."""
+        text = (
+            "%s\n\n"
+            "| Check | Expected | Got | Verdict |\n"
+            "|---|---|---|---|\n"
+            "| `%s` DRC, table `main`, `--offgrid` (signoff-grade) | clean | "
+            "`DRC clean: %s (D), 0 violations` | **PASS** |\n" % (heading, cell, cell)
+        )
+        if log is not None:
+            text += "\nCaptured deck output: `%s`.\n" % log
+        if disclosure:
+            text += "\n%s\n" % disclosure
+        return text
+
+    def test_an_offgrid_claim_matching_its_named_log_passes(self):
+        self._commit_offgrid_log(True)
+        self.tree.add_proof(
+            "vco-layout",
+            self._claim("vco_block", self.OFFGRID_LOG),
+            name="PROOF-offgrid.md",
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(
+            "1 claim(s) across 1 document(s): 1 attested by a committed log "
+            "recording `Offgrid enabled:  true`",
+            result.stdout,
+        )
+
+    def test_an_offgrid_claim_contradicted_by_its_log_is_caught(self):
+        # Issue #671's exact defect: the document says the off-grid class ran,
+        # the log it names says it did not, and nothing read the log.
+        self.tree.add_proof(
+            "vco-layout",
+            self._claim("vco_block", "drc-clean/drc.stdout.log"),
+            name="PROOF-offgrid.md",
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "layout/evidence/vco-layout/PROOF-offgrid.md claims an off-grid "
+            "(`--offgrid` / signoff-grade) DRC run for top cell `vco_block`, "
+            "but no committed deck log for that cell records "
+            "`Offgrid enabled:  true` -- every one records `false`",
+            result.stderr,
+        )
+
+    def test_flipping_the_named_logs_offgrid_value_flips_the_verdict(self):
+        # The mutation check. One byte-level fact changes -- `true` -> `false`
+        # in a log nobody edits by hand -- and the same document must go from
+        # passing to failing. Without this, a rule that never opens the log
+        # would look identical to one that does.
+        self.tree.add_proof(
+            "vco-layout",
+            self._claim("vco_block", self.OFFGRID_LOG),
+            name="PROOF-offgrid.md",
+        )
+        log = self._commit_offgrid_log(True)
+        self.assertIn("Offgrid enabled:  true", log.read_text())
+        passing = self.tree.run()
+        self.assertEqual(passing.returncode, 0, passing.stdout + passing.stderr)
+
+        log.write_text(log.read_text().replace("true", "false"))
+        failing = self.tree.run()
+        self.assertEqual(failing.returncode, 1, failing.stdout + failing.stderr)
+        self.assertIn("for top cell `vco_block`", failing.stderr)
+
+    def test_a_struck_offgrid_claim_beside_a_live_restatement_passes(self):
+        # The shape #671's own correction left in every affected document, and
+        # the reason a naive grader would fail each one the moment it was
+        # fixed: this repository corrects evidence by striking the superseded
+        # claim in place and writing the corrected one beside it.
+        self.tree.add_proof(
+            "vco-layout",
+            "# fixture off-grid proof\n\n"
+            "| ~~`vco_block` DRC, table `main`, `--offgrid`~~ -> `vco_block` "
+            "DRC, table `main`, `--no_offgrid` (default) | clean | **PASS** |\n",
+            name="PROOF-offgrid.md",
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("no document makes an off-grid DRC claim", result.stdout)
+        self.assertIn("1 struck occurrence(s) skipped as history", result.stdout)
+
+    def test_a_claim_naming_a_log_that_is_not_committed_is_caught(self):
+        # A claim pointed at nothing attests nothing -- the same doctrine the
+        # LAYER CENSUS RULE applies to a census that resolves to no GDS.
+        self.tree.add_proof(
+            "vco-layout",
+            self._claim("vco_block", self.OFFGRID_LOG),
+            name="PROOF-offgrid.md",
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "makes an off-grid DRC claim naming the deck log "
+            "`drc-clean-offgrid/drc.stdout.log`, which is not committed under "
+            "layout/evidence/",
+            result.stderr,
+        )
+
+    def test_a_claim_whose_named_log_has_no_offgrid_line_is_caught(self):
+        # A log truncated before the deck printed its own flag echo, or one
+        # that is not a DRC deck log at all. It cannot settle which class ran,
+        # so it is reported rather than passed over.
+        self.tree.add_deck_log(
+            "vco-layout/" + self.OFFGRID_LOG,
+            klayout=PINNED_KLAYOUT,
+            top="vco_block",
+            offgrid=None,
+        )
+        self.tree.add_proof(
+            "vco-layout",
+            self._claim("vco_block", self.OFFGRID_LOG),
+            name="PROOF-offgrid.md",
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "but that committed log carries no `Offgrid enabled:` line at all",
+            result.stderr,
+        )
+
+    def test_a_negated_mention_is_not_an_offgrid_claim(self):
+        # "(default, no `--offgrid`)" is the honest description of a default
+        # run, not a claim that the off-grid class ran. Every honest document
+        # in this tree writes one, and grading them would invert the rule.
+        self.tree.add_proof(
+            "vco-layout",
+            "# fixture off-grid proof\n\n"
+            "| `vco_block` DRC, table `main` (default, no `--offgrid`) | clean "
+            "| **PASS** |\n",
+            name="PROOF-offgrid.md",
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("no document makes an off-grid DRC claim", result.stdout)
+        self.assertIn(
+            "1 negated occurrence(s) skipped as default-run descriptions",
+            result.stdout,
+        )
+
+    def test_an_unattested_claim_with_a_disclosure_passes(self):
+        # cp-leg-proof/PROOF.md's shape, and the precedent #671 generalised:
+        # say plainly that the committed evidence is the `--no_offgrid` run.
+        self.tree.add_proof(
+            "vco-layout",
+            self._claim(
+                "vco_block",
+                None,
+                disclosure=(
+                    "Also run with `--offgrid` during development, clean; the "
+                    "committed evidence uses the harness's default "
+                    "(`--no_offgrid`)."
+                ),
+            ),
+            name="PROOF-offgrid.md",
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        # Two claims, not one: the disclosure sentence states the off-grid run
+        # it is disclosing, so it is itself a (disclosed) claim.
+        self.assertIn(
+            "2 disclosed as the `--no_offgrid` default run", result.stdout
+        )
+
+    def test_a_struck_disclosure_does_not_excuse_a_live_claim(self):
+        # Striking a disclosure is how it is *withdrawn*. A withdrawn
+        # disclosure excuses nothing, or the strike becomes a blanket escape.
+        self.tree.add_proof(
+            "vco-layout",
+            self._claim(
+                "vco_block",
+                None,
+                disclosure="~~The committed evidence is the `--no_offgrid` run.~~",
+            ),
+            name="PROOF-offgrid.md",
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("for top cell `vco_block`", result.stderr)
+
+    def test_a_claim_is_not_excused_by_another_cells_offgrid_log(self):
+        # The defect that made #671 per-cell rather than per-directory:
+        # PROOF-mirror-buffer.md grades two cells in one table and only the
+        # mirror's row was true. A sibling's genuine off-grid log must not
+        # cover the buffer's claim.
+        self.tree.add_deck_log(
+            "vco-layout/drc-clean/drc-mirror.stdout.log",
+            klayout=PINNED_KLAYOUT,
+            top="vco_bandsel_mirror",
+            offgrid=True,
+        )
+        self.tree.add_deck_log(
+            "vco-layout/drc-clean/drc-buffer.stdout.log",
+            klayout=PINNED_KLAYOUT,
+            top="vco_out_buffer",
+            offgrid=False,
+        )
+        self.tree.add_proof(
+            "vco-layout",
+            "# fixture off-grid proof\n\n"
+            "| `vco_bandsel_mirror` DRC, table `main`, `--offgrid` | clean | "
+            "**PASS** |\n"
+            "| `vco_out_buffer` DRC, table `main`, `--offgrid` | clean | "
+            "**PASS** |\n",
+            name="PROOF-offgrid.md",
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("for top cell `vco_out_buffer`", result.stderr)
+        self.assertNotIn("for top cell `vco_bandsel_mirror`", result.stderr)
+
+    def test_a_claim_naming_no_resolvable_cell_is_caught_not_skipped(self):
+        # An evidence directory with no committed GDS and no deck log offers
+        # nothing to attribute a claim to. The rule asks for the cell rather
+        # than passing an ungradeable claim, same doctrine as everywhere else
+        # in this script.
+        base = self.tree.root / "layout" / "evidence" / "notes"
+        base.mkdir(parents=True, exist_ok=True)
+        (base / "PROOF-offgrid.md").write_text(
+            "# fixture off-grid proof\n\n"
+            "The block was re-checked with `--offgrid` (signoff-grade) and "
+            "came back clean.\n"
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "layout/evidence/notes/PROOF-offgrid.md makes an off-grid DRC "
+            "claim that names no top cell",
+            result.stderr,
+        )
+
+    def test_a_tree_with_no_offgrid_claim_passes_and_says_so(self):
+        # Every other test in this file drives the script over trees that make
+        # no off-grid claim; none of them may start failing because this rule
+        # exists.
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("no document makes an off-grid DRC claim", result.stdout)
+
+
+class OffgridRealTreeTests(unittest.TestCase):
+    """The real tree's one committed off-grid bundle, asserted here too.
+
+    The rule is driven against synthetic trees above, for the reason the
+    KLAYOUT PIN RULE's header records.  What that cannot show is that the real
+    tree still holds the artifact the rule exists to reward -- if
+    ``pfd-cp-layout/drc-clean-offgrid/`` were ever deleted or regenerated
+    without the flag, every off-grid claim in this repository would silently
+    fall back to the disclosure path and the rule would keep reporting OK.
+    """
+
+    def test_the_committed_offgrid_bundle_still_records_an_offgrid_run(self):
+        evidence = LAYOUT_DIR / "evidence"
+        attested = {}
+        for log in sorted(evidence.glob("*/**/*.log")):
+            text = log.read_text(errors="replace")
+            flag = re.search(r"Offgrid enabled:\s*(true|false)", text)
+            cell = re.search(r"on cell ([A-Za-z0-9_]+)", text)
+            if flag and cell and flag.group(1).lower() == "true":
+                attested[cell.group(1)] = str(log.relative_to(evidence))
+        self.assertEqual(
+            sorted(attested),
+            ["pfd_cp", "vco_bandsel_mirror"],
+            "these are the only committed deck logs recording `Offgrid "
+            "enabled:  true`, and therefore the only cells whose off-grid "
+            "claims the OFF-GRID RULE can attest rather than merely see "
+            "disclosed. Issue #675 tracks committing the rest; if this list "
+            "ever SHRINKS, an attested claim silently became a disclosed one",
         )
 
 
