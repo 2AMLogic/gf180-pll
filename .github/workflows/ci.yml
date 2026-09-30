@@ -122,8 +122,10 @@ jobs:
         # stated that no PLL block had been drawn for about five weeks after
         # all four sub-blocks landed with committed GDS and DRC-clean deck
         # output -- and the proposal is a document written to be emailed
-        # verbatim to an outside reader. Pure file-existence plus a grep of
-        # the recorded deck verdicts; no PDK, no KLayout, no layout input.
+        # verbatim to an outside reader. Mostly file-existence plus a grep of
+        # the recorded deck verdicts; no PDK and no standalone KLayout
+        # application binary. NOT "no layout input" any more -- see the ninth
+        # pass at the end of this comment.
         # Also grades every absence-of-layout sentence in both documents for
         # a stated scope, and their claims about spec/pll.md's ratification
         # state against the spec's own Status line -- both of which went
@@ -154,9 +156,25 @@ jobs:
         # one-pin-for-two-engines claim in the proposal's section 8, while 16
         # of the 51 committed deck logs were on 0.30.9/0.30.10. layout/README.md
         # is graded by this rule alone -- it is the flow's operator manual,
-        # not a status narrative. Needs python3 (set
-        # up above) for the prose and footprint rules; still reads only
-        # committed files, no PDK, no KLayout.
+        # not a status narrative. Ninth pass (issue #663) grades every
+        # `layer_indexes()` census a layout/evidence/*/PROOF-*.md prints
+        # against the GDS that document names, as a set. Those censuses are
+        # what each block's erc-supply-spec.json cites to justify what it
+        # deliberately does NOT declare (no label_layer on a metal carrying no
+        # supply text, no well_layer for a native p-substrate), and nothing
+        # checked them: vco-layout/PROOF-erc.md stated a 14-member census of a
+        # 15-layer file for five weeks while quoting the correct list three
+        # sections later (issue #660), and the same wrong list was copied into
+        # that block's spec _comment (issue #661). Occurrences inside ~~...~~
+        # are skipped, because this repository corrects evidence by striking
+        # the wrong value in place. Needs python3 (set up above) for the prose
+        # and footprint rules, and -- for the census rule only, and only where
+        # a document actually states a census -- `klayout.db` from the
+        # `klayout` pip wheel installed at the top of this job. That is a
+        # deliberate contract change: this check used to read only committed
+        # text files, and a claim about a binary artifact cannot be graded
+        # from text alone. Still no PDK, no xschem, and no standalone KLayout
+        # application binary; nothing here runs a deck.
         run: bash layout/lib/check-layout-status-claims.sh
 
       - name: signoff/tests (unit tests for run-signoff.sh's klt version pin)

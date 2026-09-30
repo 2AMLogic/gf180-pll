@@ -12,7 +12,17 @@ state of the two real documents.
 
 The script resolves its own repo root from ``${BASH_SOURCE[0]}/../..``, so
 each test builds a throwaway tree with the script copied into the same
-relative position and runs it there.  No PDK, no KLayout, no layout input.
+relative position and runs it there.  No PDK and no standalone KLayout
+application binary.
+
+Most fixtures need no layout input either -- a zero-byte file is enough for
+the existence and hashing rules.  The LAYER CENSUS RULE (issue #663) is the
+exception: it grades a document's ``layer_indexes()`` enumeration against the
+GDS it names, so its tests write real GDS fixtures through ``klayout.db`` (the
+``klayout`` pip wheel's Python module, which ``.github/workflows/ci.yml``
+installs earlier in the same job) and are gated behind
+``@unittest.skipUnless(HAVE_KLAYOUT, ...)`` like every other klayout.db-using
+test under ``layout/tests/``.
 
     python3 -m unittest discover -s layout/tests -t layout/tests -v
 """
@@ -21,6 +31,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -28,7 +39,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _env import LAYOUT_DIR
+from _env import HAVE_KLAYOUT, LAYOUT_DIR
 
 SCRIPT = LAYOUT_DIR / "lib" / "check-layout-status-claims.sh"
 
@@ -253,6 +264,51 @@ class _Tree:
             body += f'KNOWN_GOOD_KLAYOUT_VERSION = "{pin}"\n'
         (base / "env.py").write_text(body)
 
+    def write_gds(
+        self,
+        evidence_dir: str,
+        gds: str,
+        layers: list[tuple[int, int]],
+        *,
+        top: str | None = None,
+    ) -> Path:
+        """Write a real GDS carrying exactly ``layers`` and nothing else.
+
+        The LAYER CENSUS RULE (issue #663) opens the stream and compares its
+        ``layer_indexes()`` against what a PROOF document claims, so its tests
+        need a file whose census is known by construction rather than the
+        zero-byte placeholder every other rule is happy with.  One 1x1 um box
+        per layer: a declared layer with no shapes is not guaranteed to survive
+        a GDS round-trip, and a layer that vanished would make the fixture's
+        own census a guess.
+        """
+        import klayout.db as db
+
+        base = self.root / "layout" / "evidence" / evidence_dir
+        base.mkdir(parents=True, exist_ok=True)
+        layout = db.Layout()
+        layout.dbu = 0.001
+        cell = layout.create_cell(top or gds[: -len(".gds")])
+        for i, (layer, datatype) in enumerate(layers):
+            index = layout.layer(layer, datatype)
+            cell.shapes(index).insert(
+                db.Box(i * 2000, 0, i * 2000 + 1000, 1000)
+            )
+        path = base / gds
+        layout.write(str(path))
+        return path
+
+    def add_proof(self, evidence_dir: str, text: str, *, name: str = "PROOF-census.md"):
+        """Write one extra ``PROOF-*.md`` into a block's evidence directory.
+
+        Separate from ``add_erc``'s own PROOF-erc.md so a census claim can be
+        added, and broken, without disturbing the antenna-coverage sentence
+        the ERC rule grades in that file.
+        """
+        base = self.root / "layout" / "evidence" / evidence_dir
+        base.mkdir(parents=True, exist_ok=True)
+        (base / name).write_text(text)
+
     def add_block(
         self,
         evidence_dir: str,
@@ -263,11 +319,18 @@ class _Tree:
         erc: bool = True,
         drc_klayout: str = PINNED_KLAYOUT,
         lvs_klayout: str = PINNED_KLAYOUT,
+        gds_layers: list[tuple[int, int]] | None = None,
     ) -> None:
         base = self.root / "layout" / "evidence" / evidence_dir
         base.mkdir(parents=True, exist_ok=True)
-        (base / gds).write_bytes(b"")
         top = gds[: -len(".gds")]
+        if gds_layers is None:
+            # Every rule but the LAYER CENSUS RULE only needs the file to
+            # exist (and to hash to something); a zero-byte file is cheaper
+            # than a real stream and keeps these tests free of klayout.db.
+            (base / gds).write_bytes(b"")
+        else:
+            self.write_gds(evidence_dir, gds, gds_layers, top=top)
         if drc:
             (base / "drc-clean").mkdir(exist_ok=True)
             (base / "drc-clean" / "drc.stdout.log").write_text(
@@ -1748,6 +1811,309 @@ class OffPinDisclosureListTests(unittest.TestCase):
             f"OFF_PIN_DISCLOSED names logs that are on the pin ({pin}); they "
             "are graded like any other log now, so the exemption only hides a "
             "future regression",
+        )
+
+
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
+class LayerCensusRuleTests(unittest.TestCase):
+    """The ninth guard (issue #663): a ``layer_indexes()`` census vs. the GDS.
+
+    ``layout/evidence/vco-layout/PROOF-erc.md`` stated a 14-member census of a
+    file that has 15 -- the omitted member being ``(0, 0)``, the two decap
+    marker rectangles' layer -- and the same document quoted the correct
+    15-member list three sections later, so it disagreed with itself for five
+    weeks (issue #660).  The wrong list was copied into that block's
+    ``erc-supply-spec.json`` ``_comment`` as well (issue #661).  Nothing could
+    have caught either: a census is printed raw tool output, and this script
+    read no layout input at all.
+
+    These tests drive the rule that now does, against synthetic trees whose
+    census is known by construction -- including the exact shape #660's own
+    correction left behind, a struck wrong list beside a live right one, which
+    the rule must pass.
+    """
+
+    # vco_block.gds's real census, as this repository's own PROOF-erc.md and
+    # erc-supply-spec.json state it post-#660/#661. Used as the fixture's set
+    # so the failure modes below read like the ones that actually happened.
+    VCO_LAYERS = [
+        (0, 0),
+        (21, 0),
+        (22, 0),
+        (30, 0),
+        (31, 0),
+        (32, 0),
+        (33, 0),
+        (34, 0),
+        (34, 10),
+        (35, 0),
+        (36, 0),
+        (36, 10),
+        (49, 0),
+        (62, 0),
+        (110, 5),
+    ]
+    # A deliberately different set, for the named-sibling resolution tests --
+    # `vco-layout` commits six GDS files in the real tree, so "the block's
+    # GDS" is a real choice the rule has to make correctly.
+    SIBLING_LAYERS = [(21, 0), (22, 0), (30, 0), (34, 0)]
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tree = _Tree(Path(self._tmp.name) / "repo")
+        for evidence_dir, gds in BLOCKS:
+            self.tree.add_block(
+                evidence_dir,
+                gds,
+                drc=True,
+                lvs=True,
+                gds_layers=self.VCO_LAYERS if evidence_dir == "vco-layout" else None,
+            )
+        self.tree.write_docs(_doc_text(4, 4))
+
+    @staticmethod
+    def _census(layers) -> str:
+        return "{%s}" % ", ".join("%d/%d" % pair for pair in layers)
+
+    def _proof(self, census: str, *, subject: str = "`vco_block.gds`") -> str:
+        """A PROOF paragraph in the real documents' own shape."""
+        return (
+            "# fixture census proof\n\n"
+            "gf180mcu draws no pwell/tub layer for a native-substrate NMOS\n"
+            "block. %s only draws layers up to Metal2 -- confirmed directly by\n"
+            "enumerating the file's own `layer_indexes()`: `%s`, nothing above\n"
+            "that at all.\n" % (subject, census)
+        )
+
+    def test_a_census_matching_the_committed_gds_passes(self):
+        self.tree.add_proof("vco-layout", self._proof(self._census(self.VCO_LAYERS)))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(
+            "1 census claim(s) across 1 document(s) match the committed GDS",
+            result.stdout,
+        )
+
+    def test_a_census_that_omits_a_layer_the_gds_has_is_caught(self):
+        # Issue #660's exact defect: `0/0` dropped from a hand-transcribed
+        # list, with nothing in CI able to see it.
+        self.tree.add_proof(
+            "vco-layout", self._proof(self._census(self.VCO_LAYERS[1:]))
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "layout/evidence/vco-layout/PROOF-census.md states a 14-member "
+            "`layer_indexes()` census of `vco_block.gds`, but that committed "
+            "GDS has 15 layers",
+            result.stderr,
+        )
+        self.assertIn("omits {0/0}", result.stderr)
+
+    def test_a_census_naming_a_layer_the_gds_does_not_have_is_caught(self):
+        # The mirror failure, and the one a bare member count would miss: the
+        # right number of members, one of them fictional.
+        claimed = self.VCO_LAYERS[1:] + [(81, 0)]
+        self.tree.add_proof("vco-layout", self._proof(self._census(claimed)))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("names {81/0}, absent from the file", result.stderr)
+        self.assertIn("omits {0/0}", result.stderr)
+
+    def test_a_struck_wrong_census_beside_a_live_correct_one_passes(self):
+        # The shape #660's own correction left in the tree, and the reason a
+        # naive grader would fail every corrected document: this repository
+        # corrects evidence by striking the wrong value in place.
+        wrong = self._census(self.VCO_LAYERS[1:])
+        right = self._census(self.VCO_LAYERS)
+        self.tree.add_proof(
+            "vco-layout",
+            "# fixture census proof\n\n"
+            "`vco_block.gds` only draws layers up to Metal2 -- confirmed\n"
+            "directly by enumerating the file's own `layer_indexes()`:\n"
+            "~~`%s`~~ -> **`%s`**, nothing above that at all.\n\n"
+            "**Correction: the struck enumeration above had 14 members; the\n"
+            "file has 15.** The omitted member is `(0, 0)`, the decap marker\n"
+            "rectangles' layer.\n" % (wrong, right),
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("1 struck occurrence(s) skipped as history", result.stdout)
+
+    def test_a_struck_census_is_the_only_thing_the_strike_excuses(self):
+        # The strike must not become a blanket excuse: striking the wrong
+        # list and leaving *no* correct one live is still a corrected
+        # document, but striking a list and stating a second wrong one is not.
+        wrong = self._census(self.VCO_LAYERS[1:])
+        alsowrong = self._census(self.VCO_LAYERS[2:])
+        self.tree.add_proof(
+            "vco-layout",
+            "# fixture census proof\n\n"
+            "`vco_block.gds`'s own `layer_indexes()`: ~~`%s`~~ -> **`%s`**.\n"
+            % (wrong, alsowrong),
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("states a 13-member `layer_indexes()` census", result.stderr)
+
+    def test_a_brace_list_with_no_layer_indexes_mention_is_not_graded(self):
+        # Narrow-match discipline, the same the PIN RESTATEMENT RULE applies
+        # to version numbers: a brace-list is not a census claim. These are
+        # the *declared* stackup layers of a spec, which legitimately name
+        # layers a given stream does not draw.
+        self.tree.add_proof(
+            "vco-layout",
+            "# fixture census proof\n\n"
+            "The spec declares the portable gf180mcu stackup `%s`, including\n"
+            "roles no block in this fleet draws on.\n"
+            % self._census([(42, 0), (46, 0), (81, 0)]),
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("no document states a layer_indexes() census", result.stdout)
+
+    def test_an_explicitly_named_sibling_gds_is_graded_against_that_file(self):
+        self.tree.write_gds(
+            "vco-layout", "vco_bandsel_mirror.gds", self.SIBLING_LAYERS
+        )
+        self.tree.add_proof(
+            "vco-layout",
+            self._proof(
+                self._census(self.SIBLING_LAYERS),
+                subject="`vco_bandsel_mirror.gds`",
+            ),
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(
+            "1 census claim(s) across 1 document(s) match", result.stdout
+        )
+
+    def test_a_sibling_census_is_not_excused_by_the_blocks_own_gds(self):
+        # The converse of the test above, and what makes it meaningful: a
+        # census attributed to the sibling must fail when it states the
+        # *block's* layers, even though those are a true census of some file
+        # in the same directory.
+        self.tree.write_gds(
+            "vco-layout", "vco_bandsel_mirror.gds", self.SIBLING_LAYERS
+        )
+        self.tree.add_proof(
+            "vco-layout",
+            self._proof(
+                self._census(self.VCO_LAYERS),
+                subject="`vco_bandsel_mirror.gds`",
+            ),
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("census of `vco_bandsel_mirror.gds`", result.stderr)
+
+    def test_a_census_in_a_non_block_directory_with_one_gds_is_graded(self):
+        # A leaf-cell proof directory is not one of the four blocks, so it has
+        # no default GDS -- but a directory holding exactly one is
+        # unambiguous, and its censuses are graded like any other.
+        self.tree.write_gds("pfd-layout", "pfd.gds", self.SIBLING_LAYERS)
+        self.tree.add_proof(
+            "pfd-layout",
+            self._proof(self._census(self.VCO_LAYERS), subject="this GDS"),
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "layout/evidence/pfd-layout/PROOF-census.md states a 15-member "
+            "`layer_indexes()` census of `pfd.gds`",
+            result.stderr,
+        )
+
+    def test_a_census_that_resolves_to_no_gds_is_caught_not_skipped(self):
+        # Two candidate files and no default: the rule must say so rather
+        # than pass over an ungradeable claim, same doctrine as a missing
+        # area audit or an unparseable spec Status line.
+        base = self.tree.root / "layout" / "evidence" / "cp-leg-proof"
+        base.mkdir(parents=True, exist_ok=True)
+        (base / "cp_leg_n.gds").write_bytes(b"")
+        (base / "cp_leg_p.gds").write_bytes(b"")
+        self.tree.add_proof(
+            "cp-leg-proof",
+            self._proof(self._census(self.SIBLING_LAYERS), subject="this cell"),
+        )
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "states a `layer_indexes()` census that resolves to no committed "
+            "GDS",
+            result.stderr,
+        )
+
+    def test_a_census_with_klayout_db_unimportable_fails_rather_than_skipping(self):
+        # The other half of the lazy-dependency contract, and the one that
+        # matters: where a claim exists, an unimportable klayout.db is a
+        # FAILURE, exactly as a missing python3 is for the prose rules. A
+        # partial pass is not a pass -- issue #660's census survived five
+        # weeks precisely because nothing opened the file.
+        self.tree.add_proof("vco-layout", self._proof(self._census(self.VCO_LAYERS)))
+        # A bare `klayout.py` module on PYTHONPATH shadows the real package,
+        # so `import klayout.db` raises ImportError ("not a package") without
+        # touching the installed wheel.
+        stub = self.tree.root / "stub"
+        stub.mkdir()
+        (stub / "klayout.py").write_text('"""Not a package."""\n')
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(stub)
+        result = self.tree.run(env=env)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("`klayout.db` cannot be imported", result.stderr)
+        self.assertIn("A partial pass is not a pass", result.stderr)
+
+    def test_a_tree_with_no_census_claim_needs_no_klayout(self):
+        # The lazy-dependency half of the contract: every other test in this
+        # file drives the script over trees that state no census, and none of
+        # them may start requiring klayout.db because this rule exists.
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("klayout.db was not needed", result.stdout)
+
+
+class LayerCensusRealTreeTests(unittest.TestCase):
+    """The census claims in the real evidence tree, asserted here too.
+
+    The rule itself is driven against synthetic trees above, for the reason
+    the KLAYOUT PIN RULE's header records.  What that cannot show is that the
+    real tree actually *has* the claims the rule exists to grade -- a rule
+    whose subject silently disappeared (a document reworded, a census deleted
+    rather than corrected) would keep reporting OK forever.
+    """
+
+    def test_the_real_tree_still_states_the_censuses_this_rule_grades(self):
+        evidence = LAYOUT_DIR / "evidence"
+        census = re.compile(
+            r"\{\s*[0-9]+\s*/\s*[0-9]+(?:\s*,\s*[0-9]+\s*/\s*[0-9]+)*\s*\}"
+        )
+        stated = []
+        for proof in sorted(evidence.glob("*/PROOF-*.md")):
+            flat = re.sub(r"\s+", " ", proof.read_text())
+            struck = [(m.start(), m.end()) for m in re.finditer(r"~~.+?~~", flat)]
+            for m in census.finditer(flat):
+                window = flat[max(0, m.start() - 250):m.end() + 120]
+                if "layer_indexes" not in window:
+                    continue
+                if any(s <= m.start() < e for s, e in struck):
+                    continue
+                stated.append(proof.parent.name)
+        self.assertEqual(
+            sorted(set(stated)),
+            [
+                "divider-chain-layout",
+                "lock-detector-layout",
+                "pfd-cp-layout",
+                "vco-layout",
+            ],
+            "the four blocks' PROOF-erc.md records each justify what their "
+            "erc-supply-spec.json declines to declare by enumerating the "
+            "committed GDS's layer_indexes(); if one of those enumerations is "
+            "gone, the LAYER CENSUS RULE is grading less than it was written "
+            "for -- reword deliberately, not by accident",
         )
 
 
