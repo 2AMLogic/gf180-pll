@@ -33,6 +33,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from _fixtures import TreeWriter
+
 SIGNOFF_DIR = Path(__file__).resolve().parents[1]
 SCRIPT = SIGNOFF_DIR / "run-signoff.sh"
 
@@ -83,7 +85,7 @@ def _report(build_version: str = PINNED_KLT, t1_met_count: int = 0) -> dict:
     }
 
 
-class _Tree:
+class _Tree(TreeWriter):
     """A throwaway repo tree with the real script installed at signoff/."""
 
     def __init__(self, root: Path):
@@ -98,11 +100,6 @@ class _Tree:
         self.stub_klt(PINNED_KLT, _report())
 
     # --- fixture pieces -----------------------------------------------------
-
-    def write(self, rel: str, text: str) -> None:
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
 
     def write_workflow(self, pin: str | None) -> None:
         if pin is None:
