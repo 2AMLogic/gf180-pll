@@ -28,6 +28,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from _fixtures import TreeWriter
+
 DOCS_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = DOCS_DIR.parent
 CHECK = DOCS_DIR / "lib" / "check-issue-reference-state.sh"
@@ -135,7 +137,7 @@ def _readme(body="Status: early.") -> str:
     return "# gf180-pll\n\n%s\n" % body
 
 
-class _Tree:
+class _Tree(TreeWriter):
     """A throwaway repo tree with the real check and a stub forge installed."""
 
     def __init__(self, root: Path):
@@ -155,11 +157,6 @@ class _Tree:
         stub = self.bin / "gh"
         stub.write_text(script, encoding="utf-8")
         stub.chmod(0o755)
-
-    def write(self, rel: str, text: str) -> None:
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
 
     def run(self) -> subprocess.CompletedProcess:
         env = dict(os.environ)
