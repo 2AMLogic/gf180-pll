@@ -2508,14 +2508,22 @@ class OffgridRuleTests(unittest.TestCase):
 
 
 class OffgridRealTreeTests(unittest.TestCase):
-    """The real tree's one committed off-grid bundle, asserted here too.
+    """The real tree's committed off-grid bundles, asserted here too.
 
     The rule is driven against synthetic trees above, for the reason the
     KLAYOUT PIN RULE's header records.  What that cannot show is that the real
-    tree still holds the artifact the rule exists to reward -- if
-    ``pfd-cp-layout/drc-clean-offgrid/`` were ever deleted or regenerated
-    without the flag, every off-grid claim in this repository would silently
-    fall back to the disclosure path and the rule would keep reporting OK.
+    tree still holds the artifacts the rule exists to reward -- if any of the
+    committed ``drc-clean-offgrid/`` bundles below were ever deleted or
+    regenerated without the flag, every off-grid claim about that cell in this
+    repository would silently fall back to the disclosure path and the rule
+    would keep reporting OK.
+
+    ``pfd_cp`` and ``vco_bandsel_mirror`` were the only two cells attested
+    this way before issue #675; #675 committed on-pin ``--offgrid`` bundles
+    for the nine cells #671 could only disclose (``vco_ring``,
+    ``vco_vtoi_core``, ``vco_bias_resistors``, ``vco_out_buffer``,
+    ``vco_block``, ``cp_array``, ``cp_output_stage``, ``div23_cell``,
+    ``divider_chain``).
     """
 
     def test_the_committed_offgrid_bundle_still_records_an_offgrid_run(self):
@@ -2529,12 +2537,24 @@ class OffgridRealTreeTests(unittest.TestCase):
                 attested[cell.group(1)] = str(log.relative_to(evidence))
         self.assertEqual(
             sorted(attested),
-            ["pfd_cp", "vco_bandsel_mirror"],
+            [
+                "cp_array",
+                "cp_output_stage",
+                "div23_cell",
+                "divider_chain",
+                "pfd_cp",
+                "vco_bandsel_mirror",
+                "vco_bias_resistors",
+                "vco_block",
+                "vco_out_buffer",
+                "vco_ring",
+                "vco_vtoi_core",
+            ],
             "these are the only committed deck logs recording `Offgrid "
             "enabled:  true`, and therefore the only cells whose off-grid "
             "claims the OFF-GRID RULE can attest rather than merely see "
-            "disclosed. Issue #675 tracks committing the rest; if this list "
-            "ever SHRINKS, an attested claim silently became a disclosed one",
+            "disclosed; if this list ever SHRINKS, an attested claim "
+            "silently became a disclosed one",
         )
 
 

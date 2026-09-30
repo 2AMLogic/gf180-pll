@@ -140,23 +140,27 @@ is the full default `main` table — every FEOL/BEOL and connectivity rule — w
 the off-grid check class **skipped**. The superseded wording is struck rather
 than rewritten, per this repository's append-only evidence convention.
 
-The off-grid class *was* run against this same committed
-`vco_vtoi_core.gds` on 2026-09-30 and came back clean:
+**Attested (issue #675)**: the off-grid class was re-run against this same
+committed `vco_vtoi_core.gds`, on the pin, and the run is now committed
+beside the default-class one — `drc-clean-offgrid/drc-vtoi-core.stdout.log`
+records
+
+```
+Offgrid enabled:  true
+```
+
+on `KLayout 0.28.16`, the same build `layout/harness/env.py` pins, in the
+shape `layout/evidence/pfd-cp-layout/drc-clean-offgrid/` already publishes.
+The run came back clean:
 
 ```
 DRC clean: vco_vtoi_core (D), 0 violations
 ```
 
-over a log recording `Offgrid enabled:  true`. That run is on
-`KLayout 0.30.10`, not the `KLayout 0.28.16` that `layout/harness/env.py`
-pins, because that is the only KLayout application binary on the host that
-did the work — so that pass is **not committed** here, for the reason
-`PROOF-klayout-pin.md` gives at length: a deck log from an unpinned build is
-not evidence about the engine this repository grades on, and
-`OFF_PIN_DISCLOSED` is not a list to widen for convenience. The on-pin
-`drc-clean-offgrid/` bundle this claim is owed — in the shape
-`layout/evidence/pfd-cp-layout/drc-clean-offgrid/` already publishes — is
-tracked as issue #675.
+so the off-grid claim this document makes for `vco_vtoi_core` is attested by
+a committed, on-pin log (`drc-clean-offgrid/drc-vtoi-core.stdout.log`,
+`drc-clean-offgrid/vco_vtoi_core_main.lyrdb`), not disclosed as an
+uncommitted one.
 
 Graded from here on by the OFF-GRID RULE in
 `layout/lib/check-layout-status-claims.sh`, which reads the `Offgrid enabled:`

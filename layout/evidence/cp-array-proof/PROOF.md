@@ -151,7 +151,7 @@ python3 layout/run_pv.py drc <workdir>/cp_array.gds --top cp_array --run-dir <ru
 | Check | Expected | Got | Verdict |
 |---|---|---|---|
 | `cp_array` DRC, table `main` (default, no `--offgrid`) | clean | `DRC clean: cp_array (D), 0 violations` | **PASS** |
-| ~~`cp_array` DRC, table `main`, `--offgrid` (signoff-grade)~~ → verified separately, **not committed** (see **Correction (issue #671)** below) | clean | `DRC clean: cp_array (D), 0 violations` | *not attested by a committed log* |
+| ~~`cp_array` DRC, table `main`, `--offgrid` (signoff-grade)~~ → attested by a committed on-pin log (see **Attested (issue #675)** below) | clean | `DRC clean: cp_array (D), 0 violations` | **PASS** |
 | `netcheck.check_gds()` (Metal1-3 connectivity, `python3 -m pfd_cp.cp_array`'s own default run) | no shorts, no splits | `connectivity clean: 18 nets, no shorts, no splits` | **PASS** |
 
 Real device/routing rules this run actually exercised (every table in the
@@ -184,20 +184,26 @@ this repository's append-only evidence convention;
 `layout/evidence/cp-leg-proof/PROOF.md` are the precedent for stating an
 uncommitted off-grid run honestly instead of implying it was archived.
 
-The off-grid class was re-run against this same committed `cp_array.gds` on
-2026-09-30 and came back clean:
+**Attested (issue #675)**: the off-grid class was re-run against this same
+committed `cp_array.gds`, on the pin, and the run is now committed beside
+the default-class one — `drc-clean-offgrid/drc.stdout.log` records
+
+```
+Offgrid enabled:  true
+```
+
+on `KLayout 0.28.16`, the same build `layout/harness/env.py` pins, in the
+shape `layout/evidence/pfd-cp-layout/drc-clean-offgrid/` already publishes.
+The run came back clean:
 
 ```
 DRC clean: cp_array (D), 0 violations
 ```
 
-over a log recording `Offgrid enabled:  true` — on `KLayout 0.30.10`, not the
-`KLayout 0.28.16` that `layout/harness/env.py` pins, because that is the only
-KLayout application binary on the host that did the work. A deck log from an
-unpinned build is not evidence about the engine this repository grades on, so
-it is **not committed** here. The on-pin `drc-clean-offgrid/` bundle this
-claim is owed — in the shape `layout/evidence/pfd-cp-layout/drc-clean-offgrid/`
-already publishes — is tracked as issue #675.
+so the off-grid claim this document makes for `cp_array` is attested by a
+committed, on-pin log (`drc-clean-offgrid/drc.stdout.log`,
+`drc-clean-offgrid/cp_array_main.lyrdb`), not disclosed as an uncommitted
+one.
 
 Graded from here on by the OFF-GRID RULE in
 `layout/lib/check-layout-status-claims.sh`, which reads the `Offgrid enabled:`

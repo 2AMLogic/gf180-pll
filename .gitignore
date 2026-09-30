@@ -69,6 +69,12 @@
 # Same story again for the assembled pfd_cp top-level block's DRC evidence and
 # its extracted-connectivity logs (issue #386).
 !layout/evidence/pfd-cp-layout/**/*.log
+# Same story again for the standalone div23_cell macro's DRC+LVS evidence
+# (issue #308) -- this negation was missing even though drc-clean/ and
+# lvs-clean/ under this directory were already committed (force-added around
+# the gap); issue #675's drc-clean-offgrid/drc.stdout.log is the log that
+# exposed the omission.
+!layout/evidence/divider-div23-proof/**/*.log
 __pycache__/
 .DS_Store
 

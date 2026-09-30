@@ -424,5 +424,13 @@ records — see each document's own "Correction (issue #671)" section — and
 every `--offgrid`/signoff-grade claim in `layout/evidence/` against the
 `Offgrid enabled:` line of the log it names. The off-grid class was separately
 re-run clean on every affected cell, but on `KLayout 0.30.10` rather than the
-pin, so those logs are disclosed and not committed; the on-pin
-`drc-clean-offgrid/` bundles are tracked as `#675`.
+pin, so at that point those logs were disclosed rather than committed.
+
+**Attested by `#675`** (2026-09-30): the on-pin `drc-clean-offgrid/` bundle
+each of those disclosures was owed is now committed — `KLayout 0.28.16`,
+`Offgrid enabled:  true`, zero violations, for every affected VCO cell
+(`vco_ring`, `vco_vtoi_core`, `vco_bias_resistors`, `vco_out_buffer`,
+`vco_block`) — see each document's own "Attested (issue #675)" paragraph and
+`vco-layout/drc-clean-offgrid/`. Every off-grid claim this directory makes is
+now attested by a committed, on-pin log rather than disclosed as an
+uncommitted one.
