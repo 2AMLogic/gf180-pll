@@ -200,6 +200,30 @@
 #     rule must stay correct on the synthetic trees its own unit tests drive it
 #     against, which hold none of those files.
 #
+# The rule above grades the **four block top cells** only, and that is where it
+# left a residual it disclosed rather than closed: the five VCO *sub-cell* logs
+# (`vco_ring`, `vco_vtoi_core`, `vco_out_buffer`) stayed on 0.30.9/0.30.10, and
+# two of them (`lvs-ring`, `lvs-buffer`) had additionally been run at
+# `POLY_RES 1k` rather than this repository's ratified `3k` (DR-009). A
+# disclosure entry is not a check: it says the gap exists, and then grades
+# nothing about whether it ever closes or silently widens. So the rule is
+# generalised (issue #127, 2026-09-30) from four named tops to **every** top
+# cell the evidence tree grades:
+#
+#   * every top cell for which some committed log carries the deck's own
+#     `Klayout DRC run is clean.` must have at least one such log on the pin,
+#     and the same for `Congratulations! Netlists match.` -- not just the four
+#     block tops. A sub-cell verdict is the warrant under a block verdict; a
+#     warrant taken on an engine this repository does not grade on is exactly
+#     the shape issue #360 makes dangerous;
+#   * a top cell whose verdicts are *deliberately* not graded on the pin must
+#     be named in OFF_PIN_TOPCELL_DISCLOSED below with a reason -- a cell-level
+#     exemption, distinct from OFF_PIN_DISCLOSED's per-file one. Three families
+#     qualify today and all three predate this rule: the two `cp_leg_*`
+#     leaf-cell generator proofs and `inv_tb`, the DRC/LVS harness's own
+#     bring-up proof (with its two deliberate fault negative controls), none of
+#     which is a PLL block or the warrant under one.
+#
 # An eighth guard, the PIN RESTATEMENT RULE, added 2026-09-28 (issue #237),
 # closes the prose half of the rule above. The KLAYOUT PIN RULE grades the
 # *logs* against `layout/harness/env.py`; nothing graded what the documents
@@ -818,16 +842,35 @@ OFF_PIN_DISCLOSED = {
         "superseded on the pin by drc-recheck-klayout-0.28.16/",
     "vco-layout/lvs-clean/lvs.stdout.log":
         "superseded on the pin by lvs-recheck-klayout-0.28.16/",
-    # VCO sub-cell evidence still only on 0.30.9/0.30.10. Disclosed, not
-    # excused: this is the residual issue #127's pin re-check pass left behind
-    # after re-deriving all four block-level verdicts, and the sub-cells are
-    # supporting evidence for vco_block rather than an item 3/4 verdict of
-    # their own.
-    "vco-layout/drc-clean/drc.stdout.log": "VCO sub-cell (vco_ring), off-pin residual",
-    "vco-layout/drc-clean/drc-buffer.stdout.log": "VCO sub-cell (vco_out_buffer), off-pin residual",
-    "vco-layout/drc-clean/drc-vtoi-core.stdout.log": "VCO sub-cell (vco_vtoi_core), off-pin residual",
-    "vco-layout/lvs-ring/lvs.stdout.log": "VCO sub-cell (vco_ring), off-pin residual",
-    "vco-layout/lvs-buffer/lvs.stdout.log": "VCO sub-cell (vco_out_buffer), off-pin residual",
+    # VCO sub-cell runs, captured on 0.30.9/0.30.10 (and, for the two LVS
+    # logs, at the PDK runner's own POLY_RES 1k rather than this repo's
+    # ratified 3k). These were issue #127's disclosed off-pin residual until
+    # 2026-09-30, when each was re-derived on the pin at POLY_RES 3k from the
+    # same committed GDS and, for LVS, the same committed reference netlist.
+    # Kept per this repository's append-only evidence convention; superseded
+    # for grading purposes by the sibling recheck directories named below
+    # (PROOF-klayout-pin.md, Addendum 1).
+    "vco-layout/drc-clean/drc.stdout.log":
+        "vco_ring sub-cell, superseded on the pin by drc-recheck-klayout-0.28.16/drc-ring.stdout.log",
+    "vco-layout/drc-clean/drc-buffer.stdout.log":
+        "vco_out_buffer sub-cell, superseded on the pin by drc-recheck-klayout-0.28.16/drc-buffer.stdout.log",
+    "vco-layout/drc-clean/drc-vtoi-core.stdout.log":
+        "vco_vtoi_core sub-cell, superseded on the pin by drc-recheck-klayout-0.28.16/drc-vtoi-core.stdout.log",
+    "vco-layout/lvs-ring/lvs.stdout.log":
+        "vco_ring sub-cell at POLY_RES 1k, superseded on the pin at 3k by lvs-recheck-klayout-0.28.16/lvs-ring.stdout.log",
+    "vco-layout/lvs-buffer/lvs.stdout.log":
+        "vco_out_buffer sub-cell at POLY_RES 1k, superseded on the pin at 3k by lvs-recheck-klayout-0.28.16/lvs-buffer.stdout.log",
+}
+
+# Cell-level counterpart to OFF_PIN_DISCLOSED: top cells whose graded verdicts
+# are deliberately not reproduced on the pin at all. Distinct from the per-file
+# list above, which excuses one superseded *log* while the cell itself is still
+# required to have an on-pin verdict somewhere in the tree. Nothing that is a
+# PLL block, or the warrant under a PLL block's own verdict, belongs here.
+OFF_PIN_TOPCELL_DISCLOSED = {
+    "cp_leg_n": "leaf-cell generator proof, not a block verdict or its warrant",
+    "cp_leg_p": "leaf-cell generator proof, not a block verdict or its warrant",
+    "inv_tb": "DRC/LVS harness bring-up proof (not a PLL block), incl. its fault controls",
 }
 
 DRC_CLEAN = "Klayout DRC run is clean."
@@ -924,6 +967,33 @@ for item in blocks_spec.split(";"):
                 "this repository pins." % (label, what, top, pin)
             )
 
+# The same rule, generalised past the four block tops to every top cell the
+# evidence tree grades (see the header). A sub-cell verdict is the warrant
+# under a block verdict, and a warrant taken on an unpinned engine is the
+# shape issue #360 makes dangerous.
+graded_tops = {}
+for entry in logs:
+    if not entry["cell"]:
+        continue
+    for want, needle_name in (("drc_clean", "DRC-clean"), ("lvs_match", "LVS-match")):
+        if entry[want]:
+            graded_tops.setdefault((entry["cell"], needle_name), []).append(entry)
+for (top, what), entries in sorted(graded_tops.items()):
+    if top in OFF_PIN_TOPCELL_DISCLOSED:
+        continue
+    if any(e["version"] == pin for e in entries):
+        continue
+    fail(
+        "top cell `%s` carries a %s verdict in %d committed deck log(s), but "
+        "not one of them is on %s -- every one is from some other KLayout "
+        "build. Re-run it on the pin (see that cell's PROOF for the exact "
+        "command), or, if this cell's verdicts are deliberately not graded on "
+        "the pin, name it in OFF_PIN_TOPCELL_DISCLOSED in this script with the "
+        "reason. Disclosing the individual logs in OFF_PIN_DISCLOSED is not "
+        "enough: that excuses a superseded run, not an ungraded cell."
+        % (top, what, len(entries), pin)
+    )
+
 print("layout/evidence/ DRC/LVS deck logs say:")
 print(
     "  %d deck logs carry a KLayout version stamp; %d on the pin (%s), "
@@ -935,6 +1005,18 @@ for entry in sorted(off_pin, key=lambda e: e["rel"]):
         "  off-pin  %-16s %-56s (%s)"
         % (entry["version"], entry["rel"], OFF_PIN_DISCLOSED.get(entry["rel"], "UNDISCLOSED"))
     )
+graded_cells = sorted({top for top, _what in graded_tops})
+exempt_cells = [c for c in graded_cells if c in OFF_PIN_TOPCELL_DISCLOSED]
+print(
+    "  %d graded top cell(s); %d with every stated verdict reproduced on the "
+    "pin, %d deliberately exempt (%s)"
+    % (
+        len(graded_cells),
+        len(graded_cells) - len(exempt_cells),
+        len(exempt_cells),
+        ", ".join(exempt_cells) or "none",
+    )
+)
 sys.exit(1 if failed else 0)
 PY
 }
