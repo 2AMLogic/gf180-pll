@@ -42,6 +42,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from _fixtures import TreeWriter
+
 DESIGN_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = DESIGN_DIR.parent
 CHECK = DESIGN_DIR / "lib" / "check-io-list-coverage.sh"
@@ -193,7 +195,7 @@ def _proposal(
     return "\n".join(lines) + "\n"
 
 
-class _Tree:
+class _Tree(TreeWriter):
     """A throwaway repo tree with the real check installed at design/lib/."""
 
     def __init__(self, root: Path):
@@ -202,11 +204,6 @@ class _Tree:
         shutil.copy2(CHECK, root / "design" / "lib" / CHECK.name)
         self.write(NETLIST, _netlist())
         self.write(PROPOSAL, _proposal())
-
-    def write(self, rel: str, text: str) -> None:
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
 
     def run(self) -> subprocess.CompletedProcess:
         return subprocess.run(

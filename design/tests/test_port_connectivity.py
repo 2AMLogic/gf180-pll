@@ -29,6 +29,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from _fixtures import TreeWriter
+
 DESIGN_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = DESIGN_DIR.parent
 CHECK = DESIGN_DIR / "lib" / "check-port-connectivity.sh"
@@ -66,7 +68,7 @@ def _pll_top_netlist(ldt3_wired: bool = True) -> str:
     return "\n".join(lines) + "\n"
 
 
-class _Tree:
+class _Tree(TreeWriter):
     """A throwaway repo tree with the real check installed at design/lib/."""
 
     def __init__(self, root: Path):
@@ -74,11 +76,6 @@ class _Tree:
         (root / "design" / "lib").mkdir(parents=True)
         (root / "design" / "netlist").mkdir(parents=True)
         shutil.copy2(CHECK, root / "design" / "lib" / CHECK.name)
-
-    def write(self, rel: str, text: str) -> None:
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
 
     def run(self, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
