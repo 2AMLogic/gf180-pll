@@ -28,6 +28,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from _fixtures import TreeWriter
+
 SPEC_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = SPEC_DIR.parent
 CHECK = SPEC_DIR / "lib" / "check-spec-row-coverage.sh"
@@ -126,7 +128,7 @@ def _proposal(
     return "\n".join(lines) + "\n"
 
 
-class _Tree:
+class _Tree(TreeWriter):
     """A throwaway repo tree with the real check installed at spec/lib/."""
 
     def __init__(self, root: Path):
@@ -135,11 +137,6 @@ class _Tree:
         shutil.copy2(CHECK, root / "spec" / "lib" / CHECK.name)
         self.write(SPEC_DOC, _spec())
         self.write(PROPOSAL, _proposal())
-
-    def write(self, rel: str, text: str) -> None:
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
 
     def decision(self, number: str, slug: str = "a-decision") -> None:
         self.write(

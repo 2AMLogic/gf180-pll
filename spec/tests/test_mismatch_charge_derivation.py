@@ -30,6 +30,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from _fixtures import TreeWriter
+
 SPEC_DIR = Path(__file__).resolve().parents[1]
 CHECK = SPEC_DIR / "lib" / "check-mismatch-charge-derivation.sh"
 
@@ -278,7 +280,7 @@ Not exercised by this check.
 """ % {"tov_csv": TOV_CSV, "icp_record": ICP_RECORD}
 
 
-class _Tree:
+class _Tree(TreeWriter):
     """A throwaway repo tree with the real check installed at spec/lib/."""
 
     def __init__(self, root: Path):
@@ -294,11 +296,6 @@ class _Tree:
         self.write(CP_TRIM_CSV, CP_TRIM_CSV_TEXT)
         self.write(CP_SWITCH_CSV, CP_SWITCH_CSV_TEXT)
         self.write(TOV_CSV, TOV_CSV_TEXT)
-
-    def write(self, rel: str, text: str) -> None:
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
 
     def run(self) -> subprocess.CompletedProcess:
         return subprocess.run(
