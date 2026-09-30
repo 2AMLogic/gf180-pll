@@ -156,9 +156,9 @@ its 31 nets a never-reused track (`devgen.NetTracks`).
 
 After each, the committed `div23_cell.gds`, `drc-clean/` and `lvs-clean/`
 artifacts in this directory are regenerated at the new geometry and still
-DRC-clean (and, since #458, DRC-clean under `--offgrid` too — that off-grid
-log is **not** committed anywhere under this directory; see **Off-grid
-disclosure (issue #671)** below) and LVS-matched;
+DRC-clean (and, since #458, DRC-clean under `--offgrid` too — attested by the
+committed `drc-clean-offgrid/` bundle; see **Attested (issue #675)** below)
+and LVS-matched;
 `div23_cell.spice` is byte-for-byte unchanged both times. `x0`, `x1`, `y0` and
 **every pin location below are unchanged** by either -- only each net's own
 `track_y` moved, which is what makes both pure routing-fabric changes.
@@ -180,36 +180,45 @@ unmodified instances (translation only) rather than six hand-tweaked copies.
 exact values so a future change to this module that silently shifts them is
 caught by CI, not discovered downstream in Part 5.
 
-## Off-grid disclosure (issue #671): the `--offgrid` runs above are not committed
+## Off-grid disclosure (issue #671): the `--offgrid` runs above were not committed
 
 The `--offgrid` invocations in the transcript above really were run, and came
-back clean — but their logs are **not** among the artifacts this directory
-commits. Every committed DRC log here records
+back clean — but at the time, their logs were **not** among the artifacts
+this directory committed. Every DRC log committed before issue #675 recorded
 
 ```
 Offgrid enabled:  false
 ```
 
 i.e. the default `--no_offgrid` run, which is what `layout/harness/drc.py`
-produces unless asked for the off-grid class. There is no `drc-clean-offgrid/`
-bundle under `divider-chain-layout/` or `divider-div23-proof/`, so the
-off-grid result above is attested by this written record and not by a machine
-artifact. `layout/evidence/cp-leg-proof/PROOF.md` and
-`layout/evidence/pfdcp-inv-proof/PROOF.md` state the same situation the same
-way; `layout/evidence/pfd-cp-layout/drc-clean-offgrid/` is what the committed
-version looks like.
+produces unless asked for the off-grid class. `layout/evidence/cp-leg-proof/
+PROOF.md` and `layout/evidence/pfdcp-inv-proof/PROOF.md` stated the same kind
+of situation the same way; `layout/evidence/pfd-cp-layout/drc-clean-offgrid/`
+is what the committed version looks like — and is now the shape this
+directory's own `drc-clean-offgrid/` matches.
 
-Independently re-run against the committed GDS on 2026-09-30, still clean:
+## Attested (issue #675)
+
+The off-grid class was re-run against this same committed `div23_cell.gds`,
+on the pin, and the run is now committed beside the default-class one —
+`drc-clean-offgrid/drc.stdout.log` records
+
+```
+Offgrid enabled:  true
+```
+
+on `KLayout 0.28.16`, the same build `layout/harness/env.py` pins, in the
+shape `layout/evidence/pfd-cp-layout/drc-clean-offgrid/` already publishes.
+The run came back clean:
 
 ```
 DRC clean: div23_cell (D), 0 violations
 ```
 
-over a log recording `Offgrid enabled:  true` — on `KLayout 0.30.10`,
-not the `KLayout 0.28.16` that `layout/harness/env.py` pins, so those logs are
-not committed either (a deck log from an unpinned build is not evidence about
-the engine this repository grades on). The on-pin `drc-clean-offgrid/` bundle
-is tracked as issue #675.
+so the off-grid claim this document makes for `div23_cell` is attested by a
+committed, on-pin log (`drc-clean-offgrid/drc.stdout.log`,
+`drc-clean-offgrid/div23_cell_main.lyrdb`), not disclosed as an uncommitted
+one.
 
 Graded from here on by the OFF-GRID RULE in
 `layout/lib/check-layout-status-claims.sh`.
