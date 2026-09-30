@@ -2148,16 +2148,17 @@ submission date.
   was unaffected (issue #360), so a verdict is only evidence about the engine
   that produced it.
 - **What the KLayout pin guarantees is narrower than "every log is on it",
-  and is stated here as narrowly as it holds.** Each verdict §6's table
-  scores — every block that reads DRC-clean, and every block that reads
-  LVS-matched — has at least one committed deck log carrying that verdict,
-  for that block's own top cell, produced on the pinned KLayout. Some logs in
-  `layout/evidence/` are off the pin: leaf-cell generator proofs, the DRC/LVS
-  harness's own bring-up cell and its two deliberate fault negative controls,
-  one deliberate cross-version re-check, and VCO sub-cell residuals. Each of
-  those is supporting material, and each block-level verdict §6 scores sits
-  on the pin in its own right. Off-pin runs are disclosed rather than
-  deleted — `sim/`-style
+  and is stated here as narrowly as it holds.** Every top cell for which some
+  committed deck log states a verdict — the four blocks §6's table scores and
+  the sub-cells under them alike — has at least one committed log carrying
+  that verdict on the pinned KLayout. Three cells are exempt by name, each
+  supporting material rather than a block verdict or the warrant under one:
+  the two `cp_leg_*` leaf-cell generator proofs and `inv_tb`, the DRC/LVS
+  harness's own bring-up cell (with its two deliberate fault negative
+  controls). Individual logs may still be off the pin — those three cells'
+  runs, one deliberate cross-version re-check, and the superseded VCO runs
+  that have since been re-derived on the pin. Off-pin runs are disclosed
+  rather than deleted — `sim/`-style
   append-only evidence keeps a superseded run in the tree beside the on-pin
   one that re-derived it — and every one of them is named, with its reason,
   on every run of `layout/lib/check-layout-status-claims.sh`, which also

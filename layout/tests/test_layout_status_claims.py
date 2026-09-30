@@ -1623,6 +1623,93 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         # 4 DRC + 2 LVS deck logs; the connectivity transcript is not one.
         self.assertIn("6 deck logs carry a KLayout version stamp", result.stdout)
 
+    # --- the per-top-cell generalisation (issue #127, 2026-09-30) ----------
+    #
+    # The four-block rule above left a residual it disclosed rather than
+    # closed: vco_ring / vco_vtoi_core / vco_out_buffer carried DRC-clean and
+    # LVS-match verdicts on 0.30.9/0.30.10 only, and naming their logs in
+    # OFF_PIN_DISCLOSED said so without ever grading whether it closed. These
+    # drive that generalisation to a known failure and back.
+
+    def test_a_sub_cell_verdict_on_no_pinned_log_is_caught(self):
+        # The exact pre-fix state of vco_ring: a DRC-clean verdict for a top
+        # cell that is not one of the four blocks, on an off-pin engine only.
+        self._all_four()
+        self.tree.add_deck_log(
+            "vco-layout/drc-clean/drc-ring.stdout.log",
+            klayout="KLayout 0.30.9",
+            top="vco_ring",
+        )
+        self.tree.write_docs(_doc_text(4, 2))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(
+            "top cell `vco_ring` carries a DRC-clean verdict in 1 committed "
+            "deck log(s), but not one of them is on KLayout 0.28.16",
+            result.stderr,
+        )
+
+    def test_disclosing_the_sub_cell_log_alone_does_not_silence_the_rule(self):
+        # The load-bearing assertion.
+        # `vco-layout/drc-clean/drc-vtoi-core.stdout.log` is a real
+        # OFF_PIN_DISCLOSED entry, so writing the off-pin vco_vtoi_core log at
+        # exactly that path satisfies the per-file rule -- and must still fail
+        # the per-cell one, because a disclosure excuses a superseded run, not
+        # an ungraded cell. If the generalisation read OFF_PIN_DISCLOSED
+        # instead of OFF_PIN_TOPCELL_DISCLOSED, this would pass and the
+        # residual could silently reopen.
+        self._all_four()
+        self.tree.add_deck_log(
+            "vco-layout/drc-clean/drc-vtoi-core.stdout.log",
+            klayout="KLayout 0.30.9",
+            top="vco_vtoi_core",
+        )
+        self.tree.write_docs(_doc_text(4, 2))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertNotIn("drc-vtoi-core.stdout.log was produced on", result.stderr)
+        self.assertIn("top cell `vco_vtoi_core` carries a DRC-clean", result.stderr)
+        # And nothing else broke: the four block tops are all still on the pin.
+        self.assertNotIn("reads as DRC-clean from the evidence tree", result.stderr)
+
+    def test_a_sub_cell_re_run_on_the_pin_passes(self):
+        # The fix shape: the off-pin run stays (append-only), a sibling
+        # recheck directory carries the same verdict on the pin.
+        self._all_four()
+        self.tree.add_deck_log(
+            "vco-layout/drc-clean/drc-vtoi-core.stdout.log",
+            klayout="KLayout 0.30.9",
+            top="vco_vtoi_core",
+        )
+        self.tree.add_deck_log(
+            "vco-layout/drc-recheck-klayout-0.28.16/drc-vtoi-core.stdout.log",
+            klayout=PINNED_KLAYOUT,
+            top="vco_vtoi_core",
+        )
+        self.tree.write_docs(_doc_text(4, 2))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(
+            "5 graded top cell(s); 5 with every stated verdict reproduced on "
+            "the pin, 0 deliberately exempt (none)",
+            result.stdout,
+        )
+
+    def test_a_cell_named_in_the_topcell_exemption_list_passes(self):
+        # cp_leg_n / cp_leg_p / inv_tb: leaf-cell generator proofs and the
+        # harness's own bring-up proof, none of which is a PLL block or the
+        # warrant under one. Off-pin on purpose, named on purpose.
+        self._all_four()
+        self.tree.add_deck_log(
+            "cp-leg-proof/drc-clean/cp_leg_n.drc.stdout.log",
+            klayout="KLayout 0.30.10",
+            top="cp_leg_n",
+        )
+        self.tree.write_docs(_doc_text(4, 2))
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("1 deliberately exempt (cp_leg_n)", result.stdout)
+
 
 class PinRestatementRuleTests(unittest.TestCase):
     """The eighth guard (issue #237): what the *documents* say the pin is.

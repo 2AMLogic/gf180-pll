@@ -274,6 +274,17 @@ off-pin logs are now enumerated by `layout/lib/check-layout-status-claims.sh`
 on every run rather than described in prose. See
 [`layout/evidence/vco-layout/PROOF-klayout-pin.md`](evidence/vco-layout/PROOF-klayout-pin.md).
 
+That first pass graded the **four block top cells** and left the VCO's own
+sub-cell logs (`vco_ring`, `vco_vtoi_core`, `vco_out_buffer`) off the pin as
+a disclosed residual — a disclosure says a gap exists and then grades nothing
+about whether it closes. Those five runs were re-derived on the pin (and, for
+the two LVS runs, at the ratified `POLY_RES 3k` rather than the PDK runner's
+own `1k`) on 2026-09-30, and the check is now **per top cell**: any cell whose
+verdicts exist only on some other engine fails the build unless it is named,
+with a reason, in the script's `OFF_PIN_TOPCELL_DISCLOSED`. Three cells are
+(`cp_leg_n`, `cp_leg_p`, `inv_tb`), none of them a PLL block or the warrant
+under one. See that same `PROOF-klayout-pin.md`, Addendum 1.
+
 The same check also grades the sentence above. Every version this file, the
 repository README, or `docs/chipalooza/challenge-5-proposal.md` states **as
 the pin** must equal `KNOWN_GOOD_KLAYOUT_VERSION`, so bumping the constant in

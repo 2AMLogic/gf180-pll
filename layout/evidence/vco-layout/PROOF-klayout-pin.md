@@ -238,7 +238,7 @@ items' pass condition is **full-`pll_top`-assembly** DRC/LVS, and no
 assembled `pll_top` GDS exists (`#149`, `loom:blocked`). What moved is the
 warrant under the per-block coverage those items already recorded.
 
-**Residual, disclosed rather than closed**: the five VCO *sub-cell* logs
+~~**Residual, disclosed rather than closed**: the five VCO *sub-cell* logs
 (`vco_ring`, `vco_vtoi_core`, `vco_out_buffer`) are still 0.30.9/0.30.10
 only. They are supporting evidence for `vco_block`, whose own block-level
 verdicts are now on the pin, so the item-3/4 claim does not rest on them —
@@ -247,4 +247,172 @@ its sub-cells, and the checker now says so out loud on every run instead of
 leaving it to be rediscovered. Two of the five (`lvs-ring`, `lvs-buffer`)
 were additionally run at `POLY_RES 1k` rather than this repo's ratified 3k,
 so re-running them on the pin is a slightly larger job than re-running the
-block was.
+block was.~~ **— closed 2026-09-30, see Addendum 1.** Struck rather than
+deleted, per this repository's append-only evidence convention: the paragraph
+records what the pass that wrote it actually left behind, and the record of an
+owed job is worth keeping next to the job.
+
+---
+
+# Addendum 1 — the sub-cell residual, closed (2026-09-30, issue #127)
+
+The residual struck above was disclosed on 2026-09-28 and graded by nothing.
+That is the distinction this addendum turns on: `OFF_PIN_DISCLOSED` named the
+five files and said, correctly, that they were off-pin — but naming a gap is
+not checking it. Nothing in the tree would have noticed if those five logs had
+been joined by a sixth, or if a regenerated `vco_ring.gds` had left the whole
+sub-cell layer of the VCO's evidence describing geometry that no longer
+existed. A disclosure that cannot fail is a note, not a guard.
+
+## What was re-run
+
+Same doctrine as Finding 2: from the committed GDS and, for LVS, the committed
+reference netlist. Nothing was regenerated first.
+
+Environment (`python3 layout/run_pv.py check-env`), unchanged from Finding 2 —
+`~/.volare/gf180mcuD` (variant D, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b`),
+`KLayout 0.28.16` = `KNOWN_GOOD_KLAYOUT_VERSION` exactly.
+
+```bash
+# for each of vco_ring, vco_vtoi_core, vco_out_buffer
+python3 layout/run_pv.py drc layout/evidence/vco-layout/<cell>.gds \
+  --top <cell> --run-dir <rundir>
+# for each of vco_ring, vco_out_buffer
+python3 layout/run_pv.py lvs layout/evidence/vco-layout/<cell>.gds \
+  layout/evidence/vco-layout/lvs-<tag>/<cell>.spice \
+  --top <cell> --lvs-sub GND_VCO --run-dir <rundir>
+```
+
+| cell | check | committed engine | on-pin re-run | wall |
+|---|---|---|---|---|
+| `vco_ring` | DRC, table `main` | 0.30.9 | `Klayout DRC run is clean. GDS has no DRC violations.` | 10.3 s |
+| `vco_vtoi_core` | DRC, table `main` | 0.30.9 | same verdict | 10.0 s |
+| `vco_out_buffer` | DRC, table `main` | 0.30.10 | same verdict | 9.9 s |
+| `vco_ring` | LVS | 0.30.9, `POLY_RES 1k` | `INFO : Congratulations! Netlists match.`, `POLY_RES Selected is 3k` | 6.7 s |
+| `vco_out_buffer` | LVS | 0.30.10, `POLY_RES 1k` | same verdict, `POLY_RES Selected is 3k` | 5.6 s |
+
+**5 of 5 reproduce**, on the pin, at the ratified process option, from the
+committed inputs.
+
+The inputs were verified rather than assumed, as Finding 3 requires:
+`python3 -m pytest layout/tests/test_gds_reproducibility.py` → **7 passed, 29
+subtests passed**, and both sub-cell reference netlists are byte-identical to
+what their generators produce today (`vco.ring.reference_netlist()` 1,660 B,
+`vco.buffer.reference_netlist()` 806 B). Each match is against the same
+schematic, not a co-moved one.
+
+## The `POLY_RES 1k` half was benign, and now that is a measurement
+
+The struck paragraph called the `1k`-vs-ratified-`3k` discrepancy the reason
+re-running these two was "a slightly larger job." It was the right worry and
+it turned out to be cheap, for a reason worth recording rather than
+discovering twice: the deck's `POLY_RES` switch only decides how a **marked**
+poly resistor (GDS layer `(62, 0)`) extracts, and neither of these two cells
+contains one.
+
+```
+>>> for c in ("vco_ring","vco_out_buffer","vco_block","vco_bias_resistors"):
+...     (62, 0) in layer_indexes(c)
+False   False   True   True
+```
+
+So `vco_ring` and `vco_out_buffer` extract identically at `1k` and `3k`, which
+the re-run now demonstrates instead of arguing: the extracted device
+population is unchanged under `3k`. The two cells that *do* carry the marker
+are `vco_block` (already re-derived on the pin at `3k`, Finding 2) and
+`vco_bias_resistors`, whose committed DRC log was on the pin already and which
+has no LVS run of its own.
+
+## The cross-version signature, for the third and fourth time
+
+Each re-run's extracted `.cir` was compared against the committed one, not
+merely its verdict:
+
+| cell | device lines | multiset identical | port set | port **order** |
+|---|---|---|---|---|
+| `vco_ring` | 20 / 20 (10 `pfet_03v3` + 10 `nfet_03v3`) | **yes** | identical (9) | **differs** |
+| `vco_out_buffer` | 6 / 6 (3 `pfet_03v3` + 3 `nfet_03v3`) | **yes** | identical (6) | **differs** |
+
+That is the same signature Finding 2 recorded for `vco_block` and PR `#471`
+recorded for `lock_detector` in the opposite direction: identical device
+population, identical port *set*, engine-dependent `.SUBCKT` port *order*.
+Four blocks/cells now, both directions, same difference — which is why this
+addendum treats a port-order difference as expected rather than as a finding.
+
+## The structural half — a per-file disclosure is not a per-cell check
+
+`OFF_PIN_DISCLOSED` is keyed by **file**. That is right for what it does:
+excuse one superseded run whose on-pin successor sits beside it. It cannot
+express "this *cell*'s verdicts are graded on the pin," and the KLAYOUT PIN
+RULE's own cell-level half only ever asked it of the four block tops
+(`blocks_spec`). Every sub-cell in the tree was therefore ungraded, and
+`vco_ring`/`vco_vtoi_core`/`vco_out_buffer` were the cases where that showed.
+
+The rule is now **per top cell**: any cell for which some committed log states
+`Klayout DRC run is clean.` or `Congratulations! Netlists match.` must have at
+least one such log on the pin. Cells that are deliberately not graded on the
+pin are named, with reasons, in a new `OFF_PIN_TOPCELL_DISCLOSED` —
+deliberately a *separate* list from the per-file one, so that disclosing a log
+can never silence the cell rule:
+
+| cell | reason |
+|---|---|
+| `cp_leg_n`, `cp_leg_p` | leaf-cell generator proofs, not a block verdict or its warrant |
+| `inv_tb` | DRC/LVS harness bring-up proof (not a PLL block), incl. its fault controls |
+
+All three predate this rule; nothing was added to the list to make the build
+pass. The census is a number the script prints, as with the log census above:
+**27 graded top cells; 24 with every stated verdict reproduced on the pin, 3
+deliberately exempt.** The log census moves with the new artifacts, from
+"53 logs, 37 on the pin, 16 off-pin" to **58 logs, 42 on the pin, 16 off-pin**
+— the off-pin count is unchanged on purpose, because append-only evidence
+keeps every superseded run in the tree.
+
+Four new tests in `layout/tests/test_layout_status_claims.py`, the
+load-bearing one being
+`test_disclosing_the_sub_cell_log_alone_does_not_silence_the_rule`: it writes
+the off-pin sub-cell log at a path that **is** in `OFF_PIN_DISCLOSED`, and
+asserts the per-file rule stays quiet while the per-cell rule still fails. If
+the generalisation had read the per-file list, that test would pass and this
+residual could silently reopen. Mutation-checked: making the new rule
+non-fatal fails 2 of the 4.
+
+## What is committed
+
+* `drc-recheck-klayout-0.28.16/` gains `drc-ring.stdout.log`,
+  `drc-vtoi-core.stdout.log`, `drc-buffer.stdout.log` and the three matching
+  `<cell>_main.lyrdb`.
+* `lvs-recheck-klayout-0.28.16/` gains `lvs-ring.stdout.log`,
+  `lvs-buffer.stdout.log`, `vco_ring.{cir,lvsdb}`,
+  `vco_out_buffer.{cir,lvsdb}`.
+
+The superseded off-pin runs (`drc-clean/drc{,-vtoi-core,-buffer}.stdout.log`,
+`lvs-ring/lvs.stdout.log`, `lvs-buffer/lvs.stdout.log`) are **kept**, and
+their `OFF_PIN_DISCLOSED` reasons now name the specific on-pin log that
+supersedes each one rather than reading "off-pin residual".
+
+## What this addendum does and does not establish
+
+**Does**: every top cell in `layout/evidence/` that states a DRC-clean or
+LVS-match verdict now has that verdict on the engine this repository grades
+on, or is exempt by name with a reason; and a future ungraded cell is a build
+failure rather than a disclosure someone has to remember to revisit.
+
+**Does not**: no checkbox moves. T1 items 3 and 4 both pass on
+**full-`pll_top`-assembly** DRC/LVS, and no assembled `pll_top` GDS exists
+(`#149`, `loom:blocked` transitively on `#297`). No `.gds` in this repository
+changes and no generator changes; this is warrant, not geometry.
+
+**Found and not fixed here** (out of scope, filed as `#671`): seven documents
+in this directory state their DRC was run `--offgrid` — "signoff-grade, the
+off-grid check class is included, not skipped" — and name, by path, a
+committed log that records `Offgrid enabled:  false`. Of the six VCO DRC logs
+in `drc-clean/`, exactly one (`drc-mirror.stdout.log`) is genuinely off-grid;
+`drc-recheck-klayout-0.28.16/drc.stdout.log`, from Finding 2 above, is
+`false` too. The re-runs in this addendum deliberately reproduce the
+**committed** invocation — this addendum grades the engine, not the check
+class, and changing both at once would make neither comparison clean — so
+they neither confirm nor refute the offgrid claim; the new logs record
+`Offgrid enabled:  false` and say so. The discrepancy is a prose-vs-artifact
+defect of the same genus as the LAYER CENSUS RULE's (issue `#660`) and wants
+its own pass, including the guard that would have caught it.
