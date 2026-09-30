@@ -106,16 +106,16 @@ for `ring.py`/`mirror.py`/`buffer.py`/`bias_resistors.py`) and by
 | | |
 |---|---|
 | Generated | 2026-09-08T23:04 UTC |
-| Invoked as | `python3 -m vco.vtoi_core --outdir layout/evidence/vco-layout` (from `layout/pll_top/`), then `python3 layout/run_pv.py drc layout/evidence/vco-layout/vco_vtoi_core.gds --top vco_vtoi_core --run-dir <tmp> --offgrid` |
+| Invoked as | `python3 -m vco.vtoi_core --outdir layout/evidence/vco-layout` (from `layout/pll_top/`), then ~~`python3 layout/run_pv.py drc layout/evidence/vco-layout/vco_vtoi_core.gds --top vco_vtoi_core --run-dir <tmp> --offgrid`~~ → `python3 layout/run_pv.py drc layout/evidence/vco-layout/vco_vtoi_core.gds --top vco_vtoi_core --run-dir <tmp>` (the committed log records the default `--no_offgrid` run — see **Correction (issue #671)** below) |
 | PDK | `gf180mcuD`, open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` (volare) |
 | KLayout (application, deck runner) | `KLayout 0.30.10` |
-| DRC deck | `<pdk>/libs.tech/klayout/drc/run_drc.py`, table `main`, `--variant=D`, `--offgrid` (signoff-grade — the off-grid check class is included, not skipped) |
+| DRC deck | `<pdk>/libs.tech/klayout/drc/run_drc.py`, table `main`, `--variant=D`, ~~`--offgrid` (signoff-grade — the off-grid check class is included, not skipped)~~ → `--no_offgrid` (the default: every FEOL/BEOL and connectivity rule in the `main` table ran; the off-grid check class did **not**) |
 
 ## Result
 
 | Check | Expected | Got | Verdict |
 |---|---|---|---|
-| `vco_vtoi_core` DRC, table `main`, `--offgrid` | clean | `Klayout DRC run is clean. GDS has no DRC violations.` | **PASS** |
+| ~~`vco_vtoi_core` DRC, table `main`, `--offgrid`~~ → `vco_vtoi_core` DRC, table `main`, `--no_offgrid` (default) | clean | `Klayout DRC run is clean. GDS has no DRC violations.` | **PASS** |
 | `CO.4`/`PL.4_LV`/`PL.5a_LV`/`PL.5b_LV` actually executed (the rules this device hit) | present in the run log | all four present in `drc-vtoi-core.stdout.log` | **PASS** |
 | `vco_ring`/`vco_bandsel_mirror`/`vco_out_buffer`/`vco_bias_resistors` re-run after this increment's `primitives.py` changes | still clean, geometry unchanged | clean; KLayout XOR against each committed `.gds` is **empty on every layer** | **PASS (no regression)** |
 
@@ -123,6 +123,45 @@ Rules this increment newly exercises for a *narrow, dog-boned* device
 (beyond what the other four blocks already exercise): `CO.4` (comp overlap
 of contact) at the boundary of `mosfet()`'s own generator floor, and the
 poly field-to-comp family `PL.5a_LV`/`PL.5b_LV` at the dog-bone's own step.
+
+## Correction (issue #671): the committed DRC log is the default run, not `--offgrid`
+
+The wording struck above claimed this run was `--offgrid` ("signoff-grade").
+The committed artifact it names says otherwise, and the artifact is the
+record — `drc-clean/drc-vtoi-core.stdout.log` prints
+
+```
+Offgrid enabled:  false
+```
+
+which is what the PDK deck echoes when `layout/harness/drc.py` appends
+`--no_offgrid`, its default. So what this document evidences for `vco_vtoi_core`
+is the full default `main` table — every FEOL/BEOL and connectivity rule — with
+the off-grid check class **skipped**. The superseded wording is struck rather
+than rewritten, per this repository's append-only evidence convention.
+
+The off-grid class *was* run against this same committed
+`vco_vtoi_core.gds` on 2026-09-30 and came back clean:
+
+```
+DRC clean: vco_vtoi_core (D), 0 violations
+```
+
+over a log recording `Offgrid enabled:  true`. That run is on
+`KLayout 0.30.10`, not the `KLayout 0.28.16` that `layout/harness/env.py`
+pins, because that is the only KLayout application binary on the host that
+did the work — so that pass is **not committed** here, for the reason
+`PROOF-klayout-pin.md` gives at length: a deck log from an unpinned build is
+not evidence about the engine this repository grades on, and
+`OFF_PIN_DISCLOSED` is not a list to widen for convenience. The on-pin
+`drc-clean-offgrid/` bundle this claim is owed — in the shape
+`layout/evidence/pfd-cp-layout/drc-clean-offgrid/` already publishes — is
+tracked as issue #675.
+
+Graded from here on by the OFF-GRID RULE in
+`layout/lib/check-layout-status-claims.sh`, which reads the `Offgrid enabled:`
+line of the log a document names and fails the build on a claim that
+disagrees with it.
 
 ## Tap pitch (test plan edge case)
 

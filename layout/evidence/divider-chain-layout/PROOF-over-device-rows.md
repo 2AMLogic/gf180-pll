@@ -96,6 +96,41 @@ geometry. The extracted `divider_chain.cir` still carries **226 `pfet_03v3` +
 | DRC deck | `<pdk>/libs.tech/klayout/drc/run_drc.py`, table `main`, `--variant=D` |
 | LVS deck | `<pdk>/libs.tech/klayout/lvs/run_lvs.py`, `--variant=D`, `--lvs_sub=VSS`, `poly_res=3k` (DR-009) |
 
+## Off-grid disclosure (issue #671): the `--offgrid` runs above are not committed
+
+The `--offgrid` invocations in the transcript above really were run, and came
+back clean — but their logs are **not** among the artifacts this directory
+commits. Every committed DRC log here records
+
+```
+Offgrid enabled:  false
+```
+
+i.e. the default `--no_offgrid` run, which is what `layout/harness/drc.py`
+produces unless asked for the off-grid class. There is no `drc-clean-offgrid/`
+bundle under `divider-chain-layout/` or `divider-div23-proof/`, so the
+off-grid result above is attested by this written record and not by a machine
+artifact. `layout/evidence/cp-leg-proof/PROOF.md` and
+`layout/evidence/pfdcp-inv-proof/PROOF.md` state the same situation the same
+way; `layout/evidence/pfd-cp-layout/drc-clean-offgrid/` is what the committed
+version looks like.
+
+Independently re-run against the committed GDS on 2026-09-30, still clean:
+
+```
+DRC clean: div23_cell (D), 0 violations
+DRC clean: divider_chain (D), 0 violations
+```
+
+each over a log recording `Offgrid enabled:  true` — on `KLayout 0.30.10`,
+not the `KLayout 0.28.16` that `layout/harness/env.py` pins, so those logs are
+not committed either (a deck log from an unpinned build is not evidence about
+the engine this repository grades on). The on-pin `drc-clean-offgrid/` bundle
+is tracked as issue #675.
+
+Graded from here on by the OFF-GRID RULE in
+`layout/lib/check-layout-status-claims.sh`.
+
 ## Why the plane over the device rows was empty, and what actually blocks it
 
 The plane was never reserved. **Metal2 has no DRC relationship to the

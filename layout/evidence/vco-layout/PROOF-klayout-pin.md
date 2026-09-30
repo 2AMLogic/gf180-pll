@@ -416,3 +416,13 @@ they neither confirm nor refute the offgrid claim; the new logs record
 `Offgrid enabled:  false` and say so. The discrepancy is a prose-vs-artifact
 defect of the same genus as the LAYER CENSUS RULE's (issue `#660`) and wants
 its own pass, including the guard that would have caught it.
+
+**Resolved by `#671`** (2026-09-30): every one of those claims is now struck
+and restated as the default `--no_offgrid` run its committed log actually
+records — see each document's own "Correction (issue #671)" section — and
+`layout/lib/check-layout-status-claims.sh` grew an OFF-GRID RULE that grades
+every `--offgrid`/signoff-grade claim in `layout/evidence/` against the
+`Offgrid enabled:` line of the log it names. The off-grid class was separately
+re-run clean on every affected cell, but on `KLayout 0.30.10` rather than the
+pin, so those logs are disclosed and not committed; the on-pin
+`drc-clean-offgrid/` bundles are tracked as `#675`.

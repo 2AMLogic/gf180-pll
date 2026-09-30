@@ -306,6 +306,66 @@
 # evidence tree -- same doctrine as the KLAYOUT PIN RULE's: a rule that is only
 # ever run where it passes proves nothing about what it would catch.
 #
+# A tenth guard, the OFF-GRID RULE, added 2026-09-30 (issue #671), grades the
+# *check class* a DRC claim says it ran under, against the deck's own record of
+# which class it actually ran. `layout/harness/drc.py` appends `--no_offgrid`
+# unless `offgrid=True`, and the PDK deck prints
+#
+#     Offgrid enabled:  true | false
+#
+# into every stdout log, so the committed artifact is unambiguous -- and seven
+# `layout/evidence/vco-layout/PROOF-*.md` documents nonetheless said their run
+# was `--offgrid`, several in the words "signoff-grade -- the off-grid check
+# class is included, not skipped", each naming by path a committed log that
+# recorded `false`. Off-grid is the class that catches geometry snapped off the
+# manufacturing grid; a document claiming it ran, over an artifact saying it did
+# not, overstates the grade of the evidence a reader is scoring. Same genus as
+# the LAYER CENSUS RULE above (#660/#661): raw tool output trusted because
+# nothing graded it.
+#
+# The rule, applied to every `layout/evidence/*/*.md`:
+#
+#   * a *claim* is a live occurrence of `--offgrid` or "signoff-grade". A
+#     negated one -- "(default, no `--offgrid`)", "non-`--offgrid`" -- is not a
+#     claim, it is the honest description of a default run, and is skipped;
+#   * an occurrence inside `~~...~~` is skipped, for the same reason the layer
+#     census rule skips one: this repository corrects evidence by striking the
+#     superseded sentence in place and writing the corrected one beside it, so a
+#     grader that could not tell asserting from quoting would fail every
+#     correctly-corrected document;
+#   * each claim is attributed to a **top cell** -- the nearest one named at or
+#     before it in the document, else the nearest after it, else the evidence
+#     directory's only committed top cell. The vocabulary is every top cell the
+#     committed deck logs record plus every committed `*.gds` basename, so it is
+#     derived from the tree and not restated. A claim whose subject cannot be
+#     resolved fails asking to be named, rather than passing unchecked;
+#   * where the claim's own window names a DRC log *by path*, that log is graded
+#     directly: it must be committed, and it must carry an `Offgrid enabled:`
+#     line at all. A named log that is absent, or truncated before the deck
+#     printed the line, attests nothing and says so -- a claim pointed at
+#     nothing is the failure mode, not a free pass;
+#   * a claim is **attested** when a committed deck log for its cell records
+#     `Offgrid enabled:  true`. `layout/evidence/pfd-cp-layout/drc-clean-offgrid/`
+#     is this repository's precedent for what that looks like;
+#   * an unattested claim must be **disclosed**: the same document must state,
+#     live, the `--no_offgrid` default its committed evidence actually records
+#     (`--no_offgrid`, or "non-`--offgrid`"). That is not an invented marker --
+#     `cp-block-layout/PROOF.md`, `cp-leg-proof/PROOF.md` and
+#     `pfdcp-inv-proof/PROOF.md` were already written that way, and are why the
+#     defect is a drift rather than a convention. Anything else fails.
+#
+# Attestation is per *cell*, not per *run*: a second document describing a
+# different `--offgrid` run of an already-attested cell passes on the first
+# one's log. That is deliberate -- the deck is a pure function of the committed
+# GDS and the flag, so a per-run identity would demand one committed log per
+# sentence and grade nothing extra. What it will not do is let a claim about
+# cell A ride on a log for cell B, which is exactly the defect #671 found:
+# `PROOF-mirror-buffer.md` grades two cells in one table and only the mirror's
+# row was true.
+#
+# Like the two rules above it, this one is driven by unit tests against
+# synthetic trees, never only against the real evidence tree.
+#
 # Usage: layout/lib/check-layout-status-claims.sh
 # Exit codes: 0 all claims match the tree, 1 any mismatch.
 #
@@ -1392,6 +1452,323 @@ sys.exit(1 if failed else 0)
 PY
 }
 
+# --- The off-grid rule (see the header) ------------------------------------
+#
+# Grades every live `--offgrid` / "signoff-grade" DRC claim in
+# `layout/evidence/*/*.md` against the `Offgrid enabled:` line the committed
+# deck logs record for the cell that claim is about. Reads only committed text
+# files -- no PDK, no KLayout, not even `klayout.db`.
+offgrid_rule() {
+  local evidence="$1"
+  python3 - "${evidence}" <<'PY'
+import glob
+import os
+import re
+import sys
+
+evidence = sys.argv[1]
+
+failed = False
+
+
+def fail(msg):
+    global failed
+    failed = True
+    sys.stderr.write("FAIL: %s\n" % msg)
+
+
+# What the PDK deck prints on every run, and the only thing that settles which
+# check class ran. `layout/harness/drc.py` appends `--no_offgrid` unless
+# `offgrid=True`, so this line is the flag's own echo.
+OFFGRID_RE = re.compile(r"Offgrid enabled:\s*(true|false)", re.I)
+CELL_RE = re.compile(r"on cell ([A-Za-z0-9_]+)")
+
+# A claim. `--no_offgrid` cannot match: `_` is not `-`.
+CLAIM_RE = re.compile(r"--offgrid|signoff-grade", re.I)
+# ...unless it is negated, which is the honest description of a default run:
+# "(default, no `--offgrid`)", "non-`--offgrid`", "without `--offgrid`".
+NEGATED_RE = re.compile(r"(?:\bno|\bnon|\bnot|\bwithout)[-\s]+`?$", re.I)
+# The disclosure that excuses an unattested claim -- the shape
+# cp-block-layout/PROOF.md, cp-leg-proof/PROOF.md and pfdcp-inv-proof/PROOF.md
+# were already written in.
+DISCLOSURE_RE = re.compile(r"--no_offgrid|non-`?--offgrid", re.I)
+STRUCK_RE = re.compile(r"~~.+?~~")
+# A DRC log named by path. `drc` in the path is what keeps an LVS or netcheck
+# log sitting in the same table out of it -- those carry no `Offgrid enabled:`
+# line and never could.
+NAMED_LOG_RE = re.compile(r"`([A-Za-z0-9_./-]*drc[A-Za-z0-9_./-]*\.log)`", re.I)
+
+# Two occurrences inside one phrase ("`--offgrid` (signoff-grade)", 12
+# characters apart) are one claim, not two. Deliberately tight: two *table
+# rows* can be barely 60 characters apart in a terse verdict table, and
+# swallowing the second one is how a per-cell rule would silently stop being
+# per-cell -- the `vco_out_buffer` row of PROOF-mirror-buffer.md is exactly
+# that shape.
+COALESCE = 40
+# How far from a claim a named log may sit and still be the log it names. One
+# markdown table row, generously.
+NAMED_REACH = 160
+# How close a top cell has to sit to a claim to be read as its subject
+# regardless of which evidence directory that cell belongs to. Inside this
+# reach the claim names its own cell -- "`--top div23_cell --offgrid`" in
+# divider-chain-layout/, whose own block cell is `divider_chain`. Outside it,
+# the document's own directory wins, because a block-level PROOF names its
+# sub-blocks constantly and the nearest token is then usually a part, not the
+# subject: pfd-cp-layout/PROOF.md says `pfd` and `cp` in almost every paragraph
+# while grading `pfd_cp`.
+NEAR_BEFORE = 120
+NEAR_AFTER = 60
+
+
+# --- What the committed logs actually record -------------------------------
+
+logs = {}            # path relative to layout/evidence/ -> (cell, offgrid|None)
+offgrid_true = set()  # cells with a committed log recording `true`
+offgrid_any = set()   # cells with any committed log carrying the line at all
+for dirpath, _dirnames, filenames in os.walk(evidence):
+    for name in sorted(filenames):
+        if not name.endswith(".log"):
+            continue
+        path = os.path.join(dirpath, name)
+        try:
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
+        except OSError:
+            continue
+        found = OFFGRID_RE.search(text)
+        cell = CELL_RE.search(text)
+        rel = os.path.relpath(path, evidence)
+        logs[rel] = (
+            cell.group(1) if cell else "",
+            found.group(1).lower() if found else None,
+        )
+        if cell and found:
+            offgrid_any.add(cell.group(1))
+            if found.group(1).lower() == "true":
+                offgrid_true.add(cell.group(1))
+
+# The top-cell vocabulary, derived from the tree rather than restated: every
+# cell a committed deck log names, plus every committed GDS basename.
+cells = {cell for cell, _ in logs.values() if cell}
+for gds in glob.glob(os.path.join(evidence, "*", "*.gds")):
+    cells.add(os.path.basename(gds)[: -len(".gds")])
+# Longest first, so `pfd_cp` is preferred over a bare `cp` at the same position.
+CELL_TOKEN_RE = (
+    re.compile(r"\b(%s)\b" % "|".join(sorted(cells, key=len, reverse=True)))
+    if cells
+    else None
+)
+
+# Each evidence directory's own committed top cells, for the last-resort
+# resolution of a claim in a document that names no cell at all.
+dir_cells = {}
+for rel, (cell, _off) in logs.items():
+    if cell:
+        dir_cells.setdefault(rel.split(os.sep)[0], set()).add(cell)
+for gds in glob.glob(os.path.join(evidence, "*", "*.gds")):
+    directory = os.path.basename(os.path.dirname(gds))
+    dir_cells.setdefault(directory, set()).add(
+        os.path.basename(gds)[: -len(".gds")]
+    )
+
+
+def resolve_log(directory, name):
+    """The committed log a claim names, or None. Tries the evidence directory
+    first (`drc-clean/drc.stdout.log`), then a repo-root-relative path
+    (`layout/evidence/<dir>/drc-clean/drc.stdout.log`), which is how the
+    documents in this tree write it in running prose."""
+    candidates = [os.path.join(directory, name)]
+    marker = "layout" + os.sep + "evidence" + os.sep
+    normalised = name.replace("/", os.sep)
+    if marker in normalised:
+        candidates.append(normalised.split(marker, 1)[1])
+    for candidate in candidates:
+        if candidate in logs:
+            return candidate
+    return None
+
+
+n_docs = n_attested = n_disclosed = n_struck = n_negated = 0
+
+for doc in sorted(glob.glob(os.path.join(evidence, "*", "*.md"))):
+    directory = os.path.basename(os.path.dirname(doc))
+    rel = "layout/evidence/%s/%s" % (directory, os.path.basename(doc))
+    try:
+        with open(doc, encoding="utf-8") as fh:
+            flat = re.sub(r"\s+", " ", fh.read())
+    except OSError as exc:  # pragma: no cover - unreadable committed file
+        fail("cannot read %s: %s" % (rel, exc))
+        continue
+
+    struck = [(m.start(), m.end()) for m in STRUCK_RE.finditer(flat)]
+
+    def is_struck(pos):
+        return any(start <= pos < end for start, end in struck)
+
+    # The disclosure has to be live too -- striking it through is how a
+    # correction is *withdrawn*, and a withdrawn disclosure excuses nothing.
+    disclosed = any(
+        not is_struck(m.start()) for m in DISCLOSURE_RE.finditer(flat)
+    )
+
+    # Where each known top cell is named in this document, live occurrences
+    # only: a struck cell name belongs to superseded history.
+    named_at = (
+        [
+            (m.start(), m.group(1))
+            for m in CELL_TOKEN_RE.finditer(flat)
+            if not is_struck(m.start())
+        ]
+        if CELL_TOKEN_RE is not None
+        else []
+    )
+
+    graded_here = 0
+    previous = None
+
+    for m in CLAIM_RE.finditer(flat):
+        if is_struck(m.start()):
+            n_struck += 1
+            continue
+        if NEGATED_RE.search(flat[max(0, m.start() - 16):m.start()]):
+            n_negated += 1
+            continue
+        if previous is not None and m.start() - previous < COALESCE:
+            continue
+        previous = m.start()
+
+        quoted = flat[max(0, m.start() - 80):m.end() + 60].strip()
+
+        # --- Which cell is this claim about? --------------------------------
+        own = dir_cells.get(directory, set())
+        before = [(pos, name) for pos, name in named_at if pos <= m.start()]
+        after = [(pos, name) for pos, name in named_at if pos > m.start()]
+        near_before = [
+            name for pos, name in before if m.start() - pos <= NEAR_BEFORE
+        ]
+        near_after = [
+            name for pos, name in after if pos - m.end() <= NEAR_AFTER
+        ]
+        own_before = [name for _pos, name in before if name in own]
+        own_after = [name for _pos, name in after if name in own]
+        if near_before:
+            cell = near_before[-1]
+        elif near_after:
+            cell = near_after[0]
+        elif own_before:
+            cell = own_before[-1]
+        elif own_after:
+            cell = own_after[0]
+        elif before:
+            cell = before[-1][1]
+        elif after:
+            cell = after[0][1]
+        else:
+            cell = next(iter(own)) if len(own) == 1 else None
+
+        if cell is None:
+            fail(
+                '%s makes an off-grid DRC claim that names no top cell: '
+                '"...%s...". Name the cell in the sentence (e.g. `vco_ring`) '
+                "-- a claim whose subject a reader cannot identify cannot be "
+                "graded against the log that would settle it." % (rel, quoted)
+            )
+            graded_here += 1
+            continue
+
+        graded_here += 1
+
+        # --- The log this claim names by path, if any -----------------------
+        window = flat[max(0, m.start() - NAMED_REACH):m.end() + NAMED_REACH]
+        attested_by = None
+        for found in NAMED_LOG_RE.finditer(window):
+            name = found.group(1)
+            resolved = resolve_log(directory, name)
+            if resolved is None:
+                fail(
+                    "%s makes an off-grid DRC claim naming the deck log `%s`, "
+                    "which is not committed under layout/evidence/. A claim "
+                    'pointed at nothing attests nothing. Quoted: "...%s..."'
+                    % (rel, name, quoted)
+                )
+                continue
+            _log_cell, value = logs[resolved]
+            if value is None:
+                fail(
+                    "%s makes an off-grid DRC claim naming the deck log `%s`, "
+                    "but that committed log carries no `Offgrid enabled:` line "
+                    "at all -- it is truncated, or was not produced by the PDK "
+                    "DRC deck, so it cannot settle which check class ran. "
+                    'Quoted: "...%s..."' % (rel, name, quoted)
+                )
+                continue
+            if value == "true":
+                attested_by = resolved
+
+        if attested_by is not None or cell in offgrid_true:
+            n_attested += 1
+            continue
+
+        if disclosed:
+            n_disclosed += 1
+            continue
+
+        recorded = sorted(
+            {
+                value
+                for name, (log_cell, value) in logs.items()
+                if log_cell == cell and value is not None
+            }
+        )
+        fail(
+            "%s claims an off-grid (`--offgrid` / signoff-grade) DRC run for "
+            "top cell `%s`, but no committed deck log for that cell records "
+            "`Offgrid enabled:  true` -- %s. Either commit the `--offgrid` run "
+            "beside the default one (layout/evidence/pfd-cp-layout/"
+            "drc-clean-offgrid/ is the precedent), or strike the claim and "
+            "restate it as the `--no_offgrid` default run the committed log "
+            "actually records (layout/evidence/cp-block-layout/PROOF.md is the "
+            'precedent). Quoted: "...%s..."'
+            % (
+                rel,
+                cell,
+                (
+                    "every one records `%s`" % "`/`".join(recorded)
+                    if recorded
+                    else "no committed log records that line for it at all"
+                ),
+                quoted,
+            )
+        )
+
+    if graded_here:
+        n_docs += 1
+
+print("layout/evidence/ off-grid DRC claims say:")
+if n_attested or n_disclosed:
+    print(
+        "  %d claim(s) across %d document(s): %d attested by a committed log "
+        "recording `Offgrid enabled:  true`, %d disclosed as the "
+        "`--no_offgrid` default run"
+        % (n_attested + n_disclosed, n_docs, n_attested, n_disclosed)
+    )
+else:
+    print("  no document makes an off-grid DRC claim")
+print(
+    "  %d struck occurrence(s) skipped as history, %d negated occurrence(s) "
+    "skipped as default-run descriptions; %d cell(s) have a committed "
+    "off-grid log (%s)"
+    % (
+        n_struck,
+        n_negated,
+        len(offgrid_true),
+        ", ".join(sorted(offgrid_true)) or "none",
+    )
+)
+sys.exit(1 if failed else 0)
+PY
+}
+
 BLOCK_PIN_SPEC=""
 for entry in "${pin_entries[@]}"; do
   BLOCK_PIN_SPEC="${BLOCK_PIN_SPEC}${BLOCK_PIN_SPEC:+;}${entry}"
@@ -1418,8 +1795,11 @@ if [ "${have_python}" = yes ]; then
 
   layer_census_rule "${EVIDENCE}" "${BLOCK_GDS_SPEC}" || status=1
   echo
+
+  offgrid_rule "${EVIDENCE}" || status=1
+  echo
 else
-  fail "python3 is not on PATH -- the KLayout pin rule and the layer census rule could not run, and a partial pass is not a pass"
+  fail "python3 is not on PATH -- the KLayout pin rule, the layer census rule and the off-grid rule could not run, and a partial pass is not a pass"
 fi
 
 # --- Check each document's prose against it -------------------------------

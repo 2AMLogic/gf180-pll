@@ -26,7 +26,9 @@ available and is filed as **#458** rather than claimed here.
 | Whole-chip sum (`PLL-FLOORPLAN.md` §5.8) | 0.2437 mm² → 0.3046 mm² after ×1.25 | **0.2041 mm² → 0.2552 mm²** | **2.03× → 1.70×** over the 0.15 mm² target |
 
 Both blocks are re-verified at the new geometry — DRC clean, LVS matched, and
-for the first time on this block DRC clean under `--offgrid` as well:
+for the first time on this block DRC clean under `--offgrid` as well (that
+off-grid log is **not** committed — see **Off-grid disclosure (issue #671)**
+below):
 
 ```
 $ python3 -m layout.pll_top.divider_chain.div23_cell --outdir <workdir>/div23
@@ -72,6 +74,41 @@ carries **226 `pfet_03v3` + 226 `nfet_03v3` = 452 devices**.
 | KLayout (application, deck runner) | `KLayout 0.30.10` — see "On the KLayout version" below |
 | DRC deck | `<pdk>/libs.tech/klayout/drc/run_drc.py`, table `main`, `--variant=D` |
 | LVS deck | `<pdk>/libs.tech/klayout/lvs/run_lvs.py`, `--variant=D`, `--lvs_sub=VSS` |
+
+## Off-grid disclosure (issue #671): the `--offgrid` runs above are not committed
+
+The `--offgrid` invocations in the transcript above really were run, and came
+back clean — but their logs are **not** among the artifacts this directory
+commits. Every committed DRC log here records
+
+```
+Offgrid enabled:  false
+```
+
+i.e. the default `--no_offgrid` run, which is what `layout/harness/drc.py`
+produces unless asked for the off-grid class. There is no `drc-clean-offgrid/`
+bundle under `divider-chain-layout/` or `divider-div23-proof/`, so the
+off-grid result above is attested by this written record and not by a machine
+artifact. `layout/evidence/cp-leg-proof/PROOF.md` and
+`layout/evidence/pfdcp-inv-proof/PROOF.md` state the same situation the same
+way; `layout/evidence/pfd-cp-layout/drc-clean-offgrid/` is what the committed
+version looks like.
+
+Independently re-run against the committed GDS on 2026-09-30, still clean:
+
+```
+DRC clean: divider_chain (D), 0 violations
+DRC clean: div23_cell (D), 0 violations
+```
+
+each over a log recording `Offgrid enabled:  true` — on `KLayout 0.30.10`,
+not the `KLayout 0.28.16` that `layout/harness/env.py` pins, so those logs are
+not committed either (a deck log from an unpinned build is not evidence about
+the engine this repository grades on). The on-pin `drc-clean-offgrid/` bundle
+is tracked as issue #675.
+
+Graded from here on by the OFF-GRID RULE in
+`layout/lib/check-layout-status-claims.sh`.
 
 ## Estimate before the change, compared against the outcome
 
