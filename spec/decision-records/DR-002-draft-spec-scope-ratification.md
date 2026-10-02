@@ -1,8 +1,9 @@
 # DR-002: Draft-spec scope ratification — reference mode, output ceiling, supply/device flavor, lock detector, jitter claim
 
-- **Status**: Proposed (scope decisions, pending engineering ratification
-  through the same governance path as the target spec — see #1). The jitter
-  decision (Decision 5) is additionally marked *proposed, not ratified* on
+- **Status**: ratified (2026-09-08, #1; scope decisions, ratified with the
+  target spec). Grandfathered by the operator ruling of 2026-10-02 on #446 —
+  see `spec/README.md`. **Exception:** the jitter
+  decision (Decision 5) stays *proposed, not ratified* on
   its own terms per #7's acceptance criteria, since it is an a priori
   assessment that precedes #13's actual jitter measurement and may be
   superseded by that evidence.

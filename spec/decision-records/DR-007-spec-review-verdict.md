@@ -1,6 +1,6 @@
 # DR-007: spec-review verdict on `spec/pll.md` v1 (ratify-with-amendments)
 
-- **Status**: ratified (2026-09-08). This record's own verdict
+- **Status**: ratified (2026-09-08, #1). This record's own verdict
   (`ratify-with-amendments`) is applied to `spec/pll.md` by the PR that
   ratifies #1, per this repo's spec/DR-ratification-via-PR policy
   (`2AMLogic/2am#357`, precedented by #148/PR #158): the operator's

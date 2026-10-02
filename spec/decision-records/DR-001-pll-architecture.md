@@ -1,7 +1,8 @@
 # DR-001: PLL architecture selection — loop type, VCO delay cell, feedback divider
 
-- **Status**: Proposed (survey + recommendation; pending engineering
-  ratification through the same governance path as the target spec — see #1)
+- **Status**: ratified (2026-09-08, #1; survey + recommendation, ratified with the
+  target spec it feeds). Grandfathered by the operator ruling of 2026-10-02
+  on #446 — see `spec/README.md`
 - **Date**: 2026-07-30
 - **Decided by**: Builder agent, issue #3
 - **Related**: #1 (spec ratification — consumes this record), #6

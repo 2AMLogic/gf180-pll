@@ -46,13 +46,16 @@ with a 2-bit charge-pump current trim, a cascaded ÷2/3 feedback divider
 (integer N = 4–64), and a digital phase-window lock detector. Architecture is
 captured in
 [`spec/decision-records/DR-001-pll-architecture.md`](../../spec/decision-records/DR-001-pll-architecture.md).
-That record's own Status line still reads **proposed**, as almost every
-decision record in this repository does — DR-007, the spec-review verdict,
-is the only one re-stamped **ratified** when issue #1 closed. The target
+That record is **ratified** (2026-09-08, #1), as are DR-002, DR-003, DR-005,
+DR-006 and DR-007. The other records stay `proposed` until they pass their
+own ratification: DR-004/008/009/012 because they are not on
+`spec/pll.md`'s `Consumes:` line (DR-004 and DR-008 predate the
+ratification; DR-009 and DR-012 were created after it), and DR-010 onward
+because they were created after that date — see
+[`spec/README.md`](../../spec/README.md) for the convention. The target
 specification those records feed, [`spec/pll.md`](../../spec/pll.md), is
 itself **ratified, with amendments** (#1, closed 2026-09-08), and §5's
-verdicts are stated against that ratified table rather than against the
-individual records' status fields. See §5.0 for the two rows the
+verdicts are stated against that ratified table. See §5.0 for the two rows the
 ratification explicitly carved out.
 
 ---
@@ -1505,7 +1508,7 @@ What remains is two figures in two rows, and neither is about the grammar:
 
 | §5 row | Figure | Why it is not re-derived |
 |---|---|---|
-| Kvco | `115.8 MHz/V` | Two reasons, either sufficient. Selecting the point evaluates [the band-selection rule](../../spec/pll.md#band-selection-rule) (lowest band code that reaches the target) at every corner — a derivation, and one over a rule whose control window `spec/pll.md` does not presently name, an ambiguity tracked at #542 under which the two candidate windows select different bands. And the point itself is at Vctrl = 1.54 V, which the 7-point control sweep does not sample (its neighbours are 114.93 MHz/V at 1.50 V and 120.85 at 1.80 V), so no reduction of this CSV returns it. The adversarial `154.3 MHz/V` figure the rule exists to exclude *is* graded above, which is the half that bounds the risk |
+| Kvco | `115.8 MHz/V` | Two reasons, either sufficient. Selecting the point evaluates [the band-selection rule](../../spec/pll.md#band-selection-rule) (lowest band code that reaches the target) at every corner — a derivation, and one whose answer depends on the control window: DR-036 (proposed) names DR-003's measured 0.9–2.7 V window as the rule's window and retires the predicted 0.9–2.4 V one, and the two select different bands. And the point itself is at Vctrl = 1.54 V, which the 7-point control sweep does not sample (its neighbours are 114.93 MHz/V at 1.50 V and 120.85 at 1.80 V), so no reduction of this CSV returns it. The adversarial `154.3 MHz/V` figure the rule exists to exclude *is* graded above, which is the half that bounds the risk |
 | Lock time, closed-loop cold-start / worst-case re-lock | `{4,16,64}` | A stimulus *set*, not a number: the grammar above re-derives a figure, and this one is the three divide ratios the grid was run at. Its cardinality is pinned from both sides by figures that are graded — the 270 rows, the 45 corners and the two conditions the record's own table carries, which multiply to 45 × 3 × 2 — while the membership is graded against the record's declared sweep axis by `check-pvt-coverage-claims.sh`, as the `f_ref` span is for the Reference input row |
 
 Nothing mechanically enumerates "every headline figure" out of §5's prose

@@ -1,6 +1,6 @@
 # DR-006: Loop filter component values and the Icp-trim-vs-f_ref rule
 
-- **Status**: proposed
+- **Status**: ratified (2026-09-08, #1; grandfathered by the operator ruling of 2026-10-02 on #446 — see `spec/README.md`)
 - **Date**: 2026-07-31
 - **Decided by**: Builder agent, issue #10
 - **Refines**: DR-001 Decision 1 (loop type / fixed passive filter). This
