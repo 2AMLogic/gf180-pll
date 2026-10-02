@@ -1,8 +1,7 @@
 # DR-036: The Output band row is derated from 200 MHz to 166 MHz for a part that holds one static band code; 200 MHz stays a per-operating-point envelope
 
 - **Status**: proposed. Ratification is the two-key process (2am#1056), run by
-  the operator through `scripts/ratify-key.sh` in the `2am` repository; this
-  record's status is not flipped by the builder. The operator's disposition
+  the operator; this record's status is not flipped by the builder. The operator's disposition
   (issue #534, comment of 2026-10-02) is "derate the ceiling". `spec/pll.md`
   is edited in the same commit, marked as amended-by-DR-036-pending, the
   position DR-016, DR-018 and DR-034 were in when they filed `proposed`.
@@ -25,7 +24,9 @@ committed VCO record shows that for 200 MHz four of five MOS bundles have none
 
 1. The Output band row promises, for a system that programs one static band
    code and holds it over the full −40 … 125 °C × 2.97 – 3.63 V box in any MOS
-   bundle, **10 – 166 MHz** — not 200 MHz. 166 MHz is 166.261 MHz rounded down:
+   bundle, a ceiling of **166 MHz** — not 200 MHz. This is a ceiling, not a
+   continuous 10 – 166 MHz range: below it the static-code windows have gaps
+   (Decision 4). 166 MHz is 166.261 MHz rounded down:
    the highest frequency at or below the 200 MHz line that one static code
    holds in every bundle (band 6, ceiling at `ff`/−40 °C/3.63 V, 166.3 MHz).
 2. 10 – 200 MHz remains true only as the per-operating-point envelope (the
