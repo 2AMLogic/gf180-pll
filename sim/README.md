@@ -1229,15 +1229,34 @@ states what follows for a reader of a batch-executed record:
   composed point-for-point with ngspice-46 numbers into one corner-consistent
   total, or be quoted as completing a grid whose other points were taken on the
   pin. A mixed-version grid must state the split.
-- **The size of the divergence is unknown and deliberately unquoted.** No
-  cross-version overlap measurement exists — no operating point has been run on
-  both. That measurement is owed at **#549**, in the shape of
-  `sim/period-jitter`'s cross-*host* overlap (records
+- **The size of the divergence is measured at one point, and it is not one
+  number** ([DR-035](../spec/decision-records/DR-035-reference-input-contract-blocked-by-the-job-image-not-by-compute.md),
+  #499). DR-028 left this unquoted with the bound owed at **#549**, in the
+  shape of `sim/period-jitter`'s cross-*host* overlap (records
   `20260906-015602-f9bef9d` / `20260906-063728-f3c9c23`, which re-run two
   27 °C/3.30 V points on a second host at the *same* version and differ by
   3.7 % and 9.3 % — the floor any cross-version result has to be read against).
-  Aligning the image at ngspice-46 remains the preferred resolution and stays
-  open; DR-028 is what makes the interim state honest, not a substitute for it.
+  `sim/reference-input-contract`'s anchor point
+  `typical_-40c_3.30v_wideal_p0` has since been run on both, same deck: the
+  **delay** quantities agree to better than 0.1 % (`d_ref` −0.044 %, `d_fb`
+  −0.061 %, `width_up`/`width_dn` +0.03 %), i.e. well *inside* that cross-host
+  floor, while the **charge** integral `qnet`/`qnet2` differs by **17 %**, well
+  *outside* it. So the quarantine above is not relaxed by this: it is one point
+  on one deck, it bounds that campaign's quantities and nothing else, and it
+  shows the divergence is quantity-dependent — small on timing, large on
+  integrated current — which is why a per-quantity relaxation needs overlap
+  points on the decks that need it rather than a single global factor.
+- **On one deck the image does not merely diverge, it does not run.** The
+  `wedge` variant of `sim/reference-input-contract` — the full-rail 6.25 ns
+  ramp placing the 10–90 % edge rate at the spec's binding 5 ns — aborts on
+  ngspice-42 with `Timestep too small … trouble with node "vctrl#branch"` at 12
+  of the 20 corners reached, every −40 °C point among them, where the pinned
+  ngspice-46 converges 6 of 6 on the same points (DR-035). Aligning the image
+  at ngspice-46 was DR-028's *preferred* resolution and is, for that campaign,
+  now a *prerequisite*, owned at **#680**: #499 cannot be discharged before it.
+  (#536, where that option was raised, took option 2 and is closed, so the
+  realignment had no open owner until #680.) DR-028 is what makes the interim state honest, not a substitute
+  for it.
 
 **`sim/harness` is the convention for every new campaign — `sim/lib/simenv.sh`
 is legacy.** The interim shim and the campaigns still built on it remain the
