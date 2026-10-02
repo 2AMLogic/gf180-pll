@@ -129,7 +129,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Callable, ClassVar, Iterable, Iterator, Sequence
+from typing import Any, Callable, ClassVar, Iterable, Iterator, Sequence
 
 
 def _r(v: float) -> float:
@@ -354,6 +354,24 @@ class Canvas:
 
 
 @dataclass
+class MosfetPorts:
+    """Port/geometry record :func:`mosfet` returns for one drawn device
+    (issue #444; previously duplicated in ``pfd_cp/devgen.py`` and
+    ``divider_chain/devgen.py``)."""
+
+    name: str
+    kind: str
+    x0: float
+    x1: float
+    y0: float
+    y3: float
+    bottom_pad: tuple[float, float, float, float]
+    top_pad: tuple[float, float, float, float]
+    gate_pad: tuple[float, float, float, float]
+    gate_y_center: float
+
+
+@dataclass
 class LeafCell:
     """The finished-cell record every ``build_stack_cell()``-style generator
     returns: a drawn :class:`Canvas` plus the port/pin/well bookkeeping a
@@ -366,16 +384,8 @@ class LeafCell:
     ``_riser()`` (#332), ``v_wire()`` (#353), ``pad_center()`` (#475), and
     ``NetTracks`` (#429) consolidations).
 
-    ``ports``'s element type (``MosfetPorts``) is deliberately left
-    unimported here: each submodule still defines its own ``MosfetPorts``
-    class (that consolidation, if it happens, is #444's job, not this
-    issue's). This module's own ``from __future__ import annotations``
-    (PEP 563) means every annotation, including ``list[MosfetPorts]``
-    below, is stored as a plain string and never evaluated at class
-    definition or instantiation time, so the annotation can name a type
-    this module never imports with no ``NameError`` -- a caller's own
-    ``MosfetPorts`` subclass or instance still works exactly as before,
-    unchanged.
+    ``ports``'s element type is this module's own :class:`MosfetPorts`
+    (consolidated here by issue #444; both submodules re-export it).
     """
 
     canvas: Canvas
@@ -547,6 +557,118 @@ def v_wire(canvas: Canvas, x: float, y0: float, y1: float, width: float) -> tupl
     x0, x1 = x - width / 2.0, x + width / 2.0
     canvas.rect("metal1", x0, y0, x1, y1)
     return (x0, min(y0, y1), x1, max(y0, y1))
+
+
+def mosfet(
+    canvas: Canvas,
+    device: Any,
+    x0: float,
+    y_bottom: float,
+    *,
+    sd_overhang_um: float,
+    poly_endcap_um: float,
+    gate_tab_w_um: float,
+    gate_tab_h_um: float,
+    gate_tab_overlap_um: float,
+    contact_size_um: float,
+    contact_pitch_um: float,
+    contact_row_margin_um: float,
+    metal1_pad_margin_um: float,
+    implant_margin_um: float,
+) -> MosfetPorts:
+    """Draw one vertical-current-flow ``nfet_03v3``/``pfet_03v3`` instance.
+
+    Identical geometry/margins to ``vco/primitives.py``'s ``mosfet()`` --
+    see that function's docstring for the full per-shape DRC citation. ``x0``
+    is the device's comp left edge; ``y_bottom`` is the bottom terminal
+    comp's bottom edge.
+
+    ``device`` is any object with ``name``, ``kind`` (``"nfet"``/``"pfet"``),
+    ``w_um`` and ``l_um`` attributes (each submodule's own ``Device``). The
+    keyword-only ``*_um`` arguments are the caller's own DRC-derived
+    geometry constants (each submodule keeps its own copy, with its own
+    rule citations, and binds them via ``functools.partial``).
+    """
+    w, l = device.w_um, device.l_um
+    implant_layer = "pplus" if device.kind == "pfet" else "nplus"
+
+    x1 = x0 + w
+    y1 = y_bottom + sd_overhang_um
+    y2 = y1 + l
+    y3 = y2 + sd_overhang_um
+
+    canvas.rect("comp", x0, y_bottom, x1, y3)
+
+    gate_x0 = x0 - poly_endcap_um
+    gate_x1 = x1 + poly_endcap_um
+    canvas.rect("poly2", gate_x0, y1, gate_x1, y2)
+
+    gate_y_center = (y1 + y2) / 2.0
+    tab_x1 = gate_x0 + gate_tab_overlap_um
+    tab_x0 = tab_x1 - gate_tab_w_um
+    tab_y0 = gate_y_center - gate_tab_h_um / 2.0
+    tab_y1 = gate_y_center + gate_tab_h_um / 2.0
+    canvas.rect("poly2", tab_x0, tab_y0, tab_x1, tab_y1)
+
+    gate_contact_x0 = tab_x0 + (gate_tab_w_um - contact_size_um) / 2.0
+    gate_contact_y0 = tab_y0 + (gate_tab_h_um - contact_size_um) / 2.0
+    canvas.rect(
+        "contact",
+        gate_contact_x0,
+        gate_contact_y0,
+        gate_contact_x0 + contact_size_um,
+        gate_contact_y0 + contact_size_um,
+    )
+    gate_pad = (
+        tab_x0 - metal1_pad_margin_um,
+        tab_y0 - metal1_pad_margin_um,
+        tab_x1 + metal1_pad_margin_um,
+        tab_y1 + metal1_pad_margin_um,
+    )
+    canvas.rect("metal1", *gate_pad)
+
+    def _terminal_pad(y_outer_edge: float, *, outer_is_max: bool) -> tuple[float, float, float, float]:
+        xs = _contact_positions(
+            x0, x1, size_um=contact_size_um, pitch_um=contact_pitch_um, margin_um=contact_row_margin_um
+        )
+        if outer_is_max:
+            cy1 = y_outer_edge - contact_row_margin_um
+            cy0 = cy1 - contact_size_um
+        else:
+            cy0 = y_outer_edge + contact_row_margin_um
+            cy1 = cy0 + contact_size_um
+        for cx in xs:
+            canvas.rect("contact", cx, cy0, cx + contact_size_um, cy1)
+        pad_x0 = min(xs) - metal1_pad_margin_um
+        pad_x1 = max(xs) + contact_size_um + metal1_pad_margin_um
+        pad_y0 = cy0 - metal1_pad_margin_um
+        pad_y1 = cy1 + metal1_pad_margin_um
+        canvas.rect("metal1", pad_x0, pad_y0, pad_x1, pad_y1)
+        return (pad_x0, pad_y0, pad_x1, pad_y1)
+
+    bottom_pad = _terminal_pad(y_bottom, outer_is_max=False)
+    top_pad = _terminal_pad(y3, outer_is_max=True)
+
+    canvas.rect(
+        implant_layer,
+        x0 - implant_margin_um,
+        y_bottom - implant_margin_um,
+        x1 + implant_margin_um,
+        y3 + implant_margin_um,
+    )
+
+    return MosfetPorts(
+        name=device.name,
+        kind=device.kind,
+        x0=x0,
+        x1=x1,
+        y0=y_bottom,
+        y3=y3,
+        bottom_pad=bottom_pad,
+        top_pad=top_pad,
+        gate_pad=gate_pad,
+        gate_y_center=gate_y_center,
+    )
 
 
 class NetTracks:
