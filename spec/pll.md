@@ -172,7 +172,7 @@ top cell, port list, netlist/GDS paths, measured area, maturity rung — is
 
 | # | Parameter | v1 target | Corner binding | Status |
 |---|---|---|---|---|
-| 1 | [Output band](#output-band) | 10 – 200 MHz, continuous | floor `all-fast`/125 °C/2.97 V (6.449 MHz, 36 % below the line); ceiling `all-slow`/−40 °C/3.63 V (247.8 MHz, 24 % above) | **measured** |
+| 1 | [Output band](#output-band) | 10 – 166 MHz under one static band code held across the PVT box; 10 – 200 MHz only as a per-operating-point envelope (amended by DR-036, **proposed** — pending ratification; was 10 – 200 MHz, continuous) | floor `all-fast`/125 °C/2.97 V (6.449 MHz, 36 % below the line); ceiling `all-slow`/−40 °C/3.63 V (247.8 MHz, 24 % above) | **measured** |
 | 2 | [Reference input](#reference-input) | 1 – 25 MHz, CMOS square wave, rising-edge triggered, duty 30–70 % | n/a — interface contract; the electrical limits are conditions on the driving system, not PVT-varying outputs | **budget** (levels, edge rate **and** duty — duty is argued from `design/pfd.sch`, not measured); range is **measured** as an operating condition of rows 8/9. The sweep that would discharge all three is declared and unmeasured at `sim/reference-input-contract`, owed from #499 — and blocked on an aligned simulator rather than on compute, because the batch job image's ngspice-42 does not converge on the variant carrying the binding 5.00 ns edge (DR-035); DR-019 re-points that obligation off closed issue #12 and restates the reference-source-quality exclusion with its owner. The exclusion's own `20·log₁₀(N)` transfer figure is, since DR-027 (#509), **measured** — 15.529 … 16.366 dB against the stated 15.563 dB at N = 6, `sim/reference-phase-transfer/records/20260925-080736-b722f33.md`, 5/5 PASS — so the exclusion is now backed by a measurement rather than by theory; the *numeric reference-jitter limit* it still does not state remains unowned, and needs a closed-loop reference-noise methodology this repository does not have — the random-jitter bound that closed #520 covers the block's own generators, not a reference spectrum pushed through the loop |
 | 3 | [Multiplication ratio](#multiplication-ratio) | N = 4 – 64, every integer, static configuration | retiming setup `ss`/125 °C/2.97 V at N = 64, 200 MHz (6.1 % of a VCO period) | **measured** |
 | 4 | [Integrated RMS jitter](#integrated-rms-jitter) | **not spec'd** — derived-only (DR-002 Decision 5) | n/a — deliberately unspecified; see the section for why this is visible rather than silent | **n/a** |
@@ -450,7 +450,26 @@ measures it.
 
 ## Output band
 
-**Target: 10 – 200 MHz, continuous, at every PVT corner.**
+**Target (amended by DR-036, `proposed` — pending the two-key ratification;
+until then the ratified wording is "10 – 200 MHz, continuous, at every PVT
+corner"): the ring reaches 10 – 200 MHz at every PVT corner *when the band code
+may be re-selected per operating point* (the envelope claim, unchanged), but
+the part promises only up to 166 MHz for a system that programs ONE static
+band code and holds it across the full −40 … 125 °C × 2.97 – 3.63 V box in any
+MOS bundle.**
+
+The band code is a static input (DR-001 Decision 2) and nothing on-chip
+re-selects it. Re-derived from the committed VCO record by
+`sim/vco-tuning-range/testbench/static_band_coverage.py`: a code holds a
+frequency across a bundle's 9 temperature × supply points only inside
+[max band floor, min band ceiling]. Four of the five MOS bundles have no single
+code that reaches 200 MHz (`ff` does: band 7), and the highest frequency below
+the 200 MHz line that one static code holds in **every** bundle is **166.3 MHz**
+(band 6, `ff`/−40 °C/3.63 V ceiling), stated as 166 MHz. Between 166.3 and
+225.4 MHz no static code is held in every bundle. The route back to the full
+10 – 200 MHz range for a static-configuration part is v2 auto-calibration
+(DR-003, out of v1 scope). No measured number below moves: the table that
+follows is the unchanged VCO characterization.
 
 The v1 output band is covered by the ring's own eight overlapping bands with no
 post-VCO output divider (DR-002 Decision 2; the divider trigger did not fire).
@@ -466,6 +485,11 @@ Conditions:
 
 - the [band-selection rule](#band-selection-rule) applies at every frequency in
   the band;
+- the 166 MHz static-code figure is not a statement that every lower frequency
+  is held by one code either: the same script lists the frequencies below
+  166 MHz that no single static code holds in every bundle (12.5 – 14.5,
+  21.0 – 24.4, 34.0 – 43.7, 57.2 – 75.7 and 94.4 – 133.4 MHz); there the
+  band code must be re-selected as temperature and supply move (DR-036);
 - Vctrl operating window **0.9 – 2.7 V** (DR-003 Decision 5);
 - 5-stage ring, and there is no fallback stage count — 3 stages does not start
   at the fast corner and floors 14 % above 10 MHz, 7 stages tops out 9 % short
@@ -943,8 +967,9 @@ across the 200 MHz grid — band 6 at 34 of the 45 points, band 7 at the other 1
 — so the binding-point measurement is configured per corner. Projected onto a
 *static* code that split leaves four of the five MOS bundles with no single
 code that reaches 200 MHz across the full ratified temperature × supply box;
-that bears on [Output band](#output-band) rather than on this row and is filed
-at #534, which this row does not pre-empt.
+that bears on [Output band](#output-band) rather than on this row, and is
+resolved there by DR-036 (#534, proposed): the Output band row is derated to
+166 MHz for a static band code.
 
 Measured — `sim/reference-spur/records/20260816-132150-5f405e7.md`, f_ref =
 25 MHz, N = 6, f_out = 150 MHz, band 6, Icp trim code 0 (the trim the
