@@ -515,6 +515,96 @@ class SubmissionTests(unittest.TestCase):
         self.assertIn("AccessDenied", str(caught.exception))
 
 
+class _CeilingRefusingTransport(_FakeTransport):
+    """Refuses the first ``refusals`` launches for want of a concurrency slot.
+
+    The refusal text is the execution layer's own, copied verbatim from the
+    submission that exposed this (#499).
+    """
+
+    REFUSAL = (
+        "error: 9 instance(s) already running + 1 requested exceeds "
+        "BATCH_MAX_CONCURRENT_INSTANCES=8"
+    )
+
+    def __init__(self, *args, refusals=0, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.refusals = refusals
+        self.launch_attempts = 0
+
+    def __call__(self, argv, **kwargs):
+        argv = list(argv)
+        if argv[0] != "aws":
+            self.launch_attempts += 1
+            self.calls.append(argv)
+            if self.launch_attempts <= self.refusals:
+                return subprocess.CompletedProcess(argv, 1, "", self.REFUSAL)
+            return subprocess.CompletedProcess(argv, 0, "", "")
+        return super().__call__(argv, **kwargs)
+
+
+class LaunchCeilingTests(SubmissionTests):
+    """#499: the layer's fleet-wide instance ceiling must not abort a grid.
+
+    The ceiling counts instances *other* campaigns launched, so no choice of
+    ``-j`` keeps a submitter under it, and the refusal is transient by
+    construction. Before this, one refusal out of twenty-four in-flight
+    launches raised out of the backend and ended a 288-point run after 118
+    points, leaving 170 never submitted.
+    """
+
+    def test_a_ceiling_refusal_is_waited_out_and_the_point_still_runs(self):
+        transport = _CeilingRefusingTransport(
+            ["done"], outputs={batch.LOG_NAME: "ok\n", batch.RC_NAME: "0"}, refusals=3
+        )
+        got = self._backend(transport).run_deck(self.deck, self.rundir, 60, None)
+        self.assertEqual(got.returncode, 0)
+        self.assertEqual(got.output, "ok\n")
+        # Four launch calls: three refused, the fourth accepted. The retry is
+        # a re-offer of the SAME job id, not a second job.
+        self.assertEqual(transport.launch_attempts, 4)
+        launches = transport.launched()
+        self.assertEqual(len({a[a.index("--job") + 1] for a in launches}), 1)
+
+    def test_a_refusal_that_is_not_the_ceiling_is_not_retried(self):
+        """A permanent refusal must fail fast, not burn the retry budget.
+
+        The subnet-resolution failure of #509 is the precedent: retrying it
+        sixty times would have turned a clear, immediate error into twenty
+        minutes of silence per point.
+        """
+        transport = _FakeTransport(["done"], outputs={batch.RC_NAME: "0"})
+
+        def refuse(argv, **kwargs):
+            argv = list(argv)
+            if argv[0] != "aws":
+                transport.calls.append(argv)
+                return subprocess.CompletedProcess(
+                    argv, 1, "", "error: only 0 subnet/AZ(s) resolved, floor is 3"
+                )
+            return transport(argv, **kwargs)
+
+        backend = self._backend(refuse)
+        with self.assertRaises(execution.BackendError) as caught:
+            backend.run_deck(self.deck, self.rundir, 60, None)
+        self.assertIn("subnet", str(caught.exception))
+        self.assertEqual(len(transport.launched()), 1)
+
+    def test_an_unending_ceiling_refusal_gives_up_naming_the_ceiling(self):
+        """Bounded, not infinite -- and the message says whose ceiling it is."""
+        transport = _CeilingRefusingTransport(
+            ["done"], outputs={batch.RC_NAME: "0"}, refusals=10**6
+        )
+        backend = self._backend(transport)
+        backend.poll_interval_s = 0
+        with self.assertRaises(execution.BackendError) as caught:
+            backend.run_deck(self.deck, self.rundir, 60, None)
+        message = str(caught.exception)
+        self.assertIn("concurrency slot", message)
+        self.assertIn("-j", message)
+        self.assertEqual(transport.launch_attempts, batch.LAUNCH_CEILING_ATTEMPTS)
+
+
 # ===========================================================================
 # 6b. The default runner: the one seam an injected `runner=` cannot cover
 # ===========================================================================

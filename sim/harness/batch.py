@@ -126,6 +126,28 @@ DEFAULT_PROVISION_GRACE_S = 1800
 
 DEFAULT_POLL_INTERVAL_S = 20
 
+#: The execution layer caps how many instances it will have running at once,
+#: **fleet-wide and shared with every other campaign submitting to it**, and
+#: refuses a launch that would exceed it:
+#:
+#:     error: 9 instance(s) already running + 1 requested exceeds
+#:     BATCH_MAX_CONCURRENT_INSTANCES=8
+#:
+#: That refusal is *transient by construction* -- the running instances are
+#: finishing -- and it is not a thing a submitter can avoid by choosing its own
+#: ``-j``: the ceiling counts instances this run did not launch. Matched on the
+#: layer's own contract name, the same coupling :func:`_env_file_value` already
+#: has, rather than on the sentence around it.
+CEILING_REFUSAL_RE = re.compile(r"BATCH_MAX_CONCURRENT_INSTANCES", re.IGNORECASE)
+
+#: How many times a ceiling-refused launch is re-offered before the point is
+#: given up on. With :data:`DEFAULT_POLL_INTERVAL_S` between attempts this is
+#: ~20 minutes of waiting for a slot, which is the same order as the provision
+#: grace a job already gets once it *is* launched -- a submitter willing to wait
+#: half an hour for Spot capacity should be willing to wait for a slot to ask
+#: for it in.
+LAUNCH_CEILING_ATTEMPTS = 60
+
 #: Default ``aws`` CLI profile name. A profile *name* is not a secret -- the
 #: credential it resolves to lives in the operator's own AWS config, and a
 #: host without that profile gets a clean CLI error naming it.
@@ -516,24 +538,48 @@ class BatchBackend:
         # for keyword argument 'capture_output'` -- after `_upload` had already
         # put the job document and inputs in the bucket. Every other call site
         # passes argv alone; this one is now uniform with them.
-        proc = self._run(
-            [
-                str(self.config.provision_script),
-                "launch",
-                "--job",
-                plan.job_id,
-                "--apply",
-                "--region",
-                self.config.region,
-                "--profile",
-                self.config.profile,
-            ]
-        )
-        if proc.returncode != 0:
-            raise BackendError(
-                f"batch backend: launching {plan.job_id} failed "
-                f"(exit {proc.returncode}): {(proc.stderr or '').strip()}"
-            )
+        # A refusal that names the layer's fleet-wide concurrency ceiling is
+        # waited out, not propagated. The ceiling counts instances *other*
+        # campaigns launched, so no choice of `-j` here can stay under it, and
+        # letting it out of this method aborted a whole grid at the first
+        # refusal: a 288-point run of `sim/reference-input-contract` at `-j 24`
+        # died after 118 points with 170 never submitted, because one launch
+        # out of twenty-four was told to come back later (#499). Every other
+        # per-point degradation in this harness follows the rule `_write_log`
+        # states -- "must degrade that one point rather than raising out of
+        # run_grid and discarding every other point the grid already
+        # completed" -- and a transient slot shortage has even less claim to
+        # abort a grid than a lost log write does.
+        argv = [
+            str(self.config.provision_script),
+            "launch",
+            "--job",
+            plan.job_id,
+            "--apply",
+            "--region",
+            self.config.region,
+            "--profile",
+            self.config.profile,
+        ]
+        for attempt in range(1, LAUNCH_CEILING_ATTEMPTS + 1):
+            proc = self._run(argv)
+            if proc.returncode == 0:
+                return
+            stderr = (proc.stderr or "").strip()
+            if not CEILING_REFUSAL_RE.search(stderr):
+                raise BackendError(
+                    f"batch backend: launching {plan.job_id} failed "
+                    f"(exit {proc.returncode}): {stderr}"
+                )
+            if attempt == LAUNCH_CEILING_ATTEMPTS:
+                raise BackendError(
+                    f"batch backend: launching {plan.job_id} was refused for "
+                    f"want of a concurrency slot on all {attempt} attempt(s) "
+                    f"over ~{attempt * self.poll_interval_s:g}s; the layer's "
+                    f"fleet-wide ceiling is held by other work, not by this "
+                    f"run's -j. Last refusal: {stderr}"
+                )
+            time.sleep(self.poll_interval_s)
 
     def _status(self, plan: JobPlan) -> dict:
         proc = self._aws(
