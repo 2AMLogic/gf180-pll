@@ -587,7 +587,8 @@ ACC_PHI_S=1e-9
 ACC_PHI_SETTLE_S=1e-10
 ACC_NTOL=0.01          # |f_out/f_fb - N|
 ACC_LOCK_FRAC=0.90     # LOCK flag level in the late window, fraction of the rail
-# Criterion 1b grades the RATIFIED budget and window (#525, DR-037), not the
+# Criterion 1b grades Budget 2 at the 1.2 V DR-037 proposes (binding on
+# ratification; DR-037 is `proposed`) and the measured window (#525), not the
 # deck's earlier proxy.  Per DR-012 Decision 5, where spec/pll.md ratifies a
 # value the deck cites that value.
 #   (i)  Budget 2 (spec/pll.md row 12): a DC rail excursion over the FULL

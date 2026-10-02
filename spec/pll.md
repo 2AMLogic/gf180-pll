@@ -1402,7 +1402,8 @@ told alongside that number:
   *bottom*, at +78 … +91 mV. A change that reduces the 53 mV has to say so even
   while Budget 2 still passes. The testbench's criterion 1b grades both.
 
-**Criterion 1b of `sim/supply-sensitivity` grades the ratified budget.**
+**Criterion 1b of `sim/supply-sensitivity` grades the budget DR-037 proposes
+(binding on ratification).**
 Before DR-037 it graded whether the control node stayed inside DR-001
 Decision 2's *predicted* 0.9–2.4 V window (which DR-003 Decision 5 superseded)
 and did not grade Budget 2 at all; its recorded "4 of 45 outside the window"

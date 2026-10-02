@@ -95,7 +95,8 @@ not pick unaided. The operator has now chosen the other one.
    VCO shift, anything that moves the consumption at `ss`/−40 °C — needs to say
    so, even while Budget 2 itself still passes.
 
-5. **Criterion 1b of `sim/supply-sensitivity` grades the ratified budget.** It
+5. **Criterion 1b of `sim/supply-sensitivity` grades the budget this record
+   proposes (binding on ratification).** It
    graded DR-001 Decision 2's superseded 0.9–2.4 V prediction and never graded
    Budget 2. From the next run it grades (i) Budget 2 at ≤ 1.2 V over the
    2.97 → 3.63 V excursion, per (bundle, temperature) cell, and (ii) the

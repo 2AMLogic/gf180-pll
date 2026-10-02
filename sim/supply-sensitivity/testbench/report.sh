@@ -820,6 +820,7 @@ eval "$(awk -F, -v accf="${ACC_FERR}" -v slowf="${DYN_SLOW_FACTOR}" '
 # ---------------------------------------------------------------------------
 eval "$(awk -F, -v accv_lo="${ACC_VCTRL_LO}" -v accv_hi="${ACC_VCTRL_HI}" -v pwr="${ACC_PWR_MW}" \
   -v b2="${ACC_BUDGET2_V}" -v b2leg="${ACC_BUDGET2_LEGACY_V}" \
+  -v rlo="${ACC_RAIL_LO}" -v rhi="${ACC_RAIL_HI}" \
   -v accl="${ACC_LOCK_FRAC}" '
   !/^#/ && $1 != "bundle" {
     n++;
@@ -864,19 +865,22 @@ eval "$(awk -F, -v accv_lo="${ACC_VCTRL_LO}" -v accv_hi="${ACC_VCTRL_HI}" -v pwr
     if (!seenv || vca > mxvc) { mxvc = vca; mxvcid = id }
     if (!seenv || vca < mnvc) { mnvc = vca; mnvcid = id }
     seenv = 1;
-    # dVctrl/dVdd, per (bundle,temp), from the 2.97 and 3.63 V rows
+    # dVctrl/dVdd, per (bundle,temp), from the ACC_RAIL_LO and ACC_RAIL_HI
+    # rows.  The rails are passed in (rlo/rhi), not hard-coded, so the rail
+    # range the record labels and the range it grades cannot drift apart.
+    # A row matches a rail within 5 mV, well under the 330 mV grid spacing.
     key = bundle "|" temp;
-    if (vdd > 3.6) { vhi[key] = vca; fhi[key] = fout }
-    if (vdd < 3.0) { vlo[key] = vca; flo[key] = fout }
+    if (abs(vdd - rhi) < 0.005) { vhi[key] = vca; fhi[key] = fout }
+    if (abs(vdd - rlo) < 0.005) { vlo[key] = vca; flo[key] = fout }
   }
   END {
     for (k in vhi) if (k in vlo) {
-      s = (vhi[k] - vlo[k]) / (3.63 - 2.97);
+      s = (vhi[k] - vlo[k]) / (rhi - rlo);
       split(k, a, "|");
       if (!seens || s > mxs) { mxs = s; mxsid = a[1] "/" a[2] "C" }
       if (!seens || s < mns) { mns = s; mnsid = a[1] "/" a[2] "C" }
       sum += s; ns++; seens = 1;
-      # Budget 2 (DR-037): Vctrl travel over the full 2.97 -> 3.63 V rail,
+      # Budget 2 (DR-037): Vctrl travel over the full rlo -> rhi rail,
       # per (bundle, temperature) cell.  A cell without both end rails has no
       # full-range span and is not graded rather than graded on a guess.
       span = vhi[k] - vlo[k]; if (span < 0) span = -span;
@@ -1231,8 +1235,9 @@ V_FREQ=$([ "${N_FAIL}" -eq 0 ] && echo PASS || echo FAIL)
 V_PWR=$([ "${N_PFAIL}" -eq 0 ] && echo PASS || echo FAIL)
 if [ "${N_DYN:-0}" -eq 0 ]; then V_DYN="NOT MEASURED"; else
   V_DYN=$([ "${DYN_LOST}" -eq 0 ] && echo PASS || echo FAIL); fi
-# Criterion 1b grades the ratified budget AND the measured window (#525,
-# DR-037): Budget 2 over the full 2.97 -> 3.63 V excursion, and the ripple
+# Criterion 1b grades the budget DR-037 proposes (binding on ratification)
+# AND the measured window (#525): Budget 2 over the full ACC_RAIL_LO ->
+# ACC_RAIL_HI excursion, and the ripple
 # peaks inside 0.9-2.7 V.  With no (bundle, temperature) cell carrying both end
 # rails there is no Budget-2 span to grade, so that half is NOT MEASURED and
 # cannot pass silently.
