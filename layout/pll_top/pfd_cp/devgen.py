@@ -79,9 +79,10 @@ would happily be replaced by a call into a fixed generator once
 MOSFET GEOMETRY CONVENTION
 ---------------------------
 Identical to ``vco/primitives.py`` (deliberately -- this is a second,
-independent leaf-cell family, not a fork of the VCO's own geometry, and
-duplicating a handful of proven constants is cheaper than a shared-module
-refactor this issue was not scoped to do): **current flows vertically**. A
+independent leaf-cell family, not a fork of the VCO's own geometry; the
+drawing routine itself is shared with ``divider_chain/devgen.py`` via
+``_canvas.mosfet()`` (issue #444), each module binding its own constants):
+**current flows vertically**. A
 device's ``w_um`` is its horizontal extent; ``l_um`` is its vertical extent
 (the gate length). Every device is its own self-contained comp/poly/implant
 island, wired to its neighbours only through Metal1 + contacts -- no shared
@@ -230,18 +231,9 @@ class Device:
     bottom_net: str
 
 
-@dataclass
-class MosfetPorts:
-    name: str
-    kind: str
-    x0: float
-    x1: float
-    y0: float
-    y3: float
-    bottom_pad: tuple[float, float, float, float]
-    top_pad: tuple[float, float, float, float]
-    gate_pad: tuple[float, float, float, float]
-    gate_y_center: float
+# Shared with the other ``layout/pll_top/*`` submodule that draws this
+# vertical-current-flow MOSFET (issue #444, ``_canvas.MosfetPorts``).
+MosfetPorts = _canvas.MosfetPorts
 
 
 # Left-edge x (or y) positions for a row of contacts spanning [lo, hi] --
@@ -255,92 +247,23 @@ _contact_positions = partial(
 )
 
 
-def mosfet(canvas: Canvas, device: Device, x0: float, y_bottom: float) -> MosfetPorts:
-    """Draw one vertical-current-flow ``nfet_03v3``/``pfet_03v3`` instance.
-
-    Identical geometry/margins to ``vco/primitives.py``'s ``mosfet()`` --
-    see that function's docstring for the full per-shape DRC citation. ``x0``
-    is the device's comp left edge; ``y_bottom`` is the bottom terminal
-    comp's bottom edge.
-    """
-    w, l = device.w_um, device.l_um
-    implant_layer = "pplus" if device.kind == "pfet" else "nplus"
-
-    x1 = x0 + w
-    y1 = y_bottom + SD_OVERHANG_UM
-    y2 = y1 + l
-    y3 = y2 + SD_OVERHANG_UM
-
-    canvas.rect("comp", x0, y_bottom, x1, y3)
-
-    gate_x0 = x0 - POLY_ENDCAP_UM
-    gate_x1 = x1 + POLY_ENDCAP_UM
-    canvas.rect("poly2", gate_x0, y1, gate_x1, y2)
-
-    gate_y_center = (y1 + y2) / 2.0
-    tab_x1 = gate_x0 + GATE_TAB_OVERLAP_UM
-    tab_x0 = tab_x1 - GATE_TAB_W_UM
-    tab_y0 = gate_y_center - GATE_TAB_H_UM / 2.0
-    tab_y1 = gate_y_center + GATE_TAB_H_UM / 2.0
-    canvas.rect("poly2", tab_x0, tab_y0, tab_x1, tab_y1)
-
-    gate_contact_x0 = tab_x0 + (GATE_TAB_W_UM - CONTACT_SIZE_UM) / 2.0
-    gate_contact_y0 = tab_y0 + (GATE_TAB_H_UM - CONTACT_SIZE_UM) / 2.0
-    canvas.rect(
-        "contact",
-        gate_contact_x0,
-        gate_contact_y0,
-        gate_contact_x0 + CONTACT_SIZE_UM,
-        gate_contact_y0 + CONTACT_SIZE_UM,
-    )
-    gate_pad = (
-        tab_x0 - METAL1_PAD_MARGIN_UM,
-        tab_y0 - METAL1_PAD_MARGIN_UM,
-        tab_x1 + METAL1_PAD_MARGIN_UM,
-        tab_y1 + METAL1_PAD_MARGIN_UM,
-    )
-    canvas.rect("metal1", *gate_pad)
-
-    def _terminal_pad(y_outer_edge: float, *, outer_is_max: bool) -> tuple[float, float, float, float]:
-        xs = _contact_positions(x0, x1)
-        if outer_is_max:
-            cy1 = y_outer_edge - CONTACT_ROW_MARGIN_UM
-            cy0 = cy1 - CONTACT_SIZE_UM
-        else:
-            cy0 = y_outer_edge + CONTACT_ROW_MARGIN_UM
-            cy1 = cy0 + CONTACT_SIZE_UM
-        for cx in xs:
-            canvas.rect("contact", cx, cy0, cx + CONTACT_SIZE_UM, cy1)
-        pad_x0 = min(xs) - METAL1_PAD_MARGIN_UM
-        pad_x1 = max(xs) + CONTACT_SIZE_UM + METAL1_PAD_MARGIN_UM
-        pad_y0 = cy0 - METAL1_PAD_MARGIN_UM
-        pad_y1 = cy1 + METAL1_PAD_MARGIN_UM
-        canvas.rect("metal1", pad_x0, pad_y0, pad_x1, pad_y1)
-        return (pad_x0, pad_y0, pad_x1, pad_y1)
-
-    bottom_pad = _terminal_pad(y_bottom, outer_is_max=False)
-    top_pad = _terminal_pad(y3, outer_is_max=True)
-
-    canvas.rect(
-        implant_layer,
-        x0 - IMPLANT_MARGIN_UM,
-        y_bottom - IMPLANT_MARGIN_UM,
-        x1 + IMPLANT_MARGIN_UM,
-        y3 + IMPLANT_MARGIN_UM,
-    )
-
-    return MosfetPorts(
-        name=device.name,
-        kind=device.kind,
-        x0=x0,
-        x1=x1,
-        y0=y_bottom,
-        y3=y3,
-        bottom_pad=bottom_pad,
-        top_pad=top_pad,
-        gate_pad=gate_pad,
-        gate_y_center=gate_y_center,
-    )
+# One vertical-current-flow ``nfet_03v3``/``pfet_03v3`` instance -- the drawing
+# routine is shared (issue #444, ``_canvas.mosfet()``); this module binds its
+# own DRC-derived constants above. See ``_canvas.mosfet()``'s docstring and
+# ``vco/primitives.py``'s ``mosfet()`` for the per-shape DRC citation.
+mosfet = partial(
+    _canvas.mosfet,
+    sd_overhang_um=SD_OVERHANG_UM,
+    poly_endcap_um=POLY_ENDCAP_UM,
+    gate_tab_w_um=GATE_TAB_W_UM,
+    gate_tab_h_um=GATE_TAB_H_UM,
+    gate_tab_overlap_um=GATE_TAB_OVERLAP_UM,
+    contact_size_um=CONTACT_SIZE_UM,
+    contact_pitch_um=CONTACT_PITCH_UM,
+    contact_row_margin_um=CONTACT_ROW_MARGIN_UM,
+    metal1_pad_margin_um=METAL1_PAD_MARGIN_UM,
+    implant_margin_um=IMPLANT_MARGIN_UM,
+)
 
 
 # Vertical Metal1 wire segment -- shared with every other
