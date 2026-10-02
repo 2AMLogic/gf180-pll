@@ -819,6 +819,7 @@ eval "$(awk -F, -v accf="${ACC_FERR}" -v slowf="${DYN_SLOW_FACTOR}" '
 # Headline scalars for the record.
 # ---------------------------------------------------------------------------
 eval "$(awk -F, -v accv_lo="${ACC_VCTRL_LO}" -v accv_hi="${ACC_VCTRL_HI}" -v pwr="${ACC_PWR_MW}" \
+  -v b2="${ACC_BUDGET2_V}" -v b2leg="${ACC_BUDGET2_LEGACY_V}" \
   -v accl="${ACC_LOCK_FRAC}" '
   !/^#/ && $1 != "bundle" {
     n++;
@@ -855,6 +856,11 @@ eval "$(awk -F, -v accv_lo="${ACC_VCTRL_LO}" -v accv_hi="${ACC_VCTRL_HI}" -v pwr
     seenp = 1;
     if (p * 1e3 > pwr) npfail++;
     if (vcmin < accv_lo || vcmax > accv_hi) { nvout++; if (vout == "") vout = id; else vout = vout " " id }
+    # Signed margin of the ripple PEAKS to the nearer window edge (positive =
+    # inside).  The tightest one is the quantity DR-036 says must not erode.
+    mg = vcmin - accv_lo; if (accv_hi - vcmax < mg) mg = accv_hi - vcmax;
+    if (!seenmg || mg < mnmg) { mnmg = mg; mnmgid = id }
+    seenmg = 1;
     if (!seenv || vca > mxvc) { mxvc = vca; mxvcid = id }
     if (!seenv || vca < mnvc) { mnvc = vca; mnvcid = id }
     seenv = 1;
@@ -870,6 +876,15 @@ eval "$(awk -F, -v accv_lo="${ACC_VCTRL_LO}" -v accv_hi="${ACC_VCTRL_HI}" -v pwr
       if (!seens || s > mxs) { mxs = s; mxsid = a[1] "/" a[2] "C" }
       if (!seens || s < mns) { mns = s; mnsid = a[1] "/" a[2] "C" }
       sum += s; ns++; seens = 1;
+      # Budget 2 (DR-036): Vctrl travel over the full 2.97 -> 3.63 V rail,
+      # per (bundle, temperature) cell.  A cell without both end rails has no
+      # full-range span and is not graded rather than graded on a guess.
+      span = vhi[k] - vlo[k]; if (span < 0) span = -span;
+      nb2++;
+      if (span > b2)    { nb2over++;  b2list = (b2list == "" ? a[1] "/" a[2] "C" : b2list " " a[1] "/" a[2] "C") }
+      if (span > b2leg) { nb2leg++ }
+      if (!seenb2 || span > b2worst) { b2worst = span; b2worstid = a[1] "/" a[2] "C" }
+      seenb2 = 1;
     }
     printf "N_STEADY=%d\nN_FAIL=%d\nFAILLIST=%s\n", n, nfail+0, (faillist == "" ? "(none)" : "\"" faillist "\"");
     printf "N_F_FERR=%d\nN_F_PHI=%d\nN_F_LOCK=%d\nN_F_RANGE=%d\n", nfferr+0, nfphi+0, nflock+0, nfrange+0;
@@ -885,6 +900,9 @@ eval "$(awk -F, -v accv_lo="${ACC_VCTRL_LO}" -v accv_hi="${ACC_VCTRL_HI}" -v pwr
     printf "MXSK_NS=%.4g\nMXSK_ID=\"%s\"\nMNSK_NS=%.4g\nMNSK_ID=\"%s\"\n", mxsk*1e9, mxskid, mnsk*1e9, mnskid;
     printf "WSPREAD_NS=%.4g\nWSPREAD_ID=\"%s\"\n", wspread*1e9, wspreadid;
     printf "MXP_MW=%.4g\nMXP_ID=\"%s\"\nMNP_MW=%.4g\nMNP_ID=\"%s\"\nN_PFAIL=%d\n", mxp*1e3, mxpid, mnp*1e3, mnpid, npfail+0;
+    printf "N_B2=%d\nN_B2_OVER=%d\nB2_LIST=%s\nN_B2_LEGACY=%d\n", nb2+0, nb2over+0, (b2list == "" ? "(none)" : "\"" b2list "\""), nb2leg+0;
+    printf "B2_WORST=%.4g\nB2_WORST_ID=\"%s\"\n", b2worst, (seenb2 ? b2worstid : "n/a");
+    printf "WIN_MARGIN_MV=%.1f\nWIN_MARGIN_ID=\"%s\"\n", mnmg*1e3, (seenmg ? mnmgid : "n/a");
     printf "N_VOUT=%d\nVOUT=%s\n", nvout+0, (vout == "" ? "(none)" : "\"" vout "\"");
     printf "MXVC=%.4g\nMXVC_ID=\"%s\"\nMNVC=%.4g\nMNVC_ID=\"%s\"\n", mxvc, mxvcid, mnvc, mnvcid;
     printf "MXSLOPE=%.4g\nMXSLOPE_ID=\"%s\"\nMNSLOPE=%.4g\nMNSLOPE_ID=\"%s\"\nAVSLOPE=%.4g\n", mxs, mxsid, mns, mnsid, sum/ns;
@@ -1213,7 +1231,17 @@ V_FREQ=$([ "${N_FAIL}" -eq 0 ] && echo PASS || echo FAIL)
 V_PWR=$([ "${N_PFAIL}" -eq 0 ] && echo PASS || echo FAIL)
 if [ "${N_DYN:-0}" -eq 0 ]; then V_DYN="NOT MEASURED"; else
   V_DYN=$([ "${DYN_LOST}" -eq 0 ] && echo PASS || echo FAIL); fi
-V_VCTRL=$([ "${N_VOUT}" -eq 0 ] && echo PASS || echo "FAIL")
+# Criterion 1b grades the ratified budget AND the measured window (#525,
+# DR-036): Budget 2 over the full 2.97 -> 3.63 V excursion, and the ripple
+# peaks inside 0.9-2.7 V.  With no (bundle, temperature) cell carrying both end
+# rails there is no Budget-2 span to grade, so that half is NOT MEASURED and
+# cannot pass silently.
+if [ "${N_B2}" -eq 0 ]; then V_B2="NOT MEASURED"; else
+  V_B2=$([ "${N_B2_OVER}" -eq 0 ] && echo PASS || echo FAIL); fi
+V_WIN=$([ "${N_VOUT}" -eq 0 ] && echo PASS || echo FAIL)
+if [ "${V_B2}" = "FAIL" ] || [ "${V_WIN}" = "FAIL" ]; then V_VCTRL=FAIL
+elif [ "${V_B2}" = "NOT MEASURED" ]; then V_VCTRL="NOT MEASURED"
+else V_VCTRL=PASS; fi
 
 # Criterion-3 escalation verdict (#253) -- mirrors V_SETTLE's three-way
 # outcome for criterion 1: nothing needed escalating, everything that
@@ -1604,7 +1632,10 @@ supply-sensitivity: ${N_STEADY} steady-state points, ${N_DYN} step/ramp runs
   frequency deviation vs nominal supply   worst ${WDEV_PPM} ppm @ ${WDEV_ID}      ${V_FREQ}
   static phase offset (REF->FB)           worst ${WPHI_NS} ns @ ${WPHI_ID}
   UP/DN pulse-width skew                  ${MNSK_NS} .. ${MXSK_NS} ns
-  Vctrl (settled)                         ${MNVC} .. ${MXVC} V,  ${N_VOUT} point(s) outside ${ACC_VCTRL_LO}-${ACC_VCTRL_HI} V   ${V_VCTRL}
+  Vctrl (settled)                         ${MNVC} .. ${MXVC} V,  ${N_VOUT} point(s) outside ${ACC_VCTRL_LO}-${ACC_VCTRL_HI} V   ${V_WIN}
+  Budget 2: Vctrl travel over ${ACC_RAIL_LO}-${ACC_RAIL_HI} V    worst ${B2_WORST} V @ ${B2_WORST_ID}, ${N_B2_OVER} of ${N_B2} cell(s) over ${ACC_BUDGET2_V} V   ${V_B2}
+  tightest ripple-peak margin to window   ${WIN_MARGIN_MV} mV @ ${WIN_MARGIN_ID} (must not erode, DR-036)
+  criterion 1b overall                    ${V_VCTRL}
   total power @ 100 MHz                   ${MNP_MW} .. ${MXP_MW} mW (worst ${MXP_ID})    ${V_PWR}
   step/ramp: worst plateau ferr           ${DYN_MXFE} @ ${DYN_MXFE_ID}     ${V_DYN}
   settling re-runs @ ${KTSTOP_X}              ${N_RERUN}: ${N_R_SETTLES} settle, ${N_R_PHI} phi-only, ${N_R_INTEG} integration, ${N_R_UNDAMPED} under-damped, ${N_R_NOTLOCK} not locked
@@ -2041,9 +2072,18 @@ ${FDEV_TABLE}
     ${MXSLOPE_ID}, least at ${MNSLOPE_ID}.
   - Settled control voltage over the whole grid: **${MNVC} .. ${MXVC} V**
     (lowest ${MNVC_ID}, highest ${MXVC_ID}) -- these are the AVERAGE control
-    voltages, \`vctrl_avg_v\`. Points outside DR-001 Decision
-    2's usable ${ACC_VCTRL_LO}-${ACC_VCTRL_HI} V window: **${N_VOUT}** --
-    ${VOUT}. **${V_VCTRL}** The window check deliberately uses a different
+    voltages, \`vctrl_avg_v\`. Points outside DR-003 Decision 5's measured
+    ${ACC_VCTRL_LO}-${ACC_VCTRL_HI} V window: **${N_VOUT}** --
+    ${VOUT}. **${V_WIN}** Tightest ripple-peak margin to that window:
+    **${WIN_MARGIN_MV} mV** at ${WIN_MARGIN_ID} -- the quantity DR-036 states
+    must not erode. **Budget 2** (\`spec/pll.md\` row 12, DR-036): the control
+    node's travel over the full ${ACC_RAIL_LO} -> ${ACC_RAIL_HI} V rail,
+    per (bundle, temperature) cell, against the ratified **${ACC_BUDGET2_V} V**:
+    worst **${B2_WORST} V** at ${B2_WORST_ID}, **${N_B2_OVER}** of ${N_B2} cell(s)
+    over (${B2_LIST}) -- **${V_B2}**. For the record only, and ungraded: the
+    superseded ${ACC_BUDGET2_LEGACY_V} V figure (which priced half this
+    excursion) is exceeded at ${N_B2_LEGACY} of ${N_B2} cell(s). **Criterion 1b
+    overall: ${V_VCTRL}.** The window check deliberately uses a different
     statistic from the range above it: it tests \`vctrl_min_v\`/\`vctrl_max_v\`,
     i.e. the RIPPLE PEAKS, not the average, because headroom is lost at the
     peak of the ripple and a corner whose average sits inside the window while
@@ -2460,7 +2500,7 @@ fi)
   | Criterion | Verdict |
   |---|---|
   | 1. output frequency vs. supply, full grid | **${V_FREQ}** |
-  | 1b. control voltage inside DR-001's usable window at every corner | **${V_VCTRL}** |
+  | 1b. Budget 2 (full-range excursion, <= ${ACC_BUDGET2_V} V) and control voltage inside the measured ${ACC_VCTRL_LO}-${ACC_VCTRL_HI} V window at every corner | **${V_VCTRL}** (budget ${V_B2}; window ${V_WIN}, tightest margin ${WIN_MARGIN_MV} mV) |
   | 1c. re-runs: budget artefact vs. integration artefact vs. genuine under-damping | ${V_SETTLE} |
   | 2. static phase offset vs. supply, full grid, post-#24 CP | reported (${N_FAIL} corner(s) outside \`spec/pll.md\`'s ratified $(awk -v p="${ACC_PHI_S}" 'BEGIN{printf "%.4g", p*1e9}') ns Lock criterion) |
   | 3. stays locked through a supply step and a supply ramp | **${V_DYN}** |
