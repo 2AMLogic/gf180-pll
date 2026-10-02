@@ -1,7 +1,9 @@
 # DR-005: a bias buffer on the charge pump's dump node is not "an opamp in the loop path"
 
-- **Status**: proposed (this is a scope reading of DR-001 Decision 1, not a
-  change to it; it becomes binding on the same governance path as DR-001, #1)
+- **Status**: ratified (2026-09-08, #1; this is a scope reading of DR-001
+  Decision 1, not a change to it, and it became binding on the same
+  governance path as DR-001). Grandfathered by the operator ruling of
+  2026-10-02 on #446 — see `spec/README.md`
 - **Date**: 2026-07-31
 - **Decided by**: Builder agent, issue #24
 - **Related**: DR-001 Decision 1 (the constraint being interpreted), #9 /

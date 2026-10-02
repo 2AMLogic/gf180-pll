@@ -31,6 +31,9 @@ Status lifecycle (the Status field below):
   - proposed            — drafted, not yet binding on design work.
   - ratified            — binding; design/sim work may rely on it.
   - superseded by DR-NNN — no longer binding; DR-NNN replaces it.
+  - What `proposed` vs `ratified` means relative to `spec/pll.md`'s own
+    ratification, and which records the first ratification (#1) covered, is
+    stated in `spec/README.md`.
 
 Append-only / never-rewrite rule:
   - Do NOT delete or rewrite a ratified record, even to fix it. If a

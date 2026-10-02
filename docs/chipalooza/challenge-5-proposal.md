@@ -46,13 +46,14 @@ with a 2-bit charge-pump current trim, a cascaded ÷2/3 feedback divider
 (integer N = 4–64), and a digital phase-window lock detector. Architecture is
 captured in
 [`spec/decision-records/DR-001-pll-architecture.md`](../../spec/decision-records/DR-001-pll-architecture.md).
-That record's own Status line still reads **proposed**, as almost every
-decision record in this repository does — DR-007, the spec-review verdict,
-is the only one re-stamped **ratified** when issue #1 closed. The target
+That record is **ratified** (2026-09-08, #1), as are DR-002, DR-003, DR-005,
+DR-006 and DR-007; decision records created or amended after that date
+(DR-010 onward, and DR-004/008/009/012) remain `proposed` until they pass
+their own ratification — see
+[`spec/README.md`](../../spec/README.md) for the convention. The target
 specification those records feed, [`spec/pll.md`](../../spec/pll.md), is
 itself **ratified, with amendments** (#1, closed 2026-09-08), and §5's
-verdicts are stated against that ratified table rather than against the
-individual records' status fields. See §5.0 for the two rows the
+verdicts are stated against that ratified table. See §5.0 for the two rows the
 ratification explicitly carved out.
 
 ---

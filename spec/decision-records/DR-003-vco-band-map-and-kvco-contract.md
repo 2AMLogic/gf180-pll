@@ -1,6 +1,6 @@
 # DR-003: Ring VCO band map, stage count and the Kvco contract handed to the loop
 
-- **Status**: proposed
+- **Status**: ratified (2026-09-08, #1; grandfathered by the operator ruling of 2026-10-02 on #446 — see `spec/README.md`)
 - **Date**: 2026-07-31
 - **Decided by**: Builder agent, issue #8
 - **Refines**: DR-001 Decision 2 (VCO delay-cell style). This record does
