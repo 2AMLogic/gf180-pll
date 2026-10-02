@@ -47,9 +47,11 @@ with a 2-bit charge-pump current trim, a cascaded ÷2/3 feedback divider
 captured in
 [`spec/decision-records/DR-001-pll-architecture.md`](../../spec/decision-records/DR-001-pll-architecture.md).
 That record is **ratified** (2026-09-08, #1), as are DR-002, DR-003, DR-005,
-DR-006 and DR-007; decision records created or amended after that date
-(DR-010 onward, and DR-004/008/009/012) remain `proposed` until they pass
-their own ratification — see
+DR-006 and DR-007. The other records stay `proposed` until they pass their
+own ratification: DR-004/008/009/012 because they are not on
+`spec/pll.md`'s `Consumes:` line (DR-004 and DR-008 predate the
+ratification; DR-009 and DR-012 were created after it), and DR-010 onward
+because they were created after that date — see
 [`spec/README.md`](../../spec/README.md) for the convention. The target
 specification those records feed, [`spec/pll.md`](../../spec/pll.md), is
 itself **ratified, with amendments** (#1, closed 2026-09-08), and §5's

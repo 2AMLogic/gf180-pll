@@ -25,9 +25,11 @@ the date and the issue or PR that ratified it.
 `spec/pll.md` was ratified through #1 on 2026-09-08, before the two-key
 ceremony above was in force for decision records. By operator ruling on #446
 (2026-10-02), that ratification also ratified every decision record listed
-on `spec/pll.md`'s `**Consumes**:` line **as of 2026-09-08**, except those
-that revise the two rows DR-007 Amendment A1 carved out (Lock time, row 9;
-Lock detector, row 16).
+on `spec/pll.md`'s `**Consumes**:` line **as of 2026-09-08**, except "the
+row-16 lock-detector records that DR-007 A1 carves out" (the ruling's
+wording). DR-007 Amendment A1 itself carves out two rows, Lock time (row 9)
+and Lock detector (row 16); no record on the 2026-09-08 `**Consumes**:` list
+revises row 9, so only the ruling's row-16 exception is operative.
 
 Covered, and stamped `ratified (2026-09-08, #1; …)`:
 
