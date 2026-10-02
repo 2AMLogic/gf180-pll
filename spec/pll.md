@@ -210,7 +210,18 @@ than like a configuration error.
 **A system targeting output frequency `f` must configure the lowest 3-bit band
 code that reaches `f`.**
 
-Source: DR-003 Decision 4, from `sim/vco-tuning-range/records/20260731-175947-0a12e6c.md`
+**"Reaches `f`" is evaluated over DR-003 Decision 5's measured 0.9 – 2.7 V
+control-voltage window**: a band reaches `f` when its f(Vctrl) curve brackets
+`f` at some Vctrl in 0.9 – 2.7 V, at the PVT point being configured. The
+0.9 – 2.4 V window DR-001 Decision 2 *predicted* is superseded for this
+purpose and is not an alternative reading (DR-036, proposed). Over the measured window
+the rule has an answer at all 15 (bundle, temperature) cells measured at
+100 MHz; over the predicted window it has none at 4 of them. The two windows
+select different codes where both have an answer (`ff`/27 °C, 100 MHz: band 5
+over 0.9 – 2.7 V, band 6 over 0.9 – 2.4 V).
+
+Source: DR-003 Decision 4 (the rule) and Decision 5 (the window), named as
+the rule's window by DR-036 (proposed; binding on ratification); from `sim/vco-tuning-range/records/20260731-175947-0a12e6c.md`
 (checks 4a / 4b).
 
 Why it is normative rather than advisory: `Kvco ∝ f_osc` *within* a band, so two
