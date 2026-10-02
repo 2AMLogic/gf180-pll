@@ -587,8 +587,27 @@ ACC_PHI_S=1e-9
 ACC_PHI_SETTLE_S=1e-10
 ACC_NTOL=0.01          # |f_out/f_fb - N|
 ACC_LOCK_FRAC=0.90     # LOCK flag level in the late window, fraction of the rail
-ACC_VCTRL_LO=0.9       # DR-001 Decision 2's usable control window
-ACC_VCTRL_HI=2.4
+# Criterion 1b grades Budget 2 at the 1.2 V DR-037 proposes (binding on
+# ratification; DR-037 is `proposed`) and the measured window (#525), not the
+# deck's earlier proxy.  Per DR-012 Decision 5, where spec/pll.md ratifies a
+# value the deck cites that value.
+#   (i)  Budget 2 (spec/pll.md row 12): a DC rail excursion over the FULL
+#        2.97-3.63 V range (0.66 V) consumes <= ACC_BUDGET2_V of the Vctrl
+#        window.  1.2 V is derived in DR-037 (twice the 0.6 V that priced a
+#        0.33 V half-excursion), not fitted to any measurement.
+#   (ii) The control-voltage RIPPLE PEAKS stay inside DR-003 Decision 5's
+#        MEASURED 0.9-2.7 V window.  This used to be DR-001 Decision 2's
+#        predicted 0.9-2.4 V, which DR-003 Decision 5 superseded.  The tightest
+#        margin to it is the quantity DR-037 says must not erode (53 mV at
+#        ss/-40C/3.63V in the 20260901-155456-46b92f8 grid).
+# ACC_BUDGET2_LEGACY_V is the superseded 0.6 V figure.  It is REPORTED, never
+# graded, so the 9-of-15 history stays visible in every future record.
+ACC_VCTRL_LO=0.9
+ACC_VCTRL_HI=2.7
+ACC_BUDGET2_V=1.2
+ACC_BUDGET2_LEGACY_V=0.6
+ACC_RAIL_LO=2.97
+ACC_RAIL_HI=3.63
 ACC_PWR_MW=5.0         # draft power target (placeholder pending #1)
 ACC_FDEV_PPM=1000      # |f_out(vdd) - f_out(3.30 V)| / f_out(3.30 V), ppm
 

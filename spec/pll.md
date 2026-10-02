@@ -184,7 +184,7 @@ top cell, port list, netlist/GDS paths, measured area, maturity rung — is
 | 9 | [Lock time](#lock-time) | < 100 µs to the stated [lock criterion](#lock-time). **The < 20 µs stretch is dropped** | 71 µs at f_ref = 1 MHz under the trim rule; structural floor 43 µs. **The criterion this time is measured *to* is not met at 1 of the 45 mandated corners at the configuration the [band-selection rule](#band-selection-rule) selects, with a second corner owed** — the static-phase half settles at 1.049 ns at `typical`/−40 °C/3.63 V against the ratified ≤ 1 ns (DR-012), so at that corner there is no instant for a lock time to be measured to. The 1.227 ns at `ff`/27 °C/3.63 V is measured at **band 6**, which is not the band the rule selects there (DR-025); the rule-selected band-5 cell is unrun, so that corner is neither cleared nor confirmed and the count returns to 2 of 45 if it misses | **measured** (small-signal settling); **budget** (cold-start, owed to #163); target **not met** at 1/45 corners because the criterion itself is not reached there, with a 2nd corner's rule-selected configuration owed (DR-025, #511) |
 | 10 | [Power](#power) | < 5 mW at 100 MHz, all domains, locked | `all-fast`/125 °C/3.63 V — derived total ≈ 1.98 mW | **derived** |
 | 11 | [Standby current](#standby-current) | **no power-down mode in v1** — the block is always-on whenever its rails are up | n/a — no standby state exists to bind a corner to | **waived, with rationale** |
-| 12 | [Supply sensitivity](#supply-sensitivity) | `vdd_vco` ripple ≤ 20 mV pp (100 kHz – 100 MHz); DC rail excursion over 2.97–3.63 V must consume ≤ 0.6 V of the Vctrl window | pushing worst −50.7 %/V at `ss`/−40 °C, band 4 (−52.3 %/V on the coarser tuning-range grid). **Budget 2's consumption is now measured on the closed loop at all 45 mandated points and the budget is not met**: 0.385 … 0.846 V consumed over the ratified rail, worst `ss`/−40 °C at **0.846 V** = **1.41×** the budget, over at **9 of the 15** (bundle, temperature) cells (DR-021). It is not an anomaly — it matches what each cell's selected band requires, from the open-loop `f(Vctrl, vdd)` table, to within 5.7 mV at every cell — and the consequence the budget guards (band plan re-cut) is **not** observed: no point leaves the measured 0.9–2.7 V window, by 53 mV at the tightest. The budget's own derivation prices a **±0.33 V** excursion where the row specifies **0.66 V**, under which reading 0 of 15 cells exceed it; which excursion governs is **#525** | **measured** (pushing; and, since DR-021, Budget 2's consumption); **derived** (the two budget *values*); Budget 2 target **not met** at 9/15 cells as the row states the excursion |
+| 12 | [Supply sensitivity](#supply-sensitivity) | `vdd_vco` ripple ≤ 20 mV pp (100 kHz – 100 MHz); DC rail excursion over the full 2.97–3.63 V range (0.66 V) must consume ≤ 1.2 V of the Vctrl window (DR-037, awaiting two-key ratification; was 0.6 V, which priced a 0.33 V half-excursion) | pushing worst −50.7 %/V at `ss`/−40 °C, band 4 (−52.3 %/V on the coarser tuning-range grid). **Budget 2's consumption is measured on the closed loop at all 45 mandated points and the 1.2 V budget (DR-037, proposed; binding on ratification) is met at all 15 (bundle, temperature) cells**: 0.385 … 0.846 V consumed over the full 0.66 V rail, worst `ss`/−40 °C at **0.846 V** = 0.71× the budget (DR-021 measured it; DR-037 re-derived the budget). Against the superseded 0.6 V figure the same measurement was a miss at **9 of the 15** cells, worst 1.41× — that miss stays recorded as an artefact of a figure that priced half the excursion. It is not an anomaly — it matches what each cell's selected band requires, from the open-loop `f(Vctrl, vdd)` table, to within 5.7 mV at every cell — and the consequence the budget guards (band plan re-cut) is **not** observed: no point leaves the measured 0.9–2.7 V window, by 53 mV at the tightest. **The quantity that must not erode is the 53 mV window margin** (DR-037 Decision 4). The 0.6 V figure's derivation priced a ±0.33 V excursion where the row specified 0.66 V; DR-037 proposes the full range as governing, per the operator ruling on #525 | **measured** (pushing; and, since DR-021, Budget 2's consumption); **derived** (the two budget *values*; Budget 2's 1.2 V by DR-037); Budget 2 **met** at 15/15 cells at the re-derived 1.2 V (DR-037, proposed; binding on ratification) (**not met** at 9/15 against the superseded 0.6 V) |
 | 13 | [Output duty cycle](#output-duty-cycle) | 45 – 55 % at `CLK`, over the whole band and all corners | measured 44.375 – 50.696 % (90 points); worst `fs`/27 °C/3.63 V at the `lo` edge (band 0, Vctrl 0.9 V) — the bottom-of-band binding condition the design basis predicted | **measured** (90 points, loaded); target **not met** at 7/90 points, all at the `lo` edge |
 | 14 | [Output levels and drive](#output-levels-and-drive) | rail-to-rail CMOS on `vdd_vco`: V_OH ≥ 0.9·VDD_VCO, V_OL ≤ 0.1·VDD_VCO into ≤ 50 fF external load | measured V_OH 1.006 – 1.044·VDD_VCO, V_OL −0.040 … −0.006·VDD_VCO into a 50 fF load, at every one of 90 points | **measured** (90 points); target **met** at every point |
 | 15 | [Area](#area) | ≤ **0.30 mm²** total — **amended by DR-016** from the draft ≤ 0.15 mm², which was never derived from anything (DR-007 Amendment A3) and is *measured* to be unreachable, and **held** at that value by **DR-017** on a floor re-measured 17.5 % lower. The drawn blocks sum to 0.1803 mm², 0.2254 mm² after the floorplan's ×1.25 top-level overhead, **1.50×** that draft target; assuming *all* Metal2 routing is free still gives 0.1702 mm² (1.13×), and every remaining named lever is above that bound. 57.2 % of what a 0.15 mm² row allowed is consumed by two terms no layout lever touches: the loop filter (capacitance-set by DR-006) and `vco_block`'s guard-ring/tap spacing. The row is the measured total *as DR-016 measured it* plus margin sized to the one unmeasured factor in it (it now holds for a top-level overhead up to ×1.664) — **not** an allowance for block growth. It did not move with the three levers that have landed since (#469, #458, #473): per DR-017 Decision 3, a downward re-amendment now needs the *uncertainty* to shrink — an assembled `pll_top` (#17), or a drawn loop filter — not another block-level lever | n/a — drawn area is not a PVT quantity; the *capacitance* it buys is (C1 = 107.1 … 133 pF over corners) | **measured** (the four drawn blocks, off committed DRC/LVS-clean GDS via `python3 layout/run_pv.py area`); **derived** (the loop filter — DR-006's measured device area ×1.15; it has no layout); **budget** (the ×1.25 top-level overhead — no assembled `pll_top` GDS exists, #17). Target **met** at 0.2254 mm² against the amended row |
@@ -1341,69 +1341,79 @@ Derived in [Period jitter](#period-jitter) and repeated here because it is the
 condition a system integrator has to design the rail against. Above the loop
 bandwidth the PLL does not correct this disturbance at all.
 
-### Budget 2 — DC: a full-range rail excursion must consume ≤ 0.6 V of the Vctrl window
+### Budget 2 — DC: a full-range rail excursion must consume ≤ 1.2 V of the Vctrl window
 
 With the loop closed and locked the output frequency is set by `N·f_ref`, so DC
 supply pushing does not appear as a frequency error — it appears as a **Vctrl
 re-positioning**, and the Vctrl window is finite (0.9–2.7 V, 1.8 V wide).
 
-Derivation: a ±10 % (±0.33 V) rail excursion moves the open-loop frequency by
-up to 17 %. The loop cancels that by moving Vctrl by `0.17 / (Kvco/f_out)`, and
-`Kvco/f_out` spans 0.31 … 0.84 per volt across bands and corners, so the
-required Vctrl shift is **0.20 V (high-Kvco bands) to 0.55 V (low-Kvco bands)**
-— up to 31 % of the window. The 0.6 V budget above covers the worst of that
-with a small allowance; if a future change pushes it past 0.6 V, the fine
-tuning range left inside a band is no longer enough to hold lock across the
-rail range and the band plan has to be re-cut.
+**The excursion is the whole ratified rail, 2.97 → 3.63 V (0.66 V)** — the
+operator's ruling on #525, recorded in DR-037. The figure was 0.6 V until
+DR-037; that number priced half this excursion (see below), and the
+re-derivation here supersedes it. DR-037 is `proposed` until ratified through
+the two-key route; this section states what it proposes.
 
-**This budget is now measured, and it is missed — at 9 of the 15
-(bundle, temperature) cells of the mandated grid.** With the loop closed and
-locked at every one of the 45 mandated points, the control node moves
-**0.385 … 0.846 V** across the 2.97–3.63 V rail. The worst cell is
-`ss`/−40 °C at **0.846 V** — **1.41×** this budget, and **47 %** of the 1.8 V
-window consumed by the rail alone (`sim/supply-sensitivity/records/20260925-044237-4ff4f65.md`,
-arithmetic on the committed 45-point grid of `.../20260901-155456-46b92f8.md`;
-DR-021 Decisions 3 and 4). Three things a reader has to be told alongside that
-number, because each changes what it means:
+Derivation: pushing is linear across the rail (see the table below), so a
+0.66 V excursion moves the open-loop frequency by twice what a ±10 %
+(±0.33 V) one does — up to 2 × 17 % = **34 %** (50.7 %/V × 0.66 V = 33.5 % at
+the worst corner). The loop cancels that by moving Vctrl by
+`0.34 / (Kvco/f_out)`, and `Kvco/f_out` spans 0.31 … 0.84 per volt across
+bands and corners, so the required Vctrl shift is **0.40 V (high-Kvco bands) to
+1.10 V (low-Kvco bands)** — up to 61 % of the window. The 1.2 V budget covers
+the worst of that with the same ~9.5 % allowance the superseded 0.6 V carried
+over its own worst case (0.6 / 0.548 = 1.095; 1.097 × 1.095 = 1.20 V — equally
+0.6 V × 0.66 / 0.33). It was derived, not fitted to the measurement. If a
+future change pushes consumption past 1.2 V, the fine tuning range left inside
+a band is no longer enough to hold lock across the rail range and the band plan
+has to be re-cut.
 
+**Budget 2 is measured, and met at all 15 (bundle, temperature) cells.** With
+the loop closed and locked at every one of the 45 mandated points, the control
+node moves **0.385 … 0.846 V** across the 2.97–3.63 V rail. The worst cell is
+`ss`/−40 °C at **0.846 V** — 0.71× this budget (0.354 V of headroom), and
+**47 %** of the 1.8 V window consumed by the rail alone
+(`sim/supply-sensitivity/records/20260925-044237-4ff4f65.md`, arithmetic on the
+committed 45-point grid of `.../20260901-155456-46b92f8.md`; DR-021 Decisions 3
+and 4). The effective `Kvco/f_out` at that cell is 0.335 / 0.846 = 0.395/V,
+inside the 0.31 … 0.84/V envelope assumed above. Three things a reader has to be
+told alongside that number:
+
+- **The 9-of-15 miss against 0.6 V stays recorded.** Graded over the full
+  range, 9 of the 15 cells exceeded the superseded 0.6 V figure, worst
+  0.846 V = 1.41×, 47 % of the window. That is true of that figure and is kept
+  here and in the committed records, which are not edited. It is an artefact of
+  a budget that priced a **0.33 V** excursion — its 17 % was `%/V × 0.33 V`,
+  the same arithmetic the pushing table below uses for its "worst frequency
+  shift over a ±10 % rail" column — against a row that specified 0.66 V. Over
+  the half-excursion, 0 of 15 cells exceeded 0.6 V (worst 0.431 V).
 - **The measurement is not anomalous.** It agrees with what each cell's own
   selected band requires, read off `sim/vco-tuning-range`'s committed open-loop
   `f(Vctrl, vdd)` table, to within **5.7 mV at every one of the 15 cells** and
   1.9 mV (0.2 %) at the worst. The loop is absorbing exactly the pushing
-  characterized below, with nothing left over; nothing in this number indicts
-  the charge pump, the loop filter or the VCO.
-- **The derivation above prices half the excursion this row specifies.** Its
-  17 % is `%/V × 0.33 V` — the same arithmetic the pushing table below uses for
-  its own "worst frequency shift over a ±10 % rail" column — so the
-  0.20 … 0.55 V it predicts, and the 0.6 V sized to cover that "with a small
-  allowance", are for a **0.33 V** excursion, while the row demands the shift
-  over **0.66 V**. Read over 0.33 V, **0 of the 15 cells** exceed the budget
-  (worst 0.431 V, 28 % inside). The factor of two is in the numerator, not the
-  denominator: the measured `Kvco/f_out` at the worst cell's band is 0.429/V,
-  inside the 0.31 … 0.84/V assumed above, and 17 % / 0.429 is 0.396 V. Which
-  excursion this row governs is a ratification question and is **#525**; until
-  it is answered the row reads as it is written, i.e. missed. The budget's
-  normative text is deliberately unchanged — relaxing a ratified line to make a
-  result pass is not an option available here.
-- **The failure mode this budget protects against is not observed, and the
-  margin left is 53 mV.** The band holds lock across the rail at every one of
-  the 45 points: **none** leaves the measured 0.9–2.7 V control window
-  (DR-003 Decision 5). The tightest margin anywhere is **53 mV**, at
-  `ss`/−40 °C/3.63 V (ripple peak 2.647 V against the 2.7 V edge); the next
-  tightest are the three −40 °C band-6 cells at the window's *bottom*, at
-  +78 … +91 mV. So the budget is exceeded and its stated consequence — re-cut
-  the band plan — is 53 mV away on a measured, not estimated, consumption.
+  characterized below; nothing in this number indicts the charge pump, the loop
+  filter or the VCO.
+- **The quantity that must not erode is the 53 mV window margin, not the
+  budget.** 1.2 V is two thirds of the 1.8 V window, so a cell can meet it and
+  still leave the window if the band plan places its lock point badly. What
+  protects lock is the ripple peak staying inside the measured 0.9–2.7 V
+  control window (DR-003 Decision 5). The tightest margin anywhere is
+  **53 mV**, at `ss`/−40 °C/3.63 V (ripple peak 2.647 V against the 2.7 V
+  edge); the next tightest are the three −40 °C band-6 cells at the window's
+  *bottom*, at +78 … +91 mV. A change that reduces the 53 mV has to say so even
+  while Budget 2 still passes. The testbench's criterion 1b grades both.
 
-**A related grading defect, stated rather than left in the deck.**
-`sim/supply-sensitivity`'s own criterion 1b does not grade this budget at all;
-it grades whether the control node stays inside DR-001 Decision 2's
-*predicted* 0.9–2.4 V window, which **DR-003 Decision 5 superseded** with the
-measured 0.9–2.7 V above. Its recorded "4 of 45 outside the window" FAIL is
-against that superseded figure and does not reproduce against the current one.
-Correcting the deck to grade the ratified budget is part of #525, per DR-012
-Decision 5 (where this specification ratifies a value, the deck cites that
-value); every run until then, including #437's full-grid re-take at the trimmed
-detector window, reproduces the same gap.
+**Criterion 1b of `sim/supply-sensitivity` grades the budget DR-037 proposes
+(binding on ratification).**
+Before DR-037 it graded whether the control node stayed inside DR-001
+Decision 2's *predicted* 0.9–2.4 V window (which DR-003 Decision 5 superseded)
+and did not grade Budget 2 at all; its recorded "4 of 45 outside the window"
+FAIL is against that superseded figure and stands, unedited, as the evidence it
+was. The deck now grades the 1.2 V budget over the 2.97 → 3.63 V excursion
+and the ripple peaks against 0.9–2.7 V, reporting the tightest margin and,
+ungraded, the count over the legacy 0.6 V figure (DR-012 Decision 5: where this
+specification ratifies a value, the deck cites that value). That change is
+exercised by the next run — #437's full-grid re-take at the trimmed detector
+window is the next one planned — and re-judges no existing record.
 
 ### Characterized open-loop pushing (what the budgets are derived from)
 
@@ -2082,7 +2092,7 @@ to reconstruct it from the status column.
 | [Reference input](#reference-input) | **the `20·log₁₀(N)` in-band transfer figure — MEASURED at N = 6, with four named residuals** (DR-027). `sim/reference-phase-transfer/records/20260925-080736-b722f33.md` measures 15.529 … 16.366 dB against the stated 15.563 dB (error −0.035 … +0.803 dB), 5/5 PASS, and measures the roll-off above the loop bandwidth at one frequency (21.6 … 32.7 dB below the in-band figure). What remains owed is **not** the figure: (a) **other N** — this is evidence at N = 6 only, and extending it needs a `vco-tuning-range`-derived `vstart` table at another (N, band, f_out) triple; (b) **a swept transfer function** rather than two frequency points, which is #509's "option 1" and would let the loop bandwidth be read off this measurement instead of cited from `sim/loop-dynamics`; (c) **the remaining 40 PVT points**, on `sim/reference-spur`'s own justification for the same 5-corner subset; (d) **the passive process axes**, held at typical. Note also that this record is **not** evidence about lock — the design's own detector does not assert at four of its five corners at that release point **with the window trim at effective code 0, not at the code 8 the decks programmed**: all three records were taken on the pre-DR-026 netlist that leaves `LDT3` unconnected at `pll_top` (#515), so the detector saw `code & 0b0111` = 0, the narrowest window the trim offers and not a code the [trim-code rule](#lock-detector-window-trim-code-rule) selects for any bundle. The measured transfer is unaffected — the trim pins reach only `delaywin_3v3`, and the detector's outputs drive nothing inside `pll_top` — so nothing above moves; what the code-0 scope costs is the lock remark's reach (DR-027 Amendment A1; record Limitations (6); row 16 and #437 own the lock question) | **#509** (`reference-phase-transfer`) — figure **measured**; (a)–(d) unowned; DR-027 (the measurement, its limits, and its non-effect on the row below), Amendment A1 (the effective trim code the three records ran at) |
 | [Reference input](#reference-input) | a numeric reference-jitter limit to replace the current exclusion — which needs the closed-loop noise bench, i.e. this repository's noise methodology, **not** the closed-loop lock bench, and is a different ask from the transfer figure in the row above (DR-027): that row has now *measured* the gain a known step is multiplied by, and this row needs a statistical reference-jitter spectrum pushed through that gain into an output jitter allocation. One of the two inputs exists; the other does not. **It has no owner, and this row now says so rather than naming one.** Its prerequisite is a closed-loop reference-noise methodology, which does not exist: #520 (the successor to issue #505, closed, which was itself the successor to issue #13, closed too — DR-023) closed on DR-032's bound of the block's own generators, which does not push a reference spectrum through the loop; the reference-jitter limit is a further measurement on top of that methodology and is unowned today. The exclusion itself is defensible and is restated with its boundary in [Reference input](#reference-input); what is owed is the number, and its input-side half (`dtdv_worst`, the AM-to-PM coefficient at the worst legal reference slope) is a deliverable of the campaign two rows above | **unowned** — sequenced behind #520 |
 | [Power](#power) | a measured `vdd_ref` domain current, and a closed-loop total | #14 (`supply-sensitivity`) |
-| [Supply sensitivity](#supply-sensitivity) | **Budget 2 is measured and missed, and what is owed is the decision, not the measurement** (DR-021): the closed loop consumes 0.385 … 0.846 V of the control window across the ratified 2.97–3.63 V rail, over the 0.6 V budget at **9 of the 15** (bundle, temperature) cells, worst `ss`/−40 °C at 1.41×. Three residuals. (a) **Which excursion the row governs** — its derivation prices ±0.33 V, under which 0 of 15 cells exceed the budget, while the row specifies the 0.66 V full range; the row is read as written until this is ratified, and the deck's criterion 1b must then grade the ratified budget instead of DR-001's superseded 0.9–2.4 V window (DR-012 Decision 5). (b) **The passive process axes** — every input is pinned `res_typical`/`moscap_typical`/`mimcap_typical`, and C1 alone spans 107.1–133 pF over corners (DR-006), so nothing bounds this consumption over the loop filter's own spread. (c) **The 10 of 45 rows the source grid flags as still converging**, nine of which sit in cells graded over budget — their settled `vctrl_avg_v` would move the count, which is why the 9-of-15 figure is the count on *that* grid and #437's re-take is entitled to another | **#525** (a, the decision + the deck); **#437** (c, the trimmed-window full-grid re-take); (b) unowned |
+| [Supply sensitivity](#supply-sensitivity) | **Budget 2 is measured; the excursion question is decided, and what is owed is ratification and a re-take** (DR-021, DR-037): the closed loop consumes 0.385 … 0.846 V of the control window across the full 2.97–3.63 V rail, which meets the re-derived 1.2 V budget at all 15 (bundle, temperature) cells (worst `ss`/−40 °C at 0.71×) and missed the superseded 0.6 V figure at **9 of the 15** (worst 1.41×) — a miss that stays recorded. The quantity that must not erode is the 53 mV window margin at `ss`/−40 °C/3.63 V. Two residuals. (a) **The passive process axes** — every input is pinned `res_typical`/`moscap_typical`/`mimcap_typical`, and C1 alone spans 107.1–133 pF over corners (DR-006), so nothing bounds this consumption, or the 53 mV, over the loop filter's own spread. (b) **The 10 of 45 rows the source grid flags as still converging**, nine of which sit in cells that exceeded the superseded 0.6 V figure — their settled `vctrl_avg_v` would move the consumption and the 9-of-15 count, which is why those figures are the count on *that* grid and #437's re-take is entitled to another. Criterion 1b of the deck now grades the re-derived budget and the measured window (DR-037 Decision 5); no run has exercised that change yet | **#437** (b, the trimmed-window full-grid re-take, the first run of the revised criterion 1b); (a) unowned; DR-037's ratification is the two-key route |
 | [Output duty cycle](#output-duty-cycle) | the design does not meet its own 45 % floor at 7/90 measured points (`fs` bundle, `lo` edge, nominal-or-above supply); post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the measurement itself now exists (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |
 | [Output levels and drive](#output-levels-and-drive) | post-extraction re-run; the on-die divider's own input capacitance is not modelled (this record's 50 fF load is external-only) — the loaded-output swing/edge-rate measurement itself now exists and PASSES at every point (`sim/output-driver/records/20260817-100354-0e9cfc9.md`, 90 points) | #144 (`output-driver`); #18 (extraction) |
 | [Lock detector](#lock-detector) | **T1′ and T2′ are both met** at the trimmed `delaywin_3v3` under the [Lock-detector window trim-code rule](#lock-detector-window-trim-code-rule) (DR-010 → DR-013 → DR-014 → #411): edges [1.14, 1.16) ns at `fs`/−40 °C/3.63 V and [1.78, 1.80) ns at `ss`/125 °C/2.97 V, observable spread 1.53–1.58× against DR-013 Decision 4's ≤ 1.65×. What is still owed against this row: (a) **T4/T5 below 25 MHz** — the detector has only ever been characterized at f_ref = 25 MHz, its assert hold-off is an absolute time, and at the 1 MHz bottom of the reference range that hold-off is of order one reference period, where the flag would be expected to chatter; **unowned**; (b) **discharged at ONE of the two cells DR-013 names — the second is withdrawn** (DR-026, #515). `sim/supply-sensitivity` has been run at the trimmed window and DR-013's window-vs-offset crossing is **measured inside one closed loop** rather than inferred across two campaigns (**#417**, `sim/supply-sensitivity/records/20260920-180604-0f91a9b.md`, `SIM_PICKS='typical -40 ff 27'` at `KWINTRIM=rule`). At `typical`/−40 °C/3.63 V (code 7) the loop settles at a **0.814 ns** static offset and the flag **asserts** — window above the offset, which is what DR-013 inferred; that cell **stands**. At `ff`/27 °C/3.63 V the record states code 11 and the loop **ran at code 3**: `design/pll_top.sch` left the `LDT3` trim MSB unconnected inside `pll_top` (#515), so the detector saw `code & 0b0111` and the run's `1.233 ns` offset / `6.9 nV` flag is an observation at code 3, not at the code the rule selects. **That cell's crossing verdict is withdrawn pending a re-take**, and the withdrawal is not neutral: at code 11 the committed 1872-point code map puts `t_win` at **1.3015 / 1.2801 ns** against the same 1.2331 ns offset, i.e. **above** it, so the re-take is predicted to read `above` and make the cell **`moved`** rather than `confirmed` — a margin of only 3.8–5.5 %, and quoted from a campaign at another f_ref, which is why it is a prediction and not a verdict (`sim/supply-sensitivity/records/20260925-111906-1937f52.md`, which re-simulates nothing). Decision 4's "marginal observer at two corners and a wrong one at one" therefore rests on **one** in-loop cell, not two. **The rest of the residual is coverage, not method**: that record is a declared 2-cell / 6-point subset of the 45-point grid, so every other cell of the campaign is still at the untrimmed cell and the full-grid `20260901-155456-46b92f8` record remains its PVT statement — a trimmed-window **full-grid** re-run of that campaign is **#437**, which now also owns the `ff` cell's re-take and **must be run on a netlist at or after DR-026** (9 of its 45 points carry an MSB-set code and would otherwise be corrupted identically and silently); (c) a **0.02 ns edge refinement at `ff`/−40 °C/3.63 V (code 11) and `ss`/−40 °C/3.63 V (code 3)** — only the coarse ladder ran at those two, so each is bounded to [1.0, 1.2) ns: T1′ is met at both, but their margin is stated as [0, 20) % rather than to 0.02 ns, and the spread figure leans on the `t_win` bound (1.62×) instead of a measured edge there; (d) **extraction (#18) and device mismatch**, both still unquantified — including segment-to-segment mismatch inside one stage's binary trim array, which would appear as trim DNL; (e) **an executable route to the trim rule itself** — DR-022 (#501) measured every quantity `pll_top`'s pads expose against the rule's internal measurand and none selects the code to the accuracy this row's own 1.53–1.58× spread figure assumes, so **every verdict in this row is conditional on a trim that no present bench or tester procedure can perform**. The two candidate routes DR-022 named were a symmetric `REF` phase-step bisection read at `LOCK` and an output-side observation point for `ERR`/`ERRD` (a design change, needing its own decision record); both were blocked behind **#515**, which left `LDT3` unconnected at `pll_top` so only 8 of the 16 codes were reachable on the assembled part. **That obstacle is removed** (DR-026): the label now lands on the pin, `XLD`'s eighth argument reads `LDT3`, all 16 codes are reachable, and `design/lib/check-port-connectivity.sh` fails CI if any committed netlist ever again declares a port nothing inside the subcircuit connects to. **Route 1 has since been measured and does not work**: DR-029 (#527) reads the bisection at the trim rule's own reference condition (`typical`/27 °C/3.30 V, code 7) and finds the step threshold is **2.200 ± 0.200 ns** against a flag window committed evidence puts at **1.3769 … 1.4529 ns** — **+55.5 %**, which at the measured 50.4 ps per trim code is **−12.6 codes** of selection error on a 16-code trim — because a step threshold is a stored-charge question while the flag window is a per-reference-cycle charge balance, an additive difference set by four quantities none of which is the delay chain the trim moves and which no fixed factor removes. The obstacle generalizes to the whole class of `REF`-side stimuli, which is why DR-029 closes the route rather than deferring it. **Route 2 is therefore the only candidate left, and it is unowned**: exposing `ERR`/`ERRD` through matched observation buffers is a `design/` change that still needs its own decision record, which neither DR-022 nor DR-029 authorizes. **DR-022's finding stands in full** — removing an obstacle that would have defeated a route is not the same as having one, and closing the cheaper of two routes is not the same as having the other — see [Executing the rule at test](#executing-the-rule-at-test--the-rule-is-normative-and-on-this-die-it-is-executable-only-in-simulation) | DR-013 (decision, #401); DR-014 (mechanism, #407); #411 (implementation + re-characterization); **#417** (b, discharged at `typical`/−40 °C only); **DR-026 / #515** (b, the `ff` cell withdrawn; e, the trim-MSB wiring); **#18** (d); **#437** (the trimmed-window full-grid `supply-sensitivity` re-run, which now also owns the `ff` cell's re-take); **DR-022; DR-029** (e — route 1 closed negative by #527; route 2 unowned and needs its own decision record); T4/T5 unowned |
