@@ -1,9 +1,9 @@
-# DR-036: The Output band row is derated from 200 MHz to 166 MHz for a part that holds one static band code; 200 MHz stays a per-operating-point envelope
+# DR-038: The Output band row is derated from 200 MHz to 166 MHz for a part that holds one static band code; 200 MHz stays a per-operating-point envelope
 
 - **Status**: proposed. Ratification is the two-key process (2am#1056), run by
   the operator; this record's status is not flipped by the builder. The operator's disposition
   (issue #534, comment of 2026-10-02) is "derate the ceiling". `spec/pll.md`
-  is edited in the same commit, marked as amended-by-DR-036-pending, the
+  is edited in the same commit, marked as amended-by-DR-038-pending, the
   position DR-016, DR-018 and DR-034 were in when they filed `proposed`.
 - **Date**: 2026-10-02
 - **Decided by**: Builder agent, issue #534, on the operator's disposition

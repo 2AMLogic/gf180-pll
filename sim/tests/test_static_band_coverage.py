@@ -1,7 +1,7 @@
 """Known-answer test for sim/vco-tuning-range/testbench/static_band_coverage.py (#534).
 
 Pins the per-bundle static-code coverage table and the derated ceiling that
-DR-036 quotes, against the committed VCO record. No simulator, no PDK.
+DR-038 quotes, against the committed VCO record. No simulator, no PDK.
 """
 
 from __future__ import annotations
