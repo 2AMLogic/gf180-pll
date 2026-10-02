@@ -54,7 +54,7 @@ Being honest about where this actually is:
   while the budget the spec ratifies — never graded before — was **missed at
   9 of 15 corner cells** against its original 0.6 V figure (worst 1.41 times,
   53 mV of window left) because that figure priced half the rail excursion;
-  DR-036 (#525) makes the full range govern and re-derives it as 1.2 V, met at
+  DR-037 (#525) makes the full range govern and re-derives it as 1.2 V, met at
   15 of 15, pending two-key ratification; and
   the step+ramp FAIL is a hold ≈8 µs short of a measurably slew-limited
   recovery rather than an under-damped loop. Each now has a named open owner:

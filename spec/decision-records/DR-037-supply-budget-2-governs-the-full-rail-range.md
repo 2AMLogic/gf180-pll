@@ -1,4 +1,4 @@
-# DR-036: Budget 2 governs the full 2.97–3.63 V rail range; its 0.6 V figure priced half that excursion and is re-derived as 1.2 V, with the 53 mV worst-corner lock margin as the quantity that must not erode
+# DR-037: Budget 2 governs the full 2.97–3.63 V rail range; its 0.6 V figure priced half that excursion and is re-derived as 1.2 V, with the 53 mV worst-corner lock margin as the quantity that must not erode
 
 - **Status**: proposed. The operator's ruling on #525 (2026-10-02) is the
   *input* to this record, not its ratification. Ratification goes through the
@@ -70,9 +70,11 @@ not pick unaided. The operator has now chosen the other one.
    Cross-check, after the fact and not as an input: the worst measured cell
    consumed 0.846 V over 0.66 V, i.e. an effective `Kvco/f_out` of
    0.335 / 0.846 = 0.395 per volt, inside the 0.31 … 0.84 envelope the budget
-   assumes. Measured consumption therefore lies between the derived 0.40 V and
-   1.10 V ends, at 0.385 … 0.846 V over the 15 cells — **all 15 meet 1.2 V**,
-   worst at 71 % of it (0.354 V of headroom).
+   assumes. Measured consumption is 0.385 … 0.846 V over the 15 cells, at or
+   below the derived 1.10 V low-Kvco end. (The lowest cell sits slightly under
+   the 0.40 V high-Kvco end, because the derivation's 34 % shift is the
+   worst-corner pushing and a cell that pushes less needs less travel.)
+   **All 15 meet 1.2 V**, worst at 71 % of it (0.354 V of headroom).
 
 3. **The miss against 0.6 V stays recorded, as an artefact of the figure and
    not a defect.** Over the full range, 9 of 15 cells exceeded 0.6 V, worst

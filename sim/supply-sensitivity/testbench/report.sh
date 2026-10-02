@@ -857,7 +857,7 @@ eval "$(awk -F, -v accv_lo="${ACC_VCTRL_LO}" -v accv_hi="${ACC_VCTRL_HI}" -v pwr
     if (p * 1e3 > pwr) npfail++;
     if (vcmin < accv_lo || vcmax > accv_hi) { nvout++; if (vout == "") vout = id; else vout = vout " " id }
     # Signed margin of the ripple PEAKS to the nearer window edge (positive =
-    # inside).  The tightest one is the quantity DR-036 says must not erode.
+    # inside).  The tightest one is the quantity DR-037 says must not erode.
     mg = vcmin - accv_lo; if (accv_hi - vcmax < mg) mg = accv_hi - vcmax;
     if (!seenmg || mg < mnmg) { mnmg = mg; mnmgid = id }
     seenmg = 1;
@@ -876,7 +876,7 @@ eval "$(awk -F, -v accv_lo="${ACC_VCTRL_LO}" -v accv_hi="${ACC_VCTRL_HI}" -v pwr
       if (!seens || s > mxs) { mxs = s; mxsid = a[1] "/" a[2] "C" }
       if (!seens || s < mns) { mns = s; mnsid = a[1] "/" a[2] "C" }
       sum += s; ns++; seens = 1;
-      # Budget 2 (DR-036): Vctrl travel over the full 2.97 -> 3.63 V rail,
+      # Budget 2 (DR-037): Vctrl travel over the full 2.97 -> 3.63 V rail,
       # per (bundle, temperature) cell.  A cell without both end rails has no
       # full-range span and is not graded rather than graded on a guess.
       span = vhi[k] - vlo[k]; if (span < 0) span = -span;
@@ -1232,7 +1232,7 @@ V_PWR=$([ "${N_PFAIL}" -eq 0 ] && echo PASS || echo FAIL)
 if [ "${N_DYN:-0}" -eq 0 ]; then V_DYN="NOT MEASURED"; else
   V_DYN=$([ "${DYN_LOST}" -eq 0 ] && echo PASS || echo FAIL); fi
 # Criterion 1b grades the ratified budget AND the measured window (#525,
-# DR-036): Budget 2 over the full 2.97 -> 3.63 V excursion, and the ripple
+# DR-037): Budget 2 over the full 2.97 -> 3.63 V excursion, and the ripple
 # peaks inside 0.9-2.7 V.  With no (bundle, temperature) cell carrying both end
 # rails there is no Budget-2 span to grade, so that half is NOT MEASURED and
 # cannot pass silently.
@@ -1634,7 +1634,7 @@ supply-sensitivity: ${N_STEADY} steady-state points, ${N_DYN} step/ramp runs
   UP/DN pulse-width skew                  ${MNSK_NS} .. ${MXSK_NS} ns
   Vctrl (settled)                         ${MNVC} .. ${MXVC} V,  ${N_VOUT} point(s) outside ${ACC_VCTRL_LO}-${ACC_VCTRL_HI} V   ${V_WIN}
   Budget 2: Vctrl travel over ${ACC_RAIL_LO}-${ACC_RAIL_HI} V    worst ${B2_WORST} V @ ${B2_WORST_ID}, ${N_B2_OVER} of ${N_B2} cell(s) over ${ACC_BUDGET2_V} V   ${V_B2}
-  tightest ripple-peak margin to window   ${WIN_MARGIN_MV} mV @ ${WIN_MARGIN_ID} (must not erode, DR-036)
+  tightest ripple-peak margin to window   ${WIN_MARGIN_MV} mV @ ${WIN_MARGIN_ID} (must not erode, DR-037)
   criterion 1b overall                    ${V_VCTRL}
   total power @ 100 MHz                   ${MNP_MW} .. ${MXP_MW} mW (worst ${MXP_ID})    ${V_PWR}
   step/ramp: worst plateau ferr           ${DYN_MXFE} @ ${DYN_MXFE_ID}     ${V_DYN}
@@ -2075,8 +2075,8 @@ ${FDEV_TABLE}
     voltages, \`vctrl_avg_v\`. Points outside DR-003 Decision 5's measured
     ${ACC_VCTRL_LO}-${ACC_VCTRL_HI} V window: **${N_VOUT}** --
     ${VOUT}. **${V_WIN}** Tightest ripple-peak margin to that window:
-    **${WIN_MARGIN_MV} mV** at ${WIN_MARGIN_ID} -- the quantity DR-036 states
-    must not erode. **Budget 2** (\`spec/pll.md\` row 12, DR-036): the control
+    **${WIN_MARGIN_MV} mV** at ${WIN_MARGIN_ID} -- the quantity DR-037 states
+    must not erode. **Budget 2** (\`spec/pll.md\` row 12, DR-037): the control
     node's travel over the full ${ACC_RAIL_LO} -> ${ACC_RAIL_HI} V rail,
     per (bundle, temperature) cell, against the ratified **${ACC_BUDGET2_V} V**:
     worst **${B2_WORST} V** at ${B2_WORST_ID}, **${N_B2_OVER}** of ${N_B2} cell(s)
