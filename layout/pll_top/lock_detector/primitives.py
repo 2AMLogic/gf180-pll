@@ -1677,14 +1677,6 @@ def route_all_nets(
 NetTracks = _canvas.NetTracks
 
 
-def nwell_over(canvas: Canvas, boxes: Iterable[tuple[float, float, float, float]]) -> tuple[float, float, float, float]:
-    """Draw one nwell rectangle enclosing every PMOS comp/ntap box given, with margin."""
-    x0, y0, x1, y1 = bbox_union(boxes)
-    well = (
-        x0 - NWELL_MARGIN_UM,
-        y0 - NWELL_MARGIN_UM,
-        x1 + NWELL_MARGIN_UM,
-        y1 + NWELL_MARGIN_UM,
-    )
-    canvas.rect("nwell", *well)
-    return well
+# One shared nwell rectangle around every PMOS comp / ntap box, with this
+# module's own ``NWELL_MARGIN_UM`` (issue #690, ``_canvas.nwell_over()``).
+nwell_over = partial(_canvas.nwell_over, margin=NWELL_MARGIN_UM)

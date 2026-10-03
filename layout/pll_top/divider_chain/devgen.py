@@ -718,16 +718,9 @@ pad_center = _canvas.pad_center
 bbox_union = _canvas.bbox_union
 
 
-def nwell_over(canvas: Canvas, boxes: Sequence[tuple[float, float, float, float]]) -> tuple[float, float, float, float]:
-    """Draw one nwell rectangle enclosing every PMOS comp box (+ any ntap
-    box) given, with :data:`NWELL_MARGIN_UM` margin -- the one-shared-nwell
-    convention a composite macro uses instead of :func:`build_stack_cell`'s
-    per-column nwell (see ``dff_tg_3v3.py``'s module docstring).
-    """
-    x0, y0, x1, y1 = bbox_union(boxes)
-    well = (x0 - NWELL_MARGIN_UM, y0 - NWELL_MARGIN_UM, x1 + NWELL_MARGIN_UM, y1 + NWELL_MARGIN_UM)
-    canvas.rect("nwell", *well)
-    return well
+# One shared nwell rectangle around every PMOS comp / ntap box, with this
+# module's own ``NWELL_MARGIN_UM`` (issue #690, ``_canvas.nwell_over()``).
+nwell_over = partial(_canvas.nwell_over, margin=NWELL_MARGIN_UM)
 
 
 def offset_pad_x(
@@ -941,20 +934,33 @@ NetTracks = _canvas.NetTracks
 # better than :class:`NetTracks` there. The win is entirely on the nets
 # whose extent leaves the rest of the block's width free for something
 # else's bus.
+_TRACK_CLEARANCE_UM = METAL2_TRACK_PITCH_UM - METAL2_WIRE_WIDTH_UM
+# Net x extent and left-edge packer are shared with ``pfd_cp/cp_array.py`` via
+# ``_canvas`` (issue #690), bound to this module's own constants; the pad
+# centres' x values are what they consume. See :func:`pack_tracks` below.
+_net_x_extent_xs = partial(
+    _canvas.net_x_extent,
+    wire_width=METAL2_WIRE_WIDTH_UM,
+    via2_size=VIA2_SIZE_UM,
+    via_enclosure=VIA_ENCLOSURE_UM,
+)
+_pack_tracks_xs = partial(
+    _canvas.pack_tracks,
+    pitch=METAL2_TRACK_PITCH_UM,
+    clearance=_TRACK_CLEARANCE_UM,
+    wire_width=METAL2_WIRE_WIDTH_UM,
+    via2_size=VIA2_SIZE_UM,
+    via_enclosure=VIA_ENCLOSURE_UM,
+)
+
+
 def _net_x_extent(pad_centers: Sequence[tuple[float, float]]) -> tuple[float, float]:
     """The physical x-range one net's drawn Metal2 geometry occupies at its
-    own track_y -- not just :func:`route_net`'s own bus rectangle
-    (``x_lo - METAL2_WIRE_WIDTH_UM/2 .. x_hi + METAL2_WIRE_WIDTH_UM/2``), but
-    the wider of that and each end riser's own Via2/Metal2 landing square
-    (:func:`_canvas._riser`'s ``half_m3_top = VIA2_SIZE_UM/2 + VIA_ENCLOSURE_UM``,
-    which is wider than half the bus wire's own width) -- so a net's true
-    left/rightmost drawn shape at ``track_y`` is never underestimated at the
-    two extreme pads, where the landing square is what actually reaches
-    furthest, not the bus wire.
+    own track_y: :func:`_canvas.net_x_extent` of the pad centres' x values --
+    the wider of the bus rectangle and each end riser's Via2/Metal2 landing
+    square, so the two extreme pads are never underestimated.
     """
-    xs = [x for x, _ in pad_centers]
-    half = max(METAL2_WIRE_WIDTH_UM / 2.0, VIA2_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM)
-    return (min(xs) - half, max(xs) + half)
+    return _net_x_extent_xs([x for x, _ in pad_centers])
 
 
 def pack_tracks(
@@ -962,13 +968,13 @@ def pack_tracks(
     base_y: float,
     *,
     pitch: float = METAL2_TRACK_PITCH_UM,
-    clearance: float = METAL2_TRACK_PITCH_UM - METAL2_WIRE_WIDTH_UM,
+    clearance: float = _TRACK_CLEARANCE_UM,
 ) -> dict[str, float]:
     """Assign every net in ``nets`` a track_y, reusing a track across any
     nets whose drawn extents (:func:`_net_x_extent`) do not come within
     ``clearance`` of each other -- see this section's own module-level
     comment for the algorithm and why it is optimal, not merely "good
-    enough".
+    enough". The packing itself is :func:`_canvas.pack_tracks`.
 
     ``clearance`` defaults to the same margin :class:`NetTracks` already
     uses *between* two tracks in y (``METAL2_TRACK_PITCH_UM -
@@ -984,32 +990,13 @@ def pack_tracks(
     :func:`build_stack_cell`/:func:`build_row_cell` already use for a caller
     error rather than a confusing downstream KeyError.
     """
-    extents: dict[str, tuple[float, float]] = {}
+    xs: dict[str, list[float]] = {}
     for net, pads in nets.items():
         pads = list(pads)
         if not pads:
             raise ValueError(f"pack_tracks(): net {net!r} has no pads to route")
-        extents[net] = _net_x_extent(pads)
-
-    # Left-edge algorithm: process nets in increasing left-edge order (ties
-    # broken by name, for determinism), placing each on the first track
-    # whose most-recent occupant ends early enough to clear this net's own
-    # left edge by `clearance`; open a new track only when none does.
-    order = sorted(extents, key=lambda n: (extents[n][0], n))
-    track_right: list[float] = []
-    track_of: dict[str, int] = {}
-    for net in order:
-        lo, hi = extents[net]
-        for i, right in enumerate(track_right):
-            if lo >= right + clearance:
-                track_right[i] = hi
-                track_of[net] = i
-                break
-        else:
-            track_right.append(hi)
-            track_of[net] = len(track_right) - 1
-
-    return {net: base_y + i * pitch for net, i in track_of.items()}
+        xs[net] = [x for x, _ in pads]
+    return _pack_tracks_xs(xs, base_y, pitch=pitch, clearance=clearance)
 
 
 # --- routing *into* the plane over the device rows (issue #458) -------------

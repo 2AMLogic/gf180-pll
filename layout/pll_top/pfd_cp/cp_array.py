@@ -884,104 +884,28 @@ NetTracks = _canvas.NetTracks
 # but the N channel's top sits 2.11 um below this block's own
 # ``footprint[3]`` (which the P channel sets) and so buys nothing either.
 # See ``layout/evidence/pfd-cp-layout/PROOF-469-glue-bus-packing.md``.
-def _net_x_extent(xs: Sequence[float]) -> tuple[float, float]:
-    """The x range one net's drawn Metal2 geometry occupies at its own
-    ``track_y``, given every x that net has a riser or a bus end at.
-
-    Not simply :func:`_route_side`'s own bus rectangle
-    (``x_lo - METAL2_WIRE_WIDTH_UM/2 .. x_hi + METAL2_WIRE_WIDTH_UM/2``): at
-    each extreme x the widest drawn shape is that riser's own Metal2 landing
-    square (:func:`_riser`'s ``half_v2 = VIA2_SIZE_UM/2 + VIA_ENCLOSURE_UM``
-    = 0.22 um, against the bus wire's own 0.17 um half-width), and a parent's
-    own link riser (``cp_output_stage._link_tracks()``) lands the same square
-    at whatever x it reaches in at. Taking the wider of the two is what keeps
-    a net's true leftmost/rightmost drawn edge from being under-reported --
-    the identical derivation ``divider_chain/devgen.py``'s own
-    ``_net_x_extent()`` states, for the same reason.
-    """
-    xs = list(xs)
-    if not xs:
-        raise ValueError("_net_x_extent(): no x coordinates")
-    half = max(METAL2_WIRE_WIDTH_UM / 2.0, VIA2_SIZE_UM / 2.0 + VIA_ENCLOSURE_UM)
-    return (min(xs) - half, max(xs) + half)
-
-
-def check_track_separation(
-    track_y: Mapping[str, float],
-    extents: Mapping[str, tuple[float, float]],
-    clearance: float = METAL2_TRACK_PITCH_UM - METAL2_WIRE_WIDTH_UM,
-) -> None:
-    """Raise unless every two nets assigned the *same* ``track_y`` keep at
-    least ``clearance`` between their drawn x extents.
-
-    :func:`pack_tracks` produces an assignment with this property by
-    construction and calls this on its own output; the reason it is a
-    separate public function is that the property has to survive the
-    *caller's* own later geometry too. ``cp_output_stage.build()`` re-checks
-    it against the x values its link loop really extended each bus to, not
-    against the ``bus_reach`` it declared beforehand -- so an extension added
-    later without updating that declaration fails the build instead of
-    silently drawing a cross-net Metal2 merge no DRC deck can report (see
-    this section's own module-level comment, and ``netcheck.py``'s).
-    """
-    by_track: dict[float, list[str]] = {}
-    for net, y in track_y.items():
-        by_track.setdefault(round(y, 6), []).append(net)
-    for y, nets in sorted(by_track.items()):
-        ordered = sorted(nets, key=lambda n: extents[n][0])
-        for a, b in zip(ordered, ordered[1:]):
-            gap = extents[b][0] - extents[a][1]
-            if gap < clearance - 1e-9:
-                raise ValueError(
-                    f"cp_array: nets {a!r} {extents[a]} and {b!r} {extents[b]} share "
-                    f"track_y={y} but are only {gap:.3f} um apart; needs >= {clearance}"
-                )
-
-
-def pack_tracks(
-    nets: Mapping[str, Sequence[float]],
-    base_y: float,
-    *,
-    pitch: float = METAL2_TRACK_PITCH_UM,
-    clearance: float = METAL2_TRACK_PITCH_UM - METAL2_WIRE_WIDTH_UM,
-) -> dict[str, float]:
-    """Assign every net in ``nets`` (net -> every x its own Metal2 geometry
-    reaches: its risers, and any x a parent will later extend its bus to) a
-    ``track_y``, reusing one track across any nets whose extents
-    (:func:`_net_x_extent`) stay ``clearance`` apart.
-
-    ``clearance`` defaults to the same margin :class:`NetTracks` already
-    keeps *between* two tracks in y (``METAL2_TRACK_PITCH_UM -
-    METAL2_WIRE_WIDTH_UM`` = 0.41 um, over ``M2.2a``'s 0.28 um minimum Metal2
-    spacing), reused here along the x axis because it is the same rule --
-    exactly as ``divider_chain/devgen.pack_tracks()`` derives it.
-
-    Deterministic: nets are processed in increasing left-edge order with the
-    net name as the tie-break, so the same geometry always yields the same
-    band.
-    """
-    extents = {net: _net_x_extent(xs) for net, xs in nets.items()}
-
-    # Left-edge algorithm: place each net on the first track whose
-    # most-recent occupant ends early enough to clear this net's own left
-    # edge by `clearance`; open a new track only when none does.
-    order = sorted(extents, key=lambda n: (extents[n][0], n))
-    track_right: list[float] = []
-    track_of: dict[str, int] = {}
-    for net in order:
-        lo, hi = extents[net]
-        for i, right in enumerate(track_right):
-            if lo >= right + clearance:
-                track_right[i] = hi
-                track_of[net] = i
-                break
-        else:
-            track_right.append(hi)
-            track_of[net] = len(track_right) - 1
-
-    assignment = {net: base_y + i * pitch for net, i in track_of.items()}
-    check_track_separation(assignment, extents, clearance)
-    return assignment
+# Net x extent, same-track separation proof, and the left-edge Metal2 track
+# packer are shared with ``divider_chain/devgen.py`` via ``_canvas`` (issue
+# #690), bound to this module's own Metal2/Via2 constants. ``pack_tracks``
+# takes net -> every x its Metal2 geometry reaches (its risers, and any x a
+# parent will later extend its bus to); ``clearance`` defaults to the margin
+# :class:`NetTracks` keeps *between* two tracks in y, reused along x.
+_TRACK_CLEARANCE_UM = METAL2_TRACK_PITCH_UM - METAL2_WIRE_WIDTH_UM
+_net_x_extent = partial(
+    _canvas.net_x_extent,
+    wire_width=METAL2_WIRE_WIDTH_UM,
+    via2_size=VIA2_SIZE_UM,
+    via_enclosure=VIA_ENCLOSURE_UM,
+)
+check_track_separation = partial(_canvas.check_track_separation, clearance=_TRACK_CLEARANCE_UM)
+pack_tracks = partial(
+    _canvas.pack_tracks,
+    pitch=METAL2_TRACK_PITCH_UM,
+    clearance=_TRACK_CLEARANCE_UM,
+    wire_width=METAL2_WIRE_WIDTH_UM,
+    via2_size=VIA2_SIZE_UM,
+    via_enclosure=VIA_ENCLOSURE_UM,
+)
 
 
 class PackedTracks:
