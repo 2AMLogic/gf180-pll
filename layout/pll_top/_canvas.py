@@ -409,6 +409,124 @@ def bbox_union(boxes: Iterable[tuple[float, float, float, float]]) -> tuple[floa
     )
 
 
+def nwell_over(
+    view: Any,
+    boxes: Iterable[tuple[float, float, float, float]],
+    *,
+    margin: float,
+) -> tuple[float, float, float, float]:
+    """Draw one nwell rectangle on ``view`` (anything with a ``rect()``, i.e. a
+    ``Canvas`` or a ``rowgen`` view) enclosing every PMOS comp / ntap box in
+    ``boxes``, ``margin`` clear on every side, and return it. ``margin`` is
+    each caller's own ``NWELL_MARGIN_UM``.
+    """
+    x0, y0, x1, y1 = bbox_union(boxes)
+    well = (x0 - margin, y0 - margin, x1 + margin, y1 + margin)
+    view.rect("nwell", *well)
+    return well
+
+
+def net_x_extent(
+    xs: Iterable[float],
+    *,
+    wire_width: float,
+    via2_size: float,
+    via_enclosure: float,
+) -> tuple[float, float]:
+    """The x range one net's drawn Metal2 geometry occupies at its own
+    ``track_y``, given every x that net has a riser or a bus end at.
+
+    Not simply the bus rectangle (``x_lo - wire_width/2 .. x_hi +
+    wire_width/2``): at each extreme x the widest drawn shape is that riser's
+    own Metal2 landing square (``_riser``'s ``via2_size/2 + via_enclosure``),
+    which is wider than half the bus wire's width, so taking the wider of the
+    two keeps a net's true leftmost/rightmost drawn edge from being
+    under-reported. Raises ``ValueError`` when ``xs`` is empty.
+    """
+    xs = list(xs)
+    if not xs:
+        raise ValueError("net_x_extent(): no x coordinates")
+    half = max(wire_width / 2.0, via2_size / 2.0 + via_enclosure)
+    return (min(xs) - half, max(xs) + half)
+
+
+def check_track_separation(
+    track_y: Any,
+    extents: Any,
+    clearance: float,
+) -> None:
+    """Raise unless every two nets assigned the *same* ``track_y`` keep at
+    least ``clearance`` between their drawn x extents.
+
+    :func:`pack_tracks` produces an assignment with this property by
+    construction and calls this on its own output; it is also public because
+    the property has to survive the *caller's* own later geometry (e.g.
+    ``cp_output_stage.build()`` re-checks the x values its link loop really
+    extended each bus to).
+    """
+    by_track: dict[float, list[str]] = {}
+    for net, y in track_y.items():
+        by_track.setdefault(round(y, 6), []).append(net)
+    for y, nets in sorted(by_track.items()):
+        ordered = sorted(nets, key=lambda n: extents[n][0])
+        for a, b in zip(ordered, ordered[1:]):
+            gap = extents[b][0] - extents[a][1]
+            if gap < clearance - 1e-9:
+                raise ValueError(
+                    f"track packing: nets {a!r} {extents[a]} and {b!r} {extents[b]} share "
+                    f"track_y={y} but are only {gap:.3f} um apart; needs >= {clearance}"
+                )
+
+
+def pack_tracks(
+    nets: Any,
+    base_y: float,
+    *,
+    pitch: float,
+    clearance: float,
+    wire_width: float,
+    via2_size: float,
+    via_enclosure: float,
+) -> dict[str, float]:
+    """Assign every net in ``nets`` (net -> every x its own Metal2 geometry
+    reaches) a ``track_y``, reusing one track across any nets whose extents
+    (:func:`net_x_extent`) stay ``clearance`` apart -- the left-edge
+    algorithm, optimal for this 1-D placement problem.
+
+    Deterministic: nets are processed in increasing left-edge order with the
+    net name as the tie-break, so the same geometry always yields the same
+    band. Each submodule binds ``pitch``/``clearance`` and the via/wire
+    constants from its own ``METAL2_*``/``VIA*`` values (``clearance`` is
+    ``METAL2_TRACK_PITCH_UM - METAL2_WIRE_WIDTH_UM``, the margin
+    ``NetTracks`` already keeps between two tracks in y, reused along x).
+    """
+    extents = {
+        net: net_x_extent(xs, wire_width=wire_width, via2_size=via2_size, via_enclosure=via_enclosure)
+        for net, xs in nets.items()
+    }
+
+    # Left-edge algorithm: place each net on the first track whose
+    # most-recent occupant ends early enough to clear this net's own left
+    # edge by `clearance`; open a new track only when none does.
+    order = sorted(extents, key=lambda n: (extents[n][0], n))
+    track_right: list[float] = []
+    track_of: dict[str, int] = {}
+    for net in order:
+        lo, hi = extents[net]
+        for i, right in enumerate(track_right):
+            if lo >= right + clearance:
+                track_right[i] = hi
+                track_of[net] = i
+                break
+        else:
+            track_right.append(hi)
+            track_of[net] = len(track_right) - 1
+
+    assignment = {net: base_y + i * pitch for net, i in track_of.items()}
+    check_track_separation(assignment, extents, clearance)
+    return assignment
+
+
 def pad_center(pad: tuple[float, float, float, float]) -> tuple[float, float]:
     """The centre point of an axis-aligned pad box ``(x0, y0, x1, y1)``."""
     return ((pad[0] + pad[2]) / 2.0, (pad[1] + pad[3]) / 2.0)

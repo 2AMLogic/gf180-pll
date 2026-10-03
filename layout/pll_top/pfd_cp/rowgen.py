@@ -450,19 +450,11 @@ def tap_strip(view, kind: str, x_center: float, y_center: float) -> tuple[float,
     return (x0, y0, x1, y1)
 
 
-def nwell_over(view, boxes: Sequence[tuple[float, float, float, float]]) -> tuple[float, float, float, float]:
-    """One nwell rectangle enclosing every PMOS comp / n-tap box, with margin.
-
-    One well per row pair keeps the design free of NW.2a/NW.2b (min nwell
-    space) by construction -- there is never a second nwell polygon close to
-    the first within a row.
-    """
-    x0 = min(b[0] for b in boxes) - NWELL_MARGIN_UM
-    y0 = min(b[1] for b in boxes) - NWELL_MARGIN_UM
-    x1 = max(b[2] for b in boxes) + NWELL_MARGIN_UM
-    y1 = max(b[3] for b in boxes) + NWELL_MARGIN_UM
-    view.rect("nwell", x0, y0, x1, y1)
-    return (x0, y0, x1, y1)
+# One nwell rectangle per row pair around every PMOS comp / n-tap box keeps
+# the design free of NW.2a/NW.2b (min nwell space) by construction -- there is
+# never a second nwell polygon close to the first within a row. Shared via
+# ``_canvas.nwell_over()`` (issue #690).
+nwell_over = partial(_canvas.nwell_over, margin=NWELL_MARGIN_UM)
 
 
 # ---------------------------------------------------------------------------
