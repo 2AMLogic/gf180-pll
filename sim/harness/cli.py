@@ -725,6 +725,9 @@ def run(args: argparse.Namespace) -> int:
             f"{report._fmt(stats['mean']):>16}{report._fmt(stats['spread_pct']):>12}"
         )
 
+    for line in report.execution_console_lines(record.get("environment", {}).get("execution")):
+        print(f"  {line}")
+
     for failure in record["checks"]["failures"]:
         print(
             f"  CHECK FAIL {failure['measurement']} {failure['kind']}={report._fmt(failure['limit'])} "

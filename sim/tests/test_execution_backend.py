@@ -1141,6 +1141,59 @@ class ExecutingSimulatorTests(unittest.TestCase):
         self.assertEqual(len(lines), 1)
 
 
+class ExecutionConsoleLineTests(unittest.TestCase):
+    """The console summary names the executor even when no record is minted (#503).
+
+    A ``--no-write`` single-point pilot against the batch backend is the
+    transport check #503 prescribes; it must be able to say which ngspice ran
+    the point, or a pilot-versus-local mismatch cannot be attributed.
+    """
+
+    def test_a_batch_pilot_names_its_host_and_simulator(self):
+        lines = report.execution_console_lines(
+            {
+                "jobs": 1,
+                "backend": "batch",
+                "hosts": {"ip-10-0-0-1": 1},
+                "simulators": {"ngspice-46": 1},
+            }
+        )
+        self.assertEqual(len(lines), 1)
+        self.assertIn("backend batch", lines[0])
+        self.assertIn("ip-10-0-0-1 (1)", lines[0])
+        self.assertIn("ngspice-46 (1)", lines[0])
+
+    def test_an_unnamed_simulator_is_unattributed_not_the_submitters(self):
+        line = report.execution_console_lines(
+            {"backend": "batch", "hosts": {"i-0a": 2}, "simulators": {"ngspice-42": 1, "": 1}}
+        )[0]
+        self.assertIn("ngspice-42 (1)", line)
+        self.assertIn("unattributed (1)", line)
+
+    def test_a_local_run_still_prints_the_line(self):
+        line = report.execution_console_lines(
+            {"backend": "local", "hosts": {"box": 3}, "simulators": {"ngspice-46": 3}}
+        )[0]
+        self.assertIn("backend local", line)
+        self.assertIn("box (3)", line)
+
+    def test_no_attribution_supplied_prints_nothing(self):
+        self.assertEqual(report.execution_console_lines({}), [])
+        self.assertEqual(report.execution_console_lines(None), [])
+        self.assertEqual(report.execution_console_lines({"jobs": 1, "backend": "local"}), [])
+
+    def test_build_record_output_feeds_it(self):
+        """The CLI reads it from where build_record puts it."""
+        env = report.environment(
+            mock.Mock(provenance=lambda: {}),
+            "ngspice-46",
+            Path("."),
+            git={"commit": "x", "dirty": False},
+            execution={"jobs": 1, "backend": "batch", "hosts": {"h": 1}, "simulators": {"ngspice-46": 1}},
+        )
+        self.assertIn("h (1)", report.execution_console_lines(env["execution"])[0])
+
+
 
 # ===========================================================================
 # 9. The transport contract itself: every call site must be callable through
