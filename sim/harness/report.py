@@ -670,6 +670,40 @@ def _execution_lines(
     return lines
 
 
+def execution_console_lines(execution: dict | None) -> list[str]:
+    """Who ran the points and on which ngspice, for the run's console summary.
+
+    The record's Environment provenance already carries this, but a
+    ``--no-write`` run mints no record -- and ``--no-write`` is exactly how a
+    single-point transport pilot against an off-host backend is run (#503).
+    Without this line such a pilot can report *that* a point came back and what
+    it measured, but not which simulator version produced it, which is the one
+    fact a pilot-versus-local comparison has to rule out first: two executors
+    that disagree because they ran different ngspice releases (DR-028) are a
+    job-image finding, not a design one.
+
+    Always printed when the caller supplied execution attribution, local or
+    not, so the line's absence never has to be interpreted. A point whose
+    output named no version is shown as ``unattributed`` rather than credited
+    to the submitting host's binary, on the same terms as the record.
+    """
+    if not execution or "hosts" not in execution:
+        return []
+
+    def _tally(counts: dict) -> str:
+        parts = [f"{name} ({n})" for name, n in sorted(counts.items()) if name]
+        if counts.get(""):
+            parts.append(f"unattributed ({counts['']})")
+        return ", ".join(parts) or "none"
+
+    backend = execution.get("backend") or "local"
+    return [
+        f"executed  : backend {backend}; "
+        f"host(s) {_tally(execution.get('hosts') or {})}; "
+        f"simulator(s) {_tally(execution.get('simulators') or {})}"
+    ]
+
+
 #: `ngspice-46` inside whatever longer banner the resolved binary printed, so
 #: the recording host's version can be compared with the executing one without
 #: depending on the rest of that banner's wording.
