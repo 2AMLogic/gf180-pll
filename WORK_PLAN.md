@@ -71,8 +71,6 @@ Issues carrying `loom:curated`.
 
 - **#292**: Layout: draw real per-block transistor-level layout for VCO, PFD/CP, divider-chain, lock-detector (#17's floorplan is planning-only)
 
-/bin/bash: line 26: loom:issue: command not found
-/bin/bash: line 26: loom:building: command not found
 ## Backlog Balance
 
 | Tier | Count |
