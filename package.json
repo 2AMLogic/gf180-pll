@@ -1,6 +1,6 @@
 {
-  "name": "loom-workspace",
-  "description": "Loom-managed workspace with AI development orchestration",
+  "name": "gf180-pll",
+  "description": "Integer-N ring-oscillator PLL block on gf180mcu: design, simulation harness, and layout",
   "private": true,
   "scripts": {
     "worktree:return": "./.loom/scripts/worktree-return.sh",
