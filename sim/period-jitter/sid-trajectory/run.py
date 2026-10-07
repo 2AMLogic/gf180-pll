@@ -68,6 +68,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(REPO / "sim"))
+
+from harness.pdk import find_pdk  # noqa: E402
 
 import sid_deck  # noqa: E402
 import sid_extract  # noqa: E402
@@ -153,16 +156,7 @@ FATAL_LOG_PATTERNS = ("Timestep too small", "simulation(s) aborted", "singular")
 
 
 def pdk_models() -> Path:
-    env = subprocess.run(
-        [sys.executable, str(REPO / "sim" / "run_corners.py"), "--print-env"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-    for line in env.splitlines():
-        if line.startswith("export GF180_MODELS="):
-            return Path(line.split("=", 1)[1].strip().strip('"'))
-    raise SystemExit("could not resolve GF180_MODELS from sim/run_corners.py")
+    return find_pdk().ngspice_dir
 
 
 def run_deck(deck: str, work: Path, logname: str, logs: Path,
