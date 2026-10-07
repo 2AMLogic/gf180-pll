@@ -79,6 +79,20 @@ class DeckRun:
     the caller: a backend that cannot determine it reports the empty string,
     which provenance renders as "unattributed" rather than silently
     substituting the minting host.
+
+    How the failure signals interact:
+
+    * ``timed_out`` is its own terminal outcome (point status ``error``).
+    * ``execution_failed`` is set *only* by a backend that was told, by the
+      execution layer itself, that the deck's run ended unsuccessfully (the
+      batch backend's ``failed`` / ``interrupted`` job states). The runner
+      fails the point even when every required measurement was parsed, keeps
+      those measurements and artefacts as evidence, and stops later phases.
+      It is never inferred from ``returncode`` or from ``detail`` text.
+    * A plain non-zero ``returncode`` with every required measurement present
+      is NOT a failure by itself: ngspice's exit status is not known to be
+      reliable for an absent optional measurement, so the existing
+      required-measurement check remains the pass condition.
     """
 
     output: str
@@ -90,6 +104,9 @@ class DeckRun:
     #: (a job id, a status document's own message). Surfaced in the point's
     #: ``message`` so a failed remote point is diagnosable from the record.
     detail: str = ""
+    #: The execution layer reported a terminal failure for this deck. See the
+    #: class docstring for how this differs from ``returncode``.
+    execution_failed: bool = False
 
 
 def deck_dependencies(deck_text: str) -> list[str]:

@@ -770,6 +770,7 @@ class BatchBackend:
                 returncode=returncode if returncode else 1,
                 seconds=seconds,
                 host=host,
+                execution_failed=True,
                 detail=(
                     f"job {plan.job_id} ended {state}"
                     + (f": {status['detail']}" if status.get("detail") else "")

@@ -761,6 +761,35 @@ def _run_phase(
         message = (
             first_error or errors or f"ngspice exit {returncode}, no measurements parsed"
         )
+        if deck_run.execution_failed and deck_run.detail:
+            message = f"{deck_run.detail}; {message}"
+        if log_write_error:
+            message = f"{message}; {log_write_error}"
+        return _PhaseOutcome(
+            run=PhaseRun(
+                name=phase.name,
+                status="failed",
+                deck=deck_path.name,
+                log=log_path.name,
+                seconds=elapsed,
+                message=message,
+                host=deck_run.host,
+                simulator=simulator_of(output),
+            ),
+            measurements=measurements,
+            missing=missing,
+            not_measured=not_measured,
+            raw_files=raw_files,
+            raw_missing=raw_missing,
+        )
+
+    if deck_run.execution_failed:
+        # The execution layer reported a terminal failure even though every
+        # required measurement parsed (a partial log can look complete). The
+        # measurements and artefacts stay on the record as evidence, but the
+        # point must not pass, and the fail-stop keeps later phases from
+        # running on top of it.
+        message = deck_run.detail or f"execution failed (exit {returncode})"
         if log_write_error:
             message = f"{message}; {log_write_error}"
         return _PhaseOutcome(

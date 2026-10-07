@@ -953,6 +953,148 @@ class BackendAttributionTests(ManifestFixture):
         self.assertIsNone(seen["env"])
 
 
+class ExecutionFailureTests(ManifestFixture):
+    """A terminal backend failure is a failure even with complete measurements (#702)."""
+
+    def setUp(self):
+        super().setUp()
+        self.pdk = fake_pdk(self.root / "pdk")
+        self.points = corners.build_sweep_grid(
+            corners.resolve_corners(["typical"]), [27.0], [3.3]
+        )
+
+    def _single(self, manifest=None):
+        body = {"measure": {"vout": "v(out)"}, "analyses": ["tran 1n 10n"]}
+        body.update(manifest or {})
+        self.write(body)
+        return testbench.load(self.tb_dir)
+
+    def _run(self, tb, outcomes):
+        backend = _ScriptedBackend(outcomes)
+        results = runner.run_grid(
+            tb, self.pdk, self.points, self.root / "work", backend=backend
+        )
+        return results[0], backend
+
+    def test_failed_with_complete_measurements_fails_and_keeps_them(self):
+        tb = self._single()
+        got, _ = self._run(tb, [execution.DeckRun(
+            output="m_vout = 1.65\n", returncode=1, seconds=1.0,
+            execution_failed=True, detail="job j1 ended failed: spot reclaimed")])
+        self.assertEqual(got.status, "failed")
+        self.assertEqual(got.measurements["vout"], 1.65)
+        self.assertEqual(got.missing, [])
+        self.assertTrue(got.message.startswith("job j1 ended failed"))
+
+    def test_interrupted_with_complete_measurements_fails(self):
+        tb = self._single()
+        got, _ = self._run(tb, [execution.DeckRun(
+            output="m_vout = 1.65\n", returncode=1, seconds=1.0,
+            execution_failed=True, detail="job j2 ended interrupted")])
+        self.assertEqual(got.status, "failed")
+        self.assertIn("interrupted", got.message)
+
+    def test_failed_with_missing_measurements_carries_detail_and_diagnostic(self):
+        tb = self._single()
+        got, _ = self._run(tb, [execution.DeckRun(
+            output="Error: no such device\n", returncode=1, seconds=1.0,
+            execution_failed=True, detail="job j3 ended failed")])
+        self.assertEqual(got.status, "failed")
+        self.assertEqual(got.missing, ["vout"])
+        self.assertIn("job j3 ended failed", got.message)
+        self.assertIn("no such device", got.message)
+
+    def test_raw_artifacts_are_retained_on_an_execution_failure(self):
+        tb = self._single({"raw_files": ["jit.dat"]})
+
+        class _Writes(_ScriptedBackend):
+            def run_deck(self, deck_path, rundir, timeout_s, env=None):
+                (rundir / "jit.dat").write_text("0 1\n")
+                return super().run_deck(deck_path, rundir, timeout_s, env)
+
+        backend = _Writes([execution.DeckRun(
+            output="m_vout = 1.65\n", returncode=1, seconds=1.0,
+            execution_failed=True, detail="job j4 ended failed")])
+        got = runner.run_grid(
+            tb, self.pdk, self.points, self.root / "work", backend=backend
+        )[0]
+        self.assertEqual(got.status, "failed")
+        self.assertTrue(got.raw_files["jit.dat"].exists())
+
+    def test_a_failed_first_phase_stops_the_later_phase(self):
+        for name in ("a.sp", "b.sp"):
+            (self.tb_dir / name).write_text("v1 out 0 dc {vdd_val}\n")
+        (self.tb_dir / "tb.json").write_text(json.dumps({
+            "name": self.slug,
+            "phases": {
+                "one": {"netlist": "a.sp", "measure": {"va": "v(out)"},
+                        "analyses": ["tran 1n 10n"]},
+                "two": {"netlist": "b.sp", "measure": {"vb": "v(out)"},
+                        "analyses": ["tran 1n 10n"]},
+            },
+        }))
+        tb = testbench.load(self.tb_dir)
+        got, backend = self._run(tb, [
+            execution.DeckRun(output="m_va = 1.0\n", returncode=1, seconds=1.0,
+                              execution_failed=True, detail="job j5 ended failed"),
+            execution.DeckRun(output="m_vb = 2.0\n", returncode=0, seconds=1.0),
+        ])
+        self.assertEqual(got.status, "failed")
+        self.assertEqual(len(got.phases), 1)
+        self.assertEqual(len(backend.outcomes), 1, "the second phase must not run")
+        self.assertNotIn("vb", got.measurements)
+
+    def test_zero_exit_success_is_unchanged(self):
+        got, _ = self._run(self._single(), [
+            execution.DeckRun(output="m_vout = 1.65\n", returncode=0, seconds=1.0)])
+        self.assertEqual(got.status, "ok")
+
+    def test_nonzero_exit_alone_with_all_measurements_still_passes(self):
+        got, _ = self._run(self._single(), [
+            execution.DeckRun(output="m_vout = 1.65\n", returncode=1, seconds=1.0)])
+        self.assertEqual(got.status, "ok")
+
+    def test_timeout_is_still_an_error(self):
+        got, _ = self._run(self._single(), [
+            execution.DeckRun(output="", returncode=-1, seconds=5.0,
+                              timed_out=True, detail="job j6 hit budget")])
+        self.assertEqual(got.status, "error")
+
+    def test_absent_optional_measure_is_not_an_execution_failure(self):
+        tb = self._single({
+            "measure": {},
+            "raw_measures": {
+                "n": {"analysis": "tran", "expr": "trig v(a) targ v(b)"},
+                "asrt": {"analysis": "tran", "expr": "when v(a)=1 rise=1",
+                         "optional": True},
+            },
+        })
+        got, _ = self._run(tb, [
+            execution.DeckRun(output="n = 3.0\n", returncode=0, seconds=1.0)])
+        self.assertEqual(got.status, "ok")
+        self.assertIn("asrt", got.not_measured)
+
+    def test_the_batch_backend_marks_failed_and_interrupted_only(self):
+        for state, flag in (("failed", True), ("interrupted", True)):
+            deck = self.root / f"{state}.spice"
+            deck.write_text("* d\n.end\n")
+            backend = batch.BatchBackend(
+                pdk_variant_dir=self.pdk.path, pdk_variant=self.pdk.variant,
+                config=_config(self.root), apply=True,
+                runner=_FakeTransport([state]), poll_interval_s=0,
+            )
+            got = backend.run_deck(deck, self.root, 60, None)
+            self.assertEqual(got.execution_failed, flag)
+        transport = _FakeTransport(["timeout"], outputs={batch.RC_NAME: "-1"})
+        backend = batch.BatchBackend(
+            pdk_variant_dir=self.pdk.path, pdk_variant=self.pdk.variant,
+            config=_config(self.root), apply=True, runner=transport,
+            poll_interval_s=0,
+        )
+        got = backend.run_deck(deck, self.root, 60, None)
+        self.assertFalse(got.execution_failed)
+
+
 class BatchRawFileCaptureTests(ManifestFixture):
     """A manifest that declares ``raw_files`` is unaffected by job isolation.
 
