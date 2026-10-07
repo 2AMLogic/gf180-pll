@@ -4,6 +4,10 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-10-07
 
+- **PR #706**: harness: fail a point when the execution layer reports a terminal failure
+- **PR #705**: Normalise host paths in layout evidence + CI guard (#701)
+- **Issue #702** (closed): sim: preserve failed and interrupted backend outcomes when measurements are complete
+- **Issue #701** (closed): CI guard + capture-time normalization: layout evidence bundles still embed host-absolute paths (58/270 files)
 - **Issue #696** (closed): Remove four duplicate pdk_models() helpers: harness Pdk.ngspice_dir already provides this
 - **PR #694**: refactor(sim): resolve PDK models via find_pdk() in period-jitter runners
 - **Issue #692** (closed): Replace four copies of pdk_models() in period-jitter run.py with harness find_pdk()
