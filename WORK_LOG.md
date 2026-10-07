@@ -2,6 +2,11 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-07
+
+- **PR #694**: refactor(sim): resolve PDK models via find_pdk() in period-jitter runners
+- **Issue #692** (closed): Replace four copies of pdk_models() in period-jitter run.py with harness find_pdk()
+
 ### 2026-10-03
 
 - **PR #691**: Consolidate Metal2 track packing and nwell_over into _canvas.py
