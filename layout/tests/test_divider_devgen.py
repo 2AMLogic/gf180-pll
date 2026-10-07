@@ -26,6 +26,25 @@ from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 from divider_chain import devgen  # noqa: E402
 from divider_chain import inv_3v3  # noqa: E402
 from divider_chain import tgate_3v3  # noqa: E402
+from pfd_cp import devgen as pfdcp_devgen  # noqa: E402
+
+
+class SharedHelperTests(unittest.TestCase):
+    """Both device-generator families share one ``Device`` (issue #707), and
+    the legacy private names keep resolving in each."""
+
+    def test_device_is_one_class_with_default_body_net(self):
+        self.assertIs(devgen.Device, pfdcp_devgen.Device)
+        d = pfdcp_devgen.Device("n", "nfet", 1.0, 0.3, "A", "Y", "VSS")
+        self.assertIsNone(d.body_net)
+
+    def test_legacy_helper_names_still_exported(self):
+        for mod in (devgen, pfdcp_devgen):
+            self.assertTrue(callable(mod._connect_pads))
+            self.assertEqual(mod._pad_overlap_x((0, 0, 2, 1), (1, 2, 4, 3)), 1.5)
+            self.assertIsNone(mod._pad_overlap_x((0, 0, 1, 1), (1, 0, 2, 1)))
+        self.assertTrue(callable(devgen.well_tap))
+        self.assertTrue(callable(pfdcp_devgen._well_tap))
 
 
 class InvDeviceTableTests(unittest.TestCase):

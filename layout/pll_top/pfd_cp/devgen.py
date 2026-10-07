@@ -208,27 +208,11 @@ class Canvas(_canvas.Canvas):
     PIN_LAYER: ClassVar[str] = "metal1_label"
 
 
-@dataclass(frozen=True)
-class Device:
-    """One ``nfet_03v3``/``pfet_03v3`` instance in a :func:`build_stack_cell` column.
-
-    ``top_net``/``bottom_net`` are this device's two source/drain terminals,
-    named for their position in the vertical stack (``top_net`` nearer the
-    top of the column). ``gate_net``/``top_net``/``bottom_net`` are plain
-    net names -- :func:`build_stack_cell` wires or promotes them purely by
-    string equality across the whole device list, so a typo silently creates
-    a spurious extra net rather than raising; callers are expected to keep
-    ``layout/tests/``-level coverage on their own device tables the way
-    ``vco/devices.py``'s own tests do.
-    """
-
-    name: str
-    kind: str  # "nfet" or "pfet"
-    w_um: float
-    l_um: float
-    gate_net: str
-    top_net: str
-    bottom_net: str
+# One ``nfet_03v3``/``pfet_03v3`` instance in a column -- shared with
+# ``divider_chain/devgen.py`` (issue #707, ``_canvas.Device``; the optional
+# trailing ``body_net`` defaults to ``None``, which is this module's original
+# behaviour). See ``_canvas.Device``'s docstring.
+Device = _canvas.Device
 
 
 # Shared with the other ``layout/pll_top/*`` submodule that draws this
@@ -271,67 +255,25 @@ mosfet = partial(
 v_wire = partial(_canvas.v_wire, width=METAL1_WIRE_WIDTH_UM)
 
 
-def _pad_overlap_x(pad_a: tuple, pad_b: tuple) -> float | None:
-    lo = max(pad_a[0], pad_b[0])
-    hi = min(pad_a[2], pad_b[2])
-    return (lo + hi) / 2.0 if hi > lo else None
+# Shared with ``divider_chain/devgen.py`` (issue #707): see
+# ``_canvas.pad_overlap_x()`` / ``_canvas.connect_pads()`` /
+# ``_canvas.well_tap()``. Every pad this module wires (gate tabs, or S/D pads
+# of devices sharing the same left-aligned ``x0``) shares a real x-overlap by
+# construction -- see the module docstring's "left-aligned at x0" note.
+_pad_overlap_x = _canvas.pad_overlap_x
+_connect_pads = partial(_canvas.connect_pads, wire_width=METAL1_WIRE_WIDTH_UM)
 
-
-def _connect_pads(canvas: Canvas, pad_a: tuple, pad_b: tuple) -> None:
-    """Wire two Metal1 pads that share an x-overlap with a straight vertical run.
-
-    Every pad this module ever wires (gate tabs, or S/D pads of devices
-    sharing the same left-aligned ``x0``) shares a real x-overlap by
-    construction -- see the module docstring's "left-aligned at x0" note --
-    so a single vertical run is always sufficient; no dogleg router is
-    needed for the one-column topology this module supports.
-    """
-    x = _pad_overlap_x(pad_a, pad_b)
-    if x is None:
-        raise ValueError(
-            f"pads {pad_a} and {pad_b} share no x-overlap -- build_stack_cell() "
-            "only wires devices left-aligned at a common x0"
-        )
-    y0 = pad_a[3] if pad_a[3] <= pad_b[1] else pad_b[3]
-    y1 = pad_b[1] if pad_a[3] <= pad_b[1] else pad_a[1]
-    if y0 > y1:
-        y0, y1 = y1, y0
-    v_wire(canvas, x, y0, y1)
-
-
-def _well_tap(canvas: Canvas, kind: str, x0: float, y0: float, net: str) -> tuple[float, float, float, float]:
-    """A small square substrate/n-well tie: comp + implant + contact + Metal1 pad.
-
-    ``kind='n'``: n-well tie (comp + ``nplus``), tied to the PMOS body net.
-    ``kind='p'``: substrate tie (comp + ``pplus``), tied to the NMOS body net.
-    Returns the drawn Metal1 pad, for the caller to wire to the rest of that
-    net.
-    """
-    x1 = x0 + TAP_SIZE_UM
-    y1 = y0 + TAP_SIZE_UM
-    canvas.rect("comp", x0, y0, x1, y1)
-    implant_layer = "nplus" if kind == "n" else "pplus"
-    canvas.rect(
-        implant_layer,
-        x0 - IMPLANT_MARGIN_UM,
-        y0 - IMPLANT_MARGIN_UM,
-        x1 + IMPLANT_MARGIN_UM,
-        y1 + IMPLANT_MARGIN_UM,
-    )
-    xs = _contact_positions(x0, x1)
-    ys = _contact_positions(y0, y1)
-    for cx in xs:
-        for cy in ys:
-            canvas.rect("contact", cx, cy, cx + CONTACT_SIZE_UM, cy + CONTACT_SIZE_UM)
-    pad = (
-        x0 - METAL1_PAD_MARGIN_UM,
-        y0 - METAL1_PAD_MARGIN_UM,
-        x1 + METAL1_PAD_MARGIN_UM,
-        y1 + METAL1_PAD_MARGIN_UM,
-    )
-    canvas.rect("metal1", *pad)
-    canvas.pin(net, *pad)
-    return pad
+# A small square substrate/n-well tie (comp + implant + contact + Metal1 pad),
+# this module's constants bound. ``kind='n'`` ties the PMOS body, ``'p'`` the NMOS.
+_well_tap = partial(
+    _canvas.well_tap,
+    tap_size_um=TAP_SIZE_UM,
+    implant_margin_um=IMPLANT_MARGIN_UM,
+    contact_size_um=CONTACT_SIZE_UM,
+    contact_pitch_um=CONTACT_PITCH_UM,
+    contact_row_margin_um=CONTACT_ROW_MARGIN_UM,
+    metal1_pad_margin_um=METAL1_PAD_MARGIN_UM,
+)
 
 
 # The finished-cell record every ``build_stack_cell()``-style generator
@@ -353,89 +295,25 @@ def build_stack_cell(top_name: str, devices: Sequence[Device], *, x0: float = 0.
     this module's wiring is intentionally not a general router; see the
     module docstring for the supported topology.
     """
-    if not devices:
-        raise ValueError("build_stack_cell() needs at least one device")
-
-    canvas = Canvas(top_name)
-    ports: list[MosfetPorts] = []
-    y_cursor = 0.0
-    for i, d in enumerate(devices):
-        if i > 0:
-            gap = NWELL_TO_NMOS_GAP_UM if d.kind != devices[i - 1].kind else COMP_GAP_UM
-            y_cursor += gap
-        p = mosfet(canvas, d, x0, y_cursor)
-        ports.append(p)
-        y_cursor = p.y3
-
-    # --- net resolution: gate/top/bottom terminals only (well/substrate
-    # ties are handled separately, below, and wired onto whichever pad
-    # already carries their net). ---
-    terminals: dict[str, list[tuple[float, float, float, float]]] = {}
-    for d, p in zip(devices, ports):
-        terminals.setdefault(d.gate_net, []).append(p.gate_pad)
-        terminals.setdefault(d.top_net, []).append(p.top_pad)
-        terminals.setdefault(d.bottom_net, []).append(p.bottom_pad)
-
-    pins: dict[str, tuple[float, float, float, float]] = {}
-    for net, pads in terminals.items():
-        if len(pads) == 1:
-            canvas.pin(net, *pads[0])
-            pins[net] = pads[0]
-        elif len(pads) == 2:
-            _connect_pads(canvas, pads[0], pads[1])
-        else:
-            raise ValueError(
-                f"net {net!r} has {len(pads)} device terminals in this stack; "
-                "build_stack_cell() only resolves 1- or 2-terminal nets automatically"
-            )
-
-    # --- n-well: encloses every pfet device (+ its own tie, added below),
-    # with NWELL_MARGIN_UM clearance past the outermost pfet comp edge. ---
-    pfet_ports = [p for p in ports if p.kind == "pfet"]
-    nwell_box = None
-    if pfet_ports:
-        pfet_y0 = min(p.y0 for p in pfet_ports)
-        pfet_y1 = max(p.y3 for p in pfet_ports)
-        pfet_x1 = max(p.x1 for p in pfet_ports)
-        tap_extent = (TAP_GAP_UM + TAP_SIZE_UM) if add_taps else 0.0
-        nwell_box = (
-            x0 - NWELL_MARGIN_UM,
-            pfet_y0 - NWELL_MARGIN_UM,
-            pfet_x1 + NWELL_MARGIN_UM,
-            pfet_y1 + tap_extent + NWELL_MARGIN_UM,
-        )
-        canvas.rect("nwell", *nwell_box)
-
-    footprint_y0 = min(p.y0 for p in ports)
-    footprint_y1 = max(p.y3 for p in ports)
-    footprint_x0 = x0 - POLY_ENDCAP_UM - METAL1_PAD_MARGIN_UM
-    footprint_x1 = max(p.x1 for p in ports)
-    if nwell_box is not None:
-        footprint_x0 = min(footprint_x0, nwell_box[0])
-        footprint_x1 = max(footprint_x1, nwell_box[2])
-        footprint_y1 = max(footprint_y1, nwell_box[3])
-
-    if add_taps:
-        pfet_ports_top = max(pfet_ports, key=lambda p: p.y3, default=None)
-        nfet_ports_bottom = min((p for p in ports if p.kind == "nfet"), key=lambda p: p.y0, default=None)
-
-        if pfet_ports_top is not None:
-            net = next(d.top_net for d, p in zip(devices, ports) if p is pfet_ports_top)
-            tap_x0 = pfet_ports_top.x0
-            tap_y0 = pfet_ports_top.y3 + TAP_GAP_UM
-            tap_pad = _well_tap(canvas, "n", tap_x0, tap_y0, net)
-            _connect_pads(canvas, pfet_ports_top.top_pad, tap_pad)
-            footprint_y1 = max(footprint_y1, tap_y0 + TAP_SIZE_UM + NWELL_MARGIN_UM)
-
-        if nfet_ports_bottom is not None:
-            net = next(d.bottom_net for d, p in zip(devices, ports) if p is nfet_ports_bottom)
-            tap_x0 = nfet_ports_bottom.x0
-            tap_y1 = nfet_ports_bottom.y0 - TAP_GAP_UM
-            tap_y0 = tap_y1 - TAP_SIZE_UM
-            tap_pad = _well_tap(canvas, "p", tap_x0, tap_y0, net)
-            _connect_pads(canvas, nfet_ports_bottom.bottom_pad, tap_pad)
-            footprint_y0 = min(footprint_y0, tap_y0 - COMP_GAP_UM)
-
-    footprint = (footprint_x0, footprint_y0, footprint_x1, footprint_y1)
-
-    return LeafCell(canvas=canvas, ports=ports, pins=pins, nwell_box=nwell_box, footprint=footprint)
+    return _canvas.build_stack_cell(
+        top_name,
+        devices,
+        x0=x0,
+        add_taps=add_taps,
+        canvas_factory=Canvas,
+        draw_column=partial(
+            _canvas.draw_column,
+            mosfet=mosfet,
+            comp_gap_um=COMP_GAP_UM,
+            nwell_to_nmos_gap_um=NWELL_TO_NMOS_GAP_UM,
+        ),
+        connect_pads=_connect_pads,
+        well_tap=_well_tap,
+        nwell_margin_um=NWELL_MARGIN_UM,
+        tap_gap_um=TAP_GAP_UM,
+        tap_size_um=TAP_SIZE_UM,
+        comp_gap_um=COMP_GAP_UM,
+        poly_endcap_um=POLY_ENDCAP_UM,
+        metal1_pad_margin_um=METAL1_PAD_MARGIN_UM,
+        metal1_wire_width_um=METAL1_WIRE_WIDTH_UM,
+    )
