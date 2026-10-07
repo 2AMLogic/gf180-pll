@@ -19,7 +19,6 @@ Issues the operator starred (`loom:operator-priority`); land these first.
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-- **#127**: Track the gap to T1 sim-validated / bronze (klayout-tools design-evidence tiers)
 - **#242**: Live wall-clock confirmation of #241's ngspice-OMP-pin fix on an idle host
 
 ## In Progress
@@ -63,7 +62,6 @@ Issues carrying `loom:curated`.
 ## Proposed (Architect / Hermit)
 
 - **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief *(architect)*
-- **#696**: Remove four duplicate pdk_models() helpers: harness Pdk.ngspice_dir already provides this *(hermit)*
 
 ## Epics
 
@@ -75,11 +73,11 @@ Issues carrying `loom:curated`.
 |------|-------|
 | Operator merge-risk holds | 0 |
 | Operator priority | 1 |
-| Ready (`loom:issue`) | 2 |
+| Ready (`loom:issue`) | 1 |
 | In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 15 |
-| Architect / Hermit proposals | 2 |
+| Architect / Hermit proposals | 1 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
