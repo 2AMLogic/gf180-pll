@@ -493,7 +493,19 @@ class _Tree:
 
     def write_docs(self, text: str) -> None:
         self.write_readme(text)
+        self.write_status_pages(text)
         self.write_proposal(text)
+
+    def write_status_pages(self, text: str) -> None:
+        """Write the two narrative pages moved out of README.md (#703).
+
+        layout/STATUS.md owes the same positive claims README.md does;
+        sim/STATUS.md is graded only for not asserting a wrong one. Giving
+        both the document text exercises every rule against the new files.
+        """
+        (self.root / "layout" / "STATUS.md").write_text(text)
+        (self.root / "sim").mkdir(exist_ok=True)
+        (self.root / "sim" / "STATUS.md").write_text(text)
 
     def write_readme(self, text: str) -> None:
         (self.root / "README.md").write_text(text)
@@ -1054,6 +1066,7 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         # block geometry today and must not be forced to.
         self._all_four()
         self.tree.write_readme(_doc_text(4, 2, footprints=False))
+        self.tree.write_status_pages(_doc_text(4, 2, footprints=False))
         self.tree.write_proposal(_doc_text(4, 2))
         result = self.tree.run()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -1797,6 +1810,7 @@ class PinRestatementRuleTests(unittest.TestCase):
         # tool-version detail by design, the same way it carries no block
         # geometry (see FOOTPRINT_COMPLETE_DOC).
         self.tree.write_readme(_doc_text(4, 4, state_pin=False))
+        self.tree.write_status_pages(_doc_text(4, 4, state_pin=False))
         self.tree.write_proposal(_doc_text(4, 4))
         result = self.tree.run()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

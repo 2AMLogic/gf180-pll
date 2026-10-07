@@ -15,112 +15,27 @@ sweep, in a format designed so you can check that yourself.
 
 ## Status: early. Block-level layout underway, pre-top-level, pre-silicon.
 
-Being honest about where this actually is:
+Being honest about where this actually is. Every number in this repository is
+simulation only; nothing has been fabricated or measured.
 
-- **Done** — architecture and scope captured as numbered decision records in
-  `spec/`; xschem schematics for the VCO, PFD, charge pump, feedback divider,
-  lock detector, and the shared 3.3 V logic cells they are built from; a
-  reproducible PVT corner harness; **105 evidence records** across 27
-  verification campaigns (device characterization, VCO tuning range, PFD
-  dead-zone freedom, charge-pump compliance and mismatch, divider moduli,
-  lock-detector window, its sizing ladder and its trim-code map, loop
-  dynamics, the closed-loop
-  reference spur measured from the output spectrum, the loaded output
-  driver's duty cycle and levels/drive, and a first pass at the other
-  closed-loop campaigns: lock-time, output-range, supply-sensitivity, and
-  period-jitter).
-- **Not done** — closed-loop bring-up. `pll-top-smoke`'s latest record
-  (`20260802-160926-8456ff3`, superseding the earlier FAIL) is an **overall
-  PASS, 0 of 7 checks failed** at the single nominal corner (`typical` / 27 C /
-  3.30 V) it is deliberately scoped to. Three of the four closed-loop
-  campaigns have since taken the full PVT grid against the same assembled
-  `pll_top` DUT, and the honest news is mixed: `lock-time`'s 270-run grid
-  (45 corners × N ∈ {4, 16, 64} × {cold, relock}) reaches a sustained
-  in-window `LOCK` PASS on 21/135 cold-start rows and 1/135 relock rows — the
-  rest are read as the test window being too short, not as a broken loop, but
-  that reading is not yet a closed PASS bound; `output-range`'s full 45-point
-  grid reaches **0/45** sustained in-window PASS at either drawn-band edge;
-  `supply-sensitivity`'s full 45-point grid (plus all three step/ramp corners)
-  PASSes on power (0.99–1.98 mW, under the 5 mW draft target) but FAILs three
-  of its other four criteria at real corners. Its record named
-  `loop-dynamics` (#10), `lock-detector` (#11) and the post-#24 charge pump
-  (#9) for each class of finding, and all three of those issues later closed,
-  leaving the findings recorded but unowned (#506). DR-021 re-read each one
-  against the ratified spec line — arithmetic on the same committed grid, no
-  new simulation — and two of the three are not what the record's headings
-  say: the frequency-vs-supply FAIL contains **no** failing frequency check
-  (3.4× and 4.4× headroom), and is the static-phase finding DR-012 owns; the
-  `VCTRL`-window FAIL is graded against a control window DR-003 superseded,
-  while the budget the spec ratifies — never graded before — was **missed at
-  9 of 15 corner cells** against its original 0.6 V figure (worst 1.41 times,
-  53 mV of window left) because that figure priced half the rail excursion;
-  DR-037 (#525) makes the full range govern and re-derives it as 1.2 V, met at
-  15 of 15, pending two-key ratification; and
-  the step+ramp FAIL is a hold ≈8 µs short of a measurably slew-limited
-  recovery rather than an under-damped loop. Each now has a named open owner:
-  #525, #511, #399, #437 and #405. See each campaign's own latest record under
-  `sim/*/records/` for the full accounting. `period-jitter`'s
-  **deterministic (control-ripple) component now covers 45 of the mandated 45
-  PVT corners** — the complete 3 × 3 temperature × supply plane at all five
-  MOS bundles (`typical`, `ff`, `ss`, `fs`, `sf`), ranging **0.0508 % RMS**
-  (`ss` / 125 °C / 3.30 V) to **0.2691 % RMS** (`typical` / −40 °C / 3.63 V),
-  every point inside the 1.0 % target with at least 3.7× margin. Two things it
-  does **not** cover, stated rather than left to be inferred: the campaign's
-  own Acceptance Criteria (#13) also require a **random/noise-driven** jitter
-  component, which no analysis this toolchain offers can *estimate* (DR-020,
-  narrowed by DR-023: the flow reports per-device noise PSDs at a bias point,
-  but has no periodic-steady-state noise analysis to carry them over the ring's
-  oscillation cycle). It is now **bounded** instead —
-  `spec/decision-records/DR-032-random-period-jitter-bounded-over-the-grid.md`:
-  `sim/period-jitter/random-bound/` injects a noise source across every device
-  of the ring and output buffer, each sized at the maximum of that device's own
-  noise density over the oscillation cycle, which can only over-state the
-  jitter, and folds flicker in through the closed loop; it bounds the VCO's
-  bias generator — the largest term — by a small-signal analysis about its DC
-  point, and the loop-filter resistor separately. The
-  result is **≤ 0.338 % RMS at all 45 mandated PVT corners** — an upper
-  bound, not an estimate — against the 0.50 % RMS the target's own ripple
-  derivation leaves for it. The charge pump, PFD, divider and lock detector,
-  in-band sources this term does not inject, are bounded separately
-  (`spec/decision-records/DR-033-in-band-random-period-jitter-bounded-over-the-grid.md`:
-  `sim/period-jitter/in-band-bound/`, ≤ 0.0249 % RMS at all 45 points, a
-  headroom of 15.8× against the margin the term above leaves) — so the whole
-  random half is **≤ 0.3388 % RMS at all 45 points**, combined in quadrature.
-  The impulse-sensitivity-function route to an *estimate* has its ingredients built
-  and validated (`sim/period-jitter/isf-bringup/`, DR-030;
-  `sim/period-jitter/sid-trajectory/`, DR-031) but not assembled, and the bound
-  does not need it. The target itself is unchanged. And every one of the campaign's records is at one output
-  frequency, 150 MHz — the same measurement at the 200 MHz top of the
-  ratified band is declared as `sim/period-jitter-band-top`, tracked at #503,
-  and carries no measured record yet. The **reference spur** is in the same
-  position and matters more, because that is the frequency its ≤ −55 dBc line
-  is stated at: the one closed-loop spur record is 5 of the 45 PVT corners at
-  150 MHz, and scaling it to 200 MHz puts the two coldest corners 0.1–0.5 dB
-  *over* the line. The binding-frequency sweep is declared as
-  `sim/reference-spur-band-top` — all 45 points, none measured — tracked at
-  #533, and DR-024 re-points the spec's owed line off the closed issue that
-  used to hold it.
-- **Underway, block by block** — PLL-block layout. Issue #16 landed a
-  repeatable `klt`-aware DRC/LVS flow against the gf180mcu open-PDK decks,
-  proven clean (and proven to catch a deliberately injected DRC violation and
-  LVS mismatch) on a trivial standard-cell inverter
-  (`layout/evidence/inv-tb-proof/PROOF.md`). Real transistor-level layout has
-  since been drawn against that flow: **4 of the 4 PLL sub-blocks** — the VCO
-  (#293), the PFD + charge pump (#294), the divider chain (#295), and the lock
-  detector (#296) — now have a committed block GDS with a DRC-clean deck log
-  under `layout/evidence/`, and **4 of the 4 are LVS-matched** against an
-  independently derived reference netlist (`vco_block`, `divider_chain`,
-  `pfd_cp` and, since issue #449 drew DR-014's 4-bit trim network into its
-  delay cell, `lock_detector`). There is **no assembled `pll_top`
-  GDS** — the four blocks exist side by side, not wired into a top level, so
-  no top-level DRC/LVS closure and no post-layout extracted-netlist
-  re-verification exists either (#17, #18, #149). These counts are checked
-  against the evidence tree in CI by
-  `layout/lib/check-layout-status-claims.sh`, so this paragraph cannot
-  silently go stale the way its predecessor did.
-- **Not started** — silicon. `measurements/` stays empty until there is any.
-  Nothing has been fabricated or measured; treat every number in this
-  repository as simulation only.
+| Area | State | Detail |
+|---|---|---|
+| Spec | Architecture and scope captured as numbered decision records. | [`spec/`](spec/) |
+| Schematics | VCO, PFD, charge pump, feedback divider, lock detector, and the shared 3.3 V logic cells. | [`design/`](design/) |
+| Verification | **105 evidence records** across 27 verification campaigns, each run over the PVT corner matrix. | [`sim/STATUS.md`](sim/STATUS.md) |
+| Closed-loop bring-up | Not done. Single-corner smoke test passes; the full-grid lock-time, output-range and supply-sensitivity campaigns do not yet show sustained lock across PVT. | [`sim/STATUS.md`](sim/STATUS.md) |
+| Period jitter | Deterministic component covers 45 of the mandated 45 PVT corners; the random component is bounded, not estimated. | [`sim/STATUS.md`](sim/STATUS.md) |
+| Reference spur | Closed-loop record covers 5 of the 45 PVT corners at 150 MHz; the 200 MHz band-top sweep has no measured record yet. | [`sim/STATUS.md`](sim/STATUS.md) |
+| Layout | 4 of the 4 PLL sub-blocks are drawn and DRC-clean; 4 of the 4 are LVS-matched. There is no assembled `pll_top` GDS, so no top-level DRC/LVS closure. | [`layout/STATUS.md`](layout/STATUS.md) |
+| Silicon | Not started. `measurements/` stays empty until there is any. | [`measurements/`](measurements/) |
+
+The machine verdict of record is `signoff/tier-report.json`, described in
+[the evidence ladder section below](#where-this-block-stands-against-the-evidence-ladder).
+The per-campaign narrative behind this table (lock-time, output range, supply
+sensitivity, period jitter, reference spur, and the layout paragraph) lives in
+[`sim/STATUS.md`](sim/STATUS.md) and [`layout/STATUS.md`](layout/STATUS.md).
+The record, campaign, period-jitter and layout counts above are checked against
+the evidence tree in CI, so they cannot silently go stale.
 
 The maturity ladder being climbed: simulation-complete → layout DRC/LVS-clean
 → shuttle seat → measured silicon over temperature. This is partway up the

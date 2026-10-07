@@ -170,8 +170,12 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # the outward-facing one; DR-019 is where the claim originates and the record
 # the proposal cites for it. README.md and sim/CHARACTERIZATION.md are graded
 # too so the claim cannot be restated there ungraded.
+# sim/STATUS.md and layout/STATUS.md hold the status narrative moved out of
+# README.md (#703); they are graded exactly as README.md was.
 GRADED=(
   "README.md"
+  "sim/STATUS.md"
+  "layout/STATUS.md"
   "sim/CHARACTERIZATION.md"
   "docs/chipalooza/challenge-5-proposal.md"
   "spec/decision-records/DR-019-reference-input-contract-owner-and-source-quality-exclusion.md"

@@ -115,8 +115,12 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # The documents that make, or could make, the drive claim. The proposal is the
 # one that does today; README.md and sim/CHARACTERIZATION.md are graded so the
 # claim cannot be restated there ungraded.
+# sim/STATUS.md and layout/STATUS.md hold the status narrative moved out of
+# README.md (#703); they are graded exactly as README.md was.
 GRADED=(
   "README.md"
+  "sim/STATUS.md"
+  "layout/STATUS.md"
   "sim/CHARACTERIZATION.md"
   "docs/chipalooza/challenge-5-proposal.md"
 )

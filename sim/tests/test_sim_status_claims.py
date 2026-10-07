@@ -110,6 +110,14 @@ def _readme_text(records: int = N_RECORDS, campaigns: int = N_CAMPAIGNS, extra: 
     return text
 
 
+def _status_page_text(extra: str = "") -> str:
+    """A minimal sim/STATUS.md (the narrative moved out of README.md, #703)."""
+    text = "# Campaign status narrative\n\n`period-jitter` covers 1 of the mandated 45 PVT corners.\n"
+    if extra:
+        text += "\n" + extra + "\n"
+    return text
+
+
 class _Tree:
     """A throwaway repo tree with both checks installed at sim/lib/."""
 
@@ -132,10 +140,14 @@ class _Tree:
                 (corners / "typical-27C-3p30V.log").write_text("ok\n")
 
         self.write_readme(_readme_text())
+        self.write_status_page(_status_page_text())
         self.write_report(_report_text())
 
     def write_readme(self, text: str) -> None:
         (self.root / "README.md").write_text(text)
+
+    def write_status_page(self, text: str) -> None:
+        (self.root / "sim" / "STATUS.md").write_text(text)
 
     def write_report(self, text: str) -> None:
         (self.root / "sim" / "CHARACTERIZATION.md").write_text(text)
@@ -297,6 +309,25 @@ class TestReadmeCountsEveryOccurrence(_TreeTest):
             )
         )
         self.assertPasses(README_CHECK)
+
+    def test_a_stale_count_in_the_moved_status_page_is_caught(self):
+        """The narrative moved to sim/STATUS.md (#703) stays graded."""
+        self.tree.write_status_page(
+            _status_page_text(extra=f"Elsewhere: {N_RECORDS - 2} evidence records.")
+        )
+        self.assertFails(README_CHECK, f"claims {N_RECORDS - 2} evidence records")
+
+    def test_a_stale_period_jitter_coverage_in_the_status_page_is_caught(self):
+        self.tree.write_status_page(
+            _status_page_text(
+                extra="`period-jitter` covers 44 of the mandated 45 PVT corners."
+            )
+        )
+        self.assertFails(README_CHECK, "claims period-jitter covers 44")
+
+    def test_a_missing_status_page_fails(self):
+        (self.tree.root / "sim" / "STATUS.md").unlink()
+        self.assertFails(README_CHECK, "sim/STATUS.md does not exist")
 
     def test_a_missing_count_still_fails(self):
         self.tree.write_readme("# gf180-pll\n\nNothing quantified here.\n")

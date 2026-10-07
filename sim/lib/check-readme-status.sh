@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Fails if README.md's top-level "evidence records" / "verification
+# Fails if README.md's (and sim/STATUS.md's) top-level "evidence records" / "verification
 # campaigns" counts have drifted from what is actually on disk under
 # sim/*/records/*.md.
 #
@@ -29,6 +29,10 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 README="${REPO_ROOT}/README.md"
+# The long-form campaign narrative moved out of README.md (#703) into this
+# page. It is graded exactly as README.md was: every occurrence of every
+# claim in either file must agree with the tree.
+STATUS_PAGE="${REPO_ROOT}/sim/STATUS.md"
 
 # shellcheck source=sim/lib/record-campaigns.sh
 . "$(dirname "${BASH_SOURCE[0]}")/record-campaigns.sh"
@@ -51,19 +55,25 @@ campaigns_actual=$(sim_record_campaigns "${REPO_ROOT}" | wc -l | tr -d ' ')
 # fixed one count and left a stale sibling four sections later, and a
 # presence-only check reported OK on that tree); it is closed here before it
 # is needed rather than after.
-readme_flat=$(tr '\n' ' ' < "${README}" | tr -s ' ')
+for doc in "${README}" "${STATUS_PAGE}"; do
+  if [ ! -f "${doc}" ]; then
+    echo "FAIL: ${doc#"${REPO_ROOT}"/} does not exist -- its status claims cannot be graded" >&2
+    exit 1
+  fi
+done
+readme_flat=$(cat "${README}" "${STATUS_PAGE}" | tr '\n' ' ' | tr -s ' ')
 mapfile -t records_claims < <(echo "${readme_flat}" | grep -oE '[0-9]+ evidence records' | grep -oE '^[0-9]+')
 mapfile -t campaigns_claims < <(echo "${readme_flat}" | grep -oE '[0-9]+ verification campaigns' | grep -oE '^[0-9]+')
 
 status=0
 
 if [ "${#records_claims[@]}" -eq 0 ]; then
-  echo "FAIL: could not find '<N> evidence records' in README.md" >&2
+  echo "FAIL: could not find '<N> evidence records' in README.md or sim/STATUS.md" >&2
   status=1
 else
   for claimed in "${records_claims[@]}"; do
     if [ "${claimed}" != "${records_actual}" ]; then
-      echo "FAIL: README.md claims ${claimed} evidence records," \
+      echo "FAIL: README.md/sim/STATUS.md claims ${claimed} evidence records," \
         "but sim/*/records/*.md has ${records_actual}" >&2
       status=1
     fi
@@ -71,12 +81,12 @@ else
 fi
 
 if [ "${#campaigns_claims[@]}" -eq 0 ]; then
-  echo "FAIL: could not find '<N> verification campaigns' in README.md" >&2
+  echo "FAIL: could not find '<N> verification campaigns' in README.md or sim/STATUS.md" >&2
   status=1
 else
   for claimed in "${campaigns_claims[@]}"; do
     if [ "${claimed}" != "${campaigns_actual}" ]; then
-      echo "FAIL: README.md claims ${claimed} verification campaigns," \
+      echo "FAIL: README.md/sim/STATUS.md claims ${claimed} verification campaigns," \
         "but sim/*/records/*.md spans ${campaigns_actual} campaign directories" >&2
       status=1
     fi
@@ -96,13 +106,13 @@ pj_claims=$(echo "${readme_flat}" |
   grep -oE '^covers [0-9]+' | grep -oE '[0-9]+')
 
 if [ -z "${pj_claims}" ]; then
-  echo "FAIL: could not find 'covers <N> of the mandated 45 PVT corners' in README.md" \
-    "-- period-jitter's coverage is quoted in README prose and must stay checkable" >&2
+  echo "FAIL: could not find 'covers <N> of the mandated 45 PVT corners' in README.md or sim/STATUS.md" \
+    "-- period-jitter's coverage is quoted in status prose and must stay checkable" >&2
   status=1
 else
   while read -r claimed; do
     if [ "${claimed}" != "${pj_actual}" ]; then
-      echo "FAIL: README.md claims period-jitter covers ${claimed} of the mandated 45 PVT" \
+      echo "FAIL: README.md/sim/STATUS.md claims period-jitter covers ${claimed} of the mandated 45 PVT" \
         "corners, but sim/period-jitter/corners/*/ holds ${pj_actual} distinct corner logs" >&2
       status=1
     fi
@@ -110,7 +120,7 @@ else
 fi
 
 if [ "${status}" -eq 0 ]; then
-  echo "OK: README.md matches the tree (${records_actual} records," \
+  echo "OK: README.md and sim/STATUS.md match the tree (${records_actual} records," \
     "${campaigns_actual} campaigns, period-jitter at ${pj_actual}/45 corners)"
 fi
 

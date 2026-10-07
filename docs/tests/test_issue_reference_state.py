@@ -37,6 +37,8 @@ CHECK = DOCS_DIR / "lib" / "check-issue-reference-state.sh"
 PROPOSAL = "docs/chipalooza/challenge-5-proposal.md"
 README = "README.md"
 SIM_README = "sim/README.md"
+SIM_STATUS = "sim/STATUS.md"
+LAYOUT_STATUS = "layout/STATUS.md"
 CHARACTERIZATION = "sim/CHARACTERIZATION.md"
 SIGNOFF_README = "signoff/README.md"
 
@@ -150,6 +152,8 @@ class _Tree(TreeWriter):
         self.write(PROPOSAL, _proposal())
         self.write(README, _readme())
         self.write(SIM_README, "# sim\n\nCampaigns.\n")
+        self.write(SIM_STATUS, "# Campaign status\n\nNarrative.\n")
+        self.write(LAYOUT_STATUS, "# Layout status\n\nNarrative.\n")
         self.write(CHARACTERIZATION, "# Characterization\n\nCoverage.\n")
         self.write(SIGNOFF_README, "# Signoff\n\nVerdict of record.\n")
 
@@ -540,7 +544,7 @@ class TestForgeFailureModes(_TreeTest):
         self.assertIn("rate limit", result.stdout)
 
     def test_a_missing_graded_document_fails(self):
-        for rel in (README, SIM_README, CHARACTERIZATION, SIGNOFF_README):
+        for rel in (README, SIM_STATUS, LAYOUT_STATUS, SIM_README, CHARACTERIZATION, SIGNOFF_README):
             with self.subTest(rel=rel):
                 path = self.tree.root / rel
                 saved = path.read_text(encoding="utf-8")

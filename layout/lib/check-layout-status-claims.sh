@@ -419,9 +419,24 @@ CI_WORKFLOW="${REPO_ROOT}/.github/workflows/ci.yml"
 HARNESS_ENV="${REPO_ROOT}/layout/harness/env.py"
 
 # Documents whose prose is checked, relative to the repo root.
+#
+# layout/STATUS.md holds the layout narrative that used to be README.md's
+# "Underway, block by block" bullet (#703), so it owes the same claims README
+# does and is graded identically.
 DOCS=(
   "README.md"
+  "layout/STATUS.md"
   "docs/chipalooza/challenge-5-proposal.md"
+)
+
+# Narrative pages that carry no layout claim of their own but whose prose is
+# still subject to every rule that does not demand a positive claim: the scope
+# rule (no unscoped "no layout exists"), the bare-deferral rule, the
+# forbidden-phrase lists and the footprint / count rules. sim/STATUS.md is the
+# campaign narrative that used to sit in README.md's status section (#703);
+# moving it must not take it out from under the guard it was graded by.
+NARRATIVE_DOCS=(
+  "sim/STATUS.md"
 )
 
 # Documents the PIN RESTATEMENT RULE grades, relative to the repo root. A
@@ -432,6 +447,8 @@ DOCS=(
 # lived for five weeks.
 PIN_DOCS=(
   "README.md"
+  "layout/STATUS.md"
+  "sim/STATUS.md"
   "docs/chipalooza/challenge-5-proposal.md"
   "layout/README.md"
 )
@@ -2189,7 +2206,7 @@ sys.exit(1 if failed else 0)
 PY
 }
 
-for doc in "${DOCS[@]}"; do
+for doc in "${DOCS[@]}" "${NARRATIVE_DOCS[@]}"; do
   path="${REPO_ROOT}/${doc}"
   if [ ! -f "${path}" ]; then
     fail "${doc} does not exist"
@@ -2198,16 +2215,23 @@ for doc in "${DOCS[@]}"; do
 
   flat="$(tr '\n' ' ' <"${path}" | tr -s ' ')"
 
-  if ! printf '%s' "${flat}" | grep -qF "${drawn_claim}"; then
+  # Whether this document must state the positive layout claims, or is only
+  # graded for not stating a wrong one.
+  owes_claims=yes
+  for narrative in "${NARRATIVE_DOCS[@]}"; do
+    [ "${doc}" = "${narrative}" ] && owes_claims=no
+  done
+
+  if [ "${owes_claims}" = yes ] && ! printf '%s' "${flat}" | grep -qF "${drawn_claim}"; then
     fail "${doc} does not state \"${drawn_claim}\" -- ${drawn} of the 4 sub-blocks have a committed GDS plus a DRC-clean log under layout/evidence/"
   fi
 
-  if ! printf '%s' "${flat}" | grep -qF "${lvs_claim}"; then
+  if [ "${owes_claims}" = yes ] && ! printf '%s' "${flat}" | grep -qF "${lvs_claim}"; then
     fail "${doc} does not state \"${lvs_claim}\" -- ${lvs_matched} of the 4 sub-blocks have an LVS log recording \"Netlists match.\""
   fi
 
   if [ "${top_assembled}" = no ]; then
-    if ! printf '%s' "${flat}" | grep -qF "${no_top_claim}"; then
+    if [ "${owes_claims}" = yes ] && ! printf '%s' "${flat}" | grep -qF "${no_top_claim}"; then
       fail "${doc} does not state \"${no_top_claim}\" -- no assembled top-level GDS is committed, and a reader must not have to infer that"
     fi
   else
@@ -2279,7 +2303,7 @@ if [ "${spec_ratified}" = unknown ]; then
 fi
 
 if [ "${status}" -eq 0 ]; then
-  echo "OK: README.md and docs/chipalooza/challenge-5-proposal.md match layout/evidence/" \
+  echo "OK: README.md, layout/STATUS.md, sim/STATUS.md and docs/chipalooza/challenge-5-proposal.md match layout/evidence/" \
     "(${drawn}/4 drawn + DRC-clean, ${lvs_matched}/4 LVS-matched, ${erc_spec_count}/4 ERC-checked," \
     "assembled pll_top: ${top_assembled})" \
     "and spec/pll.md (ratified: ${spec_ratified}); no unscoped absence-of-layout claim" \
