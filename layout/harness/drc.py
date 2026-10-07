@@ -135,6 +135,14 @@ def run(
             message=f"DRC run timed out after {timeout}s: {exc}",
         )
 
+    # Issue #701: the deck's stdout and report database name the run
+    # directory, the repo checkout and the PDK install. Swap those for stable
+    # tokens (disclosed in path-normalisation.txt) before anything is kept as
+    # evidence; the verdict markers below are unaffected.
+    subs = env_mod.path_substitutions(run_dir, tools.pdk.path)
+    env_mod.normalise_run_dir(run_dir, subs)
+    log = env_mod.normalise_paths(log, subs)
+
     report_dbs = sorted(run_dir.glob("*.lyrdb"))
     report_db = report_dbs[0] if report_dbs else None
     count, rule_counts = parse_report_db(report_db) if report_db else (0, {})

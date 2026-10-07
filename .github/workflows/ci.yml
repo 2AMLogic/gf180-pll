@@ -44,6 +44,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: layout/lib/check-evidence-host-paths.sh diffs the PR
+          # against its merge base with the default branch.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -739,6 +743,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash docs/lib/check-issue-reference-state.sh
+
+      - name: layout/lib/check-evidence-host-paths.sh (changed evidence files vs. host-absolute paths)
+        # Issue #701: layout DRC/LVS bundles kept embedding the generating
+        # host's run directory, home directory and agent-worktree path
+        # (stdout banners, DeprecationWarning source lines, the report
+        # database's `<generator>` element), and nothing stopped it. The
+        # harness now normalises those strings at capture time; this step is
+        # the ratchet. It fails when a file ADDED OR MODIFIED relative to the
+        # merge base under layout/evidence/ or a sim/<campaign>/{records,
+        # corners,netlist-snapshots}/ directory contains `/home/`, `/Users/`
+        # or `.loom/worktrees`. Existing files are grandfathered by the diff,
+        # so no append-only evidence is touched. The pinned-binary citation
+        # `<home>/.local/bin/ngspice` (sim/lib/simenv.sh) is allowlisted.
+        # Needs full history (fetch-depth: 0 above); no PDK, no klayout.
+        run: bash layout/lib/check-evidence-host-paths.sh --base "origin/${{ github.base_ref || 'main' }}"
 
   design-changed:
     name: design-changed (path filter for pdk-checks)
