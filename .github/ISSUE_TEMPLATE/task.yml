@@ -1,18 +1,16 @@
 name: "Development Task"
-description: "Create a development task for Loom"
+description: "Create a development task for gf180-pll"
 labels: ["loom:triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        **Welcome to Loom Issue Tracker**
-
-        **Important**: Loom uses GitHub Issues to control the AI-driven development process. Issues are actionable development tasks, not discussions.
-
-        - **For questions, ideas, or feedback**: Use [GitHub Discussions](https://github.com/rjwalters/loom/discussions)
-        - **For development tasks**: Use this template
-
-        **External contributors**: Your issue will be automatically labeled as `external` and reviewed by maintainers. Our AI agents focus on internal workflow, so external issues require manual triage.
+        Thanks for contributing to gf180-pll. Please check
+        [CONTRIBUTING.md](https://github.com/2AMLogic/gf180-pll/blob/main/CONTRIBUTING.md)
+        first. Issues are for actionable tasks: bugs, features, documentation,
+        and verification work. For security problems, follow
+        [SECURITY.md](https://github.com/2AMLogic/gf180-pll/blob/main/SECURITY.md)
+        instead of filing here.
 
   - type: dropdown
     id: task_type
@@ -39,12 +37,11 @@ body:
       placeholder: |
         For bugs:
         Steps to reproduce:
-        1. Launch Loom
-        2. Select workspace
-        3. Click "Start"
+        1. Run `bash sim/selftest.sh`
+        2. Observe the output
 
-        Expected: Engine starts successfully
-        Actual: Error message appears
+        Expected: PASS
+        Actual: the failure you see
 
         For features/improvements:
         - What problem does this solve?
@@ -60,9 +57,9 @@ body:
       label: "Technical Notes"
       description: "Implementation details, affected files, environment details, dependencies"
       placeholder: |
-        - Files to modify: src/lib/state.ts
+        - Files to modify: sim/harness/...
         - Related issues: #123, #456
-        - Environment: macOS 14.5, Loom 0.1.0
+        - Environment: Ubuntu 24.04, ngspice version
         - Breaking changes: No
     validations:
       required: false
