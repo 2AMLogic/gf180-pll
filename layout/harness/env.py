@@ -340,6 +340,83 @@ def run_pv_command(
     return completed, log
 
 
+#: Text artifacts a PV deck leaves in its run directory that embed absolute
+#: paths (the report databases name the generated ``main.drc`` script, the
+#: extracted netlist and LVS database name their inputs) and so are rewritten
+#: by :func:`normalise_run_dir`. Binary layouts (``*.gds``) are never touched.
+NORMALISED_GLOBS = ("*.log", "*.lyrdb", "*.lvsdb", "*.cir")
+
+#: Name of the disclosure file :func:`normalise_run_dir` writes beside the
+#: artifacts it rewrote, so the substitution is recorded rather than silent.
+NORMALISATION_NOTE = "path-normalisation.txt"
+
+
+def path_substitutions(run_dir: Path, pdk_path: Path | None = None) -> list:
+    """Ordered ``(absolute path, token)`` pairs for :func:`normalise_paths`.
+
+    Longest path first so a run directory nested inside the repo root (or the
+    repo root inside the home directory) is replaced by its most specific
+    token. Both the literal and the symlink-resolved spelling of each path are
+    listed, because the decks echo whichever one they were handed.
+    """
+    pairs: list = []
+    candidates = [(run_dir, "<RUN_DIR>"), (REPO_ROOT, "<REPO>")]
+    if pdk_path is not None:
+        candidates.append((pdk_path, "<PDK>"))
+    candidates.append((Path.home(), "<HOME>"))
+    for path, token in candidates:
+        for spelling in {str(path), str(Path(path).resolve())}:
+            if spelling and spelling != "/":
+                pairs.append((spelling.rstrip("/"), token))
+    pairs.sort(key=lambda pair: len(pair[0]), reverse=True)
+    return pairs
+
+
+def normalise_paths(text: str, substitutions: list) -> str:
+    """Replace each host-absolute path in ``text`` with its stable token."""
+    for path, token in substitutions:
+        text = text.replace(path, token)
+    return text
+
+
+def normalise_run_dir(run_dir: Path, substitutions: list) -> int:
+    """Rewrite a PV run directory's text artifacts in place; return the count.
+
+    Called after a deck has run so that what gets captured as evidence names
+    ``<RUN_DIR>`` / ``<REPO>`` / ``<PDK>`` / ``<HOME>`` instead of the
+    generating host's directory layout (issue #701). The verdict markers the
+    harness decides on are unaffected. The substitution is disclosed in
+    ``path-normalisation.txt`` next to the artifacts it touched.
+    """
+    run_dir = Path(run_dir)
+    rewritten = []
+    for pattern in NORMALISED_GLOBS:
+        for path in sorted(run_dir.glob(pattern)):
+            original = path.read_text(errors="surrogateescape")
+            normalised = normalise_paths(original, substitutions)
+            if normalised != original:
+                path.write_text(normalised, errors="surrogateescape")
+                rewritten.append(path.name)
+    tokens = sorted({token for _path, token in substitutions})
+    note = [
+        "Host-absolute paths in this bundle's text artifacts were replaced at",
+        "capture time by the harness (layout/harness/env.py normalise_run_dir):",
+        "",
+        "  <RUN_DIR>  the directory the deck was run in",
+        "  <REPO>     the repository checkout root the harness ran from",
+        "  <PDK>      the installed gf180mcu PDK directory",
+        "  <HOME>     the running user's home directory",
+        "",
+        "Tokens in use: " + ", ".join(tokens),
+        "Files rewritten: " + (", ".join(rewritten) if rewritten else "(none)"),
+        "Layout/netlist geometry and connectivity are untouched; only path",
+        "strings in logs and report databases differ from the deck's raw output.",
+        "",
+    ]
+    (run_dir / NORMALISATION_NOTE).write_text("\n".join(note))
+    return len(rewritten)
+
+
 def find_tools(variant: str | None = None) -> PvTools:
     """Locate the whole toolchain, or raise ``PdkNotFound`` / ``ToolNotFound``."""
     pdk = find_pdk(variant)

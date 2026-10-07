@@ -140,6 +140,11 @@ def run(
             message=f"LVS run timed out after {timeout}s: {exc}",
         )
 
+    # Issue #701: same capture-time path normalisation as drc.run().
+    subs = env_mod.path_substitutions(run_dir, tools.pdk.path)
+    env_mod.normalise_run_dir(run_dir, subs)
+    log = env_mod.normalise_paths(log, subs)
+
     extracted = sorted(run_dir.glob("*.cir"))
     lvs_dbs = sorted(run_dir.glob("*.lvsdb"))
 
