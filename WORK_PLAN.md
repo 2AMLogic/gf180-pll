@@ -19,6 +19,7 @@ Issues the operator starred (`loom:operator-priority`); land these first.
 
 Human-approved issues ready for implementation (`loom:issue`).
 
+- **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief
 - **#242**: Live wall-clock confirmation of #241's ngspice-OMP-pin fix on an idle host
 
 ## In Progress
@@ -62,6 +63,7 @@ Issues carrying `loom:curated`.
 ## Proposed (Architect / Hermit)
 
 - **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief *(architect)*
+- **#699**: Consolidate or retire the 14 prose-claim checker scripts (12.8k lines grading a 2.2k-line doc) *(hermit)*
 
 ## Epics
 
@@ -73,11 +75,11 @@ Issues carrying `loom:curated`.
 |------|-------|
 | Operator merge-risk holds | 0 |
 | Operator priority | 1 |
-| Ready (`loom:issue`) | 1 |
+| Ready (`loom:issue`) | 2 |
 | In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 15 |
-| Architect / Hermit proposals | 1 |
+| Architect / Hermit proposals | 2 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
