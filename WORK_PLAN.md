@@ -20,9 +20,7 @@ Issues the operator starred (`loom:operator-priority`); land these first.
 Human-approved issues ready for implementation (`loom:issue`).
 
 - **#127**: Track the gap to T1 sim-validated / bronze (klayout-tools design-evidence tiers)
-- **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief
 - **#242**: Live wall-clock confirmation of #241's ngspice-OMP-pin fix on an idle host
-- **#692**: Replace four copies of pdk_models() in period-jitter run.py with harness find_pdk()
 
 ## In Progress
 
@@ -61,7 +59,6 @@ Issues carrying `loom:curated`.
 - **#540**: sim: run the two closed-loop cells DR-025 names against the ratified <= 1 ns Lock criterion *(curated)*
 - **#549**: sim: bound the batch-vs-pinned ngspice divergence with a cross-version overlap measurement on a shared operating point *(curated)*
 - **#680**: sim: realign the batch job image to the ngspice-46 pin — it cannot converge sim/reference-input-contract's edge-rate variant, so #499's grid is unobtainable off-host *(curated)*
-- **#692**: Replace four copies of pdk_models() in period-jitter run.py with harness find_pdk() *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -77,11 +74,11 @@ Issues carrying `loom:curated`.
 |------|-------|
 | Operator merge-risk holds | 0 |
 | Operator priority | 1 |
-| Ready (`loom:issue`) | 4 |
+| Ready (`loom:issue`) | 2 |
 | In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 16 |
+| Curated | 15 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
