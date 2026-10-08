@@ -60,7 +60,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -71,6 +70,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO / "sim"))
 
 from harness.pdk import find_pdk  # noqa: E402
+from harness import execution, legacy_provenance  # noqa: E402
 
 import sid_deck  # noqa: E402
 import sid_extract  # noqa: E402
@@ -159,6 +159,11 @@ def pdk_models() -> Path:
     return find_pdk().ngspice_dir
 
 
+#: Execution backend every deck in this runner goes through (#712). A test
+#: injects a stand-in here; the default is the harness's local ngspice backend.
+BACKEND = execution.LocalBackend()
+
+
 def run_deck(deck: str, work: Path, logname: str, logs: Path,
              expect_file: str | None = None, *, banner: str | None = None,
              append: bool = False) -> tuple[float, str]:
@@ -179,15 +184,10 @@ def run_deck(deck: str, work: Path, logname: str, logs: Path,
     per file of duplicated text, while the three source lines are exactly what
     differs and exactly what a reader checking the bias needs.
     """
-    work.mkdir(parents=True, exist_ok=True)
-    (work / "deck.sp").write_text(deck)
-    t0 = time.time()
-    proc = subprocess.run(
-        ["ngspice", "-b", "deck.sp"], cwd=work, capture_output=True, text=True
-    )
-    elapsed = time.time() - t0
+    run = legacy_provenance.run_deck_files(deck, work, backend=BACKEND)
+    elapsed = run.seconds
     logs.mkdir(parents=True, exist_ok=True)
-    out = proc.stdout + proc.stderr
+    out = run.output
     if append:
         bias = "\n".join(
             ln for ln in deck.splitlines()
@@ -901,21 +901,7 @@ def stage_weighted(point, op, sid, traj):
 
 # ---------------------------------------------------------------------------
 def environment(models):
-    ver = subprocess.run(["ngspice", "-v"], capture_output=True, text=True)
-    return {
-        "ngspice": ver.stdout.splitlines()[1].strip() if len(
-            ver.stdout.splitlines()) > 1 else ver.stdout.strip(),
-        "pdk_models": str(models),
-        "repo_head": subprocess.run(
-            ["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True).stdout.strip(),
-        "vco_netlist_sha1": subprocess.run(
-            ["git", "-C", str(REPO), "hash-object",
-             str(REPO / "design" / "netlist" / "vco.spice")],
-            capture_output=True, text=True).stdout.strip(),
-        "python": sys.version.split()[0],
-        "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    }
+    return legacy_provenance.sid_environment(models, REPO)
 
 
 ALL_STAGES = ("trajectory", "sid", "checks", "cost", "weighted")
