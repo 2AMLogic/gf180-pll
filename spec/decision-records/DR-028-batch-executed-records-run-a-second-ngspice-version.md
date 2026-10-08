@@ -4,6 +4,9 @@
   same route DR-007, DR-009 … DR-020 record (a builder drafts the record on the
   evidence; the operator's PR approval is the ratifying act). Status stays
   `proposed` until that approval and merge.
+- **Superseded in part by**: DR-039 (2026-10-08) — Decision 1's version fact
+  and Decision 5 are discharged by the image's ngspice-46 sign-off; Decision 3
+  is relaxed for one campaign's `d_ref` only. The text below is unchanged.
 - **Date**: 2026-09-25
 - **Decided by**: Builder agent, issue #536
 - **Numbering note**: `DR-027` is claimed by open PR #535 (unmerged at the time
