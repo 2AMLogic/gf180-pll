@@ -130,6 +130,27 @@ def deck_dependencies(deck_text: str) -> list[str]:
     return list(seen)
 
 
+def _text_of(stream: str | bytes | None) -> str:
+    """A captured stream as text; absent -> ``""``, bad UTF-8 -> replacement.
+
+    ``TimeoutExpired`` carries bytes even under ``text=True`` on some Python
+    versions, and a kill can truncate a multibyte sequence mid-character.
+    """
+    if stream is None:
+        return ""
+    if isinstance(stream, bytes):
+        return stream.decode("utf-8", errors="replace")
+    return stream
+
+
+def _timeout_output(stdout: str | bytes | None, stderr: str | bytes | None) -> str:
+    """Partial output of a timed-out run, joined like a completed run's."""
+    out, err = _text_of(stdout), _text_of(stderr)
+    if not out and not err:
+        return ""
+    return out + "\n" + err
+
+
 class LocalBackend:
     """``ngspice -b <deck>`` as a child process of this harness.
 
@@ -172,9 +193,11 @@ class LocalBackend:
                 check=False,
                 env=child_env,
             )
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
+            # Whatever the child wrote before the kill is the only evidence of
+            # why it was slow; keep it rather than discarding it.
             return DeckRun(
-                output="",
+                output=_timeout_output(exc.stdout, exc.stderr),
                 returncode=-1,
                 seconds=time.monotonic() - started,
                 host=socket.gethostname(),

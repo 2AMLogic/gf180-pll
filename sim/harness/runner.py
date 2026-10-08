@@ -709,7 +709,14 @@ def _run_phase(
     except FileNotFoundError as exc:
         raise NgspiceMissing(str(exc)) from exc
     if deck_run.timed_out:
-        log_write_error = _write_log(log_path, f"TIMEOUT after {timeout_s}s\n")
+        # The marker comes first so a truncated log cannot be mistaken for a
+        # completed run; whatever output the backend retained follows it.
+        timeout_log = f"TIMEOUT after {timeout_s}s\n"
+        if deck_run.output:
+            timeout_log += f"--- partial simulator output ---\n{deck_run.output}"
+            if not timeout_log.endswith("\n"):
+                timeout_log += "\n"
+        log_write_error = _write_log(log_path, timeout_log)
         # A killed deck never reached its `wrdata` line, so every declared raw
         # file is reported absent rather than left unexplained.
         timed_out_raw = capture_raw_files(tb, point, rundir, log_dir, phase)
