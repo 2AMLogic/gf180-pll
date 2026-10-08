@@ -582,3 +582,48 @@ run was not repeated.
   `ngspice.env` (binary, banner, init files read, `wnflag`). This case
   makes that gap concrete, since the deciding input was an unrecorded
   per-host init file. Tracked generically as 2AMLogic/klayout-tools#2834.
+
+## Addendum 4 (2026-10-08, later): the full-transient follow-up; the spur gap tracks `wnflag`
+
+Appended after running the follow-up Addendum 3 section 5 left open. Everything
+above stays as written. No batch job was submitted and nothing was spent. No
+record under `sim/*/records/` was written (`--no-write`), and `spec/`,
+`tb.json`, the deck and `sim/harness/batch.py` were not touched. Two single
+local runs, one at a time, `OMP_NUM_THREADS=2`, on `loom-worker-2` with the
+pinned ngspice-46 (`~/.local/bin/ngspice`) and PDK `c6d73a35…`.
+
+### 1. Runs
+
+Point `ff` / -40 C / 3.63 V, band 7 (`op=b7vs1p886`), via
+`sim/run_corners.py reference-spur-band-top --corners ff --temps -40 --axis
+op=b7vs1p886 --backend local --timeout 6000 --no-write`.
+
+| run | init file read | `spur_dbc` | `lock_lvl` | DC state |
+|---|---|---|---|---|
+| A: real `~/.spiceinit` (`set wnflag=1`, `set num_threads=1`; sha256 `94a971c8…`) | yes | **-61.7103** | **3.63 V** | reference (Addendum 3) |
+| B: `HOME` set to an empty directory (with `.volare` linked), no init | none | **-75.5655** | **5.12765e-9 V** | batch (Addendum 3) |
+| batch pilot 1 / re-pilot (Addendum 1) | n/a | -75.57 / -75.5655 | 5.1e-9 / 5.13e-9 V | batch |
+
+Run A wall clock was 16 min (host shared with other work). Run B's `spur_dbc`
+and `lock_lvl` equal the batch re-pilot's figures to the printed digits; run
+A's -61.7103 equals the earlier local pilot's -61.71.
+
+### 2. Conclusion
+
+- On the same binary, PDK and deck, **the init file alone moves the
+  closed-loop result between the two pilot values**: with `wnflag=1` the loop
+  is in the locked state (-61.71 dBc, `lock_lvl` 3.63 V); without it the
+  result is the batch one (-75.57 dBc, `lock_lvl` ~5e-9 V). With Addendum 3
+  (the DC point splits on `wnflag` alone), the batch-vs-local gap for this
+  point is explained by simulator configuration, not by the PDK, the solver,
+  the thread count or run-to-run noise.
+- Not established: that `set wnflag=1` alone (rather than another line of the
+  init file) suffices in the transient; Addendum 3 isolated it at the DC point
+  only, and run A used the whole file. The model-bin comparison for nf > 1
+  devices was not run, so which configuration selects the bins the PDK intends,
+  and which state represents the design, is still undecided. That is for the
+  testbench and spec owners.
+- The 2026-10-02 ruling stands: the pilots do not match under the batch
+  image's configuration, so the 45-point grid is not submitted. Submitting it
+  needs the campaign inputs to carry the setting (a reviewed change) or the
+  image to supply it, followed by a re-pilot that matches.
