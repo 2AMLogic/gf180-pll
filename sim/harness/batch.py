@@ -106,12 +106,18 @@ PDK_TOKEN = "@PDK_VARIANT_DIR@"
 LOG_NAME = "ngspice.log"
 RC_NAME = "ngspice.rc"
 HOST_NAME = "ngspice.host"
+#: What the instance actually ran on: the ngspice banner, the PDK revision
+#: stamp beside the resolved variant, the image manifest, CPU and thread
+#: environment. Written best-effort (never fails the job) so a batch result
+#: that disagrees with a local one can be attributed to a concrete image delta
+#: instead of guessed at (#533).
+ENV_NAME = "ngspice.env"
 
-#: The three above, as a set. These names are fixed by the job contract, so two
+#: The four above, as a set. These names are fixed by the job contract, so two
 #: jobs' copies of them may never share a directory -- they are collected into
 #: a per-job directory and deliberately not published into a point's (possibly
 #: shared) rundir. See :meth:`BatchBackend._collect`.
-CONTRACT_OUTPUT_NAMES = frozenset({LOG_NAME, RC_NAME, HOST_NAME})
+CONTRACT_OUTPUT_NAMES = frozenset({LOG_NAME, RC_NAME, HOST_NAME, ENV_NAME})
 
 #: Terminal ``status.json`` states. ``interrupted`` is terminal *for one
 #: submission*: the layer's own reconcile step may relaunch it, but this
@@ -455,6 +461,13 @@ class BatchBackend:
             f'ngspice -b {deck} > {LOG_NAME} 2>&1; rc=$?; '
             f'printf "%s" "$rc" > "$EDA_OUTPUT_DIR/{RC_NAME}"; '
             f'hostname > "$EDA_OUTPUT_DIR/{HOST_NAME}" 2>/dev/null || true; '
+            f'{{ echo "== ngspice"; ngspice --version 2>&1 | head -12; '
+            f'echo "== pdk_variant_dir $variant_dir"; '
+            f'cat "$variant_dir/SOURCES" 2>&1 | head -5; '
+            f'echo "== image manifest"; cat /etc/eda-batch-image.json 2>&1; '
+            f'echo "== cpu"; grep -m1 "model name" /proc/cpuinfo; nproc; '
+            f'echo "OMP_NUM_THREADS=${{OMP_NUM_THREADS:-<unset>}}"; }} '
+            f'> "$EDA_OUTPUT_DIR/{ENV_NAME}" 2>&1 || true; '
             'find . -maxdepth 1 -type f -exec cp -f {} "$EDA_OUTPUT_DIR/" \\; ; '
             'exit 0'
         )
