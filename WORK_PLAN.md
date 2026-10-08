@@ -19,19 +19,23 @@ Issues the operator starred (`loom:operator-priority`); land these first.
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-- **#242**: Live wall-clock confirmation of #241's ngspice-OMP-pin fix on an idle host
+- **#405**: Run the post-supply-step re-lock campaign and write DR-011 Decision 4's replacement decision record (#395 remainder)
+- **#680**: sim: realign the batch job image to the ngspice-46 pin — it cannot converge sim/reference-input-contract's edge-rate variant, so #499's grid is unobtainable off-host
+- **#712**: sim/period-jitter: route the random-bound and in-band-bound grids through the harness execution backends instead of grid.sh + direct ngspice
 
 ## In Progress
 
 Issues currently being built (`loom:building`).
 
-_None._
+- **#533**: sim/reference-spur-band-top: run the 45-point 200 MHz campaign on the batch backend (operator-authorized spend)
+- **#699**: Consolidate or retire the 14 prose-claim checker scripts (12.8k lines grading a 2.2k-line doc)
+- **#724**: sim/harness: contain retained-waveform copy errors within the affected PVT point
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-_None._
+- **#733**: fix(sim/harness): contain retained-waveform copy errors within the affected point
 
 ## Approved (Awaiting Merge)
 
@@ -43,7 +47,6 @@ _None._
 
 Issues carrying `loom:curated`.
 
-- **#127**: Track the gap to T1 sim-validated / bronze (klayout-tools design-evidence tiers) *(curated)*
 - **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief *(curated)*
 - **#242**: Live wall-clock confirmation of #241's ngspice-OMP-pin fix on an idle host *(curated)*
 - **#395**: Measure post-supply-step re-lock time instead of extrapolating it (DR-011 Decision 4) *(curated)*
@@ -58,11 +61,16 @@ Issues carrying `loom:curated`.
 - **#540**: sim: run the two closed-loop cells DR-025 names against the ratified <= 1 ns Lock criterion *(curated)*
 - **#549**: sim: bound the batch-vs-pinned ngspice divergence with a cross-version overlap measurement on a shared operating point *(curated)*
 - **#680**: sim: realign the batch job image to the ngspice-46 pin — it cannot converge sim/reference-input-contract's edge-rate variant, so #499's grid is unobtainable off-host *(curated)*
+- **#699**: Consolidate or retire the 14 prose-claim checker scripts (12.8k lines grading a 2.2k-line doc) *(curated)*
+- **#724**: sim/harness: contain retained-waveform copy errors within the affected PVT point *(curated)*
 
 ## Proposed (Architect / Hermit)
 
 - **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief *(architect)*
 - **#712**: sim/period-jitter: route the random-bound and in-band-bound grids through the harness execution backends instead of grid.sh + direct ngspice *(architect)*
+- **#727**: sim/harness: bound batch transport subprocesses and contain stage timeouts *(architect)*
+- **#728**: sim/harness: reject overflowing and malformed scalar measurement tokens *(architect)*
+- **#731**: sim/period-jitter: migrate grid.sh fan-out to run_corners.py backends (follow-up to #712 step 1) *(architect)*
 - **#699**: Consolidate or retire the 14 prose-claim checker scripts (12.8k lines grading a 2.2k-line doc) *(hermit)*
 
 ## Epics
@@ -75,11 +83,11 @@ Issues carrying `loom:curated`.
 |------|-------|
 | Operator merge-risk holds | 0 |
 | Operator priority | 1 |
-| Ready (`loom:issue`) | 1 |
-| In Progress (`loom:building`) | 0 |
-| PRs awaiting review | 0 |
+| Ready (`loom:issue`) | 3 |
+| In Progress (`loom:building`) | 3 |
+| PRs awaiting review | 1 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 15 |
-| Architect / Hermit proposals | 3 |
+| Curated | 16 |
+| Architect / Hermit proposals | 6 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
