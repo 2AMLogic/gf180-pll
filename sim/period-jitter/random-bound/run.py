@@ -37,7 +37,6 @@ import hashlib
 import json
 import math
 import re
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -48,6 +47,8 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO / "sim"))
 
 from harness.pdk import find_pdk  # noqa: E402
+from harness import execution, legacy_provenance  # noqa: E402
+from harness import execution, legacy_provenance  # noqa: E402
 
 import rb_deck  # noqa: E402
 import rb_extract  # noqa: E402
@@ -125,14 +126,14 @@ def pdk_models() -> Path:
     return find_pdk().ngspice_dir
 
 
+#: Execution backend every deck in this runner goes through (#712). A test
+#: injects a stand-in here; the default is the harness's local ngspice backend.
+BACKEND = execution.LocalBackend()
+
+
 def run_deck(deck: str, work: Path, log: Path, expect: str | None = None) -> tuple[float, str]:
-    work.mkdir(parents=True, exist_ok=True)
-    (work / "deck.sp").write_text(deck)
-    t0 = time.time()
-    proc = subprocess.run(["ngspice", "-b", "deck.sp"], cwd=work,
-                          capture_output=True, text=True)
-    elapsed = time.time() - t0
-    out = proc.stdout + proc.stderr
+    run = legacy_provenance.run_deck_files(deck, work, backend=BACKEND)
+    out = run.output
     log.parent.mkdir(parents=True, exist_ok=True)
     # ngspice's batch progress meter ("Reference value : ...") is thousands of
     # characters of wall-clock noise per transient; nothing else is dropped.
@@ -142,7 +143,7 @@ def run_deck(deck: str, work: Path, log: Path, expect: str | None = None) -> tup
         raise SystemExit(f"ngspice reported {hit!r} -- see {log}; refused")
     if expect and not (work / expect).is_file():
         raise SystemExit(f"ngspice produced no {expect} -- see {log}")
-    return elapsed, out
+    return run.seconds, out
 
 
 #: Start-up retry.  A transient whose solver stalls ("Timestep too small")
@@ -183,22 +184,8 @@ BUDGET_PCT = 0.50
 
 def environment(models) -> dict:
     """What produced a result: simulator, PDK, repo HEAD, host, time."""
-    def sh(*cmd, cwd=None):
-        try:
-            return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd).stdout.strip()
-        except OSError:
-            return ""
-    ver = next((ln.strip("* ").split(" :")[0] for ln in
-                sh("ngspice", "-v").splitlines() if "ngspice-" in ln), "")
-    return {
-        "ngspice": ver, "pdk_models": str(models),
-        "repo_head": sh("git", "rev-parse", "--short=8", "HEAD", cwd=REPO),
-        # Tracked files only: this directory's own results/ and logs/ are
-        # written while the grid runs, and must not mark later points dirty.
-        "repo_dirty": bool(sh("git", "status", "--porcelain", "--untracked-files=no",
-                              "--", "design", "sim/period-jitter", cwd=REPO)),
-        "run_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    }
+    return legacy_provenance.runner_environment(
+        models, REPO, ("design", "sim/period-jitter"))
 
 
 def seed_for(point: str, salt: str = "") -> int:

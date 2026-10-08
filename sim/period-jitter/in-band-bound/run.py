@@ -43,7 +43,6 @@ import argparse
 import json
 import math
 import re
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -54,6 +53,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO / "sim"))
 
 from harness.pdk import find_pdk  # noqa: E402
+from harness import execution, legacy_provenance  # noqa: E402
 
 import ib_deck  # noqa: E402
 import ib_extract as ib  # noqa: E402
@@ -254,49 +254,34 @@ def pdk_models() -> Path:
     return find_pdk().ngspice_dir
 
 
+#: Execution backend every deck in this runner goes through (#712). A test
+#: injects a stand-in here; the default is the harness's local ngspice backend.
+BACKEND = execution.LocalBackend()
+
+
 def environment(models) -> dict:
-    def sh(*cmd, cwd=None):
-        try:
-            return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd).stdout.strip()
-        except OSError:
-            return ""
-    ver = next((ln.strip("* ").split(" :")[0] for ln in
-                sh("ngspice", "-v").splitlines() if "ngspice-" in ln), "")
-    return {
-        "ngspice": ver, "pdk_models": str(models),
-        "repo_head": sh("git", "rev-parse", "--short=8", "HEAD", cwd=REPO),
-        "repo_dirty": bool(sh("git", "status", "--porcelain", "--untracked-files=no",
-                              "design", "spec", "sim/period-jitter", cwd=REPO)),
-        "run_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    }
+    return legacy_provenance.runner_environment(
+        models, REPO, ("design", "spec", "sim/period-jitter"))
 
 
 def run_deck(deck: str, work: Path, log: Path, expect: str | None = None,
              timeout: float | None = None):
-    work.mkdir(parents=True, exist_ok=True)
-    (work / "deck.sp").write_text(deck)
-    t0 = time.time()
-    try:
-        proc = subprocess.run(["ngspice", "-b", "deck.sp"], cwd=work,
-                              capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired as exc:
-        elapsed = time.time() - t0
-        log.parent.mkdir(parents=True, exist_ok=True)
-        log.write_text((exc.stdout or "") if isinstance(exc.stdout, str)
-                       else (exc.stdout or b"").decode("utf8", "replace"))
-        raise SystemExit(
-            f"ngspice did not finish within {timeout:.0f} s ({elapsed:.0f} s "
-            f"elapsed) -- see {log}; refused") from exc
-    elapsed = time.time() - t0
-    out = proc.stdout + proc.stderr
+    run = legacy_provenance.run_deck_files(
+        deck, work, backend=BACKEND, timeout_s=timeout)
+    out = run.output
     log.parent.mkdir(parents=True, exist_ok=True)
+    if run.timed_out:
+        log.write_text(out)
+        raise SystemExit(
+            f"ngspice did not finish within {timeout:.0f} s ({run.seconds:.0f} s "
+            f"elapsed) -- see {log}; refused")
     log.write_text(re.sub(r"(?: ?Reference value :\s*\S+)+", "", out))
     hit = [p for p in FATAL if p in out]
     if hit:
         raise SystemExit(f"ngspice reported {hit!r} -- see {log}; refused")
     if expect and not (work / expect).is_file():
         raise SystemExit(f"ngspice produced no {expect} -- see {log}")
-    return elapsed, out
+    return run.seconds, out
 
 
 def save(name: str, payload: dict):

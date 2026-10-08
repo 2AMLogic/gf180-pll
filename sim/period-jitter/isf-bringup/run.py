@@ -47,6 +47,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO / "sim"))
 
 from harness.pdk import find_pdk  # noqa: E402
+from harness import execution, legacy_provenance  # noqa: E402
 
 import isf_deck  # noqa: E402
 import isf_extract  # noqa: E402
@@ -94,17 +95,17 @@ def pdk_models() -> Path:
 FATAL_LOG_PATTERNS = ("Timestep too small", "simulation(s) aborted", "singular")
 
 
+#: Execution backend every deck in this runner goes through (#712). A test
+#: injects a stand-in here; the default is the harness's local ngspice backend.
+BACKEND = execution.LocalBackend()
+
+
 def run_deck(deck: str, work: Path, logname: str, logs: Path,
              tolerate_abort: bool = False) -> float:
-    work.mkdir(parents=True, exist_ok=True)
-    (work / "deck.sp").write_text(deck)
-    t0 = time.time()
-    proc = subprocess.run(
-        ["ngspice", "-b", "deck.sp"], cwd=work, capture_output=True, text=True
-    )
-    elapsed = time.time() - t0
+    run = legacy_provenance.run_deck_files(deck, work, backend=BACKEND)
+    elapsed = run.seconds
     logs.mkdir(parents=True, exist_ok=True)
-    out = proc.stdout + proc.stderr
+    out = run.output
     (logs / logname).write_text(out)
     if not (work / "clk.dat").is_file():
         raise SystemExit(
@@ -532,10 +533,8 @@ def main(argv=None):
     )
 
     models = pdk_models()
-    ngv = subprocess.run(["ngspice", "-v"], capture_output=True, text=True)
     env = {
-        "ngspice": " ".join(ngv.stdout.splitlines()[1].split())
-        if len(ngv.stdout.splitlines()) > 1 else ngv.stdout.strip(),
+        "ngspice": legacy_provenance.ngspice_banner("second-line-squeezed"),
         "pdk_models": str(models),
         "operating_point": {k: (list(v) if isinstance(v, tuple) else v)
                             for k, v in OP.items()},
