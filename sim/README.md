@@ -498,6 +498,8 @@ Pass the ceiling as **`.tran`'s 4th argument**, from the single shared constant:
 .tran {tstep} {tstop} 0 {tmax}      # tmax <- SIMENV_CLOSED_LOOP_TMAX
 ```
 
+`sim/lib/simenv.sh`'s own bash regression tests (`sim/lib/test_simenv_*.sh`) are run by the CI `checks` job.
+
 `sim/lib/simenv.sh` defines `SIMENV_CLOSED_LOOP_TMAX`; campaign runners pass it
 through as a `.param`. **Omitting the 4th argument is the violation.** A deck
 with no `Tmax` does not run unbounded — it runs at a ceiling ngspice picks for
