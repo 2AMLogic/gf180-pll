@@ -283,3 +283,152 @@ Scratch-deck digests (sha256, scratch directory not committed):
 `dc_klu_itl1.spice` `1c5ed2d1…`, `dc_nogmin.spice` `1d14337e…`; inputs
 `ff_-40c_3.63v_b7vs1p886.spice` `d608a5db…`, `pll_top.spice` `ce6032da…`,
 `tb_reference_spur_band_top.sp` `9da0b8d6…`.
+
+## Addendum 2 (2026-10-08, later): the section 4 step run on a host that has the ngspice-46 pin
+
+Appended on a host that carries the pinned ngspice-46. Everything above
+stays as written. No batch job was submitted and nothing was spent. No record
+under `sim/*/records/` was written, and `spec/`, `tb.json` and
+`tb_reference_spur_band_top.sp` were not touched. `sim/harness/batch.py` was
+not changed. All files were run from a scratch directory outside the
+repository.
+
+### 1. Host and binaries
+
+| item | value |
+|---|---|
+| host | `robb-pro`, Apple M5 Max, macOS 27.0.1, arm64 (not the Xeon/Linux class of the batch instance or of the earlier workers) |
+| pin (`SIM_NGSPICE_BIN` unset, default per `sim/lib/simenv.sh`) | `~/.local/bin/ngspice`: `ngspice-46`, "Compiled with KLU Direct Linear Solver", "XSPICE extensions included", "X11 interface not compiled into ngspice"; Mach-O arm64, links only `libSystem` and `libc++`; sha256 `e6038926…` |
+| other build on this host | `/opt/homebrew/bin/ngspice` -> Homebrew `ngspice/47`: `ngspice-47`, KLU; links ncurses, fftw, readline, X11 libs; sha256 `5845b18c…` |
+| configure line / `config.log` | not discoverable: no build tree or `config.log` on this host, and the binary does not embed it. The only build facts are the `--version` banner above and the install prefix `~/.local` (visible in the `spinit` paths) |
+| `spinit` loaded by the pin | `~/.local/share/ngspice/scripts/spinit` (sha256 `3c13693e…`): `set num_threads=8`, XSPICE `codemodel` lines, `unset osdi_enabled`; no solver, `gmin`, convergence or `ngbehavior` setting |
+| `~/.spiceinit` | **present**: one line, `set ngbehavior=hsa`. Every default run here prints `Note: Compatibility modes selected: hs a`; the batch logs print `Note: No compatibility mode selected!` |
+| working-directory `.spiceinit` | none (scratch directory was empty) |
+| PDK | `~/.volare/gf180mcuD`, `SOURCES` = `open_pdks c6d73a35f524070e85faff4a6a9eef49553ebc2b` (matches the stamp in the deck header and the image's) |
+
+### 2. Deck
+
+The job store was **not reachable** from this host (no batch provision script
+or fleet env is configured here, so `sim/harness/batch.py`'s config resolution
+has nothing to resolve), so the re-pilot's `inputs/` could not be read. The
+deck was regenerated instead: the harness's own composer, for the same corner
+and operating point (`ff`, -40 C, 3.63 V, `op=b7vs1p886`: band 7, `vstart`
+1.886 V), run with a stub `ngspice` first on `PATH` that only copied the
+deck and ran nothing. The included `pll_top.spice` and
+`tb_reference_spur_band_top.sp` have the same sha256 prefixes as the digests
+recorded in Addendum 1 (`ce6032da…`, `9da0b8d6…`). The regenerated deck itself
+(`43536d49…`) was not compared byte-for-byte with the job's `inputs/` deck,
+because that deck could not be read; the PDK prefix there is a placeholder, so
+a direct digest comparison would differ anyway. Its parameters, `.ic`
+lines and `.options` are the harness output for that point.
+
+The four edits to make the DC-only deck are those in Addendum 1 section 2:
+PDK directory is already `~/.volare/gf180mcuD` (the local harness substituted
+it), `.measure` lines dropped, `wrdata` (and `set wr_singlescale`) dropped,
+`tran 2e-9 8.0e-6 2.4e-6 100e-12` -> `tran 1e-11 1e-11`. The `klu` variant adds
+only `.options klu` before `.options rshunt=1e12`.
+
+### 3. Commands and results
+
+Commands (scratch dir, one run at a time; `HOME` pointed at an empty directory
+for the "no `.spiceinit`" rows):
+
+```
+HOME=<home> OMP_NUM_THREADS=2 <bin> -b dc_<variant>.spice > dc.log 2>&1
+```
+
+| build | `~/.spiceinit` read | variant | solver (log) | DC path (log) | `fb` | `xdut.dn` | `xdut.up` | `xdut.xpfd.xpfd.sbf` | `vctrl` | `lock` |
+|---|---|---|---|---|---|---|---|---|---|---|
+| batch pilots (Addendum 1) | n/a (`No compatibility mode`) | default | SPARSE 1.3 | dynamic gmin failed, true gmin completed | 1.79421 | 3.63 | 1.99269e-08 | 9.47584e-09 | 1.886 | 5.14279e-09 |
+| pin ngspice-46 | yes (`hsa`) | default | SPARSE 1.3 | dynamic gmin failed, true gmin completed | 1.79421 | 3.63 | 1.99269e-08 | 9.47584e-09 | 1.886 | 5.14279e-09 |
+| pin ngspice-46 | yes (`hsa`) | `.options klu` | KLU | dynamic gmin completed | 1.79421 | 3.63 | 1.99269e-08 | 9.47584e-09 | 1.886 | 5.14279e-09 |
+| pin ngspice-46 | no | default | SPARSE 1.3 | dynamic gmin failed, true gmin completed | 1.79421 | 3.63 | 1.99269e-08 | 9.47584e-09 | 1.886 | 5.14279e-09 |
+| pin ngspice-46 | no | `.options klu` | KLU | dynamic gmin completed | 1.79421 | 3.63 | 1.99269e-08 | 9.47584e-09 | 1.886 | 5.14279e-09 |
+| Homebrew ngspice-47 | yes or no | default and klu | - | none: aborts at parse, `g.xdut.xlf.xcf1.gc_moscap ... unknown parameter (e9)`, "no simulations run" | - | - | - | - | - | - |
+
+- **No variant on the pin reached the reference state.** None converged by
+  direct Newton: every pin run starts gmin stepping, and all of them land on the
+  batch table for the six key nodes. `fb` is 1.79421 V, not 3.63 V, and
+  `xdut.dn` is high.
+- **`~/.spiceinit` (`ngbehavior=hsa`) is not the cause.** Removing it changed
+  21 of the 447 initial-solution values (default) and 11 (klu), none of the six
+  key nodes. The batch run's lack of a compatibility mode is therefore not
+  what separates it from the reference.
+- **Forcing KLU changes the path, not the PFD state.** KLU takes dynamic gmin
+  stepping to completion (SPARSE needed true gmin stepping as well), and
+  142 of 447 values differ from the SPARSE run, but they are in the divider
+  chain (`divout` 5.6e-9 V vs 3.63 V, `xdut.xdiv.ck2..ck6` flipped). The six
+  PFD/loop nodes are unchanged. This is new relative to Addendum 1, whose
+  ngspice-42 KLU run moved only 29 last-digit values: on this build the
+  divider's own DC state does depend on the solver, which is a second
+  bistable block in the DUT and should be noted when a reference state is
+  pinned.
+- **Harness invocation on this host gives the same state.** One real
+  `sim/run_corners.py reference-spur-band-top --corners ff --temps -40
+  --supply 3.3 --axis op=b7vs1p886 --no-write` run (local backend, pin on
+  `PATH`) printed `Compatibility modes selected: hs a`, `Dynamic gmin stepping
+  failed`, `True gmin stepping completed`, and the same six key-node values.
+  It then hit the harness's 300 s per-point timeout (ERROR, nothing recorded):
+  this arm64 host is far slower on the transient than the 8-vCPU Xeon workers.
+  So the full-transient outcome (`lock_lvl`, spur) was not measured here, and
+  no figure from this run is evidence.
+
+### 4. Conclusion (section 4 two-outcome analysis)
+
+Neither outcome of section 4 occurred as stated, and the result is this:
+
+- Outcome 1 ("the pinned binary converges by direct Newton to `fb` = 3.63 V, so
+  the reference build is the outlier") is **not reproduced**: the pin on this
+  host does not.
+- Outcome 2 ("the pinned binary lands in the batch state, so the difference is
+  the local harness invocation") is **not established either**. It holds for
+  this host only. The harness invocation here, a bare invocation, both with
+  and without `~/.spiceinit`, and the solver option all give the batch state,
+  so a working-directory, init-file or solver cause is **excluded on this
+  host**. But this pin is a macOS arm64 build, and the reference run that
+  showed direct-Newton convergence (Addendum 1 finding 2) was made on a Linux
+  worker (`loom-worker-2`, per PR #723). The pin here and the pin there are not
+  shown to be the same build.
+
+What is established: four independent runs now give the batch DC state for this
+deck (batch image ngspice-46, Ubuntu ngspice-42 on x86, this host's ngspice-46
+arm64 with and without KLU and `hsa`, and the harness on this host). The one
+observation that differs is the recorded earlier Linux "local" run, whose
+binary, init files and node values were never captured. That observation is
+now the outlier, and it is the less documented one. Causality is **unverified**:
+no isolated change on any host has moved the PFD latch from the batch state to
+the reference state. The earlier "local -61.71 dBc / `lock_lvl` 3.63 V" is
+not reproduced by this host, and nothing here shows which DC solution is the
+representative one (both are valid for a bistable latch).
+
+Implications, none of which relaxes a requirement:
+
+- The "batch image is the outlier" framing in the earlier text is weakened,
+  not reversed: the image matches every run that was captured. The grid stays
+  unsubmitted, as before; -55 dBc and DR-028's restrictions are unchanged.
+- No image change is supported by this evidence.
+- If the reference state cannot be reproduced anywhere with captured
+  artefacts, the campaign's closed-loop result depends on an unpinned DC
+  solution of the PFD latch. The owner decision in section 4 outcome 1 then
+  applies in substance: pin the latch state explicitly in the testbench (a
+  reviewed campaign-input change, spec/testbench owners) rather than relying
+  on which homotopy path a given build takes.
+
+### 5. Exact next step and owner
+
+On the Linux worker that produced the -61.71 dBc local pilot (`loom-worker-2`
+or whichever carries the pin that did), run the same DC-only deck from this
+addendum (regenerate it exactly as in section 2), capturing: the binary path,
+`ngspice --version`, `file`/`ldd`, sha256 of the binary, `spinit` and any
+`~/.spiceinit`, and the "Initial Transient Solution" six-node table plus the
+DC-path lines, once default and once `.options klu`. If it reaches
+`fb` = 3.63 V by direct Newton, the platform build (Linux x86 pin vs the macOS
+arm64 pin, i.e. compiler/libm/FP behaviour) is the difference and the
+decision is the testbench-owners' (latch pinning, or recording which build is
+the reference). If it reproduces the batch state, the earlier local observation
+was mis-recorded and the local reference should be re-derived from a captured
+run. Owner: an agent or the operator on that Linux worker. Not done here
+because this host cannot run it.
+
+Scratch decks (sha256, not committed): `dc_default.spice` `57630e04…`,
+`dc_klu.spice` `107920af…`; harness-composed deck `43536d49…`.
