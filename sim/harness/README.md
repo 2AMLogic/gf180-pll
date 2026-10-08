@@ -297,6 +297,19 @@ Three things are worth knowing before the second command:
   converge, or loses its log degrades *that point* and leaves the rest of the
   grid intact and recorded, exactly as under `local`. A lost job is a lost
   point, never a lost grid.
+- **Every transport command on this host has its own budget.** The upload
+  and each status read (`--batch-transport-timeout`, default 300 s), each
+  launch-script invocation (`--batch-launch-timeout`, 600 s) and the output
+  download (`--batch-collect-timeout`, 1800 s) are each killed — with any
+  processes they started — when they overrun. These are separate from
+  `--timeout` (the simulator's budget, enforced on the instance) and from the
+  provisioning grace (how long to wait for the job to finish at all). An
+  overrun fails *that point* with the job id and stage in its message: a
+  stalled upload is not launched; a stalled launch is **never relaunched**,
+  because it may already have submitted a job, so check the layer for that
+  job id before resubmitting the point; a stalled status read is re-polled
+  until the polling deadline; a stalled download keeps every file that did
+  arrive as evidence, but the point cannot pass.
 
 **Relocating the deck.** A composed deck names this host's absolute paths in
 its `.include`/`.lib` cards, which do not exist on a job instance. The batch

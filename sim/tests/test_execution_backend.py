@@ -15,11 +15,15 @@ provenance.
 
 from __future__ import annotations
 
+import inspect
 import json
+import os
+import signal
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -737,28 +741,59 @@ class LaunchCeilingTests(SubmissionTests):
 # 6b. The default runner: the one seam an injected `runner=` cannot cover
 # ===========================================================================
 
+class _FinishedPopen:
+    """The slice of a finished ``subprocess.Popen`` `_default_runner` drives."""
+
+    def __init__(self, result: subprocess.CompletedProcess):
+        self.result = result
+        self.returncode = result.returncode
+        self.pid = -1
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def communicate(self, timeout=None):
+        return self.result.stdout, self.result.stderr
+
+
 class _RecordingRun(_FakeTransport):
-    """A `subprocess.run` stand-in that also records the keywords it got."""
+    """A `subprocess.Popen` stand-in that also records the keywords it got.
+
+    ``__call__`` takes exactly ``Popen``'s positional/keyword shape and then
+    binds the keywords against ``Popen``'s real signature, so a call site that
+    hands `_default_runner` a keyword it already sets (``text``) or one
+    ``Popen`` does not take at all (``capture_output``, ``check``) still
+    raises ``TypeError`` here, as it would for real -- without a process.
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.kwargs: list[dict] = []
 
+    #: Taken before any test patches ``subprocess.Popen`` with an instance of
+    #: this class -- looked up inside ``__call__`` it would be this stub's own.
+    POPEN_SIGNATURE = inspect.signature(subprocess.Popen)
+
     def __call__(self, argv, **kwargs):
+        self.POPEN_SIGNATURE.bind(argv, **kwargs)
         self.kwargs.append(dict(kwargs))
-        return super().__call__(argv, **kwargs)
+        return _FinishedPopen(super().__call__(argv, **kwargs))
 
 
 class DefaultRunnerTests(unittest.TestCase):
-    """Drive `batch._default_runner` itself, with `subprocess.run` patched.
+    """Drive `batch._default_runner` itself, with `subprocess.Popen` patched.
 
     Every other test in this file injects its own ``runner=``, and such a stub
     absorbs any keyword a call site adds. The real submission path goes through
-    ``batch._default_runner``, which already fixes ``capture_output``/``text``/
-    ``check`` -- so a call site that re-supplies one of them hands
-    ``subprocess.run`` the same keyword twice and raises ``TypeError`` before
-    ``aws`` or the provision script is ever reached (#512). Patching
-    ``subprocess.run`` rather than the backend's runner keeps the collision
+    ``batch._default_runner``, which already fixes output capture, text mode
+    and exit-status handling -- so a call site that re-supplies one of them
+    raises ``TypeError`` before ``aws`` or the provision script is ever
+    reached (#512). Patching ``subprocess.Popen`` (which `_default_runner`
+    drives directly so that it can kill a timed-out command's whole process
+    group, #727) rather than the backend's runner keeps the collision
     reachable while still spawning no process.
     """
 
@@ -786,7 +821,7 @@ class DefaultRunnerTests(unittest.TestCase):
         backend = self._default_backend()
         plan = backend.plan_deck(self.deck, 60)
         run = _RecordingRun(["done"])
-        with mock.patch.object(batch.subprocess, "run", run):
+        with mock.patch.object(batch.subprocess, "Popen", run):
             backend._launch(plan)
         self.assertEqual(len(run.launched()), 1)
         self.assertIn("--apply", run.launched()[0])
@@ -797,7 +832,7 @@ class DefaultRunnerTests(unittest.TestCase):
             ["running", "done"],
             outputs={batch.LOG_NAME: "m_vout = 1.65\n", batch.RC_NAME: "0"},
         )
-        with mock.patch.object(batch.subprocess, "run", run):
+        with mock.patch.object(batch.subprocess, "Popen", run):
             got = backend.run_deck(self.deck, self.rundir, 60, None)
         self.assertEqual(got.returncode, 0)
         self.assertEqual(got.output, "m_vout = 1.65\n")
@@ -807,13 +842,509 @@ class DefaultRunnerTests(unittest.TestCase):
         """No call site may re-specify what `_default_runner` already sets."""
         backend = self._default_backend()
         run = _RecordingRun(["done"], outputs={batch.RC_NAME: "0"})
-        with mock.patch.object(batch.subprocess, "run", run):
+        with mock.patch.object(batch.subprocess, "Popen", run):
             backend.run_deck(self.deck, self.rundir, 60, None)
         self.assertTrue(run.kwargs)
         for seen in run.kwargs:
-            self.assertEqual(seen.get("capture_output"), True)
+            self.assertEqual(seen.get("stdout"), subprocess.PIPE)
+            self.assertEqual(seen.get("stderr"), subprocess.PIPE)
             self.assertEqual(seen.get("text"), True)
-            self.assertEqual(seen.get("check"), False)
+            self.assertEqual(seen.get("start_new_session"), True)
+            self.assertNotIn("capture_output", seen)
+            self.assertNotIn("check", seen)
+
+    def test_a_duplicated_runner_keyword_is_still_a_type_error(self):
+        """The #512 guard survives the move from `run` to `Popen`."""
+        run = _RecordingRun(["done"])
+        with mock.patch.object(batch.subprocess, "Popen", run):
+            for keyword in ("text", "capture_output", "check"):
+                with self.subTest(keyword=keyword), self.assertRaises(TypeError):
+                    batch._default_runner(["aws", "s3", "ls"], **{keyword: True})
+        self.assertEqual(run.calls, [])
+
+
+# ===========================================================================
+# 6b'. Transport stages are bounded, and a stalled one degrades one point (#727)
+# ===========================================================================
+
+def _stage_of(argv) -> str:
+    """Which transport stage a batch backend command belongs to."""
+    argv = list(argv)
+    if argv[0] != "aws":
+        return batch.STAGE_LAUNCH
+    joined = " ".join(argv)
+    if "status.json" in joined:
+        return batch.STAGE_STATUS
+    if "/outputs/" in joined:
+        return batch.STAGE_COLLECT
+    return batch.STAGE_UPLOAD
+
+
+class _HangingTransport(_FakeTransport):
+    """A `_FakeTransport` whose chosen stage(s) exceed their budget.
+
+    A hang is injected the way the real runner reports one -- by raising
+    ``subprocess.TimeoutExpired`` for the ``timeout`` the call site passed --
+    so no test waits out a real budget. ``hang`` maps a stage to how many of
+    its calls hang (``None`` = every one). ``only`` restricts the hang to
+    commands whose argv mentions that substring (one job of a grid).
+    ``before_hang`` runs first, e.g. to land a partial download.
+    """
+
+    def __init__(self, *args, hang=None, only="", partial_stderr="",
+                 partial_stdout="", before_hang=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.hang = dict(hang or {})
+        self.only = only
+        self.partial_stderr = partial_stderr
+        self.partial_stdout = partial_stdout
+        self.before_hang = before_hang
+        self.timeouts: list[tuple[str, float]] = []
+        self._lock = threading.Lock()
+
+    def _should_hang(self, stage, argv) -> bool:
+        if self.only and self.only not in " ".join(argv):
+            return False
+        with self._lock:
+            if stage not in self.hang:
+                return False
+            left = self.hang[stage]
+            if left is None:
+                return True
+            if left <= 0:
+                return False
+            self.hang[stage] = left - 1
+            return True
+
+    def __call__(self, argv, **kwargs):
+        argv = list(argv)
+        stage = _stage_of(argv)
+        timeout = kwargs.get("timeout")
+        with self._lock:
+            self.timeouts.append((stage, timeout))
+        if self._should_hang(stage, argv):
+            with self._lock:
+                self.calls.append(argv)
+            if self.before_hang is not None:
+                self.before_hang(argv)
+            # POSIX hands back partial output as bytes even in text mode.
+            raise subprocess.TimeoutExpired(
+                argv, timeout,
+                output=self.partial_stdout.encode() or None,
+                stderr=self.partial_stderr.encode() or None,
+            )
+        return super().__call__(argv, **kwargs)
+
+    def stage_calls(self, stage) -> list[list[str]]:
+        return [a for a in self.calls if _stage_of(a) == stage]
+
+
+class TransportTimeoutTests(SubmissionTests):
+    """#727: every transport command is bounded; a stall fails one point.
+
+    The polling deadline cannot interrupt a command that never returns, and
+    ``run_grid`` waits on every worker before a record is minted -- so before
+    this, one stalled upload, launch, status read or download held back every
+    sibling point's result indefinitely.
+    """
+
+    COMPLETE = {
+        batch.LOG_NAME: "m_vout = 1.65\n",
+        batch.RC_NAME: "0",
+        batch.HOST_NAME: "ip-10-0-0-7\n",
+    }
+
+    def _backend(self, transport, apply=True, **budgets):
+        backend = super()._backend(transport, apply)
+        for name, value in budgets.items():
+            setattr(backend, name, value)
+        return backend
+
+    # -- every call carries a budget ------------------------------------ #
+
+    def test_every_transport_command_is_issued_with_its_stage_budget(self):
+        transport = _HangingTransport(["running", "done"], outputs=self.COMPLETE)
+        backend = self._backend(
+            transport, transport_timeout_s=11, launch_timeout_s=22,
+            collect_timeout_s=33,
+        )
+        got = backend.run_deck(self.deck, self.rundir, 60, None)
+        self.assertEqual(got.returncode, 0)
+        seen = {stage for stage, _ in transport.timeouts}
+        self.assertEqual(
+            seen,
+            {batch.STAGE_UPLOAD, batch.STAGE_LAUNCH, batch.STAGE_STATUS,
+             batch.STAGE_COLLECT},
+        )
+        expected = {
+            batch.STAGE_UPLOAD: 11, batch.STAGE_LAUNCH: 22,
+            batch.STAGE_COLLECT: 33,
+        }
+        for stage, timeout in transport.timeouts:
+            self.assertIsNotNone(timeout, stage)
+            if stage == batch.STAGE_STATUS:
+                self.assertGreater(timeout, 0)
+                self.assertLessEqual(timeout, 11)
+            else:
+                self.assertEqual(timeout, expected[stage], stage)
+
+    def test_a_non_positive_budget_is_refused_at_construction(self):
+        for name in ("transport_timeout_s", "launch_timeout_s", "collect_timeout_s"):
+            for bad in (0, -1, None):
+                with self.subTest(name=name, value=bad):
+                    with self.assertRaises(execution.BackendError):
+                        batch.BatchBackend(
+                            pdk_variant_dir=self.pdk_dir, pdk_variant="gf180mcuD",
+                            config=_config(self.root), apply=True,
+                            runner=_FakeTransport(["done"]), **{name: bad},
+                        )
+
+    def test_the_defaults_are_bounded(self):
+        backend = batch.BatchBackend(
+            pdk_variant_dir=self.pdk_dir, pdk_variant="gf180mcuD",
+            config=_config(self.root), runner=_FakeTransport(["done"]),
+        )
+        self.assertEqual(backend.transport_timeout_s, batch.DEFAULT_TRANSPORT_TIMEOUT_S)
+        self.assertEqual(backend.launch_timeout_s, batch.DEFAULT_LAUNCH_TIMEOUT_S)
+        self.assertEqual(backend.collect_timeout_s, batch.DEFAULT_COLLECT_TIMEOUT_S)
+
+    # -- upload ----------------------------------------------------------- #
+
+    def test_a_stalled_upload_fails_the_point_without_launching(self):
+        transport = _HangingTransport(
+            ["done"], hang={batch.STAGE_UPLOAD: None},
+            partial_stderr="upload: inputs/deck.spice to s3://...",
+        )
+        backend = self._backend(transport, transport_timeout_s=7)
+        got = backend.run_deck(self.deck, self.rundir, 60, None)
+        job_id = backend.jobs[0].job_id
+        self.assertTrue(got.execution_failed)
+        self.assertFalse(got.timed_out)
+        self.assertEqual(got.output, "")
+        for text in (job_id, "upload stage timed out after 7s",
+                     "upload: inputs/deck.spice", "not launched"):
+            self.assertIn(text, got.detail)
+        self.assertEqual(transport.launched(), [])
+
+    # -- launch ----------------------------------------------------------- #
+
+    def test_a_stalled_launch_fails_the_point_and_is_never_relaunched(self):
+        """It may already have submitted a job; a retry could pay twice."""
+        transport = _HangingTransport(
+            ["done"], outputs=self.COMPLETE, hang={batch.STAGE_LAUNCH: None},
+            partial_stdout="requesting spot instance ...",
+        )
+        backend = self._backend(transport, launch_timeout_s=9)
+        got = backend.run_deck(self.deck, self.rundir, 60, None)
+        job_id = backend.jobs[0].job_id
+        self.assertTrue(got.execution_failed)
+        self.assertFalse(got.timed_out)
+        for text in (job_id, "launch stage timed out after 9s",
+                     "requesting spot instance", "not relaunched"):
+            self.assertIn(text, got.detail)
+        self.assertEqual(len(transport.launched()), 1)
+        # Nothing after the launch ran: no polling, no collection.
+        self.assertEqual(transport.stage_calls(batch.STAGE_STATUS), [])
+        self.assertEqual(transport.stage_calls(batch.STAGE_COLLECT), [])
+
+    def test_a_launch_that_stalls_while_waiting_out_the_ceiling_stops_retrying(self):
+        class _RefuseThenHang(_CeilingRefusingTransport):
+            def __call__(self, argv, **kwargs):
+                argv = list(argv)
+                if argv[0] != "aws" and self.launch_attempts == self.refusals:
+                    self.launch_attempts += 1
+                    self.calls.append(argv)
+                    raise subprocess.TimeoutExpired(argv, kwargs.get("timeout"))
+                return super().__call__(argv, **kwargs)
+
+        transport = _RefuseThenHang(["done"], outputs=self.COMPLETE, refusals=2)
+        got = self._backend(transport).run_deck(self.deck, self.rundir, 60, None)
+        self.assertTrue(got.execution_failed)
+        self.assertIn("launch stage timed out", got.detail)
+        # Two refusals re-offered, the third attempt stalled, no fourth.
+        self.assertEqual(transport.launch_attempts, 3)
+
+    # -- status ----------------------------------------------------------- #
+
+    def test_status_reads_that_always_stall_end_at_the_polling_deadline(self):
+        transport = _HangingTransport(["running"], hang={batch.STAGE_STATUS: None})
+        backend = self._backend(transport, transport_timeout_s=3600)
+        backend.provision_grace_s = 0.3
+        backend.poll_interval_s = 0.05
+        t0 = time.monotonic()
+        got = backend.run_deck(self.deck, self.rundir, 0, None)
+        elapsed = time.monotonic() - t0
+        self.assertLess(elapsed, 5.0)
+        self.assertTrue(got.timed_out)
+        self.assertIn(backend.jobs[0].job_id, got.detail)
+        self.assertIn("status read(s) timed out", got.detail)
+        self.assertIn("status stage timed out", got.detail)
+        # Each read's budget is clamped to what is left of the polling budget,
+        # never the 3600 s per-command default.
+        status_budgets = [t for s, t in transport.timeouts if s == batch.STAGE_STATUS]
+        self.assertTrue(status_budgets)
+        self.assertTrue(all(0 < t <= 0.3 for t in status_budgets), status_budgets)
+        self.assertEqual(transport.stage_calls(batch.STAGE_COLLECT), [])
+
+    def test_one_stalled_status_read_is_re_polled_not_fatal(self):
+        transport = _HangingTransport(
+            ["done"], outputs=self.COMPLETE, hang={batch.STAGE_STATUS: 2}
+        )
+        got = self._backend(transport).run_deck(self.deck, self.rundir, 60, None)
+        self.assertEqual(got.returncode, 0)
+        self.assertFalse(got.execution_failed)
+        self.assertFalse(got.timed_out)
+        self.assertEqual(got.output, "m_vout = 1.65\n")
+        self.assertEqual(len(transport.stage_calls(batch.STAGE_STATUS)), 3)
+
+    def test_the_poll_sleep_never_overruns_the_polling_deadline(self):
+        transport = _HangingTransport(["running"] * 1000)
+        backend = self._backend(transport)
+        backend.poll_interval_s = 3600
+        backend.provision_grace_s = 0.2
+        sleeps: list[float] = []
+        real_sleep = batch.time.sleep
+
+        def _sleep(seconds):
+            sleeps.append(seconds)
+            real_sleep(seconds)
+
+        with mock.patch.object(batch.time, "sleep", _sleep):
+            got = backend.run_deck(self.deck, self.rundir, 0, None)
+        self.assertTrue(got.timed_out)
+        self.assertTrue(sleeps)
+        self.assertTrue(all(s <= 0.2 for s in sleeps), sleeps)
+
+    # -- collect ---------------------------------------------------------- #
+
+    def _partial_download(self, argv):
+        """What a download stopped part-way leaves: the log, and one waveform."""
+        dest = Path(argv[argv.index("cp") + 2])
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / batch.LOG_NAME).write_text("m_vout = 1.65\n")
+        (dest / "wave.dat").write_text("0 1\n")
+
+    def test_a_stalled_download_keeps_what_arrived_but_fails_the_point(self):
+        transport = _HangingTransport(
+            ["done"], hang={batch.STAGE_COLLECT: None},
+            before_hang=self._partial_download,
+            partial_stderr="download: outputs/wave.dat",
+        )
+        backend = self._backend(transport, collect_timeout_s=13)
+        got = backend.run_deck(self.deck, self.rundir, 60, None)
+        job_id = backend.jobs[0].job_id
+        self.assertTrue(got.execution_failed)
+        self.assertFalse(got.timed_out)
+        # The partial evidence is read and published, not discarded.
+        self.assertEqual(got.output, "m_vout = 1.65\n")
+        self.assertEqual((self.rundir / "wave.dat").read_text(), "0 1\n")
+        for text in (job_id, "output collection failed",
+                     "collect stage timed out after 13s",
+                     "download: outputs/wave.dat"):
+            self.assertIn(text, got.detail)
+
+    def test_a_stalled_download_after_a_layer_timeout_stays_a_timeout(self):
+        transport = _HangingTransport(
+            ["timeout"], hang={batch.STAGE_COLLECT: None},
+            before_hang=self._partial_download,
+        )
+        got = self._backend(transport).run_deck(self.deck, self.rundir, 60, None)
+        self.assertTrue(got.timed_out)
+        self.assertIn("budget", got.detail)
+        self.assertIn("collect stage timed out", got.detail)
+
+
+class TransportTimeoutGridTests(ManifestFixture):
+    """#727 at the harness level: one stalled job, the rest of the grid stands."""
+
+    def setUp(self):
+        super().setUp()
+        self.pdk = fake_pdk(self.root / "pdk")
+        self.write({
+            "measure": {"vout": "v(out)"}, "analyses": ["tran 1n 10n"],
+            "raw_files": {"jit.dat": {"retain": True}},
+        })
+        self.tb = testbench.load(self.tb_dir)
+        self.points = corners.build_sweep_grid(
+            corners.resolve_corners(["typical"]), [-40.0, 27.0, 125.0], [3.3]
+        )
+
+    def _grid(self, stage, before_hang=None):
+        outputs = {
+            batch.LOG_NAME: "m_vout = 1.65\n", batch.RC_NAME: "0",
+            batch.HOST_NAME: "ip-10-0-0-7\n", "jit.dat": "0 1\n",
+        }
+        transport = _HangingTransport(
+            ["done"] * 10, outputs=outputs, hang={stage: None},
+            only="_27c_", before_hang=before_hang,
+        )
+        backend = batch.BatchBackend(
+            pdk_variant_dir=self.pdk.path, pdk_variant=self.pdk.variant,
+            config=_config(self.root), apply=True, runner=transport,
+            poll_interval_s=0,
+        )
+        log_dir = self.root / "corners" / "rec-727"
+        results = runner.run_grid(
+            self.tb, self.pdk, self.points, self.root / "work", jobs=3,
+            backend=backend, log_dir=log_dir,
+        )
+        return results, backend, transport
+
+    def test_each_stalled_stage_fails_one_point_and_the_siblings_stand(self):
+        for stage in (batch.STAGE_UPLOAD, batch.STAGE_LAUNCH, batch.STAGE_COLLECT):
+            with self.subTest(stage=stage):
+                results, backend, _ = self._grid(stage)
+                self.assertEqual(len(results), 3)
+                by_id = {r.point.corner_id: r for r in results}
+                stalled = next(c for c in by_id if "_27c_" in c)
+                self.assertNotEqual(by_id[stalled].status, "ok")
+                self.assertIn(f"{stage} stage timed out", by_id[stalled].message)
+                job = next(p.job_id for p in backend.jobs if "_27c_" in p.job_id)
+                self.assertIn(job, by_id[stalled].message)
+                for corner_id, result in by_id.items():
+                    if corner_id != stalled:
+                        self.assertEqual(result.status, "ok", corner_id)
+                        self.assertEqual(result.measurements["vout"], 1.65)
+
+                record = report.build_record(
+                    tb=self.tb, pdk=self.pdk, points=self.points, results=results,
+                    ngspice="ngspice-46", repo_root=self.root, record_id="rid",
+                    started_utc="2026-01-01T00:00:00+00:00", wall_seconds=1.0,
+                    execution={"jobs": 3, "omp": {}, **backend.describe()},
+                )
+                # An honest record: complete (not an aborted grid), but not a pass.
+                self.assertFalse(record["partial"])
+                self.assertEqual(record["status"], "error")
+                self.assertEqual(record["grid"]["points_ok"], 2)
+
+    def test_a_stalled_download_keeps_its_retained_raw_file_but_cannot_pass(self):
+        def partial(argv):
+            dest = Path(argv[argv.index("cp") + 2])
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / batch.LOG_NAME).write_text("m_vout = 1.65\n")
+            (dest / "jit.dat").write_text("0 1\n")
+
+        results, _, _ = self._grid(batch.STAGE_COLLECT, before_hang=partial)
+        stalled = next(r for r in results if "_27c_" in r.point.corner_id)
+        self.assertEqual(stalled.status, "failed")
+        self.assertEqual(stalled.measurements["vout"], 1.65)
+        self.assertTrue(stalled.raw_files["jit.dat"].exists())
+
+    def test_a_stalled_status_read_on_every_poll_times_out_one_point(self):
+        results, backend, _ = self._grid_with_status_hang()
+        by_id = {r.point.corner_id: r for r in results}
+        stalled = next(c for c in by_id if "_27c_" in c)
+        self.assertEqual(by_id[stalled].status, "error")
+        self.assertIn("status stage timed out", by_id[stalled].message)
+        self.assertEqual(
+            sorted(r.status for c, r in by_id.items() if c != stalled), ["ok", "ok"]
+        )
+
+    def _grid_with_status_hang(self):
+        outputs = {batch.LOG_NAME: "m_vout = 1.65\n", batch.RC_NAME: "0",
+                   "jit.dat": "0 1\n"}
+        transport = _HangingTransport(
+            ["done"] * 10, outputs=outputs, hang={batch.STAGE_STATUS: None},
+            only="_27c_",
+        )
+        backend = batch.BatchBackend(
+            pdk_variant_dir=self.pdk.path, pdk_variant=self.pdk.variant,
+            config=_config(self.root), apply=True, runner=transport,
+            poll_interval_s=0.05, provision_grace_s=0.3,
+        )
+        results = runner.run_grid(
+            self.tb, self.pdk, self.points, self.root / "work", jobs=3,
+            timeout_s=0, backend=backend,
+        )
+        return results, backend, transport
+
+
+class TransportTimeoutCliTests(unittest.TestCase):
+    """The three budgets are configurable from `sim/run_corners.py` (#727)."""
+
+    ENV = {
+        "SIM_BATCH_PROVISION_SCRIPT": "/opt/layer/provision.sh",
+        "SIM_BATCH_JOB_BUCKET": "bucket",
+        "SIM_BATCH_REGION": "us-east-1",
+    }
+
+    def _backend(self, *flags):
+        from harness import cli
+
+        args = cli.build_parser().parse_args(["some-experiment", "--backend", "batch", *flags])
+        pdk = mock.Mock(path=Path("/pdk/gf180mcuD"), variant="gf180mcuD")
+        with mock.patch.dict("os.environ", self.ENV, clear=True):
+            return cli.build_backend(args, pdk)
+
+    def test_flags_reach_the_backend(self):
+        backend = self._backend(
+            "--batch-transport-timeout", "45", "--batch-launch-timeout", "90",
+            "--batch-collect-timeout", "120",
+        )
+        self.assertEqual(
+            (backend.transport_timeout_s, backend.launch_timeout_s,
+             backend.collect_timeout_s),
+            (45, 90, 120),
+        )
+
+    def test_defaults_are_the_modules_defaults(self):
+        backend = self._backend()
+        self.assertEqual(backend.transport_timeout_s, batch.DEFAULT_TRANSPORT_TIMEOUT_S)
+        self.assertEqual(backend.launch_timeout_s, batch.DEFAULT_LAUNCH_TIMEOUT_S)
+        self.assertEqual(backend.collect_timeout_s, batch.DEFAULT_COLLECT_TIMEOUT_S)
+
+
+@unittest.skipUnless(hasattr(os, "killpg"), "process groups are POSIX-only")
+class DefaultRunnerTimeoutTests(unittest.TestCase):
+    """`_default_runner`'s budget against a real (local, network-free) process.
+
+    The one test in this file that spawns anything: the current Python
+    interpreter, running a few lines that sleep. It is here because the
+    property under test -- that a budget kills the command's *descendants*,
+    not just its direct child -- is a property of real process groups that no
+    stub can show. Nothing touches ``aws``, a provision script or a network.
+    """
+
+    #: A "launch script" that starts a long-lived child sharing its stdout,
+    #: reports that child's pid, and then stalls itself.
+    SCRIPT = (
+        "import subprocess, sys, time\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+        "print(child.pid, flush=True)\n"
+        "print('stalling', file=sys.stderr, flush=True)\n"
+        "time.sleep(60)\n"
+    )
+
+    def test_a_stalled_command_and_its_children_are_killed_within_budget(self):
+        started = time.monotonic()
+        with self.assertRaises(subprocess.TimeoutExpired) as caught:
+            batch._default_runner([sys.executable, "-c", self.SCRIPT], timeout=1.0)
+        elapsed = time.monotonic() - started
+        self.assertLess(elapsed, 1.0 + batch._REAP_GRACE_S + 2.0)
+        exc = caught.exception
+        self.assertEqual(exc.timeout, 1.0)
+        self.assertIn("stalling", batch._text(exc.stderr))
+        grandchild = int(batch._text(exc.stdout).split()[0])
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            try:
+                os.kill(grandchild, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.05)
+        else:  # pragma: no cover - the failure being guarded against
+            os.kill(grandchild, signal.SIGKILL)
+            self.fail("the stalled command's child outlived its budget")
+
+    def test_a_command_inside_its_budget_is_unchanged(self):
+        got = batch._default_runner(
+            [sys.executable, "-c", "import sys; print('out'); "
+             "print('err', file=sys.stderr); sys.exit(3)"],
+            timeout=30,
+        )
+        self.assertEqual(got.returncode, 3)
+        self.assertEqual(got.stdout, "out\n")
+        self.assertEqual(got.stderr, "err\n")
 
 
 # ===========================================================================

@@ -71,6 +71,15 @@ silently attribute another PVT point's log, exit code and host to this one
 (#507). What the *deck* wrote is then published into the rundir, because that
 is where the harness resolves a manifest's ``raw_files``.
 
+Every transport command is bounded
+----------------------------------
+Each upload, launch, status read and output download runs under its own
+wall-clock budget (:data:`DEFAULT_TRANSPORT_TIMEOUT_S` and siblings), and an
+overrun degrades only the affected point: a failed :class:`DeckRun` naming
+the job id and the stage, with whatever partial output and downloaded files
+exist kept as evidence. A launch that overruns is never retried, because it
+may already have submitted a job (#727).
+
 Safety: nothing is submitted without ``apply``
 ----------------------------------------------
 Launching jobs spends real money from a shared budget. Mirroring the
@@ -88,6 +97,7 @@ import json
 import os
 import re
 import shlex
+import signal
 import subprocess
 import time
 import uuid
@@ -154,6 +164,41 @@ CEILING_REFUSAL_RE = re.compile(r"BATCH_MAX_CONCURRENT_INSTANCES", re.IGNORECASE
 #: for it in.
 LAUNCH_CEILING_ATTEMPTS = 60
 
+#: Wall-clock budgets for each *transport* command, in seconds (#727).
+#:
+#: The polling deadline in :meth:`BatchBackend.run_deck` bounds how long the
+#: submitter waits for a job to reach a terminal state, but it is checked
+#: *between* commands -- it cannot interrupt one. A stalled upload, launch
+#: script, status read or output download therefore held a grid worker
+#: forever, and ``run_grid`` waits for every worker before any record is
+#: minted, so one hung socket withheld every sibling point's result. Each
+#: transport command now carries its own budget:
+#:
+#: - :data:`DEFAULT_TRANSPORT_TIMEOUT_S` -- the job-document/inputs upload
+#:   and each ``status.json`` read. Both move kilobytes.
+#: - :data:`DEFAULT_LAUNCH_TIMEOUT_S` -- one invocation of the layer's launch
+#:   script, which itself makes several provider API calls.
+#: - :data:`DEFAULT_COLLECT_TIMEOUT_S` -- the recursive output download,
+#:   which carries the deck's waveforms and so can be large.
+#:
+#: These are *not* the simulator's budget (``--timeout``, carried in the job
+#: document and enforced on the instance) and not the provisioning grace
+#: (:data:`DEFAULT_PROVISION_GRACE_S`, which bounds the wait for a terminal
+#: state). They bound only how long this host waits on one command it ran.
+DEFAULT_TRANSPORT_TIMEOUT_S = 300
+DEFAULT_LAUNCH_TIMEOUT_S = 600
+DEFAULT_COLLECT_TIMEOUT_S = 1800
+
+#: After a timed-out command's process group is killed, how long to wait for
+#: its pipes to drain before giving up on the remaining partial output.
+_REAP_GRACE_S = 5.0
+
+#: Transport stages, as they are named in a point's diagnostic detail.
+STAGE_UPLOAD = "upload"
+STAGE_LAUNCH = "launch"
+STAGE_STATUS = "status"
+STAGE_COLLECT = "collect"
+
 #: Default ``aws`` CLI profile name. A profile *name* is not a secret -- the
 #: credential it resolves to lives in the operator's own AWS config, and a
 #: host without that profile gets a clean CLI error naming it.
@@ -162,20 +207,110 @@ DEFAULT_PROFILE = "batch-runner-submit"
 DEFAULT_JOBS_PREFIX = "jobs"
 
 
-def _default_runner(argv: Sequence[str], **kwargs) -> subprocess.CompletedProcess:
+def _default_runner(
+    argv: Sequence[str], timeout: float | None = None, **kwargs
+) -> subprocess.CompletedProcess:
     """Run one transport command, capturing its output.
 
-    **``capture_output`` / ``text`` / ``check`` are this function's to set, and
-    a call site must not repeat them** -- ``subprocess.run`` rejects a
-    duplicated keyword with ``TypeError: got multiple values for keyword
-    argument``, which is a submission that dies *after* its inputs are already
-    uploaded. See the regression test in ``sim/tests/test_execution_backend.py``
-    (``StrictRunnerSignatureTests``), which applies these keyword rules to
-    every call site the submission path makes.
+    **Output capture, text mode and the never-raise-on-exit-status rule are
+    this function's to set, and a call site must not repeat them** -- passing
+    ``capture_output``/``text``/``check`` raises ``TypeError`` (a duplicated
+    or unknown keyword), which is a submission that dies *after* its inputs
+    are already uploaded (#512). See the regression tests in
+    ``sim/tests/test_execution_backend.py`` (``StrictRunnerSignatureTests``,
+    ``DefaultRunnerTests``), which apply these keyword rules to every call
+    site the submission path makes. ``timeout`` is the one keyword call sites
+    are expected to pass.
+
+    ``timeout`` (seconds, or ``None`` for unbounded) is enforced against the
+    command's **whole process group**, not just its direct child. The child
+    is started in a session of its own, and on expiry that session is killed
+    and :class:`subprocess.TimeoutExpired` is raised carrying whatever
+    stdout/stderr had arrived. ``subprocess.run``'s own ``timeout`` kills only
+    the direct child, which for the launch script -- a shell script that runs
+    provider CLI calls of its own -- would leave the actual stalled call
+    running unobserved after this host had given up on it (#727).
     """
-    return subprocess.run(
-        list(argv), capture_output=True, text=True, check=False, **kwargs
-    )
+    argv = list(argv)
+    with subprocess.Popen(
+        argv,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+        **kwargs,
+    ) as proc:
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            _kill_group(proc)
+            try:
+                stdout, stderr = proc.communicate(timeout=_REAP_GRACE_S)
+            except subprocess.TimeoutExpired:
+                # A descendant that left the session still holds a pipe open.
+                # Do not wait on it: report what had arrived when time ran out.
+                stdout, stderr = exc.stdout, exc.stderr
+                proc.kill()
+            raise subprocess.TimeoutExpired(
+                argv, timeout, output=stdout, stderr=stderr
+            ) from None
+        except BaseException:
+            _kill_group(proc)
+            raise
+    return subprocess.CompletedProcess(argv, proc.returncode, stdout, stderr)
+
+
+def _kill_group(proc: subprocess.Popen) -> None:
+    """Kill ``proc`` and everything in its session; never raises."""
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except (OSError, AttributeError):
+        # Already gone, or no process groups on this platform.
+        try:
+            proc.kill()
+        except OSError:
+            pass
+
+
+def _text(value) -> str:
+    """Partial output from a :class:`subprocess.TimeoutExpired`, as text.
+
+    On POSIX the exception carries *bytes* even for a ``text=True`` call,
+    because the partial read never reached the decoder.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
+class StageTimeout(Exception):
+    """One transport command exceeded its budget (#727).
+
+    Internal to this module: :meth:`BatchBackend.run_deck` converts it into
+    a failed :class:`DeckRun` for the affected point and never lets it reach
+    ``run_grid``.
+    """
+
+    def __init__(self, stage: str, job_id: str, budget_s: float, stdout="", stderr=""):
+        self.stage = stage
+        self.job_id = job_id
+        self.budget_s = budget_s
+        self.stdout = _text(stdout)
+        self.stderr = _text(stderr)
+        super().__init__(self.describe())
+
+    def describe(self) -> str:
+        text = (
+            f"job {self.job_id} {self.stage} stage timed out after "
+            f"{self.budget_s:g}s"
+        )
+        for label, stream in (("stdout", self.stdout), ("stderr", self.stderr)):
+            flat = " ".join(stream.split())
+            if flat:
+                text += f" (partial {label}: {flat[-500:]})"
+        return text
 
 
 def _env_file_value(path: Path, key: str) -> str:
@@ -361,6 +496,9 @@ class BatchBackend:
         provision_grace_s: float = DEFAULT_PROVISION_GRACE_S,
         runner=None,
         job_prefix: str = "gf180-pll-sim",
+        transport_timeout_s: float = DEFAULT_TRANSPORT_TIMEOUT_S,
+        launch_timeout_s: float = DEFAULT_LAUNCH_TIMEOUT_S,
+        collect_timeout_s: float = DEFAULT_COLLECT_TIMEOUT_S,
     ) -> None:
         self.pdk_variant_dir = Path(pdk_variant_dir)
         self.pdk_variant = pdk_variant
@@ -369,6 +507,21 @@ class BatchBackend:
         self.cores_per_job = cores_per_job
         self.poll_interval_s = poll_interval_s
         self.provision_grace_s = provision_grace_s
+        for label, value in (
+            ("transport", transport_timeout_s),
+            ("launch", launch_timeout_s),
+            ("collect", collect_timeout_s),
+        ):
+            if not value or value <= 0:
+                raise BackendError(
+                    f"batch backend: the {label} timeout must be a positive "
+                    f"number of seconds, not {value!r}; an unbounded transport "
+                    "command can hold a grid worker forever (#727)."
+                )
+        #: Per-command budgets; see :data:`DEFAULT_TRANSPORT_TIMEOUT_S`.
+        self.transport_timeout_s = transport_timeout_s
+        self.launch_timeout_s = launch_timeout_s
+        self.collect_timeout_s = collect_timeout_s
         self._run = runner if runner is not None else _default_runner
         self.job_prefix = job_prefix
         #: Every plan this backend shaped, in submission order -- the record's
@@ -499,8 +652,8 @@ class BatchBackend:
 
     # -- transport ------------------------------------------------------- #
 
-    def _aws(self, *args: str, **kwargs) -> subprocess.CompletedProcess:
-        argv = [
+    def _aws_argv(self, *args: str) -> list[str]:
+        return [
             "aws",
             "--region",
             self.config.region,
@@ -508,7 +661,22 @@ class BatchBackend:
             self.config.profile,
             *args,
         ]
-        return self._run(argv, **kwargs)
+
+    def _bounded(
+        self, stage: str, plan: JobPlan, argv: Sequence[str], timeout_s: float
+    ) -> subprocess.CompletedProcess:
+        """Run one transport command under ``timeout_s``, or raise
+        :class:`StageTimeout` naming the stage and the job.
+
+        Every transport command goes through here, so none of them can be
+        issued without a budget (#727).
+        """
+        try:
+            return self._run(list(argv), timeout=timeout_s)
+        except subprocess.TimeoutExpired as exc:
+            raise StageTimeout(
+                stage, plan.job_id, timeout_s, exc.stdout, exc.stderr
+            ) from None
 
     def _upload(self, plan: JobPlan, staging: Path) -> None:
         staging.mkdir(parents=True, exist_ok=True)
@@ -520,8 +688,14 @@ class BatchBackend:
             if source is None:
                 continue
             (inputs_dir / name).write_bytes(Path(source).read_bytes())
-        proc = self._aws(
-            "s3", "cp", str(staging), plan.job_uri + "/", "--recursive", "--only-show-errors"
+        proc = self._bounded(
+            STAGE_UPLOAD,
+            plan,
+            self._aws_argv(
+                "s3", "cp", str(staging), plan.job_uri + "/",
+                "--recursive", "--only-show-errors",
+            ),
+            self.transport_timeout_s,
         )
         if proc.returncode != 0:
             raise BackendError(
@@ -574,8 +748,14 @@ class BatchBackend:
             "--profile",
             self.config.profile,
         ]
+        #
+        # Each attempt is bounded by `launch_timeout_s`. A launch that times
+        # out is NOT retried, ceiling or not: the script may have submitted the
+        # job (and started spending) before it stalled, and this host cannot
+        # tell. The `StageTimeout` propagates to `run_deck`, which fails the
+        # point and says the outcome is ambiguous (#727).
         for attempt in range(1, LAUNCH_CEILING_ATTEMPTS + 1):
-            proc = self._run(argv)
+            proc = self._bounded(STAGE_LAUNCH, plan, argv, self.launch_timeout_s)
             if proc.returncode == 0:
                 return
             stderr = (proc.stderr or "").strip()
@@ -594,9 +774,21 @@ class BatchBackend:
                 )
             time.sleep(self.poll_interval_s)
 
-    def _status(self, plan: JobPlan) -> dict:
-        proc = self._aws(
-            "s3", "cp", plan.job_uri + "/status.json", "-", "--only-show-errors"
+    def _status(self, plan: JobPlan, timeout_s: float | None = None) -> dict:
+        """Read ``status.json`` once; ``{}`` when it cannot be read.
+
+        Raises :class:`StageTimeout` when the read itself exceeds
+        ``timeout_s`` (default :attr:`transport_timeout_s`); the polling loop
+        treats that as one unanswered poll, since a status read is idempotent.
+        """
+        budget = self.transport_timeout_s if timeout_s is None else timeout_s
+        proc = self._bounded(
+            STAGE_STATUS,
+            plan,
+            self._aws_argv(
+                "s3", "cp", plan.job_uri + "/status.json", "-", "--only-show-errors"
+            ),
+            budget,
         )
         if proc.returncode != 0:
             return {}
@@ -637,10 +829,15 @@ class BatchBackend:
         the download's own result. A nonzero download is **not** raised here:
         whatever files did arrive are still evidence, and :meth:`run_deck`
         turns the failure into a failed point (#714).
+
+        A download that exceeds :attr:`collect_timeout_s` is reported the same
+        way, as a failed download whose stderr names the stage and budget: the
+        files that had arrived when it was stopped stay where they landed and
+        are still read and published as partial evidence (#727).
         """
         collected = self._staging(plan, rundir) / "outputs"
         collected.mkdir(parents=True, exist_ok=True)
-        proc = self._aws(
+        argv = self._aws_argv(
             "s3",
             "cp",
             plan.job_uri + "/outputs/",
@@ -648,6 +845,12 @@ class BatchBackend:
             "--recursive",
             "--only-show-errors",
         )
+        try:
+            proc = self._bounded(STAGE_COLLECT, plan, argv, self.collect_timeout_s)
+        except StageTimeout as exc:
+            proc = subprocess.CompletedProcess(
+                argv, -1, exc.stdout, exc.describe()
+            )
         return collected, proc
 
     def _publish(self, plan: JobPlan, collected: Path, rundir: Path) -> None:
@@ -696,6 +899,25 @@ class BatchBackend:
             except OSError:
                 continue
 
+    @staticmethod
+    def _stage_failure(exc: StageTimeout, started: float, consequence: str) -> DeckRun:
+        """A transport stage that timed out before the job could be awaited.
+
+        Reported as an *execution failure*, not a simulator timeout: the deck
+        may never have run, and ``timed_out`` would have the point's log say
+        ``TIMEOUT after <--timeout>s``, which is a claim about ngspice. The
+        partial transport output is diagnostics, not simulator output, so it
+        goes in ``detail`` (and from there the point's message) rather than in
+        ``output``, where the measurement parser would read it.
+        """
+        return DeckRun(
+            output="",
+            returncode=-1,
+            seconds=time.monotonic() - started,
+            execution_failed=True,
+            detail=f"{exc.describe()}; {consequence}",
+        )
+
     # -- the backend interface ------------------------------------------- #
 
     def run_deck(
@@ -723,34 +945,79 @@ class BatchBackend:
         self.jobs.append(plan)
         staging = self._staging(plan, rundir)
         started = time.monotonic()
-        self._upload(plan, staging)
-        self._launch(plan)
+        # Upload and launch are bounded per command (`_bounded`). A timeout in
+        # either is a failed point, never an exception out of `run_grid`
+        # (#727). Neither is retried here: a re-upload is pointless without a
+        # launch, and a launch that timed out may already have submitted.
+        try:
+            self._upload(plan, staging)
+        except StageTimeout as exc:
+            return self._stage_failure(
+                exc, started, "the job was not launched"
+            )
+        try:
+            self._launch(plan)
+        except StageTimeout as exc:
+            return self._stage_failure(
+                exc, started,
+                "the launch outcome is unknown -- the job may have been "
+                "submitted -- so it was not relaunched; check the layer for "
+                f"job {plan.job_id} before resubmitting this point",
+            )
 
+        # The polling budget is the deck's own timeout plus the provisioning
+        # grace, measured from submission start on the monotonic clock. Each
+        # status read is bounded by the smaller of its own budget and what is
+        # left of this one, and so is each sleep, so the loop cannot overrun
+        # the deadline by more than one command's reap time.
         deadline = started + timeout_s + self.provision_grace_s
         state = ""
         status: dict = {}
-        while time.monotonic() < deadline:
-            status = self._status(plan)
+        status_timeouts = 0
+        last_status_timeout: StageTimeout | None = None
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                status = self._status(
+                    plan, min(self.transport_timeout_s, remaining)
+                )
+            except StageTimeout as exc:
+                # One unanswered poll. A status read is idempotent, so it is
+                # simply re-asked until the polling budget runs out.
+                status_timeouts += 1
+                last_status_timeout = exc
+                status = {}
             state = str(status.get("state") or "")
             if state in TERMINAL_STATES:
                 break
-            time.sleep(self.poll_interval_s)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(self.poll_interval_s, remaining))
 
         seconds = time.monotonic() - started
         host = str(status.get("instance_id") or "")
 
         if state not in TERMINAL_STATES:
+            detail = (
+                f"job {plan.job_id} never reached a terminal state "
+                f"(last state {state or 'unknown'!r}) within "
+                f"{timeout_s}s + {self.provision_grace_s:g}s provisioning grace"
+            )
+            if status_timeouts:
+                detail += (
+                    f"; {status_timeouts} {STAGE_STATUS} read(s) timed out, "
+                    f"the last: {last_status_timeout.describe()}"
+                )
             return DeckRun(
                 output="",
                 returncode=-1,
                 seconds=seconds,
                 host=host,
                 timed_out=True,
-                detail=(
-                    f"job {plan.job_id} never reached a terminal state "
-                    f"(last state {state or 'unknown'!r}) within "
-                    f"{timeout_s}s + {self.provision_grace_s:g}s provisioning grace"
-                ),
+                detail=detail,
             )
 
         # Read this job's own log/rc/host out of ITS OWN collect directory. A
