@@ -1,0 +1,28 @@
+# every (PVT corner, REF waveform, applied phase offset) point -- the applied stimulus measured back from the waveform, and what the phase detector did with it
+# ref period 40 ns (25 MHz, the top of DR-002's ratified 1-25 MHz v1 range)
+# vctrl held at 1.65 V; Icp trim code b1b0=10 (3 unit legs) -- the sim/pfd-deadzone operating point, so the charge numbers compare
+# waveform: ideal = full-rail 200 ps edges 50 % duty (what every other testbench in this repository drives); levels = 0.2*VDD - 0.8*VDD; edge5ns = 5.00 ns 10-90 %; duty30/duty70 = the ends of the ratified 30-70 % range; worst = all three at once
+# phase: p0 = zero applied phase offset (the lock point); pm200/pp200 = the +/-200 ps near pair, run only on the detector-gain sub-grid
+# d_ref_s: REF mid-rail crossing -> UP assertion (s).  THIS IS THE SAMPLED PHASE: at lock the loop drives (t_ref + d_ref) = (t_fb + d_fb).
+# d_fb_s: the same set delay down the feedback path (s).  FB is driven identically at every point, so this is the experiment's control.
+# slew_ref_s: the 10-90 % edge time OF THE APPLIED WAVEFORM (s) -- measured, so the record proves it drove what it claims to have driven
+# duty_pct: the applied mid-rail high span as a percentage of the period
+# slope_ref_v_per_s: the applied mid-rail slew rate (V/s)
+# width_up_s/width_dn_s: UP/DN pulse width at mid-supply, third reference cycle.  An empty cell is an `optional` measurement that never crossed mid-supply.
+# qnet_c: net charge delivered to the control node per reference cycle (C), positive = pump sourcing
+process,temp_c,vdd_v,waveform,phase,d_ref_s,d_fb_s,slew_ref_s,duty_pct,slope_ref_v_per_s,width_up_s,width_dn_s,qnet_c
+typical,-40,2.97,ideal,p0,3.07051e-10,2.78351e-10,1.6e-10,50.000,1.485e+10,1.53386e-09,1.55492e-09,-4.96478e-17
+typical,-40,2.97,levels,p0,3.16482e-10,2.78325e-10,1.6e-10,50.000,8.91e+09,1.53198e-09,1.5625e-09,-9.08485e-17
+typical,-40,2.97,edge5ns,p0,2.85958e-10,2.78294e-10,5e-09,50.000,4.752e+08,1.53983e-09,1.53988e-09,9.57199e-17
+typical,-40,2.97,duty30,p0,3.07051e-10,2.78351e-10,1.6e-10,30.000,1.485e+10,1.53386e-09,1.55492e-09,1.11984e-16
+typical,-40,2.97,duty70,p0,3.07051e-10,2.78351e-10,1.6e-10,70.000,1.485e+10,1.53386e-09,1.55492e-09,-9.39097e-17
+typical,-40,2.97,worst,p0,1.79533e-10,2.78093e-10,5e-09,30.000,2.8512e+08,1.61678e-09,1.51068e-09,8.31934e-16
+typical,-40,3.30,levels,p0,2.86134e-10,2.55225e-10,1.6e-10,50.000,9.9e+09,1.40419e-09,1.43347e-09,-7.71784e-16
+typical,-40,3.30,edge5ns,p0,2.56388e-10,2.55327e-10,5e-09,50.000,5.28e+08,1.41292e-09,1.41235e-09,-1.17653e-15
+typical,-40,3.30,duty70,p0,2.77907e-10,2.55367e-10,1.6e-10,70.000,1.65e+10,1.40627e-09,1.42716e-09,-1.4033e-15
+typical,-40,3.30,worst,p0,1.5613e-10,2.54854e-10,5e-09,30.000,3.168e+08,1.48996e-09,1.38961e-09,-2.79689e-16
+typical,-40,3.63,ideal,p0,2.5676e-10,2.38311e-10,1.6e-10,50.000,1.815e+10,1.31425e-09,1.33555e-09,-2.84048e-15
+typical,-40,3.63,levels,p0,2.64812e-10,2.38286e-10,1.6e-10,50.000,1.089e+10,1.31287e-09,1.34225e-09,-2.64187e-15
+typical,-40,3.63,edge5ns,p0,2.41983e-10,2.38288e-10,5e-09,50.000,5.808e+08,1.31815e-09,1.32475e-09,-2.36781e-15
+typical,-40,3.63,duty30,p0,2.5676e-10,2.38311e-10,1.6e-10,30.000,1.815e+10,1.31425e-09,1.33555e-09,-2.81519e-15
+typical,-40,3.63,duty70,p0,2.5676e-10,2.38311e-10,1.6e-10,70.000,1.815e+10,1.31425e-09,1.33555e-09,-2.8994e-15
