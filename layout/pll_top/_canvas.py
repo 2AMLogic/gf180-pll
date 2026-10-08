@@ -789,6 +789,309 @@ def mosfet(
     )
 
 
+@dataclass(frozen=True)
+class Device:
+    """One ``nfet_03v3``/``pfet_03v3`` instance in a :func:`build_stack_cell` column.
+
+    Consolidated here (issue #707); ``pfd_cp/devgen.py`` and
+    ``divider_chain/devgen.py`` each carried a copy, the divider's a strict
+    superset (the optional trailing ``body_net``), and both re-export this one.
+
+    ``top_net``/``bottom_net`` are this device's two source/drain terminals,
+    named for their position in the vertical stack (``top_net`` nearer the
+    top of the column). ``gate_net``/``top_net``/``bottom_net`` are plain
+    net names -- :func:`build_stack_cell` wires or promotes them purely by
+    string equality across the whole device list, so a typo silently creates
+    a spurious extra net rather than raising; callers are expected to keep
+    ``layout/tests/``-level coverage on their own device tables the way
+    ``vco/devices.py``'s own tests do.
+
+    A static CMOS inverter ties both devices' ``gate_net`` to the same string
+    (``"A"``). A transmission gate instead gives each device its *own*
+    ``gate_net`` while both share ``top_net``/``bottom_net``.
+
+    ``body_net``, when set, names the net this device's body/bulk ties to,
+    independent of ``top_net``/``bottom_net``. Leave it ``None`` (the
+    default) when the body legitimately *is* the same net as the device's
+    own supply-facing diffusion terminal (the common case: an inverter's
+    PMOS source is ``VDD``) -- :func:`build_stack_cell` then falls back to
+    the convention (topmost pfet's ``top_net`` / bottommost nfet's
+    ``bottom_net``). Set it explicitly when the diffusion terminals are
+    *not* supply nets (a transmission gate's pass devices): reusing the
+    fallback there would wire the tap onto a signal net, an LVS-incorrect
+    short rather than a missing label.
+    """
+
+    name: str
+    kind: str  # "nfet" or "pfet"
+    w_um: float
+    l_um: float
+    gate_net: str
+    top_net: str
+    bottom_net: str
+    body_net: str | None = None
+
+
+def pad_overlap_x(pad_a: tuple, pad_b: tuple) -> float | None:
+    """Center x of the x-overlap of two ``(x0, y0, x1, y1)`` pads, or ``None``."""
+    lo = max(pad_a[0], pad_b[0])
+    hi = min(pad_a[2], pad_b[2])
+    return (lo + hi) / 2.0 if hi > lo else None
+
+
+def connect_pads(canvas: Canvas, pad_a: tuple, pad_b: tuple, *, wire_width: float) -> None:
+    """Wire two Metal1 pads that share an x-overlap with a straight vertical run.
+
+    Every pad a ``build_stack_cell()`` column ever wires (gate tabs, or S/D
+    pads of devices sharing the same left-aligned ``x0``) shares a real
+    x-overlap by construction, so a single vertical run is always sufficient;
+    no dogleg router is needed for the one-column topology supported.
+    ``wire_width`` is the caller's own Metal1 wire width (see :func:`v_wire`).
+    """
+    x = pad_overlap_x(pad_a, pad_b)
+    if x is None:
+        raise ValueError(
+            f"pads {pad_a} and {pad_b} share no x-overlap -- build_stack_cell() "
+            "only wires devices left-aligned at a common x0"
+        )
+    y0 = pad_a[3] if pad_a[3] <= pad_b[1] else pad_b[3]
+    y1 = pad_b[1] if pad_a[3] <= pad_b[1] else pad_a[1]
+    if y0 > y1:
+        y0, y1 = y1, y0
+    v_wire(canvas, x, y0, y1, wire_width)
+
+
+def well_tap(
+    canvas: Canvas,
+    kind: str,
+    x0: float,
+    y0: float,
+    net: str,
+    *,
+    tap_size_um: float,
+    implant_margin_um: float,
+    contact_size_um: float,
+    contact_pitch_um: float,
+    contact_row_margin_um: float,
+    metal1_pad_margin_um: float,
+) -> tuple[float, float, float, float]:
+    """A small square substrate/n-well tie: comp + implant + contact + Metal1 pad.
+
+    ``kind='n'``: n-well tie (comp + ``nplus``), tied to the PMOS body net.
+    ``kind='p'``: substrate tie (comp + ``pplus``), tied to the NMOS body net.
+    Returns the drawn Metal1 pad, for the caller to wire to the rest of that
+    net. Each family binds its own DRC-derived constants (keyword arguments).
+
+    ``divider_chain/devgen.py`` exposes its binding publicly (as
+    ``well_tap``) because a composite macro built from several columns in one
+    shared ``Canvas`` draws its own periodic taps directly with it.
+    """
+    x1 = x0 + tap_size_um
+    y1 = y0 + tap_size_um
+    canvas.rect("comp", x0, y0, x1, y1)
+    implant_layer = "nplus" if kind == "n" else "pplus"
+    canvas.rect(
+        implant_layer,
+        x0 - implant_margin_um,
+        y0 - implant_margin_um,
+        x1 + implant_margin_um,
+        y1 + implant_margin_um,
+    )
+    xs = _contact_positions(
+        x0, x1, size_um=contact_size_um, pitch_um=contact_pitch_um, margin_um=contact_row_margin_um
+    )
+    ys = _contact_positions(
+        y0, y1, size_um=contact_size_um, pitch_um=contact_pitch_um, margin_um=contact_row_margin_um
+    )
+    for cx in xs:
+        for cy in ys:
+            canvas.rect("contact", cx, cy, cx + contact_size_um, cy + contact_size_um)
+    pad = (
+        x0 - metal1_pad_margin_um,
+        y0 - metal1_pad_margin_um,
+        x1 + metal1_pad_margin_um,
+        y1 + metal1_pad_margin_um,
+    )
+    canvas.rect("metal1", *pad)
+    canvas.pin(net, *pad)
+    return pad
+
+
+def draw_column(
+    canvas: Canvas,
+    devices: Sequence[Device],
+    x0: float,
+    y0: float = 0.0,
+    *,
+    mosfet: Callable[..., MosfetPorts],
+    comp_gap_um: float,
+    nwell_to_nmos_gap_um: float,
+) -> list[MosfetPorts]:
+    """Draw ``devices`` as one left-aligned vertical column, bare -- no net
+    wiring, no pin promotion, no well/substrate tap.
+
+    ``devices`` is ordered bottom-to-top. Adjacent same-``kind`` devices get
+    ``comp_gap_um`` of clearance; a ``kind`` change (an n-well boundary) gets
+    ``nwell_to_nmos_gap_um``. ``mosfet`` is the caller's constant-bound
+    :func:`mosfet` (called as ``mosfet(canvas, device, x0, y)``).
+    """
+    ports: list[MosfetPorts] = []
+    y_cursor = y0
+    for i, d in enumerate(devices):
+        if i > 0:
+            gap = nwell_to_nmos_gap_um if d.kind != devices[i - 1].kind else comp_gap_um
+            y_cursor += gap
+        p = mosfet(canvas, d, x0, y_cursor)
+        ports.append(p)
+        y_cursor = p.y3
+    return ports
+
+
+def build_stack_cell(
+    top_name: str,
+    devices: Sequence[Device],
+    *,
+    x0: float = 0.0,
+    add_taps: bool = True,
+    bypass_nets: frozenset[str] = frozenset(),
+    canvas_factory: Callable[[str], Canvas],
+    draw_column: Callable[..., list[MosfetPorts]],
+    connect_pads: Callable[[Canvas, tuple, tuple], None],
+    well_tap: Callable[[Canvas, str, float, float, str], tuple[float, float, float, float]],
+    bypass_wire: Callable[[Canvas, tuple, tuple, float], None] | None = None,
+    nwell_margin_um: float,
+    tap_gap_um: float,
+    tap_size_um: float,
+    comp_gap_um: float,
+    poly_endcap_um: float,
+    metal1_pad_margin_um: float,
+    metal1_wire_width_um: float,
+    bypass_lane_clearance_um: float = 0.0,
+) -> LeafCell:
+    """Draw ``devices`` as a single left-aligned vertical column (issue #707).
+
+    The shared core of ``pfd_cp.devgen.build_stack_cell`` and
+    ``divider_chain.devgen.build_stack_cell``; each family binds its own
+    ``Canvas`` subclass (``canvas_factory`` -- the pin layer differs, so the
+    neutral base is never instantiated here), column/pad/tap drawing
+    callables and DRC-derived constants. See those wrappers' docstrings for
+    the user-facing contract; this module imports neither family.
+
+    Every net named by exactly one device terminal is promoted to a pin;
+    every net named by exactly two is wired together -- with
+    ``connect_pads`` or, for names in ``bypass_nets`` (requires
+    ``bypass_wire``), the clear-lane router at a lane right of every pad.
+    A net named by zero or more than two terminals raises ``ValueError``.
+    A tap whose net (``Device.body_net``, else the device's own supply-facing
+    terminal) differs from that terminal is labelled but not wired to the
+    device's S/D pad, so it cannot short the body onto a diffusion net.
+    """
+    if not devices:
+        raise ValueError("build_stack_cell() needs at least one device")
+
+    canvas = canvas_factory(top_name)
+    ports = draw_column(canvas, devices, x0)
+
+    # --- net resolution: gate/top/bottom terminals only (well/substrate
+    # ties are handled separately, below, and wired onto whichever pad
+    # already carries their net). ---
+    terminals: dict[str, list[tuple[float, float, float, float]]] = {}
+    for d, p in zip(devices, ports):
+        terminals.setdefault(d.gate_net, []).append(p.gate_pad)
+        terminals.setdefault(d.top_net, []).append(p.top_pad)
+        terminals.setdefault(d.bottom_net, []).append(p.bottom_pad)
+
+    pins: dict[str, tuple[float, float, float, float]] = {}
+    # The bypass lane sits right of every device's widest drawn Metal1 edge.
+    rightmost_edge_um = max(pad[2] for p in ports for pad in (p.gate_pad, p.top_pad, p.bottom_pad))
+    lane_x = rightmost_edge_um + bypass_lane_clearance_um + metal1_wire_width_um / 2.0
+    used_bypass = False
+    for net, pads in terminals.items():
+        if len(pads) == 1:
+            canvas.pin(net, *pads[0])
+            pins[net] = pads[0]
+        elif len(pads) == 2:
+            if net in bypass_nets and bypass_wire is not None:
+                bypass_wire(canvas, pads[0], pads[1], lane_x)
+                used_bypass = True
+            else:
+                connect_pads(canvas, pads[0], pads[1])
+        else:
+            raise ValueError(
+                f"net {net!r} has {len(pads)} device terminals in this stack; "
+                "build_stack_cell() only resolves 1- or 2-terminal nets automatically"
+            )
+
+    # --- n-well: encloses every pfet device (+ its own tie, added below),
+    # with nwell_margin_um clearance past the outermost pfet comp edge. ---
+    pfet_ports = [p for p in ports if p.kind == "pfet"]
+    nwell_box = None
+    if pfet_ports:
+        pfet_y0 = min(p.y0 for p in pfet_ports)
+        pfet_y1 = max(p.y3 for p in pfet_ports)
+        pfet_x1 = max(p.x1 for p in pfet_ports)
+        tap_extent = (tap_gap_um + tap_size_um) if add_taps else 0.0
+        nwell_box = (
+            x0 - nwell_margin_um,
+            pfet_y0 - nwell_margin_um,
+            pfet_x1 + nwell_margin_um,
+            pfet_y1 + tap_extent + nwell_margin_um,
+        )
+        canvas.rect("nwell", *nwell_box)
+
+    footprint_y0 = min(p.y0 for p in ports)
+    footprint_y1 = max(p.y3 for p in ports)
+    footprint_x0 = x0 - poly_endcap_um - metal1_pad_margin_um
+    footprint_x1 = max(p.x1 for p in ports)
+    if nwell_box is not None:
+        footprint_x0 = min(footprint_x0, nwell_box[0])
+        footprint_x1 = max(footprint_x1, nwell_box[2])
+        footprint_y1 = max(footprint_y1, nwell_box[3])
+    if used_bypass:
+        footprint_x1 = max(footprint_x1, lane_x + metal1_wire_width_um / 2.0)
+
+    if add_taps:
+        pfet_ports_top = max(pfet_ports, key=lambda p: p.y3, default=None)
+        nfet_ports_bottom = min((p for p in ports if p.kind == "nfet"), key=lambda p: p.y0, default=None)
+
+        if pfet_ports_top is not None:
+            d_top = next(d for d, p in zip(devices, ports) if p is pfet_ports_top)
+            net = d_top.body_net if d_top.body_net is not None else d_top.top_net
+            tap_x0 = pfet_ports_top.x0
+            tap_y0 = pfet_ports_top.y3 + tap_gap_um
+            tap_pad = well_tap(canvas, "n", tap_x0, tap_y0, net)
+            if net == d_top.top_net:
+                # Same net as the device's own S/D pad (the common case: an
+                # inverter's PMOS source *is* VDD) -- merge them with a
+                # Metal1 run so both labels land on one physically-joined
+                # shape.
+                connect_pads(canvas, pfet_ports_top.top_pad, tap_pad)
+            # else: an explicit body_net that differs from top_net (e.g. a
+            # transmission gate's pass device, whose top_net is a signal
+            # net) -- do NOT wire the tap's pad to the device's own S/D pad;
+            # that would short the body-tie net onto the diffusion net.
+            # well_tap() already independently labels `net` on the tap's
+            # own pad, and the tap's comp sits inside the same continuous
+            # n-well as the device (see nwell_box, above), so the body ties
+            # correctly through the well itself with no Metal1 needed.
+            footprint_y1 = max(footprint_y1, tap_y0 + tap_size_um + nwell_margin_um)
+
+        if nfet_ports_bottom is not None:
+            d_bot = next(d for d, p in zip(devices, ports) if p is nfet_ports_bottom)
+            net = d_bot.body_net if d_bot.body_net is not None else d_bot.bottom_net
+            tap_x0 = nfet_ports_bottom.x0
+            tap_y1 = nfet_ports_bottom.y0 - tap_gap_um
+            tap_y0 = tap_y1 - tap_size_um
+            tap_pad = well_tap(canvas, "p", tap_x0, tap_y0, net)
+            if net == d_bot.bottom_net:
+                connect_pads(canvas, nfet_ports_bottom.bottom_pad, tap_pad)
+            footprint_y0 = min(footprint_y0, tap_y0 - comp_gap_um)
+
+    footprint = (footprint_x0, footprint_y0, footprint_x1, footprint_y1)
+
+    return LeafCell(canvas=canvas, ports=ports, pins=pins, nwell_box=nwell_box, footprint=footprint)
+
+
 class NetTracks:
     """Hands out a fresh, never-reused Metal2 track_y per net name.
 
