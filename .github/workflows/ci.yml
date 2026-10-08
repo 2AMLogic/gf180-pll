@@ -26,6 +26,8 @@ name: CI
 #     sim/*/testbench/run.sh scripts are full PVT campaign runners invoked
 #     by run_corners.py / selftest.sh, not standalone CI smoke checks --
 #     see the "checks" and "pdk-checks" jobs below for what those exercise.
+#     (simenv.sh's own bash regression tests, sim/lib/test_simenv_*.sh, ARE
+#     wired: see the "checks" job's step for them.)
 
 on:
   push:
@@ -71,6 +73,21 @@ jobs:
         # the gf180mcu PDK are absent (which they are on this runner) --
         # see sim/selftest.sh. Do NOT pass --require-pdk here.
         run: bash sim/selftest.sh
+
+      - name: sim/lib/test_simenv_*.sh (bash regression tests for sim/lib/simenv.sh)
+        # Thread-count / ngspice-pin / deck-retry logic in simenv.sh. Headless:
+        # detection takes injected ldd output, so no ngspice or PDK is needed.
+        # The glob picks up any new test_simenv_*.sh automatically;
+        # test_helpers.sh is shared scaffolding, not a test, and is excluded
+        # by the pattern. Every script runs even after a failure so one run
+        # reports all of them, and the step fails if any did.
+        run: |
+          rc=0
+          for t in sim/lib/test_simenv_*.sh; do
+            echo "=== $t"
+            bash "$t" || { echo "FAILED: $t"; rc=1; }
+          done
+          exit "$rc"
 
       - name: layout/tests (harness unit tests + klayout.db-gated tests)
         # layout/harness/drc.py's two pure functions (parse_report_db,
