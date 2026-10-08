@@ -4,6 +4,19 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-10-08
 
+- **PR #743**: docs: claim-checker inventory for #699 (no checker safely consolidable)
+- **PR #742**: sim: pinned ngspice-46 DC-only check for the batch-vs-local state split (Part of #533)
+- **PR #738**: sim/harness: reject misspelled and invalid manifest acceptance checks
+- **PR #737**: sim/harness: bound batch transport commands and contain stage timeouts
+- **PR #736**: sim/harness: reject overflowing and malformed scalar measurement tokens
+- **PR #733**: fix(sim/harness): contain retained-waveform copy errors within the affected point
+- **Issue #699** (closed): Consolidate or retire the 14 prose-claim checker scripts (12.8k lines grading a 2.2k-line doc)
+- **Issue #735** (closed): sim/harness: reject misspelled and invalid manifest acceptance checks
+- **Issue #727** (closed): sim/harness: bound batch transport subprocesses and contain stage timeouts
+- **Issue #728** (closed): sim/harness: reject overflowing and malformed scalar measurement tokens
+- **Issue #712** (closed): sim/period-jitter: route the random-bound and in-band-bound grids through the harness execution backends instead of grid.sh + direct ngspice
+- **Issue #724** (closed): sim/harness: contain retained-waveform copy errors within the affected PVT point
+- **Issue #713** (closed): Auditor Capability Request: Python interpreter for local validation
 - **PR #730**: Record batch image ngspice-46 sign-off and wedge probe 6/6 (DR-039)
 - **PR #732**: sim/period-jitter: route runner deck execution and provenance through the harness (#712 step 1)
 - **PR #729**: docs(sim): active-solver check and controlled DC comparison for the #533 batch mismatch
