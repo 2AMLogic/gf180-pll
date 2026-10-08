@@ -78,7 +78,7 @@ class _Tree(TreeWriter):
         self.root = root
         (root / "sim" / "lib").mkdir(parents=True)
         shutil.copy2(CHECK, root / "sim" / "lib" / CHECK.name)
-        for rel in (README, CHARACTERIZATION, PROPOSAL):
+        for rel in (README, "sim/STATUS.md", "layout/STATUS.md", CHARACTERIZATION, PROPOSAL):
             self.write(rel, "# placeholder\n")
 
     def run(self) -> subprocess.CompletedProcess:

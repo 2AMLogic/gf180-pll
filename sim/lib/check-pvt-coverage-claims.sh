@@ -262,8 +262,12 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # The same three reader-facing documents check-record-supersession.sh grades,
 # for the same reason: they are read by people who will not open sim/.
+# sim/STATUS.md and layout/STATUS.md hold the status narrative moved out of
+# README.md (#703); they are graded exactly as README.md was.
 GRADED=(
   "README.md"
+  "sim/STATUS.md"
+  "layout/STATUS.md"
   "sim/CHARACTERIZATION.md"
   "docs/chipalooza/challenge-5-proposal.md"
 )

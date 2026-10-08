@@ -44,6 +44,8 @@ EDGE = {"devchar-cp": {"20260505-000000-eeeeeee": None,
 
 GRADED = (
     "README.md",
+    "sim/STATUS.md",
+    "layout/STATUS.md",
     "sim/CHARACTERIZATION.md",
     "docs/chipalooza/challenge-5-proposal.md",
 )

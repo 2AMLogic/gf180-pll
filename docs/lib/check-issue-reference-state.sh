@@ -152,6 +152,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GRADED=(
   "docs/chipalooza/challenge-5-proposal.md"
   "README.md"
+  "sim/STATUS.md"
+  "layout/STATUS.md"
   "sim/README.md"
   "sim/CHARACTERIZATION.md"
   "signoff/README.md"

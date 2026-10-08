@@ -73,7 +73,7 @@ class _Tree(TreeWriter):
         shutil.copy2(CHECK, root / "sim" / "lib" / CHECK.name)
         # Every graded document must exist, or the check fails on the absence
         # rather than on what the test is about.
-        for rel in (README, CHARACTERIZATION, PROPOSAL, DR019):
+        for rel in (README, "sim/STATUS.md", "layout/STATUS.md", CHARACTERIZATION, PROPOSAL, DR019):
             self.write(rel, "# placeholder\n")
 
     def deck(self, rel: str, source_line: str = IDEAL) -> None:
