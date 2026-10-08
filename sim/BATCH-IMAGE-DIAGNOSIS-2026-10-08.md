@@ -113,7 +113,7 @@ under `sim/*/records/` was written, and the campaign inputs (`tb.json`,
 |---|---|---|
 | batch pilot 1, job `…-583b5b76`, `outputs/ngspice.log` (read from the job store) | not captured (the job ran before `ngspice.env` existed) | line 13: `Using SPARSE 1.3 as Direct Linear Solver` |
 | batch re-pilot, job `…-4c405660`, collected `outputs/ngspice.log` + `outputs/ngspice.env` | `ngspice-46`, `Compiled with KLU Direct Linear Solver`, creation date 2026-10-01 | line 13: `Using SPARSE 1.3 as Direct Linear Solver` |
-| local ngspice-46 reference (the repo's pinned build; the pilot comment names no path) | KLU-capable: `sim/lock-time/records/20260801-091429-5fd8489.md` quotes `Compiled with KLU Direct Linear Solver` for it | `Using SPARSE 1.3 as Direct Linear Solver`, per finding 3 above and in every committed local log (41,150 occurrences under `sim/`, no `Using KLU`) |
+| local ngspice-46 reference (the repo's pinned build; the pilot comment names no path) | KLU-capable: `sim/lock-time/records/20260801-091429-5fd8489.md` quotes `Compiled with KLU Direct Linear Solver` for it | `Using SPARSE 1.3 as Direct Linear Solver`, per finding 3 above and in every committed `*.log` under `sim/` that names a solver (41,150 occurrences in 19,739 files, counted with `grep -ro --include='*.log'`; the other 16 committed logs contain no simulator output; none contains `Using KLU`) |
 
 The re-pilot comment set the batch build banner ("Compiled with KLU") against
 the local runtime line ("Using SPARSE 1.3"). Those lines report different
@@ -127,7 +127,7 @@ execution logs instead of being inferred. Both batch logs also contain
 
 The two batch pilots ran byte-identical deck inputs (`ff_-40c_3.63v_b7vs1p886.spice`,
 `pll_top.spice` and `tb_reference_spur_band_top.sp` compared with `cmp`). They
-produced identical "Initial Transient Solution" tables, with all 448 node
+produced identical "Initial Transient Solution" tables, with all 447 node
 values equal at printed precision.
 
 ### 2. Controlled local DC-only comparison
@@ -154,7 +154,7 @@ worker (`run_corners.py --check-env`: "pin … not found … resolved
 /usr/bin/ngspice"). No ngspice-46 binary was available for a same-version
 comparison.
 
-| variant (ngspice-42) | solver used (log) | DC path (log) | `fb` | `xdut.dn` | `xdut.up` | `xdut.xpfd.xpfd.sbf` | `vctrl` | `lock` | node diffs vs batch (of 448) |
+| variant (ngspice-42) | solver used (log) | DC path (log) | `fb` | `xdut.dn` | `xdut.up` | `xdut.xpfd.xpfd.sbf` | `vctrl` | `lock` | node diffs vs batch (of 447) |
 |---|---|---|---|---|---|---|---|---|---|
 | batch pilots 1 and 2 (ngspice-46, image) | SPARSE 1.3 | dynamic gmin failed, then true gmin completed | 1.79421 | 3.63 | 1.99269e-08 | 9.47584e-09 | 1.886 | 5.14279e-09 | — |
 | `default` (no solver option) | SPARSE 1.3 | dynamic gmin failed, then true gmin completed | 1.79421 | 3.63 | 1.99269e-08 | 9.47584e-09 | 1.886 | 5.14279e-09 | **0** |
@@ -169,7 +169,7 @@ comparison.
 
 - Running the identical deck with the identical PDK, a second simulator build
   on a different host (Ubuntu ngspice-42) **reproduces the batch DC state
-  exactly**: the same gmin-stepping path and all 448 initial-solution values
+  exactly**: the same gmin-stepping path and all 447 initial-solution values
   equal to the batch logs at printed precision. The batch state is therefore
   not specific to the batch image. It comes from this deck and PDK on two
   independent builds (image ngspice-46 and Ubuntu ngspice-42).
@@ -209,6 +209,27 @@ comparison.
   (working directory or environment). None of these is established. Nothing
   here shows which of the two DC solutions is the representative one: both
   are valid solutions of a bistable latch.
+- **What finding 1's earlier local run adds.** Finding 1 is the closest
+  existing evidence to §4, so here is what is and is not recorded about it.
+  *Recorded* (finding 1 and "Spend" above): the batch deck, with only the
+  PDK prefix swapped to the local tree, was started once with default
+  threads, read only as far as the DC-operating-point prologue, and then
+  stopped. It showed the local behaviour (no gmin-stepping lines). PR #723's
+  provenance line names the host as `loom-worker-2`. *Not recorded*: the
+  binary path and its `--version` banner (the note's header calls the local
+  reference ngspice-46, but the run itself does not name its binary),
+  whether it was a bare `ngspice -b` or a harness invocation, the working
+  directory, the init files loaded, and the node values. Because only the
+  prologue was read, that run does not show whether it reached `fb` =
+  3.63 V. *Inferred, not verified*: a start that was stopped after the
+  prologue reads like a direct simulator invocation rather than a harness
+  run. If so, a harness-only cause (the second outcome in §4) is already
+  less likely, and the candidates above narrow to the reference binary's
+  build and the init files it reads. That run cannot settle the question:
+  its binary and init files were not captured, and its deck still carried
+  the full transient, `.measure` and `wrdata` lines. Those lines are not
+  expected to change the operating point, but this was not tested. §4 is
+  the same check with those details recorded.
 - **Implication for the campaign: unchanged.** The pilot still does not match
   local ngspice-46, so per the 2026-10-02 ruling the grid stays unsubmitted.
   Nothing here supports an image change, because the image's behaviour
@@ -235,7 +256,9 @@ Transient Solution" table, once with no option and once with
   under DR-028.
 - If it lands in the batch state, the difference lies in the local harness
   invocation (working directory, init files, environment), not in the
-  binary. Compare against the local run's `ngspice.log` header.
+  binary. Compare against the local run's `ngspice.log` header. Finding 1's
+  earlier run makes this outcome less likely if that run was a bare
+  invocation, but how it was invoked is not recorded (§3).
 
 Owner: the operator, or an agent on a worker that carries the ngspice-46 pin.
 This worker (`loom-worker-3`) cannot run the step because the pin is absent.
