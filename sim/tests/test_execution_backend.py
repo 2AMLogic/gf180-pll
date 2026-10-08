@@ -132,6 +132,39 @@ class LocalBackendTests(unittest.TestCase):
             got = execution.LocalBackend().run_deck(self.deck, self.root, 5, None)
         self.assertTrue(got.timed_out)
         self.assertEqual(got.returncode, -1)
+        self.assertEqual(got.output, "")
+
+    def _timeout_with(self, stdout, stderr):
+        exc = subprocess.TimeoutExpired("ngspice", 5, output=stdout, stderr=stderr)
+        with mock.patch.object(subprocess, "run", side_effect=exc):
+            return execution.LocalBackend().run_deck(self.deck, self.root, 5, None)
+
+    def test_a_timeout_keeps_partial_text_stdout_and_stderr(self):
+        got = self._timeout_with("tran step 1\n", "warn: slow\n")
+        self.assertTrue(got.timed_out)
+        self.assertIn("tran step 1", got.output)
+        self.assertIn("warn: slow", got.output)
+
+    def test_a_timeout_keeps_partial_bytes_streams(self):
+        got = self._timeout_with(b"out-bytes", b"err-bytes")
+        self.assertIn("out-bytes", got.output)
+        self.assertIn("err-bytes", got.output)
+
+    def test_a_timeout_with_incomplete_utf8_does_not_raise(self):
+        truncated = "volt \u00b5".encode("utf-8")[:-1]  # half of a 2-byte char
+        got = self._timeout_with(truncated, b"\xe2\x82")
+        self.assertTrue(got.timed_out)
+        self.assertIn("volt", got.output)
+
+    def test_a_timeout_with_one_absent_stream_keeps_the_other(self):
+        got = self._timeout_with(None, "only-stderr")
+        self.assertIn("only-stderr", got.output)
+        got = self._timeout_with("only-stdout", None)
+        self.assertIn("only-stdout", got.output)
+
+    def test_a_timeout_with_no_streams_has_empty_output(self):
+        self.assertEqual(self._timeout_with(None, None).output, "")
+        self.assertEqual(self._timeout_with(b"", b"").output, "")
 
 
 # ===========================================================================
@@ -1181,6 +1214,94 @@ class ExecutionFailureTests(ManifestFixture):
             execution.DeckRun(output="", returncode=-1, seconds=5.0,
                               timed_out=True, detail="job j6 hit budget")])
         self.assertEqual(got.status, "error")
+
+    def _log_text(self, got, phase_index=0):
+        return (self.log_dir / got.phases[phase_index].log).read_text()
+
+    def _run_logged(self, tb, outcomes):
+        self.log_dir = self.root / "corners" / "rec-715"
+        backend = _ScriptedBackend(outcomes)
+        results = runner.run_grid(
+            tb, self.pdk, self.points, self.root / "work", backend=backend,
+            log_dir=self.log_dir,
+        )
+        return results[0], backend
+
+    def test_timeout_output_is_retained_in_the_log_with_a_marker(self):
+        got, _ = self._run_logged(self._single(), [
+            execution.DeckRun(output="step 17 no convergence\n", returncode=-1,
+                              seconds=5.0, timed_out=True)])
+        self.assertEqual(got.status, "error")
+        text = self._log_text(got)
+        self.assertTrue(text.startswith("TIMEOUT after "))
+        self.assertIn("step 17 no convergence", text)
+
+    def test_timeout_with_empty_output_still_writes_the_marker(self):
+        got, _ = self._run_logged(self._single(), [
+            execution.DeckRun(output="", returncode=-1, seconds=5.0,
+                              timed_out=True)])
+        self.assertEqual(got.status, "error")
+        self.assertTrue(self._log_text(got).startswith("TIMEOUT after "))
+        self.assertNotIn("partial simulator output", self._log_text(got))
+
+    def test_timeout_stays_error_even_with_every_measurement_present(self):
+        tb = self._single({"raw_files": ["jit.dat"]})
+
+        class _Writes(_ScriptedBackend):
+            def run_deck(self, deck_path, rundir, timeout_s, env=None):
+                (rundir / "jit.dat").write_text("0 1\n")
+                return super().run_deck(deck_path, rundir, timeout_s, env)
+
+        self.log_dir = self.root / "corners" / "rec-715b"
+        backend = _Writes([execution.DeckRun(
+            output="m_vout = 1.65\n", returncode=-1, seconds=5.0,
+            timed_out=True)])
+        got = runner.run_grid(
+            tb, self.pdk, self.points, self.root / "work", backend=backend,
+            log_dir=self.log_dir,
+        )[0]
+        self.assertEqual(got.status, "error")
+        self.assertNotIn("vout", got.measurements)
+        self.assertIn("m_vout = 1.65", self._log_text(got))
+        self.assertTrue(got.raw_files["jit.dat"].exists())
+
+    def test_timeout_stops_later_phases(self):
+        for name in ("a.sp", "b.sp"):
+            (self.tb_dir / name).write_text("v1 out 0 dc {vdd_val}\n")
+        (self.tb_dir / "tb.json").write_text(json.dumps({
+            "name": self.slug,
+            "phases": {
+                "one": {"netlist": "a.sp", "measure": {"va": "v(out)"},
+                        "analyses": ["tran 1n 10n"]},
+                "two": {"netlist": "b.sp", "measure": {"vb": "v(out)"},
+                        "analyses": ["tran 1n 10n"]},
+            },
+        }))
+        tb = testbench.load(self.tb_dir)
+        got, backend = self._run_logged(tb, [
+            execution.DeckRun(output="m_va = 1.0\n", returncode=-1, seconds=5.0,
+                              timed_out=True),
+            execution.DeckRun(output="m_vb = 2.0\n", returncode=0, seconds=1.0),
+        ])
+        self.assertEqual(got.status, "error")
+        self.assertEqual(len(got.phases), 1)
+        self.assertEqual(len(backend.outcomes), 1, "the second phase must not run")
+        self.assertIn("m_va = 1.0", self._log_text(got))
+
+    def test_a_timed_out_point_does_not_stop_other_grid_points(self):
+        tb = self._single()
+        points = corners.build_sweep_grid(
+            corners.resolve_corners(["typical"]), [27.0, 85.0], [3.3]
+        )
+        backend = _ScriptedBackend([
+            execution.DeckRun(output="partial\n", returncode=-1, seconds=5.0,
+                              timed_out=True),
+            execution.DeckRun(output="m_vout = 1.60\n", returncode=0, seconds=1.0),
+        ])
+        results = runner.run_grid(
+            tb, self.pdk, points, self.root / "work", jobs=1, backend=backend
+        )
+        self.assertEqual([r.status for r in results], ["error", "ok"])
 
     def test_absent_optional_measure_is_not_an_execution_failure(self):
         tb = self._single({
