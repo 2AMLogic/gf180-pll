@@ -583,7 +583,7 @@ run was not repeated.
   makes that gap concrete, since the deciding input was an unrecorded
   per-host init file. Tracked generically as 2AMLogic/klayout-tools#2834.
 
-## Addendum 4 (2026-10-08, later): the full-transient follow-up; the spur gap tracks `wnflag`
+## Addendum 4 (2026-10-08, later): the full-transient follow-up; the spur gap tracks the host init file
 
 Appended after running the follow-up Addendum 3 section 5 left open. Everything
 above stays as written. No batch job was submitted and nothing was spent. No
@@ -610,16 +610,20 @@ A's -61.7103 equals the earlier local pilot's -61.71.
 
 ### 2. Conclusion
 
-- On the same binary, PDK and deck, **the init file alone moves the
-  closed-loop result between the two pilot values**: with `wnflag=1` the loop
-  is in the locked state (-61.71 dBc, `lock_lvl` 3.63 V); without it the
-  result is the batch one (-75.57 dBc, `lock_lvl` ~5e-9 V). With Addendum 3
-  (the DC point splits on `wnflag` alone), the batch-vs-local gap for this
-  point is explained by simulator configuration, not by the PDK, the solver,
-  the thread count or run-to-run noise.
-- Not established: that `set wnflag=1` alone (rather than another line of the
-  init file) suffices in the transient; Addendum 3 isolated it at the DC point
-  only, and run A used the whole file. The model-bin comparison for nf > 1
+- On the same binary, PDK and deck, **the complete host init file alone moves
+  the closed-loop result between the two pilot values**: with the init file
+  (`set wnflag=1` and `set num_threads=1`) the loop is in the locked state
+  (-61.71 dBc, `lock_lvl` 3.63 V); without any init file the result is the
+  batch one (-75.57 dBc, `lock_lvl` ~5e-9 V). Together with Addendum 3 (the DC
+  point splits on `wnflag` alone), this makes simulator configuration, not the
+  PDK, the solver or run-to-run noise, the explanation for the batch-vs-local
+  gap at this point. Which of the two init lines matters in the transient was
+  not isolated: the thread count is not excluded for the transient.
+- Not established: that `set wnflag=1` alone (rather than `set num_threads=1`
+  or the combination) suffices in the transient; Addendum 3 isolated `wnflag`
+  at the DC point only, and run A used the whole file. A controlled
+  full-transient pair (`wnflag`-only versus `num_threads`-only, or no init)
+  would settle it and was not run. The model-bin comparison for nf > 1
   devices was not run, so which configuration selects the bins the PDK intends,
   and which state represents the design, is still undecided. That is for the
   testbench and spec owners.
