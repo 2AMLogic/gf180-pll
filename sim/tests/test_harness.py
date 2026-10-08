@@ -596,6 +596,204 @@ class LogWriteFailureTests(ManifestFixture):
         self.assertTrue((log_dir / f"{self.point.corner_id}.log").is_file())
 
 
+class RetainedRawCaptureFailureTests(ManifestFixture):
+    """#724: a failed copy of a ``retain`` raw file must degrade that point to
+    ERROR (keeping its log and scalars), never raise out of the grid, and never
+    leave a partial copy readable as retained evidence.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.tb = testbench.load(
+            self.write(
+                {
+                    "measure": {"vout": "v(out)"},
+                    "raw_files": {"jit.dat": {"retain": True}},
+                }
+            )
+        )
+        self.pdk = fake_pdk(self.root / "gf180mcuD")
+        self.points = corners.build_grid(
+            corners.resolve_corners(["typical"]), (27, 125), [3.3]
+        )
+        self.real_copy = shutil.copyfile
+
+    @staticmethod
+    def _stub_ngspice(output="m_vout = 1.65000e+00\n", write_raw=True):
+        def _run(cmd, **kwargs):
+            if write_raw:
+                (Path(kwargs["cwd"]) / "jit.dat").write_text("0 1\n1 2\n")
+            return subprocess.CompletedProcess(
+                args=cmd, returncode=0, stdout=output, stderr=""
+            )
+
+        return mock.patch.object(runner.subprocess, "run", side_effect=_run)
+
+    def _failing_copy(self, fail_calls=None, partial=False):
+        state = {"n": 0}
+
+        def _copy(src, dst, *a, **kw):
+            state["n"] += 1
+            if fail_calls is None or state["n"] in fail_calls:
+                if partial:
+                    Path(dst).write_text("0 1\n")  # truncated destination
+                raise OSError(28, "disk full")
+            return self.real_copy(src, dst, *a, **kw)
+
+        return mock.patch.object(runner.shutil, "copyfile", side_effect=_copy)
+
+    def test_copy_failure_is_a_point_error_with_log_and_scalars(self):
+        log_dir = self.root / "corners" / "r1"
+        with self._stub_ngspice(), self._failing_copy():
+            result = runner.run_point(
+                self.tb, self.pdk, self.points[0], self.root / "w1", log_dir=log_dir
+            )
+        self.assertEqual(result.status, "error")
+        self.assertIn("jit.dat", result.message)
+        self.assertIn("disk full", result.message)
+        self.assertEqual(result.measurements, {"vout": 1.65})
+        self.assertTrue((log_dir / f"{self.points[0].corner_id}.log").is_file())
+        self.assertIn("jit.dat", result.raw_files_missing)
+
+    def test_partial_destination_is_removed_not_readable(self):
+        log_dir = self.root / "corners" / "r2"
+        with self._stub_ngspice(), self._failing_copy(partial=True):
+            result = runner.run_point(
+                self.tb, self.pdk, self.points[0], self.root / "w2", log_dir=log_dir
+            )
+        self.assertNotIn("jit.dat", result.raw_files)
+        self.assertIn("jit.dat", result.raw_files_missing)
+        self.assertFalse(
+            (log_dir / f"{self.points[0].corner_id}-jit.dat").exists()
+        )
+
+    def test_partial_destination_hidden_even_when_cleanup_fails(self):
+        """The partial copy survives because unlink also fails; the capture
+        must still read as absent and the record must say why."""
+        log_dir = self.root / "corners" / "r2b"
+        dest = log_dir / f"{self.points[0].corner_id}-jit.dat"
+        real_unlink = Path.unlink
+
+        def _unlink(self_, *a, **kw):
+            if self_ == dest:
+                raise OSError(13, "read-only evidence directory")
+            return real_unlink(self_, *a, **kw)
+
+        with self._stub_ngspice(), self._failing_copy(partial=True), \
+                mock.patch.object(Path, "unlink", _unlink):
+            result = runner.run_point(
+                self.tb, self.pdk, self.points[0], self.root / "w2b",
+                log_dir=log_dir,
+            )
+        self.assertTrue(dest.is_file())  # the truncated copy is still there
+        self.assertEqual(result.status, "error")
+        self.assertNotIn("jit.dat", result.raw_files)
+        self.assertIn("jit.dat", result.raw_files_missing)
+        self.assertIn("disk full", result.message)
+        self.assertIn("could not be removed", result.message)
+        self.assertIn("read-only evidence directory", result.message)
+        self.assertEqual(result.measurements, {"vout": 1.65})
+
+    def test_mkdir_failure_is_contained(self):
+        log_dir = self.root / "corners" / "r3"
+        real_mkdir = Path.mkdir
+
+        def _mkdir(self_, *a, **kw):
+            # run_point's own mkdir precedes the log write; the capture's
+            # mkdir comes after it.
+            if self_ == log_dir and any(log_dir.glob("*.log")):
+                raise OSError(13, "permission denied")
+            return real_mkdir(self_, *a, **kw)
+
+        with self._stub_ngspice():
+            with mock.patch.object(Path, "mkdir", _mkdir):
+                result = runner.run_point(
+                    self.tb, self.pdk, self.points[0], self.root / "w3",
+                    log_dir=log_dir,
+                )
+        self.assertEqual(result.status, "error")
+        self.assertIn("permission denied", result.message)
+
+    def test_serial_and_parallel_grids_continue_past_the_failed_point(self):
+        for jobs in (1, 2):
+            with self.subTest(jobs=jobs):
+                log_dir = self.root / "corners" / f"g{jobs}"
+                bad = self.points[0].corner_id
+                real = self.real_copy
+
+                def _copy(src, dst, *a, **kw):
+                    if Path(dst).name.startswith(bad):
+                        raise OSError(28, "disk full")
+                    return real(src, dst, *a, **kw)
+
+                with self._stub_ngspice(), mock.patch.object(
+                    runner.shutil, "copyfile", side_effect=_copy
+                ), mock.patch.object(runner, "omp_env_overrides", return_value={}):
+                    results = runner.run_grid(
+                        self.tb, self.pdk, self.points, self.root / f"wg{jobs}",
+                        jobs=jobs, log_dir=log_dir,
+                    )
+                self.assertEqual([r.status for r in results], ["error", "ok"])
+                self.assertTrue(results[1].raw_files["jit.dat"].exists())
+
+    def test_timeout_plus_retention_failure_discloses_both(self):
+        log_dir = self.root / "corners" / "r5"
+
+        def _run(cmd, **kwargs):
+            (Path(kwargs["cwd"]) / "jit.dat").write_text("0 1\n")
+            raise subprocess.TimeoutExpired(cmd=cmd, timeout=1)
+
+        with mock.patch.object(runner.subprocess, "run", side_effect=_run), \
+                self._failing_copy():
+            result = runner.run_point(
+                self.tb, self.pdk, self.points[0], self.root / "w5",
+                log_dir=log_dir, timeout_s=1,
+            )
+        self.assertEqual(result.status, "error")
+        self.assertIn("timed out", result.message)
+        self.assertIn("jit.dat", result.message)
+        self.assertIn("disk full", result.message)
+
+    def test_successful_capture_and_absent_file_are_unchanged(self):
+        log_dir = self.root / "corners" / "r6"
+        with self._stub_ngspice():
+            ok = runner.run_point(
+                self.tb, self.pdk, self.points[0], self.root / "w6", log_dir=log_dir
+            )
+        self.assertEqual(ok.status, "ok")
+        self.assertTrue(ok.raw_files["jit.dat"].exists())
+        self.assertEqual(ok.raw_files_missing, [])
+        with self._stub_ngspice(write_raw=False):
+            absent = runner.run_point(
+                self.tb, self.pdk, self.points[0], self.root / "w7", log_dir=log_dir
+            )
+        self.assertEqual(absent.status, "ok")
+        self.assertEqual(absent.raw_files_missing, ["jit.dat"])
+
+    def test_later_phases_do_not_run_after_a_capture_failure(self):
+        (self.tb_dir / "x.spice").write_text("v1 out 0 dc {vdd_val}\n")
+        (self.tb_dir / "tb.json").write_text(json.dumps({
+            "name": self.slug,
+            "phases": {
+                "a": {
+                    "netlist": "x.spice",
+                    "measure": {"vout": "v(out)"},
+                    "raw_files": {"jit.dat": {"retain": True}},
+                },
+                "b": {"netlist": "x.spice", "measure": {"vb": "v(out)"}},
+            },
+        }))
+        tb = testbench.load(self.tb_dir)
+        with self._stub_ngspice("m_vout = 1\nm_vb = 2\n") as run, \
+                self._failing_copy():
+            result = runner.run_point(
+                tb, self.pdk, self.points[0], self.root / "w8",
+                log_dir=self.root / "corners" / "r8",
+            )
+        self.assertEqual(result.status, "error")
+        self.assertEqual(run.call_count, 1)
+
+
 class NonlinearMoscapGuardTests(unittest.TestCase):
     """#153: ngspice-47 mis-expands this PDK's nonlinear-capacitance moscap
     family (a ``c=<expr>`` behavioral coefficient) into a malformed internal
