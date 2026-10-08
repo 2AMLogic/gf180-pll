@@ -2,8 +2,25 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-08
+
+- **PR #721**: sim/harness: atomically reserve record ids before execution
+- **PR #719**: ci: run sim/lib simenv bash regression tests in the checks job
+- **PR #717**: sim: retain simulator diagnostics in timeout evidence logs
+- **PR #716**: sim: fail batch points when output collection fails, retaining partial outputs
+- **PR #711**: Consolidate duplicated devgen helpers into _canvas.py (#707)
+- **PR #710**: README: cut Status to a scannable table; move campaign narrative under sim/ and layout/ (#703)
+- **Issue #720** (closed): sim/harness: atomically reserve record IDs before execution to protect append-only evidence
+- **Issue #718** (closed): CI: run the sim/lib simenv bash regression tests (never wired in)
+- **Issue #715** (closed): sim: retain simulator diagnostics in timeout evidence logs
+- **Issue #714** (closed): sim: fail batch points when evidence collection fails, retaining partial outputs
+- **Issue #707** (closed): Consolidate duplicated devgen helpers (_connect_pads, well_tap, Device) into _canvas.py
+- **Issue #703** (closed): README: cut the 1,200-word Status wall to a scannable summary; move campaign narrative under sim/
+
 ### 2026-10-07
 
+- **PR #708**: Add CONTRIBUTING/SECURITY, fix issue templates and package metadata
+- **Issue #704** (closed): Add an outsider on-ramp: CONTRIBUTING, SECURITY, correct issue-template contact link, repo metadata
 - **PR #706**: harness: fail a point when the execution layer reports a terminal failure
 - **PR #705**: Normalise host paths in layout evidence + CI guard (#701)
 - **Issue #702** (closed): sim: preserve failed and interrupted backend outcomes when measurements are complete

@@ -20,14 +20,12 @@ Issues the operator starred (`loom:operator-priority`); land these first.
 Human-approved issues ready for implementation (`loom:issue`).
 
 - **#242**: Live wall-clock confirmation of #241's ngspice-OMP-pin fix on an idle host
-- **#707**: Consolidate duplicated devgen helpers (_connect_pads, well_tap, Device) into _canvas.py
 
 ## In Progress
 
 Issues currently being built (`loom:building`).
 
-- **#703**: README: cut the 1,200-word Status wall to a scannable summary; move campaign narrative under sim/
-- **#704**: Add an outsider on-ramp: CONTRIBUTING, SECURITY, correct issue-template contact link, repo metadata
+_None._
 
 ## PRs Awaiting Review
 
@@ -60,11 +58,11 @@ Issues carrying `loom:curated`.
 - **#540**: sim: run the two closed-loop cells DR-025 names against the ratified <= 1 ns Lock criterion *(curated)*
 - **#549**: sim: bound the batch-vs-pinned ngspice divergence with a cross-version overlap measurement on a shared operating point *(curated)*
 - **#680**: sim: realign the batch job image to the ngspice-46 pin — it cannot converge sim/reference-input-contract's edge-rate variant, so #499's grid is unobtainable off-host *(curated)*
-- **#704**: Add an outsider on-ramp: CONTRIBUTING, SECURITY, correct issue-template contact link, repo metadata *(curated)*
 
 ## Proposed (Architect / Hermit)
 
 - **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief *(architect)*
+- **#712**: sim/period-jitter: route the random-bound and in-band-bound grids through the harness execution backends instead of grid.sh + direct ngspice *(architect)*
 - **#699**: Consolidate or retire the 14 prose-claim checker scripts (12.8k lines grading a 2.2k-line doc) *(hermit)*
 
 ## Epics
@@ -77,11 +75,11 @@ Issues carrying `loom:curated`.
 |------|-------|
 | Operator merge-risk holds | 0 |
 | Operator priority | 1 |
-| Ready (`loom:issue`) | 2 |
-| In Progress (`loom:building`) | 2 |
+| Ready (`loom:issue`) | 1 |
+| In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 16 |
-| Architect / Hermit proposals | 2 |
+| Curated | 15 |
+| Architect / Hermit proposals | 3 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
