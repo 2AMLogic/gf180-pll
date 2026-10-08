@@ -1213,26 +1213,37 @@ already carries its own PATH-resolved-version warning
 (`nonlinear_moscap_ngspice47_warning`) for the same underlying #153 defect,
 scoped to the DUTs that actually nest the moscap family.
 
-**The batch backend's job image is NOT at this pin, and the divergence is
-ratified rather than aligned ([DR-028](../spec/decision-records/DR-028-batch-executed-records-run-a-second-ngspice-version.md),
-#536).** The pin above binds what runs *here*; a campaign dispatched off-host
+**The batch backend's job image now signs off the pin's version, and the
+remaining divergence is bounded rather than aligned
+([DR-039](../spec/decision-records/DR-039-batch-job-image-signs-off-ngspice-46-and-the-wedge-probe-converges-on-it.md),
+#680; it partly supersedes
+[DR-028](../spec/decision-records/DR-028-batch-executed-records-run-a-second-ngspice-version.md)).**
+The pin above binds what runs *here*; a campaign dispatched off-host
 (`sim/run_corners.py --backend batch`) runs on an image built by operator-owned
-provisioning outside this repository, and that image's simulator is
-**ngspice-42** — its corner logs sign off `ngspice-42 done`. Nothing in a PR
-here can change it, so DR-028 records the divergence instead of denying it, and
-states what follows for a reader of a batch-executed record:
+provisioning outside this repository. That image ran **ngspice-42** when DR-028
+and DR-035 were written; as re-verified on 2026-10-08 its corner logs sign off
+`ngspice-46 done` (image manifest `tools.ngspice` `ngspice-46`, PDK stamp
+`open_pdks c6d73a35…`), and the six `wedge` −40 °C points of
+`sim/reference-input-contract` that the ngspice-42 image failed 0 of 6
+converge 6 of 6 with `d_ref` equal to the pin's to seven digits. A matching
+version string is **not** a blanket equivalence: the 2026-10-08 diagnostic
+(`BATCH-IMAGE-DIAGNOSIS-2026-10-08.md`, #533/#503) found other decks reaching a
+different DC state on the image than on the pinned local binary, cause
+unresolved. What DR-039 leaves in force for a reader of a batch-executed record:
 
 - **It is a comparability limit, not an impeachment.** Those grids converge and
   pass their own guards, and the pin's known defect (#153) is an ngspice-**47**
-  parse failure that ngspice-42 does not show. A batch-executed record is
+  parse failure that ngspice-42 did not show. A batch-executed record is
   evidence on its own terms and may be cited as such.
-- **It may not be merged into pinned-local evidence.** Until the divergence is
-  measured, a batch-executed number may not supersede an ngspice-46 record, be
+- **It may not be merged into pinned-local evidence, except as DR-039 allows.**
+  Until a campaign has its own overlap points against the pin, a batch-executed number may not supersede an ngspice-46 record, be
   composed point-for-point with ngspice-46 numbers into one corner-consistent
   total, or be quoted as completing a grid whose other points were taken on the
-  pin. A mixed-version grid must state the split.
-- **The size of the divergence is measured at one point, and it is not one
-  number** ([DR-035](../spec/decision-records/DR-035-reference-input-contract-blocked-by-the-job-image-not-by-compute.md),
+  pin. A mixed-origin grid must state the split. The one relaxation (DR-039):
+  `sim/reference-input-contract`'s `d_ref`, whose six overlap points above agree
+  with the pin; its charge quantities are not covered.
+- **The size of the ngspice-42-era divergence was measured at one point, and it
+  is not one number** ([DR-035](../spec/decision-records/DR-035-reference-input-contract-blocked-by-the-job-image-not-by-compute.md),
   #499). DR-028 left this unquoted with the bound owed at **#549**, in the
   shape of `sim/period-jitter`'s cross-*host* overlap (records
   `20260906-015602-f9bef9d` / `20260906-063728-f3c9c23`, which re-run two
@@ -1248,17 +1259,13 @@ states what follows for a reader of a batch-executed record:
   shows the divergence is quantity-dependent — small on timing, large on
   integrated current — which is why a per-quantity relaxation needs overlap
   points on the decks that need it rather than a single global factor.
-- **On one deck the image does not merely diverge, it does not run.** The
+- **On one deck the old image did not run; the current one does.** The
   `wedge` variant of `sim/reference-input-contract` — the full-rail 6.25 ns
-  ramp placing the 10–90 % edge rate at the spec's binding 5 ns — aborts on
+  ramp placing the 10–90 % edge rate at the spec's binding 5 ns — aborted on
   ngspice-42 with `Timestep too small … trouble with node "vctrl#branch"` at 12
-  of the 20 corners reached, every −40 °C point among them, where the pinned
-  ngspice-46 converges 6 of 6 on the same points (DR-035). Aligning the image
-  at ngspice-46 was DR-028's *preferred* resolution and is, for that campaign,
-  now a *prerequisite*, owned at **#680**: #499 cannot be discharged before it.
-  (#536, where that option was raised, took option 2 and is closed, so the
-  realignment had no open owner until #680.) DR-028 is what makes the interim state honest, not a substitute
-  for it.
+  of the 20 corners reached, every −40 °C point among them (DR-035). On the
+  ngspice-46 image all six −40 °C points converge (DR-039, #680). The full
+  288-point grid is #499's, not yet run.
 
 **`sim/harness` is the convention for every new campaign — `sim/lib/simenv.sh`
 is legacy.** The interim shim and the campaigns still built on it remain the

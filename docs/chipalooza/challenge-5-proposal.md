@@ -561,7 +561,7 @@ results pass":
   The campaign that would measure them is declared and blocked on an aligned
   simulator rather than on compute: the batch job image's ngspice-42 does not
   converge on the variant carrying the binding 5.00 ns edge, where the pinned
-  ngspice-46 does (DR-035).
+  ngspice-46 does (DR-035). The image has since been realigned to ngspice-46 and the probe converges 6 of 6 (DR-039, #680); the grid itself is still unrun.
 - **Period jitter, closed-loop, deterministic, at the 200 MHz band top** —
   declared, not measured; no jitter number at 200 MHz exists.
 - **Reference spur** — over the line at the scaled 200 MHz binding point at 2
@@ -2070,7 +2070,7 @@ more.
     5 ns edge-rate budget's binding point — on the image's ngspice-42, where
     the pinned ngspice-46 converges on the same points 6 of 6. The grid is
     therefore unobtainable on the current image at any spend, and the
-    prerequisite is the image realigned to the pin (**#680**).
+    prerequisite is the image realigned to the pin (**#680**) — since delivered and probe-verified (DR-039); the grid (#499) is still unrun.
 11. **The lock-detector window trim-code rule is normative and, on this die,
     executable only in simulation** (§4 step 4; **DR-022**, closing #501).
     `spec/pll.md`'s rule is not optional — "a part left untrimmed is outside
