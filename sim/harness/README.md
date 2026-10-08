@@ -446,6 +446,19 @@ about it or opt in.
 | `max_spread_pct` | the grid | `(max-min)/\|mean\|` must stay under the limit |
 | `min_spread_pct` | the grid | must *exceed* it — asserts the sweep really moved |
 
+| `min_measured_points` / `max_measured_points` | the grid | coverage: how many points produced the measurement (`max_measured_points: 0` asserts it never fires) |
+
+`checks` is validated when the manifest loads, before any backend submission or
+evidence reservation. The loader rejects, naming the manifest, measurement and
+key: a measurement not declared in `measure`, `raw_measures`, a phase or
+`derived.measures`; a limit key other than the six above; an entry that is not
+an object; an entry with no limit (empty or all `null`); a non-numeric,
+boolean or non-finite threshold; a coverage limit that is not a non-negative
+integer; and contradictory bounds (`min` > `max`, and likewise for the
+coverage and spread pairs). Negative `min`/`max` are allowed. An `optional`
+measurement is an ordinary check target; its absence at run time and the
+singleton-grid `min_spread_pct` exemption are unchanged.
+
 `min_spread_pct` is a harness-integrity check: if `.temp` or a `.lib` section
 silently failed to apply, a strongly PVT-sensitive measurement would come back
 flat, and this catches that instead of reporting a suspiciously perfect result.
