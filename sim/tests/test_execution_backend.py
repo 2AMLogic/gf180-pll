@@ -333,7 +333,14 @@ class _FakeTransport:
     polls, so a test can make a job be ``running`` before it is terminal.
     """
 
-    def __init__(self, states, outputs: dict[str, str] | None = None, instance="i-0abc"):
+    def __init__(
+        self, states, outputs: dict[str, str] | None = None, instance="i-0abc",
+        collect_rc: int = 0, collect_stderr: str = "",
+    ):
+        #: Exit status/stderr of the recursive output download (the files in
+        #: ``outputs`` are still written, as a partial transfer would).
+        self.collect_rc = collect_rc
+        self.collect_stderr = collect_stderr
         self.states = list(states)
         self.outputs = outputs or {}
         self.instance = instance
@@ -356,6 +363,9 @@ class _FakeTransport:
                 out.mkdir(parents=True, exist_ok=True)
                 for name, text in self.outputs.items():
                     (out / name).write_text(text)
+                return subprocess.CompletedProcess(
+                    argv, self.collect_rc, "", self.collect_stderr
+                )
         return subprocess.CompletedProcess(argv, 0, "", "")
 
     def launched(self) -> list[str]:
@@ -513,6 +523,77 @@ class SubmissionTests(unittest.TestCase):
         with self.assertRaises(execution.BackendError) as caught:
             backend.run_deck(self.deck, self.rundir, 60, None)
         self.assertIn("AccessDenied", str(caught.exception))
+
+
+class CollectionFailureTests(SubmissionTests):
+    """A nonzero output download fails the point, keeping what arrived (#714)."""
+
+    COMPLETE = {
+        batch.LOG_NAME: "m_vout = 1.65\n",
+        batch.RC_NAME: "0",
+        batch.HOST_NAME: "ip-10-0-0-7\n",
+    }
+
+    def test_nonzero_download_after_a_complete_log_is_an_execution_failure(self):
+        transport = _FakeTransport(
+            ["done"], outputs=self.COMPLETE, collect_rc=1,
+            collect_stderr="download failed: connection reset\n",
+        )
+        backend = self._backend(transport)
+        got = backend.run_deck(self.deck, self.rundir, 60, None)
+        job_id = backend.jobs[0].job_id
+        self.assertTrue(got.execution_failed)
+        self.assertFalse(got.timed_out)
+        self.assertEqual(got.output, "m_vout = 1.65\n")
+        self.assertEqual(got.host, "ip-10-0-0-7")
+        for text in (job_id, "exit 1", "connection reset"):
+            self.assertIn(text, got.detail)
+
+    def test_nonzero_download_with_no_files_keeps_the_transport_reason(self):
+        transport = _FakeTransport(
+            ["done"], collect_rc=2, collect_stderr="AccessDenied: s3:GetObject"
+        )
+        got = self._backend(transport).run_deck(self.deck, self.rundir, 60, None)
+        self.assertTrue(got.execution_failed)
+        self.assertEqual(got.output, "")
+        self.assertIn("AccessDenied", got.detail)
+        self.assertIn("exit 2", got.detail)
+        self.assertIn("no job outputs", got.detail)
+
+    def test_successful_download_is_unchanged_even_with_a_nonzero_ngspice_exit(self):
+        outputs = dict(self.COMPLETE, **{batch.RC_NAME: "1"})
+        got = self._backend(_FakeTransport(["done"], outputs=outputs)).run_deck(
+            self.deck, self.rundir, 60, None
+        )
+        self.assertFalse(got.execution_failed)
+        self.assertEqual(got.returncode, 1)
+        self.assertNotIn("collection", got.detail)
+
+    def test_failed_state_and_collection_failure_are_both_reported(self):
+        transport = _FakeTransport(
+            ["failed"], outputs=self.COMPLETE, collect_rc=1,
+            collect_stderr="download failed",
+        )
+        got = self._backend(transport).run_deck(self.deck, self.rundir, 60, None)
+        self.assertTrue(got.execution_failed)
+        self.assertIn("ended failed", got.detail)
+        self.assertIn("output collection failed", got.detail)
+
+    def test_timeout_stays_a_timeout_and_gains_the_collection_diagnostics(self):
+        transport = _FakeTransport(
+            ["timeout"], outputs={batch.RC_NAME: "-1"}, collect_rc=1,
+            collect_stderr="boom",
+        )
+        got = self._backend(transport).run_deck(self.deck, self.rundir, 60, None)
+        self.assertTrue(got.timed_out)
+        self.assertIn("budget", got.detail)
+        self.assertIn("output collection failed", got.detail)
+
+    def test_partial_files_still_reach_the_rundir(self):
+        outputs = dict(self.COMPLETE, **{"wave.dat": "0 1\n"})
+        transport = _FakeTransport(["done"], outputs=outputs, collect_rc=1)
+        self._backend(transport).run_deck(self.deck, self.rundir, 60, None)
+        self.assertTrue((self.rundir / "wave.dat").is_file())
 
 
 class _CeilingRefusingTransport(_FakeTransport):
@@ -1043,6 +1124,47 @@ class ExecutionFailureTests(ManifestFixture):
         self.assertEqual(len(got.phases), 1)
         self.assertEqual(len(backend.outcomes), 1, "the second phase must not run")
         self.assertNotIn("vb", got.measurements)
+
+    def test_collection_failure_fails_the_point_and_stops_later_phases(self):
+        for name in ("a.sp", "b.sp"):
+            (self.tb_dir / name).write_text("v1 out 0 dc {vdd_val}\n")
+        (self.tb_dir / "tb.json").write_text(json.dumps({
+            "name": self.slug,
+            "phases": {
+                "one": {"netlist": "a.sp", "measure": {"va": "v(out)"},
+                        "analyses": ["tran 1n 10n"]},
+                "two": {"netlist": "b.sp", "measure": {"vb": "v(out)"},
+                        "analyses": ["tran 1n 10n"]},
+            },
+        }))
+        tb = testbench.load(self.tb_dir)
+        got, backend = self._run(tb, [
+            execution.DeckRun(output="m_va = 1.0\n", returncode=0, seconds=1.0,
+                              execution_failed=True,
+                              detail="job j7 output collection failed (exit 1): x"),
+            execution.DeckRun(output="m_vb = 2.0\n", returncode=0, seconds=1.0),
+        ])
+        self.assertEqual(got.status, "failed")
+        self.assertEqual(got.measurements["va"], 1.0)
+        self.assertIn("output collection failed", got.message)
+        self.assertEqual(len(backend.outcomes), 1, "the second phase must not run")
+
+    def test_a_failed_collection_does_not_stop_other_grid_points(self):
+        tb = self._single()
+        points = corners.build_sweep_grid(
+            corners.resolve_corners(["typical"]), [27.0, 85.0], [3.3]
+        )
+        backend = _ScriptedBackend([
+            execution.DeckRun(output="m_vout = 1.65\n", returncode=0, seconds=1.0,
+                              execution_failed=True,
+                              detail="job j8 output collection failed (exit 1)"),
+            execution.DeckRun(output="m_vout = 1.60\n", returncode=0, seconds=1.0),
+        ])
+        results = runner.run_grid(
+            tb, self.pdk, points, self.root / "work", jobs=1, backend=backend
+        )
+        self.assertEqual([r.status for r in results], ["failed", "ok"])
+        self.assertEqual(results[1].measurements["vout"], 1.60)
 
     def test_zero_exit_success_is_unchanged(self):
         got, _ = self._run(self._single(), [
