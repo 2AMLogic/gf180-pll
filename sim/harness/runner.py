@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import re
 import shutil
@@ -24,7 +25,10 @@ NGSPICE = "ngspice"
 DEFAULT_TIMEOUT_S = 300
 
 # `print` output for a length-1 vector: "m_vout = 6.9043645202e-01"
-_MEAS_LET_RE = re.compile(r"^\s*m_(\w+)\s*=\s*([-+]?[0-9.]+(?:[eE][-+]?[0-9]+)?)\s*$")
+_MEAS_LET_RE = re.compile(r"^\s*m_(\w+)\s*=\s*(\S+)\s*$")
+# A complete numeric token: a partial one ("1e+", "1.2garbage") must never be
+# accepted as its numeric prefix.
+_NUMBER_RE = re.compile(r"[-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?")
 _ERROR_RE = re.compile(r"^\s*(?:Error|ERROR|Fatal|fatal error|doAnalyses:)", re.MULTILINE)
 
 # sm141064.ngspice implements this PDK's decoupling/loop-filter moscap family
@@ -495,6 +499,53 @@ class PointResult:
         return record
 
 
+def _finite_number(token: str) -> float | None:
+    """The token as a float, or None unless it is a complete, finite number."""
+    if not _NUMBER_RE.fullmatch(token):
+        return None
+    value = float(token)
+    return value if math.isfinite(value) else None
+
+
+def parse_measurements_checked(
+    text: str, raw_names: list[str] | tuple[str, ...] = ()
+) -> tuple[dict[str, float], dict[str, str]]:
+    """Like :func:`parse_measurements`, also returning rejected tokens.
+
+    The second dict maps a measurement name to the value token that was
+    rejected (malformed, truncated, or overflowing to infinity). Rejected
+    names are absent from the first dict.
+    """
+    found: dict[str, float] = {}
+    invalid: dict[str, str] = {}
+    for line in text.splitlines():
+        match = _MEAS_LET_RE.match(line)
+        if match:
+            value = _finite_number(match.group(2))
+            if value is None:
+                invalid[match.group(1)] = match.group(2)
+            else:
+                found[match.group(1)] = value
+    for name in raw_names:
+        # Not end-anchored: ngspice appends extra fields after a trig/targ
+        # measurement's value on the same line (e.g.
+        # "res_tau = 3.8e-09 targ= 2.0e-07 trig= 1.9e-07"), which an
+        # end-anchored pattern would silently fail to match. The value is
+        # instead the first whitespace-delimited token, validated whole.
+        pattern = re.compile(
+            rf"^\s*{re.escape(name)}\s*=\s*(\S+)",
+            re.IGNORECASE | re.MULTILINE,
+        )
+        match = pattern.search(text)
+        if match:
+            value = _finite_number(match.group(1))
+            if value is None:
+                invalid[name] = match.group(1)
+            else:
+                found[name] = value
+    return found, invalid
+
+
 def parse_measurements(text: str, raw_names: list[str] | tuple[str, ...] = ()) -> dict[str, float]:
     """Extract every measurement from raw ngspice batch output.
 
@@ -508,31 +559,11 @@ def parse_measurements(text: str, raw_names: list[str] | tuple[str, ...] = ()) -
       manifest) rather than a generic ``name = value`` pattern, so an
       unrelated log line (e.g. a echoed ``.param``) can never be mistaken
       for a measurement.
+
+    Only complete, finite numeric values are returned; see
+    :func:`parse_measurements_checked` for the rejected tokens.
     """
-    found: dict[str, float] = {}
-    for line in text.splitlines():
-        match = _MEAS_LET_RE.match(line)
-        if match:
-            try:
-                found[match.group(1)] = float(match.group(2))
-            except ValueError:  # pragma: no cover - regex already constrains this
-                continue
-    for name in raw_names:
-        # Not end-anchored: ngspice appends extra fields after a trig/targ
-        # measurement's value on the same line (e.g.
-        # "res_tau = 3.8e-09 targ= 2.0e-07 trig= 1.9e-07"), which an
-        # end-anchored pattern would silently fail to match.
-        pattern = re.compile(
-            rf"^\s*{re.escape(name)}\s*=\s*([-+]?[0-9.]+(?:[eE][-+]?[0-9]+)?)",
-            re.IGNORECASE | re.MULTILINE,
-        )
-        match = pattern.search(text)
-        if match:
-            try:
-                found[name] = float(match.group(1))
-            except ValueError:  # pragma: no cover - regex already constrains this
-                continue
-    return found
+    return parse_measurements_checked(text, raw_names)[0]
 
 
 def run_point(
@@ -774,7 +805,9 @@ def _run_phase(
     )
     raw_missing = _raw_missing(raw_files, capture_failures)
 
-    measurements = parse_measurements(output, phase.raw_measures.keys())
+    measurements, invalid_values = parse_measurements_checked(
+        output, phase.raw_measures.keys()
+    )
     # Only *required* measurements can fail a point. An absent optional
     # measurement is the campaign's pass condition ("this must never assert"),
     # and treating it as a failure used to discard every measurement the same
@@ -793,6 +826,12 @@ def _run_phase(
         message = (
             first_error or errors or f"ngspice exit {returncode}, no measurements parsed"
         )
+        bad = [f"{n}={invalid_values[n]!r}" for n in missing if n in invalid_values]
+        if bad:
+            message = (
+                f"invalid (non-numeric, incomplete or non-finite) value for "
+                f"required measurement(s): {', '.join(bad)}; {message}"
+            )
         if deck_run.execution_failed and deck_run.detail:
             message = f"{deck_run.detail}; {message}"
         if log_write_error:
