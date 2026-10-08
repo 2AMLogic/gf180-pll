@@ -631,3 +631,67 @@ A's -61.7103 equals the earlier local pilot's -61.71.
   image's configuration, so the 45-point grid is not submitted. Submitting it
   needs the campaign inputs to carry the setting (a reviewed change) or the
   image to supply it, followed by a re-pilot that matches.
+
+## Addendum 5 (2026-10-08, later): the controlled full-transient pair; `set wnflag=1` alone reproduces the local result, `set num_threads=1` alone reproduces the batch result
+
+Appended after running the pair Addendum 4 left open. Everything above stays as
+written. No batch job was submitted and nothing was spent. No record under
+`sim/*/records/` was written (`--no-write`), and `spec/`, `tb.json`, the deck
+and `sim/harness/batch.py` were not touched. Two single local runs, strictly
+one after the other, `OMP_NUM_THREADS=2`, on `loom-worker-2`. The host init
+file was not modified: each run set `HOME` to a scratch directory holding a
+one-line `.spiceinit` and a link to the PDK tree (as run B of Addendum 4).
+
+### 1. Setup
+
+- Simulator: ngspice-46 (KLU build), binary `~/.local/bin/ngspice` ->
+  `~/.local/ngspice/bin/ngspice`, sha256 `c874869b…`. The same binary as
+  Addendum 4.
+- PDK: gf180mcu, volare version `c6d73a35f524070e85faff4a6a9eef49553ebc2b`.
+- Command, as in Addendum 4: `sim/run_corners.py reference-spur-band-top
+  --corners ff --temps -40 --axis op=b7vs1p886 --backend local --timeout 6000
+  --no-write`.
+
+### 2. Runs
+
+| run | init file content (sha256) | `spur_dbc` | `lock_lvl` | wall clock |
+|---|---|---|---|---|
+| A (Addendum 4): real `~/.spiceinit` | `set wnflag=1` + `set num_threads=1` (`94a971c8…`) | -61.7103 | 3.63 V | 16 min |
+| C: scratch `HOME` | only `set wnflag=1` (`82a66e01…`) | **-61.7103** | **3.63 V** | 863 s |
+| D: scratch `HOME` | only `set num_threads=1` (`2ef8c1ce…`) | **-75.5655** | **5.12765e-9 V** | 1219 s |
+| B (Addendum 4): scratch `HOME`, no init | none | -75.5655 | 5.12765e-9 V | n/a |
+
+Run C's other reported metrics (for example `up_lvl` 0.15675, `dn_lvl`
+0.110875, `vctrl_ripple_mv` 7.559) match the local state; run D's (`up_lvl`
+0.280785, `dn_lvl` 0.110049, `vctrl_ripple_mv` 7.688) match the batch state of
+Addendum 4 run B. The wall clocks were taken on a shared host and are not a
+performance comparison.
+
+### 3. Conclusion
+
+- Established, for this point only (ff / -40 C / 3.63 V, band 7): on the same
+  binary, PDK and deck, **`set wnflag=1` alone gives the locked-state result
+  (-61.71 dBc, `lock_lvl` 3.63 V)**, identical to the full host init file to
+  the printed digits, and **`set num_threads=1` alone gives the batch result
+  (-75.57 dBc, `lock_lvl` ~5e-9 V)**, identical to no init file. The thread
+  count does not account for the gap in this transient; `wnflag` does. This
+  closes the open item in Addendum 4 section 2 and extends Addendum 3's DC-point
+  isolation to the full transient.
+- Not established: why `wnflag` changes the result. The model-bin selection
+  mechanism described in the host init file's comment was not checked here: no
+  bin-selection comparison for nf > 1 devices was run, so this addendum states
+  the dependence on the setting, not its cause. Run D also completed
+  without the setting, so the abort described in that comment did not occur
+  for this deck at this point. Other corners, temperatures and band codes
+  were not run, so the dependence is shown at one point only. Which
+  configuration represents the design remains undecided; that is for the
+  testbench and spec owners.
+- Tool gap, already tracked: the local runs leave no recorded equivalent of
+  the batch job's `ngspice.env` (the init files and `HOME` in force), which
+  is how this had to be reconstructed by hand. That is covered by
+  2AMLogic/klayout-tools#2834; no duplicate was filed.
+- The 2026-10-02 ruling stands and the 45-point grid stays held. Submitting
+  it still needs the campaign inputs to carry the setting (a reviewed change)
+  or the image to supply it, followed by a re-pilot that matches. Per this
+  addendum the setting that matters is `wnflag`; `num_threads` is not needed
+  to reproduce the local state at this point.
