@@ -176,6 +176,34 @@ def build_parser() -> argparse.ArgumentParser:
         "default is 1",
     )
     parser.add_argument(
+        "--batch-transport-timeout",
+        type=float,
+        default=batch_mod.DEFAULT_TRANSPORT_TIMEOUT_S,
+        metavar="SECONDS",
+        help="(--backend batch) budget for each job upload and each "
+        "status read on this host; a stalled one fails or re-polls that "
+        "point instead of holding the grid (default %(default)gs)",
+    )
+    parser.add_argument(
+        "--batch-launch-timeout",
+        type=float,
+        default=batch_mod.DEFAULT_LAUNCH_TIMEOUT_S,
+        metavar="SECONDS",
+        help="(--backend batch) budget for one invocation of the layer's "
+        "launch script. A launch that exceeds it fails its point and is "
+        "never relaunched, since it may already have submitted "
+        "(default %(default)gs)",
+    )
+    parser.add_argument(
+        "--batch-collect-timeout",
+        type=float,
+        default=batch_mod.DEFAULT_COLLECT_TIMEOUT_S,
+        metavar="SECONDS",
+        help="(--backend batch) budget for downloading one job's outputs; "
+        "files that arrived before it expired are kept, but the point "
+        "fails (default %(default)gs)",
+    )
+    parser.add_argument(
         "--timeout",
         type=int,
         default=runner.DEFAULT_TIMEOUT_S,
@@ -429,6 +457,9 @@ def build_backend(args: argparse.Namespace, pdk):
         pdk_variant=pdk.variant,
         apply=bool(args.batch_apply),
         cores_per_job=args.batch_cores_per_job,
+        transport_timeout_s=args.batch_transport_timeout,
+        launch_timeout_s=args.batch_launch_timeout,
+        collect_timeout_s=args.batch_collect_timeout,
     )
 
 
