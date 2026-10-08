@@ -465,6 +465,28 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(runner.parse_measurements(text, raw_names=["ttest"]), {})
 
 
+class InvalidScalarTokenTests(unittest.TestCase):
+    def test_let_form_rejects_overflow_and_malformed(self):
+        for token in ("1e999", "-1e999", "1e+", "1.2garbage", "1e", "nan", "inf"):
+            with self.subTest(token=token):
+                self.assertEqual(runner.parse_measurements(f"m_gain = {token}\n"), {})
+
+    def test_raw_form_rejects_overflow_and_malformed(self):
+        for token in ("1e999", "-1e999", "1e+", "1.2garbage", "1e", "nan", "inf"):
+            with self.subTest(token=token):
+                text = f"gain = {token}\n"
+                self.assertEqual(runner.parse_measurements(text, raw_names=["gain"]), {})
+                _, invalid = runner.parse_measurements_checked(text, raw_names=["gain"])
+                self.assertEqual(invalid, {"gain": token})
+
+    def test_valid_values_still_parse(self):
+        text = "m_a = -1.5e-3\nm_b = +2\ngain = 1.2 targ= 2e-7 trig= 1e-7\n"
+        self.assertEqual(
+            runner.parse_measurements(text, raw_names=["gain"]),
+            {"a": -1.5e-3, "b": 2.0, "gain": 1.2},
+        )
+
+
 class WriteLogTests(unittest.TestCase):
     """``runner._write_log`` -- the #271 primitive that turns an ``OSError``
     on a per-point log write into a message instead of letting it propagate.
@@ -594,6 +616,42 @@ class LogWriteFailureTests(ManifestFixture):
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.message, "")
         self.assertTrue((log_dir / f"{self.point.corner_id}.log").is_file())
+
+
+class InvalidRequiredScalarRunnerTests(ManifestFixture):
+    """An invalid required scalar fails its point and keeps the raw log."""
+
+    def setUp(self):
+        super().setUp()
+        self.tb = testbench.load(self.write({"measure": {"vout": "v(out)"}}))
+        self.pdk = fake_pdk(self.root / "gf180mcuD")
+        self.point = corners.build_grid(
+            corners.resolve_corners(["typical"]), (27,), [3.3]
+        )[0]
+
+    @staticmethod
+    def _stub_ngspice(output: str):
+        return mock.patch.object(
+            runner.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=output, stderr=""
+            ),
+        )
+
+    def test_invalid_required_scalar_fails_point(self):
+        log_dir = self.root / "corners" / "rec-inv"
+        with self._stub_ngspice("m_vout = 1e999\n"):
+            result = runner.run_point(
+                self.tb, self.pdk, self.point, self.root / "workinv", log_dir=log_dir
+            )
+        self.assertNotEqual(result.status, "ok")
+        self.assertNotIn("vout", result.measurements)
+        self.assertIn("vout", result.missing)
+        self.assertIn("invalid", result.message)
+        self.assertIn("1e999", result.message)
+        log = (log_dir / f"{self.point.corner_id}.log").read_text()
+        self.assertIn("m_vout = 1e999", log)
 
 
 class RetainedRawCaptureFailureTests(ManifestFixture):
