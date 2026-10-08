@@ -571,16 +571,66 @@ def run(args: argparse.Namespace) -> int:
     # logs into the tracked evidence tree, so sampling afterwards would mark
     # every record as taken against a dirty tree.
     git = report.git_provenance(REPO_ROOT)
-    record_id = report.allocate_record_id(REPO_ROOT, records_dir, started, git=git)
-    workdir = experiment_dir / "work" / record_id
-    log_dir = None if args.no_write else experiment_dir / report.CORNERS_DIR / record_id
+    plan_only = backend.name == "batch" and not args.batch_apply
+    # #720: the record id is *reserved* -- acquired by an exclusive mkdir --
+    # before anything is written under it, so two invocations of this
+    # experiment started in the same second at the same commit can never
+    # share a corners/<record-id>/ directory and overwrite each other's logs.
+    # A plan or a --no-write run only claims its scratch work/<record-id>/,
+    # and so never occupies an evidence id.
+    evidence = not (args.no_write or plan_only)
+    reservation = report.reserve_record_id(
+        REPO_ROOT, experiment_dir, started, git=git, evidence=evidence
+    )
+    record_id = reservation.record_id
+    workdir = reservation.workdir
+    log_dir = reservation.log_dir
+    if evidence:
+        for info in report.interrupted_reservations(experiment_dir):
+            print(
+                f"note: {report.describe_reservation(info)}; that id and any "
+                "partial evidence under it are left untouched and are never reused",
+                file=sys.stderr,
+            )
+    try:
+        return _run_reserved(
+            args, tb, pdk, ngspice, points, corner_list, temperatures, supplies,
+            nominal, tolerance, conformance, backend, plan_only, jobs, omp_pin,
+            started, git, reservation,
+        )
+    finally:
+        # Whatever ended the run before its summary was published -- an
+        # early return, a refused write, an exception, Ctrl-C -- the id stays
+        # reserved. Say so, rather than recycle it or delete its evidence.
+        if evidence and not (records_dir / f"{record_id}.md").exists():
+            _report_unpublished(reservation)
+
+
+def _report_unpublished(reservation: "report.RecordReservation") -> None:
+    print(
+        f"note: record id {reservation.record_id} stays reserved without a summary "
+        f"record (ownership: {reservation.ownership_path}); it will not be reused, "
+        "and any partial evidence under it is left in place.",
+        file=sys.stderr,
+    )
+
+
+def _run_reserved(
+    args, tb, pdk, ngspice, points, corner_list, temperatures, supplies,
+    nominal, tolerance, conformance, backend, plan_only, jobs, omp_pin,
+    started, git, reservation,
+) -> int:
+    experiment_dir = tb.experiment_dir
+    record_id = reservation.record_id
+    workdir = reservation.workdir
+    log_dir = reservation.log_dir
 
     # `--backend batch` without `--batch-apply` is a plan, not a run: shape
     # every job, print it, and stop. Deliberately *after* the PVT-subset gate
     # above, so a plan for a thinned grid is refused on the same terms a
     # record of one would be -- the plan is what an operator reads before
     # spending, and it must describe a run that would be recordable.
-    if backend.name == "batch" and not args.batch_apply:
+    if plan_only:
         try:
             return print_batch_plan(tb, pdk, points, workdir, backend, args.timeout)
         except execution_mod.BackendError as exc:
@@ -755,6 +805,7 @@ def run(args: argparse.Namespace) -> int:
         # otherwise leave nothing machine-readable behind (sim/harness#110).
         raw_measures_path = raw_measures_mod.write_raw_measures_csv(tb, results, log_dir)
         record_path = report.write_record(record, experiment_dir)
+        reservation.mark_published()
         print()
         print(f"record    : {record_path}")
         print(f"snapshot  : {snapshot}")

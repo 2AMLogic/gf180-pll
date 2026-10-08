@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import datetime as _dt
 import getpass
+import json
+import os
 import platform
 import re
 import socket
@@ -53,6 +55,11 @@ TESTBENCH_DIR = "testbench"          # the default; a record cites the
 SNAPSHOT_DIR = "netlist-snapshots"
 CORNERS_DIR = "corners"
 RECORDS_DIR = "records"
+#: Generated decks and per-point run directories (git-ignored scratch).
+WORK_DIR = "work"
+#: Ownership file written into ``work/<record-id>/`` for an evidence
+#: reservation, and removed once that record's summary is published.
+RESERVATION_FILE = "reservation.json"
 
 
 def _git(*args: str, cwd: Path) -> str:
@@ -86,25 +93,292 @@ def format_record_id(short_sha: str, when: _dt.datetime) -> str:
     return f"{when.strftime('%Y%m%d-%H%M%S')}-{short_sha}"
 
 
+def record_id_occupied(experiment_dir: Path, record_id: str) -> str | None:
+    """Why ``record_id`` is already taken in ``experiment_dir``, or ``None``.
+
+    Any artefact a run leaves behind occupies its id, not just a published
+    summary: a run that died after writing logs (``corners/<record-id>/``) or
+    a snapshot but before its summary still owns that evidence, and handing
+    its id to a later run would mix two runs' artefacts under one name. The
+    scratch ``work/<record-id>/`` directory counts too, because a live run --
+    recording or not -- generates its decks there.
+    """
+    candidates = (
+        (experiment_dir / RECORDS_DIR / f"{record_id}.md", "summary record"),
+        (experiment_dir / SNAPSHOT_DIR / f"{record_id}.spice", "netlist snapshot"),
+        (experiment_dir / CORNERS_DIR / record_id, "raw evidence directory"),
+        (experiment_dir / WORK_DIR / record_id, "work directory"),
+    )
+    for path, what in candidates:
+        if os.path.lexists(path):
+            return f"{what} {path} exists"
+    return None
+
+
 def allocate_record_id(
     repo_root: Path,
     records_dir: Path,
     when: _dt.datetime | None = None,
     git: dict | None = None,
 ) -> str:
-    """Mint a fresh, unused ``<record-id>``.
+    """Pick a currently-unused ``<record-id>`` *without* reserving it.
 
-    Append-only: if a record with this id already exists (same second, same
+    Append-only: if any artefact already uses this id (same second, same
     commit) we advance the timestamp until the id is free rather than
-    overwriting or inventing a non-conforming suffix.
+    overwriting or inventing a non-conforming suffix. ``records_dir`` is
+    ``sim/<experiment>/records``; its parent is checked for snapshots, raw
+    evidence and work directories (see :func:`record_id_occupied`).
+
+    This is only a snapshot of the tree: two callers can still be handed the
+    same id. Anything that is about to write under the id must use
+    :func:`reserve_record_id` instead, which acquires it atomically.
     """
     when = when or _dt.datetime.now(_dt.timezone.utc)
     short_sha = (git or git_provenance(repo_root))["short"]
+    experiment_dir = records_dir.parent
     while True:
         record_id = format_record_id(short_sha, when)
-        if not (records_dir / f"{record_id}.md").exists():
+        if (
+            not (records_dir / f"{record_id}.md").exists()
+            and record_id_occupied(experiment_dir, record_id) is None
+        ):
             return record_id
         when += _dt.timedelta(seconds=1)
+
+
+class RecordReservation:
+    """An id this process owns, acquired by :func:`reserve_record_id`.
+
+    ``workdir`` (``work/<record-id>/``) was created exclusively by this
+    process. For an *evidence* reservation so was ``log_dir``
+    (``corners/<record-id>/``), and ``workdir`` holds an ownership file
+    (:data:`RESERVATION_FILE`) naming the host, pid, user and command that
+    took it. A scratch reservation (``--no-write``, a batch plan) has
+    ``log_dir is None`` and leaves no evidence directory behind.
+    """
+
+    def __init__(
+        self,
+        record_id: str,
+        experiment_dir: Path,
+        workdir: Path,
+        log_dir: Path | None,
+        skipped: list[str] | None = None,
+    ):
+        self.record_id = record_id
+        self.experiment_dir = experiment_dir
+        self.workdir = workdir
+        self.log_dir = log_dir
+        #: One line per id passed over on the way to this one, saying why.
+        self.skipped = list(skipped or [])
+
+    @property
+    def evidence(self) -> bool:
+        return self.log_dir is not None
+
+    @property
+    def ownership_path(self) -> Path | None:
+        return self.workdir / RESERVATION_FILE if self.evidence else None
+
+    def mark_published(self) -> None:
+        """Drop the ownership file once the summary record exists.
+
+        The published record (and its evidence directory) keep the id
+        occupied from then on; the ownership file only exists to explain an
+        id whose run never got that far.
+        """
+        path = self.ownership_path
+        if path is not None:
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+
+
+def _ownership_info(record_id: str, experiment_dir: Path, git: dict) -> dict:
+    try:
+        user = getpass.getuser()
+    except Exception:  # noqa: BLE001 - getuser raises a grab-bag of errors
+        user = "unknown"
+    return {
+        "record_id": record_id,
+        "experiment": experiment_dir.name,
+        "host": socket.gethostname(),
+        "pid": os.getpid(),
+        "user": user,
+        "reserved_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
+        "commit": git.get("commit", "unknown"),
+        "argv": list(sys.argv),
+    }
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except (PermissionError, OSError):
+        return True  # exists but is not ours, or we cannot tell: assume alive
+    return True
+
+
+def read_reservation(workdir: Path) -> dict | None:
+    """The ownership record in ``workdir``, with a ``state`` key, or ``None``.
+
+    ``state`` is ``"published"`` when the summary record exists anyway,
+    ``"running"`` when the owning pid is alive on this host,
+    ``"interrupted"`` when it is not, and ``"unknown"`` when the owner was
+    another host (its liveness cannot be checked from here).
+    """
+    path = workdir / RESERVATION_FILE
+    try:
+        info = json.loads(path.read_text())
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as exc:
+        return {"record_id": workdir.name, "state": "unreadable", "error": str(exc),
+                "path": str(path)}
+    if not isinstance(info, dict):
+        return {"record_id": workdir.name, "state": "unreadable",
+                "error": "not a JSON object", "path": str(path)}
+    info = dict(info)
+    info["path"] = str(path)
+    record_id = str(info.get("record_id", workdir.name))
+    experiment_dir = workdir.parent.parent
+    if (experiment_dir / RECORDS_DIR / f"{record_id}.md").exists():
+        info["state"] = "published"
+    elif info.get("host") != socket.gethostname():
+        info["state"] = "unknown"
+    elif isinstance(info.get("pid"), int) and _pid_alive(info["pid"]):
+        info["state"] = "running"
+    else:
+        info["state"] = "interrupted"
+    return info
+
+
+def describe_reservation(info: dict) -> str:
+    """One human-readable line for a :func:`read_reservation` result."""
+    if info.get("state") == "unreadable":
+        return (f"record id {info.get('record_id')}: ownership file {info.get('path')} "
+                f"is unreadable ({info.get('error')})")
+    return (
+        f"record id {info.get('record_id')} reserved by pid {info.get('pid')} "
+        f"on {info.get('host')} (user {info.get('user')}) at {info.get('reserved_utc')}"
+        f" -- {info.get('state')}"
+    )
+
+
+def interrupted_reservations(experiment_dir: Path) -> list[dict]:
+    """Evidence reservations in ``experiment_dir`` whose run died unpublished.
+
+    These ids are never reused or cleaned up automatically: whatever partial
+    evidence the run left under ``corners/<record-id>/`` or
+    ``netlist-snapshots/`` stays exactly as it was. Deleting it is a human
+    decision; a fresh run simply mints a different id.
+    """
+    work = experiment_dir / WORK_DIR
+    if not work.is_dir():
+        return []
+    found = []
+    for path in sorted(work.glob(f"*/{RESERVATION_FILE}")):
+        info = read_reservation(path.parent)
+        if info and info["state"] in ("interrupted", "unreadable"):
+            found.append(info)
+    return found
+
+
+def _exclusive_mkdir(path: Path) -> bool:
+    """Create ``path`` (parents as needed); ``False`` if it already existed."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.mkdir()
+    except FileExistsError:
+        return False
+    return True
+
+
+def reserve_record_id(
+    repo_root: Path,
+    experiment_dir: Path,
+    when: _dt.datetime | None = None,
+    git: dict | None = None,
+    *,
+    evidence: bool = True,
+) -> RecordReservation:
+    """Atomically acquire a fresh ``<record-id>`` for one run.
+
+    The acquisition is an exclusive directory creation, so two processes that
+    compute the same id in the same second at the same commit cannot both
+    win it: the loser advances the timestamp one second at a time, exactly as
+    :func:`allocate_record_id` does for an id that is already on disk. The
+    id shape stays the ratified ``<YYYYMMDD>-<HHMMSS>-<short-git-sha>``.
+
+    ``evidence=True`` (a recording run) creates ``corners/<record-id>/`` and
+    then ``work/<record-id>/`` exclusively, and writes an ownership file into
+    the latter. ``evidence=False`` (``--no-write``, a batch plan) creates only
+    the scratch ``work/<record-id>/``, so it never occupies an evidence id
+    permanently, while still never sharing a work directory with a live run.
+
+    Nothing is ever held for longer than a ``mkdir``: unrelated experiments,
+    and other runs of this one, proceed concurrently.
+
+    An interrupted reservation is not reclaimed. Its directories keep the id
+    occupied; see :func:`interrupted_reservations`.
+    """
+    when = when or _dt.datetime.now(_dt.timezone.utc)
+    git = git or git_provenance(repo_root)
+    short_sha = git["short"]
+    skipped: list[str] = []
+    while True:
+        record_id = format_record_id(short_sha, when)
+        when += _dt.timedelta(seconds=1)
+
+        reason = record_id_occupied(experiment_dir, record_id)
+        if reason is not None:
+            info = read_reservation(experiment_dir / WORK_DIR / record_id)
+            if info and info["state"] != "published":
+                reason += f"; {describe_reservation(info)}"
+            skipped.append(f"{record_id}: {reason}")
+            continue
+
+        log_dir = experiment_dir / CORNERS_DIR / record_id if evidence else None
+        if log_dir is not None and not _exclusive_mkdir(log_dir):
+            skipped.append(f"{record_id}: raw evidence directory {log_dir} taken concurrently")
+            continue
+        workdir = experiment_dir / WORK_DIR / record_id
+        if not _exclusive_mkdir(workdir):
+            if log_dir is not None:
+                # Ours, created a moment ago and still empty: give it back.
+                try:
+                    log_dir.rmdir()
+                except OSError:
+                    pass
+            skipped.append(f"{record_id}: work directory {workdir} taken concurrently")
+            continue
+
+        reservation = RecordReservation(record_id, experiment_dir, workdir, log_dir, skipped)
+        if reservation.ownership_path is not None:
+            reservation.ownership_path.write_text(
+                json.dumps(_ownership_info(record_id, experiment_dir, git), indent=2) + "\n"
+            )
+        return reservation
+
+
+def _write_exclusive(path: Path, text: str) -> None:
+    """Create ``path`` holding ``text``; :class:`RecordExists` if it exists.
+
+    ``open(..., "x")`` makes the existence check and the creation one atomic
+    step, so two writers racing for the same artefact cannot both pass a
+    check and then truncate each other.
+    """
+    try:
+        with path.open("x") as fh:
+            fh.write(text)
+    except FileExistsError:
+        raise RecordExists(
+            f"{path} already exists; append-only evidence is never rewritten "
+            "-- mint a new record-id"
+        ) from None
 
 
 def summarize(
@@ -582,6 +856,8 @@ def write_netlist_snapshot(tb: Testbench, experiment_dir: Path, record_id: str) 
     out_dir = experiment_dir / SNAPSHOT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{record_id}.spice"
+    # Fail before composing anything; the exclusive create below is what
+    # actually guarantees an existing snapshot is never truncated.
     if path.exists():
         raise RecordExists(f"{path} already exists; append-only evidence is never rewritten")
     if tb.resolved_dut or tb.is_phased:
@@ -597,7 +873,7 @@ def write_netlist_snapshot(tb: Testbench, experiment_dir: Path, record_id: str) 
                 "",
             ]
         )
-        path.write_text(header + tb.compose_netlist())
+        _write_exclusive(path, header + tb.compose_netlist())
         return path
     header = "\n".join(
         [
@@ -608,7 +884,7 @@ def write_netlist_snapshot(tb: Testbench, experiment_dir: Path, record_id: str) 
             "",
         ]
     )
-    path.write_text(header + tb.netlist.read_text())
+    _write_exclusive(path, header + tb.netlist.read_text())
     return path
 
 
@@ -1274,5 +1550,5 @@ def write_record(record: dict, experiment_dir: Path) -> Path:
         raise RecordExists(
             f"{path} already exists; records are append-only -- mint a new record-id"
         )
-    path.write_text(render_record(record, experiment_dir.name))
+    _write_exclusive(path, render_record(record, experiment_dir.name))
     return path

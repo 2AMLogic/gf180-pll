@@ -1027,6 +1027,38 @@ with `--supersedes <record-id>`. Do not edit or delete anything under
 `records/`, `netlist-snapshots/` or `corners/` — see the append-only rule in
 `sim/README.md`.
 
+### Record-id reservation
+
+A recording run *reserves* its `<record-id>` before the first point starts:
+it creates `corners/<record-id>/` and then `work/<record-id>/` with exclusive
+`mkdir`s, so two invocations of one experiment started in the same second at
+the same commit can never share an evidence directory. The loser of that race
+simply takes the next second, as the allocator always has; the id keeps the
+ratified shape. The snapshot and the summary are then published with
+exclusive creates (`open(..., "x")`), so a writer that lost a race after its
+existence check still cannot truncate what the winner wrote.
+
+An id counts as taken if *any* artefact uses it — a summary, a snapshot, a
+`corners/<record-id>/` directory (even one holding only a dead run's partial
+logs) or a `work/<record-id>/` directory — not just a published summary.
+No lock is held beyond those `mkdir`s: other runs of the same experiment,
+other experiments and the per-point workers all proceed concurrently.
+
+`work/<record-id>/reservation.json` records the owning host, pid, user,
+command line and commit, and is deleted once the summary is published. A run
+that ends without a summary (an error before publication, a crash, Ctrl-C)
+leaves it behind and says so on stderr; later recording runs of that
+experiment print a `note:` naming any such *interrupted* reservation (owner
+pid no longer alive on this host). Such an id is **never reused or cleaned up
+automatically** — its partial evidence stays exactly as it was, and new runs
+mint other ids. Deleting a `work/<record-id>/` directory silences the note;
+deleting anything under `corners/` or `netlist-snapshots/` is a human
+decision under the append-only rule.
+
+`--no-write` runs and `--backend batch` plans (no `--batch-apply`) reserve
+only a scratch `work/<record-id>/` — never a `corners/` directory or an
+ownership file — so they never occupy an evidence id.
+
 A run taken against a dirty working tree says so in the record's **Netlist
 provenance** field and is not citable as a clean-tree result.
 
