@@ -334,6 +334,20 @@ class JobPlanTests(RelocateTests):
         self.assertIn(batch.HOST_NAME, cmd)
         self.assertTrue(cmd.rstrip().endswith("exit 0"))
 
+    def test_the_job_command_captures_the_executor_environment_best_effort(self):
+        """A batch-vs-local disagreement must be attributable to an image delta.
+
+        The PDK revision stamp, the ngspice banner and the image manifest are
+        written to a contract file, and the capture can never fail the job.
+        """
+        cmd = self._plan().spec["cmd"]
+        self.assertIn(batch.ENV_NAME, cmd)
+        self.assertIn("/SOURCES", cmd)
+        self.assertIn("ngspice --version", cmd)
+        self.assertIn("/etc/eda-batch-image.json", cmd)
+        self.assertIn(batch.ENV_NAME, batch.CONTRACT_OUTPUT_NAMES)
+        self.assertTrue(cmd.rstrip().endswith("exit 0"))
+
     def test_the_inputs_are_the_deck_plus_everything_it_includes(self):
         plan = self._plan()
         self.assertEqual(
