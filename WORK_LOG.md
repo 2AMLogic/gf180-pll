@@ -4,6 +4,7 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-10-08
 
+- **PR #723**: sim: capture batch executor environment; diagnose batch-vs-local divergence (#533)
 - **PR #721**: sim/harness: atomically reserve record ids before execution
 - **PR #719**: ci: run sim/lib simenv bash regression tests in the checks job
 - **PR #717**: sim: retain simulator diagnostics in timeout evidence logs
