@@ -670,6 +670,10 @@ def _write_log(log_path: Path, text: str) -> str | None:
     return None
 
 
+def _capture_message(failures: dict[str, str]) -> str:
+    return "; ".join(failures.values())
+
+
 def _run_phase(
     tb: Testbench,
     phase: Phase,
@@ -719,12 +723,17 @@ def _run_phase(
         log_write_error = _write_log(log_path, timeout_log)
         # A killed deck never reached its `wrdata` line, so every declared raw
         # file is reported absent rather than left unexplained.
-        timed_out_raw = capture_raw_files(tb, point, rundir, log_dir, phase)
+        capture_failures: dict[str, str] = {}
+        timed_out_raw = capture_raw_files(
+            tb, point, rundir, log_dir, phase, failures=capture_failures
+        )
         message = f"ngspice timed out after {timeout_s}s"
         if deck_run.detail:
             message = f"{message} ({deck_run.detail})"
         if log_write_error:
             message = f"{message}; {log_write_error}"
+        if capture_failures:
+            message = f"{message}; {_capture_message(capture_failures)}"
         return _PhaseOutcome(
             run=PhaseRun(
                 name=phase.name,
@@ -746,7 +755,10 @@ def _run_phase(
     # Capture what the deck wrote BEFORE anything else looks at this point: a
     # retained raw file is evidence, and it has to be banked whether the point
     # went on to pass, fail a required measurement, or break its reduction.
-    raw_files = capture_raw_files(tb, point, rundir, log_dir, phase)
+    capture_failures = {}
+    raw_files = capture_raw_files(
+        tb, point, rundir, log_dir, phase, failures=capture_failures
+    )
     raw_missing = [name for name, raw in raw_files.items() if not raw.exists()]
 
     measurements = parse_measurements(output, phase.raw_measures.keys())
@@ -772,6 +784,8 @@ def _run_phase(
             message = f"{deck_run.detail}; {message}"
         if log_write_error:
             message = f"{message}; {log_write_error}"
+        if capture_failures:
+            message = f"{message}; {_capture_message(capture_failures)}"
         return _PhaseOutcome(
             run=PhaseRun(
                 name=phase.name,
@@ -799,6 +813,8 @@ def _run_phase(
         message = deck_run.detail or f"execution failed (exit {returncode})"
         if log_write_error:
             message = f"{message}; {log_write_error}"
+        if capture_failures:
+            message = f"{message}; {_capture_message(capture_failures)}"
         return _PhaseOutcome(
             run=PhaseRun(
                 name=phase.name,
@@ -817,12 +833,14 @@ def _run_phase(
             raw_missing=raw_missing,
         )
 
-    if log_write_error:
+    if log_write_error or capture_failures:
         # The point otherwise measured cleanly, but its evidence log -- the
-        # file this record's `log` field names -- does not exist on disk.
-        # Reporting "ok" here would misrepresent what actually got recorded,
-        # so this degrades the point to "error" instead of discarding it (or
-        # the rest of the grid) outright (#271).
+        # file this record's `log` field names -- or a requested retained raw
+        # file does not exist on disk. Reporting "ok" here would misrepresent
+        # what actually got recorded, so this degrades the point to "error"
+        # instead of discarding it (or the rest of the grid) outright (#271,
+        # #724). The fail-stop in `run_point` then skips later phases.
+        problems = [m for m in (log_write_error, _capture_message(capture_failures)) if m]
         return _PhaseOutcome(
             run=PhaseRun(
                 name=phase.name,
@@ -830,7 +848,7 @@ def _run_phase(
                 deck=deck_path.name,
                 log=log_path.name,
                 seconds=elapsed,
-                message=log_write_error,
+                message="; ".join(problems),
                 host=deck_run.host,
                 simulator=simulator_of(output),
             ),
@@ -862,6 +880,7 @@ def _run_phase(
 def capture_raw_files(
     tb: Testbench, point: PvtPoint, rundir: Path, log_dir: Path,
     phase: Phase | None = None,
+    failures: dict[str, str] | None = None,
 ) -> dict[str, RawFile]:
     """Resolve the manifest's ``raw_files`` against what this point wrote.
 
@@ -884,6 +903,13 @@ def capture_raw_files(
 
     A declared file the deck never wrote yields a :class:`RawFile` whose
     ``exists()`` is ``False`` rather than an exception.
+
+    A ``retain`` copy that fails with ``OSError`` (full disk, the evidence
+    directory removed mid-run) never raises either: any partial destination is
+    removed so no reduction can read it as complete evidence, the returned
+    :class:`RawFile` points at the (absent) destination, and -- when the caller
+    passes a ``failures`` dict -- ``failures[<name>]`` receives a message naming
+    the file and the error (#724).
     """
     specs = tb.raw_files if phase is None else phase.raw_files
     run_id = point.corner_id if phase is None else phase.run_id(point.corner_id)
@@ -893,8 +919,18 @@ def capture_raw_files(
         path = source
         if spec.retain and source.is_file():
             path = log_dir / f"{run_id}-{spec.name}"
-            path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, path)
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, path)
+            except OSError as exc:
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+                if failures is not None:
+                    failures[spec.name] = (
+                        f"retained raw file {spec.name!r} not captured: {exc}"
+                    )
         captured[spec.name] = RawFile(
             name=spec.name, path=path, columns=spec.columns
         )
