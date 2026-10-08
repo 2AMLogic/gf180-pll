@@ -603,7 +603,9 @@ class BatchBackend:
         """
         return rundir / f".batch-{plan.job_id}"
 
-    def _collect(self, plan: JobPlan, rundir: Path) -> Path:
+    def _collect(
+        self, plan: JobPlan, rundir: Path
+    ) -> tuple[Path, subprocess.CompletedProcess]:
         """Download one job's outputs into a directory only that job writes.
 
         **The download target must be job-scoped, not the rundir itself.** A
@@ -618,11 +620,14 @@ class BatchBackend:
         already isolated this way; this is the same isolation on the way back.
 
         Returns the directory the outputs landed in, which is what
-        :meth:`run_deck` reads the three contract files from.
+        :meth:`run_deck` reads the three contract files from, together with
+        the download's own result. A nonzero download is **not** raised here:
+        whatever files did arrive are still evidence, and :meth:`run_deck`
+        turns the failure into a failed point (#714).
         """
         collected = self._staging(plan, rundir) / "outputs"
         collected.mkdir(parents=True, exist_ok=True)
-        self._aws(
+        proc = self._aws(
             "s3",
             "cp",
             plan.job_uri + "/outputs/",
@@ -630,7 +635,7 @@ class BatchBackend:
             "--recursive",
             "--only-show-errors",
         )
-        return collected
+        return collected, proc
 
     def _publish(self, plan: JobPlan, collected: Path, rundir: Path) -> None:
         """Copy what the *deck* produced out of the job directory into rundir.
@@ -739,7 +744,7 @@ class BatchBackend:
         # concurrent point collecting into the same rundir writes only inside
         # its own `.batch-<job-id>/`, so nothing it does can reach these three
         # reads (#507).
-        collected = self._collect(plan, rundir)
+        collected, download = self._collect(plan, rundir)
         log_path = collected / LOG_NAME
         output = log_path.read_text() if log_path.is_file() else ""
         host_path = collected / HOST_NAME
@@ -755,6 +760,23 @@ class BatchBackend:
         # timed-out or failed point's partial output is still evidence.
         self._publish(plan, collected, rundir)
 
+        # A download that exited nonzero is a known-incomplete collection: the
+        # point must not read as a success just because the files that did
+        # arrive happen to hold every measurement (#714). The files stay.
+        collect_failed = download.returncode != 0
+        collect_detail = ""
+        if collect_failed:
+            err = " ".join((download.stderr or "").split())
+            collect_detail = (
+                f"job {plan.job_id} output collection failed "
+                f"(exit {download.returncode})" + (f": {err[:500]}" if err else "")
+            )
+            if not (log_path.is_file() or rc_path.is_file()):
+                collect_detail += "; no job outputs were downloaded"
+
+        def _compose(detail: str) -> str:
+            return f"{detail}; {collect_detail}" if collect_detail else detail
+
         if state == "timeout":
             return DeckRun(
                 output=output,
@@ -762,7 +784,9 @@ class BatchBackend:
                 seconds=seconds,
                 host=host,
                 timed_out=True,
-                detail=f"job {plan.job_id} hit the layer's {timeout_s}s budget",
+                detail=_compose(
+                    f"job {plan.job_id} hit the layer's {timeout_s}s budget"
+                ),
             )
         if state in ("failed", "interrupted"):
             return DeckRun(
@@ -771,7 +795,7 @@ class BatchBackend:
                 seconds=seconds,
                 host=host,
                 execution_failed=True,
-                detail=(
+                detail=_compose(
                     f"job {plan.job_id} ended {state}"
                     + (f": {status['detail']}" if status.get("detail") else "")
                 ),
@@ -781,5 +805,6 @@ class BatchBackend:
             returncode=returncode,
             seconds=seconds,
             host=host,
-            detail=f"job {plan.job_id}",
+            execution_failed=collect_failed,
+            detail=collect_detail or f"job {plan.job_id}",
         )
