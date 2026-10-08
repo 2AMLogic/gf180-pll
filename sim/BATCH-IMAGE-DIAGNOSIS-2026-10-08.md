@@ -432,3 +432,153 @@ because this host cannot run it.
 
 Scratch decks (sha256, not committed): `dc_default.spice` `57630e04…`,
 `dc_klu.spice` `107920af…`; harness-composed deck `43536d49…`.
+
+## Addendum 3 (2026-10-08, later): Addendum 2 section 5 run on the Linux x86_64 worker; the split reproduces and `set wnflag=1` isolates it
+
+Appended after running the step Addendum 2 section 5 left open. Everything
+above stays as written. No batch job was submitted and nothing was spent. No
+record under `sim/*/records/` was written, and `spec/`, `tb.json` and
+`tb_reference_spur_band_top.sp` were not touched. `sim/harness/batch.py` was
+not changed. Every run was one single local `ngspice -b` invocation
+(`OMP_NUM_THREADS=2`), one at a time, from a scratch directory outside the
+repository (not committed). The grid stays unsubmitted.
+
+### 1. Host and binary
+
+| item | value |
+|---|---|
+| host | `loom-worker-2`, Linux x86_64 (the worker PR #723 names for the earlier "local" run) |
+| binary | `ngspice` on `PATH` is `~/.local/bin/ngspice`, a symlink to `~/.local/ngspice/bin/ngspice` (the repo pin per `sim/lib/simenv.sh`; `run_corners.py --check-env` reports the pin as resolved) |
+| `--version` | `ngspice-46`, "Compiled with KLU Direct Linear Solver", creation date Wed Aug 5 10:12:28 UTC 2026 |
+| `file` | ELF 64-bit LSB pie executable, x86-64, dynamically linked, stripped, BuildID `c160d928d9759ae1f095160f89942ff90bbd998a` |
+| `ldd` | `libm.so.6`, `libstdc++.so.6`, `libgomp.so.1`, `libgcc_s.so.1`, `libc.so.6` (system copies under `/lib/x86_64-linux-gnu`) |
+| sha256 | `c874869b16dc8a31cfa9d37d2b90a2a9e0e5b996f8e2535db89eb82855072931` |
+| `spinit` | `~/.local/ngspice/share/ngspice/scripts/spinit` (sha256 `e9cd2232…`): `set num_threads=8`, `unset osdi_enabled`, XSPICE `codemodel` lines; no solver, `gmin`, `wnflag` or `ngbehavior` setting |
+| `~/.spiceinit` | **present** (sha256 `94a971c8…`), two effective lines: `set wnflag=1` and `set num_threads=1`. Its comment says it restores per-finger model binning (bin selection uses W/NF) that a locally built ngspice lacks, because a locally built ngspice does not get it implicitly the way a distro-packaged one does through `ngbehavior=hsa` |
+| working-directory `.spiceinit` | none (scratch directory was empty) |
+| configure line / `config.log` | not available on this host (no build tree) |
+| PDK | `~/.volare/gf180mcuD`, `SOURCES` = `open_pdks c6d73a35f524070e85faff4a6a9eef49553ebc2b` |
+| batch log banner for comparison | `Note: No compatibility mode selected!` and no `wnflag`; a run here with `~/.spiceinit` also prints `No compatibility mode selected!`, so that line does not reveal `wnflag` |
+
+`~/.spiceinit` is a per-host file. Nothing in the repository sets `wnflag`
+(`git grep` finds no mention outside this note and a prose reference in two
+supply-sensitivity records about `num_threads`), and `sim/harness/batch.py`
+does not write one into the batch job.
+
+### 2. Deck
+
+Regenerated exactly as Addendum 2 section 2: the harness's own composer
+(`sim/run_corners.py reference-spur-band-top --corners ff --temps -40 --supply
+3.3 --axis op=b7vs1p886 --no-write`, a stub `ngspice` first on `PATH` that
+only copied the deck and ran nothing; the working directory the harness
+created was deleted). The point is `ff`/-40 C/3.63 V, band 7, `vstart` 1.886 V.
+Then the same four edits: PDK prefix is already `~/.volare/gf180mcuD`,
+`.measure` lines dropped, `wrdata`/`set wr_singlescale` dropped, `tran 2e-9
+8.0e-6 2.4e-6 100e-12` replaced by `tran 1e-11 1e-11`; the `klu` variant adds
+only `.options klu` before `.options rshunt=1e12`. Scratch-deck digests:
+`dc_default.spice` `13e54081…`, `dc_klu.spice` `60aa1afb…`. The composed deck
+was not compared byte-for-byte with the job's `inputs/` deck (not read from
+the job store here); the 414 scalar node lines compared below come from this
+deck.
+
+### 3. Results
+
+"Init" is whether the real `~/.spiceinit` was read. "no init" runs set `HOME`
+to an empty directory. The two "isolated" rows read a `~/.spiceinit` holding
+only the one named line.
+
+| build / run | `~/.spiceinit` content | variant | solver (log) | DC path (log) | `fb` | `xdut.dn` | `xdut.up` | `xdut.xpfd.xpfd.sbf` | `vctrl` | `lock` |
+|---|---|---|---|---|---|---|---|---|---|---|
+| batch pilots (Addendum 1) | n/a | default | SPARSE 1.3 | dynamic gmin failed, true gmin completed | 1.79421 | 3.63 | 1.99269e-08 | 9.47584e-09 | 1.886 | 5.14279e-09 |
+| pin, this host | real (`wnflag=1`, `num_threads=1`) | default | SPARSE 1.3 | **no gmin-stepping lines (direct Newton)** | **3.63** | 1.99269e-08 | 1.99269e-08 | **3.63** | 1.886 | **3.63** |
+| pin, this host | real | `.options klu` | KLU | dynamic gmin failed, true gmin completed | 1.79421 | 3.63 | 1.99269e-08 | 9.47584e-09 | 1.886 | 5.14279e-09 |
+| pin, this host | none | default | SPARSE 1.3 | dynamic gmin failed, true gmin completed | 1.79421 | 3.63 | 1.99269e-08 | 9.47584e-09 | 1.886 | 5.14279e-09 |
+| pin, this host | none | `.options klu` | KLU | dynamic gmin failed, true gmin completed | 1.79421 | 3.63 | 1.99269e-08 | 9.47584e-09 | 1.886 | 5.14279e-09 |
+| pin, this host, isolated | only `set wnflag=1` | default | SPARSE 1.3 | no gmin-stepping lines | **3.63** | 1.99269e-08 | not extracted (0 of 414 node values differ from the real-init run) | **3.63** | 1.886 | **3.63** |
+| pin, this host, isolated | only `set num_threads=1` | default | SPARSE 1.3 | dynamic gmin failed, true gmin completed | 1.79421 | 3.63 | not extracted (0 of 414 node values differ from the no-init run) | 9.47584e-09 | 1.886 | 5.14279e-09 |
+
+Node-level comparison of the 414 scalar lines of the "Initial Transient
+Solution" table (count of nodes whose printed value differs):
+
+- real-init default vs `wnflag`-only default: **0** (identical).
+- `num_threads`-only default vs no-init default: **0** (identical, the batch state).
+- real-init default vs no-init default: 206.
+- real-init default vs real-init klu: 204. Real-init klu vs no-init klu: 9.
+- no-init default vs no-init klu: 29 (the same size as the ngspice-42 KLU
+  difference in Addendum 1; last-digit scale differences).
+
+The `klu` runs on this host used the same DC path as the batch image. Unlike
+the arm64 pin in Addendum 2, no `klu` run here completed in dynamic gmin
+stepping. One no-init `klu` run printed its table and then hit the 280 s
+`timeout` while the dummy `tran` ran; the table was already complete, and the
+run was not repeated.
+
+### 4. Conclusion
+
+- **Reference state reproduced, with captured artefacts.** The Linux x86_64
+  pin reaches `fb` = 3.63 V, `lock` = 3.63 V, `sbf` = 3.63 V by direct Newton
+  (no gmin-stepping lines) on the regenerated DC-only deck. So the earlier
+  "local" observation was not mis-recorded, and Addendum 2's reading of it as
+  the less documented outlier is superseded: it is now documented, and it
+  is consistent with the -61.71 dBc / `lock_lvl` 3.63 V local pilot (the
+  pilot's transient was not rerun here).
+- **A single isolated change moves the split on this host.** With the same
+  binary, same deck, same PDK, default options and same working directory:
+  adding `set wnflag=1` to the init file takes the DC solution from the batch
+  state to the reference state; adding `set num_threads=1` alone does not.
+  Reading no init file at all gives the batch state, identical to the batch
+  logs on the six key nodes. This is a reproduction of the split by an
+  isolated change at the level of one DC operating point on one host.
+- **Platform/build difference vs. configuration difference.** The
+  hypothesis that Addendum 2 section 5 posed, a Linux-x86 build converging
+  directly by itself, does not hold: the same Linux x86 pin lands in the
+  batch state when `wnflag` is unset. What differs between the two backends
+  is a host-level init setting, not (shown here) the binary. Nothing
+  in the repository or in `sim/harness/batch.py` sets `wnflag` for the batch
+  job, and the batch logs show no sign of it (the image's own init files
+  were not read, so an image-level setting is not excluded), and the batch banner `No compatibility mode
+  selected!` appears with and without it, so the banner cannot be used to
+  tell the two apart.
+- **Causality is still unverified beyond the DC point.** The mechanism is
+  not shown. `wnflag=1` changes which model bin a multi-finger or wide
+  device selects, which could change the circuit's DC equations (a different
+  circuit, not a different homotopy path), but this was not checked here:
+  no device-by-device bin comparison was made, and no transient was run, so
+  the following are not established by this addendum: that the whole -61.71
+  vs -75.57 dBc spur gap is caused by `wnflag`, that the batch image, once
+  given `wnflag=1`, reproduces the local pilot, and that Addendum 2's arm64
+  `ngbehavior=hsa` result (batch state) is consistent with `wnflag`
+  semantics. The last point in particular is open: `hsa` is described in
+  `~/.spiceinit`'s own comment as giving the effect implicitly, yet the
+  arm64 runs with `hsa` were in the batch state. The arm64 pin also may not
+  be the same build as this one.
+- **Which DC solution is representative is still not decided here.** Both
+  are valid solutions of a bistable latch, and the model-bin question above
+  has to be answered first: if `wnflag=1` selects the bins the PDK intends,
+  the batch image (which lacks it) is simulating a different device model
+  selection on some devices and its numbers are the ones needing a caveat.
+  That is for the testbench and spec owners to judge, not this note.
+
+### 5. Implications and next step (none relaxes a requirement)
+
+- The 2026-10-02 ruling stands: the pilots still do not match, so the grid
+  is not submitted. -55 dBc, the 45-point mandate and DR-028 are unchanged.
+- The decision is the testbench owners', as framed in section 4 of the
+  original note, with the cause narrowed: make the simulator configuration
+  that the campaign depends on part of the campaign inputs (a reviewed
+  change, for example setting `wnflag` and the thread count inside the
+  deck's control block, or recording the init file as part of the reference
+  environment under DR-028), and pin the PFD latch's initial state so the
+  result does not rely on which homotopy path a build takes. Either is a
+  reviewed campaign-input or spec change; neither was made here.
+- A cheap, decisive follow-up that this addendum does not run: one
+  single-point local run of the pilot deck with `wnflag=1` and then without
+  it (full transient, `--backend local`, one point at a time, which is
+  inside the host rules) to see whether the -61.71 vs -75.57 dBc gap tracks
+  the init setting, and one comparison of the model bins selected for the
+  nf > 1 devices with and without `wnflag`. Owner: the testbench owner or an
+  agent on a Linux worker; both are single runs.
+- Evidence gap restated: a local run still records no equivalent of
+  `ngspice.env` (binary, banner, init files read, `wnflag`). This case
+  makes that gap concrete, since the deciding input was an unrecorded
+  per-host init file. Tracked generically as 2AMLogic/klayout-tools#2834.
