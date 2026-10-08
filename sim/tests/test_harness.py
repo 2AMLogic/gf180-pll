@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -833,6 +834,126 @@ class CliPartialGridRecoveryTests(ManifestFixture):
         self.assertFalse((self.root / self.slug / "records").exists())
 
 
+class CliRecordReservationTests(ManifestFixture):
+    """#720: the CLI reserves the record id before any point runs, and only
+    when the invocation can produce evidence."""
+
+    def setUp(self):
+        super().setUp()
+        self.write({"measure": {"vout": "v(out)"}})
+        self.pdk = fake_pdk(self.root / "gf180mcuD")
+        self.experiment = self.root / self.slug
+        self.seen = {}
+
+    def _args(self, *extra):
+        return cli.build_parser().parse_args(
+            [
+                self.slug,
+                "--corners", "typical",
+                "--temps", "27",
+                "--supply-tol", "0",
+                "--subset-reason", "unit test: exercising record-id reservation",
+                "--quiet",
+                *extra,
+            ]
+        )
+
+    def _fake_run_grid(self, tb, pdk, points, workdir, jobs=1, timeout_s=300,
+                       on_result=None, log_dir=None, backend=None):
+        # What exists on disk at the moment the first point would start.
+        self.seen = {
+            "workdir": workdir.is_dir(),
+            "log_dir": log_dir,
+            "log_dir_exists": log_dir is not None and log_dir.is_dir(),
+            "ownership": (workdir / report.RESERVATION_FILE).is_file(),
+        }
+        results = [runner.PointResult(point=p, status="ok", measurements={"vout": 1.65})
+                   for p in points]
+        for r in results:
+            if on_result:
+                on_result(r)
+        return results
+
+    def _run_cli(self, args, run_grid=None, backend=None):
+        buf_out, buf_err = io.StringIO(), io.StringIO()
+        patches = [
+            mock.patch.object(cli, "find_pdk", return_value=self.pdk),
+            mock.patch.object(runner, "ngspice_version", return_value="ngspice-46"),
+            mock.patch.object(runner, "run_grid", side_effect=run_grid or self._fake_run_grid),
+            mock.patch.object(cli, "SIM_DIR", self.root),
+        ]
+        if backend is not None:
+            patches.append(mock.patch.object(cli, "build_backend", return_value=backend))
+        with contextlib.ExitStack() as stack:
+            for patch in patches:
+                stack.enter_context(patch)
+            stack.enter_context(contextlib.redirect_stdout(buf_out))
+            stack.enter_context(contextlib.redirect_stderr(buf_err))
+            status = cli.run(args)
+        return status, buf_out.getvalue(), buf_err.getvalue()
+
+    def test_a_recording_run_reserves_before_the_first_point(self):
+        status, _, err = self._run_cli(self._args())
+        self.assertEqual(status, cli.EXIT_OK, err)
+        self.assertTrue(self.seen["workdir"])
+        self.assertTrue(self.seen["log_dir_exists"])
+        self.assertTrue(self.seen["ownership"])
+        record_id = self.seen["log_dir"].name
+        self.assertTrue((self.experiment / report.RECORDS_DIR / f"{record_id}.md").is_file())
+        # published: the ownership file is released, the evidence stays
+        self.assertFalse(
+            (self.experiment / report.WORK_DIR / record_id / report.RESERVATION_FILE).exists()
+        )
+        self.assertNotIn("stays reserved", err)
+
+    def test_a_no_write_run_reserves_no_evidence_id(self):
+        status, _, err = self._run_cli(self._args("--no-write"))
+        self.assertEqual(status, cli.EXIT_OK, err)
+        self.assertIsNone(self.seen["log_dir"])
+        self.assertFalse(self.seen["ownership"])
+        self.assertFalse((self.experiment / report.CORNERS_DIR).exists())
+        self.assertFalse((self.experiment / report.RECORDS_DIR).exists())
+        self.assertFalse(list((self.experiment / report.WORK_DIR).glob(f"*/{report.RESERVATION_FILE}")))
+
+    def test_a_batch_plan_reserves_no_evidence_id(self):
+        backend = mock.Mock()
+        backend.name = "batch"
+        with mock.patch.object(cli, "print_batch_plan", return_value=cli.EXIT_OK) as plan:
+            status, _, _ = self._run_cli(self._args(), backend=backend)
+        self.assertEqual(status, cli.EXIT_OK)
+        plan.assert_called_once()
+        self.assertFalse((self.experiment / report.CORNERS_DIR).exists())
+        self.assertFalse(list((self.experiment / report.WORK_DIR).glob(f"*/{report.RESERVATION_FILE}")))
+
+    def test_an_unpublished_run_says_its_id_stays_reserved(self):
+        def missing(*args, **kwargs):
+            raise runner.NgspiceMissing("ngspice not found on PATH")
+
+        status, _, err = self._run_cli(self._args(), run_grid=missing)
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("stays reserved", err)
+        ownership = list((self.experiment / report.WORK_DIR).glob(f"*/{report.RESERVATION_FILE}"))
+        self.assertEqual(len(ownership), 1)
+
+    def test_an_earlier_interrupted_reservation_is_reported_not_reused(self):
+        earlier = report.reserve_record_id(
+            SIM_DIR, self.experiment,
+            datetime.datetime(2026, 7, 29, 15, 30, 0, tzinfo=datetime.timezone.utc),
+            git={"commit": "f" * 40, "short": "fffffff"},
+        )
+        (earlier.log_dir / "typical_27c_3.3v.log").write_text("half a run\n")
+        info = json.loads(earlier.ownership_path.read_text())
+        info["pid"] = _dead_pid()
+        earlier.ownership_path.write_text(json.dumps(info))
+
+        status, _, err = self._run_cli(self._args())
+        self.assertEqual(status, cli.EXIT_OK, err)
+        self.assertIn(earlier.record_id, err)
+        self.assertIn("interrupted", err)
+        self.assertNotEqual(self.seen["log_dir"].name, earlier.record_id)
+        self.assertEqual((earlier.log_dir / "typical_27c_3.3v.log").read_text(), "half a run\n")
+
+
 class _StubPoint:
     def __init__(self, corner_id):
         self.corner_id = corner_id
@@ -928,6 +1049,258 @@ class RecordIdTests(unittest.TestCase):
                 report.write_record(
                     {"record_id": "20260729-153000-abc1234"}, experiment
                 )
+
+
+_GIT = {"commit": "abc1234" + "0" * 33, "short": "abc1234", "branch": "main", "dirty": False}
+_WHEN = datetime.datetime(2026, 7, 29, 15, 30, 0, tzinfo=datetime.timezone.utc)
+_ID_SHAPE = r"^\d{8}-\d{6}-abc1234$"
+
+
+def _dead_pid() -> int:
+    """A pid that belonged to a process which has already exited."""
+    proc = subprocess.Popen([sys.executable, "-c", "pass"])
+    proc.wait()
+    return proc.pid
+
+
+class RecordReservationTests(unittest.TestCase):
+    """#720: a record id is reserved atomically before anything is written.
+
+    Hermetic: a temporary experiment directory, a fixed commit and a fixed
+    timestamp -- no PDK, no ngspice, no git.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.experiment = Path(self.tmp.name) / "an-experiment"
+        self.experiment.mkdir()
+
+    def reserve(self, **kwargs):
+        return report.reserve_record_id(SIM_DIR, self.experiment, _WHEN, git=_GIT, **kwargs)
+
+    def test_synchronized_allocators_receive_distinct_conforming_ids(self):
+        """Many allocators released at once, same experiment/commit/second,
+        each get their own id -- and no summary record exists at any point."""
+        n = 8
+        barrier = threading.Barrier(n)
+        got, errors = [], []
+        lock = threading.Lock()
+
+        def worker():
+            try:
+                barrier.wait()
+                reservation = self.reserve()
+                with lock:
+                    got.append(reservation)
+            except Exception as exc:  # noqa: BLE001 - surfaced below
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker) for _ in range(n)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        self.assertEqual(errors, [])
+        ids = [r.record_id for r in got]
+        self.assertEqual(len(set(ids)), n, ids)
+        for record_id in ids:
+            self.assertRegex(record_id, _ID_SHAPE)
+        self.assertEqual(len({r.log_dir for r in got}), n)
+        self.assertEqual(len({r.workdir for r in got}), n)
+        self.assertFalse((self.experiment / report.RECORDS_DIR).exists())
+
+    def test_a_second_reservation_in_the_same_second_advances_the_timestamp(self):
+        first = self.reserve()
+        second = self.reserve()
+        self.assertEqual(first.record_id, "20260729-153000-abc1234")
+        self.assertEqual(second.record_id, "20260729-153001-abc1234")
+        self.assertTrue(first.log_dir.is_dir())
+        self.assertTrue(second.log_dir.is_dir())
+
+    def test_logs_without_a_summary_keep_their_id(self):
+        """A run that died after writing logs owns that id forever."""
+        record_id = report.format_record_id("abc1234", _WHEN)
+        sentinel = self.experiment / report.CORNERS_DIR / record_id / "typical_27c_3.3v.log"
+        sentinel.parent.mkdir(parents=True)
+        payload = b"partial ngspice output\x00\xff\n"
+        sentinel.write_bytes(payload)
+
+        reservation = self.reserve()
+        self.assertNotEqual(reservation.record_id, record_id)
+        self.assertRegex(reservation.record_id, _ID_SHAPE)
+        self.assertEqual(sentinel.read_bytes(), payload)
+        self.assertEqual(sorted(p.name for p in sentinel.parent.iterdir()), [sentinel.name])
+        self.assertTrue(any(record_id in line for line in reservation.skipped))
+        # the non-reserving allocator agrees
+        self.assertNotEqual(
+            report.allocate_record_id(
+                SIM_DIR, self.experiment / report.RECORDS_DIR, _WHEN, git=_GIT
+            ),
+            record_id,
+        )
+
+    def test_a_snapshot_without_a_summary_keeps_its_id(self):
+        record_id = report.format_record_id("abc1234", _WHEN)
+        snapshot = self.experiment / report.SNAPSHOT_DIR / f"{record_id}.spice"
+        snapshot.parent.mkdir(parents=True)
+        snapshot.write_bytes(b"* frozen\n")
+
+        reservation = self.reserve()
+        self.assertNotEqual(reservation.record_id, record_id)
+        self.assertEqual(snapshot.read_bytes(), b"* frozen\n")
+        self.assertFalse((self.experiment / report.CORNERS_DIR / record_id).exists())
+
+    def test_an_evidence_reservation_records_its_owner(self):
+        reservation = self.reserve()
+        self.assertTrue(reservation.evidence)
+        info = json.loads(reservation.ownership_path.read_text())
+        self.assertEqual(info["record_id"], reservation.record_id)
+        self.assertEqual(info["pid"], os.getpid())
+        self.assertEqual(info["experiment"], "an-experiment")
+        self.assertEqual(info["commit"], _GIT["commit"])
+        self.assertEqual(report.read_reservation(reservation.workdir)["state"], "running")
+        # a live reservation is not reported as interrupted
+        self.assertEqual(report.interrupted_reservations(self.experiment), [])
+
+    def test_an_interrupted_reservation_is_reported_and_never_recycled(self):
+        reservation = self.reserve()
+        log = reservation.log_dir / "typical_27c_3.3v.log"
+        log.write_text("half a run\n")
+        info = json.loads(reservation.ownership_path.read_text())
+        info["pid"] = _dead_pid()
+        reservation.ownership_path.write_text(json.dumps(info))
+
+        stale = report.interrupted_reservations(self.experiment)
+        self.assertEqual([s["record_id"] for s in stale], [reservation.record_id])
+        line = report.describe_reservation(stale[0])
+        self.assertIn(reservation.record_id, line)
+        self.assertIn(str(info["pid"]), line)
+        self.assertIn("interrupted", line)
+
+        again = self.reserve()
+        self.assertNotEqual(again.record_id, reservation.record_id)
+        self.assertTrue(
+            any(reservation.record_id in s and "interrupted" in s for s in again.skipped),
+            again.skipped,
+        )
+        # nothing of the interrupted run was cleaned up
+        self.assertEqual(log.read_text(), "half a run\n")
+        self.assertTrue(reservation.ownership_path.exists())
+
+    def test_publishing_releases_only_the_ownership_file(self):
+        reservation = self.reserve()
+        (self.experiment / report.RECORDS_DIR).mkdir()
+        (self.experiment / report.RECORDS_DIR / f"{reservation.record_id}.md").write_text("# r\n")
+        self.assertEqual(report.read_reservation(reservation.workdir)["state"], "published")
+        reservation.mark_published()
+        self.assertFalse(reservation.ownership_path.exists())
+        self.assertTrue(reservation.log_dir.is_dir())
+        self.assertNotEqual(self.reserve().record_id, reservation.record_id)
+
+    def test_a_scratch_reservation_leaves_no_evidence_behind(self):
+        """--no-write and batch plans: a work directory and nothing else."""
+        scratch = self.reserve(evidence=False)
+        self.assertFalse(scratch.evidence)
+        self.assertIsNone(scratch.log_dir)
+        self.assertIsNone(scratch.ownership_path)
+        self.assertTrue(scratch.workdir.is_dir())
+        self.assertFalse((self.experiment / report.CORNERS_DIR).exists())
+        self.assertEqual(list(scratch.workdir.iterdir()), [])
+        scratch.mark_published()  # a no-op, not an error
+
+    def test_a_scratch_run_never_shares_a_live_runs_work_directory(self):
+        live = self.reserve()
+        scratch = self.reserve(evidence=False)
+        self.assertNotEqual(scratch.workdir, live.workdir)
+
+    def test_a_concurrently_taken_work_directory_gives_back_the_evidence_dir(self):
+        """Lost the work/ race after winning corners/: roll back and advance."""
+        record_id = report.format_record_id("abc1234", _WHEN)
+        real_mkdir = report._exclusive_mkdir
+
+        def racing_mkdir(path):
+            if path == self.experiment / report.WORK_DIR / record_id:
+                path.mkdir(parents=True)  # a scratch run got there first
+            return real_mkdir(path)
+
+        with mock.patch.object(report, "_exclusive_mkdir", side_effect=racing_mkdir):
+            reservation = self.reserve()
+        self.assertNotEqual(reservation.record_id, record_id)
+        self.assertFalse((self.experiment / report.CORNERS_DIR / record_id).exists())
+
+
+class ExclusivePublicationTests(ManifestFixture):
+    """#720: an already-published snapshot or summary is never truncated,
+    even by a writer whose existence check raced with another writer."""
+
+    RID = "20260729-153000-abc1234"
+
+    def setUp(self):
+        super().setUp()
+        self.write({})
+        self.tb = testbench.load(self.tb_dir)
+        self.experiment = self.tb.experiment_dir
+
+    def test_a_record_that_appears_after_the_check_is_not_truncated(self):
+        path = self.experiment / report.RECORDS_DIR / f"{self.RID}.md"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"# the first writer's record\n")
+        # The existence check passes (the other writer has not finished yet)...
+        with mock.patch.object(Path, "exists", return_value=False), \
+             mock.patch.object(report, "render_record", return_value="# second\n"):
+            with self.assertRaises(report.RecordExists):
+                report.write_record({"record_id": self.RID}, self.experiment)
+        # ...but the exclusive create still refuses.
+        self.assertEqual(path.read_bytes(), b"# the first writer's record\n")
+
+    def test_a_snapshot_that_appears_after_the_check_is_not_truncated(self):
+        path = self.experiment / report.SNAPSHOT_DIR / f"{self.RID}.spice"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"* the first writer's snapshot\n")
+        with mock.patch.object(Path, "exists", return_value=False):
+            with self.assertRaises(report.RecordExists):
+                report.write_netlist_snapshot(self.tb, self.experiment, self.RID)
+        self.assertEqual(path.read_bytes(), b"* the first writer's snapshot\n")
+
+    def test_racing_record_writers_publish_exactly_one(self):
+        n = 6
+        barrier = threading.Barrier(n)
+        outcomes = []
+        lock = threading.Lock()
+
+        # Patch once, outside the threads (mock.patch is not thread-safe);
+        # each thread renders its own distinguishable text.
+        texts = {}
+
+        def render(record, experiment):
+            return texts[threading.get_ident()]
+
+        def worker(i):
+            texts[threading.get_ident()] = f"# writer {i}\n" + "x" * 4096 + "\n"
+            barrier.wait()
+            try:
+                report.write_record({"record_id": self.RID}, self.experiment)
+                result = ("won", texts[threading.get_ident()])
+            except report.RecordExists:
+                result = ("refused", None)
+            with lock:
+                outcomes.append(result)
+
+        (self.experiment / report.RECORDS_DIR).mkdir(parents=True)
+        with mock.patch.object(report, "render_record", side_effect=render):
+            threads = [threading.Thread(target=worker, args=(i,)) for i in range(n)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+        winners = [text for kind, text in outcomes if kind == "won"]
+        self.assertEqual(len(outcomes), n)
+        self.assertEqual(len(winners), 1, outcomes)
+        path = self.experiment / report.RECORDS_DIR / f"{self.RID}.md"
+        self.assertEqual(path.read_text(), winners[0])
 
 
 class MatrixConformanceTests(unittest.TestCase):
