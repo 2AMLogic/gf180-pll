@@ -674,6 +674,19 @@ def _capture_message(failures: dict[str, str]) -> str:
     return "; ".join(failures.values())
 
 
+def _raw_missing(
+    raw_files: dict[str, RawFile], failures: dict[str, str]
+) -> list[str]:
+    """Declared raw files with no readable capture at this point.
+
+    A file whose retained copy failed is absent from ``raw_files`` entirely
+    (see :func:`capture_raw_files`), so it is listed from ``failures``.
+    """
+    missing = [name for name, raw in raw_files.items() if not raw.exists()]
+    missing.extend(name for name in failures if name not in missing)
+    return missing
+
+
 def _run_phase(
     tb: Testbench,
     phase: Phase,
@@ -745,7 +758,7 @@ def _run_phase(
                 host=deck_run.host,
             ),
             raw_files=timed_out_raw,
-            raw_missing=[n for n, raw in timed_out_raw.items() if not raw.exists()],
+            raw_missing=_raw_missing(timed_out_raw, capture_failures),
         )
     output = deck_run.output
     returncode = deck_run.returncode
@@ -759,7 +772,7 @@ def _run_phase(
     raw_files = capture_raw_files(
         tb, point, rundir, log_dir, phase, failures=capture_failures
     )
-    raw_missing = [name for name, raw in raw_files.items() if not raw.exists()]
+    raw_missing = _raw_missing(raw_files, capture_failures)
 
     measurements = parse_measurements(output, phase.raw_measures.keys())
     # Only *required* measurements can fail a point. An absent optional
@@ -905,11 +918,14 @@ def capture_raw_files(
     ``exists()`` is ``False`` rather than an exception.
 
     A ``retain`` copy that fails with ``OSError`` (full disk, the evidence
-    directory removed mid-run) never raises either: any partial destination is
-    removed so no reduction can read it as complete evidence, the returned
-    :class:`RawFile` points at the (absent) destination, and -- when the caller
-    passes a ``failures`` dict -- ``failures[<name>]`` receives a message naming
-    the file and the error (#724).
+    directory removed mid-run) never raises either. Any partial destination is
+    removed, and the file is left out of the returned mapping altogether, so
+    no reduction can read a failed copy as evidence even when that removal
+    itself fails. When the caller passes a ``failures`` dict,
+    ``failures[<name>]`` receives a message naming the file and the copy error,
+    plus the cleanup error if the partial copy could not be removed (#724).
+    Callers must report every ``failures`` key as missing; use
+    :func:`_raw_missing`.
     """
     specs = tb.raw_files if phase is None else phase.raw_files
     run_id = point.corner_id if phase is None else phase.run_id(point.corner_id)
@@ -923,14 +939,23 @@ def capture_raw_files(
                 path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source, path)
             except OSError as exc:
+                message = f"retained raw file {spec.name!r} not captured: {exc}"
                 try:
-                    path.unlink()
-                except OSError:
-                    pass
-                if failures is not None:
-                    failures[spec.name] = (
-                        f"retained raw file {spec.name!r} not captured: {exc}"
+                    path.unlink(missing_ok=True)
+                except OSError as cleanup_exc:
+                    # The partial copy may still be on disk. It is kept out of
+                    # the returned capture below either way, so no reduction
+                    # can reach it; the record has to say it is there.
+                    message = (
+                        f"{message}; partial copy {path.name!r} could not be "
+                        f"removed: {cleanup_exc}"
                     )
+                if failures is not None:
+                    failures[spec.name] = message
+                # Never hand a reduction the destination of a failed copy, even
+                # if it is still on disk: the file is absent from the capture
+                # and the caller reports it in ``raw_files_missing``.
+                continue
         captured[spec.name] = RawFile(
             name=spec.name, path=path, columns=spec.columns
         )

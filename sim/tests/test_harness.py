@@ -661,11 +661,38 @@ class RetainedRawCaptureFailureTests(ManifestFixture):
             result = runner.run_point(
                 self.tb, self.pdk, self.points[0], self.root / "w2", log_dir=log_dir
             )
-        raw = result.raw_files["jit.dat"]
-        self.assertFalse(raw.exists())
+        self.assertNotIn("jit.dat", result.raw_files)
+        self.assertIn("jit.dat", result.raw_files_missing)
         self.assertFalse(
             (log_dir / f"{self.points[0].corner_id}-jit.dat").exists()
         )
+
+    def test_partial_destination_hidden_even_when_cleanup_fails(self):
+        """The partial copy survives because unlink also fails; the capture
+        must still read as absent and the record must say why."""
+        log_dir = self.root / "corners" / "r2b"
+        dest = log_dir / f"{self.points[0].corner_id}-jit.dat"
+        real_unlink = Path.unlink
+
+        def _unlink(self_, *a, **kw):
+            if self_ == dest:
+                raise OSError(13, "read-only evidence directory")
+            return real_unlink(self_, *a, **kw)
+
+        with self._stub_ngspice(), self._failing_copy(partial=True), \
+                mock.patch.object(Path, "unlink", _unlink):
+            result = runner.run_point(
+                self.tb, self.pdk, self.points[0], self.root / "w2b",
+                log_dir=log_dir,
+            )
+        self.assertTrue(dest.is_file())  # the truncated copy is still there
+        self.assertEqual(result.status, "error")
+        self.assertNotIn("jit.dat", result.raw_files)
+        self.assertIn("jit.dat", result.raw_files_missing)
+        self.assertIn("disk full", result.message)
+        self.assertIn("could not be removed", result.message)
+        self.assertIn("read-only evidence directory", result.message)
+        self.assertEqual(result.measurements, {"vout": 1.65})
 
     def test_mkdir_failure_is_contained(self):
         log_dir = self.root / "corners" / "r3"
