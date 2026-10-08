@@ -4,6 +4,9 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-10-08
 
+- **PR #730**: Record batch image ngspice-46 sign-off and wedge probe 6/6 (DR-039)
+- **PR #732**: sim/period-jitter: route runner deck execution and provenance through the harness (#712 step 1)
+- **PR #729**: docs(sim): active-solver check and controlled DC comparison for the #533 batch mismatch
 - **PR #723**: sim: capture batch executor environment; diagnose batch-vs-local divergence (#533)
 - **PR #721**: sim/harness: atomically reserve record ids before execution
 - **PR #719**: ci: run sim/lib simenv bash regression tests in the checks job
