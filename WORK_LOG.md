@@ -4,6 +4,10 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-10-09
 
+- **PR #764**: layout(vco): draw the 22 pF decap as real cap_nmos_03v3 devices (#759)
+- **Issue #759** (closed): VCO block: draw the 22 pF decap pair as device geometry instead of layer-(0,0) markers
+- **PR #763**: docs: describe top-level assembly as delivered by #297 (fixes closed-owner CI failure)
+- **Issue #762** (closed): Build/runtime failure on main: proposal tracks closed issue #297
 - **PR #760**: layout: assemble pll_top from the five real block layouts, with DRC and connectivity evidence
 - **Issue #297** (closed): Layout: assemble pll_top GDS from real per-block layouts, run full DRC, re-check #149/#18
 - **PR #754**: layout: physical loop-filter generator (MOS caps, MIM cap, poly resistors, ties) (#748)
