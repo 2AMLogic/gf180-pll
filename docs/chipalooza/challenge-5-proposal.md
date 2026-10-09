@@ -1744,8 +1744,9 @@ tell asserting it from quoting it.
   grown ~4.1× for the LVS match above). Reported as a spec amendment on the
   record, not rounded away.
 
-Top-level assembly is tracked at issue #297, formal DRC/LVS reporting at
-#149, and post-layout re-verification at #18. Earlier revisions of this
+Top-level assembly was delivered by issue #297 (closed; its record is
+`layout/evidence/pll-top-layout/PROOF.md`), formal DRC/LVS reporting is
+tracked at #149, and post-layout re-verification at #18. Earlier revisions of this
 sentence named **#17** for top-level assembly; that was wrong twice over —
 #17 is the *floorplan* issue (the block-placement skeleton described in the
 bullet above, which it delivered), and it closed on 2026-09-08. This
