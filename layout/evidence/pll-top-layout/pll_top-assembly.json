@@ -1,0 +1,1143 @@
+{
+  "accesses": [
+    {
+      "block": "lock_detector",
+      "key": "VSS@lock_detector",
+      "landing": "metal3",
+      "net": "VSS",
+      "port": "VSS",
+      "vias": "1x1",
+      "x": 287.515,
+      "y": 0.55
+    },
+    {
+      "block": "pfd_cp",
+      "key": "VSS@pfd_cp",
+      "landing": "metal3",
+      "net": "VSS",
+      "port": "VSS",
+      "vias": "1x1",
+      "x": 352.45,
+      "y": 20.6
+    },
+    {
+      "block": "loop_filter",
+      "key": "VSS@loop_filter",
+      "landing": "metal1",
+      "net": "VSS",
+      "port": "VSS",
+      "vias": "2x2",
+      "x": 721.385,
+      "y": 1.605
+    },
+    {
+      "block": "divider_chain",
+      "key": "VSS@divider_chain",
+      "landing": "metal3",
+      "net": "VSS",
+      "port": "VSS",
+      "vias": "1x1",
+      "x": 302.14,
+      "y": 252.15
+    },
+    {
+      "block": "lock_detector",
+      "key": "VDD@lock_detector",
+      "landing": "metal3",
+      "net": "VDD",
+      "port": "VDD",
+      "vias": "1x1",
+      "x": 294.515,
+      "y": 8.05
+    },
+    {
+      "block": "pfd_cp",
+      "key": "VDD@pfd_cp",
+      "landing": "metal3",
+      "net": "VDD",
+      "port": "VDD",
+      "vias": "1x1",
+      "x": 442.45,
+      "y": 2.31
+    },
+    {
+      "block": "vco",
+      "key": "VDD_VCO",
+      "landing": "metal1",
+      "net": "VDD_VCO",
+      "port": "VDD_VCO",
+      "vias": "2x2",
+      "x": 1137.68,
+      "y": 7.895
+    },
+    {
+      "block": "vco",
+      "key": "GND_VCO",
+      "landing": "metal1",
+      "net": "GND_VCO",
+      "port": "GND_VCO",
+      "vias": "2x2",
+      "x": 1133.9,
+      "y": 47.035
+    },
+    {
+      "block": "divider_chain",
+      "key": "VDD_DIV",
+      "landing": "metal3",
+      "net": "VDD_DIV",
+      "port": "VDD_DIV",
+      "vias": "1x1",
+      "x": 1257.57,
+      "y": 271.87
+    },
+    {
+      "block": "pfd_cp",
+      "key": "VCTRL",
+      "landing": "metal3",
+      "net": "VCTRL",
+      "port": "VOUT",
+      "vias": "1x1",
+      "x": 536.45,
+      "y": 2.1
+    },
+    {
+      "block": "loop_filter",
+      "key": "VCTRL",
+      "landing": "metal2",
+      "net": "VCTRL",
+      "port": "VCTRL",
+      "vias": "1x1",
+      "x": 922.23,
+      "y": 113.055
+    },
+    {
+      "block": "vco",
+      "key": "VCTRL",
+      "landing": "metal2",
+      "net": "VCTRL",
+      "port": "VCTRL",
+      "vias": "1x1",
+      "x": 991.265,
+      "y": 16.42
+    },
+    {
+      "block": "lock_detector",
+      "key": "UP",
+      "landing": "metal3",
+      "net": "UP",
+      "port": "UP",
+      "vias": "1x1",
+      "x": 293.115,
+      "y": 69.8
+    },
+    {
+      "block": "pfd_cp",
+      "key": "UP",
+      "landing": "metal3",
+      "net": "UP",
+      "port": "UP",
+      "vias": "1x1",
+      "x": 505.96,
+      "y": 71.825
+    },
+    {
+      "block": "lock_detector",
+      "key": "DN",
+      "landing": "metal3",
+      "net": "DN",
+      "port": "DN",
+      "vias": "1x1",
+      "x": 290.315,
+      "y": 70.55
+    },
+    {
+      "block": "pfd_cp",
+      "key": "DN",
+      "landing": "metal3",
+      "net": "DN",
+      "port": "DN",
+      "vias": "1x1",
+      "x": 478.04,
+      "y": 72.575
+    },
+    {
+      "block": "vco",
+      "key": "CLK",
+      "landing": "metal2",
+      "net": "CLK",
+      "port": "CLK",
+      "vias": "1x1",
+      "x": 1144.615,
+      "y": 167.49
+    },
+    {
+      "block": "divider_chain",
+      "key": "CLK",
+      "landing": "metal3",
+      "net": "CLK",
+      "port": "VCO",
+      "vias": "1x1",
+      "x": 1040.27,
+      "y": 270.23
+    },
+    {
+      "block": "divider_chain",
+      "key": "FB",
+      "landing": "metal3",
+      "net": "FB",
+      "port": "FB",
+      "vias": "1x1",
+      "x": 1221.59,
+      "y": 247.06
+    },
+    {
+      "block": "pfd_cp",
+      "key": "FB",
+      "landing": "metal2",
+      "net": "FB",
+      "port": "FB",
+      "vias": "1x1",
+      "x": 468.135,
+      "y": 47.97
+    },
+    {
+      "block": "pfd_cp",
+      "key": "REF",
+      "landing": "metal2",
+      "net": "REF",
+      "port": "REF",
+      "vias": "1x1",
+      "x": 515.865,
+      "y": 47.97
+    },
+    {
+      "block": "pfd_cp",
+      "key": "CPB0",
+      "landing": "metal3",
+      "net": "CPB0",
+      "port": "B0",
+      "vias": "1x1",
+      "x": 623.78,
+      "y": 9.88
+    },
+    {
+      "block": "pfd_cp",
+      "key": "CPB1",
+      "landing": "metal3",
+      "net": "CPB1",
+      "port": "B1",
+      "vias": "1x1",
+      "x": 583.24,
+      "y": 9.88
+    },
+    {
+      "block": "pfd_cp",
+      "key": "IBN",
+      "landing": "metal3",
+      "net": "IBN",
+      "port": "IBN",
+      "vias": "1x1",
+      "x": 534.25,
+      "y": 3.1
+    },
+    {
+      "block": "pfd_cp",
+      "key": "ICN",
+      "landing": "metal3",
+      "net": "ICN",
+      "port": "ICN",
+      "vias": "1x1",
+      "x": 648.11,
+      "y": 5.045
+    },
+    {
+      "block": "pfd_cp",
+      "key": "IBP",
+      "landing": "metal3",
+      "net": "IBP",
+      "port": "IBP",
+      "vias": "1x1",
+      "x": 539.45,
+      "y": 5.1
+    },
+    {
+      "block": "pfd_cp",
+      "key": "ICP",
+      "landing": "metal3",
+      "net": "ICP",
+      "port": "ICP",
+      "vias": "1x1",
+      "x": 572.55,
+      "y": 3.1
+    },
+    {
+      "block": "vco",
+      "key": "B0",
+      "landing": "metal2",
+      "net": "B0",
+      "port": "B0",
+      "vias": "1x1",
+      "x": 992.865,
+      "y": 75.14
+    },
+    {
+      "block": "vco",
+      "key": "B1",
+      "landing": "metal1",
+      "net": "B1",
+      "port": "B1",
+      "vias": "1x1",
+      "x": 1054.53,
+      "y": 71.345
+    },
+    {
+      "block": "vco",
+      "key": "B2",
+      "landing": "metal1",
+      "net": "B2",
+      "port": "B2",
+      "vias": "1x1",
+      "x": 1058.93,
+      "y": 71.345
+    },
+    {
+      "block": "divider_chain",
+      "key": "P0",
+      "landing": "metal3",
+      "net": "P0",
+      "port": "P0",
+      "vias": "1x1",
+      "x": 1263.97,
+      "y": 278.35
+    },
+    {
+      "block": "divider_chain",
+      "key": "P1",
+      "landing": "metal3",
+      "net": "P1",
+      "port": "P1",
+      "vias": "1x1",
+      "x": 862.38,
+      "y": 281.17
+    },
+    {
+      "block": "divider_chain",
+      "key": "P2",
+      "landing": "metal3",
+      "net": "P2",
+      "port": "P2",
+      "vias": "1x1",
+      "x": 460.79,
+      "y": 281.17
+    },
+    {
+      "block": "divider_chain",
+      "key": "P3",
+      "landing": "metal3",
+      "net": "P3",
+      "port": "P3",
+      "vias": "1x1",
+      "x": 1190.22,
+      "y": 257.7
+    },
+    {
+      "block": "divider_chain",
+      "key": "P4",
+      "landing": "metal3",
+      "net": "P4",
+      "port": "P4",
+      "vias": "1x1",
+      "x": 788.63,
+      "y": 257.7
+    },
+    {
+      "block": "divider_chain",
+      "key": "P5",
+      "landing": "metal3",
+      "net": "P5",
+      "port": "P5",
+      "vias": "1x1",
+      "x": 387.04,
+      "y": 257.7
+    },
+    {
+      "block": "divider_chain",
+      "key": "SEL0",
+      "landing": "metal3",
+      "net": "SEL0",
+      "port": "SEL0",
+      "vias": "1x1",
+      "x": 916.15,
+      "y": 280.53
+    },
+    {
+      "block": "divider_chain",
+      "key": "SEL1",
+      "landing": "metal3",
+      "net": "SEL1",
+      "port": "SEL1",
+      "vias": "1x1",
+      "x": 514.56,
+      "y": 280.53
+    },
+    {
+      "block": "divider_chain",
+      "key": "SEL2",
+      "landing": "metal3",
+      "net": "SEL2",
+      "port": "SEL2",
+      "vias": "1x1",
+      "x": 112.97,
+      "y": 280.53
+    },
+    {
+      "block": "divider_chain",
+      "key": "SEL3",
+      "landing": "metal3",
+      "net": "SEL3",
+      "port": "SEL3",
+      "vias": "1x1",
+      "x": 842.4,
+      "y": 257.06
+    },
+    {
+      "block": "divider_chain",
+      "key": "SEL4",
+      "landing": "metal3",
+      "net": "SEL4",
+      "port": "SEL4",
+      "vias": "1x1",
+      "x": 440.81,
+      "y": 257.06
+    },
+    {
+      "block": "divider_chain",
+      "key": "SEL5",
+      "landing": "metal3",
+      "net": "SEL5",
+      "port": "SEL5",
+      "vias": "1x1",
+      "x": 51.87,
+      "y": 257.06
+    },
+    {
+      "block": "divider_chain",
+      "key": "DIVOUT",
+      "landing": "metal3",
+      "net": "DIVOUT",
+      "port": "DIVOUT",
+      "vias": "1x1",
+      "x": 1282.79,
+      "y": 280.1
+    },
+    {
+      "block": "lock_detector",
+      "key": "LOCK",
+      "landing": "metal3",
+      "net": "LOCK",
+      "port": "LOCK",
+      "vias": "1x1",
+      "x": 0.515,
+      "y": 3.05
+    },
+    {
+      "block": "lock_detector",
+      "key": "LDT0",
+      "landing": "metal3",
+      "net": "LDT0",
+      "port": "LDT0",
+      "vias": "1x1",
+      "x": 264.415,
+      "y": 4.0
+    },
+    {
+      "block": "lock_detector",
+      "key": "LDT1",
+      "landing": "metal3",
+      "net": "LDT1",
+      "port": "LDT1",
+      "vias": "1x1",
+      "x": 228.715,
+      "y": 3.72
+    },
+    {
+      "block": "lock_detector",
+      "key": "LDT2",
+      "landing": "metal3",
+      "net": "LDT2",
+      "port": "LDT2",
+      "vias": "1x1",
+      "x": 218.215,
+      "y": 3.94
+    },
+    {
+      "block": "lock_detector",
+      "key": "LDT3",
+      "landing": "metal3",
+      "net": "LDT3",
+      "port": "LDT3",
+      "vias": "1x1",
+      "x": 249.015,
+      "y": 4.0
+    }
+  ],
+  "area_um2": 407776.24,
+  "block_bbox_area_um2": {
+    "divider_chain": 55328.54,
+    "lock_detector": 30585.5,
+    "loop_filter": 40593.54,
+    "pfd_cp": 25630.29,
+    "vco": 31826.49
+  },
+  "block_sum_um2": 183964.36,
+  "boundary_um": [
+    0.0,
+    -21.0,
+    1317.66,
+    288.47
+  ],
+  "pins": [
+    {
+      "edge": "bottom",
+      "net": "VSS",
+      "x": 306.8,
+      "y": -18.0
+    },
+    {
+      "edge": "bottom",
+      "net": "VDD",
+      "x": 324.8,
+      "y": -18.0
+    },
+    {
+      "edge": "bottom",
+      "net": "VDD_VCO",
+      "x": 1137.68,
+      "y": -19.0
+    },
+    {
+      "edge": "bottom",
+      "net": "GND_VCO",
+      "x": 1133.9,
+      "y": -19.0
+    },
+    {
+      "edge": "top",
+      "net": "VDD_DIV",
+      "x": 1257.57,
+      "y": 286.47
+    },
+    {
+      "edge": "bottom",
+      "net": "VCTRL",
+      "x": 922.23,
+      "y": -19.0
+    },
+    {
+      "edge": "top",
+      "net": "CLK",
+      "x": 1040.27,
+      "y": 286.47
+    },
+    {
+      "edge": "top",
+      "net": "FB",
+      "x": 1221.59,
+      "y": 286.47
+    },
+    {
+      "edge": "bottom",
+      "net": "REF",
+      "x": 515.865,
+      "y": -19.0
+    },
+    {
+      "edge": "bottom",
+      "net": "CPB0",
+      "x": 623.78,
+      "y": -19.0
+    },
+    {
+      "edge": "bottom",
+      "net": "CPB1",
+      "x": 583.24,
+      "y": -19.0
+    },
+    {
+      "edge": "bottom",
+      "net": "IBN",
+      "x": 534.25,
+      "y": -19.0
+    },
+    {
+      "edge": "bottom",
+      "net": "ICN",
+      "x": 648.11,
+      "y": -19.0
+    },
+    {
+      "edge": "bottom",
+      "net": "IBP",
+      "x": 539.45,
+      "y": -19.0
+    },
+    {
+      "edge": "bottom",
+      "net": "ICP",
+      "x": 572.55,
+      "y": -19.0
+    },
+    {
+      "edge": "bottom",
+      "net": "B0",
+      "x": 992.865,
+      "y": -19.0
+    },
+    {
+      "edge": "bottom",
+      "net": "B1",
+      "x": 1054.53,
+      "y": -19.0
+    },
+    {
+      "edge": "bottom",
+      "net": "B2",
+      "x": 1058.93,
+      "y": -19.0
+    },
+    {
+      "edge": "top",
+      "net": "P0",
+      "x": 1263.97,
+      "y": 286.47
+    },
+    {
+      "edge": "top",
+      "net": "P1",
+      "x": 862.38,
+      "y": 286.47
+    },
+    {
+      "edge": "top",
+      "net": "P2",
+      "x": 460.79,
+      "y": 286.47
+    },
+    {
+      "edge": "top",
+      "net": "P3",
+      "x": 1190.22,
+      "y": 286.47
+    },
+    {
+      "edge": "top",
+      "net": "P4",
+      "x": 788.63,
+      "y": 286.47
+    },
+    {
+      "edge": "top",
+      "net": "P5",
+      "x": 387.04,
+      "y": 286.47
+    },
+    {
+      "edge": "top",
+      "net": "SEL0",
+      "x": 916.15,
+      "y": 286.47
+    },
+    {
+      "edge": "top",
+      "net": "SEL1",
+      "x": 514.56,
+      "y": 286.47
+    },
+    {
+      "edge": "top",
+      "net": "SEL2",
+      "x": 112.97,
+      "y": 286.47
+    },
+    {
+      "edge": "top",
+      "net": "SEL3",
+      "x": 842.4,
+      "y": 286.47
+    },
+    {
+      "edge": "top",
+      "net": "SEL4",
+      "x": 440.81,
+      "y": 286.47
+    },
+    {
+      "edge": "top",
+      "net": "SEL5",
+      "x": 51.87,
+      "y": 286.47
+    },
+    {
+      "edge": "top",
+      "net": "DIVOUT",
+      "x": 1282.79,
+      "y": 286.47
+    },
+    {
+      "edge": "bottom",
+      "net": "LOCK",
+      "x": 0.515,
+      "y": -19.0
+    },
+    {
+      "edge": "bottom",
+      "net": "LDT0",
+      "x": 264.415,
+      "y": -19.0
+    },
+    {
+      "edge": "bottom",
+      "net": "LDT1",
+      "x": 228.715,
+      "y": -19.0
+    },
+    {
+      "edge": "bottom",
+      "net": "LDT2",
+      "x": 218.215,
+      "y": -19.0
+    },
+    {
+      "edge": "bottom",
+      "net": "LDT3",
+      "x": 249.015,
+      "y": -19.0
+    }
+  ],
+  "placements": {
+    "divider_chain": {
+      "bbox_um": [
+        0.0,
+        239.48,
+        1317.66,
+        281.47
+      ],
+      "cell": "divider_chain",
+      "orient": "R180",
+      "trans": "r180 1308440,281170"
+    },
+    "lock_detector": {
+      "bbox_um": [
+        0.0,
+        0.0,
+        294.8,
+        103.75
+      ],
+      "cell": "lock_detector",
+      "orient": "M90",
+      "trans": "m90 294300,5550"
+    },
+    "loop_filter": {
+      "bbox_um": [
+        719.78,
+        0.0,
+        939.68,
+        184.6
+      ],
+      "cell": "loop_filter",
+      "orient": "R0",
+      "trans": "r0 720080,300"
+    },
+    "pfd_cp": {
+      "bbox_um": [
+        334.8,
+        0.0,
+        679.78,
+        74.295
+      ],
+      "cell": "pfd_cp",
+      "orient": "M90",
+      "trans": "m90 652770,13845"
+    },
+    "vco": {
+      "bbox_um": [
+        979.68,
+        0.0,
+        1152.2,
+        184.48
+      ],
+      "cell": "vco_block",
+      "orient": "R0",
+      "trans": "r0 999620,11020"
+    }
+  },
+  "plans": [
+    {
+      "channel": "",
+      "kind": "star",
+      "net": "VSS",
+      "pin": "",
+      "terminals": [
+        "lock_detector.VSS",
+        "pfd_cp.VSS",
+        "loop_filter.VSS",
+        "divider_chain.VSS"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "star",
+      "net": "VDD",
+      "pin": "",
+      "terminals": [
+        "lock_detector.VDD",
+        "pfd_cp.VDD"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "power_down",
+      "net": "VDD_VCO",
+      "pin": "",
+      "terminals": [
+        "vco.VDD_VCO"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "power_down",
+      "net": "GND_VCO",
+      "pin": "",
+      "terminals": [
+        "vco.GND_VCO"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "power_up",
+      "net": "VDD_DIV",
+      "pin": "",
+      "terminals": [
+        "divider_chain.VDD_DIV"
+      ]
+    },
+    {
+      "channel": "bottom",
+      "kind": "trunk",
+      "net": "VCTRL",
+      "pin": "bottom",
+      "terminals": [
+        "pfd_cp.VOUT",
+        "loop_filter.VCTRL",
+        "vco.VCTRL"
+      ]
+    },
+    {
+      "channel": "middle",
+      "kind": "trunk",
+      "net": "UP",
+      "pin": "",
+      "terminals": [
+        "lock_detector.UP",
+        "pfd_cp.UP"
+      ]
+    },
+    {
+      "channel": "middle",
+      "kind": "trunk",
+      "net": "DN",
+      "pin": "",
+      "terminals": [
+        "lock_detector.DN",
+        "pfd_cp.DN"
+      ]
+    },
+    {
+      "channel": "middle",
+      "kind": "trunk",
+      "net": "CLK",
+      "pin": "top",
+      "terminals": [
+        "vco.CLK",
+        "divider_chain.VCO"
+      ]
+    },
+    {
+      "channel": "middle",
+      "kind": "trunk",
+      "net": "FB",
+      "pin": "top",
+      "terminals": [
+        "divider_chain.FB",
+        "pfd_cp.FB"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_down",
+      "net": "REF",
+      "pin": "",
+      "terminals": [
+        "pfd_cp.REF"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_down",
+      "net": "CPB0",
+      "pin": "",
+      "terminals": [
+        "pfd_cp.B0"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_down",
+      "net": "CPB1",
+      "pin": "",
+      "terminals": [
+        "pfd_cp.B1"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_down",
+      "net": "IBN",
+      "pin": "",
+      "terminals": [
+        "pfd_cp.IBN"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_down",
+      "net": "ICN",
+      "pin": "",
+      "terminals": [
+        "pfd_cp.ICN"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_down",
+      "net": "IBP",
+      "pin": "",
+      "terminals": [
+        "pfd_cp.IBP"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_down",
+      "net": "ICP",
+      "pin": "",
+      "terminals": [
+        "pfd_cp.ICP"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_down",
+      "net": "B0",
+      "pin": "",
+      "terminals": [
+        "vco.B0"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_down",
+      "net": "B1",
+      "pin": "",
+      "terminals": [
+        "vco.B1"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_down",
+      "net": "B2",
+      "pin": "",
+      "terminals": [
+        "vco.B2"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_up",
+      "net": "P0",
+      "pin": "",
+      "terminals": [
+        "divider_chain.P0"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_up",
+      "net": "P1",
+      "pin": "",
+      "terminals": [
+        "divider_chain.P1"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_up",
+      "net": "P2",
+      "pin": "",
+      "terminals": [
+        "divider_chain.P2"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_up",
+      "net": "P3",
+      "pin": "",
+      "terminals": [
+        "divider_chain.P3"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_up",
+      "net": "P4",
+      "pin": "",
+      "terminals": [
+        "divider_chain.P4"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_up",
+      "net": "P5",
+      "pin": "",
+      "terminals": [
+        "divider_chain.P5"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_up",
+      "net": "SEL0",
+      "pin": "",
+      "terminals": [
+        "divider_chain.SEL0"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_up",
+      "net": "SEL1",
+      "pin": "",
+      "terminals": [
+        "divider_chain.SEL1"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_up",
+      "net": "SEL2",
+      "pin": "",
+      "terminals": [
+        "divider_chain.SEL2"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_up",
+      "net": "SEL3",
+      "pin": "",
+      "terminals": [
+        "divider_chain.SEL3"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_up",
+      "net": "SEL4",
+      "pin": "",
+      "terminals": [
+        "divider_chain.SEL4"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_up",
+      "net": "SEL5",
+      "pin": "",
+      "terminals": [
+        "divider_chain.SEL5"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_up",
+      "net": "DIVOUT",
+      "pin": "",
+      "terminals": [
+        "divider_chain.DIVOUT"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_down",
+      "net": "LOCK",
+      "pin": "",
+      "terminals": [
+        "lock_detector.LOCK"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_down",
+      "net": "LDT0",
+      "pin": "",
+      "terminals": [
+        "lock_detector.LDT0"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_down",
+      "net": "LDT1",
+      "pin": "",
+      "terminals": [
+        "lock_detector.LDT1"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_down",
+      "net": "LDT2",
+      "pin": "",
+      "terminals": [
+        "lock_detector.LDT2"
+      ]
+    },
+    {
+      "channel": "",
+      "kind": "pin_down",
+      "net": "LDT3",
+      "pin": "",
+      "terminals": [
+        "lock_detector.LDT3"
+      ]
+    }
+  ],
+  "top_cell": "pll_top",
+  "top_level_shapes": 341,
+  "tracks_um": {
+    "CLK": 201.78,
+    "DN": 206.78,
+    "FB": 208.78,
+    "UP": 204.78,
+    "VCTRL": -2.3,
+    "VDD@lock_detector": -9.0,
+    "VDD@pfd_cp": -9.0,
+    "VSS@divider_chain": 202.48,
+    "VSS@lock_detector": -3.0,
+    "VSS@loop_filter": -6.0,
+    "VSS@pfd_cp": -3.0
+  }
+}

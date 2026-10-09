@@ -115,6 +115,10 @@ BLOCKS: tuple[Block, ...] = (
     # ``--outdir`` CLI for ``rebuild()`` to call. Both fixed at issue #461;
     # see layout/evidence/floorplan-skeleton/PROOF.md.
     Block("evidence/floorplan-skeleton/pll_floorplan_skeleton.gds", "floorplan.skeleton"),
+    # The assembled top level (issue #297): the five blocks above, regenerated
+    # by their own generators, placed and routed. See
+    # layout/evidence/pll-top-layout/PROOF.md.
+    Block("evidence/pll-top-layout/pll_top.gds", "pll_top.top_level.assemble"),
 )
 
 #: Committed GDS files this module deliberately does not check, each with the

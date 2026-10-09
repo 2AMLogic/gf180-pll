@@ -1,0 +1,13 @@
+file: pll_top.gds
+dbu_um: 0.001
+cells: 6
+top_cells: 1
+
+index  name           is_top  shapes  instances  children                                                  parents  bbox_um                         
+-----  -------------  ------  ------  ---------  --------------------------------------------------------  -------  --------------------------------
+    0  divider_chain      no   27414          0  -                                                         pll_top  (-9.22, -0.3, 1308.44, 41.69)   
+    1  vco_block          no   13245          0  -                                                         pll_top  (-19.94, -11.02, 152.58, 173.46)
+    2  loop_filter        no    9616          0  -                                                         pll_top  (-0.3, -0.3, 219.6, 184.3)      
+    3  pfd_cp             no    6876          0  -                                                         pll_top  (-27.01, -13.845, 317.97, 60.45)
+    4  lock_detector      no    6718          0  -                                                         pll_top  (-0.5, -5.55, 294.3, 98.2)      
+    5  pll_top           yes     377          5  divider_chain,lock_detector,loop_filter,pfd_cp,vco_block  -        (0, -21, 1317.66, 288.47)       

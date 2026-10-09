@@ -1,0 +1,8 @@
+file: pll_top.gds
+dbu_um: 0.001
+top_cell: pll_top
+bbox_um: (0.0, -21.0) - (1317.66, 288.47)  1317.66 x 309.47
+area_um2: 265838.1831
+density: 0.6519217082623933
+polygons: 63882
+vertices: 255528

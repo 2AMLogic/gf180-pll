@@ -75,6 +75,8 @@
 # the gap); issue #675's drc-clean-offgrid/drc.stdout.log is the log that
 # exposed the omission.
 !layout/evidence/divider-div23-proof/**/*.log
+# Same story for the assembled pll_top's DRC evidence (issue #297).
+!layout/evidence/pll-top-layout/**/*.log
 __pycache__/
 .DS_Store
 

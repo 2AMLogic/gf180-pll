@@ -538,8 +538,10 @@ AREA_BUDGET_UM2 = 300_000.0
 AREA_BUDGET_DRAFT_UM2 = 150_000.0
 
 #: PLL-FLOORPLAN.md section 5's top-level overhead multiplier (guard ring,
-#: four-domain supply trunk routing, block-to-block spacing). Still a ROM
-#: estimate: no assembled pll_top GDS exists to measure it against (issue #17).
+#: four-domain supply trunk routing, block-to-block spacing). A ROM estimate;
+#: the first assembled pll_top (issue #297) measured x2.217 on its own block
+#: sum (PLL-FLOORPLAN.md section 5.16). Left unchanged here: the area row and
+#: this constant move only through a decision record (DR-017 Decision 3).
 TOP_LEVEL_OVERHEAD = 1.25
 
 #: What the amended row allows as a *sum of block footprints*, i.e. before the

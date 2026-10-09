@@ -2559,6 +2559,7 @@ class OffgridRealTreeTests(unittest.TestCase):
                 "divider_chain",
                 "loop_filter",
                 "pfd_cp",
+                "pll_top",
                 "vco_bandsel_mirror",
                 "vco_bias_resistors",
                 "vco_block",

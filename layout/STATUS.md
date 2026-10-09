@@ -17,10 +17,15 @@ block counts below are graded against `layout/evidence/` in CI by
   under `layout/evidence/`, and **4 of the 4 are LVS-matched** against an
   independently derived reference netlist (`vco_block`, `divider_chain`,
   `pfd_cp` and, since issue #449 drew DR-014's 4-bit trim network into its
-  delay cell, `lock_detector`). There is **no assembled `pll_top`
-  GDS** — the four blocks exist side by side, not wired into a top level, so
-  no top-level DRC/LVS closure and no post-layout extracted-netlist
-  re-verification exists either (#17, #18, #149). These counts are checked
+  delay cell, `lock_detector`). Since issue #297 the **assembled `pll_top`
+  GDS** is committed too: the four blocks plus the physical loop filter
+  (#748), placed and wired against `design/netlist/pll_top.spice`, with the
+  wiring checked from the exported file
+  (`layout/evidence/pll-top-layout/PROOF.md`). It is **not signoff**: the
+  foundry DRC deck reports one violation, the `MIMTM.3` the loop filter's C2
+  already carried (#753); top-level LVS is still to run (#149);
+  extracted-netlist re-verification is still to run (#18); and the measured
+  0.4078 mm² is over the ratified 0.30 mm² area row. These counts are checked
   against the evidence tree in CI by
   `layout/lib/check-layout-status-claims.sh`, so this paragraph cannot
   silently go stale the way its predecessor did.
