@@ -2,6 +2,13 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-09
+
+- **PR #754**: layout: physical loop-filter generator (MOS caps, MIM cap, poly resistors, ties) (#748)
+- **PR #756**: docs: reconcile active-solver claim; reproduce wnflag DC split on ngspice-42 (Part of #533)
+- **PR #752**: docs: set wnflag=1 in the deck's .control block does not reproduce the local result (#533)
+- **Issue #748** (closed): Layout: physical loop-filter generator (MOS caps, MIM cap, poly resistors, ties)
+
 ### 2026-10-08
 
 - **PR #750**: docs: Addendum 5, wnflag alone reproduces the local full-transient result (#533)
