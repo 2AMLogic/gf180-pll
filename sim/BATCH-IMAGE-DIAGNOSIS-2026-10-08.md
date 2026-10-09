@@ -695,3 +695,63 @@ performance comparison.
   or the image to supply it, followed by a re-pilot that matches. Per this
   addendum the setting that matters is `wnflag`; `num_threads` is not needed
   to reproduce the local state at this point.
+
+## Addendum 6 (2026-10-09): `set wnflag=1` written into the campaign's `analyses` does not reproduce the local result
+
+Appended after trying the first candidate for "the campaign inputs carry the
+setting" (Addendum 5, last bullet). Everything above stays as written. No batch
+job was submitted and nothing was spent. No record under `sim/*/records/` was
+written (`--no-write`), and no file other than this note changed: the
+`tb.json` edit that was tried was reverted.
+
+### 1. What was tried
+
+`set wnflag=1` was added as the first entry of `analyses` in
+`sim/reference-spur-band-top/testbench/tb.json` (next to the existing
+`set wr_singlescale` entry). The harness emits `analyses` verbatim inside the
+`.control` block, so the composed deck contained `set wnflag=1` at deck line
+84, ahead of `save` and `tran` (confirmed in the run's `.spice` file).
+
+One local run, `loom-worker-1`, `OMP_NUM_THREADS=2`, the same command as
+Addendum 5 (`sim/run_corners.py reference-spur-band-top --corners ff --temps
+-40 --axis op=b7vs1p886 --backend local --timeout 6000 --no-write`), with
+`HOME` set to a scratch directory holding a link to the PDK tree and an
+**empty** `.spiceinit` (sha256 `e3b0c442…`), so the only source of the setting
+was the deck. Simulator ngspice-46 (KLU build); the binary's sha256 on this
+host begins `71db4f12`, not the `c874869b…` recorded in Addendums 4 and 5, so
+this host's build is not shown to be byte-identical to that one. Because of
+that difference, run F repeats run E on this same host and binary with the
+setting moved into the init file, as the positive control that E alone lacks.
+
+### 2. Result
+
+| run | where `wnflag=1` is set | `spur_dbc` | `lock_lvl` |
+|---|---|---|---|
+| C (Addendum 5) | init file, read at simulator start | -61.7103 | 3.63 V |
+| E (this addendum) | inside the deck's `.control` block | **-75.5655** | **5.12765e-9 V** |
+| B (Addendum 4) | not set | -75.5655 | 5.12765e-9 V |
+| F (this addendum, positive control) | init file holding only `set wnflag=1` (sha256 `82a66e01…`), same host, binary and command as E | **-61.7103** | **3.63 V** |
+
+Run E matches the unset case on every metric printed (for example `up_lvl`
+0.280785, `dn_lvl` 0.110049, `vctrl_ripple_mv` 7.68823).
+
+### 3. Conclusion
+
+- Established, for this point only, on this host's binary (run F reproduces the
+  Addendum 5 locked state with the init-file setting, so the E-versus-F
+  comparison is controlled): setting `wnflag` from inside the deck's
+  `.control` block leaves the batch-state result unchanged. The setting that
+  reproduced the local state in Addendum 5 does so when it is in place before
+  the simulator reads the netlist (an init file), not when set after the
+  netlist has been read.
+- Not established: the mechanism. The most likely reading is that the
+  per-finger model-bin choice is made while the netlist is parsed, before
+  `.control` commands run, but this run did not check that and does not
+  show it.
+- Consequence: the campaign inputs cannot carry the setting through
+  `analyses`. The remaining routes are an init file that exists on the
+  executing host before the simulator starts (for the batch fleet, an image
+  or job-environment change in 2AMLogic/2am, which is not in this repository)
+  or a harness feature that stages a per-job init file or `HOME`. Either needs
+  a reviewed decision; neither was attempted here.
+- The 2026-10-02 ruling stands and the 45-point grid stays held.
