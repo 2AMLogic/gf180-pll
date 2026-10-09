@@ -755,3 +755,129 @@ Run E matches the unset case on every metric printed (for example `up_lvl`
   or a harness feature that stages a per-job init file or `HOME`. Either needs
   a reviewed decision; neither was attempted here.
 - The 2026-10-02 ruling stands and the 45-point grid stays held.
+
+## Addendum 7 (2026-10-09): solver and DC-state check closed out; the `wnflag` split also reproduces on Ubuntu ngspice-42, and it is the init file, not the solver
+
+Appended to reconcile the open "linear solver" lead (re-pilot comment of
+2026-10-08 and the `loom:blocked` note that followed it) with the
+measurements above. Everything above stays as written. No batch job was
+submitted and nothing was spent. No record under `sim/*/records/` was written,
+and `spec/`, `tb.json`, the deck and `sim/harness/batch.py` were not touched.
+`batch.py`'s `ngspice.env` capture was inspected and is sufficient (build
+banner, PDK stamp, image manifest, CPU, `nproc`, `OMP_NUM_THREADS`); the one
+thing it cannot show is a per-host init file on a local run, which is the
+already-tracked report-schema gap 2AMLogic/klayout-tools#2834.
+
+### 1. Active solver, reconciled (supersedes the re-pilot comment's wording)
+
+Build capability and active solver are different facts and must be read from
+different lines of the log:
+
+| backend | build capability (`--version`) | active solver (`ngspice.log`, runtime line) | source |
+|---|---|---|---|
+| batch pilot 1 | not captured | `Using SPARSE 1.3 as Direct Linear Solver` | job store, `outputs/ngspice.log` |
+| batch re-pilot | ngspice-46, `Compiled with KLU` | `Using SPARSE 1.3 as Direct Linear Solver` | collected `outputs/ngspice.log`, `outputs/ngspice.env` |
+| local, Linux x86_64 pin (Addendum 3) | ngspice-46, `Compiled with KLU` | `Using SPARSE 1.3 as Direct Linear Solver` in both the direct-Newton and the gmin-stepping runs | scratch logs of Addendum 3 |
+| local, this host (below) | ngspice-42, `Compiled with KLU` | `Using SPARSE 1.3 as Direct Linear Solver`; `Using KLU as Direct Linear Solver` only when `.options klu` is added | `dc_*.log`, `dcklu_*.log` |
+
+The re-pilot comment set the batch build banner against the local runtime
+line. The like-for-like comparison shows the same active solver (SPARSE 1.3)
+on both backends. The premise that the image needs "solver alignment" is not
+supported; the disagreement with the earlier lead is this banner-versus-runtime
+mix-up and nothing else.
+
+### 2. Controlled DC-only runs on this host (`loom-worker-3`)
+
+The ngspice-46 pin (`~/.local/bin/ngspice`) is absent on this worker, so the
+Linux ngspice-46 half of the comparison is Addendum 3's. What this host adds
+is an independent build that reproduces the `wnflag` split.
+
+- Binary: `/usr/bin/ngspice`, `ngspice-42`, Ubuntu package `42+ds-3build1`,
+  `Compiled with KLU Direct Linear Solver`, sha256 `82065831…`. The system
+  `spinit` (`/usr/share/ngspice/scripts/spinit`) only sets `x11lineararcs` and
+  `unset osdi_enabled`; no solver, `gmin`, `wnflag` or `ngbehavior` setting.
+- PDK stamp: `open_pdks c6d73a35f524070e85faff4a6a9eef49553ebc2b`
+  (`~/.volare/gf180mcuD/SOURCES`, and the deck header).
+- Deck: regenerated with the harness composer as in Addendum 2 section 2 and
+  edited as in Addendum 1 section 2 (`.measure`, `wrdata`, `wr_singlescale`
+  dropped; `tran` cut to `1e-11 1e-11`). Its sha256 prefix is `13e54081…`,
+  the same as Addendum 3's `dc_default.spice`, so this is the same DC-only
+  deck. The `klu` variant adds `.options klu` before `.options rshunt=1e12`.
+- Command, one run at a time, ~3 s each:
+  `HOME=<scratch> OMP_NUM_THREADS=2 ngspice -b dc.spice > dc.log 2>&1`, where
+  `<scratch>` holds a link to `~/.volare` and a `.spiceinit` with the content
+  named below (none for the first row).
+
+| `.spiceinit` content | variant | active solver | gmin stepping in log | `fb` | `xdut.dn` | `xdut.up` | `xdut.xpfd.xpfd.sbf` | `vctrl` | `lock` |
+|---|---|---|---|---|---|---|---|---|---|
+| none | default | SPARSE 1.3 | dynamic failed, true completed | 1.79421 | 3.63 | 1.99269e-08 | 9.47584e-09 | 1.886 | 5.14279e-09 |
+| `set num_threads=1` | default | SPARSE 1.3 | dynamic failed, true completed | 1.79421 | 3.63 | 1.99269e-08 | 9.47584e-09 | 1.886 | 5.14279e-09 |
+| `set wnflag=1` | default | SPARSE 1.3 | **none (direct Newton)** | **3.63** | 1.99269e-08 | 1.99269e-08 | **3.63** | 1.886 | **3.63** |
+| `set wnflag=1` + `set num_threads=1` | default | SPARSE 1.3 | **none** | **3.63** | 1.99269e-08 | 1.99269e-08 | **3.63** | 1.886 | **3.63** |
+| none | `.options klu` | KLU | dynamic failed, true completed | 1.79421 | 3.63 | - | 9.47584e-09 | 1.886 | 5.14279e-09 |
+| `set wnflag=1` | `.options klu` | KLU | dynamic failed, true completed | 1.79421 | 3.63 | - | 9.47584e-09 | 1.886 | 5.14279e-09 |
+
+Node-level comparison of the 447 "Initial Transient Solution" values (printed
+precision): no init vs `num_threads` only, 0 differ; `wnflag` only vs
+`wnflag` + `num_threads`, 0 differ; no init vs `wnflag` only, 211 differ;
+no init default vs no init `klu`, 29 differ (last digits, as in Addendum 1);
+`wnflag` default vs `wnflag` `klu`, 207 differ. The values for the no-init
+default row equal the batch logs' on the six key nodes, as in Addendum 1.
+
+Observations, limited to this deck, point (ff / -40 C / 3.63 V, band 7) and DC
+operating point:
+
+- `set wnflag=1` in the init file moves the DC solution from the batch state
+  to the reference state on a **second, independent build** (Ubuntu
+  ngspice-42, a distro package rather than the locally built pin), so the
+  dependence is not a quirk of one binary. `set num_threads=1` does not move
+  it.
+- The active solver is SPARSE 1.3 on both sides of the split. The split is
+  there with the same solver in both runs, so the solver does not explain it.
+- Forcing KLU removes the reference state even with `wnflag=1` (the `klu` row
+  with `wnflag=1` is in the batch state). That matches Addendum 3's `klu` row
+  with the real init file. So `wnflag` is necessary for the reference state
+  here only together with the default SPARSE solver; the two interact. This
+  is a statement about this DC point and says nothing about which solver is
+  numerically better.
+- Gmin stepping occurs exactly in the runs that land in the batch state; it
+  is absent in the direct-Newton reference-state runs. Gmin stepping is thus
+  a symptom of the batch-state circuit, not an independent cause: the same
+  binary takes it or not depending on whether `wnflag` was in place when the
+  netlist was read (Addendum 6: setting it later in `.control` is too late).
+
+### 3. Status of the hypotheses (causality)
+
+- **Solver hypothesis: not supported**, now by three independent builds
+  (image ngspice-46, Linux pin ngspice-46, Ubuntu ngspice-42): every
+  active-solver line in every captured log is SPARSE 1.3 unless `.options klu`
+  is added, and the DC split occurs with the solver held fixed.
+- **Init-file (`wnflag`) hypothesis: reproduced at the DC point on two
+  builds** (Addendum 3 on the Linux pin, this addendum on
+  ngspice-42; full transient with a controlled pair in Addendum 5 on the
+  Linux pin only). The causal mechanism (per-finger model-bin selection at
+  netlist parse time) is **still unverified**: no device-by-device bin
+  comparison has been made.
+- **Which state represents the design is undecided** and is a testbench /
+  spec-owner call; nothing here relaxes the -55 dBc requirement or DR-028's
+  comparison-quarantine restrictions.
+
+### 4. Acceptance criterion 3 and the grid
+
+No live re-pilot was run: a batch pilot can only change if the executing host
+reads an init file with `wnflag=1` (or the deck's netlist read is otherwise
+made equivalent), and neither the image nor `sim/harness/batch.py` provides
+that, so a re-pilot of the unchanged job would reproduce the batch state again
+(it is already shown deterministic) for a Spot cost with no new information.
+The 45-point grid therefore stays unsubmitted under the 2026-10-02 ruling, and
+this increment does not discharge the 45-point obligation.
+
+Exact next step and owner: decide where the setting lives. Options already
+identified: (a) the harness stages a per-job init file (or `HOME`) for both
+backends, a change to `sim/harness/`, and to the batch job command; (b) the
+batch image supplies a system init file, a change in the image definition
+outside this repository. Either way the setting must be recorded as part of
+the reference environment under DR-028, and a single-point re-pilot must then
+match the local `-61.71 dBc` / `lock_lvl` 3.63 V result including the DC state
+before any grid is submitted. Owner: testbench/spec owners for the decision,
+then an implementer for (a). Tracked as follow-up issue #755.
