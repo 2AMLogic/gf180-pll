@@ -85,6 +85,7 @@ REFERENCES = {
     "vco.block": "vco-layout/lvs-clean/vco_block.spice",
     "vco.ring": "vco-layout/lvs-ring/vco_ring.spice",
     "vco.buffer": "vco-layout/lvs-buffer/vco_out_buffer.spice",
+    "loop_filter.block": "loop-filter-layout/loop_filter.spice",
 }
 
 #: The two ``reference_netlist()`` functions deliberately *not* in
