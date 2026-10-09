@@ -196,7 +196,7 @@ of the bounding box goes:
 This record states the overrun; it does not move the ratified row
 (`spec/` changes need a decision record, and DR-017 Decision 3 names exactly
 this event -- an assembled `pll_top` turning x1.25 into a measurement -- as its
-trigger). Follow-up for that decision: see the PR that adds this record.
+trigger). That decision is tracked at #758.
 
 ## Provenance
 
@@ -234,7 +234,7 @@ uses `klayout.db` directly.
 3. **No post-layout extraction or simulation** (#18).
 4. **VCO decap is not device geometry**: `vco_block` carries its 22 pF decap as
    two layer-(0,0) 50 x 50 um markers (`layout/evidence/vco-layout/PROOF-block.md`);
-   the assembly inherits them unchanged.
+   the assembly inherits them unchanged. Tracked at #759.
 5. **VCO ERC**: the committed `layout/evidence/vco-layout/erc-report.json`
    reports `erc_status: violations`, 1 finding; not re-examined here, and no
    ERC was run on the top level.
