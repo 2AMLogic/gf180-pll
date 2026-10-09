@@ -14,6 +14,7 @@ _None._
 Issues the operator starred (`loom:operator-priority`); land these first.
 
 - **#533**: sim/reference-spur-band-top: run the 45-point 200 MHz campaign on the batch backend (operator-authorized spend)
+- **#755**: sim harness: stage a simulator init file (wnflag) so local and batch backends run the same configuration
 
 ## Ready
 
@@ -76,7 +77,7 @@ Issues carrying `loom:curated`.
 | Tier | Count |
 |------|-------|
 | Operator merge-risk holds | 0 |
-| Operator priority | 1 |
+| Operator priority | 2 |
 | Ready (`loom:issue`) | 1 |
 | In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
