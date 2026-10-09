@@ -117,6 +117,11 @@ layout/
       inv2x_3v3.py                inv2x_3v3.sch's device table + CLI entry point (issue #307)
       dff_tg_3v3.py                dff_tg_3v3.sch's composite (6x inv_3v3 + 4x tgate_3v3,
                                     20 transistors) + CLI entry point (issue #308)
+    loop_filter/              the passive loop filter, standalone (issue #748)
+      devices.py                 device table, pinned by the tests to design/netlist/loop_filter.spice
+      primitives.py              cap_nmos_03v3_b / MIM-A cap_mim_2f0_m2m3_noshield / plain ppolyf_u generators
+      block.py                   2x2 C1 array + R chain + C2, wired; CLI entry point (--check-connectivity)
+      netcheck.py                device census + plate-aware connectivity read back from the exported GDS
   evidence/
     inv-tb-proof/            committed proof artifacts (gds, netlist, logs, reports)
     floorplan-skeleton/      block-placement skeleton GDS + DRC report (issue #17)
@@ -144,6 +149,8 @@ layout/
     divider-rowcells-proof/  divider_chain nand2/nand3/nor2/inv2x row cells: per-cell GDS +
                              DRC/LVS reports, one shared PROOF.md (issue #307)
     divider-dff-proof/       divider_chain dff_tg_3v3 composite proof: GDS + DRC/LVS reports (issue #308)
+    loop-filter-layout/      loop_filter GDS, DRC (variants D and A) + LVS attempts, connectivity (issue #748);
+                             NOT DRC-clean on variant D (1 x MIMTM.3) and not LVS-matched -- see PROOF.md
     work/                    scratch re-run tree (git-ignored)
 ```
 

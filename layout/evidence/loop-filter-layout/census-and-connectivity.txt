@@ -1,0 +1,65 @@
+# netcheck on evidence/loop-filter-layout/loop_filter.gds (layout/pll_top/loop_filter/netcheck.py)
+## device census (read back from the GDS)
+cap_nmos_03v3_b gate (poly2 AND comp, mos_cap_mk, in nwell): (3.4, 2.8, 90.4, 89.8)  87.000 x 87.000 um
+cap_nmos_03v3_b gate (poly2 AND comp, mos_cap_mk, in nwell): (96.0, 2.8, 183.0, 89.8)  87.000 x 87.000 um
+cap_nmos_03v3_b gate (poly2 AND comp, mos_cap_mk, in nwell): (3.4, 94.2, 90.4, 181.2)  87.000 x 87.000 um
+cap_nmos_03v3_b gate (poly2 AND comp, mos_cap_mk, in nwell): (96.0, 94.2, 183.0, 181.2)  87.000 x 87.000 um
+ppolyf_u body (pplus AND poly2 AND sab AND res_mk): (189.4, 5.0, 191.4, 112.0)  2.000 x 107.000 um
+ppolyf_u body (pplus AND poly2 AND sab AND res_mk): (193.4, 5.0, 195.4, 112.0)  2.000 x 107.000 um
+ppolyf_u body (pplus AND poly2 AND sab AND res_mk): (197.4, 5.0, 199.4, 112.0)  2.000 x 107.000 um
+ppolyf_u body (pplus AND poly2 AND sab AND res_mk): (201.4, 5.0, 203.4, 112.0)  2.000 x 107.000 um
+MIM FuseTop (187.6, 122.0, 219.0, 153.4)  31.400 x 31.400 um; Metal2 bottom plate (187.0, 121.4, 219.6, 154.0)
+substrate tap comp shapes (pcomp outside nwell): 12
+forbidden layers: {'resistor': 0, 'dualgate': 0, 'boundary': 0}
+layer census (layer/datatype: shapes): 21/0: 4, 22/0: 16, 30/0: 8, 31/0: 16, 32/0: 4, 33/0: 7826, 34/0: 50, 34/10: 4, 35/0: 54, 36/0: 10, 36/10: 2, 38/0: 1604, 42/0: 3, 49/0: 4, 75/0: 1, 110/5: 4, 117/5: 1, 117/10: 1, 166/5: 4
+device problems: none
+## connectivity, plate-aware (topology from the GDS alone)
+connectivity: OK (42 terminal probes)
+## connectivity, plate-aware (generator's named terminal probes, nets from the GDS)
+connectivity: OK (43 terminal probes)
+  NZ     poly     (46.900, 2.390)  XCF1 gate contact row
+  NZ     poly     (46.900, 90.210)  XCF1 gate contact row
+  VSS    diff     (3.010, 46.300)  XCF1 body diffusion
+  VSS    diff     (90.790, 46.300)  XCF1 body diffusion
+  VSS    nwell    (46.900, 46.300)  XCF1 n-well (body)
+  VSS    diff     (0.600, 46.300)  XCF1 substrate tap
+  NZ     poly     (139.500, 2.390)  XCF2 gate contact row
+  NZ     poly     (139.500, 90.210)  XCF2 gate contact row
+  VSS    diff     (95.610, 46.300)  XCF2 body diffusion
+  VSS    diff     (183.390, 46.300)  XCF2 body diffusion
+  VSS    nwell    (139.500, 46.300)  XCF2 n-well (body)
+  VSS    diff     (93.200, 46.300)  XCF2 substrate tap
+  NZ     poly     (46.900, 93.790)  XCF3 gate contact row
+  NZ     poly     (46.900, 181.610)  XCF3 gate contact row
+  VSS    diff     (3.010, 137.700)  XCF3 body diffusion
+  VSS    diff     (90.790, 137.700)  XCF3 body diffusion
+  VSS    nwell    (46.900, 137.700)  XCF3 n-well (body)
+  VSS    diff     (0.600, 137.700)  XCF3 substrate tap
+  NZ     poly     (139.500, 93.790)  XCF4 gate contact row
+  NZ     poly     (139.500, 181.610)  XCF4 gate contact row
+  VSS    diff     (95.610, 137.700)  XCF4 body diffusion
+  VSS    diff     (183.390, 137.700)  XCF4 body diffusion
+  VSS    nwell    (139.500, 137.700)  XCF4 n-well (body)
+  VSS    diff     (93.200, 137.700)  XCF4 substrate tap
+  NZ     poly     (190.400, 112.400)  XRF4 top contact
+  NR3    poly     (190.400, 4.600)  XRF4 bottom contact
+  NR2    poly     (194.400, 112.400)  XRF3 top contact
+  NR3    poly     (194.400, 4.600)  XRF3 bottom contact
+  NR2    poly     (198.400, 112.400)  XRF2 top contact
+  NR1    poly     (198.400, 4.600)  XRF2 bottom contact
+  VCTRL  poly     (202.400, 112.400)  XRF1 top contact
+  NR1    poly     (202.400, 4.600)  XRF1 bottom contact
+  VSS    diff     (207.000, 58.500)  XRF1 substrate tap (ring, right)
+  VSS    diff     (185.800, 58.500)  XRF1 substrate tap (ring, left)
+  VSS    diff     (207.000, 58.500)  XRF2 substrate tap (ring, right)
+  VSS    diff     (185.800, 58.500)  XRF2 substrate tap (ring, left)
+  VSS    diff     (207.000, 58.500)  XRF3 substrate tap (ring, right)
+  VSS    diff     (185.800, 58.500)  XRF3 substrate tap (ring, left)
+  VSS    diff     (207.000, 58.500)  XRF4 substrate tap (ring, right)
+  VSS    diff     (185.800, 58.500)  XRF4 substrate tap (ring, left)
+  VCTRL  metal2   (203.300, 121.700)  XCF5 bottom plate (outside FuseTop)
+  VCTRL  metal2   (203.300, 137.700)  XCF5 bottom plate (under FuseTop)
+  VSS    fusetop  (203.300, 137.700)  XCF5 top plate (FuseTop)
+## checker boundary: metal-only extraction (Via2 joins Metal2-Metal3 everywhere, FuseTop ignored)
+connectivity: FAIL (42 terminal probes)
+  short: VCTRL / VSS

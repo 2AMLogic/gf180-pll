@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from _env import LAYOUT_DIR  # noqa: E402  (also puts LAYOUT_DIR on sys.path)
@@ -200,10 +201,14 @@ class TestNormalisation(unittest.TestCase):
         (self.run_dir / "cp.gds").write_bytes(str(self.run_dir).encode())
         n = env.normalise_run_dir(self.run_dir, self._subs())
         self.assertEqual(n, 2)
+        # XML report databases get the token XML-escaped, so they stay
+        # well-formed and decode back to the plain token (issue #748).
         self.assertEqual(
             (self.run_dir / "cp_main.lyrdb").read_text(),
-            "<generator>drc: script='<RUN_DIR>/main.drc'</generator>\n",
+            "<generator>drc: script='&lt;RUN_DIR&gt;/main.drc'</generator>\n",
         )
+        root = ET.fromstring((self.run_dir / "cp_main.lyrdb").read_text())
+        self.assertEqual(root.text, "drc: script='<RUN_DIR>/main.drc'")
         self.assertIn("Klayout DRC run is clean <RUN_DIR>", (self.run_dir / "drc.stdout.log").read_text())
         # Binary layouts are never rewritten.
         self.assertEqual((self.run_dir / "cp.gds").read_bytes(), str(self.run_dir).encode())

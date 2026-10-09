@@ -1,0 +1,7 @@
+PDK        : OK   <HOME>/.volare/gf180mcuD (variant D, open_pdks c6d73a35f524070e85faff4a6a9eef49553ebc2b)
+KLayout    : OK   /usr/bin/klayout (KLayout 0.28.16)
+PV python  : OK   <HOME>/opt/gf180pv-venv/bin/python
+DRC runner : <HOME>/.volare/gf180mcuD/libs.tech/klayout/drc/run_drc.py
+LVS runner : <HOME>/.volare/gf180mcuD/libs.tech/klayout/lvs/run_lvs.py
+stdcell gds: <HOME>/.volare/gf180mcuD/libs.ref/gf180mcu_fd_sc_mcu9t5v0/gds/gf180mcu_fd_sc_mcu9t5v0.gds
+check-env exit=0
