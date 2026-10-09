@@ -1673,6 +1673,58 @@ machine-readable integrator view and the ratified table cannot disagree.
 DR-017 Decision 5 it will move the table above when it lands and will not, on
 its own, move the row.
 
+### 5.16 Revision: the first assembled `pll_top` is measured, and the fail-loud condition fires (issue #297)
+
+**Status: the ×1.25 top-level overhead is now a measurement, ×2.217, and the
+assembled top level is over the ratified ≤ 0.30 mm² row.** Stated here per
+§5's fail-loud clause ("if an assembled `pll_top` measures a top-level
+overhead above ×1.664, say so in a new revision rather than re-deriving the
+budget to fit"). Nothing in `spec/` changes in this revision, and neither area
+constant in `skeleton.py` moves: a row change needs a decision record (DR-017
+Decision 3 names exactly this event as its trigger).
+
+`layout/evidence/pll-top-layout/pll_top.gds` places all five real block
+layouts — the four DRC/LVS-checked blocks and the physical loop filter drawn at
+issue #748 — and routes `design/netlist/pll_top.spice` between them on
+Metal4/Metal5 (`layout/pll_top/top_level/`, `PROOF.md` beside the GDS):
+
+| Quantity | §5 / §5.15 | Measured on the assembled GDS |
+|---|---|---|
+| Loop filter | 36,936 µm² (DR-006 device sum ×1.15) | 40,593.5 µm² as drawn (219.9 × 184.6 µm) |
+| Sum of block footprints | 180,307 µm² | **183,964.4 µm²** |
+| Top-level overhead | ×1.25 (ROM) | **×2.217** |
+| Total | 225,384 µm² (0.2254 mm²) | **407,776.2 µm² (0.4078 mm²)**, 1317.66 × 309.47 µm |
+| Against ≤ 0.30 mm² | 75.1 %, met | **135.9 %, over by 107,776 µm²** |
+| Against §5's own first estimate | ≈0.099 mm² conservative, ≈34 % margin on 0.15 mm² | 4.12× that estimate; −172 % margin on 0.15 mm² |
+
+**Why the overhead is not ×1.25, in one line:** the divider chain is
+1317.66 µm wide and the tallest row block (the loop filter) is 184.6 µm, so
+any rectangular arrangement of today's blocks is at least
+1317.66 × (184.6 + 41.99) = 298,568.6 µm² — 99.5 % of the row — before any
+spacing, keep-out or routing. The rest of the bounding box is the §1 VCO
+keep-out plus one domain spacing above the row (72,313.2 µm²), the bottom
+routing channel and pins (27,670.9 µm²), the top pin edge (9,223.6 µm²) and
+row-level whitespace (114,604.2 µm²: three 40 µm domain gaps, the divider's
+overhang past the VCO, and the two shorter blocks under the 184.6 µm row
+height). A ×1.25 multiplier applied per block could not see a cost that comes
+from the blocks' *aspect ratios* not tiling.
+
+**One placement deviation from §6's skeleton, disclosed:** the skeleton stacks
+`lock_detector` above `divider_chain`; the assembly puts `lock_detector` in the
+bottom row beside `pfd_cp` (its own `VDD`-domain neighbour). Stacked, the
+bounding box would have grown by a further ~144 µm × 1317.66 µm. §1-§3's
+isolation and placement rules are otherwise followed as written: PFD/CP → loop
+filter → VCO, 40 µm domain spacing, the VCO's 15 µm keep-out clear of every
+non-VCO wire, and `VDD`/`VSS` star-routed from one pad each with no two blocks'
+branches sharing a segment — enforced at drawing time and re-checked from the
+GDS.
+
+**DRC on the assembled GDS** (gf180mcuD, `--offgrid`): one violation, the
+loop filter's own `MIMTM.3` on C2 (option-A MIM on the option-B deck, #753),
+inherited unchanged; nothing the assembly added. No top-level LVS has been run
+(#149); no extraction (#18).
+
+
 ## 6. GDS skeleton
 
 `layout/floorplan/skeleton.py` assembles a **block-placement skeleton**
@@ -1736,3 +1788,9 @@ python3 -m harness.reproduce                                          # from lay
 
 Evidence: `layout/evidence/floorplan-skeleton/` (see `PROOF.md` there for the
 DRC run's provenance and verdict).
+
+**Superseded for signoff purposes by the assembled top level (issue #297).**
+The skeleton stays as the placement record it always was; any DRC/LVS
+statement about the whole PLL now refers to
+`layout/evidence/pll-top-layout/pll_top.gds`, which carries real geometry for
+all five blocks (§5.16).

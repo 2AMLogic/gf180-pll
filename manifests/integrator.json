@@ -31,11 +31,11 @@
     "path": "design/netlist/pll_top.spice",
     "top_subckt": "pll_top",
     "provenance": "schematic (design/pll_top.sch, exported by design/netlist.sh, checked for staleness by design/netlist.sh --check)",
-    "note": "Schematic-level only — no extracted (post-layout) netlist exists for the assembled block. design/README.md documents the two-block netlist-export convention this repo uses."
+    "note": "Schematic-level only — the assembled pll_top GDS (issue #297) has not been extracted yet (issue #18). design/README.md documents the two-block netlist-export convention this repo uses."
   },
   "layout": {
-    "top_cell_gds": null,
-    "top_cell_status": "No pll_top-level (placed-and-routed) layout exists. Each non-passive sub-block below has its own independent, DRC/LVS-clean transistor-level layout; the loop filter (passive-only) has no drawn layout; nothing has been assembled into one pll_top physical view, and no PLL block has been fabricated or measured (README.md Status).",
+    "top_cell_gds": "layout/evidence/pll-top-layout/pll_top.gds",
+    "top_cell_status": "First assembled pll_top (issue #297): all five sub-blocks below, the loop filter included, placed and routed against design/netlist/pll_top.spice, wiring checked from the exported GDS. NOT signoff: the foundry DRC deck (gf180mcuD) reports 1 violation, the loop filter's own MIMTM.3 on C2 (option-A MIM on the option-B deck, issue #753), inherited unchanged; no top-level LVS has been run (issue #149); no extraction (issue #18). Nothing has been fabricated or measured. See layout/evidence/pll-top-layout/PROOF.md.",
     "floorplan_plan": "layout/floorplan/PLL-FLOORPLAN.md",
     "floorplan_skeleton_gds": "layout/evidence/floorplan-skeleton/pll_floorplan_skeleton.gds",
     "floorplan_skeleton_note": "A block-placement GDS skeleton (issue #17) that exercises the DRC flow end to end — placement rectangles and keep-outs, not device-level geometry for any block.",
@@ -70,9 +70,9 @@
       },
       {
         "name": "loop_filter",
-        "top_cell": null,
-        "gds": null,
-        "note": "Passive-only (R + C1 + C2). No drawn layout exists; its area entry below is a device-data calculation (DR-006), not a GDS measurement."
+        "top_cell": "loop_filter",
+        "gds": "layout/evidence/loop-filter-layout/loop_filter.gds",
+        "note": "Passive-only (R + C1 + C2), drawn at issue #748 (40,593.5 um2 as drawn). Not DRC-clean on gf180mcuD (1 x MIMTM.3) and not LVS-matched as shipped -- see that directory's PROOF.md and issue #753. Its area entry below is still the DR-006 device-data calculation the spec row was set on."
       }
     ],
     "as_of_commit": "0fca67d4"
@@ -117,8 +117,9 @@
   ],
   "port_list_source": "design/netlist/pll_top.spice (.subckt pll_top line + *.ipin/*.opin/*.iopin annotations), cross-checked against design/README.md#pins",
   "area": {
-    "measured_um2": null,
-    "measured_mm2": null,
+    "measured_um2": 407776.2,
+    "measured_mm2": 0.4078,
+    "measured_note": "Bounding box of the assembled pll_top GDS (issue #297), 1317.66 x 309.47 um: 135.9 % of the 0.30 mm2 row, a measured top-level overhead of x2.217 on the 183,964.4 um2 block sum (loop filter as drawn). PLL-FLOORPLAN.md §5's fail-loud clause has fired (§5.16); the row has not been re-derived -- that needs a decision record. layout/evidence/pll-top-layout/PROOF.md.",
     "budget_mm2": 0.3,
     "budget_source": "spec/pll.md#area, amended by spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md (issue #456) and held at that value by spec/decision-records/DR-017-area-row-held-at-0.30-on-the-refreshed-measured-floor.md (issue #476)",
     "draft_budget_mm2": 0.15,
@@ -134,9 +135,9 @@
     "as_drawn_sum_mm2": 0.1803,
     "after_top_level_overhead_um2": 225384,
     "after_top_level_overhead_mm2": 0.2254,
-    "overhead_factor_note": "x1.25 whole-block placement/routing overhead, per layout/floorplan/PLL-FLOORPLAN.md §5. Still a ROM estimate — no assembled pll_top GDS exists to measure it against (issue #17) — and it is the only unmeasured term in the total above. The 0.30 mm2 row holds to a measured overhead of x1.664 on the block sum as drawn; above that, or past 240,000 um2 of block sum, PLL-FLOORPLAN.md §5's fail-loud clause fires (asserted by layout/tests/test_area_audit.py, not only in prose).",
+    "overhead_factor_note": "x1.25 whole-block placement/routing overhead, per layout/floorplan/PLL-FLOORPLAN.md §5 -- the ROM estimate the figures above use. The first assembled pll_top (issue #297) measured it at x2.217 (see measured_note). The 0.30 mm2 row holds to a measured overhead of x1.664 on the block sum as drawn; above that, or past 240,000 um2 of block sum, PLL-FLOORPLAN.md §5's fail-loud clause fires (asserted by layout/tests/test_area_audit.py, not only in prose).",
     "budget_ratio": 0.75,
-    "budget_ratio_note": "against the amended 0.30 mm2 row: MET, with more headroom than when DR-016 was written (0.91 then) — 24.9 % margin on the 240,000 um2 of block sum the row allows. Against the draft 0.15 mm2 target the same total is 1.50x — see draft_budget_ratio.",
+    "budget_ratio_note": "block sum x1.25 against the amended 0.30 mm2 row (the assembled top level is 1.359, see measured_note): MET on that basis, with more headroom than when DR-016 was written (0.91 then) — 24.9 % margin on the 240,000 um2 of block sum the row allows. Against the draft 0.15 mm2 target the same total is 1.50x — see draft_budget_ratio.",
     "draft_budget_ratio": 1.5,
     "source": "spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md (issue #456) for the amended row and DR-017-area-row-held-at-0.30-on-the-refreshed-measured-floor.md (issue #476) for holding it on the current measurement; layout/floorplan/PLL-FLOORPLAN.md §5.12 (issue #469), §5.13 (issue #458), §5.14 (issue #473) and §5.15 (issue #476) for the current total; layout/evidence/area-audit/area-audit.md",
     "as_of_commit": "8c6cb7f3"
@@ -149,7 +150,7 @@
     "grader": "klt signoff --manifest",
     "regenerate": "bash signoff/run-signoff.sh",
     "rung": "pre-T1 (klayout-tools design-evidence tiers) — 0 of 22 T1 rows met as of the committed tier-report.json",
-    "note": "0/22 is the correct, honestly-graded result today, not a bug — see signoff/README.md 'Why every row is unmet': no evidence envelope is cited into signoff/block-manifest.json yet. Independently of that grading gap, four of the block's five sub-blocks (vco, pfd_cp, divider_chain, lock_detector) already have committed, DRC/LVS-clean, LVS-matched transistor-level layouts and closed-loop schematic-level simulation evidence spans dozens of campaigns (both per README.md's own Status section) — but there is no pll_top-level placed-and-routed layout, so the block as a whole has reached neither the 'simulation-complete' nor the 'layout DRC/LVS-clean' rung of the ladder above as a single, assembled unit.",
+    "note": "0/22 is the correct, honestly-graded result today, not a bug — see signoff/README.md 'Why every row is unmet': no evidence envelope is cited into signoff/block-manifest.json yet. Independently of that grading gap, four of the block's five sub-blocks (vco, pfd_cp, divider_chain, lock_detector) already have committed, DRC/LVS-clean, LVS-matched transistor-level layouts and closed-loop schematic-level simulation evidence spans dozens of campaigns (both per README.md's own Status section) — and a first assembled pll_top GDS exists (issue #297) but carries one inherited DRC violation and has had no top-level LVS run, so the block as a whole has reached neither the 'simulation-complete' nor the 'layout DRC/LVS-clean' rung of the ladder above as a single, assembled unit.",
     "readme_status_anchor": "README.md#status-early-block-level-layout-underway-pre-top-level-pre-silicon",
     "as_of_commit": "0fca67d4"
   },
