@@ -4,6 +4,7 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-10-08
 
+- **PR #747**: docs: pilot spur gap tracks the host init file in the full transient (Part of #533)
 - **PR #745**: docs: Linux x86 pin run of the DC-only deck; wnflag=1 isolates the latch-state split (#533)
 - **PR #743**: docs: claim-checker inventory for #699 (no checker safely consolidable)
 - **PR #742**: sim: pinned ngspice-46 DC-only check for the batch-vs-local state split (Part of #533)
