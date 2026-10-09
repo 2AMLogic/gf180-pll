@@ -1,0 +1,6 @@
+* Extracted by KLayout with GF180MCU LVS runset on : 09/10/2026 11:51
+
+.SUBCKT decap_min GND_VCO VDD_VCO
+M$1 GND_VCO VDD_VCO GND_VCO GND_VCO nfet_03v3 L=50U W=50U AS=30P AD=30P
++ PS=101.2U PD=101.2U
+.ENDS decap_min

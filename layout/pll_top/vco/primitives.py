@@ -114,6 +114,13 @@ LAYER = {
     # against every rule_decks/*.drc file). Used only for the carried-forward
     # 22 pF decap placeholder -- see ring.py.
     "boundary": (0, 0),
+    # cap_nmos_03v3 (the non-_b MOS capacitor) layers, used only by
+    # mos_cap_nmos(): the marker that makes a gate region a capacitor rather
+    # than a transistor, and the low-voltage p-well the deck's P2 plate is
+    # derived from (moscap_extraction.lvs: P1 => nmos_gate_3p3, P2 =>
+    # lvpwell_con). Layer numbers from layers_definitions.lvs / layers_def.py.
+    "mos_cap_mk": (166, 5),
+    "lvpwell": (204, 0),
 }
 
 # --- Derived generator margins (deck minimum + explicit headroom) ---
@@ -480,6 +487,117 @@ def mosfet(
         gate_y_center=gate_y_center,
         gate_tab_x1=tab_x1,
         gate_tab_x_center=(tab_x0 + tab_x1) / 2.0,
+    )
+
+
+# --- cap_nmos_03v3 (non-_b) generator margins (mos_cap_nmos()) ---------------
+#
+# Structure from the PDK's own ``draw_cap_mos.py`` (``cap_mos_inst`` with
+# ``type="cap_nmos"``): a comp slab marked by ``mos_cap_mk``, one poly gate
+# across it, a contact column on each of the two comp strips beyond the gate
+# (the n+ source/drain, ``nsd`` in the LVS deck), contact rows on the poly
+# ends, ``nplus`` over the comp, and a ``lvpwell`` rectangle equal to the
+# marker. Unlike ``cap_nmos_03v3_b`` there is **no n-well**: the device sits in
+# the p-substrate (the deck's ``nmos_gate_3p3 = ngate_lv_n_dw.interacting(
+# mos_cap_mk)``, no ``.and(nwell)``). Deviations are margin only.
+MOSCAP_SD_EXT_UM = 0.6  # comp beyond the gate, each side (pcell 0.44): holds one contact
+# column 0.1 um from the comp edge and leaves 0.28 um to the gate (CO.7 0.15).
+MOSCAP_POLY_EXT_UM = 0.62  # poly beyond the comp, each end (pcell 0.46)
+MOSCAP_POLY_CONTACT_GAP_UM = 0.30  # comp edge to the gate-contact row (CO.8 0.17)
+MOSCAP_ROW_INSET_UM = 0.2  # gate-row metal1 inset from the poly's x edge
+MOSCAP_IMPLANT_MARGIN_UM = 0.25  # nplus around comp (NP.5a gate overlap 0.23, NP.5b 0.16)
+MOSCAP_COL_M1_ENC_UM = 0.1  # metal1 around a contact column / row
+
+
+def mos_cap_nmos_extent(w_um: float, l_um: float) -> tuple[float, float]:
+    """Pure-Python ``(comp width, comp height)`` of :func:`mos_cap_nmos` -- ``l`` along x."""
+    return (dev.snap_um(l_um + 2 * MOSCAP_SD_EXT_UM), dev.snap_um(w_um))
+
+
+@dataclass
+class MosCapPorts:
+    """Key coordinates of a drawn ``mos_cap_nmos()`` instance."""
+
+    comp: tuple[float, float, float, float]
+    gate: tuple[float, float, float, float]  # poly2 AND comp -- the device's own W x L
+    poly: tuple[float, float, float, float]
+    cols: tuple[tuple, tuple]  # (left, right) metal1 over the diffusion contacts -> the n+ terminal
+    rows: dict  # "bottom"/"top" -> metal1 over that poly end's contacts -> the gate terminal
+    nplus: tuple[float, float, float, float]
+
+
+def mos_cap_nmos(
+    canvas: Canvas,
+    w_um: float,
+    l_um: float,
+    x0: float,
+    y0: float,
+    *,
+    gate_ends: tuple[str, ...] = ("bottom", "top"),
+) -> MosCapPorts:
+    """Draw one ``cap_nmos_03v3`` with its comp's lower-left corner at ``(x0, y0)``.
+
+    The device is the gate region ``poly2 AND comp``: ``l_um`` along x (between
+    the two diffusion strips) by ``w_um`` along y. Terminals, per
+    ``moscap_extraction.lvs`` (``tA => poly2_con``, ``tB => nsd``): the first
+    netlist terminal is the **poly gate**, the second the **n+ diffusion**.
+    ``design/netlist/vco.spice`` ties the gate to ``VDD_VCO`` and the n+ to
+    ``GND_VCO`` (an inversion-mode NMOS cap, ``v(1,2) > 0``).
+
+    Only the ``gate_ends`` poly ends get a contact row (a caller that feeds the
+    gate from one side needs only that row); the poly still extends past the
+    comp at both ends. Returns the metal1 boxes the caller connects to.
+    """
+    cw, ch = mos_cap_nmos_extent(w_um, l_um)
+    x1, y1 = dev.snap_um(x0 + cw), dev.snap_um(y0 + ch)
+    comp = (x0, y0, x1, y1)
+    canvas.rect("comp", *comp)
+    canvas.rect("mos_cap_mk", *comp)
+    canvas.rect("lvpwell", *comp)
+    m = MOSCAP_IMPLANT_MARGIN_UM
+    nplus = (x0 - m, y0 - m, x1 + m, y1 + m)
+    canvas.rect("nplus", *nplus)
+
+    gx0, gx1 = dev.snap_um(x0 + MOSCAP_SD_EXT_UM), dev.snap_um(x1 - MOSCAP_SD_EXT_UM)
+    poly = (gx0, dev.snap_um(y0 - MOSCAP_POLY_EXT_UM), gx1, dev.snap_um(y1 + MOSCAP_POLY_EXT_UM))
+    canvas.rect("poly2", *poly)
+
+    cols = []
+    for cx0 in (
+        dev.snap_um(x0 + CONTACT_ROW_MARGIN_UM),
+        dev.snap_um(x1 - CONTACT_ROW_MARGIN_UM - CONTACT_SIZE_UM),
+    ):
+        for cy in _contact_positions(y0, y1):
+            canvas.rect("contact", cx0, cy, cx0 + CONTACT_SIZE_UM, cy + CONTACT_SIZE_UM)
+        e = MOSCAP_COL_M1_ENC_UM
+        col = (dev.snap_um(cx0 - e), y0, dev.snap_um(cx0 + CONTACT_SIZE_UM + e), y1)
+        canvas.rect("metal1", *col)
+        cols.append(col)
+
+    rows = {}
+    row_x0 = dev.snap_um(gx0 + MOSCAP_ROW_INSET_UM)
+    row_x1 = dev.snap_um(gx1 - MOSCAP_ROW_INSET_UM)
+    for end in gate_ends:
+        if end == "bottom":
+            cy0 = dev.snap_um(y0 - MOSCAP_POLY_CONTACT_GAP_UM - CONTACT_SIZE_UM)
+        elif end == "top":
+            cy0 = dev.snap_um(y1 + MOSCAP_POLY_CONTACT_GAP_UM)
+        else:
+            raise ValueError(f"gate end must be 'bottom' or 'top', got {end!r}")
+        for cx in _contact_positions(row_x0, row_x1):
+            canvas.rect("contact", cx, cy0, cx + CONTACT_SIZE_UM, cy0 + CONTACT_SIZE_UM)
+        e = MOSCAP_COL_M1_ENC_UM
+        row = (row_x0, dev.snap_um(cy0 - e), row_x1, dev.snap_um(cy0 + CONTACT_SIZE_UM + e))
+        canvas.rect("metal1", *row)
+        rows[end] = row
+
+    return MosCapPorts(
+        comp=comp,
+        gate=(gx0, y0, gx1, y1),
+        poly=poly,
+        cols=(cols[0], cols[1]),
+        rows=rows,
+        nplus=nplus,
     )
 
 

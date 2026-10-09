@@ -99,6 +99,22 @@ class PlanIsTheNetlistTests(unittest.TestCase):
                 self.assemble.plan(NL.read(p))
 
 
+def _decap_gate_regions(db, gds_path):
+    """Merged ``poly2 AND comp AND mos_cap_mk`` regions of one 50 x 50 um size, plus
+    the layer-(0, 0) shape count -- the physical VCO decap pair, wherever it sits."""
+    ly = db.Layout()
+    ly.read(str(gds_path))
+    top = ly.top_cell()
+
+    def region(layer, datatype):
+        return db.Region(top.begin_shapes_rec(ly.layer(layer, datatype))).merged()
+
+    gates = region(30, 0) & region(22, 0) & region(166, 5)
+    pair = [g for g in gates.each() if (g.bbox().width(), g.bbox().height()) == (50_000, 50_000)]
+    placeholders = region(0, 0).count()
+    return pair, placeholders
+
+
 @unittest.skipUnless(HAVE_KLAYOUT, "needs the klayout pip wheel")
 class AssembledLayoutTests(unittest.TestCase):
     """One fresh build from the generators, shared by every test below."""
@@ -236,6 +252,34 @@ class AssembledLayoutTests(unittest.TestCase):
         rep = self.asm.report
         self.assertGreater(rep["area_um2"], 300_000.0)
         self.assertGreater(rep["area_um2"] / rep["block_sum_um2"], 1.664)
+
+    def test_vco_decap_pair_is_physical_and_present_exactly_once(self):
+        # Issue #759: the 22 pF decap is two real cap_nmos_03v3 devices, not
+        # layer-(0, 0) markers, and the assembly carries them through once.
+        pair, placeholders = _decap_gate_regions(self.db, self.gds)
+        self.assertEqual(len(pair), 2)
+        self.assertEqual(placeholders, 0)
+        x0, y0, x1, y1 = self.asm.placements["vco"]["bbox_um"]
+        for g in pair:
+            b = g.bbox()
+            self.assertTrue(
+                x0 * 1000 <= b.left and b.right <= x1 * 1000 and y0 * 1000 <= b.bottom and b.top <= y1 * 1000,
+                "a decap gate lies outside the placed VCO block",
+            )
+
+    def test_a_missing_decap_device_changes_the_count(self):
+        # The count above is a real gate: delete one capacitor marker and it moves.
+        db = self.db
+
+        def edit(ly, top):
+            li = ly.layer(166, 5)
+            cell = ly.cell("vco_block")
+            # the decap markers are the two 51.2 x 50 um ones (the loop filter's are 88.2 x 87)
+            target = next(s for s in cell.shapes(li).each() if s.bbox().width() == 51_200)
+            cell.shapes(li).erase(target)
+
+        pair, _ = _decap_gate_regions(db, self._mutated(edit))
+        self.assertEqual(len(pair), 1)
 
     # -- negative controls: blocks -------------------------------------------
 
@@ -381,6 +425,13 @@ class CommittedEvidenceTests(unittest.TestCase):
         ly, top = X.read_top(COMMITTED_GDS)
         bb = top.dbbox()
         self.assertEqual(rep["boundary_um"], [round(bb.left, 4), round(bb.bottom, 4), round(bb.right, 4), round(bb.top, 4)])
+
+    def test_committed_gds_carries_the_physical_decap_pair_once(self):
+        import klayout.db as db
+
+        pair, placeholders = _decap_gate_regions(db, COMMITTED_GDS)
+        self.assertEqual(len(pair), 2)
+        self.assertEqual(placeholders, 0)
 
     def test_proof_states_the_measured_area(self):
         rep = json.loads(COMMITTED_REPORT.read_text())

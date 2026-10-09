@@ -21,7 +21,8 @@ layout under a two-sided block-level guard ring (`GND_VCO` substrate ring,
 proved electrically connected as well as rule-clean (see
 `layout/evidence/vco-layout/PROOF-block.md` for the assembly and
 `PROOF-fold.md` for the band mirror's two-bank row fold and that second ring
-band).
+band); the 22 pF supply decap is two real `cap_nmos_03v3` devices, drawn at
+issue #759 — see `layout/evidence/vco-layout/decap-20261009/PROOF.md`.
 `layout/pll_top/pfd_cp/` (issue #294/#299/#300) is
 a second, independent full-custom leaf-cell family: a reusable
 device-list-driven generator (`devgen.py`) proved out on one representative
@@ -82,9 +83,9 @@ layout/
   pll_top/                  real per-block transistor-level layout (issue #292)
     vco/                      the VCO block (issue #293)
       devices.py                schematic-sourced device table (W/L/nodes), no KLayout needed
-      primitives.py              full-custom nfet_03v3/pfet_03v3 geometry generator
+      primitives.py              full-custom nfet_03v3/pfet_03v3, poly-resistor and cap_nmos_03v3 geometry generators
       stage.py                   one vco_stage.sch instance (MPH-MP-MN-MNT)
-      ring.py                    assembles the 5-stage ring + guard ring + decap; CLI entry point
+      ring.py                    assembles the 5-stage ring + guard ring (+ standalone decap markers); CLI entry point
       buffer.py                  the 3-stage tapered output buffer; CLI entry point
       mirror.py                  the common-centroid 3-cascade band-select mirror; CLI entry point
       bias_resistors.py          the bias generator's RCG/ROFF/RDEG ppolyf_u_3k poly resistors
