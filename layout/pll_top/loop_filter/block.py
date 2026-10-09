@@ -140,14 +140,20 @@ def mim_origin_um() -> tuple[float, float]:
 
 
 def footprint_um() -> tuple[float, float, float, float]:
-    """Pure-Python bounding box of everything ``build()`` draws."""
+    """Pure-Python bounding box of everything ``build()`` draws.
+
+    The tap rings carry a pplus implant grown ``IMPLANT_MARGIN_UM`` past their
+    comp (wider than their Metal1 margin), so the ring-bounded edges extend
+    that far beyond the ring's outer box -- including below/left of the origin.
+    """
     ax, ay = array_extent_um()
     mx, my = mim_origin_um()
     mim = dev.MIM_CAPS[0]
     e = prim.MIM_BOTTOM_ENC_UM
-    x1 = max(ax, res_ring_um()[2], mx + mim.w_um + e)
-    y1 = max(ay, my + mim.l_um + e)
-    return (0.0, 0.0, _s(x1), _s(y1))
+    m = prim.IMPLANT_MARGIN_UM
+    x1 = max(ax + m, res_ring_um()[2] + m, mx + mim.w_um + e)
+    y1 = max(ay + m, res_ring_um()[3] + m, my + mim.l_um + e)
+    return (_s(-m), _s(-m), _s(x1), _s(y1))
 
 
 def check_chain() -> None:

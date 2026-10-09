@@ -221,6 +221,19 @@ class ExportedGdsTests(unittest.TestCase):
         self.assertIn("forbidden layer boundary", joined)
         self.assertIn("3 MOS-cap gate(s) found", joined)
 
+    def test_declared_footprint_matches_gds_bounds(self):
+        """``footprint_um()`` must equal the exported GDS's real geometry bounds (implants included)."""
+        import klayout.db as db
+
+        for gds in (self.gds, COMMITTED_GDS):
+            layout = db.Layout()
+            layout.read(str(gds))
+            bb = layout.top_cells()[0].dbbox()
+            got = (bb.left, bb.bottom, bb.right, bb.top)
+            for want, have in zip(block.footprint_um(), got):
+                self.assertAlmostEqual(want, have, places=3, msg=f"{gds.name}: {block.footprint_um()} vs {got}")
+        self.assertEqual(self.result.footprint, block.footprint_um())
+
     # --- connectivity -----------------------------------------------------
 
     def test_topology_from_gds_alone(self):

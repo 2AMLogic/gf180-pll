@@ -47,12 +47,12 @@ are in `census-and-connectivity.txt`.
 
 | Quantity | Value |
 |---|---|
-| Block bounding box (measured, everything drawn incl. taps and routing) | **219.600 x 184.000 um = 40,406.4 um^2** |
+| Block bounding box (measured on the committed GDS, every layer incl. the 0.3 um tap-ring implants: (-0.3, -0.3)-(219.6, 184.3) um) | **219.900 x 184.600 um = 40,593.54 um^2** |
 | Device area (gates + plate + resistor bodies) | 32,118.0 um^2 (C1 30,276 + C2 985.96 + R 856) |
 | `PLL-FLOORPLAN.md` sections 3/5 estimate | 36,936 um^2 (32,118 x 1.15) |
 | `floorplan/skeleton.py` `LOOP_FILTER` reservation | 235.0 x 195.0 um = 45,825 um^2 |
 
-The measured block is **9.4 % above the floorplan's estimate** (overhead x1.258
+The measured block is **9.9 % above the floorplan's estimate** (overhead x1.264
 on device area, not x1.15) and fits inside the skeleton's reservation. The
 excess is the per-capacitor n-well + 1.0 um gap + 1.2 um tap band (2.8 um per
 side of every 88.2 x 87 um cap) and the resistor/MIM column beside the array.
@@ -219,7 +219,7 @@ the 5 nm grid.
 4. **No density or antenna DRC** (deck defaults off).
 5. **Standalone only**: no top-level placement, no pins on a boundary, no
    post-layout extraction or simulation.
-6. **Area** is 9.4 % over the floorplan's estimate (see Area).
+6. **Area** is 9.9 % over the floorplan's estimate (see Area).
 7. **Harness fix carried in this change**: `layout/harness/env.py` wrote its
    path tokens (`<RUN_DIR>`, ...) unescaped into the `.lyrdb` XML report, so
    `run_pv.py drc` crashed parsing its own report on the first DRC run after
