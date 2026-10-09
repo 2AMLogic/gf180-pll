@@ -90,7 +90,10 @@ one invented for this record.
   schematic already** (`vco.sch`) — the floorplan places it directly adjacent
   to the `VDD_VCO` pin/ring-tap junction, inside the VCO guard ring, so the
   decap's own return path is short. This is real, committed device area
-  (5,000 µm² = 0.005 mm²), not a placeholder — see §4.
+  (5,000 µm² = 0.005 mm²), not a placeholder — see §4. **Realised at issue
+  #759 (2026-10-09):** drawn as two real `cap_nmos_03v3` devices in a column at
+  the right of the VCO block, level with the `VDD_VCO` pin and inside the
+  `GND_VCO` ring (§5.17); before that it was two layer-(0, 0) markers.
 
 ## 2. Supply routing (`VDD_VCO`/`GND_VCO` vs. digital, decap placement)
 
@@ -1723,6 +1726,34 @@ GDS.
 loop filter's own `MIMTM.3` on C2 (option-A MIM on the option-B deck, #753),
 inherited unchanged; nothing the assembly added. No top-level LVS has been run
 (#149); no extraction (#18).
+
+
+### 5.17 Revision: the VCO's 22 pF decap becomes device geometry, and the block pays for it (issue #759)
+
+**Status: no area constant, spec row or decision moves; one block grows.**
+`vco_block` used to carry `vco.sch`'s two `cap_nmos_03v3` 50 × 50 µm decaps as
+two layer-(0, 0) rectangles that sat on top of other sub-blocks (§1 and §2
+counted on a decap that was not drawn). They are now two real devices
+(`layout/evidence/vco-layout/decap-20261009/PROOF.md`): DRC-clean with the
+off-grid class, LVS-matched against a reference that includes both
+capacitors, present exactly once in the assembled `pll_top`.
+
+| Quantity | Before | After |
+|---|---|---|
+| `vco_block` footprint | 172.52 × 184.48 µm (31,826.5 µm²) | **226.69 × 184.48 µm (41,819.8 µm²)** |
+| Sum of the five blocks' bounding boxes in `pll_top` | 183,964.4 µm² | **193,957.6 µm²** |
+| Assembled `pll_top` | 407,776.2 µm², ×2.217 | **407,776.2 µm², ×2.103** (the divider chain's width sets the box) |
+
+There is no free 50 × 50 µm area in the folded block, so the pair is a new
+column to the right of the CLK column (+54.17 µm of width; the pair itself is
+51.2 µm wide). That is the cost of the decap §1 always assumed; nothing was
+bought back by it and no lever from §5.5 was spent. The assembled total is
+unchanged and still over the ratified ≤ 0.30 mm² row (§5.16); the decision on
+that is #758, which now reasons from a VCO that is 9,993 µm² larger than the
+one §5.16 measured. `skeleton.py`'s `VCO_CORE` follows the generator's
+`footprint_um()`, so the skeleton's VCO box and its decap rectangles move with
+it; the tripwire bounds in `test_vco_layout.py` that watch the skeleton's
+extent were widened accordingly and say why.
 
 
 ## 6. GDS skeleton

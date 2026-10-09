@@ -1,5 +1,12 @@
 # Assembled VCO block — five sub-blocks, one guard ring, DRC-clean (issue #293, increment 5)
 
+> **Superseded in part by [`decap-20261009/PROOF.md`](decap-20261009/PROOF.md) (issue #759).**
+> This record's statements that the 22 pF decap is two layer-(0, 0) marker
+> rectangles, that the LVS reference excludes it, and its block footprint, are
+> history: the decap is now two real `cap_nmos_03v3` devices in the LVS
+> reference and the block is 226.69 x 184.48 um (41,819.8 um^2). Left as
+> written below, per this repository's append-only evidence convention.
+
 > **Superseded in part by [`PROOF-fold.md`](PROOF-fold.md) (issue #324).**
 > Everything below was true of the block as it stood at PR #325, and the
 > reasoning — why the layout is flat, the routing discipline, why `VDD_VCO` is

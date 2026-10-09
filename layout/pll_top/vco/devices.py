@@ -120,8 +120,10 @@ STAGE_FETS = (
 STAGE_COUNT = 5  # DR-003 Decision 2: fixed at 5, no fallback to 3 or 7.
 
 # vco.sch's committed 22 pF decap: 2x cap_nmos_03v3, 50x50 um (unchanged from
-# layout/floorplan/skeleton.py's VCO_DECAP_0/1 -- carried forward, not redrawn).
+# layout/floorplan/skeleton.py's VCO_DECAP_0/1); drawn as real device geometry by
+# vco/block.py since issue #759.
 DECAP_COUNT = 2
+DECAP_NAMES = ("XCDEC1", "XCDEC2")  # design/netlist/vco.spice instance names
 DECAP_SIZE_UM = 50.0
 
 # --- Design-rule constants (gf180mcuD, nfet_03v3/pfet_03v3 = the "_LV"

@@ -82,7 +82,10 @@ REFERENCES = {
     # ReferenceNetlistTests/PinLabelTests, test_divider_chain.py) -- but
     # against the *tables*, never against the committed bytes the deck was
     # actually run on, which is the distinct thing asserted here.
-    "vco.block": "vco-layout/lvs-clean/vco_block.spice",
+    # Issue #759: the current block reference carries XCDEC1/XCDEC2, so the run
+    # it was matched against lives in the dated decap directory; the older
+    # lvs-clean/ run (no decap pair) stays as the historical record.
+    "vco.block": "vco-layout/decap-20261009/vco_block.spice",
     "vco.ring": "vco-layout/lvs-ring/vco_ring.spice",
     "vco.buffer": "vco-layout/lvs-buffer/vco_out_buffer.spice",
     "loop_filter.block": "loop-filter-layout/loop_filter.spice",

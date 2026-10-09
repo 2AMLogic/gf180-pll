@@ -1584,12 +1584,24 @@ byte-compares on every test run:
 | Item | As-drawn | % of the 0.30 mm² row | Status |
 |---|---|---|---|
 | Loop filter (R + C1 + C2) | 0.0369 mm² (36,936 µm²) | 12.3 % | **derived** — DR-006's 32,118 µm² of *measured* device area (C1 30,276 at the measured 3.988 fF/µm², R 856, C2 986) ×1.15 for bulk taps and interconnect. Not measured: the loop filter has no drawn layout |
-| `vco_block` (172.52 × 184.48 µm) | 0.0318 mm² (31,826 µm²) | 10.6 % | **measured** — committed GDS bbox |
+| `vco_block` (226.69 × 184.48 µm) | 0.0418 mm² (41,820 µm²) | 13.9 % | **measured** — committed GDS bbox; re-measured 2026-10-09 (issue #759) with the 22 pF decap drawn as two real `cap_nmos_03v3` devices instead of overlapping markers |
 | `pfd_cp` (344.98 × 74.30 µm) | 0.0256 mm² (25,630 µm²) | 8.5 % | **measured** — committed GDS bbox (folded at #455, glue bus packed at #469, glue inverters interleaved at #473) |
 | `divider_chain` (1317.66 × 41.99 µm) | 0.0553 mm² (55,329 µm²) | 18.4 % | **measured** — committed GDS bbox (macro band packed at #454, tracks routed over the device rows at #458) |
 | `lock_detector` (294.80 × 103.75 µm) | 0.0306 mm² (30,586 µm²) | 10.2 % | **measured** — committed GDS bbox |
 | **Sum of block footprints** | **0.1803 mm² (180,307 µm²)** | **60.1 %** | |
 | **× the floorplan's ×1.25 top-level overhead** | **0.2254 mm² (225,384 µm²)** | **75.1 %** | **budget** — ROM multiplier; no assembled `pll_top` exists to measure it (#17) |
+
+> **Update 2026-10-09 (issue #759) — the table above is a dated snapshot and
+> only the `vco_block` row was re-measured.** The block (31,826 µm² at the snapshot) grew by 9,994 µm² when
+> its decap pair became real device geometry; the other rows and the two sum
+> rows are as of 2026-09-23 and were not re-derived here. With the new VCO row
+> the block sum would be 190,301 µm² (0.1903 mm²) and 237,876 µm² (0.2379 mm²)
+> after the ×1.25, still inside the formula this row is held on. That formula
+> is superseded as the measure of record by the assembled `pll_top`, which
+> measures 0.4078 mm² (`layout/evidence/pll-top-layout/PROOF.md`; the VCO's
+> growth did not change the assembled bounding box, which the divider chain's
+> width sets). The decision on that miss is #758; nothing in this row was
+> relaxed.
 
 **Met, at 0.2254 mm² against 0.30 mm².** The 24.9 % margin on the block-sum
 allowance is sized to exactly one thing — the unmeasured ×1.25 factor, which
