@@ -25,7 +25,6 @@ Human-approved issues ready for implementation (`loom:issue`).
 
 Issues currently being built (`loom:building`).
 
-- **#297**: Layout: assemble pll_top GDS from real per-block layouts, run full DRC, re-check #149/#18
 - **#533**: sim/reference-spur-band-top: run the 45-point 200 MHz campaign on the batch backend (operator-authorized spend)
 
 ## PRs Awaiting Review
@@ -46,7 +45,6 @@ Issues carrying `loom:curated`.
 
 - **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief *(curated)*
 - **#242**: Live wall-clock confirmation of #241's ngspice-OMP-pin fix on an idle host *(curated)*
-- **#297**: Layout: assemble pll_top GDS from real per-block layouts, run full DRC, re-check #149/#18 *(curated)*
 - **#395**: Measure post-supply-step re-lock time instead of extrapolating it (DR-011 Decision 4) *(curated)*
 - **#399**: Settled static phase at the 15 over-bound corners the 12 µs grid sampled on a decaying tail (DR-012 Decision 6) *(curated)*
 - **#405**: Run the post-supply-step re-lock campaign and write DR-011 Decision 4's replacement decision record (#395 remainder) *(curated)*
@@ -79,10 +77,10 @@ Issues carrying `loom:curated`.
 | Operator merge-risk holds | 0 |
 | Operator priority | 1 |
 | Ready (`loom:issue`) | 1 |
-| In Progress (`loom:building`) | 2 |
+| In Progress (`loom:building`) | 1 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 16 |
+| Curated | 15 |
 | Architect / Hermit proposals | 4 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
