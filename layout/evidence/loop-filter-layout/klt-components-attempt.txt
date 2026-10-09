@@ -1,0 +1,11 @@
+# klt components loop_filter.gds --conductors [m2 36/0, m3 42/0, fusetop 75/0] --vias [via2 38/0 between m2,m3; via2 38/0 between fusetop,m3] --label-layers [36/10 on m2]   (klt 0.7.0+gc64637dcd303)
+file: loop_filter.gds
+top: -
+dbu_um: 0.001
+components: 2
+
+Id             Cell                            BBox (um)  Conductors     Vias                  Labels  Touches Crop
+-------------  -----------  ----------------------------  -------------  --------------------  ------  ------------
+loop_filter:0  loop_filter  (23.85,2.18)-(190.63,181.82)  m2             -                     NZ                 -
+loop_filter:1  loop_filter  (187.0,112.34)-(219.6,154.0)  m2+m3+fusetop  via2+via2_on_fusetop  VCTRL              -
+exit=0

@@ -2537,7 +2537,8 @@ class OffgridRealTreeTests(unittest.TestCase):
     for the nine cells #671 could only disclose (``vco_ring``,
     ``vco_vtoi_core``, ``vco_bias_resistors``, ``vco_out_buffer``,
     ``vco_block``, ``cp_array``, ``cp_output_stage``, ``div23_cell``,
-    ``divider_chain``).
+    ``divider_chain``). Issue #748 added ``loop_filter`` (both of its DRC
+    bundles, variant D and variant A, were run with ``--offgrid``).
     """
 
     def test_the_committed_offgrid_bundle_still_records_an_offgrid_run(self):
@@ -2556,6 +2557,7 @@ class OffgridRealTreeTests(unittest.TestCase):
                 "cp_output_stage",
                 "div23_cell",
                 "divider_chain",
+                "loop_filter",
                 "pfd_cp",
                 "vco_bandsel_mirror",
                 "vco_bias_resistors",

@@ -1,0 +1,51 @@
+# klt extract loop_filter.gds --deck gf180mcu --top loop_filter -o <SCRATCH>/klt_extract.spice   (klt 0.7.0+gc64637dcd303)
+file: loop_filter.gds
+deck: gf180mcu
+deck_options: metal_top=9K (default), mim_cap=cap_mim_2f0_m4m5_noshield (default), poly_res=1k (default)
+top: loop_filter
+dbu_um: 0.001
+status: extracted
+netlist_path: <SCRATCH>/klt_extract.spice
+netlist_sha256: f1c4547219b229750373e5762b92674781b0ce5957d33d6beabab9ae250ba659
+devices: 4  nets: 5  pins: 5
+
+device_counts:
+  ppolyf_u: 4
+
+ignored_layers (shapes not read by this deck's connectivity):
+  166/5: 4 shape(s)
+
+device_recognition_only_layers (read for device recognition, not a metals/vias connectivity level):
+  49/0: 4 shape(s)
+  75/0: 1 shape(s)
+  110/5: 4 shape(s)
+  117/5: 1 shape(s)
+  117/10: 1 shape(s)
+
+warnings:
+  Gate shape touches no diffusion - ignored
+  Gate shape touches no diffusion - ignored
+  Gate shape touches no diffusion - ignored
+  Gate shape touches no diffusion - ignored
+  net 'VCTRL|VSS' merges 2 distinct labels (VCTRL, VSS) onto one net -- KLayout joins multiple labels found on the same electrical net (as '|' here and in the written netlist, matching NetlistSpiceWriter's own node-name escaping); this usually means two differently-named nets were shorted together in the layout -- see docs/cli/extract.md's 'Merged net labels' section.
+  1 layer (166/5) carrying 4 shapes is outside 'gf180mcu' deck's connectivity graph -- this geometry is invisible to extraction, so a net routed only through it extracts as multiple disconnected nets instead of one, which will silently mismatch a downstream `klt lvs` reference netlist -- see ignored_layers[] for the full per-layer shape counts. See docs/cli/extract.md's 'ignored_layers' field documentation.
+exit=0
+--- written netlist ---
+* extracted by klt extract --deck gf180mcu
+
+* cell loop_filter
+* pin NR1
+* pin NR2
+* pin NR3
+* pin NZ
+* pin VCTRL,VSS
+.SUBCKT loop_filter NR1 NR2 NR3 NZ VCTRL|VSS
+* device instance $1 r0 *1 190.4,58.5 ppolyf_u
+X$1 NR3 NZ VCTRL|VSS ppolyf_u r=18725 L=107U W=2U
+* device instance $2 r0 *1 194.4,58.5 ppolyf_u
+X$2 NR3 NR2 VCTRL|VSS ppolyf_u r=18725 L=107U W=2U
+* device instance $3 r0 *1 198.4,58.5 ppolyf_u
+X$3 NR1 NR2 VCTRL|VSS ppolyf_u r=18725 L=107U W=2U
+* device instance $4 r0 *1 202.4,58.5 ppolyf_u
+X$4 NR1 VCTRL|VSS VCTRL|VSS ppolyf_u r=18725 L=107U W=2U
+.ENDS loop_filter

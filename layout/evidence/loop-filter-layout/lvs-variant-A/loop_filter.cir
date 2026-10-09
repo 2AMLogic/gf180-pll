@@ -1,0 +1,10 @@
+* Extracted by KLayout with GF180MCU LVS runset on : 09/10/2026 02:52
+
+.SUBCKT loop_filter VSS NZ NR3 NR1 NR2 VCTRL
+R$1 NR1 NR2 VSS 18725 ppolyf_u L=107U W=2U
+R$2 NR3 NR2 VSS 18725 ppolyf_u L=107U W=2U
+R$3 NR3 NZ VSS 18725 ppolyf_u L=107U W=2U
+R$4 NR1 VCTRL VSS 18725 ppolyf_u L=107U W=2U
+C$5 \$13 \$17 1.97192e-12 cap_mim_2f0_m2m3_noshield A=985.96P P=125.6U
+C$6 NZ VSS 1.332144e-10 cap_nmos_03v3_b A=30276P P=1392U
+.ENDS loop_filter

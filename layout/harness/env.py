@@ -346,6 +346,14 @@ def run_pv_command(
 #: by :func:`normalise_run_dir`. Binary layouts (``*.gds``) are never touched.
 NORMALISED_GLOBS = ("*.log", "*.lyrdb", "*.lvsdb", "*.cir")
 
+#: Of those, the ones that are XML. A token such as ``<RUN_DIR>`` written into
+#: one of these verbatim is a malformed start tag, and the harness's own
+#: report parser (``drc.parse_report_db``) then cannot read the very report it
+#: is about to grade -- which is what the first DRC run after issue #701
+#: (issue #748's) hit. In these files the token is written XML-escaped
+#: (``&lt;RUN_DIR&gt;``), which an XML reader decodes back to ``<RUN_DIR>``.
+XML_GLOBS = ("*.lyrdb",)
+
 #: Name of the disclosure file :func:`normalise_run_dir` writes beside the
 #: artifacts it rewrote, so the substitution is recorded rather than silent.
 NORMALISATION_NOTE = "path-normalisation.txt"
@@ -390,10 +398,12 @@ def normalise_run_dir(run_dir: Path, substitutions: list) -> int:
     """
     run_dir = Path(run_dir)
     rewritten = []
+    xml_subs = [(path, token.replace("<", "&lt;").replace(">", "&gt;")) for path, token in substitutions]
     for pattern in NORMALISED_GLOBS:
         for path in sorted(run_dir.glob(pattern)):
             original = path.read_text(errors="surrogateescape")
-            normalised = normalise_paths(original, substitutions)
+            subs = xml_subs if any(path.match(g) for g in XML_GLOBS) else substitutions
+            normalised = normalise_paths(original, subs)
             if normalised != original:
                 path.write_text(normalised, errors="surrogateescape")
                 rewritten.append(path.name)
