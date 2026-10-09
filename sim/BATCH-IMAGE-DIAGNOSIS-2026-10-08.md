@@ -756,7 +756,7 @@ Run E matches the unset case on every metric printed (for example `up_lvl`
   a reviewed decision; neither was attempted here.
 - The 2026-10-02 ruling stands and the 45-point grid stays held.
 
-## Addendum 7 (2026-10-09): solver and DC-state check closed out; the `wnflag` split also reproduces on Ubuntu ngspice-42, and it is the init file, not the solver
+## Addendum 7 (2026-10-09): batch and local run the same active solver, so a solver difference does not explain the split; the `wnflag` split also reproduces on Ubuntu ngspice-42, where solver choice still interacts with it
 
 Appended to reconcile the open "linear solver" lead (re-pilot comment of
 2026-10-08 and the `loom:blocked` note that followed it) with the
@@ -790,7 +790,7 @@ mix-up and nothing else.
 
 The ngspice-46 pin (`~/.local/bin/ngspice`) is absent on this worker, so the
 Linux ngspice-46 half of the comparison is Addendum 3's. What this host adds
-is an independent build that reproduces the `wnflag` split.
+is a second build (a different version) that reproduces the `wnflag` split.
 
 - Binary: `/usr/bin/ngspice`, `ngspice-42`, Ubuntu package `42+ds-3build1`,
   `Compiled with KLU Direct Linear Solver`, sha256 `82065831…`. The system
@@ -824,34 +824,57 @@ no init default vs no init `klu`, 29 differ (last digits, as in Addendum 1);
 `wnflag` default vs `wnflag` `klu`, 207 differ. The values for the no-init
 default row equal the batch logs' on the six key nodes, as in Addendum 1.
 
+Why 447 here and 414 in Addendum 3 for the same deck (`13e54081…`): the
+table in these logs has 447 entries, of which 414 are node voltages and 33 are
+`#branch` currents (voltage sources and the moscap `e.` elements). The 414
+matches Addendum 3's "414 scalar node lines" exactly, so Addendum 3 most
+likely counted node voltages only; its scratch logs were not re-read to
+confirm this. Restricted to the 414 node voltages, the counts above become:
+no init vs `wnflag` only, 206 (+5 branch currents); no init default vs `klu`,
+29 (no branch currents); `wnflag` default vs `wnflag` `klu`, 204 (+3 branch
+currents). These equal Addendum 3's 206 (real-init vs no-init), 29 and 204
+(real-init default vs real-init `klu`) on the ngspice-46 pin.
+
 Observations, limited to this deck, point (ff / -40 C / 3.63 V, band 7) and DC
 operating point:
 
 - `set wnflag=1` in the init file moves the DC solution from the batch state
-  to the reference state on a **second, independent build** (Ubuntu
-  ngspice-42, a distro package rather than the locally built pin), so the
-  dependence is not a quirk of one binary. `set num_threads=1` does not move
-  it.
-- The active solver is SPARSE 1.3 on both sides of the split. The split is
-  there with the same solver in both runs, so the solver does not explain it.
-- Forcing KLU removes the reference state even with `wnflag=1` (the `klu` row
-  with `wnflag=1` is in the batch state). That matches Addendum 3's `klu` row
-  with the real init file. So `wnflag` is necessary for the reference state
-  here only together with the default SPARSE solver; the two interact. This
-  is a statement about this DC point and says nothing about which solver is
-  numerically better.
-- Gmin stepping occurs exactly in the runs that land in the batch state; it
-  is absent in the direct-Newton reference-state runs. Gmin stepping is thus
-  a symptom of the batch-state circuit, not an independent cause: the same
-  binary takes it or not depending on whether `wnflag` was in place when the
-  netlist was read (Addendum 6: setting it later in `.control` is too late).
+  to the reference state on a **second build of a different version** (Ubuntu
+  ngspice-42, a distro package rather than the locally built ngspice-46 pin),
+  so the dependence is not a quirk of one binary. `set num_threads=1` does
+  not move it.
+- The active solver is SPARSE 1.3 on both sides of the batch-versus-local
+  split. That split occurs with the same active solver in both runs, so a
+  solver *difference* does not explain it.
+- The solver is nevertheless an interacting factor: forcing KLU removes the
+  reference state even with `wnflag=1` (the `klu` row with `wnflag=1` is in
+  the batch state, with gmin stepping). That matches Addendum 3's `klu` row
+  with the real init file. So `wnflag=1` gives the reference state here only
+  together with the default SPARSE solver, and changing only the solver
+  changes the DC state. This is a statement about this DC point and says
+  nothing about which solver is numerically better.
+- Gmin stepping occurs in every run that lands in the batch state, including
+  the `wnflag=1` + KLU run, and is absent in the direct-Newton
+  reference-state runs. Under the default SPARSE solver only, whether gmin
+  stepping occurs follows whether `wnflag` was in place when the netlist was
+  read (Addendum 6: setting it later in `.control` is too late). Whether gmin
+  stepping is a consequence of the batch-state circuit or itself steers the
+  solution into that state is **not verified**: these runs do not separate
+  the two (no run forced direct Newton or gmin stepping independently of
+  `wnflag` and solver).
 
 ### 3. Status of the hypotheses (causality)
 
-- **Solver hypothesis: not supported**, now by three independent builds
-  (image ngspice-46, Linux pin ngspice-46, Ubuntu ngspice-42): every
-  active-solver line in every captured log is SPARSE 1.3 unless `.options klu`
-  is added, and the DC split occurs with the solver held fixed.
+- **Solver-difference hypothesis (batch and local use different solvers):
+  not supported**, on three builds of two versions (image ngspice-46, Linux
+  pin ngspice-46, Ubuntu ngspice-42): every active-solver line in every
+  captured log is SPARSE 1.3 unless `.options klu` is added, so batch and
+  local run the same active solver and the batch-versus-local DC split occurs
+  with the solver held fixed. This does **not** mean the solver is
+  irrelevant: when the solver is varied (`.options klu`), the DC state
+  changes, and under `wnflag=1` it falls back to the batch state. Solver
+  choice is an interacting factor with `wnflag`, not the source of the
+  batch-versus-local difference.
 - **Init-file (`wnflag`) hypothesis: reproduced at the DC point on two
   builds** (Addendum 3 on the Linux pin, this addendum on
   ngspice-42; full transient with a controlled pair in Addendum 5 on the
