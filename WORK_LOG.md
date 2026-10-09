@@ -4,6 +4,8 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-10-09
 
+- **PR #760**: layout: assemble pll_top from the five real block layouts, with DRC and connectivity evidence
+- **Issue #297** (closed): Layout: assemble pll_top GDS from real per-block layouts, run full DRC, re-check #149/#18
 - **PR #754**: layout: physical loop-filter generator (MOS caps, MIM cap, poly resistors, ties) (#748)
 - **PR #756**: docs: reconcile active-solver claim; reproduce wnflag DC split on ngspice-42 (Part of #533)
 - **PR #752**: docs: set wnflag=1 in the deck's .control block does not reproduce the local result (#533)
