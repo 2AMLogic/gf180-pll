@@ -14,11 +14,14 @@ _None._
 Issues the operator starred (`loom:operator-priority`); land these first.
 
 - **#533**: sim/reference-spur-band-top: run the 45-point 200 MHz campaign on the batch backend (operator-authorized spend)
+- **#755**: sim harness: stage a simulator init file (wnflag) so local and batch backends run the same configuration
 
 ## Ready
 
 Human-approved issues ready for implementation (`loom:issue`).
 
+- **#127**: Track the gap to T1 sim-validated / bronze (klayout-tools design-evidence tiers)
+- **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief
 - **#680**: sim: realign the batch job image to the ngspice-46 pin — it cannot converge sim/reference-input-contract's edge-rate variant, so #499's grid is unobtainable off-host
 
 ## In Progress
@@ -76,8 +79,8 @@ Issues carrying `loom:curated`.
 | Tier | Count |
 |------|-------|
 | Operator merge-risk holds | 0 |
-| Operator priority | 1 |
-| Ready (`loom:issue`) | 1 |
+| Operator priority | 2 |
+| Ready (`loom:issue`) | 3 |
 | In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
