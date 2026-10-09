@@ -730,7 +730,6 @@ setting moved into the init file, as the positive control that E alone lacks.
 | C (Addendum 5) | init file, read at simulator start | -61.7103 | 3.63 V |
 | E (this addendum) | inside the deck's `.control` block | **-75.5655** | **5.12765e-9 V** |
 | B (Addendum 4) | not set | -75.5655 | 5.12765e-9 V |
-
 | F (this addendum, positive control) | init file holding only `set wnflag=1` (sha256 `82a66e01…`), same host, binary and command as E | **-61.7103** | **3.63 V** |
 
 Run E matches the unset case on every metric printed (for example `up_lvl`
