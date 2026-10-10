@@ -26,13 +26,13 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-_None._
+- **#127**: Track the gap to T1 sim-validated / bronze (klayout-tools design-evidence tiers)
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-_None._
+- **#770**: layout(pll_top): klt erc supply-island run on the assembled top level (Part of #127)
 
 ## Approved (Awaiting Merge)
 
@@ -80,8 +80,8 @@ Issues carrying `loom:curated`.
 | Operator merge-risk holds | 0 |
 | Operator priority | 2 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 0 |
-| PRs awaiting review | 0 |
+| In Progress (`loom:building`) | 1 |
+| PRs awaiting review | 1 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 17 |
 | Architect / Hermit proposals | 4 |
