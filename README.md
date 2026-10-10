@@ -13,7 +13,7 @@ verification evidence in `sim/` is the point of the repository: every claim
 this project makes is meant to be backed by a testbench and a recorded corner
 sweep, in a format designed so you can check that yourself.
 
-## Status: early. Block-level layout underway, pre-top-level, pre-silicon.
+## Status: early. Top-level layout assembled, signoff incomplete, pre-silicon.
 
 Being honest about where this actually is. Every number in this repository is
 simulation only; nothing has been fabricated or measured.
@@ -39,7 +39,8 @@ the evidence tree in CI, so they cannot silently go stale.
 
 The maturity ladder being climbed: simulation-complete → layout DRC/LVS-clean
 → shuttle seat → measured silicon over temperature. This is partway up the
-first rung: the blocks are drawn, the top level is not.
+first rung: the blocks and top level are drawn; top-level signoff and
+post-layout verification remain incomplete.
 
 ## Repository layout
 
