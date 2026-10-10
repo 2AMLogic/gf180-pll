@@ -259,9 +259,13 @@ uses `klayout.db` directly.
    Tracked at #759.~~ Closed by #759: the decap is two real `cap_nmos_03v3`
    devices (`../vco-layout/decap-20261009/PROOF.md`). Open: their electrical
    behaviour is not extracted or simulated (#18).
-5. **VCO ERC**: the committed `layout/evidence/vco-layout/erc-report.json`
-   reports `erc_status: violations`, 1 finding; not re-examined here, and no
-   ERC was run on the top level.
+5. **ERC**: `klt erc` was run on the assembled top level
+   ([`PROOF-erc.md`](PROOF-erc.md)): `VDD`, `VSS`, `GND_VCO` and `VDD_DIV` each
+   resolve to one island and no supply pair is shorted, but `VDD_VCO` carries
+   the same two-island finding as `layout/evidence/vco-layout/erc-report.json`
+   (`erc_status: violations`, 1 finding), so T1 item 11 is not met. Well ties
+   are not graded at the top level and the antenna half skipped all 1380
+   checks (no gf180mcu table).
 6. **Supply risers are mostly single vias**: the 2 x 2 riser fits only where a
    block's supply wire is wide enough (3 of 9 supply accesses); the other 6
    are one via per cut layer. Not IR-drop-analysed.

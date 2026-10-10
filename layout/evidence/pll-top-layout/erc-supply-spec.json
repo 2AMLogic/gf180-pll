@@ -1,0 +1,114 @@
+{
+ "_description": "klt erc supply-connectivity spec for layout/evidence/pll-top-layout/pll_top.gds (gf180mcuD), the assembled top level (issue #297). Declares the gate+conductor stackup Poly2..Metal5 with the vias bridging it, and the five supply nets of design/netlist/pll_top.spice (VDD, VSS, VDD_VCO, GND_VCO, VDD_DIV) so erc.unconnected_net / erc.supply_short can be computed across the whole chip. Run with '--deck gf180mcu'. No ties[] entry; see ties_disclosure.",
+ "stackup": [
+  {
+   "name": "poly2",
+   "layer": "30/0",
+   "role": "gate",
+   "active_layer": "22/0",
+   "_comment": "Poly2 (30/0), gate poly; active_layer Comp (22/0). Same as every block-level spec."
+  },
+  {
+   "name": "metal1",
+   "layer": "34/0",
+   "label_layer": "34/10",
+   "_comment": "Metal1 (34/0) via Contact (33/0). 34/10 (Metal1_Label) carries the blocks' own supply pin text in the assembled GDS (VDD 30, VSS 32, GND_VCO 28, VDD_VCO 15, VDD_DIV 1 instances, counted with klayout.db over the flattened top cell)."
+  },
+  {
+   "name": "metal2",
+   "layer": "36/0",
+   "label_layer": "36/10",
+   "_comment": "Metal2 (36/0) via Via1 (35/0). 36/10 carries one VDD and one VSS text in the assembled GDS."
+  },
+  {
+   "name": "metal3",
+   "layer": "42/0",
+   "_comment": "Metal3 (42/0) via Via2 (38/0). No 42/10 text is drawn in this GDS."
+  },
+  {
+   "name": "metal4",
+   "layer": "46/0",
+   "_comment": "Metal4 (46/0) via Via3 (40/0): the top-level signal and supply routing layer (layout/evidence/pll-top-layout/PROOF.md)."
+  },
+  {
+   "name": "metal5",
+   "layer": "81/0",
+   "label_layer": "81/10",
+   "_comment": "Metal5 (81/0) via Via4 (41/0): the top-level supply pins. 81/10 carries exactly one text per supply (VSS, VDD, VDD_VCO, GND_VCO, VDD_DIV)."
+  }
+ ],
+ "vias": [
+  {
+   "name": "contact",
+   "layer": "33/0",
+   "between": [
+    "poly2",
+    "metal1"
+   ]
+  },
+  {
+   "name": "via1",
+   "layer": "35/0",
+   "between": [
+    "metal1",
+    "metal2"
+   ]
+  },
+  {
+   "name": "via2",
+   "layer": "38/0",
+   "between": [
+    "metal2",
+    "metal3"
+   ]
+  },
+  {
+   "name": "via3",
+   "layer": "40/0",
+   "between": [
+    "metal3",
+    "metal4"
+   ]
+  },
+  {
+   "name": "via4",
+   "layer": "41/0",
+   "between": [
+    "metal4",
+    "metal5"
+   ]
+  }
+ ],
+ "nets": [
+  {
+   "name": "VDD",
+   "kind": "supply",
+   "_comment": "Digital supply of pfd_cp and lock_detector; the netcheck records it as a star of two branches meeting at one pad, i.e. one electrical island."
+  },
+  {
+   "name": "VSS",
+   "kind": "supply",
+   "_comment": "Shared ground of every block except the VCO."
+  },
+  {
+   "name": "VDD_VCO",
+   "kind": "supply",
+   "_comment": "VCO supply, its own pin."
+  },
+  {
+   "name": "GND_VCO",
+   "kind": "supply",
+   "_comment": "VCO ground, its own pin; shares the p-substrate with VSS (PROOF.md 'GND_VCO and VSS')."
+  },
+  {
+   "name": "VDD_DIV",
+   "kind": "supply",
+   "_comment": "Divider-chain supply, its own pin."
+  }
+ ],
+ "ties_disclosure": {
+  "kind": "tool_limitation",
+  "reason": "The assembled top level draws one Nwell layer (21/0) that holds the n-wells of several differently-supplied blocks (at least VDD for pfd_cp and lock_detector, VDD_VCO, VDD_DIV), and one ties[] entry grades every shape of its well_layer against a single net. Selecting the wells of one supply needs a marker layer to select on (ties[].well_requires / well_excludes) and this stream draws none. Well-tie coverage is therefore not graded at the top level; each block's own erc-report.json grades it on that block's GDS, and the top level adds only the island check across the routing.",
+  "_comment": "Machine-readable disclosure of a deliberate zero-ties[] declaration. It keeps T1 item 11 UNMET for the top level (the caller's word is not a computed erc.missing_tie result). The same shape of limitation is disclosed for pfd_cp, see ../pfd-cp-layout/erc-supply-spec.json."
+ }
+}
