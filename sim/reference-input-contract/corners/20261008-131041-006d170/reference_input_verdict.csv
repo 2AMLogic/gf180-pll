@@ -1,0 +1,11 @@
+# per-corner shift of the sampled phase against the ideal reference -- 2 corner(s) checked, 1 FAILED; largest shift 1.275e-10 s against the 1 ns static-phase bound
+# d_ref_ideal_s: the reference-path set delay at the ideal waveform (s) -- the anchor every shift in this row is measured against
+# shift_*_s: d_ref(variant) - d_ref(ideal) at this corner (s).  A positive shift means the phase detector acted on the reference LATER than it would have with the ideal pulse, which moves the locked loop's reference-to-output phase by the same amount.
+# dfb_dev_max_s: the largest |d_fb(variant) - d_fb(ideal)| at this corner (s).  FB is driven identically at every point, so this is the experiment's own control and is graded on the same bound the duty claim is.
+# vth_off_v: the effective switching threshold of the REF input path, measured from mid-rail (V), extracted from the ideal / 5 ns-edge slope pair.  Positive = trips above VDD/2, so a slower edge arrives later.
+# vth_model_resid_s: measured d_ref(worst) minus the value that two-parameter model predicts at the worst point's own slope (s).  This is a CHECK of the extraction against a third, independent slope at reduced levels -- not a fit residual.
+# dtdv_worst_s_per_v: 1 / slope at the worst legal reference waveform (s/V) -- the AM-to-PM coefficient an integrating system needs to turn its own reference's amplitude noise into a sampling-instant displacement.  This is the input side of the reference-source-quality exclusion; the output-referred jitter number it does not replace is named in that row's owner.
+# verdict: pass iff every shift is within the 1 ns static-phase bound of spec/pll.md's Lock criterion, AND the two duty shifts are within 1 % of d_ref (the falsifiable form of the duty row's rising-edge-only argument, floored at the deck's 5 ps crossing resolution), AND the d_fb control did not move by more than that same bound
+corner,d_ref_ideal_s,shift_levels_s,shift_edge5ns_s,shift_duty30_s,shift_duty70_s,shift_worst_s,dfb_dev_max_s,vth_off_v,vth_model_resid_s,dtdv_worst_s_per_v,verdict
+typical/-40C/2.97V,3.07051e-10,9.431e-12,-2.1093e-11,0,0,-1.27518e-10,2.58e-13,-0.01035,-9.18981e-11,3.5073e-09,pass
+typical/-40C/3.63V,2.5676e-10,8.052e-12,-1.4777e-11,0,0,,2.5e-14,-0.00887,,,FAIL
