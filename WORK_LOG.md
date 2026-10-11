@@ -2,6 +2,13 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-11
+
+- **Issue #774** (closed): Dedupe claim-checker Python helpers copied across check scripts
+- **Issue #776** (closed): Consolidate duplicated h_wire, snap_um, via1_stack, tap_strip helpers into _canvas.py
+- **PR #775**: refactor: dedupe claim-checker Python helpers into lib/checklib
+- **PR #777**: refactor: consolidate h_wire, snap_um, via1_stack and tap_strip into _canvas.py
+
 ### 2026-10-10
 
 - **PR #770**: layout(pll_top): klt erc supply-island run on the assembled top level (Part of #127)
