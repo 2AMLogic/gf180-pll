@@ -20,14 +20,13 @@ Issues the operator starred (`loom:operator-priority`); land these first.
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-- **#127**: Track the gap to T1 sim-validated / bronze (klayout-tools design-evidence tiers)
-- **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief
+_None._
 
 ## In Progress
 
 Issues currently being built (`loom:building`).
 
-_None._
+- **#776**: Consolidate duplicated h_wire, snap_um, via1_stack, tap_strip helpers into _canvas.py
 
 ## PRs Awaiting Review
 
@@ -62,6 +61,7 @@ Issues carrying `loom:curated`.
 - **#680**: sim: realign the batch job image to the ngspice-46 pin — it cannot converge sim/reference-input-contract's edge-rate variant, so #499's grid is unobtainable off-host *(curated)*
 - **#753**: Loop filter C2 is a MIM option-A device, but the repository's PV flow targets gf180mcuD (MIM option B) *(curated)*
 - **#755**: sim harness: stage a simulator init file (wnflag) so local and batch backends run the same configuration *(curated)*
+- **#776**: Consolidate duplicated h_wire, snap_um, via1_stack, tap_strip helpers into _canvas.py *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -80,11 +80,11 @@ Issues carrying `loom:curated`.
 |------|-------|
 | Operator merge-risk holds | 0 |
 | Operator priority | 2 |
-| Ready (`loom:issue`) | 2 |
-| In Progress (`loom:building`) | 0 |
+| Ready (`loom:issue`) | 0 |
+| In Progress (`loom:building`) | 1 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 17 |
+| Curated | 18 |
 | Architect / Hermit proposals | 4 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
