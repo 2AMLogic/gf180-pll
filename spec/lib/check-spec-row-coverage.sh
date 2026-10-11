@@ -179,10 +179,12 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-python3 - "${REPO_ROOT}" "${SPEC}" "${PROPOSAL}" "${DECISIONS}" <<'PY'
+PYTHONPATH="${REPO_ROOT}/lib${PYTHONPATH:+:${PYTHONPATH}}" python3 - "${REPO_ROOT}" "${SPEC}" "${PROPOSAL}" "${DECISIONS}" <<'PY'
 import os
 import re
 import sys
+
+from checklib.markdown import tables
 
 repo_root, spec_rel, proposal_rel, decisions_rel = sys.argv[1:5]
 
@@ -227,38 +229,6 @@ def normalize(cell):
     for dash in ("—", "–", "‒", "‑", "−"):
         text = text.replace(dash, "-")
     return re.sub(r"\s+", " ", text).strip().casefold()
-
-
-def tables(block):
-    """Every GitHub-flavoured Markdown table in a block, header row first.
-
-    Tables are split on their own `|---|` separator rows, so a section holding
-    more than one table yields more than one table rather than one impossible
-    table with three different column counts. Section 5 gained exactly that
-    shape when 5.1's value-provenance and exclusion tables landed (issue
-    #237): before this split, 5.1's 6-cell and 2-cell rows were appended to
-    the 5-column specification table and read as malformed rows of it.
-    """
-    found, current = [], None
-    for line in block.splitlines():
-        line = line.strip()
-        if not line.startswith("|"):
-            current = None
-            continue
-        if re.fullmatch(r"\|[\s:|-]+\|", line):
-            continue
-        # GitHub-flavoured Markdown writes a literal pipe inside a cell as
-        # `\|`; only an unescaped pipe is a column boundary. The random-jitter
-        # row's "peak-\|I_d\|" was split into two extra cells until issue
-        # #237's roll-call rule read its Verdict column and found text from
-        # the Measured column there instead.
-        cells = [c.strip() for c in re.split(r"(?<!\\)\|", line.strip("|"))]
-        if current is None:
-            current = [cells]
-            found.append(current)
-        else:
-            current.append(cells)
-    return found
 
 
 def table_with(block, wanted):

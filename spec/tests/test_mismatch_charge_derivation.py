@@ -30,7 +30,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _fixtures import TreeWriter
+from _fixtures import TreeWriter, install_checklib
 
 SPEC_DIR = Path(__file__).resolve().parents[1]
 CHECK = SPEC_DIR / "lib" / "check-mismatch-charge-derivation.sh"
@@ -287,6 +287,7 @@ class _Tree(TreeWriter):
         self.root = root
         (root / "spec" / "lib").mkdir(parents=True)
         shutil.copy2(CHECK, root / "spec" / "lib" / CHECK.name)
+        install_checklib(root)
         self.write(SPEC_DOC, SPEC_TEXT)
         self.write(DR018_DOC, DR018_TEXT)
         self.write(DR006_DOC, DR006_TEXT)

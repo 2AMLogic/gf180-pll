@@ -108,11 +108,13 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-python3 - "${REPO_ROOT}" <<'PY'
+PYTHONPATH="${REPO_ROOT}/lib${PYTHONPATH:+:${PYTHONPATH}}" python3 - "${REPO_ROOT}" <<'PY'
 import glob
 import os
 import re
 import sys
+
+from checklib.spice import instance_nodes, join_continuations
 
 repo_root = sys.argv[1]
 
@@ -167,33 +169,6 @@ failed = False
 unparsed = []
 hierarchyless = []
 unnamed = []
-
-
-def join_continuations(lines, start):
-    """Join ``lines[start]`` with every following ``+``-continuation line."""
-    text = lines[start].rstrip("\n")
-    i = start + 1
-    while i < len(lines) and lines[i].startswith("+"):
-        text += " " + lines[i][1:].rstrip("\n")
-        i += 1
-    return text, i
-
-
-def instance_nodes(logical_line):
-    """The node tokens ``logical_line`` connects, and the model it names.
-
-    ``Xname node1 ... nodeN modelname [param=value ...]`` -- the model name is
-    the token before the first ``key=value``, or the last token when there are
-    none.
-    """
-    tokens = logical_line.split()[1:]
-    if not tokens:
-        return [], None
-    param_idx = next((i for i, t in enumerate(tokens) if "=" in t), None)
-    model_idx = (param_idx - 1) if param_idx is not None else len(tokens) - 1
-    if model_idx <= 0:
-        return [], None
-    return tokens[:model_idx], tokens[model_idx]
 
 
 def dead_ports(rel):
