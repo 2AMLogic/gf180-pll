@@ -98,6 +98,23 @@ class HWireTests(unittest.TestCase):
         lock_prim.h_wire(lock, 0.0, 2.0, 1.0)  # lock detector default: 0.32 um
         self.assertEqual(_layer_boxes(lock, "metal1"), [(0.0, 0.84, 2.0, 1.16)])
 
+    def test_positional_and_keyword_width_both_work_on_every_binding(self):
+        # Pre-#776 contract: ``h_wire(canvas, x0, x1, y, width)`` -- the fifth
+        # positional argument must keep working, not only ``width=``.
+        for mod in (vco_prim, lock_prim):
+            positional = mod.h_wire(mod.Canvas("hw_pos"), 0.0, 2.0, 1.0, 0.4)
+            keyword = mod.h_wire(mod.Canvas("hw_kw"), 0.0, 2.0, 1.0, width=0.4)
+            self.assertEqual(positional, (0.0, 0.8, 2.0, 1.2))
+            self.assertEqual(keyword, positional)
+
+    def test_pfd_h_wire_keeps_view_name_width_forms_and_returns_none(self):
+        # PFD's original returned None and named its first parameter ``view``.
+        positional = rowgen.Canvas("hw")
+        keyword = rowgen.Canvas("hw")
+        self.assertIsNone(rowgen.h_wire(positional, 0.0, 2.0, 1.0, 0.4))
+        self.assertIsNone(rowgen.h_wire(view=keyword, x0=0.0, x1=2.0, y=1.0, width=0.4))
+        self.assertIsNone(rowgen.h_wire(rowgen.Canvas("hw"), 0.0, 2.0, 1.0))  # default width
+
 
 class SnapUmTests(unittest.TestCase):
     """``_canvas.snap_um()``: pure rounding, no canvas needed."""

@@ -603,7 +603,8 @@ def mos_cap_nmos(
 
 # Horizontal Metal1 wire segment -- shared with every other
 # ``layout/pll_top/*`` submodule (issue #776, ``_canvas.h_wire()``).
-h_wire = partial(_canvas.h_wire, width=METAL1_WIRE_WIDTH_UM)
+def h_wire(canvas: Canvas, x0: float, x1: float, y: float, width: float = METAL1_WIRE_WIDTH_UM) -> tuple:
+    return _canvas.h_wire(canvas, x0, x1, y, width=width)
 
 # Vertical Metal1 wire segment -- shared with every other
 # ``layout/pll_top/*`` submodule (issue #353, ``_canvas.v_wire()``).

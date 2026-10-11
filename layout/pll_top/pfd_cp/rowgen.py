@@ -412,7 +412,8 @@ def mosfet(view, fet: Fet, x0: float, y_center: float, *, tab_up: bool) -> Mosfe
 
 # Horizontal Metal1 wire segment -- shared with every other
 # ``layout/pll_top/*`` submodule (issue #776, ``_canvas.h_wire()``).
-h_wire = partial(_canvas.h_wire, width=METAL1_WIRE_WIDTH_UM)
+def h_wire(view, x0: float, x1: float, y: float, width: float = METAL1_WIRE_WIDTH_UM) -> None:
+    _canvas.h_wire(view, x0, x1, y, width=width)
 
 
 def v_wire(view, x: float, y0: float, y1: float, width: float = METAL1_WIRE_WIDTH_UM) -> None:
