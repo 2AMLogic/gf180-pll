@@ -123,6 +123,44 @@ these names under their own original ``checks.shorted_pairs(...)`` /
 ``rowgen.shorted_pairs(...)`` call signatures, so no call site (including
 ``layout/tests/test_lock_detector_layout.py`` and
 ``layout/tests/test_pfd_layout.py``) changed.
+
+``h_wire()``, ``snap_um()``, ``via1_stack()`` and ``tap_strip()`` (issue
+#776) join the same convention, completing what #332/#353/#475/#690/#707
+started: the last four small drawing/rounding helpers still re-authored per
+``layout/pll_top/*`` submodule moved here.
+
+* ``h_wire()`` -- ``vco/primitives.py`` and ``lock_detector/primitives.py``
+  carried byte-identical copies and ``pfd_cp/rowgen.py`` a no-return one;
+  like ``v_wire()``, its Metal1 wire width is an explicit ``width``
+  argument, each submodule binding its own default via
+  ``functools.partial``.
+* ``snap_um()`` -- ``vco/devices.py`` and ``loop_filter/devices.py``
+  carried byte-identical copies over the same 0.005 um manufacturing grid;
+  the grid step is an explicit ``grid_um`` argument so this module never
+  guesses one, and each ``devices.py`` binds its own ``LAYOUT_GRID_UM``.
+* ``via1_stack()`` -- ``vco/primitives.py`` and
+  ``loop_filter/primitives.py`` drew the same via1 + Metal1 + Metal2
+  landing-square construction over different DRC constants; like
+  ``_contact_positions()``, the sizes and the grid snap are explicit
+  keyword arguments each caller binds.
+* ``tap_strip()`` -- the rectangular tap band that ``well_tap()`` (issue
+  #690's square-tap counterpart here) left behind: ``vco/primitives.py``,
+  ``lock_detector/primitives.py``, ``pfd_cp/rowgen.py`` and
+  ``loop_filter/primitives.py`` each carried a ~20-30-line copy of the same
+  comp / implant / contact / Metal1-pad sequence. The shared body draws all
+  of it and returns ``(comp box, Metal1 pad box)``; the per-module copies
+  become thin adapters that translate their own public contract on top of
+  that result (VCO adds a pin over the comp; lock detector pins over the
+  pad; PFD/CP returns the comp box; loop filter returns the Metal1 pad).
+  Contact placement is injected as two position callbacks over the comp box
+  (a full 2-D grid for VCO and loop filter, a single centered row for lock
+  detector and PFD/CP), and each adapter passes its own implant/margin/
+  contact-size constants -- the four tap implementations' distinct return
+  and net/pin contracts are preserved, not unified. ``net``, when given,
+  draws the Metal1 pad inside ``canvas.net(net)`` (the caller's canvas must
+  provide that context manager -- ``lock_detector``'s does, for its
+  ``RecordingCanvas`` connectivity checks; the bare ``Canvas`` does not,
+  and its callers pass ``None``).
 """
 
 from __future__ import annotations
@@ -677,6 +715,70 @@ def v_wire(canvas: Canvas, x: float, y0: float, y1: float, width: float) -> tupl
     return (x0, min(y0, y1), x1, max(y0, y1))
 
 
+def h_wire(canvas: Canvas, x0: float, x1: float, y: float, *, width: float) -> tuple:
+    """A horizontal Metal1 wire segment centered on ``y``, spanning ``[x0, x1]``.
+
+    The horizontal counterpart of :func:`v_wire` (issue #776): ``width`` is
+    the caller's own Metal1 minimum-wire-width constant, passed explicitly
+    for the same reason ``v_wire()``'s is. Reversed endpoints are legal --
+    ``Canvas.rect`` normalizes them and the returned box is normalized too,
+    so callers that route right-to-left get the same box as left-to-right.
+    """
+    y0, y1 = y - width / 2.0, y + width / 2.0
+    canvas.rect("metal1", x0, y0, x1, y1)
+    return (min(x0, x1), y0, max(x0, x1), y1)
+
+
+def snap_um(v: float, *, grid_um: float) -> float:
+    """Round ``v`` to the nearest point of the manufacturing grid ``grid_um``.
+
+    Shared home (issue #776) of the byte-identical rounding helpers
+    ``vco/devices.py`` and ``loop_filter/devices.py`` each carried next to
+    their own ``LAYOUT_GRID_UM`` constant. The grid step is an explicit
+    ``grid_um`` argument -- this module doesn't guess a grid any more than
+    ``v_wire()`` guesses a wire width -- and each ``devices.py`` binds its
+    own constant: ``snap_um = partial(_canvas.snap_um, grid_um=LAYOUT_GRID_UM)``,
+    so every existing ``dev.snap_um(x)`` call site is unchanged.
+    """
+    return round(round(v / grid_um) * grid_um, 6)
+
+
+def via1_stack(
+    canvas: Canvas,
+    x: float,
+    y: float,
+    *,
+    via_size_um: float,
+    pad_um: float,
+    snap: Callable[[float], float],
+) -> tuple[float, float, float, float]:
+    """One via1 at ``(x, y)`` with its own Metal1 and Metal2 landing pads.
+
+    Shared home (issue #776) of the construction ``vco/primitives.py`` and
+    ``loop_filter/primitives.py`` each carried: one square via plus one
+    Metal1 and one Metal2 landing square of side ``pad_um``, centered on the
+    via. ``via_size_um``/``pad_um`` are the caller's own DRC-derived via
+    size and landing-pad side (each binding keeps its own rule citations):
+    VCO passes ``VIA1_SIZE_UM`` and ``VIA1_SIZE_UM + 2*VIA1_METAL_ENCLOSE_UM``
+    (= 0.44 um, satisfying V1.3a/V1.4a with real margin and staying at or
+    above the 0.34 um width threshold below which the deck's V1.3c/V1.4b
+    end-of-line-overlap rules would apply); loop filter passes its
+    ``VIA_UM`` and ``METAL_PAD_UM``. ``snap`` is the caller's
+    manufacturing-grid snap -- a via's min *and* max size rule (V1.1/V2.1)
+    makes an off-grid corner a hard violation, not a cosmetic nudge, so the
+    center is snapped explicitly here, same reasoning as
+    :func:`_contact_positions`' ``snap``. Returns the landing-pad box.
+    """
+    x, y = snap(x), snap(y)
+    half_v = via_size_um / 2.0
+    canvas.rect("via1", x - half_v, y - half_v, x + half_v, y + half_v)
+    half_p = pad_um / 2.0
+    pad = (x - half_p, y - half_p, x + half_p, y + half_p)
+    canvas.rect("metal1", *pad)
+    canvas.rect("metal2", *pad)
+    return pad
+
+
 def mosfet(
     canvas: Canvas,
     device: Any,
@@ -915,6 +1017,80 @@ def well_tap(
     canvas.rect("metal1", *pad)
     canvas.pin(net, *pad)
     return pad
+
+
+def tap_strip(
+    canvas: Canvas,
+    kind: str,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    *,
+    implant_margin_um: float,
+    contact_size_um: float,
+    contact_xs: Callable[[float, float], list[float]],
+    contact_ys: Callable[[float, float], list[float]],
+    metal1_pad_margin_um: float,
+    net: str | None = None,
+) -> tuple[tuple[float, float, float, float], tuple[float, float, float, float]]:
+    """A rectangular substrate (``kind='p'``) or n-well (``kind='n'``) tap band:
+    comp + matching implant + a contact grid + a Metal1 pad. Returns
+    ``(comp box, Metal1 pad box)``.
+
+    The rectangular counterpart of :func:`well_tap` (issue #776 -- the
+    square tie was consolidated first; the strip-shaped band every family
+    uses for guard rings and row taps was left behind in four per-module
+    copies). The implant is grown ``implant_margin_um`` around the comp
+    (always a legal implant shape on its own when that margin is the
+    caller's NP.1/PP.1-derived constant); contacts fill the band wherever
+    the caller's position callbacks place them, each drawn
+    ``contact_size_um`` square at its returned lower-left corner; the Metal1
+    pad is grown ``metal1_pad_margin_um`` around the comp.
+
+    The two position callbacks take the comp box's ``[lo, hi]`` span along
+    their own axis and return contact lower-left positions -- typically the
+    caller's own :func:`_contact_positions` binding (a full 2-D grid when
+    the same binding is passed for both axes, as ``vco/primitives.py`` and
+    ``loop_filter/primitives.py`` do) or a single centered row (as
+    ``lock_detector/primitives.py`` and ``pfd_cp/rowgen.py`` do). Keeping
+    them explicit is what lets one body serve both shapes without this
+    module learning any family's constants.
+
+    ``net``, when given, draws the Metal1 pad inside ``canvas.net(net)`` --
+    a no-op on the real canvas, but how ``lock_detector``'s
+    ``RecordingCanvas`` connectivity checks learn the pad's net (the
+    caller's canvas must provide that context manager; the bare
+    :class:`Canvas` does not, and callers that don't need it pass
+    ``None``). Pin labelling is deliberately *not* done here: the four
+    former copies pinned different boxes (or none) and returned different
+    boxes, so each module's adapter keeps its own contract on top of this
+    result.
+    """
+    canvas.rect("comp", x0, y0, x1, y1)
+    implant_layer = "nplus" if kind == "n" else "pplus"
+    canvas.rect(
+        implant_layer,
+        x0 - implant_margin_um,
+        y0 - implant_margin_um,
+        x1 + implant_margin_um,
+        y1 + implant_margin_um,
+    )
+    for cx in contact_xs(x0, x1):
+        for cy in contact_ys(y0, y1):
+            canvas.rect("contact", cx, cy, cx + contact_size_um, cy + contact_size_um)
+    pad = (
+        x0 - metal1_pad_margin_um,
+        y0 - metal1_pad_margin_um,
+        x1 + metal1_pad_margin_um,
+        y1 + metal1_pad_margin_um,
+    )
+    if net is None:
+        canvas.rect("metal1", *pad)
+    else:
+        with canvas.net(net):
+            canvas.rect("metal1", *pad)
+    return (x0, y0, x1, y1), pad
 
 
 def draw_column(

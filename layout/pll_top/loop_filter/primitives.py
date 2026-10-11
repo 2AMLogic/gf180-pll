@@ -144,14 +144,10 @@ def via_positions(lo: float, hi: float, size: float, pitch: float, margin: float
     return _canvas._contact_positions(lo, hi, size_um=size, pitch_um=pitch, margin_um=margin, snap=dev.snap_um)
 
 
-def contact_grid(canvas: Canvas, x0: float, y0: float, x1: float, y1: float, margin: float) -> int:
-    """Fill ``[x0,x1]x[y0,y1]`` with contacts ``margin`` inside its edges; returns the count."""
-    xs = _contact_positions(x0, x1, margin_um=margin)
-    ys = _contact_positions(y0, y1, margin_um=margin)
-    for cx in xs:
-        for cy in ys:
-            canvas.rect("contact", cx, cy, cx + CONTACT_UM, cy + CONTACT_UM)
-    return len(xs) * len(ys)
+#: Contact-row placer for :func:`tap_strip`: the module's own contact row
+#: with the band's CO.3/CO.4-derived edge inset (``CONTACT_ENC_UM``), not the
+#: device contact rows' default margin (issue #776).
+_tap_contact_row = partial(_contact_positions, margin_um=CONTACT_ENC_UM)
 
 
 def via_grid(
@@ -177,12 +173,28 @@ def via_grid(
 
 
 def tap_strip(canvas: Canvas, x0: float, y0: float, x1: float, y1: float) -> tuple[float, float, float, float]:
-    """One p-substrate tap band: comp + pplus + a full contact grid + metal1. Returns its metal1 box."""
-    canvas.rect("comp", x0, y0, x1, y1)
-    canvas.rect("pplus", x0 - IMPLANT_MARGIN_UM, y0 - IMPLANT_MARGIN_UM, x1 + IMPLANT_MARGIN_UM, y1 + IMPLANT_MARGIN_UM)
-    contact_grid(canvas, x0, y0, x1, y1, CONTACT_ENC_UM)
-    m1 = (x0 - TAP_M1_MARGIN_UM, y0 - TAP_M1_MARGIN_UM, x1 + TAP_M1_MARGIN_UM, y1 + TAP_M1_MARGIN_UM)
-    canvas.rect("metal1", *m1)
+    """One p-substrate tap band: comp + pplus + a full contact grid + metal1. Returns its metal1 box.
+
+    The drawing itself is ``_canvas.tap_strip()`` (issue #776) with this
+    module's DRC constants -- p-substrate only, contact rows inset
+    ``CONTACT_ENC_UM`` from the band edges (``_tap_contact_row``), a full
+    2-D grid from passing the same placer for both axes. This adapter only
+    keeps this module's "return the metal1 box" contract (no pin: the band
+    is wired by its caller).
+    """
+    _comp, m1 = _canvas.tap_strip(
+        canvas,
+        "p",
+        x0,
+        y0,
+        x1,
+        y1,
+        implant_margin_um=IMPLANT_MARGIN_UM,
+        contact_size_um=CONTACT_UM,
+        contact_xs=_tap_contact_row,
+        contact_ys=_tap_contact_row,
+        metal1_pad_margin_um=TAP_M1_MARGIN_UM,
+    )
     return m1
 
 
@@ -364,16 +376,16 @@ def poly_res(canvas: Canvas, res: dev.PolyRes, x0: float, y0: float) -> PolyResP
     return PolyResPorts(name=res.name, body=body, poly=poly, bottom_pad=pads[0], top_pad=pads[1])
 
 
-def via1_stack(canvas: Canvas, x: float, y: float) -> tuple[float, float, float, float]:
-    """One Via1 centred at ``(x, y)`` with metal1 + metal2 landing squares; returns the square."""
-    x, y = dev.snap_um(x), dev.snap_um(y)
-    h = VIA_UM / 2
-    canvas.rect("via1", x - h, y - h, x + h, y + h)
-    p = METAL_PAD_UM / 2
-    sq = (x - p, y - p, x + p, y + p)
-    canvas.rect("metal1", *sq)
-    canvas.rect("metal2", *sq)
-    return sq
+# One Via1 at ``(x, y)`` with its metal1 + metal2 landing squares -- shared
+# with ``vco/primitives.py`` (issue #776, ``_canvas.via1_stack()``). The
+# centre is snapped to the manufacturing grid because V1.1/V2.1 make 0.26 um
+# the via's min *and* max size; the landing square is ``METAL_PAD_UM``.
+via1_stack = partial(
+    _canvas.via1_stack,
+    via_size_um=VIA_UM,
+    pad_um=METAL_PAD_UM,
+    snap=dev.snap_um,
+)
 
 
 #: Via pitch inside a :func:`metal1_to_metal3_stack` 2 x 2 cluster: 0.40 um

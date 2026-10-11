@@ -23,7 +23,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
+
+try:
+    from .. import _canvas
+except ImportError:  # this package's own dir (not its "pll_top" parent) is the
+    # sys.path root under layout/tests's flat-import convention (see
+    # loop_filter/primitives.py's own identical fallback).
+    import _canvas
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 NETLIST = REPO_ROOT / "design" / "netlist" / "loop_filter.spice"
@@ -32,10 +40,11 @@ SUBCKT = "loop_filter"
 #: Manufacturing grid (``geom.drc``'s ``ongrid(0.005)``).
 LAYOUT_GRID_UM = 0.005
 
-
-def snap_um(v: float) -> float:
-    """Round ``v`` to the nearest manufacturing-grid point."""
-    return round(round(v / LAYOUT_GRID_UM) * LAYOUT_GRID_UM, 6)
+# Round ``v`` to the nearest manufacturing-grid point -- shared with every
+# other ``layout/pll_top/*`` submodule (issue #776, ``_canvas.snap_um()``).
+# ``_canvas`` imports no ``klayout`` at module level (it is lazy, inside
+# ``Canvas.__post_init__``), so this module stays pure Python.
+snap_um = partial(_canvas.snap_um, grid_um=LAYOUT_GRID_UM)
 
 
 @dataclass(frozen=True)
