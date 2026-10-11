@@ -149,7 +149,8 @@ DECAP_SIZE_UM = dev.DECAP_SIZE_UM
 DECAP_GAP_UM = 1.0
 
 # Metal1/Metal2 landing pad half-footprint a via1_stack() call grows around
-# its own via -- see primitives.via1_stack()'s own "half_p" local.
+# its own via -- the shared ``_canvas.via1_stack()``'s "half_p" local (the
+# ``pad_um`` side is what ``prim.via1_stack`` binds, issue #776).
 VIA1_PAD_HALF_UM = prim.VIA1_SIZE_UM / 2.0 + prim.VIA1_METAL_ENCLOSE_UM
 
 # Y5->A1 wraparound Metal2 hop (issue #371, item 3): the x the A1 riser

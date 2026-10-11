@@ -1298,11 +1298,9 @@ def mosfet(
     )
 
 
-def h_wire(canvas: Canvas, x0: float, x1: float, y: float, width: float = METAL1_WIRE_WIDTH_UM) -> tuple:
-    y0, y1 = y - width / 2.0, y + width / 2.0
-    canvas.rect("metal1", x0, y0, x1, y1)
-    return (min(x0, x1), y0, max(x0, x1), y1)
-
+# Horizontal Metal1 wire segment -- shared with every other
+# ``layout/pll_top/*`` submodule (issue #776, ``_canvas.h_wire()``).
+h_wire = partial(_canvas.h_wire, width=METAL1_WIRE_WIDTH_UM)
 
 # Vertical Metal1 wire segment -- shared with every other
 # ``layout/pll_top/*`` submodule (issue #353, ``_canvas.v_wire()``).
@@ -1319,6 +1317,17 @@ pad_center = _canvas.pad_center
 bbox_union = _canvas.bbox_union
 
 
+def _centered_contact_ys(y0: float, y1: float) -> list[float]:
+    """Bottom y of the single contact row ``tap_strip()`` centres on its strip.
+
+    The y-axis half of ``_canvas.tap_strip()``'s contact-placement contract
+    (issue #776): where VCO and loop filter pass a full 2-D grid, this
+    module's strip is one contact tall, so its row hangs from the strip's
+    own centreline rather than spanning the comp box.
+    """
+    return [(y0 + y1) / 2.0 - CONTACT_SIZE_UM / 2.0]
+
+
 def tap_strip(canvas: Canvas, kind: str, x0: float, y_center: float, net: str, length: float = TAP_STRIP_LEN_UM):
     """A substrate (``kind='p'``) or n-well tap (``kind='n'``) strip.
 
@@ -1328,34 +1337,34 @@ def tap_strip(canvas: Canvas, kind: str, x0: float, y_center: float, net: str, l
     rectangular comp + matching implant + a contact row + a Metal1 pad, wide
     enough (>= NP.1/PP.1's 0.4 um) to be a legal implant shape on its own.
     Returns the comp bbox and the Metal1 pad.
+
+    The drawing itself is ``_canvas.tap_strip()`` (issue #776) with this
+    module's DRC constants and a single centred contact row; this adapter
+    only adds this module's own contract on top of the shared result: the
+    Metal1 pad is drawn inside ``canvas.net(net)`` (what
+    ``checks.RecordingCanvas`` tags) and the net pin is labelled over the
+    Metal1 pad, and both the comp bbox and the pad are returned.
     """
     x1 = x0 + length
     height = 0.5
     y0 = y_center - height / 2.0
     y1 = y_center + height / 2.0
-    canvas.rect("comp", x0, y0, x1, y1)
-    implant_layer = "nplus" if kind == "n" else "pplus"
-    canvas.rect(
-        implant_layer,
-        x0 - IMPLANT_MARGIN_UM,
-        y0 - IMPLANT_MARGIN_UM,
-        x1 + IMPLANT_MARGIN_UM,
-        y1 + IMPLANT_MARGIN_UM,
+    comp, pad = _canvas.tap_strip(
+        canvas,
+        kind,
+        x0,
+        y0,
+        x1,
+        y1,
+        implant_margin_um=IMPLANT_MARGIN_UM,
+        contact_size_um=CONTACT_SIZE_UM,
+        contact_xs=_contact_positions,
+        contact_ys=_centered_contact_ys,
+        metal1_pad_margin_um=METAL1_PAD_MARGIN_UM,
+        net=net,
     )
-    xs = _contact_positions(x0, x1)
-    cy0 = y_center - CONTACT_SIZE_UM / 2.0
-    for cx in xs:
-        canvas.rect("contact", cx, cy0, cx + CONTACT_SIZE_UM, cy0 + CONTACT_SIZE_UM)
-    pad = (
-        x0 - METAL1_PAD_MARGIN_UM,
-        y0 - METAL1_PAD_MARGIN_UM,
-        x1 + METAL1_PAD_MARGIN_UM,
-        y1 + METAL1_PAD_MARGIN_UM,
-    )
-    with canvas.net(net):
-        canvas.rect("metal1", *pad)
     canvas.pin(net, *pad)
-    return (x0, y0, x1, y1), pad
+    return comp, pad
 
 
 # Draw one square via + its enclosing metal landing pad -- shared with every

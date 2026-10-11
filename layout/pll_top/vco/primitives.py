@@ -601,11 +601,9 @@ def mos_cap_nmos(
     )
 
 
-def h_wire(canvas: Canvas, x0: float, x1: float, y: float, width: float = METAL1_WIRE_WIDTH_UM) -> tuple:
-    y0, y1 = y - width / 2.0, y + width / 2.0
-    canvas.rect("metal1", x0, y0, x1, y1)
-    return (min(x0, x1), y0, max(x0, x1), y1)
-
+# Horizontal Metal1 wire segment -- shared with every other
+# ``layout/pll_top/*`` submodule (issue #776, ``_canvas.h_wire()``).
+h_wire = partial(_canvas.h_wire, width=METAL1_WIRE_WIDTH_UM)
 
 # Vertical Metal1 wire segment -- shared with every other
 # ``layout/pll_top/*`` submodule (issue #353, ``_canvas.v_wire()``).
@@ -667,24 +665,20 @@ def m2_route(canvas: Canvas, points: Iterable[tuple[float, float]], width: float
             raise ValueError(f"non-Manhattan Metal2 segment ({x0},{y0}) -> ({x1},{y1})")
 
 
-def via1_stack(canvas: Canvas, x: float, y: float) -> tuple:
-    """One via1 at ``(x, y)`` with its own Metal1 and Metal2 landing pads.
-
-    Both pads are ``VIA1_SIZE_UM + 2*VIA1_METAL_ENCLOSE_UM`` = 0.44 um square,
-    which satisfies V1.3a/V1.4a (metal overlap of via1 >= 0) with real margin
-    and stays at or above the 0.34 um width threshold below which the deck's
-    V1.3c/V1.4b end-of-line-overlap rules would apply. Returns the pad box.
-    """
-    # V1.1 makes 0.26 um the via's min *and* max size, so the corner is
-    # snapped explicitly -- same reasoning as _contact_positions()/CO.1.
-    x, y = dev.snap_um(x), dev.snap_um(y)
-    half_v = VIA1_SIZE_UM / 2.0  # 0.13 um -- itself a grid multiple
-    canvas.rect("via1", x - half_v, y - half_v, x + half_v, y + half_v)
-    half_p = half_v + VIA1_METAL_ENCLOSE_UM
-    pad = (x - half_p, y - half_p, x + half_p, y + half_p)
-    canvas.rect("metal1", *pad)
-    canvas.rect("metal2", *pad)
-    return pad
+# One via1 at ``(x, y)`` with its own Metal1 and Metal2 landing pads --
+# shared with ``loop_filter/primitives.py`` (issue #776, ``_canvas.via1_stack()``).
+# Both pads are ``VIA1_SIZE_UM + 2*VIA1_METAL_ENCLOSE_UM`` = 0.44 um square,
+# which satisfies V1.3a/V1.4a (metal overlap of via1 >= 0) with real margin
+# and stays at or above the 0.34 um width threshold below which the deck's
+# V1.3c/V1.4b end-of-line-overlap rules would apply. The via centre is
+# snapped explicitly because V1.1 makes 0.26 um the via's min *and* max
+# size -- same reasoning as _contact_positions()/CO.1.
+via1_stack = partial(
+    _canvas.via1_stack,
+    via_size_um=VIA1_SIZE_UM,
+    pad_um=VIA1_SIZE_UM + 2 * VIA1_METAL_ENCLOSE_UM,
+    snap=dev.snap_um,
+)
 
 
 def metal_l2n(canvas: Canvas) -> tuple[db.LayoutToNetlist, dict]:
@@ -720,36 +714,33 @@ def tap_strip(canvas: Canvas, kind: str, x0: float, y0: float, x1: float, y1: fl
 
     ``kind='p'``: pcomp + pplus, tied to the substrate/``GND_VCO`` net.
     ``kind='n'``: ncomp + nplus, tied to the local n-well/``VDD_VCO`` net.
-    Both are simple rectangular comp + matching implant + a full contact row
-    + a Metal1 pad, wide enough (>= NP.1/PP.1's 0.4 um) to be a legal implant
-    shape on its own.
+    Both are simple rectangular comp + matching implant + a full contact
+    grid + a Metal1 pad, wide enough (>= NP.1/PP.1's 0.4 um) to be a legal
+    implant shape on its own.
+
+    The drawing itself is ``_canvas.tap_strip()`` (issue #776) with this
+    module's DRC constants and its own ``_contact_positions`` binding for
+    both axes -- the full 2-D contact grid a guard-ring band needs, since a
+    band can be long in *either* axis (a top/bottom band is wide-in-x, a
+    left/right band is tall-in-y) and both need a contact every <=
+    CONTACT_PITCH_UM along their long axis for a low-resistance, DRC-legal
+    tie. This adapter only adds the VCO contract on top of the shared
+    result: the net pin is labelled over the *comp* box, not the Metal1 pad.
     """
-    canvas.rect("comp", x0, y0, x1, y1)
-    implant_layer = "nplus" if kind == "n" else "pplus"
-    canvas.rect(
-        implant_layer,
-        x0 - IMPLANT_MARGIN_UM,
-        y0 - IMPLANT_MARGIN_UM,
-        x1 + IMPLANT_MARGIN_UM,
-        y1 + IMPLANT_MARGIN_UM,
+    comp, _pad = _canvas.tap_strip(
+        canvas,
+        kind,
+        x0,
+        y0,
+        x1,
+        y1,
+        implant_margin_um=IMPLANT_MARGIN_UM,
+        contact_size_um=CONTACT_SIZE_UM,
+        contact_xs=_contact_positions,
+        contact_ys=_contact_positions,
+        metal1_pad_margin_um=METAL1_PAD_MARGIN_UM,
     )
-    # Full 2-D contact grid, not just a single row -- a guard-ring band can be
-    # long in *either* axis (a top/bottom band is wide-in-x, a left/right
-    # band is tall-in-y), and both need a contact every <= CONTACT_PITCH_UM
-    # along their long axis for a low-resistance, DRC-legal tie.
-    xs = _contact_positions(x0, x1)
-    ys = _contact_positions(y0, y1)
-    for cx in xs:
-        for cy in ys:
-            canvas.rect("contact", cx, cy, cx + CONTACT_SIZE_UM, cy + CONTACT_SIZE_UM)
-    canvas.rect(
-        "metal1",
-        x0 - METAL1_PAD_MARGIN_UM,
-        y0 - METAL1_PAD_MARGIN_UM,
-        x1 + METAL1_PAD_MARGIN_UM,
-        y1 + METAL1_PAD_MARGIN_UM,
-    )
-    canvas.pin(net, x0, y0, x1, y1)
+    canvas.pin(net, *comp)
 
 
 def rect_frame(

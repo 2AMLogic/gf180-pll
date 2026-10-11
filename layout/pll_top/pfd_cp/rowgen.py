@@ -410,12 +410,23 @@ def mosfet(view, fet: Fet, x0: float, y_center: float, *, tab_up: bool) -> Mosfe
     )
 
 
-def h_wire(view, x0: float, x1: float, y: float, width: float = METAL1_WIRE_WIDTH_UM) -> None:
-    view.rect("metal1", x0, y - width / 2.0, x1, y + width / 2.0)
+# Horizontal Metal1 wire segment -- shared with every other
+# ``layout/pll_top/*`` submodule (issue #776, ``_canvas.h_wire()``).
+h_wire = partial(_canvas.h_wire, width=METAL1_WIRE_WIDTH_UM)
 
 
 def v_wire(view, x: float, y0: float, y1: float, width: float = METAL1_WIRE_WIDTH_UM) -> None:
     view.rect("metal1", x - width / 2.0, y0, x + width / 2.0, y1)
+
+
+def _centered_contact_ys(y0: float, y1: float) -> list[float]:
+    """Bottom y of the single contact row ``tap_strip()`` centres on its strip.
+
+    The y-axis half of ``_canvas.tap_strip()``'s contact-placement contract
+    (issue #776): this module's row tap is one contact tall, so its row
+    hangs from the strip's own centreline rather than spanning the comp box.
+    """
+    return [(y0 + y1) / 2.0 - CONTACT_SIZE_UM / 2.0]
 
 
 def tap_strip(view, kind: str, x_center: float, y_center: float) -> tuple[float, float, float, float]:
@@ -424,30 +435,27 @@ def tap_strip(view, kind: str, x_center: float, y_center: float) -> tuple[float,
     Drawn on the row's own supply rail, so the tap's Metal1 pad merges into
     the rail it ties (same net) instead of needing its own connection.
     Returns the tap's comp bbox.
+
+    The drawing itself is ``_canvas.tap_strip()`` (issue #776) with this
+    module's DRC constants and a single centred contact row; this adapter
+    only translates the centred ``(x_center, y_center)`` call signature into
+    the shared primitive's comp box and keeps this module's "return the
+    comp bbox" contract (no pin: the pad merges into the rail's own metal).
     """
-    x0 = x_center - TAP_STRIP_LEN_UM / 2.0
-    x1 = x_center + TAP_STRIP_LEN_UM / 2.0
-    y0 = y_center - TAP_STRIP_H_UM / 2.0
-    y1 = y_center + TAP_STRIP_H_UM / 2.0
-    view.rect("comp", x0, y0, x1, y1)
-    view.rect(
-        "nplus" if kind == "n" else "pplus",
-        x0 - IMPLANT_MARGIN_UM,
-        y0 - IMPLANT_MARGIN_UM,
-        x1 + IMPLANT_MARGIN_UM,
-        y1 + IMPLANT_MARGIN_UM,
+    comp, _pad = _canvas.tap_strip(
+        view,
+        kind,
+        x_center - TAP_STRIP_LEN_UM / 2.0,
+        y_center - TAP_STRIP_H_UM / 2.0,
+        x_center + TAP_STRIP_LEN_UM / 2.0,
+        y_center + TAP_STRIP_H_UM / 2.0,
+        implant_margin_um=IMPLANT_MARGIN_UM,
+        contact_size_um=CONTACT_SIZE_UM,
+        contact_xs=_contact_positions,
+        contact_ys=_centered_contact_ys,
+        metal1_pad_margin_um=METAL1_PAD_MARGIN_UM,
     )
-    for cx in _contact_positions(x0, x1):
-        cy = y_center - CONTACT_SIZE_UM / 2.0
-        view.rect("contact", cx, cy, cx + CONTACT_SIZE_UM, cy + CONTACT_SIZE_UM)
-    view.rect(
-        "metal1",
-        x0 - METAL1_PAD_MARGIN_UM,
-        y0 - METAL1_PAD_MARGIN_UM,
-        x1 + METAL1_PAD_MARGIN_UM,
-        y1 + METAL1_PAD_MARGIN_UM,
-    )
-    return (x0, y0, x1, y1)
+    return comp
 
 
 # One nwell rectangle per row pair around every PMOS comp / n-tap box keeps
