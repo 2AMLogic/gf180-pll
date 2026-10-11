@@ -14,7 +14,22 @@ shared.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
+
+
+def install_checklib(root: Path) -> None:
+    """Install the shared checker helpers into a throwaway repo tree.
+
+    The check scripts import ``checklib`` from ``$REPO_ROOT/lib``, and inside
+    a throwaway tree that tree IS ``$REPO_ROOT`` for the run -- so the real
+    repository's package has to be laid down next to the script, exactly as a
+    fresh clone would receive it.
+    """
+    src = Path(__file__).resolve().parents[2] / "lib" / "checklib"
+    shutil.copytree(
+        src, root / "lib" / "checklib", ignore=shutil.ignore_patterns("__pycache__")
+    )
 
 
 class TreeWriter:

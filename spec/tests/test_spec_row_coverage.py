@@ -28,7 +28,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _fixtures import TreeWriter
+from _fixtures import TreeWriter, install_checklib
 
 SPEC_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = SPEC_DIR.parent
@@ -135,6 +135,7 @@ class _Tree(TreeWriter):
         self.root = root
         (root / "spec" / "lib").mkdir(parents=True)
         shutil.copy2(CHECK, root / "spec" / "lib" / CHECK.name)
+        install_checklib(root)
         self.write(SPEC_DOC, _spec())
         self.write(PROPOSAL, _proposal())
 

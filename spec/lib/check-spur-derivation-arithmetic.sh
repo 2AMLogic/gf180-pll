@@ -158,11 +158,13 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-python3 - "${REPO_ROOT}" "${SPEC}" "${PROPOSAL}" <<'PY'
+PYTHONPATH="${REPO_ROOT}/lib${PYTHONPATH:+:${PYTHONPATH}}" python3 - "${REPO_ROOT}" "${SPEC}" "${PROPOSAL}" <<'PY'
 import math
 import os
 import re
 import sys
+
+from checklib.markdown import plain, tables
 
 repo_root, spec_rel, proposal_rel = sys.argv[1:4]
 
@@ -191,15 +193,6 @@ def read(rel):
         return None
     with open(path, encoding="utf-8") as fh:
         return fh.read()
-
-
-def plain(cell):
-    """Cell text with Markdown emphasis, escapes and Unicode dashes removed."""
-    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", cell)
-    text = text.replace("**", "").replace("`", "").replace("\\|", "|")
-    for dash in ("—", "–", "‒", "‑"):
-        text = text.replace(dash, "-")
-    return re.sub(r"\s+", " ", text).strip()
 
 
 class Figure(object):
@@ -258,35 +251,6 @@ def figures_in(text):
         for group in match.groups():
             if group:
                 found.append(Figure(group))
-    return found
-
-
-#: Stands in for an escaped `\|` while a row is split on its real pipes. The
-#: step table's first row is `... \|q_up + q_dn\|, worst corner`, which a naive
-#: split reads as three cells of a three-column table -- so the value column
-#: shifts and the number this check grades is not in it.
-ESCAPED_PIPE = "\x00"
-
-
-def tables(block):
-    """Every Markdown table in `block`, header row first."""
-    found, current = [], None
-    for line in block.splitlines():
-        line = line.strip()
-        if not line.startswith("|"):
-            current = None
-            continue
-        if re.fullmatch(r"\|[\s:|-]+\|", line):
-            continue
-        line = line.replace("\\|", ESCAPED_PIPE)
-        cells = [
-            c.strip().replace(ESCAPED_PIPE, "\\|") for c in line.strip("|").split("|")
-        ]
-        if current is None:
-            current = [cells]
-            found.append(current)
-        else:
-            current.append(cells)
     return found
 
 
