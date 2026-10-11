@@ -2,6 +2,10 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-10
+
+- **PR #770**: layout(pll_top): klt erc supply-island run on the assembled top level (Part of #127)
+
 ### 2026-10-09
 
 - **PR #764**: layout(vco): draw the 22 pF decap as real cap_nmos_03v3 devices (#759)
