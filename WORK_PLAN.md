@@ -20,13 +20,14 @@ Issues the operator starred (`loom:operator-priority`); land these first.
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-_None._
+- **#127**: Track the gap to T1 sim-validated / bronze (klayout-tools design-evidence tiers)
+- **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief
 
 ## In Progress
 
 Issues currently being built (`loom:building`).
 
-- **#774**: Dedupe claim-checker Python helpers copied across check scripts
+_None._
 
 ## PRs Awaiting Review
 
@@ -79,8 +80,8 @@ Issues carrying `loom:curated`.
 |------|-------|
 | Operator merge-risk holds | 0 |
 | Operator priority | 2 |
-| Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 1 |
+| Ready (`loom:issue`) | 2 |
+| In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 17 |
