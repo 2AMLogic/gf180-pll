@@ -5,13 +5,19 @@ This roadmap is generated from the repository's current GitHub label state.
 <!-- guide:plan-body:start -->
 ## Operator Attention: Merge-Risk-Hold Pileup
 
-Judge-approved PRs stuck under a `loom:operator` merge-risk hold — implementation work is done, only a human merge decision is missing.
+Judge-approved PRs under a hold (`loom:blocked` or `loom:operator`) — only a human merge decision is missing.
 
 _None._
 
-## Operator Priority
+## Very Important
 
-Issues the operator starred (`loom:operator-priority`); land these first.
+`loom:very-important` (one counts per workspace); every stage takes these first.
+
+_None._
+
+## Important
+
+`loom:important`; taken before unlabelled work.
 
 - **#533**: sim/reference-spur-band-top: run the 45-point 200 MHz campaign on the batch backend (operator-authorized spend)
 - **#755**: sim harness: stage a simulator init file (wnflag) so local and batch backends run the same configuration
@@ -26,7 +32,7 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-_None._
+- **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief
 
 ## PRs Awaiting Review
 
@@ -71,19 +77,20 @@ Issues carrying `loom:curated`.
 
 ## Epics
 
-- **#292**: Layout: draw real per-block transistor-level layout for VCO, PFD/CP, divider-chain, lock-detector (#17's floorplan is planning-only)
+_None._
 
 ## Backlog Balance
 
-| Tier | Count |
+| Bucket | Count |
 |------|-------|
 | Operator merge-risk holds | 0 |
-| Operator priority | 2 |
+| Very important | 0 |
+| Important | 2 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 0 |
+| In Progress (`loom:building`) | 1 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 17 |
 | Architect / Hermit proposals | 4 |
-| Active epics | 1 |
+| Active epics | 0 |
 <!-- guide:plan-body:end -->
