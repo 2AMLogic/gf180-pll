@@ -2,6 +2,10 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-14
+
+- **Issue #292** (closed): Layout: draw real per-block transistor-level layout for VCO, PFD/CP, divider-chain, lock-detector (#17's floorplan is planning-only)
+
 ### 2026-10-11
 
 - **Issue #774** (closed): Dedupe claim-checker Python helpers copied across check scripts
