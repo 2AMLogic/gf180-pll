@@ -52,9 +52,11 @@ graded against the tree in CI by `sim/lib/check-readme-status.sh`.
   15 of 15, pending two-key ratification; and
   the step+ramp FAIL is a hold ≈8 µs short of a measurably slew-limited
   recovery rather than an under-damped loop. Not every one has an open owner:
-  #525 and #405 are open, while #511 is closed (discharged by DR-025) and #399
-  and #437 (with #540) are closed as not planned, so those measurements are
-  currently unowned and are to be refiled. See each campaign's own latest record under
+  only #405 is open. #525 is closed (completed; DR-037 awaits two-key
+  ratification) and #511 is closed (completed with DR-025, which narrows the
+  design gap but states it does not close it), while #399 and #437 (with #540)
+  are closed as not planned, so those measurements are currently unowned and
+  are to be refiled. See each campaign's own latest record under
   `sim/*/records/` for the full accounting. `period-jitter`'s
   **deterministic (control-ripple) component now covers 45 of the mandated 45
   PVT corners** — the complete 3 × 3 temperature × supply plane at all five
