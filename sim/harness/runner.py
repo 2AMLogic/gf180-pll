@@ -17,6 +17,7 @@ from pathlib import Path
 from .corners import PvtPoint
 from .derived import DerivedError, PointView, RawFile, derive_point_measures
 from .execution import DeckRun, LocalBackend, simulator_of
+from .siminit import init_of
 from .omp import omp_env_overrides
 from .pdk import Pdk
 from .testbench import Phase, Testbench
@@ -386,6 +387,10 @@ class PhaseRun:
     #: say -- never filled in from the submitting host's resolved binary, which
     #: under an off-host backend ran no deck at all (#509).
     simulator: str = ""
+    #: Identity (``sha256:<hex>``) of the simulator init file the deck's own
+    #: output proves ran (``siminit.init_of``). Empty when the output does not
+    #: show it -- a missing or unexecuted init is disclosed, never assumed.
+    init: str = ""
 
     def as_dict(self) -> dict:
         record = {
@@ -399,6 +404,8 @@ class PhaseRun:
             record["host"] = self.host
         if self.simulator:
             record["simulator"] = self.simulator
+        if self.init:
+            record["init"] = self.init
         if self.message:
             record["message"] = self.message
         return record
@@ -456,6 +463,9 @@ class PointResult:
     #: own output. Joined by ``+`` on the (pathological, but reportable) case of
     #: a phased point whose decks ran on different versions.
     simulator: str = ""
+    #: Init identity per :attr:`PhaseRun.init`; ``+``-joined across distinct
+    #: values, empty if any deck of the point did not show one.
+    init: str = ""
 
     def as_dict(self) -> dict:
         record = self.point.as_dict()
@@ -472,6 +482,8 @@ class PointResult:
             record["host"] = self.host
         if self.simulator:
             record["simulator"] = self.simulator
+        if self.init:
+            record["init"] = self.init
         # Keyed on a phase having a *name*, not on there being more than one of
         # them, so the point entry and the filenames on disk always agree: a
         # named phase writes `<phase>_<corner-id>.log`, so it must be listed
@@ -637,6 +649,11 @@ def run_point(
     # Same rule as hosts: distinct, named values only, so a deck whose output
     # did not name a version cannot turn a single-version point into "x+".
     simulators = list(dict.fromkeys(run.simulator for run in runs if run.simulator))
+    # Unlike hosts, a deck that did not show the init file makes the whole
+    # point unattributed: one deck run without the configuration is exactly
+    # the case the record must not paper over.
+    inits = list(dict.fromkeys(run.init for run in runs))
+    init = "+".join(inits) if all(inits) else ""
     common = {
         "point": point,
         "raw_files": raw_files,
@@ -647,6 +664,7 @@ def run_point(
         "phases": tuple(runs),
         "host": "+".join(hosts),
         "simulator": "+".join(simulators),
+        "init": init,
     }
 
     if failed is not None:
@@ -848,6 +866,7 @@ def _run_phase(
                 message=message,
                 host=deck_run.host,
                 simulator=simulator_of(output),
+                init=init_of(output),
             ),
             measurements=measurements,
             missing=missing,
@@ -877,6 +896,7 @@ def _run_phase(
                 message=message,
                 host=deck_run.host,
                 simulator=simulator_of(output),
+                init=init_of(output),
             ),
             measurements=measurements,
             missing=missing,
@@ -903,6 +923,7 @@ def _run_phase(
                 message="; ".join(problems),
                 host=deck_run.host,
                 simulator=simulator_of(output),
+                init=init_of(output),
             ),
             measurements=measurements,
             not_measured=not_measured,
@@ -919,6 +940,7 @@ def _run_phase(
             seconds=elapsed,
             host=deck_run.host,
             simulator=simulator_of(output),
+                init=init_of(output),
         ),
         measurements=measurements,
         # Carried even on success so that a *later* phase's failure still

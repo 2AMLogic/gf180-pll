@@ -342,6 +342,33 @@ and the second is a home path on the submitting host, and neither is needed to
 reconstruct a measurement. A single-host local record renders exactly the one
 `- Execution:` line it always did.
 
+### The simulator init file: one configuration on every backend (#755, DR-040)
+
+`set wnflag=1` must be in place *before* ngspice reads the netlist (setting it
+in the deck's `.control` block is too late), and with the closed-loop deck it
+selects a different DC state. Both backends therefore stage the same
+`.spiceinit` (`harness/siminit.py`) in the directory ngspice starts from:
+locally in the run directory before the child is spawned, on batch as the
+`harness.spiceinit` upload copied into the job's working directory after the
+inputs and before `ngspice -b`. A working-directory `.spiceinit` shadows
+`~/.spiceinit` and any system init, so ambient files are neither read nor
+modified and `HOME` is untouched.
+
+The file echoes a marker as it runs. A point's record carries
+`init: sha256:<hex>` (and the Environment provenance an `Simulator init:`
+line) only when the deck's own output shows that marker; otherwise the point is
+`unattributed` and not comparable with reference-configuration points. The
+batch `ngspice.env` additionally records the checksum and content of the
+`.spiceinit` present on the instance. `LocalBackend(stage_init=False)` /
+`BatchBackend(stage_init=False)` stage nothing: the no-init negative control.
+
+Pilot procedure (do this before any 45-point submission): run the one point
+ff / −40 °C / 3.63 V, `op=b7vs1p886`, on `--backend local` and on
+`--backend batch --batch-apply`, then compare `init`, the executing simulator
+and PDK, the DC state (`fb`, `lock_lvl`, no gmin stepping) and the spur. The
+numerical matching tolerance is the testbench owner's to record; the −55 dBc
+threshold is not an equivalence tolerance.
+
 ## Writing a testbench
 
 Create `sim/<experiment-slug>/testbench/` with a manifest and a netlist

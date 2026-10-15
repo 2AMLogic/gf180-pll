@@ -712,9 +712,16 @@ def build_record(
         # each deck's own output, so it can only report versions that actually
         # produced a measurement.
         sims = HostTally()
+        inits = HostTally()
         for result in results:
             sims.add(result.simulator)
-        execution = {**execution, "hosts": tally.as_dict(), "simulators": sims.as_dict()}
+            inits.add(result.init)
+        execution = {
+            **execution,
+            "hosts": tally.as_dict(),
+            "simulators": sims.as_dict(),
+            "inits": inits.as_dict(),
+        }
     # A run that raised out of run_grid() (#271) hands back fewer results than
     # points -- `results` only covers what completed before the fault. That
     # must never be mistaken for a clean run just because every point that DID
@@ -943,7 +950,33 @@ def _execution_lines(
     lines += _execution_simulator_lines(
         execution.get("simulators") or {}, recording_simulator
     )
+    lines += _execution_init_lines(execution.get("inits") or {})
     return lines
+
+
+def _execution_init_lines(inits: dict) -> list[str]:
+    """Which simulator init file the points' own output proves ran (DR-040).
+
+    Always stated when the execution block carries attribution, because the
+    init file changes the closed-loop DC state: a point with no proof of it is
+    disclosed as ``unattributed`` rather than credited with the reference
+    configuration, and a banner or an init file merely being staged is not
+    proof (``siminit.init_of`` reads the simulator's own output).
+    """
+    if not inits:
+        return []
+    named = {k: v for k, v in inits.items() if k}
+    parts = [f"`{name}` ({count})" for name, count in sorted(named.items())]
+    if inits.get(""):
+        parts.append(f"unattributed ({inits['']})")
+    detail = ", ".join(parts)
+    if inits.get(""):
+        detail += (
+            " -- these points did not show the init file running, so they may "
+            "be in the no-init DC state and are not comparable with the "
+            "reference configuration (DR-040)"
+        )
+    return [f"  - Simulator init: {detail}"]
 
 
 def execution_console_lines(execution: dict | None) -> list[str]:
@@ -976,7 +1009,8 @@ def execution_console_lines(execution: dict | None) -> list[str]:
     return [
         f"executed  : backend {backend}; "
         f"host(s) {_tally(execution.get('hosts') or {})}; "
-        f"simulator(s) {_tally(execution.get('simulators') or {})}"
+        f"simulator(s) {_tally(execution.get('simulators') or {})}; "
+        f"init {_tally(execution.get('inits') or {})}"
     ]
 
 
