@@ -435,6 +435,6 @@ def find_tools(variant: str | None = None) -> PvTools:
         if not required.is_file():
             raise ToolNotFound(
                 f"expected PDK file is missing: {required}\n"
-                "The gf180mcu install looks incomplete -- reinstall it with volare."
+                "The gf180mcu install looks incomplete -- reinstall it with ciel (see sim/harness/pdk.py)."
             )
     return tools

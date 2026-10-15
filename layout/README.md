@@ -192,7 +192,7 @@ iteration (seconds, not minutes) before a full deck run; it is not the gate.
 
 | Tool | Why | Notes |
 |---|---|---|
-| gf180mcu PDK | DRC/LVS decks + standard-cell GDS/CDL | `pip install volare && volare enable --pdk gf180mcu <hash>` — same install `sim/` uses |
+| gf180mcu PDK | DRC/LVS decks + standard-cell GDS/CDL | `pip install ciel && ciel enable --pdk-family gf180mcu -l gf180mcu_fd_pr <hash>` (hash: `open_pdks` in `sim/pdk.json`) — same install `sim/` uses |
 | KLayout **application** binary | runs the foundry Ruby DRC/LVS-DSL decks (`klayout -b -r deck.drc`) | **not** the `klayout` pip wheel, which has no DSL runner — see "The two KLayouts" below |
 | A Python environment with `klayout` (pip) + `docopt` importable | the PDK's own `run_drc.py`/`run_lvs.py` need them | `python3 -m venv ~/opt/gf180pv-venv && ~/opt/gf180pv-venv/bin/pip install klayout docopt` |
 | `klt` (optional but recommended) | fast PDK/asset discovery, and a quick pre-check DRC pass | `pip install klayout-tools` |

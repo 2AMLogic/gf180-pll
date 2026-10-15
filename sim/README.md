@@ -612,8 +612,11 @@ apply is written as `N/A` **with a reason**, not omitted.
 
 - **Environment provenance** — **[PLL delta]**, absorbed from #4: the
   environment must be reconstructable from the record alone.
-  - PDK variant + pinned hash (e.g. volare `gf180mcuD`, open_pdks
-    `c6d73a35f524070e85faff4a6a9eef49553ebc2b`)
+  - PDK variant + pinned hash (e.g. `gf180mcuD`, open_pdks
+    `f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7`). The pin lives once, in `sim/pdk.json`;
+    the harness and `sim/lib/simenv.sh` refuse a PDK tree whose `SOURCES`
+    revision differs from it, so a record's hash is the pin, not whatever
+    happened to be installed.
   - model library file used (e.g. `sm141064.ngspice`)
   - simulator version (e.g. `ngspice 46`), and schematic-capture version if
     the netlist came from a schematic export (e.g. `xschem 3.4.7`)
@@ -1014,8 +1017,8 @@ sim/
   `sim/lock-time/netlist-snapshots/20260730-142500-3f1c9ab.spice`),
   netlist SHA-256 `9f1c…a20e`
 - **Environment provenance**:
-  - PDK: volare `gf180mcuD`, open_pdks
-    `c6d73a35f524070e85faff4a6a9eef49553ebc2b`
+  - PDK: `gf180mcuD`, open_pdks
+    `f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7`
   - Models: `sm141064.ngspice`
   - Simulator: ngspice 46; schematic capture: xschem 3.4.7
   - Repo commit: `3f1c9ab` (clean tree)
@@ -1223,7 +1226,7 @@ The pin above binds what runs *here*; a campaign dispatched off-host
 provisioning outside this repository. That image ran **ngspice-42** when DR-028
 and DR-035 were written; as re-verified on 2026-10-08 its corner logs sign off
 `ngspice-46 done` (image manifest `tools.ngspice` `ngspice-46`, PDK stamp
-`open_pdks c6d73a35…`), and the six `wedge` −40 °C points of
+`open_pdks c6d73a35…`, the revision pinned at that date), and the six `wedge` −40 °C points of
 `sim/reference-input-contract` that the ngspice-42 image failed 0 of 6
 converge 6 of 6 with `d_ref` equal to the pin's to seven digits. A matching
 version string is **not** a blanket equivalence: the 2026-10-08 diagnostic

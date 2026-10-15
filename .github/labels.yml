@@ -290,7 +290,7 @@
 # ============================================================================
 
 # CI opt-in for the PDK-dependent job.
-# .github/workflows/ci.yml's pdk-checks job (volare + xschem + gf180mcu PDK,
+# .github/workflows/ci.yml's pdk-checks job (ciel + xschem + gf180mcu PDK,
 # catching netlist drift via design/netlist.sh --check) already runs by default
 # on any PR that touches design/. This label forces it on for a PR that leaves
 # design/ alone but can still break it -- e.g. one editing design/netlist.sh's
