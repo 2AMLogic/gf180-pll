@@ -119,7 +119,7 @@
   "area": {
     "measured_um2": 407776.2,
     "measured_mm2": 0.4078,
-    "measured_note": "Bounding box of the assembled pll_top GDS (issue #297), 1317.66 x 309.47 um: 135.9 % of the 0.30 mm2 row, a measured top-level overhead of x2.217 on the 183,964.4 um2 block sum (loop filter as drawn). PLL-FLOORPLAN.md §5's fail-loud clause has fired (§5.16); the row has not been re-derived -- that needs a decision record. layout/evidence/pll-top-layout/PROOF.md.",
+    "measured_note": "Bounding box of the assembled pll_top GDS (issue #297), 1317.66 x 309.47 um: 135.9 % of the 0.30 mm2 row, a measured top-level overhead of x2.217 on the 183,964.4 um2 block sum (loop filter as drawn). PLL-FLOORPLAN.md §5's fail-loud clause has fired (§5.16); the row is held at 0.30 mm2 and recorded UNMET as assembled by spec/decision-records/DR-041-area-row-held-at-0.30-assembled-pll-top-recorded-unmet.md (issue #758); a bounded compaction study is authorized (issue #792). layout/evidence/pll-top-layout/PROOF.md.",
     "budget_mm2": 0.3,
     "budget_source": "spec/pll.md#area, amended by spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md (issue #456) and held at that value by spec/decision-records/DR-017-area-row-held-at-0.30-on-the-refreshed-measured-floor.md (issue #476)",
     "draft_budget_mm2": 0.15,
@@ -137,7 +137,7 @@
     "after_top_level_overhead_mm2": 0.2254,
     "overhead_factor_note": "x1.25 whole-block placement/routing overhead, per layout/floorplan/PLL-FLOORPLAN.md §5 -- the ROM estimate the figures above use. The first assembled pll_top (issue #297) measured it at x2.217 (see measured_note). The 0.30 mm2 row holds to a measured overhead of x1.664 on the block sum as drawn; above that, or past 240,000 um2 of block sum, PLL-FLOORPLAN.md §5's fail-loud clause fires (asserted by layout/tests/test_area_audit.py, not only in prose).",
     "budget_ratio": 0.75,
-    "budget_ratio_note": "block sum x1.25 against the amended 0.30 mm2 row (the assembled top level is 1.359, see measured_note): MET on that basis, with more headroom than when DR-016 was written (0.91 then) — 24.9 % margin on the 240,000 um2 of block sum the row allows. Against the draft 0.15 mm2 target the same total is 1.50x — see draft_budget_ratio.",
+    "budget_ratio_note": "block sum x1.25 against the amended 0.30 mm2 row (the assembled top level is 1.359, see measured_note): MET on the block-sum basis only (the assembled row is UNMET, DR-041), with more headroom than when DR-016 was written (0.91 then) — 24.9 % margin on the 240,000 um2 of block sum the row allows. Against the draft 0.15 mm2 target the same total is 1.50x — see draft_budget_ratio.",
     "draft_budget_ratio": 1.5,
     "source": "spec/decision-records/DR-016-area-budget-amended-on-measured-floor.md (issue #456) for the amended row and DR-017-area-row-held-at-0.30-on-the-refreshed-measured-floor.md (issue #476) for holding it on the current measurement; layout/floorplan/PLL-FLOORPLAN.md §5.12 (issue #469), §5.13 (issue #458), §5.14 (issue #473) and §5.15 (issue #476) for the current total; layout/evidence/area-audit/area-audit.md",
     "as_of_commit": "8c6cb7f3"

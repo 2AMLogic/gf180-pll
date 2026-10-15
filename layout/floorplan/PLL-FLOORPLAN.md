@@ -1686,6 +1686,11 @@ budget to fit"). Nothing in `spec/` changes in this revision, and neither area
 constant in `skeleton.py` moves: a row change needs a decision record (DR-017
 Decision 3 names exactly this event as its trigger).
 
+**Decision (issue #758, DR-041):** the row is held at ≤ 0.30 mm² and the
+assembled 0.4078 mm² is recorded as unmet; a bounded compaction feasibility
+study (#792) is authorized, and any upward amendment needs a separate decision
+record. The measurements below are unchanged.
+
 `layout/evidence/pll-top-layout/pll_top.gds` places all five real block
 layouts — the four DRC/LVS-checked blocks and the physical loop filter drawn at
 issue #748 — and routes `design/netlist/pll_top.spice` between them on
@@ -1749,7 +1754,7 @@ column to the right of the CLK column (+54.17 µm of width; the pair itself is
 51.2 µm wide). That is the cost of the decap §1 always assumed; nothing was
 bought back by it and no lever from §5.5 was spent. The assembled total is
 unchanged and still over the ratified ≤ 0.30 mm² row (§5.16); the decision on
-that is #758, which now reasons from a VCO that is 9,993 µm² larger than the
+that is DR-041 (#758), which now reasons from a VCO that is 9,993 µm² larger than the
 one §5.16 measured. `skeleton.py`'s `VCO_CORE` follows the generator's
 `footprint_um()`, so the skeleton's VCO box and its decap rectangles move with
 it; the tripwire bounds in `test_vco_layout.py` that watch the skeleton's
