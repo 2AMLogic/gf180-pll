@@ -1,0 +1,14 @@
+Host-absolute paths in this bundle's text artifacts were replaced at
+capture time by the harness (layout/harness/env.py normalise_run_dir):
+
+  <RUN_DIR>  the directory the deck was run in
+  <REPO>     the repository checkout root the harness ran from
+  <PDK>      the installed gf180mcu PDK directory
+  <HOME>     the running user's home directory
+
+Tokens in use: <HOME>, <PDK>, <REPO>, <RUN_DIR>
+Files rewritten: drc.stdout.log, drc_run_2026_10_15_23_35_17.log, pll_top_main.lyrdb
+Layout/netlist geometry and connectivity are untouched; only path
+strings in logs and report databases differ from the deck's raw output.
+
+<WORK>  the sweep output directory (--outdir) the study was run in; replaced by hand after capture (the harness token <RUN_DIR> covers only the DRC run directory)
