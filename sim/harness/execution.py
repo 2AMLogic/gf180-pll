@@ -46,6 +46,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import siminit
+
 NGSPICE = "ngspice"
 
 #: ``.include "<path>"`` / ``.inc "<path>"`` -- the form ``compose_deck``
@@ -165,8 +167,12 @@ class LocalBackend:
 
     name = "local"
 
-    def __init__(self, executable: str = NGSPICE) -> None:
+    def __init__(self, executable: str = NGSPICE, *, stage_init: bool = True) -> None:
         self.executable = executable
+        #: Stage the shared simulator init file (:mod:`sim.harness.siminit`)
+        #: in the run directory before ngspice starts. ``False`` is the
+        #: negative control that exposes the no-init state split.
+        self.stage_init = stage_init
 
     def describe(self) -> dict:
         return {"backend": self.name}
@@ -183,6 +189,11 @@ class LocalBackend:
     ) -> DeckRun:
         child_env = {**os.environ, **env} if env else None
         started = time.monotonic()
+        if self.stage_init:
+            # Before the child exists, so the init file is in place when
+            # ngspice reads the netlist. A working-directory .spiceinit
+            # shadows ~/.spiceinit; no HOME or user file is touched.
+            siminit.stage(rundir)
         try:
             proc = subprocess.run(
                 [self.executable, "-b", str(deck_path)],

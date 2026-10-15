@@ -355,7 +355,8 @@ class JobPlanTests(RelocateTests):
     def test_the_inputs_are_the_deck_plus_everything_it_includes(self):
         plan = self._plan()
         self.assertEqual(
-            sorted(plan.inputs), ["pll_top.spice", "typical_27c_3.30v.spice"]
+            sorted(plan.inputs),
+            ["harness.spiceinit", "pll_top.spice", "typical_27c_3.30v.spice"],
         )
         # The deck's own bytes travel in `plan.deck`, relocated, not as a copy
         # of the on-disk original -- which still names this host's paths.
@@ -1526,8 +1527,9 @@ class ConcurrentRundirTests(unittest.TestCase):
         got = backend.run_deck(deck, self.rundir, 60, None)
 
         job_id = got.detail.split()[-1]
-        self.assertEqual(transport.inputs_of(job_id), [deck.name])
+        self.assertEqual(transport.inputs_of(job_id), ["harness.spiceinit", deck.name])
         self.assertEqual(deck.read_text(), composed)
+        self.assertFalse((self.rundir / ".spiceinit").exists())
 
 
 # ===========================================================================
