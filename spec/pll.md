@@ -96,6 +96,13 @@
   sizing when built (#455, #454). **A3 is thereby discharged** — by
   measurement rather than by the hand-estimate it asked for. No other row moves,
   and the carve-out set (rows 9 and 16) is unchanged.
+- **Ratified row held; assembled miss recorded** (#758, 2026-10-15): **[Area](#area)
+  (row 15) keeps ≤ 0.30 mm² and is recorded as unmet as assembled by DR-041.**
+  The first assembled `pll_top` measures 0.4078 mm² (×2.217 overhead), which
+  is the event DR-017 Decision 3 named as grounds to revisit the row. The
+  operator ruled to hold the limit and authorize a bounded compaction
+  feasibility study (#792); an upward amendment would need a separate record.
+  No other row moves.
 - **Revision to a ratified row's *evidence*, with the row itself unchanged**
   (#476, 2026-09-23, follow-up to #458): **[Area](#area) (row 15) keeps
   ≤ 0.30 mm², and its measured table is refreshed to the committed GDS by
@@ -187,7 +194,7 @@ top cell, port list, netlist/GDS paths, measured area, maturity rung — is
 | 12 | [Supply sensitivity](#supply-sensitivity) | `vdd_vco` ripple ≤ 20 mV pp (100 kHz – 100 MHz); DC rail excursion over the full 2.97–3.63 V range (0.66 V) must consume ≤ 1.2 V of the Vctrl window (DR-037, awaiting two-key ratification; was 0.6 V, which priced a 0.33 V half-excursion) | pushing worst −50.7 %/V at `ss`/−40 °C, band 4 (−52.3 %/V on the coarser tuning-range grid). **Budget 2's consumption is measured on the closed loop at all 45 mandated points and the 1.2 V budget (DR-037, proposed; binding on ratification) is met at all 15 (bundle, temperature) cells**: 0.385 … 0.846 V consumed over the full 0.66 V rail, worst `ss`/−40 °C at **0.846 V** = 0.71× the budget (DR-021 measured it; DR-037 re-derived the budget). Against the superseded 0.6 V figure the same measurement was a miss at **9 of the 15** cells, worst 1.41× — that miss stays recorded as an artefact of a figure that priced half the excursion. It is not an anomaly — it matches what each cell's selected band requires, from the open-loop `f(Vctrl, vdd)` table, to within 5.7 mV at every cell — and the consequence the budget guards (band plan re-cut) is **not** observed: no point leaves the measured 0.9–2.7 V window, by 53 mV at the tightest. **The quantity that must not erode is the 53 mV window margin** (DR-037 Decision 4). The 0.6 V figure's derivation priced a ±0.33 V excursion where the row specified 0.66 V; DR-037 proposes the full range as governing, per the operator ruling on #525 | **measured** (pushing; and, since DR-021, Budget 2's consumption); **derived** (the two budget *values*; Budget 2's 1.2 V by DR-037); Budget 2 **met** at 15/15 cells at the re-derived 1.2 V (DR-037, proposed; binding on ratification) (**not met** at 9/15 against the superseded 0.6 V) |
 | 13 | [Output duty cycle](#output-duty-cycle) | 45 – 55 % at `CLK`, over the whole band and all corners | measured 44.375 – 50.696 % (90 points); worst `fs`/27 °C/3.63 V at the `lo` edge (band 0, Vctrl 0.9 V) — the bottom-of-band binding condition the design basis predicted | **measured** (90 points, loaded); target **not met** at 7/90 points, all at the `lo` edge |
 | 14 | [Output levels and drive](#output-levels-and-drive) | rail-to-rail CMOS on `vdd_vco`: V_OH ≥ 0.9·VDD_VCO, V_OL ≤ 0.1·VDD_VCO into ≤ 50 fF external load | measured V_OH 1.006 – 1.044·VDD_VCO, V_OL −0.040 … −0.006·VDD_VCO into a 50 fF load, at every one of 90 points | **measured** (90 points); target **met** at every point |
-| 15 | [Area](#area) | ≤ **0.30 mm²** total — **amended by DR-016** from the draft ≤ 0.15 mm², which was never derived from anything (DR-007 Amendment A3) and is *measured* to be unreachable, and **held** at that value by **DR-017** on a floor re-measured 17.5 % lower. The drawn blocks sum to 0.1803 mm², 0.2254 mm² after the floorplan's ×1.25 top-level overhead, **1.50×** that draft target; assuming *all* Metal2 routing is free still gives 0.1702 mm² (1.13×), and every remaining named lever is above that bound. 57.2 % of what a 0.15 mm² row allowed is consumed by two terms no layout lever touches: the loop filter (capacitance-set by DR-006) and `vco_block`'s guard-ring/tap spacing. The row is the measured total *as DR-016 measured it* plus margin sized to the one unmeasured factor in it (it now holds for a top-level overhead up to ×1.664) — **not** an allowance for block growth. It did not move with the three levers that have landed since (#469, #458, #473): per DR-017 Decision 3, a downward re-amendment now needs the *uncertainty* to shrink — an assembled `pll_top` (#17), or a drawn loop filter — not another block-level lever | n/a — drawn area is not a PVT quantity; the *capacitance* it buys is (C1 = 107.1 … 133 pF over corners) | **measured** (the four drawn blocks, off committed DRC/LVS-clean GDS via `python3 layout/run_pv.py area`); **derived** (the loop filter — DR-006's measured device area ×1.15; it has no layout); **budget** (the ×1.25 top-level overhead — no assembled `pll_top` GDS exists, #17). Target **met** at 0.2254 mm² against the amended row |
+| 15 | [Area](#area) | ≤ **0.30 mm²** total — **amended by DR-016** from the draft ≤ 0.15 mm², which was never derived from anything (DR-007 Amendment A3) and is *measured* to be unreachable, and **held** at that value by **DR-017** on a floor re-measured 17.5 % lower. The drawn blocks sum to 0.1803 mm², 0.2254 mm² after the floorplan's ×1.25 top-level overhead, **1.50×** that draft target; assuming *all* Metal2 routing is free still gives 0.1702 mm² (1.13×), and every remaining named lever is above that bound. 57.2 % of what a 0.15 mm² row allowed is consumed by two terms no layout lever touches: the loop filter (capacitance-set by DR-006) and `vco_block`'s guard-ring/tap spacing. The row is the measured total *as DR-016 measured it* plus margin sized to the one unmeasured factor in it (it now holds for a top-level overhead up to ×1.664) — **not** an allowance for block growth. It did not move with the three levers that have landed since (#469, #458, #473): per DR-017 Decision 3, a downward re-amendment now needs the *uncertainty* to shrink — an assembled `pll_top` (#17), or a drawn loop filter — not another block-level lever | n/a — drawn area is not a PVT quantity; the *capacitance* it buys is (C1 = 107.1 … 133 pF over corners) | **measured** (the four drawn blocks, off committed DRC/LVS-clean GDS via `python3 layout/run_pv.py area`); **derived** (the loop filter — DR-006's measured device area ×1.15; it has no layout); **budget** (the ×1.25 top-level overhead — no assembled `pll_top` GDS exists, #17). Target **UNMET as assembled** (DR-041): the assembled `pll_top` measures 0.4078 mm² against the held ≤ 0.30 mm² row; the 0.2254 mm² block-sum estimate does not satisfy it |
 | 16 | [Lock detector](#lock-detector) | digital `lock` output; assert window within **1 … 2 ns** of phase error — i.e. ≥ the ratified Lock criterion and ≤ 2× it — at every PVT point (T1′/T2′, DR-010), **measured at the flag** (the largest phase error for which `lock` asserts and stays asserted through the assembled detector loop) rather than at the bare delay chain (DR-013 Decision 1); hysteresis ≥ 25 % of the assert window; no chatter. Conditioned on the [Lock-detector window trim-code rule](#lock-detector-window-trim-code-rule) | **T1′ and T2′ are both met**, at the trimmed `delaywin_3v3` (DR-014, #411) with each part at the code the trim rule selects: window edge **[1.14, 1.16) ns** at `fs`/−40 °C/3.63 V (code 6, **+14 … +16 %** above the 1 ns lower edge) and **[1.78, 1.80) ns** at `ss`/125 °C/2.97 V (code 3, **10.0 … 11.0 % below** the 2 ns upper edge), each resolved to 0.02 ns at the corner it binds at. The observable's PVT spread is **1.53 … 1.58×** (≤ 1.62× as a resolution-independent bound), against DR-013 Decision 4's **≤ 1.65×** and **1.91–1.96×** for the untrimmed cell, whose edge sat at [2.02, 2.04) ns — 1.0–2.0 % past budget. Behaviour is unchanged by the trim: 0 of 205 points fail the four-check acceptance, no large static phase error and no frequency error asserted anywhere, worst deassert latency 5.63 ns. **An untrimmed part is outside this specification** — the spread at any one fixed code is 1.977–1.988× and no code holds the band. **That conditionality is not yet dischargeable on silicon** (DR-022, #501): the trim rule's measurand is internal, every quantity `pll_top`'s pads expose has now been measured against it and none selects the code to the accuracy this row's own spread figure assumes, so the rule is executable only in simulation — see [Executing the rule at test](#executing-the-rule-at-test--the-rule-is-normative-and-on-this-die-it-is-executable-only-in-simulation) | **measured** (205-point in-situ re-characterization, clean tree, plus a 1872-point code map); targets **met** (T1′/T2′), conditional on a trim rule with **no executable route on this die** (DR-022); **T4/T5 below 25 MHz still uncharacterized** |
 | 17 | [Kvco](#kvco) | ≤ 150 MHz/V at every legal operating point under the [band-selection rule](#band-selection-rule) | 115.8 MHz/V at `all-fast`/27 °C/2.97 V, band 6, Vctrl 1.54 V (target 200 MHz) | **measured** |
 | 18 | [Supply range](#supply-range) | 3.3 V ± 10 % (2.97 – 3.63 V), `nfet_03v3`/`pfet_03v3` only; three domains | n/a — the supply axis is the *independent* variable of every other row's corner binding | **measured** as a swept axis on every campaign |
@@ -1561,7 +1568,8 @@ regulates `vdd_vco` to meet Budget 1 changes the output swing at the same time.
 ≤ 0.15 mm², and held there by DR-017.** The draft number was never derived
 from anything — DR-007's review raised it as Amendment A3, "the one `budget`
 row in the table with no rationale behind the number at all" — and the design
-is now measured at **0.2254 mm²**, 1.50× that draft target, which itself stays
+is estimated at **0.2254 mm²** on the block sum (1.50× that draft target) and
+**measured at 0.4078 mm² as assembled — unmet against the held row (DR-041)**, which itself stays
 out of reach even with every Metal2 track in the design assumed to route for
 free (0.1702 mm², **1.13×**). DR-016 is the amendment and carries the full
 derivation; **DR-017** (#476) re-measures the floor after three reduction
@@ -1572,8 +1580,8 @@ refreshed onto.
 are **measured**, read from committed, DRC-clean, LVS-matched GDS by
 `python3 layout/run_pv.py area`; the fifth (the loop filter) is **derived**
 from DR-006's measured device area, because the loop filter has no layout.
-What *is* still a **budget** is the top-level overhead factor: no assembled
-`pll_top` GDS exists (#17), so nothing has measured it.
+The top-level overhead factor, a **budget** in the table below, has since
+been measured by the first assembled `pll_top` (#297) at ×2.217; see DR-041.
 
 Measured at `main` @ `8c6cb7f3` (2026-09-23), reproducible with
 `python3 layout/run_pv.py area`; the per-block rows are
@@ -1600,10 +1608,16 @@ byte-compares on every test run:
 > is superseded as the measure of record by the assembled `pll_top`, which
 > measures 0.4078 mm² (`layout/evidence/pll-top-layout/PROOF.md`; the VCO's
 > growth did not change the assembled bounding box, which the divider chain's
-> width sets). The decision on that miss is #758; nothing in this row was
-> relaxed.
+> width sets). The decision on that miss is DR-041 (#758): the
+> row is held and recorded unmet; nothing in this row was relaxed.
 
-**Met, at 0.2254 mm² against 0.30 mm².** The 24.9 % margin on the block-sum
+**Unmet as assembled (DR-041, 2026-10-15).** The row is held at ≤ 0.30 mm²;
+the assembled `pll_top` measures 407,776.2 µm² (0.4078 mm², 135.9 % of the
+row, ×2.217 top-level overhead) and stays unmet until a committed assembled
+GDS is ≤ 0.30 mm². A bounded compaction feasibility study (#792) is
+authorized; any upward amendment needs a separate decision record. The
+sentences below describe the **block-sum estimate** (0.2254 mm²), which met
+the row on that basis only. The 24.9 % margin on the block-sum
 allowance is sized to exactly one thing — the unmeasured ×1.25 factor, which
 the row now carries up to **×1.664** before it fails — and is not an allowance
 for block growth. It was 0.2733 mm² / 8.9 % / ×1.372 when DR-016 was ratified;
