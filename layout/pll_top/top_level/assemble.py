@@ -88,6 +88,11 @@ REPORT_NAME = f"{TOP_CELL}-assembly.json"
 
 DOMAIN_SPACING_UM = 40.0  # floorplan/skeleton.py DOMAIN_SPACING
 VCO_GUARD_MARGIN_UM = 15.0  # floorplan/skeleton.py VCO_GUARD_MARGIN
+#: Per-gap overrides of ``DOMAIN_SPACING_UM``, keyed by the block the gap follows
+#: in ``ROW`` (``"lock_detector"`` = the lock_detector | pfd_cp gap) or by
+#: ``"divider_chain"`` for the gap between the row/keep-out and the divider. Empty
+#: in the committed build; ``harness/area_feasibility.py`` sets it (issue #792).
+GAP_OVERRIDES_UM: dict[str, float] = {}
 CHANNEL_CLEAR_UM = 2.0  # a channel's first track edge to the nearest block bbox
 EDGE_UM = 6.0  # outermost track / block edge to the chip edge (pins end here)
 PAD_H_UM = 4.0  # supply pad bar height
@@ -283,7 +288,6 @@ def assemble(block_gds: dict[str, Path], *, netlist: NL.TopNetlist | None = None
     cells = {s.subckt: import_block(ly, s, block_gds[s.subckt]) for s in BLOCKS}
 
     # --- placement -----------------------------------------------------------
-    sp = R.um(DOMAIN_SPACING_UM)
     trans: dict[str, object] = {}
 
     def place(name: str, x_ll: int, y_ll: int):
@@ -298,10 +302,12 @@ def assemble(block_gds: dict[str, Path], *, netlist: NL.TopNetlist | None = None
     boxes = {}
     for name in ROW:
         boxes[name] = place(name, x, 0)
-        x = boxes[name].right + sp
+        x = boxes[name].right + R.um(GAP_OVERRIDES_UM.get(name, DOMAIN_SPACING_UM))
     row_top = max(boxes[n].top for n in ROW)
     mid_lo = max(row_top, boxes["vco"].top + R.um(VCO_GUARD_MARGIN_UM))
-    boxes["divider_chain"] = place("divider_chain", 0, mid_lo + sp)
+    boxes["divider_chain"] = place(
+        "divider_chain", 0, mid_lo + R.um(GAP_OVERRIDES_UM.get("divider_chain", DOMAIN_SPACING_UM))
+    )
     div = boxes["divider_chain"]
 
     views = {n: A.make_view(n, ly, cells[n], trans[n]) for n in specs}

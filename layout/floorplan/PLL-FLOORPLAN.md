@@ -1691,6 +1691,20 @@ assembled 0.4078 mm² is recorded as unmet; a bounded compaction feasibility
 study (#792) is authorized, and any upward amendment needs a separate decision
 record. The measurements below are unchanged.
 
+**Feasibility study result (issue #792):** with the two levers above changed in
+isolation and together through the real assembler
+(`layout/evidence/pll-top-layout/area-feasibility/PROOF.md`), **no combination
+reaches ≤ 0.30 mm²**. The best connectivity-clean, DRC-no-worse result is
+**351,275.0 µm² (0.3513 mm²), 17.1 % over the row**: horizontal gaps closed to
+0 µm (worth nothing on their own, because the divider chain sets the box
+width), the VCO keep-out at 0 µm and the row-to-divider gap at 12 µm (the
+router's floor; the deck has no block-to-block rule). Re-folding the divider
+does not help: it is 41.99 µm tall and only 111 µm wider than the block row, so
+each added band costs more height than the width it recovers (best fold probe:
+349,708.0 µm², −0.4 % against the unfolded floor). Only a re-floorplan outside
+these two levers is left open; an upward amendment is the separate decision
+record DR-041 names. Nothing in `skeleton.py` or the spec moves.
+
 `layout/evidence/pll-top-layout/pll_top.gds` places all five real block
 layouts — the four DRC/LVS-checked blocks and the physical loop filter drawn at
 issue #748 — and routes `design/netlist/pll_top.spice` between them on
