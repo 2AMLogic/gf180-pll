@@ -2,8 +2,19 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-16
+
+- **PR #795**: Bump Repo Skills 0.24.1 -> 0.24.3
+- **PR #794**: docs(layout): bound pll_top area recovery levers; none reaches 0.30 mm2
+- **Issue #792** (closed): Bounded feasibility study: recover pll_top area toward the 0.30 mm^2 row (divider aspect ratio, planning spacings)
+
 ### 2026-10-15
 
+- **PR #793**: docs(spec): hold the Area row at 0.30 mm² and record the assembled pll_top as unmet (DR-041)
+- **PR #787**: docs: state closed measurement issues as unowned, not open owners
+- **PR #784**: feat(sim): stage one shared simulator init file on local and batch backends
+- **Issue #786** (closed): CI red on main: docs cite issues #399/#437/#540 as open after they were closed
+- **Issue #758** (closed): Area row: assembled pll_top measures 0.4078 mm^2 against the 0.30 mm^2 row (x2.217 overhead) -- needs a decision record
 - **PR #783**: Bump Repo Skills 0.19.5 -> 0.24.1
 - **Issue #540** (closed): sim: run the two closed-loop cells DR-025 names against the ratified <= 1 ns Lock criterion
 - **Issue #437** (closed): sim/supply-sensitivity: full 45-point grid at the trimmed lock-detector window
