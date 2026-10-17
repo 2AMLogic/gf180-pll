@@ -10,10 +10,13 @@ below is taken from the gf180mcuD PDK's *own* device generators,
   marked by ``mos_cap_mk``, a single poly gate across it, contact columns on
   the two comp strips beyond the gate, contact rows on the two poly ends,
   ``nplus`` over the comp, ``nwell`` around it;
-* ``draw_cap_mim.py`` (``mim_option="MIM-A"``) -- ``FuseTop`` = Metal3 =
-  ``wc x lc``, Metal2 bottom plate 0.6 um larger on every side, ``cap_mk`` =
-  the bottom plate, a 0.1 um ``mim_l_mk`` strip on the top plate's bottom
-  edge, a sea of Via2 on the top plate at 0.4 um enclosure / 0.5 um space;
+* ``draw_cap_mim.py`` (``mim_option="MIM-A"`` / ``"MIM-B"`` with
+  ``metal_level="M5"``) -- ``FuseTop`` = the top-plate metal = ``wc x lc``
+  (option A: Metal3; option B, the ratified C2 of DR-042: Metal5), the
+  bottom-plate metal 0.6 um larger on every side (A: Metal2; B: Metal4),
+  ``cap_mk`` = the bottom plate, a 0.1 um ``mim_l_mk`` strip on the top plate's
+  bottom edge, a sea of the plate-crossing via (A: Via2; B: Via4) on the top
+  plate at 0.4 um enclosure / 0.5 um space;
 * ``draw_res.py`` (``draw_ppolyf_res(res_type="ppolyf_u")`` ->
   ``polyf_res_inst``) -- ``res_mk`` = the resistor body, ``sab`` = the body
   widened 0.28 um across the current flow, ``poly2`` = the body plus a
@@ -55,9 +58,15 @@ LAYER: dict[str, tuple[int, int]] = {
     "metal2": (36, 0),
     "via2": (38, 0),
     "metal3": (42, 0),
+    "via3": (40, 0),
+    "metal4": (46, 0),
+    "via4": (41, 0),
+    "metal5": (81, 0),
     "metal1_label": (34, 10),
     "metal2_label": (36, 10),
     "metal3_label": (42, 10),
+    "metal4_label": (46, 10),
+    "metal5_label": (81, 10),
     "sab": (49, 0),
     "res_mk": (110, 5),
     "mos_cap_mk": (166, 5),
@@ -104,7 +113,13 @@ MOSCAP_ROW_INSET_UM = 0.2  # gate-row metal1 starts this far inside the poly's x
 MOSCAP_IMPLANT_MARGIN_UM = 0.25  # nplus around comp: NP.5a (gate overlap 0.23), NP.5b 0.16
 MOSCAP_NWELL_ENC_UM = 0.6  # nwell around comp: DF.4d_LV needs 0.12; the pcell uses 0.16/0.23
 
-# --- cap_mim_2f0_m2m3_noshield (MIM option A) -------------------------------------
+# --- cap_mim_2f0_m4m5_noshield (MIM option B, ratified) / m2m3 (option A, historical) ---
+#: Per option: the bottom-plate metal, the top-plate metal, and the via that
+#: crosses from the top-plate metal into ``FuseTop`` (the deck's ``top_via``).
+MIM_STACK: dict[str, dict[str, str]] = {
+    "A": {"bottom": "metal2", "top": "metal3", "via": "via2"},
+    "B": {"bottom": "metal4", "top": "metal5", "via": "via4"},
+}
 MIM_BOTTOM_ENC_UM = 0.6  # MIM.3: bottom plate overlap of top plate, exactly the pcell's value
 MIM_VIA_ENC_UM = 0.4  # MIM.4: FuseTop overlap of Via2 (pcell value; also MIM.2's 0.4)
 MIM_VIA_SPACE_UM = 0.5  # MIM.9: via2 sea space (pcell value)
@@ -161,7 +176,7 @@ def via_grid(
     margin: float = VIA_ENC_UM,
     pitch: float = VIA_PITCH_UM,
 ) -> list[tuple[float, float]]:
-    """Fill ``[x0,x1]x[y0,y1]`` with ``layer`` vias (``via1``/``via2``); returns their centres."""
+    """Fill ``[x0,x1]x[y0,y1]`` with ``layer`` vias (``via1`` ... ``via4``); returns their centres."""
     xs = via_positions(x0, x1, VIA_UM, pitch, margin)
     ys = via_positions(y0, y1, VIA_UM, pitch, margin)
     centres = []
@@ -284,46 +299,49 @@ def mos_cap(canvas: Canvas, cap: dev.MosCap, x0: float, y0: float) -> MosCapPort
 
 
 # ---------------------------------------------------------------------------
-# cap_mim_2f0_m2m3_noshield
+# cap_mim_2f0_m4m5_noshield (option B) / cap_mim_2f0_m2m3_noshield (option A)
 # ---------------------------------------------------------------------------
 
 
 @dataclass
 class MimCapPorts:
     name: str
-    fusetop: tuple[float, float, float, float]  # the device's own W x L (= Metal3 top plate)
-    bottom_plate: tuple[float, float, float, float]  # Metal2 (= cap_mk)
-    via2_count: int
+    option: str
+    fusetop: tuple[float, float, float, float]  # the device's own W x L (= the top-plate metal)
+    bottom_plate: tuple[float, float, float, float]  # bottom-plate metal (= cap_mk)
+    via_count: int  # plate-crossing vias in the sea on the top plate
 
 
 def mim_cap(canvas: Canvas, cap: dev.MimCap, x0: float, y0: float) -> MimCapPorts:
-    """Draw one MIM-A capacitor with its ``FuseTop`` lower-left corner at ``(x0, y0)``.
+    """Draw one MIM capacitor with its ``FuseTop`` lower-left corner at ``(x0, y0)``.
 
-    Follows ``draw_cap_mim.py``'s MIM-A branch shape for shape. The two
-    plates are electrically distinct *only* because the deck treats Via2
-    inside ``FuseTop`` as landing on the top plate, not on the Metal2 below
-    it (``general_derivations.lvs``: ``via2_cap = via2.and(fusetop)``). A
-    metal-only extraction that ignores ``FuseTop`` sees every one of the
-    top plate's vias land on the bottom plate and reports a short -- see
+    Follows ``draw_cap_mim.py``'s branch for the device's option shape for
+    shape (:data:`MIM_STACK` names the layers). The two plates are
+    electrically distinct *only* because the deck treats the top via inside
+    ``FuseTop`` as landing on the top plate, not on the bottom-plate metal
+    below it (``general_derivations.lvs``: ``top_via_cap = <via>.and(fusetop)``).
+    A metal-only extraction that ignores ``FuseTop`` sees every one of the top
+    plate's vias land on the bottom plate and reports a short -- see
     ``netcheck.py``.
     """
+    stack = MIM_STACK[cap.option]
     w, l = cap.w_um, cap.l_um
     ft = (x0, y0, x0 + w, y0 + l)
     canvas.rect("fusetop", *ft)
-    canvas.rect("metal3", *ft)
+    canvas.rect(stack["top"], *ft)
     canvas.rect("mim_l_mk", x0, y0, x0 + w, y0 + MIM_L_MK_UM)
     e = MIM_BOTTOM_ENC_UM
     bottom = (x0 - e, y0 - e, x0 + w + e, y0 + l + e)
-    canvas.rect("metal2", *bottom)
+    canvas.rect(stack["bottom"], *bottom)
     canvas.rect("cap_mk", *bottom)
     vias = via_grid(
         canvas,
-        "via2",
+        stack["via"],
         *ft,
         margin=MIM_VIA_ENC_UM,
         pitch=VIA_UM + MIM_VIA_SPACE_UM,
     )
-    return MimCapPorts(name=cap.name, fusetop=ft, bottom_plate=bottom, via2_count=len(vias))
+    return MimCapPorts(name=cap.name, option=cap.option, fusetop=ft, bottom_plate=bottom, via_count=len(vias))
 
 
 # ---------------------------------------------------------------------------
@@ -388,35 +406,53 @@ via1_stack = partial(
 )
 
 
-#: Via pitch inside a :func:`metal1_to_metal3_stack` 2 x 2 cluster: 0.40 um
-#: space (V1.2a/V2.2a 0.26), and under 0.6 um so the four Via2 merge into one
-#: "location" for MT30.8 (``sized(0.3)``) when Metal3 is a thick top metal.
+#: Via pitch inside a :func:`metal1_to_top_stack` 2 x 2 cluster: 0.40 um
+#: space (V1.2a ... V4.2a 0.26), and under 0.6 um so the four vias of the
+#: topmost level merge into one "location" for MT30.8 (``sized(0.3)``) when
+#: that level's top metal is a 30K thick top metal (variant A's Metal3).
 STACK_VIA_PITCH_UM = 0.66
-#: Metal3 landing square of that stack: >= MT30.1a's 1.8 um thick-top-metal
+#: Top-metal landing square of that stack: >= MT30.1a's 1.8 um thick-top-metal
 #: width and >= MT30.6's 2.5 um end-of-line threshold, so the 0.25 um
 #: end-of-line via enclosure never engages (MT30.5's 0.12 um still holds).
-STACK_METAL3_UM = 2.6
+#: Variant D's 11K Metal5 only needs MT.1's 0.44 um, so the same square is
+#: simply generous there. ``STACK_METAL3_UM`` is the historical name.
+STACK_TOP_METAL_UM = 2.6
+STACK_METAL3_UM = STACK_TOP_METAL_UM
+_STACK_METALS = ("metal1", "metal2", "metal3", "metal4", "metal5")
+_STACK_VIAS = ("via1", "via2", "via3", "via4")
 
 
-def metal1_to_metal3_stack(canvas: Canvas, x: float, y: float) -> tuple[float, float, float, float]:
-    """A 2 x 2 Via1 + 2 x 2 Via2 cluster centred at ``(x, y)``; returns the Metal3 square.
+def metal1_to_top_stack(canvas: Canvas, x: float, y: float, top_level: int) -> tuple[float, float, float, float]:
+    """A 2 x 2 via cluster per level from Metal1 up to ``metal<top_level>``, centred at ``(x, y)``.
 
-    2 x 2, not one via, because when Metal3 is the stack's thick top metal
-    (gf180mcu variant A, ``metal_top=30K``) MT30.8 requires at least a 2 x 2
-    array of top vias at every Metal3 connection.
+    Returns the top-metal landing square. Intermediate metals get a pad just
+    big enough for the cluster (``span / 2 + VIA_ENC_UM`` each side); the top
+    metal gets :data:`STACK_TOP_METAL_UM`.
+
+    2 x 2, not one via, because when the top metal is a thick top metal
+    (gf180mcu variant A, ``metal_top=30K``, where Metal3 is the top) MT30.8
+    requires at least a 2 x 2 array of top vias at every connection; the
+    other levels use the same cluster for a uniform, low-resistance stack.
     """
+    if not 2 <= top_level <= len(_STACK_METALS):
+        raise ValueError(f"top_level must be 2..{len(_STACK_METALS)}, got {top_level}")
     x, y = dev.snap_um(x), dev.snap_um(y)
     span = STACK_VIA_PITCH_UM + VIA_UM
     lo_x, lo_y = x - span / 2, y - span / 2
-    for layer in ("via1", "via2"):
+    for layer in _STACK_VIAS[: top_level - 1]:
         for i in range(2):
             for j in range(2):
                 vx, vy = lo_x + i * STACK_VIA_PITCH_UM, lo_y + j * STACK_VIA_PITCH_UM
                 canvas.rect(layer, vx, vy, vx + VIA_UM, vy + VIA_UM)
     p = span / 2 + VIA_ENC_UM
-    canvas.rect("metal1", x - p, y - p, x + p, y + p)
-    canvas.rect("metal2", x - p, y - p, x + p, y + p)
-    h = STACK_METAL3_UM / 2
+    for layer in _STACK_METALS[: top_level - 1]:
+        canvas.rect(layer, x - p, y - p, x + p, y + p)
+    h = STACK_TOP_METAL_UM / 2
     sq = (x - h, y - h, x + h, y + h)
-    canvas.rect("metal3", *sq)
+    canvas.rect(_STACK_METALS[top_level - 1], *sq)
     return sq
+
+
+def metal1_to_metal3_stack(canvas: Canvas, x: float, y: float) -> tuple[float, float, float, float]:
+    """The option-A stack (Metal1 -> Metal3); see :func:`metal1_to_top_stack`."""
+    return metal1_to_top_stack(canvas, x, y, 3)

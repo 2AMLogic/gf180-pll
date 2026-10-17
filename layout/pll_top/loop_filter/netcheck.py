@@ -12,21 +12,24 @@ shapes):
 
 2. :func:`extract` + :func:`check_topology` / :func:`check_probes` --
    connectivity. :func:`extract` builds a ``klayout.db.LayoutToNetlist`` over
-   diffusion, poly, contacts, metal1-3, Via1/Via2, the n-well and the MIM top
+   diffusion, poly, contacts, metal1-5, Via1-Via4, the n-well and the MIM top
    plate. Two boundaries are deliberate and load-bearing:
 
    * **The resistor body is cut out of poly** (``poly2 NOT res_mk``), so the
      two ends of each resistor are separate nets -- otherwise the whole chain
      would extract as one node and an open link would be invisible.
-   * **The MIM plates are kept apart.** Via2 inside ``FuseTop`` connects Metal3
-     to ``FuseTop`` (the top plate) and *not* to the Metal2 underneath it,
-     exactly as the foundry LVS deck does (``via2_cap = via2.and(fusetop)``,
-     ``connect(fuse_cap, via2_cap)``; ``via2_n_cap = via2.not(fusetop)``,
-     ``connect(metal2_con, via2_n_cap)``). A metal-only extraction that lets
-     every Via2 join Metal2 to Metal3 -- ``extract(..., plate_aware=False)``
-     -- sees the top plate's 1600-via sea land on the bottom plate and reports
-     ``VCTRL`` shorted to ``VSS`` on a correct layout. The tests assert that
-     too, so this boundary cannot silently regress.
+   * **The MIM plates are kept apart.** The deck's ``top_via`` (Via4 for MIM
+     option B, the ratified C2 of DR-042; Via2 for option A) inside ``FuseTop``
+     connects the top-plate metal (Metal5 / Metal3) to ``FuseTop`` and *not* to
+     the bottom-plate metal underneath it (Metal4 / Metal2), exactly as the
+     foundry LVS deck does (``top_via_cap = top_via.and(fusetop)``,
+     ``connect(fuse_cap, top_via_cap)``; ``top_via_n_cap = top_via.not(fusetop)``,
+     ``connect(<bottom>_con, top_via_n_cap)``). A metal-only extraction that
+     lets every such via join the two metals -- ``extract(...,
+     plate_aware=False)`` -- sees the top plate's via sea land on the bottom
+     plate and reports ``VCTRL`` shorted to ``VSS`` on a correct layout. The
+     tests assert that too, so this boundary cannot silently regress. The
+     option is read from the GDS itself (Metal5 under ``FuseTop`` = B).
 
    What it does **not** do: recognise devices or measure their values (that
    is the census above, and the foundry LVS run recorded in the evidence
@@ -54,7 +57,13 @@ try:
 except ImportError:  # pragma: no cover - flat-import fallback (layout/tests)
     import primitives as prim  # type: ignore
 
-LABEL_LAYERS = {"metal1_label": "metal1", "metal2_label": "metal2", "metal3_label": "metal3"}
+LABEL_LAYERS = {
+    "metal1_label": "metal1",
+    "metal2_label": "metal2",
+    "metal3_label": "metal3",
+    "metal4_label": "metal4",
+    "metal5_label": "metal5",
+}
 
 
 def _db():
@@ -104,7 +113,8 @@ class Census:
     resistor_bodies: list[tuple] = field(default_factory=list)
     resistor_polys: list[tuple] = field(default_factory=list)
     mim_tops: list[tuple] = field(default_factory=list)
-    mim_bottoms: list[tuple] = field(default_factory=list)  # metal2 bbox interacting each FuseTop
+    mim_bottoms: list[tuple] = field(default_factory=list)  # bottom-plate-metal bbox under each FuseTop
+    mim_option: str = "A"  # "B" when the top-plate metal is Metal5 (read from the GDS)
     substrate_taps: list[tuple] = field(default_factory=list)
     forbidden: dict[str, int] = field(default_factory=dict)
     layer_shapes: dict[tuple[int, int], int] = field(default_factory=dict)
@@ -112,6 +122,11 @@ class Census:
     gate_under_nplus: list[bool] = field(default_factory=list)
     mim_has_markers: list[bool] = field(default_factory=list)
     labels: list[tuple[str, str, float, float]] = field(default_factory=list)  # (text, layer, x, y)
+
+
+def mim_option_of(R: dict) -> str:
+    """``"B"`` if any ``FuseTop`` is covered by Metal5 (the option-B top plate), else ``"A"``."""
+    return "B" if not (R["fusetop"] & R["metal5"]).is_empty() else "A"
 
 
 def census(gds: Path) -> Census:
@@ -151,17 +166,19 @@ def census(gds: Path) -> Census:
         c.resistor_bodies.append(_um_box(poly.bbox(), dbu))
         c.resistor_polys.append(_um_box(R["poly2"].interacting(db.Region(poly)).bbox(), dbu))
 
-    # --- MIM: FuseTop + the metal2 under it ---
+    # --- MIM: FuseTop + the bottom-plate metal under it (option read from the GDS) ---
+    c.mim_option = mim_option_of(R)
+    stack = prim.MIM_STACK[c.mim_option]
     for poly in R["fusetop"].each():
         ft = db.Region(poly)
         c.mim_tops.append(_um_box(poly.bbox(), dbu))
-        bottom = (R["metal2"] & ft.sized(int(round(prim.MIM_BOTTOM_ENC_UM / dbu)))).bbox()
+        bottom = (R[stack["bottom"]] & ft.sized(int(round(prim.MIM_BOTTOM_ENC_UM / dbu)))).bbox()
         c.mim_bottoms.append(_um_box(bottom, dbu))
         c.mim_has_markers.append(
             not R["cap_mk"].interacting(ft).is_empty()
             and not R["mim_l_mk"].interacting(ft).is_empty()
             and (ft - R["cap_mk"]).is_empty()
-            and (ft - R["metal3"]).is_empty()
+            and (ft - R[stack["top"]]).is_empty()
         )
 
     # --- substrate taps: every raw comp shape under pplus and outside nwell ---
@@ -186,6 +203,10 @@ def census(gds: Path) -> Census:
                 c.labels.append((t.string, lname, t.x * dbu, t.y * dbu))
             it.next()
     return c
+
+
+def dev_option(model: str) -> str:
+    return {"cap_mim_2f0_m2m3_noshield": "A", "cap_mim_2f0_m4m5_noshield": "B"}[model]
 
 
 def device_problems(c: Census, *, resistors, mos_caps, mim_caps) -> list[str]:
@@ -234,7 +255,11 @@ def device_problems(c: Census, *, resistors, mos_caps, mim_caps) -> list[str]:
         if enc < prim.MIM_BOTTOM_ENC_UM - 1e-9:
             out.append(f"MIM bottom plate encloses FuseTop {t} by only {enc:.3f} um (MIM.3: 0.6)")
         if not ok:
-            out.append(f"MIM at {t}: missing cap_mk/mim_l_mk/Metal3 top plate")
+            top = prim.MIM_STACK[c.mim_option]["top"].capitalize()
+            out.append(f"MIM at {t}: missing cap_mk/mim_l_mk/{top} top plate")
+    for model in {m.model for m in mim_caps}:
+        if dev_option(model) != c.mim_option:
+            out.append(f"netlist C2 is {model} (option {dev_option(model)}) but the GDS draws option {c.mim_option}")
     if not c.substrate_taps:
         out.append("no substrate tap found")
     return out
@@ -269,8 +294,11 @@ def extract(gds: Path, *, plate_aware: bool = True) -> Extraction:
 
     comp, poly2, res_mk = raw("comp"), raw("poly2"), raw("res_mk")
     nwell, contact = raw("nwell"), raw("contact")
-    m1, v1, m2, v2, m3 = raw("metal1"), raw("via1"), raw("metal2"), raw("via2"), raw("metal3")
+    metals = [raw(f"metal{i}") for i in range(1, 6)]
+    vias = [raw(f"via{i}") for i in range(1, 5)]
     fusetop = raw("fusetop")
+    option = mim_option_of({"fusetop": _region(ly, top, prim.LAYER["fusetop"]), "metal5": _region(ly, top, prim.LAYER["metal5"])})
+    top_via_idx = 3 if option == "B" else 1  # index into `vias`: via4 for B, via2 for A
 
     poly = poly2 - res_mk
     l2n.register(poly, "poly")
@@ -281,38 +309,42 @@ def extract(gds: Path, *, plate_aware: bool = True) -> Extraction:
         "diff": diff,
         "nwell": nwell,
         "contact": contact,
-        "metal1": m1,
-        "via1": v1,
-        "metal2": m2,
-        "metal3": m3,
         "fusetop": fusetop,
     }
+    for i, m in enumerate(metals):
+        layers[f"metal{i + 1}"] = m
     for r in layers.values():
         l2n.connect(r)
     l2n.connect(contact, poly)
     l2n.connect(contact, diff)
-    l2n.connect(contact, m1)
+    l2n.connect(contact, metals[0])
     l2n.connect(nwell, diff)
-    l2n.connect(m1, v1)
-    l2n.connect(v1, m2)
-    if plate_aware:
-        v2_ncap = v2 - fusetop
-        v2_cap = v2 & fusetop
-        l2n.register(v2_ncap, "via2_ncap")
-        l2n.register(v2_cap, "via2_cap")
-        for r in (v2_ncap, v2_cap):
-            l2n.connect(r)
-        l2n.connect(m2, v2_ncap)
-        l2n.connect(v2_ncap, m3)
-        l2n.connect(fusetop, v2_cap)
-        l2n.connect(v2_cap, m3)
-        layers["via2_ncap"], layers["via2_cap"] = v2_ncap, v2_cap
-    else:
-        l2n.connect(v2)
-        l2n.connect(m2, v2)
-        l2n.connect(v2, m3)
-        l2n.connect(fusetop, v2)
-        layers["via2"] = v2
+    for i, v in enumerate(vias):
+        lower, upper = metals[i], metals[i + 1]
+        name = f"via{i + 1}"
+        if i != top_via_idx:
+            layers[name] = v
+            l2n.connect(v)
+            l2n.connect(lower, v)
+            l2n.connect(v, upper)
+        elif plate_aware:
+            v_ncap = v - fusetop
+            v_cap = v & fusetop
+            l2n.register(v_ncap, f"{name}_ncap")
+            l2n.register(v_cap, f"{name}_cap")
+            for r in (v_ncap, v_cap):
+                l2n.connect(r)
+            l2n.connect(lower, v_ncap)
+            l2n.connect(v_ncap, upper)
+            l2n.connect(fusetop, v_cap)
+            l2n.connect(v_cap, upper)
+            layers[f"{name}_ncap"], layers[f"{name}_cap"] = v_ncap, v_cap
+        else:
+            layers[name] = v
+            l2n.connect(v)
+            l2n.connect(lower, v)
+            l2n.connect(v, upper)
+            l2n.connect(fusetop, v)
     l2n.extract_netlist()
     return Extraction(l2n=l2n, layers=layers, dbu=ly.dbu)
 
@@ -422,7 +454,7 @@ def check_topology(gds: Path, *, plate_aware: bool = True) -> Report:
     for t in c.mim_tops:
         xc, yc = (t[0] + t[2]) / 2, (t[1] + t[3]) / 2
         mim_top.append(ex.net_at("fusetop", xc, yc))
-        mim_bot.append(ex.net_at("metal2", xc, t[1] - prim.MIM_BOTTOM_ENC_UM / 2))
+        mim_bot.append(ex.net_at(prim.MIM_STACK[c.mim_option]["bottom"], xc, t[1] - prim.MIM_BOTTOM_ENC_UM / 2))
     rep.checked += len(gate_nets) + len(body_nets) + len(tap_nets) + len(mim_bot) + len(mim_top)
     for label, nets in (("MOS-cap gate", gate_nets), ("MOS-cap body", body_nets), ("substrate tap", tap_nets),
                         ("MIM bottom plate", mim_bot), ("MIM top plate", mim_top)):
