@@ -91,6 +91,14 @@ REFERENCES = {
     "loop_filter.block": "loop-filter-layout/loop_filter.spice",
 }
 
+#: Keyword arguments a row's ``reference_netlist()`` needs to reproduce the
+#: committed bytes. The loop filter's committed evidence (issue #748) was run
+#: against DR-006's option-A C2; the generator's default is now the ratified
+#: option B (DR-042), so the historical bytes are asked for explicitly.
+REFERENCE_KWARGS = {
+    "loop_filter.block": {"mim_option": "A"},
+}
+
 #: The two ``reference_netlist()`` functions deliberately *not* in
 #: :data:`REFERENCES`: each already carries this same byte-identity assertion
 #: in its own block's test file, against its own ``lvs-clean/`` directory
@@ -113,7 +121,7 @@ class CommittedReferenceNetlistTests(unittest.TestCase):
                 committed = (EVIDENCE / evidence_rel).read_text()
                 self.assertEqual(
                     committed,
-                    module.reference_netlist(),
+                    module.reference_netlist(**REFERENCE_KWARGS.get(module_path, {})),
                     f"layout/evidence/{evidence_rel} is no longer what "
                     f"{module_path}.reference_netlist() produces -- the LVS log "
                     "beside it was run against the committed bytes, so either "

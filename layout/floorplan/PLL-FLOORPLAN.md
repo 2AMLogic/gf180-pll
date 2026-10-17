@@ -179,7 +179,7 @@ as-drawn device geometry, not an estimate.** `design/loop_filter.sch`:
 |---|---|---|---|
 | R | 4× `ppolyf_u` in series | 2 µm × 107 µm each | ≈856 µm² (drawn resistor body) |
 | C1 | 4× `cap_nmos_03v3_b` | 87 × 87 µm each | 30,276 µm² (≈0.0303 mm²) |
-| C2 | 1× `cap_mim_2f0_m2m3_noshield` | 31.4 × 31.4 µm | ≈986 µm² |
+| C2 | 1× `cap_mim_2f0_m4m5_noshield` (DR-042, proposed; DR-006 had the option-A `…_m2m3_…`, same size) | 31.4 × 31.4 µm | ≈986 µm² |
 
 **C1 is the area-dominant element of the whole block, confirmed**: 30,276 µm²
 against the < 0.15 mm² (150,000 µm²) budget is **≈20.2 %** of the entire
