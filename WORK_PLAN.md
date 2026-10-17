@@ -27,21 +27,22 @@ _None._
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-_None._
+- **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief
 
 ## In Progress
 
 Issues currently being built (`loom:building`).
 
-- **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief
 - **#753**: Loop filter C2 is a MIM option-A device, but the repository's PV flow targets gf180mcuD (MIM option B)
 - **#789**: Re-pin PDK to open_pdks f6eeac7 via ciel: code, CI, docs, hash-checked search
+- **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes
+- **#801**: Remove duplicated MOS_BUNDLES/full_grid and dead SUPPLY_ALIAS in period-jitter generators
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-_None._
+- **#802**: refactor(sim): derive period-jitter MOS bundles from harness, share full_grid
 
 ## Approved (Awaiting Merge)
 
@@ -87,9 +88,9 @@ Issues carrying `loom:curated`.
 | Operator merge-risk holds | 2 |
 | Very important | 0 |
 | Important | 2 |
-| Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 3 |
-| PRs awaiting review | 0 |
+| Ready (`loom:issue`) | 1 |
+| In Progress (`loom:building`) | 4 |
+| PRs awaiting review | 1 |
 | Approved PRs awaiting merge | 2 |
 | Curated | 14 |
 | Architect / Hermit proposals | 4 |
