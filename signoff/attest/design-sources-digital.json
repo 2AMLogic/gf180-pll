@@ -1,0 +1,187 @@
+{
+  "checks": [
+    "every design/*.sch is assigned to exactly one partition or explicitly excluded",
+    "every listed schematic, symbol, support file and derived netlist exists",
+    "each derived netlist declares its top subcircuit and has at least 3 device instances",
+    "design/netlist.sh BLOCKS exports each listed netlist and CI runs 'design/netlist.sh --check'"
+  ],
+  "excluded_schematics": {},
+  "files": [
+    {
+      "content_hash": "sha256:b335204521a1a40bc41047431bb29cbd8735f86b1d29ab2cd15c2c7ae601f7cc",
+      "path": "design/inv_3v3.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:e28601a3ff8810aa08283bfdd36feea10a28439abab24ee6c7466fe15b906119",
+      "path": "design/inv_3v3.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:9c9de5568f0c68104d90d5f019aa0ed27ccbc5d335f42170867bb037e58caf76",
+      "path": "design/inv2x_3v3.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:fc9c2953498104eb734130291fd2d6b702ac476c3e5f3d45f9e01b5ed9d3385d",
+      "path": "design/inv2x_3v3.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:4ccab00a181720f3eefe11757bd5468627fb20b91a98403f9f8038707ae7c790",
+      "path": "design/nand2_3v3.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:5db78835e2a3c022955299ebe94b4ab2b6d056555d69a0d3cee68d0c05d8c2c0",
+      "path": "design/nand2_3v3.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:752cfbf83e3ee4a4ca3dd3338021b8d34ae98f47b29a073895a994d80f3a45bb",
+      "path": "design/nand3_3v3.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:7aaa929b58f4645145c7d8350d499df6a51af6c010a73061f56c9f3f7430582d",
+      "path": "design/nand3_3v3.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:8e92f7a01af08489c69b7f3861fb162e14d6dba52e5a00e685df9284ebeb40a2",
+      "path": "design/nor2_3v3.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:5db78835e2a3c022955299ebe94b4ab2b6d056555d69a0d3cee68d0c05d8c2c0",
+      "path": "design/nor2_3v3.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:75c6f9ae2266e5a34d846a0e8c3a715658e465e5054c10ada735c3e83d0adfab",
+      "path": "design/tgate_3v3.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:1822e77ea1f15b72b092128569f19d01a487de2d252dca0c4e3ad2beabde26e3",
+      "path": "design/tgate_3v3.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:6101c9396e16fae6987c740ba2c927f8f5c11b01e6319c0da3f9e7e7216a7863",
+      "path": "design/xor2_3v3.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:5db78835e2a3c022955299ebe94b4ab2b6d056555d69a0d3cee68d0c05d8c2c0",
+      "path": "design/xor2_3v3.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:86ea7b1ddaf59ab9bd99b82b39bb992ed61ed12eaa6cae3c127828d15b9a7de1",
+      "path": "design/schmitt_3v3.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:fc9c2953498104eb734130291fd2d6b702ac476c3e5f3d45f9e01b5ed9d3385d",
+      "path": "design/schmitt_3v3.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:3201a3fadc35bc44a535e16206e022f3ef4eb01cde779be719bce9657a64609c",
+      "path": "design/delaywin_3v3.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:7c5842f85ffb2deca3d13d9fd5ec3e4a6043a97319a0221360d76cb86fb4e482",
+      "path": "design/delaywin_3v3.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:0a7fbfafb4db6223e6b2d2122c8c88bfb879489496f8bdfe88686cd99d017b5b",
+      "path": "design/dff_tg_3v3.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:c0ec69a94de17bb882346eecf22d1021a7ca7b9a7d551a201f26a19e6e412f1b",
+      "path": "design/dff_tg_3v3.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:5ae3554f4597130a05a93b78ff46cb23cc4ecab1a43005e58ed00a063c429ce2",
+      "path": "design/div23_cell.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:99606756f4179077c6711da9f030d1b8fa6c44254643f7a39b8a8ea6e40f6547",
+      "path": "design/div23_cell.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:4ebd7d198dbb6984e08283ebcb90ad06ba830d733bc95dfe5880107611d410f9",
+      "path": "design/divider_chain.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:4baf333fdbaee7deb99fa2e53002729d4d56ffc16081ee7b641db56ae760421c",
+      "path": "design/divider_chain.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:a84539268812f9ea83855caf92046ed62f6ac32893ecf23b9dd567cdfa2f6175",
+      "path": "design/lock_detector.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:a9a6c40b5f2872cb370c3873b65e89cb9da28148ab4f0c83f8bd4dd2397c57d6",
+      "path": "design/lock_detector.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:6a8c0b0dfb6f48fc184b723c51b62e937416b97b8cb64ad77d4e2c0ee03177d0",
+      "path": "design/xschemrc",
+      "role": "source-support"
+    },
+    {
+      "content_hash": "sha256:2f7ac614eb034842f631a78d3c2f21120918985d76c8d862399af24d05a3f7da",
+      "path": "design/netlist.sh",
+      "role": "source-support"
+    },
+    {
+      "content_hash": "sha256:425ff72dc4c079addc246a33728758b0f69cc86630ed43ebc1db21e240ccdaf6",
+      "path": "design/gen_delaywin.py",
+      "role": "source-support"
+    },
+    {
+      "content_hash": "sha256:9e9dd4edf6aa484ba125b2547e2ba90b3b951d4f6e54abe972d1825081d3b5b9",
+      "path": "design/netlist/div23_cell.spice",
+      "role": "derived-netlist"
+    },
+    {
+      "content_hash": "sha256:bcdaece6dab79a3bfe6bb50419152bd278cb0cfb28c3020878303a2d2837c80f",
+      "path": "design/netlist/divider_chain.spice",
+      "role": "derived-netlist"
+    },
+    {
+      "content_hash": "sha256:400d585124bc2b4a5eb8dae1e1c52b7cbe482a0f38b650fe427facd76e2ba183",
+      "path": "design/netlist/lock_detector.spice",
+      "role": "derived-netlist"
+    },
+    {
+      "content_hash": "sha256:02b0da08c4e4873a42ff738ced3a7e4837e5ed25ad51c629b50e641b33b5dbd4",
+      "path": "design/netlist/dff_tg_3v3.spice",
+      "role": "derived-netlist"
+    }
+  ],
+  "freshness_gate": {
+    "command": "./design/netlist.sh --check",
+    "run_by": ".github/workflows/ci.yml (pdk-checks job, pinned xschem 3.4.7)",
+    "what": "re-exports every committed top and diffs against design/netlist/*.spice"
+  },
+  "full_custom_note": "the digital partition is full-custom (DR-008): no RTL, so its item 1 is the Analog column's artifact, schematic plus derived netlist",
+  "partition": "digital",
+  "regenerate": "./design/netlist.sh",
+  "schema_version": 1,
+  "subject": "digital design-source inventory",
+  "t1_item": 1
+}

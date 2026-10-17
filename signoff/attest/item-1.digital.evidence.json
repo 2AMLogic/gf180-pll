@@ -1,0 +1,21 @@
+{
+  "kind": "generic",
+  "provenance": {
+    "deck": null,
+    "input": {
+      "content_hash": "sha256:7d6b121ccb4ba0a520eeb39ea3710577f90070dfd22031dafa2710bc3c4c1064",
+      "path": {
+        "path": "signoff/attest/design-sources-digital.json",
+        "scope": "repo"
+      }
+    },
+    "klayout_version": null,
+    "klt_version": null,
+    "pdk": null
+  },
+  "schema_version": 1,
+  "source": "signoff/attest/design-sources-digital.json",
+  "status": "pass",
+  "summary": "digital partition: every design source and derived netlist inventoried; netlists regenerated and checked in CI",
+  "t1_item": 1
+}
