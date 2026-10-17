@@ -57,7 +57,7 @@ design/
   sky130 prior-art convention DR-001 recommends, so each block can be
   simulated and re-verified on its own.
 - **PDK root**: set `GF180_PDK_ROOT` to point at a PDK root other than
-  `~/.volare/gf180mcuD`; `xschemrc` and `sim/lib/simenv.sh` read the same
+  `~/.ciel/gf180mcuD`; `xschemrc` and `sim/lib/simenv.sh` read the same
   variable.
 
 ## Netlist export

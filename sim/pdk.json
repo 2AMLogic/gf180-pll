@@ -3,9 +3,13 @@
     "Committed PDK defaults for this repo. Environment variables win over this",
     "file, and sim/pdk.local.json (git-ignored) wins over both.",
     "  variant       gf180mcu flavor directory to use (A/B/C/D differ in metal stack)",
+    "  open_pdks     the ONE pinned open_pdks revision. Every resolved PDK tree's",
+    "                SOURCES must match it; read by sim/harness/pdk.py,",
+    "                sim/lib/simenv.sh and CI. Not overridable from pdk.local.json.",
     "  search_roots  extra directories that CONTAIN variant dirs, searched before",
-    "                the built-in list (~/.volare, /usr/share/pdk, ...)"
+    "                the built-in list (~/.ciel, ~/.volare, /usr/share/pdk, ...)"
   ],
   "variant": "gf180mcuD",
+  "open_pdks": "f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7",
   "search_roots": []
 }

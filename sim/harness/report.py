@@ -1520,7 +1520,7 @@ def render_record(record: dict, experiment: str) -> str:
         f"- **Claim**: {record['claim'] or 'harness self-verification -- no spec or design-input claim'}",
         f"- **Netlist provenance**: {provenance}",
         "- **Environment provenance**:",
-        f"  - PDK: volare `{pdk.get('variant')}`, open_pdks `{pdk.get('open_pdks_version')}` "
+        f"  - PDK: `{pdk.get('variant')}`, open_pdks `{pdk.get('open_pdks_version')}` "
         f"({pdk.get('path')}, found via {pdk.get('discovered_via')})",
         "  - Models: `libs.tech/ngspice/sm141064.ngspice`; `design.ngspice` included first",
         f"  - Simulator: {env['ngspice']}. Harness: sim/harness {env['harness_version']}, "

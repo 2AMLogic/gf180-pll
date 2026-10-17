@@ -8,7 +8,8 @@ whether a marked (GDS ``(62, 0)``) poly resistor extracts as ``ppolyf_u_1k``,
 ``ppolyf_u_2k`` or ``ppolyf_u_3k``. The PDK's own ``run_lvs.py`` **hardcodes**
 ``switches["poly_res"] = "1k"`` for every one of its four ``--variant``
 letters and exposes no CLI override (gf180mcuD, open_pdks
-``c6d73a35f524070e85faff4a6a9eef49553ebc2b``; the variant letters select the
+``c6d73a35f524070e85faff4a6a9eef49553ebc2b`` when this was written -- the data
+has NOT been regenerated under the current ``sim/pdk.json`` pin; the variant letters select the
 metal stack and MIM option, which are independent of the poly option).
 
 This shim exists so this repo can state its own ratified process option (see
