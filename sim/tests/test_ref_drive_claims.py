@@ -293,10 +293,12 @@ class TestDeviatingDeckHasNoRecord(_TreeTest):
     """Rule 5: the substance, which needs no wording at all."""
 
     def test_a_deviating_deck_with_a_record_fails_whatever_any_document_says(self):
+        # A stand-in campaign name: the real `reference-input-contract` is in
+        # the REARGUED table (DR-040), which would excuse it here.
         self.tree.deck(
-            "sim/reference-input-contract/testbench/tb_ref_contract.spice", VARYING
+            "sim/unargued-campaign/testbench/tb_ref_contract.spice", VARYING
         )
-        self.tree.record("reference-input-contract")
+        self.tree.record("unargued-campaign")
         self.assertFails(
             "varies the reference waveform",
             "committed record(s)",
