@@ -56,6 +56,7 @@ HERE = Path(__file__).resolve().parent
 SIM = HERE.parents[1]
 
 sys.path.insert(0, str(SIM))
+from harness.corners import CORNER_SETS  # noqa: E402
 from harness.derived import load_module  # noqa: E402
 
 _refspur = load_module(SIM / "reference-spur" / "testbench" / "vstart_from_vco_record.py")
@@ -64,9 +65,8 @@ interp_vctrl = _refspur.interp_vctrl
 load_curves = _refspur.load_curves
 supplies_of = _refspur.supplies_of
 
-#: The MOS-bundle corner set `tb.json` names (`sim/harness/corners.py`'s
-#: `CORNER_SETS["mos"]`), in the order the runner expands it.
-MOS_BUNDLES = ("typical", "ff", "ss", "fs", "sf")
+#: The MOS-bundle corner set `tb.json` names, in the order the runner expands it.
+MOS_BUNDLES = CORNER_SETS["mos"]
 
 #: Human-readable why-this-corner text, so every generated `grid` block can
 #: carry the `description` `sim/harness/README.md` requires of it.
@@ -77,8 +77,6 @@ BUNDLE_NOTE = {
     "fs": "skewed MOS -- the sign of the UP/DN current asymmetry one way",
     "sf": "skewed MOS -- the sign of the UP/DN current asymmetry the other way",
 }
-
-SUPPLY_ALIAS = {"low": -1, "nom": 0, "high": +1}
 
 
 def point_id(vstart: float) -> str:
