@@ -2,6 +2,14 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-15
+
+- **PR #783**: Bump Repo Skills 0.19.5 -> 0.24.1
+- **Issue #540** (closed): sim: run the two closed-loop cells DR-025 names against the ratified <= 1 ns Lock criterion
+- **Issue #437** (closed): sim/supply-sensitivity: full 45-point grid at the trimmed lock-detector window
+- **Issue #439** (closed): sim/lock-time: re-take the full 270-run PVT grid against the DR-014-trimmed lock detector
+- **Issue #399** (closed): Settled static phase at the 15 over-bound corners the 12 µs grid sampled on a decaying tail (DR-012 Decision 6)
+
 ### 2026-10-14
 
 - **Issue #292** (closed): Layout: draw real per-block transistor-level layout for VCO, PFD/CP, divider-chain, lock-detector (#17's floorplan is planning-only)
