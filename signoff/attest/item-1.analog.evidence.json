@@ -1,0 +1,21 @@
+{
+  "kind": "generic",
+  "provenance": {
+    "deck": null,
+    "input": {
+      "content_hash": "sha256:c1f2f709bcd0c5e48c930f12b4d5c15732b7e1fef63bd105ae2d9b30b33ed67a",
+      "path": {
+        "path": "signoff/attest/design-sources-analog.json",
+        "scope": "repo"
+      }
+    },
+    "klayout_version": null,
+    "klt_version": null,
+    "pdk": null
+  },
+  "schema_version": 1,
+  "source": "signoff/attest/design-sources-analog.json",
+  "status": "pass",
+  "summary": "analog partition: every design source and derived netlist inventoried; netlists regenerated and checked in CI",
+  "t1_item": 1
+}

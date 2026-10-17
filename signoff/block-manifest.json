@@ -1,5 +1,26 @@
 {
   "block": "gf180-pll",
-  "kind": "mixed-signal",
-  "evidence": {}
+  "evidence": {
+    "1.analog": {
+      "content_hash": "sha256:c1f2f709bcd0c5e48c930f12b4d5c15732b7e1fef63bd105ae2d9b30b33ed67a",
+      "file": "signoff/attest/item-1.analog.evidence.json"
+    },
+    "1.digital": {
+      "content_hash": "sha256:7d6b121ccb4ba0a520eeb39ea3710577f90070dfd22031dafa2710bc3c4c1064",
+      "file": "signoff/attest/item-1.digital.evidence.json"
+    },
+    "10": {
+      "content_hash": "sha256:5ca04ba9df57cd0351fe0ce6ac980471f3d5665090d107fe3e1e0228868d63a0",
+      "file": "signoff/attest/item-10.evidence.json"
+    },
+    "9.analog": {
+      "content_hash": "sha256:d4610c9f850e9d17adbb6ca4774ffee27e77a28557815dbb36ce9d82e8cdc4aa",
+      "file": "signoff/attest/item-9.analog.evidence.json"
+    },
+    "9.digital": {
+      "content_hash": "sha256:6e7978e74b999042b518168c1584794b0be7b13e8fb113c868c7e208fc6bc90c",
+      "file": "signoff/attest/item-9.digital.evidence.json"
+    }
+  },
+  "kind": "mixed-signal"
 }
