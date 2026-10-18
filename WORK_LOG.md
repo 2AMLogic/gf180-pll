@@ -2,6 +2,11 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-17
+
+- **PR #802**: refactor(sim): derive period-jitter MOS bundles from harness, share full_grid
+- **Issue #801** (closed): Remove duplicated MOS_BUNDLES/full_grid and dead SUPPLY_ALIAS in period-jitter generators
+
 ### 2026-10-16
 
 - **PR #795**: Bump Repo Skills 0.24.1 -> 0.24.3
