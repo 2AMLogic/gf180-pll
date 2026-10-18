@@ -71,6 +71,7 @@ Issues carrying `loom:curated`.
 
 ## Proposed (Architect / Hermit)
 
+- **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief *(architect)*
 - **#731**: sim/period-jitter: migrate grid.sh fan-out to run_corners.py backends (follow-up to #712 step 1) *(architect)*
 - **#740**: sim/lib/simenv.sh: refuse local multi-unit grid fan-out when the batch backend is selected *(architect)*
 - **#741**: sim: migrate loop-dynamics, output-range, mc-cp-mismatch shell campaigns to harness manifests *(architect)*
@@ -91,6 +92,6 @@ Issues carrying `loom:curated`.
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 2 |
 | Curated | 14 |
-| Architect / Hermit proposals | 3 |
+| Architect / Hermit proposals | 4 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
