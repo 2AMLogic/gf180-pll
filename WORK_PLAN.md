@@ -27,7 +27,7 @@ _None._
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-_None._
+- **#810**: CI: headless checks job fails building klayout on Python 3.15 (python-version 3.x)
 
 ## In Progress
 
@@ -68,6 +68,7 @@ Issues carrying `loom:curated`.
 - **#755**: sim harness: stage a simulator init file (wnflag) so local and batch backends run the same configuration *(curated)*
 - **#789**: Re-pin PDK to open_pdks f6eeac7 via ciel: code, CI, docs, hash-checked search *(curated)*
 - **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes *(curated)*
+- **#810**: CI: headless checks job fails building klayout on Python 3.15 (python-version 3.x) *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -87,11 +88,11 @@ Issues carrying `loom:curated`.
 | Operator merge-risk holds | 2 |
 | Very important | 0 |
 | Important | 2 |
-| Ready (`loom:issue`) | 0 |
+| Ready (`loom:issue`) | 1 |
 | In Progress (`loom:building`) | 3 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 2 |
-| Curated | 14 |
+| Curated | 15 |
 | Architect / Hermit proposals | 4 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
