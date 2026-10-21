@@ -9,6 +9,7 @@ Judge-approved PRs under a hold (`loom:blocked` or `loom:operator`) — only a h
 
 - **#791**: feat(sim): pin open_pdks and refuse PDK trees at another revision
 - **#796**: feat(loop-filter): prepare C2 as the option-B MIM (DR-042 proposed)
+- **#813**: ci: pin setup-python to 3.13 so klayout installs from a wheel
 
 ## Very Important
 
@@ -27,7 +28,7 @@ _None._
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-- **#810**: CI: headless checks job fails building klayout on Python 3.15 (python-version 3.x)
+_None._
 
 ## In Progress
 
@@ -36,12 +37,13 @@ Issues currently being built (`loom:building`).
 - **#753**: Loop filter C2 is a MIM option-A device, but the repository's PV flow targets gf180mcuD (MIM option B)
 - **#789**: Re-pin PDK to open_pdks f6eeac7 via ciel: code, CI, docs, hash-checked search
 - **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes
+- **#810**: CI: headless checks job fails building klayout on Python 3.15 (python-version 3.x)
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-_None._
+- **#809**: Bump Repo Skills 0.24.3 -> 0.24.7
 
 ## Approved (Awaiting Merge)
 
@@ -49,6 +51,7 @@ PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
 - **#791**: feat(sim): pin open_pdks and refuse PDK trees at another revision
 - **#796**: feat(loop-filter): prepare C2 as the option-B MIM (DR-042 proposed)
+- **#813**: ci: pin setup-python to 3.13 so klayout installs from a wheel
 
 ## Proposed
 
@@ -76,6 +79,7 @@ Issues carrying `loom:curated`.
 - **#731**: sim/period-jitter: migrate grid.sh fan-out to run_corners.py backends (follow-up to #712 step 1) *(architect)*
 - **#740**: sim/lib/simenv.sh: refuse local multi-unit grid fan-out when the batch backend is selected *(architect)*
 - **#741**: sim: migrate loop-dynamics, output-range, mc-cp-mismatch shell campaigns to harness manifests *(architect)*
+- **#812**: Simplify layout status-claims checker: replace 2.3k-line prose linter with tree-derived check *(hermit)*
 
 ## Epics
 
@@ -85,14 +89,14 @@ Issues carrying `loom:curated`.
 
 | Bucket | Count |
 |------|-------|
-| Operator merge-risk holds | 2 |
+| Operator merge-risk holds | 3 |
 | Very important | 0 |
 | Important | 2 |
-| Ready (`loom:issue`) | 1 |
-| In Progress (`loom:building`) | 3 |
-| PRs awaiting review | 0 |
-| Approved PRs awaiting merge | 2 |
+| Ready (`loom:issue`) | 0 |
+| In Progress (`loom:building`) | 4 |
+| PRs awaiting review | 1 |
+| Approved PRs awaiting merge | 3 |
 | Curated | 15 |
-| Architect / Hermit proposals | 4 |
+| Architect / Hermit proposals | 5 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
