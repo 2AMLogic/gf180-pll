@@ -2,6 +2,12 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-21
+
+- **PR #813**: ci: pin setup-python to 3.13 so klayout installs from a wheel
+- **PR #809**: Bump Repo Skills 0.24.3 -> 0.24.7
+- **Issue #810** (closed): CI: headless checks job fails building klayout on Python 3.15 (python-version 3.x)
+
 ### 2026-10-17
 
 - **PR #802**: refactor(sim): derive period-jitter MOS bundles from harness, share full_grid
