@@ -53,7 +53,9 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          # Pinned, not "3.x": a floating version outran the klayout wheels
+          # (none for cp315), forcing a failing sdist build.
+          python-version: "3.13"
 
       - name: Install the klayout pip wheel (klayout.db -- not the standalone app binary)
         # This is the `klayout` PyPI package providing `klayout.db`, distinct
@@ -844,7 +846,9 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          # Pinned, not "3.x": a floating version outran the klayout wheels
+          # (none for cp315), forcing a failing sdist build.
+          python-version: "3.13"
 
       - name: Install ngspice and xschem's runtime/build dependencies
         run: |
