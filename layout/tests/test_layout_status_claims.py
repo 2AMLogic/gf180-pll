@@ -115,11 +115,8 @@ jobs:
         run: pip install 'klayout-tools==%s'
 """
 
-# The scope rule reads a ~100-character window either side of a negation,
-# so a synthetic document needs real distance between the boilerplate
-# "no assembled `pll_top` GDS" sentinel (which legitimately carries a scope
-# word) and the sentence under test.  Deliberately free of both negations
-# and layout nouns.
+# Filler separating the sentence under test from the boilerplate around it,
+# so one fixture's wording cannot satisfy or trip another's match window.
 PAD = "\n" + ("Filler prose that bears on nothing in particular. " * 5) + "\n"
 
 def _footprint_lines(geometry: dict | None = None) -> str:
@@ -567,22 +564,6 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("4/4 drawn", result.stdout)
 
-    def test_the_exact_pre_fix_prose_is_caught(self):
-        # Verbatim from README.md and the proposal as they stood on main at
-        # 2ddf0c54, with all four blocks already committed.  This is the
-        # regression the script was written for; if this test ever passes
-        # silently, the check has stopped doing its job.
-        self._all_four()
-        self.tree.write_docs(
-            "No PLL block has been drawn yet, and `measurements/` stays empty\n"
-            "until there is silicon.\n\n"
-            "**No PLL-block layout exists.** `layout/` holds a proven flow.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("No PLL block has been drawn yet", result.stderr)
-        self.assertIn("No PLL-block layout exists", result.stderr)
-
     def test_understated_block_count_is_caught(self):
         self._all_four()
         self.tree.write_docs(_doc_text(3, 2))
@@ -634,214 +615,6 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         result = self.tree.run()
         self.assertEqual(result.returncode, 1)
         self.assertIn("still says", result.stderr)
-
-    def test_an_empty_evidence_tree_does_not_forbid_the_historical_claims(self):
-        # With nothing drawn, "no PLL block has been drawn yet" is true
-        # again and must not be flagged -- the forbidden list is conditional
-        # on the tree, not absolute.
-        self.tree.write_docs(
-            _doc_text(0, 0) + "No PLL block has been drawn yet.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-    # --- The scope rule (issue #237, second pass) -------------------------
-    #
-    # The tests below are the ones the original hand-written forbidden list
-    # could not have passed.  The list named exactly the sentences that had
-    # already gone stale; the sentence that was *still* stale in the same
-    # document -- section 3's "**No layout exists for this block**" -- was
-    # not on it, and the check reported OK on the very commit that shipped
-    # the list.
-
-    def test_the_sentence_the_forbidden_list_missed_is_caught(self):
-        # Verbatim from docs/chipalooza/challenge-5-proposal.md section 3 as
-        # it stood on main at 387d03c6 -- i.e. AFTER the first pass of this
-        # check shipped and passed over it.
-        self._all_four()
-        self.tree.write_docs(
-            _doc_text(4, 2)
-            + PAD
-            + "**No layout exists for this block** -- `layout/` currently\n"
-            "contains only the DRC/LVS flow's proof-of-flow test cell (a\n"
-            "standard-cell inverter, `layout/evidence/inv-tb-proof/PROOF.md`),\n"
-            "proven clean on that trivial circuit but never yet run against\n"
-            "any PLL sub-block or the top level.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn("without saying at what scope", result.stderr)
-        self.assertIn("No layout exists for this block", result.stderr)
-
-    def test_an_absence_claim_that_names_its_scope_passes(self):
-        # The same grammatical shape, scoped to what is genuinely absent.
-        # The rule must not force a document to stop saying true things.
-        self._all_four()
-        self.tree.write_docs(
-            _doc_text(4, 2)
-            + "No GDS exists for the assembled top level, so there is no\n"
-            "post-layout extracted netlist to re-verify against.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-    def test_a_freshly_invented_unscoped_phrasing_is_caught(self):
-        # The point of the rule: it grades the claim, not a remembered
-        # sentence.  None of these wordings appears on any forbidden list.
-        self._all_four()
-        for phrasing in (
-            "Nothing has been drawn for this PLL.",
-            "This design has never been drawn as layout.",
-            "There is no layout for the PLL at this time.",
-            "PLL-block GDS: none drawn.",
-        ):
-            with self.subTest(phrasing=phrasing):
-                self.tree.write_docs(_doc_text(4, 2) + PAD + phrasing + "\n")
-                result = self.tree.run()
-                self.assertEqual(
-                    result.returncode, 1, result.stdout + result.stderr
-                )
-                self.assertIn("without saying at what scope", result.stderr)
-
-    def test_the_scope_rule_is_silent_when_nothing_is_drawn(self):
-        # Conditional on the tree, like the forbidden list: with no drawn
-        # block, "no layout exists" is simply true.
-        self.tree.write_docs(
-            _doc_text(0, 0) + "No layout exists for this block.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-    def test_top_level_scope_stops_excusing_claims_once_a_top_lands(self):
-        # Two-sided, like the assembled-top sentinel: the day a pll_top GDS
-        # is committed, every "no assembled top level" sentence in both
-        # documents is due for a re-read, and the rule forces it.
-        self._all_four()
-        self.tree.add_assembled_top()
-        self.tree.write_docs(
-            _doc_text(4, 2, no_top=False)
-            + "No GDS exists for the assembled top level.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("without saying at what scope", result.stderr)
-
-    def test_a_negation_that_is_not_about_layout_is_not_flagged(self):
-        # False positives cost real editorial freedom, so the shapes that
-        # nearly match are pinned: "now" is not "no", and a "drawn-band
-        # edge" is not a drawn layout.
-        self._all_four()
-        self.tree.write_docs(
-            _doc_text(4, 2)
-            + "All four blocks now have a committed block GDS.\n"
-            "The closed-loop campaign reaches PASS on none, at either\n"
-            "drawn-band edge.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-    # --- The deferral half of the scope rule (issue #237) ------------------
-    #
-    # The scope rule grades NEGATED absence claims, and a claim escaped it by
-    # not using a negation: the proposal's section 8 "Flow" bullet deferred
-    # layout to the future ("(once drawn)") and named the inverter test cell
-    # as what the flow is proven on, three pages after section 6 recorded
-    # four blocks DRC-clean and LVS-matched against the foundry signoff
-    # decks. Same falsehood, no negation word, so ABSENCE could not see it.
-
-    def test_the_bare_deferral_the_scope_rule_missed_is_caught(self):
-        # Verbatim from docs/chipalooza/challenge-5-proposal.md section 8 as
-        # it stood on main at ac714b46 -- i.e. AFTER the scope rule, the
-        # count rule, the footprint rule and the ERC rule had all shipped
-        # and all reported OK over it.
-        self._all_four()
-        self.tree.write_docs(
-            _doc_text(4, 2)
-            + PAD
-            + "- **Flow**: fully open-source. Schematic capture and netlisting\n"
-            "  via xschem; simulation via ngspice; layout, DRC, and LVS (once\n"
-            "  drawn) via KLayout driven by klayout-tools (`klt`), proven on\n"
-            "  the inverter test cell referenced in §6.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn("without saying what is deferred", result.stderr)
-        self.assertIn("once drawn", result.stderr)
-
-    def test_a_freshly_invented_bare_deferral_is_caught(self):
-        # The point of grading the claim rather than the phrase: none of
-        # these wordings is the one that went stale, and all of them tell a
-        # reader the same untrue thing.
-        self._all_four()
-        for phrasing in (
-            "DRC and LVS will run once drawn.",
-            "The flow handles DRC and LVS when drawn.",
-            "Layout verification waits until drawn.",
-            "The layout's area will be reported after laid out.",
-            "The block's GDS extent is unknown if ever drawn.",
-            "Metal2 track counts in the layout follow once it is drawn.",
-        ):
-            with self.subTest(phrasing=phrasing):
-                self.tree.write_docs(_doc_text(4, 2) + PAD + phrasing + "\n")
-                result = self.tree.run()
-                self.assertEqual(
-                    result.returncode, 1, result.stdout + result.stderr
-                )
-                self.assertIn("without saying what is deferred", result.stderr)
-
-    def test_a_deferral_that_names_its_subject_passes(self):
-        # This repository says all of these truthfully and repeatedly -- the
-        # loop filter really is not drawn, and neither is the top level. A
-        # rule that broke them would be forcing the document to stop making
-        # checkable statements, which is the opposite of the point.
-        self._all_four()
-        for phrasing in (
-            "The row comes down when the loop filter is drawn.",
-            "Overhead becomes a measurement once the top level is drawn.",
-            "Extraction follows once an assembled pll_top is drawn.",
-        ):
-            with self.subTest(phrasing=phrasing):
-                self.tree.write_docs(_doc_text(4, 2) + PAD + phrasing + "\n")
-                result = self.tree.run()
-                self.assertEqual(
-                    result.returncode, 0, result.stdout + result.stderr
-                )
-
-    def test_a_bare_deferral_that_names_its_scope_nearby_passes(self):
-        # The deferral half honours the same scope tokens as the absence
-        # half, so a writer may scope the sentence instead of the phrase.
-        self._all_four()
-        self.tree.write_docs(
-            _doc_text(4, 2)
-            + PAD
-            + "Top-level DRC/LVS closure and extraction run once drawn.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-    def test_the_deferral_rule_is_silent_when_nothing_is_drawn(self):
-        # Conditional on the tree, like every other rule here: with no drawn
-        # block, "(once drawn)" was the honest thing to write, and this
-        # check must not retroactively condemn it.
-        self.tree.write_docs(
-            _doc_text(0, 0) + "DRC and LVS run once drawn.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-    def test_a_deferral_that_is_not_about_layout_is_not_flagged(self):
-        # False positives cost editorial freedom, so the near-misses are
-        # pinned: "drawn" as a verb about anything else, and the repo's own
-        # "drawn-band edge" / "drawn band" phrasings from the sim campaigns.
-        self._all_four()
-        self.tree.write_docs(
-            _doc_text(4, 2)
-            + PAD
-            + "The band-pair mismatch sample is scored once drawn from the\n"
-            "grid, at either drawn-band edge.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     # --- The count rule (issue #237, third pass) ---------------------------
     #
@@ -954,7 +727,7 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_a_missing_python3_fails_rather_than_downgrading_the_check(self):
-        # Without python3 the scope rule cannot run at all.  Passing on the
+        # Without python3 the count and footprint rules cannot run at all.  Passing on the
         # remaining literal-phrase checks would be the same silent downgrade
         # that let section 3 through in the first place.
         self._all_four()

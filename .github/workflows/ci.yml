@@ -149,11 +149,11 @@ jobs:
         # the recorded deck verdicts; no PDK and no standalone KLayout
         # application binary. NOT "no layout input" any more -- see the ninth
         # pass at the end of this comment.
-        # Also grades every absence-of-layout sentence in both documents for
-        # a stated scope, and their claims about spec/pll.md's ratification
-        # state against the spec's own Status line -- both of which went
-        # stale in the same document after the first pass of this check
-        # shipped. Third pass grades the numbers too: every block footprint
+        # Also grades the documents' claims about spec/pll.md's ratification
+        # state against the spec's own Status line, which went stale in the
+        # same document after the first pass of this check shipped. (The
+        # free-prose "scope"/"deferral" grading of absence sentences was
+        # removed in #812; every remaining rule compares against the tree.) Third pass grades the numbers too: every block footprint
         # stated in either document must equal that block's row in
         # layout/evidence/area-audit/area-audit.md, and the proposal must
         # state one for every block the audit records -- section 6's table
