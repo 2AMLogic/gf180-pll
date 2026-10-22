@@ -9,6 +9,9 @@ harness without changing what they write:
 * :func:`run_deck_files` writes ``deck.sp`` and executes it through an
   execution backend (:class:`harness.execution.LocalBackend` by default), so a
   runner's deck execution goes through the backend interface.
+* :func:`run_deck_checked` is the "run one deck, capture the log, refuse on a
+  fatal ngspice diagnostic" wrapper that ``in-band-bound`` and ``random-bound``
+  shared byte for byte.
 * :func:`runner_environment`, :func:`sid_environment` and :func:`ngspice_banner`
   produce the *runner-shaped* provenance dictionaries that are already committed
   under each campaign's ``results/``. They are projections of the harness's own
@@ -21,6 +24,7 @@ Nothing here re-measures anything or alters a result.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import time
@@ -30,6 +34,20 @@ from . import execution, report
 
 #: The deck file name every period-jitter runner has always used.
 DECK_NAME = "deck.sp"
+
+
+#: ngspice diagnostics that invalidate a run rather than annotate it
+#: (``in-band-bound`` and ``random-bound``).
+FATAL = ("Timestep too small", "simulation(s) aborted", "singular matrix",
+         "Error:")
+
+#: The shorter set ``isf-bringup`` and ``sid-trajectory`` refuse on. Deliberately
+#: not :data:`FATAL`: it has no ``"Error:"`` and matches ``"singular"`` bare.
+FATAL_LOG_PATTERNS = ("Timestep too small", "simulation(s) aborted", "singular")
+
+#: ngspice's batch progress meter ("Reference value : ...") is thousands of
+#: characters of wall-clock noise per transient; nothing else is dropped.
+_PROGRESS_RE = re.compile(r"(?: ?Reference value :\s*\S+)+")
 
 
 def run_deck_files(
@@ -49,6 +67,40 @@ def run_deck_files(
     deck_path.write_text(deck)
     chosen = backend if backend is not None else execution.LocalBackend()
     return chosen.run_deck(deck_path.resolve(), work.resolve(), timeout_s)  # type: ignore[arg-type]
+
+
+def run_deck_checked(
+    deck: str,
+    work: Path,
+    log: Path,
+    *,
+    backend=None,
+    expect: str | None = None,
+    timeout_s: float | None = None,
+    fatal: tuple[str, ...] = FATAL,
+) -> tuple[float, str]:
+    """Run ``deck`` in ``work``, write its log, and refuse on a fatal diagnostic.
+
+    Returns ``(seconds, raw output)``. The log has the progress meter stripped
+    (except on a timeout, where it is written raw). Raises ``SystemExit`` on a
+    timeout, on any ``fatal`` pattern in the output, or when ``expect`` was not
+    produced in ``work``.
+    """
+    run = run_deck_files(deck, work, backend=backend, timeout_s=timeout_s)
+    out = run.output
+    log.parent.mkdir(parents=True, exist_ok=True)
+    if run.timed_out:
+        log.write_text(out)
+        raise SystemExit(
+            f"ngspice did not finish within {timeout_s:.0f} s ({run.seconds:.0f} s "
+            f"elapsed) -- see {log}; refused")
+    log.write_text(_PROGRESS_RE.sub("", out))
+    hit = [p for p in fatal if p in out]
+    if hit:
+        raise SystemExit(f"ngspice reported {hit!r} -- see {log}; refused")
+    if expect and not (work / expect).is_file():
+        raise SystemExit(f"ngspice produced no {expect} -- see {log}")
+    return run.seconds, out
 
 
 def _ngspice_v() -> str:
