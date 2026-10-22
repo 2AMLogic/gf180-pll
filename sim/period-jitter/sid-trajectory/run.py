@@ -152,7 +152,7 @@ RSENSE_OHM = 1e-3
 ANCHOR_TOL = 5e-3
 
 #: ngspice diagnostics that invalidate a run rather than annotate it.
-FATAL_LOG_PATTERNS = ("Timestep too small", "simulation(s) aborted", "singular")
+FATAL_LOG_PATTERNS = legacy_provenance.FATAL_LOG_PATTERNS
 
 
 def pdk_models() -> Path:
