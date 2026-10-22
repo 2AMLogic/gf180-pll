@@ -9,7 +9,6 @@ Judge-approved PRs under a hold (`loom:blocked` or `loom:operator`) — only a h
 
 - **#791**: feat(sim): pin open_pdks and refuse PDK trees at another revision
 - **#796**: feat(loop-filter): prepare C2 as the option-B MIM (DR-042 proposed)
-- **#813**: ci: pin setup-python to 3.13 so klayout installs from a wheel
 
 ## Very Important
 
@@ -37,13 +36,12 @@ Issues currently being built (`loom:building`).
 - **#753**: Loop filter C2 is a MIM option-A device, but the repository's PV flow targets gf180mcuD (MIM option B)
 - **#789**: Re-pin PDK to open_pdks f6eeac7 via ciel: code, CI, docs, hash-checked search
 - **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes
-- **#810**: CI: headless checks job fails building klayout on Python 3.15 (python-version 3.x)
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-- **#809**: Bump Repo Skills 0.24.3 -> 0.24.7
+_None._
 
 ## Approved (Awaiting Merge)
 
@@ -51,7 +49,6 @@ PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
 - **#791**: feat(sim): pin open_pdks and refuse PDK trees at another revision
 - **#796**: feat(loop-filter): prepare C2 as the option-B MIM (DR-042 proposed)
-- **#813**: ci: pin setup-python to 3.13 so klayout installs from a wheel
 
 ## Proposed
 
@@ -71,7 +68,6 @@ Issues carrying `loom:curated`.
 - **#755**: sim harness: stage a simulator init file (wnflag) so local and batch backends run the same configuration *(curated)*
 - **#789**: Re-pin PDK to open_pdks f6eeac7 via ciel: code, CI, docs, hash-checked search *(curated)*
 - **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes *(curated)*
-- **#810**: CI: headless checks job fails building klayout on Python 3.15 (python-version 3.x) *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -89,14 +85,14 @@ Issues carrying `loom:curated`.
 
 | Bucket | Count |
 |------|-------|
-| Operator merge-risk holds | 3 |
+| Operator merge-risk holds | 2 |
 | Very important | 0 |
 | Important | 2 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 4 |
-| PRs awaiting review | 1 |
-| Approved PRs awaiting merge | 3 |
-| Curated | 15 |
+| In Progress (`loom:building`) | 3 |
+| PRs awaiting review | 0 |
+| Approved PRs awaiting merge | 2 |
+| Curated | 14 |
 | Architect / Hermit proposals | 5 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
