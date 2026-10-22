@@ -4,6 +4,7 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-10-22
 
+- **PR #822**: refactor: drop prose-grading scope/deferral rules from layout status-claims checker
 - **PR #819**: refactor(sim): share the period-jitter run-deck wrapper in legacy_provenance
 - **Issue #817** (closed): Consolidate four period-jitter run_deck() wrappers and duplicated FATAL patterns
 
