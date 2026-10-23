@@ -2,6 +2,11 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-23
+
+- **PR #791**: feat(sim): pin open_pdks and refuse PDK trees at another revision
+- **Issue #789** (closed): Re-pin PDK to open_pdks f6eeac7 via ciel: code, CI, docs, hash-checked search
+
 ### 2026-10-22
 
 - **PR #822**: refactor: drop prose-grading scope/deferral rules from layout status-claims checker
