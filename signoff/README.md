@@ -6,11 +6,12 @@ and re-checked in CI. Nothing in this repository hand-maintains a parallel
 met/unmet checklist; if a sentence anywhere claims this block does or does not
 clear a T1 item, the report is what settles it.
 
-Today the verdict is **0 of 22 T1 rows met**, and that is the correct, expected
-result — see "Why every row is `unmet`" below. An all-`unmet` report is an
-honest machine-readable statement of the gap. It is worth more than a prose
-checklist nobody re-reads, and it is the reason this directory exists before
-the evidence does rather than after.
+Today the verdict is **6 of 22 T1 rows met** (items 1, 9 and 10, on both
+partitions; the block's tier is still `none`) — see "Why every row is `unmet`"
+below for the other sixteen. ~~**0 of 22 T1 rows met**~~ was the verdict until
+2026-10-17 (issue #798). An honest machine-readable statement of the gap is
+worth more than a prose checklist nobody re-reads, and it is the reason this
+directory exists before the evidence does rather than after.
 
 ## Files
 
@@ -24,8 +25,9 @@ the evidence does rather than after.
 ## Reproducing
 
 ```sh
-pip install 'klayout-tools==0.6.0'
-bash signoff/run-signoff.sh --check    # verify the committed report
+pip install 'klayout-tools==0.7.0'
+bash signoff/run-signoff.sh --check
+python3 signoff/t1_attest.py --check   # items 1/9/10 inventories vs. the tree (stdlib only)    # verify the committed report
 bash signoff/run-signoff.sh            # re-render it after changing the manifest
 ```
 
@@ -63,12 +65,12 @@ suffix, render in a clean environment that has the release instead:
 
 ```sh
 python3 -m venv /tmp/klt-pinned
-/tmp/klt-pinned/bin/pip install 'klayout-tools==0.6.0'
-/tmp/klt-pinned/bin/klt --version          # must print exactly: klt 0.6.0
+/tmp/klt-pinned/bin/pip install 'klayout-tools==0.7.0'
+/tmp/klt-pinned/bin/klt --version          # must print exactly: klt 0.7.0
 PATH=/tmp/klt-pinned/bin:$PATH bash signoff/run-signoff.sh
 ```
 
-(`uvx --from 'klayout-tools==0.6.0' klt --version` answers the same question in
+(`uvx --from 'klayout-tools==0.7.0' klt --version` answers the same question in
 one line, but this script needs `klt` on `PATH`, so the venv above is what to
 render or `--check` through.)
 
@@ -119,6 +121,10 @@ DR-008 is this repo's own statement of that substitution and predates the
 checklist text adopting it.
 
 ## Why every row is `unmet`
+
+**Updated (2026-10-17, issue #798):** items 1, 9 and 10 are now cited and `met`
+(case 3 below); the text of cases 1 and 2 describes the sixteen rows that are
+still `no_evidence`.
 
 The report's `reason` for all 22 T1 rows is `no_evidence`: the manifest cites
 nothing. That single machine code covers three materially different situations,
@@ -179,18 +185,61 @@ point 1 above names for items 3, 4, 5 and 6. No open issue in this repository
 tracks producing that envelope; the remaining item-11 gap is unowned.
 
 **3. The tool cannot check what the item claims, and we decline to game it.**
-Items **1** (design sources), **2** (layout), **9** (testbenches shipped) and
+~~Items **1** (design sources), **2** (layout), **9** (testbenches shipped) and
 **10** (repo hygiene) have no `klt` verb behind them. `klt signoff` grades them
 on whether *some* passing envelope was cited at all, not on whether the cited
 evidence has anything to do with the claim — one clean DRC report cited four
 times would render four `met` rows and the tool would have no basis to object.
-This repo cites nothing for them. Items 1, 9 and 10 have real artifacts behind
-them (the committed schematics and the netlist-drift check in CI's
-`pdk-checks`; a testbench per claimed measurement under `sim/*/testbench/`;
-this repo's README and spec table), but turning those into green rows would
-mean citing evidence that does not support them. Item 2 has no block-level
-artifact at all. A row that goes green for the wrong reason is worse than a red
-one.
+This repo cites nothing for them.~~ — **corrected (2026-10-17, issue #798):**
+that was true of klt 0.6.0. klayout-tools#2718 (in 0.7.0) makes items 1, 2, 9
+and 10 accept only an **artifact-anchored** `generic` envelope: it declares
+`t1_item`, pins the audited artifact by path and content hash, and the row is
+`met` only while that artifact still re-hashes to the pin. CI now pins 0.7.0
+and this repo cites such envelopes for items **1** and **9** per partition
+(`1.analog`, `1.digital`, `9.analog`, `9.digital`) and for item **10** once
+(it is a repository property, so the bare `10` key serves both partitions).
+Six of the 22 T1 rows are now `met`; the other sixteen are unchanged
+(`no_evidence`).
+
+What the three kinds of envelope pin, all under `signoff/attest/` and all
+produced by `signoff/t1_attest.py` (stdlib only):
+
+- **Item 1** — per partition, the committed schematics and symbols, the xschem
+  setup, and the netlists derived from them under `design/netlist/`. The
+  digital partition is full-custom (DR-008), so its item 1 is the Analog
+  column's artifact, schematic plus derived netlist. The freshness gate is the
+  `./design/netlist.sh --check` step CI's `pdk-checks` already runs; the script
+  refuses to attest if that step is gone. `pfd_cp` is exported per evidence
+  record and has no committed netlist, so the analog inventory says so rather
+  than implying coverage.
+- **Item 9** — per partition, every `sim/<slug>/` campaign that has a committed
+  record, with its `testbench*/` files hash-pinned, a cold-start command, the
+  PDK revision CI installs, and the xschem and klt pins. `ngspice` is recorded
+  as **unpinned** (CI installs apt's); each evidence record states the version
+  it ran on. The closed-loop `pll_top` campaigns are carried by the analog
+  partition.
+- **Item 10** — `README.md`, `CONTRIBUTING.md`, `LICENSE`, `spec/pll.md`, and
+  the CI commands (`sim/selftest.sh`, `design/netlist.sh --check`, this
+  directory's two `--check`s). `README.md` and the workflow are edited often
+  and are audited, not hash-pinned.
+
+**`--attest` is not used.** klayout-tools#2844 closed on 2026-10-16, but the
+0.7.0 wheel's `klt signoff` does not accept `--attest`; the envelopes are the
+artifact-anchored generic form, written by `t1_attest.py`. Switch to
+`klt signoff --attest` once a released klayout-tools carries it.
+
+**Why there is a second check.** The grader re-hashes only the inventory a
+citation pins, so editing a schematic or a testbench would not by itself change
+`tier-report.json`. `python3 signoff/t1_attest.py --check` (a CI step, with the
+negative controls in `signoff/tests/test_t1_attest.py`) re-derives every
+inventory from the tree and fails until `python3 signoff/t1_attest.py` and
+`bash signoff/run-signoff.sh` are re-run. A `met` here means "the inventory is
+complete, consistent and current", not "every result passes".
+
+**Still uncited:** item 2 (no block-level layout yet, #149) and items 3-8 and
+11, which need `klt` verb envelopes this repo does not have. **Coordination:**
+the PDK re-pin (#789) changes the revision item 9 records; whichever lands
+second re-runs `t1_attest.py`.
 
 Two further things the report does **not** say, which belong with any claim
 made from it:

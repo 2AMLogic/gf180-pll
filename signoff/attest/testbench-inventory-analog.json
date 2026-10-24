@@ -1,0 +1,394 @@
+{
+  "checks": [
+    "every experiment with records/ is assigned to a partition or explicitly excluded",
+    "each listed experiment is disclosed in sim/CHARACTERIZATION.md and has a committed record",
+    "each has committed tb_*.sp/.spice testbenches and a tb.json manifest or a run*.sh driver",
+    "sim/README.md cites the PDK revision CI installs; xschem and klt pins exist in CI",
+    "CI runs 'bash sim/selftest.sh'"
+  ],
+  "cold_start": {
+    "harness_campaigns": "python3 sim/run_corners.py <slug>",
+    "prerequisites": "sim/README.md",
+    "smoke": "bash sim/selftest.sh"
+  },
+  "excluded_experiments": {
+    "harness-selftest": "the harness's own acceptance bench; no design claim (sim/CHARACTERIZATION.md)"
+  },
+  "experiments": [
+    {
+      "cold_start": "python3 sim/run_corners.py cp-compliance",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "cp-compliance",
+      "testbenches": [
+        {
+          "content_hash": "sha256:02a5580874e1ccd13a5ab98ee58dc3f11b693182a73607894376910b04e0b336",
+          "path": "sim/cp-compliance/testbench/tb.json"
+        },
+        {
+          "content_hash": "sha256:a0fe76b013efeb7a3fa90939ea27c51b800e8e0274196829d0b2d81b5d3cb661",
+          "path": "sim/cp-compliance/testbench/tb_cp_dc.sp"
+        },
+        {
+          "content_hash": "sha256:8ebe957ef759e9bbe602ab92640725a2d607f14a1fe485efa61e8b06972ae448",
+          "path": "sim/cp-compliance/testbench/tb_cp_dc.spice"
+        },
+        {
+          "content_hash": "sha256:778cd09b5fdbd028f5a4eee5a85699bc49629834718570420220ed6ec6cdd7ee",
+          "path": "sim/cp-compliance/testbench/tb_cp_switch.sp"
+        },
+        {
+          "content_hash": "sha256:84a1446b13651d6fde314b86f1dedd5c56582a3f0b6d961eb23993b13af6f05a",
+          "path": "sim/cp-compliance/testbench-switching/tb.json"
+        },
+        {
+          "content_hash": "sha256:1012a32fe9c3f14e08d9b95c824cf31ae912b90796698c83cb2f9908feb422e4",
+          "path": "sim/cp-compliance/testbench-switching/tb_cp_switch.spice"
+        }
+      ]
+    },
+    {
+      "cold_start": "python3 sim/run_corners.py devchar-cp",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "devchar-cp",
+      "testbenches": [
+        {
+          "content_hash": "sha256:5b2700198c26df81edf3dcc89fd31de53fb5411316a62f5d65930f0e05ec1d71",
+          "path": "sim/devchar-cp/testbench/tb.json"
+        },
+        {
+          "content_hash": "sha256:14af89d3b7a7917c1d99476b1d8a7bf6f0030ddd9057be6b97456f3f0d1f3bb0",
+          "path": "sim/devchar-cp/testbench/tb_cp_mirror.sp"
+        },
+        {
+          "content_hash": "sha256:81f14b746580a88f5346a35eb504c496ec1042ce6d06cd0c52dfac7d554347ba",
+          "path": "sim/devchar-cp/testbench/tb_cp_mirror.spice"
+        }
+      ]
+    },
+    {
+      "cold_start": "python3 sim/run_corners.py devchar-delay",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "devchar-delay",
+      "testbenches": [
+        {
+          "content_hash": "sha256:2f65ca0aeca84e6b2900aeca53cac269abe88c8e9c039e645bf4b131b6eb9bc9",
+          "path": "sim/devchar-delay/testbench/tb.json"
+        },
+        {
+          "content_hash": "sha256:09ef0cfd5a7d4567addf7ca15a3fe5a0cb96cfe39ba9e585f9e0212f3c8d707d",
+          "path": "sim/devchar-delay/testbench/tb_delay_stage.sp"
+        },
+        {
+          "content_hash": "sha256:9e7e82c18b23cd46a0c3bdc8d001527fe40ecbd0ca9f53342f0c8124c808254e",
+          "path": "sim/devchar-delay/testbench/tb_delay_stage.spice"
+        }
+      ]
+    },
+    {
+      "cold_start": "python3 sim/run_corners.py devchar-passives",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "devchar-passives",
+      "testbenches": [
+        {
+          "content_hash": "sha256:249d947004ece80ab5eb3cec2789e16f23b46a6cf463d58e7575d6f6786edcd7",
+          "path": "sim/devchar-passives/testbench/tb.json"
+        },
+        {
+          "content_hash": "sha256:96b210508147bf15ac074dc5f6d4cc594d72629fbef154ae5f474e7df8118e5f",
+          "path": "sim/devchar-passives/testbench/tb_cap_cv.sp"
+        },
+        {
+          "content_hash": "sha256:b012f880ccf2a478594ad5cb61cea5b6213a9e157edcf1f269d4140846381bcf",
+          "path": "sim/devchar-passives/testbench/tb_cap_cv.spice"
+        },
+        {
+          "content_hash": "sha256:acc829e0f50570174d2d9635d61163ccc2ec579db4ac359b7ebc22b4e6234ce7",
+          "path": "sim/devchar-passives/testbench/tb_res.sp"
+        },
+        {
+          "content_hash": "sha256:1ce0d948922146d7672e763d6060fd8324d4066d6f898def86c4e8332496b785",
+          "path": "sim/devchar-passives/testbench-res/tb.json"
+        },
+        {
+          "content_hash": "sha256:7d5bba5db74a9260495424548f22e32874f28fafe07deb4f6a893415c68ee01e",
+          "path": "sim/devchar-passives/testbench-res/tb_res.spice"
+        }
+      ]
+    },
+    {
+      "cold_start": "sim/lock-time/testbench/run.sh",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "lock-time",
+      "testbenches": [
+        {
+          "content_hash": "sha256:a55814c2739788335c4edb266eadef32e41dc6fc6b86001b8e6c8179bf0cea71",
+          "path": "sim/lock-time/testbench/tb_lock_time.sp"
+        }
+      ]
+    },
+    {
+      "cold_start": "sim/loop-dynamics/testbench/run.sh",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "loop-dynamics",
+      "testbenches": [
+        {
+          "content_hash": "sha256:1b2b808d57dd894a68dd93b22a0175b18aeb4971e934e629e718caa9e9ba2031",
+          "path": "sim/loop-dynamics/testbench/tb_loop_ac.sp"
+        },
+        {
+          "content_hash": "sha256:e5acb32e99c21fa164bc4b2d27b483f73ee51df669d7749a935c8772bd98cd3a",
+          "path": "sim/loop-dynamics/testbench/tb_loop_filter_ac.sp"
+        }
+      ]
+    },
+    {
+      "cold_start": "sim/mc-cp-mismatch/testbench/run.sh",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "mc-cp-mismatch",
+      "testbenches": [
+        {
+          "content_hash": "sha256:eb54b9f703246d76dd9e31c3fbf7f88bb528c37647df4d93b7a43879a4c542f4",
+          "path": "sim/mc-cp-mismatch/testbench/tb_mc_cp_dc.sp"
+        },
+        {
+          "content_hash": "sha256:c9ed214ff66b27c5575207b41e114685f2a959deb6fc0099f6c5be0983c0abdd",
+          "path": "sim/mc-cp-mismatch/testbench/tb_mc_cp_switch.sp"
+        },
+        {
+          "content_hash": "sha256:cbffdf0f95c5940e0051f8dd7c0251c877da55d94d0c5fb3ef2160303cfe84ab",
+          "path": "sim/mc-cp-mismatch/testbench/tb_mc_dff_ctq.sp"
+        },
+        {
+          "content_hash": "sha256:3ccad8f24889839ad769527973ef512c88dc471ade69f4b2bc2cb2f832d8c60e",
+          "path": "sim/mc-cp-mismatch/testbench/tb_mc_pfd_cp.sp"
+        }
+      ]
+    },
+    {
+      "cold_start": "python3 sim/run_corners.py output-driver",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "output-driver",
+      "testbenches": [
+        {
+          "content_hash": "sha256:803c2e97c911fc315af95f8e3f6d1269d09caf3f923de4eb429b44df9de38334",
+          "path": "sim/output-driver/testbench/tb.json"
+        },
+        {
+          "content_hash": "sha256:aab77c45936a5a100549c0437dab7ea5f36d60d2f772dbf6a9d3f3380671e3b5",
+          "path": "sim/output-driver/testbench/tb_output_driver.sp"
+        }
+      ]
+    },
+    {
+      "cold_start": "sim/output-range/testbench/run.sh",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "output-range",
+      "testbenches": [
+        {
+          "content_hash": "sha256:dc662f02fad4de13fc16d0a840c3ec0ec51b7181481038cba75c51e58959cca2",
+          "path": "sim/output-range/testbench/tb_output_range.sp"
+        }
+      ]
+    },
+    {
+      "cold_start": "python3 sim/run_corners.py period-jitter",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "period-jitter",
+      "testbenches": [
+        {
+          "content_hash": "sha256:79183e7fa73dd4c7b1abdcc33667e354ce2e2542b2d7be438c22927044fa3de9",
+          "path": "sim/period-jitter/testbench/tb.json"
+        },
+        {
+          "content_hash": "sha256:8f5bc267f243f70fceb4d7e5e6288aa9d4c302c8dfbca4c15e9cb6c9ada2727b",
+          "path": "sim/period-jitter/testbench/tb_period_jitter.sp"
+        }
+      ]
+    },
+    {
+      "cold_start": "python3 sim/run_corners.py pfd-deadzone",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "pfd-deadzone",
+      "testbenches": [
+        {
+          "content_hash": "sha256:98ea9beb024b521fd2ab2a4cdb232b6ebfa138ce493b40e48fd4ae7f71a12cdd",
+          "path": "sim/pfd-deadzone/testbench/tb.json"
+        },
+        {
+          "content_hash": "sha256:76866353e911bd051dde61850a92de3de659121807c674fcfdc08d5a1955649d",
+          "path": "sim/pfd-deadzone/testbench/tb_pfd_deadzone.sp"
+        },
+        {
+          "content_hash": "sha256:b60f9290e7c4ae84b9557bdcdd86021640bd22090e52f66e135c50faae60dd42",
+          "path": "sim/pfd-deadzone/testbench/tb_pfd_deadzone.spice"
+        },
+        {
+          "content_hash": "sha256:2b70f8984f162447713f4bbefb63482fb0513514ec3c937d12d6268de63dbad9",
+          "path": "sim/pfd-deadzone/testbench-operating-point/tb.json"
+        },
+        {
+          "content_hash": "sha256:80d11fd5b38802a6ad7bbd8aff01af034fdadcf22ab66c21f94223dc7823ac8a",
+          "path": "sim/pfd-deadzone/testbench-operating-point/tb_pfd_operating_point.spice"
+        }
+      ]
+    },
+    {
+      "cold_start": "sim/pll-top-smoke/testbench/run.sh",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "pll-top-smoke",
+      "testbenches": [
+        {
+          "content_hash": "sha256:768382f7ec590257ac70977d10c79963a580d06fb8c34ccb3497f4d62bdcfb59",
+          "path": "sim/pll-top-smoke/testbench/tb_pll_smoke.sp"
+        }
+      ]
+    },
+    {
+      "cold_start": "python3 sim/run_corners.py reference-phase-transfer",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "reference-phase-transfer",
+      "testbenches": [
+        {
+          "content_hash": "sha256:885440f5f78721e9aea938344f4f20fd75a61a6e8022e2b7a222cc26558bde4c",
+          "path": "sim/reference-phase-transfer/testbench/tb.json"
+        },
+        {
+          "content_hash": "sha256:245a9c3edb21772bfbb8dd994b23c5dbda2af35a6866fe4bc91567a871c4cacb",
+          "path": "sim/reference-phase-transfer/testbench/tb_ref_phase_transfer.sp"
+        }
+      ]
+    },
+    {
+      "cold_start": "python3 sim/run_corners.py reference-spur",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "reference-spur",
+      "testbenches": [
+        {
+          "content_hash": "sha256:20dfc6ac88f47733d5a9853ace7677759badeae761b60e5c0aefbef5a24c7b12",
+          "path": "sim/reference-spur/testbench/tb.json"
+        },
+        {
+          "content_hash": "sha256:45fa2321044407830f526a9e7d80d449015ac81072387b9cf23d6dc417d7ac5c",
+          "path": "sim/reference-spur/testbench/tb_ref_spur.sp"
+        }
+      ]
+    },
+    {
+      "cold_start": "sim/supply-sensitivity/testbench/run.sh",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "supply-sensitivity",
+      "testbenches": [
+        {
+          "content_hash": "sha256:624a8bb21052ebfe92027d4ed8a6fc8f9e964c88d36c40cf344fd7c88e210086",
+          "path": "sim/supply-sensitivity/testbench/tb_supply_dyn.sp"
+        },
+        {
+          "content_hash": "sha256:eaa5b4dadea75b9403c291acfd16d9cfad9855ffa733852860cda866615cdc06",
+          "path": "sim/supply-sensitivity/testbench/tb_supply_lock.sp"
+        }
+      ]
+    },
+    {
+      "cold_start": "python3 sim/run_corners.py vco-bias-current",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "vco-bias-current",
+      "testbenches": [
+        {
+          "content_hash": "sha256:0b08abd0f9b37ac43bd6c189b71a23aaf211829208030b7869c6172faa6d1418",
+          "path": "sim/vco-bias-current/testbench/tb.json"
+        },
+        {
+          "content_hash": "sha256:1f8652736b5893c47711e7ad58750dd806b2bb56391e76ccdb6838042ad41b91",
+          "path": "sim/vco-bias-current/testbench/tb_vco_bias.spice"
+        }
+      ]
+    },
+    {
+      "cold_start": "python3 sim/run_corners.py vco-tuning-range",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "vco-tuning-range",
+      "testbenches": [
+        {
+          "content_hash": "sha256:423c977328db0e351fe71a4c910d810cb9a3a874013219c0ec5dd1a112301c2f",
+          "path": "sim/vco-tuning-range/testbench/tb.json"
+        },
+        {
+          "content_hash": "sha256:372a2aaa12f8a9d197b141df8495db56f70efbb172b6ec47bc2d2b80a72d0b87",
+          "path": "sim/vco-tuning-range/testbench/tb_vco_band_pair.sp"
+        },
+        {
+          "content_hash": "sha256:f3a0b582c65bc60ad01e75e9a26c3634f9827d4f0666fe9705d6b5c8a70824a2",
+          "path": "sim/vco-tuning-range/testbench/tb_vco_mismatch.sp"
+        },
+        {
+          "content_hash": "sha256:9fd7b42d74f43f1ae64a22dbc53bc33675e2e5ab66ee9ccad43586c45c8a41bb",
+          "path": "sim/vco-tuning-range/testbench/tb_vco_pushing.sp"
+        },
+        {
+          "content_hash": "sha256:4a75afd6fa7f2d58399891c85551a26356f0dae15b0138c3b1463daa111d702a",
+          "path": "sim/vco-tuning-range/testbench/tb_vco_stages.sp"
+        },
+        {
+          "content_hash": "sha256:fd1c5d386b7e90fba9b32f0c96c2ae087c2e9486372feb7c88a05c5890d022b4",
+          "path": "sim/vco-tuning-range/testbench/tb_vco_supply_jitter.sp"
+        },
+        {
+          "content_hash": "sha256:15c9cc1876570970a79de125a0b28e1151d9a13da8ab2cdc22743174e87eeb7a",
+          "path": "sim/vco-tuning-range/testbench/tb_vco_tuning.sp"
+        },
+        {
+          "content_hash": "sha256:fab73ac36d339b9ae02c3f3172ecca46432179720a57fbd544e7e51a426b6892",
+          "path": "sim/vco-tuning-range/testbench/tb_vco_tuning.spice"
+        },
+        {
+          "content_hash": "sha256:4b52d825dced3d93eeb17433ffcb127cfaa077ab0550df958bc0d5172bf0c483",
+          "path": "sim/vco-tuning-range/testbench-stages/tb.json"
+        },
+        {
+          "content_hash": "sha256:e92182a08ca84eb9fbb0fd9b9e91613cbdb87346d8c712a52aa35c2541f6c135",
+          "path": "sim/vco-tuning-range/testbench-stages/tb_vco_stages.spice"
+        },
+        {
+          "content_hash": "sha256:d12614393bf1a7b45c607cbe97e9cbe824ba49621bef0be56b3a454af3f3f9b1",
+          "path": "sim/vco-tuning-range/testbench-supply/tb.json"
+        },
+        {
+          "content_hash": "sha256:eae2b3ba3744dddb24222980b23ce746a81c6b26933415dcb00261f9ab7c378d",
+          "path": "sim/vco-tuning-range/testbench-supply/tb_vco_pushing.spice"
+        },
+        {
+          "content_hash": "sha256:0b8295b1663d8aa59cbb8c020b10014e42d7fdd2e1ac5e073343ae0e22f499c2",
+          "path": "sim/vco-tuning-range/testbench-supply/tb_vco_supply_jitter.spice"
+        }
+      ]
+    }
+  ],
+  "partition": "analog",
+  "pinned_pdk": {
+    "open_pdks_revision": "c6d73a35f524070e85faff4a6a9eef49553ebc2b",
+    "pinned_in": [
+      ".github/workflows/ci.yml (volare enable)",
+      "sim/README.md"
+    ],
+    "variant": "gf180mcuD"
+  },
+  "schema_version": 1,
+  "scope": "every sim/<slug>/ campaign with a committed record (a claimed measurement) assigned to this partition; closed-loop pll_top campaigns are carried by analog",
+  "subject": "analog testbench inventory",
+  "t1_item": 9,
+  "tool_versions": {
+    "klt": {
+      "pinned_in": ".github/workflows/ci.yml",
+      "version": "0.7.0"
+    },
+    "ngspice": {
+      "note": "CI installs apt's ngspice; each evidence record states the version it ran on",
+      "pinned": false
+    },
+    "xschem": {
+      "commit": "92dd8fe5f4d5c1057489710d8a22f18fdc9d7ed0",
+      "pinned_in": ".github/workflows/ci.yml",
+      "version": "3.4.7"
+    }
+  }
+}
