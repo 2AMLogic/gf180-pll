@@ -47,8 +47,8 @@ C {cap_nmos_03v3_b.sym} 150 250 0 0 {name=CF4 model=cap_nmos_03v3_b W=87u L=87u 
 C {lab_pin.sym} 150 220 0 0 {name=l_CF4_G lab=NZ}
 C {lab_pin.sym} 150 280 0 0 {name=l_CF4_B lab=VSS}
 
-T {C2 = 1 x cap_mim_2f0_m2m3_noshield, 31.4 x 31.4 um -> 1.99 pF typ (ideally linear, cv_ratio 1.0000)} 400 60 0 0 0.4 0.4 {}
+T {C2 = 1 x cap_mim_2f0_m4m5_noshield (MIM option B on gf180mcuD, DR-042), 31.4 x 31.4 um -> 1.99 pF typ (ideally linear, cv_ratio 1.0000)} 400 60 0 0 0.4 0.4 {}
 T {MIM sits on the Vctrl node itself, where a voltage-dependent C would modulate the ripple pole} 400 90 0 0 0.4 0.4 {}
-C {cap_mim_2f0fF.sym} 500 250 0 0 {name=CF5 model=cap_mim_2f0_m2m3_noshield W=31.4u L=31.4u m=1}
+C {cap_mim_2f0fF.sym} 500 250 0 0 {name=CF5 model=cap_mim_2f0_m4m5_noshield W=31.4u L=31.4u m=1}
 C {lab_pin.sym} 500 220 0 0 {name=l_CF5_G lab=VCTRL}
 C {lab_pin.sym} 500 280 0 0 {name=l_CF5_B lab=VSS}
