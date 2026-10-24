@@ -91,6 +91,15 @@ jobs:
           done
           exit "$rc"
 
+      - name: sim/lib/check-artifact-manifests.sh (artifact manifests: schema, artifact: URIs, no committed bytes)
+        # Raw run output for new campaigns lives in the fleet artifact store;
+        # git keeps only manifests/artifacts/*.manifest.json (issue #830).
+        # Headless: no broker, no klt -- it grades the committed manifests
+        # only. Fails on a malformed manifest, a non-`artifact:` URI, or a
+        # committed file whose sha256 equals a stored object's. Its unit tests
+        # (and the writer's fail-closed tests) run under sim/selftest.sh.
+        run: bash sim/lib/check-artifact-manifests.sh
+
       - name: layout/tests (harness unit tests + klayout.db-gated tests)
         # layout/harness/drc.py's two pure functions (parse_report_db,
         # rules_from_log) have zero PDK/KLayout dependency and always ran
