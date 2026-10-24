@@ -180,13 +180,15 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-python3 - "${REPO_ROOT}" "${SPEC}" "${DR018}" <<'PY'
+PYTHONPATH="${REPO_ROOT}/lib${PYTHONPATH:+:${PYTHONPATH}}" python3 - "${REPO_ROOT}" "${SPEC}" "${DR018}" <<'PY'
 import glob
 import math
 import os
 import re
 import statistics
 import sys
+
+from checklib.markdown import plain, tables
 
 repo_root, spec_rel, dr018_rel = sys.argv[1:4]
 
@@ -207,38 +209,6 @@ def read(rel):
         return None
     with open(path, encoding="utf-8") as fh:
         return fh.read()
-
-
-def plain(cell):
-    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", cell)
-    text = text.replace("**", "").replace("`", "").replace("\\|", "|")
-    for dash in ("—", "–", "‒", "‑"):
-        text = text.replace(dash, "-")
-    return re.sub(r"\s+", " ", text).strip()
-
-
-ESCAPED_PIPE = "\x00"
-
-
-def tables(block):
-    found, current = [], None
-    for line in block.splitlines():
-        line = line.strip()
-        if not line.startswith("|"):
-            current = None
-            continue
-        if re.fullmatch(r"\|[\s:|-]+\|", line):
-            continue
-        line = line.replace("\\|", ESCAPED_PIPE)
-        cells = [
-            c.strip().replace(ESCAPED_PIPE, "\\|") for c in line.strip("|").split("|")
-        ]
-        if current is None:
-            current = [cells]
-            found.append(current)
-        else:
-            current.append(cells)
-    return found
 
 
 def agrees(written, computed):

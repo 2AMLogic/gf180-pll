@@ -1,0 +1,876 @@
+[
+  {
+    "area_mm2": 0.4078,
+    "area_um2": 407776.2,
+    "block_sum_um2": 193957.6,
+    "case": "baseline",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {},
+    "guard_um": 15.0,
+    "height_um": 309.47,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "case": "spacing-30",
+    "fold": 1,
+    "gaps_um": {},
+    "guard_um": 15.0,
+    "reason": "AssemblyError: supply pad slots do not fit in the lock_detector | pfd_cp gap",
+    "spacing_um": 30,
+    "status": "unroutable"
+  },
+  {
+    "case": "spacing-20",
+    "fold": 1,
+    "gaps_um": {},
+    "guard_um": 15.0,
+    "reason": "AssemblyError: supply pad slots do not fit in the lock_detector | pfd_cp gap",
+    "spacing_um": 20,
+    "status": "unroutable"
+  },
+  {
+    "case": "spacing-10",
+    "fold": 1,
+    "gaps_um": {},
+    "guard_um": 15.0,
+    "reason": "AssemblyError: supply pad slots do not fit in the lock_detector | pfd_cp gap",
+    "spacing_um": 10,
+    "status": "unroutable"
+  },
+  {
+    "case": "spacing-2",
+    "fold": 1,
+    "gaps_um": {},
+    "guard_um": 15.0,
+    "reason": "AssemblyError: supply pad slots do not fit in the lock_detector | pfd_cp gap",
+    "spacing_um": 2,
+    "status": "unroutable"
+  },
+  {
+    "area_mm2": 0.4078,
+    "area_um2": 407776.2,
+    "block_sum_um2": 193957.6,
+    "case": "hgap-40",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "lock_detector": 36.0,
+      "loop_filter": 40,
+      "pfd_cp": 40
+    },
+    "guard_um": 15.0,
+    "height_um": 309.47,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.4078,
+    "area_um2": 407776.2,
+    "block_sum_um2": 193957.6,
+    "case": "hgap-20",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "lock_detector": 36.0,
+      "loop_filter": 20,
+      "pfd_cp": 20
+    },
+    "guard_um": 15.0,
+    "height_um": 309.47,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.4078,
+    "area_um2": 407776.2,
+    "block_sum_um2": 193957.6,
+    "case": "hgap-10",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "lock_detector": 36.0,
+      "loop_filter": 10,
+      "pfd_cp": 10
+    },
+    "guard_um": 15.0,
+    "height_um": 309.47,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.4078,
+    "area_um2": 407776.2,
+    "block_sum_um2": 193957.6,
+    "case": "hgap-5",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "lock_detector": 36.0,
+      "loop_filter": 5,
+      "pfd_cp": 5
+    },
+    "guard_um": 15.0,
+    "height_um": 309.47,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.4078,
+    "area_um2": 407776.2,
+    "block_sum_um2": 193957.6,
+    "case": "hgap-3",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "lock_detector": 36.0,
+      "loop_filter": 3,
+      "pfd_cp": 3
+    },
+    "guard_um": 15.0,
+    "height_um": 309.47,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.4078,
+    "area_um2": 407776.2,
+    "block_sum_um2": 193957.6,
+    "case": "hgap-2",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "lock_detector": 36.0,
+      "loop_filter": 2,
+      "pfd_cp": 2
+    },
+    "guard_um": 15.0,
+    "height_um": 309.47,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.4078,
+    "area_um2": 407776.2,
+    "block_sum_um2": 193957.6,
+    "case": "hgap-1",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "lock_detector": 36.0,
+      "loop_filter": 1,
+      "pfd_cp": 1
+    },
+    "guard_um": 15.0,
+    "height_um": 309.47,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.4078,
+    "area_um2": 407776.2,
+    "block_sum_um2": 193957.6,
+    "case": "hgap-0.5",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "lock_detector": 36.0,
+      "loop_filter": 0.5,
+      "pfd_cp": 0.5
+    },
+    "guard_um": 15.0,
+    "height_um": 309.47,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.4078,
+    "area_um2": 407776.2,
+    "block_sum_um2": 193957.6,
+    "case": "hgap-0",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "lock_detector": 36.0,
+      "loop_filter": 0,
+      "pfd_cp": 0
+    },
+    "guard_um": 15.0,
+    "height_um": 309.47,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.3946,
+    "area_um2": 394599.6,
+    "block_sum_um2": 193957.6,
+    "case": "vgap-30",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 30
+    },
+    "guard_um": 15.0,
+    "height_um": 299.47,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.3814,
+    "area_um2": 381423.0,
+    "block_sum_um2": 193957.6,
+    "case": "vgap-20",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 20
+    },
+    "guard_um": 15.0,
+    "height_um": 289.47,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "case": "vgap-10",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 10
+    },
+    "guard_um": 15.0,
+    "reason": "RouteConflict: channel middle is full placing FB",
+    "spacing_um": 40.0,
+    "status": "unroutable"
+  },
+  {
+    "case": "vgap-5",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 5
+    },
+    "guard_um": 15.0,
+    "reason": "RouteConflict: channel middle is full placing VSS@divider_chain",
+    "spacing_um": 40.0,
+    "status": "unroutable"
+  },
+  {
+    "case": "vgap-2",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 2
+    },
+    "guard_um": 15.0,
+    "reason": "RouteConflict: channel middle is full placing VSS@divider_chain",
+    "spacing_um": 40.0,
+    "status": "unroutable"
+  },
+  {
+    "case": "vgap-0",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 0
+    },
+    "guard_um": 15.0,
+    "reason": "RouteConflict: channel middle is full placing VSS@divider_chain",
+    "spacing_um": 40.0,
+    "status": "unroutable"
+  },
+  {
+    "area_mm2": 0.3592,
+    "area_um2": 359180.9,
+    "block_sum_um2": 193957.6,
+    "case": "vgap-18-g0",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 18
+    },
+    "guard_um": 0,
+    "height_um": 272.59,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.3565,
+    "area_um2": 356545.6,
+    "block_sum_um2": 193957.6,
+    "case": "vgap-16-g0",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 16
+    },
+    "guard_um": 0,
+    "height_um": 270.59,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.3539,
+    "area_um2": 353910.3,
+    "block_sum_um2": 193957.6,
+    "case": "vgap-14-g0",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 14
+    },
+    "guard_um": 0,
+    "height_um": 268.59,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.3513,
+    "area_um2": 351275.0,
+    "block_sum_um2": 193957.6,
+    "case": "vgap-12-g0",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 12
+    },
+    "guard_um": 0,
+    "height_um": 266.59,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "case": "vgap-11-g0",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 11
+    },
+    "guard_um": 0,
+    "reason": "RouteConflict: channel middle is full placing FB",
+    "spacing_um": 40.0,
+    "status": "unroutable"
+  },
+  {
+    "case": "vgap-10-g0",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 10
+    },
+    "guard_um": 0,
+    "reason": "RouteConflict: channel middle is full placing FB",
+    "spacing_um": 40.0,
+    "status": "unroutable"
+  },
+  {
+    "case": "vgap-9-g0",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 9
+    },
+    "guard_um": 0,
+    "reason": "RouteConflict: channel middle is full placing DN",
+    "spacing_um": 40.0,
+    "status": "unroutable"
+  },
+  {
+    "case": "vgap-8-g0",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 8
+    },
+    "guard_um": 0,
+    "reason": "RouteConflict: channel middle is full placing DN",
+    "spacing_um": 40.0,
+    "status": "unroutable"
+  },
+  {
+    "case": "vgap-6-g0",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 6
+    },
+    "guard_um": 0,
+    "reason": "RouteConflict: channel middle is full placing UP",
+    "spacing_um": 40.0,
+    "status": "unroutable"
+  },
+  {
+    "case": "vgap-4-g0",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 4
+    },
+    "guard_um": 0,
+    "reason": "RouteConflict: channel middle is full placing VSS@divider_chain",
+    "spacing_um": 40.0,
+    "status": "unroutable"
+  },
+  {
+    "area_mm2": 0.4012,
+    "area_um2": 401187.9,
+    "block_sum_um2": 193957.6,
+    "case": "guard-10",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {},
+    "guard_um": 10,
+    "height_um": 304.47,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.3946,
+    "area_um2": 394599.6,
+    "block_sum_um2": 193957.6,
+    "case": "guard-5",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {},
+    "guard_um": 5,
+    "height_um": 299.47,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.3906,
+    "area_um2": 390646.7,
+    "block_sum_um2": 193957.6,
+    "case": "guard-2",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {},
+    "guard_um": 2,
+    "height_um": 296.47,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.3882,
+    "area_um2": 388169.5,
+    "block_sum_um2": 193957.6,
+    "case": "guard-0",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {},
+    "guard_um": 0,
+    "height_um": 294.59,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.4276,
+    "area_um2": 427609.9,
+    "block_sum_um2": 195934.1,
+    "case": "fold-2",
+    "divider_outline_um": [
+      658.83,
+      86.98
+    ],
+    "drc_new_vs_baseline_rules": [
+      "CO.1",
+      "CO.4",
+      "CO.6",
+      "DF.1a_LV",
+      "DF.2a_LV",
+      "DF.4c_LV",
+      "DF.6_LV",
+      "M1.1",
+      "M1.3",
+      "PL.4_LV",
+      "PP.5a",
+      "PP.5b",
+      "PP.5dii",
+      "V4.2a"
+    ],
+    "drc_rules": {
+      "CO.1": 8,
+      "CO.4": 4,
+      "CO.6": 4,
+      "DF.1a_LV": 1,
+      "DF.2a_LV": 2,
+      "DF.4c_LV": 2,
+      "DF.6_LV": 2,
+      "M1.1": 2,
+      "M1.3": 2,
+      "MIMTM.3": 1,
+      "PL.4_LV": 2,
+      "PP.5a": 2,
+      "PP.5b": 2,
+      "PP.5dii": 2,
+      "V4.2a": 6
+    },
+    "drc_status": "violations",
+    "fold": 2,
+    "gaps_um": {},
+    "guard_um": 15.0,
+    "height_um": 354.46,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1206.37
+  },
+  {
+    "area_mm2": 0.4819,
+    "area_um2": 481884.5,
+    "block_sum_um2": 196593.0,
+    "case": "fold-3",
+    "divider_outline_um": [
+      439.22,
+      131.97
+    ],
+    "drc_new_vs_baseline_rules": [
+      "CO.4",
+      "DF.1a_LV",
+      "DF.2a_LV",
+      "DF.4c_LV",
+      "DF.6_LV",
+      "DF.9",
+      "M1.1",
+      "M1.3",
+      "NP.1",
+      "NP.5a",
+      "NP.5b",
+      "PL.4_LV",
+      "PP.1",
+      "PP.5a",
+      "PP.5b",
+      "PP.5dii"
+    ],
+    "drc_rules": {
+      "CO.4": 2,
+      "DF.1a_LV": 1,
+      "DF.2a_LV": 2,
+      "DF.4c_LV": 2,
+      "DF.6_LV": 2,
+      "DF.9": 1,
+      "M1.1": 1,
+      "M1.3": 1,
+      "MIMTM.3": 1,
+      "NP.1": 1,
+      "NP.5a": 1,
+      "NP.5b": 1,
+      "PL.4_LV": 3,
+      "PP.1": 1,
+      "PP.5a": 2,
+      "PP.5b": 2,
+      "PP.5dii": 2
+    },
+    "drc_status": "violations",
+    "fold": 3,
+    "gaps_um": {},
+    "guard_um": 15.0,
+    "height_um": 399.45,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1206.37
+  },
+  {
+    "area_mm2": 0.3513,
+    "area_um2": 351275.0,
+    "block_sum_um2": 193957.6,
+    "case": "floor-b",
+    "drc_new_vs_baseline_rules": [],
+    "drc_rules": {
+      "MIMTM.3": 1
+    },
+    "drc_status": "violations",
+    "fold": 1,
+    "gaps_um": {
+      "divider_chain": 12.0,
+      "lock_detector": 36.0,
+      "loop_filter": 0.0,
+      "pfd_cp": 0.0
+    },
+    "guard_um": 0.0,
+    "height_um": 266.59,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1317.66
+  },
+  {
+    "area_mm2": 0.3497,
+    "area_um2": 349708.0,
+    "block_sum_um2": 195934.1,
+    "case": "floor-b-fold2",
+    "divider_outline_um": [
+      658.83,
+      86.98
+    ],
+    "drc_new_vs_baseline_rules": [
+      "CO.1",
+      "CO.4",
+      "CO.6",
+      "DF.1a_LV",
+      "DF.2a_LV",
+      "DF.4c_LV",
+      "DF.6_LV",
+      "M1.1",
+      "M1.3",
+      "PL.4_LV",
+      "PP.5a",
+      "PP.5b",
+      "PP.5dii",
+      "V4.2a"
+    ],
+    "drc_rules": {
+      "CO.1": 8,
+      "CO.4": 4,
+      "CO.6": 4,
+      "DF.1a_LV": 1,
+      "DF.2a_LV": 2,
+      "DF.4c_LV": 2,
+      "DF.6_LV": 2,
+      "M1.1": 2,
+      "M1.3": 2,
+      "MIMTM.3": 1,
+      "PL.4_LV": 2,
+      "PP.5a": 2,
+      "PP.5b": 2,
+      "PP.5dii": 2,
+      "V4.2a": 6
+    },
+    "drc_status": "violations",
+    "fold": 2,
+    "gaps_um": {
+      "divider_chain": 12.0,
+      "lock_detector": 36.0,
+      "loop_filter": 0.0,
+      "pfd_cp": 0.0
+    },
+    "guard_um": 0.0,
+    "height_um": 311.58,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1122.37
+  },
+  {
+    "area_mm2": 0.4002,
+    "area_um2": 400203.5,
+    "block_sum_um2": 196593.0,
+    "case": "floor-b-fold3",
+    "divider_outline_um": [
+      439.22,
+      131.97
+    ],
+    "drc_new_vs_baseline_rules": [
+      "CO.4",
+      "DF.1a_LV",
+      "DF.2a_LV",
+      "DF.4c_LV",
+      "DF.6_LV",
+      "DF.9",
+      "M1.1",
+      "M1.3",
+      "NP.1",
+      "NP.5a",
+      "NP.5b",
+      "PL.4_LV",
+      "PP.1",
+      "PP.5a",
+      "PP.5b",
+      "PP.5dii"
+    ],
+    "drc_rules": {
+      "CO.4": 2,
+      "DF.1a_LV": 1,
+      "DF.2a_LV": 2,
+      "DF.4c_LV": 2,
+      "DF.6_LV": 2,
+      "DF.9": 1,
+      "M1.1": 1,
+      "M1.3": 1,
+      "MIMTM.3": 1,
+      "NP.1": 1,
+      "NP.5a": 1,
+      "NP.5b": 1,
+      "PL.4_LV": 3,
+      "PP.1": 1,
+      "PP.5a": 2,
+      "PP.5b": 2,
+      "PP.5dii": 2
+    },
+    "drc_status": "violations",
+    "fold": 3,
+    "gaps_um": {
+      "divider_chain": 12.0,
+      "lock_detector": 36.0,
+      "loop_filter": 0.0,
+      "pfd_cp": 0.0
+    },
+    "guard_um": 0.0,
+    "height_um": 356.57,
+    "meets_row": false,
+    "netcheck": "pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)",
+    "netcheck_ok": true,
+    "spacing_um": 40.0,
+    "status": "assembled",
+    "width_um": 1122.37
+  }
+]

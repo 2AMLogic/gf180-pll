@@ -2,8 +2,93 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-23
+
+- **PR #791**: feat(sim): pin open_pdks and refuse PDK trees at another revision
+- **Issue #789** (closed): Re-pin PDK to open_pdks f6eeac7 via ciel: code, CI, docs, hash-checked search
+
+### 2026-10-22
+
+- **PR #822**: refactor: drop prose-grading scope/deferral rules from layout status-claims checker
+- **PR #819**: refactor(sim): share the period-jitter run-deck wrapper in legacy_provenance
+- **Issue #817** (closed): Consolidate four period-jitter run_deck() wrappers and duplicated FATAL patterns
+
+### 2026-10-21
+
+- **PR #813**: ci: pin setup-python to 3.13 so klayout installs from a wheel
+- **PR #809**: Bump Repo Skills 0.24.3 -> 0.24.7
+- **Issue #810** (closed): CI: headless checks job fails building klayout on Python 3.15 (python-version 3.x)
+
+### 2026-10-17
+
+- **PR #802**: refactor(sim): derive period-jitter MOS bundles from harness, share full_grid
+- **Issue #801** (closed): Remove duplicated MOS_BUNDLES/full_grid and dead SUPPLY_ALIAS in period-jitter generators
+
+### 2026-10-16
+
+- **PR #795**: Bump Repo Skills 0.24.1 -> 0.24.3
+- **PR #794**: docs(layout): bound pll_top area recovery levers; none reaches 0.30 mm2
+- **Issue #792** (closed): Bounded feasibility study: recover pll_top area toward the 0.30 mm^2 row (divider aspect ratio, planning spacings)
+
+### 2026-10-15
+
+- **PR #793**: docs(spec): hold the Area row at 0.30 mm² and record the assembled pll_top as unmet (DR-041)
+- **PR #787**: docs: state closed measurement issues as unowned, not open owners
+- **PR #784**: feat(sim): stage one shared simulator init file on local and batch backends
+- **Issue #786** (closed): CI red on main: docs cite issues #399/#437/#540 as open after they were closed
+- **Issue #758** (closed): Area row: assembled pll_top measures 0.4078 mm^2 against the 0.30 mm^2 row (x2.217 overhead) -- needs a decision record
+- **PR #783**: Bump Repo Skills 0.19.5 -> 0.24.1
+- **Issue #540** (closed): sim: run the two closed-loop cells DR-025 names against the ratified <= 1 ns Lock criterion
+- **Issue #437** (closed): sim/supply-sensitivity: full 45-point grid at the trimmed lock-detector window
+- **Issue #439** (closed): sim/lock-time: re-take the full 270-run PVT grid against the DR-014-trimmed lock detector
+- **Issue #399** (closed): Settled static phase at the 15 over-bound corners the 12 µs grid sampled on a decaying tail (DR-012 Decision 6)
+
+### 2026-10-14
+
+- **Issue #292** (closed): Layout: draw real per-block transistor-level layout for VCO, PFD/CP, divider-chain, lock-detector (#17's floorplan is planning-only)
+
+### 2026-10-11
+
+- **Issue #774** (closed): Dedupe claim-checker Python helpers copied across check scripts
+- **Issue #776** (closed): Consolidate duplicated h_wire, snap_um, via1_stack, tap_strip helpers into _canvas.py
+- **PR #775**: refactor: dedupe claim-checker Python helpers into lib/checklib
+- **PR #777**: refactor: consolidate h_wire, snap_um, via1_stack and tap_strip into _canvas.py
+
+### 2026-10-10
+
+- **PR #770**: layout(pll_top): klt erc supply-island run on the assembled top level (Part of #127)
+
+### 2026-10-09
+
+- **PR #764**: layout(vco): draw the 22 pF decap as real cap_nmos_03v3 devices (#759)
+- **Issue #759** (closed): VCO block: draw the 22 pF decap pair as device geometry instead of layer-(0,0) markers
+- **PR #763**: docs: describe top-level assembly as delivered by #297 (fixes closed-owner CI failure)
+- **Issue #762** (closed): Build/runtime failure on main: proposal tracks closed issue #297
+- **PR #760**: layout: assemble pll_top from the five real block layouts, with DRC and connectivity evidence
+- **Issue #297** (closed): Layout: assemble pll_top GDS from real per-block layouts, run full DRC, re-check #149/#18
+- **PR #754**: layout: physical loop-filter generator (MOS caps, MIM cap, poly resistors, ties) (#748)
+- **PR #756**: docs: reconcile active-solver claim; reproduce wnflag DC split on ngspice-42 (Part of #533)
+- **PR #752**: docs: set wnflag=1 in the deck's .control block does not reproduce the local result (#533)
+- **Issue #748** (closed): Layout: physical loop-filter generator (MOS caps, MIM cap, poly resistors, ties)
+
 ### 2026-10-08
 
+- **PR #750**: docs: Addendum 5, wnflag alone reproduces the local full-transient result (#533)
+- **PR #747**: docs: pilot spur gap tracks the host init file in the full transient (Part of #533)
+- **PR #745**: docs: Linux x86 pin run of the DC-only deck; wnflag=1 isolates the latch-state split (#533)
+- **PR #743**: docs: claim-checker inventory for #699 (no checker safely consolidable)
+- **PR #742**: sim: pinned ngspice-46 DC-only check for the batch-vs-local state split (Part of #533)
+- **PR #738**: sim/harness: reject misspelled and invalid manifest acceptance checks
+- **PR #737**: sim/harness: bound batch transport commands and contain stage timeouts
+- **PR #736**: sim/harness: reject overflowing and malformed scalar measurement tokens
+- **PR #733**: fix(sim/harness): contain retained-waveform copy errors within the affected point
+- **Issue #699** (closed): Consolidate or retire the 14 prose-claim checker scripts (12.8k lines grading a 2.2k-line doc)
+- **Issue #735** (closed): sim/harness: reject misspelled and invalid manifest acceptance checks
+- **Issue #727** (closed): sim/harness: bound batch transport subprocesses and contain stage timeouts
+- **Issue #728** (closed): sim/harness: reject overflowing and malformed scalar measurement tokens
+- **Issue #712** (closed): sim/period-jitter: route the random-bound and in-band-bound grids through the harness execution backends instead of grid.sh + direct ngspice
+- **Issue #724** (closed): sim/harness: contain retained-waveform copy errors within the affected PVT point
+- **Issue #713** (closed): Auditor Capability Request: Python interpreter for local validation
 - **PR #730**: Record batch image ngspice-46 sign-off and wedge probe 6/6 (DR-039)
 - **PR #732**: sim/period-jitter: route runner deck execution and provenance through the harness (#712 step 1)
 - **PR #729**: docs(sim): active-solver check and controlled DC comparison for the #533 batch mismatch

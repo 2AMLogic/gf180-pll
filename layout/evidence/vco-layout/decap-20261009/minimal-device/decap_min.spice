@@ -1,0 +1,4 @@
+* One cap_nmos_03v3, 50 x 50 um: the vco.spice XCDEC1 device alone (issue #759).
+.subckt decap_min VDD_VCO GND_VCO
+C_XCDEC1 VDD_VCO GND_VCO cap_nmos_03v3 W=50u L=50u
+.ends

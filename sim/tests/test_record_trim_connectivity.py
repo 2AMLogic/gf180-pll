@@ -40,7 +40,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-from _fixtures import TreeTestCase, TreeWriter
+from _fixtures import TreeTestCase, TreeWriter, install_checklib
 
 SIM_DIR = Path(__file__).resolve().parents[1]
 CHECK = SIM_DIR / "lib" / "check-record-trim-connectivity.sh"
@@ -104,6 +104,7 @@ class _Tree(TreeWriter):
         self.root = root
         (root / "sim" / "lib").mkdir(parents=True)
         shutil.copy2(CHECK, root / "sim" / "lib" / CHECK.name)
+        install_checklib(root)
 
     def campaign(
         self,

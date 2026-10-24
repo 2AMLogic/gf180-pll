@@ -45,20 +45,20 @@ bash sim/selftest.sh                         # prove the harness works (writes n
 | Tool | Why | Install |
 |---|---|---|
 | `ngspice` | simulation | `brew install ngspice` / `apt-get install ngspice` |
-| gf180mcu PDK | device models | `pip install volare && volare enable --pdk gf180mcu <hash>` |
+| gf180mcu PDK | device models | `pip install ciel && ciel enable --pdk-family gf180mcu -l gf180mcu_fd_pr <hash>` (hash: `open_pdks` in `sim/pdk.json`) |
 | `xschem` | schematic capture (optional for simulation) | `brew install xschem` / distro package |
 | python3 >= 3.9 | the harness | stdlib only, no packages |
 
 The harness never hardcodes a PDK path. It resolves one, in order:
 
-1. `GF180_PDK_PATH` — the *variant* directory, e.g. `~/.volare/gf180mcuD`
+1. `GF180_PDK_PATH` — the *variant* directory, e.g. `~/.ciel/gf180mcuD`
    (the one containing `libs.tech/`).
 2. `GF180_PDK_ROOT` — back-compat with the interim `sim/lib/simenv.sh` shim's
    own override (same shape as `GF180_PDK_PATH`).
 3. `PDK_ROOT` (+ `PDK`, default `gf180mcuD`) — the open_pdks / OpenLane convention.
 4. `sim/pdk.local.json` — machine-local, git-ignored.
 5. `sim/pdk.json` — committed defaults.
-6. Built-in search roots: `~/.volare`, `~/.ciel`, `/usr/share/pdk`,
+6. Built-in search roots: `~/.ciel`, `~/.volare` (legacy), `/usr/share/pdk`,
    `/usr/local/share/pdk`, `~/share/pdk`, `/opt/pdk`.
 
 If nothing is found the runner exits `3` with install instructions rather than
@@ -342,6 +342,33 @@ and the second is a home path on the submitting host, and neither is needed to
 reconstruct a measurement. A single-host local record renders exactly the one
 `- Execution:` line it always did.
 
+### The simulator init file: one configuration on every backend (#755, DR-040)
+
+`set wnflag=1` must be in place *before* ngspice reads the netlist (setting it
+in the deck's `.control` block is too late), and with the closed-loop deck it
+selects a different DC state. Both backends therefore stage the same
+`.spiceinit` (`harness/siminit.py`) in the directory ngspice starts from:
+locally in the run directory before the child is spawned, on batch as the
+`harness.spiceinit` upload copied into the job's working directory after the
+inputs and before `ngspice -b`. A working-directory `.spiceinit` shadows
+`~/.spiceinit` and any system init, so ambient files are neither read nor
+modified and `HOME` is untouched.
+
+The file echoes a marker as it runs. A point's record carries
+`init: sha256:<hex>` (and the Environment provenance an `Simulator init:`
+line) only when the deck's own output shows that marker; otherwise the point is
+`unattributed` and not comparable with reference-configuration points. The
+batch `ngspice.env` additionally records the checksum and content of the
+`.spiceinit` present on the instance. `LocalBackend(stage_init=False)` /
+`BatchBackend(stage_init=False)` stage nothing: the no-init negative control.
+
+Pilot procedure (do this before any 45-point submission): run the one point
+ff / −40 °C / 3.63 V, `op=b7vs1p886`, on `--backend local` and on
+`--backend batch --batch-apply`, then compare `init`, the executing simulator
+and PDK, the DC state (`fb`, `lock_lvl`, no gmin stepping) and the spur. The
+numerical matching tolerance is the testbench owner's to record; the −55 dBc
+threshold is not an equivalence tolerance.
+
 ## Writing a testbench
 
 Create `sim/<experiment-slug>/testbench/` with a manifest and a netlist
@@ -445,6 +472,19 @@ about it or opt in.
 | `min` / `max` | every point | hard limit; failure names the offending corner-id |
 | `max_spread_pct` | the grid | `(max-min)/\|mean\|` must stay under the limit |
 | `min_spread_pct` | the grid | must *exceed* it — asserts the sweep really moved |
+
+| `min_measured_points` / `max_measured_points` | the grid | coverage: how many points produced the measurement (`max_measured_points: 0` asserts it never fires) |
+
+`checks` is validated when the manifest loads, before any backend submission or
+evidence reservation. The loader rejects, naming the manifest, measurement and
+key: a measurement not declared in `measure`, `raw_measures`, a phase or
+`derived.measures`; a limit key other than the six above; an entry that is not
+an object; an entry with no limit (empty or all `null`); a non-numeric,
+boolean or non-finite threshold; a coverage limit that is not a non-negative
+integer; and contradictory bounds (`min` > `max`, and likewise for the
+coverage and spread pairs). Negative `min`/`max` are allowed. An `optional`
+measurement is an ordinary check target; its absence at run time and the
+singleton-grid `min_spread_pct` exemption are unchanged.
 
 `min_spread_pct` is a harness-integrity check: if `.temp` or a `.lib` section
 silently failed to apply, a strongly PVT-sensitive measurement would come back

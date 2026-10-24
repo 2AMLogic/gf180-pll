@@ -16,6 +16,7 @@ Two unrelated families live here, one per kind of test in this directory:
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -24,14 +25,28 @@ from pathlib import Path
 SIM_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SIM_DIR))
 
-from harness.pdk import Pdk  # noqa: E402
+from harness.pdk import Pdk, pinned_open_pdks  # noqa: E402
+
+
+def install_checklib(root: Path) -> None:
+    """Install the shared checker helpers into a throwaway repo tree.
+
+    The check scripts import ``checklib`` from ``$REPO_ROOT/lib``, and inside
+    a throwaway tree that tree IS ``$REPO_ROOT`` for the run -- so the real
+    repository's package has to be laid down next to the script, exactly as a
+    fresh clone would receive it.
+    """
+    src = SIM_DIR.parent / "lib" / "checklib"
+    shutil.copytree(
+        src, root / "lib" / "checklib", ignore=shutil.ignore_patterns("__pycache__")
+    )
 
 
 def fake_pdk(root: Path) -> Pdk:
     (root / "libs.tech" / "ngspice").mkdir(parents=True, exist_ok=True)
     (root / "libs.tech" / "ngspice" / "sm141064.ngspice").write_text("* fake\n")
     (root / "libs.tech" / "ngspice" / "design.ngspice").write_text("* fake\n")
-    (root / "SOURCES").write_text("open_pdks deadbeef\n")
+    (root / "SOURCES").write_text(f"open_pdks {pinned_open_pdks()}\n")
     return Pdk(path=root, variant=root.name, source="test")
 
 

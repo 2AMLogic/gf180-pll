@@ -1,5 +1,13 @@
 # `vco_block` LVS — reference netlist landed, first real run finds a genuine short (issue #367)
 
+> **Superseded in part by [`decap-20261009/PROOF.md`](decap-20261009/PROOF.md) (issue #759).**
+> The bullet below on `DECAP_LVS_MODEL` ("not emitted by `reference_netlist()`
+> at all") and the "excluded decap pair" mentions describe the reference as it
+> was then. `reference_netlist()` now emits the pair
+> (`C_XCDEC1 VDD_VCO GND_VCO cap_nmos_03v3 W=50u L=50u M=2`), the layout draws
+> two real `cap_nmos_03v3` devices, and the block's LVS match is recorded in
+> that directory. This record is otherwise unedited.
+
 > **Correction (issue #378):** the "Two disclosed device-class deviations"
 > section below reasons from this run's resistors' own *resistance values*
 > (1960/11550/11550 ohms) to conclude they "match `ppolyf_u_1k`" — that

@@ -90,7 +90,10 @@ one invented for this record.
   schematic already** (`vco.sch`) — the floorplan places it directly adjacent
   to the `VDD_VCO` pin/ring-tap junction, inside the VCO guard ring, so the
   decap's own return path is short. This is real, committed device area
-  (5,000 µm² = 0.005 mm²), not a placeholder — see §4.
+  (5,000 µm² = 0.005 mm²), not a placeholder — see §4. **Realised at issue
+  #759 (2026-10-09):** drawn as two real `cap_nmos_03v3` devices in a column at
+  the right of the VCO block, level with the `VDD_VCO` pin and inside the
+  `GND_VCO` ring (§5.17); before that it was two layer-(0, 0) markers.
 
 ## 2. Supply routing (`VDD_VCO`/`GND_VCO` vs. digital, decap placement)
 
@@ -1673,6 +1676,105 @@ machine-readable integrator view and the ratified table cannot disagree.
 DR-017 Decision 5 it will move the table above when it lands and will not, on
 its own, move the row.
 
+### 5.16 Revision: the first assembled `pll_top` is measured, and the fail-loud condition fires (issue #297)
+
+**Status: the ×1.25 top-level overhead is now a measurement, ×2.217, and the
+assembled top level is over the ratified ≤ 0.30 mm² row.** Stated here per
+§5's fail-loud clause ("if an assembled `pll_top` measures a top-level
+overhead above ×1.664, say so in a new revision rather than re-deriving the
+budget to fit"). Nothing in `spec/` changes in this revision, and neither area
+constant in `skeleton.py` moves: a row change needs a decision record (DR-017
+Decision 3 names exactly this event as its trigger).
+
+**Decision (issue #758, DR-041):** the row is held at ≤ 0.30 mm² and the
+assembled 0.4078 mm² is recorded as unmet; a bounded compaction feasibility
+study (#792) is authorized, and any upward amendment needs a separate decision
+record. The measurements below are unchanged.
+
+**Feasibility study result (issue #792):** with the two levers above changed in
+isolation and together through the real assembler
+(`layout/evidence/pll-top-layout/area-feasibility/PROOF.md`), **no combination
+reaches ≤ 0.30 mm²**. The best connectivity-clean, DRC-no-worse result is
+**351,275.0 µm² (0.3513 mm²), 17.1 % over the row**: horizontal gaps closed to
+0 µm (worth nothing on their own, because the divider chain sets the box
+width), the VCO keep-out at 0 µm and the row-to-divider gap at 12 µm (the
+router's floor; the deck has no block-to-block rule). Re-folding the divider
+does not help: it is 41.99 µm tall and only 111 µm wider than the block row, so
+each added band costs more height than the width it recovers (best fold probe:
+349,708.0 µm², −0.4 % against the unfolded floor). Only a re-floorplan outside
+these two levers is left open; an upward amendment is the separate decision
+record DR-041 names. Nothing in `skeleton.py` or the spec moves.
+
+`layout/evidence/pll-top-layout/pll_top.gds` places all five real block
+layouts — the four DRC/LVS-checked blocks and the physical loop filter drawn at
+issue #748 — and routes `design/netlist/pll_top.spice` between them on
+Metal4/Metal5 (`layout/pll_top/top_level/`, `PROOF.md` beside the GDS):
+
+| Quantity | §5 / §5.15 | Measured on the assembled GDS |
+|---|---|---|
+| Loop filter | 36,936 µm² (DR-006 device sum ×1.15) | 40,593.5 µm² as drawn (219.9 × 184.6 µm) |
+| Sum of block footprints | 180,307 µm² | **183,964.4 µm²** |
+| Top-level overhead | ×1.25 (ROM) | **×2.217** |
+| Total | 225,384 µm² (0.2254 mm²) | **407,776.2 µm² (0.4078 mm²)**, 1317.66 × 309.47 µm |
+| Against ≤ 0.30 mm² | 75.1 %, met | **135.9 %, over by 107,776 µm²** |
+| Against §5's own first estimate | ≈0.099 mm² conservative, ≈34 % margin on 0.15 mm² | 4.12× that estimate; −172 % margin on 0.15 mm² |
+
+**Why the overhead is not ×1.25, in one line:** the divider chain is
+1317.66 µm wide and the tallest row block (the loop filter) is 184.6 µm, so
+any rectangular arrangement of today's blocks is at least
+1317.66 × (184.6 + 41.99) = 298,568.6 µm² — 99.5 % of the row — before any
+spacing, keep-out or routing. The rest of the bounding box is the §1 VCO
+keep-out plus one domain spacing above the row (72,313.2 µm²), the bottom
+routing channel and pins (27,670.9 µm²), the top pin edge (9,223.6 µm²) and
+row-level whitespace (114,604.2 µm²: three 40 µm domain gaps, the divider's
+overhang past the VCO, and the two shorter blocks under the 184.6 µm row
+height). A ×1.25 multiplier applied per block could not see a cost that comes
+from the blocks' *aspect ratios* not tiling.
+
+**One placement deviation from §6's skeleton, disclosed:** the skeleton stacks
+`lock_detector` above `divider_chain`; the assembly puts `lock_detector` in the
+bottom row beside `pfd_cp` (its own `VDD`-domain neighbour). Stacked, the
+bounding box would have grown by a further ~144 µm × 1317.66 µm. §1-§3's
+isolation and placement rules are otherwise followed as written: PFD/CP → loop
+filter → VCO, 40 µm domain spacing, the VCO's 15 µm keep-out clear of every
+non-VCO wire, and `VDD`/`VSS` star-routed from one pad each with no two blocks'
+branches sharing a segment — enforced at drawing time and re-checked from the
+GDS.
+
+**DRC on the assembled GDS** (gf180mcuD, `--offgrid`): one violation, the
+loop filter's own `MIMTM.3` on C2 (option-A MIM on the option-B deck, #753),
+inherited unchanged; nothing the assembly added. No top-level LVS has been run
+(#149); no extraction (#18).
+
+
+### 5.17 Revision: the VCO's 22 pF decap becomes device geometry, and the block pays for it (issue #759)
+
+**Status: no area constant, spec row or decision moves; one block grows.**
+`vco_block` used to carry `vco.sch`'s two `cap_nmos_03v3` 50 × 50 µm decaps as
+two layer-(0, 0) rectangles that sat on top of other sub-blocks (§1 and §2
+counted on a decap that was not drawn). They are now two real devices
+(`layout/evidence/vco-layout/decap-20261009/PROOF.md`): DRC-clean with the
+off-grid class, LVS-matched against a reference that includes both
+capacitors, present exactly once in the assembled `pll_top`.
+
+| Quantity | Before | After |
+|---|---|---|
+| `vco_block` footprint | 172.52 × 184.48 µm (31,826.5 µm²) | **226.69 × 184.48 µm (41,819.8 µm²)** |
+| Sum of the five blocks' bounding boxes in `pll_top` | 183,964.4 µm² | **193,957.6 µm²** |
+| Assembled `pll_top` | 407,776.2 µm², ×2.217 | **407,776.2 µm², ×2.103** (the divider chain's width sets the box) |
+
+There is no free 50 × 50 µm area in the folded block, so the pair is a new
+column to the right of the CLK column (+54.17 µm of width; the pair itself is
+51.2 µm wide). That is the cost of the decap §1 always assumed; nothing was
+bought back by it and no lever from §5.5 was spent. The assembled total is
+unchanged and still over the ratified ≤ 0.30 mm² row (§5.16); the decision on
+that is DR-041 (#758), which now reasons from a VCO that is 9,993 µm² larger than the
+one §5.16 measured. `skeleton.py`'s `VCO_CORE` follows the generator's
+`footprint_um()`, so the skeleton's VCO box and its decap rectangles move with
+it; the tripwire bounds in `test_vco_layout.py` that watch the skeleton's
+extent were widened accordingly and say why.
+
+
 ## 6. GDS skeleton
 
 `layout/floorplan/skeleton.py` assembles a **block-placement skeleton**
@@ -1736,3 +1838,9 @@ python3 -m harness.reproduce                                          # from lay
 
 Evidence: `layout/evidence/floorplan-skeleton/` (see `PROOF.md` there for the
 DRC run's provenance and verdict).
+
+**Superseded for signoff purposes by the assembled top level (issue #297).**
+The skeleton stays as the placement record it always was; any DRC/LVS
+statement about the whole PLL now refers to
+`layout/evidence/pll-top-layout/pll_top.gds`, which carries real geometry for
+all five blocks (§5.16).

@@ -1,0 +1,6 @@
+wrote evidence/pll-top-layout/pll_top.gds
+boundary: (0.0, -21.0)-(1317.66, 288.47) um = 1317.66 x 309.47 um = 407776.2 um^2
+block bbox sum: 193957.6 um^2; 48 port accesses; 341 top-level shapes
+pll_top netcheck: OK (362 labels, 39 top-level nets, 38 chip nets reaching a block pin)
+  star VDD: 2 branch(es): lock_detector, pfd_cp
+  star VSS: 4 branch(es): loop_filter, lock_detector, pfd_cp, divider_chain

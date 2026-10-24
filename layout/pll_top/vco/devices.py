@@ -5,7 +5,8 @@ frozen export of ``vco.sch`` / ``vco_stage.sch`` / ``vco_bias.sch``), not
 re-derived: this module is the single place the layout generator (and its
 tests) get "what has to be built" from, so a schematic change shows up here
 as an explicit diff rather than a silent re-guess. Keeping it import-light
-(stdlib ``dataclasses`` only) means ``layout/tests/test_vco_layout.py`` can
+(stdlib imports plus the lazily-``klayout``-importing ``_canvas``, whose
+``snap_um()`` this module binds) means ``layout/tests/test_vco_layout.py`` can
 check the layout's own claims about what it built against these numbers
 without needing a KLayout-capable Python (same convention as
 ``floorplan/skeleton.py`` / ``layout/tests/test_floorplan_skeleton.py``).
@@ -41,6 +42,14 @@ time as ``#293``'s own acceptance-criteria checklist is worked through.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
+
+try:
+    from .. import _canvas
+except ImportError:  # this package's own dir (not its "pll_top" parent) is the
+    # sys.path root under layout/tests's flat-import convention (see
+    # vco/primitives.py's own identical fallback).
+    import _canvas
 
 LAYOUT_GRID_UM = 0.005
 """Manufacturing grid every drawn vertex must land on.
@@ -54,10 +63,12 @@ divides a width by a finger count will land off this grid routinely, so
 lets the pure-Python placement math agree with what is actually drawn.
 """
 
-
-def snap_um(v: float) -> float:
-    """Round ``v`` to the nearest manufacturing-grid point."""
-    return round(round(v / LAYOUT_GRID_UM) * LAYOUT_GRID_UM, 6)
+# Round ``v`` to the nearest manufacturing-grid point -- shared with every
+# other ``layout/pll_top/*`` submodule (issue #776, ``_canvas.snap_um()``).
+# ``_canvas`` imports no ``klayout`` at module level (it is lazy, inside
+# ``Canvas.__post_init__``), so this module stays importable with no PV
+# environment.
+snap_um = partial(_canvas.snap_um, grid_um=LAYOUT_GRID_UM)
 
 
 @dataclass(frozen=True)
@@ -120,8 +131,10 @@ STAGE_FETS = (
 STAGE_COUNT = 5  # DR-003 Decision 2: fixed at 5, no fallback to 3 or 7.
 
 # vco.sch's committed 22 pF decap: 2x cap_nmos_03v3, 50x50 um (unchanged from
-# layout/floorplan/skeleton.py's VCO_DECAP_0/1 -- carried forward, not redrawn).
+# layout/floorplan/skeleton.py's VCO_DECAP_0/1); drawn as real device geometry by
+# vco/block.py since issue #759.
 DECAP_COUNT = 2
+DECAP_NAMES = ("XCDEC1", "XCDEC2")  # design/netlist/vco.spice instance names
 DECAP_SIZE_UM = 50.0
 
 # --- Design-rule constants (gf180mcuD, nfet_03v3/pfet_03v3 = the "_LV"

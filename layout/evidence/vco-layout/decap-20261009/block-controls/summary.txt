@@ -1,0 +1,8 @@
+decap_missing: LVS mismatch: vco_block (D) layout != schematic
+    extracted: C$80 VDD_VCO GND_VCO 1.1e-11 cap_nmos_03v3 A=2500P P=200U
+gate_open: LVS mismatch: vco_block (D) layout != schematic
+    extracted: C$80 VDD_VCO GND_VCO 1.1e-11 cap_nmos_03v3 A=2500P P=200U
+    extracted: C$81 \$132 GND_VCO 1.1e-11 cap_nmos_03v3 A=2500P P=200U
+diff_open: LVS mismatch: vco_block (D) layout != schematic
+    extracted: C$80 VDD_VCO \$35 1.1e-11 cap_nmos_03v3 A=2500P P=200U
+    extracted: C$81 VDD_VCO \$79 1.1e-11 cap_nmos_03v3 A=2500P P=200U

@@ -1,5 +1,22 @@
 # `vco_block` structural power-delivery ERC (T1 checklist item 11, issue #427)
 
+> **Status update (2026-10-09, issue #759): re-run on the drawn decap pair.**
+> The 22 pF decap is now two real `cap_nmos_03v3` devices, so `vco_block.gds`
+> changed and `erc-report.json` was regenerated on the pinned
+> `klayout-tools==0.6.0` (`uvx --from "klayout-tools==0.6.0" klt erc ...`,
+> byte-identical on a second run; `erc-supply-spec.json` is unchanged). The
+> verdict is the same: `erc_status` stays `violations` with the same single
+> `VDD_VCO` two-island finding (the second island is the same one-shape Metal1
+> sliver at y = 18.5-19.3 um; the first island's reported layer is now `poly2`
+> because the decap gates are on that net). `gate_count` goes 28 -> 29: the two
+> decap gates merge into one 5,000 um^2 gate on `VDD_VCO`, whose antenna verdict
+> is `unchecked` like every other gate's (no antenna ratios are declared).
+> The antenna half still never ran: `coverage` is `checked: 0, skipped: 145`
+> (was 140; the extra five are the decap gates' own antenna levels).
+> `provenance.input.content_hash` is now the new GDS's; every older hash and
+> census quoted below describes the geometry of its own date and is left as
+> written. See [`decap-20261009/PROOF.md`](decap-20261009/PROOF.md).
+
 > **Status update (2026-09-29, issue #661): `erc-supply-spec.json`'s `metal2`
 > `_comment` carried the same wrong 14-member `layer_indexes()` census this
 > record's own "Correction (2026-09-29, issue #660)" bullet (below) fixed in
@@ -352,8 +369,9 @@ finds:
   only draws layers up to Metal2 — confirmed directly by enumerating the
   file's own `layer_indexes()`:
   ~~`{21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0, 34/10, 35/0, 36/0, 36/10,
-  49/0, 62/0, 110/5}`~~ → **`{0/0, 21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0,
-  34/10, 35/0, 36/0, 36/10, 49/0, 62/0, 110/5}`**, nothing at `42/*`, `46/*`,
+  49/0, 62/0, 110/5}`~~ → ~~**`{0/0, 21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0,
+  34/10, 35/0, 36/0, 36/10, 49/0, 62/0, 110/5}`**~~ → **`{21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0, 34/10, 35/0, 36/0, 36/10, 49/0, 62/0, 110/5, 166/5, 204/0}`** (2026-10-09, issue #759: the
+  `(0, 0)` placeholder markers are gone, `mos_cap_mk` and `lvpwell` are new), nothing at `42/*`, `46/*`,
   or `81/*` at all. Issue #427's "typically Metal1 and Metal5" guess does
   not hold for this specific block — declaring a `label_layer` there would
   have been pure fiction. `metal3`/`metal4`/`metal5` are still declared as
@@ -496,9 +514,9 @@ The spec declares **one** tie, not two. The `GND_VCO`/p-substrate side is not
 declared, and that is a measured limitation rather than an oversight:
 
 1. gf180mcu draws **no pwell/tub layer** for a native-substrate NMOS block.
-   This GDS's own `layer_indexes()` contain no such layer (the list is
-   `{0/0, 21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0, 34/10, 35/0, 36/0, 36/10,
-   49/0, 62/0, 110/5}`), so there is nothing to name as `well_layer`.
+   This GDS's own `layer_indexes()` contain no such layer (the list was
+   ~~`{0/0, 21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0, 34/10, 35/0, 36/0, 36/10,
+   49/0, 62/0, 110/5}`~~, and since issue #759 is `{21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0, 34/10, 35/0, 36/0, 36/10, 49/0, 62/0, 110/5, 166/5, 204/0}`), so there is nothing to name as `well_layer`.
 2. The one form `klt erc` provides for that case is the caller-asserted
    substrate region — `ties[].well_layer: null` plus `ties[].well_boxes`
    (klayout-tools#2255). But an asserted region indistinguishable from the

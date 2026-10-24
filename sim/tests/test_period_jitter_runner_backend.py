@@ -114,6 +114,32 @@ class BackendDispatch(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 self._run("random-bound", be, "* d\n", t / "w", t / "l.log")
 
+    def test_refusal_sets_are_preserved_per_runner(self):
+        # The consolidation (#817) must not widen or narrow what any runner refuses.
+        self.assertEqual(legacy_provenance.FATAL, (
+            "Timestep too small", "simulation(s) aborted", "singular matrix", "Error:"))
+        for name in ("isf-bringup", "sid-trajectory"):
+            mod = load_module(PJ / name / "run.py")
+            self.assertEqual(mod.FATAL_LOG_PATTERNS, (
+                "Timestep too small", "simulation(s) aborted", "singular"), name)
+
+    def test_checked_log_strips_progress_meter_but_returns_raw_output(self):
+        raw = "a Reference value : 1.0e-9 Reference value : 2e-9\nb\n"
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            _, (el, out) = self._run("random-bound", RecordingBackend(output=raw),
+                                     "* d\n", t / "w", t / "l.log")
+            self.assertEqual(out, raw)
+            self.assertEqual((t / "l.log").read_text(), "a\nb\n")
+
+    def test_missing_expected_file_refuses(self):
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            be = RecordingBackend(make_files=())
+            with self.assertRaises(SystemExit) as cm:
+                self._run("random-bound", be, "* d\n", t / "w", t / "l.log", "clk.dat")
+            self.assertIn("produced no clk.dat", str(cm.exception))
+
     def test_isf_and_sid_go_through_backend(self):
         with tempfile.TemporaryDirectory() as t:
             t = Path(t)

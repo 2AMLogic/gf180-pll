@@ -1,0 +1,5 @@
+* Extracted by KLayout with GF180MCU LVS runset on : 09/10/2026 11:51
+
+.SUBCKT decap_min GND_VCO|VDD_VCO
+C$1 GND_VCO|VDD_VCO GND_VCO|VDD_VCO 1.1e-11 cap_nmos_03v3 A=2500P P=200U
+.ENDS decap_min

@@ -1227,7 +1227,10 @@ class VcoSubBlockFloorplanTests(unittest.TestCase):
         used = skeleton.total_extent_um2(skeleton.VCO_FOLD_TRIPWIRE_BLOCKS)
         self.assertLess(used, 100_000.0)
         self.assertGreater(used / 150_000.0, 0.55, "budget headroom changed -- re-read skeleton.py")
-        self.assertLess(used / 150_000.0, 0.65, "budget headroom changed -- re-read skeleton.py")
+        # 0.65 -> 0.68 at issue #759: drawing the 22 pF decap pair as real
+        # cap_nmos_03v3 geometry widened the block by one device column
+        # (172.5 -> 226.7 um); see layout/evidence/vco-layout/decap-20261009/.
+        self.assertLess(used / 150_000.0, 0.68, "budget headroom changed -- re-read skeleton.py")
 
 
 class BiasResistorDeviceTests(unittest.TestCase):
@@ -1933,21 +1936,41 @@ class AssembledVcoBlockPlacementTests(unittest.TestCase):
     def test_decap_is_the_committed_pair_of_50um_devices(self):
         boxes = vco_block.decap_boxes_um()
         self.assertEqual(len(boxes), dev.DECAP_COUNT)
+        self.assertEqual(dev.DECAP_NAMES, ("XCDEC1", "XCDEC2"))
         for b in boxes:
             self.assertAlmostEqual(b[2] - b[0], dev.DECAP_SIZE_UM)
             self.assertAlmostEqual(b[3] - b[1], dev.DECAP_SIZE_UM)
         a, c = boxes
-        self.assertLess(a[2], c[0])  # side by side, not overlapping
+        self.assertLess(a[3], c[1])  # stacked, not overlapping
 
-    def test_decap_sits_next_to_the_block_vdd_pin_and_inside_the_guard_ring(self):
-        # AC: "placed adjacent to the VDD_VCO pin/ring-tap junction". The
-        # block's VDD_VCO pin is on the Metal1 supply trunk, so adjacency is
-        # measured against that trunk's own x.
-        boxes = vco_block.decap_boxes_um()
-        self.assertLess(self.p.vdd_trunk_x - boxes[1][2], 10.0)
+    def test_decap_sits_at_the_block_vdd_pin_and_inside_the_guard_ring(self):
+        # PLL-FLOORPLAN.md: the decap goes against the VDD_VCO pin / ring-tap
+        # junction. The lower device's gate row is centred on the pin's own y
+        # (so its gate vias land on the trunk -> n-well-ring Metal2 line), and
+        # both devices, with every shape that comes with them, sit inside the
+        # GND_VCO ring's inner edge.
+        plan = vco_block.decap_plan()
+        self.assertAlmostEqual(plan.gate_row_y[0], vco_block.vdd_pin_y_um())
         x0, y0, x1, y1 = self.p.outer
-        for b in boxes:
-            self.assertTrue(x0 < b[0] and y0 < b[1] and b[2] < x1 and b[3] < y1)
+        ring_w = vco_block.SHARED_RING_WIDTH_UM
+        for comp in plan.comps:
+            self.assertTrue(
+                x0 + ring_w < comp[0] - prim.MOSCAP_IMPLANT_MARGIN_UM
+                and comp[2] + prim.MOSCAP_IMPLANT_MARGIN_UM < x1 - ring_w
+                and y0 + ring_w < comp[1] - prim.MOSCAP_POLY_EXT_UM
+                and comp[3] + prim.MOSCAP_POLY_EXT_UM < y1 - ring_w,
+                comp,
+            )
+
+    def test_decap_devices_clear_every_sub_block(self):
+        for name, box in self.boxes.items():
+            for comp in vco_block.decap_plan().comps:
+                overlap = comp[0] < box[2] and box[0] < comp[2] and comp[1] < box[3] and box[1] < comp[3]
+                self.assertFalse(overlap, f"decap overlaps {name}")
+
+    def test_vdd_pin_y_matches_what_build_derives(self):
+        result = vco_block.build()
+        self.assertAlmostEqual(result.nets["vdd_pin_y"], vco_block.vdd_pin_y_um())
 
     def test_ring_decap_is_suppressed_inside_the_block(self):
         # One marker pair for one physical pair of caps: the ring's own copy
@@ -1957,6 +1980,189 @@ class AssembledVcoBlockPlacementTests(unittest.TestCase):
         without = ring.footprint_um(with_decap=False)
         self.assertLess(without[2], with_decap[2])
         self.assertAlmostEqual(self.boxes["ring"][2] - self.boxes["ring"][0], without[2] - without[0])
+
+
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
+class DecapDeviceGeometryTests(unittest.TestCase):
+    """The 22 pF decap is two real ``cap_nmos_03v3`` devices (issue #759).
+
+    Replaces the old "markers, not devices" disclosure with positive checks on
+    the drawn geometry: class markers, count, size, absence of the ``_b``
+    class's n-well, containment, and terminal connectivity -- including the
+    negative cases (a missing device, an open gate, an open n+ side) that the
+    check must reject.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import klayout.db as db
+
+        cls.db = db
+        cls.result = vco_block.build()
+        cls.plan = vco_block.decap_plan()
+
+    def _region(self, layer, result=None):
+        result = result or self.result
+        c = result.canvas
+        return self.db.Region(c.top.shapes(c.layout.layer(*prim.LAYER[layer]))).merged()
+
+    def _column(self):
+        """The decap pair's own window (devices, rows, n+ bar), excluding the guard ring."""
+        lo, up = self.plan.comps
+        return self.db.Region(_box(lo[0] - 1.0, lo[1] - 3.0, lo[2] + 2.0, up[3] + 3.0))
+
+    def _gates(self):
+        """poly2 AND comp inside the decap column -- the extracted devices' gate regions."""
+        return (self._region("poly2") & self._region("comp") & self._column()).merged()
+
+    def test_no_boundary_placeholder_remains_in_the_block(self):
+        self.assertTrue(self._region("boundary").is_empty())
+
+    def test_exactly_two_gate_regions_of_50_by_50_um(self):
+        gates = list(self._gates().each())
+        self.assertEqual(len(gates), dev.DECAP_COUNT)
+        for g in gates:
+            self.assertEqual(g.bbox().width(), 50_000)
+            self.assertEqual(g.bbox().height(), 50_000)
+            self.assertAlmostEqual(g.area() / 1e6, 2500.0)
+
+    def test_gate_regions_are_the_plans_boxes(self):
+        got = sorted((g.bbox().left, g.bbox().bottom, g.bbox().right, g.bbox().top) for g in self._gates().each())
+        want = sorted(tuple(round(v * 1000) for v in box) for box in vco_block.decap_boxes_um())
+        self.assertEqual(got, want)
+
+    def test_each_gate_is_under_the_capacitor_marker_and_lvpwell(self):
+        for g in self._gates().each():
+            region = self.db.Region(g)
+            self.assertTrue((region - self._region("mos_cap_mk")).is_empty())
+            self.assertTrue((region - self._region("lvpwell")).is_empty())
+
+    def test_exactly_two_capacitor_markers_in_the_whole_block(self):
+        self.assertEqual(self._region("mos_cap_mk").count(), dev.DECAP_COUNT)
+
+    def test_decaps_are_the_non_b_class_no_nwell_under_them(self):
+        # cap_nmos_03v3_b = ngate AND nwell AND mos_cap_mk. The non-_b class
+        # must have no n-well under or around its comp.
+        for comp in self.plan.comps:
+            halo = self.db.Region(_box(comp[0] - 0.6, comp[1] - 0.6, comp[2] + 0.6, comp[3] + 0.6))
+            self.assertTrue((halo & self._region("nwell")).is_empty(), comp)
+
+    def test_forbidden_markers_are_absent_from_the_column(self):
+        column = self._column()
+        for layer in ("resistor", "sab", "res_mk"):
+            self.assertTrue((self._region(layer) & column).is_empty(), layer)
+
+    def test_every_decap_shape_is_inside_the_gnd_ring(self):
+        p = self.result.placement
+        inner = self.db.Region(
+            _box(
+                p.outer[0] + vco_block.SHARED_RING_WIDTH_UM,
+                p.outer[1] + vco_block.SHARED_RING_WIDTH_UM,
+                p.outer[2] - vco_block.SHARED_RING_WIDTH_UM,
+                p.outer[3] - vco_block.SHARED_RING_WIDTH_UM,
+            )
+        )
+        column = self._column()
+        for layer in ("comp", "poly2", "nplus", "mos_cap_mk", "lvpwell"):
+            shapes = self._region(layer) & column
+            self.assertTrue((shapes - inner).is_empty(), layer)
+
+    def test_every_gate_contact_is_enclosed_by_poly_and_every_n_plus_contact_by_comp(self):
+        contacts = self._region("contact")
+        poly, comp = self._region("poly2"), self._region("comp")
+        for g in self._gates().each():
+            col = self.db.Region(_box(g.bbox().left / 1e3 - 2, g.bbox().bottom / 1e3 - 2, g.bbox().right / 1e3 + 2, g.bbox().top / 1e3 + 2))
+            inside = contacts & col
+            self.assertFalse(inside.is_empty())
+            gate_contacts = inside & poly
+            sd_contacts = inside & comp
+            self.assertTrue(((gate_contacts + sd_contacts) ^ inside).is_empty())
+            self.assertFalse(gate_contacts.is_empty())
+            self.assertFalse(sd_contacts.is_empty())
+            # no contact lands on the channel itself
+            self.assertTrue((inside & self.db.Region(g)).is_empty())
+
+    def test_connectivity_report_passes_with_the_decap_probes(self):
+        report = dict((name, ok) for name, ok, _ in vco_block.connectivity_report(self.result))
+        self.assertTrue(report["VDD_VCO"])
+        self.assertTrue(report["GND_VCO"])
+        self.assertTrue(report["VDD_VCO != GND_VCO"])
+
+    def test_probes_cover_both_gate_rows_and_all_four_n_plus_columns(self):
+        pts = vco_block._probe_points(self.result)
+        vdd = {(round(x, 3), round(y, 3)) for _, x, y in pts["VDD_VCO"]}
+        gnd = {(round(x, 3), round(y, 3)) for _, x, y in pts["GND_VCO"]}
+        for cap, end in zip(self.result.decap_ports, self.plan.gate_end):
+            row = cap.rows[end]
+            self.assertIn((round((row[0] + row[2]) / 2, 3), round((row[1] + row[3]) / 2, 3)), vdd)
+            for col in cap.cols:
+                self.assertIn((round((col[0] + col[2]) / 2, 3), round((col[1] + col[3]) / 2, 3)), gnd)
+
+    def _mutated_report(self, layer, box):
+        result = vco_block.build()
+        c = result.canvas
+        shapes = c.top.shapes(c.layout.layer(*prim.LAYER[layer]))
+        keep = self.db.Region(shapes) - self.db.Region(_box(*box))
+        shapes.clear()
+        shapes.insert(keep)
+        return {name: (ok, detail) for name, ok, detail in vco_block.connectivity_report(result)}
+
+    def test_an_open_upper_gate_is_rejected(self):
+        upper = self.plan.comps[1]
+        y = self.plan.gate_row_y[1]
+        report = self._mutated_report("via1", (upper[0], y - 1.0, upper[2], y + 1.0))
+        self.assertFalse(report["VDD_VCO"][0], report["VDD_VCO"][1])
+
+    def test_a_missing_n_plus_bar_is_rejected(self):
+        bar = self.plan.bar
+        upper = self.plan.comps[1]
+        report = self._mutated_report("metal1", (upper[0] - 0.5, bar[1], bar[2] - 2.0, bar[3]))
+        self.assertFalse(report["GND_VCO"][0], report["GND_VCO"][1])
+
+    def test_the_standalone_ring_generator_still_draws_its_own_marker_pair_only_when_asked(self):
+        # The block calls ring.build(draw_decap=False); a second pair would put
+        # two sets of decap footprints in one block. Standalone ring builds keep
+        # their carried-forward markers, so the suppression is what matters.
+        ring_res = ring.build(canvas=prim.Canvas("ring_suppressed"), draw_decap=False)
+        self.assertTrue(
+            self.db.Region(
+                ring_res.canvas.top.shapes(ring_res.canvas.layout.layer(*prim.LAYER["boundary"]))
+            ).is_empty()
+        )
+        self.assertTrue(self._region("boundary").is_empty())
+
+
+@unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
+class MosCapNmosPrimitiveTests(unittest.TestCase):
+    """``primitives.mos_cap_nmos()`` draws the non-``_b`` class by itself."""
+
+    def test_extent_is_l_plus_two_diffusion_strips_by_w(self):
+        cw, ch = prim.mos_cap_nmos_extent(50.0, 50.0)
+        self.assertAlmostEqual(cw, 50.0 + 2 * prim.MOSCAP_SD_EXT_UM)
+        self.assertAlmostEqual(ch, 50.0)
+
+    def test_draws_marker_and_lvpwell_but_neither_nwell_nor_dualgate(self):
+        canvas = prim.Canvas("moscap_min")
+        ports = prim.mos_cap_nmos(canvas, 50.0, 50.0, 0.0, 0.0)
+        import klayout.db as db
+
+        def count(layer):
+            return db.Region(canvas.top.shapes(canvas.layout.layer(*prim.LAYER[layer]))).count()
+
+        self.assertEqual(count("mos_cap_mk"), 1)
+        self.assertEqual(count("lvpwell"), 1)
+        self.assertEqual(count("nwell"), 0)
+        self.assertEqual(ports.gate[2] - ports.gate[0], 50.0)
+        self.assertEqual(ports.gate[3] - ports.gate[1], 50.0)
+        self.assertNotIn("dualgate", prim.LAYER)
+
+    def test_unknown_gate_end_is_refused(self):
+        with self.assertRaises(ValueError):
+            prim.mos_cap_nmos(prim.Canvas("moscap_bad"), 5.0, 5.0, 0.0, 0.0, gate_ends=("left",))
+
+    def test_gate_rows_are_only_drawn_where_asked(self):
+        ports = prim.mos_cap_nmos(prim.Canvas("moscap_rows"), 5.0, 5.0, 0.0, 0.0, gate_ends=("top",))
+        self.assertEqual(set(ports.rows), {"top"})
 
 
 @unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
@@ -2163,7 +2369,9 @@ class AssembledVcoBlockFloorplanTests(unittest.TestCase):
         # both in it; that is asserted, with its magnitude ratcheted, in
         # test_floorplan_skeleton.py.
         extent = skeleton.total_extent_um2(skeleton.VCO_FOLD_TRIPWIRE_BLOCKS)
-        self.assertLess(extent, 95_000.0)
+        # 95,000 -> 100,000 at issue #759 (real decap pair; block 172.5 ->
+        # 226.7 um wide). Still a tripwire for an undone fold, not a budget.
+        self.assertLess(extent, 100_000.0)
         self.assertGreater(extent, 80_000.0)
 
     def test_the_row_fold_actually_reduced_the_block_footprint(self):
@@ -2172,9 +2380,18 @@ class AssembledVcoBlockFloorplanTests(unittest.TestCase):
         # 43,680 um^2, with a substrate-only block ring. This asserts the
         # direction and rough size of the change, so "folded" cannot silently
         # become "unfolded plus a wider ring".
-        w, h = skeleton.VCO_CORE.w, skeleton.VCO_CORE.h
+        #
+        # Issue #759 added one column of real decap devices at the right
+        # (54.2 um); the fold is judged on the block *without* that column, so
+        # the decap cannot hide an unfolded mirror and the fold cannot hide
+        # the decap's cost -- the latter is bounded separately just below.
+        p = vco_block.placement()
+        decap_growth = p.content[2] - p.content_x1_no_decap
+        w, h = skeleton.VCO_CORE.w - decap_growth, skeleton.VCO_CORE.h
         self.assertLess(w, 200.0)
         self.assertLess(w * h, 35_000.0)
+        self.assertGreater(decap_growth, 0.0)
+        self.assertLess(skeleton.VCO_CORE.w * skeleton.VCO_CORE.h, 45_000.0)
         # Height was the currency the width was bought with, and the budget
         # can afford it only while it stays under LOOP_FILTER's own 195 um.
         self.assertGreater(h, 148.18)
@@ -2352,8 +2569,31 @@ class ReferenceNetlistDeviceTests(unittest.TestCase):
         """
         self.assertEqual(vco_block.RESISTOR_LVS_MODEL, "ppolyf_u_3k")
 
-    def test_decap_devices_are_not_emitted(self):
-        self.assertNotIn(vco_block.DECAP_LVS_MODEL, self.text)
+    def test_decap_pair_is_in_the_reference_as_the_schematics_class(self):
+        # Issue #759: the pair used to be omitted (and this test asserted the
+        # omission). It is now drawn, so it must be in the reference.
+        cards = [ln for ln in self.text.splitlines() if ln.startswith("C_")]
+        self.assertEqual(len(cards), 1, "the two identical caps are one M=2 card")
+        toks = cards[0].split()
+        self.assertEqual(toks[0], "C_XCDEC1")
+        self.assertEqual(toks[1:4], ["VDD_VCO", "GND_VCO", "cap_nmos_03v3"])
+        self.assertEqual(vco_block.DECAP_LVS_MODEL, "cap_nmos_03v3")
+        self.assertEqual(self._param(cards[0], "W"), 50.0)
+        self.assertEqual(self._param(cards[0], "L"), 50.0)
+        self.assertEqual(self._param(cards[0], "M"), float(dev.DECAP_COUNT))
+        for name in dev.DECAP_NAMES:
+            self.assertIn(name, self.text)
+
+    def test_decap_class_is_not_the_loop_filters_b_class(self):
+        self.assertNotIn("cap_nmos_03v3_b", self.text)
+
+    def test_decap_card_matches_the_committed_schematic(self):
+        from pathlib import Path
+
+        net = (Path(LAYOUT_DIR).parent / "design" / "netlist" / "vco.spice").read_text()
+        for name in dev.DECAP_NAMES:
+            line = next(ln for ln in net.splitlines() if ln.startswith(f"X{name[1:]} ") or ln.startswith(f"{name} "))
+            self.assertIn("VDD_VCO GND_VCO cap_nmos_03v3 c_width=50u c_length=50u m=1", line)
 
     def test_top_level_ports_match_the_frozen_netlist(self):
         header = next(ln for ln in self.text.splitlines() if ln.startswith(".subckt"))

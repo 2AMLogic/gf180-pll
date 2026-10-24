@@ -319,22 +319,28 @@ runs and the bias-current impact.
 
 DECAP_LVS_MODEL = "cap_nmos_03v3"
 """The device class ``design/netlist/vco.spice``'s ``XCDEC1``/``XCDEC2``
-name -- deliberately **not** emitted by :func:`reference_netlist` at all.
+name, and the class :func:`reference_netlist` emits for them (issue #759).
 
-``ring.py``'s own module docstring (carried into this module's
-``decap_boxes_um()``) already states the carried-forward 22 pF decap pair is
-drawn as two boundary-layer marker rectangles (GDS layer (0, 0); no DRC rule
-in this deck references it -- see ``primitives.LAYER``'s docstring), not real
-``cap_nmos_03v3`` device geometry (comp/poly2/``mos_cap_mk``): "AC's own
-wording is 'carried forward **unchanged**', not 're-drawn as a real MOS-cap
-device' -- turning it into real device geometry is follow-up-issue scope".
-With no matching layout geometry for the deck to extract, including
-``XCDEC1``/``XCDEC2`` in this reference would not "confirm ``cap_nmos_03v3``
-recognition" -- it would just fail LVS with two permanently-unmatched
-schematic-side devices for a device family this increment never draws.
-Disclosed here and in ``PROOF-lvs.md`` rather than silently omitted with no
-comment.
+Until issue #759 the 22 pF decap pair was two layer-(0, 0) boundary markers
+and the reference deliberately omitted it. It is now drawn as real
+``cap_nmos_03v3`` geometry (:func:`primitives.mos_cap_nmos`: comp, poly2,
+``mos_cap_mk``, ``nplus``, ``lvpwell``, no n-well -- the *non-*``_b`` class,
+which is a different device from the loop filter's ``cap_nmos_03v3_b``) and
+the reference carries both devices, so a missing, mis-sized or mis-classed
+decap fails LVS instead of being absent from it.
+
+The deck's capacitor class has two interchangeable terminals, so LVS alone
+cannot tell the gate from the diffusion; that polarity (gate on ``VDD_VCO``,
+n+ on ``GND_VCO``, as ``design/netlist/vco.spice`` has it) is checked
+separately by the connectivity probes and by the extracted netlist's own
+terminal order (``layout/tests/test_vco_layout.py``).
 """
+
+DECAP_SPINE_GAP_UM = 1.0  # CLK column's Metal2 -> the decap supply spine's Metal2
+DECAP_SPINE_TO_COMP_UM = 1.5  # spine Metal2 centre -> the decaps' left edge
+DECAP_PAIR_GAP_UM = 3.0  # between the two devices' comps; carries the shared GND bar
+DECAP_GATE_VIA_PITCH_UM = 2.0  # Via1 pitch along each gate row
+DECAP_BAR_WIDTH_UM = 0.8  # Metal1 bar joining the n+ columns of both devices
 
 
 def _fet_line(instance: str, f: dev.Fet, net_map: dict[str, str] | None = None) -> str:
@@ -400,9 +406,9 @@ def reference_netlist() -> str:
     """Flattened LVS reference for :data:`TOP_CELL` (``vco_block``).
 
     See the module-level "Reference LVS netlist" section above for the
-    flattening/labelling discipline, and :data:`RESISTOR_LVS_MODEL` /
-    :data:`DECAP_LVS_MODEL` for the two disclosed, deliberate departures from
-    ``design/netlist/vco.spice``'s own device classes.
+    flattening/labelling discipline, and :data:`RESISTOR_LVS_MODEL` for the
+    disclosed departure from ``design/netlist/vco.spice``'s own device classes
+    and :data:`DECAP_LVS_MODEL` for the decap pair.
     """
     lines: list[str] = [
         f"* Reference LVS netlist for {TOP_CELL} (issue #367).",
@@ -411,8 +417,8 @@ def reference_netlist() -> str:
         "* vco_stage subckts -- every device W/L traces to devices.py's own",
         "* tables (themselves read off that generated file). See block.py's",
         "* module-level docstring section and layout/evidence/vco-layout/",
-        "* lvs-clean/PROOF-lvs.md for the two disclosed device-class",
-        "* deviations (poly resistors, and the excluded MOS decap pair).",
+        "* lvs-clean/PROOF-lvs.md for the disclosed device-class deviation",
+        "* (poly resistors); the MOS decap pair is a real cap_nmos_03v3.",
         "*",
         "* Run LVS with --lvs-sub=GND_VCO (this block's own substrate net --",
         "* NOT layout/run_pv.py's own VSS default; see layout/README.md's",
@@ -470,8 +476,18 @@ def reference_netlist() -> str:
     for f in dev.VTOI_ALL_FETS:
         lines.append(_fet_line(f.name, f))
 
-    # NOTE: design/netlist/vco.spice's XCDEC1/XCDEC2 (cap_nmos_03v3, 22 pF
-    # total) are deliberately NOT emitted -- see DECAP_LVS_MODEL's docstring.
+    # --- the 22 pF decap pair (issue #759). Two identical devices on the same
+    # two nets: the PDK's LVS runset merges parallel extracted capacitors, and
+    # simplifies the reference only under --schematic_simplify (not passed
+    # here), so the pair is one card with M=2 -- the same convention
+    # loop_filter/block.py uses. That *two* are drawn is established by the
+    # layout tests and the extraction census, not by this card. Terminal
+    # order is the model's own: 1 = poly gate, 2 = n+ diffusion. ---
+    lines.append(f"* {' '.join(dev.DECAP_NAMES)} in parallel")
+    lines.append(
+        f"C_{dev.DECAP_NAMES[0]} {VDD_NET} {GND_NET} {DECAP_LVS_MODEL} "
+        f"W={dev.DECAP_SIZE_UM:g}u L={dev.DECAP_SIZE_UM:g}u M={dev.DECAP_COUNT}"
+    )
 
     lines.append(".ends")
     return "\n".join(lines) + "\n"
@@ -513,6 +529,9 @@ class Placement:
     nwell_ring: tuple  # (x0, y0, x1, y1), outer edge of that ring's own n-well
     boundary: tuple  # the block's own footprint -- == nwell_ring, the
     # outermost geometry this block draws
+    decap_spine_x: float  # Metal2 supply spine feeding the upper decap's gate
+    decap_x0: float  # left edge of both decaps' comp
+    content_x1_no_decap: float  # where the content ended before the decap column existed
 
     def boxes(self) -> dict:
         """Each sub-block's own guard-ring box, translated into block coords."""
@@ -629,10 +648,17 @@ def placement() -> Placement:
     res_col_nvi_x = snap(vt[2] + RES_COL_NVI_OFFSET_UM)
     res_col_noff_x = snap(vt[2] + RES_COL_NOFF_OFFSET_UM)
 
+    # The decap column (issue #759) sits to the right of the CLK column: the
+    # supply spine, then the two devices. Everything the guard ring encloses
+    # therefore ends at the devices' n+ implant, not at the CLK pin.
+    decap_spine_x = snap(clk_pin_x + M2_HALF_UM + DECAP_SPINE_GAP_UM + M2_HALF_UM)
+    decap_x0 = snap(decap_spine_x + DECAP_SPINE_TO_COMP_UM)
+    decap_cw, _ = prim.mos_cap_nmos_extent(dev.DECAP_SIZE_UM, dev.DECAP_SIZE_UM)
+    decap_x1 = snap(decap_x0 + decap_cw)
     content = (
         col_vbp0_x - M2_HALF_UM,
         min(b[1] for b in rows),
-        clk_pin_x + M2_HALF_UM,
+        decap_x1 + prim.MOSCAP_IMPLANT_MARGIN_UM,
         max(b[3] for b in rows),
     )
     m = SHARED_MARGIN_UM + SHARED_RING_WIDTH_UM
@@ -668,6 +694,9 @@ def placement() -> Placement:
         nwell_tap=nwell_tap,
         nwell_ring=nwell_ring,
         boundary=nwell_ring,
+        decap_spine_x=decap_spine_x,
+        decap_x0=decap_x0,
+        content_x1_no_decap=snap(clk_pin_x + M2_HALF_UM),
     )
 
 
@@ -683,29 +712,71 @@ def footprint_um() -> tuple:
     return placement().boundary
 
 
-def decap_boxes_um() -> tuple:
-    """The two carried-forward 22 pF decap footprints, absolute coordinates.
+def vdd_pin_y_um() -> float:
+    """y of the block's ``VDD_VCO`` pin: the V-to-I core's topmost supply tap band.
 
-    Placed in the open area to the right of the V-to-I core, immediately left
-    of this block's own ``VDD_VCO`` pin -- i.e. against the pin/ring-tap
-    junction where the supply trunk meets the core's n-well tap band, which is
-    what issue #293's acceptance criterion asks for. Carried forward as the
-    same layer-(0, 0) boundary markers ``ring.py`` and
-    ``layout/floorplan/skeleton.py`` have always used (no DRC rule in this
-    deck references that layer); ``ring.build(draw_decap=False)`` suppresses
-    the ring block's own copy so this is one marker pair for one physical
-    pair of caps, not two.
+    Pure Python (no KLayout). :func:`build` derives the same number from the
+    pins it collects; a test pins the two together.
     """
     p = placement()
+    return _center(_shift(vtoi_core.plan().tap_band, p.dx_vtoi, p.dy_vtoi))[1]
+
+
+@dataclass(frozen=True)
+class DecapPlan:
+    """Where the two ``cap_nmos_03v3`` decaps go (issue #759). Absolute coordinates."""
+
+    x0: float  # left edge of both comps
+    spine_x: float  # Metal2 supply spine
+    comps: tuple  # (lower, upper) comp boxes
+    gates: tuple  # (lower, upper) gate boxes, poly AND comp -- the 50 x 50 um devices
+    gate_end: tuple  # which poly end carries each device's gate contact row
+    gate_row_y: tuple  # centre y of each device's gate row
+    bar: tuple  # (x0, y0, x1, y1) the Metal1 GND bar between the two devices
+
+
+def decap_plan() -> DecapPlan:
+    """The decap pair's placement, derived without drawing anything.
+
+    The pair is a column at the right of the block, in line with the
+    ``VDD_VCO`` pin (so it sits at the pin/ring-tap junction PLL-FLOORPLAN.md
+    asks for): the lower device's bottom gate row is centred exactly on the
+    Metal2 line that already runs from the supply trunk to the n-well tap ring
+    (``vdd_pin_y``), so its gate vias land straight on that line. The upper
+    device is fed from the same line by a short Metal2 spine. The two n+
+    columns of each device are joined by one Metal1 bar in the gap between
+    them, and that bar runs on to the block's ``GND_VCO`` ring.
+    """
+    p = placement()
+    snap = dev.snap_um
     size = dev.DECAP_SIZE_UM
-    gap = 2.0
-    x1 = p.vdd_trunk_x - 5.0
-    y0 = _shift(vtoi_core.footprint_um(), p.dx_vtoi, p.dy_vtoi)[3] - size
-    first_x0 = x1 - 2 * size - gap
-    return (
-        (first_x0, y0, first_x0 + size, y0 + size),
-        (first_x0 + size + gap, y0, x1, y0 + size),
+    cw, ch = prim.mos_cap_nmos_extent(size, size)
+    yv = vdd_pin_y_um()
+    row_off = prim.MOSCAP_POLY_CONTACT_GAP_UM + prim.CONTACT_SIZE_UM / 2.0  # comp edge -> row centre
+    y0_low = snap(yv + row_off)
+    y0_up = snap(y0_low + ch + DECAP_PAIR_GAP_UM)
+    x0 = p.decap_x0
+    comps = ((x0, y0_low, snap(x0 + cw), snap(y0_low + ch)), (x0, y0_up, snap(x0 + cw), snap(y0_up + ch)))
+    sd = prim.MOSCAP_SD_EXT_UM
+    gates = tuple((c[0] + sd, c[1], c[2] - sd, c[3]) for c in comps)
+    bar_mid = (comps[0][3] + comps[1][1]) / 2.0
+    half = DECAP_BAR_WIDTH_UM / 2.0
+    # the bar spans the devices' left column to the guard ring's right band
+    bar = (comps[0][0], snap(bar_mid - half), snap(p.outer[2] - SHARED_RING_WIDTH_UM / 2.0), snap(bar_mid + half))
+    return DecapPlan(
+        x0=x0,
+        spine_x=p.decap_spine_x,
+        comps=comps,
+        gates=gates,
+        gate_end=("bottom", "top"),
+        gate_row_y=(snap(comps[0][1] - row_off), snap(comps[1][3] + row_off)),
+        bar=bar,
     )
+
+
+def decap_boxes_um() -> tuple:
+    """The two 50 x 50 um decap devices' gate regions (``poly2 AND comp``), absolute."""
+    return decap_plan().gates
 
 
 # ---------------------------------------------------------------------------
@@ -720,6 +791,7 @@ class VcoBlockResult:
     footprint: tuple = (0.0, 0.0, 0.0, 0.0)
     sub_pins: dict = field(default_factory=dict)
     nets: dict = field(default_factory=dict)
+    decap_ports: tuple = ()  # (lower, upper) primitives.MosCapPorts of the two cap_nmos_03v3
 
 
 def _center(box: tuple) -> tuple[float, float]:
@@ -1050,10 +1122,38 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
     prim.rect_frame(canvas, "nwell", *nwr, NWELL_RING_WIDTH_UM)
     prim.guard_ring(canvas, "n", *nwt, NWELL_RING_TAP_WIDTH_UM, VDD_NET)
 
-    # --- 9. carried-forward 22 pF decap, against this block's VDD_VCO pin --
-    for i, box in enumerate(decap_boxes_um()):
-        canvas.rect("boundary", *box)
-        canvas.label("boundary", f"vco.decap{i}", box[0] + 1.0, box[1] + 1.0)
+    # --- 9. the 22 pF decap: two real cap_nmos_03v3 devices (issue #759) ----
+    # Gate (poly) -> VDD_VCO, n+ diffusion -> GND_VCO, as design/netlist/
+    # vco.spice has XCDEC1/XCDEC2. See decap_plan() for the arrangement.
+    dp = decap_plan()
+    caps = []
+    for comp, end in zip(dp.comps, dp.gate_end):
+        caps.append(
+            prim.mos_cap_nmos(
+                canvas, dev.DECAP_SIZE_UM, dev.DECAP_SIZE_UM, comp[0], comp[1], gate_ends=(end,)
+            )
+        )
+    # gate rows -> Metal2: vias every DECAP_GATE_VIA_PITCH_UM along each row; the
+    # lower row's vias land on the existing trunk -> n-well-ring line, the upper
+    # row is reached through the spine.
+    for cap, end, row_y in zip(caps, dp.gate_end, dp.gate_row_y):
+        row = cap.rows[end]
+        vx = row[0] + 0.3
+        while vx < row[2] - 0.3:
+            prim.via1_stack(canvas, vx, row_y)
+            vx += DECAP_GATE_VIA_PITCH_UM
+    upper_row = caps[1].rows["top"]
+    r.route(
+        VDD_NET,
+        [(dp.spine_x, vdd_pin_y), (dp.spine_x, dp.gate_row_y[1]), (upper_row[2], dp.gate_row_y[1])],
+    )
+    # n+ columns: all four joined by one bar in the gap between the devices,
+    # which runs on to the block's GND_VCO ring (a Metal1 butt into its band).
+    bx0, by0, bx1, by1 = dp.bar
+    canvas.rect("metal1", bx0, by0, bx1, by1)
+    for cap in caps:
+        for col in cap.cols:
+            canvas.rect("metal1", col[0], min(col[1], by0), col[2], max(col[3], by1))
 
     if outdir is not None:
         outdir = Path(outdir)
@@ -1064,6 +1164,7 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
         canvas=canvas,
         placement=p,
         footprint=p.boundary,
+        decap_ports=tuple(caps),
         sub_pins=sub_pins,
         nets={
             "VBP_land_x": vbp_land_x,
@@ -1101,8 +1202,8 @@ CONNECTED_PROBES = (
     ("VBP", "band mirror VBP output <-> ring VBP rail"),
     ("VBN", "band mirror VBN output <-> ring VBN rail"),
     ("Y5", "ring stage-5 output <-> output buffer input gate"),
-    ("VDD_VCO", "supply trunk <-> one tap band per sub-block n-well + the block n-well ring"),
-    ("GND_VCO", "block guard ring <-> every sub-block guard ring + bank tap strips"),
+    ("VDD_VCO", "supply trunk <-> one tap band per sub-block n-well + the block n-well ring + both decap gates"),
+    ("GND_VCO", "block guard ring <-> every sub-block guard ring + bank tap strips + all four decap n+ columns"),
     ("CLK", "output buffer's last stage <-> the block's CLK pin"),
     ("VCTRL", "block VCTRL pin <-> V-to-I core's VCTRL track"),
     ("B0", "block B0 pin <-> band mirror's B0 track"),
@@ -1181,6 +1282,13 @@ def _probe_points(result: VcoBlockResult) -> dict:
     ):
         box = boxes[key]
         add("GND_VCO", "metal1", (box[0] + box[2]) / 2.0, box[1] + ring_w / 2.0)
+    # The decap pair (issue #759): every gate row on VDD_VCO, every n+ column on
+    # GND_VCO. Probing each of the four columns and both rows (not one of each)
+    # is what makes a floating half of either device fail the report.
+    for cap, end in zip(result.decap_ports, decap_plan().gate_end):
+        add("VDD_VCO", "metal1", *c(cap.rows[end]))
+        for col in cap.cols:
+            add("GND_VCO", "metal1", (col[0] + col[2]) / 2.0, (col[1] + col[3]) / 2.0)
     add("CLK", "metal1", *c(sp["buffer"][dev.BUFFER_OUT_NET][0]))
     add("CLK", "metal2", *c(result.canvas.pins["CLK"][-1]))
     for net, key in (("VCTRL", "vtoi_core"), ("B0", "mirror"), ("B1", "mirror"), ("B2", "mirror")):

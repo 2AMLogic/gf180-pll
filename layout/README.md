@@ -21,7 +21,8 @@ layout under a two-sided block-level guard ring (`GND_VCO` substrate ring,
 proved electrically connected as well as rule-clean (see
 `layout/evidence/vco-layout/PROOF-block.md` for the assembly and
 `PROOF-fold.md` for the band mirror's two-bank row fold and that second ring
-band).
+band); the 22 pF supply decap is two real `cap_nmos_03v3` devices, drawn at
+issue #759 — see `layout/evidence/vco-layout/decap-20261009/PROOF.md`.
 `layout/pll_top/pfd_cp/` (issue #294/#299/#300) is
 a second, independent full-custom leaf-cell family: a reusable
 device-list-driven generator (`devgen.py`) proved out on one representative
@@ -82,9 +83,9 @@ layout/
   pll_top/                  real per-block transistor-level layout (issue #292)
     vco/                      the VCO block (issue #293)
       devices.py                schematic-sourced device table (W/L/nodes), no KLayout needed
-      primitives.py              full-custom nfet_03v3/pfet_03v3 geometry generator
+      primitives.py              full-custom nfet_03v3/pfet_03v3, poly-resistor and cap_nmos_03v3 geometry generators
       stage.py                   one vco_stage.sch instance (MPH-MP-MN-MNT)
-      ring.py                    assembles the 5-stage ring + guard ring + decap; CLI entry point
+      ring.py                    assembles the 5-stage ring + guard ring (+ standalone decap markers); CLI entry point
       buffer.py                  the 3-stage tapered output buffer; CLI entry point
       mirror.py                  the common-centroid 3-cascade band-select mirror; CLI entry point
       bias_resistors.py          the bias generator's RCG/ROFF/RDEG ppolyf_u_3k poly resistors
@@ -117,6 +118,11 @@ layout/
       inv2x_3v3.py                inv2x_3v3.sch's device table + CLI entry point (issue #307)
       dff_tg_3v3.py                dff_tg_3v3.sch's composite (6x inv_3v3 + 4x tgate_3v3,
                                     20 transistors) + CLI entry point (issue #308)
+    loop_filter/              the passive loop filter, standalone (issue #748)
+      devices.py                 device table, pinned by the tests to design/netlist/loop_filter.spice
+      primitives.py              cap_nmos_03v3_b / MIM-A cap_mim_2f0_m2m3_noshield / plain ppolyf_u generators
+      block.py                   2x2 C1 array + R chain + C2, wired; CLI entry point (--check-connectivity)
+      netcheck.py                device census + plate-aware connectivity read back from the exported GDS
   evidence/
     inv-tb-proof/            committed proof artifacts (gds, netlist, logs, reports)
     floorplan-skeleton/      block-placement skeleton GDS + DRC report (issue #17)
@@ -144,6 +150,8 @@ layout/
     divider-rowcells-proof/  divider_chain nand2/nand3/nor2/inv2x row cells: per-cell GDS +
                              DRC/LVS reports, one shared PROOF.md (issue #307)
     divider-dff-proof/       divider_chain dff_tg_3v3 composite proof: GDS + DRC/LVS reports (issue #308)
+    loop-filter-layout/      loop_filter GDS, DRC (variants D and A) + LVS attempts, connectivity (issue #748);
+                             NOT DRC-clean on variant D (1 x MIMTM.3) and not LVS-matched -- see PROOF.md
     work/                    scratch re-run tree (git-ignored)
 ```
 
@@ -184,7 +192,7 @@ iteration (seconds, not minutes) before a full deck run; it is not the gate.
 
 | Tool | Why | Notes |
 |---|---|---|
-| gf180mcu PDK | DRC/LVS decks + standard-cell GDS/CDL | `pip install volare && volare enable --pdk gf180mcu <hash>` — same install `sim/` uses |
+| gf180mcu PDK | DRC/LVS decks + standard-cell GDS/CDL | `pip install ciel && ciel enable --pdk-family gf180mcu -l gf180mcu_fd_pr <hash>` (hash: `open_pdks` in `sim/pdk.json`) — same install `sim/` uses |
 | KLayout **application** binary | runs the foundry Ruby DRC/LVS-DSL decks (`klayout -b -r deck.drc`) | **not** the `klayout` pip wheel, which has no DSL runner — see "The two KLayouts" below |
 | A Python environment with `klayout` (pip) + `docopt` importable | the PDK's own `run_drc.py`/`run_lvs.py` need them | `python3 -m venv ~/opt/gf180pv-venv && ~/opt/gf180pv-venv/bin/pip install klayout docopt` |
 | `klt` (optional but recommended) | fast PDK/asset discovery, and a quick pre-check DRC pass | `pip install klayout-tools` |

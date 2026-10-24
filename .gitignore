@@ -75,6 +75,8 @@
 # the gap); issue #675's drc-clean-offgrid/drc.stdout.log is the log that
 # exposed the omission.
 !layout/evidence/divider-div23-proof/**/*.log
+# Same story for the assembled pll_top's DRC evidence (issue #297).
+!layout/evidence/pll-top-layout/**/*.log
 __pycache__/
 .DS_Store
 
@@ -131,14 +133,20 @@ layout/evidence/work/
 .loom/claims/
 .loom/locks/
 .loom/signals/
+.loom/sweep-dispatch-tap/
 .loom/status/
 .loom/retry-state/
 .loom/exit-codes/
 .loom/sweep-checkpoint/
+.loom/private-jobs/
 .loom/sweep-run/
+.loom/targets/
+.loom/target*/
+.cargo-target*/
+.loom-target/
+/target-*/
 .loom/state/*
 !.loom/state/detect-unlabeled-epics-dismissed
-.loom/concierge/
 .loom/stats/
 .loom/diagnostics/
 .loom/guide-docs-state.json

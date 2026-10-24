@@ -1,0 +1,12 @@
+* loop_filter: flat LVS reference for layout/pll_top/loop_filter (issue #748),
+* generated from layout/pll_top/loop_filter/devices.py, which the tests pin to
+* design/netlist/loop_filter.spice (DR-006).
+.SUBCKT loop_filter VCTRL VSS
+R_XRF1 NR1 VCTRL VSS ppolyf_u W=2.0u L=107.0u
+R_XRF2 NR2 NR1 VSS ppolyf_u W=2.0u L=107.0u
+R_XRF3 NR3 NR2 VSS ppolyf_u W=2.0u L=107.0u
+R_XRF4 NZ NR3 VSS ppolyf_u W=2.0u L=107.0u
+* XCF1 XCF2 XCF3 XCF4 in parallel
+C_XCF1 NZ VSS cap_nmos_03v3_b W=87.0u L=87.0u M=4
+C_XCF5 VCTRL VSS cap_mim_2f0_m2m3_noshield W=31.4u L=31.4u
+.ENDS loop_filter

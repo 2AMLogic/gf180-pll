@@ -108,12 +108,17 @@ BLOCKS: tuple[Block, ...] = (
     Block("evidence/divider-dff-proof/dff_tg_3v3.gds", "pll_top.divider_chain.dff_tg_3v3"),
     Block("evidence/divider-div23-proof/div23_cell.gds", "pll_top.divider_chain.div23_cell"),
     Block("evidence/lock-detector-layout/lock_detector.gds", "pll_top.lock_detector.build"),
+    Block("evidence/loop-filter-layout/loop_filter.gds", "pll_top.loop_filter.block"),
     # Not a device block: the floorplan's block-placement skeleton (layer 0/0
     # boundary rectangles). Excluded by name through issue #451 -- its
     # committed file was six merges behind the plan and the module had no
     # ``--outdir`` CLI for ``rebuild()`` to call. Both fixed at issue #461;
     # see layout/evidence/floorplan-skeleton/PROOF.md.
     Block("evidence/floorplan-skeleton/pll_floorplan_skeleton.gds", "floorplan.skeleton"),
+    # The assembled top level (issue #297): the five blocks above, regenerated
+    # by their own generators, placed and routed. See
+    # layout/evidence/pll-top-layout/PROOF.md.
+    Block("evidence/pll-top-layout/pll_top.gds", "pll_top.top_level.assemble"),
 )
 
 #: Committed GDS files this module deliberately does not check, each with the

@@ -93,11 +93,13 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-python3 - "${REPO_ROOT}" "$@" <<'PY'
+PYTHONPATH="${REPO_ROOT}/lib${PYTHONPATH:+:${PYTHONPATH}}" python3 - "${REPO_ROOT}" "$@" <<'PY'
 import glob
 import os
 import re
 import sys
+
+from checklib.spice import instance_nodes, join_continuations
 
 repo_root = sys.argv[1]
 given = sys.argv[2:]
@@ -127,40 +129,6 @@ def read(rel):
         return None
     with open(path, encoding="utf-8") as fh:
         return fh.readlines()
-
-
-def join_continuations(lines, start):
-    """Join `lines[start]` with every following `+`-continuation line.
-
-    Returns (logical_line, next_index). ngspice wraps a long `.subckt` port
-    list or a long instance's parameter list onto `+` lines; a scan that
-    stopped at the first newline would see a truncated line as the complete
-    one.
-    """
-    text = lines[start].rstrip("\n")
-    i = start + 1
-    while i < len(lines) and lines[i].startswith("+"):
-        text += " " + lines[i][1:].rstrip("\n")
-        i += 1
-    return text, i
-
-
-def instance_nodes(logical_line):
-    """The node/net tokens `logical_line` connects, in order.
-
-    Format: `Xname node1 node2 ... nodeN modelname [param=value ...]`. The
-    model/subcircuit name is the token immediately before the first
-    `key=value` parameter, or the last token when there are no parameters at
-    all -- either way it is not a node, and is excluded.
-    """
-    tokens = logical_line.split()[1:]  # drop the instance name itself
-    if not tokens:
-        return []
-    param_idx = next((i for i, t in enumerate(tokens) if "=" in t), None)
-    model_idx = (param_idx - 1) if param_idx is not None else len(tokens) - 1
-    if model_idx <= 0:
-        return []
-    return tokens[:model_idx]
 
 
 failed = False
@@ -218,7 +186,8 @@ for rel in rel_paths:
         line = lines[j].strip()
         if INSTANCE_RE.match(line):
             logical, j = join_continuations(lines, j)
-            connected.update(instance_nodes(logical))
+            nodes, _model = instance_nodes(logical)
+            connected.update(nodes)
             continue
         j += 1
 
@@ -243,7 +212,8 @@ for rel in rel_paths:
             line = lines[k].strip()
             if INSTANCE_RE.match(line):
                 logical, k = join_continuations(lines, k)
-                for node in instance_nodes(logical):
+                nodes, _model = instance_nodes(logical)
+                for node in nodes:
                     if AUTO_NET_RE.match(node):
                         net_counts[node] = net_counts.get(node, 0) + 1
                 continue

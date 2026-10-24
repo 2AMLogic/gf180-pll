@@ -114,6 +114,13 @@ LAYER = {
     # against every rule_decks/*.drc file). Used only for the carried-forward
     # 22 pF decap placeholder -- see ring.py.
     "boundary": (0, 0),
+    # cap_nmos_03v3 (the non-_b MOS capacitor) layers, used only by
+    # mos_cap_nmos(): the marker that makes a gate region a capacitor rather
+    # than a transistor, and the low-voltage p-well the deck's P2 plate is
+    # derived from (moscap_extraction.lvs: P1 => nmos_gate_3p3, P2 =>
+    # lvpwell_con). Layer numbers from layers_definitions.lvs / layers_def.py.
+    "mos_cap_mk": (166, 5),
+    "lvpwell": (204, 0),
 }
 
 # --- Derived generator margins (deck minimum + explicit headroom) ---
@@ -483,11 +490,121 @@ def mosfet(
     )
 
 
-def h_wire(canvas: Canvas, x0: float, x1: float, y: float, width: float = METAL1_WIRE_WIDTH_UM) -> tuple:
-    y0, y1 = y - width / 2.0, y + width / 2.0
-    canvas.rect("metal1", x0, y0, x1, y1)
-    return (min(x0, x1), y0, max(x0, x1), y1)
+# --- cap_nmos_03v3 (non-_b) generator margins (mos_cap_nmos()) ---------------
+#
+# Structure from the PDK's own ``draw_cap_mos.py`` (``cap_mos_inst`` with
+# ``type="cap_nmos"``): a comp slab marked by ``mos_cap_mk``, one poly gate
+# across it, a contact column on each of the two comp strips beyond the gate
+# (the n+ source/drain, ``nsd`` in the LVS deck), contact rows on the poly
+# ends, ``nplus`` over the comp, and a ``lvpwell`` rectangle equal to the
+# marker. Unlike ``cap_nmos_03v3_b`` there is **no n-well**: the device sits in
+# the p-substrate (the deck's ``nmos_gate_3p3 = ngate_lv_n_dw.interacting(
+# mos_cap_mk)``, no ``.and(nwell)``). Deviations are margin only.
+MOSCAP_SD_EXT_UM = 0.6  # comp beyond the gate, each side (pcell 0.44): holds one contact
+# column 0.1 um from the comp edge and leaves 0.28 um to the gate (CO.7 0.15).
+MOSCAP_POLY_EXT_UM = 0.62  # poly beyond the comp, each end (pcell 0.46)
+MOSCAP_POLY_CONTACT_GAP_UM = 0.30  # comp edge to the gate-contact row (CO.8 0.17)
+MOSCAP_ROW_INSET_UM = 0.2  # gate-row metal1 inset from the poly's x edge
+MOSCAP_IMPLANT_MARGIN_UM = 0.25  # nplus around comp (NP.5a gate overlap 0.23, NP.5b 0.16)
+MOSCAP_COL_M1_ENC_UM = 0.1  # metal1 around a contact column / row
 
+
+def mos_cap_nmos_extent(w_um: float, l_um: float) -> tuple[float, float]:
+    """Pure-Python ``(comp width, comp height)`` of :func:`mos_cap_nmos` -- ``l`` along x."""
+    return (dev.snap_um(l_um + 2 * MOSCAP_SD_EXT_UM), dev.snap_um(w_um))
+
+
+@dataclass
+class MosCapPorts:
+    """Key coordinates of a drawn ``mos_cap_nmos()`` instance."""
+
+    comp: tuple[float, float, float, float]
+    gate: tuple[float, float, float, float]  # poly2 AND comp -- the device's own W x L
+    poly: tuple[float, float, float, float]
+    cols: tuple[tuple, tuple]  # (left, right) metal1 over the diffusion contacts -> the n+ terminal
+    rows: dict  # "bottom"/"top" -> metal1 over that poly end's contacts -> the gate terminal
+    nplus: tuple[float, float, float, float]
+
+
+def mos_cap_nmos(
+    canvas: Canvas,
+    w_um: float,
+    l_um: float,
+    x0: float,
+    y0: float,
+    *,
+    gate_ends: tuple[str, ...] = ("bottom", "top"),
+) -> MosCapPorts:
+    """Draw one ``cap_nmos_03v3`` with its comp's lower-left corner at ``(x0, y0)``.
+
+    The device is the gate region ``poly2 AND comp``: ``l_um`` along x (between
+    the two diffusion strips) by ``w_um`` along y. Terminals, per
+    ``moscap_extraction.lvs`` (``tA => poly2_con``, ``tB => nsd``): the first
+    netlist terminal is the **poly gate**, the second the **n+ diffusion**.
+    ``design/netlist/vco.spice`` ties the gate to ``VDD_VCO`` and the n+ to
+    ``GND_VCO`` (an inversion-mode NMOS cap, ``v(1,2) > 0``).
+
+    Only the ``gate_ends`` poly ends get a contact row (a caller that feeds the
+    gate from one side needs only that row); the poly still extends past the
+    comp at both ends. Returns the metal1 boxes the caller connects to.
+    """
+    cw, ch = mos_cap_nmos_extent(w_um, l_um)
+    x1, y1 = dev.snap_um(x0 + cw), dev.snap_um(y0 + ch)
+    comp = (x0, y0, x1, y1)
+    canvas.rect("comp", *comp)
+    canvas.rect("mos_cap_mk", *comp)
+    canvas.rect("lvpwell", *comp)
+    m = MOSCAP_IMPLANT_MARGIN_UM
+    nplus = (x0 - m, y0 - m, x1 + m, y1 + m)
+    canvas.rect("nplus", *nplus)
+
+    gx0, gx1 = dev.snap_um(x0 + MOSCAP_SD_EXT_UM), dev.snap_um(x1 - MOSCAP_SD_EXT_UM)
+    poly = (gx0, dev.snap_um(y0 - MOSCAP_POLY_EXT_UM), gx1, dev.snap_um(y1 + MOSCAP_POLY_EXT_UM))
+    canvas.rect("poly2", *poly)
+
+    cols = []
+    for cx0 in (
+        dev.snap_um(x0 + CONTACT_ROW_MARGIN_UM),
+        dev.snap_um(x1 - CONTACT_ROW_MARGIN_UM - CONTACT_SIZE_UM),
+    ):
+        for cy in _contact_positions(y0, y1):
+            canvas.rect("contact", cx0, cy, cx0 + CONTACT_SIZE_UM, cy + CONTACT_SIZE_UM)
+        e = MOSCAP_COL_M1_ENC_UM
+        col = (dev.snap_um(cx0 - e), y0, dev.snap_um(cx0 + CONTACT_SIZE_UM + e), y1)
+        canvas.rect("metal1", *col)
+        cols.append(col)
+
+    rows = {}
+    row_x0 = dev.snap_um(gx0 + MOSCAP_ROW_INSET_UM)
+    row_x1 = dev.snap_um(gx1 - MOSCAP_ROW_INSET_UM)
+    for end in gate_ends:
+        if end == "bottom":
+            cy0 = dev.snap_um(y0 - MOSCAP_POLY_CONTACT_GAP_UM - CONTACT_SIZE_UM)
+        elif end == "top":
+            cy0 = dev.snap_um(y1 + MOSCAP_POLY_CONTACT_GAP_UM)
+        else:
+            raise ValueError(f"gate end must be 'bottom' or 'top', got {end!r}")
+        for cx in _contact_positions(row_x0, row_x1):
+            canvas.rect("contact", cx, cy0, cx + CONTACT_SIZE_UM, cy0 + CONTACT_SIZE_UM)
+        e = MOSCAP_COL_M1_ENC_UM
+        row = (row_x0, dev.snap_um(cy0 - e), row_x1, dev.snap_um(cy0 + CONTACT_SIZE_UM + e))
+        canvas.rect("metal1", *row)
+        rows[end] = row
+
+    return MosCapPorts(
+        comp=comp,
+        gate=(gx0, y0, gx1, y1),
+        poly=poly,
+        cols=(cols[0], cols[1]),
+        rows=rows,
+        nplus=nplus,
+    )
+
+
+# Horizontal Metal1 wire segment -- shared with every other
+# ``layout/pll_top/*`` submodule (issue #776, ``_canvas.h_wire()``).
+def h_wire(canvas: Canvas, x0: float, x1: float, y: float, width: float = METAL1_WIRE_WIDTH_UM) -> tuple:
+    return _canvas.h_wire(canvas, x0, x1, y, width=width)
 
 # Vertical Metal1 wire segment -- shared with every other
 # ``layout/pll_top/*`` submodule (issue #353, ``_canvas.v_wire()``).
@@ -549,24 +666,20 @@ def m2_route(canvas: Canvas, points: Iterable[tuple[float, float]], width: float
             raise ValueError(f"non-Manhattan Metal2 segment ({x0},{y0}) -> ({x1},{y1})")
 
 
-def via1_stack(canvas: Canvas, x: float, y: float) -> tuple:
-    """One via1 at ``(x, y)`` with its own Metal1 and Metal2 landing pads.
-
-    Both pads are ``VIA1_SIZE_UM + 2*VIA1_METAL_ENCLOSE_UM`` = 0.44 um square,
-    which satisfies V1.3a/V1.4a (metal overlap of via1 >= 0) with real margin
-    and stays at or above the 0.34 um width threshold below which the deck's
-    V1.3c/V1.4b end-of-line-overlap rules would apply. Returns the pad box.
-    """
-    # V1.1 makes 0.26 um the via's min *and* max size, so the corner is
-    # snapped explicitly -- same reasoning as _contact_positions()/CO.1.
-    x, y = dev.snap_um(x), dev.snap_um(y)
-    half_v = VIA1_SIZE_UM / 2.0  # 0.13 um -- itself a grid multiple
-    canvas.rect("via1", x - half_v, y - half_v, x + half_v, y + half_v)
-    half_p = half_v + VIA1_METAL_ENCLOSE_UM
-    pad = (x - half_p, y - half_p, x + half_p, y + half_p)
-    canvas.rect("metal1", *pad)
-    canvas.rect("metal2", *pad)
-    return pad
+# One via1 at ``(x, y)`` with its own Metal1 and Metal2 landing pads --
+# shared with ``loop_filter/primitives.py`` (issue #776, ``_canvas.via1_stack()``).
+# Both pads are ``VIA1_SIZE_UM + 2*VIA1_METAL_ENCLOSE_UM`` = 0.44 um square,
+# which satisfies V1.3a/V1.4a (metal overlap of via1 >= 0) with real margin
+# and stays at or above the 0.34 um width threshold below which the deck's
+# V1.3c/V1.4b end-of-line-overlap rules would apply. The via centre is
+# snapped explicitly because V1.1 makes 0.26 um the via's min *and* max
+# size -- same reasoning as _contact_positions()/CO.1.
+via1_stack = partial(
+    _canvas.via1_stack,
+    via_size_um=VIA1_SIZE_UM,
+    pad_um=VIA1_SIZE_UM + 2 * VIA1_METAL_ENCLOSE_UM,
+    snap=dev.snap_um,
+)
 
 
 def metal_l2n(canvas: Canvas) -> tuple[db.LayoutToNetlist, dict]:
@@ -602,36 +715,33 @@ def tap_strip(canvas: Canvas, kind: str, x0: float, y0: float, x1: float, y1: fl
 
     ``kind='p'``: pcomp + pplus, tied to the substrate/``GND_VCO`` net.
     ``kind='n'``: ncomp + nplus, tied to the local n-well/``VDD_VCO`` net.
-    Both are simple rectangular comp + matching implant + a full contact row
-    + a Metal1 pad, wide enough (>= NP.1/PP.1's 0.4 um) to be a legal implant
-    shape on its own.
+    Both are simple rectangular comp + matching implant + a full contact
+    grid + a Metal1 pad, wide enough (>= NP.1/PP.1's 0.4 um) to be a legal
+    implant shape on its own.
+
+    The drawing itself is ``_canvas.tap_strip()`` (issue #776) with this
+    module's DRC constants and its own ``_contact_positions`` binding for
+    both axes -- the full 2-D contact grid a guard-ring band needs, since a
+    band can be long in *either* axis (a top/bottom band is wide-in-x, a
+    left/right band is tall-in-y) and both need a contact every <=
+    CONTACT_PITCH_UM along their long axis for a low-resistance, DRC-legal
+    tie. This adapter only adds the VCO contract on top of the shared
+    result: the net pin is labelled over the *comp* box, not the Metal1 pad.
     """
-    canvas.rect("comp", x0, y0, x1, y1)
-    implant_layer = "nplus" if kind == "n" else "pplus"
-    canvas.rect(
-        implant_layer,
-        x0 - IMPLANT_MARGIN_UM,
-        y0 - IMPLANT_MARGIN_UM,
-        x1 + IMPLANT_MARGIN_UM,
-        y1 + IMPLANT_MARGIN_UM,
+    comp, _pad = _canvas.tap_strip(
+        canvas,
+        kind,
+        x0,
+        y0,
+        x1,
+        y1,
+        implant_margin_um=IMPLANT_MARGIN_UM,
+        contact_size_um=CONTACT_SIZE_UM,
+        contact_xs=_contact_positions,
+        contact_ys=_contact_positions,
+        metal1_pad_margin_um=METAL1_PAD_MARGIN_UM,
     )
-    # Full 2-D contact grid, not just a single row -- a guard-ring band can be
-    # long in *either* axis (a top/bottom band is wide-in-x, a left/right
-    # band is tall-in-y), and both need a contact every <= CONTACT_PITCH_UM
-    # along their long axis for a low-resistance, DRC-legal tie.
-    xs = _contact_positions(x0, x1)
-    ys = _contact_positions(y0, y1)
-    for cx in xs:
-        for cy in ys:
-            canvas.rect("contact", cx, cy, cx + CONTACT_SIZE_UM, cy + CONTACT_SIZE_UM)
-    canvas.rect(
-        "metal1",
-        x0 - METAL1_PAD_MARGIN_UM,
-        y0 - METAL1_PAD_MARGIN_UM,
-        x1 + METAL1_PAD_MARGIN_UM,
-        y1 + METAL1_PAD_MARGIN_UM,
-    )
-    canvas.pin(net, x0, y0, x1, y1)
+    canvas.pin(net, *comp)
 
 
 def rect_frame(

@@ -90,6 +90,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import subprocess
 import threading
 from dataclasses import dataclass, field
@@ -1527,6 +1528,84 @@ def _load_topology_groups(
     return tuple(groups)
 
 
+#: The limit keys ``report.evaluate_checks`` reads. Keep in step with it: a key
+#: the evaluator never reads is a check that silently enforces nothing.
+CHECK_SCALAR_KEYS = ("min", "max")
+CHECK_COVERAGE_KEYS = ("min_measured_points", "max_measured_points")
+CHECK_SPREAD_KEYS = ("min_spread_pct", "max_spread_pct")
+CHECK_LIMIT_KEYS = CHECK_SCALAR_KEYS + CHECK_COVERAGE_KEYS + CHECK_SPREAD_KEYS
+
+
+def _load_checks(manifest: dict, path: Path, known: list[str]) -> dict[str, dict]:
+    """Validate the manifest ``checks`` object and return it.
+
+    ``report.evaluate_checks`` skips a measurement it cannot find and ignores
+    keys it does not recognise, so a misspelling would otherwise stop enforcing
+    a requirement without any signal. Everything wrong is rejected here, before
+    a backend is contacted or any evidence directory is reserved.
+
+    ``known`` is the complete measurement set (simulated, raw, derived and
+    phased). Optional measurements are ordinary members: their absence at run
+    time is handled by the evaluator, not here.
+    """
+    raw = manifest.get("checks", {})
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"{path}: 'checks' must be an object mapping measurement names to "
+            f"limit objects, got {type(raw).__name__}"
+        )
+    known_set = set(known)
+    for name, spec in raw.items():
+        if name not in known_set:
+            raise ValueError(
+                f"{path}: checks names unknown measurement {name!r}; declared "
+                f"measurements: {sorted(known_set)}"
+            )
+        where = f"{path}: checks[{name!r}]"
+        if not isinstance(spec, dict):
+            raise ValueError(
+                f"{where} must be an object of limits, got {type(spec).__name__}"
+            )
+        for key in spec:
+            if key not in CHECK_LIMIT_KEYS:
+                raise ValueError(
+                    f"{where} has unknown limit key {key!r}; supported keys: "
+                    f"{list(CHECK_LIMIT_KEYS)}"
+                )
+        active = {k: v for k, v in spec.items() if v is not None}
+        if not active:
+            raise ValueError(
+                f"{where} sets no limit (empty or all null), so it enforces nothing"
+            )
+        for key, value in active.items():
+            if key in CHECK_COVERAGE_KEYS:
+                if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                    raise ValueError(
+                        f"{where}[{key!r}] must be a non-negative integer "
+                        f"(not a boolean or fraction), got {value!r}"
+                    )
+                continue
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+            ):
+                raise ValueError(
+                    f"{where}[{key!r}] must be a finite number, got {value!r}"
+                )
+        for lo_key, hi_key in (
+            ("min", "max"),
+            ("min_measured_points", "max_measured_points"),
+            ("min_spread_pct", "max_spread_pct"),
+        ):
+            if lo_key in active and hi_key in active and active[lo_key] > active[hi_key]:
+                raise ValueError(
+                    f"{where} is contradictory: {lo_key}={active[lo_key]!r} exceeds "
+                    f"{hi_key}={active[hi_key]!r}"
+                )
+    return dict(raw)
+
+
 def load(directory: str | Path) -> Testbench:
     """Load a testbench manifest into a :class:`Testbench`.
 
@@ -1598,6 +1677,12 @@ def load(directory: str | Path) -> Testbench:
         list(measure) + list(raw_measures) + list(derived.measures if derived else ()),
     )
 
+    checks = _load_checks(
+        manifest,
+        manifest_path,
+        list(measure) + list(raw_measures) + list(derived.measures if derived else ()),
+    )
+
     methodology = manifest.get("methodology", ())
     if isinstance(methodology, str):
         methodology = (methodology,) if methodology else ()
@@ -1623,7 +1708,7 @@ def load(directory: str | Path) -> Testbench:
         raw_measures=raw_measures,
         topology_groups=topology_groups,
         params={k: v for k, v in manifest.get("params", {}).items()},
-        checks=dict(manifest.get("checks", {})),
+        checks=checks,
         options=tuple(manifest.get("options", ())),
         dut=dut,
         dut_export=dut_export,

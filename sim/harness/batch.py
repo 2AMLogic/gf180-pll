@@ -105,6 +105,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import siminit
 from .execution import BackendError, DeckRun, deck_dependencies
 
 #: Placeholder the relocated deck carries in place of the submitting host's
@@ -461,6 +462,9 @@ class JobPlan:
     #: The relocated deck text actually uploaded.
     deck: str
     deck_name: str
+    #: The simulator init bytes uploaded as ``siminit.UPLOAD_NAME`` ("" = none
+    #: staged, the negative control).
+    init: str = ""
 
     def render(self) -> str:
         uploads = ", ".join(sorted(self.inputs))
@@ -499,6 +503,7 @@ class BatchBackend:
         transport_timeout_s: float = DEFAULT_TRANSPORT_TIMEOUT_S,
         launch_timeout_s: float = DEFAULT_LAUNCH_TIMEOUT_S,
         collect_timeout_s: float = DEFAULT_COLLECT_TIMEOUT_S,
+        stage_init: bool = True,
     ) -> None:
         self.pdk_variant_dir = Path(pdk_variant_dir)
         self.pdk_variant = pdk_variant
@@ -524,6 +529,9 @@ class BatchBackend:
         self.collect_timeout_s = collect_timeout_s
         self._run = runner if runner is not None else _default_runner
         self.job_prefix = job_prefix
+        #: Ship the shared simulator init file (:mod:`sim.harness.siminit`)
+        #: with every job; ``False`` is the no-init negative control.
+        self.stage_init = stage_init
         #: Every plan this backend shaped, in submission order -- the record's
         #: audit trail of which job id ran which point.
         self.jobs: list[JobPlan] = []
@@ -592,7 +600,7 @@ class BatchBackend:
             out.append(line)
         return "\n".join(out) + "\n", uploads
 
-    def job_command(self, deck_name: str) -> str:
+    def job_command(self, deck_name: str, stage_init: bool | None = None) -> str:
         """The ``cmd`` field: resolve the PDK, run the deck, return everything.
 
         Deliberately never fails the *job* on a failing deck (`exit 0`): a
@@ -604,6 +612,24 @@ class BatchBackend:
         variant = shlex.quote(self.pdk_variant)
         deck = shlex.quote(deck_name)
         token = PDK_TOKEN
+        stage_init = self.stage_init if stage_init is None else stage_init
+        # The init file is installed in the directory ngspice starts from,
+        # after the inputs are copied and before ngspice runs, so it is read
+        # ahead of the netlist. A working-directory .spiceinit shadows any
+        # ~/.spiceinit or system init on the instance; HOME is not changed.
+        # A failed copy stops the job before ngspice starts: running without
+        # the configuration would produce a record from the wrong state.
+        install_init = (
+            f'cp -f {siminit.UPLOAD_NAME} {siminit.INIT_NAME} || '
+            f'{{ echo "init staging failed" > "$EDA_OUTPUT_DIR/{LOG_NAME}"; '
+            f'printf 1 > "$EDA_OUTPUT_DIR/{RC_NAME}"; exit 0; }}; '
+            if stage_init
+            else f'rm -f {siminit.INIT_NAME}; '
+        )
+        init_evidence = (
+            f'echo "== spiceinit"; sha256sum {siminit.INIT_NAME} 2>&1; '
+            f'cat {siminit.INIT_NAME} 2>&1; '
+        )
         return (
             'set -u; '
             'work="$EDA_JOB_DIR/ngspice"; mkdir -p "$work"; '
@@ -611,10 +637,12 @@ class BatchBackend:
             f'variant_dir="${{PDK_ROOT%/}}/{variant}"; '
             f'for f in *.spice *.sp; do [ -f "$f" ] || continue; '
             f'sed -i "s|{token}|$variant_dir|g" "$f"; done; '
+            f'{install_init}'
             f'ngspice -b {deck} > {LOG_NAME} 2>&1; rc=$?; '
             f'printf "%s" "$rc" > "$EDA_OUTPUT_DIR/{RC_NAME}"; '
             f'hostname > "$EDA_OUTPUT_DIR/{HOST_NAME}" 2>/dev/null || true; '
             f'{{ echo "== ngspice"; ngspice --version 2>&1 | head -12; '
+            f'{init_evidence}'
             f'echo "== pdk_variant_dir $variant_dir"; '
             f'cat "$variant_dir/SOURCES" 2>&1 | head -5; '
             f'echo "== image manifest"; cat /etc/eda-batch-image.json 2>&1; '
@@ -632,6 +660,14 @@ class BatchBackend:
         job_id = f"{self.job_prefix}-{deck_path.stem}-{uuid.uuid4().hex[:8]}"
         inputs: dict[str, Path | None] = {deck_path.name: None}
         inputs.update(uploads)
+        if self.stage_init:
+            if siminit.UPLOAD_NAME in inputs:
+                raise BackendError(
+                    f"batch backend: a deck dependency is named "
+                    f"{siminit.UPLOAD_NAME!r}, which the job contract reserves "
+                    "for the simulator init file."
+                )
+            inputs[siminit.UPLOAD_NAME] = None
         spec = {
             "tool": "ngspice",
             "cmd": self.job_command(deck_path.name),
@@ -648,6 +684,7 @@ class BatchBackend:
             inputs=inputs,
             deck=relocated,
             deck_name=deck_path.name,
+            init=siminit.INIT_TEXT if self.stage_init else "",
         )
 
     # -- transport ------------------------------------------------------- #
@@ -684,6 +721,8 @@ class BatchBackend:
         inputs_dir = staging / "inputs"
         inputs_dir.mkdir(parents=True, exist_ok=True)
         (inputs_dir / plan.deck_name).write_text(plan.deck)
+        if plan.init:
+            (inputs_dir / siminit.UPLOAD_NAME).write_text(plan.init)
         for name, source in plan.inputs.items():
             if source is None:
                 continue
@@ -883,7 +922,7 @@ class BatchBackend:
         arrive is reported as missing by the record (``raw_files_missing``),
         which is a disclosed degradation of one point rather than a lost grid.
         """
-        withheld = CONTRACT_OUTPUT_NAMES | set(plan.inputs)
+        withheld = CONTRACT_OUTPUT_NAMES | set(plan.inputs) | {siminit.INIT_NAME}
         rundir.mkdir(parents=True, exist_ok=True)
         for source in sorted(collected.rglob("*")):
             relative = source.relative_to(collected)
