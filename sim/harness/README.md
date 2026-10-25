@@ -45,20 +45,20 @@ bash sim/selftest.sh                         # prove the harness works (writes n
 | Tool | Why | Install |
 |---|---|---|
 | `ngspice` | simulation | `brew install ngspice` / `apt-get install ngspice` |
-| gf180mcu PDK | device models | `pip install volare && volare enable --pdk gf180mcu <hash>` |
+| gf180mcu PDK | device models | `pip install ciel && ciel enable --pdk-family gf180mcu -l gf180mcu_fd_pr <hash>` (hash: `open_pdks` in `sim/pdk.json`) |
 | `xschem` | schematic capture (optional for simulation) | `brew install xschem` / distro package |
 | python3 >= 3.9 | the harness | stdlib only, no packages |
 
 The harness never hardcodes a PDK path. It resolves one, in order:
 
-1. `GF180_PDK_PATH` — the *variant* directory, e.g. `~/.volare/gf180mcuD`
+1. `GF180_PDK_PATH` — the *variant* directory, e.g. `~/.ciel/gf180mcuD`
    (the one containing `libs.tech/`).
 2. `GF180_PDK_ROOT` — back-compat with the interim `sim/lib/simenv.sh` shim's
    own override (same shape as `GF180_PDK_PATH`).
 3. `PDK_ROOT` (+ `PDK`, default `gf180mcuD`) — the open_pdks / OpenLane convention.
 4. `sim/pdk.local.json` — machine-local, git-ignored.
 5. `sim/pdk.json` — committed defaults.
-6. Built-in search roots: `~/.volare`, `~/.ciel`, `/usr/share/pdk`,
+6. Built-in search roots: `~/.ciel`, `~/.volare` (legacy), `/usr/share/pdk`,
    `/usr/local/share/pdk`, `~/share/pdk`, `/opt/pdk`.
 
 If nothing is found the runner exits `3` with install instructions rather than

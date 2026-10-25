@@ -36,8 +36,8 @@ SIMENV_REPO_ROOT="$(cd "${SIMENV_LIB_DIR}/../.." && pwd)"
 # Environment pin
 # --------------------------------------------------------------------------
 
-# PDK root. Override with GF180_PDK_ROOT to point at a different volare install.
-SIMENV_PDK_ROOT="${GF180_PDK_ROOT:-$HOME/.volare/gf180mcuD}"
+# PDK root. Override with GF180_PDK_ROOT to point at a different ciel install.
+SIMENV_PDK_ROOT="${GF180_PDK_ROOT:-$HOME/.ciel/gf180mcuD}"
 SIMENV_MODELS="${SIMENV_PDK_ROOT}/libs.tech/ngspice/sm141064.ngspice"
 SIMENV_DESIGN="${SIMENV_PDK_ROOT}/libs.tech/ngspice/design.ngspice"
 
@@ -115,8 +115,19 @@ SIMENV_CLOSED_LOOP_TMAX="${SIM_TMAX:-100p}"
 # Provenance
 # --------------------------------------------------------------------------
 
+# The pinned open_pdks revision: the single source is the committed
+# sim/pdk.json (the same file sim/harness/pdk.py and CI read). Never read from
+# the environment or sim/pdk.local.json, so a record's PDK hash cannot be
+# re-pointed from outside the repo.
+simenv_pdk_pin() {
+  python3 -I -c '
+import json, sys
+print(json.load(open(sys.argv[1])).get("open_pdks", ""))
+' "${SIMENV_REPO_ROOT}/sim/pdk.json"
+}
+
 simenv_pdk_hash() {
-  # volare records the open_pdks commit it built from in SOURCES.
+  # ciel records the open_pdks commit it built from in SOURCES.
   if [ -f "${SIMENV_PDK_ROOT}/SOURCES" ]; then
     awk '/open_pdks/ {print $2; exit}' "${SIMENV_PDK_ROOT}/SOURCES"
   else
@@ -130,6 +141,21 @@ simenv_pdk_variant() {
 
 simenv_ngspice_version() {
   ngspice -v 2>&1 | awk '/ngspice-/ {gsub(/^\*+ /,""); sub(/ :.*/,""); print; exit}'
+}
+
+# Fails (non-zero, message on stderr) unless the resolved PDK tree's SOURCES
+# revision equals the pin in sim/pdk.json -- the shell twin of the check in
+# sim/harness/pdk.py:find_pdk.
+simenv_require_pdk_pin() {
+  local pin have
+  pin="$(simenv_pdk_pin)"
+  [ -n "${pin}" ] || return 0
+  have="$(simenv_pdk_hash)"
+  [ "${have}" = "${pin}" ] && return 0
+  echo "ERROR: ${SIMENV_PDK_ROOT} is at open_pdks ${have}, but sim/pdk.json pins ${pin}" >&2
+  echo "       Records must be reproducible from provenance; install the pin with:" >&2
+  echo "         ciel enable --pdk-family gf180mcu -l gf180mcu_fd_pr ${pin}" >&2
+  return 1
 }
 
 # Schematic-capture tool version, for campaigns whose DUT netlist is an xschem
@@ -427,7 +453,7 @@ simenv_env_block() {
     statistical switches \`sw_stat_global = sw_stat_mismatch = 0\` (nominal
     skew, no Monte Carlo)}"
   cat <<EOF
-  - PDK: volare \`$(simenv_pdk_variant)\`, open_pdks \`$(simenv_pdk_hash)\`
+  - PDK: \`$(simenv_pdk_variant)\`, open_pdks \`$(simenv_pdk_hash)\`
   - Models: \`libs.tech/ngspice/sm141064.ngspice\` (MIM devices via
     \`sm141064_mim.ngspice\`, pulled in by the \`mimcap_*\` sections);
     ${switches}
@@ -544,10 +570,13 @@ simenv_require_tools() {
   }
   [ -f "${SIMENV_MODELS}" ] || {
     echo "ERROR: gf180mcu models not found at ${SIMENV_MODELS}" >&2
-    echo "       Install with: volare enable --pdk gf180mcu <open_pdks-hash>" >&2
+    echo "       Install with: ciel enable --pdk-family gf180mcu -l gf180mcu_fd_pr $(simenv_pdk_pin)" >&2
     echo "       or set GF180_PDK_ROOT to your PDK root." >&2
     missing=1
   }
+  if [ -f "${SIMENV_MODELS}" ]; then
+    simenv_require_pdk_pin || missing=1
+  fi
   [ -f "${SIMENV_DESIGN}" ] || {
     echo "ERROR: ${SIMENV_DESIGN} not found" >&2
     missing=1

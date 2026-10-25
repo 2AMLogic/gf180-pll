@@ -26,41 +26,13 @@
 # assembled pll_top GDS" sentinel every document currently carries becomes
 # false and must be removed, which is the next drift due.
 #
-# The first version of this script graded prose against a hand-written list
-# of three forbidden sentences -- the exact three that had gone stale. That
-# list cannot catch a *sibling* sentence, and it did not catch one in the
-# very commit that introduced it: the same change that rewrote the
-# proposal's section 6 left section 3 asserting "**No layout exists for
-# this block** -- `layout/` currently contains only the DRC/LVS flow's
-# proof-of-flow test cell", the identical claim in different words, and
-# this check reported OK on that tree.
-#
-# So the list is no longer the mechanism; it is kept only for its precise
-# error messages. The mechanism is the SCOPE RULE below: any sentence that
-# asserts layout does *not* exist must say at what scope it does not exist
-# (top level / assembled / post-layout / extracted), and an unscoped
-# absence claim fails as soon as the tree holds a drawn block. A writer who
-# invents new wording for "nothing is drawn" trips it; a writer who states
-# the true, top-level-scoped absence does not. That is a property of the
-# claim, not of a remembered sentence.
-#
-# The scope rule grades *negated* absence claims, and on 2026-09-28 a claim
-# escaped it by not using a negation. Section 8's "Flow" bullet -- the one
-# paragraph an outside reviewer reads to decide whether this project's layout
-# toolchain is credible -- said "layout, DRC, and LVS (once drawn) via
-# KLayout ... proven on the inverter test cell referenced in section 6",
-# while section 6 three pages earlier recorded four transistor-level blocks
-# DRC-clean and LVS-matched against the PDK's own foundry signoff decks. A
-# *deferral* ("once drawn", "when laid out") asserts exactly what a negation
-# asserts -- that the thing does not exist yet -- so the scope rule now has a
-# DEFERRAL half beside its ABSENCE half, excused by the same scope tokens.
-# It is the third time the same document has understated its own layout tree
-# in a sibling sentence the then-current mechanism could not see, which is
-# why the fix is a rule rather than a fourth remembered phrase.
-#
-# A bare deferral is what fails. One that names its subject -- "when the loop
-# filter is drawn", which this repository says truthfully and repeatedly --
-# does not, because naming the subject is what makes the claim checkable.
+# History: earlier versions of this script also graded free prose -- a
+# blocklist of stale sentences, then a "scope rule" and a "deferral rule"
+# that regex-matched any sentence asserting layout does not exist (issue
+# #812 narrowed it). Natural-language absence detection by regex was an
+# arms race, so those were removed; what remains is checked against facts
+# derived from the tree (counts, the pll_top sentinel, footprints, evidence
+# provenance), never against how a sentence is worded.
 #
 # A second, narrower guard covers the same drift class for `spec/pll.md`'s
 # ratification state, which went stale in the same document for the same
@@ -107,8 +79,8 @@
 # four "W x H um" block footprints README.md and the proposal do (it is the
 # ratified spec's own accounting of what the 0.30 mm2 budget row now measures)
 # and nothing graded it: this script's DOCS list has never included
-# spec/pll.md, because the rest of the script's rules (the scope rule, the
-# count rule, the two forbidden-phrase lists) do not fit a normative spec the
+# spec/pll.md, because the rest of the script's rules (the count rule and
+# the forbidden-phrase list) do not fit a normative spec the
 # way they fit a status narrative written for an outside reader. That left the
 # one claim class already proven to drift on a recurring, roughly weekly
 # cadence (four area-reduction levers in the single week noted above)
@@ -430,9 +402,8 @@ DOCS=(
 )
 
 # Narrative pages that carry no layout claim of their own but whose prose is
-# still subject to every rule that does not demand a positive claim: the scope
-# rule (no unscoped "no layout exists"), the bare-deferral rule, the
-# forbidden-phrase lists and the footprint / count rules. sim/STATUS.md is the
+# still subject to every rule that does not demand a positive claim: the
+# forbidden-phrase list and the footprint / count rules. sim/STATUS.md is the
 # campaign narrative that used to sit in README.md's status section (#703);
 # moving it must not take it out from under the guard it was graded by.
 NARRATIVE_DOCS=(
@@ -461,8 +432,8 @@ PIN_STATED_DOC="docs/chipalooza/challenge-5-proposal.md"
 
 status=0
 
-# The scope rule below needs python3. Absence is a failure, not a quiet
-# downgrade to the weaker literal-phrase checks.
+# The count and footprint rules need python3. Absence is a failure, not a
+# quiet downgrade to the weaker literal-phrase checks.
 have_python=yes
 command -v python3 >/dev/null 2>&1 || have_python=no
 
@@ -1828,20 +1799,6 @@ drawn_claim="${drawn} of the 4 PLL sub-blocks"
 lvs_claim="${lvs_matched} of the 4 are LVS-matched"
 no_top_claim="no assembled \`pll_top\` GDS"
 
-# Claims that were true before any block was drawn and are false after.
-# Checked only while the tree actually has drawn blocks, so this script
-# stays correct if the evidence tree is ever emptied.
-#
-# These are matched as literal substrings of the whitespace-collapsed
-# document, so a document may not quote one of them even to describe it as
-# historical -- paraphrase instead. That is deliberate: a matcher that tried
-# to tell "asserting this" from "quoting this" would be guessing.
-FORBIDDEN_ONCE_DRAWN=(
-  "No PLL block has been drawn yet"
-  "No PLL-block layout exists"
-  "PLL-block GDS/reports not yet drawn"
-)
-
 # Blanket assertions that spec/pll.md is unratified, forbidden once the
 # spec's own Status line says otherwise. Note what is deliberately NOT on
 # this list: "still unratified", which both documents use correctly for
@@ -1855,109 +1812,9 @@ FORBIDDEN_ONCE_RATIFIED=(
   "awaiting ratification"
 )
 
-# The scope rule (see the header). Implemented in Python rather than in
-# grep because it needs a match position and a window around it; python3 is
-# already a hard dependency of this repo's headless CI job, which runs
-# layout/tests/ next to this script.
-#
-# SCOPE_TOKENS are the qualifiers that make an absence claim checkable
-# against the tree instead of merely absolute. They are only accepted while
-# `top_assembled=no`: the day an assembled pll_top lands, every one of them
-# becomes a claim that needs re-reading, so the rule stops excusing them
-# and forces exactly that re-read.
-scope_rule() {
-  local doc_path="$1" doc_label="$2" tokens="$3"
-  python3 - "${doc_path}" "${doc_label}" "${tokens}" <<'PY'
-import re
-import sys
-
-path, label, tokens = sys.argv[1], sys.argv[2], sys.argv[3]
-scope_tokens = [t for t in tokens.split("|") if t]
-
-with open(path, encoding="utf-8") as fh:
-    flat = re.sub(r"\s+", " ", fh.read())
-low = flat.lower()
-
-# A negation word, as a whole word, reaching a layout-existence noun within
-# the same clause (no sentence-ending "." may intervene, and at most 29
-# further characters). "now have a committed block GDS" must not match, so
-# the negation needs a non-letter immediately after it; "drawn-band edge"
-# must not match, so the noun may not be followed by a letter or a hyphen.
-ABSENCE = re.compile(
-    r"(?<![a-z-])(?:no|not|never|none|neither|nothing)"
-    r"[^a-z.\-][^.]{0,29}(?:layout|gds|drawn)(?![a-z-])"
-)
-
-# The DEFERRAL half of the same rule (see the header). A bare deferral --
-# "(once drawn)", "layout ... when drawn", "if ever laid out" -- asserts the
-# same falsehood as a negation without using a negation word, so ABSENCE
-# above cannot see it. The regex deliberately requires the participle to
-# follow the deferral marker with no noun phrase in between: a deferral that
-# NAMES its subject ("when the loop filter is drawn", "once the top level is
-# drawn") is checkable prose about something genuinely undrawn and must stay
-# legal, while a bare one necessarily defers whatever the sentence is about
-# -- which, in the sentence this rule was written for, was the whole flow.
-#
-# Unlike ABSENCE, the participle carries no layout noun of its own ("drawn"
-# is the whole claim), so the deferral must additionally sit near one:
-# DEFERRAL_CONTEXT below must appear within ~60 characters. That is what
-# keeps this off the sim campaigns' own vocabulary -- a Monte-Carlo sample
-# "scored once drawn from the grid" is not a statement about layout.
-DEFERRAL = re.compile(
-    r"(?<![a-z-])(?:once|when|until|after|if)\s+"
-    r"(?:it\s+is\s+|they\s+are\s+|these\s+are\s+|ever\s+)?"
-    r"(?:drawn|laid\s+out)(?![a-z-])"
-)
-DEFERRAL_CONTEXT = re.compile(r"layout|gds|\bdrc\b|\blvs\b|extract|floorplan")
-
-failed = False
-for pattern, context, complaint, remedy in (
-    (
-        ABSENCE,
-        None,
-        "asserts layout does not exist without saying at what scope",
-        "so an unqualified absence claim is false. Name the scope -- the "
-        "assembled top level, the extracted post-layout netlist -- within "
-        "~100 characters of the negation, or drop the sentence.",
-    ),
-    (
-        DEFERRAL,
-        DEFERRAL_CONTEXT,
-        "defers layout to the future without saying what is deferred",
-        "so a bare \"once drawn\" reads as though none of it is drawn yet. "
-        "Name what the deferral is about -- the assembled top level, the "
-        "loop filter -- between the deferral word and the participle, or "
-        "name the scope within ~100 characters of it.",
-    ),
-):
-    for m in pattern.finditer(low):
-        start, end = max(0, m.start() - 100), m.end() + 100
-        if any(tok in low[start:end] for tok in scope_tokens):
-            continue
-        if context is not None and not context.search(
-            low[max(0, m.start() - 60):m.end() + 60]
-        ):
-            continue
-        failed = True
-        sys.stderr.write(
-            "FAIL: %s %s: \"...%s...\"\n"
-            "      PLL sub-block layouts are committed under "
-            "layout/evidence/, %s Accepted scope words: %s\n"
-            % (
-                label,
-                complaint,
-                flat[start:end].strip(),
-                remedy,
-                ", ".join(scope_tokens) or "(none)",
-            )
-        )
-sys.exit(1 if failed else 0)
-PY
-}
-
 # The footprint rule (see the header). Grades stated block geometry against
 # layout/evidence/area-audit/area-audit.md instead of against whatever the
-# last editor remembered. Like the scope rule it needs match positions, so
+# last editor remembered. Like the count rule it needs match positions, so
 # it is Python rather than grep.
 #
 # BLOCK_SPEC is `<top cell>~<label>;...`: the two names a document may use
@@ -2241,22 +2098,9 @@ for doc in "${DOCS[@]}" "${NARRATIVE_DOCS[@]}"; do
   fi
 
   if [ "${drawn}" -gt 0 ]; then
-    for phrase in "${FORBIDDEN_ONCE_DRAWN[@]}"; do
-      if printf '%s' "${flat}" | grep -qF "${phrase}"; then
-        fail "${doc} still says \"${phrase}\", but ${drawn} PLL sub-block layout(s) are committed under layout/evidence/"
-      fi
-    done
-
-    # The mechanism the list above is no longer trusted to be. A missing
-    # python3 is reported as a failure after the loop rather than silently
-    # running this check with its main rule switched off.
+    # A missing python3 is reported as a failure after the loop rather than
+    # silently running the count and footprint rules switched off.
     if [ "${have_python}" = yes ]; then
-      if [ "${top_assembled}" = no ]; then
-        scope_tokens="top level|top-level|pll_top|assembled|post-layout|extracted|parasitic|placed-and-routed"
-      else
-        scope_tokens=""
-      fi
-      scope_rule "${path}" "${doc}" "${scope_tokens}" || status=1
       count_rule "${path}" "${doc}" "${drawn}" "${lvs_matched}" "${erc_spec_count}" || status=1
 
       if [ -f "${AUDIT}" ]; then
@@ -2287,7 +2131,7 @@ if [ "${drawn}" -gt 0 ] && [ "${have_python}" = yes ] && [ -f "${AUDIT}" ] && [ 
 fi
 
 if [ "${have_python}" = no ] && [ "${drawn}" -gt 0 ]; then
-  fail "python3 is not on PATH -- the scope rule (the main prose check here) could not run, and a partial pass is not a pass"
+  fail "python3 is not on PATH -- the count and footprint rules could not run, and a partial pass is not a pass"
 fi
 
 # Same doctrine as the missing-spec-Status failure below: a guard whose
@@ -2306,8 +2150,7 @@ if [ "${status}" -eq 0 ]; then
   echo "OK: README.md, layout/STATUS.md, sim/STATUS.md and docs/chipalooza/challenge-5-proposal.md match layout/evidence/" \
     "(${drawn}/4 drawn + DRC-clean, ${lvs_matched}/4 LVS-matched, ${erc_spec_count}/4 ERC-checked," \
     "assembled pll_top: ${top_assembled})" \
-    "and spec/pll.md (ratified: ${spec_ratified}); no unscoped absence-of-layout claim" \
-    "and no bare deferral of layout to the future;" \
+    "and spec/pll.md (ratified: ${spec_ratified});" \
     "every stated block footprint matches layout/evidence/area-audit/area-audit.md," \
     "including spec/pll.md's own '## Area' section;" \
     "every committed klt erc report's provenance matches the GDS and spec beside it," \

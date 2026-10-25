@@ -7,7 +7,7 @@ This roadmap is generated from the repository's current GitHub label state.
 
 Judge-approved PRs under a hold (`loom:blocked` or `loom:operator`) — only a human merge decision is missing.
 
-_None._
+- **#796**: feat(loop-filter): prepare C2 as the option-B MIM (DR-042 proposed)
 
 ## Very Important
 
@@ -32,7 +32,9 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-- **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief
+- **#753**: Loop filter C2 is a MIM option-A device, but the repository's PV flow targets gf180mcuD (MIM option B)
+- **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes
+- **#830**: Adopt the common artifact store for sim evidence (manifests in git, bytes via klt artifact)
 
 ## PRs Awaiting Review
 
@@ -44,29 +46,30 @@ _None._
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
-_None._
+- **#796**: feat(loop-filter): prepare C2 as the option-B MIM (DR-042 proposed)
+- **#831**: feat(sim): store new run output in the artifact store, commit manifests only
 
 ## Proposed
 
 Issues carrying `loom:curated`.
 
-- **#127**: Track the gap to T1 sim-validated / bronze (klayout-tools design-evidence tiers) *(curated)*
 - **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief *(curated)*
 - **#242**: Live wall-clock confirmation of #241's ngspice-OMP-pin fix on an idle host *(curated)*
 - **#395**: Measure post-supply-step re-lock time instead of extrapolating it (DR-011 Decision 4) *(curated)*
-- **#399**: Settled static phase at the 15 over-bound corners the 12 µs grid sampled on a decaying tail (DR-012 Decision 6) *(curated)*
 - **#405**: Run the post-supply-step re-lock campaign and write DR-011 Decision 4's replacement decision record (#395 remainder) *(curated)*
-- **#437**: sim/supply-sensitivity: full 45-point grid at the trimmed lock-detector window *(curated)*
-- **#439**: sim/lock-time: re-take the full 270-run PVT grid against the DR-014-trimmed lock detector *(curated)*
 - **#479**: README: embed the fleet burndown chart (one line) *(curated)*
 - **#499**: sim: the Reference input contract (levels, edge rate, duty) is budget with no measurement and no owner — spec names a closed issue *(curated)*
 - **#503**: sim/period-jitter-band-top: run the 45-point campaign on the batch backend (operator-authorized spend) *(curated)*
 - **#533**: sim/reference-spur-band-top: run the 45-point 200 MHz campaign on the batch backend (operator-authorized spend) *(curated)*
-- **#540**: sim: run the two closed-loop cells DR-025 names against the ratified <= 1 ns Lock criterion *(curated)*
 - **#549**: sim: bound the batch-vs-pinned ngspice divergence with a cross-version overlap measurement on a shared operating point *(curated)*
 - **#680**: sim: realign the batch job image to the ngspice-46 pin — it cannot converge sim/reference-input-contract's edge-rate variant, so #499's grid is unobtainable off-host *(curated)*
 - **#753**: Loop filter C2 is a MIM option-A device, but the repository's PV flow targets gf180mcuD (MIM option B) *(curated)*
 - **#755**: sim harness: stage a simulator init file (wnflag) so local and batch backends run the same configuration *(curated)*
+- **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes *(curated)*
+- **#825**: Re-qualify device-characterization records under open_pdks f6eeac7 (child of #790) *(curated)*
+- **#827**: Re-qualify lock-detector, lock-window and divider records under open_pdks f6eeac7 (child of #790) *(curated)*
+- **#828**: Re-qualify closed-loop campaign records under open_pdks f6eeac7 (child of #790) *(curated)*
+- **#830**: Adopt the common artifact store for sim evidence (manifests in git, bytes via klt artifact) *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -74,23 +77,24 @@ Issues carrying `loom:curated`.
 - **#731**: sim/period-jitter: migrate grid.sh fan-out to run_corners.py backends (follow-up to #712 step 1) *(architect)*
 - **#740**: sim/lib/simenv.sh: refuse local multi-unit grid fan-out when the batch backend is selected *(architect)*
 - **#741**: sim: migrate loop-dynamics, output-range, mc-cp-mismatch shell campaigns to harness manifests *(architect)*
+- **#812**: Simplify layout status-claims checker: replace 2.3k-line prose linter with tree-derived check *(hermit)*
 
 ## Epics
 
-_None._
+- **#127**: Track the gap to T1 sim-validated / bronze (klayout-tools design-evidence tiers)
 
 ## Backlog Balance
 
 | Bucket | Count |
 |------|-------|
-| Operator merge-risk holds | 0 |
+| Operator merge-risk holds | 1 |
 | Very important | 0 |
 | Important | 2 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 1 |
+| In Progress (`loom:building`) | 3 |
 | PRs awaiting review | 0 |
-| Approved PRs awaiting merge | 0 |
+| Approved PRs awaiting merge | 2 |
 | Curated | 17 |
-| Architect / Hermit proposals | 4 |
-| Active epics | 0 |
+| Architect / Hermit proposals | 5 |
+| Active epics | 1 |
 <!-- guide:plan-body:end -->
