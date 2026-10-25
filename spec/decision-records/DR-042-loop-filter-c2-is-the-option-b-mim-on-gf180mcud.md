@@ -71,23 +71,70 @@ and states plainly which device it measured:
    `f_ref`/N/trim-code cells × 27 bundles × 3 temperatures × 5 `Vctrl` points)
    re-run on the option-B netlist. **Tolerances: (a) every ratified limit still
    holds at every cell exactly as DR-006 Decisions 3–5 state them, with the
-   trim-code table unchanged; (b) no cell changes pass/fail status relative to
-   record 20260731-202550-82af5a9; (c) per cell, phase margin no more than
-   0.25° below the option-A value and `f_c` within ±2 %.**
+   trim-code table unchanged; (b) no pass-to-fail regression of any cell
+   relative to record 20260731-202550-82af5a9 (a fail-to-pass change is
+   recorded and reported, not averaged away); (c) per cell, phase margin no
+   more than 0.5° below the option-A value and `f_c` within ±1 %.**
 3. *Failures are retained.* Any cell or point outside a tolerance is recorded
    as measured and reported against the ratified limits; it is not averaged
    away, relabelled as an option-A result, or re-toleranced after the fact.
 
-*Why these numbers.* The narrowest ratified margin in the baseline is the
-1 MHz / trim-code-4 cell at 47.44° against the 45° criterion, i.e. **2.44°**;
-the baseline's own C2 sensitivity sweep (`ripple_tradeoff.csv`, model phase
-margin 33.50° at the as-built 2.016 pF versus 31.61° at 4 pF) is ≈ 1°/pF in the
-worse direction. A ±2 % C2 window is ≈ ±0.04 pF, i.e. a few hundredths of a
-degree on that slope, and the 0.25° loop allowance is ≈ 10 % of the narrowest
-ratified margin — so the tolerances protect the ratified limits with room to
-spare while still being tight enough that a real change in the device shows up
-as a failure. They are set from the baseline's margins, not from any
-option-B result, none of which exists yet.
+*Why these numbers — and what they do not establish.* They are fixed from
+the committed option-A baseline and a model estimate, before any option-B
+result exists; none is tuned to a pass.
+
+*Baseline margins (exact records).* Under DR-006 Decision 5's required
+Icp-trim rule (trim 4 at 1 and 2 MHz, 3 at 4 MHz, 2 at 8 MHz, 1 at 16 and
+25 MHz) the narrowest of the 35 rule cells is **47.41°** at 1 MHz, N = 32,
+trim 4, bundle `rff-mff-xss`, 125 °C, 0.9 V
+(`sim/loop-dynamics/corners/20260731-202550-82af5a9/loop_margins.csv`,
+`pm_min_deg`), i.e. **2.41°** above the 45° criterion. (An earlier draft of
+this record said 47.44° / 2.44°; that is the 1 MHz, N = 12 rule cell, the second
+narrowest.) Arbitrary trim codes are a different population: 105 of 140 cells
+pass, the narrowest passing one being 16 MHz, N = 4, trim 4 at **46.05°**
+(1.05° headroom) — a code DR-006 does not require there — and the closest
+failing cell is 44.41°. The tolerances below apply to all 140 cells, because
+Decision 3.2(b) is about every cell, not only the rule cells.
+
+*Sensitivity estimate (a model, not option-B data).* `ripple_tradeoff.csv`
+cannot support the limits: apart from its as-built row it substitutes an
+*ideal* C2 into the fitted 3-element model, and its `pm_min_deg_model` is the
+minimum over all trim codes (33.5°, a failing cell), so its ≈ 1°/pF secant
+(33.50° at 2.016 pF to 31.61° at 4 pF, with a much steeper 4–8 pF segment)
+is neither measured nor taken at the rule cells. This record therefore uses
+`spec/lib/dr042_c2_sensitivity.py`, which re-evaluates the baseline's own
+fitted `(R, C1, C2)` points (`filter_rc.csv`, every bundle × temperature,
+`Vctrl` ≥ 0.9 V) against each cell's loop-gain range `A = Icp·Kvco/N`
+(25-point log grid) with only C2 scaled. It reproduces the record's
+`pm_min_deg` for every cell to within **0.02°**, which validates the
+*baseline* evaluation only. For a **+2 % C2** change it gives a worst-case
+phase-margin loss of **≈ 0.40°** and a worst-case `f_c` shift of **≈ 0.8 %**
+over all 140 cells (≈ 0.38° / 0.4 % over the rule cells), reached at
+the 25 MHz cells; at the narrowest rule cell it is ≈ 0.10° and 0.05 %. A
+−2 % change raises phase margin.
+
+*Consequence for the limits.* The earlier draft's 0.25° phase-margin allowance
+is **smaller than the loss a C2 inside its own ±2 % window can cause** at the
+high-`f_ref` cells (≈ 0.40°), so a device that met the C2 tolerance could be
+failed by the loop tolerance for the C2 value alone. The phase-margin
+allowance is therefore **0.5°** and the `f_c` window **±1 %**: each is the
+estimated effect of a full ±2 % C2 deviation plus ≈ 25 % for effects the
+model omits. That 25 % is a judgement, not a derived figure. A result inside
+these limits is still not "equivalent"; a result outside them means something
+other than C2's value moved (parasitics, voltage coefficient, correlated
+corner behaviour) and is reported as measured (item 3). The ratified limits
+and the pass/fail check (items 2a, 2b) remain the controlling gates; the
+tolerances are a tripwire on top of them. 0.5° is 21 % of the narrowest rule
+margin (2.41°) and 48 % of the narrowest passing margin (1.05°).
+
+*Where the model does not apply.* It holds R, C1 and `A` fixed and treats C2
+as an ideal constant capacitance: it has no Metal4/Metal5 plate-to-substrate
+parasitic on `VCTRL`, no C2 voltage coefficient, no correlation between C2
+and the other passive corners beyond the 27 bundles already swept, and no
+layout. It is exact only for the 3-element topology, and is checked against
+the baseline only, not against any option-B simulation. These remain
+uncertainties that Decision 3's measurements, Decision 4's checks and the
+post-layout work exist to close; none is asserted away here.
 
 **4. Physical verification is on the unmodified variant-D decks.** Required:
 standalone DRC and LVS of the option-B loop filter with the stock gf180mcuD
