@@ -91,7 +91,7 @@ jobs:
           done
           exit "$rc"
 
-      - name: sim/lib/check-artifact-manifests.sh (artifact manifests: schema, artifact: URIs, no committed bytes)
+      - name: "sim/lib/check-artifact-manifests.sh (artifact manifests: schema, artifact: URIs, no committed bytes)"
         # Raw run output for new campaigns lives in the fleet artifact store;
         # git keeps only manifests/artifacts/*.manifest.json (issue #830).
         # Headless: no broker, no klt -- it grades the committed manifests
