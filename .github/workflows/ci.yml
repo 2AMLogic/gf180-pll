@@ -239,7 +239,7 @@ jobs:
         # This is this step's own source of truth for which klt version a
         # local `bash signoff/run-signoff.sh --check` must be run against --
         # see signoff/README.md's "Reproducing" section.
-        run: pip install 'klayout-tools==0.6.0'
+        run: pip install 'klayout-tools==0.8.0'
 
       - name: signoff/run-signoff.sh --check (T1 tier verdict vs. the committed report)
         # signoff/tier-report.json is this block's T1 verdict of record --

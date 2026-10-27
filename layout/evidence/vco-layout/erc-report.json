@@ -1,11 +1,15 @@
 {
-  "schema_version": 1,
-  "file": "layout/evidence/vco-layout/vco_block.gds",
+  "schema_version": 2,
+  "file": {
+    "path": "layout/evidence/vco-layout/vco_block.gds",
+    "scope": "repo"
+  },
   "spec": "layout/evidence/vco-layout/erc-supply-spec.json",
   "pdk": null,
   "findings_only": false,
   "gate_role": "poly2",
   "gate_count": 29,
+  "antenna_tables_omitted": false,
   "gates": [
     {
       "gate_id": "gate0",
@@ -1980,6 +1984,28 @@
       ]
     }
   ],
+  "nets": [
+    {
+      "name": "VDD_VCO",
+      "matched_islands": 1,
+      "expected_islands": 1,
+      "roles": [],
+      "unlabelled_islands": null,
+      "unlabelled_area_um2": null,
+      "unlabelled_bbox": null,
+      "unlabelled_allowed_islands": null
+    },
+    {
+      "name": "GND_VCO",
+      "matched_islands": 1,
+      "expected_islands": 1,
+      "roles": [],
+      "unlabelled_islands": null,
+      "unlabelled_area_um2": null,
+      "unlabelled_bbox": null,
+      "unlabelled_allowed_islands": null
+    }
+  ],
   "erc_findings": [],
   "erc_finding_count": 0,
   "erc_status": "clean",
@@ -2740,24 +2766,26 @@
     "nothing_checked": false,
     "nothing_checked_reasons": [],
     "checked_by_assertion": [],
-    "checked_by_well_assertion": []
+    "checked_by_well_assertion": [],
+    "layers_in_stream_without_declaration": [],
+    "well_assertion_coverage": []
   },
   "ties_disclosure": null,
   "provenance": {
-    "klt_version": "0.6.0",
+    "klt_version": "0.8.0",
     "klayout_version": "0.30.12",
     "pdk": null,
     "deck": {
       "name": "gf180mcu",
-      "content_hash": "sha256:95c2eb9148b29ded02182aeca4222287ff57f813691d5e2f9f8d7a675f6cb637",
-      "released": false
+      "content_hash": "sha256:0eb6df1bafc5106ec50bd58479dbd7cda36bb685f1ef18cd3a2244a6e7e48666",
+      "released": true
     },
     "input": {
       "content_hash": "sha256:4f5151dfbcd2d43694bfc845a507fbd43974559f1e1f8c4a8b6064afe95deb3c",
       "role": "layout"
     },
     "spec": {
-      "content_hash": "sha256:bae31d4ae01879bdc25ede10b8fa4b0f3741cad8fd0fe373d8fda22db323f47f"
+      "content_hash": "sha256:9a97e1523d2acb286effdccfbe761a01e91d3429b73ff9d16635824543b4c6f1"
     },
     "devices": [
       {
@@ -2767,6 +2795,14 @@
         "body_area_um2": 71.6,
         "source": "deck",
         "superseded_by": null
+      }
+    ],
+    "net_exclusions": [],
+    "label_layers": [
+      {
+        "name": "metal1",
+        "label_layer": "34/10",
+        "label_text_count": 61
       }
     ]
   }

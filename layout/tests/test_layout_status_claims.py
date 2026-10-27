@@ -398,7 +398,7 @@ class _Tree:
         base.mkdir(parents=True, exist_ok=True)
 
         spec: dict = {
-            "_description": "fixture supply spec",
+            "_comment": "fixture supply spec",
             "stackup": [
                 {"name": "poly2", "layer": "30/0", "role": "gate"},
                 {"name": "metal1", "layer": "34/0", "label_layer": "34/10"},
