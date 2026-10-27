@@ -125,7 +125,7 @@
 #     created for (a `0.5.0` report under a `0.6.0` pin), one release apart and
 #     invisible to a prefix test;
 #   * a spec's top-level keys must come from `klt erc`'s own documented schema
-#     (plus a `_description`). This is the structural half of the stale-rationale
+#     (plus a `_comment`). This is the structural half of the stale-rationale
 #     fix: the `_ties_omitted` free-text key that carried the fixed-bug citation
 #     is not merely removed, it is now unrepresentable. A deliberate zero-`ties[]`
 #     declaration must use the first-class `ties_disclosure` field, whose
@@ -577,13 +577,13 @@ if pinned is None and not failed:
     )
 
 # `klt erc`'s own documented top-level spec keys (docs/cli/erc.md), plus the
-# `_description` this repository puts at the head of each spec. Anything else
+# `_comment` this repository puts at the head of each spec. Anything else
 # is rejected on purpose: a free-text rationale key is how the stale
 # `_ties_omitted` citation survived a fixed upstream bug by five days. Per-entry
 # `_comment` annotations are untouched by this rule -- they annotate a
 # declaration that exists, rather than standing in for one that does not.
 SPEC_KEYS = {
-    "_description",
+    "_comment",
     "stackup",
     "vias",
     "nets",

@@ -24,7 +24,7 @@ the evidence does rather than after.
 ## Reproducing
 
 ```sh
-pip install 'klayout-tools==0.6.0'
+pip install 'klayout-tools==0.8.0'
 bash signoff/run-signoff.sh --check    # verify the committed report
 bash signoff/run-signoff.sh            # re-render it after changing the manifest
 ```
@@ -48,27 +48,27 @@ the signoff tier check" step (`pip install 'klayout-tools==…'`) -- treat that
 line, not this README, as the source of truth if the two ever drift.
 
 **Match the *full* version string, suffix included -- a source build of the
-pinned version is not the pinned version.** 0.6.0 records its own build
+pinned version is not the pinned version.** 0.8.0 records its own build
 provenance in the report (`build.version`, `git_commit`, `git_tag`,
 `is_release`, `grading_ruleset_id`), and those fields differ between the
 released PyPI wheel and a locally source-built tree at the same release number,
 so a report rendered by the latter fails CI's `--check` on the provenance block
 alone. A source build reports a PEP 440 local-version suffix --
-`klt 0.6.0+gef984d3414d4`, `is_release: false`, `git_tag: null` -- where the
-released wheel reports exactly `klt 0.6.0`. **`klt --version` is the only
-reliable discriminator**: `pip show klayout-tools` prints a bare `0.6.0` with
+`klt 0.8.0+gef984d3414d4`, `is_release: false`, `git_tag: null` -- where the
+released wheel reports exactly `klt 0.8.0`. **`klt --version` is the only
+reliable discriminator**: `pip show klayout-tools` prints a bare `0.8.0` with
 `INSTALLER: pip` for *both*, and a source build installed into `~/.local/bin`
 can shadow the wheel on `PATH`. If your `klt --version` carries a `+g<sha>`
 suffix, render in a clean environment that has the release instead:
 
 ```sh
 python3 -m venv /tmp/klt-pinned
-/tmp/klt-pinned/bin/pip install 'klayout-tools==0.6.0'
-/tmp/klt-pinned/bin/klt --version          # must print exactly: klt 0.6.0
+/tmp/klt-pinned/bin/pip install 'klayout-tools==0.8.0'
+/tmp/klt-pinned/bin/klt --version          # must print exactly: klt 0.8.0
 PATH=/tmp/klt-pinned/bin:$PATH bash signoff/run-signoff.sh
 ```
 
-(`uvx --from 'klayout-tools==0.6.0' klt --version` answers the same question in
+(`uvx --from 'klayout-tools==0.8.0' klt --version` answers the same question in
 one line, but this script needs `klt` on `PATH`, so the venv above is what to
 render or `--check` through.)
 

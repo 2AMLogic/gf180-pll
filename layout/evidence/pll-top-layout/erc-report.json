@@ -1,11 +1,15 @@
 {
-  "schema_version": 1,
-  "file": "layout/evidence/pll-top-layout/pll_top.gds",
+  "schema_version": 2,
+  "file": {
+    "path": "layout/evidence/pll-top-layout/pll_top.gds",
+    "scope": "repo"
+  },
   "spec": "layout/evidence/pll-top-layout/erc-supply-spec.json",
   "pdk": null,
   "findings_only": false,
   "gate_role": "poly2",
   "gate_count": 276,
+  "antenna_tables_omitted": false,
   "gates": [
     {
       "gate_id": "gate0",
@@ -18776,6 +18780,58 @@
       ]
     }
   ],
+  "nets": [
+    {
+      "name": "VDD",
+      "matched_islands": 1,
+      "expected_islands": 1,
+      "roles": [],
+      "unlabelled_islands": null,
+      "unlabelled_area_um2": null,
+      "unlabelled_bbox": null,
+      "unlabelled_allowed_islands": null
+    },
+    {
+      "name": "VSS",
+      "matched_islands": 1,
+      "expected_islands": 1,
+      "roles": [],
+      "unlabelled_islands": null,
+      "unlabelled_area_um2": null,
+      "unlabelled_bbox": null,
+      "unlabelled_allowed_islands": null
+    },
+    {
+      "name": "VDD_VCO",
+      "matched_islands": 1,
+      "expected_islands": 1,
+      "roles": [],
+      "unlabelled_islands": null,
+      "unlabelled_area_um2": null,
+      "unlabelled_bbox": null,
+      "unlabelled_allowed_islands": null
+    },
+    {
+      "name": "GND_VCO",
+      "matched_islands": 1,
+      "expected_islands": 1,
+      "roles": [],
+      "unlabelled_islands": null,
+      "unlabelled_area_um2": null,
+      "unlabelled_bbox": null,
+      "unlabelled_allowed_islands": null
+    },
+    {
+      "name": "VDD_DIV",
+      "matched_islands": 1,
+      "expected_islands": 1,
+      "roles": [],
+      "unlabelled_islands": null,
+      "unlabelled_area_um2": null,
+      "unlabelled_bbox": null,
+      "unlabelled_allowed_islands": null
+    }
+  ],
   "erc_findings": [],
   "erc_finding_count": 0,
   "erc_status": "clean",
@@ -25718,27 +25774,29 @@
     "nothing_checked": false,
     "nothing_checked_reasons": [],
     "checked_by_assertion": [],
-    "checked_by_well_assertion": []
+    "checked_by_well_assertion": [],
+    "layers_in_stream_without_declaration": [],
+    "well_assertion_coverage": []
   },
   "ties_disclosure": {
     "reason": "The assembled top level draws one Nwell layer (21/0) that holds the n-wells of several differently-supplied blocks (at least VDD for pfd_cp and lock_detector, VDD_VCO, VDD_DIV), and one ties[] entry grades every shape of its well_layer against a single net. Selecting the wells of one supply needs a marker layer to select on (ties[].well_requires / well_excludes) and this stream draws none. Well-tie coverage is therefore not graded at the top level; each block's own erc-report.json grades it on that block's GDS, and the top level adds only the island check across the routing.",
     "kind": "tool_limitation"
   },
   "provenance": {
-    "klt_version": "0.6.0",
+    "klt_version": "0.8.0",
     "klayout_version": "0.30.12",
     "pdk": null,
     "deck": {
       "name": "gf180mcu",
-      "content_hash": "sha256:95c2eb9148b29ded02182aeca4222287ff57f813691d5e2f9f8d7a675f6cb637",
-      "released": false
+      "content_hash": "sha256:0eb6df1bafc5106ec50bd58479dbd7cda36bb685f1ef18cd3a2244a6e7e48666",
+      "released": true
     },
     "input": {
       "content_hash": "sha256:fbe4001364aa586f6bdbf1babe85cbb4d40d8fbf4560b899ee158d7f5f12b11c",
       "role": "layout"
     },
     "spec": {
-      "content_hash": "sha256:614a9eb2df07875ef257c8a8097ef70fbd931ab051e84fb932d6d965d72a62fe"
+      "content_hash": "sha256:84e1ac7e299b0806f94069eaf6beb26f15a5a19eb1d68e5d2600a28f38342817"
     },
     "devices": [
       {
@@ -25764,6 +25822,24 @@
         "body_area_um2": 0.0,
         "source": "deck",
         "superseded_by": null
+      }
+    ],
+    "net_exclusions": [],
+    "label_layers": [
+      {
+        "name": "metal1",
+        "label_layer": "34/10",
+        "label_text_count": 205
+      },
+      {
+        "name": "metal2",
+        "label_layer": "36/10",
+        "label_text_count": 70
+      },
+      {
+        "name": "metal5",
+        "label_layer": "81/10",
+        "label_text_count": 36
       }
     ]
   }
