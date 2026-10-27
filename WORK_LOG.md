@@ -2,6 +2,10 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-27
+
+- **PR #837**: layout(vco): join vtoi_core's second VDD_VCO tap band to the supply on metal
+
 ### 2026-10-23
 
 - **PR #791**: feat(sim): pin open_pdks and refuse PDK trees at another revision
