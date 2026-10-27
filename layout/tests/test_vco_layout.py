@@ -1103,6 +1103,17 @@ class AssembledBlockVddIslandTests(unittest.TestCase):
             for band in vco_block.vdd_feed_bands(key, self.result.sub_pins[key], self.p):
                 yield key, ((band[0] + band[2]) / 2.0, (band[1] + band[3]) / 2.0)
 
+    def test_every_vtoi_core_tap_band_reaches_the_trunk_on_metal_issue_836(self):
+        # Both bands share one n-well, but klt erc's conductor model is
+        # metal-only: the bottom band must not rely on the well to be supply.
+        trunk = self._cluster(self.metal_l2n, self.metal_layers, *self._trunk_point())
+        bands = self.result.sub_pins["vtoi_core"]["VDD_VCO"]
+        self.assertEqual(len(bands), 2)
+        for band in bands:
+            x, y = (band[0] + band[2]) / 2.0, (band[1] + band[3]) / 2.0
+            with self.subTest(band=band):
+                self.assertEqual(self._cluster(self.metal_l2n, self.metal_layers, x, y), trunk)
+
     def test_every_fed_tap_band_lands_on_the_supply_trunks_metal_cluster(self):
         trunk = self._cluster(self.metal_l2n, self.metal_layers, *self._trunk_point())
         for key, (x, y) in self._fed_band_points():
