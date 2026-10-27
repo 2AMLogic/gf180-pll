@@ -1,0 +1,200 @@
+{
+  "checks": [
+    "every design/*.sch is assigned to exactly one partition or explicitly excluded",
+    "every listed schematic, symbol, support file and derived netlist exists",
+    "each derived netlist declares its top subcircuit and has at least 3 device instances",
+    "design/netlist.sh BLOCKS exports each listed netlist and CI runs 'design/netlist.sh --check'"
+  ],
+  "excluded_schematics": {
+    "dut_export": "scratch export root for `netlist.sh --top pfd_cp` (design/netlist.sh); not a block"
+  },
+  "files": [
+    {
+      "content_hash": "sha256:d4397cbb9bf68e95fc3dde5b191d14db4d31b0099d46a946cbc0b4a8bedde9c3",
+      "path": "design/vco.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:f8ffafb3839fa3e8056002b723eb328525d4dad37cfb12f81188dc6b4951220a",
+      "path": "design/vco.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:586228a6165f4b3dbc10b4f9c3bd0712bea48110334725c4cd1d68de4d3cfa28",
+      "path": "design/vco_bias.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:39c3b11565a369e49da1771f1fc1b3e5230b723ddff3b7faa839c843987b2f8b",
+      "path": "design/vco_bias.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:4f9d0edcadab1b976d10e16498ce1528fc329cc9dca7c9b9bf0ecc599df2015c",
+      "path": "design/vco_stage.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:d8e973e7506ab828dc441b88f6207c6c435caa5714bb3d1dc6fcc150b03f6730",
+      "path": "design/vco_stage.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:0b7df3f44383503196c5642b288bd75a57b337377825a05a57667f5aa497c4cc",
+      "path": "design/pfd.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:0536426931dde0a18997aa2eb4aa80ed8cfcd4cd58372c494f24f580c9466ae7",
+      "path": "design/pfd.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:0e4e7060b62014236e08ad4456c8232cd786f5daabce4605e14289367d527edb",
+      "path": "design/pfd_cp.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:f4dc49f46e8a88e17416b93141aba28f144ef9b37f615e9c9ae775e7620677f7",
+      "path": "design/pfd_cp.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:c8570e0fbab917bdef1484531045012061b5ec968255017fa95e330a190c3a24",
+      "path": "design/pfdcp_inv_3v3.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:18aab00443f20f118e0d4a3f4269cf707cbfcbcf61a94c837f40a62b06db2d8a",
+      "path": "design/pfdcp_inv_3v3.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:865cabd4b3495f7cf062cdbf9b43e3806a3f2c9a9e18b86b9d447516ce1605df",
+      "path": "design/pfdcp_nand2_3v3.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:af686982ef2d72d9ae83eb3669a216ce8d380653b2e56b9b9d6a69c9fca208e3",
+      "path": "design/pfdcp_nand2_3v3.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:583c2b20e625277ee7188c98d5707739160d0bc3817d8364fc815da2160262a0",
+      "path": "design/srlatch.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:567d3b9aa66d418cf780f08124e0eaa638606c501ec2f0412deeb0cbe09e0839",
+      "path": "design/srlatch.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:15bc72774afa124249d605d7c9332937091e24c16c4b6072826d77331b91fda5",
+      "path": "design/edgedet.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:71520c7dec03bebdd8aed0e82b474e74dae14e235c337bcdcb936e5787e73a5a",
+      "path": "design/edgedet.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:93269e52d19ed922166412c2e05f9b4253e61ed9c470d4fd079ee2c14bf2300c",
+      "path": "design/cp.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:baf8695778ddaff50a68af31c4d48856fb92f19427ebd95633903eb4e84b97f7",
+      "path": "design/cp.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:728496f619321af42b8f994b2f22efbb9e2257316bc0bbb1a28d6da3a526542a",
+      "path": "design/cp_leg_n.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:b94d8d873204414e0fd8b45e2d1f69e021d4b563ce4b22e1a9c4635637943283",
+      "path": "design/cp_leg_n.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:27714bc8cdc867f6ce88a4d8881896083aad3447b19982913b316839f16ef0bb",
+      "path": "design/cp_leg_p.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:0da048de8de0b67a4abd9645c3c35634f51af658d5612c109be92bc37582b245",
+      "path": "design/cp_leg_p.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:894d66e8bc9f65c15a6dea81c07ea12b392ea359fab7bcb06eb0a2ae04507fcb",
+      "path": "design/cp_dumpbuf.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:991f5ddeb0e45683a4e33b0ddf4e5df0b6dc1c60fdd2f666eed056a2bac8994c",
+      "path": "design/cp_dumpbuf.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:4365df963db137a72ea538db748a1502ff51f1f4ce12d36bedfa409fcc746e4d",
+      "path": "design/loop_filter.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:978dfe251d43a7158e57f97d84475b6fe5cd9ea7c405c2cbdc41128ce046defa",
+      "path": "design/loop_filter.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:ecf6a6e41c2427297400830d64139932c54a175fcd976912719d87293ad2380a",
+      "path": "design/pll_top.sch",
+      "role": "source"
+    },
+    {
+      "content_hash": "sha256:61f9fb519747c2f099cf2ad06337e3428095c387172197a685f60c4969621010",
+      "path": "design/pll_top.sym",
+      "role": "source-symbol"
+    },
+    {
+      "content_hash": "sha256:6a8c0b0dfb6f48fc184b723c51b62e937416b97b8cb64ad77d4e2c0ee03177d0",
+      "path": "design/xschemrc",
+      "role": "source-support"
+    },
+    {
+      "content_hash": "sha256:2f7ac614eb034842f631a78d3c2f21120918985d76c8d862399af24d05a3f7da",
+      "path": "design/netlist.sh",
+      "role": "source-support"
+    },
+    {
+      "content_hash": "sha256:3d8bf1b307d7b230808c86b318262822fdf525c2503724609bdf51d1b1cc2d31",
+      "path": "design/netlist/vco.spice",
+      "role": "derived-netlist"
+    },
+    {
+      "content_hash": "sha256:e4c2184f4be314f9dc5f9fef16d16a57ad4905a71b7f5fd287b8e1c1ee515b01",
+      "path": "design/netlist/loop_filter.spice",
+      "role": "derived-netlist"
+    },
+    {
+      "content_hash": "sha256:ce6032daf8025a4cb9e87cbe8564490ad09fd40445e4ce7495f9c2bc31891382",
+      "path": "design/netlist/pll_top.spice",
+      "role": "derived-netlist"
+    }
+  ],
+  "freshness_gate": {
+    "command": "./design/netlist.sh --check",
+    "run_by": ".github/workflows/ci.yml (pdk-checks job, pinned xschem 3.4.7)",
+    "what": "re-exports every committed top and diffs against design/netlist/*.spice"
+  },
+  "full_custom_note": null,
+  "partition": "analog",
+  "regenerate": "./design/netlist.sh",
+  "schema_version": 1,
+  "subject": "analog design-source inventory",
+  "t1_item": 1,
+  "uncommitted_export": "pfd_cp is exported per evidence record, not committed (design/netlist.sh); its freshness is carried by the sim/*/netlist-snapshots/ records, not by this inventory"
+}

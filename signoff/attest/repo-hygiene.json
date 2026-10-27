@@ -1,0 +1,43 @@
+{
+  "checks": [
+    "README opens with a block description and has a License section",
+    "CONTRIBUTING.md carries the clone-to-green-self-test section",
+    "LICENSE is the Apache License text and spec/pll.md exists",
+    "the CI workflow still runs each required command"
+  ],
+  "ci": {
+    "hash_note": "edited often; not hash-pinned. The commands below are re-audited by --check.",
+    "required_commands": [
+      "bash sim/selftest.sh",
+      "./design/netlist.sh --check",
+      "bash signoff/run-signoff.sh --check",
+      "python3 signoff/t1_attest.py --check"
+    ],
+    "workflow": ".github/workflows/ci.yml"
+  },
+  "contributing": {
+    "audited": [
+      "From clone to a green self-test"
+    ],
+    "path": "CONTRIBUTING.md"
+  },
+  "license": {
+    "content_hash": "sha256:d47483eb3e7e0b8cdc6f5252d857935661943f6c10bcecf49ae4b8dfe8c26317",
+    "kind": "Apache-2.0",
+    "path": "LICENSE"
+  },
+  "readme": {
+    "audited": [
+      "opens with a block description",
+      "## License section"
+    ],
+    "hash_note": "README.md is edited often and is deliberately not hash-pinned; t1_attest.py --check re-audits it in CI",
+    "path": "README.md"
+  },
+  "schema_version": 1,
+  "spec": {
+    "path": "spec/pll.md"
+  },
+  "subject": "repo-hygiene audit record",
+  "t1_item": 10
+}
