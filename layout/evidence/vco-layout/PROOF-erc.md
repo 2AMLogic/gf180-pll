@@ -1,5 +1,17 @@
 # `vco_block` structural power-delivery ERC (T1 checklist item 11, issue #427)
 
+> **Status update (2026-10-27, issue #836): `VDD_VCO` is now one island; `erc_status` is `clean`.**
+> `vtoi_core`'s bottom n-well tap band (the one-shape Metal1 "island 2" at
+> y = 18.5-19.3 um) is now joined to the supply on metal by a Metal2 strap, so
+> `klt erc` (`klayout-tools==0.6.0`, same command as below) reports
+> `erc_findings: []`, `erc_finding_count: 0`, with `erc.unconnected_net` and
+> `erc.supply_short` absent. `erc-report.json` and `vco_block.gds` were
+> regenerated (`provenance.input.content_hash` is now
+> `sha256:4f5151dfbcd2d43694bfc845a507fbd43974559f1e1f8c4a8b6064afe95deb3c`);
+> `erc-supply-spec.json` is unchanged. Every older census, hash and the
+> "violations" verdicts quoted below describe the geometry of their own date
+> and are left as written. See [`PROOF-836-vdd-vco-metal-continuity.md`](PROOF-836-vdd-vco-metal-continuity.md).
+
 > **Status update (2026-10-09, issue #759): re-run on the drawn decap pair.**
 > The 22 pF decap is now two real `cap_nmos_03v3` devices, so `vco_block.gds`
 > changed and `erc-report.json` was regenerated on the pinned
