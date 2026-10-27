@@ -36,13 +36,12 @@ Issues currently being built (`loom:building`).
 - **#753**: Loop filter C2 is a MIM option-A device, but the repository's PV flow targets gf180mcuD (MIM option B)
 - **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes
 - **#830**: Adopt the common artifact store for sim evidence (manifests in git, bytes via klt artifact)
-- **#836**: T1 item 11 (power delivery): make VDD_VCO metal-continuous in vco_block so klt erc resolves one island
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-- **#837**: layout(vco): join vtoi_core's second VDD_VCO tap band to the supply on metal
+_None._
 
 ## Approved (Awaiting Merge)
 
@@ -94,8 +93,8 @@ Issues carrying `loom:curated`.
 | Very important | 0 |
 | Important | 2 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 4 |
-| PRs awaiting review | 1 |
+| In Progress (`loom:building`) | 3 |
+| PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 2 |
 | Curated | 18 |
 | Architect / Hermit proposals | 5 |

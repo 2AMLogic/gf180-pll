@@ -4,6 +4,8 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-10-27
 
+- **PR #840**: ci(signoff): pin klayout-tools 0.8.0 and regenerate ERC and tier reports
+- **Issue #839** (closed): Bump klayout-tools pin 0.6.0 → 0.8.0
 - **PR #837**: layout(vco): join vtoi_core's second VDD_VCO tap band to the supply on metal
 
 ### 2026-10-23
