@@ -8,6 +8,7 @@ This roadmap is generated from the repository's current GitHub label state.
 Judge-approved PRs under a hold (`loom:blocked` or `loom:operator`) — only a human merge decision is missing.
 
 - **#796**: feat(loop-filter): prepare C2 as the option-B MIM (DR-042 proposed)
+- **#831**: feat(sim): store new run output in the artifact store, commit manifests only
 
 ## Very Important
 
@@ -26,7 +27,7 @@ _None._
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-- **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief
+_None._
 
 ## In Progress
 
@@ -35,12 +36,13 @@ Issues currently being built (`loom:building`).
 - **#753**: Loop filter C2 is a MIM option-A device, but the repository's PV flow targets gf180mcuD (MIM option B)
 - **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes
 - **#830**: Adopt the common artifact store for sim evidence (manifests in git, bytes via klt artifact)
+- **#836**: T1 item 11 (power delivery): make VDD_VCO metal-continuous in vco_block so klt erc resolves one island
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-_None._
+- **#837**: layout(vco): join vtoi_core's second VDD_VCO tap band to the supply on metal
 
 ## Approved (Awaiting Merge)
 
@@ -70,6 +72,7 @@ Issues carrying `loom:curated`.
 - **#827**: Re-qualify lock-detector, lock-window and divider records under open_pdks f6eeac7 (child of #790) *(curated)*
 - **#828**: Re-qualify closed-loop campaign records under open_pdks f6eeac7 (child of #790) *(curated)*
 - **#830**: Adopt the common artifact store for sim evidence (manifests in git, bytes via klt artifact) *(curated)*
+- **#836**: T1 item 11 (power delivery): make VDD_VCO metal-continuous in vco_block so klt erc resolves one island *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -87,14 +90,14 @@ Issues carrying `loom:curated`.
 
 | Bucket | Count |
 |------|-------|
-| Operator merge-risk holds | 1 |
+| Operator merge-risk holds | 2 |
 | Very important | 0 |
 | Important | 2 |
-| Ready (`loom:issue`) | 1 |
-| In Progress (`loom:building`) | 3 |
-| PRs awaiting review | 0 |
+| Ready (`loom:issue`) | 0 |
+| In Progress (`loom:building`) | 4 |
+| PRs awaiting review | 1 |
 | Approved PRs awaiting merge | 2 |
-| Curated | 17 |
+| Curated | 18 |
 | Architect / Hermit proposals | 5 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
