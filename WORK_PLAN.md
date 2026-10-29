@@ -36,6 +36,7 @@ Issues currently being built (`loom:building`).
 - **#753**: Loop filter C2 is a MIM option-A device, but the repository's PV flow targets gf180mcuD (MIM option B)
 - **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes
 - **#830**: Adopt the common artifact store for sim evidence (manifests in git, bytes via klt artifact)
+- **#844**: Evidence record writer emits a host-absolute PDK path: adopt klt env_provenance render_text_lines (blocks #739)
 
 ## PRs Awaiting Review
 
@@ -72,6 +73,7 @@ Issues carrying `loom:curated`.
 - **#828**: Re-qualify closed-loop campaign records under open_pdks f6eeac7 (child of #790) *(curated)*
 - **#830**: Adopt the common artifact store for sim evidence (manifests in git, bytes via klt artifact) *(curated)*
 - **#836**: T1 item 11 (power delivery): make VDD_VCO metal-continuous in vco_block so klt erc resolves one island *(curated)*
+- **#844**: Evidence record writer emits a host-absolute PDK path: adopt klt env_provenance render_text_lines (blocks #739) *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -93,10 +95,10 @@ Issues carrying `loom:curated`.
 | Very important | 0 |
 | Important | 2 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 3 |
+| In Progress (`loom:building`) | 4 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 2 |
-| Curated | 18 |
+| Curated | 19 |
 | Architect / Hermit proposals | 5 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
