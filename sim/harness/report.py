@@ -532,14 +532,53 @@ def evaluate_checks(
     return failures
 
 
+class EnvProvenanceError(RuntimeError):
+    """``klt env-provenance emit`` is unavailable or failed.
+
+    Raised rather than worked around: a record whose host/python/klt lines
+    were hand-formatted instead would look the same as one klt rendered, which
+    is exactly how a host-absolute path reached the evidence tree.
+    """
+
+
+def klt_env_provenance_lines() -> list[str]:
+    """Host/python/klt provenance lines, rendered by ``klt env-provenance emit``.
+
+    klt owns the rendering (``env_provenance.render_text_lines``), including
+    keeping any path out of the output. It is called as a subprocess because
+    klt is an isolated tool the harness interpreter cannot import.
+    """
+    cmd = ["klt", "env-provenance", "emit", "--format", "text"]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise EnvProvenanceError(
+            f"cannot run `{' '.join(cmd)}`: {exc}. Record generation needs "
+            "klayout-tools (`klt`) on PATH; see sim/harness/README.md."
+        ) from exc
+    lines = [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
+    if proc.returncode != 0 or not lines:
+        raise EnvProvenanceError(
+            f"`{' '.join(cmd)}` failed (exit {proc.returncode}): "
+            f"{proc.stderr.strip() or 'no output'}"
+        )
+    return lines
+
+
 def environment(
     pdk: Pdk,
     ngspice: str,
     repo_root: Path,
     git: dict | None = None,
     execution: dict | None = None,
+    env_provenance_lines: list[str] | None = None,
 ) -> dict:
     """Reproducibility provenance for the record.
+
+    ``env_provenance_lines`` is klt's rendered host/python/klt block
+    (:func:`klt_env_provenance_lines`); the caller supplies it so the klt call
+    happens once, up front, before an expensive grid. Absent for a record
+    minted before this field existed -- it then renders no such lines.
 
     ``git`` should be sampled *before* the run starts. The harness writes its
     own per-corner logs into the tracked evidence tree, so sampling afterwards
@@ -573,6 +612,7 @@ def environment(
         "pdk": pdk.provenance(),
         "git": git if git is not None else git_provenance(repo_root),
         "execution": dict(execution or {}),
+        "env_provenance_lines": list(env_provenance_lines or []),
     }
 
 
@@ -687,6 +727,7 @@ def build_record(
     conformance: dict | None = None,
     execution: dict | None = None,
     abort_reason: str = "",
+    env_provenance_lines: list[str] | None = None,
 ) -> dict:
     measure_names = tb.measure_names
     optional_names = {n for n in measure_names if tb.is_optional(n)}
@@ -771,7 +812,10 @@ def build_record(
         # record and the pre-run subset gate cannot disagree.
         "matrix": conformance if conformance is not None else matrix_conformance(tb, points),
         "testbench": tb.provenance(),
-        "environment": environment(pdk, ngspice, repo_root, git, execution=execution),
+        "environment": environment(
+            pdk, ngspice, repo_root, git, execution=execution,
+            env_provenance_lines=env_provenance_lines,
+        ),
         "grid": {
             "corners": corners,
             "extra_lib_sections": list(tb.extra_lib_sections),
@@ -910,7 +954,7 @@ def _execution_lines(
     machine that minted the record (#496): a multi-host run, an off-host
     backend, or a backend that could not attribute some point. A single-host
     local run emits exactly the one line it always did, because for it the
-    ``Host:`` bullet above already says everything true.
+    klt ``host:`` line above already says everything true.
     """
     if not execution:
         return []
@@ -1520,14 +1564,15 @@ def render_record(record: dict, experiment: str) -> str:
         f"- **Claim**: {record['claim'] or 'harness self-verification -- no spec or design-input claim'}",
         f"- **Netlist provenance**: {provenance}",
         "- **Environment provenance**:",
-        f"  - PDK: `{pdk.get('variant')}`, open_pdks `{pdk.get('open_pdks_version')}` "
-        f"({pdk.get('path')}, found via {pdk.get('discovered_via')})",
+        # No pdk path / discovered_via: both are host-specific (absolute or
+        # home-relative), and the variant + open_pdks revision identify the PDK.
+        f"  - PDK: `{pdk.get('variant')}`, open_pdks `{pdk.get('open_pdks_version')}`",
         "  - Models: `libs.tech/ngspice/sm141064.ngspice`; `design.ngspice` included first",
-        f"  - Simulator: {env['ngspice']}. Harness: sim/harness {env['harness_version']}, "
-        f"python {env['python']}",
+        f"  - Simulator: {env['ngspice']}. Harness: sim/harness {env['harness_version']}",
         f"  - Repo commit: `{git['commit']}` ({'DIRTY' if git['dirty'] else 'clean'} tree)",
-        f"  - Host: {env['platform']} ({env['host']})",
     ]
+    # Host / OS / python / klt facts, exactly as klt renders them.
+    lines += [f"  - {ln}" for ln in env.get("env_provenance_lines") or []]
     lines += _execution_lines(
         env.get("execution") or {},
         env.get("host") or "",

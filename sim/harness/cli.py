@@ -510,7 +510,9 @@ def run(args: argparse.Namespace) -> int:
     try:
         pdk = find_pdk()
         ngspice = runner.ngspice_version()
-    except (PdkNotFound, NgspiceMissing) as exc:
+        # Up front: fail before the grid, not after it, if klt is unusable.
+        env_provenance_lines = report.klt_env_provenance_lines()
+    except (PdkNotFound, NgspiceMissing, report.EnvProvenanceError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ENVIRONMENT
 
@@ -627,7 +629,7 @@ def run(args: argparse.Namespace) -> int:
         return _run_reserved(
             args, tb, pdk, ngspice, points, corner_list, temperatures, supplies,
             nominal, tolerance, conformance, backend, plan_only, jobs, omp_pin,
-            started, git, reservation,
+            started, git, reservation, env_provenance_lines,
         )
     finally:
         # Whatever ended the run before its summary was published -- an
@@ -649,7 +651,7 @@ def _report_unpublished(reservation: "report.RecordReservation") -> None:
 def _run_reserved(
     args, tb, pdk, ngspice, points, corner_list, temperatures, supplies,
     nominal, tolerance, conformance, backend, plan_only, jobs, omp_pin,
-    started, git, reservation,
+    started, git, reservation, env_provenance_lines,
 ) -> int:
     experiment_dir = tb.experiment_dir
     record_id = reservation.record_id
@@ -790,6 +792,7 @@ def _run_reserved(
         conformance=conformance,
         execution={"jobs": jobs, "omp": omp_pin, **backend.describe()},
         abort_reason=abort_reason,
+        env_provenance_lines=env_provenance_lines,
     )
 
     print()

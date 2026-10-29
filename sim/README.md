@@ -625,7 +625,7 @@ apply is written as `N/A` **with a reason**, not omitted.
     and RNG-seeded analyses are — see "Statistical convention" above for the
     host-scoped seed-reproducibility claim this field documents)
   - **where the points actually ran**, when that is not the host that minted
-    the record. The `Host:` bullet names the *recording* host, which is the
+    the record. The `host:` line (klt's env-provenance block) names the *recording* host, which is the
     executing host only while every point runs locally. A campaign dispatched
     off-host (`sim/run_corners.py --backend batch`, see
     `sim/harness/README.md`) must additionally name the execution backend and
