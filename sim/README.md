@@ -950,6 +950,21 @@ state the decimation in the Methodology field, and keep the deck able to
 regenerate the full rawfile. Anything above a few MB per record wants
 justification in the record.
 
+**Manifest-forward rule for new runs (issue #830).** New campaigns do not
+commit raw run output (per-corner logs, `raw_measures.csv`, rawfiles). They
+stage it in the git-ignored `sim/.artifact-stage/`, store it with
+`sim/lib/artifact-put.sh <bench> <run-id> <file>...`, and commit only the
+resulting `manifests/artifacts/<bench>-<run-id>.manifest.json` (every object
+named by size and sha256, every `uri` an `artifact:` key) alongside the usual
+summary record. The writer fails closed: with no broker, no `klt artifact put`
+or an unreachable broker it exits nonzero, writes no manifest, and there is no
+fallback to committing bytes. `sim/lib/check-artifact-manifests.sh` (CI)
+rejects malformed manifests, non-`artifact:` URIs, and committed bytes that
+equal a stored object. The "Always, committed" rows above describe evidence
+that already exists and still apply to it; this rule only changes where *new*
+raw bytes go. **No existing file is removed or rewritten.** See
+`manifests/artifacts/README.md`.
+
 **Nothing is pruned.** Old records stay after they are superseded; that is
 the point. If `sim/` ever becomes genuinely too large, the answer is a
 decision record under `spec/` proposing an archival scheme, not a `git rm`.

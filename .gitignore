@@ -105,6 +105,11 @@ sim/pdk.local.json
 # work trees). Committed evidence lives in layout/evidence/inv-tb-proof/ --
 # see layout/README.md.
 layout/evidence/work/
+# Scratch where a run's raw outputs are staged before sim/lib/artifact-put.sh
+# stores them in the artifact store (issue #830). Only the resulting
+# manifests/artifacts/*.manifest.json is committed -- never the bytes.
+sim/.artifact-stage/
+
 # >>> loom-managed (do not edit) >>>
 # Loom runtime state (don't commit these)
 .loom-in-use
