@@ -2,6 +2,11 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-29
+
+- **PR #846**: fix(sim): render record environment block via klt env-provenance, drop PDK path
+- **Issue #844** (closed): Evidence record writer emits a host-absolute PDK path: adopt klt env_provenance render_text_lines (blocks #739)
+
 ### 2026-10-27
 
 - **PR #840**: ci(signoff): pin klayout-tools 0.8.0 and regenerate ERC and tier reports
