@@ -48,6 +48,7 @@ bash sim/selftest.sh                         # prove the harness works (writes n
 | gf180mcu PDK | device models | `pip install ciel && ciel enable --pdk-family gf180mcu -l gf180mcu_fd_pr <hash>` (hash: `open_pdks` in `sim/pdk.json`) |
 | `xschem` | schematic capture (optional for simulation) | `brew install xschem` / distro package |
 | python3 >= 3.9 | the harness | stdlib only, no packages |
+| `klt` (`klayout-tools` >= 0.8.0) | record generation: host/python/klt lines of a record's environment block come from `klt env-provenance emit` (no fallback — a run fails up front, exit 3, if it is missing) | `pip install klayout-tools` |
 
 The harness never hardcodes a PDK path. It resolves one, in order:
 
