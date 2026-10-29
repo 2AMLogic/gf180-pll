@@ -950,7 +950,9 @@ state the decimation in the Methodology field, and keep the deck able to
 regenerate the full rawfile. Anything above a few MB per record wants
 justification in the record.
 
-**Manifest-forward rule for new runs (issue #830).** New campaigns do not
+**Manifest-forward rule for new runs (issue #830).** The harness does the
+staging and the put for you with `run_corners.py ... --artifact-store`
+(`sim/harness/README.md`). New campaigns do not
 commit raw run output (per-corner logs, `raw_measures.csv`, rawfiles). They
 stage it in the git-ignored `sim/.artifact-stage/`, store it with
 `sim/lib/artifact-put.sh <bench> <run-id> <file>...`, and commit only the

@@ -181,6 +181,18 @@ python3 sim/run_corners.py harness-selftest --supply 5.0 --supply-tol 0.10   # a
 python3 sim/run_corners.py my-campaign --axis n=n64 --axis rate=f200         # thin an extra axis
 ```
 
+**Storing raw output outside git (`--artifact-store`).** Opt-in. After the
+logs, `raw_measures.csv` and retained raw files are written and *before* the
+summary record is published, the harness copies them into the git-ignored
+`sim/.artifact-stage/<bench>-<record-id>/`, calls
+`sim/lib/artifact-put.sh <bench> <record-id> <files...>` once, and on success
+removes the stored files from `corners/<record-id>/` (derived tables stay).
+Commit the resulting `manifests/artifacts/<bench>-<record-id>.manifest.json`
+with the record. It fails closed: any nonzero writer exit (e.g. 3 =
+`$KLT_ARTIFACT_BROKER` unset) makes the run exit `3`, prints the writer's
+stderr, and publishes no summary record. It is off by default so local runs and
+tests need no broker, and it is ignored under `--no-write`.
+
 **Subsets need a reason.** `sim/README.md` requires every record's *Corner
 matrix run* field to be the full mandated matrix "unless the record states why
 a subset was used". The runner enforces that: if the grid you asked for is
