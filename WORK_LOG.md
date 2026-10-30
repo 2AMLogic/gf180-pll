@@ -4,6 +4,8 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-10-29
 
+- **PR #831**: feat(sim): store new run output in the artifact store, commit manifests only
+- **Issue #830** (closed): Adopt the common artifact store for sim evidence (manifests in git, bytes via klt artifact)
 - **PR #846**: fix(sim): render record environment block via klt env-provenance, drop PDK path
 - **Issue #844** (closed): Evidence record writer emits a host-absolute PDK path: adopt klt env_provenance render_text_lines (blocks #739)
 
