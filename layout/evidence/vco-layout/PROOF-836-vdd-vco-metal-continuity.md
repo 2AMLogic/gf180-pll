@@ -72,3 +72,35 @@ cluster there) and passes now.
 * Top-level LVS (#149) and the `signoff/` item-11 citation are untouched.
 * VCO sims: the `sim/` decks read schematic netlists; they reference `layout/`
   only in tests that check committed claims, not extracted geometry.
+
+## 2026-10-30 note: curated-deck DRC re-run; LVS not obtainable
+
+This supersedes the "Foundry DRC and LVS were not re-run" bullet above (kept as
+written). Per the 2026-10-30 operator ruling the evidence was taken with
+klayout-tools' **curated gf180mcu deck**, not the foundry `run_drc.py` /
+`run_lvs.py` (`klt 0.8.1.dev849+gf05774458ae2`, KLayout 0.30.12, deck content
+hash `sha256:88d269a2...`, deck not released).
+
+| | result | evidence |
+|---|---|---|
+| `klt drc --deck gf180mcu` on `vco_block.gds` (`--top vco_block`) | `clean`, 0 violations | `klt-curated-836/drc-vco_block.json` |
+| `klt drc --deck gf180mcu` on `pll_top.gds` | `clean`, 0 violations | `../pll-top-layout/klt-curated-836/drc-pll_top.json` |
+| `klt lvs` on `vco_block.gds` vs `lvs-clean/vco_block.spice` | **no verdict**: the reference does not parse | `klt-curated-836/lvs-attempt.md`, `lvs-request.json` |
+
+Both DRC reports pass `klt drc --check`; their input hashes equal the GDS
+sha256 values in the table above.
+
+What the curated deck covers: 53 rules on this layout (COMP, Poly2, Nplus,
+Pplus, Nwell, Contact, Metal1, Via1, Metal2 width/space/enclosure/on-grid, plus
+LV tap distance). It skips Metal3-5, Via2-4, MIM, ESD, fuse, guard-ring and
+the `_MV` rules, and lists roughly 280 foundry rules as unmodeled. No MIM rule
+is in the deck, so it cannot report the known loop-filter `MIMTM.3` at
+`pll_top`: `pll_top` "clean" here is **not** evidence that `MIMTM.3` is the
+only violation, and neither report shows the foundry deck is clean. The
+geometry added by #837 is Metal1 / Via1 / Metal2, all inside the checked set.
+
+LVS: `klt lvs` could not read the committed reference (its three poly
+resistors use the foundry deck's valueless form). The reference was not
+edited. The 43/43-net `match` therefore remains the pre-#837 foundry result,
+and the post-strap LVS criterion is still open. The LVS deck joins same-named
+nets, so even a `match` would not exercise the strap.
