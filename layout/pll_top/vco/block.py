@@ -402,8 +402,13 @@ def _resistor_line(r: dev.PolyResistor) -> str:
     return f"R_{r.name} {r.top_net} {r.bottom_net} {r.bottom_net} {RESISTOR_LVS_MODEL} W={r.w_um}u L={r.l_um}u"
 
 
-def reference_netlist() -> str:
+def reference_netlist(decap_as_subckt_call: bool = False) -> str:
     """Flattened LVS reference for :data:`TOP_CELL` (``vco_block``).
+
+    ``decap_as_subckt_call`` (default ``False``, the committed form) emits the
+    decap card as an ``X_`` subckt-call card instead of a ``C_`` card -- same
+    terminals, model and parameters -- for readers that take the
+    ``subckt-call`` form (issue #855). Nothing else changes.
 
     See the module-level "Reference LVS netlist" section above for the
     flattening/labelling discipline, and :data:`RESISTOR_LVS_MODEL` for the
@@ -484,8 +489,9 @@ def reference_netlist() -> str:
     # layout tests and the extraction census, not by this card. Terminal
     # order is the model's own: 1 = poly gate, 2 = n+ diffusion. ---
     lines.append(f"* {' '.join(dev.DECAP_NAMES)} in parallel")
+    decap_prefix = "X" if decap_as_subckt_call else "C"
     lines.append(
-        f"C_{dev.DECAP_NAMES[0]} {VDD_NET} {GND_NET} {DECAP_LVS_MODEL} "
+        f"{decap_prefix}_{dev.DECAP_NAMES[0]} {VDD_NET} {GND_NET} {DECAP_LVS_MODEL} "
         f"W={dev.DECAP_SIZE_UM:g}u L={dev.DECAP_SIZE_UM:g}u M={dev.DECAP_COUNT}"
     )
 
