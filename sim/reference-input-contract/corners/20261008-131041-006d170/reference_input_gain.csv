@@ -1,0 +1,5 @@
+# detector gain at a legal reference, against the same corner's ideal reference -- 0 (corner, waveform) pair(s), 0 FAILED.  A declared 3-corner slice of the grid; see the record's Corner matrix run field for why.
+# kd_a: [q(+200ps) - q(-200ps)] / 400ps at this waveform (A) -- the phase-detector gain the loop's bandwidth and stability depend on, measured over the same near pair sim/pfd-deadzone uses
+# kd_ratio: kd(this waveform) / kd(ideal) at the same corner.  1.0 is 'a legal reference does not change the gain'.
+# verdict: pass iff kd_ratio is within +/-20 % of unity -- the loop already tolerates a 1.6x gain variation across the PVT grid (spec/pll.md, Period jitter band-top row), so a reference-shape term materially smaller than that does not move the loop's stability argument, and one larger than it would have to be budgeted
+corner,waveform,kd_a,kd_ratio,verdict
