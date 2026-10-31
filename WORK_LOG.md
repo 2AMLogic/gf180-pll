@@ -2,6 +2,13 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-31
+
+- **PR #856**: docs(layout): attribute the 57 curated-deck LVS errors on vco_block to request options and a pre-decap reference
+- **PR #852**: docs(layout): record curated-deck LVS on vco_block (mismatch, unchanged by the strap)
+- **Issue #854** (closed): Attribute the 57 curated-deck LVS mismatch errors on vco_block to reference, extraction, or layout
+- **Issue #836** (closed): T1 item 11 (power delivery): make VDD_VCO metal-continuous in vco_block so klt erc resolves one island
+
 ### 2026-10-30
 
 - **PR #850**: docs(layout): curated-deck DRC evidence for VDD_VCO strap; LVS reference unreadable by klt
