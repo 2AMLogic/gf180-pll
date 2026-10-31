@@ -104,3 +104,39 @@ resistors use the foundry deck's valueless form). The reference was not
 edited. The 43/43-net `match` therefore remains the pre-#837 foundry result,
 and the post-strap LVS criterion is still open. The LVS deck joins same-named
 nets, so even a `match` would not exercise the strap.
+
+## 2026-10-31: curated-deck LVS on `vco_block` -- runs now, verdict `mismatch`
+
+Supersedes the "LVS: `klt lvs` could not read the committed reference" paragraph
+above (kept as written). `klt 0.8.1.dev965+g5d8e4f2b5009`, KLayout 0.30.12,
+`--deck gf180mcu`. The reference netlist is unmodified. The only change to the
+request (`klt-curated-836/lvs-request.json`) is `reference.deck: "gf180mcu"`,
+which `klt lvs` names in its error hint as what `reference.form: "subckt-call"`
+needs to rewrite the valueless foundry-style resistor cards.
+
+Result (`klt-curated-836/lvs-vco_block.json`, passes `klt lvs --check`): status
+**`mismatch`**, 57 errors. Nets 43 layout / 43 reference / **31 matched**;
+devices 81 / 65 / 56 matched; pins 20 / 7 / 20 matched. **The "match, 43/43
+nets" criterion is not met by the curated deck.**
+
+Cause attribution: the same run on the `vco_block.gds` from before the #837
+strap (`389cf07d^`) gives the identical category counts and net/device/pin
+counts. The mismatch is therefore **not caused by #837's Metal1/Via1/Metal2
+strap**, and no geometry was changed. Breakdown of what the report names:
+
+- 14 layout MOS devices with no reference counterpart (12 pfet, 2 nfet), plus
+  30 `device.property` differences on matched MOS devices (`w_um`, `as`, `ad`,
+  `ps`, `pd`).
+- 2 `cap_nmos_03v3` layout devices (the supply decap from #759) with no
+  reference counterpart; the reference has none.
+- The three poly resistors are paired but flagged `device.class`: the layout
+  extracts `ppolyf_u_1k`, the reference rewrites to `PPOLYF_U_3K`.
+- 5 `topology` findings where nets were paired despite a name/identity
+  conflict.
+
+Not diagnosed here: whether these come from the reference netlist being older
+than the layout (it predates #759's decap and the #381 resistor change), from
+how the curated deck extracts MOS parameters and resistor classes, or from the
+layout. The reference was not edited, per the issue. The recorded foundry-deck
+`match` in `lvs-clean/` is unchanged and still predates #837's strap. Also,
+the LVS joins same-named nets, so even a `match` would not exercise the strap.
