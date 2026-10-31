@@ -338,6 +338,13 @@ REARGUED = {
         "spec/decision-records/"
         "DR-029-ref-phase-step-bisection-measures-the-wrong-quantity.md"
     ),
+    # #680: the first committed record of this campaign is a 15/288 partial
+    # run. DR-040 restates the Reference input row and its exclusion
+    # unchanged and verifies nothing; it relaxes no pass criterion.
+    "reference-input-contract": (
+        "spec/decision-records/"
+        "DR-040-reference-input-contract-first-record-is-a-partial-run-and-verifies-nothing.md"
+    ),
 }
 
 #: A decision record short enough to be a placeholder is not a re-argument.

@@ -22,7 +22,7 @@ simulation only; nothing has been fabricated or measured.
 |---|---|---|
 | Spec | Architecture and scope captured as numbered decision records. | [`spec/`](spec/) |
 | Schematics | VCO, PFD, charge pump, feedback divider, lock detector, and the shared 3.3 V logic cells. | [`design/`](design/) |
-| Verification | **105 evidence records** across 27 verification campaigns, each run over the PVT corner matrix. | [`sim/STATUS.md`](sim/STATUS.md) |
+| Verification | **106 evidence records** across 28 verification campaigns, each run over the PVT corner matrix. | [`sim/STATUS.md`](sim/STATUS.md) |
 | Closed-loop bring-up | Not done. Single-corner smoke test passes; the full-grid lock-time, output-range and supply-sensitivity campaigns do not yet show sustained lock across PVT. | [`sim/STATUS.md`](sim/STATUS.md) |
 | Period jitter | Deterministic component covers 45 of the mandated 45 PVT corners; the random component is bounded, not estimated. | [`sim/STATUS.md`](sim/STATUS.md) |
 | Reference spur | Closed-loop record covers 5 of the 45 PVT corners at 150 MHz; the 200 MHz band-top sweep has no measured record yet. | [`sim/STATUS.md`](sim/STATUS.md) |
