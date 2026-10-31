@@ -141,6 +141,11 @@ layout. The reference was not edited, per the issue. The recorded foundry-deck
 `match` in `lvs-clean/` is unchanged and still predates #837's strap. Also,
 the LVS joins same-named nets, so even a `match` would not exercise the strap.
 
+Follow-up (issue #855): with `poly_res: "3k"`, `combine_devices: true` and the
+decap in the reference as an `X_` subckt-call card, the curated-deck compare
+reports `match` (43/43 nets, 66/66 devices, 0 errors; R/C values unverified).
+See `klt-curated-836-recheck/RECORD.md`.
+
 Addendum 2026-10-31 (#854): the 57 errors above are attributed in
 `klt-curated-836/lvs-mismatch-diagnosis.md` (54 request/deck-run, 3 reference
 older than layout, 0 layout). The "Not diagnosed here" paragraph above is kept
