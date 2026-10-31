@@ -1,7 +1,7 @@
 """The loop filter's nine devices, transcribed from ``design/netlist/loop_filter.spice``.
 
-Pure Python: no KLayout, no PDK. The values are DR-006's ratified sizing and
-must not be changed here to make a layout fit -- ``layout/tests/
+Pure Python: no KLayout, no PDK. The values are DR-006's ratified sizing (C2's
+*device* is DR-042's option-B MIM) and must not be changed here to make a layout fit -- ``layout/tests/
 test_loop_filter_layout.py`` parses the committed netlist with
 :func:`parse_netlist` and fails if this table and the netlist ever disagree.
 
@@ -13,10 +13,16 @@ Terminal order is the PDK model's own (``libs.tech/ngspice/sm141064*.ngspice``):
   accumulates the n-well under it; the LVS deck agrees
   (``moscap_extraction.lvs``: ``P1 => cap_nmos_03v3_b`` gate region,
   ``P2 => nwell_con``).
-* ``cap_mim_2f0_m2m3_noshield 1 2`` -- the LVS deck's ``P1 => mim_virtual``
-  (the Metal2 bottom plate) and ``P2 => fuse_cap`` (the ``FuseTop`` top plate,
-  reached through Via2 from Metal3). So ``VCTRL`` is the bottom plate and
-  ``VSS`` the top plate.
+* ``cap_mim_2f0_m4m5_noshield 1 2`` (MIM option B, DR-042) and its option-A
+  predecessor ``cap_mim_2f0_m2m3_noshield 1 2`` -- the LVS deck's
+  ``P1 => mim_virtual`` (the bottom plate: Metal4 for B, Metal2 for A) and
+  ``P2 => fuse_cap`` (the ``FuseTop`` top plate, reached through Via4 from
+  Metal5 for B, Via2 from Metal3 for A). So ``VCTRL`` is the bottom plate and
+  ``VSS`` the top plate in both options.
+
+Option A is kept **only** so the committed #748 / ``pll_top`` evidence, which
+was drawn and verified with it, stays reproducible (``block.build(...,
+mim_option="A")``); the ratified, default device is option B.
 """
 
 from __future__ import annotations
@@ -72,16 +78,30 @@ class MosCap:
     model: str = "cap_nmos_03v3_b"
 
 
+#: MIM option -> netlist model. B is the ratified C2 (DR-042); A is DR-006's
+#: original device, kept for the historical evidence only (see module docstring).
+MIM_MODELS: dict[str, str] = {
+    "A": "cap_mim_2f0_m2m3_noshield",
+    "B": "cap_mim_2f0_m4m5_noshield",
+}
+MIM_OPTION_OF_MODEL: dict[str, str] = {model: option for option, model in MIM_MODELS.items()}
+RATIFIED_MIM_OPTION = "B"
+
+
 @dataclass(frozen=True)
 class MimCap:
-    """One ``cap_mim_2f0_m2m3_noshield``: top-plate (``FuseTop``) ``w_um`` x ``l_um``."""
+    """One ``cap_mim_2f0_m*_noshield``: top-plate (``FuseTop``) ``w_um`` x ``l_um``."""
 
     name: str
-    bottom_net: str  # terminal 1, Metal2 bottom plate
+    bottom_net: str  # terminal 1, the bottom plate (Metal4 for option B, Metal2 for A)
     top_net: str  # terminal 2, FuseTop top plate
     w_um: float
     l_um: float
-    model: str = "cap_mim_2f0_m2m3_noshield"
+    model: str = MIM_MODELS[RATIFIED_MIM_OPTION]
+
+    @property
+    def option(self) -> str:
+        return MIM_OPTION_OF_MODEL[self.model]
 
 
 #: Series chain VCTRL -> NR1 -> NR2 -> NR3 -> NZ (DR-006: "electrically one resistor").
@@ -95,8 +115,13 @@ RESISTORS: tuple[PolyRes, ...] = (
 #: C1, split four ways (DR-006).
 MOS_CAPS: tuple[MosCap, ...] = tuple(MosCap(f"XCF{i}", "NZ", "VSS", 87.0, 87.0) for i in range(1, 5))
 
-#: C2.
-MIM_CAPS: tuple[MimCap, ...] = (MimCap("XCF5", "VCTRL", "VSS", 31.4, 31.4),)
+def mim_caps(option: str = RATIFIED_MIM_OPTION) -> tuple[MimCap, ...]:
+    """C2 as the given MIM option's device (same terminals and drawn size)."""
+    return (MimCap("XCF5", "VCTRL", "VSS", 31.4, 31.4, MIM_MODELS[option]),)
+
+
+#: C2 -- the ratified option-B device (DR-042).
+MIM_CAPS: tuple[MimCap, ...] = mim_caps()
 
 #: The subcircuit's two ports.
 PORTS: tuple[str, ...] = ("VCTRL", "VSS")
@@ -178,9 +203,11 @@ def table_from_netlist(path: Path = NETLIST) -> tuple[tuple[PolyRes, ...], tuple
         elif inst.model == "cap_nmos_03v3_b":
             g, body = inst.nodes
             mos.append(MosCap(inst.name, g, body, _um(inst.params["c_width"]), _um(inst.params["c_length"])))
-        elif inst.model == "cap_mim_2f0_m2m3_noshield":
+        elif inst.model in MIM_OPTION_OF_MODEL:
             bot, top = inst.nodes
-            mim.append(MimCap(inst.name, bot, top, _um(inst.params["c_width"]), _um(inst.params["c_length"])))
+            mim.append(
+                MimCap(inst.name, bot, top, _um(inst.params["c_width"]), _um(inst.params["c_length"]), inst.model)
+            )
         else:
             raise ValueError(f"unexpected device model {inst.model!r} ({inst.name})")
         if inst.params.get("m", "1") != "1":
@@ -188,10 +215,10 @@ def table_from_netlist(path: Path = NETLIST) -> tuple[tuple[PolyRes, ...], tuple
     return tuple(res), tuple(mos), tuple(mim)
 
 
-def device_area_um2() -> float:
+def device_area_um2(mim: tuple[MimCap, ...] = MIM_CAPS) -> float:
     """Sum of the drawn *device* areas (gate, plate, resistor body) -- not the block area."""
     return (
         sum(r.w_um * r.l_um for r in RESISTORS)
         + sum(c.w_um * c.l_um for c in MOS_CAPS)
-        + sum(c.w_um * c.l_um for c in MIM_CAPS)
+        + sum(c.w_um * c.l_um for c in mim)
     )

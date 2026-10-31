@@ -1170,9 +1170,18 @@ data (#4 → #10), not DR-001's hand-calc placeholders:
   the DR-003 Decision 5 usable Vctrl range (0.9–2.7 V) — see
   `sim/loop-dynamics` for the measured C–V curve at the real operating
   points, not just the nominal one. Gate on the filter node, bulk on `VSS`.
-- **C2 — 1× `cap_mim_2f0_m2m3_noshield`**, 31.4 × 31.4 µm. MIM is ideally
-  linear (`cv_ratio` = 1.0000) and sits directly on `VCTRL`, where a
-  voltage-dependent cap would modulate the ripple pole itself.
+- **C2 — 1× `cap_mim_2f0_m4m5_noshield`**, 31.4 × 31.4 µm (MIM **option B**,
+  the option gf180mcuD's decks select; Metal4 bottom plate on `VCTRL`, Metal5
+  top plate on `VSS`). MIM is ideally linear (`cv_ratio` = 1.0000) and sits
+  directly on `VCTRL`, where a voltage-dependent cap would modulate the ripple
+  pole itself. DR-006 originally ratified the option-A device
+  (`cap_mim_2f0_m2m3_noshield`, same size and density); DR-042 (**proposed** —
+  ratified by operator approval of its PR) moves C2 to option B so the device
+  agrees with the repository's process target. The schematic and netlist are
+  *prepared* for it; equivalence of the option-B device (model/PVT and loop
+  dynamics) and variant-D DRC/LVS of the Metal4/Metal5 drawing are **pending**
+  — see DR-042 Decisions 3–5. The pre-DR-042 `sim/` records measured the
+  option-A device and are not relabelled.
 
 C1 is the area-dominant element (§ acceptance criteria in #10): at the real
 device density from `sim/devchar-passives`, four 87×87 µm devices consume
