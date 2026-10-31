@@ -1,0 +1,4 @@
+{
+ "layout": {"file": "../../vco_block.gds", "top": "vco_block", "deck": "gf180mcu", "deck_options": {"poly_res": "3k"}},
+ "reference": {"netlist": "../../lvs-clean/vco_block.spice", "top": "vco_block", "form": "subckt-call", "deck": "gf180mcu"}
+}
