@@ -2,6 +2,10 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-30
+
+- **PR #850**: docs(layout): curated-deck DRC evidence for VDD_VCO strap; LVS reference unreadable by klt
+
 ### 2026-10-29
 
 - **PR #831**: feat(sim): store new run output in the artifact store, commit manifests only
