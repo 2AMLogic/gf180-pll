@@ -4,6 +4,8 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-11-01
 
+- **PR #862**: sim: record harness-selftest campaign stored through the artifact store
+- **Issue #832** (closed): sim: wire sim/lib/artifact-put.sh into the campaign harness
 - **PR #849**: feat: add opt-in --artifact-store step to the sim harness
 
 ### 2026-10-31
