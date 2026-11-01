@@ -2,6 +2,10 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-11-01
+
+- **PR #849**: feat: add opt-in --artifact-store step to the sim harness
+
 ### 2026-10-31
 
 - **PR #859**: Bump Repo Skills 0.24.7 -> 0.25.1
