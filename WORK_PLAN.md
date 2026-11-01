@@ -7,7 +7,7 @@ This roadmap is generated from the repository's current GitHub label state.
 
 Judge-approved PRs under a hold (`loom:blocked` or `loom:operator`) — only a human merge decision is missing.
 
-- **#796**: feat(loop-filter): prepare C2 as the option-B MIM (DR-042 proposed)
+_None._
 
 ## Very Important
 
@@ -32,8 +32,8 @@ Human-approved issues ready for implementation (`loom:issue`).
 
 Issues currently being built (`loom:building`).
 
-- **#753**: Loop filter C2 is a MIM option-A device, but the repository's PV flow targets gf180mcuD (MIM option B)
 - **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes
+- **#866**: spec/pll.md:1149 still names the option-A C2 device; DR-042 Consequences omit that row
 
 ## PRs Awaiting Review
 
@@ -45,7 +45,7 @@ _None._
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
-- **#796**: feat(loop-filter): prepare C2 as the option-B MIM (DR-042 proposed)
+- **#867**: docs(spec): name option-B MIM in C2 row and record DR-042 open item
 
 ## Proposed
 
@@ -67,6 +67,7 @@ Issues carrying `loom:curated`.
 - **#825**: Re-qualify device-characterization records under open_pdks f6eeac7 (child of #790) *(curated)*
 - **#827**: Re-qualify lock-detector, lock-window and divider records under open_pdks f6eeac7 (child of #790) *(curated)*
 - **#828**: Re-qualify closed-loop campaign records under open_pdks f6eeac7 (child of #790) *(curated)*
+- **#866**: spec/pll.md:1149 still names the option-A C2 device; DR-042 Consequences omit that row *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -84,14 +85,14 @@ Issues carrying `loom:curated`.
 
 | Bucket | Count |
 |------|-------|
-| Operator merge-risk holds | 1 |
+| Operator merge-risk holds | 0 |
 | Very important | 0 |
 | Important | 2 |
 | Ready (`loom:issue`) | 1 |
 | In Progress (`loom:building`) | 2 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 1 |
-| Curated | 16 |
+| Curated | 17 |
 | Architect / Hermit proposals | 5 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
