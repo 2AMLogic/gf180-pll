@@ -26,7 +26,7 @@ _None._
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-_None._
+- **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief
 
 ## In Progress
 
@@ -34,21 +34,18 @@ Issues currently being built (`loom:building`).
 
 - **#753**: Loop filter C2 is a MIM option-A device, but the repository's PV flow targets gf180mcuD (MIM option B)
 - **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes
-- **#832**: sim: wire sim/lib/artifact-put.sh into the campaign harness
-- **#836**: T1 item 11 (power delivery): make VDD_VCO metal-continuous in vco_block so klt erc resolves one island
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-- **#849**: feat: add opt-in --artifact-store step to the sim harness
+_None._
 
 ## Approved (Awaiting Merge)
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
 - **#796**: feat(loop-filter): prepare C2 as the option-B MIM (DR-042 proposed)
-- **#852**: docs(layout): record curated-deck LVS on vco_block (mismatch, unchanged by the strap)
 
 ## Proposed
 
@@ -70,8 +67,6 @@ Issues carrying `loom:curated`.
 - **#825**: Re-qualify device-characterization records under open_pdks f6eeac7 (child of #790) *(curated)*
 - **#827**: Re-qualify lock-detector, lock-window and divider records under open_pdks f6eeac7 (child of #790) *(curated)*
 - **#828**: Re-qualify closed-loop campaign records under open_pdks f6eeac7 (child of #790) *(curated)*
-- **#832**: sim: wire sim/lib/artifact-put.sh into the campaign harness *(curated)*
-- **#836**: T1 item 11 (power delivery): make VDD_VCO metal-continuous in vco_block so klt erc resolves one island *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -92,11 +87,11 @@ Issues carrying `loom:curated`.
 | Operator merge-risk holds | 1 |
 | Very important | 0 |
 | Important | 2 |
-| Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 4 |
-| PRs awaiting review | 1 |
-| Approved PRs awaiting merge | 2 |
-| Curated | 18 |
+| Ready (`loom:issue`) | 1 |
+| In Progress (`loom:building`) | 2 |
+| PRs awaiting review | 0 |
+| Approved PRs awaiting merge | 1 |
+| Curated | 16 |
 | Architect / Hermit proposals | 5 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
