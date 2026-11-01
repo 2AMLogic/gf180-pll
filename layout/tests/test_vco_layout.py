@@ -206,6 +206,23 @@ class RingReferenceNetlistTests(unittest.TestCase):
         self.assertIn(" Y5 ", lines[0])  # MN's own gate net (A) for stage 1
 
 
+class BlockReferenceDecapFormTests(unittest.TestCase):
+    """vco_block.reference_netlist(decap_as_subckt_call=True) (issue #855)."""
+
+    def test_subckt_call_form_differs_only_in_the_decap_card(self):
+        default = vco_block.reference_netlist().splitlines()
+        xform = vco_block.reference_netlist(decap_as_subckt_call=True).splitlines()
+        self.assertEqual(len(default), len(xform))
+        diffs = [(a, b) for a, b in zip(default, xform) if a != b]
+        self.assertEqual(len(diffs), 1)
+        a, b = diffs[0]
+        self.assertTrue(a.startswith(f"C_{dev.DECAP_NAMES[0]} "))
+        self.assertEqual(b, "X" + a[1:])
+
+    def test_default_form_keeps_the_c_card(self):
+        self.assertNotIn("\nX_", vco_block.reference_netlist())
+
+
 @unittest.skipUnless(HAVE_KLAYOUT, "needs klayout.db")
 class RingMetal1NetSeparationTests(unittest.TestCase):
     """No Metal1 polygon in ring.py carries two nets (issues #368/#371).

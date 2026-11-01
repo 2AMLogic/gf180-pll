@@ -2,8 +2,24 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-10-31
+
+- **PR #859**: Bump Repo Skills 0.24.7 -> 0.25.1
+- **PR #857**: docs(layout): record curated-deck LVS match on vco_block with decap as subckt-call card
+- **Issue #855** (closed): Re-record curated-deck LVS on vco_block from a regenerated reference with the supply decap
+- **PR #856**: docs(layout): attribute the 57 curated-deck LVS errors on vco_block to request options and a pre-decap reference
+- **PR #852**: docs(layout): record curated-deck LVS on vco_block (mismatch, unchanged by the strap)
+- **Issue #854** (closed): Attribute the 57 curated-deck LVS mismatch errors on vco_block to reference, extraction, or layout
+- **Issue #836** (closed): T1 item 11 (power delivery): make VDD_VCO metal-continuous in vco_block so klt erc resolves one island
+
+### 2026-10-30
+
+- **PR #850**: docs(layout): curated-deck DRC evidence for VDD_VCO strap; LVS reference unreadable by klt
+
 ### 2026-10-29
 
+- **PR #831**: feat(sim): store new run output in the artifact store, commit manifests only
+- **Issue #830** (closed): Adopt the common artifact store for sim evidence (manifests in git, bytes via klt artifact)
 - **PR #846**: fix(sim): render record environment block via klt env-provenance, drop PDK path
 - **Issue #844** (closed): Evidence record writer emits a host-absolute PDK path: adopt klt env_provenance render_text_lines (blocks #739)
 

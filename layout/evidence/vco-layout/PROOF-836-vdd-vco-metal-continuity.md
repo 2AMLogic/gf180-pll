@@ -72,3 +72,81 @@ cluster there) and passes now.
 * Top-level LVS (#149) and the `signoff/` item-11 citation are untouched.
 * VCO sims: the `sim/` decks read schematic netlists; they reference `layout/`
   only in tests that check committed claims, not extracted geometry.
+
+## 2026-10-30 note: curated-deck DRC re-run; LVS not obtainable
+
+This supersedes the "Foundry DRC and LVS were not re-run" bullet above (kept as
+written). Per the 2026-10-30 operator ruling the evidence was taken with
+klayout-tools' **curated gf180mcu deck**, not the foundry `run_drc.py` /
+`run_lvs.py` (`klt 0.8.1.dev849+gf05774458ae2`, KLayout 0.30.12, deck content
+hash `sha256:88d269a2...`, deck not released).
+
+| | result | evidence |
+|---|---|---|
+| `klt drc --deck gf180mcu` on `vco_block.gds` (`--top vco_block`) | `clean`, 0 violations | `klt-curated-836/drc-vco_block.json` |
+| `klt drc --deck gf180mcu` on `pll_top.gds` | `clean`, 0 violations | `../pll-top-layout/klt-curated-836/drc-pll_top.json` |
+| `klt lvs` on `vco_block.gds` vs `lvs-clean/vco_block.spice` | **no verdict**: the reference does not parse | `klt-curated-836/lvs-attempt.md`, `lvs-request.json` |
+
+Both DRC reports pass `klt drc --check`; their input hashes equal the GDS
+sha256 values in the table above.
+
+What the curated deck covers: 53 rules on this layout (COMP, Poly2, Nplus,
+Pplus, Nwell, Contact, Metal1, Via1, Metal2 width/space/enclosure/on-grid, plus
+LV tap distance). It skips Metal3-5, Via2-4, MIM, ESD, fuse, guard-ring and
+the `_MV` rules, and lists roughly 280 foundry rules as unmodeled. No MIM rule
+is in the deck, so it cannot report the known loop-filter `MIMTM.3` at
+`pll_top`: `pll_top` "clean" here is **not** evidence that `MIMTM.3` is the
+only violation, and neither report shows the foundry deck is clean. The
+geometry added by #837 is Metal1 / Via1 / Metal2, all inside the checked set.
+
+LVS: `klt lvs` could not read the committed reference (its three poly
+resistors use the foundry deck's valueless form). The reference was not
+edited. The 43/43-net `match` therefore remains the pre-#837 foundry result,
+and the post-strap LVS criterion is still open. The LVS deck joins same-named
+nets, so even a `match` would not exercise the strap.
+
+## 2026-10-31: curated-deck LVS on `vco_block` -- runs now, verdict `mismatch`
+
+Supersedes the "LVS: `klt lvs` could not read the committed reference" paragraph
+above (kept as written). `klt 0.8.1.dev965+g5d8e4f2b5009`, KLayout 0.30.12,
+`--deck gf180mcu`. The reference netlist is unmodified. The only change to the
+request (`klt-curated-836/lvs-request.json`) is `reference.deck: "gf180mcu"`,
+which `klt lvs` names in its error hint as what `reference.form: "subckt-call"`
+needs to rewrite the valueless foundry-style resistor cards.
+
+Result (`klt-curated-836/lvs-vco_block.json`, passes `klt lvs --check`): status
+**`mismatch`**, 57 errors. Nets 43 layout / 43 reference / **31 matched**;
+devices 81 / 65 / 56 matched; pins 20 / 7 / 20 matched. **The "match, 43/43
+nets" criterion is not met by the curated deck.**
+
+Cause attribution: the same run on the `vco_block.gds` from before the #837
+strap (`389cf07d^`) gives the identical category counts and net/device/pin
+counts. The mismatch is therefore **not caused by #837's Metal1/Via1/Metal2
+strap**, and no geometry was changed. Breakdown of what the report names:
+
+- 14 layout MOS devices with no reference counterpart (12 pfet, 2 nfet), plus
+  30 `device.property` differences on matched MOS devices (`w_um`, `as`, `ad`,
+  `ps`, `pd`).
+- 2 `cap_nmos_03v3` layout devices (the supply decap from #759) with no
+  reference counterpart; the reference has none.
+- The three poly resistors are paired but flagged `device.class`: the layout
+  extracts `ppolyf_u_1k`, the reference rewrites to `PPOLYF_U_3K`.
+- 5 `topology` findings where nets were paired despite a name/identity
+  conflict.
+
+Not diagnosed here: whether these come from the reference netlist being older
+than the layout (it predates #759's decap and the #381 resistor change), from
+how the curated deck extracts MOS parameters and resistor classes, or from the
+layout. The reference was not edited, per the issue. The recorded foundry-deck
+`match` in `lvs-clean/` is unchanged and still predates #837's strap. Also,
+the LVS joins same-named nets, so even a `match` would not exercise the strap.
+
+Follow-up (issue #855): with `poly_res: "3k"`, `combine_devices: true` and the
+decap in the reference as an `X_` subckt-call card, the curated-deck compare
+reports `match` (43/43 nets, 66/66 devices, 0 errors; R/C values unverified).
+See `klt-curated-836-recheck/RECORD.md`.
+
+Addendum 2026-10-31 (#854): the 57 errors above are attributed in
+`klt-curated-836/lvs-mismatch-diagnosis.md` (54 request/deck-run, 3 reference
+older than layout, 0 layout). The "Not diagnosed here" paragraph above is kept
+as written.
