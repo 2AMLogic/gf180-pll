@@ -199,3 +199,12 @@ and this record claims only the first:
   things the Decision 4 run settles.
 - If ratified, the DR-006 header gains a one-line pointer to this record; the
   body of DR-006 is not rewritten.
+- **The `spec/pll.md` as-built filter table C2 row is changed by this record.**
+  It now names `cap_mim_2f0_m4m5_noshield`; its capacitance cells remain the
+  option-A baseline from DR-006 pending Decision 3 (follow-up correction in
+  PR #796, merge commit `e04f9e84`).
+- **Open item: post-layout equivalence evidence.** Decision 3.1's schematic-level
+  `C2_B / C2_A` is 1.0 by construction (same nominal density, textually identical
+  model card), so it cannot show equivalence. Equivalence needs post-layout
+  evidence once the Metal4/Metal5 layout exists. This is open; it does not
+  reopen or relax any ratified tolerance.

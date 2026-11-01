@@ -1146,7 +1146,11 @@ against:
 |---|---|---|---|---|
 | R | 4 × `ppolyf_u` in series | W = 2 µm, L = 107 µm each | 77.1 kΩ | 61.6 … 93.4 kΩ |
 | C1 | 4 × `cap_nmos_03v3_b` | 87 × 87 µm each | 120.8 pF | 107.1 … 133 pF |
-| C2 | 1 × `cap_mim_2f0_m2m3_noshield` | 31.4 × 31.4 µm | 2.02 pF | 1.81 … 2.22 pF |
+| C2 | 1 × `cap_mim_2f0_m4m5_noshield` (Metal4/Metal5, option B; DR-042, PR #796 merge `e04f9e84`) | 31.4 × 31.4 µm | 2.02 pF† | 1.81 … 2.22 pF† |
+
+† The C2 capacitance cells are the option-A (`cap_mim_2f0_m2m3_noshield`) baseline from DR-006 /
+`sim/devchar-passives/records/20260731-041345-833292f.md`. They are unchanged and pending
+DR-042 Decision 3; no number has been edited for option B.
 
 `C1/C2 ≈ 60`, **not** DR-001's placeholder `C1/C2 = 10`, which does not clear
 45° of phase margin at the top of the reference range (DR-006 Decision 2).
