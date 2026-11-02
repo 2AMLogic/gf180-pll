@@ -4,6 +4,8 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-11-01
 
+- **PR #867**: docs(spec): name option-B MIM in C2 row and record DR-042 open item
+- **Issue #866** (closed): spec/pll.md:1149 still names the option-A C2 device; DR-042 Consequences omit that row
 - **PR #796**: feat(loop-filter): prepare C2 as the option-B MIM (DR-042 proposed)
 - **PR #862**: sim: record harness-selftest campaign stored through the artifact store
 - **Issue #832** (closed): sim: wire sim/lib/artifact-put.sh into the campaign harness
