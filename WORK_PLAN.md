@@ -33,7 +33,6 @@ Human-approved issues ready for implementation (`loom:issue`).
 Issues currently being built (`loom:building`).
 
 - **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes
-- **#866**: spec/pll.md:1149 still names the option-A C2 device; DR-042 Consequences omit that row
 
 ## PRs Awaiting Review
 
@@ -45,7 +44,7 @@ _None._
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
-- **#867**: docs(spec): name option-B MIM in C2 row and record DR-042 open item
+_None._
 
 ## Proposed
 
@@ -61,13 +60,11 @@ Issues carrying `loom:curated`.
 - **#533**: sim/reference-spur-band-top: run the 45-point 200 MHz campaign on the batch backend (operator-authorized spend) *(curated)*
 - **#549**: sim: bound the batch-vs-pinned ngspice divergence with a cross-version overlap measurement on a shared operating point *(curated)*
 - **#680**: sim: realign the batch job image to the ngspice-46 pin — it cannot converge sim/reference-input-contract's edge-rate variant, so #499's grid is unobtainable off-host *(curated)*
-- **#753**: Loop filter C2 is a MIM option-A device, but the repository's PV flow targets gf180mcuD (MIM option B) *(curated)*
 - **#755**: sim harness: stage a simulator init file (wnflag) so local and batch backends run the same configuration *(curated)*
 - **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes *(curated)*
 - **#825**: Re-qualify device-characterization records under open_pdks f6eeac7 (child of #790) *(curated)*
 - **#827**: Re-qualify lock-detector, lock-window and divider records under open_pdks f6eeac7 (child of #790) *(curated)*
 - **#828**: Re-qualify closed-loop campaign records under open_pdks f6eeac7 (child of #790) *(curated)*
-- **#866**: spec/pll.md:1149 still names the option-A C2 device; DR-042 Consequences omit that row *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -89,10 +86,10 @@ Issues carrying `loom:curated`.
 | Very important | 0 |
 | Important | 2 |
 | Ready (`loom:issue`) | 1 |
-| In Progress (`loom:building`) | 2 |
+| In Progress (`loom:building`) | 1 |
 | PRs awaiting review | 0 |
-| Approved PRs awaiting merge | 1 |
-| Curated | 17 |
+| Approved PRs awaiting merge | 0 |
+| Curated | 15 |
 | Architect / Hermit proposals | 5 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
