@@ -26,7 +26,7 @@ _None._
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-- **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief
+_None._
 
 ## In Progress
 
@@ -73,6 +73,7 @@ Issues carrying `loom:curated`.
 - **#740**: sim/lib/simenv.sh: refuse local multi-unit grid fan-out when the batch backend is selected *(architect)*
 - **#741**: sim: migrate loop-dynamics, output-range, mc-cp-mismatch shell campaigns to harness manifests *(architect)*
 - **#812**: Simplify layout status-claims checker: replace 2.3k-line prose linter with tree-derived check *(hermit)*
+- **#871**: Dedupe identical TreeWriter / install_checklib test helpers across test directories *(hermit)*
 
 ## Epics
 
@@ -85,11 +86,11 @@ Issues carrying `loom:curated`.
 | Operator merge-risk holds | 0 |
 | Very important | 0 |
 | Important | 2 |
-| Ready (`loom:issue`) | 1 |
+| Ready (`loom:issue`) | 0 |
 | In Progress (`loom:building`) | 1 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 15 |
-| Architect / Hermit proposals | 5 |
+| Architect / Hermit proposals | 6 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
