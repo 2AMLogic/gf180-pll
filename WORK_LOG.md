@@ -2,6 +2,11 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-11-05
+
+- **PR #800**: feat(signoff): cite T1 items 1, 9 and 10 with attestations on klt 0.7.0
+- **Issue #798** (closed): T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes
+
 ### 2026-11-01
 
 - **PR #867**: docs(spec): name option-B MIM in C2 row and record DR-042 open item
