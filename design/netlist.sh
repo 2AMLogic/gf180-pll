@@ -69,7 +69,7 @@
 # of one schematic.
 #
 # Requires: xschem on PATH, and the gf180mcu PDK at $GF180_PDK_ROOT
-# (default ~/.volare/gf180mcuD), the same variable sim/lib/simenv.sh uses.
+# (default ~/.ciel/gf180mcuD), the same variable sim/lib/simenv.sh uses.
 
 set -euo pipefail
 
@@ -154,6 +154,13 @@ command -v xschem >/dev/null 2>&1 || {
   exit 1
 }
 
+# The PDK tree must be at the open_pdks revision pinned in sim/pdk.json (the
+# same check sim/harness/pdk.py applies), so a stale tree is a visible failure
+# rather than a silently different symbol/model set.
+# shellcheck source=../sim/lib/simenv.sh
+. "${HERE}/../sim/lib/simenv.sh"
+simenv_require_pdk_pin || exit 1
+
 XSCHEM_VERSION="$(xschem --no_x -q --version 2>/dev/null | head -1 || echo 3.4.7)"
 
 # ------------------------------------------------------------- path assert --
@@ -166,7 +173,7 @@ XSCHEM_VERSION="$(xschem --no_x -q --version 2>/dev/null | head -1 || echo 3.4.7
 # The argument is easy to state and easy to invalidate when the PDK or the
 # xschem install moves, so it is asserted here rather than left in a comment.
 check_paths() {
-  local pdk="${GF180_PDK_ROOT:-${HOME}/.volare/gf180mcuD}"
+  local pdk="${GF180_PDK_ROOT:-${HOME}/.ciel/gf180mcuD}"
   local sharedir=""
   local xbin
   xbin="$(command -v xschem)"

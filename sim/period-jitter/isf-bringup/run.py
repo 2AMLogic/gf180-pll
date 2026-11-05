@@ -92,7 +92,7 @@ def pdk_models() -> Path:
 #: "Timestep too small" abort in particular leaves a clk.dat with a couple of
 #: rows in it, so the reduction's own "no crossings" failure is several steps
 #: downstream of the cause -- worth naming at the source.
-FATAL_LOG_PATTERNS = ("Timestep too small", "simulation(s) aborted", "singular")
+FATAL_LOG_PATTERNS = legacy_provenance.FATAL_LOG_PATTERNS
 
 
 #: Execution backend every deck in this runner goes through (#712). A test

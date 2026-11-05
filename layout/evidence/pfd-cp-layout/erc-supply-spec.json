@@ -1,5 +1,5 @@
 {
-  "_description": "klt erc supply-connectivity spec for layout/evidence/pfd-cp-layout/pfd_cp.gds (gf180mcuD). Declares the gate+conductor stackup and the two supply nets (VDD, VSS) so erc.unconnected_net / erc.supply_short can be computed. Run with '--deck gf180mcu' so the curated extraction deck's own device-body markers are carved out of the matching conductor roles rather than hand-transcribed. The well/substrate-tie half is declared as a disclosed non-declaration (see 'ties_disclosure' below and PROOF-erc.md), not omitted silently.",
+  "_comment": "klt erc supply-connectivity spec for layout/evidence/pfd-cp-layout/pfd_cp.gds (gf180mcuD). Declares the gate+conductor stackup and the two supply nets (VDD, VSS) so erc.unconnected_net / erc.supply_short can be computed. Run with '--deck gf180mcu' so the curated extraction deck's own device-body markers are carved out of the matching conductor roles rather than hand-transcribed. The well/substrate-tie half is declared as a disclosed non-declaration (see 'ties_disclosure' below and PROOF-erc.md), not omitted silently.",
   "stackup": [
     {
       "name": "poly2",

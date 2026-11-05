@@ -9,7 +9,7 @@ name: CI
 #                   push/PR so a broken harness or a bad Python change is
 #                   caught immediately, in a bare runner with no extra
 #                   install step.
-#   pdk-checks   -- requires the gf180mcu PDK (via volare) and xschem on
+#   pdk-checks   -- requires the gf180mcu PDK (via ciel) and xschem on
 #                   PATH. These catch netlist drift against the committed
 #                   schematics, which only matters when design/ changes and
 #                   is not worth an install step on every PR. So it runs on
@@ -53,7 +53,9 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          # Pinned, not "3.x": a floating version outran the klayout wheels
+          # (none for cp315), forcing a failing sdist build.
+          python-version: "3.13"
 
       - name: Install the klayout pip wheel (klayout.db -- not the standalone app binary)
         # This is the `klayout` PyPI package providing `klayout.db`, distinct
@@ -88,6 +90,15 @@ jobs:
             bash "$t" || { echo "FAILED: $t"; rc=1; }
           done
           exit "$rc"
+
+      - name: "sim/lib/check-artifact-manifests.sh (artifact manifests: schema, artifact: URIs, no committed bytes)"
+        # Raw run output for new campaigns lives in the fleet artifact store;
+        # git keeps only manifests/artifacts/*.manifest.json (issue #830).
+        # Headless: no broker, no klt -- it grades the committed manifests
+        # only. Fails on a malformed manifest, a non-`artifact:` URI, or a
+        # committed file whose sha256 equals a stored object's. Its unit tests
+        # (and the writer's fail-closed tests) run under sim/selftest.sh.
+        run: bash sim/lib/check-artifact-manifests.sh
 
       - name: layout/tests (harness unit tests + klayout.db-gated tests)
         # layout/harness/drc.py's two pure functions (parse_report_db,
@@ -147,11 +158,11 @@ jobs:
         # the recorded deck verdicts; no PDK and no standalone KLayout
         # application binary. NOT "no layout input" any more -- see the ninth
         # pass at the end of this comment.
-        # Also grades every absence-of-layout sentence in both documents for
-        # a stated scope, and their claims about spec/pll.md's ratification
-        # state against the spec's own Status line -- both of which went
-        # stale in the same document after the first pass of this check
-        # shipped. Third pass grades the numbers too: every block footprint
+        # Also grades the documents' claims about spec/pll.md's ratification
+        # state against the spec's own Status line, which went stale in the
+        # same document after the first pass of this check shipped. (The
+        # free-prose "scope"/"deferral" grading of absence sentences was
+        # removed in #812; every remaining rule compares against the tree.) Third pass grades the numbers too: every block footprint
         # stated in either document must equal that block's row in
         # layout/evidence/area-audit/area-audit.md, and the proposal must
         # state one for every block the audit records -- section 6's table
@@ -244,7 +255,7 @@ jobs:
         # This is this step's own source of truth for which klt version a
         # local `bash signoff/run-signoff.sh --check` must be run against --
         # see signoff/README.md's "Reproducing" section.
-        run: pip install 'klayout-tools==0.7.0'
+        run: pip install 'klayout-tools==0.8.0'
 
       - name: signoff/run-signoff.sh --check (T1 tier verdict vs. the committed report)
         # signoff/tier-report.json is this block's T1 verdict of record --
@@ -851,7 +862,9 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          # Pinned, not "3.x": a floating version outran the klayout wheels
+          # (none for cp315), forcing a failing sdist build.
+          python-version: "3.13"
 
       - name: Install ngspice and xschem's runtime/build dependencies
         run: |
@@ -913,14 +926,15 @@ jobs:
                exit 1 ;;
           esac
 
-      - name: Install the gf180mcu PDK via volare
+      - name: Install the gf180mcu PDK via ciel
         run: |
-          pip install --user volare
-          # Pinned to the open_pdks hash this repo's evidence records cite
-          # (see sim/README.md). volare installs into ~/.volare/gf180mcuD,
-          # which sim/harness/pdk.py and design/xschemrc both search by
-          # default -- no extra env var needed.
-          "$HOME/.local/bin/volare" enable --pdk gf180mcu c6d73a35f524070e85faff4a6a9eef49553ebc2b
+          pip install --user ciel==2.6.1
+          # The open_pdks hash is read from sim/pdk.json, the single source
+          # (see sim/README.md). ciel installs into ~/.ciel/gf180mcuD, which
+          # sim/harness/pdk.py and design/xschemrc both search by default --
+          # no extra env var needed.
+          OPEN_PDKS="$(python3 -c 'import json; print(json.load(open("sim/pdk.json"))["open_pdks"])')"
+          "$HOME/.local/bin/ciel" enable --pdk-family gf180mcu -l gf180mcu_fd_pr "$OPEN_PDKS"
 
       - name: design/netlist.sh --check-paths
         run: ./design/netlist.sh --check-paths

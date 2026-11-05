@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 from . import HARNESS_VERSION, corners as corners_mod, report, runner, testbench as tb_mod
+from . import artifacts as artifacts_mod
 from . import batch as batch_mod
 from . import derived as derived_mod
 from . import execution as execution_mod
@@ -247,6 +248,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-write",
         action="store_true",
         help="run but do not record evidence (debugging only)",
+    )
+    parser.add_argument(
+        "--artifact-store",
+        action="store_true",
+        help="store the run's raw output (per-corner logs, raw_measures.csv, "
+        "retained raw files) with sim/lib/artifact-put.sh and commit only its "
+        "manifest; fails closed before the summary record is published "
+        "(needs $KLT_ARTIFACT_BROKER; ignored with --no-write)",
     )
     parser.add_argument("--quiet", action="store_true", help="only print the summary")
     parser.add_argument("--version", action="version", version=f"gf180-pll harness {HARNESS_VERSION}")
@@ -510,7 +519,9 @@ def run(args: argparse.Namespace) -> int:
     try:
         pdk = find_pdk()
         ngspice = runner.ngspice_version()
-    except (PdkNotFound, NgspiceMissing) as exc:
+        # Up front: fail before the grid, not after it, if klt is unusable.
+        env_provenance_lines = report.klt_env_provenance_lines()
+    except (PdkNotFound, NgspiceMissing, report.EnvProvenanceError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ENVIRONMENT
 
@@ -627,7 +638,7 @@ def run(args: argparse.Namespace) -> int:
         return _run_reserved(
             args, tb, pdk, ngspice, points, corner_list, temperatures, supplies,
             nominal, tolerance, conformance, backend, plan_only, jobs, omp_pin,
-            started, git, reservation,
+            started, git, reservation, env_provenance_lines,
         )
     finally:
         # Whatever ended the run before its summary was published -- an
@@ -649,7 +660,7 @@ def _report_unpublished(reservation: "report.RecordReservation") -> None:
 def _run_reserved(
     args, tb, pdk, ngspice, points, corner_list, temperatures, supplies,
     nominal, tolerance, conformance, backend, plan_only, jobs, omp_pin,
-    started, git, reservation,
+    started, git, reservation, env_provenance_lines,
 ) -> int:
     experiment_dir = tb.experiment_dir
     record_id = reservation.record_id
@@ -790,6 +801,7 @@ def _run_reserved(
         conformance=conformance,
         execution={"jobs": jobs, "omp": omp_pin, **backend.describe()},
         abort_reason=abort_reason,
+        env_provenance_lines=env_provenance_lines,
     )
 
     print()
@@ -835,14 +847,26 @@ def _run_reserved(
         # their own right, and a testbench with no derived table would
         # otherwise leave nothing machine-readable behind (sim/harness#110).
         raw_measures_path = raw_measures_mod.write_raw_measures_csv(tb, results, log_dir)
+        artifact_manifest = None
+        if args.artifact_store:
+            raw_out = artifacts_mod.raw_output_files(log_dir, results, tb, raw_measures_path)
+            rc = artifacts_mod.store(tb.experiment, record_id, raw_out)
+            if rc != 0:
+                return EXIT_ENVIRONMENT
+            artifact_manifest = (
+                REPO_ROOT / "manifests" / "artifacts"
+                / f"{tb.experiment}-{record_id}.manifest.json"
+            )
         record_path = report.write_record(record, experiment_dir)
         reservation.mark_published()
         print()
         print(f"record    : {record_path}")
         print(f"snapshot  : {snapshot}")
+        if artifact_manifest is not None:
+            print(f"artifacts : {artifact_manifest}")
         print(f"raw logs  : {log_dir}")
         for spec in tb.raw_files:
-            if not spec.retain:
+            if not spec.retain or artifact_manifest is not None:
                 continue
             kept = sum(
                 1
@@ -850,7 +874,8 @@ def _run_reserved(
                 if spec.name in r.raw_files and r.raw_files[spec.name].exists()
             )
             print(f"raw files : {kept} x <corner-id>-{spec.name} in {log_dir}")
-        print(f"raw table : {raw_measures_path}")
+        if artifact_manifest is None:
+            print(f"raw table : {raw_measures_path}")
         for path in written:
             print(f"derived   : {path}")
     else:

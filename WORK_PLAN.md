@@ -26,19 +26,19 @@ _None._
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-- **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief
+_None._
 
 ## In Progress
 
 Issues currently being built (`loom:building`).
 
-- **#755**: sim harness: stage a simulator init file (wnflag) so local and batch backends run the same configuration
+- **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-- **#784**: feat(sim): stage one shared simulator init file on local and batch backends
+_None._
 
 ## Approved (Awaiting Merge)
 
@@ -60,8 +60,11 @@ Issues carrying `loom:curated`.
 - **#533**: sim/reference-spur-band-top: run the 45-point 200 MHz campaign on the batch backend (operator-authorized spend) *(curated)*
 - **#549**: sim: bound the batch-vs-pinned ngspice divergence with a cross-version overlap measurement on a shared operating point *(curated)*
 - **#680**: sim: realign the batch job image to the ngspice-46 pin — it cannot converge sim/reference-input-contract's edge-rate variant, so #499's grid is unobtainable off-host *(curated)*
-- **#753**: Loop filter C2 is a MIM option-A device, but the repository's PV flow targets gf180mcuD (MIM option B) *(curated)*
 - **#755**: sim harness: stage a simulator init file (wnflag) so local and batch backends run the same configuration *(curated)*
+- **#798**: T1 items 1, 9, 10: move the grader to klt 0.7.0 and cite artifact-anchored inventory envelopes *(curated)*
+- **#825**: Re-qualify device-characterization records under open_pdks f6eeac7 (child of #790) *(curated)*
+- **#827**: Re-qualify lock-detector, lock-window and divider records under open_pdks f6eeac7 (child of #790) *(curated)*
+- **#828**: Re-qualify closed-loop campaign records under open_pdks f6eeac7 (child of #790) *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -69,6 +72,8 @@ Issues carrying `loom:curated`.
 - **#731**: sim/period-jitter: migrate grid.sh fan-out to run_corners.py backends (follow-up to #712 step 1) *(architect)*
 - **#740**: sim/lib/simenv.sh: refuse local multi-unit grid fan-out when the batch backend is selected *(architect)*
 - **#741**: sim: migrate loop-dynamics, output-range, mc-cp-mismatch shell campaigns to harness manifests *(architect)*
+- **#812**: Simplify layout status-claims checker: replace 2.3k-line prose linter with tree-derived check *(hermit)*
+- **#871**: Dedupe identical TreeWriter / install_checklib test helpers across test directories *(hermit)*
 
 ## Epics
 
@@ -81,11 +86,11 @@ Issues carrying `loom:curated`.
 | Operator merge-risk holds | 0 |
 | Very important | 0 |
 | Important | 2 |
-| Ready (`loom:issue`) | 1 |
+| Ready (`loom:issue`) | 0 |
 | In Progress (`loom:building`) | 1 |
-| PRs awaiting review | 1 |
+| PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 12 |
-| Architect / Hermit proposals | 4 |
+| Curated | 15 |
+| Architect / Hermit proposals | 6 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->

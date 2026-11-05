@@ -44,12 +44,12 @@ append XSCHEM_LIBRARY_PATH :${XSCHEM_SHAREDIR}/xschem_library
 append XSCHEM_LIBRARY_PATH :${XSCHEM_SHAREDIR}/xschem_library/devices
 
 #### PDK root: override with GF180_PDK_ROOT, the same variable
-#### sim/lib/simenv.sh uses; it defaults to the same ~/.volare/gf180mcuD path
+#### sim/lib/simenv.sh uses; it defaults to the same ~/.ciel/gf180mcuD path
 #### simenv.sh pins.
 if { [info exists env(GF180_PDK_ROOT)] && $env(GF180_PDK_ROOT) ne {} } {
   set GF180_PDK_ROOT $env(GF180_PDK_ROOT)
 } else {
-  set GF180_PDK_ROOT $env(HOME)/.volare/gf180mcuD
+  set GF180_PDK_ROOT $env(HOME)/.ciel/gf180mcuD
 }
 #### gf180mcu primitive device symbols.  Every block here uses nfet_03v3 /
 #### pfet_03v3 only, per DR-002 Decision 3 (3.3 V thick-oxide flavour

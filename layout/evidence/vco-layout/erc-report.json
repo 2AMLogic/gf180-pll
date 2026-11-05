@@ -1,82 +1,18 @@
 {
-  "schema_version": 1,
-  "file": "layout/evidence/vco-layout/vco_block.gds",
+  "schema_version": 2,
+  "file": {
+    "path": "layout/evidence/vco-layout/vco_block.gds",
+    "scope": "repo"
+  },
   "spec": "layout/evidence/vco-layout/erc-supply-spec.json",
   "pdk": null,
   "findings_only": false,
   "gate_role": "poly2",
   "gate_count": 29,
+  "antenna_tables_omitted": false,
   "gates": [
     {
       "gate_id": "gate0",
-      "net": "VDD_VCO",
-      "gate_area_um2": 5000.0,
-      "antenna_verdict": "unchecked",
-      "levels": [
-        {
-          "layer": "poly2",
-          "step_area_um2": 5124.0,
-          "cumulative_area_um2": 5124.0,
-          "antenna_ratio": 1.0248,
-          "antenna_ratio_max": null,
-          "antenna_ratio_source": null,
-          "verdict": "unchecked",
-          "remedy": null
-        },
-        {
-          "layer": "metal1",
-          "step_area_um2": 1482.1918,
-          "cumulative_area_um2": 6606.1918,
-          "antenna_ratio": 1.321238,
-          "antenna_ratio_max": null,
-          "antenna_ratio_source": null,
-          "verdict": "unchecked",
-          "remedy": null
-        },
-        {
-          "layer": "metal2",
-          "step_area_um2": 235.972,
-          "cumulative_area_um2": 6842.1638,
-          "antenna_ratio": 1.368433,
-          "antenna_ratio_max": null,
-          "antenna_ratio_source": null,
-          "verdict": "unchecked",
-          "remedy": null
-        },
-        {
-          "layer": "metal3",
-          "step_area_um2": 0.0,
-          "cumulative_area_um2": 6842.1638,
-          "antenna_ratio": 1.368433,
-          "antenna_ratio_max": null,
-          "antenna_ratio_source": null,
-          "verdict": "unchecked",
-          "remedy": null
-        },
-        {
-          "layer": "metal4",
-          "step_area_um2": 0.0,
-          "cumulative_area_um2": 6842.1638,
-          "antenna_ratio": 1.368433,
-          "antenna_ratio_max": null,
-          "antenna_ratio_source": null,
-          "verdict": "unchecked",
-          "remedy": null
-        },
-        {
-          "layer": "metal5",
-          "step_area_um2": 0.0,
-          "cumulative_area_um2": 6842.1638,
-          "antenna_ratio": 1.368433,
-          "antenna_ratio_max": null,
-          "antenna_ratio_source": null,
-          "verdict": "unchecked",
-          "remedy": null
-        }
-      ]
-    },
-    {
-      "gate_id": "gate1",
       "net": "GND_VCO",
       "gate_area_um2": 4.4,
       "antenna_verdict": "unchecked",
@@ -144,7 +80,7 @@
       ]
     },
     {
-      "gate_id": "gate2",
+      "gate_id": "gate1",
       "net": null,
       "gate_area_um2": 2.0,
       "antenna_verdict": "unchecked",
@@ -212,7 +148,7 @@
       ]
     },
     {
-      "gate_id": "gate3",
+      "gate_id": "gate2",
       "net": null,
       "gate_area_um2": 9.0,
       "antenna_verdict": "unchecked",
@@ -280,7 +216,7 @@
       ]
     },
     {
-      "gate_id": "gate4",
+      "gate_id": "gate3",
       "net": null,
       "gate_area_um2": 12.0,
       "antenna_verdict": "unchecked",
@@ -348,7 +284,7 @@
       ]
     },
     {
-      "gate_id": "gate5",
+      "gate_id": "gate4",
       "net": null,
       "gate_area_um2": 22.5,
       "antenna_verdict": "unchecked",
@@ -416,7 +352,7 @@
       ]
     },
     {
-      "gate_id": "gate6",
+      "gate_id": "gate5",
       "net": null,
       "gate_area_um2": 1.0,
       "antenna_verdict": "unchecked",
@@ -484,7 +420,7 @@
       ]
     },
     {
-      "gate_id": "gate7",
+      "gate_id": "gate6",
       "net": null,
       "gate_area_um2": 86.5,
       "antenna_verdict": "unchecked",
@@ -552,7 +488,7 @@
       ]
     },
     {
-      "gate_id": "gate8",
+      "gate_id": "gate7",
       "net": null,
       "gate_area_um2": 10.0,
       "antenna_verdict": "unchecked",
@@ -612,6 +548,74 @@
           "step_area_um2": 0.0,
           "cumulative_area_um2": 37.88,
           "antenna_ratio": 3.788,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate8",
+      "net": "VDD_VCO",
+      "gate_area_um2": 5000.0,
+      "antenna_verdict": "unchecked",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 5124.0,
+          "cumulative_area_um2": 5124.0,
+          "antenna_ratio": 1.0248,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "metal1",
+          "step_area_um2": 1571.3734,
+          "cumulative_area_um2": 6695.3734,
+          "antenna_ratio": 1.339075,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "metal2",
+          "step_area_um2": 246.884,
+          "cumulative_area_um2": 6942.2574,
+          "antenna_ratio": 1.388451,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 6942.2574,
+          "antenna_ratio": 1.388451,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 6942.2574,
+          "antenna_ratio": 1.388451,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 6942.2574,
+          "antenna_ratio": 1.388451,
           "antenna_ratio_max": null,
           "antenna_ratio_source": null,
           "verdict": "unchecked",
@@ -1980,47 +1984,32 @@
       ]
     }
   ],
-  "erc_findings": [
+  "nets": [
     {
-      "rule": "erc.unconnected_net",
-      "description": "declared net 'VDD_VCO' resolves to 2 disconnected electrical islands (expected exactly one)",
-      "net": "VDD_VCO",
-      "other_net": null,
-      "gate_id": null,
-      "layer": null,
-      "bbox": {
-        "left": -19560,
-        "bottom": -10640,
-        "right": 206370,
-        "top": 173080
-      },
-      "islands": [
-        {
-          "bbox": {
-            "left": -19560,
-            "bottom": -10640,
-            "right": 206370,
-            "top": 173080
-          },
-          "layer": "poly2",
-          "shape_count": 21
-        },
-        {
-          "bbox": {
-            "left": -120,
-            "bottom": 18480,
-            "right": 105640,
-            "top": 19320
-          },
-          "layer": "metal1",
-          "shape_count": 1
-        }
-      ]
+      "name": "VDD_VCO",
+      "matched_islands": 1,
+      "expected_islands": 1,
+      "roles": [],
+      "unlabelled_islands": null,
+      "unlabelled_area_um2": null,
+      "unlabelled_bbox": null,
+      "unlabelled_allowed_islands": null
+    },
+    {
+      "name": "GND_VCO",
+      "matched_islands": 1,
+      "expected_islands": 1,
+      "roles": [],
+      "unlabelled_islands": null,
+      "unlabelled_area_um2": null,
+      "unlabelled_bbox": null,
+      "unlabelled_allowed_islands": null
     }
   ],
-  "erc_finding_count": 1,
-  "erc_status": "violations",
-  "status": "violations",
+  "erc_findings": [],
+  "erc_finding_count": 0,
+  "erc_status": "clean",
+  "status": "not_checked",
   "coverage": {
     "scope": "antenna",
     "schema_version": 1,
@@ -2777,24 +2766,26 @@
     "nothing_checked": false,
     "nothing_checked_reasons": [],
     "checked_by_assertion": [],
-    "checked_by_well_assertion": []
+    "checked_by_well_assertion": [],
+    "layers_in_stream_without_declaration": [],
+    "well_assertion_coverage": []
   },
   "ties_disclosure": null,
   "provenance": {
-    "klt_version": "0.6.0",
+    "klt_version": "0.8.0",
     "klayout_version": "0.30.12",
     "pdk": null,
     "deck": {
       "name": "gf180mcu",
-      "content_hash": "sha256:95c2eb9148b29ded02182aeca4222287ff57f813691d5e2f9f8d7a675f6cb637",
-      "released": false
+      "content_hash": "sha256:0eb6df1bafc5106ec50bd58479dbd7cda36bb685f1ef18cd3a2244a6e7e48666",
+      "released": true
     },
     "input": {
-      "content_hash": "sha256:515f816130459d6f489f17877f596229260324b09c97f68119ae4c8172229589",
+      "content_hash": "sha256:4f5151dfbcd2d43694bfc845a507fbd43974559f1e1f8c4a8b6064afe95deb3c",
       "role": "layout"
     },
     "spec": {
-      "content_hash": "sha256:bae31d4ae01879bdc25ede10b8fa4b0f3741cad8fd0fe373d8fda22db323f47f"
+      "content_hash": "sha256:9a97e1523d2acb286effdccfbe761a01e91d3429b73ff9d16635824543b4c6f1"
     },
     "devices": [
       {
@@ -2804,6 +2795,14 @@
         "body_area_um2": 71.6,
         "source": "deck",
         "superseded_by": null
+      }
+    ],
+    "net_exclusions": [],
+    "label_layers": [
+      {
+        "name": "metal1",
+        "label_layer": "34/10",
+        "label_text_count": 61
       }
     ]
   }

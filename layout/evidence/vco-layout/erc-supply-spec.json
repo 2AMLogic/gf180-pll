@@ -1,5 +1,5 @@
 {
-  "_description": "klt erc supply-connectivity spec for layout/evidence/vco-layout/vco_block.gds (gf180mcuD). Declares the gate+conductor stackup, the n-well substrate/well tie, and the two supply nets (VDD_VCO, GND_VCO) so erc.unconnected_net / erc.supply_short / erc.missing_tie can all be computed. Run with '--deck gf180mcu' so this block's marked poly resistors are carved out of the poly2 conductor role rather than shorting their own terminals; see PROOF-erc.md for the full record.",
+  "_comment": "klt erc supply-connectivity spec for layout/evidence/vco-layout/vco_block.gds (gf180mcuD). Declares the gate+conductor stackup, the n-well substrate/well tie, and the two supply nets (VDD_VCO, GND_VCO) so erc.unconnected_net / erc.supply_short / erc.missing_tie can all be computed. Run with '--deck gf180mcu' so this block's marked poly resistors are carved out of the poly2 conductor role rather than shorting their own terminals; see PROOF-erc.md for the full record.",
   "stackup": [
     {
       "name": "poly2",

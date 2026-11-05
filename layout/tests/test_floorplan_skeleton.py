@@ -56,7 +56,7 @@ class BlockPlacementTests(unittest.TestCase):
         self.assertAlmostEqual(skeleton.C1_ARRAY.w * skeleton.C1_ARRAY.h, 4 * 87.0 * 87.0)
 
     def test_loop_filter_c2_matches_dr006_footprint(self):
-        # DR-006: C2 = 1x cap_mim_2f0_m2m3_noshield, 31.4x31.4 um.
+        # DR-006: C2 = 31.4x31.4 um (DR-042 changes the MIM option, not the size).
         self.assertAlmostEqual(skeleton.C2_CAP.w, 31.4)
         self.assertAlmostEqual(skeleton.C2_CAP.h, 31.4)
 

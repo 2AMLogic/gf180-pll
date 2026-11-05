@@ -1,5 +1,13 @@
 # `pll_top` structural power-delivery ERC (T1 checklist item 11, tracker #127)
 
+> **Status update (2026-10-27, issue #836): the inherited `VDD_VCO` two-island
+> finding is gone; `erc_status` is `clean`.** `vco_block` now ties both of
+> `vtoi_core`'s n-well tap bands to the supply on metal, so the assembled
+> `pll_top.gds` (regenerated; `sha256:fbe4001364aa586f6bdbf1babe85cbb4d40d8fbf4560b899ee158d7f5f12b11c`)
+> reports `erc_findings: []` on `klayout-tools==0.6.0`, `erc-supply-spec.json`
+> unchanged. Older text below describes the earlier geometry and is left as
+> written. See [`../vco-layout/PROOF-836-vdd-vco-metal-continuity.md`](../vco-layout/PROOF-836-vdd-vco-metal-continuity.md).
+
 First `klt erc` supply-spec run on the **assembled top level** (`pll_top.gds`,
 issue #297). Until now every `klt erc` report in this repository was per block;
 `PROOF.md` limitation 5 said no ERC had been run on the top level. This run asks

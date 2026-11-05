@@ -88,11 +88,10 @@ VCO_RECORD = _refspur.VCO_RECORD
 VCTRLS = _refspur.VCTRLS
 interp_vctrl = _refspur.interp_vctrl
 load_curves = _refspur.load_curves
-supplies_of = _refspur.supplies_of
 
-#: The MOS-bundle corner set `tb.json` names (`sim/harness/corners.py`'s
-#: `CORNER_SETS["mos"]`), in the order the runner expands it.
-MOS_BUNDLES = ("typical", "ff", "ss", "fs", "sf")
+_pjitter = load_module(SIM / "period-jitter" / "testbench" / "vstart_from_vco_record.py")
+MOS_BUNDLES = _pjitter.MOS_BUNDLES
+full_grid = _pjitter.full_grid
 
 #: Human-readable why-this-corner text, so every generated `grid` block can
 #: carry the `description` `sim/harness/README.md` requires of it.
@@ -145,17 +144,6 @@ def select_band(curves_by_band, key, target):
         if vstart is not None:
             return band, vstart, kvco_at(curve, vstart)
     return None, None, None
-
-
-def full_grid(manifest):
-    """(corner, temp, vdd, supply-alias) for every point of the mandated matrix."""
-    supplies = supplies_of(manifest)
-    out = []
-    for corner in MOS_BUNDLES:
-        for temp in manifest["temperatures_c"]:
-            for alias in ("low", "nom", "high"):
-                out.append((corner, float(temp), supplies[alias], alias))
-    return out
 
 
 def point_id(band, vstart):

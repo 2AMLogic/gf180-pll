@@ -111,6 +111,7 @@ class BlockSpec:
     cell: str  # its top cell
     orient: str  # "R0", "M90" (mirror x), "R180"
     evidence: str  # committed copy, relative to layout/ (registered in harness/reproduce.py)
+    args: tuple[str, ...] = ()  # extra generator arguments (the registered ones, for the same artifact)
 
 
 BLOCKS: tuple[BlockSpec, ...] = (
@@ -118,8 +119,11 @@ BLOCKS: tuple[BlockSpec, ...] = (
               "evidence/lock-detector-layout/lock_detector.gds"),
     BlockSpec("pfd_cp", "pll_top.pfd_cp.block", "pfd_cp.gds", "pfd_cp", "M90",
               "evidence/pfd-cp-layout/pfd_cp.gds"),
+    # The committed assembly was built with the option-A (DR-006) loop filter; DR-042 makes the
+    # generator's default option B, so the historical filter is selected explicitly. Re-assembling
+    # with the option-B filter is follow-up work (DR-042 Consequences).
     BlockSpec("loop_filter", "pll_top.loop_filter.block", "loop_filter.gds", "loop_filter", "R0",
-              "evidence/loop-filter-layout/loop_filter.gds"),
+              "evidence/loop-filter-layout/loop_filter.gds", ("--mim-option", "A")),
     BlockSpec("vco", "pll_top.vco.block", "vco_block.gds", "vco_block", "R0",
               "evidence/vco-layout/vco_block.gds"),
     BlockSpec("divider_chain", "pll_top.divider_chain.divider_chain", "divider_chain.gds", "divider_chain", "R180",
@@ -149,7 +153,7 @@ def generate_blocks(workdir: Path) -> dict[str, Path]:
 
     out = {}
     for spec in BLOCKS:
-        out[spec.subckt] = reproduce.rebuild(reproduce.Block(spec.evidence, spec.module), workdir / spec.subckt)
+        out[spec.subckt] = reproduce.rebuild(reproduce.Block(spec.evidence, spec.module, spec.args), workdir / spec.subckt)
     return out
 
 

@@ -174,7 +174,7 @@ class TestNormalisation(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.run_dir = Path(self._tmp.name).resolve() / "run"
         self.run_dir.mkdir()
-        self.pdk = Path.home() / ".volare" / "gf180mcuD"
+        self.pdk = Path.home() / ".ciel" / "gf180mcuD"
 
     def _subs(self):
         return env.path_substitutions(self.run_dir, self.pdk)

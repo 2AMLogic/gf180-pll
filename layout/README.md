@@ -120,8 +120,8 @@ layout/
                                     20 transistors) + CLI entry point (issue #308)
     loop_filter/              the passive loop filter, standalone (issue #748)
       devices.py                 device table, pinned by the tests to design/netlist/loop_filter.spice
-      primitives.py              cap_nmos_03v3_b / MIM-A cap_mim_2f0_m2m3_noshield / plain ppolyf_u generators
-      block.py                   2x2 C1 array + R chain + C2, wired; CLI entry point (--check-connectivity)
+      primitives.py              cap_nmos_03v3_b / MIM cap_mim_2f0_m4m5_noshield (option B, DR-042; option A kept for the #748 evidence) / plain ppolyf_u generators
+      block.py                   2x2 C1 array + R chain + C2, wired; CLI entry point (--check-connectivity, --mim-option {A,B}; default B)
       netcheck.py                device census + plate-aware connectivity read back from the exported GDS
   evidence/
     inv-tb-proof/            committed proof artifacts (gds, netlist, logs, reports)
@@ -151,7 +151,10 @@ layout/
                              DRC/LVS reports, one shared PROOF.md (issue #307)
     divider-dff-proof/       divider_chain dff_tg_3v3 composite proof: GDS + DRC/LVS reports (issue #308)
     loop-filter-layout/      loop_filter GDS, DRC (variants D and A) + LVS attempts, connectivity (issue #748);
-                             NOT DRC-clean on variant D (1 x MIMTM.3) and not LVS-matched -- see PROOF.md
+                             NOT DRC-clean on variant D (1 x MIMTM.3) and not LVS-matched -- see PROOF.md.
+                             Drawn with DR-006's option-A C2 (historical, reproduced with --mim-option A);
+                             DR-042 (proposed) moves C2 to the option-B MIM -- its Metal4/Metal5 drawing is
+                             generated (default) but has no variant-D DRC/LVS verdict yet (pending)
     work/                    scratch re-run tree (git-ignored)
 ```
 
@@ -192,7 +195,7 @@ iteration (seconds, not minutes) before a full deck run; it is not the gate.
 
 | Tool | Why | Notes |
 |---|---|---|
-| gf180mcu PDK | DRC/LVS decks + standard-cell GDS/CDL | `pip install volare && volare enable --pdk gf180mcu <hash>` — same install `sim/` uses |
+| gf180mcu PDK | DRC/LVS decks + standard-cell GDS/CDL | `pip install ciel && ciel enable --pdk-family gf180mcu -l gf180mcu_fd_pr <hash>` (hash: `open_pdks` in `sim/pdk.json`) — same install `sim/` uses |
 | KLayout **application** binary | runs the foundry Ruby DRC/LVS-DSL decks (`klayout -b -r deck.drc`) | **not** the `klayout` pip wheel, which has no DSL runner — see "The two KLayouts" below |
 | A Python environment with `klayout` (pip) + `docopt` importable | the PDK's own `run_drc.py`/`run_lvs.py` need them | `python3 -m venv ~/opt/gf180pv-venv && ~/opt/gf180pv-venv/bin/pip install klayout docopt` |
 | `klt` (optional but recommended) | fast PDK/asset discovery, and a quick pre-check DRC pass | `pip install klayout-tools` |

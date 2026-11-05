@@ -48,7 +48,6 @@ sys.path.insert(0, str(REPO / "sim"))
 
 from harness.pdk import find_pdk  # noqa: E402
 from harness import execution, legacy_provenance  # noqa: E402
-from harness import execution, legacy_provenance  # noqa: E402
 
 import rb_deck  # noqa: E402
 import rb_extract  # noqa: E402
@@ -118,9 +117,6 @@ N_PERIODS = 60
 CONF = 0.95
 MIN_DOF = 30
 
-FATAL = ("Timestep too small", "simulation(s) aborted", "singular matrix",
-         "Error:")
-
 
 def pdk_models() -> Path:
     return find_pdk().ngspice_dir
@@ -132,18 +128,8 @@ BACKEND = execution.LocalBackend()
 
 
 def run_deck(deck: str, work: Path, log: Path, expect: str | None = None) -> tuple[float, str]:
-    run = legacy_provenance.run_deck_files(deck, work, backend=BACKEND)
-    out = run.output
-    log.parent.mkdir(parents=True, exist_ok=True)
-    # ngspice's batch progress meter ("Reference value : ...") is thousands of
-    # characters of wall-clock noise per transient; nothing else is dropped.
-    log.write_text(re.sub(r"(?: ?Reference value :\s*\S+)+", "", out))
-    hit = [p for p in FATAL if p in out]
-    if hit:
-        raise SystemExit(f"ngspice reported {hit!r} -- see {log}; refused")
-    if expect and not (work / expect).is_file():
-        raise SystemExit(f"ngspice produced no {expect} -- see {log}")
-    return run.seconds, out
+    return legacy_provenance.run_deck_checked(
+        deck, work, log, backend=BACKEND, expect=expect)
 
 
 #: Start-up retry.  A transient whose solver stalls ("Timestep too small")
@@ -444,7 +430,7 @@ N_PEAKS = 3
 #: 600), and a 600-sub-network deck holds ~0.7 GB, enough for ngspice's own
 #: available-memory check to refuse the noise output when many points run side
 #: by side -- which it does loudly ("memory required ... is more than memory
-#: available", caught by FATAL), not silently.
+#: available", caught by `legacy_provenance.FATAL`), not silently.
 CHUNK = 80
 
 

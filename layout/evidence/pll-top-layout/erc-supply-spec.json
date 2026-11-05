@@ -1,5 +1,5 @@
 {
- "_description": "klt erc supply-connectivity spec for layout/evidence/pll-top-layout/pll_top.gds (gf180mcuD), the assembled top level (issue #297). Declares the gate+conductor stackup Poly2..Metal5 with the vias bridging it, and the five supply nets of design/netlist/pll_top.spice (VDD, VSS, VDD_VCO, GND_VCO, VDD_DIV) so erc.unconnected_net / erc.supply_short can be computed across the whole chip. Run with '--deck gf180mcu'. No ties[] entry; see ties_disclosure.",
+ "_comment": "klt erc supply-connectivity spec for layout/evidence/pll-top-layout/pll_top.gds (gf180mcuD), the assembled top level (issue #297). Declares the gate+conductor stackup Poly2..Metal5 with the vias bridging it, and the five supply nets of design/netlist/pll_top.spice (VDD, VSS, VDD_VCO, GND_VCO, VDD_DIV) so erc.unconnected_net / erc.supply_short can be computed across the whole chip. Run with '--deck gf180mcu'. No ties[] entry; see ties_disclosure.",
  "stackup": [
   {
    "name": "poly2",

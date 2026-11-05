@@ -1049,6 +1049,8 @@ class CliPartialGridRecoveryTests(ManifestFixture):
         buf_out, buf_err = io.StringIO(), io.StringIO()
         with mock.patch.object(cli, "find_pdk", return_value=self.pdk), \
              mock.patch.object(runner, "ngspice_version", return_value="ngspice-46"), \
+             mock.patch.object(report, "klt_env_provenance_lines",
+                               return_value=["host: host-00000000"]), \
              mock.patch.object(runner, "run_grid", side_effect=fake_run_grid), \
              mock.patch.object(cli, "SIM_DIR", self.root), \
              contextlib.redirect_stdout(buf_out), contextlib.redirect_stderr(buf_err):
@@ -1135,6 +1137,8 @@ class CliRecordReservationTests(ManifestFixture):
         patches = [
             mock.patch.object(cli, "find_pdk", return_value=self.pdk),
             mock.patch.object(runner, "ngspice_version", return_value="ngspice-46"),
+            mock.patch.object(report, "klt_env_provenance_lines",
+                              return_value=["host: host-00000000"]),
             mock.patch.object(runner, "run_grid", side_effect=run_grid or self._fake_run_grid),
             mock.patch.object(cli, "SIM_DIR", self.root),
         ]

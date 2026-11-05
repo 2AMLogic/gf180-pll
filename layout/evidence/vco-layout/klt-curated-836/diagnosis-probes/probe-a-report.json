@@ -1,0 +1,1473 @@
+{
+  "schema_version": 2,
+  "engine": "klayout",
+  "layout": {
+    "path": "layout/evidence/vco-layout/vco_block.gds",
+    "scope": "repo"
+  },
+  "reference": "../../lvs-clean/vco_block.spice",
+  "top": "vco_block",
+  "reference_top": "VCO_BLOCK",
+  "reference_conversion": {
+    "form": "subckt-call",
+    "deck": "gf180mcu",
+    "device_map": null
+  },
+  "parameter_tolerance": null,
+  "options": {
+    "combine_devices": false,
+    "combine_devices_per_circuit": null,
+    "combine_devices_max_attempts": 5,
+    "flatten_layout": false,
+    "flatten_reference": false,
+    "netgen_setup": null,
+    "parameter_tolerance": null,
+    "compare_parameters": null,
+    "power_connectivity": null,
+    "anchor_top_level_pins": null,
+    "strict_top_level_pin_count": false,
+    "compare_mos_flavour": false,
+    "supply_nets": [
+      "GND",
+      "VCC",
+      "VDD",
+      "VGND",
+      "VPWR",
+      "VSS"
+    ],
+    "finfet_bulk": null
+  },
+  "hints_applied": null,
+  "constant_nets_applied": null,
+  "status": "mismatch",
+  "power_connectivity": {
+    "status": "unchecked",
+    "reason": "reference.form is 'subckt-call', whose reference netlist carries its own power/ground pins and nets -- they take part in the ordinary compare, so this check (which exists to cover the signal-only 'gate-level-verilog' form) does not apply",
+    "power_pins": [],
+    "power_pins_derivation": null,
+    "instance_count": 0,
+    "expected_nets": null,
+    "unchecked_expected_pins": [],
+    "excluded_pins": [],
+    "findings": [],
+    "finding_count": 0
+  },
+  "body_verification": {
+    "status": "verified",
+    "reason": null,
+    "device_classes": [],
+    "device_count": 0,
+    "findings": [],
+    "finding_count": 0
+  },
+  "device_parameter_coverage": [
+    {
+      "class": "cap_nmos_03v3",
+      "device_kind": "capacitor",
+      "layout_devices": 2,
+      "reference_devices": 0,
+      "compared": [
+        "C"
+      ],
+      "not_compared": [
+        {
+          "parameter": "A",
+          "reason": "secondary"
+        },
+        {
+          "parameter": "P",
+          "reason": "secondary"
+        }
+      ]
+    },
+    {
+      "class": "ppolyf_u_3k",
+      "device_kind": "resistor",
+      "layout_devices": 3,
+      "reference_devices": 3,
+      "compared": [],
+      "not_compared": [
+        {
+          "parameter": "R",
+          "reason": "placeholder_value"
+        },
+        {
+          "parameter": "L",
+          "reason": "secondary"
+        },
+        {
+          "parameter": "W",
+          "reason": "secondary"
+        },
+        {
+          "parameter": "A",
+          "reason": "secondary"
+        },
+        {
+          "parameter": "P",
+          "reason": "secondary"
+        }
+      ]
+    }
+  ],
+  "mismatch_count": 56,
+  "error_count": 52,
+  "category_counts": {
+    "device.geometry_not_compared": 2,
+    "device.placeholder_value": 1,
+    "device.property": 30,
+    "device.unmatched": 16,
+    "topology": 7
+  },
+  "category_error_counts": {
+    "device.property": 30,
+    "device.unmatched": 16,
+    "topology": 6
+  },
+  "counts": {
+    "nets": {
+      "layout": 43,
+      "reference": 43,
+      "matched": 34
+    },
+    "devices": {
+      "layout": 81,
+      "reference": 65,
+      "matched": 59
+    },
+    "pins": {
+      "layout": 20,
+      "reference": 7,
+      "matched": 20
+    }
+  },
+  "device_classes": [
+    "nfet",
+    "pfet",
+    "bjt",
+    "cap_mim_2f0_m4m5_noshield",
+    "cap_nmos_03v3",
+    "cap_nmos_03v3_dn",
+    "cap_pmos_03v3",
+    "cap_pmos_03v3_dn",
+    "cap_nmos_06v0",
+    "cap_nmos_06v0_dn",
+    "cap_pmos_06v0",
+    "cap_pmos_06v0_dn",
+    "cap_nmos_03v3_b",
+    "cap_pmos_03v3_b",
+    "cap_nmos_06v0_b",
+    "cap_pmos_06v0_b",
+    "resistor",
+    "diode_nd2ps_06v0",
+    "diode_pd2nw_06v0"
+  ],
+  "environment": {
+    "engine": "klayout",
+    "engine_version": "0.30.12",
+    "netgen_binary": null,
+    "layout_sha256": "4f5151dfbcd2d43694bfc845a507fbd43974559f1e1f8c4a8b6064afe95deb3c",
+    "reference_sha256": "f6d9fb3f4186a3d1693f3245b10ea8c73bdd977ff993886e9ea236eae35c3ac5",
+    "extracted_netlist": null
+  },
+  "provenance": {
+    "klt_version": "0.8.1.dev965+g5d8e4f2b5009",
+    "klt_git_commit": "5d8e4f2b5009121919931f2fb19fff95aa3c3d1d",
+    "klt_reinstall_spec": "klayout-tools @ git+https://github.com/2AMLogic/klayout-tools@5d8e4f2b5009121919931f2fb19fff95aa3c3d1d",
+    "klayout_version": "0.30.12",
+    "pdk": null,
+    "deck": {
+      "name": "gf180mcu",
+      "content_hash": "sha256:88d269a2e7bbb9762ff2ddbe96840316df4d8ee8c5cc408119b61919ecaf1556",
+      "released": false,
+      "options": {
+        "metal_top": "9K",
+        "mim_cap": "cap_mim_2f0_m4m5_noshield",
+        "poly_res": "3k"
+      },
+      "options_explicit": {
+        "metal_top": false,
+        "mim_cap": false,
+        "poly_res": true
+      },
+      "options_hash": "sha256:df52f5d3649629175a75f1fd8b8ad9f66cc6204b375d93fa3107be5f4a96588e"
+    },
+    "input": {
+      "content_hash": "sha256:4f5151dfbcd2d43694bfc845a507fbd43974559f1e1f8c4a8b6064afe95deb3c",
+      "role": "layout"
+    },
+    "klayout_version_mismatch": false
+  },
+  "mismatches": [
+    {
+      "category": "device.geometry_not_compared",
+      "severity": "warning",
+      "description": "device class 'cap_nmos_03v3' is a capacitor class, whose ['A', 'P'] parameter(s) KLayout declares *secondary*: kdb.NetlistComparer compares primary parameters only, so none of them took part in this compare and each is NOT verified -- this capacitor's geometry could differ between the two sides by any amount and this run would still report 'match'. The compared parameter(s) were ['C']. Name them in options.compare_parameters to compare them (see docs/cli/lvs.md, 'device.geometry_not_compared')",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": null,
+        "reference": null,
+        "class": "cap_nmos_03v3"
+      },
+      "property": null,
+      "details": {
+        "device_kind": "capacitor",
+        "compared_parameters": [
+          "C"
+        ],
+        "not_compared_parameters": [
+          "A",
+          "P"
+        ],
+        "layout_devices": 2,
+        "reference_devices": 0
+      },
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.geometry_not_compared",
+      "severity": "warning",
+      "description": "device class 'ppolyf_u_3k' is a resistor class, whose ['A', 'L', 'P', 'W'] parameter(s) KLayout declares *secondary*: kdb.NetlistComparer compares primary parameters only, so none of them took part in this compare and each is NOT verified -- this resistor's geometry could differ between the two sides by any amount and this run would still report 'match'. No parameter of this class was compared at all: the remaining parameter(s) were separately excluded from this run (see the device.placeholder_value/device.parameter_excluded entries), so the two sides were paired on topology alone. Name them in options.compare_parameters to compare them (see docs/cli/lvs.md, 'device.geometry_not_compared')",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": null,
+        "reference": null,
+        "class": "ppolyf_u_3k"
+      },
+      "property": null,
+      "details": {
+        "device_kind": "resistor",
+        "compared_parameters": [],
+        "not_compared_parameters": [
+          "A",
+          "L",
+          "P",
+          "W"
+        ],
+        "layout_devices": 3,
+        "reference_devices": 3
+      },
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.placeholder_value",
+      "severity": "warning",
+      "description": "reference device class 'PPOLYF_U_3K' was converted from a subcircuit call (request.reference.form: \"subckt-call\"), so its 'R' value is the literal 0 placeholder on all 3 reference instance(s) -- klt lvs has no PDK sheet-resistance/capacitance-per-area data to compute a real one. 'R' was therefore excluded from this compare on both sides (layout: 3 instance(s), R 16800..99000) and the two sides were paired on topology alone -- that dimension of the compare is not independently verified. Supply a reference in the plain-element form carrying real 'R' values to compare it (see docs/cli/lvs.md, 'device.placeholder_value')",
+      "side": "reference",
+      "net": null,
+      "device": {
+        "layout": null,
+        "reference": null,
+        "class": "PPOLYF_U_3K"
+      },
+      "property": null,
+      "details": {
+        "parameter": "R",
+        "device_kind": "resistor",
+        "reference_devices": 3,
+        "layout_devices": 3,
+        "layout_values": [
+          16800.0,
+          99000.0
+        ]
+      },
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'w_um' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$11",
+        "reference": "_MB0",
+        "class": "nfet"
+      },
+      "property": {
+        "name": "w_um",
+        "layout": 2.5,
+        "reference": 5.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'as' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$11",
+        "reference": "_MB0",
+        "class": "nfet"
+      },
+      "property": {
+        "name": "as",
+        "layout": 3.75,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'ad' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$11",
+        "reference": "_MB0",
+        "class": "nfet"
+      },
+      "property": {
+        "name": "ad",
+        "layout": 3.75,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'ps' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$11",
+        "reference": "_MB0",
+        "class": "nfet"
+      },
+      "property": {
+        "name": "ps",
+        "layout": 8.0,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'pd' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$11",
+        "reference": "_MB0",
+        "class": "nfet"
+      },
+      "property": {
+        "name": "pd",
+        "layout": 8.0,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'w_um' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$12",
+        "reference": "_MB1",
+        "class": "nfet"
+      },
+      "property": {
+        "name": "w_um",
+        "layout": 4.305,
+        "reference": 8.61
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'as' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$12",
+        "reference": "_MB1",
+        "class": "nfet"
+      },
+      "property": {
+        "name": "as",
+        "layout": 6.4575,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'ad' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$12",
+        "reference": "_MB1",
+        "class": "nfet"
+      },
+      "property": {
+        "name": "ad",
+        "layout": 6.4575,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'ps' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$12",
+        "reference": "_MB1",
+        "class": "nfet"
+      },
+      "property": {
+        "name": "ps",
+        "layout": 11.61,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'pd' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$12",
+        "reference": "_MB1",
+        "class": "nfet"
+      },
+      "property": {
+        "name": "pd",
+        "layout": 11.61,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'w_um' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$38",
+        "reference": "_MSUM",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "w_um",
+        "layout": 15.0,
+        "reference": 60.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'as' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$38",
+        "reference": "_MSUM",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "as",
+        "layout": 22.5,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'ad' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$38",
+        "reference": "_MSUM",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "ad",
+        "layout": 22.5,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'ps' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$38",
+        "reference": "_MSUM",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "ps",
+        "layout": 33.0,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'pd' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$38",
+        "reference": "_MSUM",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "pd",
+        "layout": 33.0,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'w_um' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$42",
+        "reference": "_MA0",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "w_um",
+        "layout": 13.25,
+        "reference": 26.5
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'as' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$42",
+        "reference": "_MA0",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "as",
+        "layout": 19.875,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'ad' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$42",
+        "reference": "_MA0",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "ad",
+        "layout": 19.875,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'ps' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$42",
+        "reference": "_MA0",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "ps",
+        "layout": 29.5,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'pd' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$42",
+        "reference": "_MA0",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "pd",
+        "layout": 29.5,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'w_um' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$43",
+        "reference": "_MA1",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "w_um",
+        "layout": 8.61,
+        "reference": 17.22
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'as' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$43",
+        "reference": "_MA1",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "as",
+        "layout": 12.915,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'ad' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$43",
+        "reference": "_MA1",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "ad",
+        "layout": 12.915,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'ps' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$43",
+        "reference": "_MA1",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "ps",
+        "layout": 20.22,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'pd' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$43",
+        "reference": "_MA1",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "pd",
+        "layout": 20.22,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'w_um' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$54",
+        "reference": "_MC1",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "w_um",
+        "layout": 9.86,
+        "reference": 78.88
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'as' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$54",
+        "reference": "_MC1",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "as",
+        "layout": 14.79,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'ad' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$54",
+        "reference": "_MC1",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "ad",
+        "layout": 14.79,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'ps' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$54",
+        "reference": "_MC1",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "ps",
+        "layout": 22.72,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.property",
+      "severity": "error",
+      "description": "matched device parameter 'pd' differs",
+      "side": "both",
+      "net": null,
+      "device": {
+        "layout": "\\$54",
+        "reference": "_MC1",
+        "class": "pfet"
+      },
+      "property": {
+        "name": "pd",
+        "layout": 22.72,
+        "reference": 0.0
+      },
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$13",
+        "reference": null,
+        "class": "nfet"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$14",
+        "reference": null,
+        "class": "nfet"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$39",
+        "reference": null,
+        "class": "pfet"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$40",
+        "reference": null,
+        "class": "pfet"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$41",
+        "reference": null,
+        "class": "pfet"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$45",
+        "reference": null,
+        "class": "pfet"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$46",
+        "reference": null,
+        "class": "pfet"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$55",
+        "reference": null,
+        "class": "pfet"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$56",
+        "reference": null,
+        "class": "pfet"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$57",
+        "reference": null,
+        "class": "pfet"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$59",
+        "reference": null,
+        "class": "pfet"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$60",
+        "reference": null,
+        "class": "pfet"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$61",
+        "reference": null,
+        "class": "pfet"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$62",
+        "reference": null,
+        "class": "pfet"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$77",
+        "reference": null,
+        "class": "cap_nmos_03v3"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "\\$78",
+        "reference": null,
+        "class": "cap_nmos_03v3"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "topology",
+      "severity": "error",
+      "description": "nets were paired despite a name/identity conflict",
+      "side": "both",
+      "net": {
+        "layout": "\\$13",
+        "reference": "GB"
+      },
+      "device": null,
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "topology",
+      "severity": "error",
+      "description": "nets were paired despite a name/identity conflict",
+      "side": "both",
+      "net": {
+        "layout": "\\$16",
+        "reference": "VBN1"
+      },
+      "device": null,
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "topology",
+      "severity": "error",
+      "description": "nets were paired despite a name/identity conflict",
+      "side": "both",
+      "net": {
+        "layout": "\\$17",
+        "reference": "VBP2"
+      },
+      "device": null,
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "topology",
+      "severity": "error",
+      "description": "nets were paired despite a name/identity conflict",
+      "side": "both",
+      "net": {
+        "layout": "\\$22",
+        "reference": "GA"
+      },
+      "device": null,
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "topology",
+      "severity": "error",
+      "description": "nets were paired despite a name/identity conflict",
+      "side": "both",
+      "net": {
+        "layout": "\\$23",
+        "reference": "GC"
+      },
+      "device": null,
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "topology",
+      "severity": "error",
+      "description": "device class could not be mapped to a counterpart: 'cap_nmos_03v3'",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": null,
+        "reference": null,
+        "class": "cap_nmos_03v3"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "topology",
+      "severity": "warning",
+      "description": "device class has no counterpart on the other side, but no devices of this class were extracted either -- not a real topology mismatch: 'bjt'",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": null,
+        "reference": null,
+        "class": "bjt"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    }
+  ],
+  "net_correspondence": [
+    {
+      "layout": "B0",
+      "reference": "B0",
+      "pin": true
+    },
+    {
+      "layout": "\\$15",
+      "reference": "B0B",
+      "pin": false
+    },
+    {
+      "layout": "B1",
+      "reference": "B1",
+      "pin": true
+    },
+    {
+      "layout": "\\$14",
+      "reference": "B1B",
+      "pin": false
+    },
+    {
+      "layout": "B2",
+      "reference": "B2",
+      "pin": true
+    },
+    {
+      "layout": "\\$18",
+      "reference": "B2B",
+      "pin": false
+    },
+    {
+      "layout": "CLK",
+      "reference": "CLK",
+      "pin": true
+    },
+    {
+      "layout": "\\$11",
+      "reference": "NA",
+      "pin": false
+    },
+    {
+      "layout": "NB1",
+      "reference": "NB1",
+      "pin": true
+    },
+    {
+      "layout": "NB2",
+      "reference": "NB2",
+      "pin": true
+    },
+    {
+      "layout": "NC",
+      "reference": "NC",
+      "pin": true
+    },
+    {
+      "layout": "\\$3",
+      "reference": "NMD",
+      "pin": false
+    },
+    {
+      "layout": "NOFF",
+      "reference": "NOFF",
+      "pin": true
+    },
+    {
+      "layout": "\\$8",
+      "reference": "NSU",
+      "pin": false
+    },
+    {
+      "layout": "NVI",
+      "reference": "NVI",
+      "pin": true
+    },
+    {
+      "layout": "\\$36",
+      "reference": "S1_NH",
+      "pin": false
+    },
+    {
+      "layout": "\\$27",
+      "reference": "S1_NT",
+      "pin": false
+    },
+    {
+      "layout": "\\$37",
+      "reference": "S2_NH",
+      "pin": false
+    },
+    {
+      "layout": "\\$28",
+      "reference": "S2_NT",
+      "pin": false
+    },
+    {
+      "layout": "\\$38",
+      "reference": "S3_NH",
+      "pin": false
+    },
+    {
+      "layout": "\\$29",
+      "reference": "S3_NT",
+      "pin": false
+    },
+    {
+      "layout": "\\$39",
+      "reference": "S4_NH",
+      "pin": false
+    },
+    {
+      "layout": "\\$30",
+      "reference": "S4_NT",
+      "pin": false
+    },
+    {
+      "layout": "\\$40",
+      "reference": "S5_NH",
+      "pin": false
+    },
+    {
+      "layout": "\\$31",
+      "reference": "S5_NT",
+      "pin": false
+    },
+    {
+      "layout": "VBP",
+      "reference": "VBP",
+      "pin": true
+    },
+    {
+      "layout": "\\$7",
+      "reference": "VBPC",
+      "pin": false
+    },
+    {
+      "layout": "VCTRL",
+      "reference": "VCTRL",
+      "pin": true
+    },
+    {
+      "layout": "\\$6",
+      "reference": "VFIX",
+      "pin": false
+    },
+    {
+      "layout": "S1_Y|Y1",
+      "reference": "Y1",
+      "pin": true
+    },
+    {
+      "layout": "S2_Y|Y2",
+      "reference": "Y2",
+      "pin": true
+    },
+    {
+      "layout": "S3_Y|Y3",
+      "reference": "Y3",
+      "pin": true
+    },
+    {
+      "layout": "S4_Y|Y4",
+      "reference": "Y4",
+      "pin": true
+    },
+    {
+      "layout": "S5_Y|Y5|Y5_CLK_IN",
+      "reference": "Y5",
+      "pin": true
+    }
+  ]
+}

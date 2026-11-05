@@ -1,5 +1,5 @@
 {
-  "_description": "klt erc supply-connectivity spec for layout/evidence/divider-chain-layout/divider_chain.gds (gf180mcuD). Declares the gate+conductor stackup, the n-well tie, and the two supply nets (VDD_DIV, VSS) so erc.unconnected_net / erc.supply_short / erc.missing_tie can all be computed. Run with '--deck gf180mcu' so the curated extraction deck's own device-body markers are carved out of the matching conductor roles rather than hand-transcribed.",
+  "_comment": "klt erc supply-connectivity spec for layout/evidence/divider-chain-layout/divider_chain.gds (gf180mcuD). Declares the gate+conductor stackup, the n-well tie, and the two supply nets (VDD_DIV, VSS) so erc.unconnected_net / erc.supply_short / erc.missing_tie can all be computed. Run with '--deck gf180mcu' so the curated extraction deck's own device-body markers are carved out of the matching conductor roles rather than hand-transcribed.",
   "stackup": [
     {
       "name": "poly2",

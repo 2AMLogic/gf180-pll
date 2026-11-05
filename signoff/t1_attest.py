@@ -116,10 +116,12 @@ def ci_text(root: Path) -> str:
 
 
 def pinned_pdk(root: Path) -> str:
-    m = re.search(r"volare\"? enable --pdk gf180mcu ([0-9a-f]{40})", ci_text(root))
-    if not m:
-        raise AttestError(f"{CI}: no 'volare enable --pdk gf180mcu <rev>' pin")
-    return m.group(1)
+    # The single source of the open_pdks revision is sim/pdk.json (CI reads it
+    # from there too); it is no longer a literal in ci.yml.
+    rev = json.loads(read(root, "sim/pdk.json")).get("open_pdks", "")
+    if not re.fullmatch(r"[0-9a-f]{40}", rev):
+        raise AttestError("sim/pdk.json: no 40-hex 'open_pdks' revision pin")
+    return rev
 
 
 # --------------------------------------------------------------- item 1 ----
@@ -245,7 +247,7 @@ def testbench_inventory(root: Path, part: str) -> dict:
         "pinned_pdk": {
             "open_pdks_revision": rev,
             "variant": json.loads(read(root, "sim/pdk.json"))["variant"],
-            "pinned_in": [f"{CI} (volare enable)", "sim/README.md"],
+            "pinned_in": ["sim/pdk.json", f"{CI} (reads it)"],
         },
         "tool_versions": {
             "xschem": {"version": "3.4.7", "commit": xs.group(1), "pinned_in": CI},

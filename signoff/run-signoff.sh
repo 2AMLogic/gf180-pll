@@ -117,7 +117,7 @@ fi
 echo "klt: $(command -v klt) (${KLT_VERSION}, the pinned release)" >&2
 
 # No --tiers-doc: the report is graded against the checklist bundled inside
-# the pinned `klt` release itself (klt 0.6.0 bundles all eleven T1 items), so
+# the pinned `klt` release itself (klt 0.8.0 bundles all eleven T1 items), so
 # the report's `source_doc_content_hash` is that bundled checklist's hash. A
 # klt pin bump that ships an amended checklist therefore changes the rendered
 # report and fails --check until someone re-renders it -- which is the moment

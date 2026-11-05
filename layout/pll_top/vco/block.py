@@ -402,8 +402,13 @@ def _resistor_line(r: dev.PolyResistor) -> str:
     return f"R_{r.name} {r.top_net} {r.bottom_net} {r.bottom_net} {RESISTOR_LVS_MODEL} W={r.w_um}u L={r.l_um}u"
 
 
-def reference_netlist() -> str:
+def reference_netlist(decap_as_subckt_call: bool = False) -> str:
     """Flattened LVS reference for :data:`TOP_CELL` (``vco_block``).
+
+    ``decap_as_subckt_call`` (default ``False``, the committed form) emits the
+    decap card as an ``X_`` subckt-call card instead of a ``C_`` card -- same
+    terminals, model and parameters -- for readers that take the
+    ``subckt-call`` form (issue #855). Nothing else changes.
 
     See the module-level "Reference LVS netlist" section above for the
     flattening/labelling discipline, and :data:`RESISTOR_LVS_MODEL` for the
@@ -484,8 +489,9 @@ def reference_netlist() -> str:
     # layout tests and the extraction census, not by this card. Terminal
     # order is the model's own: 1 = poly gate, 2 = n+ diffusion. ---
     lines.append(f"* {' '.join(dev.DECAP_NAMES)} in parallel")
+    decap_prefix = "X" if decap_as_subckt_call else "C"
     lines.append(
-        f"C_{dev.DECAP_NAMES[0]} {VDD_NET} {GND_NET} {DECAP_LVS_MODEL} "
+        f"{decap_prefix}_{dev.DECAP_NAMES[0]} {VDD_NET} {GND_NET} {DECAP_LVS_MODEL} "
         f"W={dev.DECAP_SIZE_UM:g}u L={dev.DECAP_SIZE_UM:g}u M={dev.DECAP_COUNT}"
     )
 
@@ -1029,6 +1035,21 @@ def build(outdir: Path | None = None) -> VcoBlockResult:
         return max(ys)
 
     vdd_pin_y = vdd_feed("vtoi_core", vtoi_pins)
+
+    # ... and the V-to-I core's *other* tap band (issue #836). Both bands sit
+    # in one n-well, so ``vdd_feed_bands()`` feeds only the top one; but a
+    # metal-only extractor (``klt erc``) does not count the well and saw the
+    # bottom band as a second ``VDD_VCO`` island. A Metal2 strap just right of
+    # the sub-block's NOFF/escape columns joins it to the top band's hop. It
+    # cannot run through the left channel (signal Metal1 there) and the trunk
+    # hop used for the top band would cross the NOFF Metal2 column.
+    vt_bands = sorted(vtoi_pins[VDD_NET], key=lambda b: b[1])
+    for low in vt_bands[:-1]:
+        low_y = _center(low)[1]
+        strap_x = dev.snap_um(low[2] + 0.6)
+        prim.h_wire(canvas, low[2] - 0.3, strap_x + 0.3, low_y, width=0.44)
+        r.route(VDD_NET, [(strap_x, low_y), (strap_x, vdd_pin_y)])
+        r.via(VDD_NET, strap_x, low_y)
     for key, pins in (("mirror", mirror_pins), ("ring", ring_pins), ("buffer", buffer_pins)):
         vdd_feed(key, pins)
 

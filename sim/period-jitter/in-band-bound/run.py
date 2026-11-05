@@ -191,10 +191,6 @@ SWING_FRACTION = 0.8
 #: cannot pass.
 ALIGN_RESIDUAL_FRACTION = 0.02
 
-FATAL = ("Timestep too small", "simulation(s) aborted", "singular matrix",
-         "Error:")
-
-
 # ---------------------------------------------------------------------------
 # points, environment, ngspice
 # ---------------------------------------------------------------------------
@@ -266,22 +262,8 @@ def environment(models) -> dict:
 
 def run_deck(deck: str, work: Path, log: Path, expect: str | None = None,
              timeout: float | None = None):
-    run = legacy_provenance.run_deck_files(
-        deck, work, backend=BACKEND, timeout_s=timeout)
-    out = run.output
-    log.parent.mkdir(parents=True, exist_ok=True)
-    if run.timed_out:
-        log.write_text(out)
-        raise SystemExit(
-            f"ngspice did not finish within {timeout:.0f} s ({run.seconds:.0f} s "
-            f"elapsed) -- see {log}; refused")
-    log.write_text(re.sub(r"(?: ?Reference value :\s*\S+)+", "", out))
-    hit = [p for p in FATAL if p in out]
-    if hit:
-        raise SystemExit(f"ngspice reported {hit!r} -- see {log}; refused")
-    if expect and not (work / expect).is_file():
-        raise SystemExit(f"ngspice produced no {expect} -- see {log}")
-    return run.seconds, out
+    return legacy_provenance.run_deck_checked(
+        deck, work, log, backend=BACKEND, expect=expect, timeout_s=timeout)
 
 
 def save(name: str, payload: dict):

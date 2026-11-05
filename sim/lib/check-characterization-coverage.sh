@@ -93,6 +93,11 @@ NOT_AGGREGATED=(
   # see sim/supply-sensitivity/records/20260925-111906-1937f52.md's own
   # "Claim" and "Limitations" sections.
   "supply-sensitivity:20260925-111906-1937f52  # DR-025-class re-examination record, 0 new simulations, no verdict changed"
+  # Re-run of the harness self-test whose point is the artifact-store
+  # round trip (#832), not a new harness claim: same testbench, same
+  # PASS-only grid as the row this report already cites for harness-selftest,
+  # no design or spec claim, no verdict changes.
+  "harness-selftest:20261101-045427-f92e043  # artifact-store exercise of the same self-test bench (#832), no new claim"
 )
 
 set -uo pipefail

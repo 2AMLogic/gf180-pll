@@ -138,12 +138,12 @@
       "role": "source-symbol"
     },
     {
-      "content_hash": "sha256:6a8c0b0dfb6f48fc184b723c51b62e937416b97b8cb64ad77d4e2c0ee03177d0",
+      "content_hash": "sha256:a4a945ad71ae2c3b9b91bf30634c710e815b7d0c3dc4a2dd5b22cb8a6ec45be5",
       "path": "design/xschemrc",
       "role": "source-support"
     },
     {
-      "content_hash": "sha256:2f7ac614eb034842f631a78d3c2f21120918985d76c8d862399af24d05a3f7da",
+      "content_hash": "sha256:9c22135597cd9d87bf7b8979f76f170f9abf54cc2d714c3be814079f2bb0b0b9",
       "path": "design/netlist.sh",
       "role": "source-support"
     },

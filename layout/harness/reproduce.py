@@ -64,6 +64,11 @@ class Block:
     #: this checks the *documented* regeneration path rather than some
     #: in-process shortcut around it.
     module: str
+    #: Extra command-line arguments for the generator. Used where a committed
+    #: artifact predates a design decision and must stay reproducible from its
+    #: own, explicitly selected, historical variant (the loop filter's option-A
+    #: C2, DR-042), rather than from whatever the generator now defaults to.
+    args: tuple[str, ...] = ()
 
     @property
     def committed(self) -> Path:
@@ -108,7 +113,10 @@ BLOCKS: tuple[Block, ...] = (
     Block("evidence/divider-dff-proof/dff_tg_3v3.gds", "pll_top.divider_chain.dff_tg_3v3"),
     Block("evidence/divider-div23-proof/div23_cell.gds", "pll_top.divider_chain.div23_cell"),
     Block("evidence/lock-detector-layout/lock_detector.gds", "pll_top.lock_detector.build"),
-    Block("evidence/loop-filter-layout/loop_filter.gds", "pll_top.loop_filter.block"),
+    # Drawn and verified (issue #748) with DR-006's option-A C2; DR-042 moves the
+    # ratified device to option B, so the generator's default is now B and this
+    # historical artifact is reproduced from its explicit option-A path.
+    Block("evidence/loop-filter-layout/loop_filter.gds", "pll_top.loop_filter.block", ("--mim-option", "A")),
     # Not a device block: the floorplan's block-placement skeleton (layer 0/0
     # boundary rectangles). Excluded by name through issue #451 -- its
     # committed file was six merges behind the plan and the module had no
@@ -148,7 +156,7 @@ def rebuild(block: Block, outdir: Path) -> Path:
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     proc = subprocess.run(
-        [sys.executable, "-m", block.module, "--outdir", str(outdir)],
+        [sys.executable, "-m", block.module, "--outdir", str(outdir), *block.args],
         cwd=LAYOUT_DIR,
         capture_output=True,
         text=True,

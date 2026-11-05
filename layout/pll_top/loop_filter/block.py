@@ -11,8 +11,8 @@ FLOORPLAN
     y
     184 +-----------------------------+
         | XCF3          | XCF4        |   +---------------+
-        |               |             |   | XCF5 (MIM)    |  <- VSS top plate (Metal3)
-        |               |             |   |  VCTRL bottom |     VCTRL bottom plate (Metal2)
+        |               |             |   | XCF5 (MIM)    |  <- VSS top plate (Metal5; A: Metal3)
+        |               |             |   |  VCTRL bottom |     VCTRL bottom plate (Metal4; A: Metal2)
      92 +---------------+-------------+   +---------------+
         | XCF1          | XCF2        +--- tap band ---+ 117
         |               |             | R4 R3 R2 R1    |
@@ -32,16 +32,24 @@ FLOORPLAN
   ``VCTRL -(XRF1)- NR1 -(XRF2)- NR2 -(XRF3)- NR3 -(XRF4)- NZ``. They sit inside
   their own tap ring, which shares its left band with the array's right band;
   the ring is the substrate (third) terminal of every resistor.
-* **C2** -- one ``cap_mim_2f0_m2m3_noshield``, 31.4 x 31.4 um, above the
-  resistors. Its Metal2 bottom plate is ``VCTRL`` and is reached by a Metal2
-  stub from XRF1's free end; its top plate is ``VSS``, reached by a Metal3
-  strap down to a Via2/Via1 stack on the resistor ring's top band.
+* **C2** -- one ``cap_mim_2f0_m4m5_noshield`` (MIM option B, DR-042),
+  31.4 x 31.4 um, above the resistors. Its Metal4 bottom plate is ``VCTRL`` and
+  is reached by a Metal2 stub from XRF1's free end, a Via2/Via3 landing just
+  below the plate, and a Metal4 stub into the plate's bottom edge (no Via3
+  under ``FuseTop``: MIMTM.10); its top plate (``FuseTop`` under Metal5) is
+  ``VSS``, reached by a Metal5 strap down to a Via4/Via3/Via2/Via1 stack on
+  the resistor ring's top band. ``mim_option="A"`` draws DR-006's original
+  ``cap_mim_2f0_m2m3_noshield`` (Metal2 bottom plate, Metal3 top plate, Via2
+  stack) instead; it exists only so the committed #748 / ``pll_top`` evidence
+  stays reproducible.
 * **NZ** -- each C1 column carries two vertical Metal2 straps over both of
   its caps, landing by Via1 on every gate contact row; one horizontal Metal2
   bus ties all four straps to XRF4's free end.
 
 Routing layers: metal1 (``VSS`` frame, resistor links), metal2 (``NZ``,
-``VCTRL``), metal3 (``VSS`` to the MIM top plate only).
+``VCTRL``), and for C2 option B metal3/metal4 (``VCTRL`` into the bottom
+plate) and metal3-metal5 (``VSS`` to the top plate); option A uses metal3 for
+the ``VSS`` strap only.
 """
 
 from __future__ import annotations
@@ -75,7 +83,13 @@ NZ_STRAP_W_UM = 2.0
 NZ_STRAP_FRACTIONS = (0.25, 0.75)
 NZ_BUS_W_UM = 1.0
 VCTRL_STUB_W_UM = 1.0
-VSS_STRAP_W_UM = prim.STACK_METAL3_UM  # metal3, VSS stack -> MIM top plate (MT30.1a/MT30.6, see primitives)
+#: top-metal VSS strap -> MIM top plate (A: metal3, MT30.1a/MT30.6; B: metal5, MT.1), see primitives
+VSS_STRAP_W_UM = prim.STACK_TOP_METAL_UM
+#: option B: the VCTRL Via2/Via3 landing sits this far below the bottom plate's
+#: lower edge -- clear of the 1.06 um virtual-plate band (MIMTM.1) with room for
+#: the Metal4 stub that bridges it, and never under FuseTop (MIMTM.10).
+VCTRL_LANDING_BELOW_PLATE_UM = 2.0
+VCTRL_LANDING_PAD_UM = 1.0  # Metal3 landing pad (square) under the Via3
 MIM_ABOVE_RING_UM = 5.0  # resistor ring top band -> MIM FuseTop bottom edge
 MIM_X_OFFSET_UM = 1.2  # FuseTop left edge, right of the array's right band outer edge
 VSS_STACK_X_UM = 195.0  # x of the VSS Via1/Via2 stack on the resistor ring's top band
@@ -139,7 +153,7 @@ def mim_origin_um() -> tuple[float, float]:
     return (_s(ax + MIM_X_OFFSET_UM), _s(res_ring_um()[3] + MIM_ABOVE_RING_UM))
 
 
-def footprint_um() -> tuple[float, float, float, float]:
+def footprint_um(mim: dev.MimCap = dev.MIM_CAPS[0]) -> tuple[float, float, float, float]:
     """Pure-Python bounding box of everything ``build()`` draws.
 
     The tap rings carry a pplus implant grown ``IMPLANT_MARGIN_UM`` past their
@@ -148,7 +162,6 @@ def footprint_um() -> tuple[float, float, float, float]:
     """
     ax, ay = array_extent_um()
     mx, my = mim_origin_um()
-    mim = dev.MIM_CAPS[0]
     e = prim.MIM_BOTTOM_ENC_UM
     m = prim.IMPLANT_MARGIN_UM
     x1 = max(ax + m, res_ring_um()[2] + m, mx + mim.w_um + e)
@@ -211,8 +224,10 @@ def _centre(box) -> tuple[float, float]:
     return ((box[0] + box[2]) / 2.0, (box[1] + box[3]) / 2.0)
 
 
-def build(outdir: Path | None = None) -> LoopFilterResult:
+def build(outdir: Path | None = None, mim_option: str = dev.RATIFIED_MIM_OPTION) -> LoopFilterResult:
+    """Draw the loop filter; ``mim_option`` selects C2's device (default: the ratified option B)."""
     check_chain()
+    mim_caps = dev.mim_caps(mim_option)
     c = prim.Canvas(TOP_CELL)
     res = LoopFilterResult(canvas=c)
     probes = res.probes
@@ -299,27 +314,44 @@ def build(outdir: Path | None = None) -> LoopFilterResult:
 
     # --- C2 MIM ---
     mx, my = mim_origin_um()
-    mim = dev.MIM_CAPS[0]
+    mim = mim_caps[0]
     mp = prim.mim_cap(c, mim, mx, my)
     res.mim = mp
-    probes.append(Probe(mim.bottom_net, "metal2", (mp.bottom_plate[0] + mp.bottom_plate[2]) / 2.0, mp.bottom_plate[1] + 0.3, f"{mim.name} bottom plate (outside FuseTop)"))
-    probes.append(Probe(mim.bottom_net, "metal2", *_centre(mp.fusetop), f"{mim.name} bottom plate (under FuseTop)"))
+    stack = prim.MIM_STACK[mim.option]
+    bottom_layer, top_layer = stack["bottom"], stack["top"]
+    probes.append(Probe(mim.bottom_net, bottom_layer, (mp.bottom_plate[0] + mp.bottom_plate[2]) / 2.0, mp.bottom_plate[1] + 0.3, f"{mim.name} bottom plate (outside FuseTop)"))
+    probes.append(Probe(mim.bottom_net, bottom_layer, *_centre(mp.fusetop), f"{mim.name} bottom plate (under FuseTop)"))
     probes.append(Probe(mim.top_net, "fusetop", *_centre(mp.fusetop), f"{mim.name} top plate (FuseTop)"))
 
     # VCTRL: XRF1's free end -> Metal2 stub -> MIM bottom plate
     vname = next(n for n, t in RES_TOP_NET.items() if t == "VCTRL")
     vx, vy = _centre(rp[vname].top_pad)
     prim.via1_stack(c, vx, vy)
-    c.rect("metal2", vx - VCTRL_STUB_W_UM / 2.0, vy - prim.METAL_PAD_UM / 2.0, vx + VCTRL_STUB_W_UM / 2.0, mp.bottom_plate[1])
-    c.pin("VCTRL", vx - VCTRL_STUB_W_UM / 2.0, vy, vx + VCTRL_STUB_W_UM / 2.0, mp.bottom_plate[1], layer="metal2_label")
+    stub_x0, stub_x1 = vx - VCTRL_STUB_W_UM / 2.0, vx + VCTRL_STUB_W_UM / 2.0
+    if mim.option == "A":
+        c.rect("metal2", stub_x0, vy - prim.METAL_PAD_UM / 2.0, stub_x1, mp.bottom_plate[1])
+        stub_top = mp.bottom_plate[1]
+    else:
+        # The Metal2 stub stops at a Via2/Via3 landing below the plate; Metal4 bridges the rest.
+        ly_ = _s(mp.bottom_plate[1] - VCTRL_LANDING_BELOW_PLATE_UM)
+        lx_ = _s(vx)
+        h = VCTRL_LANDING_PAD_UM / 2.0
+        c.rect("metal2", stub_x0, vy - prim.METAL_PAD_UM / 2.0, stub_x1, ly_ + h)
+        c.rect("metal3", lx_ - h, ly_ - h, lx_ + h, ly_ + h)
+        for layer in ("via2", "via3"):
+            c.rect(layer, lx_ - prim.VIA_UM / 2.0, ly_ - prim.VIA_UM / 2.0, lx_ + prim.VIA_UM / 2.0, ly_ + prim.VIA_UM / 2.0)
+        c.rect("metal4", stub_x0, ly_ - h, stub_x1, mp.bottom_plate[1] + 0.3)
+        stub_top = ly_ + h
+    c.pin("VCTRL", stub_x0, vy, stub_x1, stub_top, layer="metal2_label")
 
-    # VSS: MIM top plate (Metal3) -> strap -> Via2 -> Via1 -> resistor ring top band
+    # VSS: MIM top plate -> strap -> via stack down to Metal1 -> resistor ring top band
     sy = ry1 - RING_UM / 2.0
-    prim.metal1_to_metal3_stack(c, VSS_STACK_X_UM, sy)
-    c.rect("metal3", VSS_STACK_X_UM - VSS_STRAP_W_UM / 2.0, sy, VSS_STACK_X_UM + VSS_STRAP_W_UM / 2.0, mp.fusetop[1])
+    top_level = int(top_layer[-1])
+    prim.metal1_to_top_stack(c, VSS_STACK_X_UM, sy, top_level)
+    c.rect(top_layer, VSS_STACK_X_UM - VSS_STRAP_W_UM / 2.0, sy, VSS_STACK_X_UM + VSS_STRAP_W_UM / 2.0, mp.fusetop[1])
     c.pin("VSS", 0.0, 0.0, RING_UM, RING_UM)
 
-    res.footprint = footprint_um()
+    res.footprint = footprint_um(mim_caps[0])
     if outdir is not None:
         outdir = Path(outdir)
         outdir.mkdir(parents=True, exist_ok=True)
@@ -328,7 +360,7 @@ def build(outdir: Path | None = None) -> LoopFilterResult:
     return res
 
 
-def reference_netlist() -> str:
+def reference_netlist(mim_option: str = dev.RATIFIED_MIM_OPTION) -> str:
     """The flat LVS reference, one primitive card per netlist instance.
 
     Written from :mod:`devices`, whose table ``layout/tests/
@@ -350,10 +382,21 @@ def reference_netlist() -> str:
     (``custom_classes.lvs``). That four separate devices are *drawn* is
     established independently by ``netcheck.census()``, not by this card.
     """
+    if mim_option == "A":
+        # byte-for-byte what the committed #748 evidence directory carries
+        header = [
+            f"* {TOP_CELL}: flat LVS reference for layout/pll_top/loop_filter (issue #748),",
+            "* generated from layout/pll_top/loop_filter/devices.py, which the tests pin to",
+            "* design/netlist/loop_filter.spice (DR-006).",
+        ]
+    else:
+        header = [
+            f"* {TOP_CELL}: flat LVS reference for layout/pll_top/loop_filter (issues #748, #753),",
+            "* generated from layout/pll_top/loop_filter/devices.py, which the tests pin to",
+            "* design/netlist/loop_filter.spice (DR-006; C2 per DR-042).",
+        ]
     lines = [
-        f"* {TOP_CELL}: flat LVS reference for layout/pll_top/loop_filter (issue #748),",
-        "* generated from layout/pll_top/loop_filter/devices.py, which the tests pin to",
-        "* design/netlist/loop_filter.spice (DR-006).",
+        *header,
         f".SUBCKT {TOP_CELL} {' '.join(dev.PORTS)}",
     ]
     for r in dev.RESISTORS:
@@ -364,7 +407,7 @@ def reference_netlist() -> str:
     for (g, b, model, w, l), names in groups.items():
         lines.append(f"* {' '.join(names)} in parallel")
         lines.append(f"C_{names[0]} {g} {b} {model} W={w}u L={l}u M={len(names)}")
-    for m in dev.MIM_CAPS:
+    for m in dev.mim_caps(mim_option):
         lines.append(f"C_{m.name} {m.bottom_net} {m.top_net} {m.model} W={m.w_um}u L={m.l_um}u")
     lines.append(f".ENDS {TOP_CELL}")
     return "\n".join(lines) + "\n"
@@ -386,15 +429,22 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="extract the written GDS and check every device terminal's net (netcheck.py)",
     )
+    parser.add_argument(
+        "--mim-option",
+        choices=sorted(dev.MIM_MODELS),
+        default=dev.RATIFIED_MIM_OPTION,
+        help="C2's MIM option: B = cap_mim_2f0_m4m5_noshield (ratified, DR-042, default); "
+        "A = DR-006's cap_mim_2f0_m2m3_noshield, kept only to reproduce the committed #748 / pll_top evidence",
+    )
     args = parser.parse_args(argv)
-    result = build(Path(args.outdir))
+    result = build(Path(args.outdir), args.mim_option)
     x0, y0, x1, y1 = result.footprint
     print(f"wrote {result.gds}")
     print(f"footprint: {x1 - x0:.3f} x {y1 - y0:.3f} um  ({(x1 - x0) * (y1 - y0):.1f} um^2)")
-    print(f"device area: {dev.device_area_um2():.1f} um^2")
+    print(f"device area: {dev.device_area_um2(dev.mim_caps(args.mim_option)):.1f} um^2")
     if args.reference_netlist:
         ref = Path(args.outdir) / f"{TOP_CELL}.spice"
-        ref.write_text(reference_netlist())
+        ref.write_text(reference_netlist(args.mim_option))
         print(f"wrote {ref}")
     if args.check_connectivity:
         from . import netcheck

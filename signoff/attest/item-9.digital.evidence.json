@@ -3,7 +3,7 @@
   "provenance": {
     "deck": null,
     "input": {
-      "content_hash": "sha256:6e7978e74b999042b518168c1584794b0be7b13e8fb113c868c7e208fc6bc90c",
+      "content_hash": "sha256:809f6dd440e372be0df83607d4a3e11b1feda64c58ca3fa87572140a7bd8789b",
       "path": {
         "path": "signoff/attest/testbench-inventory-digital.json",
         "scope": "repo"
