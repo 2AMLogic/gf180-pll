@@ -234,6 +234,13 @@ jobs:
         # needs neither the real tool nor a PDK.
         run: python3 -m unittest discover -s signoff/tests -t signoff/tests
 
+      - name: signoff/t1_attest.py --check (T1 item 1/9/10 inventories vs. the tree)
+        # The inventories under signoff/attest/ pin design sources, testbenches
+        # and repo-hygiene files by content hash; the klt grader only re-hashes
+        # the inventory itself. This stdlib check is what makes editing an
+        # inventoried file fail CI until the attestation is regenerated.
+        run: python3 signoff/t1_attest.py --check
+
       - name: Install klt (klayout-tools) for the signoff tier check
         # Pinned, for the same reason xschem and the PDK are pinned below: an
         # unpinned klt would re-render signoff/tier-report.json differently the

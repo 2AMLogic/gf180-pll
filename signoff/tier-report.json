@@ -5,7 +5,7 @@
   "tier": null,
   "t1_item_count": 22,
   "build_t1_item_count": 22,
-  "t1_met_count": 0,
+  "t1_met_count": 6,
   "source_doc": "docs/design-evidence-tiers.md",
   "source_doc_content_hash": "sha256:a26b90262320d0fbd32b3f549a02b6300832706041797a559d8bf6bdb62efdc7",
   "build": {
@@ -25,10 +25,29 @@
       "partition": "analog",
       "text": "committed schematic sources (or generator) plus the netlist derived from them, regenerated on design change.",
       "notes": [],
-      "status": "unmet",
-      "reason": "no_evidence",
+      "status": "met",
+      "reason": null,
       "graded_by_build": true,
-      "citation": null
+      "citation": {
+        "file": "signoff/attest/item-1.analog.evidence.json",
+        "command": null,
+        "kind": "generic",
+        "check_status": "pass",
+        "content_hash": "sha256:f63b8af0fd1c9323c57cd279a960561ef614b9077e909620823ad03bd40bb5f6",
+        "input_verified": true,
+        "exit_status": 0,
+        "artifact_binding": {
+          "t1_item": 1,
+          "path": {
+            "path": "signoff/attest/design-sources-analog.json",
+            "scope": "repo"
+          },
+          "content_hash": "sha256:f63b8af0fd1c9323c57cd279a960561ef614b9077e909620823ad03bd40bb5f6",
+          "input_verified": true,
+          "summary": "analog partition: every design source and derived netlist inventoried; netlists regenerated and checked in CI",
+          "source": "signoff/attest/design-sources-analog.json"
+        }
+      }
     },
     {
       "tier": "T1",
@@ -37,10 +56,29 @@
       "partition": "digital",
       "text": "committed RTL sources plus the synthesized gate-level netlist derived from them, regenerated on design change. For a hand-captured full-custom digital partition (no RTL, no synthesis step \u2014 see \"Full-custom digital sub-case\" above), this item is satisfied instead by the Analog column's artifact: committed schematic sources (or generator) plus the netlist derived from them, regenerated on design change, with every logic gate captured as a schematic exactly like an analog partition's.",
       "notes": [],
-      "status": "unmet",
-      "reason": "no_evidence",
+      "status": "met",
+      "reason": null,
       "graded_by_build": true,
-      "citation": null
+      "citation": {
+        "file": "signoff/attest/item-1.digital.evidence.json",
+        "command": null,
+        "kind": "generic",
+        "check_status": "pass",
+        "content_hash": "sha256:77f21c068bc7d4cbb069071915eb6d49c0e8fc6afd4c5d3808b59456886791d6",
+        "input_verified": true,
+        "exit_status": 0,
+        "artifact_binding": {
+          "t1_item": 1,
+          "path": {
+            "path": "signoff/attest/design-sources-digital.json",
+            "scope": "repo"
+          },
+          "content_hash": "sha256:77f21c068bc7d4cbb069071915eb6d49c0e8fc6afd4c5d3808b59456886791d6",
+          "input_verified": true,
+          "summary": "digital partition: every design source and derived netlist inventoried; netlists regenerated and checked in CI",
+          "source": "signoff/attest/design-sources-digital.json"
+        }
+      }
     },
     {
       "tier": "T1",
@@ -225,10 +263,29 @@
       "partition": "analog",
       "text": "every claimed measurement's testbench committed, with a documented cold-start invocation a third party can run; pinned PDK revision.",
       "notes": [],
-      "status": "unmet",
-      "reason": "no_evidence",
+      "status": "met",
+      "reason": null,
       "graded_by_build": true,
-      "citation": null
+      "citation": {
+        "file": "signoff/attest/item-9.analog.evidence.json",
+        "command": null,
+        "kind": "generic",
+        "check_status": "pass",
+        "content_hash": "sha256:92ea1f0353593caae0e96c5d9d47a223369566dad678e598110127cb46039f3f",
+        "input_verified": true,
+        "exit_status": 0,
+        "artifact_binding": {
+          "t1_item": 9,
+          "path": {
+            "path": "signoff/attest/testbench-inventory-analog.json",
+            "scope": "repo"
+          },
+          "content_hash": "sha256:92ea1f0353593caae0e96c5d9d47a223369566dad678e598110127cb46039f3f",
+          "input_verified": true,
+          "summary": "analog partition: every claimed measurement's testbench committed with a cold-start command; PDK revision and tool pins recorded",
+          "source": "signoff/attest/testbench-inventory-analog.json"
+        }
+      }
     },
     {
       "tier": "T1",
@@ -237,10 +294,29 @@
       "partition": "digital",
       "text": "every claimed measurement's testbench committed, with a documented cold-start invocation a third party can run; pinned PDK revision.",
       "notes": [],
-      "status": "unmet",
-      "reason": "no_evidence",
+      "status": "met",
+      "reason": null,
       "graded_by_build": true,
-      "citation": null
+      "citation": {
+        "file": "signoff/attest/item-9.digital.evidence.json",
+        "command": null,
+        "kind": "generic",
+        "check_status": "pass",
+        "content_hash": "sha256:809f6dd440e372be0df83607d4a3e11b1feda64c58ca3fa87572140a7bd8789b",
+        "input_verified": true,
+        "exit_status": 0,
+        "artifact_binding": {
+          "t1_item": 9,
+          "path": {
+            "path": "signoff/attest/testbench-inventory-digital.json",
+            "scope": "repo"
+          },
+          "content_hash": "sha256:809f6dd440e372be0df83607d4a3e11b1feda64c58ca3fa87572140a7bd8789b",
+          "input_verified": true,
+          "summary": "digital partition: every claimed measurement's testbench committed with a cold-start command; PDK revision and tool pins recorded",
+          "source": "signoff/attest/testbench-inventory-digital.json"
+        }
+      }
     },
     {
       "tier": "T1",
@@ -249,10 +325,29 @@
       "partition": "analog",
       "text": "a README stating what the block is, its spec table, and how to reproduce every result; a license; CI that at minimum keeps the harness and evidence formats valid.",
       "notes": [],
-      "status": "unmet",
-      "reason": "no_evidence",
+      "status": "met",
+      "reason": null,
       "graded_by_build": true,
-      "citation": null
+      "citation": {
+        "file": "signoff/attest/item-10.evidence.json",
+        "command": null,
+        "kind": "generic",
+        "check_status": "pass",
+        "content_hash": "sha256:5ca04ba9df57cd0351fe0ce6ac980471f3d5665090d107fe3e1e0228868d63a0",
+        "input_verified": true,
+        "exit_status": 0,
+        "artifact_binding": {
+          "t1_item": 10,
+          "path": {
+            "path": "signoff/attest/repo-hygiene.json",
+            "scope": "repo"
+          },
+          "content_hash": "sha256:5ca04ba9df57cd0351fe0ce6ac980471f3d5665090d107fe3e1e0228868d63a0",
+          "input_verified": true,
+          "summary": "README, contributing guide, license, spec and the CI commands audited",
+          "source": "signoff/attest/repo-hygiene.json"
+        }
+      }
     },
     {
       "tier": "T1",
@@ -261,10 +356,29 @@
       "partition": "digital",
       "text": "a README stating what the block is, its spec table, and how to reproduce every result; a license; CI that at minimum keeps the harness and evidence formats valid.",
       "notes": [],
-      "status": "unmet",
-      "reason": "no_evidence",
+      "status": "met",
+      "reason": null,
       "graded_by_build": true,
-      "citation": null
+      "citation": {
+        "file": "signoff/attest/item-10.evidence.json",
+        "command": null,
+        "kind": "generic",
+        "check_status": "pass",
+        "content_hash": "sha256:5ca04ba9df57cd0351fe0ce6ac980471f3d5665090d107fe3e1e0228868d63a0",
+        "input_verified": true,
+        "exit_status": 0,
+        "artifact_binding": {
+          "t1_item": 10,
+          "path": {
+            "path": "signoff/attest/repo-hygiene.json",
+            "scope": "repo"
+          },
+          "content_hash": "sha256:5ca04ba9df57cd0351fe0ce6ac980471f3d5665090d107fe3e1e0228868d63a0",
+          "input_verified": true,
+          "summary": "README, contributing guide, license, spec and the CI commands audited",
+          "source": "signoff/attest/repo-hygiene.json"
+        }
+      }
     },
     {
       "tier": "T1",

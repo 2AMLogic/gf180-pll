@@ -1,0 +1,21 @@
+{
+  "kind": "generic",
+  "provenance": {
+    "deck": null,
+    "input": {
+      "content_hash": "sha256:5ca04ba9df57cd0351fe0ce6ac980471f3d5665090d107fe3e1e0228868d63a0",
+      "path": {
+        "path": "signoff/attest/repo-hygiene.json",
+        "scope": "repo"
+      }
+    },
+    "klayout_version": null,
+    "klt_version": null,
+    "pdk": null
+  },
+  "schema_version": 1,
+  "source": "signoff/attest/repo-hygiene.json",
+  "status": "pass",
+  "summary": "README, contributing guide, license, spec and the CI commands audited",
+  "t1_item": 10
+}

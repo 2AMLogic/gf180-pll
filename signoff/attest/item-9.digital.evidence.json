@@ -1,0 +1,21 @@
+{
+  "kind": "generic",
+  "provenance": {
+    "deck": null,
+    "input": {
+      "content_hash": "sha256:809f6dd440e372be0df83607d4a3e11b1feda64c58ca3fa87572140a7bd8789b",
+      "path": {
+        "path": "signoff/attest/testbench-inventory-digital.json",
+        "scope": "repo"
+      }
+    },
+    "klayout_version": null,
+    "klt_version": null,
+    "pdk": null
+  },
+  "schema_version": 1,
+  "source": "signoff/attest/testbench-inventory-digital.json",
+  "status": "pass",
+  "summary": "digital partition: every claimed measurement's testbench committed with a cold-start command; PDK revision and tool pins recorded",
+  "t1_item": 9
+}
