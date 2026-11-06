@@ -16,7 +16,6 @@ Two unrelated families live here, one per kind of test in this directory:
 from __future__ import annotations
 
 import json
-import shutil
 import sys
 import tempfile
 import unittest
@@ -25,21 +24,10 @@ from pathlib import Path
 SIM_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SIM_DIR))
 
+sys.path.insert(0, str(SIM_DIR.parent / "lib"))
+
 from harness.pdk import Pdk, pinned_open_pdks  # noqa: E402
-
-
-def install_checklib(root: Path) -> None:
-    """Install the shared checker helpers into a throwaway repo tree.
-
-    The check scripts import ``checklib`` from ``$REPO_ROOT/lib``, and inside
-    a throwaway tree that tree IS ``$REPO_ROOT`` for the run -- so the real
-    repository's package has to be laid down next to the script, exactly as a
-    fresh clone would receive it.
-    """
-    src = SIM_DIR.parent / "lib" / "checklib"
-    shutil.copytree(
-        src, root / "lib" / "checklib", ignore=shutil.ignore_patterns("__pycache__")
-    )
+from testtree import TreeWriter, install_checklib  # noqa: E402,F401  (re-exported)
 
 
 def fake_pdk(root: Path) -> Pdk:
@@ -72,26 +60,6 @@ class ManifestFixture(unittest.TestCase):
     def write_module(self, source: str, name: str = "derive.py") -> str:
         (self.tb_dir / name).write_text(source)
         return name
-
-
-class TreeWriter:
-    """``write(rel, text)`` for a throwaway repo tree rooted at ``self.root``.
-
-    Mixed into the per-file ``_Tree`` helpers that build a miniature repository
-    and run a real ``sim/lib/check-*.sh`` in it. Only this generic
-    relative-path writer is shared: each ``_Tree`` keeps its own ``__init__``
-    (which script it installs, which documents must pre-exist so the check
-    fails on what the test is about rather than on an absence) and its own
-    campaign/deck/record conveniences layered on top of ``write``.
-    """
-
-    #: Set by the concrete ``_Tree.__init__``.
-    root: Path
-
-    def write(self, rel: str, text: str) -> None:
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
 
 
 class TreeTestCase(unittest.TestCase):
