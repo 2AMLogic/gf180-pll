@@ -1323,6 +1323,8 @@ N050=$(wc -l <"${JOBS050}" | tr -d ' ')
 NDYN=$(wc -l <"${JOBSDYN}" | tr -d ' ')
 echo "supply-sensitivity: ${N100} steady-state runs @ ${KFOUT} Hz, ${N050} @ ${KFOUT2} Hz (power split), ${NDYN} step/ramp runs; $(simenv_jobs) parallel jobs"
 [ -z "${NOBAND}" ] || echo "supply-sensitivity: NO single band spans +/-10 % at: ${NOBAND}"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "$(( N100 + N050 + NDYN ))" "supply-sensitivity" || exit $?
 
 # The step/ramp runs go FIRST: each is a ${KD_TSTOP} transient against the
 # grid's ${KTSTOP}, so starting them last would leave one long job running
@@ -1418,6 +1420,8 @@ if [ "${SIM_EXTEND:-auto}" != "off" ]; then
 fi
 NX=$(wc -l <"${JOBS100X}" | tr -d ' ')
 if [ "${NX}" -gt 0 ]; then
+  # Refuse a multi-unit local grid on a batch-backend host (#740).
+  simenv_guard_local_grid "${NX}" "supply-sensitivity" || exit $?
   echo "supply-sensitivity: ${NX} corner(s) not settled in frequency or phase at ${KTSTOP} -- re-running at ${KTSTOP_X}"
   # shellcheck disable=SC2016
   SIM_TSTOP="${KTSTOP_X}" SIM_TA="${KTA_X}" SIM_TB="${KTB_X}" \
@@ -1459,6 +1463,8 @@ if [ "${SIM_FINE:-auto}" != "off" ] && [ "${KTMAX_X}" != "${KTMAX}" ]; then
 fi
 NM=$(wc -l <"${JOBS100M}" | tr -d ' ')
 if [ "${NM}" -gt 0 ]; then
+  # Refuse a multi-unit local grid on a batch-backend host (#740).
+  simenv_guard_local_grid "${NM}" "supply-sensitivity" || exit $?
   echo "supply-sensitivity: ${NM} corner(s) still over ${ACC_FERR} at ${KTSTOP_X} -- re-running at timestep ceiling ${KTMAX_X}"
   # shellcheck disable=SC2016
   SIM_TSTOP="${KTSTOP_X}" SIM_TA="${KTA_X}" SIM_TB="${KTB_X}" SIM_TMAX="${KTMAX_X}" \
@@ -1494,6 +1500,8 @@ if [ "${SIM_DYN_EXTEND:-auto}" != "off" ]; then
 fi
 NDX=$(wc -l <"${JOBSDYNX}" | tr -d ' ')
 if [ "${NDX}" -gt 0 ]; then
+  # Refuse a multi-unit local grid on a batch-backend host (#740).
+  simenv_guard_local_grid "${NDX}" "supply-sensitivity" || exit $?
   echo "supply-sensitivity: ${NDX} corner(s) missed the high-plateau lock criterion at ${KD_TB_HI} -- re-running with the hold pushed to ${KD_TB_HI_X}"
   # shellcheck disable=SC2016
   SIM_DYN_TA_HI="${KD_TA_HI_X}" SIM_DYN_TB_HI="${KD_TB_HI_X}" \
@@ -1548,6 +1556,8 @@ fi
 # (sim/lib/simenv.sh) is the shared implementation; report.sh re-derives the
 # same instants with the same helper (#329).
 NDE=$(( $(wc -l <"${JOBSDEND}" | tr -d ' ') + $(wc -l <"${JOBSDENDX}" | tr -d ' ') ))
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "${NDE}" "supply-sensitivity" || exit $?
 if [ -s "${JOBSDEND}" ]; then
   echo "supply-sensitivity: $(wc -l <"${JOBSDEND}" | tr -d ' ') corner(s) still converging on the END plateau at ${KD_TSTOP_BASE} -- re-running at $(simenv_dend_at "${KD_TREND_BASE}" "${KD_DEND_TSTOP}") s"
   # shellcheck disable=SC2016

@@ -62,5 +62,29 @@ done
 if [ -z "${unguarded}" ]; then echo "ok   coverage"; else
   echo "FAIL coverage: runners without simenv_guard_local_grid:${unguarded}"; fails=$((fails + 1)); fi
 
+# Ordering: under `set -u` a guard whose count variable is assigned later
+# aborts the runner on every host. Each guard call must (a) read only
+# variables assigned on an earlier line, and (b) precede the first fan-out.
+misordered=""
+for f in "${SIM_DIR}"/*/testbench*/*.sh; do
+  grep -q '^simenv_guard_local_grid' "${f}" || continue
+  first_guard="$(grep -n '^simenv_guard_local_grid' "${f}" | head -1 | cut -d: -f1)"
+  first_fan="$(grep -nE '^[[:space:]]*xargs -P' "${f}" | head -1 | cut -d: -f1)"
+  if [ -n "${first_fan}" ] && [ "${first_guard}" -gt "${first_fan}" ]; then
+    misordered="${misordered} ${f#"${SIM_DIR}"/}(guard@${first_guard}>xargs@${first_fan})"
+  fi
+  while IFS=: read -r gl gtext; do
+    for v in $(printf '%s\n' "${gtext}" | grep -oE '[A-Z][A-Z0-9_]+' | sort -u); do
+      [ "${v}" = "simenv_guard_local_grid" ] && continue
+      al="$(grep -nE "^[[:space:]]*(local |declare (-[a-zA-Z]+ )?)?${v}=" "${f}" | head -1 | cut -d: -f1)"
+      if [ -z "${al}" ] || [ "${al}" -ge "${gl}" ]; then
+        misordered="${misordered} ${f#"${SIM_DIR}"/}(${v} assigned@${al:-never}, guard@${gl})"
+      fi
+    done
+  done < <(grep -n '^simenv_guard_local_grid' "${f}")
+done
+if [ -z "${misordered}" ]; then echo "ok   ordering"; else
+  echo "FAIL ordering:${misordered}"; fails=$((fails + 1)); fi
+
 if [ "${fails}" -gt 0 ]; then echo "${fails} failure(s)"; exit 1; fi
 echo "all passed"
