@@ -857,6 +857,48 @@ simenv_jobs() {
 }
 
 # --------------------------------------------------------------------------
+# Local-grid guard (#740)
+# --------------------------------------------------------------------------
+#
+# `simenv_guard_local_grid <units> [<experiment>]` refuses to let a legacy
+# runner fan a multi-unit grid out on this host when the environment selects
+# the remote batch backend (`KLT_SIM_BACKEND=batch`).
+#
+# The refusal is keyed on GRID CARDINALITY (the `<units>` argument), never on
+# worker count: `SIM_JOBS=1` still runs a multi-unit grid, just serially, so
+# `simenv_jobs()` cannot tell a probe from a campaign. Rules:
+#
+#   units <= 1                       -> return 0 (single-unit / --check stay local)
+#   KLT_SIM_BACKEND != batch         -> return 0 (unchanged off the dispatch hosts)
+#   SIM_ALLOW_LOCAL_GRID=1           -> return 0 (explicit local opt-in)
+#   otherwise (incl. empty or non-numeric units under batch) -> message, return 2
+#
+# Call it as a plain command, never inside `$(...)`:
+#   simenv_guard_local_grid "${NJOBS}" "<experiment>" || exit $?
+# It never invokes SPICE and never calls simenv_jobs().
+simenv_guard_local_grid() {
+  local units="${1:-}" exp="${2:-<experiment>}"
+  if [ "${KLT_SIM_BACKEND:-}" != "batch" ]; then
+    return 0
+  fi
+  case "${units}" in
+    ''|*[!0-9]*) ;;                       # not a number: fail closed below
+    *) if [ "${units}" -le 1 ]; then return 0; fi ;;
+  esac
+  if [ "${SIM_ALLOW_LOCAL_GRID:-}" = "1" ]; then
+    return 0
+  fi
+  {
+    echo "simenv: refusing to fan out a local grid (units='${units}') for ${exp}:"
+    echo "  KLT_SIM_BACKEND=batch selects the remote batch fleet for multi-unit runs."
+    echo "  Express the grid as a request instead: python3 sim/run_corners.py ${exp}"
+    echo "  (or 'klt sim --wait-for-capacity 600'). To run it locally anyway,"
+    echo "  set SIM_ALLOW_LOCAL_GRID=1 explicitly."
+  } >&2
+  return 2
+}
+
+# --------------------------------------------------------------------------
 # ngspice internal-threading detection (#241)
 # --------------------------------------------------------------------------
 #

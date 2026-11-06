@@ -532,6 +532,8 @@ fi
 
 TOTAL_DRAWS=$(( ${#GRID[@]} * N_SAMPLES ))
 echo "vco-tuning-range band-pair: ${#GRID[@]} grid points x N_SAMPLES=${N_SAMPLES} JOINT draws = ${TOTAL_DRAWS} draws, $(simenv_jobs) parallel jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "${TOTAL_DRAWS}" "vco-tuning-range" || exit $?
 
 if [ "${SIM_RESUME:-0}" != "1" ]; then
   rm -f "${WORK}"/mc_*.csv

@@ -1406,6 +1406,8 @@ EOF
 fi
 
 echo "mc-cp-mismatch: N_DC=${N_DC} N_SW=${N_SW} N_PFD=${N_PFD} N_DFF=${N_DFF} PER CORNER x ${NUM_CORNERS} corners, $(simenv_jobs) parallel jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "$(( (N_DC + N_SW + N_PFD + N_DFF) * NUM_CORNERS ))" "mc-cp-mismatch" || exit $?
 
 # SIM_RESUME=1 skips the usual clean-slate wipe below AND (via each per-sample
 # xargs entry's own existing-output check, see the `[ -s "$3" ]` guard added

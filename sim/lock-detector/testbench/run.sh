@@ -203,6 +203,8 @@ ALL_JOBS="${WORK}/jobs_all.txt"
 cat "${GRID_JOBS}" "${WIN_JOBS}" | sort -u >"${ALL_JOBS}"
 NPOINTS=$(wc -l <"${ALL_JOBS}" | tr -d ' ')
 echo "lock-detector: ${NPOINTS} points ($(wc -l <"${GRID_JOBS}" | tr -d ' ') grid + $(wc -l <"${WIN_JOBS}" | tr -d ' ') window ladder, deduplicated), ${JOBS} jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "${NPOINTS}" "lock-detector" || exit $?
 
 ROWS="${WORK}/rows.csv"; : >"${ROWS}"
 # shellcheck disable=SC2016

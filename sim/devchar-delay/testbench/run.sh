@@ -130,6 +130,8 @@ for corner in "${SIMENV_MOS_CORNERS[@]}"; do
 done
 NPOINTS=$(wc -l <"${JOBLIST}" | tr -d ' ')
 echo "devchar-delay: ${NPOINTS} corner points, $(simenv_jobs) parallel jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "${NPOINTS}" "devchar-delay" || exit $?
 
 ROWS="${WORK}/rows.csv"
 : >"${ROWS}"

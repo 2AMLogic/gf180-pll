@@ -242,6 +242,8 @@ sort -u "${JJOBS}" -o "${JJOBS}"
 NP=$(wc -l <"${PJOBS}" | tr -d ' ')
 NJ=$(wc -l <"${JJOBS}" | tr -d ' ')
 echo "vco supply campaign: ${NP} pushing runs (x7 supply points) + ${NJ} transient runs, $(simenv_jobs) parallel jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "$(( NP + NJ ))" "vco-tuning-range" || exit $?
 
 PROWS="${WORK}/push_rows.csv"
 JROWS="${WORK}/jit_rows.csv"

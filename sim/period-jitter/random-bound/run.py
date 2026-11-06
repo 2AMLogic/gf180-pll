@@ -27,7 +27,9 @@ Usage:
   run.py --list-points
 
 One point per invocation, one ngspice process at a time within it.  The 45-point
-grid is driven by `grid.sh`, which runs several invocations side by side.
+grid is driven by `../grid.py random-bound` (`grid.sh` wraps it), which
+runs the staged invocations in dependency order; `--backend {local,batch}`
+selects where decks run.
 """
 
 from __future__ import annotations
@@ -125,6 +127,24 @@ def pdk_models() -> Path:
 #: Execution backend every deck in this runner goes through (#712). A test
 #: injects a stand-in here; the default is the harness's local ngspice backend.
 BACKEND = execution.LocalBackend()
+
+
+def select_backend(name: str, batch_apply: bool = False):
+    """Install the execution backend `--backend` names into `BACKEND` (#731).
+
+    `batch` imports the batch layer lazily so a local run never needs it. It
+    is only ever built with apply=True here; the caller prints a plan instead
+    of running when `--batch-apply` was not given.
+    """
+    global BACKEND
+    if name == "local":
+        BACKEND = execution.LocalBackend()
+        return BACKEND
+    from harness import batch as batch_mod
+    pdk = find_pdk()
+    BACKEND = batch_mod.BatchBackend(
+        pdk_variant_dir=pdk.path, pdk_variant=pdk.variant, apply=batch_apply)
+    return BACKEND
 
 
 def run_deck(deck: str, work: Path, log: Path, expect: str | None = None) -> tuple[float, str]:
@@ -300,7 +320,7 @@ def stage_trajectory(point, op, outdir, logs, work, models, quick):
     nothing a reviewer reads.  What IS committed, by the `sid` stage, is the bias
     each device's injection density was calibrated at -- the one row per device
     #520 asks to be stated.  Re-running `sid` therefore needs `trajectory` re-run
-    into the same `--work` first; `grid.sh` always runs them together.
+    into the same `--work` first; `grid.py` always runs them in order against the same work directory.
     """
     src = rb_deck.isf_deck.read_vco_netlist(REPO)
     devs = rb_deck.devices(src)
@@ -1003,11 +1023,22 @@ def main(argv=None):
                     help="skip a per-point stage whose results/<stage>_<point>.json "
                          "already exists (trajectory: and whose work rows exist)")
     ap.add_argument("--list-points", action="store_true")
+    ap.add_argument("--backend", choices=("local", "batch"), default="local",
+                    help="where each deck runs (sim/harness/execution.py); "
+                         "'batch' without --batch-apply only prints a plan")
+    ap.add_argument("--batch-apply", action="store_true",
+                    help="with --backend batch, actually submit the decks")
     a = ap.parse_args(argv)
     points = load_points()
     if a.list_points:
         print("\n".join(points))
         return 0
+    if a.backend == "batch" and not a.batch_apply:
+        print(f"plan only (--backend batch without --batch-apply): would run "
+              f"stages {list(a.stage or ())} at {a.point or '-'}; nothing "
+              f"submitted.", flush=True)
+        return 0
+    select_backend(a.backend, a.batch_apply)
     if a.point not in points:
         raise SystemExit(f"unknown point {a.point!r}; see --list-points")
     op = points[a.point]

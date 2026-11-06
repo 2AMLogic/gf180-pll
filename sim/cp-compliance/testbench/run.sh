@@ -250,6 +250,8 @@ for corner in "${SIMENV_MOS_CORNERS[@]}"; do
 done
 NDC=$(wc -l <"${DCJOBS}" | tr -d ' ')
 NSW=$(wc -l <"${SWJOBS}" | tr -d ' ')
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "$(( NDC + NSW ))" "cp-compliance" || exit $?
 NCORNERS=$(( NDC / ${#TRIM_CODES[@]} ))
 echo "cp-compliance: ${NCORNERS} PVT corners; ${NDC} DC runs (x4 trim codes) + ${NSW} switching runs (x3 Vctrl), $(simenv_jobs) parallel jobs"
 

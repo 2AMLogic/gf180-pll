@@ -1,0 +1,10 @@
+{
+  "_comment": "Staged plan for grid.py. once: run first, in order, one failure aborts. point_stages: run per PVT point (tb.json via run.py load_points), strictly in this order, points independent. reference: after every point has finished (pass or fail). resume: pass --resume to that unit's run.py call.",
+  "once": [
+    {"id": "loop", "argv": ["--stage", "loop"], "resume": true}
+  ],
+  "point_stages": ["digital", "cp", "cells", "clkload", "ldload", "bound"],
+  "point_resume": true,
+  "reference": {"id": "validate", "point": "typical_27c_3.30v", "resume": true},
+  "summarize": {"script": "summarize.py", "stdout": "results/SUMMARY.md"}
+}

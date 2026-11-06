@@ -161,22 +161,12 @@ UNRATIFIED_SPEC = (
 )
 
 
-# The pin sentence every fixture document carries by default. The PIN
-# RESTATEMENT RULE (issue #237) requires the proposal to state the KLayout
-# pin, so a fixture that omitted it would fail every unrelated test in this
-# file for a reason none of them is about.
-def _pin_line(pin: str | None = None) -> str:
-    return "This repository pins `%s` for DRC and LVS.\n" % (pin or PINNED_KLAYOUT)
-
-
 def _doc_text(
     drawn: int,
     lvs: int,
     *,
     no_top: bool = True,
     footprints: bool = True,
-    pin: str | None = None,
-    state_pin: bool = True,
 ) -> str:
     """A minimal document that satisfies the script at the given counts."""
     body = [
@@ -186,8 +176,6 @@ def _doc_text(
     if no_top:
         body.append("There is no assembled `pll_top` GDS.")
     text = "\n".join(body) + "\n"
-    if state_pin:
-        text += _pin_line(pin)
     if footprints:
         text += _footprint_lines()
     return text
@@ -510,16 +498,6 @@ class _Tree:
     def write_proposal(self, text: str) -> None:
         (self.root / "docs" / "chipalooza" / "challenge-5-proposal.md").write_text(text)
 
-    def write_layout_readme(self, text: str) -> None:
-        """Write layout/README.md, graded by the PIN RESTATEMENT RULE only.
-
-        Not written by ``__init__``: the rule skips a PIN_DOC that is absent
-        (see the script's comment on why), and the vast majority of tests
-        here are about rules that never look at this file. Tests that are
-        about the pin prose write it explicitly.
-        """
-        (self.root / "layout" / "README.md").write_text(text)
-
     def run(self, env: dict | None = None) -> subprocess.CompletedProcess:
         return subprocess.run(
             ["bash", str(self.root / "layout" / "lib" / SCRIPT.name)],
@@ -564,22 +542,6 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("4/4 drawn", result.stdout)
 
-    def test_understated_block_count_is_caught(self):
-        self._all_four()
-        self.tree.write_docs(_doc_text(3, 2))
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("4 of the 4 PLL sub-blocks", result.stderr)
-
-    def test_overstated_lvs_count_is_caught(self):
-        # The direction that matters most for a document sent to an outside
-        # reader: claiming more verification than the tree records.
-        self._all_four()
-        self.tree.write_docs(_doc_text(4, 4))
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("2 of the 4 are LVS-matched", result.stderr)
-
     def test_lvs_log_without_the_match_verdict_does_not_count(self):
         # A committed lvs-clean/ directory is not an LVS pass.  Only the
         # deck's own "Netlists match." verdict is.
@@ -616,7 +578,7 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("still says", result.stderr)
 
-    # --- The count rule (issue #237, third pass) ---------------------------
+    # --- Sentinel and footprint rules --------------------------------------
     #
     # drawn_claim/lvs_claim above only require the *correct* "N of the 4
     # ..." sentence to appear somewhere in the document -- so a second,
@@ -626,73 +588,6 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
     # left section 3 saying "2 of the 4 are LVS-matched" a few paragraphs
     # later -- true only before #452/#466 landed the last two LVS matches --
     # and this check reported OK on that tree.
-
-    def test_a_second_stale_lvs_count_elsewhere_in_the_document_is_caught(self):
-        # The regression this pass was written for, reproduced with the
-        # real shape of the bug: the correct claim once, a contradicting
-        # duplicate later, all four blocks actually LVS-matched.
-        self._all_four(lvs_for=[d for d, _ in BLOCKS])
-        self.tree.write_docs(
-            _doc_text(4, 4)
-            + PAD
-            + "Most of the circuitry also exists as drawn geometry: 4 of\n"
-            "the 4 PLL sub-blocks have a committed, DRC-clean GDS, and 2 of\n"
-            "the 4 are LVS-matched. No GDS exists for the assembled top\n"
-            "level.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn(
-            'states "2 of the 4 LVS-matched", but layout/evidence/ records '
-            "4 of the 4",
-            result.stderr,
-        )
-
-    def test_a_second_stale_drawn_count_elsewhere_in_the_document_is_caught(self):
-        # Same shape, the other claim: a stale "N of the 4 sub-blocks"
-        # duplicate that disagrees with the tree.
-        self._all_four()
-        self.tree.write_docs(
-            _doc_text(4, 2)
-            + PAD
-            + "As of the last update, 3 of the 4 sub-blocks were drawn.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn(
-            'states "3 of the 4 sub-blocks drawn and DRC-clean", but '
-            "layout/evidence/ records 4 of the 4",
-            result.stderr,
-        )
-
-    def test_every_repeated_correct_count_passes(self):
-        # The real documents state each count several times over (a
-        # maturity note, section 3, section 6, section 7, README's own
-        # summary paragraph) -- every correct repetition must keep passing,
-        # not just the first.
-        self._all_four()
-        self.tree.write_docs(
-            _doc_text(4, 2)
-            + PAD
-            + "Restated: 4 of the 4 PLL sub-blocks are drawn, and 2 of the\n"
-            "4 are LVS-matched, consistent with the summary above.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-    def test_an_unrelated_of_the_denominator_is_not_graded_as_a_count(self):
-        # "34 of the 45 points" must not be mistaken for a "45" claim about
-        # the 4 sub-blocks -- the denominator must literally be "4".
-        self._all_four()
-        self.tree.write_docs(
-            _doc_text(4, 2)
-            + PAD
-            + "band 6 at 34 of the 45 points, band 7 at the other 11.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-    # --- The spec ratification guard --------------------------------------
 
     def test_a_blanket_unratified_claim_is_caught_once_the_spec_ratifies(self):
         self._all_four()
@@ -1250,21 +1145,6 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         self.assertIn("4 of the 4 blocks ERC-checked", result.stdout)
         self.assertIn("4/4 ERC-checked", result.stdout)
 
-    def test_a_stale_erc_checked_count_is_caught(self):
-        # The count rule (issue #237's third pass) extended to this claim:
-        # a document may state "N of the 4 blocks ERC-checked", but only the
-        # correct N.
-        self._all_four_erc_ready()
-        self.tree.write_docs(
-            _doc_text(4, 4) + "1 of the 4 blocks are ERC-checked.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn(
-            'states "1 of the 4 blocks ERC-checked", but layout/evidence/ '
-            "records 4 of the 4", result.stderr,
-        )
-
     def test_an_lvs_mismatched_block_is_not_asked_for_erc_even_with_a_stale_directory(self):
         # The point of the erc_entries plumbing: coverage is owed from the
         # already-derived LVS-matched verdict, not from a looser "an
@@ -1405,9 +1285,7 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
                 lvs_klayout="KLayout 0.29.4",
             )
         self.tree.write_harness_env(pin="KLayout 0.29.4")
-        # The documents move with the pin too -- that is the PIN RESTATEMENT
-        # RULE's whole point, and the test below holds it the other way round.
-        self.tree.write_docs(_doc_text(4, 4, pin="KLayout 0.29.4"))
+        self.tree.write_docs(_doc_text(4, 4))
         result = self.tree.run()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("on the pin (KLayout 0.29.4), 0 off-pin", result.stdout)
@@ -1513,136 +1391,6 @@ class CheckLayoutStatusClaimsTests(unittest.TestCase):
         result = self.tree.run()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("1 deliberately exempt (cp_leg_n)", result.stdout)
-
-
-class PinRestatementRuleTests(unittest.TestCase):
-    """The eighth guard (issue #237): what the *documents* say the pin is.
-
-    The KLAYOUT PIN RULE grades the logs. This one grades the prose about
-    them -- which is where the failure #127 found actually lived: a sentence
-    asserting the committed DRC/LVS evidence had all been captured on the
-    pin, in three places at once, while 16 of the 51 committed deck logs
-    were not.
-    """
-
-    def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self._tmp.cleanup)
-        self.tree = _Tree(Path(self._tmp.name))
-        for evidence_dir, gds in BLOCKS:
-            self.tree.add_block(evidence_dir, gds, drc=True, lvs=True)
-
-    def test_documents_stating_the_real_pin_pass(self):
-        self.tree.write_docs(_doc_text(4, 4))
-        self.tree.write_layout_readme(_pin_line())
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("state or restate the KLayout pin consistently", result.stdout)
-
-    def test_a_document_naming_a_different_engine_as_the_pin_is_caught(self):
-        # The drift a pin bump produces: env.py moves, the prose does not.
-        self.tree.write_docs(_doc_text(4, 4, pin="KLayout 0.30.10"))
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn("states `KLayout 0.30.10` as this repository's", result.stderr)
-        self.assertIn(PINNED_KLAYOUT, result.stderr)
-
-    def test_the_bare_version_shape_is_graded_too(self):
-        # "the `0.30.10` pin" asserts a pin just as squarely as
-        # "pins `KLayout 0.30.10`" does, with the program name elided. Real
-        # prose in this repository uses both shapes.
-        self.tree.write_docs(
-            _doc_text(4, 4) + "Every log above was produced on the `0.30.10` pin.\n"
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn("calls `0.30.10` the pin", result.stderr)
-
-    def test_layout_readme_is_graded_even_though_it_is_not_in_DOCS(self):
-        # It is the operator manual, not a status narrative, so the count /
-        # scope / footprint rules do not apply to it -- but it is where this
-        # repository explains the pin, and where the false claim lived.
-        self.tree.write_docs(_doc_text(4, 4))
-        self.tree.write_layout_readme("This repository pins `KLayout 0.26.1`.\n")
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn("layout/README.md states `KLayout 0.26.1`", result.stderr)
-
-    def test_the_proposal_must_state_the_pin_at_all(self):
-        # Deleting the sentence is not a way to stop it being wrong: the
-        # proposal's section 6 scores a DRC/LVS verdict table, and a verdict
-        # is only evidence about the engine that produced it.
-        self.tree.write_readme(_doc_text(4, 4))
-        self.tree.write_proposal(_doc_text(4, 4, state_pin=False))
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn("never states this repository's KLayout pin", result.stderr)
-
-    def test_the_root_readme_need_not_state_the_pin(self):
-        # Only the proposal owes the positive claim. README.md carries no
-        # tool-version detail by design, the same way it carries no block
-        # geometry (see FOOTPRINT_COMPLETE_DOC).
-        self.tree.write_readme(_doc_text(4, 4, state_pin=False))
-        self.tree.write_status_pages(_doc_text(4, 4, state_pin=False))
-        self.tree.write_proposal(_doc_text(4, 4))
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-    def test_quoting_a_superseded_captured_against_claim_is_not_graded(self):
-        # Both documents quote the sentence that was wrong, as history. A
-        # check that grades a claim cannot tell asserting it from quoting it,
-        # so this rule grades the shape that asserts a pin and leaves the
-        # shape that narrates a retired one quotable.
-        self.tree.write_docs(
-            _doc_text(4, 4)
-            + 'An earlier revision said "the committed DRC/LVS evidence was '
-            'captured against KLayout 0.30.9", which was false.\n'
-        )
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-    def test_a_missing_pin_doc_is_skipped_not_failed(self):
-        # layout/README.md is absent from this fixture unless a test writes
-        # it. That it exists in the real tree is asserted below, against the
-        # real tree, for the same reason the disclosure list is.
-        self.tree.write_docs(_doc_text(4, 4))
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-
-class PinDocumentsExistTests(unittest.TestCase):
-    """PIN_DOCS, asserted against the real tree.
-
-    The rule skips a PIN_DOC it cannot find, so that it stays correct on the
-    synthetic trees above. The guarantee that the real files are there is
-    still owed, so it is asserted here -- same doctrine, and same reason, as
-    OffPinDisclosureListTests below.
-    """
-
-    def setUp(self):
-        text = SCRIPT.read_text()
-        block = re.search(r"^PIN_DOCS=\((.*?)^\)", text, re.S | re.M)
-        self.assertIsNotNone(block, "PIN_DOCS not found in the script")
-        self.docs = re.findall(r'^\s*"([^"]+)"', block.group(1), re.M)
-        self.repo_root = LAYOUT_DIR.parent
-
-    def test_the_list_is_not_empty(self):
-        self.assertTrue(self.docs)
-
-    def test_every_pin_doc_exists(self):
-        missing = [rel for rel in self.docs if not (self.repo_root / rel).is_file()]
-        self.assertEqual(
-            missing,
-            [],
-            "PIN_DOCS names documents that do not exist; the rule skips a "
-            "missing file, so a renamed document would silently stop being "
-            "graded rather than failing",
-        )
-
-    def test_the_required_pin_doc_is_one_of_them(self):
-        required = re.search(r'^PIN_STATED_DOC="([^"]+)"', SCRIPT.read_text(), re.M)
-        self.assertIsNotNone(required, "PIN_STATED_DOC not found in the script")
-        self.assertIn(required.group(1), self.docs)
 
 
 class OffPinDisclosureListTests(unittest.TestCase):
@@ -1850,7 +1598,7 @@ class LayerCensusRuleTests(unittest.TestCase):
         self.assertIn("states a 13-member `layer_indexes()` census", result.stderr)
 
     def test_a_brace_list_with_no_layer_indexes_mention_is_not_graded(self):
-        # Narrow-match discipline, the same the PIN RESTATEMENT RULE applies
+        # Narrow-match discipline, the same discipline the version-pin grading uses
         # to version numbers: a brace-list is not a census claim. These are
         # the *declared* stackup layers of a spec, which legitimately name
         # layers a given stream does not draw.

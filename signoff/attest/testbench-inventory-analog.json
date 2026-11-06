@@ -127,13 +127,21 @@
       ]
     },
     {
-      "cold_start": "sim/loop-dynamics/testbench/run.sh",
+      "cold_start": "python3 sim/run_corners.py loop-dynamics",
       "disclosed_in": "sim/CHARACTERIZATION.md",
       "experiment": "loop-dynamics",
       "testbenches": [
         {
+          "content_hash": "sha256:9faa47334cd68050d25fc31b30cfa4d018a02bffd7c1a375da10be00936a83a3",
+          "path": "sim/loop-dynamics/testbench/tb.json"
+        },
+        {
           "content_hash": "sha256:1b2b808d57dd894a68dd93b22a0175b18aeb4971e934e629e718caa9e9ba2031",
           "path": "sim/loop-dynamics/testbench/tb_loop_ac.sp"
+        },
+        {
+          "content_hash": "sha256:b899019a3028d40533e3a15875e16efa76e092b5d32e5d58974da8337e18a805",
+          "path": "sim/loop-dynamics/testbench/tb_loop_dynamics.spice"
         },
         {
           "content_hash": "sha256:e5acb32e99c21fa164bc4b2d27b483f73ee51df669d7749a935c8772bd98cd3a",

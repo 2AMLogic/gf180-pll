@@ -171,7 +171,10 @@ jobs:
         # ..." drawn/LVS-matched count, not just whether the correct one
         # appears once -- the commit that fixed section 6's count left a
         # contradicting stale count in section 3 of the same document, and
-        # the presence-only check reported OK on that tree. Fifth pass grades
+        # the presence-only check reported OK on that tree (that count rule and
+        # the pin-restatement rule below were removed in #812 stage 2; the
+        # generated-table step after this one covers the counts and echoes the
+        # pin). Fifth pass grades
         # spec/pll.md's own "## Area" section against the same audit --
         # DR-016/DR-017's 0.30 mm2 budget row is amended against these exact
         # numbers, which had never been graded anywhere, only the two status
@@ -220,6 +223,16 @@ jobs:
         # Negated mentions ("no `--offgrid`") and struck ones are skipped.
         # Reads only committed text files -- not even klayout.db.
         run: bash layout/lib/check-layout-status-claims.sh
+
+      - name: layout/lib/gen_layout_status_table.py --check (generated status table vs. layout/evidence/)
+        # layout/STATUS.md carries the per-sub-block drawn / DRC-clean /
+        # LVS-matched counts, footprints, the assembled-pll_top sentinel and
+        # the KLayout pin as a table generated from the evidence tree (issue
+        # #812). Regenerates in memory and fails with a diff if the committed
+        # copy differs, replacing the prose-attributing count, pin-restatement
+        # and README-footprint rules the checker above used to carry. Pure
+        # file reads; no PDK, no KLayout.
+        run: python3 layout/lib/gen_layout_status_table.py --check
 
       - name: signoff/tests (unit tests for run-signoff.sh's klt version pin)
         # Same shape as the three discover steps above, for the signoff-side
@@ -941,6 +954,17 @@ jobs:
 
       - name: design/netlist.sh --check
         run: ./design/netlist.sh --check
+
+      - name: Install klt (klayout-tools) for the PVT smoke run
+        # sim/harness/report.py shells out to `klt env-provenance emit` with
+        # no fallback, so klt must be on PATH before the selftest below.
+        # The version is read from the pin in the `checks` job's "Install
+        # klt" step so this workflow keeps a single pin to bump (the same
+        # extraction signoff/run-signoff.sh uses).
+        run: |
+          pin="$(grep -oE "klayout-tools==[0-9][^'\"[:space:]]*" .github/workflows/ci.yml | head -n 1)"
+          test -n "$pin"
+          pip install "$pin"
 
       - name: sim/selftest.sh --require-pdk
         # Fails loudly instead of skipping if the PDK turns out to be
