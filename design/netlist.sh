@@ -303,6 +303,27 @@ banner() {
   esac
 }
 
+# ------------------------------------------------------- xschem invocation --
+# Every xschem run goes through `klt netlist`, which owns the invocation: it
+# always passes the headless flags, bounds the run with --timeout-s (SIGTERM
+# then SIGKILL across the process group, so a hung xschem cannot stall this
+# script), and judges success by a freshly written output file rather than
+# xschem's exit status (non-zero even on a successful batch netlist).
+# Usage: xschem_netlist <schematic.sch> <output.spice> <log>
+XSCHEM_TIMEOUT_S="${XSCHEM_TIMEOUT_S:-120}"
+xschem_netlist() {
+  local sch="$1" out="$2" log="$3"
+  klt netlist "${sch}" -o "${out}" --rcfile "${HERE}/xschemrc" \
+      --timeout-s "${XSCHEM_TIMEOUT_S}" >"${log}" 2>&1 || {
+    echo "ERROR: klt netlist failed for ${sch}; see ${log}" >&2
+    return 1
+  }
+  # klt stamps a `** klt-netlist-inputs:` provenance comment; the committed
+  # exports are pinned by SHA-256 in sim/ evidence records, so drop it to keep
+  # the bytes identical to the raw-xschem export.
+  sed -i '/^\*\* klt-netlist-inputs: /d' "${out}"
+}
+
 # -------------------------------------------------------- committed export --
 # PATH-INDEPENDENT BYTES (#28): the committed exports below are `normalize`d at
 # WRITE time, exactly like the per-record pfd_cp export -- both conventions now
@@ -321,12 +342,10 @@ banner() {
 export_block() {
   local blk="$1" outdir="$2" work="$3"
 
-  # -n netlist, -s spice format, -q quit when done, --no_x no GUI, -o out dir.
-  # xschem 3.4.7 can exit non-zero on a successful `-q` batch netlist, so the
-  # exit status is deliberately ignored; the netlist file's existence is the
-  # success check.
-  (cd "${HERE}" && xschem --no_x -n -s -q \
-      --rcfile "${HERE}/xschemrc" -o "${work}" "${HERE}/${blk}.sch" >/dev/null 2>&1) || true
+  # `klt netlist` bounds the run and judges success by the freshly written
+  # netlist, not by xschem's exit status.
+  xschem_netlist "${HERE}/${blk}.sch" "${work}/${blk}.spice" "${work}/${blk}.xschem.log" \
+    || exit 1
 
   [ -f "${work}/${blk}.spice" ] || {
     echo "ERROR: xschem produced no netlist for ${blk} at ${work}/${blk}.spice" >&2
@@ -384,15 +403,8 @@ netlist_pfd_cp() {
   local outdir="${OUTDIR:-$(mktemp -d)}"
   mkdir -p "${outdir}"
 
-  # xschem exits 10 on a successful `--quit` after netlisting, not 0.
-  local rc=0
-  ( cd "${HERE}" && XSCHEM_NETLIST_DIR="${outdir}" \
-      xschem --netlist --quit --no_x --rcfile "${HERE}/xschemrc" \
-        "${HERE}/dut_export.sch" >"${outdir}/xschem.log" 2>&1 ) || rc=$?
-  if [ "${rc}" -ne 0 ] && [ "${rc}" -ne 10 ]; then
-    echo "ERROR: xschem netlist failed (exit ${rc}); see ${outdir}/xschem.log" >&2
-    exit 1
-  fi
+  xschem_netlist "${HERE}/dut_export.sch" "${outdir}/dut_export.spice" "${outdir}/xschem.log" \
+    || exit 1
 
   local raw="${outdir}/dut_export.spice"
   [ -f "${raw}" ] || { echo "ERROR: ${raw} not produced" >&2; exit 1; }
@@ -557,11 +569,8 @@ done
 # committed export for the staleness diff to catch either.  A
 # `--top <one-block>` run has nothing useful to compare, so it is skipped.
 if [ "${#SELECTED[@]}" -eq "${#BLOCKS[@]}" ]; then
-  (
-    cd "${HERE}" && XSCHEM_NETLIST_DIR="${WORK}" \
-      xschem --netlist --quit --no_x --rcfile "${HERE}/xschemrc" \
-        "${HERE}/dut_export.sch" >"${WORK}/xschem-pfd_cp.log" 2>&1
-  ) || true
+  xschem_netlist "${HERE}/dut_export.sch" "${WORK}/dut_export.spice" "${WORK}/xschem-pfd_cp.log" \
+    || exit 1
   [ -f "${WORK}/dut_export.spice" ] || {
     echo "ERROR: the pfd_cp export needed for the leaf-cell collision check was" >&2
     echo "       not produced; see ${WORK}/xschem-pfd_cp.log" >&2
