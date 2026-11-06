@@ -69,7 +69,6 @@ REPO = HERE.parents[2]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO / "sim"))
 
-from harness.pdk import find_pdk  # noqa: E402
 from harness import execution, legacy_provenance  # noqa: E402
 
 import sid_deck  # noqa: E402
@@ -155,8 +154,7 @@ ANCHOR_TOL = 5e-3
 FATAL_LOG_PATTERNS = legacy_provenance.FATAL_LOG_PATTERNS
 
 
-def pdk_models() -> Path:
-    return find_pdk().ngspice_dir
+pdk_models = legacy_provenance.pdk_models
 
 
 #: Execution backend every deck in this runner goes through (#712). A test
