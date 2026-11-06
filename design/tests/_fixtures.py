@@ -2,52 +2,18 @@
 """Shared test fixtures for ``design/tests/``.
 
 Not itself a ``test_*.py`` module, so ``unittest discover`` never collects it
-directly -- it exists purely to be imported by the ``test_*.py`` files that
-need ``TreeWriter``.
-
-The same mixin, for the same reason, as ``sim/tests/_fixtures.py``'s: every
-test in this directory builds a throwaway miniature repository and runs a real
-``design/lib/check-*.sh`` inside it, and the generic relative-path writer that
-lays that tree out was hand-duplicated once per file (#673) rather than
-shared.
+directly. The generic helpers are defined once in ``lib/testtree.py`` and
+re-exported here so the test files' ``from _fixtures import ...`` lines stay
+put; each ``_Tree`` keeps its own ``__init__``/``run`` (#871).
 """
 
 from __future__ import annotations
 
-import shutil
+import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lib"))
 
-def install_checklib(root: Path) -> None:
-    """Install the shared checker helpers into a throwaway repo tree.
+from testtree import TreeWriter, install_checklib  # noqa: E402
 
-    The check scripts import ``checklib`` from ``$REPO_ROOT/lib``, and inside
-    a throwaway tree that tree IS ``$REPO_ROOT`` for the run -- so the real
-    repository's package has to be laid down next to the script, exactly as a
-    fresh clone would receive it.
-    """
-    src = Path(__file__).resolve().parents[2] / "lib" / "checklib"
-    shutil.copytree(
-        src, root / "lib" / "checklib", ignore=shutil.ignore_patterns("__pycache__")
-    )
-
-
-class TreeWriter:
-    """``write(rel, text)`` for a throwaway repo tree rooted at ``self.root``.
-
-    Mixed into the per-file ``_Tree`` helpers that build a miniature repository
-    and run a real ``design/lib/check-*.sh`` in it. Only this generic
-    relative-path writer is shared: each ``_Tree`` keeps its own ``__init__``
-    (which script it installs, which documents must pre-exist so the check
-    fails on what the test is about rather than on an absence) and its own
-    ``run`` -- the two differ here, one taking the netlist path as an argument
-    and running with ``cwd=self.root``, the other not.
-    """
-
-    #: Set by the concrete ``_Tree.__init__``.
-    root: Path
-
-    def write(self, rel: str, text: str) -> None:
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+__all__ = ["TreeWriter", "install_checklib"]
