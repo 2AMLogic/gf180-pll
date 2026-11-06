@@ -31,6 +31,7 @@ import time
 from pathlib import Path
 
 from . import execution, report
+from .pdk import find_pdk
 
 #: The deck file name every period-jitter runner has always used.
 DECK_NAME = "deck.sp"
@@ -48,6 +49,28 @@ FATAL_LOG_PATTERNS = ("Timestep too small", "simulation(s) aborted", "singular")
 #: ngspice's batch progress meter ("Reference value : ...") is thousands of
 #: characters of wall-clock noise per transient; nothing else is dropped.
 _PROGRESS_RE = re.compile(r"(?: ?Reference value :\s*\S+)+")
+
+
+def pdk_models() -> Path:
+    """The PDK's ngspice model directory every period-jitter runner includes."""
+    return find_pdk().ngspice_dir
+
+
+def make_backend(name: str, batch_apply: bool = False):
+    """Build the execution backend a runner's `--backend` names (#731).
+
+    Each runner keeps its own module-level ``BACKEND`` (the seam tests inject a
+    stand-in through) and assigns the result of this to it. `batch` imports the
+    batch layer lazily so a local run never needs it; it is only ever built with
+    apply=True here, and the caller prints a plan instead of running when
+    `--batch-apply` was not given.
+    """
+    if name == "local":
+        return execution.LocalBackend()
+    from . import batch as batch_mod
+    pdk = find_pdk()
+    return batch_mod.BatchBackend(
+        pdk_variant_dir=pdk.path, pdk_variant=pdk.variant, apply=batch_apply)
 
 
 def run_deck_files(

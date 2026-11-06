@@ -46,7 +46,6 @@ REPO = HERE.parents[2]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO / "sim"))
 
-from harness.pdk import find_pdk  # noqa: E402
 from harness import execution, legacy_provenance  # noqa: E402
 
 import isf_deck  # noqa: E402
@@ -84,8 +83,7 @@ TARGET_DT = 2e-12  # ~0.03 % of a period: >100x the tail spread, and see above
 DQ_MIN, DQ_MAX = 0.125e-15, 8e-15  # the range `linearity` characterises
 
 
-def pdk_models() -> Path:
-    return find_pdk().ngspice_dir
+pdk_models = legacy_provenance.pdk_models
 
 
 #: ngspice diagnostics that invalidate a run rather than annotate it.  A
