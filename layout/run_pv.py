@@ -57,7 +57,7 @@ def cmd_check_env(_args: argparse.Namespace) -> int:
           f"open_pdks {tools.pdk.version})")
     print(f"KLayout    : OK   {tools.klayout} ({tools.klayout_version()})")
     print(f"PV python  : OK   {tools.python}")
-    print(f"DRC runner : {tools.drc_runner}")
+    print(f"DRC entry  : {tools.drc_entry}")
     print(f"LVS runner : {tools.lvs_runner}")
     print(f"stdcell gds: {tools.stdcell_gds}")
     warning = tools.klayout_version_warning()

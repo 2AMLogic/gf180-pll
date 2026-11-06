@@ -1,7 +1,10 @@
 """Drive the gf180mcu open-PDK KLayout DRC deck and normalise its result.
 
-The deck itself is the PDK's -- ``libs.tech/klayout/drc/run_drc.py``, which
-generates ``main.drc`` and hands it to ``klayout -b -r``. This module adds
+The deck itself is the PDK's, run unmodified. In the pinned tree
+(``libs.tech/klayout/tech/drc/``) there is no ``run_drc.py``: the deck
+``gf180mcu.drc`` is run directly as ``klayout -b -r gf180mcu.drc -rd ...``.
+An older tree's ``drc/run_drc.py`` (which generates ``main.drc`` and hands it
+to ``klayout -b -r``) is still driven when that file is present. This module adds
 only the three things an automated gate needs and the PDK runner does not
 give you:
 
@@ -24,8 +27,13 @@ from pathlib import Path
 
 from . import env as env_mod
 
-CLEAN_MARKER = "Klayout DRC run is clean"
-DIRTY_MARKER = "Klayout DRC run is not clean"
+# Legacy run_drc.py markers, then the pinned deck's own ``ReportStatus`` lines.
+CLEAN_MARKERS = ("Klayout DRC run is clean", "DRC RESULT: SUCCESS")
+DIRTY_MARKERS = ("Klayout DRC run is not clean", "DRC RESULT: FAILURE")
+
+#: KLayout DRC threads for a direct deck run. The deck defaults to ``max``,
+#: which would take every core of a shared host.
+DECK_THREADS = 2
 _RULES_RE = re.compile(r"Violated rules are\s*:\s*\{(?P<rules>.*)\}")
 
 
@@ -84,6 +92,49 @@ def rules_from_log(log: str) -> list:
     return sorted(part.strip().strip("'\"") for part in match.group("rules").split(",") if part.strip())
 
 
+def deck_command(
+    tools: "env_mod.PvTools",
+    layout: Path,
+    topcell: str,
+    report: Path,
+    run_mode: str,
+    offgrid: bool,
+) -> list:
+    """``klayout -b -r gf180mcu.drc`` invocation, switches per the deck's header.
+
+    The ``-rd`` names are the deck's own (``klayout -b -r gf180mcu.drc -rd
+    help=true``): ``input``, ``report``, ``topcell``, ``variant``,
+    ``run_mode``, ``threads`` and ``decks``. Off-grid checks are the rule
+    decks tagged ``offgrid``; excluding them is ``decks=all,-offgrid``.
+
+    Die-level density rules (tag ``density``: DCF.1b, M*.4, MT.3, PL.8, ...)
+    are always excluded: the pinned deck's ``all`` includes them, but the
+    legacy runner's ``main`` table did not (they were a separate table), they
+    are meaningless on a leaf cell, and every committed verdict here was
+    scored without them. The deck file itself is run unmodified.
+    """
+    command = [
+        str(tools.klayout),
+        "-b",
+        "-r",
+        str(tools.drc_deck),
+        "-rd",
+        f"input={layout}",
+        "-rd",
+        f"topcell={topcell}",
+        "-rd",
+        f"report={report}",
+        "-rd",
+        f"variant={tools.variant_letter}",
+        "-rd",
+        f"run_mode={run_mode}",
+        "-rd",
+        f"threads={DECK_THREADS}",
+    ]
+    excluded = ["-density"] + ([] if offgrid else ["-offgrid"])
+    return command + ["-rd", "decks=" + ",".join(["all", *excluded])]
+
+
 def run(
     layout: Path,
     topcell: str,
@@ -105,17 +156,21 @@ def run(
     run_dir = Path(run_dir).resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    command = [
-        str(tools.python),
-        str(tools.drc_runner),
-        f"--path={layout}",
-        f"--variant={tools.variant_letter}",
-        f"--topcell={topcell}",
-        f"--run_dir={run_dir}",
-        f"--run_mode={run_mode}",
-    ]
-    if not offgrid:
-        command.append("--no_offgrid")
+    report = run_dir / f"{topcell}.lyrdb"
+    if tools.drc_runner is not None:
+        command = [
+            str(tools.python),
+            str(tools.drc_runner),
+            f"--path={layout}",
+            f"--variant={tools.variant_letter}",
+            f"--topcell={topcell}",
+            f"--run_dir={run_dir}",
+            f"--run_mode={run_mode}",
+        ]
+        if not offgrid:
+            command.append("--no_offgrid")
+    else:
+        command = deck_command(tools, layout, topcell, report, run_mode, offgrid)
 
     try:
         completed, log = env_mod.run_pv_command(
@@ -152,7 +207,7 @@ def run(
     # result -- but the log marker is the only signal that distinguishes
     # "ran, found violations" from "did not run". Decide on markers first and
     # use the return code only to catch a crash that printed neither marker.
-    if DIRTY_MARKER in log or count > 0:
+    if any(m in log for m in DIRTY_MARKERS) or count > 0:
         if not rule_counts:
             rule_counts = {rule: 1 for rule in rules_from_log(log)}
             count = sum(rule_counts.values())
@@ -168,7 +223,7 @@ def run(
             command=command,
             runner_returncode=completed.returncode,
         )
-    if CLEAN_MARKER in log:
+    if any(m in log for m in CLEAN_MARKERS):
         return DrcResult(
             status="clean",
             topcell=topcell,

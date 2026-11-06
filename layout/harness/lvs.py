@@ -1,6 +1,7 @@
 """Drive the gf180mcu open-PDK KLayout LVS deck and normalise its result.
 
-The deck is the PDK's -- ``libs.tech/klayout/lvs/run_lvs.py``, which drives
+The deck is the PDK's -- ``run_lvs.py`` under ``libs.tech/klayout/tech/lvs/`` in
+the pinned tree (``libs.tech/klayout/lvs/`` in an older one), which drives
 ``gf180mcu.lvs`` through ``klayout -b -r``. As with DRC, this module supplies
 the normalised verdict and a trustworthy exit code.
 

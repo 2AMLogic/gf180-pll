@@ -5,13 +5,17 @@ run, and all three are machine-local:
 
 1. **The PDK** -- resolved by ``sim/harness/pdk.py`` (single-sourced on
    purpose; see that module for the full resolution order). The decks
-   themselves live under ``<variant>/libs.tech/klayout/{drc,lvs}``.
+   themselves live under ``<variant>/libs.tech/klayout/tech/{drc,lvs}`` in
+   the pinned tree (``gf180mcu.drc`` and ``run_lvs.py``; there is no
+   ``run_drc.py`` there, so DRC runs the deck through ``klayout -b -r``).
+   An older tree with ``libs.tech/klayout/{drc,lvs}`` and a ``run_drc.py``
+   is still understood; the layout is chosen from the files present.
 2. **The KLayout application binary** -- *not* the ``klayout`` pip wheel. The
    foundry decks are Ruby DRC/LVS-DSL scripts; only the standalone KLayout
    binary can execute them (``klayout -b -r deck.drc``). The pip wheel gives
    ``klayout.db`` (used here for layout assembly) but has no DSL runner.
 3. **A Python interpreter that can import both ``klayout`` and ``docopt``** --
-   the PDK's own ``run_drc.py`` / ``run_lvs.py`` need them. That may or may
+   the PDK's own ``run_lvs.py`` (and a legacy ``run_drc.py``) need them. That may or may
    not be the interpreter running this harness.
 
 Every one of the three has an environment-variable override so a CI runner or
@@ -247,17 +251,46 @@ class PvTools:
     klayout: Path
     python: Path
 
+    def _deck_dir(self, kind: str, markers: tuple) -> Path:
+        """Resolve a deck directory from the files actually present.
+
+        Two PDK layouts exist and the choice is made on files, never on a
+        revision string: the pinned tree keeps the decks under
+        ``libs.tech/klayout/tech/{drc,lvs}``; an older tree keeps them directly
+        under ``libs.tech/klayout/{drc,lvs}``. ``tech/`` wins when both carry
+        a marker file. When neither does, the ``tech/`` path is returned so the
+        "expected PDK file is missing" error names the layout that is pinned.
+        """
+        base = self.pdk.klayout_dir
+        candidates = (base / "tech" / kind, base / kind)
+        for candidate in candidates:
+            if any((candidate / marker).is_file() for marker in markers):
+                return candidate
+        return candidates[0]
+
     @property
     def drc_dir(self) -> Path:
-        return self.pdk.klayout_dir / "drc"
+        return self._deck_dir("drc", ("gf180mcu.drc", "run_drc.py"))
 
     @property
     def lvs_dir(self) -> Path:
-        return self.pdk.klayout_dir / "lvs"
+        return self._deck_dir("lvs", ("run_lvs.py",))
 
     @property
-    def drc_runner(self) -> Path:
-        return self.drc_dir / "run_drc.py"
+    def drc_runner(self) -> Path | None:
+        """The legacy ``run_drc.py`` wrapper, or ``None`` when the tree has none."""
+        runner = self.drc_dir / "run_drc.py"
+        return runner if runner.is_file() else None
+
+    @property
+    def drc_deck(self) -> Path:
+        """The KLayout DRC deck run directly when there is no ``run_drc.py``."""
+        return self.drc_dir / "gf180mcu.drc"
+
+    @property
+    def drc_entry(self) -> Path:
+        """The file DRC is launched from: ``run_drc.py`` if present, else the deck."""
+        return self.drc_runner or self.drc_deck
 
     @property
     def lvs_runner(self) -> Path:
@@ -431,7 +464,7 @@ def find_tools(variant: str | None = None) -> PvTools:
     """Locate the whole toolchain, or raise ``PdkNotFound`` / ``ToolNotFound``."""
     pdk = find_pdk(variant)
     tools = PvTools(pdk=pdk, klayout=find_klayout(), python=find_pv_python())
-    for required in (tools.drc_runner, tools.lvs_runner, tools.stdcell_gds):
+    for required in (tools.drc_entry, tools.lvs_runner, tools.stdcell_gds):
         if not required.is_file():
             raise ToolNotFound(
                 f"expected PDK file is missing: {required}\n"
