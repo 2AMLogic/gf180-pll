@@ -1,16 +1,19 @@
 """Run the PDK's own ``run_lvs.py`` with the ``poly_res`` switch overridden.
 
-``$PDK_ROOT/libs.tech/klayout/lvs/gf180mcu.lvs`` reads the high-sheet
+``$PDK_ROOT/libs.tech/klayout/tech/lvs/gf180mcu.lvs`` reads the high-sheet
 poly-resistor process option from a ``-rd poly_res=<1k|2k|3k>`` klayout
 variable (``POLY_RES = $poly_res || '1k'``), and
 ``rule_decks/res_extraction.lvs``'s ``case POLY_RES`` block is what decides
 whether a marked (GDS ``(62, 0)``) poly resistor extracts as ``ppolyf_u_1k``,
 ``ppolyf_u_2k`` or ``ppolyf_u_3k``. The PDK's own ``run_lvs.py`` **hardcodes**
 ``switches["poly_res"] = "1k"`` for every one of its four ``--variant``
-letters and exposes no CLI override (gf180mcuD, open_pdks
-``c6d73a35f524070e85faff4a6a9eef49553ebc2b`` when this was written -- the data
-has NOT been regenerated under the current ``sim/pdk.json`` pin; the variant letters select the
-metal stack and MIM option, which are independent of the poly option).
+letters and exposes no CLI override (gf180mcuD; re-checked against the
+``sim/pdk.json`` pin, open_pdks ``f6eeac7``: ``tech/lvs/run_lvs.py`` still
+hardcodes ``poly_res = "1k"`` for all four variants, and its
+``generate_klayout_switches(arguments, layout_path, netlist_path)`` and
+``main(lvs_run_dir, arguments)`` signatures this shim wraps are unchanged; the
+variant letters select the metal stack and MIM option, which are independent
+of the poly option).
 
 This shim exists so this repo can state its own ratified process option (see
 ``spec/decision-records/DR-009-vco-bias-resistor-device-class.md``) without
