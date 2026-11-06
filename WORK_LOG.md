@@ -4,6 +4,23 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-11-06
 
+- **PR #894**: refactor: route design/netlist.sh xschem runs through klt netlist
+- **PR #893**: refactor: share period-jitter PDK-models and backend construction in harness
+- **PR #892**: ci: install klt in pdk-checks before the PVT smoke selftest
+- **PR #890**: feat(sim): migrate loop-dynamics to a harness manifest with baseline-comparison derive step
+- **PR #888**: layout: run the pinned PDK's tech/ DRC deck directly and find decks by file layout
+- **PR #887**: refactor(sim): share band-top check_config logic in pll_top_dut.sh
+- **PR #886**: feat(sim): refuse multi-unit local grids on batch-backend hosts
+- **PR #884**: test: share TreeWriter and install_checklib via lib/testtree.py
+- **PR #882**: refactor(layout): generate layout status table, drop prose count and pin-restatement rules
+- **Issue #891** (closed): ci: pdk-checks fails — klt installed after the selftest step that needs it
+- **Issue #889** (closed): Consolidate duplicated backend-selection and deck-run boilerplate across period-jitter run.py drivers
+- **Issue #883** (closed): Route design/netlist.sh xschem calls through klt netlist (unbounded raw invocations)
+- **Issue #881** (closed): Dedupe near-identical band-top check_config.sh scripts into a shared helper
+- **Issue #877** (closed): layout/harness: find the DRC/LVS decks in the pinned open_pdks f6eeac7 tree (tech/ layout)
+- **Issue #871** (closed): Dedupe identical TreeWriter / install_checklib test helpers across test directories
+- **Issue #812** (closed): Simplify layout status-claims checker: replace 2.3k-line prose linter with tree-derived check
+- **Issue #740** (closed): sim/lib/simenv.sh: refuse local multi-unit grid fan-out when the batch backend is selected
 - **PR #880**: feat(sim): staged period-jitter grid driver with backend-selectable run.py
 - **Issue #731** (closed): sim/period-jitter: migrate grid.sh fan-out to run_corners.py backends (follow-up to #712 step 1)
 
