@@ -369,11 +369,12 @@ def loglin(lo, hi, n):
     return [lo * (hi / lo) ** (i / (n - 1)) for i in range(n)]
 
 
-def main():
-    if len(sys.argv) != 7:
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if len(argv) != 6:
         sys.stderr.write(__doc__)
         sys.exit(2)
-    fz, lac, kv, cpdc, cpsw, outdir = sys.argv[1:]
+    fz, lac, kv, cpdc, cpsw, outdir = argv
     os.makedirs(outdir, exist_ok=True)
 
     curves = load_filter_z(fz)
