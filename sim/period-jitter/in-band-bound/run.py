@@ -53,7 +53,6 @@ REPO = HERE.parents[2]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO / "sim"))
 
-from harness.pdk import find_pdk  # noqa: E402
 from harness import execution, legacy_provenance  # noqa: E402
 
 import ib_deck  # noqa: E402
@@ -247,8 +246,7 @@ def load_config() -> tuple[dict, float, float, float]:
     return config, float(p["fref"]), float(p["nratio"]), iunit
 
 
-def pdk_models() -> Path:
-    return find_pdk().ngspice_dir
+pdk_models = legacy_provenance.pdk_models
 
 
 #: Execution backend every deck in this runner goes through (#712). A test
@@ -257,20 +255,9 @@ BACKEND = execution.LocalBackend()
 
 
 def select_backend(name: str, batch_apply: bool = False):
-    """Install the execution backend `--backend` names into `BACKEND` (#731).
-
-    `batch` imports the batch layer lazily so a local run never needs it. It
-    is only ever built with apply=True here; the caller prints a plan instead
-    of running when `--batch-apply` was not given.
-    """
+    """Install the execution backend `--backend` names into `BACKEND` (#731)."""
     global BACKEND
-    if name == "local":
-        BACKEND = execution.LocalBackend()
-        return BACKEND
-    from harness import batch as batch_mod
-    pdk = find_pdk()
-    BACKEND = batch_mod.BatchBackend(
-        pdk_variant_dir=pdk.path, pdk_variant=pdk.variant, apply=batch_apply)
+    BACKEND = legacy_provenance.make_backend(name, batch_apply)
     return BACKEND
 
 
