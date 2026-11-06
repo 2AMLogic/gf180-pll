@@ -2,6 +2,11 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-11-06
+
+- **PR #880**: feat(sim): staged period-jitter grid driver with backend-selectable run.py
+- **Issue #731** (closed): sim/period-jitter: migrate grid.sh fan-out to run_corners.py backends (follow-up to #712 step 1)
+
 ### 2026-11-05
 
 - **PR #800**: feat(signoff): cite T1 items 1, 9 and 10 with attestations on klt 0.7.0
