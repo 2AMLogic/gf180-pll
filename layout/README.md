@@ -250,8 +250,9 @@ jobs, and conflating them is the single easiest way to get stuck:
 
 ### KLayout version pin — a newer install can produce a false LVS mismatch
 
-This repository pins `KLayout 0.28.16` — recorded as
-`KNOWN_GOOD_KLAYOUT_VERSION` in `layout/harness/env.py`. A **newer** KLayout
+This repository pins one KLayout version — recorded as
+`KNOWN_GOOD_KLAYOUT_VERSION` in `layout/harness/env.py` and echoed in the generated table in
+[`STATUS.md`](STATUS.md). A **newer** KLayout
 application binary resolved off
 `PATH` (0.30.9 has been reproduced directly) has been observed to report a
 false `LVS mismatch` on a `divider_chain` layout that is otherwise LVS-clean

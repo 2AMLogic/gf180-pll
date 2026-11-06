@@ -21,8 +21,8 @@ submitting operator supplies outside this repository.
 
 **Maturity note, stated up front rather than left for a reader to discover.**
 This repository is, at the time of writing, **schematic-complete and at a
-first assembled top level**: **4 of the 4 PLL sub-blocks** have a
-committed, DRC-clean transistor-level GDS, **4 of the 4 are LVS-matched**,
+first assembled top level**: each PLL sub-block's drawn, DRC-clean and
+LVS-matched state is the generated table in `layout/STATUS.md`,
 and the assembled `pll_top` GDS is committed but is not signoff — one
 inherited DRC violation, top-level LVS still to run, area over the ratified
 row (§6). Every §5 number is therefore a *schematic-level* simulation result:
@@ -219,11 +219,10 @@ rule](../../spec/pll.md#icp-trim-code-rule)).
 The complete top-level assembly (`design/pll_top.sch`) is verified, at one
 nominal corner, to acquire and hold lock from a real frequency error
 (`sim/pll-top-smoke/records/20260802-160926-8456ff3.md`, all 7 checks PASS).
-Most of the circuitry described above also exists as drawn geometry: **4 of
-the 4 PLL sub-blocks** the layout effort partitions this design into — VCO,
-PFD + charge pump, divider chain, lock detector — have a committed,
-standalone-DRC-clean transistor-level GDS, and **4 of the 4 are
-LVS-matched**. The passive loop filter is drawn as well (issue #748), and
+Most of the circuitry described above also exists as drawn geometry: **the four
+PLL sub-blocks** the layout effort partitions this design into — VCO,
+PFD + charge pump, divider chain, lock detector — each have a block GDS whose
+drawn, DRC-clean and LVS-matched state is the generated table in `layout/STATUS.md`. The passive loop filter is drawn as well (issue #748), and
 all five are assembled into one `pll_top` GDS (issue #297) that is not yet
 signoff-clean; §5's area row still quotes the loop filter as computed from
 its sized devices. §6 gives the per-block table, the evidence paths, and
@@ -1659,10 +1658,10 @@ proven, `klt`-aware DRC/LVS flow (issue #16,
 `layout/evidence/inv-tb-proof/PROOF.md`) validated on a trivial
 standard-cell inverter test cell — including a demonstrated catch of a
 deliberately injected DRC violation and LVS mismatch — and that flow has
-since been run against this design's own sub-blocks. **4 of the 4 PLL
-sub-blocks** now have a committed, standalone-DRC-clean transistor-level
-GDS, and **4 of the 4 are LVS-matched** against an independently derived
-reference netlist:
+since been run against this design's own sub-blocks. Each PLL sub-block's
+drawn, DRC-clean and LVS-matched state (LVS against an independently derived
+reference netlist) is the generated table in `layout/STATUS.md`;
+the footprints and evidence per sub-block:
 
 | Sub-block | Top cell | As-drawn footprint (committed-GDS bounding box) | DRC | LVS | Evidence |
 |---|---|---|---|---|---|
@@ -1932,9 +1931,7 @@ more.
    closed-loop simulation to date drives the four bias nodes from ideal
    current sources.
 7. **Top-level DRC/LVS closure and post-layout re-verification are still
-   open** (§6). Block-level layout exists — 4 of the 4 PLL sub-blocks are
-   drawn and standalone-DRC-clean, and, as of issue #449, 4 of the 4
-   LVS-matched — and since issue #297 so does an assembled `pll_top` GDS,
+   open** (§6). Block-level layout exists (per-sub-block state: the generated table in `layout/STATUS.md`) — and since issue #297 so does an assembled `pll_top` GDS,
    with one inherited DRC violation (the loop filter's `MIMTM.3`, #753), no
    top-level LVS run yet, and no extraction yet, so every §5 number remains
    schematic-level. Tracked at issues #149 (formal DRC/LVS reporting) and #18
@@ -2154,10 +2151,9 @@ submission date.
   [klayout-tools](https://github.com/2AMLogic/klayout-tools) (`klt`) — a flow
   whose fault-detection was first validated on the inverter test cell
   referenced in §6 (it catches a deliberately injected DRC violation and LVS
-  mismatch) and which has since been run in earnest against **4 of the 4 PLL
-  sub-blocks**, each DRC-clean against the PDK's own foundry signoff decks and
-  LVS-matched by the PDK's own `run_lvs.py`, with the deck output committed
-  beside each GDS (§6). What remains open at the top level is DRC/LVS
+  mismatch) and which has since been run in earnest against the PLL
+  sub-blocks, with the PDK's own foundry signoff-deck and `run_lvs.py` output
+  committed beside each GDS (§6; verdicts in the generated table in `layout/STATUS.md`). What remains open at the top level is DRC/LVS
   closure and extraction: the assembled `pll_top` GDS is committed with one
   inherited DRC violation and has had no top-level LVS run (§6). The gf180mcu PDK (`gf180mcuD`
   variant) is resolved via the standard `PDK_ROOT`/`PDK` environment convention
@@ -2174,8 +2170,9 @@ submission date.
   every committed report's own `provenance.klt_version` must equal that pin
   exactly. The **KLayout application binary** that runs the foundry DRC and
   LVS decks — the engine behind every verdict in §6's table, and a different
-  program from `klt` — is pinned at `KLayout 0.28.16` by
-  `KNOWN_GOOD_KLAYOUT_VERSION` in `layout/harness/env.py`. That pin is not
+  program from `klt` — is pinned by
+  `KNOWN_GOOD_KLAYOUT_VERSION` in `layout/harness/env.py` (the version is
+  echoed in the generated table in `layout/STATUS.md`). That pin is not
   housekeeping: a newer build has been observed reporting a **false** LVS
   mismatch on an unchanged, LVS-clean layout, while DRC on the same binary
   was unaffected (issue #360), so a verdict is only evidence about the engine
