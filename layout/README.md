@@ -195,9 +195,9 @@ iteration (seconds, not minutes) before a full deck run; it is not the gate.
 
 | Tool | Why | Notes |
 |---|---|---|
-| gf180mcu PDK | DRC/LVS decks + standard-cell GDS/CDL | `pip install ciel && ciel enable --pdk-family gf180mcu -l gf180mcu_fd_pr <hash>` (hash: `open_pdks` in `sim/pdk.json`) — same install `sim/` uses |
+| gf180mcu PDK | DRC/LVS decks + standard-cell GDS/CDL. Decks are found from the files present: `libs.tech/klayout/tech/{drc,lvs}` (pinned tree: `gf180mcu.drc` run directly via `klayout -b -r`, plus `run_lvs.py`; density rules excluded) else the legacy `libs.tech/klayout/{drc,lvs}` with `run_drc.py` | `pip install ciel && ciel enable --pdk-family gf180mcu -l gf180mcu_fd_pr <hash>` (hash: `open_pdks` in `sim/pdk.json`) — same install `sim/` uses |
 | KLayout **application** binary | runs the foundry Ruby DRC/LVS-DSL decks (`klayout -b -r deck.drc`) | **not** the `klayout` pip wheel, which has no DSL runner — see "The two KLayouts" below |
-| A Python environment with `klayout` (pip) + `docopt` importable | the PDK's own `run_drc.py`/`run_lvs.py` need them | `python3 -m venv ~/opt/gf180pv-venv && ~/opt/gf180pv-venv/bin/pip install klayout docopt` |
+| A Python environment with `klayout` (pip) + `docopt` importable | the PDK's own `run_lvs.py` (and a legacy tree's `run_drc.py`) need them | `python3 -m venv ~/opt/gf180pv-venv && ~/opt/gf180pv-venv/bin/pip install klayout docopt` |
 | `klt` (optional but recommended) | fast PDK/asset discovery, and a quick pre-check DRC pass | `pip install klayout-tools` |
 
 The harness never hardcodes any of these three paths. `layout/harness/env.py`
@@ -242,7 +242,7 @@ jobs, and conflating them is the single easiest way to get stuck:
 - The **pip wheel** (`pip install klayout`, imported as `klayout.db`) is a
   headless Python API with no DSL runner. `layout/harness/cell.py` uses it
   to assemble `inv_tb.gds`; `layout/harness/faults.py` uses it to inject
-  faults; the PDK's own `run_drc.py`/`run_lvs.py` (the "PV python" above)
+  faults; the PDK's own `run_lvs.py` (and a legacy `run_drc.py`; the "PV python" above)
   import it too.
 - The **standalone application binary** (`klayout -b -r <deck>`) is the only
   thing that can execute the foundry's Ruby DRC/LVS-DSL rule decks. There is
@@ -355,7 +355,7 @@ signal, for different (and non-obvious) reasons — discovered directly during
 bring-up, which is why `layout/harness/drc.py` and `layout/harness/lvs.py`
 never trust it:
 
-- **`run_drc.py`** exits non-zero both when the deck fails to run *and* (in
+- **`run_drc.py`** (legacy trees only) exits non-zero both when the deck fails to run *and* (in
   this PDK snapshot) on a dirty result — so its exit code alone cannot
   distinguish "ran, found violations" from "crashed before running". The
   harness decides from the log's clean/dirty marker first, falling back to
@@ -433,7 +433,7 @@ below); pass a `--work-dir` to control where the scratch run trees
 git-ignored.
 
 Wall time: dominated by the two full-deck DRC runs, each several minutes
-against the ~50-table `main` rule deck (`--no_offgrid` by default — the
+against the ~50-table `main` rule deck (off-grid excluded by default — the
 off-grid check class is skipped as a separate, slower class of rule this
 flow-bring-up proof does not need; pass `--offgrid` to `drc`/`prove` for a
 signoff-grade run). LVS is fast (a few seconds) by comparison.
