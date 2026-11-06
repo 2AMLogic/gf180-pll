@@ -218,6 +218,8 @@ simenv_require_tools
 mkdir -p "${WORK}"
 
 echo "cp-compliance: exporting design/ via xschem ..."
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "$(( NDC + NSW ))" "cp-compliance" || exit $?
 "${REPO}/design/netlist.sh" --top pfd_cp "${WORK}" >/dev/null
 [ -f "${NETLIST}" ] || { echo "ERROR: ${NETLIST} not produced" >&2; exit 1; }
 

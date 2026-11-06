@@ -145,6 +145,8 @@ mkdir -p "${WORK}"
 # Export the design hierarchy from xschem ONCE per run: every corner point
 # simulates the same netlist, and that netlist is what the record freezes.
 echo "pfd-deadzone: exporting design/ via xschem ..."
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "${NPOINTS}" "pfd-deadzone" || exit $?
 "${REPO}/design/netlist.sh" --top pfd_cp "${WORK}" >/dev/null
 [ -f "${NETLIST}" ] || { echo "ERROR: ${NETLIST} not produced" >&2; exit 1; }
 

@@ -225,6 +225,8 @@ for ((i = 0; i < NSEC; i++)); do
 done
 NJOBS=$(wc -l <"${JOBLIST}" | tr -d ' ')
 echo "devchar-passives: ${NJOBS} runs ($(( NJOBS / 2 )) cap + $(( NJOBS / 2 )) res), $(simenv_jobs) parallel jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "${NJOBS}" "devchar-passives" || exit $?
 
 rm -f "${WORK}"/*.sum "${WORK}"/*.cur
 # shellcheck disable=SC2016

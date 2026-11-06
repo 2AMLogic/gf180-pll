@@ -427,6 +427,8 @@ for corner in "${BUNDLES[@]}"; do
 done
 NJOBS=$(wc -l <"${JOBLIST}" | tr -d ' ')
 echo "lock-time: ${NJOBS} runs (full 45-point PVT grid x N in {4,16,64} x {cold,relock} -- see run.sh header), ${JOBS} parallel"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "${NJOBS}" "lock-time" || exit $?
 
 # Host contention is the single biggest determinant of this campaign's
 # wall-clock (see the header), and every record it mints is read as evidence

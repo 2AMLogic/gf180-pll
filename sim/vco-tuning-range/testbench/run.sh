@@ -174,6 +174,8 @@ fi
 
 NPEND=$(wc -l <"${PENDING}" | tr -d ' ')
 echo "vco-tuning-range: ${NPEND} of ${NPOINTS} (corner, band) runs to do x ${#VCTRLS[@]} control points, $(simenv_jobs) parallel jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "${NPEND}" "vco-tuning-range" || exit $?
 
 if [ "${NPEND}" -gt 0 ]; then
   # shellcheck disable=SC2016

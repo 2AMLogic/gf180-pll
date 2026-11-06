@@ -1222,6 +1222,8 @@ done <"${OPTAB2}"
 
 NPRE=$(wc -l <"${JOBSPRE}" | tr -d ' ')
 echo "supply-sensitivity: ${NPRE} in-loop control-voltage calibration runs (2 forced points each)"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "${NPRE}" "supply-sensitivity" || exit $?
 # shellcheck disable=SC2016
 xargs -P "$(simenv_jobs)" -L 1 \
   "${BASH:-/bin/bash}" -c 'exec "$0" --one-vpre "$@"' "${HERE}/run.sh" <"${JOBSPRE}"

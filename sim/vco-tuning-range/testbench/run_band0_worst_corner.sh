@@ -211,6 +211,8 @@ if [ "${1:-}" = "--check" ]; then
 fi
 
 echo "vco-tuning-range band0-worst-corner: N_SAMPLES=${N_SAMPLES} at ${CORNER_TAG}/${TEMP}C/${VDD}V, Vctrl=${VCTRL}, $(simenv_jobs) parallel jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "${N_SAMPLES}" "vco-tuning-range" || exit $?
 
 rm -f "${WORK}"/band0_*.csv
 

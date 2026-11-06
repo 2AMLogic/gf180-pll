@@ -311,6 +311,8 @@ for corner in "${SIMENV_MOS_CORNERS[@]}"; do
   done
 done
 echo "divider-ratio/dff  : $(wc -l <"${DFF_JOBS}" | tr -d ' ') points, ${JOBS} jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "$(wc -l <"${DFF_JOBS}" | tr -d ' ')" "divider-ratio" || exit $?
 DFF_ROWS="${WORK}/rows_dff.csv"; : >"${DFF_ROWS}"
 # shellcheck disable=SC2016
 xargs -P "${JOBS}" -L 1 "${BASH:-/bin/bash}" -c 'exec "$0" --one-dff "$@"' \
