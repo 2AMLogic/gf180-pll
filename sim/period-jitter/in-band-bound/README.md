@@ -30,7 +30,9 @@ against 0.50 %. It is an upper bound, not an estimate; see
 Run it:
 
 ```sh
-sim/period-jitter/in-band-bound/grid.sh 6        # all 45 points, 6 side by side
+sim/period-jitter/grid.py in-band-bound --jobs 2   # all 45 points, staged (grid.sh is a wrapper)
+sim/period-jitter/grid.py in-band-bound --plan     # list the units, run nothing
+# --backend batch [--batch-apply] sends decks to the batch fleet; without --batch-apply it only plans
 sim/period-jitter/in-band-bound/run.py --point typical_27c_3.30v \
     --stage digital --stage cp --stage cells --stage clkload --stage ldload --stage bound
 sim/period-jitter/in-band-bound/run.py --point typical_27c_3.30v --stage validate
@@ -451,7 +453,7 @@ Each of these is a limit of the bound, stated so that nobody has to infer it.
 | [`ib_deck.py`](ib_deck.py) | Device and cell enumeration, and every deck — the open-loop `pll_top` transient, the charge pump's noise, the cells' trip point / noise / slew, the two gate loads — derived from the committed netlists |
 | [`ib_extract.py`](ib_extract.py) | The inequalities, the declared timing paths and their netlist check, the loop transfer, the sampling fold, the gated charge spectrum and the assembled bound — no simulator |
 | [`run.py`](run.py) | The eight stages; one point per invocation |
-| [`grid.sh`](grid.sh) | The 45-point driver |
+| [`../grid.py`](../grid.py), [`grid.json`](grid.json), [`grid.sh`](grid.sh) | The staged 45-point driver, this campaign's stage plan, and the thin wrapper |
 | [`summarize.py`](summarize.py) | `results/*.json` → [`results/SUMMARY.md`](results/SUMMARY.md) |
 | [`results/`](results/) | The committed evidence |
 | [`logs/`](logs/) | ngspice output for every deck, plus one driver log per grid point |

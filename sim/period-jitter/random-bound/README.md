@@ -21,7 +21,9 @@ detector; see [What this does NOT establish](#what-this-does-not-establish).
 Run it:
 
 ```sh
-sim/period-jitter/random-bound/grid.sh 6        # all 45 points, 6 side by side; hours
+sim/period-jitter/grid.py random-bound --jobs 2    # all 45 points, staged; hours (grid.sh is a wrapper)
+sim/period-jitter/grid.py random-bound --plan      # list the units, run nothing
+# --backend batch [--batch-apply] sends decks to the batch fleet; without --batch-apply it only plans
 sim/period-jitter/random-bound/run.py --point typical_27c_3.30v \
     --stage trajectory --stage sid --stage bias --stage transient   # one point
 sim/period-jitter/random-bound/summarize.py > sim/period-jitter/random-bound/results/SUMMARY.md
@@ -335,7 +337,7 @@ Each of these is a limit of the bound, stated so that nobody has to infer it.
 | [`rb_deck.py`](rb_deck.py) | Device catalogue and every deck — trajectory, noise, transient, bias sensitivity, bias small-signal — derived from the committed netlist |
 | [`rb_extract.py`](rb_extract.py) | Periods and statistics, the noise-deck parse and anchors, the inequalities, the loop model, the small-signal integral and the assembled bound — no simulator |
 | [`run.py`](run.py) | The seven stages; one point per invocation |
-| [`grid.sh`](grid.sh) | The 45-point driver |
+| [`../grid.py`](../grid.py), [`grid.json`](grid.json), [`grid.sh`](grid.sh) | The staged 45-point driver, this campaign's stage plan, and the thin wrapper |
 | [`summarize.py`](summarize.py) | `results/*.json` → [`results/SUMMARY.md`](results/SUMMARY.md) |
 | [`results/`](results/) | The committed evidence |
 | [`logs/`](logs/) | ngspice output: every trajectory, bias and transient deck, the calibration and the validation decks (the `sid` stage's noise decks stay in the work area; every check made on them is in `results/sid_*.json`) |
