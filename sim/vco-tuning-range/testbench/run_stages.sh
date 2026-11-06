@@ -154,6 +154,8 @@ for c in "${CORNERS[@]}"; do
 done
 NP=$(wc -l <"${JOBLIST}" | tr -d ' ')
 echo "vco stage-count campaign: ${NP} runs x 3 stage counts, $(simenv_jobs) parallel jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "${NP}" "vco-tuning-range" || exit $?
 
 ROWS="${WORK}/rows.csv"; : >"${ROWS}"
 # shellcheck disable=SC2016

@@ -661,6 +661,8 @@ EOF
 fi
 
 echo "vco-tuning-range mismatch: N_SAMPLES=${N_SAMPLES}/band x ${#BAND_POINTS[@]} bands at ${CORNER_TAG}/${TEMP}C/${VDD}V, Vctrl=${VCTRL}, $(simenv_jobs) parallel jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "$(( N_SAMPLES * ${#BAND_POINTS[@]} ))" "vco-tuning-range" || exit $?
 
 rm -f "${WORK}"/band*.csv
 

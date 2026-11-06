@@ -311,6 +311,8 @@ for corner in "${SIMENV_MOS_CORNERS[@]}"; do
   done
 done
 echo "divider-ratio/dff  : $(wc -l <"${DFF_JOBS}" | tr -d ' ') points, ${JOBS} jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "$(wc -l <"${DFF_JOBS}" | tr -d ' ')" "divider-ratio" || exit $?
 DFF_ROWS="${WORK}/rows_dff.csv"; : >"${DFF_ROWS}"
 # shellcheck disable=SC2016
 xargs -P "${JOBS}" -L 1 "${BASH:-/bin/bash}" -c 'exec "$0" --one-dff "$@"' \
@@ -330,6 +332,8 @@ for corner in "${SIMENV_MOS_CORNERS[@]}"; do
   done
 done
 echo "divider-ratio/cell : $(wc -l <"${CELL_JOBS}" | tr -d ' ') points, ${JOBS} jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "$(wc -l <"${CELL_JOBS}" | tr -d ' ')" "divider-ratio" || exit $?
 CELL_ROWS="${WORK}/rows_cell.csv"; : >"${CELL_ROWS}"
 # shellcheck disable=SC2016
 xargs -P "${JOBS}" -L 1 "${BASH:-/bin/bash}" -c 'exec "$0" --one-cell "$@"' \
@@ -374,6 +378,8 @@ done >>"${CHAIN_JOBS}"
 for n in 4 64; do echo "typical 27 3.30 10e6 ${n}"; done >>"${CHAIN_JOBS}"
 sort -u -o "${CHAIN_JOBS}" "${CHAIN_JOBS}"
 echo "divider-ratio/chain: $(wc -l <"${CHAIN_JOBS}" | tr -d ' ') points, ${JOBS} jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "$(wc -l <"${CHAIN_JOBS}" | tr -d ' ')" "divider-ratio" || exit $?
 CHAIN_ROWS="${WORK}/rows_chain.csv"; : >"${CHAIN_ROWS}"
 # shellcheck disable=SC2016
 xargs -P "${JOBS}" -L 1 "${BASH:-/bin/bash}" -c 'exec "$0" --one-chain "$@"' \

@@ -173,6 +173,8 @@ for corner in "${SIMENV_MOS_CORNERS[@]}"; do
   done
 done
 NPOINTS=$(wc -l <"${JOBLIST}" | tr -d ' ')
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "${NPOINTS}" "pfd-deadzone" || exit $?
 NCORNERS=$(( NPOINTS / ${#DPHI_POINTS[@]} ))
 echo "pfd-deadzone: ${NCORNERS} PVT corners x ${#DPHI_POINTS[@]} dphi points = ${NPOINTS} runs, $(simenv_jobs) parallel jobs"
 

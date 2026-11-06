@@ -171,6 +171,8 @@ done
 NT=$(wc -l <"${TJOBS}" | tr -d ' ')
 
 echo "loop-dynamics: ${NZ} filter-impedance corner points (x6 Vctrl each) + ${NT} independent loop-AC cross-check points, $(simenv_jobs) parallel jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "$(( NZ + NT ))" "loop-dynamics" || exit $?
 
 rm -f "${WORK}"/z_*.csv "${WORK}"/xc_*.csv
 

@@ -633,6 +633,8 @@ echo "${CSV_HEADER}" >"${RESULT_CSV}"
 
 JOBS="${SIM_JOBS:-1}"
 echo "output-range: ${NJOBS} runs (full 45-point PVT grid x 2 band edges -- see run.sh header), ${JOBS} parallel"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "${NJOBS}" "output-range" || exit $?
 
 export OUTCSV="${RESULT_CSV}"
 # Same re-invocation pattern as sim/lock-time: each job re-enters this script

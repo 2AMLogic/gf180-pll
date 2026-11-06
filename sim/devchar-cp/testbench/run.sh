@@ -179,6 +179,8 @@ for corner in "${SIMENV_MOS_CORNERS[@]}"; do
 done
 NPOINTS=$(wc -l <"${JOBLIST}" | tr -d ' ')
 echo "devchar-cp: ${NPOINTS} corner points x 6 stacks, $(simenv_jobs) parallel jobs"
+# Refuse a multi-unit local grid on a batch-backend host (#740).
+simenv_guard_local_grid "${NPOINTS}" "devchar-cp" || exit $?
 
 rm -f "${WORK}"/*.sum "${WORK}"/*.cur
 # shellcheck disable=SC2016
