@@ -2,6 +2,13 @@
 # gf180-pll :: loop-dynamics :: corner runner for the loop-filter bandwidth /
 # phase-margin campaign (#10).
 #
+# SUPERSEDED FOR NEW RUNS by this campaign's sim/harness manifest
+# (testbench/tb.json + tb_loop_dynamics.spice + derive.py beside it) -- run
+#   python3 sim/run_corners.py loop-dynamics
+# instead. This script is kept because the records it already minted are
+# append-only evidence and it is the only thing that can regenerate the
+# extra CSV artifacts they cite; do not extend it.
+#
 # Two testbenches feed one `analyze.py` (which does the algebra and emits the
 # record's whole Result section, so no number in the record is hand-typed):
 #

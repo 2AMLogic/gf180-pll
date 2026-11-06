@@ -1,0 +1,424 @@
+{
+  "name": "loop-dynamics",
+  "description": "passive loop-filter bandwidth / phase margin over the 27-bundle passive corner box x temperature x Vctrl, with a whole-loop AC cross-check",
+  "claim": "#4/#8/#9 -> #10 (design-input claim, not a spec line) -- DR-001 Decision 1's fixed second-order loop filter (series R + shunt C1 + shunt C2, design/loop_filter.sch) meets an explicit phase-margin criterion (>= 45 deg) and the f_c < f_ref/10 sampled-loop ceiling at every point of the PVT x Kvco-spread x N=4-64 x Icp-trim cross-product, using #8's extracted Kvco(Vctrl) table and #9's Icp/trim data; plus C1's real area against the 0.15 mm^2 budget and the ripple-vs-lock-time tradeoff.",
+  "methodology": [
+    "**Exact reduction, not an approximation.** For the type-II charge-pump loop of DR-001 Decision 1, T(s) = (Icp/2pi)*Z(s)*(2pi*Kvco/s)/N = A*Z(s)/s with A = Icp*Kvco/N, so Icp, Kvco and N enter ONLY through the scalar A. One measured filter impedance curve per (passive corner, temperature, Vctrl) point therefore covers the ENTIRE Kvco x N x Icp-trim x f_ref cross-product for that filter corner exactly. The A axis is still swept on a dense log grid between its measured extremes (see `analyze.py`), so no unimodality assumption is relied on.",
+    "**Reduction is the baseline's own.** `testbench/derive.py` rebuilds the two CSVs the pre-migration `run.sh` stitched together with awk from the deck's `wrdata` files and calls `testbench/analyze.py` with only its entry point made callable; the algebra is unchanged. R, C1 and C2 are MEASURED from each Z(jw) curve's asymptotes and phase peak (a 3-element fit), not drawn values.",
+    "**Independent cross-check.** The `d<k><t|s|f>` points re-simulate the WHOLE linearized loop (phase-domain behavioural PFD/CP, VCO and divider around the real filter) at 18 real (Icp, Kvco, N) design points -- six reference-frequency decades at each of the typical (`rtyp-mtyp-xtyp`, 27 C, Vctrl 1.8 V), slow (`rss-mss-xss`, -40 C, 0.9 V) and fast (`rff-mff-xff`, 125 C, 2.7 V) filter corners. Their Icp and Kvco come from the pinned #9/#8 tables via `pick_xcheck.py`; a unit test checks the manifest's numbers against that script's output.",
+    "**One fragment, two benches.** The pre-migration campaign had two decks (`tb_loop_filter_ac.sp`, `tb_loop_ac.sp`). sim/harness runs one deck per grid point and `phases` would run both at every point (81 x 6 cross-check runs instead of 18), so the benches share one fragment, share no node, and the `run` sweep axis (`z` or `d<k><t|s|f>`) selects which output a point reads and over which `grid` block it runs. 81 filter runs + 18 cross-check points = 99, the baseline grid.",
+    "**Criteria applied** (stated up front): phase margin >= 45 deg everywhere in the operating space (this campaign's adopted criterion -- DR-001 states none); f_c < f_ref/10, the sampled-loop stability ceiling DR-001 Decision 1 names; small-signal 1 % settling < 100 us (draft lock-time target, 20 us stretch); C1 area against the draft 0.15 mm^2 block budget. The 0.3 V Vctrl point is below the DR-003 window: characterized for the C-V check only, excluded from the stability cross-product. (f_ref, N) pairs whose f_out falls outside the ratified 10-200 MHz band are excluded, not reported as failures.",
+    "**Band-selection rule is load-bearing (DR-003 Decision 4):** Kvco is taken under the rule that a correctly configured part selects the LOWEST band that reaches the target f_out; the adversarial-band Kvco is not part of the cross-product.",
+    "**DUT pinned to the baseline's frozen export.** `design/netlist/loop_filter.spice` on `main` has since moved C2 to `cap_mim_2f0_m4m5_noshield` (option-B MIM); the baseline record measured `cap_mim_2f0_m2m3_noshield`. To measure the harness/simulator delta and nothing else, this manifest composes the baseline record's own netlist snapshot (`sim/loop-dynamics/netlist-snapshots/20260731-202550-82af5a9.spice`, SHA-256 e4c2184f...) rather than the live export. A run against the current export is a different claim and needs its own record.",
+    "**Axes not swept:** MOS process bundles (tt/ff/ss/fs/sf) N/A -- the filter contains no active device (MOS typical is composed but unused); supply N/A -- neither the filter nor the impedance bench has a supply node (a single nominal supply point is run, `supply_tolerance` = 0). The cross-check's behavioural PFD/CP and VCO are ideal and carry no PVT dependence of their own. The process axis IS the passive box: 27 bundles of `res_{typical,ff,ss}` x `moscap_{typical,ff,ss}` x `mimcap_{typical,ff,ss}`, named `r<res>-m<moscap>-x<mimcap>`. Because the mandated matrix (five MOS bundles, three supplies) does not apply to this DUT, a recorded run needs `--subset-reason`.",
+    "**Limitations:** small-signal (nominal skew, `sw_stat_global = sw_stat_mismatch = 0`, no Monte Carlo); lock time is a small-signal estimate from the fitted model's dominant closed-loop pole (cycle slipping and large-signal VCO behaviour are #12's); schematic-level, no parasitics (#18).",
+    "**Cross-record comparability (simulator / host delta).** The baseline `20260731-202550-82af5a9` was taken with ngspice-46 on Darwin 25.6.0 / arm64; harness runs on this project's Linux hosts use ngspice on Linux x86_64. The record's own Environment provenance states the simulator, host(s) and backend of THIS run and is authoritative. The `baseline_comparison` table is the pilot go/no-go gate: every metric against the baseline with the ratified tolerance, none loosened."
+  ],
+  "dut": [
+    "sim/loop-dynamics/netlist-snapshots/20260731-202550-82af5a9.spice"
+  ],
+  "netlist": "tb_loop_dynamics.spice",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "passive-box"
+  ],
+  "options": [
+    "rshunt=1e12"
+  ],
+  "params": {
+    "icp": "1e-6",
+    "kvco": "1e7",
+    "ndiv": "8",
+    "vctrl": "1.8",
+    "fstart": "100"
+  },
+  "sweeps": {
+    "run": {
+      "description": "which bench the point is for: z = filter impedance, d<k><t|s|f> = whole-loop cross-check design k (1..6, one per reference-frequency decade) at the typical / slow / fast filter corner",
+      "points": {
+        "z": {
+          "description": "filter impedance bench: Z(jw) at six Vctrl bias points, 100 Hz - 100 MHz",
+          "params": {
+            "fstart": "100"
+          }
+        },
+        "d1t": {
+          "description": "cross-check design 1: f_ref 1 MHz, N=32, 4 trim leg(s), at rtyp-mtyp-xtyp / 27 C / Vctrl 1.8 V",
+          "params": {
+            "fstart": "10",
+            "icp": "6.959e-06",
+            "kvco": "1.38307e+07",
+            "ndiv": "32",
+            "vctrl": "1.8",
+            "fref_mhz": "1",
+            "legs": "4"
+          }
+        },
+        "d1s": {
+          "description": "cross-check design 1: f_ref 1 MHz, N=32, 4 trim leg(s), at rss-mss-xss / -40 C / Vctrl 0.9 V",
+          "params": {
+            "fstart": "10",
+            "icp": "6.959e-06",
+            "kvco": "1.38307e+07",
+            "ndiv": "32",
+            "vctrl": "0.9",
+            "fref_mhz": "1",
+            "legs": "4"
+          }
+        },
+        "d1f": {
+          "description": "cross-check design 1: f_ref 1 MHz, N=32, 4 trim leg(s), at rff-mff-xff / 125 C / Vctrl 2.7 V",
+          "params": {
+            "fstart": "10",
+            "icp": "6.959e-06",
+            "kvco": "1.38307e+07",
+            "ndiv": "32",
+            "vctrl": "2.7",
+            "fref_mhz": "1",
+            "legs": "4"
+          }
+        },
+        "d2t": {
+          "description": "cross-check design 2: f_ref 2 MHz, N=32, 3 trim leg(s), at rtyp-mtyp-xtyp / 27 C / Vctrl 1.8 V",
+          "params": {
+            "fstart": "10",
+            "icp": "5.2193e-06",
+            "kvco": "2.53688e+07",
+            "ndiv": "32",
+            "vctrl": "1.8",
+            "fref_mhz": "2",
+            "legs": "3"
+          }
+        },
+        "d2s": {
+          "description": "cross-check design 2: f_ref 2 MHz, N=32, 3 trim leg(s), at rss-mss-xss / -40 C / Vctrl 0.9 V",
+          "params": {
+            "fstart": "10",
+            "icp": "5.2193e-06",
+            "kvco": "2.53688e+07",
+            "ndiv": "32",
+            "vctrl": "0.9",
+            "fref_mhz": "2",
+            "legs": "3"
+          }
+        },
+        "d2f": {
+          "description": "cross-check design 2: f_ref 2 MHz, N=32, 3 trim leg(s), at rff-mff-xff / 125 C / Vctrl 2.7 V",
+          "params": {
+            "fstart": "10",
+            "icp": "5.2193e-06",
+            "kvco": "2.53688e+07",
+            "ndiv": "32",
+            "vctrl": "2.7",
+            "fref_mhz": "2",
+            "legs": "3"
+          }
+        },
+        "d3t": {
+          "description": "cross-check design 3: f_ref 4 MHz, N=16, 3 trim leg(s), at rtyp-mtyp-xtyp / 27 C / Vctrl 1.8 V",
+          "params": {
+            "fstart": "10",
+            "icp": "5.2193e-06",
+            "kvco": "2.53688e+07",
+            "ndiv": "16",
+            "vctrl": "1.8",
+            "fref_mhz": "4",
+            "legs": "3"
+          }
+        },
+        "d3s": {
+          "description": "cross-check design 3: f_ref 4 MHz, N=16, 3 trim leg(s), at rss-mss-xss / -40 C / Vctrl 0.9 V",
+          "params": {
+            "fstart": "10",
+            "icp": "5.2193e-06",
+            "kvco": "2.53688e+07",
+            "ndiv": "16",
+            "vctrl": "0.9",
+            "fref_mhz": "4",
+            "legs": "3"
+          }
+        },
+        "d3f": {
+          "description": "cross-check design 3: f_ref 4 MHz, N=16, 3 trim leg(s), at rff-mff-xff / 125 C / Vctrl 2.7 V",
+          "params": {
+            "fstart": "10",
+            "icp": "5.2193e-06",
+            "kvco": "2.53688e+07",
+            "ndiv": "16",
+            "vctrl": "2.7",
+            "fref_mhz": "4",
+            "legs": "3"
+          }
+        },
+        "d4t": {
+          "description": "cross-check design 4: f_ref 8 MHz, N=12, 2 trim leg(s), at rtyp-mtyp-xtyp / 27 C / Vctrl 1.8 V",
+          "params": {
+            "fstart": "10",
+            "icp": "3.47957e-06",
+            "kvco": "4.15794e+07",
+            "ndiv": "12",
+            "vctrl": "1.8",
+            "fref_mhz": "8",
+            "legs": "2"
+          }
+        },
+        "d4s": {
+          "description": "cross-check design 4: f_ref 8 MHz, N=12, 2 trim leg(s), at rss-mss-xss / -40 C / Vctrl 0.9 V",
+          "params": {
+            "fstart": "10",
+            "icp": "3.47957e-06",
+            "kvco": "4.15794e+07",
+            "ndiv": "12",
+            "vctrl": "0.9",
+            "fref_mhz": "8",
+            "legs": "2"
+          }
+        },
+        "d4f": {
+          "description": "cross-check design 4: f_ref 8 MHz, N=12, 2 trim leg(s), at rff-mff-xff / 125 C / Vctrl 2.7 V",
+          "params": {
+            "fstart": "10",
+            "icp": "3.47957e-06",
+            "kvco": "4.15794e+07",
+            "ndiv": "12",
+            "vctrl": "2.7",
+            "fref_mhz": "8",
+            "legs": "2"
+          }
+        },
+        "d5t": {
+          "description": "cross-check design 5: f_ref 16 MHz, N=8, 2 trim leg(s), at rtyp-mtyp-xtyp / 27 C / Vctrl 1.8 V",
+          "params": {
+            "fstart": "10",
+            "icp": "3.47957e-06",
+            "kvco": "7.30298e+07",
+            "ndiv": "8",
+            "vctrl": "1.8",
+            "fref_mhz": "16",
+            "legs": "2"
+          }
+        },
+        "d5s": {
+          "description": "cross-check design 5: f_ref 16 MHz, N=8, 2 trim leg(s), at rss-mss-xss / -40 C / Vctrl 0.9 V",
+          "params": {
+            "fstart": "10",
+            "icp": "3.47957e-06",
+            "kvco": "7.30298e+07",
+            "ndiv": "8",
+            "vctrl": "0.9",
+            "fref_mhz": "16",
+            "legs": "2"
+          }
+        },
+        "d5f": {
+          "description": "cross-check design 5: f_ref 16 MHz, N=8, 2 trim leg(s), at rff-mff-xff / 125 C / Vctrl 2.7 V",
+          "params": {
+            "fstart": "10",
+            "icp": "3.47957e-06",
+            "kvco": "7.30298e+07",
+            "ndiv": "8",
+            "vctrl": "2.7",
+            "fref_mhz": "16",
+            "legs": "2"
+          }
+        },
+        "d6t": {
+          "description": "cross-check design 6: f_ref 25 MHz, N=6, 1 trim leg(s), at rtyp-mtyp-xtyp / 27 C / Vctrl 1.8 V",
+          "params": {
+            "fstart": "10",
+            "icp": "1.73981e-06",
+            "kvco": "7.70074e+07",
+            "ndiv": "6",
+            "vctrl": "1.8",
+            "fref_mhz": "25",
+            "legs": "1"
+          }
+        },
+        "d6s": {
+          "description": "cross-check design 6: f_ref 25 MHz, N=6, 1 trim leg(s), at rss-mss-xss / -40 C / Vctrl 0.9 V",
+          "params": {
+            "fstart": "10",
+            "icp": "1.73981e-06",
+            "kvco": "7.70074e+07",
+            "ndiv": "6",
+            "vctrl": "0.9",
+            "fref_mhz": "25",
+            "legs": "1"
+          }
+        },
+        "d6f": {
+          "description": "cross-check design 6: f_ref 25 MHz, N=6, 1 trim leg(s), at rff-mff-xff / 125 C / Vctrl 2.7 V",
+          "params": {
+            "fstart": "10",
+            "icp": "1.73981e-06",
+            "kvco": "7.70074e+07",
+            "ndiv": "6",
+            "vctrl": "2.7",
+            "fref_mhz": "25",
+            "legs": "1"
+          }
+        }
+      }
+    }
+  },
+  "grid": [
+    {
+      "description": "bench z: the full passive box x all three temperatures (27 bundles x 3 temperatures = 81 filter runs, six Vctrl points each)",
+      "axes": {
+        "run": [
+          "z"
+        ]
+      }
+    },
+    {
+      "description": "bench xc: whole-loop cross-check at the rtyp-mtyp-xtyp filter corner, 27 C (6 designs, one per reference-frequency decade)",
+      "corners": [
+        "rtyp-mtyp-xtyp"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "axes": {
+        "run": [
+          "d1t",
+          "d2t",
+          "d3t",
+          "d4t",
+          "d5t",
+          "d6t"
+        ]
+      }
+    },
+    {
+      "description": "bench xc: whole-loop cross-check at the rss-mss-xss filter corner, -40 C (6 designs, one per reference-frequency decade)",
+      "corners": [
+        "rss-mss-xss"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "axes": {
+        "run": [
+          "d1s",
+          "d2s",
+          "d3s",
+          "d4s",
+          "d5s",
+          "d6s"
+        ]
+      }
+    },
+    {
+      "description": "bench xc: whole-loop cross-check at the rff-mff-xff filter corner, 125 C (6 designs, one per reference-frequency decade)",
+      "corners": [
+        "rff-mff-xff"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "axes": {
+        "run": [
+          "d1f",
+          "d2f",
+          "d3f",
+          "d4f",
+          "d5f",
+          "d6f"
+        ]
+      }
+    }
+  ],
+  "analyses": [
+    "ac dec 40 {fstart} 1e8",
+    "let m1 = mag(v(vc1))",
+    "let a1 = 180/pi*ph(v(vc1))",
+    "let m2 = mag(v(vc2))",
+    "let a2 = 180/pi*ph(v(vc2))",
+    "let m3 = mag(v(vc3))",
+    "let a3 = 180/pi*ph(v(vc3))",
+    "let m4 = mag(v(vc4))",
+    "let a4 = 180/pi*ph(v(vc4))",
+    "let m5 = mag(v(vc5))",
+    "let a5 = 180/pi*ph(v(vc5))",
+    "let m6 = mag(v(vc6))",
+    "let a6 = 180/pi*ph(v(vc6))",
+    "set wr_singlescale",
+    "wrdata z.dat m1 a1 m2 a2 m3 a3 m4 a4 m5 a5 m6 a6",
+    "let tmag = mag(v(fb))",
+    "let tph = 180/pi*ph(v(fb))",
+    "wrdata t.dat tmag tph"
+  ],
+  "raw_files": {
+    "z.dat": {
+      "description": "bench z: |Z| (ohm) and arg Z (deg) of the filter at Vctrl = 0.3, 0.9, 1.35, 1.8, 2.25, 2.7 V, one row per AC frequency",
+      "columns": [
+        "freq",
+        "m1",
+        "a1",
+        "m2",
+        "a2",
+        "m3",
+        "a3",
+        "m4",
+        "a4",
+        "m5",
+        "a5",
+        "m6",
+        "a6"
+      ],
+      "retain": false
+    },
+    "t.dat": {
+      "description": "bench xc: |T| and arg T (deg) of the whole linearized loop, one row per AC frequency",
+      "columns": [
+        "freq",
+        "tmag",
+        "tph"
+      ],
+      "retain": false
+    }
+  },
+  "derived": {
+    "module": "derive.py",
+    "measures": [
+      "r_ohm",
+      "c1_f",
+      "c2_f",
+      "fit_err_pct"
+    ],
+    "tables": [
+      "filter_rc",
+      "loop_margins",
+      "loop_margins_by_filter_corner",
+      "kappa_by_target",
+      "ripple_tradeoff",
+      "loop_ac_crosscheck",
+      "filter_z",
+      "baseline_comparison"
+    ],
+    "joins": {}
+  },
+  "checks": {
+    "r_ohm": {
+      "min": 1000.0,
+      "min_spread_pct": 5.0
+    },
+    "c1_f": {
+      "min": 1e-12,
+      "min_spread_pct": 5.0
+    },
+    "c2_f": {
+      "min": 1e-13,
+      "min_spread_pct": 5.0
+    },
+    "fit_err_pct": {
+      "max": 0.5
+    }
+  }
+}

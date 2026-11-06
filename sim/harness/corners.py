@@ -109,6 +109,40 @@ CORNERS: dict[str, Corner] = {
     "all-fast": _all("ff", "every device family fast"),
 }
 
+# The independent passive axes taken together: every (resistor, MOS cap, MIM
+# cap) combination of {typical, ff, ss} with the MOS section at typical -- 27
+# bundles, named ``r<res>-m<moscap>-x<mimcap>`` ("x" for the MIM axis so the
+# three prefixes stay visually distinct).  For a DUT that is passive-only (the
+# loop filter) this box IS the whole process axis; it is what the corner sets
+# above cannot express, because they skew one family at a time or all of them
+# in the same direction.
+_PASSIVE_SKEWS = (("typ", "typical"), ("ff", "ff"), ("ss", "ss"))
+PASSIVE_BOX: tuple[str, ...] = tuple(
+    f"r{rs}-m{ms}-x{xs}"
+    for rs, _ in _PASSIVE_SKEWS
+    for ms, _ in _PASSIVE_SKEWS
+    for xs, _ in _PASSIVE_SKEWS
+)
+#: The 27 bundles, kept apart from ``CORNERS`` (whose members are exactly the
+#: ``full`` set, one family skewed at a time) and resolved by name alongside it.
+PASSIVE_BOX_CORNERS: dict[str, Corner] = {}
+for _rs, _rf in _PASSIVE_SKEWS:
+    for _ms, _mf in _PASSIVE_SKEWS:
+        for _xs, _xf in _PASSIVE_SKEWS:
+            _name = f"r{_rs}-m{_ms}-x{_xs}"
+            PASSIVE_BOX_CORNERS[_name] = Corner(
+                name=_name,
+                sections=_bundle(
+                    mos="typical",
+                    res=f"res_{_rf}",
+                    moscap=f"moscap_{_mf}",
+                    mimcap=f"mimcap_{_xf}",
+                ),
+                description=(
+                    f"passive box: res_{_rf} x moscap_{_mf} x mimcap_{_xf}, MOS typical"
+                ),
+            )
+
 CORNER_SETS: dict[str, tuple[str, ...]] = {
     # Minimum bar for a quick smoke run.
     "typical": ("typical",),
@@ -124,6 +158,9 @@ CORNER_SETS: dict[str, tuple[str, ...]] = {
         "all-slow", "all-fast",
     ),
 }
+# The 27-bundle passive box (3 res x 3 moscap x 3 mimcap).  Not part of "full":
+# "full" is the one-family-at-a-time matrix every MOS-bearing block runs.
+CORNER_SETS["passive-box"] = PASSIVE_BOX
 DEFAULT_CORNER_SET = "mos"
 
 
@@ -138,14 +175,17 @@ def resolve_corners(names: list[str] | tuple[str, ...] | None) -> list[Corner]:
         for corner_name in expanded:
             if corner_name in seen:
                 continue
-            if corner_name not in CORNERS:
+            known = CORNERS if corner_name in CORNERS else PASSIVE_BOX_CORNERS
+            if corner_name not in known:
                 raise KeyError(
                     f"unknown corner {corner_name!r}; "
                     f"known corners: {', '.join(sorted(CORNERS))}; "
+                    f"passive-box corners: r<res>-m<moscap>-x<mimcap> with each of "
+                    f"typ/ff/ss (see set 'passive-box'); "
                     f"known sets: {', '.join(sorted(CORNER_SETS))}"
                 )
             seen.add(corner_name)
-            resolved.append(CORNERS[corner_name])
+            resolved.append(known[corner_name])
     return resolved
 
 
