@@ -955,6 +955,17 @@ jobs:
       - name: design/netlist.sh --check
         run: ./design/netlist.sh --check
 
+      - name: Install klt (klayout-tools) for the PVT smoke run
+        # sim/harness/report.py shells out to `klt env-provenance emit` with
+        # no fallback, so klt must be on PATH before the selftest below.
+        # The version is read from the pin in the `checks` job's "Install
+        # klt" step so this workflow keeps a single pin to bump (the same
+        # extraction signoff/run-signoff.sh uses).
+        run: |
+          pin="$(grep -oE "klayout-tools==[0-9][^'\"[:space:]]*" .github/workflows/ci.yml | head -n 1)"
+          test -n "$pin"
+          pip install "$pin"
+
       - name: sim/selftest.sh --require-pdk
         # Fails loudly instead of skipping if the PDK turns out to be
         # missing here too -- catches a broken nightly runner rather than
