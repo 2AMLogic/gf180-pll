@@ -33,7 +33,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:f63b8af0fd1c9323c57cd279a960561ef614b9077e909620823ad03bd40bb5f6",
+        "content_hash": "sha256:a277137ca04fb1f4d5aede254efa4d4d4fd05e94850c4a8a21664a5b61993fab",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -42,7 +42,7 @@
             "path": "signoff/attest/design-sources-analog.json",
             "scope": "repo"
           },
-          "content_hash": "sha256:f63b8af0fd1c9323c57cd279a960561ef614b9077e909620823ad03bd40bb5f6",
+          "content_hash": "sha256:a277137ca04fb1f4d5aede254efa4d4d4fd05e94850c4a8a21664a5b61993fab",
           "input_verified": true,
           "summary": "analog partition: every design source and derived netlist inventoried; netlists regenerated and checked in CI",
           "source": "signoff/attest/design-sources-analog.json"
@@ -64,7 +64,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:77f21c068bc7d4cbb069071915eb6d49c0e8fc6afd4c5d3808b59456886791d6",
+        "content_hash": "sha256:71af18a1ea9d23df30b6167c332b0c2e5af022139d1516fd57e312e8093cdc7d",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -73,7 +73,7 @@
             "path": "signoff/attest/design-sources-digital.json",
             "scope": "repo"
           },
-          "content_hash": "sha256:77f21c068bc7d4cbb069071915eb6d49c0e8fc6afd4c5d3808b59456886791d6",
+          "content_hash": "sha256:71af18a1ea9d23df30b6167c332b0c2e5af022139d1516fd57e312e8093cdc7d",
           "input_verified": true,
           "summary": "digital partition: every design source and derived netlist inventoried; netlists regenerated and checked in CI",
           "source": "signoff/attest/design-sources-digital.json"
