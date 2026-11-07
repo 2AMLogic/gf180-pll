@@ -60,6 +60,7 @@ Issues carrying `loom:curated`.
 - **#533**: sim/reference-spur-band-top: run the 45-point 200 MHz campaign on the batch backend (operator-authorized spend) *(curated)*
 - **#549**: sim: bound the batch-vs-pinned ngspice divergence with a cross-version overlap measurement on a shared operating point *(curated)*
 - **#680**: sim: realign the batch job image to the ngspice-46 pin — it cannot converge sim/reference-input-contract's edge-rate variant, so #499's grid is unobtainable off-host *(curated)*
+- **#741**: sim: migrate loop-dynamics, output-range, mc-cp-mismatch shell campaigns to harness manifests *(curated)*
 - **#755**: sim harness: stage a simulator init file (wnflag) so local and batch backends run the same configuration *(curated)*
 - **#825**: Re-qualify device-characterization records under open_pdks f6eeac7 (child of #790) *(curated)*
 - **#827**: Re-qualify lock-detector, lock-window and divider records under open_pdks f6eeac7 (child of #790) *(curated)*
@@ -68,11 +69,6 @@ Issues carrying `loom:curated`.
 ## Proposed (Architect / Hermit)
 
 - **#237**: [Epic #542] 3A — gf180-pll maturation + Challenge #5 brief *(architect)*
-- **#731**: sim/period-jitter: migrate grid.sh fan-out to run_corners.py backends (follow-up to #712 step 1) *(architect)*
-- **#740**: sim/lib/simenv.sh: refuse local multi-unit grid fan-out when the batch backend is selected *(architect)*
-- **#741**: sim: migrate loop-dynamics, output-range, mc-cp-mismatch shell campaigns to harness manifests *(architect)*
-- **#812**: Simplify layout status-claims checker: replace 2.3k-line prose linter with tree-derived check *(hermit)*
-- **#871**: Dedupe identical TreeWriter / install_checklib test helpers across test directories *(hermit)*
 
 ## Epics
 
@@ -89,7 +85,7 @@ Issues carrying `loom:curated`.
 | In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 14 |
-| Architect / Hermit proposals | 6 |
+| Curated | 15 |
+| Architect / Hermit proposals | 1 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
