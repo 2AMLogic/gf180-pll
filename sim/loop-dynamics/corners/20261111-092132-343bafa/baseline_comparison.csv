@@ -1,0 +1,100 @@
+# every metric of the pilot go/no-go gate, this run vs. baseline record 20260731-202550-82af5a9: PILOT GATE = GO
+# tolerances are the ratified ones; a missed row is reported, never widened
+# baseline: ngspice-46 / Darwin arm64; see Environment provenance for this run's simulator and host
+# failing rows: none
+metric,baseline,new,delta,tolerance,verdict
+s1 R typical (ohm or F),77106.8,77106.8,+0.0000 %,0.5 % relative,pass
+s1 R min (ohm or F),61575.6,61575.6,+0.0000 %,0.5 % relative,pass
+s1 R max (ohm or F),93356.9,93356.9,+0.0000 %,0.5 % relative,pass
+s1 C1 typical (ohm or F),1.2075e-10,1.2075e-10,+0.0000 %,0.5 % relative,pass
+s1 C1 min (in window) (ohm or F),1.07053e-10,1.07053e-10,+0.0000 %,0.5 % relative,pass
+s1 C1 max (in window) (ohm or F),1.32953e-10,1.32953e-10,+0.0000 %,0.5 % relative,pass
+s1 C2 typical (ohm or F),2.01585e-12,2.01585e-12,+0.0000 %,0.5 % relative,pass
+s1 C2 min (ohm or F),1.81378e-12,1.81378e-12,+0.0000 %,0.5 % relative,pass
+s1 C2 max (ohm or F),2.21759e-12,2.21759e-12,+0.0000 %,0.5 % relative,pass
+s1 worst 3-element-fit |Z| mismatch (%),0.126,0.126,+0.0000,<= 0.5 absolute,pass
+s2 C1 area (um^2 / mm^2 / % of budget),30276 / 0.0303 / 20.2,30276 / 0.0303 / 20.2,0,exact,pass
+"s3 C1 at Vctrl=0.3 V (typical corner, 27 C)",1.10107e-10,1.10107e-10,+0.0000 %,0.5 % relative,pass
+"s3 C1 at Vctrl=0.9 V (typical corner, 27 C)",1.18943e-10,1.18943e-10,+0.0000 %,0.5 % relative,pass
+"s3 C1 at Vctrl=1.35 V (typical corner, 27 C)",1.20376e-10,1.20376e-10,+0.0000 %,0.5 % relative,pass
+"s3 C1 at Vctrl=1.8 V (typical corner, 27 C)",1.2075e-10,1.2075e-10,+0.0000 %,0.5 % relative,pass
+"s3 C1 at Vctrl=2.25 V (typical corner, 27 C)",1.20846e-10,1.20846e-10,+0.0000 %,0.5 % relative,pass
+"s3 C1 at Vctrl=2.7 V (typical corner, 27 C)",1.20871e-10,1.20871e-10,+0.0000 %,0.5 % relative,pass
+"s4 f_ref=1 MHz, 1 leg(s): worst PM (deg)",25.46,25.46,+0.000 deg,0.5 deg,pass
+"s4 f_ref=1 MHz, 1 leg(s): worst f_c/f_ref",0.02225,0.02225,+0.0000 %,2 % relative,pass
+"s4 f_ref=1 MHz, 1 leg(s): worst 1 % settling (s)",0.000287911,0.000287911,+0.0000 %,2 % relative,pass
+"s4 f_ref=1 MHz, 2 leg(s): worst PM (deg)",35.21,35.21,+0.000 deg,0.5 deg,pass
+"s4 f_ref=1 MHz, 2 leg(s): worst f_c/f_ref",0.03905,0.03905,+0.0000 %,2 % relative,pass
+"s4 f_ref=1 MHz, 2 leg(s): worst 1 % settling (s)",0.000143346,0.000143346,+0.0000 %,2 % relative,pass
+"s4 f_ref=1 MHz, 3 leg(s): worst PM (deg)",42.1,42.1,+0.000 deg,0.5 deg,pass
+"s4 f_ref=1 MHz, 3 leg(s): worst f_c/f_ref",0.0563,0.0563,+0.0000 %,2 % relative,pass
+"s4 f_ref=1 MHz, 3 leg(s): worst 1 % settling (s)",9.51536e-05,9.51536e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=1 MHz, 4 leg(s): worst PM (deg)",47.41,47.41,+0.000 deg,0.5 deg,pass
+"s4 f_ref=1 MHz, 4 leg(s): worst f_c/f_ref",0.0738,0.0738,+0.0000 %,2 % relative,pass
+"s4 f_ref=1 MHz, 4 leg(s): worst 1 % settling (s)",7.10547e-05,7.10547e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=2 MHz, 1 leg(s): worst PM (deg)",35.21,35.21,+0.000 deg,0.5 deg,pass
+"s4 f_ref=2 MHz, 1 leg(s): worst f_c/f_ref",0.02078,0.02078,+0.0000 %,2 % relative,pass
+"s4 f_ref=2 MHz, 1 leg(s): worst 1 % settling (s)",0.000143344,0.000143344,+0.0000 %,2 % relative,pass
+"s4 f_ref=2 MHz, 2 leg(s): worst PM (deg)",47.41,47.41,+0.000 deg,0.5 deg,pass
+"s4 f_ref=2 MHz, 2 leg(s): worst f_c/f_ref",0.03949,0.03949,+0.0000 %,2 % relative,pass
+"s4 f_ref=2 MHz, 2 leg(s): worst 1 % settling (s)",7.10538e-05,7.10538e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=2 MHz, 3 leg(s): worst PM (deg)",55.11,55.11,+0.000 deg,0.5 deg,pass
+"s4 f_ref=2 MHz, 3 leg(s): worst f_c/f_ref",0.05836,0.05836,+0.0000 %,2 % relative,pass
+"s4 f_ref=2 MHz, 3 leg(s): worst 1 % settling (s)",5.01232e-05,5.01232e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=2 MHz, 4 leg(s): worst PM (deg)",60.35,60.35,+0.000 deg,0.5 deg,pass
+"s4 f_ref=2 MHz, 4 leg(s): worst f_c/f_ref",0.07718,0.07718,+0.0000 %,2 % relative,pass
+"s4 f_ref=2 MHz, 4 leg(s): worst 1 % settling (s)",5.20771e-05,5.20771e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=4 MHz, 1 leg(s): worst PM (deg)",47.41,47.41,+0.000 deg,0.5 deg,pass
+"s4 f_ref=4 MHz, 1 leg(s): worst f_c/f_ref",0.01975,0.01975,+0.0000 %,2 % relative,pass
+"s4 f_ref=4 MHz, 1 leg(s): worst 1 % settling (s)",7.10532e-05,7.10532e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=4 MHz, 2 leg(s): worst PM (deg)",60.35,60.35,+0.000 deg,0.5 deg,pass
+"s4 f_ref=4 MHz, 2 leg(s): worst f_c/f_ref",0.0386,0.0386,+0.0000 %,2 % relative,pass
+"s4 f_ref=4 MHz, 2 leg(s): worst 1 % settling (s)",5.20776e-05,5.20776e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=4 MHz, 3 leg(s): worst PM (deg)",66.73,66.73,+0.000 deg,0.5 deg,pass
+"s4 f_ref=4 MHz, 3 leg(s): worst f_c/f_ref",0.05693,0.05693,+0.0000 %,2 % relative,pass
+"s4 f_ref=4 MHz, 3 leg(s): worst 1 % settling (s)",5.38832e-05,5.38832e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=4 MHz, 4 leg(s): worst PM (deg)",66.57,66.57,+0.000 deg,0.5 deg,pass
+"s4 f_ref=4 MHz, 4 leg(s): worst f_c/f_ref",0.07444,0.07444,+0.0000 %,2 % relative,pass
+"s4 f_ref=4 MHz, 4 leg(s): worst 1 % settling (s)",5.47401e-05,5.47401e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=8 MHz, 1 leg(s): worst PM (deg)",60.35,60.35,+0.000 deg,0.5 deg,pass
+"s4 f_ref=8 MHz, 1 leg(s): worst f_c/f_ref",0.0193,0.0193,+0.0000 %,2 % relative,pass
+"s4 f_ref=8 MHz, 1 leg(s): worst 1 % settling (s)",5.20784e-05,5.20784e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=8 MHz, 2 leg(s): worst PM (deg)",66.57,66.57,+0.000 deg,0.5 deg,pass
+"s4 f_ref=8 MHz, 2 leg(s): worst f_c/f_ref",0.03722,0.03722,+0.0000 %,2 % relative,pass
+"s4 f_ref=8 MHz, 2 leg(s): worst 1 % settling (s)",5.47403e-05,5.47403e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=8 MHz, 3 leg(s): worst PM (deg)",60.15,60.15,+0.000 deg,0.5 deg,pass
+"s4 f_ref=8 MHz, 3 leg(s): worst f_c/f_ref",0.05335,0.05335,+0.0000 %,2 % relative,pass
+"s4 f_ref=8 MHz, 3 leg(s): worst 1 % settling (s)",5.55703e-05,5.55703e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=8 MHz, 4 leg(s): worst PM (deg)",54.89,54.89,+0.000 deg,0.5 deg,pass
+"s4 f_ref=8 MHz, 4 leg(s): worst f_c/f_ref",0.06773,0.06773,+0.0000 %,2 % relative,pass
+"s4 f_ref=8 MHz, 4 leg(s): worst 1 % settling (s)",5.5976e-05,5.5976e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=16 MHz, 1 leg(s): worst PM (deg)",66.56,66.56,+0.000 deg,0.5 deg,pass
+"s4 f_ref=16 MHz, 1 leg(s): worst f_c/f_ref",0.01861,0.01861,+0.0000 %,2 % relative,pass
+"s4 f_ref=16 MHz, 1 leg(s): worst 1 % settling (s)",5.47407e-05,5.47407e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=16 MHz, 2 leg(s): worst PM (deg)",54.89,54.89,+0.000 deg,0.5 deg,pass
+"s4 f_ref=16 MHz, 2 leg(s): worst f_c/f_ref",0.03387,0.03387,+0.0000 %,2 % relative,pass
+"s4 f_ref=16 MHz, 2 leg(s): worst 1 % settling (s)",5.59761e-05,5.59761e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=16 MHz, 3 leg(s): worst PM (deg)",47.19,47.19,+0.000 deg,0.5 deg,pass
+"s4 f_ref=16 MHz, 3 leg(s): worst f_c/f_ref",0.04618,0.04618,+0.0000 %,2 % relative,pass
+"s4 f_ref=16 MHz, 3 leg(s): worst 1 % settling (s)",5.6376e-05,5.6376e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=16 MHz, 4 leg(s): worst PM (deg)",41.89,41.89,+0.000 deg,0.5 deg,pass
+"s4 f_ref=16 MHz, 4 leg(s): worst f_c/f_ref",0.05651,0.05651,+0.0000 %,2 % relative,pass
+"s4 f_ref=16 MHz, 4 leg(s): worst 1 % settling (s)",5.65738e-05,5.65738e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=25 MHz, 1 leg(s): worst PM (deg)",60.02,60.02,+0.000 deg,0.5 deg,pass
+"s4 f_ref=25 MHz, 1 leg(s): worst f_c/f_ref",0.01718,0.01718,+0.0000 %,2 % relative,pass
+"s4 f_ref=25 MHz, 1 leg(s): worst 1 % settling (s)",5.55822e-05,5.55822e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=25 MHz, 2 leg(s): worst PM (deg)",47.06,47.06,+0.000 deg,0.5 deg,pass
+"s4 f_ref=25 MHz, 2 leg(s): worst f_c/f_ref",0.02971,0.02971,+0.0000 %,2 % relative,pass
+"s4 f_ref=25 MHz, 2 leg(s): worst 1 % settling (s)",5.63817e-05,5.63817e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=25 MHz, 3 leg(s): worst PM (deg)",39.7,39.7,+0.000 deg,0.5 deg,pass
+"s4 f_ref=25 MHz, 3 leg(s): worst f_c/f_ref",0.03931,0.03931,+0.0000 %,2 % relative,pass
+"s4 f_ref=25 MHz, 3 leg(s): worst 1 % settling (s)",5.66432e-05,5.66432e-05,+0.0000 %,2 % relative,pass
+"s4 f_ref=25 MHz, 4 leg(s): worst PM (deg)",34.92,34.92,+0.000 deg,0.5 deg,pass
+"s4 f_ref=25 MHz, 4 leg(s): worst f_c/f_ref",0.04727,0.04727,+0.0000 %,2 % relative,pass
+"s4 f_ref=25 MHz, 4 leg(s): worst 1 % settling (s)",5.67731e-05,5.67731e-05,+0.0000 %,2 % relative,pass
+s4/s5 cells meeting PM and f_c/f_ref (the * cells),105,105,flipped: 0,identical set,pass
+s5 cells meeting the small-signal lock-time limit,120,120,flipped: 0,identical set,pass
+s8 cross-check worst |fc_err_pct|,0,0,+0.0000,baseline + 0.5 %,pass
+s8 cross-check worst |pm_err_deg|,0,0,+0.0000,baseline + 0.5 deg,pass
+s8 cross-check run count,18,18,-,equal,pass
+s10 verdict,"**Overall: PASS on the contracted operating space, FAIL off it.**","**Overall: PASS on the contracted operating space, FAIL off it.**",-,identical text,pass
