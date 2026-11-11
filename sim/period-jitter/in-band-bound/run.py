@@ -195,30 +195,9 @@ ALIGN_RESIDUAL_FRACTION = 0.02
 # points, environment, ngspice
 # ---------------------------------------------------------------------------
 def load_points() -> dict:
-    """The 45 PVT points, from the deterministic campaign's OWN manifest.
-
-    `sim/period-jitter/testbench/tb.json`'s grid: MOS section, temperature,
-    supply, and the control voltage that puts that corner's ring at 150 MHz.
-    Read rather than retyped, so "the mandated grid" is the same 45 points both
-    halves of the Period jitter row -- and `../random-bound` -- are measured at.
-    """
-    d = json.loads(TB_JSON.read_text())
-    vs = d["sweeps"]["vs"]["points"]
-    out = {}
-    for g in d["grid"]:
-        (corner,) = g["corners"]
-        (temp,) = g["temperatures_c"]
-        (sup,) = g["supplies"]
-        (axis,) = g["axes"]["vs"]
-        vsup = SUPPLY[sup]
-        out[f"{corner}_{temp:g}c_{vsup:.2f}v"] = dict(
-            vctrl=float(vs[axis]["params"]["vstart"]), vsup=vsup,
-            temp_c=float(temp), mos_section=corner, res_section="res_typical",
-            moscap_section="moscap_typical", mimcap_section="mimcap_typical",
-        )
-    if len(out) != 45:
-        raise SystemExit(f"{TB_JSON}: expected 45 grid points, found {len(out)}")
-    return out
+    """The 45 PVT points, from the deterministic campaign's OWN manifest."""
+    return legacy_provenance.load_period_jitter_points(
+        TB_JSON, SUPPLY, mimcap_section="mimcap_typical")
 
 
 def load_config() -> tuple[dict, float, float, float]:
