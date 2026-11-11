@@ -250,11 +250,10 @@ work around from the rest of the text.
    supply side, `IBP` and `ICP` are sunk *out of* the die to `VSS`, each at
    the 8 µA every closed-loop record in this repository drives them with
    (`.param iunit=8u` in the decks of `sim/period-jitter`,
-   `sim/reference-spur`, `sim/supply-sensitivity` and `sim/pll-top-smoke`;
-   `IUNIT=8u` in `sim/lock-time/testbench/run.sh` and
-   `sim/output-range/testbench/run.sh`, which pass it to decks that set no
-   value of their own; the polarity is those decks' own `iibn vdd ibn` /
-   `iibp ibp 0`). Current, setting sites and polarity are all
+   `sim/reference-spur`, `sim/supply-sensitivity`, `sim/pll-top-smoke` and
+   `sim/output-range`; `IUNIT=8u` in `sim/lock-time/testbench/run.sh`, which
+   passes it to a deck that sets no value of its own; the polarity is those
+   decks' own `iibn vdd ibn` / `iibp ibp 0`). Current, setting sites and polarity are all
    machine-checked against the committed decks
    (`sim/lib/check-bias-drive-claims.sh`) — an earlier revision of this step
    sent the reader to a `.param` line `tb_lock_time.sp` does not contain.

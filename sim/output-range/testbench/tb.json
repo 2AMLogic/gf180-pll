@@ -35,7 +35,6 @@
     "chgtol=1e-13"
   ],
   "params": {
-    "iunit": "8u",
     "ktmax": "100p",
     "cpb0_code": "0",
     "cpb1_code": "1",

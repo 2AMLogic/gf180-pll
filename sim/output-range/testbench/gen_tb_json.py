@@ -136,7 +136,6 @@ def build():
         "corners": ["mos"],
         "options": ["rshunt=1e12", "itl4=200", "reltol=1e-3", "abstol=1e-9", "vntol=1e-4", "chgtol=1e-13"],
         "params": {
-            "iunit": "8u",
             "ktmax": "100p",
             "cpb0_code": "0",
             "cpb1_code": "1",
