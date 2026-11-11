@@ -24,6 +24,7 @@ Nothing here re-measures anything or alters a result.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -54,6 +55,38 @@ _PROGRESS_RE = re.compile(r"(?: ?Reference value :\s*\S+)+")
 def pdk_models() -> Path:
     """The PDK's ngspice model directory every period-jitter runner includes."""
     return find_pdk().ngspice_dir
+
+
+def load_period_jitter_points(tb_json: Path, supply: dict, **extra) -> dict:
+    """The 45 PVT points, from the deterministic campaign's OWN manifest.
+
+    Each is `tb_json`'s grid block: its MOS section, temperature, supply, and
+    the control voltage that puts that corner's ring at 150 MHz.  Reading them
+    rather than retyping them is what makes "the mandated grid" the same 45
+    points every period-jitter campaign is measured at; ``in-band-bound`` and
+    ``random-bound`` both call this, so there is one copy of that guarantee.
+    Passives stay at `res_typical` / `moscap_typical`, as in that manifest
+    (`corners: ["mos"]`).  `extra` keys are added to every point:
+    ``in-band-bound`` passes ``mimcap_section``, ``random-bound`` passes ``band``
+    -- each runner's points keep exactly the keys they always had.
+    """
+    d = json.loads(tb_json.read_text())
+    vs = d["sweeps"]["vs"]["points"]
+    out = {}
+    for g in d["grid"]:
+        (corner,) = g["corners"]
+        (temp,) = g["temperatures_c"]
+        (sup,) = g["supplies"]
+        (axis,) = g["axes"]["vs"]
+        vsup = supply[sup]
+        out[f"{corner}_{temp:g}c_{vsup:.2f}v"] = dict(
+            vctrl=float(vs[axis]["params"]["vstart"]), vsup=vsup,
+            temp_c=float(temp), mos_section=corner, res_section="res_typical",
+            moscap_section="moscap_typical", **extra,
+        )
+    if len(out) != 45:
+        raise SystemExit(f"{tb_json}: expected 45 grid points, found {len(out)}")
+    return out
 
 
 def make_backend(name: str, batch_apply: bool = False):

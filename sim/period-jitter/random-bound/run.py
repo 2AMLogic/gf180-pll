@@ -60,33 +60,8 @@ REFERENCE_POINT = "typical_27c_3.30v"
 
 
 def load_points() -> dict:
-    """The 45 PVT points, from the deterministic campaign's OWN manifest.
-
-    Each is `sim/period-jitter/testbench/tb.json`'s grid block: its MOS
-    section, temperature, supply, and the control voltage that puts that
-    corner's ring at 150 MHz.  Reading them rather than retyping them is what
-    makes "the mandated grid" the same 45 points both halves of the Period
-    jitter row are measured at.  Passives stay at `res_typical` /
-    `moscap_typical`, as in that manifest (`corners: ["mos"]`).
-    """
-    d = json.loads(TB_JSON.read_text())
-    vs = d["sweeps"]["vs"]["points"]
-    out = {}
-    for g in d["grid"]:
-        (corner,) = g["corners"]
-        (temp,) = g["temperatures_c"]
-        (sup,) = g["supplies"]
-        (axis,) = g["axes"]["vs"]
-        vsup = SUPPLY[sup]
-        name = f"{corner}_{temp:g}c_{vsup:.2f}v"
-        out[name] = dict(
-            vctrl=float(vs[axis]["params"]["vstart"]), vsup=vsup,
-            temp_c=float(temp), band=BAND, mos_section=corner,
-            res_section="res_typical", moscap_section="moscap_typical",
-        )
-    if len(out) != 45:
-        raise SystemExit(f"{TB_JSON}: expected 45 grid points, found {len(out)}")
-    return out
+    """The 45 PVT points, from the deterministic campaign's OWN manifest."""
+    return legacy_provenance.load_period_jitter_points(TB_JSON, SUPPLY, band=BAND)
 
 
 # --- trajectory ----------------------------------------------------------------
