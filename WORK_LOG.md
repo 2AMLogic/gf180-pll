@@ -4,6 +4,9 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-11-11
 
+- **PR #906**: sim(output-range): harness-form manifest, deck and baseline-comparison reduction
+- **PR #908**: feat(sim): wait out vCPU and pool capacity refusals; no record on aborted supersede
+- **Issue #905** (closed): sim harness: wait with backoff on batch capacity / vCPU-budget refusals instead of aborting the grid
 - **PR #903**: sim(loop-dynamics): record full batch run reproducing the baseline (pilot GO)
 - **Issue #741** (closed): sim: migrate loop-dynamics, output-range, mc-cp-mismatch shell campaigns to harness manifests
 - **PR #901**: refactor(sim): share period-jitter grid loader between runners
