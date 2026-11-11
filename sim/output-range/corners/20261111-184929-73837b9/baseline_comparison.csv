@@ -1,0 +1,8 @@
+# summary of the per-row comparison against the baseline: GATE FOR THE DEPENDENT mc-cp-mismatch WORK = NO-GO (28 failing row(s))
+# failing rows: ff/-40C/2.97V/hi (vctrl_final); ff/-40C/3.30V/hi (vctrl_final); ff/-40C/3.63V/hi (vctrl_final); ff/27C/3.63V/hi (vctrl_final); fs/-40C/3.30V/hi (status); fs/-40C/3.63V/hi (vctrl_final); fs/27C/3.63V/hi (vctrl_final); sf/-40C/2.97V/hi (status; vctrl_final presence; DN guard); sf/-40C/3.30V/hi (status; vctrl_final presence; DN guard); sf/-40C/3.63V/hi (vctrl_final); sf/27C/2.97V/hi (vctrl_final); sf/125C/3.30V/hi (status; vctrl_final presence; DN guard); ss/-40C/3.30V/hi (vctrl_final); ss/-40C/3.63V/hi (status; vctrl_final); typical/-40C/3.63V/hi (vctrl_final); ff/-40C/2.97V/lo (vctrl_final); ff/-40C/3.30V/lo (vctrl_final); ff/-40C/3.63V/lo (vctrl_final); ff/27C/3.63V/lo (vctrl_final; DN guard); sf/27C/2.97V/lo (status; vctrl_final presence; DN guard); sf/27C/3.30V/lo (status; vctrl_final presence; DN guard); sf/27C/3.63V/lo (status; vctrl_final presence; DN guard); sf/125C/3.30V/lo (vctrl_final; DN guard); sf/125C/3.63V/lo (status; vctrl_final presence; DN guard); ss/-40C/2.97V/lo (vctrl_final; DN guard); ss/27C/3.30V/lo (vctrl_final; DN guard); typical/27C/2.97V/lo (status; vctrl_final presence; DN guard); typical/125C/3.30V/lo (status; vctrl_final presence; DN guard)
+metric,baseline,new,delta,tolerance,verdict
+baseline rows (union of two records),90,90,-,90,pass
+new rows measured,-,83,-,90,FAIL
+rows passing every per-row tolerance,-,61,-,all,FAIL
+rows documented separately (marginal ff/27C/3.30V hi),-,1,-,-,pass
+rows missing a tolerance,-,28,-,0,FAIL
