@@ -4,6 +4,8 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-11-11
 
+- **PR #903**: sim(loop-dynamics): record full batch run reproducing the baseline (pilot GO)
+- **Issue #741** (closed): sim: migrate loop-dynamics, output-range, mc-cp-mismatch shell campaigns to harness manifests
 - **PR #901**: refactor(sim): share period-jitter grid loader between runners
 - **Issue #900** (closed): Dedupe period-jitter runner helpers (load_points, select_backend, environment) into legacy_provenance
 
