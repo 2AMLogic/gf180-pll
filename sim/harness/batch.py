@@ -155,15 +155,19 @@ DEFAULT_POLL_INTERVAL_S = 20
 #: ``-j``: the ceiling counts instances this run did not launch. Matched on the
 #: layer's own contract name, the same coupling :func:`_env_file_value` already
 #: has, rather than on the sentence around it.
-CEILING_REFUSAL_RE = re.compile(r"BATCH_MAX_CONCURRENT_INSTANCES", re.IGNORECASE)
+#:
+#: The same applies to the layer's other capacity refusals, which clear as
+#: other work finishes: the vCPU budget (``BATCH_MAX_VCPU``) and an exhausted
+#: pool set (``no capacity in any of N pools``).
+CAPACITY_REFUSAL_RE = re.compile(
+    r"BATCH_MAX_CONCURRENT_INSTANCES|BATCH_MAX_VCPU|no capacity in any of",
+    re.IGNORECASE,
+)
 
-#: How many times a ceiling-refused launch is re-offered before the point is
-#: given up on. With :data:`DEFAULT_POLL_INTERVAL_S` between attempts this is
-#: ~20 minutes of waiting for a slot, which is the same order as the provision
-#: grace a job already gets once it *is* launched -- a submitter willing to wait
-#: half an hour for Spot capacity should be willing to wait for a slot to ask
-#: for it in.
-LAUNCH_CEILING_ATTEMPTS = 60
+#: Default wall-clock budget, in seconds, for re-offering a capacity-refused
+#: launch before the point is given up on. It is per launch (per point), not
+#: per run, and matches ``klt sim --wait-for-capacity 600``.
+DEFAULT_CAPACITY_WAIT_S = 600.0
 
 #: Wall-clock budgets for each *transport* command, in seconds (#727).
 #:
@@ -504,6 +508,7 @@ class BatchBackend:
         launch_timeout_s: float = DEFAULT_LAUNCH_TIMEOUT_S,
         collect_timeout_s: float = DEFAULT_COLLECT_TIMEOUT_S,
         stage_init: bool = True,
+        capacity_wait_s: float = DEFAULT_CAPACITY_WAIT_S,
     ) -> None:
         self.pdk_variant_dir = Path(pdk_variant_dir)
         self.pdk_variant = pdk_variant
@@ -511,6 +516,11 @@ class BatchBackend:
         self.apply = apply
         self.cores_per_job = cores_per_job
         self.poll_interval_s = poll_interval_s
+        #: Per-launch budget for waiting out a capacity refusal.
+        self.capacity_wait_s = capacity_wait_s
+        #: Clock/sleep seams so the bounded wait is testable without waiting.
+        self._clock = time.monotonic
+        self._sleep = time.sleep
         self.provision_grace_s = provision_grace_s
         for label, value in (
             ("transport", transport_timeout_s),
@@ -793,25 +803,29 @@ class BatchBackend:
         # job (and started spending) before it stalled, and this host cannot
         # tell. The `StageTimeout` propagates to `run_deck`, which fails the
         # point and says the outcome is ambiguous (#727).
-        for attempt in range(1, LAUNCH_CEILING_ATTEMPTS + 1):
+        deadline = self._clock() + self.capacity_wait_s
+        attempt = 0
+        while True:
+            attempt += 1
             proc = self._bounded(STAGE_LAUNCH, plan, argv, self.launch_timeout_s)
             if proc.returncode == 0:
                 return
             stderr = (proc.stderr or "").strip()
-            if not CEILING_REFUSAL_RE.search(stderr):
+            if not CAPACITY_REFUSAL_RE.search(stderr):
                 raise BackendError(
                     f"batch backend: launching {plan.job_id} failed "
                     f"(exit {proc.returncode}): {stderr}"
                 )
-            if attempt == LAUNCH_CEILING_ATTEMPTS:
+            if self._clock() + self.poll_interval_s > deadline:
                 raise BackendError(
                     f"batch backend: launching {plan.job_id} was refused for "
-                    f"want of a concurrency slot on all {attempt} attempt(s) "
-                    f"over ~{attempt * self.poll_interval_s:g}s; the layer's "
-                    f"fleet-wide ceiling is held by other work, not by this "
-                    f"run's -j. Last refusal: {stderr}"
+                    f"want of capacity (a concurrency slot or vCPU budget) "
+                    f"on all {attempt} attempt(s) within the "
+                    f"{self.capacity_wait_s:g}s capacity-wait budget; the "
+                    f"layer's fleet-wide limits are held by other work, not "
+                    f"by this run's -j. Last refusal: {stderr}"
                 )
-            time.sleep(self.poll_interval_s)
+            self._sleep(self.poll_interval_s)
 
     def _status(self, plan: JobPlan, timeout_s: float | None = None) -> dict:
         """Read ``status.json`` once; ``{}`` when it cannot be read.

@@ -1033,7 +1033,7 @@ class CliPartialGridRecoveryTests(ManifestFixture):
         self.write({"measure": {"vout": "v(out)"}})
         self.pdk = fake_pdk(self.root / "gf180mcuD")
 
-    def _args(self):
+    def _args(self, *extra):
         return cli.build_parser().parse_args(
             [
                 self.slug,
@@ -1042,10 +1042,11 @@ class CliPartialGridRecoveryTests(ManifestFixture):
                 "--supply-tol", "0",
                 "--subset-reason", "unit test: exercising the partial-grid recovery path",
                 "--quiet",
+                *extra,
             ]
         )
 
-    def _run_cli(self, fake_run_grid):
+    def _run_cli(self, fake_run_grid, *extra):
         buf_out, buf_err = io.StringIO(), io.StringIO()
         with mock.patch.object(cli, "find_pdk", return_value=self.pdk), \
              mock.patch.object(runner, "ngspice_version", return_value="ngspice-46"), \
@@ -1054,7 +1055,7 @@ class CliPartialGridRecoveryTests(ManifestFixture):
              mock.patch.object(runner, "run_grid", side_effect=fake_run_grid), \
              mock.patch.object(cli, "SIM_DIR", self.root), \
              contextlib.redirect_stdout(buf_out), contextlib.redirect_stderr(buf_err):
-            status = cli.run(self._args())
+            status = cli.run(self._args(*extra))
         return status, buf_out.getvalue(), buf_err.getvalue()
 
     def test_an_exception_out_of_run_grid_still_mints_a_partial_record(self):
@@ -1078,6 +1079,27 @@ class CliPartialGridRecoveryTests(ManifestFixture):
         self.assertIn("PARTIAL RUN", text)
         self.assertIn("1/2", text)
         self.assertIn("**Overall: ERROR**", text)
+
+    def test_an_aborted_run_with_supersedes_writes_no_record(self):
+        """A partial record naming --supersedes could pass for a full re-take,
+        so none is minted; the exit is non-zero and logs stay in place."""
+
+        def fake_run_grid(
+            tb, pdk, points, workdir, jobs=1, timeout_s=300, on_result=None,
+            log_dir=None, backend=None,
+        ):
+            first = runner.PointResult(point=points[0], status="ok", measurements={"vout": 1.65})
+            if on_result:
+                on_result(first)
+            raise OSError(2, "No such file or directory", "simulated capacity abort")
+
+        status, _, err = self._run_cli(fake_run_grid, "--supersedes", "20260101T000000Z-abc")
+
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("simulated capacity abort", err)
+        self.assertIn("1/2", err)
+        self.assertIn("--supersedes", err)
+        self.assertEqual(list((self.root / self.slug / "records").glob("*.md")), [])
 
     def test_ngspice_missing_is_unaffected_and_still_fails_fast(self):
         """The broadened net must not swallow NgspiceMissing -- no environment
