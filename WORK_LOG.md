@@ -2,6 +2,11 @@
 
 Chronological record of merged pull requests and closed issues. Maintained by the Loom Guide role.
 
+### 2026-11-11
+
+- **PR #901**: refactor(sim): share period-jitter grid loader between runners
+- **Issue #900** (closed): Dedupe period-jitter runner helpers (load_points, select_backend, environment) into legacy_provenance
+
 ### 2026-11-07
 
 - **PR #896**: Bump Repo Skills 0.25.1 -> 0.25.10
