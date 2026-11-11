@@ -1,4 +1,16 @@
 #!/usr/bin/env bash
+# ============================================================================
+# SUPERSEDED FOR NEW RUNS (#878): use the harness form of this campaign,
+#
+#     python3 sim/run_corners.py output-range [--backend batch --batch-apply]
+#
+# (sim/output-range/testbench/tb.json + tb_output_range_harness.sp + derive.py).
+# That form accounts for PVT coverage, runs on the batch backend, and compares
+# every row to the baseline records this script produced. This script is kept
+# unchanged below (apart from this banner) because the committed records name it
+# and `gen_tb_json.py` reads its `seed_for_corner` via `--plan`; do not use it
+# to mint new evidence.
+# ============================================================================
 # gf180-pll :: output-range :: closed-loop output-band coverage campaign (#12)
 #
 # DUT: `pll_top` -- the whole PLL from design/pll_top.sch, prepended to
