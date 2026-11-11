@@ -1,0 +1,4350 @@
+{
+  "name": "output-range",
+  "description": "closed-loop output-band edge coverage of pll_top: does the loop lock at the ratified 10 MHz and 200 MHz band edges, and with what control-voltage headroom to the 0.9-2.7 V window, over the 45-point PVT grid (harness form of the #12 campaign; baseline records 20260819-160843-4e32f91 + 20260819-190341-70a4128)",
+  "claim": "#12 -> #878 (design-input claim, not a spec line) -- the closed pll_top loop reaches both ratified output-band edge frequencies (spec/pll.md output band, 10-200 MHz) across the mandated PVT matrix, with Vctrl margin to the 0.9-2.7 V usable window; reproduced under the harness so the PVT coverage is accounted for and the grid can run on the batch backend.",
+  "methodology": [
+    "**Harness form of an existing campaign (#878), not a new claim.** The campaign's question is unchanged from its baseline records: for each of the two ratified output-band EDGE frequencies (10 MHz `lo`, 200 MHz `hi`), does the closed `pll_top` loop lock there, and with how much control-voltage headroom to the 0.9-2.7 V usable window. The deck is the committed `tb_output_range.sp` re-expressed as a harness fragment (`tb_output_range_harness.sp`; its header lists the mechanical differences). Nothing about the design, the stimulus, the convergence tolerances or the 100 ps internal-timestep ceiling (#65) changed.",
+    "**Grid: 45 PVT points x 2 edges = 90 rows**, the baseline's grid, expressed as 90 `grid` blocks (one per row) because the Vctrl seed is per (corner, temperature, supply, edge). Each block names the sweep point `op` that carries that row's seed, band code, divider code, f_ref and transient controls.",
+    "**Seeds are the baseline's, by construction.** `gen_tb_json.py` obtains every seed by running `run.sh --plan`, i.e. `seed_for_corner` itself (a bash function over `sim/vco-tuning-range/corners/20260731-175947-0a12e6c/kvco_by_point.csv`); the static band / divider / Icp-trim / window-trim bits come from `sim/lib/pll_top_dut.sh`'s `cloop_*` encoders. `gen_tb_json.py --check` (run by the unit test) fails if this manifest drifts from them. The seed rule, including rows seeded at the nearer rail (`below` / `above`, reported OUT-OF-WINDOW), is unchanged.",
+    "**Status rule (as run.sh's `run_one`):** PASS if the lock detector asserted at least once (`t_lock_last_rise` measured) and was still high at the end of the window (`lock_at_end` >= 1.5 V); else FAIL; OUT-OF-WINDOW overrides when the seed was clamped to a rail; ERROR when the transient produced no `vctrl_final` (including a point the execution backend killed at its `--timeout` budget, which this record reports as no-measurement, never as a simulator verdict). The PFD DN-branch guard (#69) is scored three-valued exactly as in run.sh (floor 3e-4 of the supply).",
+    "**Comparison against the baseline** is the union of two records: `20260819-160843-4e32f91` (89 rows) and `20260819-190341-70a4128` (which replaces that record's `ff`/27 C/3.30 V `hi` row only). Per-row tolerances (proposals, never widened after the fact): Status exact; `vctrl_final` 5 mV absolute (runs converge within the simulator's voltage tolerance, reltol 1e-3); DN-guard verdict exact (mean DN is reported with its delta and graded by the guard verdict, because it spans six decades between SUSPECT and PASS rows). Both baseline records are read-only.",
+    "**The `ff`/27 C/3.30 V `hi` row is a known marginal row** (a +1e-7 V seed perturbation moved the baseline between a non-terminating transient and a clean FAIL). It is compared against the second record's control row and reported separately; a flip on it alone is documented, not counted as a regression.",
+    "**Simulator / host delta.** Both baseline records were taken with ngspice-46 on Darwin 25.6.0 / arm64; harness runs on this project's batch fleet use ngspice-46 on Linux x86_64. The record's Environment provenance is authoritative for this run. Read DR-028 and DR-039 for what the batch backend does and does not guarantee.",
+    "**Limitations (unchanged from the baseline):** schematic-level, no parasitics; nominal skew only (`sw_stat_global = sw_stat_mismatch = 0`); one band/N design point per edge; the 2 us window is only ~2.5 reference cycles for `lo`, so a `lo` FAIL bounds nothing about whether that corner eventually locks."
+  ],
+  "dut": [
+    "design/netlist/pll_top.spice"
+  ],
+  "netlist": "tb_output_range_harness.sp",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "mos"
+  ],
+  "options": [
+    "rshunt=1e12",
+    "itl4=200",
+    "reltol=1e-3",
+    "abstol=1e-9",
+    "vntol=1e-4",
+    "chgtol=1e-13"
+  ],
+  "params": {
+    "ktmax": "100p",
+    "cpb0_code": "0",
+    "cpb1_code": "1",
+    "ldt0_code": "0",
+    "ldt1_code": "0",
+    "ldt2_code": "0",
+    "ldt3_code": "1"
+  },
+  "sweeps": {
+    "op": {
+      "description": "the per-row operating point: edge, per-corner Vctrl seed (and whether it was clamped to a rail), band code, divider code, f_ref and transient controls. Point id = <edge><in|below|above><seed with . as p>.",
+      "points": {
+        "hibelow0p9": {
+          "description": "hi edge (200e6 Hz, N=32), seed 0.9 V (below)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "0.9",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin0p9126": {
+          "description": "hi edge (200e6 Hz, N=32), seed 0.9126 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "0.9126",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin0p9361": {
+          "description": "hi edge (200e6 Hz, N=32), seed 0.9361 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "0.9361",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p016": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.016 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.016",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p054": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.054 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.054",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p058": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.058 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.058",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p067": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.067 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.067",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p073": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.073 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.073",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p079": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.079 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.079",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p093": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.093 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.093",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p102": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.102 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.102",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p171": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.171 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.171",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p177": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.177 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.177",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p211": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.211 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.211",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p212": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.212 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.212",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p215": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.215 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.215",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p221": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.221 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.221",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p232": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.232 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.232",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p304": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.304 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.304",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p311": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.311 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.311",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p312": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.312 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.312",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p314": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.314 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.314",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p321": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.321 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.321",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p328": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.328 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.328",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p357": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.357 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.357",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p364": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.364 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.364",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p431": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.431 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.431",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p437": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.437 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.437",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p454": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.454 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.454",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p487": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.487 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.487",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p505": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.505 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.505",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p524": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.524 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.524",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p554": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.554 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.554",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p57": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.57 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.57",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p583": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.583 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.583",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p635": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.635 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.635",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p649": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.649 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.649",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p68": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.68 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.68",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p754": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.754 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.754",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p783": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.783 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.783",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p823": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.823 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.823",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "hiin1p888": {
+          "description": "hi edge (200e6 Hz, N=32), seed 1.888 V (in)",
+          "params": {
+            "fref": "6250000",
+            "vctrl_ic": "1.888",
+            "ktforce": "3.2e-09",
+            "ktstep": "1e-10",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "1",
+            "b2_code": "1",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "1",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p17": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.17 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.17",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p283": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.283 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.283",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p302": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.302 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.302",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p313": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.313 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.313",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p324": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.324 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.324",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p401": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.401 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.401",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p411": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.411 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.411",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p42": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.42 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.42",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p439": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.439 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.439",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p445": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.445 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.445",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p475": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.475 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.475",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p499": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.499 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.499",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p52": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.52 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.52",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p522": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.522 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.522",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p527": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.527 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.527",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p535": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.535 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.535",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p562": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.562 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.562",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p592": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.592 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.592",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p6": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.6 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.6",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p601": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.601 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.601",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p643": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.643 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.643",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p644": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.644 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.644",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p646": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.646 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.646",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p679": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.679 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.679",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p69": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.69 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.69",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p707": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.707 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.707",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p713": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.713 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.713",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p729": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.729 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.729",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p732": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.732 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.732",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p746": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.746 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.746",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p754": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.754 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.754",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p763": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.763 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.763",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p813": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.813 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.813",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p84": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.84 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.84",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p842": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.842 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.842",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p847": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.847 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.847",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p853": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.853 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.853",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p882": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.882 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.882",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p905": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.905 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.905",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p915": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.915 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.915",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p977": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.977 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.977",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin1p998": {
+          "description": "lo edge (10e6 Hz, N=8), seed 1.998 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "1.998",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin2p024": {
+          "description": "lo edge (10e6 Hz, N=8), seed 2.024 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "2.024",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin2p025": {
+          "description": "lo edge (10e6 Hz, N=8), seed 2.025 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "2.025",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        },
+        "loin2p063": {
+          "description": "lo edge (10e6 Hz, N=8), seed 2.063 V (in)",
+          "params": {
+            "fref": "1250000",
+            "vctrl_ic": "2.063",
+            "ktforce": "1.6e-08",
+            "ktstep": "2e-09",
+            "ktstop": "2e-06",
+            "b0_code": "1",
+            "b1_code": "0",
+            "b2_code": "0",
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "1",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "cpb0_code": "0",
+            "cpb1_code": "1",
+            "ldt0_code": "0",
+            "ldt1_code": "0",
+            "ldt2_code": "0",
+            "ldt3_code": "1"
+          }
+        }
+      }
+    }
+  },
+  "grid": [
+    {
+      "description": "typical / -40 C / 2.97 V, lo edge: Vctrl seed 1.562 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "loin1p562"
+        ]
+      }
+    },
+    {
+      "description": "typical / -40 C / 2.97 V, hi edge: Vctrl seed 1.212 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p212"
+        ]
+      }
+    },
+    {
+      "description": "typical / -40 C / 3.30 V, lo edge: Vctrl seed 1.813 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "loin1p813"
+        ]
+      }
+    },
+    {
+      "description": "typical / -40 C / 3.30 V, hi edge: Vctrl seed 1.505 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p505"
+        ]
+      }
+    },
+    {
+      "description": "typical / -40 C / 3.63 V, lo edge: Vctrl seed 2.025 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "loin2p025"
+        ]
+      }
+    },
+    {
+      "description": "typical / -40 C / 3.63 V, hi edge: Vctrl seed 1.783 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p783"
+        ]
+      }
+    },
+    {
+      "description": "typical / 27 C / 2.97 V, lo edge: Vctrl seed 1.445 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "loin1p445"
+        ]
+      }
+    },
+    {
+      "description": "typical / 27 C / 2.97 V, hi edge: Vctrl seed 1.058 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p058"
+        ]
+      }
+    },
+    {
+      "description": "typical / 27 C / 3.30 V, lo edge: Vctrl seed 1.679 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "loin1p679"
+        ]
+      }
+    },
+    {
+      "description": "typical / 27 C / 3.30 V, hi edge: Vctrl seed 1.321 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p321"
+        ]
+      }
+    },
+    {
+      "description": "typical / 27 C / 3.63 V, lo edge: Vctrl seed 1.882 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "loin1p882"
+        ]
+      }
+    },
+    {
+      "description": "typical / 27 C / 3.63 V, hi edge: Vctrl seed 1.57 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p57"
+        ]
+      }
+    },
+    {
+      "description": "typical / 125 C / 2.97 V, lo edge: Vctrl seed 1.302 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "loin1p302"
+        ]
+      }
+    },
+    {
+      "description": "typical / 125 C / 2.97 V, hi edge: Vctrl seed 0.9 V (below the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "hibelow0p9"
+        ]
+      }
+    },
+    {
+      "description": "typical / 125 C / 3.30 V, lo edge: Vctrl seed 1.522 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "loin1p522"
+        ]
+      }
+    },
+    {
+      "description": "typical / 125 C / 3.30 V, hi edge: Vctrl seed 1.093 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p093"
+        ]
+      }
+    },
+    {
+      "description": "typical / 125 C / 3.63 V, lo edge: Vctrl seed 1.713 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "loin1p713"
+        ]
+      }
+    },
+    {
+      "description": "typical / 125 C / 3.63 V, hi edge: Vctrl seed 1.311 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "typical"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p311"
+        ]
+      }
+    },
+    {
+      "description": "ff / -40 C / 2.97 V, lo edge: Vctrl seed 1.646 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "loin1p646"
+        ]
+      }
+    },
+    {
+      "description": "ff / -40 C / 2.97 V, hi edge: Vctrl seed 1.364 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p364"
+        ]
+      }
+    },
+    {
+      "description": "ff / -40 C / 3.30 V, lo edge: Vctrl seed 1.842 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "loin1p842"
+        ]
+      }
+    },
+    {
+      "description": "ff / -40 C / 3.30 V, hi edge: Vctrl seed 1.635 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p635"
+        ]
+      }
+    },
+    {
+      "description": "ff / -40 C / 3.63 V, lo edge: Vctrl seed 2.024 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "loin2p024"
+        ]
+      }
+    },
+    {
+      "description": "ff / -40 C / 3.63 V, hi edge: Vctrl seed 1.888 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p888"
+        ]
+      }
+    },
+    {
+      "description": "ff / 27 C / 2.97 V, lo edge: Vctrl seed 1.527 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "loin1p527"
+        ]
+      }
+    },
+    {
+      "description": "ff / 27 C / 2.97 V, hi edge: Vctrl seed 1.211 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p211"
+        ]
+      }
+    },
+    {
+      "description": "ff / 27 C / 3.30 V, lo edge: Vctrl seed 1.732 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "loin1p732"
+        ]
+      }
+    },
+    {
+      "description": "ff / 27 C / 3.30 V, hi edge: Vctrl seed 1.454 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p454"
+        ]
+      }
+    },
+    {
+      "description": "ff / 27 C / 3.63 V, lo edge: Vctrl seed 1.905 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "loin1p905"
+        ]
+      }
+    },
+    {
+      "description": "ff / 27 C / 3.63 V, hi edge: Vctrl seed 1.68 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p68"
+        ]
+      }
+    },
+    {
+      "description": "ff / 125 C / 2.97 V, lo edge: Vctrl seed 1.401 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "loin1p401"
+        ]
+      }
+    },
+    {
+      "description": "ff / 125 C / 2.97 V, hi edge: Vctrl seed 1.016 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p016"
+        ]
+      }
+    },
+    {
+      "description": "ff / 125 C / 3.30 V, lo edge: Vctrl seed 1.592 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "loin1p592"
+        ]
+      }
+    },
+    {
+      "description": "ff / 125 C / 3.30 V, hi edge: Vctrl seed 1.232 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p232"
+        ]
+      }
+    },
+    {
+      "description": "ff / 125 C / 3.63 V, lo edge: Vctrl seed 1.754 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "loin1p754"
+        ]
+      }
+    },
+    {
+      "description": "ff / 125 C / 3.63 V, hi edge: Vctrl seed 1.431 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ff"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p431"
+        ]
+      }
+    },
+    {
+      "description": "ss / -40 C / 2.97 V, lo edge: Vctrl seed 1.439 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "loin1p439"
+        ]
+      }
+    },
+    {
+      "description": "ss / -40 C / 2.97 V, hi edge: Vctrl seed 1.073 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p073"
+        ]
+      }
+    },
+    {
+      "description": "ss / -40 C / 3.30 V, lo edge: Vctrl seed 1.746 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "loin1p746"
+        ]
+      }
+    },
+    {
+      "description": "ss / -40 C / 3.30 V, hi edge: Vctrl seed 1.357 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p357"
+        ]
+      }
+    },
+    {
+      "description": "ss / -40 C / 3.63 V, lo edge: Vctrl seed 1.998 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "loin1p998"
+        ]
+      }
+    },
+    {
+      "description": "ss / -40 C / 3.63 V, hi edge: Vctrl seed 1.649 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p649"
+        ]
+      }
+    },
+    {
+      "description": "ss / 27 C / 2.97 V, lo edge: Vctrl seed 1.324 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "loin1p324"
+        ]
+      }
+    },
+    {
+      "description": "ss / 27 C / 2.97 V, hi edge: Vctrl seed 0.9126 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "hiin0p9126"
+        ]
+      }
+    },
+    {
+      "description": "ss / 27 C / 3.30 V, lo edge: Vctrl seed 1.601 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "loin1p601"
+        ]
+      }
+    },
+    {
+      "description": "ss / 27 C / 3.30 V, hi edge: Vctrl seed 1.177 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p177"
+        ]
+      }
+    },
+    {
+      "description": "ss / 27 C / 3.63 V, lo edge: Vctrl seed 1.84 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "loin1p84"
+        ]
+      }
+    },
+    {
+      "description": "ss / 27 C / 3.63 V, hi edge: Vctrl seed 1.437 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p437"
+        ]
+      }
+    },
+    {
+      "description": "ss / 125 C / 2.97 V, lo edge: Vctrl seed 1.17 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "loin1p17"
+        ]
+      }
+    },
+    {
+      "description": "ss / 125 C / 2.97 V, hi edge: Vctrl seed 0.9 V (below the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "hibelow0p9"
+        ]
+      }
+    },
+    {
+      "description": "ss / 125 C / 3.30 V, lo edge: Vctrl seed 1.42 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "loin1p42"
+        ]
+      }
+    },
+    {
+      "description": "ss / 125 C / 3.30 V, hi edge: Vctrl seed 0.9361 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "hiin0p9361"
+        ]
+      }
+    },
+    {
+      "description": "ss / 125 C / 3.63 V, lo edge: Vctrl seed 1.643 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "loin1p643"
+        ]
+      }
+    },
+    {
+      "description": "ss / 125 C / 3.63 V, hi edge: Vctrl seed 1.171 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "ss"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p171"
+        ]
+      }
+    },
+    {
+      "description": "fs / -40 C / 2.97 V, lo edge: Vctrl seed 1.52 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "loin1p52"
+        ]
+      }
+    },
+    {
+      "description": "fs / -40 C / 2.97 V, hi edge: Vctrl seed 1.215 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p215"
+        ]
+      }
+    },
+    {
+      "description": "fs / -40 C / 3.30 V, lo edge: Vctrl seed 1.763 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "loin1p763"
+        ]
+      }
+    },
+    {
+      "description": "fs / -40 C / 3.30 V, hi edge: Vctrl seed 1.487 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p487"
+        ]
+      }
+    },
+    {
+      "description": "fs / -40 C / 3.63 V, lo edge: Vctrl seed 1.977 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "loin1p977"
+        ]
+      }
+    },
+    {
+      "description": "fs / -40 C / 3.63 V, hi edge: Vctrl seed 1.754 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p754"
+        ]
+      }
+    },
+    {
+      "description": "fs / 27 C / 2.97 V, lo edge: Vctrl seed 1.411 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "loin1p411"
+        ]
+      }
+    },
+    {
+      "description": "fs / 27 C / 2.97 V, hi edge: Vctrl seed 1.067 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p067"
+        ]
+      }
+    },
+    {
+      "description": "fs / 27 C / 3.30 V, lo edge: Vctrl seed 1.644 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "loin1p644"
+        ]
+      }
+    },
+    {
+      "description": "fs / 27 C / 3.30 V, hi edge: Vctrl seed 1.314 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p314"
+        ]
+      }
+    },
+    {
+      "description": "fs / 27 C / 3.63 V, lo edge: Vctrl seed 1.847 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "loin1p847"
+        ]
+      }
+    },
+    {
+      "description": "fs / 27 C / 3.63 V, hi edge: Vctrl seed 1.554 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p554"
+        ]
+      }
+    },
+    {
+      "description": "fs / 125 C / 2.97 V, lo edge: Vctrl seed 1.283 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "loin1p283"
+        ]
+      }
+    },
+    {
+      "description": "fs / 125 C / 2.97 V, hi edge: Vctrl seed 0.9 V (below the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "hibelow0p9"
+        ]
+      }
+    },
+    {
+      "description": "fs / 125 C / 3.30 V, lo edge: Vctrl seed 1.499 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "loin1p499"
+        ]
+      }
+    },
+    {
+      "description": "fs / 125 C / 3.30 V, hi edge: Vctrl seed 1.102 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p102"
+        ]
+      }
+    },
+    {
+      "description": "fs / 125 C / 3.63 V, lo edge: Vctrl seed 1.69 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "loin1p69"
+        ]
+      }
+    },
+    {
+      "description": "fs / 125 C / 3.63 V, hi edge: Vctrl seed 1.312 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "fs"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p312"
+        ]
+      }
+    },
+    {
+      "description": "sf / -40 C / 2.97 V, lo edge: Vctrl seed 1.6 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "loin1p6"
+        ]
+      }
+    },
+    {
+      "description": "sf / -40 C / 2.97 V, hi edge: Vctrl seed 1.221 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p221"
+        ]
+      }
+    },
+    {
+      "description": "sf / -40 C / 3.30 V, lo edge: Vctrl seed 1.853 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "loin1p853"
+        ]
+      }
+    },
+    {
+      "description": "sf / -40 C / 3.30 V, hi edge: Vctrl seed 1.524 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p524"
+        ]
+      }
+    },
+    {
+      "description": "sf / -40 C / 3.63 V, lo edge: Vctrl seed 2.063 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "loin2p063"
+        ]
+      }
+    },
+    {
+      "description": "sf / -40 C / 3.63 V, hi edge: Vctrl seed 1.823 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        -40.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p823"
+        ]
+      }
+    },
+    {
+      "description": "sf / 27 C / 2.97 V, lo edge: Vctrl seed 1.475 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "loin1p475"
+        ]
+      }
+    },
+    {
+      "description": "sf / 27 C / 2.97 V, hi edge: Vctrl seed 1.054 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p054"
+        ]
+      }
+    },
+    {
+      "description": "sf / 27 C / 3.30 V, lo edge: Vctrl seed 1.707 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "loin1p707"
+        ]
+      }
+    },
+    {
+      "description": "sf / 27 C / 3.30 V, hi edge: Vctrl seed 1.328 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p328"
+        ]
+      }
+    },
+    {
+      "description": "sf / 27 C / 3.63 V, lo edge: Vctrl seed 1.915 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "loin1p915"
+        ]
+      }
+    },
+    {
+      "description": "sf / 27 C / 3.63 V, hi edge: Vctrl seed 1.583 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        27.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p583"
+        ]
+      }
+    },
+    {
+      "description": "sf / 125 C / 2.97 V, lo edge: Vctrl seed 1.313 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "loin1p313"
+        ]
+      }
+    },
+    {
+      "description": "sf / 125 C / 2.97 V, hi edge: Vctrl seed 0.9 V (below the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "low"
+      ],
+      "axes": {
+        "op": [
+          "hibelow0p9"
+        ]
+      }
+    },
+    {
+      "description": "sf / 125 C / 3.30 V, lo edge: Vctrl seed 1.535 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "loin1p535"
+        ]
+      }
+    },
+    {
+      "description": "sf / 125 C / 3.30 V, hi edge: Vctrl seed 1.079 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "nom"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p079"
+        ]
+      }
+    },
+    {
+      "description": "sf / 125 C / 3.63 V, lo edge: Vctrl seed 1.729 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "loin1p729"
+        ]
+      }
+    },
+    {
+      "description": "sf / 125 C / 3.63 V, hi edge: Vctrl seed 1.304 V (in the 0.9-2.7 V window) from run.sh's seed_for_corner",
+      "corners": [
+        "sf"
+      ],
+      "temperatures_c": [
+        125.0
+      ],
+      "supplies": [
+        "high"
+      ],
+      "axes": {
+        "op": [
+          "hiin1p304"
+        ]
+      }
+    }
+  ],
+  "analyses": [
+    "save v(vctrl) v(lock) v(xdut.up) v(xdut.dn) v(xdut.vwin)",
+    "tran {ktstep} {ktstop} 0 {ktmax}"
+  ],
+  "raw_measures": {
+    "t_lock_last_rise": {
+      "analysis": "tran",
+      "expr": "when v(lock)='0.5*vdd_val' rise=last",
+      "optional": true
+    },
+    "lock_at_end": {
+      "analysis": "tran",
+      "expr": "find v(lock) at='ktstop-1p'"
+    },
+    "vctrl_final": {
+      "analysis": "tran",
+      "expr": "find v(vctrl) at='ktstop-1p'"
+    },
+    "dn_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(xdut.dn) from='0.9*ktstop' to='ktstop-1p'"
+    }
+  },
+  "topology_groups": {
+    "headroom": {
+      "description": "the campaign's measurand: where the control node settles",
+      "measures": [
+        "vctrl_final",
+        "vctrl_margin_lo_v",
+        "vctrl_margin_hi_v"
+      ]
+    },
+    "lock": {
+      "description": "did the real lock detector assert and hold",
+      "measures": [
+        "t_lock_last_rise",
+        "lock_at_end",
+        "pass_lock"
+      ]
+    },
+    "integration": {
+      "description": "the PFD DN-branch guard (#69): the internal timestep ceiling was honoured",
+      "measures": [
+        "dn_lvl"
+      ]
+    }
+  },
+  "derived": {
+    "module": "derive.py",
+    "measures": [
+      "vctrl_margin_lo_v",
+      "vctrl_margin_hi_v",
+      "pass_lock"
+    ],
+    "tables": [
+      "output_range_rows",
+      "row_comparison",
+      "baseline_comparison"
+    ]
+  },
+  "checks": {
+    "vctrl_final": {
+      "min_measured_points": 87
+    },
+    "dn_lvl": {
+      "min_measured_points": 87
+    }
+  }
+}
