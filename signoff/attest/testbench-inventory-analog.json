@@ -188,13 +188,21 @@
       ]
     },
     {
-      "cold_start": "sim/output-range/testbench/run.sh",
+      "cold_start": "python3 sim/run_corners.py output-range",
       "disclosed_in": "sim/CHARACTERIZATION.md",
       "experiment": "output-range",
       "testbenches": [
         {
+          "content_hash": "sha256:efad34367eaf8efc0cf49b6d834a3e9ff6dddee79f33c0f4338dced99e399eba",
+          "path": "sim/output-range/testbench/tb.json"
+        },
+        {
           "content_hash": "sha256:dc662f02fad4de13fc16d0a840c3ec0ec51b7181481038cba75c51e58959cca2",
           "path": "sim/output-range/testbench/tb_output_range.sp"
+        },
+        {
+          "content_hash": "sha256:76ccb9e9f319a5d45aa6d0a18819815a1ed82b657b97cbbc7dbfc940149d56a7",
+          "path": "sim/output-range/testbench/tb_output_range_harness.sp"
         }
       ]
     },
