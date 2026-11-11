@@ -660,8 +660,10 @@ class _CeilingRefusingTransport(_FakeTransport):
         "BATCH_MAX_CONCURRENT_INSTANCES=8"
     )
 
-    def __init__(self, *args, refusals=0, **kwargs):
+    def __init__(self, *args, refusals=0, refusal=None, **kwargs):
         super().__init__(*args, **kwargs)
+        if refusal is not None:
+            self.REFUSAL = refusal
         self.refusals = refusals
         self.launch_attempts = 0
 
@@ -723,19 +725,52 @@ class LaunchCeilingTests(SubmissionTests):
         self.assertIn("subnet", str(caught.exception))
         self.assertEqual(len(transport.launched()), 1)
 
-    def test_an_unending_ceiling_refusal_gives_up_naming_the_ceiling(self):
-        """Bounded, not infinite -- and the message says whose ceiling it is."""
+    def test_each_capacity_refusal_text_is_waited_out(self):
+        for text in (
+            _CeilingRefusingTransport.REFUSAL,
+            "error: 4 vCPU requested, exceeds BATCH_MAX_VCPU=16",
+            "error: no capacity in any of 3 pools",
+        ):
+            with self.subTest(text=text):
+                transport = _CeilingRefusingTransport(
+                    ["done"], outputs={batch.LOG_NAME: "ok\n", batch.RC_NAME: "0"},
+                    refusals=2, refusal=text,
+                )
+                got = self._backend(transport).run_deck(self.deck, self.rundir, 60, None)
+                self.assertEqual(got.returncode, 0)
+                self.assertEqual(transport.launch_attempts, 3)
+
+    def test_an_unending_capacity_refusal_gives_up_when_the_budget_expires(self):
+        """Bounded by the time budget (fake clock), and names the budget."""
         transport = _CeilingRefusingTransport(
             ["done"], outputs={batch.RC_NAME: "0"}, refusals=10**6
         )
         backend = self._backend(transport)
-        backend.poll_interval_s = 0
+        backend.poll_interval_s = 10
+        backend.capacity_wait_s = 35
+        now = [0.0]
+        backend._clock = lambda: now[0]
+        backend._sleep = lambda s: now.__setitem__(0, now[0] + s)
         with self.assertRaises(execution.BackendError) as caught:
             backend.run_deck(self.deck, self.rundir, 60, None)
         message = str(caught.exception)
-        self.assertIn("concurrency slot", message)
+        self.assertIn("capacity", message)
+        self.assertIn("35s", message)
         self.assertIn("-j", message)
-        self.assertEqual(transport.launch_attempts, batch.LAUNCH_CEILING_ATTEMPTS)
+        # t=0,10,20,30 attempted; at t=30 the next poll (40) passes 35.
+        self.assertEqual(transport.launch_attempts, 4)
+
+    def test_a_budget_shorter_than_the_poll_interval_still_tries_once(self):
+        transport = _CeilingRefusingTransport(
+            ["done"], outputs={batch.RC_NAME: "0"}, refusals=10**6
+        )
+        backend = self._backend(transport)
+        backend.capacity_wait_s = 1
+        backend.poll_interval_s = 20
+        backend._sleep = lambda s: self.fail("must not sleep past the budget")
+        with self.assertRaises(execution.BackendError):
+            backend.run_deck(self.deck, self.rundir, 60, None)
+        self.assertEqual(transport.launch_attempts, 1)
 
 
 # ===========================================================================

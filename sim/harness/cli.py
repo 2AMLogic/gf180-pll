@@ -205,6 +205,16 @@ def build_parser() -> argparse.ArgumentParser:
         "fails (default %(default)gs)",
     )
     parser.add_argument(
+        "--batch-wait-for-capacity",
+        type=float,
+        default=batch_mod.DEFAULT_CAPACITY_WAIT_S,
+        metavar="SECONDS",
+        help="(--backend batch) how long to keep re-offering a launch the "
+        "layer refused for want of capacity (instance ceiling, vCPU budget, "
+        "no pool with room) before failing that point. The budget is per "
+        "launch, not per run (default %(default)gs)",
+    )
+    parser.add_argument(
         "--timeout",
         type=int,
         default=runner.DEFAULT_TIMEOUT_S,
@@ -469,6 +479,7 @@ def build_backend(args: argparse.Namespace, pdk):
         transport_timeout_s=args.batch_transport_timeout,
         launch_timeout_s=args.batch_launch_timeout,
         collect_timeout_s=args.batch_collect_timeout,
+        capacity_wait_s=args.batch_wait_for_capacity,
     )
 
 
@@ -771,6 +782,19 @@ def _run_reserved(
             file=sys.stderr,
         )
     wall = time.monotonic() - wall_start
+
+    if abort_reason and args.supersedes:
+        # A partial record that names --supersedes could be mistaken for a full
+        # re-take of the record it claims to replace. Mint nothing; leave the
+        # workdir and logs for inspection.
+        print(
+            f"error: run aborted after {len(results)}/{len(points)} point(s); "
+            "not writing a record because --supersedes was given and a "
+            "partial record must not stand in for a full re-take. Workdir "
+            f"and logs are left in place under {workdir}.",
+            file=sys.stderr,
+        )
+        return EXIT_ENVIRONMENT
 
     # Derived metrics: the campaign's own reduction over the table above, which
     # is what its record actually claims. Run before the record is built so a
