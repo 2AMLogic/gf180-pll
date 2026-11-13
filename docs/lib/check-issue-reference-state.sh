@@ -6,8 +6,9 @@
 #
 # WHY THIS EXISTS (issue #237)
 #
-# Six checks already grade docs/chipalooza/challenge-5-proposal.md, and every
-# one of them grades it against something committed in this tree:
+# Six checks graded docs/chipalooza/challenge-5-proposal.md when this one was
+# written, and every one of them graded it against something committed in this
+# tree:
 #
 #   sim/lib/check-readme-status.sh              counts vs. the sim/ tree
 #   sim/lib/check-characterization-coverage.sh  the report's rows and its count
