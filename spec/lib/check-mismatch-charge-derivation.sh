@@ -188,6 +188,7 @@ import re
 import statistics
 import sys
 
+from checklib.files import read_text
 from checklib.markdown import plain, tables
 
 repo_root, spec_rel, dr018_rel = sys.argv[1:4]
@@ -200,15 +201,6 @@ failures = []
 def fail(message):
     failures.append(message)
     sys.stderr.write("FAIL: %s\n" % message)
-
-
-def read(rel):
-    path = os.path.join(repo_root, rel)
-    if not os.path.isfile(path):
-        sys.stderr.write("FAIL: %s does not exist\n" % rel)
-        return None
-    with open(path, encoding="utf-8") as fh:
-        return fh.read()
 
 
 def agrees(written, computed):
@@ -271,8 +263,8 @@ def load_csv(path, rel, required):
     return comments, idx, [ln.split(",") for ln in body[1:]]
 
 
-spec_text = read(spec_rel)
-dr018_text = read(dr018_rel)
+spec_text = read_text(repo_root, spec_rel)
+dr018_text = read_text(repo_root, dr018_rel)
 if spec_text is None or dr018_text is None:
     sys.exit(1)
 

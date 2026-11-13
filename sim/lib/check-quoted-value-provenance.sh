@@ -735,7 +735,7 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-python3 - "${REPO_ROOT}" "${PROPOSAL}" "${SPEC}" <<'PY'
+PYTHONPATH="${REPO_ROOT}/lib${PYTHONPATH:+:${PYTHONPATH}}" python3 - "${REPO_ROOT}" "${PROPOSAL}" "${SPEC}" <<'PY'
 import csv
 import json
 import math
@@ -743,6 +743,8 @@ import os
 import re
 import sys
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
+
+from checklib.markdown import tables as markdown_tables
 
 repo_root, proposal_rel, spec_rel = sys.argv[1], sys.argv[2], sys.argv[3]
 
@@ -778,33 +780,19 @@ def normalize_row_name(text):
     return re.sub(r"\s+", " ", text).strip()
 
 
-def split_row(line):
-    return [c.strip() for c in line.strip().strip("|").split("|")]
-
-
 def read_tables(text):
-    """Every pipe table in a document, as (header_cells, [row_cells...])."""
-    tables = []
-    lines = text.split("\n")
-    i = 0
-    while i < len(lines):
-        if not lines[i].lstrip().startswith("|"):
-            i += 1
-            continue
-        header = split_row(lines[i])
-        if i + 1 >= len(lines) or not re.match(
-            r"^\s*\|[\s:|-]+\|\s*$", lines[i + 1]
-        ):
-            i += 1
-            continue
-        body = []
-        j = i + 2
-        while j < len(lines) and lines[j].lstrip().startswith("|"):
-            body.append(split_row(lines[j]))
-            j += 1
-        tables.append((header, body))
-        i = j
-    return tables
+    """Every pipe table in a document, as (header_cells, [row_cells...]).
+
+    `checklib.markdown.tables` in this check's shape. `require_separator` is
+    the reading this check has always used and still needs: a sim record
+    wraps prose mid-paragraph, so a continuation line can begin
+    `|i_div|) and there is no fourth domain` -- one pipe line with no
+    separator under it, which `read_record_table` below would otherwise have
+    to tell apart from a one-row table by its first column.
+    """
+    return [(table[0], table[1:]) for table in markdown_tables(
+        text, require_separator=True
+    )]
 
 
 # ------------------------------------------------------------------ numbers ---
@@ -2731,7 +2719,7 @@ def resolve_constant(name, ctx):
     return resolved_constants[name]
 
 
-tables = read_tables(proposal)
+proposal_tables = read_tables(proposal)
 
 spec_rows = None          # normalized name -> (cells, source records)
 spec_row_order = []
@@ -2741,7 +2729,7 @@ relative_figures = None
 exclusions = None
 ungraded_figures = None
 
-for header, body in tables:
+for header, body in proposal_tables:
     if len(header) >= 5 and header[0] == "Parameter" and "Verdict" in header:
         if spec_rows is not None:
             continue

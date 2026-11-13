@@ -160,10 +160,10 @@ fi
 
 PYTHONPATH="${REPO_ROOT}/lib${PYTHONPATH:+:${PYTHONPATH}}" python3 - "${REPO_ROOT}" "${SPEC}" "${PROPOSAL}" <<'PY'
 import math
-import os
 import re
 import sys
 
+from checklib.files import read_text
 from checklib.markdown import plain, tables
 
 repo_root, spec_rel, proposal_rel = sys.argv[1:4]
@@ -184,15 +184,6 @@ failures = []
 def fail(message):
     failures.append(message)
     sys.stderr.write("FAIL: %s\n" % message)
-
-
-def read(rel):
-    path = os.path.join(repo_root, rel)
-    if not os.path.isfile(path):
-        sys.stderr.write("FAIL: %s does not exist\n" % rel)
-        return None
-    with open(path, encoding="utf-8") as fh:
-        return fh.read()
 
 
 class Figure(object):
@@ -287,8 +278,8 @@ def row_labelled(table, prefix, what):
     return None
 
 
-spec_text = read(spec_rel)
-proposal_text = read(proposal_rel)
+spec_text = read_text(repo_root, spec_rel)
+proposal_text = read_text(repo_root, proposal_rel)
 if spec_text is None or proposal_text is None:
     sys.exit(1)
 

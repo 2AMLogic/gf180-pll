@@ -177,10 +177,12 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-python3 - "${REPO_ROOT}" "${NETLIST}" "${PROPOSAL}" <<'PY'
-import os
+PYTHONPATH="${REPO_ROOT}/lib${PYTHONPATH:+:${PYTHONPATH}}" python3 - "${REPO_ROOT}" "${NETLIST}" "${PROPOSAL}" <<'PY'
 import re
 import sys
+
+from checklib.files import read_text
+from checklib.markdown import normalize, tables
 
 repo_root, netlist_rel, proposal_rel = sys.argv[1], sys.argv[2], sys.argv[3]
 
@@ -248,24 +250,6 @@ SLOT_CAP = re.compile(r"(?:≤|<=)\s*(\d+)")
 CONFIG_BITS = re.compile(r"(?P<n>\d+)\s+configuration bits\s*\((?P<list>[^)]*)\)")
 
 
-def read(rel):
-    path = os.path.join(repo_root, rel)
-    if not os.path.isfile(path):
-        sys.stderr.write("FAIL: %s does not exist\n" % rel)
-        return None
-    with open(path, encoding="utf-8") as fh:
-        return fh.read()
-
-
-def normalize(cell):
-    """Link text, no emphasis, no backticks, one dash, one space, casefolded."""
-    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", cell)
-    text = text.replace("*", "").replace("`", "")
-    for dash in ("—", "–", "‒", "‑", "−"):
-        text = text.replace(dash, "-")
-    return re.sub(r"\s+", " ", text).strip().casefold()
-
-
 def budget_key(name):
     """A slot category as a comparable key: no hyphens, singular, casefolded.
 
@@ -295,19 +279,6 @@ def strip_parens(text):
         if stripped == text:
             return text
         text = stripped
-
-
-def table_rows(block):
-    """[[cell, ...]] for a GitHub-flavoured Markdown table, header included."""
-    rows = []
-    for line in block.splitlines():
-        line = line.strip()
-        if not line.startswith("|"):
-            continue
-        if re.fullmatch(r"\|[\s:|-]+\|", line):
-            continue
-        rows.append([c.strip() for c in line.strip("|").split("|")])
-    return rows
 
 
 def signals(text):
@@ -358,8 +329,8 @@ def section(text, pattern, where, rel):
     return match.group(1)
 
 
-netlist_text = read(netlist_rel)
-proposal_text = read(proposal_rel)
+netlist_text = read_text(repo_root, netlist_rel)
+proposal_text = read_text(repo_root, proposal_rel)
 if netlist_text is None or proposal_text is None:
     sys.exit(1)
 
@@ -410,7 +381,12 @@ bench_section = section(
 if pad_section is None or slot_section is None or bench_section is None:
     sys.exit(1)
 
-pad_rows = table_rows(pad_section)
+# The first table of section 2.2, header row first. `tables()` ends a table
+# at the first line that is not a table line, so a section that grew a second
+# table would no longer silently fold into one row list with two different
+# column counts; the `< 6` guard below then reports the short parse instead.
+pad_tables = tables(pad_section)
+pad_rows = pad_tables[0] if pad_tables else []
 if len(pad_rows) < 6:
     sys.stderr.write(
         "FAIL: parsed %d data row(s) from %s section 2.2's pad table -- too "

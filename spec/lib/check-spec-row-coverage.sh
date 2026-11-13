@@ -184,7 +184,8 @@ import os
 import re
 import sys
 
-from checklib.markdown import tables
+from checklib.files import read_text
+from checklib.markdown import normalize, tables
 
 repo_root, spec_rel, proposal_rel, decisions_rel = sys.argv[1:5]
 
@@ -211,24 +212,6 @@ UNMET = re.compile(r"(?<![A-Za-z])(UNMET|NOT MET)(?![A-Za-z])")
 ROLLCALL_ANCHOR = "No row above is relaxed, narrowed, or omitted"
 ROLLCALL = re.compile(re.escape(ROLLCALL_ANCHOR) + r".*?(?=^#{1,6} |\Z)", re.M | re.S)
 ROLLCALL_BULLET = re.compile(r"^\s*[-*]\s+\*\*(.+?)\*\*", re.M)
-
-
-def read(rel):
-    path = os.path.join(repo_root, rel)
-    if not os.path.isfile(path):
-        sys.stderr.write("FAIL: %s does not exist\n" % rel)
-        return None
-    with open(path, encoding="utf-8") as fh:
-        return fh.read()
-
-
-def normalize(cell):
-    """Link text, no emphasis, no backticks, one dash, one space, casefolded."""
-    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", cell)
-    text = text.replace("*", "").replace("`", "")
-    for dash in ("—", "–", "‒", "‑", "−"):
-        text = text.replace(dash, "-")
-    return re.sub(r"\s+", " ", text).strip().casefold()
 
 
 def table_with(block, wanted):
@@ -263,8 +246,8 @@ def columns(header, wanted, where):
     return index
 
 
-spec_text = read(spec_rel)
-proposal_text = read(proposal_rel)
+spec_text = read_text(repo_root, spec_rel)
+proposal_text = read_text(repo_root, proposal_rel)
 if spec_text is None or proposal_text is None:
     sys.exit(1)
 
