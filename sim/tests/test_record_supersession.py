@@ -21,6 +21,7 @@ input -- the script reads committed Markdown.
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -271,6 +272,110 @@ class TestSupersedesFieldParsing(_TreeTest):
         self.assertFails(f"cites the superseded record `{OLD}`")
 
 
+class TestAggregationAgreementRule(_TreeTest):
+    """Rule 3: no reader-facing document may lag the aggregation.
+
+    Rules 1 and 2 are satisfied by naming *any one* successor, which is
+    deliberate (``sim/README.md``'s supersession-is-per-bench rule).  But that
+    "any one" has a cost, and it was paid: on 2026-11-11
+    ``20261111-184929-73837b9`` superseded the whole 90-row ``output-range``
+    grid, ``sim/CHARACTERIZATION.md`` was updated to cite it the same day, and
+    ``docs/chipalooza/challenge-5-proposal.md`` was not -- yet rule 2 stayed
+    green, because the proposal still named ``20260819-190341-70a4128``, an
+    August successor that replaces exactly one of those 90 rows and says so.
+    The reader of the outward-facing document was handed a thread that leads
+    only to a single-row correction, two days after a full-grid re-run of the
+    same campaign came back NO-GO against that very baseline.
+
+    The rule uses the one discriminator that needs no prose parsing: the
+    aggregation.  ``sim/CHARACTERIZATION.md``'s whole job is to cite current
+    evidence (it is why this check grades it at all), and
+    ``check-characterization-coverage.sh`` already fails CI when it falls
+    behind the tree.  So whatever successor the aggregation names, the other
+    reader-facing documents citing the same predecessor must name too.  That
+    makes the obligation self-maintaining: landing a record forces the
+    aggregation, and the aggregation now forces everything downstream of it.
+
+    What the rule deliberately does NOT do is prefer the *latest* successor.
+    ``20260731-175947-0a12e6c`` has two, 22 minutes apart, and the later one
+    (``20260804-164956-72883fb``) is the cross-version ngspice-42 companion of
+    the earlier -- not a correction of it.  Every document names the
+    ngspice-46 one this repository pins, on purpose.  A recency rule would
+    fail all of them; this one is silent there, because the aggregation names
+    the pinned record too.
+    """
+
+    #: OLD has two successors.  NEW is the one both documents name; NEWER is
+    #: the shape of the drift -- a second, whole-record successor.
+    records = {"output-range": {OLD: None, NEW: OLD, NEWER: OLD}}
+
+    def test_a_reader_facing_document_may_not_lag_the_aggregation(self):
+        """The 2026-11-11 drift shape, which rules 1 and 2 both pass."""
+        self.tree.write(
+            "sim/CHARACTERIZATION.md",
+            f"| output-range | `sim/output-range/records/{NEWER}.md` -- the latest "
+            f"record; earlier baseline `sim/output-range/records/{OLD}.md`, itself "
+            f"superseded in one row only by `{NEW}` |\n",
+        )
+        self.tree.write(
+            "docs/chipalooza/challenge-5-proposal.md",
+            f"| Output band, closed-loop | 0 of 45 corners | "
+            f"`sim/output-range/records/{OLD}.md` (full grid); "
+            f"`sim/output-range/records/{NEW}.md` (one row only) |\n",
+        )
+        self.assertFails(
+            "docs/chipalooza/challenge-5-proposal.md",
+            f"cites `{OLD}`",
+            f"`{NEWER}`",
+            "sim/CHARACTERIZATION.md",
+        )
+
+    def test_naming_what_the_aggregation_names_passes(self):
+        text = (
+            f"cites `{OLD}`, superseded in one row by `{NEW}` and in full by "
+            f"`{NEWER}`\n"
+        )
+        self.tree.write("sim/CHARACTERIZATION.md", text)
+        self.tree.write("docs/chipalooza/challenge-5-proposal.md", text)
+        self.assertPasses()
+
+    def test_a_successor_the_aggregation_does_not_name_is_not_demanded(self):
+        """The ``20260804-164956-72883fb`` shape, which must stay silent.
+
+        Both documents name the same successor and neither names the other
+        one.  Rule 2 is satisfied, and rule 3 has nothing to say: the
+        aggregation did not move, so nothing downstream of it is behind.
+        """
+        text = f"cites `{OLD}`, migrated successor `{NEW}` (the pinned simulator)\n"
+        self.tree.write("sim/CHARACTERIZATION.md", text)
+        self.tree.write("docs/chipalooza/challenge-5-proposal.md", text)
+        self.assertPasses()
+
+    def test_the_aggregation_is_not_graded_against_itself(self):
+        """It is the reference, so it can never be behind itself.
+
+        Rule 2 still holds it to naming *a* successor; rule 3 adds nothing.
+        """
+        self.tree.write(
+            "sim/CHARACTERIZATION.md",
+            f"cites `{OLD}`, superseded by `{NEW}` and by `{NEWER}`\n",
+        )
+        self.assertPasses()
+
+    def test_a_document_not_citing_the_predecessor_is_under_no_obligation(self):
+        """Rule 3 is about a shared predecessor, not about mirroring the
+        aggregation's whole citation list."""
+        self.tree.write(
+            "sim/CHARACTERIZATION.md",
+            f"cites `{OLD}`, superseded by `{NEW}` and `{NEWER}`\n",
+        )
+        self.tree.write(
+            "docs/chipalooza/challenge-5-proposal.md",
+            "This row cites no record at all.\n",
+        )
+        self.assertPasses()
+
+
 class TestSelfDefence(_TreeTest):
     def test_a_tree_with_no_supersession_edges_fails(self):
         """A parser that silently stops matching must not read as a clean
@@ -282,6 +387,18 @@ class TestSelfDefence(_TreeTest):
     def test_a_missing_graded_document_fails(self):
         (Path(self.tree.root) / "docs" / "chipalooza" / "challenge-5-proposal.md").unlink()
         self.assertFails("docs/chipalooza/challenge-5-proposal.md does not exist")
+
+    def test_a_missing_aggregation_fails_rule_3_explicitly(self):
+        """Rule 3's reference document is load-bearing, so its absence is
+        reported as rule 3 not running -- not swallowed as one more missing
+        document. A check that could not run must not read as one that passed.
+        """
+        (Path(self.tree.root) / "sim" / "CHARACTERIZATION.md").unlink()
+        self.assertFails(
+            "sim/CHARACTERIZATION.md does not exist",
+            "the aggregation sim/CHARACTERIZATION.md is unreadable, so rule 3 "
+            "could not run",
+        )
 
     def test_an_empty_record_tree_fails(self):
         self.records = {}
@@ -296,6 +413,20 @@ class TestTheRealTree(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("every cited record exists", result.stdout)
+
+    def test_rule_3_is_not_vacuous_on_the_committed_tree(self):
+        """A rule that examined nothing reports exactly what a clean tree
+        reports, so the OK line prints the obligation count and this test
+        refuses a zero.  The same anti-vacuity treatment
+        check-quoted-value-provenance.sh gives its group-sequence derivations.
+        """
+        result = subprocess.run(
+            ["bash", str(CHECK)], capture_output=True, text=True, cwd=str(REPO_ROOT)
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        match = re.search(r"over the (\d+) successor\(s\) it names", result.stdout)
+        self.assertIsNotNone(match, msg=result.stdout)
+        self.assertGreater(int(match.group(1)), 0, msg=result.stdout)
 
 
 if __name__ == "__main__":

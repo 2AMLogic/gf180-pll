@@ -50,6 +50,47 @@
 #    the other halves' records. What must never happen is a reader being handed
 #    a superseded record with no thread at all to pull.
 #
+# 3. NO READER-FACING DOCUMENT MAY LAG THE AGGREGATION. If any graded
+#    document cites record P, some record S declares `Supersedes: P`, and
+#    sim/CHARACTERIZATION.md names S, then that document must name S too.
+#
+#    Rule 2's "at least one successor, somewhere" is what makes rule 3
+#    necessary. On 2026-11-11 `20261111-184929-73837b9` superseded the whole
+#    90-row output-range grid and CHARACTERIZATION.md was updated to cite it
+#    the same day; docs/chipalooza/challenge-5-proposal.md was not, and rule 2
+#    stayed green anyway, because the proposal still named
+#    `20260819-190341-70a4128` -- an August successor that replaces exactly ONE
+#    of those 90 rows and says so in its own Supersedes qualifier. So the
+#    outward-facing document pointed a reader at an August baseline with a
+#    thread leading only to a single-row correction, two days after a full-grid
+#    re-run of that baseline came back NO-GO against it. Rule 2 cannot see
+#    that: one successor was named, which is all it asks.
+#
+#    The aggregation is the discriminator because it needs no prose parsing and
+#    it is already maintained. sim/CHARACTERIZATION.md exists to cite current
+#    evidence -- that is why this check grades it -- and
+#    check-characterization-coverage.sh already fails CI when it falls behind
+#    the record tree. So the obligation is self-maintaining in the right
+#    direction: landing a record forces the aggregation, and the aggregation
+#    then forces every other reader-facing document that cites the same
+#    predecessor. CHARACTERIZATION.md itself is exempt, being the reference;
+#    rule 2 still holds it to naming a successor at all.
+#
+#    WHY NOT SIMPLY "NAME THE LATEST SUCCESSOR". Because that rule is wrong on
+#    this tree. `20260731-175947-0a12e6c` has two successors 22 minutes apart,
+#    and the later one (`20260804-164956-72883fb`) is the cross-version
+#    ngspice-42 companion of the earlier, not a correction of it -- every
+#    document names the ngspice-46 record this repository pins (#259, DR-028),
+#    deliberately. A recency rule would fail all of them. Discriminating
+#    "whole-record successor" from "one-row successor" or "off-pin companion"
+#    means parsing a free-text qualifier, which is how a check acquires false
+#    positives on a tree whose CI gates merges. Deferring to the aggregation
+#    costs nothing and is silent on both cases above, because the aggregation
+#    names the pinned record too.
+#
+#    Rule 3 is also silenced by dropping the stale citation, for rule 2's
+#    reason: the claim graded here is the pointer.
+#
 # Deleting the predecessor citation does silence rule 2, and that is a
 # legitimate fix, not a loophole: a document that does not point a reader at a
 # superseded record has no stale pointer to be graded. This is the one place
@@ -85,9 +126,11 @@
 # would not accept stopping halfway down a four-hop chain.
 #
 # Usage: sim/lib/check-record-supersession.sh
-# Exit codes: 0 every graded document's citations exist and carry a forward
-#             pointer, 1 a citation is dangling, a superseded citation has no
-#             named successor, a graded document is missing, or the record tree
+# Exit codes: 0 every graded document's citations exist, carry a forward
+#             pointer, and are no further behind than the aggregation, 1 a
+#             citation is dangling, a superseded citation has no named
+#             successor, a document lags sim/CHARACTERIZATION.md on a shared
+#             predecessor, a graded document is missing, or the record tree
 #             yields no supersession edges at all (a broken parser must not
 #             look like a clean tree).
 
@@ -109,18 +152,22 @@ GRADED=(
   "docs/chipalooza/challenge-5-proposal.md"
 )
 
+# Rule 3's reference document. It must also be a member of GRADED above: rule 2
+# still applies to it, and rule 3 exempts it from being compared with itself.
+AGGREGATION="sim/CHARACTERIZATION.md"
+
 if ! command -v python3 >/dev/null 2>&1; then
   echo "FAIL: python3 is not on PATH -- this check could not run, and a" \
     "check that did not run is not a check that passed" >&2
   exit 1
 fi
 
-python3 - "${REPO_ROOT}" "${GRADED[@]}" <<'PY'
+python3 - "${REPO_ROOT}" "${AGGREGATION}" "${GRADED[@]}" <<'PY'
 import os
 import re
 import sys
 
-repo_root, graded = sys.argv[1], sys.argv[2:]
+repo_root, aggregation, graded = sys.argv[1], sys.argv[2], sys.argv[3:]
 
 # A record id is the record's filename stem, e.g. 20260906-095050-3a8a6ef.
 RECORD_ID = r"\d{8}-\d{6}-[0-9a-f]{7}"
@@ -171,6 +218,9 @@ if not successors:
 failed = False
 checked = 0
 
+# Read every graded document up front: rule 3 compares one against another, so
+# no rule can run until all of them are in hand.
+texts = {}
 for doc in graded:
     doc_path = os.path.join(repo_root, doc)
     if not os.path.isfile(doc_path):
@@ -178,8 +228,9 @@ for doc in graded:
         failed = True
         continue
     with open(doc_path, encoding="utf-8") as fh:
-        text = fh.read()
+        texts[doc] = fh.read()
 
+for doc, text in texts.items():
     cited = sorted(set(re.findall(RECORD_ID, text)))
     checked += len(cited)
 
@@ -204,16 +255,55 @@ for doc in graded:
             % (doc, rid, ", ".join("`%s`" % s for s in succ), records[succ[0]])
         )
 
+# Rule 3. The aggregation's job is to cite current evidence, and a separate
+# check keeps it level with the record tree. So a graded document that cites a
+# predecessor the aggregation has already followed forward must follow it too:
+# rule 2 is satisfied by ANY one successor, which is exactly how a document can
+# name a one-row August successor while a full-grid November one goes unnamed.
+obligations = 0
+agg_text = texts.get(aggregation)
+if agg_text is None:
+    # Already reported as missing above; without it rule 3 has no reference,
+    # and a rule that cannot run must not read as a rule that passed.
+    failed = True
+    sys.stderr.write(
+        "FAIL: the aggregation %s is unreadable, so rule 3 could not run\n"
+        % aggregation
+    )
+else:
+    for doc, text in texts.items():
+        if doc == aggregation:
+            continue
+        for rid in sorted(set(re.findall(RECORD_ID, text))):
+            for s_id in sorted(successors.get(rid, [])):
+                if s_id not in agg_text:
+                    continue
+                obligations += 1
+                if s_id not in text:
+                    failed = True
+                    sys.stderr.write(
+                        "FAIL: %s cites `%s` and does not name its successor "
+                        "`%s`, which %s does name. The aggregation moved "
+                        "forward and this document did not, so a reader of "
+                        "this document is held at evidence the repository has "
+                        "already replaced -- name the successor, or drop the "
+                        "citation (see %s).\n"
+                        % (doc, rid, s_id, aggregation, records[s_id])
+                    )
+
 if failed:
     sys.exit(1)
 
 print(
-    "OK: %d record citations across %d documents; every cited record exists "
-    "and every superseded one names a successor (%d supersession edges on a "
-    "tree of %d records)"
+    "OK: %d record citations across %d documents; every cited record exists, "
+    "every superseded one names a successor, and none lags %s over the %d "
+    "successor(s) it names for a predecessor another document cites (%d "
+    "supersession edges on a tree of %d records)"
     % (
         checked,
         len(graded),
+        aggregation,
+        obligations,
         sum(len(v) for v in successors.values()),
         len(records),
     )
