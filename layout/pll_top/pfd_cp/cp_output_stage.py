@@ -763,34 +763,21 @@ def glue_bus_reach(
 # ---------------------------------------------------------------------------
 
 
-def _escape(
-    canvas: devgen.Canvas,
-    pad: tuple[float, float, float, float],
-    x_target: float,
-    width: float = devgen.METAL1_WIRE_WIDTH_UM,
-    landing_half: float = LANDING_HALF_UM,
-) -> tuple[float, float, float, float]:
-    """Run a short horizontal Metal1 wire from ``pad``'s own centre out to
-    ``x_target``, ending in a via-sized landing pad, and return that landing
-    pad's box (the box to hand the router in place of ``pad``).
+_escape = cp_array._escape
+"""Run a short horizontal Metal1 wire from a pad's own centre out to
+``x_target``, ending in a via-sized landing pad, and return that landing
+pad's box (the box to hand the router in place of ``pad``).
 
-    Same technique as ``cp_array._stub()`` -- a single horizontal segment at
-    the pad's own Y, so it can never cross a shape that pad does not already
-    abut -- but *deliberately placed* rather than a repair for a decluttering
-    nudge: this is how a terminal whose natural riser X is already taken (a
-    switch's bottom pad, which shares its top pad's X by construction) gets a
-    column of its own. The landing pad is drawn explicitly, wide enough to
-    enclose Via1 (``V1.3a``), because the wire itself is narrower than that
-    enclosure requires -- the identical reason ``cp_array._riser()`` draws its
-    own.
-    """
-    cx, cy = cp_array.pad_center(pad)
-    half = width / 2.0
-    x_lo, x_hi = sorted((cx, x_target))
-    canvas.rect("metal1", x_lo, cy - half, x_hi, cy + half)
-    box = (x_target - landing_half, cy - landing_half, x_target + landing_half, cy + landing_half)
-    canvas.rect("metal1", *box)
-    return box
+Re-exported from ``cp_array.py``'s own ``_escape()`` (issue #915) rather
+than duplicated: this module's own copy differed from it only in reaching
+``pad_center()`` through the ``cp_array`` namespace instead of this
+package's own shared ``_canvas.pad_center`` binding, and its
+``landing_half`` default :data:`LANDING_HALF_UM` is derived from the same
+``cp_array.VIA1_SIZE_UM``/``cp_array.VIA_ENCLOSURE_UM`` pair that
+definition's own default is. What it is for *here* is a terminal whose
+natural riser X is already taken -- a switch's bottom pad, which shares its
+top pad's X by construction -- getting a column of its own.
+"""
 
 
 def _riser_box(x: float, y: float, half: float = LANDING_HALF_UM) -> tuple[float, float, float, float]:

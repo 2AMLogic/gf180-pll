@@ -35,9 +35,10 @@ nodes to ``VDD_VCO`` -- invisible to DRC (two touching same-layer shapes
 merge into one polygon before any spacing rule runs) and invisible to
 ``block.connectivity_report()`` (whose probes only check same-net
 continuity, never cross-net separation). Both bridges are hopped over the
-gap on Metal2 instead (``_channel_hop()``, mirroring ``buffer.py``'s own
-helper of the same name) -- Metal2 has no spacing relationship with Metal1
-at all, so the gap is simply jumped rather than trimmed.
+gap on Metal2 instead (``_channel_hop()``, this module's own re-export of
+``primitives.channel_hop()``, which ``buffer.py`` crosses its own channel
+with too) -- Metal2 has no spacing relationship with Metal1 at all, so the
+gap is simply jumped rather than trimmed.
 """
 
 from __future__ import annotations
@@ -48,28 +49,18 @@ from . import devices as dev
 from . import primitives as prim
 
 
-def _channel_hop(canvas: prim.Canvas, pad_lo: tuple, pad_hi: tuple, y_jog: float) -> None:
-    """Bridge two Metal1 pads across the NMOS/PMOS routing gap on Metal2.
+_channel_hop = prim.channel_hop
+"""Bridge two Metal1 pads across the NMOS/PMOS routing gap on Metal2.
 
-    Mirrors ``buffer.py``'s own ``_channel_hop()`` (issue #372) verbatim --
-    see this module's own docstring section "NMOS-TO-PMOS GAP CROSSING" for
-    why a plain Metal1 riser here is unsafe. Each ``via1_stack()`` is
-    centred on its own pad; every pad this is called against here is at
-    least 0.46 um tall (``primitives.mosfet()``'s own terminal/gate pad
-    construction), which strictly contains the 0.44 um square via1 landing
-    pad, so this adds **no** new Metal1 geometry, only via1/Metal2.
-    """
-    x_lo, y_lo = (pad_lo[0] + pad_lo[2]) / 2.0, (pad_lo[1] + pad_lo[3]) / 2.0
-    x_hi, y_hi = (pad_hi[0] + pad_hi[2]) / 2.0, (pad_hi[1] + pad_hi[3]) / 2.0
-    prim.via1_stack(canvas, x_lo, y_lo)
-    prim.via1_stack(canvas, x_hi, y_hi)
-    if abs(x_hi - x_lo) < 1e-9:
-        prim.m2_route(canvas, [(x_lo, y_lo), (x_lo, y_hi)])
-    else:
-        prim.m2_route(
-            canvas,
-            [(x_lo, y_lo), (x_lo, y_jog), (x_hi, y_jog), (x_hi, y_hi)],
-        )
+Moved to ``primitives.py`` in issue #915: this was a verbatim copy of
+``buffer.py``'s own ``_channel_hop()`` (issue #372), and both now re-export
+the one definition. See this module's own docstring section
+"NMOS-TO-PMOS GAP CROSSING" for why a plain Metal1 riser here is unsafe.
+Every pad this is called against here is at least 0.46 um tall
+(``primitives.mosfet()``'s own terminal/gate pad construction), which
+strictly contains the 0.44 um square via1 landing pad, so this adds **no**
+new Metal1 geometry, only via1/Metal2.
+"""
 
 
 @dataclass

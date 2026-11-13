@@ -290,24 +290,24 @@ _riser = partial(
 pad_center = _canvas.pad_center
 
 
-def _stub(canvas: devgen.Canvas, a: tuple[float, float], b: tuple[float, float], width: float = devgen.METAL1_WIRE_WIDTH_UM) -> None:
-    """A short Metal1 jog from a riser point's own natural centre ``a`` to
-    its own (possibly X-nudged) assigned column ``b`` -- ported verbatim
-    from ``cp_array.py``'s own ``_stub()`` (issue #359/#391).
-    :func:`declutter_riser_x` only ever changes X, never Y, so this is
-    always a single horizontal segment at the point's own Y -- short
-    (bounded by a handful of :data:`RISER_MIN_PITCH_UM`), and safe against
-    every *other* net's own Metal3 riser column regardless of how close the
-    jog passes to one: Metal1 and Metal3 have no DRC relationship to each
-    other except through an explicit via stack (see the module docstring's
-    own "RISER COLUMNS MUST BE DECLUTTERED ACROSS NETS" section), so the
-    only real constraint is not landing too close to *another* Metal1 shape
-    (``M1.2a``) -- proved directly by this module's own DRC pass, not
-    assumed.
-    """
-    half = width / 2.0
-    x0, x1 = sorted((a[0], b[0]))
-    canvas.rect("metal1", x0, a[1] - half, x1, a[1] + half)
+_stub = cp_array._stub
+"""A short Metal1 jog from a riser point's own natural centre ``a`` to its
+own (possibly X-nudged) assigned column ``b``.
+
+Re-exported from ``cp_array.py``'s own ``_stub()`` (issue #359/#391,
+consolidated here in issue #915) rather than duplicated -- this module's own
+copy was statement-for-statement identical to it, the same way
+:data:`declutter_riser_x` just below is re-exported rather than copied.
+:func:`declutter_riser_x` only ever changes X, never Y, so this is always a
+single horizontal segment at the point's own Y -- short (bounded by a
+handful of :data:`RISER_MIN_PITCH_UM`), and safe against every *other* net's
+own Metal3 riser column regardless of how close the jog passes to one:
+Metal1 and Metal3 have no DRC relationship to each other except through an
+explicit via stack (see the module docstring's own "RISER COLUMNS MUST BE
+DECLUTTERED ACROSS NETS" section), so the only real constraint is not
+landing too close to *another* Metal1 shape (``M1.2a``) -- proved directly
+by this module's own DRC pass, not assumed.
+"""
 
 
 declutter_riser_x = cp_array.declutter_riser_x
@@ -592,61 +592,23 @@ def _place_row(canvas: devgen.Canvas, specs: Sequence[tuple[Device, float]], y_b
     return ports
 
 
-def _tap_strip(
-    canvas: devgen.Canvas,
-    kind: str,
-    x0: float,
-    x1: float,
-    y_center: float,
-    net: str,
-    height: float = TAP_SIZE_UM,
-    contact_pitch: float = 2.0,
-) -> tuple[tuple, tuple]:
-    """A substrate (``kind='p'``) or n-well tap (``kind='n'``) drawn as one
-    long strip spanning ``[x0, x1]`` at a fixed Y, with a periodic row of
-    contacts along its length -- not a single small square tap.
+_tap_strip = cp_array._tap_strip
+"""A substrate (``kind='p'``) or n-well tap (``kind='n'``) drawn as one long
+strip spanning ``[x0, x1]`` at a fixed Y, with a periodic row of contacts
+along its length -- not a single small square tap.
 
-    gf180mcuD's ``DF.13_LV``/``DF.14_LV`` cap the distance from *any point*
-    of a PMOS-in-nwell/NMOS-outside-nwell comp to its *nearest* tap at 20 um
-    -- a hard ceiling a single tap at one end of a wide row (this module's
-    isolated PMOS array alone spans over 100 um) cannot satisfy regardless
-    of how the devices are gapped. A strip spanning the *entire* group's own
-    X range, offset only a small, fixed amount in Y, keeps that distance
-    equal to the Y offset (a couple of um) everywhere along the strip,
-    independent of the group's total width -- reproduced directly: the
-    single-small-tap version of this module failed ``DF.13_LV``/
-    ``DF.14_LV`` (4 violations) on exactly the wide groups this fixes.
-    """
-    y0 = y_center - height / 2.0
-    y1 = y_center + height / 2.0
-    canvas.rect("comp", x0, y0, x1, y1)
-    implant_layer = "nplus" if kind == "n" else "pplus"
-    canvas.rect(
-        implant_layer,
-        x0 - devgen.IMPLANT_MARGIN_UM,
-        y0 - devgen.IMPLANT_MARGIN_UM,
-        x1 + devgen.IMPLANT_MARGIN_UM,
-        y1 + devgen.IMPLANT_MARGIN_UM,
-    )
-    cy0 = y_center - devgen.CONTACT_SIZE_UM / 2.0
-    cy1 = cy0 + devgen.CONTACT_SIZE_UM
-    cx = x0 + devgen.CONTACT_ROW_MARGIN_UM
-    placed = False
-    while cx + devgen.CONTACT_SIZE_UM <= x1 - devgen.CONTACT_ROW_MARGIN_UM:
-        canvas.rect("contact", cx, cy0, cx + devgen.CONTACT_SIZE_UM, cy1)
-        placed = True
-        cx += contact_pitch
-    if not placed:
-        cx = (x0 + x1) / 2.0 - devgen.CONTACT_SIZE_UM / 2.0
-        canvas.rect("contact", cx, cy0, cx + devgen.CONTACT_SIZE_UM, cy1)
-    pad = (
-        x0 - devgen.METAL1_PAD_MARGIN_UM,
-        y0 - devgen.METAL1_PAD_MARGIN_UM,
-        x1 + devgen.METAL1_PAD_MARGIN_UM,
-        y1 + devgen.METAL1_PAD_MARGIN_UM,
-    )
-    canvas.rect("metal1", *pad)
-    return (x0, y0, x1, y1), pad
+Re-exported from ``cp_array.py``'s own ``_tap_strip()`` (issue #915) rather
+than duplicated: this module's own copy was statement-for-statement
+identical to it, down to the ``height`` default (:data:`TAP_SIZE_UM` here is
+this module's own alias of the same ``devgen.TAP_SIZE_UM`` that definition
+defaults to), and ``cp_output_stage.py`` already called that definition
+directly rather than keeping a third copy. The ``DF.13_LV``/``DF.14_LV``
+argument this module needs it for -- its own isolated PMOS array alone spans
+over 100 um, far past those rules' 20 um max-distance-to-tap, and the
+single-small-tap version of this module reproduced 4 violations on exactly
+the wide groups a full-span strip fixes -- is stated in full at that
+definition.
+"""
 
 
 @dataclass

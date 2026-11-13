@@ -682,6 +682,45 @@ via1_stack = partial(
 )
 
 
+def channel_hop(canvas: Canvas, pad_lo: tuple, pad_hi: tuple, y_jog: float) -> None:
+    """Bridge two Metal1 pads across the NMOS/PMOS channel on Metal2.
+
+    The single definition for ``buffer.py`` and ``stage.py``, which each
+    carried a statement-for-statement identical private copy of it before
+    issue #915. Both need it for the same reason (issue #372): a Metal1
+    shape they must not touch lies directly across the channel their own
+    drain-to-drain and gate-to-gate bridges have to cross -- for
+    ``buffer.py`` the inner n-well tap ring's bottom band (``VDD_VCO``),
+    which spans the whole row *inside* that channel, so the plain Metal1
+    riser this replaced shorted every stage's own internal node to
+    ``VDD_VCO`` (see ``buffer.py``'s module docstring and
+    ``PROOF-368-rootcause.md``); for ``stage.py`` the NMOS-to-PMOS routing
+    gap (see its module docstring's own "NMOS-TO-PMOS GAP CROSSING"
+    section). Metal2 has no spacing relationship with Metal1 at all, so the
+    obstruction is simply jumped over rather than routed around.
+
+    Each :func:`via1_stack` is centred on its own pad, whose 0.46 x 0.46 um
+    minimum footprint (one contact plus :data:`METAL1_PAD_MARGIN_UM` on each
+    side, :func:`mosfet`'s own terminal/gate pad construction) strictly
+    contains the 0.44 um square via landing pad -- so this adds **no** new
+    Metal1 geometry at all, only via1/Metal2. The two pads are often not at
+    the same x (an inverter's pfet is wider than its nfet, and both are
+    left-aligned), hence the Metal2 jog at ``y_jog`` rather than one
+    straight column; when they do share an x, the jog is skipped.
+    """
+    x_lo, y_lo = (pad_lo[0] + pad_lo[2]) / 2.0, (pad_lo[1] + pad_lo[3]) / 2.0
+    x_hi, y_hi = (pad_hi[0] + pad_hi[2]) / 2.0, (pad_hi[1] + pad_hi[3]) / 2.0
+    via1_stack(canvas, x_lo, y_lo)
+    via1_stack(canvas, x_hi, y_hi)
+    if abs(x_hi - x_lo) < 1e-9:
+        m2_route(canvas, [(x_lo, y_lo), (x_lo, y_hi)])
+    else:
+        m2_route(
+            canvas,
+            [(x_lo, y_lo), (x_lo, y_jog), (x_hi, y_jog), (x_hi, y_hi)],
+        )
+
+
 def metal_l2n(canvas: Canvas) -> tuple[db.LayoutToNetlist, dict]:
     """Build a metal1/via1/metal2 ``LayoutToNetlist`` extraction over ``canvas``.
 
