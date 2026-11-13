@@ -1706,6 +1706,35 @@ class LayerCensusRuleTests(unittest.TestCase):
         self.assertIn("`klayout.db` cannot be imported", result.stderr)
         self.assertIn("A partial pass is not a pass", result.stderr)
 
+    def test_the_ungraded_path_does_not_report_the_dependency_unneeded(self):
+        # The FAIL above goes to stderr; this rule's per-rule SUMMARY goes to
+        # stdout, and it used to print the no-claim branch here -- "no
+        # document states a layer_indexes() census ...; klayout.db was not
+        # needed" -- in the one run where both clauses are false. On the real
+        # tree that read "no document" over 5 live claims in 4 documents,
+        # contradicting the FAIL printed moments earlier in the same run.
+        #
+        # It matters because that line is the only place the report states
+        # whether this rule's lazy dependency was needed, and a reader who
+        # scans the summaries is told nothing opened the file BY THE RULE
+        # THAT EXISTS TO OPEN IT -- issue #660's five-week condition, now
+        # asserted by the check's own output. stderr was already covered by
+        # the test above; stdout was not, and the no-claim test below asserts
+        # the very string that leaked, so neither could discriminate.
+        self.tree.add_proof("vco-layout", self._proof(self._census(self.VCO_LAYERS)))
+        stub = self.tree.root / "stub"
+        stub.mkdir()
+        (stub / "klayout.py").write_text('"""Not a package."""\n')
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(stub)
+        result = self.tree.run(env=env)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertNotIn("klayout.db was not needed", result.stdout)
+        self.assertNotIn("no document states a layer_indexes() census", result.stdout)
+        # And it accounts for the claim it could not grade, rather than
+        # falling silent about it.
+        self.assertIn("1 census claim(s) NOT GRADED", result.stdout)
+
     def test_a_tree_with_no_census_claim_needs_no_klayout(self):
         # The lazy-dependency half of the contract: every other test in this
         # file drives the script over trees that state no census, and none of

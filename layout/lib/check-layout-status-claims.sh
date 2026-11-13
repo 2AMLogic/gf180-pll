@@ -1030,6 +1030,20 @@ PY
 # one and cannot import it FAILS rather than skipping, exactly as a missing
 # python3 does above.
 #
+# That failure is reported in BOTH streams, and it has to be. The FAIL goes to
+# stderr; this rule's one-line summary goes to stdout, and until #237's
+# 2026-11-13 pass that summary printed the no-claim branch in exactly the run
+# where it is false -- "no document states a layer_indexes() census ...;
+# klayout.db was not needed", over 5 live claims in 4 documents on the real
+# tree, contradicting the FAIL printed moments earlier. The summary is the only
+# place the report says whether the lazy dependency was needed, so a reader who
+# scans the per-rule summaries (the common case: the wheel is a CI-only
+# install, so every local run took this path) was told nothing opened the file
+# BY THE RULE WHOSE WHOLE PURPOSE IS TO OPEN IT -- which is issue #660's
+# five-week condition restated as output. An ungraded claim is now counted and
+# named as NOT GRADED; "was not needed" is reachable only when the count is
+# genuinely zero.
+#
 # Narrow by construction, three ways:
 #
 #   * only brace-lists whose members are all `<layer>/<datatype>` pairs are
@@ -1150,7 +1164,7 @@ def render(members):
     )
 
 
-n_docs = n_graded = n_struck = 0
+n_docs = n_graded = n_struck = n_ungraded = 0
 
 for proof in sorted(glob.glob(os.path.join(evidence, "*", "PROOF-*.md"))):
     directory = os.path.basename(os.path.dirname(proof))
@@ -1218,6 +1232,11 @@ for proof in sorted(glob.glob(os.path.join(evidence, "*", "PROOF-*.md"))):
 
         actual = actual_census(path)
         if actual is None:
+            # A live claim demanded the dependency and it is unavailable.
+            # fail() has already fired on stderr; count the claim so the
+            # stdout summary cannot go on to report that this rule found
+            # nothing to grade and needed nothing to grade it with.
+            n_ungraded += 1
             continue
 
         claimed = frozenset(
@@ -1267,7 +1286,18 @@ if n_graded:
         "each one names (%d struck occurrence(s) skipped as history)"
         % (n_graded, n_docs, n_struck)
     )
-else:
+if n_ungraded:
+    # Never the "was not needed" line below: the dependency was needed, by
+    # this many live claims, and is missing. Saying otherwise on stdout is
+    # the #660 condition itself -- a reader told nothing opened the file,
+    # and told it by the rule that exists to open it.
+    print(
+        "  %d census claim(s) NOT GRADED: klayout.db is unavailable, so the "
+        "committed GDS each one names was never opened -- see the FAIL on "
+        "stderr (%d struck occurrence(s) skipped as history)"
+        % (n_ungraded, n_struck)
+    )
+elif not n_graded:
     print(
         "  no document states a layer_indexes() census (%d struck occurrence(s) "
         "skipped as history); klayout.db was not needed" % n_struck
