@@ -11,10 +11,11 @@ mode ``100644`` in the single commit that created it (``1f8a574e``, PR #562),
 so for anyone who believed its own header it exited **126** instead, while all
 fourteen of its siblings exited 0.
 
-Nothing could see it. ``.github/workflows/ci.yml`` invokes all fifteen as
-``bash <path>``, and each script's unit tests spawn ``["bash", str(CHECK)]``
-too -- both forms read the file and never ask the kernel to execute it, so the
-mode bit is not on any path CI exercises. The defect surfaced only when an
+Nothing could see it. ``.github/workflows/ci.yml`` invokes every member as
+``bash <path>`` -- docs/claim-checker-inventory.md is where the size of that
+family is recorded, not here -- and each script's unit tests spawn
+``["bash", str(CHECK)]`` too -- both forms read the file and never ask the
+kernel to execute it, so the mode bit is not on any path CI exercises. The defect surfaced only when an
 agent working issue #237 typed the documented form, lost time to the 126, and
 wrote a note into #237's thread warning the *next* pass not to misread it as a
 failing gate. A warning comment is not a fix: it costs every future reader the

@@ -9,10 +9,9 @@
 # CLAUDE.md's standing rule for this repository is "PVT corners on every
 # recorded result", and #237's first acceptance criterion is closed-loop
 # behavior "verified across the full PVT corner matrix, not just the single
-# nominal corner". Seven checks already grade docs/chipalooza/
-# challenge-5-proposal.md -- its counts, its layout claims, its citations and
-# their supersession, its spec-row and decision-record coverage, its I/O list,
-# and its forge references. Every one of them grades *what* the document says.
+# nominal corner". docs/claim-checker-inventory.md lists the checks that grade
+# docs/chipalooza/challenge-5-proposal.md (the count of them is kept there,
+# not restated here). Every one of them grades *what* the document says.
 # None grades *where the number was measured*.
 #
 # That gap had a consequence, found on 2026-09-25 and fixed in the same commit

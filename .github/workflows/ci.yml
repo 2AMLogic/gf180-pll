@@ -44,6 +44,18 @@ jobs:
   checks:
     name: checks (headless -- no PDK/xschem)
     runs-on: ubuntu-latest
+    # Toolchain contract shared by every claim-checker step below, stated once
+    # here instead of seventeen times: each checker needs only python3 (set up
+    # above) and reads committed text/CSV/JSON evidence -- no PDK, no ngspice,
+    # no xschem, no standalone KLayout application binary. The single
+    # exception is layout/lib/check-layout-status-claims.sh's layer-census
+    # rule, which imports klayout.db from the `klayout` pip wheel installed
+    # above, and only when a graded document states a census.
+    #
+    # Per-checker rationale lives in each script's own header and its row in
+    # docs/claim-checker-inventory.md, not in a per-step comment. Checker unit
+    # tests under sim/tests/ run via the sim/selftest.sh step -- which is why
+    # there is no separate sim/tests discover step in this job.
     steps:
       - uses: actions/checkout@v4
         with:
@@ -92,12 +104,7 @@ jobs:
           exit "$rc"
 
       - name: "sim/lib/check-artifact-manifests.sh (artifact manifests: schema, artifact: URIs, no committed bytes)"
-        # Raw run output for new campaigns lives in the fleet artifact store;
-        # git keeps only manifests/artifacts/*.manifest.json (issue #830).
-        # Headless: no broker, no klt -- it grades the committed manifests
-        # only. Fails on a malformed manifest, a non-`artifact:` URI, or a
-        # committed file whose sha256 equals a stored object's. Its unit tests
-        # (and the writer's fail-closed tests) run under sim/selftest.sh.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash sim/lib/check-artifact-manifests.sh
 
       - name: layout/tests (harness unit tests + klayout.db-gated tests)
@@ -136,92 +143,11 @@ jobs:
         run: python3 -m unittest discover -s design/tests -t design/tests
 
       - name: sim/lib/check-readme-status.sh (README evidence counts vs. sim/ tree)
-        # README.md's status section hand-states a record/campaign count
-        # (issue #117: it drifted silently to a stale "16 records / 9
-        # campaigns" while the tree grew to 52/18). Pure file-count vs.
-        # grep, no PDK dependency -- fails the build the next time it drifts
-        # instead of misleading a reader. Every occurrence of each count in
-        # README.md is graded as of #237, not only the first: the
-        # period-jitter coverage rule in the same script already worked that
-        # way, but these two used `head -1`, so a contradicting sibling count
-        # further down the file would have passed -- the same gap #495 closed
-        # on the layout side.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash sim/lib/check-readme-status.sh
 
       - name: layout/lib/check-layout-status-claims.sh (README + proposal vs. layout/ tree and spec/pll.md)
-        # The layout-side counterpart of the sim-side check above (issue
-        # #237). README.md and docs/chipalooza/challenge-5-proposal.md both
-        # stated that no PLL block had been drawn for about five weeks after
-        # all four sub-blocks landed with committed GDS and DRC-clean deck
-        # output -- and the proposal is a document written to be emailed
-        # verbatim to an outside reader. Mostly file-existence plus a grep of
-        # the recorded deck verdicts; no PDK and no standalone KLayout
-        # application binary. NOT "no layout input" any more -- see the ninth
-        # pass at the end of this comment.
-        # Also grades the documents' claims about spec/pll.md's ratification
-        # state against the spec's own Status line, which went stale in the
-        # same document after the first pass of this check shipped. (The
-        # free-prose "scope"/"deferral" grading of absence sentences was
-        # removed in #812; every remaining rule compares against the tree.) Third pass grades the numbers too: every block footprint
-        # stated in either document must equal that block's row in
-        # layout/evidence/area-audit/area-audit.md, and the proposal must
-        # state one for every block the audit records -- section 6's table
-        # had drifted two geometry changes behind section 5 of the same
-        # document. Fourth pass grades every occurrence of a "N of the 4
-        # ..." drawn/LVS-matched count, not just whether the correct one
-        # appears once -- the commit that fixed section 6's count left a
-        # contradicting stale count in section 3 of the same document, and
-        # the presence-only check reported OK on that tree (that count rule and
-        # the pin-restatement rule below were removed in #812 stage 2; the
-        # generated-table step after this one covers the counts and echoes the
-        # pin). Fifth pass grades
-        # spec/pll.md's own "## Area" section against the same audit --
-        # DR-016/DR-017's 0.30 mm2 budget row is amended against these exact
-        # numbers, which had never been graded anywhere, only the two status
-        # documents' copies of them. Scoped to that one section: the loop
-        # filter's C2 plate size elsewhere in the file is stated in the same
-        # "W x H um" shape and is not a block footprint. Eighth pass grades
-        # what the documents say this repository's KLayout pin *is*, against
-        # KNOWN_GOOD_KLAYOUT_VERSION in layout/harness/env.py -- and requires
-        # the proposal to state it. The seventh pass (issue #127) grades the
-        # deck logs' engine; nothing graded the prose about it, which is
-        # where the failure actually lived: "the committed DRC/LVS evidence
-        # was captured against KLayout 0.28.16" stood in layout/README.md,
-        # in harness/env.py's own runtime WARNING, and as a mis-attributed
-        # one-pin-for-two-engines claim in the proposal's section 8, while 16
-        # of the 51 committed deck logs were on 0.30.9/0.30.10. layout/README.md
-        # is graded by this rule alone -- it is the flow's operator manual,
-        # not a status narrative. Ninth pass (issue #663) grades every
-        # `layer_indexes()` census a layout/evidence/*/PROOF-*.md prints
-        # against the GDS that document names, as a set. Those censuses are
-        # what each block's erc-supply-spec.json cites to justify what it
-        # deliberately does NOT declare (no label_layer on a metal carrying no
-        # supply text, no well_layer for a native p-substrate), and nothing
-        # checked them: vco-layout/PROOF-erc.md stated a 14-member census of a
-        # 15-layer file for five weeks while quoting the correct list three
-        # sections later (issue #660), and the same wrong list was copied into
-        # that block's spec _comment (issue #661). Occurrences inside ~~...~~
-        # are skipped, because this repository corrects evidence by striking
-        # the wrong value in place. Needs python3 (set up above) for the prose
-        # and footprint rules, and -- for the census rule only, and only where
-        # a document actually states a census -- `klayout.db` from the
-        # `klayout` pip wheel installed at the top of this job. That is a
-        # deliberate contract change: this check used to read only committed
-        # text files, and a claim about a binary artifact cannot be graded
-        # from text alone. Still no PDK, no xschem, and no standalone KLayout
-        # application binary; nothing here runs a deck. Tenth pass (issue
-        # #671) grades the *check class* a DRC claim says it ran under against
-        # the `Offgrid enabled:` line the deck prints into every stdout log:
-        # seven vco-layout PROOF documents said their run was `--offgrid`
-        # ("signoff-grade -- the off-grid check class is included, not
-        # skipped") while each named, by path, a committed log recording
-        # `false`. A claim is attested by a committed log for its own cell
-        # recording `true` (pfd-cp-layout/drc-clean-offgrid/ is the
-        # precedent), or must disclose the `--no_offgrid` default its
-        # committed evidence actually records (cp-block-layout/PROOF.md and
-        # cp-leg-proof/PROOF.md are the precedent); anything else fails.
-        # Negated mentions ("no `--offgrid`") and struck ones are skipped.
-        # Reads only committed text files -- not even klayout.db.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash layout/lib/check-layout-status-claims.sh
 
       - name: layout/lib/gen_layout_status_table.py --check (generated status table vs. layout/evidence/)
@@ -281,473 +207,51 @@ jobs:
         run: bash signoff/run-signoff.sh --check
 
       - name: sim/lib/check-characterization-coverage.sh (aggregated report vs. sim/ tree)
-        # #147's sim/CHARACTERIZATION.md is hand-maintained and pulls a
-        # headline result from every sim/*/records/ campaign directory.
-        # Fails the build if a new campaign directory lands without a
-        # matching entry in the report, instead of the aggregation silently
-        # going stale. Second pass (#237) grades the report's own count of
-        # what it aggregates, not just whether each row is present: the
-        # bullet stating "N campaign directories, M evidence records" spent
-        # six weeks describing a tree 19 records and 3 campaigns smaller,
-        # and asserting that README's already-graded line agreed with it --
-        # a claim the row-coverage rule cannot see. Every occurrence of the
-        # count is graded, wherever it sits, and one must be present;
-        # a figure explicitly marked as the report's original writing is
-        # exempt. Needs python3 (set up above) for the count rule; still
-        # reads only committed files, no PDK dependency.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash sim/lib/check-characterization-coverage.sh
 
       - name: sim/lib/check-record-supersession.sh (cited evidence vs. the sim/ supersession graph)
-        # The three checks above all grade what a document *says*. None of
-        # them grades whether the evidence it *cites* is still the current
-        # evidence (issue #237). sim/README.md deliberately gives a
-        # superseded record no back-reference -- "Standing is found by
-        # reading forward from the superseded record" -- and nothing ran
-        # that forward scan, so docs/chipalooza/challenge-5-proposal.md, the
-        # document written to be sent verbatim to an outside reader,
-        # described the period-jitter campaign's one FAIL as a live open
-        # defect for 18 days after issue #273 closed and a successor record
-        # recorded both affected points as PASS. Three more of its citations
-        # pointed at pre-sim/harness records whose migrated successors it
-        # never named. Two rules: every cited record id must exist on the
-        # tree, and a cited record some later record supersedes must have a
-        # successor named somewhere in the same document (which, because
-        # naming one is itself a citation, means following a chain to a
-        # current record). spec/pll.md is deliberately not graded -- DR-007
-        # Amendment A4 already governs its one stale citation with a
-        # reasoned, ratified carve-out; see the script header. Needs python3
-        # (set up above); reads only committed Markdown, no PDK.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash sim/lib/check-record-supersession.sh
 
       - name: spec/lib/check-spec-row-coverage.sh (proposal section 5 vs. spec/pll.md's summary table)
-        # The four checks above all grade something a document *has* -- its
-        # counts, its rows against the sim/ tree, its citations, its layout
-        # claims. None can see a spec row a document does not mention at all,
-        # and #237's acceptance criteria require exactly that: every spec row
-        # "either closed or explicitly marked unmet -- not silently omitted
-        # from the table". One was omitted for the proposal's whole life:
-        # spec/pll.md's summary-table row 2, Reference input, whose levels and
-        # edge rate are unmeasured `budget` items with a Verification-owed line
-        # of their own, and which carries the ideal-reference exclusion every
-        # jitter and spur number in section 5 rests on. None of it reached the
-        # document written to be emailed verbatim to an outside reader. Three
-        # rules: every spec summary-table row is named by some section-5 row,
-        # at least one row covering it states an explicit verdict, and no
-        # section-5 row names a parameter the specification does not have (so
-        # a spec rename cannot leave a stale row looking like coverage).
-        #
-        # Two more rules grade whether a present row reports the row the spec
-        # *currently* has: every decision record (DR-NNN) a spec summary-table
-        # row cites must be named by a section-5 row covering it, and every
-        # DR-NNN the proposal names must be exactly one record on disk. The
-        # first found three rows reporting readings the spec had moved past:
-        # Lock time as a bare MET without DR-012 (its Lock criterion is not
-        # reached at 2 of 45 corners), Area still describing the re-amendment
-        # trigger DR-017 replaced, and Reference spur without DR-018's
-        # re-priced 1.6 dB margin. Needs python3 (set up above); reads only
-        # committed Markdown, no PDK.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash spec/lib/check-spec-row-coverage.sh
 
       - name: spec/lib/check-spur-derivation-arithmetic.sh (the reference-spur derivation vs. its own ingredients)
-        # check-quoted-value-provenance.sh below grades a *measured* figure by
-        # reducing a committed per-corner CSV. Reference spur is the one row of
-        # the proposal whose verdict turns on a *derived* number instead: the
-        # closed-loop campaign measures 5 of 45 PVT points, all at 150 MHz with
-        # device mismatch off, so what the document tells an outside reader
-        # about the binding 200 MHz point -- "1.6 dB inside the line" rather
-        # than the ~6 dB the older -61 dBc figure implied -- is a hand
-        # derivation. That derivation's own section-5.1 entry said it could not
-        # be graded because it is "not a reduction of one CSV". It can: every
-        # ingredient is written down beside it.
-        #
-        # Six rules. The derivation must still state the two relations the
-        # check implements (read out of the spec, not asserted by the check, so
-        # a re-ratification fails here in the same commit); the worst-case sum
-        # must be the linear add it calls itself; the step table's chain must
-        # follow row by row from its own displayed figures, with the unrounded
-        # end-to-end chain agreeing within 0.1 dB so rounding cannot stand in
-        # for arithmetic; every charge-accounting row must reproduce its spur
-        # from its own total dQ; the measured table's scaled column must add
-        # the 20*log10(hi/lo) constant its own header names; and every dBc
-        # figure in the proposal must be one the specification contains. Needs
-        # python3 (set up above); reads only committed Markdown, no PDK.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash spec/lib/check-spur-derivation-arithmetic.sh
 
       - name: spec/lib/check-mismatch-charge-derivation.sh (the reference-spur charge totals vs. their own raw samples)
-        # check-spur-derivation-arithmetic.sh above grades the derivation's
-        # arithmetic *from* its charge totals (7.93 / 11.19 / 11.66 fC) onward
-        # to a dBc figure, and states plainly what it does not grade: where
-        # those totals come from, because that needs "a reduction language for
-        # a signed |mean| + 3sigma statistic, which it does not have". It does
-        # now. Term 1 (DC UP/DN mismatch) and term 3 (residual net charge) are
-        # reduced straight from sim/mc-cp-mismatch's committed per-corner
-        # samples -- the same worst-of-three-Vctrl-point / worst-corner
-        # convention sim/mc-cp-mismatch/testbench/run.sh implements -- and so
-        # (since #573) are the other three ingredients: Icp at the trim code
-        # DR-018 prices, from sim/cp-compliance's cp_dc.csv; the reset overlap
-        # T_ov, from sim/pfd-deadzone's raw_measures.csv; and the systematic
-        # per-event charge asymmetry, from sim/cp-compliance's cp_switch.csv.
-        # Each uses the campaign's OWN stated reduction, read out of the
-        # documents and CSV headers that state it, and DR-018's Input table is
-        # graded against the result rather than trusted as the source of it.
-        # The three totals the sibling check takes as given are then built
-        # from the reduced figures. Needs python3 (set up above); reads only
-        # committed Markdown and CSVs, no PDK, no ngspice, no simulation.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash spec/lib/check-mismatch-charge-derivation.sh
 
       - name: design/lib/check-io-list-coverage.sh (proposal I/O list vs. the exported port list)
-        # The five checks above grade documents against documents, against the
-        # sim/ tree, and against the layout/ tree. None grades #237's other
-        # AC4 deliverable, the I/O list -- the one whose source of truth is not
-        # a document at all but design/netlist/pll_top.spice, the committed
-        # export of design/pll_top.sch.
-        #
-        # The simulation side already refuses to drift from that file:
-        # sim/lib/pll_top_dut.sh aborts any closed-loop run whose netlist port
-        # list does not match its CLOOP_PORTS, name for name and in order. The
-        # document written to be emailed verbatim to an outside reader had no
-        # equivalent guard, and it is the one artifact whose reader cannot
-        # re-run anything to find out. It drifted once already: PR #418 added
-        # LDT0-LDT3 as real top-level ports, and three days later issue #441
-        # found section 2.2's pad table still had no row for them -- "the
-        # proposal described a part that could not be configured into its own
-        # ratified spec" (DR-015) -- with a stale 18-of-24 slot total beside it.
-        #
-        # Five rules on the pin mapping: every exported port is mapped by a pad
-        # row; every signal a pad row names is a real port; the `.subckt
-        # pll_top` line the document quotes is the netlist's ports in the
-        # netlist's order; a pad row's "K of M" count equals the signals beside
-        # it; and every port is named somewhere in section 4's bench test plan.
-        # The last of those found the drift DR-015 handed to "future harness
-        # integration work" and nobody picked up: the plan named neither
-        # LDT0-LDT3 nor the four bias references IBN/ICN/IBP/ICP, so it
-        # described a bench that could not power the charge pump and a
-        # lock-detector step that compared an untrimmed part against a spec
-        # which says such a part is outside it.
-        #
-        # Four more on the budget accounting, because #441's stale row count
-        # came with a stale slot total and a stale configuration-bit sentence
-        # two sections away: every pad row's Challenge slot is a category
-        # section 2.2's own transcribed budget names (and any cap it quotes is
-        # that category's); each category's total equals the sum of the rows
-        # carrying it, with "(proposed)" rows counting toward the upper figure
-        # of a range only; every transcribed category is totalled somewhere;
-        # and section 2.3's "N configuration bits (...)" count is its own bus
-        # list expanded, with an omitted pin explained in the same bullet. The
-        # taxonomy is read out of the document, never encoded in the check, so
-        # amending the transcription moves what CI enforces in the same commit.
-        # Those rules found the rail rows sitting in a slot -- "3.3 V digital
-        # rail" -- that the budget does not have, with the five supply/ground
-        # pads missing from a totals paragraph that claims to cover every
-        # category.
-        # Needs python3 (set up above); reads one committed netlist and one
-        # committed Markdown file, no PDK, no xschem.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash design/lib/check-io-list-coverage.sh
 
       - name: design/lib/check-port-connectivity.sh (declared ports vs. what a netlist actually wires)
-        # The check above grades a netlist's port list against a DOCUMENT.
-        # Issue #515 found the gap on the other side: `design/pll_top.sch`
-        # placed the `LDT3` trim label three grid rows off the `XLD`
-        # lock-detector instance's real `LDT3` pin, so the exported netlist
-        # wired that instance's eighth argument to `net1` -- an xschem
-        # auto-named net with exactly one connection -- while `.subckt
-        # pll_top` still declared a real `LDT3` port two lines above it.
-        # `design/netlist.sh --check` could not catch it: the export was
-        # internally consistent with the broken schematic, so there was
-        # nothing to diff against. Only 8 of the 16 lock-detector window trim
-        # codes were reachable on the assembled part as a result.
-        #
-        # Two rules, checked against every committed design/netlist/*.spice
-        # file: every port a top-level `.subckt` declares must be connected
-        # somewhere inside that same subcircuit's own body; and no
-        # `net<N>`-shaped auto-named net anywhere in the file may carry
-        # exactly one connection -- the mechanically detectable signature a
-        # dropped label leaves behind. Needs python3 (set up above); reads
-        # only committed `.spice` text, no PDK, no xschem.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash design/lib/check-port-connectivity.sh
 
       - name: sim/lib/check-record-trim-connectivity.sh (committed evidence vs. the netlist snapshot it was taken on)
-        # The check above stops #515's defect recurring in `design/`. It says
-        # nothing about the evidence already taken on the broken export, and
-        # DR-026's audit of that -- `grep -rl 'ldt3_code=1' sim/*/corners/*/`
-        # -- read as exhaustive and was not. Three `sim/reference-phase-
-        # transfer` records (#509) had been run that morning on the same
-        # pre-fix netlist while programming trim code 8, so their detector ran
-        # at code 0, and they reached `main` after DR-026 merged. That grep
-        # could never have returned them: their decks take the code from
-        # `testbench/tb.json` through the harness, so the string it looks for
-        # appears in none of their logs (#557). A grep for one campaign's
-        # parameter spelling is not an audit of a tree.
-        #
-        # This grades artifacts instead, and needs both halves of the defect:
-        # a committed `sim/*/netlist-snapshots/*.spice` that leaves a declared
-        # port wired to a single-connection auto-named `net<N>`, AND that same
-        # record's own committed per-corner log showing the matching pad
-        # driven. Either alone is not a finding -- an unused dead pin changed
-        # nothing (`sim/lock-window-proxy`), and a driven pad on a netlist
-        # that wires it is every post-DR-026 record. A record that has both
-        # must be named in the check's DISCLOSED table against a decision
-        # record that exists, is more than a stub, and names the campaign
-        # back. Its unit tests run under `bash sim/selftest.sh` above
-        # (sim/tests discovery). Needs python3 (set up above); reads committed
-        # `.spice` snapshots, committed logs and committed Markdown -- no PDK,
-        # no ngspice.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash sim/lib/check-record-trim-connectivity.sh
 
       - name: sim/lib/check-pvt-coverage-claims.sh (quoted corners vs. the harness's corner registry)
-        # The six checks above all grade WHAT a document says -- its counts, its
-        # rows, its citations, its spec and decision-record coverage, its I/O
-        # list. None grades WHERE a number was measured, and CLAUDE.md's
-        # standing rule for this repository is "PVT corners on every recorded
-        # result" (#237 AC1).
-        #
-        # Section 5 of docs/chipalooza/challenge-5-proposal.md reports most
-        # rows against the 45-point mandated grid and says so. Four rows in the
-        # same column -- Output band, open-loop period jitter, Power, Kvco --
-        # reported worst cases at `all-fast` / `all-slow`, combined bundles
-        # that skew every device family together (passives included) and are
-        # NOT in that grid: they come from vco-tuning-range's 63-point superset
-        # grid, whose own record says so in as many words ("a **superset** of
-        # the 45-point default grid"). The document written to be emailed
-        # verbatim to an outside reader said none of it, so four rows were read
-        # as "of 45" when they were worst cases over a wider corner universe.
-        # sim/CHARACTERIZATION.md carried the same undisclosed row, plus
-        # "21/135 corners" for what is 135 rows over a 45-corner grid.
-        #
-        # Four rules: every process bundle a graded document quotes in a
-        # corner triple is one sim/harness/corners.py defines; a table row
-        # that is off the mandated grid names the grid it came from (an
-        # `<N>-point` or `<N>-bundle` token matching the cited record's own
-        # committed coverage, and not the mandated numbers, since repeating
-        # them discloses nothing); every PVT-qualified corner count in a
-        # row is the mandated grid size or a count the cited record's
-        # committed per-corner evidence produces; and a row that claims it
-        # covers the WHOLE mandated grid cites records whose committed
-        # evidence, in union, contains every mandated point.
-        #
-        # "Off the mandated grid" has two triggers, because the first alone
-        # was a disclosure rule keyed on what a row happens to SAY. A row is
-        # off the grid if it quotes a corner outside it, OR if a record it
-        # cites was MEASURED outside it. The proposal's Lock detector row
-        # rests on three campaigns that each run 13 bundles / 117 PVT points
-        # and quoted only their `fs` and `ss` corners, so it disclosed
-        # nothing; sim/CHARACTERIZATION.md's harness-selftest row called its
-        # record's grid "45-point" when that record's own corner field reads
-        # "63 point full-factorial grid" -- an error the third rule
-        # structurally cannot catch, because it allows the mandated size
-        # unconditionally. Five more rows across the two documents were in the
-        # same state on 2026-09-25.
-        #
-        # The fourth rule is the converse of that trigger: it grades evidence
-        # NARROWER than the grid a row claims, where trigger (b) grades
-        # evidence wider than the grid a row quotes. It is point-by-point, not
-        # count-by-count, and it takes the union across every record the row
-        # cites -- sim/period-jitter reached the mandated 45 across five
-        # records covering 1, 4, 8, 18 and 16 points, so a per-record test
-        # would reject the honest row and a count test would accept 45 points
-        # that are not the 45. Rule 3 cannot do this job: "5 of 45 PVT points
-        # measured, not the full grid" is an honest sentence, so 45 has to
-        # stay unconditionally allowed as a denominator, and the cost is that
-        # the strongest claim in the table -- I measured all of it -- was the
-        # one claim nothing verified. A sweep of all three graded documents on
-        # 2026-09-25 found 13 rows making a full-coverage claim; 12 were backed
-        # point for point, and sim/CHARACTERIZATION.md's Verification-owed
-        # cross-reference cited campaign directories rather than records, so
-        # neither a check nor a reader could reach the evidence for it.
-        #
-        # That union is right for RECORDS and wrong for a method directory's
-        # RESULT FAMILY, which is what a seventh rule now grades one family at
-        # a time (#606). A campaign legitimately reaches the mandated 45 across
-        # several records; a result family is one stage of one method, written
-        # by one grid run of it, and is never a slice another family completes.
-        # DR-033's in-band period-jitter bound landed beside DR-032's, cited in
-        # the same Source cell of two graded rows that claim all 45 points for
-        # EACH bound, and the union was satisfied by DR-032's 45 alone -- so
-        # DR-033's family could have been trimmed to three points with every
-        # gate green. Scoped to the claim, like rule 4: a row that says it
-        # covered three corners is untouched.
-        #
-        # The mandated size is computed from REQUIRED_MOS_CORNERS x
-        # DEFAULT_TEMPERATURES_C x supply_points(), imported rather than
-        # written down, so widening an axis moves what CI enforces in the same
-        # commit that widens it. Its unit tests run under `bash sim/selftest.sh`
-        # above (sim/tests discovery), which is why there is no separate
-        # discover step here. Needs python3 (set up above); reads committed
-        # Markdown plus the committed CSV/log artifacts under sim/*/corners/.
-        # No PDK, no ngspice, no KLayout.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash sim/lib/check-pvt-coverage-claims.sh
 
       - name: sim/lib/check-ref-drive-claims.sh (quoted reproduction commands vs. the decks they promise)
-        # The seven checks above grade what a document says, where it was
-        # measured, what it cites, and what the forge holds. None grades the
-        # one thing a document can offer that looks strongest of all: a shell
-        # command the reader is invited to run.
-        #
-        # docs/chipalooza/challenge-5-proposal.md's Reference input row and
-        # spec/decision-records/DR-019's Context both rested on
-        # `grep -n '^vref ' sim/*/testbench/*.sp` returning one reference
-        # waveform shape in every deck -- the basis for the claim that the
-        # ratified Reference input contract's levels, edge rate and duty are
-        # conditions nothing has ever varied, and with it for every jitter and
-        # spur number in the document being the block's own contribution
-        # against an ideal reference. The command did return one shape. This
-        # repository held thirteen REF-driving decks, and the one that varies
-        # the waveform is `.spice` while the glob says `*.sp` -- so the command
-        # quoted as proof could not return the counterexample, which had landed
-        # in the same commit (#518, issue #499) that wrote both sentences.
-        #
-        # Five rules: the deck scan must find decks at all; a quoted command's
-        # glob may not be outreached by its own pattern (only the extension is
-        # relaxed, never the directory); a deviating deck must be named by any
-        # document claiming uniformity; an unscoped uniformity claim must hold
-        # over every deck its command can reach, union the widening, so
-        # re-narrowing the glob is not a way out; and -- the rule that needs no
-        # wording at all -- a deck that varies the reference waveform must
-        # carry no record. Its unit tests run under `bash sim/selftest.sh`
-        # above (sim/tests discovery). Needs python3 (set up above); reads
-        # committed SPICE decks and committed Markdown, no PDK, no ngspice.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash sim/lib/check-ref-drive-claims.sh
 
       - name: sim/lib/check-bias-drive-claims.sh (bias-pin drive and quoted Limitations vs. the decks and records)
-        # The PLL has no bias generator: every closed-loop deck drives
-        # IBN/ICN/IBP/ICP from ideal current sources, and the proposal turns
-        # that into a bench instruction (section 4 step 1: what current, into
-        # which pin, set where) and a pad-table justification (section 2.2:
-        # a phrase quoted "verbatim" from the records' Limitations). Both
-        # cited evidence and neither was graded. Step 1 sent the reader to a
-        # `.param iunit=8u` line tb_lock_time.sp does not contain -- its value
-        # comes from run.sh -- and section 2.2 attributed its quotation to
-        # every closed-loop record when 7 of 35 say it.
-        #
-        # Five rules: every campaign a drive claim cites runs at the stated
-        # current; every path it cites is where the quoted setting actually
-        # lives for the decks it stands for; quoted source lines and the
-        # stated sourced/sunk polarity match the decks; "every closed-loop
-        # record" holds over every closed-loop deck, cited or not; and a
-        # verbatim quotation is in every record it is attributed to. Its unit
-        # tests run under `bash sim/selftest.sh` above (sim/tests discovery).
-        # Needs python3 (set up above); reads committed decks, testbench
-        # scripts, tb.json manifests and records -- no PDK, no ngspice.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash sim/lib/check-bias-drive-claims.sh
 
       - name: sim/lib/check-quoted-value-provenance.sh (quoted values vs. the committed per-corner evidence)
-        # Every check above grades something *about* a number -- its count, its
-        # citation and whether that citation is current, its grid, its verdict,
-        # its reproduction command, its forge reference. None graded THE NUMBER.
-        # So a section 5 row could cite the right record, name the right grid,
-        # carry the right verdict, and quote a figure that is not in that
-        # record at all -- or was right once and drifted when a superseding run
-        # moved it -- and nothing in this job would have seen it. #237's own
-        # ledger named the gap on 2026-09-25 and verified a sample by hand; a
-        # hand check is not a check.
-        #
-        # Section 5.1 of the proposal is the convention this grades: for each
-        # value, the record, the committed evidence file inside it, the
-        # reduction that produces it, and the scale. Seven rules: the record and
-        # file are committed; the record is one the section 5 row itself cites
-        # (or inherits via "Same record"); the figure appears verbatim in that
-        # row, so the two tables cannot drift apart in either direction; the
-        # re-derived value equals the figure ROUNDED TO THE PRECISION WRITTEN;
-        # every section 5 row is either graded or carries a stated reason why
-        # it has no re-derivable value -- the same "nothing is silently
-        # omitted" rule section 5 already applies to verdicts; and every
-        # headline figure section 5.1 declares ungraded INSIDE a graded row
-        # still appears verbatim in that row, is not also graded, and gives a
-        # reason. That last rule replaced prose which had already gone wrong:
-        # it named four ungraded figures and silently missed a fifth (the
-        # output band row's `27 %` worst adjacent-band overlap).
-        #
-        # Two figures in that row are properties of an ordered CURVE rather
-        # than reductions of cells, and the grammar carries a group-sequence
-        # form for them -- `count(non-monotonic(fosc_hz by vctrl_v) by ...)`
-        # and `min(adjacent-overlap(fosc_hz by band) by ...)`. The first
-        # grades a ZERO, so the check treats an empty group set, a one-point
-        # curve and a repeated control voltage as failures rather than passes,
-        # and prints the number of groups it examined. The second pairs `band`
-        # with `band+1`, so a GAP in a corner's band codes (`0, 1, 3`) is a
-        # failure too rather than a pair the walk steps over (#566): a worst
-        # overlap says nothing about how many intervals it was the worst of,
-        # so the count of adjacent pairs examined is printed beside the group
-        # count for the same anti-vacuity reason.
-        #
-        # One figure is a STATISTIC rather than an extremum -- the reference
-        # spur row's term-1 mismatch reading, 17.48 % -- and the grammar
-        # carries a `sig3` aggregate (`|mean| + 3*sigma`, sample sigma) and a
-        # `worst-magnitude` group verb for it, composed three deep:
-        # `max(sig3(worst-magnitude(mism_pct by vctrl_v) by seed) by corner)`.
-        # Every level matters and collapsing one makes the number SMALLER
-        # (13.2172 % folded, 10.94 % pooled-and-folded, against 17.4798 %
-        # signed), which is exactly the drift DR-018 Amendment A1 corrected --
-        # so the tests for it assert that each collapsed reading FAILS.
-        #
-        # The contracted-space figures (loop bandwidth, phase margin, settling)
-        # are selected by an `on-icp-trim-rule` predicate READ OUT OF
-        # spec/pll.md's normative Icp trim-code rule table, never written into
-        # the check, so a change to the ratified rule moves what CI enforces in
-        # the same commit.
-        #
-        # Evidence is not only a CSV, as of 2026-09-26. Three section 5 rows
-        # were ungraded for the reason "no reduced CSV was committed, so the
-        # count cannot be re-derived" -- the two closed-loop rows in the
-        # exclusion table and the multiplication-ratio figures in the
-        # ungraded-figure table -- and all three records had committed their
-        # full per-point table all along, in the record's own Markdown
-        # (sim/output-range 90 rows, sim/lock-time 270, sim/divider-ratio-chain
-        # 235). "No CSV" had been read as "no evidence" three times. So an
-        # entry may name `<record-id>.md § <first column>` and reduce that
-        # table, under one rule a CSV does not need: the table must have exactly
-        # one row per committed per-corner log, and where its first column is
-        # the per-corner point id the row SETS are compared too -- a truncated
-        # or hand-trimmed table must not read as a smaller, passing count. The
-        # logs are read as NAMES only; this check still never parses a logfile's
-        # contents.
-        #
-        # And evidence is not the only ingredient, as of 2026-09-26. Two
-        # figures are a measurement divided by a RATIFIED LINE -- `1.41x`, the
-        # worst measured VCTRL travel over the 0.6 V Budget 2 allows, and
-        # `47 %`, the same travel over the 1.8 V width of DR-003 Decision 5's
-        # measured control window. Both sat in the ungraded-figure table for
-        # the reason "a ratio to a spec line is arithmetic on the line, not a
-        # column of the committed evidence": true about the column, wrong
-        # about the conclusion, in exactly the way section 5.2's spur
-        # derivation had already shown -- a hand derivation is gradeable when
-        # every ingredient is written down. A third table in section 5.1
-        # grades them, with the constants READ out of spec/pll.md and DR-003
-        # (never written into the check), each required to be stated at least
-        # twice and to agree between those statements, and with the table's
-        # own statement of the constant graded against what was read.
-        #
-        # One guard arrived with it that the first table needed too: A RANGE
-        # IS NOT A FIGURE. The figure parser reads the number at the front of
-        # the string, so a quoted `0.1-0.5 dB` would have been graded as `0.1`
-        # and the other end never looked at -- grading half of a two-sided
-        # bound and calling it the bound, which is the named defect the
-        # ungraded list exists to make visible. Range-shaped figures are now
-        # refused in both grading tables.
-        #
-        # And as of 2026-09-28 it grades ITS OWN OK LINE. Section 5.1 explains
-        # the machinery above by quoting this check's counts back to the
-        # reader -- how many groups were examined, how many adjacent band
-        # pairs, how many signed values a magnitude bound covered and how many
-        # of those sat on the far side of zero -- and none of that prose was
-        # graded, because section 5.1 grades section 5's values rather than its
-        # own narration. It had already drifted: #597 widened
-        # sim/mc-cp-mismatch's corner axis from three corners to 21, the group
-        # count moved from 867 to 2667 and the Monte Carlo addend beside it
-        # from 300 to 2100, and this job stayed green for a day over the one
-        # paragraph whose whole subject is numbers that cannot drift (#626).
-        # Each narration is now located by an anchor and compared against the
-        # count about to be printed; a MISSING anchor fails, so deleting the
-        # sentence is not a way to stop it being stale; and the breakdown
-        # inside the parenthetical is graded as arithmetic -- operands joined
-        # by `+` must sum to the total and operands joined by the
-        # multiplication sign must multiply to it, because the number that
-        # actually drifted was an addend and not the total.
-        #
-        # Its unit tests run under `bash sim/selftest.sh`
-        # above (sim/tests discovery). Needs python3 (set up above); reduces
-        # committed CSVs and in-record tables only -- no PDK, no ngspice, no
-        # network.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash sim/lib/check-quoted-value-provenance.sh
 
       - name: docs/tests (unit tests for the issue-reference-state check)
@@ -759,52 +263,13 @@ jobs:
         run: python3 -m unittest discover -s docs/tests -t docs/tests
 
       - name: docs/lib/check-issue-reference-state.sh (issue references vs. the forge)
-        # The seven checks above grade documents against the tree. This one
-        # grades the other half of what docs/chipalooza/challenge-5-proposal.md
-        # and README.md assert -- their claims about the *forge*: "Tracked at
-        # issue #13", "issue #499 (open)", "routed to their owning issues (#9,
-        # #10, #11)". Nothing in the tree changes when an issue closes, so no
-        # tree-reading check could see those rot, and they did: #13 and #17
-        # both closed on 2026-09-08 and were still named as live owners
-        # seventeen days later; #9/#10/#11 were all closed while the proposal
-        # told its reader they owned three FAILing supply-sensitivity
-        # criteria; and `Epic #542` never resolved in this repository at all,
-        # i.e. it was a 404 for the outside reader this document is written to
-        # be emailed to.
-        #
-        # Four rules: every `#N` resolves here; an annotated state (`(open)` /
-        # `is closed`) matches the forge; a present-tense owner ("tracked at",
-        # "routed to", "filed as", "owed at", "owned at") is OPEN, past-tense
-        # narration exempt; and a section-5 Source-column issue carries an
-        # explicit state annotation. sim/README.md and sim/CHARACTERIZATION.md
-        # are graded too: both named the closed #505 as the live owner of the
-        # random period-jitter component ("owed at", "owned at") after DR-023
-        # re-pointed it at #520, and CHARACTERIZATION.md told its reader that
-        # klayout-tools #309 "remains open" six weeks after it shipped.
-        #
-        # THIS IS THE ONLY CHECK HERE THAT IS NOT DETERMINISTIC ON A TREE, by
-        # necessity -- the fact it grades lives on the forge. Two consequences,
-        # both intended: it SKIPS (exit 0, saying "a skip is not a pass") when
-        # `gh` cannot answer, and it can fail a PR that changed nothing because
-        # someone closed a cited issue. The document went stale at that moment,
-        # not at the moment someone next edited it.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash docs/lib/check-issue-reference-state.sh
 
       - name: layout/lib/check-evidence-host-paths.sh (changed evidence files vs. host-absolute paths)
-        # Issue #701: layout DRC/LVS bundles kept embedding the generating
-        # host's run directory, home directory and agent-worktree path
-        # (stdout banners, DeprecationWarning source lines, the report
-        # database's `<generator>` element), and nothing stopped it. The
-        # harness now normalises those strings at capture time; this step is
-        # the ratchet. It fails when a file ADDED OR MODIFIED relative to the
-        # merge base under layout/evidence/ or a sim/<campaign>/{records,
-        # corners,netlist-snapshots}/ directory contains `/home/`, `/Users/`
-        # or `.loom/worktrees`. Existing files are grandfathered by the diff,
-        # so no append-only evidence is touched. The pinned-binary citation
-        # `<home>/.local/bin/ngspice` (sim/lib/simenv.sh) is allowlisted.
-        # Needs full history (fetch-depth: 0 above); no PDK, no klayout.
+        # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash layout/lib/check-evidence-host-paths.sh --base "origin/${{ github.base_ref || 'main' }}"
 
   design-changed:

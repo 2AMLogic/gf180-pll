@@ -13,6 +13,9 @@
 # the sibling copy of the same two counts in sim/CHARACTERIZATION.md is graded
 # by sim/lib/check-characterization-coverage.sh's aggregate-count rule, which
 # is where that document's other tree-derived claim already lives (#237).
+# (Occurrence-grading for these two counts arrived with #237: before it they
+# used `head -1`, so a contradicting sibling count further down the file would
+# have passed -- the same gap #495 closed on the layout side.)
 #
 # It also guards period-jitter's PVT-corner coverage claim (issue #237).
 # That campaign's coverage grew from 5 corners to the full mandated 45 over
