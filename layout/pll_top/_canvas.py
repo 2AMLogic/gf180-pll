@@ -20,9 +20,9 @@ test):
 * ``LAYER`` -- the GDS layer table; differs per submodule (each draws a
   different subset of the PDK's layers).
 * ``GRID_UM`` -- an optional manufacturing-grid snap step for ``_u()``.
-  Only ``vco/primitives.py`` sets this (to ``devices.LAYOUT_GRID_UM``);
-  everywhere else it stays ``None`` (no snapping, the original plain
-  micron -> dbu rounding).
+  ``vco/primitives.py`` and ``loop_filter/primitives.py`` set this (each to
+  its own ``devices.LAYOUT_GRID_UM``); everywhere else it stays ``None``
+  (no snapping, the original plain micron -> dbu rounding).
 * ``PIN_LAYER`` -- the default layer ``pin()`` labels a net on. Every
   submodule but ``pfd_cp/devgen.py`` uses the drawing layer ``"metal1"``;
   ``pfd_cp/devgen.py`` uses ``"metal1_label"`` (34/10), the *purpose* layer
@@ -296,6 +296,38 @@ class Canvas:
         if self._pin_scope is not None:
             self._pin_scope.setdefault(net, []).append(box)
         self.label(layer if layer is not None else self.PIN_LAYER, net, (x0 + x1) / 2.0, (y0 + y1) / 2.0)
+
+    def place_cell(self, cell_index: int, x: float, y: float) -> None:
+        """Insert a ``CellInstArray`` reference to ``cell_index`` at ``(x, y)`` um.
+
+        The GDS-level half of this package's composition pattern: a block
+        generator writes a sub-cell to a scratch GDS, ``layout.read()``s it
+        back, resolves its index with ``layout.cell_by_name()``, places one
+        or more instances with this method, and then ``top.flatten(-1,
+        True)``s them into one flat cell (see ``pfd_cp/block.py``'s module
+        docstring, and ``clear_inherited_labels()`` below for the label
+        cleanup that has to follow the flatten).
+
+        Takes **microns**, like every other coordinate this class accepts,
+        and routes both through ``_u()`` -- so a placement offset obeys the
+        same manufacturing-grid policy as the shapes the Canvas draws
+        directly. That is the reason this lives here at all (issue #940):
+        five call sites previously recomputed ``int(round(1.0 / canvas.dbu))``
+        from the public ``dbu`` attribute and inlined the conversion, which
+        silently opted them out of ``GRID_UM`` snapping. No ``Canvas``
+        subclass that places cells sets ``GRID_UM`` today, so the five were
+        equivalent -- but the policy had five places to not be applied, and
+        now it has one.
+
+        Composes with ``at()`` the way ``rect()``/``label()``/``pin()`` do,
+        so an assembler can place a sub-cell inside a translated scope.
+        """
+        self.top.insert(
+            self._db.CellInstArray(
+                cell_index,
+                self._db.Trans(self._db.Vector(self._u(x + self._dx), self._u(y + self._dy))),
+            )
+        )
 
     def clear_inherited_labels(self, layers: Sequence[str] | None = None) -> int:
         """Delete every *text* on ``layers`` from every cell, and return how

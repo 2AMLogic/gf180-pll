@@ -497,8 +497,6 @@ class PfdCpLayout:
 
 
 def build(outdir: Path | None = None) -> PfdCpLayout:  # noqa: PLR0915 -- one linear assembly
-    import klayout.db as db  # noqa: PLC0415 -- lazy, same convention as every module in this package
-
     pfd_layout = pfd.build()
     cp_layout = cp.build()
 
@@ -509,12 +507,6 @@ def build(outdir: Path | None = None) -> PfdCpLayout:  # noqa: PLR0915 -- one li
         cp_gds = Path(tmp) / f"{cp.TOP_CELL}.gds"
         pfd_layout.write_gds(pfd_gds)
         cp_layout.write_gds(cp_gds)
-
-        dbu_per_um = int(round(1.0 / canvas.dbu))
-
-        def _place(index, x: float, y: float) -> None:
-            trans = db.Trans(db.Vector(int(round(x * dbu_per_um)), int(round(y * dbu_per_um))))
-            canvas.top.insert(db.CellInstArray(index, trans))
 
         canvas.layout.read(str(pfd_gds))
         canvas.layout.read(str(cp_gds))
@@ -532,8 +524,8 @@ def build(outdir: Path | None = None) -> PfdCpLayout:  # noqa: PLR0915 -- one li
         pfd_dx = (band_x0 + BLOCK_GAP_UM) - pfd_layout.footprint()[0]
         pfd_dy = (dumpbuf_top + BLOCK_GAP_UM) - pfd_layout.footprint()[1]
 
-        _place(pfd_index, pfd_dx, pfd_dy)
-        _place(cp_index, dx, dy)
+        canvas.place_cell(pfd_index, pfd_dx, pfd_dy)
+        canvas.place_cell(cp_index, dx, dy)
         canvas.top.flatten(-1, True)
 
     pfd_box_g = cp_array._translate_box(pfd_layout.footprint(), pfd_dx, pfd_dy)

@@ -1096,8 +1096,6 @@ class CpArrayLayout:
 
 
 def build(outdir: Path | None = None) -> CpArrayLayout:
-    import klayout.db as db  # noqa: PLC0415 -- lazy, same convention as every module in this package
-
     ln = cp_leg_n.build()
     lp = cp_leg_p.build()
 
@@ -1155,16 +1153,10 @@ def build(outdir: Path | None = None) -> CpArrayLayout:
     n_index = canvas.layout.cell_by_name("cp_leg_n")
     p_index = canvas.layout.cell_by_name("cp_leg_p")
 
-    dbu_per_um = int(round(1.0 / canvas.dbu))
-
-    def _place(index, dx: float, dy: float) -> None:
-        trans = db.Trans(db.Vector(int(round(dx * dbu_per_um)), int(round(dy * dbu_per_um))))
-        canvas.top.insert(db.CellInstArray(index, trans))
-
     for off in offsets_n.values():
-        _place(n_index, *off)
+        canvas.place_cell(n_index, *off)
     for off in offsets_p.values():
-        _place(p_index, *off)
+        canvas.place_cell(p_index, *off)
     canvas.top.flatten(-1, True)
     # Each leg was written for its own standalone LVS claim and labels its
     # own *local* port names (EN/ENB/VBN/VCASCN/TAIL/VDD/VSS). Flattening
