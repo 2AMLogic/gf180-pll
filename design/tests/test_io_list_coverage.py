@@ -42,7 +42,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _fixtures import TreeWriter
+from _fixtures import TreeWriter, install_checklib
 
 DESIGN_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = DESIGN_DIR.parent
@@ -202,6 +202,7 @@ class _Tree(TreeWriter):
         self.root = root
         (root / "design" / "lib").mkdir(parents=True)
         shutil.copy2(CHECK, root / "design" / "lib" / CHECK.name)
+        install_checklib(root)
         self.write(NETLIST, _netlist())
         self.write(PROPOSAL, _proposal())
 
