@@ -271,7 +271,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:fd614804d2661720ba8babeda2bfee79a9e5ded8672231eb7d82d01941ad20af",
+        "content_hash": "sha256:09637fc4b10adea0c99447b555b8d70edff46e75beb6737e5cf27843bfc5cca7",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -280,7 +280,7 @@
             "path": "signoff/attest/testbench-inventory-analog.json",
             "scope": "repo"
           },
-          "content_hash": "sha256:fd614804d2661720ba8babeda2bfee79a9e5ded8672231eb7d82d01941ad20af",
+          "content_hash": "sha256:09637fc4b10adea0c99447b555b8d70edff46e75beb6737e5cf27843bfc5cca7",
           "input_verified": true,
           "summary": "analog partition: every claimed measurement's testbench committed with a cold-start command; PDK revision and tool pins recorded",
           "source": "signoff/attest/testbench-inventory-analog.json"

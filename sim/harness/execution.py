@@ -230,6 +230,37 @@ class LocalBackend:
 SIMULATOR_RE = re.compile(r"^\s*(ngspice-\d+)\s+done\s*$", re.IGNORECASE | re.MULTILINE)
 
 
+#: ngspice's "Using <name> as Direct Linear Solver" line, printed once per
+#: invocation by the binary that actually ran the deck. The solver is a
+#: *property of the run*, not of the deck: the same netlist takes a different
+#: DC homotopy path under SPARSE 1.3 than under KLU, and
+#: ``sim/BATCH-IMAGE-DIAGNOSIS-2026-10-08.md`` (Addendum 7) measured that on
+#: this repo's closed-loop deck -- 204 of 414 initial-solution node values
+#: differ between the two. So a record that does not say which solver ran
+#: cannot support a cross-backend comparison (#755).
+SOLVER_RE = re.compile(
+    r"^\s*Using\s+(.+?)\s+as\s+Direct\s+Linear\s+Solver\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def solver_of(output: str) -> str:
+    """The direct linear solver that produced ``output``, or ``""`` if unstated.
+
+    Reads the *last* such line, for the same reason :func:`simulator_of` reads
+    the last banner: a transport that concatenates streams, or a backend that
+    retries, may carry more than one, and the run that produced the
+    measurements is the last one.
+
+    Abstains rather than guessing. An empty string means "this output does not
+    name a solver", which provenance renders as unattributed -- never as
+    whatever the submitting host's own build would have defaulted to, which
+    under an off-host backend never ran the deck at all.
+    """
+    found = SOLVER_RE.findall(output or "")
+    return found[-1].strip() if found else ""
+
+
 def simulator_of(output: str) -> str:
     """The ngspice version that produced ``output``, or ``""`` if it did not say.
 

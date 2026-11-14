@@ -290,6 +290,21 @@
       ]
     },
     {
+      "cold_start": "python3 sim/run_corners.py reference-spur-band-top",
+      "disclosed_in": "sim/CHARACTERIZATION.md",
+      "experiment": "reference-spur-band-top",
+      "testbenches": [
+        {
+          "content_hash": "sha256:6ba5de32206bccc6ccdaa9c703707c0463294ce0d42e0536137e8fbc50a7209a",
+          "path": "sim/reference-spur-band-top/testbench/tb.json"
+        },
+        {
+          "content_hash": "sha256:9da0b8d632cfd8ccab690dfd4312b8f09e4e7fa669eb89e224dd0bd2f8303be2",
+          "path": "sim/reference-spur-band-top/testbench/tb_reference_spur_band_top.sp"
+        }
+      ]
+    },
+    {
       "cold_start": "sim/supply-sensitivity/testbench/run.sh",
       "disclosed_in": "sim/CHARACTERIZATION.md",
       "experiment": "supply-sensitivity",

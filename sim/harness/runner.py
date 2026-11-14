@@ -16,7 +16,7 @@ from pathlib import Path
 
 from .corners import PvtPoint
 from .derived import DerivedError, PointView, RawFile, derive_point_measures
-from .execution import DeckRun, LocalBackend, simulator_of
+from .execution import DeckRun, LocalBackend, simulator_of, solver_of
 from .siminit import init_of
 from .omp import omp_env_overrides
 from .pdk import Pdk
@@ -391,6 +391,12 @@ class PhaseRun:
     #: output proves ran (``siminit.init_of``). Empty when the output does not
     #: show it -- a missing or unexecuted init is disclosed, never assumed.
     init: str = ""
+    #: The direct linear solver that actually ran this deck, read out of the
+    #: deck's OWN output (``execution.solver_of``). Empty when the output does
+    #: not name one. The solver selects the DC homotopy path, so two records
+    #: that do not agree on it are not comparable however well their decks
+    #: match (#755).
+    solver: str = ""
 
     def as_dict(self) -> dict:
         record = {
@@ -406,6 +412,8 @@ class PhaseRun:
             record["simulator"] = self.simulator
         if self.init:
             record["init"] = self.init
+        if self.solver:
+            record["solver"] = self.solver
         if self.message:
             record["message"] = self.message
         return record
@@ -466,6 +474,11 @@ class PointResult:
     #: Init identity per :attr:`PhaseRun.init`; ``+``-joined across distinct
     #: values, empty if any deck of the point did not show one.
     init: str = ""
+    #: Solver per :attr:`PhaseRun.solver`; ``+``-joined across distinct *named*
+    #: values. Unlike :attr:`init`, a deck that named no solver is skipped
+    #: rather than blanking the point: not naming a solver is missing evidence
+    #: about that deck, not evidence that a different solver ran.
+    solver: str = ""
 
     def as_dict(self) -> dict:
         record = self.point.as_dict()
@@ -484,6 +497,8 @@ class PointResult:
             record["simulator"] = self.simulator
         if self.init:
             record["init"] = self.init
+        if self.solver:
+            record["solver"] = self.solver
         # Keyed on a phase having a *name*, not on there being more than one of
         # them, so the point entry and the filenames on disk always agree: a
         # named phase writes `<phase>_<corner-id>.log`, so it must be listed
@@ -654,6 +669,11 @@ def run_point(
     # the case the record must not paper over.
     inits = list(dict.fromkeys(run.init for run in runs))
     init = "+".join(inits) if all(inits) else ""
+    # Same rule as hosts and simulators, not the stricter init rule: a solver
+    # the output simply did not name is missing evidence about that deck, not
+    # evidence that a different solver ran, so it must not erase a sibling
+    # deck's named one.
+    solvers = list(dict.fromkeys(run.solver for run in runs if run.solver))
     common = {
         "point": point,
         "raw_files": raw_files,
@@ -665,6 +685,7 @@ def run_point(
         "host": "+".join(hosts),
         "simulator": "+".join(simulators),
         "init": init,
+        "solver": "+".join(solvers),
     }
 
     if failed is not None:
@@ -867,6 +888,7 @@ def _run_phase(
                 host=deck_run.host,
                 simulator=simulator_of(output),
                 init=init_of(output),
+                solver=solver_of(output),
             ),
             measurements=measurements,
             missing=missing,
@@ -897,6 +919,7 @@ def _run_phase(
                 host=deck_run.host,
                 simulator=simulator_of(output),
                 init=init_of(output),
+                solver=solver_of(output),
             ),
             measurements=measurements,
             missing=missing,
@@ -924,6 +947,7 @@ def _run_phase(
                 host=deck_run.host,
                 simulator=simulator_of(output),
                 init=init_of(output),
+                solver=solver_of(output),
             ),
             measurements=measurements,
             not_measured=not_measured,
@@ -940,7 +964,8 @@ def _run_phase(
             seconds=elapsed,
             host=deck_run.host,
             simulator=simulator_of(output),
-                init=init_of(output),
+            init=init_of(output),
+            solver=solver_of(output),
         ),
         measurements=measurements,
         # Carried even on success so that a *later* phase's failure still
