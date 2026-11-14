@@ -652,10 +652,13 @@ def _escape(
     Same technique as :func:`_stub` -- a single horizontal segment at the
     pad's own Y, so it can never cross a shape that pad does not already
     abut -- but *deliberately placed* rather than a repair for a
-    decluttering nudge (see :func:`_leg_pads`, the one caller): this is how
-    a gate-tab pin whose natural riser X is already claimed by another net
-    (see module docstring, "EN/ENB SHARE ONE GATE-TAB COLUMN") gets a
-    column of its own. The landing pad is drawn explicitly, wide enough to
+    decluttering nudge: this is how a pin whose natural riser X is already
+    claimed by another net gets a column of its own -- for :func:`_leg_pads`
+    here, a gate-tab pin on a column another net already holds (see module
+    docstring, "EN/ENB SHARE ONE GATE-TAB COLUMN"); for ``cp_output_stage.py``,
+    which re-exports this definition rather than keeping its own copy
+    (issue #915), a switch's bottom pad, which shares its top pad's X by
+    construction. The landing pad is drawn explicitly, wide enough to
     enclose Via1 (``V1.3a``), because the wire itself is narrower than that
     enclosure requires -- the identical reason :func:`_riser` draws its own
     (same citation, same ``landing_half``).
@@ -986,11 +989,26 @@ def _tap_strip(
     contact_pitch: float = 2.0,
 ) -> tuple[tuple, tuple]:
     """A substrate (``kind='p'``) or n-well tap (``kind='n'``) drawn as one
-    long strip spanning ``[x0, x1]`` -- identical technique/citation to
-    ``cp_dumpbuf.py``'s own ``_tap_strip()`` (this module's own bias-branch
-    rows, up to 62 um wide for ``MBP``+``MCP``, exceed ``DF.13_LV``/
-    ``DF.14_LV``'s 20 um max-distance-to-tap the same way that module's own
-    isolated-well row does).
+    long strip spanning ``[x0, x1]`` at a fixed Y, with a periodic row of
+    contacts along its length -- not a single small square tap.
+
+    gf180mcuD's ``DF.13_LV``/``DF.14_LV`` cap the distance from *any point*
+    of a PMOS-in-nwell/NMOS-outside-nwell comp to its *nearest* tap at 20 um
+    -- a hard ceiling a single tap at one end of a wide row cannot satisfy
+    regardless of how the devices are gapped. A strip spanning the *entire*
+    group's own X range, offset only a small, fixed amount in Y, keeps that
+    distance equal to the Y offset (a couple of um) everywhere along the
+    strip, independent of the group's total width -- reproduced directly:
+    the single-small-tap version of ``cp_dumpbuf.py`` failed ``DF.13_LV``/
+    ``DF.14_LV`` (4 violations) on exactly the wide groups this fixes.
+
+    The single definition for this package (issue #915): this module's own
+    bias-branch rows run up to 62 um wide for ``MBP``+``MCP``,
+    ``cp_dumpbuf.py``'s isolated PMOS array alone spans over 100 um, and
+    ``cp_output_stage.py``'s interleaved groups are tapped one strip per
+    group -- all three past the 20 um ceiling for the same reason.
+    ``cp_dumpbuf.py`` re-exports this definition and ``cp_output_stage.py``
+    calls it directly; neither keeps a copy.
     """
     y0 = y_center - height / 2.0
     y1 = y_center + height / 2.0

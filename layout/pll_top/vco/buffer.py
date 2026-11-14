@@ -106,34 +106,17 @@ def _box_gap_um(a: tuple, b: tuple) -> float:
     return (dx * dx + dy * dy) ** 0.5
 
 
-def _channel_hop(canvas: prim.Canvas, pad_lo: tuple, pad_hi: tuple, y_jog: float) -> None:
-    """Bridge two Metal1 pads across the NMOS/PMOS channel on Metal2.
+_channel_hop = prim.channel_hop
+"""Bridge two Metal1 pads across the NMOS/PMOS channel on Metal2.
 
-    The inner n-well tap ring's bottom band (``VDD_VCO``) spans the whole
-    row *inside* this channel, so the plain Metal1 riser this used to be
-    shorted every stage's own drain and gate node to ``VDD_VCO`` -- see the
-    module docstring and ``PROOF-368-rootcause.md``. Metal2 has no spacing
-    relationship with Metal1, so the band is simply jumped over.
-
-    Each ``via1_stack()`` is centred on its own pad, whose 0.46 x 0.46 um
-    minimum footprint (one contact plus ``METAL1_PAD_MARGIN_UM`` on each
-    side) strictly contains the 0.44 um square via landing pad -- so this
-    adds **no** new Metal1 geometry at all, only via1/Metal2. The two pads
-    are rarely at the same x (an inverter's pfet is wider than its nfet, and
-    both are left-aligned), hence the Metal2 jog at ``y_jog`` rather than one
-    straight column.
-    """
-    x_lo, y_lo = (pad_lo[0] + pad_lo[2]) / 2.0, (pad_lo[1] + pad_lo[3]) / 2.0
-    x_hi, y_hi = (pad_hi[0] + pad_hi[2]) / 2.0, (pad_hi[1] + pad_hi[3]) / 2.0
-    prim.via1_stack(canvas, x_lo, y_lo)
-    prim.via1_stack(canvas, x_hi, y_hi)
-    if abs(x_hi - x_lo) < 1e-9:
-        prim.m2_route(canvas, [(x_lo, y_lo), (x_lo, y_hi)])
-    else:
-        prim.m2_route(
-            canvas,
-            [(x_lo, y_lo), (x_lo, y_jog), (x_hi, y_jog), (x_hi, y_hi)],
-        )
+Moved to ``primitives.py`` in issue #915, where ``stage.py`` -- which
+carried a verbatim copy of it -- re-exports it too. The obstruction jumped
+*here* is the inner n-well tap ring's bottom band (``VDD_VCO``), which
+spans the whole row inside this module's own channel: the plain Metal1
+riser this replaced shorted every stage's own drain and gate node to
+``VDD_VCO``, see the module docstring above and
+``PROOF-368-rootcause.md``.
+"""
 
 
 @dataclass
