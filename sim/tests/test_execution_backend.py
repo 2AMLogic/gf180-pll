@@ -2108,6 +2108,125 @@ class ExecutingSimulatorTests(unittest.TestCase):
         self.assertEqual(len(lines), 1)
 
 
+# ===========================================================================
+# 8c. Which direct linear solver actually ran the points (#755)
+# ===========================================================================
+
+class ExecutingSolverTests(unittest.TestCase):
+    """The solver is a property of the RUN, so it has to travel with the run.
+
+    The #755 pilot compares one point taken on the local backend with the same
+    point taken on the batch backend. ``sim/BATCH-IMAGE-DIAGNOSIS-2026-10-08.md``
+    (Addendum 7) measured 204 of 414 initial-solution node values differing
+    between SPARSE 1.3 and KLU on this repo's closed-loop deck, so a record
+    that does not say which solver ran cannot support that comparison -- and
+    the submitting host's own build cannot answer it for a point it did not
+    run.
+    """
+
+    def test_the_solver_is_read_from_the_decks_own_output(self):
+        self.assertEqual(
+            execution.solver_of("...\nUsing SPARSE 1.3 as Direct Linear Solver\n"),
+            "SPARSE 1.3",
+        )
+        self.assertEqual(
+            execution.solver_of("Using KLU as Direct Linear Solver\n"), "KLU"
+        )
+
+    def test_output_that_names_no_solver_abstains_rather_than_guessing(self):
+        self.assertEqual(execution.solver_of("no solver line here"), "")
+        self.assertEqual(execution.solver_of(""), "")
+
+    def test_the_last_line_wins_when_output_carries_more_than_one(self):
+        self.assertEqual(
+            execution.solver_of(
+                "Using SPARSE 1.3 as Direct Linear Solver\n"
+                "retry\n"
+                "Using KLU as Direct Linear Solver\n"
+            ),
+            "KLU",
+        )
+
+    def test_provenance_names_the_solver_every_point_ran(self):
+        lines = report._execution_lines(
+            {
+                "jobs": 1,
+                "omp": {},
+                "backend": "batch",
+                "hosts": {"i-0a": 2},
+                "simulators": {"ngspice-47": 2},
+                "solvers": {"SPARSE 1.3": 2},
+            },
+            "submitter",
+            "ngspice-47 : Circuit level simulation program",
+        )
+        line = lines[-1]
+        self.assertIn("Active solver", line)
+        self.assertIn("`SPARSE 1.3` (2)", line)
+        self.assertNotIn("not comparable", line)
+
+    def test_a_point_whose_output_named_no_solver_is_disclosed(self):
+        lines = report._execution_lines(
+            {
+                "jobs": 1,
+                "omp": {},
+                "backend": "batch",
+                "hosts": {"i-0a": 2},
+                "simulators": {"ngspice-47": 2},
+                "solvers": {"SPARSE 1.3": 1, "": 1},
+            },
+            "submitter",
+            "ngspice-47 : Circuit level simulation program",
+        )
+        self.assertIn("unattributed (1)", lines[-1])
+
+    def test_a_grid_that_split_across_solvers_says_so(self):
+        lines = report._execution_lines(
+            {
+                "jobs": 1,
+                "omp": {},
+                "backend": "batch",
+                "hosts": {"i-0a": 3},
+                "simulators": {"ngspice-47": 3},
+                "solvers": {"SPARSE 1.3": 2, "KLU": 1},
+            },
+            "submitter",
+            "ngspice-47 : Circuit level simulation program",
+        )
+        line = lines[-1]
+        self.assertIn("`SPARSE 1.3` (2)", line)
+        self.assertIn("`KLU` (1)", line)
+        self.assertIn("not comparable point-for-point", line)
+
+    def test_no_solvers_key_renders_nothing_extra(self):
+        """Every record minted before this field existed stays byte-comparable."""
+        lines = report._execution_lines(
+            {"jobs": 4, "omp": {}, "backend": "local", "hosts": {"box": 5}},
+            "box",
+            "ngspice-46 : Circuit level simulation program",
+        )
+        self.assertEqual(len(lines), 1)
+
+    def test_a_point_carries_the_solver_its_own_output_named(self):
+        """End to end through the runner, not just the parser."""
+        run = runner.PhaseRun(
+            name="",
+            status="ok",
+            deck="d.spice",
+            log="d.log",
+            seconds=1.0,
+            solver=execution.solver_of("Using KLU as Direct Linear Solver\n"),
+        )
+        self.assertEqual(run.solver, "KLU")
+        self.assertEqual(run.as_dict()["solver"], "KLU")
+
+    def test_a_phase_that_named_no_solver_omits_the_key(self):
+        run = runner.PhaseRun(
+            name="", status="ok", deck="d.spice", log="d.log", seconds=1.0
+        )
+        self.assertNotIn("solver", run.as_dict())
+
+
 class ExecutionConsoleLineTests(unittest.TestCase):
     """The console summary names the executor even when no record is minted (#503).
 

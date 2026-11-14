@@ -754,14 +754,17 @@ def build_record(
         # produced a measurement.
         sims = HostTally()
         inits = HostTally()
+        solvers = HostTally()
         for result in results:
             sims.add(result.simulator)
             inits.add(result.init)
+            solvers.add(result.solver)
         execution = {
             **execution,
             "hosts": tally.as_dict(),
             "simulators": sims.as_dict(),
             "inits": inits.as_dict(),
+            "solvers": solvers.as_dict(),
         }
     # A run that raised out of run_grid() (#271) hands back fewer results than
     # points -- `results` only covers what completed before the fault. That
@@ -995,7 +998,37 @@ def _execution_lines(
         execution.get("simulators") or {}, recording_simulator
     )
     lines += _execution_init_lines(execution.get("inits") or {})
+    lines += _execution_solver_lines(execution.get("solvers") or {})
     return lines
+
+
+def _execution_solver_lines(solvers: dict) -> list[str]:
+    """Which direct linear solver the points' own output says ran (#755).
+
+    Stated for the same reason as the init file: it is a property of the run
+    rather than of the deck, and it selects the DC homotopy path --
+    ``sim/BATCH-IMAGE-DIAGNOSIS-2026-10-08.md`` (Addendum 7) measured 204 of
+    414 initial-solution node values differing between SPARSE 1.3 and KLU on
+    this repo's closed-loop deck. A point whose output did not name one is
+    disclosed as ``unattributed`` rather than credited with the solver the
+    recording host's build would have chosen; unlike the init file, a silent
+    point does not make the whole run unattributed, because not naming a
+    solver is missing evidence about that point, not evidence that a different
+    solver ran.
+    """
+    if not solvers:
+        return []
+    named = {k: v for k, v in solvers.items() if k}
+    parts = [f"`{name}` ({count})" for name, count in sorted(named.items())]
+    if solvers.get(""):
+        parts.append(f"unattributed ({solvers['']})")
+    detail = ", ".join(parts)
+    if len(named) > 1:
+        detail += (
+            " -- these points did not all run the same solver, so their DC "
+            "solutions are not comparable point-for-point"
+        )
+    return [f"  - Active solver: {detail}"]
 
 
 def _execution_init_lines(inits: dict) -> list[str]:
@@ -1054,7 +1087,8 @@ def execution_console_lines(execution: dict | None) -> list[str]:
         f"executed  : backend {backend}; "
         f"host(s) {_tally(execution.get('hosts') or {})}; "
         f"simulator(s) {_tally(execution.get('simulators') or {})}; "
-        f"init {_tally(execution.get('inits') or {})}"
+        f"init {_tally(execution.get('inits') or {})}; "
+        f"solver(s) {_tally(execution.get('solvers') or {})}"
     ]
 
 

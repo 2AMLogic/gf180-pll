@@ -98,6 +98,17 @@ NOT_AGGREGATED=(
   # PASS-only grid as the row this report already cites for harness-selftest,
   # no design or spec claim, no verdict changes.
   "harness-selftest:20261101-045427-f92e043  # artifact-store exercise of the same self-test bench (#832), no new claim"
+  # The four #755 local/batch equivalence-pilot records (2026-11-14) are a
+  # measurement of the HARNESS, not of the part: one point of
+  # reference-spur-band-top run twice on each execution backend to show that
+  # both now stage the same simulator init file and reach the same state
+  # (DR-040 Decision 6, sim/BATCH-LOCAL-EQUIVALENCE-PILOT-2026-11-14.md).
+  # They are a declared single-point PVT subset, carry a design-input claim
+  # rather than a spec line, and deliberately do not state this campaign's
+  # PVT result -- reference-spur-band-top has no headline record yet, and
+  # these must not be mistaken for one. Only the latest is checked, so one
+  # entry covers the set.
+  "reference-spur-band-top:20261114-011803-e752ace  # #755 backend-equivalence pilot, single point, not a campaign result"
 )
 
 set -uo pipefail

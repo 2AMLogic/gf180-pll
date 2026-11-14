@@ -375,12 +375,40 @@ batch `ngspice.env` additionally records the checksum and content of the
 `.spiceinit` present on the instance. `LocalBackend(stage_init=False)` /
 `BatchBackend(stage_init=False)` stage nothing: the no-init negative control.
 
+**The active solver is recorded on the same terms.** The init file is not the
+only property of the *run* (rather than of the deck) that moves the DC
+solution: the diagnosis measured 204 of 414 initial-solution node values
+differing between SPARSE 1.3 and KLU on this very deck. So each point also
+carries `solver: <name>`, read out of the deck's own
+`Using <name> as Direct Linear Solver` line, and the Environment provenance
+renders an `Active solver:` line. A point whose output named no solver is
+`unattributed` rather than credited with whatever the *submitting* host's
+build would have chosen — which, under `--backend batch`, ran no deck at all.
+Unlike the init file, one silent point does not make the whole run
+unattributed: not naming a solver is missing evidence about that point, not
+evidence that a different solver ran.
+
 Pilot procedure (do this before any 45-point submission): run the one point
 ff / −40 °C / 3.63 V, `op=b7vs1p886`, on `--backend local` and on
-`--backend batch --batch-apply`, then compare `init`, the executing simulator
-and PDK, the DC state (`fb`, `lock_lvl`, no gmin stepping) and the spur. The
-numerical matching tolerance is the testbench owner's to record; the −55 dBc
-threshold is not an equivalence tolerance.
+`--backend batch --batch-apply`, at least twice on each so the within-backend
+run-to-run spread is *measured* rather than assumed, then compare `init`, the
+executing simulator and PDK, the DC state (`fb`, `lock_lvl`, no gmin stepping)
+and the spur. The numerical matching tolerance is the testbench owner's and is
+recorded in DR-040 Decision 5: the local-versus-batch difference must not
+exceed the measured within-backend spread, with 1 mV on the operating-point
+nodes and ±0.5 dB on the spur as a **ceiling** on that gate rather than an
+allowance. The −55 dBc threshold is not an equivalence tolerance and may not
+be substituted for one.
+
+**It has been run** (2026-11-14, #755): two local and two batch repeats of
+that point, on the same `ngspice-47p1` build and the same pinned PDK on both
+sides, came back bit-identical on every reported quantity — zero spread within
+each backend and zero difference between them. Comparison, environments and
+the commands to re-derive each number:
+[`../BATCH-LOCAL-EQUIVALENCE-PILOT-2026-11-14.md`](../BATCH-LOCAL-EQUIVALENCE-PILOT-2026-11-14.md).
+Read its "What this does *not* establish" section before citing it: it covers
+one deck, one point and one pair of builds, and it does not re-establish the
+ngspice-46-era −61.71 dBc figure at that point.
 
 ## Writing a testbench
 

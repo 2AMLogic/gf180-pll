@@ -1248,8 +1248,14 @@ and DR-035 were written; as re-verified on 2026-10-08 its corner logs sign off
 converge 6 of 6 with `d_ref` equal to the pin's to seven digits. A matching
 version string is **not** a blanket equivalence: the 2026-10-08 diagnostic
 (`BATCH-IMAGE-DIAGNOSIS-2026-10-08.md`, #533/#503) found other decks reaching a
-different DC state on the image than on the pinned local binary, cause
-unresolved. What DR-039 leaves in force for a reader of a batch-executed record:
+different DC state on the image than on the pinned local binary. **That
+particular cause is now resolved** — it was the simulator init file
+(`set wnflag=1`), which neither backend staged, and both now do
+([DR-040](../spec/decision-records/DR-040-simulator-init-file-is-repository-staged-per-job-on-both-backends.md),
+#755). On the one deck and point where it was measured, the two backends are
+now bit-identical (`BATCH-LOCAL-EQUIVALENCE-PILOT-2026-11-14.md`). That is one
+point on one deck, not a blanket equivalence either, and the quarantine below
+is unchanged by it. What DR-039 leaves in force for a reader of a batch-executed record:
 
 - **It is a comparability limit, not an impeachment.** Those grids converge and
   pass their own guards, and the pin's known defect (#153) is an ngspice-**47**
