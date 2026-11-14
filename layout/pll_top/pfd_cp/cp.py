@@ -373,7 +373,6 @@ def _stage_bus(stage: cos.CpOutputStageLayout, net: str) -> tuple[float, float, 
 
 
 def build(outdir: Path | None = None) -> CpLayout:
-    import klayout.db as db  # noqa: PLC0415 -- lazy, same convention as every module in this package
     import tempfile
 
     stage = cos.build()
@@ -402,18 +401,12 @@ def build(outdir: Path | None = None) -> CpLayout:
         dx = (stage.footprint[2] - dumpbuf.footprint[0]) + BLOCK_GAP_UM
         dy = stage.footprint[1] - dumpbuf.footprint[1]
 
-        dbu_per_um = int(round(1.0 / canvas.dbu))
-
-        def _place(index, x: float, y: float) -> None:
-            trans = db.Trans(db.Vector(int(round(x * dbu_per_um)), int(round(y * dbu_per_um))))
-            canvas.top.insert(db.CellInstArray(index, trans))
-
         canvas.layout.read(str(stage_gds))
         canvas.layout.read(str(dumpbuf_gds))
         stage_index = canvas.layout.cell_by_name(cos.TOP_CELL)
         dumpbuf_index = canvas.layout.cell_by_name(cp_dumpbuf.TOP_CELL)
-        _place(stage_index, 0.0, 0.0)
-        _place(dumpbuf_index, dx, dy)
+        canvas.place_cell(stage_index, 0.0, 0.0)
+        canvas.place_cell(dumpbuf_index, dx, dy)
         canvas.top.flatten(-1, True)
     # NET_MAP renames six of cp_dumpbuf's own nets on the way in, so its
     # inherited labels are actively wrong here. This level owns the names

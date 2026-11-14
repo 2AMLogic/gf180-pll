@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Focused regression coverage for the shared drawing helpers in
 ``pll_top/_canvas.py`` that issue #776 consolidated: ``h_wire()``,
-``snap_um()``, ``via1_stack()`` and ``tap_strip()``.
+``snap_um()``, ``via1_stack()`` and ``tap_strip()`` -- plus
+``Canvas.place_cell()``, consolidated the same way by issue #940.
 
 Before #776 each of these existed as two-to-four per-module copies
 (``vco``/``lock_detector``/``pfd_cp``/``loop_filter``) whose DRC constants
@@ -27,6 +28,12 @@ implant/contact/metal1 stacks, so these tests draw on the real submodule
 PV environment (``_canvas`` imports ``klayout.db`` lazily and the
 generators are pure Python).
 
+``place_cell()``'s cases follow the same rule for the same reason: they use
+``pfd_cp/devgen.Canvas`` (a real cell-placing subclass, ``GRID_UM`` unset)
+and a local subclass of it with the snap turned on, rather than an abstract
+toy -- the grid-vs-no-grid distinction is the whole point of the method, and
+it is a property of which real subclass you hold.
+
     python3 -m unittest discover -s layout/tests -t layout/tests -v
 """
 
@@ -41,6 +48,7 @@ from pll_top.lock_detector import checks as lock_checks  # noqa: E402
 from pll_top.lock_detector import primitives as lock_prim  # noqa: E402
 from pll_top.loop_filter import devices as lf_dev  # noqa: E402
 from pll_top.loop_filter import primitives as lf_prim  # noqa: E402
+from pll_top.pfd_cp import devgen as pfd_devgen  # noqa: E402
 from pll_top.pfd_cp import rowgen  # noqa: E402
 from pll_top.vco import devices as vco_dev  # noqa: E402
 from pll_top.vco import primitives as vco_prim  # noqa: E402
@@ -253,6 +261,105 @@ class TapStripTests(unittest.TestCase):
         lf_prim.tap_strip(canvas, 0.0, 0.0, 0.6, 0.6)
         self.assertEqual(_layer_boxes(canvas, "nplus"), [])
         self.assertEqual(_layer_boxes(canvas, "pplus"), [(-0.3, -0.3, 0.9, 0.9)])
+
+
+class _SnappedPfdCpCanvas(pfd_devgen.Canvas):
+    """``pfd_cp``'s own Canvas, but with a manufacturing-grid snap.
+
+    Not hypothetical scaffolding: ``vco/primitives.py`` and
+    ``loop_filter/primitives.py`` already set ``GRID_UM`` this way, and the
+    two Canvas subclasses that place cells (``pfd_cp/devgen``,
+    ``divider_chain/devgen``) are the ones that do not. This subclass is
+    exactly the state ``pfd_cp`` would be in if it adopted the snap the way
+    those two already have -- the case issue #940's five hand-rolled
+    conversions would have silently kept opting out of.
+    """
+
+    GRID_UM = 0.005  # the PDK's 5 nm manufacturing grid, as devices.LAYOUT_GRID_UM
+
+
+def _instances(canvas) -> list[tuple[int, int]]:
+    """Every cell instance's placement offset in the top cell, in dbu."""
+    return sorted((inst.trans.disp.x, inst.trans.disp.y) for inst in canvas.top.each_inst())
+
+
+def _probe_cell(canvas, name: str = "place_cell_probe_sub") -> int:
+    """A throwaway one-box sub-cell, returning its cell index to place."""
+    sub = canvas.layout.create_cell(name)
+    sub.shapes(canvas.layout.layer(*canvas.LAYER["metal1"])).insert(canvas._db.Box(0, 0, 100, 100))
+    return sub.cell_index()
+
+
+@unittest.skipUnless(HAVE_KLAYOUT, "klayout.db not available")
+class PlaceCellTests(unittest.TestCase):
+    """``_canvas.Canvas.place_cell()``: micron -> dbu placement through ``_u()``.
+
+    Issue #940 replaced five hand-rolled copies of this idiom (four
+    ``_place()`` closures in ``pfd_cp/{block,cp,cp_array,cp_output_stage}.py``
+    plus an inline pair in ``divider_chain/divider_chain.py``), each of which
+    recomputed ``int(round(1.0 / canvas.dbu))`` and inlined the conversion
+    rather than calling ``_u()``. Those copies were *equivalent* only because
+    no cell-placing Canvas subclass sets ``GRID_UM``; the grid case below is
+    the behaviour that had no coverage before, and is the reason the idiom
+    belongs on the Canvas.
+    """
+
+    def test_without_a_grid_it_is_plain_rounding(self):
+        # Pins the equivalence that made #940's refactor output-neutral: this
+        # is exactly what the five deleted copies computed.
+        canvas = pfd_devgen.Canvas("place_cell_plain_probe")
+        self.assertIsNone(canvas.GRID_UM, "pfd_cp sets no grid -- the premise of the equivalence")
+        index = _probe_cell(canvas)
+        canvas.place_cell(index, 0.1234, -0.1234)
+        self.assertEqual(_instances(canvas), [(123, -123)])
+
+    def test_with_a_grid_the_offset_is_snapped(self):
+        # The same off-grid offset, on a Canvas that snaps: 0.1234 um is
+        # 123.4 dbu, which is not a multiple of the 5 dbu grid -- so the
+        # placement lands on 125, where a hand-rolled conversion would have
+        # left it at 123 and failed the PDK's geom.drc OFFGRID section.
+        canvas = _SnappedPfdCpCanvas("place_cell_snapped_probe")
+        self.assertEqual(canvas._grid_dbu, 5)
+        index = _probe_cell(canvas)
+        canvas.place_cell(index, 0.1234, -0.1234)
+        self.assertEqual(_instances(canvas), [(125, -125)])
+
+    def test_an_on_grid_offset_is_left_alone(self):
+        canvas = _SnappedPfdCpCanvas("place_cell_ongrid_probe")
+        index = _probe_cell(canvas)
+        canvas.place_cell(index, 1.5, 2.25)  # both already multiples of 5 nm
+        self.assertEqual(_instances(canvas), [(1500, 2250)])
+
+    def test_it_composes_with_at_like_the_other_drawing_methods(self):
+        # rect()/label()/pin() all add self._dx/_dy before converting; so does
+        # place_cell(), so an assembler can place a sub-cell inside a
+        # translated scope. No current call site does this (every one is at a
+        # zero offset), which is why it is pinned here rather than by a block.
+        canvas = pfd_devgen.Canvas("place_cell_at_probe")
+        index = _probe_cell(canvas)
+        with canvas.at(1.0, 2.0):
+            canvas.place_cell(index, 0.5, 0.25)
+        canvas.place_cell(index, 0.5, 0.25)  # same coords, outside the scope
+        self.assertEqual(_instances(canvas), [(500, 250), (1500, 2250)])
+
+    def test_at_translation_is_snapped_after_being_added_not_before(self):
+        # The sum is what gets snapped (one _u() call on x + _dx), so two
+        # separately-off-grid values that sum on-grid place exactly on it.
+        canvas = _SnappedPfdCpCanvas("place_cell_at_snap_probe")
+        index = _probe_cell(canvas)
+        with canvas.at(0.0020, 0.0):
+            canvas.place_cell(index, 0.0030, 0.1234)
+        self.assertEqual(_instances(canvas), [(5, 125)])
+
+    def test_several_instances_of_one_cell_each_get_their_own_transform(self):
+        # cp_array places 8 instances of 2 cells, cp_output_stage 4 of one
+        # inverter, divider_chain 6 of one div23_cell -- repeated placement of
+        # a single cell index is the common case, not the exception.
+        canvas = pfd_devgen.Canvas("place_cell_multi_probe")
+        index = _probe_cell(canvas)
+        for dx, dy in ((0.0, 0.0), (2.5, 0.0), (5.0, 1.25)):
+            canvas.place_cell(index, dx, dy)
+        self.assertEqual(_instances(canvas), [(0, 0), (2500, 0), (5000, 1250)])
 
 
 if __name__ == "__main__":
