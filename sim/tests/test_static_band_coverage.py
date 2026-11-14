@@ -1,7 +1,8 @@
 """Known-answer test for sim/vco-tuning-range/testbench/static_band_coverage.py (#534).
 
-Pins the per-bundle static-code coverage table and the derated ceiling that
-DR-038 quotes, against the committed VCO record. No simulator, no PDK.
+Pins the per-bundle static-code coverage table, the derated ceiling that
+DR-038 quotes and the binding point `spec/pll.md` states behind it, against the
+committed VCO record. No simulator, no PDK.
 """
 
 from __future__ import annotations
@@ -39,7 +40,8 @@ class StaticBandCoverage(unittest.TestCase):
             full = [b for b in M.BANDS if self.reach(bu, b) == 9]
             self.assertEqual(full, [7] if bu == "ff" else [], bu)
 
-    def test_derated_ceiling(self):
+    def held_and_common(self):
+        """Per-bundle static-code windows, and the set held in every bundle."""
         held = {}
         for bu in M.BUNDLES:
             ks = M.keys_of(self.c, bu)
@@ -49,16 +51,35 @@ class StaticBandCoverage(unittest.TestCase):
         common = held["typical"]
         for bu in M.BUNDLES[1:]:
             common = M.intersect(common, held[bu])
+        return held, common
+
+    def test_derated_ceiling(self):
+        held, common = self.held_and_common()
         self.assertAlmostEqual(M.ceiling(common) / 1e6, 166.261, places=3)
         self.assertAlmostEqual(M.ceiling(held["sf"]) / 1e6, 169.811, places=3)
         self.assertEqual(M.ceiling(held["ff"]), 200e6)
+
+    def test_derated_ceiling_binding_point(self):
+        """spec/pll.md states the figure as "band 6, `ff`/-40 C/3.63 V ceiling"."""
+        _, common = self.held_and_common()
+        self.assertEqual(
+            M.ceiling_binding(self.c, M.ceiling(common)), [(6, ("ff", -40.0, 3.63))]
+        )
+        self.assertEqual(M.fmt(("ff", -40.0, 3.63)), "ff/-40 C/3.63 V")
+
+    def test_binding_point_is_empty_when_the_cap_binds(self):
+        """`ff` alone tops out at the 200 MHz cap, which no band ceiling supplies."""
+        held, _ = self.held_and_common()
+        self.assertEqual(M.ceiling_binding(self.c, M.ceiling(held["ff"])), [])
 
     def test_check_flag_passes(self):
         import contextlib
         import io
 
-        with contextlib.redirect_stdout(io.StringIO()):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
             self.assertEqual(M.main(["--check"]), 0)
+        self.assertIn("Binding point: band 6, ff/-40 C/3.63 V ceiling", out.getvalue())
 
 
 if __name__ == "__main__":
