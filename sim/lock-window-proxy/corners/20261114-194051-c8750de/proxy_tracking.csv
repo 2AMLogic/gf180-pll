@@ -1,0 +1,18 @@
+# at the trim rule's reference condition (27 C, nominal supply): how far each bundle's window sits from typical's, and how far each candidate pad-referred observable does
+# twin_rel_to_typical is the geometric mean, over all sixteen codes, of this bundle's t_win divided by typical's t_win at the same code. Its spread across the bundles is the process variation the trim exists to remove.
+# <candidate>_rel is the same ratio for the candidate observable. <candidate>_residual = twin_rel / <candidate>_rel, which is 1 exactly when the candidate is a perfect stand-in. A residual FURTHER from 1 than twin_rel itself means the candidate is worse than measuring nothing: it moves the estimate the wrong way.
+# ring_a and ring_b are ring PERIODS in ns; clk_fb and clk_do are CLK-referred skews in ns, recovered modulo the ring period.
+bundle,twin_rel_to_typical,ring_a_ns,ring_a_rel,ring_a_residual,ring_b_ns,ring_b_rel,ring_b_residual,clk_fb_ns,clk_fb_rel,clk_fb_residual,clk_do_ns,clk_do_rel,clk_do_residual
+all-fast,0.8816,15.318,0.76722,1.1491,1.9845,0.74656,1.1809,0.22672,0.82194,1.0726,1.0435,0.8322,1.0594
+all-slow,1.1601,23.95,1.1996,0.96711,3.3264,1.2514,0.9271,0.30955,1.1222,1.0338,1.5269,1.2177,0.95274
+ff,0.8816,20.854,1.0445,0.84402,2.7295,1.0268,0.85859,0.19725,0.7151,1.2328,1.0235,0.81623,1.0801
+fs,1.0143,19.555,0.97946,1.0356,2.6114,0.98237,1.0325,0.26814,0.97208,1.0435,1.2483,0.99553,1.0189
+mimcap_ff,1,19.965,1,1,2.6582,1,1,0.27584,1,1,1.2539,1,1
+mimcap_ss,1,19.965,1,1,2.6582,1,1,0.27584,1,1,1.2539,1,1
+moscap_ff,1,19.965,1,1,2.6582,1,1,0.27584,1,1,1.2539,1,1
+moscap_ss,1,19.965,1,1,2.6582,1,1,0.27584,1,1,1.2539,1,1
+res_ff,1,14.506,0.72657,1.3763,1.9519,0.7343,1.3618,0.24624,0.89272,1.1202,1.236,0.9857,1.0145
+res_ss,1,25.332,1.2688,0.78813,3.3424,1.2574,0.7953,0.1872,0.67866,1.4735,1.2568,1.0023,0.99768
+sf,0.99961,20.307,1.0172,0.98275,2.6744,1.0061,0.99359,0.2327,0.84362,1.1849,1.2659,1.0096,0.99014
+ss,1.1601,18.72,0.93762,1.2373,2.6217,0.98625,1.1763,0.32388,1.1742,0.98804,1.487,1.1859,0.97827
+typical,1,19.965,1,1,2.6582,1,1,0.27584,1,1,1.2539,1,1
