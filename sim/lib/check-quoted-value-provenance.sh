@@ -5,20 +5,10 @@
 #
 # WHY THIS EXISTS (issue #237)
 #
-# Nine checks already grade docs/chipalooza/challenge-5-proposal.md. Every one
-# of them grades something *about* a number rather than the number:
-#
-#   check-readme-status.sh            counts of records and campaigns
-#   check-characterization-coverage.sh  the aggregation's rows
-#   check-layout-status-claims.sh     layout claims and the area figures
-#   check-record-supersession.sh      whether the cited record is current
-#   check-spec-row-coverage.sh        whether every spec row is present
-#   check-io-list-coverage.sh         the I/O list
-#   check-port-connectivity.sh        what a netlist wires
-#   check-pvt-coverage-claims.sh      WHICH GRID the number was measured on
-#   check-ref-drive-claims.sh         the reproduction commands
-#   check-bias-drive-claims.sh        the bias-pin drive and the Limitations
-#   check-issue-reference-state.sh    the forge references
+# The checks that grade docs/chipalooza/challenge-5-proposal.md are listed,
+# with what each one grades, in docs/claim-checker-inventory.md (the count of
+# them is kept there, not restated here). Every one of them grades something
+# *about* a number rather than the number.
 #
 # So a row could cite the current record, name the right grid, carry the right
 # verdict -- and quote a value that is not in that record at all, or was

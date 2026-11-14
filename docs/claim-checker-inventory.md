@@ -3,9 +3,15 @@
 Scope ratified for #699: fold wording-only checkers together only where the
 same representative mutations still fail for the same reasons. Value-grading
 checkers stay functionally unchanged. This file is the inventory that gate
-asks for. Counts are `wc -l` at the commit that adds this file; there are 16
-`*/lib/check-*.sh` scripts (the issue text said 14/15; `docs/lib/` and
-`layout/lib/check-evidence-host-paths.sh` came later).
+asks for. Counts are `wc -l` at the commit that adds the row; there are 17
+`*/lib/check-*.sh` scripts (the issue text said 14/15; `docs/lib/`,
+`layout/lib/check-evidence-host-paths.sh` and
+`sim/lib/check-artifact-manifests.sh` came later). The table below originally
+omitted `sim/lib/check-artifact-manifests.sh` -- a genuine omission, not a
+counting convention (issue #944): the script is tracked and invoked by
+ci.yml's artifact-manifests step, and no row named it. Its row was added with
+that fix and its `wc -l` taken then; the other rows keep their #699-commit
+counts.
 
 ## Outcome
 
@@ -25,7 +31,7 @@ Reasons, in order of weight:
    locate the claim to grade, not the grading itself.
 2. **Inputs barely overlap.** The shared document, the proposal, is only the
    place the claim is read. The expected side differs per script (see table),
-   so a merged script would still need 16 independent readers.
+   so a merged script would still need 17 independent readers.
 3. **Mutation equivalence cannot be shown cheaply.** Each script is paired
    with a test that builds its own scratch tree fixture (about 9,000 lines of
    test code in total). A merged checker would have to reproduce every
@@ -73,6 +79,7 @@ stop.
 | `sim/lib/check-record-supersession.sh` | 221 | cited records vs supersession graph | graph | 2 | proposal described a closed FAIL as live, 18 days after the re-measurement | KEEP |
 | `sim/lib/check-readme-status.sh` | 127 | README counts vs `sim/*/records/*.md` | tree | 5 | hand-written record count under-reported the tree for months | KEEP |
 | `layout/lib/check-evidence-host-paths.sh` | 122 | evidence files changed vs merge base | tree | 1 | host-absolute paths in committed DRC/LVS bundles | KEEP |
+| `sim/lib/check-artifact-manifests.sh` | 12 | committed `manifests/artifacts/*.manifest.json` vs. committed bytes (sha256; logic in `check_artifact_manifests.py`) | tree | 1 | campaign run output committed to git beside its manifest; non-`artifact:` URIs (issue #830) | KEEP |
 
 ## Notes on the closest candidates
 
