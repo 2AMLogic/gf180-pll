@@ -2268,6 +2268,39 @@ class ExecutionConsoleLineTests(unittest.TestCase):
         self.assertEqual(report.execution_console_lines(None), [])
         self.assertEqual(report.execution_console_lines({"jobs": 1, "backend": "local"}), [])
 
+    def test_the_console_line_names_the_solver_that_ran(self):
+        """``--no-write`` mints no record, so the console line is the only
+        place a transport pilot can read the solver off (#755)."""
+        line = report.execution_console_lines(
+            {
+                "backend": "batch",
+                "hosts": {"i-0a": 2},
+                "simulators": {"ngspice-47": 2},
+                "solvers": {"SPARSE 1.3": 2},
+            }
+        )[0]
+        self.assertIn("solver(s) SPARSE 1.3 (2)", line)
+
+    def test_an_unnamed_solver_is_unattributed_on_the_console_too(self):
+        line = report.execution_console_lines(
+            {
+                "backend": "batch",
+                "hosts": {"i-0a": 2},
+                "simulators": {"ngspice-47": 2},
+                "solvers": {"SPARSE 1.3": 1, "": 1},
+            }
+        )[0]
+        self.assertIn("SPARSE 1.3 (1)", line)
+        self.assertIn("unattributed (1)", line)
+
+    def test_a_record_with_no_solvers_key_degrades_to_none(self):
+        """Pre-#755 attribution dicts carry no ``solvers``; the line must not
+        crash or imply a solver was named."""
+        line = report.execution_console_lines(
+            {"backend": "local", "hosts": {"box": 1}, "simulators": {"ngspice-46": 1}}
+        )[0]
+        self.assertIn("solver(s) none", line)
+
     def test_build_record_output_feeds_it(self):
         """The CLI reads it from where build_record puts it."""
         env = report.environment(

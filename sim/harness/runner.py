@@ -474,8 +474,10 @@ class PointResult:
     #: Init identity per :attr:`PhaseRun.init`; ``+``-joined across distinct
     #: values, empty if any deck of the point did not show one.
     init: str = ""
-    #: Solver per :attr:`PhaseRun.solver`; ``+``-joined across distinct values,
-    #: empty if any deck of the point did not name one.
+    #: Solver per :attr:`PhaseRun.solver`; ``+``-joined across distinct *named*
+    #: values. Unlike :attr:`init`, a deck that named no solver is skipped
+    #: rather than blanking the point: not naming a solver is missing evidence
+    #: about that deck, not evidence that a different solver ran.
     solver: str = ""
 
     def as_dict(self) -> dict:
