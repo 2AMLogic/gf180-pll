@@ -42,9 +42,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import partial
-from typing import TYPE_CHECKING, ClassVar, Iterable
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterable
 
 if TYPE_CHECKING:
+    import argparse
     import klayout.db as db
 
 try:
@@ -1055,3 +1057,45 @@ def poly_resistor(
         bottom_pad=bottom_pad,
         top_pad=top_pad,
     )
+
+
+def build_cli(
+    build: Callable[[Path], Any],
+    top_cell: str,
+    doc: str | None = None,
+    extra_args: Callable[["argparse.ArgumentParser"], None] | None = None,
+) -> tuple["argparse.Namespace", Any]:
+    """Shared ``__main__`` prologue for this package's generator CLIs.
+
+    Every generator module in ``vco/`` ends with the same ``main()``: an
+    argparse parser whose only built-in option is ``--outdir`` (defaulting to
+    ``layout/evidence/vco-layout/work``), a call to that module's ``build()``
+    on the parsed directory, and the two-line "wrote / footprint" report.
+    This helper owns that prologue so each module's ``main()`` delegates
+    instead of repeating it (issue #938 -- the CLI analogue of commit
+    70eb1d9c's within-package dedup of the geometry helpers).
+
+    ``extra_args`` lets a caller register further options before parsing --
+    ``block.py`` uses it for ``--check-connectivity``. Returns ``(args,
+    result)`` so a caller can keep reporting on the built result (mirror.py's
+    bank/cascade tables, block.py's placement report).
+
+    The ``--outdir`` default is resolved off *this* file's location; every
+    caller sits in this same directory, so it matches the per-module
+    ``parents[2]`` default it replaces.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description=doc)
+    parser.add_argument(
+        "--outdir",
+        default=str(Path(__file__).resolve().parents[2] / "evidence" / "vco-layout" / "work"),
+    )
+    if extra_args is not None:
+        extra_args(parser)
+    args = parser.parse_args()
+    result = build(Path(args.outdir))
+    x0, y0, x1, y1 = result.footprint
+    print(f"wrote {args.outdir}/{top_cell}.gds")
+    print(f"footprint: {x1 - x0:.3f} x {y1 - y0:.3f} um  ({(x1 - x0) * (y1 - y0):.1f} um^2)")
+    return args, result
