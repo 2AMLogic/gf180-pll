@@ -1128,6 +1128,23 @@ table's registry to resolve. That was a true statement about the third
 table's reach and a wrong place to stop — none of the four figures left out
 of that pass is still ungraded.
 
+**Re-pinned evidence (#827, child of #790).** Two of the records this table
+quotes have since been re-qualified under open_pdks `f6eeac7`, the revision
+#789 re-pinned to: `20260802-100727-082c879` → `20261114-093804-ad9eef8`
+(`divider-ratio-chain`) and `20260919-002812-1b12179` →
+`20261114-091604-ffbc0e2` (`lock-detector`). Neither re-run moves a figure
+quoted below — the chain's worst setup margin goes 302.83 → 302.86 ps, every
+other chain figure reproduces exactly, and the lock detector's `window_edges`
+table is byte-identical at all seven ladder corners — so the `Record(s)`
+column still names the record each number was actually read from, which is
+what a provenance row is for. Re-pointing these rows at the successors, and
+re-deriving §5 against them, is #829's scope. The old-vs-new deltas are in
+[`sim/REPIN-DELTAS-f6eeac7-lock-divider.md`](../../sim/REPIN-DELTAS-f6eeac7-lock-divider.md). A third record this
+document cites outside the table, `20260925-050022-6d57802`
+(`lock-window-proxy`), is re-qualified by `20261114-194051-c8750de` — and
+that one *did* move two of its pad-proxy policy verdicts, which the same
+delta document sets out in full.
+
 | §5 row | Quoted value | Record(s) | Evidence file | Reduction | Scale |
 |---|---|---|---|---|---|
 | Output band | `6.449 MHz` | `20260731-175947-0a12e6c` (63-point grid) | `vco_tuning.csv` | `max(min(fosc_hz) by bundle+temp_c+vdd_v)` | `1e-6` |
