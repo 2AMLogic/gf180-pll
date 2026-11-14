@@ -68,8 +68,9 @@ The prose above is the human summary. The **machine verdict of record** is
 [T1 evidence checklist](https://github.com/2AMLogic/klayout-tools/blob/main/docs/design-evidence-tiers.md)
 rendered `met` or `unmet` with a reason, graded by `klt signoff --manifest`
 from the evidence this repo actually cites, and re-checked in CI so it cannot
-go stale. Today it reads **0 of 22 rows met**, which is the honest state of a
-block with no `klt` evidence envelope committed anywhere yet.
+go stale. Today it reads **6 of 22 rows met** — items 1, 9 and 10, each on
+both the `analog` and `digital` partitions, citing the evidence envelopes
+committed under `signoff/attest/`.
 
 Read `signoff/README.md` for what that verdict does and does not say — in
 particular, three quite different situations all render as `no_evidence`, and
