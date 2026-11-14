@@ -1,0 +1,409 @@
+{
+  "schema_version": 3,
+  "engine": "klayout",
+  "layout": {
+    "path": "layout/evidence/lock-detector-layout/lock_detector.gds",
+    "scope": "repo"
+  },
+  "reference": {
+    "path": "layout/evidence/lock-detector-layout/lvs-clean/lock_detector.spice",
+    "scope": "repo"
+  },
+  "top": "lock_detector",
+  "reference_top": "LOCK_DETECTOR",
+  "reference_conversion": {
+    "form": "subckt-call",
+    "deck": "gf180mcu",
+    "device_map": null
+  },
+  "parameter_tolerance": null,
+  "options": {
+    "combine_devices": true,
+    "combine_devices_per_circuit": null,
+    "combine_devices_max_attempts": 5,
+    "flatten_layout": false,
+    "flatten_reference": false,
+    "netgen_setup": null,
+    "parameter_tolerance": null,
+    "compare_parameters": null,
+    "power_connectivity": null,
+    "anchor_top_level_pins": null,
+    "strict_top_level_pin_count": false,
+    "compare_mos_flavour": false,
+    "ignore_mos_bulk": false,
+    "supply_nets": [
+      "GND",
+      "VCC",
+      "VDD",
+      "VGND",
+      "VPWR",
+      "VSS"
+    ],
+    "finfet_bulk": null
+  },
+  "hints_applied": null,
+  "constant_nets_applied": null,
+  "status": "match",
+  "power_connectivity": {
+    "status": "unchecked",
+    "reason": "reference.form is 'subckt-call', whose reference netlist carries its own power/ground pins and nets -- they take part in the ordinary compare, so this check (which exists to cover the signal-only 'gate-level-verilog' form) does not apply",
+    "power_pins": [],
+    "power_pins_derivation": null,
+    "instance_count": 0,
+    "expected_nets": null,
+    "unchecked_expected_pins": [],
+    "excluded_pins": [],
+    "findings": [],
+    "finding_count": 0
+  },
+  "body_verification": {
+    "status": "verified",
+    "reason": null,
+    "device_classes": [],
+    "device_count": 0,
+    "findings": [],
+    "finding_count": 0
+  },
+  "device_parameter_coverage": [],
+  "mismatch_count": 1,
+  "error_count": 0,
+  "category_counts": {
+    "topology": 1
+  },
+  "category_error_counts": {},
+  "counts": {
+    "nets": {
+      "layout": 48,
+      "reference": 48,
+      "matched": 48
+    },
+    "devices": {
+      "layout": 117,
+      "reference": 117,
+      "matched": 117
+    },
+    "pins": {
+      "layout": 48,
+      "reference": 10,
+      "matched": 48
+    }
+  },
+  "device_classes": [
+    "nfet",
+    "pfet",
+    "bjt",
+    "cap_mim_2f0_m4m5_noshield",
+    "cap_nmos_03v3",
+    "cap_nmos_03v3_dn",
+    "cap_pmos_03v3",
+    "cap_pmos_03v3_dn",
+    "cap_nmos_06v0",
+    "cap_nmos_06v0_dn",
+    "cap_pmos_06v0",
+    "cap_pmos_06v0_dn",
+    "cap_nmos_03v3_b",
+    "cap_pmos_03v3_b",
+    "cap_nmos_06v0_b",
+    "cap_pmos_06v0_b",
+    "resistor",
+    "diode_nd2ps_06v0",
+    "diode_pd2nw_06v0"
+  ],
+  "environment": {
+    "engine": "klayout",
+    "engine_version": "0.30.13",
+    "netgen_binary": null,
+    "layout_sha256": "799af5d7f6b8407c5efc50b7e8ef639a8aa8787eb91b47e1f31f66f1673b2c0c",
+    "reference_sha256": "a616b09c52530f481ea49e6ddaf8d68b3ab1483c36d1ca75cbb8f82ec6ba04d5",
+    "extracted_netlist": null
+  },
+  "provenance": {
+    "klt_version": "0.9.2.dev1024+g8da9718f0cb6",
+    "klt_git_commit": "8da9718f0cb6140607431017e6573c531a2b1d92",
+    "klt_reinstall_spec": "klayout-tools @ git+https://github.com/2AMLogic/klayout-tools@8da9718f0cb6140607431017e6573c531a2b1d92",
+    "klayout_version": "0.30.13",
+    "pdk": null,
+    "deck": {
+      "name": "gf180mcu",
+      "content_hash": "sha256:c3f2cce49000857a3a71cb65203aabf0eb27cd0ee6b1c60e29792355c455c4b1",
+      "released": false,
+      "options": {
+        "metal_top": "9K",
+        "mim_cap": "cap_mim_2f0_m4m5_noshield",
+        "poly_res": "3k"
+      },
+      "options_explicit": {
+        "metal_top": false,
+        "mim_cap": false,
+        "poly_res": true
+      },
+      "options_hash": "sha256:df52f5d3649629175a75f1fd8b8ad9f66cc6204b375d93fa3107be5f4a96588e"
+    },
+    "input": {
+      "content_hash": "sha256:799af5d7f6b8407c5efc50b7e8ef639a8aa8787eb91b47e1f31f66f1673b2c0c",
+      "role": "layout"
+    },
+    "klayout_version_mismatch": true
+  },
+  "mismatches": [
+    {
+      "category": "topology",
+      "severity": "warning",
+      "description": "device class has no counterpart on the other side, but no devices of this class were extracted either -- not a real topology mismatch: 'bjt'",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": null,
+        "reference": null,
+        "class": "bjt"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    }
+  ],
+  "net_correspondence": [
+    {
+      "layout": "DN",
+      "reference": "DN",
+      "pin": true
+    },
+    {
+      "layout": "LDT0",
+      "reference": "LDT0",
+      "pin": true
+    },
+    {
+      "layout": "LDT1",
+      "reference": "LDT1",
+      "pin": true
+    },
+    {
+      "layout": "LDT2",
+      "reference": "LDT2",
+      "pin": true
+    },
+    {
+      "layout": "LDT3",
+      "reference": "LDT3",
+      "pin": true
+    },
+    {
+      "layout": "LOCK",
+      "reference": "LOCK",
+      "pin": true
+    },
+    {
+      "layout": "ERR",
+      "reference": "LOCK_DETECTOR_ERR",
+      "pin": true
+    },
+    {
+      "layout": "ERRD",
+      "reference": "LOCK_DETECTOR_ERRD",
+      "pin": true
+    },
+    {
+      "layout": "LOCKB",
+      "reference": "LOCK_DETECTOR_LOCKB",
+      "pin": true
+    },
+    {
+      "layout": "WIDE",
+      "reference": "LOCK_DETECTOR_WIDE",
+      "pin": true
+    },
+    {
+      "layout": "WIDEB",
+      "reference": "LOCK_DETECTOR_WIDEB",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_D1",
+      "reference": "LOCK_DETECTOR_XDLY_D1",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_D2",
+      "reference": "LOCK_DETECTOR_XDLY_D2",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_D3",
+      "reference": "LOCK_DETECTOR_XDLY_D3",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S10",
+      "reference": "LOCK_DETECTOR_XDLY_S10",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S11",
+      "reference": "LOCK_DETECTOR_XDLY_S11",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S12",
+      "reference": "LOCK_DETECTOR_XDLY_S12",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S13",
+      "reference": "LOCK_DETECTOR_XDLY_S13",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S20",
+      "reference": "LOCK_DETECTOR_XDLY_S20",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S21",
+      "reference": "LOCK_DETECTOR_XDLY_S21",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S22",
+      "reference": "LOCK_DETECTOR_XDLY_S22",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S23",
+      "reference": "LOCK_DETECTOR_XDLY_S23",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S30",
+      "reference": "LOCK_DETECTOR_XDLY_S30",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S31",
+      "reference": "LOCK_DETECTOR_XDLY_S31",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S32",
+      "reference": "LOCK_DETECTOR_XDLY_S32",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S33",
+      "reference": "LOCK_DETECTOR_XDLY_S33",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S40",
+      "reference": "LOCK_DETECTOR_XDLY_S40",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S41",
+      "reference": "LOCK_DETECTOR_XDLY_S41",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S42",
+      "reference": "LOCK_DETECTOR_XDLY_S42",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_S43",
+      "reference": "LOCK_DETECTOR_XDLY_S43",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_T0B",
+      "reference": "LOCK_DETECTOR_XDLY_T0B",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_T1B",
+      "reference": "LOCK_DETECTOR_XDLY_T1B",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_T2B",
+      "reference": "LOCK_DETECTOR_XDLY_T2B",
+      "pin": true
+    },
+    {
+      "layout": "XDLY_T3B",
+      "reference": "LOCK_DETECTOR_XDLY_T3B",
+      "pin": true
+    },
+    {
+      "layout": "XERR_N1",
+      "reference": "LOCK_DETECTOR_XERR_N1",
+      "pin": true
+    },
+    {
+      "layout": "XERR_N2",
+      "reference": "LOCK_DETECTOR_XERR_N2",
+      "pin": true
+    },
+    {
+      "layout": "XERR_N3",
+      "reference": "LOCK_DETECTOR_XERR_N3",
+      "pin": true
+    },
+    {
+      "layout": "XERR_G1_NMID",
+      "reference": "LOCK_DETECTOR_XERR_XG1_NMID",
+      "pin": true
+    },
+    {
+      "layout": "XERR_G2_NMID",
+      "reference": "LOCK_DETECTOR_XERR_XG2_NMID",
+      "pin": true
+    },
+    {
+      "layout": "XERR_G3_NMID",
+      "reference": "LOCK_DETECTOR_XERR_XG3_NMID",
+      "pin": true
+    },
+    {
+      "layout": "XERR_G4_NMID",
+      "reference": "LOCK_DETECTOR_XERR_XG4_NMID",
+      "pin": true
+    },
+    {
+      "layout": "XNW_NMID",
+      "reference": "LOCK_DETECTOR_XNW_NMID",
+      "pin": true
+    },
+    {
+      "layout": "XSCH_N1",
+      "reference": "LOCK_DETECTOR_XSCH_N1",
+      "pin": true
+    },
+    {
+      "layout": "XSCH_P1",
+      "reference": "LOCK_DETECTOR_XSCH_P1",
+      "pin": true
+    },
+    {
+      "layout": "UP",
+      "reference": "UP",
+      "pin": true
+    },
+    {
+      "layout": "VDD",
+      "reference": "VDD",
+      "pin": true
+    },
+    {
+      "layout": "VSS",
+      "reference": "VSS",
+      "pin": true
+    },
+    {
+      "layout": "VWIN",
+      "reference": "VWIN",
+      "pin": true
+    }
+  ]
+}
