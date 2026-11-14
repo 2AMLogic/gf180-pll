@@ -14,7 +14,9 @@ curve of that band at that point brackets f inside the 0.9 - 2.7 V control
 window (DR-003 Decision 5), i.e. f1 <= f <= f7 in the committed record. For a
 code b over a set of points, the frequencies held at every point are therefore
 [max f1, min f7] -- the maximum of the band floors and the minimum of the band
-ceilings -- empty if max f1 > min f7.
+ceilings -- empty if max f1 > min f7. The derated figure is reported with the
+band and PVT point whose ceiling supplies it, so the binding point `spec/pll.md`
+states beside the figure is re-derived here rather than transcribed there.
 
     python3 static_band_coverage.py            # print the tables
     python3 static_band_coverage.py --check    # exit 1 if the 200 MHz finding
@@ -69,16 +71,6 @@ def window(c, band, keys):
     return c[band][lo][0], lo, c[band][hi][-1], hi
 
 
-def best_static(c, keys):
-    """Highest frequency one static code holds over `keys`: (f_hz, band, binding key)."""
-    best = None
-    for b in BANDS:
-        flo, _, fhi, khi = window(c, b, keys)
-        if flo <= fhi and (best is None or fhi > best[0]):
-            best = (fhi, b, khi)
-    return best
-
-
 def merge(ivs):
     out = []
     for a, z in sorted(ivs):
@@ -96,6 +88,25 @@ def intersect(xs, ys):
 def ceiling(ivs, cap=TARGET_HZ):
     """Highest frequency <= cap inside the interval set."""
     return max(min(z, cap) for a, z in ivs if a <= cap)
+
+
+def ceiling_binding(c, f_hz):
+    """[(band, ceiling-binding key)] of every static-code window whose min ceiling is f_hz.
+
+    Provenance for a printed ceiling, not a second rule for one: `merge()` and
+    `intersect()` only ever carry interval endpoints through, never invent new
+    ones, so a derated ceiling below `ceiling()`'s cap IS the min band ceiling
+    of some code over some bundle's 9 points -- and `window()` has already
+    computed the point that supplies it. Empty if the figure is the cap itself.
+    """
+    out = []
+    for bu in BUNDLES:
+        ks = keys_of(c, bu)
+        for b in BANDS:
+            flo, _, fhi, khi = window(c, b, ks)
+            if flo <= fhi and fhi == f_hz:
+                out.append((b, khi))
+    return out
 
 
 def holes(ivs, lo, hi):
@@ -166,6 +177,9 @@ def main(argv=None):
     cc = ceiling(common)
     print("| every bundle (the figure the Output band row carries) | %.1f |" % (cc / 1e6))
     print("\nDerated ceiling: %.1f MHz -> %d MHz rounded down" % (cc / 1e6, int(cc // 1e6)))
+    bound = ceiling_binding(c, cc)
+    print("Binding point: %s" % ("; ".join("band %d, %s ceiling" % (b, fmt(k)) for b, k in bound)
+                                 or "the %.0f MHz cap itself" % (TARGET_HZ / 1e6)))
 
     print("\nStatic-code holes below the ceiling, every bundle (MHz): %s"
           % "; ".join("%.1f-%.1f" % (a / 1e6, z / 1e6) for a, z in holes(common, 10e6, cc)))
@@ -173,7 +187,8 @@ def main(argv=None):
     if "--check" in argv:
         ok = (all(not table[b][2] for b in ("typical", "ss", "fs", "sf")) and table["ff"][2] == [7]
               and (either, n7only, n6only) == (30, 11, 4)
-              and int(ceiling(common) // 1e6) == 166)
+              and int(ceiling(common) // 1e6) == 166
+              and bound == [(6, ("ff", -40.0, 3.63))])
         print("\n#534 finding %s" % ("re-derives" if ok else "DOES NOT re-derive"))
         return 0 if ok else 1
     return 0
