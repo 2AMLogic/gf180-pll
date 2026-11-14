@@ -74,10 +74,13 @@ committed under `signoff/attest/`.
 
 Read `signoff/README.md` for what that verdict does and does not say — in
 particular, three quite different situations all render as `no_evidence`, and
-the four items the tool grades on "some passing envelope was cited" are
-deliberately left uncited here rather than turned green by an unrelated report.
-No hand-maintained met/unmet checklist is kept anywhere in this repository; if
-a claim about T1 status conflicts with that report, the report wins.
+the four items with no `klt` verb behind them (1, 2, 9 and 10) are graded on
+an **artifact-anchored** envelope that pins the audited artifact by path and
+content hash. This repo cites such envelopes for items 1 and 9 on each
+partition and for item 10 once; item 2 (layout) is deliberately left uncited
+rather than turned green by an unrelated report. No hand-maintained met/unmet
+checklist is kept anywhere in this repository; if a claim about T1 status
+conflicts with that report, the report wins.
 
 ## How verification works here
 
