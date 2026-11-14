@@ -14,6 +14,7 @@ from . import artifacts as artifacts_mod
 from . import batch as batch_mod
 from . import derived as derived_mod
 from . import execution as execution_mod
+from . import moscap_probe
 from . import omp
 from . import raw_measures as raw_measures_mod
 from .pdk import PdkNotFound, find_pdk
@@ -78,17 +79,18 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="?",
         metavar="EXPERIMENT",
         help="experiment slug under sim/ (i.e. sim/<slug>/testbench/tb.json); "
-        "with --check-env, an optional experiment to check for a precise "
-        "per-campaign ngspice-47 verdict instead of the generic one (#268)",
+        "with --check-env, an optional experiment for a precise "
+        "per-campaign verdict instead of the generic one (#268)",
     )
     parser.add_argument("--list", action="store_true", help="list testbenches and corners")
     parser.add_argument(
         "--check-env",
         action="store_true",
         help="report ngspice / PDK availability and exit; warns (not a hard "
-        "block) if the resolved ngspice is version 47, known-bad for "
-        "closed-loop campaigns nesting the PDK's nonlinear moscap family "
-        "(#153) -- pass EXPERIMENT for a DUT-aware verdict",
+        "block) if the resolved ngspice fails this repo's moscap capability "
+        "probe -- known-bad for campaigns instantiating the PDK's nonlinear "
+        "moscap family with an 'm=' multiplier (#153, #926) -- pass "
+        "EXPERIMENT for a DUT-aware verdict",
     )
     parser.add_argument(
         "--print-env",
@@ -318,33 +320,66 @@ def _ngspice_pin_report() -> str:
     )
 
 
+def _moscap_probe_verdict() -> tuple[bool | None, str | None]:
+    """The moscap capability verdict for ``--check-env``, plus a note when it
+    is inconclusive.
+
+    The probe needs the PDK, which ``--check-env`` otherwise resolves *after*
+    ngspice; a PdkNotFound here is reported as "could not tell" rather than
+    failing the check -- the PDK report block below still prints its own
+    MISSING line, so this helper deliberately leaves that reporting alone.
+    """
+    try:
+        pdk = find_pdk()
+    except PdkNotFound as exc:
+        return None, (
+            "moscap capability probe could not run: no gf180mcu PDK found "
+            f"({exc.args[0].splitlines()[0]})"
+        )
+    loads = moscap_probe.nested_moscap_loads(pdk)
+    if loads is None:
+        return None, (
+            "moscap capability probe was inconclusive (a probe timeout, or "
+            "output that carried neither the success marker nor the failure "
+            "signature) -- this check could not tell whether this ngspice "
+            "expands the PDK's nonlinear moscap family cleanly"
+        )
+    return loads, None
+
+
 def cmd_check_env(experiment: str | None = None) -> int:
     status = EXIT_OK
     try:
         version = runner.ngspice_version()
-        # #153/#268: ngspice-47 is known-bad for this repo's closed-loop
-        # campaigns that nest the PDK's nonlinear-capacitance moscap family
-        # inside a .subckt -- report that up front rather than an
-        # unqualified OK, without hard-blocking (a host with only
-        # ngspice-47 can still attempt a run). If an experiment was given,
-        # prefer the DUT-aware warning for a precise per-campaign verdict;
-        # otherwise fall back to the version-only advisory.
+        # #153/#926: whether the resolved binary expands the PDK's
+        # nonlinear-capacitance moscap family cleanly is a *capability*,
+        # decided by a probe deck, not by the version token (the patched
+        # ngspice-47 point build prints the same banner as the broken one).
+        # Warn only when the probe actually fails; say "could not tell" when
+        # it is inconclusive; never hard-block (a host whose only build
+        # fails the probe can still attempt a run and see the real error).
+        # If an experiment was given, prefer the DUT-aware warning for a
+        # precise per-campaign verdict; otherwise (or when the experiment
+        # could not be resolved) fall back to the generic advisory.
+        loads, probe_note = _moscap_probe_verdict()
         warning = None
         if experiment:
             try:
                 tb_path = _resolve_tb_path(experiment)
                 tb = tb_mod.load(tb_path)
                 sources = tuple(tb.dut) + tuple(phase.netlist for phase in tb.run_phases)
-                warning = runner.nonlinear_moscap_ngspice47_warning(version, sources)
+                warning = runner.nonlinear_moscap_ngspice47_warning(version, sources, loads)
             except FileNotFoundError as exc:
                 print(f"  (could not resolve {experiment!r} for a DUT-aware check: {exc})")
         if warning is None:
-            warning = runner.ngspice47_advisory(version)
+            warning = runner.ngspice47_advisory(version, loads)
         if warning:
             print(f"ngspice : WARN  {version}")
             print(f"  {warning}")
         else:
             print(f"ngspice : OK   {version}")
+            if probe_note:
+                print(f"  ({probe_note})")
         print(_ngspice_pin_report())
     except NgspiceMissing as exc:
         print(f"ngspice : MISSING\n{exc}")
@@ -536,18 +571,32 @@ def run(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ENVIRONMENT
 
-    # #153: ngspice-47 mis-expands the PDK's nonlinear-capacitance moscap
-    # family into a malformed internal element ("unknown parameter (e9)"),
-    # which otherwise surfaces only as an opaque per-point ngspice failure
-    # deep inside the sweep. Warn up front with an actionable message rather
-    # than let every point fail silently unexplained; the run still proceeds
-    # (this is a heuristic content match, not a hard version gate) so a host
-    # where ngspice-47 has since been fixed is not blocked.
+    # #153/#926: whether the resolved ngspice expands the PDK's nonlinear-
+    # capacitance moscap family cleanly is a *capability*, decided by a
+    # probe deck run once per process, not by a version token (the patched
+    # ngspice-47 point build prints the same banner as the broken one). A
+    # failed probe on a DUT that carries the measured 'm=' trigger is
+    # warned up front with an actionable message rather than let every
+    # point fail with an opaque per-point ngspice error deep inside the
+    # sweep; the run still proceeds (advisory, never a hard gate) so a host
+    # whose only build fails the probe is not blocked. An inconclusive
+    # probe says so without predicting anything.
+    moscap_sources = tuple(tb.dut) + tuple(phase.netlist for phase in tb.run_phases)
+    moscap_loads = moscap_probe.nested_moscap_loads(pdk)
     moscap_warning = runner.nonlinear_moscap_ngspice47_warning(
-        ngspice, tuple(tb.dut) + tuple(phase.netlist for phase in tb.run_phases)
+        ngspice, moscap_sources, moscap_loads
     )
     if moscap_warning:
         print(moscap_warning, file=sys.stderr)
+    elif moscap_loads is None and runner.dut_uses_nonlinear_moscap(moscap_sources):
+        print(
+            "note: this DUT instantiates the PDK's nonlinear-capacitance "
+            "moscap family, but the moscap capability probe could not tell "
+            "whether this ngspice expands it cleanly (a probe timeout, or "
+            "output with neither the success marker nor the failure "
+            "signature) -- proceeding without a prediction.",
+            file=sys.stderr,
+        )
 
     corner_names = args.corners or ([args.corner_set] if args.corner_set else list(tb.corners))
     corner_list = corners_mod.resolve_corners(corner_names)

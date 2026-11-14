@@ -67,18 +67,19 @@ producing a misleading result. `sim/run_corners.py --print-env` emits the
 resolved paths as shell exports; `source sim/env.sh` applies them so that an
 interactive ngspice or xschem session uses the identical PDK.
 
-### ngspice-46 required for nested nonlinear moscap decks (#153)
+### The nonlinear moscap family needs a build that expands it (#153, #926)
+
+(This section was previously titled "ngspice-46 required for nested
+nonlinear moscap decks"; #926's measurement corrected the mechanism on both
+counts -- the trigger and how affected builds are identified -- as described
+below. `sim/lib/simenv.sh` still refers here by the old title.)
 
 `sm141064.ngspice` implements this PDK's decoupling/loop-filter moscap family
 (`cap_nmos_03v3`, `cap_pmos_03v3`, `cap_nmos_06v0`, `cap_pmos_06v0`, and each
 of those with a `_b` body-tie variant) as a *nonlinear* capacitance -- a `c=`
-behavioral coefficient expression, not a fixed value. **ngspice-47** (the
-current Homebrew/apt bottle as of this writing) mis-expands that construct
-into a malformed internal element/node whenever it is instantiated from
-*inside* another named `.subckt` -- the hierarchical instance path the error
-names (`x1.xcdec1.gc_moscap`, two levels deep: the DUT copy, then the cap
-nested inside `.subckt vco`) is the signature -- and every PVT point fails
-with:
+behavioral coefficient expression, not a fixed value. One **ngspice-47**
+release mis-expands that construct into a malformed internal element/node,
+and every PVT point of a deck carrying it fails with:
 
 ```
 Error on line NNNN or its substitute:
@@ -86,32 +87,49 @@ Error on line NNNN or its substitute:
   unknown parameter (e9)
 ```
 
-**ngspice-46 composes and runs the identical deck correctly.** This is an
-ngspice-47 codegen regression in the PDK's own subcircuit, not a defect in
-this repo's decks, and not something a `.options` line or netlist change can
-work around — see #153 for the verified reproduction (a clean ngspice-46 run
-reproducing the historical `vco-tuning-range` record's frequency/Kvco range,
-byte-for-byte identical deck).
+**The measured trigger (#926, 2026-11-14, both installed 47 builds on the
+reference host) is the `m=` multiplier on the instance line** -- not
+`.subckt` nesting, which is what this note previously claimed following
+#153. In this repo's decks the two properties are perfectly correlated:
+every `m=` instance lives in a nested DUT export
+(`design/netlist/{vco,loop_filter,pll_top}.spice`) and every `m=`-less one
+in a flat device-characterization deck (`sim/devchar-passives`' cap-CV
+decks), so no committed deck could have told the two apart. Hand-written
+single-point decks against both builds showed a *flat* instance with `m=1`
+failing on the broken build and a *nested* one without `m=` loading cleanly
+-- the old nested/flat boundary was a confound of the deck layout, not the
+mechanism.
 
-Two campaigns currently compose a DUT that nests this family and are affected:
-`sim/vco-tuning-range` (`design/netlist/vco.spice`, `cap_nmos_03v3` inside
-`.subckt vco`) and `sim/reference-spur` (`design/netlist/pll_top.spice`,
-both `cap_nmos_03v3` inside `.subckt vco` and `cap_nmos_03v3_b` inside
-`.subckt loop_filter`). A *flat*, top-level instantiation of the same family
--- as `sim/devchar-passives`' own device-characterization deck uses, with no
-enclosing `.subckt` -- has been verified NOT to trigger this on ngspice-47;
-that campaign runs on either version. The harness itself checks this
-automatically: `run_corners.py` prints an actionable warning to stderr (and
-still attempts the run) whenever it detects a resolved DUT/fragment nesting
-this family under a version whose leading `ngspice-<N>` is `47`
-(`harness/runner.py`'s `nonlinear_moscap_ngspice47_warning`) — so a host
-missing ngspice-46 gets the explanation up front instead of only the opaque
-per-point parser error. `run_corners.py --check-env` carries the same warning
-(#268): it reports a resolved ngspice-47 as a `WARN`, not an unqualified
-`OK`, naming this issue and the build recipe below -- pass an experiment
-(`--check-env vco-tuning-range`) for the same DUT-aware, per-campaign verdict
-the run path prints. Either way this stays advisory, never a hard block, so
-a host with only ngspice-47 can still attempt a run.
+**Which installed builds are affected cannot be read off the version
+banner**: the patched 47 point build prints exactly the same `ngspice-47`
+token as the broken one (compared byte-for-byte), so there is nothing to
+parse. `run_corners.py` therefore decides from a **capability probe**
+(`sim/harness/moscap_probe.py`): a few-line deck instantiating
+`cap_nmos_03v3` with `m=1`, run through the same local-backend invocation
+the grid's points use (so the staged `.spiceinit` is in place before the
+netlist is read, #755), memoized once per process so a grid of any size
+costs exactly one probe. The probe's verdict drives both the run path and
+`--check-env` (#268):
+
+- probe **fails** → the actionable warning, on both paths, naming this
+  issue and the known-good build recipe below. Advisory only, never a hard
+  block: a host whose only build fails the probe can still attempt the run
+  and see the real per-point error.
+- probe **loads** → no warning. This is evidence about *loading* only --
+  whether a loading build returns the same *numbers* is a separate, open
+  question (#932), and no harness output here answers it.
+- probe **inconclusive** (no ngspice, a probe timeout, or output with
+  neither the success marker nor the failure signature) → the harness
+  abstains: it says it could not tell rather than predicting either way,
+  and the run proceeds unchanged.
+
+Campaigns whose committed DUTs carry the `m=` trigger: `sim/vco-tuning-range`
+(`design/netlist/vco.spice`, `cap_nmos_03v3` with `m=1` inside `.subckt vco`)
+and `sim/reference-spur` (`design/netlist/pll_top.spice`, both `cap_nmos_03v3`
+with `m=1` inside `.subckt vco` and `cap_nmos_03v3_b` with `m=1` inside
+`.subckt loop_filter`). `sim/devchar-passives`' own cap-CV decks instantiate
+the family flat and *without* `m=`, so the measured trigger is absent from
+them.
 
 To obtain ngspice-46 (not the current stock `brew install ngspice`, which
 tracks the latest release) on macOS, build the upstream release tarball
