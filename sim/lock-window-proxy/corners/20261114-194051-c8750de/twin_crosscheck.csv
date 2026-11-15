@@ -1,0 +1,4 @@
+# this deck's sixteen-copies-on-one-step window divided by the committed single-copy campaign's, at every shared (bundle, temperature, supply, code)
+# A ratio of 1 means putting sixteen chains on one ideal source changed nothing, which is what a zero-output-impedance stimulus should do. A systematic offset would mean the two campaigns are not measuring the same quantity, and the pairing this campaign rests on would not hold.
+n_points_compared,ratio_min,ratio_geomean,ratio_max,worst_point,worst_code
+1872,0.999988,0.999999,1.00001,fs_-40c_3.30v,c0

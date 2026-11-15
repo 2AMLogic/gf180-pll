@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "sha256": "3bbbdbf3920d61da3a105badc806017cc3e38e43b918442fc5907f4b27a9cd07",
+      "size": 210720,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.2.dev1029+g76f47afa48f1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "8cb08479746dd653eebe0ef46c3943e4c166f605"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/3b/3bbbdbf3920d61da3a105badc806017cc3e38e43b918442fc5907f4b27a9cd07",
+      "name": "sim/.artifact-stage/lock-window-bisection-20261114-191343-8cb0847/ff_27c_3.30v_c11v2p295_d0000.log"
+    },
+    {
+      "sha256": "32087b483a29db2bbd98ff1f4fefc31a1c0796a2fb45ce0b850d313bc7bebef9",
+      "size": 213227,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.2.dev1029+g76f47afa48f1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "8cb08479746dd653eebe0ef46c3943e4c166f605"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/32/32087b483a29db2bbd98ff1f4fefc31a1c0796a2fb45ce0b850d313bc7bebef9",
+      "name": "sim/.artifact-stage/lock-window-bisection-20261114-191343-8cb0847/ff_27c_3.30v_c11v2p295_dm2000.log"
+    },
+    {
+      "sha256": "4880f15337f9f701631b125a98aec042df4e751a54b447df42f3bfb16723c83f",
+      "size": 211810,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.2.dev1029+g76f47afa48f1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "8cb08479746dd653eebe0ef46c3943e4c166f605"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/48/4880f15337f9f701631b125a98aec042df4e751a54b447df42f3bfb16723c83f",
+      "name": "sim/.artifact-stage/lock-window-bisection-20261114-191343-8cb0847/ff_27c_3.30v_c11v2p295_dp2000.log"
+    },
+    {
+      "sha256": "8ed29b991c3668d0f6f7b550fb7a4db7afae40cc1b3382d7e92ee29b8b69e1bb",
+      "size": 6435,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.2.dev1029+g76f47afa48f1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "8cb08479746dd653eebe0ef46c3943e4c166f605"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/8e/8ed29b991c3668d0f6f7b550fb7a4db7afae40cc1b3382d7e92ee29b8b69e1bb",
+      "name": "sim/.artifact-stage/lock-window-bisection-20261114-191343-8cb0847/raw_measures.csv",
+      "media_type": "text/csv"
+    },
+    {
+      "sha256": "093dd9ea7497efc7328e7ea6d68f0ed5077f81fb638d85e98c7280c31ba8f318",
+      "size": 193583,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.2.dev1029+g76f47afa48f1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "8cb08479746dd653eebe0ef46c3943e4c166f605"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/09/093dd9ea7497efc7328e7ea6d68f0ed5077f81fb638d85e98c7280c31ba8f318",
+      "name": "sim/.artifact-stage/lock-window-bisection-20261114-191343-8cb0847/ss_27c_3.30v_c3v1p988_d0000.log"
+    },
+    {
+      "sha256": "ae0105ed71eaaa5ea867a0f8d97ac34536af528f93aee8d094db081100223a24",
+      "size": 195600,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.2.dev1029+g76f47afa48f1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "8cb08479746dd653eebe0ef46c3943e4c166f605"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/ae/ae0105ed71eaaa5ea867a0f8d97ac34536af528f93aee8d094db081100223a24",
+      "name": "sim/.artifact-stage/lock-window-bisection-20261114-191343-8cb0847/ss_27c_3.30v_c3v1p988_dm2000.log"
+    },
+    {
+      "sha256": "e8d3d98cca0b17cb17cf716a20545fbc232d818f277a66ead73284036f106f50",
+      "size": 195460,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.2.dev1029+g76f47afa48f1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "8cb08479746dd653eebe0ef46c3943e4c166f605"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/e8/e8d3d98cca0b17cb17cf716a20545fbc232d818f277a66ead73284036f106f50",
+      "name": "sim/.artifact-stage/lock-window-bisection-20261114-191343-8cb0847/ss_27c_3.30v_c3v1p988_dp2000.log"
+    },
+    {
+      "sha256": "bc4786222489639970d922f520bf041a0e7da362b68c4706f62853ecfd485565",
+      "size": 196178,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.2.dev1029+g76f47afa48f1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "8cb08479746dd653eebe0ef46c3943e4c166f605"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/bc/bc4786222489639970d922f520bf041a0e7da362b68c4706f62853ecfd485565",
+      "name": "sim/.artifact-stage/lock-window-bisection-20261114-191343-8cb0847/typical_27c_3.30v_c7v2p168_d0000.log"
+    },
+    {
+      "sha256": "11dfb169132593d576f3e9082bb15cc77848e21eb86e26fa933fcb526c0e3821",
+      "size": 206803,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.2.dev1029+g76f47afa48f1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "8cb08479746dd653eebe0ef46c3943e4c166f605"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/11/11dfb169132593d576f3e9082bb15cc77848e21eb86e26fa933fcb526c0e3821",
+      "name": "sim/.artifact-stage/lock-window-bisection-20261114-191343-8cb0847/typical_27c_3.30v_c7v2p168_dm2000.log"
+    },
+    {
+      "sha256": "4282f96cd988292717a456f8e37b454ce2dc160e5e6430dd786dc8d2b28b701a",
+      "size": 207422,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.2.dev1029+g76f47afa48f1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "8cb08479746dd653eebe0ef46c3943e4c166f605"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/42/4282f96cd988292717a456f8e37b454ce2dc160e5e6430dd786dc8d2b28b701a",
+      "name": "sim/.artifact-stage/lock-window-bisection-20261114-191343-8cb0847/typical_27c_3.30v_c7v2p168_dm2400.log"
+    },
+    {
+      "sha256": "3a74da8807d5255bef8d727f8afcd8100e22297fc0bca68ec4d7cb78db10eae8",
+      "size": 200606,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.2.dev1029+g76f47afa48f1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "8cb08479746dd653eebe0ef46c3943e4c166f605"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/3a/3a74da8807d5255bef8d727f8afcd8100e22297fc0bca68ec4d7cb78db10eae8",
+      "name": "sim/.artifact-stage/lock-window-bisection-20261114-191343-8cb0847/typical_27c_3.30v_c7v2p168_dm2800.log"
+    },
+    {
+      "sha256": "120f360f6475ea4281879c8c3117fec2e73e44aeb8880ad1689cfddca749be50",
+      "size": 204148,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.2.dev1029+g76f47afa48f1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "8cb08479746dd653eebe0ef46c3943e4c166f605"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/12/120f360f6475ea4281879c8c3117fec2e73e44aeb8880ad1689cfddca749be50",
+      "name": "sim/.artifact-stage/lock-window-bisection-20261114-191343-8cb0847/typical_27c_3.30v_c7v2p168_dp2000.log"
+    },
+    {
+      "sha256": "b9acfa6bdcc29f8b57ffe1fb8c028b8519d85ad39cd11bb6749e80b0a734b433",
+      "size": 201502,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.2.dev1029+g76f47afa48f1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "8cb08479746dd653eebe0ef46c3943e4c166f605"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/b9/b9acfa6bdcc29f8b57ffe1fb8c028b8519d85ad39cd11bb6749e80b0a734b433",
+      "name": "sim/.artifact-stage/lock-window-bisection-20261114-191343-8cb0847/typical_27c_3.30v_c7v2p168_dp2400.log"
+    },
+    {
+      "sha256": "1fd8d367f369c9e4efbe50bb8bd8417e3b44d1068eba7ac0f29885ea7674e402",
+      "size": 210942,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.2.dev1029+g76f47afa48f1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "8cb08479746dd653eebe0ef46c3943e4c166f605"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/1f/1fd8d367f369c9e4efbe50bb8bd8417e3b44d1068eba7ac0f29885ea7674e402",
+      "name": "sim/.artifact-stage/lock-window-bisection-20261114-191343-8cb0847/typical_27c_3.30v_c7v2p168_dp2800.log"
+    }
+  ]
+}
