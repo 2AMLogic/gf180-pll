@@ -124,6 +124,55 @@ class FootprintConsistencyTests(unittest.TestCase):
         self.assertGreaterEqual(prim.NWELL_TO_NMOS_GAP_UM, dev.DRC_NWELL_TO_NCOMP_OUT_UM)
 
 
+class MarginClearsPdkMinimumTests(unittest.TestCase):
+    """primitives.py's chosen margins clear the PDK minima they were sized
+    above, with the minimum read from devices.py's DRC_* constant rather
+    than restated as a digit in a comment -- one transcription of each rule
+    value, one assertion tying the margin to it."""
+
+    def test_sd_overhang_clears_df6_comp_extension_beyond_the_gate(self):
+        self.assertGreaterEqual(prim.SD_OVERHANG_UM, dev.DRC_COMP_EXTEND_GATE_UM)
+
+    def test_sd_overhang_carries_the_gate_contact_stack(self):
+        # CO.7 + contact + CO.4, stacked from the gate poly inward.
+        self.assertGreaterEqual(
+            prim.SD_OVERHANG_UM,
+            dev.DRC_CONTACT_TO_GATE_POLY_UM
+            + dev.DRC_CONTACT_SIZE_UM
+            + dev.DRC_CONTACT_COMP_ENCLOSE_UM,
+        )
+
+    def test_poly_endcap_clears_pl4(self):
+        self.assertGreaterEqual(prim.POLY_ENDCAP_UM, dev.DRC_POLY_ENDCAP_UM)
+
+    def test_contact_pitch_gap_clears_co2a(self):
+        # The gap between adjacent contacts is the pitch minus the contact.
+        self.assertGreaterEqual(
+            prim.CONTACT_PITCH_UM - dev.DRC_CONTACT_SIZE_UM,
+            dev.DRC_CONTACT_SPACE_UM,
+        )
+
+    def test_implant_margin_clears_np5a_pp5a_gate_enclosure(self):
+        self.assertGreaterEqual(prim.IMPLANT_MARGIN_UM, dev.DRC_IMPLANT_GATE_ENCLOSE_UM)
+
+    def test_implant_margin_clears_np5b_pp5b_comp_extension(self):
+        self.assertGreaterEqual(prim.IMPLANT_MARGIN_UM, dev.DRC_IMPLANT_COMP_EXTEND_UM)
+
+    def test_nwell_margin_clears_df4c_pcomp_enclosure(self):
+        self.assertGreaterEqual(prim.NWELL_MARGIN_UM, dev.DRC_NWELL_PCOMP_ENCLOSE_UM)
+
+    def test_metal2_wire_width_clears_m21(self):
+        self.assertGreaterEqual(prim.METAL2_WIRE_WIDTH_UM, dev.DRC_METAL2_MIN_WIDTH_UM)
+
+    def test_metal1_wire_width_clears_m11(self):
+        self.assertGreaterEqual(prim.METAL1_WIRE_WIDTH_UM, dev.DRC_METAL1_MIN_WIDTH_UM)
+
+    def test_moscap_poly_contact_gap_clears_co8(self):
+        self.assertGreaterEqual(
+            prim.MOSCAP_POLY_CONTACT_GAP_UM, dev.DRC_POLY_CONTACT_TO_COMP_UM
+        )
+
+
 class TapPitchTests(unittest.TestCase):
     """Test plan edge case: guard-ring tap pitch <= 15 um *everywhere*
     inside the block, not just at the block perimeter (DF.13_MV/DF.14_MV,
