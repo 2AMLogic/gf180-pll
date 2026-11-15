@@ -6,9 +6,9 @@
 The check grades the *measured value itself*: a figure quoted in the Chipalooza
 proposal's section 5 must be what the cited record's committed per-corner CSV
 produces under the reduction section 5.1 names, rounded to the precision the
-figure is written to.  It exists because eleven checks already grade that
-table's counts, citations, grid, verdicts and references, and none of them
-would have noticed a number that simply is not in the record.
+figure is written to.  It exists because eleven checks graded that table's
+counts, citations, grid, verdicts and references when this one was written, and
+none of them would have noticed a number that simply is not in the record.
 
 Every test builds a throwaway tree whose answer is known and runs the real
 script in it, because a check that only ever runs where it passes proves

@@ -750,12 +750,15 @@ jobs:
         # network.
         run: bash sim/lib/check-quoted-value-provenance.sh
 
-      - name: docs/tests (unit tests for the issue-reference-state check)
-        # Same shape as the three discover steps above, for the check added in
-        # #237 that grades what the outward-facing documents claim about the
-        # forge. Hermetic despite the check itself needing the forge: every
-        # test puts a stub `gh` first on PATH, so the issue states are part of
-        # the fixture. No network, no token, no PDK.
+      - name: docs/tests (unit tests for the issue-reference-state and claim-checker-inventory checks)
+        # Same shape as the three discover steps above, for the two checks
+        # added in #237 that grade what the outward-facing documents claim
+        # about something other than the tree's evidence: one about the
+        # *forge*, one about the *grading family itself*. Hermetic despite the
+        # first check needing the forge: every test there puts a stub `gh`
+        # first on PATH, so the issue states are part of the fixture. The
+        # second builds a miniature family in a throwaway tree, so the count
+        # it derives is the fixture's. No network, no token, no PDK.
         run: python3 -m unittest discover -s docs/tests -t docs/tests
 
       - name: docs/lib/check-issue-reference-state.sh (issue references vs. the forge)
@@ -791,6 +794,39 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash docs/lib/check-issue-reference-state.sh
+
+      - name: docs/lib/check-claim-checker-inventory.sh (the documents' checker counts vs. the tree)
+        # Issue #237. Every check above grades a document against evidence, a
+        # netlist, the spec or the forge. Two claims were left out, and both
+        # are claims about this grading family itself:
+        #
+        #   docs/claim-checker-inventory.md -- the ratified answer to which
+        #   checkers exist (#699) -- said "there are 16 `*/lib/check-*.sh`
+        #   scripts" over a 16-row table while the tree held 17.
+        #   sim/lib/check-artifact-manifests.sh landed 2026-10-23 and was
+        #   never added, so the file written to enumerate the family omitted a
+        #   member of it for three weeks while asserting a total.
+        #
+        #   docs/chipalooza/challenge-5-proposal.md section 5.1 opened with
+        #   "Eleven checks grade the table above" -- true on 2026-09-25, when
+        #   eleven was every checker then in the tree bar the one the same
+        #   commit added. Six more have landed since.
+        #
+        # sim/tests/test_check_script_invocability.py already made a new
+        # checker impossible for CI to forget. Nothing made the same promise
+        # about the documents that COUNT the family, so a checker could be
+        # wired, tested and invisible to both files a reader consults.
+        #
+        # Four rules: the family is `*/lib/check-*.sh` (the same pathspec that
+        # invocability test uses, and discovering ZERO members FAILS); the
+        # inventory states the family size; the inventory carries exactly one
+        # row per member and no row for a script the tree lacks (the row SET,
+        # not its length -- the real total and row count agreed with each
+        # other and were both wrong); and the proposal states both how many
+        # members read it and how large the family is, with deletion of that
+        # sentence a failure. Reads committed files only; no PDK, no klayout,
+        # no forge.
+        run: bash docs/lib/check-claim-checker-inventory.sh
 
       - name: layout/lib/check-evidence-host-paths.sh (changed evidence files vs. host-absolute paths)
         # Issue #701: layout DRC/LVS bundles kept embedding the generating

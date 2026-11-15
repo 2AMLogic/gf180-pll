@@ -595,13 +595,36 @@ duty cycle), it still listed the lock detector's T1/T2 window as unmet after
 
 ### 5.1 Value provenance: which quoted numbers CI re-derives from committed evidence
 
-**Eleven checks grade the table above. Until 2026-09-26 none of them graded a
-number.** They grade counts, citations and their supersession, spec-row and
-decision-record coverage, the I/O list, the corner universe a row was measured
-on, the reproduction commands, the bias-pin drive, and the forge references —
-so a row could cite the current record, name the right grid, carry the right
-verdict, and still quote a value that is not in that record. The largest
-remaining ungraded surface was the measured value itself.
+**Eleven of this repository's eighteen claim checkers read this document, and
+until 2026-09-26 not one check in the tree graded a number.** They grade counts, citations
+and their supersession, spec-row and decision-record coverage, the I/O list,
+the corner universe a row was measured on, the reproduction commands, the
+bias-pin drive, and the forge references — so a row could cite the current
+record, name the right grid, carry the right verdict, and still quote a value
+that is not in that record. The largest remaining ungraded surface was the
+measured value itself.
+
+**That sentence read "Eleven checks grade the table above" from 2026-09-26
+until this revision, and what went wrong with it is worth stating rather than
+quietly correcting.** Eleven was every checker this repository then had bar
+the one the same commit added, each counted as grading this table because it
+grades something the table rests on. Six more have landed since, so the number
+stopped matching anything — and the convention it was counted under cannot be
+re-derived at all, because "grades something the table rests on" is a
+judgement. The two counts above are re-derived instead:
+`docs/lib/check-claim-checker-inventory.sh` enumerates `*/lib/check-*.sh` and
+counts the members whose own text — or that of a `.py` sibling they delegate
+to — names this file's path, and it fails this repository's CI if either
+number here differs, or if this sentence is **deleted**, which would otherwise
+be the cheapest way to stop a count going stale. The same check grades
+`docs/claim-checker-inventory.md`, the ratified answer to which checkers
+exist, against the same enumeration — and that is where the drift had already
+landed rather than merely threatened: `sim/lib/check-artifact-manifests.sh`
+was committed on 2026-10-23 and that file went three weeks with no row for it,
+asserting a total of sixteen over a table of sixteen while the tree held
+seventeen. A total and a row count that are maintained together agree with
+each other whatever the tree says, which is why rule 3 grades the row *set*
+and not its length.
 
 The table below closes it for the values it names. Each entry gives the
 `sim/` record, the committed per-corner evidence inside it — a reduced CSV, or
