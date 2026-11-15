@@ -17,6 +17,13 @@ those figures, while ``check-readme-status.sh`` had already forced that README
 line to the true numbers.  Both sim-side checks reported OK on that tree: one
 grades README only, the other graded row coverage only.
 
+``check-readme-status.sh``'s T1 tier-count rule (#928) is graded here too.
+Its source of truth is a committed machine verdict rather than the record
+tree, and the two traps a naive implementation hits -- the report's ``items``
+array being longer than its own ``t1_item_count``, and a *struck* retraction
+of the old figure sitting beside the live one -- are each pinned as a test
+that must PASS, because both would otherwise fail a correct tree.
+
 No PDK, no ngspice, no simulation input -- these scripts read committed files
 and count paths.
 """
@@ -24,6 +31,7 @@ and count paths.
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 import subprocess
 import tempfile
@@ -55,6 +63,84 @@ _LATEST = {name: f"2026010{count - 1}-000000-deadbee" for name, count in CAMPAIG
 # content-hash rule (#544), which only cares that *a* hash matches *a* file.
 _RECORD_BODY = "# record\n"
 _RECORD_HASH = hashlib.sha256(_RECORD_BODY.encode()).hexdigest()[:12]
+
+
+# The synthetic T1 verdict. Deliberately NOT the real tree's 6 of 22: if the
+# rule ever read the repository's own signoff/tier-report.json instead of the
+# throwaway tree's, these tests fail rather than pass by coincidence.
+T1_MET = 3
+T1_TOTAL = 7
+
+
+def _tier_report_text(
+    met: int = T1_MET,
+    total: int = T1_TOTAL,
+    *,
+    items: list | None = None,
+    drop: tuple = (),
+    overrides: dict | None = None,
+) -> str:
+    """A minimal signoff/tier-report.json.
+
+    ``items`` defaults to ``total`` T1 rows PLUS one each of T2/T3/T4 with a
+    null partition -- i.e. deliberately longer than ``t1_item_count``, which
+    is the real report's shape (22 T1 rows, 25 elements). A rule deriving the
+    denominator from ``len(items)`` grades the wrong number against a correct
+    README, so the default fixture carries the trap rather than a tidy array.
+    """
+    rows: list = [
+        {
+            "id": i + 1,
+            "tier": "T1",
+            "partition": "analog",
+            "status": "met" if i < met else "unmet",
+            "reason": None if i < met else "no_evidence",
+        }
+        for i in range(total)
+    ]
+    rows += [
+        {"id": 90 + n, "tier": tier, "partition": None, "status": "unmet",
+         "reason": "tier_not_supported"}
+        for n, tier in enumerate(("T2", "T3", "T4"))
+    ]
+    report: dict = {
+        "schema_version": 1,
+        "t1_met_count": met,
+        "t1_item_count": total,
+        "items": rows if items is None else items,
+    }
+    report.update(overrides or {})
+    for field in drop:
+        report.pop(field, None)
+    return json.dumps(report, indent=2) + "\n"
+
+
+def _signoff_readme_text(
+    met: int = T1_MET,
+    total: int = T1_TOTAL,
+    *,
+    struck: bool = True,
+    extra: str = "",
+) -> str:
+    """A minimal signoff/README.md, carrying the struck-retraction trap.
+
+    ``struck=True`` (the default, and what the real file looks like) puts a
+    retracted ``~~**0 of N T1 rows met**~~`` beside the live figure. The rule
+    must not grade it; ``struck=False`` un-strikes the same sentence, which
+    must then fail -- that pair is what proves the skip is load-bearing
+    rather than vacuously passing.
+    """
+    retraction = f"**0 of {total} T1 rows met**"
+    if struck:
+        retraction = f"~~{retraction}~~"
+    text = (
+        "# signoff/ — this block's gap to T1, graded rather than hand-read\n\n"
+        f"Today the verdict is **{met} of {total} T1 rows met** (the block's tier\n"
+        f"is still `none`). {retraction} was the verdict until 2026-10-17.\n"
+    )
+    if extra:
+        text += "\n" + extra + "\n"
+    return text
 
 
 def _coverage_bullet(campaigns: int, records: int) -> str:
@@ -97,14 +183,35 @@ def _report_text(
     return "\n".join(body) + "\n"
 
 
-def _readme_text(records: int = N_RECORDS, campaigns: int = N_CAMPAIGNS, extra: str = "") -> str:
-    """A minimal README.md that satisfies check-readme-status.sh."""
+def _readme_text(
+    records: int = N_RECORDS,
+    campaigns: int = N_CAMPAIGNS,
+    extra: str = "",
+    *,
+    t1: tuple | None = None,
+    tier_claim: str | None = None,
+) -> str:
+    """A minimal README.md that satisfies check-readme-status.sh.
+
+    ``tier_claim=""`` drops the T1 sentence entirely (the claim-not-found
+    case); ``t1=(met, total)`` states a different pair than the report does.
+    """
+    t1_met, t1_total = (T1_MET, T1_TOTAL) if t1 is None else t1
+    if tier_claim is None:
+        # Wrapped mid-claim on purpose: the rule collapses whitespace per
+        # file, so a claim broken across a line must still be graded.
+        tier_claim = (
+            "The **machine verdict of record** is `signoff/tier-report.json`; today\n"
+            f"it reads **{t1_met} of {t1_total}\n  rows met**.\n"
+        )
     text = (
         "# gf180-pll\n\n"
         f"- **Done** — a reproducible PVT corner harness; **{records} evidence records**\n"
         f"  across {campaigns} verification campaigns; `period-jitter` covers 1 of the\n"
         "  mandated 45 PVT corners.\n"
     )
+    if tier_claim:
+        text += "\n" + tier_claim
     if extra:
         text += "\n" + extra + "\n"
     return text
@@ -139,9 +246,13 @@ class _Tree:
                 corners.mkdir(parents=True)
                 (corners / "typical-27C-3p30V.log").write_text("ok\n")
 
+        (root / "signoff").mkdir(parents=True)
+
         self.write_readme(_readme_text())
         self.write_status_page(_status_page_text())
         self.write_report(_report_text())
+        self.write_tier_report(_tier_report_text())
+        self.write_signoff_readme(_signoff_readme_text())
 
     def write_readme(self, text: str) -> None:
         (self.root / "README.md").write_text(text)
@@ -151,6 +262,12 @@ class _Tree:
 
     def write_report(self, text: str) -> None:
         (self.root / "sim" / "CHARACTERIZATION.md").write_text(text)
+
+    def write_tier_report(self, text: str) -> None:
+        (self.root / "signoff" / "tier-report.json").write_text(text)
+
+    def write_signoff_readme(self, text: str) -> None:
+        (self.root / "signoff" / "README.md").write_text(text)
 
     def run(self, script: Path) -> subprocess.CompletedProcess:
         return subprocess.run(
@@ -332,6 +449,179 @@ class TestReadmeCountsEveryOccurrence(_TreeTest):
     def test_a_missing_count_still_fails(self):
         self.tree.write_readme("# gf180-pll\n\nNothing quantified here.\n")
         self.assertFails(README_CHECK, "could not find '<N> evidence records'")
+
+
+class TestT1TierCountRule(_TreeTest):
+    """check-readme-status.sh's T1 tier-count rule (#928).
+
+    The regression: README.md calls `signoff/tier-report.json` the "machine
+    verdict of record", promises the figure is "re-checked in CI so it cannot
+    go stale", and then quoted **0 of 22 rows met** for weeks after the report
+    moved to 6 -- nothing compared the sentence with the report. The same
+    defect class had already been fixed one directory down in #654, which is
+    the argument for a check rather than a third correction.
+    """
+
+    def test_a_correct_readme_passes(self):
+        result = self.assertPasses(README_CHECK)
+        self.assertIn(f"T1 at {T1_MET}/{T1_TOTAL} rows met", result.stdout)
+
+    def test_a_stale_met_count_in_the_readme_is_caught(self):
+        """The mutated-README fixture: the drift the rule exists for."""
+        self.tree.write_readme(_readme_text(t1=(0, T1_TOTAL)))
+        self.assertFails(
+            README_CHECK,
+            f"README.md claims 0 of {T1_TOTAL} T1 rows met",
+            f"signoff/tier-report.json records {T1_MET} of {T1_TOTAL}",
+        )
+
+    def test_an_overstated_met_count_fails_too(self):
+        """Two-sided: claiming more evidence than the report grants is worse."""
+        self.tree.write_readme(_readme_text(t1=(T1_TOTAL, T1_TOTAL)))
+        self.assertFails(README_CHECK, f"claims {T1_TOTAL} of {T1_TOTAL} T1 rows met")
+
+    def test_a_stale_denominator_is_caught(self):
+        """Both halves of "N of M" are graded, not only the numerator."""
+        self.tree.write_readme(_readme_text(t1=(T1_MET, T1_TOTAL + 3)))
+        self.assertFails(README_CHECK, f"claims {T1_MET} of {T1_TOTAL + 3} T1 rows met")
+
+    def test_a_claim_wrapped_across_lines_is_graded(self):
+        """The baseline fixture wraps mid-claim (see _readme_text), so the
+        passing case already proves wrapping is tolerated; this pins that a
+        *stale* wrapped claim is still caught rather than silently unmatched."""
+        self.assertIn("rows met**", (self.tree.root / "README.md").read_text())
+        self.tree.write_readme(
+            _readme_text(
+                tier_claim=f"Today it reads **{T1_MET - 1} of\n  {T1_TOTAL} rows met**.\n"
+            )
+        )
+        self.assertFails(README_CHECK, f"claims {T1_MET - 1} of {T1_TOTAL} T1 rows met")
+
+    def test_a_second_contradicting_tier_count_later_is_caught(self):
+        """Every occurrence is graded, not just the first correct one."""
+        self.tree.write_readme(
+            _readme_text(extra=f"Elsewhere, unrevised: 0 of {T1_TOTAL} rows met.")
+        )
+        self.assertFails(README_CHECK, f"claims 0 of {T1_TOTAL} T1 rows met")
+
+    # -- trap 1: the struck retraction beside the live figure ---------------
+
+    def test_a_struck_retraction_is_not_graded(self):
+        """signoff/README.md:11's `~~**0 of 22 T1 rows met**~~`, in miniature.
+
+        This repository corrects itself by striking the old sentence and
+        writing the new one beside it, so a rule that graded struck spans
+        would read a retraction as a live claim and fail a *correct* tree.
+        The baseline fixture carries the strike, so this is the passing case.
+        """
+        signoff = (self.tree.root / "signoff" / "README.md").read_text()
+        self.assertIn(f"~~**0 of {T1_TOTAL} T1 rows met**~~", signoff)
+        self.assertPasses(README_CHECK)
+
+    def test_un_striking_the_retraction_makes_it_graded(self):
+        """The other half of the pair: the skip must not be vacuous.
+
+        Without this, a rule that never matched anything in signoff/README.md
+        at all would pass the test above for the wrong reason.
+        """
+        self.tree.write_signoff_readme(_signoff_readme_text(struck=False))
+        self.assertFails(
+            README_CHECK, f"signoff/README.md claims 0 of {T1_TOTAL} T1 rows met"
+        )
+
+    def test_a_struck_span_does_not_exempt_the_live_count_beside_it(self):
+        """The exemption must not leak past its own `~~` pair."""
+        self.tree.write_signoff_readme(_signoff_readme_text(met=T1_MET - 1))
+        self.assertFails(
+            README_CHECK,
+            f"signoff/README.md claims {T1_MET - 1} of {T1_TOTAL} T1 rows met",
+        )
+
+    # -- trap 2: items[] is longer than t1_item_count ----------------------
+
+    def test_a_longer_items_array_is_not_the_denominator(self):
+        """The report's `items` holds the T1 rows plus T2/T3/T4 siblings.
+
+        The real file has 22 T1 rows and 25 elements, so a rule deriving the
+        denominator from `len(items)` grades 25 and fails a correct README.
+        The baseline fixture is built with that shape; this asserts it.
+        """
+        report = json.loads((self.tree.root / "signoff" / "tier-report.json").read_text())
+        self.assertEqual(report["t1_item_count"], T1_TOTAL)
+        self.assertEqual(len(report["items"]), T1_TOTAL + 3)
+        self.assertPasses(README_CHECK)
+
+    # -- the report itself -------------------------------------------------
+
+    def test_a_zero_met_count_is_still_graded(self):
+        """A zero is a value, not a missing claim.
+
+        Both directions: a README agreeing with a genuine 0 passes, and one
+        still claiming the old figure against it fails. A truthiness test on
+        the count would silently skip the rule in exactly the state the
+        repository was in before #798.
+        """
+        self.tree.write_tier_report(_tier_report_text(met=0))
+        self.tree.write_readme(_readme_text(t1=(0, T1_TOTAL)))
+        self.tree.write_signoff_readme(_signoff_readme_text(met=0))
+        self.assertPasses(README_CHECK)
+
+        self.tree.write_readme(_readme_text(t1=(T1_MET, T1_TOTAL)))
+        self.assertFails(README_CHECK, f"records 0 of {T1_TOTAL}")
+
+    def test_a_missing_tier_report_fails_loudly(self):
+        """Not a skip: the verdict of record being absent is a failure."""
+        (self.tree.root / "signoff" / "tier-report.json").unlink()
+        self.assertFails(README_CHECK, "signoff/tier-report.json does not exist")
+
+    def test_an_unparseable_tier_report_fails_loudly(self):
+        self.tree.write_tier_report("{ not json at all\n")
+        self.assertFails(README_CHECK, "could not be read as JSON")
+
+    def test_a_tier_report_that_is_not_an_object_fails(self):
+        self.tree.write_tier_report("[1, 2, 3]\n")
+        self.assertFails(README_CHECK, "is not a JSON object")
+
+    def test_a_missing_count_field_fails(self):
+        self.tree.write_tier_report(_tier_report_text(drop=("t1_met_count",)))
+        self.assertFails(README_CHECK, "has no integer `t1_met_count` field")
+
+    def test_a_non_integer_count_field_fails(self):
+        """A string "6" is not the report answering the question."""
+        self.tree.write_tier_report(_tier_report_text(overrides={"t1_item_count": "7"}))
+        self.assertFails(README_CHECK, "has no integer `t1_item_count` field")
+
+    def test_a_boolean_count_field_fails(self):
+        """bool is an int subclass; `True` must not read as a count of 1."""
+        self.tree.write_tier_report(_tier_report_text(overrides={"t1_met_count": True}))
+        self.assertFails(README_CHECK, "has no integer `t1_met_count` field")
+
+    # -- the claim must exist in both graded documents ---------------------
+
+    def test_a_readme_with_no_tier_claim_fails(self):
+        """A selector matching nothing is a check reporting OK ungraded."""
+        self.tree.write_readme(_readme_text(tier_claim=""))
+        self.assertFails(
+            README_CHECK, "could not find '<N> of <M> rows met' in README.md"
+        )
+
+    def test_a_signoff_readme_with_no_tier_claim_fails(self):
+        self.tree.write_signoff_readme("# signoff/\n\nNothing quantified here.\n")
+        self.assertFails(
+            README_CHECK, "could not find '<N> of <M> rows met' in signoff/README.md"
+        )
+
+    def test_a_missing_signoff_readme_fails(self):
+        (self.tree.root / "signoff" / "README.md").unlink()
+        self.assertFails(README_CHECK, "signoff/README.md could not be read")
+
+    def test_deleting_the_claim_is_not_a_fix(self):
+        """Both documents at once: a stale claim cannot be un-staled by
+        removing it, the same doctrine as the aggregate-count rule."""
+        self.tree.write_readme(_readme_text(tier_claim=""))
+        self.tree.write_signoff_readme("# signoff/\n\nNo figure here.\n")
+        result = self.assertFails(README_CHECK, "README.md", "signoff/README.md")
+        self.assertEqual(result.stderr.count("could not find"), 2)
 
 
 class TestLatestRecordCitedRule(_TreeTest):
