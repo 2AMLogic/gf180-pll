@@ -79,7 +79,7 @@ stop.
 | `sim/lib/check-record-supersession.sh` | 221 | cited records vs supersession graph | graph | 2 | proposal described a closed FAIL as live, 18 days after the re-measurement | KEEP |
 | `sim/lib/check-readme-status.sh` | 127 | README counts vs `sim/*/records/*.md` | tree | 5 | hand-written record count under-reported the tree for months | KEEP |
 | `layout/lib/check-evidence-host-paths.sh` | 122 | evidence files changed vs merge base | tree | 1 | host-absolute paths in committed DRC/LVS bundles | KEEP |
-| `sim/lib/check-artifact-manifests.sh` | 12 | committed `manifests/artifacts/*.manifest.json` vs. committed bytes (sha256; logic in `check_artifact_manifests.py`) | tree | 1 | campaign run output committed to git beside its manifest; non-`artifact:` URIs (issue #830) | KEEP |
+| `sim/lib/check-artifact-manifests.sh` | 13 | committed `manifests/artifacts/*.manifest.json` vs. committed bytes (sha256; logic in `check_artifact_manifests.py`) | tree | 1 | campaign run output committed to git beside its manifest; non-`artifact:` URIs (issue #830) | KEEP |
 
 ## Notes on the closest candidates
 
