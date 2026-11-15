@@ -24,11 +24,10 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 
-from _fixtures import TreeWriter, install_checklib
+from _fixtures import TreeTestCase, TreeWriter, install_checklib
 
 SPEC_DIR = Path(__file__).resolve().parents[1]
 CHECK = SPEC_DIR / "lib" / "check-spur-derivation-arithmetic.sh"
@@ -118,11 +117,8 @@ class _Tree(TreeWriter):
         )
 
 
-class _TreeTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self._tmp = tempfile.TemporaryDirectory()
-        self.tree = _Tree(Path(self._tmp.name))
-        self.addCleanup(self._tmp.cleanup)
+class _TreeTest(TreeTestCase):
+    tree_cls = _Tree
 
     def mutate_spec(self, old: str, new: str) -> None:
         """Rewrite the spec fixture, asserting the mutation is unambiguous."""
@@ -132,18 +128,6 @@ class _TreeTest(unittest.TestCase):
     def mutate_proposal(self, old: str, new: str) -> None:
         self.assertEqual(PROPOSAL_TEXT.count(old), 1, msg=f"{old!r} is not unique")
         self.tree.write(PROPOSAL, PROPOSAL_TEXT.replace(old, new))
-
-    def assertPasses(self) -> subprocess.CompletedProcess:
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        return result
-
-    def assertFails(self, *needles: str) -> subprocess.CompletedProcess:
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
-        for needle in needles:
-            self.assertIn(needle, result.stderr)
-        return result
 
 
 class TestTheRealDerivation(_TreeTest):

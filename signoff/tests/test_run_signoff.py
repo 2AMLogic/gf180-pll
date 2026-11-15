@@ -29,11 +29,10 @@ import json
 import os
 import shutil
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 
-from _fixtures import TreeWriter
+from _fixtures import TreeTestCase, TreeWriter
 
 SIGNOFF_DIR = Path(__file__).resolve().parents[1]
 SCRIPT = SIGNOFF_DIR / "run-signoff.sh"
@@ -149,11 +148,8 @@ class _Tree(TreeWriter):
         )
 
 
-class _TreeTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self._tmp = tempfile.TemporaryDirectory()
-        self.tree = _Tree(Path(self._tmp.name))
-        self.addCleanup(self._tmp.cleanup)
+class _TreeTest(TreeTestCase):
+    tree_cls = _Tree
 
 
 class TestVersionPin(_TreeTest):
