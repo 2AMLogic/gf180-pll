@@ -118,6 +118,8 @@ import isf_deck  # noqa: E402
 
 #: Shared with every period-jitter deck module; defined once in `isf_deck`.
 _join_continuations = isf_deck._join_continuations
+#: Same walk, device-line form: the call sites below pass `skip_comments=True`.
+subckt_body = isf_deck.subckt_body
 import rb_extract  # noqa: E402
 
 K_B = rb_extract.K_B
@@ -130,23 +132,6 @@ sigma_upper = rb_extract.sigma_upper
 # ---------------------------------------------------------------------------
 # step 1: the enumeration
 # ---------------------------------------------------------------------------
-def subckt_body(src: str, name: str) -> list[str]:
-    """The instance/device lines of `.subckt <name>`, continuations folded."""
-    body: list[str] = []
-    inside = False
-    for ln in _join_continuations(src):
-        s = ln.strip()
-        low = s.lower()
-        if low.startswith(f".subckt {name.lower()} "):
-            inside = True
-            continue
-        if inside and low.startswith(".ends"):
-            return body
-        if inside and s and not s.startswith("*"):
-            body.append(s)
-    raise ValueError(f"no `.subckt {name}` in the netlist")
-
-
 #: `pll_top`'s five instances, by instance name, and the block each one is.
 #: Used only to name things; the connectivity claim below is what is checked.
 TOP_INSTANCES = {
@@ -165,7 +150,7 @@ def connectivity_claim(src: str) -> dict:
     the divider a second connection to the analog side, would change this
     dict and fail `sim/tests/test_in_band_bound.py`.
     """
-    body = subckt_body(src, "pll_top")
+    body = subckt_body(src, "pll_top", skip_comments=True)
     nets: dict[str, list[str]] = {}
     seen: dict[str, str] = {}
     for ln in body:
@@ -337,7 +322,7 @@ def resolve_instance(src: str, top: str, dotted: str) -> str:
     here = top
     for step in dotted.split("."):
         found = None
-        for ln in subckt_body(src, here):
+        for ln in subckt_body(src, here, skip_comments=True):
             tok = ln.split()
             if tok[0].lower() != step.lower():
                 continue
