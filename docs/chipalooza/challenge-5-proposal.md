@@ -595,13 +595,36 @@ duty cycle), it still listed the lock detector's T1/T2 window as unmet after
 
 ### 5.1 Value provenance: which quoted numbers CI re-derives from committed evidence
 
-**Eleven checks grade the table above. Until 2026-09-26 none of them graded a
-number.** They grade counts, citations and their supersession, spec-row and
-decision-record coverage, the I/O list, the corner universe a row was measured
-on, the reproduction commands, the bias-pin drive, and the forge references —
-so a row could cite the current record, name the right grid, carry the right
-verdict, and still quote a value that is not in that record. The largest
-remaining ungraded surface was the measured value itself.
+**Eleven of this repository's eighteen claim checkers read this document, and
+until 2026-09-26 not one check in the tree graded a number.** They grade counts, citations
+and their supersession, spec-row and decision-record coverage, the I/O list,
+the corner universe a row was measured on, the reproduction commands, the
+bias-pin drive, and the forge references — so a row could cite the current
+record, name the right grid, carry the right verdict, and still quote a value
+that is not in that record. The largest remaining ungraded surface was the
+measured value itself.
+
+**That sentence read "Eleven checks grade the table above" from 2026-09-26
+until this revision, and what went wrong with it is worth stating rather than
+quietly correcting.** Eleven was every checker this repository then had bar
+the one the same commit added, each counted as grading this table because it
+grades something the table rests on. Six more have landed since, so the number
+stopped matching anything — and the convention it was counted under cannot be
+re-derived at all, because "grades something the table rests on" is a
+judgement. The two counts above are re-derived instead:
+`docs/lib/check-claim-checker-inventory.sh` enumerates `*/lib/check-*.sh` and
+counts the members whose own text — or that of a `.py` sibling they delegate
+to — names this file's path, and it fails this repository's CI if either
+number here differs, or if this sentence is **deleted**, which would otherwise
+be the cheapest way to stop a count going stale. The same check grades
+`docs/claim-checker-inventory.md`, the ratified answer to which checkers
+exist, against the same enumeration — and that is where the drift had already
+landed rather than merely threatened: `sim/lib/check-artifact-manifests.sh`
+was committed on 2026-10-23 and that file went three weeks with no row for it,
+asserting a total of sixteen over a table of sixteen while the tree held
+seventeen. A total and a row count that are maintained together agree with
+each other whatever the tree says, which is why rule 3 grades the row *set*
+and not its length.
 
 The table below closes it for the values it names. Each entry gives the
 `sim/` record, the committed per-corner evidence inside it — a reduced CSV, or
@@ -1127,6 +1150,23 @@ another measurement, `rms_exponential_mv`, so there was nothing for the third
 table's registry to resolve. That was a true statement about the third
 table's reach and a wrong place to stop — none of the four figures left out
 of that pass is still ungraded.
+
+**Re-pinned evidence (#827, child of #790).** Two of the records this table
+quotes have since been re-qualified under open_pdks `f6eeac7`, the revision
+#789 re-pinned to: `20260802-100727-082c879` → `20261114-093804-ad9eef8`
+(`divider-ratio-chain`) and `20260919-002812-1b12179` →
+`20261114-091604-ffbc0e2` (`lock-detector`). Neither re-run moves a figure
+quoted below — the chain's worst setup margin goes 302.83 → 302.86 ps, every
+other chain figure reproduces exactly, and the lock detector's `window_edges`
+table is byte-identical at all seven ladder corners — so the `Record(s)`
+column still names the record each number was actually read from, which is
+what a provenance row is for. Re-pointing these rows at the successors, and
+re-deriving §5 against them, is #829's scope. The old-vs-new deltas are in
+[`sim/REPIN-DELTAS-f6eeac7-lock-divider.md`](../../sim/REPIN-DELTAS-f6eeac7-lock-divider.md). A third record this
+document cites outside the table, `20260925-050022-6d57802`
+(`lock-window-proxy`), is re-qualified by `20261114-194051-c8750de` — and
+that one *did* move two of its pad-proxy policy verdicts, which the same
+delta document sets out in full.
 
 | §5 row | Quoted value | Record(s) | Evidence file | Reduction | Scale |
 |---|---|---|---|---|---|

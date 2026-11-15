@@ -32,7 +32,9 @@ SIM_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SIM_DIR))
 
 from _fixtures import ManifestFixture, fake_pdk  # noqa: E402
+from harness import moscap_probe  # noqa: E402
 from harness import cli, corners, report, runner, testbench  # noqa: E402
+from harness.pdk import PdkNotFound  # noqa: E402
 
 
 class CornerTests(unittest.TestCase):
@@ -853,23 +855,47 @@ class RetainedRawCaptureFailureTests(ManifestFixture):
 
 
 class NonlinearMoscapGuardTests(unittest.TestCase):
-    """#153: ngspice-47 mis-expands this PDK's nonlinear-capacitance moscap
-    family (a ``c=<expr>`` behavioral coefficient) into a malformed internal
-    element ("unknown parameter (e9)") when it is instantiated from inside a
-    nested ``.subckt`` -- verified against a real ngspice-46/-47 pair on
-    ``design/netlist/vco.spice`` (nests -- fails on ngspice-47) versus
-    ``sim/devchar-passives``' own device-characterization deck (flat,
-    top-level instantiation -- does not fail). These tests fix that parsing
-    / triggering logic with small fixtures so it does not require ngspice or
-    the PDK to run.
+    """#153/#926: one ngspice-47 release mis-expands this PDK's nonlinear-
+    capacitance moscap family (a ``c=<expr>`` behavioral coefficient) into a
+    malformed internal element ("unknown parameter (e9)"). The measured
+    trigger (#926, 2026-11-14, both installed 47 builds on the reference
+    host) is the ``m=`` multiplier on the instance line -- NOT ``.subckt``
+    nesting, which the fixtures here previously asserted: in this repo's
+    decks the two properties are perfectly correlated (every ``m=`` instance
+    lives in a nested DUT export, every ``m=``-less one in a flat
+    device-characterization deck), so no committed deck could have falsified
+    the nesting story. Whether the resolved *binary* is affected cannot be
+    read off the version banner either (the patched point build prints the
+    same ``ngspice-47`` token), so the warnings take the capability probe's
+    verdict (:mod:`harness.moscap_probe`) as a parameter and decide on it.
+    These tests fix the gate matrix and the warning text with small fixtures
+    -- no ngspice, no PDK required.
     """
 
-    NESTED = (
+    # The measured trigger: the family + an `m=` multiplier. Nesting is
+    # irrelevant to the gate, so fixtures pair both shapes with both.
+    NESTED_M = (
         ".subckt vco vctrl clk vdd vss\n"
         "xcdec1 vdd vss cap_nmos_03v3 c_width=50u c_length=50u m=1\n"
         ".ends\n"
     )
-    FLAT = "xcn n_cn 0 cap_nmos_03v3 c_length=cl c_width=cw\n"
+    FLAT_M = "xcn n_cn 0 cap_nmos_03v3 c_length=cl c_width=cw m=1\n"
+    NESTED_NO_M = (
+        ".subckt vco vctrl clk vdd vss\n"
+        "xcdec1 vdd vss cap_nmos_03v3 c_width=50u c_length=50u\n"
+        ".ends\n"
+    )
+    FLAT_NO_M = "xcn n_cn 0 cap_nmos_03v3 c_length=cl c_width=cw\n"
+    NO_MOSCAP = "v1 in 0 dc 1\nr1 out in 1k\n"
+
+    def _gate(self, *texts: str):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = []
+            for i, text in enumerate(texts):
+                path = Path(tmp) / f"s{i}.spice"
+                path.write_text(text)
+                paths.append(path)
+            return runner.dut_uses_nonlinear_moscap(paths)
 
     def test_ngspice_major_version_parses_the_leading_number(self):
         self.assertEqual(
@@ -880,18 +906,32 @@ class NonlinearMoscapGuardTests(unittest.TestCase):
     def test_ngspice_major_version_none_when_unparseable(self):
         self.assertIsNone(runner.ngspice_major_version("unknown"))
 
-    def test_nested_instantiation_matches(self):
-        self.assertEqual(runner._nested_nonlinear_moscap_match(self.NESTED), "cap_nmos_03v3")
+    def test_gate_matches_the_measured_trigger(self):
+        """The measured trigger (#926) is family + `m=` -- nesting is
+        irrelevant, so flat-with-`m=` matches too. `#926` measured a flat
+        `m=1` instance FAILING on the broken build; the old nesting gate
+        was silent about exactly that deck."""
+        self.assertEqual(self._gate(self.FLAT_M), "cap_nmos_03v3")
+        self.assertEqual(self._gate(self.NESTED_M), "cap_nmos_03v3")
 
-    def test_flat_top_level_instantiation_does_not_match(self):
-        """sim/devchar-passives' own deck instantiates this family directly,
-        with no enclosing .subckt -- verified NOT to trip the ngspice-47
-        regression, so the guard must not warn about it."""
-        self.assertIsNone(runner._nested_nonlinear_moscap_match(self.FLAT))
+    def test_gate_ignores_a_family_instance_without_a_multiplier(self):
+        """#926 measured a nested instance WITHOUT `m=` loading cleanly on
+        the broken build -- the old gate warned about exactly that deck."""
+        self.assertIsNone(self._gate(self.NESTED_NO_M))
+        self.assertIsNone(self._gate(self.FLAT_NO_M))
+
+    def test_gate_ignores_lookalike_tokens(self):
+        # `1m` is a value suffix, `cm=` starts m mid-word, and the family's
+        # own .subckt definition line is not an instance of it.
+        self.assertIsNone(self._gate("xc1 a b cap_nmos_03v3 c_width=1m\n"))
+        self.assertIsNone(self._gate("xc1 a b cap_nmos_03v3 cm=1\n"))
+        self.assertIsNone(
+            self._gate(".subckt cap_nmos_03v3_b a b c_width=w m=1\n.ends\n")
+        )
 
     def test_b_variant_and_case_insensitivity_match(self):
         text = ".SUBCKT loop_filter vctrl vss\nXCF1 nz vss CAP_NMOS_03V3_B c_width=87u c_length=87u m=1\n.ENDS\n"
-        self.assertEqual(runner._nested_nonlinear_moscap_match(text), "CAP_NMOS_03V3_B")
+        self.assertEqual(self._gate(text), "CAP_NMOS_03V3_B")
 
     def test_dut_uses_nonlinear_moscap_skips_unreadable_sources(self):
         self.assertIsNone(runner.dut_uses_nonlinear_moscap([Path("/no/such/file.spice")]))
@@ -899,116 +939,279 @@ class NonlinearMoscapGuardTests(unittest.TestCase):
     def test_dut_uses_nonlinear_moscap_scans_every_source(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            flat = root / "flat.spice"
-            nested = root / "nested.spice"
-            flat.write_text(self.FLAT)
-            nested.write_text(self.NESTED)
+            no_trigger = root / "cap_cv.spice"
+            trigger = root / "vco.spice"
+            no_trigger.write_text(self.FLAT_NO_M)
+            trigger.write_text(self.NESTED_M)
             self.assertEqual(
-                runner.dut_uses_nonlinear_moscap([flat, nested]), "cap_nmos_03v3"
+                runner.dut_uses_nonlinear_moscap([no_trigger, trigger]), "cap_nmos_03v3"
             )
 
-    def test_warning_fires_only_on_ngspice_47_with_a_nested_match(self):
+    def test_dut_warning_fires_only_on_a_failed_probe_with_the_trigger(self):
         with tempfile.TemporaryDirectory() as tmp:
-            nested = Path(tmp) / "vco.spice"
-            nested.write_text(self.NESTED)
-            sources = [nested]
-            self.assertIsNotNone(
-                runner.nonlinear_moscap_ngspice47_warning("ngspice-47", sources)
+            trigger = Path(tmp) / "vco.spice"
+            trigger.write_text(self.NESTED_M)
+            sources = [trigger]
+            warning = runner.nonlinear_moscap_ngspice47_warning(
+                "ngspice-47 : Circuit level simulation program", sources, False
             )
-            self.assertIn("#153", runner.nonlinear_moscap_ngspice47_warning("ngspice-47", sources))
+            self.assertIsNotNone(warning)
+            self.assertIn("#153", warning)
+            self.assertIn("unknown parameter (eN)", warning)
+            self.assertIn("cap_nmos_03v3", warning)
+            # A probe that loads, or cannot tell, is not a prediction of
+            # failure -- no warning either way, whatever the version token.
             self.assertIsNone(
-                runner.nonlinear_moscap_ngspice47_warning("ngspice-46", sources)
+                runner.nonlinear_moscap_ngspice47_warning("ngspice-47", sources, True)
+            )
+            self.assertIsNone(
+                runner.nonlinear_moscap_ngspice47_warning("ngspice-47", sources, None)
             )
 
-    def test_warning_absent_for_a_flat_dut_even_on_ngspice_47(self):
+    def test_dut_warning_silent_without_the_trigger_even_on_a_failed_probe(self):
+        """A DUT that carries no `m=` instance of the family -- e.g.
+        sim/devchar-passives' flat cap-CV decks -- must stay silent on every
+        probe outcome."""
+        for loads in (True, False, None):
+            self.assertIsNone(
+                self._dut_warning_with_fixture(self.FLAT_NO_M, loads)
+            )
+        self.assertIsNone(self._dut_warning_with_fixture(self.NO_MOSCAP, False))
+
+    def _dut_warning_with_fixture(self, text, loads):
         with tempfile.TemporaryDirectory() as tmp:
-            flat = Path(tmp) / "cap_cv.spice"
-            flat.write_text(self.FLAT)
-            self.assertIsNone(
-                runner.nonlinear_moscap_ngspice47_warning("ngspice-47", [flat])
+            source = Path(tmp) / "dut.spice"
+            source.write_text(text)
+            return runner.nonlinear_moscap_ngspice47_warning(
+                "ngspice-47 : Circuit level simulation program", [source], loads
             )
 
-    def test_warning_absent_when_ngspice_version_is_unparseable(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            nested = Path(tmp) / "vco.spice"
-            nested.write_text(self.NESTED)
-            self.assertIsNone(
-                runner.nonlinear_moscap_ngspice47_warning("some dev build", [nested])
-            )
+    def test_probe_is_the_authority_not_the_version_token(self):
+        """#926: the patched point build prints the same `ngspice-47` banner
+        as the broken one, so no version token may decide. An unparseable
+        version string must not suppress a failed probe's warning, on either
+        function."""
+        self.assertIsNotNone(self._dut_warning_with_fixture(self.NESTED_M, False))
+        self.assertIsNotNone(runner.ngspice47_advisory("some dev build", False))
 
-    def test_version_only_advisory_fires_on_ngspice_47_with_no_dut_needed(self):
-        advisory = runner.ngspice47_advisory("ngspice-47 : Circuit level simulation program")
+    def test_version_only_advisory_fires_only_on_a_failed_probe(self):
+        advisory = runner.ngspice47_advisory(
+            "ngspice-47 : Circuit level simulation program", False
+        )
         self.assertIsNotNone(advisory)
         self.assertIn("#153", advisory)
+        self.assertIn("unknown parameter (eN)", advisory)
         self.assertIn("ngspice-46", advisory)
+        self.assertIsNone(runner.ngspice47_advisory("ngspice-46", True))
+        self.assertIsNone(runner.ngspice47_advisory("ngspice-46", None))
+        # The probe is the authority: a failed probe fires on any version
+        # token, including one that looks known-good.
+        self.assertIsNotNone(runner.ngspice47_advisory("ngspice-46", False))
 
-    def test_version_only_advisory_absent_on_ngspice_46(self):
-        self.assertIsNone(runner.ngspice47_advisory("ngspice-46"))
 
-    def test_version_only_advisory_absent_when_unparseable(self):
-        self.assertIsNone(runner.ngspice47_advisory("some dev build"))
+class MoscapProbeTests(unittest.TestCase):
+    """#926: the capability probe's three verdicts, headless -- no ngspice
+    and no PDK required. The probe deck's ``m=1`` is load-bearing (a deck
+    without it loads cleanly on the broken build, #926's measured row 5, so
+    a probe built that way would silence the warning permanently), so its
+    composition is pinned here too.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.pdk = fake_pdk(Path(self.tmp.name) / "gf180mcuD")
+        # lru_cache persists across tests; every test starts and ends with
+        # an empty cache so the at-most-once assertions below are exact.
+        moscap_probe._loads_cached.cache_clear()
+        self.addCleanup(moscap_probe._loads_cached.cache_clear)
+
+    def test_probe_deck_carries_the_measured_trigger(self):
+        deck = moscap_probe.probe_deck(self.pdk)
+        self.assertIn("cap_nmos_03v3", deck)
+        self.assertIn("m=1", deck)  # the measured trigger -- load-bearing
+        self.assertIn(".subckt probe_wrap", deck)  # superset of the real DUT
+        self.assertIn("moscap_typical", deck)
+        self.assertIn(str(self.pdk.model_lib), deck)
+        self.assertIn(moscap_probe.MARKER, deck)
+
+    def test_verdict_of_the_three_outcomes(self):
+        self.assertTrue(moscap_probe.verdict_of(f"op done\n{moscap_probe.MARKER}\n"))
+        self.assertFalse(
+            moscap_probe.verdict_of("Error on line 4 or its substitute:\n unknown parameter (e9)")
+        )
+        self.assertIsNone(moscap_probe.verdict_of(""))
+        self.assertIsNone(moscap_probe.verdict_of("Error: could not open include file"))
+
+    def test_regression_signature_wins_over_the_marker(self):
+        both = f"{moscap_probe.MARKER}\nunknown parameter (e9)\n"
+        self.assertFalse(moscap_probe.verdict_of(both))
+
+    def test_override_env_selects_the_verdict_without_probing(self):
+        with mock.patch.object(moscap_probe, "_run_probe") as run_probe:
+            for value, expected in (
+                ("loads", True),
+                ("malformed", False),
+                ("unknown", None),
+                ("MALFORMED", False),  # case-insensitive
+                ("  loads  ", True),  # surrounding whitespace tolerated
+                ("garbage", None),  # unrecognized abstains rather than guesses
+            ):
+                self.assertEqual(
+                    moscap_probe.nested_moscap_loads(
+                        self.pdk, env={moscap_probe.PROBE_OVERRIDE_ENV: value}
+                    ),
+                    expected,
+                    value,
+                )
+            run_probe.assert_not_called()
+
+    def test_probe_runs_at_most_once_per_process(self):
+        """AC: the probe adds no simulator invocation per grid point -- the
+        verdict is memoized on the resolved binary + PDK, whatever the
+        grid size."""
+        with mock.patch.object(moscap_probe, "_run_probe", return_value=True) as run_probe, \
+            mock.patch.object(runner, "ngspice_executable", return_value="/usr/bin/ngspice"):
+            for _ in range(5):
+                self.assertTrue(moscap_probe.nested_moscap_loads(self.pdk, env={}))
+            run_probe.assert_called_once()
+            # A different PDK is a different cache entry, probed separately.
+            other = fake_pdk(Path(self.tmp.name) / "other")
+            self.assertTrue(moscap_probe.nested_moscap_loads(other, env={}))
+            self.assertEqual(run_probe.call_count, 2)
+
+    def test_missing_ngspice_abstains_without_invoking_anything(self):
+        with mock.patch.object(runner, "ngspice_executable", return_value=None), \
+            mock.patch.object(moscap_probe.execution.LocalBackend, "run_deck") as run_deck:
+            self.assertIsNone(moscap_probe.nested_moscap_loads(self.pdk, env={}))
+            run_deck.assert_not_called()
+
+    def test_probe_timeout_is_inconclusive_not_a_failure(self):
+        timed_out = moscap_probe.execution.DeckRun(
+            output="partial output", returncode=-1, seconds=1.0, timed_out=True
+        )
+        with mock.patch.object(runner, "ngspice_executable", return_value="/usr/bin/ngspice"), \
+            mock.patch.object(
+                moscap_probe.execution.LocalBackend, "run_deck", return_value=timed_out
+            ):
+            self.assertIsNone(moscap_probe.nested_moscap_loads(self.pdk, env={}))
+
+    def test_backend_output_shapes_classify_to_the_three_verdicts(self):
+        cases = [
+            (f"banner\n{moscap_probe.MARKER}\n", True),
+            ("Error on line 4 or its substitute:\n unknown parameter (e9)\n", False),
+            ("Error: could not open include file\n", None),
+        ]
+        for output, expected in cases:
+            run = moscap_probe.execution.DeckRun(output=output, returncode=0, seconds=0.1)
+            with mock.patch.object(
+                runner, "ngspice_executable", return_value="/usr/bin/ngspice"
+            ), mock.patch.object(
+                moscap_probe.execution.LocalBackend, "run_deck", return_value=run
+            ):
+                # Same PDK every iteration: drop the per-process memo between
+                # cases so each really runs the (mocked) probe.
+                moscap_probe._loads_cached.cache_clear()
+                self.assertEqual(moscap_probe.nested_moscap_loads(self.pdk, env={}), expected)
 
 
 class CheckEnvTests(unittest.TestCase):
-    """#268: ``--check-env`` must not print an unqualified ``OK`` when the
-    resolved ``ngspice`` is version 47 -- #153 already established that
-    version mis-expands this PDK's nonlinear-capacitance moscap family into a
-    malformed element, so every point of an affected closed-loop campaign
-    fails. Pins both the version-only path (no experiment argument, no
-    ngspice/PDK required) and the DUT-aware path (an experiment argument
+    """#268/#926: ``--check-env`` must never print an unqualified ``OK`` when
+    the resolved ngspice cannot expand the PDK's nonlinear moscap family --
+    but the verdict is the capability probe's, not the version token's (the
+    patched ngspice-47 point build prints the same banner as the broken
+    one). Pins all three probe outcomes: the generic advisory path (no
+    experiment argument) and the DUT-aware path (an experiment argument
     reuses ``nonlinear_moscap_ngspice47_warning`` for a precise verdict).
     """
 
-    def _check_env(self, version, experiment=None, ngspice_exe="/usr/bin/ngspice"):
+    def _check_env(self, version, experiment=None, ngspice_exe="/usr/bin/ngspice",
+                   loads=True, find_pdk_raises=False):
         buf = io.StringIO()
         with tempfile.TemporaryDirectory() as tmp:
             # A real (if fake) PDK, so the assertions below isolate the
-            # ngspice-47 advisory's own exit status rather than a PdkNotFound
+            # moscap advisory's own exit status rather than a PdkNotFound
             # this test has nothing to do with (#268 only touches the
             # ngspice half of --check-env).
             pdk = fake_pdk(Path(tmp))
+            find_patch = (
+                mock.patch.object(cli, "find_pdk", side_effect=PdkNotFound("no pdk"))
+                if find_pdk_raises
+                else mock.patch.object(cli, "find_pdk", return_value=pdk)
+            )
             with mock.patch.object(runner, "ngspice_version", return_value=version), \
                 mock.patch.object(runner, "ngspice_executable", return_value=ngspice_exe), \
-                mock.patch.object(cli, "find_pdk", return_value=pdk), \
+                find_patch, \
+                mock.patch.object(cli.moscap_probe, "nested_moscap_loads", return_value=loads), \
                 mock.patch.dict(os.environ, {"SIM_NGSPICE_BIN": "/no/such/pin/ngspice"}), \
                 contextlib.redirect_stdout(buf):
                 status = cli.cmd_check_env(experiment)
         return status, buf.getvalue()
 
-    def test_ngspice_47_is_a_warning_not_an_unqualified_ok(self):
-        status, out = self._check_env("ngspice-47 : Circuit level simulation program")
+    def test_failed_probe_warns_with_the_actionable_text(self):
+        status, out = self._check_env("ngspice-47 : Circuit level simulation program", loads=False)
         self.assertIn("ngspice : WARN", out)
         self.assertNotIn("ngspice : OK", out)
         self.assertIn("#153", out)
+        self.assertIn("unknown parameter (eN)", out)
         self.assertIn("ngspice-46", out)
+        self.assertEqual(status, cli.EXIT_OK)  # advisory only, never a block
 
-    def test_ngspice_47_check_env_still_exits_ok_advisory_only(self):
-        status, _ = self._check_env("ngspice-47")
-        self.assertEqual(status, cli.EXIT_OK)
-
-    def test_ngspice_46_is_plain_ok_with_no_warning(self):
-        status, out = self._check_env("ngspice-46 : Circuit level simulation program")
+    def test_probe_pass_is_a_plain_ok_on_the_same_banner(self):
+        """AC: on a build that loads the family -- indistinguishable from the
+        broken one by banner -- no warning is printed."""
+        status, out = self._check_env("ngspice-47 : Circuit level simulation program", loads=True)
         self.assertEqual(status, cli.EXIT_OK)
         self.assertIn("ngspice : OK", out)
         self.assertNotIn("WARN", out)
         self.assertNotIn("#153", out)
+        self.assertNotIn("expected to fail", out)
 
-    def test_unparseable_version_does_not_warn_or_raise(self):
-        status, out = self._check_env("some dev build")
+    def test_inconclusive_probe_says_so_and_exits_ok(self):
+        status, out = self._check_env("ngspice-47 : Circuit level simulation program", loads=None)
         self.assertEqual(status, cli.EXIT_OK)
         self.assertIn("ngspice : OK", out)
+        self.assertIn("could not tell", out)
         self.assertNotIn("WARN", out)
+        self.assertNotIn("expected to fail", out)
 
-    def test_experiment_argument_gives_a_precise_per_campaign_verdict(self):
+    def test_missing_pdk_is_an_inconclusive_probe_not_an_extra_error(self):
+        """The probe needs the PDK; without one it abstains (the PDK block
+        below still reports its own MISSING and its own exit status)."""
+        status, out = self._check_env("ngspice-47", loads=False, find_pdk_raises=True)
+        self.assertIn("ngspice : OK", out)
+        self.assertIn("could not run", out)
+        self.assertNotIn("#153", out)
+
+    def test_failed_probe_with_a_moscap_dut_names_the_family(self):
         """``vco-tuning-range`` composes ``design/netlist/vco.spice``, which
-        nests ``cap_nmos_03v3`` inside ``.subckt vco`` -- a real, committed
-        instance of the #153 nesting pattern -- so the DUT-aware path must
-        name that subcircuit rather than only the generic advisory."""
-        status, out = self._check_env("ngspice-47", experiment="vco-tuning-range")
+        instantiates ``cap_nmos_03v3`` with `m=1` inside ``.subckt vco`` --
+        a real, committed instance of the measured trigger -- so the
+        DUT-aware path must name that family rather than only the generic
+        advisory."""
+        status, out = self._check_env("ngspice-47", experiment="vco-tuning-range", loads=False)
         self.assertEqual(status, cli.EXIT_OK)
         self.assertIn("ngspice : WARN", out)
         self.assertIn("#153", out)
         self.assertIn("cap_nmos_03v3", out)
+
+    def test_passing_probe_with_a_moscap_dut_is_a_plain_ok(self):
+        """The inverted version of the old version-keyed expectation: the
+        same experiment now reports OK when the probe passes."""
+        status, out = self._check_env("ngspice-47", experiment="vco-tuning-range", loads=True)
+        self.assertEqual(status, cli.EXIT_OK)
+        self.assertIn("ngspice : OK", out)
+        self.assertNotIn("WARN", out)
+
+    def test_failed_probe_on_an_experiment_without_the_family_still_warns(self):
+        """``harness-selftest``'s DUT carries no moscap at all, but a binary
+        that cannot expand the family is worth naming on any --check-env --
+        the generic advisory is the fallback, as it was under the
+        version-keyed behavior."""
+        status, out = self._check_env("ngspice-47", experiment="harness-selftest", loads=False)
+        self.assertEqual(status, cli.EXIT_OK)
+        self.assertIn("ngspice : WARN", out)
+        self.assertIn("#153", out)
 
     def test_pin_awareness_reports_the_259_discipline(self):
         """#268 suggested-fix item 3: report whether SIM_NGSPICE_BIN /

@@ -295,13 +295,32 @@ class StaysWired(unittest.TestCase):
         for script in self.SCRIPTS:
             with self.subTest(script=script.name):
                 text = script.read_text()
-                self.assertIn("emit_control_evidence", text)
-                # Not only defined -- actually called outside the --control branch,
-                # i.e. at least twice in the file (standalone + full campaign).
+                # The writer lives in simenv.sh now; each campaign is left
+                # with call sites only. Count CALL-shaped occurrences (the
+                # opening quote of the corners-dir argument), not bare
+                # substrings -- a comment or a stale doc line must not stand
+                # in for a call. Two: the --control standalone entry point
+                # and the full-campaign path.
                 self.assertGreaterEqual(
-                    text.count("emit_control_evidence"), 3, "definition + both call sites"
+                    text.count('simenv_emit_control_evidence "'),
+                    2,
+                    "--control branch + full-campaign call sites",
+                )
+                self.assertGreaterEqual(
+                    text.count('simenv_recheck_control "'),
+                    1,
+                    "--recheck-control dispatch passes the corners dir through",
                 )
                 self.assertIn("--recheck-control", text)
+                # And no campaign may still define its own copy: a local
+                # redefinition would shadow the shared writer and reintroduce
+                # exactly the drift the shared form exists to prevent.
+                self.assertNotRegex(
+                    text, r"(?m)^emit_control_evidence\(\)", "local copy of the writer"
+                )
+                self.assertNotRegex(
+                    text, r"(?m)^recheck_control\(\)", "local copy of the recheck"
+                )
 
     def test_simenv_exposes_the_shared_schema(self):
         text = SIMENV.read_text()
@@ -310,9 +329,15 @@ class StaysWired(unittest.TestCase):
             "simenv_control_verdicts",
             "simenv_control_report",
             "simenv_control_md_rows",
+            "simenv_emit_control_evidence",
+            "simenv_recheck_control",
         ):
             self.assertIn(name, text)
         self.assertIn(HEADER, text)
+        # Each shared helper defined exactly once: a second copy is the
+        # drift this shared form exists to prevent.
+        self.assertEqual(text.count("simenv_emit_control_evidence() {"), 1)
+        self.assertEqual(text.count("simenv_recheck_control() {"), 1)
 
     def test_vco_deck_keeps_the_mc_mismatch_handle_without_a_default(self):
         """A pinned literal made the `gate` leg unrunnable; a default would make
