@@ -52,6 +52,49 @@ esac
 env KLT_SIM_BACKEND=batch bash -c '. "$0"; simenv_guard_local_grid 5 foo 2>/dev/null || exit $?; exit 0' "${SIMENV_SH}"
 if [ "$?" = 2 ]; then echo "ok   exit status propagates"; else echo "FAIL exit status propagates"; fails=$((fails + 1)); fi
 
+# Bypass class (#959): a `--control` entry point must not reach the control
+# fan without consulting the guard. The coverage/ordering checks below only
+# match a column-0 guard call in the runners -- they never read simenv.sh and
+# never look inside a function body, so a guard the shared
+# simenv_emit_control_evidence calls is invisible to them, and so is its
+# absence. This check is behavioral instead: source the lib, call the helper
+# with a stub campaign function under each environment, and assert whether
+# the stub ran (and whether the helper was allowed to touch the tree at all).
+ctl_case() {  # ctl_case <name> <want_rc> <want_stub> <want_tree> <env...> -- <units>
+  local name="$1" want_rc="$2" want_stub="$3" want_tree="$4"; shift 4
+  local envs=()
+  while [ "$1" != "--" ]; do envs+=("$1"); shift; done
+  shift
+  local dir out rc stub tree
+  dir="$(mktemp -d)"
+  out="$(env -u KLT_SIM_BACKEND -u SIM_ALLOW_LOCAL_GRID "${envs[@]}" bash -c '
+    . "$0"
+    stub() { echo "CAMPAIGN RAN"; mkdir -p "$(dirname "$1")"; : >"$1"; }
+    rc=0
+    simenv_emit_control_evidence "$1/corners" "$1/work" lbl rid nl cd sw stub "$2" || rc=$?
+    echo "rc=${rc}"
+    if [ -e "$1/work/negative_control_rows.csv" ]; then echo "stub=1"; else echo "stub=0"; fi
+  ' "${SIMENV_SH}" "${dir}" "$1" 2>&1)"
+  rc="$(sed -n 's/^rc=//p' <<<"${out}" | tail -1)"
+  stub="$(sed -n 's/^stub=//p' <<<"${out}" | tail -1)"
+  tree="absent"; [ -e "${dir}/corners" ] && tree="present"
+  rm -rf "${dir}"
+  if [ "${rc}" = "${want_rc}" ] && [ "${stub}" = "${want_stub}" ] && [ "${tree}" = "${want_tree}" ]; then
+    echo "ok   ${name}"
+  else
+    echo "FAIL ${name}: want rc=${want_rc} stub=${want_stub} tree=${want_tree}," \
+      "got rc=${rc} stub=${stub} tree=${tree}"; fails=$((fails + 1))
+  fi
+}
+ctl_case "control helper consults guard: batch refuses before any side effect" \
+  2 0 absent KLT_SIM_BACKEND=batch -- 420
+ctl_case "control helper consults guard: empty units fails closed under batch" \
+  2 0 absent KLT_SIM_BACKEND=batch -- ""
+ctl_case "control helper consults guard: SIM_ALLOW_LOCAL_GRID=1 opt-in runs" \
+  0 1 present KLT_SIM_BACKEND=batch SIM_ALLOW_LOCAL_GRID=1 -- 420
+ctl_case "control helper consults guard: non-batch backend runs" \
+  0 1 present -- 420
+
 # Coverage: every runner that fans out locally must call the guard.
 unguarded=""
 for f in "${SIM_DIR}"/*/testbench*/*.sh; do
