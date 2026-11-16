@@ -77,7 +77,7 @@ This page says what comes next and why. It does not restate status: the machine 
 - **Remaining re-qualification groups (#826, #827, #828)** — after #825; then #829 cites the new
   records and regenerates the sign-off; then #843 cites `sim/CHARACTERIZATION.md` for item 8; then
   #790 and #788 close.
-- **`klt lvs` envelopes for `pfd_cp` and `divider_chain`** — after Now 6 shows the recipe carries
+- **`klt lvs` envelopes for `pfd_cp` and `divider_chain`** — after Now 5 shows the recipe carries
   over. With all four, item 11's pairing has its sub-block half.
 - **`mc-cp-mismatch` harness migration (#879)** — after #878 is closed out.
 - **C2 electrical validation (#753, second stage)** — `devchar-passives` for the option-B MIM and
