@@ -336,7 +336,7 @@ def _moscap_probe_verdict() -> tuple[bool | None, str | None]:
             "moscap capability probe could not run: no gf180mcu PDK found "
             f"({exc.args[0].splitlines()[0]})"
         )
-    loads = moscap_probe.nested_moscap_loads(pdk)
+    loads = moscap_probe.nonlinear_moscap_loads(pdk)
     if loads is None:
         return None, (
             "moscap capability probe was inconclusive (a probe timeout, or "
@@ -582,7 +582,7 @@ def run(args: argparse.Namespace) -> int:
     # whose only build fails the probe is not blocked. An inconclusive
     # probe says so without predicting anything.
     moscap_sources = tuple(tb.dut) + tuple(phase.netlist for phase in tb.run_phases)
-    moscap_loads = moscap_probe.nested_moscap_loads(pdk)
+    moscap_loads = moscap_probe.nonlinear_moscap_loads(pdk)
     moscap_warning = runner.nonlinear_moscap_ngspice47_warning(
         ngspice, moscap_sources, moscap_loads
     )
