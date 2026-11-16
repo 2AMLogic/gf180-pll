@@ -40,9 +40,10 @@ from functools import partial
 from typing import ClassVar
 
 try:
-    from .. import _canvas
+    from .. import _canvas, _drc
 except ImportError:  # layout/tests puts "pll_top" itself on sys.path (see vco/primitives.py)
     import _canvas
+    import _drc
 from . import devices as dev
 
 #: GDS layers, gf180mcuD (``libs.tech/klayout/lvs/rule_decks/layers_definitions.lvs``).
@@ -86,7 +87,7 @@ FORBIDDEN_LAYERS: dict[str, tuple[int, int]] = {
 }
 
 # --- shared contact / via constants -----------------------------------------
-CONTACT_UM = 0.22  # CO.1: min *and* max
+CONTACT_UM = _drc.CONTACT_SIZE_UM  # CO.1: min *and* max
 CONTACT_PITCH_UM = 0.5  # CO.2a/CO.2b: 0.28 um space >= 0.25 (0.28 in a 4x4+ array)
 CONTACT_ENC_UM = 0.1  # CO.3/CO.4 need 0.07 (poly/comp enclosure of contact)
 M1_ENC_CONTACT_UM = 0.1  # metal1 grown around a contact row; keeps every pad >= 0.42 um,

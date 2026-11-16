@@ -45,11 +45,12 @@ from dataclasses import dataclass
 from functools import partial
 
 try:
-    from .. import _canvas
+    from .. import _canvas, _drc
 except ImportError:  # this package's own dir (not its "pll_top" parent) is the
     # sys.path root under layout/tests's flat-import convention (see
     # vco/primitives.py's own identical fallback).
     import _canvas
+    import _drc
 
 LAYOUT_GRID_UM = 0.005
 """Manufacturing grid every drawn vertex must land on.
@@ -145,7 +146,7 @@ DECAP_SIZE_UM = 50.0
 DRC_COMP_MIN_SPACE_UM = 0.28  # DF.3a_LV
 DRC_COMP_EXTEND_GATE_UM = 0.24  # DF.6_LV
 DRC_POLY_ENDCAP_UM = 0.22  # PL.4_LV
-DRC_CONTACT_SIZE_UM = 0.22  # CO.1
+DRC_CONTACT_SIZE_UM = _drc.CONTACT_SIZE_UM  # CO.1
 DRC_CONTACT_SPACE_UM = 0.25  # CO.2a
 DRC_CONTACT_COMP_ENCLOSE_UM = 0.07  # CO.4
 DRC_CONTACT_TO_GATE_POLY_UM = 0.15  # CO.7
