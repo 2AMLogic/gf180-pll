@@ -20,9 +20,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+try:
+    from .. import _drc
+except ImportError:  # this package's own dir (not its "pll_top" parent) is the
+    # sys.path root under layout/tests's flat-import convention (see
+    # primitives.py's own identical _canvas fallback). _drc is a plain
+    # constant, so this module stays importable with no PV environment.
+    import _drc
+
 #: Fixed contact size, CO.1 (min/max 0.22 um -- gf180mcu contacts are not
 #: resizable, so this is a hard constant, not a derived margin).
-DRC_CONTACT_SIZE_UM = 0.22
+DRC_CONTACT_SIZE_UM = _drc.CONTACT_SIZE_UM
 
 
 @dataclass(frozen=True)
