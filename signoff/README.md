@@ -7,7 +7,7 @@ met/unmet checklist; if a sentence anywhere claims this block does or does not
 clear a T1 item, the report is what settles it.
 
 Today the verdict is **6 of 22 T1 rows met** (items 1, 9 and 10, on both
-partitions; the block's tier is still `none`) — see "Why every row is `unmet`"
+partitions; the block's tier is still `none`) — see "Why the remaining rows are `unmet`"
 below for the other sixteen. ~~**0 of 22 T1 rows met**~~ was the verdict until
 2026-10-17 (issue #798). An honest machine-readable statement of the gap is
 worth more than a prose checklist nobody re-reads, and it is the reason this
@@ -120,7 +120,7 @@ same way, with the Analog column's artifacts standing in for items 1, 2 and 5.
 DR-008 is this repo's own statement of that substitution and predates the
 checklist text adopting it.
 
-## Why every row is `unmet`
+## Why the remaining rows are `unmet`
 
 **Updated (2026-10-17, issue #798):** items 1, 9 and 10 are now cited and `met`
 (case 3 below); the text of cases 1 and 2 describes the sixteen rows that are
@@ -300,7 +300,7 @@ wheel's `klayout_tools/data/design-evidence-tiers.md`):
 
 ~~Item 11's notes gained, among other things, two rules that bear on the only
 item-11 evidence this repository has — the `vco_block` supply spec and report
-under `layout/evidence/vco-layout/` (see "Why every row is `unmet`"). Neither
+under `layout/evidence/vco-layout/` (see "Why the remaining rows are `unmet`"). Neither
 is cited, so neither changes today's verdict; this is what they would render
 if they were. The ERC half was checked by calling klt 0.6.0's own item-11
 supply-spec grader (`klayout_tools.signoff._resolve_erc_supply_spec`) on the
@@ -783,7 +783,7 @@ worked around silently. Their upstream state was re-checked on 2026-09-26
   per-item `graded_by_build`, all of which `tier-report.json` carries.
 - **klayout-tools#2177** — a manifest cannot record *why* an item is honestly
   uncited, so the machine verdict and its explanation live in two files that
-  drift apart. Most of the section "Why every row is `unmet`" above is prose
+  drift apart. Most of the section "Why the remaining rows are `unmet`" above is prose
   that wants to be manifest data. **Still a gap in klt 0.6.0.** The issue was
   closed upstream on 2026-09-20 as *not planned* — on a citation-accuracy
   defect in its implementation guidance, not on the merits, with a re-filed
