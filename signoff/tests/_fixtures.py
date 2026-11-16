@@ -14,6 +14,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lib"))
 
-from testtree import TreeWriter  # noqa: E402
+from testtree import TreeTestCase, TreeWriter  # noqa: E402
 
-__all__ = ["TreeWriter"]
+__all__ = ["TreeTestCase", "TreeWriter"]

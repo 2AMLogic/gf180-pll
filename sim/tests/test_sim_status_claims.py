@@ -161,9 +161,18 @@ def _report_text(
     rows: dict | None = None,
     bullet: str | None = None,
     extra: str = "",
+    latest: dict | None = None,
 ) -> str:
-    """A minimal sim/CHARACTERIZATION.md that satisfies both rules."""
+    """A minimal sim/CHARACTERIZATION.md that satisfies both rules.
+
+    ``latest`` overrides/extends the record-id map the rows cite, for tests
+    whose tree carries a campaign outside the module-level ``CAMPAIGNS``
+    (e.g. a name-prefix pair); the ``_Tree`` fixture names every campaign's
+    records ``2026010<i>-000000-deadbee.md`` for ``i in range(count)``, so
+    the caller derives the id the same way ``_LATEST`` does.
+    """
     rows = CAMPAIGNS if rows is None else rows
+    latest_map = _LATEST if latest is None else {**_LATEST, **latest}
     body = ["# sim/ — aggregated characterization report", ""]
     body.append(
         _coverage_bullet(campaigns, records) if bullet is None else bullet
@@ -176,7 +185,7 @@ def _report_text(
         # so the latest-record-cited rule (#544) passes by default -- every
         # test below that does not target that rule specifically should not
         # have to think about it.
-        body.append(f"| `{name}` | `sim/{name}/records/{_LATEST[name]}.md` | fine |")
+        body.append(f"| `{name}` | `sim/{name}/records/{latest_map[name]}.md` | fine |")
     if extra:
         body.append("")
         body.append(extra)
@@ -389,6 +398,223 @@ class TestAggregateCountRule(_TreeTest):
             _report_text(rows=rows, campaigns=N_CAMPAIGNS - 1, records=N_RECORDS - 3)
         )
         self.assertFails(COVERAGE_CHECK, "has no entry for:", "holds")
+
+
+class TestRowPerCampaignRule(_TreeTest):
+    """check-characterization-coverage.sh's row-per-campaign rule (#958).
+
+    The gap: sim/CHARACTERIZATION.md's Coverage bullet promises "one entry
+    below for every directory under `sim/` that contains a `records/`
+    subdirectory", but the pre-existing coverage rule grades only "mentioned
+    somewhere at all" -- a whole-file substring match that a caveat or a
+    cross-reference satisfies. PR #925 was the first change to produce that
+    exact state: its `reference-spur-band-top` campaign was named in prose
+    and cross-references and had no Summary-table row, with every check
+    green. The new rule is additive -- the loose rule stays, with its own
+    message, because "not silently absent" and "has the row the document
+    promises" are different questions.
+    """
+
+    # A synthetic campaign added to the tree so the fixture carries a real
+    # name-prefix pair (period-jitter / period-jitter-band-top), the same
+    # shape as reference-spur / reference-spur-band-top on the real tree
+    # (divider-ratio vs. divider-ratio-cell/-chain/-dff is the other pair).
+    PREFIX_CAMPAIGN = "period-jitter-band-top"
+
+    def _add_prefix_campaign(self) -> str:
+        """Adds the prefix campaign's directory; returns its latest id.
+
+        Uses the fixture's record-naming convention (see ``_LATEST``): one
+        record named ``20260100-000000-deadbee.md``, lexically and therefore
+        chronologically last.
+        """
+        records = self.tree.root / "sim" / self.PREFIX_CAMPAIGN / "records"
+        records.mkdir(parents=True)
+        (records / "20260100-000000-deadbee.md").write_text(_RECORD_BODY)
+        return "20260100-000000-deadbee"
+
+    def test_a_normal_one_row_per_campaign_report_passes(self):
+        """The baseline fixture: every campaign has its own row."""
+        result = self.assertPasses(COVERAGE_CHECK)
+        self.assertIn("each with at least one Summary-table row", result.stdout)
+
+    def test_mentioned_only_in_a_cross_reference_fails_the_row_rule(self):
+        """The #958 shape: named in prose, no row of its own.
+
+        The loose rule passes -- the name is present somewhere -- while the
+        row rule fails, which is the distinction the rule exists to draw.
+        The prose also cites the campaign's latest record id so the
+        latest-record-cited rule (#544) stays out of the way and this test
+        isolates the new rule's verdict.
+        """
+        rows = dict(list(CAMPAIGNS.items())[:-1])
+        self.tree.write_report(
+            _report_text(
+                rows=rows,
+                extra=(
+                    "Kept for continuity: `period-jitter` is discussed in the "
+                    "caveat below, and its latest record "
+                    f"`{_LATEST['period-jitter']}` is cited here."
+                ),
+            )
+        )
+        result = self.assertFails(
+            COVERAGE_CHECK,
+            "no row whose first cell is their name",
+            "period-jitter",
+        )
+        self.assertNotIn("has no entry for:", result.stderr)
+
+    def test_a_mention_inside_another_campaigns_row_is_not_a_row(self):
+        """The anchor is load-bearing: `| `name`` mid-line is not the cell.
+
+        An unanchored fixed-string search for "| `period-jitter`" would find
+        that substring inside this row's later cell; only a line-start match
+        is the first-column cell the Coverage bullet promises.
+        """
+        rows = dict(list(CAMPAIGNS.items())[:-1])
+        self.tree.write_report(
+            _report_text(
+                rows=rows,
+                extra=(
+                    "| `output-range` | padded | `period-jitter` mentioned in a "
+                    f"later cell, citing `{_LATEST['period-jitter']}` | fine |"
+                ),
+            )
+        )
+        result = self.assertFails(
+            COVERAGE_CHECK,
+            "no row whose first cell is their name",
+            "period-jitter",
+        )
+        self.assertNotIn("has no entry for:", result.stderr)
+
+    def test_a_second_annotated_row_passes(self):
+        """Two qualifying rows pass: at least one, never exactly one.
+
+        Mirrors `pfd-deadzone`'s deliberate second Summary-table row on the
+        real tree, whose first cell reads
+        ``| `pfd-deadzone` (operating-point manifest) |`` -- a distinct
+        manifest in the same experiment directory, not a duplicate to clean
+        up. "Exactly one" would fail that correct tree.
+        """
+        self.tree.write_report(
+            _report_text(
+                extra=(
+                    "| `period-jitter` (operating-point manifest) | "
+                    f"`sim/period-jitter/records/{_LATEST['period-jitter']}.md` | "
+                    "second manifest | fine |"
+                )
+            )
+        )
+        self.assertPasses(COVERAGE_CHECK)
+
+    def test_an_annotated_only_row_satisfies_the_rule(self):
+        """A first cell with a trailing annotation is still a first cell."""
+        rows = dict(list(CAMPAIGNS.items())[:-1])
+        self.tree.write_report(
+            _report_text(
+                rows=rows,
+                extra=(
+                    "| `period-jitter` (operating-point manifest) | "
+                    f"`sim/period-jitter/records/{_LATEST['period-jitter']}.md` | "
+                    "fine |"
+                ),
+            )
+        )
+        self.assertPasses(COVERAGE_CHECK)
+
+    def test_a_prefix_pair_is_graded_independently(self):
+        """Each of the prefix pair needs its own row, in both directions.
+
+        The closing backtick is what makes this true: without it, one
+        campaign's anchored pattern would match the other's row and a
+        campaign would be graded as covered by a row that is not its own --
+        the exact bug class #958 reports (`reference-spur` vs.
+        `reference-spur-band-top`; `divider-ratio` vs. its `-cell`/`-chain`/
+        `-dff` siblings). Pinned both ways: the short campaign rowless while
+        the long one has a row, and the long one rowless while the short has
+        a row. A pattern that dropped the closing backtick would pass both.
+        """
+        latest = self._add_prefix_campaign()
+        all_rows = {**CAMPAIGNS, self.PREFIX_CAMPAIGN: 1}
+        all_latest = {**_LATEST, self.PREFIX_CAMPAIGN: latest}
+        counts = dict(campaigns=len(all_rows), records=N_RECORDS + 1)
+
+        # Both rows present: the correct tree passes.
+        self.tree.write_report(_report_text(rows=all_rows, latest=all_latest, **counts))
+        self.assertPasses(COVERAGE_CHECK)
+
+        # Short campaign rowless, its name only in prose: fails even though
+        # the long campaign's row is present.
+        short_rows = {
+            name: count
+            for name, count in CAMPAIGNS.items()
+            if name != "period-jitter"
+        }
+        short_rows[self.PREFIX_CAMPAIGN] = 1
+        self.tree.write_report(
+            _report_text(
+                rows=short_rows,
+                latest=all_latest,
+                **counts,
+                extra=(
+                    "Cross-reference: `period-jitter`'s latest record "
+                    f"`{_LATEST['period-jitter']}` is cited here."
+                ),
+            )
+        )
+        result = self.assertFails(
+            COVERAGE_CHECK, "no row whose first cell is their name", "period-jitter"
+        )
+        self.assertNotIn("has no entry for:", result.stderr)
+
+        # Long campaign rowless, named only in prose: fails too.
+        self.tree.write_report(
+            _report_text(
+                rows=dict(CAMPAIGNS),
+                latest=all_latest,
+                **counts,
+                extra=(
+                    f"`{self.PREFIX_CAMPAIGN}`'s latest record `{latest}` is "
+                    "cited here."
+                ),
+            )
+        )
+        self.assertFails(
+            COVERAGE_CHECK,
+            "no row whose first cell is their name",
+            self.PREFIX_CAMPAIGN,
+        )
+
+    def test_both_row_and_loose_rules_report_in_one_run(self):
+        """A campaign absent entirely fails both rules, both named once.
+
+        Companion to TestAggregateCountRule.test_both_rules_report_in_one_run:
+        every failure the run finds is reported, not just the first rule to
+        trip.
+        """
+        rows = dict(list(CAMPAIGNS.items())[:-1])
+        self.tree.write_report(_report_text(rows=rows))
+        self.assertFails(
+            COVERAGE_CHECK,
+            "has no entry for:",
+            "no row whose first cell is their name",
+            "period-jitter",
+        )
+
+    def test_a_campaign_with_an_empty_records_dir_is_not_enumerated(self):
+        """No records -> not a campaign -> no row required (unchanged).
+
+        `sim/lib/record-campaigns.sh` enumerates only directories holding at
+        least one record; the row rule inherits that enumeration, so an
+        empty `records/` directory needs no row and the graded counts are
+        untouched. Requiring a row for a campaign with no records is out of
+        #958's scope and must not start happening.
+        """
+        empty = self.tree.root / "sim" / "empty-campaign" / "records"
+        empty.mkdir(parents=True)
+        self.assertPasses(COVERAGE_CHECK)
 
 
 class TestReadmeCountsEveryOccurrence(_TreeTest):

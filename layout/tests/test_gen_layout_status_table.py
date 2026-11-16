@@ -16,6 +16,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from _fixtures import install_checklib
+
 REPO = Path(__file__).resolve().parents[2]
 GEN = REPO / "layout" / "lib" / "gen_layout_status_table.py"
 CHECKER = REPO / "layout" / "lib" / "check-layout-status-claims.sh"
@@ -36,6 +38,10 @@ class GeneratorTests(unittest.TestCase):
         (self.root / "layout" / "lib").mkdir(parents=True)
         (self.root / "layout" / "harness").mkdir()
         shutil.copy(GEN, self.root / "layout" / "lib" / GEN.name)
+        # The generator imports its evidence extractors from lib/checklib,
+        # resolved relative to its own location -- so the throwaway tree needs
+        # the package beside the copied script, exactly as a clone has it.
+        install_checklib(self.root)
         array = "".join('  "%s|%s|%s|%s"\n' % b for b in BLOCKS)
         (self.root / "layout" / "lib" / CHECKER.name).write_text("BLOCKS=(\n" + array + ")\n")
         (self.root / "layout" / "harness" / "env.py").write_text(

@@ -102,18 +102,6 @@ class _TreeTest(TreeTestCase):
         self.tree.deck("sim/lock-time/testbench/tb_lock_time.sp")
         self.tree.deck("sim/pfd-deadzone/testbench/tb_pfd_deadzone.spice")
 
-    def assertPasses(self) -> subprocess.CompletedProcess:
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        return result
-
-    def assertFails(self, *needles: str) -> subprocess.CompletedProcess:
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
-        for needle in needles:
-            self.assertIn(needle, result.stderr)
-        return result
-
 
 class TestDeckEnumeration(_TreeTest):
     """Rule 1: a parser that reads nothing must not look like a clean tree."""

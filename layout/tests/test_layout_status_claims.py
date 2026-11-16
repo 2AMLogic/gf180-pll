@@ -40,6 +40,7 @@ import unittest
 from pathlib import Path
 
 from _env import HAVE_KLAYOUT, LAYOUT_DIR
+from _fixtures import install_checklib
 
 SCRIPT = LAYOUT_DIR / "lib" / "check-layout-status-claims.sh"
 
@@ -190,6 +191,10 @@ class _Tree:
         (root / "docs" / "chipalooza").mkdir(parents=True)
         (root / "spec").mkdir(parents=True)
         shutil.copy2(SCRIPT, root / "layout" / "lib" / SCRIPT.name)
+        # The KLayout-pin and footprint rules run their heredocs with
+        # PYTHONPATH=$REPO_ROOT/lib and import their evidence extractors from
+        # lib/checklib, so the package has to exist in this tree too.
+        install_checklib(root)
         self.write_spec(RATIFIED_SPEC)
         self.write_audit()
         self.write_ci_workflow()
