@@ -79,13 +79,14 @@ from functools import partial
 from typing import Sequence
 
 try:
-    from .. import _canvas
+    from .. import _canvas, _drc
 except ImportError:  # this package's own dir (not its "pll_top" parent) is the
     # sys.path root under layout/tests's flat-import convention (see
     # floorplan/skeleton.py and every layout/tests/test_*.py's own
     # sys.path.insert(..., ".../pll_top") -- "vco"/"lock_detector"/"pfd_cp"
     # are then each their own top-level package, one level short of "..").
     import _canvas
+    import _drc
 
 # --- GDS layers, gf180mcuD (confirmed against
 # libs.tech/klayout/drc/rule_decks/layers_def.drc's get_polygons() calls --
@@ -117,7 +118,7 @@ POLY_ENDCAP_UM = 0.3  # PL.4_LV=0.22 min
 GATE_TAB_W_UM = 0.4
 GATE_TAB_H_UM = 0.4
 GATE_TAB_OVERLAP_UM = 0.05  # tab and gate bar share real area, not a bare edge
-CONTACT_SIZE_UM = 0.22  # CO.1
+CONTACT_SIZE_UM = _drc.CONTACT_SIZE_UM  # CO.1
 CONTACT_PITCH_UM = 0.5  # 0.22 contact + 0.28 gap > CO.2a's 0.25 min
 CONTACT_ROW_MARGIN_UM = 0.1  # inset from the terminal's outer comp edge
 IMPLANT_MARGIN_UM = 0.3  # NP.5a/PP.5a=0.23, NP.5b/PP.5b=0.16 min

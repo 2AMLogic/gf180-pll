@@ -13,9 +13,15 @@ ratified answer to which checkers exist -- went three weeks asserting a total
 of sixteen over a table of sixteen rows while the tree held seventeen.
 
 Every test builds a throwaway tree whose answer is known, installs the real
-script in it, and runs it there.  No network, no forge, no PDK: the family the
-check discovers is whatever the fixture wrote, which is what makes running the
-real script a test of the check rather than of a reimplementation.
+script in it, and runs it there.  No network, no forge, no PDK: the tree is a
+real (tiny) git checkout and the family the check discovers is whatever the
+fixture staged in its index, which is what makes running the real script a
+test of the check rather than of a reimplementation.  Resolving the family
+from the index is the fix #946 shipped: a filesystem glob's ``*`` stops at
+``/`` while git's crosses it, so before that the two guards sharing the
+pathspec string disagreed on any tree with a checker nested one directory
+deeper than ``<top>/lib/`` -- and the check failed local trees over untracked
+files that were not in the repository at all.
 
 One property of the fixture is worth stating because it is load-bearing: the
 copied check is *itself* a member of the family it discovers (it lives at
@@ -80,9 +86,16 @@ def _proposal(readers="two", family="three") -> str:
 
 
 class _Tree(TreeWriter):
-    """A throwaway repo tree with the real check and a miniature family."""
+    """A throwaway git checkout with the real check and a miniature family.
 
-    def __init__(self, root: Path, at: str = SELF):
+    The check resolves the family from the tree's git index (#946), so the
+    fixture initializes a repository and stages what it writes. Tests that
+    write or remove files after ``__init__`` call ``stage()`` to move the
+    change into the index -- an unstaged file is invisible to the check, by
+    design, which is one of the properties under test.
+    """
+
+    def __init__(self, root: Path, at: str = SELF, init_git: bool = True):
         self.root = root
         self.at = at
         installed = root / at
@@ -92,6 +105,22 @@ class _Tree(TreeWriter):
         self.write("spec/lib/check-beta.sh", NON_READER)
         self.write(INVENTORY, _inventory())
         self.write(PROPOSAL, _proposal())
+        if init_git:
+            self.git("init", "-q")
+            self.stage()
+
+    def git(self, *args: str) -> None:
+        subprocess.run(["git", *args], cwd=self.root, check=True,
+                       capture_output=True, text=True)
+
+    def stage(self) -> None:
+        """Stage the whole tree: new files, edits, and deletions alike.
+
+        ``-f`` so a global excludes file cannot silently keep a fixture
+        (``.loom/`` say) out of the index and turn the dot-skip test into a
+        pass for the wrong reason.
+        """
+        self.git("add", "-A", "-f")
 
     def run(self) -> subprocess.CompletedProcess:
         return subprocess.run(
@@ -103,10 +132,12 @@ class _Tree(TreeWriter):
 
 class _TreeTest(unittest.TestCase):
     AT = SELF
+    INIT_GIT = True
 
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
-        self.tree = _Tree(Path(self._tmp.name), at=self.AT)
+        self.tree = _Tree(Path(self._tmp.name), at=self.AT,
+                          init_git=self.INIT_GIT)
         self.addCleanup(self._tmp.cleanup)
 
     def assertPasses(self) -> subprocess.CompletedProcess:
@@ -129,9 +160,17 @@ class TestFamilyDiscovery(_TreeTest):
         self.assertIn("2 of them read", result.stdout)
 
     def test_an_installer_managed_copy_is_not_a_family_member(self):
-        """`.loom/` and `.claude/` are resync-refreshed and owned upstream."""
+        """`.loom/` and `.claude/` are resync-refreshed and owned upstream.
+
+        Staged, not just written: under index resolution the old free
+        exclusion (a filesystem glob's `*` not matching a leading dot) is
+        gone -- git's `*` matches `.loom` as readily as any other path
+        component -- so this grades the explicit dot-prefix skip.
+        """
         self.tree.write(".loom/lib/check-upstream.sh", NON_READER)
-        self.assertPasses()
+        self.tree.stage()
+        result = self.assertPasses()
+        self.assertIn("3 checker(s) match", result.stdout)
 
 
 class TestEmptyFamily(_TreeTest):
@@ -144,6 +183,7 @@ class TestEmptyFamily(_TreeTest):
         """The trap this repository names wherever it grades a zero."""
         shutil.rmtree(self.tree.root / "sim")
         shutil.rmtree(self.tree.root / "spec")
+        self.tree.stage()
         self.assertFails("matched no checker", "not a pass")
 
 
@@ -211,6 +251,71 @@ class TestInventoryRows(_TreeTest):
         self.assertFails("could not be read")
 
 
+class TestIndexDiscovery(_TreeTest):
+    """#946: the family is resolved from the git index, exactly as
+    `sim/tests/test_check_script_invocability.py` resolves it, so the two
+    guards agree on any tree rather than only on one where every checker
+    sits at `<top>/lib/`."""
+
+    def test_a_nested_checker_requires_an_inventory_row(self):
+        """The bite (#946): git's `*` crosses `/`, so a checker one
+        directory deeper is a family member. Under the pre-#946 filesystem
+        glob this tree passed -- the checker was invisible -- which is the
+        silent-omission hole this issue exists to close; it must fail now.
+        """
+        self.tree.write("a/b/lib/check-nested.sh", NON_READER)
+        self.tree.stage()
+        self.assertFails("has no row for `a/b/lib/check-nested.sh`")
+
+    def test_a_nested_checker_with_a_row_counts(self):
+        """The same checker, inventoried: family four, and the pass line
+        says so."""
+        self.tree.write("a/b/lib/check-nested.sh", NON_READER)
+        self.tree.write(INVENTORY, _inventory(
+            total="four",
+            rows=[SELF, "sim/lib/check-alpha.sh", "spec/lib/check-beta.sh",
+                  "a/b/lib/check-nested.sh"],
+        ))
+        self.tree.write(PROPOSAL, _proposal(readers="two", family="four"))
+        self.tree.stage()
+        result = self.assertPasses()
+        self.assertIn("4 checker(s) match", result.stdout)
+        self.assertIn("2 of them read", result.stdout)
+
+    def test_an_untracked_checker_is_not_a_family_member(self):
+        """An unstaged `*/lib/check-*.sh` is invisible to the index, so the
+        check passes a local tree it used to fail: the file is not in the
+        repository a fresh clone would receive, and the invocability test
+        never saw it either. Under the pre-#946 filesystem glob this tree
+        failed -- the second half of the divergence #946 closes.
+        """
+        self.tree.write("sim/lib/check-untracked.sh", NON_READER)
+        result = self.assertPasses()
+        self.assertIn("3 checker(s) match", result.stdout)
+
+    def test_a_root_level_checker_is_not_a_family_member(self):
+        """`*/lib/` names a directory above `lib/` in both matchers, so a
+        root-level `lib/check-*.sh` is outside the family for this check
+        and the invocability test alike. Documented here because it is the
+        axis the rejected recursive-glob alternative silently got wrong.
+        """
+        self.tree.write("lib/check-root.sh", NON_READER)
+        self.tree.stage()
+        result = self.assertPasses()
+        self.assertIn("3 checker(s) match", result.stdout)
+
+
+class TestNotAGitCheckout(_TreeTest):
+    """The index is the only oracle; a tree without one cannot be graded."""
+
+    INIT_GIT = False
+
+    def test_a_tree_without_a_git_index_fails_loudly(self):
+        """A check that did not run is not a check that passed."""
+        self.assertFails("defined by the git index",
+                         "not a check that passed")
+
+
 class TestProposalCounts(_TreeTest):
     def test_a_stale_reader_count_is_caught(self):
         self.tree.write(PROPOSAL, _proposal(readers="eleven"))
@@ -245,6 +350,7 @@ class TestProposalCounts(_TreeTest):
                   "spec/lib/check-beta.sh"],
         ))
         self.tree.write(PROPOSAL, _proposal(readers="three", family="four"))
+        self.tree.stage()
         self.assertPasses()
 
     def test_a_missing_proposal_is_a_failure(self):
