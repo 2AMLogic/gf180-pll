@@ -167,18 +167,40 @@ machine will resolve, and it is exactly what `layout/harness/env.py`
 delegates to (via `sim/harness/pdk.py`'s single-sourced resolver, so the sim
 and layout harnesses can never disagree about which PDK install is in use).
 
-It does **not** use `klt drc` (and there is no `klt lvs`) for the actual
+~~It does **not** use `klt drc` (and there is no `klt lvs`) for the actual
 sign-off-grade checks in this flow, for two documented reasons, not an
-oversight:
+oversight:~~ — **corrected (2026-11-16, issue #929):** it does **not** use
+`klt drc` for the actual sign-off-grade checks in this flow — and it does not
+use `klt lvs` for them either, though the verb exists now (reason 1's
+correction below states why the foundry deck remains the gate) — for two
+documented reasons, not an oversight:
 
-1. **No LVS verb exists in `klt` yet.** Filed and tracked publicly at
+1. ~~**No LVS verb exists in `klt` yet.** Filed and tracked publicly at
    [2AMLogic/klayout-tools#54](https://github.com/2AMLogic/klayout-tools/issues/54)
    ("no netlist/parasitic extraction or LVS capability yet"), which this
-   bring-up independently reconfirms (see "Friction log" below).
-2. **`klt drc`'s gf180mcu deck is a curated ~10-rule subset** (poly2/comp/
+   bring-up independently reconfirms (see "Friction log" below).~~ —
+   **corrected (2026-11-16, issue #929):** the verb exists now — `klt lvs`
+   shipped with the LVS capability
+   [2AMLogic/klayout-tools#54](https://github.com/2AMLogic/klayout-tools/issues/54)
+   was filed to track, and that issue closed on 2026-08-01. The gap itself was
+   real when this bring-up hit it; the historical record of confirming it
+   stays in the friction log below. What keeps the foundry deck the gate is
+   reason 2's argument, which now covers LVS as well: `klt lvs` runs on the
+   curated gf180mcu extraction deck (`provenance.deck.released: false` in
+   every committed `layout/evidence/*/klt-curated-*/lvs-*.json` envelope),
+   and the foundry `run_lvs.py` deck remains the signoff-bearing check.
+2. ~~**`klt drc`'s gf180mcu deck is a curated ~10-rule subset** (poly2/comp/
    contact/metal1 width-space-enclosure checks), by design documented in
    `klayout_tools/decks/gf180mcu.py`'s own module docstring as "not a full
-   transcription of the official rule manual". `klayout-tools`' own
+   transcription of the official rule manual".~~ — **corrected (2026-11-16,
+   issue #929):** **it is a curated subset, but a far larger one than
+   "~10 rules"**: the committed `klt drc` envelopes report 50 rules checked
+   for `vco_block` and 80 for `pll_top`, of 126 modeled rules each (76 and 46
+   skipped, 191 unmodeled apiece), across 19 rule-section groups in
+   `coverage.deck_scope` — the poly2/comp/contact/metal1
+   width-space-enclosure checks among them. That it is curated rather than a
+   full transcription of the official rule manual remains by design, per
+   `klayout_tools/decks/gf180mcu.py`'s own module docstring. `klayout-tools`' own
    ROADMAP.md states competing with signoff tools is a non-goal ("the point
    is the agent-native surface, not competing with signoff tools") — so this
    is not a gap to file, just a scope this flow cannot rely on for a
@@ -559,11 +581,17 @@ encountered during this bring-up gets filed generically on the public
 `2AMLogic/klayout-tools` tracker — tool-gap description only, never design
 details, spec values, or this repo's content.
 
-- **No `klt lvs`.** Already tracked publicly:
+- ~~**No `klt lvs`.** Already tracked publicly:
   [2AMLogic/klayout-tools#54](https://github.com/2AMLogic/klayout-tools/issues/54).
   This bring-up independently reconfirms the gap (an LVS-gating flow has
   nothing to reach for in `klt` today); a confirming comment was added to
-  that issue rather than filing a duplicate.
+  that issue rather than filing a duplicate.~~ — **corrected (2026-11-16,
+  issue #929):** `klt lvs` exists now, and the issue this entry points at —
+  [2AMLogic/klayout-tools#54](https://github.com/2AMLogic/klayout-tools/issues/54)
+  — closed on 2026-08-01. The entry stands as history: the gap was real when
+  this bring-up hit it, and the confirming comment it links stays on that
+  issue. The foundry `run_lvs.py` deck remains this flow's LVS gate, for the
+  reason "Why this isn't `klt drc` / a `klt lvs`" above states.
 - **`klt drc`'s gf180mcu deck is a curated subset, not a signoff deck.**
   Self-documented already in that deck's own module docstring, and matches
   `klayout-tools`' stated non-goal of competing with signoff tools — not
