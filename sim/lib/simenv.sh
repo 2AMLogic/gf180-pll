@@ -552,11 +552,11 @@ filter/VCO moscaps (see sim/harness/README.md's "ngspice-46 required for
 nested nonlinear moscap decks", #153) and, worse, does not exit on that
 error -- it hangs indefinitely, which stalls an entire xargs-driven run.sh
 job pool since the affected corner's job slot never frees (#259).
-# Even where a deck loads cleanly, that build has been measured returning
-# a different current from the same deck: a spurious ~1 nA offset on the
-# family's c=<expr> behavioral capacitors during a constant-voltage hold
-# (#932). "It runs" is not "it returns the same values" -- only the
-# pinned build is citable.
+Even where a deck loads cleanly, that build has been measured returning
+a different current from the same deck: a spurious ~1 nA offset on the
+family's c=<expr> behavioral capacitors during a constant-voltage hold
+(#932). "It runs" is not "it returns the same values" -- only the
+pinned build is citable.
 
   Fix:      install ngspice-46 at ${SIMENV_NGSPICE_PIN}
             (sim/harness/README.md's "ngspice-46 required..." section has
