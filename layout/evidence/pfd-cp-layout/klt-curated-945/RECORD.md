@@ -82,9 +82,12 @@ $ klt lvs --format json lvs-request.json > lvs-report.json     # exit 0
   zero errors).
 - Nets 92/92 matched, devices 168/168 matched (84 nfet + 84 pfet, both
   sides). Pins are reported as `{layout: 58, reference: 13, matched: 58}`:
-  the reference `.subckt` declares 13 terminals while the extraction
-  promotes every net to a pin, and `matched` tracks the layout side — the
-  same shape the #930 record reports (`{48, 10, 48}`).
+  the reference `.subckt` declares its 13 external terminals, while the
+  extraction promotes every *named* layout net to a pin — 58 of the 92,
+  the remaining 34 being anonymous `$N` nets — and `matched` tracks the
+  layout side. #930's cell happened to have all 48 of its nets named, so
+  there `{48, 10, 48}` had pins equal to nets; that coincidence does not
+  carry over.
 - The six warnings, each attributed (verdict unaffected by any of them):
   - **1 × `topology`, device-class bjt** — present on neither side; the
     extraction deck registers the class unconditionally and the report
