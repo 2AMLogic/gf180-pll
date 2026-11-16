@@ -68,7 +68,7 @@ from . import execution, runner
 __all__ = [
     "MARKER",
     "PROBE_OVERRIDE_ENV",
-    "nested_moscap_loads",
+    "nonlinear_moscap_loads",
     "probe_deck",
     "verdict_of",
 ]
@@ -148,7 +148,7 @@ def verdict_of(output: str) -> bool | None:
     return None
 
 
-def nested_moscap_loads(
+def nonlinear_moscap_loads(
     pdk, *, timeout_s: int = _DEFAULT_TIMEOUT_S, env: Mapping[str, str] | None = None
 ) -> bool | None:
     """Can the ngspice the harness resolves expand the PDK's nonlinear
