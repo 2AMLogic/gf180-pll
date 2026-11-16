@@ -17,6 +17,13 @@ those figures, while ``check-readme-status.sh`` had already forced that README
 line to the true numbers.  Both sim-side checks reported OK on that tree: one
 grades README only, the other graded row coverage only.
 
+``check-readme-status.sh``'s T1 tier-count rule (#928) is graded here too.
+Its source of truth is a committed machine verdict rather than the record
+tree, and the two traps a naive implementation hits -- the report's ``items``
+array being longer than its own ``t1_item_count``, and a *struck* retraction
+of the old figure sitting beside the live one -- are each pinned as a test
+that must PASS, because both would otherwise fail a correct tree.
+
 No PDK, no ngspice, no simulation input -- these scripts read committed files
 and count paths.
 """
@@ -24,6 +31,7 @@ and count paths.
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 import subprocess
 import tempfile
@@ -57,6 +65,84 @@ _RECORD_BODY = "# record\n"
 _RECORD_HASH = hashlib.sha256(_RECORD_BODY.encode()).hexdigest()[:12]
 
 
+# The synthetic T1 verdict. Deliberately NOT the real tree's 6 of 22: if the
+# rule ever read the repository's own signoff/tier-report.json instead of the
+# throwaway tree's, these tests fail rather than pass by coincidence.
+T1_MET = 3
+T1_TOTAL = 7
+
+
+def _tier_report_text(
+    met: int = T1_MET,
+    total: int = T1_TOTAL,
+    *,
+    items: list | None = None,
+    drop: tuple = (),
+    overrides: dict | None = None,
+) -> str:
+    """A minimal signoff/tier-report.json.
+
+    ``items`` defaults to ``total`` T1 rows PLUS one each of T2/T3/T4 with a
+    null partition -- i.e. deliberately longer than ``t1_item_count``, which
+    is the real report's shape (22 T1 rows, 25 elements). A rule deriving the
+    denominator from ``len(items)`` grades the wrong number against a correct
+    README, so the default fixture carries the trap rather than a tidy array.
+    """
+    rows: list = [
+        {
+            "id": i + 1,
+            "tier": "T1",
+            "partition": "analog",
+            "status": "met" if i < met else "unmet",
+            "reason": None if i < met else "no_evidence",
+        }
+        for i in range(total)
+    ]
+    rows += [
+        {"id": 90 + n, "tier": tier, "partition": None, "status": "unmet",
+         "reason": "tier_not_supported"}
+        for n, tier in enumerate(("T2", "T3", "T4"))
+    ]
+    report: dict = {
+        "schema_version": 1,
+        "t1_met_count": met,
+        "t1_item_count": total,
+        "items": rows if items is None else items,
+    }
+    report.update(overrides or {})
+    for field in drop:
+        report.pop(field, None)
+    return json.dumps(report, indent=2) + "\n"
+
+
+def _signoff_readme_text(
+    met: int = T1_MET,
+    total: int = T1_TOTAL,
+    *,
+    struck: bool = True,
+    extra: str = "",
+) -> str:
+    """A minimal signoff/README.md, carrying the struck-retraction trap.
+
+    ``struck=True`` (the default, and what the real file looks like) puts a
+    retracted ``~~**0 of N T1 rows met**~~`` beside the live figure. The rule
+    must not grade it; ``struck=False`` un-strikes the same sentence, which
+    must then fail -- that pair is what proves the skip is load-bearing
+    rather than vacuously passing.
+    """
+    retraction = f"**0 of {total} T1 rows met**"
+    if struck:
+        retraction = f"~~{retraction}~~"
+    text = (
+        "# signoff/ — this block's gap to T1, graded rather than hand-read\n\n"
+        f"Today the verdict is **{met} of {total} T1 rows met** (the block's tier\n"
+        f"is still `none`). {retraction} was the verdict until 2026-10-17.\n"
+    )
+    if extra:
+        text += "\n" + extra + "\n"
+    return text
+
+
 def _coverage_bullet(campaigns: int, records: int) -> str:
     """The report's current-count claim, in the real document's shape."""
     return (
@@ -75,9 +161,18 @@ def _report_text(
     rows: dict | None = None,
     bullet: str | None = None,
     extra: str = "",
+    latest: dict | None = None,
 ) -> str:
-    """A minimal sim/CHARACTERIZATION.md that satisfies both rules."""
+    """A minimal sim/CHARACTERIZATION.md that satisfies both rules.
+
+    ``latest`` overrides/extends the record-id map the rows cite, for tests
+    whose tree carries a campaign outside the module-level ``CAMPAIGNS``
+    (e.g. a name-prefix pair); the ``_Tree`` fixture names every campaign's
+    records ``2026010<i>-000000-deadbee.md`` for ``i in range(count)``, so
+    the caller derives the id the same way ``_LATEST`` does.
+    """
     rows = CAMPAIGNS if rows is None else rows
+    latest_map = _LATEST if latest is None else {**_LATEST, **latest}
     body = ["# sim/ — aggregated characterization report", ""]
     body.append(
         _coverage_bullet(campaigns, records) if bullet is None else bullet
@@ -90,21 +185,42 @@ def _report_text(
         # so the latest-record-cited rule (#544) passes by default -- every
         # test below that does not target that rule specifically should not
         # have to think about it.
-        body.append(f"| `{name}` | `sim/{name}/records/{_LATEST[name]}.md` | fine |")
+        body.append(f"| `{name}` | `sim/{name}/records/{latest_map[name]}.md` | fine |")
     if extra:
         body.append("")
         body.append(extra)
     return "\n".join(body) + "\n"
 
 
-def _readme_text(records: int = N_RECORDS, campaigns: int = N_CAMPAIGNS, extra: str = "") -> str:
-    """A minimal README.md that satisfies check-readme-status.sh."""
+def _readme_text(
+    records: int = N_RECORDS,
+    campaigns: int = N_CAMPAIGNS,
+    extra: str = "",
+    *,
+    t1: tuple | None = None,
+    tier_claim: str | None = None,
+) -> str:
+    """A minimal README.md that satisfies check-readme-status.sh.
+
+    ``tier_claim=""`` drops the T1 sentence entirely (the claim-not-found
+    case); ``t1=(met, total)`` states a different pair than the report does.
+    """
+    t1_met, t1_total = (T1_MET, T1_TOTAL) if t1 is None else t1
+    if tier_claim is None:
+        # Wrapped mid-claim on purpose: the rule collapses whitespace per
+        # file, so a claim broken across a line must still be graded.
+        tier_claim = (
+            "The **machine verdict of record** is `signoff/tier-report.json`; today\n"
+            f"it reads **{t1_met} of {t1_total}\n  rows met**.\n"
+        )
     text = (
         "# gf180-pll\n\n"
         f"- **Done** — a reproducible PVT corner harness; **{records} evidence records**\n"
         f"  across {campaigns} verification campaigns; `period-jitter` covers 1 of the\n"
         "  mandated 45 PVT corners.\n"
     )
+    if tier_claim:
+        text += "\n" + tier_claim
     if extra:
         text += "\n" + extra + "\n"
     return text
@@ -139,9 +255,13 @@ class _Tree:
                 corners.mkdir(parents=True)
                 (corners / "typical-27C-3p30V.log").write_text("ok\n")
 
+        (root / "signoff").mkdir(parents=True)
+
         self.write_readme(_readme_text())
         self.write_status_page(_status_page_text())
         self.write_report(_report_text())
+        self.write_tier_report(_tier_report_text())
+        self.write_signoff_readme(_signoff_readme_text())
 
     def write_readme(self, text: str) -> None:
         (self.root / "README.md").write_text(text)
@@ -151,6 +271,12 @@ class _Tree:
 
     def write_report(self, text: str) -> None:
         (self.root / "sim" / "CHARACTERIZATION.md").write_text(text)
+
+    def write_tier_report(self, text: str) -> None:
+        (self.root / "signoff" / "tier-report.json").write_text(text)
+
+    def write_signoff_readme(self, text: str) -> None:
+        (self.root / "signoff" / "README.md").write_text(text)
 
     def run(self, script: Path) -> subprocess.CompletedProcess:
         return subprocess.run(
@@ -274,6 +400,223 @@ class TestAggregateCountRule(_TreeTest):
         self.assertFails(COVERAGE_CHECK, "has no entry for:", "holds")
 
 
+class TestRowPerCampaignRule(_TreeTest):
+    """check-characterization-coverage.sh's row-per-campaign rule (#958).
+
+    The gap: sim/CHARACTERIZATION.md's Coverage bullet promises "one entry
+    below for every directory under `sim/` that contains a `records/`
+    subdirectory", but the pre-existing coverage rule grades only "mentioned
+    somewhere at all" -- a whole-file substring match that a caveat or a
+    cross-reference satisfies. PR #925 was the first change to produce that
+    exact state: its `reference-spur-band-top` campaign was named in prose
+    and cross-references and had no Summary-table row, with every check
+    green. The new rule is additive -- the loose rule stays, with its own
+    message, because "not silently absent" and "has the row the document
+    promises" are different questions.
+    """
+
+    # A synthetic campaign added to the tree so the fixture carries a real
+    # name-prefix pair (period-jitter / period-jitter-band-top), the same
+    # shape as reference-spur / reference-spur-band-top on the real tree
+    # (divider-ratio vs. divider-ratio-cell/-chain/-dff is the other pair).
+    PREFIX_CAMPAIGN = "period-jitter-band-top"
+
+    def _add_prefix_campaign(self) -> str:
+        """Adds the prefix campaign's directory; returns its latest id.
+
+        Uses the fixture's record-naming convention (see ``_LATEST``): one
+        record named ``20260100-000000-deadbee.md``, lexically and therefore
+        chronologically last.
+        """
+        records = self.tree.root / "sim" / self.PREFIX_CAMPAIGN / "records"
+        records.mkdir(parents=True)
+        (records / "20260100-000000-deadbee.md").write_text(_RECORD_BODY)
+        return "20260100-000000-deadbee"
+
+    def test_a_normal_one_row_per_campaign_report_passes(self):
+        """The baseline fixture: every campaign has its own row."""
+        result = self.assertPasses(COVERAGE_CHECK)
+        self.assertIn("each with at least one Summary-table row", result.stdout)
+
+    def test_mentioned_only_in_a_cross_reference_fails_the_row_rule(self):
+        """The #958 shape: named in prose, no row of its own.
+
+        The loose rule passes -- the name is present somewhere -- while the
+        row rule fails, which is the distinction the rule exists to draw.
+        The prose also cites the campaign's latest record id so the
+        latest-record-cited rule (#544) stays out of the way and this test
+        isolates the new rule's verdict.
+        """
+        rows = dict(list(CAMPAIGNS.items())[:-1])
+        self.tree.write_report(
+            _report_text(
+                rows=rows,
+                extra=(
+                    "Kept for continuity: `period-jitter` is discussed in the "
+                    "caveat below, and its latest record "
+                    f"`{_LATEST['period-jitter']}` is cited here."
+                ),
+            )
+        )
+        result = self.assertFails(
+            COVERAGE_CHECK,
+            "no row whose first cell is their name",
+            "period-jitter",
+        )
+        self.assertNotIn("has no entry for:", result.stderr)
+
+    def test_a_mention_inside_another_campaigns_row_is_not_a_row(self):
+        """The anchor is load-bearing: `| `name`` mid-line is not the cell.
+
+        An unanchored fixed-string search for "| `period-jitter`" would find
+        that substring inside this row's later cell; only a line-start match
+        is the first-column cell the Coverage bullet promises.
+        """
+        rows = dict(list(CAMPAIGNS.items())[:-1])
+        self.tree.write_report(
+            _report_text(
+                rows=rows,
+                extra=(
+                    "| `output-range` | padded | `period-jitter` mentioned in a "
+                    f"later cell, citing `{_LATEST['period-jitter']}` | fine |"
+                ),
+            )
+        )
+        result = self.assertFails(
+            COVERAGE_CHECK,
+            "no row whose first cell is their name",
+            "period-jitter",
+        )
+        self.assertNotIn("has no entry for:", result.stderr)
+
+    def test_a_second_annotated_row_passes(self):
+        """Two qualifying rows pass: at least one, never exactly one.
+
+        Mirrors `pfd-deadzone`'s deliberate second Summary-table row on the
+        real tree, whose first cell reads
+        ``| `pfd-deadzone` (operating-point manifest) |`` -- a distinct
+        manifest in the same experiment directory, not a duplicate to clean
+        up. "Exactly one" would fail that correct tree.
+        """
+        self.tree.write_report(
+            _report_text(
+                extra=(
+                    "| `period-jitter` (operating-point manifest) | "
+                    f"`sim/period-jitter/records/{_LATEST['period-jitter']}.md` | "
+                    "second manifest | fine |"
+                )
+            )
+        )
+        self.assertPasses(COVERAGE_CHECK)
+
+    def test_an_annotated_only_row_satisfies_the_rule(self):
+        """A first cell with a trailing annotation is still a first cell."""
+        rows = dict(list(CAMPAIGNS.items())[:-1])
+        self.tree.write_report(
+            _report_text(
+                rows=rows,
+                extra=(
+                    "| `period-jitter` (operating-point manifest) | "
+                    f"`sim/period-jitter/records/{_LATEST['period-jitter']}.md` | "
+                    "fine |"
+                ),
+            )
+        )
+        self.assertPasses(COVERAGE_CHECK)
+
+    def test_a_prefix_pair_is_graded_independently(self):
+        """Each of the prefix pair needs its own row, in both directions.
+
+        The closing backtick is what makes this true: without it, one
+        campaign's anchored pattern would match the other's row and a
+        campaign would be graded as covered by a row that is not its own --
+        the exact bug class #958 reports (`reference-spur` vs.
+        `reference-spur-band-top`; `divider-ratio` vs. its `-cell`/`-chain`/
+        `-dff` siblings). Pinned both ways: the short campaign rowless while
+        the long one has a row, and the long one rowless while the short has
+        a row. A pattern that dropped the closing backtick would pass both.
+        """
+        latest = self._add_prefix_campaign()
+        all_rows = {**CAMPAIGNS, self.PREFIX_CAMPAIGN: 1}
+        all_latest = {**_LATEST, self.PREFIX_CAMPAIGN: latest}
+        counts = dict(campaigns=len(all_rows), records=N_RECORDS + 1)
+
+        # Both rows present: the correct tree passes.
+        self.tree.write_report(_report_text(rows=all_rows, latest=all_latest, **counts))
+        self.assertPasses(COVERAGE_CHECK)
+
+        # Short campaign rowless, its name only in prose: fails even though
+        # the long campaign's row is present.
+        short_rows = {
+            name: count
+            for name, count in CAMPAIGNS.items()
+            if name != "period-jitter"
+        }
+        short_rows[self.PREFIX_CAMPAIGN] = 1
+        self.tree.write_report(
+            _report_text(
+                rows=short_rows,
+                latest=all_latest,
+                **counts,
+                extra=(
+                    "Cross-reference: `period-jitter`'s latest record "
+                    f"`{_LATEST['period-jitter']}` is cited here."
+                ),
+            )
+        )
+        result = self.assertFails(
+            COVERAGE_CHECK, "no row whose first cell is their name", "period-jitter"
+        )
+        self.assertNotIn("has no entry for:", result.stderr)
+
+        # Long campaign rowless, named only in prose: fails too.
+        self.tree.write_report(
+            _report_text(
+                rows=dict(CAMPAIGNS),
+                latest=all_latest,
+                **counts,
+                extra=(
+                    f"`{self.PREFIX_CAMPAIGN}`'s latest record `{latest}` is "
+                    "cited here."
+                ),
+            )
+        )
+        self.assertFails(
+            COVERAGE_CHECK,
+            "no row whose first cell is their name",
+            self.PREFIX_CAMPAIGN,
+        )
+
+    def test_both_row_and_loose_rules_report_in_one_run(self):
+        """A campaign absent entirely fails both rules, both named once.
+
+        Companion to TestAggregateCountRule.test_both_rules_report_in_one_run:
+        every failure the run finds is reported, not just the first rule to
+        trip.
+        """
+        rows = dict(list(CAMPAIGNS.items())[:-1])
+        self.tree.write_report(_report_text(rows=rows))
+        self.assertFails(
+            COVERAGE_CHECK,
+            "has no entry for:",
+            "no row whose first cell is their name",
+            "period-jitter",
+        )
+
+    def test_a_campaign_with_an_empty_records_dir_is_not_enumerated(self):
+        """No records -> not a campaign -> no row required (unchanged).
+
+        `sim/lib/record-campaigns.sh` enumerates only directories holding at
+        least one record; the row rule inherits that enumeration, so an
+        empty `records/` directory needs no row and the graded counts are
+        untouched. Requiring a row for a campaign with no records is out of
+        #958's scope and must not start happening.
+        """
+        empty = self.tree.root / "sim" / "empty-campaign" / "records"
+        empty.mkdir(parents=True)
+        self.assertPasses(COVERAGE_CHECK)
+
+
 class TestReadmeCountsEveryOccurrence(_TreeTest):
     """sim/lib/check-readme-status.sh, after #237 dropped its `head -1`."""
 
@@ -332,6 +675,179 @@ class TestReadmeCountsEveryOccurrence(_TreeTest):
     def test_a_missing_count_still_fails(self):
         self.tree.write_readme("# gf180-pll\n\nNothing quantified here.\n")
         self.assertFails(README_CHECK, "could not find '<N> evidence records'")
+
+
+class TestT1TierCountRule(_TreeTest):
+    """check-readme-status.sh's T1 tier-count rule (#928).
+
+    The regression: README.md calls `signoff/tier-report.json` the "machine
+    verdict of record", promises the figure is "re-checked in CI so it cannot
+    go stale", and then quoted **0 of 22 rows met** for weeks after the report
+    moved to 6 -- nothing compared the sentence with the report. The same
+    defect class had already been fixed one directory down in #654, which is
+    the argument for a check rather than a third correction.
+    """
+
+    def test_a_correct_readme_passes(self):
+        result = self.assertPasses(README_CHECK)
+        self.assertIn(f"T1 at {T1_MET}/{T1_TOTAL} rows met", result.stdout)
+
+    def test_a_stale_met_count_in_the_readme_is_caught(self):
+        """The mutated-README fixture: the drift the rule exists for."""
+        self.tree.write_readme(_readme_text(t1=(0, T1_TOTAL)))
+        self.assertFails(
+            README_CHECK,
+            f"README.md claims 0 of {T1_TOTAL} T1 rows met",
+            f"signoff/tier-report.json records {T1_MET} of {T1_TOTAL}",
+        )
+
+    def test_an_overstated_met_count_fails_too(self):
+        """Two-sided: claiming more evidence than the report grants is worse."""
+        self.tree.write_readme(_readme_text(t1=(T1_TOTAL, T1_TOTAL)))
+        self.assertFails(README_CHECK, f"claims {T1_TOTAL} of {T1_TOTAL} T1 rows met")
+
+    def test_a_stale_denominator_is_caught(self):
+        """Both halves of "N of M" are graded, not only the numerator."""
+        self.tree.write_readme(_readme_text(t1=(T1_MET, T1_TOTAL + 3)))
+        self.assertFails(README_CHECK, f"claims {T1_MET} of {T1_TOTAL + 3} T1 rows met")
+
+    def test_a_claim_wrapped_across_lines_is_graded(self):
+        """The baseline fixture wraps mid-claim (see _readme_text), so the
+        passing case already proves wrapping is tolerated; this pins that a
+        *stale* wrapped claim is still caught rather than silently unmatched."""
+        self.assertIn("rows met**", (self.tree.root / "README.md").read_text())
+        self.tree.write_readme(
+            _readme_text(
+                tier_claim=f"Today it reads **{T1_MET - 1} of\n  {T1_TOTAL} rows met**.\n"
+            )
+        )
+        self.assertFails(README_CHECK, f"claims {T1_MET - 1} of {T1_TOTAL} T1 rows met")
+
+    def test_a_second_contradicting_tier_count_later_is_caught(self):
+        """Every occurrence is graded, not just the first correct one."""
+        self.tree.write_readme(
+            _readme_text(extra=f"Elsewhere, unrevised: 0 of {T1_TOTAL} rows met.")
+        )
+        self.assertFails(README_CHECK, f"claims 0 of {T1_TOTAL} T1 rows met")
+
+    # -- trap 1: the struck retraction beside the live figure ---------------
+
+    def test_a_struck_retraction_is_not_graded(self):
+        """signoff/README.md:11's `~~**0 of 22 T1 rows met**~~`, in miniature.
+
+        This repository corrects itself by striking the old sentence and
+        writing the new one beside it, so a rule that graded struck spans
+        would read a retraction as a live claim and fail a *correct* tree.
+        The baseline fixture carries the strike, so this is the passing case.
+        """
+        signoff = (self.tree.root / "signoff" / "README.md").read_text()
+        self.assertIn(f"~~**0 of {T1_TOTAL} T1 rows met**~~", signoff)
+        self.assertPasses(README_CHECK)
+
+    def test_un_striking_the_retraction_makes_it_graded(self):
+        """The other half of the pair: the skip must not be vacuous.
+
+        Without this, a rule that never matched anything in signoff/README.md
+        at all would pass the test above for the wrong reason.
+        """
+        self.tree.write_signoff_readme(_signoff_readme_text(struck=False))
+        self.assertFails(
+            README_CHECK, f"signoff/README.md claims 0 of {T1_TOTAL} T1 rows met"
+        )
+
+    def test_a_struck_span_does_not_exempt_the_live_count_beside_it(self):
+        """The exemption must not leak past its own `~~` pair."""
+        self.tree.write_signoff_readme(_signoff_readme_text(met=T1_MET - 1))
+        self.assertFails(
+            README_CHECK,
+            f"signoff/README.md claims {T1_MET - 1} of {T1_TOTAL} T1 rows met",
+        )
+
+    # -- trap 2: items[] is longer than t1_item_count ----------------------
+
+    def test_a_longer_items_array_is_not_the_denominator(self):
+        """The report's `items` holds the T1 rows plus T2/T3/T4 siblings.
+
+        The real file has 22 T1 rows and 25 elements, so a rule deriving the
+        denominator from `len(items)` grades 25 and fails a correct README.
+        The baseline fixture is built with that shape; this asserts it.
+        """
+        report = json.loads((self.tree.root / "signoff" / "tier-report.json").read_text())
+        self.assertEqual(report["t1_item_count"], T1_TOTAL)
+        self.assertEqual(len(report["items"]), T1_TOTAL + 3)
+        self.assertPasses(README_CHECK)
+
+    # -- the report itself -------------------------------------------------
+
+    def test_a_zero_met_count_is_still_graded(self):
+        """A zero is a value, not a missing claim.
+
+        Both directions: a README agreeing with a genuine 0 passes, and one
+        still claiming the old figure against it fails. A truthiness test on
+        the count would silently skip the rule in exactly the state the
+        repository was in before #798.
+        """
+        self.tree.write_tier_report(_tier_report_text(met=0))
+        self.tree.write_readme(_readme_text(t1=(0, T1_TOTAL)))
+        self.tree.write_signoff_readme(_signoff_readme_text(met=0))
+        self.assertPasses(README_CHECK)
+
+        self.tree.write_readme(_readme_text(t1=(T1_MET, T1_TOTAL)))
+        self.assertFails(README_CHECK, f"records 0 of {T1_TOTAL}")
+
+    def test_a_missing_tier_report_fails_loudly(self):
+        """Not a skip: the verdict of record being absent is a failure."""
+        (self.tree.root / "signoff" / "tier-report.json").unlink()
+        self.assertFails(README_CHECK, "signoff/tier-report.json does not exist")
+
+    def test_an_unparseable_tier_report_fails_loudly(self):
+        self.tree.write_tier_report("{ not json at all\n")
+        self.assertFails(README_CHECK, "could not be read as JSON")
+
+    def test_a_tier_report_that_is_not_an_object_fails(self):
+        self.tree.write_tier_report("[1, 2, 3]\n")
+        self.assertFails(README_CHECK, "is not a JSON object")
+
+    def test_a_missing_count_field_fails(self):
+        self.tree.write_tier_report(_tier_report_text(drop=("t1_met_count",)))
+        self.assertFails(README_CHECK, "has no integer `t1_met_count` field")
+
+    def test_a_non_integer_count_field_fails(self):
+        """A string "6" is not the report answering the question."""
+        self.tree.write_tier_report(_tier_report_text(overrides={"t1_item_count": "7"}))
+        self.assertFails(README_CHECK, "has no integer `t1_item_count` field")
+
+    def test_a_boolean_count_field_fails(self):
+        """bool is an int subclass; `True` must not read as a count of 1."""
+        self.tree.write_tier_report(_tier_report_text(overrides={"t1_met_count": True}))
+        self.assertFails(README_CHECK, "has no integer `t1_met_count` field")
+
+    # -- the claim must exist in both graded documents ---------------------
+
+    def test_a_readme_with_no_tier_claim_fails(self):
+        """A selector matching nothing is a check reporting OK ungraded."""
+        self.tree.write_readme(_readme_text(tier_claim=""))
+        self.assertFails(
+            README_CHECK, "could not find '<N> of <M> rows met' in README.md"
+        )
+
+    def test_a_signoff_readme_with_no_tier_claim_fails(self):
+        self.tree.write_signoff_readme("# signoff/\n\nNothing quantified here.\n")
+        self.assertFails(
+            README_CHECK, "could not find '<N> of <M> rows met' in signoff/README.md"
+        )
+
+    def test_a_missing_signoff_readme_fails(self):
+        (self.tree.root / "signoff" / "README.md").unlink()
+        self.assertFails(README_CHECK, "signoff/README.md could not be read")
+
+    def test_deleting_the_claim_is_not_a_fix(self):
+        """Both documents at once: a stale claim cannot be un-staled by
+        removing it, the same doctrine as the aggregate-count rule."""
+        self.tree.write_readme(_readme_text(tier_claim=""))
+        self.tree.write_signoff_readme("# signoff/\n\nNo figure here.\n")
+        result = self.assertFails(README_CHECK, "README.md", "signoff/README.md")
+        self.assertEqual(result.stderr.count("could not find"), 2)
 
 
 class TestLatestRecordCitedRule(_TreeTest):

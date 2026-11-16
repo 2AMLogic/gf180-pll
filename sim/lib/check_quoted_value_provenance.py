@@ -13,8 +13,9 @@ path -- exactly as the heredoc received them.
 
 WHY THIS EXISTS (issue #237)
 
-Nine checks already grade docs/chipalooza/challenge-5-proposal.md. Every one
-of them grades something *about* a number rather than the number:
+Nine checks graded docs/chipalooza/challenge-5-proposal.md when this one was
+written. Every one of them graded something *about* a number rather than the
+number:
 
   check-readme-status.sh            counts of records and campaigns
   check-characterization-coverage.sh  the aggregation's rows

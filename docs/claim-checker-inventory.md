@@ -3,14 +3,17 @@
 Scope ratified for #699: fold wording-only checkers together only where the
 same representative mutations still fail for the same reasons. Value-grading
 checkers stay functionally unchanged. This file is the inventory that gate
-asks for. Counts are `wc -l` at the commit that adds this file; there are 16
-`*/lib/check-*.sh` scripts (the issue text said 14/15; `docs/lib/` and
-`layout/lib/check-evidence-host-paths.sh` came later).
+asks for. The `Lines` and `Commits` counts are `wc -l` and `git log` readings
+taken at the commit that wrote each row; there are 18 `*/lib/check-*.sh`
+scripts (the issue text said 14/15; `docs/lib/` and
+`layout/lib/check-evidence-host-paths.sh` came later, and two more landed
+after #699 — see "Keeping this file true" below).
 
 ## Outcome
 
-**No checker is safely consolidable. Every script is marked KEEP, and this
-change ships the inventory only (no script, test, or CI step is altered).**
+**No checker is safely consolidable. Every script is marked KEEP, and #699's
+own change shipped the inventory only (no script, test, or CI step was
+altered).**
 
 Reasons, in order of weight:
 
@@ -25,7 +28,7 @@ Reasons, in order of weight:
    locate the claim to grade, not the grading itself.
 2. **Inputs barely overlap.** The shared document, the proposal, is only the
    place the claim is read. The expected side differs per script (see table),
-   so a merged script would still need 16 independent readers.
+   so a merged script would still need one independent reader per script.
 3. **Mutation equivalence cannot be shown cheaply.** Each script is paired
    with a test that builds its own scratch tree fixture (about 9,000 lines of
    test code in total). A merged checker would have to reproduce every
@@ -44,6 +47,30 @@ A shared-helper refactor (for example a common "extract proposal section"
 function) is possible, but it would touch value-grading scripts' code paths
 and is not what the ratified scope permits; it is left to a separate issue if
 anyone wants it.
+
+## Keeping this file true
+
+**The total above and the row set below are re-derived, not remembered.**
+`docs/lib/check-claim-checker-inventory.sh` enumerates `*/lib/check-*.sh` and
+fails this repository's CI if the stated total differs, if a script in the
+tree has no row, or if a row names a script the tree does not have. It grades
+the row **set**, not its length, because the two numbers this file states were
+maintained together and so agreed with each other while both were wrong:
+`sim/lib/check-artifact-manifests.sh` was committed on 2026-10-23 and this
+file went three weeks asserting a total of sixteen over a table of sixteen
+rows while the tree held seventeen scripts.
+
+`sim/tests/test_check_script_invocability.py` already made a new checker
+impossible for CI to forget — it discovers the family from the git index and
+fails on a member that is not runnable the way its own header says. Nothing
+made the same promise about this file, so a checker could be wired, tested,
+and absent from the one document written to enumerate the family. The same
+check grades `docs/chipalooza/challenge-5-proposal.md` §5.1's count of how
+many of these checkers read that document, which had gone stale the same way.
+
+Two rows arrived with that check: the one that had been missing, and the check
+itself. Neither revisits #699's ratified finding above — a later checker gets
+a row and a `Decision` on the same terms as the rest.
 
 ## Per-checker table
 
@@ -69,10 +96,12 @@ stop.
 | `spec/lib/check-spec-row-coverage.sh` | 533 | `spec/pll.md` summary rows vs proposal section 5 | tree | 4 | Reference input row absent from section 5 | KEEP |
 | `sim/lib/check-record-trim-connectivity.sh` | 448 | record logs vs netlist snapshot | graph | 2 | evidence taken on an export with an unwired `LDT3` pin | KEEP |
 | `sim/lib/check-characterization-coverage.sh` | 346 | `CHARACTERIZATION.md` vs `sim/*/records/` | tree | 4 | report stale by 19 records and 3 campaigns while every row existed | KEEP |
+| `docs/lib/check-claim-checker-inventory.sh` | 296 | this file's total and row set, and the proposal's §5.1 checker counts, vs `*/lib/check-*.sh` | tree | 1 | sixteen rows asserting a total of sixteen while the tree held seventeen | KEEP |
 | `design/lib/check-port-connectivity.sh` | 274 | netlist ports vs wiring in the same file | tree | 1 | `LDT3` label misplaced; exported cleanly, port wired to `net1` | KEEP |
 | `sim/lib/check-record-supersession.sh` | 221 | cited records vs supersession graph | graph | 2 | proposal described a closed FAIL as live, 18 days after the re-measurement | KEEP |
 | `sim/lib/check-readme-status.sh` | 127 | README counts vs `sim/*/records/*.md` | tree | 5 | hand-written record count under-reported the tree for months | KEEP |
 | `layout/lib/check-evidence-host-paths.sh` | 122 | evidence files changed vs merge base | tree | 1 | host-absolute paths in committed DRC/LVS bundles | KEEP |
+| `sim/lib/check-artifact-manifests.sh` | 12 | `manifests/artifacts/*.manifest.json` vs the schema and the committed tree (logic in `check_artifact_manifests.py`, 148 lines) | tree | 1 | a manifest naming a non-`artifact:` location, or an object whose bytes are also committed | KEEP |
 
 ## Notes on the closest candidates
 

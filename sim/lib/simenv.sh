@@ -1181,3 +1181,66 @@ simenv_control_md_rows() {
   printf '%s\n' "${out}" | awk '
     NF >= 7 { printf "  | %s | `%s` | **%s** | **%s** | **%s** | %d of %d |\n", $1, $2, $3, $4, $5, $7, $6 }'
 }
+
+# Everything above derives verdicts from bytes that already exist. The two
+# helpers below are the write and re-read halves of the same contract: they
+# produce those bytes (from a campaign's own control runs) and gate on them
+# again later. Both used to live copy-pasted in each campaign's runner; they
+# are here for the same reason the verdict half is -- the sort key and the
+# header line inside the writer ARE the artifact's format contract, and two
+# copies of those are two formats waiting to drift.
+
+# simenv_emit_control_evidence <corners-dir> <work-dir> <campaign-label> <rid>
+#                              <netlist-desc> <corners-desc> <switches-note>
+#                              <campaign-fn>
+#
+# Write <corners-dir>/negative_control.csv and archive every control run's
+# raw ngspice log beside it. <campaign-fn> is the campaign's own
+# control_campaign, passed by function name -- each campaign's point loop is
+# genuinely per-campaign -- and the four provenance strings are expanded by
+# the caller, so per-campaign knobs (seeds, corner counts,
+# CONTROL_SWITCHES_NOTE) stay defined where they already are. Used by BOTH a
+# campaign's `--control` standalone entry point and its full-campaign path,
+# so a campaign's control and a standalone control are the same bytes
+# produced by the same code.
+simenv_emit_control_evidence() {
+  local cornersdir="$1" work="$2" campaign="$3" rid="$4"
+  local netlist="$5" corners_desc="$6" switches="$7" campaign_fn="$8"
+  local raw="${work}/negative_control_rows.csv"
+  mkdir -p "${cornersdir}"
+  rm -rf "${work:?}"/ctl_*
+  "${campaign_fn}" "${raw}"
+  local f
+  for f in "${work}"/ctl_*/ngspice.log; do
+    [ -f "${f}" ] || continue
+    cp "${f}" "${cornersdir}/$(basename "$(dirname "${f}")").log"
+  done
+  {
+    simenv_provenance "${campaign}" "${rid}" "${netlist}" "${corners_desc}" "${switches}"
+    echo "${SIMENV_CONTROL_HEADER}"
+    sort -t, -k1,1 -k2,2 -k3,3 -k6,6 "${raw}"
+  } >"${cornersdir}/negative_control.csv"
+}
+
+# simenv_recheck_control <dir> <exp-dir> <script-name> <label> <absent-hint>
+#
+# The body of every campaign's `--recheck-control <record-id | corners dir>`:
+# re-derive an ALREADY-COMMITTED campaign's negative-control verdict from its
+# own committed CSV. Reads bytes only -- no ngspice, no netlist export, no
+# record minted -- and exits non-zero if any leg fails, so it is usable as a
+# gate. <absent-hint> is the campaign-specific sentence printed when the
+# artifact does not exist; its continuation lines carry the caller's
+# seven-space indent, so each campaign's message stays byte-identical to
+# what it printed before the pair moved here.
+simenv_recheck_control() {
+  local dir="${1:-}" exp="$2" script="$3" label="$4" absent_hint="$5"
+  [ -n "${dir}" ] || { echo "usage: ${script} --recheck-control <record-id | corners dir>" >&2; exit 2; }
+  [ -d "${dir}" ] || dir="${exp}/corners/${dir}"
+  [ -d "${dir}" ] || { echo "ERROR: no such corners directory: ${1}" >&2; exit 1; }
+  local csv="${dir}/negative_control.csv"
+  [ -f "${csv}" ] || {
+    echo "ERROR: ${csv} missing -- ${absent_hint}" >&2
+    exit 1
+  }
+  simenv_control_report "${csv}" "${label}"
+}

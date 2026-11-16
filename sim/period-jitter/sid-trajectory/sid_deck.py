@@ -106,20 +106,9 @@ def stage_device_lines(src: str) -> dict[str, dict[str, str]]:
     to bias, because a silent partial match would characterise three devices and
     report them as the ring.
     """
-    lines = _join_continuations(src)
-    body: list[str] = []
-    inside = False
-    for ln in lines:
-        low = ln.strip().lower()
-        if low.startswith(".subckt vco_stage "):
-            inside = True
-            continue
-        if inside and low.startswith(".ends"):
-            break
-        if inside:
-            body.append(ln)
+    body = isf_deck.subckt_body(src, "vco_stage")
     if not body:
-        raise ValueError("design/netlist/vco.spice: no `.subckt vco_stage` body found")
+        raise ValueError("design/netlist/vco.spice: `.subckt vco_stage` body is empty")
 
     found: dict[str, dict[str, str]] = {}
     pat = re.compile(

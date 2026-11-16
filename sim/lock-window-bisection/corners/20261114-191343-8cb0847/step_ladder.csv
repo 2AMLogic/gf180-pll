@@ -1,0 +1,19 @@
+# every rung of the phase-step ladder: what the stimulus was asked for, what it achieved, whether the LOCK pad dropped, how far the detector's integrator got, and the loop's own static offset at the instant of the step
+# delta_ps is the signed phase step applied to REF (positive = REF retarded). delta_err_ps is the achieved step minus the requested one -- a stimulus check, not a result.
+# deasserted is the procedure's own observable, taken from the LOCK pad at half rail. vwin_pre/vwin_min are the detector's integrator node, reported because they explain a threshold that does not reproduce t_flag; they are not available to a tester.
+# deassert_lat_ns and dip_ns are blank at a rung where LOCK never dropped, which is the expected outcome below threshold rather than a missing measurement.
+# phi_pre_ns is the REF -> FB skew over the last two pre-step reference cycles and skew_pw_ns is the same quantity from the PFD's UP/DN pulse-width difference. phi_drift_ps is that skew minus its value ten reference cycles earlier: how far from stationary the offset still was when the step arrived.
+bundle,code,delta_ps,delta_err_ps,lock_pre_v,lock_min_v,deasserted,vwin_pre_v,vwin_min_v,deassert_lat_ns,dip_ns,phi_pre_ns,skew_pw_ns,phi_drift_ps
+ff,11,-2000,-0.00,5.727e-09,-0.000208,yes,0.2242,0.3923,1.44e+03,,-1.7450,-1.7700,194.4
+ff,11,0,0.00,5.993e-09,-0.0002239,yes,0.2191,0.05841,,,-1.7645,-1.8000,170.4
+ff,11,2000,0.00,6.509e-09,-0.0002224,yes,0.2118,-0.02078,,,-1.7799,-1.8000,189.9
+ss,3,-2000,-0.00,5.814e-09,-0.0002957,yes,0.2815,-0.01816,,,1.6196,1.6200,-158.4
+ss,3,0,0.00,5.808e-09,-0.0003692,yes,0.293,0.2089,,,1.6109,1.6100,-157.4
+ss,3,2000,0.00,5.772e-09,-0.004223,yes,0.2825,0.4019,,,1.6201,1.6100,-168.1
+typical,7,-2800,0.00,3.3,-0.002506,yes,3.285,0.001107,80.3,1.37e+03,0.1355,0.1100,-5.9
+typical,7,-2400,-0.00,3.3,-0.03624,yes,3.286,0.1789,81.1,1.28e+03,0.1352,0.1100,-10.4
+typical,7,-2000,-0.00,3.3,3.3,no,3.286,1.395,,,0.1282,0.1100,-11.8
+typical,7,0,0.00,3.3,3.3,no,3.287,3.288,,,0.1328,0.1100,-10.0
+typical,7,2000,0.00,3.3,3.3,no,3.286,1.889,,,0.1171,0.0900,4.7
+typical,7,2400,-0.00,3.3,-0.04794,yes,3.287,0.6584,163,1.03e+03,0.0893,0.0600,-9.3
+typical,7,2800,-0.00,3.3,-0.09381,yes,3.286,0.02755,83.5,1.31e+03,0.1234,0.1000,-10.6

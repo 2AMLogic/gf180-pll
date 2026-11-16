@@ -35,22 +35,33 @@ _ERROR_RE = re.compile(r"^\s*(?:Error|ERROR|Fatal|fatal error|doAnalyses:)", re.
 # sm141064.ngspice implements this PDK's decoupling/loop-filter moscap family
 # (cap_nmos_03v3, cap_pmos_03v3, cap_nmos_06v0, cap_pmos_06v0, and each of
 # those with a "_b" body-tie variant) as a nonlinear capacitance -- a `c=`
-# behavioral coefficient expression, not a fixed value. ngspice-47 mis-expands
-# that construct into a malformed internal element/node ("unknown parameter
-# (e9)", a scientific-notation exponent split off mid-token) when the cap is
-# instantiated INSIDE another named `.subckt` (the hierarchical instance path
-# the error names, e.g. `x1.xcdec1.gc_moscap`, is two levels deep: the VCO
-# copy, then the cap nested in `.subckt vco`) -- ngspice-46 handles it
-# correctly either way. A flat, top-level instantiation (as
-# sim/devchar-passives' own cap_nmos_03v3/cap_nmos_03v3_b device-
-# characterization decks use, with no enclosing `.subckt`) has been verified
-# NOT to trigger this on ngspice-47 -- see #153's investigation. This is an
-# ngspice-47 codegen regression in the PDK's own subcircuit, not a defect in
-# this repo's decks -- see sim/harness/README.md's "ngspice-46 required for
-# nested nonlinear moscap decks" note for a portable build recipe.
-_NONLINEAR_MOSCAP_RE = re.compile(r"\bcap_(?:n|p)mos_(?:03v3|06v0)(?:_b)?\b", re.IGNORECASE)
-_SUBCKT_RE = re.compile(r"^\.subckt\b", re.IGNORECASE)
-_ENDS_RE = re.compile(r"^\.ends\b", re.IGNORECASE)
+# behavioral coefficient expression, not a fixed value. One ngspice-47
+# release mis-expands that construct into a malformed internal element/node
+# ("unknown parameter (e9)", a scientific-notation exponent split off
+# mid-token). The measured trigger (#926, 2026-11-14, both 47 builds on the
+# reference host) is the `m=` multiplier on the instance line -- NOT
+# `.subckt` nesting, as #153 concluded and earlier text here stated: in this
+# repo's decks the two properties are perfectly correlated (every `m=`
+# instance lives in a nested DUT export, every `m=`-less one in a flat
+# device-characterization deck), so no committed deck could have falsified
+# the nesting story. A flat instantiation WITH `m=` fails on the broken
+# build; a nested one WITHOUT `m=` is clean. Which installed builds are
+# affected cannot be read off the version banner either -- the patched
+# point build prints the same `ngspice-47` token as the broken one -- so
+# the warnings below are decided by a capability probe
+# (sim/harness/moscap_probe.py), and the version string only ever appears
+# in message text. This is an ngspice codegen regression in the PDK's own
+# subcircuit, not a defect in this repo's decks -- see sim/harness/README.md's
+# "The nonlinear moscap family needs a build that expands it" note for a
+# portable known-good build recipe.
+# An instance line of that family carrying an `m=` multiplier -- the
+# measured trigger. Anchored on an `X`-prefixed instance token, so the
+# family's own `.subckt` definition line never matches; the `m` must start
+# its own word (`c_width`, `1m`, ... do not match).
+_MOSCAP_M_INSTANCE_RE = re.compile(
+    r"^\s*[xX]\S+\s+.*\b(cap_(?:n|p)mos_(?:03v3|06v0)(?:_b)?)\b.*\bm\s*=",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 class NgspiceMissing(RuntimeError):
@@ -90,39 +101,11 @@ def ngspice_major_version(version: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def _nested_nonlinear_moscap_match(text: str) -> str | None:
-    """The matched subcircuit name if ``text`` instantiates the PDK's
-    nonlinear-capacitance moscap family from inside a ``.subckt`` body, else
-    ``None``. A top-level (unwrapped) instantiation does not match -- see the
-    module-level comment above ``_NONLINEAR_MOSCAP_RE`` for why that
-    distinction is the one ngspice-47 actually cares about.
-
-    A plain line-count of ``.subckt``/``.ends`` tokens, not a real parser:
-    good enough for netlists this harness itself composes and validates
-    (``testbench._check_forbidden_directives`` already rejects stray
-    ``.control``/``.lib``/etc in a fragment), where malformed nesting is not
-    a case this needs to defend against.
-    """
-    depth = 0
-    for line in text.splitlines():
-        stripped = line.strip()
-        if _SUBCKT_RE.match(stripped):
-            depth += 1
-            continue
-        if _ENDS_RE.match(stripped):
-            depth = max(0, depth - 1)
-            continue
-        if depth > 0:
-            match = _NONLINEAR_MOSCAP_RE.search(stripped)
-            if match:
-                return match.group(0)
-    return None
-
-
 def dut_uses_nonlinear_moscap(sources) -> str | None:
-    """The matched subcircuit name if any file in ``sources`` instantiates the
-    PDK's nonlinear-capacitance moscap family from inside a nested
-    ``.subckt`` (see ``_nested_nonlinear_moscap_match``), else ``None``.
+    """The matched family name if any file in ``sources`` instantiates the
+    PDK's nonlinear-capacitance moscap family with an ``m=`` multiplier on
+    the instance line -- the construct measured (#926) to make a known-bad
+    ngspice emit the malformed internal element -- else ``None``.
     Missing/unreadable sources are skipped rather than raising -- callers use
     this for an advisory check, not a hard dependency."""
     for path in sources:
@@ -130,68 +113,85 @@ def dut_uses_nonlinear_moscap(sources) -> str | None:
             text = Path(path).read_text()
         except OSError:
             continue
-        match = _nested_nonlinear_moscap_match(text)
+        match = _MOSCAP_M_INSTANCE_RE.search(text)
         if match:
-            return match
+            return match.group(1)
     return None
 
 
-def ngspice47_advisory(version: str) -> str | None:
-    """A version-only advisory if ``version`` is ngspice-47, else ``None`` --
-    unlike :func:`nonlinear_moscap_ngspice47_warning`, this needs no DUT or
-    fragment netlists to say something useful (#268). ``--check-env`` has no
-    experiment argument by default, so the leading ``ngspice-<N>`` token
-    alone is all it has to go on; when a DUT *is* known (an experiment was
-    resolved), prefer the DUT-aware warning below for a precise per-campaign
-    verdict instead of this generic one.
+def ngspice47_advisory(version: str, loads: bool | None) -> str | None:
+    """The generic advisory when the moscap capability probe *failed*
+    (``loads is False``), else ``None`` -- unlike
+    :func:`nonlinear_moscap_ngspice47_warning`, this needs no DUT or
+    fragment netlists to say something useful (#268): a binary that cannot
+    expand the family is known-bad for any campaign that instantiates it.
+    ``--check-env`` with no experiment argument has only this generic
+    verdict; when a DUT *is* known (an experiment was resolved), prefer the
+    DUT-aware warning below for a precise per-campaign verdict first.
 
-    Advisory only, like the DUT-aware warning: a host with only ngspice-47
-    can still attempt a run and see the real error.
+    The decision is the probe's, never the version string (#926: the
+    patched point build prints the same ``ngspice-47`` banner token as the
+    broken one, so ``version`` appears in the message text only). An
+    inconclusive probe (``loads is None``) says nothing -- abstain rather
+    than guess.
+
+    Advisory only, like the DUT-aware warning: a host whose only build
+    fails the probe can still attempt a run and see the real error.
     """
-    if ngspice_major_version(version) != 47:
+    if loads is not False:
         return None
     return (
-        f"{version} is known-bad for this repo's closed-loop PVT campaigns "
-        "that instantiate the PDK's nonlinear-capacitance moscap family "
+        f"{version} failed this repo's moscap capability probe: it "
+        "mis-expands this PDK's nonlinear-capacitance moscap family "
         "(cap_nmos_03v3, cap_pmos_03v3, cap_nmos_06v0, cap_pmos_06v0, and "
-        "each '_b' body-tie variant) from inside a nested '.subckt' -- "
-        "currently sim/vco-tuning-range and sim/reference-spur. ngspice-47 "
-        "mis-expands that construct into a malformed internal element, and "
-        "every point of an affected campaign fails with \"unknown parameter "
-        "(eN)\" (a scientific-notation exponent split off mid-token, #153). "
-        "A flat, top-level instantiation (e.g. sim/devchar-passives) is "
-        "unaffected and runs on either version. Known-good: ngspice-46 -- "
-        "see sim/harness/README.md's \"ngspice-46 required for nested "
-        "nonlinear moscap decks\" note for a portable build recipe."
+        "each '_b' body-tie variant, instantiated with an 'm=' multiplier) "
+        "into a malformed internal element, and every point of an affected "
+        "closed-loop campaign -- currently sim/vco-tuning-range and "
+        "sim/reference-spur -- fails with \"unknown parameter (eN)\" (a "
+        "scientific-notation exponent split off mid-token, #153). "
+        "Known-good: ngspice-46, or any build that passes the probe (e.g. "
+        "the patched ngspice-47 point build) -- see sim/harness/README.md's "
+        "\"The nonlinear moscap family needs a build that expands it\" "
+        "note for a portable build recipe."
     )
 
 
-def nonlinear_moscap_ngspice47_warning(version: str, sources) -> str | None:
-    """An actionable warning if ``version`` is ngspice-47 and ``sources``
-    (a testbench's committed DUT + fragment netlists) instantiate the PDK's
-    nonlinear-capacitance moscap family -- else ``None``. See #153.
+def nonlinear_moscap_ngspice47_warning(version: str, sources, loads: bool | None) -> str | None:
+    """An actionable warning if the moscap capability probe *failed*
+    (``loads is False``) and ``sources`` (a testbench's committed DUT +
+    fragment netlists) instantiate the PDK's nonlinear-capacitance moscap
+    family with the measured ``m=`` trigger -- else ``None``. See #153,
+    #926.
+
+    A passing probe licenses only "this build does not emit a malformed
+    element" -- it is evidence about loading, never about the *values* a
+    build returns (#932). That is why this function warns on ``False``
+    only, and stays silent on both ``True`` and an inconclusive ``None``:
+    neither is a prediction of failure, and this warning must never state
+    one it does not have.
 
     Advisory only: the caller decides whether to print it and keeps running
-    either way, so a host that only has ngspice-47 still gets to attempt the
-    run (and see the actual ngspice error) rather than being hard-blocked by
-    a heuristic content match.
+    either way, so a host whose only build fails the probe still gets to
+    attempt the run (and see the actual ngspice error) rather than being
+    hard-blocked by a heuristic content match.
     """
-    if ngspice_major_version(version) != 47:
+    if loads is not False:
         return None
-    subckt = dut_uses_nonlinear_moscap(sources)
-    if subckt is None:
+    family = dut_uses_nonlinear_moscap(sources)
+    if family is None:
         return None
     return (
         f"warning: {version} is known to mis-expand this PDK's "
-        f"nonlinear-capacitance moscap family ({subckt}, sm141064.ngspice's "
-        "'c=<expr>' behavioral coefficient) into a malformed internal "
-        "element -- every point of this run is expected to fail with "
-        "\"unknown parameter (eN)\" (a scientific-notation exponent split "
-        "off mid-token). This is an ngspice-47 codegen regression in the "
-        "PDK's own subcircuit, not a design defect (#153). Known-good: "
-        "ngspice-46 -- see sim/harness/README.md's \"ngspice-46 required "
-        "for nested nonlinear moscap decks\" note for a portable build "
-        "recipe."
+        f"nonlinear-capacitance moscap family ({family}, sm141064.ngspice's "
+        "'c=<expr>' behavioral coefficient, instantiated with an 'm=' "
+        "multiplier) into a malformed internal element -- every point of "
+        "this run is expected to fail with \"unknown parameter (eN)\" (a "
+        "scientific-notation exponent split off mid-token). This is an "
+        "ngspice codegen regression in the PDK's own subcircuit, not a "
+        "design defect (#153). Known-good: ngspice-46, or any build that "
+        "passes the moscap capability probe -- see sim/harness/README.md's "
+        "\"The nonlinear moscap family needs a build that expands it\" "
+        "note for a portable build recipe."
     )
 
 
