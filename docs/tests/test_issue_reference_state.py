@@ -188,13 +188,6 @@ class _TreeTest(TreeTestCase):
         self.assertIn("SKIP", result.stdout)
         return result
 
-    def assertFails(self, *needles: str) -> subprocess.CompletedProcess:
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
-        for needle in needles:
-            self.assertIn(needle, result.stderr)
-        return result
-
 
 class TestResolvableRule(_TreeTest):
     def test_a_clean_tree_passes(self):
