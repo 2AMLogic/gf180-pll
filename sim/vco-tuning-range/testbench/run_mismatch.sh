@@ -408,21 +408,6 @@ control_campaign() {
   done
 }
 
-recheck_control() {
-  local dir="${1:-}"
-  [ -n "${dir}" ] || { echo "usage: run_mismatch.sh --recheck-control <record-id | corners dir>" >&2; exit 2; }
-  [ -d "${dir}" ] || dir="${EXP}/corners/${dir}"
-  [ -d "${dir}" ] || { echo "ERROR: no such corners directory: ${1}" >&2; exit 1; }
-  local csv="${dir}/negative_control.csv"
-  [ -f "${csv}" ] || {
-    echo "ERROR: ${csv} missing -- that record predates this campaign's own" >&2
-    echo "       committed negative control (#602) and delegated the check by" >&2
-    echo "       citation to sim/mc-cp-mismatch instead." >&2
-    exit 1
-  }
-  simenv_control_report "${csv}" "vco-tuning-range negative control"
-}
-
 case "${1:-}" in
   --one)
     shift
@@ -430,8 +415,14 @@ case "${1:-}" in
     exit 0
     ;;
   --recheck-control)
+    # The shared simenv_recheck_control (sim/lib/simenv.sh, where the
+    # verdict/report machinery lives), given this script's usage name, EXP
+    # root, report label and absent-artifact hint.
     shift
-    recheck_control "$@"
+    simenv_recheck_control "${1:-}" "${EXP}" "run_mismatch.sh" "vco-tuning-range negative control" \
+      "that record predates this campaign's own
+       committed negative control (#602) and delegated the check by
+       citation to sim/mc-cp-mismatch instead."
     exit 0
     ;;
 esac
@@ -456,28 +447,12 @@ if [ "${1:-}" = "--check" ]; then
   exit 0
 fi
 
-# emit_control_evidence <corners-dir> -- shared by `--control` and the full
-# campaign path, so both produce the same bytes from the same code.
-emit_control_evidence() {
-  local cornersdir="$1"
-  local raw="${WORK}/negative_control_rows.csv"
-  mkdir -p "${cornersdir}"
-  rm -rf "${WORK:?}"/ctl_*
-  control_campaign "${raw}"
-  local f
-  for f in "${WORK}"/ctl_*/ngspice.log; do
-    [ -f "${f}" ] || continue
-    cp "${f}" "${cornersdir}/$(basename "$(dirname "${f}")").log"
-  done
-  {
-    simenv_provenance "vco-tuning-range (negative control)" "${RID}" \
-      "design/netlist/vco.spice (committed export)" \
-      "${#CONTROL_POINTS[@]} sampled (corner, Vctrl, band) points x 5 runs (seeds ${CONTROL_SEED_A}/${CONTROL_SEED_B}, sw_stat_mismatch 1 and 0)" \
-      "${CONTROL_SWITCHES_NOTE}"
-    echo "${SIMENV_CONTROL_HEADER}"
-    sort -t, -k1,1 -k2,2 -k3,3 -k6,6 "${raw}"
-  } >"${cornersdir}/negative_control.csv"
-}
+# The writer itself (raw-CSV assembly, per-run log archiving, the provenance
+# block, the header line and the sort that fix the artifact's byte layout)
+# lives in sim/lib/simenv.sh as simenv_emit_control_evidence -- shared with
+# the mc-cp-mismatch campaign so the artifact's format contract cannot drift
+# between them. Only this campaign's provenance strings and its own
+# control_campaign differ; both are expanded here, at the call sites.
 
 if [ "${1:-}" = "--control" ]; then
   RID=$(simenv_record_id)
@@ -489,7 +464,12 @@ if [ "${1:-}" = "--control" ]; then
   SHA_VCO=$(simenv_sha256 "${SNAPDIR}/${RID}-vco-mismatch.spice")
 
   echo "vco-tuning-range --control: ${#CONTROL_POINTS[@]} sampled points x 5 runs"
-  emit_control_evidence "${CORNERSDIR}"
+  simenv_emit_control_evidence "${CORNERSDIR}" "${WORK}" \
+    "vco-tuning-range (negative control)" "${RID}" \
+    "design/netlist/vco.spice (committed export)" \
+    "${#CONTROL_POINTS[@]} sampled (corner, Vctrl, band) points x 5 runs (seeds ${CONTROL_SEED_A}/${CONTROL_SEED_B}, sw_stat_mismatch 1 and 0)" \
+    "${CONTROL_SWITCHES_NOTE}" \
+    control_campaign
   CONTROL_CSV="${CORNERSDIR}/negative_control.csv"
   CONTROL_ROWS="$(simenv_control_md_rows "${CONTROL_CSV}")"
   CONTROL_RC=0
@@ -711,7 +691,12 @@ OUT="${CORNERSDIR}/mismatch.csv"
 # delegated the check by citation to sim/mc-cp-mismatch.
 # --------------------------------------------------------------------------
 echo "vco-tuning-range mismatch: negative control (${#CONTROL_POINTS[@]} points x 5 runs) ..."
-emit_control_evidence "${CORNERSDIR}"
+simenv_emit_control_evidence "${CORNERSDIR}" "${WORK}" \
+  "vco-tuning-range (negative control)" "${RID}" \
+  "design/netlist/vco.spice (committed export)" \
+  "${#CONTROL_POINTS[@]} sampled (corner, Vctrl, band) points x 5 runs (seeds ${CONTROL_SEED_A}/${CONTROL_SEED_B}, sw_stat_mismatch 1 and 0)" \
+  "${CONTROL_SWITCHES_NOTE}" \
+  control_campaign
 CONTROL_CSV="${CORNERSDIR}/negative_control.csv"
 CONTROL_ROWS="$(simenv_control_md_rows "${CONTROL_CSV}")"
 CONTROL_RC=0

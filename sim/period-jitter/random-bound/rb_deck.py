@@ -69,6 +69,10 @@ import isf_deck  # noqa: E402
 
 #: Shared with every period-jitter deck module; defined once in `isf_deck`.
 _join_continuations = isf_deck._join_continuations
+#: The same walk in its default form (comment/blank lines kept, each stripped):
+#: the deck-text splices below embed the committed body verbatim, so a dropped
+#: line would change an emitted deck byte-for-byte.
+subckt_lines = isf_deck.subckt_body
 
 STAGES = (1, 2, 3, 4, 5)
 RING_DEVICES = ("XMPH", "XMP", "XMN", "XMNT")
@@ -85,23 +89,6 @@ _MOS_RE = re.compile(
     r"^(X\w+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+([np]fet_03v3)\s+(.*)$", re.I
 )
 _RES_RE = re.compile(r"^(X\w+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(ppolyf_u\w*)\s+(.*)$", re.I)
-
-
-def subckt_lines(src: str, name: str) -> list[str]:
-    """The body of `.subckt <name>`, continuations folded, header and `.ends` excluded."""
-    lines = _join_continuations(src)
-    body: list[str] = []
-    inside = False
-    for ln in lines:
-        low = ln.strip().lower()
-        if low.startswith(f".subckt {name.lower()} "):
-            inside = True
-            continue
-        if inside and low.startswith(".ends"):
-            return body
-        if inside:
-            body.append(ln.strip())
-    raise ValueError(f"design/netlist/vco.spice: no `.subckt {name}` found")
 
 
 def devices(src: str) -> list[dict]:
