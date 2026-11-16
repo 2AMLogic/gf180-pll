@@ -173,10 +173,11 @@ class MarginClearsPdkMinimumTests(unittest.TestCase):
         )
 
     def test_moscap_sd_ext_clears_co7_contact_to_gate_poly(self):
-        # Comp beyond the gate holds one contact column CO.4-style margin in
-        # from the comp edge; what is left to the gate must clear CO.7.
+        # Comp beyond the gate holds one contact column CONTACT_ROW_MARGIN_UM in
+        # from the comp edge (primitives.py:569-570); what is left to the gate
+        # must clear CO.7.
         self.assertGreaterEqual(
-            prim.MOSCAP_SD_EXT_UM - prim.MOSCAP_COL_M1_ENC_UM - dev.DRC_CONTACT_SIZE_UM,
+            prim.MOSCAP_SD_EXT_UM - prim.CONTACT_ROW_MARGIN_UM - dev.DRC_CONTACT_SIZE_UM,
             dev.DRC_CONTACT_TO_GATE_POLY_UM,
         )
 
