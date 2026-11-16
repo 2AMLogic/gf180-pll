@@ -209,18 +209,7 @@ def build(outdir: Path | None = None, canvas: prim.Canvas | None = None) -> Bias
 
 
 def main() -> int:
-    import argparse
-
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--outdir",
-        default=str(Path(__file__).resolve().parents[2] / "evidence" / "vco-layout" / "work"),
-    )
-    args = parser.parse_args()
-    result = build(Path(args.outdir))
-    x0, y0, x1, y1 = result.footprint
-    print(f"wrote {args.outdir}/{TOP_CELL}.gds")
-    print(f"footprint: {x1 - x0:.3f} x {y1 - y0:.3f} um  ({(x1 - x0) * (y1 - y0):.1f} um^2)")
+    prim.build_cli(build, TOP_CELL, __doc__)
     return 0
 
 
