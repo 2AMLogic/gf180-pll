@@ -44,7 +44,20 @@ finding that no such aggregated artifact existed as of this repository's
   graded README line agreed with those figures, which it had not for as long.
   Quoting a checked document is not the same as being checked, so a count
   stated here is now a build failure when it drifts rather than a sentence
-  someone is expected to re-read.
+  someone is expected to re-read. The bullet's other promise — *one entry
+  below* per campaign directory — is graded the same way as of #958:
+  `sim/lib/check-characterization-coverage.sh` now requires every enumerated
+  campaign to have at least one row in the Summary table below whose first
+  cell is that campaign's backticked name, so a campaign named only in a
+  caveat or a cross-reference still passes the check's older
+  not-silently-absent rule — that looseness is deliberate — and fails this
+  one, which is the point. The rule is *at least* one row, never exactly one:
+  `pfd-deadzone`'s second row below documents a distinct operating-point
+  manifest in the same experiment directory and is not a duplicate. That
+  shape is not hypothetical: #925's `reference-spur-band-top` was the first
+  change to land a campaign directory whose campaign was named twice in
+  prose and cross-references while carrying no Summary-table row of its own,
+  and every check was green on the branch that introduced its records.
 - **"Latest record."** Record IDs are `<YYYYMMDD>-<HHMMSS>-<sha>`
   (`sim/README.md`'s naming convention), so a lexicographic sort of
   `records/*.md` gives chronological order for free. Unless noted otherwise
