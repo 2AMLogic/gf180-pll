@@ -126,7 +126,7 @@ LAYER = {
 }
 
 # --- Derived generator margins (deck minimum + explicit headroom) ---
-SD_OVERHANG_UM = 0.5  # DF.6_LV=0.24 min; also carries CO.7+contact+CO.4 (0.15+0.22+0.07=0.44)
+SD_OVERHANG_UM = 0.5  # DF.6_LV min; also carries CO.7+contact+CO.4 stacked
 COMP_GAP_UM = 0.6  # DF.3a_LV=0.28 min, between two separate transistors' comp islands
 NWELL_TO_NMOS_GAP_UM = 4.0  # DF.16_LV=0.43 min, PMOS-band-to-NMOS-band clearance;
 # sized generously because ring.py's inner n-well tap band (its own
@@ -134,7 +134,7 @@ NWELL_TO_NMOS_GAP_UM = 4.0  # DF.16_LV=0.43 min, PMOS-band-to-NMOS-band clearanc
 # the NMOS band and the n-well's own edge -- see ring.py's DRC-iteration
 # notes for the arithmetic (2.0 um was DF.16_LV-legal for the transistors
 # alone, but left ~0 clearance once the tap band's own footprint was added).
-POLY_ENDCAP_UM = 0.65  # PL.4_LV=0.22 min; sized to also keep the gate contact's
+POLY_ENDCAP_UM = 0.65  # PL.4_LV min; sized to also keep the gate contact's
 # Metal1 pad M1.2a-legal (>= 0.23 um) away from the S/D pads' Metal1, not just
 # to satisfy the poly rule itself (see mosfet()'s module-level DRC iteration
 # notes -- a tighter endcap DRC-passes PL.4 alone but not M1.2a once the gate
@@ -143,17 +143,17 @@ GATE_TAB_W_UM = 0.4
 GATE_TAB_H_UM = 0.4
 GATE_TAB_OVERLAP_UM = 0.05  # guarantees the tab and gate bar share real area, not a bare edge
 CONTACT_SIZE_UM = dev.DRC_CONTACT_SIZE_UM
-CONTACT_PITCH_UM = 0.5  # 0.22 contact + 0.28 pitch gap > CO.2a's 0.25 min
+CONTACT_PITCH_UM = 0.5  # pitch gap (pitch minus contact size) > CO.2a min
 CONTACT_ROW_MARGIN_UM = 0.1  # inset from the terminal's outer comp edge
-IMPLANT_MARGIN_UM = 0.3  # NP.5a/PP.5a=0.23, NP.5b/PP.5b=0.16 min
-NWELL_MARGIN_UM = 0.5  # DF.4c_LV=0.43 min (PMOS comp -> nwell edge)
+IMPLANT_MARGIN_UM = 0.3  # NP.5a/PP.5a and NP.5b/PP.5b minima
+NWELL_MARGIN_UM = 0.5  # DF.4c_LV min (PMOS comp -> nwell edge)
 METAL1_PAD_MARGIN_UM = 0.12  # metal1 pad grown around a contact/contact-row
 VIA1_SIZE_UM = dev.DRC_VIA1_SIZE_UM  # V1.1: min *and* max -- exactly 0.26 um
 VIA1_METAL_ENCLOSE_UM = 0.09  # V1.3a/V1.4a need only >= 0; 0.09 also keeps the
 # landing pad 0.26 + 2*0.09 = 0.44 um wide, i.e. >= V1.3c/V1.4b's 0.34 um
 # threshold, so the deck's end-of-line-overlap special cases (which apply only
 # to metal lines narrower than 0.34 um) never engage at all.
-METAL2_WIRE_WIDTH_UM = 0.44  # >= M2.1's 0.28 min AND >= the 0.34 um V1.4b
+METAL2_WIRE_WIDTH_UM = 0.44  # >= M2.1 min AND >= the 0.34 um V1.4b
 # threshold, so every metal2 track is wide enough to land a via1 anywhere
 # along it without a separately-grown pad.
 MIN_SD_CONTACT_WIDTH_UM = CONTACT_SIZE_UM + 2 * CONTACT_ROW_MARGIN_UM  # 0.42;
@@ -173,7 +173,7 @@ DOG_BONE_SETBACK_UM = 0.5  # keeps the dog-bone's wide-to-narrow comp step
 # a hypothetical one (the gate bar's endcap extends POLY_ENDCAP_UM=0.65 um
 # past the channel on each side, which is wider than most dog-boned
 # devices' own S/D widening, so the endcap flank oversails the step).
-METAL1_WIRE_WIDTH_UM = 0.28  # > M1.1's 0.23 min; also narrow enough that the
+METAL1_WIRE_WIDTH_UM = 0.28  # > M1.1 min; also narrow enough that the
 # VDD_VCO/GND_VCO and VBP/VBN rail pair (each stage's own S/D-to-gate
 # spacing apart -- see stage.py) stay M1.2a-legal (>= 0.23 um) from each
 # other once both are drawn full-width across the whole row (see ring.py's
@@ -505,7 +505,7 @@ def mosfet(
 MOSCAP_SD_EXT_UM = 0.6  # comp beyond the gate, each side (pcell 0.44): holds one contact
 # column 0.1 um from the comp edge and leaves 0.28 um to the gate (CO.7 0.15).
 MOSCAP_POLY_EXT_UM = 0.62  # poly beyond the comp, each end (pcell 0.46)
-MOSCAP_POLY_CONTACT_GAP_UM = 0.30  # comp edge to the gate-contact row (CO.8 0.17)
+MOSCAP_POLY_CONTACT_GAP_UM = 0.30  # comp edge to the gate-contact row (CO.8 min)
 MOSCAP_ROW_INSET_UM = 0.2  # gate-row metal1 inset from the poly's x edge
 MOSCAP_IMPLANT_MARGIN_UM = 0.25  # nplus around comp (NP.5a gate overlap 0.23, NP.5b 0.16)
 MOSCAP_COL_M1_ENC_UM = 0.1  # metal1 around a contact column / row
