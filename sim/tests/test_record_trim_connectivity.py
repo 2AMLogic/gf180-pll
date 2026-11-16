@@ -142,18 +142,6 @@ class _Tree(TreeWriter):
 class _TreeTest(TreeTestCase):
     tree_cls = _Tree
 
-    def assertPasses(self) -> subprocess.CompletedProcess:
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        return result
-
-    def assertFails(self, *needles: str) -> subprocess.CompletedProcess:
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
-        for needle in needles:
-            self.assertIn(needle, result.stderr)
-        return result
-
 
 class TestBothHalvesAreRequired(_TreeTest):
     """The finding is the PAIR: this pin is driven, and it goes nowhere."""

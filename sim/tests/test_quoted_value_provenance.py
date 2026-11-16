@@ -579,18 +579,6 @@ class _Tree:
 class _TreeTest(TreeTestCase):
     tree_cls = _Tree
 
-    def assertPasses(self) -> subprocess.CompletedProcess:
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        return result
-
-    def assertFails(self, *needles: str) -> subprocess.CompletedProcess:
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
-        for needle in needles:
-            self.assertIn(needle, result.stderr)
-        return result
-
 
 class TestCleanTree(_TreeTest):
     def test_a_consistent_document_passes(self):
