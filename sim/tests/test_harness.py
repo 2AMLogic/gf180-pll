@@ -1058,7 +1058,7 @@ class MoscapProbeTests(unittest.TestCase):
                 ("garbage", None),  # unrecognized abstains rather than guesses
             ):
                 self.assertEqual(
-                    moscap_probe.nested_moscap_loads(
+                    moscap_probe.nonlinear_moscap_loads(
                         self.pdk, env={moscap_probe.PROBE_OVERRIDE_ENV: value}
                     ),
                     expected,
@@ -1073,17 +1073,17 @@ class MoscapProbeTests(unittest.TestCase):
         with mock.patch.object(moscap_probe, "_run_probe", return_value=True) as run_probe, \
             mock.patch.object(runner, "ngspice_executable", return_value="/usr/bin/ngspice"):
             for _ in range(5):
-                self.assertTrue(moscap_probe.nested_moscap_loads(self.pdk, env={}))
+                self.assertTrue(moscap_probe.nonlinear_moscap_loads(self.pdk, env={}))
             run_probe.assert_called_once()
             # A different PDK is a different cache entry, probed separately.
             other = fake_pdk(Path(self.tmp.name) / "other")
-            self.assertTrue(moscap_probe.nested_moscap_loads(other, env={}))
+            self.assertTrue(moscap_probe.nonlinear_moscap_loads(other, env={}))
             self.assertEqual(run_probe.call_count, 2)
 
     def test_missing_ngspice_abstains_without_invoking_anything(self):
         with mock.patch.object(runner, "ngspice_executable", return_value=None), \
             mock.patch.object(moscap_probe.execution.LocalBackend, "run_deck") as run_deck:
-            self.assertIsNone(moscap_probe.nested_moscap_loads(self.pdk, env={}))
+            self.assertIsNone(moscap_probe.nonlinear_moscap_loads(self.pdk, env={}))
             run_deck.assert_not_called()
 
     def test_probe_timeout_is_inconclusive_not_a_failure(self):
@@ -1094,7 +1094,7 @@ class MoscapProbeTests(unittest.TestCase):
             mock.patch.object(
                 moscap_probe.execution.LocalBackend, "run_deck", return_value=timed_out
             ):
-            self.assertIsNone(moscap_probe.nested_moscap_loads(self.pdk, env={}))
+            self.assertIsNone(moscap_probe.nonlinear_moscap_loads(self.pdk, env={}))
 
     def test_backend_output_shapes_classify_to_the_three_verdicts(self):
         cases = [
@@ -1112,7 +1112,7 @@ class MoscapProbeTests(unittest.TestCase):
                 # Same PDK every iteration: drop the per-process memo between
                 # cases so each really runs the (mocked) probe.
                 moscap_probe._loads_cached.cache_clear()
-                self.assertEqual(moscap_probe.nested_moscap_loads(self.pdk, env={}), expected)
+                self.assertEqual(moscap_probe.nonlinear_moscap_loads(self.pdk, env={}), expected)
 
 
 class CheckEnvTests(unittest.TestCase):
@@ -1142,7 +1142,7 @@ class CheckEnvTests(unittest.TestCase):
             with mock.patch.object(runner, "ngspice_version", return_value=version), \
                 mock.patch.object(runner, "ngspice_executable", return_value=ngspice_exe), \
                 find_patch, \
-                mock.patch.object(cli.moscap_probe, "nested_moscap_loads", return_value=loads), \
+                mock.patch.object(cli.moscap_probe, "nonlinear_moscap_loads", return_value=loads), \
                 mock.patch.dict(os.environ, {"SIM_NGSPICE_BIN": "/no/such/pin/ngspice"}), \
                 contextlib.redirect_stdout(buf):
                 status = cli.cmd_check_env(experiment)
