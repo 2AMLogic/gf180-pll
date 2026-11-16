@@ -1361,23 +1361,14 @@ def connectivity_report(result: VcoBlockResult) -> list[tuple[str, bool, str]]:
 
 
 def main() -> int:
-    import argparse
+    def extra_args(parser):
+        parser.add_argument(
+            "--check-connectivity",
+            action="store_true",
+            help="extract metal connectivity and verify every routed net joins (needs klayout)",
+        )
 
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--outdir",
-        default=str(Path(__file__).resolve().parents[2] / "evidence" / "vco-layout" / "work"),
-    )
-    parser.add_argument(
-        "--check-connectivity",
-        action="store_true",
-        help="extract metal connectivity and verify every routed net joins (needs klayout)",
-    )
-    args = parser.parse_args()
-    result = build(Path(args.outdir))
-    x0, y0, x1, y1 = result.footprint
-    print(f"wrote {args.outdir}/{TOP_CELL}.gds")
-    print(f"footprint: {x1 - x0:.3f} x {y1 - y0:.3f} um  ({(x1 - x0) * (y1 - y0):.1f} um^2)")
+    args, result = prim.build_cli(build, TOP_CELL, __doc__, extra_args=extra_args)
     pl = result.placement
     for name, box in pl.boxes().items():
         print(f"  {name:<16} {box[0]:9.3f} {box[1]:9.3f} {box[2]:9.3f} {box[3]:9.3f}")

@@ -112,6 +112,37 @@ def _join_continuations(text: str) -> list[str]:
     return out
 
 
+def subckt_body(
+    src: str, name: str, *, skip_comments: bool = False, strip: bool = True
+) -> list[str]:
+    """The body of `.subckt <name>`, continuations folded, header and `.ends`
+    excluded, one line per element.
+
+    Shared by every period-jitter deck builder/extractor.  `skip_comments=True`
+    also drops blank and `*`-comment lines (the device-line walk the in-band
+    extractors want); the default keeps them, because deck-text splices here
+    embed the committed body verbatim and a dropped line would change an
+    emitted deck byte-for-byte.  Raises if the netlist has no
+    `.subckt <name>` header.
+    """
+    body: list[str] = []
+    inside = False
+    for ln in _join_continuations(src):
+        s = ln.strip()
+        low = s.lower()
+        if low.startswith(f".subckt {name.lower()} "):
+            inside = True
+            continue
+        if inside and low.startswith(".ends"):
+            return body
+        if not inside:
+            continue
+        if skip_comments and (not s or s.startswith("*")):
+            continue
+        body.append(s if strip else ln)
+    raise ValueError(f"no `.subckt {name}` in the netlist")
+
+
 def read_vco_netlist(repo_root) -> str:
     return (Path(repo_root) / "design" / "netlist" / "vco.spice").read_text()
 
