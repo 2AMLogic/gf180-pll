@@ -172,6 +172,17 @@ class MarginClearsPdkMinimumTests(unittest.TestCase):
             prim.MOSCAP_POLY_CONTACT_GAP_UM, dev.DRC_POLY_CONTACT_TO_COMP_UM
         )
 
+    def test_moscap_sd_ext_clears_co7_contact_to_gate_poly(self):
+        # Comp beyond the gate holds one contact column CO.4-style margin in
+        # from the comp edge; what is left to the gate must clear CO.7.
+        self.assertGreaterEqual(
+            prim.MOSCAP_SD_EXT_UM - prim.MOSCAP_COL_M1_ENC_UM - dev.DRC_CONTACT_SIZE_UM,
+            dev.DRC_CONTACT_TO_GATE_POLY_UM,
+        )
+
+    def test_moscap_implant_margin_clears_np5a_gate_enclosure(self):
+        self.assertGreaterEqual(prim.MOSCAP_IMPLANT_MARGIN_UM, dev.DRC_IMPLANT_GATE_ENCLOSE_UM)
+
 
 class TapPitchTests(unittest.TestCase):
     """Test plan edge case: guard-ring tap pitch <= 15 um *everywhere*

@@ -36,3 +36,12 @@ from __future__ import annotations
 #: square). Contacts are not resizable, so this is a hard constant, not a
 #: derived margin.
 CONTACT_SIZE_UM = 0.22
+
+#: gf180mcu rule CO.7: minimum contact-to-gate-poly space (0.15 um).
+CONTACT_TO_GATE_POLY_UM = 0.15
+
+#: gf180mcu rule CO.8: minimum poly-contact-to-comp space (0.17 um).
+POLY_CONTACT_TO_COMP_UM = 0.17
+
+#: gf180mcu rule NP.5a / PP.5a: minimum implant overlap of the gate (0.23 um).
+IMPLANT_GATE_ENCLOSE_UM = 0.23
