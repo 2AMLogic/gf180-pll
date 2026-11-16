@@ -913,8 +913,6 @@ def _draw_glue_column(
 
 
 def build(outdir: Path | None = None) -> DividerChainLayout:
-    import klayout.db as db  # noqa: PLC0415 -- lazy, same convention as every module in this package
-
     # --- six identical div23_cell instances, GDS-level placement -- see
     # module docstring's "SIX IDENTICAL div23_cell INSTANCES" section. ---
     div23 = div23_cell.build()
@@ -930,7 +928,6 @@ def build(outdir: Path | None = None) -> DividerChainLayout:
         div23.write_gds(div23_gds)
         canvas.layout.read(str(div23_gds))
     div23_index = canvas.layout.cell_by_name("div23_cell")
-    dbu_per_um = int(round(1.0 / canvas.dbu))
 
     # Every net that crosses a ROW_PLAN row boundary gets its own reserved
     # vertical Metal3 column at negative x -- known up front, from the net
@@ -973,8 +970,7 @@ def build(outdir: Path | None = None) -> DividerChainLayout:
                 dx = x_cursor + base_dx
                 dy = row_y + base_dy
                 div23_boxes[i] = (x_cursor, row_y, x_cursor + div23_w, row_y + div23_h)
-                trans = db.Trans(db.Vector(int(round(dx * dbu_per_um)), int(round(dy * dbu_per_um))))
-                canvas.top.insert(db.CellInstArray(div23_index, trans))
+                canvas.place_cell(div23_index, dx, dy)
                 net_map = _DIV23_NET_MAP[i]
                 for local, (px, py) in div23.pins.items():
                     if local == "VDD":
