@@ -1,0 +1,814 @@
+* Flat LVS reference for the assembled pll_top (issues #237, #149),
+* composed by layout/pll_top/top_level/reference.py from the five blocks'
+* own reference_netlist() outputs; wiring read from design/netlist/pll_top.spice.
+.subckt pll_top REF B0 B1 B2 CPB0 CPB1 LDT0 LDT1 LDT2 LDT3 P0 P1 P2 P3 P4 P5 SEL0 SEL1 SEL2 SEL3 SEL4 SEL5 IBN ICN IBP ICP CLK DIVOUT FB LOCK VCTRL VDD VDD_VCO GND_VCO VDD_DIV VSS
+M_XPFD_pfd_cp_xpfd_xed_ref_xi1_MP XPFD_pfd_cp_xpfd_xed_ref_D1 REF VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_ref_xi1_MN XPFD_pfd_cp_xpfd_xed_ref_D1 REF VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_ref_xi2_MP XPFD_pfd_cp_xpfd_xed_ref_D2 XPFD_pfd_cp_xpfd_xed_ref_D1 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_ref_xi2_MN XPFD_pfd_cp_xpfd_xed_ref_D2 XPFD_pfd_cp_xpfd_xed_ref_D1 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_ref_xi3_MP XPFD_pfd_cp_xpfd_xed_ref_D3 XPFD_pfd_cp_xpfd_xed_ref_D2 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_ref_xi3_MN XPFD_pfd_cp_xpfd_xed_ref_D3 XPFD_pfd_cp_xpfd_xed_ref_D2 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_ref_xi4_MP XPFD_pfd_cp_xpfd_xed_ref_D4 XPFD_pfd_cp_xpfd_xed_ref_D3 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_ref_xi4_MN XPFD_pfd_cp_xpfd_xed_ref_D4 XPFD_pfd_cp_xpfd_xed_ref_D3 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_ref_xi5_MP XPFD_pfd_cp_xpfd_xed_ref_D5 XPFD_pfd_cp_xpfd_xed_ref_D4 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_ref_xi5_MN XPFD_pfd_cp_xpfd_xed_ref_D5 XPFD_pfd_cp_xpfd_xed_ref_D4 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_ref_xnd_MP1 XPFD_pfd_cp_xpfd_xed_ref_NN REF VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_ref_xnd_MP2 XPFD_pfd_cp_xpfd_xed_ref_NN XPFD_pfd_cp_xpfd_xed_ref_D5 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_ref_xnd_MN1 XPFD_pfd_cp_xpfd_xed_ref_NN REF XPFD_pfd_cp_xpfd_xed_ref_xnd_NI VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_ref_xnd_MN2 XPFD_pfd_cp_xpfd_xed_ref_xnd_NI XPFD_pfd_cp_xpfd_xed_ref_D5 VSS VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_ref_xi6_MP XPFD_pfd_cp_xpfd_PR XPFD_pfd_cp_xpfd_xed_ref_NN VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_ref_xi6_MN XPFD_pfd_cp_xpfd_PR XPFD_pfd_cp_xpfd_xed_ref_NN VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xi1_MP XPFD_pfd_cp_xpfd_xed_fb_D1 FB VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xi1_MN XPFD_pfd_cp_xpfd_xed_fb_D1 FB VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xi2_MP XPFD_pfd_cp_xpfd_xed_fb_D2 XPFD_pfd_cp_xpfd_xed_fb_D1 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xi2_MN XPFD_pfd_cp_xpfd_xed_fb_D2 XPFD_pfd_cp_xpfd_xed_fb_D1 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xi3_MP XPFD_pfd_cp_xpfd_xed_fb_D3 XPFD_pfd_cp_xpfd_xed_fb_D2 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xi3_MN XPFD_pfd_cp_xpfd_xed_fb_D3 XPFD_pfd_cp_xpfd_xed_fb_D2 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xi4_MP XPFD_pfd_cp_xpfd_xed_fb_D4 XPFD_pfd_cp_xpfd_xed_fb_D3 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xi4_MN XPFD_pfd_cp_xpfd_xed_fb_D4 XPFD_pfd_cp_xpfd_xed_fb_D3 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xi5_MP XPFD_pfd_cp_xpfd_xed_fb_D5 XPFD_pfd_cp_xpfd_xed_fb_D4 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xi5_MN XPFD_pfd_cp_xpfd_xed_fb_D5 XPFD_pfd_cp_xpfd_xed_fb_D4 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xnd_MP1 XPFD_pfd_cp_xpfd_xed_fb_NN FB VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xnd_MP2 XPFD_pfd_cp_xpfd_xed_fb_NN XPFD_pfd_cp_xpfd_xed_fb_D5 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xnd_MN1 XPFD_pfd_cp_xpfd_xed_fb_NN FB XPFD_pfd_cp_xpfd_xed_fb_xnd_NI VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xnd_MN2 XPFD_pfd_cp_xpfd_xed_fb_xnd_NI XPFD_pfd_cp_xpfd_xed_fb_D5 VSS VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xi6_MP XPFD_pfd_cp_xpfd_PF XPFD_pfd_cp_xpfd_xed_fb_NN VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xed_fb_xi6_MN XPFD_pfd_cp_xpfd_PF XPFD_pfd_cp_xpfd_xed_fb_NN VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xinv_sr_MP XPFD_pfd_cp_xpfd_SBR XPFD_pfd_cp_xpfd_PR VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xinv_sr_MN XPFD_pfd_cp_xpfd_SBR XPFD_pfd_cp_xpfd_PR VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xinv_sf_MP XPFD_pfd_cp_xpfd_SBF XPFD_pfd_cp_xpfd_PF VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xinv_sf_MN XPFD_pfd_cp_xpfd_SBF XPFD_pfd_cp_xpfd_PF VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_ref_xn1_MP1 UP XPFD_pfd_cp_xpfd_SBR VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_ref_xn1_MP2 UP XPFD_pfd_cp_xpfd_UPB VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_ref_xn1_MN1 UP XPFD_pfd_cp_xpfd_SBR XPFD_pfd_cp_xpfd_xlat_ref_xn1_NI VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_ref_xn1_MN2 XPFD_pfd_cp_xpfd_xlat_ref_xn1_NI XPFD_pfd_cp_xpfd_UPB VSS VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_ref_xn2_MP1 XPFD_pfd_cp_xpfd_UPB XPFD_pfd_cp_xpfd_RB VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_ref_xn2_MP2 XPFD_pfd_cp_xpfd_UPB UP VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_ref_xn2_MN1 XPFD_pfd_cp_xpfd_UPB XPFD_pfd_cp_xpfd_RB XPFD_pfd_cp_xpfd_xlat_ref_xn2_NI VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_ref_xn2_MN2 XPFD_pfd_cp_xpfd_xlat_ref_xn2_NI UP VSS VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_fb_xn1_MP1 DN XPFD_pfd_cp_xpfd_SBF VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_fb_xn1_MP2 DN XPFD_pfd_cp_xpfd_DNB VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_fb_xn1_MN1 DN XPFD_pfd_cp_xpfd_SBF XPFD_pfd_cp_xpfd_xlat_fb_xn1_NI VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_fb_xn1_MN2 XPFD_pfd_cp_xpfd_xlat_fb_xn1_NI XPFD_pfd_cp_xpfd_DNB VSS VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_fb_xn2_MP1 XPFD_pfd_cp_xpfd_DNB XPFD_pfd_cp_xpfd_RB VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_fb_xn2_MP2 XPFD_pfd_cp_xpfd_DNB DN VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_fb_xn2_MN1 XPFD_pfd_cp_xpfd_DNB XPFD_pfd_cp_xpfd_RB XPFD_pfd_cp_xpfd_xlat_fb_xn2_NI VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xlat_fb_xn2_MN2 XPFD_pfd_cp_xpfd_xlat_fb_xn2_NI DN VSS VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xnand_rst_MP1 XPFD_pfd_cp_xpfd_NRST UP VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xnand_rst_MP2 XPFD_pfd_cp_xpfd_NRST DN VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xnand_rst_MN1 XPFD_pfd_cp_xpfd_NRST UP XPFD_pfd_cp_xpfd_xnand_rst_NI VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xnand_rst_MN2 XPFD_pfd_cp_xpfd_xnand_rst_NI DN VSS VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xinv_r0_MP XPFD_pfd_cp_xpfd_RST_RAW XPFD_pfd_cp_xpfd_NRST VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xinv_r0_MN XPFD_pfd_cp_xpfd_RST_RAW XPFD_pfd_cp_xpfd_NRST VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd1_MP XPFD_pfd_cp_xpfd_RD1 XPFD_pfd_cp_xpfd_RST_RAW VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd1_MN XPFD_pfd_cp_xpfd_RD1 XPFD_pfd_cp_xpfd_RST_RAW VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd2_MP XPFD_pfd_cp_xpfd_RD2 XPFD_pfd_cp_xpfd_RD1 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd2_MN XPFD_pfd_cp_xpfd_RD2 XPFD_pfd_cp_xpfd_RD1 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd3_MP XPFD_pfd_cp_xpfd_RD3 XPFD_pfd_cp_xpfd_RD2 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd3_MN XPFD_pfd_cp_xpfd_RD3 XPFD_pfd_cp_xpfd_RD2 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd4_MP XPFD_pfd_cp_xpfd_RD4 XPFD_pfd_cp_xpfd_RD3 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd4_MN XPFD_pfd_cp_xpfd_RD4 XPFD_pfd_cp_xpfd_RD3 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd5_MP XPFD_pfd_cp_xpfd_RD5 XPFD_pfd_cp_xpfd_RD4 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd5_MN XPFD_pfd_cp_xpfd_RD5 XPFD_pfd_cp_xpfd_RD4 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd6_MP XPFD_pfd_cp_xpfd_RD6 XPFD_pfd_cp_xpfd_RD5 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd6_MN XPFD_pfd_cp_xpfd_RD6 XPFD_pfd_cp_xpfd_RD5 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd7_MP XPFD_pfd_cp_xpfd_RD7 XPFD_pfd_cp_xpfd_RD6 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd7_MN XPFD_pfd_cp_xpfd_RD7 XPFD_pfd_cp_xpfd_RD6 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd8_MP XPFD_pfd_cp_xpfd_RD8 XPFD_pfd_cp_xpfd_RD7 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd8_MN XPFD_pfd_cp_xpfd_RD8 XPFD_pfd_cp_xpfd_RD7 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd9_MP XPFD_pfd_cp_xpfd_RD9 XPFD_pfd_cp_xpfd_RD8 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd9_MN XPFD_pfd_cp_xpfd_RD9 XPFD_pfd_cp_xpfd_RD8 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd10_MP XPFD_pfd_cp_xpfd_RD10 XPFD_pfd_cp_xpfd_RD9 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd10_MN XPFD_pfd_cp_xpfd_RD10 XPFD_pfd_cp_xpfd_RD9 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd11_MP XPFD_pfd_cp_xpfd_RD11 XPFD_pfd_cp_xpfd_RD10 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd11_MN XPFD_pfd_cp_xpfd_RD11 XPFD_pfd_cp_xpfd_RD10 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd12_MP XPFD_pfd_cp_xpfd_RD12 XPFD_pfd_cp_xpfd_RD11 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd12_MN XPFD_pfd_cp_xpfd_RD12 XPFD_pfd_cp_xpfd_RD11 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd13_MP XPFD_pfd_cp_xpfd_RD13 XPFD_pfd_cp_xpfd_RD12 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd13_MN XPFD_pfd_cp_xpfd_RD13 XPFD_pfd_cp_xpfd_RD12 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd14_MP XPFD_pfd_cp_xpfd_RD14 XPFD_pfd_cp_xpfd_RD13 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd14_MN XPFD_pfd_cp_xpfd_RD14 XPFD_pfd_cp_xpfd_RD13 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd15_MP XPFD_pfd_cp_xpfd_RD15 XPFD_pfd_cp_xpfd_RD14 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd15_MN XPFD_pfd_cp_xpfd_RD15 XPFD_pfd_cp_xpfd_RD14 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd16_MP XPFD_pfd_cp_xpfd_RD16 XPFD_pfd_cp_xpfd_RD15 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd16_MN XPFD_pfd_cp_xpfd_RD16 XPFD_pfd_cp_xpfd_RD15 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd17_MP XPFD_pfd_cp_xpfd_RD17 XPFD_pfd_cp_xpfd_RD16 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd17_MN XPFD_pfd_cp_xpfd_RD17 XPFD_pfd_cp_xpfd_RD16 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd18_MP XPFD_pfd_cp_xpfd_RD18 XPFD_pfd_cp_xpfd_RD17 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd18_MN XPFD_pfd_cp_xpfd_RD18 XPFD_pfd_cp_xpfd_RD17 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd19_MP XPFD_pfd_cp_xpfd_RD19 XPFD_pfd_cp_xpfd_RD18 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd19_MN XPFD_pfd_cp_xpfd_RD19 XPFD_pfd_cp_xpfd_RD18 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd20_MP XPFD_pfd_cp_xpfd_RD20 XPFD_pfd_cp_xpfd_RD19 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd20_MN XPFD_pfd_cp_xpfd_RD20 XPFD_pfd_cp_xpfd_RD19 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd21_MP XPFD_pfd_cp_xpfd_RD21 XPFD_pfd_cp_xpfd_RD20 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd21_MN XPFD_pfd_cp_xpfd_RD21 XPFD_pfd_cp_xpfd_RD20 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd22_MP XPFD_pfd_cp_xpfd_RD22 XPFD_pfd_cp_xpfd_RD21 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd22_MN XPFD_pfd_cp_xpfd_RD22 XPFD_pfd_cp_xpfd_RD21 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd23_MP XPFD_pfd_cp_xpfd_RD23 XPFD_pfd_cp_xpfd_RD22 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd23_MN XPFD_pfd_cp_xpfd_RD23 XPFD_pfd_cp_xpfd_RD22 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd24_MP XPFD_pfd_cp_xpfd_RST_DLY XPFD_pfd_cp_xpfd_RD23 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xd24_MN XPFD_pfd_cp_xpfd_RST_DLY XPFD_pfd_cp_xpfd_RD23 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xinv_rb_MP XPFD_pfd_cp_xpfd_RB XPFD_pfd_cp_xpfd_RST_DLY VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xpfd_xinv_rb_MN XPFD_pfd_cp_xpfd_RB XPFD_pfd_cp_xpfd_RST_DLY VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_MBN IBN IBN VSS VSS nfet_03v3 L=1u W=16u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_MCN ICN ICN VSS VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_MBP IBP IBP VDD VDD pfet_03v3 L=1u W=48u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_MCP ICP ICP VDD VDD pfet_03v3 L=1u W=12u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xi_b0_MP XPFD_pfd_cp_xcp_B0B CPB0 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xi_b0_MN XPFD_pfd_cp_xcp_B0B CPB0 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xi_b1_MP XPFD_pfd_cp_xcp_B1B CPB1 VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xi_b1_MN XPFD_pfd_cp_xcp_B1B CPB1 VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xi_up_MP XPFD_pfd_cp_xcp_UPB UP VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xi_up_MN XPFD_pfd_cp_xcp_UPB UP VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xi_dn_MP XPFD_pfd_cp_xcp_DNB DN VDD VDD pfet_03v3 L=0.3u W=1.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xi_dn_MN XPFD_pfd_cp_xcp_DNB DN VSS VSS nfet_03v3 L=0.3u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_base_MEN XPFD_pfd_cp_xcp_xn_base_BG VDD IBN VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_base_MDIS XPFD_pfd_cp_xcp_xn_base_BG VSS VSS VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_base_MBOT XPFD_pfd_cp_xcp_xn_base_MID XPFD_pfd_cp_xcp_xn_base_BG VSS VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_base_MCASC XPFD_pfd_cp_xcp_DNT ICN XPFD_pfd_cp_xcp_xn_base_MID VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_t0_MEN XPFD_pfd_cp_xcp_xn_t0_BG CPB0 IBN VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_t0_MDIS XPFD_pfd_cp_xcp_xn_t0_BG XPFD_pfd_cp_xcp_B0B VSS VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_t0_MBOT XPFD_pfd_cp_xcp_xn_t0_MID XPFD_pfd_cp_xcp_xn_t0_BG VSS VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_t0_MCASC XPFD_pfd_cp_xcp_DNT ICN XPFD_pfd_cp_xcp_xn_t0_MID VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_t1a_MEN XPFD_pfd_cp_xcp_xn_t1a_BG CPB1 IBN VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_t1a_MDIS XPFD_pfd_cp_xcp_xn_t1a_BG XPFD_pfd_cp_xcp_B1B VSS VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_t1a_MBOT XPFD_pfd_cp_xcp_xn_t1a_MID XPFD_pfd_cp_xcp_xn_t1a_BG VSS VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_t1a_MCASC XPFD_pfd_cp_xcp_DNT ICN XPFD_pfd_cp_xcp_xn_t1a_MID VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_t1b_MEN XPFD_pfd_cp_xcp_xn_t1b_BG CPB1 IBN VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_t1b_MDIS XPFD_pfd_cp_xcp_xn_t1b_BG XPFD_pfd_cp_xcp_B1B VSS VSS nfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_t1b_MBOT XPFD_pfd_cp_xcp_xn_t1b_MID XPFD_pfd_cp_xcp_xn_t1b_BG VSS VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xn_t1b_MCASC XPFD_pfd_cp_xcp_DNT ICN XPFD_pfd_cp_xcp_xn_t1b_MID VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_base_MEN XPFD_pfd_cp_xcp_xp_base_BG VSS IBP VDD pfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_base_MDIS XPFD_pfd_cp_xcp_xp_base_BG VDD VDD VDD pfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_base_MTOP XPFD_pfd_cp_xcp_xp_base_MID XPFD_pfd_cp_xcp_xp_base_BG VDD VDD pfet_03v3 L=1u W=12u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_base_MCASC XPFD_pfd_cp_xcp_UPT ICP XPFD_pfd_cp_xcp_xp_base_MID VDD pfet_03v3 L=1u W=12u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_t0_MEN XPFD_pfd_cp_xcp_xp_t0_BG XPFD_pfd_cp_xcp_B0B IBP VDD pfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_t0_MDIS XPFD_pfd_cp_xcp_xp_t0_BG CPB0 VDD VDD pfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_t0_MTOP XPFD_pfd_cp_xcp_xp_t0_MID XPFD_pfd_cp_xcp_xp_t0_BG VDD VDD pfet_03v3 L=1u W=12u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_t0_MCASC XPFD_pfd_cp_xcp_UPT ICP XPFD_pfd_cp_xcp_xp_t0_MID VDD pfet_03v3 L=1u W=12u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_t1a_MEN XPFD_pfd_cp_xcp_xp_t1a_BG XPFD_pfd_cp_xcp_B1B IBP VDD pfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_t1a_MDIS XPFD_pfd_cp_xcp_xp_t1a_BG CPB1 VDD VDD pfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_t1a_MTOP XPFD_pfd_cp_xcp_xp_t1a_MID XPFD_pfd_cp_xcp_xp_t1a_BG VDD VDD pfet_03v3 L=1u W=12u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_t1a_MCASC XPFD_pfd_cp_xcp_UPT ICP XPFD_pfd_cp_xcp_xp_t1a_MID VDD pfet_03v3 L=1u W=12u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_t1b_MEN XPFD_pfd_cp_xcp_xp_t1b_BG XPFD_pfd_cp_xcp_B1B IBP VDD pfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_t1b_MDIS XPFD_pfd_cp_xcp_xp_t1b_BG CPB1 VDD VDD pfet_03v3 L=0.3u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_t1b_MTOP XPFD_pfd_cp_xcp_xp_t1b_MID XPFD_pfd_cp_xcp_xp_t1b_BG VDD VDD pfet_03v3 L=1u W=12u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xp_t1b_MCASC XPFD_pfd_cp_xcp_UPT ICP XPFD_pfd_cp_xcp_xp_t1b_MID VDD pfet_03v3 L=1u W=12u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_MSWDN VCTRL DN XPFD_pfd_cp_xcp_DNT VSS nfet_03v3 L=0.3u W=6u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_MDMPDN XPFD_pfd_cp_xcp_VDUMP XPFD_pfd_cp_xcp_DNB XPFD_pfd_cp_xcp_DNT VSS nfet_03v3 L=0.3u W=6u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_MSWUP VCTRL XPFD_pfd_cp_xcp_UPB XPFD_pfd_cp_xcp_UPT VDD pfet_03v3 L=0.3u W=6u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_MDMPUP XPFD_pfd_cp_xcp_VDUMP UP XPFD_pfd_cp_xcp_UPT VDD pfet_03v3 L=0.3u W=6u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_MDUMN VCTRL XPFD_pfd_cp_xcp_DNB VCTRL VSS nfet_03v3 L=0.3u W=3u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_MDUMP VCTRL UP VCTRL VDD pfet_03v3 L=0.3u W=3u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xbuf_MTN XPFD_pfd_cp_xcp_xbuf_NSRC IBN VSS VSS nfet_03v3 L=1u W=16u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xbuf_MN1 XPFD_pfd_cp_xcp_xbuf_NDA VCTRL XPFD_pfd_cp_xcp_xbuf_NSRC VSS nfet_03v3 L=1u W=16u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xbuf_MN2 XPFD_pfd_cp_xcp_VDUMP XPFD_pfd_cp_xcp_VDUMP XPFD_pfd_cp_xcp_xbuf_NSRC VSS nfet_03v3 L=1u W=16u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xbuf_MN3 XPFD_pfd_cp_xcp_xbuf_NDA XPFD_pfd_cp_xcp_xbuf_NDA VDD VDD pfet_03v3 L=1u W=24u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xbuf_MN4 XPFD_pfd_cp_xcp_VDUMP XPFD_pfd_cp_xcp_xbuf_NDA VDD VDD pfet_03v3 L=1u W=24u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xbuf_MTP XPFD_pfd_cp_xcp_xbuf_PSRC IBP VDD VDD pfet_03v3 L=1u W=48u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xbuf_MP1 XPFD_pfd_cp_xcp_xbuf_PDA VCTRL XPFD_pfd_cp_xcp_xbuf_PSRC XPFD_pfd_cp_xcp_xbuf_PSRC pfet_03v3 L=1u W=48u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xbuf_MP2 XPFD_pfd_cp_xcp_VDUMP XPFD_pfd_cp_xcp_VDUMP XPFD_pfd_cp_xcp_xbuf_PSRC XPFD_pfd_cp_xcp_xbuf_PSRC pfet_03v3 L=1u W=48u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xbuf_MP3 XPFD_pfd_cp_xcp_xbuf_PDA XPFD_pfd_cp_xcp_xbuf_PDA VSS VSS nfet_03v3 L=1u W=16u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XPFD_pfd_cp_xcp_xbuf_MP4 XPFD_pfd_cp_xcp_VDUMP XPFD_pfd_cp_xcp_xbuf_PDA VSS VSS nfet_03v3 L=1u W=16u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+R_XLF_XRF1 XLF_NR1 VCTRL VSS ppolyf_u W=2.0u L=107.0u
+R_XLF_XRF2 XLF_NR2 XLF_NR1 VSS ppolyf_u W=2.0u L=107.0u
+R_XLF_XRF3 XLF_NR3 XLF_NR2 VSS ppolyf_u W=2.0u L=107.0u
+R_XLF_XRF4 XLF_NZ XLF_NR3 VSS ppolyf_u W=2.0u L=107.0u
+C_XLF_XCF1 XLF_NZ VSS cap_nmos_03v3_b W=87.0u L=87.0u M=4
+C_XLF_XCF5 VCTRL VSS cap_mim_2f0_m2m3_noshield W=31.4u L=31.4u
+M_XVCO_S1_MPH VDD_VCO XVCO_VBP XVCO_S1_NH VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_XVCO_S1_MP XVCO_S1_NH XVCO_Y5 XVCO_Y1 VDD_VCO pfet_03v3 W=5.0u L=0.28u
+M_XVCO_S1_MN XVCO_Y1 XVCO_Y5 XVCO_S1_NT VSS nfet_03v3 W=2.0u L=0.28u
+M_XVCO_S1_MNT XVCO_S1_NT XVCO_VBN VSS VSS nfet_03v3 W=4.0u L=0.5u
+M_XVCO_S2_MPH VDD_VCO XVCO_VBP XVCO_S2_NH VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_XVCO_S2_MP XVCO_S2_NH XVCO_Y1 XVCO_Y2 VDD_VCO pfet_03v3 W=5.0u L=0.28u
+M_XVCO_S2_MN XVCO_Y2 XVCO_Y1 XVCO_S2_NT VSS nfet_03v3 W=2.0u L=0.28u
+M_XVCO_S2_MNT XVCO_S2_NT XVCO_VBN VSS VSS nfet_03v3 W=4.0u L=0.5u
+M_XVCO_S3_MPH VDD_VCO XVCO_VBP XVCO_S3_NH VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_XVCO_S3_MP XVCO_S3_NH XVCO_Y2 XVCO_Y3 VDD_VCO pfet_03v3 W=5.0u L=0.28u
+M_XVCO_S3_MN XVCO_Y3 XVCO_Y2 XVCO_S3_NT VSS nfet_03v3 W=2.0u L=0.28u
+M_XVCO_S3_MNT XVCO_S3_NT XVCO_VBN VSS VSS nfet_03v3 W=4.0u L=0.5u
+M_XVCO_S4_MPH VDD_VCO XVCO_VBP XVCO_S4_NH VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_XVCO_S4_MP XVCO_S4_NH XVCO_Y3 XVCO_Y4 VDD_VCO pfet_03v3 W=5.0u L=0.28u
+M_XVCO_S4_MN XVCO_Y4 XVCO_Y3 XVCO_S4_NT VSS nfet_03v3 W=2.0u L=0.28u
+M_XVCO_S4_MNT XVCO_S4_NT XVCO_VBN VSS VSS nfet_03v3 W=4.0u L=0.5u
+M_XVCO_S5_MPH VDD_VCO XVCO_VBP XVCO_S5_NH VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_XVCO_S5_MP XVCO_S5_NH XVCO_Y4 XVCO_Y5 VDD_VCO pfet_03v3 W=5.0u L=0.28u
+M_XVCO_S5_MN XVCO_Y5 XVCO_Y4 XVCO_S5_NT VSS nfet_03v3 W=2.0u L=0.28u
+M_XVCO_S5_MNT XVCO_S5_NT XVCO_VBN VSS VSS nfet_03v3 W=4.0u L=0.5u
+M_XVCO_MBP1 VDD_VCO XVCO_Y5 XVCO_NB1 VDD_VCO pfet_03v3 W=1.25u L=0.28u
+M_XVCO_MBN1 XVCO_NB1 XVCO_Y5 VSS VSS nfet_03v3 W=0.5u L=0.28u
+M_XVCO_MBP2 VDD_VCO XVCO_NB1 XVCO_NB2 VDD_VCO pfet_03v3 W=3.75u L=0.28u
+M_XVCO_MBN2 XVCO_NB2 XVCO_NB1 VSS VSS nfet_03v3 W=1.5u L=0.28u
+M_XVCO_MBP3 VDD_VCO XVCO_NB2 CLK VDD_VCO pfet_03v3 W=11.25u L=0.28u
+M_XVCO_MBN3 CLK XVCO_NB2 VSS VSS nfet_03v3 W=4.5u L=0.28u
+M_XVCO_MA0 VDD_VCO XVCO_VBP0 XVCO_VBN1 VDD_VCO pfet_03v3 W=26.5u L=1.0u
+M_XVCO_MA1 VDD_VCO XVCO_GA XVCO_VBN1 VDD_VCO pfet_03v3 W=17.22u L=1.0u
+M_XVCO_MB0 XVCO_VBP2 XVCO_VBN1 VSS VSS nfet_03v3 W=5.0u L=1.0u
+M_XVCO_MB1 XVCO_VBP2 XVCO_GB VSS VSS nfet_03v3 W=8.61u L=1.0u
+M_XVCO_MC0 VDD_VCO XVCO_VBP2 XVCO_VBN VDD_VCO pfet_03v3 W=12.3u L=1.0u
+M_XVCO_MC1 VDD_VCO XVCO_GC XVCO_VBN VDD_VCO pfet_03v3 W=78.88u L=1.0u
+M_XVCO_MSWA0 XVCO_VBP0 XVCO_B0B XVCO_GA VDD_VCO pfet_03v3 W=2.0u L=0.5u
+M_XVCO_MSWA1 VDD_VCO B0 XVCO_GA VDD_VCO pfet_03v3 W=2.0u L=0.5u
+M_XVCO_MSWB0 XVCO_GB B1 XVCO_VBN1 VSS nfet_03v3 W=2.0u L=0.5u
+M_XVCO_MSWB1 XVCO_GB XVCO_B1B VSS VSS nfet_03v3 W=2.0u L=0.5u
+M_XVCO_MSWC0 XVCO_VBP2 XVCO_B2B XVCO_GC VDD_VCO pfet_03v3 W=2.0u L=0.5u
+M_XVCO_MSWC1 VDD_VCO B2 XVCO_GC VDD_VCO pfet_03v3 W=2.0u L=0.5u
+M_XVCO_MDA XVCO_VBN1 XVCO_VBN1 VSS VSS nfet_03v3 W=10.0u L=1.0u
+M_XVCO_MDB VDD_VCO XVCO_VBP2 XVCO_VBP2 VDD_VCO pfet_03v3 W=20.0u L=1.0u
+M_XVCO_MDN XVCO_VBN XVCO_VBN VSS VSS nfet_03v3 W=4.0u L=0.5u
+M_XVCO_MMN XVCO_VBP XVCO_VBN VSS VSS nfet_03v3 W=4.0u L=0.5u
+M_XVCO_MDP VDD_VCO XVCO_VBP XVCO_VBP VDD_VCO pfet_03v3 W=10.0u L=0.5u
+M_XVCO_MIP0 VDD_VCO B0 XVCO_B0B VDD_VCO pfet_03v3 W=2.0u L=0.28u
+M_XVCO_MIN0 XVCO_B0B B0 VSS VSS nfet_03v3 W=1.0u L=0.28u
+M_XVCO_MIP1 VDD_VCO B1 XVCO_B1B VDD_VCO pfet_03v3 W=2.0u L=0.28u
+M_XVCO_MIN1 XVCO_B1B B1 VSS VSS nfet_03v3 W=1.0u L=0.28u
+M_XVCO_MIP2 VDD_VCO B2 XVCO_B2B VDD_VCO pfet_03v3 W=2.0u L=0.28u
+M_XVCO_MIN2 XVCO_B2B B2 VSS VSS nfet_03v3 W=1.0u L=0.28u
+R_XVCO_RCG XVCO_NC VSS VSS ppolyf_u_3k W=1.0u L=5.6u
+R_XVCO_ROFF XVCO_NOFF VSS VSS ppolyf_u_3k W=1.0u L=33.0u
+R_XVCO_RDEG XVCO_NVI VSS VSS ppolyf_u_3k W=1.0u L=33.0u
+M_XVCO_MN1 XVCO_NA XVCO_NA VSS VSS nfet_03v3 W=1.4u L=1.0u
+M_XVCO_MN2 XVCO_VBPC XVCO_NA XVCO_NC VSS nfet_03v3 W=5.6u L=1.0u
+M_XVCO_MSU2 XVCO_NSU XVCO_NA VSS VSS nfet_03v3 W=2.0u L=1.0u
+M_XVCO_MSU3 XVCO_VBPC XVCO_NSU VSS VSS nfet_03v3 W=1.0u L=1.0u
+M_XVCO_MD1 XVCO_VFIX XVCO_VFIX XVCO_NMD VSS nfet_03v3 W=2.0u L=1.0u
+M_XVCO_MD2 XVCO_NMD XVCO_NMD VSS VSS nfet_03v3 W=2.0u L=1.0u
+M_XVCO_MOFF XVCO_VBP0 XVCO_VFIX XVCO_NOFF VSS nfet_03v3 W=10.0u L=1.0u
+M_XVCO_MVI XVCO_VBP0 VCTRL XVCO_NVI VSS nfet_03v3 W=10.0u L=1.0u
+M_XVCO_MP1 VDD_VCO XVCO_VBPC XVCO_NA VDD_VCO pfet_03v3 W=10.0u L=1.0u
+M_XVCO_MP2 VDD_VCO XVCO_VBPC XVCO_VBPC VDD_VCO pfet_03v3 W=10.0u L=1.0u
+M_XVCO_MPR VDD_VCO XVCO_VBPC XVCO_VFIX VDD_VCO pfet_03v3 W=2.5u L=1.0u
+M_XVCO_MSUM VDD_VCO XVCO_VBP0 XVCO_VBP0 VDD_VCO pfet_03v3 W=60.0u L=1.0u
+M_XVCO_MSU1 VDD_VCO VSS XVCO_NSU VDD_VCO pfet_03v3 W=0.22u L=20.0u
+C_XVCO_XCDEC1 VDD_VCO VSS cap_nmos_03v3 W=50u L=50u M=2
+M_XDIV_XD0_XN3_MPA XDIV_XD0_SB XDIV_MI0 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XN3_MPB XDIV_XD0_SB P0 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XN3_MPC XDIV_XD0_SB XDIV_MO0 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XN3_MNA XDIV_XD0_SB XDIV_MI0 XDIV_XD0_XN3_NM1 VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD0_XN3_MNB XDIV_XD0_XN3_NM1 P0 XDIV_XD0_XN3_NM2 VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD0_XN3_MNC XDIV_XD0_XN3_NM2 XDIV_MO0 VSS VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD0_XN2Q_MPA XDIV_XD0_DQN XDIV_XD0_QB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XN2Q_MPB XDIV_XD0_DQN XDIV_XD0_SB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XN2Q_MNA XDIV_XD0_DQN XDIV_XD0_QB XDIV_XD0_XN2Q_NMID VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD0_XN2Q_MNB XDIV_XD0_XN2Q_NMID XDIV_XD0_SB VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD0_XIQ_MP XDIV_XD0_DQ XDIV_XD0_DQN VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XIQ_MN XDIV_XD0_DQ XDIV_XD0_DQN VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFQ_ICKB_P XDIV_XD0_XFQ_CKB CLK VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFQ_ICKB_N XDIV_XD0_XFQ_CKB CLK VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFQ_ICKBB_P XDIV_XD0_XFQ_CKBB XDIV_XD0_XFQ_CKB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFQ_ICKBB_N XDIV_XD0_XFQ_CKBB XDIV_XD0_XFQ_CKB VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFQ_TGMI_P XDIV_XD0_XFQ_NM XDIV_XD0_XFQ_CKBB XDIV_XD0_DQ VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFQ_TGMI_N XDIV_XD0_DQ XDIV_XD0_XFQ_CKB XDIV_XD0_XFQ_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFQ_IA_P XDIV_XD0_XFQ_NMA XDIV_XD0_XFQ_NM VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFQ_IA_N XDIV_XD0_XFQ_NMA XDIV_XD0_XFQ_NM VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFQ_IB_P XDIV_XD0_XFQ_NMB XDIV_XD0_XFQ_NMA VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFQ_IB_N XDIV_XD0_XFQ_NMB XDIV_XD0_XFQ_NMA VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFQ_TGMF_P XDIV_XD0_XFQ_NM XDIV_XD0_XFQ_CKB XDIV_XD0_XFQ_NMB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFQ_TGMF_N XDIV_XD0_XFQ_NMB XDIV_XD0_XFQ_CKBB XDIV_XD0_XFQ_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFQ_TGSI_P XDIV_XD0_XFQ_NS XDIV_XD0_XFQ_CKB XDIV_XD0_XFQ_NMA VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFQ_TGSI_N XDIV_XD0_XFQ_NMA XDIV_XD0_XFQ_CKBB XDIV_XD0_XFQ_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFQ_IC_P XDIV_XD0_Q XDIV_XD0_XFQ_NS VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFQ_IC_N XDIV_XD0_Q XDIV_XD0_XFQ_NS VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFQ_ID_P XDIV_XD0_QB XDIV_XD0_Q VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFQ_ID_N XDIV_XD0_QB XDIV_XD0_Q VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFQ_TGSF_P XDIV_XD0_XFQ_NS XDIV_XD0_XFQ_CKBB XDIV_XD0_QB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFQ_TGSF_N XDIV_XD0_QB XDIV_XD0_XFQ_CKB XDIV_XD0_XFQ_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XICKO_MP XDIV_CK1 XDIV_XD0_QB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=5u
+M_XDIV_XD0_XICKO_MN XDIV_CK1 XDIV_XD0_QB VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD0_XN2M_MPA XDIV_XD0_NMO XDIV_MI0 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XN2M_MPB XDIV_XD0_NMO XDIV_XD0_Q VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XN2M_MNA XDIV_XD0_NMO XDIV_MI0 XDIV_XD0_XN2M_NMID VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD0_XN2M_MNB XDIV_XD0_XN2M_NMID XDIV_XD0_Q VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD0_XIM_MP XDIV_XD0_DMO XDIV_XD0_NMO VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XIM_MN XDIV_XD0_DMO XDIV_XD0_NMO VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFMO_ICKB_P XDIV_XD0_XFMO_CKB CLK VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFMO_ICKB_N XDIV_XD0_XFMO_CKB CLK VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFMO_ICKBB_P XDIV_XD0_XFMO_CKBB XDIV_XD0_XFMO_CKB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFMO_ICKBB_N XDIV_XD0_XFMO_CKBB XDIV_XD0_XFMO_CKB VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFMO_TGMI_P XDIV_XD0_XFMO_NM XDIV_XD0_XFMO_CKBB XDIV_XD0_DMO VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFMO_TGMI_N XDIV_XD0_DMO XDIV_XD0_XFMO_CKB XDIV_XD0_XFMO_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFMO_IA_P XDIV_XD0_XFMO_NMA XDIV_XD0_XFMO_NM VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFMO_IA_N XDIV_XD0_XFMO_NMA XDIV_XD0_XFMO_NM VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFMO_IB_P XDIV_XD0_XFMO_NMB XDIV_XD0_XFMO_NMA VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFMO_IB_N XDIV_XD0_XFMO_NMB XDIV_XD0_XFMO_NMA VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFMO_TGMF_P XDIV_XD0_XFMO_NM XDIV_XD0_XFMO_CKB XDIV_XD0_XFMO_NMB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFMO_TGMF_N XDIV_XD0_XFMO_NMB XDIV_XD0_XFMO_CKBB XDIV_XD0_XFMO_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFMO_TGSI_P XDIV_XD0_XFMO_NS XDIV_XD0_XFMO_CKB XDIV_XD0_XFMO_NMA VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFMO_TGSI_N XDIV_XD0_XFMO_NMA XDIV_XD0_XFMO_CKBB XDIV_XD0_XFMO_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFMO_IC_P XDIV_MO0 XDIV_XD0_XFMO_NS VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFMO_IC_N XDIV_MO0 XDIV_XD0_XFMO_NS VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFMO_ID_P XDIV_XD0_MOB XDIV_MO0 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFMO_ID_N XDIV_XD0_MOB XDIV_MO0 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD0_XFMO_TGSF_P XDIV_XD0_XFMO_NS XDIV_XD0_XFMO_CKBB XDIV_XD0_MOB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD0_XFMO_TGSF_N XDIV_XD0_MOB XDIV_XD0_XFMO_CKB XDIV_XD0_XFMO_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XN3_MPA XDIV_XD1_SB XDIV_MI1 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XN3_MPB XDIV_XD1_SB P1 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XN3_MPC XDIV_XD1_SB XDIV_MO1 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XN3_MNA XDIV_XD1_SB XDIV_MI1 XDIV_XD1_XN3_NM1 VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD1_XN3_MNB XDIV_XD1_XN3_NM1 P1 XDIV_XD1_XN3_NM2 VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD1_XN3_MNC XDIV_XD1_XN3_NM2 XDIV_MO1 VSS VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD1_XN2Q_MPA XDIV_XD1_DQN XDIV_XD1_QB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XN2Q_MPB XDIV_XD1_DQN XDIV_XD1_SB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XN2Q_MNA XDIV_XD1_DQN XDIV_XD1_QB XDIV_XD1_XN2Q_NMID VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD1_XN2Q_MNB XDIV_XD1_XN2Q_NMID XDIV_XD1_SB VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD1_XIQ_MP XDIV_XD1_DQ XDIV_XD1_DQN VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XIQ_MN XDIV_XD1_DQ XDIV_XD1_DQN VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFQ_ICKB_P XDIV_XD1_XFQ_CKB XDIV_CK1 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFQ_ICKB_N XDIV_XD1_XFQ_CKB XDIV_CK1 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFQ_ICKBB_P XDIV_XD1_XFQ_CKBB XDIV_XD1_XFQ_CKB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFQ_ICKBB_N XDIV_XD1_XFQ_CKBB XDIV_XD1_XFQ_CKB VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFQ_TGMI_P XDIV_XD1_XFQ_NM XDIV_XD1_XFQ_CKBB XDIV_XD1_DQ VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFQ_TGMI_N XDIV_XD1_DQ XDIV_XD1_XFQ_CKB XDIV_XD1_XFQ_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFQ_IA_P XDIV_XD1_XFQ_NMA XDIV_XD1_XFQ_NM VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFQ_IA_N XDIV_XD1_XFQ_NMA XDIV_XD1_XFQ_NM VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFQ_IB_P XDIV_XD1_XFQ_NMB XDIV_XD1_XFQ_NMA VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFQ_IB_N XDIV_XD1_XFQ_NMB XDIV_XD1_XFQ_NMA VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFQ_TGMF_P XDIV_XD1_XFQ_NM XDIV_XD1_XFQ_CKB XDIV_XD1_XFQ_NMB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFQ_TGMF_N XDIV_XD1_XFQ_NMB XDIV_XD1_XFQ_CKBB XDIV_XD1_XFQ_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFQ_TGSI_P XDIV_XD1_XFQ_NS XDIV_XD1_XFQ_CKB XDIV_XD1_XFQ_NMA VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFQ_TGSI_N XDIV_XD1_XFQ_NMA XDIV_XD1_XFQ_CKBB XDIV_XD1_XFQ_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFQ_IC_P XDIV_XD1_Q XDIV_XD1_XFQ_NS VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFQ_IC_N XDIV_XD1_Q XDIV_XD1_XFQ_NS VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFQ_ID_P XDIV_XD1_QB XDIV_XD1_Q VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFQ_ID_N XDIV_XD1_QB XDIV_XD1_Q VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFQ_TGSF_P XDIV_XD1_XFQ_NS XDIV_XD1_XFQ_CKBB XDIV_XD1_QB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFQ_TGSF_N XDIV_XD1_QB XDIV_XD1_XFQ_CKB XDIV_XD1_XFQ_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XICKO_MP XDIV_CK2 XDIV_XD1_QB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=5u
+M_XDIV_XD1_XICKO_MN XDIV_CK2 XDIV_XD1_QB VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD1_XN2M_MPA XDIV_XD1_NMO XDIV_MI1 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XN2M_MPB XDIV_XD1_NMO XDIV_XD1_Q VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XN2M_MNA XDIV_XD1_NMO XDIV_MI1 XDIV_XD1_XN2M_NMID VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD1_XN2M_MNB XDIV_XD1_XN2M_NMID XDIV_XD1_Q VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD1_XIM_MP XDIV_XD1_DMO XDIV_XD1_NMO VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XIM_MN XDIV_XD1_DMO XDIV_XD1_NMO VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFMO_ICKB_P XDIV_XD1_XFMO_CKB XDIV_CK1 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFMO_ICKB_N XDIV_XD1_XFMO_CKB XDIV_CK1 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFMO_ICKBB_P XDIV_XD1_XFMO_CKBB XDIV_XD1_XFMO_CKB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFMO_ICKBB_N XDIV_XD1_XFMO_CKBB XDIV_XD1_XFMO_CKB VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFMO_TGMI_P XDIV_XD1_XFMO_NM XDIV_XD1_XFMO_CKBB XDIV_XD1_DMO VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFMO_TGMI_N XDIV_XD1_DMO XDIV_XD1_XFMO_CKB XDIV_XD1_XFMO_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFMO_IA_P XDIV_XD1_XFMO_NMA XDIV_XD1_XFMO_NM VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFMO_IA_N XDIV_XD1_XFMO_NMA XDIV_XD1_XFMO_NM VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFMO_IB_P XDIV_XD1_XFMO_NMB XDIV_XD1_XFMO_NMA VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFMO_IB_N XDIV_XD1_XFMO_NMB XDIV_XD1_XFMO_NMA VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFMO_TGMF_P XDIV_XD1_XFMO_NM XDIV_XD1_XFMO_CKB XDIV_XD1_XFMO_NMB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFMO_TGMF_N XDIV_XD1_XFMO_NMB XDIV_XD1_XFMO_CKBB XDIV_XD1_XFMO_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFMO_TGSI_P XDIV_XD1_XFMO_NS XDIV_XD1_XFMO_CKB XDIV_XD1_XFMO_NMA VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFMO_TGSI_N XDIV_XD1_XFMO_NMA XDIV_XD1_XFMO_CKBB XDIV_XD1_XFMO_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFMO_IC_P XDIV_MO1 XDIV_XD1_XFMO_NS VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFMO_IC_N XDIV_MO1 XDIV_XD1_XFMO_NS VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFMO_ID_P XDIV_XD1_MOB XDIV_MO1 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFMO_ID_N XDIV_XD1_MOB XDIV_MO1 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD1_XFMO_TGSF_P XDIV_XD1_XFMO_NS XDIV_XD1_XFMO_CKBB XDIV_XD1_MOB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD1_XFMO_TGSF_N XDIV_XD1_MOB XDIV_XD1_XFMO_CKB XDIV_XD1_XFMO_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XN3_MPA XDIV_XD2_SB XDIV_MI2 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XN3_MPB XDIV_XD2_SB P2 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XN3_MPC XDIV_XD2_SB XDIV_MO2 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XN3_MNA XDIV_XD2_SB XDIV_MI2 XDIV_XD2_XN3_NM1 VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD2_XN3_MNB XDIV_XD2_XN3_NM1 P2 XDIV_XD2_XN3_NM2 VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD2_XN3_MNC XDIV_XD2_XN3_NM2 XDIV_MO2 VSS VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD2_XN2Q_MPA XDIV_XD2_DQN XDIV_XD2_QB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XN2Q_MPB XDIV_XD2_DQN XDIV_XD2_SB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XN2Q_MNA XDIV_XD2_DQN XDIV_XD2_QB XDIV_XD2_XN2Q_NMID VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD2_XN2Q_MNB XDIV_XD2_XN2Q_NMID XDIV_XD2_SB VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD2_XIQ_MP XDIV_XD2_DQ XDIV_XD2_DQN VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XIQ_MN XDIV_XD2_DQ XDIV_XD2_DQN VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFQ_ICKB_P XDIV_XD2_XFQ_CKB XDIV_CK2 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFQ_ICKB_N XDIV_XD2_XFQ_CKB XDIV_CK2 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFQ_ICKBB_P XDIV_XD2_XFQ_CKBB XDIV_XD2_XFQ_CKB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFQ_ICKBB_N XDIV_XD2_XFQ_CKBB XDIV_XD2_XFQ_CKB VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFQ_TGMI_P XDIV_XD2_XFQ_NM XDIV_XD2_XFQ_CKBB XDIV_XD2_DQ VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFQ_TGMI_N XDIV_XD2_DQ XDIV_XD2_XFQ_CKB XDIV_XD2_XFQ_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFQ_IA_P XDIV_XD2_XFQ_NMA XDIV_XD2_XFQ_NM VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFQ_IA_N XDIV_XD2_XFQ_NMA XDIV_XD2_XFQ_NM VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFQ_IB_P XDIV_XD2_XFQ_NMB XDIV_XD2_XFQ_NMA VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFQ_IB_N XDIV_XD2_XFQ_NMB XDIV_XD2_XFQ_NMA VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFQ_TGMF_P XDIV_XD2_XFQ_NM XDIV_XD2_XFQ_CKB XDIV_XD2_XFQ_NMB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFQ_TGMF_N XDIV_XD2_XFQ_NMB XDIV_XD2_XFQ_CKBB XDIV_XD2_XFQ_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFQ_TGSI_P XDIV_XD2_XFQ_NS XDIV_XD2_XFQ_CKB XDIV_XD2_XFQ_NMA VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFQ_TGSI_N XDIV_XD2_XFQ_NMA XDIV_XD2_XFQ_CKBB XDIV_XD2_XFQ_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFQ_IC_P XDIV_XD2_Q XDIV_XD2_XFQ_NS VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFQ_IC_N XDIV_XD2_Q XDIV_XD2_XFQ_NS VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFQ_ID_P XDIV_XD2_QB XDIV_XD2_Q VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFQ_ID_N XDIV_XD2_QB XDIV_XD2_Q VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFQ_TGSF_P XDIV_XD2_XFQ_NS XDIV_XD2_XFQ_CKBB XDIV_XD2_QB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFQ_TGSF_N XDIV_XD2_QB XDIV_XD2_XFQ_CKB XDIV_XD2_XFQ_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XICKO_MP XDIV_CK3 XDIV_XD2_QB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=5u
+M_XDIV_XD2_XICKO_MN XDIV_CK3 XDIV_XD2_QB VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD2_XN2M_MPA XDIV_XD2_NMO XDIV_MI2 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XN2M_MPB XDIV_XD2_NMO XDIV_XD2_Q VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XN2M_MNA XDIV_XD2_NMO XDIV_MI2 XDIV_XD2_XN2M_NMID VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD2_XN2M_MNB XDIV_XD2_XN2M_NMID XDIV_XD2_Q VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD2_XIM_MP XDIV_XD2_DMO XDIV_XD2_NMO VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XIM_MN XDIV_XD2_DMO XDIV_XD2_NMO VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFMO_ICKB_P XDIV_XD2_XFMO_CKB XDIV_CK2 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFMO_ICKB_N XDIV_XD2_XFMO_CKB XDIV_CK2 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFMO_ICKBB_P XDIV_XD2_XFMO_CKBB XDIV_XD2_XFMO_CKB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFMO_ICKBB_N XDIV_XD2_XFMO_CKBB XDIV_XD2_XFMO_CKB VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFMO_TGMI_P XDIV_XD2_XFMO_NM XDIV_XD2_XFMO_CKBB XDIV_XD2_DMO VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFMO_TGMI_N XDIV_XD2_DMO XDIV_XD2_XFMO_CKB XDIV_XD2_XFMO_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFMO_IA_P XDIV_XD2_XFMO_NMA XDIV_XD2_XFMO_NM VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFMO_IA_N XDIV_XD2_XFMO_NMA XDIV_XD2_XFMO_NM VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFMO_IB_P XDIV_XD2_XFMO_NMB XDIV_XD2_XFMO_NMA VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFMO_IB_N XDIV_XD2_XFMO_NMB XDIV_XD2_XFMO_NMA VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFMO_TGMF_P XDIV_XD2_XFMO_NM XDIV_XD2_XFMO_CKB XDIV_XD2_XFMO_NMB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFMO_TGMF_N XDIV_XD2_XFMO_NMB XDIV_XD2_XFMO_CKBB XDIV_XD2_XFMO_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFMO_TGSI_P XDIV_XD2_XFMO_NS XDIV_XD2_XFMO_CKB XDIV_XD2_XFMO_NMA VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFMO_TGSI_N XDIV_XD2_XFMO_NMA XDIV_XD2_XFMO_CKBB XDIV_XD2_XFMO_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFMO_IC_P XDIV_MO2 XDIV_XD2_XFMO_NS VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFMO_IC_N XDIV_MO2 XDIV_XD2_XFMO_NS VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFMO_ID_P XDIV_XD2_MOB XDIV_MO2 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFMO_ID_N XDIV_XD2_MOB XDIV_MO2 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD2_XFMO_TGSF_P XDIV_XD2_XFMO_NS XDIV_XD2_XFMO_CKBB XDIV_XD2_MOB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD2_XFMO_TGSF_N XDIV_XD2_MOB XDIV_XD2_XFMO_CKB XDIV_XD2_XFMO_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XN3_MPA XDIV_XD3_SB XDIV_MI3 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XN3_MPB XDIV_XD3_SB P3 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XN3_MPC XDIV_XD3_SB XDIV_MO3 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XN3_MNA XDIV_XD3_SB XDIV_MI3 XDIV_XD3_XN3_NM1 VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD3_XN3_MNB XDIV_XD3_XN3_NM1 P3 XDIV_XD3_XN3_NM2 VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD3_XN3_MNC XDIV_XD3_XN3_NM2 XDIV_MO3 VSS VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD3_XN2Q_MPA XDIV_XD3_DQN XDIV_XD3_QB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XN2Q_MPB XDIV_XD3_DQN XDIV_XD3_SB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XN2Q_MNA XDIV_XD3_DQN XDIV_XD3_QB XDIV_XD3_XN2Q_NMID VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD3_XN2Q_MNB XDIV_XD3_XN2Q_NMID XDIV_XD3_SB VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD3_XIQ_MP XDIV_XD3_DQ XDIV_XD3_DQN VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XIQ_MN XDIV_XD3_DQ XDIV_XD3_DQN VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFQ_ICKB_P XDIV_XD3_XFQ_CKB XDIV_CK3 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFQ_ICKB_N XDIV_XD3_XFQ_CKB XDIV_CK3 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFQ_ICKBB_P XDIV_XD3_XFQ_CKBB XDIV_XD3_XFQ_CKB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFQ_ICKBB_N XDIV_XD3_XFQ_CKBB XDIV_XD3_XFQ_CKB VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFQ_TGMI_P XDIV_XD3_XFQ_NM XDIV_XD3_XFQ_CKBB XDIV_XD3_DQ VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFQ_TGMI_N XDIV_XD3_DQ XDIV_XD3_XFQ_CKB XDIV_XD3_XFQ_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFQ_IA_P XDIV_XD3_XFQ_NMA XDIV_XD3_XFQ_NM VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFQ_IA_N XDIV_XD3_XFQ_NMA XDIV_XD3_XFQ_NM VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFQ_IB_P XDIV_XD3_XFQ_NMB XDIV_XD3_XFQ_NMA VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFQ_IB_N XDIV_XD3_XFQ_NMB XDIV_XD3_XFQ_NMA VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFQ_TGMF_P XDIV_XD3_XFQ_NM XDIV_XD3_XFQ_CKB XDIV_XD3_XFQ_NMB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFQ_TGMF_N XDIV_XD3_XFQ_NMB XDIV_XD3_XFQ_CKBB XDIV_XD3_XFQ_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFQ_TGSI_P XDIV_XD3_XFQ_NS XDIV_XD3_XFQ_CKB XDIV_XD3_XFQ_NMA VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFQ_TGSI_N XDIV_XD3_XFQ_NMA XDIV_XD3_XFQ_CKBB XDIV_XD3_XFQ_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFQ_IC_P XDIV_XD3_Q XDIV_XD3_XFQ_NS VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFQ_IC_N XDIV_XD3_Q XDIV_XD3_XFQ_NS VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFQ_ID_P XDIV_XD3_QB XDIV_XD3_Q VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFQ_ID_N XDIV_XD3_QB XDIV_XD3_Q VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFQ_TGSF_P XDIV_XD3_XFQ_NS XDIV_XD3_XFQ_CKBB XDIV_XD3_QB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFQ_TGSF_N XDIV_XD3_QB XDIV_XD3_XFQ_CKB XDIV_XD3_XFQ_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XICKO_MP XDIV_CK4 XDIV_XD3_QB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=5u
+M_XDIV_XD3_XICKO_MN XDIV_CK4 XDIV_XD3_QB VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD3_XN2M_MPA XDIV_XD3_NMO XDIV_MI3 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XN2M_MPB XDIV_XD3_NMO XDIV_XD3_Q VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XN2M_MNA XDIV_XD3_NMO XDIV_MI3 XDIV_XD3_XN2M_NMID VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD3_XN2M_MNB XDIV_XD3_XN2M_NMID XDIV_XD3_Q VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD3_XIM_MP XDIV_XD3_DMO XDIV_XD3_NMO VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XIM_MN XDIV_XD3_DMO XDIV_XD3_NMO VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFMO_ICKB_P XDIV_XD3_XFMO_CKB XDIV_CK3 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFMO_ICKB_N XDIV_XD3_XFMO_CKB XDIV_CK3 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFMO_ICKBB_P XDIV_XD3_XFMO_CKBB XDIV_XD3_XFMO_CKB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFMO_ICKBB_N XDIV_XD3_XFMO_CKBB XDIV_XD3_XFMO_CKB VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFMO_TGMI_P XDIV_XD3_XFMO_NM XDIV_XD3_XFMO_CKBB XDIV_XD3_DMO VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFMO_TGMI_N XDIV_XD3_DMO XDIV_XD3_XFMO_CKB XDIV_XD3_XFMO_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFMO_IA_P XDIV_XD3_XFMO_NMA XDIV_XD3_XFMO_NM VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFMO_IA_N XDIV_XD3_XFMO_NMA XDIV_XD3_XFMO_NM VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFMO_IB_P XDIV_XD3_XFMO_NMB XDIV_XD3_XFMO_NMA VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFMO_IB_N XDIV_XD3_XFMO_NMB XDIV_XD3_XFMO_NMA VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFMO_TGMF_P XDIV_XD3_XFMO_NM XDIV_XD3_XFMO_CKB XDIV_XD3_XFMO_NMB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFMO_TGMF_N XDIV_XD3_XFMO_NMB XDIV_XD3_XFMO_CKBB XDIV_XD3_XFMO_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFMO_TGSI_P XDIV_XD3_XFMO_NS XDIV_XD3_XFMO_CKB XDIV_XD3_XFMO_NMA VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFMO_TGSI_N XDIV_XD3_XFMO_NMA XDIV_XD3_XFMO_CKBB XDIV_XD3_XFMO_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFMO_IC_P XDIV_MO3 XDIV_XD3_XFMO_NS VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFMO_IC_N XDIV_MO3 XDIV_XD3_XFMO_NS VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFMO_ID_P XDIV_XD3_MOB XDIV_MO3 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFMO_ID_N XDIV_XD3_MOB XDIV_MO3 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD3_XFMO_TGSF_P XDIV_XD3_XFMO_NS XDIV_XD3_XFMO_CKBB XDIV_XD3_MOB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD3_XFMO_TGSF_N XDIV_XD3_MOB XDIV_XD3_XFMO_CKB XDIV_XD3_XFMO_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XN3_MPA XDIV_XD4_SB XDIV_MI4 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XN3_MPB XDIV_XD4_SB P4 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XN3_MPC XDIV_XD4_SB XDIV_MO4 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XN3_MNA XDIV_XD4_SB XDIV_MI4 XDIV_XD4_XN3_NM1 VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD4_XN3_MNB XDIV_XD4_XN3_NM1 P4 XDIV_XD4_XN3_NM2 VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD4_XN3_MNC XDIV_XD4_XN3_NM2 XDIV_MO4 VSS VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD4_XN2Q_MPA XDIV_XD4_DQN XDIV_XD4_QB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XN2Q_MPB XDIV_XD4_DQN XDIV_XD4_SB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XN2Q_MNA XDIV_XD4_DQN XDIV_XD4_QB XDIV_XD4_XN2Q_NMID VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD4_XN2Q_MNB XDIV_XD4_XN2Q_NMID XDIV_XD4_SB VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD4_XIQ_MP XDIV_XD4_DQ XDIV_XD4_DQN VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XIQ_MN XDIV_XD4_DQ XDIV_XD4_DQN VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFQ_ICKB_P XDIV_XD4_XFQ_CKB XDIV_CK4 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFQ_ICKB_N XDIV_XD4_XFQ_CKB XDIV_CK4 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFQ_ICKBB_P XDIV_XD4_XFQ_CKBB XDIV_XD4_XFQ_CKB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFQ_ICKBB_N XDIV_XD4_XFQ_CKBB XDIV_XD4_XFQ_CKB VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFQ_TGMI_P XDIV_XD4_XFQ_NM XDIV_XD4_XFQ_CKBB XDIV_XD4_DQ VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFQ_TGMI_N XDIV_XD4_DQ XDIV_XD4_XFQ_CKB XDIV_XD4_XFQ_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFQ_IA_P XDIV_XD4_XFQ_NMA XDIV_XD4_XFQ_NM VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFQ_IA_N XDIV_XD4_XFQ_NMA XDIV_XD4_XFQ_NM VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFQ_IB_P XDIV_XD4_XFQ_NMB XDIV_XD4_XFQ_NMA VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFQ_IB_N XDIV_XD4_XFQ_NMB XDIV_XD4_XFQ_NMA VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFQ_TGMF_P XDIV_XD4_XFQ_NM XDIV_XD4_XFQ_CKB XDIV_XD4_XFQ_NMB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFQ_TGMF_N XDIV_XD4_XFQ_NMB XDIV_XD4_XFQ_CKBB XDIV_XD4_XFQ_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFQ_TGSI_P XDIV_XD4_XFQ_NS XDIV_XD4_XFQ_CKB XDIV_XD4_XFQ_NMA VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFQ_TGSI_N XDIV_XD4_XFQ_NMA XDIV_XD4_XFQ_CKBB XDIV_XD4_XFQ_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFQ_IC_P XDIV_XD4_Q XDIV_XD4_XFQ_NS VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFQ_IC_N XDIV_XD4_Q XDIV_XD4_XFQ_NS VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFQ_ID_P XDIV_XD4_QB XDIV_XD4_Q VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFQ_ID_N XDIV_XD4_QB XDIV_XD4_Q VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFQ_TGSF_P XDIV_XD4_XFQ_NS XDIV_XD4_XFQ_CKBB XDIV_XD4_QB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFQ_TGSF_N XDIV_XD4_QB XDIV_XD4_XFQ_CKB XDIV_XD4_XFQ_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XICKO_MP XDIV_CK5 XDIV_XD4_QB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=5u
+M_XDIV_XD4_XICKO_MN XDIV_CK5 XDIV_XD4_QB VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD4_XN2M_MPA XDIV_XD4_NMO XDIV_MI4 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XN2M_MPB XDIV_XD4_NMO XDIV_XD4_Q VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XN2M_MNA XDIV_XD4_NMO XDIV_MI4 XDIV_XD4_XN2M_NMID VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD4_XN2M_MNB XDIV_XD4_XN2M_NMID XDIV_XD4_Q VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD4_XIM_MP XDIV_XD4_DMO XDIV_XD4_NMO VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XIM_MN XDIV_XD4_DMO XDIV_XD4_NMO VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFMO_ICKB_P XDIV_XD4_XFMO_CKB XDIV_CK4 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFMO_ICKB_N XDIV_XD4_XFMO_CKB XDIV_CK4 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFMO_ICKBB_P XDIV_XD4_XFMO_CKBB XDIV_XD4_XFMO_CKB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFMO_ICKBB_N XDIV_XD4_XFMO_CKBB XDIV_XD4_XFMO_CKB VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFMO_TGMI_P XDIV_XD4_XFMO_NM XDIV_XD4_XFMO_CKBB XDIV_XD4_DMO VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFMO_TGMI_N XDIV_XD4_DMO XDIV_XD4_XFMO_CKB XDIV_XD4_XFMO_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFMO_IA_P XDIV_XD4_XFMO_NMA XDIV_XD4_XFMO_NM VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFMO_IA_N XDIV_XD4_XFMO_NMA XDIV_XD4_XFMO_NM VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFMO_IB_P XDIV_XD4_XFMO_NMB XDIV_XD4_XFMO_NMA VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFMO_IB_N XDIV_XD4_XFMO_NMB XDIV_XD4_XFMO_NMA VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFMO_TGMF_P XDIV_XD4_XFMO_NM XDIV_XD4_XFMO_CKB XDIV_XD4_XFMO_NMB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFMO_TGMF_N XDIV_XD4_XFMO_NMB XDIV_XD4_XFMO_CKBB XDIV_XD4_XFMO_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFMO_TGSI_P XDIV_XD4_XFMO_NS XDIV_XD4_XFMO_CKB XDIV_XD4_XFMO_NMA VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFMO_TGSI_N XDIV_XD4_XFMO_NMA XDIV_XD4_XFMO_CKBB XDIV_XD4_XFMO_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFMO_IC_P XDIV_MO4 XDIV_XD4_XFMO_NS VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFMO_IC_N XDIV_MO4 XDIV_XD4_XFMO_NS VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFMO_ID_P XDIV_XD4_MOB XDIV_MO4 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFMO_ID_N XDIV_XD4_MOB XDIV_MO4 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD4_XFMO_TGSF_P XDIV_XD4_XFMO_NS XDIV_XD4_XFMO_CKBB XDIV_XD4_MOB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD4_XFMO_TGSF_N XDIV_XD4_MOB XDIV_XD4_XFMO_CKB XDIV_XD4_XFMO_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XN3_MPA XDIV_XD5_SB SEL5 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XN3_MPB XDIV_XD5_SB P5 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XN3_MPC XDIV_XD5_SB XDIV_MO5 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XN3_MNA XDIV_XD5_SB SEL5 XDIV_XD5_XN3_NM1 VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD5_XN3_MNB XDIV_XD5_XN3_NM1 P5 XDIV_XD5_XN3_NM2 VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD5_XN3_MNC XDIV_XD5_XN3_NM2 XDIV_MO5 VSS VSS nfet_03v3 L=0.28u W=3u
+M_XDIV_XD5_XN2Q_MPA XDIV_XD5_DQN XDIV_XD5_QB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XN2Q_MPB XDIV_XD5_DQN XDIV_XD5_SB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XN2Q_MNA XDIV_XD5_DQN XDIV_XD5_QB XDIV_XD5_XN2Q_NMID VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD5_XN2Q_MNB XDIV_XD5_XN2Q_NMID XDIV_XD5_SB VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD5_XIQ_MP XDIV_XD5_DQ XDIV_XD5_DQN VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XIQ_MN XDIV_XD5_DQ XDIV_XD5_DQN VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFQ_ICKB_P XDIV_XD5_XFQ_CKB XDIV_CK5 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFQ_ICKB_N XDIV_XD5_XFQ_CKB XDIV_CK5 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFQ_ICKBB_P XDIV_XD5_XFQ_CKBB XDIV_XD5_XFQ_CKB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFQ_ICKBB_N XDIV_XD5_XFQ_CKBB XDIV_XD5_XFQ_CKB VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFQ_TGMI_P XDIV_XD5_XFQ_NM XDIV_XD5_XFQ_CKBB XDIV_XD5_DQ VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFQ_TGMI_N XDIV_XD5_DQ XDIV_XD5_XFQ_CKB XDIV_XD5_XFQ_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFQ_IA_P XDIV_XD5_XFQ_NMA XDIV_XD5_XFQ_NM VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFQ_IA_N XDIV_XD5_XFQ_NMA XDIV_XD5_XFQ_NM VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFQ_IB_P XDIV_XD5_XFQ_NMB XDIV_XD5_XFQ_NMA VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFQ_IB_N XDIV_XD5_XFQ_NMB XDIV_XD5_XFQ_NMA VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFQ_TGMF_P XDIV_XD5_XFQ_NM XDIV_XD5_XFQ_CKB XDIV_XD5_XFQ_NMB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFQ_TGMF_N XDIV_XD5_XFQ_NMB XDIV_XD5_XFQ_CKBB XDIV_XD5_XFQ_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFQ_TGSI_P XDIV_XD5_XFQ_NS XDIV_XD5_XFQ_CKB XDIV_XD5_XFQ_NMA VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFQ_TGSI_N XDIV_XD5_XFQ_NMA XDIV_XD5_XFQ_CKBB XDIV_XD5_XFQ_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFQ_IC_P XDIV_XD5_Q XDIV_XD5_XFQ_NS VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFQ_IC_N XDIV_XD5_Q XDIV_XD5_XFQ_NS VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFQ_ID_P XDIV_XD5_QB XDIV_XD5_Q VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFQ_ID_N XDIV_XD5_QB XDIV_XD5_Q VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFQ_TGSF_P XDIV_XD5_XFQ_NS XDIV_XD5_XFQ_CKBB XDIV_XD5_QB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFQ_TGSF_N XDIV_XD5_QB XDIV_XD5_XFQ_CKB XDIV_XD5_XFQ_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XICKO_MP XDIV_CK6 XDIV_XD5_QB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=5u
+M_XDIV_XD5_XICKO_MN XDIV_CK6 XDIV_XD5_QB VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD5_XN2M_MPA XDIV_XD5_NMO SEL5 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XN2M_MPB XDIV_XD5_NMO XDIV_XD5_Q VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XN2M_MNA XDIV_XD5_NMO SEL5 XDIV_XD5_XN2M_NMID VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD5_XN2M_MNB XDIV_XD5_XN2M_NMID XDIV_XD5_Q VSS VSS nfet_03v3 L=0.28u W=2u
+M_XDIV_XD5_XIM_MP XDIV_XD5_DMO XDIV_XD5_NMO VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XIM_MN XDIV_XD5_DMO XDIV_XD5_NMO VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFMO_ICKB_P XDIV_XD5_XFMO_CKB XDIV_CK5 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFMO_ICKB_N XDIV_XD5_XFMO_CKB XDIV_CK5 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFMO_ICKBB_P XDIV_XD5_XFMO_CKBB XDIV_XD5_XFMO_CKB VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFMO_ICKBB_N XDIV_XD5_XFMO_CKBB XDIV_XD5_XFMO_CKB VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFMO_TGMI_P XDIV_XD5_XFMO_NM XDIV_XD5_XFMO_CKBB XDIV_XD5_DMO VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFMO_TGMI_N XDIV_XD5_DMO XDIV_XD5_XFMO_CKB XDIV_XD5_XFMO_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFMO_IA_P XDIV_XD5_XFMO_NMA XDIV_XD5_XFMO_NM VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFMO_IA_N XDIV_XD5_XFMO_NMA XDIV_XD5_XFMO_NM VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFMO_IB_P XDIV_XD5_XFMO_NMB XDIV_XD5_XFMO_NMA VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFMO_IB_N XDIV_XD5_XFMO_NMB XDIV_XD5_XFMO_NMA VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFMO_TGMF_P XDIV_XD5_XFMO_NM XDIV_XD5_XFMO_CKB XDIV_XD5_XFMO_NMB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFMO_TGMF_N XDIV_XD5_XFMO_NMB XDIV_XD5_XFMO_CKBB XDIV_XD5_XFMO_NM VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFMO_TGSI_P XDIV_XD5_XFMO_NS XDIV_XD5_XFMO_CKB XDIV_XD5_XFMO_NMA VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFMO_TGSI_N XDIV_XD5_XFMO_NMA XDIV_XD5_XFMO_CKBB XDIV_XD5_XFMO_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFMO_IC_P XDIV_MO5 XDIV_XD5_XFMO_NS VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFMO_IC_N XDIV_MO5 XDIV_XD5_XFMO_NS VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFMO_ID_P XDIV_XD5_MOB XDIV_MO5 VDD_DIV VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFMO_ID_N XDIV_XD5_MOB XDIV_MO5 VSS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XD5_XFMO_TGSF_P XDIV_XD5_XFMO_NS XDIV_XD5_XFMO_CKBB XDIV_XD5_MOB VDD_DIV pfet_03v3 L=0.28u W=2.5u
+M_XDIV_XD5_XFMO_TGSF_N XDIV_XD5_MOB XDIV_XD5_XFMO_CKB XDIV_XD5_XFMO_NS VSS nfet_03v3 L=0.28u W=1u
+M_XDIV_XNR0_MPA XDIV_XNR0_PMID XDIV_MO1 VDD_DIV VDD_DIV pfet_03v3 W=5u L=0.28u
+M_XDIV_XNR0_MPB XDIV_NMI0 SEL0 XDIV_XNR0_PMID VDD_DIV pfet_03v3 W=5u L=0.28u
+M_XDIV_XNR0_MNA XDIV_NMI0 XDIV_MO1 VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XNR0_MNB XDIV_NMI0 SEL0 VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XIV0_MP XDIV_MI0 XDIV_NMI0 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XIV0_MN XDIV_MI0 XDIV_NMI0 VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XNR1_MPA XDIV_XNR1_PMID XDIV_MO2 VDD_DIV VDD_DIV pfet_03v3 W=5u L=0.28u
+M_XDIV_XNR1_MPB XDIV_NMI1 SEL1 XDIV_XNR1_PMID VDD_DIV pfet_03v3 W=5u L=0.28u
+M_XDIV_XNR1_MNA XDIV_NMI1 XDIV_MO2 VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XNR1_MNB XDIV_NMI1 SEL1 VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XIV1_MP XDIV_MI1 XDIV_NMI1 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XIV1_MN XDIV_MI1 XDIV_NMI1 VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XNR2_MPA XDIV_XNR2_PMID XDIV_MO3 VDD_DIV VDD_DIV pfet_03v3 W=5u L=0.28u
+M_XDIV_XNR2_MPB XDIV_NMI2 SEL2 XDIV_XNR2_PMID VDD_DIV pfet_03v3 W=5u L=0.28u
+M_XDIV_XNR2_MNA XDIV_NMI2 XDIV_MO3 VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XNR2_MNB XDIV_NMI2 SEL2 VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XIV2_MP XDIV_MI2 XDIV_NMI2 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XIV2_MN XDIV_MI2 XDIV_NMI2 VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XNR3_MPA XDIV_XNR3_PMID XDIV_MO4 VDD_DIV VDD_DIV pfet_03v3 W=5u L=0.28u
+M_XDIV_XNR3_MPB XDIV_NMI3 SEL3 XDIV_XNR3_PMID VDD_DIV pfet_03v3 W=5u L=0.28u
+M_XDIV_XNR3_MNA XDIV_NMI3 XDIV_MO4 VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XNR3_MNB XDIV_NMI3 SEL3 VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XIV3_MP XDIV_MI3 XDIV_NMI3 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XIV3_MN XDIV_MI3 XDIV_NMI3 VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XNR4_MPA XDIV_XNR4_PMID XDIV_MO5 VDD_DIV VDD_DIV pfet_03v3 W=5u L=0.28u
+M_XDIV_XNR4_MPB XDIV_NMI4 SEL4 XDIV_XNR4_PMID VDD_DIV pfet_03v3 W=5u L=0.28u
+M_XDIV_XNR4_MNA XDIV_NMI4 XDIV_MO5 VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XNR4_MNB XDIV_NMI4 SEL4 VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XIV4_MP XDIV_MI4 XDIV_NMI4 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XIV4_MN XDIV_MI4 XDIV_NMI4 VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XM0_MPA XDIV_T0 XDIV_CK1 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XM0_MPB XDIV_T0 SEL0 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XM0_MNA XDIV_T0 XDIV_CK1 XDIV_XM0_NMID VSS nfet_03v3 W=2u L=0.28u
+M_XDIV_XM0_MNB XDIV_XM0_NMID SEL0 VSS VSS nfet_03v3 W=2u L=0.28u
+M_XDIV_XM1_MPA XDIV_T1 XDIV_CK2 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XM1_MPB XDIV_T1 SEL1 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XM1_MNA XDIV_T1 XDIV_CK2 XDIV_XM1_NMID VSS nfet_03v3 W=2u L=0.28u
+M_XDIV_XM1_MNB XDIV_XM1_NMID SEL1 VSS VSS nfet_03v3 W=2u L=0.28u
+M_XDIV_XM2_MPA XDIV_T2 XDIV_CK3 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XM2_MPB XDIV_T2 SEL2 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XM2_MNA XDIV_T2 XDIV_CK3 XDIV_XM2_NMID VSS nfet_03v3 W=2u L=0.28u
+M_XDIV_XM2_MNB XDIV_XM2_NMID SEL2 VSS VSS nfet_03v3 W=2u L=0.28u
+M_XDIV_XM3_MPA XDIV_T3 XDIV_CK4 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XM3_MPB XDIV_T3 SEL3 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XM3_MNA XDIV_T3 XDIV_CK4 XDIV_XM3_NMID VSS nfet_03v3 W=2u L=0.28u
+M_XDIV_XM3_MNB XDIV_XM3_NMID SEL3 VSS VSS nfet_03v3 W=2u L=0.28u
+M_XDIV_XM4_MPA XDIV_T4 XDIV_CK5 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XM4_MPB XDIV_T4 SEL4 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XM4_MNA XDIV_T4 XDIV_CK5 XDIV_XM4_NMID VSS nfet_03v3 W=2u L=0.28u
+M_XDIV_XM4_MNB XDIV_XM4_NMID SEL4 VSS VSS nfet_03v3 W=2u L=0.28u
+M_XDIV_XM5_MPA XDIV_T5 XDIV_CK6 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XM5_MPB XDIV_T5 SEL5 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XM5_MNA XDIV_T5 XDIV_CK6 XDIV_XM5_NMID VSS nfet_03v3 W=2u L=0.28u
+M_XDIV_XM5_MNB XDIV_XM5_NMID SEL5 VSS VSS nfet_03v3 W=2u L=0.28u
+M_XDIV_XMA_MPA XDIV_MA XDIV_T0 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XMA_MPB XDIV_MA XDIV_T1 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XMA_MPC XDIV_MA XDIV_T2 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XMA_MNA XDIV_MA XDIV_T0 XDIV_XMA_NM1 VSS nfet_03v3 W=3u L=0.28u
+M_XDIV_XMA_MNB XDIV_XMA_NM1 XDIV_T1 XDIV_XMA_NM2 VSS nfet_03v3 W=3u L=0.28u
+M_XDIV_XMA_MNC XDIV_XMA_NM2 XDIV_T2 VSS VSS nfet_03v3 W=3u L=0.28u
+M_XDIV_XMB_MPA XDIV_MB XDIV_T3 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XMB_MPB XDIV_MB XDIV_T4 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XMB_MPC XDIV_MB XDIV_T5 VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XMB_MNA XDIV_MB XDIV_T3 XDIV_XMB_NM1 VSS nfet_03v3 W=3u L=0.28u
+M_XDIV_XMB_MNB XDIV_XMB_NM1 XDIV_T4 XDIV_XMB_NM2 VSS nfet_03v3 W=3u L=0.28u
+M_XDIV_XMB_MNC XDIV_XMB_NM2 XDIV_T5 VSS VSS nfet_03v3 W=3u L=0.28u
+M_XDIV_XMNO_MPA XDIV_XMNO_PMID XDIV_MA VDD_DIV VDD_DIV pfet_03v3 W=5u L=0.28u
+M_XDIV_XMNO_MPB XDIV_DIVOUTB XDIV_MB XDIV_XMNO_PMID VDD_DIV pfet_03v3 W=5u L=0.28u
+M_XDIV_XMNO_MNA XDIV_DIVOUTB XDIV_MA VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XMNO_MNB XDIV_DIVOUTB XDIV_MB VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XIDO_MP DIVOUT XDIV_DIVOUTB VDD_DIV VDD_DIV pfet_03v3 W=5u L=0.28u
+M_XDIV_XIDO_MN DIVOUT XDIV_DIVOUTB VSS VSS nfet_03v3 W=2u L=0.28u
+M_XDIV_XFRT_ICKB_P XDIV_XFRT_CKB CLK VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XFRT_ICKB_N XDIV_XFRT_CKB CLK VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XFRT_ICKBB_P XDIV_XFRT_CKBB XDIV_XFRT_CKB VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XFRT_ICKBB_N XDIV_XFRT_CKBB XDIV_XFRT_CKB VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XFRT_TGMI_P XDIV_XFRT_NM XDIV_XFRT_CKBB DIVOUT VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XFRT_TGMI_N DIVOUT XDIV_XFRT_CKB XDIV_XFRT_NM VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XFRT_IA_P XDIV_XFRT_NMA XDIV_XFRT_NM VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XFRT_IA_N XDIV_XFRT_NMA XDIV_XFRT_NM VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XFRT_IB_P XDIV_XFRT_NMB XDIV_XFRT_NMA VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XFRT_IB_N XDIV_XFRT_NMB XDIV_XFRT_NMA VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XFRT_TGMF_P XDIV_XFRT_NM XDIV_XFRT_CKB XDIV_XFRT_NMB VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XFRT_TGMF_N XDIV_XFRT_NMB XDIV_XFRT_CKBB XDIV_XFRT_NM VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XFRT_TGSI_P XDIV_XFRT_NS XDIV_XFRT_CKB XDIV_XFRT_NMA VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XFRT_TGSI_N XDIV_XFRT_NMA XDIV_XFRT_CKBB XDIV_XFRT_NS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XFRT_IC_P FB XDIV_XFRT_NS VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XFRT_IC_N FB XDIV_XFRT_NS VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XFRT_ID_P XDIV_FBB FB VDD_DIV VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XFRT_ID_N XDIV_FBB FB VSS VSS nfet_03v3 W=1u L=0.28u
+M_XDIV_XFRT_TGSF_P XDIV_XFRT_NS XDIV_XFRT_CKBB XDIV_FBB VDD_DIV pfet_03v3 W=2.5u L=0.28u
+M_XDIV_XFRT_TGSF_N XDIV_FBB XDIV_XFRT_CKB XDIV_XFRT_NS VSS nfet_03v3 W=1u L=0.28u
+M_XLD_lock_detector_XERR_XG1_MPA XLD_lock_detector_XERR_N1 UP VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XERR_XG1_MPB XLD_lock_detector_XERR_N1 DN VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XERR_XG1_MNA XLD_lock_detector_XERR_N1 UP XLD_lock_detector_XERR_XG1_NMID VSS nfet_03v3 L=0.28u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XERR_XG1_MNB XLD_lock_detector_XERR_XG1_NMID DN VSS VSS nfet_03v3 L=0.28u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XERR_XG2_MPA XLD_lock_detector_XERR_N2 UP VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XERR_XG2_MPB XLD_lock_detector_XERR_N2 XLD_lock_detector_XERR_N1 VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XERR_XG2_MNA XLD_lock_detector_XERR_N2 UP XLD_lock_detector_XERR_XG2_NMID VSS nfet_03v3 L=0.28u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XERR_XG2_MNB XLD_lock_detector_XERR_XG2_NMID XLD_lock_detector_XERR_N1 VSS VSS nfet_03v3 L=0.28u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XERR_XG3_MPA XLD_lock_detector_XERR_N3 DN VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XERR_XG3_MPB XLD_lock_detector_XERR_N3 XLD_lock_detector_XERR_N1 VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XERR_XG3_MNA XLD_lock_detector_XERR_N3 DN XLD_lock_detector_XERR_XG3_NMID VSS nfet_03v3 L=0.28u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XERR_XG3_MNB XLD_lock_detector_XERR_XG3_NMID XLD_lock_detector_XERR_N1 VSS VSS nfet_03v3 L=0.28u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XERR_XG4_MPA XLD_lock_detector_ERR XLD_lock_detector_XERR_N2 VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XERR_XG4_MPB XLD_lock_detector_ERR XLD_lock_detector_XERR_N3 VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XERR_XG4_MNA XLD_lock_detector_ERR XLD_lock_detector_XERR_N2 XLD_lock_detector_XERR_XG4_NMID VSS nfet_03v3 L=0.28u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XERR_XG4_MNB XLD_lock_detector_XERR_XG4_NMID XLD_lock_detector_XERR_N3 VSS VSS nfet_03v3 L=0.28u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XIT0_MP XLD_lock_detector_XDLY_T0B LDT0 VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XIT0_MN XLD_lock_detector_XDLY_T0B LDT0 VSS VSS nfet_03v3 L=0.28u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XIT1_MP XLD_lock_detector_XDLY_T1B LDT1 VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XIT1_MN XLD_lock_detector_XDLY_T1B LDT1 VSS VSS nfet_03v3 L=0.28u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XIT2_MP XLD_lock_detector_XDLY_T2B LDT2 VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XIT2_MN XLD_lock_detector_XDLY_T2B LDT2 VSS VSS nfet_03v3 L=0.28u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XIT3_MP XLD_lock_detector_XDLY_T3B LDT3 VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XIT3_MN XLD_lock_detector_XDLY_T3B LDT3 VSS VSS nfet_03v3 L=0.28u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XI1_MP XLD_lock_detector_XDLY_D1 XLD_lock_detector_ERR VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XI1_MN XLD_lock_detector_XDLY_D1 XLD_lock_detector_ERR VSS VSS nfet_03v3 L=0.28u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MB1 VSS XLD_lock_detector_XDLY_D1 VSS VSS nfet_03v3 L=2u W=6.2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN10 XLD_lock_detector_XDLY_D1 LDT0 XLD_lock_detector_XDLY_S10 VSS nfet_03v3 L=0.28u W=0.22u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP10 XLD_lock_detector_XDLY_S10 XLD_lock_detector_XDLY_T0B XLD_lock_detector_XDLY_D1 VDD pfet_03v3 L=0.28u W=0.22u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK10 XLD_lock_detector_XDLY_S10 XLD_lock_detector_XDLY_T0B VSS VSS nfet_03v3 L=0.5u W=0.22u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC10 VSS XLD_lock_detector_XDLY_S10 VSS VSS nfet_03v3 L=1u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN11 XLD_lock_detector_XDLY_D1 LDT1 XLD_lock_detector_XDLY_S11 VSS nfet_03v3 L=0.28u W=0.44u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP11 XLD_lock_detector_XDLY_S11 XLD_lock_detector_XDLY_T1B XLD_lock_detector_XDLY_D1 VDD pfet_03v3 L=0.28u W=0.44u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK11 XLD_lock_detector_XDLY_S11 XLD_lock_detector_XDLY_T1B VSS VSS nfet_03v3 L=0.5u W=0.44u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC11 VSS XLD_lock_detector_XDLY_S11 VSS VSS nfet_03v3 L=1u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN12 XLD_lock_detector_XDLY_D1 LDT2 XLD_lock_detector_XDLY_S12 VSS nfet_03v3 L=0.28u W=0.88u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP12 XLD_lock_detector_XDLY_S12 XLD_lock_detector_XDLY_T2B XLD_lock_detector_XDLY_D1 VDD pfet_03v3 L=0.28u W=0.88u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK12 XLD_lock_detector_XDLY_S12 XLD_lock_detector_XDLY_T2B VSS VSS nfet_03v3 L=0.5u W=0.88u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC12 VSS XLD_lock_detector_XDLY_S12 VSS VSS nfet_03v3 L=1u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN13 XLD_lock_detector_XDLY_D1 LDT3 XLD_lock_detector_XDLY_S13 VSS nfet_03v3 L=0.28u W=1.76u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP13 XLD_lock_detector_XDLY_S13 XLD_lock_detector_XDLY_T3B XLD_lock_detector_XDLY_D1 VDD pfet_03v3 L=0.28u W=1.76u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK13 XLD_lock_detector_XDLY_S13 XLD_lock_detector_XDLY_T3B VSS VSS nfet_03v3 L=0.5u W=1.76u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC13 VSS XLD_lock_detector_XDLY_S13 VSS VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XI2_MP XLD_lock_detector_XDLY_D2 XLD_lock_detector_XDLY_D1 VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XI2_MN XLD_lock_detector_XDLY_D2 XLD_lock_detector_XDLY_D1 VSS VSS nfet_03v3 L=0.28u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MB2 VSS XLD_lock_detector_XDLY_D2 VSS VSS nfet_03v3 L=2u W=6.2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN20 XLD_lock_detector_XDLY_D2 LDT0 XLD_lock_detector_XDLY_S20 VSS nfet_03v3 L=0.28u W=0.22u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP20 XLD_lock_detector_XDLY_S20 XLD_lock_detector_XDLY_T0B XLD_lock_detector_XDLY_D2 VDD pfet_03v3 L=0.28u W=0.22u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK20 XLD_lock_detector_XDLY_S20 XLD_lock_detector_XDLY_T0B VSS VSS nfet_03v3 L=0.5u W=0.22u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC20 VSS XLD_lock_detector_XDLY_S20 VSS VSS nfet_03v3 L=1u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN21 XLD_lock_detector_XDLY_D2 LDT1 XLD_lock_detector_XDLY_S21 VSS nfet_03v3 L=0.28u W=0.44u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP21 XLD_lock_detector_XDLY_S21 XLD_lock_detector_XDLY_T1B XLD_lock_detector_XDLY_D2 VDD pfet_03v3 L=0.28u W=0.44u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK21 XLD_lock_detector_XDLY_S21 XLD_lock_detector_XDLY_T1B VSS VSS nfet_03v3 L=0.5u W=0.44u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC21 VSS XLD_lock_detector_XDLY_S21 VSS VSS nfet_03v3 L=1u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN22 XLD_lock_detector_XDLY_D2 LDT2 XLD_lock_detector_XDLY_S22 VSS nfet_03v3 L=0.28u W=0.88u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP22 XLD_lock_detector_XDLY_S22 XLD_lock_detector_XDLY_T2B XLD_lock_detector_XDLY_D2 VDD pfet_03v3 L=0.28u W=0.88u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK22 XLD_lock_detector_XDLY_S22 XLD_lock_detector_XDLY_T2B VSS VSS nfet_03v3 L=0.5u W=0.88u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC22 VSS XLD_lock_detector_XDLY_S22 VSS VSS nfet_03v3 L=1u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN23 XLD_lock_detector_XDLY_D2 LDT3 XLD_lock_detector_XDLY_S23 VSS nfet_03v3 L=0.28u W=1.76u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP23 XLD_lock_detector_XDLY_S23 XLD_lock_detector_XDLY_T3B XLD_lock_detector_XDLY_D2 VDD pfet_03v3 L=0.28u W=1.76u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK23 XLD_lock_detector_XDLY_S23 XLD_lock_detector_XDLY_T3B VSS VSS nfet_03v3 L=0.5u W=1.76u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC23 VSS XLD_lock_detector_XDLY_S23 VSS VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XI3_MP XLD_lock_detector_XDLY_D3 XLD_lock_detector_XDLY_D2 VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XI3_MN XLD_lock_detector_XDLY_D3 XLD_lock_detector_XDLY_D2 VSS VSS nfet_03v3 L=0.28u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MB3 VSS XLD_lock_detector_XDLY_D3 VSS VSS nfet_03v3 L=2u W=6.2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN30 XLD_lock_detector_XDLY_D3 LDT0 XLD_lock_detector_XDLY_S30 VSS nfet_03v3 L=0.28u W=0.22u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP30 XLD_lock_detector_XDLY_S30 XLD_lock_detector_XDLY_T0B XLD_lock_detector_XDLY_D3 VDD pfet_03v3 L=0.28u W=0.22u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK30 XLD_lock_detector_XDLY_S30 XLD_lock_detector_XDLY_T0B VSS VSS nfet_03v3 L=0.5u W=0.22u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC30 VSS XLD_lock_detector_XDLY_S30 VSS VSS nfet_03v3 L=1u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN31 XLD_lock_detector_XDLY_D3 LDT1 XLD_lock_detector_XDLY_S31 VSS nfet_03v3 L=0.28u W=0.44u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP31 XLD_lock_detector_XDLY_S31 XLD_lock_detector_XDLY_T1B XLD_lock_detector_XDLY_D3 VDD pfet_03v3 L=0.28u W=0.44u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK31 XLD_lock_detector_XDLY_S31 XLD_lock_detector_XDLY_T1B VSS VSS nfet_03v3 L=0.5u W=0.44u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC31 VSS XLD_lock_detector_XDLY_S31 VSS VSS nfet_03v3 L=1u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN32 XLD_lock_detector_XDLY_D3 LDT2 XLD_lock_detector_XDLY_S32 VSS nfet_03v3 L=0.28u W=0.88u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP32 XLD_lock_detector_XDLY_S32 XLD_lock_detector_XDLY_T2B XLD_lock_detector_XDLY_D3 VDD pfet_03v3 L=0.28u W=0.88u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK32 XLD_lock_detector_XDLY_S32 XLD_lock_detector_XDLY_T2B VSS VSS nfet_03v3 L=0.5u W=0.88u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC32 VSS XLD_lock_detector_XDLY_S32 VSS VSS nfet_03v3 L=1u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN33 XLD_lock_detector_XDLY_D3 LDT3 XLD_lock_detector_XDLY_S33 VSS nfet_03v3 L=0.28u W=1.76u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP33 XLD_lock_detector_XDLY_S33 XLD_lock_detector_XDLY_T3B XLD_lock_detector_XDLY_D3 VDD pfet_03v3 L=0.28u W=1.76u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK33 XLD_lock_detector_XDLY_S33 XLD_lock_detector_XDLY_T3B VSS VSS nfet_03v3 L=0.5u W=1.76u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC33 VSS XLD_lock_detector_XDLY_S33 VSS VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XI4_MP XLD_lock_detector_ERRD XLD_lock_detector_XDLY_D3 VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_XI4_MN XLD_lock_detector_ERRD XLD_lock_detector_XDLY_D3 VSS VSS nfet_03v3 L=0.28u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MB4 VSS XLD_lock_detector_ERRD VSS VSS nfet_03v3 L=2u W=6.2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN40 XLD_lock_detector_ERRD LDT0 XLD_lock_detector_XDLY_S40 VSS nfet_03v3 L=0.28u W=0.22u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP40 XLD_lock_detector_XDLY_S40 XLD_lock_detector_XDLY_T0B XLD_lock_detector_ERRD VDD pfet_03v3 L=0.28u W=0.22u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK40 XLD_lock_detector_XDLY_S40 XLD_lock_detector_XDLY_T0B VSS VSS nfet_03v3 L=0.5u W=0.22u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC40 VSS XLD_lock_detector_XDLY_S40 VSS VSS nfet_03v3 L=1u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN41 XLD_lock_detector_ERRD LDT1 XLD_lock_detector_XDLY_S41 VSS nfet_03v3 L=0.28u W=0.44u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP41 XLD_lock_detector_XDLY_S41 XLD_lock_detector_XDLY_T1B XLD_lock_detector_ERRD VDD pfet_03v3 L=0.28u W=0.44u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK41 XLD_lock_detector_XDLY_S41 XLD_lock_detector_XDLY_T1B VSS VSS nfet_03v3 L=0.5u W=0.44u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC41 VSS XLD_lock_detector_XDLY_S41 VSS VSS nfet_03v3 L=1u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN42 XLD_lock_detector_ERRD LDT2 XLD_lock_detector_XDLY_S42 VSS nfet_03v3 L=0.28u W=0.88u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP42 XLD_lock_detector_XDLY_S42 XLD_lock_detector_XDLY_T2B XLD_lock_detector_ERRD VDD pfet_03v3 L=0.28u W=0.88u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK42 XLD_lock_detector_XDLY_S42 XLD_lock_detector_XDLY_T2B VSS VSS nfet_03v3 L=0.5u W=0.88u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC42 VSS XLD_lock_detector_XDLY_S42 VSS VSS nfet_03v3 L=1u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSN43 XLD_lock_detector_ERRD LDT3 XLD_lock_detector_XDLY_S43 VSS nfet_03v3 L=0.28u W=1.76u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MSP43 XLD_lock_detector_XDLY_S43 XLD_lock_detector_XDLY_T3B XLD_lock_detector_ERRD VDD pfet_03v3 L=0.28u W=1.76u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MK43 XLD_lock_detector_XDLY_S43 XLD_lock_detector_XDLY_T3B VSS VSS nfet_03v3 L=0.5u W=1.76u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XDLY_MC43 VSS XLD_lock_detector_XDLY_S43 VSS VSS nfet_03v3 L=1u W=4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XNW_MPA XLD_lock_detector_WIDEB XLD_lock_detector_ERR VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XNW_MPB XLD_lock_detector_WIDEB XLD_lock_detector_ERRD VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XNW_MNA XLD_lock_detector_WIDEB XLD_lock_detector_ERR XLD_lock_detector_XNW_NMID VSS nfet_03v3 L=0.28u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XNW_MNB XLD_lock_detector_XNW_NMID XLD_lock_detector_ERRD VSS VSS nfet_03v3 L=0.28u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XIW_MP XLD_lock_detector_WIDE XLD_lock_detector_WIDEB VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XIW_MN XLD_lock_detector_WIDE XLD_lock_detector_WIDEB VSS VSS nfet_03v3 L=0.28u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_MDNW VWIN XLD_lock_detector_WIDE VSS VSS nfet_03v3 L=0.5u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_MUPW VWIN VSS VDD VDD pfet_03v3 L=20u W=0.22u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_MCW VSS VWIN VSS VSS nfet_03v3 L=6u W=30u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XSCH_MP1 XLD_lock_detector_XSCH_P1 VWIN VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XSCH_MP2 XLD_lock_detector_LOCKB VWIN XLD_lock_detector_XSCH_P1 VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XSCH_MP3 VSS XLD_lock_detector_LOCKB XLD_lock_detector_XSCH_P1 VDD pfet_03v3 L=0.28u W=1.2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XSCH_MN1 XLD_lock_detector_XSCH_N1 VWIN VSS VSS nfet_03v3 L=0.28u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XSCH_MN2 XLD_lock_detector_LOCKB VWIN XLD_lock_detector_XSCH_N1 VSS nfet_03v3 L=0.28u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XSCH_MN3 VDD XLD_lock_detector_LOCKB XLD_lock_detector_XSCH_N1 VSS nfet_03v3 L=0.28u W=0.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XILK_MP LOCK XLD_lock_detector_LOCKB VDD VDD pfet_03v3 L=0.28u W=2.5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+M_XLD_lock_detector_XILK_MN LOCK XLD_lock_detector_LOCKB VSS VSS nfet_03v3 L=0.28u W=1u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+.ends pll_top

@@ -26,7 +26,7 @@ simulation only; nothing has been fabricated or measured.
 | Closed-loop bring-up | Not done. Single-corner smoke test passes; the full-grid lock-time, output-range and supply-sensitivity campaigns do not yet show sustained lock across PVT. | [`sim/STATUS.md`](sim/STATUS.md) |
 | Period jitter | Deterministic component covers 45 of the mandated 45 PVT corners; the random component is bounded, not estimated. | [`sim/STATUS.md`](sim/STATUS.md) |
 | Reference spur | Closed-loop record covers 5 of the 45 PVT corners at 150 MHz; the 200 MHz band-top sweep has no measured record yet. | [`sim/STATUS.md`](sim/STATUS.md) |
-| Layout | Per-sub-block drawn / DRC-clean / LVS-matched state is the generated table in `layout/STATUS.md`. The assembled `pll_top` GDS (all five blocks, loop filter included) is committed with one inherited DRC violation (the loop filter's `MIMTM.3`), top-level LVS still to run, and an area over the ratified row. | [`layout/STATUS.md`](layout/STATUS.md) |
+| Layout | Per-sub-block drawn / DRC-clean / LVS-matched state is the generated table in `layout/STATUS.md`. The assembled `pll_top` GDS (all five blocks, loop filter included) is committed with one inherited DRC violation (the loop filter's `MIMTM.3`), a first top-level LVS run recorded as a mismatch with both causes diagnosed (#753's option-A C2, which the variant-D deck does not extract at all, and the f6eeac7 runset's SIMPLIFY=false change — #980), and an area over the ratified row. | [`layout/STATUS.md`](layout/STATUS.md) |
 | Silicon | Not started. `measurements/` stays empty until there is any. | [`measurements/`](measurements/) |
 
 The machine verdict of record is `signoff/tier-report.json`, described in
@@ -126,7 +126,9 @@ the proposal marks that row **unmet** rather than omitting it; and that layout
 has reached a first assembled top level — the per-sub-block drawn, DRC-clean and
 LVS-matched state is the generated table in [`layout/STATUS.md`](layout/STATUS.md)
 — and the assembled
-`pll_top` GDS carries one inherited DRC violation, has had no top-level LVS run
+`pll_top` GDS carries one inherited DRC violation, has had a first top-level LVS
+run recorded as a mismatch with both causes diagnosed (#753's option-A C2 and
+the f6eeac7 runset change — [`layout/evidence/pll-top-layout/lvs-20261116/PROOF-lvs.md`](layout/evidence/pll-top-layout/lvs-20261116/PROOF-lvs.md)),
 and measures 0.4078 mm² against the 0.30 mm² row, so top-level signoff and
 post-layout re-verification are both still ahead
 ([`layout/evidence/pll-top-layout/PROOF.md`](layout/evidence/pll-top-layout/PROOF.md)).

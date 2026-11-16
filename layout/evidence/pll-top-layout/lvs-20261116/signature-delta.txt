@@ -1,0 +1,55 @@
+reference devices (M= multiplied): 813
+extracted devices:                 829
+
+== extracted-only (model, L_um, W_um) ==
+     2 x ('cap_nmos_03v3', 0.0, 0.0)
+     4 x ('cap_nmos_03v3_b', 0.0, 0.0)
+     2 x ('nfet_03v3', 1.0, 2.5)
+     2 x ('nfet_03v3', 1.0, 4.305)
+     2 x ('pfet_03v3', 1.0, 8.61)
+     8 x ('pfet_03v3', 1.0, 9.86)
+     2 x ('pfet_03v3', 1.0, 13.25)
+     4 x ('pfet_03v3', 1.0, 15.0)
+
+== reference-only (model, L_um, W_um) ==
+     1 x ('cap_mim_2f0_m2m3_noshield', 31.4, 31.4)
+     2 x ('cap_nmos_03v3', 50.0, 50.0)
+     4 x ('cap_nmos_03v3_b', 87.0, 87.0)
+     1 x ('nfet_03v3', 1.0, 5.0)
+     1 x ('nfet_03v3', 1.0, 8.61)
+     1 x ('pfet_03v3', 1.0, 17.22)
+     1 x ('pfet_03v3', 1.0, 26.5)
+     1 x ('pfet_03v3', 1.0, 60.0)
+     1 x ('pfet_03v3', 1.0, 78.88)
+
+== count deltas on shared signatures ==
+  ('pfet_03v3', 1.0, 24.0): ref 2 vs ext 8 (delta +6)
+  ('pfet_03v3', 1.0, 48.0): ref 4 vs ext 1 (delta -3)
+
+== drawn-segment decomposition check ==
+MOSFET reference-only cards: does an extracted-only signature of exactly
+size/N exist, with count(ext) == count(ref)*N?  Caps: the deck writes the
+extracted ones in A/P form (W=L=0), so a match is model + equal count.
+  1 x ('cap_mim_2f0_m2m3_noshield', 31.4, 31.4)  ->  absent from the extracted netlist (the #753 MIM finding)
+  2 x ('cap_nmos_03v3', 50.0, 50.0)  ->  2 x ('cap_nmos_03v3', 0.0, 0.0) (A/P form, count equal)  OK
+  4 x ('cap_nmos_03v3_b', 87.0, 87.0)  ->  4 x ('cap_nmos_03v3_b', 0.0, 0.0) (A/P form, count equal)  OK
+  1 x ('nfet_03v3', 1.0, 5.0)  ->  2 x ('nfet_03v3', 1.0, 2.5)  (extracted pool has 2)  OK
+  1 x ('nfet_03v3', 1.0, 8.61)  ->  2 x ('nfet_03v3', 1.0, 4.305)  (extracted pool has 2)  OK
+  1 x ('pfet_03v3', 1.0, 17.22)  ->  2 x ('pfet_03v3', 1.0, 8.61)  (extracted pool has 2)  OK
+  1 x ('pfet_03v3', 1.0, 26.5)  ->  2 x ('pfet_03v3', 1.0, 13.25)  (extracted pool has 2)  OK
+  1 x ('pfet_03v3', 1.0, 60.0)  ->  4 x ('pfet_03v3', 1.0, 15.0)  (extracted pool has 4)  OK
+  1 x ('pfet_03v3', 1.0, 78.88)  ->  8 x ('pfet_03v3', 1.0, 9.86)  (extracted pool has 8)  OK
+
+== shared-signature count-delta reconciliation ==
+Signatures both sides carry but in different counts: does an extracted
+surplus of size W pair with a reference deficit of size N*W (drawn folds
+of the same card)?
+  3 x ('pfet_03v3', 1.0, 48.0)  ->  6 x ('pfet_03v3', 1.0, 24.0) (each drawn as 2 segments)  OK
+
+reference-only cards accounted for: 13; residual extracted-only after decomposition:
+  none
+
+VERDICT: every delta accounted for: folded-MOSFET cards pair with their drawn
+fingers, caps match in A/P form, and the single true residual is the
+option-A MIM cap, which the variant-D deck (mim_option=B) does not
+extract at all -- see PROOF-lvs.md.

@@ -24,7 +24,11 @@ This repository is, at the time of writing, **schematic-complete and at a
 first assembled top level**: each PLL sub-block's drawn, DRC-clean and
 LVS-matched state is the generated table in `layout/STATUS.md`,
 and the assembled `pll_top` GDS is committed but is not signoff — one
-inherited DRC violation, top-level LVS still to run, area over the ratified
+inherited DRC violation, a first top-level LVS run recorded as a mismatch
+with both causes diagnosed (#753's option-A C2, which the variant-D deck
+does not extract at all, and the f6eeac7 runset's SIMPLIFY=false change,
+#980; `layout/evidence/pll-top-layout/lvs-20261116/PROOF-lvs.md`), and area
+over the ratified
 row (§6). Every §5 number is therefore a *schematic-level* simulation result:
 extracted-netlist re-verification of that top level is still to be run.
 This proposal documents the block honestly at that maturity: §5's
@@ -2006,8 +2010,10 @@ more.
    current sources.
 7. **Top-level DRC/LVS closure and post-layout re-verification are still
    open** (§6). Block-level layout exists (per-sub-block state: the generated table in `layout/STATUS.md`) — and since issue #297 so does an assembled `pll_top` GDS,
-   with one inherited DRC violation (the loop filter's `MIMTM.3`, #753), no
-   top-level LVS run yet, and no extraction yet, so every §5 number remains
+   with one inherited DRC violation (the loop filter's `MIMTM.3`, #753), a
+   first top-level LVS run recorded as a mismatch (#753's option-A C2 plus
+   the f6eeac7 runset change, #980), and no extraction yet, so every §5
+   number remains
    schematic-level. Tracked at issues #149 (formal DRC/LVS reporting) and #18
    (post-layout re-verification). Earlier revisions named **#17** here, the
    floorplan issue, which closed on 2026-09-08 having delivered exactly the
@@ -2229,7 +2235,10 @@ submission date.
   sub-blocks, with the PDK's own foundry signoff-deck and `run_lvs.py` output
   committed beside each GDS (§6; verdicts in the generated table in `layout/STATUS.md`). What remains open at the top level is DRC/LVS
   closure and extraction: the assembled `pll_top` GDS is committed with one
-  inherited DRC violation and has had no top-level LVS run (§6). The gf180mcu PDK (`gf180mcuD`
+  inherited DRC violation and has had a first top-level LVS run recorded as a
+  mismatch with both causes diagnosed (#753's option-A C2, which the variant-D
+  deck does not extract as a device at all, and the f6eeac7 runset's
+  SIMPLIFY=false change, #980) (§6). The gf180mcu PDK (`gf180mcuD`
   variant) is resolved via the standard `PDK_ROOT`/`PDK` environment convention
   this repository uses throughout. Every cited `sim/` record's own
   Environment-provenance field states the exact pinned toolchain versions
