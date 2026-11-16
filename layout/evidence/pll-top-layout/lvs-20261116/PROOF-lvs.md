@@ -9,9 +9,11 @@
 > (`SIMPLIFY option: false` in this run's own log, where the
 > c6d73a35-era runset the four block-level LVS-match records were
 > produced on merged those devices by default). After decomposing both
-> effects, **every one of the 16 device-count deltas is accounted for**
-> (`signature-delta.txt`); there is **no unexplained device and no wiring
-> delta**. This is not a signoff result, and it is not evidence about the
+> effects, **every one of the 16 net device-count deltas is accounted
+> for** — 829 extracted devices against the reference's 813, i.e.
+> Finding 2's 17 fold-segment surplus minus the one MIM cap Finding 1
+> shows does not extract (`signature-delta.txt`); there is **no
+> unexplained device and no wiring delta**. This is not a signoff result, and it is not evidence about the
 > KLayout `0.28.16` pin either — see Provenance.
 
 ## Provenance
@@ -79,8 +81,9 @@ variant-sensitive this device's recognition already was.)
 ## Finding 2 — the f6eeac7 re-pin turned the runset's parallel-device merge off
 
 The top-level extracted netlist has **816 MOSFETs where the reference
-states 799**. Every one of the 16 extra devices is a *fold segment* of a
-card the reference (and the schematic behind it) states as one device:
+states 799** — a surplus of **17**. Every one of those 17 extra MOSFETs
+is a *fold segment* of a card the reference (and the schematic behind
+it) states as one device; the fold table below sums to the same 17:
 
 | reference card | drawn as | extracted as |
 |---|---|---|
@@ -91,6 +94,11 @@ card the reference (and the schematic behind it) states as one device:
 | one `nfet W=8.61u L=1u` card | 2 fingers | 2 × `W=4.305u` |
 | one `nfet W=5u L=1u` card | 2 fingers | 2 × `W=2.5u` |
 | 3 of 4 `W=48u L=1u` cards | 2 segments each | 6 × `W=24u` |
+
+The net device-count delta quoted in the verdict above is **16**, not
+17: 829 extracted devices against the reference's 813 (M= multipliers
+included) — the 17-MOSFET surplus above, minus the one MIM cap Finding
+1 shows does not extract.
 
 Mechanism, verified not inferred: this run's deck log prints **`Selected
 SIMPLIFY option: false`**, while the c6d73a35-era behaviour is on the
