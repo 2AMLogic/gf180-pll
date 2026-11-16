@@ -22,6 +22,7 @@ test of the check rather than of a reimplementation.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import unittest
@@ -580,6 +581,54 @@ class TestScriptHygiene(unittest.TestCase):
         self.assertIn("THIS IS THE ONE CHECK IN THIS REPOSITORY THAT NEEDS THE FORGE",
                       header)
         self.assertIn("A skip is not a pass", header)
+
+    def test_roadmap_is_an_explicit_exemption_not_an_omission(self):
+        """`docs/ROADMAP.md` stays ungraded, and the header records why (issue #956).
+
+        The two halves stand or fall together. Dropping the file from `GRADED`
+        silently would leave the omission an accident a future reader cannot
+        distinguish from an oversight; naming an exemption in the header while
+        the file stayed graded would make the header lie. So both are asserted
+        here, and the member count pins `GRADED` against a quiet deletion of
+        some *other* document being mistaken for this exemption.
+        """
+        lines = CHECK.read_text(encoding="utf-8").splitlines()
+
+        # Half one: the file is absent from GRADED, and GRADED still has its
+        # seven members.
+        graded_block = re.search(
+            r"^GRADED=\(\n(.*?)^\)$", "\n".join(lines), re.MULTILINE | re.DOTALL
+        )
+        self.assertIsNotNone(graded_block, "GRADED array not found in %s" % CHECK)
+        graded = re.findall(r'"([^"]+)"', graded_block.group(1))
+        self.assertNotIn("docs/ROADMAP.md", graded)
+        self.assertEqual(
+            len(graded), 7,
+            "GRADED changed size (%d members): if a document was added, the "
+            "docs/ROADMAP.md exemption reasoning in the header must be "
+            "revisited against it; if one was removed, the header must say so"
+            % len(graded),
+        )
+
+        # Half two: the header names the exemption in WHAT IT DOES NOT DO,
+        # beside the spec/pll.md carve-out, and states what the rules cannot
+        # see in that document -- the measured reason, not a bare choice.
+        header_lines = []
+        for line in lines:
+            if not line.startswith("#"):
+                break
+            header_lines.append(line)
+        header = "\n".join(header_lines)
+        self.assertIn("WHAT IT DOES NOT DO", header)
+        not_do = header.split("WHAT IT DOES NOT DO", 1)[1]
+        self.assertIn(
+            "docs/ROADMAP.md", not_do,
+            "the docs/ROADMAP.md exemption must be recorded in the "
+            "WHAT IT DOES NOT DO section, beside the spec/pll.md carve-out",
+        )
+        roadmap_note = not_do.split("docs/ROADMAP.md", 1)[1]
+        self.assertIn("rule 2", roadmap_note)
+        self.assertIn("rule 3", roadmap_note)
 
 
 if __name__ == "__main__":  # pragma: no cover
