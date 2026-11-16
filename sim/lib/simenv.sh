@@ -1192,7 +1192,7 @@ simenv_control_md_rows() {
 
 # simenv_emit_control_evidence <corners-dir> <work-dir> <campaign-label> <rid>
 #                              <netlist-desc> <corners-desc> <switches-note>
-#                              <campaign-fn>
+#                              <campaign-fn> <units>
 #
 # Write <corners-dir>/negative_control.csv and archive every control run's
 # raw ngspice log beside it. <campaign-fn> is the campaign's own
@@ -1203,9 +1203,21 @@ simenv_control_md_rows() {
 # campaign's `--control` standalone entry point and its full-campaign path,
 # so a campaign's control and a standalone control are the same bytes
 # produced by the same code.
+#
+# <units> is the control grid's cardinality (points x runs per point),
+# computed by the caller from its own arrays. The guard call below (#959) is
+# the FIRST side-effect-free gate the helper runs -- ahead of the mkdir/rm --
+# because a refusal must leave the tree untouched, and because the runners'
+# standalone `--control` branches exit before they ever reach their own
+# sample-grid guard call: routing the check through this chokepoint is what
+# makes the control fan consult it at all. Like every fan-out path, a
+# multi-unit grid refuses under the batch backend unless
+# SIM_ALLOW_LOCAL_GRID=1; a caller that omits <units> fails closed under
+# batch (an empty count refuses), never bypasses.
 simenv_emit_control_evidence() {
   local cornersdir="$1" work="$2" campaign="$3" rid="$4"
   local netlist="$5" corners_desc="$6" switches="$7" campaign_fn="$8"
+  simenv_guard_local_grid "${9:-}" "${campaign}" || return $?
   local raw="${work}/negative_control_rows.csv"
   mkdir -p "${cornersdir}"
   rm -rf "${work:?}"/ctl_*
