@@ -104,7 +104,7 @@ stop.
 | `spec/lib/check-spec-row-coverage.sh` | 533 | `spec/pll.md` summary rows vs proposal section 5 | tree | 4 | Reference input row absent from section 5 | KEEP |
 | `sim/lib/check-record-trim-connectivity.sh` | 448 | record logs vs netlist snapshot | graph | 2 | evidence taken on an export with an unwired `LDT3` pin | KEEP |
 | `sim/lib/check-characterization-coverage.sh` | 346 | `CHARACTERIZATION.md` vs `sim/*/records/` | tree | 4 | report stale by 19 records and 3 campaigns while every row existed | KEEP |
-| `docs/lib/check-claim-checker-inventory.sh` | 296 | this file's total and row set, and the proposal's §5.1 checker counts, vs `*/lib/check-*.sh` | tree | 1 | sixteen rows asserting a total of sixteen while the tree held seventeen | KEEP |
+| `docs/lib/check-claim-checker-inventory.sh` | 346 | this file's total and row set, and the proposal's §5.1 checker counts, vs `*/lib/check-*.sh` | tree | 2 | sixteen rows asserting a total of sixteen while the tree held seventeen | KEEP |
 | `design/lib/check-port-connectivity.sh` | 274 | netlist ports vs wiring in the same file | tree | 1 | `LDT3` label misplaced; exported cleanly, port wired to `net1` | KEEP |
 | `sim/lib/check-record-supersession.sh` | 221 | cited records vs supersession graph | graph | 2 | proposal described a closed FAIL as live, 18 days after the re-measurement | KEEP |
 | `sim/lib/check-readme-status.sh` | 127 | README counts vs `sim/*/records/*.md` | tree | 5 | hand-written record count under-reported the tree for months | KEEP |
