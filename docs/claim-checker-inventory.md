@@ -51,11 +51,19 @@ anyone wants it.
 ## Keeping this file true
 
 **The total above and the row set below are re-derived, not remembered.**
-`docs/lib/check-claim-checker-inventory.sh` enumerates `*/lib/check-*.sh` and
-fails this repository's CI if the stated total differs, if a script in the
-tree has no row, or if a row names a script the tree does not have. It grades
-the row **set**, not its length, because the two numbers this file states were
-maintained together and so agreed with each other while both were wrong:
+`docs/lib/check-claim-checker-inventory.sh` enumerates `*/lib/check-*.sh` —
+resolving it from the git index (`git ls-files --stage` over the shared
+pathspec, dot-prefixed installer-managed paths skipped) exactly as
+`sim/tests/test_check_script_invocability.py` does, so the two guards
+discover one family on any tree (#946; before that they shared only the
+pathspec *string*, and agreed only while every checker happened to sit at
+`<top>/lib/` — a nested `a/b/lib/` checker was the invocability test's
+family and invisible here, and an untracked checker failed here without
+being in the repository at all) — and fails this repository's CI if the
+stated total differs, if a script in the tree has no row, or if a row names
+a script the tree does not have. It grades the row **set**, not its length,
+because the two numbers this file states were maintained together and so
+agreed with each other while both were wrong:
 `sim/lib/check-artifact-manifests.sh` was committed on 2026-10-23 and this
 file went three weeks asserting a total of sixteen over a table of sixteen
 rows while the tree held seventeen scripts.
