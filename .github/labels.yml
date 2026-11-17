@@ -292,11 +292,15 @@
 # ============================================================================
 
 # CI opt-in for the PDK-dependent job.
-# .github/workflows/ci.yml's pdk-checks job (ciel + xschem + gf180mcu PDK,
-# catching netlist drift via design/netlist.sh --check) already runs by default
-# on any PR that touches design/. This label forces it on for a PR that leaves
-# design/ alone but can still break it -- e.g. one editing design/netlist.sh's
-# environment, the workflow itself, or the PDK pin.
+# .github/workflows/pdk-checks.yml's pdk-checks job (ciel + xschem + gf180mcu
+# PDK, catching netlist drift via design/netlist.sh --check) already runs by
+# default on any PR that touches design/. This label forces it on for a PR
+# that leaves design/ alone but can still break it -- e.g. one editing
+# design/netlist.sh's environment, the workflow itself, or the PDK pin.
+# Label adds start no workflow in this repo (#1015), so the label takes
+# effect on the PR's next opened/synchronize run; to run the PDK tier right
+# away, dispatch the workflow on the branch:
+#   gh workflow run pdk-checks.yml --ref <branch>
 - name: ci:full
-  description: "Force the PDK-dependent CI job (pdk-checks) to run on this PR"
+  description: "Run the PDK-dependent CI job (pdk-checks): push or dispatch pdk-checks.yml to start it"
   color: "1D76DB"  # blue - CI/infra opt-in

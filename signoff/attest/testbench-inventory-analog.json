@@ -437,7 +437,7 @@
     "open_pdks_revision": "f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7",
     "pinned_in": [
       "sim/pdk.json",
-      ".github/workflows/ci.yml (reads it)"
+      ".github/workflows/pdk-checks.yml (reads it)"
     ],
     "variant": "gf180mcuD"
   },
@@ -456,7 +456,7 @@
     },
     "xschem": {
       "commit": "92dd8fe5f4d5c1057489710d8a22f18fdc9d7ed0",
-      "pinned_in": ".github/workflows/ci.yml",
+      "pinned_in": ".github/workflows/pdk-checks.yml",
       "version": "3.4.7"
     }
   }

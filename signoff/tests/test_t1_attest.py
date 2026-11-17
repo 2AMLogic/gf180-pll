@@ -32,7 +32,8 @@ COPY = [
     "sim/*/testbench*/*", "sim/CHARACTERIZATION.md", "sim/README.md", "sim/pdk.json",
     "sim/run_corners.py", "sim/selftest.sh", "sim/run-all.sh",
     "README.md", "CONTRIBUTING.md", "LICENSE", "spec/pll.md",
-    ".github/workflows/ci.yml", "signoff/t1_attest.py", "signoff/block-manifest.json",
+    ".github/workflows/ci.yml", ".github/workflows/pdk-checks.yml",
+    "signoff/t1_attest.py", "signoff/block-manifest.json",
     "signoff/attest/*",
 ]
 
@@ -112,8 +113,10 @@ class T1AttestNegativeControls(unittest.TestCase):
         self.assertIn("new_block", r.stderr)
 
     def test_ci_dropping_the_netlist_drift_check_is_refused(self):
-        ci = self.tree / ".github/workflows/ci.yml"
-        ci.write_text(ci.read_text().replace("run: ./design/netlist.sh --check", "run: true"))
+        # The netlist freshness gate runs in the PDK workflow (#1015), so the
+        # control edits that file, not ci.yml.
+        pdk = self.tree / ".github/workflows/pdk-checks.yml"
+        pdk.write_text(pdk.read_text().replace("run: ./design/netlist.sh --check", "run: true"))
         r = run(self.tree, "--check")
         self.assertEqual(r.returncode, 2)
         self.assertIn("netlist.sh --check", r.stderr)
