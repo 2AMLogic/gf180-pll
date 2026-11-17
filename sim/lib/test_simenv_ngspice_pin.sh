@@ -6,9 +6,9 @@
 # records cite (conventionally $HOME/.local/bin/ngspice, per #241/#242) is
 # absent, PATH previously fell through SILENTLY to whatever "ngspice"
 # resolved to next -- observed on at least one host to be Homebrew's
-# ngspice-47, which has a reproducible parse failure on this PDK's nested
-# nonlinear loop-filter/VCO moscaps (#153) and, worse, hangs instead of
-# exiting on that failure. This suite drives simenv_require_ngspice_pin
+# ngspice-47, which has a reproducible parse failure on this PDK's
+# loop-filter/VCO moscaps (#153) and, worse, hangs instead of exiting
+# on that failure. This suite drives simenv_require_ngspice_pin
 # against fake `ngspice` stubs under a scratch $TMPDIR -- no real ngspice
 # binary or PDK required -- covering:
 #   1. pinned binary present -> its directory wins PATH, even when another
