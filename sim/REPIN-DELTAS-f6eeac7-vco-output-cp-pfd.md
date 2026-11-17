@@ -74,7 +74,8 @@ simulator-attributed (next section).** Three rows crossed FAIL→PASS and one
 PASS→FAIL; four further rows stayed FAIL with moved values. The
 campaign-level verdict is unchanged — the floor was already unmet at 7/90
 points and remains unmet at 5/90, all `fs`/`lo` — and **no stated limit
-moved**. The flips are filed as #966 rather than left in a table.
+moved**. The flips are tabulated below ("Per-corner verdict flips") and
+were accepted as current evidence by operator ruling 2026-11-15.
 
 The large relative deltas on `trise`/`tfall` (161 % / 93 %) are artefacts of
 the comparator's denominator, not physical movements: both measurements

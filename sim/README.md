@@ -1231,7 +1231,9 @@ hours against a defective, uncited simulator build. `sim/harness`'s own
 `run_corners.py --check-env` / `runner.py` codepath is unaffected — it
 already carries its own PATH-resolved-version warning
 (`nonlinear_moscap_ngspice47_warning`) for the same underlying #153 defect,
-scoped to the DUTs that actually nest the moscap family.
+scoped, via the #926 capability probe, to DUTs whose instances carry the
+`m=` trigger -- and a probe pass licenses "it loads", never "it returns
+the same values" (#932).
 
 **The batch backend's job image now signs off the pin's version, and the
 remaining divergence is bounded rather than aligned
