@@ -54,7 +54,7 @@ same branch, still `Part of #826`) re-qualified both `cp-compliance` benches
 and both `pfd-deadzone` manifests, the third (2026-11-17, same branch)
 re-qualified `vco-bias-current`, and the fourth (2026-11-17, same branch)
 re-qualified both `output-range` single-point records. The live scope the
-issue's own derivation script returns is therefore **13 records, not 20** —
+issue's own derivation script returns is therefore **12 records, not 20** —
 `8/0/0/3` plus its one `cp-compliance` residual across the three remaining
 directories `vco-tuning-range`, `cp-compliance`, `mc-cp-mismatch`. The script
 counts supersession from records' own `Supersedes` fields, so its one
