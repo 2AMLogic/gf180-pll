@@ -36,7 +36,7 @@ Scope section excludes:
 | `lock-detector` | `20260916-052313-b1633b5` | live — **not re-runnable** (§ "Two records cannot be re-run") |
 | `lock-detector` | `20260919-002812-1b12179` | live — **re-qualified here** |
 | `lock-window-sizing` | `20260915-202802-79c0cee` | live — **not re-runnable** (§ "Two records cannot be re-run") |
-| `lock-window-trim` | `20260917-185928-8adff3d` | live — **still owed** (§ "What is still owed") |
+| `lock-window-trim` | `20260917-185928-8adff3d` | live — **re-qualified here** |
 | `lock-window-proxy` | `20260925-050022-6d57802` | live — **re-qualified here** |
 | `lock-window-bisection` | `20260925-162032-e341b58` | live — **re-qualified here** |
 | `divider-ratio-dff` | `20260801-125114-3f883e3` | live — **re-qualified here** |
@@ -57,18 +57,22 @@ the records' own **Supersedes** fields.
 | `divider-ratio-chain` | `20260802-100727-082c879` | `20261114-093804-ad9eef8` | 235 pts (N = 4…64, non-rectangular) |
 | `lock-window-bisection` | `20260925-162032-e341b58` | `20261114-191343-8cb0847` | 13 pts (3 bundle blocks × phase-step ladder) |
 | `lock-window-proxy` | `20260925-050022-6d57802` | `20261114-194051-c8750de` | 234 decks (2 stimulus decks × the full 13-bundle PVT grid) |
+| `lock-window-trim` | `20260917-185928-8adff3d` | `20261117-201624-7252a70` | 1872 pts (13 bundles × 3 temps × 3 supplies × 16 trim codes) |
 
-All six: open_pdks `f6eeac7`, ngspice-47, **every point executed on the batch
+All seven: open_pdks `f6eeac7`, ngspice-47, **every point executed on the batch
 fleet** — the host that minted each record ran no ngspice of its own. #827's
 test plan asks for the batch image's `SOURCES` stamp to be confirmed before
 the grids are spent; it was, by #825's four records already on `main`, each
 reporting `batch` execution under open_pdks `f6eeac7…`, so no probe grid was
-paid for twice.
+paid for twice. `lock-window-trim`'s record additionally discloses that 1871
+of its 1872 points were **adopted** from earlier attempts' stored logs rather
+than simulated by the minting attempt itself — see § "What is still owed"
+below for why that is the same evidence, measured.
 
 ## Verdict
 
 **No per-corner verdict flipped and no stated limit moved**, on any of the
-822 graded per-corner rows across the six benches.
+2694 graded per-corner rows across the seven benches.
 
 **One derived verdict did move**, on `lock-window-proxy`, and it is the single
 finding this group owes under #827's third acceptance criterion: the `clk_fb`
@@ -86,6 +90,7 @@ in a table.
 | `divider-ratio-chain` | 235 | 0 | 0 | 338 % (`fbpw`, `ss`/125 °C/2.97 V) — edge aliasing, see below |
 | `lock-window-bisection` | 13 | 0 | 0 | see § "The bisection predecessor ran a derive module that never landed" |
 | `lock-window-proxy` | 234 | 0 | 0 | 8804 % (`tcq_raw`, `all-fast`/125 °C/2.97 V) — a raw edge time that straddles zero; see § "The one real finding" |
+| `lock-window-trim` | 1872 | 0 | 0 | 0 — **bit-identical** on every point (`twin_r`, `twin_f`) |
 
 `record_delta.py` lists six rows on `lock-window-bisection` under "per-corner
 verdict flips". None of them is a flip: all six are **FAIL in both** records,
@@ -126,6 +131,15 @@ The load-bearing derived artifacts in this group all reproduce:
   ladder resolution, Tier A **FAIL**, Tier B **FAIL**. DR-029's negative
   result — DR-022 Decision 5 route 1 does not execute the trim rule — stands
   on the re-pinned PDK, by the same margin.
+- `lock-window-trim`'s two derived tables — `trim_code_table.csv`, the trim
+  rule applied (per bundle the selected code and the window it yields against
+  the ratified [1, 2] ns band and DR-013 Decision 4's ≤ 1.65× spread target),
+  and `trim_ladder.csv`, the code-to-window map with its monotonicity column —
+  are **byte-identical** to the predecessor's, and the per-corner delta table
+  below shows 0 absolute and 0 relative movement on `twin_r`/`twin_f` at every
+  one of the 1872 points. DR-013 Decision 4's spread figure and DR-014's
+  fixed-code mechanism therefore rest on the re-pinned PDK unchanged, to the
+  last printed digit.
 
 ## The one real finding: two `lock-window-proxy` policy rows move
 
@@ -235,49 +249,78 @@ Both are reported rather than silently dropped, because both are still cited.
 Naming their successor, or retiring the citation, is the reader-facing half of
 this and belongs to the final child, #829.
 
-## What is still owed
+## What was still owed, and how it landed
 
-One of the nine is re-runnable and did not land:
+Closed 2026-11-17: the last owed successor is
+[`20261117-201624-7252a70`](lock-window-trim/records/20261117-201624-7252a70.md)
+(§ below). Nothing in this group is owed any more; the two records in
+§ "Two records in this scope cannot be re-run at all" remain refusals, not
+gaps, and their citations are #829's to re-point or retire.
 
-| campaign | record owed a successor | grid | why it did not land |
-|---|---|---|---|
-| `lock-window-trim` | `20260917-185928-8adff3d` | 1872 pts (13 bundles × 3 temps × 3 supplies × 16 trim codes) | compute: ~117 s of ngspice-47 per point (measured, see below) is ~61 CPU-hours, and the submitting host's own per-job AWS transport is the throughput limit. Peak observed completion rate was ~12.6 points/min, so the grid is a multi-hour fleet campaign rather than one step's work. |
+This section's original text carried two claims that the campaign's own
+measurements superseded, corrected here as the record of how the grid
+actually completed:
 
-It is reported here rather than worked around: the host rules forbid falling
-back to a local grid, and `--supersedes` plus a partial grid is exactly the
-"partial record standing in for a full re-take" the harness refuses. It is not
-blocked on anything about the design.
+- **"the submitting host's own per-job AWS transport is the throughput
+  limit" — unsupported, and falsified by measurement.** Across every attempt
+  on this grid the sustained completion rate stayed at ~11.5–12 points/min
+  whether submitted at `-j 24` or at `-j 48` (the six landed records use both
+  — `-j` is per-campaign, and 48 is this group's own high-water mark). If
+  `-j` bounded throughput, doubling it would have roughly doubled the rate;
+  it did not. The rate is bounded by the fleet's concurrency grant to the
+  stream (~24 effective slots × the ~117 s ngspice-47 per-point cost plus
+  ~120 s submit/queue/fetch overhead), not by this run's `-j` and not by
+  per-job transport. `sim/harness/runner.py` fans points over
+  `ThreadPoolExecutor(max_workers=jobs)`, so `-j` bounds the request; what
+  the fleet grants is the other half of the product.
 
-`lock-window-proxy` took three submissions to land, which is worth recording
-because the second failure is the one a reader would otherwise mistake for a
-result. It was `batch_no_capacity`, with the mandated capacity-wait budget
-already spent: *"launching `gf180-pll-sim-win_ss_27c_3.63v-…` was refused for
-want of capacity (a concurrency slot or vCPU budget) on all 5 attempt(s)
-within the 600s capacity-wait budget; the layer's fleet-wide limits are held by
-other work, not by this run's `-j`. Last refusal: no capacity in any of the 30
-pools after 3 attempt(s)."* The harness refused to mint a record from the 91 of
-117 points that had completed, which is the correct behaviour under
-`--supersedes`. Re-submitted with `--batch-wait-for-capacity 1800` it completed
-all 117. Separately, `lock-window-bisection`'s first attempt lost one job to a
-Spot reclamation notice and was re-run whole.
+Two earlier failures in this group remain worth recording because each is the
+one a reader would otherwise mistake for a result. `lock-window-proxy` took
+three submissions to land; the second was `batch_no_capacity` with the
+mandated capacity-wait budget already spent: *"launching
+`gf180-pll-sim-win_ss_27c_3.63v-…` was refused for want of capacity (a
+concurrency slot or vCPU budget) on all 5 attempt(s) within the 600s
+capacity-wait budget; the layer's fleet-wide limits are held by other work,
+not by this run's `-j`. Last refusal: no capacity in any of the 30 pools after
+3 attempt(s)."* The harness refused to mint a record from the 91 of 117 points
+that had completed, which is the correct behaviour under `--supersedes`.
+Re-submitted with `--batch-wait-for-capacity 1800` it completed all 117.
+Separately, `lock-window-bisection`'s first attempt lost one job to a Spot
+reclamation notice and was re-run whole — the same failure mode that cost
+`lock-window-trim`'s first 2026-11-17 attempt its 1872nd point, which is the
+one point the minting attempt simulated fresh.
 
-Useful prior for whoever picks `lock-window-trim` up: its nominal corner does
-not move under either variable (next section), so the expected finding is a
-null result — which is a reason to schedule the grid when the fleet is quiet,
-not a reason to skip it. Submit it the way the other five were submitted:
+- **"the grid is a multi-hour fleet campaign rather than one step's work" —
+  true as written, and no longer a reason the grid cannot complete.** It took
+  four attempts across three days and three hosts, but that was the
+  stranded-compute gap (each retry restarted from point 1), not the grid:
+  once #973's `--resume` and #1049's per-point banking + adoption landed, the
+  campaign stopped re-spending completed points. The minting attempt
+  (`20261117-201624-7252a70`) adopted 1871 of 1872 points from earlier
+  attempts' stored logs — 1731 banked from `20261115-140750-887f6e0`'s
+  fetched logs (that attempt reached 92 % fetched before its step ended;
+  its logs predate banking, so they were banked through the harness's own
+  per-point put path and their manifest committed as the adoption carrier) —
+  and simulated exactly 1 point fresh (a Spot reclamation had cost attempt
+  `20261117-185406-7252a70` its last point at 1871/1872). Each adopted point
+  is sha256-verified on fetch and replayed through the same parser and
+  qualification gate a resumed run uses; the record's own **Artifact-adopted
+  points** bullet names the split and the source attempts.
+
+For the record, the submission shape that landed, after the 2026-11-15
+arithmetic in this document's earlier revision (`-j 24` cannot fit a ~2 h
+step; `-j` beyond ~24 buys no throughput on today's fleet):
 
 ```bash
 python3 sim/run_corners.py lock-window-trim \
   --backend batch --batch-apply --artifact-store \
   --supersedes 20260917-185928-8adff3d \
-  --supersedes-note "<the re-qualification note, as in the five records above>" \
-  -j 24 --timeout 1800 --batch-wait-for-capacity 1800
+  --supersedes-note "<the re-qualification note, as in the six records above>" \
+  -j 48 --timeout 1800 --batch-wait-for-capacity 1800
 ```
 
-**#827 stays open for it** rather than being re-filed: the PR that added this
-document says `Part of #827`, so the issue carries the remainder, and nothing
-about the remainder is a new question. The two records in the section above
-are owed nothing — they are refusals, not gaps.
+The nominal-corner prior this section originally recorded (next section)
+held: the result is a null on every one of the 1872 points.
 
 ## Attribution: PDK or simulator?
 
@@ -635,4 +678,47 @@ The four `proxy` rows are the pad-referred observables and the sixteen
 `window` rows are the normative measurand; the policy scoring those four
 produce is in § "The one real finding" above, because it is a reduction over
 the grid and not a per-corner row this table can reach.
+
+## `lock-window-trim`
+
+Regenerate with:
+
+```bash
+python3 sim/lib/record_delta.py \
+  sim/lock-window-trim/records/20260917-185928-8adff3d.md \
+  sim/lock-window-trim/records/20261117-201624-7252a70.md
+```
+
+### `20261117-201624-7252a70` vs `20260917-185928-8adff3d`
+
+| topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
+|---|---|---|---|---|---|---|---|
+| `window` | `twin_f` | — | 7.575920e-10..2.536810e-09 | 7.575920e-10..2.536810e-09 | 0 | 0 | `—` |
+| `window` | `twin_r` | min_spread_pct=30 | 7.670730e-10..2.571660e-09 | 7.670730e-10..2.571660e-09 | 0 | 0 | `—` |
+
+**Per-corner verdicts**: unchanged on all 1872 graded rows.
+
+**Stated limits**: identical in both records.
+
+The result is a **null on every one of the 1872 points** — `twin_r` and
+`twin_f` are identical to the last printed digit at every corner, and the
+derived `trim_code_table.csv` / `trim_ladder.csv` are byte-identical to the
+predecessor's (§ "Verdict" above). That is the expected finding this grid was
+re-run to measure, not to argue: the record's nominal control
+(`typical_27c_3.30v_c7`, `twin_r` 1.357890e-09 s / `twin_f` 1.340040e-09 s)
+had already been observed bit-identical across both variables in the single-
+point probes, and the full grid confirms the same holds everywhere.
+
+One provenance note a reader of the record needs: 1871 of its 1872 points
+were **adopted** from earlier attempts' stored logs rather than simulated by
+the minting attempt (the record's own **Artifact-adopted points** bullet
+names the split, the fingerprint and the source attempts). The adoption path
+fetches each point's logs from the artifact store, re-verifies every sha256,
+and replays it through the same parser and qualification gate a resumed run
+uses — the same gate that grades the fresh point. The one point simulated
+fresh is the one a Spot reclamation had cost the previous attempt; it too
+reproduces its predecessor's value exactly. Nothing in the tables above
+mixes evidence levels: every row is either a sha-verified replay of a
+batch-executed log or a fresh batch execution, all under ngspice-47 on
+open_pdks `f6eeac7`.
 
