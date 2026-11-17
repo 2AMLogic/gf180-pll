@@ -348,5 +348,101 @@ class TheVcoBiasCurrentIncrementIsBitForBit(unittest.TestCase):
         self.assertIn("`vco-bias-current` increment (2026-11-17) adds zero findings", text)
 
 
+class TheOutputRangeIncrementRequalifiesTwoSinglePoints(unittest.TestCase):
+    """The fourth increment (2026-11-17) re-qualifies `output-range`'s two
+    single-point records. Both predecessors are narrative investigation
+    records whose tables predate the corner-id schema the comparator
+    parses, so both comparisons come back with an EMPTY shared-measurement
+    intersection — the generated output is the explicit coverage-differs
+    form, and the document says so instead of hiding it. The attribution
+    rests on quoted rows plus the controls: the `lo` point's `vctrl_final`
+    is 1.70267 V under ngspice-42, 46 and the fleet build alike, and the
+    previously-CAPPED `hi` point completes under the re-pinned PDK on
+    every source that tried it, landing on the predecessor's own
+    perturbed-seed control run."""
+
+    SLUG = "output-range"
+    OLD_LO = "20260801-061907-67d7127"
+    NEW_LO = "20261117-174557-327ee00"
+    OLD_HI = "20260819-190341-70a4128"
+    NEW_HI = "20261117-174951-33cbd72"
+    INIT = "sha256:d6efd5b23e4c9bcb6d97e0516269077b983e81ac453ca7ec74f412cfc0efd385"
+
+    def _record_text(self, record_id):
+        return (SIM_DIR / self.SLUG / "records" / f"{record_id}.md").read_text(
+            encoding="utf-8")
+
+    def _pair(self, old_id, new_id):
+        return record_delta.compare(
+            SIM_DIR / self.SLUG / "records" / f"{old_id}.md",
+            SIM_DIR / self.SLUG / "records" / f"{new_id}.md",
+        )
+
+    def test_both_pairs_grade_zero_shared_rows_with_explicit_coverage_list(self):
+        for old_id, new_id in ((self.OLD_LO, self.NEW_LO),
+                               (self.OLD_HI, self.NEW_HI)):
+            with self.subTest(pair=new_id):
+                lines, findings = self._pair(old_id, new_id)
+                self.assertEqual(findings, 0, "a finding appeared")
+                self.assertTrue(
+                    any("unchanged on all 0 graded rows" in ln for ln in lines),
+                    "the empty-intersection form changed")
+                self.assertTrue(
+                    any("Measurement coverage differs" in ln for ln in lines),
+                    "the coverage-differs section is missing")
+
+    def test_both_new_records_are_clean_f6eeac7_batch_with_version_attributed(self):
+        for new_id in (self.NEW_LO, self.NEW_HI):
+            with self.subTest(record=new_id):
+                text = self._record_text(new_id)
+                self.assertIn(
+                    "open_pdks `f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7`", text)
+                self.assertIn("(clean tree)", text)
+                self.assertNotIn("DIRTY tree", text)
+                self.assertIn("`batch` execution backend", text)
+                # No `Executing simulator` aggregate line: per
+                # sim/harness/report.py that means every point reported
+                # exactly the recording version, and the record's Simulator
+                # line is ngspice-47.
+                self.assertNotIn("Executing simulator", text)
+                self.assertIn("Simulator: ngspice-47", text)
+                self.assertIn(self.INIT, text)
+
+    def test_each_record_supersedes_its_own_predecessor(self):
+        self.assertIn(
+            f"**Supersedes**: {self.OLD_LO} -- re-pin re-qualification (#826)",
+            self._record_text(self.NEW_LO))
+        self.assertIn(
+            f"**Supersedes**: {self.OLD_HI} -- re-pin re-qualification (#826)",
+            self._record_text(self.NEW_HI))
+
+    def test_recorded_values_match_the_document_quotes(self):
+        lo = self._record_text(self.NEW_LO)
+        hi = self._record_text(self.NEW_HI)
+        self.assertIn("`vctrl_final` | 1.70267", lo)
+        self.assertIn("`vctrl_final` | 1.45651", hi)
+        self.assertIn("`dn_lvl` | 0.0339103", hi)
+        self.assertIn("**Overall: FAIL**", lo)
+        self.assertIn("**Overall: FAIL**", hi)
+
+    def test_document_states_empty_intersection_dut_migration_and_nothing_to_file(self):
+        text = _doc_text()
+        self.assertIn("shared-measurement intersection is **empty**",
+                      text)
+        self.assertIn("the DUT migration, not the re-pin", text)
+        self.assertIn("0.33 mV", text)
+        self.assertIn("**CAPPED →\nFAIL is not a verdict flip**", text)
+        self.assertIn("`output-range` increment (2026-11-17) adds zero verdict flips",
+                      text)
+
+    def test_document_states_the_stall_does_not_reproduce_and_the_control_landing(self):
+        text = _doc_text()
+        self.assertIn("The `hi` point's stall does not reproduce under the re-pinned PDK",
+                      text)
+        self.assertIn("1.45651 V", text)
+        self.assertIn("0.0339103", text)
+        self.assertIn("20 µV", text)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -39,7 +39,7 @@ stays open** for the remainder. Dispositions so far:
 | `output-driver` | `20260817-100354-0e9cfc9` | **re-qualified here** (`20261115-130526-3be016c`) |
 | `vco-tuning-range` | `20260804-162735-72883fb`, `20260804-211600-f599a65`, `20260817-143524-0e9cfc9`, `20260923-084925-1655e11`, `20260927-081930-d004d5b`, `20260927-094524-b994116`, `20260927-214737-546a397`, `20260927-220631-546a397` | still owed under #826 |
 | `vco-bias-current` | `20260911-172350-da0bb1e` | **re-qualified here** (`20261117-150323-f3b3e7f`) |
-| `output-range` | `20260801-061907-67d7127`, `20260819-190341-70a4128` | still owed under #826 |
+| `output-range` | `20260801-061907-67d7127`, `20260819-190341-70a4128` | **re-qualified here** (`20261117-174557-327ee00` and `20261117-174951-33cbd72`) — two single-point re-runs, one per predecessor; the 90-row grid under the re-pinned PDK is the already-landed `20261111-184929-73837b9` |
 | `cp-compliance` | `20260801-190821-734f483`, `20260802-033728-c24ee3a`, `20260802-061841-c24ee3a` | **re-qualified here** — `20261115-025500-8da7900` (DC bench) and `20261116-180719-930fb6e` (switching bench); the third id, `20260802-033728-c24ee3a`, is the near-duplicate twin of the re-run `20260802-061841-c24ee3a`, dispositioned in the cp-compliance section below rather than silently dropped |
 | `mc-cp-mismatch` | `20260731-212614-640560e`, `20260927-093235-b994116`, `20260927-102154-d004d5b` | still owed under #826 |
 | `pfd-deadzone` | `20260801-234626-5b333d0`, `20260916-051356-8cedbba` | **re-qualified here** (`20261116-195826-16f19a5`, `20261116-183811-1379f1f`) |
@@ -51,17 +51,18 @@ the records' own **Supersedes** fields.
 Three increments have landed since that table was first written: #967
 re-qualified `output-driver` (2026-11-15), the second increment (2026-11-17,
 same branch, still `Part of #826`) re-qualified both `cp-compliance` benches
-and both `pfd-deadzone` manifests, and the third (2026-11-17, same branch)
-re-qualified `vco-bias-current`. The live scope the issue's own derivation
-script returns is therefore **14 records, not 20** — `8/2/0/3` plus its one
-`cp-compliance` residual across the four directories `vco-tuning-range`,
-`output-range`, `cp-compliance`, `mc-cp-mismatch`. The script counts
-supersession from records' own `Supersedes` fields, so its one
+and both `pfd-deadzone` manifests, the third (2026-11-17, same branch)
+re-qualified `vco-bias-current`, and the fourth (2026-11-17, same branch)
+re-qualified both `output-range` single-point records. The live scope the
+issue's own derivation script returns is therefore **12 records, not 20** —
+`8/0/0/3` plus its one `cp-compliance` residual across the three remaining
+directories `vco-tuning-range`, `cp-compliance`, `mc-cp-mismatch`. The script
+counts supersession from records' own `Supersedes` fields, so its one
 `cp-compliance` residual, `20260802-033728-c24ee3a`, is dispositioned in the
 cp-compliance section below as fully superseded by the second increment's
 re-run of its near-duplicate twin — in prose, not by any record's
 `Supersedes` field — and the script will keep returning it until a record
-names it. Records needing a re-run: **13** — 8/2/0/3 across those same four
+names it. Records needing a re-run: **11** — 8/0/0/3 across those same three
 directories, all still owed under #826.
 
 ## What was re-run
@@ -74,6 +75,8 @@ directories, all still owed under #826.
 | `pfd-deadzone` operating-point manifest | `20260916-051356-8cedbba` | `20261116-183811-1379f1f` | 405 pts (45 PVT × 3 Vctrl × 3 phase offsets) |
 | `pfd-deadzone` dead-zone bench | `20260801-234626-5b333d0` | `20261116-195826-16f19a5` | 225 pts (45 PVT × 5 phase offsets) |
 | `vco-bias-current` | `20260911-172350-da0bb1e` | `20261117-150323-f3b3e7f` | 234 pts (13 bundles × 3 temps × 3 supplies × 2 band codes) |
+| `output-range` lo-edge diagnostic | `20260801-061907-67d7127` | `20261117-174557-327ee00` | 1 pt (typical / 27 °C / 3.30 V, `lo` edge, band 1, N=8, seed 1.679 V) |
+| `output-range` CAPPED `hi` row | `20260819-190341-70a4128` | `20261117-174951-33cbd72` | 1 pt (ff / 27 °C / 3.30 V, `hi` edge, band 7, N=32, seed 1.454 V) |
 
 open_pdks `f6eeac7`, **every point executed on the batch fleet** — the host
 that minted the record ran no ngspice of its own (24 concurrent off-host
@@ -184,6 +187,22 @@ prints no version banner) under `f6eeac7` on 189 execution hosts — the re-pin,
 the simulator bump and the backend are each individually invisible on this
 bench, which the controls below confirm one variable at a time. No tolerance
 moved and nothing flipped; nothing to file.
+
+**The `output-range` increment (2026-11-17) adds zero verdict flips and no
+findings to file.** Its two comparisons grade zero shared rows in the
+comparator — both predecessors are narrative investigation records that
+predate the corner-id table schema — so the attribution rests on the quoted
+rows and the controls above, not on a generated delta column: the `lo`
+point's `vctrl_final` is 1.70267 V under ngspice-42, ngspice-46 and the
+fleet build alike (0.33 mV from the pre-re-pin baseline row, FAIL verdict
+unchanged), and the previously-stalled `hi` point completes under the
+re-pinned PDK on every source that tried it, its verdict-bearing values
+landing on the predecessor's own completed perturbed-seed control run
+(1.45651 V vs 1.4565 V, mean DN 0.0339 vs 0.0339103) with FAIL and DN-guard
+PASS unchanged. The one status transition, CAPPED → FAIL, is a non-verdict
+becoming the verdict — the predecessor's own words — not a PASS/FAIL flip.
+Nothing to file.
+
 
 ## Attribution: PDK or simulator?
 
@@ -325,6 +344,63 @@ notes the mechanism: the claim quantities here are DC operating points of a
 resistor–MOS bias network, six printed digits of headroom above solver
 noise, with no charge-integral or crossing-interpolation measurement for
 platform numerics to surface in.
+
+### Controls for the `output-range` increment (2026-11-17)
+
+Two single-point records, both predecessors ngspice-46 on Darwin arm64 (read
+from each record's own provenance). The controls hold the simulator at the
+predecessor's version and run the re-pinned PDK locally, one point at a time,
+`--no-write`; the issue's literal ngspice-42 probe runs alongside, so the
+controls again bracket the predecessor's version from both sides. Unlike the
+DC benches above, this campaign's two points are ~1–2 minute transients, so
+the probe costs nothing:
+
+```bash
+PATH=$HOME/.local/opt/ngspice-46/bin:$PATH \
+  python3 sim/run_corners.py output-range --backend local \
+  --corners typical --temps 27 --supply 3.30 --supply-tol 0 \
+  --axis op=loin1p679 --no-write -j 1 --timeout 2400
+PATH=$HOME/.local/opt/ngspice-46/bin:$PATH \
+  python3 sim/run_corners.py output-range --backend local \
+  --corners ff --temps 27 --supply 3.30 --supply-tol 0 \
+  --axis op=hiin1p454 --no-write -j 1 --timeout 2400
+PATH=/usr/bin:$PATH \
+  python3 sim/run_corners.py output-range --backend local \
+  --corners typical --temps 27 --supply 3.30 --supply-tol 0 \
+  --axis op=loin1p679 --no-write -j 1 --timeout 2400
+PATH=/usr/bin:$PATH \
+  python3 sim/run_corners.py output-range --backend local \
+  --corners ff --temps 27 --supply 3.30 --supply-tol 0 \
+  --axis op=hiin1p454 --no-write -j 1 --timeout 2400
+```
+
+| control (simulator + `f6eeac7`) | `vctrl_final` | `dn_lvl` | vs predecessor / like-for-like reference |
+|---|---|---|---|
+| `loin1p679` (ngspice-46) | 1.70267 | -3.652520e-07 | **bit-for-bit the 20261111 grid record's row**; 0.33 mV from the pre-re-pin baseline row (`20260819-160843-4e32f91`: 1.703) |
+| `loin1p679` (ngspice-42) | 1.70267 | -3.423358e-07 | `vctrl_final` bit-for-bit the same value again — three simulator builds, one number |
+| `hiin1p454` (ngspice-46) | 1.4569 | 0.0322125 | **bit-for-bit the 20261111 grid record's row** (which completed where the old pin stalled) |
+| `hiin1p454` (ngspice-42) | 1.45686 | 0.0325038 | 40 µV from ngspice-46, both well inside the row's 5 mV tolerance; the transient **completes on both** |
+
+Reading the two controls together with the batch records below:
+
+- **The PDK re-pin is a no-op on the graded `vctrl_final` at both points.**
+  The `lo` point reads 1.70267 under ngspice-42, ngspice-46 and the fleet
+  build alike, 0.33 mV from the pre-re-pin baseline row; the `hi` point's
+  spread across all four sources (42 local, 46 local, the grid record's 46
+  on the fleet, this increment's 47 on the fleet) is 0.39 mV against a 5 mV
+  row tolerance. The `dn_lvl` readings move at the 1e-7 V (`lo`) and ~5 %
+  (`hi`) scale across simulator builds — sub-µV and milli-volt quantities
+  against a 9.9e-4 V guard floor — and the guard verdict is unchanged
+  everywhere (SUSPECT at `lo`, PASS at `hi`).
+- **The `hi` point's stall does not reproduce under the re-pinned PDK on any
+  of the four sources** — it completed on the fleet in the already-recorded
+  grid (ngspice-46), in both local controls, and in this increment's fleet
+  record (ngspice-47). That is exactly what the predecessor's own null
+  control predicted: a +1e-7 V seed move escaped the stall under the OLD
+  pin, so the stall was one hypersensitive solver trajectory, not a
+  property of the operating point. Under the re-pinned PDK the grid-seed
+  trajectory completes everywhere it was tried.
+
 
 ## `output-driver`
 
@@ -637,3 +713,129 @@ at every point of the grid on its own (`ivco_b_100m_ua` min 1995.48 µA,
 7.4–20.4× the as-specified arm's 68.7–195.6 µA), and the as-specified arm's
 per-stage starving current stays 19.1–48.4 µA at the 100 MHz reference
 point. The record's Layout-fix reading (#381) carries over unchanged.
+
+## `output-range`
+
+Two single-point records, one per predecessor — and on both pairs the
+comparator's shared-measurement intersection is **empty**: both predecessors
+are narrative investigation records whose result tables predate the
+corner-id schema `sim/lib/record_delta.py` parses (one `| Edge | … |` summary
+row, one CAPPED row plus a labelled diagnostic), so the intersection of
+parseable `(topology, measurement)` keys is zero and the generator prints
+its explicit coverage-differs form. That empty output is the generated
+table, verbatim, below; the informative comparison is then assembled by hand
+from the two records' own quoted rows — the values are the records', not a
+re-analysis. Both new records carry the same DUT export, stimulus fragment
+and composed SHA-256 as the already-landed `20261111-184929-73837b9` grid
+record (`a7daa6a7…` / `76ccb9e9…` / `99a55608…`), so the like-for-like
+reference at this bench's current DUT generation is that grid — which is
+also the full-matrix record under the re-pinned PDK, deliberately not
+re-taken here (each new record's subset justification says so).
+
+Regenerate the lo-edge pair's table with:
+
+```bash
+python3 sim/lib/record_delta.py \
+  sim/output-range/records/20260801-061907-67d7127.md \
+  sim/output-range/records/20261117-174557-327ee00.md
+```
+
+### `20261117-174557-327ee00` vs `20260801-061907-67d7127`
+
+| topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
+|---|---|---|---|---|---|---|---|
+
+**Per-corner verdicts**: unchanged on all 0 graded rows.
+
+**Stated limits**: identical in both records.
+
+**Measurement coverage differs between the two records:**
+
+- in `20261117-174557-327ee00` only: `headroom`/`vctrl_final`
+- in `20261117-174557-327ee00` only: `headroom`/`vctrl_margin_hi_v`
+- in `20261117-174557-327ee00` only: `headroom`/`vctrl_margin_lo_v`
+- in `20261117-174557-327ee00` only: `integration`/`dn_lvl`
+- in `20261117-174557-327ee00` only: `lock`/`lock_at_end`
+- in `20261117-174557-327ee00` only: `lock`/`pass_lock`
+
+The predecessor's single measured row (its own Result table, quoted): `lo`
+edge, 10 MHz, band 1, N=8 — **FAIL** (lock not asserted in the 2 µs window),
+`vctrl_final` **2.1116 V**, on the bench's pre-#159 assembled DUT under
+`c6d73a3`, ngspice-46 on Darwin arm64. The new record's row: **FAIL**,
+`vctrl_final` **1.70267 V**, `dn_lvl` -3.605620e-07 V (guard SUSPECT), on
+the current `pll_top` DUT under `f6eeac7`, ngspice-47 on the batch fleet.
+
+**The 409 mV old-vs-new movement is the DUT migration, not the re-pin**, and
+saying so is the whole attribution: the predecessor chain itself changed DUT
+between 2026-08-01 and 2026-08-19 (the assembled closed loop was replaced by
+the `pll_top` schematic export, #159/#164; `sim/CHARACTERIZATION.md`'s
+output-range row has said "not netlist-for-netlist comparable" since), so
+the predecessor's 2.1116 V has no same-DUT successor to delta against. The
+like-for-like comparison at the current DUT is the one that isolates the
+re-pin, and it is sub-tolerance three ways: baseline grid row 1.703 V
+(`c6d73a3`, same DUT generation) → grid record 1.70267 V (`f6eeac7`, fleet
+ngspice-46) → this record 1.70267 V (`f6eeac7`, fleet ngspice-47), the last
+two **identical to the last printed digit**, with the ngspice-46 and -42
+controls above reproducing 1.70267 bit-for-bit as well. The verdict is FAIL
+in both records; the acquisition-trajectory diagnosis (persistently
+one-sided UP assertion raising `vctrl` from the seed toward the 10 MHz
+operating point) is not re-derived here — the harness form does not carry
+the predecessor's `waveform.csv` capture (#878 dropped it; its reduction
+never read it), and that narrative stays with the predecessor, as the
+successor's own claim field states.
+
+Regenerate the CAPPED-row pair's table with:
+
+```bash
+python3 sim/lib/record_delta.py \
+  sim/output-range/records/20260819-190341-70a4128.md \
+  sim/output-range/records/20261117-174951-33cbd72.md
+```
+
+### `20261117-174951-33cbd72` vs `20260819-190341-70a4128`
+
+| topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
+|---|---|---|---|---|---|---|---|
+
+**Per-corner verdicts**: unchanged on all 0 graded rows.
+
+**Stated limits**: identical in both records.
+
+**Measurement coverage differs between the two records:**
+
+- in `20261117-174951-33cbd72` only: `headroom`/`vctrl_final`
+- in `20261117-174951-33cbd72` only: `headroom`/`vctrl_margin_hi_v`
+- in `20261117-174951-33cbd72` only: `headroom`/`vctrl_margin_lo_v`
+- in `20261117-174951-33cbd72` only: `integration`/`dn_lvl`
+- in `20261117-174951-33cbd72` only: `lock`/`lock_at_end`
+- in `20261117-174951-33cbd72` only: `lock`/`pass_lock`
+
+The predecessor reported **no measurement at this point**: its campaign row
+is `CAPPED` under a reproducible 2400 s wall-clock budget — a budget
+termination of a trajectory whose transient stopped advancing at
+t = 1.7328 ns, which that record is explicit is "not a verdict at all" —
+plus a labelled diagnostic at seed +1e-7 V that completed: `vctrl_final`
+**1.4565 V**, mean DN **0.0339 V**, **FAIL**, DN guard **PASS**, 173.5 CPU-s.
+The new record runs the grid's own seed (1.454 V, not the perturbed one) at
+the same point and **completes**: `vctrl_final` **1.45651 V**, `dn_lvl`
+**0.0339103 V**, **FAIL**, DN guard **PASS**, 146.5 s wall on the fleet.
+
+That is the increment's headline, and it is stronger than a delta table:
+**the completed grid-seed trajectory under `f6eeac7` lands on the
+predecessor's completed perturbed-seed trajectory** — 20 µV apart on
+`vctrl_final`, identical to the diagnostic's four printed digits on `dn_lvl`
+— which is the predecessor's own attribution (the stall was one
+hypersensitive solver trajectory, escaped by a perturbation below the
+simulator's own tolerance) now confirmed from the re-pin's side. Against the
+like-for-like sources at the grid seed: the 20261111 grid row reads
+1.4569 V / 0.0322125 V (fleet ngspice-46), the local controls read
+1.4569 V / 0.0322125 V (ngspice-46) and 1.45686 V / 0.0325038 V
+(ngspice-42); this record's 1.45651 V sits 0.39 mV from the farthest of
+them, inside the 5 mV row tolerance, verdict and guard unchanged
+everywhere. The `lock_at_end` samples differ at the nanovolt scale across
+backends (-6.09e-09 V here, 2.12e-08 V on the local 46 control) — both read
+as lock low at the end of the window, `t_lock_last_rise` not measured in
+either, so the FAIL verdict is the same non-event on both sides. **CAPPED →
+FAIL is not a verdict flip**: the predecessor asserts this explicitly about
+its own row, and no tolerance moved, so there is nothing to file.
+
