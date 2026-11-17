@@ -52,9 +52,16 @@ Two increments have landed since that table was first written: #967
 re-qualified `output-driver` (2026-11-15), and this increment (2026-11-17,
 same branch, still `Part of #826`) re-qualifies both `cp-compliance` benches
 and both `pfd-deadzone` manifests. The live scope the issue's own derivation
-script returns is therefore **15 records, not 20** — 8/1/2/3/3 with
-`vco-tuning-range`, `vco-bias-current`, `output-range`, `mc-cp-mismatch`
-still owed.
+script returns is therefore **15 records, not 20** — `8/1/2/1/3` across the
+five directories `vco-tuning-range`, `vco-bias-current`, `output-range`,
+`cp-compliance`, `mc-cp-mismatch`. The script counts supersession from
+records' own `Supersedes` fields, so its one `cp-compliance` residual,
+`20260802-033728-c24ee3a`, is dispositioned in the cp-compliance section
+below as fully superseded by this increment's re-run of its near-duplicate
+twin — in prose, not by any record's `Supersedes` field — and the script
+will keep returning it until a record names it. Records needing a re-run:
+**14** — 8/1/2/0/3 across those same five directories, all still owed
+under #826.
 
 ## What was re-run
 
