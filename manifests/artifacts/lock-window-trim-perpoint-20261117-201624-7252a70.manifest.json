@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "sha256": "01666999eb5ab34bf3cd5618ea87a72f1fb9749998542b7ce3c342de2173c18f",
+      "size": 3046,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.3.dev663+g22ab2a8756c7",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "7252a70d0cb87a515929eb69bc5c2dbe801d31b1"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/01/01666999eb5ab34bf3cd5618ea87a72f1fb9749998542b7ce3c342de2173c18f",
+      "name": "sim/.artifact-stage/lock-window-trim-perpoint/1f3fd313f81fa415684d87bc1507b10cf0aff84202f9fa25edc17161527ab6a2/all-fast_125c_3.30v_c6/all-fast_125c_3.30v_c6.log"
+    }
+  ]
+}

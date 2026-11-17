@@ -1167,7 +1167,14 @@ re-deriving §5 against them, is #829's scope. The old-vs-new deltas are in
 document cites outside the table, `20260925-050022-6d57802`
 (`lock-window-proxy`), is re-qualified by `20261114-194051-c8750de` — and
 that one *did* move two of its pad-proxy policy verdicts, which the same
-delta document sets out in full.
+delta document sets out in full. The last of the nine, the 1872-point
+trim-code map `20260917-185928-8adff3d` (`lock-window-trim`), is re-qualified
+by `20261117-201624-7252a70` — a **null on every point** (`twin_r`/`twin_f`
+identical to the last printed digit, derived tables byte-identical), landed
+by the harness's per-point artifact banking (#1049): the minting attempt
+adopts 1871 of its 1872 points from earlier attempts' stored logs, which is
+how a grid whose fleet floor exceeds one agent step completes without
+re-spending any attempt's compute.
 
 | §5 row | Quoted value | Record(s) | Evidence file | Reduction | Scale |
 |---|---|---|---|---|---|
