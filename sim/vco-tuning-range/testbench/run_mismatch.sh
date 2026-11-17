@@ -469,7 +469,8 @@ if [ "${1:-}" = "--control" ]; then
     "design/netlist/vco.spice (committed export)" \
     "${#CONTROL_POINTS[@]} sampled (corner, Vctrl, band) points x 5 runs (seeds ${CONTROL_SEED_A}/${CONTROL_SEED_B}, sw_stat_mismatch 1 and 0)" \
     "${CONTROL_SWITCHES_NOTE}" \
-    control_campaign
+    control_campaign \
+    "$(( ${#CONTROL_POINTS[@]} * 5 ))"
   CONTROL_CSV="${CORNERSDIR}/negative_control.csv"
   CONTROL_ROWS="$(simenv_control_md_rows "${CONTROL_CSV}")"
   CONTROL_RC=0
@@ -696,7 +697,8 @@ simenv_emit_control_evidence "${CORNERSDIR}" "${WORK}" \
   "design/netlist/vco.spice (committed export)" \
   "${#CONTROL_POINTS[@]} sampled (corner, Vctrl, band) points x 5 runs (seeds ${CONTROL_SEED_A}/${CONTROL_SEED_B}, sw_stat_mismatch 1 and 0)" \
   "${CONTROL_SWITCHES_NOTE}" \
-  control_campaign
+  control_campaign \
+  "$(( ${#CONTROL_POINTS[@]} * 5 ))"
 CONTROL_CSV="${CORNERSDIR}/negative_control.csv"
 CONTROL_ROWS="$(simenv_control_md_rows "${CONTROL_CSV}")"
 CONTROL_RC=0
