@@ -44,7 +44,7 @@ from pathlib import Path
 # `harness.numeric` holds the shared crossing/linfit primitives (#985); this
 # module is loaded by path (its directory is not a package), so it puts
 # `sim/` on `sys.path` itself, guarded, the way its loading scripts do.
-_SIM = Path(__file__).resolve().parents[1]
+_SIM = Path(__file__).resolve().parents[2]
 if str(_SIM) not in sys.path:
     sys.path.insert(0, str(_SIM))
 
