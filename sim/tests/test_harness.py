@@ -2009,6 +2009,26 @@ class CliResumeTests(ManifestFixture):
         self.assertEqual(result.seconds, 0.0)
         self.assertEqual(result.as_dict().get("replayed"), True)
 
+    def test_a_replayed_point_carries_the_solver_its_log_named(self):
+        """The adoption path re-derives solver provenance from the log's own
+        text, exactly as it re-derives simulator and init: an adopted point's
+        record must not report as missing evidence the log does name."""
+        point = self._points((27.0,))[0]
+        log_dir = self.root / "corners" / "replay-solver"
+        log_dir.mkdir(parents=True)
+        (log_dir / f"{point.corner_id}.log").write_text(
+            "ngspice-46\n"
+            "Using SPARSE 1.3 as Direct Linear Solver\n"
+            "\n"
+            "m_vout = 1.6500000000e+00\n"
+        )
+        result = runner.replay_point(
+            self.tb, point, self.root / "work-solver", log_dir, host="host-old"
+        )
+        self.assertIsNotNone(result)
+        self.assertEqual(result.solver, "SPARSE 1.3")
+        self.assertEqual(result.as_dict()["solver"], "SPARSE 1.3")
+
 
 class _StubPoint:
     def __init__(self, corner_id):

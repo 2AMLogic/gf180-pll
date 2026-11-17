@@ -2495,6 +2495,41 @@ class PhasedRunTests(PhasedFixture):
         self.assertEqual([p.name for p in result.phases], ["push", "jit"])
         self.assertTrue(all(p.status == "ok" for p in result.phases))
 
+    def test_a_silent_deck_does_not_erase_a_sibling_decks_named_solver(self):
+        """The deliberate divergence from the init rule, at point level (#755).
+
+        A deck whose output did not name a solver is *missing evidence* about
+        that deck, not evidence that a different solver ran -- so unlike the
+        init file, one silent deck must not blank the whole point's solver.
+        The #755 cross-backend comparison rests on the named value surviving a
+        phased point, so the join rule is pinned here and not only per phase.
+        """
+        tb = testbench.load(self.write_phased({}))
+        result = self._run(
+            tb,
+            outputs={
+                "push": "Using SPARSE 1.3 as Direct Linear Solver\n" + PUSH_LOG,
+                "jit": "",
+            },
+        )
+        self.assertEqual(result.status, "ok", result.message)
+        self.assertEqual([p.solver for p in result.phases], ["SPARSE 1.3", ""])
+        self.assertEqual(result.solver, "SPARSE 1.3")
+
+    def test_a_point_whose_decks_ran_different_solvers_reports_both(self):
+        """Pathological but reportable: the record must not pick a winner."""
+        tb = testbench.load(self.write_phased({}))
+        result = self._run(
+            tb,
+            outputs={
+                "push": "Using SPARSE 1.3 as Direct Linear Solver\n" + PUSH_LOG,
+                "jit": "Using KLU as Direct Linear Solver\n",
+            },
+        )
+        self.assertEqual(result.status, "ok", result.message)
+        self.assertEqual(result.solver, "SPARSE 1.3+KLU")
+        self.assertEqual(result.as_dict()["solver"], "SPARSE 1.3+KLU")
+
     def test_each_phase_writes_its_own_deck_log_and_scratch_directory(self):
         tb = testbench.load(self.write_phased({}))
         log_dir = self.root / "corners" / "rec-phased"
