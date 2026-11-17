@@ -3,10 +3,11 @@
 `sim/vco-tuning-range` has two live extraction paths over the same decks: the
 manual-invocation scripts (`jitter_extract.py`, `analyze.py`, `analyze_supply.py`,
 driven by `run.sh` / `run_supply.sh`) and the `sim/harness`-integrated `derive.py`
-/ `derive_supply.py` pair exercised by `sim/tests/test_vco_supply_derive.py`. Both
-paths re-implement the same handful of numeric primitives; this module is the one
-copy each of `jitter_extract.py`, `derive_supply.py`, `analyze_supply.py`,
-`derive.py` and `analyze.py` load, instead of carrying their own.
+/ `derive_supply.py` pair exercised by `sim/tests/test_vco_supply_derive.py`. The
+numeric primitives those paths share repo-wide -- the rising-crossing extraction
+and the least-squares line fit -- live in `sim/harness/numeric.py` (#985), the
+one package every extractor imports; this module keeps the vco-tuning-range
+statistics built on top of them and is what the path-loading callers load.
 
 Neither `testbench/` nor `testbench-supply/` is a Python package, and none of the
 affected scripts import each other, so every caller loads this module the same way
@@ -19,16 +20,24 @@ collide.
 from __future__ import annotations
 
 import csv
+import sys as _sys
+from pathlib import Path as _Path
 
+# `harness.numeric` holds the shared primitives this module re-exported since
+# #985; this file is itself loaded by path (its directory is not a package),
+# so it puts `sim/` on `sys.path` the way its loading scripts do, guarded so
+# repeated loads under different private names add nothing.
+_SIM = _Path(__file__).resolve().parents[2]
+if str(_SIM) not in _sys.path:
+    _sys.path.insert(0, str(_SIM))
 
-def crossings(t, y, th, tmin):
-    """Rising crossings of `th`, linearly interpolated, at times >= tmin."""
-    out = []
-    for i in range(len(y) - 1):
-        if y[i] < th <= y[i + 1] and t[i] >= tmin:
-            dy = y[i + 1] - y[i]
-            out.append(t[i] if dy == 0 else t[i] + (th - y[i]) * (t[i + 1] - t[i]) / dy)
-    return out
+from harness.numeric import crossings, linfit  # noqa: E402,F401 -- re-exported
+
+__all__ = [
+    "crossings", "linfit", "stats", "linefit_residual", "mhz", "ts",
+    "channel_metrics", "corner_name", "corner_temp_name", "read_csv_rows",
+    "read_columns", "local_kvco",
+]
 
 
 def stats(xs):
@@ -51,16 +60,6 @@ def linefit_residual(ts):
     sxy = sum((k - mk) * (t - mt) for k, t in zip(ks, ts))
     slope = sxy / sxx
     return [t - (mt + slope * (k - mk)) for k, t in zip(ks, ts)], slope
-
-
-def linfit(xs, ys):
-    """Least-squares slope/intercept of `ys` against `xs`."""
-    n = len(xs)
-    mx, my = sum(xs) / n, sum(ys) / n
-    sxx = sum((x - mx) ** 2 for x in xs)
-    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
-    m = sxy / sxx
-    return m, my - m * mx
 
 
 def mhz(x):

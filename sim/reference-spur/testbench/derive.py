@@ -52,6 +52,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness.derived import DerivedTable, fmt_scalar  # noqa: E402
+from harness.numeric import crossings, linfit  # noqa: E402
 
 #: Uniform resampling density, samples per reference period. The carrier sits
 #: at 6 * f_ref here, so this is ~85 samples per output period -- far above
@@ -221,38 +222,6 @@ def harmonic_amplitudes(t, y, fref, t0, t1, kmax=KMAX):
 
 
 # ----------------------------------------------------------- edge / TIE path
-def rising_crossings(t, y, threshold, t0, t1):
-    """Rising mid-supply crossing times of ``y`` inside ``[t0, t1]``."""
-    out = []
-    for i in range(1, len(t)):
-        if t[i] < t0 or t[i] > t1:
-            continue
-        if y[i - 1] < threshold <= y[i]:
-            dy = y[i] - y[i - 1]
-            if dy <= 0:
-                continue
-            out.append(t[i - 1] + (threshold - y[i - 1]) * (t[i] - t[i - 1]) / dy)
-    return out
-
-
-def linfit(xs, ys):
-    """Least-squares (slope, intercept, r2) -- the only fit this module needs."""
-    m = len(xs)
-    if m < 2:
-        return None, None, None
-    mx = sum(xs) / m
-    my = sum(ys) / m
-    sxx = sum((x - mx) ** 2 for x in xs)
-    if sxx <= 0:
-        return None, None, None
-    sxy = sum((xs[i] - mx) * (ys[i] - my) for i in range(m))
-    slope = sxy / sxx
-    intercept = my - slope * mx
-    syy = sum((y - my) ** 2 for y in ys)
-    r2 = (sxy * sxy) / (sxx * syy) if syy > 0 else 1.0
-    return slope, intercept, r2
-
-
 def tie_sequence(crossings):
     """De-trended crossing times: (TIE sequence, mean output period).
 
@@ -320,7 +289,9 @@ def analyse_window(t, clk, vctrl, vdd, fref, nratio, t0, t1):
         out["ripple_mv"] = (max(ys) - min(ys)) * 1e3
         out["vctrl_mean"] = sum(ys) / len(ys)
 
-    cross = rising_crossings(t, clk, vdd / 2.0, t0, t1)
+    # The TIE window's `[t0, t1]` gates the straddling pair's LATER sample,
+    # inclusively -- `harness.numeric.crossings`' `window` convention.
+    cross = crossings(t, clk, vdd / 2.0, window=(t0, t1))
     tie, period = tie_sequence(cross)
     if tie and period:
         amp_s = tie_component(tie, cross, fref)
