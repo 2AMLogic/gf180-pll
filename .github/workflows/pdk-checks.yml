@@ -1,0 +1,233 @@
+name: PDK checks
+
+# The PDK-dependent tier of this repo's self-checks. It lives in its own
+# workflow, apart from ci.yml's required headless `checks` job, because of
+# how GitHub fires workflows on label adds (issue #1015): a workflow with
+# `labeled` in its pull_request types re-runs in full on EVERY label add,
+# and ci.yml must not be one of those -- a label write on a PR would
+# otherwise re-run the required headless suite on a head that had usually
+# already passed it, parking review on a pending re-run. So this file owns
+# both the PDK jobs and the repo's only `labeled` trigger:
+#
+#   design-changed -- per-job path filter for pdk-checks below. GitHub
+#                    Actions has no per-job `paths:` key, and a
+#                    workflow-level `paths:` on the pull_request trigger
+#                    would gate ci.yml's headless `checks` job too -- so ask
+#                    the API which files the PR touches.
+#   pdk-checks    -- requires the gf180mcu PDK (via ciel) and xschem on
+#                    PATH. Runs on the nightly schedule, on manual dispatch,
+#                    and on any PR that touches design/; the `ci:full`
+#                    label (declared in .github/labels.yml) forces it on for
+#                    a PR that leaves design/ alone.
+#
+# Label adds fire this workflow (that is what `labeled` means), so both jobs
+# gate on "not a label add, or the label added is ci:full": a label add
+# creates no new head, so the head's real PDK verdict stays on its
+# opened/synchronize run, and the skipped contexts report as "skipped" --
+# never as a green checkmark. The `checks` context is never re-reported on
+# a label add at all, because ci.yml does not carry `labeled`; that asymmetry
+# is deliberate: a label add on a red PR head must not overwrite the failing
+# `checks` conclusion with a skipped one, which every reader of this repo's
+# checks (forge rollup, merge-pr's required-context gate, the Judge's
+# exact-head CI gate) counts as green.
+#
+# There is no push trigger on purpose: pdk-checks has never run on plain
+# main pushes -- the nightly covers main, and ci.yml's push run carries the
+# headless tier.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    # Nightly PDK-dependent run -- the headless half of the nightly lives in
+    # ci.yml (same cron).
+    - cron: "17 6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  design-changed:
+    name: design-changed (path filter for pdk-checks)
+    runs-on: ubuntu-latest
+    # Per-job path filter for pdk-checks below. GitHub Actions has no per-job
+    # `paths:` key, and a workflow-level `paths:` on the pull_request trigger
+    # would gate the headless `checks` job in ci.yml too -- so ask the API
+    # which files the PR touches. No checkout, no PDK, a couple of seconds.
+    #
+    # The label-event gate (issue #1015): on any other label add this job
+    # skips too, so a label write costs a ~2-second all-skip run, never a
+    # PDK install. The gate is repeated on pdk-checks rather than inherited
+    # from this job's output -- see the comment there.
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.action != 'labeled' ||
+       github.event.label.name == 'ci:full')
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      design: ${{ steps.filter.outputs.design }}
+    steps:
+      - name: Does this PR touch design/?
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_FILES_API: repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files
+        run: |
+          set -uo pipefail
+          # Fail open: if the file list can't be read, report design=true so
+          # pdk-checks still runs. A missed netlist-drift check is the failure
+          # this job exists to prevent; a redundant PDK install is only slow.
+          if ! files="$(gh api --paginate "$PR_FILES_API" --jq '.[].filename')"; then
+            echo "Could not list the PR's changed files -- failing open (design=true)." >&2
+            echo "design=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Changed files:"
+          printf '%s\n' "$files"
+          if printf '%s\n' "$files" | grep -q '^design/'; then
+            echo "design=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "design=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  pdk-checks:
+    name: pdk-checks (design/ PRs, nightly, ci:full -- requires gf180mcu PDK + xschem)
+    runs-on: ubuntu-latest
+    needs: [design-changed]
+    # `!cancelled()` is load-bearing: design-changed is skipped on schedule /
+    # workflow_dispatch runs, and a skipped `needs` job cascades a skip here
+    # unless the condition uses a status-check function.
+    #
+    # The PR arm reads `!= 'false'` rather than `== 'true'` so that a
+    # design-changed job which failed outright (empty output) also falls open
+    # to running these checks, matching the fail-open behaviour of its script.
+    #
+    # The label-event gate is repeated here and cannot be inherited from
+    # design-changed's outcome: on a non-ci:full label add design-changed
+    # skips, its output is empty, and empty `!= 'false'` is true -- without
+    # this arm every label add would run the full PDK install and xschem
+    # build (issue #1015). This arm is also why the trigger split is done
+    # with a per-job gate here instead of by dropping `labeled` from the
+    # types: unlike ci.yml's `checks`, this workflow NEEDS `labeled` so the
+    # ci:full opt-in can force pdk-checks on.
+    if: >-
+      !cancelled() &&
+      (github.event.action != 'labeled' ||
+       github.event.label.name == 'ci:full') &&
+      (github.event_name == 'schedule' ||
+       github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'pull_request' &&
+        (needs.design-changed.outputs.design != 'false' ||
+         contains(github.event.pull_request.labels.*.name, 'ci:full'))))
+    env:
+      # #421: pin xschem to the commit the `3.4.7` tag points at -- every
+      # committed design/netlist/*.spice export was generated with 3.4.7, and
+      # apt's xschem package drifts with the distro (3.4.4 on ubuntu-latest/
+      # noble as of 2026-09). A commit, unlike a tag, cannot move; verify at
+      # https://github.com/StefanSchippers/xschem/releases/tag/3.4.7 before
+      # bumping.
+      XSCHEM_COMMIT: 92dd8fe5f4d5c1057489710d8a22f18fdc9d7ed0
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Pinned, not "3.x": a floating version outran the klayout wheels
+          # (none for cp315), forcing a failing sdist build.
+          python-version: "3.13"
+
+      - name: Install ngspice and xschem's runtime/build dependencies
+        run: |
+          sudo apt-get update
+          # ngspice: unpinned, apt's version tracks whatever this runner's
+          # Ubuntu ships. xschem is deliberately NOT installed from apt here
+          # (see the pinned build below) -- apt's xschem tracks the distro
+          # package too, which is exactly the drift #421 is about.
+          sudo apt-get install -y ngspice \
+            flex bison gawk tcl tcl-dev tk tk-dev \
+            libcairo2 libcairo2-dev xcb libxcb1 libxcb1-dev libxrender-dev \
+            libxpm-dev libxcb-render0-dev libx11-xcb1 libx11-xcb-dev
+
+      - name: Cache xschem 3.4.7 build
+        id: cache-xschem
+        uses: actions/cache@v4
+        with:
+          path: /tmp/xschem-src
+          key: xschem-${{ env.XSCHEM_COMMIT }}-${{ runner.os }}-v1
+
+      - name: Build xschem 3.4.7 from source (pinned)
+        # #421: the runner's `apt-get install -y xschem` resolves to whatever
+        # Ubuntu ships (3.4.4 on noble as of 2026-09), while every committed
+        # design/netlist/*.spice export was generated with 3.4.7 -- a version
+        # mismatch this script's provenance banner and continuation-line
+        # wrapping both surface as false STALE / leaf-cell-collision failures
+        # (see design/netlist.sh's XSCHEM_VERSION stamp and check_export's
+        # wrapped-port-list guard). Pinned to the exact commit the `3.4.7` tag
+        # points at (not just the tag name) for the same reason the PDK below
+        # is pinned to a hash rather than a branch: a tag can move, a commit
+        # cannot. Build steps mirror xschem's own CI:
+        # https://github.com/StefanSchippers/xschem/blob/3.4.7/.github/workflows/ci.yaml
+        if: steps.cache-xschem.outputs.cache-hit != 'true'
+        run: |
+          rm -rf /tmp/xschem-src
+          mkdir -p /tmp/xschem-src
+          cd /tmp/xschem-src
+          git init -q
+          git remote add origin https://github.com/StefanSchippers/xschem.git
+          git fetch --depth 1 origin "${XSCHEM_COMMIT}"
+          git checkout -q FETCH_HEAD
+          ./configure
+          make -j"$(nproc)"
+
+      - name: Install xschem 3.4.7
+        run: sudo make -C /tmp/xschem-src install
+
+      - name: Confirm the pinned xschem version is on PATH
+        # Cheap guard against the exact failure mode #421 filed: if apt's
+        # xschem (or any other build) shadows the pinned one on PATH, fail
+        # loudly here instead of producing a confusing STALE/collision
+        # failure three steps later.
+        run: |
+          version="$(xschem --no_x -q --version 2>/dev/null | head -1)"
+          echo "xschem on PATH: $(command -v xschem) ($version)"
+          case "$version" in
+            *3.4.7*) ;;
+            *) echo "ERROR: expected xschem 3.4.7 (pinned commit ${XSCHEM_COMMIT}), got: $version" >&2
+               exit 1 ;;
+          esac
+
+      - name: Install the gf180mcu PDK via ciel
+        run: |
+          pip install --user ciel==2.6.1
+          # The open_pdks hash is read from sim/pdk.json, the single source
+          # (see sim/README.md). ciel installs into ~/.ciel/gf180mcuD, which
+          # sim/harness/pdk.py and design/xschemrc both search by default --
+          # no extra env var needed.
+          OPEN_PDKS="$(python3 -c 'import json; print(json.load(open("sim/pdk.json"))["open_pdks"])')"
+          "$HOME/.local/bin/ciel" enable --pdk-family gf180mcu -l gf180mcu_fd_pr "$OPEN_PDKS"
+
+      - name: design/netlist.sh --check-paths
+        run: ./design/netlist.sh --check-paths
+
+      - name: Install klt (klayout-tools) for netlist.sh and the PVT smoke run
+        # design/netlist.sh --check runs every xschem export through
+        # `klt netlist`, so klt must be on PATH before it. Also
+        # sim/harness/report.py shells out to `klt env-provenance emit` with
+        # no fallback, so klt must be on PATH before the selftest below.
+        # The version is read from the pin in ci.yml's `checks` job "Install
+        # klt" step -- across the file split on #1015, ci.yml stays the
+        # single pin to bump (the same extraction signoff/run-signoff.sh
+        # uses). If the checks job ever moves, this grep moves with it.
+        run: |
+          pin="$(grep -oE "klayout-tools==[0-9][^'\"[:space:]]*" .github/workflows/ci.yml | head -n 1)"
+          test -n "$pin"
+          pip install "$pin"
+
+      - name: design/netlist.sh --check
+        run: ./design/netlist.sh --check
+
+      - name: sim/selftest.sh --require-pdk
+        # Fails loudly instead of skipping if the PDK turns out to be
+        # missing here too -- catches a broken nightly runner rather than
+        # reporting a false pass.
+        run: bash sim/selftest.sh --require-pdk

@@ -3,7 +3,7 @@
   "provenance": {
     "deck": null,
     "input": {
-      "content_hash": "sha256:5ca04ba9df57cd0351fe0ce6ac980471f3d5665090d107fe3e1e0228868d63a0",
+      "content_hash": "sha256:de5dff8c058c03023d639bcc695644c0f230288eba2b853bd4725520dc348cab",
       "path": {
         "path": "signoff/attest/repo-hygiene.json",
         "scope": "repo"

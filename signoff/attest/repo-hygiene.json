@@ -3,17 +3,32 @@
     "README opens with a block description and has a License section",
     "CONTRIBUTING.md carries the clone-to-green-self-test section",
     "LICENSE is the Apache License text and spec/pll.md exists",
-    "the CI workflow still runs each required command"
+    "both CI workflows still run each required command, in the workflow named beside it"
   ],
   "ci": {
     "hash_note": "edited often; not hash-pinned. The commands below are re-audited by --check.",
     "required_commands": [
-      "bash sim/selftest.sh",
-      "./design/netlist.sh --check",
-      "bash signoff/run-signoff.sh --check",
-      "python3 signoff/t1_attest.py --check"
+      {
+        "command": "bash sim/selftest.sh",
+        "workflow": ".github/workflows/ci.yml"
+      },
+      {
+        "command": "bash signoff/run-signoff.sh --check",
+        "workflow": ".github/workflows/ci.yml"
+      },
+      {
+        "command": "python3 signoff/t1_attest.py --check",
+        "workflow": ".github/workflows/ci.yml"
+      },
+      {
+        "command": "./design/netlist.sh --check",
+        "workflow": ".github/workflows/pdk-checks.yml"
+      }
     ],
-    "workflow": ".github/workflows/ci.yml"
+    "workflows": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/pdk-checks.yml"
+    ]
   },
   "contributing": {
     "audited": [

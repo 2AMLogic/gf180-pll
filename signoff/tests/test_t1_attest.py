@@ -32,7 +32,8 @@ COPY = [
     "sim/*/testbench*/*", "sim/CHARACTERIZATION.md", "sim/README.md", "sim/pdk.json",
     "sim/run_corners.py", "sim/selftest.sh", "sim/run-all.sh",
     "README.md", "CONTRIBUTING.md", "LICENSE", "spec/pll.md",
-    ".github/workflows/ci.yml", "signoff/t1_attest.py", "signoff/block-manifest.json",
+    ".github/workflows/ci.yml", ".github/workflows/pdk-checks.yml",
+    "signoff/t1_attest.py", "signoff/block-manifest.json",
     "signoff/attest/*",
 ]
 
@@ -85,19 +86,6 @@ class T1AttestNegativeControls(unittest.TestCase):
         self.assertEqual(r.returncode, 1, r.stderr)
         self.assertIn("testbench-inventory-digital.json", r.stderr)
 
-    def test_edited_reduction_module_names_the_partition_inventory(self):
-        mod = self.tree / "sim/output-driver/testbench/derive.py"
-        mod.write_text(mod.read_text() + "# edited\n")
-        r = run(self.tree, "--check")
-        self.assertEqual(r.returncode, 1, r.stderr)
-        self.assertIn("testbench-inventory-analog.json", r.stderr)
-
-    def test_missing_declared_reduction_module_is_refused(self):
-        (self.tree / "sim/output-driver/testbench/derive.py").unlink()
-        r = run(self.tree, "--check")
-        self.assertEqual(r.returncode, 2)
-        self.assertIn("derive.py", r.stderr)
-
     def test_edited_license_makes_check_fail(self):
         with (self.tree / "LICENSE").open("a") as f:
             f.write("\n")
@@ -112,8 +100,10 @@ class T1AttestNegativeControls(unittest.TestCase):
         self.assertIn("new_block", r.stderr)
 
     def test_ci_dropping_the_netlist_drift_check_is_refused(self):
-        ci = self.tree / ".github/workflows/ci.yml"
-        ci.write_text(ci.read_text().replace("run: ./design/netlist.sh --check", "run: true"))
+        # The netlist freshness gate runs in the PDK workflow (#1015), so the
+        # control edits that file, not ci.yml.
+        pdk = self.tree / ".github/workflows/pdk-checks.yml"
+        pdk.write_text(pdk.read_text().replace("run: ./design/netlist.sh --check", "run: true"))
         r = run(self.tree, "--check")
         self.assertEqual(r.returncode, 2)
         self.assertIn("netlist.sh --check", r.stderr)

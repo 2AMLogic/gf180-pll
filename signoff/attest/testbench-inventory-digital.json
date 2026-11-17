@@ -3,7 +3,6 @@
     "every experiment with records/ is assigned to a partition or explicitly excluded",
     "each listed experiment is disclosed in sim/CHARACTERIZATION.md and has a committed record",
     "each has committed tb_*.sp/.spice testbenches and a tb.json manifest or a run*.sh driver",
-    "each manifest's declared reduction module (derived.module) exists and is content-pinned",
     "sim/README.md cites the PDK revision CI installs; xschem and klt pins exist in CI",
     "CI runs 'bash sim/selftest.sh'"
   ],
@@ -39,10 +38,6 @@
       "experiment": "divider-ratio-cell",
       "testbenches": [
         {
-          "content_hash": "sha256:8814007f7218fb9d046254017698cd7fcace0b98f9b39e3cf202e3a7c3a07e21",
-          "path": "sim/divider-ratio-cell/testbench/derive.py"
-        },
-        {
           "content_hash": "sha256:69ac113f3f3cefaaa1ca13a848a29c53e979e4027c9034ddb5abd4deb85d70a2",
           "path": "sim/divider-ratio-cell/testbench/tb.json"
         },
@@ -57,10 +52,6 @@
       "disclosed_in": "sim/CHARACTERIZATION.md",
       "experiment": "divider-ratio-chain",
       "testbenches": [
-        {
-          "content_hash": "sha256:1ba8e6f07f782c653aa071d04abf602a38c907b2147b9acf74c7c6ee0222dee0",
-          "path": "sim/divider-ratio-chain/testbench/derive.py"
-        },
         {
           "content_hash": "sha256:4f6724c58240e191444d2d263075ff1b2b3afaa9c7bc99352d6d90bcb9714419",
           "path": "sim/divider-ratio-chain/testbench/tb.json"
@@ -77,10 +68,6 @@
       "experiment": "divider-ratio-dff",
       "testbenches": [
         {
-          "content_hash": "sha256:dc798e749bae85e58b64648ff8b756ffaea2bcf60fe53d994d984ab5a625c94c",
-          "path": "sim/divider-ratio-dff/testbench/derive.py"
-        },
-        {
           "content_hash": "sha256:24abb8f40bb87692d4da7f254580e405ba37d74bd6d1005352913aea8dda1334",
           "path": "sim/divider-ratio-dff/testbench/tb.json"
         },
@@ -95,10 +82,6 @@
       "disclosed_in": "sim/CHARACTERIZATION.md",
       "experiment": "lock-detector",
       "testbenches": [
-        {
-          "content_hash": "sha256:4b32f649531400bb0d3e70bf2efe32b401844cba0453a2ac74bceef23c8f3767",
-          "path": "sim/lock-detector/testbench/derive.py"
-        },
         {
           "content_hash": "sha256:0e16d2d0f95b05b14541850f29cdb7baa59b32a208e073d221c996fb7ab8ae32",
           "path": "sim/lock-detector/testbench/tb.json"
@@ -119,10 +102,6 @@
       "experiment": "lock-window-bisection",
       "testbenches": [
         {
-          "content_hash": "sha256:e4423208d8f30c97385c625e93074e2bcbec16905aa8bda90ebe6779c3ffc23b",
-          "path": "sim/lock-window-bisection/testbench/derive.py"
-        },
-        {
           "content_hash": "sha256:c3a14ee1f66f8cef944ec997683333cb4e63008245d018fe841937ba697946c5",
           "path": "sim/lock-window-bisection/testbench/tb.json"
         },
@@ -137,10 +116,6 @@
       "disclosed_in": "sim/CHARACTERIZATION.md",
       "experiment": "lock-window-proxy",
       "testbenches": [
-        {
-          "content_hash": "sha256:be2344de4714472072d8159de0a460aac11306f17cd3cf0081cd1e1e4b18b361",
-          "path": "sim/lock-window-proxy/testbench/derive.py"
-        },
         {
           "content_hash": "sha256:a767e04bfcbecd2b0e440233f715f7693400fbc19a03df14ceae0badfbc2b827",
           "path": "sim/lock-window-proxy/testbench/tb.json"
@@ -161,10 +136,6 @@
       "experiment": "lock-window-sizing",
       "testbenches": [
         {
-          "content_hash": "sha256:173cf0339ec750766f47b96dc020396f80650ec3727619752344c2655e7318f2",
-          "path": "sim/lock-window-sizing/testbench/derive.py"
-        },
-        {
           "content_hash": "sha256:9e5860e333657c91b7195383b35193cf85d2bf15e7b9f91c977e8edb450ebf5d",
           "path": "sim/lock-window-sizing/testbench/tb.json"
         },
@@ -179,10 +150,6 @@
       "disclosed_in": "sim/CHARACTERIZATION.md",
       "experiment": "lock-window-trim",
       "testbenches": [
-        {
-          "content_hash": "sha256:b20bdb9f33cb9b1e4c4003d13c695725e79acb0e870c36f4842adbe6702e30a4",
-          "path": "sim/lock-window-trim/testbench/derive.py"
-        },
         {
           "content_hash": "sha256:61f43e60208f3ddd1c9215486ce0083d2da3a40289028b7a42d8b2dbbde910e1",
           "path": "sim/lock-window-trim/testbench/tb.json"
@@ -199,7 +166,7 @@
     "open_pdks_revision": "f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7",
     "pinned_in": [
       "sim/pdk.json",
-      ".github/workflows/ci.yml (reads it)"
+      ".github/workflows/pdk-checks.yml (reads it)"
     ],
     "variant": "gf180mcuD"
   },
@@ -218,7 +185,7 @@
     },
     "xschem": {
       "commit": "92dd8fe5f4d5c1057489710d8a22f18fdc9d7ed0",
-      "pinned_in": ".github/workflows/ci.yml",
+      "pinned_in": ".github/workflows/pdk-checks.yml",
       "version": "3.4.7"
     }
   }

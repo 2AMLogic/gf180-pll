@@ -175,7 +175,7 @@
   ],
   "freshness_gate": {
     "command": "./design/netlist.sh --check",
-    "run_by": ".github/workflows/ci.yml (pdk-checks job, pinned xschem 3.4.7)",
+    "run_by": ".github/workflows/pdk-checks.yml (pdk-checks job, pinned xschem 3.4.7)",
     "what": "re-exports every committed top and diffs against design/netlist/*.spice"
   },
   "full_custom_note": "the digital partition is full-custom (DR-008): no RTL, so its item 1 is the Analog column's artifact, schematic plus derived netlist",
