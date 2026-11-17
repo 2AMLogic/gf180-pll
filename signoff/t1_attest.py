@@ -40,10 +40,12 @@ MANIFEST = "signoff/block-manifest.json"
 CI = ".github/workflows/ci.yml"
 # The PDK-dependent tier lives in its own workflow (#1015): CI carries the
 # required headless `checks` job and the klt pin; PDK carries design-changed,
-# pdk-checks, the xschem/PDK pins and the netlist freshness gate. A workflow
-# with `labeled` in its pull_request types re-runs on every label add, and
-# ci.yml must not be one of those -- a label write on a PR would re-run the
-# required headless suite on a head that had usually already passed it.
+# pdk-checks, the xschem/PDK pins and the netlist freshness gate. Neither
+# workflow carries `labeled` in its pull_request types: GitHub re-runs a
+# whole workflow on every label add, and a label-add run re-reports the same
+# job names for the same tree -- a skipped re-report supersedes the same job
+# name's earlier verdict and counts as green everywhere, so a label add could
+# un-mask a red head (measured on #1033's review).
 PDK = ".github/workflows/pdk-checks.yml"
 PARTITIONS = ("analog", "digital")
 
@@ -332,7 +334,11 @@ def repo_hygiene(root: Path, part: str | None) -> dict:
         raise AttestError(f"{PDK} no longer runs './design/netlist.sh --check'")
     required.append({"command": "./design/netlist.sh --check", "workflow": PDK})
     return {
-        "schema_version": 1,
+        # 2: required_commands grew a workflow field ({command, workflow}) and
+        # the ci record renamed workflow -> workflows when the CI split landed
+        # (#1015). No consumer outside this generator and its --check
+        # round-trip, but the version exists to signal exactly this.
+        "schema_version": 2,
         "t1_item": 10,
         "subject": "repo-hygiene audit record",
         "readme": {

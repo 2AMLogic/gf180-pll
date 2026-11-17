@@ -36,12 +36,18 @@ name: CI
 #                   label (declared in .github/labels.yml) forces it on for
 #                   a PR that leaves design/ alone, e.g. one editing
 #                   design/netlist.sh's callers, this workflow, or the PDK
-#                   pin. Both jobs live with their `labeled` trigger in
-#                   pdk-checks.yml, gated to skip on every label add except
-#                   ci:full -- so label writes cost seconds, never a PDK
-#                   install. Job names in both files are the
-#                   required-status-check context names, so the split moves
-#                   no context a branch rule may list.
+#                   pin. Neither workflow carries `labeled`: a label add
+#                   creates no run of any workflow in this repo, so a label
+#                   write costs nothing and can never re-report a job name
+#                   on an existing head (a skipped re-report supersedes the
+#                   same job name's earlier verdict and counts as green at
+#                   every enforcement layer; the skip-gate shape was
+#                   measured and rejected -- see pdk-checks.yml's header).
+#                   The ci:full opt-in applies on the PR's next
+#                   opened/synchronize run, or immediately via `gh workflow
+#                   run pdk-checks.yml --ref <branch>`. Job names in both
+#                   files are the required-status-check context names, so
+#                   the split moves no context a branch rule may list.
 #
 # Self-checks intentionally NOT wired here:
 #   - sim/run-all.sh, sim/lib/simenv.sh, and the per-campaign
@@ -57,9 +63,8 @@ on:
     branches: [main]
   pull_request:
     # `labeled` is deliberately absent -- see the header comment. A label add
-    # must not re-run this workflow's required `checks` context; the ci:full
-    # opt-in lives in pdk-checks.yml, the only workflow listening for label
-    # adds.
+    # must not re-run this workflow's required `checks` context; no workflow
+    # in this repo listens for label adds at all.
     types: [opened, synchronize, reopened]
   schedule:
     # Nightly headless run. The PDK-dependent half of the nightly lives in

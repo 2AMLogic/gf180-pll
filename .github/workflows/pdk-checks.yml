@@ -1,13 +1,25 @@
 name: PDK checks
 
 # The PDK-dependent tier of this repo's self-checks. It lives in its own
-# workflow, apart from ci.yml's required headless `checks` job, because of
-# how GitHub fires workflows on label adds (issue #1015): a workflow with
-# `labeled` in its pull_request types re-runs in full on EVERY label add,
-# and ci.yml must not be one of those -- a label write on a PR would
-# otherwise re-run the required headless suite on a head that had usually
-# already passed it, parking review on a pending re-run. So this file owns
-# both the PDK jobs and the repo's only `labeled` trigger:
+# workflow, apart from ci.yml's required headless `checks` job, because the
+# tiers do not share a toolchain dependency and because of how GitHub fires
+# workflows on label adds (issue #1015).
+#
+# Neither this file nor ci.yml carries `labeled` in its pull_request types:
+# GitHub re-runs a whole workflow on ANY label add, and a label add creates
+# no new head, so a label-add run can only re-report the same job names for
+# the same tree. If that re-report is `skipped` -- the per-job gate on
+# non-ci:full label adds this file used before #1033's review -- it
+# supersedes the same job name's earlier real conclusion (GitHub keys
+# "latest conclusion per check name" on the job name) and a skipped context
+# counts as green at every enforcement layer of this repo: the forge rollup,
+# merge-pr's required-context gate, and the Judge's exact-head `forge
+# wait-checks`. Measured on #1033's review: a `pdk-checks` red on its
+# netlist-freshness gate read LOOM-CHECKS-GREEN after a label add that
+# skipped both jobs. With `labeled` absent, a label add creates no run of
+# any workflow in this repo, so a head's conclusions always come from its
+# own opened/synchronize runs -- a red head stays red and a green head
+# stays green, whatever labels land on the PR afterwards.
 #
 #   design-changed -- per-job path filter for pdk-checks below. GitHub
 #                    Actions has no per-job `paths:` key, and a
@@ -18,18 +30,10 @@ name: PDK checks
 #                    PATH. Runs on the nightly schedule, on manual dispatch,
 #                    and on any PR that touches design/; the `ci:full`
 #                    label (declared in .github/labels.yml) forces it on for
-#                    a PR that leaves design/ alone.
-#
-# Label adds fire this workflow (that is what `labeled` means), so both jobs
-# gate on "not a label add, or the label added is ci:full": a label add
-# creates no new head, so the head's real PDK verdict stays on its
-# opened/synchronize run, and the skipped contexts report as "skipped" --
-# never as a green checkmark. The `checks` context is never re-reported on
-# a label add at all, because ci.yml does not carry `labeled`; that asymmetry
-# is deliberate: a label add on a red PR head must not overwrite the failing
-# `checks` conclusion with a skipped one, which every reader of this repo's
-# checks (forge rollup, merge-pr's required-context gate, the Judge's
-# exact-head CI gate) counts as green.
+#                    a PR that leaves design/ alone -- on the PR's next
+#                    opened/synchronize run, or right away via `gh workflow
+#                    run pdk-checks.yml --ref <branch>`. A label add itself
+#                    starts nothing (see above).
 #
 # There is no push trigger on purpose: pdk-checks has never run on plain
 # main pushes -- the nightly covers main, and ci.yml's push run carries the
@@ -37,7 +41,9 @@ name: PDK checks
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    # `labeled` is deliberately absent, like in ci.yml -- see the header
+    # comment. A label add creates no run of this workflow at all.
+    types: [opened, synchronize, reopened]
   schedule:
     # Nightly PDK-dependent run -- the headless half of the nightly lives in
     # ci.yml (same cron).
@@ -59,15 +65,8 @@ jobs:
     # `paths:` key, and a workflow-level `paths:` on the pull_request trigger
     # would gate the headless `checks` job in ci.yml too -- so ask the API
     # which files the PR touches. No checkout, no PDK, a couple of seconds.
-    #
-    # The label-event gate (issue #1015): on any other label add this job
-    # skips too, so a label write costs a ~2-second all-skip run, never a
-    # PDK install. The gate is repeated on pdk-checks rather than inherited
-    # from this job's output -- see the comment there.
     if: >-
-      github.event_name == 'pull_request' &&
-      (github.event.action != 'labeled' ||
-       github.event.label.name == 'ci:full')
+      github.event_name == 'pull_request'
     permissions:
       contents: read
       pull-requests: read
@@ -109,18 +108,16 @@ jobs:
     # design-changed job which failed outright (empty output) also falls open
     # to running these checks, matching the fail-open behaviour of its script.
     #
-    # The label-event gate is repeated here and cannot be inherited from
-    # design-changed's outcome: on a non-ci:full label add design-changed
-    # skips, its output is empty, and empty `!= 'false'` is true -- without
-    # this arm every label add would run the full PDK install and xschem
-    # build (issue #1015). This arm is also why the trigger split is done
-    # with a per-job gate here instead of by dropping `labeled` from the
-    # types: unlike ci.yml's `checks`, this workflow NEEDS `labeled` so the
-    # ci:full opt-in can force pdk-checks on.
+    # The `ci:full` arm reads the PR's labels as of the run's event, so it
+    # applies to opened/synchronize runs -- a PR labeled ci:full that then
+    # pushes. To run the PDK tier right now on a branch that will not see a
+    # new push, dispatch this workflow on it (`gh workflow run
+    # pdk-checks.yml --ref <branch>`). Re-running an older run does not pick
+    # up labels added after that run's event, and a label add itself starts
+    # nothing: no workflow in this repo carries `labeled` (see the header
+    # comment for why a label-add run may not re-report these job names).
     if: >-
       !cancelled() &&
-      (github.event.action != 'labeled' ||
-       github.event.label.name == 'ci:full') &&
       (github.event_name == 'schedule' ||
        github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'pull_request' &&

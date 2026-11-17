@@ -333,7 +333,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:de5dff8c058c03023d639bcc695644c0f230288eba2b853bd4725520dc348cab",
+        "content_hash": "sha256:1d5dc72f3d640127e269d3179e78609a0483970a862d0c8018c166e61fd53b8b",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -342,7 +342,7 @@
             "path": "signoff/attest/repo-hygiene.json",
             "scope": "repo"
           },
-          "content_hash": "sha256:de5dff8c058c03023d639bcc695644c0f230288eba2b853bd4725520dc348cab",
+          "content_hash": "sha256:1d5dc72f3d640127e269d3179e78609a0483970a862d0c8018c166e61fd53b8b",
           "input_verified": true,
           "summary": "README, contributing guide, license, spec and the CI commands audited",
           "source": "signoff/attest/repo-hygiene.json"
@@ -364,7 +364,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:de5dff8c058c03023d639bcc695644c0f230288eba2b853bd4725520dc348cab",
+        "content_hash": "sha256:1d5dc72f3d640127e269d3179e78609a0483970a862d0c8018c166e61fd53b8b",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -373,7 +373,7 @@
             "path": "signoff/attest/repo-hygiene.json",
             "scope": "repo"
           },
-          "content_hash": "sha256:de5dff8c058c03023d639bcc695644c0f230288eba2b853bd4725520dc348cab",
+          "content_hash": "sha256:1d5dc72f3d640127e269d3179e78609a0483970a862d0c8018c166e61fd53b8b",
           "input_verified": true,
           "summary": "README, contributing guide, license, spec and the CI commands audited",
           "source": "signoff/attest/repo-hygiene.json"
