@@ -224,8 +224,18 @@ capture and the ngspice banner. The capture is collected best-effort by
 (`CONTRACT_OUTPUT_NAMES` keeps the four contract-named files out of a possibly
 shared rundir), and the committed per-corner logs begin at the `.spiceinit`
 marker without the banner, so the creation date is not recoverable from the
-retained evidence either. Each of these values hits only this document in the
-tree (searches re-run on this branch, 2026-11-17).
+retained evidence either. Each of the discriminating values above — the
+banner creation date, the binary sha256 and the image-manifest fields — hits
+only this document in the tree, as does the batch CPU model (`8375C`);
+searches re-run on this branch, 2026-11-17. The one exception is the local CPU
+model (`8488C`), which also appears in `sim/BATCH-IMAGE-DIAGNOSIS-2026-10-08.md`
+(as both sides of an ngspice-46-era comparison) and
+`.loom/docs/telemetry-overhead.md` (a fleet-host note for an unrelated tool) —
+prose run-time observations from other sessions that neither record this
+pilot's environment nor make its CPU row re-derivable. The CPU and
+`OMP_NUM_THREADS` rows stand as non-re-derivable on the run-time-observation
+ground alone: the retained per-corner logs record no CPU model and no thread
+count.
 
 **Re-derivable from committed evidence**:
 
