@@ -94,6 +94,14 @@ def store(bench: str, record_id: str, files: list[Path], put_script: Path | None
         return proc.returncode
     for src in files:
         src.unlink()
+    # The staged copies are transient: the store holds the bytes and the
+    # manifest names them, so nothing downstream reads them again -- the
+    # per-point uploads already delete theirs. Leaving them would make a
+    # second run that reserved the same id (same second, same commit, a
+    # different checkout's experiment dir) collide with this run's leftovers
+    # on its own stage directory and fail closed for no good reason (#1049).
+    for dst in staged:
+        dst.unlink(missing_ok=True)
     return 0
 
 
@@ -110,8 +118,8 @@ def require_store(purpose: str) -> None:
     The store path has no fallback to committed bytes, so a run that will
     need the broker must find out before it dispatches a grid, not hours
     later at the first per-point upload. Raises :class:`ArtifactUploadError`
-    when ``$KLT_ARTIFACT_BROKER`` is unset or this klt lacks the
-    ``artifact put``/``get`` subcommands the flow uses.
+    when ``$KLT_ARTIFACT_BROKER`` is unset, ``klt`` is not on ``PATH``, or
+    this klt lacks the ``artifact put``/``get`` subcommands the flow uses.
     """
     if not os.environ.get("KLT_ARTIFACT_BROKER"):
         raise ArtifactUploadError(
@@ -119,10 +127,19 @@ def require_store(purpose: str) -> None:
             "(no fallback to committed bytes)"
         )
     for subcommand in ("put", "get"):
-        proc = subprocess.run(
-            ["klt", "artifact", subcommand, "--help"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=os.environ,
-        )
+        try:
+            proc = subprocess.run(
+                ["klt", "artifact", subcommand, "--help"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=os.environ,
+            )
+        except OSError:
+            # A klt binary that is not on PATH fails the same preflight as
+            # one that lacks the subcommand: refused before dispatch, with
+            # the reason stated -- not an unhandled traceback (#1049).
+            raise ArtifactUploadError(
+                f"klt not found on PATH; {purpose} refuses "
+                "(no fallback to committed bytes)"
+            ) from None
         if proc.returncode != 0:
             raise ArtifactUploadError(
                 f"this klt has no 'artifact {subcommand}'; {purpose} refuses "

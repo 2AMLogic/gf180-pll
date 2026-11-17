@@ -185,6 +185,20 @@ class AdoptionHelperTests(unittest.TestCase):
             with self.assertRaises(artifacts.ArtifactUploadError):
                 artifacts.require_store("--artifact-store")
 
+    def test_require_store_fails_closed_without_klt_binary(self):
+        # `klt` not on PATH raises FileNotFoundError from subprocess.run
+        # itself; the preflight must convert that to the same clean refusal
+        # as a klt lacking the subcommand, not an unhandled traceback (#1049).
+        def _no_binary(cmd, **kwargs):
+            raise FileNotFoundError(2, "No such file or directory", cmd[0])
+
+        with unittest.mock.patch.dict(os.environ, {"KLT_ARTIFACT_BROKER": "http://b"}), \
+                unittest.mock.patch.object(artifacts.subprocess, "run",
+                                           side_effect=_no_binary):
+            with self.assertRaises(artifacts.ArtifactUploadError) as ctx:
+                artifacts.require_store("--artifact-store")
+        self.assertIn("klt not found on PATH", str(ctx.exception))
+
     def test_store_point_logs_uploads_and_cleans_stage(self):
         log_dir = self.root / "corners" / "rid-9"
         log_dir.mkdir(parents=True)
@@ -414,6 +428,12 @@ class CliAdoptionTests(ManifestFixture):
         real_run = subprocess.run
 
         def _proc_router(cmd, **kwargs):
+            if cmd[:4] in (["klt", "artifact", "put", "--help"],
+                           ["klt", "artifact", "get", "--help"]):
+                # require_store's preflight probe: this klt has the flow's
+                # subcommands, so the run proceeds to the fake store below.
+                return subprocess.CompletedProcess(
+                    args=cmd, returncode=0, stdout="", stderr="")
             if cmd[:3] == ["klt", "artifact", "get"] and "-o" in cmd:
                 sha = cmd[3]
                 out = Path(cmd[cmd.index("-o") + 1])
@@ -552,11 +572,11 @@ class CliAdoptionTests(ManifestFixture):
         root2 = self._second_host("host-b")
         self._install_fake_writer()
         state2: dict = {}
-        status2, out2, _ = self._run_cli(
+        status2, out2, err2 = self._run_cli(
             self._args("--artifact-store"), self._fake_grid(state=state2),
             sim_dir=root2,
         )
-        self.assertEqual(status2, cli.EXIT_OK)
+        self.assertEqual(status2, cli.EXIT_OK, f"ERR={err2}")
         self.assertEqual(state2["replayed"], state1["simulated"])
         self.assertEqual(len(state2["simulated"]), 1, "only the remainder runs")
         self.assertIn("adopted   : 1 point(s) fetched from the artifact store", out2)
@@ -578,19 +598,19 @@ class CliAdoptionTests(ManifestFixture):
         full, structurally ordinary record."""
         self._install_fake_writer()
         state1: dict = {}
-        status1, _, _ = self._run_cli(
+        status1, _, err1 = self._run_cli(
             self._args("--artifact-store"), self._fake_grid(state=state1)
         )
-        self.assertEqual(status1, cli.EXIT_OK)
+        self.assertEqual(status1, cli.EXIT_OK, f"ERR={err1}")
         self.assertEqual(len(self._records(self.root)), 1)
 
         root2 = self._second_host("host-b")
         state2: dict = {}
-        status2, out2, _ = self._run_cli(
+        status2, out2, err2 = self._run_cli(
             self._args("--artifact-store"), self._fake_grid(state=state2),
             sim_dir=root2,
         )
-        self.assertEqual(status2, cli.EXIT_OK)
+        self.assertEqual(status2, cli.EXIT_OK, f"ERR={err2}")
         self.assertEqual(sorted(state2["replayed"]), sorted(state1["simulated"]))
         self.assertEqual(state2["simulated"], [], "nothing left to simulate")
         self.assertIn("2 point(s) fetched from the artifact store", out2)
@@ -612,10 +632,10 @@ class CliAdoptionTests(ManifestFixture):
              "--subset-reason", "unit test: different grid, must adopt nothing",
              "-j", "1", "--artifact-store"]
         )
-        status2, out2, _ = self._run_cli(
+        status2, out2, err2 = self._run_cli(
             args2, self._fake_grid(state=state2), sim_dir=root2
         )
-        self.assertEqual(status2, cli.EXIT_OK)
+        self.assertEqual(status2, cli.EXIT_OK, f"ERR={err2}")
         self.assertEqual(state2["replayed"], [], "a mismatched grid adopts nothing")
         self.assertNotIn("adopted   :", out2)
         text = self._records(root2)[0].read_text()
@@ -637,11 +657,11 @@ class CliAdoptionTests(ManifestFixture):
 
         root2 = self._second_host("host-b")
         state2: dict = {}
-        status2, _, _ = self._run_cli(
+        status2, _, err2 = self._run_cli(
             self._args("--artifact-store"), self._fake_grid(state=state2),
             sim_dir=root2,
         )
-        self.assertEqual(status2, cli.EXIT_OK)
+        self.assertEqual(status2, cli.EXIT_OK, f"ERR={err2}")
         # The corrupted point re-simulated; its neighbour was still adopted.
         self.assertEqual(len(state2["simulated"]), 1)
         self.assertEqual(len(state2["replayed"]), 1)
@@ -768,11 +788,11 @@ class CliAdoptionTests(ManifestFixture):
         # Attempt 2: --resume the same id on this host; replays the banked
         # point, simulates the other, banks the fresh one.
         state2: dict = {}
-        status2, out2, _ = self._run_cli(
+        status2, out2, err2 = self._run_cli(
             self._args("--artifact-store", "--resume", record_id),
             self._fake_grid(state=state2),
         )
-        self.assertEqual(status2, cli.EXIT_OK)
+        self.assertEqual(status2, cli.EXIT_OK, f"ERR={err2}")
         self.assertEqual(len(state2["replayed"]), 1)
         self.assertIn("resume    : 1 point(s) replayed from the earlier", out2)
         text = self._records(self.root)[0].read_text()
@@ -784,11 +804,11 @@ class CliAdoptionTests(ManifestFixture):
         # attempt 1 banked and the one attempt 2 banked.
         root3 = self._second_host("host-b")
         state3: dict = {}
-        status3, out3, _ = self._run_cli(
+        status3, out3, err3 = self._run_cli(
             self._args("--artifact-store"), self._fake_grid(state=state3),
             sim_dir=root3,
         )
-        self.assertEqual(status3, cli.EXIT_OK)
+        self.assertEqual(status3, cli.EXIT_OK, f"ERR={err3}")
         self.assertEqual(len(state3["replayed"]), 2)
         self.assertEqual(state3["simulated"], [])
         self.assertIn("adopted   : 2 point(s) fetched from the artifact store", out3)

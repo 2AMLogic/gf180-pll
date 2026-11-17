@@ -68,6 +68,15 @@ mkdir -p "$(dirname "$manifest")"
 # failed put never leaves a partial manifest.
 tmp="$(mktemp "${manifest}.XXXXXX")"
 rm -f "$tmp"
+# Seed the temp manifest from the current one when it exists: `klt artifact
+# put --manifest` merges its entries into what the file already holds, and
+# handing it an absent path would make every call replace the manifest with
+# only its own entries -- each per-point upload would then erase the points
+# banked before it, leaving a later attempt one adoptable point short of a
+# fully banked grid (#1049).
+if [ -f "$manifest" ]; then
+  cp "$manifest" "$tmp"
+fi
 trap 'rm -f "$tmp"' EXIT
 klt artifact put --manifest "$tmp" "$@"
 rc=$?

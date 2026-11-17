@@ -970,9 +970,11 @@ def _run_reserved(
     # host can reach. Replayed points (resumed or adopted) already have
     # their evidence banked, and a point that did not succeed has nothing
     # adoptable to bank -- its log still reaches the end-of-run store, as
-    # always. The first upload failure aborts the run: evidence this run
-    # cannot store is evidence the campaign can lose, so the grid stops
-    # rather than minting a record over incomplete raw output.
+    # always. The first upload failure stops banking and minting a record:
+    # evidence this run cannot store is evidence the campaign can lose.
+    # (Serially the grid stops with the failing point; with -j > 1 points
+    # already dispatched keep running to completion, but nothing after the
+    # failure is banked -- so the record is refused either way.)
     artifact_upload = None
     if args.artifact_store and evidence:
         def artifact_upload(corner_id: str) -> None:
@@ -1035,11 +1037,13 @@ def _run_reserved(
         # banked stay adoptable.
         print(
             f"error: --artifact-store: {exc}\n"
-            f"  {len(completed_results)}/{len(points)} point(s) had completed; "
-            "the grid stops because its raw evidence cannot be stored -- no "
-            "summary record will be published. Logs written so far stay in "
-            f"place under {log_dir}, and the points already banked in the "
-            "store remain adoptable by the next attempt.",
+            f"  {len(completed_results)}/{len(points)} point(s) had completed "
+            "when banking failed; the run stops banking and no summary "
+            "record will be published (with -j > 1, points already "
+            "dispatched may still finish, but nothing after the failure is "
+            "banked). Logs written so far stay in place under "
+            f"{log_dir}, and the points already banked in the store remain "
+            "adoptable by the next attempt.",
             file=sys.stderr,
         )
         return EXIT_ENVIRONMENT
