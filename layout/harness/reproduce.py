@@ -143,6 +143,12 @@ EXCLUDED: dict[str, str] = {
     # reproducing it needs a PDK -- which is exactly what this module is
     # built not to require. run_pv.py build covers it where a PDK exists.
     "evidence/inv-tb-proof/inv_tb.gds": "needs the PDK stdcell GDS (harness/cell.py), not pure Python",
+    # The same three artifacts from the DR-043 --combine re-run of the same
+    # prove flow into a fresh evidence directory (issue #980) -- same
+    # reasons as their inv-tb-proof twins above.
+    "evidence/inv-tb-combine-f6eeac7/drc_fault.gds": "negative control, injected by harness/faults.py",
+    "evidence/inv-tb-combine-f6eeac7/lvs_fault.gds": "negative control, injected by harness/faults.py",
+    "evidence/inv-tb-combine-f6eeac7/inv_tb.gds": "needs the PDK stdcell GDS (harness/cell.py), not pure Python",
 }
 
 
