@@ -912,13 +912,13 @@ class BatchBackend:
         The harness resolves a manifest's ``raw_files`` against the point's
         ``rundir`` (``runner.capture_raw_files``), so a collected waveform has
         to arrive there for a reduction to read it -- job isolation is for the
-        three files *this module's* job command writes, not for the deck's own
-        output.
+        contract files *this module's* job command writes, not for the deck's
+        own output.
 
         Two classes of collected file are deliberately **not** published, and
         both are about not overwriting something the harness owns:
 
-        - the three fixed contract names (:data:`CONTRACT_OUTPUT_NAMES`), which
+        - the fixed contract names (:data:`CONTRACT_OUTPUT_NAMES`), which
           are already carried back in the returned :class:`DeckRun` and whose
           shared-rundir collision is the whole point of this isolation. The
           point's log is written to ``corners/<record-id>/<run-id>.log`` by the
