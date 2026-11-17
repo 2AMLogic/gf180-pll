@@ -438,13 +438,18 @@ RESUME_LOCK_DIR = ".resuming"
 
 
 def reservation_backend(info: dict) -> str:
-    """The execution backend a reservation's recorded ``argv`` asked for.
+    """The execution backend one recorded attempt's ``argv`` asked for.
 
-    A replayed point keeps the executing host of the attempt that actually
-    ran it, and which machines those were depends on that attempt's backend:
-    the recording host for ``local``, per-job execution hosts for an
-    off-host backend. The argv is the only durable place the choice is
-    written (a reservation's ownership file predates every backend report).
+    ``info`` is one entry of an ownership file's ``attempts`` list (or the
+    top level of the file itself), so this answers per attempt. The
+    harness's attribution rule spans the whole history: a replayed point
+    keeps the executing host of the attempt that actually ran it, and a
+    replayed log may come from any earlier attempt, so the replayed points
+    carry the recording host only when **every** earlier attempt read back
+    ``local`` here. A history in which any attempt dispatched off-host
+    leaves them unattributed rather than claiming a host some of them
+    never ran on. The argv is the only durable place the choice is written
+    (a reservation's ownership file predates every backend report).
     """
     argv = info.get("argv") or []
     for i, token in enumerate(argv):
@@ -971,6 +976,7 @@ def build_record(
     abort_reason: str = "",
     env_provenance_lines: list[str] | None = None,
     resume: dict | None = None,
+    adoption: dict | None = None,
 ) -> dict:
     measure_names = tb.measure_names
     optional_names = {n for n in measure_names if tb.is_optional(n)}
@@ -1055,6 +1061,12 @@ def build_record(
         # _resume_lines -- a record whose wall clock describes only its final
         # process must say so (#973).
         "resume": dict(resume or {}),
+        # Empty for an ordinary run. A run that adopted points from the
+        # artifact store (#1048) carries the adopted/fresh split, the grid
+        # fingerprint the adoption was keyed on and the prior attempt(s) the
+        # points came from, rendered by _adoption_lines -- adopted evidence
+        # must never pass for freshly simulated evidence.
+        "artifact_adoption": dict(adoption or {}),
         # The CLI may have already computed this (and folded in gaps only it
         # knows about, e.g. an axis narrowed by --axis); reuse it so the
         # record and the pre-run subset gate cannot disagree.
@@ -1433,6 +1445,45 @@ def _resume_lines(record: dict) -> list[str]:
     return lines
 
 
+def _adoption_lines(record: dict) -> list[str]:
+    """The artifact-store adoption disclosure (#1048).
+
+    A record whose grid was partly (or wholly) adopted from the fleet
+    artifact store must not pass for a single-process run: the point count
+    alone cannot tell a reader which points this attempt actually simulated,
+    and the wall clock describes only the fresh ones. The bullet names the
+    split, the fingerprint the adoption was keyed on, and the earlier
+    attempt(s) whose per-point manifests supplied the logs.
+    """
+    adoption = record.get("artifact_adoption") or {}
+    adopted = adoption.get("adopted_points") or 0
+    if not adopted:
+        return []
+    fresh = adoption.get("fresh_points")
+    fingerprint = adoption.get("fingerprint") or ""
+    sources = adoption.get("sources") or []
+    source_text = (
+        "earlier attempt record id(s) " + ", ".join(f"`{s}`" for s in sources)
+        if sources
+        else "an unnamed earlier attempt"
+    )
+    return [
+        "- **Artifact-adopted points**: "
+        f"{adopted} point(s) of this grid were not simulated by this "
+        "attempt: their raw per-phase logs were fetched from the fleet "
+        "artifact store (each verified by sha256 after fetch) under an "
+        f"identical grid fingerprint (`{fingerprint[:12]}...`) and replayed "
+        "through the same parser and qualification gate a resumed run uses. "
+        f"{fresh} point(s) were simulated by this attempt. Sources: "
+        f"{source_text}.",
+        "  - Adopted points carry `\"replayed\": true`, `seconds` 0 and an "
+        "unattributed executing host -- the store proves which bytes were "
+        "stored, never which machine produced them -- so the `Execution:` "
+        "line, the wall clock and the per-point host/seconds attributions "
+        "describe only the fresh points.",
+    ]
+
+
 def _corner_matrix_lines(record: dict) -> list[str]:
     grid = record["grid"]
     axes = record["matrix"].get("axes") or []
@@ -1621,7 +1672,10 @@ def _corner_table_lines(
     can be given only its own columns' failures -- an unrelated topology's
     FAIL in this table's pass/fail column would be pure noise. A point that
     failed to simulate at all is reported as ERROR in *every* table, because
-    the whole point is missing, not one topology's slice of it.
+    the whole point is missing, not one topology's slice of it. A replayed
+    point carries a ``(replayed)`` marker on its verdict whatever that
+    verdict is -- a replayed failure must be as distinguishable from a
+    freshly-simulated one as a replayed pass is.
     """
     lines = [
         "  | corner-id | " + " | ".join(measure_names) + " | pass/fail |",
@@ -1637,8 +1691,15 @@ def _corner_table_lines(
             for name in measure_names
         ]
         verdict = _point_verdict(point, failures_at)
-        if point.get("replayed") and verdict == "PASS":
-            verdict = "PASS (replayed)"
+        if point.get("replayed"):
+            # The marker goes on every replayed verdict, not only PASS: a
+            # reader must be able to tell a replayed failure from a
+            # freshly-simulated one, exactly as for a replayed pass. The
+            # verdict word leads ("FAIL -- detail"), so the marker slots in
+            # before the detail; PASS, which has no detail, renders exactly
+            # as it did before.
+            head, sep, tail = verdict.partition(" — ")
+            verdict = f"{head} (replayed)" + (sep + tail if sep else "")
         lines.append(f"  | `{point['corner_id']}` | " + " | ".join(cells) + f" | {verdict} |")
     return lines
 
@@ -1879,6 +1940,7 @@ def render_record(record: dict, experiment: str) -> str:
         env.get("ngspice") or "",
     )
     lines += _resume_lines(record)
+    lines += _adoption_lines(record)
     lines += _corner_matrix_lines(record)
     lines += _methodology_lines(record)
     lines.append(

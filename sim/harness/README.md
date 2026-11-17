@@ -211,6 +211,59 @@ with the record. It fails closed: any nonzero writer exit (e.g. 3 =
 stderr, and publishes no summary record. It is off by default so local runs and
 tests need no broker, and it is ignored under `--no-write`.
 
+Under `--artifact-store` the harness also banks **each completed point's raw
+logs in the store as it finishes** (#1048), and a later run can **adopt**
+them — see "Adopting a prior attempt's stored points" below. Because the
+store path has no fallback to committed bytes, a run that will need the
+broker now finds out **before it dispatches a single point** (exit `3` with
+the reason): a broker discovered missing after a thousand simulated points
+is exactly the stranded-compute failure this flow exists to end.
+
+### Adopting a prior attempt's stored points (`--artifact-store`)
+
+`--resume` re-adopts an interrupted reservation only on the host that still
+holds its workdir — a foreign host cannot prove the liveness of a run whose
+reservation file it cannot check. The artifact store has no such
+constraint: bytes are content-addressed and sha256-verified, so a grid that
+exceeds one agent step can hand its completed points from host to host
+(#1048):
+
+- **Banking.** Each point whose simulation succeeds has its per-phase logs
+  uploaded to the store immediately, staged under
+  `sim/.artifact-stage/<bench>-perpoint/<grid-fingerprint>/<corner-id>/` and
+  merged into the attempt's per-point manifest
+  `manifests/artifacts/<bench>-perpoint-<record-id>.manifest.json` (one per
+  attempt, so concurrent attempts never race on one file). The grid
+  fingerprint is the same one `--resume` records: a sha256 over the point
+  set and the manifest provenance, so it identifies *what the grid means*,
+  not merely its size. A point whose upload fails stops the run before any
+  record is minted — evidence the campaign could not bank is evidence it
+  could lose. Failed points and killed decks are not banked (their logs
+  still reach the end-of-run store, as always).
+- **Adoption.** A fresh recording run under `--artifact-store` (or a
+  `--resume` run, for the points its same-host predecessor never reached)
+  scans the manifests in `manifests/artifacts/` for per-point entries under
+  its own grid fingerprint, fetches them (`klt artifact get`), re-verifies
+  each fetched object's sha256, and replays each point through the same
+  parser and qualification gate `--resume` uses. Only the points that were
+  never stored — or whose stored log fails to qualify, e.g. a stored
+  killed-deck log with the timeout banner, or an object that fails its
+  sha256 check — are simulated. A grid that does not match the fingerprint
+  adopts nothing: adoption is keyed on a proven-identical grid, never a
+  best-effort one. The progress output states the adopted vs. fresh split.
+- **Disclosure.** The minted record carries an **Artifact-adopted points**
+  bullet naming the adopted/fresh split, the fingerprint, and the earlier
+  attempt(s) whose manifests supplied the points. Adopted points carry
+  `"replayed": true` (with the `(replayed)` corner-table marker), `seconds`
+  0, and an **unattributed** executing host — the store proves which bytes
+  were stored, never which machine produced them.
+- **The carrier requirement.** The store holds the bytes; the *manifest*
+  is what names them. A next attempt on another host can only adopt the
+  points whose per-point manifest has reached that host's checkout
+  (`manifests/artifacts/` is a tracked tree — commit and push it as the
+  campaign progresses). A malformed manifest degrades the next attempt to
+  re-simulation; it never crashes it.
+
 **Subsets need a reason.** `sim/README.md` requires every record's *Corner
 matrix run* field to be the full mandated matrix "unless the record states why
 a subset was used". The runner enforces that: if the grid you asked for is
@@ -1183,7 +1236,11 @@ under one id); a missing `corners/<record-id>/` directory; and a
 plan (`--backend batch` without `--batch-apply`). It composes with
 `--backend batch --batch-apply`, `--supersedes`/`--supersedes-note` and
 `--artifact-store` — the stored raw output includes the replayed points'
-logs, which sit in the same evidence directory.
+logs, which sit in the same evidence directory; and under
+`--artifact-store` the adoption pass additionally covers whatever this
+host's logs cannot supply, fetched from points an earlier attempt on
+another host already banked (see "Adopting a prior attempt's stored
+points").
 
 **The carrier requirement — what must survive between attempts.** Resume
 works by reading two paths from the earlier attempt:
@@ -1207,10 +1264,15 @@ every attempt's start, the replayed/re-run split, and an explicit
 statement that the `Execution:` line, the wall clock and the per-point
 `seconds` describe the final attempt only — a reader must not mistake one
 process's wall time for a multi-attempt campaign's cost. Replayed points
-carry `"replayed": true` in the record's point entry (`PASS (replayed)` in
-the corner table), `seconds` 0, and the executing host of the attempt that
-actually ran them — unattributed when that attempt dispatched off-host,
-since a raw log does not record which machine produced it. `simulator` and
+carry `"replayed": true` in the record's point entry (a `(replayed)`
+marker on the point's verdict in the corner table, whatever that verdict
+is), `seconds` 0, and the executing host of the attempt that actually ran
+them. A replayed log may come from any earlier attempt, so the replayed
+points carry the recording host only when **every** earlier attempt ran
+on the `local` backend; a history in which any attempt dispatched
+off-host leaves them unattributed, since a raw log does not record which
+machine produced it — under-claiming beats naming a host some of the
+replayed logs never ran on. `simulator` and
 init attribution are re-read from the log's own text, so those survive.
 A timed-out point can never be replayed: the timeout banner is written
 first in the log, before any measurement.

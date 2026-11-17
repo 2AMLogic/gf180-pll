@@ -280,8 +280,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="store the run's raw output (per-corner logs, raw_measures.csv, "
         "retained raw files) with sim/lib/artifact-put.sh and commit only its "
-        "manifest; fails closed before the summary record is published "
-        "(needs $KLT_ARTIFACT_BROKER; ignored with --no-write)",
+        "manifest; each completed point's raw logs are also banked in the "
+        "store as it finishes (keyed by the grid fingerprint), so a later run "
+        "on any host with an identical grid adopts them instead of "
+        "re-simulating. Fails closed -- before dispatching and before any "
+        "record is published -- when the broker is unreachable (needs "
+        "$KLT_ARTIFACT_BROKER; ignored with --no-write)",
     )
     parser.add_argument("--quiet", action="store_true", help="only print the summary")
     parser.add_argument("--version", action="version", version=f"gf180-pll harness {HARNESS_VERSION}")
@@ -744,6 +748,7 @@ def run(args: argparse.Namespace) -> int:
             args, tb, pdk, ngspice, points, corner_list, temperatures, supplies,
             nominal, tolerance, conformance, backend, plan_only, jobs, omp_pin,
             started, git, reservation, env_provenance_lines, resume_info,
+            fingerprint=fingerprint,
         )
     finally:
         # Whatever ended the run before its summary was published -- an
@@ -766,10 +771,63 @@ def _report_unpublished(reservation: "report.RecordReservation") -> None:
     )
 
 
+def _adopt_stored_points(
+    tb, points, workdir: Path, log_dir: Path, fingerprint: str,
+    skip: tuple[str, ...] = (),
+) -> tuple[dict, list[str]]:
+    """Adopt this grid's already-stored points from the artifact store (#1048).
+
+    A fresh invocation under ``--artifact-store`` calls this before
+    dispatching: every point whose per-phase logs sit in the store under THIS
+    grid fingerprint is fetched (``klt artifact get``, each byte stream
+    sha256-re-verified), written into this attempt's ``log_dir`` and replayed
+    through :func:`runner.replay_point` -- the same parser and the same
+    all-or-nothing qualification gate a ``--resume`` uses, so a stored log
+    that fails to parse (a killed deck's timeout banner, a truncated write)
+    simply re-simulates its point. The executing host of a stored log is not
+    recorded anywhere durable, so adopted points are unattributed -- the
+    store proves *what* ran, never *where*.
+
+    ``skip`` names corners an earlier mechanism (``--resume``'s same-host
+    replay) already supplied: they are not fetched, and not counted as
+    adoption -- a point resumed from local logs keeps that attribution
+    rather than being demoted to an unattributed store fetch.
+
+    Returns ``({corner_id: PointResult}, [source record ids])``; a point that
+    does not qualify is simply absent from the dict and runs as usual.
+    """
+    stored, sources = artifacts_mod.lookup_stored_points(tb.experiment, fingerprint)
+    adopted: dict[str, runner.PointResult] = {}
+    if not stored:
+        return adopted, sources
+    points_by_id = {point.corner_id: point for point in points}
+    for corner_id, stems in sorted(stored.items()):
+        if corner_id in skip:
+            continue
+        point = points_by_id.get(corner_id)
+        if point is None:
+            continue
+        expected = [phase.run_id(corner_id) for phase in tb.run_phases]
+        # A point is adoptable only whole: one entry per phase of THIS grid.
+        # A stray or partial entry set re-simulates -- never half-adopts.
+        if sorted(stems) != sorted(expected):
+            continue
+        if not all(
+            artifacts_mod.fetch_stored_log(stems[run_id], log_dir / f"{run_id}.log")
+            for run_id in expected
+        ):
+            continue
+        result = runner.replay_point(tb, point, workdir, log_dir, host="")
+        if result is not None and result.status == "ok":
+            adopted[corner_id] = result
+    return adopted, sources
+
+
 def _run_reserved(
     args, tb, pdk, ngspice, points, corner_list, temperatures, supplies,
     nominal, tolerance, conformance, backend, plan_only, jobs, omp_pin,
     started, git, reservation, env_provenance_lines, resume_info=None,
+    fingerprint=None,
 ) -> int:
     experiment_dir = tb.experiment_dir
     record_id = reservation.record_id
@@ -786,6 +844,19 @@ def _run_reserved(
             return print_batch_plan(tb, pdk, points, workdir, backend, args.timeout)
         except execution_mod.BackendError as exc:
             print(f"error: {exc}", file=sys.stderr)
+            return EXIT_ENVIRONMENT
+
+    # --artifact-store (#1048): the store path has no fallback to committed
+    # bytes, so a run that needs the broker must find out before dispatching
+    # a single point. A broker discovered missing after a thousand points is
+    # exactly the stranded-compute failure this flow exists to end. This
+    # covers adoption below too, which fetches through the same broker.
+    evidence = not args.no_write
+    if args.artifact_store and evidence:
+        try:
+            artifacts_mod.require_store("--artifact-store")
+        except artifacts_mod.ArtifactUploadError as exc:
+            print(f"error: --artifact-store: {exc}", file=sys.stderr)
             return EXIT_ENVIRONMENT
 
     # --resume (#973): before dispatching anything, split the grid into the
@@ -815,13 +886,34 @@ def _run_reserved(
             if prior_backends and all(b == "local" for b in prior_backends)
             else ""
         )
-        rerun: list[str] = []
         for point in points:
             result = runner.replay_point(tb, point, workdir, log_dir, host=replay_host)
             if result is None:
-                rerun.append(point.corner_id)
-            else:
-                replay[point.corner_id] = result
+                continue
+            replay[point.corner_id] = result
+        # Captured before adoption (below) adds its own points to `replay`,
+        # so the resume line keeps describing only what --resume supplied.
+        resume_replayed = len(replay)
+
+    # --artifact-store adoption (#1048): start this attempt from what an
+    # earlier one already banked under an identical grid fingerprint --
+    # on any host, where --resume (above) reaches only same-host workdirs.
+    # Adopted points enter the same replay map, so the grid dispatches only
+    # what neither mechanism can supply.
+    adoption: dict | None = None
+    if args.artifact_store and evidence:
+        adopted, adopt_sources = _adopt_stored_points(
+            tb, points, workdir, log_dir, fingerprint, skip=tuple(replay)
+        )
+        for corner_id, result in adopted.items():
+            replay.setdefault(corner_id, result)
+        if adopted:
+            adoption = {
+                "adopted_points": len(adopted),
+                "fresh_points": len(points) - len(replay),
+                "fingerprint": fingerprint,
+                "sources": adopt_sources,
+            }
 
     if not args.quiet:
         print(f"experiment: {tb.experiment}"
@@ -851,8 +943,14 @@ def _run_reserved(
         print(f"record id : {record_id}")
         if resume_info is not None:
             print(
-                f"resume    : {len(replay)} point(s) replayed from the earlier "
-                f"attempt's logs, {len(rerun)} re-run"
+                f"resume    : {resume_replayed} point(s) replayed from the earlier "
+                f"attempt's logs, {len(points) - len(replay)} re-run"
+            )
+        if adoption is not None:
+            print(
+                f"adopted   : {adoption['adopted_points']} point(s) fetched from "
+                "the artifact store (grid fingerprint match), "
+                f"{adoption['fresh_points']} simulated by this attempt"
             )
         print()
     for description in conformance.get("empty_blocks", []):
@@ -866,8 +964,40 @@ def _run_reserved(
     # raises, whatever already ran is not lost along with it.
     completed_results: list[runner.PointResult] = []
 
+    # --artifact-store (#1048): bank each freshly simulated point's raw logs
+    # as it finishes, before the next point is reported complete -- the
+    # store, not this process's workdir, is what the next attempt on another
+    # host can reach. Replayed points (resumed or adopted) already have
+    # their evidence banked, and a point that did not succeed has nothing
+    # adoptable to bank -- its log still reaches the end-of-run store, as
+    # always. The first upload failure stops banking and minting a record:
+    # evidence this run cannot store is evidence the campaign can lose.
+    # (Serially the grid stops with the failing point; with -j > 1 points
+    # already dispatched keep running to completion, but nothing after the
+    # failure is banked -- so the record is refused either way.)
+    artifact_upload = None
+    if args.artifact_store and evidence:
+        def artifact_upload(corner_id: str) -> None:
+            artifacts_mod.store_point_logs(
+                tb.experiment, record_id, fingerprint, corner_id,
+                artifacts_mod.point_log_files(tb, corner_id, log_dir),
+            )
+
+    upload_failure = ""
+
     def progress(result):
-        nonlocal completed
+        nonlocal completed, upload_failure
+        if (
+            artifact_upload is not None
+            and not upload_failure
+            and not result.replayed
+            and result.status == "ok"
+        ):
+            try:
+                artifact_upload(result.point.corner_id)
+            except artifacts_mod.ArtifactUploadError as exc:
+                upload_failure = str(exc)
+                raise
         completed += 1
         completed_results.append(result)
         if args.quiet:
@@ -899,6 +1029,24 @@ def _run_reserved(
             backend=backend,
             replay=replay or None,
         )
+    except artifacts_mod.ArtifactUploadError as exc:
+        # Fail closed (#1048): without this point's raw output in the store,
+        # the campaign's next attempt would silently re-buy it -- and minting
+        # a record over raw output that could not even be banked would hide
+        # the gap. The logs already written stay in place; the points already
+        # banked stay adoptable.
+        print(
+            f"error: --artifact-store: {exc}\n"
+            f"  {len(completed_results)}/{len(points)} point(s) had completed "
+            "when banking failed; the run stops banking and no summary "
+            "record will be published (with -j > 1, points already "
+            "dispatched may still finish, but nothing after the failure is "
+            "banked). Logs written so far stay in place under "
+            f"{log_dir}, and the points already banked in the store remain "
+            "adoptable by the next attempt.",
+            file=sys.stderr,
+        )
+        return EXIT_ENVIRONMENT
     except NgspiceMissing as exc:
         # Kept fail-fast and separate from the broad net below: no ngspice on
         # PATH means no point could have meaningfully run, so there is nothing
@@ -969,7 +1117,9 @@ def _run_reserved(
         resume=(
             {
                 "resumed": True,
-                "replayed_points": len(replay),
+                # --resume's own replay count; points adopted from the
+                # artifact store are disclosed separately (artifact_adoption).
+                "replayed_points": resume_replayed,
                 "rerun_points": len(points) - len(replay),
                 # The adopted ownership file's attempt history: attempt 1's
                 # start plus one entry per resume, ending with this one.
@@ -978,6 +1128,7 @@ def _run_reserved(
             if resume_info is not None
             else None
         ),
+        adoption=adoption,
     )
 
     print()
@@ -1029,10 +1180,7 @@ def _run_reserved(
             rc = artifacts_mod.store(tb.experiment, record_id, raw_out)
             if rc != 0:
                 return EXIT_ENVIRONMENT
-            artifact_manifest = (
-                REPO_ROOT / "manifests" / "artifacts"
-                / f"{tb.experiment}-{record_id}.manifest.json"
-            )
+            artifact_manifest = artifacts_mod.manifest_path(tb.experiment, record_id)
         record_path = report.write_record(record, experiment_dir)
         reservation.mark_published()
         print()

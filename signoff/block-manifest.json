@@ -14,7 +14,7 @@
       "file": "signoff/attest/item-10.evidence.json"
     },
     "9.analog": {
-      "content_hash": "sha256:244c6b5bd8ef4d0da3d75dc96b6dab2fe4352f022ccd516fad5f9d602321fa84",
+      "content_hash": "sha256:c727a322ca0e32c3bee4638d2926f1bdd05d63238f65c17c77d078c6b6046d30",
       "file": "signoff/attest/item-9.analog.evidence.json"
     },
     "9.digital": {

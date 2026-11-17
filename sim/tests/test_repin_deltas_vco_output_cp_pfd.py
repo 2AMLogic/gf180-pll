@@ -166,6 +166,85 @@ class TheFlipListTheDocumentTabulates(unittest.TestCase):
                         self.assertIn("duty_pct min=45", v, v)
 
 
+class TheChargePumpAndPfdIncrementsAddNoFlips(unittest.TestCase):
+    """The 2026-11-17 increment re-qualifies both `cp-compliance` benches and
+    both `pfd-deadzone` manifests. Its claim, unlike output-driver's, is that
+    **nothing moved**: zero comparator findings on all four pairs, per-corner
+    verdicts unchanged on every graded row, and provenance on each new record
+    (clean tree, `f6eeac7`, batch fleet) together with each record's own
+    per-point simulator attribution: read ngspice-47 on the two `pfd-deadzone`
+    grids (their `Executing simulator` line is omitted — the harness's
+    every-point-matched disclosure), and an honest `unattributed` disclosure
+    on the two `cp-compliance` grids, whose decks printed no version banner
+    and for which the document claims the batch image's ngspice-47 only by
+    fingerprint inference, never as read provenance. Asserted here, not
+    trusted."""
+
+    #: (slug, superseded id, new id, graded rows the document claims).
+    PAIRS = [
+        ("cp-compliance", "20260801-190821-734f483", "20261115-025500-8da7900", 180),
+        ("cp-compliance", "20260802-061841-c24ee3a", "20261116-180719-930fb6e", 135),
+        ("pfd-deadzone", "20260916-051356-8cedbba", "20261116-183811-1379f1f", 405),
+        ("pfd-deadzone", "20260801-234626-5b333d0", "20261116-195826-16f19a5", 225),
+    ]
+
+    #: new id -> whether its decks printed no ngspice version banner, per the
+    #: record's own `Executing simulator` line (`sim/harness/report.py`
+    #: discloses that as `unattributed` rather than crediting the recording
+    #: host's binary).
+    UNATTRIBUTED = {
+        "20261115-025500-8da7900": True,
+        "20261116-180719-930fb6e": True,
+        "20261116-183811-1379f1f": False,
+        "20261116-195826-16f19a5": False,
+    }
+
+    def _compare(self, slug, old_id, new_id):
+        return record_delta.compare(
+            SIM_DIR / slug / "records" / f"{old_id}.md",
+            SIM_DIR / slug / "records" / f"{new_id}.md",
+        )
+
+    def test_zero_findings_and_unchanged_verdicts_on_every_pair(self):
+        for slug, old_id, new_id, n_rows in self.PAIRS:
+            with self.subTest(pair=f"{slug}/{new_id}"):
+                lines, findings = self._compare(slug, old_id, new_id)
+                self.assertEqual(findings, 0, "a flip or limit-crossing appeared")
+                self.assertTrue(
+                    any(f"unchanged on all {n_rows} graded rows" in ln
+                        for ln in lines),
+                    f"graded-row count drifted from the documented {n_rows}")
+
+    def test_new_records_provenance_is_clean_f6eeac7_batch_and_attribution(
+            self):
+        for slug, _old, new, _n in self.PAIRS:
+            with self.subTest(record=new):
+                text = (SIM_DIR / slug / "records" / f"{new}.md").read_text(
+                    encoding="utf-8")
+                self.assertIn(
+                    "open_pdks `f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7`", text)
+                self.assertIn("(clean tree)", text)
+                self.assertNotIn("DIRTY tree", text)
+                self.assertIn("`batch` execution backend", text)
+                # The submitter's `Simulator:` bullet is NOT per-point
+                # provenance (report.py: under an off-host backend it names
+                # the version resolved on the host that ran no deck). What
+                # counts is each record's own per-point disclosure.
+                if self.UNATTRIBUTED[new]:
+                    self.assertIn("Executing simulator: unattributed", text)
+                else:
+                    # Line omitted => every point reported the recording
+                    # version (ngspice-47): the read-provenance case.
+                    self.assertNotIn(
+                        "Executing simulator: unattributed", text)
+                    self.assertIn("Simulator: ngspice-47", text)
+
+    def test_document_numbers_the_four_pairs_and_states_nothing_to_file(self):
+        text = _doc_text()
+        self.assertIn("945 graded rows", text)
+        self.assertIn("add zero flips", text)
+
+
 class TheAttributionProseRestsOnCommittedProvenance(unittest.TestCase):
     """The document attributes every delta to ngspice-46 -> 47 residue on a
     PDK no-op, and to a clean-tree batch re-run under `f6eeac7`. Each of
@@ -174,6 +253,10 @@ class TheAttributionProseRestsOnCommittedProvenance(unittest.TestCase):
     def test_predecessor_ran_ngspice_46_new_record_ran_ngspice_47(self):
         self.assertIn("ngspice-46", OLD.read_text(encoding="utf-8"))
         new_text = NEW.read_text(encoding="utf-8")
+        # Read provenance, not the submitter's `Simulator:` bullet: the
+        # output-driver record omits its `Executing simulator` line, which
+        # per report.py means every point reported the recording version.
+        self.assertNotIn("Executing simulator: unattributed", new_text)
         self.assertIn("Simulator: ngspice-47", new_text)
 
     def test_new_record_is_clean_tree_f6eeac7_batch_executed(self):

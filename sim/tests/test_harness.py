@@ -1880,6 +1880,120 @@ class CliResumeTests(ManifestFixture):
         self.assertEqual(status, cli.EXIT_ENVIRONMENT)
         self.assertIn("not a record id", err)
 
+    def _adopt(self, points, record_id):
+        """Call ``adopt_interrupted_reservation`` with the reserved grid's
+        fingerprint, as ``cli.py`` does on ``--resume``. Patch
+        ``report.time`` (``_FakeResumeTime``) around the call to make the
+        bounded waits deterministic.
+        """
+        return report.adopt_interrupted_reservation(
+            self.experiment,
+            record_id,
+            report.grid_fingerprint(self.tb, points),
+            started=datetime.datetime(
+                2026, 11, 17, 12, 0, 0, tzinfo=datetime.timezone.utc
+            ),
+        )
+
+    def test_a_second_adopter_reading_running_refuses_without_waiting(self):
+        """The contention branch of the adoption lock: the pre-lock read sees
+        state ``interrupted`` (the original run is dead), but by the time this
+        process collides with the lock, the rival adopter has rewritten the
+        ownership file to name itself -- the in-lock read sees ``running``
+        and the adoption refuses on the spot, with no bounded wait.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._interrupt(reservation)
+        lock = reservation.workdir / report.RESUME_LOCK_DIR
+        lock.mkdir()
+
+        real_read = report.read_reservation
+        reads = {"n": 0}
+
+        def rival_rewrote_between_reads(workdir):
+            info = real_read(workdir)
+            reads["n"] += 1
+            if reads["n"] > 1:
+                # The rival adopter's rewrite: same file, but it now names a
+                # live process -- state reads "running".
+                info["state"] = "running"
+            return info
+
+        clock = _FakeResumeTime()
+        with mock.patch.object(
+            report, "read_reservation", side_effect=rival_rewrote_between_reads
+        ), mock.patch.object(report, "time", clock):
+            with self.assertRaises(report.ResumeRefused) as caught:
+                self._adopt(points, reservation.record_id)
+
+        self.assertIn("another process adopted it", str(caught.exception))
+        self.assertEqual(reads["n"], 2, "one read before the lock, one inside it")
+        self.assertEqual(
+            clock.sleep_calls, 0, "refused on the first collision, no waiting"
+        )
+
+    def test_a_dead_adopter_stale_lock_is_stolen_once_and_adoption_succeeds(self):
+        """The stale-lock branch: the previous adopter was killed between
+        taking the lock and rewriting the ownership file (the state still
+        reads ``interrupted``). The next adoption waits out its bounded
+        deadline once, steals the lock, and completes.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._interrupt(reservation)
+        lock = reservation.workdir / report.RESUME_LOCK_DIR
+        lock.mkdir()
+
+        clock = _FakeResumeTime()
+        with mock.patch.object(report, "time", clock):
+            adopted_reservation, adopted = self._adopt(points, reservation.record_id)
+        self.addCleanup(adopted_reservation.release_resume_lock)
+
+        self.assertEqual(
+            clock.sleep_calls,
+            2,
+            "one bounded wait before the steal, one before the retry that wins",
+        )
+        self.assertEqual(adopted_reservation.resume_lock, lock)
+        self.assertTrue(lock.is_dir(), "the stolen lock now belongs to this adopter")
+        self.assertEqual(adopted["pid"], os.getpid())
+        self.assertEqual(len(adopted["attempts"]), 2)
+        self.assertTrue(adopted["attempts"][1]["resumed"])
+        # The ownership file names this process: a fresh read sees "running".
+        self.assertEqual(
+            report.read_reservation(reservation.workdir)["state"], "running"
+        )
+
+    def test_a_stale_lock_is_stolen_only_once_per_adoption(self):
+        """One steal per adoption, not a free retry loop: if the lock is
+        already taken again by the time the steal's retry lands, the second
+        bounded wait refuses rather than stealing someone else's lock --
+        and it leaves that lock in place for whoever holds it.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._interrupt(reservation)
+        lock = reservation.workdir / report.RESUME_LOCK_DIR
+        lock.mkdir()
+
+        def rival_takes_the_lock_back():
+            # The steal's rmdir succeeded; before our retry's mkdir runs, the
+            # rival adopter has taken the lock again -- and it has not yet
+            # rewritten the ownership file, so state still reads "interrupted".
+            if not lock.exists():
+                lock.mkdir()
+
+        clock = _FakeResumeTime(on_sleep=rival_takes_the_lock_back)
+        with mock.patch.object(report, "time", clock):
+            with self.assertRaises(report.ResumeRefused) as caught:
+                self._adopt(points, reservation.record_id)
+
+        self.assertIn("never claimed", str(caught.exception))
+        self.assertTrue(
+            lock.is_dir(), "the refusal leaves the rival's lock alone"
+        )
+
     def test_replay_point_synthesizes_a_replayed_result(self):
         point = self._points((27.0,))[0]
         log_dir = self.root / "corners" / "replay-unit"
@@ -2003,6 +2117,31 @@ def _dead_pid() -> int:
     proc = subprocess.Popen([sys.executable, "-c", "pass"])
     proc.wait()
     return proc.pid
+
+
+class _FakeResumeTime:
+    """Stands in for ``report.time`` while the adoption lock is exercised.
+
+    ``monotonic`` starts before the 15 s deadline
+    ``adopt_interrupted_reservation`` computes, and every ``sleep`` jumps
+    past it, so the bounded wait elapses without any real sleeping.
+    ``on_sleep`` hooks the moment a wait completes -- the contention tests
+    use it to stage a rival adopter between the steal and the retry.
+    """
+
+    def __init__(self, on_sleep=None):
+        self.now = 0.0
+        self.sleep_calls = 0
+        self._on_sleep = on_sleep
+
+    def monotonic(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleep_calls += 1
+        self.now += 30.0
+        if self._on_sleep is not None:
+            self._on_sleep()
 
 
 class RecordReservationTests(unittest.TestCase):
@@ -2430,6 +2569,49 @@ class RecordRenderingTests(unittest.TestCase):
         self.assertIn("`typical_-40c_2.97v`", text)
         self.assertIn("`ff_125c_3.63v`", text)
         self.assertIn("**Overall: PASS**", text)
+
+    def test_a_replayed_point_carries_the_marker_on_every_verdict(self):
+        """``(replayed)`` marks a replayed verdict whatever the verdict is:
+        a replayed failure must be distinguishable from a freshly-simulated
+        one, not only a replayed pass. Fresh verdicts carry no marker.
+        """
+        points = self.points
+        results = list(self.results)
+        results[0] = runner.PointResult(
+            point=points[0], status="ok", measurements={"vout": 99.0},
+            replayed=True,
+        )
+        results[1] = runner.PointResult(
+            point=points[1], status="error", message="derived: boom",
+            replayed=True,
+        )
+        results[2] = runner.PointResult(
+            point=points[2], status="ok", measurements={"vout": 98.0},
+        )
+        record = report.build_record(
+            tb=self.tb,
+            pdk=self.pdk,
+            points=points,
+            results=results,
+            ngspice="ngspice-46",
+            repo_root=SIM_DIR,
+            record_id="20260729-153000-1a7ef75",
+            started_utc="2026-07-29T15:30:00+00:00",
+            wall_seconds=9.5,
+            claim="spec/pll.md#example",
+        )
+        text = report.render_record(record, "harness-selftest")
+        self.assertIn("FAIL (replayed) — ", text)
+        self.assertIn("ERROR (replayed) — derived: boom", text)
+        # A fresh failure is marked as a failure, and only as a failure.
+        self.assertIn("FAIL — ", text)
+        self.assertEqual(
+            text.count("FAIL (replayed)"),
+            1,
+            "only the replayed failure carries the marker",
+        )
+        # A fresh pass renders exactly as it always did.
+        self.assertIn(" | PASS |", text)
 
     def test_a_full_matrix_run_says_so(self):
         text = report.render_record(self.record, "harness-selftest")
