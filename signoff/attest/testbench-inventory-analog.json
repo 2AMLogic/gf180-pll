@@ -3,6 +3,7 @@
     "every experiment with records/ is assigned to a partition or explicitly excluded",
     "each listed experiment is disclosed in sim/CHARACTERIZATION.md and has a committed record",
     "each has committed tb_*.sp/.spice testbenches and a tb.json manifest or a run*.sh driver",
+    "each manifest's declared reduction module (derived.module) exists and is content-pinned",
     "sim/README.md cites the PDK revision CI installs; xschem and klt pins exist in CI",
     "CI runs 'bash sim/selftest.sh'"
   ],
@@ -21,6 +22,10 @@
       "experiment": "cp-compliance",
       "testbenches": [
         {
+          "content_hash": "sha256:c3c19a4b60b2aae1e4f06ccb667b32eb0bfee0c6393089993902bb4c1fecb0d6",
+          "path": "sim/cp-compliance/testbench/derive.py"
+        },
+        {
           "content_hash": "sha256:02a5580874e1ccd13a5ab98ee58dc3f11b693182a73607894376910b04e0b336",
           "path": "sim/cp-compliance/testbench/tb.json"
         },
@@ -35,6 +40,10 @@
         {
           "content_hash": "sha256:778cd09b5fdbd028f5a4eee5a85699bc49629834718570420220ed6ec6cdd7ee",
           "path": "sim/cp-compliance/testbench/tb_cp_switch.sp"
+        },
+        {
+          "content_hash": "sha256:7533096abcbe35cb8dc3a5af8489fbbcf22d95f21583816eb71ad8c09f997744",
+          "path": "sim/cp-compliance/testbench-switching/derive.py"
         },
         {
           "content_hash": "sha256:84a1446b13651d6fde314b86f1dedd5c56582a3f0b6d961eb23993b13af6f05a",
@@ -132,6 +141,10 @@
       "experiment": "loop-dynamics",
       "testbenches": [
         {
+          "content_hash": "sha256:0c0882cfacfaff6eaafd6ea2830901168dfed55f2f33f9d8754111be3a54ef6e",
+          "path": "sim/loop-dynamics/testbench/derive.py"
+        },
+        {
           "content_hash": "sha256:9faa47334cd68050d25fc31b30cfa4d018a02bffd7c1a375da10be00936a83a3",
           "path": "sim/loop-dynamics/testbench/tb.json"
         },
@@ -178,6 +191,10 @@
       "experiment": "output-driver",
       "testbenches": [
         {
+          "content_hash": "sha256:fad82576b839c83dadab2c360977f0bdd6299243b4789b389346e408c3fb774a",
+          "path": "sim/output-driver/testbench/derive.py"
+        },
+        {
           "content_hash": "sha256:803c2e97c911fc315af95f8e3f6d1269d09caf3f923de4eb429b44df9de38334",
           "path": "sim/output-driver/testbench/tb.json"
         },
@@ -192,6 +209,10 @@
       "disclosed_in": "sim/CHARACTERIZATION.md",
       "experiment": "output-range",
       "testbenches": [
+        {
+          "content_hash": "sha256:1a2e965f0edf90f448419d39da574d303d9a5afe742840b0a007c1183735574d",
+          "path": "sim/output-range/testbench/derive.py"
+        },
         {
           "content_hash": "sha256:efad34367eaf8efc0cf49b6d834a3e9ff6dddee79f33c0f4338dced99e399eba",
           "path": "sim/output-range/testbench/tb.json"
@@ -212,6 +233,10 @@
       "experiment": "period-jitter",
       "testbenches": [
         {
+          "content_hash": "sha256:ad2bdc46716cd329563aa55324f7bba05e1d50b5124a9841e718f14eb3186b24",
+          "path": "sim/period-jitter/testbench/derive.py"
+        },
+        {
           "content_hash": "sha256:79183e7fa73dd4c7b1abdcc33667e354ce2e2542b2d7be438c22927044fa3de9",
           "path": "sim/period-jitter/testbench/tb.json"
         },
@@ -227,6 +252,10 @@
       "experiment": "pfd-deadzone",
       "testbenches": [
         {
+          "content_hash": "sha256:03b25a23abe1f73f44b83406ba0c1938ed8da95a8895a450a0d639f16f44cae2",
+          "path": "sim/pfd-deadzone/testbench/derive.py"
+        },
+        {
           "content_hash": "sha256:98ea9beb024b521fd2ab2a4cdb232b6ebfa138ce493b40e48fd4ae7f71a12cdd",
           "path": "sim/pfd-deadzone/testbench/tb.json"
         },
@@ -237,6 +266,10 @@
         {
           "content_hash": "sha256:b60f9290e7c4ae84b9557bdcdd86021640bd22090e52f66e135c50faae60dd42",
           "path": "sim/pfd-deadzone/testbench/tb_pfd_deadzone.spice"
+        },
+        {
+          "content_hash": "sha256:b97159d39c487a435917b16f1b7e4f1b6a248c0fd828ac951cf10c0a462dc2ad",
+          "path": "sim/pfd-deadzone/testbench-operating-point/derive_operating_point.py"
         },
         {
           "content_hash": "sha256:2b70f8984f162447713f4bbefb63482fb0513514ec3c937d12d6268de63dbad9",
@@ -265,6 +298,10 @@
       "experiment": "reference-phase-transfer",
       "testbenches": [
         {
+          "content_hash": "sha256:8a7cee63c7b671ffebe654e7706439896a1347d1b620b1d7069faeaf22d404b2",
+          "path": "sim/reference-phase-transfer/testbench/derive.py"
+        },
+        {
           "content_hash": "sha256:885440f5f78721e9aea938344f4f20fd75a61a6e8022e2b7a222cc26558bde4c",
           "path": "sim/reference-phase-transfer/testbench/tb.json"
         },
@@ -279,6 +316,10 @@
       "disclosed_in": "sim/CHARACTERIZATION.md",
       "experiment": "reference-spur",
       "testbenches": [
+        {
+          "content_hash": "sha256:9fb48ea4ecba19947d3766e3779ef8c366c90f0b72242379f12568e4798072dd",
+          "path": "sim/reference-spur/testbench/derive.py"
+        },
         {
           "content_hash": "sha256:20dfc6ac88f47733d5a9853ace7677759badeae761b60e5c0aefbef5a24c7b12",
           "path": "sim/reference-spur/testbench/tb.json"
@@ -325,6 +366,10 @@
       "experiment": "vco-tuning-range",
       "testbenches": [
         {
+          "content_hash": "sha256:6bf4012debfb27404571157c7973970527c44580f45fd388a19591350010fa1f",
+          "path": "sim/vco-tuning-range/testbench/derive.py"
+        },
+        {
           "content_hash": "sha256:423c977328db0e351fe71a4c910d810cb9a3a874013219c0ec5dd1a112301c2f",
           "path": "sim/vco-tuning-range/testbench/tb.json"
         },
@@ -357,12 +402,20 @@
           "path": "sim/vco-tuning-range/testbench/tb_vco_tuning.spice"
         },
         {
+          "content_hash": "sha256:a4895fc45c1a430884a0e9f3059363bf487b2173497bb862e76687779b7874d2",
+          "path": "sim/vco-tuning-range/testbench-stages/derive_stages.py"
+        },
+        {
           "content_hash": "sha256:4b52d825dced3d93eeb17433ffcb127cfaa077ab0550df958bc0d5172bf0c483",
           "path": "sim/vco-tuning-range/testbench-stages/tb.json"
         },
         {
           "content_hash": "sha256:e92182a08ca84eb9fbb0fd9b9e91613cbdb87346d8c712a52aa35c2541f6c135",
           "path": "sim/vco-tuning-range/testbench-stages/tb_vco_stages.spice"
+        },
+        {
+          "content_hash": "sha256:1d5644c2550537be199af8806513e071c7fe0f129bbe7512c1810f208b8b168f",
+          "path": "sim/vco-tuning-range/testbench-supply/derive_supply.py"
         },
         {
           "content_hash": "sha256:d12614393bf1a7b45c607cbe97e9cbe824ba49621bef0be56b3a454af3f3f9b1",
