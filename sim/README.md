@@ -1219,7 +1219,7 @@ overridable with `SIM_NGSPICE_BIN` — rather than silently accepting whatever
 `ngspice` resolves to on `PATH`. This is not merely version pedantry: issue
 #259 found a host where that pinned `ngspice-46` was absent, PATH fell
 through to Homebrew's `ngspice-47`, and that build then hit a reproducible
-parse failure on this PDK's nested nonlinear loop-filter/VCO moscaps
+parse failure on this PDK's loop-filter/VCO moscaps
 (`sm141064.ngspice`'s `cap_*mos_03v3`/`06v0` family — see
 `sim/harness/README.md`'s "ngspice-46 required for nested nonlinear moscap
 decks", #153) — and, worse, **hung instead of exiting** on that error,

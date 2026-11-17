@@ -211,6 +211,10 @@ class SharedRuleValueTest(unittest.TestCase):
             uncovered_literal_names("CONTACT_SIZE_UM: float = 0.22\n"), set()
         )
         self.assertEqual(
+            uncovered_literal_names("CONTACT_COMP_ENCLOSE_UM: float = 0.07\n"),
+            {"CONTACT_COMP_ENCLOSE_UM"},
+        )
+        self.assertEqual(
             uncovered_literal_names(
                 "CONTACT_COMP_ENCLOSE_UM = _drc.CONTACT_SIZE_UM\n"
                 "CONTACT_SIZE_UM = _drc.CONTACT_SIZE_UM\n"
