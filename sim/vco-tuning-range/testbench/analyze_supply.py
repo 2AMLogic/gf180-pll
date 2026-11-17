@@ -46,7 +46,7 @@ def main():
         pts.sort()
         vs = [p[0] for p in pts]
         fs = [p[1] for p in pts]
-        m, c = linfit(vs, fs)
+        m, c, _ = linfit(vs, fs)
         f_nom = [f for v, f in zip(vs, fs) if abs(v - 3.30) < 1e-9][0]
         # worst deviation of the measured curve from its own straight line,
         # as a fraction of the nominal frequency: how non-linear pushing is

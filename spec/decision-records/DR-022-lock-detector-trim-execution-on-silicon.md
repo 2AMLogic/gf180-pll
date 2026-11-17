@@ -369,3 +369,76 @@ drives all four trim pins itself — but every statement here about what a
   code) points to **0.999988 … 1.00001**. The rule's own table was previously
   carried by a single campaign; it is now carried by two that share only the
   cell.
+
+## Amendment A1 — the campaign this record rests on was re-qualified under the open_pdks `f6eeac7` re-pin; its quoted figures are corrected here, not in place (issue #965)
+
+**Date**: 2026-11-16. **No decision, target, bound or verdict moves.**
+
+The campaign this record is written on —
+`sim/lock-window-proxy/records/20260925-050022-6d57802.md` — was superseded by
+`sim/lock-window-proxy/records/20261114-194051-c8750de.md` when the
+characterization campaigns were re-qualified under the open_pdks `f6eeac7`
+re-pin (#827, a child of #790). The two records' code-to-window maps are
+identical at all 117 grid points — the re-pin does not touch the all-MOS
+`delaywin_3v3` window the rule reads — so the measured **2.7–4.7 %** trim step
+the accuracy bound above is derived from is unchanged, and with it every code
+count Tier A and Tier B quote. What moves is the evidence the policy table and
+its prose carry. The body figures — the table at lines 153–157 and the prose
+at lines 183, 186–196, 294–295 and 300 — are left as written, because they
+were true of the evidence that minted this record, and are corrected here
+rather than in place, per the precedent of DR-019 Amendment A2:
+
+| Quantity | body records (20260925-050022) | successor measures (20261114-194051) |
+|---|---|---|
+| `clk_do` residual process spread | **1.132×** | **1.134×** |
+| `clk_do` grid spread | **1.697×** | **1.670×** — still past DR-013 Decision 4's ≤ 1.65× |
+| `clk_do` continuous-population bracket | **1.74 … 1.78×** | **1.72 … 1.75×** — same derivation method as above: 1.670 × 1.027 = 1.715, × 1.047 = 1.748; derived here, not a committed figure of its own |
+| `clk_do` worst code error | **+4** | **+2** |
+| `clk_fb` grid spread | **1.735×** | **2.036×** |
+| `clk_fb` verdict / worst code error | in band / **4** | **`OUT OF BAND somewhere`** (twin_max 2.191 ns) / **8** |
+
+The table's other columns move with the re-pin as well — `clk_do`'s window
+over the grid reads **1.076 … 1.797 ns** with margins **+7.6 % / +10.2 %**
+(above: 1.122 … 1.905 ns, +12.3 % / +4.8 %) and `ring_b`'s residual reads
+**1.712×** (above: 1.700×) — while the **RULE** row and the **NONE** control
+are unchanged in every field. Every verdict above stands, and the negative
+answer strengthens rather than weakens: `clk_fb`, which held the band when
+this record was written, no longer holds it anywhere.
+
+**The inverted figure, stated plainly.** The body's Tier A bullet — "its worst
+code error is **+4**, one code beyond Tier A's derived +3 bound" — no longer
+reads against the measurement: the successor's worst code error is **+2**,
+*inside* the +3 bound Decision 2 derives, so Tier A alone would now admit the
+`CLK`→`DIVOUT` skew. The clause that was licensed by being outside the bound —
+"the band survives on where this grid's thirteen bundles happen to sit, not
+because the selector is bounded" — does not follow from +2, but the conclusion
+it supported survives on the tier that actually decides. Decision 3's
+acceptance criterion is Tier B, which demands a worst code error of **exactly
+zero**, so +2 fails it as surely as +4 did; this record's own Tier B prose
+already carried the case: "a substitute with a worst error of 1 or 2 codes
+still holds the *band* (Tier A) but no longer holds the *spread target*
+(Tier B)".
+
+**The same inversion, a second time.** The `## Alternatives considered`
+bullet that rejects "adopt the best pad-referred selector anyway" (lines
+294–295 — a site the original enumeration above missed, added to it on
+2026-11-17 in #1010, found while evaluating PR #1008) restates both of the
+moved figures. Its "exceeds DR-013 Decision 4's spread target by 3–8 %" reads
+**1–6 %** under the successor, by the table's own derivation: 1.670 / 1.65 − 1
+= **+1.2 %** on the grid, and on the continuous bracket (1.670 × 1.027) / 1.65
+− 1 = **+3.9 %** to (1.670 × 1.047) / 1.65 − 1 = **+6.0 %**. Its "worst code
+error is one code outside Tier A's own guarantee" is inverted exactly as the
+Tier A bullet's is: the successor's worst code error is **+2**, *inside* the
++3 bound. Neither movement weakens the rejection, which stands on the same
+Tier B ground given above — Tier B demands a worst code error of **exactly
+zero**, so +2 fails it as surely as +4 did, and the spread is still past
+DR-013 Decision 4's ≤ 1.65× target on both the grid (1.670×) and the
+continuous bracket (1.715 … 1.748×). The bullet's remaining grounds —
+correlation is not the criterion, and a pass on one grid would put a number in
+`spec/` that the next grid could withdraw — do not rest on the re-pinned
+figures at all.
+
+`spec/pll.md`'s trim-execution subsection quotes four of the moved figures and
+is edited under this amendment: its record citation and quoted figures now
+read against the successor, its header's revisions bullet records the refresh,
+and no limit, bound or verdict in that file moves with it.

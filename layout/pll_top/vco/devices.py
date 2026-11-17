@@ -45,11 +45,12 @@ from dataclasses import dataclass
 from functools import partial
 
 try:
-    from .. import _canvas
+    from .. import _canvas, _drc
 except ImportError:  # this package's own dir (not its "pll_top" parent) is the
     # sys.path root under layout/tests's flat-import convention (see
     # vco/primitives.py's own identical fallback).
     import _canvas
+    import _drc
 
 LAYOUT_GRID_UM = 0.005
 """Manufacturing grid every drawn vertex must land on.
@@ -145,13 +146,13 @@ DECAP_SIZE_UM = 50.0
 DRC_COMP_MIN_SPACE_UM = 0.28  # DF.3a_LV
 DRC_COMP_EXTEND_GATE_UM = 0.24  # DF.6_LV
 DRC_POLY_ENDCAP_UM = 0.22  # PL.4_LV
-DRC_CONTACT_SIZE_UM = 0.22  # CO.1
+DRC_CONTACT_SIZE_UM = _drc.CONTACT_SIZE_UM  # CO.1
 DRC_CONTACT_SPACE_UM = 0.25  # CO.2a
 DRC_CONTACT_COMP_ENCLOSE_UM = 0.07  # CO.4
-DRC_CONTACT_TO_GATE_POLY_UM = 0.15  # CO.7
-DRC_POLY_CONTACT_TO_COMP_UM = 0.17  # CO.8
+DRC_CONTACT_TO_GATE_POLY_UM = _drc.CONTACT_TO_GATE_POLY_UM  # CO.7
+DRC_POLY_CONTACT_TO_COMP_UM = _drc.POLY_CONTACT_TO_COMP_UM  # CO.8
 DRC_NPLUS_MIN_WIDTH_UM = 0.4  # NP.1 / PP.1
-DRC_IMPLANT_GATE_ENCLOSE_UM = 0.23  # NP.5a / PP.5a
+DRC_IMPLANT_GATE_ENCLOSE_UM = _drc.IMPLANT_GATE_ENCLOSE_UM  # NP.5a / PP.5a
 DRC_IMPLANT_COMP_EXTEND_UM = 0.16  # NP.5b / PP.5b (comp inside/outside its own well)
 DRC_NWELL_PCOMP_ENCLOSE_UM = 0.43  # DF.4c_LV
 DRC_NWELL_NCOMP_ENCLOSE_UM = 0.12  # DF.4d_LV (n-well tap)

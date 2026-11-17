@@ -30,6 +30,7 @@ from _fixtures import TreeTestCase, install_checklib
 SIM_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = SIM_DIR.parent
 CHECK = SIM_DIR / "lib" / "check-quoted-value-provenance.sh"
+CHECK_PY = SIM_DIR / "lib" / "check_quoted_value_provenance.py"
 
 PROPOSAL = "docs/chipalooza/challenge-5-proposal.md"
 SPEC = "spec/pll.md"
@@ -495,6 +496,7 @@ class _Tree:
         self.root = root
         (root / "sim" / "lib").mkdir(parents=True)
         shutil.copy2(CHECK, root / "sim" / "lib" / CHECK.name)
+        shutil.copy2(CHECK_PY, root / "sim" / "lib" / CHECK_PY.name)
         install_checklib(root)
 
         rec_dir = root / "sim" / CAMPAIGN / "records"

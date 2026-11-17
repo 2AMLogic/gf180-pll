@@ -30,6 +30,7 @@ sys.path.insert(0, str(SIM_DIR.parent / "lib"))
 from harness.pdk import Pdk, pinned_open_pdks  # noqa: E402
 from testtree import TreeTestCase, TreeWriter, install_checklib  # noqa: E402,F401  (re-exported)
 
+
 def fake_pdk(root: Path) -> Pdk:
     (root / "libs.tech" / "ngspice").mkdir(parents=True, exist_ok=True)
     (root / "libs.tech" / "ngspice" / "sm141064.ngspice").write_text("* fake\n")

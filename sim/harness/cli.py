@@ -257,6 +257,20 @@ def build_parser() -> argparse.ArgumentParser:
         "a subset run may be recorded as evidence",
     )
     parser.add_argument(
+        "--resume",
+        default="",
+        metavar="RECORD_ID",
+        help="re-adopt this experiment's interrupted reservation and replay "
+        "its completed points from corners/<record-id>/ instead of "
+        "re-simulating them; only an 'interrupted' reservation may be "
+        "resumed (a live peer, a published record, another host's "
+        "reservation or an unreadable ownership file is refused, naming the "
+        "state), and this invocation's grid must match the one the "
+        "reservation was taken for. Composes with --backend batch "
+        "--batch-apply, --supersedes/--supersedes-note and --artifact-store; "
+        "refused with --no-write (no evidence reservation exists to resume)",
+    )
+    parser.add_argument(
         "--no-write",
         action="store_true",
         help="run but do not record evidence (debugging only)",
@@ -559,6 +573,13 @@ def print_batch_plan(tb, pdk, points, workdir, backend, timeout_s) -> int:
 
 
 def run(args: argparse.Namespace) -> int:
+    if args.resume and args.no_write:
+        print(
+            "error: --resume re-adopts an evidence reservation; --no-write "
+            "reserves no evidence, so there is nothing to resume into",
+            file=sys.stderr,
+        )
+        return EXIT_ENVIRONMENT
     tb_path = _resolve_tb_path(args.testbench)
     tb = tb_mod.load(tb_path)
 
@@ -681,9 +702,32 @@ def run(args: argparse.Namespace) -> int:
     # A plan or a --no-write run only claims its scratch work/<record-id>/,
     # and so never occupies an evidence id.
     evidence = not (args.no_write or plan_only)
-    reservation = report.reserve_record_id(
-        REPO_ROOT, experiment_dir, started, git=git, evidence=evidence
-    )
+    # Recorded with every evidence reservation so a later --resume can prove
+    # the grid it resolved is the one this run was taking (#973). A resumed
+    # run recomputes it from its own grid for the same comparison.
+    fingerprint = report.grid_fingerprint(tb, points) if evidence else None
+    resume_info: dict | None = None
+    if args.resume:
+        if plan_only:
+            print(
+                "error: --resume names an evidence reservation, but a batch "
+                "plan (--backend batch without --batch-apply) submits nothing "
+                "and records nothing, so there is no run to resume into",
+                file=sys.stderr,
+            )
+            return EXIT_ENVIRONMENT
+        try:
+            reservation, resume_info = report.adopt_interrupted_reservation(
+                experiment_dir, args.resume, fingerprint, started=started,
+            )
+        except report.ResumeRefused as exc:
+            print(f"error: --resume: {exc}", file=sys.stderr)
+            return EXIT_ENVIRONMENT
+    else:
+        reservation = report.reserve_record_id(
+            REPO_ROOT, experiment_dir, started, git=git, evidence=evidence,
+            grid_fingerprint=fingerprint,
+        )
     record_id = reservation.record_id
     workdir = reservation.workdir
     log_dir = reservation.log_dir
@@ -691,19 +735,24 @@ def run(args: argparse.Namespace) -> int:
         for info in report.interrupted_reservations(experiment_dir):
             print(
                 f"note: {report.describe_reservation(info)}; that id and any "
-                "partial evidence under it are left untouched and are never reused",
+                "partial evidence under it are left untouched and are never "
+                "reused (--resume <id> re-adopts one deliberately)",
                 file=sys.stderr,
             )
     try:
         return _run_reserved(
             args, tb, pdk, ngspice, points, corner_list, temperatures, supplies,
             nominal, tolerance, conformance, backend, plan_only, jobs, omp_pin,
-            started, git, reservation, env_provenance_lines,
+            started, git, reservation, env_provenance_lines, resume_info,
         )
     finally:
         # Whatever ended the run before its summary was published -- an
         # early return, a refused write, an exception, Ctrl-C -- the id stays
         # reserved. Say so, rather than recycle it or delete its evidence.
+        # The resume adoption lock goes either way: it only serializes the
+        # ownership rewrite, and a dead holder's stale lock is stolen by the
+        # next attempt's bounded wait.
+        reservation.release_resume_lock()
         if evidence and not (records_dir / f"{record_id}.md").exists():
             _report_unpublished(reservation)
 
@@ -720,7 +769,7 @@ def _report_unpublished(reservation: "report.RecordReservation") -> None:
 def _run_reserved(
     args, tb, pdk, ngspice, points, corner_list, temperatures, supplies,
     nominal, tolerance, conformance, backend, plan_only, jobs, omp_pin,
-    started, git, reservation, env_provenance_lines,
+    started, git, reservation, env_provenance_lines, resume_info=None,
 ) -> int:
     experiment_dir = tb.experiment_dir
     record_id = reservation.record_id
@@ -738,6 +787,41 @@ def _run_reserved(
         except execution_mod.BackendError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return EXIT_ENVIRONMENT
+
+    # --resume (#973): before dispatching anything, split the grid into the
+    # points whose every phase's log qualifies for replay and the points that
+    # must be re-simulated. Both branches stay visible in the progress
+    # output, so the operator always knows which evidence is old and which
+    # is fresh.
+    replay: dict[str, runner.PointResult] = {}
+    if resume_info is not None:
+        # A replayed point keeps the executing host of the attempt that ran
+        # it: the recording host for a local-backend attempt (the only host a
+        # resumable reservation can name -- another host's reservation reads
+        # "unknown" and is refused), unattributed for an off-host one. Which
+        # backend that was must be read from the attempt entries, not the
+        # ownership file's top-level argv: adoption rewrites that argv to
+        # name *this* invocation, and this invocation is always the local
+        # one (--resume refuses off-host backends), so the top level would
+        # stamp the recording host onto logs a batch attempt produced.
+        # Replayed logs may come from any earlier attempt, so they share the
+        # recording host only when every earlier attempt ran local: a
+        # history that switched backends leaves them unattributed rather
+        # than claiming a host some of them never ran on.
+        prior_attempts = (resume_info.get("attempts") or [])[:-1]
+        prior_backends = [report.reservation_backend(a) for a in prior_attempts]
+        replay_host = (
+            resume_info.get("host", "")
+            if prior_backends and all(b == "local" for b in prior_backends)
+            else ""
+        )
+        rerun: list[str] = []
+        for point in points:
+            result = runner.replay_point(tb, point, workdir, log_dir, host=replay_host)
+            if result is None:
+                rerun.append(point.corner_id)
+            else:
+                replay[point.corner_id] = result
 
     if not args.quiet:
         print(f"experiment: {tb.experiment}"
@@ -765,6 +849,11 @@ def _run_reserved(
                 + "  (ngspice links an OpenMP runtime; capping per-worker threads)"
             )
         print(f"record id : {record_id}")
+        if resume_info is not None:
+            print(
+                f"resume    : {len(replay)} point(s) replayed from the earlier "
+                f"attempt's logs, {len(rerun)} re-run"
+            )
         print()
     for description in conformance.get("empty_blocks", []):
         print(
@@ -792,7 +881,8 @@ def _run_reserved(
             )
         else:
             detail = result.message
-        print(f"[{completed:>3}/{len(points)}] {flag} {result.point.corner_id:<26} {detail}")
+        marker = "  [replayed from earlier attempt]" if result.replayed else ""
+        print(f"[{completed:>3}/{len(points)}] {flag} {result.point.corner_id:<26} {detail}{marker}")
 
     wall_start = time.monotonic()
     abort_reason = ""
@@ -807,6 +897,7 @@ def _run_reserved(
             on_result=progress,
             log_dir=log_dir,
             backend=backend,
+            replay=replay or None,
         )
     except NgspiceMissing as exc:
         # Kept fail-fast and separate from the broad net below: no ngspice on
@@ -875,6 +966,18 @@ def _run_reserved(
         execution={"jobs": jobs, "omp": omp_pin, **backend.describe()},
         abort_reason=abort_reason,
         env_provenance_lines=env_provenance_lines,
+        resume=(
+            {
+                "resumed": True,
+                "replayed_points": len(replay),
+                "rerun_points": len(points) - len(replay),
+                # The adopted ownership file's attempt history: attempt 1's
+                # start plus one entry per resume, ending with this one.
+                "attempts": list(resume_info.get("attempts") or []),
+            }
+            if resume_info is not None
+            else None
+        ),
     )
 
     print()

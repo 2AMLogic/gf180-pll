@@ -40,9 +40,10 @@ from functools import partial
 from typing import ClassVar
 
 try:
-    from .. import _canvas
+    from .. import _canvas, _drc
 except ImportError:  # layout/tests puts "pll_top" itself on sys.path (see vco/primitives.py)
     import _canvas
+    import _drc
 from . import devices as dev
 
 #: GDS layers, gf180mcuD (``libs.tech/klayout/lvs/rule_decks/layers_definitions.lvs``).
@@ -86,7 +87,7 @@ FORBIDDEN_LAYERS: dict[str, tuple[int, int]] = {
 }
 
 # --- shared contact / via constants -----------------------------------------
-CONTACT_UM = 0.22  # CO.1: min *and* max
+CONTACT_UM = _drc.CONTACT_SIZE_UM  # CO.1: min *and* max
 CONTACT_PITCH_UM = 0.5  # CO.2a/CO.2b: 0.28 um space >= 0.25 (0.28 in a 4x4+ array)
 CONTACT_ENC_UM = 0.1  # CO.3/CO.4 need 0.07 (poly/comp enclosure of contact)
 M1_ENC_CONTACT_UM = 0.1  # metal1 grown around a contact row; keeps every pad >= 0.42 um,
@@ -104,13 +105,13 @@ TAP_M1_MARGIN_UM = 0.12
 # --- cap_nmos_03v3_b ----------------------------------------------------------
 MOSCAP_SD_EXT_UM = 0.6  # comp beyond the gate, each side. Pcell: 0.44 (0.36 land + 0.08).
 # Holds one contact column at CONTACT_ENC_UM from the comp edge and leaves
-# 0.6 - 0.1 - 0.22 = 0.28 um to the gate (CO.7 needs 0.15).
+# 0.6 - 0.1 - 0.22 = 0.28 um to the gate (clears CO.7).
 MOSCAP_POLY_EXT_UM = 0.62  # poly beyond the comp, each end. Pcell: 0.46.
-# 0.30 to the contact (CO.8 needs 0.17), 0.22 contact, 0.10 poly enclosure (CO.3 0.07).
+# 0.30 to the contact (clears CO.8), 0.22 contact, 0.10 poly enclosure (CO.3 0.07).
 MOSCAP_POLY_CONTACT_GAP_UM = 0.30
 MOSCAP_ROW_INSET_UM = 0.2  # gate-row metal1 starts this far inside the poly's x edge,
 # keeping it 0.6 - 0.42 + 0.2 = 0.38 um from the diffusion column's metal1 (M1.2a 0.23)
-MOSCAP_IMPLANT_MARGIN_UM = 0.25  # nplus around comp: NP.5a (gate overlap 0.23), NP.5b 0.16
+MOSCAP_IMPLANT_MARGIN_UM = 0.25  # nplus around comp: clears NP.5a (gate overlap) and NP.5b
 MOSCAP_NWELL_ENC_UM = 0.6  # nwell around comp: DF.4d_LV needs 0.12; the pcell uses 0.16/0.23
 
 # --- cap_mim_2f0_m4m5_noshield (MIM option B, ratified) / m2m3 (option A, historical) ---
