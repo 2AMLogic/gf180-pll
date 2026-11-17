@@ -885,6 +885,15 @@ simenv_jobs() {
 #   SIM_ALLOW_LOCAL_GRID=1           -> return 0 (explicit local opt-in)
 #   otherwise (incl. empty or non-numeric units under batch) -> message, return 2
 #
+# The refusal's printed reroute line (`python3 sim/run_corners.py
+# <experiment>`) appears only when <experiment> is a bare slug that resolves
+# to `sim/<experiment>/testbench/tb.json` -- resolved from this file's own
+# directory, so it never depends on the caller's cwd. Control entry points
+# pass a "<slug> (negative control)" label and some legacy runner names have
+# no manifest, and for those the reroute line is omitted rather than printed
+# as a command that cannot run (#996); the batch-fleet and
+# SIM_ALLOW_LOCAL_GRID alternatives are always named.
+#
 # Call it as a plain command, never inside `$(...)`:
 #   simenv_guard_local_grid "${NJOBS}" "<experiment>" || exit $?
 # It never invokes SPICE and never calls simenv_jobs().
@@ -903,9 +912,27 @@ simenv_guard_local_grid() {
   {
     echo "simenv: refusing to fan out a local grid (units='${units}') for ${exp}:"
     echo "  KLT_SIM_BACKEND=batch selects the remote batch fleet for multi-unit runs."
-    echo "  Express the grid as a request instead: python3 sim/run_corners.py ${exp}"
-    echo "  (or 'klt sim --wait-for-capacity 600'). To run it locally anyway,"
-    echo "  set SIM_ALLOW_LOCAL_GRID=1 explicitly."
+    # The reroute line is only printed when <exp> is a bare slug naming a
+    # real experiment manifest, resolved from this file's own directory
+    # (never the caller's cwd). Control entry points pass a
+    # "<slug> (negative control)" label and some legacy names have no
+    # manifest at all -- for those the printed command could not be run
+    # (#996), so the message offers only the alternatives that exist.
+    local reroute=""
+    case "${exp}" in
+      *[!A-Za-z0-9._-]*|'') ;;           # not a bare slug: spaces, parens, '/', '<>'
+      *) if [ -f "${SIMENV_LIB_DIR}/../${exp}/testbench/tb.json" ]; then
+           reroute=1
+         fi ;;
+    esac
+    if [ -n "${reroute}" ]; then
+      echo "  Express the grid as a request instead: python3 sim/run_corners.py ${exp}"
+      echo "  (or 'klt sim --wait-for-capacity 600'). To run it locally anyway,"
+      echo "  set SIM_ALLOW_LOCAL_GRID=1 explicitly."
+    else
+      echo "  Send it to the batch fleet instead: 'klt sim --wait-for-capacity 600',"
+      echo "  or set SIM_ALLOW_LOCAL_GRID=1 explicitly to run it locally anyway."
+    fi
   } >&2
   return 2
 }

@@ -41,12 +41,36 @@ check "batch, non-numeric refuses"        2 KLT_SIM_BACKEND=batch -- abc exp
 check "unset backend passes"              0 -- 5 exp
 check "local backend passes"              0 KLT_SIM_BACKEND=local -- 5 exp
 
-# Message names the supported path.
-msg="$(env KLT_SIM_BACKEND=batch bash -c '. "$0"; simenv_guard_local_grid 5 foo' "${SIMENV_SH}" 2>&1)"
+# Message shapes (issue #996): the reroute line (`python3 sim/run_corners.py
+# <exp>`) is printed only when <exp> is a bare slug that resolves to a real
+# experiment manifest (sim/<exp>/testbench/tb.json, resolved from the lib's
+# own directory, never the caller's cwd). A nonexistent slug, a
+# "<slug> (negative control)" label passed by the control entry points, or a
+# pathy string omits the line instead of printing a command that cannot run,
+# and still names both alternatives.
+want_slug=vco-tuning-range
+if [ ! -f "${SIM_LIB_DIR}/../${want_slug}/testbench/tb.json" ]; then
+  echo "FAIL message fixture: '${want_slug}' does not resolve"; fails=$((fails + 1))
+fi
+msg="$(env KLT_SIM_BACKEND=batch bash -c '. "$0"; simenv_guard_local_grid 5 "$1"' "${SIMENV_SH}" "${want_slug}" 2>&1)"
 case "${msg}" in
-  *"python3 sim/run_corners.py foo"*"SIM_ALLOW_LOCAL_GRID=1"*) echo "ok   message" ;;
-  *) echo "FAIL message: ${msg}"; fails=$((fails + 1)) ;;
+  *"python3 sim/run_corners.py ${want_slug}"*"SIM_ALLOW_LOCAL_GRID=1"*)
+    echo "ok   message: resolving slug prints reroute" ;;
+  *) echo "FAIL message: resolving slug '${want_slug}' should print reroute: ${msg}"; fails=$((fails + 1)) ;;
 esac
+
+for bad in "mc-cp-mismatch" "mc-cp-mismatch (negative control)" "a/b" ""; do
+  msg="$(env KLT_SIM_BACKEND=batch bash -c '. "$0"; simenv_guard_local_grid 5 "$1"' "${SIMENV_SH}" "${bad}" 2>&1)"
+  if grep -q "python3 sim/run_corners.py" <<<"${msg}"; then
+    echo "FAIL message: unresolvable '${bad:-<default>}' printed a reroute command: ${msg}"
+    fails=$((fails + 1))
+  elif grep -q "klt sim --wait-for-capacity 600" <<<"${msg}" \
+    && grep -q "SIM_ALLOW_LOCAL_GRID=1" <<<"${msg}"; then
+    echo "ok   message: '${bad:-<default>}' omits reroute, names both alternatives"
+  else
+    echo "FAIL message: '${bad}' dropped an alternative: ${msg}"; fails=$((fails + 1))
+  fi
+done
 
 # Status reaches a runner's exit code via the `|| exit $?` idiom.
 env KLT_SIM_BACKEND=batch bash -c '. "$0"; simenv_guard_local_grid 5 foo 2>/dev/null || exit $?; exit 0' "${SIMENV_SH}"
