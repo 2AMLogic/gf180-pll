@@ -976,6 +976,7 @@ def build_record(
     abort_reason: str = "",
     env_provenance_lines: list[str] | None = None,
     resume: dict | None = None,
+    adoption: dict | None = None,
 ) -> dict:
     measure_names = tb.measure_names
     optional_names = {n for n in measure_names if tb.is_optional(n)}
@@ -1060,6 +1061,12 @@ def build_record(
         # _resume_lines -- a record whose wall clock describes only its final
         # process must say so (#973).
         "resume": dict(resume or {}),
+        # Empty for an ordinary run. A run that adopted points from the
+        # artifact store (#1048) carries the adopted/fresh split, the grid
+        # fingerprint the adoption was keyed on and the prior attempt(s) the
+        # points came from, rendered by _adoption_lines -- adopted evidence
+        # must never pass for freshly simulated evidence.
+        "artifact_adoption": dict(adoption or {}),
         # The CLI may have already computed this (and folded in gaps only it
         # knows about, e.g. an axis narrowed by --axis); reuse it so the
         # record and the pre-run subset gate cannot disagree.
@@ -1436,6 +1443,45 @@ def _resume_lines(record: dict) -> list[str]:
         "off-host -- a raw log does not record which machine produced it)."
     )
     return lines
+
+
+def _adoption_lines(record: dict) -> list[str]:
+    """The artifact-store adoption disclosure (#1048).
+
+    A record whose grid was partly (or wholly) adopted from the fleet
+    artifact store must not pass for a single-process run: the point count
+    alone cannot tell a reader which points this attempt actually simulated,
+    and the wall clock describes only the fresh ones. The bullet names the
+    split, the fingerprint the adoption was keyed on, and the earlier
+    attempt(s) whose per-point manifests supplied the logs.
+    """
+    adoption = record.get("artifact_adoption") or {}
+    adopted = adoption.get("adopted_points") or 0
+    if not adopted:
+        return []
+    fresh = adoption.get("fresh_points")
+    fingerprint = adoption.get("fingerprint") or ""
+    sources = adoption.get("sources") or []
+    source_text = (
+        "earlier attempt record id(s) " + ", ".join(f"`{s}`" for s in sources)
+        if sources
+        else "an unnamed earlier attempt"
+    )
+    return [
+        "- **Artifact-adopted points**: "
+        f"{adopted} point(s) of this grid were not simulated by this "
+        "attempt: their raw per-phase logs were fetched from the fleet "
+        "artifact store (each verified by sha256 after fetch) under an "
+        f"identical grid fingerprint (`{fingerprint[:12]}...`) and replayed "
+        "through the same parser and qualification gate a resumed run uses. "
+        f"{fresh} point(s) were simulated by this attempt. Sources: "
+        f"{source_text}.",
+        "  - Adopted points carry `\"replayed\": true`, `seconds` 0 and an "
+        "unattributed executing host -- the store proves which bytes were "
+        "stored, never which machine produced them -- so the `Execution:` "
+        "line, the wall clock and the per-point host/seconds attributions "
+        "describe only the fresh points.",
+    ]
 
 
 def _corner_matrix_lines(record: dict) -> list[str]:
@@ -1894,6 +1940,7 @@ def render_record(record: dict, experiment: str) -> str:
         env.get("ngspice") or "",
     )
     lines += _resume_lines(record)
+    lines += _adoption_lines(record)
     lines += _corner_matrix_lines(record)
     lines += _methodology_lines(record)
     lines.append(
