@@ -438,13 +438,18 @@ RESUME_LOCK_DIR = ".resuming"
 
 
 def reservation_backend(info: dict) -> str:
-    """The execution backend a reservation's recorded ``argv`` asked for.
+    """The execution backend one recorded attempt's ``argv`` asked for.
 
-    A replayed point keeps the executing host of the attempt that actually
-    ran it, and which machines those were depends on that attempt's backend:
-    the recording host for ``local``, per-job execution hosts for an
-    off-host backend. The argv is the only durable place the choice is
-    written (a reservation's ownership file predates every backend report).
+    ``info`` is one entry of an ownership file's ``attempts`` list (or the
+    top level of the file itself), so this answers per attempt. The
+    harness's attribution rule spans the whole history: a replayed point
+    keeps the executing host of the attempt that actually ran it, and a
+    replayed log may come from any earlier attempt, so the replayed points
+    carry the recording host only when **every** earlier attempt read back
+    ``local`` here. A history in which any attempt dispatched off-host
+    leaves them unattributed rather than claiming a host some of them
+    never ran on. The argv is the only durable place the choice is written
+    (a reservation's ownership file predates every backend report).
     """
     argv = info.get("argv") or []
     for i, token in enumerate(argv):
@@ -1621,7 +1626,10 @@ def _corner_table_lines(
     can be given only its own columns' failures -- an unrelated topology's
     FAIL in this table's pass/fail column would be pure noise. A point that
     failed to simulate at all is reported as ERROR in *every* table, because
-    the whole point is missing, not one topology's slice of it.
+    the whole point is missing, not one topology's slice of it. A replayed
+    point carries a ``(replayed)`` marker on its verdict whatever that
+    verdict is -- a replayed failure must be as distinguishable from a
+    freshly-simulated one as a replayed pass is.
     """
     lines = [
         "  | corner-id | " + " | ".join(measure_names) + " | pass/fail |",
@@ -1637,8 +1645,15 @@ def _corner_table_lines(
             for name in measure_names
         ]
         verdict = _point_verdict(point, failures_at)
-        if point.get("replayed") and verdict == "PASS":
-            verdict = "PASS (replayed)"
+        if point.get("replayed"):
+            # The marker goes on every replayed verdict, not only PASS: a
+            # reader must be able to tell a replayed failure from a
+            # freshly-simulated one, exactly as for a replayed pass. The
+            # verdict word leads ("FAIL -- detail"), so the marker slots in
+            # before the detail; PASS, which has no detail, renders exactly
+            # as it did before.
+            head, sep, tail = verdict.partition(" — ")
+            verdict = f"{head} (replayed)" + (sep + tail if sep else "")
         lines.append(f"  | `{point['corner_id']}` | " + " | ".join(cells) + f" | {verdict} |")
     return lines
 

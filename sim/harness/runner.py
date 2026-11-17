@@ -643,7 +643,6 @@ def replay_point(
     measurements: dict[str, float] = {}
     raw_files: dict[str, RawFile] = {}
     raw_missing: list[str] = []
-    not_measured: list[str] = []
     for phase in tb.run_phases:
         run_id = phase.run_id(point.corner_id)
         log_path = log_dir / f"{run_id}.log"
@@ -665,15 +664,14 @@ def replay_point(
             else:
                 rundir = workdir / f"{run_id}.d" if phase.raw_files else workdir
                 path = rundir / spec.name
-            raw_files[spec.name] = RawFile(
-                name=spec.name, path=path, columns=spec.columns
-            )
-            if not path.exists():
+            # Presence goes through the RawFile wrapper, exactly as the live
+            # path's missing-raw detection does -- the replayed record's
+            # raw_files_missing must answer the same question with the same
+            # predicate, not a plain path.exists().
+            raw = RawFile(name=spec.name, path=path, columns=spec.columns)
+            raw_files[spec.name] = raw
+            if not raw.exists():
                 raw_missing.append(spec.name)
-        not_measured.extend(
-            name for name in phase.measure_names
-            if tb.is_optional(name) and name not in phase_measurements
-        )
         runs.append(
             PhaseRun(
                 name=phase.name,

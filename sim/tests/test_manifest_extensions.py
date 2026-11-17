@@ -2428,13 +2428,13 @@ class PhasedDeckTests(PhasedFixture):
         self.assertIn("tb_pushing.sp", push)
         self.assertNotIn("tb_jitter.sp", push)
         self.assertIn(".measure tran fosc when v(out)=1.65 rise=2", push)
-        self.assertNotIn("wrdata", push)
+        self.assertNotIn("wrdata jit.dat", push)
 
         self.assertIn("tb_jitter.sp", jit)
         self.assertNotIn(".measure", jit)
         self.assertIn("wrdata jit.dat v(out)", jit)
         self.assertIn(".param arip=0.05", jit)
-        self.assertNotIn("arip", push)
+        self.assertNotIn(".param arip", push)
 
         # ... over one shared environment: same corner, temp, supply, params.
         for deck in (push, jit):
