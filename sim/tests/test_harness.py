@@ -1587,6 +1587,115 @@ class CliResumeTests(ManifestFixture):
         self.assertFalse((work / report.RESERVATION_FILE).exists())
         self.assertFalse((work / report.RESUME_LOCK_DIR).exists())
 
+    def test_a_batch_attempt_resumed_locally_leaves_replayed_points_unattributed(self):
+        """#973: the replay host comes from attempt 1's argv, not the
+        resuming invocation's. Adoption overwrites the ownership file's
+        top-level argv with ``sys.argv`` of the attempt doing the resuming
+        -- which is always local, since ``--resume`` refuses off-host
+        backends -- so the top level can never witness attempt 1's batch
+        choice. A batch attempt's logs must stay unattributed rather than
+        being stamped with the recording host: that stamp would suppress
+        the ``Execution hosts`` disclosure entirely and the record would
+        claim every point ran where the record was minted.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._set_ownership(
+            reservation,
+            argv=["sim/run_corners.py", self.slug, "--backend", "batch",
+                  "--batch-apply"],
+        )
+        for point in points:
+            (reservation.log_dir / f"{point.corner_id}.log").write_text(self.LOG_TEXT)
+        self._interrupt(reservation)
+
+        backend = self._never_backend()
+        status, out, err = self._run(
+            self._args("--resume", reservation.record_id), backend=backend
+        )
+
+        self.assertEqual(status, cli.EXIT_OK, err)
+        backend.run_deck.assert_not_called()
+        text = self._record_text(reservation.record_id)
+        self.assertIsNotNone(text)
+        self.assertIn(
+            "Execution hosts: 2 point(s) across 0 named execution host(s)"
+            " -- unattributed (2)",
+            text,
+        )
+
+    def test_a_mixed_backend_attempt_history_leaves_replayed_points_unattributed(self):
+        """#973: with more than two attempts the replayed logs may come from
+        any earlier attempt, and one ``replay_host`` cannot describe a
+        history that switched backends -- the conservative reading is
+        unattributed unless every earlier attempt ran local.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._set_ownership(
+            reservation,
+            attempts=[
+                {"started_utc": "2026-11-15T19:42:00+00:00",
+                 "argv": ["sim/run_corners.py", self.slug,
+                          "--backend", "batch", "--batch-apply"]},
+                {"started_utc": "2026-11-15T20:10:00+00:00",
+                 "argv": ["sim/run_corners.py", self.slug,
+                          "--resume", reservation.record_id],
+                 "resumed": True},
+            ],
+        )
+        for point in points:
+            (reservation.log_dir / f"{point.corner_id}.log").write_text(self.LOG_TEXT)
+        self._interrupt(reservation)
+
+        backend = self._never_backend()
+        status, out, err = self._run(
+            self._args("--resume", reservation.record_id), backend=backend
+        )
+
+        self.assertEqual(status, cli.EXIT_OK, err)
+        text = self._record_text(reservation.record_id)
+        self.assertIsNotNone(text)
+        self.assertIn("Attempt 3 (this record): started", text)
+        self.assertIn(
+            "Execution hosts: 2 point(s) across 0 named execution host(s)"
+            " -- unattributed (2)",
+            text,
+        )
+
+    def test_an_all_local_attempt_history_keeps_the_recording_host_attribution(self):
+        """#973: every earlier attempt local -- the replayed points ran on
+        the recording host, so the single-host ``Execution hosts`` line
+        stays suppressed exactly as for a never-interrupted run.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._set_ownership(
+            reservation,
+            attempts=[
+                {"started_utc": "2026-11-15T19:42:00+00:00",
+                 "argv": ["sim/run_corners.py", self.slug]},
+                {"started_utc": "2026-11-15T20:10:00+00:00",
+                 "argv": ["sim/run_corners.py", self.slug,
+                          "--resume", reservation.record_id],
+                 "resumed": True},
+            ],
+        )
+        for point in points:
+            (reservation.log_dir / f"{point.corner_id}.log").write_text(self.LOG_TEXT)
+        self._interrupt(reservation)
+
+        backend = self._never_backend()
+        status, out, err = self._run(
+            self._args("--resume", reservation.record_id), backend=backend
+        )
+
+        self.assertEqual(status, cli.EXIT_OK, err)
+        text = self._record_text(reservation.record_id)
+        self.assertIsNotNone(text)
+        self.assertIn("Attempt 3 (this record): started", text)
+        self.assertNotIn("Execution hosts", text)
+
     def test_an_incomplete_log_is_re_run_not_replayed(self):
         points = self._points()
         reservation = self._reserve(points)
@@ -1911,6 +2020,32 @@ class RecordReservationTests(unittest.TestCase):
 
     def reserve(self, **kwargs):
         return report.reserve_record_id(SIM_DIR, self.experiment, _WHEN, git=_GIT, **kwargs)
+
+    def test_reservation_backend_reads_the_recorded_argv(self):
+        """#973: the backend a reservation's argv asked for, both spellings.
+
+        The argv is the only durable record of the backend choice, so the
+        function is total: no ``--backend`` flag means the default local
+        backend, as does an argv that names nothing at all.
+        """
+        self.assertEqual(
+            report.reservation_backend(
+                {"argv": ["sim/run_corners.py", "bench", "--backend", "batch"]}
+            ),
+            "batch",
+        )
+        self.assertEqual(
+            report.reservation_backend(
+                {"argv": ["sim/run_corners.py", "bench", "--backend=batch"]}
+            ),
+            "batch",
+        )
+        self.assertEqual(
+            report.reservation_backend({"argv": ["sim/run_corners.py", "bench"]}),
+            "local",
+        )
+        self.assertEqual(report.reservation_backend({"argv": []}), "local")
+        self.assertEqual(report.reservation_backend({}), "local")
 
     def test_synchronized_allocators_receive_distinct_conforming_ids(self):
         """Many allocators released at once, same experiment/commit/second,

@@ -798,10 +798,21 @@ def _run_reserved(
         # A replayed point keeps the executing host of the attempt that ran
         # it: the recording host for a local-backend attempt (the only host a
         # resumable reservation can name -- another host's reservation reads
-        # "unknown" and is refused), unattributed for an off-host one.
+        # "unknown" and is refused), unattributed for an off-host one. Which
+        # backend that was must be read from the attempt entries, not the
+        # ownership file's top-level argv: adoption rewrites that argv to
+        # name *this* invocation, and this invocation is always the local
+        # one (--resume refuses off-host backends), so the top level would
+        # stamp the recording host onto logs a batch attempt produced.
+        # Replayed logs may come from any earlier attempt, so they share the
+        # recording host only when every earlier attempt ran local: a
+        # history that switched backends leaves them unattributed rather
+        # than claiming a host some of them never ran on.
+        prior_attempts = (resume_info.get("attempts") or [])[:-1]
+        prior_backends = [report.reservation_backend(a) for a in prior_attempts]
         replay_host = (
             resume_info.get("host", "")
-            if report.reservation_backend(resume_info) == "local"
+            if prior_backends and all(b == "local" for b in prior_backends)
             else ""
         )
         rerun: list[str] = []
