@@ -466,7 +466,7 @@ class TestRowPerCampaignRule(_TreeTest):
         )
         result = self.assertFails(
             COVERAGE_CHECK,
-            "no row whose first cell is their name",
+            "no row inside `## Summary table` whose first cell is their name",
             "period-jitter",
         )
         self.assertNotIn("has no entry for:", result.stderr)
@@ -490,7 +490,7 @@ class TestRowPerCampaignRule(_TreeTest):
         )
         result = self.assertFails(
             COVERAGE_CHECK,
-            "no row whose first cell is their name",
+            "no row inside `## Summary table` whose first cell is their name",
             "period-jitter",
         )
         self.assertNotIn("has no entry for:", result.stderr)
@@ -571,7 +571,9 @@ class TestRowPerCampaignRule(_TreeTest):
             )
         )
         result = self.assertFails(
-            COVERAGE_CHECK, "no row whose first cell is their name", "period-jitter"
+            COVERAGE_CHECK,
+            "no row inside `## Summary table` whose first cell is their name",
+            "period-jitter",
         )
         self.assertNotIn("has no entry for:", result.stderr)
 
@@ -589,7 +591,7 @@ class TestRowPerCampaignRule(_TreeTest):
         )
         self.assertFails(
             COVERAGE_CHECK,
-            "no row whose first cell is their name",
+            "no row inside `## Summary table` whose first cell is their name",
             self.PREFIX_CAMPAIGN,
         )
 
@@ -619,7 +621,7 @@ class TestRowPerCampaignRule(_TreeTest):
         )
         result = self.assertFails(
             COVERAGE_CHECK,
-            "no row whose first cell is their name",
+            "no row inside `## Summary table` whose first cell is their name",
             "period-jitter",
         )
         self.assertNotIn("has no entry for:", result.stderr)
@@ -637,7 +639,7 @@ class TestRowPerCampaignRule(_TreeTest):
         )
         result = self.assertFails(
             COVERAGE_CHECK,
-            "no row whose first cell is their name",
+            "no row inside `## Summary table` whose first cell is their name",
             "lock-time",
             "output-range",
             "period-jitter",
@@ -668,7 +670,7 @@ class TestRowPerCampaignRule(_TreeTest):
         self.assertFails(
             COVERAGE_CHECK,
             "has no entry for:",
-            "no row whose first cell is their name",
+            "no row inside `## Summary table` whose first cell is their name",
             "period-jitter",
         )
 
