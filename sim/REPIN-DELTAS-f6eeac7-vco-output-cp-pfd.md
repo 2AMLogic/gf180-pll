@@ -38,7 +38,7 @@ stays open** for the remainder. Dispositions so far:
 |---|---|---|
 | `output-driver` | `20260817-100354-0e9cfc9` | **re-qualified here** (`20261115-130526-3be016c`) |
 | `vco-tuning-range` | `20260804-162735-72883fb`, `20260804-211600-f599a65`, `20260817-143524-0e9cfc9`, `20260923-084925-1655e11`, `20260927-081930-d004d5b`, `20260927-094524-b994116`, `20260927-214737-546a397`, `20260927-220631-546a397` | still owed under #826 |
-| `vco-bias-current` | `20260911-172350-da0bb1e` | still owed under #826 |
+| `vco-bias-current` | `20260911-172350-da0bb1e` | **re-qualified here** (`20261117-150323-f3b3e7f`) |
 | `output-range` | `20260801-061907-67d7127`, `20260819-190341-70a4128` | still owed under #826 |
 | `cp-compliance` | `20260801-190821-734f483`, `20260802-033728-c24ee3a`, `20260802-061841-c24ee3a` | **re-qualified here** — `20261115-025500-8da7900` (DC bench) and `20261116-180719-930fb6e` (switching bench); the third id, `20260802-033728-c24ee3a`, is the near-duplicate twin of the re-run `20260802-061841-c24ee3a`, dispositioned in the cp-compliance section below rather than silently dropped |
 | `mc-cp-mismatch` | `20260731-212614-640560e`, `20260927-093235-b994116`, `20260927-102154-d004d5b` | still owed under #826 |
@@ -48,20 +48,21 @@ Re-derive the supersession side of that table with
 `bash sim/lib/check-record-supersession.sh`, which builds the same graph from
 the records' own **Supersedes** fields.
 
-Two increments have landed since that table was first written: #967
-re-qualified `output-driver` (2026-11-15), and this increment (2026-11-17,
-same branch, still `Part of #826`) re-qualifies both `cp-compliance` benches
-and both `pfd-deadzone` manifests. The live scope the issue's own derivation
-script returns is therefore **15 records, not 20** — `8/1/2/1/3` across the
-five directories `vco-tuning-range`, `vco-bias-current`, `output-range`,
-`cp-compliance`, `mc-cp-mismatch`. The script counts supersession from
-records' own `Supersedes` fields, so its one `cp-compliance` residual,
-`20260802-033728-c24ee3a`, is dispositioned in the cp-compliance section
-below as fully superseded by this increment's re-run of its near-duplicate
-twin — in prose, not by any record's `Supersedes` field — and the script
-will keep returning it until a record names it. Records needing a re-run:
-**14** — 8/1/2/0/3 across those same five directories, all still owed
-under #826.
+Three increments have landed since that table was first written: #967
+re-qualified `output-driver` (2026-11-15), the second increment (2026-11-17,
+same branch, still `Part of #826`) re-qualified both `cp-compliance` benches
+and both `pfd-deadzone` manifests, and the third (2026-11-17, same branch)
+re-qualified `vco-bias-current`. The live scope the issue's own derivation
+script returns is therefore **14 records, not 20** — `8/2/0/3` plus its one
+`cp-compliance` residual across the four directories `vco-tuning-range`,
+`output-range`, `cp-compliance`, `mc-cp-mismatch`. The script counts
+supersession from records' own `Supersedes` fields, so its one
+`cp-compliance` residual, `20260802-033728-c24ee3a`, is dispositioned in the
+cp-compliance section below as fully superseded by the second increment's
+re-run of its near-duplicate twin — in prose, not by any record's
+`Supersedes` field — and the script will keep returning it until a record
+names it. Records needing a re-run: **13** — 8/2/0/3 across those same four
+directories, all still owed under #826.
 
 ## What was re-run
 
@@ -72,6 +73,7 @@ under #826.
 | `cp-compliance` switching bench | `20260802-061841-c24ee3a` | `20261116-180719-930fb6e` | 135 pts (45 PVT × 3 Vctrl) |
 | `pfd-deadzone` operating-point manifest | `20260916-051356-8cedbba` | `20261116-183811-1379f1f` | 405 pts (45 PVT × 3 Vctrl × 3 phase offsets) |
 | `pfd-deadzone` dead-zone bench | `20260801-234626-5b333d0` | `20261116-195826-16f19a5` | 225 pts (45 PVT × 5 phase offsets) |
+| `vco-bias-current` | `20260911-172350-da0bb1e` | `20261117-150323-f3b3e7f` | 234 pts (13 bundles × 3 temps × 3 supplies × 2 band codes) |
 
 open_pdks `f6eeac7`, **every point executed on the batch fleet** — the host
 that minted the record ran no ngspice of its own (24 concurrent off-host
@@ -114,6 +116,25 @@ the completed record and its stored artifact manifest were recovered and
 landed unchanged — its provenance line names the clean tree it ran from,
 which is what makes that recovery legible.
 
+The `vco-bias-current` grid (2026-11-17) ran the same way — `--backend
+batch`, clean-tree provenance at the commit each attempt started from — and
+is this document's first recovery through the per-point store rather than
+around it: its first submission was refused for want of fleet capacity after
+42 of 234 points (12 retries across the 1800 s capacity-wait budget; the
+layer's pools were held by other work), and those 42 points were already
+banked per-point. The retry re-submitted under a fresh record id, adopted
+the banked 42 by an identical grid fingerprint (each fetched object
+sha256-verified), and simulated the remaining 192; the record discloses the
+split on its face, and its provenance line names the clean tree — the
+banking commit — the adopting attempt started from. The discarded
+reservation `20261117-141510-2673695` stays reserved without a record and is
+never reused; its per-point manifest is committed as the adoption's source
+of truth. `Executing simulator: unattributed (234)` on the landed record —
+this deck prints no ngspice version banner per point, so ngspice-47 there is
+the shared batch image's, fingerprint-inferred (`sha256:d6efd5b2…`, 234/234
+points) rather than read, the same disclosure class as the two
+`cp-compliance` grids.
+
 ## Verdict
 
 **Four per-corner verdicts flipped, all four on `duty_pct` at the `fs`/`lo`
@@ -152,6 +173,17 @@ denominator artefact as `trise`/`tfall` above — a 0.2–0.4 fC absolute move
 dividing by a value of order 1e-17 C. No tolerance moved and nothing flipped,
 so there is nothing to file: the four sections below are the evidence, not a
 deferral.
+
+**The `vco-bias-current` increment (2026-11-17) adds zero findings and is
+this document's strongest result: bit-for-bit identical on all 936 graded
+rows** (4 topologies × 234 corners, max abs delta 0 on every one of the 36
+measurements the comparator grades). A predecessor that ran ngspice-46 on
+this same Linux host class under `c6d73a3` is reproduced to the last printed
+digit by a fleet record that ran ngspice-47 (fingerprint-inferred; the deck
+prints no version banner) under `f6eeac7` on 189 execution hosts — the re-pin,
+the simulator bump and the backend are each individually invisible on this
+bench, which the controls below confirm one variable at a time. No tolerance
+moved and nothing flipped; nothing to file.
 
 ## Attribution: PDK or simulator?
 
@@ -255,6 +287,44 @@ control held *everything* fixed but the PDK pin — and that control is
 bit-for-bit, which is why the DC bench's batch delta below comes back
 bit-for-bit too: on this bench the re-pin, the simulator bump and the backend
 are each individually invisible.
+
+### Controls for the `vco-bias-current` increment (2026-11-17)
+
+One bench, one predecessor simulator version — ngspice-46, read from the
+predecessor record's own provenance (`ngspice-46 … Linux-…-aws-x86_64`, the
+same host class as the prober). The control holds the simulator at 46 and
+runs the re-pinned PDK locally, one corner at a time, `--no-write`; the
+issue's literal ngspice-42 probe is run alongside it, so the two controls
+bracket the predecessor's version from both sides:
+
+```bash
+PATH=$HOME/.local/opt/ngspice-46/bin:$PATH \
+  python3 sim/run_corners.py vco-bias-current --backend local \
+  --corners typical all-fast --temps 27 125 --supply 3.30 --supply-tol 0 \
+  --no-write -j 2
+PATH=/usr/bin:$PATH \
+  python3 sim/run_corners.py vco-bias-current --backend local \
+  --corners typical --temps 27 --supply 3.30 --supply-tol 0 --no-write -j 2
+```
+
+(`--supply` is single-valued per invocation; the two control corners were
+taken as two runs. Each point grades 37 measurements across the four
+topologies, both band codes.)
+
+| control (simulator + `f6eeac7`) | vs predecessor `20260911-172350-da0bb1e` |
+|---|---|
+| `typical_27c_3.30v` × 2 band codes (ngspice-46) | identical to the last printed digit, every column of both points — witness resistors (`r3k_cg` 18188, `rsh_ratio` 8.3011), bias supply (`ibias_a_lo_ua` 34.6489 / 136.567), ring stage (`itail_a_mid_ua` 2.55705 / 76.6696, `vbn_a_mid` 0.700332 / 1.05771), 100 MHz point (`ivco_b_100m_ua` 2863.6) |
+| `all-fast_125c_3.63v` × 2 band codes (ngspice-46) | identical to the last printed digit, every column — `rsh_ratio` 6.78009, `ibias_ratio_mid` 11.7229 / 8.73498, `itail_b_mid_ua` 34.8499 / 1018.4, `iring_b_mid_ua` 174.25 / 5092.01, `ivco_b_100m_ua` 3925.26 |
+| `typical_27c_3.30v` × 2 band codes (ngspice-42, the issue's literal probe) | identical to the last printed digit, every column — the same values as the ngspice-46 control and the predecessor |
+
+Reading the controls with the batch delta below: **the PDK re-pin is a no-op
+on this bench, and so is the simulator bump** — ngspice-42, 46 and 47 all
+print the same values at every probed corner, under either PDK pin, which is
+why the 936-row batch delta comes back bit-for-bit. The predecessor itself
+notes the mechanism: the claim quantities here are DC operating points of a
+resistor–MOS bias network, six printed digits of headroom above solver
+noise, with no charge-integral or crossing-interpolation measurement for
+platform numerics to surface in.
 
 ## `output-driver`
 
@@ -486,3 +556,84 @@ few percent against its 0.5 threshold, in the direction the ngspice-46
 control already measured. This predecessor was already clean-tree; the new
 record's provenance is clean at `16f19a59` as well (see What was re-run for
 the interrupted session the record was recovered from).
+
+## `vco-bias-current`
+
+Regenerate with:
+
+```bash
+python3 sim/lib/record_delta.py \
+  sim/vco-bias-current/records/20260911-172350-da0bb1e.md \
+  sim/vco-bias-current/records/20261117-150323-f3b3e7f.md
+```
+
+### `20261117-150323-f3b3e7f` vs `20260911-172350-da0bb1e`
+
+| topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
+|---|---|---|---|---|---|---|---|
+| `bias_supply_current` | `ibias_a_hi_ua` | — | 38.4408..490.443 | 38.4408..490.443 | 0 | 0 | `—` |
+| `bias_supply_current` | `ibias_a_lo_ua` | — | 21.0621..256.401 | 21.0621..256.401 | 0 | 0 | `—` |
+| `bias_supply_current` | `ibias_a_mid_ua` | — | 29.4061..367.342 | 29.4061..367.342 | 0 | 0 | `—` |
+| `bias_supply_current` | `ibias_b_hi_ua` | — | 621.848..4240.6 | 621.848..4240.6 | 0 | 0 | `—` |
+| `bias_supply_current` | `ibias_b_lo_ua` | — | 477.277..2951.99 | 477.277..2951.99 | 0 | 0 | `—` |
+| `bias_supply_current` | `ibias_b_mid_ua` | — | 544.549..3597.41 | 544.549..3597.41 | 0 | 0 | `—` |
+| `bias_supply_current` | `ibias_ratio_mid` | — | 6.13176..31.3217 | 6.13176..31.3217 | 0 | 0 | `—` |
+| `reference_point_100mhz` | `ibias_a_100m_ua` | — | 68.7452..195.563 | 68.7452..195.563 | 0 | 0 | `—` |
+| `reference_point_100mhz` | `ibias_b_100m_ua` | — | 970.396..2163.37 | 970.396..2163.37 | 0 | 0 | `—` |
+| `reference_point_100mhz` | `ibias_ratio_100m` | min=5 | 7.38269..20.3571 | 7.38269..20.3571 | 0 | 0 | `—` |
+| `reference_point_100mhz` | `iring_a_100m_ua` | — | 95.5004..242.131 | 95.5004..242.131 | 0 | 0 | `—` |
+| `reference_point_100mhz` | `iring_b_100m_ua` | — | 997.509..1987.86 | 997.509..1987.86 | 0 | 0 | `—` |
+| `reference_point_100mhz` | `itail_a_100m_ua` | — | 19.1001..48.4262 | 19.1001..48.4262 | 0 | 0 | `—` |
+| `reference_point_100mhz` | `itail_b_100m_ua` | — | 199.502..397.572 | 199.502..397.572 | 0 | 0 | `—` |
+| `reference_point_100mhz` | `ivco_a_100m_ua` | — | 164.246..435.63 | 164.246..435.63 | 0 | 0 | `—` |
+| `reference_point_100mhz` | `ivco_b_100m_ua` | min=318 | 1995.48..4131.46 | 1995.48..4131.46 | 0 | 0 | `—` |
+| `ring_stage_bias` | `ihead_a_mid_ua` | — | 1.83117..131.519 | 1.83117..131.519 | 0 | 0 | `—` |
+| `ring_stage_bias` | `ihead_b_mid_ua` | — | 17.6784..998.44 | 17.6784..998.44 | 0 | 0 | `—` |
+| `ring_stage_bias` | `iring_a_mid_ua` | — | 8.34948..634.504 | 8.34948..634.504 | 0 | 0 | `—` |
+| `ring_stage_bias` | `iring_b_mid_ua` | — | 85.3342..5219.51 | 85.3342..5219.51 | 0 | 0 | `—` |
+| `ring_stage_bias` | `itail_a_hi_ua` | — | 2.34834..175.256 | 2.34834..175.256 | 0 | 0 | `—` |
+| `ring_stage_bias` | `itail_a_lo_ua` | — | 1.05398..82.3828 | 1.05398..82.3828 | 0 | 0 | `—` |
+| `ring_stage_bias` | `itail_a_mid_ua` | min=1 | 1.6699..126.901 | 1.6699..126.901 | 0 | 0 | `—` |
+| `ring_stage_bias` | `itail_b_hi_ua` | — | 22.7765..1312.32 | 22.7765..1312.32 | 0 | 0 | `—` |
+| `ring_stage_bias` | `itail_b_lo_ua` | — | 12.2098..801.869 | 12.2098..801.869 | 0 | 0 | `—` |
+| `ring_stage_bias` | `itail_b_mid_ua` | — | 17.0668..1043.9 | 17.0668..1043.9 | 0 | 0 | `—` |
+| `ring_stage_bias` | `itail_ratio_mid` | — | 5.97699..12.1532 | 5.97699..12.1532 | 0 | 0 | `—` |
+| `ring_stage_bias` | `vbn_a_mid` | — | 0.501466..1.22222 | 0.501466..1.22222 | 0 | 0 | `—` |
+| `ring_stage_bias` | `vbn_b_mid` | — | 0.695053..2.82603 | 0.695053..2.82603 | 0 | 0 | `—` |
+| `ring_stage_bias` | `vbp_a_mid` | — | 1.57714..3.01696 | 1.57714..3.01696 | 0 | 0 | `—` |
+| `ring_stage_bias` | `vbp_b_mid` | — | 0.646034..2.7779 | 0.646034..2.7779 | 0 | 0 | `—` |
+| `witness_resistors` | `r3k_cg` | — | 11918.4..25639.5 | 11918.4..25639.5 | 0 | 0 | `—` |
+| `witness_resistors` | `r3k_off` | — | 68117.3..1.466257e+05 | 68117.3..1.466257e+05 | 0 | 0 | `—` |
+| `witness_resistors` | `rsh_ratio` | min=5 | 6.78009..9.71496 | 6.78009..9.71496 | 0 | 0 | `—` |
+| `witness_resistors` | `ru_cg` | — | 1757.85..2639.18 | 1757.85..2639.18 | 0 | 0 | `—` |
+| `witness_resistors` | `ru_off` | — | 9825.98..14872.4 | 9825.98..14872.4 | 0 | 0 | `—` |
+
+**Per-corner verdicts**: unchanged on all 936 graded rows.
+
+**Stated limits**: identical in both records.
+
+Every graded row of all 936 is bit-for-bit: the comparator's abs-delta
+column reads 0 on all 36 measurements, no per-corner verdict moved, and the
+stated limits are identical. The new record ran on 189 batch execution
+hosts under `f6eeac7` with the fleet's shared `Simulator init` fingerprint
+(`sha256:d6efd5b2…`, 234/234 points) and discloses `Executing simulator:
+unattributed (234)` — this deck prints no version banner, so ngspice-47
+there is the image's, fingerprint-inferred, the same disclosure class as the
+two `cp-compliance` grids. Its predecessor's values are nonetheless
+reproduced to the last printed digit by the ngspice-46 and ngspice-42
+controls above, one variable at a time, so the bit-for-bit result is
+attributed rather than assumed: nothing on this bench moves across the
+re-pin, the 46→47 bump or the backend. 42 of the 234 points were simulated
+by the capacity-aborted first submission and adopted from the fleet
+artifact store by grid fingerprint (each fetched object sha256-verified);
+the record's own Artifact-adopted-points field discloses the split and the
+source attempt.
+
+The claim's verdict structure is unchanged at every corner: the measured
+3k/unmarked ratio at the drawn RCG geometry stays 6.78–9.72× (8.30× at
+typical/27 °C/3.30 V, against its min=5 floor), the counterfactual
+as-drawn-350 arm still exceeds the ratified 318 µA `vdd_vco` domain current
+at every point of the grid on its own (`ivco_b_100m_ua` min 1995.48 µA,
+7.4–20.4× the as-specified arm's 68.7–195.6 µA), and the as-specified arm's
+per-stage starving current stays 19.1–48.4 µA at the 100 MHz reference
+point. The record's Layout-fix reading (#381) carries over unchanged.

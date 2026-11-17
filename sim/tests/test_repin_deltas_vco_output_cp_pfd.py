@@ -279,5 +279,74 @@ class TheAttributionProseRestsOnCommittedProvenance(unittest.TestCase):
         self.assertNotIn("#966", text)
 
 
+class TheVcoBiasCurrentIncrementIsBitForBit(unittest.TestCase):
+    """The third increment (2026-11-17) re-qualifies `vco-bias-current`. Its
+    claim is stronger than the cp/PFD increments': not merely no flips, but
+    **bit-for-bit identical on every graded row** — the comparator's abs
+    delta reads 0 on all 36 measurements across 4 topologies × 234 corners
+    (936 graded rows), because the DC bias network prints the same six
+    digits under either PDK pin and any of ngspice 42/46/47. The record
+    discloses `Executing simulator: unattributed` on all 234 points (the
+    deck prints no version banner; 47 is the shared batch image's,
+    fingerprint-inferred), and 42 of its points were adopted from the fleet
+    artifact store after a capacity-aborted first submission — disclosed on
+    the record's face, asserted here."""
+
+    SLUG = "vco-bias-current"
+    OLD_ID = "20260911-172350-da0bb1e"
+    NEW_ID = "20261117-150323-f3b3e7f"
+    N_ROWS = 936
+    ADOPTED = 42
+    SOURCE_ATTEMPT = "20261117-141510-2673695"
+
+    def _record_text(self):
+        return (SIM_DIR / self.SLUG / "records" / f"{self.NEW_ID}.md").read_text(
+            encoding="utf-8")
+
+    def test_zero_findings_and_unchanged_verdicts_on_every_row(self):
+        lines, findings = record_delta.compare(
+            SIM_DIR / self.SLUG / "records" / f"{self.OLD_ID}.md",
+            SIM_DIR / self.SLUG / "records" / f"{self.NEW_ID}.md",
+        )
+        self.assertEqual(findings, 0, "a flip or limit-crossing appeared")
+        self.assertTrue(
+            any(f"unchanged on all {self.N_ROWS} graded rows" in ln
+                for ln in lines),
+            f"graded-row count drifted from {self.N_ROWS}")
+
+    def test_every_graded_measurement_is_bit_for_bit(self):
+        lines, _ = record_delta.compare(
+            SIM_DIR / self.SLUG / "records" / f"{self.OLD_ID}.md",
+            SIM_DIR / self.SLUG / "records" / f"{self.NEW_ID}.md",
+        )
+        rows = [ln for ln in lines if ln.startswith("| `")]
+        self.assertTrue(rows, "no delta table in comparator output")
+        for ln in rows:
+            cells = [c.strip() for c in ln.strip("|").split("|")]
+            with self.subTest(meas=cells[1]):
+                self.assertEqual(cells[5], "0",
+                                 f"{cells[1]}: nonzero abs delta {cells[5]}")
+
+    def test_new_record_provenance_is_clean_f6eeac7_batch_unattributed(self):
+        text = self._record_text()
+        self.assertIn(
+            "open_pdks `f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7`", text)
+        self.assertIn("(clean tree)", text)
+        self.assertNotIn("DIRTY tree", text)
+        self.assertIn("`batch` execution backend", text)
+        self.assertIn("Executing simulator: unattributed (234)", text)
+
+    def test_adopted_points_are_disclosed_on_the_record_face(self):
+        text = self._record_text()
+        self.assertIn("Artifact-adopted points", text)
+        self.assertIn(f"{self.ADOPTED} point(s)", text)
+        self.assertIn(self.SOURCE_ATTEMPT, text)
+
+    def test_document_states_the_bit_for_bit_result_and_nothing_to_file(self):
+        text = _doc_text()
+        self.assertIn("bit-for-bit identical on all 936 graded\nrows", text)
+        self.assertIn("`vco-bias-current` increment (2026-11-17) adds zero findings", text)
+
+
 if __name__ == "__main__":
     unittest.main()
