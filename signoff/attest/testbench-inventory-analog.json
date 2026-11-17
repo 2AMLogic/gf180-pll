@@ -178,7 +178,7 @@
       "experiment": "output-driver",
       "testbenches": [
         {
-          "content_hash": "sha256:803c2e97c911fc315af95f8e3f6d1269d09caf3f923de4eb429b44df9de38334",
+          "content_hash": "sha256:51bd7cb638948c6791a2c59ae13cbd5b8fbd118e05a97545014f9b5cb94ee96b",
           "path": "sim/output-driver/testbench/tb.json"
         },
         {
