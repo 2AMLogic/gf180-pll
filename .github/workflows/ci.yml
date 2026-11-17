@@ -311,3 +311,6 @@ jobs:
         # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash layout/lib/check-evidence-host-paths.sh --base "origin/${{ github.base_ref || 'main' }}"
 
+      - name: "SCRATCH red-head test for #1015 -- reverted before review"
+        run: exit 1
+
