@@ -107,9 +107,17 @@ $ klt lvs --format json lvs-request.json > lvs-report.json     # exit 0
     name label to break the tie, so the comparer paired them
     structurally. Symmetry-resolved, not a mismatch; a `hints.same_nets`
     entry would pin each one down but was left out to keep this request in
-    #930's no-hints shape. These are **not** bulk/body nets — every bulk
-    terminal in the charge pump is `VSS` or `VDD`; the only body finding
-    in this run is the separate `device.body_unverified` entry below.
+    #930's no-hints shape. These are **not** bulk/body nets: none of the
+    four ever occupies a bulk (4th) terminal — each appears only as a
+    drain (`MEN`, `MDIS`) or a gate (`MBOT` on an n-leg, `MTOP` on a
+    p-leg). Bulk terminals in the charge pump are on a rail for 58 of 60
+    cards (`VSS` for all 30 nfet, `VDD` for 28 of 30 pfet); the two
+    exceptions are the dump buffer's `xbuf_MP1` / `xbuf_MP2` PMOS, whose
+    bodies tie to the local source node `pfd_cp_xcp_xbuf_PSRC` — the
+    only off-rail bulks in the whole 168-card reference, and the
+    near-certain subjects of the separate `device.body_unverified`
+    finding below (which the report scopes only as class `pfet`,
+    2 devices, naming no device).
   - **1 × `device.body_unverified`** — 2 PMOS body terminals were compared
     against an anonymous, KLayout-synthesized well net rather than a real
     schematic net (no drawn/derived well-tap geometry, or the tap-connected
