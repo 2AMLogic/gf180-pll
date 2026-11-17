@@ -97,10 +97,19 @@ $ klt lvs --format json lvs-request.json > lvs-report.json     # exit 0
     `$11`↔`PFD_CP_XCP_XN_T1A_BG`, `$27`↔`PFD_CP_XCP_XN_T1B_BG`,
     `$32`↔`PFD_CP_XCP_XP_T1B_BG`; the comparer resolved each structurally
     and the report suggests a `hints.same_nets` entry to pin them down.
-    Cause: these are the charge-pump legs' bulk/background nets, which
-    carry no name label on the layout side. Symmetry-resolved, not a
-    mismatch; a `hints.same_nets` entry would silence them but was left out
-    to keep this request in #930's no-hints shape.
+    Cause: each `_BG` net is an internal bias-gate node of one charge-pump
+    leg — the common drain of that leg's `MEN`/`MDIS` switches, driving
+    the gate of its `MTOP`/`MBOT` output device — and the two n-legs
+    (`xn_t1a`/`xn_t1b`) and two p-legs (`xp_t1a`/`xp_t1b`) are
+    device-for-device identical, same models and same `L`/`W`, differing
+    only in their internal net names. The legs are therefore
+    indistinguishable by structure alone, and the layout side carries no
+    name label to break the tie, so the comparer paired them
+    structurally. Symmetry-resolved, not a mismatch; a `hints.same_nets`
+    entry would pin each one down but was left out to keep this request in
+    #930's no-hints shape. These are **not** bulk/body nets — every bulk
+    terminal in the charge pump is `VSS` or `VDD`; the only body finding
+    in this run is the separate `device.body_unverified` entry below.
   - **1 × `device.body_unverified`** — 2 PMOS body terminals were compared
     against an anonymous, KLayout-synthesized well net rather than a real
     schematic net (no drawn/derived well-tap geometry, or the tap-connected
@@ -141,7 +150,7 @@ KLayout engine is 0.30.13 while this klt build was tested against 0.30.12.
 klt warns that *report counts* may differ on a different engine, while the
 verdict is unaffected. Note the klt version itself has moved twice since
 #930 recorded its envelope (`0.9.2.dev1024+g8da9718f0cb6` →
-`0.9.3.dev3+gd5d57daf9a14` at #930's curation →
+`0.9.3.dev3+gd5d57daf9a14` at this issue's curation →
 `0.9.3.dev16+gdcf18e2e0c03` here); the load-bearing mechanisms the
 carry-over rule rests on were re-verified present on this build
 (`netlist_normalize._rewrite_m_card_model` at `netlist_normalize.py:2029`,
