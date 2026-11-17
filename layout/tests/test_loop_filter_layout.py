@@ -46,6 +46,7 @@ from pathlib import Path
 
 from _env import HAVE_KLAYOUT, LAYOUT_DIR  # noqa: F401
 
+import _drc  # noqa: E402
 from floorplan import skeleton  # noqa: E402
 from harness import reproduce  # noqa: E402
 from loop_filter import block, devices as dev, netcheck, primitives as prim  # noqa: E402
@@ -130,9 +131,9 @@ class DeviceTableIsTheNetlistTests(unittest.TestCase):
         self.assertGreaterEqual(prim.PRES_IMPLANT_ENC_UM, 0.3)  # PRES.5
         self.assertGreaterEqual(prim.PRES_SAB_EXT_UM, 0.28)  # PRES.6
         self.assertGreaterEqual(block.RES_TO_TAP_UM, 0.6)  # PRES.3
-        self.assertGreaterEqual(prim.MOSCAP_SD_EXT_UM - prim.CONTACT_ENC_UM - prim.CONTACT_UM, 0.15)  # CO.7
-        self.assertGreaterEqual(prim.MOSCAP_POLY_CONTACT_GAP_UM, 0.17)  # CO.8
-        self.assertGreaterEqual(prim.MOSCAP_IMPLANT_MARGIN_UM, 0.23)  # NP.5a
+        self.assertGreaterEqual(prim.MOSCAP_SD_EXT_UM - prim.CONTACT_ENC_UM - prim.CONTACT_UM, _drc.CONTACT_TO_GATE_POLY_UM)  # CO.7
+        self.assertGreaterEqual(prim.MOSCAP_POLY_CONTACT_GAP_UM, _drc.POLY_CONTACT_TO_COMP_UM)  # CO.8
+        self.assertGreaterEqual(prim.MOSCAP_IMPLANT_MARGIN_UM, _drc.IMPLANT_GATE_ENCLOSE_UM)  # NP.5a
         self.assertGreaterEqual(prim.MIM_BOTTOM_ENC_UM, 0.6)  # MIM.3
         self.assertGreaterEqual(prim.MIM_VIA_ENC_UM, 0.4)  # MIM.4
         self.assertGreaterEqual(prim.MIM_VIA_SPACE_UM, 0.5)  # MIM.9
