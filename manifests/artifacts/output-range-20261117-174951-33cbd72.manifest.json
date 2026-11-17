@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "sha256": "78bf141edee5d2821b23f3237f19a0348d056bd40651091e13922b1d1598e9d6",
+      "size": 60193,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.3.dev614+g32005e5ebde1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "33cbd72dfc41f6db1ede689b86266860e286b433"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/78/78bf141edee5d2821b23f3237f19a0348d056bd40651091e13922b1d1598e9d6",
+      "name": "sim/.artifact-stage/output-range-20261117-174951-33cbd72/ff_27c_3.30v_hiin1p454.log"
+    },
+    {
+      "sha256": "77994fffd6e161cfdbf71c44eddd025c5de60c92a0f285d9af8878428bde4c2b",
+      "size": 258,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.3.dev614+g32005e5ebde1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "33cbd72dfc41f6db1ede689b86266860e286b433"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/77/77994fffd6e161cfdbf71c44eddd025c5de60c92a0f285d9af8878428bde4c2b",
+      "name": "sim/.artifact-stage/output-range-20261117-174951-33cbd72/raw_measures.csv",
+      "media_type": "text/csv"
+    }
+  ]
+}
