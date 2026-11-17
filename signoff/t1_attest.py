@@ -217,14 +217,14 @@ def testbench_inventory(root: Path, part: str) -> dict:
             declared = (json.loads(f.read_bytes()).get("derived") or {}).get("module")
             if not declared:
                 continue
-            mod = (f.parent / declared).resolve()
+            mod = f.parent / declared
             try:
-                mod.relative_to(f.parent.resolve())
+                mod.resolve().relative_to(f.parent.resolve())
             except ValueError:
                 raise AttestError(
                     f"sim/{e}: derived.module {declared!r} must live inside its "
                     f"testbench directory") from None
-            if not mod.is_file():
+            if not mod.resolve().is_file():
                 raise AttestError(f"sim/{e}: derived.module {declared!r} does not exist")
             files.append(mod)
         files = sorted(set(files))

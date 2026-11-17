@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""Guard: the CO.1 contact size has exactly one literal definition (issue #1001).
+"""Guard: shared DRC rule values have exactly one literal definition.
 
-``layout/pll_top/_drc.py`` owns ``CONTACT_SIZE_UM``. Every block-level
-contact-size constant must alias it, so a rule revision lands once rather than
-in six hand-copied places. These tests fail if a block re-types the number.
+``layout/pll_top/_drc.py`` owns the numeric value of each DRC rule the
+``layout/pll_top/*`` blocks may not disagree about -- currently CO.1
+(contact size, issue #1001), CO.7 (contact-to-gate-poly space), CO.8
+(poly-contact-to-comp space) and NP.5a/PP.5a (implant overlap of the gate)
+(issue #1013). Every block-level constant for a watched rule must alias
+``_drc``, so a rule revision lands once rather than in several hand-copied
+places. These tests fail if a block re-types the number.
 
-The scan keys on contact-*size* constant names, never on the value 0.22:
-other 0.22 literals (``TRIM_W_UNIT_SW_UM``, the ``MUPW`` width,
-``POLY_RES_CONTACT_TO_SAB_UM`` for HRES.8) are different rules and must stay
-untouched, as must the per-block margins (``VIA_ENCLOSURE_UM`` etc.).
+The scan keys on rule *names*, never on the values: 0.22, 0.15, 0.17 and
+0.23 all collide with unrelated literals (``TRIM_W_UNIT_SW_UM``, the
+``MUPW`` width, ``POLY_RES_CONTACT_TO_SAB_UM`` for HRES.8,
+``DRC_METAL1_MIN_WIDTH_UM`` for M1.1) that are different rules and must
+stay untouched, as must the per-block margins (``VIA_ENCLOSURE_UM`` etc.).
 
     python3 -m unittest discover -s layout/tests -t layout/tests -v
 """
@@ -21,19 +26,29 @@ import unittest
 
 from _env import LAYOUT_DIR
 
-CO1_NAMES = frozenset({"CONTACT_SIZE_UM", "DRC_CONTACT_SIZE_UM", "CONTACT_UM"})
+# Rule -> every name a block binds that rule's value under.
+RULE_NAMES: dict[str, frozenset[str]] = {
+    "CO.1": frozenset({"CONTACT_SIZE_UM", "DRC_CONTACT_SIZE_UM", "CONTACT_UM"}),
+    "CO.7": frozenset({"CONTACT_TO_GATE_POLY_UM", "DRC_CONTACT_TO_GATE_POLY_UM"}),
+    "CO.8": frozenset({"POLY_CONTACT_TO_COMP_UM", "DRC_POLY_CONTACT_TO_COMP_UM"}),
+    "NP.5a": frozenset({"IMPLANT_GATE_ENCLOSE_UM", "DRC_IMPLANT_GATE_ENCLOSE_UM"}),
+}
 DRC_PATH = LAYOUT_DIR / "pll_top" / "_drc.py"
 
-# (module path relative to layout/pll_top, constant, dotted source of its RHS)
+# (module path relative to layout/pll_top, constant, dotted source of its RHS,
+#  the ``_drc`` attribute the constant's value must resolve to)
 ALIASES = [
-    ("divider_chain/devgen.py", "CONTACT_SIZE_UM", "_drc.CONTACT_SIZE_UM"),
-    ("pfd_cp/devgen.py", "CONTACT_SIZE_UM", "_drc.CONTACT_SIZE_UM"),
-    ("pfd_cp/rowgen.py", "CONTACT_SIZE_UM", "_drc.CONTACT_SIZE_UM"),
-    ("vco/devices.py", "DRC_CONTACT_SIZE_UM", "_drc.CONTACT_SIZE_UM"),
-    ("lock_detector/devices.py", "DRC_CONTACT_SIZE_UM", "_drc.CONTACT_SIZE_UM"),
-    ("loop_filter/primitives.py", "CONTACT_UM", "_drc.CONTACT_SIZE_UM"),
-    ("vco/primitives.py", "CONTACT_SIZE_UM", "dev.DRC_CONTACT_SIZE_UM"),
-    ("lock_detector/primitives.py", "CONTACT_SIZE_UM", "dev.DRC_CONTACT_SIZE_UM"),
+    ("divider_chain/devgen.py", "CONTACT_SIZE_UM", "_drc.CONTACT_SIZE_UM", "CONTACT_SIZE_UM"),
+    ("pfd_cp/devgen.py", "CONTACT_SIZE_UM", "_drc.CONTACT_SIZE_UM", "CONTACT_SIZE_UM"),
+    ("pfd_cp/rowgen.py", "CONTACT_SIZE_UM", "_drc.CONTACT_SIZE_UM", "CONTACT_SIZE_UM"),
+    ("vco/devices.py", "DRC_CONTACT_SIZE_UM", "_drc.CONTACT_SIZE_UM", "CONTACT_SIZE_UM"),
+    ("lock_detector/devices.py", "DRC_CONTACT_SIZE_UM", "_drc.CONTACT_SIZE_UM", "CONTACT_SIZE_UM"),
+    ("loop_filter/primitives.py", "CONTACT_UM", "_drc.CONTACT_SIZE_UM", "CONTACT_SIZE_UM"),
+    ("vco/primitives.py", "CONTACT_SIZE_UM", "dev.DRC_CONTACT_SIZE_UM", "CONTACT_SIZE_UM"),
+    ("lock_detector/primitives.py", "CONTACT_SIZE_UM", "dev.DRC_CONTACT_SIZE_UM", "CONTACT_SIZE_UM"),
+    ("vco/devices.py", "DRC_CONTACT_TO_GATE_POLY_UM", "_drc.CONTACT_TO_GATE_POLY_UM", "CONTACT_TO_GATE_POLY_UM"),
+    ("vco/devices.py", "DRC_POLY_CONTACT_TO_COMP_UM", "_drc.POLY_CONTACT_TO_COMP_UM", "POLY_CONTACT_TO_COMP_UM"),
+    ("vco/devices.py", "DRC_IMPLANT_GATE_ENCLOSE_UM", "_drc.IMPLANT_GATE_ENCLOSE_UM", "IMPLANT_GATE_ENCLOSE_UM"),
 ]
 
 
@@ -51,34 +66,45 @@ def _module_assignments(source: str) -> dict[str, ast.expr]:
     return out
 
 
-def co1_literal_names(source: str) -> list[str]:
-    """CO.1 contact-size names bound to a numeric literal in ``source``."""
-    found = []
-    for name, value in _module_assignments(source).items():
-        if name not in CO1_NAMES:
-            continue
-        if any(
-            isinstance(n, ast.Constant) and isinstance(n.value, (int, float))
-            for n in ast.walk(value)
-        ):
-            found.append(name)
-    return found
+def literal_definitions(source: str) -> list[tuple[str, str]]:
+    """``(rule, name)`` pairs from ``RULE_NAMES`` bound to a numeric literal."""
+    assignments = _module_assignments(source)
+    found: list[tuple[str, str]] = []
+    for rule, names in RULE_NAMES.items():
+        for name in names:
+            value = assignments.get(name)
+            if value is None:
+                continue
+            if any(
+                isinstance(n, ast.Constant) and isinstance(n.value, (int, float))
+                for n in ast.walk(value)
+            ):
+                found.append((rule, name))
+    return sorted(found)
 
 
-class SharedContactSizeTest(unittest.TestCase):
-    def test_drc_is_the_only_literal_definition(self) -> None:
-        self.assertEqual(co1_literal_names(DRC_PATH.read_text()), ["CONTACT_SIZE_UM"])
+class SharedRuleValueTest(unittest.TestCase):
+    def test_drc_holds_the_only_literal_definitions(self) -> None:
+        self.assertEqual(
+            literal_definitions(DRC_PATH.read_text()),
+            [
+                ("CO.1", "CONTACT_SIZE_UM"),
+                ("CO.7", "CONTACT_TO_GATE_POLY_UM"),
+                ("CO.8", "POLY_CONTACT_TO_COMP_UM"),
+                ("NP.5a", "IMPLANT_GATE_ENCLOSE_UM"),
+            ],
+        )
         offenders = {}
         for path in sorted(LAYOUT_DIR.rglob("*.py")):
             if path == DRC_PATH:
                 continue
-            names = co1_literal_names(path.read_text())
-            if names:
-                offenders[str(path.relative_to(LAYOUT_DIR))] = names
-        self.assertEqual(offenders, {}, "CO.1 literal re-typed outside _drc.py")
+            found = literal_definitions(path.read_text())
+            if found:
+                offenders[str(path.relative_to(LAYOUT_DIR))] = found
+        self.assertEqual(offenders, {}, "shared DRC rule literal re-typed outside _drc.py")
 
     def test_block_constants_alias_drc(self) -> None:
-        for rel, name, expected in ALIASES:
+        for rel, name, expected, _ in ALIASES:
             with self.subTest(module=rel, constant=name):
                 path = LAYOUT_DIR / "pll_top" / rel
                 value = _module_assignments(path.read_text()).get(name)
@@ -87,28 +113,63 @@ class SharedContactSizeTest(unittest.TestCase):
 
     def test_alias_values_resolve_to_drc(self) -> None:
         drc = importlib.import_module("_drc")
-        for rel, name, _ in ALIASES:
+        for rel, name, _, drc_attr in ALIASES:
             modname = rel[: -len(".py")].replace("/", ".")
             try:
                 mod = importlib.import_module(modname)
             except ImportError as exc:  # optional deps (e.g. klayout) absent
                 self.skipTest(f"cannot import {modname}: {exc}")
             with self.subTest(module=modname, constant=name):
-                self.assertEqual(getattr(mod, name), drc.CONTACT_SIZE_UM)
+                self.assertEqual(getattr(mod, name), getattr(drc, drc_attr))
 
-    def test_scanner_bites_on_synthetic_literal(self) -> None:
-        self.assertEqual(co1_literal_names("CONTACT_SIZE_UM = 0.22\n"), ["CONTACT_SIZE_UM"])
-        self.assertEqual(co1_literal_names("CONTACT_UM: float = 0.22\n"), ["CONTACT_UM"])
-        self.assertEqual(co1_literal_names("CONTACT_SIZE_UM = _drc.CONTACT_SIZE_UM\n"), [])
+    def test_scanner_bites_on_synthetic_literals(self) -> None:
+        self.assertEqual(
+            literal_definitions("CONTACT_SIZE_UM = 0.22\n"), [("CO.1", "CONTACT_SIZE_UM")]
+        )
+        self.assertEqual(
+            literal_definitions("CONTACT_UM: float = 0.22\n"), [("CO.1", "CONTACT_UM")]
+        )
+        self.assertEqual(literal_definitions("CONTACT_SIZE_UM = _drc.CONTACT_SIZE_UM\n"), [])
+        self.assertEqual(
+            literal_definitions("CONTACT_TO_GATE_POLY_UM = 0.15\n"),
+            [("CO.7", "CONTACT_TO_GATE_POLY_UM")],
+        )
+        self.assertEqual(
+            literal_definitions("DRC_CONTACT_TO_GATE_POLY_UM = 0.15\n"),
+            [("CO.7", "DRC_CONTACT_TO_GATE_POLY_UM")],
+        )
+        self.assertEqual(
+            literal_definitions("POLY_CONTACT_TO_COMP_UM = 0.17\n"),
+            [("CO.8", "POLY_CONTACT_TO_COMP_UM")],
+        )
+        self.assertEqual(
+            literal_definitions("DRC_POLY_CONTACT_TO_COMP_UM = 0.17\n"),
+            [("CO.8", "DRC_POLY_CONTACT_TO_COMP_UM")],
+        )
+        self.assertEqual(
+            literal_definitions("IMPLANT_GATE_ENCLOSE_UM = 0.23\n"),
+            [("NP.5a", "IMPLANT_GATE_ENCLOSE_UM")],
+        )
+        self.assertEqual(
+            literal_definitions("DRC_IMPLANT_GATE_ENCLOSE_UM = 0.23\n"),
+            [("NP.5a", "DRC_IMPLANT_GATE_ENCLOSE_UM")],
+        )
+        self.assertEqual(
+            literal_definitions("DRC_IMPLANT_GATE_ENCLOSE_UM = _drc.IMPLANT_GATE_ENCLOSE_UM\n"),
+            [],
+        )
 
-    def test_scanner_ignores_non_co1_literals(self) -> None:
+    def test_scanner_ignores_non_rule_literals(self) -> None:
         src = (
             "TRIM_W_UNIT_SW_UM = 0.22\n"
             "POLY_RES_CONTACT_TO_SAB_UM = 0.22\n"
             "VIA_ENCLOSURE_UM = 0.09\n"
             "CONTACT_PITCH_UM = 0.5\n"
+            "DRC_METAL1_MIN_WIDTH_UM = 0.23\n"
+            "DRC_CONTACT_SPACE_UM = 0.15\n"
+            "DRC_CONTACT_COMP_ENCLOSE_UM = 0.17\n"
         )
-        self.assertEqual(co1_literal_names(src), [])
+        self.assertEqual(literal_definitions(src), [])
 
 
 if __name__ == "__main__":

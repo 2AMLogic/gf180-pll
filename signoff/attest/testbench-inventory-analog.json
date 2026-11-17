@@ -191,11 +191,11 @@
       "experiment": "output-driver",
       "testbenches": [
         {
-          "content_hash": "sha256:fad82576b839c83dadab2c360977f0bdd6299243b4789b389346e408c3fb774a",
+          "content_hash": "sha256:cd07c81629658d6262529cae2cf85b6b5d542194726e792159a73dc2eb870cd0",
           "path": "sim/output-driver/testbench/derive.py"
         },
         {
-          "content_hash": "sha256:803c2e97c911fc315af95f8e3f6d1269d09caf3f923de4eb429b44df9de38334",
+          "content_hash": "sha256:51bd7cb638948c6791a2c59ae13cbd5b8fbd118e05a97545014f9b5cb94ee96b",
           "path": "sim/output-driver/testbench/tb.json"
         },
         {
@@ -233,7 +233,7 @@
       "experiment": "period-jitter",
       "testbenches": [
         {
-          "content_hash": "sha256:ad2bdc46716cd329563aa55324f7bba05e1d50b5124a9841e718f14eb3186b24",
+          "content_hash": "sha256:d78d38763fe2d815fad309330986565d6f8b8716638d20286c2fd07340ce622f",
           "path": "sim/period-jitter/testbench/derive.py"
         },
         {
@@ -317,7 +317,7 @@
       "experiment": "reference-spur",
       "testbenches": [
         {
-          "content_hash": "sha256:9fb48ea4ecba19947d3766e3779ef8c366c90f0b72242379f12568e4798072dd",
+          "content_hash": "sha256:c724c1e2c0da58c8877fee7fdf330d8aff328c0979441a747bf62f59bf76840f",
           "path": "sim/reference-spur/testbench/derive.py"
         },
         {
@@ -414,7 +414,7 @@
           "path": "sim/vco-tuning-range/testbench-stages/tb_vco_stages.spice"
         },
         {
-          "content_hash": "sha256:1d5644c2550537be199af8806513e071c7fe0f129bbe7512c1810f208b8b168f",
+          "content_hash": "sha256:4666d793471b5323f2b8559d085d4146049b299e8f47312a48a82e4d9a689d7a",
           "path": "sim/vco-tuning-range/testbench-supply/derive_supply.py"
         },
         {
