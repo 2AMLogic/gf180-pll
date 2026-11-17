@@ -301,8 +301,14 @@ one point the minting attempt simulated fresh.
   fetched logs (that attempt reached 92 % fetched before its step ended;
   its logs predate banking, so they were banked through the harness's own
   per-point put path and their manifest committed as the adoption carrier) —
-  and simulated exactly 1 point fresh (a Spot reclamation had cost attempt
-  `20261117-185406-7252a70` its last point at 1871/1872). Each adopted point
+  and simulated exactly 1 point fresh — the one point attempt
+  `20261117-185406-7252a70` never banked: its Spot reclamation landed before
+  that point reached the per-point store, so while the attempt's committed
+  artifact manifest holds all 1872 logs (including
+  `all-fast_125c_3.30v_c6.log`, `98c9cda2…`), its per-point bank
+  (`perpoint-20261117-185406-7252a70`) holds 140 entries and not that one —
+  the point was on disk but never *adoptable*, and the minting attempt
+  re-simulated it fresh (`01666999…`). Each adopted point
   is sha256-verified on fetch and replayed through the same parser and
   qualification gate a resumed run uses; the record's own **Artifact-adopted
   points** bullet names the split and the source attempts.
@@ -716,8 +722,10 @@ names the split, the fingerprint and the source attempts). The adoption path
 fetches each point's logs from the artifact store, re-verifies every sha256,
 and replays it through the same parser and qualification gate a resumed run
 uses — the same gate that grades the fresh point. The one point simulated
-fresh is the one a Spot reclamation had cost the previous attempt; it too
-reproduces its predecessor's value exactly. Nothing in the tables above
+fresh is the one the previous attempt never banked — its Spot reclamation
+landed before the point reached the per-point store (the attempt's artifact
+manifest holds the log; its per-point bank does not) — so it was never
+adoptable; it too reproduces its predecessor's value exactly. Nothing in the tables above
 mixes evidence levels: every row is either a sha-verified replay of a
 batch-executed log or a fresh batch execution, all under ngspice-47 on
 open_pdks `f6eeac7`.
