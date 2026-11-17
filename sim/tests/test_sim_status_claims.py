@@ -165,6 +165,10 @@ def _report_text(
 ) -> str:
     """A minimal sim/CHARACTERIZATION.md that satisfies both rules.
 
+    The table sits under a ``## Summary table`` heading, exactly as the
+    real document's does -- the row-per-campaign rule is scoped to that
+    section (#977), so a fixture without the heading would fail it.
+
     ``latest`` overrides/extends the record-id map the rows cite, for tests
     whose tree carries a campaign outside the module-level ``CAMPAIGNS``
     (e.g. a name-prefix pair); the ``_Tree`` fixture names every campaign's
@@ -177,6 +181,8 @@ def _report_text(
     body.append(
         _coverage_bullet(campaigns, records) if bullet is None else bullet
     )
+    body.append("")
+    body.append("## Summary table")
     body.append("")
     body.append("| Campaign | Latest record | Headline |")
     body.append("|---|---|---|")
@@ -587,6 +593,69 @@ class TestRowPerCampaignRule(_TreeTest):
             self.PREFIX_CAMPAIGN,
         )
 
+    def test_a_row_moved_to_a_later_section_is_not_a_summary_table_row(self):
+        """The #977 shape: the row exists verbatim, but outside the table.
+
+        The pre-#977 rule graded "a first-column cell anywhere in the
+        document", so `period-jitter`'s row moved verbatim under the
+        `## Verification-owed cross-check` heading -- whose first column
+        is prose by convention -- passed with the Summary-table row gone.
+        The rule tracks the current `^## ` heading and counts a hit only
+        inside `## Summary table`, so the moved row now fails exactly
+        like a missing one, while the loose rule stays satisfied: the
+        name is still in the document.
+        """
+        rows = dict(list(CAMPAIGNS.items())[:-1])
+        self.tree.write_report(
+            _report_text(
+                rows=rows,
+                extra=(
+                    "## Verification-owed cross-check\n\n"
+                    "| `period-jitter` | "
+                    f"`sim/period-jitter/records/{_LATEST['period-jitter']}.md` | "
+                    "owed |"
+                ),
+            )
+        )
+        result = self.assertFails(
+            COVERAGE_CHECK,
+            "no row whose first cell is their name",
+            "period-jitter",
+        )
+        self.assertNotIn("has no entry for:", result.stderr)
+
+    def test_a_renamed_summary_table_heading_fails_loudly(self):
+        """Renaming the section heading fails the check, not the promise.
+
+        The heading is load-bearing, not decorative: with the section
+        gone no row can satisfy the rule, so every campaign is reported
+        rowless rather than the match silently degrading to the
+        whole-file rule #977 closed.
+        """
+        self.tree.write_report(
+            _report_text().replace("## Summary table", "## Results table", 1)
+        )
+        result = self.assertFails(
+            COVERAGE_CHECK,
+            "no row whose first cell is their name",
+            "lock-time",
+            "output-range",
+            "period-jitter",
+        )
+        self.assertNotIn("has no entry for:", result.stderr)
+
+    def test_a_summary_table_heading_with_trailing_whitespace_opens_the_section(self):
+        """`## Summary table ` (trailing blanks) still opens the section.
+
+        The heading is matched as a full line modulo trailing whitespace,
+        so ordinary editor noise on the one line the rule keys on cannot
+        silently close the section and fail a correct tree.
+        """
+        self.tree.write_report(
+            _report_text().replace("## Summary table\n", "## Summary table  \n", 1)
+        )
+        self.assertPasses(COVERAGE_CHECK)
+
     def test_both_row_and_loose_rules_report_in_one_run(self):
         """A campaign absent entirely fails both rules, both named once.
 
@@ -897,7 +966,8 @@ class TestLatestRecordCitedRule(_TreeTest):
             (root / "sim" / "CHARACTERIZATION.md").write_text(
                 "# sim/ — aggregated characterization report\n\n"
                 + _coverage_bullet(1, 1)
-                + "\n| Campaign | Latest record | Headline |\n|---|---|---|\n"
+                + "\n## Summary table\n\n"
+                + "| Campaign | Latest record | Headline |\n|---|---|---|\n"
                 "| `supply-sensitivity` | (allowlisted, not cited on purpose) | fine |\n"
             )
             result = subprocess.run(

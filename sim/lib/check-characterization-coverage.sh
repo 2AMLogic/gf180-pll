@@ -85,12 +85,12 @@
 # document only in prose and cross-references -- which the loose rule
 # accepts by design -- while carrying no Summary-table row of its own, with
 # every check green. The rule: for every enumerated campaign, at least one
-# line of sim/CHARACTERIZATION.md must start with `| ` immediately
-# followed by the campaign's backticked name -- a first-column cell of
-# exactly that name, optionally carrying an annotation inside the same
-# cell (the `pfd-deadzone` "(operating-point manifest)" row shape).
+# line of the document's `## Summary table` section must start with `| `
+# immediately followed by the campaign's backticked name -- a first-column
+# cell of exactly that name, optionally carrying an annotation inside the
+# same cell (the `pfd-deadzone` "(operating-point manifest)" row shape).
 #
-# Two design points this rule pins deliberately:
+# Three design points this rule pins deliberately:
 #
 # - *At least* one row, never *exactly* one. `pfd-deadzone` legitimately
 #   has two qualifying first-column rows (the second documents a second
@@ -104,6 +104,14 @@
 #   reintroducing the very gap this rule closes. The match is therefore a
 #   literal line-start comparison (awk's index() at position 1), not a
 #   regex, so campaign names need no metacharacter escaping.
+# - The section is load-bearing. The pass tracks the current `^## `
+#   heading and counts a first-column hit only inside `## Summary table`
+#   (#977): a row that satisfies the cell shape but sits in a later
+#   section -- `## Verification-owed cross-check`'s first column is prose
+#   by convention -- is not the Summary-table row the Coverage bullet
+#   promises, and a renamed heading fails loudly (every campaign reported
+#   rowless) rather than the match silently degrading to a whole-file
+#   one.
 #
 # The rule is additive: the loose coverage rule above stays, with its own
 # distinct failure message, because "not silently absent" and "has the row
@@ -184,10 +192,11 @@ if [ "${status}" -ne 0 ]; then
   done
 fi
 
-# The row-per-campaign rule (see the header, #958): the Coverage bullet
-# promises a Summary-table row per enumerated campaign, and the loose rule
-# above deliberately accepts a mention anywhere. Grade the row promise
-# separately: at least one line must start with "| `<campaign>`" -- a
+# The row-per-campaign rule (see the header, #958, #977): the Coverage
+# bullet promises a Summary-table row per enumerated campaign, and the
+# loose rule above deliberately accepts a mention anywhere. Grade the
+# row promise separately: at least one line of the document's
+# `## Summary table` section must start with "| `<campaign>`" -- a
 # first-column cell of exactly that name, optionally followed by an
 # annotation inside the same cell (pfd-deadzone's
 # "(operating-point manifest)" row shape). At least one, never exactly one:
@@ -195,14 +204,20 @@ fi
 # load-bearing (divider-ratio vs. divider-ratio-cell/-chain/-dff;
 # reference-spur vs. reference-spur-band-top), and the match is awk's
 # literal index() at position 1 rather than a regex, so campaign names
-# need no metacharacter escaping. Kept beside, not instead of, the loose
-# rule: the two answer different questions, and both failures are named
-# in one run.
+# need no metacharacter escaping. The pass also tracks the current `^## `
+# heading (#977): only the Summary-table section counts, so a qualifying
+# row moved into a later section is graded like a missing one, and a
+# renamed heading fails loudly (every campaign rowless) instead of the
+# match silently degrading to a whole-file one. Kept beside, not instead
+# of, the loose rule: the two answer different questions, and both
+# failures are named in one run.
 row_missing=()
 
 for campaign in "${campaigns[@]}"; do
   if ! awk -v cell="| \`${campaign}\`" \
-    'index($0, cell) == 1 { found = 1; exit } END { if (!found) exit 1 }' \
+    '/^## / { in_summary = ($0 ~ /^## Summary table[ \t]*$/) }
+     in_summary && index($0, cell) == 1 { found = 1; exit }
+     END { if (!found) exit 1 }' \
     "${REPORT}"; then
     row_missing+=("${campaign}")
     status=1
