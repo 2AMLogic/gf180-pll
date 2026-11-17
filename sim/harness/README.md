@@ -1207,10 +1207,15 @@ every attempt's start, the replayed/re-run split, and an explicit
 statement that the `Execution:` line, the wall clock and the per-point
 `seconds` describe the final attempt only — a reader must not mistake one
 process's wall time for a multi-attempt campaign's cost. Replayed points
-carry `"replayed": true` in the record's point entry (`PASS (replayed)` in
-the corner table), `seconds` 0, and the executing host of the attempt that
-actually ran them — unattributed when that attempt dispatched off-host,
-since a raw log does not record which machine produced it. `simulator` and
+carry `"replayed": true` in the record's point entry (a `(replayed)`
+marker on the point's verdict in the corner table, whatever that verdict
+is), `seconds` 0, and the executing host of the attempt that actually ran
+them. A replayed log may come from any earlier attempt, so the replayed
+points carry the recording host only when **every** earlier attempt ran
+on the `local` backend; a history in which any attempt dispatched
+off-host leaves them unattributed, since a raw log does not record which
+machine produced it — under-claiming beats naming a host some of the
+replayed logs never ran on. `simulator` and
 init attribution are re-read from the log's own text, so those survive.
 A timed-out point can never be replayed: the timeout banner is written
 first in the log, before any measurement.
