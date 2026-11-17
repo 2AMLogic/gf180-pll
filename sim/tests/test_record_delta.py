@@ -19,7 +19,10 @@ The cases worth pinning are the ones where a wrong answer looks plausible:
   it as no change at all;
 - a record pair whose measurement coverage differs (the #40 harness migration
   both dropped and added columns) must list the difference rather than
-  intersect it away in silence.
+  intersect it away in silence;
+- the `` (replayed)`` provenance marker (#973) is not part of the verdict
+  (#1042): a replay/fresh record pair must not report a flip, while a
+  genuine flip on a replayed point still must.
 
 Run:  python3 -m unittest discover -s sim/tests -v
 """
@@ -153,6 +156,54 @@ class ReportsMovementAgainstTheOldRecordAsTheBaseline(unittest.TestCase):
         self.assertEqual(findings, 1)
         self.assertIn("verdict flips", body)
         self.assertIn("| `cn` | `typical_27c_3.30v` | PASS | FAIL |", body)
+
+    def test_the_replayed_marker_alone_is_not_a_flip(self):
+        """#1042: the `(replayed)` marker is provenance, not a verdict, so a
+        replay/fresh pair of records must not read as a flip in either
+        direction -- including the `FAIL (replayed) — prose` shape PR #1039
+        introduces for replayed failures."""
+        for old_cell, new_cell in (
+            ("PASS", "PASS (replayed)"),
+            ("PASS (replayed)", "PASS"),
+            (
+                "FAIL — vout max=10 (got 99)",
+                "FAIL (replayed) — vout max=10 (got 99)",
+            ),
+        ):
+            with self.subTest(old=old_cell, new=new_cell):
+                old = _record(
+                    {"cn": (["c330_cn"], {"typical_27c_3.30v": ["1.0", old_cell]})},
+                    [("cn", "c330_cn", "min=0")],
+                )
+                new = _record(
+                    {"cn": (["c330_cn"], {"typical_27c_3.30v": ["1.0", new_cell]})},
+                    [("cn", "c330_cn", "min=0")],
+                )
+                _lines, findings = self._compare(old, new)
+                self.assertEqual(
+                    findings,
+                    0,
+                    f"{old_cell!r} -> {new_cell!r} is a marker move, not a flip",
+                )
+
+    def test_a_real_flip_on_a_replayed_point_is_still_a_finding(self):
+        """Stripping the marker must not hide a genuine PASS -> FAIL move."""
+        old = _record(
+            {"cn": (["c330_cn"], {"typical_27c_3.30v": ["1.0", "PASS"]})},
+            [("cn", "c330_cn", "min=0")],
+        )
+        new = _record(
+            {"cn": (["c330_cn"], {"typical_27c_3.30v": ["1.0", "FAIL (replayed) — vout max=10 (got 99)"]})},
+            [("cn", "c330_cn", "min=0")],
+        )
+        lines, findings = self._compare(old, new)
+        body = "\n".join(lines)
+        self.assertEqual(findings, 1)
+        self.assertIn("verdict flips", body)
+        self.assertIn(
+            "| `cn` | `typical_27c_3.30v` | PASS | FAIL (replayed) — vout max=10 (got 99) |",
+            body,
+        )
 
     def test_a_changed_stated_limit_is_a_finding_even_when_values_sit_still(self):
         old = _record(
