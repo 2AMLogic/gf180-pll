@@ -58,15 +58,12 @@ This page says what comes next and why. It does not restate status: the machine 
    old-versus-new delta table.
 3. **Land the open clean-up PRs.** #919, #920 and #921 (for #916, #915, #918) and #917. *Done when*
    merged with CI green.
-4. **Make the README's T1 count match the report.** `README.md` still says "0 of 22 rows met"; the
-   report says 6. *Done when* the sentence is corrected and a CI check fails when the README's count
-   differs from `tier-report.json`. No issue yet.
-5. **Correct the "no `klt drc` / `klt lvs` envelope exists" statements.** `signoff/README.md` and
+4. **Correct the "no `klt drc` / `klt lvs` envelope exists" statements.** `signoff/README.md` and
    `layout/README.md` predate the envelopes committed under
    `layout/evidence/vco-layout/klt-curated-836*/` and
    `layout/evidence/pll-top-layout/klt-curated-836/`. *Done when* both files describe what is
-   committed and why it is still uncited. No issue yet.
-6. **`klt lvs` envelope for `lock_detector`.** Only `vco_block` has one (`klt-curated-836-recheck/`,
+   committed and why it is still uncited (#929).
+5. **`klt lvs` envelope for `lock_detector`.** Only `vco_block` has one (`klt-curated-836-recheck/`,
    `status: match`). *Done when* a request, report and `RECORD.md` are committed under
    `layout/evidence/lock-detector-layout/`, whatever the verdict, with any tool gap filed on
    klayout-tools. No issue yet.
@@ -80,7 +77,7 @@ This page says what comes next and why. It does not restate status: the machine 
 - **Remaining re-qualification groups (#826, #827, #828)** — after #825; then #829 cites the new
   records and regenerates the sign-off; then #843 cites `sim/CHARACTERIZATION.md` for item 8; then
   #790 and #788 close.
-- **`klt lvs` envelopes for `pfd_cp` and `divider_chain`** — after Now 6 shows the recipe carries
+- **`klt lvs` envelopes for `pfd_cp` and `divider_chain`** — after Now 5 shows the recipe carries
   over. With all four, item 11's pairing has its sub-block half.
 - **`mc-cp-mismatch` harness migration (#879)** — after #878 is closed out.
 - **C2 electrical validation (#753, second stage)** — `devchar-passives` for the option-B MIM and
