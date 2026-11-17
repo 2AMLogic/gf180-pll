@@ -124,6 +124,23 @@
 # force. Those are filed rather than fixed here (#499 for #12; see the issue
 # filed alongside this check for #13).
 #
+# `docs/ROADMAP.md` is deliberately NOT graded either (issue #956), and the
+# reason is measured against its text rather than guessed. Both of the stale
+# claims that issue was filed about pass every rule here undetected: the
+# document's state claims are sequencing and completion prose -- "after
+# #825", "In progress", "*Done when* merged with CI green" -- and rule 2
+# reads only the forty characters after a reference, while rule 3 finds no
+# ownership phrase anywhere in the file. The one reference the rules DO
+# reach is a sentence that is true: "after #878 is closed out" is
+# future-conditional, but the state-annotation matcher reads "is closed"
+# inside it as a present-tense assertion (#878 is open), so grading the page
+# would fail CI on a correct sentence while still seeing none of its actual
+# defect class. The page is also not the state of record -- its own header
+# defers to sim/STATUS.md, layout/STATUS.md and signoff/tier-report.json,
+# all of which ARE graded here. What it owes instead is a standing as-of
+# disclosure beside its header pin, which the same issue added to the
+# document itself.
+#
 # THIS IS THE ONE CHECK IN THIS REPOSITORY THAT NEEDS THE FORGE. Every other
 # one reads only committed files and is therefore deterministic on a tree.
 # This one cannot be: the fact it grades lives on the forge. Two consequences,
