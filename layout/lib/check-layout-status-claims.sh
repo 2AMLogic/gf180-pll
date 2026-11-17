@@ -860,6 +860,36 @@ OFF_PIN_DISCLOSED = {
         "vco_ring sub-cell at POLY_RES 1k, superseded on the pin at 3k by lvs-recheck-klayout-0.28.16/lvs-ring.stdout.log",
     "vco-layout/lvs-buffer/lvs.stdout.log":
         "vco_out_buffer sub-cell at POLY_RES 1k, superseded on the pin at 3k by lvs-recheck-klayout-0.28.16/lvs-buffer.stdout.log",
+    # The f6eeac7-runset re-derivation under --combine (issue #980, DR-043).
+    # The pinned open_pdks tree moved from c6d73a35 to f6eeac7, whose runset
+    # defaults SIMPLIFY off, so every block-level reference-vs-extraction
+    # comparison had to be re-run with --combine to mean anything. No 0.28.16
+    # binary exists on the capturing host, so these logs are from 0.30.12;
+    # each block keeps its on-pin (0.28.16, c6d73a35-deck) match log as the
+    # engine-pin warrant, so the "at least one on-pin verdict" rule still
+    # holds. The inv_tb set is the prove() negative control under --combine.
+    "vco-layout/lvs-combine-f6eeac7/lvs.stdout.log":
+        "f6eeac7 --combine re-derivation (issue #980, DR-043); on-pin warrant is lvs-recheck-klayout-0.28.16/",
+    "vco-layout/lvs-nocombine-f6eeac7/lvs.stdout.log":
+        "f6eeac7 baseline mismatch that motivates --combine (issue #980, DR-043); deliberately run at the runset's own defaults",
+    "vco-layout/lvs-combine-width-sensitivity-f6eeac7/width-10nm-short/lvs.stdout.log":
+        "f6eeac7 width-tolerance probe, deliberately a mismatch (issue #980, DR-043)",
+    "vco-layout/lvs-combine-width-sensitivity-f6eeac7/width-onefold-short/lvs.stdout.log":
+        "f6eeac7 dropped-fold probe, deliberately a mismatch (issue #980, DR-043)",
+    "pfd-cp-layout/lvs-combine-f6eeac7/lvs.stdout.log":
+        "f6eeac7 --combine re-derivation (issue #980, DR-043); no 0.28.16 binary on the capturing host",
+    "divider-chain-layout/lvs-combine-f6eeac7/lvs.stdout.log":
+        "f6eeac7 --combine re-derivation (issue #980, DR-043); no 0.28.16 binary on the capturing host",
+    "lock-detector-layout/lvs-combine-f6eeac7/lvs.stdout.log":
+        "f6eeac7 --combine re-derivation (issue #980, DR-043); no 0.28.16 binary on the capturing host",
+    "inv-tb-combine-f6eeac7/drc-clean/drc.stdout.log":
+        "prove() negative-control re-run under --combine (issue #980, DR-043); inv_tb is cell-level disclosed",
+    "inv-tb-combine-f6eeac7/drc-fault/drc.stdout.log":
+        "prove() negative-control re-run under --combine (issue #980, DR-043); inv_tb is cell-level disclosed",
+    "inv-tb-combine-f6eeac7/lvs-clean/lvs.stdout.log":
+        "prove() negative-control re-run under --combine (issue #980, DR-043); inv_tb is cell-level disclosed",
+    "inv-tb-combine-f6eeac7/lvs-fault/lvs.stdout.log":
+        "prove() negative-control re-run under --combine (issue #980, DR-043); inv_tb is cell-level disclosed",
 }
 
 # Cell-level counterpart to OFF_PIN_DISCLOSED: top cells whose graded verdicts
