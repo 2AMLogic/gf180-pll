@@ -8,8 +8,8 @@ naming itself bare -- ``# Usage: sim/lib/check-readme-status.sh`` -- and that
 line is a claim like any other here: it promises a reader can type the path and
 get a verdict. ``sim/lib/check-record-trim-connectivity.sh`` was committed at
 mode ``100644`` in the single commit that created it (``1f8a574e``, PR #562),
-so for anyone who believed its own header it exited **126** instead, while all
-fourteen of its siblings exited 0.
+so for anyone who believed its own header it exited **126** instead, while
+every other check in the family exited 0.
 
 Nothing could see it. ``.github/workflows/ci.yml`` invokes every member as
 ``bash <path>`` -- docs/claim-checker-inventory.md is where the size of that
