@@ -484,14 +484,21 @@ EOF
 # "ngspice-46 required for nested nonlinear moscap decks" already
 # documents that ngspice-47 mis-expands this PDK's nonlinear
 # cap_*mos_03v3/06v0 loop-filter/VCO moscap family into a malformed
-# element ("unknown parameter (e9)") whenever it is instantiated inside a
-# named `.subckt` -- and #259 additionally found that build does not even
-# exit on that error, it hangs indefinitely (~13-14% CPU), which stalls an
-# entire `xargs`-driven run.sh job pool since the affected corner's slot
-# never frees. A campaign that silently ran on the wrong binary because the
-# pin happened to be missing is exactly the kind of quiet wrong number
-# CLAUDE.md's "Verification is the product" line exists to prevent -- so
-# the check below fails loudly by default instead.
+# element ("unknown parameter (e9)") whenever an instance carries the measured
+# `m=` multiplier trigger (#926; the older nesting-based framing was a
+# confound of this repo's deck layout -- the trigger is the `m=`,
+# not the nesting) -- and #259 additionally found
+# that build does not even exit on that error, it hangs indefinitely
+# (~13-14% CPU), which stalls an entire xargs-driven run.sh job pool
+# since the affected corner's slot never frees. Nor is a clean load the
+# same as agreement: #932 measured that build returning a spurious ~1 nA
+# current on the family's c=<expr> behavioral capacitors during a
+# constant-voltage hold, on instances with no `m=` at all -- "it runs"
+# is not "it returns the same values". A campaign that silently ran on
+# the wrong binary because the pin happened to be missing is exactly the
+# kind of quiet wrong number CLAUDE.md's "Verification is the product"
+# line exists to prevent -- so the check below fails loudly by default
+# instead.
 #
 # SIM_NGSPICE_BIN overrides the pinned path itself, for a host that
 # deliberately keeps its pinned ngspice-46 build somewhere other than
@@ -540,11 +547,16 @@ Every citable sim/ evidence record cites ngspice-46 at this path, and
 #241/#242 tuned this shim's OpenMP-thread-pin detection against that build.
 Silently falling through to whatever "ngspice" resolves to on PATH is not
 safe here: Homebrew's current ngspice-47 bottle has a reproducible parse
-failure ("unknown parameter (e9)") on this PDK's nested nonlinear loop-
+failure ("unknown parameter (e9)") on this PDK's loop-
 filter/VCO moscaps (see sim/harness/README.md's "ngspice-46 required for
 nested nonlinear moscap decks", #153) and, worse, does not exit on that
 error -- it hangs indefinitely, which stalls an entire xargs-driven run.sh
 job pool since the affected corner's job slot never frees (#259).
+Even where a deck loads cleanly, that build has been measured returning
+a different current from the same deck: a spurious ~1 nA offset on the
+family's c=<expr> behavioral capacitors during a constant-voltage hold
+(#932). "It runs" is not "it returns the same values" -- only the
+pinned build is citable.
 
   Fix:      install ngspice-46 at ${SIMENV_NGSPICE_PIN}
             (sim/harness/README.md's "ngspice-46 required..." section has
@@ -1192,7 +1204,7 @@ simenv_control_md_rows() {
 
 # simenv_emit_control_evidence <corners-dir> <work-dir> <campaign-label> <rid>
 #                              <netlist-desc> <corners-desc> <switches-note>
-#                              <campaign-fn>
+#                              <campaign-fn> <units>
 #
 # Write <corners-dir>/negative_control.csv and archive every control run's
 # raw ngspice log beside it. <campaign-fn> is the campaign's own
@@ -1203,9 +1215,21 @@ simenv_control_md_rows() {
 # campaign's `--control` standalone entry point and its full-campaign path,
 # so a campaign's control and a standalone control are the same bytes
 # produced by the same code.
+#
+# <units> is the control grid's cardinality (points x runs per point),
+# computed by the caller from its own arrays. The guard call below (#959) is
+# the FIRST side-effect-free gate the helper runs -- ahead of the mkdir/rm --
+# because a refusal must leave the tree untouched, and because the runners'
+# standalone `--control` branches exit before they ever reach their own
+# sample-grid guard call: routing the check through this chokepoint is what
+# makes the control fan consult it at all. Like every fan-out path, a
+# multi-unit grid refuses under the batch backend unless
+# SIM_ALLOW_LOCAL_GRID=1; a caller that omits <units> fails closed under
+# batch (an empty count refuses), never bypasses.
 simenv_emit_control_evidence() {
   local cornersdir="$1" work="$2" campaign="$3" rid="$4"
   local netlist="$5" corners_desc="$6" switches="$7" campaign_fn="$8"
+  simenv_guard_local_grid "${9:-}" "${campaign}" || return $?
   local raw="${work}/negative_control_rows.csv"
   mkdir -p "${cornersdir}"
   rm -rf "${work:?}"/ctl_*
