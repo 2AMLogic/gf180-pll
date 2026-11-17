@@ -140,6 +140,16 @@ def _fmt(x: float) -> str:
     return f"{x:.6e}"
 
 
+def _strip_replayed(cell: str) -> str:
+    """Drop the `` (replayed)`` provenance marker (#973) from a verdict cell.
+
+    The marker says *where the numbers came from*, not what they say (#1042):
+    a point freshly simulated in one record and replayed from an earlier
+    attempt's logs in the other must not read as a verdict flip.
+    """
+    return cell.replace(" (replayed)", "")
+
+
 def compare(old_path: Path, new_path: Path) -> tuple[list[str], int]:
     """Render the delta tables. Returns ``(lines, n_findings)``."""
     old_v, old_l = parse_record(old_path)
@@ -196,7 +206,7 @@ def compare(old_path: Path, new_path: Path) -> tuple[list[str], int]:
         if meas != "pass/fail":
             continue
         new_val = new_v.get((topo, meas, corner))
-        if new_val is not None and new_val != old_val:
+        if new_val is not None and _strip_replayed(new_val) != _strip_replayed(old_val):
             flips.append((topo, corner, old_val, new_val))
 
     lines.append("")
