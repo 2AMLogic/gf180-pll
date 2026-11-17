@@ -3,7 +3,7 @@
   "provenance": {
     "deck": null,
     "input": {
-      "content_hash": "sha256:5afa66afe960ab55dbec98d5280e91db9eace55dc989d7b1096f411071a9f70c",
+      "content_hash": "sha256:be68497d816c5f216844971c17c3ff5eb3723a6e6dcff77e2443ecffd33e6680",
       "path": {
         "path": "signoff/attest/testbench-inventory-digital.json",
         "scope": "repo"
@@ -16,6 +16,6 @@
   "schema_version": 1,
   "source": "signoff/attest/testbench-inventory-digital.json",
   "status": "pass",
-  "summary": "digital partition: every claimed measurement's testbench committed with a cold-start command; PDK revision and tool pins recorded",
+  "summary": "digital partition: every claimed measurement's testbench and declared reduction module committed with a cold-start command; PDK revision and tool pins recorded",
   "t1_item": 9
 }

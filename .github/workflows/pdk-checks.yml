@@ -44,6 +44,13 @@ on:
     - cron: "17 6 * * *"
   workflow_dispatch: {}
 
+# Least-privilege GITHUB_TOKEN (CodeQL alert: "Workflow does not contain
+# permissions"). Jobs override as needed -- design-changed additionally reads
+# pull-requests for its path filter; every other job inherits read-only
+# contents access.
+permissions:
+  contents: read
+
 jobs:
   design-changed:
     name: design-changed (path filter for pdk-checks)

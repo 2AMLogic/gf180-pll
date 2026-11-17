@@ -15,6 +15,11 @@ The scan keys on rule *names*, never on the values: 0.22, 0.15, 0.17 and
 ``DRC_METAL1_MIN_WIDTH_UM`` for M1.1) that are different rules and must
 stay untouched, as must the per-block margins (``VIA_ENCLOSURE_UM`` etc.).
 
+``RULE_NAMES`` is also kept complete: every module-level numeric literal
+in ``_drc.py`` must be covered by some ``RULE_NAMES`` entry, so the next
+rule added there fails a test naming it until its entry lands -- the
+watch list cannot silently lag the file it watches (issue #1024).
+
     python3 -m unittest discover -s layout/tests -t layout/tests -v
 """
 
@@ -83,6 +88,28 @@ def literal_definitions(source: str) -> list[tuple[str, str]]:
     return sorted(found)
 
 
+def uncovered_literal_names(source: str) -> set[str]:
+    """Module-level names bound to a numeric literal that no ``RULE_NAMES``
+    entry watches.
+
+    ``literal_definitions`` only sees the names ``RULE_NAMES`` already
+    lists, so a rule literal added to ``_drc.py`` without a matching entry
+    there is invisible to it (issue #1024). This helper walks every
+    module-level binding instead and reports the ones whose name is outside
+    the watch list; the guard test asserts the set is empty.
+    """
+    covered = frozenset().union(*RULE_NAMES.values())
+    return {
+        name
+        for name, value in _module_assignments(source).items()
+        if name not in covered
+        and any(
+            isinstance(node, ast.Constant) and isinstance(node.value, (int, float))
+            for node in ast.walk(value)
+        )
+    }
+
+
 class SharedRuleValueTest(unittest.TestCase):
     def test_drc_holds_the_only_literal_definitions(self) -> None:
         self.assertEqual(
@@ -102,6 +129,16 @@ class SharedRuleValueTest(unittest.TestCase):
             if found:
                 offenders[str(path.relative_to(LAYOUT_DIR))] = found
         self.assertEqual(offenders, {}, "shared DRC rule literal re-typed outside _drc.py")
+
+    def test_drc_binds_no_unwatched_literals(self) -> None:
+        uncovered = uncovered_literal_names(DRC_PATH.read_text())
+        self.assertEqual(
+            uncovered,
+            set(),
+            "module-level numeric literal(s) in _drc.py that no RULE_NAMES "
+            f"entry watches: {sorted(uncovered)} -- add each one's rule to "
+            "RULE_NAMES in the same change",
+        )
 
     def test_block_constants_alias_drc(self) -> None:
         for rel, name, expected, _ in ALIASES:
@@ -157,6 +194,28 @@ class SharedRuleValueTest(unittest.TestCase):
         self.assertEqual(
             literal_definitions("DRC_IMPLANT_GATE_ENCLOSE_UM = _drc.IMPLANT_GATE_ENCLOSE_UM\n"),
             [],
+        )
+
+    def test_unwatched_scanner_bites_on_synthetic_literals(self) -> None:
+        self.assertEqual(
+            uncovered_literal_names("CONTACT_COMP_ENCLOSE_UM = 0.07\n"),
+            {"CONTACT_COMP_ENCLOSE_UM"},
+        )
+        self.assertEqual(
+            uncovered_literal_names(
+                "CONTACT_SIZE_UM = 0.22\nCONTACT_COMP_ENCLOSE_UM = 0.07\n"
+            ),
+            {"CONTACT_COMP_ENCLOSE_UM"},
+        )
+        self.assertEqual(
+            uncovered_literal_names("CONTACT_SIZE_UM: float = 0.22\n"), set()
+        )
+        self.assertEqual(
+            uncovered_literal_names(
+                "CONTACT_COMP_ENCLOSE_UM = _drc.CONTACT_SIZE_UM\n"
+                "CONTACT_SIZE_UM = _drc.CONTACT_SIZE_UM\n"
+            ),
+            set(),
         )
 
     def test_scanner_ignores_non_rule_literals(self) -> None:
