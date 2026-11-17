@@ -86,9 +86,26 @@ citable, so both were deleted before this clean-tree run. The predecessor's
 own provenance was a dirty-tree run; this record upgrades it to clean.
 
 The four charge-pump/PFD grids above (2026-11-15 … 2026-11-17) were run the
-same way — `--backend batch`, ngspice-47 on every execution host, clean-tree
-provenance at the commit each campaign ran from, sequential with a commit
-between each, raw evidence manifest-forward via `sim/lib/artifact-put.sh`.
+same way — `--backend batch`, clean-tree provenance at the commit each
+campaign ran from, sequential with a commit between each, raw evidence
+manifest-forward via `sim/lib/artifact-put.sh`. On simulator version they do
+not all read the same, and this document does not assume they do: both
+`pfd-deadzone` grids attribute ngspice-47 per point — their records omit the
+`Executing simulator` line, which per `sim/harness/report.py` means every
+point reported exactly the recording version — while both `cp-compliance`
+grids disclose `Executing simulator: unattributed` on every point (all 315):
+their decks printed no ngspice version banner, so ngspice-47 is *not* read
+provenance there. What all four share is the batch image itself — an
+identical `Simulator init` fingerprint (`sha256:d6efd5b2…`, 945/945 points),
+the same fingerprint under which #967's output-driver record *does* attribute
+ngspice-47 per point. The switching grid (18:07) attributed nothing; the
+operating-point grid 31 minutes later (18:38) attributed 47 on all 405
+points — same backend, same init hash, different banners — so per-grid
+attribution is read from each record, not assumed from the way they were
+run. ngspice-47 is therefore read on the two PFD grids and inferred from the
+shared image on the two `cp-compliance` grids; the attribution argument
+below rests on measured probe-vs-fleet numeric agreement, not on the version
+string.
 One earlier dead-zone-grid submission minted a DIRTY-tree record and was
 deleted unread (the same discard rule as above); the landed
 `20261116-195826-16f19a5` re-ran clean at commit `16f19a59`. The session
@@ -122,8 +139,10 @@ comparisons — 180 + 135 + 405 + 225 = 945 graded rows — come back
 reports no findings section for any of them. The `cp-compliance` DC bench is
 the strongest result in this document: **every graded row of all 180 is
 bit-for-bit identical** to a predecessor that ran under a different PDK pin,
-a different simulator major version (42 vs 47) and a different execution
-backend. Where the other three benches move at all, the movement is confined
+a different simulator major version and a different execution backend — the
+predecessor's ngspice-42 is its record's own attribution; this run's
+ngspice-47 is inferred from the shared batch image, not read from it (the DC
+record discloses `Executing simulator: unattributed` on all 180 points). Where the other three benches move at all, the movement is confined
 to the femtocoulomb-scale charge integrals (`qnet`/`q_zero`/`qup`/`qdn`,
 sub-fC absolute deltas) and the switch-timing quantities derived from them
 (`wskew`, `ton_*`); the pulse widths and saturation margins that carry the
@@ -211,19 +230,25 @@ Reading the four controls together with the batch deltas below:
   everywhere they were probed.
 - **The femtocoulomb-scale `qnet`/`q_zero` movement is platform numerics,
   not the 46→47 bump and not the PDK**: at every probed corner the
-  ngspice-46 Linux probe and the ngspice-47 fleet record print the *same*
+  ngspice-46 Linux probe and the batch fleet record print the *same*
   values to the last digit (dead-zone `d0` qnet −8.40045e-16 in both;
   operating-point `v1p65_d0` −9.67131e-16 in both; switching `x1.65`
   `wskew` −1.72821e-10 in both), while the ngspice-46 *Darwin* predecessor
-  differs there. This is exactly the residue class both PFD predecessors'
+  differs there. (On the fleet side, ngspice-47 is read per point on the
+  dead-zone and operating-point grids and inferred from the shared batch
+  image on the switching grid — the agreement rests on the numbers, not the
+  label.) This is exactly the residue class both PFD predecessors'
   own "Cross-record comparability" bullets predict for sub-fC charge
   integrals.
 - **The switching bench's mid-window `x1.65` row confirms it**: the probe's
   moved values (`wskew` −1.728213e-10, `ton_dn` 5.822562e-12) and the batch
   record's (`-1.72821e-10`, `5.82256e-12`) agree to the last printed digit —
-  one ngspice-46 Linux probe and one ngspice-47 fleet run land on the same
+  one ngspice-46 Linux probe and one batch fleet run land on the same
   number, so the movement was already fully present without the simulator
-  bump. The window ends (`x0.9`, `x2.4`) do not move anywhere.
+  bump. The switching record attributes no ngspice version per point (its
+  47 is the shared image's, fingerprint-inferred), so this identification
+  rests on the measured numbers, not on either side's version label. The
+  window ends (`x0.9`, `x2.4`) do not move anywhere.
 
 The DC bench predecessor already ran ngspice-42 on this Linux image, so its
 control held *everything* fixed but the PDK pin — and that control is
