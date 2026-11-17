@@ -7,12 +7,12 @@ waveform with `wrdata` over the measurement window only, and this module
 reduces it -- the shape `sim/harness/README.md` documents for `raw_files` +
 `derived`.
 
-The reduction itself is not new: `sim/vco-tuning-range/testbench/_numeric.py`
-already carries the crossing-extraction and least-squares-line-residual
-primitives every jitter measurement in this repo uses (`jitter_extract.py`,
-`derive_supply.py`, and `sim/reference-spur/testbench/derive.py`'s own TIE
-cross-check). This module loads that shared file rather than re-implementing
-it, exactly the way `derive_supply.py` already does.
+The reduction itself is not new: `sim/harness/numeric.py` carries the
+crossing-extraction and least-squares-line-residual primitives every jitter
+measurement in this repo uses (`jitter_extract.py`, `derive_supply.py`, and
+`sim/reference-spur/testbench/derive.py`'s own TIE cross-check). This module
+imports those primitives rather than re-implementing them, exactly the way
+`derive_supply.py` already does.
 
 Two things this module computes, from one crossing sequence:
 
@@ -37,11 +37,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness.derived import DerivedTable, fmt_scalar, load_module  # noqa: E402
+from harness.numeric import crossings  # noqa: E402
 
 _numeric = load_module(
     Path(__file__).resolve().parents[2] / "vco-tuning-range" / "testbench" / "_numeric.py"
 )
-crossings = _numeric.crossings
 channel_metrics = _numeric.channel_metrics
 
 #: Minimum crossings before a channel's statistics mean anything -- the same

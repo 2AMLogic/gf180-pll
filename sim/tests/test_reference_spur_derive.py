@@ -164,7 +164,7 @@ class SpurTiePathKnownAnswer(unittest.TestCase):
             t, y = pm_square(theta, 1.4e-6)
             t0 = 1.0e-7
             t1 = t0 + 16 / F_REF
-            cross = D.rising_crossings(t, y, VDD / 2.0, t0, t1)
+            cross = D.crossings(t, y, VDD / 2.0, window=(t0, t1))
             tie, period = D.tie_sequence(cross)
             self.assertTrue(tie, "no TIE sequence extracted")
             amp_s = D.tie_component(tie, cross, F_REF)
@@ -182,7 +182,7 @@ class SpurTiePathKnownAnswer(unittest.TestCase):
         theta = 2.0 * (10.0 ** (-61.0 / 20.0))
         t, y = pm_square(theta, 1.4e-6)
         t0, t1 = 1.0e-7, 1.0e-7 + 16 / F_REF
-        cross = D.rising_crossings(t, y, VDD / 2.0, t0, t1)
+        cross = D.crossings(t, y, VDD / 2.0, window=(t0, t1))
         skewed = [c * (1.0 + 1e-4) for c in cross]
         tie, period = D.tie_sequence(skewed)
         amp_s = D.tie_component(tie, skewed, F_REF)

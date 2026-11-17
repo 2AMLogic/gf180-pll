@@ -20,11 +20,11 @@ statement of that sum cancels against the `q_max` inside `Gamma`.  Reporting
 the cost of numbers that are not directly comparable with a published
 `Gamma`-normalised plot.  That trade is stated here rather than hidden.
 
-The crossing primitive is `sim/vco-tuning-range/testbench/_numeric.py`'s
-`crossings()` -- the same linear interpolation `sim/period-jitter`'s own
-deterministic reduction and `sim/reference-spur`'s TIE cross-check use -- so
-this bring-up cannot disagree with the committed campaigns about what a
-threshold crossing of the same waveform is.
+The crossing primitive is `sim/harness/numeric.py`'s `crossings()` -- the
+same linear interpolation `sim/period-jitter`'s own deterministic reduction
+and `sim/reference-spur`'s TIE cross-check use -- so this bring-up cannot
+disagree with the committed campaigns about what a threshold crossing of the
+same waveform is.
 """
 
 from __future__ import annotations
@@ -39,32 +39,25 @@ _RB = _HERE.parent / "random-bound"
 # a caller's own directory must keep resolving its own `run.py` first.
 if str(_RB) not in sys.path:
     sys.path.append(str(_RB))
+_SIM = _HERE.parents[1]
+if str(_SIM) not in sys.path:
+    sys.path.insert(0, str(_SIM))
 
 import rb_extract  # noqa: E402
 
 #: Shared with every period-jitter extractor; defined once in `rb_extract`.
 read_wrdata = rb_extract.read_wrdata
 
-_NUMERIC = _HERE.parents[1] / "vco-tuning-range" / "testbench" / "_numeric.py"
+from harness.derived import load_module  # noqa: E402
+from harness.numeric import crossings, linfit  # noqa: E402
 
-
-def _load_numeric():
-    import importlib.util
-    import sys
-
-    key = "_gf180_isf_numeric"
-    if key in sys.modules:
-        return sys.modules[key]
-    spec = importlib.util.spec_from_file_location(key, _NUMERIC)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[key] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def crossings(t, y, th, tmin=0.0):
-    """Rising mid-supply crossings -- `sim/vco-tuning-range`'s own primitive."""
-    return _load_numeric().crossings(t, y, th, tmin)
+#: The TIE residual `settled_shift` needs lives on in the vco-tuning-range
+#: module (it is wrapped by that directory's own `channel_metrics`); the
+#: crossing and linfit primitives it used to load from there are now in
+#: `harness.numeric` (#985), imported above.
+linefit_residual = load_module(
+    _SIM / "vco-tuning-range" / "testbench" / "_numeric.py"
+).linefit_residual
 
 
 def shift_sequence(ref, perturbed):
@@ -109,7 +102,6 @@ def settled_shift(dts, t_cross, t_inject, settle_cycles=2):
     an oscillator's response to an impulse contains an amplitude transient
     that decays, and only the phase part survives it.
     """
-    num = _load_numeric()
     tail = [
         d
         for d, tc in zip(dts, t_cross)
@@ -122,7 +114,7 @@ def settled_shift(dts, t_cross, t_inject, settle_cycles=2):
         )
     mean = sum(tail) / len(tail)
     spread = max(tail) - min(tail)
-    _, slope = num.linefit_residual(tail)
+    _, slope = linefit_residual(tail)
     return mean, spread, len(tail), slope
 
 
@@ -138,8 +130,7 @@ def sensitivity(dt, period, dq):
 
 def mean_period(cross):
     """Mean period of a crossing sequence (least-squares, not first-to-last)."""
-    num = _load_numeric()
-    slope, _ = num.linfit(list(range(len(cross))), list(cross))
+    slope, _, _ = linfit(list(range(len(cross))), list(cross))
     return slope
 
 
