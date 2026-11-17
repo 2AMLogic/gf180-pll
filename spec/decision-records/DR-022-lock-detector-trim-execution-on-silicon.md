@@ -384,9 +384,9 @@ identical at all 117 grid points — the re-pin does not touch the all-MOS
 the accuracy bound above is derived from is unchanged, and with it every code
 count Tier A and Tier B quote. What moves is the evidence the policy table and
 its prose carry. The body figures — the table at lines 153–157 and the prose
-at lines 183, 186–196 and 300 — are left as written, because they were true of
-the evidence that minted this record, and are corrected here rather than in
-place, per the precedent of DR-019 Amendment A2:
+at lines 183, 186–196, 294–295 and 300 — are left as written, because they
+were true of the evidence that minted this record, and are corrected here
+rather than in place, per the precedent of DR-019 Amendment A2:
 
 | Quantity | body records (20260925-050022) | successor measures (20261114-194051) |
 |---|---|---|
@@ -418,6 +418,25 @@ zero**, so +2 fails it as surely as +4 did; this record's own Tier B prose
 already carried the case: "a substitute with a worst error of 1 or 2 codes
 still holds the *band* (Tier A) but no longer holds the *spread target*
 (Tier B)".
+
+**The same inversion, a second time.** The `## Alternatives considered`
+bullet that rejects "adopt the best pad-referred selector anyway" (lines
+294–295 — a site the original enumeration above missed, added to it on
+2026-11-17 in #1010, found while evaluating PR #1008) restates both of the
+moved figures. Its "exceeds DR-013 Decision 4's spread target by 3–8 %" reads
+**1–6 %** under the successor, by the table's own derivation: 1.670 / 1.65 − 1
+= **+1.2 %** on the grid, and on the continuous bracket (1.670 × 1.027) / 1.65
+− 1 = **+3.9 %** to (1.670 × 1.047) / 1.65 − 1 = **+6.0 %**. Its "worst code
+error is one code outside Tier A's own guarantee" is inverted exactly as the
+Tier A bullet's is: the successor's worst code error is **+2**, *inside* the
++3 bound. Neither movement weakens the rejection, which stands on the same
+Tier B ground given above — Tier B demands a worst code error of **exactly
+zero**, so +2 fails it as surely as +4 did, and the spread is still past
+DR-013 Decision 4's ≤ 1.65× target on both the grid (1.670×) and the
+continuous bracket (1.715 … 1.748×). The bullet's remaining grounds —
+correlation is not the criterion, and a pass on one grid would put a number in
+`spec/` that the next grid could withdraw — do not rest on the re-pinned
+figures at all.
 
 `spec/pll.md`'s trim-execution subsection quotes four of the moved figures and
 is edited under this amendment: its record citation and quoted figures now
