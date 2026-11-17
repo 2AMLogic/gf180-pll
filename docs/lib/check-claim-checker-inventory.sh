@@ -113,6 +113,8 @@
 # It does not decide whether a checker SHOULD read the proposal. Rule 4
 # re-derives how many do, not how many ought to.
 #
+# Reads committed files only; no PDK, no klayout, no forge.
+#
 # Usage: docs/lib/check-claim-checker-inventory.sh
 # Exit codes: 0 the family is non-empty, the inventory states its size and
 #               carries exactly one row per member, and the proposal states
