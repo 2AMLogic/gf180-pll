@@ -169,15 +169,23 @@ and 8 `klt lvs` envelopes committed as well, none of them cited in
   item 3 still has nothing citable: a curated pre-check deck that leaves 191
   rules unmodeled is not the foundry deck `layout/README.md` gates on, and
   nothing is cited in the manifest.
-- **`klt lvs` (8):** six on `vco_block` — the committed `mismatch`
+- ~~**`klt lvs` (8):**~~ — **corrected (2026-11-17, issue #929):**
+  **`klt lvs` (9 at `07bf0f03`, 2026-11-17; the (8) was the `3d4eedb3`
+  sweep above):** six on `vco_block` — the committed `mismatch`
   (`klt-curated-836/lvs-vco_block.json`), its four diagnosis-probe reports
   (`klt-curated-836/diagnosis-probes/probe-{a,b,c,d}-report.json`), and the
   re-run `match` (`klt-curated-836-recheck/lvs-report.json`, whose
   `RECORD.md` states resistor and capacitor values are unverified by the
-  run: no device value was compared at all) — and two on `lock_detector`
+  run: no device value was compared at all) — two on `lock_detector`
   (`klt-curated-930/lvs-report.json`, `status: match`, committed by #930,
   and its diagnosed first attempt
-  `klt-curated-930/lvs-report-plain-element.json`, `mismatch`). There is
+  `klt-curated-930/lvs-report-plain-element.json`, `mismatch`) — and one on
+  `pfd_cp`, committed by #945 after that sweep:
+  `layout/evidence/pfd-cp-layout/klt-curated-945/lvs-report.json`,
+  `status: match` (92/92 nets and 168/168 devices, `error_count: 0` on the
+  first attempt — the one envelope of the nine whose
+  `provenance.deck.released` is `true`, per `layout/README.md`'s reason-1
+  correction). There is
   still no `pll_top` LVS envelope, so item 4 has nothing block-scoped to
   cite even before citation is considered.
 - **`klt sim` and `klt pex`:** still no envelope of either kind exists
@@ -222,9 +230,14 @@ point 1 above names for items 3, 4, 5 and 6. No open issue in this repository
 tracks producing that envelope; the remaining item-11 gap is unowned.~~ —
 **corrected (2026-11-16, issue #929):** item 11 still grades that *set* and
 nothing is cited, but envelope absence is no longer the reason, and the gap
-has an owner history now: `klt lvs` envelopes exist for two cells —
+has an owner history now: ~~`klt lvs` envelopes exist for two cells —
 `vco_block` (a topology-only `match` whose `RECORD.md` states no device value
-was compared) and `lock_detector` (a `match` produced by #930). What still
+was compared) and `lock_detector` (a `match` produced by #930).~~ —
+**corrected (2026-11-17, issue #929):** `klt lvs` envelopes exist for three
+cells — `vco_block` (a topology-only `match` whose `RECORD.md` states no
+device value was compared), `lock_detector` (a `match` produced by #930) and
+`pfd_cp` (a `match` produced by #945: 92/92 nets and 168/168 devices,
+`error_count: 0` on the first attempt). What still
 blocks item 11 is citability, not existence: no block has a *citable* ERC+LVS
 pair on file — every committed `klt erc` envelope is `status: not_checked`
 (its antenna coverage checked nothing, every entry `missing_antenna_pdk`),
@@ -353,14 +366,26 @@ supply-spec grader (`klayout_tools.signoff._resolve_erc_supply_spec`) on the
 committed report and spec directly. A full manifest run cannot reach that code
 path here: item 11 also requires a `klt lvs` envelope, none exists, and the
 grader returns `wrong_kind` for a set without one before it reads the ERC
-half.~~ — **corrected (2026-11-16, issue #929):** both halves of the item-11
+half.~~ — **corrected (2026-11-16, issue #929):** ~~both halves of the item-11
 pair now exist for exactly one cell — `lock_detector` has
 `layout/evidence/lock-detector-layout/erc-report.json` and
 `layout/evidence/lock-detector-layout/klt-curated-930/lvs-report.json`
 (`status: match`) — and the pair is still not citable: that ERC envelope is
 `status: not_checked`, like all five committed ERC reports (the antenna half
 of every one was skipped, each entry `missing_antenna_pdk`), so there is no
-passing ERC half for the grader to read.
+passing ERC half for the grader to read.~~ — **corrected (2026-11-17, issue
+#929):** both halves of the item-11 pair now exist for three cells —
+`lock_detector` (`layout/evidence/lock-detector-layout/erc-report.json` +
+`klt-curated-930/lvs-report.json`, `status: match`), `pfd_cp`
+(`layout/evidence/pfd-cp-layout/erc-report.json` +
+`klt-curated-945/lvs-report.json`, `status: match`) and `vco_block` (ERC
+report + topology-only LVS `match`; its ERC half carries the
+`supply_not_continuous` finding named below) — and no pair is citable:
+every committed ERC envelope is `status: not_checked` (the antenna half of
+every one was skipped, each entry `missing_antenna_pdk`), so no cell has a
+passing ERC half for the grader to read — and past that skip, `pfd_cp`'s ERC
+half renders `supply_spec_disclosed_tool_limitation` (its `PROOF-erc.md`),
+so its pair is uncitable twice over.
 
 - **A spec declaring no `ties[]` now renders `supply_spec_incomplete`.** The
   committed `erc-supply-spec.json` declares no `ties[]` and no
@@ -441,7 +466,7 @@ set without one before it reads the ERC half at all (see "Scope note" in each
 committed ERC envelopes is cited, so the verdict is unchanged, and the grader
 still returns `wrong_kind` for a cited set without an LVS half before it reads
 the ERC half at all (see "Scope note" in each `PROOF-erc.md`). But "no `klt
-lvs` envelope exists" is no longer the blocker: `lock_detector` now has both
+lvs` envelope exists" is no longer the blocker: ~~`lock_detector` now has both
 halves of the pair committed — `layout/evidence/lock-detector-layout/erc-report.json`
 and `layout/evidence/lock-detector-layout/klt-curated-930/lvs-report.json`,
 the latter a `match` produced by #930. It stays uncitable for the ERC half's
@@ -451,7 +476,24 @@ passing ERC half to pair it with. `divider_chain` still has the clean ERC
 half but no LVS envelope; `vco_block`'s ERC half carries the
 `supply_not_continuous` finding named above and its LVS `match` is
 topology-only (its `RECORD.md` states no device value was compared);
-`pll_top` has block-scoped ERC and DRC envelopes and no LVS envelope at all.
+`pll_top` has block-scoped ERC and DRC envelopes and no LVS envelope at
+all.~~ — **corrected (2026-11-17, issue #929):** `lock_detector` and
+`pfd_cp` now have both halves of the pair committed —
+`layout/evidence/lock-detector-layout/erc-report.json` +
+`klt-curated-930/lvs-report.json` (`match`, #930) and
+`layout/evidence/pfd-cp-layout/erc-report.json` +
+`klt-curated-945/lvs-report.json` (`match`, #945) — and both stay
+uncitable for the ERC half's sake: the envelopes are
+`status: not_checked` — the antenna half of every committed ERC report was skipped
+(`missing_antenna_pdk`) — so there is no passing ERC half to pair with
+either. The per-cell picture: `divider_chain` still has the clean ERC half
+but no LVS envelope; `vco_block`'s ERC half carries the
+`supply_not_continuous` finding named above and its LVS `match` is
+topology-only (its `RECORD.md` states no device value was compared);
+`pfd_cp`'s ERC half renders `supply_spec_disclosed_tool_limitation` (its
+`PROOF-erc.md` names the unexpressible dual-biased well), so it stays
+uncitable even once the antenna half is satisfied; `pll_top` has
+block-scoped ERC and DRC envelopes and no LVS envelope at all.
 
 ~~Net: item 11 is `unmet` for every block, for reasons that are now precisely
 named per block rather than uniform, and none of them is a known

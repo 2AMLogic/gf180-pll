@@ -184,11 +184,28 @@ documented reasons, not an oversight:
    [2AMLogic/klayout-tools#54](https://github.com/2AMLogic/klayout-tools/issues/54)
    was filed to track, and that issue closed on 2026-08-01. The gap itself was
    real when this bring-up hit it; the historical record of confirming it
-   stays in the friction log below. What keeps the foundry deck the gate is
+   stays in the friction log below. ~~What keeps the foundry deck the gate is
    reason 2's argument, which now covers LVS as well: `klt lvs` runs on the
    curated gf180mcu extraction deck (`provenance.deck.released: false` in
    every committed `layout/evidence/*/klt-curated-*/lvs-*.json` envelope),
-   and the foundry `run_lvs.py` deck remains the signoff-bearing check.
+   and the foundry `run_lvs.py` deck remains the signoff-bearing check.~~ —
+   **corrected (2026-11-17, issue #929):** the foundry `run_lvs.py` deck
+   remains the signoff-bearing check, but the universal above did not
+   survive this branch's own update from `main`: #945 (`80bcf121`,
+   2026-11-16) committed
+   `layout/evidence/pfd-cp-layout/klt-curated-945/lvs-report.json` — a
+   `match` on `pfd_cp`, and the one envelope under that glob whose
+   `provenance.deck.released` is `true`. That flag is not a property of the
+   check: the envelope records the *same* deck content
+   (`sha256:c3f2cce4…`) that #930's `lock_detector` envelope had recorded
+   as `released: false`, so the flag reads as the deck's release status at
+   run time, not as a line between signoff-bearing and non-signoff-bearing
+   runs. What actually keeps the foundry deck the gate is reason 2's
+   argument, which is about deck *coverage*, not release status — and the
+   envelopes' own records agree: #945's `RECORD.md` keeps the foundry-deck
+   `Netlists match.` in `../lvs-clean/` (the run the envelope
+   cross-checks) as "untouched and remain[ing] the signoff-bearing LVS
+   result".
 2. ~~**`klt drc`'s gf180mcu deck is a curated ~10-rule subset** (poly2/comp/
    contact/metal1 width-space-enclosure checks), by design documented in
    `klayout_tools/decks/gf180mcu.py`'s own module docstring as "not a full
