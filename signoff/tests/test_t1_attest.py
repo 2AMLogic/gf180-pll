@@ -85,6 +85,19 @@ class T1AttestNegativeControls(unittest.TestCase):
         self.assertEqual(r.returncode, 1, r.stderr)
         self.assertIn("testbench-inventory-digital.json", r.stderr)
 
+    def test_edited_reduction_module_names_the_partition_inventory(self):
+        mod = self.tree / "sim/output-driver/testbench/derive.py"
+        mod.write_text(mod.read_text() + "# edited\n")
+        r = run(self.tree, "--check")
+        self.assertEqual(r.returncode, 1, r.stderr)
+        self.assertIn("testbench-inventory-analog.json", r.stderr)
+
+    def test_missing_declared_reduction_module_is_refused(self):
+        (self.tree / "sim/output-driver/testbench/derive.py").unlink()
+        r = run(self.tree, "--check")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("derive.py", r.stderr)
+
     def test_edited_license_makes_check_fail(self):
         with (self.tree / "LICENSE").open("a") as f:
             f.write("\n")

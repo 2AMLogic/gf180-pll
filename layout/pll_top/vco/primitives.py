@@ -443,7 +443,7 @@ def mosfet(
     canvas.rect("metal1", *gate_pad)
 
     # --- S/D contacts: bottom terminal row hugs the outer (away-from-gate)
-    # edge, so CO.7's 0.15 um contact-to-gate-poly space is satisfied by
+    # edge, so the CO.7 contact-to-gate-poly space is satisfied by
     # SD_OVERHANG_UM (0.5) - CONTACT_ROW_MARGIN_UM (0.1) - CONTACT_SIZE_UM (0.22). ---
     def _terminal_pad(y_outer_edge: float, *, outer_is_max: bool) -> tuple[float, float, float, float]:
         xs = _contact_positions(sd_x0, sd_x1)
@@ -503,11 +503,11 @@ def mosfet(
 # the p-substrate (the deck's ``nmos_gate_3p3 = ngate_lv_n_dw.interacting(
 # mos_cap_mk)``, no ``.and(nwell)``). Deviations are margin only.
 MOSCAP_SD_EXT_UM = 0.6  # comp beyond the gate, each side (pcell 0.44): holds one contact
-# column 0.1 um from the comp edge and leaves 0.28 um to the gate (CO.7 0.15).
+# column 0.1 um from the comp edge and leaves 0.28 um to the gate (clears CO.7).
 MOSCAP_POLY_EXT_UM = 0.62  # poly beyond the comp, each end (pcell 0.46)
 MOSCAP_POLY_CONTACT_GAP_UM = 0.30  # comp edge to the gate-contact row (CO.8 min)
 MOSCAP_ROW_INSET_UM = 0.2  # gate-row metal1 inset from the poly's x edge
-MOSCAP_IMPLANT_MARGIN_UM = 0.25  # nplus around comp (NP.5a gate overlap 0.23, NP.5b 0.16)
+MOSCAP_IMPLANT_MARGIN_UM = 0.25  # nplus around comp (clears NP.5a gate overlap and NP.5b)
 MOSCAP_COL_M1_ENC_UM = 0.1  # metal1 around a contact column / row
 
 

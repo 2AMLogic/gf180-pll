@@ -77,6 +77,10 @@
 !layout/evidence/divider-div23-proof/**/*.log
 # Same story for the assembled pll_top's DRC evidence (issue #297).
 !layout/evidence/pll-top-layout/**/*.log
+# Same story again for the DR-043 --combine negative-control re-run's
+# DRC+LVS deck logs (issue #980) -- they are the committed record that the
+# prove() re-run really used the f6eeac7 runset with COMBINE on.
+!layout/evidence/inv-tb-combine-f6eeac7/**/*.log
 __pycache__/
 .DS_Store
 

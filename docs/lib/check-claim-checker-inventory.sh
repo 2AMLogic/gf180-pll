@@ -39,16 +39,31 @@
 # THE RULES
 #
 # 1. FAMILY DISCOVERED. The family is `*/lib/check-*.sh` -- the same pathspec
-#    `sim/tests/test_check_script_invocability.py` uses, kept identical on
-#    purpose so the two guards cannot disagree about what a checker is.
+#    `sim/tests/test_check_script_invocability.py` uses, and, since #946,
+#    resolved the same way: both guards run `git ls-files --stage --` over
+#    that string and skip dot-prefixed paths, so they discover one set on
+#    any tree. An identical string alone was never enough: a filesystem
+#    glob's `*` stops at `/` while git's crosses it, so a checker at
+#    `a/b/lib/` belonged to that test's family and was invisible here, and
+#    an untracked `*/lib/check-*.sh` failed this check without being in the
+#    repository at all. The two agreed only while every checker happened to
+#    sit at `<top>/lib/`. Index resolution closes both axes at once --
+#    nested members count, untracked files do not (a fresh clone cannot see
+#    them either) -- and a tree without a git index FAILS rather than
+#    guessing, because a check that did not run is not a check that passed.
+#
 #    Discovering ZERO members is a FAILURE, not a pass: a guard over an empty
 #    set reports the same clean result as a guard over a healthy one, which is
 #    the trap this repository names explicitly wherever it grades a zero
 #    (the proposal's own section 5.1, on the monotonicity count).
 #
-#    Installer-managed trees are excluded by the glob itself -- `*` does not
-#    match a leading dot -- so `.loom/` and `.claude/` copies, which are owned
-#    upstream and are not this repository's to inventory, never enter the set.
+#    Installer-managed trees are excluded by the explicit dot-prefix skip --
+#    the same `startswith(".")` the invocability test applies. The old
+#    filesystem glob bought that exclusion for free (`*` would not match a
+#    leading dot); git's `*` matches `.loom` as readily as any other path
+#    component, so under index resolution the skip is load-bearing. `.loom/`
+#    and `.claude/` copies are owned upstream and are not this repository's
+#    to inventory.
 #
 # 2. INVENTORY TOTAL. `docs/claim-checker-inventory.md` must state the family
 #    size. The sentence is located by the pathspec it quotes, so rewording the
@@ -86,8 +101,8 @@
 # WHAT IT DOES NOT DO
 #
 # It does not grade the inventory's `Lines` or `Commits` columns. Those are
-# `wc -l` and `git log` readings taken at the commit that wrote each row --
-# the file says so -- and they move on every edit to any checker. Grading
+# `wc -l` and `git log` readings at the one reference commit the file names
+# -- the file says so -- and they move on every edit to any checker. Grading
 # them would make the inventory churn on changes that do not touch what it
 # is for, which is the set of checkers and what each one reads.
 #
@@ -97,6 +112,8 @@
 #
 # It does not decide whether a checker SHOULD read the proposal. Rule 4
 # re-derives how many do, not how many ought to.
+#
+# Reads committed files only; no PDK, no klayout, no forge.
 #
 # Usage: docs/lib/check-claim-checker-inventory.sh
 # Exit codes: 0 the family is non-empty, the inventory states its size and
@@ -118,18 +135,19 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 python3 - "${REPO_ROOT}" <<'PY'
-import glob
 import os
 import re
+import subprocess
 import sys
 
 repo_root = sys.argv[1]
 os.chdir(repo_root)
 
 #: The pathspec that defines the family. Identical to FAMILY_PATHSPEC in
-#: sim/tests/test_check_script_invocability.py on purpose: two guards that
-#: disagreed about what a checker is would each be right about a different
-#: set.
+#: sim/tests/test_check_script_invocability.py and, since #946, resolved
+#: identically too -- `git ls-files --stage --` over it, dot-prefixed paths
+#: skipped: two guards that shared a string but not a matcher would each be
+#: right about a different set.
 FAMILY_PATHSPEC = "*/lib/check-*.sh"
 
 INVENTORY = "docs/claim-checker-inventory.md"
@@ -206,7 +224,41 @@ def grade_count(token, derived, where, subject):
 
 
 # ---------------------------------------------------------------- rule 1
-family = sorted(glob.glob(FAMILY_PATHSPEC))
+def discover_family():
+    """Resolve FAMILY_PATHSPEC against the git index (#946).
+
+    The same resolution `sim/tests/test_check_script_invocability.py`'s
+    `_family()` performs, so the two guards discover one set on any tree:
+    git's `*` crosses `/` (a nested `a/b/lib/check-*.sh` is a member) and
+    the index lists only staged files (an untracked checker is not one).
+    """
+    try:
+        out = subprocess.run(
+            ["git", "ls-files", "--stage", "--", FAMILY_PATHSPEC],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as exc:
+        sys.stderr.write(
+            "FAIL: the family is defined by the git index, and the index "
+            "could not be read here (%s). Run this check from a git "
+            "checkout: a check that did not run is not a check that "
+            "passed.\n" % exc)
+        sys.exit(1)
+    found = []
+    for line in out.splitlines():
+        if not line.strip():
+            continue
+        path = line.split("\t", 1)[1]
+        # Installer-managed copies are owned upstream, not here.
+        if path.startswith("."):
+            continue
+        found.append(path)
+    return sorted(found)
+
+
+family = discover_family()
 if not family:
     sys.stderr.write(
         "FAIL: pathspec %r matched no checker. Either the family moved or "

@@ -1129,19 +1129,101 @@ No lock is held beyond those `mkdir`s: other runs of the same experiment,
 other experiments and the per-point workers all proceed concurrently.
 
 `work/<record-id>/reservation.json` records the owning host, pid, user,
-command line and commit, and is deleted once the summary is published. A run
-that ends without a summary (an error before publication, a crash, Ctrl-C)
-leaves it behind and says so on stderr; later recording runs of that
-experiment print a `note:` naming any such *interrupted* reservation (owner
-pid no longer alive on this host). Such an id is **never reused or cleaned up
-automatically** — its partial evidence stays exactly as it was, and new runs
-mint other ids. Deleting a `work/<record-id>/` directory silences the note;
+command line, commit and a fingerprint of the grid it was taking, and is
+deleted once the summary is published. A run that ends without a summary
+(an error before publication, a crash, Ctrl-C) leaves it behind and says so
+on stderr; later recording runs of that experiment print a `note:` naming
+any such *interrupted* reservation (owner pid no longer alive on this
+host). Such an id is **never reused or cleaned up automatically** — its
+partial evidence stays exactly as it was, and new runs mint other ids. The
+one deliberate exception is `--resume <record-id>`, which re-adopts an
+interrupted reservation and replays its completed points — see the next
+section. Deleting a `work/<record-id>/` directory silences the note;
 deleting anything under `corners/` or `netlist-snapshots/` is a human
 decision under the append-only rule.
 
 `--no-write` runs and `--backend batch` plans (no `--batch-apply`) reserve
 only a scratch `work/<record-id>/` — never a `corners/` directory or an
 ownership file — so they never occupy an evidence id.
+
+### Resuming an interrupted run: `--resume`
+
+A grid whose wall clock can exceed one process's lifetime does not have to
+be re-bought from point 1. A recording run that dies mid-grid has already
+written one raw log per completed point under `corners/<record-id>/`, and
+its `work/<record-id>/reservation.json` reads state `interrupted`.
+Re-invoking with the **same grid arguments** plus
+`--resume <record-id>` re-adopts that reservation and, before dispatching
+anything, replays every point whose per-phase logs parse to the point's
+complete declared measurement set — the same parser the live path uses, so
+replay adds no second parser and no new on-disk format. Only the remaining
+points are simulated. The run mints one **full** record under the resumed
+id when the grid completes; a resumed run that still aborts mints nothing,
+exactly as an ordinary run — the `--supersedes` partial-record refusal is
+untouched by all of this.
+
+```bash
+python3 sim/run_corners.py my-campaign --resume 20261115-194211-1c7142ca
+```
+
+`--resume` refuses, naming the observed state, anything that is not an
+`interrupted` reservation: an id with no reservation at all; one whose owner
+is still `running` on this host (including a concurrent `--resume`, which
+it loses to by name); a `published` record (nothing left to finish);
+`unknown` — reserved on another host, whose liveness cannot be checked from
+here (only a human who knows that run is dead may resume it, from that
+host); an `unreadable` ownership file; a reservation that predates
+`--resume` and carries no grid fingerprint; a grid that does not match the
+one the reservation was taken for (the reservation stores a fingerprint of
+the point set and the manifest, so a changed corner set, temperature or
+supply list, axis thinning or manifest edit is refused rather than mixed
+under one id); a missing `corners/<record-id>/` directory; and a
+`--resume` value that is not a record id. It is also refused with
+`--no-write` (no evidence reservation exists to resume) and with a batch
+plan (`--backend batch` without `--batch-apply`). It composes with
+`--backend batch --batch-apply`, `--supersedes`/`--supersedes-note` and
+`--artifact-store` — the stored raw output includes the replayed points'
+logs, which sit in the same evidence directory.
+
+**The carrier requirement — what must survive between attempts.** Resume
+works by reading two paths from the earlier attempt:
+
+- `sim/<slug>/corners/<record-id>/` — the per-point raw logs (and retained
+  raw files), which are the replayed evidence; and
+- `sim/<slug>/work/<record-id>/reservation.json` — the reservation whose
+  `interrupted` state licenses the re-adoption.
+
+Both live in the repo's working tree, so a run inside a disposable
+checkout or worktree loses **both** the moment that checkout is removed.
+Resuming cannot recover evidence that no longer exists on any disk: in
+particular, a batch layer's already-submitted-but-unfetched jobs are
+separately unreachable, because their job ids are random and recorded
+nowhere durable. Run a campaign you expect to resume in a checkout that
+outlives the process, or copy those two paths somewhere durable before the
+process ends.
+
+The minted record discloses the resume: a **Resumed run** bullet naming
+every attempt's start, the replayed/re-run split, and an explicit
+statement that the `Execution:` line, the wall clock and the per-point
+`seconds` describe the final attempt only — a reader must not mistake one
+process's wall time for a multi-attempt campaign's cost. Replayed points
+carry `"replayed": true` in the record's point entry (a `(replayed)`
+marker on the point's verdict in the corner table, whatever that verdict
+is), `seconds` 0, and the executing host of the attempt that actually ran
+them. A replayed log may come from any earlier attempt, so the replayed
+points carry the recording host only when **every** earlier attempt ran
+on the `local` backend; a history in which any attempt dispatched
+off-host leaves them unattributed, since a raw log does not record which
+machine produced it — under-claiming beats naming a host some of the
+replayed logs never ran on. `simulator` and
+init attribution are re-read from the log's own text, so those survive.
+A timed-out point can never be replayed: the timeout banner is written
+first in the log, before any measurement.
+
+A concurrent second `--resume` on the same id sees the first adopter's
+`running` state and refuses; simultaneous adoptions are serialized by a
+lock directory under the reservation, and a lock left by an adopter that
+was killed outright is stolen by the next attempt's bounded wait.
 
 A run taken against a dirty working tree says so in the record's **Netlist
 provenance** field and is not citable as a clean-tree result.

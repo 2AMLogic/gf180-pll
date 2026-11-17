@@ -1221,7 +1221,8 @@ if [ "${1:-}" = "--control" ]; then
     "design/cp.sch + design/pfd_cp.sch (xschem export), design/netlist/dff_tg_3v3.spice" \
     "${NUM_CORNERS} corners x ${#CONTROL_STAGES[@]} stages x 5 runs (seeds ${CONTROL_SEED_A}/${CONTROL_SEED_B}, sw_stat_mismatch 1 and 0)" \
     "${CONTROL_SWITCHES_NOTE}" \
-    control_campaign
+    control_campaign \
+    "$(( NUM_CORNERS * ${#CONTROL_STAGES[@]} * 5 ))"
   CONTROL_CSV="${CORNERSDIR}/negative_control.csv"
   CONTROL_ROWS="$(simenv_control_md_rows "${CONTROL_CSV}")"
   CONTROL_RC=0
@@ -1503,7 +1504,8 @@ simenv_emit_control_evidence "${CORNERSDIR}" "${WORK}" \
   "design/cp.sch + design/pfd_cp.sch (xschem export), design/netlist/dff_tg_3v3.spice" \
   "${NUM_CORNERS} corners x ${#CONTROL_STAGES[@]} stages x 5 runs (seeds ${CONTROL_SEED_A}/${CONTROL_SEED_B}, sw_stat_mismatch 1 and 0)" \
   "${CONTROL_SWITCHES_NOTE}" \
-  control_campaign
+  control_campaign \
+  "$(( NUM_CORNERS * ${#CONTROL_STAGES[@]} * 5 ))"
 CONTROL_CSV="${CORNERSDIR}/negative_control.csv"
 CONTROL_ROWS="$(simenv_control_md_rows "${CONTROL_CSV}")"
 CONTROL_RC=0

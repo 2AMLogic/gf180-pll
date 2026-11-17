@@ -33,7 +33,7 @@ sys.path.insert(0, str(SIM_DIR))
 
 from _fixtures import ManifestFixture, fake_pdk  # noqa: E402
 from harness import moscap_probe  # noqa: E402
-from harness import cli, corners, report, runner, testbench  # noqa: E402
+from harness import cli, corners, execution, report, runner, testbench  # noqa: E402
 from harness.pdk import PdkNotFound  # noqa: E402
 
 
@@ -1264,7 +1264,7 @@ class CliPartialGridRecoveryTests(ManifestFixture):
     def test_an_exception_out_of_run_grid_still_mints_a_partial_record(self):
         def fake_run_grid(
             tb, pdk, points, workdir, jobs=1, timeout_s=300, on_result=None,
-            log_dir=None, backend=None,
+            log_dir=None, backend=None, replay=None,
         ):
             self.assertEqual(len(points), 2)
             first = runner.PointResult(point=points[0], status="ok", measurements={"vout": 1.65})
@@ -1289,7 +1289,7 @@ class CliPartialGridRecoveryTests(ManifestFixture):
 
         def fake_run_grid(
             tb, pdk, points, workdir, jobs=1, timeout_s=300, on_result=None,
-            log_dir=None, backend=None,
+            log_dir=None, backend=None, replay=None,
         ):
             first = runner.PointResult(point=points[0], status="ok", measurements={"vout": 1.65})
             if on_result:
@@ -1342,7 +1342,7 @@ class CliRecordReservationTests(ManifestFixture):
         )
 
     def _fake_run_grid(self, tb, pdk, points, workdir, jobs=1, timeout_s=300,
-                       on_result=None, log_dir=None, backend=None):
+                       on_result=None, log_dir=None, backend=None, replay=None):
         # What exists on disk at the moment the first point would start.
         self.seen = {
             "workdir": workdir.is_dir(),
@@ -1437,6 +1437,577 @@ class CliRecordReservationTests(ManifestFixture):
         self.assertIn("interrupted", err)
         self.assertNotEqual(self.seen["log_dir"].name, earlier.record_id)
         self.assertEqual((earlier.log_dir / "typical_27c_3.3v.log").read_text(), "half a run\n")
+
+
+class CliResumeTests(ManifestFixture):
+    """#973: ``--resume`` re-adopts an interrupted reservation and replays
+    its completed points from their per-point logs; every other reservation
+    state is refused by name; a resumed run mints one full record that
+    discloses the resume, and the ``--supersedes`` partial-mint refusal is
+    untouched.
+    """
+
+    #: Shaped like raw ngspice output: the ``let``-measure print the parser
+    #: reads, plus a banner for ``simulator_of`` to find.
+    LOG_TEXT = "ngspice-46\n\nm_vout = 1.6500000000e+00\n"
+
+    def setUp(self):
+        super().setUp()
+        self.write({"measure": {"vout": "v(out)"}})
+        self.pdk = fake_pdk(self.root / "gf180mcuD")
+        self.experiment = self.root / self.slug
+        self.tb = testbench.load(self.tb_dir)
+
+    def _points(self, temps=(27.0, 125.0)):
+        return corners.build_sweep_grid(
+            corners.resolve_corners(["typical"]),
+            list(temps),
+            corners.supply_points(3.3, 0.0),
+            axes=self.tb.sweeps,
+            blocks=self.tb.grid_blocks,
+            axis_filter={},
+        )
+
+    def _reserve(self, points, fingerprint="default"):
+        kwargs = {}
+        if fingerprint == "default":
+            kwargs["grid_fingerprint"] = report.grid_fingerprint(self.tb, points)
+        elif fingerprint is not None:
+            kwargs["grid_fingerprint"] = fingerprint
+        return report.reserve_record_id(
+            self.root, self.experiment,
+            datetime.datetime(2026, 11, 15, 19, 42, 0, tzinfo=datetime.timezone.utc),
+            git={"commit": "f" * 40, "short": "fffffff"},
+            **kwargs,
+        )
+
+    @staticmethod
+    def _set_ownership(reservation, **changes):
+        info = json.loads(reservation.ownership_path.read_text())
+        info.update(changes)
+        reservation.ownership_path.write_text(json.dumps(info))
+
+    def _interrupt(self, reservation):
+        self._set_ownership(reservation, pid=_dead_pid())
+
+    def _args(self, *extra, quiet=True):
+        argv = [
+            self.slug,
+            "--corners", "typical",
+            "--temps", "27", "125",
+            "--supply-tol", "0",
+            "--subset-reason", "unit test: exercising --resume",
+        ]
+        if quiet:
+            argv.append("--quiet")
+        argv.extend(extra)
+        return cli.build_parser().parse_args(argv)
+
+    def _run(self, args, run_grid=None, backend=None):
+        buf_out, buf_err = io.StringIO(), io.StringIO()
+        patches = [
+            mock.patch.object(cli, "find_pdk", return_value=self.pdk),
+            mock.patch.object(runner, "ngspice_version", return_value="ngspice-46"),
+            mock.patch.object(report, "klt_env_provenance_lines",
+                              return_value=["host: host-00000000"]),
+            mock.patch.object(cli, "SIM_DIR", self.root),
+        ]
+        if run_grid is not None:
+            patches.append(mock.patch.object(runner, "run_grid", side_effect=run_grid))
+        if backend is not None:
+            patches.append(mock.patch.object(cli, "build_backend", return_value=backend))
+        with contextlib.ExitStack() as stack:
+            for patch in patches:
+                stack.enter_context(patch)
+            stack.enter_context(contextlib.redirect_stdout(buf_out))
+            stack.enter_context(contextlib.redirect_stderr(buf_err))
+            status = cli.run(args)
+        return status, buf_out.getvalue(), buf_err.getvalue()
+
+    @staticmethod
+    def _never_backend():
+        """A backend whose every deck invocation is a test failure."""
+        backend = mock.Mock()
+        backend.name = "local"
+        backend.describe.return_value = {"backend": "local"}
+        backend.run_deck.side_effect = AssertionError(
+            "backend called for a replayed point"
+        )
+        return backend
+
+    @staticmethod
+    def _rerun_backend():
+        """A backend that 'simulates' a passing point for every deck."""
+        backend = mock.Mock()
+        backend.name = "local"
+        backend.describe.return_value = {"backend": "local"}
+
+        def run_deck(deck_path, rundir, timeout_s, env=None):
+            return execution.DeckRun(
+                output="ngspice-46\nm_vout = 1.2340000000e+00\n",
+                returncode=0,
+                seconds=1.0,
+                host="host-run",
+            )
+
+        backend.run_deck.side_effect = run_deck
+        return backend
+
+    def _record_text(self, record_id):
+        path = self.experiment / report.RECORDS_DIR / f"{record_id}.md"
+        return path.read_text() if path.is_file() else None
+
+    def test_a_complete_log_is_replayed_without_a_backend_call(self):
+        points = self._points()
+        reservation = self._reserve(points)
+        for point in points:
+            (reservation.log_dir / f"{point.corner_id}.log").write_text(self.LOG_TEXT)
+        self._interrupt(reservation)
+
+        backend = self._never_backend()
+        status, out, err = self._run(
+            self._args("--resume", reservation.record_id, quiet=False), backend=backend
+        )
+
+        self.assertEqual(status, cli.EXIT_OK, err)
+        backend.run_deck.assert_not_called()
+        self.assertIn(
+            "2 point(s) replayed from the earlier attempt's logs, 0 re-run", out
+        )
+        self.assertIn("[replayed from earlier attempt]", out)
+        text = self._record_text(reservation.record_id)
+        self.assertIsNotNone(text, "a resumed run that completes mints its record")
+        self.assertIn("**Resumed run**", text)
+        self.assertIn("Attempt 1: started", text)
+        self.assertIn("Attempt 2 (this record): started", text)
+        self.assertIn("describe the FINAL attempt only", text)
+        self.assertIn("PASS (replayed)", text)
+        # Published: the ownership file is released, the adoption lock is gone.
+        work = self.experiment / report.WORK_DIR / reservation.record_id
+        self.assertFalse((work / report.RESERVATION_FILE).exists())
+        self.assertFalse((work / report.RESUME_LOCK_DIR).exists())
+
+    def test_a_batch_attempt_resumed_locally_leaves_replayed_points_unattributed(self):
+        """#973: the replay host comes from attempt 1's argv, not the
+        resuming invocation's. Adoption overwrites the ownership file's
+        top-level argv with ``sys.argv`` of the attempt doing the resuming
+        -- which is always local, since ``--resume`` refuses off-host
+        backends -- so the top level can never witness attempt 1's batch
+        choice. A batch attempt's logs must stay unattributed rather than
+        being stamped with the recording host: that stamp would suppress
+        the ``Execution hosts`` disclosure entirely and the record would
+        claim every point ran where the record was minted.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._set_ownership(
+            reservation,
+            argv=["sim/run_corners.py", self.slug, "--backend", "batch",
+                  "--batch-apply"],
+        )
+        for point in points:
+            (reservation.log_dir / f"{point.corner_id}.log").write_text(self.LOG_TEXT)
+        self._interrupt(reservation)
+
+        backend = self._never_backend()
+        status, out, err = self._run(
+            self._args("--resume", reservation.record_id), backend=backend
+        )
+
+        self.assertEqual(status, cli.EXIT_OK, err)
+        backend.run_deck.assert_not_called()
+        text = self._record_text(reservation.record_id)
+        self.assertIsNotNone(text)
+        self.assertIn(
+            "Execution hosts: 2 point(s) across 0 named execution host(s)"
+            " -- unattributed (2)",
+            text,
+        )
+
+    def test_a_mixed_backend_attempt_history_leaves_replayed_points_unattributed(self):
+        """#973: with more than two attempts the replayed logs may come from
+        any earlier attempt, and one ``replay_host`` cannot describe a
+        history that switched backends -- the conservative reading is
+        unattributed unless every earlier attempt ran local.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._set_ownership(
+            reservation,
+            attempts=[
+                {"started_utc": "2026-11-15T19:42:00+00:00",
+                 "argv": ["sim/run_corners.py", self.slug,
+                          "--backend", "batch", "--batch-apply"]},
+                {"started_utc": "2026-11-15T20:10:00+00:00",
+                 "argv": ["sim/run_corners.py", self.slug,
+                          "--resume", reservation.record_id],
+                 "resumed": True},
+            ],
+        )
+        for point in points:
+            (reservation.log_dir / f"{point.corner_id}.log").write_text(self.LOG_TEXT)
+        self._interrupt(reservation)
+
+        backend = self._never_backend()
+        status, out, err = self._run(
+            self._args("--resume", reservation.record_id), backend=backend
+        )
+
+        self.assertEqual(status, cli.EXIT_OK, err)
+        text = self._record_text(reservation.record_id)
+        self.assertIsNotNone(text)
+        self.assertIn("Attempt 3 (this record): started", text)
+        self.assertIn(
+            "Execution hosts: 2 point(s) across 0 named execution host(s)"
+            " -- unattributed (2)",
+            text,
+        )
+
+    def test_an_all_local_attempt_history_keeps_the_recording_host_attribution(self):
+        """#973: every earlier attempt local -- the replayed points ran on
+        the recording host, so the single-host ``Execution hosts`` line
+        stays suppressed exactly as for a never-interrupted run.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._set_ownership(
+            reservation,
+            attempts=[
+                {"started_utc": "2026-11-15T19:42:00+00:00",
+                 "argv": ["sim/run_corners.py", self.slug]},
+                {"started_utc": "2026-11-15T20:10:00+00:00",
+                 "argv": ["sim/run_corners.py", self.slug,
+                          "--resume", reservation.record_id],
+                 "resumed": True},
+            ],
+        )
+        for point in points:
+            (reservation.log_dir / f"{point.corner_id}.log").write_text(self.LOG_TEXT)
+        self._interrupt(reservation)
+
+        backend = self._never_backend()
+        status, out, err = self._run(
+            self._args("--resume", reservation.record_id), backend=backend
+        )
+
+        self.assertEqual(status, cli.EXIT_OK, err)
+        text = self._record_text(reservation.record_id)
+        self.assertIsNotNone(text)
+        self.assertIn("Attempt 3 (this record): started", text)
+        self.assertNotIn("Execution hosts", text)
+
+    def test_an_incomplete_log_is_re_run_not_replayed(self):
+        points = self._points()
+        reservation = self._reserve(points)
+        # Point 1 completed in the earlier attempt; point 2's log is missing
+        # the declared measurement entirely.
+        (reservation.log_dir / f"{points[0].corner_id}.log").write_text(self.LOG_TEXT)
+        (reservation.log_dir / f"{points[1].corner_id}.log").write_text("m_other = 9.9\n")
+        self._interrupt(reservation)
+
+        backend = self._rerun_backend()
+        status, out, err = self._run(
+            self._args("--resume", reservation.record_id, quiet=False), backend=backend
+        )
+
+        self.assertEqual(status, cli.EXIT_OK, err)
+        self.assertEqual(backend.run_deck.call_count, 1, "only the incomplete point re-runs")
+        self.assertIn(
+            "1 point(s) replayed from the earlier attempt's logs, 1 re-run", out
+        )
+        text = self._record_text(reservation.record_id)
+        self.assertIn("PASS (replayed)", text)
+        self.assertEqual(text.count("PASS (replayed)"), 1)
+
+    def test_a_timeout_or_truncated_log_is_never_replayed(self):
+        points = self._points()
+        bad_logs = {
+            "timeout banner": (
+                "TIMEOUT after 300s\n--- partial simulator output ---\n"
+                "m_vout = 1.6500000000e+00\n"
+            ),
+            "truncated exponent": "m_vout = 1.65e+",
+            "empty": "",
+        }
+        for label, text in bad_logs.items():
+            with self.subTest(log=label):
+                reservation = self._reserve(self._points())
+                for point in points:
+                    (reservation.log_dir / f"{point.corner_id}.log").write_text(text)
+                self._interrupt(reservation)
+                backend = self._rerun_backend()
+                status, out, err = self._run(
+                    self._args("--resume", reservation.record_id, quiet=False),
+                    backend=backend,
+                )
+                self.assertEqual(status, cli.EXIT_OK, err)
+                self.assertEqual(
+                    backend.run_deck.call_count, len(points),
+                    f"{label}: every point must be re-simulated",
+                )
+                self.assertIn(
+                    "0 point(s) replayed from the earlier attempt's logs, "
+                    f"{len(points)} re-run",
+                    out,
+                )
+                self.assertNotIn("PASS (replayed)", self._record_text(reservation.record_id))
+
+    def test_a_resumed_run_that_aborts_under_supersedes_mints_nothing(self):
+        points = self._points()
+        reservation = self._reserve(points)
+        (reservation.log_dir / f"{points[0].corner_id}.log").write_text(self.LOG_TEXT)
+        self._interrupt(reservation)
+
+        def aborting_run_grid(tb, pdk, points, workdir, jobs=1, timeout_s=300,
+                              on_result=None, log_dir=None, backend=None, replay=None):
+            first = runner.PointResult(point=points[0], status="ok",
+                                       measurements={"vout": 1.65})
+            if on_result:
+                on_result(first)
+            raise OSError(2, "No such file or directory", "simulated mid-resume abort")
+
+        status, _, err = self._run(
+            self._args(
+                "--resume", reservation.record_id,
+                "--supersedes", "20260101T000000Z-abc",
+            ),
+            run_grid=aborting_run_grid,
+        )
+
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("not writing a record", err)
+        self.assertEqual(list((self.experiment / report.RECORDS_DIR).glob("*.md")), [])
+        # Still reserved, still un-owned by anything live-on-disk-false: the
+        # adoption is reversible exactly like a fresh reserve.
+        work = self.experiment / report.WORK_DIR / reservation.record_id
+        self.assertTrue((work / report.RESERVATION_FILE).exists())
+        self.assertFalse((work / report.RESUME_LOCK_DIR).exists())
+
+    def test_resume_refuses_every_non_interrupted_state_by_name(self):
+        points = self._points()
+        # No reservation at all.
+        status, _, err = self._run(
+            self._args("--resume", "20261115-194200-fffffff"),
+            backend=self._never_backend(),
+        )
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("no reservation file", err)
+
+        published = self._reserve(points)
+        self._interrupt(published)
+        records = self.experiment / report.RECORDS_DIR
+        records.mkdir(parents=True)
+        (records / f"{published.record_id}.md").write_text("# already published\n")
+        running = self._reserve(points)
+        self._set_ownership(running, pid=os.getpid())
+        unknown = self._reserve(points)
+        self._interrupt(unknown)
+        self._set_ownership(unknown, host="some-other-host")
+        unreadable = self._reserve(points)
+        unreadable.ownership_path.write_text("not json{")
+
+        for state, reservation in (
+            ("published", published),
+            ("running", running),
+            ("unknown", unknown),
+            ("unreadable", unreadable),
+        ):
+            with self.subTest(state=state):
+                status, _, err = self._run(
+                    self._args("--resume", reservation.record_id),
+                    backend=self._never_backend(),
+                )
+                self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+                self.assertIn(f"'{state}'", err)
+                if state != "published":
+                    self.assertEqual(list(records.glob(f"{reservation.record_id}.md")), [])
+
+    def test_resume_with_no_write_is_refused(self):
+        status, _, err = self._run(
+            self._args("--resume", "20261115-194200-fffffff", "--no-write")
+        )
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("nothing to resume into", err)
+
+    def test_resume_with_a_batch_plan_is_refused(self):
+        backend = mock.Mock()
+        backend.name = "batch"
+        status, _, err = self._run(
+            self._args("--resume", "20261115-194200-fffffff"), backend=backend
+        )
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("no run to resume into", err)
+
+    def test_a_changed_grid_is_refused(self):
+        points = self._points()
+        reservation = self._reserve(points)
+        self._interrupt(reservation)
+        # Same experiment, a different grid: one temperature instead of two.
+        backend = self._never_backend()
+        status, _, err = self._run(
+            self._args("--resume", reservation.record_id, "--temps", "27"),
+            backend=backend,
+        )
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("does not match", err)
+        backend.run_deck.assert_not_called()
+
+    def test_a_reservation_without_a_grid_fingerprint_is_refused(self):
+        reservation = self._reserve(self._points(), fingerprint=None)
+        self._interrupt(reservation)
+        status, _, err = self._run(
+            self._args("--resume", reservation.record_id),
+            backend=self._never_backend(),
+        )
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("predates --resume", err)
+
+    def test_a_reservation_whose_evidence_directory_is_gone_is_refused(self):
+        reservation = self._reserve(self._points())
+        self._interrupt(reservation)
+        shutil.rmtree(reservation.log_dir)
+        status, _, err = self._run(
+            self._args("--resume", reservation.record_id),
+            backend=self._never_backend(),
+        )
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("does not exist", err)
+
+    def test_a_path_like_resume_argument_is_refused(self):
+        status, _, err = self._run(
+            self._args("--resume", "../escape"), backend=self._never_backend()
+        )
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("not a record id", err)
+
+    def _adopt(self, points, record_id):
+        """Call ``adopt_interrupted_reservation`` with the reserved grid's
+        fingerprint, as ``cli.py`` does on ``--resume``. Patch
+        ``report.time`` (``_FakeResumeTime``) around the call to make the
+        bounded waits deterministic.
+        """
+        return report.adopt_interrupted_reservation(
+            self.experiment,
+            record_id,
+            report.grid_fingerprint(self.tb, points),
+            started=datetime.datetime(
+                2026, 11, 17, 12, 0, 0, tzinfo=datetime.timezone.utc
+            ),
+        )
+
+    def test_a_second_adopter_reading_running_refuses_without_waiting(self):
+        """The contention branch of the adoption lock: the pre-lock read sees
+        state ``interrupted`` (the original run is dead), but by the time this
+        process collides with the lock, the rival adopter has rewritten the
+        ownership file to name itself -- the in-lock read sees ``running``
+        and the adoption refuses on the spot, with no bounded wait.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._interrupt(reservation)
+        lock = reservation.workdir / report.RESUME_LOCK_DIR
+        lock.mkdir()
+
+        real_read = report.read_reservation
+        reads = {"n": 0}
+
+        def rival_rewrote_between_reads(workdir):
+            info = real_read(workdir)
+            reads["n"] += 1
+            if reads["n"] > 1:
+                # The rival adopter's rewrite: same file, but it now names a
+                # live process -- state reads "running".
+                info["state"] = "running"
+            return info
+
+        clock = _FakeResumeTime()
+        with mock.patch.object(
+            report, "read_reservation", side_effect=rival_rewrote_between_reads
+        ), mock.patch.object(report, "time", clock):
+            with self.assertRaises(report.ResumeRefused) as caught:
+                self._adopt(points, reservation.record_id)
+
+        self.assertIn("another process adopted it", str(caught.exception))
+        self.assertEqual(reads["n"], 2, "one read before the lock, one inside it")
+        self.assertEqual(
+            clock.sleep_calls, 0, "refused on the first collision, no waiting"
+        )
+
+    def test_a_dead_adopter_stale_lock_is_stolen_once_and_adoption_succeeds(self):
+        """The stale-lock branch: the previous adopter was killed between
+        taking the lock and rewriting the ownership file (the state still
+        reads ``interrupted``). The next adoption waits out its bounded
+        deadline once, steals the lock, and completes.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._interrupt(reservation)
+        lock = reservation.workdir / report.RESUME_LOCK_DIR
+        lock.mkdir()
+
+        clock = _FakeResumeTime()
+        with mock.patch.object(report, "time", clock):
+            adopted_reservation, adopted = self._adopt(points, reservation.record_id)
+        self.addCleanup(adopted_reservation.release_resume_lock)
+
+        self.assertEqual(
+            clock.sleep_calls,
+            2,
+            "one bounded wait before the steal, one before the retry that wins",
+        )
+        self.assertEqual(adopted_reservation.resume_lock, lock)
+        self.assertTrue(lock.is_dir(), "the stolen lock now belongs to this adopter")
+        self.assertEqual(adopted["pid"], os.getpid())
+        self.assertEqual(len(adopted["attempts"]), 2)
+        self.assertTrue(adopted["attempts"][1]["resumed"])
+        # The ownership file names this process: a fresh read sees "running".
+        self.assertEqual(
+            report.read_reservation(reservation.workdir)["state"], "running"
+        )
+
+    def test_a_stale_lock_is_stolen_only_once_per_adoption(self):
+        """One steal per adoption, not a free retry loop: if the lock is
+        already taken again by the time the steal's retry lands, the second
+        bounded wait refuses rather than stealing someone else's lock --
+        and it leaves that lock in place for whoever holds it.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._interrupt(reservation)
+        lock = reservation.workdir / report.RESUME_LOCK_DIR
+        lock.mkdir()
+
+        def rival_takes_the_lock_back():
+            # The steal's rmdir succeeded; before our retry's mkdir runs, the
+            # rival adopter has taken the lock again -- and it has not yet
+            # rewritten the ownership file, so state still reads "interrupted".
+            if not lock.exists():
+                lock.mkdir()
+
+        clock = _FakeResumeTime(on_sleep=rival_takes_the_lock_back)
+        with mock.patch.object(report, "time", clock):
+            with self.assertRaises(report.ResumeRefused) as caught:
+                self._adopt(points, reservation.record_id)
+
+        self.assertIn("never claimed", str(caught.exception))
+        self.assertTrue(
+            lock.is_dir(), "the refusal leaves the rival's lock alone"
+        )
+
+    def test_replay_point_synthesizes_a_replayed_result(self):
+        point = self._points((27.0,))[0]
+        log_dir = self.root / "corners" / "replay-unit"
+        log_dir.mkdir(parents=True)
+        (log_dir / f"{point.corner_id}.log").write_text(self.LOG_TEXT)
+        result = runner.replay_point(
+            self.tb, point, self.root / "work-unit", log_dir, host="host-old"
+        )
+        self.assertIsNotNone(result)
+        self.assertTrue(result.replayed)
+        self.assertEqual(result.measurements, {"vout": 1.65})
+        self.assertEqual(result.host, "host-old")
+        self.assertEqual(result.seconds, 0.0)
+        self.assertEqual(result.as_dict().get("replayed"), True)
 
 
 class _StubPoint:
@@ -1548,6 +2119,31 @@ def _dead_pid() -> int:
     return proc.pid
 
 
+class _FakeResumeTime:
+    """Stands in for ``report.time`` while the adoption lock is exercised.
+
+    ``monotonic`` starts before the 15 s deadline
+    ``adopt_interrupted_reservation`` computes, and every ``sleep`` jumps
+    past it, so the bounded wait elapses without any real sleeping.
+    ``on_sleep`` hooks the moment a wait completes -- the contention tests
+    use it to stage a rival adopter between the steal and the retry.
+    """
+
+    def __init__(self, on_sleep=None):
+        self.now = 0.0
+        self.sleep_calls = 0
+        self._on_sleep = on_sleep
+
+    def monotonic(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleep_calls += 1
+        self.now += 30.0
+        if self._on_sleep is not None:
+            self._on_sleep()
+
+
 class RecordReservationTests(unittest.TestCase):
     """#720: a record id is reserved atomically before anything is written.
 
@@ -1563,6 +2159,32 @@ class RecordReservationTests(unittest.TestCase):
 
     def reserve(self, **kwargs):
         return report.reserve_record_id(SIM_DIR, self.experiment, _WHEN, git=_GIT, **kwargs)
+
+    def test_reservation_backend_reads_the_recorded_argv(self):
+        """#973: the backend a reservation's argv asked for, both spellings.
+
+        The argv is the only durable record of the backend choice, so the
+        function is total: no ``--backend`` flag means the default local
+        backend, as does an argv that names nothing at all.
+        """
+        self.assertEqual(
+            report.reservation_backend(
+                {"argv": ["sim/run_corners.py", "bench", "--backend", "batch"]}
+            ),
+            "batch",
+        )
+        self.assertEqual(
+            report.reservation_backend(
+                {"argv": ["sim/run_corners.py", "bench", "--backend=batch"]}
+            ),
+            "batch",
+        )
+        self.assertEqual(
+            report.reservation_backend({"argv": ["sim/run_corners.py", "bench"]}),
+            "local",
+        )
+        self.assertEqual(report.reservation_backend({"argv": []}), "local")
+        self.assertEqual(report.reservation_backend({}), "local")
 
     def test_synchronized_allocators_receive_distinct_conforming_ids(self):
         """Many allocators released at once, same experiment/commit/second,
@@ -1947,6 +2569,49 @@ class RecordRenderingTests(unittest.TestCase):
         self.assertIn("`typical_-40c_2.97v`", text)
         self.assertIn("`ff_125c_3.63v`", text)
         self.assertIn("**Overall: PASS**", text)
+
+    def test_a_replayed_point_carries_the_marker_on_every_verdict(self):
+        """``(replayed)`` marks a replayed verdict whatever the verdict is:
+        a replayed failure must be distinguishable from a freshly-simulated
+        one, not only a replayed pass. Fresh verdicts carry no marker.
+        """
+        points = self.points
+        results = list(self.results)
+        results[0] = runner.PointResult(
+            point=points[0], status="ok", measurements={"vout": 99.0},
+            replayed=True,
+        )
+        results[1] = runner.PointResult(
+            point=points[1], status="error", message="derived: boom",
+            replayed=True,
+        )
+        results[2] = runner.PointResult(
+            point=points[2], status="ok", measurements={"vout": 98.0},
+        )
+        record = report.build_record(
+            tb=self.tb,
+            pdk=self.pdk,
+            points=points,
+            results=results,
+            ngspice="ngspice-46",
+            repo_root=SIM_DIR,
+            record_id="20260729-153000-1a7ef75",
+            started_utc="2026-07-29T15:30:00+00:00",
+            wall_seconds=9.5,
+            claim="spec/pll.md#example",
+        )
+        text = report.render_record(record, "harness-selftest")
+        self.assertIn("FAIL (replayed) — ", text)
+        self.assertIn("ERROR (replayed) — derived: boom", text)
+        # A fresh failure is marked as a failure, and only as a failure.
+        self.assertIn("FAIL — ", text)
+        self.assertEqual(
+            text.count("FAIL (replayed)"),
+            1,
+            "only the replayed failure carries the marker",
+        )
+        # A fresh pass renders exactly as it always did.
+        self.assertIn(" | PASS |", text)
 
     def test_a_full_matrix_run_says_so(self):
         text = report.render_record(self.record, "harness-selftest")

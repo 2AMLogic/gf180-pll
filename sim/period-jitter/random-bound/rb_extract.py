@@ -38,7 +38,17 @@ from __future__ import annotations
 
 import math
 import re
+import sys
 from pathlib import Path
+
+# `harness.numeric` holds the shared crossing/linfit primitives (#985); this
+# module is loaded by path (its directory is not a package), so it puts
+# `sim/` on `sys.path` itself, guarded, the way its loading scripts do.
+_SIM = Path(__file__).resolve().parents[2]
+if str(_SIM) not in sys.path:
+    sys.path.insert(0, str(_SIM))
+
+from harness.numeric import crossings as rising_crossings  # noqa: E402,F401
 
 K_B = 1.380649e-23
 T0_K = 273.15
@@ -69,23 +79,6 @@ def read_wrdata(path, ncol: int):
     if not t:
         raise ValueError(f"{path}: no data rows with {ncol + 1} columns")
     return t, cols
-
-
-def rising_crossings(t, v, level: float):
-    """Rising crossings of `level`, linearly interpolated between stored points.
-
-    The same construction `sim/vco-tuning-range/testbench/_numeric.py` and the
-    ISF bring-up use: the crossing is placed on the chord between the two stored
-    timepoints that straddle it.  At a 10 ps timestep ceiling the chord's error
-    is the clean copy's period spread, which every run reports beside its noisy
-    copies as the floor.
-    """
-    out = []
-    for i in range(1, len(t)):
-        a, b = v[i - 1], v[i]
-        if a < level <= b:
-            out.append(t[i - 1] + (level - a) * (t[i] - t[i - 1]) / (b - a))
-    return out
 
 
 def periods(crossings, t_start: float):

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import getpass
+import hashlib
 import json
 import os
 import platform
@@ -35,6 +36,7 @@ import re
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from . import HARNESS_VERSION
@@ -171,6 +173,10 @@ class RecordReservation:
         self.log_dir = log_dir
         #: One line per id passed over on the way to this one, saying why.
         self.skipped = list(skipped or [])
+        #: Set by :func:`adopt_interrupted_reservation`: the lock directory
+        #: serializing concurrent ``--resume`` adoptions of this id. Released
+        #: best-effort at process exit; absent for a fresh reservation.
+        self.resume_lock: Path | None = None
 
     @property
     def evidence(self) -> bool:
@@ -193,6 +199,20 @@ class RecordReservation:
                 path.unlink()
             except FileNotFoundError:
                 pass
+
+    def release_resume_lock(self) -> None:
+        """Drop the ``--resume`` adoption lock, best-effort, at process exit.
+
+        A run killed outright (SIGKILL) leaves the lock behind; the next
+        adoption re-reads the ownership file, finds the dead pid, and steals
+        the stale lock rather than refusing forever.
+        """
+        if self.resume_lock is None:
+            return
+        try:
+            self.resume_lock.rmdir()
+        except OSError:
+            pass
 
 
 def _ownership_info(record_id: str, experiment_dir: Path, git: dict) -> dict:
@@ -304,6 +324,7 @@ def reserve_record_id(
     git: dict | None = None,
     *,
     evidence: bool = True,
+    grid_fingerprint: str | None = None,
 ) -> RecordReservation:
     """Atomically acquire a fresh ``<record-id>`` for one run.
 
@@ -319,11 +340,18 @@ def reserve_record_id(
     the scratch ``work/<record-id>/``, so it never occupies an evidence id
     permanently, while still never sharing a work directory with a live run.
 
+    ``grid_fingerprint`` (:func:`grid_fingerprint`) is recorded in the
+    ownership file of an evidence reservation so that a later ``--resume``
+    can prove the grid it is about to run is the one this reservation was
+    taking. Omitted for a scratch reservation, which carries no evidence to
+    resume.
+
     Nothing is ever held for longer than a ``mkdir``: unrelated experiments,
     and other runs of this one, proceed concurrently.
 
     An interrupted reservation is not reclaimed. Its directories keep the id
-    occupied; see :func:`interrupted_reservations`.
+    occupied; see :func:`interrupted_reservations` and, for the one
+    deliberate exception, :func:`adopt_interrupted_reservation`.
     """
     when = when or _dt.datetime.now(_dt.timezone.utc)
     git = git or git_provenance(repo_root)
@@ -358,10 +386,229 @@ def reserve_record_id(
 
         reservation = RecordReservation(record_id, experiment_dir, workdir, log_dir, skipped)
         if reservation.ownership_path is not None:
+            ownership = _ownership_info(record_id, experiment_dir, git)
+            if grid_fingerprint:
+                ownership["grid_sha256"] = grid_fingerprint
             reservation.ownership_path.write_text(
-                json.dumps(_ownership_info(record_id, experiment_dir, git), indent=2) + "\n"
+                json.dumps(ownership, indent=2) + "\n"
             )
         return reservation
+
+
+def grid_fingerprint(tb: Testbench, points: list[PvtPoint]) -> str:
+    """A sha256 over everything that decides what a grid *means*.
+
+    Recorded in ``work/<record-id>/reservation.json`` at reserve time and
+    compared by ``--resume`` before it re-adopts anything: a resumed
+    invocation whose point set or manifest differs from the one the
+    reservation was taken for would replay logs produced by a *different*
+    grid under this record id. The payload is the sorted per-deck run-ids
+    (corner set, temperatures, supplies, sweep-axis points, phases) plus the
+    testbench provenance minus its prose annotations (``claim``,
+    ``description``) -- the netlist/manifest/DUT sha256s it carries are what
+    stop a changed manifest from slipping through under unchanged file
+    names.
+    """
+    prov = tb.provenance()
+    semantic = {k: v for k, v in prov.items() if k not in ("claim", "description")}
+    payload = json.dumps(
+        {
+            "experiment": tb.experiment,
+            "run_ids": sorted(
+                phase.run_id(point.corner_id)
+                for point in points
+                for phase in tb.run_phases
+            ),
+            "testbench": semantic,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+class ResumeRefused(RuntimeError):
+    """``--resume`` refused to re-adopt a reservation, with the reason."""
+
+
+#: The lock directory an adoption holds while it rewrites the ownership file
+#: to name itself, so a second concurrent ``--resume`` reads state
+#: ``"running"`` and refuses instead of sharing the work directory.
+RESUME_LOCK_DIR = ".resuming"
+
+
+def reservation_backend(info: dict) -> str:
+    """The execution backend one recorded attempt's ``argv`` asked for.
+
+    ``info`` is one entry of an ownership file's ``attempts`` list (or the
+    top level of the file itself), so this answers per attempt. The
+    harness's attribution rule spans the whole history: a replayed point
+    keeps the executing host of the attempt that actually ran it, and a
+    replayed log may come from any earlier attempt, so the replayed points
+    carry the recording host only when **every** earlier attempt read back
+    ``local`` here. A history in which any attempt dispatched off-host
+    leaves them unattributed rather than claiming a host some of them
+    never ran on. The argv is the only durable place the choice is written
+    (a reservation's ownership file predates every backend report).
+    """
+    argv = info.get("argv") or []
+    for i, token in enumerate(argv):
+        if token == "--backend" and i + 1 < len(argv):
+            return argv[i + 1]
+        if token.startswith("--backend="):
+            return token.partition("=")[2]
+    return "local"
+
+
+def adopt_interrupted_reservation(
+    experiment_dir: Path,
+    record_id: str,
+    fingerprint: str,
+    *,
+    started: _dt.datetime,
+) -> tuple[RecordReservation, dict]:
+    """Re-adopt an ``interrupted`` reservation for ``--resume`` (#973).
+
+    Every refusal names the observed state, per the harness's rule that a
+    refusal a reader cannot act on is not a refusal. ``adopted`` -- the
+    rewritten ownership record -- is returned alongside the reservation so
+    the caller can disclose the attempt history in the minted record.
+
+    The re-adoption itself is deliberately narrow: it rewrites the ownership
+    file to name THIS process (so any concurrent ``--resume`` now reads
+    state ``"running"`` and refuses) and appends this attempt to the
+    ownership file's ``attempts`` list. Nothing under ``corners/`` is
+    touched here; replaying the logs is the runner's job, and minting the
+    record stays exactly as exclusive as it was.
+    """
+    if "/" in record_id or "\\" in record_id or record_id in (".", ".."):
+        raise ResumeRefused(f"{record_id!r} is not a record id")
+    workdir = experiment_dir / WORK_DIR / record_id
+    log_dir = experiment_dir / CORNERS_DIR / record_id
+
+    def refuse(reason: str) -> ResumeRefused:
+        return ResumeRefused(f"record id {record_id} cannot be resumed: {reason}")
+
+    info = read_reservation(workdir)
+    if info is None:
+        raise refuse(
+            f"no reservation file at {workdir / RESERVATION_FILE} -- nothing "
+            "is reserved under this id (a removed work directory also took "
+            "the run's decks and scratch state with it)"
+        )
+    state = info.get("state")
+    if state != "interrupted":
+        raise refuse(
+            f"its reservation reads state {state!r}, not 'interrupted' -- "
+            + {
+                "running": "another process owns it on this host right now",
+                "published": "its summary record already exists, so there "
+                "is nothing left to finish",
+                "unknown": f"it was reserved on another host "
+                "({host}), whose liveness cannot be checked from here -- "
+                "only a human who knows that run is dead may resume it, "
+                "from that host".format(host=info.get("host")),
+                "unreadable": f"the ownership file could not be read "
+                "({error})".format(error=info.get("error")),
+            }.get(state, "only an interrupted reservation may be resumed")
+        )
+    stored = info.get("grid_sha256")
+    if not stored:
+        raise refuse(
+            "its reservation predates --resume and carries no grid "
+            "fingerprint, so there is no way to prove this invocation's "
+            "grid is the one the interrupted run was taking"
+        )
+    if stored != fingerprint:
+        raise refuse(
+            "the grid this invocation resolved (corner set, temperatures, "
+            "supplies, sweep axes, or the manifest itself) does not match "
+            "the interrupted run's -- replaying its logs under this record "
+            "id would mix two grids, so it is refused"
+        )
+    if not log_dir.is_dir():
+        raise refuse(
+            f"its raw evidence directory {log_dir} does not exist -- the "
+            "per-point logs a resume replays are gone (sim/harness/README.md, "
+            "'Resuming an interrupted run', documents which two paths must "
+            "survive between attempts)"
+        )
+
+    # Serialize concurrent adoptions. Exactly one process may rewrite the
+    # ownership file; it does so immediately after taking this lock, so a
+    # second --resume's read sees state "running" and refuses.
+    lock = workdir / RESUME_LOCK_DIR
+    deadline = time.monotonic() + 15.0
+    steals = 0
+    while True:
+        try:
+            lock.mkdir()
+            break
+        except FileExistsError:
+            current = read_reservation(workdir)
+            if current and current.get("state") == "running":
+                raise refuse(
+                    "another process adopted it while this one was starting"
+                ) from None
+            if time.monotonic() >= deadline:
+                if steals >= 1:
+                    raise refuse(
+                        f"the adoption lock {lock} is held and the holding "
+                        "process never claimed the reservation -- if no "
+                        "resume is actually running, remove the lock by hand"
+                    ) from None
+                # A dead adopter's stale lock: it was killed between taking
+                # the lock and rewriting the ownership file (the ownership
+                # pid is dead -- state reads "interrupted" above). One steal,
+                # then race for the lock again.
+                steals += 1
+                try:
+                    lock.rmdir()
+                except OSError:
+                    pass
+            time.sleep(0.25)
+
+    try:
+        try:
+            user = getpass.getuser()
+        except Exception:  # noqa: BLE001 - same grab-bag as _ownership_info
+            user = "unknown"
+        attempts = list(info.get("attempts") or [
+            # Attempt 1 predates the attempts list: the original ownership
+            # file's own fields are the only facts it carries.
+            {"started_utc": info.get("reserved_utc"), "argv": info.get("argv") or []}
+        ])
+        attempts.append(
+            {
+                "started_utc": started.isoformat(timespec="seconds"),
+                "argv": list(sys.argv),
+                "resumed": True,
+            }
+        )
+        adopted = {
+            **info,
+            "host": socket.gethostname(),
+            "pid": os.getpid(),
+            "user": user,
+            "argv": list(sys.argv),
+            # Attempt 1's start, kept for the record's resume disclosure; the
+            # current attempt's start lives in ``attempts[-1]``.
+            "initial_reserved_utc": info.get("reserved_utc"),
+            "attempts": attempts,
+            "grid_sha256": fingerprint,
+        }
+        tmp = workdir / (RESERVATION_FILE + ".new")
+        tmp.write_text(json.dumps(adopted, indent=2) + "\n")
+        os.replace(tmp, workdir / RESERVATION_FILE)
+    except OSError:
+        try:
+            lock.rmdir()
+        except OSError:
+            pass
+        raise
+    reservation = RecordReservation(record_id, experiment_dir, workdir, log_dir)
+    reservation.resume_lock = lock
+    return reservation, adopted
 
 
 def _write_exclusive(path: Path, text: str) -> None:
@@ -728,6 +975,7 @@ def build_record(
     execution: dict | None = None,
     abort_reason: str = "",
     env_provenance_lines: list[str] | None = None,
+    resume: dict | None = None,
 ) -> dict:
     measure_names = tb.measure_names
     optional_names = {n for n in measure_names if tb.is_optional(n)}
@@ -807,6 +1055,11 @@ def build_record(
         "supersedes_note": supersedes_note,
         "statistical_convention": statistical_convention,
         "subset_reason": subset_reason,
+        # Empty for an ordinary run. A resumed run carries every attempt's
+        # start, the replayed/re-run split and the disclosure rendered by
+        # _resume_lines -- a record whose wall clock describes only its final
+        # process must say so (#973).
+        "resume": dict(resume or {}),
         # The CLI may have already computed this (and folded in gaps only it
         # knows about, e.g. an axis narrowed by --axis); reuse it so the
         # record and the pre-run subset gate cannot disagree.
@@ -1135,6 +1388,56 @@ def _execution_host_lines(hosts: dict, recording_host: str) -> list[str]:
     ]
 
 
+def _resume_lines(record: dict) -> list[str]:
+    """The multi-attempt disclosure for a resumed run (#973).
+
+    A resumed record's ``Execution:`` line, ``wall_seconds`` and per-point
+    ``seconds`` all describe the FINAL attempt only. This bullet names every
+    attempt's start and counts the replayed points, so a reader cannot
+    mistake one process's wall clock for a multi-attempt campaign's cost --
+    that mistake is exactly what made the four attempts behind #973 look
+    cheaper on paper than they ran.
+    """
+    resume = record.get("resume") or {}
+    if not resume.get("resumed"):
+        return []
+    attempts = resume.get("attempts") or []
+    replayed = resume.get("replayed_points", 0)
+    rerun = resume.get("rerun_points", 0)
+    lines = [
+        "- **Resumed run**: this record completes a campaign begun under the "
+        "same record id by earlier attempt(s) that ended unpublished. "
+        f"{replayed} point(s) are replayed from the earlier attempt's raw "
+        "logs (each verified to parse to the point's full declared "
+        f"measurement set; no simulator call) and {rerun} were re-run by "
+        "this attempt.",
+    ]
+    final = len(attempts) - 1
+    for i, attempt in enumerate(attempts):
+        started = attempt.get("started_utc", "?")
+        if i == final:
+            lines.append(
+                f"  - Attempt {i + 1} (this record): started {started}; "
+                f"wall {_fmt(record['wall_seconds'])} s."
+            )
+        else:
+            lines.append(
+                f"  - Attempt {i + 1}: started {started}; ended unpublished "
+                "-- the next attempt's start is when its interruption was "
+                "observed, so its wall clock is bounded by that gap but not "
+                "known."
+            )
+    lines.append(
+        "  - The `Execution:` line, the wall clock above and the per-point "
+        "`seconds` fields describe the FINAL attempt only; the campaign's "
+        "total cost is that plus the earlier attempt(s)' runtime. Replayed "
+        "points carry `seconds` 0 and the executing host of the attempt "
+        "that ran them (unattributed when that attempt dispatched "
+        "off-host -- a raw log does not record which machine produced it)."
+    )
+    return lines
+
+
 def _corner_matrix_lines(record: dict) -> list[str]:
     grid = record["grid"]
     axes = record["matrix"].get("axes") or []
@@ -1323,7 +1626,10 @@ def _corner_table_lines(
     can be given only its own columns' failures -- an unrelated topology's
     FAIL in this table's pass/fail column would be pure noise. A point that
     failed to simulate at all is reported as ERROR in *every* table, because
-    the whole point is missing, not one topology's slice of it.
+    the whole point is missing, not one topology's slice of it. A replayed
+    point carries a ``(replayed)`` marker on its verdict whatever that
+    verdict is -- a replayed failure must be as distinguishable from a
+    freshly-simulated one as a replayed pass is.
     """
     lines = [
         "  | corner-id | " + " | ".join(measure_names) + " | pass/fail |",
@@ -1339,6 +1645,15 @@ def _corner_table_lines(
             for name in measure_names
         ]
         verdict = _point_verdict(point, failures_at)
+        if point.get("replayed"):
+            # The marker goes on every replayed verdict, not only PASS: a
+            # reader must be able to tell a replayed failure from a
+            # freshly-simulated one, exactly as for a replayed pass. The
+            # verdict word leads ("FAIL -- detail"), so the marker slots in
+            # before the detail; PASS, which has no detail, renders exactly
+            # as it did before.
+            head, sep, tail = verdict.partition(" — ")
+            verdict = f"{head} (replayed)" + (sep + tail if sep else "")
         lines.append(f"  | `{point['corner_id']}` | " + " | ".join(cells) + f" | {verdict} |")
     return lines
 
@@ -1578,6 +1893,7 @@ def render_record(record: dict, experiment: str) -> str:
         env.get("host") or "",
         env.get("ngspice") or "",
     )
+    lines += _resume_lines(record)
     lines += _corner_matrix_lines(record)
     lines += _methodology_lines(record)
     lines.append(
