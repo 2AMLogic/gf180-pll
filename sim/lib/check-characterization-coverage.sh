@@ -226,8 +226,9 @@ done
 
 if [ "${#row_missing[@]}" -gt 0 ]; then
   echo "FAIL: sim/CHARACTERIZATION.md promises one Summary-table row per" \
-    "campaign, but these campaigns have no row whose first cell is their" \
-    "name (a mention in prose, a caveat or a cross-reference satisfies the" \
+    "campaign, but these campaigns have no row inside \`## Summary table\`" \
+    "whose first cell is their name (a mention in prose, a caveat, a" \
+    "cross-reference, or a qualifying row in a later section satisfies the" \
     "loose rule above, not this one):" >&2
   for campaign in "${row_missing[@]}"; do
     echo "  - ${campaign}" >&2
