@@ -1,0 +1,272 @@
+2026-11-17 01:00:12 +0000: Memory Usage (427132K) : Starting running GF180MCU Klayout LVS runset on <REPO>/layout/evidence/vco-layout/vco_block.gds
+2026-11-17 01:00:12 +0000: Memory Usage (427132K) : Ruby Version for klayout: 3.2.3
+2026-11-17 01:00:12 +0000: Memory Usage (428188K) : Loading database to memory is complete.
+2026-11-17 01:00:12 +0000: Memory Usage (428188K) : GF180MCU Klayout LVS runset output at: <RUN_DIR>/vco_block.lvsdb
+2026-11-17 01:00:12 +0000: Memory Usage (428188K) : Evaluate switches.
+2026-11-17 01:00:12 +0000: Memory Usage (428188K) : schematic translate: false
+2026-11-17 01:00:12 +0000: Memory Usage (428188K) : Extracted netlist with net names: true
+2026-11-17 01:00:12 +0000: Memory Usage (428188K) : Extracted netlist with comments in details: false
+2026-11-17 01:00:12 +0000: Memory Usage (428188K) : LVS extracted netlist at: <RUN_DIR>/vco_block.cir
+2026-11-17 01:00:13 +0000: Memory Usage (428188K) : Selected SIMPLIFY option: false
+2026-11-17 01:00:13 +0000: Memory Usage (428188K) : Selected NET_ONLY option: false
+2026-11-17 01:00:13 +0000: Memory Usage (428188K) : Selected TOP_LVL_PINS option: false
+2026-11-17 01:00:13 +0000: Memory Usage (428188K) : Selected COMBINE option: true
+2026-11-17 01:00:13 +0000: Memory Usage (428188K) : Selected PURGE option: false
+2026-11-17 01:00:13 +0000: Memory Usage (428188K) : Selected PURGE_NETS option: false
+2026-11-17 01:00:13 +0000: Memory Usage (428188K) : Selected IMPLICIT_CONNECT option: false
+2026-11-17 01:00:13 +0000: Memory Usage (428188K) : Selected CONSIDER_DN_DW_FEATURES option: false
+2026-11-17 01:00:13 +0000: Memory Usage (428188K) : Verbose mode: false
+2026-11-17 01:00:13 +0000: Memory Usage (428188K) : deep  mode is enabled.
+2026-11-17 01:00:13 +0000: Memory Usage (428188K) : METAL_TOP Selected is 11K
+2026-11-17 01:00:13 +0000: Memory Usage (428188K) : METAL_STACK Selected is 5LM
+2026-11-17 01:00:13 +0000: Memory Usage (428188K) : POLY_RES Selected is 3k
+2026-11-17 01:00:13 +0000: Memory Usage (428188K) : MIM Option selected: B
+2026-11-17 01:00:13 +0000: Memory Usage (428188K) : MIM CAP selected: 2
+2026-11-17 01:00:13 +0000: Memory Usage (428252K) : Input schematic file: /tmp/lvs980/vco_block_onefold_short.spice
+2026-11-17 01:00:13 +0000: Memory Usage (429244K) : Read in polygons from layers.
+2026-11-17 01:00:13 +0000: Memory Usage (430276K) : comp has 117 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430276K) : dnwell has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430564K) : nwell has 9 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430584K) : lvpwell has 2 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430628K) : dualgate has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430696K) : poly2 has 157 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430724K) : nplus has 47 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : pplus has 74 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : sab has 3 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : esd has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : resistor has 3 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : fhres has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : fusetop has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : fusewindow_d has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : polyfuse has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : mvsd has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : mvpsd has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : nat has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : comp_dummy has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : poly2_dummy has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : schottky_diode has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : zener has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : res_mk has 3 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : opc_drc has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : ndmy has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : pmndmy has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : v5_xtor has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : cap_mk has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : mos_cap_mk has 2 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : ind_mk has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430736K) : diode_mk has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430760K) : drc_bjt has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430808K) : lvs_bjt has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430852K) : mim_l_mk has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430904K) : latchup_mk has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430948K) : guard_ring_mk has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (430996K) : otp_mk has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (431032K) : mtpmark has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (431076K) : neo_ee_mk has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (431076K) : sramcore has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (431116K) : lvs_rf has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (431160K) : lvs_drain has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (431160K) : hvpolyrs has 0 polygons
+2026-11-17 01:00:13 +0000: Memory Usage (431160K) : lvs_io has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431160K) : probe_mk has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431160K) : esd_mk has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431160K) : lvs_source has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431160K) : well_diode_mk has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431160K) : ldmos_xtor has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431160K) : plfuse has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431160K) : efuse_mk has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431160K) : mcell_feol_mk has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431160K) : ymtp_mk has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431160K) : dev_wf_mk has 0 polygons
+Warning: Comp labels are ignored, as comp is not defined as a valid conductive layer
+2026-11-17 01:00:14 +0000: Memory Usage (431224K) : comp_label has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431224K) : poly2_label has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431224K) : mdiode has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431228K) : contact has 12758 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431448K) : metal1_drawn has 760 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431448K) : metal1_dummy has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431704K) : metal1_label has 61 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431704K) : metal1_slot has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431704K) : metal1_blk has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431704K) : metal1_res has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431704K) : via1 has 253 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431704K) : metal2_drawn has 402 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431704K) : metal2_dummy has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431704K) : metal2_label has 18 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431748K) : metal2_slot has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431748K) : metal2_blk has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431796K) : metal2_res has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431864K) : via2 has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431908K) : metal3_drawn has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (431968K) : metal3_dummy has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal3_label has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal3_slot has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal3_blk has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal3_res has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : via3 has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal4_drawn has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal4_dummy has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal4_label has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal4_slot has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal4_blk has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal4_res has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : via4 has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal5_drawn has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal5_dummy has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal5_label has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal5_slot has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal5_blk has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432008K) : metal5_res has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432072K) : pad has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432072K) : ubmpperi has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432072K) : ubmparray has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432072K) : ubmeplate has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432072K) : pr_bndry has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432072K) : border has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432072K) : isosub has 0 polygons
+2026-11-17 01:00:14 +0000: Memory Usage (432072K) : Total no. of polygons in the design is 14669
+2026-11-17 01:00:14 +0000: Memory Usage (432072K) : Starting GF180MCU LVS runset
+2026-11-17 01:00:14 +0000: Memory Usage (432072K) : Starting base layers derivations
+2026-11-17 01:00:14 +0000: Memory Usage (438704K) : Starting MOSFET DERIVATIONS
+2026-11-17 01:00:14 +0000: Memory Usage (438816K) : Starting PMOS layers DERIVATIONS
+2026-11-17 01:00:15 +0000: Memory Usage (438816K) : Starting NMOS layers DERIVATIONS
+2026-11-17 01:00:15 +0000: Memory Usage (438820K) : Starting BJT DERIVATIONS
+2026-11-17 01:00:15 +0000: Memory Usage (438820K) : Starting vnpn layers DERIVATIONS
+2026-11-17 01:00:15 +0000: Memory Usage (442772K) : Starting vpnp layers DERIVATIONS
+2026-11-17 01:00:15 +0000: Memory Usage (445364K) : Starting DIODE DERIVATIONS
+2026-11-17 01:00:15 +0000: Memory Usage (450692K) : Starting RESISTOR DERIVATIONS
+2026-11-17 01:00:15 +0000: Memory Usage (454160K) : Starting MIMCAP DERIVATIONS
+2026-11-17 01:00:15 +0000: Memory Usage (454160K) : Starting MOSCAP DERIVATIONS
+2026-11-17 01:00:15 +0000: Memory Usage (454160K) : Starting MOS SAB DERIVATIONS
+2026-11-17 01:00:15 +0000: Memory Usage (454160K) : Starting PMOS SAB DERIVATIONS
+2026-11-17 01:00:15 +0000: Memory Usage (454160K) : Starting NMOS SAB DERIVATIONS
+2026-11-17 01:00:15 +0000: Memory Usage (454160K) : Starting NMOS EFUSE DERIVATIONS
+2026-11-17 01:00:15 +0000: Memory Usage (454160K) : Starting GF180 LVS connectivity setup
+2026-11-17 01:00:15 +0000: Memory Usage (454160K) : Starting GF180 LVS connectivity setup (Inter-layer)
+2026-11-17 01:00:15 +0000: Memory Usage (454288K) : Starting GF180 LVS connectivity setup (Global)
+2026-11-17 01:00:15 +0000: Memory Usage (454288K) : Starting LVS MOSFET CONNECTIONS
+2026-11-17 01:00:15 +0000: Memory Usage (454288K) : Starting LVS BJT CONNECTIONS
+2026-11-17 01:00:15 +0000: Memory Usage (454288K) : Starting LVS DIODE CONNECTIONS
+2026-11-17 01:00:15 +0000: Memory Usage (454288K) : Starting LVS MIMCAP CONNECTIONS
+2026-11-17 01:00:15 +0000: Memory Usage (454288K) : Starting LVS RESISTOR CONNECTIONS
+2026-11-17 01:00:15 +0000: Memory Usage (454288K) : Starting LVS EFUSE CONNECTIONS
+2026-11-17 01:00:15 +0000: Memory Usage (454288K) : Starting GF180 LVS DEVICES EXTRACTION
+2026-11-17 01:00:15 +0000: Memory Usage (454288K) : Starting MOSFET EXTRACTION
+2026-11-17 01:00:15 +0000: Memory Usage (454288K) : Starting PMOS EXTRACTION
+2026-11-17 01:00:15 +0000: Memory Usage (454288K) : Extracting 3.3V PMOS transistor outside DNWEL
+2026-11-17 01:00:15 +0000: Memory Usage (454636K) : Extracting 5V PMOS transistor outside DNWELL
+2026-11-17 01:00:15 +0000: Memory Usage (454636K) : Extracting 6V PMOS transistor outside DNWELL
+2026-11-17 01:00:15 +0000: Memory Usage (454636K) : Extracting 3.3V PMOS transistor inside DNWELL as regular 3.3V PMOS transistor
+2026-11-17 01:00:15 +0000: Memory Usage (454636K) : Extracting 5V PMOS transistor inside DNWELL as regular 5V PMOS transistor
+2026-11-17 01:00:15 +0000: Memory Usage (454636K) : Extracting 6V PMOS transistor inside DNWELL as regular, no dw device
+2026-11-17 01:00:15 +0000: Memory Usage (454636K) : Extracting LDPMOS transistor
+2026-11-17 01:00:15 +0000: Memory Usage (454636K) : Starting NMOS EXTRACTION
+2026-11-17 01:00:16 +0000: Memory Usage (454636K) : 3.3V NMOS transistor outside DNWELL
+2026-11-17 01:00:16 +0000: Memory Usage (454636K) : 5V NMOS transistor outside DNWELL
+2026-11-17 01:00:16 +0000: Memory Usage (454636K) : 6V NMOS transistor outside DNWELL
+2026-11-17 01:00:16 +0000: Memory Usage (454636K) : 3.3V NMOS transistor inside DNWELL as regular, non dw device
+2026-11-17 01:00:16 +0000: Memory Usage (454636K) : 5V NMOS transistor inside DNWELL as regular, non dw device
+2026-11-17 01:00:16 +0000: Memory Usage (454636K) : 6V NMOS transistor inside DNWELL, as regular, non dw device
+2026-11-17 01:00:16 +0000: Memory Usage (454636K) : Native Vt NMOS transistor
+2026-11-17 01:00:16 +0000: Memory Usage (454636K) : Extracting LDNMOS transistor
+2026-11-17 01:00:16 +0000: Memory Usage (454636K) : Starting BJT EXTRACTION
+2026-11-17 01:00:16 +0000: Memory Usage (454636K) : Starting vnpn BJT EXTRACTION
+2026-11-17 01:00:16 +0000: Memory Usage (454636K) : Extracting npn_10p00x10p00 BJT
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Extracting npn_05p00x05p00 BJT
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Extracting npn_00p54x16p00 BJT
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Extracting npn_00p54x08p00 BJT
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Extracting npn_00p54x04p00 BJT
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Extracting npn_00p54x02p00 BJT
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Starting vpnp BJT EXTRACTION
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Extracting pnp_10p00x10p00 BJT
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Extracting pnp_05p00x05p00 BJT
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Extracting pnp_10p00x00p42 BJT
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Extracting pnp_05p00x00p42 BJT
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Starting DIODE EXTRACTION
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Extracting diode_nd2ps_03v3 diode
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Extracting diode_nd2ps_03v3_dn diode as diode_nd2ps_03v3
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Extracting diode_nd2ps_06v0 diode
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Extracting diode_nd2ps_06v0_dn diode as diode_nd2ps_06v0
+2026-11-17 01:00:16 +0000: Memory Usage (454700K) : Extracting diode_pd2nw_03v3 diode
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting diode_pd2nw_03v3_dn diode as diode_pd2nw_03v3
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting diode_pd2nw_06v0 diode
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting diode_pd2nw_06v0_dn diode as diode_pd2nw_06v0
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting diode_nw2ps_03v3 diode
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting diode_nw2ps_06v0 diode
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting diode_pw2dw_03v3 diode
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting diode_pw2dw_06v0 diode
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting diode_dw2ps_03v3 diode
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting diode_dw2ps_06v0 diode
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting sc_diode diode
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Starting RESISTOR EXTRACTION
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting NPLUS_U device
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting NPLUS_U_DW device as NPLUS_U
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting PPLUS_U device
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting PPLUS_U_DW device as PPLUS_U
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting NPLUS_S device
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting NPLUS_S_DW device NPLUS_S
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting PPLUS_S device
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting PPLUS_S_DW device as PPLUS_S
+2026-11-17 01:00:16 +0000: Memory Usage (454764K) : Extracting NWELL device
+2026-11-17 01:00:16 +0000: Memory Usage (454828K) : Extracting PWELL device
+2026-11-17 01:00:16 +0000: Memory Usage (454828K) : Extracting NPOLYF_U SUB device
+2026-11-17 01:00:16 +0000: Memory Usage (454828K) : Extracting NPOLYF_U LVPWELL device
+2026-11-17 01:00:16 +0000: Memory Usage (454828K) : Extracting NPOLYF_U_DW device NPOLYF_U
+2026-11-17 01:00:16 +0000: Memory Usage (454828K) : Extracting PPOLYF_U SUB device
+2026-11-17 01:00:16 +0000: Memory Usage (454828K) : Extracting PPOLYF_U NWELL device
+2026-11-17 01:00:16 +0000: Memory Usage (454828K) : Extracting PPOLYF_U_DW device as PPOLYF_U
+2026-11-17 01:00:16 +0000: Memory Usage (454828K) : Extracting NPOLYF_S SUB device
+2026-11-17 01:00:16 +0000: Memory Usage (454828K) : Extracting NPOLYF_S NWELL device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting NPOLYF_S_DW device as NPOLYF_S
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting PPOLYF_S SUB device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting PPOLYF_S NWELL device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting PPOLYF_S_DW device as PPOLYF_S
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting PPOLYF_U_3K SUB device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting PPOLYF_U_3K NWELL device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting PPOLYF_U_3K_dw device as PPOLYF_U_3K
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting PPOLYF_U_3K_6p0 SUB device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting PPOLYF_U_3K_6p0 NWELL device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting PPOLYF_U_3K_6p0_DW device as PPOLYF_U_3K_6p0
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting RM1 device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting RM2 device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting RM3 device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting RM4 device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting TM11K device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Starting MIMCAP EXTRACTION
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting cap_mim_2f0fF device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Starting MOSCAP EXTRACTION
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting cap_nmos_03v3 device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting cap_nmos_03v3_dn device as cap_nmos_03v3
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting cap_pmos_03v3 device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting cap_pmos_03v3_dn device as cap_pmos_03v3
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting cap_nmos_06v0 device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting cap_nmos_06v0_dn device as cap_nmos_06v0
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting cap_pmos_06v0 device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting cap_pmos_06v0_dn device as cap_pmos_06v0
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting cap_pmos_03v3_b device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting cap_nmos_06v0_b device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting cap_pmos_06v0_b device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Starting MOS SAB EXTRACTION
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Starting PMOS SAB EXTRACTION
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting 3.3V ESD PMOS transistor outside DNWELL device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting 5V ESD PMOS transistor outside DNWELL device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting 6V ESD PMOS transistor outside DNWELL device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting 3.3V ESD PMOS transistor inside DNWELL device, as regular, non dw device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting 5V ESD PMOS transistor inside DNWELL device as regular, non dw device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting 6V ESD PMOS transistor inside DNWELL device as regular, non dw device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Starting NMOS SAB EXTRACTION
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting 3.3V ESD NMOS transistor outside DNWELL device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting 5V ESD NMOS transistor outside DNWELL device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting 6V ESD NMOS transistor outside DNWELL device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting 3.3V ESD NMOS transistor inside DNWELL device, as regular, non dw device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting 5V ESD NMOS transistor inside DNWELL device as regular, non dw device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Extracting 6V ESD NMOS transistor inside DNWELL device as regular, non dw device
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Starting EFUSE EXTRACTION
+2026-11-17 01:00:17 +0000: Memory Usage (454828K) : Starting GF180 LVS comparison section
+2026-11-17 01:00:18 +0000: Memory Usage (455164K) : LVS Total Run time 5.148324 seconds
+2026-11-17 01:00:18 +0000: Memory Usage (455164K) : xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+2026-11-17 01:00:18 +0000: Memory Usage (455164K) : ERROR : Netlists don't match
+2026-11-17 01:00:18 +0000: Memory Usage (455164K) : xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+17-Nov-2026 01:00:11 | INFO    | poly_res switch overridden to 3k (see <REPO>/layout/harness/_pdk_lvs_poly_res.py)
+17-Nov-2026 01:00:11 | INFO    | Your Klayout version is: KLayout 0.30.12
+17-Nov-2026 01:00:11 | INFO    | Running Global Foundries 180nm MCU <PDK>/libs.tech/klayout/tech/lvs/gf180mcu.lvs checks on design <REPO>/layout/evidence/vco-layout/vco_block.gds on cell vco_block
