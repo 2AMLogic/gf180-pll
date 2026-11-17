@@ -271,7 +271,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:8a7218e6a60099933842519bb6063f7b4353bc259107fa29ea4ac641ffcbdcb0",
+        "content_hash": "sha256:8e3f7892b6a4dadfbfd1480ed35dd8fb7e1ea289ce13869ccf899287662eb5e9",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -280,9 +280,9 @@
             "path": "signoff/attest/testbench-inventory-analog.json",
             "scope": "repo"
           },
-          "content_hash": "sha256:8a7218e6a60099933842519bb6063f7b4353bc259107fa29ea4ac641ffcbdcb0",
+          "content_hash": "sha256:8e3f7892b6a4dadfbfd1480ed35dd8fb7e1ea289ce13869ccf899287662eb5e9",
           "input_verified": true,
-          "summary": "analog partition: every claimed measurement's testbench committed with a cold-start command; PDK revision and tool pins recorded",
+          "summary": "analog partition: every claimed measurement's testbench and declared reduction module committed with a cold-start command; PDK revision and tool pins recorded",
           "source": "signoff/attest/testbench-inventory-analog.json"
         }
       }
@@ -302,7 +302,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:809f6dd440e372be0df83607d4a3e11b1feda64c58ca3fa87572140a7bd8789b",
+        "content_hash": "sha256:70806671089fe6459468939494cd86e54cce3b0d9997deb3dd1af02d62d64f5c",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -311,9 +311,9 @@
             "path": "signoff/attest/testbench-inventory-digital.json",
             "scope": "repo"
           },
-          "content_hash": "sha256:809f6dd440e372be0df83607d4a3e11b1feda64c58ca3fa87572140a7bd8789b",
+          "content_hash": "sha256:70806671089fe6459468939494cd86e54cce3b0d9997deb3dd1af02d62d64f5c",
           "input_verified": true,
-          "summary": "digital partition: every claimed measurement's testbench committed with a cold-start command; PDK revision and tool pins recorded",
+          "summary": "digital partition: every claimed measurement's testbench and declared reduction module committed with a cold-start command; PDK revision and tool pins recorded",
           "source": "signoff/attest/testbench-inventory-digital.json"
         }
       }
