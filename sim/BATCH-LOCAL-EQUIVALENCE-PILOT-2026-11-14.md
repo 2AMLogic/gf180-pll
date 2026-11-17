@@ -202,3 +202,52 @@ done
    of this pilot completed on. The warning is keyed on a version string that
    cannot distinguish the two builds; it needs a capability probe. Filed
    separately.
+
+## Addendum (2026-11-17, later): which rows of the environment table are re-derivable
+
+Appended after Judge evaluation of #925 flagged that the build-identity rows of
+"The two environments" cannot be checked from this repository. Everything above
+this heading stays as written. No simulation was run, no batch job was submitted
+and nothing was spent for this addendum; no record under `sim/*/records/` was
+written; no harness file or deck was changed. It only classifies the rows of the
+table above against what this repository commits.
+
+**Run-time-observed, not re-derivable from this repository**: the banner and
+`Compiled with` rows, the banner's creation date (`Fri Nov 13 23:19:32 UTC
+2026`), the local binary's path and sha256 (`e12148ba…1314`), the image-manifest
+fields (`pin_digest` `838a0d68…6e08c`, source commit `2ef7e4981`, `built`
+`2026-11-14T00:22:48Z`, `base_ami`), the CPU models (Xeon 8488C local, Xeon
+8375C batch) and `OMP_NUM_THREADS`. These values were observed at run time —
+locally on the submitting worker, on batch from the per-job `ngspice.env`
+capture and the ngspice banner. The capture is collected best-effort by
+`sim/harness/batch.py` but deliberately not published into a point's rundir
+(`CONTRACT_OUTPUT_NAMES` keeps the four contract-named files out of a possibly
+shared rundir), and the committed per-corner logs begin at the `.spiceinit`
+marker without the banner, so the creation date is not recoverable from the
+retained evidence either. Each of these values hits only this document in the
+tree (searches re-run on this branch, 2026-11-17).
+
+**Re-derivable from committed evidence**:
+
+- the PDK revision `f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7`, byte-identical
+  to the pin in `sim/pdk.json`;
+- the `.spiceinit` sha256 `d6efd5b23e4c…f385`: the exact bytes are committed as
+  `INIT_TEXT` in `sim/harness/siminit.py`, whose `INIT_SHA256` hashes to this
+  value;
+- the init marker `gf180-pll-spiceinit-applied wnflag=1`, printed in each of
+  the four committed logs;
+- the solver line (`Using SPARSE 1.3 as Direct Linear Solver`) and the Gate 1
+  DC state (`fb` 3.63, `vctrl` 1.886, `lock` 3.63, `clk` 3.63, zero `gmin
+  stepping` lines), read out of each of the four retained logs;
+- the measured agreement itself: each of `raw_measures.csv`,
+  `spectrum_worst.csv` and `spur_by_corner.csv` is one md5 across all four
+  records under `sim/reference-spur-band-top/corners/*-e752ace`.
+
+The pilot's conclusion — that the batch backend reproduces the local reference
+exactly — rests only on these re-derivable rows. The attribution rows matter if
+a later batch result ever disagrees with a local one: that disagreement is what
+the `ngspice.env` capture exists to attribute (`sim/harness/batch.py`, citing
+#533). The unbuilt remedy would be to commit the per-job env captures under the
+record's own directory, so the attribution table becomes re-derivable the way
+the measurements already are; that needs a rule for what is safe to publish
+from a job environment and is deliberately not decided here. Tracked in #964.
