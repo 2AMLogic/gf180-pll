@@ -685,25 +685,6 @@ control_campaign() {
   done
 }
 
-# --recheck-control <record-id | corners dir>: re-derive an ALREADY-COMMITTED
-# campaign's negative-control verdict from its own committed CSV. Reads bytes
-# only -- no ngspice, no netlist export, no record minted -- and exits
-# non-zero if any leg fails, so it is usable as a gate. The `--restat`
-# sibling does the same thing for the campaign's statistics.
-recheck_control() {
-  local dir="${1:-}"
-  [ -n "${dir}" ] || { echo "usage: run.sh --recheck-control <record-id | corners dir>" >&2; exit 2; }
-  [ -d "${dir}" ] || dir="${EXP}/corners/${dir}"
-  [ -d "${dir}" ] || { echo "ERROR: no such corners directory: ${1}" >&2; exit 1; }
-  local csv="${dir}/negative_control.csv"
-  [ -f "${csv}" ] || {
-    echo "ERROR: ${csv} missing -- that campaign predates the committed" >&2
-    echo "       negative control (#602) and has only its record's prose." >&2
-    exit 1
-  }
-  simenv_control_report "${csv}" "mc-cp-mismatch negative control"
-}
-
 # ===========================================================================
 # Statistics: mean, sample stddev (N-1), |mean|+3sigma
 # ===========================================================================
@@ -1175,7 +1156,14 @@ case "${1:-}" in
   --one-pfd) shift; run_pfd "$@"; exit 0 ;;
   --one-dff) shift; run_dff "$@"; exit 0 ;;
   --restat) shift; restat "$@"; exit 0 ;;
-  --recheck-control) shift; recheck_control "$@"; exit 0 ;;
+  # --recheck-control: the shared simenv_recheck_control (sim/lib/simenv.sh,
+  # where the verdict/report machinery lives), given this script's usage name,
+  # EXP root, report label and absent-artifact hint.
+  --recheck-control) shift
+    simenv_recheck_control "${1:-}" "${EXP}" "run.sh" "mc-cp-mismatch negative control" \
+      "that campaign predates the committed
+       negative control (#602) and has only its record's prose."
+    exit 0 ;;
 esac
 
 simenv_require_tools
@@ -1206,31 +1194,12 @@ if [ "${1:-}" = "--check" ]; then
   exit 0
 fi
 
-# emit_control_evidence <corners-dir> -> writes <corners-dir>/negative_control.csv
-# and archives every control run's raw ngspice log beside it. Used by BOTH the
-# `--control` standalone entry point below and the full-campaign path further
-# down, so a campaign's control and a standalone control are the same bytes
-# produced by the same code.
-emit_control_evidence() {
-  local cornersdir="$1"
-  local raw="${WORK}/negative_control_rows.csv"
-  mkdir -p "${cornersdir}"
-  rm -rf "${WORK:?}"/ctl_*
-  control_campaign "${raw}"
-  local f
-  for f in "${WORK}"/ctl_*/ngspice.log; do
-    [ -f "${f}" ] || continue
-    cp "${f}" "${cornersdir}/$(basename "$(dirname "${f}")").log"
-  done
-  {
-    simenv_provenance "mc-cp-mismatch (negative control)" "${RID}" \
-      "design/cp.sch + design/pfd_cp.sch (xschem export), design/netlist/dff_tg_3v3.spice" \
-      "${NUM_CORNERS} corners x ${#CONTROL_STAGES[@]} stages x 5 runs (seeds ${CONTROL_SEED_A}/${CONTROL_SEED_B}, sw_stat_mismatch 1 and 0)" \
-      "${CONTROL_SWITCHES_NOTE}"
-    echo "${SIMENV_CONTROL_HEADER}"
-    sort -t, -k1,1 -k2,2 -k3,3 -k6,6 "${raw}"
-  } >"${cornersdir}/negative_control.csv"
-}
+# The writer itself (raw-CSV assembly, per-run log archiving, the provenance
+# block, the header line and the sort that fix the artifact's byte layout)
+# lives in sim/lib/simenv.sh as simenv_emit_control_evidence -- shared with
+# the vco-tuning-range mismatch campaign so the artifact's format contract
+# cannot drift between them. Only this campaign's provenance strings and its
+# own control_campaign differ; both are expanded here, at the call sites.
 
 if [ "${1:-}" = "--control" ]; then
   # Standalone negative control: the three legs, every (stage, corner), minted
@@ -1247,7 +1216,13 @@ if [ "${1:-}" = "--control" ]; then
   SHA_DFF=$(simenv_sha256 "${SNAPDIR}/${RID}-dff.spice")
 
   echo "mc-cp-mismatch --control: ${NUM_CORNERS} corners x ${#CONTROL_STAGES[@]} stages x 5 runs"
-  emit_control_evidence "${CORNERSDIR}"
+  simenv_emit_control_evidence "${CORNERSDIR}" "${WORK}" \
+    "mc-cp-mismatch (negative control)" "${RID}" \
+    "design/cp.sch + design/pfd_cp.sch (xschem export), design/netlist/dff_tg_3v3.spice" \
+    "${NUM_CORNERS} corners x ${#CONTROL_STAGES[@]} stages x 5 runs (seeds ${CONTROL_SEED_A}/${CONTROL_SEED_B}, sw_stat_mismatch 1 and 0)" \
+    "${CONTROL_SWITCHES_NOTE}" \
+    control_campaign \
+    "$(( NUM_CORNERS * ${#CONTROL_STAGES[@]} * 5 ))"
   CONTROL_CSV="${CORNERSDIR}/negative_control.csv"
   CONTROL_ROWS="$(simenv_control_md_rows "${CONTROL_CSV}")"
   CONTROL_RC=0
@@ -1524,7 +1499,13 @@ OUT_DFF="${CORNERSDIR}/mc_dff_ctq.csv"
 # from the committed CSV below, not asserted in prose.
 # --------------------------------------------------------------------------
 echo "mc-cp-mismatch: negative control (${NUM_CORNERS} corners x ${#CONTROL_STAGES[@]} stages x 5 runs) ..."
-emit_control_evidence "${CORNERSDIR}"
+simenv_emit_control_evidence "${CORNERSDIR}" "${WORK}" \
+  "mc-cp-mismatch (negative control)" "${RID}" \
+  "design/cp.sch + design/pfd_cp.sch (xschem export), design/netlist/dff_tg_3v3.spice" \
+  "${NUM_CORNERS} corners x ${#CONTROL_STAGES[@]} stages x 5 runs (seeds ${CONTROL_SEED_A}/${CONTROL_SEED_B}, sw_stat_mismatch 1 and 0)" \
+  "${CONTROL_SWITCHES_NOTE}" \
+  control_campaign \
+  "$(( NUM_CORNERS * ${#CONTROL_STAGES[@]} * 5 ))"
 CONTROL_CSV="${CORNERSDIR}/negative_control.csv"
 CONTROL_ROWS="$(simenv_control_md_rows "${CONTROL_CSV}")"
 CONTROL_RC=0

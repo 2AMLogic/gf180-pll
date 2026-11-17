@@ -29,7 +29,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _fixtures import TreeWriter, install_checklib
+from _fixtures import TreeTestCase, TreeWriter, install_checklib
 
 DESIGN_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = DESIGN_DIR.parent
@@ -87,22 +87,12 @@ class _Tree(TreeWriter):
         )
 
 
-class _TreeTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self._tmp = tempfile.TemporaryDirectory()
-        self.tree = _Tree(Path(self._tmp.name))
-        self.addCleanup(self._tmp.cleanup)
+class _TreeTest(TreeTestCase):
+    tree_cls = _Tree
 
     def assertPasses(self, *args: str) -> subprocess.CompletedProcess:
         result = self.tree.run(*args)
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        return result
-
-    def assertFails(self, *needles: str) -> subprocess.CompletedProcess:
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
-        for needle in needles:
-            self.assertIn(needle, result.stderr)
         return result
 
 

@@ -11,6 +11,7 @@ Two unrelated families live here, one per kind of test in this directory:
   harness directly against a manifest and a stand-in PDK.
 * ``TreeWriter`` / ``TreeTestCase`` -- for the tests that build a throwaway
   miniature repository and run a real ``sim/lib/check-*.sh`` inside it.
+  Both are defined once in ``lib/testtree.py`` and re-exported here (#871).
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ sys.path.insert(0, str(SIM_DIR))
 sys.path.insert(0, str(SIM_DIR.parent / "lib"))
 
 from harness.pdk import Pdk, pinned_open_pdks  # noqa: E402
-from testtree import TreeWriter, install_checklib  # noqa: E402,F401  (re-exported)
+from testtree import TreeTestCase, TreeWriter, install_checklib  # noqa: E402,F401  (re-exported)
 
 
 def fake_pdk(root: Path) -> Pdk:
@@ -60,22 +61,3 @@ class ManifestFixture(unittest.TestCase):
     def write_module(self, source: str, name: str = "derive.py") -> str:
         (self.tb_dir / name).write_text(source)
         return name
-
-
-class TreeTestCase(unittest.TestCase):
-    """Gives every test its own freshly-built ``self.tree``.
-
-    A subclass names its module-level ``_Tree`` in ``tree_cls``; ``setUp``
-    builds one under a per-test ``tempfile.TemporaryDirectory`` whose cleanup
-    is registered for teardown. A subclass needing a baseline tree (decks,
-    records, documents) overrides ``setUp``, calls ``super().setUp()`` first,
-    then populates ``self.tree``.
-    """
-
-    #: The ``_Tree`` class ``self.tree`` is instantiated from.
-    tree_cls: type
-
-    def setUp(self) -> None:
-        self._tmp = tempfile.TemporaryDirectory()
-        self.tree = self.tree_cls(Path(self._tmp.name))
-        self.addCleanup(self._tmp.cleanup)

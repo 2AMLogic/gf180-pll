@@ -150,9 +150,14 @@ Why those two and not the rule: `t_win` is the delay of a cell built only from
 candidate is read through the VCO, the divider or the retiming flop. That is
 the same transistor-level timing the `divider-ratio-cell` re-run found the PDK
 moving, strongest at 125 °C — so a selector calibrated at one bundle and
-applied at twelve others inherits all of it. `clk_fb`'s outlier is the
-transmission-gate flop's clock-to-Q at `ff`, which the predecessor already
-named as what sank that candidate; the re-pin makes it worse.
+applied at twelve others inherits all of it. The bundle that sinks `clk_fb`
+is `res_ss`, not the `ff` outlier the predecessor named: the retiming skew is
+recovered modulo the ring period, and `res_ss` moves that period through
+DR-009's three `ppolyf_u_3k` bias resistors while the all-MOS window does not
+move — its selected code saturates at c15, the top of typical's window table,
+where its own window reaches 2.1910 ns, the successor's `clk_fb` `twin_max`.
+`ff`'s code error is unchanged at +4 and its residual improves
+(1.5828 → 1.2328).
 
 **Nothing ratified is relaxed, and the campaign's answer is unchanged.**
 DR-022 Tier B needs a worst code error of exactly zero and the best candidate

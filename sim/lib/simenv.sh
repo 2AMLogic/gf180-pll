@@ -484,14 +484,21 @@ EOF
 # "ngspice-46 required for nested nonlinear moscap decks" already
 # documents that ngspice-47 mis-expands this PDK's nonlinear
 # cap_*mos_03v3/06v0 loop-filter/VCO moscap family into a malformed
-# element ("unknown parameter (e9)") whenever it is instantiated inside a
-# named `.subckt` -- and #259 additionally found that build does not even
-# exit on that error, it hangs indefinitely (~13-14% CPU), which stalls an
-# entire `xargs`-driven run.sh job pool since the affected corner's slot
-# never frees. A campaign that silently ran on the wrong binary because the
-# pin happened to be missing is exactly the kind of quiet wrong number
-# CLAUDE.md's "Verification is the product" line exists to prevent -- so
-# the check below fails loudly by default instead.
+# element ("unknown parameter (e9)") whenever an instance carries the measured
+# `m=` multiplier trigger (#926; the older nesting-based framing was a
+# confound of this repo's deck layout -- the trigger is the `m=`,
+# not the nesting) -- and #259 additionally found
+# that build does not even exit on that error, it hangs indefinitely
+# (~13-14% CPU), which stalls an entire xargs-driven run.sh job pool
+# since the affected corner's slot never frees. Nor is a clean load the
+# same as agreement: #932 measured that build returning a spurious ~1 nA
+# current on the family's c=<expr> behavioral capacitors during a
+# constant-voltage hold, on instances with no `m=` at all -- "it runs"
+# is not "it returns the same values". A campaign that silently ran on
+# the wrong binary because the pin happened to be missing is exactly the
+# kind of quiet wrong number CLAUDE.md's "Verification is the product"
+# line exists to prevent -- so the check below fails loudly by default
+# instead.
 #
 # SIM_NGSPICE_BIN overrides the pinned path itself, for a host that
 # deliberately keeps its pinned ngspice-46 build somewhere other than
@@ -540,11 +547,16 @@ Every citable sim/ evidence record cites ngspice-46 at this path, and
 #241/#242 tuned this shim's OpenMP-thread-pin detection against that build.
 Silently falling through to whatever "ngspice" resolves to on PATH is not
 safe here: Homebrew's current ngspice-47 bottle has a reproducible parse
-failure ("unknown parameter (e9)") on this PDK's nested nonlinear loop-
+failure ("unknown parameter (e9)") on this PDK's loop-
 filter/VCO moscaps (see sim/harness/README.md's "ngspice-46 required for
 nested nonlinear moscap decks", #153) and, worse, does not exit on that
 error -- it hangs indefinitely, which stalls an entire xargs-driven run.sh
 job pool since the affected corner's job slot never frees (#259).
+Even where a deck loads cleanly, that build has been measured returning
+a different current from the same deck: a spurious ~1 nA offset on the
+family's c=<expr> behavioral capacitors during a constant-voltage hold
+(#932). "It runs" is not "it returns the same values" -- only the
+pinned build is citable.
 
   Fix:      install ngspice-46 at ${SIMENV_NGSPICE_PIN}
             (sim/harness/README.md's "ngspice-46 required..." section has
@@ -873,6 +885,15 @@ simenv_jobs() {
 #   SIM_ALLOW_LOCAL_GRID=1           -> return 0 (explicit local opt-in)
 #   otherwise (incl. empty or non-numeric units under batch) -> message, return 2
 #
+# The refusal's printed reroute line (`python3 sim/run_corners.py
+# <experiment>`) appears only when <experiment> is a bare slug that resolves
+# to `sim/<experiment>/testbench/tb.json` -- resolved from this file's own
+# directory, so it never depends on the caller's cwd. Control entry points
+# pass a "<slug> (negative control)" label and some legacy runner names have
+# no manifest, and for those the reroute line is omitted rather than printed
+# as a command that cannot run (#996); the batch-fleet and
+# SIM_ALLOW_LOCAL_GRID alternatives are always named.
+#
 # Call it as a plain command, never inside `$(...)`:
 #   simenv_guard_local_grid "${NJOBS}" "<experiment>" || exit $?
 # It never invokes SPICE and never calls simenv_jobs().
@@ -891,9 +912,27 @@ simenv_guard_local_grid() {
   {
     echo "simenv: refusing to fan out a local grid (units='${units}') for ${exp}:"
     echo "  KLT_SIM_BACKEND=batch selects the remote batch fleet for multi-unit runs."
-    echo "  Express the grid as a request instead: python3 sim/run_corners.py ${exp}"
-    echo "  (or 'klt sim --wait-for-capacity 600'). To run it locally anyway,"
-    echo "  set SIM_ALLOW_LOCAL_GRID=1 explicitly."
+    # The reroute line is only printed when <exp> is a bare slug naming a
+    # real experiment manifest, resolved from this file's own directory
+    # (never the caller's cwd). Control entry points pass a
+    # "<slug> (negative control)" label and some legacy names have no
+    # manifest at all -- for those the printed command could not be run
+    # (#996), so the message offers only the alternatives that exist.
+    local reroute=""
+    case "${exp}" in
+      *[!A-Za-z0-9._-]*|'') ;;           # not a bare slug: spaces, parens, '/', '<>'
+      *) if [ -f "${SIMENV_LIB_DIR}/../${exp}/testbench/tb.json" ]; then
+           reroute=1
+         fi ;;
+    esac
+    if [ -n "${reroute}" ]; then
+      echo "  Express the grid as a request instead: python3 sim/run_corners.py ${exp}"
+      echo "  (or 'klt sim --wait-for-capacity 600'). To run it locally anyway,"
+      echo "  set SIM_ALLOW_LOCAL_GRID=1 explicitly."
+    else
+      echo "  Send it to the batch fleet instead: 'klt sim --wait-for-capacity 600',"
+      echo "  or set SIM_ALLOW_LOCAL_GRID=1 explicitly to run it locally anyway."
+    fi
   } >&2
   return 2
 }
@@ -1180,4 +1219,79 @@ simenv_control_md_rows() {
   out="$(simenv_control_verdicts "$1" 2>/dev/null)" || true
   printf '%s\n' "${out}" | awk '
     NF >= 7 { printf "  | %s | `%s` | **%s** | **%s** | **%s** | %d of %d |\n", $1, $2, $3, $4, $5, $7, $6 }'
+}
+
+# Everything above derives verdicts from bytes that already exist. The two
+# helpers below are the write and re-read halves of the same contract: they
+# produce those bytes (from a campaign's own control runs) and gate on them
+# again later. Both used to live copy-pasted in each campaign's runner; they
+# are here for the same reason the verdict half is -- the sort key and the
+# header line inside the writer ARE the artifact's format contract, and two
+# copies of those are two formats waiting to drift.
+
+# simenv_emit_control_evidence <corners-dir> <work-dir> <campaign-label> <rid>
+#                              <netlist-desc> <corners-desc> <switches-note>
+#                              <campaign-fn> <units>
+#
+# Write <corners-dir>/negative_control.csv and archive every control run's
+# raw ngspice log beside it. <campaign-fn> is the campaign's own
+# control_campaign, passed by function name -- each campaign's point loop is
+# genuinely per-campaign -- and the four provenance strings are expanded by
+# the caller, so per-campaign knobs (seeds, corner counts,
+# CONTROL_SWITCHES_NOTE) stay defined where they already are. Used by BOTH a
+# campaign's `--control` standalone entry point and its full-campaign path,
+# so a campaign's control and a standalone control are the same bytes
+# produced by the same code.
+#
+# <units> is the control grid's cardinality (points x runs per point),
+# computed by the caller from its own arrays. The guard call below (#959) is
+# the FIRST side-effect-free gate the helper runs -- ahead of the mkdir/rm --
+# because a refusal must leave the tree untouched, and because the runners'
+# standalone `--control` branches exit before they ever reach their own
+# sample-grid guard call: routing the check through this chokepoint is what
+# makes the control fan consult it at all. Like every fan-out path, a
+# multi-unit grid refuses under the batch backend unless
+# SIM_ALLOW_LOCAL_GRID=1; a caller that omits <units> fails closed under
+# batch (an empty count refuses), never bypasses.
+simenv_emit_control_evidence() {
+  local cornersdir="$1" work="$2" campaign="$3" rid="$4"
+  local netlist="$5" corners_desc="$6" switches="$7" campaign_fn="$8"
+  simenv_guard_local_grid "${9:-}" "${campaign}" || return $?
+  local raw="${work}/negative_control_rows.csv"
+  mkdir -p "${cornersdir}"
+  rm -rf "${work:?}"/ctl_*
+  "${campaign_fn}" "${raw}"
+  local f
+  for f in "${work}"/ctl_*/ngspice.log; do
+    [ -f "${f}" ] || continue
+    cp "${f}" "${cornersdir}/$(basename "$(dirname "${f}")").log"
+  done
+  {
+    simenv_provenance "${campaign}" "${rid}" "${netlist}" "${corners_desc}" "${switches}"
+    echo "${SIMENV_CONTROL_HEADER}"
+    sort -t, -k1,1 -k2,2 -k3,3 -k6,6 "${raw}"
+  } >"${cornersdir}/negative_control.csv"
+}
+
+# simenv_recheck_control <dir> <exp-dir> <script-name> <label> <absent-hint>
+#
+# The body of every campaign's `--recheck-control <record-id | corners dir>`:
+# re-derive an ALREADY-COMMITTED campaign's negative-control verdict from its
+# own committed CSV. Reads bytes only -- no ngspice, no netlist export, no
+# record minted -- and exits non-zero if any leg fails, so it is usable as a
+# gate. <absent-hint> is the campaign-specific sentence printed when the
+# artifact does not exist; its continuation lines carry the caller's
+# seven-space indent, so each campaign's message stays byte-identical to
+# what it printed before the pair moved here.
+simenv_recheck_control() {
+  local dir="${1:-}" exp="$2" script="$3" label="$4" absent_hint="$5"
+  [ -n "${dir}" ] || { echo "usage: ${script} --recheck-control <record-id | corners dir>" >&2; exit 2; }
+  [ -d "${dir}" ] || dir="${exp}/corners/${dir}"
+  [ -d "${dir}" ] || { echo "ERROR: no such corners directory: ${1}" >&2; exit 1; }
+  local csv="${dir}/negative_control.csv"
+  [ -f "${csv}" ] || {
+    echo "ERROR: ${csv} missing -- ${absent_hint}" >&2
+    exit 1
+  }
+  simenv_control_report "${csv}" "${label}"
 }

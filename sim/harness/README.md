@@ -67,18 +67,19 @@ producing a misleading result. `sim/run_corners.py --print-env` emits the
 resolved paths as shell exports; `source sim/env.sh` applies them so that an
 interactive ngspice or xschem session uses the identical PDK.
 
-### ngspice-46 required for nested nonlinear moscap decks (#153)
+### The nonlinear moscap family needs a build that expands it (#153, #926)
+
+(This section was previously titled "ngspice-46 required for nested
+nonlinear moscap decks"; #926's measurement corrected the mechanism on both
+counts -- the trigger and how affected builds are identified -- as described
+below. `sim/lib/simenv.sh` still refers here by the old title.)
 
 `sm141064.ngspice` implements this PDK's decoupling/loop-filter moscap family
 (`cap_nmos_03v3`, `cap_pmos_03v3`, `cap_nmos_06v0`, `cap_pmos_06v0`, and each
 of those with a `_b` body-tie variant) as a *nonlinear* capacitance -- a `c=`
-behavioral coefficient expression, not a fixed value. **ngspice-47** (the
-current Homebrew/apt bottle as of this writing) mis-expands that construct
-into a malformed internal element/node whenever it is instantiated from
-*inside* another named `.subckt` -- the hierarchical instance path the error
-names (`x1.xcdec1.gc_moscap`, two levels deep: the DUT copy, then the cap
-nested inside `.subckt vco`) is the signature -- and every PVT point fails
-with:
+behavioral coefficient expression, not a fixed value. One **ngspice-47**
+release mis-expands that construct into a malformed internal element/node,
+and every PVT point of a deck carrying it fails with:
 
 ```
 Error on line NNNN or its substitute:
@@ -86,32 +87,49 @@ Error on line NNNN or its substitute:
   unknown parameter (e9)
 ```
 
-**ngspice-46 composes and runs the identical deck correctly.** This is an
-ngspice-47 codegen regression in the PDK's own subcircuit, not a defect in
-this repo's decks, and not something a `.options` line or netlist change can
-work around — see #153 for the verified reproduction (a clean ngspice-46 run
-reproducing the historical `vco-tuning-range` record's frequency/Kvco range,
-byte-for-byte identical deck).
+**The measured trigger (#926, 2026-11-14, both installed 47 builds on the
+reference host) is the `m=` multiplier on the instance line** -- not
+`.subckt` nesting, which is what this note previously claimed following
+#153. In this repo's decks the two properties are perfectly correlated:
+every `m=` instance lives in a nested DUT export
+(`design/netlist/{vco,loop_filter,pll_top}.spice`) and every `m=`-less one
+in a flat device-characterization deck (`sim/devchar-passives`' cap-CV
+decks), so no committed deck could have told the two apart. Hand-written
+single-point decks against both builds showed a *flat* instance with `m=1`
+failing on the broken build and a *nested* one without `m=` loading cleanly
+-- the old nested/flat boundary was a confound of the deck layout, not the
+mechanism.
 
-Two campaigns currently compose a DUT that nests this family and are affected:
-`sim/vco-tuning-range` (`design/netlist/vco.spice`, `cap_nmos_03v3` inside
-`.subckt vco`) and `sim/reference-spur` (`design/netlist/pll_top.spice`,
-both `cap_nmos_03v3` inside `.subckt vco` and `cap_nmos_03v3_b` inside
-`.subckt loop_filter`). A *flat*, top-level instantiation of the same family
--- as `sim/devchar-passives`' own device-characterization deck uses, with no
-enclosing `.subckt` -- has been verified NOT to trigger this on ngspice-47;
-that campaign runs on either version. The harness itself checks this
-automatically: `run_corners.py` prints an actionable warning to stderr (and
-still attempts the run) whenever it detects a resolved DUT/fragment nesting
-this family under a version whose leading `ngspice-<N>` is `47`
-(`harness/runner.py`'s `nonlinear_moscap_ngspice47_warning`) — so a host
-missing ngspice-46 gets the explanation up front instead of only the opaque
-per-point parser error. `run_corners.py --check-env` carries the same warning
-(#268): it reports a resolved ngspice-47 as a `WARN`, not an unqualified
-`OK`, naming this issue and the build recipe below -- pass an experiment
-(`--check-env vco-tuning-range`) for the same DUT-aware, per-campaign verdict
-the run path prints. Either way this stays advisory, never a hard block, so
-a host with only ngspice-47 can still attempt a run.
+**Which installed builds are affected cannot be read off the version
+banner**: the patched 47 point build prints exactly the same `ngspice-47`
+token as the broken one (compared byte-for-byte), so there is nothing to
+parse. `run_corners.py` therefore decides from a **capability probe**
+(`sim/harness/moscap_probe.py`): a few-line deck instantiating
+`cap_nmos_03v3` with `m=1`, run through the same local-backend invocation
+the grid's points use (so the staged `.spiceinit` is in place before the
+netlist is read, #755), memoized once per process so a grid of any size
+costs exactly one probe. The probe's verdict drives both the run path and
+`--check-env` (#268):
+
+- probe **fails** → the actionable warning, on both paths, naming this
+  issue and the known-good build recipe below. Advisory only, never a hard
+  block: a host whose only build fails the probe can still attempt the run
+  and see the real per-point error.
+- probe **loads** → no warning. This is evidence about *loading* only --
+  whether a loading build returns the same *numbers* is a separate, open
+  question (#932), and no harness output here answers it.
+- probe **inconclusive** (no ngspice, a probe timeout, or output with
+  neither the success marker nor the failure signature) → the harness
+  abstains: it says it could not tell rather than predicting either way,
+  and the run proceeds unchanged.
+
+Campaigns whose committed DUTs carry the `m=` trigger: `sim/vco-tuning-range`
+(`design/netlist/vco.spice`, `cap_nmos_03v3` with `m=1` inside `.subckt vco`)
+and `sim/reference-spur` (`design/netlist/pll_top.spice`, both `cap_nmos_03v3`
+with `m=1` inside `.subckt vco` and `cap_nmos_03v3_b` with `m=1` inside
+`.subckt loop_filter`). `sim/devchar-passives`' own cap-CV decks instantiate
+the family flat and *without* `m=`, so the measured trigger is absent from
+them.
 
 To obtain ngspice-46 (not the current stock `brew install ngspice`, which
 tracks the latest release) on macOS, build the upstream release tarball
@@ -192,6 +210,59 @@ with the record. It fails closed: any nonzero writer exit (e.g. 3 =
 `$KLT_ARTIFACT_BROKER` unset) makes the run exit `3`, prints the writer's
 stderr, and publishes no summary record. It is off by default so local runs and
 tests need no broker, and it is ignored under `--no-write`.
+
+Under `--artifact-store` the harness also banks **each completed point's raw
+logs in the store as it finishes** (#1048), and a later run can **adopt**
+them — see "Adopting a prior attempt's stored points" below. Because the
+store path has no fallback to committed bytes, a run that will need the
+broker now finds out **before it dispatches a single point** (exit `3` with
+the reason): a broker discovered missing after a thousand simulated points
+is exactly the stranded-compute failure this flow exists to end.
+
+### Adopting a prior attempt's stored points (`--artifact-store`)
+
+`--resume` re-adopts an interrupted reservation only on the host that still
+holds its workdir — a foreign host cannot prove the liveness of a run whose
+reservation file it cannot check. The artifact store has no such
+constraint: bytes are content-addressed and sha256-verified, so a grid that
+exceeds one agent step can hand its completed points from host to host
+(#1048):
+
+- **Banking.** Each point whose simulation succeeds has its per-phase logs
+  uploaded to the store immediately, staged under
+  `sim/.artifact-stage/<bench>-perpoint/<grid-fingerprint>/<corner-id>/` and
+  merged into the attempt's per-point manifest
+  `manifests/artifacts/<bench>-perpoint-<record-id>.manifest.json` (one per
+  attempt, so concurrent attempts never race on one file). The grid
+  fingerprint is the same one `--resume` records: a sha256 over the point
+  set and the manifest provenance, so it identifies *what the grid means*,
+  not merely its size. A point whose upload fails stops the run before any
+  record is minted — evidence the campaign could not bank is evidence it
+  could lose. Failed points and killed decks are not banked (their logs
+  still reach the end-of-run store, as always).
+- **Adoption.** A fresh recording run under `--artifact-store` (or a
+  `--resume` run, for the points its same-host predecessor never reached)
+  scans the manifests in `manifests/artifacts/` for per-point entries under
+  its own grid fingerprint, fetches them (`klt artifact get`), re-verifies
+  each fetched object's sha256, and replays each point through the same
+  parser and qualification gate `--resume` uses. Only the points that were
+  never stored — or whose stored log fails to qualify, e.g. a stored
+  killed-deck log with the timeout banner, or an object that fails its
+  sha256 check — are simulated. A grid that does not match the fingerprint
+  adopts nothing: adoption is keyed on a proven-identical grid, never a
+  best-effort one. The progress output states the adopted vs. fresh split.
+- **Disclosure.** The minted record carries an **Artifact-adopted points**
+  bullet naming the adopted/fresh split, the fingerprint, and the earlier
+  attempt(s) whose manifests supplied the points. Adopted points carry
+  `"replayed": true` (with the `(replayed)` corner-table marker), `seconds`
+  0, and an **unattributed** executing host — the store proves which bytes
+  were stored, never which machine produced them.
+- **The carrier requirement.** The store holds the bytes; the *manifest*
+  is what names them. A next attempt on another host can only adopt the
+  points whose per-point manifest has reached that host's checkout
+  (`manifests/artifacts/` is a tracked tree — commit and push it as the
+  campaign progresses). A malformed manifest degrades the next attempt to
+  re-simulation; it never crashes it.
 
 **Subsets need a reason.** `sim/README.md` requires every record's *Corner
 matrix run* field to be the full mandated matrix "unless the record states why
@@ -1139,19 +1210,105 @@ No lock is held beyond those `mkdir`s: other runs of the same experiment,
 other experiments and the per-point workers all proceed concurrently.
 
 `work/<record-id>/reservation.json` records the owning host, pid, user,
-command line and commit, and is deleted once the summary is published. A run
-that ends without a summary (an error before publication, a crash, Ctrl-C)
-leaves it behind and says so on stderr; later recording runs of that
-experiment print a `note:` naming any such *interrupted* reservation (owner
-pid no longer alive on this host). Such an id is **never reused or cleaned up
-automatically** — its partial evidence stays exactly as it was, and new runs
-mint other ids. Deleting a `work/<record-id>/` directory silences the note;
+command line, commit and a fingerprint of the grid it was taking, and is
+deleted once the summary is published. A run that ends without a summary
+(an error before publication, a crash, Ctrl-C) leaves it behind and says so
+on stderr; later recording runs of that experiment print a `note:` naming
+any such *interrupted* reservation (owner pid no longer alive on this
+host). Such an id is **never reused or cleaned up automatically** — its
+partial evidence stays exactly as it was, and new runs mint other ids. The
+one deliberate exception is `--resume <record-id>`, which re-adopts an
+interrupted reservation and replays its completed points — see the next
+section. Deleting a `work/<record-id>/` directory silences the note;
 deleting anything under `corners/` or `netlist-snapshots/` is a human
 decision under the append-only rule.
 
 `--no-write` runs and `--backend batch` plans (no `--batch-apply`) reserve
 only a scratch `work/<record-id>/` — never a `corners/` directory or an
 ownership file — so they never occupy an evidence id.
+
+### Resuming an interrupted run: `--resume`
+
+A grid whose wall clock can exceed one process's lifetime does not have to
+be re-bought from point 1. A recording run that dies mid-grid has already
+written one raw log per completed point under `corners/<record-id>/`, and
+its `work/<record-id>/reservation.json` reads state `interrupted`.
+Re-invoking with the **same grid arguments** plus
+`--resume <record-id>` re-adopts that reservation and, before dispatching
+anything, replays every point whose per-phase logs parse to the point's
+complete declared measurement set — the same parser the live path uses, so
+replay adds no second parser and no new on-disk format. Only the remaining
+points are simulated. The run mints one **full** record under the resumed
+id when the grid completes; a resumed run that still aborts mints nothing,
+exactly as an ordinary run — the `--supersedes` partial-record refusal is
+untouched by all of this.
+
+```bash
+python3 sim/run_corners.py my-campaign --resume 20261115-194211-1c7142ca
+```
+
+`--resume` refuses, naming the observed state, anything that is not an
+`interrupted` reservation: an id with no reservation at all; one whose owner
+is still `running` on this host (including a concurrent `--resume`, which
+it loses to by name); a `published` record (nothing left to finish);
+`unknown` — reserved on another host, whose liveness cannot be checked from
+here (only a human who knows that run is dead may resume it, from that
+host); an `unreadable` ownership file; a reservation that predates
+`--resume` and carries no grid fingerprint; a grid that does not match the
+one the reservation was taken for (the reservation stores a fingerprint of
+the point set and the manifest, so a changed corner set, temperature or
+supply list, axis thinning or manifest edit is refused rather than mixed
+under one id); a missing `corners/<record-id>/` directory; and a
+`--resume` value that is not a record id. It is also refused with
+`--no-write` (no evidence reservation exists to resume) and with a batch
+plan (`--backend batch` without `--batch-apply`). It composes with
+`--backend batch --batch-apply`, `--supersedes`/`--supersedes-note` and
+`--artifact-store` — the stored raw output includes the replayed points'
+logs, which sit in the same evidence directory; and under
+`--artifact-store` the adoption pass additionally covers whatever this
+host's logs cannot supply, fetched from points an earlier attempt on
+another host already banked (see "Adopting a prior attempt's stored
+points").
+
+**The carrier requirement — what must survive between attempts.** Resume
+works by reading two paths from the earlier attempt:
+
+- `sim/<slug>/corners/<record-id>/` — the per-point raw logs (and retained
+  raw files), which are the replayed evidence; and
+- `sim/<slug>/work/<record-id>/reservation.json` — the reservation whose
+  `interrupted` state licenses the re-adoption.
+
+Both live in the repo's working tree, so a run inside a disposable
+checkout or worktree loses **both** the moment that checkout is removed.
+Resuming cannot recover evidence that no longer exists on any disk: in
+particular, a batch layer's already-submitted-but-unfetched jobs are
+separately unreachable, because their job ids are random and recorded
+nowhere durable. Run a campaign you expect to resume in a checkout that
+outlives the process, or copy those two paths somewhere durable before the
+process ends.
+
+The minted record discloses the resume: a **Resumed run** bullet naming
+every attempt's start, the replayed/re-run split, and an explicit
+statement that the `Execution:` line, the wall clock and the per-point
+`seconds` describe the final attempt only — a reader must not mistake one
+process's wall time for a multi-attempt campaign's cost. Replayed points
+carry `"replayed": true` in the record's point entry (a `(replayed)`
+marker on the point's verdict in the corner table, whatever that verdict
+is), `seconds` 0, and the executing host of the attempt that actually ran
+them. A replayed log may come from any earlier attempt, so the replayed
+points carry the recording host only when **every** earlier attempt ran
+on the `local` backend; a history in which any attempt dispatched
+off-host leaves them unattributed, since a raw log does not record which
+machine produced it — under-claiming beats naming a host some of the
+replayed logs never ran on. `simulator` and
+init attribution are re-read from the log's own text, so those survive.
+A timed-out point can never be replayed: the timeout banner is written
+first in the log, before any measurement.
+
+A concurrent second `--resume` on the same id sees the first adopter's
+`running` state and refuses; simultaneous adoptions are serialized by a
+lock directory under the reservation, and a lock left by an adopter that
+was killed outright is stolen by the next attempt's bounded wait.
 
 A run taken against a dirty working tree says so in the record's **Netlist
 provenance** field and is not citable as a clean-tree result.

@@ -22,6 +22,23 @@ applied through ``_pdk_lvs_poly_res.py``, a shim that re-uses the PDK
 runner's own argument parsing and switch derivation and replaces exactly
 that one key. Pass ``poly_res=None`` to get the PDK runner's own unmodified
 behaviour.
+
+**The combine default.** The open_pdks ``f6eeac7`` runset this repo pins
+(``sim/pdk.json``) logs ``Selected SIMPLIFY option: false``: unlike the
+``c6d73a35``-era deck, whose netlist simplification merged the separately
+drawn, parallel-connected fold segments of a multi-finger device back into
+one summed-width device before comparison, it reports each drawn fold
+segment as its own transistor -- so a reference that states one card per
+schematic device (``W=78.87u nf=8``) can no longer match an extraction of
+eight ``W=9.86u`` segments. ``combine=True`` (the default, see
+``spec/decision-records/DR-043-lvs-combine-devices-on-the-f6eeac7-runset.md``)
+passes the runner's own ``--combine`` switch, which the deck honours on
+**both** sides (``netlist.combine_devices if COMBINE`` *and*
+``schematic.combine_devices if COMBINE`` -- the runner's own ``--combine``
+help text says "only in extracted netlist", which understates what the deck
+does): parallel devices are combined into one summed-width device on the
+extracted side and on the reference side under the same semantics, which is
+the shared fold-merge the old deck's SIMPLIFY had on the extracted side.
 """
 
 from __future__ import annotations
@@ -87,6 +104,7 @@ def run(
     substrate: str = "VSS",
     timeout: int = 3600,
     poly_res: str | None = POLY_RES,
+    combine: bool = True,
 ) -> LvsResult:
     """Run the foundry LVS deck. Never raises on a *mismatch*.
 
@@ -98,6 +116,11 @@ def run(
     ``poly_res`` selects the deck's high-sheet poly-resistor process option
     (see :data:`POLY_RES`); ``None`` runs the PDK's own ``run_lvs.py``
     directly, with its hardcoded ``1k``.
+
+    ``combine`` passes ``--combine`` (the f6eeac7 runset's default-off device
+    combiner) so parallel fold segments combine on both sides of the
+    comparison -- see the module docstring and DR-043. ``False`` runs the
+    deck exactly as the runset defaults it.
     """
     tools = tools or env_mod.find_tools()
     layout = Path(layout).resolve()
@@ -121,6 +144,8 @@ def run(
         f"--run_mode={run_mode}",
         f"--lvs_sub={substrate}",
     ]
+    if combine:
+        command.append("--combine")
 
     try:
         completed, log = env_mod.run_pv_command(

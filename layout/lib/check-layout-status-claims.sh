@@ -788,10 +788,12 @@ fi
 # no KLayout.
 klayout_pin_rule() {
   local evidence="$1" harness_env="$2" blocks="$3"
-  python3 - "${evidence}" "${harness_env}" "${blocks}" <<'PY'
+  PYTHONPATH="${REPO_ROOT}/lib${PYTHONPATH:+:${PYTHONPATH}}" python3 - "${evidence}" "${harness_env}" "${blocks}" <<'PY'
 import os
 import re
 import sys
+
+from checklib.layout import klayout_pin
 
 evidence, harness_env, blocks_spec = sys.argv[1], sys.argv[2], sys.argv[3]
 
@@ -858,6 +860,36 @@ OFF_PIN_DISCLOSED = {
         "vco_ring sub-cell at POLY_RES 1k, superseded on the pin at 3k by lvs-recheck-klayout-0.28.16/lvs-ring.stdout.log",
     "vco-layout/lvs-buffer/lvs.stdout.log":
         "vco_out_buffer sub-cell at POLY_RES 1k, superseded on the pin at 3k by lvs-recheck-klayout-0.28.16/lvs-buffer.stdout.log",
+    # The f6eeac7-runset re-derivation under --combine (issue #980, DR-043).
+    # The pinned open_pdks tree moved from c6d73a35 to f6eeac7, whose runset
+    # defaults SIMPLIFY off, so every block-level reference-vs-extraction
+    # comparison had to be re-run with --combine to mean anything. No 0.28.16
+    # binary exists on the capturing host, so these logs are from 0.30.12;
+    # each block keeps its on-pin (0.28.16, c6d73a35-deck) match log as the
+    # engine-pin warrant, so the "at least one on-pin verdict" rule still
+    # holds. The inv_tb set is the prove() negative control under --combine.
+    "vco-layout/lvs-combine-f6eeac7/lvs.stdout.log":
+        "f6eeac7 --combine re-derivation (issue #980, DR-043); on-pin warrant is lvs-recheck-klayout-0.28.16/",
+    "vco-layout/lvs-nocombine-f6eeac7/lvs.stdout.log":
+        "f6eeac7 baseline mismatch that motivates --combine (issue #980, DR-043); deliberately run at the runset's own defaults",
+    "vco-layout/lvs-combine-width-sensitivity-f6eeac7/width-10nm-short/lvs.stdout.log":
+        "f6eeac7 width-tolerance probe, deliberately a mismatch (issue #980, DR-043)",
+    "vco-layout/lvs-combine-width-sensitivity-f6eeac7/width-onefold-short/lvs.stdout.log":
+        "f6eeac7 dropped-fold probe, deliberately a mismatch (issue #980, DR-043)",
+    "pfd-cp-layout/lvs-combine-f6eeac7/lvs.stdout.log":
+        "f6eeac7 --combine re-derivation (issue #980, DR-043); no 0.28.16 binary on the capturing host",
+    "divider-chain-layout/lvs-combine-f6eeac7/lvs.stdout.log":
+        "f6eeac7 --combine re-derivation (issue #980, DR-043); no 0.28.16 binary on the capturing host",
+    "lock-detector-layout/lvs-combine-f6eeac7/lvs.stdout.log":
+        "f6eeac7 --combine re-derivation (issue #980, DR-043); no 0.28.16 binary on the capturing host",
+    "inv-tb-combine-f6eeac7/drc-clean/drc.stdout.log":
+        "prove() negative-control re-run under --combine (issue #980, DR-043); inv_tb is cell-level disclosed",
+    "inv-tb-combine-f6eeac7/drc-fault/drc.stdout.log":
+        "prove() negative-control re-run under --combine (issue #980, DR-043); inv_tb is cell-level disclosed",
+    "inv-tb-combine-f6eeac7/lvs-clean/lvs.stdout.log":
+        "prove() negative-control re-run under --combine (issue #980, DR-043); inv_tb is cell-level disclosed",
+    "inv-tb-combine-f6eeac7/lvs-fault/lvs.stdout.log":
+        "prove() negative-control re-run under --combine (issue #980, DR-043); inv_tb is cell-level disclosed",
 }
 
 # Cell-level counterpart to OFF_PIN_DISCLOSED: top cells whose graded verdicts
@@ -877,14 +909,16 @@ LVS_MATCH = "Congratulations! Netlists match."
 # The pin, read out of layout/harness/env.py rather than restated here.
 # Absence is a failure: every committed log's engine claim would then be
 # gradeable against nothing, which is the state this rule exists to end.
+#
+# The read is checklib's, shared with the generator that renders the same pin
+# into layout/STATUS.md (issue #924); it returns None when the module
+# declares no pin. What stays here is this rule's answer to that absence,
+# which is deliberately not the generator's -- it prints "unknown" and
+# carries on, because it has a table to render either way.
 pin = None
 try:
     with open(harness_env, encoding="utf-8") as fh:
-        m = re.search(
-            r'^KNOWN_GOOD_KLAYOUT_VERSION\s*=\s*"([^"]+)"', fh.read(), re.M
-        )
-        if m:
-            pin = m.group(1)
+        pin = klayout_pin(fh.read())
 except OSError as exc:
     fail("cannot read %s: %s" % (harness_env, exc))
 if pin is None and not failed:
@@ -1690,38 +1724,36 @@ footprint_rule() {
   # dimensions elsewhere is not misread as making an unattributable footprint
   # claim there. Empty (the default) means the whole document, as before.
   local section="${6:-}"
-  python3 - "${doc_path}" "${doc_label}" "${audit_path}" "${spec}" "${require_all}" "${section}" <<'PY'
+  PYTHONPATH="${REPO_ROOT}/lib${PYTHONPATH:+:${PYTHONPATH}}" python3 - "${doc_path}" "${doc_label}" "${audit_path}" "${spec}" "${require_all}" "${section}" <<'PY'
 import re
 import sys
+
+from checklib.layout import audit_rows
 
 doc_path, label, audit_path, spec, require_all, section = sys.argv[1:7]
 
 # --- The tree's own numbers ------------------------------------------------
 #
-# area-audit.md's first table is one row per block:
+# area-audit.md's geometry table is one row per block:
 #   | `vco_block` | 172.52 x 184.48 | 31,826 | 12,468 | 39.2 % | ... |
-# The later tables in the same file start with the same cell but do not
-# carry a "W x H" second cell, so this pattern selects the geometry table
-# without needing to count tables.
-AUDIT_ROW = re.compile(
-    r"^\|\s*`([A-Za-z0-9_]+)`\s*\|\s*([0-9]+(?:\.[0-9]+)?)\s*[xX×]\s*"
-    r"([0-9]+(?:\.[0-9]+)?)\s*\|\s*([0-9,]+)\s*\|"
-)
-
-audit = {}
+# The parse is checklib's, shared with the generator that renders these same
+# rows into layout/STATUS.md (issue #924) -- a format change that reached
+# only one of the two copies used to leave this rule quietly grading against
+# a pattern the audit no longer writes.
 try:
     with open(audit_path, encoding="utf-8") as fh:
-        for line in fh:
-            m = AUDIT_ROW.match(line.strip())
-            if m and m.group(1) not in audit:
-                audit[m.group(1)] = (
-                    float(m.group(2)),
-                    float(m.group(3)),
-                    int(m.group(4).replace(",", "")),
-                )
+        rows = audit_rows(fh.read())
 except OSError as exc:  # pragma: no cover - reported by the caller too
     sys.stderr.write("FAIL: cannot read %s: %s\n" % (audit_path, exc))
     sys.exit(1)
+
+# checklib hands back the width and height as the audit writes them, because
+# the generator prints them into the table and must not round. This rule
+# compares them numerically instead, so it converts here.
+audit = {
+    top: (float(width), float(height), bbox)
+    for top, (width, height, bbox) in rows.items()
+}
 
 if not audit:
     sys.stderr.write(

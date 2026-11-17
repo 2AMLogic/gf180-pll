@@ -32,7 +32,9 @@ SIM_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SIM_DIR))
 
 from _fixtures import ManifestFixture, fake_pdk  # noqa: E402
-from harness import cli, corners, report, runner, testbench  # noqa: E402
+from harness import moscap_probe  # noqa: E402
+from harness import cli, corners, execution, report, runner, testbench  # noqa: E402
+from harness.pdk import PdkNotFound  # noqa: E402
 
 
 class CornerTests(unittest.TestCase):
@@ -853,23 +855,47 @@ class RetainedRawCaptureFailureTests(ManifestFixture):
 
 
 class NonlinearMoscapGuardTests(unittest.TestCase):
-    """#153: ngspice-47 mis-expands this PDK's nonlinear-capacitance moscap
-    family (a ``c=<expr>`` behavioral coefficient) into a malformed internal
-    element ("unknown parameter (e9)") when it is instantiated from inside a
-    nested ``.subckt`` -- verified against a real ngspice-46/-47 pair on
-    ``design/netlist/vco.spice`` (nests -- fails on ngspice-47) versus
-    ``sim/devchar-passives``' own device-characterization deck (flat,
-    top-level instantiation -- does not fail). These tests fix that parsing
-    / triggering logic with small fixtures so it does not require ngspice or
-    the PDK to run.
+    """#153/#926: one ngspice-47 release mis-expands this PDK's nonlinear-
+    capacitance moscap family (a ``c=<expr>`` behavioral coefficient) into a
+    malformed internal element ("unknown parameter (e9)"). The measured
+    trigger (#926, 2026-11-14, both installed 47 builds on the reference
+    host) is the ``m=`` multiplier on the instance line -- NOT ``.subckt``
+    nesting, which the fixtures here previously asserted: in this repo's
+    decks the two properties are perfectly correlated (every ``m=`` instance
+    lives in a nested DUT export, every ``m=``-less one in a flat
+    device-characterization deck), so no committed deck could have falsified
+    the nesting story. Whether the resolved *binary* is affected cannot be
+    read off the version banner either (the patched point build prints the
+    same ``ngspice-47`` token), so the warnings take the capability probe's
+    verdict (:mod:`harness.moscap_probe`) as a parameter and decide on it.
+    These tests fix the gate matrix and the warning text with small fixtures
+    -- no ngspice, no PDK required.
     """
 
-    NESTED = (
+    # The measured trigger: the family + an `m=` multiplier. Nesting is
+    # irrelevant to the gate, so fixtures pair both shapes with both.
+    NESTED_M = (
         ".subckt vco vctrl clk vdd vss\n"
         "xcdec1 vdd vss cap_nmos_03v3 c_width=50u c_length=50u m=1\n"
         ".ends\n"
     )
-    FLAT = "xcn n_cn 0 cap_nmos_03v3 c_length=cl c_width=cw\n"
+    FLAT_M = "xcn n_cn 0 cap_nmos_03v3 c_length=cl c_width=cw m=1\n"
+    NESTED_NO_M = (
+        ".subckt vco vctrl clk vdd vss\n"
+        "xcdec1 vdd vss cap_nmos_03v3 c_width=50u c_length=50u\n"
+        ".ends\n"
+    )
+    FLAT_NO_M = "xcn n_cn 0 cap_nmos_03v3 c_length=cl c_width=cw\n"
+    NO_MOSCAP = "v1 in 0 dc 1\nr1 out in 1k\n"
+
+    def _gate(self, *texts: str):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = []
+            for i, text in enumerate(texts):
+                path = Path(tmp) / f"s{i}.spice"
+                path.write_text(text)
+                paths.append(path)
+            return runner.dut_uses_nonlinear_moscap(paths)
 
     def test_ngspice_major_version_parses_the_leading_number(self):
         self.assertEqual(
@@ -880,18 +906,32 @@ class NonlinearMoscapGuardTests(unittest.TestCase):
     def test_ngspice_major_version_none_when_unparseable(self):
         self.assertIsNone(runner.ngspice_major_version("unknown"))
 
-    def test_nested_instantiation_matches(self):
-        self.assertEqual(runner._nested_nonlinear_moscap_match(self.NESTED), "cap_nmos_03v3")
+    def test_gate_matches_the_measured_trigger(self):
+        """The measured trigger (#926) is family + `m=` -- nesting is
+        irrelevant, so flat-with-`m=` matches too. `#926` measured a flat
+        `m=1` instance FAILING on the broken build; the old nesting gate
+        was silent about exactly that deck."""
+        self.assertEqual(self._gate(self.FLAT_M), "cap_nmos_03v3")
+        self.assertEqual(self._gate(self.NESTED_M), "cap_nmos_03v3")
 
-    def test_flat_top_level_instantiation_does_not_match(self):
-        """sim/devchar-passives' own deck instantiates this family directly,
-        with no enclosing .subckt -- verified NOT to trip the ngspice-47
-        regression, so the guard must not warn about it."""
-        self.assertIsNone(runner._nested_nonlinear_moscap_match(self.FLAT))
+    def test_gate_ignores_a_family_instance_without_a_multiplier(self):
+        """#926 measured a nested instance WITHOUT `m=` loading cleanly on
+        the broken build -- the old gate warned about exactly that deck."""
+        self.assertIsNone(self._gate(self.NESTED_NO_M))
+        self.assertIsNone(self._gate(self.FLAT_NO_M))
+
+    def test_gate_ignores_lookalike_tokens(self):
+        # `1m` is a value suffix, `cm=` starts m mid-word, and the family's
+        # own .subckt definition line is not an instance of it.
+        self.assertIsNone(self._gate("xc1 a b cap_nmos_03v3 c_width=1m\n"))
+        self.assertIsNone(self._gate("xc1 a b cap_nmos_03v3 cm=1\n"))
+        self.assertIsNone(
+            self._gate(".subckt cap_nmos_03v3_b a b c_width=w m=1\n.ends\n")
+        )
 
     def test_b_variant_and_case_insensitivity_match(self):
         text = ".SUBCKT loop_filter vctrl vss\nXCF1 nz vss CAP_NMOS_03V3_B c_width=87u c_length=87u m=1\n.ENDS\n"
-        self.assertEqual(runner._nested_nonlinear_moscap_match(text), "CAP_NMOS_03V3_B")
+        self.assertEqual(self._gate(text), "CAP_NMOS_03V3_B")
 
     def test_dut_uses_nonlinear_moscap_skips_unreadable_sources(self):
         self.assertIsNone(runner.dut_uses_nonlinear_moscap([Path("/no/such/file.spice")]))
@@ -899,116 +939,279 @@ class NonlinearMoscapGuardTests(unittest.TestCase):
     def test_dut_uses_nonlinear_moscap_scans_every_source(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            flat = root / "flat.spice"
-            nested = root / "nested.spice"
-            flat.write_text(self.FLAT)
-            nested.write_text(self.NESTED)
+            no_trigger = root / "cap_cv.spice"
+            trigger = root / "vco.spice"
+            no_trigger.write_text(self.FLAT_NO_M)
+            trigger.write_text(self.NESTED_M)
             self.assertEqual(
-                runner.dut_uses_nonlinear_moscap([flat, nested]), "cap_nmos_03v3"
+                runner.dut_uses_nonlinear_moscap([no_trigger, trigger]), "cap_nmos_03v3"
             )
 
-    def test_warning_fires_only_on_ngspice_47_with_a_nested_match(self):
+    def test_dut_warning_fires_only_on_a_failed_probe_with_the_trigger(self):
         with tempfile.TemporaryDirectory() as tmp:
-            nested = Path(tmp) / "vco.spice"
-            nested.write_text(self.NESTED)
-            sources = [nested]
-            self.assertIsNotNone(
-                runner.nonlinear_moscap_ngspice47_warning("ngspice-47", sources)
+            trigger = Path(tmp) / "vco.spice"
+            trigger.write_text(self.NESTED_M)
+            sources = [trigger]
+            warning = runner.nonlinear_moscap_ngspice47_warning(
+                "ngspice-47 : Circuit level simulation program", sources, False
             )
-            self.assertIn("#153", runner.nonlinear_moscap_ngspice47_warning("ngspice-47", sources))
+            self.assertIsNotNone(warning)
+            self.assertIn("#153", warning)
+            self.assertIn("unknown parameter (eN)", warning)
+            self.assertIn("cap_nmos_03v3", warning)
+            # A probe that loads, or cannot tell, is not a prediction of
+            # failure -- no warning either way, whatever the version token.
             self.assertIsNone(
-                runner.nonlinear_moscap_ngspice47_warning("ngspice-46", sources)
+                runner.nonlinear_moscap_ngspice47_warning("ngspice-47", sources, True)
+            )
+            self.assertIsNone(
+                runner.nonlinear_moscap_ngspice47_warning("ngspice-47", sources, None)
             )
 
-    def test_warning_absent_for_a_flat_dut_even_on_ngspice_47(self):
+    def test_dut_warning_silent_without_the_trigger_even_on_a_failed_probe(self):
+        """A DUT that carries no `m=` instance of the family -- e.g.
+        sim/devchar-passives' flat cap-CV decks -- must stay silent on every
+        probe outcome."""
+        for loads in (True, False, None):
+            self.assertIsNone(
+                self._dut_warning_with_fixture(self.FLAT_NO_M, loads)
+            )
+        self.assertIsNone(self._dut_warning_with_fixture(self.NO_MOSCAP, False))
+
+    def _dut_warning_with_fixture(self, text, loads):
         with tempfile.TemporaryDirectory() as tmp:
-            flat = Path(tmp) / "cap_cv.spice"
-            flat.write_text(self.FLAT)
-            self.assertIsNone(
-                runner.nonlinear_moscap_ngspice47_warning("ngspice-47", [flat])
+            source = Path(tmp) / "dut.spice"
+            source.write_text(text)
+            return runner.nonlinear_moscap_ngspice47_warning(
+                "ngspice-47 : Circuit level simulation program", [source], loads
             )
 
-    def test_warning_absent_when_ngspice_version_is_unparseable(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            nested = Path(tmp) / "vco.spice"
-            nested.write_text(self.NESTED)
-            self.assertIsNone(
-                runner.nonlinear_moscap_ngspice47_warning("some dev build", [nested])
-            )
+    def test_probe_is_the_authority_not_the_version_token(self):
+        """#926: the patched point build prints the same `ngspice-47` banner
+        as the broken one, so no version token may decide. An unparseable
+        version string must not suppress a failed probe's warning, on either
+        function."""
+        self.assertIsNotNone(self._dut_warning_with_fixture(self.NESTED_M, False))
+        self.assertIsNotNone(runner.ngspice47_advisory("some dev build", False))
 
-    def test_version_only_advisory_fires_on_ngspice_47_with_no_dut_needed(self):
-        advisory = runner.ngspice47_advisory("ngspice-47 : Circuit level simulation program")
+    def test_version_only_advisory_fires_only_on_a_failed_probe(self):
+        advisory = runner.ngspice47_advisory(
+            "ngspice-47 : Circuit level simulation program", False
+        )
         self.assertIsNotNone(advisory)
         self.assertIn("#153", advisory)
+        self.assertIn("unknown parameter (eN)", advisory)
         self.assertIn("ngspice-46", advisory)
+        self.assertIsNone(runner.ngspice47_advisory("ngspice-46", True))
+        self.assertIsNone(runner.ngspice47_advisory("ngspice-46", None))
+        # The probe is the authority: a failed probe fires on any version
+        # token, including one that looks known-good.
+        self.assertIsNotNone(runner.ngspice47_advisory("ngspice-46", False))
 
-    def test_version_only_advisory_absent_on_ngspice_46(self):
-        self.assertIsNone(runner.ngspice47_advisory("ngspice-46"))
 
-    def test_version_only_advisory_absent_when_unparseable(self):
-        self.assertIsNone(runner.ngspice47_advisory("some dev build"))
+class MoscapProbeTests(unittest.TestCase):
+    """#926: the capability probe's three verdicts, headless -- no ngspice
+    and no PDK required. The probe deck's ``m=1`` is load-bearing (a deck
+    without it loads cleanly on the broken build, #926's measured row 5, so
+    a probe built that way would silence the warning permanently), so its
+    composition is pinned here too.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.pdk = fake_pdk(Path(self.tmp.name) / "gf180mcuD")
+        # lru_cache persists across tests; every test starts and ends with
+        # an empty cache so the at-most-once assertions below are exact.
+        moscap_probe._loads_cached.cache_clear()
+        self.addCleanup(moscap_probe._loads_cached.cache_clear)
+
+    def test_probe_deck_carries_the_measured_trigger(self):
+        deck = moscap_probe.probe_deck(self.pdk)
+        self.assertIn("cap_nmos_03v3", deck)
+        self.assertIn("m=1", deck)  # the measured trigger -- load-bearing
+        self.assertIn(".subckt probe_wrap", deck)  # superset of the real DUT
+        self.assertIn("moscap_typical", deck)
+        self.assertIn(str(self.pdk.model_lib), deck)
+        self.assertIn(moscap_probe.MARKER, deck)
+
+    def test_verdict_of_the_three_outcomes(self):
+        self.assertTrue(moscap_probe.verdict_of(f"op done\n{moscap_probe.MARKER}\n"))
+        self.assertFalse(
+            moscap_probe.verdict_of("Error on line 4 or its substitute:\n unknown parameter (e9)")
+        )
+        self.assertIsNone(moscap_probe.verdict_of(""))
+        self.assertIsNone(moscap_probe.verdict_of("Error: could not open include file"))
+
+    def test_regression_signature_wins_over_the_marker(self):
+        both = f"{moscap_probe.MARKER}\nunknown parameter (e9)\n"
+        self.assertFalse(moscap_probe.verdict_of(both))
+
+    def test_override_env_selects_the_verdict_without_probing(self):
+        with mock.patch.object(moscap_probe, "_run_probe") as run_probe:
+            for value, expected in (
+                ("loads", True),
+                ("malformed", False),
+                ("unknown", None),
+                ("MALFORMED", False),  # case-insensitive
+                ("  loads  ", True),  # surrounding whitespace tolerated
+                ("garbage", None),  # unrecognized abstains rather than guesses
+            ):
+                self.assertEqual(
+                    moscap_probe.nonlinear_moscap_loads(
+                        self.pdk, env={moscap_probe.PROBE_OVERRIDE_ENV: value}
+                    ),
+                    expected,
+                    value,
+                )
+            run_probe.assert_not_called()
+
+    def test_probe_runs_at_most_once_per_process(self):
+        """AC: the probe adds no simulator invocation per grid point -- the
+        verdict is memoized on the resolved binary + PDK, whatever the
+        grid size."""
+        with mock.patch.object(moscap_probe, "_run_probe", return_value=True) as run_probe, \
+            mock.patch.object(runner, "ngspice_executable", return_value="/usr/bin/ngspice"):
+            for _ in range(5):
+                self.assertTrue(moscap_probe.nonlinear_moscap_loads(self.pdk, env={}))
+            run_probe.assert_called_once()
+            # A different PDK is a different cache entry, probed separately.
+            other = fake_pdk(Path(self.tmp.name) / "other")
+            self.assertTrue(moscap_probe.nonlinear_moscap_loads(other, env={}))
+            self.assertEqual(run_probe.call_count, 2)
+
+    def test_missing_ngspice_abstains_without_invoking_anything(self):
+        with mock.patch.object(runner, "ngspice_executable", return_value=None), \
+            mock.patch.object(moscap_probe.execution.LocalBackend, "run_deck") as run_deck:
+            self.assertIsNone(moscap_probe.nonlinear_moscap_loads(self.pdk, env={}))
+            run_deck.assert_not_called()
+
+    def test_probe_timeout_is_inconclusive_not_a_failure(self):
+        timed_out = moscap_probe.execution.DeckRun(
+            output="partial output", returncode=-1, seconds=1.0, timed_out=True
+        )
+        with mock.patch.object(runner, "ngspice_executable", return_value="/usr/bin/ngspice"), \
+            mock.patch.object(
+                moscap_probe.execution.LocalBackend, "run_deck", return_value=timed_out
+            ):
+            self.assertIsNone(moscap_probe.nonlinear_moscap_loads(self.pdk, env={}))
+
+    def test_backend_output_shapes_classify_to_the_three_verdicts(self):
+        cases = [
+            (f"banner\n{moscap_probe.MARKER}\n", True),
+            ("Error on line 4 or its substitute:\n unknown parameter (e9)\n", False),
+            ("Error: could not open include file\n", None),
+        ]
+        for output, expected in cases:
+            run = moscap_probe.execution.DeckRun(output=output, returncode=0, seconds=0.1)
+            with mock.patch.object(
+                runner, "ngspice_executable", return_value="/usr/bin/ngspice"
+            ), mock.patch.object(
+                moscap_probe.execution.LocalBackend, "run_deck", return_value=run
+            ):
+                # Same PDK every iteration: drop the per-process memo between
+                # cases so each really runs the (mocked) probe.
+                moscap_probe._loads_cached.cache_clear()
+                self.assertEqual(moscap_probe.nonlinear_moscap_loads(self.pdk, env={}), expected)
 
 
 class CheckEnvTests(unittest.TestCase):
-    """#268: ``--check-env`` must not print an unqualified ``OK`` when the
-    resolved ``ngspice`` is version 47 -- #153 already established that
-    version mis-expands this PDK's nonlinear-capacitance moscap family into a
-    malformed element, so every point of an affected closed-loop campaign
-    fails. Pins both the version-only path (no experiment argument, no
-    ngspice/PDK required) and the DUT-aware path (an experiment argument
+    """#268/#926: ``--check-env`` must never print an unqualified ``OK`` when
+    the resolved ngspice cannot expand the PDK's nonlinear moscap family --
+    but the verdict is the capability probe's, not the version token's (the
+    patched ngspice-47 point build prints the same banner as the broken
+    one). Pins all three probe outcomes: the generic advisory path (no
+    experiment argument) and the DUT-aware path (an experiment argument
     reuses ``nonlinear_moscap_ngspice47_warning`` for a precise verdict).
     """
 
-    def _check_env(self, version, experiment=None, ngspice_exe="/usr/bin/ngspice"):
+    def _check_env(self, version, experiment=None, ngspice_exe="/usr/bin/ngspice",
+                   loads=True, find_pdk_raises=False):
         buf = io.StringIO()
         with tempfile.TemporaryDirectory() as tmp:
             # A real (if fake) PDK, so the assertions below isolate the
-            # ngspice-47 advisory's own exit status rather than a PdkNotFound
+            # moscap advisory's own exit status rather than a PdkNotFound
             # this test has nothing to do with (#268 only touches the
             # ngspice half of --check-env).
             pdk = fake_pdk(Path(tmp))
+            find_patch = (
+                mock.patch.object(cli, "find_pdk", side_effect=PdkNotFound("no pdk"))
+                if find_pdk_raises
+                else mock.patch.object(cli, "find_pdk", return_value=pdk)
+            )
             with mock.patch.object(runner, "ngspice_version", return_value=version), \
                 mock.patch.object(runner, "ngspice_executable", return_value=ngspice_exe), \
-                mock.patch.object(cli, "find_pdk", return_value=pdk), \
+                find_patch, \
+                mock.patch.object(cli.moscap_probe, "nonlinear_moscap_loads", return_value=loads), \
                 mock.patch.dict(os.environ, {"SIM_NGSPICE_BIN": "/no/such/pin/ngspice"}), \
                 contextlib.redirect_stdout(buf):
                 status = cli.cmd_check_env(experiment)
         return status, buf.getvalue()
 
-    def test_ngspice_47_is_a_warning_not_an_unqualified_ok(self):
-        status, out = self._check_env("ngspice-47 : Circuit level simulation program")
+    def test_failed_probe_warns_with_the_actionable_text(self):
+        status, out = self._check_env("ngspice-47 : Circuit level simulation program", loads=False)
         self.assertIn("ngspice : WARN", out)
         self.assertNotIn("ngspice : OK", out)
         self.assertIn("#153", out)
+        self.assertIn("unknown parameter (eN)", out)
         self.assertIn("ngspice-46", out)
+        self.assertEqual(status, cli.EXIT_OK)  # advisory only, never a block
 
-    def test_ngspice_47_check_env_still_exits_ok_advisory_only(self):
-        status, _ = self._check_env("ngspice-47")
-        self.assertEqual(status, cli.EXIT_OK)
-
-    def test_ngspice_46_is_plain_ok_with_no_warning(self):
-        status, out = self._check_env("ngspice-46 : Circuit level simulation program")
+    def test_probe_pass_is_a_plain_ok_on_the_same_banner(self):
+        """AC: on a build that loads the family -- indistinguishable from the
+        broken one by banner -- no warning is printed."""
+        status, out = self._check_env("ngspice-47 : Circuit level simulation program", loads=True)
         self.assertEqual(status, cli.EXIT_OK)
         self.assertIn("ngspice : OK", out)
         self.assertNotIn("WARN", out)
         self.assertNotIn("#153", out)
+        self.assertNotIn("expected to fail", out)
 
-    def test_unparseable_version_does_not_warn_or_raise(self):
-        status, out = self._check_env("some dev build")
+    def test_inconclusive_probe_says_so_and_exits_ok(self):
+        status, out = self._check_env("ngspice-47 : Circuit level simulation program", loads=None)
         self.assertEqual(status, cli.EXIT_OK)
         self.assertIn("ngspice : OK", out)
+        self.assertIn("could not tell", out)
         self.assertNotIn("WARN", out)
+        self.assertNotIn("expected to fail", out)
 
-    def test_experiment_argument_gives_a_precise_per_campaign_verdict(self):
+    def test_missing_pdk_is_an_inconclusive_probe_not_an_extra_error(self):
+        """The probe needs the PDK; without one it abstains (the PDK block
+        below still reports its own MISSING and its own exit status)."""
+        status, out = self._check_env("ngspice-47", loads=False, find_pdk_raises=True)
+        self.assertIn("ngspice : OK", out)
+        self.assertIn("could not run", out)
+        self.assertNotIn("#153", out)
+
+    def test_failed_probe_with_a_moscap_dut_names_the_family(self):
         """``vco-tuning-range`` composes ``design/netlist/vco.spice``, which
-        nests ``cap_nmos_03v3`` inside ``.subckt vco`` -- a real, committed
-        instance of the #153 nesting pattern -- so the DUT-aware path must
-        name that subcircuit rather than only the generic advisory."""
-        status, out = self._check_env("ngspice-47", experiment="vco-tuning-range")
+        instantiates ``cap_nmos_03v3`` with `m=1` inside ``.subckt vco`` --
+        a real, committed instance of the measured trigger -- so the
+        DUT-aware path must name that family rather than only the generic
+        advisory."""
+        status, out = self._check_env("ngspice-47", experiment="vco-tuning-range", loads=False)
         self.assertEqual(status, cli.EXIT_OK)
         self.assertIn("ngspice : WARN", out)
         self.assertIn("#153", out)
         self.assertIn("cap_nmos_03v3", out)
+
+    def test_passing_probe_with_a_moscap_dut_is_a_plain_ok(self):
+        """The inverted version of the old version-keyed expectation: the
+        same experiment now reports OK when the probe passes."""
+        status, out = self._check_env("ngspice-47", experiment="vco-tuning-range", loads=True)
+        self.assertEqual(status, cli.EXIT_OK)
+        self.assertIn("ngspice : OK", out)
+        self.assertNotIn("WARN", out)
+
+    def test_failed_probe_on_an_experiment_without_the_family_still_warns(self):
+        """``harness-selftest``'s DUT carries no moscap at all, but a binary
+        that cannot expand the family is worth naming on any --check-env --
+        the generic advisory is the fallback, as it was under the
+        version-keyed behavior."""
+        status, out = self._check_env("ngspice-47", experiment="harness-selftest", loads=False)
+        self.assertEqual(status, cli.EXIT_OK)
+        self.assertIn("ngspice : WARN", out)
+        self.assertIn("#153", out)
 
     def test_pin_awareness_reports_the_259_discipline(self):
         """#268 suggested-fix item 3: report whether SIM_NGSPICE_BIN /
@@ -1061,7 +1264,7 @@ class CliPartialGridRecoveryTests(ManifestFixture):
     def test_an_exception_out_of_run_grid_still_mints_a_partial_record(self):
         def fake_run_grid(
             tb, pdk, points, workdir, jobs=1, timeout_s=300, on_result=None,
-            log_dir=None, backend=None,
+            log_dir=None, backend=None, replay=None,
         ):
             self.assertEqual(len(points), 2)
             first = runner.PointResult(point=points[0], status="ok", measurements={"vout": 1.65})
@@ -1086,7 +1289,7 @@ class CliPartialGridRecoveryTests(ManifestFixture):
 
         def fake_run_grid(
             tb, pdk, points, workdir, jobs=1, timeout_s=300, on_result=None,
-            log_dir=None, backend=None,
+            log_dir=None, backend=None, replay=None,
         ):
             first = runner.PointResult(point=points[0], status="ok", measurements={"vout": 1.65})
             if on_result:
@@ -1139,7 +1342,7 @@ class CliRecordReservationTests(ManifestFixture):
         )
 
     def _fake_run_grid(self, tb, pdk, points, workdir, jobs=1, timeout_s=300,
-                       on_result=None, log_dir=None, backend=None):
+                       on_result=None, log_dir=None, backend=None, replay=None):
         # What exists on disk at the moment the first point would start.
         self.seen = {
             "workdir": workdir.is_dir(),
@@ -1234,6 +1437,577 @@ class CliRecordReservationTests(ManifestFixture):
         self.assertIn("interrupted", err)
         self.assertNotEqual(self.seen["log_dir"].name, earlier.record_id)
         self.assertEqual((earlier.log_dir / "typical_27c_3.3v.log").read_text(), "half a run\n")
+
+
+class CliResumeTests(ManifestFixture):
+    """#973: ``--resume`` re-adopts an interrupted reservation and replays
+    its completed points from their per-point logs; every other reservation
+    state is refused by name; a resumed run mints one full record that
+    discloses the resume, and the ``--supersedes`` partial-mint refusal is
+    untouched.
+    """
+
+    #: Shaped like raw ngspice output: the ``let``-measure print the parser
+    #: reads, plus a banner for ``simulator_of`` to find.
+    LOG_TEXT = "ngspice-46\n\nm_vout = 1.6500000000e+00\n"
+
+    def setUp(self):
+        super().setUp()
+        self.write({"measure": {"vout": "v(out)"}})
+        self.pdk = fake_pdk(self.root / "gf180mcuD")
+        self.experiment = self.root / self.slug
+        self.tb = testbench.load(self.tb_dir)
+
+    def _points(self, temps=(27.0, 125.0)):
+        return corners.build_sweep_grid(
+            corners.resolve_corners(["typical"]),
+            list(temps),
+            corners.supply_points(3.3, 0.0),
+            axes=self.tb.sweeps,
+            blocks=self.tb.grid_blocks,
+            axis_filter={},
+        )
+
+    def _reserve(self, points, fingerprint="default"):
+        kwargs = {}
+        if fingerprint == "default":
+            kwargs["grid_fingerprint"] = report.grid_fingerprint(self.tb, points)
+        elif fingerprint is not None:
+            kwargs["grid_fingerprint"] = fingerprint
+        return report.reserve_record_id(
+            self.root, self.experiment,
+            datetime.datetime(2026, 11, 15, 19, 42, 0, tzinfo=datetime.timezone.utc),
+            git={"commit": "f" * 40, "short": "fffffff"},
+            **kwargs,
+        )
+
+    @staticmethod
+    def _set_ownership(reservation, **changes):
+        info = json.loads(reservation.ownership_path.read_text())
+        info.update(changes)
+        reservation.ownership_path.write_text(json.dumps(info))
+
+    def _interrupt(self, reservation):
+        self._set_ownership(reservation, pid=_dead_pid())
+
+    def _args(self, *extra, quiet=True):
+        argv = [
+            self.slug,
+            "--corners", "typical",
+            "--temps", "27", "125",
+            "--supply-tol", "0",
+            "--subset-reason", "unit test: exercising --resume",
+        ]
+        if quiet:
+            argv.append("--quiet")
+        argv.extend(extra)
+        return cli.build_parser().parse_args(argv)
+
+    def _run(self, args, run_grid=None, backend=None):
+        buf_out, buf_err = io.StringIO(), io.StringIO()
+        patches = [
+            mock.patch.object(cli, "find_pdk", return_value=self.pdk),
+            mock.patch.object(runner, "ngspice_version", return_value="ngspice-46"),
+            mock.patch.object(report, "klt_env_provenance_lines",
+                              return_value=["host: host-00000000"]),
+            mock.patch.object(cli, "SIM_DIR", self.root),
+        ]
+        if run_grid is not None:
+            patches.append(mock.patch.object(runner, "run_grid", side_effect=run_grid))
+        if backend is not None:
+            patches.append(mock.patch.object(cli, "build_backend", return_value=backend))
+        with contextlib.ExitStack() as stack:
+            for patch in patches:
+                stack.enter_context(patch)
+            stack.enter_context(contextlib.redirect_stdout(buf_out))
+            stack.enter_context(contextlib.redirect_stderr(buf_err))
+            status = cli.run(args)
+        return status, buf_out.getvalue(), buf_err.getvalue()
+
+    @staticmethod
+    def _never_backend():
+        """A backend whose every deck invocation is a test failure."""
+        backend = mock.Mock()
+        backend.name = "local"
+        backend.describe.return_value = {"backend": "local"}
+        backend.run_deck.side_effect = AssertionError(
+            "backend called for a replayed point"
+        )
+        return backend
+
+    @staticmethod
+    def _rerun_backend():
+        """A backend that 'simulates' a passing point for every deck."""
+        backend = mock.Mock()
+        backend.name = "local"
+        backend.describe.return_value = {"backend": "local"}
+
+        def run_deck(deck_path, rundir, timeout_s, env=None):
+            return execution.DeckRun(
+                output="ngspice-46\nm_vout = 1.2340000000e+00\n",
+                returncode=0,
+                seconds=1.0,
+                host="host-run",
+            )
+
+        backend.run_deck.side_effect = run_deck
+        return backend
+
+    def _record_text(self, record_id):
+        path = self.experiment / report.RECORDS_DIR / f"{record_id}.md"
+        return path.read_text() if path.is_file() else None
+
+    def test_a_complete_log_is_replayed_without_a_backend_call(self):
+        points = self._points()
+        reservation = self._reserve(points)
+        for point in points:
+            (reservation.log_dir / f"{point.corner_id}.log").write_text(self.LOG_TEXT)
+        self._interrupt(reservation)
+
+        backend = self._never_backend()
+        status, out, err = self._run(
+            self._args("--resume", reservation.record_id, quiet=False), backend=backend
+        )
+
+        self.assertEqual(status, cli.EXIT_OK, err)
+        backend.run_deck.assert_not_called()
+        self.assertIn(
+            "2 point(s) replayed from the earlier attempt's logs, 0 re-run", out
+        )
+        self.assertIn("[replayed from earlier attempt]", out)
+        text = self._record_text(reservation.record_id)
+        self.assertIsNotNone(text, "a resumed run that completes mints its record")
+        self.assertIn("**Resumed run**", text)
+        self.assertIn("Attempt 1: started", text)
+        self.assertIn("Attempt 2 (this record): started", text)
+        self.assertIn("describe the FINAL attempt only", text)
+        self.assertIn("PASS (replayed)", text)
+        # Published: the ownership file is released, the adoption lock is gone.
+        work = self.experiment / report.WORK_DIR / reservation.record_id
+        self.assertFalse((work / report.RESERVATION_FILE).exists())
+        self.assertFalse((work / report.RESUME_LOCK_DIR).exists())
+
+    def test_a_batch_attempt_resumed_locally_leaves_replayed_points_unattributed(self):
+        """#973: the replay host comes from attempt 1's argv, not the
+        resuming invocation's. Adoption overwrites the ownership file's
+        top-level argv with ``sys.argv`` of the attempt doing the resuming
+        -- which is always local, since ``--resume`` refuses off-host
+        backends -- so the top level can never witness attempt 1's batch
+        choice. A batch attempt's logs must stay unattributed rather than
+        being stamped with the recording host: that stamp would suppress
+        the ``Execution hosts`` disclosure entirely and the record would
+        claim every point ran where the record was minted.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._set_ownership(
+            reservation,
+            argv=["sim/run_corners.py", self.slug, "--backend", "batch",
+                  "--batch-apply"],
+        )
+        for point in points:
+            (reservation.log_dir / f"{point.corner_id}.log").write_text(self.LOG_TEXT)
+        self._interrupt(reservation)
+
+        backend = self._never_backend()
+        status, out, err = self._run(
+            self._args("--resume", reservation.record_id), backend=backend
+        )
+
+        self.assertEqual(status, cli.EXIT_OK, err)
+        backend.run_deck.assert_not_called()
+        text = self._record_text(reservation.record_id)
+        self.assertIsNotNone(text)
+        self.assertIn(
+            "Execution hosts: 2 point(s) across 0 named execution host(s)"
+            " -- unattributed (2)",
+            text,
+        )
+
+    def test_a_mixed_backend_attempt_history_leaves_replayed_points_unattributed(self):
+        """#973: with more than two attempts the replayed logs may come from
+        any earlier attempt, and one ``replay_host`` cannot describe a
+        history that switched backends -- the conservative reading is
+        unattributed unless every earlier attempt ran local.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._set_ownership(
+            reservation,
+            attempts=[
+                {"started_utc": "2026-11-15T19:42:00+00:00",
+                 "argv": ["sim/run_corners.py", self.slug,
+                          "--backend", "batch", "--batch-apply"]},
+                {"started_utc": "2026-11-15T20:10:00+00:00",
+                 "argv": ["sim/run_corners.py", self.slug,
+                          "--resume", reservation.record_id],
+                 "resumed": True},
+            ],
+        )
+        for point in points:
+            (reservation.log_dir / f"{point.corner_id}.log").write_text(self.LOG_TEXT)
+        self._interrupt(reservation)
+
+        backend = self._never_backend()
+        status, out, err = self._run(
+            self._args("--resume", reservation.record_id), backend=backend
+        )
+
+        self.assertEqual(status, cli.EXIT_OK, err)
+        text = self._record_text(reservation.record_id)
+        self.assertIsNotNone(text)
+        self.assertIn("Attempt 3 (this record): started", text)
+        self.assertIn(
+            "Execution hosts: 2 point(s) across 0 named execution host(s)"
+            " -- unattributed (2)",
+            text,
+        )
+
+    def test_an_all_local_attempt_history_keeps_the_recording_host_attribution(self):
+        """#973: every earlier attempt local -- the replayed points ran on
+        the recording host, so the single-host ``Execution hosts`` line
+        stays suppressed exactly as for a never-interrupted run.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._set_ownership(
+            reservation,
+            attempts=[
+                {"started_utc": "2026-11-15T19:42:00+00:00",
+                 "argv": ["sim/run_corners.py", self.slug]},
+                {"started_utc": "2026-11-15T20:10:00+00:00",
+                 "argv": ["sim/run_corners.py", self.slug,
+                          "--resume", reservation.record_id],
+                 "resumed": True},
+            ],
+        )
+        for point in points:
+            (reservation.log_dir / f"{point.corner_id}.log").write_text(self.LOG_TEXT)
+        self._interrupt(reservation)
+
+        backend = self._never_backend()
+        status, out, err = self._run(
+            self._args("--resume", reservation.record_id), backend=backend
+        )
+
+        self.assertEqual(status, cli.EXIT_OK, err)
+        text = self._record_text(reservation.record_id)
+        self.assertIsNotNone(text)
+        self.assertIn("Attempt 3 (this record): started", text)
+        self.assertNotIn("Execution hosts", text)
+
+    def test_an_incomplete_log_is_re_run_not_replayed(self):
+        points = self._points()
+        reservation = self._reserve(points)
+        # Point 1 completed in the earlier attempt; point 2's log is missing
+        # the declared measurement entirely.
+        (reservation.log_dir / f"{points[0].corner_id}.log").write_text(self.LOG_TEXT)
+        (reservation.log_dir / f"{points[1].corner_id}.log").write_text("m_other = 9.9\n")
+        self._interrupt(reservation)
+
+        backend = self._rerun_backend()
+        status, out, err = self._run(
+            self._args("--resume", reservation.record_id, quiet=False), backend=backend
+        )
+
+        self.assertEqual(status, cli.EXIT_OK, err)
+        self.assertEqual(backend.run_deck.call_count, 1, "only the incomplete point re-runs")
+        self.assertIn(
+            "1 point(s) replayed from the earlier attempt's logs, 1 re-run", out
+        )
+        text = self._record_text(reservation.record_id)
+        self.assertIn("PASS (replayed)", text)
+        self.assertEqual(text.count("PASS (replayed)"), 1)
+
+    def test_a_timeout_or_truncated_log_is_never_replayed(self):
+        points = self._points()
+        bad_logs = {
+            "timeout banner": (
+                "TIMEOUT after 300s\n--- partial simulator output ---\n"
+                "m_vout = 1.6500000000e+00\n"
+            ),
+            "truncated exponent": "m_vout = 1.65e+",
+            "empty": "",
+        }
+        for label, text in bad_logs.items():
+            with self.subTest(log=label):
+                reservation = self._reserve(self._points())
+                for point in points:
+                    (reservation.log_dir / f"{point.corner_id}.log").write_text(text)
+                self._interrupt(reservation)
+                backend = self._rerun_backend()
+                status, out, err = self._run(
+                    self._args("--resume", reservation.record_id, quiet=False),
+                    backend=backend,
+                )
+                self.assertEqual(status, cli.EXIT_OK, err)
+                self.assertEqual(
+                    backend.run_deck.call_count, len(points),
+                    f"{label}: every point must be re-simulated",
+                )
+                self.assertIn(
+                    "0 point(s) replayed from the earlier attempt's logs, "
+                    f"{len(points)} re-run",
+                    out,
+                )
+                self.assertNotIn("PASS (replayed)", self._record_text(reservation.record_id))
+
+    def test_a_resumed_run_that_aborts_under_supersedes_mints_nothing(self):
+        points = self._points()
+        reservation = self._reserve(points)
+        (reservation.log_dir / f"{points[0].corner_id}.log").write_text(self.LOG_TEXT)
+        self._interrupt(reservation)
+
+        def aborting_run_grid(tb, pdk, points, workdir, jobs=1, timeout_s=300,
+                              on_result=None, log_dir=None, backend=None, replay=None):
+            first = runner.PointResult(point=points[0], status="ok",
+                                       measurements={"vout": 1.65})
+            if on_result:
+                on_result(first)
+            raise OSError(2, "No such file or directory", "simulated mid-resume abort")
+
+        status, _, err = self._run(
+            self._args(
+                "--resume", reservation.record_id,
+                "--supersedes", "20260101T000000Z-abc",
+            ),
+            run_grid=aborting_run_grid,
+        )
+
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("not writing a record", err)
+        self.assertEqual(list((self.experiment / report.RECORDS_DIR).glob("*.md")), [])
+        # Still reserved, still un-owned by anything live-on-disk-false: the
+        # adoption is reversible exactly like a fresh reserve.
+        work = self.experiment / report.WORK_DIR / reservation.record_id
+        self.assertTrue((work / report.RESERVATION_FILE).exists())
+        self.assertFalse((work / report.RESUME_LOCK_DIR).exists())
+
+    def test_resume_refuses_every_non_interrupted_state_by_name(self):
+        points = self._points()
+        # No reservation at all.
+        status, _, err = self._run(
+            self._args("--resume", "20261115-194200-fffffff"),
+            backend=self._never_backend(),
+        )
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("no reservation file", err)
+
+        published = self._reserve(points)
+        self._interrupt(published)
+        records = self.experiment / report.RECORDS_DIR
+        records.mkdir(parents=True)
+        (records / f"{published.record_id}.md").write_text("# already published\n")
+        running = self._reserve(points)
+        self._set_ownership(running, pid=os.getpid())
+        unknown = self._reserve(points)
+        self._interrupt(unknown)
+        self._set_ownership(unknown, host="some-other-host")
+        unreadable = self._reserve(points)
+        unreadable.ownership_path.write_text("not json{")
+
+        for state, reservation in (
+            ("published", published),
+            ("running", running),
+            ("unknown", unknown),
+            ("unreadable", unreadable),
+        ):
+            with self.subTest(state=state):
+                status, _, err = self._run(
+                    self._args("--resume", reservation.record_id),
+                    backend=self._never_backend(),
+                )
+                self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+                self.assertIn(f"'{state}'", err)
+                if state != "published":
+                    self.assertEqual(list(records.glob(f"{reservation.record_id}.md")), [])
+
+    def test_resume_with_no_write_is_refused(self):
+        status, _, err = self._run(
+            self._args("--resume", "20261115-194200-fffffff", "--no-write")
+        )
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("nothing to resume into", err)
+
+    def test_resume_with_a_batch_plan_is_refused(self):
+        backend = mock.Mock()
+        backend.name = "batch"
+        status, _, err = self._run(
+            self._args("--resume", "20261115-194200-fffffff"), backend=backend
+        )
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("no run to resume into", err)
+
+    def test_a_changed_grid_is_refused(self):
+        points = self._points()
+        reservation = self._reserve(points)
+        self._interrupt(reservation)
+        # Same experiment, a different grid: one temperature instead of two.
+        backend = self._never_backend()
+        status, _, err = self._run(
+            self._args("--resume", reservation.record_id, "--temps", "27"),
+            backend=backend,
+        )
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("does not match", err)
+        backend.run_deck.assert_not_called()
+
+    def test_a_reservation_without_a_grid_fingerprint_is_refused(self):
+        reservation = self._reserve(self._points(), fingerprint=None)
+        self._interrupt(reservation)
+        status, _, err = self._run(
+            self._args("--resume", reservation.record_id),
+            backend=self._never_backend(),
+        )
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("predates --resume", err)
+
+    def test_a_reservation_whose_evidence_directory_is_gone_is_refused(self):
+        reservation = self._reserve(self._points())
+        self._interrupt(reservation)
+        shutil.rmtree(reservation.log_dir)
+        status, _, err = self._run(
+            self._args("--resume", reservation.record_id),
+            backend=self._never_backend(),
+        )
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("does not exist", err)
+
+    def test_a_path_like_resume_argument_is_refused(self):
+        status, _, err = self._run(
+            self._args("--resume", "../escape"), backend=self._never_backend()
+        )
+        self.assertEqual(status, cli.EXIT_ENVIRONMENT)
+        self.assertIn("not a record id", err)
+
+    def _adopt(self, points, record_id):
+        """Call ``adopt_interrupted_reservation`` with the reserved grid's
+        fingerprint, as ``cli.py`` does on ``--resume``. Patch
+        ``report.time`` (``_FakeResumeTime``) around the call to make the
+        bounded waits deterministic.
+        """
+        return report.adopt_interrupted_reservation(
+            self.experiment,
+            record_id,
+            report.grid_fingerprint(self.tb, points),
+            started=datetime.datetime(
+                2026, 11, 17, 12, 0, 0, tzinfo=datetime.timezone.utc
+            ),
+        )
+
+    def test_a_second_adopter_reading_running_refuses_without_waiting(self):
+        """The contention branch of the adoption lock: the pre-lock read sees
+        state ``interrupted`` (the original run is dead), but by the time this
+        process collides with the lock, the rival adopter has rewritten the
+        ownership file to name itself -- the in-lock read sees ``running``
+        and the adoption refuses on the spot, with no bounded wait.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._interrupt(reservation)
+        lock = reservation.workdir / report.RESUME_LOCK_DIR
+        lock.mkdir()
+
+        real_read = report.read_reservation
+        reads = {"n": 0}
+
+        def rival_rewrote_between_reads(workdir):
+            info = real_read(workdir)
+            reads["n"] += 1
+            if reads["n"] > 1:
+                # The rival adopter's rewrite: same file, but it now names a
+                # live process -- state reads "running".
+                info["state"] = "running"
+            return info
+
+        clock = _FakeResumeTime()
+        with mock.patch.object(
+            report, "read_reservation", side_effect=rival_rewrote_between_reads
+        ), mock.patch.object(report, "time", clock):
+            with self.assertRaises(report.ResumeRefused) as caught:
+                self._adopt(points, reservation.record_id)
+
+        self.assertIn("another process adopted it", str(caught.exception))
+        self.assertEqual(reads["n"], 2, "one read before the lock, one inside it")
+        self.assertEqual(
+            clock.sleep_calls, 0, "refused on the first collision, no waiting"
+        )
+
+    def test_a_dead_adopter_stale_lock_is_stolen_once_and_adoption_succeeds(self):
+        """The stale-lock branch: the previous adopter was killed between
+        taking the lock and rewriting the ownership file (the state still
+        reads ``interrupted``). The next adoption waits out its bounded
+        deadline once, steals the lock, and completes.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._interrupt(reservation)
+        lock = reservation.workdir / report.RESUME_LOCK_DIR
+        lock.mkdir()
+
+        clock = _FakeResumeTime()
+        with mock.patch.object(report, "time", clock):
+            adopted_reservation, adopted = self._adopt(points, reservation.record_id)
+        self.addCleanup(adopted_reservation.release_resume_lock)
+
+        self.assertEqual(
+            clock.sleep_calls,
+            2,
+            "one bounded wait before the steal, one before the retry that wins",
+        )
+        self.assertEqual(adopted_reservation.resume_lock, lock)
+        self.assertTrue(lock.is_dir(), "the stolen lock now belongs to this adopter")
+        self.assertEqual(adopted["pid"], os.getpid())
+        self.assertEqual(len(adopted["attempts"]), 2)
+        self.assertTrue(adopted["attempts"][1]["resumed"])
+        # The ownership file names this process: a fresh read sees "running".
+        self.assertEqual(
+            report.read_reservation(reservation.workdir)["state"], "running"
+        )
+
+    def test_a_stale_lock_is_stolen_only_once_per_adoption(self):
+        """One steal per adoption, not a free retry loop: if the lock is
+        already taken again by the time the steal's retry lands, the second
+        bounded wait refuses rather than stealing someone else's lock --
+        and it leaves that lock in place for whoever holds it.
+        """
+        points = self._points()
+        reservation = self._reserve(points)
+        self._interrupt(reservation)
+        lock = reservation.workdir / report.RESUME_LOCK_DIR
+        lock.mkdir()
+
+        def rival_takes_the_lock_back():
+            # The steal's rmdir succeeded; before our retry's mkdir runs, the
+            # rival adopter has taken the lock again -- and it has not yet
+            # rewritten the ownership file, so state still reads "interrupted".
+            if not lock.exists():
+                lock.mkdir()
+
+        clock = _FakeResumeTime(on_sleep=rival_takes_the_lock_back)
+        with mock.patch.object(report, "time", clock):
+            with self.assertRaises(report.ResumeRefused) as caught:
+                self._adopt(points, reservation.record_id)
+
+        self.assertIn("never claimed", str(caught.exception))
+        self.assertTrue(
+            lock.is_dir(), "the refusal leaves the rival's lock alone"
+        )
+
+    def test_replay_point_synthesizes_a_replayed_result(self):
+        point = self._points((27.0,))[0]
+        log_dir = self.root / "corners" / "replay-unit"
+        log_dir.mkdir(parents=True)
+        (log_dir / f"{point.corner_id}.log").write_text(self.LOG_TEXT)
+        result = runner.replay_point(
+            self.tb, point, self.root / "work-unit", log_dir, host="host-old"
+        )
+        self.assertIsNotNone(result)
+        self.assertTrue(result.replayed)
+        self.assertEqual(result.measurements, {"vout": 1.65})
+        self.assertEqual(result.host, "host-old")
+        self.assertEqual(result.seconds, 0.0)
+        self.assertEqual(result.as_dict().get("replayed"), True)
 
 
 class _StubPoint:
@@ -1345,6 +2119,31 @@ def _dead_pid() -> int:
     return proc.pid
 
 
+class _FakeResumeTime:
+    """Stands in for ``report.time`` while the adoption lock is exercised.
+
+    ``monotonic`` starts before the 15 s deadline
+    ``adopt_interrupted_reservation`` computes, and every ``sleep`` jumps
+    past it, so the bounded wait elapses without any real sleeping.
+    ``on_sleep`` hooks the moment a wait completes -- the contention tests
+    use it to stage a rival adopter between the steal and the retry.
+    """
+
+    def __init__(self, on_sleep=None):
+        self.now = 0.0
+        self.sleep_calls = 0
+        self._on_sleep = on_sleep
+
+    def monotonic(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleep_calls += 1
+        self.now += 30.0
+        if self._on_sleep is not None:
+            self._on_sleep()
+
+
 class RecordReservationTests(unittest.TestCase):
     """#720: a record id is reserved atomically before anything is written.
 
@@ -1360,6 +2159,32 @@ class RecordReservationTests(unittest.TestCase):
 
     def reserve(self, **kwargs):
         return report.reserve_record_id(SIM_DIR, self.experiment, _WHEN, git=_GIT, **kwargs)
+
+    def test_reservation_backend_reads_the_recorded_argv(self):
+        """#973: the backend a reservation's argv asked for, both spellings.
+
+        The argv is the only durable record of the backend choice, so the
+        function is total: no ``--backend`` flag means the default local
+        backend, as does an argv that names nothing at all.
+        """
+        self.assertEqual(
+            report.reservation_backend(
+                {"argv": ["sim/run_corners.py", "bench", "--backend", "batch"]}
+            ),
+            "batch",
+        )
+        self.assertEqual(
+            report.reservation_backend(
+                {"argv": ["sim/run_corners.py", "bench", "--backend=batch"]}
+            ),
+            "batch",
+        )
+        self.assertEqual(
+            report.reservation_backend({"argv": ["sim/run_corners.py", "bench"]}),
+            "local",
+        )
+        self.assertEqual(report.reservation_backend({"argv": []}), "local")
+        self.assertEqual(report.reservation_backend({}), "local")
 
     def test_synchronized_allocators_receive_distinct_conforming_ids(self):
         """Many allocators released at once, same experiment/commit/second,
@@ -1744,6 +2569,49 @@ class RecordRenderingTests(unittest.TestCase):
         self.assertIn("`typical_-40c_2.97v`", text)
         self.assertIn("`ff_125c_3.63v`", text)
         self.assertIn("**Overall: PASS**", text)
+
+    def test_a_replayed_point_carries_the_marker_on_every_verdict(self):
+        """``(replayed)`` marks a replayed verdict whatever the verdict is:
+        a replayed failure must be distinguishable from a freshly-simulated
+        one, not only a replayed pass. Fresh verdicts carry no marker.
+        """
+        points = self.points
+        results = list(self.results)
+        results[0] = runner.PointResult(
+            point=points[0], status="ok", measurements={"vout": 99.0},
+            replayed=True,
+        )
+        results[1] = runner.PointResult(
+            point=points[1], status="error", message="derived: boom",
+            replayed=True,
+        )
+        results[2] = runner.PointResult(
+            point=points[2], status="ok", measurements={"vout": 98.0},
+        )
+        record = report.build_record(
+            tb=self.tb,
+            pdk=self.pdk,
+            points=points,
+            results=results,
+            ngspice="ngspice-46",
+            repo_root=SIM_DIR,
+            record_id="20260729-153000-1a7ef75",
+            started_utc="2026-07-29T15:30:00+00:00",
+            wall_seconds=9.5,
+            claim="spec/pll.md#example",
+        )
+        text = report.render_record(record, "harness-selftest")
+        self.assertIn("FAIL (replayed) — ", text)
+        self.assertIn("ERROR (replayed) — derived: boom", text)
+        # A fresh failure is marked as a failure, and only as a failure.
+        self.assertIn("FAIL — ", text)
+        self.assertEqual(
+            text.count("FAIL (replayed)"),
+            1,
+            "only the replayed failure carries the marker",
+        )
+        # A fresh pass renders exactly as it always did.
+        self.assertIn(" | PASS |", text)
 
     def test_a_full_matrix_run_says_so(self):
         text = report.render_record(self.record, "harness-selftest")

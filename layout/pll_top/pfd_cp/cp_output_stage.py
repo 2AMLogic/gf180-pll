@@ -867,8 +867,6 @@ class CpOutputStageLayout:
 
 
 def build(outdir: Path | None = None) -> CpOutputStageLayout:  # noqa: PLR0915 -- one linear assembly
-    import klayout.db as db  # noqa: PLC0415 -- lazy, same convention as every module in this package
-
     arr = cp_array.build()
     inv = pfdcp_inv.build()
 
@@ -887,12 +885,6 @@ def build(outdir: Path | None = None) -> CpOutputStageLayout:  # noqa: PLR0915 -
         canvas.layout.read(str(inv_gds))
     arr_index = canvas.layout.cell_by_name(cp_array.TOP_CELL)
     inv_index = canvas.layout.cell_by_name(pfdcp_inv.TOP_CELL)
-
-    dbu_per_um = int(round(1.0 / canvas.dbu))
-
-    def _place(index, dx: float, dy: float) -> None:
-        trans = db.Trans(db.Vector(int(round(dx * dbu_per_um)), int(round(dy * dbu_per_um))))
-        canvas.top.insert(db.CellInstArray(index, trans))
 
     # --- the glue row's own coordinate frame ---
     row_x0 = arr.footprint[0] + 2.0
@@ -913,9 +905,9 @@ def build(outdir: Path | None = None) -> CpOutputStageLayout:  # noqa: PLR0915 -
     # instances are inserted in a fixed order whatever ROW_ORDER says.
     inv_origins = {spec.name: (inv_x[spec.name], row_y0) for spec in GLUE_INVERTERS}
 
-    _place(arr_index, 0.0, 0.0)
+    canvas.place_cell(arr_index, 0.0, 0.0)
     for dx, dy in inv_origins.values():
-        _place(inv_index, dx, dy)
+        canvas.place_cell(inv_index, dx, dy)
     canvas.top.flatten(-1, True)
     # The array's and the glue inverters' own standalone port labels are
     # local names, and four copies of one inverter cell contribute four

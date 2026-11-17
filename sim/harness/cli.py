@@ -14,6 +14,7 @@ from . import artifacts as artifacts_mod
 from . import batch as batch_mod
 from . import derived as derived_mod
 from . import execution as execution_mod
+from . import moscap_probe
 from . import omp
 from . import raw_measures as raw_measures_mod
 from .pdk import PdkNotFound, find_pdk
@@ -78,17 +79,18 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="?",
         metavar="EXPERIMENT",
         help="experiment slug under sim/ (i.e. sim/<slug>/testbench/tb.json); "
-        "with --check-env, an optional experiment to check for a precise "
-        "per-campaign ngspice-47 verdict instead of the generic one (#268)",
+        "with --check-env, an optional experiment for a precise "
+        "per-campaign verdict instead of the generic one (#268)",
     )
     parser.add_argument("--list", action="store_true", help="list testbenches and corners")
     parser.add_argument(
         "--check-env",
         action="store_true",
         help="report ngspice / PDK availability and exit; warns (not a hard "
-        "block) if the resolved ngspice is version 47, known-bad for "
-        "closed-loop campaigns nesting the PDK's nonlinear moscap family "
-        "(#153) -- pass EXPERIMENT for a DUT-aware verdict",
+        "block) if the resolved ngspice fails this repo's moscap capability "
+        "probe -- known-bad for campaigns instantiating the PDK's nonlinear "
+        "moscap family with an 'm=' multiplier (#153, #926) -- pass "
+        "EXPERIMENT for a DUT-aware verdict",
     )
     parser.add_argument(
         "--print-env",
@@ -255,6 +257,20 @@ def build_parser() -> argparse.ArgumentParser:
         "a subset run may be recorded as evidence",
     )
     parser.add_argument(
+        "--resume",
+        default="",
+        metavar="RECORD_ID",
+        help="re-adopt this experiment's interrupted reservation and replay "
+        "its completed points from corners/<record-id>/ instead of "
+        "re-simulating them; only an 'interrupted' reservation may be "
+        "resumed (a live peer, a published record, another host's "
+        "reservation or an unreadable ownership file is refused, naming the "
+        "state), and this invocation's grid must match the one the "
+        "reservation was taken for. Composes with --backend batch "
+        "--batch-apply, --supersedes/--supersedes-note and --artifact-store; "
+        "refused with --no-write (no evidence reservation exists to resume)",
+    )
+    parser.add_argument(
         "--no-write",
         action="store_true",
         help="run but do not record evidence (debugging only)",
@@ -264,8 +280,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="store the run's raw output (per-corner logs, raw_measures.csv, "
         "retained raw files) with sim/lib/artifact-put.sh and commit only its "
-        "manifest; fails closed before the summary record is published "
-        "(needs $KLT_ARTIFACT_BROKER; ignored with --no-write)",
+        "manifest; each completed point's raw logs are also banked in the "
+        "store as it finishes (keyed by the grid fingerprint), so a later run "
+        "on any host with an identical grid adopts them instead of "
+        "re-simulating. Fails closed -- before dispatching and before any "
+        "record is published -- when the broker is unreachable (needs "
+        "$KLT_ARTIFACT_BROKER; ignored with --no-write)",
     )
     parser.add_argument("--quiet", action="store_true", help="only print the summary")
     parser.add_argument("--version", action="version", version=f"gf180-pll harness {HARNESS_VERSION}")
@@ -318,33 +338,66 @@ def _ngspice_pin_report() -> str:
     )
 
 
+def _moscap_probe_verdict() -> tuple[bool | None, str | None]:
+    """The moscap capability verdict for ``--check-env``, plus a note when it
+    is inconclusive.
+
+    The probe needs the PDK, which ``--check-env`` otherwise resolves *after*
+    ngspice; a PdkNotFound here is reported as "could not tell" rather than
+    failing the check -- the PDK report block below still prints its own
+    MISSING line, so this helper deliberately leaves that reporting alone.
+    """
+    try:
+        pdk = find_pdk()
+    except PdkNotFound as exc:
+        return None, (
+            "moscap capability probe could not run: no gf180mcu PDK found "
+            f"({exc.args[0].splitlines()[0]})"
+        )
+    loads = moscap_probe.nonlinear_moscap_loads(pdk)
+    if loads is None:
+        return None, (
+            "moscap capability probe was inconclusive (a probe timeout, or "
+            "output that carried neither the success marker nor the failure "
+            "signature) -- this check could not tell whether this ngspice "
+            "expands the PDK's nonlinear moscap family cleanly"
+        )
+    return loads, None
+
+
 def cmd_check_env(experiment: str | None = None) -> int:
     status = EXIT_OK
     try:
         version = runner.ngspice_version()
-        # #153/#268: ngspice-47 is known-bad for this repo's closed-loop
-        # campaigns that nest the PDK's nonlinear-capacitance moscap family
-        # inside a .subckt -- report that up front rather than an
-        # unqualified OK, without hard-blocking (a host with only
-        # ngspice-47 can still attempt a run). If an experiment was given,
-        # prefer the DUT-aware warning for a precise per-campaign verdict;
-        # otherwise fall back to the version-only advisory.
+        # #153/#926: whether the resolved binary expands the PDK's
+        # nonlinear-capacitance moscap family cleanly is a *capability*,
+        # decided by a probe deck, not by the version token (the patched
+        # ngspice-47 point build prints the same banner as the broken one).
+        # Warn only when the probe actually fails; say "could not tell" when
+        # it is inconclusive; never hard-block (a host whose only build
+        # fails the probe can still attempt a run and see the real error).
+        # If an experiment was given, prefer the DUT-aware warning for a
+        # precise per-campaign verdict; otherwise (or when the experiment
+        # could not be resolved) fall back to the generic advisory.
+        loads, probe_note = _moscap_probe_verdict()
         warning = None
         if experiment:
             try:
                 tb_path = _resolve_tb_path(experiment)
                 tb = tb_mod.load(tb_path)
                 sources = tuple(tb.dut) + tuple(phase.netlist for phase in tb.run_phases)
-                warning = runner.nonlinear_moscap_ngspice47_warning(version, sources)
+                warning = runner.nonlinear_moscap_ngspice47_warning(version, sources, loads)
             except FileNotFoundError as exc:
                 print(f"  (could not resolve {experiment!r} for a DUT-aware check: {exc})")
         if warning is None:
-            warning = runner.ngspice47_advisory(version)
+            warning = runner.ngspice47_advisory(version, loads)
         if warning:
             print(f"ngspice : WARN  {version}")
             print(f"  {warning}")
         else:
             print(f"ngspice : OK   {version}")
+            if probe_note:
+                print(f"  ({probe_note})")
         print(_ngspice_pin_report())
     except NgspiceMissing as exc:
         print(f"ngspice : MISSING\n{exc}")
@@ -524,6 +577,13 @@ def print_batch_plan(tb, pdk, points, workdir, backend, timeout_s) -> int:
 
 
 def run(args: argparse.Namespace) -> int:
+    if args.resume and args.no_write:
+        print(
+            "error: --resume re-adopts an evidence reservation; --no-write "
+            "reserves no evidence, so there is nothing to resume into",
+            file=sys.stderr,
+        )
+        return EXIT_ENVIRONMENT
     tb_path = _resolve_tb_path(args.testbench)
     tb = tb_mod.load(tb_path)
 
@@ -536,18 +596,32 @@ def run(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ENVIRONMENT
 
-    # #153: ngspice-47 mis-expands the PDK's nonlinear-capacitance moscap
-    # family into a malformed internal element ("unknown parameter (e9)"),
-    # which otherwise surfaces only as an opaque per-point ngspice failure
-    # deep inside the sweep. Warn up front with an actionable message rather
-    # than let every point fail silently unexplained; the run still proceeds
-    # (this is a heuristic content match, not a hard version gate) so a host
-    # where ngspice-47 has since been fixed is not blocked.
+    # #153/#926: whether the resolved ngspice expands the PDK's nonlinear-
+    # capacitance moscap family cleanly is a *capability*, decided by a
+    # probe deck run once per process, not by a version token (the patched
+    # ngspice-47 point build prints the same banner as the broken one). A
+    # failed probe on a DUT that carries the measured 'm=' trigger is
+    # warned up front with an actionable message rather than let every
+    # point fail with an opaque per-point ngspice error deep inside the
+    # sweep; the run still proceeds (advisory, never a hard gate) so a host
+    # whose only build fails the probe is not blocked. An inconclusive
+    # probe says so without predicting anything.
+    moscap_sources = tuple(tb.dut) + tuple(phase.netlist for phase in tb.run_phases)
+    moscap_loads = moscap_probe.nonlinear_moscap_loads(pdk)
     moscap_warning = runner.nonlinear_moscap_ngspice47_warning(
-        ngspice, tuple(tb.dut) + tuple(phase.netlist for phase in tb.run_phases)
+        ngspice, moscap_sources, moscap_loads
     )
     if moscap_warning:
         print(moscap_warning, file=sys.stderr)
+    elif moscap_loads is None and runner.dut_uses_nonlinear_moscap(moscap_sources):
+        print(
+            "note: this DUT instantiates the PDK's nonlinear-capacitance "
+            "moscap family, but the moscap capability probe could not tell "
+            "whether this ngspice expands it cleanly (a probe timeout, or "
+            "output with neither the success marker nor the failure "
+            "signature) -- proceeding without a prediction.",
+            file=sys.stderr,
+        )
 
     corner_names = args.corners or ([args.corner_set] if args.corner_set else list(tb.corners))
     corner_list = corners_mod.resolve_corners(corner_names)
@@ -632,9 +706,32 @@ def run(args: argparse.Namespace) -> int:
     # A plan or a --no-write run only claims its scratch work/<record-id>/,
     # and so never occupies an evidence id.
     evidence = not (args.no_write or plan_only)
-    reservation = report.reserve_record_id(
-        REPO_ROOT, experiment_dir, started, git=git, evidence=evidence
-    )
+    # Recorded with every evidence reservation so a later --resume can prove
+    # the grid it resolved is the one this run was taking (#973). A resumed
+    # run recomputes it from its own grid for the same comparison.
+    fingerprint = report.grid_fingerprint(tb, points) if evidence else None
+    resume_info: dict | None = None
+    if args.resume:
+        if plan_only:
+            print(
+                "error: --resume names an evidence reservation, but a batch "
+                "plan (--backend batch without --batch-apply) submits nothing "
+                "and records nothing, so there is no run to resume into",
+                file=sys.stderr,
+            )
+            return EXIT_ENVIRONMENT
+        try:
+            reservation, resume_info = report.adopt_interrupted_reservation(
+                experiment_dir, args.resume, fingerprint, started=started,
+            )
+        except report.ResumeRefused as exc:
+            print(f"error: --resume: {exc}", file=sys.stderr)
+            return EXIT_ENVIRONMENT
+    else:
+        reservation = report.reserve_record_id(
+            REPO_ROOT, experiment_dir, started, git=git, evidence=evidence,
+            grid_fingerprint=fingerprint,
+        )
     record_id = reservation.record_id
     workdir = reservation.workdir
     log_dir = reservation.log_dir
@@ -642,19 +739,25 @@ def run(args: argparse.Namespace) -> int:
         for info in report.interrupted_reservations(experiment_dir):
             print(
                 f"note: {report.describe_reservation(info)}; that id and any "
-                "partial evidence under it are left untouched and are never reused",
+                "partial evidence under it are left untouched and are never "
+                "reused (--resume <id> re-adopts one deliberately)",
                 file=sys.stderr,
             )
     try:
         return _run_reserved(
             args, tb, pdk, ngspice, points, corner_list, temperatures, supplies,
             nominal, tolerance, conformance, backend, plan_only, jobs, omp_pin,
-            started, git, reservation, env_provenance_lines,
+            started, git, reservation, env_provenance_lines, resume_info,
+            fingerprint=fingerprint,
         )
     finally:
         # Whatever ended the run before its summary was published -- an
         # early return, a refused write, an exception, Ctrl-C -- the id stays
         # reserved. Say so, rather than recycle it or delete its evidence.
+        # The resume adoption lock goes either way: it only serializes the
+        # ownership rewrite, and a dead holder's stale lock is stolen by the
+        # next attempt's bounded wait.
+        reservation.release_resume_lock()
         if evidence and not (records_dir / f"{record_id}.md").exists():
             _report_unpublished(reservation)
 
@@ -668,10 +771,63 @@ def _report_unpublished(reservation: "report.RecordReservation") -> None:
     )
 
 
+def _adopt_stored_points(
+    tb, points, workdir: Path, log_dir: Path, fingerprint: str,
+    skip: tuple[str, ...] = (),
+) -> tuple[dict, list[str]]:
+    """Adopt this grid's already-stored points from the artifact store (#1048).
+
+    A fresh invocation under ``--artifact-store`` calls this before
+    dispatching: every point whose per-phase logs sit in the store under THIS
+    grid fingerprint is fetched (``klt artifact get``, each byte stream
+    sha256-re-verified), written into this attempt's ``log_dir`` and replayed
+    through :func:`runner.replay_point` -- the same parser and the same
+    all-or-nothing qualification gate a ``--resume`` uses, so a stored log
+    that fails to parse (a killed deck's timeout banner, a truncated write)
+    simply re-simulates its point. The executing host of a stored log is not
+    recorded anywhere durable, so adopted points are unattributed -- the
+    store proves *what* ran, never *where*.
+
+    ``skip`` names corners an earlier mechanism (``--resume``'s same-host
+    replay) already supplied: they are not fetched, and not counted as
+    adoption -- a point resumed from local logs keeps that attribution
+    rather than being demoted to an unattributed store fetch.
+
+    Returns ``({corner_id: PointResult}, [source record ids])``; a point that
+    does not qualify is simply absent from the dict and runs as usual.
+    """
+    stored, sources = artifacts_mod.lookup_stored_points(tb.experiment, fingerprint)
+    adopted: dict[str, runner.PointResult] = {}
+    if not stored:
+        return adopted, sources
+    points_by_id = {point.corner_id: point for point in points}
+    for corner_id, stems in sorted(stored.items()):
+        if corner_id in skip:
+            continue
+        point = points_by_id.get(corner_id)
+        if point is None:
+            continue
+        expected = [phase.run_id(corner_id) for phase in tb.run_phases]
+        # A point is adoptable only whole: one entry per phase of THIS grid.
+        # A stray or partial entry set re-simulates -- never half-adopts.
+        if sorted(stems) != sorted(expected):
+            continue
+        if not all(
+            artifacts_mod.fetch_stored_log(stems[run_id], log_dir / f"{run_id}.log")
+            for run_id in expected
+        ):
+            continue
+        result = runner.replay_point(tb, point, workdir, log_dir, host="")
+        if result is not None and result.status == "ok":
+            adopted[corner_id] = result
+    return adopted, sources
+
+
 def _run_reserved(
     args, tb, pdk, ngspice, points, corner_list, temperatures, supplies,
     nominal, tolerance, conformance, backend, plan_only, jobs, omp_pin,
-    started, git, reservation, env_provenance_lines,
+    started, git, reservation, env_provenance_lines, resume_info=None,
+    fingerprint=None,
 ) -> int:
     experiment_dir = tb.experiment_dir
     record_id = reservation.record_id
@@ -689,6 +845,75 @@ def _run_reserved(
         except execution_mod.BackendError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return EXIT_ENVIRONMENT
+
+    # --artifact-store (#1048): the store path has no fallback to committed
+    # bytes, so a run that needs the broker must find out before dispatching
+    # a single point. A broker discovered missing after a thousand points is
+    # exactly the stranded-compute failure this flow exists to end. This
+    # covers adoption below too, which fetches through the same broker.
+    evidence = not args.no_write
+    if args.artifact_store and evidence:
+        try:
+            artifacts_mod.require_store("--artifact-store")
+        except artifacts_mod.ArtifactUploadError as exc:
+            print(f"error: --artifact-store: {exc}", file=sys.stderr)
+            return EXIT_ENVIRONMENT
+
+    # --resume (#973): before dispatching anything, split the grid into the
+    # points whose every phase's log qualifies for replay and the points that
+    # must be re-simulated. Both branches stay visible in the progress
+    # output, so the operator always knows which evidence is old and which
+    # is fresh.
+    replay: dict[str, runner.PointResult] = {}
+    if resume_info is not None:
+        # A replayed point keeps the executing host of the attempt that ran
+        # it: the recording host for a local-backend attempt (the only host a
+        # resumable reservation can name -- another host's reservation reads
+        # "unknown" and is refused), unattributed for an off-host one. Which
+        # backend that was must be read from the attempt entries, not the
+        # ownership file's top-level argv: adoption rewrites that argv to
+        # name *this* invocation, and this invocation is always the local
+        # one (--resume refuses off-host backends), so the top level would
+        # stamp the recording host onto logs a batch attempt produced.
+        # Replayed logs may come from any earlier attempt, so they share the
+        # recording host only when every earlier attempt ran local: a
+        # history that switched backends leaves them unattributed rather
+        # than claiming a host some of them never ran on.
+        prior_attempts = (resume_info.get("attempts") or [])[:-1]
+        prior_backends = [report.reservation_backend(a) for a in prior_attempts]
+        replay_host = (
+            resume_info.get("host", "")
+            if prior_backends and all(b == "local" for b in prior_backends)
+            else ""
+        )
+        for point in points:
+            result = runner.replay_point(tb, point, workdir, log_dir, host=replay_host)
+            if result is None:
+                continue
+            replay[point.corner_id] = result
+        # Captured before adoption (below) adds its own points to `replay`,
+        # so the resume line keeps describing only what --resume supplied.
+        resume_replayed = len(replay)
+
+    # --artifact-store adoption (#1048): start this attempt from what an
+    # earlier one already banked under an identical grid fingerprint --
+    # on any host, where --resume (above) reaches only same-host workdirs.
+    # Adopted points enter the same replay map, so the grid dispatches only
+    # what neither mechanism can supply.
+    adoption: dict | None = None
+    if args.artifact_store and evidence:
+        adopted, adopt_sources = _adopt_stored_points(
+            tb, points, workdir, log_dir, fingerprint, skip=tuple(replay)
+        )
+        for corner_id, result in adopted.items():
+            replay.setdefault(corner_id, result)
+        if adopted:
+            adoption = {
+                "adopted_points": len(adopted),
+                "fresh_points": len(points) - len(replay),
+                "fingerprint": fingerprint,
+                "sources": adopt_sources,
+            }
 
     if not args.quiet:
         print(f"experiment: {tb.experiment}"
@@ -716,6 +941,17 @@ def _run_reserved(
                 + "  (ngspice links an OpenMP runtime; capping per-worker threads)"
             )
         print(f"record id : {record_id}")
+        if resume_info is not None:
+            print(
+                f"resume    : {resume_replayed} point(s) replayed from the earlier "
+                f"attempt's logs, {len(points) - len(replay)} re-run"
+            )
+        if adoption is not None:
+            print(
+                f"adopted   : {adoption['adopted_points']} point(s) fetched from "
+                "the artifact store (grid fingerprint match), "
+                f"{adoption['fresh_points']} simulated by this attempt"
+            )
         print()
     for description in conformance.get("empty_blocks", []):
         print(
@@ -728,8 +964,40 @@ def _run_reserved(
     # raises, whatever already ran is not lost along with it.
     completed_results: list[runner.PointResult] = []
 
+    # --artifact-store (#1048): bank each freshly simulated point's raw logs
+    # as it finishes, before the next point is reported complete -- the
+    # store, not this process's workdir, is what the next attempt on another
+    # host can reach. Replayed points (resumed or adopted) already have
+    # their evidence banked, and a point that did not succeed has nothing
+    # adoptable to bank -- its log still reaches the end-of-run store, as
+    # always. The first upload failure stops banking and minting a record:
+    # evidence this run cannot store is evidence the campaign can lose.
+    # (Serially the grid stops with the failing point; with -j > 1 points
+    # already dispatched keep running to completion, but nothing after the
+    # failure is banked -- so the record is refused either way.)
+    artifact_upload = None
+    if args.artifact_store and evidence:
+        def artifact_upload(corner_id: str) -> None:
+            artifacts_mod.store_point_logs(
+                tb.experiment, record_id, fingerprint, corner_id,
+                artifacts_mod.point_log_files(tb, corner_id, log_dir),
+            )
+
+    upload_failure = ""
+
     def progress(result):
-        nonlocal completed
+        nonlocal completed, upload_failure
+        if (
+            artifact_upload is not None
+            and not upload_failure
+            and not result.replayed
+            and result.status == "ok"
+        ):
+            try:
+                artifact_upload(result.point.corner_id)
+            except artifacts_mod.ArtifactUploadError as exc:
+                upload_failure = str(exc)
+                raise
         completed += 1
         completed_results.append(result)
         if args.quiet:
@@ -743,7 +1011,8 @@ def _run_reserved(
             )
         else:
             detail = result.message
-        print(f"[{completed:>3}/{len(points)}] {flag} {result.point.corner_id:<26} {detail}")
+        marker = "  [replayed from earlier attempt]" if result.replayed else ""
+        print(f"[{completed:>3}/{len(points)}] {flag} {result.point.corner_id:<26} {detail}{marker}")
 
     wall_start = time.monotonic()
     abort_reason = ""
@@ -758,7 +1027,26 @@ def _run_reserved(
             on_result=progress,
             log_dir=log_dir,
             backend=backend,
+            replay=replay or None,
         )
+    except artifacts_mod.ArtifactUploadError as exc:
+        # Fail closed (#1048): without this point's raw output in the store,
+        # the campaign's next attempt would silently re-buy it -- and minting
+        # a record over raw output that could not even be banked would hide
+        # the gap. The logs already written stay in place; the points already
+        # banked stay adoptable.
+        print(
+            f"error: --artifact-store: {exc}\n"
+            f"  {len(completed_results)}/{len(points)} point(s) had completed "
+            "when banking failed; the run stops banking and no summary "
+            "record will be published (with -j > 1, points already "
+            "dispatched may still finish, but nothing after the failure is "
+            "banked). Logs written so far stay in place under "
+            f"{log_dir}, and the points already banked in the store remain "
+            "adoptable by the next attempt.",
+            file=sys.stderr,
+        )
+        return EXIT_ENVIRONMENT
     except NgspiceMissing as exc:
         # Kept fail-fast and separate from the broad net below: no ngspice on
         # PATH means no point could have meaningfully run, so there is nothing
@@ -826,6 +1114,21 @@ def _run_reserved(
         execution={"jobs": jobs, "omp": omp_pin, **backend.describe()},
         abort_reason=abort_reason,
         env_provenance_lines=env_provenance_lines,
+        resume=(
+            {
+                "resumed": True,
+                # --resume's own replay count; points adopted from the
+                # artifact store are disclosed separately (artifact_adoption).
+                "replayed_points": resume_replayed,
+                "rerun_points": len(points) - len(replay),
+                # The adopted ownership file's attempt history: attempt 1's
+                # start plus one entry per resume, ending with this one.
+                "attempts": list(resume_info.get("attempts") or []),
+            }
+            if resume_info is not None
+            else None
+        ),
+        adoption=adoption,
     )
 
     print()
@@ -877,10 +1180,7 @@ def _run_reserved(
             rc = artifacts_mod.store(tb.experiment, record_id, raw_out)
             if rc != 0:
                 return EXIT_ENVIRONMENT
-            artifact_manifest = (
-                REPO_ROOT / "manifests" / "artifacts"
-                / f"{tb.experiment}-{record_id}.manifest.json"
-            )
+            artifact_manifest = artifacts_mod.manifest_path(tb.experiment, record_id)
         record_path = report.write_record(record, experiment_dir)
         reservation.mark_published()
         print()

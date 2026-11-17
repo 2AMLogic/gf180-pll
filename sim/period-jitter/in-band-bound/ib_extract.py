@@ -113,12 +113,19 @@ if str(RB) not in sys.path:
 ISF = HERE.parent / "isf-bringup"
 if str(ISF) not in sys.path:
     sys.path.append(str(ISF))
+SIM = HERE.parents[1]
+if str(SIM) not in sys.path:
+    sys.path.insert(0, str(SIM))
 
 import isf_deck  # noqa: E402
 
 #: Shared with every period-jitter deck module; defined once in `isf_deck`.
 _join_continuations = isf_deck._join_continuations
+#: Same walk, device-line form: the call sites below pass `skip_comments=True`.
+subckt_body = isf_deck.subckt_body
 import rb_extract  # noqa: E402
+
+from harness.numeric import crossings  # noqa: E402
 
 K_B = rb_extract.K_B
 kelvin = rb_extract.kelvin
@@ -130,23 +137,6 @@ sigma_upper = rb_extract.sigma_upper
 # ---------------------------------------------------------------------------
 # step 1: the enumeration
 # ---------------------------------------------------------------------------
-def subckt_body(src: str, name: str) -> list[str]:
-    """The instance/device lines of `.subckt <name>`, continuations folded."""
-    body: list[str] = []
-    inside = False
-    for ln in _join_continuations(src):
-        s = ln.strip()
-        low = s.lower()
-        if low.startswith(f".subckt {name.lower()} "):
-            inside = True
-            continue
-        if inside and low.startswith(".ends"):
-            return body
-        if inside and s and not s.startswith("*"):
-            body.append(s)
-    raise ValueError(f"no `.subckt {name}` in the netlist")
-
-
 #: `pll_top`'s five instances, by instance name, and the block each one is.
 #: Used only to name things; the connectivity claim below is what is checked.
 TOP_INSTANCES = {
@@ -165,7 +155,7 @@ def connectivity_claim(src: str) -> dict:
     the divider a second connection to the analog side, would change this
     dict and fail `sim/tests/test_in_band_bound.py`.
     """
-    body = subckt_body(src, "pll_top")
+    body = subckt_body(src, "pll_top", skip_comments=True)
     nets: dict[str, list[str]] = {}
     seen: dict[str, str] = {}
     for ln in body:
@@ -337,7 +327,7 @@ def resolve_instance(src: str, top: str, dotted: str) -> str:
     here = top
     for step in dotted.split("."):
         found = None
-        for ln in subckt_body(src, here):
+        for ln in subckt_body(src, here, skip_comments=True):
             tok = ln.split()
             if tok[0].lower() != step.lower():
                 continue
@@ -859,31 +849,18 @@ rising_crossings = rb_extract.rising_crossings
 def crossings_with_slew(t, v, level: float):
     """Rising crossings of `level`, each with the chord slew rate there.
 
-    The crossing is placed on the chord between the two stored timepoints that
-    straddle it -- `../random-bound/rb_extract.rising_crossings`' construction --
-    and the chord's own slope is the slew rate reported for it.  A chord
-    UNDER-estimates the instantaneous slope of a convex edge, which makes
-    `1/SR` an over-estimate, the safe direction for `edge_jitter`.
+    `harness.numeric.crossings`' `slew=True` form -- the same construction
+    `../random-bound/rb_extract.rising_crossings` uses -- where the chord's
+    own slope is the slew rate reported for it.  A chord UNDER-estimates the
+    instantaneous slope of a convex edge, which makes `1/SR` an
+    over-estimate, the safe direction for `edge_jitter`.
     """
-    out = []
-    for i in range(1, len(t)):
-        a, b = v[i - 1], v[i]
-        if a < level <= b and t[i] > t[i - 1]:
-            sr = (b - a) / (t[i] - t[i - 1])
-            out.append({"t": t[i - 1] + (level - a) * (t[i] - t[i - 1]) / (b - a),
-                        "slew": sr})
-    return out
+    return crossings(t, v, level, slew=True)
 
 
 def falling_crossings_with_slew(t, v, level: float):
-    out = []
-    for i in range(1, len(t)):
-        a, b = v[i - 1], v[i]
-        if a >= level > b and t[i] > t[i - 1]:
-            sr = (a - b) / (t[i] - t[i - 1])
-            out.append({"t": t[i - 1] + (a - level) * (t[i] - t[i - 1]) / (a - b),
-                        "slew": sr})
-    return out
+    """Falling crossings of `level` with chord slew rates, the mirror form."""
+    return crossings(t, v, level, slew=True, falling=True)
 
 
 def pulse_widths(t, v, level: float):

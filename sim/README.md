@@ -1219,7 +1219,7 @@ overridable with `SIM_NGSPICE_BIN` — rather than silently accepting whatever
 `ngspice` resolves to on `PATH`. This is not merely version pedantry: issue
 #259 found a host where that pinned `ngspice-46` was absent, PATH fell
 through to Homebrew's `ngspice-47`, and that build then hit a reproducible
-parse failure on this PDK's nested nonlinear loop-filter/VCO moscaps
+parse failure on this PDK's loop-filter/VCO moscaps
 (`sm141064.ngspice`'s `cap_*mos_03v3`/`06v0` family — see
 `sim/harness/README.md`'s "ngspice-46 required for nested nonlinear moscap
 decks", #153) — and, worse, **hung instead of exiting** on that error,
@@ -1231,7 +1231,9 @@ hours against a defective, uncited simulator build. `sim/harness`'s own
 `run_corners.py --check-env` / `runner.py` codepath is unaffected — it
 already carries its own PATH-resolved-version warning
 (`nonlinear_moscap_ngspice47_warning`) for the same underlying #153 defect,
-scoped to the DUTs that actually nest the moscap family.
+scoped, via the #926 capability probe, to DUTs whose instances carry the
+`m=` trigger -- and a probe pass licenses "it loads", never "it returns
+the same values" (#932).
 
 **The batch backend's job image now signs off the pin's version, and the
 remaining divergence is bounded rather than aligned

@@ -192,7 +192,7 @@ def reduce_pushing(vs, fs, currents, vnom=3.30):
     v = [vs[i] for i in order]
     f = [fs[i] for i in order]
     cur = [currents[i] for i in order]
-    m, c = linfit(v, f)
+    m, c, _ = linfit(v, f)
     nomix = min(range(len(v)), key=lambda i: abs(v[i] - vnom))
     f_nom = f[nomix]
     if not f_nom:

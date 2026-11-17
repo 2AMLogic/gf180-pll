@@ -73,7 +73,11 @@
   quantity `pll_top`'s pads expose has now been measured against the rule's
   internal measurand and none reaches the accuracy the row's own spread figure
   assumes. That is a third reason this row stays carved out, not a reason to
-  move it. Row 9's cold-start question is unchanged, though DR-013
+  move it. **DR-022 Amendment A1** (#965, 2026-11-16) refreshes the
+  trim-execution subsection's quoted campaign figures onto the re-qualified
+  open_pdks `f6eeac7` successor record
+  (`20261114-194051-c8750de.md`) — no limit, bound or verdict moves with
+  them. Row 9's cold-start question is unchanged, though DR-013
   Decision 7's *hold* on its re-take is released by #411's window landing.
   Lifting the carve-out is a ratification act on evidence that does not exist
   yet, not a consequence of these revisions.
@@ -367,7 +371,10 @@ Tier B is the binding one, and it leaves no room: the rule's own rounding has
 already spent all but 0.53 of a trim step of the spread allowance.
 
 **What the pads can actually do**, measured over the full 13-bundle grid in
-`sim/lock-window-proxy/records/20260925-050022-6d57802.md` — every candidate `pll_top`'s
+`sim/lock-window-proxy/records/20261114-194051-c8750de.md` (figures refreshed
+2026-11-16 under **DR-022 Amendment A1**, off the superseded
+`20260925-050022-6d57802.md` record the re-qualified campaign replaced) —
+every candidate `pll_top`'s
 pad list offers, each calibrated at one bundle and scored at the other twelve,
 against a no-measurement control:
 
@@ -380,11 +387,16 @@ against a no-measurement control:
   where the window is 16 % *slower*. Both ring operating points behave
   identically, so this is the topology, not the read point.
 - **The `CLK`→`DIVOUT` pad-to-pad skew is the best candidate and is still not
-  sufficient.** It leaves a 1.132× residual on the window's 1.316× process
-  spread and holds the band at all 117 points, but at **1.697×** grid spread
-  (1.74–1.78× continuous) it fails Tier B, and its worst code error of +4 is
-  outside Tier A's own bound — the band survives on where this grid's thirteen
-  bundles sit, not on a property of the selector. `CLK`→`FB` is worse (1.735×).
+  sufficient.** It leaves a 1.134× residual on the window's 1.316× process
+  spread and holds the band at all 117 points, but at **1.670×** grid spread
+  (1.72 … 1.75× continuous — the grid spread with one whole trim step of
+  un-applied rounding added, per DR-022's derivation method) it fails Tier B,
+  and its worst code error of +2, though now *inside* Tier A's derived +3
+  bound, is not saved by that: Tier B needs a worst code error of exactly
+  zero, so +2 still misses the rule's code at some bundles — the band survives
+  on where this grid's thirteen bundles sit, not on a property of the
+  selector. `CLK`→`FB` is worse (2.036×) and no longer holds the band at all
+  (out of band somewhere; twin_max 2.191 ns).
 
 **Therefore**, and this is the normative part of this subsection:
 
@@ -1714,7 +1726,7 @@ Every number in this section is conditioned on the trim rule, and the rule is
 executable only in simulation: its measurand is internal, and
 `sim/lock-window-proxy` has now measured every quantity `pll_top`'s pads
 expose against it — the best of them, the `CLK`→`DIVOUT` skew, holds the
-[1, 2] ns band across the 13-bundle grid but lands at a 1.697× spread against
+[1, 2] ns band across the 13-bundle grid but lands at a 1.670× spread against
 DR-013 Decision 4's ≤ 1.65×, while the free-running ring period is worse than
 not trimming at all. The full statement, and the two-tier accuracy bound a
 future route must clear, is

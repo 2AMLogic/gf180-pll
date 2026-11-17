@@ -5,6 +5,12 @@ open flow (xschem, ngspice, klayout-tools) with every claim backed by a committe
 
 Status as of 2026-11-13, `main` @ `658a7fdf`.
 
+Every `#N` open/closed annotation on this page is as of that pin, not the forge today — re-check
+the forge before acting on one. State claims on this page are written one of two ways and no
+other: "open as of `<sha>`", or the past tense ("closed on `<date>`", "merged as `<sha>`"). A
+bare present-tense live state ("#N is open") is not used here. This page is not graded by
+`check-issue-reference-state.sh`; the documents it defers to below are.
+
 This page says what comes next and why. It does not restate status: the machine verdict is
 [`signoff/tier-report.json`](../signoff/tier-report.json), the campaign detail is
 [`sim/STATUS.md`](../sim/STATUS.md) and the layout detail is
@@ -53,20 +59,17 @@ This page says what comes next and why. It does not restate status: the machine 
    4; the ruling on #753 sets this order). *Done when* the DRC and LVS logs and an updated
    `PROOF.md` are committed under `layout/evidence/loop-filter-layout/`, stating clean or naming
    each violation. This is the item everything in layout signoff waits on.
-2. **Re-qualify the device-characterization records under `f6eeac7` (#825).** In progress. *Done
-   when* the five cited records each have a successor record naming what it supersedes, with an
+2. **Re-qualify the remaining record groups under `f6eeac7` (#826, #827, #828).** This item began
+   as the device-characterization group (#825), which closed completed on 2026-11-14; what is
+   live is the rest of #790's children — the VCO/output/charge-pump/PFD records (#826) first.
+   *Done when* every cited record has a successor record naming what it supersedes, with an
    old-versus-new delta table.
-3. **Land the open clean-up PRs.** #919, #920 and #921 (for #916, #915, #918) and #917. *Done when*
-   merged with CI green.
-4. **Make the README's T1 count match the report.** `README.md` still says "0 of 22 rows met"; the
-   report says 6. *Done when* the sentence is corrected and a CI check fails when the README's count
-   differs from `tier-report.json`. No issue yet.
-5. **Correct the "no `klt drc` / `klt lvs` envelope exists" statements.** `signoff/README.md` and
+3. **Correct the "no `klt drc` / `klt lvs` envelope exists" statements.** `signoff/README.md` and
    `layout/README.md` predate the envelopes committed under
    `layout/evidence/vco-layout/klt-curated-836*/` and
    `layout/evidence/pll-top-layout/klt-curated-836/`. *Done when* both files describe what is
-   committed and why it is still uncited. No issue yet.
-6. **`klt lvs` envelope for `lock_detector`.** Only `vco_block` has one (`klt-curated-836-recheck/`,
+   committed and why it is still uncited (#929).
+4. **`klt lvs` envelope for `lock_detector`.** Only `vco_block` has one (`klt-curated-836-recheck/`,
    `status: match`). *Done when* a request, report and `RECORD.md` are committed under
    `layout/evidence/lock-detector-layout/`, whatever the verdict, with any tool gap filed on
    klayout-tools. No issue yet.
@@ -77,10 +80,10 @@ This page says what comes next and why. It does not restate status: the machine 
   Done when both reports are committed and items 3 and 4 can be cited.
 - **Post-layout extracted re-run of the verification suite (#18)** — after #149. Done when
   extracted-netlist records sit beside their schematic baselines with deltas stated (item 7).
-- **Remaining re-qualification groups (#826, #827, #828)** — after #825; then #829 cites the new
-  records and regenerates the sign-off; then #843 cites `sim/CHARACTERIZATION.md` for item 8; then
-  #790 and #788 close.
-- **`klt lvs` envelopes for `pfd_cp` and `divider_chain`** — after Now 6 shows the recipe carries
+- **Remaining re-qualification groups (#826, #827, #828)** — in motion as Now item 2; when they
+  land, #829 cites the new records and regenerates the sign-off; then #843 cites
+  `sim/CHARACTERIZATION.md` for item 8; then #790 and #788 close.
+- **`klt lvs` envelopes for `pfd_cp` and `divider_chain`** — after Now 4 shows the recipe carries
   over. With all four, item 11's pairing has its sub-block half.
 - **`mc-cp-mismatch` harness migration (#879)** — after #878 is closed out.
 - **C2 electrical validation (#753, second stage)** — `devchar-passives` for the option-B MIM and

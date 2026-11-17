@@ -1,0 +1,718 @@
+{
+  "schema_version": 3,
+  "engine": "klayout",
+  "layout": {
+    "path": "layout/evidence/pfd-cp-layout/pfd_cp.gds",
+    "scope": "repo"
+  },
+  "reference": {
+    "path": "layout/evidence/pfd-cp-layout/lvs-clean/pfd_cp.spice",
+    "scope": "repo"
+  },
+  "top": "pfd_cp",
+  "reference_top": "PFD_CP",
+  "reference_conversion": {
+    "form": "subckt-call",
+    "deck": "gf180mcu",
+    "device_map": null
+  },
+  "parameter_tolerance": null,
+  "options": {
+    "combine_devices": true,
+    "combine_devices_per_circuit": null,
+    "combine_devices_max_attempts": 5,
+    "flatten_layout": false,
+    "flatten_reference": false,
+    "netgen_setup": null,
+    "parameter_tolerance": null,
+    "compare_parameters": null,
+    "power_connectivity": null,
+    "anchor_top_level_pins": null,
+    "strict_top_level_pin_count": false,
+    "compare_mos_flavour": false,
+    "ignore_mos_bulk": false,
+    "supply_nets": [
+      "GND",
+      "VCC",
+      "VDD",
+      "VGND",
+      "VPWR",
+      "VSS"
+    ],
+    "finfet_bulk": null
+  },
+  "hints_applied": null,
+  "constant_nets_applied": null,
+  "status": "match",
+  "power_connectivity": {
+    "status": "unchecked",
+    "reason": "reference.form is 'subckt-call', whose reference netlist carries its own power/ground pins and nets -- they take part in the ordinary compare, so this check (which exists to cover the signal-only 'gate-level-verilog' form) does not apply",
+    "power_pins": [],
+    "power_pins_derivation": null,
+    "instance_count": 0,
+    "expected_nets": null,
+    "unchecked_expected_pins": [],
+    "excluded_pins": [],
+    "findings": [],
+    "finding_count": 0
+  },
+  "body_verification": {
+    "status": "unverified",
+    "reason": null,
+    "device_classes": [
+      "pfet"
+    ],
+    "device_count": 2,
+    "findings": [
+      {
+        "class": "pfet",
+        "device_count": 2
+      }
+    ],
+    "finding_count": 1
+  },
+  "device_parameter_coverage": [],
+  "mismatch_count": 6,
+  "error_count": 0,
+  "category_counts": {
+    "device.body_unverified": 1,
+    "topology": 5
+  },
+  "category_error_counts": {},
+  "counts": {
+    "nets": {
+      "layout": 92,
+      "reference": 92,
+      "matched": 92
+    },
+    "devices": {
+      "layout": 168,
+      "reference": 168,
+      "matched": 168
+    },
+    "pins": {
+      "layout": 58,
+      "reference": 13,
+      "matched": 58
+    }
+  },
+  "device_classes": [
+    "nfet",
+    "pfet",
+    "bjt",
+    "cap_mim_2f0_m4m5_noshield",
+    "cap_nmos_03v3",
+    "cap_nmos_03v3_dn",
+    "cap_pmos_03v3",
+    "cap_pmos_03v3_dn",
+    "cap_nmos_06v0",
+    "cap_nmos_06v0_dn",
+    "cap_pmos_06v0",
+    "cap_pmos_06v0_dn",
+    "cap_nmos_03v3_b",
+    "cap_pmos_03v3_b",
+    "cap_nmos_06v0_b",
+    "cap_pmos_06v0_b",
+    "resistor",
+    "diode_nd2ps_06v0",
+    "diode_pd2nw_06v0"
+  ],
+  "environment": {
+    "engine": "klayout",
+    "engine_version": "0.30.13",
+    "netgen_binary": null,
+    "layout_sha256": "212c27c4a209c2d851d0e424ee9c4c75c040b5824a77a8a2763a3d9f7b7030d9",
+    "reference_sha256": "8559f96d532888fce22b868b3af70cd25afc48b148012357c5b287e8ebf38cdb",
+    "extracted_netlist": null
+  },
+  "provenance": {
+    "klt_version": "0.9.3.dev16+gdcf18e2e0c03",
+    "klt_git_commit": "dcf18e2e0c0330742eb46cd7b54059612f627cca",
+    "klt_reinstall_spec": "klayout-tools @ git+https://github.com/2AMLogic/klayout-tools@dcf18e2e0c0330742eb46cd7b54059612f627cca",
+    "klayout_version": "0.30.13",
+    "pdk": null,
+    "deck": {
+      "name": "gf180mcu",
+      "content_hash": "sha256:c3f2cce49000857a3a71cb65203aabf0eb27cd0ee6b1c60e29792355c455c4b1",
+      "released": true,
+      "options": {
+        "metal_top": "9K",
+        "mim_cap": "cap_mim_2f0_m4m5_noshield",
+        "poly_res": "3k"
+      },
+      "options_explicit": {
+        "metal_top": false,
+        "mim_cap": false,
+        "poly_res": true
+      },
+      "options_hash": "sha256:df52f5d3649629175a75f1fd8b8ad9f66cc6204b375d93fa3107be5f4a96588e"
+    },
+    "input": {
+      "content_hash": "sha256:212c27c4a209c2d851d0e424ee9c4c75c040b5824a77a8a2763a3d9f7b7030d9",
+      "role": "layout"
+    },
+    "klayout_version_mismatch": true
+  },
+  "mismatches": [
+    {
+      "category": "device.body_unverified",
+      "severity": "warning",
+      "description": "2 PMOS device body terminal(s) were compared against an anonymous, KLayout-synthesized well net, not a real schematic net -- either no drawn or derived well-tap geometry exists, or the tap-connected net carries no name label (a body resolves only to a *named* net; label the tap-connected conductor, e.g. VDD, to resolve it; see docs/cli/extract.md, \"Coverage\")",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": null,
+        "reference": null,
+        "class": "pfet"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "topology",
+      "severity": "warning",
+      "description": "nets were paired ambiguously; the comparer resolved it structurally (consider a hints.same_nets entry to pin this down)",
+      "side": "both",
+      "net": {
+        "layout": "\\$11",
+        "reference": "PFD_CP_XCP_XN_T1A_BG"
+      },
+      "device": null,
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "topology",
+      "severity": "warning",
+      "description": "nets were paired ambiguously; the comparer resolved it structurally (consider a hints.same_nets entry to pin this down)",
+      "side": "both",
+      "net": {
+        "layout": "\\$27",
+        "reference": "PFD_CP_XCP_XN_T1B_BG"
+      },
+      "device": null,
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "topology",
+      "severity": "warning",
+      "description": "nets were paired ambiguously; the comparer resolved it structurally (consider a hints.same_nets entry to pin this down)",
+      "side": "both",
+      "net": {
+        "layout": "\\$32",
+        "reference": "PFD_CP_XCP_XP_T1B_BG"
+      },
+      "device": null,
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "topology",
+      "severity": "warning",
+      "description": "nets were paired ambiguously; the comparer resolved it structurally (consider a hints.same_nets entry to pin this down)",
+      "side": "both",
+      "net": {
+        "layout": "\\$8",
+        "reference": "PFD_CP_XCP_XP_T1A_BG"
+      },
+      "device": null,
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    },
+    {
+      "category": "topology",
+      "severity": "warning",
+      "description": "device class has no counterpart on the other side, but no devices of this class were extracted either -- not a real topology mismatch: 'bjt'",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": null,
+        "reference": null,
+        "class": "bjt"
+      },
+      "property": null,
+      "details": null,
+      "circuit": null,
+      "instance": null,
+      "subcircuit": null
+    }
+  ],
+  "net_correspondence": [
+    {
+      "layout": "B0",
+      "reference": "B0",
+      "pin": true
+    },
+    {
+      "layout": "B1",
+      "reference": "B1",
+      "pin": true
+    },
+    {
+      "layout": "DN",
+      "reference": "DN",
+      "pin": true
+    },
+    {
+      "layout": "FB",
+      "reference": "FB",
+      "pin": true
+    },
+    {
+      "layout": "IBN",
+      "reference": "IBN",
+      "pin": true
+    },
+    {
+      "layout": "IBP",
+      "reference": "IBP",
+      "pin": true
+    },
+    {
+      "layout": "ICN",
+      "reference": "ICN",
+      "pin": true
+    },
+    {
+      "layout": "ICP",
+      "reference": "ICP",
+      "pin": true
+    },
+    {
+      "layout": "\\$9",
+      "reference": "PFD_CP_XCP_B0B",
+      "pin": false
+    },
+    {
+      "layout": "\\$26",
+      "reference": "PFD_CP_XCP_B1B",
+      "pin": false
+    },
+    {
+      "layout": "\\$52",
+      "reference": "PFD_CP_XCP_DNB",
+      "pin": false
+    },
+    {
+      "layout": "\\$19",
+      "reference": "PFD_CP_XCP_DNT",
+      "pin": false
+    },
+    {
+      "layout": "\\$53",
+      "reference": "PFD_CP_XCP_UPB",
+      "pin": false
+    },
+    {
+      "layout": "\\$25",
+      "reference": "PFD_CP_XCP_UPT",
+      "pin": false
+    },
+    {
+      "layout": "\\$5",
+      "reference": "PFD_CP_XCP_VDUMP",
+      "pin": false
+    },
+    {
+      "layout": "\\$4",
+      "reference": "PFD_CP_XCP_XBUF_NDA",
+      "pin": false
+    },
+    {
+      "layout": "\\$3",
+      "reference": "PFD_CP_XCP_XBUF_NSRC",
+      "pin": false
+    },
+    {
+      "layout": "\\$30",
+      "reference": "PFD_CP_XCP_XBUF_PDA",
+      "pin": false
+    },
+    {
+      "layout": "\\$29",
+      "reference": "PFD_CP_XCP_XBUF_PSRC",
+      "pin": false
+    },
+    {
+      "layout": "\\$20",
+      "reference": "PFD_CP_XCP_XN_BASE_BG",
+      "pin": false
+    },
+    {
+      "layout": "\\$21",
+      "reference": "PFD_CP_XCP_XN_BASE_MID",
+      "pin": false
+    },
+    {
+      "layout": "\\$10",
+      "reference": "PFD_CP_XCP_XN_T0_BG",
+      "pin": false
+    },
+    {
+      "layout": "\\$14",
+      "reference": "PFD_CP_XCP_XN_T0_MID",
+      "pin": false
+    },
+    {
+      "layout": "\\$11",
+      "reference": "PFD_CP_XCP_XN_T1A_BG",
+      "pin": false
+    },
+    {
+      "layout": "\\$15",
+      "reference": "PFD_CP_XCP_XN_T1A_MID",
+      "pin": false
+    },
+    {
+      "layout": "\\$27",
+      "reference": "PFD_CP_XCP_XN_T1B_BG",
+      "pin": false
+    },
+    {
+      "layout": "\\$28",
+      "reference": "PFD_CP_XCP_XN_T1B_MID",
+      "pin": false
+    },
+    {
+      "layout": "\\$22",
+      "reference": "PFD_CP_XCP_XP_BASE_BG",
+      "pin": false
+    },
+    {
+      "layout": "\\$23",
+      "reference": "PFD_CP_XCP_XP_BASE_MID",
+      "pin": false
+    },
+    {
+      "layout": "\\$7",
+      "reference": "PFD_CP_XCP_XP_T0_BG",
+      "pin": false
+    },
+    {
+      "layout": "\\$12",
+      "reference": "PFD_CP_XCP_XP_T0_MID",
+      "pin": false
+    },
+    {
+      "layout": "\\$8",
+      "reference": "PFD_CP_XCP_XP_T1A_BG",
+      "pin": false
+    },
+    {
+      "layout": "\\$13",
+      "reference": "PFD_CP_XCP_XP_T1A_MID",
+      "pin": false
+    },
+    {
+      "layout": "\\$32",
+      "reference": "PFD_CP_XCP_XP_T1B_BG",
+      "pin": false
+    },
+    {
+      "layout": "\\$33",
+      "reference": "PFD_CP_XCP_XP_T1B_MID",
+      "pin": false
+    },
+    {
+      "layout": "DNB",
+      "reference": "PFD_CP_XPFD_DNB",
+      "pin": true
+    },
+    {
+      "layout": "NRST",
+      "reference": "PFD_CP_XPFD_NRST",
+      "pin": true
+    },
+    {
+      "layout": "PF",
+      "reference": "PFD_CP_XPFD_PF",
+      "pin": true
+    },
+    {
+      "layout": "PR",
+      "reference": "PFD_CP_XPFD_PR",
+      "pin": true
+    },
+    {
+      "layout": "RB",
+      "reference": "PFD_CP_XPFD_RB",
+      "pin": true
+    },
+    {
+      "layout": "RD1",
+      "reference": "PFD_CP_XPFD_RD1",
+      "pin": true
+    },
+    {
+      "layout": "RD10",
+      "reference": "PFD_CP_XPFD_RD10",
+      "pin": true
+    },
+    {
+      "layout": "RD11",
+      "reference": "PFD_CP_XPFD_RD11",
+      "pin": true
+    },
+    {
+      "layout": "RD12",
+      "reference": "PFD_CP_XPFD_RD12",
+      "pin": true
+    },
+    {
+      "layout": "RD13",
+      "reference": "PFD_CP_XPFD_RD13",
+      "pin": true
+    },
+    {
+      "layout": "RD14",
+      "reference": "PFD_CP_XPFD_RD14",
+      "pin": true
+    },
+    {
+      "layout": "RD15",
+      "reference": "PFD_CP_XPFD_RD15",
+      "pin": true
+    },
+    {
+      "layout": "RD16",
+      "reference": "PFD_CP_XPFD_RD16",
+      "pin": true
+    },
+    {
+      "layout": "RD17",
+      "reference": "PFD_CP_XPFD_RD17",
+      "pin": true
+    },
+    {
+      "layout": "RD18",
+      "reference": "PFD_CP_XPFD_RD18",
+      "pin": true
+    },
+    {
+      "layout": "RD19",
+      "reference": "PFD_CP_XPFD_RD19",
+      "pin": true
+    },
+    {
+      "layout": "RD2",
+      "reference": "PFD_CP_XPFD_RD2",
+      "pin": true
+    },
+    {
+      "layout": "RD20",
+      "reference": "PFD_CP_XPFD_RD20",
+      "pin": true
+    },
+    {
+      "layout": "RD21",
+      "reference": "PFD_CP_XPFD_RD21",
+      "pin": true
+    },
+    {
+      "layout": "RD22",
+      "reference": "PFD_CP_XPFD_RD22",
+      "pin": true
+    },
+    {
+      "layout": "RD23",
+      "reference": "PFD_CP_XPFD_RD23",
+      "pin": true
+    },
+    {
+      "layout": "RD3",
+      "reference": "PFD_CP_XPFD_RD3",
+      "pin": true
+    },
+    {
+      "layout": "RD4",
+      "reference": "PFD_CP_XPFD_RD4",
+      "pin": true
+    },
+    {
+      "layout": "RD5",
+      "reference": "PFD_CP_XPFD_RD5",
+      "pin": true
+    },
+    {
+      "layout": "RD6",
+      "reference": "PFD_CP_XPFD_RD6",
+      "pin": true
+    },
+    {
+      "layout": "RD7",
+      "reference": "PFD_CP_XPFD_RD7",
+      "pin": true
+    },
+    {
+      "layout": "RD8",
+      "reference": "PFD_CP_XPFD_RD8",
+      "pin": true
+    },
+    {
+      "layout": "RD9",
+      "reference": "PFD_CP_XPFD_RD9",
+      "pin": true
+    },
+    {
+      "layout": "RST_DLY",
+      "reference": "PFD_CP_XPFD_RST_DLY",
+      "pin": true
+    },
+    {
+      "layout": "RST_RAW",
+      "reference": "PFD_CP_XPFD_RST_RAW",
+      "pin": true
+    },
+    {
+      "layout": "SBF",
+      "reference": "PFD_CP_XPFD_SBF",
+      "pin": true
+    },
+    {
+      "layout": "SBR",
+      "reference": "PFD_CP_XPFD_SBR",
+      "pin": true
+    },
+    {
+      "layout": "UPB",
+      "reference": "PFD_CP_XPFD_UPB",
+      "pin": true
+    },
+    {
+      "layout": "xed_fb_D1",
+      "reference": "PFD_CP_XPFD_XED_FB_D1",
+      "pin": true
+    },
+    {
+      "layout": "xed_fb_D2",
+      "reference": "PFD_CP_XPFD_XED_FB_D2",
+      "pin": true
+    },
+    {
+      "layout": "xed_fb_D3",
+      "reference": "PFD_CP_XPFD_XED_FB_D3",
+      "pin": true
+    },
+    {
+      "layout": "xed_fb_D4",
+      "reference": "PFD_CP_XPFD_XED_FB_D4",
+      "pin": true
+    },
+    {
+      "layout": "xed_fb_D5",
+      "reference": "PFD_CP_XPFD_XED_FB_D5",
+      "pin": true
+    },
+    {
+      "layout": "xed_fb_NN",
+      "reference": "PFD_CP_XPFD_XED_FB_NN",
+      "pin": true
+    },
+    {
+      "layout": "\\$42",
+      "reference": "PFD_CP_XPFD_XED_FB_XND_NI",
+      "pin": false
+    },
+    {
+      "layout": "xed_ref_D1",
+      "reference": "PFD_CP_XPFD_XED_REF_D1",
+      "pin": true
+    },
+    {
+      "layout": "xed_ref_D2",
+      "reference": "PFD_CP_XPFD_XED_REF_D2",
+      "pin": true
+    },
+    {
+      "layout": "xed_ref_D3",
+      "reference": "PFD_CP_XPFD_XED_REF_D3",
+      "pin": true
+    },
+    {
+      "layout": "xed_ref_D4",
+      "reference": "PFD_CP_XPFD_XED_REF_D4",
+      "pin": true
+    },
+    {
+      "layout": "xed_ref_D5",
+      "reference": "PFD_CP_XPFD_XED_REF_D5",
+      "pin": true
+    },
+    {
+      "layout": "xed_ref_NN",
+      "reference": "PFD_CP_XPFD_XED_REF_NN",
+      "pin": true
+    },
+    {
+      "layout": "\\$35",
+      "reference": "PFD_CP_XPFD_XED_REF_XND_NI",
+      "pin": false
+    },
+    {
+      "layout": "\\$41",
+      "reference": "PFD_CP_XPFD_XLAT_FB_XN1_NI",
+      "pin": false
+    },
+    {
+      "layout": "\\$40",
+      "reference": "PFD_CP_XPFD_XLAT_FB_XN2_NI",
+      "pin": false
+    },
+    {
+      "layout": "\\$36",
+      "reference": "PFD_CP_XPFD_XLAT_REF_XN1_NI",
+      "pin": false
+    },
+    {
+      "layout": "\\$37",
+      "reference": "PFD_CP_XPFD_XLAT_REF_XN2_NI",
+      "pin": false
+    },
+    {
+      "layout": "\\$39",
+      "reference": "PFD_CP_XPFD_XNAND_RST_NI",
+      "pin": false
+    },
+    {
+      "layout": "REF",
+      "reference": "REF",
+      "pin": true
+    },
+    {
+      "layout": "UP",
+      "reference": "UP",
+      "pin": true
+    },
+    {
+      "layout": "VDD",
+      "reference": "VDD",
+      "pin": true
+    },
+    {
+      "layout": "VOUT",
+      "reference": "VOUT",
+      "pin": true
+    },
+    {
+      "layout": "VSS",
+      "reference": "VSS",
+      "pin": true
+    }
+  ]
+}

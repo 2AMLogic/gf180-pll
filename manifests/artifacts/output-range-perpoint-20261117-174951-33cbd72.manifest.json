@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "sha256": "78bf141edee5d2821b23f3237f19a0348d056bd40651091e13922b1d1598e9d6",
+      "size": 60193,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.9.3.dev614+g32005e5ebde1",
+        "loom.repo": "2AMLogic/gf180-pll",
+        "commit": "33cbd72dfc41f6db1ede689b86266860e286b433"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-pll/78/78bf141edee5d2821b23f3237f19a0348d056bd40651091e13922b1d1598e9d6",
+      "name": "sim/.artifact-stage/output-range-perpoint/68829a94b2efc09a32067284466f955fef347c5931b52e7288bf846729b2c03b/ff_27c_3.30v_hiin1p454/ff_27c_3.30v_hiin1p454.log"
+    }
+  ]
+}

@@ -73,13 +73,59 @@
 # the "records are append-only, so a citation's hash never goes stale"
 # claim several records make is self-enforcing rather than self-asserted.
 #
+# A fifth guard, the ROW-PER-CAMPAIGN RULE (#958), grades the other half of
+# what the Coverage bullet promises. The loose coverage rule above asks
+# "is the campaign mentioned anywhere at all" -- deliberately, per its own
+# comment. But the bullet promises more than a mention: "One entry below
+# for every directory under `sim/` that contains a `records/`
+# subdirectory" -- a row in the Summary table. Nothing graded that row
+# promise, and the shape it guards against actually occurred: PR #925's
+# `reference-spur-band-top` was the first change to land a
+# `sim/<campaign>/records/` directory whose campaign was named in the
+# document only in prose and cross-references -- which the loose rule
+# accepts by design -- while carrying no Summary-table row of its own, with
+# every check green. The rule: for every enumerated campaign, at least one
+# line of the document's `## Summary table` section must start with `| `
+# immediately followed by the campaign's backticked name -- a first-column
+# cell of exactly that name, optionally carrying an annotation inside the
+# same cell (the `pfd-deadzone` "(operating-point manifest)" row shape).
+#
+# Three design points this rule pins deliberately:
+#
+# - *At least* one row, never *exactly* one. `pfd-deadzone` legitimately
+#   has two qualifying first-column rows (the second documents a second
+#   operating-point manifest in the same experiment directory); requiring
+#   exactly one would fail a correct tree.
+# - The closing backtick is load-bearing. Several campaign names are
+#   proper prefixes of another (`divider-ratio` of `divider-ratio-cell`,
+#   `divider-ratio-chain` and `divider-ratio-dff`; `reference-spur` of
+#   `reference-spur-band-top`), so a pattern that stopped at the opening
+#   backtick would let the longer name's row satisfy the shorter one --
+#   reintroducing the very gap this rule closes. The match is therefore a
+#   literal line-start comparison (awk's index() at position 1), not a
+#   regex, so campaign names need no metacharacter escaping.
+# - The section is load-bearing. The pass tracks the current `^## `
+#   heading and counts a first-column hit only inside `## Summary table`
+#   (#977): a row that satisfies the cell shape but sits in a later
+#   section -- `## Verification-owed cross-check`'s first column is prose
+#   by convention -- is not the Summary-table row the Coverage bullet
+#   promises, and a renamed heading fails loudly (every campaign reported
+#   rowless) rather than the match silently degrading to a whole-file
+#   one.
+#
+# The rule is additive: the loose coverage rule above stays, with its own
+# distinct failure message, because "not silently absent" and "has the row
+# the document promises" are different questions and both are worth a
+# named failure in a single run.
+#
 # Usage: sim/lib/check-characterization-coverage.sh
-# Exit codes: 0 every campaign is covered, the stated counts match the tree,
-#             every campaign's latest record is cited or allowlisted, and
-#             every cited content hash matches; 1 otherwise (a campaign is
-#             missing, a count disagrees, an uncited/unallowlisted latest
-#             record exists, a cited hash is stale, or the report file is
-#             absent).
+# Exit codes: 0 every campaign is covered, has its own Summary-table row,
+#             the stated counts match the tree, every campaign's latest
+#             record is cited or allowlisted, and every cited content hash
+#             matches; 1 otherwise (a campaign is missing, a campaign has
+#             no Summary-table row, a count disagrees, an
+#             uncited/unallowlisted latest record exists, a cited hash is
+#             stale, or the report file is absent).
 
 # NOT_AGGREGATED: deliberate exclusions from the latest-record-cited rule.
 # One "<campaign>:<record-id>  # <one-line reason>" entry per exclusion.
@@ -153,6 +199,49 @@ done
 if [ "${status}" -ne 0 ]; then
   echo "FAIL: sim/CHARACTERIZATION.md has no entry for:" >&2
   for campaign in "${missing[@]}"; do
+    echo "  - ${campaign}" >&2
+  done
+fi
+
+# The row-per-campaign rule (see the header, #958, #977): the Coverage
+# bullet promises a Summary-table row per enumerated campaign, and the
+# loose rule above deliberately accepts a mention anywhere. Grade the
+# row promise separately: at least one line of the document's
+# `## Summary table` section must start with "| `<campaign>`" -- a
+# first-column cell of exactly that name, optionally followed by an
+# annotation inside the same cell (pfd-deadzone's
+# "(operating-point manifest)" row shape). At least one, never exactly one:
+# that second pfd-deadzone row is deliberate. The closing backtick is
+# load-bearing (divider-ratio vs. divider-ratio-cell/-chain/-dff;
+# reference-spur vs. reference-spur-band-top), and the match is awk's
+# literal index() at position 1 rather than a regex, so campaign names
+# need no metacharacter escaping. The pass also tracks the current `^## `
+# heading (#977): only the Summary-table section counts, so a qualifying
+# row moved into a later section is graded like a missing one, and a
+# renamed heading fails loudly (every campaign rowless) instead of the
+# match silently degrading to a whole-file one. Kept beside, not instead
+# of, the loose rule: the two answer different questions, and both
+# failures are named in one run.
+row_missing=()
+
+for campaign in "${campaigns[@]}"; do
+  if ! awk -v cell="| \`${campaign}\`" \
+    '/^## / { in_summary = ($0 ~ /^## Summary table[ \t]*$/) }
+     in_summary && index($0, cell) == 1 { found = 1; exit }
+     END { if (!found) exit 1 }' \
+    "${REPORT}"; then
+    row_missing+=("${campaign}")
+    status=1
+  fi
+done
+
+if [ "${#row_missing[@]}" -gt 0 ]; then
+  echo "FAIL: sim/CHARACTERIZATION.md promises one Summary-table row per" \
+    "campaign, but these campaigns have no row inside \`## Summary table\`" \
+    "whose first cell is their name (a mention in prose, a caveat, a" \
+    "cross-reference, or a qualifying row in a later section satisfies the" \
+    "loose rule above, not this one):" >&2
+  for campaign in "${row_missing[@]}"; do
     echo "  - ${campaign}" >&2
   done
 fi
@@ -359,4 +448,5 @@ if [ "${status}" -ne 0 ]; then
 fi
 
 echo "OK: sim/CHARACTERIZATION.md covers all ${#campaigns[@]} campaign directories" \
-  "and states ${#campaigns[@]} campaigns / ${records_actual} records, matching the tree"
+  "(each with at least one Summary-table row) and states" \
+  "${#campaigns[@]} campaigns / ${records_actual} records, matching the tree"

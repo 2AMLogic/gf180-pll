@@ -6,9 +6,9 @@
 The check grades the *measured value itself*: a figure quoted in the Chipalooza
 proposal's section 5 must be what the cited record's committed per-corner CSV
 produces under the reduction section 5.1 names, rounded to the precision the
-figure is written to.  It exists because eleven checks already grade that
-table's counts, citations, grid, verdicts and references, and none of them
-would have noticed a number that simply is not in the record.
+figure is written to.  It exists because eleven checks graded that table's
+counts, citations, grid, verdicts and references when this one was written, and
+none of them would have noticed a number that simply is not in the record.
 
 Every test builds a throwaway tree whose answer is known and runs the real
 script in it, because a check that only ever runs where it passes proves
@@ -30,6 +30,7 @@ from _fixtures import TreeTestCase, install_checklib
 SIM_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = SIM_DIR.parent
 CHECK = SIM_DIR / "lib" / "check-quoted-value-provenance.sh"
+CHECK_PY = SIM_DIR / "lib" / "check_quoted_value_provenance.py"
 
 PROPOSAL = "docs/chipalooza/challenge-5-proposal.md"
 SPEC = "spec/pll.md"
@@ -495,6 +496,7 @@ class _Tree:
         self.root = root
         (root / "sim" / "lib").mkdir(parents=True)
         shutil.copy2(CHECK, root / "sim" / "lib" / CHECK.name)
+        shutil.copy2(CHECK_PY, root / "sim" / "lib" / CHECK_PY.name)
         install_checklib(root)
 
         rec_dir = root / "sim" / CAMPAIGN / "records"
@@ -578,18 +580,6 @@ class _Tree:
 
 class _TreeTest(TreeTestCase):
     tree_cls = _Tree
-
-    def assertPasses(self) -> subprocess.CompletedProcess:
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        return result
-
-    def assertFails(self, *needles: str) -> subprocess.CompletedProcess:
-        result = self.tree.run()
-        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
-        for needle in needles:
-            self.assertIn(needle, result.stderr)
-        return result
 
 
 class TestCleanTree(_TreeTest):
