@@ -155,13 +155,14 @@ from functools import partial
 from typing import ClassVar, Sequence
 
 try:
-    from .. import _canvas
+    from .. import _canvas, _drc
 except ImportError:  # this package's own dir (not its "pll_top" parent) is the
     # sys.path root under layout/tests's flat-import convention (see
     # floorplan/skeleton.py and every layout/tests/test_*.py's own
     # sys.path.insert(..., ".../pll_top") -- "vco"/"lock_detector"/"pfd_cp"
     # are then each their own top-level package, one level short of "..").
     import _canvas
+    import _drc
 
 # --- GDS layers, gf180mcuD (identical citation/values to
 # pfd_cp/devgen.py's own LAYER table -- confirmed against
@@ -203,7 +204,10 @@ LAYER = {
 # constants; see those modules' docstrings for the full per-rule derivation.
 # Repeated (not imported) so this package does not depend on either sibling
 # block family's own module -- each full-custom leaf-cell family owns its
-# own generator. ---
+# own generator. CO.1's contact size is the one exception (issue #922): the
+# PDK pins it as min *and* max, so divergence is never correct and it is
+# bound from the shared package rule table ``_drc.py`` rather than
+# repeated. ---
 SD_OVERHANG_UM = 0.5  # DF.6_LV=0.24 min
 COMP_GAP_UM = 0.6  # DF.3a_LV=0.28 min, between two same-flavor devices' comp islands
 NWELL_TO_NMOS_GAP_UM = 4.0  # DF.16_LV=0.43 min, PMOS-to-NMOS clearance across a well edge
@@ -212,7 +216,7 @@ POLY_ENDCAP_UM = 0.65  # PL.4_LV=0.22 min, sized so the gate contact tab's own M
 GATE_TAB_W_UM = 0.4
 GATE_TAB_H_UM = 0.4
 GATE_TAB_OVERLAP_UM = 0.05
-CONTACT_SIZE_UM = 0.22  # CO.1
+CONTACT_SIZE_UM = _drc.CONTACT_SIZE_UM  # CO.1
 CONTACT_PITCH_UM = 0.5  # 0.22 contact + 0.28 pitch gap > CO.2a's 0.25 min
 CONTACT_ROW_MARGIN_UM = 0.1
 IMPLANT_MARGIN_UM = 0.3  # NP.5a/PP.5a=0.23, NP.5b/PP.5b=0.16 min
