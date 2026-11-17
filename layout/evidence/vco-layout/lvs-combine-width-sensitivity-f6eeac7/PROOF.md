@@ -33,8 +33,12 @@ reference card's width alone.
   record.
 
 The scratch references are not committed (single-character `sed` deltas of
-the committed reference; the exact substitution is stated above and in each
-run's log, which names the netlist file and its content hash).
+the committed reference). Each run's log names the scratch netlist file it
+read (`Input schematic file: .../vco_block_10nm_short.spice`) but carries no
+hash of it, so the substitution itself rests on this record's statement of
+it above; what the logs and the committed `vco_block.cir` do establish
+independently is that the layout side and the extraction were identical to
+the match run's.
 
 ## Provenance
 

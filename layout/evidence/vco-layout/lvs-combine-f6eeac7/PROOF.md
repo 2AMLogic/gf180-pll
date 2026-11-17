@@ -67,7 +67,7 @@ above needs no extra flag; `combine=False` reproduces the baseline run).
 | Run | 2026-11-17 00:52 UTC |
 | PDK | `gf180mcuD`, open_pdks `f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7` (the `sim/pdk.json` pin) |
 | KLayout | `0.30.12` — **off the 0.28.16 pin**: no 0.28.16 binary exists on the capturing host; disclosed per-file in `layout/lib/check-layout-status-claims.sh` (`OFF_PIN_DISCLOSED`). The on-pin engine warrant for this block's match stays `lvs-recheck-klayout-0.28.16/` (`c6d73a35` deck). |
-| GDS | `layout/evidence/vco-layout/vco_block.gds`, sha256 `4f5151dfbcd2d43694bfc845a507fbd43974559f1e1f8c4a8b6064afe95deb3c3` |
+| GDS | `layout/evidence/vco-layout/vco_block.gds`, sha256 `4f5151dfbcd2d43694bfc845a507fbd43974559f1e1f8c4a8b6064afe95deb3c` |
 | Reference | `decap-20261009/vco_block.spice`, sha256 `8a948654b05e32752a0f68d47ed6fc5d2033a25dcb19f8bab5ad192ddc93a821` — unmodified; 65 MOSFET/resistor cards + the `C_XCDEC1 ... M=2` decap card |
 | Deck log | `Selected SIMPLIFY option: false` / `Selected COMBINE option: true` / `POLY_RES Selected is 3k` (DR-009's shim) / `Congratulations! Netlists match.`, deck run time 5.04 s |
 | Artifacts | `lvs.stdout.log`, `vco_block.cir` (66 cards), `vco_block.lvsdb`, `path-normalisation.txt` |
