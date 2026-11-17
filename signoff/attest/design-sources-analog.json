@@ -175,7 +175,7 @@
       "role": "derived-netlist"
     },
     {
-      "content_hash": "sha256:86b0ad2bf8c4ef403724223c62d61a2b4f6f7988dd2b40af63008e09e5e9cde0",
+      "content_hash": "sha256:c37291e28fff5722a8357306eebb89cfc9d73e9eeea3670f6f66f77fe71dd0bd",
       "path": "design/netlist/loop_filter.spice",
       "role": "derived-netlist"
     },

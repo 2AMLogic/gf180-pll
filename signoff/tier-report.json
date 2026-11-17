@@ -33,7 +33,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:18e1ce79e498d572337cfb50d26fc5efb391eac74bf17e984ffc6ef668a05820",
+        "content_hash": "sha256:e54704ffa783851b53e2fc70ab1fed2412154c97941e218f8c7ce1693c34c5a8",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -42,7 +42,7 @@
             "path": "signoff/attest/design-sources-analog.json",
             "scope": "repo"
           },
-          "content_hash": "sha256:18e1ce79e498d572337cfb50d26fc5efb391eac74bf17e984ffc6ef668a05820",
+          "content_hash": "sha256:e54704ffa783851b53e2fc70ab1fed2412154c97941e218f8c7ce1693c34c5a8",
           "input_verified": true,
           "summary": "analog partition: every design source and derived netlist inventoried; netlists regenerated and checked in CI",
           "source": "signoff/attest/design-sources-analog.json"
