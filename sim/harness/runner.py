@@ -650,9 +650,9 @@ def replay_point(
     (the earlier attempt's per-deck wall clock is not in the log), and
     ``host`` is the caller-supplied attribution -- the recording host for a
     local-backend attempt, empty ("unattributed") for an off-host one, whose
-    per-point executing hosts a raw log does not name. ``simulator`` and
-    ``init`` ARE re-derived from the log's own text, the same way the live
-    path derives them, so those attributions survive the replay.
+    per-point executing hosts a raw log does not name. ``simulator``, ``init``
+    and ``solver`` ARE re-derived from the log's own text, the same way the
+    live path derives them, so those attributions survive the replay.
     """
     runs: list[PhaseRun] = []
     measurements: dict[str, float] = {}
@@ -697,15 +697,19 @@ def replay_point(
                 host=host,
                 simulator=simulator_of(text),
                 init=init_of(text),
+                solver=solver_of(text),
             )
         )
 
     # Distinct, named values only, and the all-present rule for init -- both
     # exactly as run_point aggregates them, so a replayed point's record row
-    # is shaped like a simulated one.
+    # is shaped like a simulated one. Solver joins by run_point's named-only
+    # rule: a deck whose output named no solver is missing evidence about
+    # that deck, not evidence that a different solver ran.
     simulators = list(dict.fromkeys(run.simulator for run in runs if run.simulator))
     inits = list(dict.fromkeys(run.init for run in runs))
     init = "+".join(inits) if all(inits) else ""
+    solvers = list(dict.fromkeys(run.solver for run in runs if run.solver))
     common = {
         "point": point,
         "raw_files": raw_files,
@@ -717,6 +721,7 @@ def replay_point(
         "host": host,
         "simulator": "+".join(simulators),
         "init": init,
+        "solver": "+".join(solvers),
     }
 
     if tb.derived is not None and tb.derived.measures:
