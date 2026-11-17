@@ -59,14 +59,14 @@ change here.
 
 One directory per job, in both directions
 -----------------------------------------
-The job contract's own output names are fixed (``ngspice.log``,
-``ngspice.rc``, ``ngspice.host``), while the ``rundir`` the harness hands a
+The job contract's own output names are fixed
+(:data:`CONTRACT_OUTPUT_NAMES`), while the ``rundir`` the harness hands a
 point is *shared* by every point of a grid unless the manifest declares
 ``raw_files``. So both halves of the transport are scoped to
 ``<rundir>/.batch-<job-id>/``: the upload stages ``job.json``/``inputs/``
 there, and the download collects ``outputs/`` there -- never into the shared
 rundir, where a concurrent point's download would otherwise overwrite those
-three files between this point's own download and its read of them, and
+contract files between this point's own download and its read of them, and
 silently attribute another PVT point's log, exit code and host to this one
 (#507). What the *deck* wrote is then published into the rundir, because that
 is where the harness resolves a manifest's ``raw_files``.
@@ -870,10 +870,10 @@ class BatchBackend:
         testbench that declares no ``raw_files`` gives every point of a grid
         the same ``rundir`` (``runner._run_phase``), points run concurrently at
         the CLI's own default ``-j``, and the job contract's output names are
-        fixed (:data:`LOG_NAME`/:data:`RC_NAME`/:data:`HOST_NAME`). Collecting
+        fixed (:data:`CONTRACT_OUTPUT_NAMES`). Collecting
         straight into the shared rundir therefore let one point's download
-        overwrite those three files between another point's own download and
-        its read of them -- silently recording a *different* PVT point's
+        overwrite those contract files between another point's own download
+        and its read of them -- silently recording a *different* PVT point's
         ngspice log, exit code and executing host (#507). The upload side was
         already isolated this way; this is the same isolation on the way back.
 
