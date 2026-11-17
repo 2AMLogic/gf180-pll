@@ -10,7 +10,10 @@ no import, no derivation, and no test comparing any two of them -- a typo
 in one copy, or a rule revision applied to five of six, would surface only
 as a DRC failure on that one block. Named with the same leading-underscore
 package-private convention as ``_canvas.py`` (issue #317), the sibling
-shared home this module follows.
+shared home this module follows. As of issue #1013 the module also pins
+CO.7 (contact-to-gate-poly space), CO.8 (poly-contact-to-comp space) and
+NP.5a/PP.5a (implant overlap of the gate), under the same
+one-literal-definition alias discipline as CO.1.
 
 Scope: rule values the PDK fixes *exactly*, only. The per-block chosen
 margins above rule minima -- ``VIA_ENCLOSURE_UM`` (0.09 in four modules,
@@ -36,3 +39,12 @@ from __future__ import annotations
 #: square). Contacts are not resizable, so this is a hard constant, not a
 #: derived margin.
 CONTACT_SIZE_UM = 0.22
+
+#: gf180mcu rule CO.7: minimum contact-to-gate-poly space (0.15 um).
+CONTACT_TO_GATE_POLY_UM = 0.15
+
+#: gf180mcu rule CO.8: minimum poly-contact-to-comp space (0.17 um).
+POLY_CONTACT_TO_COMP_UM = 0.17
+
+#: gf180mcu rule NP.5a / PP.5a: minimum implant overlap of the gate (0.23 um).
+IMPLANT_GATE_ENCLOSE_UM = 0.23

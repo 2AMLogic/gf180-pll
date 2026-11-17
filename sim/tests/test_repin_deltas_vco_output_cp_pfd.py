@@ -10,8 +10,8 @@ check by eye, and each is asserted here instead of trusted:
 
 - **Its flip list is exact.** #826's acceptance criterion sends any
   PASS/FAIL flip to a new issue; this document's group has four (three
-  FAIL→PASS, one PASS→FAIL, all `duty_pct` at the `fs`/`lo` edge, filed as
-  #966), plus four FAIL→FAIL rows with moved values. The set of eight, and
+  FAIL→PASS, one PASS→FAIL, all `duty_pct` at the `fs`/`lo` edge), plus
+  four FAIL→FAIL rows with moved values. The set of eight, and
   each row's direction, is asserted as stated — a fifth silent flip is
   exactly what this test exists to catch.
 
@@ -54,7 +54,8 @@ REGEN = re.compile(
     r"\s+(sim/[\w.-]+/records/[\d-]+-\w+\.md)\n"
 )
 
-#: The four verdict flips the document files as #966: corner -> direction.
+#: The four verdict flips the document tabulates below its verdict:
+#: corner -> direction.
 FLIPS = {
     "ff_-40c_3.30v_lo": "F2P",
     "fs_-40c_3.30v_lo": "F2P",
@@ -107,8 +108,10 @@ class TheDocumentsTablesAreGenerated(unittest.TestCase):
                 )
 
 
-class TheFlipListTheDocumentFiles(unittest.TestCase):
-    """#826's acceptance criterion: every flip is called out, here as #966.
+class TheFlipListTheDocumentTabulates(unittest.TestCase):
+    """#826's acceptance criterion: every flip is called out, tabulated in
+    the document and accepted as current evidence by operator ruling
+    2026-11-15.
 
     The comparator reports eight graded rows; the document's claim is that
     exactly four of them are flips (three FAIL->PASS, one PASS->FAIL) and
@@ -186,8 +189,11 @@ class TheAttributionProseRestsOnCommittedProvenance(unittest.TestCase):
         self.assertEqual(
             len(re.findall(r"FAIL — duty_pct", NEW.read_text(encoding="utf-8"))), 5)
 
-    def test_the_document_names_the_flips_issue(self):
-        self.assertIn("#966", _doc_text())
+    def test_the_document_tabulates_the_flips_and_cites_the_accepting_ruling(self):
+        text = _doc_text()
+        self.assertIn("**Per-corner verdict flips**", text)
+        self.assertIn("operator ruling 2026-11-15", text)
+        self.assertNotIn("#966", text)
 
 
 if __name__ == "__main__":

@@ -208,6 +208,26 @@ def testbench_inventory(root: Path, part: str) -> dict:
         if not list((root / "sim" / e / "records").glob("*.md")):
             raise AttestError(f"sim/{e}/records: no committed record")
         has_manifest = any(f.name == "tb.json" for f in files)
+        # Pin each manifest's declared reduction module (derived.module)
+        # alongside the tb* files: it produces reported columns of the record,
+        # including graded ones, so an edit to it must fail --check exactly
+        # like a testbench edit does (issue #1021).  Resolution mirrors
+        # sim/harness/testbench.py -- relative to the manifest's directory.
+        for f in [f for f in files if f.name == "tb.json"]:
+            declared = (json.loads(f.read_bytes()).get("derived") or {}).get("module")
+            if not declared:
+                continue
+            mod = f.parent / declared
+            try:
+                mod.resolve().relative_to(f.parent.resolve())
+            except ValueError:
+                raise AttestError(
+                    f"sim/{e}: derived.module {declared!r} must live inside its "
+                    f"testbench directory") from None
+            if not mod.resolve().is_file():
+                raise AttestError(f"sim/{e}: derived.module {declared!r} does not exist")
+            files.append(mod)
+        files = sorted(set(files))
         runners = sorted(str(f.relative_to(root)) for d in tbdirs for f in d.glob("run*.sh"))
         if has_manifest:
             cold = f"python3 sim/run_corners.py {e}"
@@ -265,6 +285,7 @@ def testbench_inventory(root: Path, part: str) -> dict:
             "every experiment with records/ is assigned to a partition or explicitly excluded",
             "each listed experiment is disclosed in sim/CHARACTERIZATION.md and has a committed record",
             "each has committed tb_*.sp/.spice testbenches and a tb.json manifest or a run*.sh driver",
+            "each manifest's declared reduction module (derived.module) exists and is content-pinned",
             "sim/README.md cites the PDK revision CI installs; xschem and klt pins exist in CI",
             "CI runs 'bash sim/selftest.sh'",
         ],
@@ -328,8 +349,9 @@ def cases(root: Path):
                design_sources(root, part))
     for part in PARTITIONS:
         yield (f"9.{part}", f"testbench-inventory-{part}", 9,
-               f"{part} partition: every claimed measurement's testbench committed with a cold-start "
-               "command; PDK revision and tool pins recorded",
+               f"{part} partition: every claimed measurement's testbench and declared "
+               "reduction module committed with a cold-start command; PDK revision and "
+               "tool pins recorded",
                testbench_inventory(root, part))
     yield ("10", "repo-hygiene", 10,
            "README, contributing guide, license, spec and the CI commands audited",

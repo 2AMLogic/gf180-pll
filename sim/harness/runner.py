@@ -466,6 +466,11 @@ class PointResult:
     #: Init identity per :attr:`PhaseRun.init`; ``+``-joined across distinct
     #: values, empty if any deck of the point did not show one.
     init: str = ""
+    #: True when this result was synthesized from an earlier attempt's raw
+    #: log by :func:`replay_point` (``--resume``) instead of simulated by
+    #: this process. Carried into the record's point entry so a reader can
+    #: tell replayed evidence from freshly simulated evidence.
+    replayed: bool = False
 
     def as_dict(self) -> dict:
         record = self.point.as_dict()
@@ -497,6 +502,8 @@ class PointResult:
             record["missing_measurements"] = self.missing
         if self.not_measured:
             record["not_measured"] = self.not_measured
+        if self.replayed:
+            record["replayed"] = True
         written = {
             name: raw.path.name
             for name, raw in self.raw_files.items()
@@ -576,6 +583,154 @@ def parse_measurements(text: str, raw_names: list[str] | tuple[str, ...] = ()) -
     :func:`parse_measurements_checked` for the rejected tokens.
     """
     return parse_measurements_checked(text, raw_names)[0]
+
+
+#: The banner ``_run_phase`` writes FIRST to a timed-out point's log. A log
+#: starting with it is a killed deck's, whatever complete-looking output
+#: follows the banner -- it is never replayable success evidence (#973).
+_TIMEOUT_MARKER = "TIMEOUT after "
+
+
+def _replayable_phase_log(log_path: Path, phase: Phase) -> str | None:
+    """This phase's log text, if it is a completed success worth replaying.
+
+    A log qualifies only when it exists, is not empty, does not carry the
+    per-point timeout banner (written FIRST, so even a killed deck whose
+    retained partial output happens to contain every measurement can never
+    pass this check), and parses to every *required* measurement the phase
+    declares -- the same completeness rule that fails a live point. Anything
+    else returns ``None`` and the caller re-runs the point.
+    """
+    try:
+        text = log_path.read_text()
+    except OSError:
+        return None
+    if not text.strip() or text.lstrip().startswith(_TIMEOUT_MARKER):
+        return None
+    measurements, _ = parse_measurements_checked(text, phase.raw_measures.keys())
+    if [n for n in phase.required_measure_names if n not in measurements]:
+        return None
+    return text
+
+
+def replay_point(
+    tb: Testbench,
+    point: PvtPoint,
+    workdir: Path,
+    log_dir: Path,
+    host: str = "",
+) -> PointResult | None:
+    """Rebuild one PVT point's result from its existing per-phase logs.
+
+    ``--resume`` calls this before dispatching the grid: a point whose every
+    phase's log qualifies (:func:`_replayable_phase_log`) is synthesized here
+    instead of being re-simulated. The measurements are a pure function of
+    the log text -- ``parse_measurements_checked``, the same parser the live
+    path uses -- so this adds no second parser and no new on-disk format
+    (#973). Returns ``None`` when any phase's log does not qualify; the
+    caller then re-runs the WHOLE point, exactly as an ordinary run would
+    (a point is never half-replayed).
+
+    Provenance limits, stated rather than papered over: ``seconds`` is 0
+    (the earlier attempt's per-deck wall clock is not in the log), and
+    ``host`` is the caller-supplied attribution -- the recording host for a
+    local-backend attempt, empty ("unattributed") for an off-host one, whose
+    per-point executing hosts a raw log does not name. ``simulator`` and
+    ``init`` ARE re-derived from the log's own text, the same way the live
+    path derives them, so those attributions survive the replay.
+    """
+    runs: list[PhaseRun] = []
+    measurements: dict[str, float] = {}
+    raw_files: dict[str, RawFile] = {}
+    raw_missing: list[str] = []
+    not_measured: list[str] = []
+    for phase in tb.run_phases:
+        run_id = phase.run_id(point.corner_id)
+        log_path = log_dir / f"{run_id}.log"
+        text = _replayable_phase_log(log_path, phase)
+        if text is None:
+            return None
+        phase_measurements, _ = parse_measurements_checked(
+            text, phase.raw_measures.keys()
+        )
+        measurements.update(phase_measurements)
+        # Mirrors capture_raw_files' resolution, minus the copy: a retained
+        # raw file was already banked into log_dir by the attempt that ran
+        # the deck; a non-retained one still lives (or lived) in the scratch
+        # tree. A file that is gone is data, not an error -- exactly the
+        # treatment a live run's absent raw file gets.
+        for spec in phase.raw_files:
+            if spec.retain:
+                path = log_dir / f"{run_id}-{spec.name}"
+            else:
+                rundir = workdir / f"{run_id}.d" if phase.raw_files else workdir
+                path = rundir / spec.name
+            raw_files[spec.name] = RawFile(
+                name=spec.name, path=path, columns=spec.columns
+            )
+            if not path.exists():
+                raw_missing.append(spec.name)
+        not_measured.extend(
+            name for name in phase.measure_names
+            if tb.is_optional(name) and name not in phase_measurements
+        )
+        runs.append(
+            PhaseRun(
+                name=phase.name,
+                status="ok",
+                deck=f"{run_id}.spice",
+                log=log_path.name,
+                seconds=0.0,
+                host=host,
+                simulator=simulator_of(text),
+                init=init_of(text),
+            )
+        )
+
+    # Distinct, named values only, and the all-present rule for init -- both
+    # exactly as run_point aggregates them, so a replayed point's record row
+    # is shaped like a simulated one.
+    simulators = list(dict.fromkeys(run.simulator for run in runs if run.simulator))
+    inits = list(dict.fromkeys(run.init for run in runs))
+    init = "+".join(inits) if all(inits) else ""
+    common = {
+        "point": point,
+        "raw_files": raw_files,
+        "raw_files_missing": raw_missing,
+        "seconds": 0.0,
+        "deck": runs[0].deck,
+        "log": runs[0].log,
+        "phases": tuple(runs),
+        "host": host,
+        "simulator": "+".join(simulators),
+        "init": init,
+    }
+
+    if tb.derived is not None and tb.derived.measures:
+        try:
+            measurements.update(
+                derive_point_measures(
+                    tb.derived, _point_view(tb, point, measurements, raw_files)
+                )
+            )
+        except DerivedError as exc:
+            # Same treatment as the live path: the reduction is evidence too,
+            # and a deterministic failure is reported, not retried.
+            return PointResult(
+                status="error",
+                measurements=measurements,
+                message=str(exc),
+                replayed=True,
+                **common,
+            )
+
+    return PointResult(
+        status="ok",
+        measurements=measurements,
+        not_measured=[n for n in tb.measure_names if n not in measurements],
+        replayed=True,
+        **common,
+    )
 
 
 def run_point(
@@ -1054,6 +1209,7 @@ def run_grid(
     on_result=None,
     log_dir: Path | None = None,
     backend=None,
+    replay: dict[str, PointResult] | None = None,
 ) -> list[PointResult]:
     """Run every PVT point; results come back in grid order regardless of jobs.
 
@@ -1062,6 +1218,10 @@ def run_grid(
     does not multiply against ngspice's own internal thread count -- the
     self-oversubscription #241/#244 fixed for the shell campaign path but not
     for this one. A serial run is left exactly as it was.
+
+    ``replay`` (``--resume``, #973) maps corner-id -> a pre-built
+    :class:`PointResult` (:func:`replay_point`): those points are handed back
+    without any backend call, and every other point runs exactly as before.
     """
     results: list[PointResult | None] = [None] * len(points)
     backend = backend if backend is not None else LocalBackend()
@@ -1075,6 +1235,12 @@ def run_grid(
 
     def _one(index_point):
         index, point = index_point
+        replayed = (replay or {}).get(point.corner_id)
+        if replayed is not None:
+            results[index] = replayed
+            if on_result is not None:
+                on_result(replayed)
+            return replayed
         result = run_point(
             tb, pdk, point, workdir, timeout_s=timeout_s, log_dir=log_dir,
             omp_env=omp_env, backend=backend,

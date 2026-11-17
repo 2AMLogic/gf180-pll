@@ -1,0 +1,15 @@
+* Reference schematic for the layout/ DRC+LVS flow proof (issue #16).
+*
+* Hand-written on purpose: LVS is only evidence if the schematic is stated
+* independently of the layout. Device sizes are the ones the gf180mcu
+* standard-cell CDL documents for gf180mcu_fd_sc_mcu9t5v0__clkinv_1.
+*
+* Bulk terminals are tied to the rails because the filltie cells in the row
+* tie nwell -> VDD and p-substrate -> VSS. Run LVS with --lvs_sub=VSS so the
+* extractor names the global substrate net VSS to match (see layout/README.md
+* -> "The substrate-net gotcha").
+
+.subckt inv_tb I ZN VDD VSS
+M_i_0 ZN I VSS VSS nfet_05v0 W=0.73u L=0.6u
+M_i_1 ZN I VDD VDD pfet_05v0 W=1.83u L=0.5u
+.ends
