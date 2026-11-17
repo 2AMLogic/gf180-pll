@@ -101,8 +101,8 @@
 # WHAT IT DOES NOT DO
 #
 # It does not grade the inventory's `Lines` or `Commits` columns. Those are
-# `wc -l` and `git log` readings taken at the commit that wrote each row --
-# the file says so -- and they move on every edit to any checker. Grading
+# `wc -l` and `git log` readings at the one reference commit the file names
+# -- the file says so -- and they move on every edit to any checker. Grading
 # them would make the inventory churn on changes that do not touch what it
 # is for, which is the set of checkers and what each one reads.
 #
@@ -112,6 +112,8 @@
 #
 # It does not decide whether a checker SHOULD read the proposal. Rule 4
 # re-derives how many do, not how many ought to.
+#
+# Reads committed files only; no PDK, no klayout, no forge.
 #
 # Usage: docs/lib/check-claim-checker-inventory.sh
 # Exit codes: 0 the family is non-empty, the inventory states its size and
