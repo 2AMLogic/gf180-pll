@@ -444,8 +444,6 @@ class TheOutputRangeIncrementRequalifiesTwoSinglePoints(unittest.TestCase):
         self.assertIn("20 µV", text)
 
 
-if __name__ == "__main__":
-    unittest.main()
 class TheVcoTuningRangeIncrementRequalifiesTwoBenches(unittest.TestCase):
     """The fifth increment (2026-11-18) re-qualifies `vco-tuning-range`'s two
     harness-form benches: the 504-point tuning grid and the 144-point
@@ -540,3 +538,7 @@ class TheVcoTuningRangeIncrementRequalifiesTwoBenches(unittest.TestCase):
         self.assertIn(
             "six band-select-mirror Monte Carlo / negative-control records",
             text)
+
+
+if __name__ == "__main__":
+    unittest.main()

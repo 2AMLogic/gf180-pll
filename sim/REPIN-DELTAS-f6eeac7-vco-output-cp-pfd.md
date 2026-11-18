@@ -82,7 +82,7 @@ still owed under #826.
 | `output-range` lo-edge diagnostic | `20260801-061907-67d7127` | `20261117-174557-327ee00` | 1 pt (typical / 27 °C / 3.30 V, `lo` edge, band 1, N=8, seed 1.679 V) |
 | `output-range` CAPPED `hi` row | `20260819-190341-70a4128` | `20261117-174951-33cbd72` | 1 pt (ff / 27 °C / 3.30 V, `hi` edge, band 7, N=32, seed 1.454 V) |
 | `vco-tuning-range` tuning grid | `20260804-162735-72883fb` | `20261118-021803-deb4ec0` | 504 pts (7 bundles × 3 temps × 3 supplies × 8 band codes) |
-| `vco-tuning-range` supply bench | `20260804-211600-f599a65` | `20261118-023753-1b6f7c2` | 144 pts (two phases: static pushing × 63, transient jitter × 144 grid points) |
+| `vco-tuning-range` supply bench | `20260804-211600-f599a65` | `20261118-023753-1b6f7c2` | 144 pts (one shared grid — 63 static-pushing + 63 mandated-PVT transient + 12 band-sweep + 6 ripple-frequency-check points; both decks run at every point, 288 graded rows) |
 
 open_pdks `f6eeac7`, **every point executed on the batch fleet** — the host
 that minted the record ran no ngspice of its own (24 concurrent off-host
@@ -230,11 +230,25 @@ Nothing to file.
 acceptance-check flip and zero per-point findings.** Both comparisons come
 back **per-corner verdicts unchanged** — 504 graded rows on the tuning
 grid, 288 on the supply bench — with stated limits identical and no
-comparator findings section on either. The supply-induced rows of the
-supply bench move ≤ 0.28 % relative; the rows that move by tens of percent
+comparator findings section on either. In the supply bench's jitter phase
+the supply-induced rows (`rip_*`, `step_*`) move ≤ 0.28 % relative — worst
+`rip_tj_pp_s` at 0.2742 % — while the rows that move by tens of percent
 are the quiet-copy numerical floor and the `floor_margin_x` ratio built on
-it, which the record's own methodology calls solver noise, not results. The
-one flip is acceptance check 5 (f(Vctrl) monotonicity) at
+it, which the record's own methodology calls solver noise, not results.
+The push phase needs its own disposition: 24 of its rows move above
+0.28 % relative. The pushing coefficient itself moves ≈3.3 %
+(`push_norm_pct_per_v` 3.433 %, `push_slope_hz_per_v` 3.297 % — the
+−54.5 → −54.6 move the `sim/CHARACTERIZATION.md` row records), the supply
+currents reach `i6` 5.433 % and `i7` 4.998 %, and `push_nl_pct` — a
+limit-bearing row, and the bench's largest relative mover at 141.8 % —
+moves an absolute 1.542 against its `max=5` limit at
+`sf_27c_3.30v_band0_r16_f100` (≈31 % of the limit budget, verdict
+unchanged; the relative figure divides two small nonlinearity
+percentages, 0.13..3.4 across the old range, so it reads far larger than
+the absolute move). With the ngspice-46 control below reproducing the
+predecessor bit-for-bit at the shared point, these push-phase moves are
+host/batch-build residue, not PDK. The one flip is acceptance check 5
+(f(Vctrl) monotonicity) at
 `all-fast/27C/3.30V` band 1 under the batch image's ngspice-47 — a
 transient-solve inversion that every other solver build tested resolves the
 other way, and that the pinned local ngspice-47 cannot solve at all inside
@@ -494,8 +508,11 @@ Reading the controls together with the batch records below:
   under the new pin, the local ngspice-47 build cannot solve the point at
   all in 300 s, and the batch's 47 build returns a dipped f6. Filed as
   #1059.
-- **The fleet-vs-predecessor residue on the tuning grid (~0.1 % on
-  frequencies, ~0.5 % on the worst buffer-level rows) is host plus
+- **The fleet-vs-predecessor residue on the tuning grid — frequencies up to
+  ~0.8 % (`f7` 0.819 %, `f5` 0.4599 %, excluding the #1059 band-1 curve),
+  swing-high buffer rows ≤ 1.9 %, and the near-zero swing-low rails at
+  429 % / 64.81 % relative (absolute 0.0816 V / 0.0632 V against the
+  0.3 V limit, ≈27 % / ≈21 % of its budget) — is host plus
   batch-build**, not PDK and not the 46→47 version label alone: the local
   ngspice-47 probe of the supply bench's control point reproduced the
   predecessor's pushing phase bit-for-bit while the fleet's 47 build moves
@@ -1011,9 +1028,20 @@ python3 sim/lib/record_delta.py \
 
 The band-1 outlier rows (`f6`, `tp6`, `k5`/`k7`, `kvco_min`/`kvco_max`) are
 all the same curve — `all-fast/27c_3.30v_band1` — through the check-5
-inversion dispositioned as #1059; every other row of the 504-point grid
-moved ≤ 0.83 % relative, with the predecessor a Darwin arm64 record and the
-PDK excluded by the controls above. Check 4b's FAIL is not a flip: the
+inversion dispositioned as #1059. "Row" below means a table row — one
+metric's maximum across the grid — not a single grid point: this table
+reports per-metric maxima, not per-point movement. Outside the band-1
+outliers the largest movers are the two swing-low buffer rails, `sw1lo`
+(429 % relative at `ff_125c_3.63v_band6`) and `sw7lo` (64.81 % at
+`all-fast_-40c_3.30v_band7`): both rails sit near zero, so a relative
+figure there measures the floor, not the signal — in absolute terms they
+move 0.0816 V and 0.0632 V against their `max=0.3` V limit, ≈27 % and
+≈21 % of the limit budget, verdicts unchanged. Every other row of the
+grid moved ≤ 4.46 % relative (`k6` 4.451 % at `ss_-40c_3.30v_band0`, then
+`i2` 4.337 % and `i6` 3.325 %, with the other current, gain and swing-high
+rows between 1.2 % and 3.1 % and the frequency/period rows ≤ 0.83 %), with
+the predecessor a Darwin arm64 record and the PDK excluded by the controls
+above. Check 4b's FAIL is not a flip: the
 predecessor already read 154.4 MHz/V at the same adversarial
 all-fast/27C/3.30V B7 point, and the new record's own caveat field carries
 the same reading.
