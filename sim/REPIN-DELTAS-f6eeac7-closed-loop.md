@@ -38,8 +38,59 @@ uncommitted; the committed record is the complete second run, whose
 The predecessor was minted on macOS/arm64 with ngspice-46 from a dirty tree.
 The re-run differs in the PDK pin, the simulator (46 → 47), the host OS and
 the execution backend. This is a closed-loop transient, so the movement below
-is **not attributable to the PDK alone**; no single-variable control probe
-was run for this bench. Stated as a limitation, not resolved.
+is **not attributable to the PDK alone**. The deck also carries the
+nonlinear-moscap `m=` trigger of #153/#926 (6 instances in the netlist
+snapshot: `cap_nmos_03v3_b` x4 in `loop_filter`, `cap_nmos_03v3` x2 in
+`vco`), and per #932 a build that loads that family is not evidence that it
+returns the same values. The next subsection measures one overlap point.
+
+### Overlap point: ngspice-46 under `f6eeac7`, one corner
+
+```bash
+SIM_NGSPICE_BIN=$HOME/.local/opt/ngspice-46/bin/ngspice \
+PATH=$HOME/.local/opt/ngspice-46/bin:$PATH \
+  python3 sim/run_corners.py reference-spur --backend local \
+  --corners typical --temps 27 --supply 3.3 --supply-tol 0 \
+  --axis vs=vs1p795 --timeout 1800 --no-write -j 1
+```
+
+Same deck, same PDK pin (`f6eeac7`), `typical_27c_3.30v_vs1p795`, 1/1 ok,
+**935.3 s wall clock** on this host. A first attempt with the harness's
+default 300 s per-point timeout was killed with no output (`TIMEOUT after
+300s`), so a local run of this bench needs `--timeout` raised; it is a
+single-unit run and was kept local. Not minted as a record (`--no-write`).
+
+| measurement | predecessor (ngspice-46, `c6d73a3`) | ngspice-46, `f6eeac7` | this record (ngspice-47, `f6eeac7`) |
+|---|---|---|---|
+| `spur_dbc` | -58.36 | -62.01 | -55.95 |
+| `spur_dbc_200m` (max -55) | -55.87 PASS | -59.51 PASS | -53.45 **FAIL** |
+| `spur_tie_dbc` | -56.13 | -58.12 | -53.94 |
+| `spur_dbc_fit` | -57.93 | -57.65 | -56.26 |
+| `tie_pk_ps` | 3.313 | 2.634 | 4.264 |
+| `phi_a` (s) | 2.84424e-09 | 2.85431e-09 | 2.85737e-09 |
+| `fout` (Hz) | 1.50010e+08 | 1.50003e+08 | 1.50003e+08 |
+| `ferr` | 1.20245e-04 | 1.39759e-04 | 1.39842e-04 |
+| `drift_q_fc` | -1.6016 | -2.3894 | -3.1740 |
+
+Reading, at this one corner and no other:
+
+- The simulator moves `spur_dbc` by **6.06 dB** on an identical deck and PDK
+  (ngspice-46 -62.01, ngspice-47 -55.95); the PDK moves it by 3.65 dB in the
+  opposite direction (-58.36 -> -62.01 at ngspice-46). The two effects partly
+  cancel in the predecessor-to-record comparison, so the headline 2.4 dB
+  movement understates both.
+- The lock-point columns (`phi_a`, `fout`, `ferr`, `ffb`) agree to better than
+  0.3 % between the two simulators; the spur columns do not. The disagreement
+  is in the sideband reduction's inputs (`tie_pk_ps` 2.63 vs 4.26 ps), not in
+  whether the loop locks.
+- The `typical` `spur_dbc_200m` PASS -> FAIL flip below is **a simulator
+  effect at this corner**: ngspice-46 under the new PDK reads -59.51 dBc and
+  passes. Whether it also holds at the other four corners is not measured.
+- This is an overlap point, not an equivalence proof: it shows the batch
+  ngspice-47 number is not interchangeable with an ngspice-46 one for this
+  campaign, which is the reason DR-028 Decision 3(a) quarantines it. Whether
+  that licenses the `Supersedes:` line in the new record is for the Judge and
+  the operator; the ratified -55 dBc bound is untouched either way.
 
 ### Disposition: a verdict flips, and the bound is not relaxed
 
@@ -57,7 +108,9 @@ The worst point at 200 MHz moves from −54.51 to −53.45 dBc, i.e. **1.06 dB
 worse**, and moves from a cold corner to the nominal one. At the measured
 150 MHz every corner still meets −55 dBc (worst −55.95 dBc, `typical`, only
 0.95 dB of margin; previously −57.01). The ratified spec is unchanged; the
-shortfall is routed to #1061 rather than absorbed.
+shortfall is routed to #1061 rather than absorbed; the overlap point above
+answers that issue's control-probe option for the `typical` corner (the flip
+there is the simulator, not the PDK) and for no other corner.
 
 ### Delta table
 
