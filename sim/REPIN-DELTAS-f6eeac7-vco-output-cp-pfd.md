@@ -37,7 +37,9 @@ stays open** for the remainder. Dispositions so far:
 | directory | live records | disposition |
 |---|---|---|
 | `output-driver` | `20260817-100354-0e9cfc9` | **re-qualified here** (`20261115-130526-3be016c`) |
-| `vco-tuning-range` | `20260804-162735-72883fb`, `20260804-211600-f599a65`, `20260817-143524-0e9cfc9`, `20260923-084925-1655e11`, `20260927-081930-d004d5b`, `20260927-094524-b994116`, `20260927-214737-546a397`, `20260927-220631-546a397` | still owed under #826 |
+| `vco-tuning-range` tuning grid | `20260804-162735-72883fb` | **re-qualified here** (`20261118-021803-deb4ec0`) |
+| `vco-tuning-range` supply bench | `20260804-211600-f599a65` | **re-qualified here** (`20261118-023753-1b6f7c2`) |
+| `vco-tuning-range` Monte Carlo family | `20260817-143524-0e9cfc9`, `20260923-084925-1655e11`, `20260927-081930-d004d5b`, `20260927-094524-b994116`, `20260927-214737-546a397`, `20260927-220631-546a397` | still owed under #826 — the six band-select-mirror Monte Carlo / negative-control records; see the vco-tuning-range section for why they are a separate increment |
 | `vco-bias-current` | `20260911-172350-da0bb1e` | **re-qualified here** (`20261117-150323-f3b3e7f`) |
 | `output-range` | `20260801-061907-67d7127`, `20260819-190341-70a4128` | **re-qualified here** (`20261117-174557-327ee00` and `20261117-174951-33cbd72`) — two single-point re-runs, one per predecessor; the 90-row grid under the re-pinned PDK is the already-landed `20261111-184929-73837b9` |
 | `cp-compliance` | `20260801-190821-734f483`, `20260802-033728-c24ee3a`, `20260802-061841-c24ee3a` | **re-qualified here** — `20261115-025500-8da7900` (DC bench) and `20261116-180719-930fb6e` (switching bench); the third id, `20260802-033728-c24ee3a`, is the near-duplicate twin of the re-run `20260802-061841-c24ee3a`, dispositioned in the cp-compliance section below rather than silently dropped |
@@ -48,22 +50,24 @@ Re-derive the supersession side of that table with
 `bash sim/lib/check-record-supersession.sh`, which builds the same graph from
 the records' own **Supersedes** fields.
 
-Three increments have landed since that table was first written: #967
+Increments have landed since that table was first written: #967
 re-qualified `output-driver` (2026-11-15), the second increment (2026-11-17,
 same branch, still `Part of #826`) re-qualified both `cp-compliance` benches
 and both `pfd-deadzone` manifests, the third (2026-11-17, same branch)
-re-qualified `vco-bias-current`, and the fourth (2026-11-17, same branch)
-re-qualified both `output-range` single-point records. The live scope the
-issue's own derivation script returns is therefore **12 records, not 20** —
-`8/0/0/3` plus its one `cp-compliance` residual across the three remaining
-directories `vco-tuning-range`, `cp-compliance`, `mc-cp-mismatch`. The script
-counts supersession from records' own `Supersedes` fields, so its one
-`cp-compliance` residual, `20260802-033728-c24ee3a`, is dispositioned in the
-cp-compliance section below as fully superseded by the second increment's
-re-run of its near-duplicate twin — in prose, not by any record's
-`Supersedes` field — and the script will keep returning it until a record
-names it. Records needing a re-run: **11** — 8/0/0/3 across those same three
-directories, all still owed under #826.
+re-qualified `vco-bias-current`, the fourth (2026-11-17, same branch)
+re-qualified both `output-range` single-point records, and the fifth
+(2026-11-18, same branch) re-qualified the `vco-tuning-range` tuning grid
+and supply bench. The live scope the issue's own derivation script returns
+is therefore **10 records, not 20** — `6/0/0/3` plus its one `cp-compliance`
+residual across the three remaining directories `vco-tuning-range`,
+`cp-compliance`, `mc-cp-mismatch`. The script counts supersession from
+records' own `Supersedes` fields, so its one `cp-compliance` residual,
+`20260802-033728-c24ee3a`, is dispositioned in the cp-compliance section
+below as fully superseded by the second increment's re-run of its
+near-duplicate twin — in prose, not by any record's `Supersedes` field —
+and the script will keep returning it until a record names it. Records
+needing a re-run: **9** — 6/0/0/3 across those same three directories, all
+still owed under #826.
 
 ## What was re-run
 
@@ -77,6 +81,8 @@ directories, all still owed under #826.
 | `vco-bias-current` | `20260911-172350-da0bb1e` | `20261117-150323-f3b3e7f` | 234 pts (13 bundles × 3 temps × 3 supplies × 2 band codes) |
 | `output-range` lo-edge diagnostic | `20260801-061907-67d7127` | `20261117-174557-327ee00` | 1 pt (typical / 27 °C / 3.30 V, `lo` edge, band 1, N=8, seed 1.679 V) |
 | `output-range` CAPPED `hi` row | `20260819-190341-70a4128` | `20261117-174951-33cbd72` | 1 pt (ff / 27 °C / 3.30 V, `hi` edge, band 7, N=32, seed 1.454 V) |
+| `vco-tuning-range` tuning grid | `20260804-162735-72883fb` | `20261118-021803-deb4ec0` | 504 pts (7 bundles × 3 temps × 3 supplies × 8 band codes) |
+| `vco-tuning-range` supply bench | `20260804-211600-f599a65` | `20261118-023753-1b6f7c2` | 144 pts (two phases: static pushing × 63, transient jitter × 144 grid points) |
 
 open_pdks `f6eeac7`, **every point executed on the batch fleet** — the host
 that minted the record ran no ngspice of its own (24 concurrent off-host
@@ -137,6 +143,23 @@ this deck prints no ngspice version banner per point, so ngspice-47 there is
 the shared batch image's, fingerprint-inferred (`sha256:d6efd5b2…`, 234/234
 points) rather than read, the same disclosure class as the two
 `cp-compliance` grids.
+
+The `vco-tuning-range` grids (2026-11-18) ran the same way — `--backend
+batch`, clean-tree provenance at the commit each attempt started from,
+sequential with a commit between the two benches — and the tuning grid is
+this document's second recovery through the per-point store: two earlier
+submissions of the 504-point grid were interrupted (the first
+capacity-refused after 257 points, the second killed mid-run with 234 fresh
+points done, 491/504 total), each attempt's completed per-point logs banked
+manifest-forward and committed as it stood (`8e80a309`, `deb4ec08`). The
+landed record `20261118-021803-deb4ec0` started from the clean tree at the
+second banking commit, adopted 496 banked points by identical grid
+fingerprint (each fetched object sha256-verified, disclosed on the record's
+face with `"replayed": true`), and simulated the remaining 8. The supply
+bench then ran clean from the tuning grid's own commit (`1b6f7c24` →
+`20261118-023753-1b6f7c2`, 144 points, no adoption needed). Both records
+attribute ngspice-47 per point. The tuning grid's one acceptance-check
+flip is filed as #1059; see the vco-tuning-range section below.
 
 ## Verdict
 
@@ -202,6 +225,22 @@ landing on the predecessor's own completed perturbed-seed control run
 PASS unchanged. The one status transition, CAPPED → FAIL, is a non-verdict
 becoming the verdict — the predecessor's own words — not a PASS/FAIL flip.
 Nothing to file.
+
+**The `vco-tuning-range` increment (2026-11-18) adds one curve-level
+acceptance-check flip and zero per-point findings.** Both comparisons come
+back **per-corner verdicts unchanged** — 504 graded rows on the tuning
+grid, 288 on the supply bench — with stated limits identical and no
+comparator findings section on either. The supply-induced rows of the
+supply bench move ≤ 0.28 % relative; the rows that move by tens of percent
+are the quiet-copy numerical floor and the `floor_margin_x` ratio built on
+it, which the record's own methodology calls solver noise, not results. The
+one flip is acceptance check 5 (f(Vctrl) monotonicity) at
+`all-fast/27C/3.30V` band 1 under the batch image's ngspice-47 — a
+transient-solve inversion that every other solver build tested resolves the
+other way, and that the pinned local ngspice-47 cannot solve at all inside
+the harness's 300 s point budget. It is filed as **#1059** with its
+controls, per this issue's acceptance criteria, and the record stands as
+latest evidence pending that disposition.
 
 
 ## Attribution: PDK or simulator?
@@ -400,6 +439,68 @@ Reading the two controls together with the batch records below:
   pin, so the stall was one hypersensitive solver trajectory, not a
   property of the operating point. Under the re-pinned PDK the grid-seed
   trajectory completes everywhere it was tried.
+
+### Controls for the `vco-tuning-range` increment (2026-11-18)
+
+Two benches, both predecessors on Linux x86_64 (the supply bench's
+ngspice-46 on an AWS host; the tuning grid's ngspice-46 on Darwin arm64 —
+read from each record's own provenance). Controls hold the simulator at
+the predecessor's version and run the re-pinned PDK locally, one point at
+a time, `--no-write`:
+
+```bash
+PATH=$HOME/.local/opt/ngspice-46/bin:$PATH \
+  python3 sim/run_corners.py sim/vco-tuning-range/testbench-supply --backend local \
+  --corners typical --temps 27 --supply 3.30 --supply-tol 0 \
+  --axis band=band0 --axis rdiv=r16 --axis fcal=f100 --no-write -j 1
+PATH=/usr/bin:$PATH \
+  python3 sim/run_corners.py sim/vco-tuning-range/testbench-supply --backend local \
+  --corners typical --temps 27 --supply 3.30 --supply-tol 0 \
+  --axis band=band0 --axis rdiv=r16 --axis fcal=f100 --no-write -j 1
+PATH=$HOME/.local/opt/ngspice-46/bin:$PATH \
+  python3 sim/run_corners.py vco-tuning-range --backend local \
+  --corners all-fast --temps 27 --supply 3.30 --supply-tol 0 \
+  --axis band=band1 --no-write -j 1
+```
+
+| control (simulator + `f6eeac7`) | vs predecessor |
+|---|---|
+| supply bench, `typical_27c_3.30v_band0_r16_f100` (ngspice-46) | **identical to the last printed digit, every column of both phases** — push frequencies, pushing coefficient, quiet/stepped/rippled jitter rows, `floor_margin_x` 463.746 |
+| supply bench, same point (ngspice-42) | push phase identical to the last printed digit; jitter phase: supply-induced rows ≤ 2e-4 relative from the predecessor, quiet-floor rows move at the solver-noise scale |
+| tuning grid, `all-fast_27c_3.30v_band1` (ngspice-46) | f5 = 1.570530e+07 → f6 = 1.760210e+07 Hz — **monotonic**, 0.05 % from the predecessor's f6 (the predecessor is a Darwin arm64 record) |
+| tuning grid, same point (ngspice-42) | f6 = 1.760210e+07 Hz — monotonic, identical to the ngspice-46 probe |
+| tuning grid, same point (pinned local ngspice-47) | **times out** after the harness's 300 s point budget — the batch image's 47 build returns the dipped f6 instead |
+
+A fourth leg separates the PDK from the host on the tuning grid, which the
+pinned harness cannot do (it refuses a non-pinned PDK tree, correctly): the
+composed probe deck for `typical_27c_3.30v_band0` with its include paths
+pointed at the retired `~/.volare` tree (`c6d73a3`), run as a single
+`ngspice -b` invocation under ngspice-42 — an attribution probe only,
+nothing minted — prints **exactly the same values as the same deck against
+`f6eeac7`** (f4 = 6.526290e+06 Hz, `sw7hi` = 3.363994 V, to the last
+digit).
+
+Reading the controls together with the batch records below:
+
+- **The PDK re-pin is a bit-for-bit no-op on both benches.** The supply
+  bench's ngspice-46 control reproduces its Linux ngspice-46 predecessor
+  exactly under the new pin; the tuning grid's old-pin/new-pin deck pair
+  prints identical values, so its old-vs-new residue is host-class
+  (Darwin arm64 → Linux x86_64) plus simulator, never the PDK — the same
+  cross-record-comparability class `sim/README.md` reserves for exactly
+  this.
+- **The check-5 flip is a batch-image ngspice-47 transient-solve
+  inversion**: ngspice-46 and ngspice-42 both solve the curve monotonically
+  under the new pin, the local ngspice-47 build cannot solve the point at
+  all in 300 s, and the batch's 47 build returns a dipped f6. Filed as
+  #1059.
+- **The fleet-vs-predecessor residue on the tuning grid (~0.1 % on
+  frequencies, ~0.5 % on the worst buffer-level rows) is host plus
+  batch-build**, not PDK and not the 46→47 version label alone: the local
+  ngspice-47 probe of the supply bench's control point reproduced the
+  predecessor's pushing phase bit-for-bit while the fleet's 47 build moves
+  it by ~0.05 % — same version string, same staged init fingerprint
+  (`sha256:d6efd5b2…`), different binary.
 
 
 ## `output-driver`
@@ -839,3 +940,151 @@ either, so the FAIL verdict is the same non-event on both sides. **CAPPED →
 FAIL is not a verdict flip**: the predecessor asserts this explicitly about
 its own row, and no tolerance moved, so there is nothing to file.
 
+## `vco-tuning-range`
+
+Two of the directory's eight live records are re-qualified in this
+increment — the two harness-form benches. The remaining six (the
+band-select-mirror Monte Carlo family: `20260817-143524-0e9cfc9`,
+`20260923-084925-1655e11`, `20260927-081930-d004d5b`,
+`20260927-094524-b994116`, `20260927-214737-546a397`,
+`20260927-220631-546a397`) stay owed under #826 as a separate increment:
+they are per-seed Monte Carlo campaigns whose runner is deliberately a raw
+`sim/lib/simenv.sh` deck (`testbench/run_mismatch.sh`'s own header records
+why a harness manifest cannot express them), so re-running them is not this
+increment's batch-manifest path and needs its own campaign plan.
+
+### Tuning grid
+
+Regenerate with:
+
+```bash
+python3 sim/lib/record_delta.py \
+  sim/vco-tuning-range/records/20260804-162735-72883fb.md \
+  sim/vco-tuning-range/records/20261118-021803-deb4ec0.md
+```
+
+### `20261118-021803-deb4ec0` vs `20260804-162735-72883fb`
+
+| topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
+|---|---|---|---|---|---|---|---|
+| `` | `f1` | min=1.000000e+05, min_spread_pct=50 | 2.957680e+06..2.749280e+08 | 2.957550e+06..2.749280e+08 | 17400 | 0.1183 | `sf_-40c_3.63v_band0` |
+| `` | `f2` | — | 3.473630e+06..3.349450e+08 | 3.472820e+06..3.349450e+08 | 82900 | 0.3006 | `all-fast_27c_3.30v_band3` |
+| `` | `f3` | — | 4.041550e+06..3.968140e+08 | 4.040440e+06..3.968140e+08 | 34800 | 0.2423 | `ss_125c_2.97v_band0` |
+| `` | `f4` | — | 4.626740e+06..4.585300e+08 | 4.624450e+06..4.585300e+08 | 66900 | 0.3148 | `all-slow_27c_3.63v_band3` |
+| `` | `f5` | — | 5.228220e+06..5.189070e+08 | 5.231170e+06..5.189070e+08 | 4.910000e+05 | 0.4599 | `fs_-40c_2.97v_band5` |
+| `` | `f6` | — | 5.841090e+06..5.767760e+08 | 5.840800e+06..5.767760e+08 | 1.940800e+06 | 11.02 | `all-fast_27c_3.30v_band1` |
+| `` | `f7` | min=1.000000e+05, min_spread_pct=50 | 6.461800e+06..6.319790e+08 | 6.456310e+06..6.319790e+08 | 1.988000e+05 | 0.819 | `ss_-40c_3.30v_band0` |
+| `` | `fine_ratio` | — | 2.00211..2.6997 | 2.00211..2.6997 | 0.01767 | 0.827 | `ss_-40c_3.30v_band0` |
+| `` | `i1` | — | 2.801730e-05..0.000479448 | 2.838100e-05..0.000479448 | 1.402100e-06 | 2.507 | `sf_27c_2.97v_band1` |
+| `` | `i2` | — | 3.089600e-05..0.000552466 | 3.092610e-05..0.000552466 | 2.254200e-06 | 4.337 | `ff_-40c_3.30v_band0` |
+| `` | `i3` | — | 3.435280e-05..0.000632157 | 3.396410e-05..0.000632157 | 1.949600e-06 | 3.035 | `sf_-40c_3.30v_band1` |
+| `` | `i4` | — | 3.770920e-05..0.00070958 | 3.746200e-05..0.00070958 | 2.301500e-06 | 3.003 | `ff_27c_3.63v_band0` |
+| `` | `i5` | — | 4.153340e-05..0.000790093 | 4.116610e-05..0.000790093 | 2.325000e-06 | 2.243 | `ff_-40c_3.63v_band2` |
+| `` | `i6` | — | 4.479740e-05..0.00086893 | 4.486190e-05..0.00086893 | 3.219700e-06 | 3.325 | `ff_-40c_3.63v_band1` |
+| `` | `i7` | — | 4.862400e-05..0.000947912 | 4.835320e-05..0.000947912 | 2.696000e-06 | 2.205 | `ff_-40c_3.63v_band2` |
+| `` | `k1` | — | 1.719833e+06..2.000567e+08 | 1.717567e+06..2.000567e+08 | 2.580000e+05 | 1.682 | `all-fast_27c_3.30v_band3` |
+| `` | `k2` | — | 1.806450e+06..2.031433e+08 | 1.804817e+06..2.031433e+08 | 91000 | 0.7776 | `all-fast_27c_3.30v_band2` |
+| `` | `k3` | — | 1.921850e+06..2.059750e+08 | 1.919383e+06..2.059750e+08 | 1.126670e+05 | 1.244 | `all-slow_27c_3.63v_band3` |
+| `` | `k4` | — | 1.977783e+06..2.034883e+08 | 1.984550e+06..2.034883e+08 | 7.235000e+05 | 1.781 | `all-fast_-40c_2.97v_band0` |
+| `` | `k5` | — | 2.023917e+06..1.990167e+08 | 2.027250e+06..1.990167e+08 | 3.248000e+06 | 51.51 | `all-fast_27c_3.30v_band1` |
+| `` | `k6` | — | 2.055967e+06..1.963800e+08 | 2.041900e+06..1.963800e+08 | 4.571700e+05 | 4.451 | `ss_-40c_3.30v_band0` |
+| `` | `k7` | — | 1.868800e+06..1.947033e+08 | 1.623400e+06..1.947033e+08 | 6.401330e+06 | 98.6 | `all-fast_27c_3.30v_band1` |
+| `` | `kvco_max` | — | 2.069033e+06..2.059750e+08 | 2.051700e+06..2.059750e+08 | 6.401330e+06 | 98.6 | `all-fast_27c_3.30v_band1` |
+| `` | `kvco_mean` | — | 1.946733e+06..1.983617e+08 | 1.943756e+06..1.983617e+08 | 1.087200e+05 | 1.546 | `ss_-40c_3.30v_band0` |
+| `` | `kvco_min` | — | 1.719833e+06..1.840100e+08 | 1.623400e+06..1.840100e+08 | 2.599733e+06 | 45.95 | `all-fast_27c_3.30v_band1` |
+| `` | `kvco_over_f_max` | — | 0.558088..0.837653 | 0.558028..0.837653 | 0.011067 | 1.657 | `all-fast_27c_3.30v_band3` |
+| `` | `sw1hi` | min=2.6 | 2.98137..3.78425 | 2.98372..3.7864 | 0.07121 | 1.894 | `ff_-40c_3.63v_band6` |
+| `` | `sw1lo` | max=0.3 | -0.167821..-0.0114043 | -0.174464..-0.016998 | 0.0816104 | 429 | `ff_125c_3.63v_band6` |
+| `` | `sw7hi` | min=2.6 | 2.99847..3.81011 | 2.99847..3.81846 | 0.05986 | 1.745 | `ss_27c_3.30v_band5` |
+| `` | `sw7lo` | max=0.3 | -0.208826..-0.0298282 | -0.218849..-0.0298283 | 0.06323 | 64.81 | `all-fast_-40c_3.30v_band7` |
+| `` | `tp1` | — | 1.454930e-08..1.352410e-06 | 1.454930e-08..1.352470e-06 | 1.300000e-09 | 0.1178 | `sf_-40c_3.63v_band0` |
+| `` | `tp2` | — | 1.194230e-08..1.151530e-06 | 1.194230e-08..1.151800e-06 | 1.032000e-09 | 0.2999 | `all-fast_27c_3.30v_band3` |
+| `` | `tp3` | — | 1.008030e-08..9.897190e-07 | 1.008030e-08..9.899920e-07 | 1.366000e-09 | 0.2428 | `ss_125c_2.97v_band0` |
+| `` | `tp4` | — | 8.723530e-09..8.645390e-07 | 8.723530e-09..8.649670e-07 | 8.790000e-10 | 0.314 | `all-slow_27c_3.63v_band3` |
+| `` | `tp5` | — | 7.708510e-09..7.650780e-07 | 7.708510e-09..7.646480e-07 | 1.181000e-09 | 0.4582 | `fs_-40c_2.97v_band5` |
+| `` | `tp6` | — | 6.935100e-09..6.848040e-07 | 6.935100e-09..6.848370e-07 | 2.813200e-08 | 12.39 | `all-fast_27c_3.30v_band1` |
+| `` | `tp7` | — | 6.329320e-09..6.190230e-07 | 6.329320e-09..6.195490e-07 | 3.856000e-09 | 0.8258 | `ss_-40c_3.30v_band0` |
+
+**Per-corner verdicts**: unchanged on all 504 graded rows.
+
+**Stated limits**: identical in both records.
+
+The band-1 outlier rows (`f6`, `tp6`, `k5`/`k7`, `kvco_min`/`kvco_max`) are
+all the same curve — `all-fast/27c_3.30v_band1` — through the check-5
+inversion dispositioned as #1059; every other row of the 504-point grid
+moved ≤ 0.83 % relative, with the predecessor a Darwin arm64 record and the
+PDK excluded by the controls above. Check 4b's FAIL is not a flip: the
+predecessor already read 154.4 MHz/V at the same adversarial
+all-fast/27C/3.30V B7 point, and the new record's own caveat field carries
+the same reading.
+
+### Supply bench
+
+Regenerate with:
+
+```bash
+python3 sim/lib/record_delta.py \
+  sim/vco-tuning-range/records/20260804-211600-f599a65.md \
+  sim/vco-tuning-range/records/20261118-023753-1b6f7c2.md
+```
+
+### `20261118-023753-1b6f7c2` vs `20260804-211600-f599a65`
+
+| topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
+|---|---|---|---|---|---|---|---|
+| `jit` | `floor_margin_x` | min=10 | 135.148..2010.12 | 130.39..1893 | 197.344 | 76.75 | `typical_27c_3.30v_band5_r4_f100` |
+| `jit` | `jfrip` | — | 2.829420e+05..2.883600e+07 | 2.829420e+05..2.883600e+07 | 0 | 0 | `—` |
+| `jit` | `jsettle` | — | 1.415320e-08..1.325360e-06 | 1.415320e-08..1.325360e-06 | 0 | 0 | `—` |
+| `jit` | `jstepon` | — | 8.963680e-08..8.393950e-06 | 8.963680e-08..8.393950e-06 | 0 | 0 | `—` |
+| `jit` | `quiet_c2c_rms_s` | — | 1.780474e-13..2.161974e-11 | 1.835019e-13..2.257353e-11 | 2.012340e-12 | 31.03 | `sf_125c_2.97v_band5_r16_f100` |
+| `jit` | `quiet_cycles` | min=32 | 42..123 | 42..123 | 0 | 0 | `—` |
+| `jit` | `quiet_f_hz` | — | 5.064372e+06..4.036127e+08 | 5.064336e+06..4.036129e+08 | 400 | 0.000717 | `all-fast_-40c_3.30v_band0_r16_f125` |
+| `jit` | `quiet_tie_pp_s` | — | 6.273077e-13..1.352343e-10 | 6.721718e-13..1.341797e-10 | 1.457336e-11 | 51.35 | `all-slow_27c_3.30v_band5_r4_f080` |
+| `jit` | `quiet_tie_rms_s` | — | 1.547741e-13..2.558384e-11 | 1.464496e-13..2.842967e-11 | 3.782765e-13 | 43.42 | `typical_27c_3.30v_band5_r4_f100` |
+| `jit` | `quiet_tj_pp_s` | — | 4.189079e-13..8.148669e-11 | 5.177383e-13..9.063275e-11 | 1.057691e-12 | 47.65 | `typical_27c_3.63v_band5_r16_f100` |
+| `jit` | `quiet_tj_rms_s` | — | 1.146220e-13..1.715074e-11 | 1.164988e-13..1.815519e-11 | 1.104950e-12 | 26.85 | `all-fast_125c_3.30v_band5_r16_f125` |
+| `jit` | `rip_c2c_rms_s` | — | 1.550078e-11..1.173484e-09 | 1.549715e-11..1.173396e-09 | 3.425000e-13 | 0.05833 | `typical_-40c_3.30v_band0_r16_f100` |
+| `jit` | `rip_cycles` | min=32 | 43..123 | 43..123 | 0 | 0 | `—` |
+| `jit` | `rip_f_hz` | — | 5.066246e+06..4.036023e+08 | 5.066281e+06..4.036023e+08 | 500 | 0.0008713 | `ss_-40c_3.30v_band0_r16_f100` |
+| `jit` | `rip_tie_pp_pred_s` | — | 2.027070e-10..1.700522e-08 | 2.026893e-10..1.699767e-08 | 6.400000e-12 | 0.0569 | `sf_-40c_3.30v_band0_r16_f100` |
+| `jit` | `rip_tie_pp_s` | — | 2.775337e-10..2.092688e-08 | 2.774209e-10..2.092330e-08 | 1.556000e-11 | 0.1259 | `all-fast_-40c_3.30v_band0_r16_f125` |
+| `jit` | `rip_tie_rms_s` | — | 9.300987e-11..6.527032e-09 | 9.300529e-11..6.523197e-09 | 3.155000e-12 | 0.07012 | `typical_-40c_3.30v_band0_r16_f100` |
+| `jit` | `rip_tj_pp_pred_s` | — | 8.361047e-11..5.969443e-09 | 8.360318e-11..5.966836e-09 | 2.312000e-12 | 0.05627 | `sf_-40c_3.30v_band0_r16_f100` |
+| `jit` | `rip_tj_pp_s` | — | 1.085676e-10..6.501042e-09 | 1.085516e-10..6.492177e-09 | 3.585000e-12 | 0.2742 | `ss_27c_3.30v_band7_r16_f100` |
+| `jit` | `rip_tj_rms_pct` | — | 0.867437..3.23505 | 0.867292..3.23548 | 0.00055 | 0.05468 | `typical_-40c_3.30v_band0_r16_f100` |
+| `jit` | `rip_tj_rms_s` | — | 3.849601e-11..2.309306e-09 | 3.849408e-11..2.308856e-09 | 8.850000e-13 | 0.05444 | `typical_-40c_3.30v_band0_r16_f100` |
+| `jit` | `step_df_hz` | — | -1.362042e+07..-1.371294e+05 | -1.361924e+07..-1.370832e+05 | 910 | 0.05748 | `sf_-40c_3.30v_band0_r16_f100` |
+| `jit` | `step_f_post_hz` | — | 4.911273e+06..3.899964e+08 | 4.911292e+06..3.899977e+08 | 600 | 0.0009961 | `typical_-40c_3.30v_band0_r16_f100` |
+| `jit` | `step_f_pre_hz` | — | 5.064376e+06..4.036169e+08 | 5.064326e+06..4.036170e+08 | 1200 | 0.0009873 | `all-slow_-40c_3.30v_band0_r16_f080` |
+| `jit` | `step_kvdd_hz_per_v` | — | -1.362042e+08..-1.371294e+06 | -1.361924e+08..-1.370832e+06 | 9100 | 0.05748 | `sf_-40c_3.30v_band0_r16_f100` |
+| `jit` | `step_tie_per_us_s` | — | -6.076885e-08..-2.235348e-08 | -6.076488e-08..-2.234603e-08 | 1.412000e-11 | 0.05649 | `sf_-40c_3.30v_band0_r16_f100` |
+| `push` | `f1` | — | 5.746860e+06..4.584100e+08 | 5.743620e+06..4.584100e+08 | 3.770000e+05 | 0.3235 | `all-slow_-40c_3.30v_band4_r16_f080` |
+| `push` | `f2` | — | 5.490450e+06..4.395430e+08 | 5.488340e+06..4.395430e+08 | 1.650500e+06 | 1.855 | `all-slow_125c_2.97v_band5_r16_f080` |
+| `push` | `f3` | — | 5.256650e+06..4.210870e+08 | 5.259040e+06..4.210870e+08 | 2.590000e+05 | 2.52 | `sf_27c_3.30v_band0_r16_f100` |
+| `push` | `f4` | min=1.000000e+05, min_spread_pct=50 | 5.073200e+06..4.035060e+08 | 5.068260e+06..4.035060e+08 | 4.479000e+05 | 1.113 | `fs_27c_3.30v_band0_r16_f100` |
+| `push` | `f5` | — | 4.886320e+06..3.867860e+08 | 4.880770e+06..3.867860e+08 | 1.369300e+06 | 2.304 | `all-slow_-40c_2.97v_band5_r16_f080` |
+| `push` | `f6` | — | 4.757680e+06..3.711660e+08 | 4.760380e+06..3.711660e+08 | 1.050000e+05 | 0.2821 | `ss_27c_3.30v_band0_r16_f100` |
+| `push` | `f7` | — | 4.626680e+06..3.565950e+08 | 4.619940e+06..3.565950e+08 | 1.600000e+05 | 0.2583 | `fs_-40c_3.30v_band0_r16_f100` |
+| `push` | `i1` | — | 3.799700e-05..0.000653237 | 3.787080e-05..0.000653237 | 1.197000e-06 | 2.023 | `typical_-40c_3.30v_band0_r16_f100` |
+| `push` | `i2` | — | 3.901990e-05..0.000661283 | 3.869730e-05..0.000661283 | 1.723300e-06 | 2.888 | `ss_27c_3.30v_band0_r16_f100` |
+| `push` | `i3` | — | 4.004930e-05..0.000675351 | 4.054940e-05..0.000675351 | 2.219300e-06 | 2.58 | `all-slow_-40c_3.30v_band4_r16_f080` |
+| `push` | `i4` | — | 4.109920e-05..0.000682673 | 4.046040e-05..0.000682673 | 2.349300e-06 | 4.245 | `fs_-40c_3.30v_band0_r16_f100` |
+| `push` | `i5` | — | 4.353630e-05..0.000688741 | 4.336560e-05..0.000688741 | 2.411400e-06 | 4.14 | `sf_-40c_3.30v_band0_r16_f100` |
+| `push` | `i6` | — | 4.453860e-05..0.000702994 | 4.518520e-05..0.000702994 | 3.480600e-06 | 5.433 | `ff_-40c_3.30v_band0_r16_f100` |
+| `push` | `i7` | — | 4.498090e-05..0.000708702 | 4.466170e-05..0.000708702 | 3.835900e-06 | 4.998 | `ff_27c_3.30v_band0_r16_f100` |
+| `push` | `push_f_nom_hz` | — | 5.073200e+06..4.035060e+08 | 5.068260e+06..4.035060e+08 | 4.479000e+05 | 1.113 | `fs_27c_3.30v_band0_r16_f100` |
+| `push` | `push_i_nom_a` | — | 4.109920e-05..0.000682673 | 4.046040e-05..0.000682673 | 2.349300e-06 | 4.245 | `fs_-40c_3.30v_band0_r16_f100` |
+| `push` | `push_nl_pct` | max=5 | 0.148398..3.41401 | 0.127758..2.62913 | 1.54161 | 141.8 | `sf_27c_3.30v_band0_r16_f100` |
+| `push` | `push_norm_pct_per_v` | max=0 | -54.5388..-24.1067 | -54.5913..-24.0205 | 0.9619 | 3.433 | `sf_27c_3.30v_band0_r16_f100` |
+| `push` | `push_slope_hz_per_v` | — | -1.547078e+08..-1.477299e+06 | -1.547078e+08..-1.473643e+06 | 4.767000e+05 | 3.297 | `sf_27c_3.30v_band0_r16_f100` |
+| `push` | `tp1` | — | 8.725800e-09..6.960320e-07 | 8.725800e-09..6.964250e-07 | 1.108000e-09 | 0.3245 | `all-slow_-40c_3.30v_band4_r16_f080` |
+| `push` | `tp2` | — | 9.100360e-09..7.285380e-07 | 9.100360e-09..7.288180e-07 | 1.413000e-09 | 1.89 | `all-slow_125c_2.97v_band5_r16_f080` |
+| `push` | `tp3` | — | 9.499220e-09..7.609400e-07 | 9.499220e-09..7.605950e-07 | 1.555100e-08 | 2.585 | `sf_27c_3.30v_band0_r16_f100` |
+| `push` | `tp4` | — | 9.913110e-09..7.884570e-07 | 9.913110e-09..7.892250e-07 | 6.785000e-09 | 1.126 | `fs_27c_3.30v_band0_r16_f100` |
+| `push` | `tp5` | — | 1.034160e-08..8.186120e-07 | 1.034160e-08..8.195420e-07 | 8.064000e-09 | 2.252 | `all-slow_-40c_2.97v_band5_r16_f080` |
+| `push` | `tp6` | — | 1.077690e-08..8.407460e-07 | 1.077690e-08..8.402700e-07 | 1.798000e-09 | 0.2814 | `ss_27c_3.30v_band0_r16_f100` |
+| `push` | `tp7` | — | 1.121720e-08..8.645510e-07 | 1.121720e-08..8.658120e-07 | 1.775000e-09 | 0.2576 | `fs_-40c_3.30v_band0_r16_f100` |
+
+**Per-corner verdicts**: unchanged on all 288 graded rows.
+
+**Stated limits**: identical in both records.

@@ -446,3 +446,97 @@ class TheOutputRangeIncrementRequalifiesTwoSinglePoints(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+class TheVcoTuningRangeIncrementRequalifiesTwoBenches(unittest.TestCase):
+    """The fifth increment (2026-11-18) re-qualifies `vco-tuning-range`'s two
+    harness-form benches: the 504-point tuning grid and the 144-point
+    supply bench. Per-point comparator verdicts are unchanged on both (0
+    findings), and the one movement is a curve-level acceptance-check flip —
+    check 5, f(Vctrl) monotonicity, PASS->FAIL on one `all-fast`/27 C/
+    3.30 V band-1 curve under the batch image's ngspice-47 — filed as
+    #1059 per #826's acceptance criteria, not left silent. The tuning grid
+    landed through the per-point store: 496 of 504 points adopted from two
+    interrupted earlier attempts, disclosed on the record's face."""
+
+    SLUG = "vco-tuning-range"
+    TUNING = ("20260804-162735-72883fb", "20261118-021803-deb4ec0", 504)
+    SUPPLY = ("20260804-211600-f599a65", "20261118-023753-1b6f7c2", 288)
+    ADOPTED = 496
+    SOURCE_ATTEMPTS = ("20261118-004057-6f0fd4e", "20261118-012236-8e80a30")
+    FLIP_ISSUE = "#1059"
+
+    def _pair(self, triple):
+        old_id, new_id, n_rows = triple
+        lines, findings = record_delta.compare(
+            SIM_DIR / self.SLUG / "records" / f"{old_id}.md",
+            SIM_DIR / self.SLUG / "records" / f"{new_id}.md",
+        )
+        return lines, findings, n_rows
+
+    def _record_text(self, new_id):
+        return (SIM_DIR / self.SLUG / "records" / f"{new_id}.md").read_text(
+            encoding="utf-8")
+
+    def test_zero_findings_and_unchanged_verdicts_on_both_pairs(self):
+        for old_id, new_id, n_rows in (self.TUNING, self.SUPPLY):
+            with self.subTest(pair=f"{old_id} -> {new_id}"):
+                lines, findings, n = self._pair((old_id, new_id, n_rows))
+                self.assertEqual(findings, 0,
+                                 "a flip or limit-crossing appeared")
+                self.assertTrue(
+                    any(f"unchanged on all {n} graded rows" in ln
+                        for ln in lines),
+                    f"graded-row count drifted from {n}")
+
+    def test_both_new_records_are_clean_f6eeac7_batch_ngspice_47(self):
+        for _, new_id, _ in (self.TUNING, self.SUPPLY):
+            with self.subTest(record=new_id):
+                text = self._record_text(new_id)
+                self.assertIn(
+                    "open_pdks `f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7`",
+                    text)
+                self.assertIn("(clean tree)", text)
+                self.assertNotIn("DIRTY tree", text)
+                self.assertIn("`batch` execution backend", text)
+                self.assertIn("Simulator: ngspice-47", text)
+
+    def test_each_new_record_supersedes_its_own_predecessor(self):
+        for (old_id, new_id, _) in (self.TUNING, self.SUPPLY):
+            with self.subTest(record=new_id):
+                self.assertIn(f"**Supersedes**: {old_id}",
+                              self._record_text(new_id))
+
+    def test_tuning_grids_adopted_points_are_disclosed_on_the_record_face(self):
+        text = self._record_text(self.TUNING[1])
+        self.assertIn("Artifact-adopted points", text)
+        self.assertIn(f"{self.ADOPTED} point(s)", text)
+        for attempt in self.SOURCE_ATTEMPTS:
+            self.assertIn(attempt, text)
+
+    def test_check_5_flips_pass_to_fail_exactly_as_the_document_states(self):
+        """The one acceptance-check flip, read off both records' own
+        acceptance_checks tables rather than trusted from prose."""
+        old_text = self._record_text(self.TUNING[0])
+        new_text = self._record_text(self.TUNING[1])
+        self.assertIn(
+            "| 5 | f(Vctrl) monotonic on every (corner, band) curve | n/a"
+            " | 0 non-monotonic curves | 0 | **PASS** |",
+            old_text)
+        self.assertIn(
+            "| 5 | f(Vctrl) monotonic on every (corner, band) curve |"
+            " all-fast/27C/3.30V | 1 non-monotonic curves | 0 | **FAIL** |",
+            new_text)
+        # check 4b is NOT a flip: the predecessor already read FAIL there.
+        self.assertIn("154.4 MHz/V | <= 150 MHz/V | **FAIL** |", old_text)
+        self.assertIn("154.4 MHz/V | <= 150 MHz/V | **FAIL** |", new_text)
+
+    def test_document_states_the_increment_its_flip_and_its_filing(self):
+        text = _doc_text()
+        self.assertIn(
+            "`vco-tuning-range` increment (2026-11-18) adds one curve-level",
+            text)
+        self.assertIn("504 graded rows on the tuning", text)
+        self.assertIn("288 on the supply bench", text)
+        self.assertIn(self.FLIP_ISSUE, text)
+        self.assertIn(
+            "six band-select-mirror Monte Carlo / negative-control records",
+            text)
