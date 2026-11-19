@@ -37,7 +37,7 @@ stays open** for the remainder. Dispositions so far:
 | directory | live records | disposition |
 |---|---|---|
 | `output-driver` | `20260817-100354-0e9cfc9` | **re-qualified here** (`20261115-130526-3be016c`) |
-| `vco-tuning-range` tuning grid | `20260804-162735-72883fb` | **re-qualified here** (`20261118-021803-deb4ec0`) |
+| `vco-tuning-range` tuning grid | `20260804-162735-72883fb` | **re-qualified here** (`20261118-021803-deb4ec0`); its one check-5 flip (#1059, `all-fast`/27 °C/3.30 V band 1) is resolved by `20261119-145734-a6e4fcb`, which re-runs that one curve with a halved transient timestep, reads it strictly monotonic, and supersedes the band-1 curve only |
 | `vco-tuning-range` supply bench | `20260804-211600-f599a65` | **re-qualified here** (`20261118-023753-1b6f7c2`) |
 | `vco-tuning-range` Monte Carlo family | `20260817-143524-0e9cfc9`, `20260923-084925-1655e11`, `20260927-081930-d004d5b`, `20260927-094524-b994116`, `20260927-214737-546a397`, `20260927-220631-546a397` | still owed under #826 — the six band-select-mirror Monte Carlo / negative-control records; see the vco-tuning-range section for why they are a separate increment |
 | `vco-bias-current` | `20260911-172350-da0bb1e` | **re-qualified here** (`20261117-150323-f3b3e7f`) |
@@ -159,7 +159,9 @@ face with `"replayed": true`), and simulated the remaining 8. The supply
 bench then ran clean from the tuning grid's own commit (`1b6f7c24` →
 `20261118-023753-1b6f7c2`, 144 points, no adoption needed). Both records
 attribute ngspice-47 per point. The tuning grid's one acceptance-check
-flip is filed as #1059; see the vco-tuning-range section below.
+flip is filed as #1059 and resolved by its tightened re-run (successor
+record `20261119-145734-a6e4fcb`, band-1 curve only); see the
+vco-tuning-range section below.
 
 ## Verdict
 
@@ -252,9 +254,17 @@ host/batch-build residue, not PDK. The one flip is acceptance check 5
 `all-fast/27C/3.30V` band 1 under the batch image's ngspice-47 — a
 transient-solve inversion that every other solver build tested resolves the
 other way, and that the pinned local ngspice-47 cannot solve at all inside
-the harness's 300 s point budget. It is filed as **#1059** with its
-controls, per this issue's acceptance criteria, and the record stands as
-latest evidence pending that disposition.
+the harness's 300 s point budget. It was filed as **#1059** with its
+controls, per this issue's acceptance criteria, and is now **resolved by
+measurement**: re-running that one curve on the batch route with the
+transient maximum timestep halved (`w_max` 1/(160 f_max) instead of
+1/(80 f_max), tolerances unchanged) restores strict monotonicity — f6 reads
+1.760840e+07 Hz against f5's 1.570220e+07 (Δ = +1.906 MHz), 0.04 % from
+the ngspice-42/46 control value — and successor record
+`20261119-145734-a6e4fcb` supersedes the band-1 curve of
+`20261118-021803-deb4ec0` (that curve only; the record's other 503 curves
+stand). The dip was a timestep-limited artefact of the batch image's
+ngspice-47 build, not a circuit property.
 
 
 ## Attribution: PDK or simulator?
@@ -507,7 +517,11 @@ Reading the controls together with the batch records below:
   inversion**: ngspice-46 and ngspice-42 both solve the curve monotonically
   under the new pin, the local ngspice-47 build cannot solve the point at
   all in 300 s, and the batch's 47 build returns a dipped f6. Filed as
-  #1059.
+  #1059, and resolved by #1059's tightened re-run: with the transient
+  maximum timestep halved the same batch build reads the curve strictly
+  monotonic (f6 = 1.760840e+07 Hz, 0.04 % from the ngspice-42/46 control),
+  and successor record `20261119-145734-a6e4fcb` supersedes the band-1
+  curve — the dip was timestep-limited solver behaviour, not the circuit.
 - **The fleet-vs-predecessor residue on the tuning grid — frequencies up to
   ~0.8 % (`f7` 0.819 %, `f5` 0.4599 %, excluding the #1059 band-1 curve),
   swing-high buffer rows ≤ 1.9 %, and the near-zero swing-low rails at
@@ -1028,7 +1042,13 @@ python3 sim/lib/record_delta.py \
 
 The band-1 outlier rows (`f6`, `tp6`, `k5`/`k7`, `kvco_min`/`kvco_max`) are
 all the same curve — `all-fast/27c_3.30v_band1` — through the check-5
-inversion dispositioned as #1059. "Row" below means a table row — one
+inversion dispositioned as #1059 and resolved by its tightened re-run:
+successor record `20261119-145734-a6e4fcb` re-runs that one curve with the
+transient maximum timestep halved and reads it strictly monotonic (f6 =
+1.760840e+07 Hz against the baseline row's dipped 1.566990e+07), so the
+outlier rows above describe the baseline record's solver artefact, not the
+circuit — the band-1 curve's current evidence is the successor. "Row"
+below means a table row — one
 metric's maximum across the grid — not a single grid point: this table
 reports per-metric maxima, not per-point movement. Outside the band-1
 outliers the largest movers are the two swing-low buffer rails, `sw1lo`
