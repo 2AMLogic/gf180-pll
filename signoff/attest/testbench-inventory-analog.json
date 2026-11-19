@@ -447,6 +447,18 @@
         {
           "content_hash": "sha256:0b8295b1663d8aa59cbb8c020b10014e42d7fdd2e1ac5e073343ae0e22f499c2",
           "path": "sim/vco-tuning-range/testbench-supply/tb_vco_supply_jitter.spice"
+        },
+        {
+          "content_hash": "sha256:6bf4012debfb27404571157c7973970527c44580f45fd388a19591350010fa1f",
+          "path": "sim/vco-tuning-range/testbench-tightband1/derive.py"
+        },
+        {
+          "content_hash": "sha256:8807607d7dcfd8a765bc74b38bc22d1850c972e99f5d2dc60ccb696203d26bae",
+          "path": "sim/vco-tuning-range/testbench-tightband1/tb.json"
+        },
+        {
+          "content_hash": "sha256:624b041a5c808020e4d9ec615c3714995db3b20cdf6ce6ecdd123f24890e739d",
+          "path": "sim/vco-tuning-range/testbench-tightband1/tb_vco_tuning.spice"
         }
       ]
     }
