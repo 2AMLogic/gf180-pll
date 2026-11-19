@@ -236,17 +236,48 @@ class TheDispositionTableAndDerivedProse(unittest.TestCase):
         cells = [c.strip() for c in rows[0].strip().strip("|").split("|")]
         return tuple(float(c.split("..")[1]) for c in cells[3:5])
 
+    def _disposition_rows(self):
+        """{corner: (old cell, new cell)} from the Disposition table only.
+
+        The table is located by its header row, and only its contiguous
+        data rows are collected: a corner listed in some other table is
+        simply absent here, and one that appears twice is rejected rather
+        than silently matched in whichever copy happens to fit the value
+        pattern.
+        """
+        lines = self._norm(_doc_text()).splitlines()
+        heads = [i for i, ln in enumerate(lines) if ln.startswith("| corner |")]
+        self.assertEqual(len(heads), 1,
+                         f"Disposition table header rows at {heads}, "
+                         "expected exactly one")
+        table = {}
+        for ln in lines[heads[0] + 1:]:
+            if not ln.startswith("|"):
+                break
+            if not re.search(r"[`a-zA-Z]", ln):
+                continue  # the |---| separator
+            cells = [c.strip() for c in ln.strip().strip("|").split("|")]
+            self.assertEqual(len(cells), 4, cells)
+            corner = cells[0].strip("`")
+            self.assertNotIn(corner, table,
+                             f"{corner} occurs more than once in the "
+                             f"Disposition table")
+            table[corner] = (cells[1], cells[2])
+        return table
+
     def test_each_disposition_row_matches_both_csvs(self):
         old, new = _csv_200m(OLD_CSV), _csv_200m(NEW_CSV)
-        text = self._norm(_doc_text())
+        table = self._disposition_rows()
+        self.assertEqual(sorted(table), sorted(EXPECTED_FLIPS),
+                         "each expected corner must occur exactly once in "
+                         "the Disposition table")
         for corner in EXPECTED_FLIPS:
             with self.subTest(corner=corner):
-                rows = re.findall(
-                    rf"^\| `{re.escape(corner)}` \| (-\d+\.\d+) \((?:PASS|FAIL)\)"
-                    rf" \| (-\d+\.\d+) \|", text, re.MULTILINE)
-                self.assertEqual(len(rows), 1, rows)
-                self.assertEqual(rows[0],
-                                 (f"{old[corner]:.2f}", f"{new[corner]:.2f}"))
+                old_cell, new_cell = table[corner]
+                m = re.fullmatch(r"(-\d+\.\d+) \((?:PASS|FAIL)\)", old_cell)
+                self.assertIsNotNone(m, f"{corner}: old cell {old_cell!r}")
+                self.assertEqual(m.group(1), f"{old[corner]:.2f}")
+                self.assertEqual(new_cell, f"{new[corner]:.2f}")
 
     def _prose(self):
         return re.sub(r"\s+", " ", self._norm(_doc_text()))
