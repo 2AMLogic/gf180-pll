@@ -65,12 +65,13 @@ OUT="${2:-${EXP}/corners/${RID}-reexam}"
 CSV="${EXP}/corners/${RID}/supply_steady.csv"
 [ -f "${CSV}" ] || { echo "ERROR: ${CSV} not found" >&2; exit 1; }
 
-# Re-read the campaign's own constants rather than restating them -- the same
-# trick report.sh uses, and for the same reason: a threshold restated here is a
-# threshold that will drift away from the one the campaign actually applied.
+# The campaign's own constants are declared once in settings.sh beside the
+# scripts and sourced here -- a threshold restated here is a threshold that
+# would drift away from the one the campaign actually applied.
 # shellcheck source=../../lib/simenv.sh
 . "${ROOT}/sim/lib/simenv.sh"
-eval "$(sed -n '/^KFOUT=/,/^ACC_FDEV_PPM=/p;/^VCO_TUNING=/p' "${HERE}/run.sh")"
+# shellcheck source=settings.sh
+. "${HERE}/settings.sh"
 
 # Thresholds for the classification above.  Stated here, before the analysis.
 # FFB_FAST     |f_fb/f_ref - 1| above which the feedback is "already faster".

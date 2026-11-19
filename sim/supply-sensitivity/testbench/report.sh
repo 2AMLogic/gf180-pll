@@ -9,7 +9,7 @@
 #
 # Everything below is arithmetic on the collected rows.  No number in the
 # record is typed in by hand; the only literals are the acceptance thresholds,
-# which run.sh states before the runs and passes through here.
+# which settings.sh states once and every consumer of this campaign loads.
 
 set -euo pipefail
 # A campaign may legitimately have run only part of its job sets (the runner's
@@ -22,12 +22,14 @@ ROOT="$(cd "${EXP}/../.." && pwd)"
 # shellcheck source=../../lib/simenv.sh
 . "${ROOT}/sim/lib/simenv.sh"
 
-# Re-read the constants run.sh declared, by sourcing its assignment block.  The
-# alternative -- restating them here -- is how the record's stated criterion and
-# the criterion actually applied drift apart.
-eval "$(sed -n '/^KFOUT=/,/^ACC_FDEV_PPM=/p;/^CITE_/p;/^VCO_TUNING=/p;/^PASSIVES=/p;/^window_trim_code_of()/,/^}$/p' "${HERE}/run.sh")"
+# The campaign's settings (thresholds, citations, the window-trim rule and its
+# tag suffix) are declared once in settings.sh beside the scripts and sourced
+# here.  The alternative -- restating them -- is how the record's stated
+# criterion and the criterion actually applied drift apart.
+# shellcheck source=settings.sh
+. "${HERE}/settings.sh"
 
-# The END-plateau escalation's instants are declared by run.sh as OFFSETS from
+# The END-plateau escalation's instants are declared in settings.sh as OFFSETS from
 # t_rend (KD_DEND_TA/_TB/_TSTOP), not as absolute times, because they compose
 # with #253's high-plateau escalation -- which moves t_rend.  Re-derive the two
 # absolute sets here exactly as run.sh's own simenv_dend_at() call does (the
@@ -63,8 +65,8 @@ SHA_DYN="$(simenv_sha256 "${SNAPDIR}/${RID}-dyn.spice")"
 #
 # Each tag below reconstructs a work-directory name run.sh minted, so every
 # suffix run.sh appends has to be appended here too or the archive looks for a
-# directory that does not exist.  `$(window_trim_tag_suffix)` is run.sh's own
-# function, spliced in above rather than restated, and it appends LAST at all
+# directory that does not exist.  `$(window_trim_tag_suffix)` is settings.sh's
+# function, sourced above rather than restated, and it appends LAST at all
 # three of run.sh's tag sites -- so it appends last here as well (#425).
 # ---------------------------------------------------------------------------
 WSUF="$(window_trim_tag_suffix)"
@@ -282,7 +284,7 @@ LD_RAW="${ROOT}/sim/lock-detector/corners/${CITE_LD_RECORD}/raw_measures.csv"
 {
   simenv_provenance "supply-sensitivity (DR-013 window-vs-offset crossing)" "${RID}" \
     "design/pll_top.sch -> sim/supply-sensitivity/netlist-snapshots/${RID}.spice" \
-    "the cells named by XING_PICKS in run.sh, from this record's own steady-state rows"
+    "the cells named by XING_PICKS in settings.sh, from this record's own steady-state rows"
   echo "# question: DR-013 Consequences -- 'this crossing is inferred across two"
   echo "#   campaigns, not measured in one loop'.  Every column left of"
   echo "#   twin_r_ns comes out of ONE closed-loop transient per row."
@@ -307,7 +309,7 @@ LD_RAW="${ROOT}/sim/lock-detector/corners/${CITE_LD_RECORD}/raw_measures.csv"
   echo "#   lock_asserted, never typed"
   echo "bundle,temp_c,vdd_v,trim_code,phi_b_ns,dphi_win_ns,lock_lvl_v,lock_asserted,in_loop_window_vs_offset,twin_r_ns,twin_f_ns,dr013_crossed,dr013_window_ns,dr013_offset_ns,verdict"
   # The late window is (tb - ta) at both the default and the escalated
-  # transient length -- run.sh's KTA/KTB and KTA_X/KTB_X are both 3.2 us apart
+  # transient length -- settings.sh's KTA/KTB and KTA_X/KTB_X are both 3.2 us apart
   # -- so one width covers every row, escalated or not.
   XWIN_S="$(awk -v a="${KTA}" -v b="${KTB}" '
     function s(x,  n) { n = x + 0;
@@ -1400,7 +1402,7 @@ FDEV_TABLE="$(awk -F, '
 
 # DR-013 crossing table and verdict prose (#417), from window_crossing.csv.
 # Every word of the verdict sentence is selected by the data; the only literals
-# are the cell names DR-013 itself asked about, which run.sh states.
+# are the cell names DR-013 itself asked about, which settings.sh states.
 XING_TABLE="$(awk -F, '
   !/^#/ && $1 != "bundle" {
     printf "  | `%s` / %s C / %s V | %s | %+.4g | %.4g | %.4g | **%s** | **%s** | %s / %s | %s (%s vs %s) | **%s** |\n",
@@ -2221,7 +2223,7 @@ ${XING_TABLE}
   assert -> \`confirmed\`.
 
   **${N_XING} of the ${N_XING_ASKED} cell(s) DR-013 asks about were run here**
-  (\`XING_PICKS\` in \`run.sh\`); ${N_XING_CONFIRMED} confirmed,
+  (\`XING_PICKS\` in \`settings.sh\`); ${N_XING_CONFIRMED} confirmed,
   ${N_XING_MOVED} moved, ${N_XING_REFUTED} refuted. A cell this run did not
   sweep is absent from the table rather than answered -- a reduced run must not
   be able to answer a question it did not run, which is the same rule the
