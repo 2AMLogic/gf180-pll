@@ -30,6 +30,7 @@ Run:  python3 -m unittest discover -s sim/tests -v
 
 from __future__ import annotations
 
+import csv
 import re
 import subprocess
 import sys
@@ -67,6 +68,17 @@ OVERLAP = {
     "ngspice-46 f6eeac7": ("-62.01", "-59.51", "-58.12", "2.63"),
     "ngspice-47 f6eeac7": ("-55.95", "-53.45", "-53.94", "4.26"),
 }
+
+
+OLD_CSV = SIM_DIR / "reference-spur" / "corners" / OLD_ID / "spur_by_corner.csv"
+NEW_CSV = SIM_DIR / "reference-spur" / "corners" / NEW_ID / "spur_by_corner.csv"
+
+
+def _csv_200m(path):
+    """corner_id -> spur_dbc_at_200mhz (the document's `spur_dbc_200m`)."""
+    with path.open(encoding="utf-8") as fh:
+        rows = csv.DictReader(ln for ln in fh if not ln.startswith("#"))
+        return {r["corner_id"]: float(r["spur_dbc_at_200mhz"]) for r in rows}
 
 
 def _doc_text() -> str:
@@ -207,6 +219,85 @@ class TheOverlapPointFigures(unittest.TestCase):
         # flip at this corner is a simulator effect, as stated.
         self.assertLessEqual(float(OVERLAP["ngspice-46 f6eeac7"][1]), -55.0)
         self.assertGreater(float(OVERLAP["ngspice-47 f6eeac7"][1]), -55.0)
+
+
+class TheDispositionTableAndDerivedProse(unittest.TestCase):
+    """Hand-maintained figures, each checked against an independent source."""
+
+    @staticmethod
+    def _norm(text):
+        return text.replace("\u2212", "-")
+
+    def _maxima(self, name):
+        """(old_max, new_max) of a measurement from the generated delta table."""
+        lines, _ = _compare()
+        rows = [ln for ln in lines if ln.startswith(f"| `spur` | `{name}` |")]
+        self.assertEqual(len(rows), 1, rows)
+        cells = [c.strip() for c in rows[0].strip().strip("|").split("|")]
+        return tuple(float(c.split("..")[1]) for c in cells[3:5])
+
+    def _disposition_rows(self):
+        """{corner: (old cell, new cell)} from the Disposition table only.
+
+        The table is located by its header row, and only its contiguous
+        data rows are collected: a corner listed in some other table is
+        simply absent here, and one that appears twice is rejected rather
+        than silently matched in whichever copy happens to fit the value
+        pattern.
+        """
+        lines = self._norm(_doc_text()).splitlines()
+        heads = [i for i, ln in enumerate(lines) if ln.startswith("| corner |")]
+        self.assertEqual(len(heads), 1,
+                         f"Disposition table header rows at {heads}, "
+                         "expected exactly one")
+        table = {}
+        for ln in lines[heads[0] + 1:]:
+            if not ln.startswith("|"):
+                break
+            if not re.search(r"[`a-zA-Z]", ln):
+                continue  # the |---| separator
+            cells = [c.strip() for c in ln.strip().strip("|").split("|")]
+            self.assertEqual(len(cells), 4, cells)
+            corner = cells[0].strip("`")
+            self.assertNotIn(corner, table,
+                             f"{corner} occurs more than once in the "
+                             f"Disposition table")
+            table[corner] = (cells[1], cells[2])
+        return table
+
+    def test_each_disposition_row_matches_both_csvs(self):
+        old, new = _csv_200m(OLD_CSV), _csv_200m(NEW_CSV)
+        table = self._disposition_rows()
+        self.assertEqual(sorted(table), sorted(EXPECTED_FLIPS),
+                         "each expected corner must occur exactly once in "
+                         "the Disposition table")
+        for corner in EXPECTED_FLIPS:
+            with self.subTest(corner=corner):
+                old_cell, new_cell = table[corner]
+                m = re.fullmatch(r"(-\d+\.\d+) \((?:PASS|FAIL)\)", old_cell)
+                self.assertIsNotNone(m, f"{corner}: old cell {old_cell!r}")
+                self.assertEqual(m.group(1), f"{old[corner]:.2f}")
+                self.assertEqual(new_cell, f"{new[corner]:.2f}")
+
+    def _prose(self):
+        return re.sub(r"\s+", " ", self._norm(_doc_text()))
+
+    def test_pdk_movement_prose_is_the_pinned_overlap_arithmetic(self):
+        d = abs(float(OVERLAP["ngspice-46 f6eeac7"][0])
+                - float(OVERLAP["predecessor"][0]))
+        self.assertIn(f"moves it by {d:.2f} dB in the", self._prose())
+
+    def test_worsening_at_200mhz_prose(self):
+        old, new = self._maxima("spur_dbc_200m")
+        self.assertIn(f"moves from {old:.2f} to {new:.2f} dBc, "
+                      f"i.e. **{abs(new - old):.2f} dB worse**", self._prose())
+
+    def test_150mhz_worst_margin_and_previous_prose(self):
+        old, new = self._maxima("spur_dbc")
+        margin = abs(-55.0 - new)
+        prose = self._prose()
+        self.assertIn(f"(worst {new:.2f} dBc, `typical`, only "
+                      f"{margin:.2f} dB of margin; previously {old:.2f})", prose)
 
 
 if __name__ == "__main__":
