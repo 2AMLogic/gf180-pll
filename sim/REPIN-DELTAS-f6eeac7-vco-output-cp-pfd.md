@@ -43,7 +43,7 @@ stays open** for the remainder. Dispositions so far:
 | `vco-bias-current` | `20260911-172350-da0bb1e` | **re-qualified here** (`20261117-150323-f3b3e7f`) |
 | `output-range` | `20260801-061907-67d7127`, `20260819-190341-70a4128` | **re-qualified here** (`20261117-174557-327ee00` and `20261117-174951-33cbd72`) — two single-point re-runs, one per predecessor; the 90-row grid under the re-pinned PDK is the already-landed `20261111-184929-73837b9` |
 | `cp-compliance` | `20260801-190821-734f483`, `20260802-033728-c24ee3a`, `20260802-061841-c24ee3a` | **re-qualified here** — `20261115-025500-8da7900` (DC bench) and `20261116-180719-930fb6e` (switching bench); the third id, `20260802-033728-c24ee3a`, is the near-duplicate twin of the re-run `20260802-061841-c24ee3a`, dispositioned in the cp-compliance section below rather than silently dropped |
-| `mc-cp-mismatch` | `20260731-212614-640560e`, `20260927-093235-b994116`, `20260927-102154-d004d5b` | still owed under #826 |
+| `mc-cp-mismatch` | `20260731-212614-640560e`, `20260927-093235-b994116`, `20260927-102154-d004d5b` | **re-qualified here** — `20261120-031550-b12c30d` (nominal-only), `20261120-022856-2985e2e` (negative control) and `20261120-024846-61c1dc6` (corner-combined); see the mc-cp-mismatch section for the deck-list fleet transport this campaign needed and the draw-stream attribution its delta tables rest on |
 | `pfd-deadzone` | `20260801-234626-5b333d0`, `20260916-051356-8cedbba` | **re-qualified here** (`20261116-195826-16f19a5`, `20261116-183811-1379f1f`) |
 
 Re-derive the supersession side of that table with
@@ -55,18 +55,19 @@ re-qualified `output-driver` (2026-11-15), the second increment (2026-11-17,
 same branch, still `Part of #826`) re-qualified both `cp-compliance` benches
 and both `pfd-deadzone` manifests, the third (2026-11-17, same branch)
 re-qualified `vco-bias-current`, the fourth (2026-11-17, same branch)
-re-qualified both `output-range` single-point records, and the fifth
+re-qualified both `output-range` single-point records, the fifth
 (2026-11-18, same branch) re-qualified the `vco-tuning-range` tuning grid
-and supply bench. The live scope the issue's own derivation script returns
-is therefore **10 records, not 20** — `6/0/0/3` plus its one `cp-compliance`
-residual across the three remaining directories `vco-tuning-range`,
-`cp-compliance`, `mc-cp-mismatch`. The script counts supersession from
+and supply bench, and the sixth (2026-11-20, same branch) re-qualified all
+three `mc-cp-mismatch` records. The live scope the issue's own derivation
+script returns is therefore **7 listed records** — the six
+`vco-tuning-range` Monte Carlo family records plus its one `cp-compliance`
+residual. The script counts supersession from
 records' own `Supersedes` fields, so its one `cp-compliance` residual,
 `20260802-033728-c24ee3a`, is dispositioned in the cp-compliance section
 below as fully superseded by the second increment's re-run of its
 near-duplicate twin — in prose, not by any record's `Supersedes` field —
 and the script will keep returning it until a record names it. Records
-needing a re-run: **9** — 6/0/0/3 across those same three directories, all
+needing a re-run: **6** — the `vco-tuning-range` Monte Carlo family, all
 still owed under #826.
 
 ## What was re-run
@@ -83,6 +84,9 @@ still owed under #826.
 | `output-range` CAPPED `hi` row | `20260819-190341-70a4128` | `20261117-174951-33cbd72` | 1 pt (ff / 27 °C / 3.30 V, `hi` edge, band 7, N=32, seed 1.454 V) |
 | `vco-tuning-range` tuning grid | `20260804-162735-72883fb` | `20261118-021803-deb4ec0` | 504 pts (7 bundles × 3 temps × 3 supplies × 8 band codes) |
 | `vco-tuning-range` supply bench | `20260804-211600-f599a65` | `20261118-023753-1b6f7c2` | 144 pts (one shared grid — 63 static-pushing + 63 mandated-PVT transient + 12 band-sweep + 6 ripple-frequency-check points; both decks run at every point, 288 graded rows) |
+| `mc-cp-mismatch` negative control | `20260927-093235-b994116` | `20261120-022856-2985e2e` | 420 units (21 corners × 4 stages × 5 runs; one fleet job per corner, deck-list transport) |
+| `mc-cp-mismatch` corner-combined budget | `20260927-102154-d004d5b` | `20261120-024846-61c1dc6` | 3864 sample units + 420 control units (21 corners × (100 dc + 16 sw + 48 pfd + 20 dff); one fleet job per corner) |
+| `mc-cp-mismatch` nominal-only budget | `20260731-212614-640560e` | `20261120-031550-b12c30d` | 410 units (typical/27 °C/3.30 V × 200/40/40/50; 226 fresh + 184 shared with the corner-combined record's typical-corner job, disclosed on the record) |
 
 open_pdks `f6eeac7`, **every point executed on the batch fleet** — the host
 that minted the record ran no ngspice of its own (24 concurrent off-host
@@ -1136,3 +1140,175 @@ python3 sim/lib/record_delta.py \
 **Per-corner verdicts**: unchanged on all 288 graded rows.
 
 **Stated limits**: identical in both records.
+
+## `mc-cp-mismatch`
+
+The one campaign in this group the corner-manifest harness cannot express:
+`run.sh` composes one deck per (stage, corner, seed) itself, because the
+`sw_stat_mismatch` override must land after `design.ngspice`'s defaults and
+the per-sample `.option rndseed` axis has no manifest form (both gaps are
+recorded in `run.sh`'s own header). Its fleet route is therefore `klt sim`'s
+**deck-list transport** (`testbench/run_batch.sh`, landed with this
+increment): per-corner requests of pre-composed unit decks whose bytes
+mirror `simenv_run_deck`'s composition, submitted with
+`--wait-for-capacity 600`, one job per corner; the collected per-unit
+stdout is replayed through the campaign's own reduction, statistics and
+record minting on the recording host (`SIM_FLEET_REPLAY=1`), with a
+missing log a hard error rather than a local ngspice run. Three records
+were re-qualified this way, sequentially, each committed before the next
+started (clean-tree provenance reads on all three — this campaign's own
+records had always stamped `DIRTY` because `simenv_env_block` sampled the
+tree at mint time, after the run's own artifacts existed; it now samples
+at campaign start via `SIMENV_GIT_STATE`).
+
+The predecessors' simulator provenance, read per record: both sample
+records (`20260731-212614-640560e`, `20260927-102154-d004d5b`) ran
+ngspice-46 on **Darwin/arm64**; the control record (`20260927-093235`)
+ran ngspice-46 on **Linux/x86_64**. The fleet is ngspice-47 on
+Linux/x86_64, and the batch image's executed open_pdks stamp is `f6eeac7`
+(`worker_environment.pdk`, `stamp_scope: executed`, comparison `match`).
+
+### Controls for the `mc-cp-mismatch` increment (2026-11-20)
+
+The issue's literal PDK-only probe (`SIM_NGSPICE_BIN=/usr/bin/ngspice`,
+ngspice-42) plus the predecessor-sample version (ngspice-46,
+`~/.local/opt/ngspice-46/bin`), both run locally against the re-pinned
+PDK at `typical`/27 °C/3.30 V through the campaign's own `--one-*` unit
+entries (single-unit local runs; the multi-unit grid went to the fleet):
+
+```bash
+cd sim/mc-cp-mismatch/testbench
+export SIM_CORNER=typical SIM_TEMP=27 SIM_VDD=3.30
+PATH=$HOME/.local/opt/ngspice-46/bin:$PATH ./run.sh --one-dc 1 /tmp/p46dc.csv   # and --one-sw/--one-pfd/--one-dff
+PATH=/usr/bin:$PATH ./run.sh --one-dc 1 /tmp/p42dc.csv                           # ditto
+```
+
+| control (simulator + `f6eeac7`, typical corner, seed 1) | vs predecessor control `20260927-093235` (ngspice-46 Linux + `c6d73a3`) |
+|---|---|
+| dc (ngspice-46) and dc (ngspice-42) | `iup`/`idn` at all three Vctrl points identical to the last digit — `MCDC_LO iup=5.33332E-06 idn=5.16066E-06` |
+| sw (ngspice-46) and sw (ngspice-42) | `iup_ss`/`idn_ss` identical; charge/width metrics within the platform-numerics residue class below (e.g. `wskew` −1.50757e-10 vs the control's −1.49573e-10, 0.8 %) |
+| pfd (ngspice-46 / 42) | `qnet` −1.93085e-15 vs the control's −1.90962e-15 (1.1 %) |
+| dff (ngspice-46 / 42) | `tcq_r`/`tcq_f` identical to the six printed digits |
+
+The two local builds agree with each other on every stage and reproduce
+the DC currents exactly, so nothing scales like a device-model change —
+the femtocoulomb/picosecond residue on the transient integrals is the
+same platform-numerics class the `cp-compliance`/`pfd-deadzone` controls
+above already documented. The fleet itself needs no such allowance
+against the Linux control predecessor: the **entire 3-corner overlap of
+the negative-control grid reproduces bit-for-bit** — 240 metric rows, as
+text, across the re-pin, the 46→47 bump and the local→fleet move:
+
+```bash
+rid=20261120-022856-2985e2e
+control_dir=sim/mc-cp-mismatch/corners/$rid
+if [ -f "manifests/artifacts/mc-cp-mismatch-$rid.manifest.json" ]; then
+  control_dir=$(mktemp -d)
+  python3 sim/mc-cp-mismatch/testbench/fleet_archive.py restore "$control_dir" "$rid"
+fi
+diff <(grep -v '^#' sim/mc-cp-mismatch/corners/20260927-093235-b994116/negative_control.csv \
+        | grep 'typical_27c_3.30v\|ss_125c_2.97v\|ff_-40c_3.63v') \
+     <(grep -v '^#' "$control_dir/negative_control.csv" \
+        | grep 'typical_27c_3.30v\|ss_125c_2.97v\|ff_-40c_3.63v')   # -> empty
+```
+
+**The predecessors' sample records ran under an ambient init the successor
+does not reproduce, and cannot.** All 3944 sample logs of
+`20260927-102154-d004d5b` and all 410 of `20260731-212614-640560e` open
+with `Compatibility modes selected: hs a` (and the `m=` override warning
+that mode prints) — an ambient `$HOME/.spiceinit` on the minting hosts,
+the exact failure class DR-040 closed for harness campaigns by staging a
+declared init with a marker. The control record, minted the same day on
+the Linux host, shows no such banner, and the fleet (no `hs a`) reproduces
+THAT lineage bit-for-bit. A local `hsa` probe reproduces the banner but
+not the predecessor samples' values — the ambient init's full content and
+that ngspice build's `m=` semantics went unrecorded, so the predecessor
+sample runs are not reproducible off their host. This does not weaken the
+comparison: per `sim/README.md`'s #611 scoping (written for this campaign),
+the same seed on a different host/build draws a different sample from the
+same distribution — a per-seed comparison is meaningless and the
+**distribution-level statistics** are the comparable quantity, which is
+what the tables below grade. Consistently with that, the new records'
+three corners shared with the Linux-lineage record
+`20260923-095854-1655e11` reproduce that record's committed per-corner
+figures on every column (folded term 1, `wskew`, `qnet`, `t_offset`,
+`tcq`) — the draws and numerics of the Linux lineage are stable across
+the pin, the version and the backend, which is what pins the PDK
+contribution at zero.
+
+`sim/lib/record_delta.py` reports "0 graded rows" on all three pairs by
+design: it diffs per-corner result rows of manifest-form records, and this
+legacy campaign's records carry statistics tables over fresh draws —
+there is no per-row identity to grade. The tables below are the
+campaign-form equivalents, each carrying the command that produced it.
+
+### `20261120-024846-61c1dc6` vs `20260927-102154-d004d5b` (corner-combined)
+
+Every term's binding corner is unchanged; all four PASS in both records.
+Figures quoted from each record's committed CSVs
+(`./run.sh --restat <id>` re-derives the new side; the predecessor's own
+per-corner table supplies the old side):
+
+| term (worst corner, signed \|mean\|+3σ) | old | new | budget | verdicts |
+|---|---|---|---|---|
+| 1 at `sf_-40c_3.63v` | 17.0863 % | **17.9173 %** | ±20 % (DR-018) | PASS / PASS |
+| 2/2a at `ss_125c_3.63v` | 5.52599e-10 s | **5.51935e-10 s** | ±3 ns | PASS / PASS |
+| 3 at `sf_125c_3.63v` | 5.56626e-15 C | **5.30466e-15 C** | ±20 fC | PASS / PASS |
+| 4 at `sf_125c_3.63v` | 1.02467e-09 s | **1.01051e-09 s** | ±3 ns | PASS / PASS |
+
+```bash
+sim/mc-cp-mismatch/testbench/run.sh --restat 20260927-102154-d004d5b   # old, from committed CSVs
+sim/mc-cp-mismatch/testbench/run.sh --restat 20261120-024846-61c1dc6   # new
+```
+
+Term 1's worst-corner move (+0.83 pt) is ~1.8 SE of a single corner's
+mean at n=100 — replicate noise, not a shift; the pooled statistic moves
+15.424 % → 14.8715 %. No verdict flips anywhere in the grid (the
+term-1 FAIL the oldest 3-corner record carried was resolved by DR-018
+before either of these records). Nothing to file.
+
+### `20261120-031550-b12c30d` vs `20260731-212614-640560e` (nominal-only)
+
+The predecessor's headline 8.47867 % against ±12 % was the folded
+statistic DR-018/#487 retired; re-read under the current signed statistic
+its committed 200 samples give 11.72760 %. Both records PASS against the
+ratified ±20 %:
+
+| term (nominal point, signed \|mean\|+3σ) | old (committed samples, current statistic) | new | budget | verdicts |
+|---|---|---|---|---|
+| 1 | 11.72760 % (n=200) | **12.209 %** (n=200) | ±20 % | PASS / PASS |
+| 2/2a wskew | 2.70181e-10 s | **2.59654e-10 s** | ±3 ns | PASS / PASS |
+| 3 qnet0 | 2.98874e-15 C | **2.85825e-15 C** | ±20 fC | PASS / PASS |
+| 4 t_offset | 5.76014e-10 s | **5.58646e-10 s** | ±3 ns | PASS / PASS |
+
+```bash
+# old side: the predecessor's single-corner CSV predates the corner column
+# (--restat refuses it), so the signed statistic is recomputed the way the
+# runner does -- worst-magnitude Vctrl per seed, |mean|+3sd:
+python3 - <<'PY'
+import csv, statistics
+worst = {}
+for row in csv.reader(l for l in open(
+        "sim/mc-cp-mismatch/corners/20260731-212614-640560e/mc_cp_dc.csv")
+        if not l.startswith("#")):
+    if not row or row[0] == "seed": continue
+    seed = int(row[0]); iup, idn = float(row[2]), float(row[3])
+    m = (iup - idn) / ((iup + idn) / 2) * 100
+    if seed not in worst or abs(m) > abs(worst[seed]): worst[seed] = m
+xs = list(worst.values())
+print("n=%d signed |mean|+3sd = %.5f%%" % (len(xs),
+      abs(statistics.fmean(xs)) + 3 * statistics.stdev(xs)))
+PY
+sim/mc-cp-mismatch/testbench/run.sh --restat 20261120-031550-b12c30d    # new
+```
+
+### `20261120-022856-2985e2e` vs `20260927-093235-b994116` (negative control)
+
+Same decks, same five-run legs; the successor runs the control in the
+testbench's current 21-corner form (the predecessor control predated
+#597's widening by an hour and ran the 3-point diagonal). Verdict: **PASS
+on all 84 (stage, corner) rows** of the new grid, and the predecessor's
+3-corner overlap is byte-identical (the diff command above) — the
+strongest single piece of PDK-no-op evidence in this increment, since it
+covers all four stages' deterministic readouts at three corners across
+every variable that changed.

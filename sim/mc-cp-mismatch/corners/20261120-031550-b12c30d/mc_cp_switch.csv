@@ -1,0 +1,52 @@
+# campaign: mc-cp-mismatch (switch)
+# record_id: 20261120-031550-b12c30d
+# generated_utc: 2026-11-20T03:16:07Z
+# pdk_variant: gf180mcuD
+# pdk_open_pdks_hash: f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7
+# pdk_root: <home>/.ciel/gf180mcuD
+# model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
+# switches: design.ngspice defaults OVERRIDDEN by this campaign (sw_stat_global=0, sw_stat_mismatch=1 -> mismatch-only Monte Carlo, .option rndseed set per sample)
+# simulator: ngspice-47
+# netlist: design/cp.sch (xschem export)
+# corners: 1 corners, Vctrl=1.65, N=40 mismatch samples/corner
+corner,seed,vctrl_v,wskew_s
+typical_27c_3.30v,1,1.65,-1.49573E-10
+typical_27c_3.30v,2,1.65,-2.08304E-10
+typical_27c_3.30v,3,1.65,-1.87178E-10
+typical_27c_3.30v,4,1.65,-1.26664E-10
+typical_27c_3.30v,5,1.65,-1.57728E-10
+typical_27c_3.30v,6,1.65,-1.85306E-10
+typical_27c_3.30v,7,1.65,-1.3648E-10
+typical_27c_3.30v,8,1.65,-2.25167E-10
+typical_27c_3.30v,9,1.65,-1.55832E-10
+typical_27c_3.30v,10,1.65,-2.11429E-10
+typical_27c_3.30v,11,1.65,-1.68113E-10
+typical_27c_3.30v,12,1.65,-1.66297E-10
+typical_27c_3.30v,13,1.65,-2.08825E-10
+typical_27c_3.30v,14,1.65,-1.32795E-10
+typical_27c_3.30v,15,1.65,-1.8433E-10
+typical_27c_3.30v,16,1.65,-1.21814E-10
+typical_27c_3.30v,17,1.65,-1.64952E-10
+typical_27c_3.30v,18,1.65,-1.88932E-10
+typical_27c_3.30v,19,1.65,-2.19822E-10
+typical_27c_3.30v,20,1.65,-1.52078E-10
+typical_27c_3.30v,21,1.65,-1.71467E-10
+typical_27c_3.30v,22,1.65,-2.0917E-10
+typical_27c_3.30v,23,1.65,-1.94551E-10
+typical_27c_3.30v,24,1.65,-1.54227E-10
+typical_27c_3.30v,25,1.65,-2.04756E-10
+typical_27c_3.30v,26,1.65,-1.86955E-10
+typical_27c_3.30v,27,1.65,-2.15262E-10
+typical_27c_3.30v,28,1.65,-1.42609E-10
+typical_27c_3.30v,29,1.65,-1.8894E-10
+typical_27c_3.30v,30,1.65,-2.01835E-10
+typical_27c_3.30v,31,1.65,-1.83584E-10
+typical_27c_3.30v,32,1.65,-1.73635E-10
+typical_27c_3.30v,33,1.65,-1.67583E-10
+typical_27c_3.30v,34,1.65,-1.90623E-10
+typical_27c_3.30v,35,1.65,-1.88852E-10
+typical_27c_3.30v,36,1.65,-1.91995E-10
+typical_27c_3.30v,37,1.65,-2.14113E-10
+typical_27c_3.30v,38,1.65,-1.76452E-10
+typical_27c_3.30v,39,1.65,-1.84483E-10
+typical_27c_3.30v,40,1.65,-1.94352E-10

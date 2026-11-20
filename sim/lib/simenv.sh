@@ -411,13 +411,20 @@ simenv_stage_netlist() {
 simenv_provenance() {
   local campaign="$1" rid="$2" netlist="$3" corners="$4"
   local switches="${5:-design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0 -> nominal skew, no Monte Carlo)}"
+  # pdk_root is printed through the same <home> normalisation layout/harness
+  # applies to its captured evidence (check-evidence-host-paths.sh, #701):
+  # an absolute home directory in an append-only evidence file is a
+  # contributor-machine detail the public repository does not carry, and the
+  # variant + open_pdks hash lines beside it are the identifying provenance.
+  local pdk_root_print="${SIMENV_PDK_ROOT}"
+  pdk_root_print="${pdk_root_print/#$HOME/<home>}"
   cat <<EOF
 # campaign: ${campaign}
 # record_id: ${rid}
 # generated_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 # pdk_variant: $(simenv_pdk_variant)
 # pdk_open_pdks_hash: $(simenv_pdk_hash)
-# pdk_root: ${SIMENV_PDK_ROOT}
+# pdk_root: ${pdk_root_print}
 # model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
 # switches: ${switches}
 # simulator: $(simenv_ngspice_version)
@@ -445,6 +452,20 @@ EOF
 #   note to simenv_provenance above as well, or the record and the CSV beside
 #   it disagree about the same run (#601). sim/tests/
 #   test_provenance_switches_note.py enforces that pairing statically.
+#
+#   SIMENV_GIT_STATE (optional environment, #826): replaces the parenthesised
+#   tree state on the "Repo commit" line with a state the CALLER sampled
+#   earlier. Why that is sometimes necessary: this block renders inside the
+#   record-minting heredoc, i.e. AFTER the campaign has written its own
+#   corners/<id>/ and netlist-snapshots/ artifacts -- those are untracked
+#   files, so a mint-time `git status --porcelain` is non-empty and the line
+#   reads "DIRTY tree" even when the campaign started from a fully committed
+#   tree. sim/harness samples the tree state BEFORE a run starts for exactly
+#   this reason; a legacy campaign that must mint clean-tree provenance
+#   (#826's re-qualification AC) captures `simenv_git_state` at its own start
+#   and passes it through here. Unset (the default), the line samples at
+#   render time exactly as before, so every existing campaign keeps emitting
+#   what it emitted before.
 simenv_env_block() {
   local capture="${1:-N/A — these
     testbenches are hand-written SPICE, not an xschem export; there is no
@@ -458,7 +479,7 @@ simenv_env_block() {
     \`sm141064_mim.ngspice\`, pulled in by the \`mimcap_*\` sections);
     ${switches}
   - Simulator: $(simenv_ngspice_version). Schematic capture: ${capture}
-  - Repo commit: \`$(simenv_git_sha)\` ($(simenv_git_state) tree)
+  - Repo commit: \`$(simenv_git_sha)\` (${SIMENV_GIT_STATE:-$(simenv_git_state)} tree)
   - Host: $(simenv_host)
 EOF
 }
@@ -1231,7 +1252,7 @@ simenv_control_md_rows() {
 
 # simenv_emit_control_evidence <corners-dir> <work-dir> <campaign-label> <rid>
 #                              <netlist-desc> <corners-desc> <switches-note>
-#                              <campaign-fn> <units>
+#                              <campaign-fn> <units> [replay]
 #
 # Write <corners-dir>/negative_control.csv and archive every control run's
 # raw ngspice log beside it. <campaign-fn> is the campaign's own
@@ -1253,19 +1274,32 @@ simenv_control_md_rows() {
 # multi-unit grid refuses under the batch backend unless
 # SIM_ALLOW_LOCAL_GRID=1; a caller that omits <units> fails closed under
 # batch (an empty count refuses), never bypasses.
+#
+# A callback that only reads collected logs may explicitly pass 1 as the
+# tenth argument. The default callback launches the simulator and always
+# consults the batch-host guard, regardless of the caller's environment.
 simenv_emit_control_evidence() {
   local cornersdir="$1" work="$2" campaign="$3" rid="$4"
   local netlist="$5" corners_desc="$6" switches="$7" campaign_fn="$8"
-  simenv_guard_local_grid "${9:-}" "${campaign}" || return $?
+  if [ "${10:-0}" != "1" ]; then
+    simenv_guard_local_grid "${9:-}" "${campaign}" || return $?
+  fi
   local raw="${work}/negative_control_rows.csv"
   mkdir -p "${cornersdir}"
-  rm -rf "${work:?}"/ctl_*
+  # Clean-slate wipe of a previous run's control dirs -- but NOT under fleet
+  # replay (#826): there the ctl_* logs ARE the run's inputs, produced on the
+  # batch fleet and collected into place by the campaign's transport, and the
+  # campaign_fn below only consumes them (its per-unit hooks hard-error on a
+  # missing log instead of running ngspice). Wiping them would destroy the
+  # run's own evidence before it is read.
+  if [ "${10:-0}" != "1" ]; then
+    rm -rf "${work:?}"/ctl_*
+  fi
   "${campaign_fn}" "${raw}"
-  local f
-  for f in "${work}"/ctl_*/ngspice.log; do
-    [ -f "${f}" ] || continue
-    cp "${f}" "${cornersdir}/$(basename "$(dirname "${f}")").log"
-  done
+  local tag
+  while read -r tag; do
+    cp "${work}/${tag}/ngspice.log" "${cornersdir}/${tag}.log" || return 1
+  done < <(awk -F, '{print "ctl_" $1 "_" $2 "_" $3}' "${raw}" | sort -u)
   {
     simenv_provenance "${campaign}" "${rid}" "${netlist}" "${corners_desc}" "${switches}"
     echo "${SIMENV_CONTROL_HEADER}"
