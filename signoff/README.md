@@ -196,11 +196,13 @@ and 8 `klt lvs` envelopes committed as well, none of them cited in
   not by `klt sim`.
 
 `klt signoff` grades envelopes, so none of it is citable as it stands. This
-affects items 3, 4, 5 and 6 most directly. Item 6 also carries a further,
-independent gap on
-top of the envelope question — its evidence is currently unreachable on the
-pinned install regardless of format — see "Item 6: statistical evidence
-(`klt yield`) and the pinned-install gap" below.
+affects items 3, 4, 5 and 6 most directly. ~~Item 6 also carries a further,
+independent gap on top of the envelope question — its evidence is currently
+unreachable on the pinned install regardless of format.~~
+**Correction (2026-11-20, issue #1079).** CI installs `klt-yield-native`
+alongside `klayout-tools==0.9.2`, so the pinned install can run `klt yield`.
+Issue #1081 tracks deriving and validating the Monte Carlo sample sets needed
+for [item 6](#item-6-statistical-evidence-klt-yield-and-the-pinned-install-gap).
 
 **2. The artifact does not exist yet.** No PLL-block layout has been drawn.
 `layout/pll_top/` holds real transistor-level layout for sub-blocks (the
