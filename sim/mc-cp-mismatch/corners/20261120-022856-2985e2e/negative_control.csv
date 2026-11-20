@@ -3,7 +3,7 @@
 # generated_utc: 2026-11-20T02:29:03Z
 # pdk_variant: gf180mcuD
 # pdk_open_pdks_hash: f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7
-# pdk_root: /home/ubuntu/.ciel/gf180mcuD
+# pdk_root: <home>/.ciel/gf180mcuD
 # model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
 # switches: design.ngspice defaults OVERRIDDEN per run -- this control artifact runs BOTH switch values (sw_stat_mismatch=1 for the repeat/vary legs, OFF for the gate leg); read the per-row sw_stat_mismatch column, not this line, for the authoritative per-run value
 # simulator: ngspice-47
