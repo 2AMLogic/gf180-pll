@@ -597,16 +597,25 @@ CORNER_POINTS=(
   "sf 125 3.63"
 )
 if [ -n "${MCCP_CORNER_POINTS:-}" ]; then
+  # Parse into the array WITHOUT touching the positional parameters: this
+  # script re-executes itself per sample (`--one-dc` and friends through
+  # xargs), the child inherits MCCP_CORNER_POINTS from the campaign's
+  # environment, and a `set --` here would CLOBBER the child's own
+  # `--one-*` arguments -- the child would then fall through the entry-point
+  # dispatch and run a whole campaign of its own, recursively. A `read -a`
+  # into a scratch array leaves "$@" alone.
   CORNER_POINTS=()
-  set -- ${MCCP_CORNER_POINTS}
-  while [ "$#" -ge 3 ]; do
-    CORNER_POINTS+=("$1 $2 $3")
-    shift 3
-  done
-  [ "$#" -eq 0 ] || {
+  read -r -a __mccp_pts <<<"${MCCP_CORNER_POINTS}"
+  if [ "${#__mccp_pts[@]}" -eq 0 ] || [ $(( ${#__mccp_pts[@]} % 3 )) -ne 0 ]; then
     echo "ERROR: MCCP_CORNER_POINTS must be '<bundle> <temp> <vdd>' triplets" >&2
     exit 1
-  }
+  fi
+  __i=0
+  while [ "${__i}" -lt "${#__mccp_pts[@]}" ]; do
+    CORNER_POINTS+=("${__mccp_pts[${__i}]} ${__mccp_pts[$(( __i + 1 ))]} ${__mccp_pts[$(( __i + 2 ))]}")
+    __i=$(( __i + 3 ))
+  done
+  unset __mccp_pts __i
   [ "${#CORNER_POINTS[@]}" -gt 0 ] || {
     echo "ERROR: MCCP_CORNER_POINTS is empty" >&2
     exit 1
