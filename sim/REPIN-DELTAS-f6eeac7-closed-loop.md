@@ -21,7 +21,7 @@ per-directory increments, each `Part of #828`. Nothing here edits a record.
 | `period-jitter` | 6 | still owed under #828 |
 | `supply-sensitivity` | 12 | still owed under #828 |
 | `lock-time` | 5 | still owed under #828 |
-| `pll-top-smoke` | 1 | still owed under #828 |
+| `pll-top-smoke` | `20260802-160926-8456ff3` | **re-qualified** ([`20261120-025417-fe7841e`](pll-top-smoke/records/20261120-025417-fe7841e.md)) |
 | `loop-dynamics` | 1 | still owed under #828 |
 
 ## `reference-spur`
@@ -166,3 +166,10 @@ python3 sim/lib/record_delta.py \
 - in `20261118-212630-1649033` only: `lock`/`ferr_fb`
 
 _3 finding(s) above need a human disposition._
+
+## `pll-top-smoke`
+
+The [seven-check comparison](pll-top-smoke/records/20261120-025417-fe7841e.md) covers the
+entire original smoke bench at 27 °C and 3.30 V. All seven checks pass on
+both pins using ngspice-42 and the same frozen PLL assembly. The record
+also grades the late static phase against the ratified 1 ns bound.
