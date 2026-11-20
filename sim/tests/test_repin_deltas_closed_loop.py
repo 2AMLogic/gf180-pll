@@ -31,6 +31,7 @@ Run:  python3 -m unittest discover -s sim/tests -v
 from __future__ import annotations
 
 import csv
+import hashlib
 import re
 import subprocess
 import sys
@@ -375,6 +376,112 @@ class TheDispositionTableAndDerivedProse(unittest.TestCase):
         prose = self._prose()
         self.assertIn(f"(worst {new:.2f} dBc, `typical`, only "
                       f"{margin:.2f} dB of margin; previously {old:.2f})", prose)
+
+
+class LoopDynamicsProvenance(unittest.TestCase):
+    """The `loop-dynamics` successor's unattributed simulator, recovered.
+
+    Record `20261111-092132-343bafa` says "Executing simulator: unattributed
+    (99)" because the harness cannot see inside a batch job. The archived
+    fleet job outputs can, and the recovered mapping is committed beside the
+    record's raw logs as `executing-simulator-provenance.csv`. Everything the
+    `## loop-dynamics` section of the document claims from that CSV is
+    re-derived here from committed files only -- no simulator runs, no
+    network: the byte-match itself is recomputed as sha256 over each
+    committed corner log, so a CSV row that drifted from the evidence it
+    speaks for fails rather than trusts.
+    """
+
+    RECORD_ID = "20261111-092132-343bafa"
+    BASELINE_ID = "20260731-202550-82af5a9"
+    PIN = "f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7"
+    INIT = "d6efd5b23e4c9bcb6d97e0516269077b983e81ac453ca7ec74f412cfc0efd385"
+    AMI = "ami-095c25ae241a4d360"
+    IMAGE_BUILT_AT = "2026-11-06T02:46:10Z"
+
+    @classmethod
+    def _rows(cls):
+        campaign = SIM_DIR / "loop-dynamics"
+        csv_path = campaign / "corners" / cls.RECORD_ID / "executing-simulator-provenance.csv"
+        with csv_path.open(encoding="utf-8") as fh:
+            return list(csv.DictReader(ln for ln in fh if not ln.startswith("#")))
+
+    def test_every_committed_corner_log_is_covered_and_byte_matched(self):
+        corners_dir = SIM_DIR / "loop-dynamics" / "corners" / self.RECORD_ID
+        committed = {p.stem: p for p in corners_dir.glob("*.log")}
+        rows = self._rows()
+        self.assertEqual(sorted(r["corner_id"] for r in rows),
+                         sorted(committed),
+                         "the CSV must cover exactly the committed corner logs")
+        self.assertEqual(len(rows), 99)
+        for r in rows:
+            with self.subTest(corner=r["corner_id"]):
+                digest = hashlib.sha256(
+                    committed[r["corner_id"]].read_bytes()).hexdigest()
+                self.assertEqual(r["ngspice_log_sha256"], digest,
+                                 "sha256 must be of the committed log itself")
+
+    def test_the_attribution_is_uniform_and_names_the_re_pinned_pdk(self):
+        rows = self._rows()
+        self.assertEqual({r["executing_simulator"] for r in rows},
+                         {"ngspice-46"},
+                         "every point executed on ngspice-46")
+        self.assertEqual({r["open_pdks"] for r in rows}, {self.PIN})
+        self.assertEqual({r["simulator_init_sha256"] for r in rows}, {self.INIT})
+        self.assertEqual({r["ami_id"] for r in rows}, {self.AMI})
+        self.assertEqual({r["image_built_at"] for r in rows},
+                         {self.IMAGE_BUILT_AT})
+        for r in rows:
+            with self.subTest(corner=r["corner_id"]):
+                self.assertEqual(r["job_state"], "done")
+                self.assertEqual(r["job_exit_code"], "0")
+                self.assertRegex(
+                    r["job_id"],
+                    rf"^gf180-pll-sim-{re.escape(r['corner_id'])}-[0-9a-f]{{8}}$")
+
+    def test_the_executing_hosts_are_the_records_own_ninety_nine(self):
+        record = (SIM_DIR / "loop-dynamics" / "records"
+                  / f"{self.RECORD_ID}.md").read_text(encoding="utf-8")
+        self.assertIn("Executing simulator: unattributed (99)", record)
+        hosts_span = re.search(r"Execution hosts:.*?-- (.*?)\n", record).group(1)
+        named = set(re.findall(r"`(ip-[\d-]+)`", hosts_span))
+        rows = self._rows()
+        csv_hosts = {r["executing_host"] for r in rows}
+        self.assertEqual(len(csv_hosts), 99, "99 points on 99 distinct hosts")
+        self.assertEqual(csv_hosts, named,
+                         "CSV hosts must be exactly the record's named hosts")
+
+    def test_nine_pilot_points_report_byte_identical_prior_executions(self):
+        rows = [r for r in self._rows() if r["prior_byte_identical_jobs"]]
+        self.assertEqual(len(rows), 9)
+        for r in rows:
+            with self.subTest(corner=r["corner_id"]):
+                self.assertRegex(
+                    r["corner_id"],
+                    r"^rtyp-mtyp-x(?:typ|ff|ss)_-?\d+c_3\.30v_z$")
+                prefix = f"gf180-pll-sim-{r['corner_id']}-"
+                for jid in r["prior_byte_identical_jobs"].split(";"):
+                    self.assertTrue(jid.startswith(prefix), jid)
+                    self.assertRegex(jid[len(prefix):], r"^[0-9a-f]{8}$")
+
+    def test_the_document_cites_the_record_and_the_recovered_attribution(self):
+        text = _doc_text()
+        self.assertIn("## `loop-dynamics`", text)
+        self.assertIn(self.RECORD_ID, text)
+        self.assertIn("executing-simulator-provenance.csv", text)
+        # The disposition row: provenance-verified, successor named.
+        row = [ln for ln in text.splitlines()
+               if ln.startswith("| `loop-dynamics` |")]
+        self.assertEqual(len(row), 1)
+        self.assertIn("**provenance-verified here**", row[0])
+        self.assertIn(self.BASELINE_ID, row[0])
+        self.assertIn(self.RECORD_ID, row[0])
+        # The section states what the archive established.
+        self.assertIn("ngspice-46 on all 99 points", text)
+        self.assertIn("`open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7`",
+                      text)
+        # And why no generated table is printed for this pair.
+        self.assertIn("0 graded rows", text)
 
 
 if __name__ == "__main__":

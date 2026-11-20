@@ -22,7 +22,7 @@ per-directory increments, each `Part of #828`. Nothing here edits a record.
 | `supply-sensitivity` | 12 | still owed under #828 |
 | `lock-time` | 5 | still owed under #828 |
 | `pll-top-smoke` | `20260802-160926-8456ff3` | **re-qualified** ([`20261120-025417-fe7841e`](pll-top-smoke/records/20261120-025417-fe7841e.md)) |
-| `loop-dynamics` | 1 | still owed under #828 |
+| `loop-dynamics` | `20260731-202550-82af5a9` | **provenance-verified here** ([`20261111-092132-343bafa`](loop-dynamics/records/20261111-092132-343bafa.md)) |
 
 ## `reference-spur`
 
@@ -173,3 +173,63 @@ The [seven-check comparison](pll-top-smoke/records/20261120-025417-fe7841e.md) c
 entire original smoke bench at 27 °C and 3.30 V. All seven checks pass on
 both pins using ngspice-42 and the same frozen PLL assembly. The record
 also grades the late static phase against the ratified 1 ns bound.
+
+## `loop-dynamics`
+
+Disposition: **provenance verified, no replay needed.** The successor record
+[`20261111-092132-343bafa`](loop-dynamics/records/20261111-092132-343bafa.md)
+already exists on `main` — 99/99 batch points under open_pdks `f6eeac7`,
+`Supersedes: 20260731-202550-82af5a9` — but its Environment provenance lists
+the executing simulator as *unattributed* for all 99 points, which is why this
+campaign stayed open. The archive of the batch fleet's job outputs answers it.
+
+### What the archived worker job metadata says
+
+Every batch job's `outputs/ngspice.env` (written by the job contract,
+`sim/harness/batch.py`) carries the executing binary's own banner, the
+resolved PDK's `SOURCES` stamp, the image manifest and the instance's
+hostname; `outputs/ngspice.log` is the deck stdout the harness published.
+Matching those archives to the committed evidence:
+
+- **99 of 99 committed corner logs byte-match an archived fleet job** — the
+  `outputs/ngspice.log` of exactly one 2026-11-11 job per corner is
+  sha256-identical to `corners/20261111-092132-343bafa/<corner_id>.log`.
+  The recovered mapping is committed as
+  [`executing-simulator-provenance.csv`](loop-dynamics/corners/20261111-092132-343bafa/executing-simulator-provenance.csv)
+  and asserted by `sim/tests/test_repin_deltas_closed_loop.py`.
+- **Executing simulator: ngspice-46 on all 99 points** (the banner in every
+  job's `ngspice.env`; simulator init sha256 `d6efd5b2…`, the single value
+  the record already states). Same major version as the baseline
+  `20260731-202550-82af5a9` (ngspice-46, Darwin arm64, pinned-local), so the
+  DR-039 hazard of a batch ngspice-47 number superseding an ngspice-46 one
+  does not arise here; the remaining host/OS delta is exactly what the
+  record's own `baseline_comparison` pilot gate grades — 95 rows, zero
+  failing, PILOT GATE = GO.
+- **PDK stamp: `open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7` on all
+  99 points**, resolved at `/opt/pdk/gf180mcuD` — the re-pinned revision
+  this issue requires, on image `ami-095c25ae241a4d360` (manifest
+  `built_at 2026-11-06T02:46:10Z`, `tools.ngspice ngspice-46`), uniform
+  across the grid.
+- The 99 executing hosts in the CSV are exactly the record's 99 named
+  `ip-*` execution hosts. Nine `rtyp-mtyp-*` filter points additionally
+  have earlier archived executions (2026-11-06, 2026-11-08 — the pilot
+  days) whose logs are byte-identical to the committed ones, on the same
+  image; they are listed in the CSV's `prior_byte_identical_jobs` column.
+
+Method note for re-verification: the job archive is addressed by job id
+under the worker-exported batch configuration (`KLT_BATCH_PROVISION_SCRIPT`
+env file: bucket, region, `jobs/` prefix); job ids are
+`gf180-pll-sim-<corner-run-id>-<hex8>`. The per-job facts above come from
+the archived `ngspice.env`/`ngspice.host`/`status.json`; the byte-match is
+recomputable from the committed CSV's sha256 column alone.
+
+### Delta table
+
+The old-vs-new comparison for this campaign is the record's own ratified
+pilot gate (every metric against the baseline with the ratified tolerance,
+none loosened): see
+[`baseline_comparison.csv`](loop-dynamics/corners/20261111-092132-343bafa/baseline_comparison.csv)
+(95 metrics, failing rows: none, verdicts unchanged — **Overall: PASS** on
+both sides). No generated `record_delta.py` table is printed for this pair:
+the predecessor predates the harness's graded-table record format, so there
+are no overlapping graded measurements to tabulate (0 graded rows).
