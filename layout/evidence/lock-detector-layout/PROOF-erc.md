@@ -380,3 +380,12 @@ and `klt signoff` cannot assemble the cited set at all yet.
 `signoff/block-manifest.json` therefore still cites nothing, and this record
 makes no claim about `signoff/tier-report.json`. That gap is real, it is
 separate from anything above, and it is named here rather than papered over.
+
+## Re-run on klayout-tools 0.9.2 (pin bump, issue #1079)
+
+`erc-report.json` was regenerated with
+`klt erc --top lock_detector --deck gf180mcu --format json lock_detector.gds erc-supply-spec.json` on the
+released `klayout-tools==0.9.2` wheel with KLayout `0.30.12` (the repository's
+KLayout pin). Verdicts are unchanged from 0.8.0: `status: not_checked`,
+`erc_status: clean`, zero findings. The report gains fields 0.8.0 did not emit; the
+input and spec content hashes are unchanged.
