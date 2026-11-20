@@ -17,7 +17,7 @@ per-directory increments, each `Part of #828`. Nothing here edits a record.
 | directory | live records | disposition |
 |---|---|---|
 | `reference-spur` | `20260816-132150-5f405e7` | **re-qualified here** (`20261118-212630-1649033`) |
-| `reference-phase-transfer` | 3 | still owed under #828 |
+| `reference-phase-transfer` | 3 | **re-qualified here** ([`20261120-151718-d0000b5`](reference-phase-transfer/records/20261120-151718-d0000b5.md)) |
 | `period-jitter` | 6 | still owed under #828 |
 | `supply-sensitivity` | 12 | still owed under #828 |
 | `lock-time` | 5 | still owed under #828 |
@@ -166,6 +166,175 @@ python3 sim/lib/record_delta.py \
 - in `20261118-212630-1649033` only: `lock`/`ferr_fb`
 
 _3 finding(s) above need a human disposition._
+
+## `reference-phase-transfer`
+
+The paired control/step grid covers 5 of 45 mandated PVT combinations
+(2 decks per point, 10 jobs). The re-run used the predecessor's manifest,
+deck and settings on the `batch` backend (5/5 points completed, open_pdks
+`f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7` verified from the first
+completing job's `SOURCES` stamp before the grid was spent, ngspice-47 on
+the fleet image built 2026-11-14). Job ids, one per deck:
+`gf180-pll-sim-ctl_typical_27c_3.30v_vs1p795-4ea005e6`,
+`gf180-pll-sim-stp_typical_27c_3.30v_vs1p795-e4d49ed7`,
+`gf180-pll-sim-ctl_ff_-40c_3.63v_vs2p430-eb0ef707`,
+`gf180-pll-sim-stp_ff_-40c_3.63v_vs2p430-cb55b4bb`,
+`gf180-pll-sim-ctl_ss_125c_2.97v_vs1p093-4e7c9d84`,
+`gf180-pll-sim-stp_ss_125c_2.97v_vs1p093-c2d1e37c`,
+`gf180-pll-sim-ctl_fs_125c_3.63v_vs1p791-fe7de866`,
+`gf180-pll-sim-stp_fs_125c_3.63v_vs1p791-db768f89`,
+`gf180-pll-sim-ctl_sf_-40c_2.97v_vs1p677-8344da86`,
+`gf180-pll-sim-stp_sf_-40c_2.97v_vs1p677-8e7e5003`.
+A first submission lost its `ss` point to a Spot reclamation and was
+discarded uncommitted; the four points it did complete reproduce the
+committed run's values to every printed digit.
+
+### What changed besides the PDK
+
+The predecessor's five points executed on the batch image's ngspice-42
+(its `Simulator:` bullet named the minting host's ngspice-46, which ran no
+deck); this run executed on ngspice-47 — the same simulator transition the
+`reference-spur` record above carries. The composed DUT also differs from
+the predecessor's frozen snapshot in exactly two lines, both design edits
+on `main` that post-date it and that the `reference-spur` re-run's snapshot
+already carries: `XCF5` moves from `cap_mim_2f0_m2m3_noshield` to the
+option-B `cap_mim_2f0_m4m5_noshield` (same 31.4 µm × 31.4 µm `m=1`
+geometry), and `XLD`'s fourth trim pin connects to the `LDT3` port instead
+of an internal `net1` (the DR-026 lock-detector MSB connection). The
+stimulus deck, solver options, `.tran` line and every measurement card are
+unchanged. This is a closed-loop transient, so the movement below is
+**not attributable to the PDK alone**.
+
+### Overlap point: pinned ngspice-46 under `f6eeac7`, one corner
+
+```bash
+SIM_NGSPICE_BIN=$HOME/.local/opt/ngspice-46/bin/ngspice \
+PATH=$HOME/.local/opt/ngspice-46/bin:$PATH \
+  python3 sim/run_corners.py reference-phase-transfer --backend local \
+  --corners typical --temps 27 --supply 3.3 --supply-tol 0 \
+  --axis vs=vs1p795 --timeout 3600 --no-write -j 2
+```
+
+Same deck, same PDK pin (`f6eeac7`), `typical_27c_3.30v_vs1p795`, 1/1 ok,
+**961.9 s wall clock** on this host, both phases. Not minted as a record
+(`--no-write`).
+
+| measurement | predecessor (executing ngspice-42, `c6d73a3`) | ngspice-46, `f6eeac7` | this record (executing ngspice-47, `f6eeac7`) |
+|---|---|---|---|
+| `measured_gain_db` | 15.8894 | 15.5871 | 15.5326 |
+| `transfer_error_db` | 0.3264 | 0.0240 | -0.0305 |
+| `phi_shift` (ps) | 38.3 | 2.8 | -3.5 |
+| `pair_resid` (ps) | -10.5 | -3.4 | -16.9 |
+| `settle_resid` (ps) | 9.1 | -37.5 | -64.6 |
+| `tracking_ratio` | 1.03829 | 1.00277 | 0.9965 |
+| `fout` (Hz) | 1.500140e+08 | 1.500240e+08 | 1.500220e+08 |
+| `nmeas` | 6.00012 | 6.00027 | 6.00035 |
+
+- At `typical`, gain fell from 15.8894 to 15.5871 dB between the
+  predecessor and the local overlap. The **0.3023 dB** difference combines
+  the PDK change, both DUT netlist edits, ngspice-42 → 46 and the move
+  from batch to local execution. The individual contributions remain unknown.
+- The local overlap and successor used the same new PDK and DUT netlist.
+  Gain fell from 15.5871 to 15.5326 dB, a **0.0545 dB** simulator-plus-host
+  difference between local ngspice-46 and batch ngspice-47 at `typical`.
+- The operating-point columns (`fout`, `ffb`, `nmeas`) agree to better than
+  0.01 % across all three runs. The overlap covers only `typical`.
+
+### Method guards and resolution of the in-band residuals
+
+The record's overall verdict is **FAIL** on the campaign's own
+method-validity guards — the first time a `reference-phase-transfer`
+record has failed them since DR-027 corrected the `pair_resid` band:
+
+| corner-id | guard | old | new | verdict |
+|---|---|---|---|---|
+| `ff_-40c_3.63v_vs2p430` | `pair_resid` (±50 ps, DR-027) | 16.5 ps (PASS) | 53.54 ps | **PASS → FAIL** |
+| `sf_-40c_2.97v_vs1p677` | `settle_resid` (±100 ps) | -37.7 ps (PASS) | 117.52 ps | **PASS → FAIL** |
+
+The table compares the magnitude of the reported shift at `tb` with the
+pre-step pairing floor and with the movement between `tc` and `tb`.
+
+| MOS corner | abs(`phi_shift`) (ps) | abs(`pair_resid`) (ps) | abs(`settle_resid`) (ps) | method guards |
+|---|---:|---:|---:|---|
+| `typical` | 3.50 | 16.90 | 64.56 | PASS |
+| `ff` | 35.00 | 53.54 | 16.62 | FAIL (pairing) |
+| `ss` | 5.46 | 13.03 | 56.56 | PASS |
+| `fs` | 19.61 | 8.68 | 58.52 | PASS |
+| `sf` | 4.77 | 1.80 | 117.52 | FAIL (settling) |
+
+At `typical`, `ff` and `ss`, the pairing floor exceeds the observed shift.
+At `fs` the shift exceeds the pairing floor, but the late readings moved by
+about three times the shift. At `sf` that movement also exceeds the settling guard.
+These comparisons limit the precision of the fine residual at every point.
+The graded transfer, operating-point and integration checks pass at all five.
+
+| quantity | old (min…max) | new (min…max) |
+|---|---|---|
+| `transfer_error_db` | -0.0345…+0.8032 dB | -0.0305…+0.2988 dB |
+| `measured_gain_db` | 15.5285…16.3662 dB | 15.5326…15.8618 dB |
+| `tracking_ratio` | 0.996032…1.09688 | 0.9965…1.035 |
+
+The largest reported deviation from `20·log₁₀(6)` fell from 0.80 to
+0.30 dB. The method guards above determine the record's overall FAIL.
+Issue #1077 tracks both failures under the existing DR-027 bands.
+
+### Delta table
+
+Reproduce with:
+
+```bash
+python3 sim/lib/record_delta.py \
+  sim/reference-phase-transfer/records/20260925-080736-b722f33.md \
+  sim/reference-phase-transfer/records/20261120-151718-d0000b5.md
+```
+
+Each row reports the largest absolute and relative changes independently.
+The last column identifies the corner with the largest relative change.
+
+| topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
+|---|---|---|---|---|---|---|---|
+| `integration` | `cdn_lvl` | min=8.900000e-04 | 0.109533..0.208704 | 0.109627..0.208713 | 9.400000e-05 | 0.08582 | `ff_-40c_3.63v_vs2p430` |
+| `integration` | `dn_lvl` | min=8.900000e-04 | 0.109416..0.208863 | 0.109617..0.208731 | 0.000201 | 0.1837 | `ff_-40c_3.63v_vs2p430` |
+| `integration` | `up_lvl` | — | 0.18123..0.494493 | 0.179734..0.495692 | 0.004629 | 1.481 | `ff_-40c_3.63v_vs2p430` |
+| `operating-point` | `ffb` | — | 2.500120e+07..2.500530e+07 | 2.500120e+07..2.500490e+07 | 800 | 0.0032 | `fs_125c_3.63v_vs1p791` |
+| `operating-point` | `fout` | min=1.485000e+08, max=1.515000e+08 | 1.500070e+08..1.500320e+08 | 1.500040e+08..1.500300e+08 | 8000 | 0.005333 | `typical_27c_3.30v_vs1p795` |
+| `operating-point` | `lock_lvl` | — | 5.124637e-09..2.97 | 5.126650e-09..2.97 | 2.275000e-12 | 0.04165 | `typical_27c_3.30v_vs1p795` |
+| `operating-point` | `nmeas` | min=5.99, max=6.01 | 5.99984..6.00012 | 5.99989..6.00035 | 0.00027 | 0.0045 | `ff_-40c_3.63v_vs2p430` |
+| `pairing` | `d_mid` | — | 2.345900e-11..6.287800e-11 | -1.127510e-10..7.813000e-11 | 1.465197e-10 | 433.9 | `sf_-40c_2.97v_vs1p677` |
+| `pairing` | `drift_ctl` | — | -1.409533e-09..8.514300e-11 | -1.411510e-09..1.440800e-10 | 7.889900e-11 | 69.22 | `ff_-40c_3.63v_vs2p430` |
+| `pairing` | `pair_resid` | min=-5.000000e-11, max=5.000000e-11 | -1.048500e-11..2.629800e-11 | -1.690000e-11..5.354000e-11 | 3.708100e-11 | 284.3 | `ss_125c_2.97v_vs1p093` |
+| `pairing` | `settle_resid` | min=-1.000000e-10, max=1.000000e-10 | -5.207900e-11..7.342300e-11 | -6.456000e-11..1.175180e-10 | 1.552547e-10 | 1493 | `fs_125c_3.63v_vs1p791` |
+| `phases` | `cphi_fast` | — | 1.024547e-09..4.789116e-09 | 9.013920e-10..4.808640e-09 | 1.231550e-10 | 12.02 | `sf_-40c_2.97v_vs1p677` |
+| `phases` | `cphi_mid` | — | 7.555487e-10..4.085248e-09 | 8.716260e-10..4.107410e-09 | 1.191620e-10 | 15.36 | `sf_-40c_2.97v_vs1p677` |
+| `phases` | `cphi_post` | — | 6.722134e-10..3.560114e-09 | 6.294400e-10..3.575020e-09 | 6.899200e-11 | 6.363 | `sf_-40c_2.97v_vs1p677` |
+| `phases` | `cphi_pre` | — | 1.053434e-09..4.969647e-09 | 9.480630e-10..4.986530e-09 | 1.053710e-10 | 10 | `sf_-40c_2.97v_vs1p677` |
+| `phases` | `sphi_fast` | — | 8.589610e-11..3.872757e-09 | -3.272030e-11..3.877950e-09 | 1.186164e-10 | 138.1 | `sf_-40c_2.97v_vs1p677` |
+| `phases` | `sphi_mid` | — | 7.893174e-10..4.148126e-09 | 7.588750e-10..4.169430e-09 | 9.100100e-11 | 3.857 | `sf_-40c_2.97v_vs1p677` |
+| `phases` | `sphi_post` | — | 6.682454e-10..3.570913e-09 | 6.342070e-10..3.580480e-09 | 1.107870e-10 | 5.315 | `typical_27c_3.30v_vs1p795` |
+| `phases` | `sphi_pre` | — | 1.079732e-09..4.962576e-09 | 9.462660e-10..4.999560e-09 | 1.334660e-10 | 12.36 | `sf_-40c_2.97v_vs1p677` |
+| `rolloff` | `d_fast` | — | -9.758290e-10..-9.163590e-10 | -9.779600e-10..-9.306900e-10 | 1.433100e-11 | 1.564 | `ss_125c_2.97v_vs1p093` |
+| `rolloff` | `fast_gain` | — | 0.145026..0.501846 | 0.13224..0.41586 | 0.085986 | 37.73 | `ff_-40c_3.63v_vs2p430` |
+| `rolloff` | `fast_gain_db` | — | -16.7711..-5.98859 | -17.5727..-7.62106 | 2.7807 | 27.26 | `ss_125c_2.97v_vs1p093` |
+| `rolloff` | `fast_rejection_db` | — | -32.6605..-21.6449 | -33.1053..-23.2314 | 3.285 | 10.77 | `ff_-40c_3.63v_vs2p430` |
+| `transfer` | `measured_gain` | — | 5.97619..6.58129 | 5.979..6.21 | 0.37129 | 5.642 | `ff_-40c_3.63v_vs2p430` |
+| `transfer` | `measured_gain_db` | — | 15.5285..16.3662 | 15.5326..15.8618 | 0.5044 | 3.082 | `ff_-40c_3.63v_vs2p430` |
+| `transfer` | `phi_shift` | — | -3.968000e-12..9.688200e-11 | -3.500000e-12..3.500000e-11 | 6.188200e-11 | 220.1 | `sf_-40c_2.97v_vs1p677` |
+| `transfer` | `target_gain_db` | — | 15.563..15.563 | 15.563..15.563 | 0 | 0 | `—` |
+| `transfer` | `tracking_ratio` | min=0.9, max=1.1 | 0.996032..1.09688 | 0.9965..1.035 | 0.06188 | 5.641 | `ff_-40c_3.63v_vs2p430` |
+| `transfer` | `transfer_error_db` | — | -0.0345342..0.803198 | -0.0304539..0.298807 | 0.504391 | 219.6 | `sf_-40c_2.97v_vs1p677` |
+| `ungrouped` | `tclk160` | — | 1.066438e-06..1.066616e-06 | 1.066450e-06..1.066640e-06 | 5.800000e-11 | 0.005438 | `typical_27c_3.30v_vs1p795` |
+| `ungrouped` | `tfb20` | — | 7.998317e-07..7.999629e-07 | 7.998420e-07..7.999620e-07 | 2.570000e-11 | 0.003213 | `fs_125c_3.63v_vs1p791` |
+
+**Per-corner verdict flips** (each one is a finding):
+
+| topology | corner-id | old | new |
+|---|---|---|---|
+| `pairing` | `ff_-40c_3.63v_vs2p430` | PASS | FAIL — pair_resid max=5.000000e-11 (got 5.354000e-11) |
+| `pairing` | `sf_-40c_2.97v_vs1p677` | PASS | FAIL — settle_resid max=1.000000e-10 (got 1.175180e-10) |
+
+**Stated limits**: identical in both records.
+
+_2 finding(s) above need a human disposition._
 
 ## `pll-top-smoke`
 

@@ -142,6 +142,19 @@ class ReportsMovementAgainstTheOldRecordAsTheBaseline(unittest.TestCase):
         self.assertIn("9.086050e-10", row, "the absolute step must be reported")
         self.assertEqual(findings, 0, "no verdict flipped and no limit moved")
 
+    def test_absolute_and_relative_maxima_can_come_from_different_corners(self):
+        limits = [("transfer", "gain", "—")]
+        old = _record({"transfer": (["gain"], {
+            "ff": ["1000", "PASS"], "fs": ["1", "PASS"], "ss": ["4", "PASS"],
+        })}, limits)
+        new = _record({"transfer": (["gain"], {
+            "ff": ["1050", "PASS"], "fs": ["2", "PASS"], "ss": ["8", "PASS"],
+        })}, limits)
+
+        lines, _ = self._compare(old, new)
+        # ff moves by 50. Both fs and ss move by 100%, with a larger step at ss.
+        self.assertIn("| `transfer` | `gain` | — | 1..1000 | 2..1050 | 50 | 100 | `ss` |", lines)
+
     def test_a_verdict_flip_is_a_finding(self):
         old = _record(
             {"cn": (["c330_cn"], {"typical_27c_3.30v": ["1.0", "PASS"]})},
