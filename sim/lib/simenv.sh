@@ -1267,13 +1267,32 @@ simenv_control_md_rows() {
 # multi-unit grid refuses under the batch backend unless
 # SIM_ALLOW_LOCAL_GRID=1; a caller that omits <units> fails closed under
 # batch (an empty count refuses), never bypasses.
+#
+# SIM_FLEET_REPLAY=1 (optional, #826): the campaign's transport has already
+# produced every unit's log on the batch fleet and this pass only consumes
+# those bytes -- its control_run_one wrappers skip the engine per tag and a
+# missing log is a hard error, not a local run -- so the local fan-out the
+# guard refuses cannot happen and the gate is skipped. The campaign's own
+# replay hooks (not this helper) enforce that no engine runs; the guard here
+# would otherwise make a fleet-produced control impossible to mint on a
+# batch-backend host.
 simenv_emit_control_evidence() {
   local cornersdir="$1" work="$2" campaign="$3" rid="$4"
   local netlist="$5" corners_desc="$6" switches="$7" campaign_fn="$8"
-  simenv_guard_local_grid "${9:-}" "${campaign}" || return $?
+  if [ "${SIM_FLEET_REPLAY:-0}" != "1" ]; then
+    simenv_guard_local_grid "${9:-}" "${campaign}" || return $?
+  fi
   local raw="${work}/negative_control_rows.csv"
   mkdir -p "${cornersdir}"
-  rm -rf "${work:?}"/ctl_*
+  # Clean-slate wipe of a previous run's control dirs -- but NOT under fleet
+  # replay (#826): there the ctl_* logs ARE the run's inputs, produced on the
+  # batch fleet and collected into place by the campaign's transport, and the
+  # campaign_fn below only consumes them (its per-unit hooks hard-error on a
+  # missing log instead of running ngspice). Wiping them would destroy the
+  # run's own evidence before it is read.
+  if [ "${SIM_FLEET_REPLAY:-0}" != "1" ]; then
+    rm -rf "${work:?}"/ctl_*
+  fi
   "${campaign_fn}" "${raw}"
   local f
   for f in "${work}"/ctl_*/ngspice.log; do
