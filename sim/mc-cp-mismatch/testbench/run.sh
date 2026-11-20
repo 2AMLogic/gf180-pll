@@ -1232,7 +1232,7 @@ restat() {
 # existing file at that exact path IS the completed sample, and can be
 # trusted without re-running ngspice. Guard is a no-op (falls through to the
 # normal run_*) unless SIM_RESUME=1, so a plain invocation is unaffected.
-if [ "${SIM_RESUME:-0}" = "1" ]; then
+if [ "${SIM_RESUME:-0}" = "1" ] && [ "${SIM_FLEET_REPLAY:-0}" != "1" ]; then
   case "${1:-}" in
     --one-dc|--one-sw|--one-pfd|--one-dff)
       if [ -n "${3:-}" ] && [ -s "${3}" ]; then
@@ -1241,6 +1241,17 @@ if [ "${SIM_RESUME:-0}" = "1" ]; then
       fi
       ;;
   esac
+fi
+# Historical records resolve to their committed directory. Fleet records
+# resolve to the checksum-verified archive for this command's lifetime.
+if [[ "${1:-}" = --restat || "${1:-}" = --recheck-control ]]; then
+  if [[ "${2:-}" =~ ^[0-9]{8}-[0-9]{6}-[a-f0-9]{7}$ ]] &&
+     [ -f "${REPO}/manifests/artifacts/mc-cp-mismatch-$2.manifest.json" ]; then
+    evidence_tmp=$(mktemp -d)
+    trap 'rm -rf "${evidence_tmp}"' EXIT
+    python3 "${HERE}/fleet_archive.py" restore "${evidence_tmp}" "$2"
+    set -- "$1" "${evidence_tmp}"
+  fi
 fi
 case "${1:-}" in
   --one-dc) shift; run_dc "$@"; exit 0 ;;
@@ -1275,6 +1286,13 @@ SIMENV_GIT_STATE="$(simenv_git_state)"
 simenv_require_tools
 mkdir -p "${WORK}"
 
+# Sample reductions must see the same cache bytes the archive verifies.
+if [ "${SIM_FLEET_REPLAY:-0}" = 1 ]; then
+  mkdir -p "${WORK}/batch"
+  exec 9>"${WORK}/batch/transport.lock"
+  flock 9
+fi
+
 echo "mc-cp-mismatch: exporting design/ via xschem ..."
 "${REPO}/design/netlist.sh" --top pfd_cp "${WORK}" >/dev/null
 [ -f "${NETLIST}" ] || { echo "ERROR: ${NETLIST} not produced" >&2; exit 1; }
@@ -1284,6 +1302,13 @@ echo "mc-cp-mismatch: exporting design/ via xschem ..."
   exit 1
 }
 cat "${DFF_NETLIST_SRC}" "${DECK_DFF}" >"${DUT_DFF}"
+
+if [ "${SIM_FLEET_REPLAY:-0}" = 1 ]; then
+  # Record the worker's simulator. Publication checks the same version and
+  # the executed PDK stamp on every sample and control receipt.
+  replay_simulator=$(python3 "${HERE}/fleet_batch.py" simulator "${WORK}/batch/control")
+  simenv_ngspice_version() { printf '%s\n' "${replay_simulator}"; }
+fi
 
 if [ "${1:-}" = "--check" ]; then
   tmpdir=$(mktemp -d)
@@ -1307,13 +1332,36 @@ fi
 # cannot drift between them. Only this campaign's provenance strings and its
 # own control_campaign differ; both are expanded here, at the call sites.
 
+# Retrieve store-backed records by id with the same --restat and
+# --recheck-control commands used for historical corners directories.
+record_evidence_dir() {
+  if [ "${SIM_FLEET_REPLAY:-0}" = 1 ]; then
+    echo "${WORK}/evidence/$1"
+  else
+    echo "${EXP}/corners/$1"
+  fi
+}
+
+finalize_evidence() {
+  local grid="$1"
+  if [ "${SIM_FLEET_REPLAY:-0}" = 1 ]; then
+    python3 "${HERE}/fleet_archive.py" publish "${CORNERSDIR}" "${grid}" "${RID}"
+    EVIDENCE_LINK="manifests/artifacts/mc-cp-mismatch-${RID}.manifest.json"
+  else
+    if [ "${grid}" != control ]; then
+      python3 "${HERE}/fleet_archive.py" local-logs "${CORNERSDIR}"
+    fi
+    EVIDENCE_LINK="sim/mc-cp-mismatch/corners/${RID}/"
+  fi
+}
+
 if [ "${1:-}" = "--control" ]; then
   # Standalone negative control: the three legs, every (stage, corner), minted
   # as its own record so the control is citable and re-checkable on its own
   # without re-running (or waiting for) a full sample campaign. #602.
   RID=$(simenv_record_id)
   SNAPDIR="${EXP}/netlist-snapshots"
-  CORNERSDIR="${EXP}/corners/${RID}"
+  CORNERSDIR="$(record_evidence_dir "${RID}")"
   RECORDSDIR="${EXP}/records"
   mkdir -p "${SNAPDIR}" "${CORNERSDIR}" "${RECORDSDIR}"
   cp "${NETLIST}" "${SNAPDIR}/${RID}-cppfd.spice"
@@ -1328,7 +1376,7 @@ if [ "${1:-}" = "--control" ]; then
     "${NUM_CORNERS} corners x ${#CONTROL_STAGES[@]} stages x 5 runs (seeds ${CONTROL_SEED_A}/${CONTROL_SEED_B}, sw_stat_mismatch 1 and 0)" \
     "${CONTROL_SWITCHES_NOTE}" \
     control_campaign \
-    "$(( NUM_CORNERS * ${#CONTROL_STAGES[@]} * 5 ))"
+    "$(( NUM_CORNERS * ${#CONTROL_STAGES[@]} * 5 ))" "${SIM_FLEET_REPLAY:-0}"
   CONTROL_CSV="${CORNERSDIR}/negative_control.csv"
   CONTROL_ROWS="$(simenv_control_md_rows "${CONTROL_CSV}")"
   CONTROL_RC=0
@@ -1339,6 +1387,7 @@ if [ "${1:-}" = "--control" ]; then
     CONTROL_VERDICT="FAIL"
   fi
 
+  finalize_evidence control
   RECORD="${RECORDSDIR}/${RID}.md"
   cat >"${RECORD}" <<EOF
 # Record ${RID}
@@ -1355,7 +1404,7 @@ if [ "${1:-}" = "--control" ]; then
   budget" table stays where
   \`sim/mc-cp-mismatch/records/20260923-095854-1655e11.md\` left it. What
   changes is that the validity leg underneath those numbers can now be
-  re-derived by a reader from \`corners/${RID}/negative_control.csv\`
+  re-derived by a reader from \`negative_control.csv\`
   (\`./run.sh --recheck-control ${RID}\`, no simulator required) rather than
   taken on the earlier records' word.
 - **Model-capability gate**: this record IS the gate, re-derived rather than
@@ -1451,7 +1500,7 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
   switch settings ARE the measurement: \`sw_stat_global = 0\` throughout,
   \`sw_stat_mismatch\` taking both 1 and 0, seeds ${CONTROL_SEED_A} and
   ${CONTROL_SEED_B} passed via \`.option rndseed\`. Every run's raw log is
-  committed under \`corners/${RID}/\`, named by its full
+  archived with this record, named by its full
   (stage, corner, run-tag) tag.
 - **Result -- ${CONTROL_VERDICT}**, per (stage, corner):
 
@@ -1459,7 +1508,7 @@ $(simenv_env_block "$(simenv_xschem_version) (batch netlist export of
   |---|---|---|---|---|---|
 ${CONTROL_ROWS}
 
-  Re-derive this table from committed bytes alone, with no simulator and no
+  Re-derive this table from the recorded bytes, with no simulator and no
   PDK, via \`sim/mc-cp-mismatch/testbench/run.sh --recheck-control ${RID}\`.
   That command exits non-zero if any leg fails, so the control is a gate and
   not only a description.
@@ -1472,8 +1521,8 @@ ${CONTROL_ROWS}
   - Netlist snapshots:
     \`sim/mc-cp-mismatch/netlist-snapshots/${RID}-cppfd.spice\`,
     \`sim/mc-cp-mismatch/netlist-snapshots/${RID}-dff.spice\`
-  - Raw logs: \`sim/mc-cp-mismatch/corners/${RID}/\`
-  - Extracted metrics: \`sim/mc-cp-mismatch/corners/${RID}/negative_control.csv\`
+  - Raw logs and CSVs: \`${EVIDENCE_LINK}\`
+  - Extracted metrics: \`negative_control.csv\`
   - Sample campaign this control belongs to:
     \`sim/mc-cp-mismatch/records/20260923-095854-1655e11.md\`
   - Sibling campaign's own control (same three legs, same schema):
@@ -1506,7 +1555,7 @@ fi
 # rather than repeating (and re-paying the wall-clock cost of) everything
 # already on disk. Off by default so a normal invocation is always a clean,
 # from-scratch campaign, matching every other campaign in this repo.
-if [ "${SIM_RESUME:-0}" != "1" ]; then
+if [ "${SIM_RESUME:-0}" != "1" ] || [ "${SIM_FLEET_REPLAY:-0}" = "1" ]; then
   rm -f "${WORK}"/dc_*.csv "${WORK}"/sw_*.csv "${WORK}"/pfd_*.csv "${WORK}"/dff_*.csv
 else
   echo "mc-cp-mismatch: SIM_RESUME=1 -- keeping any already-completed per-sample CSVs from a prior run"
@@ -1559,7 +1608,7 @@ GOT_DFF=$(wc -l <"${WORK}/dff_all.csv" | tr -d ' ')
 # --------------------------------------------------------------------------
 RID=$(simenv_record_id)
 SNAPDIR="${EXP}/netlist-snapshots"
-CORNERSDIR="${EXP}/corners/${RID}"
+CORNERSDIR="$(record_evidence_dir "${RID}")"
 RECORDSDIR="${EXP}/records"
 mkdir -p "${SNAPDIR}" "${CORNERSDIR}" "${RECORDSDIR}"
 
@@ -1567,14 +1616,6 @@ cp "${NETLIST}" "${SNAPDIR}/${RID}-cppfd.spice"
 cp "${DUT_DFF}" "${SNAPDIR}/${RID}-dff.spice"
 SHA_CPPFD=$(simenv_sha256 "${SNAPDIR}/${RID}-cppfd.spice")
 SHA_DFF=$(simenv_sha256 "${SNAPDIR}/${RID}-dff.spice")
-
-# Archive every raw log -- the WORK subdir tag already carries corner+seed
-# (and, for pfd, dphi), so the directory's own name is the archived filename.
-for f in "${WORK}"/dc_*/ngspice.log "${WORK}"/sw_*/ngspice.log \
-         "${WORK}"/pfd_*/ngspice.log "${WORK}"/dff_*/ngspice.log; do
-  [ -f "${f}" ] || continue
-  cp "${f}" "${CORNERSDIR}/$(basename "$(dirname "${f}")").log"
-done
 
 OUT_DC="${CORNERSDIR}/mc_cp_dc.csv"
 OUT_SW="${CORNERSDIR}/mc_cp_switch.csv"
@@ -1615,7 +1656,7 @@ simenv_emit_control_evidence "${CORNERSDIR}" "${WORK}" \
   "${NUM_CORNERS} corners x ${#CONTROL_STAGES[@]} stages x 5 runs (seeds ${CONTROL_SEED_A}/${CONTROL_SEED_B}, sw_stat_mismatch 1 and 0)" \
   "${CONTROL_SWITCHES_NOTE}" \
   control_campaign \
-  "$(( NUM_CORNERS * ${#CONTROL_STAGES[@]} * 5 ))"
+  "$(( NUM_CORNERS * ${#CONTROL_STAGES[@]} * 5 ))" "${SIM_FLEET_REPLAY:-0}"
 CONTROL_CSV="${CORNERSDIR}/negative_control.csv"
 CONTROL_ROWS="$(simenv_control_md_rows "${CONTROL_CSV}")"
 CONTROL_RC=0
@@ -1681,6 +1722,11 @@ else
 "
 fi
 
+if [ "${NUM_CORNERS}" -eq 1 ]; then
+  finalize_evidence nominal
+else
+  finalize_evidence full
+fi
 RECORD="${RECORDSDIR}/${RID}.md"
 cat >"${RECORD}" <<EOF
 # Record ${RID}
@@ -1746,7 +1792,7 @@ cat >"${RECORD}" <<EOF
   bundle issue #597's own record checked by hand -- as committed evidence
   rather than prose (#602). See the Methodology field's negative-control
   bullet and the Result field's control table, and
-  \`corners/${RID}/negative_control.csv\` for the bytes.
+  \`negative_control.csv\` for the bytes.
 - **Netlist provenance**:
   - \`cp\`/\`pfd_cp\`: schematic (\`design/cp.sch\`, \`design/pfd_cp.sch\` and
     the cells below them) exported by \`design/netlist.sh --top pfd_cp\` ->
@@ -1950,12 +1996,12 @@ ${CORNER_LIST_MD}
     added mixed bundle, before this fix existed). It is now a stage of this
     script, run at EVERY (stage, corner) this campaign samples -- all
     ${NUM_CORNERS} corners of the widened axis, not only the one #597's prose
-    check visited -- and committed as \`corners/${RID}/negative_control.csv\`
+    check visited -- and recorded as \`negative_control.csv\`
     plus one raw log per run. The wall-clock argument did not survive
     measurement: 5 runs x ${#CONTROL_STAGES[@]} stages x ${NUM_CORNERS}
     corners is a few minutes against this campaign's own
     $(( (N_DC + N_SW + N_PFD * 3 + N_DFF) * NUM_CORNERS )) sample invocations.
-    Three legs per (stage, corner), each derived from the committed CSV
+    Three legs per (stage, corner), each derived from the recorded CSV
     rather than asserted here -- \`repeat\` (\`sw_stat_mismatch=1\`, seed
     ${CONTROL_SEED_A}, twice) identical; \`vary\` (\`sw_stat_mismatch=1\`,
     seeds ${CONTROL_SEED_A} vs ${CONTROL_SEED_B}) DIFFERENT; \`gate\`
@@ -1964,7 +2010,7 @@ ${CORNER_LIST_MD}
     is what stops the other two from being equally satisfied by a
     measurement insensitive to everything. Overall: **${CONTROL_VERDICT}**;
     see the Result field's control table, and re-derive it with
-    \`./run.sh --recheck-control ${RID}\` (committed bytes only, no
+    \`./run.sh --recheck-control ${RID}\` (recorded bytes only, no
     simulator).
   - **THE SAME SEED DOES NOT PRODUCE THE SAME DRAW ON A DIFFERENT HOST, and
     this record is the first in this campaign to be able to show it (issue
@@ -1972,8 +2018,7 @@ ${CORNER_LIST_MD}
     \`.option rndseed=N\` makes the draws reproducible, and that is true --
     but only within one build on one machine. The superseded record
     \`20260923-095854-1655e11\` was taken with ngspice-46 on Linux/x86_64; this
-    one is ngspice-46 on the host named in the Environment provenance field
-    above. Both cover \`ff\`/-40C/3.63V at seeds 1..100, from the same deck and
+    one uses the simulator reported in its Environment provenance field. Both cover \`ff\`/-40C/3.63V at seeds 1..100, from the same deck and
     the same committed CSV schema, so the two can be compared row for row --
     and seed 1 is a DIFFERENT DRAW, not a slightly different numerical answer
     to the same one:
@@ -2079,7 +2124,7 @@ ${CORNER_LIST_MD}
   same seed value 1 is reused at each of the ${NUM_CORNERS} corners, which is fine because
   a corner change (different \`.lib\` sections, different \`.temp\`/\`vsup\`)
   changes the circuit the same seed's draw is applied to; every seed's raw
-  log is committed under \`corners/${RID}/\`, named by its full
+  log is archived with this record, named by its full
   (sub-campaign, corner, seed[, dphi]) tag.
 - **Result -- worst corner (binding on the budget verdict)**:
 
@@ -2131,9 +2176,9 @@ ${TERM1_NOTE}
   |---|---|---|---|---|---|
 ${CONTROL_ROWS}
 
-  Derived from \`corners/${RID}/negative_control.csv\`, not written by hand.
+  Derived from \`negative_control.csv\`, not written by hand.
   \`./run.sh --recheck-control ${RID}\` reproduces this table from the
-  committed bytes with no simulator, and exits non-zero if any leg fails.
+  recorded bytes with no simulator, and exits non-zero if any leg fails.
 - **Result -- per-corner breakdown**:
 
   | Corner | Term 1 \|mean\|+3sigma (signed; verdict) | Term 1 \`mean(\|x\|)+3*sd(\|x\|)\` (folded) | Term 2/2a \|mean\|+3sigma | Term 3 \|mean\|+3sigma | Term 4 \|mean\|+3sigma | DFF clk->Q mismatch 3sigma (and mean delay) |
@@ -2168,8 +2213,8 @@ ${PERCORNER_ROWS}
   - Netlist snapshots:
     \`sim/mc-cp-mismatch/netlist-snapshots/${RID}-cppfd.spice\`,
     \`sim/mc-cp-mismatch/netlist-snapshots/${RID}-dff.spice\`
-  - Raw logs: \`sim/mc-cp-mismatch/corners/${RID}/\`
-  - Extracted metrics: \`sim/mc-cp-mismatch/corners/${RID}/mc_cp_dc.csv\`,
+  - Raw logs and CSVs: \`${EVIDENCE_LINK}\`
+  - Extracted metrics: \`mc_cp_dc.csv\`,
     \`mc_cp_switch.csv\`, \`mc_pfd_cp.csv\`, \`mc_dff_ctq.csv\`
   - Prior record (nominal-only MC, not superseded, historical evidence):
     \`sim/mc-cp-mismatch/records/20260731-212614-640560e.md\`

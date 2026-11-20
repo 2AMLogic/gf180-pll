@@ -42,16 +42,16 @@
 #   nominal   20260731-212614-640560e's own grid: typical/27C/3.30V only,
 #             N_DC=200 N_SW=40 N_PFD=40 N_DFF=50
 #
-# compose skips any tag whose ${WORK}/<tag>/ngspice.log already exists, so a
-# re-compose after a partial collect resumes rather than re-spends (the
-# nominal grid's typical-corner tags 1..16 etc. reuse the full campaign's
-# logs -- deterministic same-seed reruns, not new evidence).
+# Compose retains every expected unit. A cached unit is eligible for reuse
+# only when its collected worker receipt, input digests and log agree.
 #
 # Usage:
-#   ./run_batch.sh compose  <grid>            # write per-corner requests + unit decks
-#   ./run_batch.sh submit   <grid>            # --submit-only each request (job ids -> jobs.tsv)
+#   ./run_batch.sh compose <grid> [record-id] # export DUTs, or use the record's frozen DUTs
+#   ./run_batch.sh submit   <grid>            # --submit-only each request (persist each accepted job)
 #   ./run_batch.sh status   <grid>            # one klt sim --job-status line per job
 #   ./run_batch.sh collect  <grid>            # --attach every job, copy stdout -> WORK/<tag>/ngspice.log
+#   ./run_batch.sh recover <grid>            # re-attach jobs from the original two-column jobs.tsv
+#   ./run_batch.sh publish <grid> <record-id> # store verified evidence from an existing record
 #   ./run_batch.sh verify   <grid>            # every expected tag present + parseable (no klt)
 # A submit refused for capacity is retried by klt's own --wait-for-capacity
 # (600 s, per CLAUDE.md host rules); a refusal that outlives it is reported,
@@ -81,11 +81,7 @@ N_DFF="${N_DFF:-20}"
 CONTROL_SEED_A=1
 CONTROL_SEED_B=97
 
-# 21-point vertex set -- MUST match run.sh's CORNER_POINTS array; the counts
-# and spellings below are cross-checked against it by `compose` (the script
-# sources run.sh's array verbatim through MCCP_CORNER_POINTS round-tripping:
-# compose enumerates from this copy, verify re-reads run.sh's own array the
-# same way run.sh's loops do, so a drift between the two fails loudly).
+# Same corner order and spellings as run.sh.
 CORNER_POINTS=(
   "typical 27 3.30"
   "typical -40 2.97"
@@ -176,18 +172,8 @@ emit() {
   local stage="$1" ctag="$2" tag="$3" deck="$4" pc="$5" pt="$6" pv="$7" tmo="$8"
   shift 8
   set -- "vsup=${pv}" "$@"
-  if [ -s "${WORK}/${tag}/ngspice.log" ]; then
-    echo "skip ${tag} (log present)"
-    return 0
-  fi
-  local stage_input
-  if [ "${deck}" = "${WORK}/dut_dff.spice" ]; then
-    stage_input="dut_dff.spice"
-  else
-    stage_input="dut.spice"
-  fi
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "${tag}" "${stage}" "${ctag}" "${deck}" "${stage_input}" "${pc}" "${pt}" "${pv}" "${tmo}$([ $# -gt 0 ] && printf '\t%s' "$*")"
+    "${tag}" "${stage}" "${ctag}" "${deck}" "${pc}" "${pt}" "${pv}" "${tmo}" "$*"
 }
 
 write_unit_deck() {
@@ -204,6 +190,7 @@ write_unit_deck() {
     # PDK files are named through $PDK_ROOT/<variant>/...: the executing host
     # expands the variable (locally: the parent of the variant dir; on the
     # batch image: /opt/pdk, the family root volare enabled the variant into).
+    # shellcheck disable=SC2016 # Expanded on the worker.
     echo '.include "$PDK_ROOT/gf180mcuD/libs.tech/ngspice/design.ngspice"'
     echo ".lib \"\$PDK_ROOT/gf180mcuD/libs.tech/ngspice/sm141064.ngspice\" ${pc}"
     echo ".temp ${pt}"
@@ -222,23 +209,18 @@ write_unit_deck() {
   } >"${out}"
 }
 
-stage_marker() {
-  case "$1" in
-    dc|ctl_dc)   echo '^MCDC_LO ' ;;
-    sw|ctl_sw)   echo '^MCSW ' ;;
-    pfd|ctl_pfd) echo '^MCPFD ' ;;
-    dff|ctl_dff) echo 'tcq_r' ;;
-    *) echo "ERROR: unknown stage $1" >&2; exit 1 ;;
-  esac
-}
-
 do_compose() {
   local netlist="${WORK}/dut.spice"
   mkdir -p "${BATCH_DIR}/decks"
-  echo "run_batch: exporting design/ via netlist.sh (same export run.sh snapshots) ..."
-  "${REPO}/design/netlist.sh" --top pfd_cp "${WORK}" >/dev/null
-  [ -f "${netlist}" ] || { echo "ERROR: ${netlist} not produced" >&2; exit 1; }
-  cat "${DECK_DFF_SRC}" "${DECK_DFF_TB}" >"${WORK}/dut_dff.spice"
+  if [ -n "${1:-}" ]; then
+    # Reconstruct a historical request against the DUT bytes frozen at mint.
+    [[ "$1" =~ ^[0-9]{8}-[0-9]{6}-[0-9a-f]{7}$ ]] || { echo "invalid snapshot ID" >&2; exit 2; }
+    cp "${EXP}/netlist-snapshots/$1-cppfd.spice" "${netlist}"
+    cp "${EXP}/netlist-snapshots/$1-dff.spice" "${WORK}/dut_dff.spice"
+  else
+    "${REPO}/design/netlist.sh" --top pfd_cp "${WORK}" >/dev/null
+    cat "${DECK_DFF_SRC}" "${DECK_DFF_TB}" >"${WORK}/dut_dff.spice"
+  fi
   # The unit decks' `.include` targets must resolve on THIS host relative to
   # the deck file's directory, so the campaign decks and both DUT files are
   # staged into decks/ beside them; klt's closure stager ships them (and the
@@ -247,142 +229,30 @@ do_compose() {
   cp "${DECK_DC}" "${DECK_SW}" "${DECK_PFD}" "${BATCH_DIR}/decks/"
   cp "${WORK}/dut.spice" "${WORK}/dut_dff.spice" "${BATCH_DIR}/decks/"
 
-  local tag stage ctag deck inputs pc pt pv tmo kvs ucount=0 skipped
-  : >"${BATCH_DIR}/units.tsv"
-  while IFS=$'\t' read -r tag stage ctag deck inputs pc pt pv tmo kvs; do
-    [ -n "${tag}" ] || continue
+  local tag stage ctag deck pc pt pv tmo kvs
+  grid_units >"${BATCH_DIR}/grid.tsv"
+  while IFS=$'\t' read -r tag stage ctag deck pc pt pv tmo kvs; do
     # shellcheck disable=SC2086
-    write_unit_deck "${tag}" "${deck}" "${pc}" "${pt}" "${pv}" ${kvs:-}
-    printf '%s\t%s\t%s\t%s\t%s\n' "${tag}" "${stage}" "${ctag}" "${tmo}" "${inputs}" >>"${BATCH_DIR}/units.tsv"
-    ucount=$((ucount+1))
-  done < <(grid_units | grep -v '^skip ')
-  skipped=$(grid_units | grep -c '^skip ' || true)
-
-  # one request per corner: fleet-parallel across corners, one job id each
-  python3 - "${BATCH_DIR}" <<'PYEOF'
-import json, sys, re
-bdir = sys.argv[1]
-reqs = {}
-with open(f"{bdir}/units.tsv") as f:
-    for line in f:
-        tag, stage, ctag, tmo, _ = (line.rstrip("\n").split("\t") + [""]*5)[:5]
-        reqs.setdefault(ctag, []).append(
-            {"id": tag, "deck": f"decks/{tag}.spice", "outputs": [], "timeout_s": int(tmo)})
-for ctag, decks in sorted(reqs.items()):
-    req = {"backend": "batch",
-           "models": {"pdk": "gf180mcuD"},
-           "decks": decks,
-           "options": {"timeout_s": 1800},
-           "batch": {"capacity_wait_s": 600, "poll_timeout_s": 86400}}
-    name = re.sub(r"[^A-Za-z0-9]", "", ctag)
-    with open(f"{bdir}/req-{name}.json", "w") as f:
-        json.dump(req, f, indent=1)
-    print(f"req-{name}.json: {len(decks)} units")
-PYEOF
-  echo "run_batch: composed ${ucount} unit deck(s) under ${BATCH_DIR} (${skipped} skipped: log already present)"
+    write_unit_deck "${tag}" "${deck}" "${pc}" "${pt}" "${pv}" ${kvs}
+    printf '%s\t%s\t%s\t%s\t%s\n' "${tag}" "${stage}" "${ctag}" "${tmo}" "${deck##*/}"
+  done <"${BATCH_DIR}/grid.tsv" >"${BATCH_DIR}/units.tsv.new"
+  mv "${BATCH_DIR}/units.tsv.new" "${BATCH_DIR}/units.tsv"
 }
 
-# Parse a --submit-only output (json or text) down to its job id.
-submit_job_id() {
-  python3 -c '
-import json, re, sys
-raw = sys.stdin.read()
-i = raw.find("{")
-if i >= 0:
-    try:
-        d = json.loads(raw[i:])
-        j = d.get("job_id") or d.get("job", {}).get("job_id")
-        if j:
-            print(j); sys.exit(0)
-    except Exception:
-        pass
-m = re.search(r"job_id\"?\s*[=:]\s*\"?([A-Za-z0-9._-]+)", raw)
-if m:
-    print(m.group(1))
-' <<<"$1"
-}
-
-do_submit() {
-  local req idjson id stem
-  : >"${BATCH_DIR}/jobs.tsv.new"
-  [ -f "${BATCH_DIR}/jobs.tsv" ] && cp "${BATCH_DIR}/jobs.tsv" "${BATCH_DIR}/jobs.tsv.new"
-  for req in "${BATCH_DIR}"/req-*.json; do
-    [ -e "${req}" ] || { echo "ERROR: no req-*.json under ${BATCH_DIR}; compose first" >&2; exit 1; }
-    stem="$(basename "${req}")"
-    if grep -q "^${stem}	" "${BATCH_DIR}/jobs.tsv.new" 2>/dev/null; then
-      echo "run_batch: ${stem} already submitted, skipping"
-      continue
-    fi
-    echo "run_batch: submitting ${stem} ..."
-    idjson=$(klt sim "${req}" --submit-only --wait-for-capacity 600 --format json 2>&1)
-    id=$(submit_job_id "${idjson}")
-    [ -n "${id}" ] || { echo "ERROR: no job id parsed from submit output:" >&2; printf '%s\n' "${idjson}" >&2; exit 1; }
-    printf '%s\t%s\n' "${stem}" "${id}" >>"${BATCH_DIR}/jobs.tsv.new"
-    printf '%s' "${id}" >"${BATCH_DIR}/jobid-$(basename "${req}" .json).txt"
-  done
-  mv "${BATCH_DIR}/jobs.tsv.new" "${BATCH_DIR}/jobs.tsv"
-  echo "run_batch: submitted $(wc -l <"${BATCH_DIR}/jobs.tsv" | tr -d ' ') job(s); see ${BATCH_DIR}/jobs.tsv"
-}
-
-do_status() {
-  local req stem id state
-  while IFS=$'\t' read -r stem id; do
-    [ -n "${id}" ] || { echo "${stem}: no job id recorded" >&2; continue; }
-    req="${BATCH_DIR}/${stem}"
-    state=$(klt sim "${req}" --job-status "${id}" --format json 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("state") or d.get("status","?"))' 2>/dev/null || echo "?")
-    echo "${stem}: ${id} ${state}"
-  done <"${BATCH_DIR}/jobs.tsv"
-}
-
-do_collect() {
-  local req stem id out tag base n=0 fail=0
-  while IFS=$'\t' read -r stem id; do
-    [ -n "${id}" ] || { echo "ERROR: ${stem}: no job id recorded" >&2; exit 1; }
-    req="${BATCH_DIR}/${stem}"
-    out="${BATCH_DIR}/out-$(basename "${stem}" .json)"
-    echo "run_batch: attaching ${id} (${stem}) -> ${out} ..."
-    klt sim "${req}" --attach "${id}" -o "${out}" --format json >/dev/null
-    for tag in "${out}"/*/; do
-      tag="${tag%/}"
-      base="$(basename "${tag}")"
-      if [ -s "${tag}/stdout.bin" ]; then
-        mkdir -p "${WORK}/${base}"
-        cp "${tag}/stdout.bin" "${WORK}/${base}/ngspice.log"
-        n=$((n+1))
-      else
-        echo "ERROR: unit ${base} produced no stdout" >&2
-        fail=$((fail+1))
-      fi
-    done
-  done <"${BATCH_DIR}/jobs.tsv"
-  echo "run_batch: collected ${n} unit log(s) into ${WORK} (${fail} missing stdout)"
-  [ "${fail}" -eq 0 ]
-}
-
-do_verify() {
-  local missing=0 bad=0 total=0 tag stage marker
-  while IFS=$'\t' read -r tag stage _; do
-    total=$((total+1))
-    if [ ! -s "${WORK}/${tag}/ngspice.log" ]; then
-      echo "MISSING ${tag}"
-      missing=$((missing+1))
-      continue
-    fi
-    marker=$(stage_marker "${stage}")
-    if ! grep -qE "${marker}" "${WORK}/${tag}/ngspice.log"; then
-      echo "UNPARSEABLE ${tag} (no ${marker} line)"
-      bad=$((bad+1))
-    fi
-  done <"${BATCH_DIR}/units.tsv"
-  echo "run_batch: verify ${GRID}: ${total} unit(s), ${missing} missing, ${bad} unparseable"
-  [ "${missing}" -eq 0 ] && [ "${bad}" -eq 0 ]
-}
-
-case "${1:-}" in
-  compose)  [ -n "${GRID}" ] || { echo "usage: $0 compose <control|full|nominal>" >&2; exit 1; }; do_compose ;;
-  submit)   [ -n "${GRID}" ] || { echo "usage: $0 submit <grid>" >&2; exit 1; }; do_submit ;;
-  status)   [ -n "${GRID}" ] || { echo "usage: $0 status <grid>" >&2; exit 1; }; do_status ;;
-  collect)  [ -n "${GRID}" ] || { echo "usage: $0 collect <grid>" >&2; exit 1; }; do_collect ;;
-  verify)   [ -n "${GRID}" ] || { echo "usage: $0 verify <grid>" >&2; exit 1; }; do_verify ;;
-  *) echo "usage: $0 {compose|submit|status|collect|verify} <control|full|nominal>" >&2; exit 1 ;;
+case "${GRID}" in
+  control|full|nominal) ;;
+  *) echo 'usage: run_batch.sh {compose|submit|status|collect|recover|publish|verify} {control|full|nominal}' >&2; exit 2 ;;
 esac
+mkdir -p "${BATCH_DIR}"
+# The three grids share their per-tag cache. Serialize updates to it and to
+# the ledger, including the submit/checkpoint pair.
+exec 9>"${WORK}/batch/transport.lock"
+flock 9
+if [ "${1:-}" = publish ]; then
+  rid="${3:?publish needs the record ID}"
+  exec python3 "${HERE}/fleet_archive.py" publish "${EXP}/corners/${rid}" "${GRID}" "${rid}"
+fi
+if [ "${1:-}" = compose ]; then
+  do_compose "${3:-}"
+fi
+exec python3 "${HERE}/fleet_batch.py" "${1:-}" "${BATCH_DIR}"

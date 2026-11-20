@@ -1252,7 +1252,7 @@ simenv_control_md_rows() {
 
 # simenv_emit_control_evidence <corners-dir> <work-dir> <campaign-label> <rid>
 #                              <netlist-desc> <corners-desc> <switches-note>
-#                              <campaign-fn> <units>
+#                              <campaign-fn> <units> [replay]
 #
 # Write <corners-dir>/negative_control.csv and archive every control run's
 # raw ngspice log beside it. <campaign-fn> is the campaign's own
@@ -1275,18 +1275,13 @@ simenv_control_md_rows() {
 # SIM_ALLOW_LOCAL_GRID=1; a caller that omits <units> fails closed under
 # batch (an empty count refuses), never bypasses.
 #
-# SIM_FLEET_REPLAY=1 (optional, #826): the campaign's transport has already
-# produced every unit's log on the batch fleet and this pass only consumes
-# those bytes -- its control_run_one wrappers skip the engine per tag and a
-# missing log is a hard error, not a local run -- so the local fan-out the
-# guard refuses cannot happen and the gate is skipped. The campaign's own
-# replay hooks (not this helper) enforce that no engine runs; the guard here
-# would otherwise make a fleet-produced control impossible to mint on a
-# batch-backend host.
+# A callback that only reads collected logs may explicitly pass 1 as the
+# tenth argument. The default callback launches the simulator and always
+# consults the batch-host guard, regardless of the caller's environment.
 simenv_emit_control_evidence() {
   local cornersdir="$1" work="$2" campaign="$3" rid="$4"
   local netlist="$5" corners_desc="$6" switches="$7" campaign_fn="$8"
-  if [ "${SIM_FLEET_REPLAY:-0}" != "1" ]; then
+  if [ "${10:-0}" != "1" ]; then
     simenv_guard_local_grid "${9:-}" "${campaign}" || return $?
   fi
   local raw="${work}/negative_control_rows.csv"
@@ -1297,15 +1292,14 @@ simenv_emit_control_evidence() {
   # campaign_fn below only consumes them (its per-unit hooks hard-error on a
   # missing log instead of running ngspice). Wiping them would destroy the
   # run's own evidence before it is read.
-  if [ "${SIM_FLEET_REPLAY:-0}" != "1" ]; then
+  if [ "${10:-0}" != "1" ]; then
     rm -rf "${work:?}"/ctl_*
   fi
   "${campaign_fn}" "${raw}"
-  local f
-  for f in "${work}"/ctl_*/ngspice.log; do
-    [ -f "${f}" ] || continue
-    cp "${f}" "${cornersdir}/$(basename "$(dirname "${f}")").log"
-  done
+  local tag
+  while read -r tag; do
+    cp "${work}/${tag}/ngspice.log" "${cornersdir}/${tag}.log" || return 1
+  done < <(awk -F, '{print "ctl_" $1 "_" $2 "_" $3}' "${raw}" | sort -u)
   {
     simenv_provenance "${campaign}" "${rid}" "${netlist}" "${corners_desc}" "${switches}"
     echo "${SIMENV_CONTROL_HEADER}"

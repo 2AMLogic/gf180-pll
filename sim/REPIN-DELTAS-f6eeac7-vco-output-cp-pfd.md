@@ -1196,14 +1196,19 @@ the femtocoulomb/picosecond residue on the transient integrals is the
 same platform-numerics class the `cp-compliance`/`pfd-deadzone` controls
 above already documented. The fleet itself needs no such allowance
 against the Linux control predecessor: the **entire 3-corner overlap of
-the negative-control grid reproduces bit-for-bit** — 241 metric rows, as
+the negative-control grid reproduces bit-for-bit** — 240 metric rows, as
 text, across the re-pin, the 46→47 bump and the local→fleet move:
 
 ```bash
-for c in typical_27c_3.30v ss_125c_2.97v ff_-40c_3.63v; do :; done   # the predecessor control's grid
+rid=20261120-022856-2985e2e
+control_dir=sim/mc-cp-mismatch/corners/$rid
+if [ -f "manifests/artifacts/mc-cp-mismatch-$rid.manifest.json" ]; then
+  control_dir=$(mktemp -d)
+  python3 sim/mc-cp-mismatch/testbench/fleet_archive.py restore "$control_dir" "$rid"
+fi
 diff <(grep -v '^#' sim/mc-cp-mismatch/corners/20260927-093235-b994116/negative_control.csv \
         | grep 'typical_27c_3.30v\|ss_125c_2.97v\|ff_-40c_3.63v') \
-     <(grep -v '^#' sim/mc-cp-mismatch/corners/20261120-022856-2985e2e/negative_control.csv \
+     <(grep -v '^#' "$control_dir/negative_control.csv" \
         | grep 'typical_27c_3.30v\|ss_125c_2.97v\|ff_-40c_3.63v')   # -> empty
 ```
 
@@ -1302,7 +1307,7 @@ sim/mc-cp-mismatch/testbench/run.sh --restat 20261120-031550-b12c30d    # new
 Same decks, same five-run legs; the successor runs the control in the
 testbench's current 21-corner form (the predecessor control predated
 #597's widening by an hour and ran the 3-point diagonal). Verdict: **PASS
-on all 63 (stage, corner) rows** of the new grid, and the predecessor's
+on all 84 (stage, corner) rows** of the new grid, and the predecessor's
 3-corner overlap is byte-identical (the diff command above) — the
 strongest single piece of PDK-no-op evidence in this increment, since it
 covers all four stages' deterministic readouts at three corners across
