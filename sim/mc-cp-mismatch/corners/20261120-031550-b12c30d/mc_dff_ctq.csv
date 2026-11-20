@@ -1,0 +1,62 @@
+# campaign: mc-cp-mismatch (dff clk->Q)
+# record_id: 20261120-031550-b12c30d
+# generated_utc: 2026-11-20T03:16:07Z
+# pdk_variant: gf180mcuD
+# pdk_open_pdks_hash: f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7
+# pdk_root: /home/ubuntu/.ciel/gf180mcuD
+# model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
+# switches: design.ngspice defaults OVERRIDDEN by this campaign (sw_stat_global=0, sw_stat_mismatch=1 -> mismatch-only Monte Carlo, .option rndseed set per sample)
+# simulator: ngspice-47
+# netlist: design/dff_tg_3v3.sch (committed netlist)
+# corners: 1 corners, N=50 mismatch samples/corner x 2 (rise+fall)
+corner,seed,tcq_r_s,tcq_f_s
+typical_27c_3.30v,1,2.37496e-10,2.04972e-10
+typical_27c_3.30v,2,2.38578e-10,2.04203e-10
+typical_27c_3.30v,3,2.35818e-10,2.05420e-10
+typical_27c_3.30v,4,2.34861e-10,2.03677e-10
+typical_27c_3.30v,5,2.34174e-10,2.05303e-10
+typical_27c_3.30v,6,2.34398e-10,2.01810e-10
+typical_27c_3.30v,7,2.36780e-10,2.05394e-10
+typical_27c_3.30v,8,2.36070e-10,2.02900e-10
+typical_27c_3.30v,9,2.35600e-10,2.04119e-10
+typical_27c_3.30v,10,2.36874e-10,2.03434e-10
+typical_27c_3.30v,11,2.37079e-10,2.05398e-10
+typical_27c_3.30v,12,2.36932e-10,2.03940e-10
+typical_27c_3.30v,13,2.35074e-10,2.03542e-10
+typical_27c_3.30v,14,2.35468e-10,2.04512e-10
+typical_27c_3.30v,15,2.36807e-10,2.05310e-10
+typical_27c_3.30v,16,2.36235e-10,2.02726e-10
+typical_27c_3.30v,17,2.35818e-10,2.04145e-10
+typical_27c_3.30v,18,2.34914e-10,2.05808e-10
+typical_27c_3.30v,19,2.36176e-10,2.02829e-10
+typical_27c_3.30v,20,2.35310e-10,2.04903e-10
+typical_27c_3.30v,21,2.36967e-10,2.06317e-10
+typical_27c_3.30v,22,2.37204e-10,2.03945e-10
+typical_27c_3.30v,23,2.35996e-10,2.05045e-10
+typical_27c_3.30v,24,2.37324e-10,2.05009e-10
+typical_27c_3.30v,25,2.37109e-10,2.04882e-10
+typical_27c_3.30v,26,2.37407e-10,2.04116e-10
+typical_27c_3.30v,27,2.35409e-10,2.04078e-10
+typical_27c_3.30v,28,2.36149e-10,2.02803e-10
+typical_27c_3.30v,29,2.35498e-10,2.03748e-10
+typical_27c_3.30v,30,2.36695e-10,2.05571e-10
+typical_27c_3.30v,31,2.35914e-10,2.03795e-10
+typical_27c_3.30v,32,2.34375e-10,2.03379e-10
+typical_27c_3.30v,33,2.36072e-10,2.04489e-10
+typical_27c_3.30v,34,2.35255e-10,2.05842e-10
+typical_27c_3.30v,35,2.35404e-10,2.03449e-10
+typical_27c_3.30v,36,2.36204e-10,2.04832e-10
+typical_27c_3.30v,37,2.36713e-10,2.04214e-10
+typical_27c_3.30v,38,2.36230e-10,2.04187e-10
+typical_27c_3.30v,39,2.35758e-10,2.05648e-10
+typical_27c_3.30v,40,2.34747e-10,2.03638e-10
+typical_27c_3.30v,41,2.35679e-10,2.05608e-10
+typical_27c_3.30v,42,2.34973e-10,2.05146e-10
+typical_27c_3.30v,43,2.36992e-10,2.03903e-10
+typical_27c_3.30v,44,2.35039e-10,2.04595e-10
+typical_27c_3.30v,45,2.34891e-10,2.03501e-10
+typical_27c_3.30v,46,2.35260e-10,2.05919e-10
+typical_27c_3.30v,47,2.33552e-10,2.05021e-10
+typical_27c_3.30v,48,2.35926e-10,2.06309e-10
+typical_27c_3.30v,49,2.37686e-10,2.04759e-10
+typical_27c_3.30v,50,2.36195e-10,2.04762e-10

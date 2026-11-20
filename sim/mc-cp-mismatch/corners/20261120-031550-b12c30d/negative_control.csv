@@ -1,0 +1,92 @@
+# campaign: mc-cp-mismatch (negative control)
+# record_id: 20261120-031550-b12c30d
+# generated_utc: 2026-11-20T03:16:09Z
+# pdk_variant: gf180mcuD
+# pdk_open_pdks_hash: f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7
+# pdk_root: /home/ubuntu/.ciel/gf180mcuD
+# model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
+# switches: design.ngspice defaults OVERRIDDEN per run -- this control artifact runs BOTH switch values (sw_stat_mismatch=1 for the repeat/vary legs, OFF for the gate leg); read the per-row sw_stat_mismatch column, not this line, for the authoritative per-run value
+# simulator: ngspice-47
+# netlist: design/cp.sch + design/pfd_cp.sch (xschem export), design/netlist/dff_tg_3v3.spice
+# corners: 1 corners x 4 stages x 5 runs (seeds 1/97, sw_stat_mismatch 1 and 0)
+stage,corner,run,sw_stat_mismatch,rndseed,metric,value
+dc,typical_27c_3.30v,mc0_seedA,0,1,idn_hi,5.2213E-06
+dc,typical_27c_3.30v,mc0_seedA,0,1,idn_lo,5.17395E-06
+dc,typical_27c_3.30v,mc0_seedA,0,1,idn_mid,5.19917E-06
+dc,typical_27c_3.30v,mc0_seedA,0,1,iup_hi,5.22697E-06
+dc,typical_27c_3.30v,mc0_seedA,0,1,iup_lo,5.2442E-06
+dc,typical_27c_3.30v,mc0_seedA,0,1,iup_mid,5.23925E-06
+dc,typical_27c_3.30v,mc0_seedB,0,97,idn_hi,5.2213E-06
+dc,typical_27c_3.30v,mc0_seedB,0,97,idn_lo,5.17395E-06
+dc,typical_27c_3.30v,mc0_seedB,0,97,idn_mid,5.19917E-06
+dc,typical_27c_3.30v,mc0_seedB,0,97,iup_hi,5.22697E-06
+dc,typical_27c_3.30v,mc0_seedB,0,97,iup_lo,5.2442E-06
+dc,typical_27c_3.30v,mc0_seedB,0,97,iup_mid,5.23925E-06
+dc,typical_27c_3.30v,mc1_seedA_run1,1,1,idn_hi,5.20288E-06
+dc,typical_27c_3.30v,mc1_seedA_run1,1,1,idn_lo,5.16066E-06
+dc,typical_27c_3.30v,mc1_seedA_run1,1,1,idn_mid,5.18315E-06
+dc,typical_27c_3.30v,mc1_seedA_run1,1,1,iup_hi,5.31536E-06
+dc,typical_27c_3.30v,mc1_seedA_run1,1,1,iup_lo,5.33332E-06
+dc,typical_27c_3.30v,mc1_seedA_run1,1,1,iup_mid,5.32812E-06
+dc,typical_27c_3.30v,mc1_seedA_run2,1,1,idn_hi,5.20288E-06
+dc,typical_27c_3.30v,mc1_seedA_run2,1,1,idn_lo,5.16066E-06
+dc,typical_27c_3.30v,mc1_seedA_run2,1,1,idn_mid,5.18315E-06
+dc,typical_27c_3.30v,mc1_seedA_run2,1,1,iup_hi,5.31536E-06
+dc,typical_27c_3.30v,mc1_seedA_run2,1,1,iup_lo,5.33332E-06
+dc,typical_27c_3.30v,mc1_seedA_run2,1,1,iup_mid,5.32812E-06
+dc,typical_27c_3.30v,mc1_seedB,1,97,idn_hi,5.16946E-06
+dc,typical_27c_3.30v,mc1_seedB,1,97,idn_lo,5.12571E-06
+dc,typical_27c_3.30v,mc1_seedB,1,97,idn_mid,5.14888E-06
+dc,typical_27c_3.30v,mc1_seedB,1,97,iup_hi,5.23162E-06
+dc,typical_27c_3.30v,mc1_seedB,1,97,iup_lo,5.24811E-06
+dc,typical_27c_3.30v,mc1_seedB,1,97,iup_mid,5.24339E-06
+dff,typical_27c_3.30v,mc0_seedA,0,1,tcq_f,2.04522e-10
+dff,typical_27c_3.30v,mc0_seedA,0,1,tcq_r,2.36039e-10
+dff,typical_27c_3.30v,mc0_seedB,0,97,tcq_f,2.04522e-10
+dff,typical_27c_3.30v,mc0_seedB,0,97,tcq_r,2.36039e-10
+dff,typical_27c_3.30v,mc1_seedA_run1,1,1,tcq_f,2.04972e-10
+dff,typical_27c_3.30v,mc1_seedA_run1,1,1,tcq_r,2.37496e-10
+dff,typical_27c_3.30v,mc1_seedA_run2,1,1,tcq_f,2.04972e-10
+dff,typical_27c_3.30v,mc1_seedA_run2,1,1,tcq_r,2.37496e-10
+dff,typical_27c_3.30v,mc1_seedB,1,97,tcq_f,2.03418e-10
+dff,typical_27c_3.30v,mc1_seedB,1,97,tcq_r,2.34945e-10
+pfd,typical_27c_3.30v,mc0_seedA,0,1,qnet,-8.40045E-16
+pfd,typical_27c_3.30v,mc0_seedB,0,97,qnet,-8.40045E-16
+pfd,typical_27c_3.30v,mc1_seedA_run1,1,1,qnet,-1.90962E-15
+pfd,typical_27c_3.30v,mc1_seedA_run2,1,1,qnet,-1.90962E-15
+pfd,typical_27c_3.30v,mc1_seedB,1,97,qnet,-1.29592E-15
+sw,typical_27c_3.30v,mc0_seedA,0,1,idn_ss,-5.09347E-06
+sw,typical_27c_3.30v,mc0_seedA,0,1,iup_ss,4.99382E-06
+sw,typical_27c_3.30v,mc0_seedA,0,1,qdn,-2.31562E-14
+sw,typical_27c_3.30v,mc0_seedA,0,1,qup,2.18401E-14
+sw,typical_27c_3.30v,mc0_seedA,0,1,wdn,4.54626E-09
+sw,typical_27c_3.30v,mc0_seedA,0,1,wskew,-1.72821E-10
+sw,typical_27c_3.30v,mc0_seedA,0,1,wup,4.37344E-09
+sw,typical_27c_3.30v,mc0_seedB,0,97,idn_ss,-5.09347E-06
+sw,typical_27c_3.30v,mc0_seedB,0,97,iup_ss,4.99382E-06
+sw,typical_27c_3.30v,mc0_seedB,0,97,qdn,-2.31562E-14
+sw,typical_27c_3.30v,mc0_seedB,0,97,qup,2.18401E-14
+sw,typical_27c_3.30v,mc0_seedB,0,97,wdn,4.54626E-09
+sw,typical_27c_3.30v,mc0_seedB,0,97,wskew,-1.72821E-10
+sw,typical_27c_3.30v,mc0_seedB,0,97,wup,4.37344E-09
+sw,typical_27c_3.30v,mc1_seedA_run1,1,1,idn_ss,-5.08141E-06
+sw,typical_27c_3.30v,mc1_seedA_run1,1,1,iup_ss,5.06073E-06
+sw,typical_27c_3.30v,mc1_seedA_run1,1,1,qdn,-2.31592E-14
+sw,typical_27c_3.30v,mc1_seedA_run1,1,1,qup,2.2308E-14
+sw,typical_27c_3.30v,mc1_seedA_run1,1,1,wdn,4.55762E-09
+sw,typical_27c_3.30v,mc1_seedA_run1,1,1,wskew,-1.49573E-10
+sw,typical_27c_3.30v,mc1_seedA_run1,1,1,wup,4.40805E-09
+sw,typical_27c_3.30v,mc1_seedA_run2,1,1,idn_ss,-5.08141E-06
+sw,typical_27c_3.30v,mc1_seedA_run2,1,1,iup_ss,5.06073E-06
+sw,typical_27c_3.30v,mc1_seedA_run2,1,1,qdn,-2.31592E-14
+sw,typical_27c_3.30v,mc1_seedA_run2,1,1,qup,2.2308E-14
+sw,typical_27c_3.30v,mc1_seedA_run2,1,1,wdn,4.55762E-09
+sw,typical_27c_3.30v,mc1_seedA_run2,1,1,wskew,-1.49573E-10
+sw,typical_27c_3.30v,mc1_seedA_run2,1,1,wup,4.40805E-09
+sw,typical_27c_3.30v,mc1_seedB,1,97,idn_ss,-5.05488E-06
+sw,typical_27c_3.30v,mc1_seedB,1,97,iup_ss,4.96486E-06
+sw,typical_27c_3.30v,mc1_seedB,1,97,qdn,-2.2886E-14
+sw,typical_27c_3.30v,mc1_seedB,1,97,qup,2.17147E-14
+sw,typical_27c_3.30v,mc1_seedB,1,97,wdn,4.52751E-09
+sw,typical_27c_3.30v,mc1_seedB,1,97,wskew,-1.53836E-10
+sw,typical_27c_3.30v,mc1_seedB,1,97,wup,4.37367E-09
