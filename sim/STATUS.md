@@ -14,7 +14,7 @@ graded against the tree in CI by `sim/lib/check-readme-status.sh`.
 - **Done** — architecture and scope captured as numbered decision records in
   `spec/`; xschem schematics for the VCO, PFD, charge pump, feedback divider,
   lock detector, and the shared 3.3 V logic cells they are built from; a
-  reproducible PVT corner harness; **136 evidence records** across 28
+  reproducible PVT corner harness; **137 evidence records** across 28
   verification campaigns (device characterization, VCO tuning range, PFD
   dead-zone freedom, charge-pump compliance and mismatch, divider moduli,
   lock-detector window, its sizing ladder and its trim-code map, loop
@@ -24,7 +24,7 @@ graded against the tree in CI by `sim/lib/check-readme-status.sh`.
   closed-loop campaigns: lock-time, output-range, supply-sensitivity, and
   period-jitter).
 - **Not done** — closed-loop bring-up. `pll-top-smoke`'s latest record
-  (`20260802-160926-8456ff3`, superseding the earlier FAIL) is an **overall
+  (`20261120-025417-fe7841e`, re-qualifying `20260802-160926-8456ff3`) is an **overall
   PASS, 0 of 7 checks failed** at the single nominal corner (`typical` / 27 C /
   3.30 V) it is deliberately scoped to. Three of the four closed-loop
   campaigns have since taken the full PVT grid against the same assembled

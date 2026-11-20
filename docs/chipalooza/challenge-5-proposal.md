@@ -218,7 +218,7 @@ rule](../../spec/pll.md#icp-trim-code-rule)).
 
 The complete top-level assembly (`design/pll_top.sch`) is verified, at one
 nominal corner, to acquire and hold lock from a real frequency error
-(`sim/pll-top-smoke/records/20260802-160926-8456ff3.md`, all 7 checks PASS).
+(`sim/pll-top-smoke/records/20261120-025417-fe7841e.md`, all 7 checks PASS on the frozen assembly).
 Most of the circuitry described above also exists as drawn geometry: **the four
 PLL sub-blocks** the layout effort partitions this design into — VCO,
 PFD + charge pump, divider chain, lock detector — each have a block GDS whose
