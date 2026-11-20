@@ -330,3 +330,12 @@ grades, which must itself pass. This repository runs LVS through the PDK's own
 block here** and `klt signoff` cannot assemble the cited set at all yet.
 `signoff/block-manifest.json` therefore still cites nothing, and this record
 makes no claim about `signoff/tier-report.json`.
+
+## Re-run on klayout-tools 0.9.2 (pin bump, issue #1079)
+
+`erc-report.json` was regenerated with
+`klt erc --top divider_chain --deck gf180mcu --format json divider_chain.gds erc-supply-spec.json` on the
+released `klayout-tools==0.9.2` wheel with KLayout `0.30.12` (the repository's
+KLayout pin). Verdicts are unchanged from 0.8.0: `status: not_checked`,
+`erc_status: clean`, zero findings. The report gains fields 0.8.0 did not emit; the
+input and spec content hashes are unchanged.

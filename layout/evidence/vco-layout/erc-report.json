@@ -2758,26 +2758,33 @@
       "erc.floating_gate:[\"gate9\"]",
       "erc.missing_tie:[\"nwell_vdd_vco\"]",
       "erc.net_connectivity:[\"GND_VCO\"]",
-      "erc.net_connectivity:[\"VDD_VCO\"]"
+      "erc.net_connectivity:[\"VDD_VCO\"]",
+      "erc.supply_short",
+      "erc.supply_short.substrate"
     ],
     "skipped": [],
     "inapplicable": [],
     "unknown": [],
     "nothing_checked": false,
     "nothing_checked_reasons": [],
+    "missing_tie_checked": true,
     "checked_by_assertion": [],
     "checked_by_well_assertion": [],
-    "layers_in_stream_without_declaration": [],
+    "layers_in_stream_without_declaration": [
+      "36/10"
+    ],
     "well_assertion_coverage": []
   },
   "ties_disclosure": null,
   "provenance": {
-    "klt_version": "0.8.0",
+    "klt_version": "0.9.2",
+    "klt_git_commit": "046ba74652fc096bd97071fc3237f7159dd40183",
+    "klt_reinstall_spec": "klayout-tools==0.9.2",
     "klayout_version": "0.30.12",
     "pdk": null,
     "deck": {
       "name": "gf180mcu",
-      "content_hash": "sha256:0eb6df1bafc5106ec50bd58479dbd7cda36bb685f1ef18cd3a2244a6e7e48666",
+      "content_hash": "sha256:c3f2cce49000857a3a71cb65203aabf0eb27cd0ee6b1c60e29792355c455c4b1",
       "released": true
     },
     "input": {
@@ -2803,6 +2810,50 @@
         "name": "metal1",
         "label_layer": "34/10",
         "label_text_count": 61
+      }
+    ],
+    "substrate_bodies": [
+      {
+        "kind": "well",
+        "id": "-1700,137600,67700,144380",
+        "ties": [
+          "nwell_vdd_vco"
+        ]
+      },
+      {
+        "kind": "well",
+        "id": "-19940,-11020,206750,173460",
+        "ties": [
+          "nwell_vdd_vco"
+        ]
+      },
+      {
+        "kind": "well",
+        "id": "-500,103720,51920,118720",
+        "ties": [
+          "nwell_vdd_vco"
+        ]
+      },
+      {
+        "kind": "well",
+        "id": "-500,18100,106020,44500",
+        "ties": [
+          "nwell_vdd_vco"
+        ]
+      },
+      {
+        "kind": "well",
+        "id": "-500,80220,92300,90820",
+        "ties": [
+          "nwell_vdd_vco"
+        ]
+      },
+      {
+        "kind": "well",
+        "id": "55300,158980,80950,163660",
+        "ties": [
+          "nwell_vdd_vco"
+        ]
       }
     ]
   }

@@ -2604,13 +2604,16 @@
       "erc.floating_gate:[\"gate9\"]",
       "erc.missing_tie:[\"nwell_vdd\"]",
       "erc.net_connectivity:[\"VDD\"]",
-      "erc.net_connectivity:[\"VSS\"]"
+      "erc.net_connectivity:[\"VSS\"]",
+      "erc.supply_short",
+      "erc.supply_short.substrate"
     ],
     "skipped": [],
     "inapplicable": [],
     "unknown": [],
     "nothing_checked": false,
     "nothing_checked_reasons": [],
+    "missing_tie_checked": true,
     "checked_by_assertion": [],
     "checked_by_well_assertion": [],
     "layers_in_stream_without_declaration": [],
@@ -2618,12 +2621,14 @@
   },
   "ties_disclosure": null,
   "provenance": {
-    "klt_version": "0.8.0",
+    "klt_version": "0.9.2",
+    "klt_git_commit": "046ba74652fc096bd97071fc3237f7159dd40183",
+    "klt_reinstall_spec": "klayout-tools==0.9.2",
     "klayout_version": "0.30.12",
     "pdk": null,
     "deck": {
       "name": "gf180mcu",
-      "content_hash": "sha256:0eb6df1bafc5106ec50bd58479dbd7cda36bb685f1ef18cd3a2244a6e7e48666",
+      "content_hash": "sha256:c3f2cce49000857a3a71cb65203aabf0eb27cd0ee6b1c60e29792355c455c4b1",
       "released": true
     },
     "input": {
@@ -2645,6 +2650,15 @@
         "name": "metal2",
         "label_layer": "36/10",
         "label_text_count": 48
+      }
+    ],
+    "substrate_bodies": [
+      {
+        "kind": "well",
+        "id": "-500,750,294300,6000",
+        "ties": [
+          "nwell_vdd"
+        ]
       }
     ]
   }

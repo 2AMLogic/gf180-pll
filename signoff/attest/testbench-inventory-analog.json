@@ -479,7 +479,7 @@
   "tool_versions": {
     "klt": {
       "pinned_in": ".github/workflows/ci.yml",
-      "version": "0.8.0"
+      "version": "0.9.2"
     },
     "ngspice": {
       "note": "CI installs apt's ngspice; each evidence record states the version it ran on",

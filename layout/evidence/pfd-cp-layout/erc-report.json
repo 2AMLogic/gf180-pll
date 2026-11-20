@@ -4812,14 +4812,24 @@
       {
         "id": "erc.missing_tie:[]",
         "reason": "ties_disclosed_tool_limitation"
+      },
+      {
+        "id": "erc.supply_short",
+        "missing": [
+          "ties[] entries declaring the substrate/well tap geometry"
+        ],
+        "reason": "substrate_isolation_undecidable"
       }
     ],
     "unknown": [],
     "nothing_checked": false,
     "nothing_checked_reasons": [],
+    "missing_tie_checked": false,
     "checked_by_assertion": [],
     "checked_by_well_assertion": [],
-    "layers_in_stream_without_declaration": [],
+    "layers_in_stream_without_declaration": [
+      "36/10"
+    ],
     "well_assertion_coverage": []
   },
   "ties_disclosure": {
@@ -4827,12 +4837,14 @@
     "kind": "tool_limitation"
   },
   "provenance": {
-    "klt_version": "0.8.0",
+    "klt_version": "0.9.2",
+    "klt_git_commit": "046ba74652fc096bd97071fc3237f7159dd40183",
+    "klt_reinstall_spec": "klayout-tools==0.9.2",
     "klayout_version": "0.30.12",
     "pdk": null,
     "deck": {
       "name": "gf180mcu",
-      "content_hash": "sha256:0eb6df1bafc5106ec50bd58479dbd7cda36bb685f1ef18cd3a2244a6e7e48666",
+      "content_hash": "sha256:c3f2cce49000857a3a71cb65203aabf0eb27cd0ee6b1c60e29792355c455c4b1",
       "released": true
     },
     "input": {

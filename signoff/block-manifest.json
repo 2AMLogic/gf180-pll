@@ -14,11 +14,11 @@
       "file": "signoff/attest/item-10.evidence.json"
     },
     "9.analog": {
-      "content_hash": "sha256:44de86cee426f7f3586461097e98316b20712305cbf00dee4ec6e2521dd69ea1",
+      "content_hash": "sha256:c8ece3842b207fb006a1c2cb3b4c237bb784941c2443177e3ed6daec14bf332e",
       "file": "signoff/attest/item-9.analog.evidence.json"
     },
     "9.digital": {
-      "content_hash": "sha256:70806671089fe6459468939494cd86e54cce3b0d9997deb3dd1af02d62d64f5c",
+      "content_hash": "sha256:c9f7a0f6c27b0896fc2190096fb7f5de69b3efa82d9cc7dd3af39bad2b670d40",
       "file": "signoff/attest/item-9.digital.evidence.json"
     }
   },
