@@ -25,7 +25,7 @@ directory exists before the evidence does rather than after.
 ## Reproducing
 
 ```sh
-pip install 'klayout-tools==0.8.0'
+pip install 'klayout-tools==0.9.2'
 bash signoff/run-signoff.sh --check    # verify the committed report
 python3 signoff/t1_attest.py --check   # items 1/9/10 inventories vs. the tree (stdlib only)
 bash signoff/run-signoff.sh            # re-render it after changing the manifest
@@ -50,27 +50,28 @@ the signoff tier check" step (`pip install 'klayout-tools==…'`) -- treat that
 line, not this README, as the source of truth if the two ever drift.
 
 **Match the *full* version string, suffix included -- a source build of the
-pinned version is not the pinned version.** 0.8.0 records its own build
-provenance in the report (`build.version`, `git_commit`, `git_tag`,
+pinned version is not the pinned version.** The pinned klt records its own
+build provenance in the report (`build.version`, `git_commit`, `git_tag`,
 `is_release`, `grading_ruleset_id`), and those fields differ between the
 released PyPI wheel and a locally source-built tree at the same release number,
 so a report rendered by the latter fails CI's `--check` on the provenance block
 alone. A source build reports a PEP 440 local-version suffix --
-`klt 0.8.0+gef984d3414d4`, `is_release: false`, `git_tag: null` -- where the
-released wheel reports exactly `klt 0.8.0`. **`klt --version` is the only
-reliable discriminator**: `pip show klayout-tools` prints a bare `0.8.0` with
+`klt <pin>+g<sha>` (a fleet host once carried `klt 0.8.0+gef984d3414d4`),
+`is_release: false`, `git_tag: null` -- where the
+released wheel reports exactly `klt <pin>`. **`klt --version` is the only
+reliable discriminator**: `pip show klayout-tools` prints a bare version with
 `INSTALLER: pip` for *both*, and a source build installed into `~/.local/bin`
 can shadow the wheel on `PATH`. If your `klt --version` carries a `+g<sha>`
 suffix, render in a clean environment that has the release instead:
 
 ```sh
 python3 -m venv /tmp/klt-pinned
-/tmp/klt-pinned/bin/pip install 'klayout-tools==0.8.0'
-/tmp/klt-pinned/bin/klt --version          # must print exactly: klt 0.8.0
+/tmp/klt-pinned/bin/pip install 'klayout-tools==0.9.2'
+/tmp/klt-pinned/bin/klt --version          # must print exactly: klt 0.9.2
 PATH=/tmp/klt-pinned/bin:$PATH bash signoff/run-signoff.sh
 ```
 
-(`uvx --from 'klayout-tools==0.8.0' klt --version` answers the same question in
+(`uvx --from 'klayout-tools==0.9.2' klt --version` answers the same question in
 one line, but this script needs `klt` on `PATH`, so the venv above is what to
 render or `--check` through.)
 
@@ -253,7 +254,7 @@ This repo cites nothing for them.~~ — **corrected (2026-10-17, issue #798):**
 that was true of klt 0.6.0. klayout-tools#2718 (in 0.7.0) makes items 1, 2, 9
 and 10 accept only an **artifact-anchored** `generic` envelope: it declares
 `t1_item`, pins the audited artifact by path and content hash, and the row is
-`met` only while that artifact still re-hashes to the pin. CI now pins 0.8.0 (which carries 0.7.0's envelope support)
+`met` only while that artifact still re-hashes to the pin. CI now pins 0.9.2 (which carries 0.7.0's envelope support)
 and this repo cites such envelopes for items **1** and **9** per partition
 (`1.analog`, `1.digital`, `9.analog`, `9.digital`) and for item **10** once
 (it is a repository property, so the bare `10` key serves both partitions).
@@ -282,10 +283,17 @@ produced by `signoff/t1_attest.py` (stdlib only):
   directory's two `--check`s). `README.md` and the workflow are edited often
   and are audited, not hash-pinned.
 
-**`--attest` is not used.** klayout-tools#2844 closed on 2026-10-16, but the
-0.7.0 wheel's `klt signoff` does not accept `--attest`; the envelopes are the
-artifact-anchored generic form, written by `t1_attest.py`. Switch to
-`klt signoff --attest` once a released klayout-tools carries it.
+**`--attest` is still not used, deliberately.** The pinned release carries it
+(`klt signoff --attest` first shipped in klt 0.8.0; 0.9.2 extends it to items
+2 and 8), but this repo keeps writing the envelopes with `t1_attest.py`,
+because the tool-produced form *executes* what the inventory declares -- an
+item-9 attestation runs each campaign's cold start, an item-1 attestation runs
+the declared netlist freshness command -- which would turn CI's stdlib
+tree-vs-inventory check (which runs before klt is even installed) into a
+re-export and simulation campaign, and because upstream's docs make
+re-attesting the repo owner's sign-off action rather than the mechanical
+regeneration this repository's `--check` loop relies on. Switching producer is
+a CI-shape decision of its own, not a rider on a pin bump.
 
 **Why there is a second check.** The grader re-hashes only the inventory a
 citation pins, so editing a schematic or a testbench would not by itself change
@@ -577,12 +585,22 @@ requirement the way "Item 11 under the klt 0.6.0 checklist" above names item
 11's structural gap. It does not restate or revisit `#127`'s four-criteria
 assessment, and it does not move `#127`'s item-6 checkbox (#594).
 
-**Unreachable on the pinned install, regardless of citation.** `klt yield`'s
-statistics run in a separately built `klt_yield_native` Rust extension that
-is not published as a prebuilt wheel and is therefore unreachable from a
-single-package `pip install`/`uv tool install` — including its git-pinned
-`@git+…` form — on the klt version CI pins (`klt 0.6.0`), verified on this
-fleet host:
+**Reachable on the pinned install; not yet exercised.** ~~**Unreachable on
+the pinned install, regardless of citation.** `klt yield`'s statistics run in
+a separately built `klt_yield_native` Rust extension that is not published as
+a prebuilt wheel and is therefore unreachable from a single-package `pip
+install`/`uv tool install` — including its git-pinned `@git+…` form — on the
+klt version CI pins (`klt 0.6.0`), verified on this fleet host:~~ —
+**corrected (2026-11-20, issue #1079):** upstream now publishes the extension
+as the prebuilt `klt-yield-native` wheel (0.1.0 on PyPI since 2026-11-05:
+manylinux x86_64 and macOS arm64, abi3), and CI's "Install klt" step installs
+it beside the pin — `pip install 'klayout-tools==0.9.2'
+'klt-yield-native>=0.1.0,<0.2'` — so in the CI environment
+`import klt_yield_native` succeeds and `klt yield` runs. The pin is kept as
+the literal `klayout-tools==<version>` token on that line (the second
+requirement rides beside it) because the three pin readers —
+`run-signoff.sh`, the netlist job's pin grep, and `t1_attest.py` — all match
+that literal. What the gap looked like while it existed, on this fleet host:
 
 ```
 $ klt --help | grep -A1 '^ *yield'
@@ -592,19 +610,20 @@ $ .../klayout-tools/bin/python -c "import klt_yield_native"
 ModuleNotFoundError: No module named 'klt_yield_native'
 ```
 
-Filed upstream and **open**: **klayout-tools#2531** ("Friction:
-`klt_yield_native` still has no prebuilt wheel after two closed friction
-reports asking for one") — filed from other work, not from this repository,
-and cited here rather than re-filed, per this repository's friction protocol.
-Two related, closed friction reports already record the consequence for this
-item specifically: **klayout-tools#2466** ("`klt yield`'s native extension is
-unreachable from every published release, so `klt signoff`'s kind-restricted
-T1 item 6 is ungradeable for a release-pinning consumer") and
-**klayout-tools#1061** (the same gap for the git-pinned install method). Host
-policy forbids agents on this fleet from changing host-wide tool installs, so
-building the extension locally is not a route open to this repository's own
-agents — klayout-tools#2531 is the blocker's tracking issue, and closing it is upstream's
-work, not this repository's.
+**klayout-tools#2531** ("Friction: `klt_yield_native` still has no prebuilt
+wheel after two closed friction reports asking for one") — filed from other
+work, not from this repository, and cited here rather than re-filed, per this
+repository's friction protocol — closed on 2026-10-03 once the wheel was
+published, and its recurrences are closed too. Two related friction reports
+record the consequence this item carried while the gap existed:
+**klayout-tools#2466** ("`klt yield`'s native extension is unreachable from
+every published release, so `klt signoff`'s kind-restricted T1 item 6 is
+ungradeable for a release-pinning consumer") and **klayout-tools#1061** (the
+same gap for the git-pinned install method). Host policy still forbids agents
+on this fleet from changing host-wide tool installs, which is why the fix here
+was the CI pin-step change plus a throwaway venv, not a host install. Running
+`klt yield` on this repository's own sample sets — producing the item 6
+evidence — is #1081's work, not this section's.
 
 **Which spec rows are statistical, named explicitly.** The checklist's
 converse obligation is that a block whose spec has no statistical row must
@@ -774,10 +793,13 @@ one-dimensional cuts, not the full 5 bundles × 4 vertices × 7 pairs cross
 product, so an interaction appearing off all three cuts is unsampled.
 
 **What still blocks item 6 is therefore not (d).** It is the `klt yield` JSON
-envelope requirement and its pinned-install gap — see "Item 6: statistical
+envelope requirement — ~~and its pinned-install gap — see "Item 6: statistical
 evidence (`klt yield`) and the pinned-install gap" above, and
-**klayout-tools#2531**, which is open and not actionable from this repository.
-Nor does this section change any measured
+**klayout-tools#2531**, which is open and not actionable from this
+repository.~~ the pinned-install half of that gap closed with the 0.9.2 pin
+bump (see the corrected section above), so what remains is producing and
+validating the sample-set export itself: the deferral recorded at the end of
+this section, and #1081. Nor does this section change any measured
 number: the two control records re-measure nothing and supersede nothing, and
 both campaigns' sample records keep their bytes and their verdicts. A campaign
 minted before #602 has no `negative_control.csv`, and `--recheck-control` says
@@ -904,11 +926,14 @@ worked around silently. Their upstream state was re-checked on 2026-09-26
   defect in its implementation guidance, not on the merits, with a re-filed
   proposal invited — so nothing shipped. It has not been re-filed from this
   repository as of issue #564.
-- **klayout-tools#2531** (open) — `klt_yield_native`, the Rust extension
+- **klayout-tools#2531** — ~~`klt_yield_native`, the Rust extension
   `klt yield` needs, has no prebuilt wheel, so item 6's evidence
   (`klt yield` JSON reports) cannot be produced from this repository's pinned
   install; see "Item 6: statistical evidence (`klt yield`) and the
-  pinned-install gap" above. Unlike the three issues above, **this one was
+  pinned-install gap" above.~~ — **closed 2026-10-03** once the
+  `klt-yield-native` wheel was published; this repository's pinned install
+  now reaches `klt yield` (issue #1079's pin bump; see the corrected "Item 6"
+  section above). Unlike the three issues above, **this one was
   not filed from this repository's own work** — it predates issue #594 and
   was filed from other work — and is cited here rather than duplicated, per
   issue #594.

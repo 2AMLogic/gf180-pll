@@ -193,8 +193,14 @@ jobs:
         #
         # This is this step's own source of truth for which klt version a
         # local `bash signoff/run-signoff.sh --check` must be run against --
-        # see signoff/README.md's "Reproducing" section.
-        run: pip install 'klayout-tools==0.8.0'
+        # see signoff/README.md's "Reproducing" section. The yield extra
+        # (klt-yield-native, declared by both 0.8.0 and 0.9.2 but not pulled
+        # in by a bare install) rides along beside the pin so `klt yield` --
+        # and therefore T1 item 6 -- is reachable in CI; the pin readers
+        # (run-signoff.sh, the netlist-job pin grep below, t1_attest.py) all
+        # match the `klayout-tools==<version>` literal, so the second
+        # requirement must stay off that line's pin token.
+        run: pip install 'klayout-tools==0.9.2' 'klt-yield-native>=0.1.0,<0.2'
 
       - name: signoff/run-signoff.sh --check (T1 tier verdict vs. the committed report)
         # signoff/tier-report.json is this block's T1 verdict of record --
