@@ -484,5 +484,159 @@ class LoopDynamicsProvenance(unittest.TestCase):
         self.assertIn("0 graded rows", text)
 
 
+class ReferencePhaseTransferRepin(unittest.TestCase):
+    """The `reference-phase-transfer` re-qualification pair (#828).
+
+    Successor `20261120-151718-d0000b5` supersedes `20260925-080736-b722f33`
+    under the re-pinned open_pdks. Its two findings are method-guard flips
+    (`pair_resid` at `ff`, `settle_resid` at `sf`), routed to #1077 -- not
+    spec-limit misses. Everything asserted here is re-derived from the
+    committed records and the document, mirroring the classes above.
+    """
+
+    OLD_ID = "20260925-080736-b722f33"
+    NEW_ID = "20261120-151718-d0000b5"
+    OLD_REC = SIM_DIR / "reference-phase-transfer" / "records" / f"{OLD_ID}.md"
+    NEW_REC = SIM_DIR / "reference-phase-transfer" / "records" / f"{NEW_ID}.md"
+
+    #: corner-id -> the guard whose band the new record exceeds there
+    GUARD_FLIPS = {
+        "ff_-40c_3.63v_vs2p430": "pair_resid",
+        "sf_-40c_2.97v_vs1p677": "settle_resid",
+    }
+
+    #: column label -> (measured_gain_db, transfer_error_db, phi_shift_ps,
+    #:                   pair_resid_ps) at the overlap corner
+    OVERLAP = {
+        "predecessor": ("15.8894", "0.3264", "38.3", "-10.5"),
+        "ngspice-46 f6eeac7": ("15.5871", "0.0240", "2.8", "-3.4"),
+        "ngspice-47 f6eeac7": ("15.5326", "-0.0305", "-3.5", "-16.9"),
+    }
+
+    def _compare(self):
+        return record_delta.compare(self.OLD_REC, self.NEW_REC)
+
+    def test_both_records_exist_and_the_successor_supersedes(self):
+        for p in (self.OLD_REC, self.NEW_REC):
+            self.assertTrue(p.is_file(), f"{p} missing")
+        record = self.NEW_REC.read_text(encoding="utf-8")
+        self.assertIn(f"- **Supersedes**: {self.OLD_ID}", record)
+        # Provenance: the re-pinned PDK, executed off-host.
+        self.assertIn("f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7", record)
+        self.assertIn("`batch` execution backend", record)
+
+    def test_exactly_two_findings_and_they_are_the_method_guards(self):
+        lines, findings = self._compare()
+        self.assertEqual(findings, 2,
+                         "the pair carries exactly the two guard findings")
+        rows = [ln for ln in lines if ln.startswith("| `pairing` |")
+                and ("pair_resid max=" in ln or "settle_resid max=" in ln)]
+        self.assertEqual(len(rows), 2, "\n".join(lines))
+        seen = {}
+        for ln in rows:
+            cells = [c.strip() for c in ln.strip().strip("|").split("|")]
+            corner, guard = cells[1].strip("`"), cells[3].split(" ")[2]
+            self.assertEqual(cells[2], "PASS", ln)
+            self.assertTrue(cells[3].startswith("FAIL"), ln)
+            seen[corner] = guard
+        self.assertEqual(seen, self.GUARD_FLIPS)
+        # The stated limits did not move.
+        self.assertIn("**Stated limits**: identical in both records.", lines)
+
+    def _section(self):
+        """The document's `## reference-phase-transfer` section only."""
+        text = _doc_text()
+        start = text.index("## `reference-phase-transfer`")
+        nxt = text.find("\n## ", start + 1)
+        return text[start:nxt if nxt != -1 else None]
+
+    def test_the_document_section_states_the_same_flips(self):
+        text = self._norm(_doc_text())
+        self.assertIn("## `reference-phase-transfer`", text)
+        for corner, guard in self.GUARD_FLIPS.items():
+            self.assertIn(f"`{corner}`", text)
+            self.assertIn(guard, text)
+        section = self._norm(self._section())
+        self.assertEqual(section.count("**PASS → FAIL**"), 2)
+        # Routed, not absorbed.
+        self.assertIn("#1077", section)
+        self.assertIn("`pair_resid` (±50 ps, DR-027)", section)
+        self.assertIn("`settle_resid` (±100 ps)", section)
+
+    def test_residual_magnitudes_and_coverage_match_the_completed_grid(self):
+        raw = SIM_DIR / "reference-phase-transfer" / "corners" / self.NEW_ID / "raw_measures.csv"
+        with raw.open(encoding="utf-8") as fh:
+            rows = list(csv.DictReader(fh))
+        section = self._section()
+        record = self.NEW_REC.read_text(encoding="utf-8")
+        points = {(r["corner"], r["temp_c"], r["vdd"]) for r in rows}
+        self.assertEqual(len(points), 5)
+        for doc in (section, record):
+            self.assertIn(f"{len(points)} of 45", doc)
+        for row in rows:
+            with self.subTest(corner=row["corner"]):
+                magnitudes = [f"{abs(float(row[m])) * 1e12:.2f}"
+                              for m in ("phi_shift", "pair_resid", "settle_resid")]
+                cells = [f"`{row['corner']}`", *magnitudes, row["verdict"].split()[0]]
+                self.assertIn("| " + " | ".join(cells), section)
+
+    def test_the_disposition_row_names_the_successor(self):
+        row = [ln for ln in _doc_text().splitlines()
+               if ln.startswith("| `reference-phase-transfer` |")]
+        self.assertEqual(len(row), 1)
+        self.assertIn("**re-qualified here**", row[0])
+        self.assertIn(self.NEW_ID, row[0])
+
+    @staticmethod
+    def _norm(text):
+        return text.replace("\u2212", "-")
+
+    def test_the_overlap_table_and_the_record_bullet_agree(self):
+        text = self._norm(self._section())
+        order = list(self.OVERLAP)
+        rows = {
+            "measured_gain_db": ("measured_gain_db", "", 0),
+            "phi_shift (ps)": ("phi_shift", " (ps)", 2),
+            "pair_resid (ps)": ("pair_resid", " (ps)", 3),
+        }
+        for name, (core, unit, idx) in rows.items():
+            with self.subTest(measurement=name):
+                row = re.escape(f"| `{core}`{unit} |") + r"(.+)\|"
+                m = re.search(row, text)
+                self.assertIsNotNone(m, f"overlap row for {name} missing")
+                cells = [c.strip() for c in m.group(1).split("|")]
+                self.assertEqual(len(cells), 3, cells)
+                self.assertEqual(
+                    cells, [self.OVERLAP[k][idx] for k in order], cells)
+        record = self._norm(self.NEW_REC.read_text(encoding="utf-8"))
+        self.assertIn("SIMULATOR EXPOSURE", record)
+        self.assertIn("961.9 s", record)
+        for label, vals in self.OVERLAP.items():
+            with self.subTest(column=label):
+                g, e, p, r = vals
+                signed = f"+{e}" if float(e) >= 0 else e
+                self.assertIn(f"{g} / {signed} dB / {p} ps / {r} ps", record)
+
+    def test_typical_gain_differences_for_the_two_overlap_comparisons(self):
+        s46 = float(self.OVERLAP["ngspice-46 f6eeac7"][0])
+        s47 = float(self.OVERLAP["ngspice-47 f6eeac7"][0])
+        pred = float(self.OVERLAP["predecessor"][0])
+        self.assertAlmostEqual(s46 - s47, 0.0545, places=4)
+        self.assertAlmostEqual(pred - s46, 0.3023, places=4)
+        text = self._norm(self._section())
+        record = self._norm(self.NEW_REC.read_text(encoding="utf-8"))
+        for doc in (text, record):
+            self.assertIn("0.0545 dB", doc)
+            self.assertIn("0.3023 dB", doc)
+
+    def test_the_verdict_flip_leaves_the_transfer_substance_stated(self):
+        text = self._norm(_doc_text())
+        # The tightened error range the disposition quotes, both ends.
+        self.assertIn("-0.0305…+0.2988 dB", text)
+        self.assertIn("-0.0345…+0.8032 dB", text)
+        record = self._norm(self.NEW_REC.read_text(encoding="utf-8"))
+        self.assertIn("**Overall: FAIL**", record)
+
+
 if __name__ == "__main__":
     unittest.main()
