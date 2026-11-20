@@ -306,6 +306,15 @@
 #                            # non-zero if any leg fails.
 #   SIM_JOBS=8 ./run.sh      # cap parallelism
 #   N_DC=.. N_SW=.. N_PFD=.. N_DFF=..   override PER-CORNER sample counts
+#   SIM_FLEET_REPLAY=1 ./run.sh
+#                            # fleet transport (#826): consume each unit's
+#                            # fleet-produced ${WORK}/<tag>/ngspice.log
+#                            # (collected by testbench/run_batch.sh) instead
+#                            # of running ngspice here. A missing log is a
+#                            # hard error, never a local-grid fall-back.
+#   MCCP_CORNER_POINTS="typical 27 3.30" ./run.sh
+#                            # replace the 21-point corner array -- the
+#                            # nominal-only grid of 20260731-212614-640560e
 
 set -euo pipefail
 
@@ -420,6 +429,38 @@ CONTROL_SWITCHES_NOTE="design.ngspice defaults OVERRIDDEN per run -- this contro
 # called directly; see that function's comment there for the full
 # investigation.
 
+# --- Fleet replay transport (#826) ------------------------------------------
+#
+# On a dispatch host KLT_SIM_BACKEND=batch selects the remote batch fleet, and
+# simenv_guard_local_grid (#740) correctly refuses this campaign's multi-unit
+# local fan-out there. The fleet's sanctioned route for a campaign that
+# composes its own decks is `klt sim`'s deck-list transport ("pre-composed
+# decks"): each unit's deck ships byte-for-byte, runs with `ngspice -b` on its
+# own execution host, and the raw stdout comes back. testbench/run_batch.sh
+# composes exactly the decks simenv_run_deck composes (same header order, same
+# kv overrides, same per-sample `.option rndseed`), submits them, and collects
+# each unit's stdout to ${WORK}/<tag>/ngspice.log -- the path simenv_run_deck
+# itself writes. With SIM_FLEET_REPLAY=1 this file then runs its ENTIRE
+# reduction, control, statistics and record-minting path unchanged, minus the
+# local ngspice: every simenv_run_deck_retried call below is wrapped in
+# fleet_replay_skip, which consumes the collected log instead. A missing log
+# under replay is a hard error, never a silent fall-back to the local grid the
+# guard exists to refuse.
+#
+# Call as:  if ! fleet_replay_skip "${tag}"; then simenv_run_deck_retried ...; fi
+# Returns 0 (skip the engine) when replaying and the log is present; 1 when
+# not replaying (the caller runs ngspice as before); exits 3 when replaying
+# and the log is missing.
+fleet_replay_skip() {
+  if [ "${SIM_FLEET_REPLAY:-0}" != "1" ]; then return 1; fi
+  local tag="$1"
+  if [ -s "${WORK}/${tag}/ngspice.log" ]; then return 0; fi
+  echo "ERROR: SIM_FLEET_REPLAY=1 but ${WORK}/${tag}/ngspice.log is missing." >&2
+  echo "       Refusing to fall back to a local ngspice run; collect the unit" >&2
+  echo "       first (testbench/run_batch.sh collect ...)." >&2
+  exit 3
+}
+
 # ===========================================================================
 # dc: tb_mc_cp_dc.sp -- term 1 (DC UP/DN current mismatch)
 # ===========================================================================
@@ -428,8 +469,10 @@ run_dc() {
   local ctag="${CORNER}_${TEMP}c_${VDD}v"
   local tag="dc_${ctag}_seed$(printf '%03d' "${seed}")"
   simenv_stage_netlist "${WORK}/${tag}" "${NETLIST}"
-  simenv_run_deck_retried "${DECK_DC}" "${WORK}" "${tag}" "${CORNER}" "${TEMP}" \
-    "vsup=${VDD}" "sw_stat_mismatch=1" "rndseed=${seed}" >/dev/null
+  if ! fleet_replay_skip "${tag}"; then
+    simenv_run_deck_retried "${DECK_DC}" "${WORK}" "${tag}" "${CORNER}" "${TEMP}" \
+      "vsup=${VDD}" "sw_stat_mismatch=1" "rndseed=${seed}" >/dev/null
+  fi
   local log="${WORK}/${tag}/ngspice.log"
   local pt line iup idn
   for pt in "LO:0.9" "MID:1.65" "HI:2.4"; do
@@ -451,8 +494,10 @@ run_sw() {
   local ctag="${CORNER}_${TEMP}c_${VDD}v"
   local tag="sw_${ctag}_seed$(printf '%03d' "${seed}")"
   simenv_stage_netlist "${WORK}/${tag}" "${NETLIST}"
-  simenv_run_deck_retried "${DECK_SW}" "${WORK}" "${tag}" "${CORNER}" "${TEMP}" \
-    "vsup=${VDD}" "vctrl=${VCTRL_MID}" "sw_stat_mismatch=1" "rndseed=${seed}" >/dev/null
+  if ! fleet_replay_skip "${tag}"; then
+    simenv_run_deck_retried "${DECK_SW}" "${WORK}" "${tag}" "${CORNER}" "${TEMP}" \
+      "vsup=${VDD}" "vctrl=${VCTRL_MID}" "sw_stat_mismatch=1" "rndseed=${seed}" >/dev/null
+  fi
   local log="${WORK}/${tag}/ngspice.log" line wskew
   line=$(grep "^MCSW " "${log}" | tail -1)
   [ -n "${line}" ] || { echo "ERROR: missing MCSW for corner=${ctag} seed=${seed}" >&2; return 1; }
@@ -472,8 +517,10 @@ run_pfd() {
     local dsuf="d${dphi}"; dsuf="${dsuf//./p}"; dsuf="${dsuf//-/m}"
     local dtag="pfd_${ctag}_seed${sseed}_${dsuf}"
     simenv_stage_netlist "${WORK}/${dtag}" "${NETLIST}"
-    simenv_run_deck_retried "${DECK_PFD}" "${WORK}" "${dtag}" "${CORNER}" "${TEMP}" \
-      "vsup=${VDD}" "dphi=${dphi}" "sw_stat_mismatch=1" "rndseed=${seed}" >/dev/null
+    if ! fleet_replay_skip "${dtag}"; then
+      simenv_run_deck_retried "${DECK_PFD}" "${WORK}" "${dtag}" "${CORNER}" "${TEMP}" \
+        "vsup=${VDD}" "dphi=${dphi}" "sw_stat_mismatch=1" "rndseed=${seed}" >/dev/null
+    fi
     local log="${WORK}/${dtag}/ngspice.log" line q
     line=$(grep "^MCPFD " "${log}" | tail -1)
     [ -n "${line}" ] || { echo "ERROR: missing MCPFD for corner=${ctag} seed=${seed} dphi=${dphi}" >&2; return 1; }
@@ -499,8 +546,10 @@ run_dff() {
   local seed="$1" sfile="$2"
   local ctag="${CORNER}_${TEMP}c_${VDD}v"
   local tag="dff_${ctag}_seed$(printf '%03d' "${seed}")"
-  simenv_run_deck_retried "${DUT_DFF}" "${WORK}" "${tag}" "${CORNER}" "${TEMP}" \
-    "vsup=${VDD}" "sw_stat_mismatch=1" "rndseed=${seed}" >/dev/null
+  if ! fleet_replay_skip "${tag}"; then
+    simenv_run_deck_retried "${DUT_DFF}" "${WORK}" "${tag}" "${CORNER}" "${TEMP}" \
+      "vsup=${VDD}" "sw_stat_mismatch=1" "rndseed=${seed}" >/dev/null
+  fi
   local log="${WORK}/${tag}/ngspice.log" tcq_r tcq_f
   tcq_r=$(simenv_meas "${log}" tcq_r)
   tcq_f=$(simenv_meas "${log}" tcq_f)
@@ -514,6 +563,16 @@ run_dff() {
 # bundle/temp/vdd. Defined up here, ahead of the entry points, because
 # `--restat` (below) re-derives the per-corner breakdown of an
 # already-committed campaign and needs the same corner list the run used.
+#
+# MCCP_CORNER_POINTS (optional, #826 re-qualification): a whitespace-separated
+# list of "<bundle> <temp> <vdd>" triplets that REPLACES the default array, for
+# re-running one of this campaign's own earlier grids exactly. The only user is
+# the nominal-only re-qualification of `20260731-212614-640560e`, which ran
+# ONE point at per-corner sample counts of 200/40/40/50:
+#   MCCP_CORNER_POINTS="typical 27 3.30" N_DC=200 N_SW=40 N_PFD=40 N_DFF=50 \
+#     SIM_FLEET_REPLAY=1 ./run.sh
+# Everything downstream (CORNER_LIST_MD, NUM_VERTICES, the loops, the row-count
+# assertions) derives from the array, so an override cannot drift from what ran.
 CORNER_POINTS=(
   "typical 27 3.30"
   "typical -40 2.97"
@@ -537,6 +596,22 @@ CORNER_POINTS=(
   "sf 125 2.97"
   "sf 125 3.63"
 )
+if [ -n "${MCCP_CORNER_POINTS:-}" ]; then
+  CORNER_POINTS=()
+  set -- ${MCCP_CORNER_POINTS}
+  while [ "$#" -ge 3 ]; do
+    CORNER_POINTS+=("$1 $2 $3")
+    shift 3
+  done
+  [ "$#" -eq 0 ] || {
+    echo "ERROR: MCCP_CORNER_POINTS must be '<bundle> <temp> <vdd>' triplets" >&2
+    exit 1
+  }
+  [ "${#CORNER_POINTS[@]}" -gt 0 ] || {
+    echo "ERROR: MCCP_CORNER_POINTS is empty" >&2
+    exit 1
+  }
+fi
 NUM_CORNERS=${#CORNER_POINTS[@]}
 
 # Markdown rendering of the grid above, plus the count of non-nominal points,
@@ -636,22 +711,30 @@ control_run_one() {
   case "${stage}" in
     dc)
       simenv_stage_netlist "${WORK}/${tag}" "${NETLIST}"
-      simenv_run_deck_retried "${DECK_DC}" "${WORK}" "${tag}" "${pc}" "${pt}" \
-        "vsup=${pv}" "sw_stat_mismatch=${mism}" "rndseed=${seed}" >/dev/null
+      if ! fleet_replay_skip "${tag}"; then
+        simenv_run_deck_retried "${DECK_DC}" "${WORK}" "${tag}" "${pc}" "${pt}" \
+          "vsup=${pv}" "sw_stat_mismatch=${mism}" "rndseed=${seed}" >/dev/null
+      fi
       ;;
     sw)
       simenv_stage_netlist "${WORK}/${tag}" "${NETLIST}"
-      simenv_run_deck_retried "${DECK_SW}" "${WORK}" "${tag}" "${pc}" "${pt}" \
-        "vsup=${pv}" "vctrl=${VCTRL_MID}" "sw_stat_mismatch=${mism}" "rndseed=${seed}" >/dev/null
+      if ! fleet_replay_skip "${tag}"; then
+        simenv_run_deck_retried "${DECK_SW}" "${WORK}" "${tag}" "${pc}" "${pt}" \
+          "vsup=${pv}" "vctrl=${VCTRL_MID}" "sw_stat_mismatch=${mism}" "rndseed=${seed}" >/dev/null
+      fi
       ;;
     pfd)
       simenv_stage_netlist "${WORK}/${tag}" "${NETLIST}"
-      simenv_run_deck_retried "${DECK_PFD}" "${WORK}" "${tag}" "${pc}" "${pt}" \
-        "vsup=${pv}" "dphi=0" "sw_stat_mismatch=${mism}" "rndseed=${seed}" >/dev/null
+      if ! fleet_replay_skip "${tag}"; then
+        simenv_run_deck_retried "${DECK_PFD}" "${WORK}" "${tag}" "${pc}" "${pt}" \
+          "vsup=${pv}" "dphi=0" "sw_stat_mismatch=${mism}" "rndseed=${seed}" >/dev/null
+      fi
       ;;
     dff)
-      simenv_run_deck_retried "${DUT_DFF}" "${WORK}" "${tag}" "${pc}" "${pt}" \
-        "vsup=${pv}" "sw_stat_mismatch=${mism}" "rndseed=${seed}" >/dev/null
+      if ! fleet_replay_skip "${tag}"; then
+        simenv_run_deck_retried "${DUT_DFF}" "${WORK}" "${tag}" "${pc}" "${pt}" \
+          "vsup=${pv}" "sw_stat_mismatch=${mism}" "rndseed=${seed}" >/dev/null
+      fi
       ;;
   esac
   local m v
@@ -1166,6 +1249,20 @@ case "${1:-}" in
     exit 0 ;;
 esac
 
+# Tree state as the campaign STARTED, not as the record renders (#826). The
+# minting heredocs below call simenv_env_block after this run has already
+# written corners/<id>/ and netlist-snapshots/ artifacts, and those untracked
+# files would make a mint-time `git status --porcelain` read "DIRTY" even
+# from a fully committed starting tree -- which is exactly how every record
+# this campaign minted before #826 came to say "DIRTY tree" despite the runs
+# themselves starting clean. #826's re-qualification AC requires clean-tree
+# provenance, so the state is captured HERE, before any artifact is written
+# (the --one-* single-unit entries above exit before this point, so per-sample
+# xargs children pay nothing), and handed to simenv_env_block through its
+# SIMENV_GIT_STATE override. A genuinely dirty starting tree still reads
+# DIRTY -- the override changes WHEN the sample is taken, never what it says.
+SIMENV_GIT_STATE="$(simenv_git_state)"
+
 simenv_require_tools
 mkdir -p "${WORK}"
 
@@ -1381,8 +1478,12 @@ EOF
 fi
 
 echo "mc-cp-mismatch: N_DC=${N_DC} N_SW=${N_SW} N_PFD=${N_PFD} N_DFF=${N_DFF} PER CORNER x ${NUM_CORNERS} corners, $(simenv_jobs) parallel jobs"
-# Refuse a multi-unit local grid on a batch-backend host (#740).
-simenv_guard_local_grid "$(( (N_DC + N_SW + N_PFD + N_DFF) * NUM_CORNERS ))" "mc-cp-mismatch" || exit $?
+# Refuse a multi-unit local grid on a batch-backend host (#740). Under
+# SIM_FLEET_REPLAY=1 no engine runs here at all (every unit's log was produced
+# on the fleet and is consumed from ${WORK}), so the refusal does not apply.
+if [ "${SIM_FLEET_REPLAY:-0}" != "1" ]; then
+  simenv_guard_local_grid "$(( (N_DC + N_SW + N_PFD + N_DFF) * NUM_CORNERS ))" "mc-cp-mismatch" || exit $?
+fi
 
 # SIM_RESUME=1 skips the usual clean-slate wipe below AND (via each per-sample
 # xargs entry's own existing-output check, see the `[ -s "$3" ]` guard added

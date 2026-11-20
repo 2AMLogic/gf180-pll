@@ -445,6 +445,20 @@ EOF
 #   note to simenv_provenance above as well, or the record and the CSV beside
 #   it disagree about the same run (#601). sim/tests/
 #   test_provenance_switches_note.py enforces that pairing statically.
+#
+#   SIMENV_GIT_STATE (optional environment, #826): replaces the parenthesised
+#   tree state on the "Repo commit" line with a state the CALLER sampled
+#   earlier. Why that is sometimes necessary: this block renders inside the
+#   record-minting heredoc, i.e. AFTER the campaign has written its own
+#   corners/<id>/ and netlist-snapshots/ artifacts -- those are untracked
+#   files, so a mint-time `git status --porcelain` is non-empty and the line
+#   reads "DIRTY tree" even when the campaign started from a fully committed
+#   tree. sim/harness samples the tree state BEFORE a run starts for exactly
+#   this reason; a legacy campaign that must mint clean-tree provenance
+#   (#826's re-qualification AC) captures `simenv_git_state` at its own start
+#   and passes it through here. Unset (the default), the line samples at
+#   render time exactly as before, so every existing campaign keeps emitting
+#   what it emitted before.
 simenv_env_block() {
   local capture="${1:-N/A — these
     testbenches are hand-written SPICE, not an xschem export; there is no
@@ -458,7 +472,7 @@ simenv_env_block() {
     \`sm141064_mim.ngspice\`, pulled in by the \`mimcap_*\` sections);
     ${switches}
   - Simulator: $(simenv_ngspice_version). Schematic capture: ${capture}
-  - Repo commit: \`$(simenv_git_sha)\` ($(simenv_git_state) tree)
+  - Repo commit: \`$(simenv_git_sha)\` (${SIMENV_GIT_STATE:-$(simenv_git_state)} tree)
   - Host: $(simenv_host)
 EOF
 }
