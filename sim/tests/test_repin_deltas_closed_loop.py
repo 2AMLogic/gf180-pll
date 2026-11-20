@@ -1,4 +1,4 @@
-"""The closed-loop re-pin delta document (#828, increment `reference-spur`).
+"""The closed-loop re-pin delta document (#828).
 
 `sim/REPIN-DELTAS-f6eeac7-closed-loop.md` makes claims a reader cannot check
 by eye, and each is asserted here instead of trusted:
@@ -35,6 +35,7 @@ import re
 import subprocess
 import sys
 import unittest
+from decimal import Decimal
 from pathlib import Path
 
 SIM_DIR = Path(__file__).resolve().parents[1]
@@ -219,6 +220,82 @@ class TheOverlapPointFigures(unittest.TestCase):
         # flip at this corner is a simulator effect, as stated.
         self.assertLessEqual(float(OVERLAP["ngspice-46 f6eeac7"][1]), -55.0)
         self.assertGreater(float(OVERLAP["ngspice-47 f6eeac7"][1]), -55.0)
+
+
+class PllTopSmokeReplay(unittest.TestCase):
+    """Check the re-pin against the frozen seven-check bench and both raw logs."""
+
+    def test_input_and_reported_deltas(self):
+        campaign = SIM_DIR / "pll-top-smoke"
+        (row,) = (
+            line
+            for line in _doc_text().splitlines()
+            if line.startswith("| `pll-top-smoke` |")
+        )
+        ids = re.findall(r"`(\d{8}-\d{6}-[a-f0-9]{7})`", row)
+        self.assertEqual(len(ids), 2, row)
+        previous, replay = ids
+        self.assertEqual(previous, "20260802-160926-8456ff3")
+        snapshots = campaign / "netlist-snapshots"
+        self.assertEqual(
+            (snapshots / f"{previous}.spice").read_bytes(),
+            (snapshots / f"{replay}.spice").read_bytes(),
+        )
+        record = (campaign / "records" / f"{replay}.md").read_text()
+        self.assertIn(f"- **Supersedes**: {previous}\n", record)
+
+        # The batch-mode log repeats measurements after the .control block.
+        # The legacy runner reads the first evaluation of each measurement.
+        logs = []
+        settings = []
+        for rid in ids:
+            path = campaign / "corners" / rid / "typical_27c_3.30v.log"
+            deck, output = path.read_text().split("==== ngspice output ====")
+            # Compare all parameter cards, temperature and PDK library sections.
+            # The absolute installation directory varies between recording hosts.
+            settings.append(
+                [
+                    re.sub(r'"[^"]*/libs\.tech/', '"libs.tech/', line)
+                    for line in deck.splitlines()
+                    if line.startswith((".param ", ".lib ", ".temp ", ".option "))
+                    or (line.startswith(".include ") and "libs.tech/" in line)
+                ]
+            )
+            first = output.split("Measurements for Transient Analysis")[1]
+            logs.append(
+                dict(re.findall(r"^(\w+)\s+=\s+([-+.\deE]+)\b", first, re.MULTILINE))
+            )
+
+        self.assertEqual(settings[0], settings[1])
+
+        # The record tabulates magnitudes for phase and residual error. All
+        # other gated quantities on this bench are positive physical values.
+        measures = {
+            "ferr": 1,
+            "phi_b": 10**9,
+            "nmeas": 1,
+            "fout": Decimal("1e-6"),
+            "lock_lvl": 1,
+            "vctrl_min": 1,
+            "vctrl_max": 1,
+            "dn_lvl": 1,
+        }
+        rows = [line for line in record.splitlines() if re.match(r"^\| [1-7] \|", line)]
+        self.assertEqual(len(rows), len(measures))
+        seen = set()
+        for line in rows:
+            _, quantity, _, old, new, delta, _ = (
+                c.strip() for c in line.strip("|").split("|")
+            )
+            measure = re.search(r"`(\w+)`", quantity).group(1)
+            with self.subTest(measure=measure):
+                seen.add(measure)
+                values = [Decimal(log[measure]) * measures[measure] for log in logs]
+                if measure in ("phi_b", "ferr"):
+                    values = [abs(value) for value in values]
+                self.assertEqual([Decimal(old), Decimal(new)], values)
+                self.assertEqual(Decimal(delta), values[1] - values[0])
+        self.assertEqual(seen, set(measures))
 
 
 class TheDispositionTableAndDerivedProse(unittest.TestCase):
