@@ -229,7 +229,11 @@ The old-vs-new comparison for this campaign is the record's own ratified
 pilot gate (every metric against the baseline with the ratified tolerance,
 none loosened): see
 [`baseline_comparison.csv`](loop-dynamics/corners/20261111-092132-343bafa/baseline_comparison.csv)
-(95 metrics, failing rows: none, verdicts unchanged — **Overall: PASS** on
-both sides). No generated `record_delta.py` table is printed for this pair:
-the predecessor predates the harness's graded-table record format, so there
-are no overlapping graded measurements to tabulate (0 graded rows).
+(95 metrics, failing rows: none, verdicts unchanged — the `s10 verdict` row
+is the identical text on both sides: **Overall: PASS on the contracted
+operating space, FAIL off it**, i.e. the conditional PASS
+`sim/CHARACTERIZATION.md` records, only when the Icp trim-code rule is
+followed — not an unqualified pass). No generated `record_delta.py` table is
+printed for this pair: the predecessor predates the harness's graded-table
+record format, so there are no overlapping graded measurements to tabulate
+(0 graded rows).
