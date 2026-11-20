@@ -411,13 +411,20 @@ simenv_stage_netlist() {
 simenv_provenance() {
   local campaign="$1" rid="$2" netlist="$3" corners="$4"
   local switches="${5:-design.ngspice defaults (sw_stat_global=0, sw_stat_mismatch=0 -> nominal skew, no Monte Carlo)}"
+  # pdk_root is printed through the same <home> normalisation layout/harness
+  # applies to its captured evidence (check-evidence-host-paths.sh, #701):
+  # an absolute home directory in an append-only evidence file is a
+  # contributor-machine detail the public repository does not carry, and the
+  # variant + open_pdks hash lines beside it are the identifying provenance.
+  local pdk_root_print="${SIMENV_PDK_ROOT}"
+  pdk_root_print="${pdk_root_print/#$HOME/<home>}"
   cat <<EOF
 # campaign: ${campaign}
 # record_id: ${rid}
 # generated_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 # pdk_variant: $(simenv_pdk_variant)
 # pdk_open_pdks_hash: $(simenv_pdk_hash)
-# pdk_root: ${SIMENV_PDK_ROOT}
+# pdk_root: ${pdk_root_print}
 # model_file: libs.tech/ngspice/sm141064.ngspice (+ sm141064_mim.ngspice via mimcap_* sections)
 # switches: ${switches}
 # simulator: $(simenv_ngspice_version)
