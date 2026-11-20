@@ -560,7 +560,25 @@ class ReferencePhaseTransferRepin(unittest.TestCase):
         self.assertEqual(section.count("**PASS → FAIL**"), 2)
         # Routed, not absorbed.
         self.assertIn("#1077", section)
-        self.assertIn("not relaxed", section)
+        self.assertIn("`pair_resid` (±50 ps, DR-027)", section)
+        self.assertIn("`settle_resid` (±100 ps)", section)
+
+    def test_residual_magnitudes_and_coverage_match_the_completed_grid(self):
+        raw = SIM_DIR / "reference-phase-transfer" / "corners" / self.NEW_ID / "raw_measures.csv"
+        with raw.open(encoding="utf-8") as fh:
+            rows = list(csv.DictReader(fh))
+        section = self._section()
+        record = self.NEW_REC.read_text(encoding="utf-8")
+        points = {(r["corner"], r["temp_c"], r["vdd"]) for r in rows}
+        self.assertEqual(len(points), 5)
+        for doc in (section, record):
+            self.assertIn(f"{len(points)} of 45", doc)
+        for row in rows:
+            with self.subTest(corner=row["corner"]):
+                magnitudes = [f"{abs(float(row[m])) * 1e12:.2f}"
+                              for m in ("phi_shift", "pair_resid", "settle_resid")]
+                cells = [f"`{row['corner']}`", *magnitudes, row["verdict"].split()[0]]
+                self.assertIn("| " + " | ".join(cells), section)
 
     def test_the_disposition_row_names_the_successor(self):
         row = [ln for ln in _doc_text().splitlines()
@@ -574,7 +592,7 @@ class ReferencePhaseTransferRepin(unittest.TestCase):
         return text.replace("\u2212", "-")
 
     def test_the_overlap_table_and_the_record_bullet_agree(self):
-        text = self._norm(_doc_text())
+        text = self._norm(self._section())
         order = list(self.OVERLAP)
         rows = {
             "measured_gain_db": ("measured_gain_db", "", 0),
@@ -599,17 +617,17 @@ class ReferencePhaseTransferRepin(unittest.TestCase):
                 signed = f"+{e}" if float(e) >= 0 else e
                 self.assertIn(f"{g} / {signed} dB / {p} ps / {r} ps", record)
 
-    def test_the_simulator_and_pdk_movement_arithmetic(self):
+    def test_typical_gain_differences_for_the_two_overlap_comparisons(self):
         s46 = float(self.OVERLAP["ngspice-46 f6eeac7"][0])
         s47 = float(self.OVERLAP["ngspice-47 f6eeac7"][0])
         pred = float(self.OVERLAP["predecessor"][0])
-        self.assertAlmostEqual(abs(s46 - s47), 0.0545, places=4)
-        self.assertAlmostEqual(abs(pred - s46), 0.30, places=2)
-        text = self._norm(_doc_text())
+        self.assertAlmostEqual(s46 - s47, 0.0545, places=4)
+        self.assertAlmostEqual(pred - s46, 0.3023, places=4)
+        text = self._norm(self._section())
         record = self._norm(self.NEW_REC.read_text(encoding="utf-8"))
         for doc in (text, record):
-            self.assertIn("0.055 dB", doc)
-            self.assertIn("0.30 dB", doc)
+            self.assertIn("0.0545 dB", doc)
+            self.assertIn("0.3023 dB", doc)
 
     def test_the_verdict_flip_leaves_the_transfer_substance_stated(self):
         text = self._norm(_doc_text())
