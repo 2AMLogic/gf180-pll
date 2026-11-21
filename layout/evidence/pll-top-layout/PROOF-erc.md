@@ -1,5 +1,15 @@
 # `pll_top` structural power-delivery ERC (T1 checklist item 11, tracker #127)
 
+> **Status update (2026-11-21, issue #1085): limitation 2 below ("No well-tie
+> grading at the top level") is obsolete.** [klayout-tools#2540](https://github.com/2AMLogic/klayout-tools/issues/2540)
+> shipped literal well-side selectors, and the 0.9.2 pin carries them. All
+> forty merged Nwell shapes — five classes across the four placed blocks and
+> the loop filter's capacitor bodies — are now declared and graded in
+> [`erc-ties-20261121/`](erc-ties-20261121/RECORD.md); the tool-limitation
+> disclosure is superseded by computed `erc.missing_tie` results (one finding,
+> the placed PSRC tub; the four supply classes grade clean). See the section
+> at the end. Older text below is left as written.
+
 > **Status update (2026-10-27, issue #836): the inherited `VDD_VCO` two-island
 > finding is gone; `erc_status` is `clean`.** `vco_block` now ties both of
 > `vtoi_core`'s n-well tap bands to the supply on metal, so the assembled
@@ -118,3 +128,53 @@ graded against nothing. No antenna claim is made.
    whether the devices on each net are the right ones (#149).
 5. **Not IR-drop or EM.** Most supply risers are single vias (`PROOF.md`
    limitation 6); nothing here analyses them.
+
+## Well-tie grading on the 0.9.2 box selectors (issue #1085)
+
+The top-level `ties_disclosure` is superseded:
+[klayout-tools#2540](https://github.com/2AMLogic/klayout-tools/issues/2540)
+gave `ties[]` the literal well-side class selectors
+`well_requires_boxes`/`well_excludes_boxes`, shipped by the CI pin
+(`klayout-tools==0.9.2`). Each class of the assembly's forty merged Nwell
+shapes is now declared against its own net, selected by one caller-named box
+strictly inside each well — the instance transform applied to an interior
+point of each child-cell well (the PFD/CP instance is mirrored, `m90`).
+
+[`erc-ties-20261121/`](erc-ties-20261121/RECORD.md) holds the first graded
+envelope: a copy of the committed spec with the disclosure replaced by the
+five-class partition (15 `VDD`, 14 `VDD_DIV`, 6 `VDD_VCO`, 4 `VSS` loop-filter
+capacitor bodies, 1 `PSRC`; disjoint and exhaustive — 15+14+6+4+1 = 40 = every
+merged Nwell shape) and with the stackup names mapped to the gf180mcu antenna
+table's canonical spelling so `--pdk gf180mcu` grades the antenna half in the
+same run. The capacitor-body class intersects `Contact (33/0)` into its tap:
+those cells draw `Nplus` over the whole `Comp` body
+(`layout/pll_top/loop_filter/primitives.py`), so the plain two-layer tap is
+degenerate there. On the pinned wheel (klt 0.9.2, KLayout 0.30.13):
+
+- `erc_status: violations` (exit 3) with exactly **one** finding —
+  `erc.missing_tie`, *"well/tub tap is not connected to declared net 'PSRC'"*,
+  bounding box `[372950, 21600, 475950, 26400]` dbu =
+  `(372.950, 21.600)`–`(475.950, 26.400)` µm in top-cell coordinates: the
+  placed (m90) image of `pfd_cp`'s dump-buffer tub, the same rule the
+  block-level run reports on the same well at block coordinates
+  `(176.820, 7.755)`–`(279.820, 12.555)` µm
+  (`../pfd-cp-layout/erc-ties-20261121/RECORD.md`). No `PSRC` label exists
+  anywhere in the assembly, so the tool cannot credit the body tie the block's
+  own LVS extraction establishes. A reported finding is the honest computed
+  outcome.
+- The four supply classes grade **clean** — 39 of 40 wells' taps reach exactly
+  their declared net through the assembly's own routing.
+- All five classes appear in `erc_coverage.checked_by_well_assertion`; nothing
+  is skipped, degenerate or disclosed.
+- The pinned item-11 ERC-half grader
+  (`klayout_tools.signoff_power_delivery._resolve_erc_supply_spec`) resolves
+  the spec and returns `supply_not_continuous`. Item 11 stays `unmet` — now by
+  measurement, not by disclosure.
+- The antenna half is unchanged (gate17/`XDLY_T0B`, gate21/`GND_VCO`
+  711.857909, gate38/`VDD` 857.065333 — the three rail-tied false positives
+  issue #1082's antenna re-run documents), as the tool's contract guarantees:
+  a `ties[]` declaration cannot alter anything but `erc.missing_tie`.
+
+The committed `erc-supply-spec.json` and `erc-report.json` at this directory
+are untouched — the dated directory carries its own spec copy so the older
+envelope keeps resolving its own hashes.
