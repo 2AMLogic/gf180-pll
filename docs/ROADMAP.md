@@ -45,7 +45,7 @@ This page says what comes next and why. It does not restate status: the machine 
 | 3 DRC clean | unmet | block-level clean report; `MIMTM.3` (#753, then #149) |
 | 4 LVS clean | unmet | top-level LVS has not run (#149) |
 | 5 Corner verification vs ratified spec | unmet | rows 9 and 16 unratified; evidence is not in `klt sim` envelope form |
-| 6 Monte Carlo evidence | unmet | see `signoff/README.md`, "Item 6" — `klt yield` is reachable on the 0.9.2 pin (klayout-tools#2531 closed 2026-10-03); the sample-set derivation is #1081 |
+| 6 Monte Carlo evidence | unmet (digital: N/A) | see `signoff/README.md`, "Item 6" — `klt yield` envelopes derived and cited from both MC campaigns (#1081, `signoff/yield/`); analog `unmet` / `undersized_sample` (n < 183/corner on the four budget terms — #1092 owns the draw-count raise; the VCO coverage citation grades `met`), digital `not_applicable` granted |
 | 7 Post-layout verification | unmet | needs a clean block layout to extract (#18) |
 | 8 Characterization report | unmet | `sim/CHARACTERIZATION.md` exists but is uncited (#843) |
 | 9 Testbenches shipped | met | — |

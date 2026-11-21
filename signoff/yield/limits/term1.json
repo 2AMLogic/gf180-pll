@@ -1,0 +1,130 @@
+{
+  "measurements": {
+    "ff_-40c_2.97v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "ff_-40c_3.63v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "ff_125c_2.97v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "ff_125c_3.63v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "fs_-40c_2.97v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "fs_-40c_3.63v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "fs_125c_2.97v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "fs_125c_3.63v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "sf_-40c_2.97v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "sf_-40c_3.63v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "sf_125c_2.97v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "sf_125c_3.63v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "ss_-40c_2.97v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "ss_-40c_3.63v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "ss_125c_2.97v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "ss_125c_3.63v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "typical_-40c_2.97v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "typical_-40c_3.63v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "typical_125c_2.97v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "typical_125c_3.63v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    },
+    "typical_27c_3.30v": {
+      "spec_row": "cp-budget/1",
+      "target_sigma": 3.0,
+      "min": -20.0,
+      "max": 20.0
+    }
+  }
+}

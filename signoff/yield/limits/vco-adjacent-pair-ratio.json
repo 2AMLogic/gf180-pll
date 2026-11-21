@@ -1,0 +1,59 @@
+{
+  "measurements": {
+    "ff_125c_3.63v_b3b4": {
+      "spec_row": "vco-band-coverage/adjacent-pair-ratio",
+      "target_sigma": 3.0,
+      "min": 1.0
+    },
+    "fs_125c_3.63v_b3b4": {
+      "spec_row": "vco-band-coverage/adjacent-pair-ratio",
+      "target_sigma": 3.0,
+      "min": 1.0
+    },
+    "sf_125c_3.63v_b3b4": {
+      "spec_row": "vco-band-coverage/adjacent-pair-ratio",
+      "target_sigma": 3.0,
+      "min": 1.0
+    },
+    "ss_-40c_2.97v_b3b4": {
+      "spec_row": "vco-band-coverage/adjacent-pair-ratio",
+      "target_sigma": 3.0,
+      "min": 1.0
+    },
+    "ss_-40c_3.63v_b3b4": {
+      "spec_row": "vco-band-coverage/adjacent-pair-ratio",
+      "target_sigma": 3.0,
+      "min": 1.0
+    },
+    "ss_125c_2.97v_b3b4": {
+      "spec_row": "vco-band-coverage/adjacent-pair-ratio",
+      "target_sigma": 3.0,
+      "min": 1.0
+    },
+    "ss_125c_3.63v_b0b1": {
+      "spec_row": "vco-band-coverage/adjacent-pair-ratio",
+      "target_sigma": 3.0,
+      "min": 1.0
+    },
+    "ss_125c_3.63v_b1b2": {
+      "spec_row": "vco-band-coverage/adjacent-pair-ratio",
+      "target_sigma": 3.0,
+      "min": 1.0
+    },
+    "ss_125c_3.63v_b3b4": {
+      "spec_row": "vco-band-coverage/adjacent-pair-ratio",
+      "target_sigma": 3.0,
+      "min": 1.0
+    },
+    "ss_125c_3.63v_b6b7": {
+      "spec_row": "vco-band-coverage/adjacent-pair-ratio",
+      "target_sigma": 3.0,
+      "min": 1.0
+    },
+    "typical_125c_3.63v_b3b4": {
+      "spec_row": "vco-band-coverage/adjacent-pair-ratio",
+      "target_sigma": 3.0,
+      "min": 1.0
+    }
+  }
+}
