@@ -38,7 +38,7 @@ _None._
 
 PRs waiting on Judge (`loom:review-requested`).
 
-- **#906**: sim(output-range): harness-form manifest, deck and baseline-comparison reduction
+_None._
 
 ## Approved (Awaiting Merge)
 
@@ -65,7 +65,6 @@ Issues carrying `loom:curated`.
 - **#827**: Re-qualify lock-detector, lock-window and divider records under open_pdks f6eeac7 (child of #790) *(curated)*
 - **#828**: Re-qualify closed-loop campaign records under open_pdks f6eeac7 (child of #790) *(curated)*
 - **#878**: sim: migrate output-range shell campaign to a harness manifest (after loop-dynamics pilot #741) *(curated)*
-- **#905**: sim harness: wait with backoff on batch capacity / vCPU-budget refusals instead of aborting the grid *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -84,9 +83,9 @@ Issues carrying `loom:curated`.
 | Important | 2 |
 | Ready (`loom:issue`) | 1 |
 | In Progress (`loom:building`) | 0 |
-| PRs awaiting review | 1 |
+| PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 16 |
+| Curated | 15 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->

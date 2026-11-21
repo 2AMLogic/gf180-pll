@@ -4,6 +4,7 @@ Chronological record of merged pull requests and closed issues. Maintained by th
 
 ### 2026-11-11
 
+- **PR #909**: sim(output-range): record full 90-row batch grid vs baseline (83/90 measured, NO-GO)
 - **PR #906**: sim(output-range): harness-form manifest, deck and baseline-comparison reduction
 - **PR #908**: feat(sim): wait out vCPU and pool capacity refusals; no record on aborted supersede
 - **Issue #905** (closed): sim harness: wait with backoff on batch capacity / vCPU-budget refusals instead of aborting the grid
