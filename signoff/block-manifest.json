@@ -21,6 +21,56 @@
       "content_hash": "sha256:fbe4001364aa586f6bdbf1babe85cbb4d40d8fbf4560b899ee158d7f5f12b11c",
       "file": "signoff/attest/item-2.evidence.json"
     },
+    "6.analog": [
+      {
+        "content_hash": "sha256:9df8517c5d67a557f77afc46def005151726f53c59cf0b38676a020f03c58de9",
+        "file": "signoff/yield/reports/term1.json",
+        "rows": [
+          "cp-budget/1"
+        ]
+      },
+      {
+        "content_hash": "sha256:772d42fdd3ccf3e9602ca4a9c3e886727ab7c320fea2f9cbb86dfd5ca58b6c9b",
+        "file": "signoff/yield/reports/term2a.json",
+        "rows": [
+          "cp-budget/2",
+          "cp-budget/2a"
+        ]
+      },
+      {
+        "content_hash": "sha256:a9ce0a4f2728ef3357b83bc7eaaaac63af618e61b3004263e3d81e451ab7888a",
+        "file": "signoff/yield/reports/term3.json",
+        "rows": [
+          "cp-budget/3"
+        ]
+      },
+      {
+        "content_hash": "sha256:37453fdffe079e5b5058a55f925602f78dd21fdcb00baa8b5c7fa9cb355d92da",
+        "file": "signoff/yield/reports/term4.json",
+        "rows": [
+          "cp-budget/4"
+        ]
+      },
+      {
+        "content_hash": "sha256:0e1a21d5672cc6b679197b7d52c69c236a612f1974abadd24ce2e59858889e43",
+        "file": "signoff/yield/reports/vco-adjacent-pair-ratio.json",
+        "rows": [
+          "vco-band-coverage/adjacent-pair-ratio"
+        ]
+      }
+    ],
+    "6.digital": {
+      "not_applicable": {
+        "spec": {
+          "content_hash": "sha256:0b2798d5b272b298fc04a90d1c7286b14c18471c0c86022f737c43f0196c9a4c",
+          "file": "signoff/yield/digital/spec-rows.json"
+        },
+        "statement": {
+          "content_hash": "sha256:d8b9f60cb0483a606d0c979f3acf9463b5608828ce2dd65fb1d65511c699d03f",
+          "file": "signoff/yield/digital/item6-statement.json"
+        }
+      }
+    },
     "9.analog": {
       "content_hash": "sha256:c8ece3842b207fb006a1c2cb3b4c237bb784941c2443177e3ed6daec14bf332e",
       "file": "signoff/attest/item-9.analog.evidence.json"
@@ -30,5 +80,31 @@
       "file": "signoff/attest/item-9.digital.evidence.json"
     }
   },
-  "kind": "mixed-signal"
+  "kind": "mixed-signal",
+  "spec_rows": {
+    "6.analog": [
+      {
+        "id": "cp-budget/1"
+      },
+      {
+        "id": "cp-budget/2"
+      },
+      {
+        "id": "cp-budget/2a"
+      },
+      {
+        "id": "cp-budget/3"
+      },
+      {
+        "id": "cp-budget/4"
+      },
+      {
+        "id": "vco-band-coverage/adjacent-pair-ratio"
+      },
+      {
+        "gap": "a deterministic noise-injection/ISF bound, not a sampled population: no per-draw sample array exists for klt yield (DR-032); an estimate would need the ISF assembly DR-030/DR-031 left unassembled",
+        "id": "period-jitter/random-bound"
+      }
+    ]
+  }
 }

@@ -215,6 +215,17 @@ jobs:
         # procedure named instead of as a bare report diff.
         run: bash signoff/run-signoff.sh --check
 
+      - name: signoff/tests (yield-evidence negative control, needs the klt above)
+        # The item-6 yield tests run twice: the pre-klt unit-test step above
+        # covers the klt-free legs (derivation determinism, the hash chain,
+        # the term-1 statistic), while this step -- after klt and its
+        # klt-yield-native extra are installed -- runs the leg that re-derives
+        # a sample set and envelope over a perturbed per-draw record and
+        # asserts the committed envelope moves (issue #1081's negative
+        # control). Re-discovering the whole directory is deliberate: the
+        # skipUnless gate makes the other classes no-ops here.
+        run: python3 -m unittest discover -s signoff/tests -t signoff/tests
+
       - name: sim/lib/check-characterization-coverage.sh (aggregated report vs. sim/ tree)
         # Why: the script's own header and its docs/claim-checker-inventory.md row.
         run: bash sim/lib/check-characterization-coverage.sh
