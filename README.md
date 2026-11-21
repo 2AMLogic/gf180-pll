@@ -68,7 +68,7 @@ The prose above is the human summary. The **machine verdict of record** is
 [T1 evidence checklist](https://github.com/2AMLogic/klayout-tools/blob/main/docs/design-evidence-tiers.md)
 rendered `met` or `unmet` with a reason, graded by `klt signoff --manifest`
 from the evidence this repo actually cites, and re-checked in CI so it cannot
-go stale. Today it reads **6 of 22 rows met** — items 1, 9 and 10, each on
+go stale. Today it reads **8 of 22 rows met** — items 1, 2, 9 and 10, each on
 both the `analog` and `digital` partitions, citing the evidence envelopes
 committed under `signoff/attest/`.
 
@@ -77,8 +77,10 @@ particular, three quite different situations all render as `no_evidence`, and
 the four items with no `klt` verb behind them (1, 2, 9 and 10) are graded on
 an **artifact-anchored** envelope that pins the audited artifact by path and
 content hash. This repo cites such envelopes for items 1 and 9 on each
-partition and for item 10 once; item 2 (layout) is deliberately left uncited
-rather than turned green by an unrelated report. No hand-maintained met/unmet
+partition and for items 2 and 10 once; item 2's pins the committed `pll_top`
+GDS itself — its content hash, the assembly generator and that generator's
+geometry digest — so it is a claim about the artifact, not a DRC or LVS
+result (those are items 3 and 4, still `unmet`). No hand-maintained met/unmet
 checklist is kept anywhere in this repository; if a claim about T1 status
 conflicts with that report, the report wins.
 

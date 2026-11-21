@@ -11,13 +11,19 @@
 # (a re-run DRC, an edited netlist, a moved file) re-renders differently, and
 # the diff fails the build instead of the verdict quietly rotting.
 #
+# Before any rendering, both modes re-attest the committed T1 item-2 layout
+# envelope with the same pinned klt (`klt signoff --attest 2 --check`), so a
+# layout stream that changed underneath it fails at the envelope with the
+# re-attest procedure named, not as a bare report diff (issue #1080).
+#
 # Run from anywhere; paths below are resolved against the repo root, and `klt`
 # is invoked *from* the repo root so that relative evidence paths inside the
 # manifest mean the same thing here, in CI, and on a reviewer's machine.
 #
 # Exit codes:
 #   0  the report was written (default mode), or matches (--check)
-#   1  the committed report is stale (--check), or the manifest is bad
+#   1  the committed report is stale (--check), the manifest is bad, or the
+#      item-2 layout envelope no longer reproduces against its stream
 #   2  `klt` is not installed, or the `klt` on PATH is not the version
 #      .github/workflows/ci.yml pins (see "The version pin" below)
 
@@ -37,7 +43,7 @@ case "${1-}" in
   "") ;;
   --check) mode="check" ;;
   -h | --help)
-    sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     exit 0
     ;;
   *)
@@ -115,6 +121,55 @@ if [ "$KLT_VERSION" != "klt ${PIN}" ]; then
 fi
 
 echo "klt: $(command -v klt) (${KLT_VERSION}, the pinned release)" >&2
+
+# --- T1 item 2: re-attest the committed layout envelope ----------------------
+#
+# `klt signoff --attest 2` (klayout-tools#4188; on this repo's pin since the
+# 0.9.2 bump, issue #1079) is the producer of record for the item-2 envelope
+# -- never hand-written, and not signoff/t1_attest.py, which stays stdlib-only
+# and inventory-shaped (its CI step runs before klt is installed). The
+# envelope pins the committed pll_top.gds by content hash and records the
+# assembly generator with its geometry digest; `--check` re-attests read-only
+# and exits 0 only while the envelope still reproduces against the stream --
+# it must be handed the same --generator / --regenerated-hash the envelope
+# records (a bare `--input` re-attest drops the regeneration block and every
+# committed envelope would read `drifted`), and it re-hashes the stream, so a
+# GDS that moved underneath it -- the #753 C2 swap will -- is meant to fail
+# here, at the envelope, with the procedure named, instead of quietly
+# re-grading unmet in the report diff below. The render that follows adds the
+# geometry cross-check: the grader re-derives the stream's geometry digest and
+# flags the row `stale_evidence` if the recorded regeneration hash disagrees.
+# Trees without the committed envelope (the unit-test fixtures') skip this;
+# their manifests cite nothing, so the render is what grades them.
+ITEM2_ENVELOPE="signoff/attest/item-2.evidence.json"
+ITEM2_STREAM="layout/evidence/pll-top-layout/pll_top.gds"
+ITEM2_GENERATOR="cd layout && python3 -m pll_top.top_level.assemble --outdir evidence/pll-top-layout"
+ITEM2_GEOMETRY="sha256:bfa2f4b63b0aaf523da3345d84d67c5be7b03698419f61b23dfa3ac130db6f4a"
+if [ -f "$ITEM2_ENVELOPE" ]; then
+  attest=0
+  klt signoff --attest 2 --input "$ITEM2_STREAM" \
+    --generator "$ITEM2_GENERATOR" \
+    --regenerated-hash "$ITEM2_GEOMETRY" --hash-kind geometry \
+    --check "$ITEM2_ENVELOPE" >&2 || attest=$?
+  if [ "$attest" -ne 0 ]; then
+    echo "error: $ITEM2_ENVELOPE no longer reproduces against $ITEM2_STREAM" >&2
+    echo "       (\`klt signoff --attest 2 --check\` exited $attest -- the stream" >&2
+    echo "       moved since the envelope pinned it, or a check failed)." >&2
+    echo "       Re-attesting is an evidence step, not mechanical: regenerate the" >&2
+    echo "       stream with the recorded generator, read the geometry digest" >&2
+    echo "       \`klt stats --format json\` prints for the regenerated file, then:" >&2
+    echo "         klt signoff --attest 2 --input $ITEM2_STREAM \\" >&2
+    echo "           --generator '$ITEM2_GENERATOR' \\" >&2
+    echo "           --regenerated-hash sha256:<geometry digest> --hash-kind geometry \\" >&2
+    echo "           -o $ITEM2_ENVELOPE" >&2
+    echo "       then update the 2.analog / 2.digital content_hash pins in" >&2
+    echo "       signoff/block-manifest.json to the stream hash the command prints," >&2
+    echo "       the ITEM2_GEOMETRY pin above in this script, and re-run it" >&2
+    echo "       (signoff/README.md, 'Reproducing')." >&2
+    exit 1
+  fi
+  echo "item-2 envelope: current against $ITEM2_STREAM." >&2
+fi
 
 # No --tiers-doc: the report is graded against the checklist bundled inside
 # the pinned `klt` release itself (it bundles all eleven T1 items), so

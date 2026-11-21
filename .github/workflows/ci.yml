@@ -209,7 +209,10 @@ jobs:
         # rotting: an evidence artifact that changed after the manifest pinned
         # its content_hash re-grades as unmet/stale_evidence, the committed
         # report stops matching, and this step fails instead of a stale green
-        # row surviving.
+        # row surviving. The same step first re-attests the committed T1 item-2
+        # layout envelope (`klt signoff --attest 2 --check`, issue #1080), so a
+        # pll_top.gds that moved underneath it fails here with the re-attest
+        # procedure named instead of as a bare report diff.
         run: bash signoff/run-signoff.sh --check
 
       - name: sim/lib/check-characterization-coverage.sh (aggregated report vs. sim/ tree)
