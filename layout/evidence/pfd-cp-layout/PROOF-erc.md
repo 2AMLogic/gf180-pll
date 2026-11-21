@@ -1,5 +1,14 @@
 # `pfd_cp` structural power-delivery ERC (T1 checklist item 11, issue #565)
 
+> **Status update (2026-11-21, issue #1085): the "cannot be expressed" below is
+> obsolete.** [klayout-tools#2540](https://github.com/2AMLogic/klayout-tools/issues/2540)
+> shipped literal well-side selectors, and the 0.9.2 pin carries them. Both
+> well classes are now *declared and graded* in
+> [`erc-ties-20261121/`](erc-ties-20261121/RECORD.md) — the tool-limitation
+> disclosure is superseded by a computed `erc.missing_tie` result on the PSRC
+> well (a valid outcome, not a layout defect; see the section at the end).
+> Older text below is left as written.
+
 The first `klt erc` supply-spec run committed for this block. It targets the
 T1/bronze design-evidence checklist's eleventh item, *"Power delivery
 (structural)"* (klayout-tools#2025, bundled with klt 0.6.0 as
@@ -482,3 +491,48 @@ KLayout pin). Verdicts are unchanged from 0.8.0: `status: not_checked`,
 `erc_status: clean`, zero findings. The report gains fields 0.8.0 did not emit; the
 input and spec content hashes are unchanged.
 `erc_coverage.layers_in_stream_without_declaration` is now `["36/10"]` (Metal2_Label, a text-only layer): 0.8.0 did not emit the key, 0.9.2 does. The layer is the deliberate omission already justified in `erc-supply-spec.json` (it carries bias/control or signal net text, none of it a declared supply net), so it needs no new disclosure.
+
+## Well-tie grading on the 0.9.2 box selectors (issue #1085)
+
+The obstacle this record measured is gone:
+[klayout-tools#2540](https://github.com/2AMLogic/klayout-tools/issues/2540)
+gave `ties[]` the literal well-side class selectors
+`well_requires_boxes`/`well_excludes_boxes`, and the CI pin
+(`klayout-tools==0.9.2`) ships them. They select whole merged wells by
+interaction with caller-named boxes, so a two-class tub with no marker layer —
+exactly this block — is declarable without a layout edit.
+
+[`erc-ties-20261121/`](erc-ties-20261121/RECORD.md) holds the first graded
+envelope: a copy of the committed spec with the `ties_disclosure` replaced by
+the two-class partition (the box `[180, 8, 181, 9]` µm, strictly inside the
+PSRC well, selects it; its complement selects the fourteen `VDD` wells) and
+with the stackup names mapped to the gf180mcu antenna table's canonical
+spelling so `--pdk gf180mcu` grades the antenna half in the same run. On the
+pinned wheel (klt 0.9.2, KLayout 0.30.13):
+
+- `erc_status: violations` (exit 3) with exactly **one** finding —
+  `erc.missing_tie`, *"well/tub tap is not connected to declared net 'PSRC'"*,
+  bounding box `[176820, 7755, 279820, 12555]` dbu =
+  `(176.820, 7.755)`–`(279.820, 12.555)` µm: the fifteenth well, as predicted.
+  The tool matches a tie's target net by label and no `PSRC` text exists in
+  this stream, so the real body tie (LVS net `$30`, above) is invisible to it.
+  A reported finding is the honest computed outcome; the negative control in
+  the RECORD (the same entry retargeted to `VDD` in a scratch spec reports the
+  same rule at the same box naming `VDD`) shows the finding tracks the
+  declared net, not the selector.
+- Both classes appear in `erc_coverage.checked_by_well_assertion`; nothing is
+  skipped, degenerate or disclosed — `erc_coverage.inapplicable` is empty
+  where the deck-only run carried `ties_disclosed_tool_limitation` and
+  `substrate_isolation_undecidable`.
+- The pinned item-11 ERC-half grader
+  (`klayout_tools.signoff_power_delivery._resolve_erc_supply_spec`) resolves
+  the spec and returns `supply_not_continuous`. Item 11 stays `unmet` — now by
+  measurement, not by disclosure.
+- The antenna half is unchanged (gate4/`VSS` 558.595333 and gate11/`VDD`
+  771.320667 at Metal1, the two rail-tied false positives already documented),
+  as the tool's contract guarantees: a `ties[]` declaration cannot alter
+  anything but `erc.missing_tie`.
+
+The committed `erc-supply-spec.json` and `erc-report.json` at this directory
+are untouched — the dated directory carries its own spec copy so the older
+envelope keeps resolving its own hashes.
