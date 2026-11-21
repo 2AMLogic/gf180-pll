@@ -638,5 +638,150 @@ class ReferencePhaseTransferRepin(unittest.TestCase):
         self.assertIn("**Overall: FAIL**", record)
 
 
+class PeriodJitterRepin(unittest.TestCase):
+    """The `period-jitter` re-qualification (#828).
+
+    Successor `20261121-184803-04533bf` supersedes `20260906-095050-3a8a6ef`
+    (the #273 wrap-safe-gate re-measure) and re-runs the whole 45-point
+    mandated grid the six-record union covered. Expected findings: ZERO
+    against current evidence -- the only flips the generator reports are the
+    two `ferr` FAILs of `20260906-063728-f3c9c23` that `3a8a6ef` already
+    superseded with PASS. Everything here is re-derived from the committed
+    records, the generated tables and the document.
+    """
+
+    NEW_ID = "20261121-184803-04533bf"
+    NEW_REC = SIM_DIR / "period-jitter" / "records" / f"{NEW_ID}.md"
+    SUPERSEDED_ID = "20260906-095050-3a8a6ef"
+    #: every predecessor pair the document tabulates
+    PAIRS = (
+        "20260905-192724-a2ba48f",
+        "20260906-015602-f9bef9d",
+        "20260906-024225-12bccda",
+        "20260906-063728-f3c9c23",
+        "20260906-080511-69b36ef",
+        "20260906-095050-3a8a6ef",
+    )
+
+    #: tj_rms_pct at the overlap corner, three ways
+    OVERLAP = {
+        "first record": 0.23339,       # 20260905-192724-a2ba48f
+        "ngspice-46 f6eeac7": 0.218059,
+        "this record": 0.21977,
+    }
+
+    @staticmethod
+    def _norm(text):
+        return text.replace("\u2212", "-")
+
+    def _prose(self):
+        return re.sub(r"\s+", " ", self._norm(_doc_text()))
+
+    def _record(self):
+        return self._norm(self.NEW_REC.read_text(encoding="utf-8"))
+
+    def _compare(self, old_id):
+        return record_delta.compare(
+            SIM_DIR / "period-jitter" / "records" / f"{old_id}.md", self.NEW_REC)
+
+    def test_the_record_exists_supersedes_and_passes_on_the_new_pin(self):
+        self.assertTrue(self.NEW_REC.is_file(), f"{self.NEW_REC} missing")
+        record = self._record()
+        self.assertIn(f"- **Supersedes**: {self.SUPERSEDED_ID}", record)
+        self.assertIn("f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7", record)
+        self.assertIn("`batch` execution backend", record)
+        self.assertIn("45 point grid (process x temperature x supply x vs), "
+                      "45 completed", record)
+        self.assertIn("**Overall: PASS**", record)
+        # The union coverage the Supersedes note claims, by its endpoints.
+        self.assertIn("20260905-192724-a2ba48f", record)
+        self.assertIn("20260906-080511-69b36ef", record)
+
+    def test_zero_findings_against_every_current_predecessor(self):
+        for old_id in ("20260905-192724-a2ba48f", "20260906-015602-f9bef9d",
+                       "20260906-024225-12bccda", "20260906-080511-69b36ef",
+                       "20260906-095050-3a8a6ef"):
+            with self.subTest(old=old_id):
+                _, findings = self._compare(old_id)
+                self.assertEqual(findings, 0,
+                                 "an unexpected verdict flip vs " + old_id)
+
+    def test_the_two_findings_vs_f3c9c23_are_the_273_wrap_defect(self):
+        lines, findings = self._compare("20260906-063728-f3c9c23")
+        self.assertEqual(findings, 2)
+        rows = _flip_rows(lines)
+        self.assertEqual(sorted(r[0] for r in rows),
+                         ["ff_27c_2.97v_vs1p638", "ff_27c_3.63v_vs2p200"])
+        for corner, old, new in rows:
+            with self.subTest(corner=corner):
+                self.assertIn("ferr", old)
+                self.assertNotEqual(old, "PASS")
+                self.assertTrue(new.startswith("PASS"),
+                                f"new verdict {new!r} must be PASS")
+        # ... and the successor agrees with the current evidence record.
+        _, findings = self._compare(self.SUPERSEDED_ID)
+        self.assertEqual(findings, 0)
+
+    def test_headline_range_prose_matches_the_records_spread_table(self):
+        record = self._record()
+        m = re.search(r"\| `jitter` \| `tj_rms_pct` \| (\d+\.\d+) "
+                      r"\(`[^`]+`\) \| (\d+\.\d+) \(`[^`]+`\) \|",
+                      record)
+        self.assertIsNotNone(m, "tj_rms_pct spread row not found in record")
+        lo, hi = float(m.group(1)), float(m.group(2))
+        self.assertAlmostEqual(hi / lo, 0.279518 / 0.0463528, places=5)
+        self.assertIn(f"**0.0508-0.2691 -> {lo:.4f}-{hi:.4f}**",
+                      self._prose())
+        self.assertIn(f"worst-case margin of {1.0 / hi:.1f}x", self._prose())
+
+    def test_the_worst_per_point_move_matches_both_by_corner_csvs(self):
+        def load(rec_id):
+            with (SIM_DIR / "period-jitter" / "corners" / rec_id
+                  / "period_jitter_by_corner.csv").open(encoding="utf-8") as fh:
+                rows = csv.DictReader(ln for ln in fh if not ln.startswith("#"))
+                return {r["corner_id"]: float(r["tj_rms_pct"]) for r in rows}
+        old = load("20260906-063728-f3c9c23")
+        new = load(self.NEW_ID)
+        shared = set(old) & set(new)
+        corner = max(shared, key=lambda c: abs(new[c] - old[c]) / old[c])
+        rel = abs(new[corner] - old[corner]) / old[corner] * 100
+        self.assertEqual(corner, "ss_27c_3.63v_vs1p953")
+        self.assertIn(f"(`ss`/27 C/3.63 V: {old[corner]:.4f} -> "
+                      f"{new[corner]:.4f}", self._prose())
+        self.assertIn(f"**-{rel:.1f} % relative**", self._prose())
+
+    def test_overlap_figures_agree_between_the_doc_and_the_record(self):
+        record, prose = self._record(), self._prose()
+        first, v46, v47 = (self.OVERLAP[k] for k in
+                           ("first record", "ngspice-46 f6eeac7",
+                            "this record"))
+        # The doc's overlap table and the record's exposure bullet state the
+        # same three figures.
+        self.assertIn(f"| `tj_rms_pct` (max 1.0) | {first} PASS | "
+                      f"{v46} PASS | {v47} PASS |", prose)
+        for v in (first, v46, v47):
+            self.assertIn(str(v), record)
+        # The two derived steps, as percentages of the predecessor value.
+        self.assertIn(f"**{(v46 - first) / first * 100:+.1f} % relative**",
+                      record)
+        self.assertIn(f"**{(v47 - v46) / v46 * 100:+.1f} %**", prose)
+
+    def test_the_disposition_row_names_the_successor(self):
+        self.assertIn(
+            "| `period-jitter` | 6 | **re-qualified here** "
+            f"([`{self.NEW_ID}`](period-jitter/records/{self.NEW_ID}.md)) |",
+            _doc_text())
+        self.assertNotIn("| `period-jitter` | 6 | still owed under #828 |",
+                         _doc_text())
+
+    def test_every_documented_pair_uses_the_committed_successor(self):
+        text = _doc_text()
+        for old_rel, new_rel in REGEN.findall(text):
+            if "period-jitter" in old_rel:
+                self.assertEqual(
+                    new_rel, f"sim/period-jitter/records/{self.NEW_ID}.md")
+                self.assertIn(old_rel.split("/")[-1][:-3], self.PAIRS)
+
+
 if __name__ == "__main__":
     unittest.main()

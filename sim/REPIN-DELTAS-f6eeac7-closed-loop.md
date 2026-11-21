@@ -18,7 +18,7 @@ per-directory increments, each `Part of #828`. Nothing here edits a record.
 |---|---|---|
 | `reference-spur` | `20260816-132150-5f405e7` | **re-qualified here** (`20261118-212630-1649033`) |
 | `reference-phase-transfer` | 3 | **re-qualified here** ([`20261120-151718-d0000b5`](reference-phase-transfer/records/20261120-151718-d0000b5.md)) |
-| `period-jitter` | 6 | still owed under #828 |
+| `period-jitter` | 6 | **re-qualified here** ([`20261121-184803-04533bf`](period-jitter/records/20261121-184803-04533bf.md)) |
 | `supply-sensitivity` | 12 | still owed under #828 |
 | `lock-time` | 5 | still owed under #828 |
 | `pll-top-smoke` | `20260802-160926-8456ff3` | **re-qualified** ([`20261120-025417-fe7841e`](pll-top-smoke/records/20261120-025417-fe7841e.md)) |
@@ -335,6 +335,331 @@ The last column identifies the corner with the largest relative change.
 **Stated limits**: identical in both records.
 
 _2 finding(s) above need a human disposition._
+
+## `period-jitter`
+
+The deterministic period-jitter grid -- the full mandated 45-point PVT matrix
+(five MOS bundles x -40/27/125 C x 2.97/3.30/3.63 V), one job per point on
+the `batch` backend -- re-run under `f6eeac7` as a single new record,
+[`20261121-184803-04533bf`](period-jitter/records/20261121-184803-04533bf.md)
+(45/45 ok, **overall PASS**). The `SOURCES` stamp was verified before the
+grid was spent: a one-job probe at `typical_27c_3.30v_vs1p795` (fleet job
+`gf180-pll-sim-typical_27c_3.30v_vs1p795-c552a7bc`, `--no-write`, nothing
+minted) returned `open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7` in its
+collected `ngspice.env`, and only then was the 45-job grid submitted. 46
+fleet jobs total, ids `gf180-pll-sim-<corner-id>-<8-hex>`; the record's
+**Execution hosts** line carries the per-point host tally.
+
+The submission was interrupted once at the submitting host: the first
+attempt's driver was killed 24 points in, and the record was completed by
+`--resume` under the same record id -- 23 points replayed from that
+attempt's collected logs (each re-parsed to its full declared measurement
+set, no simulator call), 22 re-run (the record's **Resumed run** field
+carries the split and the wall-clock caveat). Nothing was minted under a
+second id and no evidence was discarded. One side effect is disclosed in the
+record and worth restating: the minting attempt sampled git state with
+attempt 1's own untracked evidence already under `corners/`, so the record's
+tree flag reads **DIRTY**; no tracked file differed from `04533bf7` -- the
+flag names that resume artifact, not a tree edit.
+
+**Supersedes: `20260906-095050-3a8a6ef`** -- the campaign's latest record,
+the #273 wrap-safe-gate re-measure -- and through it the whole union: the
+re-run covers every point of `20260905-192724-a2ba48f` (1),
+`20260906-015602-f9bef9d` (4), `20260906-024225-12bccda` (8),
+`20260906-063728-f3c9c23` (18) and `20260906-080511-69b36ef` (16) -- 47
+predecessor runs at the 45 distinct points the new grid measures once each.
+
+### What changed besides the PDK
+
+The six predecessors executed on ngspice-46 (the first on macOS/arm64, the
+rest on Linux/x86-64, all local runs); this record executed on the fleet
+image's ngspice-47 (built 2026-11-14). The composed DUT differs from the
+September snapshots in the same design edits the `reference-spur` re-run
+carries -- `XCF5` moves to the option-B MIM (`m2m3_noshield` ->
+`m4m5_noshield`, DR-042, same 31.4 um x 31.4 um `m=1` geometry) -- plus, for
+this campaign's snapshots, the DR-014 lock-detector window-trim ports on
+`XLD`/`delaywin_3v3` (`LDT0`-`LDT3`), which post-date them. The stimulus
+deck, solver options, `.tran` line and every measurement card are unchanged.
+The deck carries the nonlinear-moscap `m=` trigger of #153/#926 (4x
+`cap_nmos_03v3_b` in `loop_filter`, 2x `cap_nmos_03v3` in `vco`), so per #932
+the movement below is **not attributable to the PDK alone**.
+
+### Overlap point: pinned ngspice-46 under `f6eeac7`, one corner
+
+```bash
+SIM_NGSPICE_BIN=$HOME/.local/opt/ngspice-46/bin/ngspice \
+PATH=$HOME/.local/opt/ngspice-46/bin:$PATH \
+  python3 sim/run_corners.py period-jitter --backend local \
+  --corners typical --temps 27 --supply 3.3 --supply-tol 0 \
+  --axis vs=vs1p795 --timeout 5400 --no-write -j 1
+```
+
+Same deck, same PDK pin (`f6eeac7`), `typical_27c_3.30v_vs1p795`, 1/1 ok,
+**287.0 s wall clock** on this host. Not minted as a record (`--no-write`).
+This is also the only corner the first record `20260905-192724-a2ba48f`
+measured, read here three ways (its corner-id predates the `vs` axis):
+
+| measurement | first record (ngspice-46, `c6d73a3`, macOS) | ngspice-46, `f6eeac7` (local) | this record (ngspice-47, `f6eeac7`, batch) |
+|---|---|---|---|
+| `tj_rms_pct` (max 1.0) | 0.23339 PASS | 0.218059 PASS | 0.21977 PASS |
+| `tj_rms_s` | 1.555757e-11 | 1.453507e-11 | 1.464894e-11 |
+| `tj_pp_s` | 6.768892e-11 | 6.768740e-11 | 7.037071e-11 |
+| `fout` (Hz) | 1.500010e+08 | 1.500130e+08 | 1.500420e+08 |
+| `nmeas` | 5.99987 | 5.99941 | 6.00028 |
+| `dn_lvl` (min 8.9e-4) | 0.174982 | 0.174946 | 0.174987 |
+
+- Predecessor -> local overlap: `tj_rms_pct` moves **-6.6 % relative** on an
+  identical deck, combining the PDK, both DUT netlist edits and the host
+  change.
+- Local ngspice-46 -> batch ngspice-47 (PDK and netlist fixed): **+0.8 %**
+  at this corner. The lock-point columns agree to better than 0.04 % across
+  all three runs.
+- One corner only; no claim is made for the other 44.
+
+### Deltas per predecessor
+
+**No per-corner verdict changed against current evidence, and no stated
+limit moved.** The only flips the generator reports are against
+`20260906-063728-f3c9c23`'s two `ferr` FAILs -- the #273 wrap-defect
+verdicts `20260906-095050-3a8a6ef` already superseded with PASS; this record
+agrees with `3a8a6ef` on all 8 graded rows of that pair (table below).
+Headline movement across the union: `tj_rms_pct` **0.0508-0.2691 ->
+0.0464-0.2795**, worst per-point move **-23.2 % relative**
+(`ss`/27 C/3.63 V: 0.1732 -> 0.1331; the same re-pin moves `ff`/-40 C/3.30 V
+0.2477 -> 0.1935, -21.9 %), every point inside the 1.0 % RMS line with a
+worst-case margin of 3.6x. Nothing moved past a tolerance, so this increment
+files no new issue or decision record.
+
+#### vs `20260906-015602-f9bef9d` (four process-corner extremes at 27 °C/3.30 V)
+
+Reproduce with:
+
+```bash
+python3 sim/lib/record_delta.py \
+  sim/period-jitter/records/20260906-015602-f9bef9d.md \
+  sim/period-jitter/records/20261121-184803-04533bf.md
+```
+
+| topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
+|---|---|---|---|---|---|---|---|
+| `integration` | `dn_lvl` | min=8.900000e-04 | 0.16218..0.212955 | 0.162163..0.212059 | 0.000896 | 0.4207 | `ss_27c_3.30v_vs1p633` |
+| `integration` | `dt_int_mean` | max=1.000000e-10 | 7.358352e-11..7.644729e-11 | 7.354662e-11..7.650045e-11 | 6.423400e-13 | 0.8683 | `fs_27c_3.30v_vs1p764` |
+| `integration` | `up_lvl` | — | 0.150014..0.367994 | 0.150666..0.495535 | 0.127541 | 34.66 | `ss_27c_3.30v_vs1p633` |
+| `jitter` | `c2c_rms_s` | — | 1.496479e-11..2.367510e-11 | 1.460604e-11..2.217640e-11 | 4.758540e-12 | 24.57 | `fs_27c_3.30v_vs1p764` |
+| `jitter` | `n_cycles` | — | 313..314 | 313..314 | 0 | 0 | `—` |
+| `jitter` | `tie_pp_s` | — | 4.678269e-11..7.348412e-11 | 3.533734e-11..5.852974e-11 | 2.511759e-11 | 36.33 | `ss_27c_3.30v_vs1p633` |
+| `jitter` | `tie_rms_s` | — | 9.072738e-12..1.615206e-11 | 6.984765e-12..1.067191e-11 | 7.209413e-12 | 48.29 | `ss_27c_3.30v_vs1p633` |
+| `jitter` | `tj_pp_s` | — | 3.937769e-11..6.629769e-11 | 3.888072e-11..6.771119e-11 | 1.684124e-11 | 30.22 | `fs_27c_3.30v_vs1p764` |
+| `jitter` | `tj_rms_pct` | max=1 | 0.133303..0.207204 | 0.133959..0.197684 | 0.034731 | 20.59 | `fs_27c_3.30v_vs1p764` |
+| `jitter` | `tj_rms_s` | — | 8.886586e-12..1.381374e-11 | 8.930497e-12..1.317901e-11 | 2.315653e-12 | 20.59 | `fs_27c_3.30v_vs1p764` |
+| `lock` | `ferr` | min=-0.001, max=0.001 | -6.779880e-06..1.387370e-05 | -3.036170e-05..-3.202910e-08 | 4.423540e-05 | 318.8 | `ff_27c_3.30v_vs1p931` |
+| `lock` | `ffb` | — | 2.499790e+07..2.500100e+07 | 2.499990e+07..2.500130e+07 | 3400 | 0.0136 | `ff_27c_3.30v_vs1p931` |
+| `lock` | `fout` | min=1.485000e+08, max=1.515000e+08 | 1.499930e+08..1.500250e+08 | 1.499920e+08..1.500130e+08 | 21000 | 0.014 | `ss_27c_3.30v_vs1p633` |
+| `lock` | `lock_lvl` | — | 5.784600e-09..3.3 | 5.784230e-09..3.3 | 3.700000e-13 | 0.006396 | `ss_27c_3.30v_vs1p633` |
+| `lock` | `nmeas` | min=5.99, max=6.01 | 6.00002..6.00151 | 5.99966..6.00019 | 0.00132 | 0.02199 | `ff_27c_3.30v_vs1p931` |
+| `ungrouped` | `phi_a` | — | -7.616100e-11..1.580010e-09 | -7.798000e-11..2.879110e-09 | 1.299100e-09 | 82.22 | `ss_27c_3.30v_vs1p633` |
+| `ungrouped` | `phi_b` | — | -9.003470e-11..1.574980e-09 | -4.761830e-11..2.879140e-09 | 1.304160e-09 | 82.8 | `ss_27c_3.30v_vs1p633` |
+| `ungrouped` | `tclk20` | — | 1.333110e-07..1.333390e-07 | 1.333220e-07..1.333400e-07 | 1.900000e-11 | 0.01425 | `ss_27c_3.30v_vs1p633` |
+| `ungrouped` | `tfb5` | — | 1.999920e-07..2.000170e-07 | 1.999900e-07..2.000010e-07 | 2.700000e-11 | 0.0135 | `ff_27c_3.30v_vs1p931` |
+
+**Per-corner verdicts**: unchanged on all 16 graded rows.
+
+**Stated limits**: identical in both records.
+
+**Measurement coverage differs between the two records:**
+
+- in `20261121-184803-04533bf` only: `lock`/`dphi`
+- in `20261121-184803-04533bf` only: `lock`/`ferr_fb`
+
+#### vs `20260906-024225-12bccda` (the `typical` temperature x supply plane)
+
+Reproduce with:
+
+```bash
+python3 sim/lib/record_delta.py \
+  sim/period-jitter/records/20260906-024225-12bccda.md \
+  sim/period-jitter/records/20261121-184803-04533bf.md
+```
+
+| topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
+|---|---|---|---|---|---|---|---|
+| `integration` | `dn_lvl` | min=8.900000e-04 | 0.148101..0.211655 | 0.14837..0.212098 | 0.000985 | 0.6463 | `typical_-40c_3.30v_vs1p999` |
+| `integration` | `dt_int_mean` | max=1.000000e-10 | 6.875859e-11..8.085560e-11 | 6.897417e-11..8.080808e-11 | 5.696100e-13 | 0.7747 | `typical_-40c_2.97v_vs1p644` |
+| `integration` | `up_lvl` | — | 0.325179..0.53305 | 0.318307..0.533521 | 0.053189 | 10.33 | `typical_125c_2.97v_vs1p270` |
+| `jitter` | `c2c_rms_s` | — | 1.281454e-11..3.153120e-11 | 1.357541e-11..3.205192e-11 | 3.233210e-12 | 12.31 | `typical_27c_2.97v_vs1p478` |
+| `jitter` | `n_cycles` | — | 314..314 | 314..314 | 0 | 0 | `—` |
+| `jitter` | `tie_pp_s` | — | 3.424473e-11..1.726805e-10 | 3.606053e-11..1.658866e-10 | 7.021390e-11 | 86.12 | `typical_27c_3.63v_vs2p094` |
+| `jitter` | `tie_rms_s` | — | 6.583296e-12..4.011189e-11 | 8.439930e-12..3.752954e-11 | 1.712823e-11 | 96.87 | `typical_27c_3.63v_vs2p094` |
+| `jitter` | `tj_pp_s` | — | 3.535206e-11..8.070263e-11 | 3.464833e-11..8.333656e-11 | 6.896710e-12 | 10.4 | `typical_125c_3.30v_vs1p549` |
+| `jitter` | `tj_rms_pct` | max=1 | 0.11114..0.269086 | 0.116654..0.279518 | 0.02777 | 11.03 | `typical_-40c_2.97v_vs1p644` |
+| `jitter` | `tj_rms_s` | — | 7.407988e-12..1.793773e-11 | 7.775906e-12..1.863092e-11 | 1.851120e-12 | 11.03 | `typical_-40c_2.97v_vs1p644` |
+| `lock` | `ferr` | min=-0.001, max=0.001 | -1.488380e-05..2.979480e-05 | 6.391510e-07..3.526560e-05 | 2.775978e-05 | 518 | `typical_27c_2.97v_vs1p478` |
+| `lock` | `ffb` | — | 2.499810e+07..2.500590e+07 | 2.500020e+07..2.500620e+07 | 5200 | 0.0208 | `typical_-40c_2.97v_vs1p644` |
+| `lock` | `fout` | min=1.485000e+08, max=1.515000e+08 | 1.499850e+08..1.500430e+08 | 1.499760e+08..1.500390e+08 | 67000 | 0.04465 | `typical_27c_3.63v_vs2p094` |
+| `lock` | `lock_lvl` | — | 4.150140e-09..5.737850e-08 | 4.064670e-09..5.734610e-08 | 3.450700e-10 | 6.397 | `typical_-40c_3.63v_vs2p330` |
+| `lock` | `nmeas` | min=5.99, max=6.01 | 5.99932..6.00066 | 5.99885..6.00032 | 0.00181 | 0.03016 | `typical_27c_3.63v_vs2p094` |
+| `ungrouped` | `phi_a` | — | 1.743470e-09..3.481720e-09 | 1.666420e-09..3.308540e-09 | 6.068700e-10 | 17.43 | `typical_125c_2.97v_vs1p270` |
+| `ungrouped` | `phi_b` | — | 1.743980e-09..3.454480e-09 | 1.664250e-09..3.300270e-09 | 5.909100e-10 | 17.11 | `typical_125c_2.97v_vs1p270` |
+| `ungrouped` | `tclk20` | — | 1.332950e-07..1.333470e-07 | 1.332980e-07..1.333550e-07 | 6.000000e-11 | 0.04501 | `typical_27c_3.63v_vs2p094` |
+| `ungrouped` | `tfb5` | — | 1.999520e-07..2.000150e-07 | 1.999500e-07..1.999980e-07 | 4.200000e-11 | 0.021 | `typical_-40c_2.97v_vs1p644` |
+
+**Per-corner verdicts**: unchanged on all 32 graded rows.
+
+**Stated limits**: identical in both records.
+
+**Measurement coverage differs between the two records:**
+
+- in `20261121-184803-04533bf` only: `lock`/`dphi`
+- in `20261121-184803-04533bf` only: `lock`/`ferr_fb`
+
+#### vs `20260906-063728-f3c9c23` (the `ff` and `ss` planes)
+
+Reproduce with:
+
+```bash
+python3 sim/lib/record_delta.py \
+  sim/period-jitter/records/20260906-063728-f3c9c23.md \
+  sim/period-jitter/records/20261121-184803-04533bf.md
+```
+
+| topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
+|---|---|---|---|---|---|---|---|
+| `integration` | `dn_lvl` | min=8.900000e-04 | 0.123712..0.25407 | 0.124014..0.253821 | 0.001915 | 1.15 | `ff_27c_2.97v_vs1p638` |
+| `integration` | `dt_int_mean` | max=1.000000e-10 | 6.872638e-11..8.525480e-11 | 6.898498e-11..8.509980e-11 | 9.406000e-13 | 1.315 | `ff_-40c_2.97v_vs1p812` |
+| `integration` | `up_lvl` | — | 0.14586..0.766845 | 0.146315..0.72952 | 0.235847 | 41.53 | `ff_-40c_3.30v_vs2p136` |
+| `jitter` | `c2c_rms_s` | — | 5.942038e-12..2.909803e-11 | 5.314212e-12..2.739045e-11 | 6.074660e-12 | 25.24 | `ss_27c_3.63v_vs1p953` |
+| `jitter` | `n_cycles` | — | 314..314 | 314..314 | 0 | 0 | `—` |
+| `jitter` | `tie_pp_s` | — | 1.727898e-11..1.297270e-10 | 2.464492e-11..1.036310e-10 | 4.866798e-11 | 54.19 | `ss_125c_3.63v_vs1p664` |
+| `jitter` | `tie_rms_s` | — | 3.101653e-12..3.217348e-11 | 5.600771e-12..2.383400e-11 | 9.821108e-12 | 89.57 | `ss_125c_2.97v_vs1p093` |
+| `jitter` | `tj_pp_s` | — | 1.807482e-11..7.910367e-11 | 1.602519e-11..7.910342e-11 | 1.449913e-11 | 19.97 | `ff_-40c_3.30v_vs2p136` |
+| `jitter` | `tj_rms_pct` | max=1 | 0.0507647..0.248428 | 0.0463528..0.240717 | 0.054211 | 23.19 | `ss_27c_3.63v_vs1p953` |
+| `jitter` | `tj_rms_s` | — | 3.383759e-12..1.655856e-11 | 3.089687e-12..1.604607e-11 | 3.612190e-12 | 23.17 | `ss_27c_3.63v_vs1p953` |
+| `lock` | `ferr` | min=-0.001, max=0.001 | -1.078020e-05..0.0399985 | -3.803670e-05..4.140200e-05 | 0.0400083 | 1.393e+04 | `ff_-40c_2.97v_vs1p812` |
+| `lock` | `ffb` | — | 2.499720e+07..2.500710e+07 | 2.499510e+07..2.500710e+07 | 6600 | 0.0264 | `ff_-40c_2.97v_vs1p812` |
+| `lock` | `fout` | min=1.485000e+08, max=1.515000e+08 | 1.499760e+08..1.500540e+08 | 1.499530e+08..1.500530e+08 | 46000 | 0.03067 | `ff_125c_2.97v_vs1p431` |
+| `lock` | `lock_lvl` | — | 3.772400e-09..3.63 | 3.771480e-09..3.63 | 3.63 | 7.769e+10 | `ff_-40c_3.30v_vs2p136` |
+| `lock` | `nmeas` | min=5.99, max=6.01 | 5.99923..6.00113 | 5.99882..6.00102 | 0.00134 | 0.02233 | `ff_125c_3.63v_vs1p929` |
+| `ungrouped` | `phi_a` | — | -8.884970e-11..3.985710e-08 | -7.798000e-11..3.987780e-08 | 2.190690e-09 | 82.77 | `ss_27c_3.30v_vs1p633` |
+| `ungrouped` | `phi_b` | — | -1.864790e-10..4.695000e-09 | -2.030200e-10..4.668750e-09 | 2.183630e-09 | 82.8 | `ss_27c_3.30v_vs1p633` |
+| `ungrouped` | `tclk20` | — | 1.332860e-07..1.333550e-07 | 1.332860e-07..1.333750e-07 | 4.100000e-11 | 0.03075 | `ff_125c_2.97v_vs1p431` |
+| `ungrouped` | `tfb5` | — | 1.999440e-07..2.000220e-07 | 1.999430e-07..2.000390e-07 | 5.300000e-11 | 0.0265 | `ff_-40c_2.97v_vs1p812` |
+
+**Per-corner verdict flips** (each one is a finding):
+
+| topology | corner-id | old | new |
+|---|---|---|---|
+| `lock` | `ff_27c_2.97v_vs1p638` | FAIL — ferr max=0.001 (got 0.0399985) | PASS (replayed) |
+| `lock` | `ff_27c_3.63v_vs2p200` | FAIL — ferr max=0.001 (got 0.0399881) | PASS (replayed) |
+
+**Stated limits**: identical in both records.
+
+**Measurement coverage differs between the two records:**
+
+- in `20261121-184803-04533bf` only: `lock`/`dphi`
+- in `20261121-184803-04533bf` only: `lock`/`ferr_fb`
+
+_2 finding(s) above need a human disposition._
+
+#### vs `20260906-080511-69b36ef` (the `fs` and `sf` planes, closing the matrix)
+
+Reproduce with:
+
+```bash
+python3 sim/lib/record_delta.py \
+  sim/period-jitter/records/20260906-080511-69b36ef.md \
+  sim/period-jitter/records/20261121-184803-04533bf.md
+```
+
+| topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
+|---|---|---|---|---|---|---|---|
+| `integration` | `dn_lvl` | min=8.900000e-04 | 0.145138..0.219175 | 0.145412..0.220046 | 0.001242 | 0.6127 | `sf_-40c_2.97v_vs1p677` |
+| `integration` | `dt_int_mean` | max=1.000000e-10 | 6.903044e-11..8.098954e-11 | 6.942034e-11..8.096272e-11 | 5.304000e-13 | 0.6915 | `fs_27c_2.97v_vs1p460` |
+| `integration` | `up_lvl` | — | 0.194922..0.557749 | 0.19799..0.557652 | 0.016056 | 6.441 | `sf_-40c_2.97v_vs1p677` |
+| `jitter` | `c2c_rms_s` | — | 1.055707e-11..2.934851e-11 | 1.101916e-11..3.009598e-11 | 3.687540e-12 | 16.2 | `sf_27c_2.97v_vs1p500` |
+| `jitter` | `n_cycles` | — | 314..314 | 314..314 | 0 | 0 | `—` |
+| `jitter` | `tie_pp_s` | — | 3.332403e-11..9.900831e-11 | 3.185386e-11..1.288174e-10 | 7.625410e-11 | 145.1 | `fs_-40c_2.97v_vs1p620` |
+| `jitter` | `tie_rms_s` | — | 6.700826e-12..2.168357e-11 | 8.043125e-12..2.845334e-11 | 1.836281e-11 | 182 | `fs_-40c_2.97v_vs1p620` |
+| `jitter` | `tj_pp_s` | — | 2.700495e-11..7.862877e-11 | 2.711186e-11..7.928264e-11 | 1.069131e-11 | 16.82 | `fs_-40c_3.63v_vs2p279` |
+| `jitter` | `tj_rms_pct` | max=1 | 0.0902712..0.247217 | 0.0931676..0.269041 | 0.028652 | 13.93 | `sf_27c_2.97v_vs1p500` |
+| `jitter` | `tj_rms_s` | — | 6.017011e-12..1.648005e-11 | 6.209997e-12..1.793630e-11 | 1.909580e-12 | 13.93 | `sf_27c_2.97v_vs1p500` |
+| `lock` | `ferr` | min=-0.001, max=0.001 | -1.977270e-05..3.649070e-05 | -1.398430e-05..5.300460e-05 | 2.318381e-05 | 3.486e+04 | `sf_27c_3.63v_vs2p128` |
+| `lock` | `ffb` | — | 2.499760e+07..2.500770e+07 | 2.499720e+07..2.500820e+07 | 8000 | 0.03199 | `fs_27c_3.63v_vs2p055` |
+| `lock` | `fout` | min=1.485000e+08, max=1.515000e+08 | 1.499710e+08..1.500550e+08 | 1.499610e+08..1.500710e+08 | 47000 | 0.03132 | `fs_27c_3.63v_vs2p055` |
+| `lock` | `lock_lvl` | — | 3.865850e-09..3.63 | 3.835720e-09..3.63 | 3.63 | 6.653e+10 | `sf_-40c_3.63v_vs2p379` |
+| `lock` | `nmeas` | min=5.99, max=6.01 | 5.99892..6.00088 | 5.99912..6.00085 | 0.00121 | 0.02017 | `fs_-40c_3.63v_vs2p279` |
+| `ungrouped` | `phi_a` | — | 3.942430e-10..3.315890e-09 | 4.264440e-10..3.327370e-09 | 1.927330e-10 | 17.81 | `sf_-40c_2.97v_vs1p677` |
+| `ungrouped` | `phi_b` | — | 3.956290e-10..3.285290e-09 | 4.330170e-10..3.307780e-09 | 1.887620e-10 | 17.49 | `sf_-40c_2.97v_vs1p677` |
+| `ungrouped` | `tclk20` | — | 1.332850e-07..1.333590e-07 | 1.332710e-07..1.333680e-07 | 4.200000e-11 | 0.03151 | `fs_27c_3.63v_vs2p055` |
+| `ungrouped` | `tfb5` | — | 1.999380e-07..2.000190e-07 | 1.999340e-07..2.000220e-07 | 6.400000e-11 | 0.03201 | `fs_27c_3.63v_vs2p055` |
+
+**Per-corner verdicts**: unchanged on all 64 graded rows.
+
+**Stated limits**: identical in both records.
+
+**Measurement coverage differs between the two records:**
+
+- in `20261121-184803-04533bf` only: `lock`/`dphi`
+- in `20261121-184803-04533bf` only: `lock`/`ferr_fb`
+
+#### vs `20260906-095050-3a8a6ef` (the #273 wrap-safe-gate re-measure -- the superseded record)
+
+Reproduce with:
+
+```bash
+python3 sim/lib/record_delta.py \
+  sim/period-jitter/records/20260906-095050-3a8a6ef.md \
+  sim/period-jitter/records/20261121-184803-04533bf.md
+```
+
+| topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
+|---|---|---|---|---|---|---|---|
+| `integration` | `dn_lvl` | min=8.900000e-04 | 0.166548..0.173443 | 0.168463..0.17264 | 0.001915 | 1.15 | `ff_27c_2.97v_vs1p638` |
+| `integration` | `dt_int_mean` | max=1.000000e-10 | 7.175941e-11..7.571325e-11 | 7.165657e-11..7.566898e-11 | 1.028400e-13 | 0.1433 | `ff_27c_3.63v_vs2p200` |
+| `integration` | `up_lvl` | — | 0.14586..0.154897 | 0.146315..0.154482 | 0.000455 | 0.3119 | `ff_27c_2.97v_vs1p638` |
+| `jitter` | `c2c_rms_s` | — | 2.263701e-11..2.785439e-11 | 2.345371e-11..2.502147e-11 | 2.832920e-12 | 10.17 | `ff_27c_2.97v_vs1p638` |
+| `jitter` | `n_cycles` | — | 314..314 | 314..314 | 0 | 0 | `—` |
+| `jitter` | `tie_pp_s` | — | 6.300712e-11..6.898545e-11 | 5.616357e-11..8.975187e-11 | 2.076642e-11 | 30.1 | `ff_27c_2.97v_vs1p638` |
+| `jitter` | `tie_rms_s` | — | 1.269751e-11..1.415247e-11 | 1.131631e-11..1.739268e-11 | 3.240210e-12 | 22.9 | `ff_27c_2.97v_vs1p638` |
+| `jitter` | `tj_pp_s` | — | 6.454633e-11..6.981386e-11 | 6.735212e-11..7.007651e-11 | 2.805790e-12 | 4.347 | `ff_27c_3.63v_vs2p200` |
+| `jitter` | `tj_rms_pct` | max=1 | 0.199429..0.235105 | 0.205675..0.220465 | 0.01464 | 6.227 | `ff_27c_2.97v_vs1p638` |
+| `jitter` | `tj_rms_s` | — | 1.329573e-11..1.567401e-11 | 1.371187e-11..1.469816e-11 | 9.758500e-13 | 6.226 | `ff_27c_2.97v_vs1p638` |
+| `lock` | `dphi` | — | 1.466790e-12..1.186040e-11 | -3.001740e-12..2.021340e-11 | 8.353000e-12 | 304.6 | `ff_27c_2.97v_vs1p638` |
+| `lock` | `ferr` | min=-0.001, max=0.001 | -1.186040e-05..-1.466790e-06 | -2.021340e-05..3.001740e-06 | 8.353000e-06 | 304.6 | `ff_27c_2.97v_vs1p638` |
+| `lock` | `ferr_fb` | min=-0.002, max=0.002 | -0.000110489..0.000106812 | -6.352000e-05..0.000123471 | 0.00023396 | 211.7 | `ff_27c_3.63v_vs2p200` |
+| `lock` | `ffb` | — | 2.499720e+07..2.500270e+07 | 2.499840e+07..2.500310e+07 | 5900 | 0.0236 | `ff_27c_3.63v_vs2p200` |
+| `lock` | `fout` | min=1.485000e+08, max=1.515000e+08 | 1.499760e+08..1.500060e+08 | 1.500080e+08..1.500120e+08 | 36000 | 0.024 | `ff_27c_3.63v_vs2p200` |
+| `lock` | `lock_lvl` | — | 2.97..3.63 | 2.97..3.63 | 0 | 0 | `—` |
+| `lock` | `nmeas` | min=5.99, max=6.01 | 5.99961..5.99969 | 5.99975..6.0007 | 0.00109 | 0.01817 | `ff_27c_2.97v_vs1p638` |
+| `ungrouped` | `phi_a` | — | 3.981210e-08..3.985710e-08 | 3.980000e-08..3.987780e-08 | 2.070000e-11 | 0.05194 | `ff_27c_3.63v_vs2p200` |
+| `ungrouped` | `phi_b` | — | -1.864790e-10..-1.310450e-10 | -2.030200e-10..-1.020140e-10 | 2.903100e-11 | 22.15 | `ff_27c_3.63v_vs2p200` |
+| `ungrouped` | `tclk20` | — | 1.333280e-07..1.333550e-07 | 1.333220e-07..1.333260e-07 | 3.300000e-11 | 0.02475 | `ff_27c_3.63v_vs2p200` |
+| `ungrouped` | `tfb5` | — | 1.999790e-07..2.000220e-07 | 1.999750e-07..2.000130e-07 | 4.700000e-11 | 0.0235 | `ff_27c_3.63v_vs2p200` |
+
+**Per-corner verdicts**: unchanged on all 8 graded rows.
+
+**Stated limits**: identical in both records.
+
+#### vs `20260905-192724-a2ba48f` (the campaign first record: single point, pre-`vs`-axis corner-id)
+
+Reproduce with:
+
+```bash
+python3 sim/lib/record_delta.py \
+  sim/period-jitter/records/20260905-192724-a2ba48f.md \
+  sim/period-jitter/records/20261121-184803-04533bf.md
+```
+
+| topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
+|---|---|---|---|---|---|---|---|
+
+**Per-corner verdicts**: unchanged on all 4 graded rows.
+
+**Stated limits**: identical in both records.
+
+**Measurement coverage differs between the two records:**
+
+- in `20261121-184803-04533bf` only: `lock`/`dphi`
+- in `20261121-184803-04533bf` only: `lock`/`ferr_fb`
 
 ## `pll-top-smoke`
 
