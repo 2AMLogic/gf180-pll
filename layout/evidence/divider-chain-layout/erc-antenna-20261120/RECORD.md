@@ -42,7 +42,8 @@ klt erc --top divider_chain --deck gf180mcu --pdk gf180mcu --format json \
 
 - klt: `0.9.2` (`klt_reinstall_spec: klayout-tools==0.9.2`, the
   `.github/workflows/ci.yml` pin), git commit `046ba74652fc096bd97071fc3237f7159dd40183`
-- KLayout: `0.30.13`
+- The klt ERC run used the KLayout Python wheel `0.30.13`. The foundry
+  antenna deck ran in the standalone KLayout application `0.30.12`.
 - layout input `divider_chain.gds`:
   `sha256:bb5d78a0f80130bd8fbcc766b0e71d07493c7d0e5c92edf549044f66a7704404`
 - spec input `erc-supply-spec.json` (this directory):

@@ -49,7 +49,8 @@ klt erc --top vco_block --deck gf180mcu --pdk gf180mcu --format json \
 
 - klt: `0.9.2` (`klt_reinstall_spec: klayout-tools==0.9.2`, the
   `.github/workflows/ci.yml` pin), git commit `046ba74652fc096bd97071fc3237f7159dd40183`
-- KLayout: `0.30.13`
+- The klt ERC run used the KLayout Python wheel `0.30.13`. The foundry
+  antenna deck ran in the standalone KLayout application `0.30.12`.
 - layout input `vco_block.gds`:
   `sha256:4f5151dfbcd2d43694bfc845a507fbd43974559f1e1f8c4a8b6064afe95deb3c`
 - spec input `erc-supply-spec.json` (this directory):

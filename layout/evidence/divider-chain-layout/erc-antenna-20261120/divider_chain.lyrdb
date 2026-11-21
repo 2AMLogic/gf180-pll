@@ -2,7 +2,7 @@
 <report-database>
  <description>GF180 ANTENNA DRC Run Report at</description>
  <original-file/>
- <generator>drc: script='/home/ubuntu/.volare/gf180mcuD/libs.tech/klayout/tech/drc/rule_decks/antenna.drc'</generator>
+ <generator>drc: script='&lt;PDK&gt;/libs.tech/klayout/tech/drc/rule_decks/antenna.drc'</generator>
  <top-cell>divider_chain</top-cell>
  <tags>
  </tags>
