@@ -1035,27 +1035,8 @@ def _run_phase(
             message = f"{message}; {log_write_error}"
         if capture_failures:
             message = f"{message}; {_capture_message(capture_failures)}"
-        return _PhaseOutcome(
-            run=PhaseRun(
-                name=phase.name,
-                status="failed",
-                deck=deck_path.name,
-                log=log_path.name,
-                seconds=elapsed,
-                message=message,
-                host=deck_run.host,
-                simulator=simulator_of(output),
-                init=init_of(output),
-                solver=solver_of(output),
-            ),
-            measurements=measurements,
-            missing=missing,
-            not_measured=not_measured,
-            raw_files=raw_files,
-            raw_missing=raw_missing,
-        )
-
-    if deck_run.execution_failed:
+        status = "failed"
+    elif deck_run.execution_failed:
         # The execution layer reported a terminal failure even though every
         # required measurement parsed (a partial log can look complete). The
         # measurements and artefacts stay on the record as evidence, but the
@@ -1066,27 +1047,8 @@ def _run_phase(
             message = f"{message}; {log_write_error}"
         if capture_failures:
             message = f"{message}; {_capture_message(capture_failures)}"
-        return _PhaseOutcome(
-            run=PhaseRun(
-                name=phase.name,
-                status="failed",
-                deck=deck_path.name,
-                log=log_path.name,
-                seconds=elapsed,
-                message=message,
-                host=deck_run.host,
-                simulator=simulator_of(output),
-                init=init_of(output),
-                solver=solver_of(output),
-            ),
-            measurements=measurements,
-            missing=missing,
-            not_measured=not_measured,
-            raw_files=raw_files,
-            raw_missing=raw_missing,
-        )
-
-    if log_write_error or capture_failures:
+        status = "failed"
+    elif log_write_error or capture_failures:
         # The point otherwise measured cleanly, but its evidence log -- the
         # file this record's `log` field names -- or a requested retained raw
         # file does not exist on disk. Reporting "ok" here would misrepresent
@@ -1094,38 +1056,27 @@ def _run_phase(
         # instead of discarding it (or the rest of the grid) outright (#271,
         # #724). The fail-stop in `run_point` then skips later phases.
         problems = [m for m in (log_write_error, _capture_message(capture_failures)) if m]
-        return _PhaseOutcome(
-            run=PhaseRun(
-                name=phase.name,
-                status="error",
-                deck=deck_path.name,
-                log=log_path.name,
-                seconds=elapsed,
-                message="; ".join(problems),
-                host=deck_run.host,
-                simulator=simulator_of(output),
-                init=init_of(output),
-                solver=solver_of(output),
-            ),
-            measurements=measurements,
-            not_measured=not_measured,
-            raw_files=raw_files,
-            raw_missing=raw_missing,
-        )
+        message = "; ".join(problems)
+        status = "error"
+    else:
+        message = ""
+        status = "ok"
 
     return _PhaseOutcome(
         run=PhaseRun(
             name=phase.name,
-            status="ok",
+            status=status,
             deck=deck_path.name,
             log=log_path.name,
             seconds=elapsed,
+            message=message,
             host=deck_run.host,
             simulator=simulator_of(output),
             init=init_of(output),
             solver=solver_of(output),
         ),
         measurements=measurements,
+        missing=missing,
         # Carried even on success so that a *later* phase's failure still
         # reports what this one legitimately did not measure.
         not_measured=not_measured,
