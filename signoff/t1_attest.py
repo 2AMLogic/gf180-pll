@@ -9,8 +9,13 @@ envelopes beside them, and re-pins signoff/block-manifest.json.
 
 Items 1 and 9 are attested per partition (`1.analog`, `1.digital`, `9.analog`,
 `9.digital`); item 10 is a repository property and is cited once (`10`), which
-the grader applies to both partitions.  Item 2 is deliberately not attested:
-there is no block-level layout yet (#149).
+the grader applies to both partitions.  Item 2 (layout) is attested by klt
+itself -- `klt signoff --attest 2` over the committed pll_top.gds, one shared
+envelope cited as `2.analog` and `2.digital` (issue #1080) -- because its
+subject is a layout stream, not an inventory this script could re-derive.  This
+script neither writes nor owns that envelope; it only preserves the `2.*`
+manifest pins when it re-pins its own (run-signoff.sh re-attests the envelope
+before rendering, in CI and locally).
 
 The envelope `status` is an assertion, so this script derives it: every check
 is evaluated mechanically against the working tree, and if any check fails
@@ -20,8 +25,11 @@ inventory is complete, consistent and current", not "every result passes".
     python3 signoff/t1_attest.py            # (re)write inventories + envelopes, re-pin the manifest
     python3 signoff/t1_attest.py --check    # verify, write nothing (CI)
 
-When `klt signoff --attest` ships in a released klayout-tools, switch to it
-(klayout-tools#2844 closed, but the 0.7.0 wheel does not carry the flag).
+`klt signoff --attest` has since shipped in the pinned release and produces
+the item-2 envelope (issue #1080); items 1, 9 and 10 stay with this script
+because the tool-produced form executes what an inventory declares, which
+CI's pre-klt stdlib check cannot become (signoff/README.md, "`--attest` is
+used for item 2 only").
 
 Stdlib only; no simulator, PDK or network.  Exit: 0 ok, 1 --check drift,
 2 a check failed or an input is missing.

@@ -6,10 +6,11 @@ and re-checked in CI. Nothing in this repository hand-maintains a parallel
 met/unmet checklist; if a sentence anywhere claims this block does or does not
 clear a T1 item, the report is what settles it.
 
-Today the verdict is **6 of 22 T1 rows met** (items 1, 9 and 10, on both
+Today the verdict is **8 of 22 T1 rows met** (items 1, 2, 9 and 10, on both
 partitions; the block's tier is still `none`) — see "Why the remaining rows are `unmet`"
-below for the other sixteen. ~~**0 of 22 T1 rows met**~~ was the verdict until
-2026-10-17 (issue #798). An honest machine-readable statement of the gap is
+below for the other fourteen. ~~**0 of 22 T1 rows met**~~ was the verdict until
+2026-10-17 (issue #798); item 2 was cited 2026-11-20 (issue #1080). An honest
+machine-readable statement of the gap is
 worth more than a prose checklist nobody re-reads, and it is the reason this
 directory exists before the evidence does rather than after.
 
@@ -20,7 +21,7 @@ directory exists before the evidence does rather than after.
 | `block-manifest.json` | The block manifest: this block's `block` name, its `kind`, and the evidence envelope cited per T1 item. Hand-edited; the only file here a human writes. |
 | `tier-report.json` | `klt signoff --manifest … --format json` output. **Generated — do not edit.** Re-render with `bash signoff/run-signoff.sh`. |
 | ~~`design-evidence-tiers.md`~~ | ~~A pinned copy of `klayout-tools`' T1 checklist. See "Why the checklist is vendored here".~~ — **removed (2026-09-26, issue #564):** klt 0.6.0 bundles the eleven-item checklist, which was this file's own stated deletion condition. See "Which checklist this is graded against". |
-| `run-signoff.sh` | Renders the report (`bash signoff/run-signoff.sh`) or verifies the committed one (`--check`, which is what CI runs). |
+| `run-signoff.sh` | Renders the report (`bash signoff/run-signoff.sh`) or verifies the committed one (`--check`, which is what CI runs). Both modes re-attest the item-2 layout envelope first (`klt signoff --attest 2 --check`). |
 
 ## Reproducing
 
@@ -37,6 +38,31 @@ the manifest pinned its `content_hash` re-renders as `unmet` /
 `stale_evidence`, the committed report no longer matches, and the build fails
 instead of a stale green row surviving. Both halves of that are demonstrated
 under "Negative controls" below.
+
+**The item-2 envelope is re-attested by the same script, never re-rendered.**
+Both modes of `run-signoff.sh` re-attest
+`signoff/attest/item-2.evidence.json` (`klt signoff --attest 2 --check`,
+handed the generator and geometry digest the envelope records) *before*
+rendering, so a `pll_top.gds` that moved underneath it fails at the envelope
+with the re-attest procedure named instead of as a bare report diff. Producing
+a fresh one after the stream changes is an evidence step, not a mechanical
+one: regenerate the stream with the recorded generator, read the geometry
+digest `klt stats --format json` prints for the regenerated file, then
+
+```sh
+klt signoff --attest 2 \
+  --input layout/evidence/pll-top-layout/pll_top.gds \
+  --generator 'cd layout && python3 -m pll_top.top_level.assemble --outdir evidence/pll-top-layout' \
+  --regenerated-hash sha256:<geometry digest> --hash-kind geometry \
+  -o signoff/attest/item-2.evidence.json
+```
+
+then update three pins before re-rendering: the `2.analog` / `2.digital`
+`content_hash` values in `block-manifest.json` (the command prints the new
+stream hash), and the `ITEM2_GEOMETRY` constant in `run-signoff.sh` (the
+`--check` re-attest must be handed the same regeneration claim the envelope
+records — a bare `--input` re-attest drops the `regeneration` block and every
+committed envelope would read `drifted`).
 
 **A local `--check` run is only meaningful against the klt version CI
 currently pins.** `klt signoff --format json` output is not guaranteed
@@ -124,7 +150,9 @@ checklist text adopting it.
 ## Why the remaining rows are `unmet`
 
 **Updated (2026-10-17, issue #798):** items 1, 9 and 10 are now cited and `met`
-(case 3 below); the text of cases 1 and 2 describes the sixteen rows that are
+(case 3 below); item 2 followed on 2026-11-20 (issue #1080 — a `klt signoff
+--attest 2` envelope over the committed `pll_top.gds`, shared by both
+partitions). The text of cases 1 and 2 describes the fourteen rows that are
 still `no_evidence`.
 
 The report's `reason` for all 22 T1 rows is `no_evidence`: the manifest cites
@@ -260,11 +288,14 @@ and 10 accept only an **artifact-anchored** `generic` envelope: it declares
 and this repo cites such envelopes for items **1** and **9** per partition
 (`1.analog`, `1.digital`, `9.analog`, `9.digital`) and for item **10** once
 (it is a repository property, so the bare `10` key serves both partitions).
-Six of the 22 T1 rows are now `met`; the other sixteen are unchanged
-(`no_evidence`).
+Six of the 22 T1 rows were `met` from #798; item **2** followed on 2026-11-20
+(issue #1080) with one shared envelope cited as `2.analog` and `2.digital` —
+produced by `klt signoff --attest 2` itself, not by `t1_attest.py` (see
+below). Eight of the 22 T1 rows are now `met`; the other fourteen are
+unchanged (`no_evidence`).
 
-What the three kinds of envelope pin, all under `signoff/attest/` and all
-produced by `signoff/t1_attest.py` (stdlib only):
+What these envelopes pin, all under `signoff/attest/` — items 1, 9 and 10
+produced by `signoff/t1_attest.py` (stdlib only), item 2 by klt itself:
 
 - **Item 1** — per partition, the committed schematics and symbols, the xschem
   setup, and the netlists derived from them under `design/netlist/`. The
@@ -274,6 +305,22 @@ produced by `signoff/t1_attest.py` (stdlib only):
   refuses to attest if that step is gone. `pfd_cp` is exported per evidence
   record and has no committed netlist, so the analog inventory says so rather
   than implying coverage.
+- **Item 2** — one shared envelope, `item-2.evidence.json`, cited for both
+  `2.analog` and `2.digital`: the digital partition is full-custom (DR-008),
+  so its item 2 is the Analog column's artifact — the same committed stream,
+  not a separate digital one. It is the one envelope here produced by klt
+  itself (`klt signoff --attest 2`, klayout-tools#4188, on the pin since the
+  0.9.2 bump): it pins
+  `layout/evidence/pll-top-layout/pll_top.gds` by content hash, records the
+  assembly generator (`python3 -m pll_top.top_level.assemble`, the entry
+  point `layout/harness/reproduce.py` re-runs) and that generator's geometry
+  digest, and asserts three mechanical stream properties only — readable,
+  non-empty top cell, dbu on grid. What it does **not** claim: the stream
+  still carries the inherited `MIMTM.3` on the loop filter's C2 and has no
+  matching top-level LVS (items 3 and 4; #753, #149), and when #753 swaps C2
+  to the option-B device the GDS hash changes and this row goes
+  `stale_evidence` until re-attested — the intended behaviour, not an
+  exemption.
 - **Item 9** — per partition, every `sim/<slug>/` campaign that has a committed
   record, with its `testbench*/` files hash-pinned, a cold-start command, the
   PDK revision CI installs, and the xschem and klt pins. `ngspice` is recorded
@@ -285,17 +332,20 @@ produced by `signoff/t1_attest.py` (stdlib only):
   directory's two `--check`s). `README.md` and the workflow are edited often
   and are audited, not hash-pinned.
 
-**`--attest` is still not used, deliberately.** The pinned release carries it
+**`--attest` is used for item 2 only.** The pinned release carries it
 (`klt signoff --attest` first shipped in klt 0.8.0; 0.9.2 extends it to items
-2 and 8), but this repo keeps writing the envelopes with `t1_attest.py`,
-because the tool-produced form *executes* what the inventory declares -- an
-item-9 attestation runs each campaign's cold start, an item-1 attestation runs
-the declared netlist freshness command -- which would turn CI's stdlib
-tree-vs-inventory check (which runs before klt is even installed) into a
-re-export and simulation campaign, and because upstream's docs make
-re-attesting the repo owner's sign-off action rather than the mechanical
-regeneration this repository's `--check` loop relies on. Switching producer is
-a CI-shape decision of its own, not a rider on a pin bump.
+2 and 8), and item 2's envelope is its output — the checks it runs for a
+layout stream (readable, non-empty top cell, dbu on grid) are read-only
+stream properties, so none of the concerns below apply. Items 1, 9 and 10
+keep their envelopes with `t1_attest.py`, because for those the tool-produced
+form *executes* what the inventory declares -- an item-9 attestation runs
+each campaign's cold start, an item-1 attestation runs the declared netlist
+freshness command -- which would turn CI's stdlib tree-vs-inventory check
+(which runs before klt is even installed) into a re-export and simulation
+campaign, and because upstream's docs make re-attesting the repo owner's
+sign-off action rather than the mechanical regeneration this repository's
+`--check` loop relies on. Switching producer for those items is a CI-shape
+decision of its own, not a rider on a pin bump.
 
 **Why there is a second check.** The grader re-hashes only the inventory a
 citation pins, so editing a schematic or a testbench would not by itself change
@@ -305,8 +355,8 @@ inventory from the tree and fails until `python3 signoff/t1_attest.py` and
 `bash signoff/run-signoff.sh` are re-run. A `met` here means "the inventory is
 complete, consistent and current", not "every result passes".
 
-**Still uncited:** item 2 (no block-level layout yet, #149) and items 3-8 and
-11, which need `klt` verb envelopes this repo does not have. **Coordination:**
+**Still uncited:** items 3-8 and 11, which need `klt` verb envelopes this
+repo does not have. **Coordination:**
 the PDK re-pin (#789) changes the revision item 9 records; whichever lands
 second re-runs `t1_attest.py`.
 
@@ -898,6 +948,16 @@ Editing one field of the committed `tier-report.json` and re-running
 -  "t1_met_count": 99,
 +  "t1_met_count": 0,
 ```
+
+**The item-2 re-attest gate catches a stream that moved under its envelope.**
+Erasing one top-level shape from a scratch copy of `pll_top.gds` and
+re-attesting against the committed envelope makes `klt signoff --attest 2
+--check` exit 3 (`drift: provenance.input.content_hash`, committed vs. fresh
+stream hash), which `run-signoff.sh` turns into exit 1 with the re-attest
+procedure named — before any report diff. Letting the render run anyway
+grades the row `unmet` / `stale_evidence` on both partitions. The
+gate-both-ways behaviour is driven against a stub klt by
+`signoff/tests/test_run_signoff.py` (`TestItem2Envelope`).
 
 ## Upstream friction filed from this work
 

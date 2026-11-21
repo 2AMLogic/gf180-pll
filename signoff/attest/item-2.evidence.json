@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "kind": "generic",
+  "status": "pass",
+  "t1_item": 2,
+  "summary": "T1 item 2 (Layout): 3/3 attestation checks passed (klt signoff --attest)",
+  "source": "layout/evidence/pll-top-layout/pll_top.gds",
+  "attestation": {
+    "producer": "klt signoff --attest",
+    "hash_algorithm": "sha256-raw-bytes",
+    "check_count": 3,
+    "passed_count": 3,
+    "checks": [
+      {
+        "check": "stream_readable",
+        "role": "layout",
+        "passed": true,
+        "content_hash": "sha256:fbe4001364aa586f6bdbf1babe85cbb4d40d8fbf4560b899ee158d7f5f12b11c"
+      },
+      {
+        "check": "top_cell_non_empty",
+        "role": "layout",
+        "passed": true,
+        "top_cells": [
+          "pll_top"
+        ]
+      },
+      {
+        "check": "dbu_on_grid",
+        "role": "layout",
+        "passed": true,
+        "dbu": 0.001
+      }
+    ]
+  },
+  "provenance": {
+    "klt_version": "0.9.2",
+    "klayout_version": "0.30.10",
+    "pdk": null,
+    "deck": null,
+    "input": {
+      "path": {
+        "path": "layout/evidence/pll-top-layout/pll_top.gds",
+        "scope": "repo"
+      },
+      "content_hash": "sha256:fbe4001364aa586f6bdbf1babe85cbb4d40d8fbf4560b899ee158d7f5f12b11c"
+    },
+    "regeneration": {
+      "generator": "cd layout && python3 -m pll_top.top_level.assemble --outdir evidence/pll-top-layout",
+      "regenerated_hash": "sha256:bfa2f4b63b0aaf523da3345d84d67c5be7b03698419f61b23dfa3ac130db6f4a",
+      "hash_kind": "geometry"
+    }
+  }
+}
