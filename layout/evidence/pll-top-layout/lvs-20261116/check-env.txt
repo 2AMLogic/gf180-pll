@@ -1,0 +1,7 @@
+PDK        : OK   <PDK> (variant D, open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7)
+KLayout    : OK   /usr/bin/klayout (KLayout 0.30.12)
+PV python  : OK   /tmp/gf180pv-venv/bin/python
+DRC entry  : <PDK>/libs.tech/klayout/tech/drc/gf180mcu.drc
+LVS runner : <PDK>/libs.tech/klayout/tech/lvs/run_lvs.py
+stdcell gds: <PDK>/libs.ref/gf180mcu_fd_sc_mcu9t5v0/gds/gf180mcu_fd_sc_mcu9t5v0.gds
+WARNING: resolved KLayout is 'KLayout 0.30.12', but this repo pins 'KLayout 0.28.16' as the engine its scored DRC/LVS verdicts must be reproducible on. KLayout releases newer than the pin (reproduced: 0.30.9) have been observed to report a false LVS mismatch on an LVS-clean, unchanged layout -- DRC on the same binary was unaffected. A result produced here is not evidence about the pinned engine; see layout/README.md's "The two KLayouts" section before concluding a regression from an LVS mismatch alone.

@@ -24,7 +24,11 @@ by `layout/lib/check-layout-status-claims.sh`); the campaign-side narrative is i
   wiring checked from the exported file
   (`layout/evidence/pll-top-layout/PROOF.md`). It is **not signoff**: the
   foundry DRC deck reports one violation, the `MIMTM.3` the loop filter's C2
-  already carried (#753); top-level LVS is still to run (#149);
+  already carried (#753); the first top-level LVS run is recorded as a
+  mismatch with both causes diagnosed — the #753 option-A C2, which the
+  variant-D deck does not extract as a device at all, and the f6eeac7
+  runset's SIMPLIFY=false parallel-device-merge change (#980)
+  (`layout/evidence/pll-top-layout/lvs-20261116/PROOF-lvs.md`);
   extracted-netlist re-verification is still to run (#18); and the measured
   0.4078 mm² is over the ratified 0.30 mm² area row.
 

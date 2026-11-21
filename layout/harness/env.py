@@ -376,8 +376,12 @@ def run_pv_command(
 #: Text artifacts a PV deck leaves in its run directory that embed absolute
 #: paths (the report databases name the generated ``main.drc`` script, the
 #: extracted netlist and LVS database name their inputs) and so are rewritten
-#: by :func:`normalise_run_dir`. Binary layouts (``*.gds``) are never touched.
-NORMALISED_GLOBS = ("*.log", "*.lyrdb", "*.lvsdb", "*.cir")
+#: by :func:`normalise_run_dir`. The environment probe (``run_pv.py
+#: check-env``) is not deck output, but it names the PDK and home-directory
+#: tool paths and is captured into the run directory by hand, so it is
+#: normalised too when one is present. Binary layouts (``*.gds``) are never
+#: touched.
+NORMALISED_GLOBS = ("*.log", "*.lyrdb", "*.lvsdb", "*.cir", "check-env.txt")
 
 #: Of those, the ones that are XML. A token such as ``<RUN_DIR>`` written into
 #: one of these verbatim is a malformed start tag, and the harness's own

@@ -833,6 +833,15 @@ OFF_PIN_DISCLOSED = {
     "inv-tb-proof/drc-fault/drc.stdout.log": "harness bring-up proof, negative control",
     "inv-tb-proof/lvs-clean/lvs.stdout.log": "harness bring-up proof (not a PLL block)",
     "inv-tb-proof/lvs-fault/lvs.stdout.log": "harness bring-up proof, negative control",
+    # pll_top's first top-level LVS run, captured on 0.30.12 -- the only
+    # engine available where it ran. Its verdict is a mismatch whose two
+    # structural causes (#753's option-A C2 absent from the variant-D
+    # extraction; the f6eeac7 runset's SIMPLIFY=false fold-merge change,
+    # issue #980) are read from the deck's own extracted netlist, not from
+    # the near-miss class the pin guards against; a scored on-pin re-run
+    # stays gated on those two issues, not on this disclosure.
+    "pll-top-layout/lvs-20261116/lvs.stdout.log":
+        "first top-level run, off-pin engine disclosed; scored re-run gated on #753/#980",
     # vco_block's original block-level runs, captured on 0.30.10. Kept per this
     # repository's append-only evidence convention; superseded for grading
     # purposes by drc-recheck-klayout-0.28.16/ and lvs-recheck-klayout-0.28.16/,
