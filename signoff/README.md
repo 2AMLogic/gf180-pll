@@ -153,7 +153,9 @@ checklist text adopting it.
 (case 3 below); item 2 followed on 2026-11-20 (issue #1080 — a `klt signoff
 --attest 2` envelope over the committed `pll_top.gds`, shared by both
 partitions). The text of cases 1 and 2 describes the fourteen rows that are
-still `no_evidence`.
+still `no_evidence` — **updated (2026-11-21, issue #1083):** thirteen of them;
+item 5 on the digital partition now reads `timing_margin_missing` with one
+cited `klt sim` envelope (see the correction in case 1).
 
 The report's `reason` for all 22 T1 rows is `no_evidence`: the manifest cites
 nothing. That single machine code covers three materially different situations,
@@ -217,11 +219,21 @@ and 8 `klt lvs` envelopes committed as well, none of them cited in
   correction). There is
   still no `pll_top` LVS envelope, so item 4 has nothing block-scoped to
   cite even before citation is considered.
-- **`klt sim` and `klt pex`:** still no envelope of either kind exists
+- **`klt sim` and `klt pex`:** ~~still no envelope of either kind exists
   anywhere, which keeps items 5 and 6 uncitable on the format axis; the
   `sim/` campaigns recorded in `sim/CHARACTERIZATION.md` remain this repo's
   own Markdown-plus-raw-log record format, produced by `sim/run_corners.py`,
-  not by `klt sim`.
+  not by `klt sim`.~~ — **corrected (2026-11-21, issue #1083):** the first
+  `klt sim` envelope is committed and cited —
+  `sim/divider-ratio-chain/klt-sim/envelope.json` (the campaign's f200n33
+  slice, 45/45 corners PASS, every measurement identical to the committed
+  f6eeac7 record), cited for item 5 on the digital partition with derived
+  `spec_row` coverage of the multiplication-ratio row. Item 5 digital
+  therefore reads `timing_margin_missing`, not `no_evidence` (the N=64
+  retiming margins are not yet migrated — #1090, and 2AMLogic/klayout-tools#7006
+  records that row coverage cannot express the one-divisor slice). No `klt
+  pex` envelope exists, and every other `sim/` campaign remains in the
+  repo-format record; the analog partition's item 5 is still `no_evidence`.
 
 `klt signoff` grades envelopes, so none of it is citable as it stands. This
 affects items 3, 4, 5 and 6 most directly. ~~Item 6 also carries a further,
