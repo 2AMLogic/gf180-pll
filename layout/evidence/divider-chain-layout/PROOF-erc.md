@@ -339,3 +339,30 @@ released `klayout-tools==0.9.2` wheel with KLayout `0.30.12` (the repository's
 KLayout pin). Verdicts are unchanged from 0.8.0: `status: not_checked`,
 `erc_status: clean`, zero findings. The report gains fields 0.8.0 did not emit; the
 input and spec content hashes are unchanged.
+
+## Antenna-graded re-run with the gf180mcu table (2026-11-20, issue #1082)
+
+**Correction to this document's antenna-coverage statements:** the
+antenna half of `klt erc` has now run on this block, on the pinned
+`klayout-tools==0.9.2`, with the gf180mcu antenna-ratio table
+2AMLogic/klayout-tools#4003 added (`--pdk gf180mcu`). The dated record is
+[`erc-antenna-20261120/`](erc-antenna-20261120/RECORD.md) — a fresh
+envelope, a spec copy whose stackup names are the table's canonical
+`Metal1`..`Metal3` (the exact-name lookup is
+[2AMLogic/klayout-tools#6976](https://github.com/2AMLogic/klayout-tools/issues/6976);
+the committed `erc-supply-spec.json` and `erc-report.json` above are
+byte-unchanged), and the PDK's own `antenna.drc` corroboration run
+(zero violations on the same GDS — the deck and the klt table agree).
+
+The new envelope grades **checked: 420, skipped: 0** where the committed
+report reads checked: 0, skipped: 420 (its 140 `gate_reference_level`
+inapplicables stay, as expected), and **every gate net passes every
+level** — `status: clean` (exit 0), the first fully-graded clean ERC
+envelope in this repository. Even this block's rail-tied gate nodes —
+the net class that false-positive-violates under the area model in the
+other four cells
+([2AMLogic/klayout-tools#6975](https://github.com/2AMLogic/klayout-tools/issues/6975))
+— stay under the 400 limit here; this block's rails are small enough
+that the whole-rail cumulative area passes on its own. `erc_status`
+stays `clean` with zero findings, and the item-11 grader resolves this
+block's ERC half (reason `None`, supply nets `VDD_DIV`, `VSS`).
