@@ -36,15 +36,16 @@ committed spec stays byte-unchanged at its recorded path so
 | `nwell_vdd` | `well_excludes_boxes: [[180, 8, 181, 9]]` | 14 | `Comp ∩ Nplus` | `VDD` |
 | `nwell_psrc` | `well_requires_boxes: [[180, 8, 181, 9]]` | 1 | `Comp ∩ Nplus` | `PSRC` |
 
-The box `[180, 8, 181, 9]` µm lies strictly inside the fifteenth merged Nwell
-`(176.820, 7.755)`–`(279.820, 12.555)` µm and interacts with no other well
+The box `[180, 8, 181, 9]` µm lies inside the fifteenth merged Nwell
+`(176.820, 7.755)`–`(279.820, 12.555)` µm (the box edges touch that well's
+boundary; it is contained in exactly this one well) and interacts with no other well
 (verified by erosion: the box minus the merged Nwell region is empty), so the
 two entries partition all fifteen drawn Nwell shapes disjointly and
 exhaustively -- 14 + 1 = the 15 merged shapes `klayout.db` counts on this GDS.
 The tap is the boolean gf180mcu draws an n-well tap as, `Comp (22/0)` narrowed
 by `Nplus (32/0)`, wired to `Metal1`. The p-substrate half stays undeclared for
 the reason already measured in
-[`../lock-detector-layout/PROOF-erc.md`](../lock-detector-layout/PROOF-erc.md)
+[`../../lock-detector-layout/PROOF-erc.md`](../../lock-detector-layout/PROOF-erc.md)
 (a caller-asserted native substrate region grades `degenerate_well_assertion`);
 this spec, like the one it copies, makes no substrate claim.
 
@@ -58,9 +59,13 @@ klt erc --top pfd_cp --deck gf180mcu --pdk gf180mcu --format json \
 # exit 3 (the tie finding below; the connectivity half otherwise clean)
 ```
 
-- klt: `0.9.2` (released wheel, `.github/workflows/ci.yml` pin), git commit
-  `e109054112336b1ff537043a860adf120b84e49c`, run through a throwaway venv
-  (`python3 -m venv && pip install klayout-tools==0.9.2`), not the host tool
+- klt: `0.9.2` (released wheel, `.github/workflows/ci.yml` pin), run through a
+  throwaway venv (`python3 -m venv && pip install klayout-tools==0.9.2`), not the
+  host tool. The envelope's `.provenance.klt_git_commit` is
+  `046ba74652fc096bd97071fc3237f7159dd40183` (the klt revision). This
+  repository's own revision when the run was made was `e109054112336b1ff537043a860adf120b84e49c`
+  (the parent of this PR's first commit); the two are different repositories'
+  commits and are not interchangeable
 - KLayout: `0.30.13` (the wheel's own dependency)
 - layout input `pfd_cp.gds` (unchanged from `../erc-report.json`'s):
   `sha256:212c27c4a209c2d851d0e424ee9c4c75c040b5824a77a8a2763a3d9f7b7030d9`
@@ -153,8 +158,12 @@ with identical ratios, that issue #1082's antenna re-run of this GDS records
 and corroborates against the foundry deck (open PR #1088; both are documented
 false positives of the table's area approximation, owned upstream by
 [2AMLogic/klayout-tools#6975](https://github.com/2AMLogic/klayout-tools/issues/6975)).
-Declaring `ties[]` changed no antenna verdict, as the tool's own contract
-guarantees.
+Declaring `ties[]` leaves every antenna gate row unchanged (same GDS, deck,
+PDK and stackup; swapping only the tie declarations back to the original
+disclosure preserves all antenna rows), but it is **not** true that it changes
+only `erc.missing_tie`: the declarations also move `erc.supply_short` and
+`erc.supply_short.substrate` into `erc_coverage.checked`, which the disclosure
+run did not list.
 
 ## Item-11 grader (ERC half)
 

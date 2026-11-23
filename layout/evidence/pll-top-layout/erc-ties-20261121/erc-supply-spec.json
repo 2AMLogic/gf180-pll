@@ -101,7 +101,7 @@
    "tap_requires": ["32/0"],
    "connect_to": "Metal1",
    "net": "VDD_DIV",
-   "_comment": "The divider_chain's fourteen Nwell shapes at their placed (r180) positions; the same class the block's own ../divider-chain-layout/erc-supply-spec.json declares and grades."
+   "_comment": "The divider_chain's fourteen Nwell shapes at their placed (r180) positions; the same class the block's own ../../divider-chain-layout/erc-supply-spec.json declares and grades."
   },
   {
    "name": "nwell_vdd_vco",
@@ -118,7 +118,7 @@
    "tap_requires": ["32/0"],
    "connect_to": "Metal1",
    "net": "VDD_VCO",
-   "_comment": "vco_block's six Nwell shapes (including the large outer tub) at their placed (r0) positions; the same class the block's own ../vco-layout/erc-supply-spec.json declares and grades."
+   "_comment": "vco_block's six Nwell shapes (including the large outer tub) at their placed (r0) positions; the same class the block's own ../../vco-layout/erc-supply-spec.json declares and grades."
   },
   {
    "name": "nwell_vss_cap_body",

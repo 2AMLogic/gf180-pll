@@ -171,7 +171,7 @@ gave `ties[]` the literal well-side class selectors
 `well_requires_boxes`/`well_excludes_boxes`, shipped by the CI pin
 (`klayout-tools==0.9.2`). Each class of the assembly's forty merged Nwell
 shapes is now declared against its own net, selected by one caller-named box
-strictly inside each well — the instance transform applied to an interior
+contained in exactly one well (the box edges touch that well's boundary) — the instance transform applied to an interior
 point of each child-cell well (the PFD/CP instance is mirrored, `m90`).
 
 [`erc-ties-20261121/`](erc-ties-20261121/RECORD.md) holds the first graded
@@ -192,22 +192,28 @@ degenerate there. On the pinned wheel (klt 0.9.2, KLayout 0.30.13):
   placed (m90) image of `pfd_cp`'s dump-buffer tub, the same rule the
   block-level run reports on the same well at block coordinates
   `(176.820, 7.755)`–`(279.820, 12.555)` µm
-  (`../pfd-cp-layout/erc-ties-20261121/RECORD.md`). No `PSRC` label exists
+  ([`../pfd-cp-layout/erc-ties-20261121/RECORD.md`](../pfd-cp-layout/erc-ties-20261121/RECORD.md#negative-control-the-finding-tracks-the-declared-net-not-the-box); body-tie proof: [`../pfd-cp-layout/PROOF-erc.md`](../pfd-cp-layout/PROOF-erc.md#it-is-deliberate-and-three-independent-sources-say-so)). No `PSRC` label exists
   anywhere in the assembly, so the tool cannot credit the body tie the block's
   own LVS extraction establishes. A reported finding is the honest computed
   outcome.
-- The four supply classes grade **clean** — 39 of 40 wells' taps reach exactly
-  their declared net through the assembly's own routing.
+- The four supply classes grade **clean** — for each of the 39 wells the rule
+  found at least one tap connected to its declared net. This does not show that
+  every tap in a well is connected: a well holding both a connected and an
+  untied tap also passes.
 - All five classes appear in `erc_coverage.checked_by_well_assertion`; nothing
   is skipped, degenerate or disclosed.
 - The pinned item-11 ERC-half grader
   (`klayout_tools.signoff_power_delivery._resolve_erc_supply_spec`) resolves
   the spec and returns `supply_not_continuous`. Item 11 stays `unmet` — now by
   measurement, not by disclosure.
-- The antenna half is unchanged (gate17/`XDLY_T0B`, gate21/`GND_VCO`
-  711.857909, gate38/`VDD` 857.065333 — the three rail-tied false positives
-  issue #1082's antenna re-run documents), as the tool's contract guarantees:
-  a `ties[]` declaration cannot alter anything but `erc.missing_tie`.
+- The antenna half is unchanged: gate21/`GND_VCO` 711.857909 and gate38/`VDD`
+  857.065333 are rail-tied false positives, and gate17/`XDLY_T0B` is the driven
+  delay-chain node (Metal1 passes at 13.378205; Metal3-Metal5 violate at
+  420.961247 against 400), all as issue #1082's antenna re-run documents.
+  Swapping only the tie declarations back to the disclosure preserves every
+  antenna gate row on the same GDS, deck, PDK and stackup. Ties do not change
+  only `erc.missing_tie`: they also add `erc.supply_short` and
+  `erc.supply_short.substrate` to `erc_coverage.checked`.
 
 The committed `erc-supply-spec.json` and `erc-report.json` at this directory
 are untouched — the dated directory carries its own spec copy so the older

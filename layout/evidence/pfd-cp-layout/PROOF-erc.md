@@ -536,7 +536,7 @@ exactly this block — is declarable without a layout edit.
 
 [`erc-ties-20261121/`](erc-ties-20261121/RECORD.md) holds the first graded
 envelope: a copy of the committed spec with the `ties_disclosure` replaced by
-the two-class partition (the box `[180, 8, 181, 9]` µm, strictly inside the
+the two-class partition (the box `[180, 8, 181, 9]` µm, contained in the
 PSRC well, selects it; its complement selects the fourteen `VDD` wells) and
 with the stackup names mapped to the gf180mcu antenna table's canonical
 spelling so `--pdk gf180mcu` grades the antenna half in the same run. On the
@@ -562,8 +562,10 @@ pinned wheel (klt 0.9.2, KLayout 0.30.13):
   measurement, not by disclosure.
 - The antenna half is unchanged (gate4/`VSS` 558.595333 and gate11/`VDD`
   771.320667 at Metal1, the two rail-tied false positives already documented),
-  as the tool's contract guarantees: a `ties[]` declaration cannot alter
-  anything but `erc.missing_tie`.
+  (swapping only the tie declarations back to the disclosure preserves every
+  antenna gate row on the same GDS, deck, PDK and stackup). Ties do not change
+  only `erc.missing_tie`: they also add `erc.supply_short` and
+  `erc.supply_short.substrate` to `erc_coverage.checked`.
 
 The committed `erc-supply-spec.json` and `erc-report.json` at this directory
 are untouched — the dated directory carries its own spec copy so the older
