@@ -255,8 +255,12 @@ independent gap on top of the envelope question — its evidence is currently
 unreachable on the pinned install regardless of format.~~
 **Correction (2026-11-20, issue #1079).** CI installs `klt-yield-native`
 alongside `klayout-tools==0.9.2`, so the pinned install can run `klt yield`.
-Issue #1081 tracks deriving and validating the Monte Carlo sample sets needed
-for [item 6](#item-6-statistical-evidence-klt-yield-and-the-pinned-install-gap).
+~~Issue #1081 tracks deriving and validating the Monte Carlo sample sets needed
+for item 6.~~ **Done (#1081):** the sample sets and envelopes are committed
+under `signoff/yield/` and cited for
+[item 6](#item-6-statistical-evidence-klt-yield); the analog row grades
+`unmet` / `undersized_sample` (more draws owed, #1092) and the digital row
+`not_applicable`.
 
 **2. The artifact does not exist yet.** No PLL-block layout has been drawn.
 `layout/pll_top/` holds real transistor-level layout for sub-blocks (the
@@ -696,7 +700,7 @@ Two limits of the bridge, stated rather than assumed:
   11's grading, and the committed report says so mechanically: item 11 reads
   `graded_by_build: true` on both partition rows.
 
-## Item 6: statistical evidence (`klt yield`) and the pinned-install gap
+## Item 6: statistical evidence (`klt yield`)
 
 Item 6's own text (`signoff/tier-report.json`, both partition rows, read
 against klt 0.6.0's bundled `docs/design-evidence-tiers.md`,
@@ -720,7 +724,14 @@ requirement the way "Item 11 under the klt 0.6.0 checklist" above names item
 11's structural gap. It does not restate or revisit `#127`'s four-criteria
 assessment, and it does not move `#127`'s item-6 checkbox (#594).
 
-**Reachable on the pinned install; not yet exercised.** ~~**Unreachable on
+**Exercised as of #1081: the evidence is committed and cited.** The
+per-draw CSVs of the two genuine Monte Carlo campaigns above are derived
+into `klt yield` sample-set documents and envelopes under
+[`signoff/yield/`](yield/) (`klt yield-csv` + `klt yield`, on the pinned
+0.9.2 release with the `klt-yield-native` wheel), and
+`signoff/block-manifest.json` cites them for item 6 with a declared row
+set. The verdicts, and what still blocks `met`, are recorded below
+("Item 6 today: the machine verdicts"). ~~**Unreachable on
 the pinned install, regardless of citation.** `klt yield`'s statistics run in
 a separately built `klt_yield_native` Rust extension that is not published as
 a prebuilt wheel and is therefore unreachable from a single-package `pip
@@ -745,20 +756,19 @@ $ .../klayout-tools/bin/python -c "import klt_yield_native"
 ModuleNotFoundError: No module named 'klt_yield_native'
 ```
 
-**klayout-tools#2531** ("Friction: `klt_yield_native` still has no prebuilt
-wheel after two closed friction reports asking for one") — filed from other
-work, not from this repository, and cited here rather than re-filed, per this
-repository's friction protocol — closed on 2026-10-03 once the wheel was
-published, and its recurrences are closed too. Two related friction reports
-record the consequence this item carried while the gap existed:
-**klayout-tools#2466** ("`klt yield`'s native extension is unreachable from
-every published release, so `klt signoff`'s kind-restricted T1 item 6 is
-ungradeable for a release-pinning consumer") and **klayout-tools#1061** (the
-same gap for the git-pinned install method). Host policy still forbids agents
-on this fleet from changing host-wide tool installs, which is why the fix here
-was the CI pin-step change plus a throwaway venv, not a host install. Running
-`klt yield` on this repository's own sample sets — producing the item 6
-evidence — is #1081's work, not this section's.
+`klt yield`'s own evidence was **klayout-tools#2531** ("Friction:
+`klt_yield_native` still has no prebuilt wheel after two closed friction
+reports asking for one") — filed from other work, not from this repository,
+and cited here rather than re-filed, per this repository's friction protocol;
+closed on 2026-10-03 once the wheel was published, and its recurrences are
+closed too. Two related friction reports record the consequence this item
+carried while the gap existed: **klayout-tools#2466** ("`klt yield`'s native
+extension is unreachable from every published release, so `klt signoff`'s
+kind-restricted T1 item 6 is ungradeable for a release-pinning consumer")
+and **klayout-tools#1061** (the same gap for the git-pinned install method).
+Host policy still forbids agents on this fleet from changing host-wide tool
+installs, which is why the fix here was the CI pin-step change plus a
+throwaway venv, not a host install.
 
 **Which spec rows are statistical, named explicitly.** The checklist's
 converse obligation is that a block whose spec has no statistical row must
@@ -927,18 +937,103 @@ own "What is still not measured" field: the grid is a union of three
 one-dimensional cuts, not the full 5 bundles × 4 vertices × 7 pairs cross
 product, so an interaction appearing off all three cuts is unsampled.
 
-**What still blocks item 6 is therefore not (d).** It is the `klt yield` JSON
-envelope requirement — ~~and its pinned-install gap — see "Item 6: statistical
-evidence (`klt yield`) and the pinned-install gap" above, and
-**klayout-tools#2531**, which is open and not actionable from this
-repository.~~ the pinned-install half of that gap closed with the 0.9.2 pin
-bump (see the corrected section above), so what remains is producing and
-validating the sample-set export itself: the deferral recorded at the end of
-this section, and #1081. Nor does this section change any measured
-number: the two control records re-measure nothing and supersede nothing, and
-both campaigns' sample records keep their bytes and their verdicts. A campaign
-minted before #602 has no `negative_control.csv`, and `--recheck-control` says
-so rather than inventing one.
+**What still blocks `met` is therefore not (d) — it is the sample-size
+verdict.** ~~What remains is producing and validating the sample-set export
+itself: the deferral recorded at the end of this section, and #1081.~~
+**Done (#1081):** the export exists, is validated against the campaigns' own
+committed figures, and is cited; see "Item 6 today: the machine verdicts"
+below. Nor does this section change any measured number: the two control
+records re-measure nothing and supersede nothing, and both campaigns' sample
+records keep their bytes and their verdicts. A campaign minted before #602
+has no `negative_control.csv`, and `--recheck-control` says so rather than
+inventing one.
+
+### Item 6 today: the machine verdicts (#1081)
+
+`signoff/yield/` carries the derivation and the evidence; its
+[README](yield/README.md) documents the chain
+(record CSV → derived CSV → sample-set document → `klt yield` envelope →
+manifest citation; the manifest's `content_hash` for each citation pins the **sample-set document** under `signoff/yield/samples/` — the bytes the grader hashes — while `file` names the envelope under `signoff/yield/reports/`, and the tests regenerate every envelope from its sample set and limits). The rendered verdicts in `signoff/tier-report.json`:
+
+- **6.analog: `unmet` / `undersized_sample`.** Every measurement of all five
+  envelopes **passes against its own stated 3σ bound** (`target_sigma: 3` —
+  the budget rows' own `|mean| + 3σ` form; worst CI lower bound 3.19 on
+  term 1 at `ff`/−40 °C/3.63 V), and the VCO band-coverage citation (N = 200
+  per point, 11 points) grades `met` with `sample_size: sufficient`. The
+  four charge-pump budget-term citations grade `unmet` / `undersized_sample`
+  because `klt yield`'s sample-size verdict at its documented default
+  ±1-percentage-point CI half-width needs n ≥ 183 per measurement at zero
+  failures (exact Clopper-Pearson form), and the committed record has
+  n = 100/corner for term 1 and n = 16/corner for terms 2/2a/3/4. That is a
+  property of the campaigns, not of the derivation: **#1092** owns raising
+  the draw counts. No limit, spec row or grader input was changed to make
+  any of this pass — in particular `target_ci_halfwidth` stays at the
+  default and no `target_yield` is declared anywhere, because the spec
+  states none.
+- **The `period-jitter/random-bound` row is declared, as a gap.** It is in
+  the manifest's declared row set with `gap` text naming the shape mismatch
+  (a deterministic per-corner bound, not a sampled population — DR-032), so
+  even with sufficient samples the analog row tops out at
+  `unmet` / `partial_coverage` until an estimate-shaped evidence route
+  exists. Declaring it was chosen over omitting it: item 6 is a claim about
+  every statistical row.
+- **6.digital: `not_applicable`, granted — for the ratified rows only.**
+  None of the digital partition's *ratified* spec rows is statistical — the
+  divider ratio is a static configuration with a corner-bounded retiming
+  margin. The checklist's converse obligation ("a block whose spec has no
+  statistical row must say so explicitly") is discharged by the committed
+  statement `signoff/yield/digital/item6-statement.json`, which accounts for
+  **every ratified row** of the spec (the analog rows too, pointing at the
+  analog partition's citations). The spec withholds ratification from lock
+  time (row 9) and the lock detector (row 16) (`spec/pll.md` header,
+  DR-007 Amendment A1), so the projection
+  `signoff/yield/digital/spec-rows.json` — generated from `spec/pll.md`'s
+  summary table by the same tested derivation step, stamped `ratified` —
+  **excludes both**, and the statement lists them under `unratified_rows`
+  with no not-applicable claim. The pinned schema has no partial-
+  ratification form, so the rendered `not_applicable` verdict's
+  `spec.status: ratified` and `row_count: 17` describe exactly the
+  ratified rows; nothing is asserted for rows 9 and 16 until they ratify.
+- **Negative controls are `not_declared` on every citation — upstream gap.**
+  Both campaigns have committed, re-checkable negative controls (the table
+  above), but they are CSV-record harness controls
+  (`sw_stat_mismatch` repeat/vary/gate legs), not the seeded known-bad
+  *variant draw* shape `klt yield`'s `negative_control` block analyses, and
+  `klt yield-csv` has no way to derive one from a second per-draw CSV
+  (**klayout-tools#6974**, open). The grader discloses this
+  (`citation.yield_campaign.negative_control: "not_declared"`) rather than
+  failing on it; when klayout-tools#6974 lands, the committed control CSVs
+  are the starting material for declaring one properly.
+
+**The export is no longer deferred — here is what replaced the deferral.**
+The deferral recorded below was written when the native extension could not
+be installed from a release: nobody could validate a candidate export
+against the campaigns' own committed figures, so committing one would have
+been a citation waiting to be trusted. The pinned install now runs the
+statistics, and the validation the deferral demanded is exactly what
+`signoff/tests/test_yield_evidence.py` does: the derived per-draw CSVs
+re-derive byte-for-byte from the committed records, each sample-set
+document's `derivation` block re-hashes its CSV, the committed envelope
+hashes match the manifest's pins, and — the check the old deferral named
+specifically — the term-1 per-draw worst-of-window selection reproduces
+`design/README.md`'s own committed figure (17.0863 % signed `|mean| + 3σ` at
+`sf`/−40 °C/3.63 V) to the digit, so a flattening that silently misstated
+the budget quantity the row checks would fail CI. Two capability gaps were
+hit and filed rather than worked around beyond the thinnest possible step
+(see `signoff/yield/README.md`): **klayout-tools#7019** (the `#` metadata
+preamble every one of these record CSVs opens with breaks `klt yield-csv`'s
+header line) and **klayout-tools#6974** (no CSV-route negative control
+above).
+
+*(The historical deferral text follows, struck through, because its
+reasoning — the citation-that-merely-grades trap applied to the input side —
+is what the validation test now guards against.)*
+
+~~**The sample-set export: deferred, not done — and here is exactly why.**~~
+~~`klt yield`'s sample-set schema (`measurements[]`, each entry
+`{name, samples, limits, …}`) is parsed entirely on the Python side, ahead
+of any call into the native extension~~ (confirmed on this host by feeding
+the pinned `klt yield` a syntactically valid, minimal sample-set document).
 
 *(Correction, 2026-09-27: this paragraph read* ~~"`sim/mc-cp-mismatch` samples 3
 of the 45 mandated PVT points … tracked as `#597`"~~ *— written before #602's PR
@@ -969,7 +1064,7 @@ $ klt yield /tmp/test_sample_set.json --format json
 }
 ```
 
-So *producing a well-formed sample-set document* is reachable without the
+~~So *producing a well-formed sample-set document* is reachable without the
 extension, exactly as the issue that prompted this section observes — the
 remaining work is not blocked on the wheel. What is **not** reachable without
 the extension is verifying that the document says the *right* thing. Two of
@@ -1004,7 +1099,10 @@ against `sim/mc-cp-mismatch`'s and `sim/vco-tuning-range`'s own committed
 figures before trusting it. At that point the two exportable rows above, and
 `run.sh`'s existing worst-point-selection logic, are the starting material;
 the period-jitter random bound is out of scope for this particular artifact
-regardless of tooling, for the reason stated above.
+regardless of tooling, for the reason stated above.~~ — **resolved
+(#1081)**: the extension is installable from the release pin, the export is
+committed under `signoff/yield/`, and the worst-of-window-selection concern
+is guarded by the derivation test reproducing the committed 17.0863 % figure.
 
 ## Negative controls
 
@@ -1082,3 +1180,18 @@ worked around silently. Their upstream state was re-checked on 2026-09-26
   not filed from this repository's own work** — it predates issue #594 and
   was filed from other work — and is cited here rather than duplicated, per
   issue #594.
+- **klayout-tools#7019** — filed from #1081's work: `klt yield-csv` (0.9.2)
+  takes the per-draw CSV's first line as its header, so the `#` metadata
+  preamble every harness-recorded CSV in this repository opens with (campaign,
+  record id, PDK hash, simulator, switch settings — the convention
+  `sim/README.md`'s record format writes) breaks the ingest before any row
+  is read. Worked around by the thinnest possible tested step
+  (`signoff/yield/derive.py` strips the preamble into a committed,
+  re-derivable header-first CSV); the strip is pure boilerplate and should
+  live upstream. **Open.**
+- **klayout-tools#6974** — cited, not filed from here (it predates #1081):
+  `klt yield-csv` has no way to attach a `negative_control` (or run
+  provenance) to a CSV-derived sample set, so this repository's committed
+  CSV-shape campaign controls cannot be declared on the item-6 citations,
+  which read `negative_control: "not_declared"` — disclosed, not hidden; see
+  "Item 6 today" above. **Open.**
