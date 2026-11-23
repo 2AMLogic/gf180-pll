@@ -28,31 +28,20 @@ Run:  python3 -m unittest discover -s sim/tests -v
 from __future__ import annotations
 
 import re
-import subprocess
 import sys
 import unittest
 from pathlib import Path
 
 SIM_DIR = Path(__file__).resolve().parents[1]
-REPO_ROOT = SIM_DIR.parent
 sys.path.insert(0, str(SIM_DIR / "lib"))
 
 import record_delta  # noqa: E402
+from _repin_doc_check import REGEN, RepinGeneratedTablesMixin  # noqa: E402
 
 DOC = SIM_DIR / "REPIN-DELTAS-f6eeac7-vco-output-cp-pfd.md"
 
 OLD = SIM_DIR / "output-driver" / "records" / "20260817-100354-0e9cfc9.md"
 NEW = SIM_DIR / "output-driver" / "records" / "20261115-130526-3be016c.md"
-
-#: A fenced regeneration command, as the document writes it:
-#:     python3 sim/lib/record_delta.py \
-#:       sim/<slug>/records/<old>.md \
-#:       sim/<slug>/records/<new>.md
-REGEN = re.compile(
-    r"python3 sim/lib/record_delta\.py \\\n"
-    r"\s+(sim/[\w.-]+/records/[\d-]+-\w+\.md) \\\n"
-    r"\s+(sim/[\w.-]+/records/[\d-]+-\w+\.md)\n"
-)
 
 #: The four verdict flips the document tabulates below its verdict:
 #: corner -> direction.
@@ -76,36 +65,14 @@ def _doc_text() -> str:
     return DOC.read_text(encoding="utf-8")
 
 
-class TheDocumentsTablesAreGenerated(unittest.TestCase):
+class TheDocumentsTablesAreGenerated(RepinGeneratedTablesMixin,
+                                     unittest.TestCase):
+    DOC = DOC
+
     def test_the_document_exists_and_names_at_least_one_command(self):
         self.assertTrue(DOC.is_file(), f"{DOC} missing")
         self.assertTrue(REGEN.findall(_doc_text()),
                         "no regeneration command found in the document")
-
-    def test_every_documented_regeneration_command_reproduces_its_table(self):
-        """Run each command the document prints and require its own output back.
-
-        This is the check that stops a hand-edited table: the document is not
-        merely *accompanied* by a command, it *is* the command's output.
-        """
-        text = _doc_text()
-        for old_rel, new_rel in REGEN.findall(text):
-            with self.subTest(pair=f"{old_rel} -> {new_rel}"):
-                old, new = REPO_ROOT / old_rel, REPO_ROOT / new_rel
-                self.assertTrue(old.is_file(), f"{old} missing")
-                self.assertTrue(new.is_file(), f"{new} missing")
-                r = subprocess.run(
-                    [sys.executable, "sim/lib/record_delta.py", old_rel, new_rel],
-                    cwd=REPO_ROOT, capture_output=True, text=True,
-                )
-                self.assertEqual(r.returncode, 0, r.stderr)
-                missing = [ln for ln in r.stdout.splitlines()
-                           if ln.strip() and ln not in text]
-                self.assertEqual(
-                    missing[:3], [],
-                    f"{new_rel}: the document does not show this generated "
-                    f"output -- regenerate it ({len(missing)} line(s) differ)",
-                )
 
 
 class TheFlipListTheDocumentTabulates(unittest.TestCase):

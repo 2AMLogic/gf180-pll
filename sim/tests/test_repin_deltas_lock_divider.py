@@ -32,7 +32,6 @@ Run:  python3 -m unittest discover -s sim/tests -v
 from __future__ import annotations
 
 import re
-import subprocess
 import sys
 import unittest
 from hashlib import sha256
@@ -43,18 +42,14 @@ REPO_ROOT = SIM_DIR.parent
 sys.path.insert(0, str(SIM_DIR / "lib"))
 
 import record_delta  # noqa: E402
+from _repin_doc_check import (  # noqa: E402
+    REGEN,
+    RepinGeneratedTablesMixin,
+    command_section_failures,
+    sections,
+)
 
 DOC = SIM_DIR / "REPIN-DELTAS-f6eeac7-lock-divider.md"
-
-#: A fenced regeneration command, as the document writes it:
-#:     python3 sim/lib/record_delta.py \
-#:       sim/<slug>/records/<old>.md \
-#:       sim/<slug>/records/<new>.md
-REGEN = re.compile(
-    r"python3 sim/lib/record_delta\.py \\\n"
-    r"\s+(sim/[\w.-]+/records/[\d-]+-\w+\.md) \\\n"
-    r"\s+(sim/[\w.-]+/records/[\d-]+-\w+\.md)\n"
-)
 
 #: Pairs with no finding at all. `lock-window-bisection` is deliberately not
 #: here -- it has six, and they get their own, stricter test.
@@ -74,39 +69,45 @@ def _doc_text() -> str:
     return DOC.read_text(encoding="utf-8")
 
 
-class TheDocumentsTablesAreGenerated(unittest.TestCase):
+class TheDocumentsTablesAreGenerated(RepinGeneratedTablesMixin,
+                                     unittest.TestCase):
+    DOC = DOC
+
     def test_the_document_exists_and_names_at_least_one_command(self):
         self.assertTrue(DOC.is_file(), f"{DOC} missing")
         self.assertTrue(REGEN.findall(_doc_text()),
                         "no regeneration command found in the document")
 
-    def test_every_documented_regeneration_command_reproduces_its_table(self):
-        """Run each command the document prints and require its own output back.
 
-        This is the check that stops a hand-edited table: the document is not
-        merely *accompanied* by a command, it is the command's output.
-        """
+class TheGenerationCheckIsScopedToEachSection(unittest.TestCase):
+    """Negative case for the shared regeneration check (#1107).
+
+    Every generated table in this document starts with the same header
+    line, so a whole-document search let a header deleted from one section
+    be supplied by any other section's table. Delete the first section's
+    header from an in-memory copy and the shared check must fail -- for
+    exactly the record pair whose section lost it.
+    """
+
+    def test_a_repeated_header_missing_from_its_own_section_is_reported(self):
         text = _doc_text()
-        for old_rel, new_rel in REGEN.findall(text):
-            with self.subTest(pair=f"{old_rel} -> {new_rel}"):
-                old, new = REPO_ROOT / old_rel, REPO_ROOT / new_rel
-                self.assertTrue(old.is_file(), f"{old} missing")
-                self.assertTrue(new.is_file(), f"{new} missing")
-                r = subprocess.run(
-                    [sys.executable, "sim/lib/record_delta.py", old_rel, new_rel],
-                    cwd=REPO_ROOT, capture_output=True, text=True,
-                )
-                self.assertEqual(r.returncode, 0, r.stderr)
-                # Every non-blank line of the generated table must appear in
-                # the document verbatim. Comparing line by line rather than as
-                # one block keeps the failure message readable.
-                missing = [ln for ln in r.stdout.splitlines()
-                           if ln.strip() and ln not in text]
-                self.assertEqual(
-                    missing[:3], [],
-                    f"{new_rel}: the document does not show this generated "
-                    f"output -- regenerate it ({len(missing)} line(s) differ)",
-                )
+        spans = sections(text)
+        first, section = spans[0]
+        header = next(ln for ln in section.splitlines()
+                      if ln.startswith("| topology |"))
+        # The premise: a later section repeats that header, which is what
+        # let the old whole-document search pass this deletion.
+        self.assertGreater(len(spans), 1, "need a later section to borrow from")
+        self.assertTrue(any(header in later.splitlines()
+                            for _m, later in spans[1:]),
+                        "premise: the header must repeat in a later section")
+        start = text.index(header, first.end())
+        mutated = text[:start] + text[start + len(header) + 1:]
+        failures = command_section_failures(mutated)
+        self.assertEqual([new_rel for new_rel, _missing in failures],
+                         [first.group(2)],
+                         "the check must fail for exactly the affected pair")
+        self.assertIn(header, failures[0][1])
 
 
 class NoReQualifiedBenchFlippedAPerCornerVerdictOrMovedALimit(unittest.TestCase):
