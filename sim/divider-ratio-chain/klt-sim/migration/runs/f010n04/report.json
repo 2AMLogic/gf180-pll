@@ -1,0 +1,1690 @@
+{
+  "schema_version": 3,
+  "netlist": {
+    "path": "sim/divider-ratio-chain/klt-sim/migration/netlists/f010n04.sp",
+    "scope": "repo"
+  },
+  "status": "pass",
+  "corner_count": 6,
+  "passed": 6,
+  "failed": 0,
+  "errored": 0,
+  "inconclusive": 0,
+  "diagnostic_counts": {
+    "by_code": {
+      "nonconvergence": 3
+    },
+    "by_severity": {
+      "warning": 3
+    },
+    "corners_with_diagnostics": 3
+  },
+  "metrics": {
+    "sim__corner__count": 6,
+    "sim__corner__passed_count": 6,
+    "sim__corner__failed_count": 0,
+    "sim__corner__errored_count": 0,
+    "sim__corner__inconclusive_count": 0
+  },
+  "environment": {
+    "engine": "ngspice",
+    "engine_version": "47",
+    "ngspice_binary": "/usr/local/bin/ngspice",
+    "engine_build": {
+      "version_banner": "******\n** ngspice-47 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2026, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Fri Nov 13 23:19:32 UTC 2026\n******",
+      "binary_sha256": null,
+      "probe": "ok",
+      "reason": null
+    },
+    "ngspice_init": {
+      "source": "runner",
+      "lines": null,
+      "sha256": null
+    },
+    "models_lib": {
+      "path": null,
+      "scope": "external"
+    },
+    "models_lib_sha256": "f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+    "models_lib_sha256_scope": "client",
+    "netlist_sha256": "b33f84d65b177d48bd324156d3b0ef9e61a0e71563eb75d9c21b598455926cac",
+    "netlist_sha256_scope": "staged",
+    "models_param_file": {
+      "path": null,
+      "scope": "external"
+    },
+    "models_param_file_sha256": "7e222f050318388f37543a64fbd0be55cc15e4b93f57501a09f7c159c4c9e561",
+    "netlist_closure": [
+      {
+        "path": "sim/divider-ratio-chain/klt-sim/migration/netlists/f010n04.sp",
+        "scope": "repo",
+        "sha256": "b33f84d65b177d48bd324156d3b0ef9e61a0e71563eb75d9c21b598455926cac"
+      },
+      {
+        "path": "design/netlist/divider_chain.spice",
+        "scope": "repo",
+        "sha256": "bcdaece6dab79a3bfe6bb50419152bd278cb0cfb28c3020878303a2d2837c80f"
+      },
+      {
+        "path": "sim/divider-ratio-chain/testbench/tb_divider_chain.sp",
+        "scope": "repo",
+        "sha256": "c9f11fc479c62263d4f3a50cc7954de44726c8a314462ca20d803001e19e6ef1"
+      }
+    ],
+    "netlist_identity": "sha256:cea00b20e01cddcdc4ca20b01fcce468043b980da434f6c11cb54cf5f4f204ed",
+    "staged_model_inputs": [
+      {
+        "name": "sm141064.ngspice",
+        "field": "models.lib",
+        "kind": "library",
+        "sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e",
+        "rewritten": true,
+        "source_sha256": "f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+        "transform": "include-path-rewrite"
+      },
+      {
+        "name": "design.ngspice",
+        "field": "models.param_file",
+        "kind": "library",
+        "sha256": "7e222f050318388f37543a64fbd0be55cc15e4b93f57501a09f7c159c4c9e561",
+        "rewritten": false,
+        "source_sha256": "7e222f050318388f37543a64fbd0be55cc15e4b93f57501a09f7c159c4c9e561"
+      },
+      {
+        "name": "sm141064.spice",
+        "field": "models.lib",
+        "kind": "dependency",
+        "sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e",
+        "rewritten": true,
+        "source_sha256": "f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+        "transform": "include-path-rewrite"
+      },
+      {
+        "name": "sm141064_mim.spice",
+        "field": "models.lib",
+        "kind": "dependency",
+        "sha256": "9b85cd009968d9aeb6b61046b24a63f39d6a463c4e4aee3949c8fd183c06666f",
+        "rewritten": false,
+        "source_sha256": "9b85cd009968d9aeb6b61046b24a63f39d6a463c4e4aee3949c8fd183c06666f"
+      }
+    ],
+    "pdk_revision_asserted": {
+      "value": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7",
+      "scope": "caller-asserted"
+    },
+    "remote": {
+      "fleet": [
+        {
+          "provider": "aws-batch-fleet",
+          "job_id": "klt-sim-4edf0d03d595",
+          "region": "us-east-1",
+          "instance_id": "i-0a9b8d6eb4d9ca329",
+          "instance_type": "m6i.4xlarge",
+          "availability_zone": "us-east-1c",
+          "ami_id": "ami-09c14f55df4958cbd",
+          "lifecycle": "spot",
+          "spot": true,
+          "state": "done",
+          "exit_code": "0",
+          "concurrency": "1",
+          "physical_cores": "8",
+          "elapsed_seconds": 14,
+          "client_submitted_at": "2026-11-23T04:16:59.868233Z",
+          "client_launched_at": "2026-11-23T04:17:49.784526Z",
+          "client_status_terminal_at": "2026-11-23T04:18:21.496882Z",
+          "client_collected_at": "2026-11-23T04:18:22.329828Z",
+          "runner_klt_version": "0.9.0",
+          "client_klt_version": "0.9.3.dev3692+g719ab7426e77",
+          "runner_compatibility": "match",
+          "runner_request_features": {
+            "required": [
+              "corners.params",
+              "options.stage_model_inputs"
+            ],
+            "missing": [],
+            "status": "supported"
+          },
+          "worker_environment": {
+            "capture": "ok",
+            "simulator": {
+              "requested_binary": "ngspice",
+              "binary_source": "PATH",
+              "selected_path": "/usr/local/bin/ngspice",
+              "version_banner": "******\n** ngspice-47 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2026, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Fri Nov 13 23:19:32 UTC 2026\n******\n",
+              "version_probe": "ok"
+            },
+            "pdk": {
+              "variant": "gf180mcuD",
+              "root": "/opt/pdk",
+              "stamp_scheme": "sources-sha256",
+              "stamp_sha256": "4ca10280ae9f293aa1ff69f0060a52e0026929111bda881503717469b429ce67",
+              "stamp_text": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7",
+              "models_staged": true,
+              "stamp_scope": "image"
+            },
+            "cpu_model": "Intel(R) Xeon(R) Platinum 8375C CPU @ 2.90GHz",
+            "omp_num_threads": null,
+            "image_manifest": null,
+            "model_inputs": [
+              {
+                "name": "sm141064.ngspice",
+                "sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e"
+              },
+              {
+                "name": "design.ngspice",
+                "sha256": "7e222f050318388f37543a64fbd0be55cc15e4b93f57501a09f7c159c4c9e561"
+              },
+              {
+                "name": "sm141064.spice",
+                "sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e"
+              },
+              {
+                "name": "sm141064_mim.spice",
+                "sha256": "9b85cd009968d9aeb6b61046b24a63f39d6a463c4e4aee3949c8fd183c06666f"
+              }
+            ],
+            "diagnostics": [],
+            "pdk_stamp_comparison": {
+              "basis": "staged_model_inputs",
+              "client_stamp": {
+                "variant": "gf180mcuD",
+                "stamp_scheme": "sources-sha256",
+                "stamp_sha256": "4ca10280ae9f293aa1ff69f0060a52e0026929111bda881503717469b429ce67"
+              },
+              "status": "match"
+            },
+            "ngspice_init": null,
+            "threads_per_worker": 1,
+            "engine_build_comparison": {
+              "status": "match"
+            }
+          },
+          "runner_model_inputs": [
+            {
+              "name": "sm141064.ngspice",
+              "sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e"
+            },
+            {
+              "name": "design.ngspice",
+              "sha256": "7e222f050318388f37543a64fbd0be55cc15e4b93f57501a09f7c159c4c9e561"
+            },
+            {
+              "name": "sm141064.spice",
+              "sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e"
+            },
+            {
+              "name": "sm141064_mim.spice",
+              "sha256": "9b85cd009968d9aeb6b61046b24a63f39d6a463c4e4aee3949c8fd183c06666f"
+            }
+          ],
+          "runner_models_lib_sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e",
+          "runner_corner_section_libs": null,
+          "runner_osdi_preload": null,
+          "resumed": false,
+          "models_lib_comparison": {
+            "status": "not_comparable",
+            "reason": "models_staged"
+          }
+        },
+        {
+          "provider": "aws-batch-fleet",
+          "job_id": "klt-sim-eb113d208c41",
+          "region": "us-east-1",
+          "instance_id": "i-0d2f0f679717603bc",
+          "instance_type": "m6i.4xlarge",
+          "availability_zone": "us-east-1c",
+          "ami_id": "ami-09c14f55df4958cbd",
+          "lifecycle": "spot",
+          "spot": true,
+          "state": "done",
+          "exit_code": "0",
+          "concurrency": "1",
+          "physical_cores": "8",
+          "elapsed_seconds": 15,
+          "client_submitted_at": "2026-11-23T04:16:59.614959Z",
+          "client_launched_at": "2026-11-23T04:17:29.497503Z",
+          "client_status_terminal_at": "2026-11-23T04:18:03.763755Z",
+          "client_collected_at": "2026-11-23T04:18:04.727331Z",
+          "runner_klt_version": "0.9.0",
+          "client_klt_version": "0.9.3.dev3692+g719ab7426e77",
+          "runner_compatibility": "match",
+          "runner_request_features": {
+            "required": [
+              "corners.params",
+              "options.stage_model_inputs"
+            ],
+            "missing": [],
+            "status": "supported"
+          },
+          "worker_environment": {
+            "capture": "ok",
+            "simulator": {
+              "requested_binary": "ngspice",
+              "binary_source": "PATH",
+              "selected_path": "/usr/local/bin/ngspice",
+              "version_banner": "******\n** ngspice-47 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2026, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Fri Nov 13 23:19:32 UTC 2026\n******\n",
+              "version_probe": "ok"
+            },
+            "pdk": {
+              "variant": "gf180mcuD",
+              "root": "/opt/pdk",
+              "stamp_scheme": "sources-sha256",
+              "stamp_sha256": "4ca10280ae9f293aa1ff69f0060a52e0026929111bda881503717469b429ce67",
+              "stamp_text": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7",
+              "models_staged": true,
+              "stamp_scope": "image"
+            },
+            "cpu_model": "Intel(R) Xeon(R) Platinum 8375C CPU @ 2.90GHz",
+            "omp_num_threads": null,
+            "image_manifest": null,
+            "model_inputs": [
+              {
+                "name": "sm141064.ngspice",
+                "sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e"
+              },
+              {
+                "name": "design.ngspice",
+                "sha256": "7e222f050318388f37543a64fbd0be55cc15e4b93f57501a09f7c159c4c9e561"
+              },
+              {
+                "name": "sm141064.spice",
+                "sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e"
+              },
+              {
+                "name": "sm141064_mim.spice",
+                "sha256": "9b85cd009968d9aeb6b61046b24a63f39d6a463c4e4aee3949c8fd183c06666f"
+              }
+            ],
+            "diagnostics": [],
+            "pdk_stamp_comparison": {
+              "basis": "staged_model_inputs",
+              "client_stamp": {
+                "variant": "gf180mcuD",
+                "stamp_scheme": "sources-sha256",
+                "stamp_sha256": "4ca10280ae9f293aa1ff69f0060a52e0026929111bda881503717469b429ce67"
+              },
+              "status": "match"
+            },
+            "ngspice_init": null,
+            "threads_per_worker": 1,
+            "engine_build_comparison": {
+              "status": "match"
+            }
+          },
+          "runner_model_inputs": [
+            {
+              "name": "sm141064.ngspice",
+              "sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e"
+            },
+            {
+              "name": "design.ngspice",
+              "sha256": "7e222f050318388f37543a64fbd0be55cc15e4b93f57501a09f7c159c4c9e561"
+            },
+            {
+              "name": "sm141064.spice",
+              "sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e"
+            },
+            {
+              "name": "sm141064_mim.spice",
+              "sha256": "9b85cd009968d9aeb6b61046b24a63f39d6a463c4e4aee3949c8fd183c06666f"
+            }
+          ],
+          "runner_models_lib_sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e",
+          "runner_corner_section_libs": null,
+          "runner_osdi_preload": null,
+          "resumed": false,
+          "models_lib_comparison": {
+            "status": "not_comparable",
+            "reason": "models_staged"
+          }
+        },
+        {
+          "provider": "aws-batch-fleet",
+          "job_id": "klt-sim-dc16fd5577ca",
+          "region": "us-east-1",
+          "instance_id": "i-087c4e6b92f9a6244",
+          "instance_type": "m6i.4xlarge",
+          "availability_zone": "us-east-1c",
+          "ami_id": "ami-09c14f55df4958cbd",
+          "lifecycle": "spot",
+          "spot": true,
+          "state": "done",
+          "exit_code": "0",
+          "concurrency": "1",
+          "physical_cores": "8",
+          "elapsed_seconds": 17,
+          "client_submitted_at": "2026-11-23T04:16:59.450024Z",
+          "client_launched_at": "2026-11-23T04:17:46.492603Z",
+          "client_status_terminal_at": "2026-11-23T04:18:18.466373Z",
+          "client_collected_at": "2026-11-23T04:18:19.308080Z",
+          "runner_klt_version": "0.9.0",
+          "client_klt_version": "0.9.3.dev3692+g719ab7426e77",
+          "runner_compatibility": "match",
+          "runner_request_features": {
+            "required": [
+              "corners.params",
+              "options.stage_model_inputs"
+            ],
+            "missing": [],
+            "status": "supported"
+          },
+          "worker_environment": {
+            "capture": "ok",
+            "simulator": {
+              "requested_binary": "ngspice",
+              "binary_source": "PATH",
+              "selected_path": "/usr/local/bin/ngspice",
+              "version_banner": "******\n** ngspice-47 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2026, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Fri Nov 13 23:19:32 UTC 2026\n******\n",
+              "version_probe": "ok"
+            },
+            "pdk": {
+              "variant": "gf180mcuD",
+              "root": "/opt/pdk",
+              "stamp_scheme": "sources-sha256",
+              "stamp_sha256": "4ca10280ae9f293aa1ff69f0060a52e0026929111bda881503717469b429ce67",
+              "stamp_text": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7",
+              "models_staged": true,
+              "stamp_scope": "image"
+            },
+            "cpu_model": "Intel(R) Xeon(R) Platinum 8375C CPU @ 2.90GHz",
+            "omp_num_threads": null,
+            "image_manifest": null,
+            "model_inputs": [
+              {
+                "name": "sm141064.ngspice",
+                "sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e"
+              },
+              {
+                "name": "design.ngspice",
+                "sha256": "7e222f050318388f37543a64fbd0be55cc15e4b93f57501a09f7c159c4c9e561"
+              },
+              {
+                "name": "sm141064.spice",
+                "sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e"
+              },
+              {
+                "name": "sm141064_mim.spice",
+                "sha256": "9b85cd009968d9aeb6b61046b24a63f39d6a463c4e4aee3949c8fd183c06666f"
+              }
+            ],
+            "diagnostics": [],
+            "pdk_stamp_comparison": {
+              "basis": "staged_model_inputs",
+              "client_stamp": {
+                "variant": "gf180mcuD",
+                "stamp_scheme": "sources-sha256",
+                "stamp_sha256": "4ca10280ae9f293aa1ff69f0060a52e0026929111bda881503717469b429ce67"
+              },
+              "status": "match"
+            },
+            "ngspice_init": null,
+            "threads_per_worker": 1,
+            "engine_build_comparison": {
+              "status": "match"
+            }
+          },
+          "runner_model_inputs": [
+            {
+              "name": "sm141064.ngspice",
+              "sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e"
+            },
+            {
+              "name": "design.ngspice",
+              "sha256": "7e222f050318388f37543a64fbd0be55cc15e4b93f57501a09f7c159c4c9e561"
+            },
+            {
+              "name": "sm141064.spice",
+              "sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e"
+            },
+            {
+              "name": "sm141064_mim.spice",
+              "sha256": "9b85cd009968d9aeb6b61046b24a63f39d6a463c4e4aee3949c8fd183c06666f"
+            }
+          ],
+          "runner_models_lib_sha256": "f905b0737ed31b4916359455becc3ba22c1c3228d9e1e83e265e9e32d0b9403e",
+          "runner_corner_section_libs": null,
+          "runner_osdi_preload": null,
+          "resumed": false,
+          "models_lib_comparison": {
+            "status": "not_comparable",
+            "reason": "models_staged"
+          }
+        }
+      ],
+      "job_ceiling": {
+        "basis": "conservative_serial_bound",
+        "unit_count": 6,
+        "per_unit_timeout_s": 900,
+        "overhead_s": 120.0,
+        "job_bound_s": 5520.0,
+        "max_job_seconds": 3600.0,
+        "max_job_seconds_source": "fleet_config",
+        "exceeds_ceiling": true,
+        "check": "warn",
+        "max_units_per_job": 3,
+        "recommended_hosts": 2,
+        "warning": "batch job bound 5520s (options.timeout_s 900s x 6 units + 120s; a conservative fully-serial upper bound, not a runtime estimate) exceeds the fleet's whole-job ceiling of 3600s (max_job_seconds from fleet_config); a job still running at the ceiling is killed and every unit is reported batch_job_timeout. Set request.remote.hosts to at least 2 to run one job per shard of at most 3 units, each within the ceiling",
+        "split": true,
+        "effective_hosts": 3
+      },
+      "job_ids": [
+        "klt-sim-4edf0d03d595",
+        "klt-sim-eb113d208c41",
+        "klt-sim-dc16fd5577ca"
+      ],
+      "runner_compatibility": "match"
+    },
+    "engine_host": "worker",
+    "client_ngspice_binary": "/home/ubuntu/.local/bin/ngspice",
+    "client_engine_build": {
+      "version_banner": "******\n** ngspice-47 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2026, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Fri Nov 13 23:19:32 UTC 2026\n******",
+      "binary_sha256": "39ca1adb826660324c3626f72bd946ec40704f0f3fc8e243c623f76e24b3eee2",
+      "probe": "ok",
+      "reason": null
+    },
+    "backend": {
+      "resolved": "batch",
+      "source": "flag",
+      "requested": "batch"
+    },
+    "resume": {
+      "resumed_corners": 0,
+      "checkpoint_path": {
+        "path": "sim/divider-ratio-chain/klt-sim/migration/runs/f010n04/checkpoint.json",
+        "scope": "repo"
+      },
+      "checkpoint_retained": false
+    }
+  },
+  "coverage": {
+    "corners_simulated": 6,
+    "measurements_declared": 11,
+    "measurements_with_limits": 2,
+    "unrecognized_limit_keys": [],
+    "schema_version": 1,
+    "known": true,
+    "checked": [
+      "limit:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"n_fb\",\"max\"]",
+      "limit:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"n_fb\",\"min\"]",
+      "limit:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"ndo\",\"max\"]",
+      "limit:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"ndo\",\"min\"]",
+      "limit:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"n_fb\",\"max\"]",
+      "limit:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"n_fb\",\"min\"]",
+      "limit:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"ndo\",\"max\"]",
+      "limit:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"ndo\",\"min\"]",
+      "limit:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"n_fb\",\"max\"]",
+      "limit:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"n_fb\",\"min\"]",
+      "limit:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"ndo\",\"max\"]",
+      "limit:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"ndo\",\"min\"]",
+      "limit:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"n_fb\",\"max\"]",
+      "limit:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"n_fb\",\"min\"]",
+      "limit:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"ndo\",\"max\"]",
+      "limit:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"ndo\",\"min\"]",
+      "limit:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"n_fb\",\"max\"]",
+      "limit:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"n_fb\",\"min\"]",
+      "limit:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"ndo\",\"max\"]",
+      "limit:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"ndo\",\"min\"]",
+      "limit:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"n_fb\",\"max\"]",
+      "limit:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"n_fb\",\"min\"]",
+      "limit:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"ndo\",\"max\"]",
+      "limit:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"ndo\",\"min\"]",
+      "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"fbpw\"]/observation",
+      "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"ffb2\"]/observation",
+      "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"iavg\"]/observation",
+      "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"t_arr\"]/observation",
+      "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"t_rtcq\"]/observation",
+      "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"tdo1\"]/observation",
+      "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"tdo2\"]/observation",
+      "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"tfb1\"]/observation",
+      "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"tfb2\"]/observation",
+      "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"fbpw\"]/observation",
+      "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"ffb2\"]/observation",
+      "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"iavg\"]/observation",
+      "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"t_arr\"]/observation",
+      "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"t_rtcq\"]/observation",
+      "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"tdo1\"]/observation",
+      "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"tdo2\"]/observation",
+      "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"tfb1\"]/observation",
+      "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"tfb2\"]/observation",
+      "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"fbpw\"]/observation",
+      "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"ffb2\"]/observation",
+      "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"iavg\"]/observation",
+      "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"t_arr\"]/observation",
+      "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"t_rtcq\"]/observation",
+      "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"tdo1\"]/observation",
+      "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"tdo2\"]/observation",
+      "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"tfb1\"]/observation",
+      "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"tfb2\"]/observation",
+      "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"fbpw\"]/observation",
+      "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"ffb2\"]/observation",
+      "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"iavg\"]/observation",
+      "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"t_arr\"]/observation",
+      "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"t_rtcq\"]/observation",
+      "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"tdo1\"]/observation",
+      "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"tdo2\"]/observation",
+      "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"tfb1\"]/observation",
+      "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"tfb2\"]/observation",
+      "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"fbpw\"]/observation",
+      "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"ffb2\"]/observation",
+      "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"iavg\"]/observation",
+      "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"t_arr\"]/observation",
+      "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"t_rtcq\"]/observation",
+      "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"tdo1\"]/observation",
+      "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"tdo2\"]/observation",
+      "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"tfb1\"]/observation",
+      "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"tfb2\"]/observation",
+      "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"fbpw\"]/observation",
+      "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"ffb2\"]/observation",
+      "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"iavg\"]/observation",
+      "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"t_arr\"]/observation",
+      "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"t_rtcq\"]/observation",
+      "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"tdo1\"]/observation",
+      "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"tdo2\"]/observation",
+      "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"tfb1\"]/observation",
+      "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"tfb2\"]/observation"
+    ],
+    "skipped": [],
+    "inapplicable": [
+      {
+        "id": "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"fbpw\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"ffb2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"iavg\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"t_arr\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"t_rtcq\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"tdo1\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"tdo2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"tfb1\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[0,\"typical/novdd/125C/params:vdd_val=2.97\",\"tfb2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"fbpw\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"ffb2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"iavg\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"t_arr\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"t_rtcq\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"tdo1\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"tdo2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"tfb1\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[1,\"typical/novdd/27C/params:vdd_val=3.3\",\"tfb2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"fbpw\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"ffb2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"iavg\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"t_arr\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"t_rtcq\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"tdo1\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"tdo2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"tfb1\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[2,\"ff/novdd/125C/params:vdd_val=2.97\",\"tfb2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"fbpw\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"ffb2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"iavg\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"t_arr\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"t_rtcq\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"tdo1\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"tdo2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"tfb1\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[3,\"ss/novdd/125C/params:vdd_val=2.97\",\"tfb2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"fbpw\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"ffb2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"iavg\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"t_arr\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"t_rtcq\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"tdo1\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"tdo2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"tfb1\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[4,\"fs/novdd/125C/params:vdd_val=2.97\",\"tfb2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"fbpw\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"ffb2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"iavg\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"t_arr\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"t_rtcq\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"tdo1\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"tdo2\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"tfb1\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[5,\"sf/novdd/125C/params:vdd_val=2.97\",\"tfb2\"]/limits",
+        "reason": "characterization_without_limits"
+      }
+    ],
+    "unknown": [],
+    "nothing_checked": false,
+    "nothing_checked_reasons": []
+  },
+  "provenance": {
+    "klt_version": "0.9.3.dev3692+g719ab7426e77",
+    "klt_git_commit": "719ab7426e775b607d1c419b8b36826958aa481e",
+    "klt_reinstall_spec": "klayout-tools @ git+https://github.com/2AMLogic/klayout-tools@719ab7426e775b607d1c419b8b36826958aa481e",
+    "klayout_version": "0.30.12",
+    "pdk": {
+      "name": "gf180mcuD",
+      "source": "search root: ~/.ciel",
+      "version": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7",
+      "ambiguous_sources": [
+        "search root: ~/.volare"
+      ]
+    },
+    "deck": {
+      "name": "sm141064.ngspice",
+      "content_hash": "sha256:f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+      "released": false
+    },
+    "input": {
+      "content_hash": "sha256:b33f84d65b177d48bd324156d3b0ef9e61a0e71563eb75d9c21b598455926cac",
+      "role": "netlist"
+    }
+  },
+  "measurements": [
+    {
+      "name": "tfb1",
+      "unit": "s",
+      "limits": null,
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": 8.00981e-07,
+        "margin": null
+      },
+      "min": {
+        "corner_id": "typical/novdd/27C/params:vdd_val=3.3",
+        "value": 6.00971e-07
+      },
+      "max": {
+        "corner_id": "fs/novdd/125C/params:vdd_val=2.97",
+        "value": 8.00985e-07
+      }
+    },
+    {
+      "name": "tfb2",
+      "unit": "s",
+      "limits": null,
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": 1.20098e-06,
+        "margin": null
+      },
+      "min": {
+        "corner_id": "typical/novdd/27C/params:vdd_val=3.3",
+        "value": 1.00097e-06
+      },
+      "max": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": 1.20098e-06
+      }
+    },
+    {
+      "name": "tdo1",
+      "unit": "s",
+      "limits": null,
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": 7.02617e-07,
+        "margin": null
+      },
+      "min": {
+        "corner_id": "typical/novdd/27C/params:vdd_val=3.3",
+        "value": 5.00964e-07
+      },
+      "max": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": 7.02617e-07
+      }
+    },
+    {
+      "name": "tdo2",
+      "unit": "s",
+      "limits": null,
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": 1.10262e-06,
+        "margin": null
+      },
+      "min": {
+        "corner_id": "typical/novdd/27C/params:vdd_val=3.3",
+        "value": 9.00964e-07
+      },
+      "max": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": 1.10262e-06
+      }
+    },
+    {
+      "name": "ffb2",
+      "unit": "s",
+      "limits": null,
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": 1.00098e-06,
+        "margin": null
+      },
+      "min": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": 1.00098e-06
+      },
+      "max": {
+        "corner_id": "ss/novdd/125C/params:vdd_val=2.97",
+        "value": 1.20099e-06
+      }
+    },
+    {
+      "name": "n_fb",
+      "unit": "vco_periods",
+      "limits": {
+        "min": 3.95,
+        "max": 4.05
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": 4.0,
+        "margin": 0.04999999999999982
+      },
+      "min": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": 4.0
+      },
+      "max": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": 4.0
+      },
+      "spec_row": "multiplication-ratio"
+    },
+    {
+      "name": "ndo",
+      "unit": "vco_periods",
+      "limits": {
+        "min": 3.95,
+        "max": 4.05
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "fs/novdd/125C/params:vdd_val=2.97",
+        "value": 3.99986,
+        "margin": 0.04985999999999979
+      },
+      "min": {
+        "corner_id": "fs/novdd/125C/params:vdd_val=2.97",
+        "value": 3.99986
+      },
+      "max": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": 4.0
+      },
+      "spec_row": "multiplication-ratio"
+    },
+    {
+      "name": "t_arr",
+      "unit": "s",
+      "limits": null,
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": 1.61679e-09,
+        "margin": null
+      },
+      "min": {
+        "corner_id": "fs/novdd/125C/params:vdd_val=2.97",
+        "value": 1.26316e-09
+      },
+      "max": {
+        "corner_id": "sf/novdd/125C/params:vdd_val=2.97",
+        "value": 9.99863e-08
+      }
+    },
+    {
+      "name": "t_rtcq",
+      "unit": "s",
+      "limits": null,
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": 9.99811e-08,
+        "margin": null
+      },
+      "min": {
+        "corner_id": "typical/novdd/27C/params:vdd_val=3.3",
+        "value": 9.99714e-08
+      },
+      "max": {
+        "corner_id": "ss/novdd/125C/params:vdd_val=2.97",
+        "value": 9.99885e-08
+      }
+    },
+    {
+      "name": "fbpw",
+      "unit": "s",
+      "limits": null,
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": -2.00001e-07,
+        "margin": null
+      },
+      "min": {
+        "corner_id": "fs/novdd/125C/params:vdd_val=2.97",
+        "value": -2.00008e-07
+      },
+      "max": {
+        "corner_id": "sf/novdd/125C/params:vdd_val=2.97",
+        "value": 2.00006e-07
+      }
+    },
+    {
+      "name": "iavg",
+      "unit": "A",
+      "limits": null,
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": -1.69531e-05,
+        "margin": null
+      },
+      "min": {
+        "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+        "value": -1.69531e-05
+      },
+      "max": {
+        "corner_id": "ss/novdd/125C/params:vdd_val=2.97",
+        "value": -1.42874e-05
+      }
+    }
+  ],
+  "corners": [
+    {
+      "corner_id": "typical/novdd/125C/params:vdd_val=2.97",
+      "process": "typical",
+      "supply_v": {},
+      "temperature_c": 125,
+      "params": {
+        "vdd_val": 2.97
+      },
+      "status": "pass",
+      "runtime_s": 5.932,
+      "peak_rss_bytes": 49963008,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "tfb1",
+          "value": 8.00981e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tfb2",
+          "value": 1.20098e-06,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tdo1",
+          "value": 7.02617e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tdo2",
+          "value": 1.10262e-06,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "ffb2",
+          "value": 1.00098e-06,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "n_fb",
+          "value": 4.0,
+          "unit": "vco_periods",
+          "status": "pass",
+          "margin": 0.04999999999999982
+        },
+        {
+          "name": "ndo",
+          "value": 4.0,
+          "unit": "vco_periods",
+          "status": "pass",
+          "margin": 0.04999999999999982
+        },
+        {
+          "name": "t_arr",
+          "value": 1.61679e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "t_rtcq",
+          "value": 9.99811e-08,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "fbpw",
+          "value": -2.00001e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "iavg",
+          "value": -1.69531e-05,
+          "unit": "A",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "typical/novdd/27C/params:vdd_val=3.3",
+      "process": "typical",
+      "supply_v": {},
+      "temperature_c": 27,
+      "params": {
+        "vdd_val": 3.3
+      },
+      "status": "pass",
+      "runtime_s": 4.974,
+      "peak_rss_bytes": 49963008,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "tfb1",
+          "value": 6.00971e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tfb2",
+          "value": 1.00097e-06,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tdo1",
+          "value": 5.00964e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tdo2",
+          "value": 9.00964e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "ffb2",
+          "value": 1.20097e-06,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "n_fb",
+          "value": 4.0,
+          "unit": "vco_periods",
+          "status": "pass",
+          "margin": 0.04999999999999982
+        },
+        {
+          "name": "ndo",
+          "value": 4.0,
+          "unit": "vco_periods",
+          "status": "pass",
+          "margin": 0.04999999999999982
+        },
+        {
+          "name": "t_arr",
+          "value": 9.99638e-08,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "t_rtcq",
+          "value": 9.99714e-08,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "fbpw",
+          "value": 1.99998e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "iavg",
+          "value": -1.56849e-05,
+          "unit": "A",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ff/novdd/125C/params:vdd_val=2.97",
+      "process": "ff",
+      "supply_v": {},
+      "temperature_c": 125,
+      "params": {
+        "vdd_val": 2.97
+      },
+      "status": "pass",
+      "runtime_s": 5.244,
+      "peak_rss_bytes": 49967104,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "tfb1",
+          "value": 6.00976e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tfb2",
+          "value": 1.00098e-06,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tdo1",
+          "value": 5.00975e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tdo2",
+          "value": 9.00975e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "ffb2",
+          "value": 1.20097e-06,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "n_fb",
+          "value": 4.0,
+          "unit": "vco_periods",
+          "status": "pass",
+          "margin": 0.04999999999999982
+        },
+        {
+          "name": "ndo",
+          "value": 4.0,
+          "unit": "vco_periods",
+          "status": "pass",
+          "margin": 0.04999999999999982
+        },
+        {
+          "name": "t_arr",
+          "value": 9.99752e-08,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "t_rtcq",
+          "value": 9.99763e-08,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "fbpw",
+          "value": 1.99999e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "iavg",
+          "value": -1.63193e-05,
+          "unit": "A",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ss/novdd/125C/params:vdd_val=2.97",
+      "process": "ss",
+      "supply_v": {},
+      "temperature_c": 125,
+      "params": {
+        "vdd_val": 2.97
+      },
+      "status": "pass",
+      "runtime_s": 6.142,
+      "peak_rss_bytes": 49967104,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "tfb1",
+          "value": 6.00988e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tfb2",
+          "value": 1.00099e-06,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tdo1",
+          "value": 5.02973e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tdo2",
+          "value": 9.02973e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "ffb2",
+          "value": 1.20099e-06,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "n_fb",
+          "value": 4.0,
+          "unit": "vco_periods",
+          "status": "pass",
+          "margin": 0.04999999999999982
+        },
+        {
+          "name": "ndo",
+          "value": 4.0,
+          "unit": "vco_periods",
+          "status": "pass",
+          "margin": 0.04999999999999982
+        },
+        {
+          "name": "t_arr",
+          "value": 1.97314e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "t_rtcq",
+          "value": 9.99885e-08,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "fbpw",
+          "value": 1.99999e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "iavg",
+          "value": -1.42874e-05,
+          "unit": "A",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "fs/novdd/125C/params:vdd_val=2.97",
+      "process": "fs",
+      "supply_v": {},
+      "temperature_c": 125,
+      "params": {
+        "vdd_val": 2.97
+      },
+      "status": "pass",
+      "runtime_s": 5.626,
+      "peak_rss_bytes": 49836032,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "tfb1",
+          "value": 8.00985e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tfb2",
+          "value": 1.20098e-06,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tdo1",
+          "value": 7.02277e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tdo2",
+          "value": 1.10226e-06,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "ffb2",
+          "value": 1.00098e-06,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "n_fb",
+          "value": 4.0,
+          "unit": "vco_periods",
+          "status": "pass",
+          "margin": 0.04999999999999982
+        },
+        {
+          "name": "ndo",
+          "value": 3.99986,
+          "unit": "vco_periods",
+          "status": "pass",
+          "margin": 0.04985999999999979
+        },
+        {
+          "name": "t_arr",
+          "value": 1.26316e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "t_rtcq",
+          "value": 9.99847e-08,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "fbpw",
+          "value": -2.00008e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "iavg",
+          "value": -1.65765e-05,
+          "unit": "A",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "sf/novdd/125C/params:vdd_val=2.97",
+      "process": "sf",
+      "supply_v": {},
+      "temperature_c": 125,
+      "params": {
+        "vdd_val": 2.97
+      },
+      "status": "pass",
+      "runtime_s": 5.975,
+      "peak_rss_bytes": 49836032,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "tfb1",
+          "value": 6.00978e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tfb2",
+          "value": 1.00098e-06,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tdo1",
+          "value": 5.00986e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "tdo2",
+          "value": 9.00986e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "ffb2",
+          "value": 1.20098e-06,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "n_fb",
+          "value": 4.0,
+          "unit": "vco_periods",
+          "status": "pass",
+          "margin": 0.04999999999999982
+        },
+        {
+          "name": "ndo",
+          "value": 4.0,
+          "unit": "vco_periods",
+          "status": "pass",
+          "margin": 0.04999999999999982
+        },
+        {
+          "name": "t_arr",
+          "value": 9.99863e-08,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "t_rtcq",
+          "value": 9.99782e-08,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "fbpw",
+          "value": 2.00006e-07,
+          "unit": "s",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "iavg",
+          "value": -1.49463e-05,
+          "unit": "A",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "batch_runner_request_feature_unverified",
+      "severity": "warning",
+      "message": "the client could not verify support for corners.params before launch because the AMI manifest has no candidate images. The worker will check these mandatory features when it starts.",
+      "features": [
+        "corners.params"
+      ],
+      "runner_klt_version": null,
+      "client_klt_version": "0.9.3.dev3692+g719ab7426e77",
+      "source": "manifest"
+    }
+  ]
+}
