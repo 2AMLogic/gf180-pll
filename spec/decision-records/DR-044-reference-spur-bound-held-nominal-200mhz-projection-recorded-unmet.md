@@ -1,17 +1,13 @@
 # DR-044: The Reference spur row is held at ≤ −55 dBc; the nominal corner's 200 MHz projection (−53.45 dBc) is recorded as a projected miss on the batch run, with a simulator-associated difference between the two backends recorded at that corner only
 
 - **Status**: proposed — ratified only by operator approval of the PR that
-  carries it (the two-key ceremony in `spec/README.md`). The disposition this
-  record drafts — hold the bound, record the miss, attribute it via the
-  control probe — was selected on issue #1061 on 2026-11-18 by that issue's
-  attended `/fleet:decide` session, which auto-selected option (a) of the
-  decision block under `--yolo 70` at 80% confidence (control probe first,
-  then a record that states a cause) — not an operator ruling. Ratification
-  stays with the operator's PR approval.
+  carries it (the two-key ceremony in `spec/README.md`).
 - **Date**: 2026-11-19
-- **Decided by**: Builder agent, issue #1061 (disposition auto-selected by
-  the issue's attended `/fleet:decide` session under `--yolo 70` at 80%
-  confidence — not an operator ruling)
+- **Decided by**: the disposition this record drafts (hold the bound, record
+  the miss, run a control probe first and then state a cause) was selected in
+  an attended session on #1061 on 2026-11-18; that selection was not an
+  operator ruling. This record was drafted by a Builder agent, issue #1061.
+  Ratification stays with the operator's approval of the PR that carries it.
 - **Evidence consumed**:
   `sim/reference-spur/records/20261118-212630-1649033.md` (batch, ngspice-47,
   open_pdks `f6eeac7`, minted by merged PR #1062, `Supersedes:
@@ -27,7 +23,8 @@
 The f6eeac7 re-qualification of `sim/reference-spur` (#828, PR #1062) moved
 the `spur_dbc_200m` verdicts. The column is the measured 150 MHz spur scaled
 **+2.50 dB** (`20·log10(200/150)`, arithmetic on the narrowband-FM relation,
-not a measurement) to the ratified band's 200 MHz binding point, against the
+not a measurement; it assumes the time-interval error is the same at 200 MHz
+as at 150 MHz, an assumption no simulation here tests) to the ratified band's 200 MHz binding point, against the
 unchanged −55 dBc bound:
 
 | corner | predecessor (old) | re-run (new) | verdict |
@@ -40,16 +37,16 @@ At the measured 150 MHz **all five corners pass on the batch run** (worst
 −55.95 dBc, `typical`, 0.95 dB of margin; the predecessor's own worst was
 −57.01). The worst
 scaled point moves −54.51 → −53.45, i.e. 1.06 dB worse, and from a cold corner
-to the nominal one; the nominal corner is **1.45 dB over** the bound. Direct
+to the nominal one; the nominal corner is **1.55 dB over** the bound (the
++2.50 dB scaling less the 0.95 dB measured margin). Direct
 measurement at 200 MHz is not this record's to make: no single static band code
 holds 200 MHz across the grid, which is why the binding-point campaign
 `reference-spur-band-top` exists, owed at #533.
 
 The two records differ in more than the PDK (predecessor: macOS/arm64,
 ngspice-46, dirty tree; re-run: Linux, ngspice-47 on the batch fleet image,
-clean tree), so #1061's 2026-11-18 decision block — auto-selected by the
-attended `/fleet:decide` session — ordered a control probe before anything
-was recorded. That probe re-ran the `typical` corner on the
+clean tree), so the disposition selected on #1061 on 2026-11-18 ordered a
+control probe before anything was recorded. That probe re-ran the `typical` corner on the
 **local ngspice-46 pin under the same `f6eeac7` PDK and the same deck**:
 −62.01 dBc measured, −59.51 dBc scaled, **PASS**. Alongside the two records it
 decomposes the nominal corner's movement:
@@ -64,12 +61,51 @@ On an identical deck and PDK the two configurations differ by **6.06 dB**
 (−62.01 local vs −55.95 batch), while the PDK at fixed ngspice-46 moved the
 number 3.65 dB in the opposite direction (−58.36 → −62.01). That comparison
 switches more than the simulator: it goes from the **local backend** (the
-ngspice-46 pin, `--backend local`, this host) to the **batch backend** (the
+ngspice-46 pin, `--backend local`) to the **batch backend** (the
 fleet image's ngspice-47). The nominal corner's PASS → FAIL flip is therefore
 recorded as a **simulator-associated difference at that corner** — associated
 with that local-to-batch switch, not attributed to the simulator alone — and
 not a PDK effect and not a design change. Nothing here licenses attribution at
 the other four corners: the overlap covers one corner and no other.
+
+That 6.06 dB is not uniform across the columns the record reports. From the
+same overlap table and the batch record's `spur_by_corner`:
+
+| `typical_27c_3.30v_vs1p795` | local ngspice-46, `f6eeac7` | batch ngspice-47, `f6eeac7` | gap |
+|---|---:|---:|---:|
+| `spur_dbc` (last window; the scored column) | −62.01 | −55.95 | **6.06 dB** |
+| `spur_dbc_zero_drift_fit` | −57.65 | −56.26 | **1.39 dB** |
+| `spur_tie_dbc` | −58.12 | −53.94 | 4.18 dB |
+| `tie_pk_ps` | 2.634 | 4.264 | — |
+
+The gap is concentrated in the last-window measurement. On the batch run at
+this corner that window is poorly settled: `fit_r2` is 0.122 (the record's own
+methodology reads a low `fit_r2` as "the windows are not described by the
+linear model"), and the first window reads −52.14 dBc against −55.95 dBc in
+the last, a **3.81 dB within-run spread** — larger than the 1.55 dB miss this
+record disposes of. A reader should therefore take the 6.06 dB as a difference
+in the scored last-window metric, with an unquantified part of it riding on
+settling, and not as a difference in a settled value.
+
+Two further limits on the attribution:
+
+- **The solver is not controlled.** The batch record names `Active solver:
+  SPARSE 1.3`. The local control ran with `--no-write`, minted no record and
+  so carries no active-solver line; its solver is not recorded, and solver is
+  an unexcluded variable alongside simulator version and execution backend.
+  [DR-040](DR-040-simulator-init-file-is-repository-staged-per-job-on-both-backends.md)
+  measured 204 of 414 initial-solution node values differing between SPARSE
+  1.3 and KLU on this deck.
+- **DR-040 Decision 6 cuts toward the simulator build, narrowly.** It records
+  that the local and batch backends agree exactly (ff, −40 °C, 3.63 V) when
+  both run the same `ngspice-47p1` build. That is the closest in-repo evidence
+  separating a simulator-build effect from a local-to-batch backend effect,
+  and it points at the build rather than the backend as what moves numbers.
+  It is one point on a different corner and a different build pair from the
+  control here (ngspice-46), and DR-040 states it is not a general
+  equivalence result — so it supports, and does not establish, reading the
+  typical-corner difference as a simulator-build effect, which is why this
+  record stays at "associated with the two configurations tested".
 
 ## Decision
 
@@ -79,7 +115,7 @@ the other four corners: the overlap covers one corner and no other.
 2. **Each record's verdicts are scoped to its own run.** On the batch run
    (ngspice-47, `f6eeac7`) the nominal corner's 200 MHz projection is recorded
    as a **projected miss**: −53.45 dBc (−55.95 dBc measured at 150 MHz,
-   +2.50 dB scaled), 1.45 dB over the bound, while its two cold corners pass
+   +2.50 dB scaled), 1.55 dB over the bound, while its two cold corners pass
    (−58.42, −65.69). On the predecessor run (ngspice-46, `c6d73a3`) the two
    cold-corner projections fail (−54.88, −54.51). One record's passes do not
    discharge the other's misses: whether a batch-executed record may supersede
@@ -95,7 +131,11 @@ the other four corners: the overlap covers one corner and no other.
    −59.51 dBc scaled and passes; the batch backend (ngspice-47 fleet image)
    reads −53.45 dBc scaled and fails. Both backends are named wherever this
    record states the cause, so each number can be read against the
-   configuration that produced it.
+   configuration that produced it. The reach is further limited as set out in
+   Context: the gap is 6.06 dB on the last-window `spur_dbc` and 1.39 dB on
+   the zero-drift fit, the batch point's last window is poorly settled
+   (`fit_r2` 0.122, 3.81 dB within-run spread), and the control's solver is
+   unrecorded.
 4. **DR-028's cross-version comparison caveat is retained.** The overlap point
    is one corner, not an equivalence proof: it shows the batch ngspice-47
    number is not interchangeable with an ngspice-46 one for this campaign —
@@ -140,7 +180,7 @@ the other four corners: the overlap covers one corner and no other.
 ## Consequences
 
 - The row's binding-point status, scoped per run: **projected unmet at the
-  nominal corner on the batch run** (−53.45 dBc, 1.45 dB over) and unmet at
+  nominal corner on the batch run** (−53.45 dBc, 1.55 dB over) and unmet at
   the predecessor's two cold corners on that earlier run (−54.88, −54.51).
   Each run's status is visible here rather than absorbed into a silent pass;
   which record's verdicts the row carries forward is the supersession
@@ -153,6 +193,10 @@ the other four corners: the overlap covers one corner and no other.
   measured value there determines whether the bound is met — and it now has a
   named worst corner (`typical`) and a measured 150 MHz margin of 0.95 dB to
   scale from.
+- No public comparison establishes the 200 MHz projection (−53.45 dBc at the
+  nominal corner) as competitive. This record does not pre-authorize
+  accepting the carried-forward miss; whether to accept it is for the
+  operator (Decision 5).
 - The simulator-associated split this record records (batch ngspice-47 fleet
   image vs the local ngspice-46 pin) is a fact #828's remaining
   re-qualifications will keep meeting; each campaign's numbers stay
