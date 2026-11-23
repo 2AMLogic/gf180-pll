@@ -67,12 +67,13 @@ Both hashes verified against `erc-report.json`'s own
 
 Every gate net's every metal level **passes** the real limit
 (`antenna_ratio_max: 400.0`, rules `ANT.16_i_ANT.2`..`ANT.4` from
-google/gf180mcu-pdk `f6eeac7`). Notably, this block's own supply-tied
-gate nodes — the net class that false-positive-violates under the area
-model in the other four cells (see
+google/gf180mcu-pdk `f6eeac7`). Notably, the net class that
+false-positive-violates under the area model in the other four cells
+(see
 [2AMLogic/klayout-tools#6975](https://github.com/2AMLogic/klayout-tools/issues/6975))
-— stay under 400 here: this block's rails are small enough that even the
-whole-rail cumulative area stays within the limit.
+— supply rails appearing as gate nets — is absent from this block:
+neither `VDD_DIV` nor `VSS` is the net of any of its 140 gates. The
+worst ratio is 289.75 on `Metal3` of the signal net `MB` (limit 400).
 
 ## Foundry-deck corroboration
 

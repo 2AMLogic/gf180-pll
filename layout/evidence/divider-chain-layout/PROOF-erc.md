@@ -358,11 +358,11 @@ The new envelope grades **checked: 420, skipped: 0** where the committed
 report reads checked: 0, skipped: 420 (its 140 `gate_reference_level`
 inapplicables stay, as expected), and **every gate net passes every
 level** — `status: clean` (exit 0), the first fully-graded clean ERC
-envelope in this repository. Even this block's rail-tied gate nodes —
-the net class that false-positive-violates under the area model in the
-other four cells
+envelope in this repository. It is clean because the net class that
+false-positive-violates under the area model in the other four cells
 ([2AMLogic/klayout-tools#6975](https://github.com/2AMLogic/klayout-tools/issues/6975))
-— stay under the 400 limit here; this block's rails are small enough
-that the whole-rail cumulative area passes on its own. `erc_status`
+is absent from this block: neither declared supply net (`VDD_DIV`,
+`VSS`) appears as a gate net among its 140 gates. The worst ratio is
+289.75 on `Metal3` of the signal net `MB` (limit 400). `erc_status`
 stays `clean` with zero findings, and the item-11 grader resolves this
 block's ERC half (reason `None`, supply nets `VDD_DIV`, `VSS`).
