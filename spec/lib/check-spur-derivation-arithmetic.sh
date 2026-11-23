@@ -105,6 +105,16 @@
 #    makes the `≈` visible to a reader, and a rule that rejected it would be
 #    pushing the document towards saying less than it knows.
 #
+#    The allowed set also holds the figures of the directly-measured table
+#    (rule 7). A direct measurement is a new class of evidence, not an
+#    exemption: it enters the allowed set only through a spec row that rule 7
+#    has re-read from a committed record.
+#
+# 7. DIRECT MEASUREMENTS. Every row of the `Directly measured spur at …`
+#    table must match, at the precision written, the `spur_dbc` the committed
+#    record named in that table's header holds for the row's record point. A
+#    missing record, a missing point or a disagreeing figure fails.
+#
 # WHAT IT DOES NOT DO
 #
 # It grades the derivation *from* its charge totals (7.93 / 11.19 / 11.66 fC)
@@ -302,6 +312,14 @@ measured = table_matching(
     and header[2].lower().startswith("scaled to"),
     "measured-spur table (header 'Measured spur at … | Scaled to …')",
 )
+direct = table_matching(
+    found,
+    lambda header: len(header) >= 4
+    and header[1].lower().startswith("directly measured spur at")
+    and header[2].lower().startswith("record point"),
+    "directly-measured-spur table (header 'Corner | Directly measured spur at "
+    "<f> MHz (<record path>) | Record point | …')",
+)
 step = table_matching(
     found,
     lambda header: len(header) >= 3
@@ -317,7 +335,7 @@ accounting = table_matching(
     "charge-accounting table (header 'Charge accounting at … | Total ΔQ | "
     "Derived spur')",
 )
-if measured is None or step is None or accounting is None:
+if measured is None or direct is None or step is None or accounting is None:
     sys.exit(1)
 
 # --------------------------------------------------------------- rule 1 ---
@@ -577,12 +595,63 @@ if target is None:
         "without it" % spec_rel
     )
 
+# --------------------------------------------------------------- rule 7 ---
+# A directly measured figure is read, not derived, so there is no arithmetic to
+# re-run: the check instead re-reads it from the committed record the table's
+# header names, at the precision the specification writes it.
+direct_figures = []
+record_ref = re.search(
+    r"(sim/[\w./-]+/records/[\w.-]+\.md)", " | ".join(direct[0])
+)
+record_text = read_text(repo_root, record_ref.group(1)) if record_ref else None
+if record_ref is None or record_text is None:
+    fail(
+        "%s's directly-measured-spur table header names no readable committed "
+        "record (sim/<campaign>/records/<id>.md); a measured figure with no "
+        "record behind it is a claim without a testbench" % spec_rel
+    )
+else:
+    for cells in direct[1:]:
+        if len(cells) < 3:
+            fail(
+                "%s's directly-measured-spur table has a row with %d cell(s), "
+                "fewer than its header declares" % (spec_rel, len(cells))
+            )
+            continue
+        written = cell_figure(cells[1], "directly-measured-spur table, figure")
+        point = plain(cells[2]).strip("` ")
+        if written is None:
+            continue
+        in_record = re.search(
+            r"^\s*\|\s*`%s`\s*\|\s*(%s)\s*\|" % (re.escape(point), NUMBER),
+            record_text,
+            re.M,
+        )
+        if in_record is None:
+            fail(
+                "%s's directly-measured row %r names record point %r, which "
+                "%s has no spur_dbc row for"
+                % (spec_rel, plain(cells[0]), point, record_ref.group(1))
+            )
+            continue
+        recorded = Figure(in_record.group(1))
+        if not written.agrees(recorded.value):
+            fail(
+                "%s writes %s dBc for %r, but %s records %s dBc for %s"
+                % (spec_rel, written, plain(cells[0]), record_ref.group(1),
+                   recorded, point)
+            )
+        direct_figures.append(written)
+
+if len(direct_figures) < 1:
+    fail("%s: parsed no directly measured corner" % spec_rel)
+
 if failures:
     sys.exit(1)
 
 allowed = [
     figure.value
-    for figure in list(derived_figures) + measured_figures + scaled_figures
+    for figure in list(derived_figures) + measured_figures + scaled_figures + direct_figures
     + [Figure(target.group(1))]
 ] + computed_values
 
@@ -615,7 +684,8 @@ print(
     "charge-accounting row(s) re-derived unrounded from their own total ΔQ, the "
     "worst-case sum a linear add of its own two terms, "
     "and %d measured corner(s) scaled %g -> %g MHz by their own stated "
-    "+%.2f dB; %d dBc figure(s) quoted in %s all trace to one of them or to "
+    "+%.2f dB, %d directly measured corner(s) re-read from %s; "
+    "%d dBc figure(s) quoted in %s all trace to one of them or to "
     "the ratified line (%d figure(s) written with `≈`, graded to one unit of "
     "the last written place)"
     % (
@@ -628,6 +698,8 @@ print(
         lo,
         hi,
         constant,
+        len(direct_figures),
+        record_ref.group(1),
         len(quoted),
         proposal_rel,
         approximate,
