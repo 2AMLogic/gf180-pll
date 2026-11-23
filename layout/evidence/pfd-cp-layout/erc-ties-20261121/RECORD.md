@@ -36,9 +36,10 @@ committed spec stays byte-unchanged at its recorded path so
 | `nwell_vdd` | `well_excludes_boxes: [[180, 8, 181, 9]]` | 14 | `Comp ∩ Nplus` | `VDD` |
 | `nwell_psrc` | `well_requires_boxes: [[180, 8, 181, 9]]` | 1 | `Comp ∩ Nplus` | `PSRC` |
 
-The box `[180, 8, 181, 9]` µm lies inside the fifteenth merged Nwell
-`(176.820, 7.755)`–`(279.820, 12.555)` µm (the box edges touch that well's
-boundary; it is contained in exactly this one well) and interacts with no other well
+The box `[180, 8, 181, 9]` µm lies strictly inside the fifteenth merged Nwell
+`(176.820, 7.755)`–`(279.820, 12.555)` µm (its edges touch no Nwell
+boundary -- unlike the assembly's 0.1 µm transformed probes, each of which does
+touch its target well's boundary; it is contained in exactly this one well) and interacts with no other well
 (verified by erosion: the box minus the merged Nwell region is empty), so the
 two entries partition all fifteen drawn Nwell shapes disjointly and
 exhaustively -- 14 + 1 = the 15 merged shapes `klayout.db` counts on this GDS.
