@@ -1,0 +1,2456 @@
+{
+  "schema_version": 2,
+  "file": {
+    "path": "layout/evidence/vco-layout/vco_block.gds",
+    "scope": "repo"
+  },
+  "spec": "layout/evidence/vco-layout/erc-antenna-20261120/erc-supply-spec.json",
+  "pdk": "gf180mcu",
+  "findings_only": false,
+  "gate_role": "poly2",
+  "gate_count": 29,
+  "antenna_tables_omitted": false,
+  "gates": [
+    {
+      "gate_id": "gate0",
+      "net": "GND_VCO",
+      "gate_area_um2": 4.4,
+      "antenna_verdict": "violate",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 32.52,
+          "cumulative_area_um2": 32.52,
+          "antenna_ratio": 7.390909,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 3099.6548,
+          "cumulative_area_um2": 3132.1748,
+          "antenna_ratio": 711.857909,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "violate",
+          "remedy": {
+            "type": "diode_insertion",
+            "net": "GND_VCO",
+            "layer": "Metal1",
+            "target_layer": null,
+            "justification": "net 'GND_VCO' exceeds the antenna-ratio limit at 'Metal1' (ratio 712 > 400); no adjacent stackup level has margin to absorb the excess routing (a layer-local violation with no jump target) -- insert an antenna diode on this net at 'Metal1' to bleed off accumulated charge"
+          }
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 3132.1748,
+          "antenna_ratio": 711.857909,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "violate",
+          "remedy": {
+            "type": "diode_insertion",
+            "net": "GND_VCO",
+            "layer": "Metal2",
+            "target_layer": null,
+            "justification": "net 'GND_VCO' exceeds the antenna-ratio limit at 'Metal2' (ratio 712 > 400); the violation is already present at the preceding stackup level ('Metal1'), so it carries forward regardless of how routing on 'Metal2' is redistributed -- insert an antenna diode on this net at 'Metal2' to bleed off accumulated charge"
+          }
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 3132.1748,
+          "antenna_ratio": 711.857909,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "violate",
+          "remedy": {
+            "type": "diode_insertion",
+            "net": "GND_VCO",
+            "layer": "Metal3",
+            "target_layer": null,
+            "justification": "net 'GND_VCO' exceeds the antenna-ratio limit at 'Metal3' (ratio 712 > 400); the violation is already present at the preceding stackup level ('Metal2'), so it carries forward regardless of how routing on 'Metal3' is redistributed -- insert an antenna diode on this net at 'Metal3' to bleed off accumulated charge"
+          }
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 3132.1748,
+          "antenna_ratio": 711.857909,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "violate",
+          "remedy": {
+            "type": "diode_insertion",
+            "net": "GND_VCO",
+            "layer": "Metal4",
+            "target_layer": null,
+            "justification": "net 'GND_VCO' exceeds the antenna-ratio limit at 'Metal4' (ratio 712 > 400); the violation is already present at the preceding stackup level ('Metal3'), so it carries forward regardless of how routing on 'Metal4' is redistributed -- insert an antenna diode on this net at 'Metal4' to bleed off accumulated charge"
+          }
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 3132.1748,
+          "antenna_ratio": 711.857909,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "violate",
+          "remedy": {
+            "type": "diode_insertion",
+            "net": "GND_VCO",
+            "layer": "Metal5",
+            "target_layer": null,
+            "justification": "net 'GND_VCO' exceeds the antenna-ratio limit at 'Metal5' (ratio 712 > 400); the violation is already present at the preceding stackup level ('Metal4'), so it carries forward regardless of how routing on 'Metal5' is redistributed -- insert an antenna diode on this net at 'Metal5' to bleed off accumulated charge"
+          }
+        }
+      ]
+    },
+    {
+      "gate_id": "gate1",
+      "net": null,
+      "gate_area_um2": 2.0,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 3.44,
+          "cumulative_area_um2": 3.44,
+          "antenna_ratio": 1.72,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 12.5444,
+          "cumulative_area_um2": 15.9844,
+          "antenna_ratio": 7.9922,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 1.6456,
+          "cumulative_area_um2": 17.63,
+          "antenna_ratio": 8.815,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 17.63,
+          "antenna_ratio": 8.815,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 17.63,
+          "antenna_ratio": 8.815,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 17.63,
+          "antenna_ratio": 8.815,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate2",
+      "net": null,
+      "gate_area_um2": 9.0,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 13.32,
+          "cumulative_area_um2": 13.32,
+          "antenna_ratio": 1.48,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 29.9416,
+          "cumulative_area_um2": 43.2616,
+          "antenna_ratio": 4.806844,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 96.1576,
+          "cumulative_area_um2": 139.4192,
+          "antenna_ratio": 15.491022,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 139.4192,
+          "antenna_ratio": 15.491022,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 139.4192,
+          "antenna_ratio": 15.491022,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 139.4192,
+          "antenna_ratio": 15.491022,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate3",
+      "net": null,
+      "gate_area_um2": 12.0,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 14.88,
+          "cumulative_area_um2": 14.88,
+          "antenna_ratio": 1.24,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 25.794,
+          "cumulative_area_um2": 40.674,
+          "antenna_ratio": 3.3895,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 77.3916,
+          "cumulative_area_um2": 118.0656,
+          "antenna_ratio": 9.8388,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 118.0656,
+          "antenna_ratio": 9.8388,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 118.0656,
+          "antenna_ratio": 9.8388,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 118.0656,
+          "antenna_ratio": 9.8388,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate4",
+      "net": null,
+      "gate_area_um2": 22.5,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 26.82,
+          "cumulative_area_um2": 26.82,
+          "antenna_ratio": 1.192,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 58.5452,
+          "cumulative_area_um2": 85.3652,
+          "antenna_ratio": 3.794009,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 100.5312,
+          "cumulative_area_um2": 185.8964,
+          "antenna_ratio": 8.262062,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 185.8964,
+          "antenna_ratio": 8.262062,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 185.8964,
+          "antenna_ratio": 8.262062,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 185.8964,
+          "antenna_ratio": 8.262062,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate5",
+      "net": null,
+      "gate_area_um2": 1.0,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 2.44,
+          "cumulative_area_um2": 2.44,
+          "antenna_ratio": 2.44,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 11.8364,
+          "cumulative_area_um2": 14.2764,
+          "antenna_ratio": 14.2764,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 46.0372,
+          "cumulative_area_um2": 60.3136,
+          "antenna_ratio": 60.3136,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 60.3136,
+          "antenna_ratio": 60.3136,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 60.3136,
+          "antenna_ratio": 60.3136,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 60.3136,
+          "antenna_ratio": 60.3136,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate6",
+      "net": null,
+      "gate_area_um2": 86.5,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 95.14,
+          "cumulative_area_um2": 95.14,
+          "antenna_ratio": 1.099884,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 122.7576,
+          "cumulative_area_um2": 217.8976,
+          "antenna_ratio": 2.519047,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 141.2312,
+          "cumulative_area_um2": 359.1288,
+          "antenna_ratio": 4.151778,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 359.1288,
+          "antenna_ratio": 4.151778,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 359.1288,
+          "antenna_ratio": 4.151778,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 359.1288,
+          "antenna_ratio": 4.151778,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate7",
+      "net": null,
+      "gate_area_um2": 10.0,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 11.44,
+          "cumulative_area_um2": 11.44,
+          "antenna_ratio": 1.144,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 1.8616,
+          "cumulative_area_um2": 13.3016,
+          "antenna_ratio": 1.33016,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 24.5784,
+          "cumulative_area_um2": 37.88,
+          "antenna_ratio": 3.788,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 37.88,
+          "antenna_ratio": 3.788,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 37.88,
+          "antenna_ratio": 3.788,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 37.88,
+          "antenna_ratio": 3.788,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate8",
+      "net": "VDD_VCO",
+      "gate_area_um2": 5000.0,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 5124.0,
+          "cumulative_area_um2": 5124.0,
+          "antenna_ratio": 1.0248,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 1571.3734,
+          "cumulative_area_um2": 6695.3734,
+          "antenna_ratio": 1.339075,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 246.884,
+          "cumulative_area_um2": 6942.2574,
+          "antenna_ratio": 1.388451,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 6942.2574,
+          "antenna_ratio": 1.388451,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 6942.2574,
+          "antenna_ratio": 1.388451,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 6942.2574,
+          "antenna_ratio": 1.388451,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate9",
+      "net": null,
+      "gate_area_um2": 8.61,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 11.49,
+          "cumulative_area_um2": 11.49,
+          "antenna_ratio": 1.334495,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 18.6612,
+          "cumulative_area_um2": 30.1512,
+          "antenna_ratio": 3.501882,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 4.0216,
+          "cumulative_area_um2": 34.1728,
+          "antenna_ratio": 3.968966,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 34.1728,
+          "antenna_ratio": 3.968966,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 34.1728,
+          "antenna_ratio": 3.968966,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 34.1728,
+          "antenna_ratio": 3.968966,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate10",
+      "net": null,
+      "gate_area_um2": 1.0,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 1.79,
+          "cumulative_area_um2": 1.79,
+          "antenna_ratio": 1.79,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 15.23,
+          "cumulative_area_um2": 17.02,
+          "antenna_ratio": 17.02,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 44.2684,
+          "cumulative_area_um2": 61.2884,
+          "antenna_ratio": 61.2884,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 61.2884,
+          "antenna_ratio": 61.2884,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 61.2884,
+          "antenna_ratio": 61.2884,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 61.2884,
+          "antenna_ratio": 61.2884,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate11",
+      "net": null,
+      "gate_area_um2": 1.0,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 1.79,
+          "cumulative_area_um2": 1.79,
+          "antenna_ratio": 1.79,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 19.278,
+          "cumulative_area_um2": 21.068,
+          "antenna_ratio": 21.068,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 86.1608,
+          "cumulative_area_um2": 107.2288,
+          "antenna_ratio": 107.2288,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 107.2288,
+          "antenna_ratio": 107.2288,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 107.2288,
+          "antenna_ratio": 107.2288,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 107.2288,
+          "antenna_ratio": 107.2288,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate12",
+      "net": null,
+      "gate_area_um2": 1.0,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 1.79,
+          "cumulative_area_um2": 1.79,
+          "antenna_ratio": 1.79,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 17.87,
+          "cumulative_area_um2": 19.66,
+          "antenna_ratio": 19.66,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 28.4724,
+          "cumulative_area_um2": 48.1324,
+          "antenna_ratio": 48.1324,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 48.1324,
+          "antenna_ratio": 48.1324,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 48.1324,
+          "antenna_ratio": 48.1324,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 48.1324,
+          "antenna_ratio": 48.1324,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate13",
+      "net": null,
+      "gate_area_um2": 15.0,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 19.32,
+          "cumulative_area_um2": 19.32,
+          "antenna_ratio": 1.288,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 58.8144,
+          "cumulative_area_um2": 78.1344,
+          "antenna_ratio": 5.20896,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 82.6364,
+          "cumulative_area_um2": 160.7708,
+          "antenna_ratio": 10.718053,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 160.7708,
+          "antenna_ratio": 10.718053,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 160.7708,
+          "antenna_ratio": 10.718053,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 160.7708,
+          "antenna_ratio": 10.718053,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate14",
+      "net": null,
+      "gate_area_um2": 32.3,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 35.18,
+          "cumulative_area_um2": 35.18,
+          "antenna_ratio": 1.089164,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 58.3962,
+          "cumulative_area_um2": 93.5762,
+          "antenna_ratio": 2.897096,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 105.1512,
+          "cumulative_area_um2": 198.7274,
+          "antenna_ratio": 6.152551,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 198.7274,
+          "antenna_ratio": 6.152551,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 198.7274,
+          "antenna_ratio": 6.152551,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 198.7274,
+          "antenna_ratio": 6.152551,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate15",
+      "net": null,
+      "gate_area_um2": 1.84,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 3.65,
+          "cumulative_area_um2": 3.65,
+          "antenna_ratio": 1.983696,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 20.2852,
+          "cumulative_area_um2": 23.9352,
+          "antenna_ratio": 13.008261,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 89.9976,
+          "cumulative_area_um2": 113.9328,
+          "antenna_ratio": 61.92,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 113.9328,
+          "antenna_ratio": 61.92,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 113.9328,
+          "antenna_ratio": 61.92,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 113.9328,
+          "antenna_ratio": 61.92,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate16",
+      "net": null,
+      "gate_area_um2": 1.84,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 3.65,
+          "cumulative_area_um2": 3.65,
+          "antenna_ratio": 1.983696,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 15.5332,
+          "cumulative_area_um2": 19.1832,
+          "antenna_ratio": 10.425652,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 69.6696,
+          "cumulative_area_um2": 88.8528,
+          "antenna_ratio": 48.289565,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 88.8528,
+          "antenna_ratio": 48.289565,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 88.8528,
+          "antenna_ratio": 48.289565,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 88.8528,
+          "antenna_ratio": 48.289565,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate17",
+      "net": null,
+      "gate_area_um2": 1.84,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 3.65,
+          "cumulative_area_um2": 3.65,
+          "antenna_ratio": 1.983696,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 18.8772,
+          "cumulative_area_um2": 22.5272,
+          "antenna_ratio": 12.243043,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 58.7576,
+          "cumulative_area_um2": 81.2848,
+          "antenna_ratio": 44.176522,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 81.2848,
+          "antenna_ratio": 44.176522,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 81.2848,
+          "antenna_ratio": 44.176522,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 81.2848,
+          "antenna_ratio": 44.176522,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate18",
+      "net": null,
+      "gate_area_um2": 17.22,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 20.1,
+          "cumulative_area_um2": 20.1,
+          "antenna_ratio": 1.167247,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 27.462,
+          "cumulative_area_um2": 47.562,
+          "antenna_ratio": 2.762021,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 4.0216,
+          "cumulative_area_um2": 51.5836,
+          "antenna_ratio": 2.995563,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 51.5836,
+          "antenna_ratio": 2.995563,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 51.5836,
+          "antenna_ratio": 2.995563,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 51.5836,
+          "antenna_ratio": 2.995563,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate19",
+      "net": null,
+      "gate_area_um2": 78.88,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 90.4,
+          "cumulative_area_um2": 90.4,
+          "antenna_ratio": 1.146045,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 61.8032,
+          "cumulative_area_um2": 152.2032,
+          "antenna_ratio": 1.929554,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 38.192,
+          "cumulative_area_um2": 190.3952,
+          "antenna_ratio": 2.413732,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 190.3952,
+          "antenna_ratio": 2.413732,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 190.3952,
+          "antenna_ratio": 2.413732,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 190.3952,
+          "antenna_ratio": 2.413732,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate20",
+      "net": null,
+      "gate_area_um2": 14.0,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 19.53,
+          "cumulative_area_um2": 19.53,
+          "antenna_ratio": 1.395,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 62.8436,
+          "cumulative_area_um2": 82.3736,
+          "antenna_ratio": 5.883829,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 191.51,
+          "cumulative_area_um2": 273.8836,
+          "antenna_ratio": 19.563114,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 273.8836,
+          "antenna_ratio": 19.563114,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 273.8836,
+          "antenna_ratio": 19.563114,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 273.8836,
+          "antenna_ratio": 19.563114,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate21",
+      "net": null,
+      "gate_area_um2": 30.0,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 34.74,
+          "cumulative_area_um2": 34.74,
+          "antenna_ratio": 1.158,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 21.942,
+          "cumulative_area_um2": 56.682,
+          "antenna_ratio": 1.8894,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 202.0524,
+          "cumulative_area_um2": 258.7344,
+          "antenna_ratio": 8.62448,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 258.7344,
+          "antenna_ratio": 8.62448,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 258.7344,
+          "antenna_ratio": 8.62448,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 258.7344,
+          "antenna_ratio": 8.62448,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate22",
+      "net": "S5.Y,Y5,Y5_CLK_IN",
+      "gate_area_um2": 2.45,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 4.49,
+          "cumulative_area_um2": 4.49,
+          "antenna_ratio": 1.832653,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 21.7992,
+          "cumulative_area_um2": 26.2892,
+          "antenna_ratio": 10.730286,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 20.4204,
+          "cumulative_area_um2": 46.7096,
+          "antenna_ratio": 19.065143,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 46.7096,
+          "antenna_ratio": 19.065143,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 46.7096,
+          "antenna_ratio": 19.065143,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 46.7096,
+          "antenna_ratio": 19.065143,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate23",
+      "net": "S1.Y,Y1",
+      "gate_area_um2": 1.96,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 2.98,
+          "cumulative_area_um2": 2.98,
+          "antenna_ratio": 1.520408,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 8.7176,
+          "cumulative_area_um2": 11.6976,
+          "antenna_ratio": 5.968163,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 5.3152,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate24",
+      "net": "S2.Y,Y2",
+      "gate_area_um2": 1.96,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 2.98,
+          "cumulative_area_um2": 2.98,
+          "antenna_ratio": 1.520408,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 8.7176,
+          "cumulative_area_um2": 11.6976,
+          "antenna_ratio": 5.968163,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 5.3152,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate25",
+      "net": "S3.Y,Y3",
+      "gate_area_um2": 1.96,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 2.98,
+          "cumulative_area_um2": 2.98,
+          "antenna_ratio": 1.520408,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 8.7176,
+          "cumulative_area_um2": 11.6976,
+          "antenna_ratio": 5.968163,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 5.3152,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate26",
+      "net": "S4.Y,Y4",
+      "gate_area_um2": 1.96,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 2.98,
+          "cumulative_area_um2": 2.98,
+          "antenna_ratio": 1.520408,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 8.7176,
+          "cumulative_area_um2": 11.6976,
+          "antenna_ratio": 5.968163,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 5.3152,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 17.0128,
+          "antenna_ratio": 8.68,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate27",
+      "net": "NB1",
+      "gate_area_um2": 1.47,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 2.49,
+          "cumulative_area_um2": 2.49,
+          "antenna_ratio": 1.693878,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 3.6676,
+          "cumulative_area_um2": 6.1576,
+          "antenna_ratio": 4.188844,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 4.8202,
+          "cumulative_area_um2": 10.9778,
+          "antenna_ratio": 7.467891,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 10.9778,
+          "antenna_ratio": 7.467891,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 10.9778,
+          "antenna_ratio": 7.467891,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 10.9778,
+          "antenna_ratio": 7.467891,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    },
+    {
+      "gate_id": "gate28",
+      "net": "NB2",
+      "gate_area_um2": 4.41,
+      "antenna_verdict": "pass",
+      "levels": [
+        {
+          "layer": "poly2",
+          "step_area_um2": 5.43,
+          "cumulative_area_um2": 5.43,
+          "antenna_ratio": 1.231293,
+          "antenna_ratio_max": null,
+          "antenna_ratio_source": null,
+          "verdict": "unchecked",
+          "remedy": null
+        },
+        {
+          "layer": "Metal1",
+          "step_area_um2": 5.8376,
+          "cumulative_area_um2": 11.2676,
+          "antenna_ratio": 2.555011,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.2', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal2",
+          "step_area_um2": 5.1502,
+          "cumulative_area_um2": 16.4178,
+          "antenna_ratio": 3.722857,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.3', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal3",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 16.4178,
+          "antenna_ratio": 3.722857,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.4', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal4",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 16.4178,
+          "antenna_ratio": 3.722857,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.5', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        },
+        {
+          "layer": "Metal5",
+          "step_area_um2": 0.0,
+          "cumulative_area_um2": 16.4178,
+          "antenna_ratio": 3.722857,
+          "antenna_ratio_max": 400.0,
+          "antenna_ratio_source": "https://github.com/google/gf180mcu-pdk/blob/f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7/libs.tech/klayout/tech/drc/rule_decks/antenna.rb rule 'ANT.16_i_ANT.6', gf180mcu-pdk f6eeac7, w/o-diode limit (area approximates perimeter)",
+          "verdict": "pass",
+          "remedy": null
+        }
+      ]
+    }
+  ],
+  "nets": [
+    {
+      "name": "VDD_VCO",
+      "matched_islands": 1,
+      "expected_islands": 1,
+      "roles": [],
+      "unlabelled_islands": null,
+      "unlabelled_area_um2": null,
+      "unlabelled_bbox": null,
+      "unlabelled_allowed_islands": null
+    },
+    {
+      "name": "GND_VCO",
+      "matched_islands": 1,
+      "expected_islands": 1,
+      "roles": [],
+      "unlabelled_islands": null,
+      "unlabelled_area_um2": null,
+      "unlabelled_bbox": null,
+      "unlabelled_allowed_islands": null
+    }
+  ],
+  "erc_findings": [],
+  "erc_finding_count": 0,
+  "erc_status": "clean",
+  "status": "violations",
+  "coverage": {
+    "scope": "antenna",
+    "schema_version": 1,
+    "known": true,
+    "checked": [
+      "antenna:[\"gate0\",\"Metal1\"]",
+      "antenna:[\"gate0\",\"Metal2\"]",
+      "antenna:[\"gate0\",\"Metal3\"]",
+      "antenna:[\"gate0\",\"Metal4\"]",
+      "antenna:[\"gate0\",\"Metal5\"]",
+      "antenna:[\"gate1\",\"Metal1\"]",
+      "antenna:[\"gate1\",\"Metal2\"]",
+      "antenna:[\"gate1\",\"Metal3\"]",
+      "antenna:[\"gate1\",\"Metal4\"]",
+      "antenna:[\"gate1\",\"Metal5\"]",
+      "antenna:[\"gate10\",\"Metal1\"]",
+      "antenna:[\"gate10\",\"Metal2\"]",
+      "antenna:[\"gate10\",\"Metal3\"]",
+      "antenna:[\"gate10\",\"Metal4\"]",
+      "antenna:[\"gate10\",\"Metal5\"]",
+      "antenna:[\"gate11\",\"Metal1\"]",
+      "antenna:[\"gate11\",\"Metal2\"]",
+      "antenna:[\"gate11\",\"Metal3\"]",
+      "antenna:[\"gate11\",\"Metal4\"]",
+      "antenna:[\"gate11\",\"Metal5\"]",
+      "antenna:[\"gate12\",\"Metal1\"]",
+      "antenna:[\"gate12\",\"Metal2\"]",
+      "antenna:[\"gate12\",\"Metal3\"]",
+      "antenna:[\"gate12\",\"Metal4\"]",
+      "antenna:[\"gate12\",\"Metal5\"]",
+      "antenna:[\"gate13\",\"Metal1\"]",
+      "antenna:[\"gate13\",\"Metal2\"]",
+      "antenna:[\"gate13\",\"Metal3\"]",
+      "antenna:[\"gate13\",\"Metal4\"]",
+      "antenna:[\"gate13\",\"Metal5\"]",
+      "antenna:[\"gate14\",\"Metal1\"]",
+      "antenna:[\"gate14\",\"Metal2\"]",
+      "antenna:[\"gate14\",\"Metal3\"]",
+      "antenna:[\"gate14\",\"Metal4\"]",
+      "antenna:[\"gate14\",\"Metal5\"]",
+      "antenna:[\"gate15\",\"Metal1\"]",
+      "antenna:[\"gate15\",\"Metal2\"]",
+      "antenna:[\"gate15\",\"Metal3\"]",
+      "antenna:[\"gate15\",\"Metal4\"]",
+      "antenna:[\"gate15\",\"Metal5\"]",
+      "antenna:[\"gate16\",\"Metal1\"]",
+      "antenna:[\"gate16\",\"Metal2\"]",
+      "antenna:[\"gate16\",\"Metal3\"]",
+      "antenna:[\"gate16\",\"Metal4\"]",
+      "antenna:[\"gate16\",\"Metal5\"]",
+      "antenna:[\"gate17\",\"Metal1\"]",
+      "antenna:[\"gate17\",\"Metal2\"]",
+      "antenna:[\"gate17\",\"Metal3\"]",
+      "antenna:[\"gate17\",\"Metal4\"]",
+      "antenna:[\"gate17\",\"Metal5\"]",
+      "antenna:[\"gate18\",\"Metal1\"]",
+      "antenna:[\"gate18\",\"Metal2\"]",
+      "antenna:[\"gate18\",\"Metal3\"]",
+      "antenna:[\"gate18\",\"Metal4\"]",
+      "antenna:[\"gate18\",\"Metal5\"]",
+      "antenna:[\"gate19\",\"Metal1\"]",
+      "antenna:[\"gate19\",\"Metal2\"]",
+      "antenna:[\"gate19\",\"Metal3\"]",
+      "antenna:[\"gate19\",\"Metal4\"]",
+      "antenna:[\"gate19\",\"Metal5\"]",
+      "antenna:[\"gate2\",\"Metal1\"]",
+      "antenna:[\"gate2\",\"Metal2\"]",
+      "antenna:[\"gate2\",\"Metal3\"]",
+      "antenna:[\"gate2\",\"Metal4\"]",
+      "antenna:[\"gate2\",\"Metal5\"]",
+      "antenna:[\"gate20\",\"Metal1\"]",
+      "antenna:[\"gate20\",\"Metal2\"]",
+      "antenna:[\"gate20\",\"Metal3\"]",
+      "antenna:[\"gate20\",\"Metal4\"]",
+      "antenna:[\"gate20\",\"Metal5\"]",
+      "antenna:[\"gate21\",\"Metal1\"]",
+      "antenna:[\"gate21\",\"Metal2\"]",
+      "antenna:[\"gate21\",\"Metal3\"]",
+      "antenna:[\"gate21\",\"Metal4\"]",
+      "antenna:[\"gate21\",\"Metal5\"]",
+      "antenna:[\"gate22\",\"Metal1\"]",
+      "antenna:[\"gate22\",\"Metal2\"]",
+      "antenna:[\"gate22\",\"Metal3\"]",
+      "antenna:[\"gate22\",\"Metal4\"]",
+      "antenna:[\"gate22\",\"Metal5\"]",
+      "antenna:[\"gate23\",\"Metal1\"]",
+      "antenna:[\"gate23\",\"Metal2\"]",
+      "antenna:[\"gate23\",\"Metal3\"]",
+      "antenna:[\"gate23\",\"Metal4\"]",
+      "antenna:[\"gate23\",\"Metal5\"]",
+      "antenna:[\"gate24\",\"Metal1\"]",
+      "antenna:[\"gate24\",\"Metal2\"]",
+      "antenna:[\"gate24\",\"Metal3\"]",
+      "antenna:[\"gate24\",\"Metal4\"]",
+      "antenna:[\"gate24\",\"Metal5\"]",
+      "antenna:[\"gate25\",\"Metal1\"]",
+      "antenna:[\"gate25\",\"Metal2\"]",
+      "antenna:[\"gate25\",\"Metal3\"]",
+      "antenna:[\"gate25\",\"Metal4\"]",
+      "antenna:[\"gate25\",\"Metal5\"]",
+      "antenna:[\"gate26\",\"Metal1\"]",
+      "antenna:[\"gate26\",\"Metal2\"]",
+      "antenna:[\"gate26\",\"Metal3\"]",
+      "antenna:[\"gate26\",\"Metal4\"]",
+      "antenna:[\"gate26\",\"Metal5\"]",
+      "antenna:[\"gate27\",\"Metal1\"]",
+      "antenna:[\"gate27\",\"Metal2\"]",
+      "antenna:[\"gate27\",\"Metal3\"]",
+      "antenna:[\"gate27\",\"Metal4\"]",
+      "antenna:[\"gate27\",\"Metal5\"]",
+      "antenna:[\"gate28\",\"Metal1\"]",
+      "antenna:[\"gate28\",\"Metal2\"]",
+      "antenna:[\"gate28\",\"Metal3\"]",
+      "antenna:[\"gate28\",\"Metal4\"]",
+      "antenna:[\"gate28\",\"Metal5\"]",
+      "antenna:[\"gate3\",\"Metal1\"]",
+      "antenna:[\"gate3\",\"Metal2\"]",
+      "antenna:[\"gate3\",\"Metal3\"]",
+      "antenna:[\"gate3\",\"Metal4\"]",
+      "antenna:[\"gate3\",\"Metal5\"]",
+      "antenna:[\"gate4\",\"Metal1\"]",
+      "antenna:[\"gate4\",\"Metal2\"]",
+      "antenna:[\"gate4\",\"Metal3\"]",
+      "antenna:[\"gate4\",\"Metal4\"]",
+      "antenna:[\"gate4\",\"Metal5\"]",
+      "antenna:[\"gate5\",\"Metal1\"]",
+      "antenna:[\"gate5\",\"Metal2\"]",
+      "antenna:[\"gate5\",\"Metal3\"]",
+      "antenna:[\"gate5\",\"Metal4\"]",
+      "antenna:[\"gate5\",\"Metal5\"]",
+      "antenna:[\"gate6\",\"Metal1\"]",
+      "antenna:[\"gate6\",\"Metal2\"]",
+      "antenna:[\"gate6\",\"Metal3\"]",
+      "antenna:[\"gate6\",\"Metal4\"]",
+      "antenna:[\"gate6\",\"Metal5\"]",
+      "antenna:[\"gate7\",\"Metal1\"]",
+      "antenna:[\"gate7\",\"Metal2\"]",
+      "antenna:[\"gate7\",\"Metal3\"]",
+      "antenna:[\"gate7\",\"Metal4\"]",
+      "antenna:[\"gate7\",\"Metal5\"]",
+      "antenna:[\"gate8\",\"Metal1\"]",
+      "antenna:[\"gate8\",\"Metal2\"]",
+      "antenna:[\"gate8\",\"Metal3\"]",
+      "antenna:[\"gate8\",\"Metal4\"]",
+      "antenna:[\"gate8\",\"Metal5\"]",
+      "antenna:[\"gate9\",\"Metal1\"]",
+      "antenna:[\"gate9\",\"Metal2\"]",
+      "antenna:[\"gate9\",\"Metal3\"]",
+      "antenna:[\"gate9\",\"Metal4\"]",
+      "antenna:[\"gate9\",\"Metal5\"]"
+    ],
+    "skipped": [],
+    "inapplicable": [
+      {
+        "id": "antenna:[\"gate0\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate1\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate10\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate11\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate12\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate13\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate14\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate15\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate16\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate17\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate18\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate19\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate2\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate20\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate21\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate22\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate23\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate24\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate25\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate26\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate27\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate28\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate3\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate4\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate5\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate6\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate7\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate8\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      },
+      {
+        "id": "antenna:[\"gate9\",\"poly2\"]",
+        "reason": "gate_reference_level"
+      }
+    ],
+    "unknown": [],
+    "nothing_checked": false,
+    "nothing_checked_reasons": []
+  },
+  "erc_coverage": {
+    "scope": "connectivity",
+    "schema_version": 1,
+    "known": true,
+    "checked": [
+      "erc.floating_gate:[\"gate0\"]",
+      "erc.floating_gate:[\"gate1\"]",
+      "erc.floating_gate:[\"gate10\"]",
+      "erc.floating_gate:[\"gate11\"]",
+      "erc.floating_gate:[\"gate12\"]",
+      "erc.floating_gate:[\"gate13\"]",
+      "erc.floating_gate:[\"gate14\"]",
+      "erc.floating_gate:[\"gate15\"]",
+      "erc.floating_gate:[\"gate16\"]",
+      "erc.floating_gate:[\"gate17\"]",
+      "erc.floating_gate:[\"gate18\"]",
+      "erc.floating_gate:[\"gate19\"]",
+      "erc.floating_gate:[\"gate2\"]",
+      "erc.floating_gate:[\"gate20\"]",
+      "erc.floating_gate:[\"gate21\"]",
+      "erc.floating_gate:[\"gate22\"]",
+      "erc.floating_gate:[\"gate23\"]",
+      "erc.floating_gate:[\"gate24\"]",
+      "erc.floating_gate:[\"gate25\"]",
+      "erc.floating_gate:[\"gate26\"]",
+      "erc.floating_gate:[\"gate27\"]",
+      "erc.floating_gate:[\"gate28\"]",
+      "erc.floating_gate:[\"gate3\"]",
+      "erc.floating_gate:[\"gate4\"]",
+      "erc.floating_gate:[\"gate5\"]",
+      "erc.floating_gate:[\"gate6\"]",
+      "erc.floating_gate:[\"gate7\"]",
+      "erc.floating_gate:[\"gate8\"]",
+      "erc.floating_gate:[\"gate9\"]",
+      "erc.missing_tie:[\"nwell_vdd_vco\"]",
+      "erc.net_connectivity:[\"GND_VCO\"]",
+      "erc.net_connectivity:[\"VDD_VCO\"]",
+      "erc.supply_short",
+      "erc.supply_short.substrate"
+    ],
+    "skipped": [],
+    "inapplicable": [],
+    "unknown": [],
+    "nothing_checked": false,
+    "nothing_checked_reasons": [],
+    "missing_tie_checked": true,
+    "checked_by_assertion": [],
+    "checked_by_well_assertion": [],
+    "layers_in_stream_without_declaration": [
+      "36/10"
+    ],
+    "well_assertion_coverage": []
+  },
+  "ties_disclosure": null,
+  "provenance": {
+    "klt_version": "0.9.2",
+    "klt_git_commit": "046ba74652fc096bd97071fc3237f7159dd40183",
+    "klt_reinstall_spec": "klayout-tools==0.9.2",
+    "klayout_version": "0.30.13",
+    "pdk": {
+      "name": "gf180mcu",
+      "source": "built-in",
+      "version": null
+    },
+    "deck": {
+      "name": "gf180mcu",
+      "content_hash": "sha256:c3f2cce49000857a3a71cb65203aabf0eb27cd0ee6b1c60e29792355c455c4b1",
+      "released": true
+    },
+    "input": {
+      "content_hash": "sha256:4f5151dfbcd2d43694bfc845a507fbd43974559f1e1f8c4a8b6064afe95deb3c",
+      "role": "layout"
+    },
+    "spec": {
+      "content_hash": "sha256:35534205a2a37a27b99413d4055337bf062e0f685f5094d628646676d50ae9aa"
+    },
+    "devices": [
+      {
+        "name": "ppolyf_u_1k",
+        "body_layer": "30/0",
+        "on": "poly2",
+        "body_area_um2": 71.6,
+        "source": "deck",
+        "superseded_by": null
+      }
+    ],
+    "net_exclusions": [],
+    "label_layers": [
+      {
+        "name": "Metal1",
+        "label_layer": "34/10",
+        "label_text_count": 61
+      }
+    ],
+    "substrate_bodies": [
+      {
+        "kind": "well",
+        "id": "-1700,137600,67700,144380",
+        "ties": [
+          "nwell_vdd_vco"
+        ]
+      },
+      {
+        "kind": "well",
+        "id": "-19940,-11020,206750,173460",
+        "ties": [
+          "nwell_vdd_vco"
+        ]
+      },
+      {
+        "kind": "well",
+        "id": "-500,103720,51920,118720",
+        "ties": [
+          "nwell_vdd_vco"
+        ]
+      },
+      {
+        "kind": "well",
+        "id": "-500,18100,106020,44500",
+        "ties": [
+          "nwell_vdd_vco"
+        ]
+      },
+      {
+        "kind": "well",
+        "id": "-500,80220,92300,90820",
+        "ties": [
+          "nwell_vdd_vco"
+        ]
+      },
+      {
+        "kind": "well",
+        "id": "55300,158980,80950,163660",
+        "ties": [
+          "nwell_vdd_vco"
+        ]
+      }
+    ]
+  }
+}

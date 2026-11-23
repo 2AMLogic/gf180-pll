@@ -67,7 +67,8 @@ The manifest's declared row set (`spec_rows."6.analog"`) and each citation's
 | row id | source | value column | limits | per measurement |
 |---|---|---|---|---|
 | `cp-budget/1` | `mc_cp_dc.csv` → worst-of-window | `mism_worst_pct` | ±20 % (DR-018/DR-034) | 21 corners × n=100 |
-| `cp-budget/2a` (and `2`, a fortiori) | `mc_cp_switch.csv` | `wskew_s` | ±2 ns mid-window (term 2's ±3 ns window bound is looser) | 21 corners × n=16 |
+| `cp-budget/2a` | `mc_cp_switch.csv` | `wskew_s` | ±2 ns mid-window | 21 corners × n=16 (every draw at Vctrl = 1.65 V) |
+| `cp-budget/2` | — (**declared gap**) | — | ±3 ns over the whole Vctrl window | no measurement: the campaign draws only the mid-window point, and mid-window dispersion is a proxy that says nothing about the window's edges, so `2a`'s evidence is not claimed for `2` — raising the sample count cannot supply the missing window points |
 | `cp-budget/3` | `mc_pfd_cp.csv` | `qnet0_c` | ±20 fC | 21 corners × n=16 |
 | `cp-budget/4` | `mc_pfd_cp.csv` | `t_offset_s` | ±3 ns | 21 corners × n=16 |
 | `vco-band-coverage/adjacent-pair-ratio` | `mismatch.csv` (record `20260927-220631-546a397`, 11-point joint-draw grid) | `ratio` | ≥ 1.0 one-sided | 11 points × n=200 |

@@ -9,15 +9,17 @@
     {"id": "7", "class": "analog", "reason": "reference spur: a deterministic dBc bound; its derivation folds the charge-pump budget's dispersion terms, which are evidenced by the analog partition's item-6 citations"},
     {"id": "8", "class": "analog", "reason": "loop bandwidth: corner-bounded small-signal measurement over the contracted reference range"},
     {"id": "8a", "class": "analog", "reason": "phase margin: corner-bounded small-signal measurement over the contracted reference range"},
-    {"id": "9", "class": "analog", "reason": "lock time: corner-bounded small-signal settling measurement"},
     {"id": "10", "class": "both", "reason": "power: derived total over all domains, corner-bounded; no per-die statistical population is claimed"},
     {"id": "11", "class": "waived", "reason": "standby current: no power-down mode exists in v1, so no state and no population exists to measure"},
     {"id": "12", "class": "analog", "reason": "supply sensitivity: pushing figure and Vctrl-window consumption are corner-bounded measurements"},
     {"id": "13", "class": "both", "reason": "output duty cycle: corner-bounded over 90 measured points"},
     {"id": "14", "class": "both", "reason": "output levels and drive: corner-bounded over 90 measured points"},
     {"id": "15", "class": "both", "reason": "area: a drawn quantity, not a PVT-varying population"},
-    {"id": "16", "class": "digital", "reason": "lock detector: assert window, hysteresis and chatter are corner-bounded at every PVT point (205-point in-situ re-characterization); no per-die statistical population is claimed"},
     {"id": "17", "class": "analog", "reason": "Kvco: corner-bounded at every legal operating point under the band-selection rule"},
     {"id": "18", "class": "both", "reason": "supply range: the independent variable every other row's corner binding sweeps, not a statistical claim"}
+  ],
+  "unratified_rows": [
+    {"id": "9", "reason": "lock time is carved out of the ratification (spec/pll.md header, DR-007 Amendment A1): not ratified, so no not-applicable claim is made for it here"},
+    {"id": "16", "reason": "lock detector is carved out of the ratification (spec/pll.md header, DR-007 Amendment A1): not ratified, so no not-applicable claim is made for it here"}
   ]
 }

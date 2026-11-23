@@ -30,9 +30,22 @@ gen() {
   "$KLT" yield-csv "$csv" \
     --group-by "$group" --value "$value" --draw-col seed --unit "$unit" \
     --format json >"$samples"
+  # Exit 3 is a *completed* measurement whose status is `fail` (the report
+  # is still written in full): record it and keep going, so a campaign that
+  # misses its limit never leaves the other reports stale. Any other
+  # non-zero exit is a tool error and stops the run (set -e).
+  local rc=0
   "$KLT" yield "$samples" --limits "$limits" --format json \
-    >"signoff/yield/reports/$(basename "$samples")"
+    >"signoff/yield/reports/$(basename "$samples")" || rc=$?
+  if [ "$rc" -eq 3 ]; then
+    FAILED_MEASUREMENTS+=("$(basename "$samples" .json)")
+  elif [ "$rc" -ne 0 ]; then
+    echo "run.sh: klt yield failed (exit $rc) on $samples" >&2
+    exit "$rc"
+  fi
 }
+
+FAILED_MEASUREMENTS=()
 
 mkdir -p signoff/yield/samples signoff/yield/reports
 gen signoff/yield/csv/mc-cp-term1-worst-window.csv \
@@ -52,3 +65,8 @@ gen signoff/yield/csv/vco-adjacent-pair-ratio.csv \
   signoff/yield/limits/vco-adjacent-pair-ratio.json \
   ratio point_id ""
 echo "signoff/yield: 5 sample-set documents and envelopes (re)generated."
+if [ "${#FAILED_MEASUREMENTS[@]}" -gt 0 ]; then
+  echo "signoff/yield: measurement(s) missed their limit: ${FAILED_MEASUREMENTS[*]}" >&2
+  echo "  (all five reports were still refreshed; the failing verdict is real.)" >&2
+  exit 3
+fi

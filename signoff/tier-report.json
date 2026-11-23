@@ -239,9 +239,52 @@
         "Both require the spec table itself to be ratified \u2014 verdicts against a draft spec are provisional by construction."
       ],
       "status": "unmet",
-      "reason": "no_evidence",
+      "reason": "partial_coverage",
       "graded_by_build": true,
-      "citation": null
+      "citation": null,
+      "citations_graded": [
+        {
+          "citation": "sim/divider-ratio-chain/klt-sim/envelope.json",
+          "rows": [
+            "multiplication-ratio"
+          ],
+          "status": "met",
+          "reason": null
+        },
+        {
+          "citation": "sim/divider-ratio-chain/klt-sim/migration/runs/f200n64a/report.json",
+          "rows": [
+            "multiplication-ratio",
+            "retiming-margin"
+          ],
+          "status": "met",
+          "reason": null
+        },
+        {
+          "citation": "sim/divider-ratio-chain/klt-sim/migration/runs/f200n64b/report.json",
+          "rows": [
+            "multiplication-ratio",
+            "retiming-margin"
+          ],
+          "status": "met",
+          "reason": null
+        }
+      ],
+      "detail": {
+        "failed_rows": [],
+        "uncovered_rows": [],
+        "declared_gaps": [
+          {
+            "id": "lock-detector",
+            "gap": "row unratified (DR-007 Amendment A1) -- item-5 evidence may not cite it until the spec row is ratified, and no klt sim envelope exists for the lock-detector campaigns"
+          }
+        ],
+        "unratified_rows": [],
+        "row_sources": {
+          "multiplication-ratio": "derived",
+          "retiming-margin": "derived"
+        }
+      }
     },
     {
       "tier": "T1",
@@ -269,7 +312,6 @@
         {
           "citation": "signoff/yield/reports/term2a.json",
           "rows": [
-            "cp-budget/2",
             "cp-budget/2a"
           ],
           "status": "unmet",
@@ -362,13 +404,16 @@
         ],
         "failed_rows": [
           "cp-budget/1",
-          "cp-budget/2",
           "cp-budget/2a",
           "cp-budget/3",
           "cp-budget/4"
         ],
         "uncovered_rows": [],
         "declared_gaps": [
+          {
+            "id": "cp-budget/2",
+            "gap": "term 2 (switch charge-injection skew, +/-3 ns whole-Vctrl-window bound) has no measurement of its own: the only campaign draws every switch at Vctrl = 1.65 V, so it evidences the mid-window row cp-budget/2a (+/-2 ns) only, and mid-window dispersion is a proxy that does not cover the window's edges; no limit was relaxed or tightened to bridge that"
+          },
           {
             "id": "period-jitter/random-bound",
             "gap": "a deterministic noise-injection/ISF bound, not a sampled population: no per-draw sample array exists for klt yield (DR-032); an estimate would need the ISF assembly DR-030/DR-031 left unassembled"
@@ -397,13 +442,13 @@
       "not_applicable": {
         "spec": {
           "file": "signoff/yield/digital/spec-rows.json",
-          "content_hash": "sha256:0b2798d5b272b298fc04a90d1c7286b14c18471c0c86022f737c43f0196c9a4c",
+          "content_hash": "sha256:6681b463202d4c252a87219aff1ffbe56150355cf837babc30ee3b62ef368d08",
           "status": "ratified",
-          "row_count": 19
+          "row_count": 17
         },
         "statement": {
           "file": "signoff/yield/digital/item6-statement.json",
-          "content_hash": "sha256:d8b9f60cb0483a606d0c979f3acf9463b5608828ce2dd65fb1d65511c699d03f",
+          "content_hash": "sha256:8ff73bbfb037f3f923fe6010eff177bf75653370d05246c6b82c469fd71228c1",
           "rows": [
             {
               "id": "1",
@@ -451,11 +496,6 @@
               "reason": "phase margin: corner-bounded small-signal measurement over the contracted reference range"
             },
             {
-              "id": "9",
-              "class": "analog",
-              "reason": "lock time: corner-bounded small-signal settling measurement"
-            },
-            {
               "id": "10",
               "class": "both",
               "reason": "power: derived total over all domains, corner-bounded; no per-die statistical population is claimed"
@@ -484,11 +524,6 @@
               "id": "15",
               "class": "both",
               "reason": "area: a drawn quantity, not a PVT-varying population"
-            },
-            {
-              "id": "16",
-              "class": "digital",
-              "reason": "lock detector: assert window, hysteresis and chatter are corner-bounded at every PVT point (205-point in-situ re-characterization); no per-die statistical population is claimed"
             },
             {
               "id": "17",

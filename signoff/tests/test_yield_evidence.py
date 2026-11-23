@@ -216,6 +216,18 @@ class DigitalStatementTestCase(unittest.TestCase):
         spec_ids = [row["id"] for row in projection["rows"]]
         statement_ids = [row["id"] for row in statement["rows"]]
         self.assertEqual(sorted(spec_ids), sorted(statement_ids))
+        # spec/pll.md's header carves rows 9 and 16 out of the ratification:
+        # the projection claims only ratified rows, and the statement names
+        # the carve-outs separately.
+        unratified = [row["id"] for row in statement["unratified_rows"]]
+        self.assertEqual(sorted(unratified), ["16", "9"])
+        self.assertFalse(set(unratified) & set(spec_ids))
+        spec_text = " ".join(
+            (REPO_ROOT / "spec/pll.md").read_text().split("\n## ", 1)[0]
+            .split())
+        self.assertIn("remain unratified", spec_text)
+        self.assertIn("(row 9)", spec_text)
+        self.assertIn("(row 16)", spec_text)
         for row in statement["rows"]:
             self.assertTrue(row.get("class"), f"row {row['id']}: no class")
             self.assertTrue(row.get("reason"), f"row {row['id']}: no reason")
@@ -314,6 +326,27 @@ class NegativeControlTestCase(unittest.TestCase):
                 committed, fresh,
                 f"signoff/yield/samples/{name}.json does not re-derive "
                 f"through klt yield-csv from its committed CSV")
+
+    @unittest.skipUnless(
+        HAVE_KLT_YIELD,
+        "klt with the klt-yield-native extension is not on this host "
+        "(CI runs this class in its post-klt-install step)")
+    def test_every_committed_envelope_regenerates_byte_identically(self):
+        """Positive comparison: each committed envelope equals a clean
+        `klt yield` run over its committed sample set and limits. Exit 3 is
+        a completed failing measurement (the report is still written)."""
+        for name in (Path(k).stem for k in SAMPLES):
+            run = subprocess.run(
+                ["klt", "yield", f"signoff/yield/samples/{name}.json",
+                 "--limits", f"signoff/yield/limits/{name}.json",
+                 "--format", "json"],
+                capture_output=True, cwd=REPO_ROOT)
+            self.assertIn(run.returncode, (0, 3), run.stderr.decode())
+            committed = (YIELD_DIR / "reports" / f"{name}.json").read_bytes()
+            self.assertEqual(
+                committed, run.stdout,
+                f"signoff/yield/reports/{name}.json does not regenerate "
+                f"from its committed sample set and limits")
 
     @unittest.skipUnless(
         HAVE_KLT_YIELD,

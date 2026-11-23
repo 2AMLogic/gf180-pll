@@ -52,6 +52,13 @@ VCO_RECORD = "sim/vco-tuning-range/corners/20260927-220631-546a397"
 
 TERM1_SPEC_ROW = "cp-budget/1"
 TERM2A_SPEC_ROW = "cp-budget/2a"
+#: Spec rows withheld from ratification (spec/pll.md header, DR-007
+#: Amendment A1: Lock time, row 9; Lock detector, row 16). The projection
+#: stamps `status: ratified`, so these rows must not appear in it; the
+#: derivation asserts they are still the spec's carve-outs and still rows of
+#: the table, so lifting a carve-out (or renumbering) fails loudly here
+#: instead of leaving the projection silently wrong.
+UNRATIFIED_SPEC_ROWS = ("9", "16")
 TERM3_SPEC_ROW = "cp-budget/3"
 TERM4_SPEC_ROW = "cp-budget/4"
 VCO_SPEC_ROW = "vco-band-coverage/adjacent-pair-ratio"
@@ -154,7 +161,10 @@ def derive_digital_spec_projection(out: Path) -> list[str]:
     cannot drift from the spec's summary table. Ratification is this
     repository's own governance claim: spec rows move only through
     spec/decision-records (CLAUDE.md), which is what "status: ratified"
-    asserts here."""
+    asserts here. The two rows the spec's own header carves out of the
+    ratification (UNRATIFIED_SPEC_ROWS) are excluded: the projection claims
+    only what is ratified, and item6-statement.json names the carve-outs
+    separately."""
     text = (REPO_ROOT / "spec/pll.md").read_text(encoding="utf-8")
     lines = text.splitlines()
     ids: list[str] = []
@@ -177,6 +187,17 @@ def derive_digital_spec_projection(out: Path) -> list[str]:
         break
     if not ids:
         raise DeriveError("spec/pll.md: no pipe table with a '#' id column")
+    missing = [r for r in UNRATIFIED_SPEC_ROWS if r not in ids]
+    if missing:
+        raise DeriveError(
+            f"spec/pll.md: carve-out row(s) {missing} not in the summary "
+            "table; update UNRATIFIED_SPEC_ROWS against the spec header")
+    header = " ".join(text.split("\n## ", 1)[0].split())
+    if "remain unratified" not in header:
+        raise DeriveError(
+            "spec/pll.md: the header no longer states rows remain "
+            "unratified; re-derive UNRATIFIED_SPEC_ROWS from it")
+    ids = [r for r in ids if r not in UNRATIFIED_SPEC_ROWS]
     doc = {"status": "ratified", "rows": [{"id": r} for r in ids]}
     path = out / "digital" / "spec-rows.json"
     path.parent.mkdir(parents=True, exist_ok=True)
