@@ -160,9 +160,9 @@ cited `klt sim` envelope (see the correction in case 1).
 ~~The report's `reason` for all 22 T1 rows is `no_evidence`: the manifest cites
 nothing.~~ — **corrected (2026-11-21, issue #1089):** that stopped being true
 when #798 first made rows `met`, as the note above already records: the
-manifest now cites envelopes under `signoff/attest/`, and the `met` rows carry
-`reason: null`. `no_evidence` is the reason for the rows that are still
-`unmet`, not for all of T1 — read the current verdicts from
+manifest now cites envelopes under `signoff/attest/` (among others), and the
+`met` rows carry `reason: null`. `no_evidence` is the reason for most of the
+rows that are still `unmet` (those that cite nothing at all), not for all of T1 — read the current verdicts from
 `signoff/tier-report.json`, not from this paragraph. That machine code still
 covers materially different situations among the rows that carry it, and the
 difference is the point of this section: cases 1 and 2 explain the remaining
