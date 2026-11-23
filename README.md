@@ -25,7 +25,7 @@ simulation only; nothing has been fabricated or measured.
 | Verification | **139 evidence records** across 28 verification campaigns, each run over the PVT corner matrix. | [`sim/STATUS.md`](sim/STATUS.md) |
 | Closed-loop bring-up | Not done. Single-corner smoke test passes; the full-grid lock-time, output-range and supply-sensitivity campaigns do not yet show sustained lock across PVT. | [`sim/STATUS.md`](sim/STATUS.md) |
 | Period jitter | Deterministic component covers 45 of the mandated 45 PVT corners; the random component is bounded, not estimated. | [`sim/STATUS.md`](sim/STATUS.md) |
-| Reference spur | Closed-loop record covers 5 of the 45 PVT corners at 150 MHz; the 200 MHz band-top sweep has no measured record yet. | [`sim/STATUS.md`](sim/STATUS.md) |
+| Reference spur | Closed-loop record covers 5 of the 45 PVT corners at 150 MHz; the 200 MHz band-top sweep is measured at all 45 corners and **11 miss the −55 dBc line** (worst −49.69 dBc). | [`sim/STATUS.md`](sim/STATUS.md); [`sim/reference-spur-band-top/records/20261122-174251-f9f5a7c.md`](sim/reference-spur-band-top/records/20261122-174251-f9f5a7c.md) |
 | Layout | Per-sub-block drawn / DRC-clean / LVS-matched state is the generated table in `layout/STATUS.md`. The assembled `pll_top` GDS (all five blocks, loop filter included) is committed with one inherited DRC violation (the loop filter's `MIMTM.3`), top-level LVS still to run, and an area over the ratified row. | [`layout/STATUS.md`](layout/STATUS.md) |
 | Silicon | Not started. `measurements/` stays empty until there is any. | [`measurements/`](measurements/) |
 

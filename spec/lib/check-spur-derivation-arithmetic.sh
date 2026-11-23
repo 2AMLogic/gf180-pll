@@ -684,7 +684,8 @@ print(
     "charge-accounting row(s) re-derived unrounded from their own total ΔQ, the "
     "worst-case sum a linear add of its own two terms, "
     "and %d measured corner(s) scaled %g -> %g MHz by their own stated "
-    "+%.2f dB; %d dBc figure(s) quoted in %s all trace to one of them or to "
+    "+%.2f dB, %d directly measured corner(s) re-read from %s; "
+    "%d dBc figure(s) quoted in %s all trace to one of them or to "
     "the ratified line (%d figure(s) written with `≈`, graded to one unit of "
     "the last written place)"
     % (
@@ -697,6 +698,8 @@ print(
         lo,
         hi,
         constant,
+        len(direct_figures),
+        record_ref.group(1),
         len(quoted),
         proposal_rel,
         approximate,

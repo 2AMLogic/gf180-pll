@@ -1122,7 +1122,7 @@ figure alone suggests.
 
 **Which of these rows a measurement may be read against** (DR-024 Decision 4).
 Every closed-loop spur campaign in this repository — `sim/reference-spur` and
-the owed `sim/reference-spur-band-top` — runs with **device mismatch off**, so
+`sim/reference-spur-band-top` — runs with **device mismatch off**, so
 what they measure is the systematic, corner-driven spur. The comparable row is
 therefore the **first** one, −66.6 dBc, *not* the −55.7 dBc stack, which adds
 two statistical terms each at its own worst corner. Two things follow, and the
