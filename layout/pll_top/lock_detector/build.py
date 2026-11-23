@@ -16,10 +16,14 @@ from .primitives import Canvas, NetTracks, nwell_over, route_all_nets, tap_strip
 try:
     from harness import spice_flatten
 except ImportError:  # "layout/" itself (harness's own package root) is not
-    # on sys.path under this package's own flat-import test convention (see
+    # on sys.path when sys.path holds layout/pll_top/ but not layout/
+    # itself (the flat ``python3 -m lock_detector.build`` CLI, run with
+    # cwd/sys.path rooted at layout/pll_top/; or
+    # layout/floorplan/skeleton.py, which inserts only layout/pll_top/ --
+    # layout/tests/_env.py, by contrast, adds both unconditionally; see
     # pfd_cp/block.py's identical try/except for the full citation) -- one
-    # level further up than ``_canvas``-style imports would need, since this
-    # file has no such import today: ``parents[2]`` from this file is
+    # level further up than ``_canvas``-style imports would need, since
+    # this file has no such import today: ``parents[2]`` from this file is
     # ``layout/``.
     import sys as _sys
 
