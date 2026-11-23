@@ -389,3 +389,34 @@ released `klayout-tools==0.9.2` wheel with KLayout `0.30.12` (the repository's
 KLayout pin). Verdicts are unchanged from 0.8.0: `status: not_checked`,
 `erc_status: clean`, zero findings. The report gains fields 0.8.0 did not emit; the
 input and spec content hashes are unchanged.
+
+## Antenna-graded re-run with the gf180mcu table (2026-11-20, issue #1082)
+
+**Correction to this document's antenna-coverage statements:** the
+antenna half of `klt erc` has now run on this block, on the pinned
+`klayout-tools==0.9.2`, with the gf180mcu antenna-ratio table
+2AMLogic/klayout-tools#4003 added (`--pdk gf180mcu`). The dated record is
+[`erc-antenna-20261120/`](erc-antenna-20261120/RECORD.md) — a fresh
+envelope, a spec copy whose stackup names are the table's canonical
+`Metal1`..`Metal3` (the exact-name lookup is
+[2AMLogic/klayout-tools#6976](https://github.com/2AMLogic/klayout-tools/issues/6976);
+the committed `erc-supply-spec.json` and `erc-report.json` above are
+byte-unchanged), and the PDK's own `antenna.drc` corroboration run
+(zero violations on the same GDS).
+
+The new envelope grades **checked: 117, skipped: 0** where the committed
+report reads checked: 0, skipped: 117 (its 39 `gate_reference_level`
+inapplicables stay, as expected). 37 of 39 gate nets pass every level.
+The two `violate` verdicts — `gate6`/`VSS` (ratio 501.7) and
+`gate12`/`XDLY_T0B` (421.0, this block's delay-chain first driven node,
+diffusion-connected at both ends; the same net also violates under
+`pll_top`) — are the no-diode-credit false-positive class of the table's
+documented cumulative-area approximation
+([2AMLogic/klayout-tools#6975](https://github.com/2AMLogic/klayout-tools/issues/6975)):
+the foundry deck's own `[diode, 800]`-credited rule passes both, so no
+layout change is assigned. `status` is `violations` (exit 3),
+`erc_status` stays `clean` with zero findings, and the item-11 grader
+resolves this block's ERC half (reason `None`, supply nets `VDD`, `VSS`)
+— with the block-level LVS `match` already committed in
+`klt-curated-930/`, a qualifying item-11 pair now exists on its
+ERC-half merits (citing it belongs to #149 / #987, not #1082).

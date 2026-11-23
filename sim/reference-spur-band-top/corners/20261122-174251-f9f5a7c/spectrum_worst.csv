@@ -1,0 +1,23 @@
+# the measured output spectrum at the worst-spur corner (sf_-40c_3.30v_b7vs1p525), last window: amplitude at every harmonic of f_ref through k = 20, so the sideband the claim rests on can be read against the carrier and against everything else in the spectrum
+k,f_hz,amplitude_v,dbc,role
+0,0,3.248540e+00,3.80,
+1,2.5e+07,5.820340e-03,-51.14,
+2,5e+07,1.905420e-03,-60.84,
+3,7.5e+07,3.650865e-03,-55.19,
+4,1e+08,2.558416e-03,-58.28,
+5,1.25e+08,2.609667e-03,-58.11,
+6,1.5e+08,3.045011e-03,-56.77,
+7,1.75e+08,6.874247e-03,-49.69,lower reference sideband (f_out - f_ref)
+8,2e+08,2.098236e+00,0.00,carrier (f_out)
+9,2.25e+08,6.517942e-03,-50.15,upper reference sideband (f_out + f_ref)
+10,2.5e+08,3.016226e-03,-56.85,
+11,2.75e+08,2.595590e-03,-58.15,
+12,3e+08,2.608228e-03,-58.11,
+13,3.25e+08,3.612266e-03,-55.28,
+14,3.5e+08,1.799179e-03,-61.34,
+15,3.75e+08,5.692253e-03,-51.33,
+16,4e+08,5.121944e-02,-32.25,harmonic of f_out
+17,4.25e+08,5.850991e-03,-51.09,
+18,4.5e+08,2.008552e-03,-60.38,
+19,4.75e+08,3.644695e-03,-55.20,
+20,5e+08,2.491541e-03,-58.51,

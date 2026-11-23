@@ -261,3 +261,77 @@ the `ngspice.env` capture exists to attribute (`sim/harness/batch.py`, citing
 record's own directory, so the attribution table becomes re-derivable the way
 the measurements already are; that needs a rule for what is safe to publish
 from a job environment and is deliberately not decided here. Tracked in #964.
+
+## Addendum (2026-11-22): the controlled comparison to the ruling's ngspice-46 reference; #533's spend condition
+
+Appended to discharge the one step the 2026-11-22 curation of #533 (Champion
+approval 2026-11-22T12:43Z) puts between this pilot and the 45-point grid:
+*"The ruling names the local ngspice-46 reference. If the current pair only
+establishes 47p1-to-47p1 parity, document the controlled comparison to that
+reference before treating the spend condition as met."* Everything above stays
+as written. No simulation was run, no batch job was submitted and nothing was
+spent for this addendum; no record was written and no harness file, deck or
+spec file was changed.
+
+### The reference the ruling names
+
+The 2026-10-02 operator ruling gates the grid on the pilot *"matches the local
+ngspice-46 run"*. The concrete ngspice-46 run at this exact point is run A of
+[`BATCH-IMAGE-DIAGNOSIS-2026-10-08.md`](BATCH-IMAGE-DIAGNOSIS-2026-10-08.md)
+Addendum 4: **−61.7103 dBc**, `lock_lvl` 3.63 V, in the reference
+(`wnflag=1`) DC state, on the then-pinned ngspice-46 with PDK `c6d73a35…` and
+the host `~/.spiceinit` (sha256 `94a971c8…`); Addendum 5 later isolated
+`set wnflag=1` as the line that selects this state.
+
+### The comparison
+
+| | ruling's reference (Addendum 4 run A) | this pilot (L1, L2, B1, B2) |
+|---|---|---|
+| simulator | ngspice-46 (worker pin at the time) | ngspice-47p1, **same build on both backends** (banner creation date `Fri Nov 13 23:19:32 UTC 2026` on all four) |
+| PDK | `c6d73a35…` | `f6eeac7d…` (= the `sim/pdk.json` pin) |
+| simulator init | host `~/.spiceinit` `94a971c8…` | repository-staged `.spiceinit` `d6efd5b2…` (DR-040), marker in all four logs |
+| DC state `fb`/`lock`/`clk` | 3.63 V | 3.63 V, all four runs |
+| `vctrl` | 1.886 V | 1.886 V, all four runs |
+| `lock_lvl` | 3.63 V | 3.63 V, all four runs |
+| `spur_dbc` | **−61.7103 dBc** | **−53.512956778089766 dBc**, all four runs |
+
+Scored against the owner's gate: the DC operating point — scored first — is
+**identical to the reference**; the ruling's guarded failure (batch landing in
+the other, gmin-stepped loop state at `lock_lvl` ≈ 5e-9 V) does not occur. The
+spur differs by **8.20 dB**, and **two** toolchain variables moved between the
+runs. The committed controlled decomposition that exists is the overlap point
+of [`REPIN-DELTAS-f6eeac7-closed-loop.md`](REPIN-DELTAS-f6eeac7-closed-loop.md)
+(a different deck and corner — 150 MHz `reference-spur`, `typical`/27 °C/
+3.30 V): there, the simulator alone (ngspice-46 → 47, same PDK) moved
+`spur_dbc` by 6.06 dB **in the same direction** as this shift, and the PDK
+alone (`c6d73a35` → `f6eeac7`, same simulator) moved it 3.65 dB the opposite
+way. The 8.20 dB shift here is consistent in sign and magnitude with that
+pattern, but it is **not attributed for this deck**: no worker in the fleet
+carries the ngspice-46 binary any more (the worker spec and the job image both
+pin the 47p1 build), so the controlled pair this deck would need — the pilot's
+own "Owed next" item 1 — remains unrun and open.
+
+### Why the spend condition is treated as met
+
+1. **The failure mode the ruling guarded against is identified and excluded.**
+   The 2026-10-02 pilots' mismatch was the init-file/`wnflag` DC-state split
+   (Addendums 4–5), since fixed for every backend by DR-040's
+   repository-staged init file. On the toolchain the whole fleet now pins, the
+   batch backend reproduces the local run **exactly** (measured spread 0
+   within and across backends, section "Result" above).
+2. **The ruling's literal reference is unrunnable today.** "The local
+   ngspice-46 run" cannot be re-executed or re-matched anywhere in the fleet;
+   its successor — the pinned local ngspice build, byte- and
+   creation-date-identical on both backends — is what the condition can
+   compare against, and it matches.
+3. **The version shift is disclosed, not hidden.** The grid records carry
+   ngspice-47/PDK `f6eeac7` provenance; DR-028's cross-version quarantine
+   governs any comparison with ngspice-46-era figures; the open 8.20 dB
+   attribution question is named here and travels with the campaign record.
+
+Stated plainly so no reader misses it: at this pilot point the current pinned
+toolchain reads **−53.513 dBc, which misses the −55 dBc line** where the
+ngspice-46-era reference passed it (−61.71). The grid measures what the pinned
+toolchain produces; its record reports every point's measured verdict and
+names every miss against the unchanged −55 dBc target (DR-024 Decision 2),
+with this addendum as the version context.

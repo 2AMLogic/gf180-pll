@@ -238,9 +238,52 @@
         "Both require the spec table itself to be ratified \u2014 verdicts against a draft spec are provisional by construction."
       ],
       "status": "unmet",
-      "reason": "no_evidence",
+      "reason": "partial_coverage",
       "graded_by_build": true,
-      "citation": null
+      "citation": null,
+      "citations_graded": [
+        {
+          "citation": "sim/divider-ratio-chain/klt-sim/envelope.json",
+          "rows": [
+            "multiplication-ratio"
+          ],
+          "status": "met",
+          "reason": null
+        },
+        {
+          "citation": "sim/divider-ratio-chain/klt-sim/migration/runs/f200n64a/report.json",
+          "rows": [
+            "multiplication-ratio",
+            "retiming-margin"
+          ],
+          "status": "met",
+          "reason": null
+        },
+        {
+          "citation": "sim/divider-ratio-chain/klt-sim/migration/runs/f200n64b/report.json",
+          "rows": [
+            "multiplication-ratio",
+            "retiming-margin"
+          ],
+          "status": "met",
+          "reason": null
+        }
+      ],
+      "detail": {
+        "failed_rows": [],
+        "uncovered_rows": [],
+        "declared_gaps": [
+          {
+            "id": "lock-detector",
+            "gap": "row unratified (DR-007 Amendment A1) -- item-5 evidence may not cite it until the spec row is ratified, and no klt sim envelope exists for the lock-detector campaigns"
+          }
+        ],
+        "unratified_rows": [],
+        "row_sources": {
+          "multiplication-ratio": "derived",
+          "retiming-margin": "derived"
+        }
+      }
     },
     {
       "tier": "T1",
