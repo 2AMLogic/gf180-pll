@@ -110,8 +110,10 @@ This page says what comes next and why. It does not restate status: the machine 
   `no_evidence` to `timing_margin_missing` with row 3 covered by derived `spec_row` coverage.
   Migrating campaigns does yield gradeable envelopes; DR-028 quarantine was not needed here
   because the values agree at the record's printed precision (both report ngspice-47; the
-  envelope records no binary hash, and no simulator-init marker was retained, so the
-  comparison is `unattributed` under DR-040 until the runner retains one). Recommendation: migrate the remaining campaigns to `klt sim` and retire
+  envelope records no binary hash, and the committed request stages no simulator init (DR-040 decision 1 unmet
+  here) and no init marker was retained (decision 2 unmet; 2AMLogic/klayout-tools#7368),
+  so the comparison is `unattributed` under DR-040 until the request stages the init and
+  the runner retains evidence of it). Recommendation: migrate the remaining campaigns to `klt sim` and retire
   `sim/harness/batch.py` once the last grid it owns has a successor envelope — follow-ups:
   #1090 (the rest of `divider-ratio-chain`, including the N=64 retiming margins that clear
   `timing_margin_missing`), #1081 (item 6 `klt yield` sample sets). Upstream gaps that bound

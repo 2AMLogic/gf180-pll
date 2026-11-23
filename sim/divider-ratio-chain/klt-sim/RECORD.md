@@ -45,16 +45,24 @@ slice covers it at the full mandated 45-point PVT matrix for one divisor
   that produced the committed record (also reported as ngspice-47) are
   **not** shown to be the same binary. What is measured is agreement at the
   record's printed precision, below.
-- **Simulator init (DR-040)**: **not evidenced.** The request stages the
-  repository init text (`options.ngspice_init`), but the envelope carries no
-  init identity (`environment.ngspice_init.sha256` is null and each worker's
-  `ngspice_init` is empty), and the fleet runner (klt 0.9.0) retains no
-  marker line. Under DR-040 decision 2 these points are therefore
-  `unattributed` against the reference-configuration baseline: the
-  zero-delta comparison below is a comparison of results, not a proven
-  same-configuration comparison. A one-point pilot rerun with the init text
-  staged reproduced the same values and the same null init identity. Tool
-  gap: 2AMLogic/klayout-tools#7368.
+- **Simulator init (DR-040)**: **unmet — decisions 1 and 2 both.** The
+  committed `request.json` does **not** stage the repository init text
+  (`options` carries only `timeout_s`, `stage_model_inputs` and
+  `pdk_revision`; there is no `options.ngspice_init`), so the 45-corner grid
+  ran under the fleet worker's ambient init, not the init file DR-040
+  decision 1 requires both backends to stage. Separately, the envelope
+  carries no init identity (`environment.ngspice_init` is
+  `{source: "runner", lines: null, sha256: null}`) and the fleet runner
+  (klt 0.9.0) retains no marker line, so decision 2's evidence requirement
+  is also unmet and these points are `unattributed` against the
+  reference-configuration baseline: the zero-delta comparison below is a
+  comparison of results, not a proven same-configuration comparison. The
+  grid was not re-run with the init staged: a one-point pilot rerun with
+  `options.ngspice_init` set reproduced the same values and the same null
+  init identity, so a full re-run would not have changed the attribution,
+  and the pilot is not committed here. Decision 1 is this repository's
+  shortfall; decision 2's evidence gap is a tool gap:
+  2AMLogic/klayout-tools#7368.
 - **Runners**: klt 0.9.0 (fleet image), client klt 0.9.3.dev2575+g6bd18bbc8637,
   `runner_compatibility: match` (required features `corners.params`,
   `options.stage_model_inputs`).
