@@ -49,6 +49,7 @@ SELF_BOOTSTRAPPED = sorted(
         "sim/period-jitter/random-bound/rb_extract.py",
         "sim/period-jitter/testbench/derive.py",
         "sim/reference-spur/testbench/derive.py",
+        "sim/vco-tuning-range/testbench-tightband1/_numeric.py",
         "sim/vco-tuning-range/testbench/_numeric.py",
     ]
 )

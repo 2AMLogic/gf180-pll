@@ -1049,3 +1049,13 @@ exists for any block here** and `klt signoff` cannot assemble item 11's cited
 set at all yet — for this block or the other three. That is a separate gap from
 the one adjudicated above, it is not what this record claims to close, and
 `signoff/block-manifest.json` is correspondingly left citing nothing.
+
+## Re-run on klayout-tools 0.9.2 (pin bump, issue #1079)
+
+`erc-report.json` was regenerated with
+`klt erc --top vco_block --deck gf180mcu --format json vco_block.gds erc-supply-spec.json` on the
+released `klayout-tools==0.9.2` wheel with KLayout `0.30.12` (the repository's
+KLayout pin). Verdicts are unchanged from 0.8.0: `status: not_checked`,
+`erc_status: clean`, zero findings. The report gains fields 0.8.0 did not emit; the
+input and spec content hashes are unchanged.
+`erc_coverage.layers_in_stream_without_declaration` is now `["36/10"]` (Metal2_Label, a text-only layer): 0.8.0 did not emit the key, 0.9.2 does. The layer is the deliberate omission already justified in `erc-supply-spec.json` (it carries bias/control or signal net text, none of it a declared supply net), so it needs no new disclosure.

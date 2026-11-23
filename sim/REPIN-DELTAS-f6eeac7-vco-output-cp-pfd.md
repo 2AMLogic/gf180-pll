@@ -37,7 +37,7 @@ stays open** for the remainder. Dispositions so far:
 | directory | live records | disposition |
 |---|---|---|
 | `output-driver` | `20260817-100354-0e9cfc9` | **re-qualified here** (`20261115-130526-3be016c`) |
-| `vco-tuning-range` tuning grid | `20260804-162735-72883fb` | **re-qualified here** (`20261118-021803-deb4ec0`) |
+| `vco-tuning-range` tuning grid | `20260804-162735-72883fb` | **re-qualified here** (`20261118-021803-deb4ec0`); its one check-5 flip (#1059, `all-fast`/27 °C/3.30 V band 1) is resolved by `20261119-145734-a6e4fcb`, which re-runs that one curve with a halved transient timestep, reads it strictly monotonic, and supersedes the band-1 curve only |
 | `vco-tuning-range` supply bench | `20260804-211600-f599a65` | **re-qualified here** (`20261118-023753-1b6f7c2`) |
 | `vco-tuning-range` Monte Carlo family | `20260817-143524-0e9cfc9`, `20260923-084925-1655e11`, `20260927-081930-d004d5b`, `20260927-094524-b994116`, `20260927-214737-546a397`, `20260927-220631-546a397` | still owed under #826 — the six band-select-mirror Monte Carlo / negative-control records; see the vco-tuning-range section for why they are a separate increment |
 | `vco-bias-current` | `20260911-172350-da0bb1e` | **re-qualified here** (`20261117-150323-f3b3e7f`) |
@@ -159,7 +159,9 @@ face with `"replayed": true`), and simulated the remaining 8. The supply
 bench then ran clean from the tuning grid's own commit (`1b6f7c24` →
 `20261118-023753-1b6f7c2`, 144 points, no adoption needed). Both records
 attribute ngspice-47 per point. The tuning grid's one acceptance-check
-flip is filed as #1059; see the vco-tuning-range section below.
+flip is filed as #1059 and resolved by its tightened re-run (successor
+record `20261119-145734-a6e4fcb`, band-1 curve only); see the
+vco-tuning-range section below.
 
 ## Verdict
 
@@ -252,9 +254,17 @@ host/batch-build residue, not PDK. The one flip is acceptance check 5
 `all-fast/27C/3.30V` band 1 under the batch image's ngspice-47 — a
 transient-solve inversion that every other solver build tested resolves the
 other way, and that the pinned local ngspice-47 cannot solve at all inside
-the harness's 300 s point budget. It is filed as **#1059** with its
-controls, per this issue's acceptance criteria, and the record stands as
-latest evidence pending that disposition.
+the harness's 300 s point budget. It was filed as **#1059** with its
+controls, per this issue's acceptance criteria, and is now **resolved by
+measurement**: re-running that one curve on the batch route with the
+transient maximum timestep halved (`w_max` 1/(160 f_max) instead of
+1/(80 f_max), tolerances unchanged) restores strict monotonicity — f6 reads
+1.760840e+07 Hz against f5's 1.570220e+07 (Δ = +1.906 MHz), 0.04 % from
+the ngspice-42/46 control value — and successor record
+`20261119-145734-a6e4fcb` supersedes the band-1 curve of
+`20261118-021803-deb4ec0` (that curve only; the record's other 503 curves
+stand). The dip was a timestep-limited artefact of the batch image's
+ngspice-47 build, not a circuit property.
 
 
 ## Attribution: PDK or simulator?
@@ -507,7 +517,11 @@ Reading the controls together with the batch records below:
   inversion**: ngspice-46 and ngspice-42 both solve the curve monotonically
   under the new pin, the local ngspice-47 build cannot solve the point at
   all in 300 s, and the batch's 47 build returns a dipped f6. Filed as
-  #1059.
+  #1059, and resolved by #1059's tightened re-run: with the transient
+  maximum timestep halved the same batch build reads the curve strictly
+  monotonic (f6 = 1.760840e+07 Hz, 0.04 % from the ngspice-42/46 control),
+  and successor record `20261119-145734-a6e4fcb` supersedes the band-1
+  curve — the dip was timestep-limited solver behaviour, not the circuit.
 - **The fleet-vs-predecessor residue on the tuning grid — frequencies up to
   ~0.8 % (`f7` 0.819 %, `f5` 0.4599 %, excluding the #1059 band-1 curve),
   swing-high buffer rows ≤ 1.9 %, and the near-zero swing-low rails at
@@ -544,7 +558,7 @@ python3 sim/lib/record_delta.py \
 | `` | `thigh` | — | 1.015700e-09..1.284800e-07 | 1.015700e-09..1.284200e-07 | 2.740000e-09 | 2.495 | `fs_27c_3.30v_lo` |
 | `` | `tperiod` | — | 2.114700e-09..2.831090e-07 | 2.114700e-09..2.830080e-07 | 2.521000e-09 | 0.947 | `typical_27c_3.63v_lo` |
 | `` | `trise` | — | -2.488800e-09..1.591490e-08 | -2.488800e-09..1.591200e-08 | 1.923780e-09 | 160.9 | `ss_-40c_2.97v_lo` |
-| `` | `voh` | — | 2.99966..3.76598 | 2.99966..3.766 | 0.02434 | 0.7224 | `sf_-40c_3.30v_lo` |
+| `` | `voh` | — | 2.99966..3.76598 | 2.99966..3.766 | 0.02525 | 0.7224 | `sf_-40c_3.30v_lo` |
 | `` | `voh_ratio` | min=0.9 | 1.00595..1.04403 | 1.00595..1.04145 | 0.00737 | 0.7218 | `sf_-40c_3.30v_lo` |
 | `` | `vol` | — | -0.12787..-0.0218946 | -0.130686..-0.0218946 | 0.0281936 | 40.44 | `fs_-40c_3.30v_lo` |
 | `` | `vol_ratio` | max=0.1 | -0.0396747..-0.00603156 | -0.0403156..-0.00603156 | 0.0085436 | 40.44 | `fs_-40c_3.30v_lo` |
@@ -729,8 +743,8 @@ python3 sim/lib/record_delta.py \
 | topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
 |---|---|---|---|---|---|---|---|
 | `` | `q_zero` | — | -3.496690e-15..2.971210e-16 | -3.496710e-15..2.971190e-16 | 3.781130e-16 | 54.84 | `ff_-40c_3.30v_d0` |
-| `` | `qnet` | — | -1.052870e-14..4.670980e-15 | -1.061400e-14..4.673830e-15 | 2.118400e-16 | 1.647e+04 | `sf_-40c_3.30v_d200p` |
-| `` | `qnet2` | — | -2.105750e-14..9.341960e-15 | -2.122800e-14..9.347670e-15 | 4.236600e-16 | 1.647e+04 | `sf_-40c_3.30v_d200p` |
+| `` | `qnet` | — | -1.052870e-14..4.670980e-15 | -1.061400e-14..4.673830e-15 | 5.142300e-16 | 1.647e+04 | `sf_-40c_3.30v_d200p` |
+| `` | `qnet2` | — | -2.105750e-14..9.341960e-15 | -2.122800e-14..9.347670e-15 | 1.028500e-15 | 1.647e+04 | `sf_-40c_3.30v_d200p` |
 | `` | `width_dn` | — | 1.107980e-09..3.594920e-09 | 1.107980e-09..3.594920e-09 | 0 | 0 | `—` |
 | `` | `width_up` | — | 1.106300e-09..3.515240e-09 | 1.106300e-09..3.515240e-09 | 0 | 0 | `—` |
 | `` | `wmin_zero` | — | 1.116680e-09..2.583880e-09 | 1.116680e-09..2.583880e-09 | 0 | 0 | `—` |
@@ -984,30 +998,30 @@ python3 sim/lib/record_delta.py \
 
 | topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
 |---|---|---|---|---|---|---|---|
-| `` | `f1` | min=1.000000e+05, min_spread_pct=50 | 2.957680e+06..2.749280e+08 | 2.957550e+06..2.749280e+08 | 17400 | 0.1183 | `sf_-40c_3.63v_band0` |
+| `` | `f1` | min=1.000000e+05, min_spread_pct=50 | 2.957680e+06..2.749280e+08 | 2.957550e+06..2.749280e+08 | 23900 | 0.1183 | `sf_-40c_3.63v_band0` |
 | `` | `f2` | — | 3.473630e+06..3.349450e+08 | 3.472820e+06..3.349450e+08 | 82900 | 0.3006 | `all-fast_27c_3.30v_band3` |
-| `` | `f3` | — | 4.041550e+06..3.968140e+08 | 4.040440e+06..3.968140e+08 | 34800 | 0.2423 | `ss_125c_2.97v_band0` |
-| `` | `f4` | — | 4.626740e+06..4.585300e+08 | 4.624450e+06..4.585300e+08 | 66900 | 0.3148 | `all-slow_27c_3.63v_band3` |
+| `` | `f3` | — | 4.041550e+06..3.968140e+08 | 4.040440e+06..3.968140e+08 | 75500 | 0.2423 | `ss_125c_2.97v_band0` |
+| `` | `f4` | — | 4.626740e+06..4.585300e+08 | 4.624450e+06..4.585300e+08 | 2.550000e+05 | 0.3148 | `all-slow_27c_3.63v_band3` |
 | `` | `f5` | — | 5.228220e+06..5.189070e+08 | 5.231170e+06..5.189070e+08 | 4.910000e+05 | 0.4599 | `fs_-40c_2.97v_band5` |
 | `` | `f6` | — | 5.841090e+06..5.767760e+08 | 5.840800e+06..5.767760e+08 | 1.940800e+06 | 11.02 | `all-fast_27c_3.30v_band1` |
-| `` | `f7` | min=1.000000e+05, min_spread_pct=50 | 6.461800e+06..6.319790e+08 | 6.456310e+06..6.319790e+08 | 1.988000e+05 | 0.819 | `ss_-40c_3.30v_band0` |
+| `` | `f7` | min=1.000000e+05, min_spread_pct=50 | 6.461800e+06..6.319790e+08 | 6.456310e+06..6.319790e+08 | 2.370000e+05 | 0.819 | `ss_-40c_3.30v_band0` |
 | `` | `fine_ratio` | — | 2.00211..2.6997 | 2.00211..2.6997 | 0.01767 | 0.827 | `ss_-40c_3.30v_band0` |
-| `` | `i1` | — | 2.801730e-05..0.000479448 | 2.838100e-05..0.000479448 | 1.402100e-06 | 2.507 | `sf_27c_2.97v_band1` |
+| `` | `i1` | — | 2.801730e-05..0.000479448 | 2.838100e-05..0.000479448 | 1.549700e-06 | 2.507 | `sf_27c_2.97v_band1` |
 | `` | `i2` | — | 3.089600e-05..0.000552466 | 3.092610e-05..0.000552466 | 2.254200e-06 | 4.337 | `ff_-40c_3.30v_band0` |
-| `` | `i3` | — | 3.435280e-05..0.000632157 | 3.396410e-05..0.000632157 | 1.949600e-06 | 3.035 | `sf_-40c_3.30v_band1` |
+| `` | `i3` | — | 3.435280e-05..0.000632157 | 3.396410e-05..0.000632157 | 2.192500e-06 | 3.035 | `sf_-40c_3.30v_band1` |
 | `` | `i4` | — | 3.770920e-05..0.00070958 | 3.746200e-05..0.00070958 | 2.301500e-06 | 3.003 | `ff_27c_3.63v_band0` |
-| `` | `i5` | — | 4.153340e-05..0.000790093 | 4.116610e-05..0.000790093 | 2.325000e-06 | 2.243 | `ff_-40c_3.63v_band2` |
+| `` | `i5` | — | 4.153340e-05..0.000790093 | 4.116610e-05..0.000790093 | 2.585000e-06 | 2.243 | `ff_-40c_3.63v_band2` |
 | `` | `i6` | — | 4.479740e-05..0.00086893 | 4.486190e-05..0.00086893 | 3.219700e-06 | 3.325 | `ff_-40c_3.63v_band1` |
 | `` | `i7` | — | 4.862400e-05..0.000947912 | 4.835320e-05..0.000947912 | 2.696000e-06 | 2.205 | `ff_-40c_3.63v_band2` |
 | `` | `k1` | — | 1.719833e+06..2.000567e+08 | 1.717567e+06..2.000567e+08 | 2.580000e+05 | 1.682 | `all-fast_27c_3.30v_band3` |
-| `` | `k2` | — | 1.806450e+06..2.031433e+08 | 1.804817e+06..2.031433e+08 | 91000 | 0.7776 | `all-fast_27c_3.30v_band2` |
-| `` | `k3` | — | 1.921850e+06..2.059750e+08 | 1.919383e+06..2.059750e+08 | 1.126670e+05 | 1.244 | `all-slow_27c_3.63v_band3` |
+| `` | `k2` | — | 1.806450e+06..2.031433e+08 | 1.804817e+06..2.031433e+08 | 1.231700e+05 | 0.7776 | `all-fast_27c_3.30v_band2` |
+| `` | `k3` | — | 1.921850e+06..2.059750e+08 | 1.919383e+06..2.059750e+08 | 4.181700e+05 | 1.244 | `all-slow_27c_3.63v_band3` |
 | `` | `k4` | — | 1.977783e+06..2.034883e+08 | 1.984550e+06..2.034883e+08 | 7.235000e+05 | 1.781 | `all-fast_-40c_2.97v_band0` |
 | `` | `k5` | — | 2.023917e+06..1.990167e+08 | 2.027250e+06..1.990167e+08 | 3.248000e+06 | 51.51 | `all-fast_27c_3.30v_band1` |
-| `` | `k6` | — | 2.055967e+06..1.963800e+08 | 2.041900e+06..1.963800e+08 | 4.571700e+05 | 4.451 | `ss_-40c_3.30v_band0` |
+| `` | `k6` | — | 2.055967e+06..1.963800e+08 | 2.041900e+06..1.963800e+08 | 6.200000e+05 | 4.451 | `ss_-40c_3.30v_band0` |
 | `` | `k7` | — | 1.868800e+06..1.947033e+08 | 1.623400e+06..1.947033e+08 | 6.401330e+06 | 98.6 | `all-fast_27c_3.30v_band1` |
 | `` | `kvco_max` | — | 2.069033e+06..2.059750e+08 | 2.051700e+06..2.059750e+08 | 6.401330e+06 | 98.6 | `all-fast_27c_3.30v_band1` |
-| `` | `kvco_mean` | — | 1.946733e+06..1.983617e+08 | 1.943756e+06..1.983617e+08 | 1.087200e+05 | 1.546 | `ss_-40c_3.30v_band0` |
+| `` | `kvco_mean` | — | 1.946733e+06..1.983617e+08 | 1.943756e+06..1.983617e+08 | 1.311100e+05 | 1.546 | `ss_-40c_3.30v_band0` |
 | `` | `kvco_min` | — | 1.719833e+06..1.840100e+08 | 1.623400e+06..1.840100e+08 | 2.599733e+06 | 45.95 | `all-fast_27c_3.30v_band1` |
 | `` | `kvco_over_f_max` | — | 0.558088..0.837653 | 0.558028..0.837653 | 0.011067 | 1.657 | `all-fast_27c_3.30v_band3` |
 | `` | `sw1hi` | min=2.6 | 2.98137..3.78425 | 2.98372..3.7864 | 0.07121 | 1.894 | `ff_-40c_3.63v_band6` |
@@ -1017,8 +1031,8 @@ python3 sim/lib/record_delta.py \
 | `` | `tp1` | — | 1.454930e-08..1.352410e-06 | 1.454930e-08..1.352470e-06 | 1.300000e-09 | 0.1178 | `sf_-40c_3.63v_band0` |
 | `` | `tp2` | — | 1.194230e-08..1.151530e-06 | 1.194230e-08..1.151800e-06 | 1.032000e-09 | 0.2999 | `all-fast_27c_3.30v_band3` |
 | `` | `tp3` | — | 1.008030e-08..9.897190e-07 | 1.008030e-08..9.899920e-07 | 1.366000e-09 | 0.2428 | `ss_125c_2.97v_band0` |
-| `` | `tp4` | — | 8.723530e-09..8.645390e-07 | 8.723530e-09..8.649670e-07 | 8.790000e-10 | 0.314 | `all-slow_27c_3.63v_band3` |
-| `` | `tp5` | — | 7.708510e-09..7.650780e-07 | 7.708510e-09..7.646480e-07 | 1.181000e-09 | 0.4582 | `fs_-40c_2.97v_band5` |
+| `` | `tp4` | — | 8.723530e-09..8.645390e-07 | 8.723530e-09..8.649670e-07 | 1.016000e-09 | 0.314 | `all-slow_27c_3.63v_band3` |
+| `` | `tp5` | — | 7.708510e-09..7.650780e-07 | 7.708510e-09..7.646480e-07 | 1.297000e-09 | 0.4582 | `fs_-40c_2.97v_band5` |
 | `` | `tp6` | — | 6.935100e-09..6.848040e-07 | 6.935100e-09..6.848370e-07 | 2.813200e-08 | 12.39 | `all-fast_27c_3.30v_band1` |
 | `` | `tp7` | — | 6.329320e-09..6.190230e-07 | 6.329320e-09..6.195490e-07 | 3.856000e-09 | 0.8258 | `ss_-40c_3.30v_band0` |
 
@@ -1028,7 +1042,13 @@ python3 sim/lib/record_delta.py \
 
 The band-1 outlier rows (`f6`, `tp6`, `k5`/`k7`, `kvco_min`/`kvco_max`) are
 all the same curve — `all-fast/27c_3.30v_band1` — through the check-5
-inversion dispositioned as #1059. "Row" below means a table row — one
+inversion dispositioned as #1059 and resolved by its tightened re-run:
+successor record `20261119-145734-a6e4fcb` re-runs that one curve with the
+transient maximum timestep halved and reads it strictly monotonic (f6 =
+1.760840e+07 Hz against the baseline row's dipped 1.566990e+07), so the
+outlier rows above describe the baseline record's solver artefact, not the
+circuit — the band-1 curve's current evidence is the successor. "Row"
+below means a table row — one
 metric's maximum across the grid — not a single grid point: this table
 reports per-metric maxima, not per-point movement. Outside the band-1
 outliers the largest movers are the two swing-low buffer rails, `sw1lo`
@@ -1060,51 +1080,51 @@ python3 sim/lib/record_delta.py \
 
 | topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
 |---|---|---|---|---|---|---|---|
-| `jit` | `floor_margin_x` | min=10 | 135.148..2010.12 | 130.39..1893 | 197.344 | 76.75 | `typical_27c_3.30v_band5_r4_f100` |
+| `jit` | `floor_margin_x` | min=10 | 135.148..2010.12 | 130.39..1893 | 324.357 | 76.75 | `typical_27c_3.30v_band5_r4_f100` |
 | `jit` | `jfrip` | — | 2.829420e+05..2.883600e+07 | 2.829420e+05..2.883600e+07 | 0 | 0 | `—` |
 | `jit` | `jsettle` | — | 1.415320e-08..1.325360e-06 | 1.415320e-08..1.325360e-06 | 0 | 0 | `—` |
 | `jit` | `jstepon` | — | 8.963680e-08..8.393950e-06 | 8.963680e-08..8.393950e-06 | 0 | 0 | `—` |
-| `jit` | `quiet_c2c_rms_s` | — | 1.780474e-13..2.161974e-11 | 1.835019e-13..2.257353e-11 | 2.012340e-12 | 31.03 | `sf_125c_2.97v_band5_r16_f100` |
+| `jit` | `quiet_c2c_rms_s` | — | 1.780474e-13..2.161974e-11 | 1.835019e-13..2.257353e-11 | 3.186490e-12 | 31.03 | `sf_125c_2.97v_band5_r16_f100` |
 | `jit` | `quiet_cycles` | min=32 | 42..123 | 42..123 | 0 | 0 | `—` |
 | `jit` | `quiet_f_hz` | — | 5.064372e+06..4.036127e+08 | 5.064336e+06..4.036129e+08 | 400 | 0.000717 | `all-fast_-40c_3.30v_band0_r16_f125` |
-| `jit` | `quiet_tie_pp_s` | — | 6.273077e-13..1.352343e-10 | 6.721718e-13..1.341797e-10 | 1.457336e-11 | 51.35 | `all-slow_27c_3.30v_band5_r4_f080` |
-| `jit` | `quiet_tie_rms_s` | — | 1.547741e-13..2.558384e-11 | 1.464496e-13..2.842967e-11 | 3.782765e-13 | 43.42 | `typical_27c_3.30v_band5_r4_f100` |
-| `jit` | `quiet_tj_pp_s` | — | 4.189079e-13..8.148669e-11 | 5.177383e-13..9.063275e-11 | 1.057691e-12 | 47.65 | `typical_27c_3.63v_band5_r16_f100` |
-| `jit` | `quiet_tj_rms_s` | — | 1.146220e-13..1.715074e-11 | 1.164988e-13..1.815519e-11 | 1.104950e-12 | 26.85 | `all-fast_125c_3.30v_band5_r16_f125` |
+| `jit` | `quiet_tie_pp_s` | — | 6.273077e-13..1.352343e-10 | 6.721718e-13..1.341797e-10 | 1.811980e-11 | 51.35 | `all-slow_27c_3.30v_band5_r4_f080` |
+| `jit` | `quiet_tie_rms_s` | — | 1.547741e-13..2.558384e-11 | 1.464496e-13..2.842967e-11 | 4.259720e-12 | 43.42 | `typical_27c_3.30v_band5_r4_f100` |
+| `jit` | `quiet_tj_pp_s` | — | 4.189079e-13..8.148669e-11 | 5.177383e-13..9.063275e-11 | 1.982386e-11 | 47.65 | `typical_27c_3.63v_band5_r16_f100` |
+| `jit` | `quiet_tj_rms_s` | — | 1.146220e-13..1.715074e-11 | 1.164988e-13..1.815519e-11 | 1.822393e-12 | 26.85 | `all-fast_125c_3.30v_band5_r16_f125` |
 | `jit` | `rip_c2c_rms_s` | — | 1.550078e-11..1.173484e-09 | 1.549715e-11..1.173396e-09 | 3.425000e-13 | 0.05833 | `typical_-40c_3.30v_band0_r16_f100` |
 | `jit` | `rip_cycles` | min=32 | 43..123 | 43..123 | 0 | 0 | `—` |
-| `jit` | `rip_f_hz` | — | 5.066246e+06..4.036023e+08 | 5.066281e+06..4.036023e+08 | 500 | 0.0008713 | `ss_-40c_3.30v_band0_r16_f100` |
-| `jit` | `rip_tie_pp_pred_s` | — | 2.027070e-10..1.700522e-08 | 2.026893e-10..1.699767e-08 | 6.400000e-12 | 0.0569 | `sf_-40c_3.30v_band0_r16_f100` |
+| `jit` | `rip_f_hz` | — | 5.066246e+06..4.036023e+08 | 5.066281e+06..4.036023e+08 | 800 | 0.0008713 | `ss_-40c_3.30v_band0_r16_f100` |
+| `jit` | `rip_tie_pp_pred_s` | — | 2.027070e-10..1.700522e-08 | 2.026893e-10..1.699767e-08 | 7.550000e-12 | 0.0569 | `sf_-40c_3.30v_band0_r16_f100` |
 | `jit` | `rip_tie_pp_s` | — | 2.775337e-10..2.092688e-08 | 2.774209e-10..2.092330e-08 | 1.556000e-11 | 0.1259 | `all-fast_-40c_3.30v_band0_r16_f125` |
-| `jit` | `rip_tie_rms_s` | — | 9.300987e-11..6.527032e-09 | 9.300529e-11..6.523197e-09 | 3.155000e-12 | 0.07012 | `typical_-40c_3.30v_band0_r16_f100` |
-| `jit` | `rip_tj_pp_pred_s` | — | 8.361047e-11..5.969443e-09 | 8.360318e-11..5.966836e-09 | 2.312000e-12 | 0.05627 | `sf_-40c_3.30v_band0_r16_f100` |
-| `jit` | `rip_tj_pp_s` | — | 1.085676e-10..6.501042e-09 | 1.085516e-10..6.492177e-09 | 3.585000e-12 | 0.2742 | `ss_27c_3.30v_band7_r16_f100` |
+| `jit` | `rip_tie_rms_s` | — | 9.300987e-11..6.527032e-09 | 9.300529e-11..6.523197e-09 | 3.835000e-12 | 0.07012 | `typical_-40c_3.30v_band0_r16_f100` |
+| `jit` | `rip_tj_pp_pred_s` | — | 8.361047e-11..5.969443e-09 | 8.360318e-11..5.966836e-09 | 2.607000e-12 | 0.05627 | `sf_-40c_3.30v_band0_r16_f100` |
+| `jit` | `rip_tj_pp_s` | — | 1.085676e-10..6.501042e-09 | 1.085516e-10..6.492177e-09 | 1.296600e-11 | 0.2742 | `ss_27c_3.30v_band7_r16_f100` |
 | `jit` | `rip_tj_rms_pct` | — | 0.867437..3.23505 | 0.867292..3.23548 | 0.00055 | 0.05468 | `typical_-40c_3.30v_band0_r16_f100` |
 | `jit` | `rip_tj_rms_s` | — | 3.849601e-11..2.309306e-09 | 3.849408e-11..2.308856e-09 | 8.850000e-13 | 0.05444 | `typical_-40c_3.30v_band0_r16_f100` |
-| `jit` | `step_df_hz` | — | -1.362042e+07..-1.371294e+05 | -1.361924e+07..-1.370832e+05 | 910 | 0.05748 | `sf_-40c_3.30v_band0_r16_f100` |
-| `jit` | `step_f_post_hz` | — | 4.911273e+06..3.899964e+08 | 4.911292e+06..3.899977e+08 | 600 | 0.0009961 | `typical_-40c_3.30v_band0_r16_f100` |
+| `jit` | `step_df_hz` | — | -1.362042e+07..-1.371294e+05 | -1.361924e+07..-1.370832e+05 | 1200 | 0.05748 | `sf_-40c_3.30v_band0_r16_f100` |
+| `jit` | `step_f_post_hz` | — | 4.911273e+06..3.899964e+08 | 4.911292e+06..3.899977e+08 | 1300 | 0.0009961 | `typical_-40c_3.30v_band0_r16_f100` |
 | `jit` | `step_f_pre_hz` | — | 5.064376e+06..4.036169e+08 | 5.064326e+06..4.036170e+08 | 1200 | 0.0009873 | `all-slow_-40c_3.30v_band0_r16_f080` |
-| `jit` | `step_kvdd_hz_per_v` | — | -1.362042e+08..-1.371294e+06 | -1.361924e+08..-1.370832e+06 | 9100 | 0.05748 | `sf_-40c_3.30v_band0_r16_f100` |
+| `jit` | `step_kvdd_hz_per_v` | — | -1.362042e+08..-1.371294e+06 | -1.361924e+08..-1.370832e+06 | 12000 | 0.05748 | `sf_-40c_3.30v_band0_r16_f100` |
 | `jit` | `step_tie_per_us_s` | — | -6.076885e-08..-2.235348e-08 | -6.076488e-08..-2.234603e-08 | 1.412000e-11 | 0.05649 | `sf_-40c_3.30v_band0_r16_f100` |
 | `push` | `f1` | — | 5.746860e+06..4.584100e+08 | 5.743620e+06..4.584100e+08 | 3.770000e+05 | 0.3235 | `all-slow_-40c_3.30v_band4_r16_f080` |
 | `push` | `f2` | — | 5.490450e+06..4.395430e+08 | 5.488340e+06..4.395430e+08 | 1.650500e+06 | 1.855 | `all-slow_125c_2.97v_band5_r16_f080` |
 | `push` | `f3` | — | 5.256650e+06..4.210870e+08 | 5.259040e+06..4.210870e+08 | 2.590000e+05 | 2.52 | `sf_27c_3.30v_band0_r16_f100` |
 | `push` | `f4` | min=1.000000e+05, min_spread_pct=50 | 5.073200e+06..4.035060e+08 | 5.068260e+06..4.035060e+08 | 4.479000e+05 | 1.113 | `fs_27c_3.30v_band0_r16_f100` |
 | `push` | `f5` | — | 4.886320e+06..3.867860e+08 | 4.880770e+06..3.867860e+08 | 1.369300e+06 | 2.304 | `all-slow_-40c_2.97v_band5_r16_f080` |
-| `push` | `f6` | — | 4.757680e+06..3.711660e+08 | 4.760380e+06..3.711660e+08 | 1.050000e+05 | 0.2821 | `ss_27c_3.30v_band0_r16_f100` |
-| `push` | `f7` | — | 4.626680e+06..3.565950e+08 | 4.619940e+06..3.565950e+08 | 1.600000e+05 | 0.2583 | `fs_-40c_3.30v_band0_r16_f100` |
-| `push` | `i1` | — | 3.799700e-05..0.000653237 | 3.787080e-05..0.000653237 | 1.197000e-06 | 2.023 | `typical_-40c_3.30v_band0_r16_f100` |
-| `push` | `i2` | — | 3.901990e-05..0.000661283 | 3.869730e-05..0.000661283 | 1.723300e-06 | 2.888 | `ss_27c_3.30v_band0_r16_f100` |
-| `push` | `i3` | — | 4.004930e-05..0.000675351 | 4.054940e-05..0.000675351 | 2.219300e-06 | 2.58 | `all-slow_-40c_3.30v_band4_r16_f080` |
-| `push` | `i4` | — | 4.109920e-05..0.000682673 | 4.046040e-05..0.000682673 | 2.349300e-06 | 4.245 | `fs_-40c_3.30v_band0_r16_f100` |
-| `push` | `i5` | — | 4.353630e-05..0.000688741 | 4.336560e-05..0.000688741 | 2.411400e-06 | 4.14 | `sf_-40c_3.30v_band0_r16_f100` |
-| `push` | `i6` | — | 4.453860e-05..0.000702994 | 4.518520e-05..0.000702994 | 3.480600e-06 | 5.433 | `ff_-40c_3.30v_band0_r16_f100` |
+| `push` | `f6` | — | 4.757680e+06..3.711660e+08 | 4.760380e+06..3.711660e+08 | 1.315000e+05 | 0.2821 | `ss_27c_3.30v_band0_r16_f100` |
+| `push` | `f7` | — | 4.626680e+06..3.565950e+08 | 4.619940e+06..3.565950e+08 | 1.780000e+05 | 0.2583 | `fs_-40c_3.30v_band0_r16_f100` |
+| `push` | `i1` | — | 3.799700e-05..0.000653237 | 3.787080e-05..0.000653237 | 2.059000e-06 | 2.023 | `typical_-40c_3.30v_band0_r16_f100` |
+| `push` | `i2` | — | 3.901990e-05..0.000661283 | 3.869730e-05..0.000661283 | 3.041000e-06 | 2.888 | `ss_27c_3.30v_band0_r16_f100` |
+| `push` | `i3` | — | 4.004930e-05..0.000675351 | 4.054940e-05..0.000675351 | 2.521000e-06 | 2.58 | `all-slow_-40c_3.30v_band4_r16_f080` |
+| `push` | `i4` | — | 4.109920e-05..0.000682673 | 4.046040e-05..0.000682673 | 3.940000e-06 | 4.245 | `fs_-40c_3.30v_band0_r16_f100` |
+| `push` | `i5` | — | 4.353630e-05..0.000688741 | 4.336560e-05..0.000688741 | 3.088000e-06 | 4.14 | `sf_-40c_3.30v_band0_r16_f100` |
+| `push` | `i6` | — | 4.453860e-05..0.000702994 | 4.518520e-05..0.000702994 | 4.788000e-06 | 5.433 | `ff_-40c_3.30v_band0_r16_f100` |
 | `push` | `i7` | — | 4.498090e-05..0.000708702 | 4.466170e-05..0.000708702 | 3.835900e-06 | 4.998 | `ff_27c_3.30v_band0_r16_f100` |
 | `push` | `push_f_nom_hz` | — | 5.073200e+06..4.035060e+08 | 5.068260e+06..4.035060e+08 | 4.479000e+05 | 1.113 | `fs_27c_3.30v_band0_r16_f100` |
-| `push` | `push_i_nom_a` | — | 4.109920e-05..0.000682673 | 4.046040e-05..0.000682673 | 2.349300e-06 | 4.245 | `fs_-40c_3.30v_band0_r16_f100` |
+| `push` | `push_i_nom_a` | — | 4.109920e-05..0.000682673 | 4.046040e-05..0.000682673 | 3.940000e-06 | 4.245 | `fs_-40c_3.30v_band0_r16_f100` |
 | `push` | `push_nl_pct` | max=5 | 0.148398..3.41401 | 0.127758..2.62913 | 1.54161 | 141.8 | `sf_27c_3.30v_band0_r16_f100` |
-| `push` | `push_norm_pct_per_v` | max=0 | -54.5388..-24.1067 | -54.5913..-24.0205 | 0.9619 | 3.433 | `sf_27c_3.30v_band0_r16_f100` |
-| `push` | `push_slope_hz_per_v` | — | -1.547078e+08..-1.477299e+06 | -1.547078e+08..-1.473643e+06 | 4.767000e+05 | 3.297 | `sf_27c_3.30v_band0_r16_f100` |
+| `push` | `push_norm_pct_per_v` | max=0 | -54.5388..-24.1067 | -54.5913..-24.0205 | 1.3095 | 3.433 | `sf_27c_3.30v_band0_r16_f100` |
+| `push` | `push_slope_hz_per_v` | — | -1.547078e+08..-1.477299e+06 | -1.547078e+08..-1.473643e+06 | 1.047630e+06 | 3.297 | `sf_27c_3.30v_band0_r16_f100` |
 | `push` | `tp1` | — | 8.725800e-09..6.960320e-07 | 8.725800e-09..6.964250e-07 | 1.108000e-09 | 0.3245 | `all-slow_-40c_3.30v_band4_r16_f080` |
 | `push` | `tp2` | — | 9.100360e-09..7.285380e-07 | 9.100360e-09..7.288180e-07 | 1.413000e-09 | 1.89 | `all-slow_125c_2.97v_band5_r16_f080` |
 | `push` | `tp3` | — | 9.499220e-09..7.609400e-07 | 9.499220e-09..7.605950e-07 | 1.555100e-08 | 2.585 | `sf_27c_3.30v_band0_r16_f100` |

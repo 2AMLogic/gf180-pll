@@ -113,12 +113,16 @@ class _Tree(TreeWriter):
     def read_report(self) -> str:
         return (self.root / REPORT).read_text(encoding="utf-8")
 
-    def stub_klt(self, version: str, report: dict, exit_code: int = 3) -> None:
+    def stub_klt(self, version: str, report: dict, exit_code: int = 3,
+                 attest_exit: int = 0) -> None:
         """A `klt` on PATH reporting `version` and rendering `report`.
 
         `exit_code` is what `klt signoff --manifest` exits with: 3 ("not yet
         T1") is this block's real, expected verdict today, and the script
         treats 0 and 3 alike, so the stub defaults to the honest one.
+        `attest_exit` is what `klt signoff --attest … --check` exits with:
+        0 is "the committed envelope still reproduces", 3 is the stale/failed
+        verdict the item-2 re-attest gate exists to catch (issue #1080).
         """
         rendered = self.root / "stub-klt-report.json"
         rendered.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
@@ -129,6 +133,12 @@ class _Tree(TreeWriter):
             f'  echo "klt {version}"\n'
             "  exit 0\n"
             "fi\n"
+            'for arg in "$@"; do\n'
+            '  if [ "$arg" = "--attest" ]; then\n'
+            f'    echo "attest: stub exit {attest_exit}"\n'
+            f"    exit {attest_exit}\n"
+            "  fi\n"
+            "done\n"
             f'cat "{rendered}"\n'
             f"exit {exit_code}\n",
             encoding="utf-8",
@@ -291,3 +301,60 @@ class TestToolErrors(_TreeTest):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestItem2Envelope(_TreeTest):
+    """The committed item-2 layout envelope re-attest gate (issue #1080).
+
+    `run-signoff.sh` re-attests `signoff/attest/item-2.evidence.json` with
+    `klt signoff --attest 2 --check` before rendering, in both modes, so a
+    `pll_top.gds` that moved underneath the envelope fails at the envelope --
+    with the re-attest procedure named -- instead of quietly re-grading the
+    row unmet in the report diff. A gate that cannot fail is not a gate, so
+    these drive the stub klt's `--attest` exit code both ways.
+    """
+
+    ENVELOPE = "signoff/attest/item-2.evidence.json"
+
+    def setUp(self):
+        super().setUp()  # builds the tree and stubs klt (attest_exit=0)
+        self.tree.write(self.ENVELOPE, '{"t1_item": 2, "status": "pass"}\n')
+
+    def test_a_reproducing_envelope_passes(self):
+        result = self.tree.run("--check")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("item-2 envelope: current", result.stderr)
+
+    def test_a_stale_envelope_fails_with_the_reattest_procedure(self):
+        """The negative control: the GDS moved, the envelope did not.
+
+        Exit 3 from `--attest --check` is the stale/failed verdict; the script
+        must fail (1), name the envelope and the stream, and print the
+        re-attest command -- not blame the committed report.
+        """
+        self.tree.stub_klt(PINNED_KLT, _report(), attest_exit=3)
+        result = self.tree.run("--check")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(self.ENVELOPE, result.stderr)
+        self.assertIn("--attest 2", result.stderr)
+        self.assertIn("--hash-kind geometry", result.stderr)
+        self.assertIn("block-manifest.json", result.stderr)
+        self.assertNotIn("is stale", result.stderr)
+
+    def test_write_mode_refuses_a_stale_envelope_too(self):
+        """A stale envelope must not be *rendered past* either -- otherwise
+        write mode would bake the unmet re-grade into tier-report.json and
+        --check would go green over the moved stream."""
+        self.tree.stub_klt(PINNED_KLT, _report(), attest_exit=3)
+        before = self.tree.read_report()
+        result = self.tree.run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(before, self.tree.read_report())
+
+    def test_a_tree_without_the_envelope_skips_the_gate(self):
+        """The fixture tree cites no evidence, so nothing is there to attest;
+        the render below is what grades such a tree."""
+        (self.tree.root / self.ENVELOPE).unlink()
+        result = self.tree.run("--check")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("item-2 envelope", result.stderr)

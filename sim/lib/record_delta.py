@@ -5,8 +5,9 @@
 
 Prints a Markdown delta table: for every measurement the two records share,
 the old and new value range over the grid, the largest absolute and relative
-change, the corner that moved most, and whether any per-corner `pass/fail`
-verdict or any `limits` entry changed.
+change, the corner with the largest relative change (ties use the larger
+absolute change), and whether any per-corner `pass/fail` verdict or any
+`limits` entry changed.
 
 WHY THIS EXISTS (#825)
 ----------------------
@@ -181,6 +182,7 @@ def compare(old_path: Path, new_path: Path) -> tuple[list[str], int]:
 
         worst_abs = 0.0
         worst_rel = 0.0
+        abs_at_worst_rel = 0.0
         worst_corner = "—"
         for c, o, n in zip(corners, olds, news):
             d = abs(n - o)
@@ -188,9 +190,9 @@ def compare(old_path: Path, new_path: Path) -> tuple[list[str], int]:
             # reader is comparing against. A zero baseline has no meaningful
             # relative change, so it contributes to the absolute column only.
             r = (d / abs(o) * 100.0) if o != 0 else 0.0
-            if r > worst_rel or (r == worst_rel and d > worst_abs):
-                worst_abs, worst_rel, worst_corner = d, r, c
             worst_abs = max(worst_abs, d)
+            if (r, d) > (worst_rel, abs_at_worst_rel):
+                worst_rel, abs_at_worst_rel, worst_corner = r, d, c
 
         limit = new_l.get((topo, meas), old_l.get((topo, meas), "—")) or "—"
         lines.append(
