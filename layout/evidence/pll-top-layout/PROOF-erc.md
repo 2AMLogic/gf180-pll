@@ -129,6 +129,40 @@ graded against nothing. No antenna claim is made.
 5. **Not IR-drop or EM.** Most supply risers are single vias (`PROOF.md`
    limitation 6); nothing here analyses them.
 
+## Antenna-graded re-run with the gf180mcu table (2026-11-20, issue #1082)
+
+**Correction to this document's antenna-coverage statements (and to
+`erc-report.json`'s own `not_checked` status as the latest word):** the
+antenna half of `klt erc` has now run on the assembled top level, on the
+pinned `klayout-tools==0.9.2`, with the gf180mcu antenna-ratio table
+2AMLogic/klayout-tools#4003 added (`--pdk gf180mcu`). The dated record is
+[`erc-antenna-20261120/`](erc-antenna-20261120/RECORD.md) — a fresh
+envelope, a spec copy whose stackup names are the table's canonical
+`Metal1`..`Metal5` (the exact-name lookup is
+[2AMLogic/klayout-tools#6976](https://github.com/2AMLogic/klayout-tools/issues/6976);
+the committed `erc-supply-spec.json` and `erc-report.json` above are
+byte-unchanged), and the PDK's own `antenna.drc` corroboration run
+(zero violations on the same GDS).
+
+The new envelope grades **checked: 1380, skipped: 0** where the committed
+report reads checked: 0, skipped: 1380 (its 276 `gate_reference_level`
+inapplicables stay, as expected). All but three gate nets pass every
+level. The three `violate` verdicts — `gate21`/`GND_VCO` (ratio 711.9),
+`gate38`/`VDD` (857.1, climbing to 4038.9 at Metal5),
+`gate17`/`XDLY_T0B` (421.0) — are all gate nets that also carry
+source/drain junctions (supply rails and a driven delay-chain node), the
+no-diode-credit false-positive class of the table's documented
+cumulative-area approximation
+([2AMLogic/klayout-tools#6975](https://github.com/2AMLogic/klayout-tools/issues/6975)):
+the foundry deck's own `[diode, 800]`-credited rule passes all three, so
+no layout change is assigned. `status` is `violations` (exit 3),
+`erc_status` stays `clean` with zero findings. The item-11 grader's
+reason for the new envelope is `supply_spec_disclosed_tool_limitation`
+(quoted verbatim in the dated record; removal owned by #1085 and
+[2AMLogic/klayout-tools#2540](https://github.com/2AMLogic/klayout-tools/issues/2540))
+— no longer the `not_checked` that made the pair unreadable, and the
+disclosure is not relaxed to get a pass.
+
 ## Well-tie grading on the 0.9.2 box selectors (issue #1085)
 
 The top-level `ties_disclosure` is superseded:

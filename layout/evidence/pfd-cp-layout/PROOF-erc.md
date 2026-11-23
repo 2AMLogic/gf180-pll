@@ -492,6 +492,38 @@ KLayout pin). Verdicts are unchanged from 0.8.0: `status: not_checked`,
 input and spec content hashes are unchanged.
 `erc_coverage.layers_in_stream_without_declaration` is now `["36/10"]` (Metal2_Label, a text-only layer): 0.8.0 did not emit the key, 0.9.2 does. The layer is the deliberate omission already justified in `erc-supply-spec.json` (it carries bias/control or signal net text, none of it a declared supply net), so it needs no new disclosure.
 
+## Antenna-graded re-run with the gf180mcu table (2026-11-20, issue #1082)
+
+**Correction to this document's antenna-coverage statements:** the
+antenna half of `klt erc` has now run on this block, on the pinned
+`klayout-tools==0.9.2`, with the gf180mcu antenna-ratio table
+2AMLogic/klayout-tools#4003 added (`--pdk gf180mcu`). The dated record is
+[`erc-antenna-20261120/`](erc-antenna-20261120/RECORD.md) — a fresh
+envelope, a spec copy whose stackup names are the table's canonical
+`Metal1`..`Metal3` (the exact-name lookup is
+[2AMLogic/klayout-tools#6976](https://github.com/2AMLogic/klayout-tools/issues/6976);
+the committed `erc-supply-spec.json` and `erc-report.json` above are
+byte-unchanged), and the PDK's own `antenna.drc` corroboration run
+(zero violations on the same GDS).
+
+The new envelope grades **checked: 219, skipped: 0** where the committed
+report reads checked: 0, skipped: 219 (its 73 `gate_reference_level`
+inapplicables stay, as expected). 71 of 73 gate nets pass every level.
+The two `violate` verdicts — `gate4`/`VSS` (ratio 558.6) and
+`gate11`/`VDD` (771.3), both rail-tied gate nodes — are the
+no-diode-credit false-positive class of the table's documented
+cumulative-area approximation
+([2AMLogic/klayout-tools#6975](https://github.com/2AMLogic/klayout-tools/issues/6975)):
+the foundry deck's own `[diode, 800]`-credited rule passes both, so no
+layout change is assigned. `status` is `violations` (exit 3),
+`erc_status` stays `clean` with zero findings. The item-11 grader's
+reason for the new envelope is `supply_spec_disclosed_tool_limitation`
+(quoted verbatim in the dated record; removal owned by #1085 and
+[2AMLogic/klayout-tools#2540](https://github.com/2AMLogic/klayout-tools/issues/2540))
+— the same disclosed tool limitation this document already adjudicates
+above, now reached past the antenna skip instead of stopping at
+`not_checked`.
+
 ## Well-tie grading on the 0.9.2 box selectors (issue #1085)
 
 The obstacle this record measured is gone:

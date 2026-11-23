@@ -153,7 +153,9 @@ checklist text adopting it.
 (case 3 below); item 2 followed on 2026-11-20 (issue #1080 — a `klt signoff
 --attest 2` envelope over the committed `pll_top.gds`, shared by both
 partitions). The text of cases 1 and 2 describes the fourteen rows that are
-still `no_evidence`.
+still `no_evidence` — **updated (2026-11-21, issue #1083):** thirteen of them;
+item 5 on the digital partition now reads `timing_margin_missing` with one
+cited `klt sim` envelope (see the correction in case 1).
 
 The report's `reason` for all 22 T1 rows is `no_evidence`: the manifest cites
 nothing. That single machine code covers three materially different situations,
@@ -217,11 +219,21 @@ and 8 `klt lvs` envelopes committed as well, none of them cited in
   correction). There is
   still no `pll_top` LVS envelope, so item 4 has nothing block-scoped to
   cite even before citation is considered.
-- **`klt sim` and `klt pex`:** still no envelope of either kind exists
+- **`klt sim` and `klt pex`:** ~~still no envelope of either kind exists
   anywhere, which keeps items 5 and 6 uncitable on the format axis; the
   `sim/` campaigns recorded in `sim/CHARACTERIZATION.md` remain this repo's
   own Markdown-plus-raw-log record format, produced by `sim/run_corners.py`,
-  not by `klt sim`.
+  not by `klt sim`.~~ — **corrected (2026-11-21, issue #1083):** the first
+  `klt sim` envelope is committed and cited —
+  `sim/divider-ratio-chain/klt-sim/envelope.json` (the campaign's f200n33
+  slice, 45/45 corners PASS, every measurement identical to the committed
+  f6eeac7 record), cited for item 5 on the digital partition with derived
+  `spec_row` coverage of the multiplication-ratio row. Item 5 digital
+  therefore reads `timing_margin_missing`, not `no_evidence` (the N=64
+  retiming margins are not yet migrated — #1090, and 2AMLogic/klayout-tools#7006
+  records that row coverage cannot express the one-divisor slice). No `klt
+  pex` envelope exists, and every other `sim/` campaign remains in the
+  repo-format record; the analog partition's item 5 is still `no_evidence`.
 
 `klt signoff` grades envelopes, so none of it is citable as it stands. This
 affects items 3, 4, 5 and 6 most directly. ~~Item 6 also carries a further,
@@ -434,7 +446,7 @@ pair now exist for exactly one cell — `lock_detector` has
 `status: not_checked`, like all five committed ERC reports (the antenna half
 of every one was skipped, each entry `missing_antenna_pdk`), so there is no
 passing ERC half for the grader to read.~~ — **corrected (2026-11-17, issue
-#929):** both halves of the item-11 pair now exist for three cells —
+#929):** ~~both halves of the item-11 pair now exist for three cells —
 `lock_detector` (`layout/evidence/lock-detector-layout/erc-report.json` +
 `klt-curated-930/lvs-report.json`, `status: match`), `pfd_cp`
 (`layout/evidence/pfd-cp-layout/erc-report.json` +
@@ -445,7 +457,37 @@ every committed ERC envelope is `status: not_checked` (the antenna half of
 every one was skipped, each entry `missing_antenna_pdk`), so no cell has a
 passing ERC half for the grader to read — and past that skip, `pfd_cp`'s ERC
 half renders `supply_spec_disclosed_tool_limitation` (its `PROOF-erc.md`),
-so its pair is uncitable twice over.
+so its pair is uncitable twice over.~~ — **corrected (2026-11-20, issue
+#1082):** the antenna half has now been graded on all five cells — dated
+`erc-antenna-20261120/` records beside each committed report, produced on
+the pinned `klayout-tools==0.9.2` with `--pdk gf180mcu` (the table
+2AMLogic/klayout-tools#4003 added) and a spec copy per cell whose stackup
+names are the table's canonical `Metal*` spelling (the exact-name lookup
+that makes that necessary is
+[2AMLogic/klayout-tools#6976](https://github.com/2AMLogic/klayout-tools/issues/6976)).
+Antenna coverage is now checked everywhere, skipped nowhere
+(`divider_chain` 420/0, `vco_block` 145/0, `pfd_cp` 219/0,
+`lock_detector` 117/0, `pll_top` 1380/0). `divider_chain` comes back
+`status: clean`; the other four read `status: violations` whose verdicts
+are all one corroborated false-positive class — gate nets that also carry
+source/drain junctions (supply rails, a driven delay node), which the
+table's documented no-diode-credit cumulative-area model flags
+([2AMLogic/klayout-tools#6975](https://github.com/2AMLogic/klayout-tools/issues/6975))
+and the PDK's own `antenna.drc` (run on each GDS, committed in each dated
+dir, zero violations) clears. Calling the pinned item-11 grader
+(`_resolve_erc_supply_spec`) on the new envelopes resolves the ERC half
+of `vco_block`, `divider_chain` and `lock_detector` (reason `None`, no
+supply finding); `pll_top` and `pfd_cp` render
+`supply_spec_disclosed_tool_limitation` — quoted verbatim in each dated
+`RECORD.md`, with removal owned by
+[#1085](https://github.com/2AMLogic/gf180-pll/issues/1085) (a well-class
+marker layer, or upstream
+[2AMLogic/klayout-tools#2540](https://github.com/2AMLogic/klayout-tools/issues/2540)).
+So "no passing ERC half for the grader to read" is no longer the
+blocker for three cells; what remains is the pairing/citation decision
+(#149 / #987 own the LVS half), and the two disclosures, which are
+deliberately not relaxed. The five committed `erc-report.json` files are
+byte-unchanged; the dated directories are the record.
 
 - **A spec declaring no `ties[]` now renders `supply_spec_incomplete`.** The
   committed `erc-supply-spec.json` declares no `ties[]` and no
@@ -558,12 +600,26 @@ block-scoped ERC and DRC envelopes and no LVS envelope at all.
 ~~Net: item 11 is `unmet` for every block, for reasons that are now precisely
 named per block rather than uniform, and none of them is a known
 power-delivery defect. The one gap left with no open owner is the `klt lvs`
-envelope itself.~~ — **corrected (2026-11-16, issue #929):** the summary
+envelope itself.~~ — **corrected (2026-11-16, issue #929):** ~~the summary
 stands except for its last clause. #930 closed that gap by committing the
 `lock_detector` LVS envelope, and `vco_block`'s topology-only LVS `match` was
 already on file; what remains for every block is citability, not existence —
 nothing is cited in the manifest, and no committed ERC envelope renders a
-passing ERC half (all five are `status: not_checked` on the antenna half).
+passing ERC half (all five are `status: not_checked` on the antenna half).~~
+— **corrected (2026-11-20, issue #1082):** the last clause is superseded:
+every cell now has an antenna-graded ERC envelope (its dated
+`erc-antenna-20261120/` record), and the pinned grader resolves the ERC
+half of `vco_block`, `divider_chain` and `lock_detector` with no reason at
+all — `divider_chain`'s is `status: clean` end to end, and the `violate`
+verdicts on the other four are the corroborated no-diode-credit false
+positives of 2AMLogic/klayout-tools#6975 (the PDK's own `antenna.drc`
+clears every one of them; the corroboration runs are committed beside
+the envelopes). Item 11 remains `unmet` for every partition row — the
+manifest still cites nothing — and the honest blockers are now: the
+pairing/citation decision for the three resolved cells (#149 / #987 own
+the LVS half), and the `supply_spec_disclosed_tool_limitation`
+disclosures on `pll_top` and `pfd_cp` (#1085 owns their removal; they
+are deliberately not relaxed to manufacture a pass).
 
 ### Superseded: why the checklist was vendored here
 

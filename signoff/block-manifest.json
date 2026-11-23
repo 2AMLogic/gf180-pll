@@ -21,6 +21,28 @@
       "content_hash": "sha256:fbe4001364aa586f6bdbf1babe85cbb4d40d8fbf4560b899ee158d7f5f12b11c",
       "file": "signoff/attest/item-2.evidence.json"
     },
+    "5.digital": [
+      {
+        "file": "sim/divider-ratio-chain/klt-sim/envelope.json",
+        "rows": [
+          "multiplication-ratio"
+        ]
+      },
+      {
+        "file": "sim/divider-ratio-chain/klt-sim/migration/runs/f200n64a/report.json",
+        "rows": [
+          "multiplication-ratio",
+          "retiming-margin"
+        ]
+      },
+      {
+        "file": "sim/divider-ratio-chain/klt-sim/migration/runs/f200n64b/report.json",
+        "rows": [
+          "multiplication-ratio",
+          "retiming-margin"
+        ]
+      }
+    ],
     "9.analog": {
       "content_hash": "sha256:c8ece3842b207fb006a1c2cb3b4c237bb784941c2443177e3ed6daec14bf332e",
       "file": "signoff/attest/item-9.analog.evidence.json"
@@ -30,5 +52,20 @@
       "file": "signoff/attest/item-9.digital.evidence.json"
     }
   },
-  "kind": "mixed-signal"
+  "kind": "mixed-signal",
+  "spec_rows": {
+    "5.digital": [
+      {
+        "id": "multiplication-ratio"
+      },
+      {
+        "id": "retiming-margin",
+        "timing_margin": true
+      },
+      {
+        "gap": "row unratified (DR-007 Amendment A1) -- item-5 evidence may not cite it until the spec row is ratified, and no klt sim envelope exists for the lock-detector campaigns",
+        "id": "lock-detector"
+      }
+    ]
+  }
 }
