@@ -34,12 +34,17 @@ ngspice, no network.
 from __future__ import annotations
 
 import csv
+import hashlib
 import sys
 import unittest
 from pathlib import Path
 
 SIM_DIR = Path(__file__).resolve().parents[1]
 TESTBENCH = SIM_DIR / "vco-tuning-range" / "testbench"
+#: Deliberate byte-identical copy of `testbench/`'s derive code: the harness
+#: confines a manifest's `derived.module` to its own directory and `derive.py`
+#: loads `_numeric.py` from next to itself, so tightband1 cannot share files.
+TIGHTBAND1 = SIM_DIR / "vco-tuning-range" / "testbench-tightband1"
 #: The chain-head record this migration supersedes, and its committed sweep CSV.
 SUPERSEDED_RECORD = "20260731-175947-0a12e6c"
 SWEEP_CSV = SIM_DIR / "vco-tuning-range" / "corners" / SUPERSEDED_RECORD / "vco_tuning.csv"
@@ -584,6 +589,39 @@ class VcoTuningSubsetGridDoesNotCrash(unittest.TestCase):
         self.assertEqual(len(tables["kvco_summary"].rows), 3)
         self.assertEqual(len(tables["band_edge_margin"].rows), 2)
         self.assertTrue(tables["acceptance_checks"].rows)
+
+
+class VcoTuningTightband1CopyParity(unittest.TestCase):
+    """`testbench-tightband1/` must reuse `testbench/`'s derive code verbatim.
+
+    `testbench-tightband1/` carries copies of `derive.py` and `_numeric.py`
+    rather than sharing them, because the harness resolves a manifest's
+    `derived.module` inside its own testbench directory and `derive.py` loads
+    `_numeric.py` from `Path(__file__).resolve().parent`. That layout is
+    deliberate -- the copy is content-hashed in the attested inventory -- but
+    it means a fix applied to one directory can silently miss the other. This
+    test makes that drift loud instead: any byte, encoding or line-ending
+    difference between the paired files fails here.
+    """
+
+    FILES = ("derive.py", "_numeric.py")
+
+    def test_copies_match_testbench_byte_for_byte(self):
+        for name in self.FILES:
+            with self.subTest(file=name):
+                canonical = TESTBENCH / name
+                copy = TIGHTBAND1 / name
+                self.assertTrue(canonical.is_file(), f"missing {canonical}")
+                self.assertTrue(copy.is_file(), f"missing {copy}")
+                canonical_sha = hashlib.sha256(canonical.read_bytes()).hexdigest()
+                copy_sha = hashlib.sha256(copy.read_bytes()).hexdigest()
+                self.assertEqual(
+                    copy_sha,
+                    canonical_sha,
+                    "%s drifted from %s (sha256 %s != %s); the two "
+                    "testbench directories must stay byte-identical"
+                    % (copy, canonical, copy_sha, canonical_sha),
+                )
 
 
 if __name__ == "__main__":
