@@ -1097,8 +1097,7 @@ hole at a smaller scale: its `−54.5` was graded, but not the two corner-count
 figures its verdict stated at the time, nor `−54.9`, the other of the "two
 coldest
 corners" that made that count. All reduce `spur_by_corner.csv` —
-`spur_dbc <= -55`, `spur_dbc_at_200mhz > -55`, and the `ff`/−40 °C point — so
-they are graded beside it.) Its three findings each reduce the
+`spur_dbc <= -55` and the `ff`/−40 °C point — so they are graded beside it.) Its three findings each reduce the
 CSV that states them — `criterion1_verdict_classes.csv` (45 rows: the 10
 failing corners and their 2 / 8 split, the frequency headroom, and DR-012's
 settled grading joined per corner), `criterion1b_vctrl_budget.csv` (15 rows,
