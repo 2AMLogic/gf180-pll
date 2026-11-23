@@ -27,6 +27,20 @@
         "rows": [
           "multiplication-ratio"
         ]
+      },
+      {
+        "file": "sim/divider-ratio-chain/klt-sim/migration/runs/f200n64a/report.json",
+        "rows": [
+          "multiplication-ratio",
+          "retiming-margin"
+        ]
+      },
+      {
+        "file": "sim/divider-ratio-chain/klt-sim/migration/runs/f200n64b/report.json",
+        "rows": [
+          "multiplication-ratio",
+          "retiming-margin"
+        ]
       }
     ],
     "9.analog": {
@@ -45,7 +59,6 @@
         "id": "multiplication-ratio"
       },
       {
-        "gap": "the N=64/200 MHz retiming-margin points (DR-001's worst-case selection, joined against sim/divider-ratio-dff) are evidenced by the committed harness record 20261114-093804-ad9eef8 and are not yet migrated to a klt sim envelope (#1083 migrated the f200n33 slice only)",
         "id": "retiming-margin",
         "timing_margin": true
       },
