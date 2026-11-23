@@ -1008,10 +1008,13 @@ manifest citation; the manifest's `content_hash` for each citation pins the **sa
   (`sw_stat_mismatch` repeat/vary/gate legs), not the seeded known-bad
   *variant draw* shape `klt yield`'s `negative_control` block analyses, and
   `klt yield-csv` has no way to derive one from a second per-draw CSV
-  (**klayout-tools#6974**, open). The grader discloses this
+  (**klayout-tools#6974**, closed upstream 2026-11-22, after the pinned
+  0.9.2 release, so the capability is still absent on the pinned install).
+  The grader discloses this
   (`citation.yield_campaign.negative_control: "not_declared"`) rather than
-  failing on it; when klayout-tools#6974 lands, the committed control CSVs
-  are the starting material for declaring one properly.
+  failing on it; once this repository pins a klt release carrying
+  klayout-tools#6974, the committed control CSVs are the starting material
+  for declaring one properly.
 
 **The export is no longer deferred — here is what replaced the deferral.**
 The deferral recorded below was written when the native extension could not
@@ -1196,10 +1199,13 @@ worked around silently. Their upstream state was re-checked on 2026-09-26
   is read. Worked around by the thinnest possible tested step
   (`signoff/yield/derive.py` strips the preamble into a committed,
   re-derivable header-first CSV); the strip is pure boilerplate and should
-  live upstream. **Open.**
+  live upstream. **Closed upstream 2026-11-22**, after the pinned 0.9.2
+  release, so the strip is still needed on the pinned install.
 - **klayout-tools#6974** — cited, not filed from here (it predates #1081):
   `klt yield-csv` has no way to attach a `negative_control` (or run
   provenance) to a CSV-derived sample set, so this repository's committed
   CSV-shape campaign controls cannot be declared on the item-6 citations,
   which read `negative_control: "not_declared"` — disclosed, not hidden; see
-  "Item 6 today" above. **Open.**
+  "Item 6 today" above. **Closed upstream 2026-11-22**, after the pinned
+  0.9.2 release, so the citations still read `not_declared` on the pinned
+  install.
