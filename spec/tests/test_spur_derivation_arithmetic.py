@@ -55,6 +55,13 @@ Target: ≤ −55 dBc at the binding output frequency.
 | `ff` / −40 °C / 3.63 V | −57.4 dBc | −54.9 dBc |
 | `fs` / 125 °C / 3.63 V | −72.7 dBc (best) | −70.2 dBc |
 
+Directly measured at the binding frequency:
+
+| Corner | Directly measured spur at 200 MHz (`sim/fixture-band-top/records/r1.md`) | Record point | Against −55 dBc |
+|---|---|---|---|
+| `sf` / −40 °C / 3.30 V | **−49.69 dBc** (worst) | `sf_-40c_3.30v_b7` | FAIL |
+| `sf` / −40 °C / 2.97 V | −64.77 dBc | `sf_-40c_2.97v_b6` | PASS |
+
 Derivation from the recorded dominant mechanism:
 
 | Step | Value | Source |
@@ -80,6 +87,17 @@ Re-priced over the corner-combined campaign (DR-018):
 ## Loop bandwidth
 
 Text after the section this check grades.
+"""
+
+#: A miniature of the committed record the directly-measured table names: the
+#: `spur_dbc` table whose first column is the backticked record point.
+RECORD_PATH = "sim/fixture-band-top/records/r1.md"
+RECORD_TEXT = """# Fixture record
+
+  | corner-id | spur_dbc | spur_lsb_dbc | pass/fail |
+  |---|---|---|---|
+  | `sf_-40c_3.30v_b7` | -49.6926 | -50.1 | FAIL |
+  | `sf_-40c_2.97v_b6` | -64.7712 | -65.0 | PASS |
 """
 
 #: A miniature of the proposal's section-5 reference-spur row: the measured
@@ -108,6 +126,7 @@ class _Tree(TreeWriter):
         install_checklib(root)
         self.write(SPEC_DOC, SPEC_TEXT)
         self.write(PROPOSAL, PROPOSAL_TEXT)
+        self.write(RECORD_PATH, RECORD_TEXT)
 
     def run(self) -> subprocess.CompletedProcess:
         return subprocess.run(
@@ -142,6 +161,34 @@ class TestTheRealDerivation(_TreeTest):
         self.assertIn("4 charge-accounting row(s)", result.stdout)
         self.assertIn("3 measured corner(s)", result.stdout)
         self.assertIn("+2.50 dB", result.stdout)
+        self.assertIn("2 directly measured corner(s)", result.stdout)
+        self.assertIn(RECORD_PATH, result.stdout)
+
+
+class TestDirectlyMeasuredTable(_TreeTest):
+    """Rule 7: a figure the spec calls measured must be re-read from its record."""
+
+    def test_a_figure_that_disagrees_with_its_record_fails(self):
+        self.mutate_spec("**−49.69 dBc**", "**−49.60 dBc**")
+        self.assertFails("records", "-49.6926")
+
+    def test_a_record_point_the_record_does_not_hold_fails(self):
+        self.mutate_spec("`sf_-40c_3.30v_b7`", "`sf_-40c_3.30v_bNOPE`")
+        self.assertFails("has no spur_dbc row for")
+
+    def test_a_missing_record_fails(self):
+        (self.tree.root / RECORD_PATH).unlink()
+        self.assertFails("names no readable committed record")
+
+    def test_deleting_the_table_cannot_silence_the_rule(self):
+        start = SPEC_TEXT.index("Directly measured at the binding frequency:")
+        end = SPEC_TEXT.index("Derivation from the recorded")
+        self.tree.write(SPEC_DOC, SPEC_TEXT[:start] + SPEC_TEXT[end:])
+        self.assertFails("no directly-measured-spur table")
+
+    def test_a_figure_only_the_direct_table_holds_is_admitted_in_the_proposal(self):
+        self.mutate_proposal("−72.7 dBc measured", "−49.69 dBc measured")
+        self.assertPasses()
 
 
 class TestWorstCaseSum(_TreeTest):
