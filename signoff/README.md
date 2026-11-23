@@ -162,9 +162,17 @@ landed (2026-11-23): the committed report now gives that row reason
 the f200n33 envelope of #1083 plus the two N=64 migration reports of #1090 —
 not one envelope.
 
-The report's `reason` for all 22 T1 rows is `no_evidence`: the manifest cites
-nothing. That single machine code covers three materially different situations,
-and the difference is the point of this section.
+~~The report's `reason` for all 22 T1 rows is `no_evidence`: the manifest cites
+nothing.~~ — **corrected (2026-11-21, issue #1089):** that stopped being true
+when #798 first made rows `met`, as the note above already records: the
+manifest now cites envelopes under `signoff/attest/` (among others), and the
+`met` rows carry `reason: null`. `no_evidence` is the reason for most of the
+rows that are still `unmet` (those that cite nothing at all), not for all of T1 — read the current verdicts from
+`signoff/tier-report.json`, not from this paragraph. That machine code still
+covers materially different situations among the rows that carry it, and the
+difference is the point of this section: cases 1 and 2 explain the remaining
+unmet rows; case 3 records the history of the items that now have cited
+evidence.
 
 **1. The artifact exists, but not as a citable `klt` JSON envelope.**
 ~~There is no `klt` `--format json` envelope of any kind committed anywhere in
