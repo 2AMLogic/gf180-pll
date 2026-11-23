@@ -38,10 +38,23 @@ slice covers it at the full mandated 45-point PVT matrix for one divisor
   (`options.stage_model_inputs: true`), runner model hashes verified,
   `pdk_stamp_comparison: match`. `options.pdk_revision` asserts the same pin.
 - **Simulator**: ngspice-47 on the worker (`/usr/local/bin/ngspice`, creation
-  date 2026-11-13, KLU direct solver), `engine_build_comparison: match`; the
-  committed record also ran ngspice-47. Under DR-028 the two executors' builds
-  may differ; here they did not — which is why the per-corner deltas below are
-  exactly zero rather than merely small.
+  date 2026-11-13, KLU direct solver), `engine_build_comparison: match`. That
+  comparison is each worker's version banner against its own submitting
+  client's banner; the envelope records no binary hash
+  (`engine_build.binary_sha256` is null), so the worker build and the build
+  that produced the committed record (also reported as ngspice-47) are
+  **not** shown to be the same binary. What is measured is agreement at the
+  record's printed precision, below.
+- **Simulator init (DR-040)**: **not evidenced.** The request stages the
+  repository init text (`options.ngspice_init`), but the envelope carries no
+  init identity (`environment.ngspice_init.sha256` is null and each worker's
+  `ngspice_init` is empty), and the fleet runner (klt 0.9.0) retains no
+  marker line. Under DR-040 decision 2 these points are therefore
+  `unattributed` against the reference-configuration baseline: the
+  zero-delta comparison below is a comparison of results, not a proven
+  same-configuration comparison. A one-point pilot rerun with the init text
+  staged reproduced the same values and the same null init identity. Tool
+  gap: 2AMLogic/klayout-tools#7368.
 - **Runners**: klt 0.9.0 (fleet image), client klt 0.9.3.dev2575+g6bd18bbc8637,
   `runner_compatibility: match` (required features `corners.params`,
   `options.stage_model_inputs`).
@@ -116,8 +129,10 @@ largest absolute difference over all eleven measurements at that corner.
 **Every delta is exactly 0.** All 45 corners join 1:1 with the committed
 record — one comparison for each of the 45 expected keys, no missing or extra
 measurements, and identical PASS verdicts, identical `ratio_pass`, and
-bit-identical values on all eleven measurements (the record prints six
-significant digits; the envelope agrees at every digit).
+equal values on all eleven measurements at the printed precision (the record
+prints six significant digits; the envelope agrees at every printed digit).
+This is agreement of printed values, not evidence of an identical simulator
+build or initialization.
 
 ## Diagnostics
 
