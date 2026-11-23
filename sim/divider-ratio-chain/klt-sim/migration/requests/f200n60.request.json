@@ -1,0 +1,144 @@
+{
+  "netlist": "../netlists/f200n60.sp",
+  "engine": "ngspice",
+  "backend": "batch",
+  "models": {
+    "pdk": "gf180mcuD",
+    "lib": "libs.tech/ngspice/sm141064.ngspice",
+    "param_file": "libs.tech/ngspice/design.ngspice"
+  },
+  "corners": {
+    "process": [
+      {
+        "name": "ss",
+        "sections": [
+          "ss",
+          "res_typical",
+          "moscap_typical",
+          "mimcap_typical"
+        ]
+      },
+      {
+        "name": "ff",
+        "sections": [
+          "ff",
+          "res_typical",
+          "moscap_typical",
+          "mimcap_typical"
+        ]
+      }
+    ],
+    "temperature_c": [
+      125,
+      -40
+    ],
+    "params": {
+      "vdd_val": [
+        2.97,
+        3.63
+      ]
+    }
+  },
+  "analysis": {
+    "kind": "tran",
+    "args": "1e-10 1e-06"
+  },
+  "measurements": [
+    {
+      "name": "tfb1",
+      "spice": ".meas tran tfb1 when v(fb)='vdd_val/2' rise=1 td='tskip'",
+      "unit": "s"
+    },
+    {
+      "name": "tfb2",
+      "spice": ".meas tran tfb2 when v(fb)='vdd_val/2' rise=2 td='tskip'",
+      "unit": "s"
+    },
+    {
+      "name": "tdo1",
+      "spice": ".meas tran tdo1 when v(divout)='vdd_val/2' rise=1 td='tskip'",
+      "unit": "s"
+    },
+    {
+      "name": "tdo2",
+      "spice": ".meas tran tdo2 when v(divout)='vdd_val/2' rise=2 td='tskip'",
+      "unit": "s"
+    },
+    {
+      "name": "ffb2",
+      "spice": ".meas tran ffb2 when v(fb)='vdd_val/2' fall=2 td='tskip'",
+      "unit": "s"
+    },
+    {
+      "name": "n_fb",
+      "spice": ".meas tran n_fb param='(tfb2-tfb1)/tvco'",
+      "unit": "vco_periods",
+      "limits": {
+        "min": 59.95,
+        "max": 60.05
+      },
+      "spec_row": "multiplication-ratio"
+    },
+    {
+      "name": "ndo",
+      "spice": ".meas tran ndo param='(tdo2-tdo1)/tvco'",
+      "unit": "vco_periods",
+      "limits": {
+        "min": 59.95,
+        "max": 60.05
+      },
+      "spec_row": "multiplication-ratio"
+    },
+    {
+      "name": "t_arr",
+      "spice": ".meas tran t_arr param='(tdo2-tck0)-tvco*floor((tdo2-tck0)/tvco)'",
+      "unit": "s"
+    },
+    {
+      "name": "t_rtcq",
+      "spice": ".meas tran t_rtcq param='(tfb2-tck0)-tvco*floor((tfb2-tck0)/tvco)'",
+      "unit": "s"
+    },
+    {
+      "name": "fbpw",
+      "spice": ".meas tran fbpw param='ffb2-tfb2'",
+      "unit": "s"
+    },
+    {
+      "name": "iavg",
+      "spice": ".meas tran iavg avg i(vdiv) from='tskip' to='ktstop'",
+      "unit": "A"
+    }
+  ],
+  "options": {
+    "timeout_s": 300,
+    "stage_model_inputs": true,
+    "pdk_revision": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7"
+  },
+  "batch": {
+    "capacity_wait_s": 600,
+    "max_units_per_job": 2
+  },
+  "exclude": [
+    {
+      "process": "ss",
+      "temperature_c": -40
+    },
+    {
+      "process": "ss",
+      "params": {
+        "vdd_val": 3.63
+      }
+    },
+    {
+      "process": "ff",
+      "temperature_c": 125
+    },
+    {
+      "process": "ff",
+      "params": {
+        "vdd_val": 2.97
+      }
+    }
+  ]
+}

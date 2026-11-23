@@ -157,7 +157,8 @@ signoff-crediting gap for failing corners; these did not fail).
 - Row 3 spans N = 4–64 at 200 MHz (plus the retiming-margin worst cases); this
   envelope covers N = 33 only. The remaining divisors, the N = 64 retiming
   margins (which join `sim/divider-ratio-dff`), and the 10 MHz bottom-of-band
-  checks stay evidenced by the committed harness record until migrated.
+  checks were migrated by #1090 — see `migration/RECORD.md` (190 further
+  corners, same zero-delta join against the committed record).
 - `klt signoff`'s row coverage is row-granular: a row with one passing tagged
   measurement reads as covered even when only a slice of its sweep ran. The
   disclosure lives here and in the PR; the granularity gap is filed upstream.

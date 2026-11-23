@@ -238,7 +238,7 @@
         "Both require the spec table itself to be ratified \u2014 verdicts against a draft spec are provisional by construction."
       ],
       "status": "unmet",
-      "reason": "timing_margin_missing",
+      "reason": "partial_coverage",
       "graded_by_build": true,
       "citation": null,
       "citations_graded": [
@@ -249,6 +249,24 @@
           ],
           "status": "met",
           "reason": null
+        },
+        {
+          "citation": "sim/divider-ratio-chain/klt-sim/migration/runs/f200n64a/report.json",
+          "rows": [
+            "multiplication-ratio",
+            "retiming-margin"
+          ],
+          "status": "met",
+          "reason": null
+        },
+        {
+          "citation": "sim/divider-ratio-chain/klt-sim/migration/runs/f200n64b/report.json",
+          "rows": [
+            "multiplication-ratio",
+            "retiming-margin"
+          ],
+          "status": "met",
+          "reason": null
         }
       ],
       "detail": {
@@ -256,26 +274,15 @@
         "uncovered_rows": [],
         "declared_gaps": [
           {
-            "id": "retiming-margin",
-            "gap": "the N=64/200 MHz retiming-margin points (DR-001's worst-case selection, joined against sim/divider-ratio-dff) are evidenced by the committed harness record 20261114-093804-ad9eef8 and are not yet migrated to a klt sim envelope (#1083 migrated the f200n33 slice only)"
-          },
-          {
             "id": "lock-detector",
             "gap": "row unratified (DR-007 Amendment A1) -- item-5 evidence may not cite it until the spec row is ratified, and no klt sim envelope exists for the lock-detector campaigns"
           }
         ],
         "unratified_rows": [],
         "row_sources": {
-          "multiplication-ratio": "derived"
-        },
-        "missing_timing_margin": [
-          {
-            "row": "retiming-margin",
-            "corners": [
-              "*"
-            ]
-          }
-        ]
+          "multiplication-ratio": "derived",
+          "retiming-margin": "derived"
+        }
       }
     },
     {

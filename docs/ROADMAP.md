@@ -84,7 +84,14 @@ This page says what comes next and why. It does not restate status: the machine 
   land, #829 cites the new records and regenerates the sign-off; then #843 cites
   `sim/CHARACTERIZATION.md` for item 8; then #790 and #788 close.
 - **`klt lvs` envelopes for `pfd_cp` and `divider_chain`** — after Now 4 shows the recipe carries
-  over. With all four, item 11's pairing has its sub-block half.
+  over. With all four, item 11's pairing has its sub-block half. The ERC half of that pairing is
+  done since 2026-11-20 (#1082): every cell has an antenna-graded ERC envelope in its dated
+  `erc-antenna-20261120/` record (`divider_chain` clean end to end; the `violate` verdicts
+  elsewhere are corroborated false positives of the no-diode-credit area model,
+  2AMLogic/klayout-tools#6975), and the pinned grader resolves the ERC half of `vco_block`,
+  `divider_chain` and `lock_detector` with no reason — what remains for the pairing is the LVS
+  envelopes and the citation decision (#149 / #987), plus the `pll_top`/`pfd_cp`
+  `supply_spec_disclosed_tool_limitation` disclosures (#1085 owns their removal).
 - **`mc-cp-mismatch` harness migration (#879)** — after #878 is closed out.
 - **C2 electrical validation (#753, second stage)** — `devchar-passives` for the option-B MIM and
   the 140-cell `loop-dynamics` grid, after stage one is clean and the simulator on the workers can
