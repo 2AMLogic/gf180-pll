@@ -154,8 +154,13 @@ checklist text adopting it.
 --attest 2` envelope over the committed `pll_top.gds`, shared by both
 partitions). The text of cases 1 and 2 describes the fourteen rows that are
 still `no_evidence` — **updated (2026-11-21, issue #1083):** thirteen of them;
-item 5 on the digital partition now reads `timing_margin_missing` with one
-cited `klt sim` envelope (see the correction in case 1).
+item 5 on the digital partition now reads ~~`timing_margin_missing` with one
+cited `klt sim` envelope~~ (see the correction in case 1) — **corrected
+(2026-11-23, issue #1108):** true as written at `772b38d0`, stale since #1090
+landed (2026-11-23): the committed report now gives that row reason
+`partial_coverage`, and the manifest's `5.digital` cites three artifacts —
+the f200n33 envelope of #1083 plus the two N=64 migration reports of #1090 —
+not one envelope.
 
 The report's `reason` for all 22 T1 rows is `no_evidence`: the manifest cites
 nothing. That single machine code covers three materially different situations,
@@ -228,10 +233,19 @@ and 8 `klt lvs` envelopes committed as well, none of them cited in
   `sim/divider-ratio-chain/klt-sim/envelope.json` (the campaign's f200n33
   slice, 45/45 corners PASS, every measurement identical to the committed
   f6eeac7 record), cited for item 5 on the digital partition with derived
-  `spec_row` coverage of the multiplication-ratio row. Item 5 digital
+  `spec_row` coverage of the multiplication-ratio row. ~~Item 5 digital
   therefore reads `timing_margin_missing`, not `no_evidence` (the N=64
   retiming margins are not yet migrated — #1090, and 2AMLogic/klayout-tools#7006
-  records that row coverage cannot express the one-divisor slice). No `klt
+  records that row coverage cannot express the one-divisor slice).~~ —
+  **corrected (2026-11-23, issue #1108):** true as written at `772b38d0`
+  (2026-11-21); stale since #1090 landed (70944182, 2026-11-23): the N=64
+  retiming margins are migrated and cited, and the row now reads `unmet` with
+  reason `partial_coverage`, not `timing_margin_missing` — all three
+  `5.digital` citations grade `met` (the f200n33 envelope over the
+  multiplication-ratio row, the two N=64 reports over both it and
+  retiming-margin), and what keeps the row `unmet` is its declared gap: the
+  lock-detector row is unratified (DR-007 Amendment A1), so item-5 evidence
+  may not cite it yet. No `klt
   pex` envelope exists, and every other `sim/` campaign remains in the
   repo-format record; the analog partition's item 5 is still `no_evidence`.
 
@@ -409,8 +423,15 @@ at that moment is still a deliberate act, as the next section is.
 The re-render against the bundled checklist changed four lines of
 `tier-report.json` and no verdict: `source_doc`, `source_doc_content_hash`, and
 item 11's `notes` entry on each of its two partition rows (its `text`
-is unchanged). All 22 T1 rows are still
-`unmet` / `no_evidence`, and all 22 still read `graded_by_build: true`.
+is unchanged). ~~All 22 T1 rows are still
+`unmet` / `no_evidence`, and all 22 still read `graded_by_build: true`.~~ —
+**corrected (2026-11-23, issue #1108):** both halves held at that re-render
+(PR #577, the klt 0.6.0 regrade) and stayed true until #798 began clearing
+rows; the first half no longer does. Re-derived from the committed
+`signoff/tier-report.json` at `ace44545` (2026-11-23): the 22 T1 rows read
+8 `met` (reason `null`), 13 `unmet` / `no_evidence`, and 1 `unmet` /
+`partial_coverage` (item 5 digital). The `graded_by_build: true` half still
+holds — all 22 rows read it.
 
 ### Item 11 under the klt 0.6.0 checklist
 
@@ -427,7 +448,13 @@ wheel's `klayout_tools/data/design-evidence-tiers.md`):
 3. **Staleness** — every citation now reports `input_verified: true | false |
    null` (klayout-tools#2196): whether `klt signoff` re-hashed the artifact
    itself rather than only comparing the envelope's self-reported hash. Never
-   graded on. This manifest cites nothing, so no row carries it.
+   graded on. ~~This manifest cites nothing, so no row carries it.~~ —
+   **corrected (2026-11-23, issue #1108):** the manifest now carries eight
+   evidence keys — seven over the six `signoff/attest/` envelopes (item 2's
+   is shared by both partitions) and `5.digital` over three `klt sim`
+   artifacts — and its citations do report the field: the eight `met` rows'
+   citations each read `input_verified: true`; item 5 digital's three
+   `klt sim` citations read `input_verified: null`.
 
 ~~Item 11's notes gained, among other things, two rules that bear on the only
 item-11 evidence this repository has — the `vco_block` supply spec and report
