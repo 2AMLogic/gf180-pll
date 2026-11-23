@@ -106,6 +106,30 @@ Two further limits on the attribution:
   equivalence result — so it supports, and does not establish, reading the
   typical-corner difference as a simulator-build effect, which is why this
   record stays at "associated with the two configurations tested".
+- **DR-040 also records an ~8 dB version-and-PDK shift that is not
+  quantified, and a precondition attached to it.** At the pilot's point (ff,
+  −40 °C, 3.63 V, same deck, same DC state) `spur_dbc` reads −61.7103 dBc on
+  ngspice-46 against open_pdks `c6d73a35…` and −53.513 dBc on ngspice-47p1
+  against `f6eeac7d…`. **Two** variables moved — simulator version and PDK
+  revision — so nothing attributes the ~8 dB to either. DR-040 states that
+  quantifying it with a controlled pair "is owed before any −55 dBc verdict is
+  read off an ngspice-47 record", and
+  `sim/BATCH-LOCAL-EQUIVALENCE-PILOT-2026-11-14.md` lists it as *Owed next*
+  item 1. **That quantification has not been done and this record does not
+  discharge it.** The shift is about five times the 1.55 dB this record
+  disposes of and runs the same way (the ngspice-47 / `f6eeac7…` configuration
+  reads the less favourable number), so it is the largest unquantified spread
+  bearing on the −53.45 dBc figure. It is also a different point and a
+  different version pair from the typical-corner comparison above, so it
+  neither explains nor bounds that 6.06 dB gap. How this record stands given
+  it: the record reads **no −55 dBc pass** off the ngspice-47 run. It records
+  a projected *miss* scoped to that run, moves no row, relaxes no bound and
+  designates neither record as live evidence. DR-040's precondition governs
+  reading a verdict off an ngspice-47 number; recording that a run's own
+  projection falls short, with the bound held, is not the use it guards
+  against. Were the shift to be quantified in the other direction, the miss
+  recorded here would be the one in doubt, which is a further reason Decision
+  1 holds the bound and the question stays with #533.
 
 ## Decision
 
@@ -135,7 +159,8 @@ Two further limits on the attribution:
    Context: the gap is 6.06 dB on the last-window `spur_dbc` and 1.39 dB on
    the zero-drift fit, the batch point's last window is poorly settled
    (`fit_r2` 0.122, 3.81 dB within-run spread), and the control's solver is
-   unrecorded.
+   unrecorded, and the unquantified ~8 dB version-and-PDK shift DR-040 owes
+   (Context) bounds nothing here.
 4. **DR-028's cross-version comparison caveat is retained.** The overlap point
    is one corner, not an equivalence proof: it shows the batch ngspice-47
    number is not interchangeable with an ngspice-46 one for this campaign —
@@ -189,6 +214,10 @@ Two further limits on the attribution:
   measured worst, −54.5 dBc scaled); restating that row against the re-run is
   deliberately not done in this PR (#1061 scoped the change to this record)
   and belongs to ratification or #828's campaign-wide disposition.
+- DR-040's owed quantification of the ~8 dB ngspice-46 → ngspice-47p1 and
+  `c6d73a35…` → `f6eeac7d…` shift remains undone (Context). Until it is done,
+  no −55 dBc pass may be read off an ngspice-47 record on the strength of this
+  one.
 - #533's campaign is where direct verification at 200 MHz lands — the
   measured value there determines whether the bound is met — and it now has a
   named worst corner (`typical`) and a measured 150 MHz margin of 0.95 dB to
