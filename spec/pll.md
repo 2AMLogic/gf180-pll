@@ -1016,6 +1016,20 @@ fastest), which is why the measurement is at 150 MHz. **The bound is not
 relaxed on the strength of that extrapolation**; a direct measurement at
 200 MHz, per corner, is what would settle it.
 
+That direct measurement now exists (`sim/reference-spur-band-top`, run to
+completion 2026-11-22, all 45 mandated points). The corners the Chipalooza
+proposal quotes from it, in the same form as the 150 MHz table above but
+**read, not scaled** — each figure is the record's own `spur_dbc` for that
+point at the binding f_out = 200 MHz, and
+`spec/lib/check-spur-derivation-arithmetic.sh` re-reads each one from the
+committed record named in the header:
+
+| Corner | Directly measured spur at 200 MHz (`sim/reference-spur-band-top/records/20261122-174251-f9f5a7c.md`) | Record point | Against −55 dBc |
+|---|---|---|---|
+| `sf` / −40 °C / 3.30 V | **−49.69 dBc** (worst of 45) | `sf_-40c_3.30v_b7vs1p525` | FAIL |
+| `ff` / −40 °C / 3.63 V | −53.51 dBc | `ff_-40c_3.63v_b7vs1p886` | FAIL |
+| `sf` / −40 °C / 2.97 V | −64.77 dBc | `sf_-40c_2.97v_b6vs2p283` | PASS |
+
 How much to trust each number: the loop's slow pole is 9.3 µs and the run is
 8 µs, so a residual settling drift is still present and is reported per point
 as `drift_q_fc` (−1.60 … +2.78 fC, against the 2.16–3.68 fC charge-pump
