@@ -3144,6 +3144,20 @@ class TestARangeIsNotAFigure(_TreeTest):
         self.tree.write(proposal(spec_rows=tuple(rows), derived=entries))
         self.assertFails("two-ended range")
 
+    def test_a_range_in_the_relative_table_is_refused(self):
+        rows = list(SPEC_ROWS)
+        rows[0] = ("Output band",
+                   "Floor 12 MHz; ceiling 20 MHz; 12-20 MHz as one figure; "
+                   "the floor is 40 % short of the ceiling",
+                   "**MET**", f"`sim/{CAMPAIGN}/records/{RECORD}.md`")
+        relative = [(
+            "Output band", "`12-20 MHz`", RECORD, "vco_tuning.csv",
+            DEFAULT_RELATIVE[0][4], "100",
+        )]
+        self.tree.write(proposal(spec_rows=tuple(rows), relative=relative))
+        self.assertFails("the relative figure is a two-ended range",
+                         "calling it the bound")
+
     def test_an_ellipsis_range_is_refused(self):
         rows = list(SPEC_ROWS)
         rows[0] = ("Output band", "Floor 12 … 20 MHz", "**MET**",
