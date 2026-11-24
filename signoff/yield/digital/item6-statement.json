@@ -1,0 +1,25 @@
+{
+  "rows": [
+    {"id": "1", "class": "analog", "reason": "VCO output band: static band codes with a per-corner measured envelope; corner-bounded, no per-die statistical population is claimed"},
+    {"id": "2", "class": "interface", "reason": "reference input contract: electrical limits are conditions on the driving system, not statistical populations of this block"},
+    {"id": "3", "class": "digital", "reason": "divider multiplication ratio: static configuration with a corner-bounded retiming margin; no per-die statistical population is claimed"},
+    {"id": "4", "class": "not-specd", "reason": "integrated RMS jitter is deliberately unspecified (DR-002 Decision 5); no row exists to be statistical"},
+    {"id": "5", "class": "analog", "reason": "period jitter: its random half is a deterministic per-corner bound (DR-032), not a sampled population; it is carried as a declared gap on the analog partition's item-6 row set, not here"},
+    {"id": "6", "class": "not-specd", "reason": "phase noise is deliberately unspecified (DR-002 Decision 5); no row exists to be statistical"},
+    {"id": "7", "class": "analog", "reason": "reference spur: a deterministic dBc bound; its derivation folds the charge-pump budget's dispersion terms, which are evidenced by the analog partition's item-6 citations"},
+    {"id": "8", "class": "analog", "reason": "loop bandwidth: corner-bounded small-signal measurement over the contracted reference range"},
+    {"id": "8a", "class": "analog", "reason": "phase margin: corner-bounded small-signal measurement over the contracted reference range"},
+    {"id": "10", "class": "both", "reason": "power: derived total over all domains, corner-bounded; no per-die statistical population is claimed"},
+    {"id": "11", "class": "waived", "reason": "standby current: no power-down mode exists in v1, so no state and no population exists to measure"},
+    {"id": "12", "class": "analog", "reason": "supply sensitivity: pushing figure and Vctrl-window consumption are corner-bounded measurements"},
+    {"id": "13", "class": "both", "reason": "output duty cycle: corner-bounded over 90 measured points"},
+    {"id": "14", "class": "both", "reason": "output levels and drive: corner-bounded over 90 measured points"},
+    {"id": "15", "class": "both", "reason": "area: a drawn quantity, not a PVT-varying population"},
+    {"id": "17", "class": "analog", "reason": "Kvco: corner-bounded at every legal operating point under the band-selection rule"},
+    {"id": "18", "class": "both", "reason": "supply range: the independent variable every other row's corner binding sweeps, not a statistical claim"}
+  ],
+  "unratified_rows": [
+    {"id": "9", "reason": "lock time is carved out of the ratification (spec/pll.md header, DR-007 Amendment A1): not ratified, so no not-applicable claim is made for it here"},
+    {"id": "16", "reason": "lock detector is carved out of the ratification (spec/pll.md header, DR-007 Amendment A1): not ratified, so no not-applicable claim is made for it here"}
+  ]
+}

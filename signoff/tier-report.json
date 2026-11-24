@@ -6,6 +6,7 @@
   "t1_item_count": 22,
   "build_t1_item_count": 22,
   "t1_met_count": 8,
+  "t1_not_applicable_count": 1,
   "source_doc": "docs/design-evidence-tiers.md",
   "source_doc_content_hash": "sha256:d9287ec9dc6107e560e00b1a8b7a670f757722713b5c651dee3d2cbde058490a",
   "build": {
@@ -238,7 +239,7 @@
         "Both require the spec table itself to be ratified \u2014 verdicts against a draft spec are provisional by construction."
       ],
       "status": "unmet",
-      "reason": "timing_margin_missing",
+      "reason": "partial_coverage",
       "graded_by_build": true,
       "citation": null,
       "citations_graded": [
@@ -249,6 +250,24 @@
           ],
           "status": "met",
           "reason": null
+        },
+        {
+          "citation": "sim/divider-ratio-chain/klt-sim/migration/runs/f200n64a/report.json",
+          "rows": [
+            "multiplication-ratio",
+            "retiming-margin"
+          ],
+          "status": "met",
+          "reason": null
+        },
+        {
+          "citation": "sim/divider-ratio-chain/klt-sim/migration/runs/f200n64b/report.json",
+          "rows": [
+            "multiplication-ratio",
+            "retiming-margin"
+          ],
+          "status": "met",
+          "reason": null
         }
       ],
       "detail": {
@@ -256,26 +275,15 @@
         "uncovered_rows": [],
         "declared_gaps": [
           {
-            "id": "retiming-margin",
-            "gap": "the N=64/200 MHz retiming-margin points (DR-001's worst-case selection, joined against sim/divider-ratio-dff) are evidenced by the committed harness record 20261114-093804-ad9eef8 and are not yet migrated to a klt sim envelope (#1083 migrated the f200n33 slice only)"
-          },
-          {
             "id": "lock-detector",
             "gap": "row unratified (DR-007 Amendment A1) -- item-5 evidence may not cite it until the spec row is ratified, and no klt sim envelope exists for the lock-detector campaigns"
           }
         ],
         "unratified_rows": [],
         "row_sources": {
-          "multiplication-ratio": "derived"
-        },
-        "missing_timing_margin": [
-          {
-            "row": "retiming-margin",
-            "corners": [
-              "*"
-            ]
-          }
-        ]
+          "multiplication-ratio": "derived",
+          "retiming-margin": "derived"
+        }
       }
     },
     {
@@ -289,9 +297,133 @@
         "**Declare item 6 a gap** for the analog partition. The digital partition of the same block may still use `not_applicable`. **Several statistical rows, only some evidenced** (issue #2908): item 6 is a claim about *every* statistical row, so a manifest may declare the row set under `spec_rows.\"6\"` and cite one `klt yield` report per row set (`rows` on each citation). Item 6 grades `met` only when every declared row is covered by a passing citation against a ratified target. A row with no citation (`uncovered_rows`), a row declared a `gap` because no evidence can exist yet (`declared_gaps`), or a row declared `ratified: false` (`unratified_rows`, evidence against a proposed limit is provisional) grades `unmet` / `partial_coverage`, never `met`. Without a declaration the item grades as before; a `not_applicable` entry contradicts a declared row set and is `invalid_evidence`."
       ],
       "status": "unmet",
-      "reason": "no_evidence",
+      "reason": "undersized_sample",
       "graded_by_build": true,
-      "citation": null
+      "citation": null,
+      "citations_graded": [
+        {
+          "citation": "signoff/yield/reports/term1.json",
+          "rows": [
+            "cp-budget/1"
+          ],
+          "status": "unmet",
+          "reason": "undersized_sample"
+        },
+        {
+          "citation": "signoff/yield/reports/term2a.json",
+          "rows": [
+            "cp-budget/2a"
+          ],
+          "status": "unmet",
+          "reason": "undersized_sample"
+        },
+        {
+          "citation": "signoff/yield/reports/term3.json",
+          "rows": [
+            "cp-budget/3"
+          ],
+          "status": "unmet",
+          "reason": "undersized_sample"
+        },
+        {
+          "citation": "signoff/yield/reports/term4.json",
+          "rows": [
+            "cp-budget/4"
+          ],
+          "status": "unmet",
+          "reason": "undersized_sample"
+        },
+        {
+          "citation": "signoff/yield/reports/vco-adjacent-pair-ratio.json",
+          "rows": [
+            "vco-band-coverage/adjacent-pair-ratio"
+          ],
+          "status": "met",
+          "reason": null
+        }
+      ],
+      "detail": {
+        "yield_campaign": {
+          "sample_size": "insufficient",
+          "undersized_measurements": [
+            "ff_-40c_2.97v",
+            "ff_-40c_3.63v",
+            "ff_125c_2.97v",
+            "ff_125c_3.63v",
+            "fs_-40c_2.97v",
+            "fs_-40c_3.63v",
+            "fs_125c_2.97v",
+            "fs_125c_3.63v",
+            "sf_-40c_2.97v",
+            "sf_-40c_3.63v",
+            "sf_125c_2.97v",
+            "sf_125c_3.63v",
+            "ss_-40c_2.97v",
+            "ss_-40c_3.63v",
+            "ss_125c_2.97v",
+            "ss_125c_3.63v",
+            "typical_-40c_2.97v",
+            "typical_-40c_3.63v",
+            "typical_125c_2.97v",
+            "typical_125c_3.63v",
+            "typical_27c_3.30v"
+          ],
+          "negative_control": "not_declared",
+          "measurements_without_negative_control": [
+            "ff_-40c_2.97v",
+            "ff_-40c_3.63v",
+            "ff_125c_2.97v",
+            "ff_125c_3.63v",
+            "fs_-40c_2.97v",
+            "fs_-40c_3.63v",
+            "fs_125c_2.97v",
+            "fs_125c_3.63v",
+            "sf_-40c_2.97v",
+            "sf_-40c_3.63v",
+            "sf_125c_2.97v",
+            "sf_125c_3.63v",
+            "ss_-40c_2.97v",
+            "ss_-40c_3.63v",
+            "ss_125c_2.97v",
+            "ss_125c_3.63v",
+            "typical_-40c_2.97v",
+            "typical_-40c_3.63v",
+            "typical_125c_2.97v",
+            "typical_125c_3.63v",
+            "typical_27c_3.30v"
+          ],
+          "undetected_negative_controls": [],
+          "not_applicable_negative_controls": []
+        },
+        "content_hash_pin": "verified",
+        "failed_citations": [
+          "signoff/yield/reports/term1.json",
+          "signoff/yield/reports/term2a.json",
+          "signoff/yield/reports/term3.json",
+          "signoff/yield/reports/term4.json"
+        ],
+        "failed_rows": [
+          "cp-budget/1",
+          "cp-budget/2a",
+          "cp-budget/3",
+          "cp-budget/4"
+        ],
+        "uncovered_rows": [],
+        "declared_gaps": [
+          {
+            "id": "cp-budget/2",
+            "gap": "term 2 (switch charge-injection skew, +/-3 ns whole-Vctrl-window bound) has no measurement of its own: the only campaign draws every switch at Vctrl = 1.65 V, so it evidences the mid-window row cp-budget/2a (+/-2 ns) only, and mid-window dispersion is a proxy that does not cover the window's edges; no limit was relaxed or tightened to bridge that"
+          },
+          {
+            "id": "period-jitter/random-bound",
+            "gap": "a deterministic noise-injection/ISF bound, not a sampled population: no per-draw sample array exists for klt yield (DR-032); an estimate would need the ISF assembly DR-030/DR-031 left unassembled"
+          }
+        ],
+        "unratified_rows": [],
+        "row_sources": {
+          "vco-band-coverage/adjacent-pair-ratio": "derived"
+        }
+      }
     },
     {
       "tier": "T1",
@@ -303,10 +435,109 @@
         "**Add the missing statistical row(s)** to the block's spec through a decision record the operator ratifies, then supply Monte Carlo evidence (`klt yield`) for them. Where the PDK has no mismatch models, assumed mismatch is acceptable, labelled as such in the evidence.",
         "**Declare item 6 a gap** for the analog partition. The digital partition of the same block may still use `not_applicable`. **Several statistical rows, only some evidenced** (issue #2908): item 6 is a claim about *every* statistical row, so a manifest may declare the row set under `spec_rows.\"6\"` and cite one `klt yield` report per row set (`rows` on each citation). Item 6 grades `met` only when every declared row is covered by a passing citation against a ratified target. A row with no citation (`uncovered_rows`), a row declared a `gap` because no evidence can exist yet (`declared_gaps`), or a row declared `ratified: false` (`unratified_rows`, evidence against a proposed limit is provisional) grades `unmet` / `partial_coverage`, never `met`. Without a declaration the item grades as before; a `not_applicable` entry contradicts a declared row set and is `invalid_evidence`."
       ],
-      "status": "unmet",
-      "reason": "no_evidence",
+      "status": "not_applicable",
+      "reason": null,
       "graded_by_build": true,
-      "citation": null
+      "citation": null,
+      "not_applicable": {
+        "spec": {
+          "file": "signoff/yield/digital/spec-rows.json",
+          "content_hash": "sha256:6681b463202d4c252a87219aff1ffbe56150355cf837babc30ee3b62ef368d08",
+          "status": "ratified",
+          "row_count": 17
+        },
+        "statement": {
+          "file": "signoff/yield/digital/item6-statement.json",
+          "content_hash": "sha256:8ff73bbfb037f3f923fe6010eff177bf75653370d05246c6b82c469fd71228c1",
+          "rows": [
+            {
+              "id": "1",
+              "class": "analog",
+              "reason": "VCO output band: static band codes with a per-corner measured envelope; corner-bounded, no per-die statistical population is claimed"
+            },
+            {
+              "id": "2",
+              "class": "interface",
+              "reason": "reference input contract: electrical limits are conditions on the driving system, not statistical populations of this block"
+            },
+            {
+              "id": "3",
+              "class": "digital",
+              "reason": "divider multiplication ratio: static configuration with a corner-bounded retiming margin; no per-die statistical population is claimed"
+            },
+            {
+              "id": "4",
+              "class": "not-specd",
+              "reason": "integrated RMS jitter is deliberately unspecified (DR-002 Decision 5); no row exists to be statistical"
+            },
+            {
+              "id": "5",
+              "class": "analog",
+              "reason": "period jitter: its random half is a deterministic per-corner bound (DR-032), not a sampled population; it is carried as a declared gap on the analog partition's item-6 row set, not here"
+            },
+            {
+              "id": "6",
+              "class": "not-specd",
+              "reason": "phase noise is deliberately unspecified (DR-002 Decision 5); no row exists to be statistical"
+            },
+            {
+              "id": "7",
+              "class": "analog",
+              "reason": "reference spur: a deterministic dBc bound; its derivation folds the charge-pump budget's dispersion terms, which are evidenced by the analog partition's item-6 citations"
+            },
+            {
+              "id": "8",
+              "class": "analog",
+              "reason": "loop bandwidth: corner-bounded small-signal measurement over the contracted reference range"
+            },
+            {
+              "id": "8a",
+              "class": "analog",
+              "reason": "phase margin: corner-bounded small-signal measurement over the contracted reference range"
+            },
+            {
+              "id": "10",
+              "class": "both",
+              "reason": "power: derived total over all domains, corner-bounded; no per-die statistical population is claimed"
+            },
+            {
+              "id": "11",
+              "class": "waived",
+              "reason": "standby current: no power-down mode exists in v1, so no state and no population exists to measure"
+            },
+            {
+              "id": "12",
+              "class": "analog",
+              "reason": "supply sensitivity: pushing figure and Vctrl-window consumption are corner-bounded measurements"
+            },
+            {
+              "id": "13",
+              "class": "both",
+              "reason": "output duty cycle: corner-bounded over 90 measured points"
+            },
+            {
+              "id": "14",
+              "class": "both",
+              "reason": "output levels and drive: corner-bounded over 90 measured points"
+            },
+            {
+              "id": "15",
+              "class": "both",
+              "reason": "area: a drawn quantity, not a PVT-varying population"
+            },
+            {
+              "id": "17",
+              "class": "analog",
+              "reason": "Kvco: corner-bounded at every legal operating point under the band-selection rule"
+            },
+            {
+              "id": "18",
+              "class": "both",
+              "reason": "supply range: the independent variable every other row's corner binding sweeps, not a statistical claim"
+            }
+          ]
+        }
+      }
     },
     {
       "tier": "T1",

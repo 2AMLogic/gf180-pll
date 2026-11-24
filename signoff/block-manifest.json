@@ -27,8 +27,71 @@
         "rows": [
           "multiplication-ratio"
         ]
+      },
+      {
+        "file": "sim/divider-ratio-chain/klt-sim/migration/runs/f200n64a/report.json",
+        "rows": [
+          "multiplication-ratio",
+          "retiming-margin"
+        ]
+      },
+      {
+        "file": "sim/divider-ratio-chain/klt-sim/migration/runs/f200n64b/report.json",
+        "rows": [
+          "multiplication-ratio",
+          "retiming-margin"
+        ]
       }
     ],
+    "6.analog": [
+      {
+        "content_hash": "sha256:9df8517c5d67a557f77afc46def005151726f53c59cf0b38676a020f03c58de9",
+        "file": "signoff/yield/reports/term1.json",
+        "rows": [
+          "cp-budget/1"
+        ]
+      },
+      {
+        "content_hash": "sha256:772d42fdd3ccf3e9602ca4a9c3e886727ab7c320fea2f9cbb86dfd5ca58b6c9b",
+        "file": "signoff/yield/reports/term2a.json",
+        "rows": [
+          "cp-budget/2a"
+        ]
+      },
+      {
+        "content_hash": "sha256:a9ce0a4f2728ef3357b83bc7eaaaac63af618e61b3004263e3d81e451ab7888a",
+        "file": "signoff/yield/reports/term3.json",
+        "rows": [
+          "cp-budget/3"
+        ]
+      },
+      {
+        "content_hash": "sha256:37453fdffe079e5b5058a55f925602f78dd21fdcb00baa8b5c7fa9cb355d92da",
+        "file": "signoff/yield/reports/term4.json",
+        "rows": [
+          "cp-budget/4"
+        ]
+      },
+      {
+        "content_hash": "sha256:0e1a21d5672cc6b679197b7d52c69c236a612f1974abadd24ce2e59858889e43",
+        "file": "signoff/yield/reports/vco-adjacent-pair-ratio.json",
+        "rows": [
+          "vco-band-coverage/adjacent-pair-ratio"
+        ]
+      }
+    ],
+    "6.digital": {
+      "not_applicable": {
+        "spec": {
+          "content_hash": "sha256:6681b463202d4c252a87219aff1ffbe56150355cf837babc30ee3b62ef368d08",
+          "file": "signoff/yield/digital/spec-rows.json"
+        },
+        "statement": {
+          "content_hash": "sha256:8ff73bbfb037f3f923fe6010eff177bf75653370d05246c6b82c469fd71228c1",
+          "file": "signoff/yield/digital/item6-statement.json"
+        }
+      }
+    },
     "9.analog": {
       "content_hash": "sha256:c8ece3842b207fb006a1c2cb3b4c237bb784941c2443177e3ed6daec14bf332e",
       "file": "signoff/attest/item-9.analog.evidence.json"
@@ -45,13 +108,37 @@
         "id": "multiplication-ratio"
       },
       {
-        "gap": "the N=64/200 MHz retiming-margin points (DR-001's worst-case selection, joined against sim/divider-ratio-dff) are evidenced by the committed harness record 20261114-093804-ad9eef8 and are not yet migrated to a klt sim envelope (#1083 migrated the f200n33 slice only)",
         "id": "retiming-margin",
         "timing_margin": true
       },
       {
         "gap": "row unratified (DR-007 Amendment A1) -- item-5 evidence may not cite it until the spec row is ratified, and no klt sim envelope exists for the lock-detector campaigns",
         "id": "lock-detector"
+      }
+    ],
+    "6.analog": [
+      {
+        "id": "cp-budget/1"
+      },
+      {
+        "gap": "term 2 (switch charge-injection skew, +/-3 ns whole-Vctrl-window bound) has no measurement of its own: the only campaign draws every switch at Vctrl = 1.65 V, so it evidences the mid-window row cp-budget/2a (+/-2 ns) only, and mid-window dispersion is a proxy that does not cover the window's edges; no limit was relaxed or tightened to bridge that",
+        "id": "cp-budget/2"
+      },
+      {
+        "id": "cp-budget/2a"
+      },
+      {
+        "id": "cp-budget/3"
+      },
+      {
+        "id": "cp-budget/4"
+      },
+      {
+        "id": "vco-band-coverage/adjacent-pair-ratio"
+      },
+      {
+        "gap": "a deterministic noise-injection/ISF bound, not a sampled population: no per-draw sample array exists for klt yield (DR-032); an estimate would need the ISF assembly DR-030/DR-031 left unassembled",
+        "id": "period-jitter/random-bound"
       }
     ]
   }

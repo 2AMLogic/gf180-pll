@@ -1,0 +1,151 @@
+{
+ "_comment": "klt erc supply-connectivity spec for layout/evidence/pll-top-layout/pll_top.gds (gf180mcuD), ties-grading variant (issue #1085). Same stackup/vias/nets as the committed ../erc-supply-spec.json, with two deltas: (1) stackup entry names use the gf180mcu antenna table's canonical spelling (Metal1..Metal5) so '--pdk gf180mcu' grades the antenna half (klayout-tools#6976; same rename as ../erc-antenna-20261120/erc-supply-spec.json); (2) the tool_limitation ties_disclosure is replaced by a computed five-class ties[] partition of the assembly's forty merged Nwell (21/0) shapes, selected per placement with the literal well-side selectors of klayout-tools#2540. The committed spec at the parent path stays byte-unchanged so ../erc-report.json keeps resolving its own provenance.spec.content_hash.",
+ "stackup": [
+  {
+   "name": "poly2",
+   "layer": "30/0",
+   "role": "gate",
+   "active_layer": "22/0",
+   "_comment": "Poly2 (30/0), gate poly; active_layer Comp (22/0). Same as every block-level spec."
+  },
+  {
+   "name": "Metal1",
+   "layer": "34/0",
+   "label_layer": "34/10",
+   "_comment": "Metal1 (34/0) via Contact (33/0). 34/10 (Metal1_Label) carries the blocks' own supply pin text in the assembled GDS (VDD 30, VSS 32, GND_VCO 28, VDD_VCO 15, VDD_DIV 1 instances, counted with klayout.db over the flattened top cell)."
+  },
+  {
+   "name": "Metal2",
+   "layer": "36/0",
+   "label_layer": "36/10",
+   "_comment": "Metal2 (36/0) via Via1 (35/0). 36/10 carries one VDD and one VSS text in the assembled GDS."
+  },
+  {
+   "name": "Metal3",
+   "layer": "42/0",
+   "_comment": "Metal3 (42/0) via Via2 (38/0). No 42/10 text is drawn in this GDS."
+  },
+  {
+   "name": "Metal4",
+   "layer": "46/0",
+   "_comment": "Metal4 (46/0) via Via3 (40/0): the top-level signal and supply routing layer (layout/evidence/pll-top-layout/PROOF.md)."
+  },
+  {
+   "name": "Metal5",
+   "layer": "81/0",
+   "label_layer": "81/10",
+   "_comment": "Metal5 (81/0) via Via4 (41/0): the top-level supply pins. 81/10 carries exactly one text per supply (VSS, VDD, VDD_VCO, GND_VCO, VDD_DIV)."
+  }
+ ],
+ "vias": [
+  { "name": "contact", "layer": "33/0", "between": ["poly2", "Metal1"] },
+  { "name": "via1", "layer": "35/0", "between": ["Metal1", "Metal2"] },
+  { "name": "via2", "layer": "38/0", "between": ["Metal2", "Metal3"] },
+  { "name": "via3", "layer": "40/0", "between": ["Metal3", "Metal4"] },
+  { "name": "via4", "layer": "41/0", "between": ["Metal4", "Metal5"] }
+ ],
+ "nets": [
+  { "name": "VDD", "kind": "supply", "_comment": "Digital supply of pfd_cp and lock_detector; the netcheck records it as a star of two branches meeting at one pad, i.e. one electrical island." },
+  { "name": "VSS", "kind": "supply", "_comment": "Shared ground of every block except the VCO." },
+  { "name": "VDD_VCO", "kind": "supply", "_comment": "VCO supply, its own pin." },
+  { "name": "GND_VCO", "kind": "supply", "_comment": "VCO ground, its own pin; shares the p-substrate with VSS (PROOF.md 'GND_VCO and VSS')." },
+  { "name": "VDD_DIV", "kind": "supply", "_comment": "Divider-chain supply, its own pin." }
+ ],
+ "ties": [
+  {
+   "name": "nwell_vdd",
+   "well_layer": "21/0",
+   "well_requires_boxes": [
+    [294.7, 6.3, 294.8, 6.4],
+    [477.85, 1.6, 477.95, 1.7],
+    [528.55, 61.58, 528.65, 61.68],
+    [531.35, 50.14, 531.45, 50.24],
+    [533.85, 21.6, 533.95, 21.7],
+    [580.84, 8.1, 580.94, 8.2],
+    [589.96, 50.925, 590.06, 51.025],
+    [597.96, 50.925, 598.06, 51.025],
+    [601.11, 12.715, 601.21, 12.815],
+    [601.11, 21.945, 601.21, 22.045],
+    [621.38, 8.1, 621.48, 8.2],
+    [622.15, 1.6, 622.25, 1.7],
+    [626.96, 45.625, 627.06, 45.725],
+    [633.96, 50.925, 634.06, 51.025],
+    [669.96, 50.925, 670.06, 51.025]
+   ],
+   "tap_layer": "22/0",
+   "tap_requires": ["32/0"],
+   "connect_to": "Metal1",
+   "net": "VDD",
+   "_comment": "Fifteen wells: lock_detector's one assembly-level VDD tub plus pfd_cp's fourteen (everything pfd_cp draws on Nwell except its PSRC tub). Each box is the instance transform applied to an interior point of one child-cell well, so the list follows the placement; the pfd_cp instance is mirrored (m90). Counted and reconciled against the merged top-level geometry in RECORD.md."
+  },
+  {
+   "name": "nwell_vdd_div",
+   "well_layer": "21/0",
+   "well_requires_boxes": [
+    [50.92, 248.1, 51.02, 248.2],
+    [124.67, 271.57, 124.77, 271.67],
+    [386.44, 247.8, 386.54, 247.9],
+    [452.51, 248.1, 452.61, 248.2],
+    [460.19, 271.27, 460.29, 271.37],
+    [526.26, 271.57, 526.36, 271.67],
+    [788.03, 247.8, 788.13, 247.9],
+    [854.1, 248.1, 854.2, 248.2],
+    [861.78, 271.27, 861.88, 271.37],
+    [927.85, 271.57, 927.95, 271.67],
+    [1189.62, 247.8, 1189.72, 247.9],
+    [1263.37, 271.27, 1263.47, 271.37],
+    [1308.84, 248.1, 1308.94, 248.2],
+    [1308.84, 271.57, 1308.94, 271.67]
+   ],
+   "tap_layer": "22/0",
+   "tap_requires": ["32/0"],
+   "connect_to": "Metal1",
+   "net": "VDD_DIV",
+   "_comment": "The divider_chain's fourteen Nwell shapes at their placed (r180) positions; the same class the block's own ../../divider-chain-layout/erc-supply-spec.json declares and grades."
+  },
+  {
+   "name": "nwell_vdd_vco",
+   "well_layer": "21/0",
+   "well_requires_boxes": [
+    [979.68, 0.0, 979.78, 0.1],
+    [997.92, 148.62, 998.02, 148.72],
+    [999.12, 29.12, 999.22, 29.22],
+    [999.12, 91.24, 999.22, 91.34],
+    [999.12, 114.74, 999.22, 114.84],
+    [1054.92, 170.0, 1055.02, 170.1]
+   ],
+   "tap_layer": "22/0",
+   "tap_requires": ["32/0"],
+   "connect_to": "Metal1",
+   "net": "VDD_VCO",
+   "_comment": "vco_block's six Nwell shapes (including the large outer tub) at their placed (r0) positions; the same class the block's own ../../vco-layout/erc-supply-spec.json declares and grades."
+  },
+  {
+   "name": "nwell_vss_cap_body",
+   "well_layer": "21/0",
+   "well_requires_boxes": [
+    [722.28, 2.5, 722.38, 2.6],
+    [722.28, 93.9, 722.38, 94.0],
+    [814.88, 2.5, 814.98, 2.6],
+    [814.88, 93.9, 814.98, 94.0]
+   ],
+   "tap_layer": "22/0",
+   "tap_requires": ["32/0", "33/0"],
+   "connect_to": "Metal1",
+   "net": "VSS",
+   "_comment": "The four loop-filter cap_nmos_03v3_b body tubs, tied to VSS through their diffusion contact columns. The extra Contact (33/0) narrowing is required here and only here: the cap cell draws Nplus over the whole Comp body (layout/pll_top/loop_filter/primitives.py mos_cap), so Comp-and-Nplus alone names no distinguishable tap inside these wells and klt 0.9.2 would skip the class as degenerate_tap_declaration; intersecting Contact keeps exactly the physical body-contact columns."
+  },
+  {
+   "name": "nwell_psrc",
+   "well_layer": "21/0",
+   "well_requires_boxes": [
+    [475.85, 21.6, 475.95, 21.7]
+   ],
+   "tap_layer": "22/0",
+   "tap_requires": ["32/0"],
+   "connect_to": "Metal1",
+   "net": "PSRC",
+   "_comment": "pfd_cp's dump-buffer pfet body tub at its placed (m90) position, top bbox (372.950, 21.600)-(475.950, 26.400) um. No PSRC label exists anywhere in the assembly, and klt erc matches a tie's target net by label, so the expected outcome is a computed erc.missing_tie finding on this well -- the same finding the block-level run reports, now at assembly coordinates. The five entries together partition all forty drawn Nwell shapes disjointly and exhaustively."
+  }
+ ]
+}
