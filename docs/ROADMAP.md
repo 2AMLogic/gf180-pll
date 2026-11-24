@@ -90,8 +90,10 @@ This page says what comes next and why. It does not restate status: the machine 
   elsewhere are corroborated false positives of the no-diode-credit area model,
   2AMLogic/klayout-tools#6975), and the pinned grader resolves the ERC half of `vco_block`,
   `divider_chain` and `lock_detector` with no reason — what remains for the pairing is the LVS
-  envelopes and the citation decision (#149 / #987), plus the `pll_top`/`pfd_cp`
-  `supply_spec_disclosed_tool_limitation` disclosures (#1085 owns their removal).
+  envelopes and the citation decision (#149 / #987), plus the measured `supply_not_continuous`
+  reasons on `pll_top`/`pfd_cp` (`erc.missing_tie` on the `PSRC` dump-buffer tub; #1085 declared
+  their `ties[]` on the klt 0.9.2 box selectors and graded them, closed 2026-11-24 by PR #1095 —
+  records in each cell's `erc-ties-20261121/`).
 - **`mc-cp-mismatch` harness migration (#879)** — after #878 is closed out.
 - **C2 electrical validation (#753, second stage)** — `devchar-passives` for the option-B MIM and
   the 140-cell `loop-dynamics` grid, after stage one is clean and the simulator on the workers can
