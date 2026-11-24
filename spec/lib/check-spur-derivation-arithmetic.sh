@@ -598,7 +598,12 @@ if target is None:
 # --------------------------------------------------------------- rule 7 ---
 # A directly measured figure is read, not derived, so there is no arithmetic to
 # re-run: the check instead re-reads it from the committed record the table's
-# header names, at the precision the specification writes it.
+# header names, at the precision the specification writes it. A record holds
+# several per-point tables whose rows all start with the same backticked
+# corner id, plus a derived `corner_id` summary whose own `spur_dbc` column is
+# rounded -- so the figure is located by the table that names what it is (a
+# `corner-id` header with a `spur_dbc` column) and read from that column's
+# index, never from whichever point-id row happens to come first in the file.
 direct_figures = []
 record_ref = re.search(
     r"(sim/[\w./-]+/records/[\w.-]+\.md)", " | ".join(direct[0])
@@ -611,37 +616,68 @@ if record_ref is None or record_text is None:
         "record behind it is a claim without a testbench" % spec_rel
     )
 else:
-    for cells in direct[1:]:
-        if len(cells) < 3:
-            fail(
-                "%s's directly-measured-spur table has a row with %d cell(s), "
-                "fewer than its header declares" % (spec_rel, len(cells))
-            )
-            continue
-        written = cell_figure(cells[1], "directly-measured-spur table, figure")
-        point = plain(cells[2]).strip("` ")
-        if written is None:
-            continue
-        in_record = re.search(
-            r"^\s*\|\s*`%s`\s*\|\s*(%s)\s*\|" % (re.escape(point), NUMBER),
-            record_text,
-            re.M,
+    record_tables = tables(record_text, require_separator=True)
+    spur_table = None
+    spur_col = 0
+    for table in record_tables:
+        header = [plain(cell).lower() for cell in table[0]]
+        if header and header[0] == "corner-id" and "spur_dbc" in header:
+            spur_table = table
+            spur_col = header.index("spur_dbc")
+            break
+    if spur_table is None:
+        fail(
+            "%s's directly-measured-spur table names %s, which has no "
+            "corner-id table with a spur_dbc column -- the measurement this "
+            "check re-reads is not in it, and a record it cannot read the "
+            "figure out of is not a clean one" % (spec_rel, record_ref.group(1))
         )
-        if in_record is None:
-            fail(
-                "%s's directly-measured row %r names record point %r, which "
-                "%s has no spur_dbc row for"
-                % (spec_rel, plain(cells[0]), point, record_ref.group(1))
+    else:
+        for cells in direct[1:]:
+            if len(cells) < 3:
+                fail(
+                    "%s's directly-measured-spur table has a row with %d "
+                    "cell(s), fewer than its header declares"
+                    % (spec_rel, len(cells))
+                )
+                continue
+            written = cell_figure(cells[1], "directly-measured-spur table, figure")
+            point = plain(cells[2]).strip("` ")
+            if written is None:
+                continue
+            row = next(
+                (
+                    r for r in spur_table[1:]
+                    if plain(r[0]).strip("` ") == point
+                ),
+                None,
             )
-            continue
-        recorded = Figure(in_record.group(1))
-        if not written.agrees(recorded.value):
-            fail(
-                "%s writes %s dBc for %r, but %s records %s dBc for %s"
-                % (spec_rel, written, plain(cells[0]), record_ref.group(1),
-                   recorded, point)
+            if row is None:
+                fail(
+                    "%s's directly-measured row %r names record point %r, "
+                    "which %s has no spur_dbc row for"
+                    % (spec_rel, plain(cells[0]), point, record_ref.group(1))
+                )
+                continue
+            if len(row) <= spur_col:
+                fail(
+                    "%s's spur_dbc row for %r has %d cell(s), fewer than its "
+                    "header declares" % (record_ref.group(1), point, len(row))
+                )
+                continue
+            recorded = cell_figure(
+                row[spur_col],
+                "%s, spur_dbc cell for %r" % (record_ref.group(1), point),
             )
-        direct_figures.append(written)
+            if recorded is None:
+                continue
+            if not written.agrees(recorded.value):
+                fail(
+                    "%s writes %s dBc for %r, but %s records %s dBc for %s"
+                    % (spec_rel, written, plain(cells[0]), record_ref.group(1),
+                       recorded, point)
+                )
+            direct_figures.append(written)
 
 if len(direct_figures) < 1:
     fail("%s: parsed no directly measured corner" % spec_rel)
