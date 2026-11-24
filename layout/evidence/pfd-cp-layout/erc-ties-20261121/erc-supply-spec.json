@@ -1,0 +1,59 @@
+{
+  "_comment": "klt erc supply-connectivity spec for layout/evidence/pfd-cp-layout/pfd_cp.gds (gf180mcuD), ties-grading variant (issue #1085). Same stackup/vias/nets as the committed ../erc-supply-spec.json, with two deltas: (1) stackup entry names use the gf180mcu antenna table's canonical spelling (Metal1..Metal3) so '--pdk gf180mcu' grades the antenna half (klayout-tools#6976; same rename as ../erc-antenna-20261120/erc-supply-spec.json); (2) the tool_limitation ties_disclosure is replaced by a computed two-class ties[] partition of the block's fifteen merged Nwell (21/0) shapes, using the literal well-side selectors of klayout-tools#2540. The committed spec at the parent path stays byte-unchanged so ../erc-report.json keeps resolving its own provenance.spec.content_hash.",
+  "stackup": [
+    {
+      "name": "poly2",
+      "layer": "30/0",
+      "role": "gate",
+      "active_layer": "22/0",
+      "_comment": "Poly2 (30/0) is gf180mcu's gate-poly layer -- stackup[0] must set role:gate. active_layer names Comp (22/0), the diffusion/active layer, so klt erc accumulates true poly-and-diff gate area (klayout-tools#1979) rather than raw poly-net area. Cross-checked against libs.tech/klayout/tech/gf180mcu.lyp and klayout-tools' curated decks/gf180mcu.py layer table (both agree: Poly2 30/0, COMP 22/0)."
+    },
+    {
+      "name": "Metal1",
+      "layer": "34/0",
+      "label_layer": "34/10",
+      "_comment": "Metal1 (34/0), reached from poly/diffusion through Contact (33/0). label_layer 34/10 (Metal1_Label) is declared because it is VERIFIED to carry this block's own VDD/VSS pin text -- walking every text shape on (34,10) of the committed GDS with klayout.db finds exactly one instance each of VDD and VSS, alongside this block's eleven non-supply Metal1 pin texts (REF, FB, B0, B1, IBN, ICN, IBP, ICP, VOUT). One text per supply is a weak island bound, and PROOF-erc.md states it explicitly rather than letting a clean read imply more."
+    },
+    {
+      "name": "Metal2",
+      "layer": "36/0",
+      "_comment": "Metal2 (36/0), reached through Via1 (35/0). No label_layer: layer (36,10) (Metal2_Label) does carry text in this block, but only UP and DN -- VERIFIED none of it is VDD/VSS -- so declaring it would not help resolve either declared supply net."
+    },
+    {
+      "name": "Metal3",
+      "layer": "42/0",
+      "_comment": "Metal3 (42/0), reached through Via2 (38/0) -- this block's last routing layer actually drawn. Confirmed by enumerating layer_indexes() on the committed GDS: layers present are 21/0, 22/0, 30/0, 31/0, 32/0, 33/0, 34/0, 34/10, 35/0, 36/0, 36/10, 38/0, 42/0 -- nothing above 42/0, and no 42/10 to declare as a label layer."
+    }
+  ],
+  "vias": [
+    { "name": "contact", "layer": "33/0", "between": ["poly2", "Metal1"], "_comment": "Contact (33/0) is gf180mcu's single poly/diffusion-to-Metal1 contact layer (used generically for both gate and source/drain contacts)." },
+    { "name": "via1", "layer": "35/0", "between": ["Metal1", "Metal2"], "_comment": "Via1 (35/0), Metal1-to-Metal2." },
+    { "name": "via2", "layer": "38/0", "between": ["Metal2", "Metal3"], "_comment": "Via2 (38/0), Metal2-to-Metal3. No Via3 (40/0) or above is drawn in this block." }
+  ],
+  "nets": [
+    { "name": "VDD", "kind": "supply", "_comment": "This block's positive supply rail -- the shared VDD domain PLL-FLOORPLAN.md section 2 assigns to the reference / PFD / charge pump / lock detector. Matched against Metal1_Label (34/10) text, verified present in the committed GDS." },
+    { "name": "VSS", "kind": "supply", "_comment": "This block's ground rail -- the shared VSS domain of PLL-FLOORPLAN.md section 2 (every block except the VCO, which owns a private GND_VCO). Matched against Metal1_Label (34/10) text, verified present in the committed GDS." }
+  ],
+  "ties": [
+    {
+      "name": "nwell_vdd",
+      "well_layer": "21/0",
+      "well_excludes_boxes": [[180, 8, 181, 9]],
+      "tap_layer": "22/0",
+      "tap_requires": ["32/0"],
+      "connect_to": "Metal1",
+      "net": "VDD",
+      "_comment": "The fourteen device-body Nwell shapes, selected as 'every merged Nwell except the PSRC tub'. The excluded box [180, 8, 181, 9] um lies strictly inside the fifteenth well (176.820, 7.755)-(279.820, 12.555) um and touches no other, so this entry selects exactly the fourteen wells whose Comp-and-Nplus tap reaches VDD -- the partition measured in PROOF-erc.md 'The well-tie half'. The tap is the boolean gf180mcu draws an n-well tap as, Comp (22/0) narrowed by Nplus (32/0), wired to Metal1."
+    },
+    {
+      "name": "nwell_psrc",
+      "well_layer": "21/0",
+      "well_requires_boxes": [[180, 8, 181, 9]],
+      "tap_layer": "22/0",
+      "tap_requires": ["32/0"],
+      "connect_to": "Metal1",
+      "net": "PSRC",
+      "_comment": "The fifteenth merged Nwell: the charge-pump dump buffer's pfet body tub, deliberately body-tied to its own source node cp.PSRC (design/pfd_cp.sch; net $30 of the committed pfd_cp.lvsdb; pfd_cp.netcheck.log names it cp.PSRC). klt erc matches a tie's target net by label, and this stream draws no PSRC text on any label layer, so the expected outcome of this declaration is a computed erc.missing_tie finding on this well -- the honest record that the tool cannot see the body tie electrically. Declaring the class is what makes the finding computable; dropping it would hide the only tie finding this block has. Both entries together partition all fifteen drawn Nwell shapes disjointly and exhaustively."
+    }
+  ]
+}

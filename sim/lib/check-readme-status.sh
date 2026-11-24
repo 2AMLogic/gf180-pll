@@ -110,8 +110,16 @@ fi
 # every record directory is the campaign's real coverage. EVERY occurrence
 # of the claim in README.md must agree -- the drift this guards against was
 # two different stale numbers in two paragraphs of the same file.
+#
+# The `_vs<release-voltage>` suffix is stripped before uniquing: it names the
+# per-point VCO release voltage, not a PVT corner, and the campaign's first
+# record (20260905-192724-a2ba48f) predates the axis -- its unsuffixed
+# `typical_27c_3.30v` and the current grid's `typical_27c_3.30v_vs1p795` are
+# the same mandated corner. Counting suffixed ids as distinct would grade 46
+# corners on a 45-corner matrix the moment that legacy log coexists with a
+# re-run (#828), so the fold measures what the claim states: PVT corners.
 pj_actual=$(find "${REPO_ROOT}/sim/period-jitter/corners" -name '*.log' -type f \
-  -exec basename {} .log \; 2>/dev/null | sort -u | wc -l | tr -d ' ')
+  -exec basename {} .log \; 2>/dev/null | sed 's/_vs[0-9a-z.]*$//' | sort -u | wc -l | tr -d ' ')
 pj_claims=$(echo "${readme_flat}" |
   grep -oE 'covers [0-9]+ of the mandated 45 PVT corners' |
   grep -oE '^covers [0-9]+' | grep -oE '[0-9]+')

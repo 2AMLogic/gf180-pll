@@ -190,6 +190,78 @@ class TestDirectlyMeasuredTable(_TreeTest):
         self.mutate_proposal("−72.7 dBc measured", "−49.69 dBc measured")
         self.assertPasses()
 
+    def test_decoy_tables_above_the_spur_table_cannot_feed_the_rule(self):
+        """Rule 7 must find the figure by table header, not by table order.
+
+        A record holds several per-point tables whose rows start with the
+        same backticked corner id, and a derived `corner_id` summary -- with
+        its own, rounded `spur_dbc` column -- sits above the harness
+        measurement table.  Reading the first point-id row in the file would
+        grade one of those numbers instead of the measurement; the lookup is
+        anchored on the `corner-id` table that names a `spur_dbc` column.
+        The summary's figures are rounded one place short of the precision
+        the spec writes (−49.7 against −49.69), so a lookup that accepted
+        the `corner_id` summary would grade −49.70 against −49.69 and fail,
+        not pass silently on the rounded number.
+        """
+        decoys = (
+            "  | corner_id | spur_dbc | verdict |\n"
+            "  |---|---|---|\n"
+            "  | sf_-40c_3.30v_b7 | -49.7 | PASS |\n"
+            "  | sf_-40c_2.97v_b6 | -64.8 | PASS |\n"
+            "\n"
+            "  | corner-id | ferr | pass/fail |\n"
+            "  |---|---|---|\n"
+            "  | `sf_-40c_3.30v_b7` | 7.999080e-05 | PASS |\n"
+            "  | `sf_-40c_2.97v_b6` | 1.663920e-04 | PASS |\n"
+            "\n"
+        )
+        self.assertEqual(1, RECORD_TEXT.count("# Fixture record\n\n"))
+        self.tree.write(
+            RECORD_PATH,
+            RECORD_TEXT.replace("# Fixture record\n\n", "# Fixture record\n\n" + decoys),
+        )
+        self.assertPasses()
+
+    def test_a_shifted_spur_dbc_column_still_grades_the_named_column(self):
+        """`spur_dbc` at another column index is read by name, not position."""
+        record = (
+            RECORD_TEXT.replace(
+                "| corner-id | spur_dbc | spur_lsb_dbc | pass/fail |",
+                "| corner-id | spur_lsb_dbc | spur_dbc | pass/fail |",
+            )
+            .replace(
+                "| `sf_-40c_3.30v_b7` | -49.6926 | -50.1 | FAIL |",
+                "| `sf_-40c_3.30v_b7` | -50.1 | -49.6926 | FAIL |",
+            )
+            .replace(
+                "| `sf_-40c_2.97v_b6` | -64.7712 | -65.0 | PASS |",
+                "| `sf_-40c_2.97v_b6` | -65.0 | -64.7712 | PASS |",
+            )
+        )
+        self.tree.write(RECORD_PATH, record)
+        self.assertPasses()
+        self.mutate_spec("**−49.69 dBc**", "**−49.60 dBc**")
+        self.assertFails("records", "-49.6926")
+
+    def test_a_record_without_a_spur_dbc_column_fails_naming_the_record(self):
+        self.tree.write(
+            RECORD_PATH,
+            RECORD_TEXT.replace("| corner-id | spur_dbc |", "| corner-id | spur_lvl_dbc |"),
+        )
+        self.assertFails("r1.md", "no corner-id table with a spur_dbc column")
+
+    def test_a_row_too_short_to_reach_the_spur_dbc_column_fails(self):
+        record = RECORD_TEXT.replace(
+            "| corner-id | spur_dbc | spur_lsb_dbc | pass/fail |",
+            "| corner-id | spur_lsb_dbc | spur_dbc |",
+        ).replace(
+            "| `sf_-40c_2.97v_b6` | -64.7712 | -65.0 | PASS |",
+            "| `sf_-40c_2.97v_b6` | -65.0 |",
+        )
+        self.tree.write(RECORD_PATH, record)
+        self.assertFails("r1.md", "fewer than its header declares")
+
 
 class TestWorstCaseSum(_TreeTest):
     def test_a_sum_that_is_not_the_sum_of_its_terms_fails(self):

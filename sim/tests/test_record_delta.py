@@ -127,6 +127,25 @@ class ReportsMovementAgainstTheOldRecordAsTheBaseline(unittest.TestCase):
         self.assertIn("| 0 | 0 |", body.replace("`—`", "—"))
         self.assertIn("unchanged on all 1 graded rows", body)
 
+    def test_disjoint_corner_ids_compare_nothing_until_aliased(self):
+        old = _record(
+            {"ring1x": (["r1_fosc"], {"typical_27c_3.30v": ["1.5e+09", "PASS"]})},
+            [("ring1x", "r1_fosc", "—")])
+        new = _record(
+            {"ring1x": (["r1_fosc"],
+                        {"typical_27c_3.30v_vs1p795": ["1.6e+09", "PASS"]})},
+            [("ring1x", "r1_fosc", "—")])
+        with tempfile.TemporaryDirectory() as d:
+            o, n = Path(d) / "old.md", Path(d) / "new.md"
+            o.write_text(old)
+            n.write_text(new)
+            bare, _ = record_delta.compare(o, n)
+            aliased, findings = record_delta.compare(
+                o, n, {"typical_27c_3.30v": "typical_27c_3.30v_vs1p795"})
+        self.assertFalse(any("r1_fosc" in ln and "`typical" in ln for ln in bare))
+        self.assertTrue(any("`typical_27c_3.30v_vs1p795`" in ln for ln in aliased))
+        self.assertEqual(findings, 0)
+
     def test_a_zero_baseline_contributes_to_the_absolute_column_only(self):
         """The moscap leak_* case (#932): 0 -> -1 nA must not read as no change."""
         old = _record(

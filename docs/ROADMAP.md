@@ -45,7 +45,7 @@ This page says what comes next and why. It does not restate status: the machine 
 | 3 DRC clean | unmet | block-level clean report; `MIMTM.3` (#753, then #149) |
 | 4 LVS clean | unmet | top-level LVS has not run (#149) |
 | 5 Corner verification vs ratified spec | unmet | digital partition cites one `klt sim` envelope (divider-ratio-chain f200n33, 45/45, #1083) — row 3 covered at one divisor; still owed: the N=64 retiming margins (`timing_margin_missing`, #1090), the other campaigns' envelopes, and rows 9/16 unratified |
-| 6 Monte Carlo evidence | unmet | see `signoff/README.md`, "Item 6" — `klt yield` is reachable on the 0.9.2 pin (klayout-tools#2531 closed 2026-10-03); the sample-set derivation is #1081 |
+| 6 Monte Carlo evidence | unmet (digital: N/A) | see `signoff/README.md`, "Item 6" — `klt yield` envelopes derived and cited from both MC campaigns (#1081, `signoff/yield/`); analog `unmet` / `undersized_sample` (n < 183/corner on the four budget terms — #1092 owns the draw-count raise; the VCO coverage citation grades `met`), digital `not_applicable` granted |
 | 7 Post-layout verification | unmet | needs a clean block layout to extract (#18) |
 | 8 Characterization report | unmet | `sim/CHARACTERIZATION.md` exists but is uncited (#843) |
 | 9 Testbenches shipped | met | — |
@@ -90,8 +90,10 @@ This page says what comes next and why. It does not restate status: the machine 
   elsewhere are corroborated false positives of the no-diode-credit area model,
   2AMLogic/klayout-tools#6975), and the pinned grader resolves the ERC half of `vco_block`,
   `divider_chain` and `lock_detector` with no reason — what remains for the pairing is the LVS
-  envelopes and the citation decision (#149 / #987), plus the `pll_top`/`pfd_cp`
-  `supply_spec_disclosed_tool_limitation` disclosures (#1085 owns their removal).
+  envelopes and the citation decision (#149 / #987), plus the measured `supply_not_continuous`
+  reasons on `pll_top`/`pfd_cp` (`erc.missing_tie` on the `PSRC` dump-buffer tub; #1085 declared
+  their `ties[]` on the klt 0.9.2 box selectors and graded them, closed 2026-11-24 by PR #1095 —
+  records in each cell's `erc-ties-20261121/`).
 - **`mc-cp-mismatch` harness migration (#879)** — after #878 is closed out.
 - **C2 electrical validation (#753, second stage)** — `devchar-passives` for the option-B MIM and
   the 140-cell `loop-dynamics` grid, after stage one is clean and the simulator on the workers can

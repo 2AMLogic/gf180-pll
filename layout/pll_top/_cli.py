@@ -145,12 +145,13 @@ def reference_netlist_header(cell: str, issue: int) -> str:
     try:
         from harness.cell import reference_netlist_header as _impl  # noqa: PLC0415
     except ImportError:  # "layout/" itself (harness's own package root) is
-        # not on sys.path under either of this module's two call
-        # conventions (the flat ``python3 -m divider_chain.inv_3v3`` CLI,
-        # run with cwd/sys.path rooted at ``layout/pll_top/``; or
-        # ``layout/tests``'s own convention, which adds ``layout/pll_top/``
-        # but only conditionally ``layout/`` itself) -- see
-        # ``pfd_cp/block.py``'s identical try/except for the full citation.
+        # not on sys.path when sys.path holds ``layout/pll_top/`` but not
+        # ``layout/`` itself (the flat ``python3 -m divider_chain.inv_3v3``
+        # CLI, run with cwd/sys.path rooted at ``layout/pll_top/``; or
+        # ``layout/floorplan/skeleton.py``, which inserts only
+        # ``layout/pll_top/`` -- ``layout/tests/_env.py``, by contrast,
+        # adds both unconditionally) -- see ``pfd_cp/block.py``'s identical
+        # try/except for the full citation.
         layout_dir = Path(__file__).resolve().parents[1]
         if str(layout_dir) not in sys.path:
             sys.path.insert(0, str(layout_dir))
