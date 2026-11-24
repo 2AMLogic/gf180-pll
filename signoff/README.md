@@ -518,10 +518,10 @@ dir, zero violations) clears. Calling the pinned item-11 grader
 of `vco_block`, `divider_chain` and `lock_detector` (reason `None`, no
 supply finding); ~~`pll_top` and `pfd_cp` render
 `supply_spec_disclosed_tool_limitation` — quoted verbatim in each dated
-`RECORD.md`, with removal owned by
-[#1085](https://github.com/2AMLogic/gf180-pll/issues/1085) (a well-class
-marker layer, or upstream
-[2AMLogic/klayout-tools#2540](https://github.com/2AMLogic/klayout-tools/issues/2540)).
+`RECORD.md`. Removing the marker needs a well-class marker layer or an
+upstream fix
+([2AMLogic/klayout-tools#2540](https://github.com/2AMLogic/klayout-tools/issues/2540));
+no open issue in this repository owns that removal (the gap is unowned).
 So "no passing ERC half for the grader to read" is no longer the
 blocker for three cells; what remains is the pairing/citation decision
 (#149 / #987 own the LVS half), and the two disclosures, which are

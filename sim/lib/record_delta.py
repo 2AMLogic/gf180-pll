@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Grade one evidence record against the record it supersedes.
 
-    python3 sim/lib/record_delta.py <old-record.md> <new-record.md>
+    python3 sim/lib/record_delta.py [--alias OLD_ID=NEW_ID ...] \\
+        <old-record.md> <new-record.md>
 
 Prints a Markdown delta table: for every measurement the two records share,
 the old and new value range over the grid, the largest absolute and relative
@@ -76,8 +77,13 @@ def _num(text: str) -> float | None:
         return None
 
 
-def parse_record(path: Path) -> tuple[dict, dict]:
+def parse_record(path: Path, alias: dict[str, str] | None = None) -> tuple[dict, dict]:
     """Return ``(values, limits)``.
+
+    ``alias`` renames corner ids as they are read (``{old_id: new_id}``), for
+    a record whose corner-id scheme predates its successor's (e.g. before a
+    sweep axis was added to the id). It is an explicit, caller-verified
+    one-to-one mapping; nothing is inferred.
 
     ``values`` maps ``(topology, measurement, corner_id)`` to a float, plus
     ``(topology, "pass/fail", corner_id)`` to the verdict string.
@@ -122,6 +128,7 @@ def parse_record(path: Path) -> tuple[dict, dict]:
         m = _ROW.match(line)
         if m and columns:
             corner, cells = m.group(1), _cells(m.group(2))
+            corner = (alias or {}).get(corner, corner)
             for name, cell in zip(columns, cells):
                 if name == "pass/fail":
                     values[(topo, name, corner)] = cell
@@ -151,9 +158,13 @@ def _strip_replayed(cell: str) -> str:
     return cell.replace(" (replayed)", "")
 
 
-def compare(old_path: Path, new_path: Path) -> tuple[list[str], int]:
-    """Render the delta tables. Returns ``(lines, n_findings)``."""
-    old_v, old_l = parse_record(old_path)
+def compare(old_path: Path, new_path: Path,
+            old_alias: dict[str, str] | None = None) -> tuple[list[str], int]:
+    """Render the delta tables. Returns ``(lines, n_findings)``.
+
+    ``old_alias`` maps the old record's corner ids onto the new record's.
+    """
+    old_v, old_l = parse_record(old_path, old_alias)
     new_v, new_l = parse_record(new_path)
 
     def measurements(values):
@@ -261,14 +272,24 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("old", type=Path, help="the superseded record (.md)")
     ap.add_argument("new", type=Path, help="the superseding record (.md)")
+    ap.add_argument(
+        "--alias", action="append", default=[], metavar="OLD_ID=NEW_ID",
+        help="treat the old record's corner id OLD_ID as the new record's "
+             "NEW_ID (repeatable); for records whose id scheme differs")
     args = ap.parse_args(argv)
+    alias: dict[str, str] = {}
+    for a in args.alias:
+        old_id, sep, new_id = a.partition("=")
+        if not sep or not old_id or not new_id:
+            ap.error(f"--alias expects OLD_ID=NEW_ID, got {a!r}")
+        alias[old_id] = new_id
 
     for p in (args.old, args.new):
         if not p.is_file():
             print(f"record-delta: no such record: {p}", file=sys.stderr)
             return 2
 
-    lines, findings = compare(args.old, args.new)
+    lines, findings = compare(args.old, args.new, alias)
     print(f"### `{args.new.stem}` vs `{args.old.stem}`")
     print()
     print("\n".join(lines))
