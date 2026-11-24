@@ -4,7 +4,7 @@
   "claim": "spec/pll.md#lock-time -- closed-loop cold-start and worst-case re-lock acquisition against the design's own lock_detector, full 45-point PVT grid x N x condition (270 points).",
   "methodology": [
     "PORT, NOT A NEW MEASUREMENT. tb_lock_time_batch.sp is tb_lock_time.sp with the .control block replaced by manifest analyses and the .measure cards by raw_measures; the DUT instance, static configuration, clamp release, solver options and measurement expressions are unchanged. The per-(N, condition) values run.sh computes (reference frequency 80 MHz / N, window min(80 reference periods, 4 us * N/4) cold or 2 us * N/4 relock, t_force = 0.02 reference periods, divider codes from cloop_divider_params) are written out as the six points of the `np` axis.",
-    "VERDICT. A row is PASS when LOCK is high at the end of the window (lock_at_end >= 1.5 V) and a last LOCK rising edge exists; t_lock_last_rise is optional because its failure to land is the FAIL condition the legacy campaign reports, not a broken deck. The DN-branch integration guard floor is 8.9e-4 V (3e-4 * 2.97 V), the legacy 3e-4 * VDD at the lowest supply; at 3.30 V and 3.63 V the legacy floor is 9.9e-4 V and 1.09e-3 V.",
+    "VERDICT. Scored per point by derive.py, ported from run.sh: lock_pass is 1 only when a last LOCK rising edge was measured AND LOCK is high at the end of the window (lock_at_end >= 1.5 V); a missing edge (t_lock_last_rise is optional because its failure to land is the FAIL condition the legacy campaign reports, not a broken deck) scores the row FAIL while keeping its other measurements. The DN-branch integration guard is scored against the supply-relative floor 3e-4 * VDD of each point (8.91e-4 V at 2.97 V, 9.9e-4 V at 3.30 V, 1.089e-3 V at 3.63 V), never one fixed floor; dn_lvl is retained raw and dn_guard carries the legacy three-valued disposition (2 PASS, 1 SUSPECT = below the floor on a row that is not a lock PASS, 0 FAIL = below the floor on a lock PASS). The manifest requires dn_guard = 2, so SUSPECT and FAIL both fail the row.",
     "WINDOW AND HOST. Every row's window is fixed by N and condition, never by SIM_WINCAP. Rows run on the batch fleet; the executing ngspice build is recorded per point."
   ],
   "dut": [
@@ -72,13 +72,15 @@
       "measures": [
         "t_lock_last_rise",
         "lock_at_end",
-        "vctrl_final"
+        "vctrl_final",
+        "lock_pass"
       ]
     },
     "integration": {
       "description": "PFD DN-branch integration guard",
       "measures": [
-        "dn_lvl"
+        "dn_lvl",
+        "dn_guard"
       ]
     }
   },
@@ -86,9 +88,19 @@
     "lock_at_end": {
       "min": 1.5
     },
-    "dn_lvl": {
-      "min": 0.00089
+    "lock_pass": {
+      "min": 1
+    },
+    "dn_guard": {
+      "min": 2
     }
+  },
+  "derived": {
+    "module": "derive.py",
+    "measures": [
+      "lock_pass",
+      "dn_guard"
+    ]
   },
   "sweeps": {
     "np": {
