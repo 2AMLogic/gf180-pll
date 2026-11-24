@@ -33,7 +33,6 @@ from __future__ import annotations
 import csv
 import hashlib
 import re
-import subprocess
 import sys
 import unittest
 from decimal import Decimal
@@ -44,18 +43,13 @@ REPO_ROOT = SIM_DIR.parent
 sys.path.insert(0, str(SIM_DIR / "lib"))
 
 import record_delta  # noqa: E402
+from _repin_doc_check import REGEN, RepinGeneratedTablesMixin  # noqa: E402
 
 DOC = SIM_DIR / "REPIN-DELTAS-f6eeac7-closed-loop.md"
 OLD_ID = "20260816-132150-5f405e7"
 NEW_ID = "20261118-212630-1649033"
 OLD_REC = SIM_DIR / "reference-spur" / "records" / f"{OLD_ID}.md"
 NEW_REC = SIM_DIR / "reference-spur" / "records" / f"{NEW_ID}.md"
-
-REGEN = re.compile(
-    r"python3 sim/lib/record_delta\.py \\\n"
-    r"\s+(sim/[\w.-]+/records/[\d-]+-\w+\.md) \\\n"
-    r"\s+(sim/[\w.-]+/records/[\d-]+-\w+\.md)\n"
-)
 
 #: corner-id -> (old verdict is PASS, new verdict is PASS)
 EXPECTED_FLIPS = {
@@ -107,34 +101,19 @@ def _flip_rows(lines):
     return rows
 
 
-class TheDocumentsTablesAreGenerated(unittest.TestCase):
+class TheDocumentsTablesAreGenerated(RepinGeneratedTablesMixin,
+                                     unittest.TestCase):
+    DOC = DOC
+
+    #: The generator's own `###` heading is replaced by the document's
+    #: section heading, so heading lines are not compared.
+    CHECK_GENERATOR_HEADINGS = False
+
     def test_the_document_and_records_exist_and_a_command_is_named(self):
         for p in (DOC, OLD_REC, NEW_REC):
             self.assertTrue(p.is_file(), f"{p} missing")
         self.assertTrue(REGEN.findall(_doc_text()),
                         "no regeneration command found in the document")
-
-    def test_every_documented_regeneration_command_reproduces_its_table(self):
-        text = _doc_text()
-        for old_rel, new_rel in REGEN.findall(text):
-            with self.subTest(pair=f"{old_rel} -> {new_rel}"):
-                self.assertTrue((REPO_ROOT / old_rel).is_file(), old_rel)
-                self.assertTrue((REPO_ROOT / new_rel).is_file(), new_rel)
-                r = subprocess.run(
-                    [sys.executable, "sim/lib/record_delta.py", old_rel, new_rel],
-                    cwd=REPO_ROOT, capture_output=True, text=True,
-                )
-                self.assertEqual(r.returncode, 0, r.stderr)
-                # The generator's own `###` heading is replaced by the
-                # document's section heading, so headings are not compared.
-                missing = [ln for ln in r.stdout.splitlines()
-                           if ln.strip() and not ln.startswith("#")
-                           and ln not in text]
-                self.assertEqual(
-                    missing[:3], [],
-                    f"{new_rel}: the document does not show this generated "
-                    f"output -- regenerate it ({len(missing)} line(s) differ)",
-                )
 
 
 class ThePerCornerVerdictFlips(unittest.TestCase):
