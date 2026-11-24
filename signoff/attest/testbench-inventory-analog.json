@@ -125,13 +125,21 @@
       ]
     },
     {
-      "cold_start": "sim/lock-time/testbench/run.sh",
+      "cold_start": "python3 sim/run_corners.py lock-time",
       "disclosed_in": "sim/CHARACTERIZATION.md",
       "experiment": "lock-time",
       "testbenches": [
         {
+          "content_hash": "sha256:d96fae4729139af284f5b21f38fd10990c87ab20ae0978d22439a8d4413ed7d2",
+          "path": "sim/lock-time/testbench/tb.json"
+        },
+        {
           "content_hash": "sha256:a55814c2739788335c4edb266eadef32e41dc6fc6b86001b8e6c8179bf0cea71",
           "path": "sim/lock-time/testbench/tb_lock_time.sp"
+        },
+        {
+          "content_hash": "sha256:d9499fb4e43b921cf0f32f41cbb120e4eee1498ce26f070ec694dbcf9e879e71",
+          "path": "sim/lock-time/testbench/tb_lock_time_batch.sp"
         }
       ]
     },
