@@ -2806,6 +2806,37 @@ if not ungraded_figures:
 
 # ---------------------------------------------------------------- the rules ---
 
+def parse_graded_figure(quoted_raw, scale_raw, ctx, noun, verb):
+    """Read one graded figure's quoted number and scale for the rules below.
+
+    Every grading table makes the same three decisions about the figure it
+    grades: it refuses a two-ended range (parse_quoted would read only the
+    number at the front, which grades half of a two-sided bound and calls
+    it the bound), then parses the quoted number at its written precision,
+    then the row's scale. `noun` names the table's kind of figure and `verb`
+    the advice its range diagnostic gives, so each table keeps its own
+    wording. Returns (parsed, scale), or None after fail() has reported.
+    """
+    if is_range_figure(quoted_raw):
+        fail(
+            "%s: the %s is a two-ended range. Only the number at "
+            "its front would be graded, which is grading half of a two-sided "
+            "bound and calling it the bound -- %s each end as its own "
+            "entry, or declare the range in the ungraded-figure table."
+            % (ctx, noun, verb)
+        )
+        return None
+    parsed = parse_quoted(quoted_raw)
+    if parsed is None:
+        fail("%s: cannot read a number out of the %s" % (ctx, noun))
+        return None
+    scale = as_float(scale_raw)
+    if scale is None:
+        fail("%s: scale `%s` is not a number" % (ctx, scale_raw))
+        return None
+    return parsed, scale
+
+
 graded_rows = set()
 graded_values = {}        # normalized row name -> {quoted figure as written}
 #: normalized row name -> {reduction text graded in the FIRST table}. Rule 8b
@@ -2855,25 +2886,11 @@ for cells in provenance:
     if evidence is None:
         continue
 
-    if is_range_figure(quoted_raw):
-        fail(
-            "%s: the quoted value is a two-ended range. Only the number at "
-            "its front would be graded, which is grading half of a two-sided "
-            "bound and calling it the bound -- grade each end as its own "
-            "entry, or declare the range in the ungraded-figure table." % ctx
-        )
+    figure = parse_graded_figure(
+        quoted_raw, scale_raw, ctx, "quoted value", "grade")
+    if figure is None:
         continue
-
-    parsed = parse_quoted(quoted_raw)
-    if parsed is None:
-        fail("%s: cannot read a number out of the quoted value" % ctx)
-        continue
-    mantissa, exp, decimals = parsed
-
-    scale = as_float(scale_raw)
-    if scale is None:
-        fail("%s: scale `%s` is not a number" % (ctx, scale_raw))
-        continue
+    (mantissa, exp, decimals), scale = figure
 
     if evidence.single_point:
         result = read_single_cell(reduction, evidence, ctx)
@@ -2964,25 +2981,11 @@ for cells in derived_figures or []:
     if evidence is None:
         continue
 
-    if is_range_figure(quoted_raw):
-        fail(
-            "%s: the derived figure is a two-ended range. Only the number at "
-            "its front would be graded, which is grading half of a two-sided "
-            "bound and calling it the bound -- derive each end as its own "
-            "entry, or declare the range in the ungraded-figure table." % ctx
-        )
+    figure = parse_graded_figure(
+        quoted_raw, scale_raw, ctx, "derived figure", "derive")
+    if figure is None:
         continue
-
-    parsed = parse_quoted(quoted_raw)
-    if parsed is None:
-        fail("%s: cannot read a number out of the derived figure" % ctx)
-        continue
-    mantissa, exp, decimals = parsed
-
-    scale = as_float(scale_raw)
-    if scale is None:
-        fail("%s: scale `%s` is not a number" % (ctx, scale_raw))
-        continue
+    (mantissa, exp, decimals), scale = figure
 
     constant = resolve_constant(constant_name, ctx)
     if constant is None:
@@ -3123,25 +3126,11 @@ for cells in relative_figures:
         )
         continue
 
-    if is_range_figure(quoted_raw):
-        fail(
-            "%s: the relative figure is a two-ended range. Only the number at "
-            "its front would be graded, which is grading half of a two-sided "
-            "bound and calling it the bound -- derive each end as its own "
-            "entry, or declare the range in the ungraded-figure table." % ctx
-        )
+    figure = parse_graded_figure(
+        quoted_raw, scale_raw, ctx, "relative figure", "derive")
+    if figure is None:
         continue
-
-    parsed_figure = parse_quoted(quoted_raw)
-    if parsed_figure is None:
-        fail("%s: cannot read a number out of the relative figure" % ctx)
-        continue
-    mantissa, exp, decimals = parsed_figure
-
-    scale = as_float(scale_raw)
-    if scale is None:
-        fail("%s: scale `%s` is not a number" % (ctx, scale_raw))
-        continue
+    (mantissa, exp, decimals), scale = figure
 
     # Rule 8b. Both ingredients must be quoted figures a reader can find
     # re-derived in the first table, which is what makes the arithmetic
