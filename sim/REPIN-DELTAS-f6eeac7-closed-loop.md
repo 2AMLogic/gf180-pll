@@ -276,7 +276,23 @@ The graded transfer, operating-point and integration checks pass at all five.
 
 The largest reported deviation from `20·log₁₀(6)` fell from 0.80 to
 0.30 dB. The method guards above determine the record's overall FAIL.
-Issue #1077 tracks both failures under the existing DR-027 bands.
+**Disposition (issue #1077, operator ruling 2026-11-23: retain the FAIL).**
+Record `20261120-151718-d0000b5` keeps its overall **FAIL** under the existing
+DR-027 guards. All five points pass the graded transfer, operating-point and
+integration checks; the FAIL comes only from the two method guards above. No
+guard band is changed and no replay or successor record is made.
+
+- **Unresolved at this pin:** the fine in-band residuals at `ff` and `sf`.
+  At `ff` the 35.00 ps shift is below the 53.54 ps pairing floor (±50 ps
+  guard). At `sf` the 4.77 ps shift is smaller than the 117.52 ps movement
+  between the late readings (±100 ps guard).
+- **Pass both guards:** `typical`, `ss` and `fs`. These three support the
+  in-band transfer claim at N = 6, subject to the precision caveat in the
+  table above: at `typical` and `ss` the shift is smaller than the pairing
+  floor, and at `fs` the late movement exceeds the shift.
+
+The ngspice-46/47 overlap covers only `typical`, so this disposition does not
+attribute the `ff` and `sf` failures to the simulator or the PDK.
 
 ### Delta table
 

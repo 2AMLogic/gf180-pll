@@ -94,7 +94,7 @@ graded against the tree in CI by `sim/lib/check-readme-status.sh`.
   position and matters more, because that is the frequency its ≤ −55 dBc line
   is stated at: the one closed-loop spur record is 5 of the 45 PVT corners at
   150 MHz, and scaling it to 200 MHz puts the two coldest corners 0.1–0.5 dB
-  *over* the line. The binding-frequency sweep is declared as
-  `sim/reference-spur-band-top` — all 45 points, none measured — tracked at
-  #533, and DR-024 re-points the spec's owed line off the closed issue that
-  used to hold it.
+  *over* the line. The binding-frequency sweep,
+  `sim/reference-spur-band-top`, ran to completion on 2026-11-22 (#533): all
+  45 points measured, **34 pass and 11 miss −55 dBc**, worst −49.69 dBc at
+  `sf`/−40 °C/3.30 V. The disposition of the 11 misses is the open item.

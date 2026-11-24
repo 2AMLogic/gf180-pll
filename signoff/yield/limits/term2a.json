@@ -1,0 +1,130 @@
+{
+  "measurements": {
+    "ff_-40c_2.97v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "ff_-40c_3.63v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "ff_125c_2.97v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "ff_125c_3.63v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "fs_-40c_2.97v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "fs_-40c_3.63v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "fs_125c_2.97v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "fs_125c_3.63v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "sf_-40c_2.97v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "sf_-40c_3.63v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "sf_125c_2.97v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "sf_125c_3.63v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "ss_-40c_2.97v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "ss_-40c_3.63v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "ss_125c_2.97v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "ss_125c_3.63v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "typical_-40c_2.97v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "typical_-40c_3.63v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "typical_125c_2.97v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "typical_125c_3.63v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    },
+    "typical_27c_3.30v": {
+      "spec_row": "cp-budget/2a",
+      "target_sigma": 3.0,
+      "min": -2e-09,
+      "max": 2e-09
+    }
+  }
+}

@@ -238,13 +238,14 @@ except ImportError:  # this package's own dir (not its "pll_top" parent) is the
 try:
     from harness import spice_flatten
 except ImportError:  # "layout/" itself (harness's own package root) is not
-    # on sys.path under either of this module's two call conventions (the
-    # flat `python3 -m pfd_cp.block` CLI, run with cwd/sys.path rooted at
-    # layout/pll_top/; or layout/tests's own convention, which adds
-    # layout/pll_top/ but only conditionally layout/ itself) -- same
-    # "try the plain import, fall back to inserting the directory this
-    # file's own path implies" shape as the ``_canvas`` import above, one
-    # level further up (``parents[2]`` from this file is ``layout/``).
+    # on sys.path when sys.path holds layout/pll_top/ but not layout/
+    # itself (the flat `python3 -m pfd_cp.block` CLI, run with cwd/sys.path
+    # rooted at layout/pll_top/; or layout/floorplan/skeleton.py, which
+    # inserts only layout/pll_top/ -- layout/tests/_env.py, by contrast,
+    # adds both unconditionally) -- same "try the plain import, fall back
+    # to inserting the directory this file's own path implies" shape as
+    # the ``_canvas`` import above, one level further up (``parents[2]``
+    # from this file is ``layout/``).
     import sys as _sys
 
     _LAYOUT_DIR = Path(__file__).resolve().parents[2]

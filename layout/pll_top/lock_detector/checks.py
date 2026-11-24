@@ -37,9 +37,9 @@ try:
     from .. import _canvas
 except ImportError:  # this package's own dir (not its "pll_top" parent) is the
     # sys.path root under layout/tests's flat-import convention (see
-    # floorplan/skeleton.py and every layout/tests/test_*.py's own
-    # sys.path.insert(..., ".../pll_top") -- "vco"/"lock_detector"/"pfd_cp"
-    # are then each their own top-level package, one level short of "..").
+    # floorplan/skeleton.py and layout/tests/_env.py's sys.path.insert of
+    # ".../pll_top" -- "vco"/"lock_detector"/"pfd_cp" are then each their
+    # own top-level package, one level short of "..").
     import _canvas
 from . import primitives as P
 

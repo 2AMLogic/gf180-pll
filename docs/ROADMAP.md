@@ -44,8 +44,8 @@ This page says what comes next and why. It does not restate status: the machine 
 | 2 Layout | met | envelope pins the committed GDS by content hash plus the assembly generator and its geometry digest; the inherited `MIMTM.3` on C2 and the missing top-level LVS are items 3/4 (#753, #149), and a GDS change re-stales this row until re-attested |
 | 3 DRC clean | unmet | block-level clean report; `MIMTM.3` (#753, then #149) |
 | 4 LVS clean | unmet | top-level LVS has not run (#149) |
-| 5 Corner verification vs ratified spec | unmet | rows 9 and 16 unratified; evidence is not in `klt sim` envelope form |
-| 6 Monte Carlo evidence | unmet | see `signoff/README.md`, "Item 6" — `klt yield` is reachable on the 0.9.2 pin (klayout-tools#2531 closed 2026-10-03); the sample-set derivation is #1081 |
+| 5 Corner verification vs ratified spec | unmet | digital partition cites one `klt sim` envelope (divider-ratio-chain f200n33, 45/45, #1083) — row 3 covered at one divisor; still owed: the N=64 retiming margins (`timing_margin_missing`, #1090), the other campaigns' envelopes, and rows 9/16 unratified |
+| 6 Monte Carlo evidence | unmet (digital: N/A) | see `signoff/README.md`, "Item 6" — `klt yield` envelopes derived and cited from both MC campaigns (#1081, `signoff/yield/`); analog `unmet` / `undersized_sample` (n < 183/corner on the four budget terms — #1092 owns the draw-count raise; the VCO coverage citation grades `met`), digital `not_applicable` granted |
 | 7 Post-layout verification | unmet | needs a clean block layout to extract (#18) |
 | 8 Characterization report | unmet | `sim/CHARACTERIZATION.md` exists but is uncited (#843) |
 | 9 Testbenches shipped | met | — |
@@ -84,7 +84,14 @@ This page says what comes next and why. It does not restate status: the machine 
   land, #829 cites the new records and regenerates the sign-off; then #843 cites
   `sim/CHARACTERIZATION.md` for item 8; then #790 and #788 close.
 - **`klt lvs` envelopes for `pfd_cp` and `divider_chain`** — after Now 4 shows the recipe carries
-  over. With all four, item 11's pairing has its sub-block half.
+  over. With all four, item 11's pairing has its sub-block half. The ERC half of that pairing is
+  done since 2026-11-20 (#1082): every cell has an antenna-graded ERC envelope in its dated
+  `erc-antenna-20261120/` record (`divider_chain` clean end to end; the `violate` verdicts
+  elsewhere are corroborated false positives of the no-diode-credit area model,
+  2AMLogic/klayout-tools#6975), and the pinned grader resolves the ERC half of `vco_block`,
+  `divider_chain` and `lock_detector` with no reason — what remains for the pairing is the LVS
+  envelopes and the citation decision (#149 / #987), plus the `pll_top`/`pfd_cp`
+  `supply_spec_disclosed_tool_limitation` disclosures (#1085 owns their removal).
 - **`mc-cp-mismatch` harness migration (#879)** — after #878 is closed out.
 - **C2 electrical validation (#753, second stage)** — `devchar-passives` for the option-B MIM and
   the 140-cell `loop-dynamics` grid, after stage one is clean and the simulator on the workers can
@@ -103,9 +110,23 @@ This page says what comes next and why. It does not restate status: the machine 
   to move 0.4078 mm² toward the 0.30 mm² row?
 - **Lock-detector trim on silicon.** DR-022 finds the trim rule executable only in simulation on
   this die; what observable would make it executable at test?
-- **Items 5 and 6 as `klt` envelopes.** Does migrating campaigns to harness manifests yield
-  envelopes `klt signoff` can grade, and does the cross-version quarantine of DR-028 allow them to
-  be cited (#549)?
+- **Items 5 and 6 as `klt` envelopes — answered for item 5 (2026-11-21, #1083): migrate.** The
+  `f200n33` slice of `divider-ratio-chain` ran through `klt sim --backend batch` (45/45 corners
+  PASS, every measurement identical to the committed f6eeac7 record, staged models pinning the
+  PDK on the worker) and `klt signoff` grades the citation: item 5's digital reason moved off
+  `no_evidence` to `timing_margin_missing` with row 3 covered by derived `spec_row` coverage.
+  Migrating campaigns does yield gradeable envelopes; DR-028 quarantine was not needed here
+  because the values agree at the record's printed precision (both report ngspice-47; the
+  envelope records no binary hash, and the committed request stages no simulator init (DR-040 decision 1 unmet
+  here) and no init marker was retained (decision 2 unmet; 2AMLogic/klayout-tools#7368),
+  so the comparison is `unattributed` under DR-040 until the request stages the init and
+  the runner retains evidence of it). Recommendation: migrate the remaining campaigns to `klt sim` and retire
+  `sim/harness/batch.py` once the last grid it owns has a successor envelope — follow-ups:
+  #1090 (the rest of `divider-ratio-chain`, including the N=64 retiming margins that clear
+  `timing_margin_missing`), #1081 (item 6 `klt yield` sample sets). Upstream gaps that bound
+  what the envelopes can say: 2AMLogic/klayout-tools#7006 (row coverage is row-binary — no
+  way to declare a slice of a row's sweep), #7007 (`chgtol` cannot live in the request's
+  `ngspice_options`); a failing envelope still credits nothing (#6027).
 - **5.0 V analog rail.** The Chipalooza proposal records that the design is 3.3 V-only; is a 5.0 V
   variant in scope at all?
 
