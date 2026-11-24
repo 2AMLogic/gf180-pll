@@ -680,9 +680,16 @@ class PeriodJitterRepin(unittest.TestCase):
     def _record(self):
         return self._norm(self.NEW_REC.read_text(encoding="utf-8"))
 
+    #: the first record's corner-id predates the `vs` axis: its one point is
+    #: the successor's `typical_27c_3.30v_vs1p795` (the old log's `vctrl 1.795`)
+    FIRST_ID = "20260905-192724-a2ba48f"
+    FIRST_ALIAS = {"typical_27c_3.30v": "typical_27c_3.30v_vs1p795"}
+
     def _compare(self, old_id):
+        alias = self.FIRST_ALIAS if old_id == self.FIRST_ID else None
         return record_delta.compare(
-            SIM_DIR / "period-jitter" / "records" / f"{old_id}.md", self.NEW_REC)
+            SIM_DIR / "period-jitter" / "records" / f"{old_id}.md", self.NEW_REC,
+            alias)
 
     def test_the_record_exists_supersedes_and_passes_on_the_new_pin(self):
         self.assertTrue(self.NEW_REC.is_file(), f"{self.NEW_REC} missing")
@@ -705,6 +712,64 @@ class PeriodJitterRepin(unittest.TestCase):
                 _, findings = self._compare(old_id)
                 self.assertEqual(findings, 0,
                                  "an unexpected verdict flip vs " + old_id)
+
+    def test_every_pair_compares_real_overlap_not_just_zero_findings(self):
+        """A zero-finding result is vacuous when the two corner-id sets do
+        not intersect: assert the measurement rows and verdicts compared."""
+        def rows_and_verdicts(lines):
+            rows = [ln for ln in lines if ln.startswith("| `")
+                    and not ln.startswith("| `period-jitter`")
+                    and "| corner-id" not in ln]
+            m = re.search(r"unchanged on all (\d+) graded rows", "\n".join(lines))
+            return len(rows), int(m.group(1)) if m else 0
+        for old_id in self.PAIRS:
+            with self.subTest(old=old_id):
+                lines, _ = self._compare(old_id)
+                n_rows, n_verdicts = rows_and_verdicts(lines)
+                self.assertGreater(n_rows, 0, "no shared measurement rows")
+                if old_id != "20260906-063728-f3c9c23":  # has flips instead
+                    self.assertGreater(n_verdicts, 0, "no graded verdicts")
+        # The first record is one point: 19 shared measurements, 4 verdicts.
+        lines, findings = self._compare(self.FIRST_ID)
+        self.assertEqual(rows_and_verdicts(lines), (19, 4))
+        self.assertEqual(findings, 0)
+        # ... and the unaliased pair really is vacuous, which is why the doc
+        # passes the mapping explicitly.
+        bare, _ = record_delta.compare(
+            SIM_DIR / "period-jitter" / "records" / f"{self.FIRST_ID}.md",
+            self.NEW_REC)
+        self.assertEqual(rows_and_verdicts(bare)[0], 0)
+
+    def test_every_point_has_one_producing_job_with_the_pdk_stamp(self):
+        d = SIM_DIR / "period-jitter" / "corners" / self.NEW_ID
+        with (d / "executing-job-provenance.csv").open(encoding="utf-8") as fh:
+            rows = list(csv.DictReader(ln for ln in fh if not ln.startswith("#")))
+        with (d / "period_jitter_by_corner.csv").open(encoding="utf-8") as fh:
+            corners = [r["corner_id"] for r in
+                       csv.DictReader(ln for ln in fh if not ln.startswith("#"))]
+        self.assertEqual([r["corner_id"] for r in rows], corners)
+        self.assertEqual(len({r["job_id"] for r in rows}), 45)
+        for r in rows:
+            with self.subTest(corner=r["corner_id"]):
+                self.assertRegex(
+                    r["job_id"],
+                    rf"^gf180-pll-sim-{re.escape(r['corner_id'])}-[0-9a-f]{{8}}$")
+                self.assertEqual(r["executing_simulator"], "ngspice-47")
+                self.assertEqual(r["open_pdks"],
+                                 "f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7")
+                # The committed log is the one the mapping was matched on.
+                digest = hashlib.sha256(
+                    (d / f"{r['corner_id']}.log").read_bytes()).hexdigest()
+                self.assertEqual(r["committed_log_sha256"], digest)
+        self.assertEqual(len({r["simulator_init_sha256"] for r in rows}), 1)
+        self.assertIn("executing-job-provenance.csv", self._record())
+
+    def test_the_first_record_pair_is_documented_with_its_alias(self):
+        prose = self._prose()
+        self.assertIn("--alias typical_27c_3.30v=typical_27c_3.30v_vs1p795",
+                      prose)
+        self.assertIn("19 shared numeric measurements and 4 graded verdicts",
+                      prose)
 
     def test_the_two_findings_vs_f3c9c23_are_the_273_wrap_defect(self):
         lines, findings = self._compare("20260906-063728-f3c9c23")

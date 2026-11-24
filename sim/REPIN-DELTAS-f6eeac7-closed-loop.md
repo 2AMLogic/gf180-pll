@@ -366,6 +366,25 @@ collected `ngspice.env`, and only then was the 45-job grid submitted. 46
 fleet jobs total, ids `gf180-pll-sim-<corner-id>-<8-hex>`; the record's
 **Execution hosts** line carries the per-point host tally.
 
+**Executing job per point.** The 23 replayed points carry no host in the
+record, so the producing job of every one of the 45 points is recovered from
+the archived job outputs the same way the loop-dynamics section below does it:
+for each corner, the archived job whose `outputs/ngspice.log` is
+line-for-line identical to the committed `<corner_id>.log` (the archive keeps
+ngspice's carriage-return progress lines, which the committed copy has as
+newlines). Exactly one archived job matches per corner, and the mapping is
+committed as
+[`executing-job-provenance.csv`](period-jitter/corners/20261121-184803-04533bf/executing-job-provenance.csv)
+-- corner, job id, committed-log sha256, executing simulator, simulator-init
+sha256, resolved `open_pdks` stamp and image build time -- and asserted by
+`sim/tests/test_repin_deltas_closed_loop.py`. All 45 jobs report
+**ngspice-47**, simulator init `d6efd5b2...`, and `open_pdks
+f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7` on the image built
+2026-11-14T00:22:48Z, so the PDK stamp is stated for every producing worker,
+not just the pre-grid probe. The job id is also what a reader needs to
+retrieve each job's `ngspice.env` from the archive (see the method note under
+`loop-dynamics`).
+
 The submission was interrupted once at the submitting host: the first
 attempt's driver was killed 24 points in, and the record was completed by
 `--resume` under the same record id -- 23 points replayed from that
@@ -394,8 +413,21 @@ September snapshots in the same design edits the `reference-spur` re-run
 carries -- `XCF5` moves to the option-B MIM (`m2m3_noshield` ->
 `m4m5_noshield`, DR-042, same 31.4 um x 31.4 um `m=1` geometry) -- plus, for
 this campaign's snapshots, the DR-014 lock-detector window-trim ports on
-`XLD`/`delaywin_3v3` (`LDT0`-`LDT3`), which post-date them. The stimulus
-deck, solver options, `.tran` line and every measurement card are unchanged.
+`XLD`/`delaywin_3v3` (`LDT0`-`LDT3`), which post-date them. The solver options, `.tran` line and analysis commands are identical
+across the campaign's manifests, and the six predecessor netlist snapshots
+differ from one another only in their header lines. The deck is **not**
+otherwise identical to the predecessors', though: against this record's
+snapshot, all six lack the four DC trim sources `vldt0`-`vldt3` (successor
+snapshot lines 1019-1022) and the four extra `ldt0`-`ldt3` connections on
+the `xdut` line (line 1044); the five oldest records (`a2ba48f` through
+`69b36ef`) report no `dphi` or `ferr_fb` and were gated on the original
+`ferr = -(phi_b-phi_a)/(tb-ta)` (checked in the manifests at `9eb4a8f2`,
+`12bccda1` and `f3c9c234`), where this record uses the wrap-safe
+`ferr = -dphi/(tb-ta)` plus the independent `ferr_fb` of #273; the first
+record's manifest also released the control node from a single `vstart`
+parameter rather than the per-point `vs` axis. Only the #273 re-measure
+`3a8a6ef` shares the wrap-safe gate. Every other measurement card is
+unchanged.
 The deck carries the nonlinear-moscap `m=` trigger of #153/#926 (4x
 `cap_nmos_03v3_b` in `loop_filter`, 2x `cap_nmos_03v3` in `vco`), so per #932
 the movement below is **not attributable to the PDK alone**.
@@ -410,7 +442,7 @@ PATH=$HOME/.local/opt/ngspice-46/bin:$PATH \
   --axis vs=vs1p795 --timeout 5400 --no-write -j 1
 ```
 
-Same deck, same PDK pin (`f6eeac7`), `typical_27c_3.30v_vs1p795`, 1/1 ok,
+This record's deck, same PDK pin (`f6eeac7`), `typical_27c_3.30v_vs1p795`, 1/1 ok,
 **287.0 s wall clock** on this host. Not minted as a record (`--no-write`).
 This is also the only corner the first record `20260905-192724-a2ba48f`
 measured, read here three ways (its corner-id predates the `vs` axis):
@@ -424,8 +456,8 @@ measured, read here three ways (its corner-id predates the `vs` axis):
 | `nmeas` | 5.99987 | 5.99941 | 6.00028 |
 | `dn_lvl` (min 8.9e-4) | 0.174982 | 0.174946 | 0.174987 |
 
-- Predecessor -> local overlap: `tj_rms_pct` moves **-6.6 % relative** on an
-  identical deck, combining the PDK, both DUT netlist edits and the host
+- Predecessor -> local overlap: `tj_rms_pct` moves **-6.6 % relative** against
+  the first record's deck (which differs as listed above), combining the PDK, both DUT netlist edits and the host
   change.
 - Local ngspice-46 -> batch ngspice-47 (PDK and netlist fixed): **+0.8 %**
   at this corner. The lock-point columns agree to better than 0.04 % across
@@ -657,16 +689,40 @@ python3 sim/lib/record_delta.py \
 
 #### vs `20260905-192724-a2ba48f` (the campaign first record: single point, pre-`vs`-axis corner-id)
 
-Reproduce with:
+The first record names its one point `typical_27c_3.30v`; the successor names the
+same operating point `typical_27c_3.30v_vs1p795` (the old log's `vctrl 1.795` is
+the successor's `vs1p795` release voltage), so the generator is given that one-to-one
+mapping explicitly -- without it the two corner-id sets do not intersect and the
+table comes out empty. Reproduce with:
 
 ```bash
 python3 sim/lib/record_delta.py \
+  --alias typical_27c_3.30v=typical_27c_3.30v_vs1p795 \
   sim/period-jitter/records/20260905-192724-a2ba48f.md \
   sim/period-jitter/records/20261121-184803-04533bf.md
 ```
 
 | topology | measurement | limit | old min..max | new min..max | max abs delta | max rel delta % | worst corner |
 |---|---|---|---|---|---|---|---|
+| `integration` | `dn_lvl` | min=8.900000e-04 | 0.174982..0.174982 | 0.174987..0.174987 | 5.000000e-06 | 0.002857 | `typical_27c_3.30v_vs1p795` |
+| `integration` | `dt_int_mean` | max=1.000000e-10 | 7.367716e-11..7.367716e-11 | 7.367223e-11..7.367223e-11 | 4.930000e-15 | 0.006691 | `typical_27c_3.30v_vs1p795` |
+| `integration` | `up_lvl` | — | 0.446691..0.446691 | 0.452485..0.452485 | 0.005794 | 1.297 | `typical_27c_3.30v_vs1p795` |
+| `jitter` | `c2c_rms_s` | — | 2.751336e-11..2.751336e-11 | 2.564510e-11..2.564510e-11 | 1.868260e-12 | 6.79 | `typical_27c_3.30v_vs1p795` |
+| `jitter` | `n_cycles` | — | 314..314 | 314..314 | 0 | 0 | `—` |
+| `jitter` | `tie_pp_s` | — | 6.789522e-11..6.789522e-11 | 6.648156e-11..6.648156e-11 | 1.413660e-12 | 2.082 | `typical_27c_3.30v_vs1p795` |
+| `jitter` | `tie_rms_s` | — | 1.452931e-11..1.452931e-11 | 1.452106e-11..1.452106e-11 | 8.250000e-15 | 0.05678 | `typical_27c_3.30v_vs1p795` |
+| `jitter` | `tj_pp_s` | — | 6.768892e-11..6.768892e-11 | 7.037071e-11..7.037071e-11 | 2.681790e-12 | 3.962 | `typical_27c_3.30v_vs1p795` |
+| `jitter` | `tj_rms_pct` | max=1 | 0.23339..0.23339 | 0.21977..0.21977 | 0.01362 | 5.836 | `typical_27c_3.30v_vs1p795` |
+| `jitter` | `tj_rms_s` | — | 1.555757e-11..1.555757e-11 | 1.464894e-11..1.464894e-11 | 9.086300e-13 | 5.84 | `typical_27c_3.30v_vs1p795` |
+| `lock` | `ferr` | min=-0.001, max=0.001 | 1.617960e-06..1.617960e-06 | 2.887960e-05..2.887960e-05 | 2.726164e-05 | 1685 | `typical_27c_3.30v_vs1p795` |
+| `lock` | `ffb` | — | 2.500070e+07..2.500070e+07 | 2.500590e+07..2.500590e+07 | 5200 | 0.0208 | `typical_27c_3.30v_vs1p795` |
+| `lock` | `fout` | min=1.485000e+08, max=1.515000e+08 | 1.500010e+08..1.500010e+08 | 1.500420e+08..1.500420e+08 | 41000 | 0.02733 | `typical_27c_3.30v_vs1p795` |
+| `lock` | `lock_lvl` | — | 5.422690e-09..5.422690e-09 | 5.424550e-09..5.424550e-09 | 1.860000e-12 | 0.0343 | `typical_27c_3.30v_vs1p795` |
+| `lock` | `nmeas` | min=5.99, max=6.01 | 5.99987..5.99987 | 6.00028..6.00028 | 0.00041 | 0.006833 | `typical_27c_3.30v_vs1p795` |
+| `ungrouped` | `phi_a` | — | 2.769930e-09..2.769930e-09 | 2.831880e-09..2.831880e-09 | 6.195000e-11 | 2.237 | `typical_27c_3.30v_vs1p795` |
+| `ungrouped` | `phi_b` | — | 2.768310e-09..2.768310e-09 | 2.803000e-09..2.803000e-09 | 3.469000e-11 | 1.253 | `typical_27c_3.30v_vs1p795` |
+| `ungrouped` | `tclk20` | — | 1.333330e-07..1.333330e-07 | 1.332960e-07..1.332960e-07 | 3.700000e-11 | 0.02775 | `typical_27c_3.30v_vs1p795` |
+| `ungrouped` | `tfb5` | — | 1.999950e-07..1.999950e-07 | 1.999530e-07..1.999530e-07 | 4.200000e-11 | 0.021 | `typical_27c_3.30v_vs1p795` |
 
 **Per-corner verdicts**: unchanged on all 4 graded rows.
 
@@ -676,6 +732,12 @@ python3 sim/lib/record_delta.py \
 
 - in `20261121-184803-04533bf` only: `lock`/`dphi`
 - in `20261121-184803-04533bf` only: `lock`/`ferr_fb`
+
+One corner only: 19 shared numeric measurements and 4 graded verdicts. The large
+`ferr` move (1685 %) compares two different expressions -- the first record's
+raw phase difference and this record's wrap-safe `dphi` form (see "What changed
+besides the PDK") -- on a near-zero quantity, so it is not a like-for-like loop
+comparison; both values (1.6e-6, 2.9e-5) are far inside the +-1e-3 gate.
 
 ## `pll-top-smoke`
 
