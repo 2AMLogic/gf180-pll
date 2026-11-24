@@ -199,12 +199,16 @@ class TestDirectlyMeasuredTable(_TreeTest):
         measurement table.  Reading the first point-id row in the file would
         grade one of those numbers instead of the measurement; the lookup is
         anchored on the `corner-id` table that names a `spur_dbc` column.
+        The summary's figures are rounded one place short of the precision
+        the spec writes (−49.7 against −49.69), so a lookup that accepted
+        the `corner_id` summary would grade −49.70 against −49.69 and fail,
+        not pass silently on the rounded number.
         """
         decoys = (
             "  | corner_id | spur_dbc | verdict |\n"
             "  |---|---|---|\n"
-            "  | sf_-40c_3.30v_b7 | -49.69 | PASS |\n"
-            "  | sf_-40c_2.97v_b6 | -64.77 | PASS |\n"
+            "  | sf_-40c_3.30v_b7 | -49.7 | PASS |\n"
+            "  | sf_-40c_2.97v_b6 | -64.8 | PASS |\n"
             "\n"
             "  | corner-id | ferr | pass/fail |\n"
             "  |---|---|---|\n"
