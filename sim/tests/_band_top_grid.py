@@ -24,7 +24,7 @@ is silently measuring a differently-configured part. (The same duplication in
 the two campaigns' ``check_config.sh`` scripts was consolidated under #881;
 this is the test-side half of that.)
 
-The three classes below are **mixins, not test cases**: they do not inherit
+The four classes below are **mixins, not test cases**: they do not inherit
 ``unittest.TestCase``, so neither this module nor an import of it hands
 ``unittest discover`` anything to collect. A campaign's ``test_*.py`` combines
 each with ``unittest.TestCase`` and points it at a testbench::
@@ -49,13 +49,16 @@ from pathlib import Path
 SIM_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SIM_DIR))
 
+from harness import corners  # noqa: E402
 from harness.derived import load_module  # noqa: E402,F401  (re-exported)
 
 #: The mandated matrix: `sim/harness/corners.py`'s `CORNER_SETS["mos"]` x the
-#: three temperatures x the three supplies.
-MOS_BUNDLES = {"typical", "ff", "ss", "fs", "sf"}
-TEMPERATURES = {-40.0, 27.0, 125.0}
-SUPPLY_ALIASES = {"low", "nom", "high"}
+#: three temperatures x the three supplies. Derived from that module -- the
+#: authority `sim/README.md` names -- rather than retyped, so a change to the
+#: mandate is made once and every campaign grading against it moves with it.
+MOS_BUNDLES = set(corners.REQUIRED_MOS_CORNERS)
+TEMPERATURES = set(corners.DEFAULT_TEMPERATURES_C)
+SUPPLY_ALIASES = set(corners.SUPPLY_ALIASES)
 
 #: The top of the ratified output band -- both campaigns' reason for existing.
 TARGET_HZ = 200e6
@@ -93,21 +96,16 @@ def divider_codes(n):
     return codes
 
 
-class BandTopGridMixin:
-    """The manifest's own shape: is the declared grid the mandated matrix?
+class MandatedMatrixMixin:
+    """The union of the manifest's grid blocks is exactly the mandated matrix.
 
-    Mix with ``unittest.TestCase`` and set ``TESTBENCH``.
+    The one invariant every 45-point campaign shares, whatever its extra axis:
+    mix with ``unittest.TestCase`` and provide ``self.blocks`` -- the
+    manifest's ``grid`` list -- from ``setUpClass``. The matrix compared
+    against is imported from `sim/harness/corners.py`, so grading stays
+    manifest-vs-spec; retyping it would add a third copy able to disagree with
+    both.
     """
-
-    #: The campaign's ``testbench/`` directory. Set by the subclass.
-    TESTBENCH: Path
-
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.manifest = load_manifest(cls.TESTBENCH)
-        cls.blocks = cls.manifest["grid"]
-        cls.points = cls.manifest["sweeps"]["op"]["points"]
 
     def test_grid_union_is_exactly_the_mandated_pvt_matrix(self):
         seen = []
@@ -125,6 +123,23 @@ class BandTopGridMixin:
         }
         self.assertEqual(set(seen), expected)
         self.assertEqual(len(seen), 45)
+
+
+class BandTopGridMixin(MandatedMatrixMixin):
+    """The manifest's own shape: is the declared grid the mandated matrix?
+
+    Mix with ``unittest.TestCase`` and set ``TESTBENCH``.
+    """
+
+    #: The campaign's ``testbench/`` directory. Set by the subclass.
+    TESTBENCH: Path
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.manifest = load_manifest(cls.TESTBENCH)
+        cls.blocks = cls.manifest["grid"]
+        cls.points = cls.manifest["sweeps"]["op"]["points"]
 
     def test_every_block_carries_a_description_and_exactly_one_operating_point(self):
         for block in self.blocks:

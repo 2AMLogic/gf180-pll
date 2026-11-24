@@ -33,18 +33,14 @@ REF_SPUR_TB = SIM_DIR / "reference-spur" / "testbench" / "tb.json"
 sys.path.insert(0, str(SIM_DIR))
 from harness.derived import load_module  # noqa: E402
 
-#: The mandated matrix: `sim/harness/corners.py`'s `CORNER_SETS["mos"]` x the
-#: three temperatures x the three supplies.
-MOS_BUNDLES = {"typical", "ff", "ss", "fs", "sf"}
-TEMPERATURES = {-40.0, 27.0, 125.0}
-SUPPLY_ALIASES = {"low", "nom", "high"}
+from _band_top_grid import MandatedMatrixMixin  # noqa: E402
 
 
 def _manifest():
     return json.loads((TESTBENCH / "tb.json").read_text())
 
 
-class PeriodJitterGrid(unittest.TestCase):
+class PeriodJitterGrid(MandatedMatrixMixin, unittest.TestCase):
     """The manifest's own shape: is the declared grid the mandated matrix?"""
 
     @classmethod
@@ -52,23 +48,6 @@ class PeriodJitterGrid(unittest.TestCase):
         cls.manifest = _manifest()
         cls.blocks = cls.manifest["grid"]
         cls.points = cls.manifest["sweeps"]["vs"]["points"]
-
-    def test_grid_union_is_exactly_the_mandated_pvt_matrix(self):
-        seen = []
-        for block in self.blocks:
-            for corner in block["corners"]:
-                for temp in block["temperatures_c"]:
-                    for supply in block["supplies"]:
-                        seen.append((corner, float(temp), supply))
-        self.assertEqual(len(seen), len(set(seen)), "a PVT point is declared twice")
-        expected = {
-            (corner, temp, supply)
-            for corner in MOS_BUNDLES
-            for temp in TEMPERATURES
-            for supply in SUPPLY_ALIASES
-        }
-        self.assertEqual(set(seen), expected)
-        self.assertEqual(len(seen), 45)
 
     def test_every_block_carries_a_description_and_exactly_one_release_voltage(self):
         for block in self.blocks:
